@@ -33,9 +33,7 @@ int main(void)
 	}
 
 	static const struct suite suites[] = {
-		{ "aliro_advertising", test_aliro_advertising },
-		{ "aliro_ble", test_aliro_ble },
-		{ "aliro_nfc", test_aliro_nfc },
+		{ "pn532", test_pn532 },
 		{ "ccc_kdf", test_ccc_kdf },
 		{ "ccc_mac", test_ccc_mac },
 		{ "ccc_sts", test_ccc_sts },
