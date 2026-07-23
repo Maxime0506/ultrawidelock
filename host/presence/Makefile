@@ -39,7 +39,7 @@ $(OUT):
 $(OUT)/pam_aliro.$(SO_EXT): pam_aliro.c $(DEPS) | $(OUT)
 	$(CC) $(CFLAGS) -fPIC $(SHARED) $(INCS) $^ -o $@
 
-$(OUT)/aliro-presence-setup: aliro-presence-setup.c $(ALIRO)/src/aliro_assert.c $(ALIRO)/src/aliro_hash.c | $(OUT)
+$(OUT)/aliro-presence-setup: aliro-presence-setup.c aliro_presence.c $(ALIRO)/src/aliro_assert.c $(ALIRO)/src/aliro_hash.c | $(OUT)
 	$(CC) $(CFLAGS) $(INCS) $^ -o $@
 
 test:

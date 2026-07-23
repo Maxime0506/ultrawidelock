@@ -31,6 +31,7 @@ extern "C" {
 
 #define PRESENCE_PATH_MAX 256u
 #define PRESENCE_CHALLENGE_LEN 18u /* 'A' 'C' | nonce(16) */
+#define PRESENCE_KEYSET_LEN 34u    /* 'A' 'K' | key(32): load the pairing key */
 
 struct presence_config {
 	char device[PRESENCE_PATH_MAX];    /* serial tty, e.g. /dev/tty.usbmodem* */
@@ -68,6 +69,9 @@ int presence_key_load(const char *path, uint8_t key[ALIRO_ASSERT_KEY_LEN]);
 /* ---- wire framing ------------------------------------------------------- */
 /* Build the 18-byte challenge for a nonce. buf must hold PRESENCE_CHALLENGE_LEN. */
 void presence_build_challenge(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint8_t *buf);
+/* Build the 34-byte key-load frame (pairing the dongle to the host key). buf must
+ * hold PRESENCE_KEYSET_LEN. */
+void presence_build_keyset(const uint8_t key[ALIRO_ASSERT_KEY_LEN], uint8_t *buf);
 /* Find a complete 70-byte assertion frame (synced on its 0xA1 0x50 magic) in a
  * byte buffer. Returns the start offset, or -1 if no complete frame is present.
  * Tolerates leading garbage/desync on the serial line. */

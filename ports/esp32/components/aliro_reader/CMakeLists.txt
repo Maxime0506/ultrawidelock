@@ -19,6 +19,9 @@ idf_component_register(
 		# worker's whole body is gated, so it is empty with the option off.
 		"${ALIRO}/src/aliro_stepup.c"
 		"${ALIRO}/src/aliro_stepup_parse.c"
+		# Presence-assertion codec (non-door primitive): pure functions, always
+		# compiled; only the presence dongle app (CONFIG_WOZ_PRESENCE) calls them.
+		"${ALIRO}/src/aliro_assert.c"
 		"aliro_stepup_worker.c"
 		"aliro_prov_nvs.c"
 	INCLUDE_DIRS "${ALIRO}/include"

@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "aliro_assert.h"
+#include "aliro_presence.h"
 
 static int rand_bytes(uint8_t *out, size_t len)
 {
@@ -73,7 +74,27 @@ static int hexdecode(const char *s, uint8_t *out, size_t want)
 	return 0;
 }
 
-static int cmd_keygen(const char *out_path)
+// Writes the 34-byte key-load frame to the dongle device. 0 on success, -1 else.
+static int pair_device(const char *dev, const uint8_t key[ALIRO_ASSERT_KEY_LEN])
+{
+	int fd = open(dev, O_RDWR | O_NOCTTY);
+
+	if (fd < 0) {
+		fprintf(stderr, "pair: cannot open %s\n", dev);
+		return -1;
+	}
+	uint8_t frame[PRESENCE_KEYSET_LEN];
+	presence_build_keyset(key, frame);
+	ssize_t n = write(fd, frame, sizeof(frame));
+	close(fd);
+	if (n != (ssize_t)sizeof(frame)) {
+		fprintf(stderr, "pair: short write to %s\n", dev);
+		return -1;
+	}
+	return 0;
+}
+
+static int cmd_keygen(const char *out_path, const char *device)
 {
 	uint8_t key[ALIRO_ASSERT_KEY_LEN];
 
@@ -93,9 +114,19 @@ static int cmd_keygen(const char *out_path)
 	}
 	close(fd);
 	printf("wrote 32-byte pairing key to %s (mode 0600)\n", out_path);
-	printf("load the SAME key onto the dongle over its console:\n\n    presence-key ");
-	print_hex(key, sizeof(key));
-	printf("\nkeep this secret: anyone holding it can forge presence assertions.\n");
+
+	if (device != NULL) {
+		if (pair_device(device, key) != 0) {
+			return 1;
+		}
+		printf("loaded the pairing key onto the dongle at %s\n", device);
+	} else {
+		printf("pair the dongle later with:  aliro-presence-setup keygen "
+		       "--out %s --device <dev>\nor load this key over its link:  ",
+		       out_path);
+		print_hex(key, sizeof(key));
+	}
+	printf("keep this key secret: anyone holding it can forge presence assertions.\n");
 	return 0;
 }
 
@@ -118,7 +149,7 @@ static int usage(void)
 {
 	fprintf(stderr,
 		"usage:\n"
-		"  aliro-presence-setup keygen [--out /etc/aliro-presence/key]\n"
+		"  aliro-presence-setup keygen [--out /etc/aliro-presence/key] [--device <dev>]\n"
 		"  aliro-presence-setup cred-id --pub <130-hex credential public key>\n");
 	return 2;
 }
@@ -130,12 +161,17 @@ int main(int argc, char **argv)
 	}
 	if (strcmp(argv[1], "keygen") == 0) {
 		const char *out = "/etc/aliro-presence/key";
-		if (argc == 4 && strcmp(argv[2], "--out") == 0) {
-			out = argv[3];
-		} else if (argc != 2) {
-			return usage();
+		const char *device = NULL;
+		for (int i = 2; i < argc; i++) {
+			if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) {
+				out = argv[++i];
+			} else if (strcmp(argv[i], "--device") == 0 && i + 1 < argc) {
+				device = argv[++i];
+			} else {
+				return usage();
+			}
 		}
-		return cmd_keygen(out);
+		return cmd_keygen(out, device);
 	}
 	if (strcmp(argv[1], "cred-id") == 0) {
 		if (argc != 4 || strcmp(argv[2], "--pub") != 0) {

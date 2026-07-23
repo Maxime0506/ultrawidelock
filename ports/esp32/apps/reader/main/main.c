@@ -15,6 +15,9 @@
 #include "woz_uwb_facade.h"
 #include "aliro_reader.h"
 #include "app_shell.h"
+#if defined(CONFIG_WOZ_PRESENCE)
+#include "presence_link.h"
+#endif
 
 static const char *TAG = "woz_esp32s3";
 
@@ -52,6 +55,13 @@ void app_main(void)
 	ESP_LOGI(TAG, "aliro_reader_start() = %d %s", brc,
 		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
 
+#if defined(CONFIG_WOZ_PRESENCE)
+	/* Presence dongle mode: serve the host challenge/response on the console UART
+	 * instead of the interactive shell. presence_link_serve() never returns. */
+	presence_link_init();
+	ESP_LOGI(TAG, "presence dongle mode: serving host challenges (REPL disabled)");
+	presence_link_serve();
+#else
 	/* Interactive console on the console UART (shares the log stream). */
 	app_shell_start();
 
@@ -63,4 +73,5 @@ void app_main(void)
 		}
 		vTaskDelay(pdMS_TO_TICKS(500));
 	}
+#endif
 }

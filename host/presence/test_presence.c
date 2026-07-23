@@ -152,6 +152,11 @@ static void test_framing(void)
 	uint8_t nomagic[100];
 	memset(nomagic, 0x00, sizeof(nomagic));
 	CHECK("find.none", presence_find_frame(nomagic, sizeof(nomagic)) == -1);
+
+	uint8_t ks[PRESENCE_KEYSET_LEN];
+	presence_build_keyset(k_key, ks);
+	CHECK("keyset.magic", ks[0] == 'A' && ks[1] == 'K');
+	CHECK("keyset.key", memcmp(ks + 2, k_key, ALIRO_ASSERT_KEY_LEN) == 0);
 }
 
 static void test_verify(void)

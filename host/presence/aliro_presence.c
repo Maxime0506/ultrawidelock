@@ -255,6 +255,13 @@ void presence_build_challenge(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint8
 	memcpy(buf + 2, nonce, ALIRO_ASSERT_NONCE_LEN);
 }
 
+void presence_build_keyset(const uint8_t key[ALIRO_ASSERT_KEY_LEN], uint8_t *buf)
+{
+	buf[0] = 'A';
+	buf[1] = 'K';
+	memcpy(buf + 2, key, ALIRO_ASSERT_KEY_LEN);
+}
+
 long presence_find_frame(const uint8_t *buf, size_t len)
 {
 	if (buf == NULL || len < ALIRO_ASSERT_WIRE_LEN) {
