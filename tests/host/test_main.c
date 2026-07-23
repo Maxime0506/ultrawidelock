@@ -44,6 +44,8 @@ int main(void)
 		{ "aliro_msg", test_aliro_msg },
 		{ "aliro_session", test_aliro_session },
 		{ "aliro_prov", test_aliro_prov },
+		{ "aliro_hash", test_aliro_hash },
+		{ "aliro_assert", test_aliro_assert },
 		{ "cherry", test_cherry },
 		{ "fira", test_fira },
 		{ "facade", test_facade },
