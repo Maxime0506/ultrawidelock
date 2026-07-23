@@ -1,0 +1,26 @@
+# aliro-presence PAM module configuration.
+# Install at /etc/aliro-presence/config, root-owned, mode 0600.
+
+# Serial device the presence dongle enumerates as (a udev symlink is tidier than
+# a raw /dev/ttyACM* that renumbers).
+device = /dev/aliro-presence
+
+# 32-byte symmetric pairing key, shared with the dongle. Create with
+#   sudo aliro-presence-setup keygen
+keyfile = /etc/aliro-presence/key
+
+# Freshness cache: a successful check is trusted for this many seconds so repeated
+# sudo in a session does not re-transact every time. Stored here (root-only).
+stampfile = /run/aliro-presence.stamp
+cache_ttl_s = 30
+
+# Inclusive distance gate, centimetres. The phone must be at least this close.
+threshold_cm = 40
+
+# Per-transaction deadline, milliseconds.
+timeout_ms = 3000
+
+# Optional: bind presence to ONE enrolled credential so only your iPhone counts.
+# Derive it from the credential public key the reader logged (aliro-prov):
+#   aliro-presence-setup cred-id --pub <130-hex P-256 point>
+# cred_id = 0011223344556677

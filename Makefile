@@ -42,7 +42,7 @@ ENV := $(strip \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-port test-ws test-web test-presence docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -114,9 +114,16 @@ verify:
 	@$(MAKE) --no-print-directory test-web
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory test-san
+	@$(MAKE) --no-print-directory test-presence
 	@$(MAKE) --no-print-directory fuzz
 	@$(MAKE) --no-print-directory cbmc
 	@printf '\n  ✓ all host gates passed\n'
+
+## test-presence: host unit tests for the presence second factor (PAM/dongle)
+##   Config, wire framing, verification, TTL cache, and the challenge/verify flow
+##   over a socketpair. Plain C, no PAM or hardware. See host/presence/.
+test-presence:
+	@$(REPO_ROOT)/host/presence/run.sh
 
 ## test-port: host-runnable ESP32 port tests (port headers, crypto KATs, codec)
 ##   No ESP-IDF needed; the on-target build check inside skips cleanly without it.
