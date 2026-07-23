@@ -32,7 +32,9 @@ if(CONFIG_WOZ_UWB)
         # Responder-RX CCC-STS substitution: program CCC key/IV per dwt_rxenable.
         ${SRC}/ccc/ccc_shim_rx.c
         # Diagnostic (removable): tallies on-air RX events.
-        ${SRC}/driver/uwb_rxdiag.c)
+        ${SRC}/driver/uwb_rxdiag.c
+        # Diagnostic (removable): per-reception CIA first-path/STS stream (`aliro cir`).
+        ${SRC}/driver/uwb_cirdiag.c)
 
       # AES-ECB crypto seam (ccc_kdf.h): PSA on nRF (default), mbedTLS for SoCs
       # without a PSA provider (e.g. ESP32-S3). See docs/porting.md.

@@ -17,7 +17,8 @@
 
 #include <deca_device_api.h>
 
-#include "ccc_shim.h" /* ccc_shim_rx_{awaiting_poll,notify_rx,try_prepoll} */
+#include "ccc_shim.h"    /* ccc_shim_rx_{awaiting_poll,notify_rx,try_prepoll} */
+#include "uwb_cirdiag.h" /* per-reception CIA diag latch (rides the `lab on` gate) */
 
 void __real_dwt_configurestsmode(uint8_t stsMode);
 
@@ -55,6 +56,9 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	if (d != NULL && !await) {
 		ccc_shim_rx_try_prepoll(d->datalength);
 	}
+	/* Channel-impulse Stage 0: latch this reception's CIA diagnostics last (armed by
+	 * `lab on`); dw3000_isr_task emits the [ALAB] line after its IRQ drain loop. */
+	(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u, d != NULL ? d->datalength : 0u);
 }
 
 // RX-timeout callback shim; forwards the event to g_blob_rxto if a handler is registered, otherwise no-op.

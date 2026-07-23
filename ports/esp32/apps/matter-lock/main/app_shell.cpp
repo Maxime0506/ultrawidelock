@@ -24,7 +24,8 @@
 #include <woz_uwb_facade.h>
 #include <woz_diag.h> // woz_uwb_diag_on — the raw per-frame UWB trace gate
 #ifdef CONFIG_WOZ_ALIRO_LAB
-#include <aliro_lab.h> // aliro_lab_set_enabled — the transaction-trace runtime gate
+#include <aliro_lab.h>   // aliro_lab_set_enabled — the transaction-trace runtime gate
+#include <uwb_cirdiag.h> // uwb_cirdiag_set_enabled — per-reception CIA diag stream, rides `lab`
 #endif
 
 #include "freertos/FreeRTOS.h"
@@ -297,8 +298,10 @@ static int cmd_lab(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
 		aliro_lab_set_enabled(true);
+		uwb_cirdiag_set_enabled(true); /* per-reception ev=uwb.diag lines ride the gate */
 	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
 		aliro_lab_set_enabled(false);
+		uwb_cirdiag_set_enabled(false);
 	} else if (argc != 1) {
 		printf("usage: lab [on|off]\n");
 		return 0;

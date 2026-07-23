@@ -8,6 +8,7 @@
 
 #include "ccc_shim.h"     /* ccc_shim_active */
 #include "fira_session.h" /* fira_session_last_range, fira_session_get_ursk */
+#include "uwb_cirdiag.h"  /* per-reception CIA diagnostics stream toggle */
 #include "uwb_min.h"      /* uwb_min_read_chipid, uwb_min_selftest, DEV_ID */
 #include "uwb_rxdiag.h"   /* counters + ranging-log stream toggle */
 
@@ -202,6 +203,31 @@ static int cmd_frames(const struct shell *sh, size_t argc, char **argv)
 }
 
 /**
+ * @brief Enable, disable, or query the per-reception CIA diagnostics stream ([ALAB] uwb.diag).
+ * @param sh Shell context.
+ * @param argc Argument count; if ≥2, argv[1] must be "on" or "off".
+ * @param argv Command arguments; argv[1] optionally specifies "on" or "off".
+ * @return 0 on success; -EINVAL if argv[1] is neither "on" nor "off".
+ */
+static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
+{
+	if (argc >= 2) {
+		if (strcmp(argv[1], "on") == 0) {
+			uwb_cirdiag_set_enabled(true);
+		} else if (strcmp(argv[1], "off") == 0) {
+			uwb_cirdiag_set_enabled(false);
+		} else {
+			shell_print(sh, "  " C_YEL "usage: aliro cir [on|off]" C_RST);
+			return -EINVAL;
+		}
+	}
+	bool on = uwb_cirdiag_enabled();
+	shell_print(sh, "  CIA first-path diag stream %s",
+		    on ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST);
+	return 0;
+}
+
+/**
  * @brief Display the build commit SHA.
  * @param sh Shell context.
  * @param argc Argument count (unused).
@@ -317,6 +343,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(chip, NULL, "Read the DW3110 DEV_ID over SPI.", cmd_chip),
 	SHELL_CMD(selftest, NULL, "Run the radio TX/RX self-test.", cmd_selftest),
 	SHELL_CMD(log, NULL, "Ranging heartbeat: `log on` | `log off`.", cmd_log),
+	SHELL_CMD(cir, NULL, "Per-reception CIA diag stream: `cir on` | `cir off`.", cmd_cir),
 	SHELL_CMD(frames, NULL, "Per-block distance stream: `frames on` | `frames off`.",
 		  cmd_frames),
 	SHELL_CMD(version, NULL, "Firmware build: short commit SHA.", cmd_version),

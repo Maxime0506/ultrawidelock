@@ -16,6 +16,7 @@ set(WOZ_SRCS
     # engine: driver + fira
     "${WOZ}/driver/uwb_min.c"
     "${WOZ}/driver/uwb_isr.c"
+    "${WOZ}/driver/uwb_cirdiag.c"
     "${WOZ}/fira/fira_session.c"
     # engine: CCC STS
     "${WOZ}/ccc/ccc_kdf.c"

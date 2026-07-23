@@ -10,6 +10,7 @@
 
 #include "ccc_shim.h"     /* ccc_shim_rx_notify_rx — empirical STS-index tracker */
 #include "fira_session.h" /* fira_session_last_range — latched DS-TWR distance */
+#include "uwb_cirdiag.h"  /* per-reception CIA diag latch (`aliro cir on`) */
 #include "uwb_rxdiag.h"   /* our accessors + runtime stream toggle */
 #include "woz_diag.h"     /* DIAGK — per-event/cfg/CAD trace, gated off in pretty mode */
 #include "woz_alloc.h"    /* qrtc_get_us — monotonic microsecond wall-clock */
@@ -81,6 +82,14 @@ static void rxdiag_ev_log(const char *cls, const dwt_cb_data_t *d)
 /** @brief Decode-cost probe: last try_prepoll() duration, hi32 (~4 ns) units. */
 uint32_t g_ccc_dbg_decode;
 
+/** @brief Task-side emitter for the latched CIA diagnostics (uwb_cirdiag). */
+static void cirdiag_emit(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	uwb_cirdiag_flush();
+}
+static K_WORK_DEFINE(g_cirdiag_work, cirdiag_emit);
+
 /**
  * @brief RX-good callback shim: log RX diagnostics, invoke the armed CCC callback, then decode the
  * Pre-POLL frame off the critical path.
@@ -110,6 +119,11 @@ static void shim_rxok(const dwt_cb_data_t *d)
 
 		ccc_shim_rx_try_prepoll(d->datalength);
 		g_ccc_dbg_decode = dwt_readsystimestamphi32() - s0;
+	}
+	/* Channel-impulse Stage 0: latch this reception's CIA diagnostics last (armed by
+	 * `aliro cir on`), then hand the printk to the sysworkq — never print on this thread. */
+	if (uwb_cirdiag_capture(d != NULL ? d->status : 0u, d != NULL ? d->datalength : 0u)) {
+		k_work_submit(&g_cirdiag_work);
 	}
 }
 
