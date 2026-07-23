@@ -131,10 +131,22 @@ test-ws:
 
 ## test-web: drift-gate the web-twin page against the firmware it cites
 ##   Re-reads every constant web-twin/index.html cites (file:line) from the C
-##   tree and fails if a value moved, so the firmware stays the single source
-##   of truth for the twin. Python 3 only; no toolchain / hardware.
+##   tree and fails if a value moved. The decision logic itself is the real
+##   firmware compiled to WASM (twin.js) — this guards the residual JS-side
+##   constants (the ESP32 walk-up controller port + world pacing).
 test-web:
 	@python3 $(REPO_ROOT)/web-twin/check_constants.py
+
+## twin-wasm: compile the twin's firmware to WASM  ->  web-twin/twin.js
+##   modules/woz_uwb + the tests/host shim under Emscripten (needs emsdk on
+##   PATH or in ~/emsdk). Reproducible: the committed twin.js is rebuilt and
+##   byte-diffed by CI, so the page can never run stale firmware.
+twin-wasm:
+	@$(REPO_ROOT)/scripts/twin-wasm.sh
+
+## test-twin: rebuild the WASM twin, then replay the test_twin.c scenario in node
+test-twin: twin-wasm
+	@node $(REPO_ROOT)/web-twin/selftest.cjs
 
 ##@ Docs
 ## docs: build the documentation site  ->  site/index.html
