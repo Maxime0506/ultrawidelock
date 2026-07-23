@@ -9,12 +9,20 @@
   reacts: BLE connect radius, Aliro session bring-up, UWB DS-TWR ranging
   blocks, the range-integrity trust gate, the approach controller, the bolt.
 
-  The decision logic below is a line-cited port of the firmware; every
-  decision constant lives in the FW table and is verified against the C tree
-  by web-twin/check_constants.py (the drift gate). Environment knobs that are
-  NOT firmware (BLE radio range, noise probability, phase pacing) are marked
-  SIM where they appear. The model self-test in the footer replays the
-  scenario tests/host/test_twin.c asserts and must pass on every load.
+  The decision logic IS the firmware: modules/woz_uwb (the CCC DS-TWR
+  responder, range store and trust gate) is compiled unmodified to WASM
+  (twin.js, built by scripts/twin-wasm.sh) against the same tests/host shim
+  the host suite links, and every ranging block on this page is a genuinely
+  CCM*-encrypted Pre-POLL/POLL/Response/Final/Final_Data exchange decoded by
+  the firmware's own RX state machine. The page reads decisions through the
+  same facade seam the lock uses, and can single-step a round leg by leg.
+
+  What stays JavaScript is the world (BLE radio range, noise probability,
+  phase pacing — marked SIM) and the ESP32 walk-up controller port, whose
+  constants live in the FW table below and are verified against the C tree by
+  web-twin/check_constants.py (the residual drift gate). The firmware
+  self-test in the footer replays the scenario tests/host/test_twin.c asserts
+  — against the compiled firmware — and must pass on every load.
 -->
 <html lang="en">
 <head>
@@ -163,6 +171,21 @@
   .pips { display: inline-flex; gap: .25rem; vertical-align: middle; }
   .pip { width: .55rem; height: .55rem; border-radius: 50%; border: 1px solid var(--faint); transition: background .2s; }
   .pip.on { background: var(--amber); border-color: var(--amber); }
+  /* firmware debugger */
+  #legs { display: flex; gap: .3rem; margin-bottom: .55rem; }
+  .leg {
+    flex: 1; text-align: center; font-family: var(--mono); font-size: .6rem; color: var(--muted);
+    padding: .18rem .1rem; border: 1px solid var(--hairline); border-radius: 6px;
+    background: var(--ground); white-space: nowrap; overflow: hidden;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .leg.next {
+    color: var(--strong); border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+    background: color-mix(in srgb, var(--amber) 12%, var(--surface));
+  }
+  #dbg-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: .45rem .6rem; margin-bottom: .55rem; }
+  #dbg-stats .k { font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
+  #dbg-stats .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: .78rem; color: var(--strong); }
   /* controls */
   .ctl { display: flex; align-items: center; gap: .6rem; margin-bottom: .6rem; }
   .ctl label { flex: 1; font-size: .8rem; color: var(--muted); }
@@ -184,13 +207,19 @@
   button.danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
   button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--tint); }
   button.primary[aria-pressed="true"] { color: #fff; }
-  /* log */
+  button:disabled { opacity: .45; cursor: default; }
+  /* logs */
   #log { font-family: var(--mono); font-size: .7rem; max-height: 9.5rem; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
   #log div { padding: .07rem 0; color: var(--muted); }
   #log div.hot { color: var(--strong); }
   #log .t { color: var(--faint); }
   #log .ble { color: var(--cyan); } #log .uwb { color: var(--amber); }
   #log .ok { color: var(--green); } #log .bad { color: var(--red); }
+  #fwlog {
+    font-family: var(--mono); font-size: .62rem; line-height: 1.45; color: var(--muted);
+    max-height: 7.5rem; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
   footer {
     display: flex; gap: 1rem; flex-wrap: wrap; align-items: baseline;
     padding: .55rem 1.2rem; background: var(--surface); border-top: 1px solid var(--hairline);
@@ -212,7 +241,7 @@
 <div class="topbar">
   <a id="backBtn" class="back-link" href="index.html" hidden>&larr; Docs</a>
   <span class="brand"><b>openaliro</b><span class="tag">Digital Twin</span></span>
-  <span class="sub">the reader's real unlock logic, line-cited from the firmware — drag the phone or press Walk up</span>
+  <span class="sub">the reader's real unlock logic — the firmware itself, compiled to WASM — drag the phone or press Walk up</span>
   <button id="themeBtn" class="icon-btn" aria-label="Toggle light / dark theme" title="Toggle theme">
     <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
     <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -236,11 +265,26 @@
           <div class="v"><span id="v-cm">—</span> <small>cm · true <span id="v-true">—</span> cm</small></div>
         </div>
         <div class="ro"><div class="k">median (filter)</div><div class="v"><span id="v-med">—</span> <small>cm</small></div></div>
-        <div class="ro"><div class="k">trust (layer 4)</div><div class="v"><span class="pips" id="v-trust"></span> <small id="v-trustn">0/3</small></div></div>
+        <div class="ro"><div class="k">trust (layer 4)</div><div class="v"><span class="pips" id="v-trust"></span> <small id="v-trustn">—</small></div></div>
         <div class="ro"><div class="k">dwell near·far</div><div class="v" id="v-dwell">0·0</div></div>
         <div class="ro"><div class="k">BLE link</div><div class="v" id="v-ble"><small>—</small></div></div>
         <div class="ro"><div class="k">Wallet</div><div class="v"><span class="chip locked" id="v-wallet">Secured</span></div></div>
         <div class="ro"><div class="k">Bolt</div><div class="v"><span class="chip locked" id="v-bolt">LOCKED</span></div></div>
+      </div>
+    </section>
+    <section>
+      <h2>Firmware debugger <span class="cite">(woz_uwb in WASM, ccc_shim_rx.c state machine)</span></h2>
+      <div id="legs"></div>
+      <div id="dbg-stats">
+        <div><div class="k">block</div><div class="v" id="d-block">—</div></div>
+        <div><div class="k">poll idx</div><div class="v" id="d-idx">—</div></div>
+        <div><div class="k">rx arms</div><div class="v" id="d-rx">—</div></div>
+        <div><div class="k">resp tx</div><div class="v" id="d-tx">—</div></div>
+      </div>
+      <div class="btnrow">
+        <button id="b-pause" aria-pressed="false" title="freeze the world; the firmware only moves when stepped">⏸ Pause</button>
+        <button id="b-stepleg" title="run the next leg of the DS-TWR round in the real RX state machine">Step leg</button>
+        <button id="b-stepblock" title="run the rest of the current ranging block">Step block</button>
       </div>
     </section>
     <section>
@@ -258,21 +302,26 @@
       <div class="btnrow">
         <button id="b-walk" class="primary" aria-pressed="false">▶ Walk up</button>
         <button id="b-away" aria-pressed="false">◀ Walk away</button>
-        <button id="b-spoof" class="danger" title="inject one implausible early-first-path block, as test_twin.c:207-213">Ghost-Peak spoof</button>
-        <button id="b-reset">Reset</button>
+        <button id="b-spoof" class="danger" title="inject one implausible early-first-path block through the full frame path, as test_twin.c:123-130">Ghost-Peak spoof</button>
+        <button id="b-reset" title="reboot the twin firmware (a fresh WASM instance)">Reset</button>
       </div>
     </section>
     <section>
       <h2>Event log</h2>
       <div id="log"></div>
     </section>
+    <section>
+      <h2>Firmware console <span class="cite">(DIAG stream from the C; throttled like on-target)</span></h2>
+      <div id="fwlog"></div>
+    </section>
   </aside>
 </main>
 <footer>
-  <span id="selftest">model self-test: …</span>
-  <span>decision constants are firmware-cited (file:line) and drift-gated by <code>web-twin/check_constants.py</code></span>
+  <span id="selftest">firmware self-test: …</span>
+  <span>decision logic is <code>modules/woz_uwb</code> compiled to WASM (<code>twin.js</code>); residual JS constants are firmware-cited and drift-gated by <code>web-twin/check_constants.py</code></span>
 </footer>
 
+<script src="twin.js"></script>
 <script>
 "use strict";
 
@@ -307,13 +356,12 @@
   });
 })();
 
-/* ── FW: decision constants, one per line, verified against the C tree by
- * check_constants.py. Format is load-bearing: `NAME: value, // path:line`. ── */
+/* ── FW: residual JS-side constants, one per line, verified against the C tree
+ * by check_constants.py. Format is load-bearing: `NAME: value, // path:line`.
+ * Everything the range store / trust gate decides comes from the compiled
+ * firmware itself (twin.js) — only the ESP32 walk-up controller port and the
+ * world pacing still read constants here. ── */
 const FW = {
-  FIRA_RANGE_NEG_TOL_CM: 30,   // modules/woz_uwb/src/fira/fira_session.h:41
-  FIRA_RANGE_MAX_CM: 3000,     // modules/woz_uwb/src/fira/fira_session.h:42
-  FIRA_RANGE_TRUST_K: 3,       // modules/woz_uwb/src/fira/fira_session.h:64
-  FIRA_RANGE_SPREAD_CM: 50,    // modules/woz_uwb/src/fira/fira_session.h:65
   ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:119
   ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:120
   ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:121
@@ -322,7 +370,7 @@ const FW = {
   ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:124
   CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:270
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
-  SPOOF_CM: -400,              // tests/host/test_twin.c:211
+  SPOOF_CM: -400,              // tests/host/test_twin.c:127
 };
 
 /* The firmware's own walk-up phase names (aliro_lat.h:21-31). M4_DONE and up
@@ -331,41 +379,48 @@ const PHASES = ["BLE_CONNECT","OP05_RX","AUTH0_TX","AUTH1_DONE","EXCHANGE_DONE",
                 "AP_COMPLETED","M4_DONE","FIRST_RANGE","TRUSTED_RANGE","BOLT_DRIVEN"];
 const P = Object.fromEntries(PHASES.map((n,i)=>[n,i]));
 
-/* ── Range store + integrity gate: port of fira_session.c ─────────────────── */
-class RangeStore {
-  constructor(){ this.haveRange=false; this.lastCm=0; this.trust=0; this.listener=null; }
-  /* layer 1 plausibility band — fira_session.c:82-85 */
-  plausible(cm){ return cm >= -FW.FIRA_RANGE_NEG_TOL_CM && cm <= FW.FIRA_RANGE_MAX_CM; }
-  /* layer 4 consensus bit — fira_session.c:92-95 */
-  trusted(){ return this.trust >= FW.FIRA_RANGE_TRUST_K; }
-  /* per-block latch — fira_session.c:102-141 */
-  setCccRangeCm(cm){
-    if (!this.plausible(cm)) { this.trust = 0; return false; }   // fira_session.c:109-112
-    if (cm < 0) cm = 0;                                          // fira_session.c:114-116 (point-blank slop)
-    const delta = Math.abs(cm - this.lastCm);                    // fira_session.c:120
-    if (this.haveRange && delta <= FW.FIRA_RANGE_SPREAD_CM) {    // fira_session.c:121-127
-      if (this.trust < FW.FIRA_RANGE_TRUST_K) this.trust++;
-    } else {
-      this.trust = 1;
-    }
-    this.haveRange = true; this.lastCm = cm;                     // fira_session.c:130-135
-    if (this.listener) this.listener();                          // fira_session.c:137-140 (accepted latches only)
-    return true;
-  }
-  /* facade unlock seam — woz_uwb_facade.c:102-105 and :129-140 */
-  lastRangeCm(){ return this.haveRange ? this.lastCm : null; }
-  trustedRangeCm(){ return (this.haveRange && this.trusted()) ? this.lastCm : null; }
+/* The five legs of one DS-TWR ranging block, as twin_glue.c drives them
+ * through ccc_shim_rx.c's real state machine. */
+const LEGS = ["PRE-POLL","POLL","RESP TX","FINAL","FINAL_DATA"];
+
+/* ── Firmware bridge: the compiled woz_uwb responder (twin.js) ────────────── */
+const NO_RANGE = -100000; /* twin_glue.c TWIN_NO_RANGE */
+function wrapModule(m){
+  const cmOrNull = v => v === NO_RANGE ? null : v;
+  return {
+    block: cm => m._twin_block(cm|0),
+    step: cm => m._twin_step(cm|0),
+    leg: () => m._twin_leg(),
+    lastCm: () => cmOrNull(m._twin_last_cm()),
+    trustedCm: () => cmOrNull(m._twin_trusted_cm()),
+    trustLevel: () => m._twin_trust_level(),
+    trustK: () => m._twin_trust_k(),
+    plausible: cm => m._twin_plausible(cm|0) === 1,
+    takeLatches: () => m._twin_take_latches(),
+    awaitingPoll: () => m._twin_awaiting_poll() === 1,
+    rxArms: () => m._twin_stat_rxenable(),
+    respTx: () => m._twin_stat_starttx(),
+    pollIndex: () => m._twin_poll_index(),
+    blockNo: () => m._twin_block_no(),
+  };
+}
+async function bootFirmware(print){
+  const m = await createTwin({ print });
+  if (m._twin_boot() !== 0) throw new Error("twin_boot failed");
+  return wrapModule(m);
 }
 
-/* ── Approach controller: port of the ESP32 walk-up loop, app_main.cpp ────── */
+/* ── Approach controller: port of the ESP32 walk-up loop, app_main.cpp.
+ * Still JavaScript (it is application code on the ESP32 port, not part of
+ * woz_uwb); it reads the firmware through the same trusted-range seam. ────── */
 /* median of first n — app_main.cpp:179-199 */
 function rangeMedian(win, n){
   const t = win.slice(0, n).sort((a,b)=>a-b);
   return t[Math.floor(n/2)];
 }
 class ApproachController {
-  constructor(store, events){
-    this.store = store; this.ev = events;
+  constructor(getFw, events){
+    this.getFw = getFw; this.ev = events;
     this.locked = true; this.present = false;                    // app_main.cpp:255-256
     this.win = new Array(FW.ALIRO_RANGE_MEDIAN_N).fill(0);
     this.wlen = 0; this.wpos = 0;
@@ -376,7 +431,8 @@ class ApproachController {
   /* one 200 ms wake — app_main.cpp:262-336; `active` = a block latched since
    * the last wake (the task-notify count), NOT the raw timeout path. */
   tick(nowMs, active){
-    const cm = this.store.trustedRangeCm();
+    const fw = this.getFw();
+    const cm = fw ? fw.trustedCm() : null;                       // woz_uwb_trusted_range_cm
     const trusted = active && cm !== null;                       // app_main.cpp:268-270
     if (active) this.lastActivityMs = nowMs;                     // app_main.cpp:272-274
     if (trusted) {
@@ -411,33 +467,60 @@ class ApproachController {
   }
 }
 
-/* ── Model self-test: replay the scenario test_twin.c asserts ─────────────── */
-function selfTest(){
+/* ── Firmware self-test: replay the test_twin.c scenario against the compiled
+ * firmware, in a throwaway module instance so the live sim stays clean. The
+ * same sequence runs in CI via web-twin/selftest.cjs. ── */
+async function selfTest(){
+  const el = document.getElementById("selftest");
   const r = [];
   const ok = (name, cond) => r.push([name, !!cond]);
-  const s = new RangeStore();
-  s.setCccRangeCm(234);                                  // the twin's DS-TWR round latches 234 cm
-  ok("range.seen+cm", s.lastRangeCm() === 234);          // test_twin.c:201-202
-  ok("range.plausible", s.plausible(234));               // test_twin.c:203
-  ok("one_block.not_trusted", s.trustedRangeCm() === null); // test_twin.c:205
-  s.setCccRangeCm(FW.SPOOF_CM);                          // Ghost-Peak spoof
-  ok("spoof.range_not_reduced", s.lastRangeCm() === 234);   // test_twin.c:212
-  ok("spoof.not_trusted", s.trustedRangeCm() === null);     // test_twin.c:213
-  s.setCccRangeCm(120);
-  ok("earn.one", s.trustedRangeCm() === null);           // test_twin.c:219
-  s.setCccRangeCm(122);
-  ok("earn.two", s.trustedRangeCm() === null);           // test_twin.c:221
-  s.setCccRangeCm(121);
-  ok("earn.k_reached", s.trustedRangeCm() === 121);      // test_twin.c:223-224
-  /* controller: trusted blocks at 80 cm move the bolt after NEAR_DWELL ticks */
-  let unlocked = false;
-  const c = new ApproachController(s, { grant(){}, unlock(){ unlocked = true; }, relock(){}, secured(){} });
-  for (let i = 0; i < FW.ALIRO_NEAR_DWELL + 1; i++){ s.setCccRangeCm(80); c.tick(i*FW.CTRL_TICK_MS, true); }
-  ok("controller.unlock_after_dwell", unlocked);
+  try {
+    const m = await createTwin({ print: () => {} });
+    ok("boot", m._twin_boot() === 0);
+    const w = wrapModule(m);
+    /* legit approach: one full encrypted DS-TWR block latches 234 cm */
+    w.block(234);
+    ok("range.cm", w.lastCm() === 234);
+    ok("range.plausible", w.plausible(234));
+    ok("one_block.not_trusted", w.trustedCm() === null);
+    ok("latch.notified", w.takeLatches() === 1);
+    /* Ghost-Peak spoof through the same full-frame path */
+    w.block(FW.SPOOF_CM);
+    ok("spoof.range_not_reduced", w.lastCm() === 234);
+    ok("spoof.not_trusted", w.trustedCm() === null);
+    ok("spoof.trust_reset", w.trustLevel() === 0);
+    ok("spoof.no_wake", w.takeLatches() === 0);
+    /* only a sustained honest approach earns the unlock bit */
+    w.block(120);
+    ok("earn.one", w.trustedCm() === null);
+    w.block(122);
+    ok("earn.two", w.trustedCm() === null);
+    w.block(121);
+    ok("earn.k_reached", w.trustedCm() !== null);
+    ok("earn.distance", w.trustedCm() === 121);
+    ok("earn.level_k", w.trustLevel() === w.trustK());
+    /* the per-leg stepper drives the real RX state machine */
+    ok("leg.start", w.leg() === 0);
+    w.step(150);
+    ok("leg.await_poll", w.awaitingPoll());
+    for (let i = 0; i < 4; i++) w.step(150);
+    ok("leg.wrapped", w.leg() === 0);
+    ok("step.latched", w.lastCm() === 150);
+    /* controller: trusted blocks at 80 cm move the bolt after NEAR_DWELL ticks */
+    let unlocked = false;
+    const c = new ApproachController(() => w,
+      { grant(){}, unlock(){ unlocked = true; }, relock(){}, secured(){} });
+    for (let i = 0; i < FW.ALIRO_NEAR_DWELL + 1; i++){
+      w.block(80); c.tick(i*FW.CTRL_TICK_MS, w.takeLatches() > 0);
+    }
+    ok("controller.unlock_after_dwell", unlocked);
+  } catch (e) {
+    ok("firmware.loaded", false);
+    console.error("twin self-test: firmware failed to load:", e);
+  }
   const fails = r.filter(x=>!x[1]);
-  const el = document.getElementById("selftest");
-  el.textContent = "model self-test: " + (fails.length ? "FAIL " + fails.map(f=>f[0]).join(",")
-                    : r.length + "/" + r.length + " vs test_twin.c");
+  el.textContent = "firmware self-test: " + (fails.length ? "FAIL " + fails.map(f=>f[0]).join(",")
+                    : r.length + "/" + r.length + " vs test_twin.c (WASM)");
   el.className = fails.length ? "fail" : "pass";
   for (const [name, pass] of r) if (!pass) console.error("twin self-test FAIL:", name);
   return fails.length === 0;
@@ -454,11 +537,12 @@ const sim = {
   connected: false,
   sessionActive: false,
   phase: -1,                     // highest aliro_lat mark this walk-up
-  store: new RangeStore(),
+  fw: null,                      // the booted firmware bridge (wrapModule)
   ctrl: null,
+  paused: false,                 // debugger: freeze the world, step the firmware
+  stepMeas: null,                // measurement captured at leg 0 of a stepped block
   t: 0,                          // sim clock, ms
-  blockAcc: 0, tickAcc: 0, blockN: 0,
-  activeSinceTick: false,
+  blockAcc: 0, tickAcc: 0,
   spoofArmed: false,
   bleRadius: 8, speed: 1.4, angleDeg: 0, noise: true,
   trueCm(){ return Math.round(Math.hypot(this.phone.x, this.phone.y) * 100); },
@@ -474,6 +558,14 @@ function log(cls, msg){
   setTimeout(()=>d.classList.remove("hot"), 900);
   while (logEl.children.length > 40) logEl.lastChild.remove();
 }
+const fwlogEl = $("fwlog");
+function fwPrint(line){
+  const d = document.createElement("div");
+  d.textContent = line;
+  fwlogEl.append(d);
+  while (fwlogEl.children.length > 160) fwlogEl.firstChild.remove();
+  fwlogEl.scrollTop = fwlogEl.scrollHeight;
+}
 function mark(phase){ if (phase > sim.phase) sim.phase = phase; }
 
 const events = {
@@ -484,17 +576,11 @@ const events = {
 };
 
 function resetWorld(){
-  sim.store = new RangeStore();
-  sim.ctrl = new ApproachController(sim.store, events);
+  sim.ctrl = new ApproachController(() => sim.fw, events);
   sim.ctrl.unlockCm = +$("c-thresh").value;
-  sim.store.listener = () => {                       // on_uwb_range, app_main.cpp:203-221
-    sim.activeSinceTick = true;
-    mark(P.FIRST_RANGE);
-    if (sim.store.trustedRangeCm() !== null) mark(P.TRUSTED_RANGE);
-  };
   sim.connected = false; sim.sessionActive = false; sim.phase = -1;
-  sim.blockAcc = sim.tickAcc = sim.blockN = 0;
-  sim.activeSinceTick = false; sim.spoofArmed = false;
+  sim.blockAcc = sim.tickAcc = 0;
+  sim.spoofArmed = false; sim.stepMeas = null;
 }
 
 function bleConnect(){
@@ -519,39 +605,84 @@ function authAdvance(){
   }
 }
 
-/* One 192 ms ranging block (uwb_selftest.c:36): measure, condition, latch. */
-function rangingBlock(){
-  sim.blockN++;
-  scene.beam = 1;                                   // pulse the DS-TWR link visual
-  let cm;
+/* One block's measurement, honoring an armed spoof and the noise knob.
+ * Per-block spikes are firmware-documented bench behaviour: consecutive
+ * blocks swung 70 mm -> 1604 mm -> 112 mm (app_main.cpp:242-243). The
+ * ~150 cm spike magnitude cites that line; the 6% rate + small jitter are
+ * SIM. This is exactly the noise the median filter exists to kill. */
+function blockCm(){
   if (sim.spoofArmed){
     sim.spoofArmed = false;
-    cm = FW.SPOOF_CM;                                // test_twin.c:211
-    const before = sim.store.lastRangeCm();
-    sim.store.setCccRangeCm(cm);
-    emitWave("bad");                                 // a red pulse that the gate kills
-    log("bad", `Ghost-Peak spoof (${cm} cm) REJECTED — layer 1; range stays ` +
-               `${before === null ? "—" : before + " cm"}, trust reset`);
-    return;
+    return { cm: FW.SPOOF_CM, spoof: true };         // test_twin.c:127
   }
-  emitWave("uwb");
-  cm = sim.trueCm();
+  let cm = sim.trueCm();
   if (sim.noise){
-    /* Per-block spikes are firmware-documented bench behaviour: consecutive
-     * blocks swung 70 mm -> 1604 mm -> 112 mm (app_main.cpp:242-243). The
-     * ~150 cm spike magnitude cites that line; the 6% rate + small jitter
-     * are SIM. This is exactly the noise the median filter exists to kill. */
     cm += Math.round((Math.random() + Math.random() - 1) * 6);
     if (Math.random() < 0.06) cm += 1500 + Math.round(Math.random() * 100);
   }
-  const before = sim.store.trust;
-  sim.store.setCccRangeCm(cm);
-  if (sim.store.trust === 1 && before >= 1)
-    log("uwb", `block ${sim.blockN}: ${cm} cm outlier — trust run restarts`);
+  return { cm, spoof: false };
+}
+
+/* Post-block bookkeeping: phases, spoof/outlier logging — all read back from
+ * the firmware, which just decided. */
+function afterBlock(meas, before, trustBefore){
+  if (meas.spoof){
+    emitWave("bad");                                 // a red pulse the gate killed
+    log("bad", `Ghost-Peak spoof (${meas.cm} cm) REJECTED — layer 1; range stays ` +
+               `${before === null ? "—" : before + " cm"}, trust reset`);
+    return;
+  }
+  if (sim.fw.lastCm() !== null) mark(P.FIRST_RANGE);
+  if (sim.fw.trustedCm() !== null) mark(P.TRUSTED_RANGE);
+  if (sim.fw.trustLevel() === 1 && trustBefore >= 1)
+    log("uwb", `block ${sim.fw.blockNo() - 1}: ${meas.cm} cm outlier — trust run restarts`);
+}
+
+/* One 192 ms ranging block (uwb_selftest.c:36): a full encrypted DS-TWR
+ * exchange through the compiled responder. */
+function rangingBlock(){
+  scene.beam = 1;                                    // pulse the DS-TWR link visual
+  const meas = blockCm();
+  const before = sim.fw.lastCm(), trustBefore = sim.fw.trustLevel();
+  if (!meas.spoof) emitWave("uwb");
+  sim.fw.block(meas.cm);
+  afterBlock(meas, before, trustBefore);
+}
+
+/* Debugger: run the next leg of the current block in the real state machine. */
+function stepLeg(){
+  if (!sim.fw){ log("bad", "firmware still booting"); return; }
+  if (!sim.sessionActive){ log("bad", "step needs an active UWB session — walk into BLE range first"); return; }
+  const leg = sim.fw.leg();
+  if (leg === 0){
+    sim.stepMeas = blockCm();
+    scene.beam = 1;
+    emitWave(sim.stepMeas.spoof ? "bad" : "uwb");
+  }
+  if (leg === 4){
+    const meas = sim.stepMeas || blockCm();
+    const before = sim.fw.lastCm(), trustBefore = sim.fw.trustLevel();
+    sim.fw.step(meas.cm);
+    if (!meas.spoof){
+      const l = sim.fw.lastCm();
+      log("uwb", `leg FINAL_DATA — decoded, latched ${l === null ? "—" : l + " cm"}`);
+    }
+    afterBlock(meas, before, trustBefore);
+    sim.stepMeas = null;
+  } else {
+    sim.fw.step(sim.trueCm());
+    const note = leg === 0 && sim.fw.awaitingPoll() ? " — SP3 armed for the POLL" : "";
+    log("uwb", `leg ${LEGS[leg]}${note}`);
+  }
+}
+function stepBlock(){
+  if (!sim.fw || !sim.sessionActive){ stepLeg(); return; }
+  do { stepLeg(); } while (sim.fw.leg() !== 0);
 }
 
 /* ── Fixed-step timers off the sim clock ──────────────────────────────────── */
 function step(dtMs){
+  if (sim.paused) return;                            // debugger freeze: world + firmware
   sim.t += dtMs;
   const d = Math.hypot(sim.phone.x, sim.phone.y);
   /* walking */
@@ -565,8 +696,8 @@ function step(dtMs){
   const dist = Math.hypot(sim.phone.x, sim.phone.y);
   if (!sim.connected && dist <= sim.bleRadius) bleConnect();
   else if (sim.connected && dist > sim.bleRadius) bleDisconnect();
-  /* UWB blocks at 192 ms while the session is up */
-  if (sim.sessionActive){
+  /* UWB blocks at 192 ms while the session is up (and the firmware is booted) */
+  if (sim.sessionActive && sim.fw){
     sim.blockAcc += dtMs;
     while (sim.blockAcc >= FW.BLOCK_MS){ sim.blockAcc -= FW.BLOCK_MS; rangingBlock(); }
   }
@@ -575,8 +706,9 @@ function step(dtMs){
   while (sim.tickAcc >= FW.CTRL_TICK_MS){
     sim.tickAcc -= FW.CTRL_TICK_MS;
     if (sim.connected) authAdvance();
-    sim.ctrl.tick(sim.t, sim.activeSinceTick);
-    sim.activeSinceTick = false;
+    /* `active` = the firmware's accepted-latch notify count, the same seam
+     * app_main blocks on; a rejected block never wakes it. */
+    sim.ctrl.tick(sim.t, sim.fw ? sim.fw.takeLatches() > 0 : false);
   }
 }
 
@@ -586,7 +718,7 @@ function step(dtMs){
  * watch from an angle. World is metres, reader/door at the origin, +X the
  * approach axis (phone at -X), +Y lateral depth, +Z up. Everything below is
  * decoration over the same simulation state — waves, an RF density field, and a
- * spring-loaded bolt — so the firmware-cited decision logic is untouched. */
+ * spring-loaded bolt — so the firmware decision logic is untouched. */
 const cv = $("scene"), cx = cv.getContext("2d");
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
 /* Screen directions of the world axes (parallel projection): X approach runs
@@ -670,7 +802,7 @@ function updateScene(dt){
     scene.bleAcc += dt;
     if (scene.bleAcc > 950){ scene.bleAcc = 0; emitWave("ble"); }
   }
-  const target = sim.ctrl.locked ? 1 : 0;
+  const target = sim.ctrl && sim.ctrl.locked ? 1 : 0;
   if (RM.matches){ scene.boltPos = target; scene.boltVel = 0; return; }
   const f = Math.min(1.6, dt / 16.67);
   scene.boltVel += ((target - scene.boltPos) * 0.14 - scene.boltVel * 0.85) * f;
@@ -686,6 +818,7 @@ function draw(){
         raise = C("--raise"), doorOpen = C("--door-open"), mono = C("--mono"),
         motion = !RM.matches, dpr = devicePixelRatio, S = view.S;
   const W = view.W, H = view.H;
+  const locked = sim.ctrl ? sim.ctrl.locked : true;
   cx.clearRect(0, 0, W, H); cx.lineJoin = "round"; cx.textAlign = "center";
   cx.fillStyle = ground; cx.fillRect(0, 0, W, H);
   const dr = project(0, 0, 0);
@@ -713,7 +846,8 @@ function draw(){
   /* zones */
   drawZone(sim.bleRadius, cyan, false, [7 * dpr, 7 * dpr], "BLE " + sim.bleRadius.toFixed(1) + " m", faint, mono);
   drawZone(FW.ALIRO_RELOCK_RANGE_CM / 100, muted, false, [3 * dpr, 6 * dpr], "relock 250 cm", faint, mono);
-  drawZone(sim.ctrl.unlockCm / 100, amber, true, [], "unlock " + sim.ctrl.unlockCm + " cm", muted, mono);
+  drawZone((sim.ctrl ? sim.ctrl.unlockCm : FW.ALIRO_UNLOCK_RANGE_CM) / 100, amber, true, [],
+           "unlock " + (sim.ctrl ? sim.ctrl.unlockCm : FW.ALIRO_UNLOCK_RANGE_CM) + " cm", muted, mono);
   /* wavefronts */
   for (const w of scene.waves){
     const k = w.age / w.life;
@@ -737,13 +871,13 @@ function draw(){
 
   /* 2. door + reader + bolt (right, at the origin) as extruded iso boxes */
   softShadow(dr.x, dr.y, 0.58 * S, 0.22 * S);
-  box3(0.12, 0, 0, 0.92, 1.95, 0.3, sim.ctrl.locked ? panel2 : doorOpen, sim.ctrl.locked ? muted : green);
+  box3(0.12, 0, 0, 0.92, 1.95, 0.3, locked ? panel2 : doorOpen, locked ? muted : green);
   const dt2 = project(0.12, 0, 0);
   cx.strokeStyle = hexA(line, 0.6); cx.lineWidth = dpr;
   roundRect(dt2.x - 0.46 * S + 0.15 * S, dt2.y - 1.95 * S * HZ + 0.19 * S * HZ, 0.62 * S, 1.48 * S * HZ, 0.06 * S); cx.stroke();
   /* bolt: extends into the jamb (left) when locked, retracts green when open */
   const boltB = project(0.12, 0, 0.98), boltH = 0.14 * S * HZ, boltLen = (0.12 + 0.24 * scene.boltPos) * S;
-  cx.fillStyle = sim.ctrl.locked ? ink : green;
+  cx.fillStyle = locked ? ink : green;
   roundRect(boltB.x - 0.46 * S - boltLen, boltB.y - boltH, boltLen + 0.1 * S, boltH, boltH * 0.4); cx.fill();
   /* reader module + glow */
   const rp = project(0.12, 0, 1.06);
@@ -866,9 +1000,18 @@ for (const [i, name] of PHASES.entries()){
   d.textContent = name; d.id = "ph-" + i;
   pipelineEl.append(d);
 }
+const legsEl = $("legs");
+for (const [i, name] of LEGS.entries()){
+  const d = document.createElement("div");
+  d.className = "leg"; d.textContent = name; d.id = "leg-" + i;
+  legsEl.append(d);
+}
 const trustEl = $("v-trust");
-for (let i = 0; i < FW.FIRA_RANGE_TRUST_K; i++){
-  const s = document.createElement("span"); s.className = "pip"; trustEl.append(s);
+function buildTrustPips(k){
+  trustEl.innerHTML = "";
+  for (let i = 0; i < k; i++){
+    const s = document.createElement("span"); s.className = "pip"; trustEl.append(s);
+  }
 }
 
 function render(){
@@ -877,20 +1020,30 @@ function render(){
     el.classList.toggle("lit", sim.phase >= i);
     /* keep the uwb/bolt tint classes; lit is the only toggle */
   }
-  const last = sim.store.lastRangeCm();
+  const fw = sim.fw;
+  const last = fw ? fw.lastCm() : null;
   $("v-cm").textContent = last === null ? "—" : last;
   $("v-true").textContent = sim.trueCm();
-  $("v-med").textContent = sim.ctrl.median === null ? "—" : sim.ctrl.median;
-  [...trustEl.children].forEach((p,i)=>p.classList.toggle("on", i < sim.store.trust));
-  $("v-trustn").textContent = sim.store.trust + "/" + FW.FIRA_RANGE_TRUST_K;
-  $("v-dwell").textContent = sim.ctrl.nearDwell + "·" + sim.ctrl.farDwell;
+  $("v-med").textContent = sim.ctrl && sim.ctrl.median !== null ? sim.ctrl.median : "—";
+  const trust = fw ? fw.trustLevel() : 0, k = fw ? fw.trustK() : 0;
+  [...trustEl.children].forEach((p,i)=>p.classList.toggle("on", i < trust));
+  $("v-trustn").textContent = fw ? trust + "/" + k : "—";
+  $("v-dwell").textContent = sim.ctrl ? sim.ctrl.nearDwell + "·" + sim.ctrl.farDwell : "0·0";
   $("v-ble").innerHTML = sim.connected
     ? '<span class="chip granted">connected</span>'
     : '<small>advertising 0xFFF2</small>';
-  $("v-wallet").textContent = sim.ctrl.present ? "Unsecured" : "Secured";
-  $("v-wallet").className = "chip " + (sim.ctrl.present ? "granted" : "locked");
-  $("v-bolt").textContent = sim.ctrl.locked ? "LOCKED" : "UNLOCKED";
-  $("v-bolt").className = "chip " + (sim.ctrl.locked ? "locked" : "unlocked");
+  $("v-wallet").textContent = sim.ctrl && sim.ctrl.present ? "Unsecured" : "Secured";
+  $("v-wallet").className = "chip " + (sim.ctrl && sim.ctrl.present ? "granted" : "locked");
+  const locked = sim.ctrl ? sim.ctrl.locked : true;
+  $("v-bolt").textContent = locked ? "LOCKED" : "UNLOCKED";
+  $("v-bolt").className = "chip " + (locked ? "locked" : "unlocked");
+  /* firmware debugger */
+  const leg = fw ? fw.leg() : -1;
+  for (let i = 0; i < LEGS.length; i++) $("leg-" + i).classList.toggle("next", i === leg);
+  $("d-block").textContent = fw ? String(fw.blockNo()) : "—";
+  $("d-idx").textContent = fw ? "0x" + fw.pollIndex().toString(16) : "—";
+  $("d-rx").textContent = fw ? String(fw.rxArms()) : "—";
+  $("d-tx").textContent = fw ? String(fw.respTx()) : "—";
 }
 
 function setWalking(dir){
@@ -904,11 +1057,32 @@ $("b-spoof").onclick = () => {
   if (!sim.sessionActive){ log("bad", "spoof needs an active UWB session"); return; }
   sim.spoofArmed = true;
 };
-$("b-reset").onclick = () => {
+$("b-reset").onclick = async () => {
+  if (!sim.fw) return;                 // still booting — ignore
+  setWalking(0);
+  sim.phone = { x: -9, y: 0 };
+  sim.fw = null;                       // freeze UWB until the reboot lands
+  setPaused(false);
   resetWorld();
-  sim.phone = { x: -9, y: 0 }; setWalking(0);
-  applyAngle(); logEl.innerHTML = ""; log("ble", "reset — reader advertising");
+  applyAngle(); logEl.innerHTML = ""; fwlogEl.innerHTML = "";
+  log("ble", "reset — rebooting the twin firmware");
+  try {
+    sim.fw = await bootFirmware(fwPrint);
+    buildTrustPips(sim.fw.trustK());
+    log("ble", "firmware up — reader advertising");
+  } catch (e) {
+    log("bad", "firmware reboot failed — reload the page");
+    console.error(e);
+  }
 };
+function setPaused(on){
+  sim.paused = on;
+  $("b-pause").setAttribute("aria-pressed", String(on));
+  $("b-pause").textContent = on ? "▶ Run" : "⏸ Pause";
+}
+$("b-pause").onclick = () => setPaused(!sim.paused);
+$("b-stepleg").onclick = stepLeg;
+$("b-stepblock").onclick = stepBlock;
 
 function bindRange(id, out, fmt, apply){
   $(id).oninput = () => { $(out).textContent = fmt($(id).value); apply(+$(id).value); };
@@ -957,7 +1131,23 @@ cv.addEventListener("pointercancel", endDrag);
 /* ── Main loop ────────────────────────────────────────────────────────────── */
 resetWorld();
 resize();
-selfTest();
+buildTrustPips(3); /* placeholder until the firmware reports its real K */
+if (typeof createTwin === "undefined"){
+  const el = $("selftest");
+  el.textContent = "firmware self-test: twin.js missing — run `make twin-wasm`";
+  el.className = "fail";
+  log("bad", "twin.js not found — the firmware cannot boot");
+} else {
+  selfTest();
+  bootFirmware(fwPrint).then(fw => {
+    sim.fw = fw;
+    buildTrustPips(fw.trustK());
+    log("ble", "firmware up (woz_uwb in WASM) — drag the phone or press Walk up");
+  }).catch(e => {
+    log("bad", "firmware boot failed — see the browser console");
+    console.error(e);
+  });
+}
 log("ble", "reader advertising — drag the phone or press Walk up");
 let lastT = performance.now();
 function frame(now){
