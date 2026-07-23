@@ -47,6 +47,7 @@ void test_aliro_parser(void);
 void test_aliro_adapter(void);
 void test_aliro_msg(void);
 void test_aliro_session(void);
+void test_aliro_prov(void);
 void test_cherry(void);
 void test_fira(void);
 void test_facade(void);

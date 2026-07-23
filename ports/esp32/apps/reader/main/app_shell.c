@@ -233,6 +233,96 @@ static int cmd_aliro_trust(int argc, char **argv)
 	return 0;
 }
 
+#if defined(CONFIG_WOZ_ALIRO_CLONE)
+#include "aliro_prov.h" /* ALIRO_PROV_BLOB_MAX */
+
+// Maps one hex digit to its 0-15 value, or -1 if not [0-9a-fA-F].
+static int hexnib(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	return -1;
+}
+
+// Decodes an even-length hex string into out (capacity out_cap). Returns the byte
+// count on success, or -1 on an odd length, a bad character, or overflow.
+static int hexdecode(const char *s, uint8_t *out, size_t out_cap)
+{
+	size_t n = strlen(s);
+	if (n == 0 || (n & 1u) || n / 2 > out_cap) {
+		return -1;
+	}
+	for (size_t i = 0; i < n; i += 2) {
+		int hi = hexnib(s[i]);
+		int lo = hexnib(s[i + 1]);
+		if (hi < 0 || lo < 0) {
+			return -1;
+		}
+		out[i / 2] = (uint8_t)((hi << 4) | lo);
+	}
+	return (int)(n / 2);
+}
+
+// Shell command handler: serialise the reader identity + trust store (INCLUDING the
+// private key) into a hex blob for cloning onto a second board. Bench only; gated by
+// CONFIG_WOZ_ALIRO_CLONE. Always returns 0.
+static int cmd_aliro_export(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+	uint8_t blob[ALIRO_PROV_BLOB_MAX];
+	size_t len = 0;
+
+	if (aliro_reader_export_blob(blob, sizeof(blob), &len) != 0) {
+		printf("aliro-export: FAILED (buffer too small)\n");
+		return 0;
+	}
+	printf("%saliro-export%s: %u bytes (contains the reader PRIVATE KEY -- bench only)\n",
+	       col(C_BAD), col(C_RST), (unsigned)len);
+	for (size_t i = 0; i < len; i++) {
+		printf("%02x", blob[i]);
+	}
+	printf("\n");
+	return 0;
+}
+
+// Shell command handler: `aliro-import <hex>`. Adopt an identity + trust store
+// exported from another board via `aliro-export`, persist it, and use it live.
+// Always returns 0.
+static int cmd_aliro_import(int argc, char **argv)
+{
+	if (argc != 2) {
+		printf("usage: aliro-import <hex-blob>\n");
+		return 0;
+	}
+	uint8_t blob[ALIRO_PROV_BLOB_MAX];
+	int n = hexdecode(argv[1], blob, sizeof(blob));
+
+	if (n < 0) {
+		printf("aliro-import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
+		       (unsigned)sizeof(blob));
+		return 0;
+	}
+	int rc = aliro_reader_import_blob(blob, (size_t)n);
+
+	if (rc == 0) {
+		printf("aliro-import: adopted %d-byte identity + trust store (saved to NVS)\n", n);
+	} else if (rc == -1) {
+		printf("aliro-import: malformed blob (bad magic/version/length)\n");
+	} else {
+		printf("aliro-import: NVS write FAILED\n");
+	}
+	return 0;
+}
+#endif /* CONFIG_WOZ_ALIRO_CLONE */
+
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 // Shell command handler: `aliro-stepup [arm|status]`. With `arm` (or no argument)
 // it arms a one-shot Access-Document request for the next transaction; `status`
@@ -258,6 +348,11 @@ void app_shell_start(void)
 	 * which would stall both cores' cache). Pin off the responder core (core 1). */
 	repl_cfg.prompt = "esp32>";
 	repl_cfg.task_core_id = 0;
+#if defined(CONFIG_WOZ_ALIRO_CLONE)
+	/* An exported identity+trust blob is a single hex argument up to
+	 * ALIRO_PROV_BLOB_MAX*2 chars, past the 256-byte default line buffer. */
+	repl_cfg.max_cmdline_length = 1024;
+#endif
 
 	/* UART repl on the default console UART: the prompt shares the UART0 log
 	 * stream, so `make monitor`/`make term` need no change. This mirrors the
@@ -290,6 +385,14 @@ void app_shell_start(void)
 		{.command = "aliro-trust",
 		 .help = "trust the last-presented credential (persist to NVS)",
 		 .func = cmd_aliro_trust},
+#if defined(CONFIG_WOZ_ALIRO_CLONE)
+		{.command = "aliro-export",
+		 .help = "serialise identity+trust (incl. PRIVATE KEY) to hex for cloning",
+		 .func = cmd_aliro_export},
+		{.command = "aliro-import",
+		 .help = "aliro-import <hex>: adopt an identity+trust blob from another board",
+		 .func = cmd_aliro_import},
+#endif
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 		{.command = "aliro-stepup",
 		 .help = "aliro-stepup [arm|status]: request + verify an Access Document (verdict "

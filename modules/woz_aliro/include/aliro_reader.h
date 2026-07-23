@@ -105,6 +105,21 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[65]);
  *  and persist. Returns 0 on success, negative on an NVS error. */
 int aliro_reader_provision_clear(void);
 
+/* ---- Identity clone (bench, CONFIG_WOZ_ALIRO_CLONE) --------------------- *
+ * Replicate a reader's identity + trust store onto a second board so a phone's
+ * existing credential transacts with the clone (the "no pairing dance" path for
+ * the presence-second-factor experiment). export_blob emits the reader private
+ * key, so only the clone-gated console commands reach these. */
+
+/** Serialise the current identity + trust store into a portable blob (backs the
+ *  `aliro-export` console command). Returns 0 and sets *out_len; -1 if cap is
+ *  too small. The blob contains the reader private key. */
+int aliro_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len);
+
+/** Adopt an identity + trust store from an exported blob, persist it, and use it
+ *  live (backs `aliro-import`). 0 ok; -1 malformed blob; -2 NVS write failed. */
+int aliro_reader_import_blob(const uint8_t *buf, size_t len);
+
 /* ---- Step-up (Access Document) bench control (CONFIG_WOZ_ALIRO_STEPUP) ---- *
  * Back the `aliro-stepup` console command. Both are no-ops unless the reader was
  * built with the step-up phase enabled. */

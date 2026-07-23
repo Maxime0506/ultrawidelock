@@ -9,6 +9,7 @@
 # See coverage.sh for what is deliberately excluded and why.
 
 SRC="$ROOT/modules/woz_uwb/src"
+ALIRO="$ROOT/modules/woz_aliro/src"
 SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
 
@@ -27,6 +28,7 @@ UNIT_SRCS=(
 	"$SRC/ccc/ccc_shim_rx.c"
 	"$SRC/fira/fira_session.c"
 	"$SRC/facade/woz_uwb_facade.c"
+	"$ALIRO/aliro_prov.c"
 )
 
 TEST_SRCS=(
@@ -43,6 +45,7 @@ TEST_SRCS=(
 	"$HOST/test_aliro_adapter.c"
 	"$HOST/test_aliro_msg.c"
 	"$HOST/test_aliro_session.c"
+	"$HOST/test_aliro_prov.c"
 	"$HOST/test_cherry.c"
 	"$HOST/test_fira.c"
 	"$HOST/test_facade.c"
@@ -67,6 +70,7 @@ INCS=(
 	-I"$SRC/fira"
 	-I"$SRC/facade"
 	-I"$ROOT/modules/woz_port/include"
+	-I"$ROOT/modules/woz_aliro/include"
 )
 
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.

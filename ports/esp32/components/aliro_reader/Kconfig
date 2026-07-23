@@ -44,4 +44,19 @@ config WOZ_ALIRO_STEPUP
 	  trust store alone decides. With this option unset the reader is byte-for-byte
 	  identical to today and the fast-path auth segment is untouched.
 
+config WOZ_ALIRO_CLONE
+	bool "Reader identity clone/export console commands (bench only)"
+	default n
+	help
+	  Compile the `aliro-export` / `aliro-import` console commands, which
+	  serialise the reader identity + trust store (INCLUDING the reader private
+	  key) to a hex blob and load it onto a second board. This replicates a
+	  provisioned reader so a phone's existing Wallet credential transacts with
+	  the clone -- the bench setup for the presence-second-factor experiment
+	  (export from the door reader, import on a dongle board).
+
+	  OFF by default and never appropriate for a deployed reader: exposing the
+	  private key on the console defeats the identity's whole purpose. Enable it
+	  only on bench boards you control, for the duration of the experiment.
+
 endmenu

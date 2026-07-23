@@ -1627,3 +1627,56 @@ int aliro_reader_provision_clear(void)
 	LOG_INF("reader provisioning cleared (reverted to dev identity)");
 	return 0;
 }
+
+/* ---- Identity clone (bench: replicate a reader onto a second board) ------ *
+ * Serialise/adopt the full identity + trust store so a phone's existing Wallet
+ * credential transacts with a second device carrying the same reader identity.
+ * export_blob emits sign_priv; the console commands that reach these are
+ * compiled only under CONFIG_WOZ_ALIRO_CLONE, off in production. */
+
+// Serialise the reader's current identity + trust store into a self-describing blob
+// (aliro_prov_serialize format) so it can be loaded onto a second board. Snapshots
+// the shared state under s_prov_lock, then serialises off the copy. Returns 0 and
+// sets *out_len on success; -1 if the buffer is too small.
+int aliro_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	woz_mutex_lock(&s_prov_lock);
+	id = s_id;
+	ts = s_trust;
+	woz_mutex_unlock(&s_prov_lock);
+
+	return aliro_prov_serialize(&id, &ts, out, cap, out_len);
+}
+
+// Adopt an identity + trust store from a blob written by aliro_reader_export_blob
+// (or aliro_prov_serialize): parse, persist to NVS, then commit in memory so the
+// running reader uses it immediately. Persist happens before the in-memory commit,
+// so a failed NVS write leaves the live identity unchanged. Returns 0 on success,
+// -1 if the blob is malformed, -2 if the NVS write fails.
+int aliro_reader_import_blob(const uint8_t *buf, size_t len)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	if (aliro_prov_deserialize(buf, len, &id, &ts) != 0) {
+		return -1;
+	}
+	if (aliro_prov_store(&id, &ts) != 0) {
+		return -2; /* not committed; s_id/s_trust unchanged */
+	}
+	woz_mutex_lock(&s_prov_lock);
+	s_id = id;
+	s_trust = ts;
+	woz_mutex_unlock(&s_prov_lock);
+	compute_reader_group_x(); /* signingKey/grk changed -> refresh salt field 1 */
+	LOG_INF("reader identity imported from clone blob (%s, %u trust anchor(s))",
+		id.is_dev ? "DEV" : "provisioned", ts.count);
+	return 0;
+}
