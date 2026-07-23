@@ -15,6 +15,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,14 @@ int aliro_reader_start_attached(void);
  *  config, so its first advertisement has no GRK and the phone cannot resolve it.
  *  No-op if the reader has no GRK or is not yet advertising. */
 void aliro_reader_refresh_adv(void);
+
+/* Feed one BLE connection-RSSI sample (dBm) into the session's ranging power gate
+ * (CONFIG_WOZ_RSSI_GATE; absent without it). The transport polls the controller
+ * every CONFIG_WOZ_RSSI_GATE_POLL_MS while its CoC is up and calls this from the
+ * BLE-host task. The gate holds AP-Completed — and with it the whole UWB radio —
+ * until the phone is inside the open threshold, and tears ranging down again on a
+ * sustained fade below the close threshold. */
+void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm);
 
 /* Send the phone a "Reader Status Changed" SDU (Aliro transaction step 23) over the
  * active ranging session's BleSK channel: `unsecured` true on an approach grant (this

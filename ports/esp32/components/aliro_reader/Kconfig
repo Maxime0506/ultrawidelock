@@ -28,6 +28,69 @@ config WOZ_ALIRO_LAB
 	  aliro-lat stamps, hence the ALIRO_LAT_TRACE dependency. Set n to strip
 	  it entirely from a hardened production image.
 
+config WOZ_RSSI_GATE
+	bool "RSSI-gated UWB ranging (power gate)"
+	default y
+	help
+	  Gate the UWB radio on BLE connection RSSI: the reader completes the
+	  Aliro auth as soon as the phone connects, but holds the one message
+	  the phone waits for before initiating ranging (Reader-Status-AP-
+	  Completed, §11.7.3.4.1) until the smoothed RSSI says the phone is in
+	  the last few metres. Until then the DW3000 stays powered off instead
+	  of listening continuously from BLE range — the difference between a
+	  battery-powered lock and a tethered one. A sustained fade below the
+	  close threshold tears ranging down again and drops the link; the
+	  phone re-runs the fast auth on its next approach. With this off the
+	  radio arms right after auth, exactly as before.
+
+config WOZ_RSSI_GATE_OPEN_DBM
+	int "Gate open threshold (dBm)"
+	depends on WOZ_RSSI_GATE
+	default -65
+	help
+	  Smoothed connection RSSI at or above this opens the gate (allows UWB).
+	  Placeholder until the bench power/latency curve pins it; roughly the
+	  last few metres for a phone at 0 dBm TX indoors.
+
+config WOZ_RSSI_GATE_CLOSE_DBM
+	int "Gate close threshold (dBm)"
+	depends on WOZ_RSSI_GATE
+	default -75
+	help
+	  Smoothed RSSI at or below this — sustained for the close hold time —
+	  closes the gate: ranging stops, the DW3000 powers down and the link
+	  is dropped. Keep well below the open threshold (hysteresis) so body
+	  fades cannot flap the radio.
+
+config WOZ_RSSI_GATE_CLOSE_HOLD_MS
+	int "Gate close hold (ms)"
+	depends on WOZ_RSSI_GATE
+	default 3000
+	help
+	  How long the smoothed RSSI must stay below the close threshold before
+	  the gate closes. Rides out pocket/body fades mid-approach.
+
+config WOZ_RSSI_GATE_SLOPE_DB
+	int "Fast-open rise (dB per 1.5 s window; 0 disables)"
+	depends on WOZ_RSSI_GATE
+	default 8
+	help
+	  A rise of this many dB across the tracking window opens the gate
+	  early (once above the close threshold), so a fast walk-up is not
+	  penalized by the smoothing lag. 0 turns the rise-rate fast open off
+	  (threshold-only gating) — useful as the comparison arm in the power/
+	  latency study.
+
+config WOZ_RSSI_GATE_POLL_MS
+	int "Connection RSSI poll period (ms)"
+	depends on WOZ_RSSI_GATE
+	default 250
+	help
+	  How often the transport reads the controller RSSI while the Aliro
+	  L2CAP channel is up (one HCI Read RSSI per period; negligible next
+	  to the UWB RX it replaces). The first read fires at channel-open so
+	  a connect-at-the-door walk-up is never delayed by the poll cadence.
+
 config WOZ_ALIRO_STEPUP
 	bool "Enable the Aliro step-up (Access Document) phase"
 	default n

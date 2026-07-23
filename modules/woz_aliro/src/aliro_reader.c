@@ -38,6 +38,7 @@
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
 #include "aliro_reader.h"
+#include "aliro_rssi_gate.h"
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 #include "aliro_stepup.h"
 #endif
@@ -128,6 +129,9 @@ enum txn_phase {
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 	PH_SENT_STEPUP, /* ENVELOPE sent; collecting the DeviceResponse before AP-Completed */
 #endif
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	PH_GATE_HOLD, /* auth done; AP-Completed deferred until the RSSI power gate opens */
+#endif
 	PH_ESTABLISHED, /* AP-Completed sent; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
 };
@@ -148,6 +152,10 @@ static const char *phase_str(enum txn_phase p)
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 	case PH_SENT_STEPUP:
 		return "SENT_STEPUP";
+#endif
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	case PH_GATE_HOLD:
+		return "GATE_HOLD";
 #endif
 	case PH_ESTABLISHED:
 		return "ESTABLISHED";
@@ -199,6 +207,13 @@ static struct aliro_session {
 	uint8_t stepup_skd[ALIRO_SESSION_KEY_LEN];
 	uint8_t stepup_sd[2048]; /* collected DeviceResponse SessionData (x5chain headroom) */
 	size_t stepup_sd_len;
+#endif
+
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	/* BLE-RSSI ranging power gate: fed by the transport's poll, holds
+	 * AP-Completed (PH_GATE_HOLD) until the phone is near enough that the UWB
+	 * radio's RX power is worth spending. Zeroed slot == closed + unprimed. */
+	struct aliro_rssi_gate rgate;
 #endif
 } s_sessions[ALIRO_MAX_SESSIONS];
 
@@ -812,6 +827,38 @@ static void complete_ap_and_range(struct aliro_session *s)
 	}
 }
 
+#if defined(CONFIG_WOZ_RSSI_GATE)
+static const struct aliro_rssi_gate_cfg k_rgate_cfg = ALIRO_RSSI_GATE_CFG_DEFAULT;
+#endif
+
+/* Run complete_ap_and_range only once the RSSI power gate allows the UWB radio:
+ * the device does not initiate ranging until it receives AP-Completed (the
+ * comment above k_ap_completed_plain), so holding that one message here keeps
+ * the DW3000 dark while the phone is still tens of metres out. The gate opening
+ * (aliro_reader_rssi_sample) completes the AP; a phone that gives up meanwhile
+ * simply reconnects on approach and re-runs the fast auth. Direct call when the
+ * gate is compiled out. */
+static void gated_complete_ap(struct aliro_session *s)
+{
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	if (!s->rgate.primed) {
+		/* No RSSI sample ever arrived (controller read failing?): fail OPEN.
+		 * Deferring on missing data would trade a broken unlock for a power
+		 * win; the wrong direction for a lock. The poll's inline first read
+		 * at CoC-open makes this path unreachable when RSSI works. */
+		LOG_WRN("[conn %u] RSSI gate has no samples; failing open (no power gating)",
+			s->conn_handle);
+	} else if (!aliro_rssi_gate_is_open(&s->rgate)) {
+		s->phase = PH_GATE_HOLD;
+		LOG_INF("[conn %u] RSSI gate closed (%d dBm): AP-Completed held, UWB stays dark",
+			s->conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi("gate.hold", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
+		return;
+	}
+#endif
+	complete_ap_and_range(s);
+}
+
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 /* Build the Access-Document DeviceRequest, seal it into a SessionData message on
  * the StepUpSK channel, and send it in an ENVELOPE APDU (§8.4). On any build/seal
@@ -827,7 +874,7 @@ static void stepup_send_request(struct aliro_session *s)
 		LOG_WRN("[conn %u] step-up: request build failed; completing AP normally",
 			s->conn_handle);
 		s->stepup_active = false;
-		complete_ap_and_range(s);
+		gated_complete_ap(s);
 		return;
 	}
 	s->stepup_sd_len = 0;
@@ -875,7 +922,7 @@ static void on_stepup_response(struct aliro_session *s, const uint8_t *pl, size_
 		LOG_WRN("[conn %u] step-up: short ENVELOPE response; completing AP",
 			s->conn_handle);
 		s->stepup_active = false;
-		complete_ap_and_range(s);
+		gated_complete_ap(s);
 		return;
 	}
 	if (len > 0 && s->stepup_sd_len + len <= sizeof(s->stepup_sd)) {
@@ -907,7 +954,7 @@ static void on_stepup_response(struct aliro_session *s, const uint8_t *pl, size_
 
 	/* Complete the AP + arm ranging FIRST so the verify never delays the unlock,
 	 * then hand the document to the worker. */
-	complete_ap_and_range(s);
+	gated_complete_ap(s);
 	if (s->stepup_sd_len > 0) {
 		stepup_submit_job(s);
 	} else {
@@ -958,7 +1005,7 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
 		return;
 	}
 #endif
-	complete_ap_and_range(s);
+	gated_complete_ap(s);
 }
 
 /* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
@@ -1148,6 +1195,43 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	}
 }
 
+#if defined(CONFIG_WOZ_RSSI_GATE)
+// Feeds one connection-RSSI sample into the session's ranging power gate and acts on the
+// resulting transition: gate opening completes a held AP (starts ranging); gate closing on an
+// established session tears ranging down and drops the link (the phone re-runs the fast auth
+// on its next approach). Runs on the BLE-host task, same as every other session touch point.
+void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
+{
+	struct aliro_session *s = session_find(conn_handle);
+
+	if (s == NULL) {
+		return;
+	}
+	uint32_t now_ms = (uint32_t)(woz_uptime_us() / 1000);
+	bool was_open = aliro_rssi_gate_is_open(&s->rgate);
+	bool open = aliro_rssi_gate_feed(&s->rgate, &k_rgate_cfg, rssi_dbm, now_ms);
+
+	aliro_lab_evi("rssi", "dbm", rssi_dbm);
+	if (open && s->phase == PH_GATE_HOLD) {
+		LOG_INF("[conn %u] RSSI gate open (%d dBm): completing AP, ranging may start",
+			conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi("gate.open", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
+		complete_ap_and_range(s);
+		return;
+	}
+	if (was_open && !open && s->phase == PH_ESTABLISHED) {
+		/* Sustained fade below the close threshold: the peer has left the
+		 * last few metres. Stop the responder (powers the DW3000 down) and
+		 * drop the link rather than keep answering ever-farther polls. */
+		LOG_INF("[conn %u] RSSI gate closed (%d dBm): stopping ranging, disconnecting",
+			conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi("gate.close", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_ranging_stop(conn_handle);
+		(void)aliro_ble_disconnect(conn_handle);
+	}
+}
+#endif /* CONFIG_WOZ_RSSI_GATE */
+
 /* ---- aliro_ble transport callbacks ---- */
 
 // BLE connection-established callback: allocates a session slot for the new connection.
@@ -1246,6 +1330,10 @@ static struct aliro_ble_config make_ble_cfg(void)
 				.on_data = on_data,
 				.on_connected = on_connected,
 				.on_disconnected = on_disconnected,
+#if defined(CONFIG_WOZ_RSSI_GATE)
+				/* non-NULL turns the transport's RSSI poll on */
+				.on_rssi = aliro_reader_rssi_sample,
+#endif
 			},
 	};
 	return cfg;

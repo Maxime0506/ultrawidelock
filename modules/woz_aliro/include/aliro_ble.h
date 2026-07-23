@@ -36,6 +36,10 @@ struct aliro_ble_callbacks {
 	/** L2CAP channel opened / closed for a peer (2.2+). */
 	void (*on_connected)(uint16_t conn_handle);
 	void (*on_disconnected)(uint16_t conn_handle);
+	/** Connection-RSSI sample (dBm), polled while the CoC is up. Setting this
+	 *  turns the transport's RSSI poll on (the reader's ranging power gate);
+	 *  leave NULL and the transport never reads RSSI. */
+	void (*on_rssi)(uint16_t conn_handle, int8_t rssi_dbm);
 };
 
 /** Reader configuration. `proto_versions` are host-order uint16s; they are the
@@ -57,6 +61,10 @@ uint16_t aliro_ble_spsm(void);
 
 /** Send an SDU to the peer over its L2CAP channel (2.2+). Returns 0 on success. */
 int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len);
+
+/** Terminate the BLE connection (reader-initiated; e.g. the RSSI power gate
+ *  closing on a departed peer). Returns 0 on success. */
+int aliro_ble_disconnect(uint16_t conn_handle);
 
 /* Marshal a reader->phone status send onto the NimBLE host task (where every sc_ble
  * seal + L2CAP send already runs), so a caller on another task can send without racing
