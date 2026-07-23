@@ -1,8 +1,13 @@
-# Drift gate for the walk-up digital twin web page: web-twin/index.html cites
-# every decision constant it uses back to a firmware file:line, and this check
-# re-reads each cited line from the C tree and fails if a value moved — so the
-# firmware stays the single source of truth for the twin. Python 3 only; no
-# NCS toolchain, no hardware.
+# Gates for the walk-up digital twin web page.
+#
+#   drift-gate     — the constants still living in page JavaScript (the ESP32
+#                    walk-up controller port + world pacing) are cited back to
+#                    firmware file:line and re-checked against the C tree.
+#   wasm-firmware  — the page's decision logic is modules/woz_uwb itself,
+#                    compiled to WASM (web-twin/twin.js). Rebuild it with the
+#                    pinned emsdk and byte-diff against the committed file (the
+#                    build is reproducible), then replay the test_twin.c
+#                    scenario against it in node.
 name: twin-web
 
 on:
@@ -10,15 +15,16 @@ on:
     branches: [main]
     paths:
       - web-twin/**
-      # The files the page cites: a constant moving here must re-run the gate.
+      # Everything compiled into twin.js or cited by the page: a change here
+      # must re-run both gates.
       - modules/woz_uwb/**
       - ports/esp32/apps/matter-lock/**
-      - tests/host/test_twin.c
+      - tests/host/**
+      - scripts/twin-wasm.sh
       - Makefile
       - .github/workflows/twin-web.yml
   # No path filter on PRs: matches the other host gates so a mixed PR always
-  # reports (a path-skipped required check would stick at "Expected"). The
-  # check is a sub-second script, so always running is cheap.
+  # reports (a path-skipped required check would stick at "Expected").
   pull_request:
   workflow_dispatch:
 
@@ -40,3 +46,36 @@ jobs:
           persist-credentials: false
       - name: twin constants match the firmware
         run: make test-web
+
+  wasm-firmware:
+    runs-on: ubuntu-latest
+    env:
+      # Must match the emsdk that built the committed twin.js, or the
+      # byte-diff below reports a false staleness. Bump both together.
+      EMSDK_VERSION: 6.0.3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cache emsdk
+        id: emsdk-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}
+      - name: install emsdk
+        if: steps.emsdk-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git ~/emsdk
+          ~/emsdk/emsdk install "$EMSDK_VERSION"
+          ~/emsdk/emsdk activate "$EMSDK_VERSION"
+      - name: rebuild the twin firmware (WASM)
+        run: make twin-wasm
+      - name: committed twin.js matches the sources
+        run: |
+          if ! git diff --exit-code -- web-twin/twin.js; then
+            echo "::error::web-twin/twin.js is stale — rebuild with 'make twin-wasm' (emsdk $EMSDK_VERSION) and commit it"
+            exit 1
+          fi
+      - name: replay the test_twin.c scenario in node
+        run: node web-twin/selftest.cjs
