@@ -468,9 +468,10 @@ int aliro_device_selftest(void)
 	return 0;
 }
 
-/* Host entry. On ESP-IDF (ESP_PLATFORM defined by the toolchain) the on-target
- * app_main() calls aliro_device_selftest() instead, so this is excluded there. */
-#if !defined(ESP_PLATFORM)
+/* Host entry. On a firmware target the on-target main()/app_main() calls
+ * aliro_device_selftest() instead: ESP-IDF defines ESP_PLATFORM, Zephyr (nRF)
+ * defines __ZEPHYR__ and supplies its own main(), so exclude this there. */
+#if !defined(ESP_PLATFORM) && !defined(__ZEPHYR__)
 int main(void)
 {
 	return aliro_device_selftest();
