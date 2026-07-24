@@ -137,6 +137,13 @@ DissectorTable.get("btcommon.eir_ad.entry.uuid"):add("fff2", adv)
 -- flag is inferred; neither is byte-confirmed against a live capture yet, so
 -- treat this parser as LIKELY and verify before relying on offsets. This is why
 -- it is offered for manual "Decode As", not auto-hooked. Total 23 bytes.
+--
+-- Bench note (real iPhone->ESP32 capture): no clear-text Procedure-0 was seen on
+-- the wire. The Aliro control plane is a proto-2 L2CAP CoC (PSM 0x0080, dynamic
+-- CID e.g. 0x0040): type 00 = Auth/ECDH (clear, 04-prefixed EC public keys),
+-- type 01/03 = cryptograms, type 02 = BleSK-SEALED control. The only 23-byte
+-- frames are sealed type-02 PDUs (ciphertext), so Decode As on a live capture
+-- yields garbage. Retained for manual use / spec-defined clear flows.
 local ts = Proto("aliro_timesync", "Aliro Time Sync (Procedure 0)")
 
 local TS_SUCCESS = { [0] = "0", [1] = "1", [2] = "2" }  -- meanings not given in doc

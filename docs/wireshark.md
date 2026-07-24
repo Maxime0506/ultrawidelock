@@ -81,20 +81,38 @@ is not a plausible date is flagged as a likely malformed or misaligned advert.
 
 ## Using `aliro_timesync`
 
-The Procedure-0 time sync rides GATT/L2CAP on a handle a passive tool cannot identify on its
-own, so it is not auto-hooked. To decode it: select the packet carrying the time-sync payload,
-right-click the L2CAP/ATT value bytes, choose **Decode As...**, and set the protocol to
-**aliro_timesync**.
+The Aliro control plane rides an L2CAP connection-oriented channel (observed PSM `0x0080`, a
+dynamic CID such as `0x0040`), not ATT, so the time sync is not auto-hooked. To try it,
+right-click a frame on that CID, choose **Decode As...**, and set the *L2CAP CID* row to
+**aliro_timesync**. On the command line:
 
-Its field set and sizes come straight from research doc section 5. The wire order follows the
-doc's listing order and the clock-skew flag width is inferred; neither is yet confirmed against
-a live capture, so treat the field offsets as provisional until a real Procedure-0 sync is
-matched. A payload shorter than 23 bytes is flagged rather than mis-parsed.
+```
+tshark -r capture.pklg -d btl2cap.cid==0x0040,aliro_timesync -Y "frame.number==N" -O aliro_timesync
+```
+
+Its field set and sizes come from research doc section 5, with the wire order and clock-skew
+flag width inferred; treat the offsets as provisional. A payload shorter than 23 bytes is
+flagged rather than mis-parsed.
+
+**Bench note.** In a real iPhone-to-ESP32 capture, no clear-text Procedure-0 appears on the
+wire. The control plane is proto-2 framed PDUs `[type | subtype | 16-bit length | body]`: type
+`00` is the Auth/ECDH exchange (clear, `04`-prefixed EC public keys), type `01`/`03` are auth
+cryptograms, and type `02` is BleSK-sealed control. The only 23-byte frames are sealed type-`02`
+PDUs whose bodies are ciphertext, so Decode As on them yields nonsense (a giant device event
+count, an impossible max-PPM). Any time sync in a modern transaction is therefore sealed (Tier
+B). This decoder is retained for manual use and for older or spec-defined flows that do send a
+clear Procedure-0.
 
 ## Verified against
 
 The dissector was checked with tshark 4.6.7 against synthetic `0xFFF2` advertisements,
 including the Aliro Specification 1.0 Appendix 20 vector (expiry `0x7a4b8500`, dynamic tag
 `7b7f4a82557990`), a no-clock reader, a truncated advert, an implausible-expiry advert, and a
-synthetic 23-byte Procedure-0 payload, with zero Lua errors. It has not yet been run against a
-capture from a real iPhone-to-reader transaction; that is the natural next validation.
+synthetic 23-byte Procedure-0 payload, with zero Lua errors.
+
+It has also been run against a real capture: an iPhone PacketLogger trace of a walk-up to an
+ESP32 reader (39 `0xFFF2` adverts). `aliro_adv` auto-fired on the live iOS HCI capture and
+decoded every advert, with the big-endian expiry resolving to real wall-clock dates matching the
+capture time (confirming the byte order on silicon) and a fresh 7-octet dynamic tag on each
+refresh. That same capture is what established that no clear-text Procedure-0 rides the wire (see
+the bench note above).
