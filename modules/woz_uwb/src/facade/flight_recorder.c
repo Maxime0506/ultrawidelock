@@ -483,7 +483,7 @@ void fr_dump(void)
 	char line[8 + FR_DUMP_LINE * 2u + 1u];
 
 	n = fr_finalize(&b);
-	snprintf(line, sizeof(line), "[FREC] begin bytes=%u", (unsigned)n);
+	(void)snprintf(line, sizeof(line), "[FREC] begin bytes=%u", (unsigned)n);
 	fr_emit_line(line);
 	for (i = 0; i < n; i += FR_DUMP_LINE) {
 		size_t k = (n - i < FR_DUMP_LINE) ? (n - i) : FR_DUMP_LINE;
