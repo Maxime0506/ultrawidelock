@@ -28,6 +28,28 @@ config WOZ_ALIRO_LAB
 	  aliro-lat stamps, hence the ALIRO_LAT_TRACE dependency. Set n to strip
 	  it entirely from a hardened production image.
 
+config WOZ_FLIGHT_RECORDER
+	bool "Flight recorder: record a live walk-up for host replay"
+	default n
+	help
+	  Record the DS-TWR responder's inputs (session config + every received
+	  frame and its DW3000 register snapshot, in dispatch order) into a RAM ring,
+	  dumped over the console with `fr dump` as hex "[FREC]" lines.
+	  tools/flight_recorder.py turns the capture into a .frc trace the host build
+	  replays deterministically (tests/host/fr_replay.c) and into a fuzz corpus.
+	  OFF at boot; `fr on` before a walk-up, `fr off` after. Like the `lab` /
+	  `uwbdiag` traces it reads extra registers while armed, so it costs walk-up
+	  latency — arm it only for a capture run. Set n to strip it entirely.
+
+config WOZ_FLIGHT_RECORDER_BYTES
+	int "Flight recorder RAM ring size (bytes)"
+	depends on WOZ_FLIGHT_RECORDER
+	default 16384
+	help
+	  Capacity of the static capture ring. One walk-up is a few dozen events at
+	  ~40-170 bytes each; 16 KiB holds a full session with headroom. When the ring
+	  fills, capture stops and the END record is flagged truncated.
+
 config WOZ_ALIRO_STEPUP
 	bool "Enable the Aliro step-up (Access Document) phase"
 	default n

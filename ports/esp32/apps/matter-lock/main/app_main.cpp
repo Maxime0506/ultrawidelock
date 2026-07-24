@@ -37,6 +37,7 @@
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
+#include <aliro_approach.h>
 #include <aliro_ble.h> // aliro_ble_time_updated()
 #include <aliro_lab.h>
 #include <aliro_lat.h>
@@ -118,10 +119,18 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 // which crashed because NimBLE can't be re-inited after Matter reclaims BLE.
 #define ALIRO_UNLOCK_RANGE_CM 100  // approach threshold: unlock at/under this (median cm)
 #define ALIRO_RELOCK_RANGE_CM 250  // depart threshold: relock past this — wide band vs UWB range noise
-#define ALIRO_RANGE_MEDIAN_N  5     // trusted-range samples in the spike-rejecting median filter
 #define ALIRO_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
 #define ALIRO_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
 #define ALIRO_PEER_GONE_MS    1500  // no ranging activity this long -> peer left -> relock + secured
+// Negative latency: the controller predicts the time of arrival at the unlock
+// radius and starts retraction motor+margin early, so the bolt is open when the
+// hand lands. MOTOR_MS is this lock model's retraction time — tune it from the
+// ALAB near->bolt phase gap plus the motor spec (`lab on`, walk up, read the
+// budget line). The margin stays >= one 192 ms ranging block so the discrete
+// sample grid cannot step over the firing window.
+#define ALIRO_MOTOR_MS          500 // bolt retraction time for this lock model
+#define ALIRO_PREDICT_MARGIN_MS 250 // scheduling slack on top of the motor
+#define ALIRO_PREDICT_VMIN_CM_S 30  // min closing speed before predictions arm
 
 // Resolve the Matter user that owns the credential the reader authenticated, so the LockOperation
 // event names who operated the lock. Without it the event is anonymous and Apple Home, unable to
@@ -176,28 +185,6 @@ static void schedule_bolt_lock(void)
 	});
 }
 
-// Median of the first n samples of win (n in [1, ALIRO_RANGE_MEDIAN_N]). Rejects the metre-scale
-// spikes in the per-block UWB distance without the lag of a running average.
-static int32_t aliro_range_median(const int32_t *win, int n)
-{
-	int32_t t[ALIRO_RANGE_MEDIAN_N];
-
-	for (int i = 0; i < n; i++) {
-		t[i] = win[i];
-	}
-	for (int i = 1; i < n; i++) { /* insertion sort; n <= 5 */
-		int32_t v = t[i];
-		int j = i - 1;
-
-		while (j >= 0 && t[j] > v) {
-			t[j + 1] = t[j];
-			j--;
-		}
-		t[j + 1] = v;
-	}
-	return t[n / 2];
-}
-
 // Range-latch listener: runs on the UWB RX path, so it only stamps the latency
 // trace and wakes the reader task; the unlock decision itself stays on the task.
 static void on_uwb_range(void)
@@ -245,24 +232,42 @@ static void aliro_reader_task(void *arg)
 	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
 		 rc == 0 ? "reader advertising on shared host" : "reader start FAILED");
 
-	// Approach controller. The per-block UWB distance is very noisy — single blocks
-	// swing by metres (bench: 70 mm -> 1604 mm -> 112 mm between consecutive blocks) —
-	// and the security trust gate stabilises *when* a range is surfaced, not its
-	// value, so thresholding a raw sample oscillates the bolt. Condition the signal:
-	//   - grant the Wallet animation once, on the first trusted range this approach;
-	//   - push trusted ranges through a median filter (rejects the metre-scale
-	//     spikes) and require ALIRO_NEAR_DWELL / ALIRO_FAR_DWELL consecutive filtered
-	//     samples across a wide hysteresis band before moving the bolt;
-	//   - treat the peer as gone (relock + Secured) only after ALIRO_PEER_GONE_MS
-	//     with no ranging activity at all — decoupled from the flickering trust bit,
-	//     which can briefly re-agree at range and otherwise wedge the door open.
-	// Only fresh notifies act; a bare 200 ms timeout never re-decides on a stale
-	// latched value. `locked` mirrors the bolt, `present` mirrors the Wallet state.
-	bool locked = true;
+	// Approach controller (modules/woz_aliro/src/aliro_approach.c, shared with
+	// the host suite's walk-up profile replays). The per-block UWB distance is
+	// very noisy — single blocks swing by metres (bench: 70 mm -> 1604 mm ->
+	// 112 mm between consecutive blocks) — and the security trust gate
+	// stabilises *when* a range is surfaced, not its value, so thresholding a
+	// raw sample oscillates the bolt. The controller conditions the signal
+	// (median + dwell across a wide hysteresis band) and, on top, runs a
+	// constant-velocity Kalman filter to predict the time of arrival at the
+	// unlock radius: retraction starts ALIRO_MOTOR_MS early so the bolt is
+	// open when the hand lands ("negative latency"), and a predictive open
+	// that stops closing or misses its arrival window relocks before anyone
+	// is in reach. Presence behaviour is unchanged — slow approaches and
+	// stand-at-door still unlock via the median path. This task additionally:
+	//   - grants the Wallet animation once, on the first trusted range this
+	//     approach;
+	//   - treats the peer as gone (relock + Secured) only after
+	//     ALIRO_PEER_GONE_MS with no ranging activity at all — decoupled from
+	//     the flickering trust bit, which can briefly re-agree at range and
+	//     otherwise wedge the door open.
+	// Only fresh notifies feed the controller; a bare 200 ms timeout only
+	// supervises the arrival deadline, never re-decides on a stale latched
+	// value. `present` mirrors the Wallet state.
+	struct aliro_approach approach;
+	struct aliro_approach_cfg acfg;
+
+	aliro_approach_defaults(&acfg);
+	acfg.unlock_cm = ALIRO_UNLOCK_RANGE_CM;
+	acfg.relock_cm = ALIRO_RELOCK_RANGE_CM;
+	acfg.near_dwell = ALIRO_NEAR_DWELL;
+	acfg.far_dwell = ALIRO_FAR_DWELL;
+	acfg.motor_ms = ALIRO_MOTOR_MS;
+	acfg.margin_ms = ALIRO_PREDICT_MARGIN_MS;
+	acfg.vmin_cm_s = ALIRO_PREDICT_VMIN_CM_S;
+	aliro_approach_init(&approach, &acfg);
+
 	bool present = false;
-	int32_t win[ALIRO_RANGE_MEDIAN_N];
-	int wlen = 0, wpos = 0;
-	int near_dwell = 0, far_dwell = 0;
 	int64_t last_activity_ms = 0;
 
 	while (true) {
@@ -279,6 +284,8 @@ static void aliro_reader_task(void *arg)
 			last_activity_ms = now;
 		}
 
+		enum aliro_approach_action act;
+
 		if (trusted) {
 			// Task context (not the UWB RX path): one trace line per trusted
 			// range block gives the approach curve in the Aliro Lab report.
@@ -293,35 +300,47 @@ static void aliro_reader_task(void *arg)
 				aliro_reader_notify_unlock(true);
 				present = true;
 			}
-
-			win[wpos] = cm;
-			wpos = (wpos + 1) % ALIRO_RANGE_MEDIAN_N;
-			if (wlen < ALIRO_RANGE_MEDIAN_N) {
-				wlen++;
+			act = aliro_approach_feed(&approach, now, cm);
+			if (aliro_approach_eta_ms(&approach) >= 0) {
+				// Estimator overlay for the walk-up report: closing speed
+				// and predicted time of arrival at the unlock radius.
+				aliro_lab_evi("vel", "cms", aliro_approach_vel_cm_s(&approach));
+				aliro_lab_evi("eta", "ms", aliro_approach_eta_ms(&approach));
 			}
-			int32_t f = aliro_range_median(win, wlen);
+		} else {
+			act = aliro_approach_tick(&approach, now);
+		}
 
-			if (f <= ALIRO_UNLOCK_RANGE_CM) {
-				far_dwell = 0;
-				if (locked && ++near_dwell >= ALIRO_NEAR_DWELL) {
-					ESP_LOGI(TAG, "Aliro approach %d cm (median): unlocking",
-						 (int)f);
-					schedule_bolt_unlock();
-					locked = false;
-				}
-			} else if (f >= ALIRO_RELOCK_RANGE_CM) {
-				near_dwell = 0;
-				if (!locked && ++far_dwell >= ALIRO_FAR_DWELL) {
-					ESP_LOGI(TAG, "Aliro departed %d cm (median): relocking",
-						 (int)f);
-					schedule_bolt_lock();
-					locked = true;
-				}
-			} else {
-				// Dead band between the two thresholds: hold, reset both dwells.
-				near_dwell = 0;
-				far_dwell = 0;
-			}
+		switch (act) {
+		case ALIRO_APPROACH_UNLOCK_PREDICT:
+			// ETA inside the retraction window: start now, open at arrival.
+			ESP_LOGI(TAG, "Aliro arrival in %d ms (%d cm/s closing): unlocking early",
+				 (int)aliro_approach_eta_ms(&approach),
+				 (int)aliro_approach_vel_cm_s(&approach));
+			aliro_lab_evi("predict.fire", "eta_ms",
+				      aliro_approach_eta_ms(&approach));
+			schedule_bolt_unlock();
+			break;
+		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+			ESP_LOGI(TAG, "Aliro approach %d cm (est): unlocking",
+				 (int)aliro_approach_est_cm(&approach));
+			schedule_bolt_unlock();
+			break;
+		case ALIRO_APPROACH_RELOCK_DEPART:
+			ESP_LOGI(TAG, "Aliro departed %d cm (est): relocking",
+				 (int)aliro_approach_est_cm(&approach));
+			schedule_bolt_lock();
+			break;
+		case ALIRO_APPROACH_RELOCK_ABORT:
+			// Opened on a prediction, but the approach stopped/turned or
+			// arrival is overdue: put the bolt back.
+			ESP_LOGI(TAG, "Aliro approach aborted (%d cm/s closing): relocking",
+				 (int)aliro_approach_vel_cm_s(&approach));
+			aliro_lab_ev("predict.abort");
+			schedule_bolt_lock();
+			break;
+		default:
+			break;
 		}
 
 		// Departure: no ranging activity at all for ALIRO_PEER_GONE_MS. This is the
@@ -331,16 +350,12 @@ static void aliro_reader_task(void *arg)
 		if (present && (now - last_activity_ms) >= ALIRO_PEER_GONE_MS) {
 			ESP_LOGI(TAG, "Aliro peer gone (%d ms silent): relock + secured",
 				 (int)(now - last_activity_ms));
-			if (!locked) {
+			if (aliro_approach_gone(&approach) ==
+			    ALIRO_APPROACH_RELOCK_DEPART) {
 				schedule_bolt_lock();
-				locked = true;
 			}
 			aliro_reader_notify_unlock(false); // Reader Status Changed -> Secured
 			present = false;
-			wlen = 0;
-			wpos = 0;
-			near_dwell = 0;
-			far_dwell = 0;
 		}
 	}
 }
