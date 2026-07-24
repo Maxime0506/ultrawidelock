@@ -24,12 +24,30 @@ if ! command -v emcc >/dev/null 2>&1; then
   exit 1
 fi
 
-# Same sources + defines as the host suite (run.sh), minus the test files: the
-# unit list, the radio-stub shim, the host AES double, and the shared peer
-# model — plus the glue that exports the page's entry points.
+# The twin's firmware is modules/woz_uwb specifically — the DS-TWR responder,
+# range store and facade. UNIT_SRCS is the whole host-coverage denominator and
+# now carries sibling modules too (woz_aliro_stack, ...), which the twin never
+# calls; -O2 would dead-strip them, but compiling them at all couples this
+# build to modules the page has nothing to do with (a sibling that failed
+# under emcc would break the twin for no reason). So take only the woz_uwb
+# subset of UNIT_SRCS — self-maintaining as woz_uwb files come and go.
+WOZ_UWB_SRCS=()
+for src in "${UNIT_SRCS[@]}"; do
+  case "$src" in
+    */modules/woz_uwb/src/*) WOZ_UWB_SRCS+=("$src") ;;
+  esac
+done
+if [ "${#WOZ_UWB_SRCS[@]}" -eq 0 ]; then
+  echo "twin-wasm: no woz_uwb sources in UNIT_SRCS — sources.sh layout changed?" >&2
+  exit 1
+fi
+
+# Same defines + include path as the host suite (run.sh); the woz_uwb sources,
+# the radio-stub shim, the host AES double, and the shared peer model — plus
+# the glue that exports the page's entry points.
 emcc -std=c11 -O2 -w "${DEFS[@]}" "${INCS[@]}" \
   -ffile-prefix-map="$ROOT"=. \
-  "${UNIT_SRCS[@]}" "${SHIM_SRCS[@]}" \
+  "${WOZ_UWB_SRCS[@]}" "${SHIM_SRCS[@]}" \
   "$ROOT/tests/host/aes_ref.c" \
   "$ROOT/tests/host/twin_frames.c" \
   "$ROOT/web-twin/twin_glue.c" \
