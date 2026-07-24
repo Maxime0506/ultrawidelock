@@ -40,20 +40,33 @@ enum { DWT_SUCCESS = 0, DWT_ERROR = -1 };
 #define DWT_START_RX_IMMEDIATE 0x00
 #define DWT_START_RX_DELAYED   0x01
 #define DWT_IDLE_ON_DLY_ERR    0x02
+#define DWT_START_TX_IMMEDIATE 0x00
 #define DWT_START_TX_DELAYED   0x01
 
 #define DWT_STS_MODE_OFF 0x0
 #define DWT_STS_MODE_ND  0x3
 
 #define DWT_PLEN_64     (64U)
+#define DWT_PLEN_128    (128U)
 #define DWT_PAC8        0
 #define DWT_SFD_IEEE_4A 0
+#define DWT_SFD_IEEE_4Z 3
 #define DWT_BR_6M8      1
 #define DWT_PHRMODE_STD 0x0
 #define DWT_PHRRATE_STD 0x0
 #define DWT_STS_LEN_64  7
 #define DWT_PDOA_M0     0x0
 #define DWT_ENABLE_INT  1
+
+/* uwb_min.c surface (values mirror deps/dw3000/dwt_uwb_driver/deca_device_api.h) */
+#define DWT_DW_INIT         0x0
+#define DWT_CONFIG          0x0001
+#define DWT_RUNSAR          0x0002
+#define DWT_GOTOIDLE        0x0100
+#define DWT_WAKE_CSN        0x8
+#define DWT_SLP_EN          0x1
+#define DWT_LEDS_ENABLE     0x01
+#define DWT_LEDS_INIT_BLINK 0x02
 
 #define DWT_INT_ARFE_BIT_MASK    0x20000000UL
 #define DWT_INT_HPDWARN_BIT_MASK 0x8000000UL
@@ -67,6 +80,12 @@ enum { DWT_SUCCESS = 0, DWT_ERROR = -1 };
 #define DWT_INT_RXPHD_BIT_MASK   0x800U
 #define DWT_INT_CIADONE_BIT_MASK 0x400U
 #define DWT_INT_TXFRS_BIT_MASK   0x80U
+#define DWT_INT_CPERR_BIT_MASK   0x10000000UL
+#define DWT_INT_CIAERR_BIT_MASK  0x40000UL
+#define DWT_INT_RXFR_BIT_MASK    0x2000U
+#define DWT_INT_TXPHS_BIT_MASK   0x40U
+#define DWT_INT_TXPRS_BIT_MASK   0x20U
+#define DWT_INT_TXFRB_BIT_MASK   0x10U
 
 typedef struct {
 	uint8_t chan;
@@ -103,6 +122,28 @@ typedef struct {
 	dwt_cb_t cbSPIRdy;
 	dwt_cb_t cbDualSPIEv;
 } dwt_callbacks_s;
+
+/** @brief TX RF config (uwb_min.c); field layout mirrors the real driver. */
+typedef struct {
+	uint8_t PGdly;
+	uint32_t power;
+	uint16_t PGcount;
+} dwt_txconfig_t;
+
+/** @brief Probe interface (opaque here; uwb_min.c only passes its address). */
+struct dwt_probe_s {
+	void *dw;
+	void *spi;
+	void (*wakeup_device_with_io)(void);
+};
+
+int32_t dwt_probe(struct dwt_probe_s *probe_interf);
+int32_t dwt_initialise(int32_t mode);
+uint32_t dwt_readdevid(void);
+void dwt_configuretxrf(dwt_txconfig_t *config);
+void dwt_configuresleep(uint16_t mode, uint8_t wake);
+void dwt_setleds(uint8_t mode);
+void dwt_writesysstatuslo(uint32_t mask);
 
 int32_t dwt_configure(dwt_config_t *config);
 void dwt_configurestsmode(uint8_t stsMode);
@@ -145,6 +186,8 @@ struct woz_host_rx_rec {
 	uint32_t systime;             /* dwt_readsystimestamphi32 */
 	int stsq_ret;                 /* dwt_readstsquality return */
 	int16_t stsq_val;             /* ...and its quality index out-param */
+	int radio_init_ret;           /* uwb_min_radio_init return (default 0 = up) */
+	int32_t configure_ret;        /* dwt_configure return (default DWT_SUCCESS) */
 };
 extern struct woz_host_rx_rec woz_host_rx;
 void woz_host_rx_reset(void);
