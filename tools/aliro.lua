@@ -37,16 +37,17 @@
 --                           bits4:3 notification/error, bits2:0 adv version
 --   1        TX power (int8, dBm)
 --   2-11     reader group identifier (+ sub-identifier), truncated
---   12-15    dynamic tag expiry (Unix time; 0xFFFFFFFF = reader has no clock)
+--   12-15    dynamic tag expiry (Unix time, big-endian; 0xFFFFFFFF = no clock)
 --   16       reserved
 --   17-23    dynamic tag (first 7 octets of AES-128(GRK, pad || AdvA || expiry))
 
 local adv = Proto("aliro_adv", "Aliro Advertisement (0xFFF2)")
 
 local NOTIF = { [0] = "none", [1] = "notification", [2] = "error", [3] = "reserved" }
--- The research doc does not pin the byte order of the expiry; rather than guess,
--- the dissector reads it both ways and picks the plausible date (see below), and
--- always shows the raw bytes so the choice stays checkable. See docs/wireshark.md.
+-- The expiry is big-endian on the wire. Confirmed against the firmware that
+-- builds the advert (modules/woz_aliro_stack: SetDynamicTagExpiryTimestamp writes
+-- byte[0] = expiry >> 24) and the Aliro Spec 1.0 Appendix 20 known-answer vectors
+-- (tests/host/test_aliro_advertising.c). The raw bytes are still shown.
 local f = {
   flags    = ProtoField.uint8 ("aliro_adv.flags", "Flags", base.HEX),
   flow_uwb = ProtoField.bool  ("aliro_adv.flow_uwb", "BLE + UWB flow supported", 8, nil, 0x80),
@@ -65,7 +66,8 @@ for _, fld in pairs(f) do adv.fields[#adv.fields + 1] = fld end
 local e_short   = ProtoExpert.new("aliro_adv.short", "Aliro service data shorter than 24 bytes (truncated advert)", expert.group.MALFORMED, expert.severity.WARN)
 local e_no_uwb  = ProtoExpert.new("aliro_adv.no_uwb", "UWB flow flag clear: phone will not range with this reader (control-only build)", expert.group.PROTOCOL, expert.severity.NOTE)
 local e_no_clock= ProtoExpert.new("aliro_adv.no_clock", "Dynamic tag expiry is 0xFFFFFFFF: reader has no clock", expert.group.PROTOCOL, expert.severity.NOTE)
-adv.experts = { e_short, e_no_uwb, e_no_clock }
+local e_odd_exp = ProtoExpert.new("aliro_adv.odd_expiry", "Dynamic tag expiry (big-endian) is not a plausible date: malformed, misaligned, or rekeyed advert", expert.group.MALFORMED, expert.severity.WARN)
+adv.experts = { e_short, e_no_uwb, e_no_clock, e_odd_exp }
 
 -- A valid recent Unix expiry sits roughly in 2020..2100. Only one byte order
 -- puts a real Aliro expiry there, so we let plausibility pick the endianness
@@ -99,25 +101,18 @@ function adv.dissector(tvb, pinfo, tree)
 
   if n >= 16 then
     local et = t:add(f.expiry, tvb(12, 4))
-    local le, be = tvb(12, 4):le_uint(), tvb(12, 4):uint()
-    if le == 0xFFFFFFFF then
+    local be = tvb(12, 4):uint()  -- big-endian; see note at the field table
+    if be == 0xFFFFFFFF then
       et:append_text(" (no clock)")
       t:add(f.expiry_s, tvb(12, 4), "n/a (no clock)"):set_generated()
       t:add_proto_expert_info(e_no_clock)
       info[#info + 1] = "no-clock"
     else
-      -- Endianness is not pinned in the research doc; pick the byte order that
-      -- yields a plausible date, and always show both so it stays checkable.
-      local le_ok, be_ok = plausible(le), plausible(be)
-      local decoded, order
-      if be_ok and not le_ok then decoded, order = utc(be), "big-endian"
-      elseif le_ok and not be_ok then decoded, order = utc(le), "little-endian"
-      elseif le_ok and be_ok then decoded, order = utc(le), "little-endian?; both plausible"
-      else decoded, order = "implausible either way", "unknown order" end
-      local text = decoded .. " (" .. order .. "; LE=" .. le .. " BE=" .. be .. ")"
+      local decoded = utc(be)
       et:append_text(" -> " .. decoded)
-      t:add(f.expiry_s, tvb(12, 4), text):set_generated()
+      t:add(f.expiry_s, tvb(12, 4), decoded):set_generated()
       info[#info + 1] = "expires " .. decoded
+      if not plausible(be) then t:add_proto_expert_info(e_odd_exp) end
     end
   end
 

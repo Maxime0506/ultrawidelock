@@ -73,10 +73,11 @@ Expert notes flag the two states the field guide (section 10) calls out on sight
 flow bit clear (control-only build, phone will not range) and a `0xFFFFFFFF` expiry (reader
 has no clock).
 
-The research doc does not pin the byte order of the expiry field. The dissector reads it both
-ways and shows the interpretation that lands in a plausible date window (2020-2100), labelling
-which byte order that was and printing both raw values, so the choice stays checkable against
-a real reader. If a live capture proves one order, this is where to hard-set it.
+The expiry is decoded big-endian. That byte order is confirmed against the firmware that
+builds the advert (`modules/woz_aliro_stack`, `SetDynamicTagExpiryTimestamp` writes the
+most-significant byte first) and the Aliro Specification 1.0 Appendix 20 known-answer vectors
+(`tests/host/test_aliro_advertising.c`). The raw four bytes stay visible, and an expiry that
+is not a plausible date is flagged as a likely malformed or misaligned advert.
 
 ## Using `aliro_timesync`
 
@@ -92,7 +93,8 @@ matched. A payload shorter than 23 bytes is flagged rather than mis-parsed.
 
 ## Verified against
 
-The dissector was checked with tshark 4.6.7 against synthetic `0xFFF2` advertisements
-(big-endian and little-endian expiries, a no-clock reader, and a truncated advert) and a
+The dissector was checked with tshark 4.6.7 against synthetic `0xFFF2` advertisements,
+including the Aliro Specification 1.0 Appendix 20 vector (expiry `0x7a4b8500`, dynamic tag
+`7b7f4a82557990`), a no-clock reader, a truncated advert, an implausible-expiry advert, and a
 synthetic 23-byte Procedure-0 payload, with zero Lua errors. It has not yet been run against a
 capture from a real iPhone-to-reader transaction; that is the natural next validation.
