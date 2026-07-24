@@ -32,6 +32,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # markdown==3.8 arms test_flash_html's regen-drift gate (it skips
+      # without the package); pinned to the version the committed
+      # release/*/FLASH.html files were rendered with.
+      - name: install python deps for the tooling suites
+        run: python3 -m pip install 'markdown==3.8'
       - name: run host KAT suite
         run: make test
 
@@ -63,13 +68,21 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CC: clang # coverage.sh's instrumentation flags are clang-only
-      COV_MIN: "85" # line-% floor; total was 89.2% when set
+      CXX: clang++ # ditto for the instrumented C++ suites (ubuntu c++ is g++)
+      COV_MIN: "90" # line-% floor; raised from 80 after the coverage push
+      # landed the full denominator (shared core + reader engine + headers)
+      # at 96.1%. History: 85 against the woz_uwb-only set (89.2%), 80 at
+      # the honest-denominator re-base (84.7%).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: install llvm (llvm-profdata / llvm-cov)
         run: sudo apt-get update -q && sudo apt-get install -y -q llvm
+      # coverage.py puts real percentages on the python surface rows;
+      # markdown==3.8 lets the flash_html suite execute under measurement.
+      - name: install python deps (coverage.py + markdown)
+        run: python3 -m pip install coverage 'markdown==3.8'
       - name: build instrumented + run + report
         run: make coverage
       - name: enforce line-coverage floor

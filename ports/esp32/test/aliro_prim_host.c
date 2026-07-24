@@ -5,20 +5,62 @@
  * Host double for the aliro_prim backend so the key-schedule and secure-channel
  * code can be tested off-target. Provides a compact reference AES-256-GCM (the
  * real target backend is aliro_prim_psa.c / mbedTLS-PSA). The GCM here is
- * KAT-checked against the GCM spec vectors in test_aliro_crypto.c. EC primitives
- * are exercised on hardware, not doubled here.
+ * KAT-checked against the GCM spec vectors in test_aliro_crypto.c.
+ *
+ * The EC block at the bottom is NOT P-256 — it is a deterministic, commutative,
+ * trivially forgeable stand-in (see its banner) so the reader transaction state
+ * machine (test_aliro_reader.c) can run both sides of the handshake on host.
+ * Real curve math runs only in aliro_prim_psa.c on target.
  */
 #include "aliro_prim.h"
+#include "aliro_hash.h"
 
 #include <string.h>
 
+/* ---- failure injection (reader error-path tests) --------------------------
+ *
+ * All hooks default OFF and disarm themselves after firing, so suites that do
+ * not touch them (crypto, stepup) see the plain double. Two shapes:
+ *   fail_<op>        > 0: fail the next N calls of <op>, decrementing each time
+ *   fail_<op>_after >= 0: succeed that many calls, then fail ONE and reset to -1
+ * The _after shape exists because some ops are nested (keygen draws from
+ * aliro_random; the phone helpers seal with the same GCM the reader uses), so
+ * the test must be able to fail the Nth call, not the first. */
+int aliro_prim_host_fail_init;
+int aliro_prim_host_fail_keygen;
+int aliro_prim_host_fail_sign;
+int aliro_prim_host_fail_pub_from_priv;
+int aliro_prim_host_fail_random_after = -1;
+int aliro_prim_host_fail_encrypt_after = -1;
+
+/* Consume one call against an _after counter; returns 1 when this call must fail. */
+static int fail_after_fires(int *after)
+{
+	if (*after < 0) {
+		return 0;
+	}
+	if (*after == 0) {
+		*after = -1;
+		return 1;
+	}
+	(*after)--;
+	return 0;
+}
+
 int aliro_prim_init(void)
 {
+	if (aliro_prim_host_fail_init > 0) {
+		aliro_prim_host_fail_init--;
+		return -1;
+	}
 	return 0;
 }
 
 int aliro_random(uint8_t *out, size_t len)
 {
+	if (fail_after_fires(&aliro_prim_host_fail_random_after)) {
+		return -1;
+	}
 	/* Deterministic host filler; the host suite does not need CSPRNG quality. */
 	for (size_t i = 0; i < len; i++) {
 		out[i] = (uint8_t)(0x5a + i);
@@ -318,6 +360,9 @@ int aliro_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce,
 {
 	uint8_t full[16];
 
+	if (fail_after_fires(&aliro_prim_host_fail_encrypt_after)) {
+		return -1;
+	}
 	if (tag_len > 16) {
 		return -1;
 	}
@@ -353,4 +398,124 @@ int aliro_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce,
 	}
 	memcpy(pt, tmp, ct_len);
 	return 0;
+}
+
+/* ---- P-256 stand-in (NOT a curve — host tests only) -----------------------
+ *
+ * The reader engine treats the EC provider as opaque: it needs keygen, a
+ * commutative shared secret, and a sign/verify pair that only the key holder
+ * can produce *within the test process*. That contract is satisfied without
+ * curve math:
+ *
+ *   pub(priv)         = 0x04 || priv || SHA-256("woz-fake-y" || priv)
+ *   ecdh(a, B)        = SHA-256("woz-fake-ecdh" || sort(a, B.x))   (commutes
+ *                       because B.x == b, so both sides hash the same pair)
+ *   sign(priv, m)     = SHA-256("woz-fake-r" || priv || H(m)) ||
+ *                       SHA-256("woz-fake-s" || priv || H(m))
+ *   verify(P, m, sig) recomputes both halves from P.x (== priv).
+ *
+ * Anyone holding a public key can forge signatures — which is exactly why this
+ * stays in the host double: it exercises the state machine, key schedule and
+ * secure channels, never the curve. KATs for real EC belong on target. */
+
+static void fake_point(const uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])
+{
+	struct aliro_sha256 s;
+
+	pub[0] = 0x04;
+	memcpy(pub + 1, priv, 32);
+	aliro_sha256_init(&s);
+	aliro_sha256_update(&s, "woz-fake-y", 10);
+	aliro_sha256_update(&s, priv, 32);
+	aliro_sha256_final(&s, pub + 33);
+}
+
+int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])
+{
+	if (aliro_prim_host_fail_keygen > 0) {
+		aliro_prim_host_fail_keygen--;
+		return -1;
+	}
+	if (aliro_random(priv, ALIRO_P256_SCALAR) != 0) {
+		return -1;
+	}
+	fake_point(priv, pub);
+	return 0;
+}
+
+int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
+				uint8_t pub[ALIRO_P256_POINT])
+{
+	if (aliro_prim_host_fail_pub_from_priv > 0) {
+		aliro_prim_host_fail_pub_from_priv--;
+		return -1;
+	}
+	fake_point(priv, pub);
+	return 0;
+}
+
+int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t peer_pub[ALIRO_P256_POINT],
+		    uint8_t shared_x[ALIRO_P256_SCALAR])
+{
+	const uint8_t *a = priv, *b = peer_pub + 1;
+	struct aliro_sha256 s;
+
+	if (peer_pub[0] != 0x04) {
+		return -1;
+	}
+	if (memcmp(a, b, 32) > 0) {
+		const uint8_t *t = a;
+
+		a = b;
+		b = t;
+	}
+	aliro_sha256_init(&s);
+	aliro_sha256_update(&s, "woz-fake-ecdh", 13);
+	aliro_sha256_update(&s, a, 32);
+	aliro_sha256_update(&s, b, 32);
+	aliro_sha256_final(&s, shared_x);
+	return 0;
+}
+
+/* sig = two SHA-256 halves bound to the signer's X coordinate and H(msg). */
+static void fake_sig(const uint8_t x[32], const uint8_t *msg, size_t msg_len,
+		     uint8_t sig[ALIRO_P256_SIG])
+{
+	uint8_t h[ALIRO_SHA256_LEN];
+	struct aliro_sha256 s;
+
+	aliro_sha256(msg, msg_len, h);
+	aliro_sha256_init(&s);
+	aliro_sha256_update(&s, "woz-fake-r", 10);
+	aliro_sha256_update(&s, x, 32);
+	aliro_sha256_update(&s, h, sizeof(h));
+	aliro_sha256_final(&s, sig);
+	aliro_sha256_init(&s);
+	aliro_sha256_update(&s, "woz-fake-s", 10);
+	aliro_sha256_update(&s, x, 32);
+	aliro_sha256_update(&s, h, sizeof(h));
+	aliro_sha256_final(&s, sig + 32);
+}
+
+int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *msg, size_t msg_len,
+			  uint8_t sig[ALIRO_P256_SIG])
+{
+	if (aliro_prim_host_fail_sign > 0) {
+		aliro_prim_host_fail_sign--;
+		return -1;
+	}
+	fake_sig(priv, msg, msg_len, sig); /* priv == pub.x by construction */
+	return 0;
+}
+
+int aliro_ecdsa_p256_verify(const uint8_t pub[ALIRO_P256_POINT], const uint8_t *msg, size_t msg_len,
+			    const uint8_t sig[ALIRO_P256_SIG])
+{
+	uint8_t want[ALIRO_P256_SIG];
+
+	if (pub[0] != 0x04) {
+		return -1;
+	}
+	fake_sig(pub + 1, msg, msg_len, want);
+	return memcmp(want, sig, ALIRO_P256_SIG) == 0 ? 0 : -1;
 }

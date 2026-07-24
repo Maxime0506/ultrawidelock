@@ -51,6 +51,12 @@ void test_fira(void)
 	T_EQ("block2", block, 9u);
 	/* All out-params optional. */
 	T_OK("null.outs", fira_session_last_range(NULL, NULL, NULL, NULL, NULL));
+	/* All out-params filled: the CCC latch reports addr 0, LOS. */
+	uint16_t addr = 0xFFFFu;
+	uint8_t nlos = 0xFFu;
+	T_OK("full.outs", fira_session_last_range(&cm, &addr, &nlos, &block, &age));
+	T_EQ("addr", addr, 0u);
+	T_EQ("nlos", nlos, 0u);
 
 	/* ── Range-integrity gate ─────────────────────────────────────────────── */
 
