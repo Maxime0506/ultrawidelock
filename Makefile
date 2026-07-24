@@ -23,7 +23,9 @@ STRICT   ?=
 # HA=1 opts into the Home Assistant variant. It must be set on BOTH bootstrap
 # (applies the data-model patches) and build (layers woz-ha.conf); see
 # integration/homeassistant/README.md. Not hardware-validated.
-HA       ?=
+HA            ?=
+ALIRO_SOURCE  ?=
+ALIRO_TRACE   ?=
 
 # Serial monitor (make term). PORT auto-detects the nRF5340DK console (VCOM1 —
 # this firmware's console + Zephyr shell live there; VCOM0 is silent). Override
@@ -40,7 +42,9 @@ ENV := $(strip \
   $(if $(PRISTINE),PRISTINE=$(PRISTINE)) \
   $(if $(SELFTEST),UWB_SELFTEST=$(SELFTEST)) \
   $(if $(STRICT),STRICT=$(STRICT)) \
-  $(if $(HA),HA=$(HA)))
+  $(if $(HA),HA=$(HA)) \
+  $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
+  $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)))
 
 .PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
@@ -61,6 +65,7 @@ ws-seed:
 ##   Options: CHIP=dw3720 (default dw3000)  PRETTY=1  PRISTINE=1  SELFTEST=1
 ##            STRICT=1 (drop suspect ranges)
 ##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
+##            ALIRO_SOURCE=1  ALIRO_TRACE=1 (temporary BLE/UWB capture)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720
 build:
 	@$(ENV) ./scripts/build.sh build
