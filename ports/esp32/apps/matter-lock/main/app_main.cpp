@@ -249,17 +249,25 @@ static void aliro_reader_task(void *arg)
 	// swing by metres (bench: 70 mm -> 1604 mm -> 112 mm between consecutive blocks) —
 	// and the security trust gate stabilises *when* a range is surfaced, not its
 	// value, so thresholding a raw sample oscillates the bolt. Condition the signal:
-	//   - grant the Wallet animation once, on the first trusted range this approach;
 	//   - push trusted ranges through a median filter (rejects the metre-scale
 	//     spikes) and require ALIRO_NEAR_DWELL / ALIRO_FAR_DWELL consecutive filtered
 	//     samples across a wide hysteresis band before moving the bolt;
+	//   - tie the Wallet grant (Aliro step 23, Unsecured) to the bolt itself, never
+	//     to the bare trust bit: trust lands at whatever range the first block
+	//     resolves at (bench: 300 cm), so granting there tells the phone "unlocked"
+	//     while the door is still locked, for the whole length of the walk-in;
+	//   - send Secured on the depart threshold, while the link is still up — the
+	//     peer-gone path below normally runs after the phone has already dropped
+	//     BLE, and the notify is then discarded with only a warning;
 	//   - treat the peer as gone (relock + Secured) only after ALIRO_PEER_GONE_MS
 	//     with no ranging activity at all — decoupled from the flickering trust bit,
 	//     which can briefly re-agree at range and otherwise wedge the door open.
 	// Only fresh notifies act; a bare 200 ms timeout never re-decides on a stale
-	// latched value. `locked` mirrors the bolt, `present` mirrors the Wallet state.
+	// latched value. `locked` mirrors the bolt, `granted` mirrors the Wallet state
+	// (the two move together), `present` marks an approach in progress.
 	bool locked = true;
 	bool present = false;
+	bool granted = false;
 	int32_t win[ALIRO_RANGE_MEDIAN_N];
 	int wlen = 0, wpos = 0;
 	int near_dwell = 0, far_dwell = 0;
@@ -283,16 +291,7 @@ static void aliro_reader_task(void *arg)
 			// Task context (not the UWB RX path): one trace line per trusted
 			// range block gives the approach curve in the Aliro Lab report.
 			aliro_lab_evi("range", "cm", cm);
-			if (!present) {
-				// First trusted range this approach: grant + fire the Wallet
-				// unlock animation ("Reader Status Changed", Unsecured, Aliro
-				// step 23). Trust already means the credential authenticated and
-				// ranging passed the integrity gate.
-				ESP_LOGI(TAG, "Aliro trusted range %d cm: granting (Wallet notify)",
-					 (int)cm);
-				aliro_reader_notify_unlock(true);
-				present = true;
-			}
+			present = true;
 
 			win[wpos] = cm;
 			wpos = (wpos + 1) % ALIRO_RANGE_MEDIAN_N;
@@ -308,6 +307,10 @@ static void aliro_reader_task(void *arg)
 						 (int)f);
 					schedule_bolt_unlock();
 					locked = false;
+					// Reader Status Changed -> Unsecured: the Wallet
+					// animation, now truthful about the bolt.
+					aliro_reader_notify_unlock(true);
+					granted = true;
 				}
 			} else if (f >= ALIRO_RELOCK_RANGE_CM) {
 				near_dwell = 0;
@@ -316,6 +319,10 @@ static void aliro_reader_task(void *arg)
 						 (int)f);
 					schedule_bolt_lock();
 					locked = true;
+					// Still connected here, so this one actually reaches
+					// the phone (the peer-gone path below often cannot).
+					aliro_reader_notify_unlock(false);
+					granted = false;
 				}
 			} else {
 				// Dead band between the two thresholds: hold, reset both dwells.
@@ -335,7 +342,10 @@ static void aliro_reader_task(void *arg)
 				schedule_bolt_lock();
 				locked = true;
 			}
-			aliro_reader_notify_unlock(false); // Reader Status Changed -> Secured
+			if (granted) {
+				aliro_reader_notify_unlock(false); /* -> Secured */
+				granted = false;
+			}
 			present = false;
 			wlen = 0;
 			wpos = 0;
