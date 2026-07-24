@@ -1,0 +1,6 @@
+# ESP-IDF build output + generated config (sdkconfig.defaults is the tracked source).
+/build/
+/sdkconfig
+/sdkconfig.old
+/dependencies.lock
+/managed_components/

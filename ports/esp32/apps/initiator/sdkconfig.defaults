@@ -1,0 +1,20 @@
+# ESP32-S3 target. No PSRAM, no UWB yet: Stage 1a is BLE transport only, so this
+# app is small and the stock large-app partition table is enough (the reader's
+# custom Matter-ready layout would only add files with nothing to put in them).
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# 1 kHz tick, matching the reader app, so millisecond sleeps mean what they say.
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# NimBLE in the CENTRAL role — the one line that most distinguishes this app from
+# the reader, which needs only the peripheral role. Observer is what lets us scan
+# for the reader's 0xFFF2 advert; central is what lets us connect to it.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
+
+CONFIG_LOG_COLORS=y

@@ -81,6 +81,36 @@ int aliro_ble_central_parse_read_payload(const uint8_t *payload, size_t len,
 int aliro_ble_central_blesk_salt(const struct aliro_ble_central_peer *peer, uint16_t selected,
 				 uint8_t *out, size_t cap, size_t *out_len);
 
+/* ---- transport (backend-provided; NimBLE one lives in ports/esp32) ---- */
+
+struct aliro_ble_central_callbacks {
+	/* The CoC is open and the peer's GATT facts are known: the Aliro
+	 * transaction can start. peer stays valid only for the call. */
+	void (*on_ready)(uint16_t conn_handle, const struct aliro_ble_central_peer *peer);
+	/* One inbound SDU from the reader (an AP response or a sealed ranging SDU). */
+	void (*on_data)(uint16_t conn_handle, const uint8_t *data, size_t len);
+	/* CoC or link dropped; any session state keyed on conn_handle is dead. */
+	void (*on_closed)(uint16_t conn_handle);
+};
+
+struct aliro_ble_central_config {
+	/* The reader we are provisioned against; scanning matches its advert by
+	 * the truncated group id/sub id (see aliro_ble_central_adv_matches). */
+	uint8_t reader_id[32];
+	uint16_t selected_version; /* written to the device-version characteristic */
+	struct aliro_ble_central_callbacks cb;
+};
+
+/* Bring up the BLE host in the central role and start scanning for the
+ * configured reader. Drives connect -> GATT discovery -> READ/WRITE -> CoC and
+ * reports through cfg->cb. Returns 0 once the host is running, <0 on setup
+ * failure; discovery outcomes arrive via the callbacks. */
+int aliro_ble_central_start(const struct aliro_ble_central_config *cfg);
+
+/* Send one SDU to the reader over the open CoC. Returns 0 on success (including
+ * the queued-on-stall case), <0 if there is no channel or the send fails. */
+int aliro_ble_central_send(uint16_t conn_handle, const uint8_t *data, size_t len);
+
 #ifdef __cplusplus
 }
 #endif
