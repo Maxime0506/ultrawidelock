@@ -34,6 +34,19 @@ cc -std=c11 -O1 -Wall -Wextra \
 "$CBIN"
 
 echo
+echo "== host: aliro_assert_ec P-256 binder =="
+# aliro_assert.c is backend-free, so its P-256 path is covered in the main host
+# suite against a local double. This is the shim to aliro_prim, which only has
+# meaning where a prim implementation exists -- here, over the fake curve.
+ECBIN="$(mktemp -t aliro_assert_ec.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_aliro_assert_ec.c" \
+   "$ALIRO/src/aliro_assert.c" "$ALIRO/src/aliro_assert_ec.c" "$ALIRO/src/aliro_hash.c" \
+   "$HERE/aliro_prim_host.c" -o "$ECBIN"
+"$ECBIN"
+
+echo
 echo "== host: aliro_apdu wire-codec KAT =="
 ABIN="$(mktemp -t aliro_apdu_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
