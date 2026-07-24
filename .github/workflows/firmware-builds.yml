@@ -63,6 +63,7 @@ jobs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
       nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
       esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
+      aliro-source: ${{ steps.filter.outputs.aliro-source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'push' || github.event_name == 'pull_request'
@@ -108,6 +109,20 @@ jobs:
               - modules/woz_aliro_ecp/**/!(*.md)
               - modules/woz_port/**/!(*.md)
               - deps/dw3000/**/!(*.md)
+              - .github/workflows/firmware-builds.yml
+            # The source-Aliro nRF build (ALIRO_SOURCE=1) below. Its unique
+            # input is the clean-room stack; the rest are the shared deps the
+            # nRF app compiles either way (a break in them can surface only on
+            # the source path). The blob nrf5340dk job ignores woz_aliro_stack,
+            # so this filter is what gives that tree any CI compile at all.
+            aliro-source:
+              - modules/woz_aliro_stack/**/!(*.md)
+              - modules/woz_uwb/**/!(*.md)
+              - modules/woz_port/**/!(*.md)
+              - deps/dw3000/**/!(*.md)
+              - west.yml
+              - scripts/bootstrap.sh
+              - scripts/build.sh
               - .github/workflows/firmware-builds.yml
 
   # Plain ESP-IDF reader app. All dependencies are in-tree, so this is the
@@ -220,6 +235,65 @@ jobs:
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           ./scripts/build.sh build
+          { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+
+  # The same nRF5340 DK app, but with the clean-room Aliro source stack linked
+  # in place of the libaliro_ble.a blob (ALIRO_SOURCE=1 →
+  # CONFIG_WOZ_ALIRO_SOURCE_STACK=y, build.sh). The blob nrf5340dk job never
+  # compiles modules/woz_aliro_stack, so without this the ~5k-line source
+  # replacement rots until someone bench-builds it. Kept off unrelated PRs:
+  # runs on push, manual dispatch, and PRs that touch the source stack or its
+  # shared deps (the aliro-source filter) — so a break is caught before merge,
+  # not after. Shares the blob job's workspace cache (same key: ALIRO_SOURCE is
+  # a compile-time -D and does not change the bootstrapped tree), and bootstraps
+  # itself on a miss so a source-stack-only PR — which the blob job skips — is
+  # still self-sufficient. No nightly: unlike the Matter build every input here
+  # is pinned, so a canary run would add nothing.
+  nrf5340dk-aliro-source:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.aliro-source == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
+      CCACHE_MAXSIZE: 1G
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: restore the bootstrapped west workspace
+        id: ws
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+      - name: bootstrap the workspace (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/bootstrap.sh || {
+            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
+            ./scripts/bootstrap.sh
+          }
+      - name: save the workspace cache (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: ${{ steps.ws.outputs.cache-primary-key }}
+      - name: restore the compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-nrf5340dk-aliro-source-${{ github.run_id }}
+          restore-keys: |
+            ccache-nrf5340dk-aliro-source-
+      - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild, ALIRO_SOURCE=1)
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          ALIRO_SOURCE=1 ./scripts/build.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # ESP32-S3 Matter door lock against esp-matter at the bench-validated
