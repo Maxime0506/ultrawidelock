@@ -91,6 +91,7 @@ static void aliro_ccc_cb(struct cherry_ccc_event *event, void *user_data)
 	}
 	if (event->type == CHERRY_CCC_EVENT_TYPE_SESSION_STATUS &&
 	    event->data.status->session_state == CHERRY_CCC_SESSION_STATE_DEINIT) {
+		qfree(session->ursk); /* NULL if the destroy API already freed it */
 		qfree(session);
 	}
 
@@ -269,6 +270,7 @@ void aliro_uwb_session_destroy(struct aliro_uwb_session *session)
 		return;
 	}
 	qfree(session->ursk);
+	session->ursk = NULL; /* the CCC DEINIT teardown frees it too */
 	session_close(session);
 }
 

@@ -5,16 +5,21 @@
  * These two carry no OS dependency at all, so they compile and run on the host
  * with no backend selected. They back the shared engine's endian load/store and
  * container/compare macros, so a silent edit here would corrupt the codec
- * on-silicon with no build error. This pins their behavior. The platform-bound
- * headers (woz_port.h, woz_log.h) only prove out on target; see verify_port.sh
- * for the on-target build/link guard.
+ * on-silicon with no build error. This pins their behavior. woz_port.h is also
+ * exercised here through its WOZ_PORT_HOST backend (the same branch every host
+ * suite runs on); the Zephyr/ESP-IDF backends only prove out on target — see
+ * verify_port.sh for the on-target build/link guard.
  *
  * Plain C, no toolchain. Returns nonzero on any failure.
  */
+#define _POSIX_C_SOURCE 200809L /* clock_gettime for woz_uptime_us on glibc */
+#define WOZ_PORT_HOST 1
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "woz_port.h"
 #include "woz_util.h"
 #include "woz_bytes.h"
 
@@ -101,10 +106,44 @@ static void test_util(void)
 	CHECK("IS_ENABLED_undefined", IS_ENABLED(CFG_OFF) == 0);
 }
 
+static void test_port(void)
+{
+	printf("port (WOZ_PORT_HOST backend inlines)\n");
+
+	void *m = woz_malloc(16);
+
+	CHECK("malloc", m != NULL);
+	woz_free(m);
+
+	uint32_t *c = woz_calloc(4, sizeof(uint32_t));
+
+	CHECK("calloc_zeroed", c != NULL && c[0] == 0 && c[3] == 0);
+	woz_free(c);
+
+	int64_t us0 = woz_uptime_us();
+	int64_t ms0 = woz_uptime_ms();
+
+	CHECK("uptime_us_nonneg", us0 >= 0);
+	CHECK("uptime_ms_scaled", ms0 >= us0 / 1000 && ms0 <= woz_uptime_us() / 1000);
+	woz_sleep_ms(1); /* deterministic no-ops on the host backend */
+	woz_sleep_us(1);
+	CHECK("uptime_monotonic", woz_uptime_us() >= us0);
+	(void)woz_cycle_get_32(); /* free-running probe counter: callable */
+	CHECK("cycle_counter", 1);
+
+	woz_mutex_t mu;
+
+	woz_mutex_init(&mu);
+	woz_mutex_lock(&mu);
+	woz_mutex_unlock(&mu);
+	CHECK("mutex_noop_contract", 1);
+}
+
 int main(void)
 {
 	test_byteorder();
 	test_util();
+	test_port();
 
 	printf("\nport headers: %s (%d failure%s)\n",
 	       failures ? "FAIL" : "PASS", failures, failures == 1 ? "" : "s");
