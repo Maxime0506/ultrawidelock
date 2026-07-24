@@ -111,16 +111,23 @@ cbmc:
 	@$(REPO_ROOT)/tests/host/cbmc.sh
 
 ## verify: run every host gate in one shot  ·  pre-PR sweep
-##   test-web -> test -> test-san -> fuzz -> cbmc, sequential + fail-fast. The
-##   cheap drift gate runs first; the last two need clang / cbmc. Plain
-##   `make test` stays sub-second for the edit loop, so this is the full sweep,
-##   not the inner-loop gate.
+##   test-web -> test -> test-san -> fuzz -> cbmc -> twin selftest, sequential +
+##   fail-fast. The cheap drift gate runs first; the later ones need clang /
+##   cbmc / node. The twin self-test replays the scenario against the committed
+##   web-twin/twin.js (node only, no emsdk); the rebuild + byte-diff staleness
+##   gate stays in CI / `make test-twin`. Plain `make test` stays sub-second for
+##   the edit loop, so this is the full sweep, not the inner-loop gate.
 verify:
 	@$(MAKE) --no-print-directory test-web
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory test-san
 	@$(MAKE) --no-print-directory fuzz
 	@$(MAKE) --no-print-directory cbmc
+	@if command -v node >/dev/null 2>&1; then \
+		node $(REPO_ROOT)/web-twin/selftest.cjs; \
+	else \
+		printf '  ~ web-twin selftest skipped (node not found)\n'; \
+	fi
 	@printf '\n  ✓ all host gates passed\n'
 
 ## check: every host-side suite under one banner  ->  live rows + summary table

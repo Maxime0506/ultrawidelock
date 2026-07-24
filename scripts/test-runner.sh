@@ -6,7 +6,7 @@
 #
 #   firmware (C host)      tests/host/run.sh        the KAT suite + the lab python suite
 #   shared core (C host)   ports/esp32/test/run.sh  reader/stepup/crypto/... stages
-#   web twin (drift)       web-twin/check_constants.py
+#   web twin               scripts/twin-suite.sh    constant-drift gate + WASM selftest
 #
 # Default: suites run in parallel, output replayed in order when done.
 # SERIAL=1 streams them live, one at a time. SUITES="firmware shared" scopes.
@@ -54,7 +54,7 @@ boxed() { # <plain-row-content already W_IN wide, may hold ANSI>
 banner() {
 	printf '\n  %s%s%s%s%s\n' "$CYAN$BOLD" "$TL" "$(hr "$HZ" "$W_IN")" "$TR" "$RESET"
 	boxed "$BOLD$(center "OPENALIRO  $DOT  host-side test suites")"
-	boxed "$DIM$(center "firmware KATs (C)   $DOT   shared core (C)   $DOT   web twin (drift)")"
+	boxed "$DIM$(center "firmware KATs (C)   $DOT   shared core (C)   $DOT   web twin")"
 	printf '  %s%s%s%s%s\n\n' "$CYAN$BOLD" "$BL" "$(hr "$HZ" "$W_IN")" "$BR" "$RESET"
 }
 
@@ -63,7 +63,7 @@ suite_cmd() {
 	case "$1" in
 	firmware) echo "bash tests/host/run.sh" ;;
 	shared) echo "bash ports/esp32/test/run.sh" ;;
-	webtwin) echo "python3 web-twin/check_constants.py" ;;
+	webtwin) echo "bash scripts/twin-suite.sh" ;;
 	esac
 }
 
@@ -71,7 +71,7 @@ suite_label() {
 	case "$1" in
 	firmware) echo "firmware (C host)" ;;
 	shared) echo "shared core (C host)" ;;
-	webtwin) echo "web twin (drift)" ;;
+	webtwin) echo "web twin" ;;
 	esac
 }
 
