@@ -21,11 +21,11 @@ a host test suite; the ESP32 transport polls the controller RSSI once per
 | Kconfig | default | meaning |
 |---|---|---|
 | `WOZ_RSSI_GATE` | y | the gate; off = radio arms right after auth, as before |
-| `WOZ_RSSI_GATE_OPEN_DBM` | -65 | smoothed RSSI at/above this opens the gate |
-| `WOZ_RSSI_GATE_CLOSE_DBM` | -75 | at/below this, sustained, closes it |
+| `WOZ_RSSI_GATE_OPEN_DBM` | -55 | smoothed RSSI at/above this opens the gate |
+| `WOZ_RSSI_GATE_CLOSE_DBM` | -65 | at/below this, sustained, closes it |
 | `WOZ_RSSI_GATE_CLOSE_HOLD_MS` | 3000 | how long below close before closing |
 | `WOZ_RSSI_GATE_SLOPE_DB` | 8 | fast-open rise per 1.5 s window; 0 disables |
-| `WOZ_RSSI_GATE_MAX_HOLD_MS` | 1200 | longest AP-Completed hold; 0 = unbounded |
+| `WOZ_RSSI_GATE_MAX_HOLD_MS` | 0 | cap on the AP-Completed hold; 0 = unbounded (see below) |
 | `WOZ_RSSI_GATE_POLL_MS` | 250 | connection RSSI poll period |
 
 ## How long the phone will wait
@@ -37,22 +37,31 @@ reason=531`, i.e. `0x200 + 0x13 BLE_ERR_REM_USER_CONN_TERM`) and immediately
 reconnecting to try again. Our own gate-close disconnect reads 534
 (`0x16 BLE_ERR_CONN_TERM_LOCAL`); the pair is how you tell who dropped the link.
 
-So an unbounded hold does not keep a loitering phone connected and dark. It
-hands the teardown to the phone and turns a peer parked in the threshold band
-into a connect/hold/drop cycle. `WOZ_RSSI_GATE_MAX_HOLD_MS` bounds it: at the
-cap the reader completes the AP anyway and the gate opens as if the level had
-qualified, so the ordinary close path still powers the radio down when the peer
-leaves. The trace distinguishes the two openings, `gate.open` against
+So a hold does not keep a loitering phone connected and dark. It hands the
+teardown to the phone, and a peer parked in the threshold band becomes a
+connect/hold/drop cycle. `WOZ_RSSI_GATE_MAX_HOLD_MS` exists to bound that: at
+the cap the reader completes the AP anyway and the gate opens as if the level
+had qualified, so the ordinary close path still powers the radio down when the
+peer leaves. The trace distinguishes the two openings, `gate.open` against
 `gate.holdcap`, because they cost very different amounts of radio.
 
-The cap is only checked when an RSSI sample arrives, so the hold ends up to one
-`WOZ_RSSI_GATE_POLL_MS` late. Measured: a 1500 ms cap released at **1695 ms**,
-leaving 121 ms against a phone that gives up at 1873. Budget cap + poll, not cap;
-1200 + 250 lands at 1450 with a comfortable margin.
+**It defaults to 0, off.** Both arms were run on the bench and the cap lost.
+Capped at 1200 ms, the gate released at -75 and -72 dBm with the phone still
+roughly 4 m out; the DW3000 then listened to nothing for **2.8 s** in one
+session and **6.6 s** in the next before the first trusted range. That is the
+waste the gate exists to prevent, and what it buys is the avoidance of a
+reconnect that costs one fast re-auth: BLE only, about 200 ms. Seconds of UWB
+receiver against a fraction of a second of BLE is not a close call.
 
-Which is actually cheaper — a capped hold that arms UWB briefly, or an unbounded
-hold that pays a fast re-auth every few seconds — is a question for the scenario
-matrix below, not for a default. Set the cap to 0 to measure the unbounded arm.
+The right behaviour for a phone that connects at BLE range and then stays there
+is to hold, let it give up, and let it come back when it is closer. The unlock
+is not at risk: an unprimed gate still fails open, and the phone demonstrably
+retries.
+
+If you set a cap anyway, note it is only checked when an RSSI sample arrives, so
+the hold ends up to one `WOZ_RSSI_GATE_POLL_MS` late. Measured: a 1500 ms cap
+released at **1695 ms**, leaving 121 ms against a phone that gives up at 1873.
+Budget cap + poll, not cap.
 
 dBm-to-metres depends on the phone's TX power and the door's RF surroundings,
 so the curve is the deliverable, not the defaults. Here is ours.
@@ -104,8 +113,9 @@ distances by the time it matters, which at normal walking pace means around 2 m.
 -55 sits at the 200-250 cm median, so it opens in the 2.0-2.5 m band. It scores
 worse on separation (+37 against +63) and that is the trade being made: some
 radio-on time beyond the door in exchange for never being the reason an unlock
-is late. `WOZ_RSSI_GATE_MAX_HOLD_MS` is what makes even this safe, since a gate
-that never qualifies still yields after 1.5 s.
+is late. What keeps an aggressive threshold safe is not the hold cap (off by
+default) but the fail-open on an unprimed gate, plus the phone's own willingness
+to drop the hold and reconnect on approach.
 
 The old -65/-75 pair came from guesswork and this data retires it: -65 opened
 for 93% of samples past 1 m (the gate barely gated, releasing the radio at
@@ -141,7 +151,7 @@ Run each N=10, one serial log + one power capture per run:
 | approach slow/normal/fast | on | latency cost at the door, per speed |
 | approach slow/normal/fast | off (`WOZ_RSSI_GATE=n`) | the ungated baseline |
 | approach normal, slope off (`SLOPE_DB=0`) | on | what the fast-open buys |
-| approach normal, cap off (`MAX_HOLD_MS=0`) | on | unbounded hold: reconnect churn against radio-dark time |
+| approach normal, cap on (`MAX_HOLD_MS=1200`) | on | the capped arm: UWB armed early against reconnects avoided |
 | parked outside BLE range | either | true idle floor |
 | parked connected, far (hallway) | on | the held state: BLE up, UWB dark |
 | walk in and stay (resident) | on | the open question below |

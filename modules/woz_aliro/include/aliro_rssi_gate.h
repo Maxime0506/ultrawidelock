@@ -42,7 +42,7 @@ struct aliro_rssi_gate_cfg {
 #define CONFIG_WOZ_RSSI_GATE_SLOPE_DB 8
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS
-#define CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS 1200
+#define CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS 0
 #endif
 
 #define ALIRO_RSSI_GATE_CFG_DEFAULT                                                                \
@@ -95,13 +95,13 @@ bool aliro_rssi_gate_is_open(const struct aliro_rssi_gate *g);
 
 /* Start the AP-Completed hold clock. Called when the reader defers AP-Completed on a
  * closed gate. From here a feed opens the gate once cfg->max_hold_ms has elapsed even
- * if the level never qualifies: the phone stops waiting for AP-Completed at around
- * 1.9 s (bench-measured) and terminates the link, so an unbounded hold does not keep
- * a loitering peer connected, it only hands the teardown to the phone and invites a
- * reconnect cycle. A capped open is a normal open in every other respect, so the
- * ordinary close path still powers the radio back down when the peer leaves.
+ * if the level never qualifies. Off by default (max_hold_ms 0): the phone stops
+ * waiting at around 1.9 s and reconnects, and that reconnect costs one fast re-auth
+ * where capping costs seconds of DW3000 RX aimed at a phone still metres away. A
+ * capped open is a normal open in every other respect, so the ordinary close path
+ * still powers the radio back down when the peer leaves.
  *
- * Only evaluated on a feed, so the hold ends up to one sample period late: budget
+ * Only evaluated on a feed, so a cap ends up to one sample period late: budget
  * max_hold_ms + the caller's poll interval against the phone's patience. */
 void aliro_rssi_gate_hold_begin(struct aliro_rssi_gate *g, uint32_t now_ms);
 
