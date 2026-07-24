@@ -204,6 +204,12 @@ static void sp0(void)
 					      huge, sizeof(huge), bigct, mic), -E2BIG);
 	T_EQ("sp0.dec.null", ccc_sp0_decrypt(mupsk1, NULL, 1u, mhr, sizeof(mhr), ct,
 					     sizeof(ct), mic, recovered), -EINVAL);
+	/* ciphertext beyond the CCM scratch bound -> E2BIG */
+	uint8_t hugerec[200];
+	T_EQ("sp0.dec.e2big", ccc_sp0_decrypt(mupsk1, src_long, 1u, mhr, sizeof(mhr),
+					      huge, sizeof(huge), mic, hugerec), -E2BIG);
+	/* an unsupported CMAC key width fails at the first AES call */
+	T_OK("cmac.badbits", ccc_aes_cmac(mupsk1, 192, mhr, sizeof(mhr), mic) != 0);
 }
 
 void test_ccc_kdf(void)
