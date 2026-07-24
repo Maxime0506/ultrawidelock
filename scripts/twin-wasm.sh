@@ -24,30 +24,48 @@ if ! command -v emcc >/dev/null 2>&1; then
   exit 1
 fi
 
-# The twin's firmware is modules/woz_uwb specifically — the DS-TWR responder,
-# range store and facade. UNIT_SRCS is the whole host-coverage denominator and
-# now carries sibling modules too (woz_aliro_stack, ...), which the twin never
-# calls; -O2 would dead-strip them, but compiling them at all couples this
-# build to modules the page has nothing to do with (a sibling that failed
-# under emcc would break the twin for no reason). So take only the woz_uwb
-# subset of UNIT_SRCS — self-maintaining as woz_uwb files come and go.
-WOZ_UWB_SRCS=()
-for src in "${UNIT_SRCS[@]}"; do
-  case "$src" in
-    */modules/woz_uwb/src/*) WOZ_UWB_SRCS+=("$src") ;;
-  esac
-done
-if [ "${#WOZ_UWB_SRCS[@]}" -eq 0 ]; then
-  echo "twin-wasm: no woz_uwb sources in UNIT_SRCS — sources.sh layout changed?" >&2
-  exit 1
-fi
+# The twin's firmware is a deliberate, stable set: the modules/woz_uwb decision
+# logic (DS-TWR responder, CCC crypto + codec, range store, facade). It is NOT
+# the logging backends (woz_logfmt/woz_logquiet — the twin logs via
+# printf -> Module.print) nor the ld --wrap layer (ccc_shim_wrap — the twin
+# uses the host radio doubles in dw_rx_stub.c). An explicit allowlist, not a
+# path filter over the shared UNIT_SRCS: that list is the host-COVERAGE
+# denominator and grows target-only + coverage-only files (a coarse
+# modules/woz_uwb/src/* filter swept woz_logfmt/woz_logquiet/ccc_shim_wrap in
+# and drifted twin.js). A woz_uwb decision file the twin needs but omits here
+# fails loud — the node selftest link-errors on the missing symbol. $SRC/$SHIM
+# come from sources.sh; INCS/DEFS are reused as-is (extra -I dirs compile
+# nothing, so their churn is harmless — only the source list matters).
+WOZ_UWB_SRCS=(
+  "$SRC/ccc/ccc_kdf.c" "$SRC/ccc/ccc_mac.c" "$SRC/ccc/ccc_session.c"
+  "$SRC/ccc/ccc_shim.c" "$SRC/ccc/ccc_sts.c" "$SRC/ccc/cherry_ccc_shim.c"
+  "$SRC/ccc/ccc_shim_rx.c"
+  "$SRC/aliro/aliro_uwb_msg_builder.c" "$SRC/aliro/aliro_uwb_msg_parser.c"
+  "$SRC/aliro/aliro_uwb_adapter.c" "$SRC/aliro/aliro_uwb_msg.c"
+  "$SRC/aliro/aliro_uwb_session.c"
+  "$SRC/fira/fira_session.c"
+  "$SRC/facade/woz_uwb_facade.c"
+)
+# Radio + STS-register doubles the responder links against (the host shim, not
+# the target ld --wrap). Explicit for the same reason: SHIM_SRCS now carries
+# logfake.c, which only the excluded woz_logfmt.c needs.
+TWIN_SHIM_SRCS=("$SHIM/shim.c" "$SHIM/dw_rx_stub.c")
 
-# Same defines + include path as the host suite (run.sh); the woz_uwb sources,
-# the radio-stub shim, the host AES double, and the shared peer model — plus
-# the glue that exports the page's entry points.
+# Fail loud if any listed source was renamed/moved out from under us, rather
+# than letting emcc emit a cryptic missing-input error.
+for src in "${WOZ_UWB_SRCS[@]}" "${TWIN_SHIM_SRCS[@]}"; do
+  if [ ! -f "$src" ]; then
+    echo "twin-wasm: source not found: $src — did modules/woz_uwb or the shim move?" >&2
+    exit 1
+  fi
+done
+
+# The woz_uwb sources + the radio-stub shim, the host AES double and the shared
+# peer model, plus the glue that exports the page's entry points. INCS/DEFS
+# match the host suite (run.sh).
 emcc -std=c11 -O2 -w "${DEFS[@]}" "${INCS[@]}" \
   -ffile-prefix-map="$ROOT"=. \
-  "${WOZ_UWB_SRCS[@]}" "${SHIM_SRCS[@]}" \
+  "${WOZ_UWB_SRCS[@]}" "${TWIN_SHIM_SRCS[@]}" \
   "$ROOT/tests/host/aes_ref.c" \
   "$ROOT/tests/host/twin_frames.c" \
   "$ROOT/web-twin/twin_glue.c" \
