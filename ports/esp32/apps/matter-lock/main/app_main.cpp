@@ -121,7 +121,15 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 #define ALIRO_RANGE_MEDIAN_N  5     // trusted-range samples in the spike-rejecting median filter
 #define ALIRO_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
 #define ALIRO_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
-#define ALIRO_PEER_GONE_MS    1500  // no ranging activity this long -> peer left -> relock + secured
+// No ranging activity this long -> peer left -> relock + secured. Must clear iOS's
+// own mid-approach ranging pauses or the bolt relocks under a phone that never left:
+// bench captures show gaps of 1.6 s with the phone 7 cm from the reader and 2.4 s
+// during a walk-in, which relocked the bolt 2.6 s after it opened. The depart
+// threshold above is the primary walk-away relock (it fires while BLE is still up),
+// so this is the backstop for a peer that vanishes without a departure ramp, and it
+// can afford the margin. Cost of the larger value: a bolt left open up to this long
+// when someone leaves sideways out of UWB without crossing ALIRO_RELOCK_RANGE_CM.
+#define ALIRO_PEER_GONE_MS    3000
 
 // Resolve the Matter user that owns the credential the reader authenticated, so the LockOperation
 // event names who operated the lock. Without it the event is anonymous and Apple Home, unable to
@@ -336,8 +344,9 @@ static void aliro_reader_task(void *arg)
 		// the noisy distance. Relock if still open, tell Wallet Secured, reset for
 		// the next approach.
 		if (present && (now - last_activity_ms) >= ALIRO_PEER_GONE_MS) {
-			ESP_LOGI(TAG, "Aliro peer gone (%d ms silent): relock + secured",
-				 (int)(now - last_activity_ms));
+			ESP_LOGI(TAG, "Aliro peer gone (%d ms silent)%s%s",
+				 (int)(now - last_activity_ms), locked ? "" : ": relock",
+				 granted ? " + secured" : "");
 			if (!locked) {
 				schedule_bolt_lock();
 				locked = true;

@@ -878,7 +878,7 @@ static void section_reader_task(void)
 	wake_push(1, 1, 200, 10);  /* far branch while already locked */
 	wake_push(1, 1, 200, 10);
 	wake_push(1, 1, 200, 10);  /* median decays into the dead band */
-	wake_push(0, 0, 0, 1600);  /* silence -> peer gone (already locked) */
+	wake_push(0, 0, 0, 3200);  /* silence -> peer gone (already locked) */
 	mfk_task_run(task, nullptr);
 
 	okc("wait loop released by host sync + free advertiser", delays >= 3);
@@ -907,7 +907,7 @@ static void section_reader_task(void)
 	mfk_wake_idx = 0;
 	wake_push(1, 1, 50, 10);
 	wake_push(1, 1, 60, 10);  /* unlock, attributed to user 1 */
-	wake_push(0, 0, 0, 1600); /* silence while unlocked -> relock + secured */
+	wake_push(0, 0, 0, 3200); /* silence while unlocked -> relock + secured */
 	mfk_task_run(task, nullptr);
 	okc("unlock attributed to the credential's user",
 	    mfk_dls_unlock_user_null == 0 && mfk_dls_unlock_user == 1);
@@ -941,7 +941,7 @@ static void section_reader_task(void)
 	wake_push(1, 1, 260, 10);
 	wake_push(1, 1, 310, 10);
 	wake_push(1, 1, 290, 10);
-	wake_push(0, 0, 0, 1600); /* silence -> peer gone, still locked */
+	wake_push(0, 0, 0, 3200); /* silence -> peer gone, still locked */
 	mfk_task_run(task, nullptr);
 	okc("trusted but never near: wallet never told unsecured",
 	    mfk_notify_unlock_calls == 0);
