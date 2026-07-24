@@ -295,7 +295,8 @@ static int cmd_log(int argc, char **argv)
  * writes on the protocol path, so they cost walk-up latency while on). `lab on`
  * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log.
  * `lab cir on|off` additionally arms the windowed-CIR tap dump (channel-impulse
- * Stage 1) — many extra lines per reception, so it is a separate opt-in. */
+ * Stage 1): the taps buffer to RAM while armed and print in a burst on `lab cir
+ * off`, off the ranging path, so the walk-up still unlocks while capturing. */
 static int cmd_lab(int argc, char **argv)
 {
 	if (argc == 3 && strcmp(argv[1], "cir") == 0) {
@@ -307,7 +308,10 @@ static int cmd_lab(int argc, char **argv)
 			printf("usage: lab cir [on|off]\n");
 			return 0;
 		}
-		printf("aliro lab CIR dump: %s\n", uwb_cirdiag_dump_enabled() ? "on" : "off");
+		bool cir_on = uwb_cirdiag_dump_enabled();
+
+		printf("aliro lab CIR dump: %s%s\n", cir_on ? "on" : "off",
+		       cir_on ? "  (taps print on: lab cir off)" : "");
 		return 0;
 	}
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {

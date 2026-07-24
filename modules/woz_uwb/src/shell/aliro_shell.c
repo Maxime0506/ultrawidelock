@@ -224,8 +224,12 @@ static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
 				return -EINVAL;
 			}
 		}
-		shell_print(sh, "  windowed-CIR dump %s",
-			    uwb_cirdiag_dump_enabled() ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST);
+		bool don = uwb_cirdiag_dump_enabled();
+
+		shell_print(sh, "  windowed-CIR dump %s%s",
+			    don ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST,
+			    don ? C_DIM "  (taps buffer to RAM; dumped on `cir dump off`)" C_RST
+				: "");
 		return 0;
 	}
 	if (argc >= 2) {

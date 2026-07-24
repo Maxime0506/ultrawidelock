@@ -21,14 +21,20 @@ void uwb_cirdiag_set_enabled(bool on);
 /** @brief Whether the summary stream is currently armed. */
 bool uwb_cirdiag_enabled(void);
 
-/** @brief Arm or disarm the windowed-CIR dump (Stage 1): per reception, emit ~64 `ev=uwb.cir`
- * tap lines around the first path. Arming implies the summary stream too; disarming leaves it.
- * Costs an extra CIR SPI read + ~64 serial lines per reception — a capture-session tool, not a
- * latency probe. Safe any time (the read only runs inside a live armed reception). */
+/** @brief Arm or disarm the windowed-CIR dump (Stage 1): while armed, each reception's ~64-tap
+ * Ipatov window around the first path is buffered to RAM — NOT printed, because printing on the
+ * RX path stalls ranging. Disarming drains the buffer to `ev=uwb.cir` lines off the ranging hot
+ * path, so a live walk-up still unlocks while capturing. Arming implies the summary stream too;
+ * disarming leaves it. Costs one CIR SPI read per reception + a burst of serial lines on disarm.
+ * Safe any time (the read only runs inside a live armed reception). */
 void uwb_cirdiag_dump_set_enabled(bool on);
 
 /** @brief Whether the windowed-CIR dump is currently armed. */
 bool uwb_cirdiag_dump_enabled(void);
+
+/** @brief Number of CIR windows currently buffered awaiting a drain (0..CIRDIAG_RING_RECS).
+ * The drain on dump disarm empties it back to 0. Exposed mainly for tests. */
+uint32_t uwb_cirdiag_ring_count(void);
 
 /**
  * @brief Latch the CIA diagnostics of the reception just serviced (latest wins).

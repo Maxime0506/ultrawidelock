@@ -9,10 +9,13 @@
  * the next reception re-latches.
  *
  * Stage 1 adds an independently-armed windowed-CIR dump: when armed, capture also reads a
- * fixed window of Ipatov complex taps centred on the first-path index into the snapshot, and
- * flush emits one `ev=uwb.cir` line per tap (absolute index + int16 real/imag). Separate arm
- * from the summary line because a full window is ~64 extra serial lines per reception — wanted
- * for offline analysis, not for a plain latency check.
+ * fixed window of Ipatov complex taps centred on the first-path index into the snapshot. The
+ * taps are NOT printed on the RX/flush path — a full window is ~64 serial lines per reception,
+ * enough blocking UART to overrun the ranging slot and stall a live walk-up. Instead flush
+ * appends each window to a small RAM ring (the last CIRDIAG_RING_RECS receptions), and the taps
+ * are drained to `ev=uwb.cir` lines only when the dump is disarmed (uwb_cirdiag_dump_set_enabled
+ * (false)) — that runs in console/task context after the walk-up, so the unlock is unaffected
+ * while capturing.
  */
 
 #include "uwb_cirdiag.h"
@@ -71,6 +74,49 @@ static bool g_cir_have;
 static volatile uint32_t g_seq;
 static volatile bool g_pending;
 
+/** @brief Deferred-dump ring. flush() appends each armed reception's window here (a cheap memcpy,
+ * no UART) instead of printing it on the ranging path; the taps are emitted only on disarm
+ * (cirdiag_drain), off that path, so a live walk-up still unlocks while capturing. Overwrites
+ * oldest, so it holds the last RECS receptions — the near-door end of an approach (~272 B/record).
+ * Single-producer (flush) / single-consumer (drain-after-disarm): the drain runs only after
+ * g_dump is cleared, so in the intended "walk up, then dump off" workflow no live flush races it.
+ */
+#define CIRDIAG_RING_RECS 16u
+struct cirdiag_rec {
+	int64_t t_us;
+	uint32_t n;
+	uint16_t base;
+	uint32_t taps[CIRDIAG_CIR_WIN];
+};
+static struct cirdiag_rec g_ring[CIRDIAG_RING_RECS];
+static uint32_t g_ring_head;  /* next write slot (mod RECS) */
+static uint32_t g_ring_count; /* valid records held (<= RECS) */
+
+/** @brief Emit every buffered window as `ev=uwb.cir` lines (oldest first), then empty the ring.
+ * Called on dump disarm, off the ranging path. Blocking: up to RECS*WIN serial lines. */
+static void cirdiag_drain(void)
+{
+	uint32_t start = (g_ring_head + CIRDIAG_RING_RECS - g_ring_count) % CIRDIAG_RING_RECS;
+
+	for (uint32_t k = 0; k < g_ring_count; k++) {
+		const struct cirdiag_rec *r = &g_ring[(start + k) % CIRDIAG_RING_RECS];
+		const int16_t *s = (const int16_t *)r->taps;
+
+		for (unsigned i = 0; i < CIRDIAG_CIR_WIN; i++) {
+			woz_printf("[ALAB] t=%lld ev=uwb.cir n=%u i=%u re=%d im=%d\n",
+				   (long long)r->t_us, (unsigned)r->n, (unsigned)(r->base + i),
+				   (int)s[2u * i], (int)s[2u * i + 1u]);
+		}
+	}
+	g_ring_count = 0;
+	g_ring_head = 0;
+}
+
+uint32_t uwb_cirdiag_ring_count(void)
+{
+	return g_ring_count;
+}
+
 void uwb_cirdiag_set_enabled(bool on)
 {
 	g_on = on;
@@ -85,11 +131,16 @@ void uwb_cirdiag_dump_set_enabled(bool on)
 {
 	/* The window read needs the summary path armed too (it supplies the first-path index and
 	 * the lazy CIA-logging enable). Arming dump implies arming the summary; disarming dump
-	 * leaves the summary as-is. */
+	 * leaves the summary as-is. Disarm is also the safe moment to drain the buffered windows:
+	 * it runs in console/task context after the walk-up, so the burst of serial lines never
+	 * touches the ranging path. Clear g_dump first so no further capture appends mid-drain. */
 	if (on) {
 		g_on = true;
+		g_dump = true;
+	} else {
+		g_dump = false;
+		cirdiag_drain();
 	}
-	g_dump = on;
 }
 
 bool uwb_cirdiag_dump_enabled(void)
@@ -212,16 +263,22 @@ void uwb_cirdiag_flush(void)
 			   (unsigned)sts_stat, (int)sts_stat_ret, (int)d.xtalOffset,
 			   (unsigned)d.ciaDiag1);
 		if (cir_have) {
-			/* One line per Ipatov tap, keyed to the summary line by n. i is the
-			 * absolute accumulator index; re/im are the int16 real/imaginary parts
-			 * (DWT_CIR_READ_MID). aliro_lab.py groups taps by n and computes
-			 * magnitude offline. */
-			const int16_t *s = (const int16_t *)cir_copy;
+			/* Deferred dump: park the window in the ring (cheap memcpy, no UART)
+			 * instead of printing ~64 lines here — that print would stall ranging (this
+			 * runs in the ISR-service task on the ESP32). cirdiag_drain() emits them on
+			 * disarm. Overwrite-oldest keeps the last RECS receptions. Keyed to the
+			 * summary line by n; re/im are the int16 real/imag parts
+			 * (DWT_CIR_READ_MID), grouped and magnitude-computed offline by
+			 * aliro_lab.py. */
+			struct cirdiag_rec *r = &g_ring[g_ring_head];
 
-			for (unsigned i = 0; i < CIRDIAG_CIR_WIN; i++) {
-				woz_printf("[ALAB] t=%lld ev=uwb.cir n=%u i=%u re=%d im=%d\n",
-					   (long long)t_us, (unsigned)n, (unsigned)(cir_base + i),
-					   (int)s[2u * i], (int)s[2u * i + 1u]);
+			r->t_us = t_us;
+			r->n = n;
+			r->base = cir_base;
+			memcpy(r->taps, cir_copy, sizeof(r->taps));
+			g_ring_head = (g_ring_head + 1u) % CIRDIAG_RING_RECS;
+			if (g_ring_count < CIRDIAG_RING_RECS) {
+				g_ring_count++;
 			}
 		}
 		return;

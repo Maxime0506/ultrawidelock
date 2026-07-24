@@ -10,9 +10,11 @@
 #include "uwb_cirdiag.h"
 
 /* Mirror of the firmware constants (uwb_cirdiag.c): 64-tap window over a
- * 1016-sample PRF64 Ipatov accumulator; ipatovFpIndex is Q10.6. */
+ * 1016-sample PRF64 Ipatov accumulator; ipatovFpIndex is Q10.6; RECS is the
+ * deferred-dump ring depth (CIRDIAG_RING_RECS). */
 #define WIN     64
 #define IP_LEN  1016
+#define RECS    16
 #define Q(fp)   ((uint16_t)((unsigned)(fp) << 6))
 
 void test_uwb_cirdiag(void)
@@ -47,7 +49,8 @@ void test_uwb_cirdiag(void)
 	T_EQ("cir read issued", drvfake.readcir_calls, 1);
 	T_EQ("window width", drvfake.last_cir_num, WIN);
 	T_EQ("centred base", drvfake.last_cir_base, 200 - WIN / 2); /* 168 */
-	uwb_cirdiag_flush(); /* covers the per-tap emit loop */
+	uwb_cirdiag_flush(); /* dump armed: appends the window to the ring, no inline print */
+	T_EQ("one window buffered", uwb_cirdiag_ring_count(), 1);
 
 	/* First path near 0 -> base clamps to 0. */
 	drvfake.diag_fp = Q(1);
@@ -59,12 +62,21 @@ void test_uwb_cirdiag(void)
 	(void)uwb_cirdiag_capture(0x1u, 12u);
 	T_EQ("high base clamps", drvfake.last_cir_base, IP_LEN - WIN); /* 952 */
 
-	/* Disarm dump: summary stays armed, no further CIR reads. */
+	/* Fill past capacity: the ring keeps only the last RECS windows (overwrite oldest). */
+	for (int i = 0; i < RECS + 8; i++) {
+		drvfake.diag_fp = Q(200);
+		(void)uwb_cirdiag_capture(0x1u, 12u);
+		uwb_cirdiag_flush();
+	}
+	T_EQ("ring caps at capacity", uwb_cirdiag_ring_count(), RECS);
+
+	/* Disarm dump: drains the ring off the ranging path, empties it; summary stays armed. */
 	unsigned before = drvfake.readcir_calls;
 
 	uwb_cirdiag_dump_set_enabled(false);
 	T_OK("dump disarmed", !uwb_cirdiag_dump_enabled());
 	T_OK("summary still armed", uwb_cirdiag_enabled());
+	T_EQ("ring drained empty", uwb_cirdiag_ring_count(), 0);
 	(void)uwb_cirdiag_capture(0x1u, 12u);
 	T_EQ("no CIR read when dump off", drvfake.readcir_calls, before);
 
