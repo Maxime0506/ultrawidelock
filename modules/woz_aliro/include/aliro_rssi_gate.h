@@ -15,8 +15,9 @@
 extern "C" {
 #endif
 
-/* Tuning knobs. Kconfig supplies the build defaults (ALIRO_RSSI_GATE_CFG_DEFAULT);
- * every threshold is a placeholder until the bench power/latency curve pins it. */
+/* Tuning knobs. Kconfig supplies the build defaults (ALIRO_RSSI_GATE_CFG_DEFAULT).
+ * The thresholds come from a measured curve on one rig (docs/power-profile.md);
+ * they are per-room and per-handset, so re-run the calibration for a new one. */
 struct aliro_rssi_gate_cfg {
 	int16_t open_dbm;         /* smoothed RSSI at/above this -> open */
 	int16_t close_dbm;        /* smoothed RSSI at/below this (sustained) -> close */
@@ -29,10 +30,10 @@ struct aliro_rssi_gate_cfg {
 
 /* Kconfig-tunable defaults, with host-build fallbacks (no sdkconfig there). */
 #ifndef CONFIG_WOZ_RSSI_GATE_OPEN_DBM
-#define CONFIG_WOZ_RSSI_GATE_OPEN_DBM -65
+#define CONFIG_WOZ_RSSI_GATE_OPEN_DBM -55
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_CLOSE_DBM
-#define CONFIG_WOZ_RSSI_GATE_CLOSE_DBM -75
+#define CONFIG_WOZ_RSSI_GATE_CLOSE_DBM -65
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_CLOSE_HOLD_MS
 #define CONFIG_WOZ_RSSI_GATE_CLOSE_HOLD_MS 3000

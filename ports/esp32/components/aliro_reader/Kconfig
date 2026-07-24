@@ -46,21 +46,31 @@ config WOZ_RSSI_GATE
 config WOZ_RSSI_GATE_OPEN_DBM
 	int "Gate open threshold (dBm)"
 	depends on WOZ_RSSI_GATE
-	default -65
+	default -55
 	help
 	  Smoothed connection RSSI at or above this opens the gate (allows UWB).
-	  Placeholder until the bench power/latency curve pins it; roughly the
-	  last few metres for a phone at 0 dBm TX indoors.
+
+	  Set from a measured 274-sample curve (see docs/power-profile.md), not
+	  from separation alone. Ranging needs about 1.5 s from AP-Completed to
+	  its first trusted range, so the gate has to open roughly 2 m out or the
+	  radio is still warming up when the phone reaches the door. On the bench
+	  rig -55 lands in the 2.0-2.5 m band; -50 separates near from far better
+	  on paper but opens under 1 m, which arrives too late to be useful.
 
 config WOZ_RSSI_GATE_CLOSE_DBM
 	int "Gate close threshold (dBm)"
 	depends on WOZ_RSSI_GATE
-	default -75
+	default -65
 	help
 	  Smoothed RSSI at or below this — sustained for the close hold time —
 	  closes the gate: ranging stops, the DW3000 powers down and the link
 	  is dropped. Keep well below the open threshold (hysteresis) so body
 	  fades cannot flap the radio.
+
+	  10 dB under the open threshold, which on the measured curve puts the
+	  close edge past 3 m: you have to walk a metre back out before the radio
+	  powers down. The old -75 was below the level seen at any distance the
+	  rig could still hold a link at, so the gate effectively never closed.
 
 config WOZ_RSSI_GATE_CLOSE_HOLD_MS
 	int "Gate close hold (ms)"

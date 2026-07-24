@@ -82,8 +82,10 @@ void test_rssi_gate(void)
 
 	T_OK("opened", slow_open >= 0);
 	T_OK("smoothed at/above open_dbm", aliro_rssi_gate_level_dbm(&g) >= k_cfg.open_dbm);
-	/* raw crosses -65 at sample 25; EWMA lag means never before that */
-	T_OK("not before raw crossing", slow_open >= 25);
+	/* The ramp starts at -90 and rises 1 dB per sample, so the raw level reaches
+	 * open_dbm at sample (open_dbm + 90). Smoothing lags, so the gate can open at
+	 * that sample but never before it. */
+	T_OK("not before raw crossing", slow_open >= k_cfg.open_dbm + 90);
 
 	t_group("rssi_gate: rise-rate fast open beats threshold on a fast approach");
 	struct aliro_rssi_gate ga, gb;
@@ -101,12 +103,17 @@ void test_rssi_gate(void)
 	T_OK("slope floor held", aliro_rssi_gate_level_dbm(&ga) > k_cfg.close_dbm);
 
 	t_group("rssi_gate: hysteresis band holds current state");
+	/* Mid-band, derived from the configured thresholds rather than written in:
+	 * a literal here silently stops testing hysteresis the moment the bench
+	 * curve moves the band. */
+	int8_t mid = (int8_t)((k_cfg.open_dbm + k_cfg.close_dbm) / 2);
+
 	aliro_rssi_gate_reset(&g);
 	now = 0u;
-	T_OK("still closed at -70", !feed_flat(&g, &k_cfg, -70, 40, &now));
+	T_OK("still closed mid-band", !feed_flat(&g, &k_cfg, mid, 40, &now));
 	aliro_rssi_gate_reset(&g);
-	(void)aliro_rssi_gate_feed(&g, &k_cfg, -55, now); /* open */
-	T_OK("still open at -70", feed_flat(&g, &k_cfg, -70, 40, &now));
+	(void)aliro_rssi_gate_feed(&g, &k_cfg, (int8_t)(k_cfg.open_dbm + 5), now); /* open */
+	T_OK("still open mid-band", feed_flat(&g, &k_cfg, mid, 40, &now));
 
 	t_group("rssi_gate: a short fade does not flap; a sustained drop closes");
 	aliro_rssi_gate_reset(&g);

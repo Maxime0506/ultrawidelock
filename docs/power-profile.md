@@ -49,9 +49,63 @@ Which is actually cheaper — a capped hold that arms UWB briefly, or an unbound
 hold that pays a fast re-auth every few seconds — is a question for the scenario
 matrix below, not for a default. Set the cap to 0 to measure the unbounded arm.
 
-Both thresholds are placeholders until the measured curve below pins them.
-dBm-to-metres depends on the phone's TX power and the door's RF surroundings;
-publish the curve, not the defaults.
+dBm-to-metres depends on the phone's TX power and the door's RF surroundings,
+so the curve is the deliverable, not the defaults. Here is ours.
+
+## The curve
+
+274 paired samples, one iPhone, one room, from three slow walk-ins with 3 s
+pauses at 2.0, 1.5, 1.0 and 0.5 m. Each `range cm=` in the lab trace paired
+with the `rssi dbm=` nearest it in time; reproduce with
+`power_profile.py capture.log --calibrate`.
+
+| distance | n | median | p10 | p90 | min | max |
+|---|---|---|---|---|---|---|
+| 0-50 cm | 39 | -47 | -54 | -44 | -58 | -40 |
+| 50-100 cm | 41 | -44 | -52 | -40 | -70 | -38 |
+| 100-150 cm | 38 | -52 | -56 | -47 | -61 | -41 |
+| 150-200 cm | 54 | -53 | -57 | -51 | -61 | -46 |
+| 200-250 cm | 54 | -55 | -63 | -51 | -71 | -50 |
+| 250-300 cm | 30 | -61 | -70 | -56 | -72 | -51 |
+| 300+ cm | 18 | -65 | -70 | -57 | -70 | -56 |
+
+Three things in that table are worth more than the numbers.
+
+**It is flat.** About 18 dB across the whole 0 to 3 m range, and the bins
+overlap heavily: the p90 of 250-300 cm (-56) sits above the median of 100-150 cm
+(-52). BLE RSSI is a coarse proximity hint here, not a range estimate.
+
+**It is not monotonic.** 50-100 cm reads *stronger* (-44) than 0-50 cm (-47).
+At the door the phone is held differently and the body is in a different place;
+whatever the mechanism, "closer is stronger" stops being true in the last metre.
+Anything that tries to invert this curve into a distance will be wrong there.
+
+**Tails are long.** The 50-100 cm bin has a -70 minimum, 26 dB below its own
+median. A single sample proves nothing about distance, which is why the gate
+smooths (EWMA) and latches (hysteresis) rather than thresholding raw values.
+
+## Why -55 and not the best-separating threshold
+
+`--calibrate` scores thresholds by how cleanly they split near from far, and on
+this data it likes -50: it opens for 74% of samples under 1 m and only 11% of
+those beyond it. That is the right answer to the wrong question.
+
+Ranging is not instant. From AP-Completed to the first trusted range is about
+1.5 s (`apc` to `trusted` in the lab trace). A gate that opens under 1 m hands
+the radio a walking phone that is already at the door, and the bolt waits on
+warm-up. The gate has to open with enough lead that ranging is producing
+distances by the time it matters, which at normal walking pace means around 2 m.
+
+-55 sits at the 200-250 cm median, so it opens in the 2.0-2.5 m band. It scores
+worse on separation (+37 against +63) and that is the trade being made: some
+radio-on time beyond the door in exchange for never being the reason an unlock
+is late. `WOZ_RSSI_GATE_MAX_HOLD_MS` is what makes even this safe, since a gate
+that never qualifies still yields after 1.5 s.
+
+The old -65/-75 pair came from guesswork and this data retires it: -65 opened
+for 93% of samples past 1 m (the gate barely gated, releasing the radio at
+2.7 m), and -75 was below the level seen at any distance the rig could still
+hold a link at, so the close path effectively never fired.
 
 ## What nobody publishes: the numbers
 
