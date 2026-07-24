@@ -110,6 +110,12 @@ static bool s_prov_lock_ready;
  * stays off the walk-up critical path. */
 static bool s_kp_dirty;
 
+/* A Secured (relock) Reader-Status-Changed that could not be delivered because the
+ * peer had already disconnected. The phone is left showing this door unlocked, so
+ * the next established session replays it. Host-task only, like every other touch
+ * point on the session table. */
+static bool s_secured_undelivered;
+
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 /* One-shot step-up arm (bench `aliro-stepup arm`): forces the next transaction
  * into the expedited-standard phase and requests an Access Document after
@@ -216,6 +222,10 @@ static struct aliro_session {
 	struct aliro_rssi_gate rgate;
 #endif
 } s_sessions[ALIRO_MAX_SESSIONS];
+
+/* Defined with the other Reader-Status-Changed plumbing; declared here so the
+ * stale-Wallet resync in complete_ap_and_range can reach it. */
+static void reader_status_send(struct aliro_session *s, bool unsecured);
 
 // Finds the active session matching the given BLE connection handle.
 // Returns a pointer to the matching session, or NULL if no active session has that conn_handle.
@@ -825,6 +835,19 @@ static void complete_ap_and_range(struct aliro_session *s)
 	if (aliro_ranging_start(s->conn_handle, ranging_sid, s->ursk, &s->sc_ble) != 0) {
 		LOG_WRN("[conn %u] ranging setup did not arm", s->conn_handle);
 	}
+
+	/* Stale-Wallet resync. If a relock notification was lost because the peer had
+	 * already dropped BLE, the phone is still showing this door unlocked; a channel
+	 * exists again now, so replay it once. Deliberately Secured-only: an unsolicited
+	 * Unsecured would fire the Wallet unlock animation for a door the arriving phone
+	 * did not open. Costs nothing on a normal walk-up — the flag is only ever set by
+	 * an undeliverable relock — so the ranging path stays off the critical latency
+	 * path it just armed. */
+	if (s_secured_undelivered) {
+		LOG_INF("[conn %u] replaying the undelivered Secured (stale Wallet state)",
+			s->conn_handle);
+		reader_status_send(s, false);
+	}
 }
 
 #if defined(CONFIG_WOZ_RSSI_GATE)
@@ -1017,21 +1040,8 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
  * to select which connection to notify). Plaintext the BleSK channel then seals:
  * [02][02][00 04][00 02 04 <state>]. Runs on the BLE-host task (posted via
  * aliro_ble_post_reader_status) so it serializes with the other sc_ble seals. */
-static void reader_status_send_on_host(bool unsecured)
+static void reader_status_send(struct aliro_session *s, bool unsecured)
 {
-	struct aliro_session *s = NULL;
-
-	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
-		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
-			s = &s_sessions[i];
-			break;
-		}
-	}
-	if (s == NULL) {
-		LOG_WRN("reader-status-changed: no established session to notify");
-		return;
-	}
-
 	const uint8_t plain[8] = {
 		0x02u, 0x02u, 0x00u, 0x04u,
 		0x00u, 0x02u, 0x04u, (uint8_t)(unsecured ? 0x01u : 0x00u),
@@ -1048,6 +1058,33 @@ static void reader_status_send_on_host(bool unsecured)
 	LOG_INF("[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
 	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
+	s_secured_undelivered = false;
+}
+
+static void reader_status_send_on_host(bool unsecured)
+{
+	struct aliro_session *s = NULL;
+
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
+			s = &s_sessions[i];
+			break;
+		}
+	}
+	if (s == NULL) {
+		/* The peer went away before we could tell it. A lost Unsecured costs
+		 * nothing (the phone learns the door is open on its next approach), but
+		 * a lost Secured strands the Wallet showing this door unlocked with
+		 * nothing left to correct it: the relock is normally triggered BY the
+		 * peer leaving, so this is the common case, not the rare one. Flag it
+		 * and replay on the next session. */
+		if (!unsecured) {
+			s_secured_undelivered = true;
+		}
+		LOG_WRN("reader-status-changed: no established session to notify");
+		return;
+	}
+	reader_status_send(s, unsecured);
 }
 
 // Sends a Reader-Status BLE notification reporting the lock's unsecured/secured state to the

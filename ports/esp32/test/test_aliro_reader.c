@@ -926,6 +926,12 @@ int main(void)
 	 * phone's independent derivation of it */
 	s_cfg.cb.on_disconnected(2);
 	okc("a.kp_persisted", s_nvs_stores == 3); /* 2 provision calls + this one */
+
+	/* The peer-gone relock lands after the phone has already dropped BLE, which is
+	 * the normal case: nothing goes out, and the phone is left showing this door
+	 * unlocked. Section B asserts the next session replays it. */
+	aliro_reader_notify_unlock(false);
+	okc("a.relock_undeliverable", tx_pending() == 0);
 	{
 		struct aliro_reader_identity id2;
 		struct aliro_trust_store ts2;
@@ -982,6 +988,21 @@ int main(void)
 	okc("b.exchange_no_auth1", ph_exchange_resp(&p, 3) == 0); /* next TX is EXCHANGE */
 	okc("b.ap_completed", ph_take_ap_completed(&p) == 0);
 	okc("b.ranging_armed", s_rng_starts == 3);
+
+	/* Stale-Wallet resync: the Secured lost in A rides out on this session, right
+	 * after AP-Completed, so the phone stops showing a locked door as unlocked.
+	 * Secured only — an unsolicited Unsecured would fire the unlock animation. */
+	{
+		uint8_t plain[64];
+		size_t n, pn;
+		const uint8_t *f = tx_next(&n);
+		static const uint8_t relock[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x00};
+
+		okc("b.secured_replayed", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
+						  pn == 8 && memcmp(plain, relock, 8) == 0);
+	}
+	/* One shot: the flag is cleared by the replay, so nothing trails it. */
+	okc("b.replay_not_repeated", tx_pending() == 0);
 	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
 	s_cfg.cb.on_disconnected(3);
 	okc("b.no_new_persist", s_nvs_stores == 3); /* fast phase mints nothing */
