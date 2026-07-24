@@ -49,9 +49,38 @@ def synth_log(cadence_hz=None, n=26, block_ms=192, d0_cm=700.0, v_cm_s=130.0,
     return "\n".join(lines) + "\n"
 
 
+def synth_session(cadence_hz=1.9, k=3, n=18, retreat=6, block_ms=192,
+                  d0_cm=520.0, v_cm_s=130.0, amp_cm=3.0, noise_cm=2.0,
+                  wander_cm=2.5, seed=0, t0_us=1000000, gap_us=10000000):
+    """One held BLE session with k approaches: each descends (n blocks) then
+    retreats (retreat blocks) and fires relock.sent, modeling a carrier who
+    walks up repeatedly without the phone ever disconnecting. This is the
+    natural bench capture, not one session per walk-up."""
+    rng = random.Random(seed)
+    lines = ["[ALAB] t=%d ev=session.start" % t0_us]
+    t = t0_us
+    for _ in range(k):
+        phase = rng.uniform(0.0, 2.0 * math.pi)
+        wander_hz = rng.uniform(0.25, 0.35)
+        wander_ph = rng.uniform(0.0, 2.0 * math.pi)
+        for i in range(n + retreat):
+            ti = i * block_ms / 1000.0
+            di = min(i, 2 * n - i)  # descend to block n, then rise (walk away)
+            r = d0_cm - v_cm_s * (di * block_ms / 1000.0)
+            r += amp_cm * math.sin(2.0 * math.pi * cadence_hz * ti + phase)
+            r += wander_cm * math.sin(2.0 * math.pi * wander_hz * ti + wander_ph)
+            r += rng.gauss(0.0, noise_cm)
+            lines.append("[ALAB] t=%d ev=range cm=%d"
+                         % (t + int(ti * 1e6), max(1, int(round(r)))))
+        end_us = t + int((n + retreat) * block_ms / 1000.0 * 1e6)
+        lines.append("[ALAB] t=%d ev=relock.sent" % end_us)
+        t = end_us + gap_us
+    lines.append("[ALAB] t=%d ev=session.end" % t)
+    return "\n".join(lines) + "\n"
+
+
 def analyze(text, label="x"):
-    txns = aliro_lab.split_transactions(aliro_lab.parse_events(text))
-    return [aliro_gait.analyze_walkup(t, label) for t in txns]
+    return aliro_gait.walkups_from_text(label, text)
 
 
 class BlockDerivation(unittest.TestCase):
@@ -123,6 +152,28 @@ class MotionVerdict(unittest.TestCase):
             self.assertFalse(still["motion"], "stationary seed %d read CARRY" % seed)
             self.assertFalse(still["approach"],
                              "stationary seed %d read approaching" % seed)
+
+
+class MultiApproach(unittest.TestCase):
+    def test_held_session_splits_into_approaches(self):
+        # The whole point: one BLE session, carrier walks up 3 times with a
+        # relock between each. The probe must yield 3 analyzed walk-ups, not 1,
+        # each reading as motion, with the median cadence on target.
+        analyzed = [w for w in analyze(synth_session(cadence_hz=1.9, k=3,
+                                                      seed=1)) if w.features]
+        self.assertEqual(len(analyzed), 3)
+        for w in analyzed:
+            self.assertTrue(w.features["motion"], "approach read still")
+            self.assertLessEqual(w.n, 22, "retreat not trimmed (n=%d)" % w.n)
+        cads = sorted(w.features["cadence_hz"] for w in analyzed)
+        self.assertAlmostEqual(cads[len(cads) // 2], 1.9, delta=0.25)
+
+    def test_no_relock_stays_single_window(self):
+        # A capture with no relock (synthetic / genuine single approach) is one
+        # walk-up: the split must not manufacture extra windows.
+        self.assertEqual(
+            len([w for w in analyze(synth_log(cadence_hz=1.9, seed=0))
+                 if w.features]), 1)
 
 
 class Classification(unittest.TestCase):

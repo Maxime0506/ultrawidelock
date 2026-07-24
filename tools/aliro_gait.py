@@ -239,15 +239,10 @@ def incremental_cadence_hz(xs, fs_hz, band_lo, band_hi):
 
 # ---- per-walk-up analysis ----
 
-def analyze_walkup(txn, label):
-    """Features from one transaction's trusted-range series. The series is cut
-    at the bolt stamp when present: post-unlock loitering at the door is not
-    part of the approach."""
-    w = WalkUp(label, txn.index)
-    ranges = txn.ranges
-    bolt = txn.phases.get("bolt")
-    if bolt is not None:
-        ranges = [(t, cm) for t, cm in ranges if t <= bolt]
+def analyze_walkup(label, idx, ranges):
+    """Features from one approach's trusted-range series, already windowed to
+    the descending phase by _approach_windows."""
+    w = WalkUp(label, idx)
     w.n = len(ranges)
     if w.n < MIN_SAMPLES:
         w.skip = "too few range samples (%d < %d)" % (w.n, MIN_SAMPLES)
@@ -319,13 +314,51 @@ def analyze_walkup(txn, label):
     return w
 
 
+def _approach_windows(txn):
+    """Split one session into its individual approaches.
+
+    When the phone keeps the BLE session up while the carrier walks up several
+    times, one session.start..session.end holds multiple approaches, each ended
+    by a relock.sent. Split on those relocks and keep each approach's descending
+    phase (segment start .. closest approach), dropping the walk-away and the
+    door-side loitering that follow it. Legacy single-approach captures (no
+    relock, e.g. synthetic traces) fall back to the whole series, cut at the
+    bolt stamp as before."""
+    ranges = txn.ranges
+    relocks = sorted(e.t_us for e in txn.named("relock.sent"))
+    if not relocks:
+        bolt = txn.phases.get("bolt")
+        if bolt is not None:
+            ranges = [(t, cm) for t, cm in ranges if t <= bolt]
+        return [ranges]
+    bounds = [float("-inf")] + relocks + [float("inf")]
+    windows = []
+    for i in range(len(bounds) - 1):
+        seg = [(t, cm) for t, cm in ranges if bounds[i] <= t < bounds[i + 1]]
+        if len(seg) < 2:
+            continue
+        cms = [cm for _, cm in seg]
+        sm = [_median(cms[max(0, j - 1):j + 2]) for j in range(len(cms))]
+        jmin = min(range(len(sm)), key=lambda j: sm[j])
+        windows.append(seg[:jmin + 1])
+    return windows
+
+
+def walkups_from_text(label, text):
+    walkups = []
+    idx = 0
+    for txn in aliro_lab.split_transactions(aliro_lab.parse_events(text)):
+        for ranges in _approach_windows(txn):
+            idx += 1
+            walkups.append(analyze_walkup(label, idx, ranges))
+    return walkups
+
+
 def load_walkups(labeled_paths):
     walkups = []
     for label, path in labeled_paths:
         with open(path, "r", errors="replace") as f:
-            text = f.read()
-        for txn in aliro_lab.split_transactions(aliro_lab.parse_events(text)):
-            walkups.append(analyze_walkup(txn, label))
+            walkups.extend(walkups_from_text(label, f.read()))
     return walkups
 
 
