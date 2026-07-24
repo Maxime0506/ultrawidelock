@@ -348,7 +348,10 @@ reset over the sync pin) as the primitive that defines the epoch. Two items rema
 | Everything dies after BLE drop / ~12 h | URSK lifetime rules (section 8); a fresh fast-path transaction is required. |
 
 On instruments: a BLE sniffer alone yields everything through section 6 (discovery, the
-versions, the message IDs, suspend/resume) with no UWB gear. Resolving section 7 needs a
+versions, the message IDs, suspend/resume) with no UWB gear. The clear-text half of that is
+decoded for you by the Wireshark dissector in [wireshark.md](wireshark.md)
+(`tools/aliro.lua`): the `0xFFF2` advert of this section and the Procedure-0 time sync of
+section 5. Resolving section 7 needs a
 UWB capture, or the radio's own per-frame diagnostics, which is what separates "setup
 negotiated but the STS is mismatched" from "STS lines up but there is no RF link." The
 single most useful question when distances vanish: is BLE still trading setup and ranging
