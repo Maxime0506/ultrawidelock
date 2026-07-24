@@ -11,6 +11,8 @@
 #define FB_MAX_WRITES 8
 #define FB_MAX_REPLIES 8
 
+static const uint8_t kAck[] = { 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00 };
+
 static struct {
 	uint8_t written[FB_MAX_WRITES][PN532_FRAME_BUF_SIZE];
 	size_t written_len[FB_MAX_WRITES];
@@ -19,7 +21,11 @@ static struct {
 	size_t reply_len[FB_MAX_REPLIES];
 	int replies;
 	int reply_at;
-	int timeouts_left; /* wait_ready failures before becoming ready */
+	int timeouts_left;         /* wait_ready failures before becoming ready */
+	int mi_storm;              /* when set, serve ACK / status-MI frames forever */
+	int mi_calls;              /* fb_read calls consumed while mi_storm is set */
+	const uint8_t *storm_frame;
+	size_t storm_len;
 } fb;
 
 static void fb_reset(void)
@@ -60,6 +66,20 @@ static int fb_read(void *ctx, uint8_t *buf, size_t cap)
 {
 	(void)ctx;
 	memset(buf, 0, cap);
+	if (fb.mi_storm) {
+		/* Alternate ACK / status-MI response so an InDataExchange that follows
+		 * the MI bit never completes on its own — drives the continuation cap
+		 * rather than the finite scripted reply list. */
+		const int odd = fb.mi_calls++ & 1;
+		const uint8_t *f = odd ? fb.storm_frame : kAck;
+		size_t n = odd ? fb.storm_len : sizeof(kAck);
+
+		if (n > cap) {
+			n = cap;
+		}
+		memcpy(buf, f, n);
+		return PN532_OK;
+	}
 	if (fb.reply_at >= fb.replies) {
 		return PN532_ERR_IO;
 	}
@@ -78,8 +98,6 @@ static const struct pn532_bus_ops fb_ops = {
 	.wait_ready = fb_wait_ready,
 	.read = fb_read,
 };
-
-static const uint8_t kAck[] = { 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00 };
 
 /* Build a chip→host response frame: PD0 = cmd + 1, payload follows. */
 static size_t mk_resp(uint8_t cmd, const uint8_t *data, size_t n, uint8_t *out)
@@ -169,6 +187,23 @@ void test_pn532(void)
 		p = mk_chip();
 		T_EQ("params too large",
 		     pn532_transact(&p, 0x40, frame_a, 254, NULL, 0, NULL, -1), PN532_ERR_SPACE);
+
+		/* On ERR_SPACE (response larger than resp_cap) *resp_len must be left
+		 * untouched, never set to the oversized payload length. */
+		p = mk_chip();
+		{
+			static const uint8_t fw2[] = { 0x32, 0x01, 0x06, 0x07 };
+			uint8_t tiny[1];
+			size_t rl = 0xABCD;
+
+			len_a = mk_resp(0x02, fw2, sizeof(fw2), frame_a);
+			fb_push_reply(kAck, sizeof(kAck));
+			fb_push_reply(frame_a, len_a);
+			T_EQ("oversize response rc",
+			     pn532_transact(&p, 0x02, NULL, 0, tiny, sizeof(tiny), &rl, -1),
+			     PN532_ERR_SPACE);
+			T_EQ("resp_len untouched on ERR_SPACE", rl, 0xABCD);
+		}
 	}
 
 	t_group("InListPassiveTarget");
@@ -284,6 +319,28 @@ void test_pn532(void)
 		     pn532_in_data_exchange(&p, 1, big, 4, rx, sizeof(rx), &rx_len, 100),
 		     PN532_ERR_STATUS);
 		T_EQ("status value", p.last_status, 0x01);
+	}
+
+	t_group("InDataExchange MI runaway is bounded");
+	{
+		struct pn532 p = mk_chip();
+		static const uint8_t apdu[] = { 0x00, 0xB0, 0x00, 0x00 };
+		static const uint8_t status_mi[] = { PN532_STATUS_MI }; /* MI set, zero data */
+		static uint8_t storm[16];
+		uint8_t rx[64];
+		size_t rx_len = 0;
+
+		/* A chip that keeps the MI bit set forever (no forward progress) must
+		 * fail closed at the continuation cap, not spin on back-to-back round
+		 * trips. mi_storm serves ACK / this frame indefinitely, so a broken cap
+		 * would hang this test rather than let it pass. */
+		fb.storm_len = mk_resp(0x40, status_mi, sizeof(status_mi), storm);
+		fb.storm_frame = storm;
+		fb.mi_storm = 1;
+		T_EQ("runaway MI fails closed",
+		     pn532_in_data_exchange(&p, 1, apdu, sizeof(apdu), rx, sizeof(rx), &rx_len, 100),
+		     PN532_ERR_FRAME);
+		T_OK("continuations bounded", fb.mi_calls < 2 * (64 + 4));
 	}
 
 	t_group("extended frame + CommunicateThru");
