@@ -105,59 +105,60 @@ void aliro_assert_cred_id(const uint8_t cred_pub[ALIRO_ASSERT_PUB_LEN],
 	memcpy(cred_id, digest, ALIRO_ASSERT_CREDID_LEN);
 }
 
-int aliro_assert_build(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const struct aliro_assert *a,
-		       uint8_t *wire, size_t wire_cap, size_t *wire_len)
+// Writes the signed prefix (everything up to the tag) for one algorithm. Shared
+// so the two build paths cannot drift into producing different prefixes.
+static void put_prefix(uint8_t *wire, uint8_t alg, const struct aliro_assert *a)
 {
-	if (wire == NULL || a == NULL || wire_cap < ALIRO_ASSERT_WIRE_HMAC) {
-		return -1;
-	}
-
 	wire[OFF_MAGIC] = ASSERT_MAGIC0;
 	wire[OFF_MAGIC + 1u] = ASSERT_MAGIC1;
 	wire[OFF_VERSION] = ASSERT_VERSION;
-	wire[OFF_ALG] = ALIRO_ASSERT_ALG_HMAC_SHA256;
+	wire[OFF_ALG] = alg;
 	wire[OFF_STATUS] = a->status;
 	memcpy(wire + OFF_NONCE, a->nonce, ALIRO_ASSERT_NONCE_LEN);
 	memcpy(wire + OFF_CREDID, a->cred_id, ALIRO_ASSERT_CREDID_LEN);
 	put_be16(wire + OFF_DISTANCE, a->distance_cm);
 	put_be64(wire + OFF_UPTIME, a->uptime_ms);
 	put_be64(wire + OFF_UNIX, a->unix_ms);
-
-	/* MAC over every byte before the tag. */
-	aliro_hmac_sha256(key, ALIRO_ASSERT_KEY_LEN, wire, OFF_TAG, wire + OFF_TAG);
-
-	if (wire_len != NULL) {
-		*wire_len = ALIRO_ASSERT_WIRE_HMAC;
-	}
-	return 0;
 }
 
-int aliro_assert_verify(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const uint8_t *wire,
-			size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
-			uint16_t threshold_cm, uint64_t min_uptime_ms, struct aliro_assert *out)
+/*
+ * Framing checks common to both verifiers: length for the algorithm actually
+ * named in the frame, magic, version, and that the algorithm is the one this
+ * verifier implements. Returns ALIRO_ASSERT_OK when the frame is safe to
+ * authenticate.
+ */
+static int check_framing(const uint8_t *wire, size_t wire_len, uint8_t want_alg)
 {
-	if (wire == NULL || wire_len != ALIRO_ASSERT_WIRE_HMAC ||
-	    wire[OFF_MAGIC] != ASSERT_MAGIC0 || wire[OFF_MAGIC + 1u] != ASSERT_MAGIC1 ||
+	/* Enough bytes to hold the header fields this function reads. */
+	if (wire == NULL || wire_len < ALIRO_ASSERT_SIGNED_LEN) {
+		return ALIRO_ASSERT_E_MALFORMED;
+	}
+	if (wire[OFF_MAGIC] != ASSERT_MAGIC0 || wire[OFF_MAGIC + 1u] != ASSERT_MAGIC1 ||
 	    wire[OFF_VERSION] != ASSERT_VERSION) {
 		return ALIRO_ASSERT_E_MALFORMED;
 	}
-	/* Length alone cannot separate the algorithms once a second one exists, so
-	 * the alg byte is checked explicitly: an ECDSA frame must never be fed to
-	 * the HMAC verifier and silently treated as a bad tag. */
-	if (wire[OFF_ALG] != ALIRO_ASSERT_ALG_HMAC_SHA256) {
+	/* Algorithm before length, deliberately. A well-formed frame for the other
+	 * algorithm should be reported as the wrong ALGORITHM whatever its length,
+	 * rather than as generic malformed framing -- the two have very different
+	 * causes and only one of them means "your peer is misconfigured". */
+	if (wire[OFF_ALG] != want_alg) {
 		return ALIRO_ASSERT_E_ALG;
 	}
-
-	/* Authenticate before interpreting any field. */
-	uint8_t mac[ALIRO_ASSERT_MAC_LEN];
-
-	aliro_hmac_sha256(key, ALIRO_ASSERT_KEY_LEN, wire, OFF_TAG, mac);
-	if (!ct_equal(mac, wire + OFF_TAG, ALIRO_ASSERT_MAC_LEN)) {
-		return ALIRO_ASSERT_E_MAC;
+	if (wire_len != aliro_assert_wire_len(want_alg)) {
+		return ALIRO_ASSERT_E_MALFORMED;
 	}
+	return ALIRO_ASSERT_OK;
+}
 
-	/* Authentic: parse for the caller (logging / cred-allowlist) even on a
-	 * later semantic reject, so the reason can be recorded. */
+/*
+ * Everything after authentication: parse the fields, hand them to the caller
+ * for logging even on a semantic reject, then apply the policy checks in a
+ * fixed order. Shared by both verifiers so the two can never disagree about
+ * what an authentic frame means.
+ */
+static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
+			   uint16_t threshold_cm, uint64_t min_uptime_ms, struct aliro_assert *out)
+{
 	struct aliro_assert a;
 
 	a.status = wire[OFF_STATUS];
@@ -183,4 +184,89 @@ int aliro_assert_verify(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const uint8_t *
 		return ALIRO_ASSERT_E_RANGE;
 	}
 	return ALIRO_ASSERT_OK;
+}
+
+int aliro_assert_build(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const struct aliro_assert *a,
+		       uint8_t *wire, size_t wire_cap, size_t *wire_len)
+{
+	if (wire == NULL || a == NULL || wire_cap < ALIRO_ASSERT_WIRE_HMAC) {
+		return -1;
+	}
+
+	put_prefix(wire, ALIRO_ASSERT_ALG_HMAC_SHA256, a);
+
+	/* MAC over every byte before the tag. */
+	aliro_hmac_sha256(key, ALIRO_ASSERT_KEY_LEN, wire, OFF_TAG, wire + OFF_TAG);
+
+	if (wire_len != NULL) {
+		*wire_len = ALIRO_ASSERT_WIRE_HMAC;
+	}
+	return 0;
+}
+
+int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct aliro_assert *a,
+			    uint8_t *wire, size_t wire_cap, size_t *wire_len)
+{
+	if (sign == NULL || wire == NULL || a == NULL || wire_cap < ALIRO_ASSERT_WIRE_P256) {
+		return -1;
+	}
+
+	put_prefix(wire, ALIRO_ASSERT_ALG_ECDSA_P256, a);
+
+	/* Sign every byte before the tag -- the same prefix the HMAC path MACs, so
+	 * the two modes authenticate identical bytes. */
+	if (sign(ctx, wire, OFF_TAG, wire + OFF_TAG) != 0) {
+		return -1;
+	}
+
+	if (wire_len != NULL) {
+		*wire_len = ALIRO_ASSERT_WIRE_P256;
+	}
+	return 0;
+}
+
+int aliro_assert_verify(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const uint8_t *wire,
+			size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
+			uint16_t threshold_cm, uint64_t min_uptime_ms, struct aliro_assert *out)
+{
+	int fr = check_framing(wire, wire_len, ALIRO_ASSERT_ALG_HMAC_SHA256);
+
+	if (fr != ALIRO_ASSERT_OK) {
+		return fr;
+	}
+
+	/* Authenticate before interpreting any field. */
+	uint8_t mac[ALIRO_ASSERT_MAC_LEN];
+
+	aliro_hmac_sha256(key, ALIRO_ASSERT_KEY_LEN, wire, OFF_TAG, mac);
+	if (!ct_equal(mac, wire + OFF_TAG, ALIRO_ASSERT_MAC_LEN)) {
+		return ALIRO_ASSERT_E_MAC;
+	}
+
+	return parse_and_check(wire, expected_nonce, threshold_cm, min_uptime_ms, out);
+}
+
+int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,
+			     size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
+			     uint16_t threshold_cm, uint64_t min_uptime_ms,
+			     struct aliro_assert *out)
+{
+	if (verify == NULL) {
+		return ALIRO_ASSERT_E_MALFORMED;
+	}
+
+	int fr = check_framing(wire, wire_len, ALIRO_ASSERT_ALG_ECDSA_P256);
+
+	if (fr != ALIRO_ASSERT_OK) {
+		return fr;
+	}
+
+	/* Authenticate before interpreting any field. A backend that fails for any
+	 * reason -- bad signature, malformed point, backend error -- is a frame we
+	 * cannot trust, so all of it collapses to one verdict. */
+	if (verify(ctx, wire, OFF_TAG, wire + OFF_TAG) != 0) {
+		return ALIRO_ASSERT_E_MAC;
+	}
+
+	return parse_and_check(wire, expected_nonce, threshold_cm, min_uptime_ms, out);
 }

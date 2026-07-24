@@ -8,7 +8,68 @@
 #include <string.h>
 
 #include "aliro_assert.h"
+#include "aliro_hash.h"
 #include "test.h"
+
+/*
+ * Stand-in for the P-256 backend.
+ *
+ * This is NOT ECDSA and proves nothing about curve arithmetic -- the host suite
+ * has no real P-256 (the PSA seam is a recording fake), and real signature
+ * validation belongs in an on-target test. What it does prove is everything the
+ * codec is actually responsible for: that the bytes handed to the backend are
+ * exactly the signed prefix, that a tampered frame fails authentication, and
+ * that authentication happens before any field is trusted. sig is a
+ * deterministic function of the message, so tampering anywhere in the prefix
+ * changes it.
+ */
+struct fake_ec {
+	unsigned sign_calls;
+	unsigned verify_calls;
+	size_t last_msg_len;
+	uint8_t last_msg[ALIRO_ASSERT_WIRE_MAX];
+	int force_fail;
+};
+
+static void fake_ec_tag(const uint8_t *msg, size_t msg_len, uint8_t sig[ALIRO_ASSERT_SIG_LEN])
+{
+	uint8_t d[ALIRO_SHA256_LEN];
+
+	aliro_sha256(msg, msg_len, d);
+	memcpy(sig, d, ALIRO_SHA256_LEN);
+	aliro_sha256(d, sizeof(d), sig + ALIRO_SHA256_LEN);
+}
+
+static int fake_ec_sign(void *ctx, const uint8_t *msg, size_t msg_len,
+			uint8_t sig[ALIRO_ASSERT_SIG_LEN])
+{
+	struct fake_ec *f = ctx;
+
+	f->sign_calls++;
+	f->last_msg_len = msg_len;
+	memcpy(f->last_msg, msg, msg_len);
+	if (f->force_fail) {
+		return -1;
+	}
+	fake_ec_tag(msg, msg_len, sig);
+	return 0;
+}
+
+static int fake_ec_verify(void *ctx, const uint8_t *msg, size_t msg_len,
+			  const uint8_t sig[ALIRO_ASSERT_SIG_LEN])
+{
+	struct fake_ec *f = ctx;
+	uint8_t want[ALIRO_ASSERT_SIG_LEN];
+
+	f->verify_calls++;
+	f->last_msg_len = msg_len;
+	memcpy(f->last_msg, msg, msg_len);
+	if (f->force_fail) {
+		return -1;
+	}
+	fake_ec_tag(msg, msg_len, want);
+	return memcmp(want, sig, sizeof(want)) == 0 ? 0 : -1;
+}
 
 /* A fixed pairing key + a built assertion the tests mutate. */
 static const uint8_t k_key[ALIRO_ASSERT_KEY_LEN] = {
@@ -164,6 +225,99 @@ void test_aliro_assert(void)
 	/* Too short to contain the alg byte's own prefix: report invalid, not a
 	 * read past the end of the caller's buffer. */
 	T_EQ("peek.short", aliro_assert_peek_alg(wire, ALIRO_ASSERT_SIGNED_LEN - 1u), 0);
+
+	t_group("p256 mode");
+	struct fake_ec fec;
+	memset(&fec, 0, sizeof(fec));
+	uint8_t pwire[ALIRO_ASSERT_WIRE_P256];
+	size_t plen = 0;
+
+	T_EQ("p256.build.rc", aliro_assert_build_p256(fake_ec_sign, &fec, &a, pwire, sizeof(pwire),
+						      &plen),
+	     0);
+	T_EQ("p256.build.len", (long)plen, ALIRO_ASSERT_WIRE_P256);
+	T_EQ("p256.build.version", pwire[2], 0x02);
+	T_EQ("p256.build.alg", pwire[3], ALIRO_ASSERT_ALG_ECDSA_P256);
+	/* The backend must be handed the signed prefix -- all of it, and nothing
+	 * but it. A backend fed the wrong span would still round-trip against
+	 * itself, so this is checked directly rather than inferred. */
+	T_EQ("p256.signed_len", (long)fec.last_msg_len, ALIRO_ASSERT_SIGNED_LEN);
+	T_OK("p256.signed_bytes", memcmp(fec.last_msg, pwire, ALIRO_ASSERT_SIGNED_LEN) == 0);
+	/* Both modes must authenticate identical bytes: the P-256 prefix differs
+	 * from the HMAC prefix only in the alg byte. */
+	T_OK("p256.prefix.alg_only", pwire[3] != wire[3] &&
+					    memcmp(pwire, wire, 3) == 0 &&
+					    memcmp(pwire + 4, wire + 4, ALIRO_ASSERT_SIGNED_LEN - 4) == 0);
+
+	memset(&out, 0, sizeof(out));
+	T_EQ("p256.verify", aliro_assert_verify_p256(fake_ec_verify, &fec, pwire, plen, k_nonce, 40,
+						     0, &out),
+	     ALIRO_ASSERT_OK);
+	T_EQ("p256.verify.dist", out.distance_cm, 25);
+	T_OK("p256.verify.unix", out.unix_ms == 1785000000000ULL);
+
+	/* Tamper anywhere in the signed prefix -> authentication fails. */
+	uint8_t ptam[ALIRO_ASSERT_WIRE_P256];
+	memcpy(ptam, pwire, sizeof(ptam));
+	ptam[29] ^= 0x01; /* distance_cm high byte: claim a different distance */
+	T_EQ("p256.tamper.prefix", aliro_assert_verify_p256(fake_ec_verify, &fec, ptam,
+							    sizeof(ptam), k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_MAC);
+	memcpy(ptam, pwire, sizeof(ptam));
+	ptam[ALIRO_ASSERT_SIGNED_LEN] ^= 0x01; /* tamper the signature itself */
+	T_EQ("p256.tamper.sig", aliro_assert_verify_p256(fake_ec_verify, &fec, ptam, sizeof(ptam),
+							 k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_MAC);
+
+	/* Cross-algorithm confusion, both directions, must name the algorithm as
+	 * the problem rather than look like tampering. */
+	T_EQ("p256.hmac_frame", aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce,
+							 40, 0, &out),
+	     ALIRO_ASSERT_E_ALG);
+	T_EQ("hmac.p256_frame", aliro_assert_verify(k_key, pwire, plen, k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_ALG);
+
+	/* Backend failures propagate as build failure / not-authentic, never as a
+	 * silently accepted frame. */
+	fec.force_fail = 1;
+	T_EQ("p256.sign_fails", aliro_assert_build_p256(fake_ec_sign, &fec, &a, pwire,
+							sizeof(pwire), &plen),
+	     -1);
+	T_EQ("p256.verify_fails", aliro_assert_verify_p256(fake_ec_verify, &fec, ptam,
+							   sizeof(ptam), k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_MAC);
+	fec.force_fail = 0;
+
+	/* Misuse: no backend, and a buffer too small for the longer frame. */
+	T_EQ("p256.null_sign", aliro_assert_build_p256(NULL, &fec, &a, pwire, sizeof(pwire), &plen),
+	     -1);
+	T_EQ("p256.small_buf", aliro_assert_build_p256(fake_ec_sign, &fec, &a, pwire,
+						       ALIRO_ASSERT_WIRE_P256 - 1u, &plen),
+	     -1);
+	T_EQ("p256.null_verify", aliro_assert_verify_p256(NULL, &fec, pwire, ALIRO_ASSERT_WIRE_P256,
+							  k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_MALFORMED);
+
+	/* NULL arguments are caller bugs, but they must fail loudly at the guard
+	 * rather than dereference: these are the paths a wrong integration hits. */
+	t_group("misuse: NULL arguments");
+	T_EQ("null.build_assert", aliro_assert_build(k_key, NULL, pwire, sizeof(pwire), &plen), -1);
+	T_EQ("null.build_wire", aliro_assert_build(k_key, &a, NULL, ALIRO_ASSERT_WIRE_HMAC, &plen),
+	     -1);
+	T_EQ("null.p256_assert", aliro_assert_build_p256(fake_ec_sign, &fec, NULL, pwire,
+							 sizeof(pwire), &plen),
+	     -1);
+	T_EQ("null.p256_wire", aliro_assert_build_p256(fake_ec_sign, &fec, &a, NULL,
+						       ALIRO_ASSERT_WIRE_P256, &plen),
+	     -1);
+	T_EQ("null.verify_wire", aliro_assert_verify(k_key, NULL, ALIRO_ASSERT_WIRE_HMAC, k_nonce,
+						     40, 0, &out),
+	     ALIRO_ASSERT_E_MALFORMED);
+	T_EQ("null.p256_verify_wire", aliro_assert_verify_p256(fake_ec_verify, &fec, NULL,
+							       ALIRO_ASSERT_WIRE_P256, k_nonce, 40,
+							       0, &out),
+	     ALIRO_ASSERT_E_MALFORMED);
+	T_EQ("null.peek", aliro_assert_peek_alg(NULL, ALIRO_ASSERT_WIRE_MAX), 0);
 
 	t_group("cred_id derivation");
 	uint8_t pub[65];

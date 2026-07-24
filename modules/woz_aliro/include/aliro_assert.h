@@ -123,10 +123,47 @@ uint8_t aliro_assert_peek_alg(const uint8_t *buf, size_t len);
 void aliro_assert_cred_id(const uint8_t cred_pub[ALIRO_ASSERT_PUB_LEN],
 			  uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN]);
 
+/*
+ * Signing seam for the ECDSA-P256 mode.
+ *
+ * The curve arithmetic deliberately does NOT live in this module. Keeping the
+ * codec free of any crypto-backend dependency is what lets it stay portable
+ * C11, model-checkable and fuzzable, and it lets each caller bind whatever
+ * P-256 it already has -- on target that is aliro_ecdsa_p256_sign/verify from
+ * aliro_prim.h, in tests it is a double that can assert exactly which bytes
+ * were presented for signature.
+ *
+ * Both take the signed prefix as msg (never a pre-hash: the backend hashes
+ * internally, matching aliro_prim's ECDSA-P256-SHA256 contract) and return 0
+ * on success, non-zero on failure. sig is r||s, 32 bytes each.
+ */
+typedef int (*aliro_assert_sign_fn)(void *ctx, const uint8_t *msg, size_t msg_len,
+				    uint8_t sig[ALIRO_ASSERT_SIG_LEN]);
+typedef int (*aliro_assert_verify_fn)(void *ctx, const uint8_t *msg, size_t msg_len,
+				      const uint8_t sig[ALIRO_ASSERT_SIG_LEN]);
+
 /* Serialise + HMAC an assertion into an ALIRO_ASSERT_WIRE_HMAC-byte frame under
  * key. Returns 0 and sets *wire_len; -1 if wire_cap is too small. */
 int aliro_assert_build(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const struct aliro_assert *a,
 		       uint8_t *wire, size_t wire_cap, size_t *wire_len);
+
+/* Serialise an assertion and have sign() sign it, producing an
+ * ALIRO_ASSERT_WIRE_P256-byte frame. Returns 0 and sets *wire_len; -1 if
+ * wire_cap is too small, sign is NULL, or sign() fails. */
+int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct aliro_assert *a,
+			    uint8_t *wire, size_t wire_cap, size_t *wire_len);
+
+/*
+ * Parse + fully verify a P-256 frame. Identical to aliro_assert_verify except
+ * that authentication is delegated to verify(); every later check, and the
+ * order they run in, is shared with the HMAC path. A failed signature reports
+ * ALIRO_ASSERT_E_MAC, the same as a failed HMAC -- from the caller's side both
+ * mean "this frame is not authentic".
+ */
+int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,
+			     size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
+			     uint16_t threshold_cm, uint64_t min_uptime_ms,
+			     struct aliro_assert *out);
 
 /*
  * Parse + fully verify an HMAC frame. Checks, in order: length/magic/version,
