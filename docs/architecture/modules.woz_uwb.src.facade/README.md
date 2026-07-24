@@ -3,6 +3,8 @@
 
 | subsystem | about |
 |---|---|
+| [`modules/woz_uwb/src/facade/flight_recorder.c`](flight_recorder.c.md) | *first commit: "flight-recorder: record/replay real UWB walk-ups"* |
+| [`modules/woz_uwb/src/facade/flight_recorder.h`](flight_recorder.h.md) | *first commit: "flight-recorder: record/replay real UWB walk-ups"* |
 | [`modules/woz_uwb/src/facade/trace.h`](trace.h.md) | @file trace.h — Structured [WOZ_TRACE] emit helpers, gated on CONFIG_WOZ_E2E_TRACE. |
 | [`modules/woz_uwb/src/facade/woz_alloc.h`](woz_alloc.h.md) | Memory allocation and timing facade: qmalloc, qcalloc, qfree wrap the platform heap; |
 | [`modules/woz_uwb/src/facade/woz_bytes.h`](woz_bytes.h.md) | *first commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract"* |

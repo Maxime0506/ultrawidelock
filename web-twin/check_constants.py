@@ -2,11 +2,13 @@
 # Copyright (c) 2026 asxeem
 # SPDX-License-Identifier: ISC
 #
-# Drift gate for the walk-up digital twin web page: every decision constant in
-# web-twin/index.html carries a firmware citation (`NAME: value, // path:line`);
-# this script re-reads each cited line from the C tree and fails if the value
-# is no longer on it (or, for #define lines, if the name moved too). The C
-# firmware stays the single source of truth for every number the page uses.
+# Drift gate for the walk-up digital twin web page: every constant that is
+# still JavaScript in web-twin/index.html carries a firmware citation
+# (`NAME: value, // path:line`); this script re-reads each cited line from the
+# C tree and fails if the value is no longer on it (or, for #define lines, if
+# the name moved too). The range store / trust gate need no gate at all — they
+# ARE the firmware, compiled to WASM (twin.js) — so what remains here is the
+# ESP32 walk-up controller port and the world pacing.
 #
 # Usage: python3 web-twin/check_constants.py   (from anywhere; exits nonzero on drift)
 
@@ -34,7 +36,7 @@ def main() -> int:
         return 1
 
     entries = [e for e in (ENTRY.match(ln) for ln in m.group(1).splitlines()) if e]
-    if len(entries) < 10:
+    if len(entries) < 8:
         print(f"FAIL: only {len(entries)} parsable FW entries — citation format drifted?")
         return 1
 

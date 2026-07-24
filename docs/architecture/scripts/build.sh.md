@@ -13,6 +13,7 @@ scripts/build.sh rebuild                # force a clean pristine build
 PRISTINE=1 scripts/build.sh build       # same as rebuild
 UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
+ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
 UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 
 **discussed in** [`docs/configuring.md`](../../configuring.md), [`docs/porting.md`](../../porting.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
@@ -20,42 +21,42 @@ UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (defaul
 ## API
 
 ### `sha()`
-`scripts/build.sh:62`
+`scripts/build.sh:63`
 
 Compute SHA-1 hash; tries shasum first (BSD/macOS), falls back to sha1sum (Linux). Filters output to the hash hex string only.
 
 **called by** `do_build`
 
 ### `hdr()`
-`scripts/build.sh:72`
+`scripts/build.sh:73`
 
 Print a section header to stdout: blue "==>" followed by bold text. Used to mark the start of major build phases (preflight, build, done).
 
 **called by** `do_build`, `preflight`
 
 ### `ok()`
-`scripts/build.sh:74`
+`scripts/build.sh:75`
 
 Print a checkmark to stdout in green followed by text. Used to mark successful completion of build steps.
 
 **called by** `do_build`, `preflight`
 
 ### `kv()`
-`scripts/build.sh:76`
+`scripts/build.sh:77`
 
 Print a key-value pair indented: dim key (9 chars wide) and value. Used to display build configuration during the build phase.
 
 **called by** `do_build`, `resolve_snr`
 
 ### `die()`
-`scripts/build.sh:78`
+`scripts/build.sh:79`
 
 Print an error message to stderr and exit with status 1. First line prints the error text in red; remaining arguments are printed as indented hints (dim text with arrow prefix). Used by preflight checks and build validation to fail fast on missing prerequisites or configuration errors.
 
-**called by** `preflight`, `require_built`, `resolve_chip`, `resolve_snr`
+**called by** `do_build`, `preflight`, `require_built`, `resolve_chip`, `resolve_snr`
 
 ### `resolve_chip()`
-`scripts/build.sh:86`
+`scripts/build.sh:87`
 
 Resolve UWB_CHIP -> the dw3000 decadriver's chip Kconfig choice (deps/dw3000/Kconfig).
 Same DT node + wiring for both; only which *_device.c/dwt_driver builds changes.
@@ -63,28 +64,28 @@ Same DT node + wiring for both; only which *_device.c/dwt_driver builds changes.
 **called by** `do_build`  ·  **calls** `die`
 
 ### `preflight()`
-`scripts/build.sh:95`
+`scripts/build.sh:96`
 
 Verify bootstrap.sh left everything the build needs. All cheap fs/git checks.
 
 **called by** `do_build`  ·  **calls** `die`, `hdr`, `ok`
 
 ### `do_build()`
-`scripts/build.sh:134`
+`scripts/build.sh:135`
 
 Build the Aliro UWB firmware image. Runs preflight checks, resolves chip config, applies optional overlays (pretty console, latency diagnostics, self-test), computes a signature from all -D flags, and runs west build (pristine if config changed, incremental otherwise). Writes build signature to a cache file to detect future flag changes. Outputs merged.hex to BUILD directory.
 
-**calls** `hdr`, `kv`, `launch`, `ok`, `preflight`, `resolve_chip`, `sha`
+**calls** `die`, `hdr`, `kv`, `launch`, `ok`, `preflight`, `resolve_chip`, `sha`
 
 ### `require_built()`
-`scripts/build.sh:225`
+`scripts/build.sh:267`
 
 Verify that a west build has completed in BUILD directory (build.ninja exists). Called before flash operations to fail fast if build has not run.
 
 **calls** `die`
 
 ### `resolve_snr()`
-`scripts/build.sh:233`
+`scripts/build.sh:275`
 
 Resolve which J-Link probe to flash, into SNR. Only nRF5340DKs (board version
 PCA10095 in nrfutil device list) qualify, so another attached probe (e.g. a

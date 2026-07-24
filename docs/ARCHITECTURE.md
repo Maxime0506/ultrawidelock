@@ -10,6 +10,7 @@ flowchart LR
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_aliro.src --> modules.woz_uwb.src.facade
+  modules.woz_aliro_stack.src --> modules.woz_aliro_stack.src.protocol
   modules.woz_uwb.src.aliro --> modules.woz_port.include
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.cherry
@@ -32,6 +33,7 @@ flowchart LR
   modules.woz_uwb.src.fira --> modules.woz_uwb.src.ccc
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.ccc
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.driver
+  modules.woz_uwb.src.shell --> modules.woz_uwb.src.facade
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.fira
   ports.esp32.apps.matter-lock.main --> ports.esp32.apps.matter-lock.main.lock
 ```
@@ -172,6 +174,12 @@ payloads, and TLV/APDU parsing helpers used to extract fields from device respon
 
 **depends on** [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)
 
+### [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
+
+*No module docstring. First commit: "approach: predict time-of-arrival, open the bolt at arrival".*
+
+**depends on** [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
+
 ### [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md)
 
 Self-contained SHA-256, HMAC-SHA256, HKDF, and ANSI-X9.63 KDF implementation for the ESP32-IDF
@@ -228,7 +236,7 @@ calls.
 @file ccc_shim_rx.c — responder-RX CCC STS substitution (ld --wrap=dwt_rxenable) programming the
 CCC STS on each RX-arm; target only.
 
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
 
@@ -378,6 +386,32 @@ ccc_ran_params.
 
 **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
 
+## `modules/woz_aliro_stack/src/`
+
+### [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md), [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md)
+
+### [`modules/woz_aliro_stack/src/advertising_core.c`](architecture/modules.woz_aliro_stack.src/advertising_core.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
+
+### [`modules/woz_aliro_stack/src/aliro_stack.cpp`](architecture/modules.woz_aliro_stack.src/aliro_stack.cpp.md)
+
+Clean-room implementation of the Nordic Aliro public API used by this app.
+Protocol constants and wire formats come from Aliro Specification 1.0.
+No implementation detail from the proprietary archive is used here.
+
+**depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
+
+### [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
+
+Clean-room Aliro BLE advertising primitives.
+Kept as portable C so the byte-order rules can be tested on the host using
+the specification's published known-answer vectors.
+
+**used by** [`modules/woz_aliro_stack/src/advertising_core.c`](architecture/modules.woz_aliro_stack.src/advertising_core.c.md), [`modules/woz_aliro_stack/src/aliro_stack.cpp`](architecture/modules.woz_aliro_stack.src/aliro_stack.cpp.md)
+
 ## `modules/woz_uwb/src/facade/`
 
 ### [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
@@ -386,7 +420,13 @@ UWB facade: binds the CCC credential-based STS engine to the DW3000 radio, expos
 responder start/stop and range query, and manages platform dependencies (HFCLK boost, SPI init,
 callbacks).
 
-**depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+
+### [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md)
+
+*No module docstring. First commit: "flight-recorder: record/replay real UWB walk-ups".*
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
 
 ### [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
 
@@ -406,7 +446,13 @@ qrtc_get_us returns monotonic microseconds since boot.
 Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
 engine is bound and unbound via internal ursk and stop calls.
 
-**used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
+**used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
+
+### [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md)
+
+*No module docstring. First commit: "flight-recorder: record/replay real UWB walk-ups".*
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ### [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
 
@@ -454,7 +500,7 @@ CONFIG_LOG_RUNTIME_FILTERING=y (set in ports/nrf5340dk/overlays/woz-pretty.conf)
 
 @file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ## `ports/esp32/apps/matter-lock/main/`
 
@@ -524,6 +570,74 @@ current locked and Aliro-ranging state.
 
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
+
+## `modules/woz_aliro_stack/src/protocol/`
+
+### [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/ble_timeout.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/access_document.c`](architecture/modules.woz_aliro_stack.src.protocol/access_document.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
+
+**depends on** [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
+
+### [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md)
+
+**used by** [`modules/woz_aliro_stack/src/protocol/access_document.c`](architecture/modules.woz_aliro_stack.src.protocol/access_document.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+### [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md)
+
+Aliro 1.0 Bluetooth LE message framing (section 11.7).
+
+**used by** [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+### [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md)
+
+Aliro 1.0 Bluetooth LE responseTimeout rules (section 11.9).
+
+**used by** [`modules/woz_aliro_stack/src/protocol/ble_timeout.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+### [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md)
+
+Aliro 1.0 expedited authentication APDU codecs.
+
+**used by** [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+### [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md)
+
+**used by** [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+### [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md)
+
+Aliro 1.0 / ISO 18013-5 NFC step-up message and APDU codecs.
+
+**used by** [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+### [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
+
+Minimal strict BER/DER-TLV reader for Aliro APDU payloads.
+
+**used by** [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md), [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
 
 ## `ports/esp32/apps/matter-lock/main/lock/`
 
@@ -640,292 +754,29 @@ g_warm_valid stays false, and the responder receives Pre-POLLs but never
 replies.  Re-create only the essential chain here (no k_work, no diagnostics).
 Also keeps the dwt_configurestsmode pass-through the essential RX path needs.
 
-## `modules/woz_port/include/`
-
-### [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)
-
-*No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
-
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
-
-### [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
-
-*No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
-
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
-
-## `modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`
-
-### [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md)
-
-@file aliro_uwb_adapter.h — reader-device public interface.
-
-**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md)
-
-### [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)
-
-@file aliro_uwb_session.h — per-session public interface.
-
-**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
-
-## `modules/woz_aliro/include/`
-
-### [`modules/woz_aliro/include/aliro_ble.h`](architecture/modules.woz_aliro.include/aliro_ble.h.md)
-
-Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport
-callbacks connecting the BLE peripheral role to the Aliro protocol handler in aliro_reader.
-Callers configure the transport via aliro_ble_prepare (which builds the READ characteristic
-payload without touching NimBLE), then register the GATT service returned by
-aliro_ble_service_def with the host's combined service table.
-
-**used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
-
-### [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)
-
-Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
-seal/open framing shared by the reader and device sides of an Aliro session.
-
-**used by** [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
-
-### [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md)
-
-Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
-parsed by tools/aliro_lab.py into a scored walk-up report. Ships in every Aliro
-build (CONFIG_WOZ_ALIRO_LAB defaults y, like the sibling uwbdiag trace) but is
-OFF at boot and toggled at runtime by the `lab on`/`lab off` console command, so
-any firmware profiles on demand with no reflash. Set CONFIG_WOZ_ALIRO_LAB=n to
-strip it from a hardened production image.
-
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
-
-### [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md)
-
-*No module docstring. First commit: "Cut ESP32 walk-up unlock latency: instrument, unblock, and precompute".*
-
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
-
-### [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
-
-**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_prim_psa.c`](architecture/modules.woz_aliro.src/aliro_prim_psa.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
-
-### [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md)
-
-Persistent reader provisioning storage: identity and credential trust anchors saved to and
-loaded from NVS.
-Declares aliro_prov_store for committing an identity/trust pair to NVS, and struct
-aliro_trust_store, the set of trusted credential public keys against which a presented
-credential is authenticated.
-
-**used by** [`modules/woz_aliro/src/aliro_prov.c`](architecture/modules.woz_aliro.src/aliro_prov.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
-
-### [`modules/woz_aliro/include/aliro_reader.h`](architecture/modules.woz_aliro.include/aliro_reader.h.md)
-
-**used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
-
-### [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md)
-
-Aliro step-up (Access Document) phase: builds the mdoc DeviceRequest, unwraps and decrypts the
-SessionData DeviceResponse, decodes the CBOR document per spec 7.2/8.4.2, and runs the six-step
-Access Document verification of spec 7.4. Reference-completeness codec + verifier; the verdict is
-logged and stored, never gates the unlock (the provisioned trust store remains the sole gate).
-
-**depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_aliro/src/aliro_stepup_parse.c`](architecture/modules.woz_aliro.src/aliro_stepup_parse.c.md)
-
-### [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md)
-
-Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1): the 7-byte
-GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of interest.
-
-**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md)
-
-## `modules/woz_uwb/src/aliro/include/cherry/`
-
-### [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md)
-
-@file cherry.h — Cherry core (context + device-capabilities) interface.
-
-**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
-
-### [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)
-
-@file cherry_ccc.h — CCC/Aliro-session interface (seam the adapter drives).
-
-**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
-
-### [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
-
-@file cherry_session.h — generic base-session interface.
-
-**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
-
-### [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md)
-
-@file cherry_common.h — diagnostics config struct and report forward decl.
-
-**used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
-
-## `integration/homeassistant/`
-
-### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
-
-Republish the lock's console log to MQTT as Home Assistant entities.
-
-Usage: aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 [--broker HOST] [--node NAME]
-       aliro_mqtt_bridge.py --port - --dry-run < captured.log
-
-Reads the UWB console line by line, extracts the per-block range line and the
-access verdict, and publishes them as two MQTT Discovery entities: a distance
-sensor in millimetres and an access event carrying granted/denied. Lines
-matching neither pattern are ignored.
-
-The range line is gated on the firmware side behind CONFIG_WOZ_PRETTY_SHELL and
-uwb_rxdiag_rng_get(), so it only appears once `aliro frames on` has been issued
-on the shell. Without that, the access events still flow but distance stays
-unpublished.
-
-Reading from '-' takes the log on stdin, which with --dry-run exercises the
-parser and the payloads without a broker or a board attached. paho-mqtt is
-imported only when publishing, pyserial only for a real port, so neither is
-needed for a dry run.
-
-## `modules/woz_aliro_ecp/src/`
-
-### [`modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp`](architecture/modules.woz_aliro_ecp.src/nfc_prop_ecp.cpp.md)
-
-NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
-Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
-
-## `ports/esp32/components/aliro_ble/`
-
-### [`ports/esp32/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32.components.aliro_ble/aliro_ble.c.md)
-
-NimBLE-backed BLE transport for the Aliro reader: GAP advertising, the Aliro GATT service,
-and an L2CAP connection-oriented channel (CoC) used to carry Aliro protocol messages.
-Supports two bring-up modes: a standalone NimBLE host (aliro_ble_start) and attachment to a
-host already owned and synced by another stack such as esp-matter (aliro_ble_prepare +
-aliro_ble_start_attached). Tracks CoC channels per connection handle in a fixed-size table
-and exposes send/receive plus reader-status notification helpers to the rest of the Aliro
-reader.
-
-## `ports/esp32/components/aliro_reader/`
-
-### [`ports/esp32/components/aliro_reader/aliro_prov_nvs.c`](architecture/ports.esp32.components.aliro_reader/aliro_prov_nvs.c.md)
-
-NVS-backed persistence for Aliro reader provisioning: loads and stores the serialized reader
-identity and trust store built by aliro_prov.c.
-Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
-
-### [`ports/esp32/components/aliro_reader/aliro_stepup_worker.c`](architecture/ports.esp32.components.aliro_reader/aliro_stepup_worker.c.md)
-
-*No module docstring. First commit: "esp32: add the Aliro step-up (Access Document) phase".*
-
-## `release/esp32-matter-lock/`
-
-### [`release/esp32-matter-lock/flash.sh`](architecture/release.esp32-matter-lock/flash.sh.md)
-
-flash.sh — program the openaliro ESP32-S3 Matter lock (single merged image at
-offset 0x0) with esptool. See FLASH.md for wiring and first run.
-Usage:  bash flash.sh [PORT]       e.g.  bash flash.sh /dev/ttyACM0
-
-## `release/nrf5340dk/`
-
-### [`release/nrf5340dk/flash.sh`](architecture/release.nrf5340dk/flash.sh.md)
-
-flash.sh — program the openaliro nRF5340 DK firmware (both cores) over the
-DK's on-board J-Link, using nrfutil. See FLASH.md for setup and first run.
-Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
-
-## `scripts/`
-
-### [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md)
-
-bootstrap.sh — build a self-contained west workspace, PRISTINE from upstream.
-Fetches everything the build needs from public GitHub into ./workspace
-(git-ignored), then applies our integration patches on top. It never reads from
-any other local checkout — a clean upstream fetch every time.
-Fetches (all public):
-- Nordic add-on  ncs-door-lock-and-access-control @ the pin below
-- NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
-Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0
-Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
-ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
-
-### [`scripts/build.sh`](architecture/scripts/build.sh.md)
-
-build.sh {build|rebuild|flash|flash-erase|build-flash} — build the Aliro
-NFC+UWB image from the self-contained ./workspace. Run scripts/bootstrap.sh first.
-Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
-overlays. Output → ./build (git-ignored).
-Incremental by default — a full from-scratch (pristine) build runs only when it
-has to: first build, changed build flags (UWB chip / self-test / config), or
-when you ask for one. A preflight first checks the workspace is bootstrapped.
-scripts/build.sh build                  # incremental where safe (fast)
-scripts/build.sh rebuild                # force a clean pristine build
-PRISTINE=1 scripts/build.sh build       # same as rebuild
-UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
-PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
-
-### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
-
-docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch.
-The site is a build artifact and never lives on main; what gets published is a
-snapshot branch that holds site/'s contents at its root. This script only moves
-the LOCAL gh-pages ref — pushing it (`git push origin gh-pages`) stays a human
-step on purpose. Run it through `make docs-publish`, which rebuilds the site
-first so a stale or partial tree can never be snapshotted.
-Guards, in order:
-- site/index.html and site/.nojekyll must exist (the build completed);
-- docs/ must be clean: if the rebuild just changed the committed pages, they
-must be committed first, so every snapshot corresponds to a commit;
-- an existing gh-pages branch is reused only when it is one of our
-snapshots ("docs site …") — a real branch by that name is never eaten;
-- the snapshot must actually contain index.html and .nojekyll;
-- each snapshot chains to the previous one, so the push fast-forwards.
-Nothing here checks out a branch or touches the working tree: the snapshot is
-built through a throwaway index, so it is safe to run from any worktree, with
-any branch checked out, dirty or not.
-
-### [`scripts/docs.sh`](architecture/scripts/docs.sh.md)
-
-docs.sh — build the documentation site into site/.
-Two generators write into the same output directory, in this order:
-1. the subsystem tree + guides + search shell   -> site/*.html
-2. doxygen (docs/Doxyfile)                      -> site/api/
-then a link pass rewrites cross-document links so the published site has no
-dead ends, and the freshness gate confirms the committed docs/ tree matches
-the source. Run it through `make docs`.
-Nothing here needs the NCS toolchain or hardware.
-
-### [`scripts/flash_html.py`](architecture/scripts/flash_html.md)
-
-Render a release FLASH.md into a self-contained FLASH.html.
-
-The markdown file stays the single source of truth; this wraps its rendered
-body in an embedded stylesheet (light + dark, no external assets) so the
-bundle ships a guide that reads well in a browser. The output is committed
-next to its source, so regenerate after editing a FLASH.md:
-
-    pip install markdown==3.8
-    python3 scripts/flash_html.py release/*/FLASH.md
-
-Output is deterministic (no timestamps): it only changes when the source does.
-
-### [`scripts/ws-seed.sh`](architecture/scripts/ws-seed.sh.md)
-
-ws-seed.sh — give this git worktree its own NCS workspace, cheaply.
-Frequent branch-bouncing over a single shared workspace is a trap: the tree
-holds one patch state at a time (last bootstrap wins), so a build from the
-wrong worktree silently compiles another branch's patches. This seeds a
-per-worktree workspace at the default path ($TREE/workspace) so build.sh picks
-it up with no env var, and each worktree stays self-contained.
-Cheap because it uses an APFS copy-on-write clone (cp -c): the clone shares
-every block with the primary and costs ~0 extra disk until a patched file
-diverges. Cleanup is automatic — the workspace lives inside the worktree, so
-deleting the worktree deletes it (see `make ws-clean`).
-
 ## `tools/`
+
+### [`tools/aliro_gait.py`](architecture/tools/aliro_gait.md)
+
+Aliro Gait: carry-motion features from Aliro Lab walk-up captures.
+
+Usage: python3 tools/aliro_gait.py [-o report.html] [label=]capture.log ...
+
+E1 probe of the passive carry verification experiment (see
+internal/passive-verify-scoping.md): for every walk-up transaction in the
+given "[ALAB]" captures, detrend the per-block trusted-range series, FFT the
+residual, and report the carry-motion features (cadence, stride regularity,
+approach speed, deceleration, closest approach, residual RMS) plus a
+per-window carried/stationary verdict. With two or more labels (one per
+carrier, e.g. alice=alice.log bob=bob.log) it also runs leave-one-out
+nearest-centroid classification to measure whether the features separate the
+carriers — the pre-registered Tier-2 GO bar is >= 80%.
+
+The block duration (and the phone's implied RAN multiplier) is derived from
+the range timestamps themselves, so no extra firmware logging is needed.
+Exit status: 0 = report produced, 2 = usage/input error.
+
+**depends on** [`tools/aliro_lab.py`](architecture/tools/aliro_lab.md)
 
 ### [`tools/aliro_lab.py`](architecture/tools/aliro_lab.md)
 
@@ -942,6 +793,12 @@ terminal and as a self-contained HTML report (default: <capture.log>.html).
 Every check encodes an invariant of this repo's reader implementation (see
 internal notes in the check text), nothing else. Exit status: 0 = no failing
 check, 1 = at least one FAIL, 2 = usage/input error.
+
+**used by** [`tools/aliro_gait.py`](architecture/tools/aliro_gait.md)
+
+### [`tools/aliro.lua`](architecture/tools/aliro.lua.md)
+
+*No module docstring. First commit: "Add Wireshark dissector for the clear-text Aliro BLE plane".*
 
 ### [`tools/docs_3d.py`](architecture/tools/docs_3d.md)
 
@@ -1285,8 +1142,373 @@ run over a site/ kept from a previous build, so the landing page may already
 carry the CTA. Run from the repo root, after the generators and before the link
 pass.
 
+### [`tools/flight_recorder.py`](architecture/tools/flight_recorder.md)
+
+flight_recorder.py — carry a recorded UWB walk-up off the device and turn it
+into replayable / fuzzable artifacts.
+
+The firmware's `fr dump` console command hex-encodes its RAM ring as `[FREC]`
+serial lines (see modules/woz_uwb/src/facade/flight_recorder.c). This tool:
+
+  * reconstructs the binary trace from those lines (or reads a `.frc` directly),
+  * prints a human summary of the recorded session,
+  * extracts the received UWB frames into a fuzz corpus (seeding
+    tests/host/fuzz with genuine RF sessions).
+
+Only the frames (already on-air ciphertext) go to the corpus — never the CONFIG
+record's URSK, so a shared corpus carries no session key material.
+
+Usage:
+  flight_recorder.py <capture.log | trace.frc> [corpus_dir]
+
+With a `.log` input the reconstructed trace is written next to it as `.frc`.
+With a corpus_dir the frames are written there as `frame_NNNN.bin`. Stdlib only;
+the binary format mirrors flight_recorder.h byte for byte.
+
+## `modules/woz_port/include/`
+
+### [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)
+
+*No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
+
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
+
+### [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
+
+*No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
+
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
+
+## `modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`
+
+### [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md)
+
+@file aliro_uwb_adapter.h — reader-device public interface.
+
+**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md)
+
+### [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)
+
+@file aliro_uwb_session.h — per-session public interface.
+
+**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
+
+## `modules/woz_aliro/include/`
+
+### [`modules/woz_aliro/include/aliro_ble.h`](architecture/modules.woz_aliro.include/aliro_ble.h.md)
+
+Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport
+callbacks connecting the BLE peripheral role to the Aliro protocol handler in aliro_reader.
+Callers configure the transport via aliro_ble_prepare (which builds the READ characteristic
+payload without touching NimBLE), then register the GATT service returned by
+aliro_ble_service_def with the host's combined service table.
+
+**used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)
+
+Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
+seal/open framing shared by the reader and device sides of an Aliro session.
+
+**used by** [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
+
+### [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md)
+
+Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
+parsed by tools/aliro_lab.py into a scored walk-up report. Ships in every Aliro
+build (CONFIG_WOZ_ALIRO_LAB defaults y, like the sibling uwbdiag trace) but is
+OFF at boot and toggled at runtime by the `lab on`/`lab off` console command, so
+any firmware profiles on demand with no reflash. Set CONFIG_WOZ_ALIRO_LAB=n to
+strip it from a hardened production image.
+
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md)
+
+*No module docstring. First commit: "Cut ESP32 walk-up unlock latency: instrument, unblock, and precompute".*
+
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
+
+**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_prim_psa.c`](architecture/modules.woz_aliro.src/aliro_prim_psa.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md)
+
+Persistent reader provisioning storage: identity and credential trust anchors saved to and
+loaded from NVS.
+Declares aliro_prov_store for committing an identity/trust pair to NVS, and struct
+aliro_trust_store, the set of trusted credential public keys against which a presented
+credential is authenticated.
+
+**used by** [`modules/woz_aliro/src/aliro_prov.c`](architecture/modules.woz_aliro.src/aliro_prov.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_reader.h`](architecture/modules.woz_aliro.include/aliro_reader.h.md)
+
+**used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md)
+
+Aliro step-up (Access Document) phase: builds the mdoc DeviceRequest, unwraps and decrypts the
+SessionData DeviceResponse, decodes the CBOR document per spec 7.2/8.4.2, and runs the six-step
+Access Document verification of spec 7.4. Reference-completeness codec + verifier; the verdict is
+logged and stored, never gates the unlock (the provisioned trust store remains the sole gate).
+
+**depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_aliro/src/aliro_stepup_parse.c`](architecture/modules.woz_aliro.src/aliro_stepup_parse.c.md)
+
+### [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md)
+
+Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1): the 7-byte
+GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of interest.
+
+**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md)
+
+### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
+
+*No module docstring. First commit: "approach: predict time-of-arrival, open the bolt at arrival".*
+
+**used by** [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
+
+## `modules/woz_uwb/src/aliro/include/cherry/`
+
+### [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md)
+
+@file cherry.h — Cherry core (context + device-capabilities) interface.
+
+**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
+
+### [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)
+
+@file cherry_ccc.h — CCC/Aliro-session interface (seam the adapter drives).
+
+**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
+
+### [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
+
+@file cherry_session.h — generic base-session interface.
+
+**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
+
+### [`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_common.h.md)
+
+@file cherry_common.h — diagnostics config struct and report forward decl.
+
+**used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
+
+## `integration/homeassistant/`
+
+### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
+
+Republish the lock's console log to MQTT as Home Assistant entities.
+
+Usage: aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 [--broker HOST] [--node NAME]
+       aliro_mqtt_bridge.py --port - --dry-run < captured.log
+
+Reads the UWB console line by line, extracts the per-block range line and the
+access verdict, and publishes them as two MQTT Discovery entities: a distance
+sensor in millimetres and an access event carrying granted/denied. Lines
+matching neither pattern are ignored.
+
+The range line is gated on the firmware side behind CONFIG_WOZ_PRETTY_SHELL and
+uwb_rxdiag_rng_get(), so it only appears once `aliro frames on` has been issued
+on the shell. Without that, the access events still flow but distance stays
+unpublished.
+
+Reading from '-' takes the log on stdin, which with --dry-run exercises the
+parser and the payloads without a broker or a board attached. paho-mqtt is
+imported only when publishing, pyserial only for a real port, so neither is
+needed for a dry run.
+
+## `modules/woz_aliro_ecp/src/`
+
+### [`modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp`](architecture/modules.woz_aliro_ecp.src/nfc_prop_ecp.cpp.md)
+
+NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
+Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
+
+## `ports/esp32/components/aliro_ble/`
+
+### [`ports/esp32/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32.components.aliro_ble/aliro_ble.c.md)
+
+NimBLE-backed BLE transport for the Aliro reader: GAP advertising, the Aliro GATT service,
+and an L2CAP connection-oriented channel (CoC) used to carry Aliro protocol messages.
+Supports two bring-up modes: a standalone NimBLE host (aliro_ble_start) and attachment to a
+host already owned and synced by another stack such as esp-matter (aliro_ble_prepare +
+aliro_ble_start_attached). Tracks CoC channels per connection handle in a fixed-size table
+and exposes send/receive plus reader-status notification helpers to the rest of the Aliro
+reader.
+
+## `ports/esp32/components/aliro_reader/`
+
+### [`ports/esp32/components/aliro_reader/aliro_prov_nvs.c`](architecture/ports.esp32.components.aliro_reader/aliro_prov_nvs.c.md)
+
+NVS-backed persistence for Aliro reader provisioning: loads and stores the serialized reader
+identity and trust store built by aliro_prov.c.
+Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
+
+### [`ports/esp32/components/aliro_reader/aliro_stepup_worker.c`](architecture/ports.esp32.components.aliro_reader/aliro_stepup_worker.c.md)
+
+*No module docstring. First commit: "esp32: add the Aliro step-up (Access Document) phase".*
+
+## `release/esp32-matter-lock/`
+
+### [`release/esp32-matter-lock/flash.sh`](architecture/release.esp32-matter-lock/flash.sh.md)
+
+flash.sh — program the openaliro ESP32-S3 Matter lock (single merged image at
+offset 0x0) with esptool. See FLASH.md for wiring and first run.
+Usage:  bash flash.sh [PORT]       e.g.  bash flash.sh /dev/ttyACM0
+
+## `release/nrf5340dk/`
+
+### [`release/nrf5340dk/flash.sh`](architecture/release.nrf5340dk/flash.sh.md)
+
+flash.sh — program the openaliro nRF5340 DK firmware (both cores) over the
+DK's on-board J-Link, using nrfutil. See FLASH.md for setup and first run.
+Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
+
+## `scripts/`
+
+### [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md)
+
+bootstrap.sh — build a self-contained west workspace, PRISTINE from upstream.
+Fetches everything the build needs from public GitHub into ./workspace
+(git-ignored), then applies our integration patches on top. It never reads from
+any other local checkout — a clean upstream fetch every time.
+Fetches (all public):
+- Nordic add-on  ncs-door-lock-and-access-control @ the pin below
+- NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
+Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
+nrfutil sdk-manager toolchain install --ncs-version v3.3.0
+Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
+ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
+
+### [`scripts/build.sh`](architecture/scripts/build.sh.md)
+
+build.sh {build|rebuild|flash|flash-erase|build-flash} — build the Aliro
+NFC+UWB image from the self-contained ./workspace. Run scripts/bootstrap.sh first.
+Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
+overlays. Output → ./build (git-ignored).
+Incremental by default — a full from-scratch (pristine) build runs only when it
+has to: first build, changed build flags (UWB chip / self-test / config), or
+when you ask for one. A preflight first checks the workspace is bootstrapped.
+scripts/build.sh build                  # incremental where safe (fast)
+scripts/build.sh rebuild                # force a clean pristine build
+PRISTINE=1 scripts/build.sh build       # same as rebuild
+UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
+PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
+ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
+UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
+
+### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
+
+docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch.
+The site is a build artifact and never lives on main; what gets published is a
+snapshot branch that holds site/'s contents at its root. This script only moves
+the LOCAL gh-pages ref — pushing it (`git push origin gh-pages`) stays a human
+step on purpose. Run it through `make docs-publish`, which rebuilds the site
+first so a stale or partial tree can never be snapshotted.
+Guards, in order:
+- site/index.html and site/.nojekyll must exist (the build completed);
+- docs/ must be clean: if the rebuild just changed the committed pages, they
+must be committed first, so every snapshot corresponds to a commit;
+- an existing gh-pages branch is reused only when it is one of our
+snapshots ("docs site …") — a real branch by that name is never eaten;
+- the snapshot must actually contain index.html and .nojekyll;
+- each snapshot chains to the previous one, so the push fast-forwards.
+Nothing here checks out a branch or touches the working tree: the snapshot is
+built through a throwaway index, so it is safe to run from any worktree, with
+any branch checked out, dirty or not.
+
+### [`scripts/docs.sh`](architecture/scripts/docs.sh.md)
+
+docs.sh — build the documentation site into site/.
+Two generators write into the same output directory, in this order:
+1. the subsystem tree + guides + search shell   -> site/*.html
+2. doxygen (docs/Doxyfile)                      -> site/api/
+then a link pass rewrites cross-document links so the published site has no
+dead ends, and the freshness gate confirms the committed docs/ tree matches
+the source. Run it through `make docs`.
+Nothing here needs the NCS toolchain or hardware.
+
+### [`scripts/flash_html.py`](architecture/scripts/flash_html.md)
+
+Render a release FLASH.md into a self-contained FLASH.html.
+
+The markdown file stays the single source of truth; this wraps its rendered
+body in an embedded stylesheet (light + dark, no external assets) so the
+bundle ships a guide that reads well in a browser. The output is committed
+next to its source, so regenerate after editing a FLASH.md:
+
+    pip install markdown==3.8
+    python3 scripts/flash_html.py release/*/FLASH.md
+
+Output is deterministic (no timestamps): it only changes when the source does.
+
+### [`scripts/test-runner.sh`](architecture/scripts/test-runner.sh.md)
+
+Pretty umbrella runner for every host-side suite: one banner, live per-check
+rows, a per-suite summary table, and suite timings. The suites themselves are
+unchanged — this only orchestrates and renders their existing output:
+firmware (C host)      tests/host/run.sh        the KAT suite + the lab python suite
+shared core (C host)   ports/esp32/test/run.sh  reader/stepup/crypto/... stages
+web twin               scripts/twin-suite.sh    constant-drift gate + WASM selftest
+Default: suites run in parallel, output replayed in order when done.
+SERIAL=1 streams them live, one at a time. SUITES="firmware shared" scopes.
+Exit is nonzero if any suite fails. Colour off when not a TTY or NO_COLOR.
+
+### [`scripts/twin-suite.sh`](architecture/scripts/twin-suite.sh.md)
+
+The web-twin suite for the umbrella runner (make check): the constant-drift
+gate (always) plus the WASM twin's node self-test against the committed
+web-twin/twin.js (when node is present). No rebuild here — regenerating
+twin.js needs a pinned emsdk and is CI's byte-diff staleness gate; this only
+proves the committed firmware artifact still passes its scenario.
+
+### [`scripts/twin-wasm.sh`](architecture/scripts/twin-wasm.sh.md)
+
+Build the web twin's firmware: modules/woz_uwb + the tests/host shim compiled
+to WASM (Emscripten), driven by web-twin/twin_glue.c. Output is a single
+self-contained web-twin/twin.js (MODULARIZE + SINGLE_FILE: the .wasm rides
+embedded, so the page keeps working from file:// and the site copy stays a
+flat file pair). The compile is path-prefix-mapped for reproducibility: the
+same emsdk version must produce a byte-identical twin.js on any machine,
+which is what lets CI rebuild and diff it as a staleness gate.
+
+### [`scripts/ws-seed.sh`](architecture/scripts/ws-seed.sh.md)
+
+ws-seed.sh — give this git worktree its own NCS workspace, cheaply.
+Frequent branch-bouncing over a single shared workspace is a trap: the tree
+holds one patch state at a time (last bootstrap wins), so a build from the
+wrong worktree silently compiles another branch's patches. This seeds a
+per-worktree workspace at the default path ($TREE/workspace) so build.sh picks
+it up with no env var, and each worktree stays self-contained.
+Cheap because it uses an APFS copy-on-write clone (cp -c): the clone shares
+every block with the primary and costs ~0 extra disk until a patched file
+diverges. Cleanup is automatic — the workspace lives inside the worktree, so
+deleting the worktree deletes it (see `make ws-clean`).
+
 ## `web-twin/`
 
 ### [`web-twin/check_constants.py`](architecture/web-twin/check_constants.md)
 
 *No module docstring. First commit: "web: add the walk-up digital twin as an interactive page".*
+
+### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
+
+@file twin_glue.c — WASM entry points: the twin page's firmware harness.
+Compiled (emcc) with the untouched modules/woz_uwb sources plus the same
+tests/host shim the host suite links, so the page runs the real responder:
+every block is a genuinely CCM*-encrypted Pre-POLL/POLL/Response/Final/
+Final_Data exchange decoded by the firmware's own RX state machine, and the
+page reads its decisions through the same facade seam the lock uses.
+The peer (iPhone) side comes from tests/host/twin_frames.c — shared with
+test_twin.c, so the page and the suite drive the responder identically. The
+JS above supplies only the world: target distance, noise, spoof timing, and
+the pacing of the five per-block legs (PREPOLL/POLL/TXDONE/FINAL/FINAL_DATA)
+so a visitor can single-step a live DS-TWR round.
+Distance is injected the way physics does it: the initiator-side DS-TWR
+intervals ride in the Final_Data as round1 = reply1 + 2*tof and
+reply2 = round2 - 2*tof, which makes the firmware's own
+(round1*round2 - reply1*reply2)/sum recover exactly tof ticks
+(1 tick ~ 15.65 ps, ~4.692 mm — ccc_shim_rx.c final_data_decode).
+A Ghost-Peak spoof is a negative-tof block through the same full path.

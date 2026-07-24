@@ -65,6 +65,7 @@ TEST_SRCS=(
 	"$HOST/test_facade.c"
 	"$HOST/test_prepoll_gate.c"
 	"$HOST/test_prepoll_round.c"
+	"$HOST/twin_frames.c"
 	"$HOST/test_twin.c"
 	"$HOST/test_approach.c"
 	"$HOST/test_woz_logfmt.c"
