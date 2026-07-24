@@ -65,6 +65,96 @@ int aliro_dev_secchan_seal(struct aliro_dev_secchan *sc, const uint8_t *pt, size
 	return 0;
 }
 
+/* ---- device BleSK ranging channel (mirror of the reader's sc_ble) ----
+ *
+ * Same GCM construction as the AP channel, but each SDU carries the reader's
+ * aliro_msg_seal/open framing: a 4-byte [proto][id][len_be16] header (wire length
+ * = payload + 16) authenticated as AAD. s0 = BleSKReader (open, dir 0), s1 =
+ * BleSKDevice (seal, dir 1). Byte-for-byte inverse of aliro_msg_seal/aliro_msg_open.
+ */
+
+int aliro_dev_blesk_init(struct aliro_dev_secchan *ch, const uint8_t block[ALIRO_KEY_BLOCK_LEN],
+			 const uint8_t *versions_salt, size_t salt_len)
+{
+	uint8_t ble_reader[ALIRO_SESSION_KEY_LEN], ble_device[ALIRO_SESSION_KEY_LEN];
+
+	if (aliro_crypto_derive_ble_keys(block, versions_salt, salt_len, ble_reader, ble_device) !=
+	    0) {
+		return -1;
+	}
+	aliro_dev_secchan_init(ch, ble_reader, ble_device);
+	return 0;
+}
+
+int aliro_dev_ble_open(struct aliro_dev_secchan *ch, const uint8_t *wire, size_t wire_len,
+		       uint8_t *plain, size_t plain_cap, size_t *plain_len)
+{
+	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+
+	if (wire_len < 4u + ALIRO_GCM_TAG_LEN) {
+		return -1;
+	}
+	size_t len_wire = ((size_t)wire[2] << 8) | wire[3];
+
+	if (len_wire + 4u != wire_len || len_wire < ALIRO_GCM_TAG_LEN) {
+		return -1;
+	}
+	size_t len_plain = len_wire - ALIRO_GCM_TAG_LEN;
+
+	if (4u + len_plain > plain_cap) {
+		return -1;
+	}
+	/* AAD = [proto][id][len_plain BE] — the plaintext-length header. */
+	uint8_t aad[4] = {wire[0], wire[1], (uint8_t)(len_plain >> 8),
+			  (uint8_t)(len_plain & 0xffu)};
+
+	aliro_crypto_gcm_nonce(0, ch->ctr_r2d, nonce); /* direction 0 = reader->device */
+	if (aliro_aes256_gcm_decrypt(ch->s0, nonce, ALIRO_GCM_NONCE_LEN, aad, sizeof(aad),
+				     wire + 4u, len_plain, wire + 4u + len_plain, ALIRO_GCM_TAG_LEN,
+				     plain + 4u) != 0) {
+		return -1;
+	}
+	memcpy(plain, aad, sizeof(aad));
+	*plain_len = 4u + len_plain;
+	ch->ctr_r2d++;
+	return 0;
+}
+
+int aliro_dev_ble_seal(struct aliro_dev_secchan *ch, const uint8_t *plain, size_t plain_len,
+		       uint8_t *wire, size_t wire_cap, size_t *wire_len)
+{
+	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+
+	if (plain_len < 4u) {
+		return -1;
+	}
+	size_t len_plain = plain_len - 4u;
+
+	if ((((size_t)plain[2] << 8) | plain[3]) != len_plain) {
+		return -1; /* header length must equal the payload length */
+	}
+	size_t wl = 4u + len_plain + ALIRO_GCM_TAG_LEN;
+
+	if (wl > wire_cap) {
+		return -1;
+	}
+	uint16_t wlen = (uint16_t)(len_plain + ALIRO_GCM_TAG_LEN);
+
+	wire[0] = plain[0];
+	wire[1] = plain[1];
+	wire[2] = (uint8_t)(wlen >> 8);
+	wire[3] = (uint8_t)(wlen & 0xffu);
+	aliro_crypto_gcm_nonce(1, ch->ctr_d2r, nonce); /* direction 1 = device->reader */
+	if (aliro_aes256_gcm_encrypt(ch->s1, nonce, ALIRO_GCM_NONCE_LEN, plain, 4u, plain + 4u,
+				     len_plain, wire + 4u, wire + 4u + len_plain,
+				     ALIRO_GCM_TAG_LEN) != 0) {
+		return -1;
+	}
+	*wire_len = wl;
+	ch->ctr_d2r++;
+	return 0;
+}
+
 int aliro_dev_seal_cryptogram(const uint8_t cryptogram_sk[32], const uint8_t *plain,
 			      size_t plain_len, uint8_t *out)
 {

@@ -295,6 +295,89 @@ static void test_key_schedule(void)
 	T_OK("dev.s1==S1(device->reader)", memcmp(sc.s1, dec, 32) == 0);
 }
 
+/* ---- test 4b: device BleSK ranging channel <-> the reader's aliro_msg_* ---- */
+
+static void test_blesk_channel(void)
+{
+	printf("\n== device BleSK ranging channel <-> reader aliro_msg_seal/open ==\n");
+
+	/* A derived 160-byte key block; only block[96..127] (BleSK) is consumed here.
+	 * Both roles derive their directional keys from the SAME block + versions salt. */
+	uint8_t block[ALIRO_KEY_BLOCK_LEN];
+
+	for (int i = 0; i < (int)sizeof(block); i++) {
+		block[i] = (uint8_t)(0x37u * (unsigned)i + 0x11u);
+	}
+	/* v1.0-only ranging-channel salt = reader_versions || selected_version, i.e.
+	 * 01 00 01 00 (matches the reader's init_ble_channel + test_aliro_reader.c). */
+	static const uint8_t ble_salt[] = {0x01, 0x00, 0x01, 0x00};
+
+	/* reader side: the shipped primitives */
+	uint8_t br[32], bd[32];
+	struct aliro_secchan r_ble;
+
+	T_OK("blesk.derive",
+	     aliro_crypto_derive_ble_keys(block, ble_salt, sizeof(ble_salt), br, bd) == 0);
+	aliro_secchan_init(&r_ble, br, bd);
+
+	/* device side: the new mirror derives the same two directional keys */
+	struct aliro_dev_secchan d_ble;
+
+	T_OK("blesk.dev-init", aliro_dev_blesk_init(&d_ble, block, ble_salt, sizeof(ble_salt)) == 0);
+	T_OK("blesk.s0==BleSKReader", memcmp(d_ble.s0, br, 32) == 0);
+	T_OK("blesk.s1==BleSKDevice", memcmp(d_ble.s1, bd, 32) == 0);
+
+	/* reader->device: reader seals (dir 0), device opens (dir 0). Two SDUs prove
+	 * counter continuity. First = the real Reader-Status AP-Completed plaintext. */
+	static const uint8_t ap_completed[] = {0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00};
+	static const uint8_t m1_ish[] = {0x01, 0x00, 0x00, 0x04, 0xde, 0xad, 0xbe, 0xef};
+	const uint8_t *const r2d[2] = {ap_completed, m1_ish};
+
+	for (int i = 0; i < 2; i++) {
+		uint8_t wire[64], got[64];
+		size_t wl = 0, gl = 0;
+
+		T_OK("blesk.r2d.reader-seals",
+		     aliro_msg_seal(&r_ble, r2d[i], 8, wire, sizeof(wire), &wl) == 0);
+		T_OK("blesk.r2d.device-opens",
+		     aliro_dev_ble_open(&d_ble, wire, wl, got, sizeof(got), &gl) == 0 && gl == 8 &&
+			     memcmp(got, r2d[i], 8) == 0);
+	}
+
+	/* device->reader: device seals (dir 1), reader opens (dir 1). Mixed lengths. */
+	static const uint8_t d2r_a[] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x01};
+	static const uint8_t d2r_b[] = {0x01, 0x01, 0x00, 0x02, 0xca, 0xfe};
+	const uint8_t *const d2r[2] = {d2r_a, d2r_b};
+	const size_t d2r_len[2] = {sizeof(d2r_a), sizeof(d2r_b)};
+
+	for (int i = 0; i < 2; i++) {
+		uint8_t wire[64], got[64];
+		size_t wl = 0, gl = 0;
+
+		T_OK("blesk.d2r.device-seals",
+		     aliro_dev_ble_seal(&d_ble, d2r[i], d2r_len[i], wire, sizeof(wire), &wl) == 0);
+		T_OK("blesk.d2r.reader-opens",
+		     aliro_msg_open(&r_ble, wire, wl, got, sizeof(got), &gl) == 0 &&
+			     gl == d2r_len[i] && memcmp(got, d2r[i], d2r_len[i]) == 0);
+	}
+
+	/* a flipped ciphertext byte must fail the device open (auth, not just parse). */
+	{
+		struct aliro_dev_secchan fresh;
+		struct aliro_secchan rfresh;
+		uint8_t wire[64], got[64];
+		size_t wl = 0, gl = 0;
+
+		aliro_secchan_init(&rfresh, br, bd);
+		aliro_dev_blesk_init(&fresh, block, ble_salt, sizeof(ble_salt));
+		T_OK("blesk.tamper.seal",
+		     aliro_msg_seal(&rfresh, ap_completed, 8, wire, sizeof(wire), &wl) == 0);
+		wire[5] ^= 0x01u;
+		T_OK("blesk.tamper.rejected",
+		     aliro_dev_ble_open(&fresh, wire, wl, got, sizeof(got), &gl) != 0);
+	}
+}
+
 /* ---- test 5: full standard-path loopback (target-gated: needs real EC) ---- */
 
 #if defined(ALIRO_DEVICE_HAVE_EC)
@@ -452,6 +535,7 @@ int aliro_device_selftest(void)
 	test_cryptogram();
 	test_secchan();
 	test_key_schedule();
+	test_blesk_channel();
 
 	printf("\n== full standard-path loopback ==\n");
 #if defined(ALIRO_DEVICE_HAVE_EC)

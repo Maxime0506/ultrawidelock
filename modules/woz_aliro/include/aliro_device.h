@@ -20,6 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "aliro_crypto.h" /* ALIRO_KEY_BLOCK_LEN + channel/BleSK derivation */
 #include "aliro_device_apdu.h"
 
 #ifdef __cplusplus
@@ -47,6 +48,39 @@ int aliro_dev_secchan_open(struct aliro_dev_secchan *sc, const uint8_t *ct, size
  * ctr_d2r; writes ct (ct_len == pt_len) and the 16-byte tag. Returns 0. */
 int aliro_dev_secchan_seal(struct aliro_dev_secchan *sc, const uint8_t *pt, size_t pt_len,
 			   uint8_t *ct, uint8_t tag[16]);
+
+/* ---- device BleSK ranging channel (mirror of the reader's sc_ble) ----
+ *
+ * The UWB ranging-setup traffic (Reader-Status AP-Completed, Initiate-Ranging,
+ * M1-M4, notifications) rides one BleSK-keyed AES-256-GCM channel — the same
+ * construction as the AP channel above, but each SDU carries a 4-byte
+ * [proto][id][len_be16] header that is authenticated as GCM AAD and whose wire
+ * length field is payload+16 (the reader's aliro_msg_seal/open framing). We
+ * reuse struct aliro_dev_secchan: s0 = BleSKReader (device OPENS, direction 0),
+ * s1 = BleSKDevice (device SEALS, direction 1). */
+
+/* Initialise the device BleSK channel from the 160-byte key block and the
+ * versions salt (reader_supported_versions || selected_version; 01 00 01 00 for
+ * v1.0-only). Derives BleSKReader/BleSKDevice via aliro_crypto_derive_ble_keys;
+ * both counters start at 1. Returns 0, or <0 if the HKDF derivation fails. */
+int aliro_dev_blesk_init(struct aliro_dev_secchan *ch, const uint8_t block[ALIRO_KEY_BLOCK_LEN],
+			 const uint8_t *versions_salt, size_t salt_len);
+
+/* Open a reader-sealed BleSK SDU: wire = [proto][id][len_be16][ct||tag] with
+ * len_be16 = payload_len + 16. Authenticates the 4-byte header as AAD, opens on
+ * direction 0 (key s0 = BleSKReader), writes plain = [proto][id][payload_len_be16]
+ * [payload] and sets *plain_len = 4 + payload_len. Advances ctr_r2d; returns 0 on
+ * success, <0 on a tag/length failure (hard auth failure). */
+int aliro_dev_ble_open(struct aliro_dev_secchan *ch, const uint8_t *wire, size_t wire_len,
+		       uint8_t *plain, size_t plain_cap, size_t *plain_len);
+
+/* Seal a device->reader BleSK SDU (inverse of aliro_dev_ble_open): plain =
+ * [proto][id][payload_len_be16][payload] (the header length must equal the
+ * payload length); writes wire = [proto][id][(payload_len+16)_be16][ct||tag] on
+ * direction 1 (key s1 = BleSKDevice), header as AAD, and sets *wire_len. Advances
+ * ctr_d2r; returns 0 or <0. Byte-compatible with the reader's aliro_msg_open. */
+int aliro_dev_ble_seal(struct aliro_dev_secchan *ch, const uint8_t *plain, size_t plain_len,
+		       uint8_t *wire, size_t wire_cap, size_t *wire_len);
 
 /* Seal an AUTH0 fast-phase cryptogram (§8.3.1.11): the byte-exact mirror of the
  * reader's aliro_crypto_verify_cryptogram. AES-256-GCM under CryptogramSK, a
