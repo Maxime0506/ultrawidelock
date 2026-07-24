@@ -7,7 +7,7 @@
 #   make                 # this grouped, colourised help
 #   make build           # incremental build   -> build/merged.hex
 #   make test            # host KAT test for the pure CCC core
-#   make coverage        # line coverage of that core (+ HTML report)
+#   make coverage        # line coverage of all our code (+ HTML report)
 #   make build PRETTY=1 CHIP=dw3720   # build options (build targets only)
 
 .DEFAULT_GOAL := help
@@ -46,7 +46,7 @@ ENV := $(strip \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -87,7 +87,7 @@ pretty:
 test:
 	@$(REPO_ROOT)/tests/host/run.sh
 
-## coverage: line coverage of the pure CCC core  ->  terminal table + HTML
+## coverage: line coverage of every host suite, 0% rows for the rest  ->  table + HTML
 ##   Instrumented (clang source-based coverage); slower than `make test` and
 ##   rebuilt at -O0. Artifacts under build/coverage/ (html/index.html).
 coverage:
@@ -122,6 +122,12 @@ verify:
 	@$(MAKE) --no-print-directory fuzz
 	@$(MAKE) --no-print-directory cbmc
 	@printf '\n  ✓ all host gates passed\n'
+
+## check: every host-side suite under one banner  ->  live rows + summary table
+##   Parallel by default; SERIAL=1 streams suites one at a time, SUITES="..."
+##   scopes (firmware shared webtwin). The pre-push look, runnable any time.
+check:
+	@$(REPO_ROOT)/scripts/test-runner.sh
 
 ## test-port: host-runnable ESP32 port tests (port headers, crypto KATs, codec)
 ##   No ESP-IDF needed; the on-target build check inside skips cleanly without it.

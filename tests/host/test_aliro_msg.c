@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <deca_device_api.h> /* woz_host_rx radio knobs */
+
 #include "aliro_uwb_internal.h"
 #include "aliro_uwb_msg.h"
 #include "aliro_uwb_msg_builder.h"
@@ -483,12 +485,279 @@ void test_aliro_msg(void)
 	     aliro_uwb_msg_process_notification(s, b.message), ALIRO_UWB_ERR_NONE);
 	aliro_uwb_msg_free(b.message);
 
+	t_group("build M1 fails when a capability array is empty");
+	s->aliro_ctx->ccc_caps.uwb_configs.len = 0u;
+	T_OK("m1.nocfgs", aliro_uwb_msg_build_m1(s) == NULL);
+	s->aliro_ctx->ccc_caps.uwb_configs.len = 1u;
+
+	t_group("session-id mismatch rejects suspend request and M4");
+	s->state = RANGING;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SUSPEND_REQUEST);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER, SID ^ 1u);
+	fix_plen(b.message);
+	T_EQ("susp.badsid", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_PARAMETER);
+	aliro_uwb_msg_free(b.message);
+	s->state = M3_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SETUP_M4);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER, SID ^ 1u);
+	fix_plen(b.message);
+	T_EQ("m4.badsid", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_PARAMETER);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("channel bitmask ch9 resolves to channel 9");
+	s->state = M1_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SETUP_M2);
+	aliro_uwb_msg_builder_add_u8(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_CHANNEL_BITMASK, 0x02u);
+	fix_plen(b.message);
+	/* Parsed (channel latched), then fails the M2 attribute-mask check. */
+	T_EQ("m2.ch9", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED);
+	T_EQ("m2.ch9.chan", s->ccc_aliro_config.channel, 9);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("slot bitmask maps every chaps-per-slot bit");
+	{
+		struct {
+			uint8_t bit;
+			uint16_t slot_duration;
+		} sb[] = {
+			{ 0x02u, 400u * 4u },  { 0x04u, 400u * 6u },
+			{ 0x08u, 400u * 8u },  { 0x10u, 400u * 9u },
+			{ 0x20u, 400u * 12u }, { 0x40u, 400u * 24u },
+			{ 0x80u, 400u * 0x80u }, /* no chaps bit: raw kept */
+		};
+
+		s->aliro_ctx->ccc_caps.slot_bitmask = 0xFFu;
+		for (size_t i = 0; i < sizeof(sb) / sizeof(sb[0]); i++) {
+			s->state = M1_SENT;
+			b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+			       ALIRO_UWB_MESSAGE_SETUP_M2);
+			aliro_uwb_msg_builder_add_u8(
+				&b, ALIRO_UWB_RANGING_SERVICE_ATTR_SLOT_BITMASK,
+				sb[i].bit);
+			fix_plen(b.message);
+			T_EQ("slot.parse", aliro_uwb_msg_process_ranging(s, b.message),
+			     ALIRO_UWB_ERR_MSG_MALFORMED);
+			T_EQ("slot.duration", s->ccc_aliro_config.slot_duration,
+			     sb[i].slot_duration);
+			aliro_uwb_msg_free(b.message);
+		}
+		s->aliro_ctx->ccc_caps.slot_bitmask = 0x01u;
+	}
+
+	t_group("hopping preference selection: disabled / adaptive / unknown");
+	s->aliro_ctx->ccc_caps.hopping_config_bitmask = 0xFFu;
+	cfg.preferred_hopping_configs.configs[0] = ALIRO_HOPPING_CONFIG_DISABLED;
+	s->state = M1_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SETUP_M2);
+	aliro_uwb_msg_builder_add_u8(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_HOPPING_CONFIGURATION_BITMASK,
+		0xFFu);
+	fix_plen(b.message);
+	T_EQ("hop.disabled", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED); /* mask check, after the hop parse */
+	T_EQ("hop.disabled.mode", s->ccc_aliro_config.hopping_mode,
+	     (enum cherry_ccc_hopping_mode)ALIRO_HOPPING_CONFIG_DISABLED);
+	aliro_uwb_msg_free(b.message);
+	cfg.preferred_hopping_configs.configs[0] =
+		ALIRO_HOPPING_CONFIG_ADAPTIVE_DEFAULT;
+	s->state = M1_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SETUP_M2);
+	aliro_uwb_msg_builder_add_u8(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_HOPPING_CONFIGURATION_BITMASK,
+		0xFFu);
+	fix_plen(b.message);
+	T_EQ("hop.adaptive", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED);
+	T_EQ("hop.adaptive.mode", s->ccc_aliro_config.hopping_mode,
+	     (enum cherry_ccc_hopping_mode)ALIRO_HOPPING_CONFIG_ADAPTIVE_DEFAULT);
+	aliro_uwb_msg_free(b.message);
+	cfg.preferred_hopping_configs.configs[0] = (enum aliro_hopping_config)0x55;
+	s->state = M1_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SETUP_M2);
+	aliro_uwb_msg_builder_add_u8(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_HOPPING_CONFIGURATION_BITMASK,
+		0xFFu);
+	fix_plen(b.message);
+	T_EQ("hop.unknown", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED); /* unknown pref -> no common config */
+	aliro_uwb_msg_free(b.message);
+	cfg.preferred_hopping_configs.configs[0] =
+		ALIRO_HOPPING_CONFIG_CONTINUOUS_DEFAULT;
+	s->aliro_ctx->ccc_caps.hopping_config_bitmask = 0x0Au;
+
+	t_group("suspend request: missing attributes + wrong state");
+	s->state = RANGING;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SUSPEND_REQUEST);
+	aliro_uwb_msg_builder_add_u8(&b, ALIRO_UWB_RANGING_SERVICE_ATTR_STATUS,
+				     ALIRO_UWB_RANGING_SERVICE_STATUS_ACCEPT);
+	fix_plen(b.message);
+	T_EQ("susp.req.missing", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED);
+	aliro_uwb_msg_free(b.message);
+	s->state = CREATED;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SUSPEND_REQUEST);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER, SID);
+	fix_plen(b.message);
+	T_EQ("susp.req.badstate", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_STATE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("suspend response: parse error, missing attrs, wrong state");
+	s->state = SUSPEND_REQ_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SUSPEND_RESPONSE);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER, SID ^ 1u);
+	fix_plen(b.message);
+	T_EQ("susp.resp.badsid", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_PARAMETER);
+	aliro_uwb_msg_free(b.message);
+	s->state = SUSPEND_REQ_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SUSPEND_RESPONSE);
+	fix_plen(b.message);
+	T_EQ("susp.resp.missing", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED);
+	aliro_uwb_msg_free(b.message);
+	s->state = RANGING; /* wrong state for a suspend response */
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_SUSPEND_RESPONSE);
+	aliro_uwb_msg_builder_add_u8(&b, ALIRO_UWB_RANGING_SERVICE_ATTR_STATUS,
+				     ALIRO_UWB_RANGING_SERVICE_STATUS_ACCEPT);
+	fix_plen(b.message);
+	T_EQ("susp.resp.badstate", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_STATE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("resume response: parse error, missing attrs, wrong state");
+	s->state = RESUME_REQ_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_RESUME_RESPONSE);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER, SID ^ 1u);
+	fix_plen(b.message);
+	T_EQ("resume.badsid", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_PARAMETER);
+	aliro_uwb_msg_free(b.message);
+	s->state = RESUME_REQ_SENT;
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_RESUME_RESPONSE);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_STS_INDEX0, 0x2000u);
+	fix_plen(b.message);
+	T_EQ("resume.missing", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_MSG_MALFORMED);
+	aliro_uwb_msg_free(b.message);
+	s->state = RANGING; /* wrong state for a resume response */
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_RESUME_RESPONSE);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_STS_INDEX0, 0x2000u);
+	aliro_uwb_msg_builder_add_u64(&b, ALIRO_UWB_RANGING_SERVICE_ATTR_UWB_TIME0,
+				      0u);
+	fix_plen(b.message);
+	T_EQ("resume.badstate", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_STATE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("ranging notification: bad-state resume-later + suspended");
+	s->state = RANGING; /* wrong state for resume-later */
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_NOTIFICATION,
+	       ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING);
+	aliro_uwb_msg_builder_add_u8(
+		&b,
+		ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING_ATTR_INIT_RANGING_RESUME_LATER,
+		0u);
+	fix_plen(b.message);
+	T_EQ("rn.resumelater.badstate",
+	     aliro_uwb_msg_process_notification(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_STATE);
+	aliro_uwb_msg_free(b.message);
+	s->state = CREATED; /* wrong state for ranging-suspended */
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_NOTIFICATION,
+	       ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING);
+	aliro_uwb_msg_builder_add_u8(
+		&b, ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING_ATTR_RANGING_SUSPENDED,
+		0u);
+	fix_plen(b.message);
+	T_EQ("rn.suspended.badstate",
+	     aliro_uwb_msg_process_notification(s, b.message),
+	     ALIRO_UWB_ERR_INVALID_STATE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("ranging notification: unknown attribute is logged, not fatal");
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_NOTIFICATION,
+	       ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING);
+	aliro_uwb_msg_builder_add_u8(&b, 0x7Fu, 0u);
+	fix_plen(b.message);
+	T_EQ("rn.unknownattr", aliro_uwb_msg_process_notification(s, b.message),
+	     ALIRO_UWB_ERR_NONE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("supplementary-service messages are logged and accepted");
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_SUPPLEMENTARY_SERVICE, 0x01u);
+	aliro_uwb_msg_builder_add_u8(&b, 0x10u, 0xAAu);
+	fix_plen(b.message);
+	T_EQ("suppl.ok", aliro_uwb_msg_process_supplementary(s, b.message),
+	     ALIRO_UWB_ERR_NONE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("resume response: ccc setter failure surfaces as internal");
+	{
+		struct cherry_ccc_session *saved = s->ccc_session;
+
+		s->ccc_session = NULL; /* set_resume_params' ccc calls now reject */
+		s->state = RESUME_REQ_SENT;
+		b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+		       ALIRO_UWB_MESSAGE_RESUME_RESPONSE);
+		aliro_uwb_msg_builder_add_u32(
+			&b, ALIRO_UWB_RANGING_SERVICE_ATTR_STS_INDEX0, 0x2000u);
+		aliro_uwb_msg_builder_add_u64(
+			&b, ALIRO_UWB_RANGING_SERVICE_ATTR_UWB_TIME0, 0u);
+		fix_plen(b.message);
+		T_EQ("resume.paramfail", aliro_uwb_msg_process_ranging(s, b.message),
+		     ALIRO_UWB_ERR_INTERNAL);
+		aliro_uwb_msg_free(b.message);
+		s->ccc_session = saved;
+	}
+
+	t_group("resume response: failed restart tears the session down");
+	s->state = RESUME_REQ_SENT;
+	woz_host_rx.radio_init_ret = -5; /* the UWB re-listen must fail */
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
+	       ALIRO_UWB_MESSAGE_RESUME_RESPONSE);
+	aliro_uwb_msg_builder_add_u32(
+		&b, ALIRO_UWB_RANGING_SERVICE_ATTR_STS_INDEX0, 0x2000u);
+	aliro_uwb_msg_builder_add_u64(&b, ALIRO_UWB_RANGING_SERVICE_ATTR_UWB_TIME0,
+				      0u);
+	fix_plen(b.message);
+	T_EQ("resume.startfail", aliro_uwb_msg_process_ranging(s, b.message),
+	     ALIRO_UWB_ERR_SESSION_INIT);
+	aliro_uwb_msg_free(b.message);
+	woz_host_rx.radio_init_ret = 0;
+	/* The close-on-error branch already freed s; only the adapter remains. */
+
 	if (g_tx.msg) {
 		aliro_uwb_msg_free(g_tx.msg);
 		g_tx.msg = NULL;
 	}
-	s->state = RANGING;
-	aliro_uwb_session_destroy(s);
+	/* No session destroy here: the ranging flow above already tore it down
+	 * via the CCC DEINIT event (which frees the session and its URSK). */
 	aliro_uwb_adapter_destroy(adapter);
 	cherry_destroy_sync(cx);
 }
