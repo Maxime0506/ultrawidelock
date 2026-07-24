@@ -46,6 +46,7 @@ int main(void)
 		{ "aliro_adapter", test_aliro_adapter },
 		{ "aliro_msg", test_aliro_msg },
 		{ "aliro_session", test_aliro_session },
+		{ "aliro_device_uwb", test_aliro_device_uwb },
 		{ "cherry", test_cherry },
 		{ "fira", test_fira },
 		{ "facade", test_facade },
