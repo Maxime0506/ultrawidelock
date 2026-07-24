@@ -60,10 +60,23 @@ for src in "${WOZ_UWB_SRCS[@]}" "${TWIN_SHIM_SRCS[@]}"; do
   fi
 done
 
+# The flight recorder is a device diagnostic: a RAM ring dumped over the serial
+# console, which the twin has neither of. Its header stands in with no-op
+# inlines when the define is absent, so dropping it here keeps both the recorder
+# and the logging backend it prints through out of the twin's link — the host
+# suite keeps building it with the define on.
+TWIN_DEFS=()
+for def in "${DEFS[@]}"; do
+  case "$def" in
+  -DCONFIG_WOZ_FLIGHT_RECORDER*) ;;
+  *) TWIN_DEFS+=("$def") ;;
+  esac
+done
+
 # The woz_uwb sources + the radio-stub shim, the host AES double and the shared
 # peer model, plus the glue that exports the page's entry points. INCS/DEFS
-# match the host suite (run.sh).
-emcc -std=c11 -O2 -w "${DEFS[@]}" "${INCS[@]}" \
+# match the host suite (run.sh), less the recorder define above.
+emcc -std=c11 -O2 -w "${TWIN_DEFS[@]}" "${INCS[@]}" \
   -ffile-prefix-map="$ROOT"=. \
   "${WOZ_UWB_SRCS[@]}" "${TWIN_SHIM_SRCS[@]}" \
   "$ROOT/tests/host/aes_ref.c" \
