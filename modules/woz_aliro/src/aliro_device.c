@@ -168,7 +168,8 @@ int aliro_device_derive_session(const uint8_t shared_x[32], const uint8_t txid[1
 				const uint8_t reader_group_x[32], const uint8_t reader_eph_x[32],
 				const uint8_t reader_id[32], uint8_t exp_phase, const uint8_t *a5,
 				size_t a5n, const uint8_t device_eph_x[32],
-				struct aliro_dev_secchan *sc, uint8_t ursk[32])
+				struct aliro_dev_secchan *sc, uint8_t ursk[32],
+				uint8_t block_out[ALIRO_KEY_BLOCK_LEN])
 {
 	uint8_t z[32], salt[ALIRO_SALT_MAX], block[ALIRO_KEY_BLOCK_LEN];
 	uint8_t enc[ALIRO_SESSION_KEY_LEN], dec[ALIRO_SESSION_KEY_LEN];
@@ -187,6 +188,9 @@ int aliro_device_derive_session(const uint8_t shared_x[32], const uint8_t txid[1
 	 * device channel opens on s0 and seals on s1 (mirror of the reader). */
 	aliro_crypto_split(block, 1, enc, dec, ursk);
 	aliro_dev_secchan_init(sc, enc, dec);
+	if (block_out != NULL) {
+		memcpy(block_out, block, ALIRO_KEY_BLOCK_LEN);
+	}
 	return 0;
 }
 
@@ -252,6 +256,7 @@ int aliro_device_on_command(struct aliro_device *d, const uint8_t *ap_payload, s
 		struct aliro_auth1_command c;
 		uint8_t td[160], shared[ALIRO_SHARED_SECRET_LEN], sig[ALIRO_P256_SIG];
 		uint8_t plain[160], tag[ALIRO_GCM_TAG_LEN];
+		uint8_t block[ALIRO_KEY_BLOCK_LEN];
 		size_t tn, pl;
 
 		if (aliro_dev_parse_auth1_cmd(data, dlen, &c) != 0) {
@@ -269,9 +274,26 @@ int aliro_device_on_command(struct aliro_device *d, const uint8_t *ap_payload, s
 		if (aliro_ecdh_p256(d->dev_eph_priv, d->reader_eph_pub, shared) != 0 ||
 		    aliro_device_derive_session(shared, d->txid, d->reader_group_x,
 						d->reader_eph_pub + 1, d->reader_id, d->exp_phase,
-						d->a5, d->a5n, d->dev_eph_pub + 1, &d->sc,
-						d->ursk) != 0) {
+						d->a5, d->a5n, d->dev_eph_pub + 1, &d->sc, d->ursk,
+						block) != 0) {
 			goto fail;
+		}
+		/* Same block feeds the BleSK ranging channel (§11.8.1), which must be up
+		 * before the reader's AP-Completed arrives — that SDU is the first thing
+		 * sealed under it. Salt = reader_supported_versions || selected_version;
+		 * v1.0 is the only version either side speaks, so both halves are
+		 * ALIRO_DEV_VERSION and the salt is 01 00 01 00 (mirrors the reader's
+		 * init_ble_channel). */
+		{
+			const uint8_t ble_salt[4] = {(uint8_t)(ALIRO_DEV_VERSION >> 8),
+						     (uint8_t)(ALIRO_DEV_VERSION & 0xffu),
+						     (uint8_t)(ALIRO_DEV_VERSION >> 8),
+						     (uint8_t)(ALIRO_DEV_VERSION & 0xffu)};
+
+			if (aliro_dev_blesk_init(&d->sc_ble, block, ble_salt, sizeof(ble_salt)) !=
+			    0) {
+				goto fail;
+			}
 		}
 		/* Sign the device-usage transcript with the credential key, then build +
 		 * seal the AUTH1Response (device signature + presented credential key). */

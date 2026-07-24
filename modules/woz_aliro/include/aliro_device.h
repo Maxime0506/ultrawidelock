@@ -92,12 +92,15 @@ int aliro_dev_seal_cryptogram(const uint8_t cryptogram_sk[32], const uint8_t *pl
 /* Standard-path session derivation, factored EC-free (the caller supplies the
  * ECDH shared X). Builds z, the §8.3.1.13 SESSION salt and the 160-byte block,
  * then the device AP channel (s0/s1 = block split S0/S1) and the URSK. Every
- * input mirrors the reader's on_auth1_response. Returns 0 on success. */
+ * input mirrors the reader's on_auth1_response. block_out, if non-NULL, receives
+ * the 160-byte block (the BleSK at offset 96 lives there and nowhere else, so a
+ * caller that needs the ranging channel must ask for it). Returns 0 on success. */
 int aliro_device_derive_session(const uint8_t shared_x[32], const uint8_t txid[16],
 				const uint8_t reader_group_x[32], const uint8_t reader_eph_x[32],
 				const uint8_t reader_id[32], uint8_t exp_phase, const uint8_t *a5,
 				size_t a5n, const uint8_t device_eph_x[32],
-				struct aliro_dev_secchan *sc, uint8_t ursk[32]);
+				struct aliro_dev_secchan *sc, uint8_t ursk[32],
+				uint8_t block_out[ALIRO_KEY_BLOCK_LEN]);
 
 /* ---- full initiator state machine (uses EC via aliro_prim) ---- */
 
@@ -125,7 +128,8 @@ struct aliro_device {
 	uint8_t exp_phase;
 	uint16_t version;
 	uint8_t ursk[32];
-	struct aliro_dev_secchan sc;
+	struct aliro_dev_secchan sc;     /* Access-Protocol channel (S0/S1), from AUTH1 */
+	struct aliro_dev_secchan sc_ble; /* BleSK ranging channel, from the same block */
 
 	const uint8_t *a5; /* 0xA5 proprietary-info TLV for the salt (CSA v1.0 default) */
 	size_t a5n;

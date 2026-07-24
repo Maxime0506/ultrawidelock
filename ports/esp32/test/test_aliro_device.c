@@ -286,11 +286,14 @@ static void test_key_schedule(void)
 
 	/* device path */
 	struct aliro_dev_secchan sc;
-	uint8_t ursk_dev[32];
+	uint8_t ursk_dev[32], block_dev[ALIRO_KEY_BLOCK_LEN];
 
-	T_OK("dev.derive", aliro_device_derive_session(shared, txid, rgx, rex, rid, 0x00u, k_a5,
-						       sizeof(k_a5), dex, &sc, ursk_dev) == 0);
+	T_OK("dev.derive",
+	     aliro_device_derive_session(shared, txid, rgx, rex, rid, 0x00u, k_a5, sizeof(k_a5), dex,
+					 &sc, ursk_dev, block_dev) == 0);
 	T_OK("dev.ursk==reader", memcmp(ursk_dev, ursk_exp, 32) == 0);
+	/* the whole 160-byte block matches, so BleSK (block[96..127]) does too */
+	T_OK("dev.block==reader", memcmp(block_dev, block, sizeof(block)) == 0);
 	T_OK("dev.s0==S0(reader->device)", memcmp(sc.s0, enc, 32) == 0);
 	T_OK("dev.s1==S1(device->reader)", memcmp(sc.s1, dec, 32) == 0);
 }
@@ -381,7 +384,9 @@ static void test_blesk_channel(void)
 /* ---- test 5: full standard-path loopback (target-gated: needs real EC) ---- */
 
 #if defined(ALIRO_DEVICE_HAVE_EC)
-static int loopback(void)
+/* On success writes the finished device (for the ranging-channel checks below)
+ * and the reader's own 160-byte key block into the caller's buffers. */
+static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BLOCK_LEN])
 {
 	uint8_t reader_sign_priv[32], reader_verif_pub[65], reader_group_x[32], reader_id[32];
 	uint8_t cred_priv[32];
@@ -520,7 +525,90 @@ static int loopback(void)
 	int ok = bodylen >= 4u && body[2] == 0x00u && body[3] == 0x00u;
 
 	/* the money check: both sides independently derived the same URSK */
-	return (ok && memcmp(ursk_r, dev.ursk, 32) == 0) ? 0 : -1;
+	if (!ok || memcmp(ursk_r, dev.ursk, 32) != 0) {
+		return -1;
+	}
+	memcpy(dev_out, &dev, sizeof(dev));
+	memcpy(block_out, block, ALIRO_KEY_BLOCK_LEN);
+	return 0;
+}
+
+/* ---- test 5b: the ranging channel that handshake left behind ----
+ *
+ * AUTH1 derives d->sc_ble off the same 160-byte block as the AP channel, so
+ * Stage-1 firmware can seal ranging traffic the moment the reader's AP-Completed
+ * lands. Two properties have to hold and neither is covered by test 4b (which
+ * hand-builds a block): the keys are the ones the READER derived from ITS block,
+ * and the counters stay in lockstep across the real SDU order. Payload bodies are
+ * opaque here on purpose — M1-M4 content is proven against the live reader engine
+ * in tests/host/test_aliro_device_uwb.c; what is under test is the channel. */
+static void test_ranging_channel_after_auth1(struct aliro_device *dev,
+					     const uint8_t block[ALIRO_KEY_BLOCK_LEN])
+{
+	printf("\n== ranging channel established by AUTH1 ==\n");
+
+	static const uint8_t ble_salt[] = {0x01, 0x00, 0x01, 0x00};
+	uint8_t br[32], bd[32];
+	struct aliro_secchan r_ble;
+
+	T_OK("auth1.blesk.reader-derive",
+	     aliro_crypto_derive_ble_keys(block, ble_salt, sizeof(ble_salt), br, bd) == 0);
+	aliro_secchan_init(&r_ble, br, bd);
+
+	T_OK("auth1.blesk.s0==BleSKReader", memcmp(dev->sc_ble.s0, br, 32) == 0);
+	T_OK("auth1.blesk.s1==BleSKDevice", memcmp(dev->sc_ble.s1, bd, 32) == 0);
+	T_OK("auth1.blesk.fresh-counters",
+	     dev->sc_ble.ctr_r2d == 1u && dev->sc_ble.ctr_d2r == 1u);
+	/* the AP channel ran AUTH1Response + EXCHANGE and must be independent of it */
+	T_OK("auth1.ap.counters-untouched", dev->sc.ctr_r2d == 2u && dev->sc.ctr_d2r == 3u);
+
+	/* The real ranging-setup order (aliro_reader.c complete_ap_and_range ->
+	 * aliro_ranging.c): reader AP-Completed, device Initiate-Ranging-Session,
+	 * then M1/M2/M3/M4 alternating. Headers are [proto][id][len_be16]. */
+	static const uint8_t r2d_ap_completed[] = {0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00};
+	static const uint8_t d2r_initiate[] = {0x02, 0x01, 0x00, 0x02, 0x00, 0x00};
+	static const uint8_t r2d_m1[] = {0x01, 0x00, 0x00, 0x05, 0x11, 0x22, 0x33, 0x44, 0x55};
+	static const uint8_t d2r_m2[] = {0x01, 0x01, 0x00, 0x03, 0xa1, 0xa2, 0xa3};
+	static const uint8_t r2d_m3[] = {0x01, 0x02, 0x00, 0x06, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+	static const uint8_t d2r_m4[] = {0x01, 0x03, 0x00, 0x04, 0xde, 0xad, 0xbe, 0xef};
+
+	struct {
+		const char *name;
+		const uint8_t *plain;
+		size_t len;
+		int reader_to_device;
+	} const seq[] = {
+		{"ap-completed", r2d_ap_completed, sizeof(r2d_ap_completed), 1},
+		{"initiate-ranging", d2r_initiate, sizeof(d2r_initiate), 0},
+		{"m1", r2d_m1, sizeof(r2d_m1), 1},
+		{"m2", d2r_m2, sizeof(d2r_m2), 0},
+		{"m3", r2d_m3, sizeof(r2d_m3), 1},
+		{"m4", d2r_m4, sizeof(d2r_m4), 0},
+	};
+
+	for (size_t i = 0; i < sizeof(seq) / sizeof(seq[0]); i++) {
+		uint8_t wire[64], got[64];
+		size_t wl = 0, gl = 0;
+		int rc;
+
+		if (seq[i].reader_to_device) {
+			rc = aliro_msg_seal(&r_ble, seq[i].plain, seq[i].len, wire, sizeof(wire),
+					    &wl) == 0 &&
+			     aliro_dev_ble_open(&dev->sc_ble, wire, wl, got, sizeof(got), &gl) == 0;
+		} else {
+			rc = aliro_dev_ble_seal(&dev->sc_ble, seq[i].plain, seq[i].len, wire,
+						sizeof(wire), &wl) == 0 &&
+			     aliro_msg_open(&r_ble, wire, wl, got, sizeof(got), &gl) == 0;
+		}
+		T_OK(seq[i].name,
+		     rc && wl == seq[i].len + 16u && gl == seq[i].len &&
+			     memcmp(got, seq[i].plain, seq[i].len) == 0);
+	}
+
+	/* three SDUs each way: both counters advanced 1 -> 4, on both sides */
+	T_OK("auth1.blesk.lockstep",
+	     dev->sc_ble.ctr_r2d == 4u && dev->sc_ble.ctr_d2r == 4u && r_ble.enc_ctr == 4u &&
+		     r_ble.dec_ctr == 4u);
 }
 #endif
 
@@ -539,7 +627,16 @@ int aliro_device_selftest(void)
 
 	printf("\n== full standard-path loopback ==\n");
 #if defined(ALIRO_DEVICE_HAVE_EC)
-	T_OK("loopback: reader URSK == device URSK", loopback() == 0);
+	{
+		struct aliro_device dev;
+		uint8_t rblock[ALIRO_KEY_BLOCK_LEN];
+		int rc = loopback(&dev, rblock);
+
+		T_OK("loopback: reader URSK == device URSK", rc == 0);
+		if (rc == 0) {
+			test_ranging_channel_after_auth1(&dev, rblock);
+		}
+	}
 #else
 	printf("  SKIP loopback (no host EC double; runs on target with real aliro_prim)\n");
 #endif
