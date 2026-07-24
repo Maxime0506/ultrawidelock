@@ -15,6 +15,8 @@ Every check encodes an invariant of this repo's reader implementation (see
 internal notes in the check text), nothing else. Exit status: 0 = no failing
 check, 1 = at least one FAIL, 2 = usage/input error.
 
+**used by** [`tools/aliro_gait.py`](aliro_gait.md)
+
 ## API
 
 ### `class Transaction`

@@ -3,6 +3,8 @@
 
 | subsystem | about |
 |---|---|
+| [`tools/aliro.lua`](aliro.lua.md) | *first commit: "Add Wireshark dissector for the clear-text Aliro BLE plane"* |
+| [`tools/aliro_gait.py`](aliro_gait.md) | Aliro Gait: carry-motion features from Aliro Lab walk-up captures. |
 | [`tools/aliro_lab.py`](aliro_lab.md) | Aliro Lab: score a captured reader serial log. |
 | [`tools/docs_3d.py`](docs_3d.md) | Render the whole code surface as a flyable 3D graph: site/graph3d.html. |
 | [`tools/docs_api.py`](docs_api.md) | Fill the reference pages the page generator leaves bare. |
@@ -17,3 +19,4 @@
 | [`tools/docs_theme.py`](docs_theme.md) | Retheme the rendered site: warm paper surfaces, serif display headings. |
 | [`tools/docs_title.py`](docs_title.md) | Title the generated pages after the repository, not after the checkout directory. |
 | [`tools/docs_twin.py`](docs_twin.md) | Fold the interactive walk-up digital twin into the rendered site. |
+| [`tools/flight_recorder.py`](flight_recorder.md) | flight_recorder.py — carry a recorded UWB walk-up off the device and turn it |
