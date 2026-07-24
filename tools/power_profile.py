@@ -76,6 +76,11 @@ def analyze(run):
     t_connect, _ = first(run, "ph.connect")
     t_hold, _ = first(run, "gate.hold")
     t_open, open_dbm = first(run, "gate.open", "dbm")
+    if t_open is None:
+        # The hold hit CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS and the reader completed the
+        # AP anyway. That is still the moment the radio was allowed up, so it is the
+        # end of the held span; open_dbm then reads as the level we gave up at.
+        t_open, open_dbm = first(run, "gate.holdcap", "dbm")
     t_m4, _ = first(run, "ph.m4")
     t_bolt, _ = first(run, "ph.bolt")
     t_close, _ = first(run, "gate.close")

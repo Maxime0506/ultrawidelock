@@ -24,6 +24,7 @@ struct aliro_rssi_gate_cfg {
 	uint8_t ewma_shift;       /* smoothing alpha = 1/2^shift */
 	uint8_t slope_open_db;    /* fast-open on this much rise per window; 0 = off */
 	uint16_t slope_window_ms; /* rise-rate reference window */
+	uint16_t max_hold_ms;     /* longest AP-Completed hold before opening anyway; 0 = off */
 };
 
 /* Kconfig-tunable defaults, with host-build fallbacks (no sdkconfig there). */
@@ -39,6 +40,9 @@ struct aliro_rssi_gate_cfg {
 #ifndef CONFIG_WOZ_RSSI_GATE_SLOPE_DB
 #define CONFIG_WOZ_RSSI_GATE_SLOPE_DB 8
 #endif
+#ifndef CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS
+#define CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS 1500
+#endif
 
 #define ALIRO_RSSI_GATE_CFG_DEFAULT                                                                \
 	{                                                                                          \
@@ -48,6 +52,7 @@ struct aliro_rssi_gate_cfg {
 		.ewma_shift = 2u,                                                                  \
 		.slope_open_db = CONFIG_WOZ_RSSI_GATE_SLOPE_DB,                                    \
 		.slope_window_ms = 1500u,                                                          \
+		.max_hold_ms = CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS,                                   \
 	}
 
 /* HCI "RSSI not available" sentinel (Core spec Read RSSI); such samples are ignored. */
@@ -58,6 +63,11 @@ struct aliro_rssi_gate_cfg {
 struct aliro_rssi_gate {
 	bool primed; /* EWMA seeded by a first sample */
 	bool open;
+	/* AP-Completed hold, started by aliro_rssi_gate_hold_begin. `capped` records
+	 * that max_hold_ms opened the gate rather than the level doing it. */
+	bool holding;
+	bool capped;
+	uint32_t hold_since_ms;
 	int32_t ewma_q4;
 	/* close hold-off tracking */
 	bool below;
@@ -81,6 +91,19 @@ bool aliro_rssi_gate_feed(struct aliro_rssi_gate *g, const struct aliro_rssi_gat
 
 /* Current open state without feeding a sample. */
 bool aliro_rssi_gate_is_open(const struct aliro_rssi_gate *g);
+
+/* Start the AP-Completed hold clock. Called when the reader defers AP-Completed on a
+ * closed gate. From here a feed opens the gate once cfg->max_hold_ms has elapsed even
+ * if the level never qualifies: the phone stops waiting for AP-Completed at around
+ * 1.9 s (bench-measured) and terminates the link, so an unbounded hold does not keep
+ * a loitering peer connected, it only hands the teardown to the phone and invites a
+ * reconnect cycle. A capped open is a normal open in every other respect, so the
+ * ordinary close path still powers the radio back down when the peer leaves. */
+void aliro_rssi_gate_hold_begin(struct aliro_rssi_gate *g, uint32_t now_ms);
+
+/* True when the gate's current open state came from the hold cap rather than from the
+ * level qualifying. Diagnostics only (the power study separates the two). */
+bool aliro_rssi_gate_was_capped(const struct aliro_rssi_gate *g);
 
 /* Smoothed level in whole dBm (truncated), 0 before the first sample. Logging. */
 int16_t aliro_rssi_gate_level_dbm(const struct aliro_rssi_gate *g);

@@ -23,6 +23,18 @@ bool aliro_rssi_gate_is_open(const struct aliro_rssi_gate *g)
 	return g->open;
 }
 
+void aliro_rssi_gate_hold_begin(struct aliro_rssi_gate *g, uint32_t now_ms)
+{
+	g->holding = true;
+	g->capped = false;
+	g->hold_since_ms = now_ms;
+}
+
+bool aliro_rssi_gate_was_capped(const struct aliro_rssi_gate *g)
+{
+	return g->capped;
+}
+
 int16_t aliro_rssi_gate_level_dbm(const struct aliro_rssi_gate *g)
 {
 	return (int16_t)(g->ewma_q4 / Q4);
@@ -30,7 +42,7 @@ int16_t aliro_rssi_gate_level_dbm(const struct aliro_rssi_gate *g)
 
 /* Advance the rise-rate reference: `mid` follows the newest smoothed value, and
  * once it is window/2 old it becomes `old`, so `old` always lags the present by
- * between window/2 and ~window (given a steady sample cadence). */
+ * between window/2 and ~window (given a steady sample interval). */
 static void slope_track(struct aliro_rssi_gate *g, const struct aliro_rssi_gate_cfg *cfg,
 			uint32_t now_ms)
 {
@@ -86,9 +98,18 @@ bool aliro_rssi_gate_feed(struct aliro_rssi_gate *g, const struct aliro_rssi_gat
 		    g->ewma_q4 > (int32_t)cfg->close_dbm * Q4) {
 			open = true;
 		}
+		/* Hold cap: the reader has been deferring AP-Completed this long and the
+		 * level still has not qualified. Open anyway rather than let the phone's
+		 * own patience expire and take the link down with it. */
+		if (!open && g->holding && cfg->max_hold_ms > 0u &&
+		    now_ms - g->hold_since_ms >= (uint32_t)cfg->max_hold_ms) {
+			open = true;
+			g->capped = true;
+		}
 		if (open) {
 			g->open = true;
 			g->below = false;
+			g->holding = false;
 		}
 		return g->open;
 	}

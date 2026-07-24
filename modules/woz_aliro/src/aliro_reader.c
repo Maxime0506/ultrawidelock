@@ -873,6 +873,7 @@ static void gated_complete_ap(struct aliro_session *s)
 			s->conn_handle);
 	} else if (!aliro_rssi_gate_is_open(&s->rgate)) {
 		s->phase = PH_GATE_HOLD;
+		aliro_rssi_gate_hold_begin(&s->rgate, (uint32_t)(woz_uptime_us() / 1000));
 		LOG_INF("[conn %u] RSSI gate closed (%d dBm): AP-Completed held, UWB stays dark",
 			s->conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
 		aliro_lab_evi("gate.hold", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
@@ -1250,9 +1251,16 @@ void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
 
 	aliro_lab_evi("rssi", "dbm", rssi_dbm);
 	if (open && s->phase == PH_GATE_HOLD) {
-		LOG_INF("[conn %u] RSSI gate open (%d dBm): completing AP, ranging may start",
-			conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
-		aliro_lab_evi("gate.open", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
+		/* Two ways out of the hold: the level qualified, or the hold cap ran out
+		 * and the gate opened anyway so the phone's own patience never does. The
+		 * study needs them apart, so they get separate trace events. */
+		bool capped = aliro_rssi_gate_was_capped(&s->rgate);
+
+		LOG_INF("[conn %u] RSSI gate open%s (%d dBm): completing AP, ranging may start",
+			conn_handle, capped ? " on the hold cap" : "",
+			(int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi(capped ? "gate.holdcap" : "gate.open", "dbm",
+			      aliro_rssi_gate_level_dbm(&s->rgate));
 		complete_ap_and_range(s);
 		return;
 	}

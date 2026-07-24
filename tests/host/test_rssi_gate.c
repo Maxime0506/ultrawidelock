@@ -11,7 +11,7 @@
 
 #include "aliro_rssi_gate.h"
 
-/* One knob set for the whole suite: the build defaults with a 250 ms cadence. */
+/* One knob set for the whole suite: the build defaults with a 250 ms poll interval. */
 #define STEP_MS 250u
 
 static const struct aliro_rssi_gate_cfg k_cfg = ALIRO_RSSI_GATE_CFG_DEFAULT;
@@ -136,6 +136,58 @@ void test_rssi_gate(void)
 	now += STEP_MS;
 	/* sustained drop whose hold interval spans the wrap still closes */
 	T_OK("close across wrap", !feed_flat(&g, &k_cfg, -85, 40, &now));
+
+	t_group("rssi_gate: hold cap opens a gate the level never would");
+	{
+		/* Same tuning, but with the AP-Completed hold capped. */
+		struct aliro_rssi_gate_cfg cap_cfg = k_cfg;
+
+		cap_cfg.max_hold_ms = 1500u;
+		cap_cfg.slope_open_db = 0u; /* isolate the cap from the fast-open path */
+
+		aliro_rssi_gate_reset(&g);
+		now = 0u;
+		(void)aliro_rssi_gate_feed(&g, &cap_cfg, -85, now);
+		T_OK("closed while far", !aliro_rssi_gate_is_open(&g));
+
+		/* No hold started yet: far samples alone must never open it, however
+		 * many arrive. This is the pre-AUTH stretch of a walk-up. */
+		T_OK("no cap without a hold", !feed_flat(&g, &cap_cfg, -85, 20, &now));
+
+		aliro_rssi_gate_hold_begin(&g, now);
+		T_OK("hold does not open on its own", !aliro_rssi_gate_is_open(&g));
+
+		now += 1000u; /* inside the cap */
+		T_OK("still held before the cap", !aliro_rssi_gate_feed(&g, &cap_cfg, -85, now));
+		T_OK("not flagged capped yet", !aliro_rssi_gate_was_capped(&g));
+
+		now += 600u; /* 1600 ms of hold: past it */
+		T_OK("opens at the cap", aliro_rssi_gate_feed(&g, &cap_cfg, -85, now));
+		T_OK("flagged as capped", aliro_rssi_gate_was_capped(&g));
+
+		/* The point of opening rather than bypassing the gate: the ordinary
+		 * close path must still reclaim the radio, or a capped hold would leave
+		 * the DW3000 up until the peer disconnects. */
+		now += STEP_MS;
+		T_OK("capped open still closes on a fade", !feed_flat(&g, &cap_cfg, -85, 40, &now));
+
+		/* A level that qualifies on its own is not a capped open. */
+		aliro_rssi_gate_reset(&g);
+		now = 0u;
+		aliro_rssi_gate_hold_begin(&g, now);
+		T_OK("level opens before the cap", aliro_rssi_gate_feed(&g, &cap_cfg, -50, now));
+		T_OK("level open is not capped", !aliro_rssi_gate_was_capped(&g));
+
+		/* max_hold_ms = 0 keeps the old unbounded hold. */
+		cap_cfg.max_hold_ms = 0u;
+		aliro_rssi_gate_reset(&g);
+		now = 0u;
+		(void)aliro_rssi_gate_feed(&g, &cap_cfg, -85, now);
+		aliro_rssi_gate_hold_begin(&g, now);
+		now += 60000u;
+		T_OK("cap disabled holds indefinitely",
+		     !aliro_rssi_gate_feed(&g, &cap_cfg, -85, now));
+	}
 
 	t_group("rssi_gate: reset returns to zeroed");
 	aliro_rssi_gate_reset(&g);

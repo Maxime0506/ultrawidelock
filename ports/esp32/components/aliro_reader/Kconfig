@@ -70,6 +70,28 @@ config WOZ_RSSI_GATE_CLOSE_HOLD_MS
 	  How long the smoothed RSSI must stay below the close threshold before
 	  the gate closes. Rides out pocket/body fades mid-approach.
 
+config WOZ_RSSI_GATE_MAX_HOLD_MS
+	int "Longest AP-Completed hold (ms; 0 = unbounded)"
+	depends on WOZ_RSSI_GATE
+	default 1500
+	help
+	  Cap on how long Reader-Status-AP-Completed may be deferred while the
+	  gate stays closed. The phone will not wait forever: bench measurements
+	  put its patience at about 1.9 s, after which it terminates the link
+	  (HCI reason 0x13) and reconnects, so an unbounded hold turns a phone
+	  loitering in the threshold band into a connect/hold/drop cycle.
+
+	  At the cap the reader completes the AP anyway and the gate is forced
+	  open, exactly as if the level had crossed the open threshold, so the
+	  ordinary close path still powers the radio back down when the peer
+	  leaves. The unlock never depends on the gate, the same reasoning that
+	  makes an unprimed gate fail open.
+
+	  Keep it comfortably under the phone's patience. Set 0 to hold
+	  indefinitely and accept the reconnect cycle, which keeps the radio dark
+	  at the cost of a fast re-auth every few seconds; the power study is
+	  what decides which of the two is actually cheaper.
+
 config WOZ_RSSI_GATE_SLOPE_DB
 	int "Fast-open rise (dB per 1.5 s window; 0 disables)"
 	depends on WOZ_RSSI_GATE
