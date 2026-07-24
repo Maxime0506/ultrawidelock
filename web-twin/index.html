@@ -362,16 +362,28 @@
  * firmware itself (twin.js) — only the ESP32 walk-up controller port and the
  * world pacing still read constants here. ── */
 const FW = {
-  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:119
-  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:120
-  ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:121
+  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:120
+  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:121
+  ALIRO_APPROACH_MEDIAN_N: 5,  // modules/woz_aliro/include/aliro_approach.h:42
   ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:122
   ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:123
   ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:124
-  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:270
+  ALIRO_MOTOR_MS: 500,         // ports/esp32/apps/matter-lock/main/app_main.cpp:131
+  ALIRO_PREDICT_MARGIN_MS: 250, // ports/esp32/apps/matter-lock/main/app_main.cpp:132
+  ALIRO_PREDICT_VMIN_CM_S: 30, // ports/esp32/apps/matter-lock/main/app_main.cpp:133
+  KF_REJECT_MAX: 3,            // modules/woz_aliro/src/aliro_approach.c:18
+  KF_STALE_MS: 1000,           // modules/woz_aliro/src/aliro_approach.c:19
+  KF_MIN_SAMPLES: 6,           // modules/woz_aliro/src/aliro_approach.c:21
+  PRED_DWELL_N: 2,             // modules/woz_aliro/src/aliro_approach.c:26
+  PRED_GRACE_MS: 900,          // modules/woz_aliro/src/aliro_approach.c:27
+  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:276
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
   SPOOF_CM: -400,              // tests/host/test_twin.c:127
 };
+
+/* Kalman tuning mirrored from aliro_approach.c:15-20 — float-valued in the C
+ * (900.0f, …), so listed here rather than in the integer-cited FW table. */
+const KF = { R_CM2: 900, QA: 22500, GATE_CM: 100, VINIT_CM2S2: 40000 };
 
 /* The firmware's own walk-up phase names (aliro_lat.h:21-31). M4_DONE and up
  * are the UWB half of the pipeline; BOLT_DRIVEN is the lock actuation. */
@@ -410,10 +422,17 @@ async function bootFirmware(print){
   return wrapModule(m);
 }
 
-/* ── Approach controller: port of the ESP32 walk-up loop, app_main.cpp.
- * Still JavaScript (it is application code on the ESP32 port, not part of
- * woz_uwb); it reads the firmware through the same trusted-range seam. ────── */
-/* median of first n — app_main.cpp:179-199 */
+/* ── Approach controller: JS port of the shared firmware unit
+ * modules/woz_aliro/src/aliro_approach.c — the exact logic the ESP32 runs
+ * (app_main.cpp feeds it) and the host suite replays (test_approach.c). It is
+ * application code on the ESP32 port, not part of woz_uwb, so it stays
+ * JavaScript here; it reads the range through the same trusted-range seam the
+ * firmware exposes (getFw().trustedCm() -> the compiled twin.js). Median/dwell
+ * presence path, plus a constant-velocity Kalman filter that predicts time of
+ * arrival at the unlock radius and starts retraction MOTOR+MARGIN early, so the
+ * bolt is OPEN when the hand lands ("negative latency"). A predictive open that
+ * stops closing or misses its arrival deadline relocks immediately. */
+/* median of first n — aliro_approach.c:100-121 */
 function rangeMedian(win, n){
   const t = win.slice(0, n).sort((a,b)=>a-b);
   return t[Math.floor(n/2)];
@@ -421,48 +440,129 @@ function rangeMedian(win, n){
 class ApproachController {
   constructor(getFw, events){
     this.getFw = getFw; this.ev = events;
-    this.locked = true; this.present = false;                    // app_main.cpp:255-256
-    this.win = new Array(FW.ALIRO_RANGE_MEDIAN_N).fill(0);
+    this.locked = true; this.present = false;
+    this.win = new Array(FW.ALIRO_APPROACH_MEDIAN_N).fill(0);
     this.wlen = 0; this.wpos = 0;
     this.nearDwell = 0; this.farDwell = 0;
     this.lastActivityMs = 0; this.median = null;
     this.unlockCm = FW.ALIRO_UNLOCK_RANGE_CM;                    // the threshold knob
+    /* Kalman state — aliro_approach.c kf_rebase()/kf_update() */
+    this.kfInit = false; this.accepted = 0; this.rejects = 0;
+    this.lastMs = 0; this.d = 0; this.v = 0;                     // cm, cm/s (v<0 = closing)
+    this.p00 = 0; this.p01 = 0; this.p11 = 0;
+    this.predDwell = 0; this.predOpen = false; this.predDeadline = 0;
+    this.etaMs = -1;
   }
-  /* one 200 ms wake — app_main.cpp:262-336; `active` = a block latched since
-   * the last wake (the task-notify count), NOT the raw timeout path. */
+  kfRebase(nowMs, cm){                                           // aliro_approach.c:30-43
+    this.kfInit = true; this.accepted = 1; this.rejects = 0;
+    this.lastMs = nowMs; this.d = cm; this.v = 0;
+    this.p00 = KF.R_CM2; this.p01 = 0; this.p11 = KF.VINIT_CM2S2;
+    this.predDwell = 0; this.etaMs = -1;
+  }
+  /* time update always, measurement update only inside the innovation gate;
+   * returns whether the sample updated the estimate — aliro_approach.c:45-99 */
+  kfUpdate(nowMs, cm){
+    if (!this.kfInit || nowMs - this.lastMs > FW.KF_STALE_MS){
+      this.kfRebase(nowMs, cm); return true;
+    }
+    let dt = (nowMs - this.lastMs) / 1000;
+    if (dt < 0.001) dt = 0.001;
+    this.lastMs = nowMs;
+    this.d += this.v * dt;
+    const dt2 = dt * dt;
+    this.p00 += dt * (this.p01 + this.p01) + dt2 * this.p11 + KF.QA * dt2 * dt2 / 4;
+    this.p01 += dt * this.p11 + KF.QA * dt2 * dt / 2;
+    this.p11 += KF.QA * dt2;
+    const y = cm - this.d;
+    if (Math.abs(y) > KF.GATE_CM){
+      if (++this.rejects >= FW.KF_REJECT_MAX){ this.kfRebase(nowMs, cm); return true; }
+      return false;
+    }
+    this.rejects = 0;
+    const s = this.p00 + KF.R_CM2, k0 = this.p00 / s, k1 = this.p01 / s;
+    this.d += k0 * y; this.v += k1 * y;
+    this.p11 -= k1 * this.p01; this.p01 -= k0 * this.p01; this.p00 -= k0 * this.p00;
+    if (this.accepted < FW.KF_MIN_SAMPLES) this.accepted++;
+    return true;
+  }
+  predAbort(){                                                   // aliro_approach.c:146-152
+    this.locked = true; this.predOpen = false; this.predDwell = 0;
+    return "abort";
+  }
+  /* one trusted sample — aliro_approach_feed(), aliro_approach.c:154-238 */
+  feed(nowMs, cm){
+    const estFresh = this.kfUpdate(nowMs, cm);
+    const closing = -this.v;
+    if (estFresh && this.accepted >= FW.KF_MIN_SAMPLES &&
+        closing >= FW.ALIRO_PREDICT_VMIN_CM_S && this.d > this.unlockCm){
+      this.etaMs = Math.trunc((this.d - this.unlockCm) * 1000 / closing);
+    } else { this.etaMs = -1; this.predDwell = 0; }
+    /* presence path — the shipped median/dwell controller, verbatim */
+    this.win[this.wpos] = cm;
+    this.wpos = (this.wpos + 1) % FW.ALIRO_APPROACH_MEDIAN_N;
+    if (this.wlen < FW.ALIRO_APPROACH_MEDIAN_N) this.wlen++;
+    const f = this.median = rangeMedian(this.win, this.wlen);
+    if (f <= this.unlockCm){
+      this.farDwell = 0;
+      if (this.predOpen) this.predOpen = false;                  // arrived: converts to presence
+      if (this.locked && ++this.nearDwell >= FW.ALIRO_NEAR_DWELL){
+        this.locked = false; return "thresh";
+      }
+    } else if (f >= FW.ALIRO_RELOCK_RANGE_CM){
+      this.nearDwell = 0;
+      if (!this.locked && ++this.farDwell >= FW.ALIRO_FAR_DWELL){
+        this.locked = true; this.predOpen = false; this.predDwell = 0;
+        return "depart";
+      }
+    } else { this.nearDwell = 0; this.farDwell = 0; }            // dead band
+    /* prediction path: supervise an open, else try to fire */
+    if (this.predOpen){
+      if (nowMs >= this.predDeadline) return this.predAbort();
+      if (estFresh && closing < FW.ALIRO_PREDICT_VMIN_CM_S / 2) return this.predAbort();
+      return null;
+    }
+    if (this.locked && this.etaMs >= 0 &&
+        this.etaMs <= FW.ALIRO_MOTOR_MS + FW.ALIRO_PREDICT_MARGIN_MS){
+      if (++this.predDwell >= FW.PRED_DWELL_N){
+        this.locked = false; this.predOpen = true; this.predDwell = 0;
+        this.predDeadline = nowMs + this.etaMs + FW.PRED_GRACE_MS;
+        return "predict";
+      }
+    } else this.predDwell = 0;
+    return null;
+  }
+  dispatch(act){
+    if (act === "predict") this.ev.predict(this.etaMs, Math.round(-this.v));
+    else if (act === "thresh") this.ev.unlock(this.median);
+    else if (act === "depart") this.ev.relock(this.median);
+    else if (act === "abort") this.ev.abort(Math.round(-this.v));
+  }
+  /* one 200 ms wake — app_main.cpp reader task; `active` = a block latched
+   * since the last wake (the task-notify count), NOT the raw timeout path. */
   tick(nowMs, active){
     const fw = this.getFw();
     const cm = fw ? fw.trustedCm() : null;                       // woz_uwb_trusted_range_cm
-    const trusted = active && cm !== null;                       // app_main.cpp:268-270
-    if (active) this.lastActivityMs = nowMs;                     // app_main.cpp:272-274
+    const trusted = active && cm !== null;
+    if (active) this.lastActivityMs = nowMs;
     if (trusted) {
-      if (!this.present) {                                       // app_main.cpp:276-286 (Wallet grant)
+      if (!this.present) {                                       // Wallet grant, once per approach
         this.present = true; this.ev.grant(cm);
       }
-      this.win[this.wpos] = cm;                                  // app_main.cpp:288-292
-      this.wpos = (this.wpos + 1) % FW.ALIRO_RANGE_MEDIAN_N;
-      if (this.wlen < FW.ALIRO_RANGE_MEDIAN_N) this.wlen++;
-      const f = this.median = rangeMedian(this.win, this.wlen);  // app_main.cpp:293
-      if (f <= this.unlockCm) {                                  // app_main.cpp:295-302
-        this.farDwell = 0;
-        if (this.locked && ++this.nearDwell >= FW.ALIRO_NEAR_DWELL) {
-          this.locked = false; this.ev.unlock(f);
-        }
-      } else if (f >= FW.ALIRO_RELOCK_RANGE_CM) {                // app_main.cpp:303-310
-        this.nearDwell = 0;
-        if (!this.locked && ++this.farDwell >= FW.ALIRO_FAR_DWELL) {
-          this.locked = true; this.ev.relock(f);
-        }
-      } else {                                                   // app_main.cpp:311-315 (dead band)
-        this.nearDwell = 0; this.farDwell = 0;
-      }
+      this.dispatch(this.feed(nowMs, cm));
+    } else if (this.predOpen && nowMs >= this.predDeadline) {
+      /* idle tick only supervises the arrival deadline — aliro_approach_tick */
+      this.dispatch(this.predAbort());
     }
-    /* peer gone: no ranging activity at all — app_main.cpp:318-335 */
+    /* peer gone: no ranging activity at all — aliro_approach_gone() */
     if (this.present && (nowMs - this.lastActivityMs) >= FW.ALIRO_PEER_GONE_MS) {
-      if (!this.locked) { this.locked = true; this.ev.relock(null); }
+      const wasOpen = !this.locked;
+      this.locked = true; this.predOpen = false; this.predDwell = 0;
+      this.wlen = 0; this.wpos = 0; this.nearDwell = 0; this.farDwell = 0;
+      this.median = null; this.kfInit = false; this.accepted = 0;
+      this.rejects = 0; this.etaMs = -1;
+      if (wasOpen) this.ev.relock(null);
       this.ev.secured();
-      this.present = false; this.wlen = 0; this.wpos = 0;
-      this.nearDwell = 0; this.farDwell = 0; this.median = null;
+      this.present = false;
     }
   }
 }
@@ -511,22 +611,47 @@ async function selfTest(){
      * the prior sub-test latched 150 cm, and an 80 cm jump (Δ70 > the firmware's
      * FIRA_RANGE_SPREAD 50) correctly resets its trust run, so the dwell has to
      * count from an already-trusted state, exactly as a real steady walk-up. */
+    const quiet = { grant(){}, unlock(){}, relock(){}, secured(){}, predict(){}, abort(){} };
     let unlocked = false;
-    const c = new ApproachController(() => w,
-      { grant(){}, unlock(){ unlocked = true; }, relock(){}, secured(){} });
+    const c = new ApproachController(() => w, { ...quiet, unlock(){ unlocked = true; } });
     for (let i = 0; i < w.trustK(); i++) w.block(80);   // reach trust = K at 80 cm
     w.takeLatches();                                     // clear the notify count
     for (let i = 0; i <= FW.ALIRO_NEAR_DWELL; i++){
       w.block(80); c.tick(i*FW.CTRL_TICK_MS, w.takeLatches() > 0);
     }
     ok("controller.unlock_after_dwell", unlocked);
+    /* predictor (test_approach.c "brisk walk"): a steady 1.3 m/s approach fires
+     * the ETA unlock while still OUTSIDE the unlock ring and never aborts. The
+     * Kalman path is pure controller JS, so a scripted trusted-range seam drives
+     * it directly (no firmware trust-building needed), sampled on the 192 ms
+     * block grid exactly as the firmware feeds it. */
+    let predicted = false, aborted = false, dAtFire = 0, d2 = 600;
+    const c2 = new ApproachController(() => ({ trustedCm: () => Math.round(d2) }),
+      { ...quiet, predict(){ predicted = true; dAtFire = d2; }, abort(){ aborted = true; } });
+    for (let i = 1; d2 > 55 && i < 60; i++){
+      d2 = 600 - 130 * (i * FW.BLOCK_MS) / 1000;
+      c2.tick(i * FW.BLOCK_MS, true);
+    }
+    ok("predict.fires_outside_ring", predicted && dAtFire > FW.ALIRO_UNLOCK_RANGE_CM);
+    ok("predict.no_abort", !aborted);
+    /* predictor (test_approach.c "stop short after fire"): fire, then stall at
+     * ~1.5 m — the predictive open ABORTS (closing-speed decay or the overdue
+     * deadline) and the bolt relocks. */
+    let aborted2 = false, d3 = 600;
+    const c3 = new ApproachController(() => ({ trustedCm: () => Math.round(d3) }),
+      { ...quiet, abort(){ aborted2 = true; } });
+    for (let i = 1; i <= 38; i++){
+      if (i <= 18){ d3 = 600 - 130 * (i * FW.BLOCK_MS) / 1000; }
+      c3.tick(i * FW.BLOCK_MS, true);
+    }
+    ok("predict.stop_aborts", aborted2 && c3.locked);
   } catch (e) {
     ok("firmware.loaded", false);
     console.error("twin self-test: firmware failed to load:", e);
   }
   const fails = r.filter(x=>!x[1]);
   el.textContent = "firmware self-test: " + (fails.length ? "FAIL " + fails.map(f=>f[0]).join(",")
-                    : r.length + "/" + r.length + " vs test_twin.c (WASM)");
+                    : r.length + "/" + r.length + " vs test_twin.c + test_approach.c (WASM)");
   el.className = fails.length ? "fail" : "pass";
   for (const [name, pass] of r) if (!pass) console.error("twin self-test FAIL:", name);
   return fails.length === 0;
@@ -576,8 +701,11 @@ function mark(phase){ if (phase > sim.phase) sim.phase = phase; }
 
 const events = {
   grant(cm){ mark(P.TRUSTED_RANGE); emitWave("uwb"); log("uwb", `trusted range ${cm} cm — granting (Wallet notify)`); },
+  predict(etaMs, vel){ mark(P.BOLT_DRIVEN); emitWave("ok");
+    log("ok", `arrival in ${etaMs} ms (${vel} cm/s closing) — PREDICTIVE UNLOCK, open at arrival`); },
   unlock(f){ mark(P.BOLT_DRIVEN); emitWave("ok"); log("ok", `approach ${f} cm (median) — UNLOCK, bolt drawn`); },
   relock(f){ log("ok", f === null ? "relock (bolt thrown)" : `departed ${f} cm (median) — RELOCK`); },
+  abort(vel){ log("bad", `approach stalled (${vel} cm/s closing) — predictive open ABORTED, bolt thrown`); },
   secured(){ log("ble", "peer gone 1500 ms silent — Wallet Secured"); },
 };
 
@@ -613,7 +741,7 @@ function authAdvance(){
 
 /* One block's measurement, honoring an armed spoof and the noise knob.
  * Per-block spikes are firmware-documented bench behaviour: consecutive
- * blocks swung 70 mm -> 1604 mm -> 112 mm (app_main.cpp:242-243). The
+ * blocks swung 70 mm -> 1604 mm -> 112 mm (app_main.cpp:237-238). The
  * ~150 cm spike magnitude cites that line; the 6% rate + small jitter are
  * SIM. This is exactly the noise the median filter exists to kill. */
 function blockCm(){
@@ -707,7 +835,7 @@ function step(dtMs){
     sim.blockAcc += dtMs;
     while (sim.blockAcc >= FW.BLOCK_MS){ sim.blockAcc -= FW.BLOCK_MS; rangingBlock(); }
   }
-  /* controller + auth ladder at the 200 ms task tick (app_main.cpp:270) */
+  /* controller + auth ladder at the 200 ms task tick (app_main.cpp:276) */
   sim.tickAcc += dtMs;
   while (sim.tickAcc >= FW.CTRL_TICK_MS){
     sim.tickAcc -= FW.CTRL_TICK_MS;
