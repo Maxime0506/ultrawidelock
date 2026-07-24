@@ -1,0 +1,29 @@
+# Clean-room Aliro stack implementation derived from the published specification.
+
+config WOZ_ALIRO_SOURCE_STACK
+	bool "Use the in-tree Aliro source implementation"
+	depends on NCS_ALIRO_BLE_UWB
+	help
+	  Override the public Aliro symbols used by the application with the
+	  in-tree implementation. NFC expedited-standard, expedited-fast,
+	  step-up, and authenticated BLE/UWB messaging are implemented.
+
+config WOZ_ALIRO_APDU_BUFFER_SIZE
+	int "Aliro session APDU buffer size"
+	depends on WOZ_ALIRO_SOURCE_STACK
+	default RFAL_FEATURE_ISO_DEP_APDU_MAX_LEN if NFC_DRIVER_STM
+	default 512
+	help
+	  Largest single APDU the session layer buffers, and the base of the
+	  BLE frame capacity. Tracks the RFAL ISO-DEP ceiling when the ST NFC
+	  driver is present so both paths agree; otherwise stands alone (the
+	  PN532 transport chains larger transfers at the ISO-DEP layer).
+
+config WOZ_ALIRO_TRACE
+	bool "Trace Aliro BLE/UWB protocol boundaries"
+	depends on NCS_ALIRO_BLE_UWB
+	help
+	  Log advertising data, encrypted BLE transport messages, decrypted UWB
+	  messages, session transitions, and a truncated SHA-256 fingerprint of
+	  URSK. This is a temporary bring-up facility and may expose credential or
+	  device identifiers. Do not enable it in production firmware.
