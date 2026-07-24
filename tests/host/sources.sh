@@ -9,6 +9,7 @@
 # See coverage.sh for what is deliberately excluded and why.
 
 SRC="$ROOT/modules/woz_uwb/src"
+ALIRO="$ROOT/modules/woz_aliro"
 SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
 
@@ -38,6 +39,7 @@ UNIT_SRCS=(
 	"$SRC/facade/woz_uwb_facade.c"
 	"$SRC/facade/woz_logfmt.c"
 	"$SRC/facade/woz_logquiet.c"
+	"$ALIRO/src/aliro_approach.c"
 )
 
 TEST_SRCS=(
@@ -63,6 +65,7 @@ TEST_SRCS=(
 	"$HOST/test_prepoll_gate.c"
 	"$HOST/test_prepoll_round.c"
 	"$HOST/test_twin.c"
+	"$HOST/test_approach.c"
 	"$HOST/test_woz_logfmt.c"
 	"$HOST/test_trace.c"
 	"$HOST/trace_stub.c"
@@ -89,6 +92,7 @@ INCS=(
 	-I"$SRC/aliro/include"
 	-I"$SRC/fira"
 	-I"$SRC/facade"
+	-I"$ALIRO/include"
 	-I"$ROOT/modules/woz_port/include"
 )
 
