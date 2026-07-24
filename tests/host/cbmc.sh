@@ -59,11 +59,17 @@ for name in "${targets[@]}"; do
 		continue
 	fi
 	printf '  [cbmc] %s (unwind %s)…\n' "$name" "$uw"
+	# Full per-property dump goes to a log; the terminal keeps one line per
+	# harness (plus the proof-size summary). The log is replayed on failure.
+	log="$ROOT/build/cbmc_$name.log"
+	mkdir -p "$ROOT/build"
 	if "$CBMC" "${COMMON[@]}" --unwind "$uw" "${DEFS[@]}" "${INCS[@]}" "${EXTRA_INCS[@]}" \
-		"$CB/cbmc_$name.c" "$src"; then
-		printf '  [cbmc] %s: SUCCESSFUL\n' "$name"
+		"$CB/cbmc_$name.c" "$src" >"$log" 2>&1; then
+		printf '  [cbmc] %s: SUCCESSFUL (%s)\n' "$name" \
+			"$(sed -n 's/^\*\* \(0 of [0-9]* failed\).*/\1/p' "$log")"
 	else
-		printf '  [cbmc] %s: FAILED\n' "$name"
+		cat "$log"
+		printf '  [cbmc] %s: FAILED (full log: build/cbmc_%s.log)\n' "$name" "$name"
 		fail=1
 	fi
 done

@@ -214,6 +214,95 @@ int main(void)
 	okc("longform.find", aliro_tlv_find(bigout, rlen, 0xB2, &fv, &fl) == 0 &&
 				     fl == 200 && memcmp(fv, big, 200) == 0);
 
+	printf("\n== error paths: writer overflow / reader forms / wrap / envelope ==\n");
+	{
+		/* writer overflow latches err; finish reports it */
+		uint8_t tiny[4];
+		size_t tn = 0;
+
+		aliro_tlv_w_init(&w, tiny, sizeof(tiny));
+		aliro_tlv_put(&w, 0x9E, sig, 64);
+		okc("writer.overflow", aliro_tlv_w_finish(&w, &tn) < 0);
+	}
+	{
+		/* 0x82 two-byte length form: write + read back */
+		uint8_t hugev[300], hugebuf[320];
+		size_t hn = 0;
+		const uint8_t *hv;
+		size_t hl;
+
+		memset(hugev, 0x77, sizeof(hugev));
+		aliro_tlv_w_init(&w, hugebuf, sizeof(hugebuf));
+		aliro_tlv_put(&w, 0xB3, hugev, sizeof(hugev));
+		okc("longform82.write", aliro_tlv_w_finish(&w, &hn) == 0 && hn == 4 + 300 &&
+					       hugebuf[1] == 0x82 && hugebuf[2] == 0x01 &&
+					       hugebuf[3] == 0x2C);
+		okc("longform82.find", aliro_tlv_find(hugebuf, hn, 0xB3, &hv, &hl) == 0 &&
+					       hl == 300 && memcmp(hv, hugev, 300) == 0);
+	}
+	{
+		/* malformed TLV streams the reader must reject */
+		const uint8_t *tv;
+		size_t tl;
+		static const uint8_t trunc81[2] = {0x99, 0x81};
+		static const uint8_t trunc82[3] = {0x99, 0x82, 0x01};
+		static const uint8_t badl0[3] = {0x99, 0x83, 0x00};
+		static const uint8_t overrun[3] = {0x99, 0x05, 0xAA};
+
+		okc("find.trunc81", aliro_tlv_find(trunc81, sizeof(trunc81), 0x99, &tv, &tl) < 0);
+		okc("find.trunc82", aliro_tlv_find(trunc82, sizeof(trunc82), 0x99, &tv, &tl) < 0);
+		okc("find.badlenform", aliro_tlv_find(badl0, sizeof(badl0), 0x99, &tv, &tl) < 0);
+		okc("find.overrun", aliro_tlv_find(overrun, sizeof(overrun), 0x99, &tv, &tl) < 0);
+	}
+	{
+		/* ISO7816 wrap limits: NULL/empty/too-long payloads and a tight cap */
+		uint8_t apdu[300];
+		size_t alen = 0;
+		uint8_t big[256];
+
+		memset(big, 0x44, sizeof(big));
+		okc("wrap.null", aliro_apdu_wrap(0x80, NULL, 10, apdu, sizeof(apdu), &alen) < 0);
+		okc("wrap.empty", aliro_apdu_wrap(0x80, big, 0, apdu, sizeof(apdu), &alen) < 0);
+		okc("wrap.too-long",
+		    aliro_apdu_wrap(0x80, big, 256, apdu, sizeof(apdu), &alen) < 0);
+		okc("wrap.cap", aliro_apdu_wrap(0x80, big, 100, apdu, 50, &alen) < 0);
+	}
+	{
+		/* AUTH1Response: missing signature rejected; 0x91 bitmap ignored */
+		struct aliro_auth1_response ax;
+
+		aliro_tlv_w_init(&w, rbuf, sizeof(rbuf));
+		aliro_tlv_put(&w, 0x5A, pub, 65);
+		aliro_tlv_w_finish(&w, &rlen);
+		okc("auth1resp.reject-nosig",
+		    aliro_apdu_parse_auth1_response(rbuf, rlen, &ax) < 0);
+		aliro_tlv_w_init(&w, rbuf, sizeof(rbuf));
+		aliro_tlv_put(&w, 0x9E, sig, 64);
+		aliro_tlv_put_u16(&w, 0x91, 0x0003);
+		aliro_tlv_w_finish(&w, &rlen);
+		okc("auth1resp.bitmap-ignored",
+		    aliro_apdu_parse_auth1_response(rbuf, rlen, &ax) == 0 &&
+			    ax.have_device_pub == 0);
+	}
+	{
+		/* envelope limits: oversize payload, tight cap, truncated/lying frames */
+		uint8_t fout[16];
+		size_t fn = 0;
+		uint8_t ty, op;
+		const uint8_t *pp2;
+		size_t pl2;
+		static const uint8_t shortenv[3] = {0x00, 0x80, 0x00};
+		static const uint8_t lieenv[5] = {0x00, 0x80, 0x00, 0x05, 0xAA};
+
+		okc("frame.too-big",
+		    aliro_ble_frame(0, 0x80, pl, 0x10000u, fout, sizeof(fout), &fn) < 0);
+		okc("frame.cap", aliro_ble_frame(0, 0x80, pl, 3, fout, 4, &fn) < 0);
+		okc("unframe.short",
+		    aliro_ble_unframe(shortenv, sizeof(shortenv), &ty, &op, &pp2, &pl2) < 0);
+		okc("unframe.lying-len",
+		    aliro_ble_unframe(lieenv, sizeof(lieenv), &ty, &op, &pp2, &pl2) < 0);
+	}
+
 	if (fails) {
 		printf("\nRESULT: %d FAIL\n", fails);
 		return 1;

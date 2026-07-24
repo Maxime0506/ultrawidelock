@@ -274,6 +274,36 @@ void test_aliro_session(void)
 	     ALIRO_UWB_MESSAGE_NOTIFICATION_EVENT);
 	T_EQ("err.state", s->state, RANGING); /* error does not change state */
 
+	t_group("ccc report/diagnostic/unknown events wrap (or drop) cleanly");
+	struct cherry_ccc_event *er = malloc(sizeof(*er));
+	er->type = CHERRY_CCC_EVENT_TYPE_SESSION_CONTROLLER_REPORT;
+	er->session = s->ccc_session;
+	er->data.controller_report = NULL; /* pointer is carried, never read */
+	ccc_cb(er, ccc_ud);
+	T_EQ("ev.controller", g_ev.last_type,
+	     ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_CONTROLLER_REPORT);
+	er = malloc(sizeof(*er));
+	er->type = CHERRY_CCC_EVENT_TYPE_SESSION_CONTROLEE_REPORT;
+	er->session = s->ccc_session;
+	er->data.controlee_report = NULL;
+	ccc_cb(er, ccc_ud);
+	T_EQ("ev.controlee", g_ev.last_type,
+	     ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_CONTROLEE_REPORT);
+	er = malloc(sizeof(*er));
+	er->type = CHERRY_CCC_EVENT_TYPE_SESSION_DIAGNOSTIC_REPORT;
+	er->session = s->ccc_session;
+	er->data.diagnostics = NULL;
+	ccc_cb(er, ccc_ud);
+	T_EQ("ev.diag", g_ev.last_type,
+	     ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_DIAGNOSTIC_REPORT);
+	er = malloc(sizeof(*er));
+	er->type = (enum cherry_ccc_event_type)0x7F;
+	er->session = s->ccc_session;
+	int before_ev = g_ev.count;
+	ccc_cb(er, ccc_ud); /* unknown type: dropped before the client callback */
+	T_EQ("ev.unknown.dropped", g_ev.count, before_ev);
+	free(er); /* the drop path leaves the cherry event with the caller */
+
 	t_group("graceful suspend (RANGING -> SUSPEND_REQ_SENT)");
 	T_EQ("suspend.ok", aliro_uwb_session_suspend(s), ALIRO_UWB_ERR_NONE);
 	T_EQ("suspend.state", s->state, SUSPEND_REQ_SENT);
@@ -322,6 +352,22 @@ void test_aliro_session(void)
 		aliro_uwb_session_create(adapter, 11u, ev_cb, tx_cb, NULL);
 	T_EQ("stop.close", aliro_uwb_session_stop(sf2),
 	     ALIRO_UWB_ERR_INVALID_PARAMETER);
+
+	t_group("supplementary dispatch through message_handle");
+	b = mk(ALIRO_UWB_PROTOCOL_TYPE_SUPPLEMENTARY_SERVICE, 0x01u);
+	fix_plen(b.message);
+	T_EQ("suppl.ok", aliro_uwb_session_message_handle(s, b.message),
+	     ALIRO_UWB_ERR_NONE);
+	aliro_uwb_msg_free(b.message);
+
+	t_group("init_setup fails when M1 cannot be built");
+	struct aliro_uwb_session *s5 =
+		aliro_uwb_session_create(adapter, 5u, ev_cb, tx_cb, NULL);
+	adapter->ccc_caps.uwb_configs.len = 0u; /* M1's config array turns empty */
+	T_EQ("init.m1fail", aliro_uwb_session_init_setup(s5),
+	     ALIRO_UWB_ERR_INTERNAL);
+	adapter->ccc_caps.uwb_configs.len = 1u;
+	aliro_uwb_session_destroy(s5);
 
 	t_group("notification dispatch through message_handle");
 	s->state = RANGING;

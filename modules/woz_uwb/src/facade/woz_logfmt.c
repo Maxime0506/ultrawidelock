@@ -152,7 +152,7 @@ static void woz_msg_format(const struct log_output *output, struct log_msg *msg,
 	struct woz_sink s = {line, sizeof(line)};
 	char pre[48];
 
-	snprintk(pre, sizeof(pre), "%llu.%09u ", (unsigned long long)sec, ns);
+	(void)snprintk(pre, sizeof(pre), "%llu.%09u ", (unsigned long long)sec, ns);
 	if (color) {
 		woz_sink_str(&s, A_DIM);
 	}
@@ -214,7 +214,7 @@ static void woz_msg_format(const struct log_output *output, struct log_msg *msg,
 	for (size_t i = 0; i < dlen && s.rem > 3u; i++) {
 		char hex[4];
 
-		snprintk(hex, sizeof(hex), " %02x", data[i]);
+		(void)snprintk(hex, sizeof(hex), " %02x", data[i]);
 		woz_sink_str(&s, hex);
 	}
 

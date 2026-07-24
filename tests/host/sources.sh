@@ -33,9 +33,12 @@ UNIT_SRCS=(
 	"$SRC/aliro/aliro_uwb_session.c"
 	"$SRC/ccc/cherry_ccc_shim.c"
 	"$SRC/ccc/ccc_shim_rx.c"
+	"$SRC/ccc/ccc_shim_wrap.c"
 	"$SRC/fira/fira_session.c"
 	"$SRC/facade/woz_uwb_facade.c"
 	"$ROOT/modules/woz_aliro/src/aliro_rssi_gate.c"
+	"$SRC/facade/woz_logfmt.c"
+	"$SRC/facade/woz_logquiet.c"
 )
 
 TEST_SRCS=(
@@ -62,17 +65,24 @@ TEST_SRCS=(
 	"$HOST/test_prepoll_round.c"
 	"$HOST/test_twin.c"
 	"$HOST/test_rssi_gate.c"
+	"$HOST/test_woz_logfmt.c"
+	"$HOST/test_trace.c"
+	"$HOST/trace_stub.c"
+	"$HOST/test_ccc_shim_wrap.c"
 )
 
 SHIM_SRCS=(
 	"$SHIM/shim.c"
 	"$SHIM/dw_rx_stub.c"
+	"$HOST/logfake/logfake.c"
 )
 
-# Include search path: shim first so <zephyr/...> resolves to the stubs.
+# Include search path: shim first so <zephyr/...> resolves to the stubs;
+# logfake supplies the Zephyr logging + CMSIS surface woz_logfmt.c needs.
 INCS=(
 	-I"$SHIM"
 	-I"$HOST"
+	-I"$HOST/logfake"
 	-I"$ROOT/modules/woz_aliro_stack/src"
 	-I"$ROOT/modules/woz_aliro_stack/src/protocol"
 	-I"$SRC/ccc"

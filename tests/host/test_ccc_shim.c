@@ -117,6 +117,9 @@ void test_ccc_shim(void)
 	T_EQ("bind.zero.nslot", ccc_shim_bind(mursk, salted, STS0, 0u), -EINVAL);
 	T_EQ("bind_ursk.null", ccc_shim_bind_from_ursk(NULL, RC, sizeof(RC), STS0, NSLOT),
 	     -EINVAL);
+	/* SaltedHash derivation fails on a null ranging config with a length. */
+	T_EQ("bind_ursk.null.rc",
+	     ccc_shim_bind_from_ursk(URSK, NULL, sizeof(RC), STS0, NSLOT), -EINVAL);
 	ccc_shim_unbind();
 	T_OK("unbound.inactive", !ccc_shim_active());
 	T_EQ("unbound.sts0", ccc_shim_sts_index0(), 0u);

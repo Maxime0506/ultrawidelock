@@ -226,6 +226,128 @@ void test_prepoll_round(void)
 	T_OK("armfail.not_awaiting", !ccc_shim_rx_awaiting_poll());
 	woz_host_rx.rxenable_ret = DWT_SUCCESS;
 
-	/* Quiet the radio for any suite that follows. */
+	t_group("notify_rx is a quiet no-op without the lock-sweep diagnostic");
+	ccc_shim_rx_notify_rx(0x10000000u);
+	T_OK("notify_rx.survived", 1);
+
+	t_group("restart: a Pre-POLL event with no warm cannot arm SP3");
 	woz_uwb_stop();
+	T_EQ("restart", woz_uwb_start_aliro(&c), 0); /* log_reset clears the warm */
+	len = mk_prepoll(frame, fc++, RND_IDX1);
+	stash_frame(frame, len, 0x6000000ull);
+	rx_event(woz_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm_poll_sp3 -> no warm */
+	T_OK("nowarm.not_awaiting", !ccc_shim_rx_awaiting_poll());
+
+	t_group("prepoll decode rejects every malformed frame class");
+	/* Too short to hold a Pre-POLL (routing header parses, decode bails). */
+	len = mk_prepoll(frame, fc++, RND_IDX1);
+	stash_frame(frame, len, 0x6100000ull);
+	ccc_shim_rx_try_prepoll((uint16_t)(CCC_MHR_LEN + 2u));
+	/* Corrupted frame control: the MHR parse fails. */
+	len = mk_prepoll(frame, fc++, RND_IDX1);
+	frame[0] ^= 0xFFu;
+	stash_frame(frame, len, 0x6200000ull);
+	ccc_shim_rx_try_prepoll(len);
+	/* Valid MHR carrying a message id that is neither Pre-POLL nor Final. */
+	{
+		struct ccc_mhr_fields f;
+
+		memset(&f, 0, sizeof(f));
+		f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+		f.frame_counter = fc++;
+		memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+		f.msg_id = 0x07u;
+		f.payload_len = CCC_PRE_POLL_LEN;
+		memset(frame, 0, sizeof(frame));
+		T_EQ("mk_odd.mhr", ccc_build_mhr(&f, frame), 0);
+		len = CCC_MHR_LEN + CCC_PRE_POLL_LEN + CCC_SP0_MIC_LEN;
+		stash_frame(frame, len, 0x6300000ull);
+		ccc_shim_rx_try_prepoll(len);
+		/* Pre-POLL id with a wrong payload length in the MHR. */
+		f.msg_id = CCC_MSG_ID_PRE_POLL;
+		f.payload_len = CCC_PRE_POLL_LEN - 1u;
+		T_EQ("mk_badlen.mhr", ccc_build_mhr(&f, frame), 0);
+		stash_frame(frame, len, 0x6400000ull);
+		ccc_shim_rx_try_prepoll(len);
+	}
+	/* No URSK provisioned: the decode stops before any derivation. */
+	fira_session_set_provisioned_ursk(NULL);
+	len = mk_prepoll(frame, fc++, RND_IDX1);
+	stash_frame(frame, len, 0x6500000ull);
+	ccc_shim_rx_try_prepoll(len);
+	fira_session_set_provisioned_ursk(g_ursk);
+	/* Genuine Pre-POLL with a flipped MIC byte: the CCM* decrypt fails. */
+	len = mk_prepoll(frame, fc++, RND_IDX1);
+	frame[len - 1u] ^= 0x01u;
+	stash_frame(frame, len, 0x6600000ull);
+	ccc_shim_rx_try_prepoll(len);
+	T_OK("badframes.no_warm", !ccc_shim_rx_awaiting_poll());
+
+	t_group("Final_Data decode rejects malformed frames");
+	/* Payload length beyond the decode's plaintext scratch. */
+	{
+		struct ccc_mhr_fields f;
+
+		memset(&f, 0, sizeof(f));
+		f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+		f.frame_counter = fc++;
+		memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+		f.msg_id = CCC_MSG_ID_FINAL_DATA;
+		f.payload_len = 100u;
+		memset(frame, 0, sizeof(frame));
+		T_EQ("mk_fdbig.mhr", ccc_build_mhr(&f, frame), 0);
+		stash_frame(frame, 40u, 0x6700000ull);
+		ccc_shim_rx_try_prepoll(40u);
+	}
+	/* Flipped MIC byte: the dUDSK decrypt fails. */
+	len = mk_final_data(frame, fc++, 0u, 101000u, 199000u);
+	frame[len - 1u] ^= 0x01u;
+	stash_frame(frame, len, 0x6800000ull);
+	ccc_shim_rx_try_prepoll(len);
+	/* Valid decrypt of an 18-byte all-zero header: zero responders reported. */
+	{
+		struct ccc_mhr_fields f;
+		uint8_t plain[18];
+		uint8_t dudsk[CCC_DUDSK_LEN];
+
+		memset(plain, 0, sizeof(plain));
+		memset(&f, 0, sizeof(f));
+		f.dest_short_addr = (uint16_t)(g_dest[0] | ((uint16_t)g_dest[1] << 8));
+		f.frame_counter = fc;
+		memcpy(f.key_source, g_ks, CCC_KEYSOURCE_LEN);
+		f.msg_id = CCC_MSG_ID_FINAL_DATA;
+		f.payload_len = sizeof(plain);
+		T_EQ("mk_fd0.mhr", ccc_build_mhr(&f, frame), 0);
+		T_EQ("mk_fd0.key", ccc_shim_dudsk_for_index(0u, dudsk), 0);
+		T_EQ("mk_fd0.enc",
+		     ccc_sp0_encrypt(dudsk, g_src_long, fc, frame, CCC_MHR_LEN, plain,
+				     sizeof(plain), &frame[CCC_MHR_LEN],
+				     &frame[CCC_MHR_LEN + sizeof(plain)]),
+		     0);
+		fc++;
+		len = CCC_MHR_LEN + sizeof(plain) + CCC_SP0_MIC_LEN;
+		stash_frame(frame, len, 0x6900000ull);
+		ccc_shim_rx_try_prepoll(len);
+	}
+	T_OK("badfinal.survived", 1);
+
+	t_group("an orphaned pending decode is flushed by the next Pre-POLL");
+	len = mk_prepoll(frame, fc++, RND_IDX1);
+	stash_frame(frame, len, 0x7000000ull);
+	ccc_shim_rx_try_prepoll(len); /* bootstrap decode #1 — index only */
+	len = mk_prepoll(frame, fc++, RND_IDX1 + RND_STRIDE);
+	stash_frame(frame, len, 0x7100000ull);
+	ccc_shim_rx_try_prepoll(len); /* decode #2 — stride learned, warm valid */
+	len = mk_prepoll(frame, fc++, RND_IDX1 + 2u * RND_STRIDE);
+	stash_frame(frame, len, 0x7200000ull);
+	ccc_shim_rx_try_prepoll(len); /* steady state: deferred (pending) */
+	len = mk_prepoll(frame, fc++, RND_IDX1 + 3u * RND_STRIDE);
+	stash_frame(frame, len, 0x7300000ull);
+	ccc_shim_rx_try_prepoll(len); /* missed POLL: flushes the orphan first */
+	T_OK("flush.survived", 1);
+
+	t_group("try_prepoll is gated once the listener is stopped");
+	woz_uwb_stop();
+	ccc_shim_rx_try_prepoll(len);
+	T_OK("stopped.not_awaiting", !ccc_shim_rx_awaiting_poll());
 }
