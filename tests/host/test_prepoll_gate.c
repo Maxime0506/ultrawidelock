@@ -3,6 +3,7 @@
  * forcetrxoff (the serialization invariant the suspend fix relies on). The
  * captured DW3000 callbacks are invoked directly, playing the role of the
  * coop isr-workqueue thread. */
+#include <errno.h>
 #include <string.h>
 
 #include <deca_device_api.h>
@@ -83,6 +84,16 @@ void test_prepoll_gate(void)
 	T_OK("resume.armed", before > 0);
 	rx_event(woz_host_rx.cbs.cbRxOk, 0u);
 	T_EQ("resume.rxok.rearms", woz_host_rx.rxenable_calls, before + 1);
+
+	t_group("listen fails when the radio cannot init or configure");
+	ccc_prepoll_stop();
+	woz_host_rx.radio_init_ret = -5;
+	T_EQ("listen.radiofail", ccc_prepoll_listen(9u, 9u), -5);
+	woz_host_rx.radio_init_ret = 0;
+	/* A different channel bypasses the PHY cache so dwt_configure runs. */
+	woz_host_rx.configure_ret = DWT_ERROR;
+	T_EQ("listen.cfgfail", ccc_prepoll_listen(5u, 9u), -EIO);
+	woz_host_rx.configure_ret = DWT_SUCCESS;
 
 	/* Leave the listener stopped so later suites see a quiet radio. */
 	ccc_prepoll_stop();

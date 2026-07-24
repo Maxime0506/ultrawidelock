@@ -8,6 +8,13 @@
 #include "woz_uwb_facade.h"
 #include "test.h"
 
+static int s_facade_listener_hits;
+
+static void facade_range_listener(void)
+{
+	s_facade_listener_hits++;
+}
+
 void test_facade(void)
 {
 	uint8_t ursk[ALIRO_URSK_LEN];
@@ -21,6 +28,18 @@ void test_facade(void)
 	for (size_t i = 0; i < sizeof(rc); i++) {
 		rc[i] = (uint8_t)i;
 	}
+
+	t_group("prewarm applies the session PHY with the radio left off");
+	T_EQ("prewarm.ok", woz_uwb_prewarm(9u, 9u), 0);
+
+	t_group("range-listener seam registers and clears");
+	s_facade_listener_hits = 0;
+	woz_uwb_set_range_listener(facade_range_listener);
+	fira_session_set_ccc_range_cm(140, 1u); /* accepted latch -> callback */
+	T_EQ("listener.fired", s_facade_listener_hits, 1);
+	woz_uwb_set_range_listener(NULL);
+	fira_session_set_ccc_range_cm(141, 2u);
+	T_EQ("listener.cleared", s_facade_listener_hits, 1);
 
 	t_group("bind_ursk binds the CCC shim");
 	T_OK("shim.unbound.before", !ccc_shim_active());

@@ -208,6 +208,41 @@ int main(void)
 	mkpub(over, 0xF0);
 	okc("fill.overflow", aliro_prov_trust_add(&ts, over) == -1);
 
+	printf("\n== corrupt count / v1 compat / NULL store ==\n");
+	{
+		/* a count beyond the store capacity must refuse to serialize */
+		struct aliro_trust_store tsbad;
+
+		memset(&tsbad, 0, sizeof(tsbad));
+		tsbad.count = ALIRO_TRUST_MAX + 1;
+		okc("ser.countoverflow",
+		    aliro_prov_serialize(&id, &tsbad, blob, sizeof(blob), &n) == -1);
+	}
+	{
+		/* hand-built v1 blob: hdr + reader_id + sign_priv + count(0) — no grk
+		 * field, no kpersistent tail. The parse must zero the grk. */
+		uint8_t v1[ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN + ALIRO_READER_PRIV_LEN + 1u];
+		uint8_t zgrk[ALIRO_GRK_LEN] = { 0 };
+
+		aliro_prov_dev_default(&id, NULL);
+		v1[0] = 'A';
+		v1[1] = 'P';
+		v1[2] = 'R';
+		v1[3] = 'V';
+		v1[4] = 0x01; /* ALIRO_PROV_VERSION_1 */
+		v1[5] = 0x01; /* dev flag */
+		memcpy(v1 + ALIRO_PROV_BLOB_HDR, id.reader_id, ALIRO_READER_ID_LEN);
+		memcpy(v1 + ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN, id.sign_priv,
+		       ALIRO_READER_PRIV_LEN);
+		v1[sizeof(v1) - 1u] = 0; /* no trust anchors */
+		memset(id2.grk, 0xEE, ALIRO_GRK_LEN); /* stale bytes the parse must clear */
+		okc("v1.parse", aliro_prov_deserialize(v1, sizeof(v1), &id2, &ts2) == 0);
+		okc("v1.grk-zeroed", memcmp(id2.grk, zgrk, ALIRO_GRK_LEN) == 0);
+		okc("v1.dev-flag", id2.is_dev == true);
+		okc("v1.count", ts2.count == 0);
+	}
+	okc("find.null-store", aliro_prov_trust_find(NULL, k0) == -1);
+
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");
 	return fails == 0 ? 0 : 1;
 }
