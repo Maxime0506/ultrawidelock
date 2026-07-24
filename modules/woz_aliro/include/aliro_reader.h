@@ -62,6 +62,15 @@ void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm);
  * session is established. */
 void aliro_reader_notify_unlock(bool unsecured);
 
+/* True while some peer holds an established Aliro session (auth done, ranging
+ * channel up). This is the reader's presence signal, and it is the one an approach
+ * controller should relock on: ranging silence is not a departure, because iOS
+ * pauses ranging when the phone stops moving (bench: 3.07 s with the phone 26 cm
+ * from the reader). The link ending is a departure, and the RSSI gate's close path
+ * is what ends the link when the peer walks out of range. Safe to call from any
+ * task -- a plain read of the session table, no lock needed for a boolean. */
+bool aliro_reader_session_active(void);
+
 /* Copy out the credential public key (uncompressed P-256, 65 bytes) of the most
  * recent session that passed the trust check. The Matter door lock resolves it to
  * the user that owns it, so the LockOperation event names who unlocked; without

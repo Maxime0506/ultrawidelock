@@ -889,6 +889,9 @@ int main(void)
 	okc("a.exchange", ph_exchange_resp(&p, 2) == 0);
 	okc("a.ap_completed", ph_take_ap_completed(&p) == 0);
 	okc("a.ranging_armed", s_rng_starts == 2);
+	/* The approach controller's presence signal: true only once a session has
+	 * reached the established phase, and false again the moment it tears down. */
+	okc("a.session_active", aliro_reader_session_active());
 	okc("a.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
 
 	/* established: a device ranging SDU rides the BleSK channel to the engine */
@@ -926,6 +929,7 @@ int main(void)
 	 * phone's independent derivation of it */
 	s_cfg.cb.on_disconnected(2);
 	okc("a.kp_persisted", s_nvs_stores == 3); /* 2 provision calls + this one */
+	okc("a.session_gone_on_disconnect", !aliro_reader_session_active());
 
 	/* The peer-gone relock lands after the phone has already dropped BLE, which is
 	 * the normal case: nothing goes out, and the phone is left showing this door

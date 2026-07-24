@@ -1096,6 +1096,18 @@ void aliro_reader_notify_unlock(bool unsecured)
 	aliro_ble_post_reader_status(reader_status_send_on_host, unsecured);
 }
 
+// Reports whether any peer currently holds an established Aliro session.
+// Returns true if at least one session slot is active and in the established phase.
+bool aliro_reader_session_active(void)
+{
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // Copies the credential public key that most recently passed the trust check into out.
 // Returns true if a credential has authenticated since boot (out written), false otherwise
 // (out untouched). Safe to call from any task.

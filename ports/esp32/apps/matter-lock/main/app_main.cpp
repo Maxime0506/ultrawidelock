@@ -121,15 +121,11 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 #define ALIRO_RANGE_MEDIAN_N  5     // trusted-range samples in the spike-rejecting median filter
 #define ALIRO_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
 #define ALIRO_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
-// No ranging activity this long -> peer left -> relock + secured. Must clear iOS's
-// own mid-approach ranging pauses or the bolt relocks under a phone that never left:
-// bench captures show gaps of 1.6 s with the phone 7 cm from the reader and 2.4 s
-// during a walk-in, which relocked the bolt 2.6 s after it opened. The depart
-// threshold above is the primary walk-away relock (it fires while BLE is still up),
-// so this is the backstop for a peer that vanishes without a departure ramp, and it
-// can afford the margin. Cost of the larger value: a bolt left open up to this long
-// when someone leaves sideways out of UWB without crossing ALIRO_RELOCK_RANGE_CM.
-#define ALIRO_PEER_GONE_MS    3000
+// Departure is the Aliro session ending, not a ranging timeout, so there is no
+// silence threshold to tune here. Every value tried relocked the bolt under a phone
+// that had simply stopped moving: iOS pauses ranging when the user stands still,
+// measured at 1.6 s, 2.4 s and 3.07 s in successive bench runs, the last one with
+// the phone 26 cm from the reader and the link still up.
 
 // Resolve the Matter user that owns the credential the reader authenticated, so the LockOperation
 // event names who operated the lock. Without it the event is anonymous and Apple Home, unable to
@@ -267,9 +263,12 @@ static void aliro_reader_task(void *arg)
 	//   - send Secured on the depart threshold, while the link is still up — the
 	//     peer-gone path below normally runs after the phone has already dropped
 	//     BLE, and the notify is then discarded with only a warning;
-	//   - treat the peer as gone (relock + Secured) only after ALIRO_PEER_GONE_MS
-	//     with no ranging activity at all — decoupled from the flickering trust bit,
-	//     which can briefly re-agree at range and otherwise wedge the door open.
+	//   - treat the peer as gone (relock + Secured) when its Aliro SESSION ends,
+	//     never on ranging silence: iOS pauses ranging when the phone stops moving,
+	//     measured at 3.07 s with the phone 26 cm from the reader, which relocked
+	//     the bolt under someone standing at the door and then re-unlocked when
+	//     ranging resumed. A link that is still up is a peer that is still there.
+	//     Walking away ends the link via the RSSI gate's close path.
 	// Only fresh notifies act; a bare 200 ms timeout never re-decides on a stale
 	// latched value. `locked` mirrors the bolt, `granted` mirrors the Wallet state
 	// (the two move together), `present` marks an approach in progress.
@@ -279,21 +278,16 @@ static void aliro_reader_task(void *arg)
 	int32_t win[ALIRO_RANGE_MEDIAN_N];
 	int wlen = 0, wpos = 0;
 	int near_dwell = 0, far_dwell = 0;
-	int64_t last_activity_ms = 0;
 
 	while (true) {
 		// >0 = at least one range block latched since the last wake (peer is
-		// ranging); 0 = a bare 200 ms timeout (no block this window).
+		// ranging); 0 = a bare 200 ms timeout, which is also how often the
+		// session-gone check below runs when nothing is ranging.
 		uint32_t woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
-		int64_t now = esp_timer_get_time() / 1000; // ms
 
 		int32_t cm = 0;
 		bool active = (woke > 0);
 		bool trusted = active && woz_uwb_trusted_range_cm(&cm);
-
-		if (active) {
-			last_activity_ms = now;
-		}
 
 		if (trusted) {
 			// Task context (not the UWB RX path): one trace line per trusted
@@ -339,14 +333,15 @@ static void aliro_reader_task(void *arg)
 			}
 		}
 
-		// Departure: no ranging activity at all for ALIRO_PEER_GONE_MS. This is the
-		// reliable relock trigger (walking away stops the ranging), independent of
-		// the noisy distance. Relock if still open, tell Wallet Secured, reset for
-		// the next approach.
-		if (present && (now - last_activity_ms) >= ALIRO_PEER_GONE_MS) {
-			ESP_LOGI(TAG, "Aliro peer gone (%d ms silent)%s%s",
-				 (int)(now - last_activity_ms), locked ? "" : ": relock",
-				 granted ? " + secured" : "");
+		// Departure: the peer's Aliro session is gone. Not ranging silence — iOS
+		// stops ranging when the phone stops moving, so silence means "standing
+		// still", which is the opposite of departed. The link is the presence
+		// signal; walking away ends it via the RSSI gate's close path, and a
+		// phone that pockets or sleeps ends it too. Relock if still open, tell
+		// Wallet Secured, reset for the next approach.
+		if (present && !aliro_reader_session_active()) {
+			ESP_LOGI(TAG, "Aliro peer gone (session ended)%s%s",
+				 locked ? "" : ": relock", granted ? " + secured" : "");
 			if (!locked) {
 				schedule_bolt_lock();
 				locked = true;
