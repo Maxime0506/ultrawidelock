@@ -1,0 +1,288 @@
+/**
+ * @file test_psa_backends.c — the PSA/mbedTLS-bound crypto seams on host, over
+ * recording fakes (tests/host/psafake/). Standalone binary: the main host
+ * suite links aes_ref.c's real crypto_aes_ecb_encrypt, so the two backend
+ * implementations of the same symbol are compiled here instead, renamed via
+ * -Dcrypto_aes_ecb_encrypt=... on their own compile steps (run.sh).
+ *
+ * THEATRE, STATED PLAINLY: the fakes do no crypto. These checks pin argument
+ * plumbing (key bits, algorithm spellings, lengths) and every error branch by
+ * failure injection — they cannot detect a wrong ciphertext, and the target's
+ * real PSA/mbedTLS behaviour is out of scope.
+ *
+ * Files under test:
+ *   modules/woz_uwb/src/ccc/ccc_crypto_psa.c      (as woz_test_psa_ecb)
+ *   modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c  (as woz_test_mbedtls_ecb)
+ *   modules/woz_aliro/src/aliro_prim_psa.c
+ */
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "aliro_prim.h"
+#include "psafake.h"
+#include <mbedtls/aes.h>
+#include <psa/crypto.h>
+
+#include "test.h"
+
+/* The renamed backend entry points (see run.sh). */
+int woz_test_psa_ecb(const uint8_t *key, size_t key_bits, const uint8_t in[16], uint8_t out[16]);
+int woz_test_mbedtls_ecb(const uint8_t *key, size_t key_bits, const uint8_t in[16],
+			 uint8_t out[16]);
+
+static const uint8_t K16[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+static const uint8_t K32[32] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+				8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
+static const uint8_t BLK[16] = {0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11,
+				0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99};
+
+void test_ccc_crypto_backends(void)
+{
+	uint8_t out[16];
+
+	t_group("ccc_crypto_psa: argument plumbing");
+	psafake_reset();
+	T_EQ("128-bit ok", woz_test_psa_ecb(K16, 128, BLK, out), 0);
+	T_EQ("usage ENCRYPT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_ENCRYPT);
+	T_EQ("alg ECB", (long)psafake.attr_alg, (long)PSA_ALG_ECB_NO_PADDING);
+	T_EQ("type AES", (long)psafake.attr_type, (long)PSA_KEY_TYPE_AES);
+	T_EQ("bits 128", (long)psafake.attr_bits, 128L);
+	T_EQ("key bytes = bits/8", (long)psafake.key_len, 16L);
+	T_OK("key material forwarded", memcmp(psafake.key, K16, 16) == 0);
+	T_EQ("op alg ECB", (long)psafake.last_alg, (long)PSA_ALG_ECB_NO_PADDING);
+	T_EQ("one 16B block in", (long)psafake.last_in_len, 16L);
+	T_OK("out = fake passthrough", memcmp(out, BLK, 16) == 0);
+	T_EQ("key destroyed", (long)psafake.destroy_calls, 1L);
+
+	T_EQ("256-bit ok", woz_test_psa_ecb(K32, 256, BLK, out), 0);
+	T_EQ("bits 256", (long)psafake.attr_bits, 256L);
+	T_EQ("key bytes 32", (long)psafake.key_len, 32L);
+
+	t_group("ccc_crypto_psa: guards + injected failures");
+	T_EQ("NULL key", woz_test_psa_ecb(NULL, 128, BLK, out), -EINVAL);
+	T_EQ("NULL in", woz_test_psa_ecb(K16, 128, NULL, out), -EINVAL);
+	T_EQ("NULL out", woz_test_psa_ecb(K16, 128, BLK, NULL), -EINVAL);
+	T_EQ("192-bit rejected", woz_test_psa_ecb(K16, 192, BLK, out), -EINVAL);
+	psafake_reset();
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("import fail -> -EIO", woz_test_psa_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("no destroy after failed import... but PSA_KEY_ID_NULL passed",
+	     (long)psafake.destroy_calls, 0L);
+	psafake_reset();
+	psafake.cipher_ret = PSA_ERROR_GENERIC;
+	T_EQ("cipher fail -> -EIO", woz_test_psa_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("destroy still runs", (long)psafake.destroy_calls, 1L);
+	psafake_reset();
+	psafake.cipher_olen = 15;
+	T_EQ("short olen -> -EIO", woz_test_psa_ecb(K16, 128, BLK, out), -EIO);
+
+	t_group("ccc_crypto_mbedtls: plumbing + failures");
+	psafake_reset();
+	T_EQ("128-bit ok", woz_test_mbedtls_ecb(K16, 128, BLK, out), 0);
+	T_EQ("keybits 128", (long)psafake.mtls_keybits, 128L);
+	T_EQ("mode ENCRYPT", (long)psafake.mtls_mode, (long)MBEDTLS_AES_ENCRYPT);
+	T_OK("out = fake passthrough", memcmp(out, BLK, 16) == 0);
+	T_EQ("init/free paired", (long)psafake.mtls_init_calls, (long)psafake.mtls_free_calls);
+	T_EQ("256-bit ok", woz_test_mbedtls_ecb(K32, 256, BLK, out), 0);
+	T_EQ("keybits 256", (long)psafake.mtls_keybits, 256L);
+	T_EQ("NULL key", woz_test_mbedtls_ecb(NULL, 128, BLK, out), -EINVAL);
+	T_EQ("192-bit rejected", woz_test_mbedtls_ecb(K16, 192, BLK, out), -EINVAL);
+	psafake_reset();
+	psafake.mtls_setkey_ret = -1;
+	T_EQ("setkey fail -> -EIO", woz_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("crypt skipped", (long)psafake.mtls_crypt_calls, 0L);
+	T_EQ("ctx still freed", (long)psafake.mtls_free_calls, 1L);
+	psafake_reset();
+	psafake.mtls_crypt_ret = -1;
+	T_EQ("crypt fail -> -EIO", woz_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
+}
+
+void test_aliro_prim_psa(void)
+{
+	uint8_t ct[64], tag[16], pt[64], out16[16];
+	uint8_t priv[ALIRO_P256_SCALAR], pub[ALIRO_P256_POINT];
+	uint8_t shared[ALIRO_P256_SCALAR], sig[ALIRO_P256_SIG];
+	static const uint8_t NONCE[12] = {0};
+	static const uint8_t AAD[5] = {1, 2, 3, 4, 5};
+	static const uint8_t MSG[20] = {7};
+
+	t_group("init + random");
+	psafake_reset();
+	T_EQ("init ok", aliro_prim_init(), 0);
+	T_EQ("init hits psa_crypto_init", (long)psafake.init_calls, 1L);
+	psafake.init_ret = PSA_ERROR_GENERIC;
+	T_EQ("init fail -> -1", aliro_prim_init(), -1);
+	T_EQ("random ok", aliro_random(pt, 20), 0);
+	T_EQ("random len plumbed", (long)psafake.last_random_len, 20L);
+	psafake.random_ret = PSA_ERROR_GENERIC;
+	T_EQ("random fail -> -1", aliro_random(pt, 4), -1);
+
+	t_group("aes256-gcm encrypt");
+	psafake_reset();
+	T_EQ("encrypt ok (tag16)",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, sizeof(NONCE), AAD, sizeof(AAD), BLK, 16, ct,
+				      tag, 16),
+	     0);
+	T_EQ("bits 256", (long)psafake.attr_bits, 256L);
+	T_EQ("usage ENCRYPT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_ENCRYPT);
+	T_EQ("alg GCM tag16", (long)psafake.last_alg,
+	     (long)PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_GCM, 16));
+	T_EQ("nonce len", (long)psafake.last_nonce_len, 12L);
+	T_EQ("aad len", (long)psafake.last_aad_len, 5L);
+	T_OK("ct split out", memcmp(ct, BLK, 16) == 0);
+	T_OK("tag split out", tag[0] == 0xc0 && tag[15] == 0xcf);
+	T_EQ("key destroyed", (long)psafake.destroy_calls, 1L);
+	psafake.aead_enc_olen = 16 + 8; /* fake writes pt+16; olen knob models tag8 */
+	T_EQ("encrypt ok (tag8)",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, sizeof(NONCE), NULL, 0, BLK, 16, ct, tag, 8),
+	     0);
+	T_EQ("alg encodes tag8", (long)psafake.last_alg,
+	     (long)PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_GCM, 8));
+	T_EQ("tag too long -> -1",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 17), -1);
+	T_EQ("pt too long -> -1",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 2000, ct, tag, 16), -1);
+	psafake_reset();
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("import fail -> -1",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
+	psafake_reset();
+	psafake.aead_enc_ret = PSA_ERROR_GENERIC;
+	T_EQ("aead fail -> -1",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
+	T_EQ("destroy after aead fail", (long)psafake.destroy_calls, 1L);
+	psafake_reset();
+	psafake.aead_enc_olen = 5; /* wrong total length */
+	T_EQ("olen mismatch -> -1",
+	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
+
+	t_group("aes256-gcm decrypt");
+	psafake_reset();
+	T_EQ("decrypt ok",
+	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, AAD, 5, ct, 16, tag, 16, pt), 0);
+	T_EQ("usage DECRYPT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_DECRYPT);
+	T_EQ("ct||tag length in", (long)psafake.last_in_len, 32L);
+	T_OK("pt out", memcmp(pt, ct, 16) == 0);
+	T_EQ("tag too long -> -1",
+	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 17, pt), -1);
+	T_EQ("ct too long -> -1",
+	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 2000, tag, 16, pt), -1);
+	psafake_reset();
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("import fail -> -1",
+	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
+	psafake_reset();
+	psafake.aead_dec_ret = PSA_ERROR_GENERIC;
+	T_EQ("tag-mismatch fail -> -1",
+	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
+	psafake_reset();
+	psafake.aead_dec_olen = 3;
+	T_EQ("olen mismatch -> -1",
+	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
+
+	t_group("aes128-ecb (advert dynamic tag)");
+	psafake_reset();
+	T_EQ("ecb ok", aliro_aes128_ecb_encrypt(K16, BLK, out16), 0);
+	T_EQ("bits 128", (long)psafake.attr_bits, 128L);
+	T_EQ("alg ECB", (long)psafake.last_alg, (long)PSA_ALG_ECB_NO_PADDING);
+	T_OK("block out", memcmp(out16, BLK, 16) == 0);
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("import fail -> -1", aliro_aes128_ecb_encrypt(K16, BLK, out16), -1);
+	psafake_reset();
+	psafake.cipher_olen = 15;
+	T_EQ("olen mismatch -> -1", aliro_aes128_ecb_encrypt(K16, BLK, out16), -1);
+	psafake_reset();
+	psafake.cipher_ret = PSA_ERROR_GENERIC;
+	T_EQ("cipher fail -> -1", aliro_aes128_ecb_encrypt(K16, BLK, out16), -1);
+
+	t_group("p256 keygen");
+	psafake_reset();
+	T_EQ("keygen ok", aliro_ec_p256_keygen(priv, pub), 0);
+	T_EQ("usage EXPORT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_EXPORT);
+	T_EQ("alg ECDH", (long)psafake.attr_alg, (long)PSA_ALG_ECDH);
+	T_EQ("type keypair secp256r1", (long)psafake.attr_type,
+	     (long)PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+	T_EQ("bits 256", (long)psafake.attr_bits, 256L);
+	T_EQ("destroyed", (long)psafake.destroy_calls, 1L);
+	psafake_reset();
+	psafake.generate_key_ret = PSA_ERROR_GENERIC;
+	T_EQ("generate fail -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	psafake_reset();
+	psafake.export_key_ret = PSA_ERROR_GENERIC;
+	T_EQ("export-priv fail -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	psafake_reset();
+	psafake.export_olen = 31;
+	T_EQ("priv olen mismatch -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	psafake_reset();
+	psafake.export_pub_ret = PSA_ERROR_GENERIC;
+	T_EQ("export-pub fail -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	psafake_reset();
+	psafake.export_pub_olen = 64;
+	T_EQ("pub olen mismatch -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+
+	t_group("p256 pub-from-priv");
+	psafake_reset();
+	T_EQ("derive ok", aliro_ec_p256_pub_from_priv(priv, pub), 0);
+	T_EQ("scalar imported", (long)psafake.key_len, 32L);
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("import fail -> -1", aliro_ec_p256_pub_from_priv(priv, pub), -1);
+	psafake_reset();
+	psafake.export_pub_olen = 10;
+	T_EQ("olen mismatch -> -1", aliro_ec_p256_pub_from_priv(priv, pub), -1);
+
+	t_group("p256 ecdh");
+	psafake_reset();
+	T_EQ("ecdh ok", aliro_ecdh_p256(priv, pub, shared), 0);
+	T_EQ("usage DERIVE", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_DERIVE);
+	T_EQ("op alg ECDH", (long)psafake.last_alg, (long)PSA_ALG_ECDH);
+	T_EQ("peer point 65B", (long)psafake.last_in_len, 65L);
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("import fail -> -1", aliro_ecdh_p256(priv, pub, shared), -1);
+	psafake_reset();
+	psafake.raw_ka_ret = PSA_ERROR_GENERIC;
+	T_EQ("agreement fail -> -1", aliro_ecdh_p256(priv, pub, shared), -1);
+	psafake_reset();
+	psafake.raw_ka_olen = 31;
+	T_EQ("olen mismatch -> -1", aliro_ecdh_p256(priv, pub, shared), -1);
+
+	t_group("p256 ecdsa sign/verify");
+	psafake_reset();
+	T_EQ("sign ok", aliro_ecdsa_p256_sign(priv, MSG, sizeof(MSG), sig), 0);
+	T_EQ("usage SIGN", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_SIGN_MESSAGE);
+	T_EQ("alg ECDSA(SHA256)", (long)psafake.last_alg,
+	     (long)PSA_ALG_ECDSA(PSA_ALG_SHA_256));
+	T_EQ("msg len plumbed", (long)psafake.last_msg_len, 20L);
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("sign import fail -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	psafake_reset();
+	psafake.sign_ret = PSA_ERROR_GENERIC;
+	T_EQ("sign fail -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	psafake_reset();
+	psafake.sign_olen = 63;
+	T_EQ("sig olen mismatch -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	psafake_reset();
+	T_EQ("verify ok", aliro_ecdsa_p256_verify(pub, MSG, sizeof(MSG), sig), 0);
+	T_EQ("usage VERIFY", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_VERIFY_MESSAGE);
+	T_EQ("type public key", (long)psafake.attr_type,
+	     (long)PSA_KEY_TYPE_ECC_PUBLIC_KEY(PSA_ECC_FAMILY_SECP_R1));
+	T_EQ("sig len 64", (long)psafake.last_sig_len, 64L);
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("verify import fail -> -1", aliro_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
+	psafake_reset();
+	psafake.verify_ret = PSA_ERROR_GENERIC;
+	T_EQ("bad signature -> -1", aliro_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
+	T_EQ("destroy after verify fail", (long)psafake.destroy_calls, 1L);
+}
+
+int main(void)
+{
+	test_ccc_crypto_backends();
+	test_aliro_prim_psa();
+	if (t_fail > 0) {
+		printf("  psa-backends: FAIL (%d of %d)\n", t_fail, t_fail + t_pass);
+		return 1;
+	}
+	printf("  psa-backends: PASS (%d checks — recording fakes, no real crypto)\n", t_pass);
+	return 0;
+}

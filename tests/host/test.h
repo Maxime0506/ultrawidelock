@@ -59,5 +59,19 @@ void test_facade(void);
 void test_prepoll_gate(void);
 void test_prepoll_round(void);
 void test_twin(void);
+void test_woz_logfmt(void);
+void test_trace(void);
+void test_ccc_shim_wrap(void);
+
+/* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
+void test_uwb_min(void);
+void test_uwb_isr(void);
+void test_uwb_rxdiag(void);
+void test_uwb_selftest(void);
+void test_aliro_shell(void);
+
+/* PSA/mbedTLS-backend binary suites (host_test_psa; see tests/host/psafake/). */
+void test_ccc_crypto_backends(void);
+void test_aliro_prim_psa(void);
 
 #endif /* WOZ_HOST_TEST_H */

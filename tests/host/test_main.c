@@ -55,6 +55,9 @@ int main(void)
 		{ "prepoll_gate", test_prepoll_gate },
 		{ "prepoll_round", test_prepoll_round },
 		{ "twin", test_twin },
+		{ "logfmt", test_woz_logfmt },
+		{ "trace", test_trace },
+		{ "ccc_shim_wrap", test_ccc_shim_wrap },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	int npass[32], nfail[32], npend[32];

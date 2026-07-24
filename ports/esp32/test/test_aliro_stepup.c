@@ -394,6 +394,503 @@ static void t_run_convenience(void)
 	chk("run valid_elements 1", v.valid_elements == 1);
 }
 
+/* ---- malformed-input rejection ------------------------------------------- */
+
+/* SV_GOOD single-byte offset map (byte-walked from stepup_vectors.h):
+ *    0 top map        1 top key       9 documents arr  10 document map
+ *   11 doc key       13 issSig map   14 issSig key     16 nameSpaces map
+ *   17 ns key        25 items arr    26 item tag       27 tag arg
+ *   30 item map      31 item key     33 digest_id      36 random hdr
+ *   72 elem_id hdr   86 IssuerAuth   87 protected      91 unprot map
+ *   92 label         93 kid          98 payload hdr   101 payload tag arg
+ *  102 mso bstr     104 MSO map     105 MSO key       107 version value
+ *  113 digestAlg    123 valueDigests 124 vd ns key    132 vd inner map
+ *  133 vd id        134 vd hash     170 mso docType   180 validity map
+ *  181 validity key 182 vkey char   183 tag(0)        184 date hdr
+ *  185 date[0]      189 date[4]     255 timeVerReq    257 sig len
+ *  324 doc docType  334 status                                            */
+
+static size_t find_pat(const uint8_t *hay, size_t hn, const uint8_t *pat, size_t pn)
+{
+	for (size_t i = 0; i + pn <= hn; i++) {
+		if (memcmp(hay + i, pat, pn) == 0) {
+			return i;
+		}
+	}
+	return (size_t)-1;
+}
+
+static int parse_mut2(size_t o1, uint8_t v1, size_t o2, uint8_t v2, struct aliro_stepup_doc *doc)
+{
+	static uint8_t b[400]; /* static: the doc keeps slices into this buffer */
+	struct aliro_stepup_doc local;
+
+	memcpy(b, SV_GOOD, SV_GOOD_len);
+	b[o1] = v1;
+	b[o2] = v2;
+	return aliro_stepup_parse_response(b, SV_GOOD_len, doc ? doc : &local);
+}
+
+/* Minimal DeviceResponse {"9": <value>} exercising the unknown-key skipper. */
+static int parse_skipv(const uint8_t *val, size_t vn)
+{
+	uint8_t b[64] = {0xa1, 0x61, 0x39};
+	struct aliro_stepup_doc doc;
+
+	memcpy(b + 3, val, vn);
+	return aliro_stepup_parse_response(b, 3 + vn, &doc);
+}
+
+/* SV_GOOD with the status value (offset 334) replaced by an arbitrary tail. */
+static int parse_status_tail(const uint8_t *tail, size_t tn, struct aliro_stepup_doc *doc)
+{
+	uint8_t b[400];
+	struct aliro_stepup_doc local;
+
+	memcpy(b, SV_GOOD, 334);
+	memcpy(b + 334, tail, tn);
+	return aliro_stepup_parse_response(b, 334 + tn, doc ? doc : &local);
+}
+
+static void t_parse_malformed(void)
+{
+	printf("-- malformed DeviceResponse rejection --\n");
+
+	static const struct {
+		const char *name;
+		size_t off;
+		uint8_t val;
+		size_t off2;
+		uint8_t val2;
+		int want;
+	} m[] = {
+		{"top not map", 0, 0x83, 0, 0x83, -1},
+		{"top key not tstr", 1, 0x01, 1, 0x01, -1},
+		{"documents not arr", 9, 0xa1, 9, 0xa1, -1},
+		{"document not map", 10, 0x81, 10, 0x81, -1},
+		{"doc key not tstr", 11, 0x01, 11, 0x01, -1},
+		{"doc unknown-key skip fail", 12, 0x39, 13, 0xff, -1},
+		{"doc docType not tstr", 324, 0x47, 324, 0x47, -1},
+		{"issuerSigned not map", 13, 0x81, 13, 0x81, -1},
+		{"issSig key not tstr", 14, 0x01, 14, 0x01, -1},
+		{"issSig unknown skip fail", 15, 0x39, 16, 0xff, -1},
+		{"issSig unknown skip ok", 15, 0x39, 15, 0x39, 0},
+		{"nameSpaces not map", 16, 0x81, 16, 0x81, -1},
+		{"ns key not tstr", 17, 0x01, 17, 0x01, -1},
+		{"ns items not arr", 25, 0xa1, 25, 0xa1, -1},
+		{"item not tag24", 27, 0x19, 27, 0x19, -1},
+		{"item not a tag", 26, 0x00, 26, 0x00, -1},
+		{"item inner not map", 30, 0x84, 30, 0x84, -1},
+		{"item key not tstr", 31, 0x01, 31, 0x01, -1},
+		{"item digestID not uint", 33, 0x20, 33, 0x20, -1},
+		{"item elemID not tstr", 72, 0x48, 72, 0x48, -1},
+		{"item skip fail", 36, 0x5f, 36, 0x5f, -1},
+		{"IssuerAuth not arr", 86, 0xa4, 86, 0xa4, -1},
+		{"IssuerAuth arr not 4", 86, 0x83, 86, 0x83, -1},
+		{"protected not bstr", 87, 0x63, 87, 0x63, -1},
+		{"unprotected not map", 91, 0x81, 91, 0x81, -1},
+		{"COSE label not int", 92, 0x61, 92, 0x61, -1},
+		{"COSE nint label skipped", 92, 0x20, 92, 0x20, 0},
+		{"COSE label skip fail", 92, 0x07, 93, 0x5f, -1},
+		{"kid not bstr", 93, 0x24, 93, 0x24, -1},
+		{"payload not bstr", 98, 0x78, 98, 0x78, -1},
+		{"payload tag not 24", 101, 0x19, 101, 0x19, -1},
+		{"payload inner not bstr", 102, 0x78, 102, 0x78, -1},
+		{"signature not 64B", 257, 0x3f, 257, 0x3f, -1},
+		{"MSO not map", 104, 0x84, 104, 0x84, -1},
+		{"MSO key not tstr", 105, 0x01, 105, 0x01, -1},
+		{"MSO skip fail", 107, 0x7f, 107, 0x7f, -1},
+		{"digestAlg not tstr", 113, 0x41, 113, 0x41, -1},
+		{"MSO docType not tstr", 170, 0x41, 170, 0x41, -1},
+		{"valueDigests not map", 123, 0x81, 123, 0x81, -1},
+		{"vd ns key not tstr", 124, 0x01, 124, 0x01, -1},
+		{"vd inner not map", 132, 0x81, 132, 0x81, -1},
+		{"vd id not uint", 133, 0x20, 133, 0x20, -1},
+		{"vd hash not bstr", 134, 0x61, 134, 0x61, -1},
+		{"validity not map", 180, 0x83, 180, 0x83, -1},
+		{"validity key not tstr", 181, 0x01, 181, 0x01, -1},
+		{"date tag missing", 183, 0x00, 183, 0x00, -1},
+		{"date tag not 0", 183, 0xc1, 183, 0xc1, -1},
+		{"date not tstr", 184, 0x54, 184, 0x54, -1},
+		{"validity skip fail", 182, 0x34, 183, 0xff, -1},
+		{"timeVerReq not bool", 255, 0xf6, 255, 0xf6, -1},
+	};
+
+	for (size_t i = 0; i < sizeof(m) / sizeof(m[0]); i++) {
+		chk(m[i].name,
+		    parse_mut2(m[i].off, m[i].val, m[i].off2, m[i].val2, NULL) == m[i].want);
+	}
+
+	/* NULL / empty / truncated inputs. */
+	struct aliro_stepup_doc doc;
+	uint8_t one = 0xa0;
+
+	chk("NULL buf", aliro_stepup_parse_response(NULL, 4, &doc) == -1);
+	chk("NULL doc", aliro_stepup_parse_response(&one, 1, NULL) == -1);
+	chk("empty input", aliro_stepup_parse_response(&one, 0, &doc) == -1);
+	chk("truncated at payload", aliro_stepup_parse_response(SV_GOOD, 150, &doc) == -1);
+	chk("truncated at COSE label", aliro_stepup_parse_response(SV_GOOD, 92, &doc) == -1);
+
+	/* Unknown validity key "4" whose tagged value is skipped (rc 0, no signed). */
+	chk("validity unknown key skip ok",
+	    parse_mut2(182, 0x34, 182, 0x34, &doc) == 0 && doc.have_signed == 0);
+
+	/* Broken tdates are tolerated: the field is just not marked present. */
+	chk("date bad punctuation", parse_mut2(189, 'x', 189, 'x', &doc) == 0 && !doc.have_signed);
+	chk("date bad digit", parse_mut2(185, 'A', 185, 'A', &doc) == 0 && !doc.have_signed);
+	chk("date month 13", parse_mut2(190, '1', 191, '3', &doc) == 0 && !doc.have_signed);
+
+	/* Year 0000 exercises the negative-era arm of days_from_civil. */
+	{
+		uint8_t b[400];
+
+		memcpy(b, SV_GOOD, SV_GOOD_len);
+		memcpy(b + 185, "0000", 4); /* year */
+		memcpy(b + 190, "01", 2);   /* month <= 2 */
+		chk("date year 0000",
+		    aliro_stepup_parse_response(b, SV_GOOD_len, &doc) == 0 && doc.have_signed &&
+			    doc.signed_epoch < 0);
+	}
+
+	/* validityIteration not a uint (mutated SV_WITH_VI). */
+	{
+		static const uint8_t pat[] = {0x61, 0x35, 0x01, 0x61, 0x37};
+		size_t q = find_pat(SV_WITH_VI, SV_WITH_VI_len, pat, sizeof(pat));
+		uint8_t b[400];
+
+		chk("VI pattern found", q != (size_t)-1);
+		memcpy(b, SV_WITH_VI, SV_WITH_VI_len);
+		b[q + 2] = 0x20;
+		chk("VI not uint", aliro_stepup_parse_response(b, SV_WITH_VI_len, &doc) == -1);
+	}
+
+	/* x5chain value that cannot be skipped (mutated SV_X5CHAIN). */
+	{
+		static const uint8_t pat[] = {0x18, 0x21, 0x58, 0x64};
+		size_t q = find_pat(SV_X5CHAIN, SV_X5CHAIN_len, pat, sizeof(pat));
+		uint8_t b[512];
+
+		chk("x5chain pattern found", q != (size_t)-1);
+		memcpy(b, SV_X5CHAIN, SV_X5CHAIN_len);
+		b[q + 2] = 0x7f;
+		chk("x5chain skip fail", aliro_stepup_parse_response(b, SV_X5CHAIN_len, &doc) == -1);
+	}
+
+	/* CBOR head argument widths on the status value. */
+	{
+		static const uint8_t t16[] = {0x19, 0x01, 0x00};
+		static const uint8_t t32[] = {0x1a, 0x00, 0x01, 0x00, 0x00};
+		static const uint8_t t64[] = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0x07};
+		static const uint8_t tbad[] = {0x1c};
+		static const uint8_t ttrunc[] = {0x19, 0x01};
+
+		chk("status uint16", parse_status_tail(t16, 3, &doc) == 0 && doc.status == 256);
+		chk("status uint32", parse_status_tail(t32, 5, &doc) == 0 && doc.status == 65536);
+		chk("status uint64", parse_status_tail(t64, 9, &doc) == 0 && doc.status == 7);
+		chk("status ai 28 invalid", parse_status_tail(tbad, 1, NULL) == -1);
+		chk("status arg truncated", parse_status_tail(ttrunc, 2, NULL) == -1);
+		chk("top-key skip fail", parse_mut2(333, 0x39, 334, 0xff, NULL) == -1);
+	}
+	{
+		uint8_t b = 0xbf; /* indefinite map */
+
+		chk("indefinite map", aliro_stepup_parse_response(&b, 1, &doc) == -1);
+	}
+
+	/* Generic skipper: array / map / tag / simple / depth / truncation. */
+	{
+		static const uint8_t v_arr[] = {0x82, 0x00, 0x01};
+		static const uint8_t v_arr_bad[] = {0x82, 0x00};
+		static const uint8_t v_map_bad[] = {0xa1, 0x00};
+		static const uint8_t v_tag[] = {0xc0, 0x00};
+		static const uint8_t v_null[] = {0xf6};
+		static const uint8_t v_bstr_bad[] = {0x45, 0x01, 0x02};
+		static const uint8_t v_nolen[] = {0x58};
+		uint8_t deep[24];
+
+		chk("skip array", parse_skipv(v_arr, 3) == 0);
+		chk("skip array truncated", parse_skipv(v_arr_bad, 2) == -1);
+		chk("skip map truncated", parse_skipv(v_map_bad, 2) == -1);
+		chk("skip tag", parse_skipv(v_tag, 2) == 0);
+		chk("skip simple null", parse_skipv(v_null, 1) == 0);
+		chk("skip bstr overlong", parse_skipv(v_bstr_bad, 3) == -1);
+		chk("skip missing len byte", parse_skipv(v_nolen, 1) == -1);
+		memset(deep, 0xc0, 22); /* 22 nested tags > CB_MAX_DEPTH */
+		deep[22] = 0x00;
+		chk("skip depth limit", parse_skipv(deep, 23) == -1);
+	}
+
+	/* documents array with a second (skipped) document; then a bad second. */
+	{
+		uint8_t b[400];
+
+		memcpy(b, SV_GOOD, 332); /* top hdr + document (ends at 331) */
+		b[9] = 0x82;             /* two documents */
+		b[332] = 0x00;           /* second document: skippable uint */
+		b[333] = 0x61;
+		b[334] = 0x33;
+		b[335] = 0x00; /* "3": 0 */
+		chk("second document skipped",
+		    aliro_stepup_parse_response(b, 336, &doc) == 0 && doc.have_document &&
+			    doc.n_items == 1);
+		b[332] = 0xff;
+		chk("second document skip fail", aliro_stepup_parse_response(b, 336, &doc) == -1);
+	}
+
+	/* ALIRO_STEPUP_MAX_ITEMS parsed, the 17th falls to the skipper. */
+	{
+		static const uint8_t hdr[] = {0xa1, 0x61, 0x32, 0x81, 0xa1, 0x61, 0x31,
+					      0xa1, 0x61, 0x31, 0xa1, 0x61, 0x6e, 0x91};
+		static const uint8_t item[] = {0xd8, 0x18, 0x44, 0xa1, 0x61, 0x31, 0x00};
+		uint8_t b[200];
+		size_t n = sizeof(hdr);
+
+		memcpy(b, hdr, n);
+		for (int i = 0; i < 16; i++) {
+			memcpy(b + n, item, sizeof(item));
+			n += sizeof(item);
+		}
+		b[n] = 0x00; /* 17th item: skipped */
+		chk("17th item skipped", aliro_stepup_parse_response(b, n + 1, &doc) == 0 &&
+						 doc.n_items == ALIRO_STEPUP_MAX_ITEMS);
+		b[n] = 0xff;
+		chk("17th item skip fail", aliro_stepup_parse_response(b, n + 1, &doc) == -1);
+	}
+}
+
+/* ---- writer/APDU/SessionData edges + verifier seams ----------------------- */
+
+/* SV_X5CHAIN with the 102-byte x5chain value spliced out for an alternative. */
+static int x5_splice(const uint8_t *val, size_t vn, struct aliro_stepup_doc *doc)
+{
+	static const uint8_t pat[] = {0x18, 0x21, 0x58, 0x64};
+	size_t q = find_pat(SV_X5CHAIN, SV_X5CHAIN_len, pat, sizeof(pat));
+	static uint8_t b[600]; /* static: the doc keeps slices into this buffer */
+	size_t n;
+
+	if (q == (size_t)-1) {
+		return -3;
+	}
+	memcpy(b, SV_X5CHAIN, q + 2);
+	n = q + 2;
+	memcpy(b + n, val, vn);
+	n += vn;
+	memcpy(b + n, SV_X5CHAIN + q + 2 + 102, SV_X5CHAIN_len - (q + 2 + 102));
+	n += SV_X5CHAIN_len - (q + 2 + 102);
+	return aliro_stepup_parse_response(b, n, doc);
+}
+
+static void t_stepup_edges(void)
+{
+	printf("-- builder/SessionData edges + verifier seams --\n");
+	uint8_t out[64];
+	size_t n;
+
+	/* DeviceRequest writer overflow: element too long, then cap too small. */
+	{
+		char big[200];
+		const char *elems[1];
+
+		memset(big, 'e', sizeof(big) - 1);
+		big[sizeof(big) - 1] = '\0';
+		elems[0] = big;
+		uint8_t dr[256];
+
+		chk("devreq long elem",
+		    aliro_stepup_build_device_request(elems, 1, dr, sizeof(dr), &n) == -1);
+		chk("devreq tiny cap",
+		    aliro_stepup_build_device_request(NULL, 0, dr, 4, &n) == -1);
+	}
+
+	/* Seal/open edges over a real channel. */
+	uint8_t block[ALIRO_KEY_BLOCK_LEN] = {0}, stepup[32], skr[32], skd[32];
+
+	uh(stepup, K_STEPUP_SK);
+	memcpy(block + ALIRO_STEPUP_SK_OFFSET, stepup, 32);
+	aliro_stepup_derive_keys(block, skr, skd);
+
+	struct aliro_secchan sc;
+
+	aliro_stepup_channel_init(&sc, skr, skd);
+	{
+		uint8_t plain[500] = {0};
+		uint8_t sd[600];
+
+		chk("seal plaintext too big",
+		    aliro_stepup_seal_sessiondata(&sc, plain, 500, sd, sizeof(sd), &n) == -1);
+		chk("seal out cap too small",
+		    aliro_stepup_seal_sessiondata(&sc, plain, 4, sd, 6, &n) == -1);
+
+		struct aliro_secchan dead = sc;
+
+		dead.enc_ctr = 0xffffffffu;
+		chk("seal counter exhausted",
+		    aliro_stepup_seal_sessiondata(&dead, plain, 4, sd, sizeof(sd), &n) == -1);
+	}
+	{
+		static const uint8_t bad_prefix[8] = {0};
+		static const uint8_t short_form[] = {0xa1, 0x64, 0x64, 0x61, 0x74, 0x61, 0x50,
+						     0,	   0,	 0,    0,    0,	   0,	 0,
+						     0,	   0,	 0,    0,    0,	   0,	 0,
+						     0,	   0,	 0};
+		static const uint8_t trunc59[] = {0xa1, 0x64, 0x64, 0x61, 0x74, 0x61, 0x59, 0x00};
+		static const uint8_t bad_ib[] = {0xa1, 0x64, 0x64, 0x61, 0x74, 0x61, 0x5a, 0x00};
+		static const uint8_t tiny_blob[] = {0xa1, 0x64, 0x64, 0x61, 0x74, 0x61, 0x4f, 0, 0,
+						    0,	  0,	0,    0,    0,	  0,	0,    0, 0,
+						    0,	  0,	0,    0};
+		uint8_t pt[64];
+
+		chk("open bad prefix",
+		    aliro_stepup_open_sessiondata(&sc, bad_prefix, 8, pt, sizeof(pt), &n) == -1);
+		chk("open short-form GCM fail",
+		    aliro_stepup_open_sessiondata(&sc, short_form, sizeof(short_form), pt,
+						  sizeof(pt), &n) == -1);
+
+		uint8_t byte_form[7 + 1 + 32] = {0xa1, 0x64, 0x64, 0x61,
+						 0x74, 0x61, 0x58, 0x20}; /* bstr(32), 1-byte len */
+
+		chk("open 0x58-form GCM fail",
+		    aliro_stepup_open_sessiondata(&sc, byte_form, sizeof(byte_form), pt, sizeof(pt),
+						  &n) == -1);
+		chk("open 0x59 truncated",
+		    aliro_stepup_open_sessiondata(&sc, trunc59, sizeof(trunc59), pt, sizeof(pt),
+						  &n) == -1);
+		chk("open bad length byte",
+		    aliro_stepup_open_sessiondata(&sc, bad_ib, sizeof(bad_ib), pt, sizeof(pt),
+						  &n) == -1);
+		chk("open blob under tag len",
+		    aliro_stepup_open_sessiondata(&sc, tiny_blob, sizeof(tiny_blob), pt, sizeof(pt),
+						  &n) == -1);
+
+		uint8_t sdresp[600];
+		size_t sdn = uh(sdresp, K_SD_RESP);
+
+		chk("open out cap too small",
+		    aliro_stepup_open_sessiondata(&sc, sdresp, sdn, pt, 4, &n) == -1);
+	}
+
+	/* APDU builder bounds. */
+	chk("envelope zero len", aliro_stepup_build_envelope(out, 0, 0, out, sizeof(out), &n) == -1);
+	chk("envelope cap too small", aliro_stepup_build_envelope(out, 32, 0, out, 8, &n) == -1);
+	chk("get_response cap too small", aliro_stepup_build_get_response(0, out, 4, &n) == -1);
+
+	/* Oversized protected header: Sig_structure build fails -> reject step 2. */
+	struct aliro_stepup_verify_ctx ctx = base_ctx(SV_KID, SV_KID_len, SV_ISSUER_PUB);
+	struct aliro_stepup_verdict v;
+	struct aliro_stepup_doc doc;
+
+	g_mode = MODE_ACCEPT;
+	{
+		static uint8_t b[1024];
+		size_t bn = 0;
+
+		memcpy(b, SV_GOOD, 87);
+		bn = 87;
+		b[bn++] = 0x59; /* protected: bstr(600) of zeros */
+		b[bn++] = 0x02;
+		b[bn++] = 0x58;
+		memset(b + bn, 0, 600);
+		bn += 600;
+		memcpy(b + bn, SV_GOOD + 91, SV_GOOD_len - 91);
+		bn += SV_GOOD_len - 91;
+		chk("big-protected parse", aliro_stepup_parse_response(b, bn, &doc) == 0);
+		chk("big-protected reject step 2",
+		    aliro_stepup_verify(&doc, &ctx, &v) == -1 && v.reject_step == 2 && !v.sig_ok);
+	}
+
+	/* >=64 KiB payload: CBOR writer takes the 4-byte-length arm, then errors. */
+	{
+		static uint8_t b[70500];
+		size_t bn = 0;
+
+		memcpy(b, SV_GOOD, 98);
+		bn = 98;
+		b[bn++] = 0x5a; /* payload: bstr(70007) */
+		b[bn++] = 0x00;
+		b[bn++] = 0x01;
+		b[bn++] = 0x11;
+		b[bn++] = 0x77;
+		b[bn++] = 0xd8; /* 24(bstr(70000)) */
+		b[bn++] = 0x18;
+		b[bn++] = 0x5a;
+		b[bn++] = 0x00;
+		b[bn++] = 0x01;
+		b[bn++] = 0x11;
+		b[bn++] = 0x70;
+		memcpy(b + bn, SV_GOOD + 104, 152); /* the real MSO map */
+		bn += 152;
+		memset(b + bn, 0, 70000 - 152); /* MSO trailing padding */
+		bn += 70000 - 152;
+		memcpy(b + bn, SV_GOOD + 256, SV_GOOD_len - 256); /* sig + docType + status */
+		bn += SV_GOOD_len - 256;
+		chk("huge-payload parse", aliro_stepup_parse_response(b, bn, &doc) == 0);
+		chk("huge-payload reject step 2",
+		    aliro_stepup_verify(&doc, &ctx, &v) == -1 && v.reject_step == 2 && !v.sig_ok);
+	}
+
+	/* x5chain too short / without an SPKI marker -> issuer key not found. */
+	{
+		static const uint8_t tiny[] = {0x41, 0x00};
+		uint8_t nomark[72] = {0x58, 0x46, 0}; /* bstr(70) of zeros */
+
+		chk("x5chain tiny parse", x5_splice(tiny, sizeof(tiny), &doc) == 0);
+		aliro_stepup_verify(&doc, &ctx, &v);
+		chk("x5chain tiny reject step 1", v.reject_step == 1 && !v.issuer_key_found);
+		chk("x5chain no-marker parse", x5_splice(nomark, sizeof(nomark), &doc) == 0);
+		aliro_stepup_verify(&doc, &ctx, &v);
+		chk("x5chain no-marker reject step 1", v.reject_step == 1 && !v.issuer_key_found);
+	}
+
+	/* No kid + no x5chain: a single provisioned issuer is used implicitly. */
+	{
+		chk("no-kid parse", parse_mut2(92, 0x05, 92, 0x05, &doc) == 0 && doc.kid == NULL);
+		g_mode = MODE_GOLDEN;
+		g_golden_ss_ok = 0;
+		chk("no-kid single-issuer valid",
+		    aliro_stepup_verify(&doc, &ctx, &v) == 0 && v.valid && g_golden_ss_ok);
+		g_mode = MODE_ACCEPT;
+
+		struct aliro_stepup_verify_ctx zctx = ctx;
+
+		zctx.n_issuers = 0;
+		aliro_stepup_verify(&doc, &zctx, &v);
+		chk("no-kid zero-issuer reject step 1", v.reject_step == 1);
+	}
+
+	/* Disclosed item whose digestID has no valueDigests entry -> step 3. */
+	{
+		chk("unknown digestID parse", parse_mut2(33, 0x08, 33, 0x08, &doc) == 0);
+		aliro_stepup_verify(&doc, &ctx, &v);
+		chk("unknown digestID reject step 3",
+		    v.reject_step == 3 && v.valid_elements == 0);
+	}
+
+	/* aliro_stepup_run early-outs: SessionData open fails, then parse fails. */
+	{
+		static const uint8_t junk[8] = {0};
+		uint8_t scratch[64];
+
+		chk("run open fail", aliro_stepup_run(&sc, junk, sizeof(junk), &ctx, scratch,
+						      sizeof(scratch), &doc, &v) == -1);
+
+		/* Seal invalid CBOR in the device direction so open succeeds. */
+		struct aliro_secchan sc2;
+
+		aliro_stepup_channel_init(&sc2, skr, skd);
+
+		uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+		uint8_t pt[2] = {0xff, 0xff};
+		uint8_t sd[7 + 18] = {0xa1, 0x64, 0x64, 0x61, 0x74, 0x61, 0x52};
+
+		aliro_crypto_gcm_nonce(1, 1, nonce);
+		chk("device-direction seal",
+		    aliro_aes256_gcm_encrypt(skd, nonce, sizeof(nonce), NULL, 0, pt, 2, sd + 7,
+					     sd + 9, ALIRO_GCM_TAG_LEN) == 0);
+		chk("run parse fail", aliro_stepup_run(&sc2, sd, sizeof(sd), &ctx, scratch,
+						       sizeof(scratch), &doc, &v) == -1);
+	}
+}
+
 static void t_apdu_builders(void)
 {
 	printf("-- ENVELOPE / GET RESPONSE APDUs --\n");
@@ -419,6 +916,8 @@ int main(void)
 	t_synth_good_and_rejects();
 	t_run_convenience();
 	t_apdu_builders();
+	t_parse_malformed();
+	t_stepup_edges();
 
 	printf("\n%s (%d failure%s)\n", fails ? "FAIL" : "PASS", fails, fails == 1 ? "" : "s");
 	return fails ? 1 : 0;
