@@ -26,3 +26,4 @@ WOZ_TEST_QUIET=1 "$ROOT/build/host_test"
 
 # Host-side tooling tests (pure-stdlib Python; no toolchain involved).
 python3 "$ROOT/tests/host/test_aliro_lab.py"
+python3 "$ROOT/tests/host/test_flight_recorder.py"

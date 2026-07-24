@@ -49,6 +49,7 @@ int main(void)
 		{ "prepoll_gate", test_prepoll_gate },
 		{ "prepoll_round", test_prepoll_round },
 		{ "twin", test_twin },
+		{ "flight_recorder", test_flight_recorder },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	int npass[32], nfail[32], npend[32];

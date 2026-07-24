@@ -18,6 +18,7 @@
 #include "uwb_min.h"            /* uwb_min_radio_init — standalone SP0 Pre-POLL listener */
 #include "woz_diag.h"           /* DIAGK — verbose per-frame trace, gated off in pretty mode */
 #include "uwb_rxdiag.h"         /* uwb_rxdiag_stream_get — the `aliro log` runtime toggle */
+#include "flight_recorder.h"    /* fr_capture_ev — record/replay walk-up capture (gated) */
 
 /* DIAGK runtime gate — default is per-platform; see woz_diag.h for the rationale. */
 volatile int woz_uwb_diag_on = WOZ_UWB_DIAG_DEFAULT;
@@ -630,6 +631,10 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
  */
 void ccc_shim_rx_try_prepoll(uint16_t datalength)
 {
+	/* Flight recorder: record this decode call + the RX buffer it will read,
+	 * in dispatch order, so a host replay drives the identical entry point. */
+	fr_capture_ev((uint8_t)FR_EP_TRY_PREPOLL, 0u, datalength);
+
 	if (!ccc_shim_active() || datalength == 0u || datalength > sizeof(g_pp_stash)) {
 		return; /* (the POLL event is gated out by the shim's await snapshot) */
 	}
@@ -1069,7 +1074,9 @@ static void resp_tx_done(const dwt_cb_data_t *cb)
 {
 	static uint32_t g_resp_txn;
 
-	(void)cb;
+	fr_capture_ev((uint8_t)FR_EP_TX_DONE, cb != NULL ? cb->status : 0u,
+		      cb != NULL ? (uint16_t)cb->datalength : 0u);
+
 	if (g_resp_txn < 16u) {
 		DIAGK("RESP txdone #%u idx=%08x\n", (unsigned)g_resp_txn,
 		      (unsigned)(g_armed_index + 1u));
@@ -1124,6 +1131,9 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 	uint8_t rng = 0u;
 	bool is_pp = false;
 	uint8_t b[CCC_MHR_LEN] = {0};
+
+	/* Flight recorder: record this RX-result callback + its register snapshot. */
+	fr_capture_ev((uint8_t)FR_EP_RX_REARM, st, (cb != NULL) ? (uint16_t)cb->datalength : 0u);
 
 	if ((st & DWT_INT_CIADONE_BIT_MASK) != 0u) {
 		uint8_t tsb[5] = {0};

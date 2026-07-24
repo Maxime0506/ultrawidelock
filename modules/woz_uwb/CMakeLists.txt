@@ -93,6 +93,12 @@ if(CONFIG_WOZ_UWB)
       if(CONFIG_WOZ_UWB_SELFTEST)
         zephyr_library_sources(${SRC}/driver/uwb_selftest.c)
       endif()
+
+      # Flight recorder: record a live walk-up into a RAM ring for host replay
+      # (gated, default n; the ccc_shim_rx.c call sites no-op when unset).
+      if(CONFIG_WOZ_FLIGHT_RECORDER)
+        zephyr_library_sources(${SRC}/facade/flight_recorder.c)
+      endif()
       # Redirect the per-frame STS-IV load into ccc_shim_wrap.c (TX path).
       zephyr_link_libraries(-Wl,--wrap=dwt_configurestsiv)
       # Responder-RX CCC-STS: program CCC key/IV at each RX-arm (ccc_shim_rx.c).
