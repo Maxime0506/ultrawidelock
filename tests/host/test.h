@@ -37,6 +37,9 @@ void t_eqi_(const char *name, long got, long want, const char *file, int line);
 #define T_EQ(name, got, want) t_eqi_((name), (long)(got), (long)(want), __FILE__, __LINE__)
 
 /* Module suites — one per file under test. */
+void test_aliro_advertising(void);
+void test_aliro_ble(void);
+void test_aliro_nfc(void);
 void test_ccc_kdf(void);
 void test_ccc_mac(void);
 void test_ccc_sts(void);
