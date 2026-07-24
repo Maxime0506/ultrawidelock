@@ -25,7 +25,7 @@ a host test suite; the ESP32 transport polls the controller RSSI once per
 | `WOZ_RSSI_GATE_CLOSE_DBM` | -75 | at/below this, sustained, closes it |
 | `WOZ_RSSI_GATE_CLOSE_HOLD_MS` | 3000 | how long below close before closing |
 | `WOZ_RSSI_GATE_SLOPE_DB` | 8 | fast-open rise per 1.5 s window; 0 disables |
-| `WOZ_RSSI_GATE_MAX_HOLD_MS` | 1500 | longest AP-Completed hold; 0 = unbounded |
+| `WOZ_RSSI_GATE_MAX_HOLD_MS` | 1200 | longest AP-Completed hold; 0 = unbounded |
 | `WOZ_RSSI_GATE_POLL_MS` | 250 | connection RSSI poll period |
 
 ## How long the phone will wait
@@ -44,6 +44,11 @@ cap the reader completes the AP anyway and the gate opens as if the level had
 qualified, so the ordinary close path still powers the radio down when the peer
 leaves. The trace distinguishes the two openings, `gate.open` against
 `gate.holdcap`, because they cost very different amounts of radio.
+
+The cap is only checked when an RSSI sample arrives, so the hold ends up to one
+`WOZ_RSSI_GATE_POLL_MS` late. Measured: a 1500 ms cap released at **1695 ms**,
+leaving 121 ms against a phone that gives up at 1873. Budget cap + poll, not cap;
+1200 + 250 lands at 1450 with a comfortable margin.
 
 Which is actually cheaper — a capped hold that arms UWB briefly, or an unbounded
 hold that pays a fast re-auth every few seconds — is a question for the scenario

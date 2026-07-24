@@ -83,8 +83,13 @@ config WOZ_RSSI_GATE_CLOSE_HOLD_MS
 config WOZ_RSSI_GATE_MAX_HOLD_MS
 	int "Longest AP-Completed hold (ms; 0 = unbounded)"
 	depends on WOZ_RSSI_GATE
-	default 1500
+	default 1200
 	help
+	  NOTE the cap is only evaluated when an RSSI sample arrives, so the hold
+	  actually ends up to WOZ_RSSI_GATE_POLL_MS late. Bench: a 1500 ms cap
+	  fired at 1695 ms, leaving 121 ms against a phone that gives up at 1873.
+	  Budget for cap + poll, not cap.
+
 	  Cap on how long Reader-Status-AP-Completed may be deferred while the
 	  gate stays closed. The phone will not wait forever: bench measurements
 	  put its patience at about 1.9 s, after which it terminates the link
