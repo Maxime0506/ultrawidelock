@@ -28,6 +28,16 @@ a host test suite; the ESP32 transport polls the controller RSSI once per
 | `WOZ_RSSI_GATE_MAX_HOLD_MS` | 0 | cap on the AP-Completed hold; 0 = unbounded (see below) |
 | `WOZ_RSSI_GATE_POLL_MS` | 250 | connection RSSI poll period |
 
+Changing a threshold means changing `sdkconfig.defaults`, not just the Kconfig
+`default`. A Kconfig default only seeds a **fresh** sdkconfig; an app that
+already has one keeps its old value forever, so editing the default alone
+silently ships the previous thresholds and every bench number after it is
+measuring the old build. Check what actually shipped:
+
+```
+grep WOZ_RSSI_GATE ports/esp32/apps/matter-lock/sdkconfig
+```
+
 ## How long the phone will wait
 
 The hold is not free and the phone sets the budget. Measured on an iPhone

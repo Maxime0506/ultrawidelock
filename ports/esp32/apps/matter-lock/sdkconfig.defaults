@@ -119,3 +119,15 @@ CONFIG_FREERTOS_HZ=1000
 # Fixed-point optimisation speeds the base-point mults (keygen/sign) further.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM=y
+
+# RSSI power-gate thresholds, measured rather than guessed: 274 paired
+# range/RSSI samples on the bench rig, reduced with
+# `power_profile.py <log> --calibrate`. See docs/power-profile.md for the curve
+# and for why -55 beats the better-separating -50. Per-room and per-handset;
+# re-run the calibration for a different rig.
+#
+# Pinned here because a Kconfig `default` only seeds a FRESH sdkconfig. An
+# existing sdkconfig keeps its old value forever, so changing the default alone
+# silently ships the old thresholds.
+CONFIG_WOZ_RSSI_GATE_OPEN_DBM=-55
+CONFIG_WOZ_RSSI_GATE_CLOSE_DBM=-65
