@@ -11,6 +11,7 @@
 #include "aliro_kdf.h"
 #include "fira_session.h"
 #include "ccc_shim.h"
+#include "flight_recorder.h" /* fr_capture_config — walk-up record/replay (gated) */
 
 #if defined(CONFIG_SOC_NRF5340_CPUAPP)
 #include <hal/nrf_clock.h>
@@ -63,6 +64,11 @@ int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)
 	}
 
 	woz_hfclk_ensure_128mhz();
+
+	/* Flight recorder: stamp the session config (incl. URSK) that opens this
+	 * walk-up, so a replay can reconstruct the exact session before feeding it
+	 * the recorded frames. No-op unless armed (`fr on`). */
+	fr_capture_config(c);
 
 	/* Stash the URSK so the Pre-POLL decode can derive the CCC STS the Wallet expects. */
 	fira_session_set_provisioned_ursk(c->ursk);
