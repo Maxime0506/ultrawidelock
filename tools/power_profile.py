@@ -4,6 +4,15 @@ into the mA / unlock-latency / approach numbers of the RSSI-gate study.
 
 Usage: python3 tools/power_profile.py <capture.log> [--ppk trace.csv]
                                       [--tag LABEL] [--shift SECONDS] [--csv out.csv]
+       python3 tools/power_profile.py <capture.log> --calibrate
+                                      [--near-cm CM] [--pair-ms MS]
+
+--calibrate answers a different question from the same captures: what the BLE
+level actually means in metres on THIS reader in THIS room. Every walk-up already
+interleaves `range cm=` (UWB ground truth) with `rssi dbm=`, so it pairs them,
+prints the level per distance bin with its spread, and scores each candidate open
+threshold on how well it separates near from far. That is what should set
+WOZ_RSSI_GATE_OPEN_DBM / CLOSE_DBM, which ship as placeholders. No analyzer needed.
 
 Parses the same "[ALAB] t=<us> ev=..." trace aliro_lab.py reads (firmware built
 with CONFIG_WOZ_ALIRO_LAB, `lab on`), now including the RSSI power-gate events
@@ -157,6 +166,83 @@ def span_ma(samples, off_s, a_us, b_us):
     return (sum(vals) / len(vals)) if vals else None
 
 
+def pair_range_rssi(events, window_us):
+    """[(cm, dbm)] — every trusted range paired with the RSSI sample nearest it in
+    time, within window_us. The UWB range is the ground truth the BLE level has to
+    be judged against, and both already ride the same trace, so a walk-up capture
+    is a calibration run whether or not it was meant as one."""
+    ranges = [(t, a["cm"]) for t, n, a in events if n == "range" and "cm" in a]
+    rssis = [(t, a["dbm"]) for t, n, a in events if n == "rssi" and "dbm" in a]
+    pairs = []
+    j = 0
+    for t, cm in ranges:
+        while j + 1 < len(rssis) and abs(rssis[j + 1][0] - t) <= abs(rssis[j][0] - t):
+            j += 1
+        if rssis and abs(rssis[j][0] - t) <= window_us:
+            pairs.append((cm, rssis[j][1]))
+    return pairs
+
+
+def pct(sorted_vals, p):
+    """Nearest-rank percentile of an already-sorted list."""
+    if not sorted_vals:
+        return None
+    k = int(round((p / 100.0) * (len(sorted_vals) - 1)))
+    return sorted_vals[k]
+
+
+def calibrate(pairs, near_cm, edges):
+    """Print the dBm-to-distance curve and, for each candidate threshold, how well
+    it separates near from far. Returns the best-margin threshold or None."""
+    print("calibration: %d paired samples (range + nearest RSSI)\n" % len(pairs))
+
+    hdr = ["distance", "n", "median", "p10", "p90", "min", "max"]
+    table = []
+    for lo, hi in zip(edges, edges[1:] + [None]):
+        vals = sorted(d for cm, d in pairs if cm >= lo and (hi is None or cm < hi))
+        if not vals:
+            continue
+        label = ("%d-%d cm" % (lo, hi)) if hi is not None else "%d+ cm" % lo
+        table.append([label, str(len(vals)), str(pct(vals, 50)), str(pct(vals, 10)),
+                      str(pct(vals, 90)), str(vals[0]), str(vals[-1])])
+    print_table(hdr, table)
+
+    near = [d for cm, d in pairs if cm < near_cm]
+    far = [d for cm, d in pairs if cm >= near_cm]
+    if not near or not far:
+        print("\nno separation table: need samples on both sides of %d cm" % near_cm)
+        return None
+
+    print("\nseparation at %d cm  (%d near, %d far)" % (near_cm, len(near), len(far)))
+    hdr2 = ["open dBm", "opens near", "opens far (false)", "margin"]
+    rows, best = [], None
+    for thr in range(-40, -91, -5):
+        n_rate = 100.0 * sum(1 for d in near if d >= thr) / len(near)
+        f_rate = 100.0 * sum(1 for d in far if d >= thr) / len(far)
+        rows.append([str(thr), "%.0f%%" % n_rate, "%.0f%%" % f_rate,
+                     "%+.0f" % (n_rate - f_rate)])
+        if best is None or (n_rate - f_rate) > best[1]:
+            best = (thr, n_rate - f_rate, n_rate, f_rate)
+    print_table(hdr2, rows)
+
+    print("\nbest margin: %d dBm — opens for %.0f%% of near samples, %.0f%% of far"
+          % (best[0], best[2], best[3]))
+    if best[1] < 50.0:
+        print("WEAK SEPARATION: BLE RSSI does not cleanly tell these distances apart\n"
+              "here. A threshold set from this data will either hold too long or open\n"
+              "too early; treat the gate as a coarse pre-filter, not a range estimate.")
+    return best[0]
+
+
+def print_table(hdr, rows):
+    widths = [max(len(h), max((len(r[c]) for r in rows), default=0))
+              for c, h in enumerate(hdr)]
+    print("| " + " | ".join(h.ljust(w) for h, w in zip(hdr, widths)) + " |")
+    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    for r in rows:
+        print("| " + " | ".join(v.ljust(w) for v, w in zip(r, widths)) + " |")
+
+
 def fmt_ms(us):
     return "-" if us is None else "%.0f" % (us / 1e3)
 
@@ -167,6 +253,7 @@ def fmt_ma(ma):
 
 def main(argv):
     args, log, ppk, tag, shift, csv_out = argv[1:], None, None, "", None, None
+    do_cal, near_cm, pair_ms = False, 100, 300
     it = iter(args)
     for a in it:
         if a == "--ppk":
@@ -177,13 +264,29 @@ def main(argv):
             shift = float(next(it, "0"))
         elif a == "--csv":
             csv_out = next(it, None)
+        elif a == "--calibrate":
+            do_cal = True
+        elif a == "--near-cm":
+            near_cm = int(next(it, "100"))
+        elif a == "--pair-ms":
+            pair_ms = int(next(it, "300"))
         elif a.startswith("-"):
             sys.exit(__doc__.strip().split("\n")[0] + "\n(unknown option %s)" % a)
         else:
             log = a
     if log is None:
         sys.exit("usage: power_profile.py <capture.log> [--ppk trace.csv] "
-                 "[--tag LABEL] [--shift SECONDS] [--csv out.csv]")
+                 "[--tag LABEL] [--shift SECONDS] [--csv out.csv]\n"
+                 "       power_profile.py <capture.log> --calibrate "
+                 "[--near-cm CM] [--pair-ms MS]")
+
+    if do_cal:
+        pairs = pair_range_rssi(parse_log(log), pair_ms * 1000)
+        if not pairs:
+            sys.exit("power_profile: no range/rssi pairs (needs a walk-up that ranged, "
+                     "with `lab on`)")
+        calibrate(pairs, near_cm, [0, 50, 100, 150, 200, 250, 300])
+        return 0
 
     runs = split_walkups(parse_log(log))
     if not runs:
@@ -213,13 +316,7 @@ def main(argv):
                       str(r["open_dbm"]) if r["open_dbm"] is not None else "-",
                       fmt_ma(r["idle_ma"]), fmt_ma(r["held_ma"]), fmt_ma(r["uwb_ma"])])
 
-    widths = [max(len(h), max((len(t[c]) for t in table), default=0))
-              for c, h in enumerate(hdr)]
-    line = "| " + " | ".join(h.ljust(w) for h, w in zip(hdr, widths)) + " |"
-    print(line)
-    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
-    for t in table:
-        print("| " + " | ".join(v.ljust(w) for v, w in zip(t, widths)) + " |")
+    print_table(hdr, table)
 
     if csv_out:
         with open(csv_out, "a") as f:
