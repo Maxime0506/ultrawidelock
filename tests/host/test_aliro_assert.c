@@ -31,29 +31,35 @@ static void base_assertion(struct aliro_assert *a)
 	}
 	a->distance_cm = 25;
 	a->uptime_ms = 1000000;
+	/* Non-zero so the byte-exact vector below actually pins where unix_ms
+	 * sits; all-zero would pass even if the field were misplaced. */
+	a->unix_ms = 1785000000000ULL;
 }
 
 void test_aliro_assert(void)
 {
 	struct aliro_assert a;
 	base_assertion(&a);
-	uint8_t wire[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t wire[ALIRO_ASSERT_WIRE_HMAC];
 	size_t wlen = 0;
 
 	t_group("build");
 	T_EQ("build.rc", aliro_assert_build(k_key, &a, wire, sizeof(wire), &wlen), 0);
-	T_EQ("build.len", (long)wlen, ALIRO_ASSERT_WIRE_LEN);
+	T_EQ("build.len", (long)wlen, ALIRO_ASSERT_WIRE_HMAC);
 	T_EQ("build.magic0", wire[0], 0xA1);
 	T_EQ("build.magic1", wire[1], 0x50);
-	T_EQ("build.version", wire[2], 0x01);
+	T_EQ("build.version", wire[2], 0x02);
+	T_EQ("build.alg", wire[3], ALIRO_ASSERT_ALG_HMAC_SHA256);
 	uint8_t tiny[8];
 	T_EQ("build.too_small", aliro_assert_build(k_key, &a, tiny, sizeof(tiny), &wlen), -1);
-	/* Lock the whole 70-byte frame so the wire format + MAC cannot drift.
-	 * magic|ver|status|nonce|cred_id|dist=0019(25)|uptime=0f4240(1e6)|HMAC. */
+	/* Lock the whole 79-byte frame so the wire format + MAC cannot drift. Frame
+	 * and tag were derived independently (Python hmac) before being pinned here.
+	 * magic|ver=02|alg=01|status|nonce|cred_id|dist=0019(25)|
+	 * uptime=0f4240(1e6)|unix=019f9a4a7a00(1785000000000)|HMAC. */
 	t_vec("build.frame", wire, sizeof(wire),
-	      "a1500101deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c700190000"
-	      "0000000f4240b3533a5bc0f740685f3330ad30afe93fbeaf8bd409c74c4367f6"
-	      "ae8de25ff4fb");
+	      "a150020101deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c7001900"
+	      "000000000f42400000019f9a4a7a00339543684e90639413024ab06d2f49f888"
+	      "29baaef4730ea900db1f0d5bcf639c");
 
 	t_group("verify OK");
 	struct aliro_assert out;
@@ -62,6 +68,10 @@ void test_aliro_assert(void)
 	T_EQ("ok.dist", out.distance_cm, 25);
 	T_EQ("ok.status", out.status, ALIRO_PRESENCE_PRESENT);
 	T_OK("ok.credid", memcmp(out.cred_id, a.cred_id, ALIRO_ASSERT_CREDID_LEN) == 0);
+	/* Decode side of the two 64-bit clocks: the frame KAT above pins how they
+	 * are written, this pins that verify hands them back. */
+	T_OK("ok.uptime", out.uptime_ms == 1000000ULL);
+	T_OK("ok.unix", out.unix_ms == 1785000000000ULL);
 	/* Threshold is inclusive: exactly at the boundary passes. */
 	T_EQ("ok.boundary", aliro_assert_verify(k_key, wire, wlen, k_nonce, 25, 0, &out),
 	     ALIRO_ASSERT_OK);
@@ -76,7 +86,7 @@ void test_aliro_assert(void)
 	T_EQ("wrong_key", aliro_assert_verify(badkey, wire, wlen, k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MAC);
 	/* Any single-bit tamper of the MAC'd region also fails the MAC. */
-	uint8_t tampered[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t tampered[ALIRO_ASSERT_WIRE_HMAC];
 	memcpy(tampered, wire, sizeof(tampered));
 	tampered[28] ^= 0x08; /* flip distance high byte */
 	T_EQ("tamper", aliro_assert_verify(k_key, tampered, sizeof(tampered), k_nonce, 40, 0, &out),
@@ -99,7 +109,7 @@ void test_aliro_assert(void)
 	t_group("reject: absent status");
 	struct aliro_assert absent = a;
 	absent.status = ALIRO_PRESENCE_ABSENT;
-	uint8_t awire[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t awire[ALIRO_ASSERT_WIRE_HMAC];
 	aliro_assert_build(k_key, &absent, awire, sizeof(awire), NULL);
 	T_EQ("absent", aliro_assert_verify(k_key, awire, sizeof(awire), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_ABSENT);
@@ -107,13 +117,13 @@ void test_aliro_assert(void)
 	t_group("reject: out of range / no range");
 	struct aliro_assert far = a;
 	far.distance_cm = 41;
-	uint8_t fwire[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t fwire[ALIRO_ASSERT_WIRE_HMAC];
 	aliro_assert_build(k_key, &far, fwire, sizeof(fwire), NULL);
 	T_EQ("far", aliro_assert_verify(k_key, fwire, sizeof(fwire), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_RANGE);
 	struct aliro_assert norange = a;
 	norange.distance_cm = ALIRO_ASSERT_DIST_NONE;
-	uint8_t nwire[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t nwire[ALIRO_ASSERT_WIRE_HMAC];
 	aliro_assert_build(k_key, &norange, nwire, sizeof(nwire), NULL);
 	T_EQ("no_range", aliro_assert_verify(k_key, nwire, sizeof(nwire), k_nonce, 0xFFFE, 0, &out),
 	     ALIRO_ASSERT_E_RANGE);
@@ -121,15 +131,39 @@ void test_aliro_assert(void)
 	t_group("reject: malformed framing");
 	T_EQ("short_len", aliro_assert_verify(k_key, wire, wlen - 1u, k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
-	uint8_t bad[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t bad[ALIRO_ASSERT_WIRE_HMAC];
 	memcpy(bad, wire, sizeof(bad));
 	bad[0] = 0x00; /* bad magic */
 	T_EQ("bad_magic", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	memcpy(bad, wire, sizeof(bad));
-	bad[2] = 0x02; /* bad version */
+	bad[2] = 0x03; /* bad version (0x02 is current) */
 	T_EQ("bad_version", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
+	/* A frame naming an algorithm this verifier does not implement must be
+	 * refused as a wrong ALGORITHM, not mislabelled as a bad tag -- otherwise a
+	 * P-256 frame arriving at the HMAC path looks like tampering. Rejected
+	 * before the tag is even computed, so the MAC here is deliberately stale. */
+	memcpy(bad, wire, sizeof(bad));
+	bad[3] = ALIRO_ASSERT_ALG_ECDSA_P256;
+	T_EQ("wrong_alg", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_ALG);
+	memcpy(bad, wire, sizeof(bad));
+	bad[3] = 0x7F; /* unknown algorithm */
+	T_EQ("unknown_alg", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_ALG);
+
+	t_group("wire length by algorithm");
+	T_EQ("len.hmac", (long)aliro_assert_wire_len(ALIRO_ASSERT_ALG_HMAC_SHA256),
+	     ALIRO_ASSERT_WIRE_HMAC);
+	T_EQ("len.p256", (long)aliro_assert_wire_len(ALIRO_ASSERT_ALG_ECDSA_P256),
+	     ALIRO_ASSERT_WIRE_P256);
+	T_EQ("len.unknown", (long)aliro_assert_wire_len(0x7F), 0);
+	T_EQ("peek.alg", aliro_assert_peek_alg(wire, sizeof(wire)),
+	     ALIRO_ASSERT_ALG_HMAC_SHA256);
+	/* Too short to contain the alg byte's own prefix: report invalid, not a
+	 * read past the end of the caller's buffer. */
+	T_EQ("peek.short", aliro_assert_peek_alg(wire, ALIRO_ASSERT_SIGNED_LEN - 1u), 0);
 
 	t_group("cred_id derivation");
 	uint8_t pub[65];

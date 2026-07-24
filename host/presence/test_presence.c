@@ -45,7 +45,7 @@ static void make_frame(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint16_t dis
 	}
 	a.distance_cm = dist;
 	a.uptime_ms = 500000;
-	aliro_assert_build(k_key, &a, wire, ALIRO_ASSERT_WIRE_LEN, NULL);
+	aliro_assert_build(k_key, &a, wire, ALIRO_ASSERT_WIRE_HMAC, NULL);
 }
 
 // Writes data to a fresh temp file and returns its path (static buffer per call
@@ -141,14 +141,14 @@ static void test_framing(void)
 	CHECK("chal.magic", ch[0] == 'A' && ch[1] == 'C');
 	CHECK("chal.nonce", memcmp(ch + 2, nonce, ALIRO_ASSERT_NONCE_LEN) == 0);
 
-	uint8_t frame[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t frame[ALIRO_ASSERT_WIRE_HMAC];
 	make_frame(nonce, 20, NULL, ALIRO_PRESENCE_PRESENT, frame);
 	/* embed the frame after 5 garbage bytes */
-	uint8_t buf[5 + ALIRO_ASSERT_WIRE_LEN];
+	uint8_t buf[5 + ALIRO_ASSERT_WIRE_HMAC];
 	memset(buf, 0x77, 5);
 	memcpy(buf + 5, frame, sizeof(frame));
 	CHECK("find.offset", presence_find_frame(buf, sizeof(buf)) == 5);
-	CHECK("find.short", presence_find_frame(frame, ALIRO_ASSERT_WIRE_LEN - 1u) == -1);
+	CHECK("find.short", presence_find_frame(frame, ALIRO_ASSERT_WIRE_HMAC - 1u) == -1);
 	uint8_t nomagic[100];
 	memset(nomagic, 0x00, sizeof(nomagic));
 	CHECK("find.none", presence_find_frame(nomagic, sizeof(nomagic)) == -1);
@@ -168,7 +168,7 @@ static void test_verify(void)
 	memset(nonce, 0x11, sizeof(nonce));
 	uint8_t cred[ALIRO_ASSERT_CREDID_LEN] = { 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7 };
 
-	uint8_t wire[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t wire[ALIRO_ASSERT_WIRE_HMAC];
 	make_frame(nonce, 25, cred, ALIRO_PRESENCE_PRESENT, wire);
 	CHECK("vf.present", presence_verify(&c, k_key, wire, sizeof(wire), nonce, NULL) ==
 			     PRESENCE_PRESENT);
@@ -185,7 +185,7 @@ static void test_verify(void)
 	c.have_cred_id = 0;
 
 	/* out of range -> DENIED */
-	uint8_t far[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t far[ALIRO_ASSERT_WIRE_HMAC];
 	make_frame(nonce, 100, cred, ALIRO_PRESENCE_PRESENT, far);
 	CHECK("vf.far", presence_verify(&c, k_key, far, sizeof(far), nonce, NULL) == PRESENCE_DENIED);
 
@@ -205,11 +205,13 @@ static void test_transact_and_cache(void)
 	/* happy transact over a socketpair: pre-write the dongle's response. */
 	int sv[2];
 	CHECK("sp.create", socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
-	uint8_t frame[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t frame[ALIRO_ASSERT_WIRE_HMAC];
 	make_frame(nonce, 30, NULL, ALIRO_PRESENCE_PRESENT, frame);
 	write(sv[1], frame, sizeof(frame));
-	uint8_t got[ALIRO_ASSERT_WIRE_LEN];
-	CHECK("tx.ok", presence_transact_fd(sv[0], nonce, 1000, got) == 0);
+	uint8_t got[ALIRO_ASSERT_WIRE_MAX];
+	size_t got_len = 0;
+	CHECK("tx.ok", presence_transact_fd(sv[0], nonce, 1000, got, &got_len) == 0);
+	CHECK("tx.len", got_len == ALIRO_ASSERT_WIRE_HMAC);
 	CHECK("tx.frame", memcmp(got, frame, sizeof(frame)) == 0);
 	close(sv[0]);
 	close(sv[1]);
@@ -217,7 +219,7 @@ static void test_transact_and_cache(void)
 	/* timeout: nothing written, short deadline. */
 	int sv2[2];
 	socketpair(AF_UNIX, SOCK_STREAM, 0, sv2);
-	CHECK("tx.timeout", presence_transact_fd(sv2[0], nonce, 100, got) == PRESENCE_E_IO);
+	CHECK("tx.timeout", presence_transact_fd(sv2[0], nonce, 100, got, NULL) == PRESENCE_E_IO);
 	close(sv2[0]);
 	close(sv2[1]);
 
@@ -246,7 +248,7 @@ static void test_check_fd(void)
 	memset(nonce, 0x33, sizeof(nonce));
 	int sv[2];
 	socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
-	uint8_t frame[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t frame[ALIRO_ASSERT_WIRE_HMAC];
 	make_frame(nonce, 15, NULL, ALIRO_PRESENCE_PRESENT, frame);
 	write(sv[1], frame, sizeof(frame));
 
@@ -265,7 +267,7 @@ static void test_check_fd(void)
 	snprintf(c.stampfile, sizeof(c.stampfile), "%s", stamp2 ? stamp2 : "/tmp/aliro_stamp_y");
 	int sv2[2];
 	socketpair(AF_UNIX, SOCK_STREAM, 0, sv2);
-	uint8_t afr[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t afr[ALIRO_ASSERT_WIRE_HMAC];
 	make_frame(nonce, 15, NULL, ALIRO_PRESENCE_ABSENT, afr);
 	write(sv2[1], afr, sizeof(afr));
 	CHECK("checkfd.absent", presence_check_fd(sv2[0], &c, k_key, nonce, 3000) == PRESENCE_DENIED);

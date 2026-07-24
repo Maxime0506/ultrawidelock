@@ -110,6 +110,10 @@ static void answer_challenge(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 	memset(&a, 0, sizeof(a));
 	memcpy(a.nonce, nonce, ALIRO_ASSERT_NONCE_LEN);
 	a.uptime_ms = (uint64_t)(esp_timer_get_time() / 1000);
+	/* unix_ms stays ALIRO_ASSERT_TIME_NONE (the memset above): this dongle has
+	 * no trusted wall clock, and claiming one it cannot back would be worse
+	 * than admitting it has none. Only the paired host verifies these frames,
+	 * and it does not need attested time. */
 
 	int64_t now = esp_timer_get_time();
 	uint8_t cred_pub[65];
@@ -129,7 +133,7 @@ static void answer_challenge(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 	 * fails cleanly (a clean deny) instead of the dongle going silent. */
 	static const uint8_t zero_key[ALIRO_ASSERT_KEY_LEN] = { 0 };
 	const uint8_t *key = s_key_set ? s_key : zero_key;
-	uint8_t wire[ALIRO_ASSERT_WIRE_LEN];
+	uint8_t wire[ALIRO_ASSERT_WIRE_HMAC];
 
 	aliro_assert_build(key, &a, wire, sizeof(wire), NULL);
 	fwrite(wire, 1, sizeof(wire), stdout);

@@ -264,11 +264,20 @@ void presence_build_keyset(const uint8_t key[ALIRO_ASSERT_KEY_LEN], uint8_t *buf
 
 long presence_find_frame(const uint8_t *buf, size_t len)
 {
-	if (buf == NULL || len < ALIRO_ASSERT_WIRE_LEN) {
+	if (buf == NULL) {
 		return -1;
 	}
-	for (size_t i = 0; i + ALIRO_ASSERT_WIRE_LEN <= len; i++) {
-		if (buf[i] == 0xA1u && buf[i + 1u] == 0x50u) {
+	/* Frames are variable length -- the alg byte inside the signed prefix says
+	 * which -- so a magic match is only a frame once that many bytes have
+	 * actually arrived. Scanning on magic alone would hand a half-received
+	 * P-256 frame to the verifier as if it were complete. */
+	for (size_t i = 0; i + ALIRO_ASSERT_SIGNED_LEN <= len; i++) {
+		if (buf[i] != 0xA1u || buf[i + 1u] != 0x50u) {
+			continue;
+		}
+		size_t need = aliro_assert_wire_len(aliro_assert_peek_alg(buf + i, len - i));
+
+		if (need != 0u && i + need <= len) {
 			return (long)i;
 		}
 	}
@@ -278,7 +287,7 @@ long presence_find_frame(const uint8_t *buf, size_t len)
 /* ---- transport ---------------------------------------------------------- */
 
 int presence_transact_fd(int fd, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint32_t timeout_ms,
-			 uint8_t wire[ALIRO_ASSERT_WIRE_LEN])
+			 uint8_t wire[ALIRO_ASSERT_WIRE_MAX], size_t *wire_len)
 {
 	uint8_t challenge[PRESENCE_CHALLENGE_LEN];
 
@@ -328,7 +337,15 @@ int presence_transact_fd(int fd, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], ui
 
 		long off = presence_find_frame(acc, used);
 		if (off >= 0) {
-			memcpy(wire, acc + off, ALIRO_ASSERT_WIRE_LEN);
+			/* find_frame only returns an offset once the whole frame is
+			 * present, so this length is always fully buffered. */
+			size_t n_frame = aliro_assert_wire_len(
+				aliro_assert_peek_alg(acc + off, used - (size_t)off));
+
+			memcpy(wire, acc + off, n_frame);
+			if (wire_len != NULL) {
+				*wire_len = n_frame;
+			}
 			return 0;
 		}
 	}
@@ -400,14 +417,15 @@ int presence_check_fd(int fd, const struct presence_config *c,
 		      const uint8_t key[ALIRO_ASSERT_KEY_LEN],
 		      const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint64_t now_s)
 {
-	uint8_t wire[ALIRO_ASSERT_WIRE_LEN];
-	int rc = presence_transact_fd(fd, nonce, c->timeout_ms, wire);
+	uint8_t wire[ALIRO_ASSERT_WIRE_MAX];
+	size_t wire_len = 0;
+	int rc = presence_transact_fd(fd, nonce, c->timeout_ms, wire, &wire_len);
 
 	if (rc != 0) {
 		return PRESENCE_E_IO;
 	}
 	struct aliro_assert a;
-	int v = presence_verify(c, key, wire, sizeof(wire), nonce, &a);
+	int v = presence_verify(c, key, wire, wire_len, nonce, &a);
 
 	if (v == PRESENCE_PRESENT) {
 		(void)presence_cache_stamp(c->stampfile, now_s);

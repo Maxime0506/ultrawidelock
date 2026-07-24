@@ -72,17 +72,21 @@ void presence_build_challenge(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint8
 /* Build the 34-byte key-load frame (pairing the dongle to the host key). buf must
  * hold PRESENCE_KEYSET_LEN. */
 void presence_build_keyset(const uint8_t key[ALIRO_ASSERT_KEY_LEN], uint8_t *buf);
-/* Find a complete 70-byte assertion frame (synced on its 0xA1 0x50 magic) in a
- * byte buffer. Returns the start offset, or -1 if no complete frame is present.
- * Tolerates leading garbage/desync on the serial line. */
+/* Find a complete assertion frame (synced on its 0xA1 0x50 magic) in a byte
+ * buffer. Frame length depends on the algorithm named inside the frame, so a
+ * match requires the whole frame to have arrived. Returns the start offset, or
+ * -1 if no complete frame is present. Tolerates leading garbage/desync on the
+ * serial line. */
 long presence_find_frame(const uint8_t *buf, size_t len);
 
 /* ---- transport (any fd; socketpair in tests) ---------------------------- */
 /* Write the challenge to fd, then read until a full assertion frame arrives or
- * timeout_ms elapses. On success writes 70 bytes to wire and returns 0; returns
- * PRESENCE_E_IO on timeout/short/error. */
+ * timeout_ms elapses. On success copies the frame to wire, stores its length in
+ * *wire_len (optional) and returns 0; returns PRESENCE_E_IO on timeout/short/
+ * error. wire must hold ALIRO_ASSERT_WIRE_MAX bytes: the frame is as long as
+ * its algorithm requires, which the caller does not know in advance. */
 int presence_transact_fd(int fd, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], uint32_t timeout_ms,
-			 uint8_t wire[ALIRO_ASSERT_WIRE_LEN]);
+			 uint8_t wire[ALIRO_ASSERT_WIRE_MAX], size_t *wire_len);
 
 /* ---- verification ------------------------------------------------------- */
 /* Verify a received frame against config + key + the nonce we sent + a monotonic
