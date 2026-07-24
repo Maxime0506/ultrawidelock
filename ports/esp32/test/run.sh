@@ -201,6 +201,7 @@ echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes =="
 DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
    -I "$HERE/../../../deps/dw3000/platform" \
    -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
@@ -216,6 +217,7 @@ SBIN2="$(mktemp -t esp_wrap_stubs.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
    -I "$HERE/../../../modules/woz_uwb/src/ccc" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
    "$HERE/test_esp_wrap_stubs.c" \
    "$HERE/../components/woz_uwb/port/woz_wrap_stubs.c" -o "$SBIN2"
 "$SBIN2"

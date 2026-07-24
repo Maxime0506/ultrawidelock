@@ -76,6 +76,15 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 	s_prepoll_calls++;
 }
 
+/* uwb_cirdiag_capture double: shim_rxok latches the CIA diag through it; the
+ * real latch lives in the woz_uwb driver, out of this wrap-seam suite. */
+bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength)
+{
+	(void)status;
+	(void)datalength;
+	return false;
+}
+
 /* ---- the blob's own callbacks (recording) -------------------------------- */
 static int s_blob_rxok, s_blob_rxto, s_blob_rxerr, s_blob_txdone;
 static const dwt_cb_data_t *s_blob_rxok_arg;

@@ -28,6 +28,7 @@
 
 #include "aliro_ble.h"
 #include "aliro_lab.h"
+#include "uwb_cirdiag.h"
 #include "aliro_lat.h"
 #include "aliro_reader.h"
 #include "woz_diag.h"
@@ -1041,6 +1042,34 @@ void aliro_lab_set_enabled(bool on)
 bool aliro_lab_enabled(void)
 {
 	return mfk_lab_on != 0;
+}
+
+/* uwb_cirdiag doubles: app_shell's `lab`/`lab cir` command drives these; the
+ * real latch/stream lives in the woz_uwb driver, out of the matter-lock suite. */
+static int mfk_cir_on;
+static int mfk_cir_dump_on;
+
+void uwb_cirdiag_set_enabled(bool on)
+{
+	mfk_cir_on = on ? 1 : 0;
+}
+
+bool uwb_cirdiag_enabled(void)
+{
+	return mfk_cir_on != 0;
+}
+
+void uwb_cirdiag_dump_set_enabled(bool on)
+{
+	if (on) {
+		mfk_cir_on = 1;
+	}
+	mfk_cir_dump_on = on ? 1 : 0;
+}
+
+bool uwb_cirdiag_dump_enabled(void)
+{
+	return mfk_cir_dump_on != 0;
 }
 
 void aliro_lab_ev(const char *ev)

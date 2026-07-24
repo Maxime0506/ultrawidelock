@@ -199,6 +199,48 @@ int dwt_readstsquality(int16_t *rxStsQualityIndex, int stsSegment)
 	return drvfake.stsq_ret;
 }
 
+/* CIA/CIR diagnostics doubles for uwb_cirdiag.c: recording no-ops. The
+ * diagnostics are zeroed except a settable ipatovFpIndex (drives the window
+ * clamp), and dwt_readcir records the requested offset/width so a test can
+ * assert the window geometry without any accumulator truth. */
+void dwt_readdiagnostics(dwt_rxdiag_t *diagnostics)
+{
+	drvfake.readdiag_calls++;
+	if (diagnostics != NULL) {
+		memset(diagnostics, 0, sizeof(*diagnostics));
+		diagnostics->ipatovFpIndex = drvfake.diag_fp;
+	}
+}
+
+int dwt_readcir(uint32_t *buffer, dwt_acc_idx_e cir_idx, uint16_t sample_offs,
+		uint16_t num_samples, dwt_cir_read_mode_e mode)
+{
+	(void)cir_idx;
+	(void)mode;
+	drvfake.readcir_calls++;
+	drvfake.last_cir_base = sample_offs;
+	drvfake.last_cir_num = num_samples;
+	if (buffer != NULL) {
+		memset(buffer, 0, (size_t)num_samples * sizeof(uint32_t));
+	}
+	return drvfake.cir_ret;
+}
+
+int dwt_readstsstatus(uint16_t *stsStatus, int sts_num)
+{
+	(void)sts_num;
+	if (stsStatus != NULL) {
+		*stsStatus = 0u;
+	}
+	return 0;
+}
+
+void dwt_configciadiag(uint8_t enable_mask)
+{
+	drvfake.configciadiag_calls++;
+	drvfake.last_ciadiag_mask = enable_mask;
+}
+
 uint32_t dwt_read_reg(uint32_t addr)
 {
 	(void)addr;
@@ -375,6 +417,13 @@ int k_work_cancel_delayable(struct k_work_delayable *dwork)
 void k_work_init_delayable(struct k_work_delayable *dwork, k_work_handler_t handler)
 {
 	dwork->work.handler = handler;
+}
+
+int k_work_submit(struct k_work *work)
+{
+	workfake.submit_calls++;
+	workfake.last_submit = work;
+	return 0;
 }
 
 /* ── shell fake (zephyr/shell/shell.h capture sink) ────────────────────────── */

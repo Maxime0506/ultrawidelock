@@ -64,6 +64,7 @@ void test_ccc_shim_wrap(void);
 void test_uwb_min(void);
 void test_uwb_isr(void);
 void test_uwb_rxdiag(void);
+void test_uwb_cirdiag(void);
 void test_uwb_selftest(void);
 void test_aliro_shell(void);
 

@@ -143,6 +143,7 @@ SIDE_UNIT_SRCS=(
 	"$SRC/driver/uwb_min.c"
 	"$SRC/driver/uwb_isr.c"
 	"$SRC/driver/uwb_rxdiag.c"
+	"$SRC/driver/uwb_cirdiag.c"
 	"$SRC/driver/uwb_selftest.c"
 	"$SRC/shell/aliro_shell.c"
 	"$SRC/ccc/ccc_crypto_psa.c"
@@ -172,9 +173,11 @@ cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
+	"$HOSTD/test_uwb_cirdiag.c" \
 	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
+	"$SRC/driver/uwb_cirdiag.c" \
 	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" -o "$OUT/cov_drv"
 WOZ_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
 	>>"$OUT/run.log" 2>&1 || true
@@ -228,14 +231,14 @@ cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
 	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
 run_suite esp_shell "$OUT/cov_esp_shell"
 
-cov_cc -I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" \
+cov_cc -I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
 	-I"$ROOT/deps/dw3000/platform" -I"$ROOT/deps/dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
 	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
-cov_cc -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" \
+cov_cc -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/facade" \
 	"$ET/test_esp_wrap_stubs.c" \
 	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c" -o "$OUT/cov_esp_wrap"
 run_suite esp_wrap "$OUT/cov_esp_wrap"
