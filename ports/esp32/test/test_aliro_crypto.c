@@ -430,6 +430,92 @@ int main(void)
 		chk("advtag.no-clock", tag, sizeof(tag), "1bee7962570be1");
 	}
 
+	printf("\n== error paths: cryptogram / channel exhaustion / framing / salt ==\n");
+	{
+		uint8_t csk[32], crg[ALIRO_CRYPTOGRAM_LEN], cpt[ALIRO_CRYPTOGRAM_LEN];
+
+		memset(csk, 0x11, sizeof(csk));
+		memset(crg, 0x22, sizeof(crg));
+		T_OK("cryptogram.null", aliro_crypto_verify_cryptogram(csk, NULL, 64, cpt) < 0);
+		T_OK("cryptogram.short",
+		     aliro_crypto_verify_cryptogram(csk, crg, ALIRO_GCM_TAG_LEN - 1u, cpt) < 0);
+	}
+	{
+		/* both directional counters refuse to wrap at 0xffffffff */
+		struct aliro_secchan xc;
+		uint8_t ka[32], kb[32], one[1] = {0x5A}, ct1[1], tg[16], po[4];
+
+		memset(ka, 0x21, sizeof(ka));
+		memset(kb, 0x43, sizeof(kb));
+		aliro_secchan_init(&xc, ka, kb);
+		xc.enc_ctr = 0xffffffffu;
+		T_OK("seal.ctr-exhausted", aliro_secchan_seal(&xc, NULL, 0, one, 1, ct1, tg) < 0);
+		xc.dec_ctr = 0xffffffffu;
+		T_OK("open.ctr-exhausted", aliro_secchan_open(&xc, NULL, 0, ct1, 1, tg, po) < 0);
+	}
+	{
+		/* wire-SDU framing rejects: short header, lying length field, small
+		 * caps, a dead channel underneath, and a failing tag check */
+		struct aliro_secchan mc;
+		uint8_t ka[32], kb[32], wire[64], plain[64];
+		size_t wl = 0, pl = 0;
+		uint8_t msg6[6] = {0x01, 0x01, 0x00, 0x02, 0xAB, 0xCD};
+
+		memset(ka, 0x66, sizeof(ka));
+		memset(kb, 0x77, sizeof(kb));
+		aliro_secchan_init(&mc, ka, kb);
+		T_OK("msg_seal.short-plain",
+		     aliro_msg_seal(&mc, msg6, 3, wire, sizeof(wire), &wl) < 0);
+		{
+			uint8_t badlen[6] = {0x01, 0x01, 0x00, 0x07, 0xAB, 0xCD};
+
+			T_OK("msg_seal.len-mismatch",
+			     aliro_msg_seal(&mc, badlen, sizeof(badlen), wire, sizeof(wire),
+					    &wl) < 0);
+		}
+		T_OK("msg_seal.cap", aliro_msg_seal(&mc, msg6, sizeof(msg6), wire, 8, &wl) < 0);
+		{
+			struct aliro_secchan dead = mc;
+
+			dead.enc_ctr = 0xffffffffu;
+			T_OK("msg_seal.channel-dead",
+			     aliro_msg_seal(&dead, msg6, sizeof(msg6), wire, sizeof(wire),
+					    &wl) < 0);
+		}
+		T_OK("msg_seal.ok",
+		     aliro_msg_seal(&mc, msg6, sizeof(msg6), wire, sizeof(wire), &wl) == 0 &&
+			     wl == 4u + 2u + 16u);
+		T_OK("msg_open.short-wire",
+		     aliro_msg_open(&mc, wire, 10, plain, sizeof(plain), &pl) < 0);
+		{
+			uint8_t lied[64];
+
+			memcpy(lied, wire, wl);
+			lied[3] ^= 0x01; /* header length no longer matches wire_len */
+			T_OK("msg_open.len-mismatch",
+			     aliro_msg_open(&mc, lied, wl, plain, sizeof(plain), &pl) < 0);
+		}
+		T_OK("msg_open.cap", aliro_msg_open(&mc, wire, wl, plain, 4, &pl) < 0);
+		/* the wire above was sealed with direction-0 nonces; this channel's
+		 * open expects direction-1, so the tag check must fail */
+		T_OK("msg_open.bad-tag",
+		     aliro_msg_open(&mc, wire, wl, plain, sizeof(plain), &pl) < 0);
+	}
+	{
+		/* salt overflow: a 0xA5 TLV longer than ALIRO_SALT_MAX leaves room for */
+		uint8_t stx[16], sx[32], srid[32], huge_a5[220], sout[ALIRO_SALT_MAX];
+		size_t sl = 0;
+
+		memset(stx, 0x0F, sizeof(stx));
+		memset(sx, 0x1E, sizeof(sx));
+		memset(srid, 0x2D, sizeof(srid));
+		memset(huge_a5, 0xA5, sizeof(huge_a5));
+		T_OK("salt.overflow",
+		     aliro_salt_build(ALIRO_SALT_SESSION, stx, sx, sx, srid, ALIRO_IFACE_BLE,
+				      0x0100, 0x00, 0x01, NULL, huge_a5, sizeof(huge_a5), sout,
+				      &sl) == -1);
+	}
+
 	if (fails) {
 		printf("\nRESULT: %d FAIL\n", fails);
 		return 1;
