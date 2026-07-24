@@ -1,0 +1,8 @@
+CONFIG_IDF_TARGET="esp32s3"
+# The self-test derives keys, runs ECDH and signs on the main task; give headroom.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+# PSA + P-256 for aliro_prim_psa.c (defaults on recent IDF, pinned here to be safe).
+CONFIG_MBEDTLS_PSA_CRYPTO_C=y
+CONFIG_MBEDTLS_ECDSA_C=y
+CONFIG_MBEDTLS_ECDH_C=y
+CONFIG_MBEDTLS_ECP_DP_SECP256R1_ENABLED=y

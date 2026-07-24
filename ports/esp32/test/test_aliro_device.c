@@ -441,7 +441,10 @@ static int loopback(void)
 }
 #endif
 
-int main(void)
+/* The full self-test body, callable from the host main() below and from the
+ * on-target app_main() (ports/esp32/test/on_target_ec), which runs the same
+ * suite against the real PSA P-256 backend instead of the host fake curve. */
+int aliro_device_selftest(void)
 {
 	printf("== aliro_device: initiator-side codec + crypto ==\n");
 
@@ -464,3 +467,12 @@ int main(void)
 	printf("\nRESULT: PASS\n");
 	return 0;
 }
+
+/* Host entry. On ESP-IDF (ESP_PLATFORM defined by the toolchain) the on-target
+ * app_main() calls aliro_device_selftest() instead, so this is excluded there. */
+#if !defined(ESP_PLATFORM)
+int main(void)
+{
+	return aliro_device_selftest();
+}
+#endif
