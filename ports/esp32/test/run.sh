@@ -58,6 +58,19 @@ cc -std=c11 -O1 -Wall -Wextra -DALIRO_DEVICE_HAVE_EC \
 rm -f "$DBIN"
 
 echo
+echo "== host: aliro_ble_central device-transport decoders =="
+# The device/initiator side of BLE discovery: the 0xFFF2 advert, the reader-SPSM
+# READ payload, and the BleSK salt assembled from the version list that READ
+# carries. Pure byte work, no BLE stack — the NimBLE backend that calls it is
+# ESP32-only and covered by verify_port.sh.
+BCBIN="$(mktemp -t aliro_ble_central.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$ALIRO/include" \
+   "$HERE/test_aliro_ble_central.c" "$ALIRO/src/aliro_ble_central.c" -o "$BCBIN"
+"$BCBIN"
+rm -f "$BCBIN"
+
+echo
 echo "== host: aliro_stepup Access-Document codec + §7.4 verifier KAT =="
 SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
