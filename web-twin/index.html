@@ -506,11 +506,17 @@ async function selfTest(){
     for (let i = 0; i < 4; i++) w.step(150);
     ok("leg.wrapped", w.leg() === 0);
     ok("step.latched", w.lastCm() === 150);
-    /* controller: trusted blocks at 80 cm move the bolt after NEAR_DWELL ticks */
+    /* controller: once trust is built at the near distance, the bolt draws after
+     * NEAR_DWELL consecutive trusted-near ticks. Build the run at 80 cm first —
+     * the prior sub-test latched 150 cm, and an 80 cm jump (Δ70 > the firmware's
+     * FIRA_RANGE_SPREAD 50) correctly resets its trust run, so the dwell has to
+     * count from an already-trusted state, exactly as a real steady walk-up. */
     let unlocked = false;
     const c = new ApproachController(() => w,
       { grant(){}, unlock(){ unlocked = true; }, relock(){}, secured(){} });
-    for (let i = 0; i < FW.ALIRO_NEAR_DWELL + 1; i++){
+    for (let i = 0; i < w.trustK(); i++) w.block(80);   // reach trust = K at 80 cm
+    w.takeLatches();                                     // clear the notify count
+    for (let i = 0; i <= FW.ALIRO_NEAR_DWELL; i++){
       w.block(80); c.tick(i*FW.CTRL_TICK_MS, w.takeLatches() > 0);
     }
     ok("controller.unlock_after_dwell", unlocked);
