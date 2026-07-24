@@ -63,7 +63,7 @@ void dwt_setcallbacks(dwt_callbacks_s *callbacks)
 int32_t dwt_configure(dwt_config_t *config)
 {
 	(void)config;
-	return DWT_SUCCESS;
+	return woz_host_rx.configure_ret;
 }
 
 void dwt_configurestsmode(uint8_t stsMode)
@@ -173,7 +173,7 @@ int dwt_readstsquality(int16_t *rxStsQualityIndex, int stsSegment)
 
 int uwb_min_radio_init(void)
 {
-	return 0; /* radio is "up" on the host */
+	return woz_host_rx.radio_init_ret; /* radio is "up" on the host by default */
 }
 
 uint32_t uwb_min_radio_generation(void)

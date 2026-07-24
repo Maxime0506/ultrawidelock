@@ -13,10 +13,28 @@ a green build is not evidence of anything on this target — these suites are.
 | `test_aliro_crypto.c` | SHA-256, HMAC, HKDF, X9.63 and AES-GCM against published vectors, then the key-schedule composition and secure-channel counters on top |
 | `test_aliro_apdu.c` | The wire codec byte-for-byte: command builders, signed-data transcripts, response parsers, the L2CAP envelope |
 | `test_aliro_prov.c` | Reader identity serialization and the trust store, including malformed-blob rejection |
+| `test_aliro_stepup.c` | The Access-Document codec and the §7.4 document verifier |
+| `test_aliro_lat.c` | The walk-up latency trace, compiled both with and without the trace gate |
+| `test_aliro_reader.c` | The reader transaction engine end-to-end: a scripted phone independently re-derives the key schedule from the wire and drives AUTH0/AUTH1/EXCHANGE/AP-Completed, the expedited-fast path, the trust gate, and every rejection branch |
+| `test_aliro_ranging.c` | The M1-M4 ranging-setup glue: session arm/feed/teardown against recording doubles of the engine adapter, with real BleSK sealing on the transmit path opened from the device direction, plus every init/start/feed failure branch |
 | `test_lock_led.c` | The bolt-state LED policy, including that the two unlock paths stay distinguishable |
+| `test_esp_aliro_ble.c` | The BLE transport's wire assembly + branch logic against NimBLE recording doubles: the 26-byte 0xFFF2 advert (dynamic tag cross-checked against the KAT'd `aliro_advtag_derive`, live-expiry and no-clock forms), the SPSM READ payload, version-WRITE validation, CoC tracking + send/receive, the conn-param retry ladder, and the host-task marshaling paths |
+| `test_esp_prov_nvs.c` | The NVS provisioning backend's load/store branch logic against an in-RAM NVS fake with failure injection, plus the blob round trip through the real serializer |
+| `test_esp_stepup_worker.c` | The step-up worker's submit/drop/verdict wiring with the queue+task pumped synchronously; the decrypt/parse/§7.4-verify underneath is the real shared core on the KAT vectors (VALID, tampered, no-issuer, decrypt-fail, parse-fail) |
+| `test_esp_app_shell.c` | The bench console + `app_main`: command registration, every handler's argument branches, the responder single-owner guard, and the boot wiring order, against esp_console/linenoise fakes |
+| `test_esp_dw3000_port.c` | The ESP-IDF DW3000 backend: SPI transaction framing (header/body/crc, 64-byte chunking in one CS window, MISO reassembly), CS/RST/WAKEUP pin choreography, and the IRQ service-loop wiring, against GPIO/SPI recording doubles |
+| `test_esp_wrap_stubs.c` | The `--wrap` RX-callback shim's interception + chaining (STS tracker feed, awaiting-poll gate, NULL handling) with the real decadriver types |
+
+The `test_esp_*` suites compile target-only sources against the recording doubles in
+`sdkfake/` (a minimal fake of the ESP-IDF/NimBLE/FreeRTOS surface those sources touch).
+They prove branch logic and wiring against the fakes, not hardware truth — the on-target
+seam is `verify_port.sh`'s job and the radio's behavior is the bench's.
 
 `aliro_prim_host.c` is a compact host double of the crypto backend interface, so the KATs
-run without PSA. It is test scaffolding, never linked into firmware.
+run without PSA. It is test scaffolding, never linked into firmware. Its EC block is a
+deterministic commutative stand-in, not P-256 — good enough to drive both sides of the
+handshake in `test_aliro_reader.c`, never a statement about curve math (that runs only in
+`aliro_prim_psa.c` on target).
 
 The crypto core and the wire codec compile host-identical to target. That is what makes a
 host result a statement about on-target behavior rather than an approximation.
