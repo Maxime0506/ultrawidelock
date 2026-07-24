@@ -74,48 +74,10 @@ static void t_ok_(const char *name, int cond)
 /* Same CSA v1.0 default 0xA5 salt TLV the reader and device both use. */
 static const uint8_t k_a5[] = {0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0x01, 0x00};
 
-/* EC stubs so the host build links; the real backend is aliro_prim_psa.c on
- * target. Only compiled when EC is absent (host); on target ALIRO_DEVICE_HAVE_EC
- * is set and the genuine primitives are linked instead. */
-#if !defined(ALIRO_DEVICE_HAVE_EC)
-int aliro_ec_p256_keygen(uint8_t priv[32], uint8_t pub[65])
-{
-	(void)priv;
-	(void)pub;
-	return -1;
-}
-int aliro_ec_p256_pub_from_priv(const uint8_t priv[32], uint8_t pub[65])
-{
-	(void)priv;
-	(void)pub;
-	return -1;
-}
-int aliro_ecdh_p256(const uint8_t priv[32], const uint8_t peer_pub[65], uint8_t shared_x[32])
-{
-	(void)priv;
-	(void)peer_pub;
-	(void)shared_x;
-	return -1;
-}
-int aliro_ecdsa_p256_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
-			  uint8_t sig[64])
-{
-	(void)priv;
-	(void)msg;
-	(void)msg_len;
-	(void)sig;
-	return -1;
-}
-int aliro_ecdsa_p256_verify(const uint8_t pub[65], const uint8_t *msg, size_t msg_len,
-			    const uint8_t sig[64])
-{
-	(void)pub;
-	(void)msg;
-	(void)msg_len;
-	(void)sig;
-	return -1;
-}
-#endif
+/* EC comes from aliro_prim_host.c's fake-curve double (added by the reader-tests
+ * suite): a self-consistent P-256 stand-in (symmetric ECDH, round-tripping
+ * ECDSA). With it present the full standard-path loopback below runs host-side
+ * under -DALIRO_DEVICE_HAVE_EC; the byte-exact anchors above still pin spec truth. */
 
 /* ---- test 1: inverse wire codec round-trips against the shipped reader ---- */
 

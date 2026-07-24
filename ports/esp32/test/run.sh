@@ -45,18 +45,16 @@ rm -f "$ABIN"
 echo
 echo "== host: aliro_device initiator codec + crypto KAT =="
 DBIN="$(mktemp -t aliro_device.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
+# ALIRO_DEVICE_HAVE_EC: run the full standard-path loopback against the fake-EC
+# host double in aliro_prim_host.c (symmetric ECDH + round-tripping ECDSA), not
+# only the EC-free anchors. On target the real aliro_prim_psa curve is linked.
+cc -std=c11 -O1 -Wall -Wextra -DALIRO_DEVICE_HAVE_EC \
    -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_device.c" \
    "$ALIRO/src/aliro_device.c" "$ALIRO/src/aliro_device_apdu.c" \
    "$ALIRO/src/aliro_apdu.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
    "$HERE/aliro_prim_host.c" -o "$DBIN"
 "$DBIN"
-# Syntax-check the target-only EC loopback path so it cannot rot in CI (no host
-# EC double exists, so it never runs here — the bench build with real aliro_prim
-# is the arbiter).
-cc -std=c11 -O1 -Wall -Wextra -fsyntax-only -DALIRO_DEVICE_HAVE_EC \
-   -I "$ALIRO/include" -I "$ALIRO/src" "$HERE/test_aliro_device.c"
 rm -f "$DBIN"
 
 echo
