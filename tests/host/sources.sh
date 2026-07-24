@@ -39,6 +39,7 @@ UNIT_SRCS=(
 	"$SRC/facade/woz_uwb_facade.c"
 	"$SRC/facade/woz_logfmt.c"
 	"$SRC/facade/woz_logquiet.c"
+	"$SRC/facade/flight_recorder.c"
 	"$ALIRO/src/aliro_approach.c"
 )
 
@@ -70,6 +71,8 @@ TEST_SRCS=(
 	"$HOST/test_trace.c"
 	"$HOST/trace_stub.c"
 	"$HOST/test_ccc_shim_wrap.c"
+	"$HOST/test_flight_recorder.c"
+	"$HOST/fr_replay.c"
 )
 
 SHIM_SRCS=(
@@ -101,4 +104,4 @@ INCS=(
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
 # WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
 # those headers #error rather than guess a platform.
-DEFS=(-DCONFIG_WOZ_ALIRO=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
+DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
