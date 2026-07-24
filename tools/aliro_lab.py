@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Aliro Lab: score a captured reader serial log.
 
-Usage: python3 tools/aliro_lab.py <capture.log> [report.html]
+Usage: python3 tools/aliro_lab.py [--cir <taps.csv>] <capture.log> [report.html]
 
 Parses the structured "[ALAB] t=<us> ev=..." trace lines the firmware emits
 when CONFIG_WOZ_ALIRO_LAB is enabled (see modules/woz_aliro/src/aliro_lab.h),
 groups them into walk-up transactions, and reports phase timings, the flow
 taken (fast vs standard), and pass/warn/fail invariant checks — to the
 terminal and as a self-contained HTML report (default: <capture.log>.html).
+
+With --cir, the windowed-CIR taps (ev=uwb.cir, channel-impulse Stage 1) are
+also written to a CSV (t_us,n,i,re,im,mag2) for offline inside/outside
+labeling and analysis; the scoring/report output is unchanged.
 
 Every check encodes an invariant of this repo's reader implementation (see
 internal notes in the check text), nothing else. Exit status: 0 = no failing
@@ -139,6 +143,33 @@ def parse_events(text):
         attrs = {k: int(v) for k, v in ATTR_RE.findall(m.group(3))}
         events.append(Event(int(m.group(1)), m.group(2), attrs, line_no))
     return events
+
+
+def cir_rows(events):
+    """Windowed-CIR taps as (t_us, n, i, re, im, mag2), in capture order. One
+    row per ev=uwb.cir line with the full i/re/im set; magnitude-squared is
+    precomputed for convenience. Works on the raw event stream, so taps are
+    kept even outside a walk-up session (idle-ranging captures)."""
+    rows = []
+    for e in events:
+        if e.name != "uwb.cir":
+            continue
+        a = e.attrs
+        if not all(k in a for k in ("n", "i", "re", "im")):
+            continue
+        re_, im = a["re"], a["im"]
+        rows.append((e.t_us, a["n"], a["i"], re_, im, re_ * re_ + im * im))
+    return rows
+
+
+def write_cir_csv(events, path):
+    """Write the CIR taps to a CSV; return the row count."""
+    rows = cir_rows(events)
+    with open(path, "w") as f:
+        f.write("t_us,n,i,re,im,mag2\n")
+        for r in rows:
+            f.write("%d,%d,%d,%d,%d,%d\n" % r)
+    return len(rows)
 
 
 def split_transactions(events):
@@ -593,11 +624,23 @@ def render_html(name, txns, checks_by_txn):
 
 
 def main(argv):
-    if len(argv) < 2 or len(argv) > 3 or argv[1] in ("-h", "--help"):
+    # Optional --cir <path> anywhere before the positionals; strip it out first
+    # so the existing positional parsing is unchanged.
+    cir_path = None
+    args = list(argv[1:])
+    if "--cir" in args:
+        i = args.index("--cir")
+        if i + 1 >= len(args):
+            sys.stderr.write(__doc__)
+            return 2
+        cir_path = args[i + 1]
+        del args[i:i + 2]
+
+    if len(args) < 1 or len(args) > 2 or args[0] in ("-h", "--help"):
         sys.stderr.write(__doc__)
         return 2
-    log_path = argv[1]
-    html_path = argv[2] if len(argv) > 2 else log_path + ".html"
+    log_path = args[0]
+    html_path = args[1] if len(args) > 1 else log_path + ".html"
     try:
         with open(log_path, "r", errors="replace") as f:
             text = f.read()
@@ -606,7 +649,11 @@ def main(argv):
         return 2
 
     name = os.path.basename(log_path)
-    txns = split_transactions(parse_events(text))
+    events = parse_events(text)
+    if cir_path is not None:
+        n_taps = write_cir_csv(events, cir_path)
+        sys.stdout.write("cir taps: %d -> %s\n" % (n_taps, cir_path))
+    txns = split_transactions(events)
     checks_by_txn = [run_checks(t) for t in txns]
 
     sys.stdout.write(render_terminal(name, txns, checks_by_txn,

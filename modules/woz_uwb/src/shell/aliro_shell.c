@@ -203,21 +203,39 @@ static int cmd_frames(const struct shell *sh, size_t argc, char **argv)
 }
 
 /**
- * @brief Enable, disable, or query the per-reception CIA diagnostics stream ([ALAB] uwb.diag).
+ * @brief Control the per-reception CIA diagnostics stream ([ALAB] uwb.diag) and, via the `dump`
+ * sub-form, the windowed-CIR tap dump ([ALAB] uwb.cir).
  * @param sh Shell context.
- * @param argc Argument count; if ≥2, argv[1] must be "on" or "off".
- * @param argv Command arguments; argv[1] optionally specifies "on" or "off".
- * @return 0 on success; -EINVAL if argv[1] is neither "on" nor "off".
+ * @param argc Argument count. `cir [on|off]` toggles the summary stream; `cir dump [on|off]`
+ * toggles the windowed-CIR dump.
+ * @param argv Command arguments.
+ * @return 0 on success; -EINVAL on a malformed argument.
  */
 static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
 {
+	if (argc >= 2 && strcmp(argv[1], "dump") == 0) {
+		if (argc >= 3) {
+			if (strcmp(argv[2], "on") == 0) {
+				uwb_cirdiag_dump_set_enabled(true);
+			} else if (strcmp(argv[2], "off") == 0) {
+				uwb_cirdiag_dump_set_enabled(false);
+			} else {
+				shell_print(sh, "  " C_YEL "usage: aliro cir dump [on|off]" C_RST);
+				return -EINVAL;
+			}
+		}
+		shell_print(sh, "  windowed-CIR dump %s",
+			    uwb_cirdiag_dump_enabled() ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST);
+		return 0;
+	}
 	if (argc >= 2) {
 		if (strcmp(argv[1], "on") == 0) {
 			uwb_cirdiag_set_enabled(true);
 		} else if (strcmp(argv[1], "off") == 0) {
 			uwb_cirdiag_set_enabled(false);
 		} else {
-			shell_print(sh, "  " C_YEL "usage: aliro cir [on|off]" C_RST);
+			shell_print(sh, "  " C_YEL
+					"usage: aliro cir [on|off] | cir dump [on|off]" C_RST);
 			return -EINVAL;
 		}
 	}
@@ -343,7 +361,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(chip, NULL, "Read the DW3110 DEV_ID over SPI.", cmd_chip),
 	SHELL_CMD(selftest, NULL, "Run the radio TX/RX self-test.", cmd_selftest),
 	SHELL_CMD(log, NULL, "Ranging heartbeat: `log on` | `log off`.", cmd_log),
-	SHELL_CMD(cir, NULL, "Per-reception CIA diag stream: `cir on` | `cir off`.", cmd_cir),
+	SHELL_CMD(cir, NULL, "CIA diag stream + windowed CIR: `cir on|off` | `cir dump on|off`.",
+		  cmd_cir),
 	SHELL_CMD(frames, NULL, "Per-block distance stream: `frames on` | `frames off`.",
 		  cmd_frames),
 	SHELL_CMD(version, NULL, "Firmware build: short commit SHA.", cmd_version),

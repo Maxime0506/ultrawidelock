@@ -293,9 +293,23 @@ static int cmd_log(int argc, char **argv)
 #ifdef CONFIG_WOZ_ALIRO_LAB
 /* Aliro Lab transaction trace: OFF at boot (the [ALAB] lines are blocking UART
  * writes on the protocol path, so they cost walk-up latency while on). `lab on`
- * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log. */
+ * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log.
+ * `lab cir on|off` additionally arms the windowed-CIR tap dump (channel-impulse
+ * Stage 1) — many extra lines per reception, so it is a separate opt-in. */
 static int cmd_lab(int argc, char **argv)
 {
+	if (argc == 3 && strcmp(argv[1], "cir") == 0) {
+		if (strcmp(argv[2], "on") == 0) {
+			uwb_cirdiag_dump_set_enabled(true);
+		} else if (strcmp(argv[2], "off") == 0) {
+			uwb_cirdiag_dump_set_enabled(false);
+		} else {
+			printf("usage: lab cir [on|off]\n");
+			return 0;
+		}
+		printf("aliro lab CIR dump: %s\n", uwb_cirdiag_dump_enabled() ? "on" : "off");
+		return 0;
+	}
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
 		aliro_lab_set_enabled(true);
 		uwb_cirdiag_set_enabled(true); /* per-reception ev=uwb.diag lines ride the gate */
@@ -303,7 +317,7 @@ static int cmd_lab(int argc, char **argv)
 		aliro_lab_set_enabled(false);
 		uwb_cirdiag_set_enabled(false);
 	} else if (argc != 1) {
-		printf("usage: lab [on|off]\n");
+		printf("usage: lab [on|off] | lab cir [on|off]\n");
 		return 0;
 	}
 	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");

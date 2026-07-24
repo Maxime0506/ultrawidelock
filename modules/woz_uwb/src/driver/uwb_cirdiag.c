@@ -1,4 +1,4 @@
-/** @file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0).
+/** @file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0/1).
  *
  * Split the work across the two contexts the ALAB contract demands: the RX callback only
  * latches registers into a snapshot (uwb_cirdiag_capture, plain stores + one SPI read), and a
@@ -7,6 +7,12 @@
  * its IRQ drain loop, so capture and flush are sequential there. A seqlock covers the
  * one real race (nRF: a new capture preempting a flush mid-copy): torn snapshots are dropped,
  * the next reception re-latches.
+ *
+ * Stage 1 adds an independently-armed windowed-CIR dump: when armed, capture also reads a
+ * fixed window of Ipatov complex taps centred on the first-path index into the snapshot, and
+ * flush emits one `ev=uwb.cir` line per tap (absolute index + int16 real/imag). Separate arm
+ * from the summary line because a full window is ~64 extra serial lines per reception — wanted
+ * for offline analysis, not for a plain latency check.
  */
 
 #include "uwb_cirdiag.h"
@@ -24,8 +30,19 @@
 #define CIRDIAG_SYS_CFG   0x10UL
 #define CIRDIAG_CP_SPC(v) (unsigned)(((v) >> 12) & 0x3u)
 
+/** @brief Windowed-CIR dump width, in complex taps, centred on the first-path index. 64 is
+ * enough to carry the leading edge + early multipath that separates inside/outside a door,
+ * while staying cheap on serial (~64 lines) and RAM (256 B in DWT_CIR_READ_MID: 1 word/tap). */
+#define CIRDIAG_CIR_WIN 64u
+
+/** @brief ipatovFpIndex is Q10.6 (6 fractional bits); the integer sample index is the high bits. */
+#define CIRDIAG_FP_FRAC_BITS 6u
+
 /** @brief Runtime arm state (console-toggled; OFF at boot). */
 static volatile bool g_on;
+
+/** @brief Windowed-CIR dump arm (independent of g_on; OFF at boot). */
+static volatile bool g_dump;
 
 /** @brief Chip-side CIA diagnostic logging enabled (lazily, on the RX path). */
 static bool g_cia_armed;
@@ -42,6 +59,13 @@ static uint16_t g_sts_stat;
 static int32_t g_sts_stat_ret;
 static uint32_t g_n;
 
+/** @brief Windowed-CIR snapshot: DWT_CIR_READ_MID packs each tap as two int16 (real, imag) in
+ * one word, so g_cir doubles as an int16[2*WIN] pair array. g_cir_base is the absolute Ipatov
+ * sample index of tap 0; g_cir_have gates emission (false if dump disarmed or the read failed). */
+static uint32_t g_cir[CIRDIAG_CIR_WIN];
+static uint16_t g_cir_base;
+static bool g_cir_have;
+
 /** @brief Seqlock around the snapshot: odd while the RX path writes; the flush copies only
  * between two equal even reads. */
 static volatile uint32_t g_seq;
@@ -55,6 +79,22 @@ void uwb_cirdiag_set_enabled(bool on)
 bool uwb_cirdiag_enabled(void)
 {
 	return g_on;
+}
+
+void uwb_cirdiag_dump_set_enabled(bool on)
+{
+	/* The window read needs the summary path armed too (it supplies the first-path index and
+	 * the lazy CIA-logging enable). Arming dump implies arming the summary; disarming dump
+	 * leaves the summary as-is. */
+	if (on) {
+		g_on = true;
+	}
+	g_dump = on;
+}
+
+bool uwb_cirdiag_dump_enabled(void)
+{
+	return g_dump;
 }
 
 bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength)
@@ -86,6 +126,23 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength)
 	g_sts_qual_ret = dwt_readstsquality(&g_sts_qual, 0);
 	g_sts_stat = 0;
 	g_sts_stat_ret = dwt_readstsstatus(&g_sts_stat, 0);
+	g_cir_have = false;
+	if (g_dump) {
+		/* Centre a fixed window on the integer first-path index, clamped into the valid
+		 * Ipatov accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN]. dwt_readcir forces the
+		 * ACC clocks on itself; MID mode gives int16 real/imag with headroom for the early
+		 * taps. Inside the seqlock bracket so the flush copies a consistent window. */
+		uint16_t fp_int = (uint16_t)(g_diag.ipatovFpIndex >> CIRDIAG_FP_FRAC_BITS);
+		uint16_t base =
+			(fp_int > (CIRDIAG_CIR_WIN / 2u)) ? (fp_int - CIRDIAG_CIR_WIN / 2u) : 0u;
+
+		if ((uint32_t)base + CIRDIAG_CIR_WIN > (uint32_t)DWT_CIR_LEN_IP_PRF64) {
+			base = (uint16_t)(DWT_CIR_LEN_IP_PRF64 - CIRDIAG_CIR_WIN);
+		}
+		g_cir_base = base;
+		g_cir_have = (dwt_readcir(g_cir, DWT_ACC_IDX_IP_M, base, CIRDIAG_CIR_WIN,
+					  DWT_CIR_READ_MID) == DWT_SUCCESS);
+	}
 	g_n++;
 	g_seq++; /* even: stable */
 	g_pending = true;
@@ -98,9 +155,13 @@ void uwb_cirdiag_flush(void)
 	int64_t t_us;
 	uint32_t status, n;
 	unsigned sp;
-	uint16_t len, sts_stat;
+	uint16_t len, sts_stat, cir_base;
 	int16_t sts_qual;
 	int32_t sts_qual_ret, sts_stat_ret;
+	bool cir_have;
+	/* Flush is single-context per port (nRF sysworkq item / ESP32 isr task), never
+	 * re-entrant, so a static scratch window keeps 256 B off the task stack. */
+	static uint32_t cir_copy[CIRDIAG_CIR_WIN];
 
 	if (!g_pending) {
 		return;
@@ -123,6 +184,11 @@ void uwb_cirdiag_flush(void)
 		sts_stat = g_sts_stat;
 		sts_stat_ret = g_sts_stat_ret;
 		n = g_n;
+		cir_have = g_cir_have;
+		cir_base = g_cir_base;
+		if (cir_have) {
+			memcpy(cir_copy, g_cir, sizeof(cir_copy));
+		}
 		if (g_seq != s0) {
 			continue; /* a capture landed mid-copy — retry */
 		}
@@ -145,6 +211,19 @@ void uwb_cirdiag_flush(void)
 			   (unsigned)d.stsAccumCount, (int)sts_qual, (int)sts_qual_ret,
 			   (unsigned)sts_stat, (int)sts_stat_ret, (int)d.xtalOffset,
 			   (unsigned)d.ciaDiag1);
+		if (cir_have) {
+			/* One line per Ipatov tap, keyed to the summary line by n. i is the
+			 * absolute accumulator index; re/im are the int16 real/imaginary parts
+			 * (DWT_CIR_READ_MID). aliro_lab.py groups taps by n and computes
+			 * magnitude offline. */
+			const int16_t *s = (const int16_t *)cir_copy;
+
+			for (unsigned i = 0; i < CIRDIAG_CIR_WIN; i++) {
+				woz_printf("[ALAB] t=%lld ev=uwb.cir n=%u i=%u re=%d im=%d\n",
+					   (long long)t_us, (unsigned)n, (unsigned)(cir_base + i),
+					   (int)s[2u * i], (int)s[2u * i + 1u]);
+			}
+		}
 		return;
 	}
 	/* Persistently torn — drop this snapshot; the next reception re-latches. */

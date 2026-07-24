@@ -14,12 +14,21 @@
 extern "C" {
 #endif
 
-/** @brief Arm or disarm the stream. Safe any time, even before the chip is probed: the
+/** @brief Arm or disarm the summary stream. Safe any time, even before the chip is probed: the
  * chip-side CIA logging enable happens lazily on the first armed reception. */
 void uwb_cirdiag_set_enabled(bool on);
 
-/** @brief Whether the stream is currently armed. */
+/** @brief Whether the summary stream is currently armed. */
 bool uwb_cirdiag_enabled(void);
+
+/** @brief Arm or disarm the windowed-CIR dump (Stage 1): per reception, emit ~64 `ev=uwb.cir`
+ * tap lines around the first path. Arming implies the summary stream too; disarming leaves it.
+ * Costs an extra CIR SPI read + ~64 serial lines per reception — a capture-session tool, not a
+ * latency probe. Safe any time (the read only runs inside a live armed reception). */
+void uwb_cirdiag_dump_set_enabled(bool on);
+
+/** @brief Whether the windowed-CIR dump is currently armed. */
+bool uwb_cirdiag_dump_enabled(void);
 
 /**
  * @brief Latch the CIA diagnostics of the reception just serviced (latest wins).
