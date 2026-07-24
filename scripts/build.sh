@@ -15,6 +15,7 @@
 #   PRISTINE=1 scripts/build.sh build       # same as rebuild
 #   UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 #   PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
+#   ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
 #   UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 set -euo pipefail
 
@@ -144,6 +145,28 @@ do_build() {
   local strict=""
   [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
 
+  # ALIRO_SOURCE=1: compile the clean-room public API directly into the nRF app.
+  # NFC expedited-standard, expedited-fast, and step-up use the source stack.
+  local aliro_source=""
+  [ "${ALIRO_SOURCE:-0}" = 1 ] && aliro_source="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y"
+
+  # ALIRO_TRACE=1: capture proprietary/source BLE session boundaries without
+  # exposing URSK itself (only its truncated SHA-256 fingerprint is logged).
+  local aliro_trace=""
+  [ "${ALIRO_TRACE:-0}" = 1 ] && aliro_trace="-DCONFIG_WOZ_ALIRO_TRACE=y"
+
+  if [ -n "$aliro_trace" ]; then
+    local trace_patch="$TREE/integration/patches/aliro-ble-trace.patch"
+    if git -C "$ADDON" apply --check --reverse "$trace_patch" 2>/dev/null; then
+      ok "Aliro BLE trace integration already applied"
+    elif git -C "$ADDON" apply --check "$trace_patch" 2>/dev/null; then
+      git -C "$ADDON" apply --whitespace=nowarn "$trace_patch"
+      ok "Aliro BLE trace integration applied"
+    else
+      die "Aliro BLE trace patch does not match the workspace" "$trace_patch"
+    fi
+  fi
+
   # PRETTY=1: layer woz-pretty.conf after woz-aliro.conf (curated console +
   # log-level cuts). Reversible: drop PRETTY and the flag + levels revert to the
   # verbose default. It rides EXTRA_CONF_FILE (in the build signature), so
@@ -173,13 +196,22 @@ do_build() {
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay"
     -DPM_STATIC_YML_FILE="$OV/pm_static.yml"
     -DSB_EXTRA_CONF_FILE="$OV/sysbuild-woz.conf"
-    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_aliro_ecp;$TREE/deps/dw3000"
+    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_aliro_ecp;$TREE/modules/woz_aliro_stack;$TREE/deps/dw3000"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_WOZ_UWB=y -DCONFIG_WOZ_UWB_RESPONDER=y
     -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n
   )
   [ -n "$selftest" ] && dflags+=("$selftest")
   [ -n "$strict" ] && dflags+=("$strict")
+  [ -n "$aliro_source" ] && dflags+=("$aliro_source")
+  if [ -n "$aliro_trace" ]; then
+    dflags+=(
+      "$aliro_trace"
+      -DCONFIG_DOOR_LOCK_ALIRO_BLE_SERVICE_LOG_LEVEL_INF=y
+      -DCONFIG_DOOR_LOCK_ALIRO_GATT_SERVER_LOG_LEVEL_DBG=y
+      -DCONFIG_DOOR_LOCK_ALIRO_L2CAP_SERVER_LOG_LEVEL_INF=y
+    )
+  fi
 
   local sig sig_file="${BUILD%/}.aliro_build_sig"
   sig="$(printf '%s\0' "$BOARD" "$APP" "$NCS_VER" "${dflags[@]}" | sha | awk '{print $1}')"
@@ -200,7 +232,7 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_source:+   (Aliro source ON)}${aliro_trace:+   (Aliro trace ON)}"
   if [ "$pristine" = 1 ]; then
     kv "mode" "${YLW}pristine${RST} ${DIM}($reason)${RST}"
   else
@@ -212,6 +244,16 @@ do_build() {
     ( cd "$WS" && launch west build -b "$BOARD" --sysbuild "$APP" -p always -d "$BUILD" -- "${dflags[@]}" )
   else
     ( cd "$WS" && launch west build -d "$BUILD" )
+  fi
+
+  if [ -n "$aliro_source" ]; then
+    local aliro_map="$BUILD/matter-aliro-door-lock-app/zephyr/zephyr.map"
+    [ -f "$aliro_map" ] || die "Aliro source link map not found" "$aliro_map"
+    if grep -q 'libaliro_ble\.a' "$aliro_map"; then
+      die "proprietary Aliro archive still contributed linked code" \
+          "source override must define the complete application-used public ABI"
+    fi
+    ok "Aliro source override linked without libaliro_ble.a members"
   fi
   printf '%s' "$sig" > "$sig_file"
   local secs=$(( SECONDS - start ))

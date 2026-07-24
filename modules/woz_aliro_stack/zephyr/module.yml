@@ -1,0 +1,4 @@
+name: woz_aliro_stack
+build:
+  cmake: .
+  kconfig: Kconfig
