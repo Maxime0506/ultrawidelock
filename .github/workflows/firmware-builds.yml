@@ -72,7 +72,7 @@ jobs:
           # Push events diff against the pre-push commit, which a depth-1
           # clone does not have.
           fetch-depth: 0
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         id: filter
         with:
