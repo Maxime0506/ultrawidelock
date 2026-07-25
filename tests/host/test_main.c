@@ -55,6 +55,7 @@ int main(void)
 		{ "prepoll_gate", test_prepoll_gate },
 		{ "prepoll_round", test_prepoll_round },
 		{ "twin", test_twin },
+		{ "rssi_gate", test_rssi_gate },
 		{ "approach", test_approach },
 		{ "logfmt", test_woz_logfmt },
 		{ "trace", test_trace },

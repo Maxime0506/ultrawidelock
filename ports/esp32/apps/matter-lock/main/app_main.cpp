@@ -124,7 +124,11 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 #define ALIRO_RELOCK_RANGE_CM 250  // depart threshold: relock past this — wide band vs UWB range noise
 #define ALIRO_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
 #define ALIRO_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
-#define ALIRO_PEER_GONE_MS    1500  // no ranging activity this long -> peer left -> relock + secured
+// Departure is the Aliro session ending, not a ranging timeout, so there is no
+// silence threshold to tune here. Every value tried relocked the bolt under a phone
+// that had simply stopped moving: iOS pauses ranging when the user stands still,
+// measured at 1.6 s, 2.4 s and 3.07 s in successive bench runs, the last one with
+// the phone 26 cm from the reader and the link still up.
 // Negative latency: the controller predicts the time of arrival at the unlock
 // radius and starts retraction motor+margin early, so the bolt is open when the
 // hand lands. MOTOR_MS is this lock model's retraction time — tune it from the
@@ -254,15 +258,24 @@ static void aliro_reader_task(void *arg)
 	// that stops closing or misses its arrival window relocks before anyone
 	// is in reach. Presence behaviour is unchanged — slow approaches and
 	// stand-at-door still unlock via the median path. This task additionally:
-	//   - grants the Wallet animation once, on the first trusted range this
-	//     approach;
-	//   - treats the peer as gone (relock + Secured) only after
-	//     ALIRO_PEER_GONE_MS with no ranging activity at all — decoupled from
-	//     the flickering trust bit, which can briefly re-agree at range and
-	//     otherwise wedge the door open.
+	//   - ties the Wallet grant (Aliro step 23, Unsecured) to the bolt itself,
+	//     never to the bare trust bit: trust lands at whatever range the first
+	//     block resolves at (bench: 300 cm), so granting there tells the phone
+	//     "unlocked" while the door is still locked, for the whole walk-in. Both
+	//     unlock paths grant, including the predictive one, which is honest: the
+	//     bolt really is being driven;
+	//   - sends Secured on the depart and abort transitions, while the link is
+	//     still up — the peer-gone path below normally runs after the phone has
+	//     already dropped BLE, and the notify is then discarded;
+	//   - treats the peer as gone (relock + Secured) when its Aliro SESSION ends,
+	//     never on ranging silence: iOS stops ranging when the phone stops moving,
+	//     measured at 3.07 s with the phone 26 cm from the reader, which relocked
+	//     the bolt under someone standing at the door and re-unlocked when ranging
+	//     resumed. A link that is still up is a peer that is still there; walking
+	//     away ends it via the RSSI gate's close path.
 	// Only fresh notifies feed the controller; a bare 200 ms timeout only
-	// supervises the arrival deadline, never re-decides on a stale latched
-	// value. `present` mirrors the Wallet state.
+	// supervises the arrival deadline, never re-decides on a stale latched value.
+	// `granted` mirrors the Wallet state, `present` marks an approach in progress.
 	struct aliro_approach approach;
 	struct aliro_approach_cfg acfg;
 
@@ -274,14 +287,24 @@ static void aliro_reader_task(void *arg)
 	acfg.motor_ms = ALIRO_MOTOR_MS;
 	acfg.margin_ms = ALIRO_PREDICT_MARGIN_MS;
 	acfg.vmin_cm_s = ALIRO_PREDICT_VMIN_CM_S;
+	// Mutually exclusive with the RSSI power gate by Kconfig dependency: the
+	// gate holds ranging until the phone is already inside unlock_cm, so an
+	// ETA could never arm anyway. Being explicit here keeps the trace honest
+	// rather than leaving a predictor that silently never fires.
+#if defined(CONFIG_WOZ_APPROACH_PREDICT)
+	acfg.predict_en = true;
+#else
+	acfg.predict_en = false;
+#endif
 	aliro_approach_init(&approach, &acfg);
 
 	bool present = false;
-	int64_t last_activity_ms = 0;
+	bool granted = false;
 
 	while (true) {
 		// >0 = at least one range block latched since the last wake (peer is
-		// ranging); 0 = a bare 200 ms timeout (no block this window).
+		// ranging); 0 = a bare 200 ms timeout, which is also how often the
+		// session-gone check below runs when nothing is ranging.
 		uint32_t woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
 		int64_t now = esp_timer_get_time() / 1000; // ms
 
@@ -289,26 +312,13 @@ static void aliro_reader_task(void *arg)
 		bool active = (woke > 0);
 		bool trusted = active && woz_uwb_trusted_range_cm(&cm);
 
-		if (active) {
-			last_activity_ms = now;
-		}
-
 		enum aliro_approach_action act;
 
 		if (trusted) {
 			// Task context (not the UWB RX path): one trace line per trusted
 			// range block gives the approach curve in the Aliro Lab report.
 			aliro_lab_evi("range", "cm", cm);
-			if (!present) {
-				// First trusted range this approach: grant + fire the Wallet
-				// unlock animation ("Reader Status Changed", Unsecured, Aliro
-				// step 23). Trust already means the credential authenticated and
-				// ranging passed the integrity gate.
-				ESP_LOGI(TAG, "Aliro trusted range %d cm: granting (Wallet notify)",
-					 (int)cm);
-				aliro_reader_notify_unlock(true);
-				present = true;
-			}
+			present = true;
 			act = aliro_approach_feed(&approach, now, cm);
 			if (aliro_approach_eta_ms(&approach) >= 0) {
 				// Estimator overlay for the walk-up report: closing speed
@@ -329,16 +339,26 @@ static void aliro_reader_task(void *arg)
 			aliro_lab_evi("predict.fire", "eta_ms",
 				      aliro_approach_eta_ms(&approach));
 			schedule_bolt_unlock();
+			// Reader Status Changed -> Unsecured. Honest on the predictive
+			// path too: the bolt is being driven, just early.
+			aliro_reader_notify_unlock(true);
+			granted = true;
 			break;
 		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
 			ESP_LOGI(TAG, "Aliro approach %d cm (est): unlocking",
 				 (int)aliro_approach_est_cm(&approach));
 			schedule_bolt_unlock();
+			aliro_reader_notify_unlock(true);
+			granted = true;
 			break;
 		case ALIRO_APPROACH_RELOCK_DEPART:
 			ESP_LOGI(TAG, "Aliro departed %d cm (est): relocking",
 				 (int)aliro_approach_est_cm(&approach));
 			schedule_bolt_lock();
+			// Still connected here, so this one actually reaches the phone
+			// (the peer-gone path below often cannot).
+			aliro_reader_notify_unlock(false);
+			granted = false;
 			break;
 		case ALIRO_APPROACH_RELOCK_ABORT:
 			// Opened on a prediction, but the approach stopped/turned or
@@ -347,23 +367,32 @@ static void aliro_reader_task(void *arg)
 				 (int)aliro_approach_vel_cm_s(&approach));
 			aliro_lab_ev("predict.abort");
 			schedule_bolt_lock();
+			aliro_reader_notify_unlock(false);
+			granted = false;
 			break;
 		default:
 			break;
 		}
 
-		// Departure: no ranging activity at all for ALIRO_PEER_GONE_MS. This is the
-		// reliable relock trigger (walking away stops the ranging), independent of
-		// the noisy distance. Relock if still open, tell Wallet Secured, reset for
-		// the next approach.
-		if (present && (now - last_activity_ms) >= ALIRO_PEER_GONE_MS) {
-			ESP_LOGI(TAG, "Aliro peer gone (%d ms silent): relock + secured",
-				 (int)(now - last_activity_ms));
-			if (aliro_approach_gone(&approach) ==
-			    ALIRO_APPROACH_RELOCK_DEPART) {
+		// Departure: the peer's Aliro session is gone. Not ranging silence — iOS
+		// stops ranging when the phone stops moving, so silence means "standing
+		// still", which is the opposite of departed. The link is the presence
+		// signal; walking away ends it via the RSSI gate's close path, and a
+		// phone that pockets or sleeps ends it too. Relock if still open, tell
+		// Wallet Secured, reset for the next approach.
+		if (present && !aliro_reader_session_active()) {
+			bool relocked = aliro_approach_gone(&approach) ==
+					ALIRO_APPROACH_RELOCK_DEPART;
+
+			ESP_LOGI(TAG, "Aliro peer gone (session ended)%s%s",
+				 relocked ? ": relock" : "", granted ? " + secured" : "");
+			if (relocked) {
 				schedule_bolt_lock();
 			}
-			aliro_reader_notify_unlock(false); // Reader Status Changed -> Secured
+			if (granted) {
+				aliro_reader_notify_unlock(false); /* -> Secured */
+				granted = false;
+			}
 			present = false;
 		}
 	}

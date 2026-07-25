@@ -18,6 +18,7 @@
 #include "woz_uwb_facade.h"
 #include "woz_diag.h" /* woz_uwb_diag_on — the raw per-frame UWB trace gate */
 #include "aliro_reader.h"
+#include "aliro_lab.h" /* aliro_lab_set_enabled — the [ALAB] trace runtime gate */
 #include "app_shell.h"
 #if defined(CONFIG_WOZ_PRESENCE)
 #include "presence_link.h"
@@ -206,6 +207,25 @@ static int cmd_uwbdiag(int argc, char **argv)
 		return 0;
 	}
 	printf("uwb per-frame trace: %s\n", woz_uwb_diag_on ? "on" : "off");
+	return 0;
+}
+
+// Shell command handler: toggles the [ALAB] transaction/power trace consumed by
+// tools/aliro_lab.py and tools/power_profile.py (rssi, gate.hold/open/close, phase
+// boundaries). Compiled in by default (CONFIG_WOZ_ALIRO_LAB) but off at boot so it
+// costs nothing until asked for. With no argument, prints the current state.
+// Always returns 0.
+static int cmd_lab(int argc, char **argv)
+{
+	if (argc == 2 && strcmp(argv[1], "on") == 0) {
+		aliro_lab_set_enabled(true);
+	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
+		aliro_lab_set_enabled(false);
+	} else if (argc != 1) {
+		printf("usage: lab [on|off]\n");
+		return 0;
+	}
+	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");
 	return 0;
 }
 
@@ -411,6 +431,9 @@ void app_shell_start(void)
 		{.command = "uwbdiag",
 		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off)",
 		 .func = cmd_uwbdiag},
+		{.command = "lab",
+		 .help = "lab [on|off]: [ALAB] transaction + power trace (boot default off)",
+		 .func = cmd_lab},
 		{.command = "clear", .help = "clear the screen (also: ctrl-L)", .func = cmd_clear},
 	};
 	for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {

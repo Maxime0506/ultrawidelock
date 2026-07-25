@@ -69,14 +69,21 @@ endef
 # Flashing needs the UART exclusively. If a monitor/tio holds $$port, refuse with
 # a clear message (FORCE=1 stops the holder first). Non-destructive by default.
 define ENSURE_PORT_FREE
-holder=$$(lsof -t "$$port" 2>/dev/null | tr '\n' ' '); \
-if [ -n "$$holder" ]; then \
-	if [ "$(FORCE)" = "1" ]; then \
-		echo "  FORCE: stopping port holder(s): $$holder"; \
-		kill $$holder 2>/dev/null || true; \
+pids=$$(lsof -t "$$port" 2>/dev/null | tr '\n' ' '); \
+busy="$$pids"; \
+if [ -z "$$busy" ] && command -v python3 >/dev/null 2>&1; then \
+	python3 -c "import fcntl,os,sys;fd=os.open(sys.argv[1],os.O_RDWR|os.O_NONBLOCK);fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)" "$$port" >/dev/null 2>&1 \
+		|| busy="held under an exclusive lock (owner not named by lsof)"; \
+fi; \
+if [ -n "$$busy" ]; then \
+	if [ "$(FORCE)" = "1" ] && [ -n "$$pids" ]; then \
+		echo "  FORCE: stopping port holder(s): $$pids"; \
+		kill $$pids 2>/dev/null || true; \
 		sleep 1; \
+	elif [ "$(FORCE)" = "1" ]; then \
+		echo "  FORCE: $$port is $$busy and has no PID to stop; trying anyway" >&2; \
 	else \
-		echo "  $$port is held by PID(s): $$holder" >&2; \
+		echo "  $$port is busy: $$busy" >&2; \
 		echo "  quit it (idf.py monitor: ctrl-]  ·  tio: ctrl-t q) or run: make flash FORCE=1" >&2; \
 		exit 1; \
 	fi; \

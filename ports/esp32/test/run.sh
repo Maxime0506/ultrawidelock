@@ -127,12 +127,12 @@ echo "== host: aliro_ranging M1-M4 session glue =="
 UWB_SRC="$HERE/../../../modules/woz_uwb/src"
 GBIN="$(mktemp -t aliro_ranging.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
+   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
    -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
    -I "$UWB_SRC/facade" -I "$UWB_SRC/aliro/include" \
    "$HERE/test_aliro_ranging.c" \
    "$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
-   "$ALIRO/src/aliro_hash.c" \
+   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_lat.c" \
    "$HERE/aliro_prim_host.c" -o "$GBIN"
 "$GBIN"
 rm -f "$GBIN"

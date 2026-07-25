@@ -43,6 +43,12 @@ void aliro_lab_ev(const char *ev);
  * disabled). */
 void aliro_lab_evi(const char *ev, const char *key, long val);
 
+/* Same, with two integer attributes. Used where one number cannot identify the
+ * thing traced: a ranging SDU needs both its protocol and its message id, since
+ * the ids repeat across protocols (proto-2 id-1 is Initiate-Ranging-Session,
+ * proto-1 id-1 is M2). */
+void aliro_lab_evi2(const char *ev, const char *k1, long v1, const char *k2, long v2);
+
 /* Print a `ph.<name>` line for every latency phase stamped this walk-up, at the
  * phase's own timestamp (no-op while disabled). One-shot until aliro_lat_begin()
  * opens the next walk-up; call off the UWB path. */
@@ -70,6 +76,15 @@ static inline void aliro_lab_evi(const char *ev, const char *key, long val)
 	(void)ev;
 	(void)key;
 	(void)val;
+}
+
+static inline void aliro_lab_evi2(const char *ev, const char *k1, long v1, const char *k2, long v2)
+{
+	(void)ev;
+	(void)k1;
+	(void)v1;
+	(void)k2;
+	(void)v2;
 }
 
 static inline void aliro_lab_dump(void)

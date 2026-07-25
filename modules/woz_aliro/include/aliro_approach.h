@@ -70,6 +70,12 @@ struct aliro_approach_cfg {
 			    * >= one ranging block (192 ms) so the discrete
 			    * sample grid cannot miss the window */
 	int32_t vmin_cm_s; /* min closing speed for a prediction to fire */
+	bool predict_en;   /* arm the prediction path at all; false leaves the
+			    * presence path exactly as it shipped. Off whenever
+			    * the RSSI power gate is on: the gate withholds
+			    * ranging until the credential is already inside
+			    * unlock_cm, so no ETA can ever arm and the two
+			    * features would only pretend to cooperate. */
 };
 
 struct aliro_approach {

@@ -52,6 +52,41 @@ PHASES = [
 PHASE_INDEX = {key: i for i, (key, _) in enumerate(PHASES)}
 PHASE_LABEL = dict(PHASES)
 
+# Ranging-SDU names by (protocol, message id), mirroring the engine's
+# aliro_uwb_msg_spec.h. Ids repeat across protocols, so both bytes are needed:
+# proto-2 id-1 is Initiate-Ranging-Session, proto-1 id-1 is M2.
+SDU_NAMES = {
+    (1, 0): "M1", (1, 1): "M2", (1, 2): "M3", (1, 3): "M4",
+    (1, 4): "SUSPEND-REQ", (1, 5): "SUSPEND-RSP",
+    (1, 6): "RESUME-REQ", (1, 7): "RESUME-RSP",
+    (2, 0): "EVENT", (2, 1): "IRS", (2, 2): "READER-STATUS-CHANGED",
+    (2, 3): "READER-STATUS-AP", (2, 4): "PKE-REQ",
+    (2, 5): "INITIATE-AP", (2, 6): "INITIATE-AP-RKE",
+}
+
+# Protocol names, for SDUs whose message ids the engine does not enumerate.
+# Protocol 3 is the one that matters here: iPhones send a proto-3 id-0 SDU
+# ahead of Initiate-Ranging-Session, which is what broke order-based latency
+# stamping.
+PROTO_NAMES = {0: "AP", 3: "SUPPL", 4: "THIRD-PARTY"}
+
+
+def sdu_label(ev):
+    """Human name for an rtx/rrx event, e.g. "rtx M1".
+
+    Captures from firmware before the id-based latency stamping carry no
+    `proto`, and there the id alone is ambiguous; those render as "rrx id=1".
+    """
+    mid = ev.attrs.get("id", -1)
+    proto = ev.attrs.get("proto")
+    if proto is None:
+        return "%s id=%d" % (ev.name, mid)
+    named = SDU_NAMES.get((proto, mid))
+    if named is None:
+        named = ("%s id=%d" % (PROTO_NAMES[proto], mid) if proto in PROTO_NAMES
+                 else "proto=%d id=%d" % (proto, mid))
+    return "%s %s" % (ev.name, named)
+
 # Bench-derived timing envelopes (ms): generous margins over the measured
 # walk-up numbers on this hardware (auth segment 203 ms fast / 757 ms
 # standard, connect->bolt 2.6 s). The auth segment is op05->auth1 (the phone
@@ -207,13 +242,19 @@ def run_checks(txn):
             applicable="auth1" in ph or txn.flow != "incomplete")
 
     # setup — reaching UWB-active means the engine ran the full ranging setup:
-    # the device's Initiate-Ranging-Session (rrx id=1) before our first reply,
-    # then at least 2 TX and 2 RX setup messages by the m4 stamp.
+    # the device's Initiate-Ranging-Session before our first reply, then at
+    # least 2 TX and 2 RX setup messages by the m4 stamp.
+    #
+    # The IRS is proto-2 id-1; M2 is proto-1 id-1. Message ids repeat across
+    # protocols, so `proto` is what tells them apart. Firmware before the
+    # id-based latency stamping did not emit it, and there the first id=1 RX
+    # is the IRS by arrival order -- keep reading those logs.
     if "m4" in ph:
         m4_t = ph["m4"]
         rtx = [e for e in txn.named("rtx") if e.t_us <= m4_t]
         rrx = [e for e in txn.named("rrx") if e.t_us <= m4_t]
-        irs = [e for e in rrx if e.attrs.get("id") == 1]
+        irs = [e for e in rrx if e.attrs.get("id") == 1
+               and e.attrs.get("proto", 2) == 2]
         first_rtx_t = rtx[0].t_us if rtx else None
         ok = (len(rtx) >= 2 and len(rrx) >= 2 and irs and
               first_rtx_t is not None and irs[0].t_us <= first_rtx_t)
@@ -342,7 +383,7 @@ def render_terminal(name, txns, checks_by_txn, use_color):
         setup = [e for e in txn.events if e.name in ("rtx", "rrx")]
         if setup:
             out.append("  ranging setup: " + ", ".join(
-                "%s id=%d" % (e.name, e.attrs.get("id", -1)) for e in setup))
+                sdu_label(ev) for ev in setup))
 
         if txn.ranges:
             cms = [cm for _, cm in txn.ranges]
@@ -565,8 +606,7 @@ def render_html(name, txns, checks_by_txn):
         setup = [ev for ev in txn.events if ev.name in ("rtx", "rrx")]
         if setup:
             parts.append('<p class="setup">ranging setup: %s</p>' % ", ".join(
-                "<code>%s id=%d</code>" % (e(ev.name), ev.attrs.get("id", -1))
-                for ev in setup))
+                "<code>%s</code>" % e(sdu_label(ev)) for ev in setup))
 
         parts.append("<table><tr><th>check</th><th>status</th>"
                      "<th>detail</th></tr>")

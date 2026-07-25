@@ -1,0 +1,102 @@
+# The documentation site: gated on every pull request, published from main.
+#
+#   build    — renders the site exactly as `make docs` does locally, which is
+#              also the gate: the page generator's freshness check fails when
+#              docs/ has fallen behind the sources, and the link pass fails on
+#              a dead link.
+#   publish  — a merge to main deploys the rendered site to GitHub Pages, so
+#              the published site refreshes itself. Only main publishes: a
+#              pull request is never allowed to replace the live site, and the
+#              job that deploys holds no write access to the repository.
+#
+# Pull requests from a fork: GitHub withholds secrets from those runs, so the
+# page generator is not configured, and docs.sh falls back to the reference
+# tree (every pass skips cleanly when there is no rendered site). The gate
+# still reports, so the check never sticks at "Expected".
+name: docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Elevated to write on the publishing job only.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: main, for the drift gate
+        # The generator compares prose against the sources on main, and docs.sh
+        # refuses to regenerate from a checkout behind it. Neither ref exists
+        # after a pull-request checkout, which fetches only the merge ref.
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - name: doxygen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends doxygen graphviz
+      - name: page generator
+        # The tool is named by a repository secret, not by this tree. Absent
+        # (fork pull requests), docs.sh says so and builds what it can.
+        env:
+          SPEC: ${{ secrets.DOCS_GEN_SPEC }}
+        run: |
+          if [ -z "$SPEC" ]; then
+            echo "::notice::no page generator configured for this run — building the reference tree only"
+            exit 0
+          fi
+          pipx install "$SPEC"
+          cmd="${SPEC%%[!A-Za-z0-9_-]*}"
+          cat >tools/docs_generate.local <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          case "\${1:-}" in
+          build) exec $cmd --html ;;
+          check) exec $cmd --check ;;
+          *) exit 2 ;;
+          esac
+          EOF
+          chmod +x tools/docs_generate.local
+      - name: render the site
+        run: make docs
+      - name: pack the site
+        # The artifact is what Pages serves, so the deploying job below needs
+        # no checkout, no generator and no page pass of its own.
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  publish:
+    needs: build
+    # main only, whether it got here by a merge or by hand. The environment
+    # gates the branch a second time, on GitHub's side.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Deploying needs no write access to the repository at all: pages:write
+    # publishes the artifact, id-token:write proves to Pages which workflow
+    # built it. Nothing here can touch a branch or a tag.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    # One deployment at a time, and never cancel one midway.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

@@ -5,12 +5,12 @@ UWB facade: binds the CCC credential-based STS engine to the DW3000 radio, expos
 responder start/stop and range query, and manages platform dependencies (HFCLK boost, SPI init,
 callbacks).
 
-**depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](../modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](../modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](woz_uwb_facade.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](../modules.woz_uwb.src.fira/fira_session.h.md)  ·  **discussed in** [`docs/porting.md`](../../porting.md), [`web-twin/README.md`](../../../web-twin/README.md)
+**depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](../modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](../modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](woz_uwb_facade.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](../modules.woz_uwb.src.fira/fira_session.h.md)  ·  **discussed in** [`docs/porting.md`](../../porting.md), [`web-twin/README.md`](../../../web-twin/README.md)
 
 ## API
 
 ### `static void woz_hfclk_ensure_128mhz(void)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:26`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:27`
 
 @brief One-shot boost of the app-core HFCLK to 128 MHz for the DW3000 SPI bus.
 nRF5340-specific platform seam: the app core boots with HFCLK divided to
@@ -20,7 +20,7 @@ so this compiles to a no-op there. See docs/porting.md.
 **called by** `woz_uwb_bind_ursk`, `woz_uwb_prewarm`, `woz_uwb_start_aliro`
 
 ### `int woz_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:44`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:45`
 
 @brief Bind the CCC STS from the add-on-supplied plaintext URSK; returns 0 on success.
 @param ursk Pointer to the URSK bytes.
@@ -30,7 +30,7 @@ so this compiles to a no-op there. See docs/porting.md.
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:59`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:60`
 
 @brief Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
 @param c Configuration struct (channel, sync_code_index, ursk, ranging_config, sts_index0,
@@ -41,7 +41,7 @@ fails.
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `int woz_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:91`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:97`
 
 @brief Pre-apply the expected session PHY so the M4-time start skips dwt_configure.
 @param channel UWB channel the upcoming session is expected to negotiate.
@@ -51,26 +51,26 @@ fails.
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `void woz_uwb_stop(void)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:100`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:106`
 
 @brief Quiesce the radio and unbind the CCC STS shim.
 
 ### `bool woz_uwb_last_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:114`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:120`
 
 @brief Retrieve the last valid DS-TWR distance measurement in centimeters.
 @param cm_out Pointer to store the distance in cm.
 @return True if a valid range has been seen since initialization; false otherwise.
 
 ### `void woz_uwb_set_range_listener(void (*cb)(void))`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:132`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:138`
 
 @brief Register a callback fired after each accepted DS-TWR range latch.
 @param cb Callback invoked on the UWB RX path (keep it to a task wake), or NULL to clear.
 Without CONFIG_WOZ_ALIRO there is no range latch to observe and this is a no-op.
 
 ### `bool woz_uwb_trusted_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:141`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:147`
 
 Latest distance in cm, gated by the range-integrity consensus (layer 4):
 true only when a valid range has been seen AND it is trusted
