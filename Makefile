@@ -59,8 +59,10 @@ tools:
 ## tools-install: install the missing host tools  ·  prints the commands, asks first
 ##   macOS/Linux, via whichever of brew/apt/dnf/pacman/zypper is present, plus
 ##   pipx for the version-pinned python tools. Nothing runs before you agree;
-##   `-y` or ASSUME_YES=1 answers in advance. Firmware toolchains are separate:
-##   `make bootstrap` (NCS) and ESP-IDF, see docs/set-up.md.
+##   `-y` or ASSUME_YES=1 answers in advance. Also fetches nrfutil, which is
+##   reported but never required: it belongs to `make build`, not to any gate,
+##   so its absence never fails this target. The firmware toolchains themselves
+##   are separate: `make bootstrap` (NCS) and ESP-IDF, see docs/set-up.md.
 tools-install:
 	@$(REPO_ROOT)/scripts/toolchain.sh install
 
