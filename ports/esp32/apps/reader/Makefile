@@ -84,7 +84,8 @@ fi
 endef
 
 .PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean \
-        presence-on presence-off presence-flash presence-probe presence-enroll presence-sign
+        presence-on presence-off presence-flash presence-clone presence-probe presence-enroll \
+        presence-sign
 
 check-idf:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -144,26 +145,42 @@ term:
 	printf '  tio %s @ %s 8N1  ·  ctrl-t q quits  ·  release before make flash\n' "$$port" '$(BAUD)'; \
 	exec tio -b $(BAUD) $$logargs "$$port"
 
-##@ Presence dongle  (CONFIG_WOZ_PRESENCE · replaces the REPL with a binary link)
-## presence-on: switch sdkconfig into dongle mode  ·  idempotent
-##   Dongle mode serves a binary challenge/response on the console UART, so it
-##   MUTES all logging and removes the shell. Bring the board up as a normal
-##   reader first and confirm ranging; debugging a silent board is much worse.
+##@ Presence dongle  (CONFIG_WOZ_PRESENCE · adds `presence` to the normal shell)
+## presence-on: add the presence + clone console commands  ·  idempotent
+##   Additive, not a mode: the shell, the logs and ranging all stay exactly as
+##   they are, and `presence` joins them. That is what lets one board be
+##   provisioned (presence-clone) and answer challenges without reflashing.
+##   Also enables CONFIG_WOZ_ALIRO_CLONE, whose aliro-export prints the reader
+##   PRIVATE KEY on the console -- bench only, which is why it stays default n.
 presence-on:
 	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — run 'make build' once first" >&2; exit 1; }
-	@if grep -qx 'CONFIG_WOZ_PRESENCE=y' $(SDKCONFIG); then echo "  presence already on"; \
-	else printf '\nCONFIG_WOZ_PRESENCE=y\n' >> $(SDKCONFIG); echo "  presence ON  ·  next: make presence-flash"; fi
+	@for k in CONFIG_WOZ_PRESENCE CONFIG_WOZ_ALIRO_CLONE; do \
+		grep -qx "$$k=y" $(SDKCONFIG) || printf '%s=y\n' "$$k" >> $(SDKCONFIG); \
+	done; echo "  presence ON (+clone)  ·  next: make presence-flash"
 
-## presence-off: back to the normal reader (logs + interactive shell)
+## presence-off: drop the presence + clone commands from the build
 presence-off:
 	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — nothing to turn off"; exit 0; }
-	@sed -i '' '/^CONFIG_WOZ_PRESENCE=y$$/d' $(SDKCONFIG) && echo "  presence OFF  ·  next: make flash"
+	@sed -i '' -e '/^CONFIG_WOZ_PRESENCE=y$$/d' -e '/^CONFIG_WOZ_ALIRO_CLONE=y$$/d' \
+	  $(SDKCONFIG) && echo "  presence OFF  ·  next: make flash"
 
 ## presence-flash: turn presence on, then build + flash
 ##   Never erases: the device signing key and the Aliro trust store both live in
 ##   NVS, and erasing regenerates the key, invalidating every enrolment.
 presence-flash: presence-on
 	@$(MAKE) --no-print-directory flash
+
+## presence-clone: copy a provisioned reader identity onto the dongle  ·  SRC=/dev/cu...
+##   The phone's Wallet credential was issued against ONE reader identity, so the
+##   dongle has to present that same identity rather than be enrolled separately.
+##   SRC is the provisioned board (it needs aliro-export, i.e. its own presence-on).
+presence-clone:
+	@[ -n "$(SRC)" ] || { echo "  set SRC=  ·  the provisioned board's port (see: make ports)" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	[ "$$port" != "$(SRC)" ] || { echo "  SRC and the dongle resolved to the same port ($$port)" >&2; \
+	  echo "  pass PORT= as well to say which is the dongle" >&2; exit 1; }; \
+	echo "  cloning $(SRC) -> $$port"; \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) clone --source "$(SRC)" --port "$$port"
 
 ## presence-probe: bring-up check  ·  does the dongle sign a frame we accept?
 ##   Prints signature and presence verdicts separately. "signature VERIFIED"

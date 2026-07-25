@@ -56,12 +56,14 @@ void app_main(void)
 		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
 
 #if defined(CONFIG_WOZ_PRESENCE)
-	/* Presence dongle mode: serve the host challenge/response on the console UART
-	 * instead of the interactive shell. presence_link_serve() never returns. */
+	/* Additive: registers the range listener and the device signing key, and the
+	 * shell below picks up the `presence` command. Deliberately not a separate mode
+	 * -- the same board then serves presence AND stays provisionable over the same
+	 * console, which is what removes the reflash-to-switch-modes dance. */
 	presence_link_init();
-	ESP_LOGI(TAG, "presence dongle mode: serving host challenges (REPL disabled)");
-	presence_link_serve();
-#else
+	ESP_LOGI(TAG, "presence commands registered (see `presence` in help)");
+#endif
+
 	/* Interactive console on the console UART (shares the log stream). */
 	app_shell_start();
 
@@ -73,5 +75,4 @@ void app_main(void)
 		}
 		vTaskDelay(pdMS_TO_TICKS(500));
 	}
-#endif
 }

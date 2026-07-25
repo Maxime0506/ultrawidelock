@@ -19,6 +19,9 @@
 #include "woz_diag.h" /* woz_uwb_diag_on — the raw per-frame UWB trace gate */
 #include "aliro_reader.h"
 #include "app_shell.h"
+#if defined(CONFIG_WOZ_PRESENCE)
+#include "presence_link.h"
+#endif
 
 /* ---- look & feel -------------------------------------------------------- *
  * All color goes through col(): a terminal that failed the escape-sequence
@@ -398,6 +401,12 @@ void app_shell_start(void)
 		 .help = "aliro-stepup [arm|status]: request + verify an Access Document (verdict "
 			 "logged only)",
 		 .func = cmd_aliro_stepup},
+#endif
+#if defined(CONFIG_WOZ_PRESENCE)
+		{.command = "presence",
+		 .help = "presence pub|assert <nonce-hex>|hmac <nonce-hex>|key <hex>: signed "
+			 "statements of the current trusted-range presence",
+		 .func = presence_link_cmd},
 #endif
 		{.command = "uwbdiag",
 		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off)",

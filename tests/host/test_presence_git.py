@@ -38,11 +38,19 @@ POINT_A = tpv.KAT_POINT
 POINT_B = bytes.fromhex(
     "04" + "11" * 32 + "22" * 32
 )
-# A frame with the right header and a junk body: enough to test framing, which
+# A frame with the right header and a junk body: enough to test the transport, which
 # runs before anyone looks at the signature.
 P256_FRAME = pv.MAGIC + bytes([pv.VERSION, pv.ALG_ECDSA_P256]) + bytes(
     (i * 7) & 0xFF for i in range(pv.WIRE_P256 - 4)
 )
+
+
+def pub_line(point):
+    return f"{pg.TAG_PUB} {point.hex()}\n".encode()
+
+
+def p256_line(frame):
+    return f"{pg.TAG_P256} {frame.hex()}\n".encode()
 
 
 @contextlib.contextmanager
@@ -142,6 +150,13 @@ class FakeSerial:
             n = min(n, self.chunk)
         out = bytes(self.script[:n])
         del self.script[:n]
+        return out
+
+    def readline(self):
+        at = self.script.find(b"\n")
+        end = len(self.script) if at < 0 else at + 1
+        out = bytes(self.script[:end])
+        del self.script[:end]
         return out
 
     def close(self):
@@ -369,75 +384,113 @@ class VerifyTagTests(unittest.TestCase):
 
 
 class SerialTests(unittest.TestCase):
-    def test_pubkey_request_sends_the_right_frame(self):
-        ser = FakeSerial(POINT_A)
+    def test_pubkey_request_sends_the_console_command(self):
+        ser = FakeSerial(pub_line(POINT_A))
         self.assertEqual(pg.dongle_pubkey(ser), POINT_A)
-        self.assertEqual(ser.written, b"AQ")
+        self.assertEqual(ser.written, b"presence pub\n")
 
-    def test_challenge_sends_lead_type_and_nonce(self):
+    def test_challenge_sends_the_nonce_as_hex(self):
         nonce = bytes(range(16))
-        ser = FakeSerial(P256_FRAME)
+        ser = FakeSerial(p256_line(P256_FRAME))
         self.assertEqual(pg.dongle_assert(ser, nonce), P256_FRAME)
-        self.assertEqual(ser.written, b"AP" + nonce)
+        self.assertEqual(ser.written, b"presence assert " + nonce.hex().encode() + b"\n")
 
-    def test_short_reads_are_reassembled(self):
-        ser = FakeSerial(POINT_A, chunk=7)
-        self.assertEqual(pg.dongle_pubkey(ser), POINT_A)
+    def test_log_lines_around_the_answer_are_ignored(self):
+        # The whole point of moving off a binary channel: an interleaved log line is
+        # a line that does not match, where before it corrupted the response.
+        noise = b"I (523) ccc_shim: arm#0 slot=2 key0 wr deadbeef\n"
+        ser = FakeSerial(noise + b"esp32> \n" + p256_line(P256_FRAME))
+        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
 
-    def test_truncated_response_fails_loudly(self):
-        ser = FakeSerial(POINT_A[:30])
+    def test_dongle_error_line_is_surfaced_not_swallowed(self):
+        ser = FakeSerial(b"PRESENCE-ERR no usable device signing key\n")
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.dongle_assert(ser, bytes(16))
+        self.assertIn("no usable device signing key", str(cm.exception))
+
+    def test_truncated_answer_fails_loudly(self):
+        ser = FakeSerial(b"PRESENCE-PUB " + POINT_A[:30].hex().encode() + b"\n")
         with self.assertRaises(pg.PresenceError) as cm:
             pg.dongle_pubkey(ser)
-        self.assertIn("30 of 65", str(cm.exception))
+        self.assertIn("30 bytes, expected 65", str(cm.exception))
+
+    def test_non_hex_answer_fails_loudly(self):
+        ser = FakeSerial(b"PRESENCE-PUB not-actually-hex\n")
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.dongle_pubkey(ser)
+        self.assertIn("not hex", str(cm.exception))
 
     def test_dongle_without_a_key_is_refused(self):
-        ser = FakeSerial(b"\x00" * pv.PUB_LEN)
+        ser = FakeSerial(pub_line(b"\x00" * pv.PUB_LEN))
         with self.assertRaises(pg.PresenceError) as cm:
             pg.dongle_pubkey(ser)
         self.assertIn("no signing key", str(cm.exception))
 
     def test_non_uncompressed_point_is_refused(self):
-        ser = FakeSerial(b"\x02" + b"\x11" * 64)
+        ser = FakeSerial(pub_line(b"\x02" + b"\x11" * 64))
         with self.assertRaises(pg.PresenceError):
             pg.dongle_pubkey(ser)
 
     def test_stale_input_is_flushed_before_each_request(self):
-        ser = FakeSerial(POINT_A)
+        ser = FakeSerial(pub_line(POINT_A))
         pg.dongle_pubkey(ser)
         self.assertEqual(ser.flushed_input, 1)
-        ser.script = bytearray(P256_FRAME)
+        ser.script = bytearray(p256_line(P256_FRAME))
         pg.dongle_assert(ser, bytes(16))
         self.assertEqual(ser.flushed_input, 2)
 
-    def test_console_text_before_a_frame_is_skipped(self):
-        # A firmware printf lands in the same UART as the binary frame. Framing on
-        # the header is what keeps that from reading as a signature failure.
-        noise = b"I (523) ccc_shim: arm#0 slot=2 key0 wr deadbeef\n"
-        ser = FakeSerial(noise + P256_FRAME)
-        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
-
-    def test_magic_alone_in_the_noise_does_not_derail_resync(self):
-        # The magic pair turns up in binary noise; only magic+version+alg starts a
-        # frame. Locking onto the decoy would shift every field by four bytes.
-        decoy = pv.MAGIC + b"\x99\x99" + b"\x00" * 20
-        ser = FakeSerial(decoy + P256_FRAME)
-        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
-
-    def test_resync_finds_a_frame_split_across_reads(self):
-        ser = FakeSerial(b"stray\n" + P256_FRAME, chunk=3)
-        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
-
-    def test_endless_console_noise_fails_with_advice(self):
-        ser = FakeSerial(b"z" * (pg.RESYNC_BUDGET + 10))
+    def test_wrong_firmware_fails_with_advice(self):
+        ser = FakeSerial(b"some other board\n" * (pg.REPLY_LINE_BUDGET + 5))
         with self.assertRaises(pg.PresenceError) as cm:
             pg.dongle_assert(ser, bytes(16))
-        self.assertIn("presence mode", str(cm.exception))
+        self.assertIn("CONFIG_WOZ_PRESENCE", str(cm.exception))
 
-    def test_silent_port_times_out_rather_than_spinning(self):
+    def test_silent_port_fails_with_the_same_advice(self):
+        # The realistic wrong-firmware path: one "Unrecognized command" and then
+        # nothing. The timeout must carry the advice, since it is what users hit.
         ser = FakeSerial(b"")
         with self.assertRaises(pg.PresenceError) as cm:
             pg.dongle_assert(ser, bytes(16))
-        self.assertIn("timed out", str(cm.exception))
+        self.assertIn("CONFIG_WOZ_PRESENCE", str(cm.exception))
+
+
+class CloneTests(unittest.TestCase):
+    BLOB = "ab" * 238  # ALIRO_PROV_BLOB_MAX, the largest a real board emits
+
+    def test_export_picks_the_bare_hex_line_past_the_header(self):
+        script = (
+            b"aliro-export: 238 bytes (contains the reader PRIVATE KEY -- bench only)\n"
+            + self.BLOB.encode()
+            + b"\n"
+        )
+        self.assertEqual(pg.export_identity(FakeSerial(script)), self.BLOB)
+        # The header line is hex-ish in places; length is what rules it out.
+        self.assertNotIn("bytes", pg.export_identity(FakeSerial(script)))
+
+    def test_export_without_clone_support_says_so(self):
+        ser = FakeSerial(b"Unrecognized command\n" * 5)
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.export_identity(ser)
+        self.assertIn("CONFIG_WOZ_ALIRO_CLONE", str(cm.exception))
+
+    def test_import_sends_the_blob_and_returns_the_verdict(self):
+        ser = FakeSerial(b"aliro-import: adopted 238-byte identity + trust store (saved to NVS)\n")
+        line = pg.import_identity(ser, self.BLOB)
+        self.assertIn("adopted", line)
+        self.assertEqual(ser.written, f"aliro-import {self.BLOB}\n".encode())
+
+    def test_blob_too_long_for_the_console_is_refused_before_sending(self):
+        # A blob that overflows max_cmdline_length arrives truncated and is rejected
+        # as malformed, which blames the blob for a transport limit. Catch it here.
+        ser = FakeSerial(b"")
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.import_identity(ser, "cd" * pg.CONSOLE_LINE_MAX)
+        self.assertIn("console line", str(cm.exception))
+        self.assertEqual(ser.written, b"")
+
+    def test_largest_real_blob_still_fits_the_console_line(self):
+        # 476 bytes -> 952 hex chars + "aliro-import " + newline, against 1024.
+        self.assertLess(len(f"aliro-import {self.BLOB}\n"), pg.CONSOLE_LINE_MAX)
 
 
 @needs_openssl
@@ -463,7 +516,7 @@ class ProbeTests(unittest.TestCase):
 
     def test_present_dongle_passes(self):
         point, frame = signed_frame(self.NONCE, distance=20)
-        rc, out = self.run_probe(point + frame)
+        rc, out = self.run_probe(pub_line(point) + p256_line(frame))
         self.assertEqual(rc, 0, out)
         self.assertIn("signature  VERIFIED", out)
         self.assertIn("OK", out)
@@ -473,7 +526,7 @@ class ProbeTests(unittest.TestCase):
         # The realistic first-flash result: keys work, no phone has ranged yet.
         point, frame = signed_frame(self.NONCE, distance=pv.DIST_NONE,
                                     status=pv.PRESENCE_ABSENT)
-        rc, out = self.run_probe(point + frame)
+        rc, out = self.run_probe(pub_line(point) + p256_line(frame))
         self.assertEqual(rc, 0, out)
         self.assertIn("signature  VERIFIED", out)
         self.assertIn("E_ABSENT", out)
@@ -485,13 +538,13 @@ class ProbeTests(unittest.TestCase):
         # must report FAILED, which is the real bring-up failure mode.
         _, frame = signed_frame(self.NONCE, distance=20)
         other, _ = signed_frame(self.NONCE, distance=20)
-        rc, out = self.run_probe(other + frame)
+        rc, out = self.run_probe(pub_line(other) + p256_line(frame))
         self.assertEqual(rc, 1)
         self.assertIn("signature  FAILED", out)
 
     def test_keyless_dongle_refused_before_any_challenge(self):
         with self.assertRaises(pg.PresenceError):
-            self.run_probe(b"\x00" * pv.PUB_LEN)
+            self.run_probe(pub_line(b"\x00" * pv.PUB_LEN))
 
 
 class CliTests(unittest.TestCase):

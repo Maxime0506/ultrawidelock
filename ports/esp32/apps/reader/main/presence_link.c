@@ -1,9 +1,13 @@
-// Presence dongle protocol (see presence_link.h). Serves the host challenge on the
-// console UART: latches the latest trusted range via the facade's range listener,
-// and answers each nonce with a signed assertion of the current presence state.
-// Two signing paths: an HMAC under the NVS pairing key, verifiable only by the
-// paired host, and ECDSA-P256 under a per-device key generated on first boot,
-// verifiable by anyone holding the public point.
+// Presence dongle commands (see presence_link.h). Latches the latest trusted range
+// via the facade's range listener, and answers each nonce with a signed assertion of
+// the current presence state. Two signing paths: an HMAC under the NVS pairing key,
+// verifiable only by the paired host, and ECDSA-P256 under a per-device key
+// generated on first boot, verifiable by anyone holding the public point.
+//
+// These live on the ordinary console rather than a private binary channel, so one
+// board can be provisioned (aliro-import) and queried for presence without
+// reflashing between modes, and so a stray log line is just another line instead of
+// a corrupted frame.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -11,10 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_timer.h"
-#include "esp_log.h"
 #include "nvs.h"
 
 #include "woz_uwb_facade.h"
@@ -148,22 +149,6 @@ void presence_link_init(void)
 	woz_uwb_set_range_listener(range_cb);
 }
 
-// Blocking read of exactly n bytes from stdin, yielding while the UART is idle.
-static void read_full(uint8_t *b, size_t n)
-{
-	size_t got = 0;
-
-	while (got < n) {
-		int c = getchar();
-
-		if (c == EOF) {
-			vTaskDelay(pdMS_TO_TICKS(2));
-			continue;
-		}
-		b[got++] = (uint8_t)c;
-	}
-}
-
 /* Wallet unlock animation (Reader-Status-Changed, Aliro transaction step 23).
  * Latched so the grant fires on the edge, not once per challenge: the phone
  * animates when a presence check first succeeds and relocks when a later check
@@ -214,97 +199,133 @@ static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT
 	notify_wallet(fresh && have_cred);
 }
 
-// Assemble + HMAC the assertion for a challenge nonce and write it to the host.
-// Only the paired host, holding the same secret, can check this frame.
-static void answer_challenge(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+// Emit one tagged hex line in a single printf. Assembling the line first matters:
+// another task's output can land between two printf calls but not inside one, and
+// the host frames on whole lines.
+static void emit_hex(const char *tag, const uint8_t *b, size_t n)
 {
-	struct aliro_assert a;
+	char line[2 * ALIRO_ASSERT_WIRE_P256 + 32];
+	size_t at = (size_t)snprintf(line, sizeof(line), "%s ", tag);
 
-	fill_assert(&a, nonce);
+	for (size_t i = 0; i < n && at + 3 <= sizeof(line); i++) {
+		at += (size_t)snprintf(line + at, sizeof(line) - at, "%02x", b[i]);
+	}
+	printf("%s\n", line);
+}
 
-	/* With no pairing key yet, sign under an all-zero key so the host's MAC check
-	 * fails cleanly (a clean deny) instead of the dongle going silent. */
+static int hexval(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	return -1;
+}
+
+// Parse exactly n bytes of hex. Rejects a short or long string rather than taking a
+// prefix: a truncated nonce that still parsed would silently weaken the challenge.
+static int parse_hex(const char *s, uint8_t *out, size_t n)
+{
+	if (strlen(s) != 2 * n) {
+		return -1;
+	}
+	for (size_t i = 0; i < n; i++) {
+		int hi = hexval(s[2 * i]);
+		int lo = hexval(s[2 * i + 1]);
+
+		if (hi < 0 || lo < 0) {
+			return -1;
+		}
+		out[i] = (uint8_t)((hi << 4) | lo);
+	}
+	return 0;
+}
+
+// Assemble + HMAC the assertion for a challenge nonce. Only the paired host, holding
+// the same secret, can check this. With no pairing key yet, sign under an all-zero
+// key so the host's check fails cleanly (a clean deny) rather than the dongle going
+// silent and the host blocking on a response that never comes.
+static void answer_hmac(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+{
 	static const uint8_t zero_key[ALIRO_ASSERT_KEY_LEN] = { 0 };
-	const uint8_t *key = s_key_set ? s_key : zero_key;
+	struct aliro_assert a;
 	uint8_t wire[ALIRO_ASSERT_WIRE_HMAC];
 
-	aliro_assert_build(key, &a, wire, sizeof(wire), NULL);
-	fwrite(wire, 1, sizeof(wire), stdout);
-	fflush(stdout);
+	fill_assert(&a, nonce);
+	aliro_assert_build(s_key_set ? s_key : zero_key, &a, wire, sizeof(wire), NULL);
+	emit_hex("PRESENCE-HMAC", wire, sizeof(wire));
 }
 
 // As above but signed under the device key, so any holder of the public point can
 // verify it without sharing a secret. This is what makes a presence proof portable
 // to a third party (a CI job, a second reviewer) rather than only to this host.
-static void answer_challenge_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+static void answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 {
 	struct aliro_assert a;
 	uint8_t wire[ALIRO_ASSERT_WIRE_P256];
 
 	fill_assert(&a, nonce);
-
 	if (!s_dev_set || aliro_assert_build_p256(aliro_assert_ec_sign, &s_dev, &a, wire,
 						  sizeof(wire), NULL) != 0) {
-		/* No usable device key, or the signature failed. Answer with an
-		 * all-zero frame rather than going silent: the host then fails the
-		 * framing check and denies, instead of blocking on a read of a
-		 * response that never arrives. */
-		memset(wire, 0, sizeof(wire));
+		printf("PRESENCE-ERR no usable device signing key\n");
+		return;
 	}
-	fwrite(wire, 1, sizeof(wire), stdout);
-	fflush(stdout);
+	emit_hex("PRESENCE-P256", wire, sizeof(wire));
 }
 
-// Answer a public-key request with the device's uncompressed P-256 point, which is
-// how a host enrols this dongle. All-zero when there is no key, and no verifier
-// accepts a frame under that point.
-static void send_pubkey(void)
+int presence_link_cmd(int argc, char **argv)
 {
-	fwrite(s_dev_pub, 1, sizeof(s_dev_pub), stdout);
-	fflush(stdout);
-}
+	uint8_t nonce[ALIRO_ASSERT_NONCE_LEN];
 
-void presence_link_serve(void)
-{
-	/* Mute logging so it cannot corrupt the binary channel, and make stdio
-	 * unbuffered so frames go out whole and immediately. */
-	esp_log_level_set("*", ESP_LOG_NONE);
-	setvbuf(stdin, NULL, _IONBF, 0);
-	setvbuf(stdout, NULL, _IONBF, 0);
-
-	for (;;) {
-		int c = getchar();
-
-		if (c == EOF) {
-			vTaskDelay(pdMS_TO_TICKS(5));
-			continue;
-		}
-		if (c != 'A') {
-			continue; /* resync on the frame lead byte */
-		}
-		int t = getchar();
-		while (t == EOF) {
-			vTaskDelay(pdMS_TO_TICKS(2));
-			t = getchar();
-		}
-		if (t == 'C') { /* HMAC challenge: 16-byte nonce follows */
-			uint8_t nonce[ALIRO_ASSERT_NONCE_LEN];
-
-			read_full(nonce, sizeof(nonce));
-			answer_challenge(nonce);
-		} else if (t == 'P') { /* P-256 challenge: 16-byte nonce follows */
-			uint8_t nonce[ALIRO_ASSERT_NONCE_LEN];
-
-			read_full(nonce, sizeof(nonce));
-			answer_challenge_p256(nonce);
-		} else if (t == 'Q') { /* public-key request: no payload */
-			send_pubkey();
-		} else if (t == 'K') { /* key-load: 32-byte pairing key follows */
-			uint8_t key[ALIRO_ASSERT_KEY_LEN];
-
-			read_full(key, sizeof(key));
-			(void)presence_link_set_key(key);
-		}
-		/* any other second byte: ignore, keep scanning */
+	if (argc < 2) {
+		printf("PRESENCE-ERR usage: presence pub|assert <nonce-hex>|hmac <nonce-hex>|"
+		       "key <hex>\n");
+		return 1;
 	}
+
+	if (strcmp(argv[1], "pub") == 0) {
+		/* All-zero when keygen or its NVS write failed. Emitted rather than
+		 * suppressed so enrolment fails loudly at the host, which knows that no
+		 * verifier accepts a frame under an all-zero point. */
+		emit_hex("PRESENCE-PUB", s_dev_pub, sizeof(s_dev_pub));
+		return 0;
+	}
+
+	if (strcmp(argv[1], "assert") == 0 || strcmp(argv[1], "hmac") == 0) {
+		if (argc < 3 || parse_hex(argv[2], nonce, sizeof(nonce)) != 0) {
+			printf("PRESENCE-ERR expected a %u-byte nonce as %u hex chars\n",
+			       (unsigned)sizeof(nonce), (unsigned)(2 * sizeof(nonce)));
+			return 1;
+		}
+		if (argv[1][0] == 'a') {
+			answer_p256(nonce);
+		} else {
+			answer_hmac(nonce);
+		}
+		return 0;
+	}
+
+	if (strcmp(argv[1], "key") == 0) {
+		uint8_t key[ALIRO_ASSERT_KEY_LEN];
+
+		if (argc < 3 || parse_hex(argv[2], key, sizeof(key)) != 0) {
+			printf("PRESENCE-ERR expected a %u-byte key as %u hex chars\n",
+			       (unsigned)sizeof(key), (unsigned)(2 * sizeof(key)));
+			return 1;
+		}
+		if (presence_link_set_key(key) != 0) {
+			printf("PRESENCE-ERR could not persist the pairing key\n");
+			return 1;
+		}
+		printf("PRESENCE-KEY ok\n");
+		return 0;
+	}
+
+	printf("PRESENCE-ERR unknown subcommand '%s'\n", argv[1]);
+	return 1;
 }

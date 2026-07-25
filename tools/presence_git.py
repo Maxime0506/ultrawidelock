@@ -61,14 +61,18 @@ ENROLLED_PATH = os.path.join(".presence", "enrolled")
 TRAILER_KEY_ID = "Presence-Key-Id"
 TRAILER_ASSERTION = "Presence-Assertion"
 
-# Serial framing understood by the dongle (ports/esp32/apps/reader/main/presence_link.c).
-# Console bytes tolerated ahead of a frame while resyncing: roomy enough for a
-# ROM boot banner, small enough that a port babbling something else fails fast.
-RESYNC_BUDGET = 4096
+# Console protocol spoken by the dongle (ports/esp32/apps/reader/main/presence_link.c).
+# Everything is a line: a command line in, one tagged hex line back. The dongle
+# shares this console with the log stream and the rest of the shell, so answers are
+# found by their tag rather than by position, and an interleaved log line is simply
+# a line that does not match.
+TAG_PUB = "PRESENCE-PUB"
+TAG_P256 = "PRESENCE-P256"
+TAG_ERR = "PRESENCE-ERR"
 
-FRAME_LEAD = b"A"
-FRAME_CHALLENGE_P256 = b"P"
-FRAME_PUBKEY = b"Q"
+# Lines read while looking for a tagged answer. A boot banner plus a busy log stream
+# stays well inside this; a port that is not running this firmware fails fast.
+REPLY_LINE_BUDGET = 400
 
 
 class PresenceError(RuntimeError):
@@ -204,64 +208,129 @@ def open_port(port: str, timeout=8.0):
         raise PresenceError(f"cannot open {port}: {exc}") from exc
 
 
-def read_exact(ser, n: int) -> bytes:
-    """Read exactly n bytes or fail. pyserial's read() may return short."""
-    buf = b""
-    while len(buf) < n:
-        chunk = ser.read(n - len(buf))
-        if not chunk:
-            raise PresenceError(f"dongle sent {len(buf)} of {n} bytes before timing out")
-        buf += chunk
-    return buf
+def read_line(ser) -> str:
+    """Read one line, or raise on a silent port. Undecodable bytes are not fatal.
 
-
-def read_framed(ser, magic: bytes, n: int, what: str) -> bytes:
-    """Read an n-byte frame starting with magic, skipping any console text first.
-
-    The dongle's binary frames share one UART with the ROM boot banner and with
-    any firmware printf that is not routed through the log level, so the bytes
-    waiting after a request are not reliably the response. Scanning for the magic
-    rather than trusting alignment is what the leading constant is for. Without
-    it a single stray line shifts the frame by a few bytes and the signature
-    check fails, which reads as a crypto or key problem when it is really a
-    framing one -- a genuinely misleading way to lose an afternoon.
+    Console output is not guaranteed to be clean UTF-8 -- a board reset mid-read
+    puts ROM garbage on the wire -- and a decode error there should look like a
+    line that does not match, not like a crash.
     """
-    win = b""
-    skipped = 0
-    while True:
-        b = ser.read(1)
-        if not b:
-            raise PresenceError(f"timed out waiting for the {what}")
-        win = (win + b)[-len(magic) :]
-        if win == magic:
-            return magic + read_exact(ser, n - len(magic))
-        skipped += 1
-        if skipped > RESYNC_BUDGET:
-            raise PresenceError(
-                f"no {what} in {RESYNC_BUDGET} bytes of console output. The dongle is "
-                "talking, but not this protocol: check it was flashed with presence mode on."
-            )
+    raw = ser.readline()
+    if not raw:
+        raise PresenceError("the port went silent (no newline before the timeout)")
+    return raw.decode("utf-8", "replace").strip()
+
+
+def ask(ser, command: str, tag: str, what: str) -> str:
+    """Send a console command and return the payload of the first line tagged `tag`.
+
+    Answers are located by tag rather than by position because the dongle's console
+    also carries the log stream and the shell's own echo. That is the whole reason
+    this protocol is lines of text: an interleaved log line is a line that does not
+    match, where in a binary framing it was a corrupted response.
+    """
+    ser.reset_input_buffer()
+    ser.write((command + "\n").encode())
+    ser.flush()
+    # A board lacking the command prints one "Unrecognized command" and then goes
+    # quiet, so the timeout -- not the line budget -- is the path a real mistake
+    # takes. Both ends carry the same advice or it would never be read.
+    advice = (
+        f"no {what} came back from '{command}'. Check the board was flashed with "
+        "CONFIG_WOZ_PRESENCE=y (run 'help' on its console to see)."
+    )
+    for _ in range(REPLY_LINE_BUDGET):
+        try:
+            line = read_line(ser)
+        except PresenceError as exc:
+            raise PresenceError(advice) from exc
+        if line.startswith(tag + " "):
+            return line[len(tag) + 1 :].strip()
+        if line.startswith(TAG_ERR + " "):
+            raise PresenceError(f"dongle refused '{command}': {line[len(TAG_ERR) + 1:]}")
+    raise PresenceError(advice)
+
+
+def unhex(payload: str, n: int, what: str) -> bytes:
+    try:
+        raw = bytes.fromhex(payload)
+    except ValueError as exc:
+        raise PresenceError(f"{what} was not hex: {payload[:40]!r}") from exc
+    if len(raw) != n:
+        raise PresenceError(f"{what} was {len(raw)} bytes, expected {n}")
+    return raw
+
+
+# `aliro-import <hex>` has to fit the console's line buffer, which both apps set to
+# this. A blob that overflows it would arrive truncated and be rejected as malformed,
+# blaming the blob for what is really a transport limit, so check it here instead.
+CONSOLE_LINE_MAX = 1024
+
+# The identity blob is printed on a bare line with no tag, unlike the presence
+# replies. A long unbroken run of hex is a strong enough signature, and demanding a
+# minimum length keeps a short hex-ish log line from matching. 64 chars is well under
+# the smallest real blob and well over anything that shows up in a log line.
+BLOB_MIN_HEX = 64
+
+
+def read_bare_hex(ser, min_chars: int, what: str) -> str:
+    # As in ask(): a board without the command answers once and falls silent, so the
+    # timeout carries the same advice as running out of lines.
+    advice = (
+        f"no {what} came back. Was this board built with CONFIG_WOZ_ALIRO_CLONE=y? "
+        "(run 'help' on its console to see)"
+    )
+    for _ in range(REPLY_LINE_BUDGET):
+        try:
+            candidate = read_line(ser).strip()
+        except PresenceError as exc:
+            raise PresenceError(advice) from exc
+        if len(candidate) >= min_chars and len(candidate) % 2 == 0:
+            try:
+                bytes.fromhex(candidate)
+            except ValueError:
+                continue
+            return candidate
+    raise PresenceError(advice)
+
+
+def export_identity(ser) -> str:
+    """Read a reader identity + trust blob from a provisioned board, as hex."""
+    ser.reset_input_buffer()
+    ser.write(b"aliro-export\n")
+    ser.flush()
+    return read_bare_hex(ser, BLOB_MIN_HEX, "identity blob")
+
+
+def import_identity(ser, blob_hex: str) -> str:
+    """Load an identity blob into a board. Returns the console's confirmation line."""
+    command = f"aliro-import {blob_hex}"
+    if len(command) + 1 > CONSOLE_LINE_MAX:
+        raise PresenceError(
+            f"identity blob is {len(blob_hex) // 2} bytes, which does not fit the "
+            f"{CONSOLE_LINE_MAX}-char console line. Raise max_cmdline_length in both "
+            "app shells, or move the transfer off the command line."
+        )
+    ser.reset_input_buffer()
+    ser.write((command + "\n").encode())
+    ser.flush()
+    for _ in range(REPLY_LINE_BUDGET):
+        line = read_line(ser)
+        if line.startswith("aliro-import:"):
+            return line
+    raise PresenceError("the destination board never acknowledged the import")
 
 
 def dongle_pubkey(ser) -> bytes:
-    ser.reset_input_buffer()
-    ser.write(FRAME_LEAD + FRAME_PUBKEY)
-    ser.flush()
-    point = read_exact(ser, pv.PUB_LEN)
+    point = unhex(ask(ser, "presence pub", TAG_PUB, "public key"), pv.PUB_LEN, "public key")
     if point[0] != 0x04 or point == b"\x00" * pv.PUB_LEN:
         raise PresenceError("dongle has no signing key (it returned an unusable point)")
     return point
 
 
 def dongle_assert(ser, nonce: bytes) -> bytes:
-    ser.reset_input_buffer()
-    ser.write(FRAME_LEAD + FRAME_CHALLENGE_P256 + nonce)
-    ser.flush()
-    # Frame on magic + version + algorithm, not magic alone: two bytes turn up in
-    # noise often enough to lock onto the wrong offset, and every byte of this
-    # prefix is fixed for the P-256 response we just asked for.
-    prefix = pv.MAGIC + bytes([pv.VERSION, pv.ALG_ECDSA_P256])
-    return read_framed(ser, prefix, pv.WIRE_P256, "assertion frame")
+    payload = ask(ser, f"presence assert {nonce.hex()}", TAG_P256, "assertion")
+    return unhex(payload, pv.WIRE_P256, "assertion")
 
 
 def cmd_nonce(args) -> int:
@@ -334,6 +403,34 @@ def cmd_enroll(args) -> int:
             fh.write("# Reviewed in history like any other change; a tag names only a key id.\n")
         fh.write(f"{args.name} {point.hex()}\n")
     print(f"enrolled {args.name} as {kid} in {args.file}")
+    return 0
+
+
+def cmd_clone(args) -> int:
+    """Copy a provisioned reader identity onto the dongle over two serial ports.
+
+    This is what lets a phone's EXISTING Wallet credential transact with the dongle:
+    the credential was issued against a particular reader identity, so the dongle has
+    to present that same identity rather than be enrolled separately. The blob
+    carries the reader private key, which is exactly why the console command behind
+    it is not compiled in by default.
+    """
+    src = open_port(args.source)
+    try:
+        blob = export_identity(src)
+    finally:
+        src.close()
+    print(f"exported {len(blob) // 2} bytes of identity + trust from {args.source}")
+
+    dst = open_port(args.port)
+    try:
+        line = import_identity(dst, blob)
+    finally:
+        dst.close()
+    print(line)
+    if "adopted" not in line:
+        return 1
+    print("the dongle now presents the source board's reader identity")
     return 0
 
 
@@ -410,6 +507,11 @@ def build_parser():
     p.add_argument("--name", required=True, help="human label for this dongle")
     p.add_argument("--file", default=ENROLLED_PATH)
     p.set_defaults(func=cmd_enroll)
+
+    p = sub.add_parser("clone", help="copy a provisioned reader identity onto the dongle")
+    p.add_argument("--source", required=True, help="serial port of the provisioned board")
+    p.add_argument("--port", required=True, help="dongle serial port")
+    p.set_defaults(func=cmd_clone)
 
     p = sub.add_parser("sign", help="create a presence-signed annotated tag")
     p.add_argument("--tag", required=True)
