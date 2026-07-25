@@ -177,11 +177,68 @@ bolt, UWB-on window, UWB duty cycle, RSSI at open, and mean mA over the idle /
 held / UWB-on spans. `--csv` appends so the scenario matrix accumulates into
 one file; plot mA against latency per tag and the curve is the deliverable.
 
+## What the bench proved
+
+Measured on an ESP32-S3 + DWM3000EVB against one iPhone, over roughly a dozen
+walk-ups. Every row here is an observed event in an `[ALAB]` capture, not a
+design intention.
+
+| behaviour | evidence |
+|---|---|
+| gate holds while far, radio dark | seven consecutive hold-and-drop sessions with no `rrx`/`rtx` at all |
+| the phone's patience | holds ended at 1.784 to 1.918 s, always phone-initiated (`reason=531`) |
+| gate opens on the level | `gate.hold dbm=-63` and `-60` both held; `gate.open dbm=-55` released |
+| rise-rate fast open | one approach opened at `gate.open dbm=-59`, below threshold, on an ~11 dB climb in 1.25 s |
+| hold cap, when enabled | a 1200 ms cap released at 1.208 and 1.444 s; a 1500 ms cap at 1.695 s |
+| walk-away closes the gate | `gate.close dbm=-79`, `-80`, `-82` on three departures |
+| unlock latency | `bolt+2525 ms` with the gate already open; `bolt+4517 ms` through a 1.6 s hold |
+
+Two numbers are the cost side of the ledger, and both are the direct
+consequence of a design choice made earlier in this document:
+
+**Departure takes 5.46 s.** Running away, the last trusted range landed at
+t=45.306 and the relock at t=50.763. Ranging stops before the depart threshold
+can see three sustained samples past `ALIRO_RELOCK_RANGE_CM`, so the gate close
+is what relocks, and that needs `WOZ_RSSI_GATE_CLOSE_HOLD_MS` of sustained fade
+plus the EWMA's own lag. Halving the close hold roughly halves the window, at
+the cost of a body fade being able to close the gate under someone who has not
+left.
+
+**A lingering phone costs reconnects, not radio.** A peer that connects at BLE
+range and stays there cycles connect / hold / drop every ~3.4 s, each cycle
+about 200 ms of fast re-auth. That is the deliberate trade behind
+`WOZ_RSSI_GATE_MAX_HOLD_MS=0`; see the section above for the arm that was
+rejected.
+
+## Relock policy, and why it is not a timeout
+
+The approach controller relocks when the Aliro **session** ends, never on
+ranging silence. This is not a tuning preference, it is forced by iOS: the phone
+stops ranging when it stops moving. Bench captures show silences of 1.6 s, 2.4 s
+and 3.07 s with the phone still present, the last one 26 cm from the reader with
+the link up. Under a silence timeout the bolt relocked under someone standing at
+the door and then re-unlocked when ranging resumed, cycling the physical lock.
+
+Consequences worth knowing before changing it:
+
+- The door stays unlocked while the phone holds the link. There is no auto-relock
+  timer. The bound is spatial (the gate's close threshold), not temporal.
+- Departure is therefore whatever ends the link: the gate closing on a fade, the
+  phone pocketing or sleeping, or BLE dropping.
+- The reader tells the phone **before** hanging up. The gate-close path sends
+  Reader-Status-Changed Secured between stopping ranging and disconnecting,
+  measured at 2.2 ms after `gate.close` and 16.6 ms before `session.end`. Without
+  it the notification has no channel and the phone keeps showing the door open.
+- If the link dies without the reader closing it, the Secured cannot be delivered
+  at all. It is flagged and replayed on the next session, right after
+  AP-Completed, which the user sees as the Wallet showing locked then unlocked
+  moments later. Duplicate suppression keeps that replay from firing when the
+  close path already delivered.
+
 ## Known limitation (bench question)
 
 If the phone stays parked inside after unlocking, its side eventually stops
-ranging (the reader's peer-gone relock fires) while the reader's receiver
-keeps listening for the next round until the phone drops BLE. Whether iOS
-drops the link promptly is exactly what the resident scenario measures; if it
-holds the link for long, the follow-up is a reader-side idle teardown after
-peer-gone. The gate's close path already covers the walk-away case.
+ranging while the reader's receiver keeps listening for the next round until the
+phone drops BLE. Whether iOS drops the link promptly is exactly what the resident
+scenario measures; if it holds the link for long, the follow-up is a reader-side
+idle teardown. The gate's close path already covers the walk-away case.

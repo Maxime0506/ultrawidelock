@@ -60,10 +60,20 @@ No NFC tap path exists on this target, so there is no equivalent of HV-5.
 | EV-9 | Walk away | Bolt relocks past the hysteresis margin and does not oscillate at the boundary |
 | EV-10 | Re-approach within the same session | Unlocks again without a reconnect |
 | EV-11 | Power-cycle the board, wait for boot, repeat EV-7 | Unlock works without re-commissioning or re-provisioning |
+| EV-12 | `lab on`, then approach from beyond BLE range and watch the trace | `gate.hold` appears and no `rrx`/`rtx` follows until `gate.open`; the radio stays dark while the phone is far |
+| EV-13 | Loiter out of range for ~10 s during EV-12 | Repeated `session.start` / `gate.hold` / `session.end` cycles are correct, not a fault; the phone gives up at ~1.9 s and retries |
+| EV-14 | Unlock, then stand still at the door for 10 s | No `relock.sent`, bolt does not cycle. iOS pauses ranging when still; a relock here is the regression |
+| EV-15 | Unlock, then leave briskly | `relock.sent` appears **before** `session.end`, and the phone shows locked as you go |
+| EV-16 | Re-approach after EV-15 | No `relock.sent` between `ph.apc` and the grant, i.e. the Wallet does not flash locked then unlocked |
 
 EV-7 is the row that matters most and the one most easily faked: the bolt moving is not
 a pass. The Wallet animation is the pass criterion, because that is what proves the
 reader told the phone it granted access rather than just actuating locally.
+
+EV-12 to EV-16 gate the RSSI power gate and the relock policy; see
+[`power-profile.md`](power-profile.md) for what each measurement means and for the
+thresholds they depend on. EV-14 and EV-16 are regression rows: both behaviours were
+shipped broken once and are invisible unless specifically looked for.
 
 ## Recording results
 
