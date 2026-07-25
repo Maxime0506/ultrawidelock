@@ -1,0 +1,72 @@
+# Woz NFC transport seam: selects which reader backend implements the WozNfc
+# transport API consumed by the patched add-on application.
+
+config WOZ_NFC
+	bool "Woz NFC transport seam"
+	help
+	  Compile the WozNfc transport seam into the application. The add-on's
+	  NFC call sites are patched (integration/patches/nfc-transport-seam.patch)
+	  to go through this seam, so exactly one backend below must be selected
+	  in any application build that links those call sites.
+
+if WOZ_NFC
+
+choice WOZ_NFC_TRANSPORT
+	prompt "Aliro NFC reader transport"
+	default WOZ_NFC_TRANSPORT_RFAL if NFC_DRIVER_STM
+	default WOZ_NFC_TRANSPORT_NONE
+
+config WOZ_NFC_TRANSPORT_RFAL
+	bool "ST25R series via the upstream RFAL transport"
+	depends on NFC_DRIVER_STM
+	help
+	  Forward the seam to the add-on's NfcTransportRfal (X-NUCLEO ST25R500
+	  shield on spi1). Upstream behavior, byte for byte.
+
+config WOZ_NFC_TRANSPORT_PN532
+	bool "NXP PN532 over SPI"
+	depends on SPI
+	help
+	  In-tree PN532 reader transport. Needs a devicetree node compatible
+	  "nxp,pn532-spi" (see integration/overlays/pn532.overlay, which reuses
+	  the spi1 bus the ST25R shield would occupy). Emits Apple ECP frames
+	  while polling so an iPhone auto-presents its Aliro pass, mirroring the
+	  woz_aliro_ecp module on the RFAL path.
+
+config WOZ_NFC_TRANSPORT_NONE
+	bool "No NFC reader fitted"
+	help
+	  The board has no NFC frontend. Start() succeeds without doing
+	  anything; the Aliro NFC flow is simply never entered. BLE/UWB and
+	  Matter operate normally.
+
+endchoice
+
+if WOZ_NFC_TRANSPORT_PN532
+
+config WOZ_NFC_PN532_THREAD_STACK_SIZE
+	int "PN532 transport thread stack size"
+	default 3072
+
+config WOZ_NFC_PN532_POLL_PERIOD_MS
+	int "Polling period between discovery rounds (ms)"
+	default 96
+	help
+	  Delay with the RF field off between polling rounds. Each round emits
+	  one ECP frame and one 106 kbps type A activation attempt.
+
+config WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS
+	int "APDU exchange response timeout (ms)"
+	default 5000
+	help
+	  Upper bound on one InDataExchange round trip. The PN532 services
+	  ISO-DEP WTX requests autonomously, and a User Device performing user
+	  authentication can legitimately stretch a response several seconds.
+
+endif # WOZ_NFC_TRANSPORT_PN532
+
+module = WOZ_NFC
+module-str = woz_nfc
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif # WOZ_NFC

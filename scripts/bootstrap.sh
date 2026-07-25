@@ -94,9 +94,14 @@ if [ "${HA:-0}" = 1 ]; then
   ha_patches=("$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch")
 fi
 
-apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" "$P/approach-direction-cluster.patch" ${ha_patches[@]+"${ha_patches[@]}"}
+apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" "$P/approach-direction-cluster.patch" "$P/nfc-transport-seam.patch" ${ha_patches[@]+"${ha_patches[@]}"}
 apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
-echo "    ✓ pristine upstream + $((11 + ${#ha_patches[@]})) patches (add-on ×$((9 + ${#ha_patches[@]})), nrf, matter)"
+
+# Calculate number of patches applied to $ADDON (always 10 base patches plus the HA patches if HA=1)
+addon_patch_count=$((10 + ${#ha_patches[@]}))
+total_patch_count=$((12 + ${#ha_patches[@]}))
+
+echo "    ✓ pristine upstream + $total_patch_count patches (add-on ×$addon_patch_count, nrf, matter)"
 
 echo "==> ready. Build with:  make build"

@@ -1,0 +1,6 @@
+name: woz_nfc
+build:
+  cmake: .
+  kconfig: Kconfig
+  settings:
+    dts_root: .

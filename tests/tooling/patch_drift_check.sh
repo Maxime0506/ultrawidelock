@@ -30,7 +30,7 @@ ADDON_PATCHES=(
   "$P/pretty-shell.patch" "$P/console-quiet-flood.patch"
   "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch"
   "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch"
-  "$P/approach-direction-cluster.patch"
+  "$P/approach-direction-cluster.patch" "$P/nfc-transport-seam.patch"
   "$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch"
 )
 NRF_PATCHES=("$P/nrf-flashfit-dfu-guards.patch")

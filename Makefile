@@ -26,6 +26,7 @@ STRICT   ?=
 HA            ?=
 ALIRO_SOURCE  ?=
 ALIRO_TRACE   ?=
+NFC           ?=
 
 # Serial monitor (make term). PORT auto-detects the nRF5340DK console (VCOM1 —
 # this firmware's console + Zephyr shell live there; VCOM0 is silent). Override
@@ -44,7 +45,8 @@ ENV := $(strip \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)) \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
-  $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)))
+  $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
+  $(if $(NFC),NFC=$(NFC)))
 
 .PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
@@ -67,6 +69,7 @@ ws-seed:
 ##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
 ##            ALIRO_SOURCE=1  ALIRO_TRACE=1 (temporary BLE/UWB capture)
 ##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
+##            NFC=pn532|st25r|none (reader transport; default st25r)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720
 build:
 	@$(ENV) ./scripts/build.sh build
