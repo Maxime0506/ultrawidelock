@@ -21,6 +21,12 @@
 #define PN532_DEFAULT_ACK_TIMEOUT_MS      100
 #define PN532_DEFAULT_RESPONSE_TIMEOUT_MS 1000
 
+/* Upper bound on MI-chained InDataExchange continuations. A full 512-byte
+ * response is only a handful of PN532 frames; this ceiling trips solely when the
+ * chip keeps the MI (more-information) bit set without making forward progress,
+ * which would otherwise spin the caller on back-to-back round trips forever. */
+#define PN532_MI_MAX_CONTINUATIONS 64
+
 void pn532_init(struct pn532 *p, const struct pn532_bus_ops *ops, void *ctx)
 {
 	memset(p, 0, sizeof(*p));
@@ -244,14 +250,15 @@ int pn532_transact(struct pn532 *p, uint8_t cmd, const uint8_t *params, size_t p
 
 	payload++; /* skip echoed response code */
 	payload_len--;
-	if (resp_len != NULL) {
-		*resp_len = payload_len;
-	}
 	if (payload_len > 0) {
 		if (resp == NULL || payload_len > resp_cap) {
 			return PN532_ERR_SPACE;
 		}
 		memcpy(resp, payload, payload_len);
+	}
+	if (resp_len != NULL) {
+		*resp_len =
+			payload_len; /* only on success: never leave an oversized len on error */
 	}
 	return PN532_OK;
 }
@@ -426,6 +433,8 @@ int pn532_in_data_exchange(struct pn532 *p, uint8_t tg, const uint8_t *tx, size_
 	} while (sent < tx_len);
 
 	/* Collect the response, following the MI bit for chained answers. */
+	unsigned int continuations = 0;
+
 	for (;;) {
 		const size_t data_len = resp_len - 1;
 
@@ -438,6 +447,11 @@ int pn532_in_data_exchange(struct pn532 *p, uint8_t tg, const uint8_t *tx, size_
 		}
 		if ((p->last_status & PN532_STATUS_MI) == 0) {
 			break;
+		}
+		if (++continuations > PN532_MI_MAX_CONTINUATIONS) {
+			/* Chip left MI set without completing — fail closed rather
+			 * than loop on it indefinitely. */
+			return frame_error(p, PN532_FRAME_ERROR_TRUNCATED);
 		}
 		params[0] = tg;
 		rc = pn532_transact(p, PN532_CMD_IN_DATA_EXCHANGE, params, 1, resp, sizeof(resp),
