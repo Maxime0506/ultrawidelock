@@ -127,6 +127,31 @@ config WOZ_RSSI_GATE_POLL_MS
 	  L2CAP channel is up (one HCI Read RSSI per period; negligible next
 	  to the UWB RX it replaces). The first read fires at channel-open so
 	  a connect-at-the-door walk-up is never delayed by the poll interval.
+config WOZ_APPROACH_PREDICT
+	bool "Predictive (ETA) unlock — negative latency"
+	depends on !WOZ_RSSI_GATE
+	default y
+	help
+	  Run the constant-velocity Kalman path in aliro_approach: estimate the
+	  credential's closing speed and start retracting the bolt early, so it
+	  finishes at arrival instead of beginning there.
+
+	  It needs a run-up. The ETA only arms while the estimate is still
+	  OUTSIDE the unlock radius, with a converged filter and a closing speed
+	  above the minimum, so the controller has to see the phone approaching
+	  from beyond a metre.
+
+	  That is exactly what WOZ_RSSI_GATE takes away, which is why this
+	  depends on the gate being off. The gate withholds the message that
+	  starts ranging until the phone is already close, and a further ~1.29 s
+	  elapses before the first trusted range (1286 and 1289 ms, measured).
+	  On the bench the first trusted ranges with the gate on were 48 cm and
+	  6 cm — already inside the radius, so the predictor never armed once in
+	  69 trusted ranges. Stacking them does not blend the two behaviours; it
+	  silently disables this one.
+
+	  Pick per lock: the gate for battery power, this for latency.
+
 config WOZ_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	default n

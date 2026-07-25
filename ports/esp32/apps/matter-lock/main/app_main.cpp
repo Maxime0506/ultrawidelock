@@ -278,6 +278,15 @@ static void aliro_reader_task(void *arg)
 	acfg.motor_ms = ALIRO_MOTOR_MS;
 	acfg.margin_ms = ALIRO_PREDICT_MARGIN_MS;
 	acfg.vmin_cm_s = ALIRO_PREDICT_VMIN_CM_S;
+	// Mutually exclusive with the RSSI power gate by Kconfig dependency: the
+	// gate holds ranging until the phone is already inside unlock_cm, so an
+	// ETA could never arm anyway. Being explicit here keeps the trace honest
+	// rather than leaving a predictor that silently never fires.
+#if defined(CONFIG_WOZ_APPROACH_PREDICT)
+	acfg.predict_en = true;
+#else
+	acfg.predict_en = false;
+#endif
 	aliro_approach_init(&approach, &acfg);
 
 	bool present = false;

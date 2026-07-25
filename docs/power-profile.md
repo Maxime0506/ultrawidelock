@@ -242,6 +242,44 @@ Consequences worth knowing before changing it:
   moments later. Duplicate suppression keeps that replay from firing when the
   close path already delivered.
 
+## The gate and the predictive unlock are mutually exclusive
+
+The predictive ("negative latency") unlock estimates the credential's closing
+speed and starts retracting the bolt early, so retraction *finishes* at arrival
+instead of beginning there. It needs a run-up: the ETA only arms while the
+estimate is still outside the unlock radius (100 cm), with a converged filter
+and a closing speed above `vmin_cm_s`.
+
+The gate takes that run-up away. It withholds AP-Completed until the phone is
+close, and a further ~1.29 s elapses before the first trusted range (1286 ms and
+1289 ms, measured in the two unlocking transactions of the 2026-07-25 capture).
+At a measured 89 cm/s walking pace that is over a metre of approach consumed
+before the controller sees its first sample.
+
+The result, measured, is that the predictor never arms:
+
+| | with the gate on |
+|---|---|
+| first trusted range, txn 2 | 48 cm |
+| first trusted range, txn 7 | 6 cm |
+| trusted ranges observed | 69 |
+| `predict.fire` events | 0 |
+| `vel` / `eta` events | 0 |
+
+Both are already inside the radius the ETA needs to be outside of. Stacking the
+two features does not blend them; it silently disables the predictor.
+
+So `CONFIG_WOZ_APPROACH_PREDICT` `depends on !WOZ_RSSI_GATE`, and the gate is the
+default. Pick per lock: the gate for battery power, the predictor for latency.
+`aliro_approach_cfg.predict_en` carries the choice into the controller, so a
+build with the gate on reports honestly that the prediction path is off rather
+than shipping one that can never fire.
+
+Raising the open threshold far enough to restore the run-up would need the gate
+to release around 215 cm (100 cm radius plus the ~115 cm consumed during ranging
+setup). The curve above is flat and non-monotonic across 0 to 3 m, so it cannot
+resolve that distance reliably.
+
 ## Known limitation (bench question)
 
 If the phone stays parked inside after unlocking, its side eventually stops
