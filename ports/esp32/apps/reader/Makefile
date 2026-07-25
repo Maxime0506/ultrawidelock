@@ -205,11 +205,11 @@ presence-enroll:
 	@$(RESOLVE_PORT); \
 	cd $(REPO_ROOT) && python3 $(PRESENCE) enroll --port "$$port" --name "$(NAME)"
 
-## presence-sign: create a presence-signed annotated tag  ·  TAG=v1.2.0
+## presence-sign: create a presence-signed annotated tag  ·  TAG=presence/1.2.0
 ##   Wake the phone and hold it near the dongle first; this refuses to tag
 ##   unless presence actually verifies.
 presence-sign:
-	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-sign TAG=v1.2.0" >&2; exit 1; }
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-sign TAG=presence/1.2.0" >&2; exit 1; }
 	@$(RESOLVE_PORT); \
 	cd $(REPO_ROOT) && python3 $(PRESENCE) sign --tag "$(TAG)" --port "$$port" --max-cm $(MAXCM)
 

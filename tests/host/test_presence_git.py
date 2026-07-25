@@ -624,6 +624,40 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(SystemExit), quiet():
             pg.main(["nope"])
 
+    def test_presence_namespace_is_accepted(self):
+        for name in ("presence/1.2.0", "presence/2026-07-25", "presence/rc.1", "presence/a"):
+            pg.validate_tag_name(name)  # must not raise
+
+    def test_release_style_tags_are_refused(self):
+        # The whole point of the namespace: a vN.N.N tag must never become a
+        # presence tag, so the two sets stay separable by name alone.
+        for name in ("v0.1.0", "v1.2.0", "0.3.0", "release-1", "presence", "presence/"):
+            with self.assertRaises(pg.PresenceError):
+                pg.validate_tag_name(name)
+
+    def test_version_like_refusal_suggests_the_namespaced_form(self):
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.validate_tag_name("v0.3.0")
+        self.assertIn("presence/0.3.0", str(cm.exception))
+
+    def test_sign_rejects_a_bad_name_before_touching_the_port(self):
+        # Signing costs a phone wake and a walk to the reader, so a name that was
+        # never going to be accepted must fail at the keyboard. open_port is
+        # replaced with a bomb: reaching the hardware at all is the failure.
+        def bomb(_port):
+            raise AssertionError("opened the serial port before validating the tag")
+
+        saved = pg.open_port
+        pg.open_port = bomb
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                make_repo(d)
+                with chdir(d), quiet():
+                    rc = pg.main(["sign", "--tag", "v0.4.0", "--port", "/dev/null"])
+            self.assertEqual(rc, 1)
+        finally:
+            pg.open_port = saved
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

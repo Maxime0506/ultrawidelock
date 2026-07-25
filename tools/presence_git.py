@@ -9,8 +9,8 @@ the tag was made -- measured by UWB time-of-flight, which an attacker cannot
 shorten by relaying.
 
     presence_git.py enroll --port /dev/tty.usbmodem... --name my-dongle
-    presence_git.py sign   --tag v1.2.0 --port /dev/tty.usbmodem...
-    presence_git.py verify --tag v1.2.0          # what CI runs
+    presence_git.py sign   --tag presence/1.2.0 --port /dev/tty.usbmodem...
+    presence_git.py verify --tag presence/1.2.0          # what CI runs
 
 HOW THE NONCE WORKS, AND WHAT THAT COSTS
 Everywhere else in this protocol the verifier mints a random nonce and remembers
@@ -45,6 +45,7 @@ dongle. verify -- the half CI runs -- needs no serial port and no extra package.
 import argparse
 import hashlib
 import os
+import re
 import subprocess
 import sys
 
@@ -57,6 +58,14 @@ import presence_verify as pv  # noqa: E402
 TAG_DOMAIN = b"openaliro-presence-tag-v1"
 
 ENROLLED_PATH = os.path.join(".presence", "enrolled")
+
+# Presence tags live in their own refname namespace so they can never be confused
+# with, or collide with, the vN.N.N release tags. A slash is legal in a git tag name
+# and absent from the release scheme, which makes the two sets trivially separable:
+# `git tag -l 'presence/*'` lists exactly these and nothing else, and a release tag
+# can never accidentally acquire a presence trailer by being named the same thing.
+TAG_NAMESPACE = "presence/"
+TAG_NAME_RE = re.compile(r"^presence/[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 TRAILER_KEY_ID = "Presence-Key-Id"
 TRAILER_ASSERTION = "Presence-Assertion"
@@ -455,7 +464,27 @@ def cmd_clone(args) -> int:
     return 0
 
 
+def validate_tag_name(tag: str) -> None:
+    """Reject a tag outside the presence namespace.
+
+    Called before the port is opened on purpose. Signing costs a phone wake and a
+    walk to the reader (an asleep phone refuses every transaction), so a name this
+    tool was never going to accept must fail while the user is still at the keyboard,
+    not after they have stood in front of the board.
+    """
+    if TAG_NAME_RE.match(tag):
+        return
+    hint = ""
+    if re.match(r"^v?\d+\.\d+", tag):
+        hint = f" Did you mean {TAG_NAMESPACE}{tag.lstrip('v')}?"
+    raise PresenceError(
+        f"{tag!r} is not a presence tag name: presence tags start with "
+        f"{TAG_NAMESPACE!r}, keeping them clear of the vN.N.N release tags.{hint}"
+    )
+
+
 def cmd_sign(args) -> int:
+    validate_tag_name(args.tag)
     commit = args.commit or git("rev-parse", "HEAD")
     nonce = binding_nonce(args.tag, commit)
 

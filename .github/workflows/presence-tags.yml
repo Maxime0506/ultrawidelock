@@ -13,9 +13,14 @@
 # so adding one is a reviewable change like any other.
 name: presence-tags
 
+# Both patterns on purpose. presence/* is where tools/presence_git.py now puts
+# assertions, kept out of the vN.N.N release namespace so the two can never
+# collide. v* stays listed because a release tag that grows an assertion later
+# must still be checked, and because the adoption ramp below means an ordinary
+# release tag carrying none simply passes with a note.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "presence/*"]
   workflow_dispatch:
     inputs:
       tag:
