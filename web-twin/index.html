@@ -362,20 +362,20 @@
  * firmware itself (twin.js) — only the ESP32 walk-up controller port and the
  * world pacing still read constants here. ── */
 const FW = {
-  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:120
-  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:121
+  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:123
+  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:124
   ALIRO_APPROACH_MEDIAN_N: 5,  // modules/woz_aliro/include/aliro_approach.h:42
-  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:122
-  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:123
-  ALIRO_MOTOR_MS: 500,         // ports/esp32/apps/matter-lock/main/app_main.cpp:135
-  ALIRO_PREDICT_MARGIN_MS: 250, // ports/esp32/apps/matter-lock/main/app_main.cpp:136
-  ALIRO_PREDICT_VMIN_CM_S: 30, // ports/esp32/apps/matter-lock/main/app_main.cpp:137
+  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:125
+  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:126
+  ALIRO_MOTOR_MS: 500,         // ports/esp32/apps/matter-lock/main/app_main.cpp:138
+  ALIRO_PREDICT_MARGIN_MS: 250, // ports/esp32/apps/matter-lock/main/app_main.cpp:139
+  ALIRO_PREDICT_VMIN_CM_S: 30, // ports/esp32/apps/matter-lock/main/app_main.cpp:140
   KF_REJECT_MAX: 3,            // modules/woz_aliro/src/aliro_approach.c:18
   KF_STALE_MS: 1000,           // modules/woz_aliro/src/aliro_approach.c:19
   KF_MIN_SAMPLES: 6,           // modules/woz_aliro/src/aliro_approach.c:21
   PRED_DWELL_N: 2,             // modules/woz_aliro/src/aliro_approach.c:26
   PRED_GRACE_MS: 900,          // modules/woz_aliro/src/aliro_approach.c:27
-  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:299
+  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:308
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
   SPOOF_CM: -400,              // tests/host/test_twin.c:127
 };
