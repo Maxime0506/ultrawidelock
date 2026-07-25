@@ -21,15 +21,22 @@ nrfutil sdk-manager toolchain install --ncs-version v3.3.0
 make bootstrap
 ```
 
-`make bootstrap` pulls NCS v3.3.0 + the Nordic door-lock add-on (~6.5 GB)
-into `./workspace` and applies this repo's patches. Knobs:
+`make bootstrap` runs in two phases. First `make tools-install`, covered
+[below](#development-tools-macos--linux): the host tools every CI gate needs.
+Then it pulls NCS v3.3.0 + the Nordic door-lock add-on (~6.5 GB) into
+`./workspace` and applies this repo's patches. A tool it cannot install stops
+the run before the download, not after. Knobs:
 
 | Knob | Effect |
 |---|---|
+| `NO_TOOLS=1` | skip the tool phase, go straight to the fetch |
 | `ALIRO_WS=/big/disk/ws` | put the workspace somewhere else |
 | `ALIRO_SHALLOW=1` | shallow fetch, saves several GB (what CI uses) |
 | `ALIRO_TOOLCHAIN=env` | use the toolchain already on `PATH` |
 | `HA=1` | Home Assistant patches (pair with `make build HA=1`) |
+
+CI never runs `make bootstrap`; it calls `scripts/bootstrap.sh` directly, so no
+runner has its packages touched.
 
 Then:
 

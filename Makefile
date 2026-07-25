@@ -64,10 +64,17 @@ tools:
 tools-install:
 	@$(REPO_ROOT)/scripts/toolchain.sh install
 
-## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
-##   Options: HA=1 also applies the Home Assistant data-model patches
+## bootstrap: set this machine up for the repo  ·  host tools, then NCS (~6.5 GB)
+##   Two phases. `make tools-install` first, for the tools every host CI gate
+##   needs; then NCS v3.3.0 + the Nordic add-on, patched for this repo. A tool
+##   it cannot install stops the run before the 6.5 GB fetch, not after it.
+##   CI never runs this target — it calls scripts/bootstrap.sh directly — so no
+##   runner has its packages touched.
+##   Options: NO_TOOLS=1 skip the tool phase, straight to the fetch
+##            HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make build HA=1`; not hardware-validated)
 bootstrap:
+	@[ -n "$(NO_TOOLS)" ] || $(REPO_ROOT)/scripts/toolchain.sh install
 	@$(ENV) ./scripts/bootstrap.sh
 
 ## ws-seed: give THIS worktree its own workspace (APFS COW clone, ~0 disk)
