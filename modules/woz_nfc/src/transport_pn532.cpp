@@ -138,9 +138,17 @@ void BroadcastEcp()
 		LOG_DBG("ECP broadcast anomaly: rc=%d status=0x%02x", rc, sChip.last_status);
 	}
 
-	(void)pn532_write_register(&sChip, PN532_REG_CIU_TX_MODE, 0x80);
-	(void)pn532_write_register(&sChip, PN532_REG_CIU_RX_MODE, 0x80);
-	(void)pn532_set_rf_timeouts(&sChip, kAtrResTimeoutCode, kExchangeTimeoutCode);
+	/* Restore the CIU CRC engines and the APDU-length RF timeout. A dropped
+	 * restore write silently leaves the chip with CRC off (the next
+	 * InListPassiveTarget then quietly stops activating cards) or clips long APDU
+	 * waits, with no error surfaced by the poll loop — warn so a wedged chip is
+	 * diagnosable. */
+	if (pn532_write_register(&sChip, PN532_REG_CIU_TX_MODE, 0x80) != PN532_OK ||
+	    pn532_write_register(&sChip, PN532_REG_CIU_RX_MODE, 0x80) != PN532_OK ||
+	    pn532_set_rf_timeouts(&sChip, kAtrResTimeoutCode, kExchangeTimeoutCode) != PN532_OK) {
+		LOG_WRN("ECP: failed to restore CIU CRC / RF-timeout state; card activation may "
+			"stall");
+	}
 }
 
 /* Adapt one stack-level APDU to the PN532's local limits.  Intermediate 9000
@@ -223,6 +231,16 @@ void RunSession(const pn532_target &target)
 	}
 
 	atomic_clear(&sTagActive);
+	/* Reached only on a loop-condition exit (an exchange failure returns above
+	 * having already destroyed the session). Either the stack terminated the
+	 * session — sTerminateReq, and the contract says Terminate() must not call
+	 * back into the stack — or the app stopped polling mid-session (Stop cleared
+	 * sStarted), in which case the stack still believes the NFC session is live.
+	 * Balance the CreateSession() posted at entry with a DestroySession() on that
+	 * Stop path, else the next activation double-creates on ConnectionHandle::Nfc(). */
+	if (!atomic_get(&sTerminateReq)) {
+		(void)AliroWorkqueueSubmit(&sDestroySessionWork);
+	}
 }
 
 void PollRound()
