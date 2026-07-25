@@ -43,7 +43,8 @@
 #   SERIAL=1           one gate at a time, fail-fast, instead of lanes
 #   SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
 #   COV_MIN=90         line-coverage floor, matching host-tests.yml
-#   NO_COLOR=1         plain output
+#   NO_COLOR=1         plain output (colour is the default, pipe or not)
+#   FAIL_TAIL=40       lines of a failing gate's log to show inline
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -56,15 +57,28 @@ cd "$ROOT" || exit 1
 
 COV_MIN="${COV_MIN:-90}"
 SKIP="${SKIP:-}"
+FAIL_TAIL="${FAIL_TAIL:-40}"
 
 # ---- glyphs + colour (same vocabulary as scripts/test-runner.sh) -----------
-if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+# Colour is on unless NO_COLOR says otherwise — deliberately not gated on a tty.
+# The usual `[ -t 1 ]` test gets this backwards here: the pre-push hook runs the
+# sweep through git-pr, which captures stdout, so the one place the reader most
+# needs to spot a red row at a glance is exactly the place tty detection turns
+# the colour off. Nothing in CI runs this script, and the one caller that wants
+# plain output (the sandbox in tests/tooling/verify_test.sh) sets NO_COLOR=1.
+if [[ -z "${NO_COLOR:-}" ]]; then
 	BOLD=$'\033[1m' DIM=$'\033[2m' CYAN=$'\033[36m' GRN=$'\033[32m'
 	RED=$'\033[31m' YEL=$'\033[33m' RESET=$'\033[0m'
-	CHK="✓" CRS="✗" ARR="▸" TIL="~" DOT="•"
+	CHK="✓" CRS="✗" ARR="→" TIL="~" DOT="·"
+	# 58 wide: the row printf is 2 + glyph + 1 + 12 + 1 + 36 + 4 + the two
+	# leading spaces the rule is printed with, so the rule ends where a row does.
+	HR="──────────────────────────────────────────────────────────"
+	HR4="────"
 else
 	BOLD="" DIM="" CYAN="" GRN="" RED="" YEL="" RESET=""
 	CHK="+" CRS="x" ARR=">" TIL="~" DOT="*"
+	HR="----------------------------------------------------------"
+	HR4="----"
 fi
 
 # ---- gate table -----------------------------------------------------------
@@ -72,7 +86,6 @@ fi
 # silicon host with warm caches. This order is the summary's, not the run's:
 # what runs when is set by TRIPWIRE and LANES below. The times are what those
 # are packed against, so a gate that gets much slower wants repacking.
-HR="--------------------------------------------"
 GATES=(
 	test-web    # 0s   twin-web.yml : drift-gate
 	actionlint  # 0s   workflow-lint.yml : actionlint
@@ -192,6 +205,8 @@ gate_need_py() {
 	esac
 }
 
+# Return the human-readable label for a CI gate name.
+# Labels are used in the summary row at the end of the verify sweep.
 gate_label() {
 	case "$1" in
 	format) echo "clang-format over modules/" ;;
@@ -309,8 +324,13 @@ print("  licence store consistent")'
 # to a .tmp and renamed, because the parent reads these while lanes are still
 # running and a half-written line would be read as a status.
 RUNDIR="$(mktemp -d -t oa-verify.XXXXXX)"
-trap 'rm -rf "$RUNDIR"' EXIT
+# Kept only when a gate failed: the summary prints the path to its full log, so
+# deleting it on the way out would hand the reader a path to nothing.
+KEEPDIR=""
+trap '[ -n "$KEEPDIR" ] || rm -rf "$RUNDIR"' EXIT
 
+# Write the result of a gate to a temporary file in RUNDIR and atomically rename it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an optional reason string.
+# Called from inside a lane subshell; the summary reads these files after all lanes join.
 gate_result() { # <gate> <status> <secs> <reason>
 	printf '%s\t%s\t%s\n' "$2" "$3" "$4" >"$RUNDIR/$1.rc.tmp"
 	mv -f "$RUNDIR/$1.rc.tmp" "$RUNDIR/$1.rc"
@@ -403,8 +423,13 @@ run_lane() { # <lane index>
 }
 
 # ---- run ------------------------------------------------------------------
-printf '\n  %s%sopenaliro verify%s  %s%s  every host-runnable CI gate%s\n\n' \
+# The scope caveat rides here rather than in the verdict: it is true of every
+# run, so stating it once up front frames the sweep instead of nagging at the
+# end of a green one.
+printf '\n  %s%sopenaliro verify%s  %s%s  every host-runnable CI gate%s\n' \
 	"$BOLD" "$CYAN" "$RESET" "$DIM" "$DOT" "$RESET"
+printf '  %sfirmware builds (ESP-IDF / NCS) and hardware validation run separately%s\n\n' \
+	"$DIM" "$RESET"
 
 n=${#GATES[@]}
 t_all0=$(date +%s)
@@ -443,16 +468,18 @@ t_all=$(($(date +%s) - t_all0))
 # ---- summary --------------------------------------------------------------
 # Rebuilt from the .rc files, not from what scrolled past: with lanes running at
 # once the printed order is arrival order, and this table is the gate table's.
-STATUS=() TIMES=() REASON=()
+STATUS=() REASON=()
 nfail=0 nskip=0 npass=0 nskip_tool=0 nskip_optin=0
 for ((i = 0; i < n; i++)); do
 	g="${GATES[i]}"
 	if [ -f "$RUNDIR/$g.rc" ]; then
-		IFS=$'\t' read -r st secs reason <"$RUNDIR/$g.rc"
+		# The per-gate time is in field 2, already printed on the gate's own
+		# row as it finished; only status and reason are needed again here.
+		IFS=$'\t' read -r st _ reason <"$RUNDIR/$g.rc"
 	else
-		st=notrun secs=0 reason=""
+		st=notrun reason=""
 	fi
-	STATUS[i]="$st" TIMES[i]="$secs" REASON[i]="$reason"
+	STATUS[i]="$st" REASON[i]="$reason"
 	case "$st" in
 	pass) npass=$((npass + 1)) ;;
 	fail) nfail=$((nfail + 1)) ;;
@@ -477,24 +504,23 @@ why_notrun() { # <gate>
 	printf 'did not start'
 }
 
-printf '\n  %sGate           Status     Time%s\n' "$BOLD" "$RESET"
-printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
+# Every gate that ran already printed its own row as it finished, so reprinting
+# the whole table here would double the output to say nothing new. The one thing
+# no row covers is a gate that never started: it is silently absent otherwise,
+# and a gate you did not notice skipping is how a green sweep meets a red CI.
 for ((i = 0; i < n; i++)); do
-	g="${GATES[i]}"
-	case "${STATUS[i]}" in
-	pass) printf '  %s%s%s %-12s %spassed%s %6ds\n' "$GRN" "$CHK" "$RESET" "$g" "$GRN" "$RESET" "${TIMES[i]}" ;;
-	fail) printf '  %s%s%s %-12s %sFAILED%s %6ds\n' "$RED" "$CRS" "$RESET" "$g" "$RED" "$RESET" "${TIMES[i]}" ;;
-	notrun) printf '    %-12s %snot run%s     %s— %s%s\n' "$g" "$DIM" "$RESET" "$DIM" "$(why_notrun "$g")" "$RESET" ;;
-	*) printf '  %s%s%s %-12s %sskipped%s     %s— %s%s\n' "$YEL" "$TIL" "$RESET" "$g" "$YEL" "$RESET" "$DIM" "${REASON[i]}" "$RESET" ;;
-	esac
+	[ "${STATUS[i]}" = notrun ] || continue
+	printf '  %s%s %-12s %-36s%s%s\n' \
+		"$DIM" "$TIL" "${GATES[i]}" "$(gate_label "${GATES[i]}")" \
+		"$(why_notrun "${GATES[i]}")" "$RESET"
 done
 printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
-printf '  %s%d gates %s %d passed %s %d failed %s %d skipped %s %ds total%s\n\n' \
-	"$DIM" "$n" "$DOT" "$npass" "$DOT" "$nfail" "$DOT" "$nskip" "$DOT" "$t_all" "$RESET"
 
 # The skipped list is repeated here on purpose: a gate that did not run locally
-# is the exact thing that makes a green sweep and a red CI disagree.
-if [ "$nskip" -gt 0 ]; then
+# is the exact thing that makes a green sweep and a red CI disagree. The cbmc
+# opt-out is excluded because it is the default — it gets one quiet line in the
+# verdict instead, and a warning that fires every run is a warning nobody reads.
+if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_optin" ]; then
 	names=""
 	for ((i = 0; i < n; i++)); do
 		case "${STATUS[i]}" in skip-*) ;; *) continue ;; esac
@@ -508,18 +534,29 @@ if [ "$nfail" -gt 0 ]; then
 	# Every failure, in gate-table order. Lanes run at once, so more than one
 	# can fail in a single sweep and showing only the first would send someone
 	# round the loop twice.
+	# The tail, not the whole log: one gate here can emit thousands of lines of
+	# its own tracing, and dumping all of it buries the failure that caused it.
+	# The full file stays on disk and its path is printed, so nothing is lost.
+	KEEPDIR=1
 	failed_names=""
 	for ((i = 0; i < n; i++)); do
 		[ "${STATUS[i]}" = fail ] || continue
 		g="${GATES[i]}"
 		failed_names="${failed_names:+$failed_names }$g"
-		printf '%s---- %s output ----------------------%s\n' "$DIM" "$g" "$RESET"
-		cat "$RUNDIR/$g.out"
-		printf '%s%s%s\n\n' "$DIM" "$HR" "$RESET"
+		nlines=$(wc -l <"$RUNDIR/$g.out")
+		nlines="${nlines// /}"
+		if [ "$nlines" -gt "$FAIL_TAIL" ]; then
+			printf '\n  %s%s %s %s last %s of %s lines%s\n' \
+				"$DIM" "$HR4" "$g" "$DOT" "$FAIL_TAIL" "$nlines" "$RESET"
+		else
+			printf '\n  %s%s %s%s\n' "$DIM" "$HR4" "$g" "$RESET"
+		fi
+		tail -n "$FAIL_TAIL" "$RUNDIR/$g.out" | sed 's/^/  /'
+		printf '  %sfull log:  %s%s\n' "$DIM" "$RUNDIR/$g.out" "$RESET"
 	done
-	printf '  %s%s verify FAILED: %s%s\n' "$RED" "$CRS" "$failed_names" "$RESET"
-	printf '  %sRe-run one gate on its own with SKIP= listing the others.%s\n\n' \
-		"$DIM" "$RESET"
+	printf '\n  %s%s verify FAILED: %s%s\n' "$RED" "$CRS" "$failed_names" "$RESET"
+	printf '  %sre-run one gate alone:  %sSKIP="<the others>" make verify%s\n\n' \
+		"$DIM" "$BOLD" "$RESET"
 	exit 1
 fi
 
@@ -538,17 +575,14 @@ fi
 # default, so it gets a plain one: a warning that fires on every single run is a
 # warning nobody reads, and then the loud line means nothing when it matters.
 if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_optin" ]; then
-	printf '  %s%s %d gates passed, %d skipped by request — NOT the full CI set.%s\n\n' \
-		"$YEL" "$CHK" "$npass" "$nskip" "$RESET"
+	printf '  %s%s %d passed %s %d skipped %s %ds%s  %sNOT the full CI set%s\n\n' \
+		"$YEL" "$CHK" "$npass" "$DOT" "$nskip" "$DOT" "$t_all" "$RESET" "$YEL" "$RESET"
 elif [ "$nskip_optin" -gt 0 ]; then
-	printf '  %s%s %d gates passed. cbmc did not run (opt-in).%s\n' \
-		"$GRN" "$CHK" "$npass" "$RESET"
-	printf '  %sAdd the memory-safety proof:  %sWITH_CBMC=1 make verify%s\n' \
+	printf '  %s%s %d passed %s %d skipped %s %ds%s\n' \
+		"$GRN" "$CHK" "$npass" "$DOT" "$nskip" "$DOT" "$t_all" "$RESET"
+	printf '    %scbmc did not run:  %sWITH_CBMC=1 make verify%s\n\n' \
 		"$DIM" "$BOLD" "$RESET"
-	printf '  %sFirmware builds (ESP-IDF / NCS) and hardware validation run separately.%s\n\n' \
-		"$DIM" "$RESET"
 else
-	printf '  %s%s all %d host-runnable CI gates passed.%s\n' "$GRN" "$CHK" "$npass" "$RESET"
-	printf '  %sFirmware builds (ESP-IDF / NCS) and hardware validation run separately.%s\n\n' \
-		"$DIM" "$RESET"
+	printf '  %s%s all %d host-runnable CI gates passed %s %ds%s\n\n' \
+		"$GRN" "$CHK" "$npass" "$DOT" "$t_all" "$RESET"
 fi

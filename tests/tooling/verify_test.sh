@@ -45,6 +45,12 @@ assert() { local n="$1"; shift; if "$@"; then ok "$n"; else bad "$n"; fi; }
 # spaces: the column widths are formatting, not behavior.
 has()  { printf '%s' "${out:-}" | grep -qE -- "$1"; }
 hasnt() { ! has "$1"; }
+# passed LABEL — the gate whose label is LABEL ran and passed. A duration is
+# what says so: only a passing row carries one, where skipped and not-run rows
+# carry a reason instead. Matched by label rather than gate name because the
+# gate name also appears in the skip and failure lines.
+passed() { has "$1 +[0-9]+s"; }
+notpassed() { ! passed "$1"; }
 
 # ---------------------------------------------------------------------------
 # Part 1: the gate table against the workflows it claims to mirror
@@ -201,7 +207,7 @@ mkdir -p "$BIN" "$TMP/home"
 # this directory rather than of the host. verify.sh and the stubs use: bash
 # (their own shebang), git, python3 (the coverage floor and the licence filter,
 # both run for real), and the coreutils the script itself calls.
-NEED_REAL="bash git python3 date mktemp mv rm cat xargs uname sed grep sort head dirname mkdir chmod ln cp touch env"
+NEED_REAL="bash git python3 date mktemp mv rm cat xargs uname sed grep sort head tail wc dirname mkdir chmod ln cp touch env"
 [ "$(uname -s)" = Darwin ] && NEED_REAL="$NEED_REAL xcrun"
 missing_real=""
 for t in $NEED_REAL; do
@@ -321,27 +327,28 @@ echo "== the sweep, against stub tools =="
 # run also carries the default-state assertions in S2 and S3.
 runv
 assert "S1 a clean sweep exits 0"            test "$rc" -eq 0
-assert "S1 every gate but one passed"        has "$((NGATES - 1)) gates passed"
+assert "S1 every gate but one passed"        has "$((NGATES - 1)) passed"
 assert "S1 no gate reports FAILED"           hasnt "FAILED"
-# Two reports, not one: rows printed live as each gate finishes, and a summary
-# rebuilt afterwards from the result files. Only the live rows carry the gate
-# labels, so a label is what tells the two apart from out here.
+# One report, not two: each gate prints its own row as it finishes and nothing
+# reprints them afterwards, so a gate appears exactly once. The label is what
+# proves the row is the live one rather than a bare name in the verdict.
 assert "S1 rows print live, with labels"     has "twin constants match the firmware"
+assert "S1 and each gate appears once"       test "$(printf '%s' "$out" | grep -cE 'twin constants match the firmware')" -eq 1
 assert "S1 and the parallel phase announces" has "lanes in parallel"
 
 # S2: cbmc is opt-in, and still gets a row saying so. A gate that vanishes from
 # the summary is indistinguishable from one that passed.
-assert "S2 cbmc is held back by default"     has "cbmc +skipped"
+assert "S2 cbmc is held back by default"     has "cbmc .*skipped"
 assert "S2 and the row explains why"         has "opt-in, WITH_CBMC=1"
 
 # S3: the licence gate reproduces what CI gates on, which is the licence store,
 # not full REUSE compliance — header-coverage categories are reported, not
 # enforced, and the stub returns two of them on every run.
-assert "S3 header notes do not fail it"      has "licenses +passed"
+assert "S3 header notes do not fail it"      passed "licence store is consistent"
 
 # S4: WITH_CBMC=1 puts it back, and then nothing is held back at all.
 runv WITH_CBMC=1
-assert "S4 WITH_CBMC=1 runs cbmc"            has "cbmc +passed"
+assert "S4 WITH_CBMC=1 runs cbmc"            passed "wire-parser memory-safety proof"
 assert "S4 and then every gate ran"          has "all $NGATES host-runnable CI gates passed"
 
 # S5: gates in two different lanes fail. The run must fail, name both — showing
@@ -351,8 +358,9 @@ runv FAIL_GATES="docs fuzz"
 assert "S5 a failing gate exits 1"           test "$rc" -eq 1
 assert "S5 both failures are named"          has "verify FAILED: fuzz docs"
 assert "S5 prints the gate's output"         has "stub make: docs failed"
-assert "S5 other lanes still ran"            has "coverage +passed"
-assert "S5 its lane-mate is 'not run'"       has "clang-tidy +not run"
+assert "S5 and points at the full log"       has "full log: +.*/docs\.out"
+assert "S5 other lanes still ran"            passed "line coverage >= [0-9]+%"
+assert "S5 its lane-mate is 'not run'"       has "clang-tidy .*lane stopped"
 assert "S5 and says which gate stopped it"   has "its lane stopped at docs"
 
 # S6: the tripwire. A one-second formatting slip stops the sweep before the
@@ -360,7 +368,7 @@ assert "S5 and says which gate stopped it"   has "its lane stopped at docs"
 runv FAIL_GATES="format"
 assert "S6 tripwire failure exits 1"         test "$rc" -eq 1
 assert "S6 later gates did not run"          has "tripwire failed at format"
-assert "S6 nothing after it claims to pass"  hasnt "coverage +passed"
+assert "S6 nothing after it claims to pass"  notpassed "line coverage >= [0-9]+%"
 
 # S7: THE one that matters. A gate whose tool is absent must fail the sweep.
 # Exiting 0 here is the whole bug this sweep was written to remove: the push
@@ -408,7 +416,7 @@ assert "S11 and names the category"          has "unused_licenses"
 # captured output, which a passing sweep does not print.
 runv TWIN_DRIFTS=1
 assert "S12 a twin.js diff is warn-only"     test "$rc" -eq 0
-assert "S12 twin-wasm still passes"          has "twin-wasm +passed"
+assert "S12 twin-wasm still passes"          passed "node selftest"
 
 # S13: SERIAL=1 is the same sweep, one gate at a time. Same verdict, or it is
 # not a debugging aid but a second, differently-behaved gate set.
