@@ -11,10 +11,17 @@ bring-up with its symptom and fix.
 
 ## Build and flash
 
-**`make build` can't find the toolchain.** The NCS v3.3.0 toolchain is a one-time
-per-machine install, separate from `make bootstrap`:
-`nrfutil sdk-manager toolchain install --ncs-version v3.3.0`. All builds run through
-`nrfutil sdk-manager toolchain launch … west`; a bare `west` is not used.
+**`make build` can't find the toolchain.** `make bootstrap` installs the NCS v3.3.0
+toolchain as its second phase, so this normally means bootstrap has not been run here.
+All builds go through `nrfutil sdk-manager toolchain launch … west`; a bare `west` is
+not used. If your toolchain is managed some other way, `nrfutil sdk-manager config show`
+names the directory bootstrap looks in, and `ALIRO_TOOLCHAIN=env` uses whatever is
+already on `PATH` instead.
+
+**`make bootstrap` says nrfutil is not on PATH.** It is what installs the toolchain, so
+bootstrap stops there rather than after the 6.5 GB fetch. `make tools-install` gets it on
+macOS; elsewhere it is a
+[download from Nordic](https://www.nordicsemi.com/Products/Development-tools/nrf-util).
 
 **A config change flashed but did not take effect.** A change to net-core configuration
 needs a full erase: use `make flash-erase`, not `make flash`. `make flash` is app-core
@@ -124,6 +131,33 @@ antenna calibration was needed on this hardware.
 **Approach unlock works, then the bolt relocks 5 s later while the phone is still
 there.** A fixed auto-relock timer fights approach unlock. Set `AutoRelockTime = 0` and
 drive relock from proximity with hysteresis.
+
+## Tests and CI gates
+
+**`make verify` says a gate COULD NOT RUN and exits nonzero.** That is deliberate, not a
+warning: the gate's tool is not installed, and CI will run it whatever this machine has,
+so "could not check" reads as "not verified". `make tools-install` fills the gap. To
+accept it for one run instead, scope it out by name: `SKIP="cbmc docs" make verify`.
+
+**A gate passed here and failed on the PR.** Two usual causes. A version-pinned tool
+(`clang-format`, `clang-tidy`, `zizmor`, `reuse`) disagreeing with CI's pin: `make tools`
+flags a row that is off the pin. Or a gate that silently ran weaker here — without the
+`markdown` python package the flash-HTML drift check skips, which `make tools` also
+reports.
+
+**`make verify` is slow, or a failure is hard to read.** It runs in parallel lanes, so
+rows arrive out of order and two lanes can fail in one sweep. `SERIAL=1 make verify` runs
+one gate at a time in table order. To re-run a single gate, scope the rest out with
+`SKIP=`.
+
+**`make test-verify` fails after a workflow change.** It gates the mapping between CI
+jobs and local gates. A new job in `.github/workflows/` has to be accounted for — either
+a gate that reproduces it locally, or a written reason it cannot be one. The failure
+names the job.
+
+**`make docs` refuses to run.** It stops when `HEAD` is behind `origin/main`, because
+regenerating from a stale tree writes stale pages. `git fetch origin && git merge
+origin/main` first.
 
 ## Still stuck
 

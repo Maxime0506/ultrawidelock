@@ -71,13 +71,9 @@ QUICKSTART_STEPS = (
         "git clone {url}.git",
     ),
     (
-        "Install the toolchain",
-        "once per machine",
-        "nrfutil sdk-manager toolchain install --ncs-version v3.3.0",
-    ),
-    (
-        "Fetch the SDK workspace",
-        "NCS v3.3.0 + the Nordic add-on (~6.5 GB) into ./workspace",
+        "Set the machine up",
+        "host tools, the NCS v3.3.0 toolchain, then the SDK workspace "
+        "(~6.5 GB) into ./workspace — anything already installed is skipped",
         "make bootstrap",
     ),
     (

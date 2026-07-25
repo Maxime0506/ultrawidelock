@@ -23,7 +23,7 @@ after docs_media.py and before the link pass.
 ## API
 
 ### `repo_slug() -> str`
-`tools/docs_github.py:97`
+`tools/docs_github.py:93`
 
 owner/repo for the origin remote, or '' if none.
 
