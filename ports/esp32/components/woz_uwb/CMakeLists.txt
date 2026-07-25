@@ -16,7 +16,6 @@ set(WOZ_SRCS
     # engine: driver + fira
     "${WOZ}/driver/uwb_min.c"
     "${WOZ}/driver/uwb_isr.c"
-    "${WOZ}/driver/uwb_cirdiag.c"
     "${WOZ}/fira/fira_session.c"
     # engine: CCC STS
     "${WOZ}/ccc/ccc_kdf.c"
@@ -47,6 +46,12 @@ set(WOZ_SRCS
     "port/dw3000_hw.c"
     "port/woz_wrap_stubs.c"
 )
+
+# CIA/CIR diagnostics: per-reception first-path summary + windowed CIR tap dump
+# (gated, default n; the RX-shim call sites no-op when unset).
+if(CONFIG_WOZ_UWB_CIRDIAG)
+    list(APPEND WOZ_SRCS "${WOZ}/driver/uwb_cirdiag.c")
+endif()
 
 # Flight recorder: record a live walk-up into a RAM ring for host replay
 # (gated, default n; the ccc_shim_rx.c call sites no-op when unset).

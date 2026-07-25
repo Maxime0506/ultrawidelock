@@ -166,7 +166,7 @@ SIDE_UNIT_SRCS=(
 	"$EAPPS/matter-lock/main/lock/aliro_reader_delegate.cpp"
 )
 
-cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 \
+cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" \
@@ -231,14 +231,14 @@ cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
 	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
 run_suite esp_shell "$OUT/cov_esp_shell"
 
-cov_cc -I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
+cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
 	-I"$ROOT/deps/dw3000/platform" -I"$ROOT/deps/dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
 	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
-cov_cc -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/facade" \
+cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/facade" \
 	"$ET/test_esp_wrap_stubs.c" \
 	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c" -o "$OUT/cov_esp_wrap"
 run_suite esp_wrap "$OUT/cov_esp_wrap"
@@ -253,6 +253,7 @@ cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
 cov_cc -I"$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$OUT/aliro_approach_matter_cov.o"
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
+	-DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
 	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" -I"$SRC/facade" \

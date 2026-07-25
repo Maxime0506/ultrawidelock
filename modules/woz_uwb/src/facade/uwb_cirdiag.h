@@ -14,6 +14,14 @@
 extern "C" {
 #endif
 
+/* No-op inlines when the feature is compiled out, so the latch call sites in the two RX shims
+ * and the console commands cost nothing in a build that does not want the diagnostics. */
+#if defined(ESP_PLATFORM)
+#include "sdkconfig.h" /* CONFIG_WOZ_UWB_CIRDIAG (Zephyr injects autoconf.h itself) */
+#endif
+
+#if defined(CONFIG_WOZ_UWB_CIRDIAG)
+
 /** @brief Arm or disarm the summary stream. Safe any time, even before the chip is probed: the
  * chip-side CIA logging enable happens lazily on the first armed reception. */
 void uwb_cirdiag_set_enabled(bool on);
@@ -78,6 +86,48 @@ bool uwb_cirdiag_window_due(void);
  * transactions with no regard for ranging deadlines. No-op until the chip-side CIA logging has
  * been enabled on the RX path (arm the stream and take one reception first). */
 void uwb_cirdiag_probe(void);
+
+#else
+
+static inline void uwb_cirdiag_set_enabled(bool on)
+{
+	(void)on;
+}
+static inline bool uwb_cirdiag_enabled(void)
+{
+	return false;
+}
+static inline void uwb_cirdiag_dump_set_enabled(bool on)
+{
+	(void)on;
+}
+static inline bool uwb_cirdiag_dump_enabled(void)
+{
+	return false;
+}
+static inline uint32_t uwb_cirdiag_ring_count(void)
+{
+	return 0u;
+}
+static inline bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
+{
+	(void)status;
+	(void)datalength;
+	(void)deadline_pending;
+	return false;
+}
+static inline void uwb_cirdiag_flush(void)
+{
+}
+static inline bool uwb_cirdiag_window_due(void)
+{
+	return false;
+}
+static inline void uwb_cirdiag_probe(void)
+{
+}
+
+#endif /* CONFIG_WOZ_UWB_CIRDIAG */
 
 #ifdef __cplusplus
 }

@@ -32,9 +32,7 @@ if(CONFIG_WOZ_UWB)
         # Responder-RX CCC-STS substitution: program CCC key/IV per dwt_rxenable.
         ${SRC}/ccc/ccc_shim_rx.c
         # Diagnostic (removable): tallies on-air RX events.
-        ${SRC}/driver/uwb_rxdiag.c
-        # Diagnostic (removable): per-reception CIA first-path/STS stream (`aliro cir`).
-        ${SRC}/driver/uwb_cirdiag.c)
+        ${SRC}/driver/uwb_rxdiag.c)
 
       # AES-ECB crypto seam (ccc_kdf.h): PSA on nRF (default), mbedTLS for SoCs
       # without a PSA provider (e.g. ESP32-S3). See docs/porting.md.
@@ -96,6 +94,11 @@ if(CONFIG_WOZ_UWB)
         zephyr_library_sources(${SRC}/driver/uwb_selftest.c)
       endif()
 
+      # CIA/CIR diagnostics: per-reception first-path summary + windowed CIR tap dump
+      # (gated, default n; the RX-shim call sites no-op when unset).
+      if(CONFIG_WOZ_UWB_CIRDIAG)
+        zephyr_library_sources(${SRC}/driver/uwb_cirdiag.c)
+      endif()
       # Flight recorder: record a live walk-up into a RAM ring for host replay
       # (gated, default n; the ccc_shim_rx.c call sites no-op when unset).
       if(CONFIG_WOZ_FLIGHT_RECORDER)

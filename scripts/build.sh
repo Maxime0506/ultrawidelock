@@ -180,6 +180,12 @@ do_build() {
   local lat_conf=""
   [ "${LAT:-0}" = 1 ] && lat_conf=";$OV/diag-latency.conf"
 
+  # CIR=1: layer diag-cirdiag.conf (CIA/CIR diagnostics: `aliro cir`). Off by
+  # default because the windowed tap read costs walk-up latency while armed.
+  # Rides EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
+  local cir_conf=""
+  [ "${CIR:-0}" = 1 ] && cir_conf=";$OV/diag-cirdiag.conf"
+
   # HA=1: layer woz-ha.conf (Home Assistant / multi-admin). Off by default so the
   # Apple Home demo image is untouched; see that file for why. Needs the matching
   # `make bootstrap HA=1`, which applies the data-model patches this pairs with.
@@ -191,7 +197,7 @@ do_build() {
   # *content* edits are handled incrementally by Zephyr (configure-deps), so only
   # flag changes are captured here.
   local -a dflags=(
-    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}${ha_conf}"
+    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}${cir_conf}${ha_conf}"
     -Dipc_radio_EXTRA_CONF_FILE="$OV/ipc_radio.conf"
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay"
     -DPM_STATIC_YML_FILE="$OV/pm_static.yml"

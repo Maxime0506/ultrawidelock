@@ -302,6 +302,7 @@ static int cmd_log(int argc, char **argv)
  * off`, off the ranging path, so the walk-up still unlocks while capturing. */
 static int cmd_lab(int argc, char **argv)
 {
+#ifdef CONFIG_WOZ_UWB_CIRDIAG
 	if (argc == 3 && strcmp(argv[1], "cir") == 0) {
 		if (strcmp(argv[2], "probe") == 0) {
 			uwb_cirdiag_probe();
@@ -321,6 +322,7 @@ static int cmd_lab(int argc, char **argv)
 		       cir_on ? "  (taps print on: lab cir off)" : "");
 		return 0;
 	}
+#endif /* CONFIG_WOZ_UWB_CIRDIAG */
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
 		aliro_lab_set_enabled(true);
 		uwb_cirdiag_set_enabled(true); /* per-reception ev=uwb.diag lines ride the gate */
