@@ -11,4 +11,5 @@
 | [`scripts/test-runner.sh`](test-runner.sh.md) | Pretty umbrella runner for every host-side suite: one banner, live per-check |
 | [`scripts/twin-suite.sh`](twin-suite.sh.md) | The web-twin suite for the umbrella runner (make check): the constant-drift |
 | [`scripts/twin-wasm.sh`](twin-wasm.sh.md) | Build the web twin's firmware: modules/woz_uwb + the tests/host shim compiled |
+| [`scripts/verify.sh`](verify.sh.md) | Pre-push sweep: every CI gate that a host can run, in one shot. |
 | [`scripts/ws-seed.sh`](ws-seed.sh.md) | ws-seed.sh — give this git worktree its own NCS workspace, cheaply. |
