@@ -88,7 +88,8 @@ GATES=(
 	patch-drift # 11s  patch-drift.yml
 	docs        # 12s  docs.yml
 	test-port   # 14s  port-tests.yml
-	test-ws     # 14s  tooling.yml : hermetic
+	test-ws     # 14s  tooling.yml : ws-seed
+	test-verify # 15s  tooling.yml : verify-tests
 	coverage    # 18s  host-tests.yml : coverage (+ the line floor)
 	cbmc        # 82s  cbmc.yml
 )
@@ -131,6 +132,7 @@ LANES=(
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
 	"test test-san"            # 15s  same run.sh, same build/host_test* paths
+	"test-verify"              # 15s  13 stub sweeps back to back, under the floor
 	"cbmc"                     # 64s  WITH_CBMC=1 only, and then it is the floor
 )
 
@@ -164,6 +166,7 @@ gate_need() {
 	format) echo "clang-format" ;;
 	shellcheck) echo "shellcheck" ;;
 	test-web) echo "python3" ;;
+	test-verify) echo "python3" ;; # its sandbox runs the real floor + licence checks
 	actionlint) echo "actionlint" ;;
 	twin-wasm) echo "node" ;; # emcc is resolved from ~/emsdk by twin-wasm.sh
 	docs) echo "doxygen dot" ;;
@@ -203,6 +206,7 @@ gate_label() {
 	test-san) echo "host suite under ASan + UBSan" ;;
 	test-port) echo "ESP32 port tests" ;;
 	test-ws) echo "workspace auto-seeding" ;;
+	test-verify) echo "this sweep's own tests" ;;
 	coverage) echo "line coverage >= ${COV_MIN}%" ;;
 	clang-tidy) echo "static analysis of the core" ;;
 	zizmor) echo "workflow security audit" ;;
@@ -243,6 +247,7 @@ gate_run() {
 	# firmware build into a 33s sweep, from a shell state the sweep cannot see.
 	test-port) WOZ_NO_TARGET_BUILD=1 make --no-print-directory test-port ;;
 	test-ws) make --no-print-directory test-ws ;;
+	test-verify) make --no-print-directory test-verify ;;
 	coverage)
 		# host-tests.yml runs `make coverage` and THEN enforces the floor as a
 		# separate step. Running coverage alone would pass where CI fails.

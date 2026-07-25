@@ -133,10 +133,10 @@ cbmc:
 	@$(REPO_ROOT)/tests/host/cbmc.sh
 
 ## verify: run every host-runnable CI gate in one shot  ·  pre-push sweep
-##   The 17 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
-##   twin-wasm, patch-drift, docs, test-san, test-port, test-ws, coverage (with
-##   the 90% floor), zizmor, licences, cbmc — run in parallel lanes behind a
-##   4s serial tripwire, so a 1s formatting slip still stops it immediately.
+##   The 18 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
+##   twin-wasm, patch-drift, docs, test-san, test-port, test-ws, test-verify,
+##   coverage (with the 90% floor), zizmor, licences, cbmc — run in parallel
+##   lanes behind a 4s serial tripwire, so a 1s formatting slip stops it at once.
 ##   ~34s all in (83s if run one at a time). A gate whose tool is missing
 ##   FAILS the sweep (`make tools-install` fixes it), because CI runs that gate
 ##   regardless. cbmc is the exception: 64s on its own, twice the rest of the
@@ -165,6 +165,16 @@ test-port:
 ##   never touches this repo's own workspace/ or build/.
 test-ws:
 	@$(REPO_ROOT)/tests/tooling/ws_seed_test.sh
+
+## test-verify: tests for the pre-push sweep itself  ·  make verify's own gate
+##   Two halves. Static: the gate table still covers every job in
+##   .github/workflows/, so a new CI job cannot be added without either a local
+##   gate or a written reason. Behavioral: a copy of verify.sh run against stub
+##   tools in a temp git repo, checking that a missing tool, a failed tripwire
+##   and an unmet coverage floor each fail the sweep rather than passing quietly.
+##   Nothing real is compiled; the whole file runs in a couple of seconds.
+test-verify:
+	@$(REPO_ROOT)/tests/tooling/verify_test.sh
 
 ## test-web: drift-gate the web-twin page against the firmware it cites
 ##   Re-reads every constant web-twin/index.html cites (file:line) from the C

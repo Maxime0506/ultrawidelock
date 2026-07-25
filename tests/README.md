@@ -14,6 +14,7 @@ hardware. Hardware truth comes separately from the manual
 | `make verify` | All of the above host gates, sequential, fail-fast — the pre-PR sweep | — |
 | `make test-port` | [`../ports/esp32/test/`](../ports/esp32/test): the ESP32 port suite (port headers, crypto KATs, codec, provisioning) | port-tests |
 | `make test-ws` | [`tooling/ws_seed_test.sh`](tooling/ws_seed_test.sh): hermetic tests of per-worktree workspace seeding | tooling |
+| `make test-verify` | [`tooling/verify_test.sh`](tooling/verify_test.sh): tests for the sweep above: that its gate table still covers every CI job, and that a missing tool or an unmet coverage floor fails it instead of passing quietly | tooling |
 | `tooling/patch_drift_check.sh` | Verifies every nRF patch still applies to the pinned upstream revisions (sparse network fetch, no workspace) | patch-drift |
 
 CI additionally runs shellcheck over every script (tooling), clang-format and
