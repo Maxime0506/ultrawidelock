@@ -115,10 +115,40 @@ static bool s_kp_dirty;
  * the next established session replays it. Host-task only, like every other touch
  * point on the session table. */
 static bool s_secured_undelivered;
+/* How long the stale-Wallet Secured waits for a grant to supersede it. Sized off
+ * the slowest walk-up on record (bolt+3566 ms with AP-Completed near 1250 ms, so
+ * ~2.3 s of headroom needed) rather than the fast path's 1206 ms. Overshooting is
+ * nearly free: the phone has already been showing the stale unlocked state for the
+ * whole disconnect, so a few more seconds costs nothing, while undershooting puts
+ * the flicker straight back. */
+#define ALIRO_SECURED_REPLAY_HOLD_MS 3000
+
+/* Monotonic ms at which that replay may go out, or 0 for "nothing armed". The
+ * replay is held rather than sent the moment the session establishes, because the
+ * common reason a phone reconnects is that it woke up on the doorstep and is about
+ * to be granted again: bench 2026-07-25 measured the grant landing 1206 ms after
+ * AP-Completed, so an immediate replay shows the Wallet a lock it must undo one
+ * second later. Any send at all cancels the hold (see reader_status_send), so a
+ * grant inside the window silently supersedes it -- which is the whole point.
+ *
+ * 32-bit and volatile, unlike the ms clock it comes from: this is the one piece of
+ * reader state the BLE host task writes and the caller's own task reads, and the
+ * two run on different cores. A single aligned word cannot tear the way an int64
+ * read can, so the worst a race costs is which side of one 200 ms tick the release
+ * lands on. Wraps every 49 days, which the subtraction below is written to survive;
+ * the arm skips a deadline of exactly 0 so the sentinel stays unambiguous. */
+static volatile uint32_t s_secured_replay_at;
 /* The state the peer was last told (false = Secured, which is where the bolt boots).
  * Suppresses duplicate Reader-Status-Changed sends and, with them, the spurious
  * replays a duplicate would otherwise queue up. */
 static bool s_last_unsecured;
+/* Set alongside an armed replay: this peer reconnected while still owed a Secured,
+ * so s_last_unsecured no longer describes what its Wallet shows -- it may well have
+ * dropped its own view when the link went. Forces the first send of the new session
+ * past the duplicate filter, whichever it turns out to be. Without it, deferring the
+ * replay silently swallows the grant too (the peer was last told Unsecured), and the
+ * walk-up loses its unlock animation entirely. */
+static bool s_peer_state_unknown;
 
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 /* One-shot step-up arm (bench `aliro-stepup arm`): forces the next transaction
@@ -844,13 +874,20 @@ static void complete_ap_and_range(struct aliro_session *s)
 	 * already dropped BLE, the phone is still showing this door unlocked; a channel
 	 * exists again now, so replay it once. Deliberately Secured-only: an unsolicited
 	 * Unsecured would fire the Wallet unlock animation for a door the arriving phone
-	 * did not open. Costs nothing on a normal walk-up — the flag is only ever set by
-	 * an undeliverable relock — so the ranging path stays off the critical latency
-	 * path it just armed. */
+	 * did not open. Armed rather than sent here: the phone that just reconnected is
+	 * usually one that woke on the doorstep and is about to be granted, and a Secured
+	 * the grant overwrites a second later reads as the Wallet flickering locked then
+	 * unlocked. aliro_reader_status_tick releases it if no grant intervenes. Costs
+	 * nothing on a normal walk-up — the flag is only ever set by an undeliverable
+	 * relock — so the ranging path stays off the critical latency path it just
+	 * armed. */
 	if (s_secured_undelivered) {
-		LOG_INF("[conn %u] replaying the undelivered Secured (stale Wallet state)",
-			s->conn_handle);
-		reader_status_send(s, false);
+		LOG_INF("[conn %u] stale Wallet state: Secured replay armed (%d ms)",
+			s->conn_handle, ALIRO_SECURED_REPLAY_HOLD_MS);
+		uint32_t at = (uint32_t)woz_uptime_ms() + ALIRO_SECURED_REPLAY_HOLD_MS;
+
+		s_secured_replay_at = (at == 0) ? 1u : at;
+		s_peer_state_unknown = true;
 	}
 }
 
@@ -1064,6 +1101,10 @@ static void reader_status_send(struct aliro_session *s, bool unsecured)
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
 	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
 	s_secured_undelivered = false;
+	/* Whatever just went out is newer than any held replay, including the replay
+	 * itself firing. A grant landing inside the hold window therefore cancels it. */
+	s_secured_replay_at = 0;
+	s_peer_state_unknown = false;
 	s_last_unsecured = unsecured;
 }
 
@@ -1071,7 +1112,7 @@ static void reader_status_send_on_host(bool unsecured)
 {
 	struct aliro_session *s = NULL;
 
-	if (unsecured == s_last_unsecured) {
+	if (unsecured == s_last_unsecured && !s_peer_state_unknown) {
 		/* The peer already believes this. The gate-close path sends Secured
 		 * itself before dropping the link, so the approach controller's own
 		 * relock (which fires off that very disconnect) arrives here as a
@@ -1109,6 +1150,29 @@ static void reader_status_send_on_host(bool unsecured)
 void aliro_reader_notify_unlock(bool unsecured)
 {
 	aliro_ble_post_reader_status(reader_status_send_on_host, unsecured);
+}
+
+// Releases a held stale-Wallet Secured once its window expires with no grant to supersede it.
+// now_ms is the caller's monotonic clock (the same one woz_uptime_ms reads); taking it as an
+// argument keeps the deadline testable without a fake clock. No-op unless a replay is armed.
+void aliro_reader_status_tick(int64_t now_ms)
+{
+	uint32_t at = s_secured_replay_at;
+
+	/* Wrap-safe "now is at or past the deadline": the signed difference stays
+	 * correct across the 49-day rollover, where a plain `now < at` would not. */
+	if (at == 0 || (int32_t)((uint32_t)now_ms - at) < 0) {
+		return;
+	}
+	s_secured_replay_at = 0;
+	/* The peer may have left during the hold. Re-arming is the next session's job
+	 * (the flag survives), so drop out quietly rather than posting a send that can
+	 * only log "no established session to notify". */
+	if (!s_secured_undelivered || !aliro_reader_session_active()) {
+		return;
+	}
+	LOG_INF("replaying the undelivered Secured (stale Wallet state)");
+	aliro_ble_post_reader_status(reader_status_send_on_host, false);
 }
 
 // Reports whether any peer currently holds an established Aliro session.

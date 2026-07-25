@@ -13,6 +13,7 @@
 #include "esp_log.h"
 
 #include "woz_uwb_facade.h"
+#include "woz_port.h" /* woz_uptime_ms for the reader status tick */
 #include "aliro_reader.h"
 #include "app_shell.h"
 #if defined(CONFIG_WOZ_PRESENCE)
@@ -71,6 +72,11 @@ void app_main(void)
 
 	while (1) {
 		int32_t cm;
+
+		/* Same duty as the Matter lock's approach loop: release a held stale-Wallet
+		 * Secured once its window passes without a grant. Only presence_link drives
+		 * grants in this app, so only presence can ever arm one. */
+		aliro_reader_status_tick(woz_uptime_ms());
 
 		if (woz_uwb_last_range_cm(&cm)) {
 			ESP_LOGI(TAG, "range: %d cm", (int)cm);

@@ -62,6 +62,14 @@ void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm);
  * session is established. */
 void aliro_reader_notify_unlock(bool unsecured);
 
+/* Drives the one deferred piece of the above: a Secured that could not be delivered
+ * because the peer had already gone is held for a few seconds after the next session
+ * establishes, so that a phone which merely woke on the doorstep is not shown a lock
+ * its own grant undoes a second later. Call from any periodic loop with a monotonic
+ * millisecond clock; cheap enough to call unconditionally, and a no-op unless a
+ * replay is pending. Nothing else needs it -- an ordinary walk-up never arms one. */
+void aliro_reader_status_tick(int64_t now_ms);
+
 /* True while some peer holds an established Aliro session (auth done, ranging
  * channel up). This is the reader's presence signal, and it is the one an approach
  * controller should relock on: ranging silence is not a departure, because iOS

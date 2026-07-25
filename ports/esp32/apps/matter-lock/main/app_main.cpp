@@ -308,6 +308,11 @@ static void aliro_reader_task(void *arg)
 		uint32_t woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
 		int64_t now = esp_timer_get_time() / 1000; // ms
 
+		// Release a held stale-Wallet Secured if this approach produced no grant to
+		// supersede it. Free on every other pass: nothing is armed unless a relock
+		// went undelivered, which needs the peer to have vanished mid-notification.
+		aliro_reader_status_tick(now);
+
 		int32_t cm = 0;
 		bool active = (woke > 0);
 		bool trusted = active && woz_uwb_trusted_range_cm(&cm);
