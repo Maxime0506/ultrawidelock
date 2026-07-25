@@ -47,14 +47,20 @@
 @brief Layer 4: true once >= K consecutive plausible, mutually consistent
 ranges have been latched. Cleared by any implausible or outlier block.
 
-### `void fira_session_set_range_listener(void (*cb)(void))`
+### `uint8_t fira_session_trust_level(void)`
 `modules/woz_uwb/src/fira/fira_session.c:97`
+
+@brief Layer 4 diagnostic: the live run length of agreeing plausible blocks
+(0..FIRA_RANGE_TRUST_K) behind fira_session_range_trusted().
+
+### `void fira_session_set_range_listener(void (*cb)(void))`
+`modules/woz_uwb/src/fira/fira_session.c:102`
 
 @brief Register a callback fired after each accepted range latch (NULL to
 clear). Runs on the UWB RX path — keep it to a task wake, nothing heavier.
 
 ### `void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block)`
-`modules/woz_uwb/src/fira/fira_session.c:102`
+`modules/woz_uwb/src/fira/fira_session.c:107`
 
 @brief Latch a CCC DS-TWR range so it flows up the Aliro mRangingData seam.
 

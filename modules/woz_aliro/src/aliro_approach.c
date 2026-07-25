@@ -127,6 +127,7 @@ void aliro_approach_defaults(struct aliro_approach_cfg *cfg)
 	cfg->motor_ms = 500;
 	cfg->margin_ms = 250;
 	cfg->vmin_cm_s = 30;
+	cfg->predict_en = true;
 }
 
 void aliro_approach_init(struct aliro_approach *ap, const struct aliro_approach_cfg *cfg)
@@ -159,8 +160,8 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
 	 * closing speed and the credential still outside the radius. */
 	float closing = -ap->v;
 
-	if (est_fresh && ap->accepted >= KF_MIN_SAMPLES && closing >= (float)ap->cfg.vmin_cm_s &&
-	    ap->d > (float)ap->cfg.unlock_cm) {
+	if (ap->cfg.predict_en && est_fresh && ap->accepted >= KF_MIN_SAMPLES &&
+	    closing >= (float)ap->cfg.vmin_cm_s && ap->d > (float)ap->cfg.unlock_cm) {
 		ap->eta_ms = (int32_t)(((ap->d - (float)ap->cfg.unlock_cm) * 1000.0f) / closing);
 	} else {
 		ap->eta_ms = -1;

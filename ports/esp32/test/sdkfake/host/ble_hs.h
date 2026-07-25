@@ -7,7 +7,10 @@
 
 /* ---- errors / constants ---- */
 #define BLE_HS_ENOMEM   6
+#define BLE_HS_ENOTCONN 7
 #define BLE_HS_ESTALLED 25
+/* HCI reason code the RSSI power gate passes to ble_gap_terminate on a departed peer. */
+#define BLE_ERR_REM_USER_CONN_TERM 0x13
 #define BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN 0x0D
 #define BLE_ATT_ERR_UNLIKELY               0x0E
 #define BLE_ATT_ERR_INSUFFICIENT_RES       0x11
@@ -149,6 +152,8 @@ int ble_gap_adv_stop(void);
 int ble_gap_adv_active(void);
 int ble_gap_update_params(uint16_t conn_handle, const struct ble_gap_upd_params *params);
 int ble_gap_conn_find(uint16_t conn_handle, struct ble_gap_conn_desc *out);
+int ble_gap_conn_rssi(uint16_t conn_handle, int8_t *out_rssi);
+int ble_gap_terminate(uint16_t conn_handle, uint8_t reason);
 
 /* ---- host config / npl ---- */
 struct ble_hs_cfg_s {
@@ -198,6 +203,12 @@ extern int fake_gap_update_calls;
 extern struct ble_gap_upd_params fake_gap_update_params;
 extern int fake_gap_conn_find_rc;
 extern struct ble_gap_conn_desc fake_gap_conn_desc; /* what conn_find returns */
+extern int fake_gap_rssi_rc;                        /* ble_gap_conn_rssi return */
+extern int8_t fake_gap_rssi_value;                  /* dBm it hands back */
+extern int fake_gap_terminate_rc;                   /* ble_gap_terminate return */
+extern int fake_gap_terminate_calls;
+extern uint16_t fake_gap_terminate_conn;
+extern uint8_t fake_gap_terminate_reason;
 extern struct ble_npl_event *fake_eventq[16];       /* posted events, FIFO */
 extern int fake_eventq_count;
 extern struct ble_npl_callout *fake_last_callout;   /* last init'd/reset */

@@ -96,6 +96,17 @@ static void on_disconnected(uint16_t conn)
 	s_disc_count++;
 }
 
+static uint16_t s_rssi_conn;
+static int8_t s_rssi_val;
+static int s_rssi_count;
+
+static void on_rssi(uint16_t conn, int8_t rssi_dbm)
+{
+	s_rssi_conn = conn;
+	s_rssi_val = rssi_dbm;
+	s_rssi_count++;
+}
+
 static const uint16_t k_versions[2] = {0x0100, 0x0200};
 
 static struct aliro_ble_config base_cfg(void)
@@ -653,6 +664,72 @@ static void t_leftover_branches(void)
 	fake_gap_conn_find_rc = 0;
 }
 
+/* G: RSSI power gate — the connection-RSSI poll (armed only when on_rssi is set)
+ * and the reader-initiated disconnect the gate uses when a peer departs. */
+static void t_rssi_gate_poll(void)
+{
+	printf("-- G: RSSI power-gate poll --\n");
+
+	/* on_rssi non-NULL turns the poll on; base_cfg leaves it off. */
+	struct aliro_ble_config cfg = base_cfg();
+
+	cfg.cb.on_rssi = on_rssi;
+	okc("prepare with on_rssi", aliro_ble_prepare(&cfg) == 0);
+
+	struct ble_l2cap_chan *chan = (struct ble_l2cap_chan *)0x3333;
+	struct ble_l2cap_event lev = {0};
+
+	fake_gap_rssi_rc = 0;
+	fake_gap_rssi_value = -58;
+	fake_last_callout = NULL;
+	s_rssi_count = 0;
+
+	/* CoC-open arms the poll and takes the first sample inline (no poll-period
+	 * latency at the door). */
+	lev.type = BLE_L2CAP_EVENT_COC_CONNECTED;
+	lev.connect.status = 0;
+	lev.connect.conn_handle = 9;
+	lev.connect.chan = chan;
+	okc("coc connect", fake_l2cap_event_cb(&lev, fake_l2cap_event_arg) == 0);
+	okc("first RSSI sampled inline",
+	    s_rssi_count == 1 && s_rssi_conn == 9 && s_rssi_val == -58);
+	okc("poll callout armed at 250 ms", fake_last_callout != NULL &&
+	    fake_last_callout->armed && fake_last_callout->armed_ticks == 250u);
+
+	/* Firing the callout re-samples and re-arms. */
+	fake_gap_rssi_value = -62;
+	fake_last_callout->ev.fn(&fake_last_callout->ev);
+	okc("poll re-samples", s_rssi_count == 2 && s_rssi_val == -62);
+	okc("poll re-arms", fake_last_callout->armed == 1);
+
+	/* A failed RSSI read is swallowed: no callback, poll keeps running. */
+	fake_gap_rssi_rc = 5;
+	fake_last_callout->ev.fn(&fake_last_callout->ev);
+	okc("failed read skips callback", s_rssi_count == 2);
+	fake_gap_rssi_rc = 0;
+
+	/* CoC-disconnect stops the poll. */
+	lev.type = BLE_L2CAP_EVENT_COC_DISCONNECTED;
+	lev.disconnect.conn_handle = 9;
+	lev.disconnect.chan = chan;
+	okc("coc disconnect", fake_l2cap_event_cb(&lev, fake_l2cap_event_arg) == 0);
+	okc("poll stopped", fake_last_callout->armed == 0);
+
+	/* Reader-initiated disconnect (gate close on a departed peer). */
+	fake_gap_terminate_calls = 0;
+	fake_gap_terminate_rc = 0;
+	okc("disconnect ok", aliro_ble_disconnect(9) == 0);
+	okc("terminated with remote-user reason", fake_gap_terminate_calls == 1 &&
+	    fake_gap_terminate_reason == BLE_ERR_REM_USER_CONN_TERM);
+
+	/* Already-gone tolerated; a hard failure surfaces. */
+	fake_gap_terminate_rc = BLE_HS_ENOTCONN;
+	okc("already-gone tolerated", aliro_ble_disconnect(9) == 0);
+	fake_gap_terminate_rc = 5;
+	okc("hard terminate failure surfaces", aliro_ble_disconnect(9) == -1);
+	fake_gap_terminate_rc = 0;
+}
+
 int main(void)
 {
 	fake_nimble_reset();
@@ -667,6 +744,7 @@ int main(void)
 	t_l2cap_coc();
 	t_marshaling();
 	t_leftover_branches();
+	t_rssi_gate_poll();
 
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");
 	return fails == 0 ? 0 : 1;

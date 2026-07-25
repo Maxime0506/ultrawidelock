@@ -62,15 +62,24 @@ static void okc(const char *name, int cond)
 }
 
 /* ---- helpers -------------------------------------------------------------- */
-static void wake_push(uint32_t wake, int trusted, int32_t cm, int64_t advance_ms)
+/* A wake with the Aliro session up (the usual case: ranging implies a session). */
+static void wake_push(uint32_t wake, int trusted, int32_t cm, int64_t advance_ms,
+		      int session = 1)
 {
 	if (mfk_wake_len < MFK_WAKE_MAX) {
 		mfk_wake_script[mfk_wake_len].wake = wake;
 		mfk_wake_script[mfk_wake_len].trusted = trusted;
 		mfk_wake_script[mfk_wake_len].cm = cm;
 		mfk_wake_script[mfk_wake_len].advance_ms = advance_ms;
+		mfk_wake_script[mfk_wake_len].session = session;
 		mfk_wake_len++;
 	}
+}
+
+/* The peer's session ended: the departure signal the approach controller acts on. */
+static void wake_push_session_gone(void)
+{
+	wake_push(0, 0, 0, 200, 0);
 }
 
 static int run_cmd(const char *name, int argc, const char *a1 = nullptr,
@@ -878,20 +887,21 @@ static void section_reader_task(void)
 	wake_push(1, 1, 200, 10);  /* far branch while already locked */
 	wake_push(1, 1, 200, 10);
 	wake_push(1, 1, 200, 10);  /* median decays into the dead band */
-	wake_push(0, 0, 0, 1600);  /* silence -> peer gone (already locked) */
+	wake_push(0, 0, 0, 200);   /* ranging silence alone must NOT relock */
+	wake_push_session_gone();  /* session end -> peer gone (already locked) */
 	mfk_task_run(task, nullptr);
 
 	okc("wait loop released by host sync + free advertiser", delays >= 3);
 	okc("reader started once on the shared host", mfk_reader_start_calls == 1);
 	okc("range listener installed", mfk_range_listener != nullptr);
-	okc("first trusted range granted the wallet animation",
-	    mfk_notify_unlock_calls >= 1);
+	okc("wallet notified exactly twice: grant with the bolt, secured on depart",
+	    mfk_notify_unlock_calls == 2);
 	okc("near dwell unlocked via the matter hop",
 	    mfk_lat_marks[ALIRO_LAT_NEAR_DWELL] >= 1 &&
 		    mfk_lat_marks[ALIRO_LAT_BOLT_DRIVEN] >= 1 && mfk_lat_reports == 1);
 	okc("unlock was aliro-sourced and unattributed (no credential)",
 	    mfk_dls_last_source == (int)OperationSourceEnum::kAliro);
-	okc("far dwell + silence relocked and secured",
+	okc("far dwell + session end relocked and secured",
 	    mfk_dls_last_state == (int)DlLockState::kLocked && mfk_notify_unlock_last == 0 &&
 		    mfk_notify_unlock_calls == 2);
 	okc("trusted ranges traced for the lab", mfk_lab_evi_calls >= 10);
@@ -907,7 +917,8 @@ static void section_reader_task(void)
 	mfk_wake_idx = 0;
 	wake_push(1, 1, 50, 10);
 	wake_push(1, 1, 60, 10);  /* unlock, attributed to user 1 */
-	wake_push(0, 0, 0, 1600); /* silence while unlocked -> relock + secured */
+	wake_push(0, 0, 0, 200);  /* standing still while unlocked: no relock */
+	wake_push_session_gone(); /* session end -> relock + secured */
 	mfk_task_run(task, nullptr);
 	okc("unlock attributed to the credential's user",
 	    mfk_dls_unlock_user_null == 0 && mfk_dls_unlock_user == 1);
@@ -927,6 +938,47 @@ static void section_reader_task(void)
 	okc("unknown credential leaves the operation unattributed",
 	    mfk_dls_last_state == (int)DlLockState::kUnlocked &&
 		    mfk_dls_unlock_user_null == 1);
+
+	/* run 4: trusted the whole time but never inside the unlock threshold. The bolt
+	 * must not move and — the regression this guards — the phone must never be told
+	 * "unsecured", which is what a grant tied to the trust bit did at 2-3 m. */
+	mfk_notify_unlock_calls = 0;
+	mfk_dls_set_lock_calls = 0;
+	mfk_dls_last_state = (int)DlLockState::kLocked;
+	mfk_wake_len = 0;
+	mfk_wake_idx = 0;
+	wake_push(1, 1, 300, 10);
+	wake_push(1, 1, 280, 10);
+	wake_push(1, 1, 260, 10);
+	wake_push(1, 1, 310, 10);
+	wake_push(1, 1, 290, 10);
+	wake_push_session_gone(); /* session end -> peer gone, still locked */
+	mfk_task_run(task, nullptr);
+	okc("trusted but never near: wallet never told unsecured",
+	    mfk_notify_unlock_calls == 0);
+	okc("trusted but never near: bolt stayed locked",
+	    mfk_dls_last_state == (int)DlLockState::kLocked);
+
+	/* run 5: unlock, then stand still. iOS stops ranging when the phone stops
+	 * moving (bench: 3.07 s of silence with the phone 26 cm from the reader and
+	 * the link still up), which under a ranging-silence timeout relocked the bolt
+	 * and then re-unlocked it. Silence with the session up must change nothing. */
+	mfk_notify_unlock_calls = 0;
+	mfk_dls_set_lock_calls = 0;
+	mfk_wake_len = 0;
+	mfk_wake_idx = 0;
+	wake_push(1, 1, 50, 10);
+	wake_push(1, 1, 60, 10); /* unlock + grant */
+	for (int i = 0; i < 30; i++) {
+		wake_push(0, 0, 0, 200); /* 6 s of ranging silence, session still up */
+	}
+	mfk_task_run(task, nullptr);
+	okc("standing still does not relock the bolt",
+	    mfk_dls_last_state == (int)DlLockState::kUnlocked);
+	okc("standing still sends no secured", mfk_notify_unlock_last == 1);
+	/* One bolt drive for the whole run: the unlock, and nothing after it. Run 2
+	 * covers the other half, that a session end in the same position does relock. */
+	okc("standing still drove the bolt once", mfk_dls_set_lock_calls == 1);
 }
 
 /* ---- I: UWB range listener ---------------------------------------------------------- */

@@ -38,6 +38,7 @@
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
 #include "aliro_reader.h"
+#include "aliro_rssi_gate.h"
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 #include "aliro_stepup.h"
 #endif
@@ -109,6 +110,16 @@ static bool s_prov_lock_ready;
  * stays off the walk-up critical path. */
 static bool s_kp_dirty;
 
+/* A Secured (relock) Reader-Status-Changed that could not be delivered because the
+ * peer had already disconnected. The phone is left showing this door unlocked, so
+ * the next established session replays it. Host-task only, like every other touch
+ * point on the session table. */
+static bool s_secured_undelivered;
+/* The state the peer was last told (false = Secured, which is where the bolt boots).
+ * Suppresses duplicate Reader-Status-Changed sends and, with them, the spurious
+ * replays a duplicate would otherwise queue up. */
+static bool s_last_unsecured;
+
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 /* One-shot step-up arm (bench `aliro-stepup arm`): forces the next transaction
  * into the expedited-standard phase and requests an Access Document after
@@ -127,6 +138,9 @@ enum txn_phase {
 	PH_SENT_EXCHANGE, /* EXCHANGE sent; awaiting its response, then AP-Completed */
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 	PH_SENT_STEPUP, /* ENVELOPE sent; collecting the DeviceResponse before AP-Completed */
+#endif
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	PH_GATE_HOLD, /* auth done; AP-Completed deferred until the RSSI power gate opens */
 #endif
 	PH_ESTABLISHED, /* AP-Completed sent; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
@@ -148,6 +162,10 @@ static const char *phase_str(enum txn_phase p)
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 	case PH_SENT_STEPUP:
 		return "SENT_STEPUP";
+#endif
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	case PH_GATE_HOLD:
+		return "GATE_HOLD";
 #endif
 	case PH_ESTABLISHED:
 		return "ESTABLISHED";
@@ -200,7 +218,18 @@ static struct aliro_session {
 	uint8_t stepup_sd[2048]; /* collected DeviceResponse SessionData (x5chain headroom) */
 	size_t stepup_sd_len;
 #endif
+
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	/* BLE-RSSI ranging power gate: fed by the transport's poll, holds
+	 * AP-Completed (PH_GATE_HOLD) until the phone is near enough that the UWB
+	 * radio's RX power is worth spending. Zeroed slot == closed + unprimed. */
+	struct aliro_rssi_gate rgate;
+#endif
 } s_sessions[ALIRO_MAX_SESSIONS];
+
+/* Defined with the other Reader-Status-Changed plumbing; declared here so the
+ * stale-Wallet resync in complete_ap_and_range can reach it. */
+static void reader_status_send(struct aliro_session *s, bool unsecured);
 
 // Finds the active session matching the given BLE connection handle.
 // Returns a pointer to the matching session, or NULL if no active session has that conn_handle.
@@ -810,6 +839,52 @@ static void complete_ap_and_range(struct aliro_session *s)
 	if (aliro_ranging_start(s->conn_handle, ranging_sid, s->ursk, &s->sc_ble) != 0) {
 		LOG_WRN("[conn %u] ranging setup did not arm", s->conn_handle);
 	}
+
+	/* Stale-Wallet resync. If a relock notification was lost because the peer had
+	 * already dropped BLE, the phone is still showing this door unlocked; a channel
+	 * exists again now, so replay it once. Deliberately Secured-only: an unsolicited
+	 * Unsecured would fire the Wallet unlock animation for a door the arriving phone
+	 * did not open. Costs nothing on a normal walk-up — the flag is only ever set by
+	 * an undeliverable relock — so the ranging path stays off the critical latency
+	 * path it just armed. */
+	if (s_secured_undelivered) {
+		LOG_INF("[conn %u] replaying the undelivered Secured (stale Wallet state)",
+			s->conn_handle);
+		reader_status_send(s, false);
+	}
+}
+
+#if defined(CONFIG_WOZ_RSSI_GATE)
+static const struct aliro_rssi_gate_cfg k_rgate_cfg = ALIRO_RSSI_GATE_CFG_DEFAULT;
+#endif
+
+/* Run complete_ap_and_range only once the RSSI power gate allows the UWB radio:
+ * the device does not initiate ranging until it receives AP-Completed (the
+ * comment above k_ap_completed_plain), so holding that one message here keeps
+ * the DW3000 dark while the phone is still tens of metres out. The gate opening
+ * (aliro_reader_rssi_sample) completes the AP; a phone that gives up meanwhile
+ * simply reconnects on approach and re-runs the fast auth. Direct call when the
+ * gate is compiled out. */
+static void gated_complete_ap(struct aliro_session *s)
+{
+#if defined(CONFIG_WOZ_RSSI_GATE)
+	if (!s->rgate.primed) {
+		/* No RSSI sample ever arrived (controller read failing?): fail OPEN.
+		 * Deferring on missing data would trade a broken unlock for a power
+		 * win; the wrong direction for a lock. The poll's inline first read
+		 * at CoC-open makes this path unreachable when RSSI works. */
+		LOG_WRN("[conn %u] RSSI gate has no samples; failing open (no power gating)",
+			s->conn_handle);
+	} else if (!aliro_rssi_gate_is_open(&s->rgate)) {
+		s->phase = PH_GATE_HOLD;
+		aliro_rssi_gate_hold_begin(&s->rgate, (uint32_t)(woz_uptime_us() / 1000));
+		LOG_INF("[conn %u] RSSI gate closed (%d dBm): AP-Completed held, UWB stays dark",
+			s->conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi("gate.hold", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
+		return;
+	}
+#endif
+	complete_ap_and_range(s);
 }
 
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
@@ -827,7 +902,7 @@ static void stepup_send_request(struct aliro_session *s)
 		LOG_WRN("[conn %u] step-up: request build failed; completing AP normally",
 			s->conn_handle);
 		s->stepup_active = false;
-		complete_ap_and_range(s);
+		gated_complete_ap(s);
 		return;
 	}
 	s->stepup_sd_len = 0;
@@ -875,7 +950,7 @@ static void on_stepup_response(struct aliro_session *s, const uint8_t *pl, size_
 		LOG_WRN("[conn %u] step-up: short ENVELOPE response; completing AP",
 			s->conn_handle);
 		s->stepup_active = false;
-		complete_ap_and_range(s);
+		gated_complete_ap(s);
 		return;
 	}
 	if (len > 0 && s->stepup_sd_len + len <= sizeof(s->stepup_sd)) {
@@ -907,7 +982,7 @@ static void on_stepup_response(struct aliro_session *s, const uint8_t *pl, size_
 
 	/* Complete the AP + arm ranging FIRST so the verify never delays the unlock,
 	 * then hand the document to the worker. */
-	complete_ap_and_range(s);
+	gated_complete_ap(s);
 	if (s->stepup_sd_len > 0) {
 		stepup_submit_job(s);
 	} else {
@@ -958,7 +1033,7 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
 		return;
 	}
 #endif
-	complete_ap_and_range(s);
+	gated_complete_ap(s);
 }
 
 /* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
@@ -970,21 +1045,8 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
  * to select which connection to notify). Plaintext the BleSK channel then seals:
  * [02][02][00 04][00 02 04 <state>]. Runs on the BLE-host task (posted via
  * aliro_ble_post_reader_status) so it serializes with the other sc_ble seals. */
-static void reader_status_send_on_host(bool unsecured)
+static void reader_status_send(struct aliro_session *s, bool unsecured)
 {
-	struct aliro_session *s = NULL;
-
-	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
-		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
-			s = &s_sessions[i];
-			break;
-		}
-	}
-	if (s == NULL) {
-		LOG_WRN("reader-status-changed: no established session to notify");
-		return;
-	}
-
 	const uint8_t plain[8] = {
 		0x02u, 0x02u, 0x00u, 0x04u,
 		0x00u, 0x02u, 0x04u, (uint8_t)(unsecured ? 0x01u : 0x00u),
@@ -1001,6 +1063,44 @@ static void reader_status_send_on_host(bool unsecured)
 	LOG_INF("[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
 	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
+	s_secured_undelivered = false;
+	s_last_unsecured = unsecured;
+}
+
+static void reader_status_send_on_host(bool unsecured)
+{
+	struct aliro_session *s = NULL;
+
+	if (unsecured == s_last_unsecured) {
+		/* The peer already believes this. The gate-close path sends Secured
+		 * itself before dropping the link, so the approach controller's own
+		 * relock (which fires off that very disconnect) arrives here as a
+		 * duplicate. Treating it as already-delivered is what stops it being
+		 * flagged undeliverable and replayed on the next approach, which the
+		 * user sees as the Wallet flashing locked then unlocked on arrival. */
+		return;
+	}
+
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
+			s = &s_sessions[i];
+			break;
+		}
+	}
+	if (s == NULL) {
+		/* The peer went away before we could tell it. A lost Unsecured costs
+		 * nothing (the phone learns the door is open on its next approach), but
+		 * a lost Secured strands the Wallet showing this door unlocked with
+		 * nothing left to correct it: the relock is normally triggered BY the
+		 * peer leaving, so this is the common case, not the rare one. Flag it
+		 * and replay on the next session. */
+		if (!unsecured) {
+			s_secured_undelivered = true;
+		}
+		LOG_WRN("reader-status-changed: no established session to notify");
+		return;
+	}
+	reader_status_send(s, unsecured);
 }
 
 // Sends a Reader-Status BLE notification reporting the lock's unsecured/secured state to the
@@ -1009,6 +1109,18 @@ static void reader_status_send_on_host(bool unsecured)
 void aliro_reader_notify_unlock(bool unsecured)
 {
 	aliro_ble_post_reader_status(reader_status_send_on_host, unsecured);
+}
+
+// Reports whether any peer currently holds an established Aliro session.
+// Returns true if at least one session slot is active and in the established phase.
+bool aliro_reader_session_active(void)
+{
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // Copies the credential public key that most recently passed the trust check into out.
@@ -1148,6 +1260,60 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	}
 }
 
+#if defined(CONFIG_WOZ_RSSI_GATE)
+// Feeds one connection-RSSI sample into the session's ranging power gate and acts on the
+// resulting transition: gate opening completes a held AP (starts ranging); gate closing on an
+// established session tears ranging down and drops the link (the phone re-runs the fast auth
+// on its next approach). Runs on the BLE-host task, same as every other session touch point.
+void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
+{
+	struct aliro_session *s = session_find(conn_handle);
+
+	if (s == NULL) {
+		return;
+	}
+	uint32_t now_ms = (uint32_t)(woz_uptime_us() / 1000);
+	bool was_open = aliro_rssi_gate_is_open(&s->rgate);
+	bool open = aliro_rssi_gate_feed(&s->rgate, &k_rgate_cfg, rssi_dbm, now_ms);
+
+	aliro_lab_evi("rssi", "dbm", rssi_dbm);
+	if (open && s->phase == PH_GATE_HOLD) {
+		/* Two ways out of the hold: the level qualified, or the hold cap ran out
+		 * and the gate opened anyway so the phone's own patience never does. The
+		 * study needs them apart, so they get separate trace events. */
+		bool capped = aliro_rssi_gate_was_capped(&s->rgate);
+
+		LOG_INF("[conn %u] RSSI gate open%s (%d dBm): completing AP, ranging may start",
+			conn_handle, capped ? " on the hold cap" : "",
+			(int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi(capped ? "gate.holdcap" : "gate.open", "dbm",
+			      aliro_rssi_gate_level_dbm(&s->rgate));
+		complete_ap_and_range(s);
+		return;
+	}
+	if (was_open && !open && s->phase == PH_ESTABLISHED) {
+		/* Sustained fade below the close threshold: the peer has left the
+		 * last few metres. Stop the responder (powers the DW3000 down) and
+		 * drop the link rather than keep answering ever-farther polls. */
+		LOG_INF("[conn %u] RSSI gate closed (%d dBm): stopping ranging, disconnecting",
+			conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_lab_evi("gate.close", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
+		aliro_ranging_stop(conn_handle);
+		/* Say goodbye before hanging up. The approach controller relocks off the
+		 * session ending, and the session ends because of the disconnect two
+		 * lines down, so its own Secured would arrive with no channel left to
+		 * carry it and the phone would keep showing the door unlocked until its
+		 * next approach. Sending here costs one sealed 8-byte SDU on a link that
+		 * is about to close anyway. The bolt follows within a poll period, so
+		 * the phone reads Secured a moment early rather than minutes late. */
+		if (s_last_unsecured) {
+			reader_status_send(s, false);
+		}
+		(void)aliro_ble_disconnect(conn_handle);
+	}
+}
+#endif /* CONFIG_WOZ_RSSI_GATE */
+
 /* ---- aliro_ble transport callbacks ---- */
 
 // BLE connection-established callback: allocates a session slot for the new connection.
@@ -1246,6 +1412,10 @@ static struct aliro_ble_config make_ble_cfg(void)
 				.on_data = on_data,
 				.on_connected = on_connected,
 				.on_disconnected = on_disconnected,
+#if defined(CONFIG_WOZ_RSSI_GATE)
+				/* non-NULL turns the transport's RSSI poll on */
+				.on_rssi = aliro_reader_rssi_sample,
+#endif
 			},
 	};
 	return cfg;

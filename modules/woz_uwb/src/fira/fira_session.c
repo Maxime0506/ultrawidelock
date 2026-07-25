@@ -94,6 +94,11 @@ bool fira_session_range_trusted(void)
 	return g_range_trust >= FIRA_RANGE_TRUST_K;
 }
 
+uint8_t fira_session_trust_level(void)
+{
+	return g_range_trust;
+}
+
 void fira_session_set_range_listener(void (*cb)(void))
 {
 	g_range_listener = cb;

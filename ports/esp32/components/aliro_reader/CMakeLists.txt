@@ -13,6 +13,7 @@ idf_component_register(
 		"${ALIRO}/src/aliro_prov.c"
 		"${ALIRO}/src/aliro_ranging.c"
 		"${ALIRO}/src/aliro_lat.c"
+		"${ALIRO}/src/aliro_rssi_gate.c"
 		"${ALIRO}/src/aliro_approach.c"
 		# Step-up (Access Document) phase. The platform-neutral codec + verifier
 		# always compile (pure functions, no side effects) but are only invoked

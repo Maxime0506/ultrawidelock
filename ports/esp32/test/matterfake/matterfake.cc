@@ -789,6 +789,7 @@ uint32_t ulTaskNotifyTake(BaseType_t clear, TickType_t ticks)
 	mfk_trusted_have = s->trusted;
 	mfk_trusted_cm = s->cm;
 	mfk_now_us += s->advance_ms * 1000;
+	mfk_session_active = s->session;
 	return s->wake;
 }
 
@@ -930,6 +931,7 @@ int mfk_reader_start_rc;
 int mfk_ble_prepare_null;
 int mfk_notify_unlock_calls;
 int mfk_notify_unlock_last = -1;
+int mfk_session_active;
 int mfk_auth_cred_have;
 uint8_t mfk_auth_cred[65];
 int mfk_prov_print_calls;
@@ -979,6 +981,11 @@ void aliro_reader_notify_unlock(bool unsecured)
 {
 	mfk_notify_unlock_calls++;
 	mfk_notify_unlock_last = unsecured ? 1 : 0;
+}
+
+bool aliro_reader_session_active(void)
+{
+	return mfk_session_active != 0;
 }
 
 bool aliro_reader_authenticated_credential(uint8_t cred_pub[65])
