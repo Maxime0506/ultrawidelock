@@ -1,3 +1,7 @@
+/**
+ * @file woz_bytes.h
+ * Byte-order utilities: read/write 16-bit and 32-bit integers in little-endian or big-endian order.
+ */
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

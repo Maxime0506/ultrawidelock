@@ -89,26 +89,44 @@ void uwb_cirdiag_probe(void);
 
 #else
 
+/**
+ * Stub: set_enabled is a no-op.
+ */
 static inline void uwb_cirdiag_set_enabled(bool on)
 {
 	(void)on;
 }
+/**
+ * Stub: enabled returns false.
+ */
 static inline bool uwb_cirdiag_enabled(void)
 {
 	return false;
 }
+/**
+ * Stub: dump_set_enabled is a no-op.
+ */
 static inline void uwb_cirdiag_dump_set_enabled(bool on)
 {
 	(void)on;
 }
+/**
+ * Stub: dump_enabled returns false.
+ */
 static inline bool uwb_cirdiag_dump_enabled(void)
 {
 	return false;
 }
+/**
+ * Stub: ring_count returns 0.
+ */
 static inline uint32_t uwb_cirdiag_ring_count(void)
 {
 	return 0u;
 }
+/**
+ * Stub: capture returns false.
+ */
 static inline bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
 {
 	(void)status;
@@ -116,13 +134,22 @@ static inline bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, boo
 	(void)deadline_pending;
 	return false;
 }
+/**
+ * Stub: flush is a no-op.
+ */
 static inline void uwb_cirdiag_flush(void)
 {
 }
+/**
+ * Stub: window_due returns false.
+ */
 static inline bool uwb_cirdiag_window_due(void)
 {
 	return false;
 }
+/**
+ * Stub: probe is a no-op.
+ */
 static inline void uwb_cirdiag_probe(void)
 {
 }

@@ -118,6 +118,7 @@ def open_lines(port: str, baud: int) -> Iterator[str]:
 
 
 def main() -> int:
+    """Parse a serial line or read lines from stdin ('-'), decode range and access readings, publish to MQTT (or stdout in dry-run mode), and notify Home Assistant via discovery payloads; return 0 on clean exit or KeyboardInterrupt."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", required=True, help="serial device, or '-' for stdin")
     ap.add_argument("--baud", type=int, default=115200)

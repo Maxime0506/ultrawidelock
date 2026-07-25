@@ -1,3 +1,10 @@
+/**
+ * @file session.cpp
+ * Aliro reader BLE session state machine and cryptographic session context. Manages NFC APDU
+ * limits, response timeouts, connection setup, fast-path and standard key derivation, message
+ * encryption and decryption, and reader-status notifications. Processes events from the BLE
+ * transport and application layer.
+ */
 #include "protocol/nfc_auth.h"
 #include "protocol/access_document.h"
 #include "protocol/ble_message.h"

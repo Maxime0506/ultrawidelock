@@ -1,3 +1,9 @@
+/**
+ * @file access_document.h
+ * Aliro access document parsed from CBOR and COSE_Sign1 envelope: device public key, issued data
+ * element, issuer-signed item, signature, issuer key ID and certificate, validity period, and
+ * optional iteration count.
+ */
 #pragma once
 
 #include <stdbool.h>
@@ -8,6 +14,12 @@
 extern "C" {
 #endif
 
+/**
+ * Parsed Aliro access document with all fields needed for signature verification: device public
+ * key, the issued data element and its issuer-signed item (CBOR), cryptographic envelope
+ * (COSE_Sign1 protected/payload/signature), issuer key ID and certificate, validity timestamps, and
+ * validity iteration if present.
+ */
 struct woz_aliro_access_document {
 	uint8_t device_public_key[65];
 	const uint8_t *data_element;

@@ -80,12 +80,20 @@ void aliro_tlv_put_u16(struct aliro_tlv_w *w, uint8_t tag, uint16_t v)
 	aliro_tlv_put(w, tag, be, 2);
 }
 
+/**
+ * Append a BER-TLV tag and zero-length field to the writer's buffer; idempotent if writer is
+ * already in error state.
+ */
 void aliro_tlv_put_empty(struct aliro_tlv_w *w, uint8_t tag)
 {
 	w_byte(w, tag);
 	w_len(w, 0);
 }
 
+/**
+ * Finalize a BER-TLV write sequence; return 0 and write the byte count to *out_len if no encoding
+ * error occurred, else return -1.
+ */
 int aliro_tlv_w_finish(struct aliro_tlv_w *w, size_t *out_len)
 {
 	if (w->err) {

@@ -71,10 +71,23 @@ Vendor copy into site/, fetching it into internal/vendor once.
 
 **called by** `main`
 
-<details><summary>Undocumented (3)</summary>
+### `cta() -> str`
+`tools/docs_3d.py:182`
 
-- `cta`
-- `page`
-- `main`
+Render the 3D graph call-to-action block: heading, description, and button link to graph3d.html. Returns styled HTML with inline CSS.
 
-</details>
+**called by** `main`
+
+### `page(nodes, links, syms, slots) -> str`
+`tools/docs_3d.py:197`
+
+Generate the interactive 3D graph page: embed node/link data and symbol lookup as JSON, substitute into the template HTML, and inject threejs library code.
+
+**called by** `main`
+
+### `main() -> int`
+`tools/docs_3d.py:211`
+
+Build the 3D graph if a rendered site exists: mine nodes and symbols, generate page, inject the CTA button into architecture.html if present. Prints node/edge/symbol counts.
+
+**calls** `cta`, `ensure_lib`, `mine_nodes`, `mine_symbols`, `page`, `slot_map`

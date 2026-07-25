@@ -57,6 +57,7 @@ BOARD="nrf5340dk/nrf5340/cpuapp"
 if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
   launch() { "$@"; }
 else
+  # Launch a command in the NCS toolchain environment for the configured version.
   launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
 fi
 # Compute SHA-1 hash; tries shasum first (BSD/macOS), falls back to sha1sum (Linux). Filters output to the hash hex string only.

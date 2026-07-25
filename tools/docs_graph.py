@@ -181,6 +181,7 @@ PALETTE = (
 
 
 def parse_edges(mermaid: str) -> tuple[str, list[tuple[str, str]]]:
+    """Parse a mermaid graph block into its header line and a list of (source, target) node pairs, dropping self-loops."""
     lines = mermaid.strip().split("\n")
     pairs = []
     for line in lines[1:]:
@@ -208,6 +209,7 @@ def stem_dirs(page: str) -> dict[str, str]:
 
 
 def cluster_of(directory: str) -> str:
+    """Return the top-level cluster name for a source directory: woz_uwb submodule names become "woz_uwb/submodule", others return their first path component."""
     d = re.sub(r"^modules/", "", directory)
     m = re.match(r"woz_uwb/src/([a-z_]+)", d)
     return "woz_uwb/" + m.group(1) if m else d.split("/")[0]
@@ -247,6 +249,7 @@ def color_css(names: list[str], clusters: dict[str, set[str]]) -> str:
 
 
 def figures(page: str, mermaid: str) -> tuple[str, dict[str, int]]:
+    """Build the architecture overview and clustered detail graphs from a mermaid definition, returning the HTML block and a cluster-to-color-slot mapping."""
     header, pairs = parse_edges(mermaid)
     dirs = stem_dirs(page)
     clusters: dict[str, set[str]] = {}
@@ -264,6 +267,7 @@ def figures(page: str, mermaid: str) -> tuple[str, dict[str, int]]:
         )
 
     def cluster_key(n: str) -> str | None:
+        """Map a node name to its cluster, or None if the node has no directory heading on the page."""
         return cluster_of(dirs[n]) if n in dirs else None
 
     cedges = sorted(
@@ -330,6 +334,7 @@ LEDE_BARE_RE = re.compile(r'<p class="lede">@file [\w.-]+(?:…|\.{3})?</p>\n?')
 
 
 def chip(m: re.Match) -> str:
+    """Format a single chip reference as an HTML link with code formatting, extracting the basename from the full path."""
     path = m.group(2)
     return (
         f'<a href="{m.group(1)}" title="{path}">'
@@ -338,6 +343,7 @@ def chip(m: re.Match) -> str:
 
 
 def chips_block(m: re.Match) -> str:
+    """Rewrite a block of chip references by applying link and formatting to each one, preserving leading and trailing whitespace."""
     return m.group(1) + CHIP_RE.sub(chip, m.group(2)).rstrip() + m.group(3)
 
 
@@ -360,6 +366,7 @@ def tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]:
     """
 
     def head(m: re.Match) -> str:
+        """Rewrite a module section heading with a shortened directory name, optional color-slot dot, and a hyperlinked source filename."""
         d = m.group(2).rstrip("/")
         i = slots.get(cluster_of(d))
         dot = (
@@ -422,6 +429,7 @@ def group_sections(page: str, slots: dict[str, int]) -> tuple[str, int]:
     secs: list[tuple[str, str, str, str]] = []
 
     def eat(m: re.Match) -> str:
+        """Extract a section heading metadata triple and blurb into the accumulator, returning empty string to erase the matched text."""
         b = BLURB_RE.search(m.group(5))
         secs.append(
             (m.group(2), m.group(3), m.group(4), b.group(1).strip() if b else "")
@@ -522,6 +530,7 @@ else go()})();
 
 
 def side_shim(slots: dict[str, int], buckets: list[tuple[str, list[str]]]) -> str:
+    """Generate the sidebar shim HTML with color-slot CSS variables and JSON-encoded cluster/bucket metadata for the interactive architecture sidebar."""
     light = ";".join(f"--gv{i}:{PALETTE[i % 8][0]}" for i in range(len(slots)))
     dark = ";".join(f"--gv{i}:{PALETTE[i % 8][1]}" for i in range(len(slots)))
     return (
@@ -533,6 +542,7 @@ def side_shim(slots: dict[str, int], buckets: list[tuple[str, list[str]]]) -> st
 
 
 def main() -> int:
+    """Restructure the rendered architecture page: split its graph into overview and detail, shorten module headings, compact dependency rows, group sections by cluster, and apply layout shimming and sidebar injection to all HTML files."""
     if not ARCH.is_file():
         print("    no rendered site — nothing to restructure")
         return 0

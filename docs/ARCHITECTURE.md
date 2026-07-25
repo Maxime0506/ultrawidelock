@@ -11,6 +11,7 @@ flowchart LR
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_aliro.src --> modules.woz_uwb.src.facade
   modules.woz_aliro_stack.src --> modules.woz_aliro_stack.src.protocol
+  modules.woz_nfc.src --> modules.woz_nfc.include.woz_nfc
   modules.woz_uwb.src.aliro --> modules.woz_port.include
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.cherry
@@ -176,7 +177,12 @@ payloads, and TLV/APDU parsing helpers used to extract fields from device respon
 
 ### [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
 
-*No module docstring. First commit: "approach: predict time-of-arrival, open the bolt at arrival".*
+@file aliro_approach.c
+Kalman-filtered approach controller for predictive unlock. Tracks distance (cm), velocity (cm/s),
+and estimated time-to-arrival (ms) at the unlock radius. Supervises presence via median filtering
+of trusted ranges and fires predictive unlock when closing speed and ETA meet thresholds. Factory
+defaults: unlock 100 cm, relock 250 cm, dwell times 2 s and 3 s, motor delay 500 ms, margin 250
+ms, velocity floor 30 cm/s, prediction enabled.
 
 **depends on** [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
@@ -436,9 +442,20 @@ CIRDIAG_CIR_EVERY.
 
 ### [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
 
+@file session.cpp
+Aliro reader BLE session state machine and cryptographic session context. Manages NFC APDU
+limits, response timeouts, connection setup, fast-path and standard key derivation, message
+encryption and decryption, and reader-status notifications. Processes events from the BLE
+transport and application layer.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md), [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md)
 
 ### [`modules/woz_aliro_stack/src/advertising_core.c`](architecture/modules.woz_aliro_stack.src/advertising_core.c.md)
+
+@file advertising_core.c
+Compute dynamic advertisement tag inputs and extract tags from AES ciphertext. The plaintext
+input incorporates the device's BLE address and an expiry timestamp; the tag is derived by AES
+encryption and truncation for inclusion in Aliro BLE advertisements per specification section 20.
 
 **depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
 
@@ -469,7 +486,9 @@ callbacks).
 
 ### [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md)
 
-*No module docstring. First commit: "flight-recorder: record/replay real UWB walk-ups".*
+@file flight_recorder.c
+Binary flight-recorder format: framed records (magic, metadata, configuration, events, end) with
+little-endian integers and truncation handling; read/write operations with overflow detection.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
 
@@ -495,13 +514,17 @@ engine is bound and unbound via internal ursk and stop calls.
 
 ### [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md)
 
-*No module docstring. First commit: "flight-recorder: record/replay real UWB walk-ups".*
+@file flight_recorder.h
+Capture and replay UWB frames and session configuration from a walk-up to a host for analysis and
+replay. Records endpoint identity, status registers, frame data, and timing metadata into a
+fixed-size ring buffer; provides reader and writer interfaces for host tools.
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ### [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
 
-*No module docstring. First commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract".*
+@file woz_bytes.h
+Byte-order utilities: read/write 16-bit and 32-bit integers in little-endian or big-endian order.
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
@@ -548,6 +571,106 @@ and a threshold below ERR still lets ERR through. So mute per-source at runtime.
 Reversible: compiled only under CONFIG_WOZ_PRETTY_SHELL (PRETTY=1). Drop PRETTY
 and every one of these lines returns for raw diagnosis. Needs
 CONFIG_LOG_RUNTIME_FILTERING=y (set in ports/nrf5340dk/overlays/woz-pretty.conf).
+
+## `modules/woz_nfc/src/`
+
+### [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
+
+WozNfc backend driving an NXP PN532 reader.
+A dedicated thread owns the chip: it runs the discovery loop (RF field on,
+one Apple ECP broadcast, one 106 kbps type A activation attempt, field off,
+sleep) and, once an ISO-DEP User Device is activated, performs the blocking
+APDU round trips. Stack callbacks (CreateSession / HandleSessionData /
+DestroySession) are posted to the Aliro workqueue so the stack observes the
+same threading as with the upstream RFAL transport, and Send() stays
+asynchronous: it hands the APDU to the thread and returns.
+The ECP frame layout mirrors modules/woz_aliro_ecp (the RFAL-path emitter):
+8-byte Aliro ECP v2 header, 8-byte provisioned reader identifier, CRC_A.
+The PN532 cannot inject raw frames mid-discovery the way RFAL's proprietary
+poll hook can, so the frame is broadcast with InCommunicateThru while the
+CIU CRC is switched off, between activation attempts — the same cadence a
+matching iPhone expects: ECP beacon, then WUPA.
+
+**depends on** [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md), [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md), [`modules/woz_nfc/src/pn532_apdu.h`](architecture/modules.woz_nfc.src/pn532_apdu.h.md), [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md)
+
+### [`modules/woz_nfc/src/pn532_bus_spi.c`](architecture/modules.woz_nfc.src/pn532_bus_spi.c.md)
+
+Zephyr SPI glue for the PN532 host protocol.
+PN532 SPI framing (UM0701-02 §6.2.5): every transaction opens with a
+one-byte command — 0x01 DATAWRITE (host→PN532 frame), 0x02 STATREAD (read a
+one-byte status; bit0 set = a response frame is ready), 0x03 DATAREAD
+(PN532→host frame). The interface is byte-wise LSB-first, which the nRF5340
+SPIM does in hardware (SPI_TRANSFER_LSB), so buffers hold ordinary MSB-order
+bytes here and the peripheral flips them on the wire.
+Each command, status poll, and frame read is its own CS-cycled transaction
+(the same shape as the Adafruit/ESPHome PN532 drivers). DATAREAD clocks its
+command byte and the complete response through one contiguous SPIM transfer.
+The chip re-presents the current frame on each DATAREAD, so reading more bytes
+than a frame holds is harmless as long as CS is dropped between frames — with
+one exception the caller enforces: the ACK read is kept short
+(PN532_ACK_READ_LEN) because the response follows it immediately and a long
+over-read would clock it away.
+Readiness is polled with STATREAD unless irq-gpios is wired (active low =
+frame ready), in which case a GPIO edge wakes the waiting thread.
+
+**depends on** [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md)
+
+### [`modules/woz_nfc/src/pn532.c`](architecture/modules.woz_nfc.src/pn532.c.md)
+
+PN532 host-protocol driver. See pn532.h. OS-free: no Zephyr headers, no
+allocation, no sleeping — waiting is delegated to the bus wait_ready op.
+
+**depends on** [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md)
+
+### [`modules/woz_nfc/src/pn532_apdu.c`](architecture/modules.woz_nfc.src/pn532_apdu.c.md)
+
+@file pn532_apdu.c
+PN532 APDU command planner: parse ISO 7816-4 APDU structure (Case 1-4, short/extended), emit
+passthrough or fragmented transport frames, handle GetResponse for extended data retrieval.
+
+**depends on** [`modules/woz_nfc/src/pn532_apdu.h`](architecture/modules.woz_nfc.src/pn532_apdu.h.md)
+
+### [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md)
+
+WozNfc backend for boards with no NFC frontend: polling never starts and no
+NFC session is ever created, so Send()/Terminate() are unreachable in a
+correct run; Send() reports invalid state defensively.
+
+**depends on** [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md)
+
+### [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
+
+WozNfc backend forwarding to the add-on's ST25R/RFAL transport unchanged.
+
+**depends on** [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md)
+
+### [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md)
+
+NXP PN532 host-protocol driver: frame codec and the command subset needed by
+the Aliro reader transport. Bus-agnostic and OS-free — all I/O goes through
+injected bus operations, so the whole layer compiles and runs in the host
+test suite against a scripted fake bus.
+Protocol reference: NXP UM0701-02 (PN532 User Manual).
+
+**used by** [`modules/woz_nfc/src/pn532.c`](architecture/modules.woz_nfc.src/pn532.c.md), [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
+
+### [`modules/woz_nfc/src/pn532_apdu.h`](architecture/modules.woz_nfc.src/pn532_apdu.h.md)
+
+PN532-specific ISO 7816 APDU adaptation.
+The Aliro stack (including the prebuilt library) negotiates sizes with the
+User Device, but has no API for the reader controller's smaller local limit.
+This adapter keeps that hardware constraint at the transport boundary.
+
+**used by** [`modules/woz_nfc/src/pn532_apdu.c`](architecture/modules.woz_nfc.src/pn532_apdu.c.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
+
+### [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md)
+
+Bus binding for the PN532 driver. One implementation is compiled in per
+build (currently SPI: pn532_bus_spi.c). The transport uses only these
+neutral names, so swapping the physical bus never touches pn532.c or
+transport_pn532.cpp.
+
+**depends on** [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md)  ·  **used by** [`modules/woz_nfc/src/pn532_bus_spi.c`](architecture/modules.woz_nfc.src/pn532_bus_spi.c.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
 
 ## `ports/esp32/apps/matter-lock/main/`
 
@@ -622,33 +745,80 @@ fira_session.c.
 
 ### [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md)
 
+@file ble_message.c
+BLE protocol message framing: parse and build protocol/message_id headers and payloads; parse and
+extract Initiate Access, UWB control, Access Completed, and Reader Status Changed messages.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/ble_timeout.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.c.md)
+
+@file ble_timeout.c
+Aliro BLE timeout supervisor (state machine + reply validator). Core: classify_attribute parses
+BLE message type from attribute ID/length; is_allowed_reply maps request→reply types (including
+Busy/GeneralError for any); has_response_timeout marks messages that start a timeout window;
+collision_replaces_pending resolves priority when incoming messages arrive before the previous
+one completes; set_pending / clear_pending manage state transitions. Designed to prevent timeouts
+when the phone is responsive and terminate when not.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md)
 
+@file nfc_auth.c
+NFC Aliro protocol command builders: AUTH0 and AUTH1 APDU encoding, authentication data
+construction, and response parsing for credential exchange and signature verification over NFC.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md)
+
+@file nfc_select.c
+NFC SELECT command builder and response parser for Aliro. build_select_command emits 00 A4 04 00
+09 <AID> 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
+extracting protocol version (expedited phase only) and extended-length sizes (0x7f66 TLV).
+parse_select_response and parse_select_response_ex validate the trailing 9000, check AID, and
+call parse_proprietary_information.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md)
 
+@file nfc_step_up.c
+NFC step-up messaging: compact-key CBOR encoder/decoder for Aliro DeviceRequest and SessionData
+(ISO 18013-5). Core: put appends to writer buffer; cbor_head / cbor_bytes / text build encoded
+items; cbor_read_head parses with validation (non-minimal representation rejected);
+build_device_request constructs DeviceRequest (compact keys); wrap_session_data /
+unwrap_session_data encode/decode SessionData; wrap_do53 / unwrap_do53 TLV-wrap messages;
+build_envelope_command / build_get_response_command and collect_response chain ISO APDU commands.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/access_document.c`](architecture/modules.woz_aliro_stack.src.protocol/access_document.c.md)
+
+@file access_document.c
+Compact-key CBOR parser for Aliro Access Documents (compact subset of ISO 18013-5 mDoc). Parses
+strictly with iterative depth traversal (no stack recursion), validates CBOR encoding (no floats,
+no simple values with payloads, minimal representation), and enforces a 25-level nesting bound.
+Core: parse_at walks encoded items; root validates full-buffer consumption; child_at / map_find_*
+retrieve nested elements; integer / timestamp extract scalar fields.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
 
+@file tlv.c
+BER-TLV parser and encoder for Aliro protocol: parse TLVs with definite length and advance
+offset, compute encoded sizes, and write new TLVs.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md)
+
+@file access_document.h
+Aliro access document parsed from CBOR and COSE_Sign1 envelope: device public key, issued data
+element, issuer-signed item, signature, issuer key ID and certificate, validity period, and
+optional iteration count.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/access_document.c`](architecture/modules.woz_aliro_stack.src.protocol/access_document.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
 
@@ -671,6 +841,11 @@ Aliro 1.0 expedited authentication APDU codecs.
 **used by** [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md)
+
+@file nfc_select.h
+Parsed result of an NFC SELECT command for the Aliro applet: negotiated protocol version, maximum
+command and response data lengths (from TLV or default), extended-length support, and the raw
+proprietary information TLV (A5 tag) for further parsing.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
 
@@ -1262,7 +1437,9 @@ Exit status: 0 = parsed at least one walk-up, 2 = usage/input error.
 
 ### [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
-*No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
+@file woz_port.h
+Portable platform shim: allocates memory, measures uptime and cycle counts, provides sleep stubs
+for host tests, and wraps mutexes (no-op on single-threaded host).
 
 **used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
 
@@ -1312,7 +1489,10 @@ strip it from a hardened production image.
 
 ### [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md)
 
-*No module docstring. First commit: "Cut ESP32 walk-up unlock latency: instrument, unblock, and precompute".*
+@file aliro_lat.h
+Latency tracking for Aliro protocol phases during a walk-up: record BLE_CONNECT as epoch zero,
+mark timestamps for each phase, emit a report with elapsed intervals and flight-recorder
+diagnostics.
 
 **used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
 
@@ -1362,7 +1542,10 @@ GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of in
 
 ### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
-*No module docstring. First commit: "approach: predict time-of-arrival, open the bolt at arrival".*
+@file aliro_approach.h
+Configuration and state for approach detection and predictive unlock: unlock/relock thresholds in
+centimeters, sample-count dwell times, motor retraction time, scheduling margin, minimum closing
+speed, and a flag to enable or disable predictive ToA unlock.
 
 **used by** [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
 
@@ -1391,6 +1574,32 @@ GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of in
 @file cherry_common.h — diagnostics config struct and report forward decl.
 
 **used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
+
+## `modules/woz_nfc/include/woz_nfc/`
+
+### [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md)
+
+Woz NFC transport seam.
+One reader backend is selected at build time (Kconfig choice WOZ_NFC_TRANSPORT):
+the upstream ST25R/RFAL transport, the in-tree PN532 transport, or none. The
+add-on application calls these five functions instead of a concrete transport
+class; the selected backend supplies the definitions. The semantics mirror the
+upstream NfcTransportRfal public API exactly:
+- Init():  bring up the bus/PAL. Failure is logged by the caller but not fatal.
+- Start(): begin polling for a User Device. May be called again after Stop().
+- Stop():  cease polling and switch the RF field off.
+- Send():  asynchronous. Queues one APDU for the activated device and returns;
+the response is delivered later via AliroStack::HandleSessionData()
+from the Aliro workqueue. Returns ALIRO_INVALID_STATE when no
+device is activated.
+- Terminate(): the stack is done with the session; drop the device and return
+to polling. Does not call back into the stack.
+The backend owns the session lifecycle in the other direction: on ISO-DEP
+activation it calls AliroStack::CreateSession(ConnectionHandle::Nfc()), on
+device loss or exchange failure DestroySession(), both from the Aliro
+workqueue, matching the upstream RFAL transport's threading.
+
+**used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
 
 ## `integration/homeassistant/`
 
@@ -1445,7 +1654,8 @@ Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_
 
 ### [`ports/esp32/components/aliro_reader/aliro_stepup_worker.c`](architecture/ports.esp32.components.aliro_reader/aliro_stepup_worker.c.md)
 
-*No module docstring. First commit: "esp32: add the Aliro step-up (Access Document) phase".*
+@file aliro_stepup_worker.c
+Step-up document verification worker for ESP32. Runs on a dedicated FreeRTOS task (6 KB stack, priority 4). Lazily creates a single-slot queue on first submission. Non-blocking submission: if a previous job is still enqueued, the new job is dropped. Verdict and connection handle are stored in shared state (spinlock-protected) and retrieved via aliro_stepup_worker_last(). Logging includes decrypted DeviceResponse hex and verdict breakdown (validity, element count, issuer found, signature OK, doctype OK, time OK, iteration OK).
 
 ## `release/esp32-matter-lock/`
 
@@ -1636,7 +1846,8 @@ WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
 COV_MIN=90         line-coverage floor, matching host-tests.yml
-NO_COLOR=1         plain output
+NO_COLOR=1         plain output (colour is the default, pipe or not)
+FAIL_TAIL=40       lines of a failing gate's log to show inline
 
 ### [`scripts/ws-seed.sh`](architecture/scripts/ws-seed.sh.md)
 
@@ -1655,7 +1866,7 @@ deleting the worktree deletes it (see `make ws-clean`).
 
 ### [`web-twin/check_constants.py`](architecture/web-twin/check_constants.md)
 
-*No module docstring. First commit: "web: add the walk-up digital twin as an interactive page".*
+Verify that the web-twin's hardcoded firmware constants in index.html stay synchronized with their source definitions. Parses the FW table, reads the cited source lines, and reports any mismatches or missing citations.
 
 ### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
 

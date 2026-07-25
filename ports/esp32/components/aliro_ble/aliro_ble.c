@@ -186,6 +186,10 @@ static bool s_rssi_poll_init;
 static bool s_rssi_poll_on;
 static uint16_t s_rssi_conn;
 
+/**
+ * Sample the current RSSI on the active BLE connection and invoke the registered callback if one is set.
+ * A no-op if no connection is active or the callback is null.
+ */
 static void rssi_poll_sample(void)
 {
 	int8_t rssi = 0;
@@ -195,6 +199,9 @@ static void rssi_poll_sample(void)
 	}
 }
 
+/**
+ * Poll the current RSSI on the active BLE connection and invoke the registered callback. Reschedules itself if polling is enabled.
+ */
 static void rssi_poll_ev(struct ble_npl_event *ev)
 {
 	(void)ev;
@@ -225,6 +232,10 @@ static void rssi_poll_start(uint16_t conn_handle)
 			      ble_npl_time_ms_to_ticks32(CONFIG_WOZ_RSSI_GATE_POLL_MS));
 }
 
+/**
+ * Stop polling the RSSI on the active BLE connection.
+ * A no-op if polling is not currently running.
+ */
 static void rssi_poll_stop(void)
 {
 	if (!s_rssi_poll_on) {
@@ -439,6 +450,11 @@ static bool s_conn_upd_retry_init;
 static uint16_t s_conn_upd_conn;
 static uint8_t s_conn_upd_tries;
 
+/**
+ * Request the BLE connection interval be lowered to 15 ms (the Apple accessory guideline floor) to minimize GATT discovery latency during Aliro handshake.
+ * Best-effort: a rejected request keeps the current connection parameters.
+ * Updates to minimum and maximum interval 12 (1.25 ms units = 15 ms), latency 0, and supervision timeout 4 s.
+ */
 static void request_fast_conn(uint16_t conn_handle)
 {
 	/* The walk-up is dozens of lock-step round trips (GATT discovery
@@ -462,6 +478,9 @@ static void request_fast_conn(uint16_t conn_handle)
 	}
 }
 
+/**
+ * Retry callback for BLE connection interval update: increments retry counter and re-requests a fast interval (15 ms) if the current interval is slower. Exits silently if the connection is gone or already at target speed.
+ */
 static void conn_upd_retry_ev(struct ble_npl_event *ev)
 {
 	struct ble_gap_conn_desc desc;

@@ -40,6 +40,7 @@ NAV_ANCHOR = '<script defer src="nav.js"></script>'
 
 
 def repo_url() -> str:
+    """Return the GitHub URL (https://github.com/owner/repo) of the origin remote, or an empty string if the remote is not configured or not a GitHub URL."""
     try:
         url = subprocess.run(
             ["git", "remote", "get-url", "origin"],
@@ -52,6 +53,7 @@ def repo_url() -> str:
 
 
 def chip(cmd: str) -> str:
+    """Render a shell command in a copyable chip with a Copy button and dollar-sign prompt. No comments allowed inline; context goes in surrounding prose."""
     # Command only — no `# comment` in or next to anything copyable. Context
     # goes in prose around the chip instead.
     return (
@@ -62,6 +64,7 @@ def chip(cmd: str) -> str:
 
 
 def row(href: str, name: str, desc: str) -> str:
+    """Render a navigation card row with a link, title, and description text."""
     return (
         f'<li><a href="{href}"><span class="row-name">{name}</span>'
         f'<span class="row-desc">{desc}</span></a></li>'
@@ -117,6 +120,7 @@ HERO = (
 # Every page and anchor referenced here is validated by the link pass that
 # runs after this one, so a renamed guide fails the build instead of rotting.
 def main_html(gh: str) -> str:
+    """Render the main content section of the Get-Started landing page as a series of collapsible track cards. Each card contains links, code chips, and prose explaining the Hardware, Software, Build/Test/Verify, Architecture, Protocol, and Project tracks. Embeds the provided GitHub URL into clone and repository-link rows. Returns HTML."""
     tracks = []
     tracks.append(("chip", "Hardware", "Boards, wiring, and the UWB radio", (
         '<ul class="rows">'
@@ -275,6 +279,7 @@ else go()})();
 
 
 def build_page(template: str, gh: str) -> str:
+    """Build the Get-Started page by injecting main_html(gh) into the site template, then update the hero button link and search index. Applies title, og:title, breadcrumb, and active-nav-marker rewrites. Returns the modified page as a string."""
     page = template
     page = re.sub(
         r"<title>[^<]*</title>", "<title>Get started</title>", page, count=1
@@ -303,6 +308,7 @@ def build_page(template: str, gh: str) -> str:
 
 
 def add_search_row(page_name: str) -> None:
+    """Add an entry for the given page name to the nav.js search array if not already present. Inserts at position 1 (after the index entry) and rewrites the JSON in place. Does nothing silently if nav.js is absent."""
     nav_path = SITE / "nav.js"
     if not nav_path.is_file():
         return
@@ -320,6 +326,7 @@ def add_search_row(page_name: str) -> None:
 
 
 def main() -> int:
+    """Render the Get-Started landing page and inject it into site/start.html, wire the wayfinding guide into every page, and update navigation and hero-button references. Reports counts of pages modified and returns 1 if the template layout has changed. Requires the site to be rendered first."""
     if not TEMPLATE.is_file():
         print("    no rendered site — nothing to build the landing from")
         return 0

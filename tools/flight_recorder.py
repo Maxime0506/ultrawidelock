@@ -50,7 +50,9 @@ class TraceError(Exception):
 
 
 class Trace:
+    """In-memory representation of a single UWB walk-up trace: session metadata, radio configuration, received frames, and end-of-trace marker."""
     def __init__(self):
+        """Initialize an empty trace with null metadata, config, and end marker, and an empty frame list."""
         self.meta = None      # dict: version, port, sha
         self.config = None    # dict: session_id, channel, ..., ursk, rc
         self.events = []      # list of dicts
@@ -58,6 +60,7 @@ class Trace:
 
 
 def _is_hex_line(s):
+    """Return true if the string is a valid even-length sequence of hexadecimal digits."""
     return len(s) > 0 and len(s) % 2 == 0 and all(
         c in "0123456789abcdefABCDEF" for c in s)
 
@@ -203,6 +206,7 @@ def summarize(trace):
 
 
 def main(argv):
+    """Parse a capture log or binary trace file, print a summary, optionally write a .frc sidecar, and optionally extract frames into a corpus directory."""
     if len(argv) < 2:
         sys.stderr.write("Usage: %s <capture.log | trace.frc> [corpus_dir]\n"
                          % os.path.basename(argv[0]))

@@ -168,6 +168,7 @@ tool_gate() {
 # nobody remembers to bump — the bump lands in .github/workflows/ because that
 # is what CI reads. So this reads the same line CI does.
 WF=".github/workflows"
+# Extract the pinned version string for a tool (clang-format, clang-tidy, zizmor, reuse, actionlint, emcc, or markdown) from the corresponding CI workflow file. Returns the version or empty string if not found or tool name is unrecognized.
 tool_pin() {
 	case "$1" in
 	clang-format) sed -n 's/.*pip install clang-format==\([0-9][0-9.]*\).*/\1/p' "$WF/format.yml" | head -1 ;;
@@ -192,6 +193,7 @@ actionlint_url() {
 	grep -oE 'https://github.com/rhysd/actionlint/releases/download/[^ ]*_linux_amd64\.tar\.gz' \
 		"$WF/workflow-lint.yml" | head -1
 }
+# Extract the actionlint binary hash (64 hex characters) from workflow-lint.yml, return it or empty string if not found.
 actionlint_sha() {
 	grep -oE '[0-9a-f]{64}' "$WF/workflow-lint.yml" | head -1
 }

@@ -44,16 +44,30 @@ touch a package it has already installed — which is exactly the repin case.
 Which gate stops working without it. This is the "why do I need this" column,
 and it is the reason a row exists at all.
 
+### `tool_pin()`
+`scripts/toolchain.sh:172`
+
+Extract the pinned version string for a tool (clang-format, clang-tidy, zizmor, reuse, actionlint, emcc, or markdown) from the corresponding CI workflow file. Returns the version or empty string if not found or tool name is unrecognized.
+
+**called by** `tool_install`, `tool_note`
+
 ### `actionlint_url()`
-`scripts/toolchain.sh:191`
+`scripts/toolchain.sh:192`
 
 actionlint's Linux install is CI's own: a release tarball checked against a
 sha256. Both come out of the workflow for the same reason the pins do.
 
 **called by** `tool_install`
 
+### `actionlint_sha()`
+`scripts/toolchain.sh:197`
+
+Extract the actionlint binary hash (64 hex characters) from workflow-lint.yml, return it or empty string if not found.
+
+**called by** `tool_install`
+
 ### `tool_probe()`
-`scripts/toolchain.sh:205`
+`scripts/toolchain.sh:207`
 
 Present on this host? Echoes the version (or a bare "installed") and returns
 0; returns 1 when absent. Three rows are not a plain `command -v`:
@@ -63,7 +77,7 @@ emcc      twin-wasm.sh sources ~/emsdk/emsdk_env.sh when emcc is off PATH.
 markdown  a python import, not a binary.
 
 ### `tool_install()`
-`scripts/toolchain.sh:263`
+`scripts/toolchain.sh:265`
 
 The command that installs it here. Empty = this host has no packaged route and
 the row prints a pointer instead.
@@ -71,19 +85,19 @@ the row prints a pointer instead.
 **calls** `actionlint_sha`, `actionlint_url`, `pipx_or_pip`, `tool_pin`
 
 ### `tool_note()`
-`scripts/toolchain.sh:404`
+`scripts/toolchain.sh:406`
 
 Printed under a row that has no install command on this host.
 
 **calls** `tool_pin`
 
 ### `version_of()`
-`scripts/toolchain.sh:414`
+`scripts/toolchain.sh:416`
 
 Pull the leading dotted number out of a --version line, for the pin compare.
 
 ### `verify_needs()`
-`scripts/toolchain.sh:424`
+`scripts/toolchain.sh:426`
 
 ---- drift check: every gate tool verify.sh names must have a row here -----
 verify.sh's gate_need() and gate_need_py() are the authority on what the gates
@@ -92,10 +106,3 @@ arrive without an install route: this check fails until someone adds the row.
 Both functions, not just the first. gate_need_py() arrived later and covering
 only gate_need() would have left python dependencies drifting freely, which is
 the exact hole this check exists to close.
-
-<details><summary>Undocumented (2)</summary>
-
-- `tool_pin`
-- `actionlint_sha`
-
-</details>

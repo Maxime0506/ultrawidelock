@@ -45,8 +45,9 @@ Prepend the font import and append the overrides; report what happened.
 
 **called by** `main`
 
-<details><summary>Undocumented (1)</summary>
+### `main() -> int`
+`tools/docs_theme.py:221`
 
-- `main`
+Apply CSS theme overrides (fonts and color scheme) to the main site shell and API reference tree if they exist; report what was themed.
 
-</details>
+**calls** `theme`

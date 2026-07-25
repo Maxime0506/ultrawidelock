@@ -1,3 +1,9 @@
+/**
+ * @file aliro_lat.h
+ * Latency tracking for Aliro protocol phases during a walk-up: record BLE_CONNECT as epoch zero,
+ * mark timestamps for each phase, emit a report with elapsed intervals and flight-recorder
+ * diagnostics.
+ */
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -61,14 +67,26 @@ void aliro_lat_report(void);
 
 #else /* !CONFIG_ALIRO_LAT_TRACE */
 
+/**
+ * Initialize latency tracking; record the BLE_CONNECT epoch as the zero reference for all
+ * subsequent phase timestamps.
+ */
 static inline void aliro_lat_begin(void)
 {
 }
+/**
+ * Record the current uptime for a given Aliro protocol phase if not yet marked; return 1 if newly
+ * recorded, 0 if already marked or out of range.
+ */
 static inline int aliro_lat_mark(enum aliro_lat_phase phase)
 {
 	(void)phase;
 	return 0;
 }
+/**
+ * Emit a latency report showing all recorded phase timestamps and elapsed intervals; dump
+ * flight-recorder lab traces if CONFIG_WOZ_ALIRO_LAB is enabled and tracing is active.
+ */
 static inline void aliro_lat_report(void)
 {
 }

@@ -89,11 +89,19 @@ int aliro_stepup_build_get_response(uint8_t le, uint8_t *out, size_t cap, size_t
 #define ALIRO_STEPUP_MAX_ITEMS   16u
 #define ALIRO_STEPUP_ID_MAX      32u
 
+/**
+ * Step-up credential element digest: SHA-256 hash of a disclosed IssuerSignedItem, with its
+ * digest_id for verification.
+ */
 struct aliro_stepup_digest {
 	uint64_t id;
 	uint8_t hash[32];
 };
 
+/**
+ * Single disclosed IssuerSignedItem from a Step-up document: digest_id (which digest to check
+ * against), tagged (24(bstr(IssuerSignedItem)) bytes for hashing), elem_id (element name).
+ */
 struct aliro_stepup_item {
 	uint64_t digest_id;
 	const uint8_t
@@ -102,6 +110,14 @@ struct aliro_stepup_item {
 	char elem_id[ALIRO_STEPUP_ID_MAX];
 };
 
+/**
+ * Parsed Step-up access document (ISO/IEC 18013-5 mDoc): have_document (0 if device declined),
+ * status (DeviceResponse "3" code), doc_type and name_space (issuer namespace), IssuerAuth
+ * COSE_Sign1 components (protected header, kid, x5chain, payload=24(bstr(MSO)), signature r||s),
+ * MobileSecurityObject (digest algorithm, doc type, disclosed digests), validity dates
+ * (signed/valid_from/valid_until as epoch seconds, with flags), and disclosed IssuerSignedItems
+ * (elem_id, tagged bytes, digest_id for matching against MSO).
+ */
 struct aliro_stepup_doc {
 	int have_document; /* 0 = DeviceResponse carried no documents (device declined) */
 	int status;        /* DeviceResponse "3" */
@@ -150,6 +166,11 @@ struct aliro_stepup_issuer {
 	uint8_t pub[65]; /* P-256 uncompressed issuer public key */
 };
 
+/**
+ * Context for Step-up document verification: issuers (trust store), time_valid/now_epoch (clock
+ * state), access_iteration (stored iteration for replay check), expected_doctype, ecdsa_verify
+ * callback (ES256 over message, takes 65-byte pub, message, 64-byte r||s sig, returns 0 on valid).
+ */
 struct aliro_stepup_verify_ctx {
 	const struct aliro_stepup_issuer *issuers;
 	size_t n_issuers;
@@ -163,6 +184,12 @@ struct aliro_stepup_verify_ctx {
 			    const uint8_t sig[64]);
 };
 
+/**
+ * Verdict of Step-up document verification (ISO/IEC 18013-5 §7.4): valid (all passed steps + >=1
+ * valid element), reject_step (0=accepted, else step 1-6 that failed),
+ * issuer_key_found/issuer_chain_validated/sig_ok/digests_ok/doctype_ok/time_ok/iteration_ok
+ * (per-step flags), valid_elements (count of disclosed items with verified digest).
+ */
 struct aliro_stepup_verdict {
 	int valid;       /* all applicable steps passed AND >=1 valid element */
 	int reject_step; /* 0 = accepted; else the first §7.4 step that failed (1..6) */

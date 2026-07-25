@@ -1,7 +1,22 @@
+/**
+ * @file ble_timeout.c
+ * Aliro BLE timeout supervisor (state machine + reply validator). Core: classify_attribute parses
+ * BLE message type from attribute ID/length; is_allowed_reply maps request→reply types (including
+ * Busy/GeneralError for any); has_response_timeout marks messages that start a timeout window;
+ * collision_replaces_pending resolves priority when incoming messages arrive before the previous
+ * one completes; set_pending / clear_pending manage state transitions. Designed to prevent timeouts
+ * when the phone is responsive and terminate when not.
+ */
 #include "ble_timeout.h"
 
 #include "ble_message.h"
 
+/**
+ * Classify a BLE message by attribute ID and length: returns WOZ_ALIRO_BLE_MALFORMED (bad format),
+ * WOZ_ALIRO_BLE_OK (valid, kind set). Recognizes Busy (id=0, len=0), GeneralError (id=1, len=1),
+ * and ranging-specific types (InitiateRanging, Resume, SetupLater, ResumeLater,
+ * SecureRangingFailed, RangingSuspended).
+ */
 static int classify_attribute(const struct woz_aliro_ble_message *message,
 			      enum woz_aliro_ble_timeout_message *kind)
 {
@@ -119,6 +134,10 @@ int woz_aliro_ble_timeout_classify(const uint8_t *data, size_t data_length,
 	}
 }
 
+/**
+ * Test whether a message expects a response within a timeout window (1/0). Applies to
+ * access/ranging/handshake/control requests.
+ */
 static int has_response_timeout(enum woz_aliro_ble_timeout_message message)
 {
 	return message == WOZ_ALIRO_BLE_TIMEOUT_MESSAGE_INITIATE_ACCESS ||
@@ -134,6 +153,11 @@ static int has_response_timeout(enum woz_aliro_ble_timeout_message message)
 	       message == WOZ_ALIRO_BLE_TIMEOUT_MESSAGE_RESUME_REQUEST;
 }
 
+/**
+ * Test whether reply is a valid response to request: allows Busy/GeneralError for any request, then
+ * checks request-specific reply rules (e.g., InitiateAccess → ApRequest, ApRequest → ApResponse,
+ * InitiateRanging → SetupM1/SetupLater, etc.). Returns 1 (allowed), 0 (not allowed).
+ */
 static int is_allowed_reply(enum woz_aliro_ble_timeout_message request,
 			    enum woz_aliro_ble_timeout_message reply)
 {
@@ -173,6 +197,11 @@ static int is_allowed_reply(enum woz_aliro_ble_timeout_message request,
 	}
 }
 
+/**
+ * Test whether an incoming message should replace a pending one: ResumRequest is replaced by
+ * InitiateRanging/InitiateRangingResume/SuspendRequest; SuspendRequest is replaced by the same
+ * three. Returns 1 (collision), 0 (no collision).
+ */
 static int collision_replaces_pending(enum woz_aliro_ble_timeout_message pending,
 				      enum woz_aliro_ble_timeout_message incoming)
 {
@@ -189,6 +218,10 @@ static int collision_replaces_pending(enum woz_aliro_ble_timeout_message pending
 	return 0;
 }
 
+/**
+ * Set pending message and role (local transmitter if outgoing, local receiver if incoming) in the
+ * BLE timeout state machine.
+ */
 static void set_pending(struct woz_aliro_ble_timeout_state *state,
 			enum woz_aliro_ble_timeout_direction direction,
 			enum woz_aliro_ble_timeout_message message)
@@ -199,12 +232,22 @@ static void set_pending(struct woz_aliro_ble_timeout_state *state,
 	state->pending_message = message;
 }
 
+/**
+ * Clear the pending message and timeout role in the BLE timeout state machine.
+ */
 static void clear_pending(struct woz_aliro_ble_timeout_state *state)
 {
 	state->role = WOZ_ALIRO_BLE_TIMEOUT_IDLE;
 	state->pending_message = WOZ_ALIRO_BLE_TIMEOUT_MESSAGE_UNKNOWN;
 }
 
+/**
+ * Supervise Aliro BLE protocol timeouts in a state machine: track pending messages, role (idle,
+ * local transmitter, local receiver), and deadline. Given a message direction and type, return the
+ * action (ARM timeout, STOP timeout, TERMINATE connection, or HOLD). Validates collisions (incoming
+ * ResumRequest or SuspendRequest can replace pending messages) and enforces request-reply
+ * correspondence.
+ */
 enum woz_aliro_ble_timeout_action
 woz_aliro_ble_timeout_observe(struct woz_aliro_ble_timeout_state *state,
 			      enum woz_aliro_ble_timeout_direction direction,

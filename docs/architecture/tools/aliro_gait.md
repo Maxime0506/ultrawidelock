@@ -29,30 +29,49 @@ One analyzed walk-up: identity, series shape, features (or skip reason).
 
 **called by** `analyze_walkup`
 
+#### `WalkUp.__init__(self, label, txn_index)`
+`tools/aliro_gait.py:68`
+
+Initialize one walk-up record: label and transaction index are fixed; n, dur_s, block_ms, ran, features, and skip are populated by analysis.
+
+### `_median(xs)`
+`tools/aliro_gait.py:82`
+
+Return the median of xs (middle value if odd length, average of two middle values if even).
+
+**called by** `_approach_windows`, `_polyfit2`, `analyze_walkup`
+
 ### `_solve3(a, b)`
-`tools/aliro_gait.py:87`
+`tools/aliro_gait.py:89`
 
 Gaussian elimination for the 3x3 normal equations of the quadratic fit.
 
 **called by** `_polyfit2`
 
 ### `_polyfit2(ts, xs)`
-`tools/aliro_gait.py:104`
+`tools/aliro_gait.py:106`
 
 Least-squares x(t) = a*t^2 + b*t + c; returns (a, b, c).
 
 **called by** `analyze_walkup`  ·  **calls** `_median`, `_solve3`
 
 ### `_resample(ts, xs, dt)`
-`tools/aliro_gait.py:125`
+`tools/aliro_gait.py:127`
 
 Linear interpolation onto a uniform dt grid (missed blocks leave gaps
 in the capture; the spectrum needs even spacing).
 
 **called by** `analyze_walkup`
 
+### `_hann(n)`
+`tools/aliro_gait.py:148`
+
+Return a Hann window of length n as a list; for n < 2 return all 1.0 (no window).
+
+**called by** `_norm_spectrum`, `incremental_cadence_hz`
+
 ### `_dft_power(xs, nfft)`
-`tools/aliro_gait.py:152`
+`tools/aliro_gait.py:155`
 
 Power spectrum, bins 0..nfft/2 (input zero-padded to nfft).
 O(N*K) is fine at these sizes; keeps the tool stdlib-only.
@@ -60,7 +79,7 @@ O(N*K) is fine at these sizes; keeps the tool stdlib-only.
 **called by** `_norm_spectrum`
 
 ### `_norm_spectrum(xs, nfft)`
-`tools/aliro_gait.py:167`
+`tools/aliro_gait.py:170`
 
 Hann-windowed magnitude spectrum normalized by coherent gain, so a
 unit-amplitude sine at a bin center reads ~1.0 regardless of length.
@@ -68,7 +87,7 @@ unit-amplitude sine at a bin center reads ~1.0 regardless of length.
 **called by** `_diff_spectrum`  ·  **calls** `_dft_power`, `_hann`
 
 ### `_diff_spectrum(xs, fs, nfft)`
-`tools/aliro_gait.py:176`
+`tools/aliro_gait.py:179`
 
 Spectrum of the first-differenced series, gain-compensated back to
 amplitude units. Differencing crushes what the polynomial detrend leaves
@@ -80,7 +99,7 @@ unbiased. DC (gain 0) is pinned to zero, which the band never reaches.
 **called by** `_gait_spectra`  ·  **calls** `_norm_spectrum`
 
 ### `_gait_spectra(resid, fs, nfft)`
-`tools/aliro_gait.py:192`
+`tools/aliro_gait.py:195`
 
 (coincidence, full) magnitude spectra of the residual. The coincidence
 spectrum is the min() of the two half-window spectra: at ~26-sample
@@ -92,8 +111,15 @@ full-window spectrum, which has the sharper mainlobe.
 
 **called by** `analyze_walkup`  ·  **calls** `_diff_spectrum`
 
+### `_goertzel_power(xs, f_hz, fs_hz)`
+`tools/aliro_gait.py:211`
+
+Compute the power at frequency f_hz in a signal xs sampled at fs_hz using the Goertzel algorithm: real-time single-pass O(n) equivalent to FFT bin power.
+
+**called by** `incremental_cadence_hz`
+
 ### `incremental_cadence_hz(xs, fs_hz, band_lo, band_hi)`
-`tools/aliro_gait.py:217`
+`tools/aliro_gait.py:221`
 
 Firmware-shaped estimator: first-difference high-pass (kills the
 approach trend), Hann weight over the trailing window, Goertzel bank
@@ -104,7 +130,7 @@ to the FFT answer so the future firmware learner mirrors this exactly.
 **called by** `analyze_walkup`  ·  **calls** `_goertzel_power`, `_hann`
 
 ### `analyze_walkup(label, idx, ranges)`
-`tools/aliro_gait.py:241`
+`tools/aliro_gait.py:245`
 
 Features from one approach's trusted-range series, already windowed to
 the descending phase by _approach_windows.
@@ -112,7 +138,7 @@ the descending phase by _approach_windows.
 **called by** `walkups_from_text`  ·  **calls** `WalkUp`, `_gait_spectra`, `_median`, `_polyfit2`, `_resample`, `incremental_cadence_hz`
 
 ### `_approach_windows(txn)`
-`tools/aliro_gait.py:316`
+`tools/aliro_gait.py:320`
 
 Split one session into its individual approaches.
 
@@ -126,36 +152,81 @@ bolt stamp as before.
 
 **called by** `walkups_from_text`  ·  **calls** `_median`
 
+### `walkups_from_text(label, text)`
+`tools/aliro_gait.py:350`
+
+Parse Aliro Lab event text into transactions, extract individual approaches (windowed ranges) from each, and return a list of WalkUp objects with features and skip reasons analyzed per approach.
+
+**called by** `load_walkups`  ·  **calls** `_approach_windows`, `analyze_walkup`
+
+### `load_walkups(labeled_paths)`
+`tools/aliro_gait.py:361`
+
+Load walk-up event sets from a list of labeled file paths. For each path, open the file and parse all transactions and approaches from its text, returning a list of WalkUp objects with features and skip reasons analyzed per approach.
+
+**called by** `main`  ·  **calls** `walkups_from_text`
+
 ### `classify(walkups)`
-`tools/aliro_gait.py:366`
+`tools/aliro_gait.py:372`
 
 Leave-one-out nearest-centroid over z-scored features. Returns None
 unless there are >= 2 labels with >= 2 analyzed walk-ups each.
 
 **called by** `main`  ·  **calls** `z`
 
+### `z(vec_)`
+`tools/aliro_gait.py:399`
+
+Z-score a feature vector: compute mean and std of each feature across all samples, then return (vec[k] - mean[k]) / std[k] for each k (or 0.0 if std is negligible).
+
+**called by** `classify`
+
+### `render_terminal(walkups, cls, use_color)`
+`tools/aliro_gait.py:425`
+
+Render walk-up data as a terminal table with optional ANSI color. Columns: label, transaction index, event count, duration (s), block (ms), ranged-sample count, cadence (Hz), incident cadence (Hz), prominence, regularity, speed (cm/s), RMS (cm), verdict (CARRY+, carry, or still). Skipped walk-ups show skip reason. If classifier results provided, display leave-one-out accuracy and confusion matrix. Prom weights the cadence estimate (Tier 2); motion verdict combines cadence and approach detection.
+
+**called by** `main`  ·  **calls** `paint`
+
+### `paint(code, text)`
+`tools/aliro_gait.py:427`
+
+Return the string text wrapped in ANSI color code if use_color is true, otherwise return text unchanged.
+
+**called by** `render_terminal`
+
 ### `_scatter_svg(walkups)`
-`tools/aliro_gait.py:522`
+`tools/aliro_gait.py:531`
 
 Cadence vs stride regularity, one dot per walk-up, colored by label:
 the E1 eyeball plot (do the carriers cluster?).
 
 **called by** `render_html`  ·  **calls** `sx`, `sy`
 
-<details><summary>Undocumented (13)</summary>
+### `sx(v)`
+`tools/aliro_gait.py:544`
 
-- `WalkUp.__init__`
-- `_median`
-- `_hann`
-- `_goertzel_power`
-- `walkups_from_text`
-- `load_walkups`
-- `z`
-- `render_terminal`
-- `paint`
-- `sx`
-- `sy`
-- `render_html`
-- `main`
+Map a value v on the x-axis (cadence_hz range) to SVG pixel coordinate m + (v - x_lo) / (x_hi - x_lo) * (wpx - 2*m), where m is margin and wpx is plot width.
 
-</details>
+**called by** `_scatter_svg`
+
+### `sy(v)`
+`tools/aliro_gait.py:548`
+
+Map a value v on the y-axis (regularity range) to SVG pixel coordinate hpx - m - (v - y_lo) / (y_hi - y_lo) * (hpx - 2*m), where m is margin and hpx is plot height (inverted so higher values are higher on the plot).
+
+**called by** `_scatter_svg`
+
+### `render_html(walkups, cls, title)`
+`tools/aliro_gait.py:582`
+
+Render walk-ups as a standalone HTML document with a table of features (cadence, regularity, speed, RMS), a cadence-vs-regularity scatter plot, and (if classifier results provided) a leave-one-out confusion matrix. Title appears in <title> and <h1>.
+
+**called by** `main`  ·  **calls** `_scatter_svg`
+
+### `main(argv)`
+`tools/aliro_gait.py:629`
+
+Parse command-line arguments (label=path pairs or bare paths), load walk-ups from files, run leave-one-out nearest-centroid classifier (if >= 2 labels), and render terminal output (with ANSI color if stdout is a TTY). If -o is given, also render HTML report to that file. Return 2 on argument error, 0 on success, or OSError on file read failure.
+
+**calls** `classify`, `load_walkups`, `render_html`, `render_terminal`

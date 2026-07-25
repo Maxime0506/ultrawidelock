@@ -37,25 +37,77 @@ clamped into the valid accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN].
 
 **called by** `uwb_cirdiag_capture`, `uwb_cirdiag_probe`
 
+### `struct cirdiag_rec`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:125`
+
+Channel impulse response diagnostic record: timestamp (microseconds), sample count, base index,
+and tap array (I/Q magnitude or signed values) for post-processing.
+
 ### `static void cirdiag_drain(void)`
-`modules/woz_uwb/src/driver/uwb_cirdiag.c:133`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:137`
 
 @brief Emit every buffered window as `ev=uwb.cir` lines (oldest first), then empty the ring.
 Called on dump disarm, off the ranging path. Blocking: up to RECS*WIN serial lines.
 
 **called by** `uwb_cirdiag_dump_set_enabled`
 
-<details><summary>Undocumented (10)</summary>
+### `uint32_t uwb_cirdiag_ring_count(void)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:158`
 
-- `cirdiag_rec`
-- `uwb_cirdiag_ring_count`
-- `uwb_cirdiag_set_enabled`
-- `uwb_cirdiag_enabled`
-- `uwb_cirdiag_dump_set_enabled`
-- `uwb_cirdiag_dump_enabled`
-- `uwb_cirdiag_capture`
-- `uwb_cirdiag_window_due`
-- `uwb_cirdiag_probe`
-- `uwb_cirdiag_flush`
+Return the count of CIR windows currently in the ring buffer (0 to CIRDIAG_RING_RECS).
 
-</details>
+### `void uwb_cirdiag_set_enabled(bool on)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:166`
+
+Enable or disable CIA diagnostic capture globally.
+
+### `bool uwb_cirdiag_enabled(void)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:174`
+
+Return true if CIA diagnostic capture is enabled.
+
+### `void uwb_cirdiag_dump_set_enabled(bool on)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:183`
+
+Arm or disarm CIR window capture. When arming, also arms the summary diagnostics. When disarming,
+drains all buffered windows to the console via ev=uwb.cir lines and clears the ring.
+
+**calls** `cirdiag_drain`
+
+### `bool uwb_cirdiag_dump_enabled(void)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:202`
+
+Return true if CIR window dump is armed (enabled and CIA logging armed).
+
+### `bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:213`
+
+Capture one reception's CIR diagnostic snapshot: arm CIA logging on first RX, then latch the
+status, frame length, STS quality/status, and (if window dump is enabled and the radio is idle) a
+fixed-size Ipatov-centred CIR window. Returns true if capture succeeded; false on first RX or if
+already pending. Seqlock-protected; safe to call from RX callback.
+
+**calls** `cirdiag_window_base`
+
+### `bool uwb_cirdiag_window_due(void)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:269`
+
+Return true on every CIRDIAG_CIR_EVERY-th call if capture is enabled, CIA logging is armed, and
+window dump is armed; used to throttle window reads during streaming.
+
+### `void uwb_cirdiag_probe(void)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:283`
+
+Diagnostic: read and print the CIR at four sample offsets (three distinct addresses plus one
+repeat) to verify addressing and detect non-determinism. Requires CIA logging armed (one
+reception taken). Outputs one pass in MID mode (int16 real/imag) and one in FULL mode (raw
+24-bit) at the base offset.
+
+**calls** `cirdiag_window_base`
+
+### `void uwb_cirdiag_flush(void)`
+`modules/woz_uwb/src/driver/uwb_cirdiag.c:345`
+
+Emit the pending CIR snapshot: write the summary line ([ALAB] ev=uwb.diag) with Ipatov and STS
+peak/power/quality fields, and either defer the window to the ring buffer (if window dump is
+enabled) or skip it. Retry up to 3 times if the seqlock detects concurrent capture. Idempotent.

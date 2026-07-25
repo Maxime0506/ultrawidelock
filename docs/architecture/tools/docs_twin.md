@@ -22,8 +22,9 @@ pass.
 
 **discussed in** [`web-twin/README.md`](../../../web-twin/README.md)
 
-<details><summary>Undocumented (1)</summary>
+## API
 
-- `main`
+### `main() -> int`
+`tools/docs_twin.py:61`
 
-</details>
+Copy the digital-twin firmware bundle into the site and inject a call-to-action card into the landing page's explore list.

@@ -27,17 +27,28 @@ Run from the repo root, after the generators and before the link pass.
 
 ## API
 
+### `git(*args: str) -> str`
+`tools/docs_title.py:43`
+
+Run a git command and return its stdout stripped, or an empty string if git is not found or the command fails.
+
+**called by** `main`
+
 ### `retitle(raw: bytes, slots, token: re.Pattern[bytes], repo: bytes) -> tuple[bytes, int]`
-`tools/docs_title.py:52`
+`tools/docs_title.py:53`
 
 Substitute the checkout name inside title slots only; count edits.
 
 **called by** `main`
 
-<details><summary>Undocumented (3)</summary>
+### `fix(m: re.Match[bytes]) -> bytes`
+`tools/docs_title.py:57`
 
-- `git`
-- `fix`
-- `main`
+Replace a single occurrence of the checkout name with the repo name inside a matched title slot; increment the edit counter and return the fixed bytes.
 
-</details>
+### `main() -> int`
+`tools/docs_title.py:69`
+
+Detect worktree name mismatch and retitle all docstring title slots and HTML title tags from checkout name to repo name (one-time per worktree); report count of edits and files touched.
+
+**calls** `git`, `retitle`

@@ -17,13 +17,13 @@ ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewher
 
 ## API
 
+### `launch()`
+`scripts/bootstrap.sh:37`
+
+Execute a command inside the nRF Connect SDK toolchain environment for NCS_VER, forwarding all arguments.
+Wrapper around `nrfutil sdk-manager toolchain launch`.
+
 ### `apply_to()`
-`scripts/bootstrap.sh:125`
+`scripts/bootstrap.sh:127`
 
 Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
-
-<details><summary>Undocumented (1)</summary>
-
-- `launch`
-
-</details>

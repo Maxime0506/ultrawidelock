@@ -30,6 +30,11 @@ enum woz_pn532_apdu_mode {
 	WOZ_PN532_APDU_GET_RESPONSE,
 };
 
+/**
+ * State machine for chunking an ISO 7816 APDU across multiple SPI frames: tracks input buffer,
+ * payload offset and length, amount emitted, expected response length (Le), and mode flags
+ * (extended-length, has-Le). Used by the PN532 driver to split oversized commands.
+ */
 struct woz_pn532_apdu_plan {
 	const uint8_t *input;
 	size_t input_length;

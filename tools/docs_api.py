@@ -139,6 +139,7 @@ def parse_header(text: str) -> list[tuple[int, str, str, str, str]]:
 
 
 def entry_html(path: str, line: int, kind: str, name: str, sig: str, brief: str) -> str:
+    """Render one API entry as HTML: function or macro signature with kind badge, source location, and optional docstring paragraph. Highlights the symbol name in bold."""
     code = html.escape(sig, quote=False).replace(name, f"<b>{name}</b>", 1)
     body = f"\n<p>{brief}</p>" if brief else ""
     return (
@@ -210,6 +211,7 @@ def index_rows(rows: list[tuple[str, str, str, str]]) -> int:
 
 
 def main() -> int:
+    """Fill all rendered site pages with API declarations: parse symbol index, extract signatures and briefs, inject entries into pages, and merge new rows into the search index. Returns count of declarations added to the index, or -1 on error."""
     pages = sorted(SITE.glob("*.html"))
     if not pages:
         print("    no rendered site — nothing to fill")

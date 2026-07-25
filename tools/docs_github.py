@@ -108,6 +108,7 @@ def repo_slug() -> str:
 
 
 def topbar_chip(slug: str, url: str) -> bytes:
+    """Render a GitHub repository link chip for the top navigation bar, showing the repo slug with live star and fork counts populated by JavaScript. The chip targets the provided GitHub URL. Returns encoded HTML."""
     return (
         f'<a class="gh-chip" data-repo="{slug}" href="{url}" target="_blank" '
         f'rel="noopener" aria-label="{slug} on GitHub">{MARK.format(s=15)}'
@@ -120,6 +121,7 @@ def topbar_chip(slug: str, url: str) -> bytes:
 # Styles for everything this pass injects, plus the count fetcher. One block,
 # appended to every page; the quickstart rules are unused off the landing page.
 def tail_block() -> bytes:
+    """Render inline CSS and JavaScript for the GitHub repository chip and quickstart section. The script fetches live star and fork counts from the GitHub API and caches them in localStorage for one hour. Returns encoded HTML."""
     return (
         """<style>
 .gh-chip{display:inline-flex;align-items:center;gap:.55rem;padding:.3rem .8rem;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--ink);text-decoration:none;font-size:.78rem;transition:border-color .15s,background .15s}
@@ -161,6 +163,7 @@ show(d)}).catch(function(){});
 
 
 def hero_button(url: str) -> bytes:
+    """Render a GitHub link button with 15px SVG icon and "GitHub" text."""
     return (
         f'<a class="btn btn-gh" href="{url}" target="_blank" rel="noopener">'
         f"{MARK.format(s=15)}GitHub</a>"
@@ -168,6 +171,7 @@ def hero_button(url: str) -> bytes:
 
 
 def quickstart(url: str) -> bytes:
+    """Render a numbered quickstart checklist with shell commands, formatted for injection into the Get-Running section of the landing page. Each step embeds a command in a copyable chip with the provided URL template applied. Returns encoded HTML."""
     items = []
     for n, (title, aside, cmd) in enumerate(QUICKSTART_STEPS, 1):
         cmd = cmd.format(url=url)
@@ -195,6 +199,7 @@ start at the <a href="esp32-bringup.html">bring-up checklist</a>.</p>
 
 
 def main() -> int:
+    """Inject GitHub repository metadata into the rendered site: a repository chip on every page (anchored to the theme toggle), a GitHub button on the landing page hero section, and a quickstart checklist below the features list. Reports counts of pages modified and returns 0 on success or 1 if layout anchors are missing. Requires the site to be already rendered and origin remote configured."""
     index = SITE / "index.html"
     if not index.is_file():
         print("    no rendered site — nothing to link")

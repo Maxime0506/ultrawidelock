@@ -32,6 +32,8 @@ P="$TREE/ports/nrf5340dk/patches"
 if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
   launch() { "$@"; }
 else
+  # Execute a command inside the nRF Connect SDK toolchain environment for NCS_VER, forwarding all arguments.
+  # Wrapper around `nrfutil sdk-manager toolchain launch`.
   launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
 fi
 

@@ -31,8 +31,27 @@ Malformed trace (bad magic, version, or truncated record).
 
 **called by** `parse_trace`
 
+### `class Trace`
+`tools/flight_recorder.py:52`
+
+In-memory representation of a single UWB walk-up trace: session metadata, radio configuration, received frames, and end-of-trace marker.
+
+**called by** `parse_trace`
+
+#### `Trace.__init__(self)`
+`tools/flight_recorder.py:54`
+
+Initialize an empty trace with null metadata, config, and end marker, and an empty frame list.
+
+### `_is_hex_line(s)`
+`tools/flight_recorder.py:62`
+
+Return true if the string is a valid even-length sequence of hexadecimal digits.
+
+**called by** `read_hex_from_log`
+
 ### `read_hex_from_log(text)`
-`tools/flight_recorder.py:65`
+`tools/flight_recorder.py:68`
 
 Concatenate the pure-hex `[FREC] <hex>` payload lines into bytes. The
 `[FREC] begin ...` / `[FREC] end` markers contain spaces so they are not
@@ -41,7 +60,7 @@ pure hex and are skipped. Returns b"" if the log holds no FREC data.
 **called by** `load_trace_bytes`  ·  **calls** `_is_hex_line`
 
 ### `load_trace_bytes(data)`
-`tools/flight_recorder.py:80`
+`tools/flight_recorder.py:83`
 
 Return raw trace bytes from either a binary `.frc` (starts with the magic)
 or a serial log carrying `[FREC]` hex lines.
@@ -49,14 +68,14 @@ or a serial log carrying `[FREC]` hex lines.
 **called by** `main`  ·  **calls** `read_hex_from_log`
 
 ### `parse_trace(data)`
-`tools/flight_recorder.py:92`
+`tools/flight_recorder.py:95`
 
 Parse trace bytes into a Trace. Mirrors fr_read_next().
 
 **called by** `main`  ·  **calls** `Trace`, `TraceError`
 
 ### `extract_frames(trace)`
-`tools/flight_recorder.py:147`
+`tools/flight_recorder.py:150`
 
 The received UWB frames, in order (deduped-preserving is the caller's job).
 Only frame bytes — no key material.
@@ -64,7 +83,7 @@ Only frame bytes — no key material.
 **called by** `main`, `summarize`
 
 ### `write_corpus(frames, outdir)`
-`tools/flight_recorder.py:153`
+`tools/flight_recorder.py:156`
 
 Write each distinct frame as frame_NNNN.bin under outdir. Returns the
 number of files written (duplicates collapse to one).
@@ -72,17 +91,15 @@ number of files written (duplicates collapse to one).
 **called by** `main`
 
 ### `summarize(trace)`
-`tools/flight_recorder.py:170`
+`tools/flight_recorder.py:173`
 
 A human-readable one-session report.
 
 **called by** `main`  ·  **calls** `extract_frames`
 
-<details><summary>Undocumented (4)</summary>
+### `main(argv)`
+`tools/flight_recorder.py:208`
 
-- `Trace`
-- `Trace.__init__`
-- `_is_hex_line`
-- `main`
+Parse a capture log or binary trace file, print a summary, optionally write a .frc sidecar, and optionally extract frames into a corpus directory.
 
-</details>
+**calls** `extract_frames`, `load_trace_bytes`, `parse_trace`, `summarize`, `write_corpus`

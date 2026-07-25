@@ -6,14 +6,27 @@ Protocol constants and wire formats come from Aliro Specification 1.0.
 
 **depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](advertising_core.h.md)
 
-<details><summary>Undocumented (21)</summary>
+## API
+
+### `const char *AliroError::ToString() const`
+`modules/woz_aliro_stack/src/aliro_stack.cpp:102`
+
+Return a human-readable null-terminated string for this error code. Valid for all error enum
+values; returns "Unknown error" if the code is out of bounds.
+
+### `AliroError AliroError::FromInt(int ec)`
+`modules/woz_aliro_stack/src/aliro_stack.cpp:113`
+
+Convert an integer error code to an AliroError object. Returns ALIRO_ERROR_UNKNOWN if the code is
+out of bounds (negative or >= ALIRO_ERROR_MAX); otherwise returns the corresponding error enum
+value.
+
+<details><summary>Undocumented (19)</summary>
 
 - `IsDigit`
 - `ParseDecimal`
 - `IsLeapYear`
 - `IsValidDate`
-- `ToString`
-- `FromInt`
 - `FromTimestamp`
 - `SetVersion`
 - `SetNotification`

@@ -25,6 +25,10 @@ enum woz_aliro_auth_result {
 	WOZ_ALIRO_AUTH_WRONG_CONTENT = -5,
 };
 
+/**
+ * Parsed NFC AUTH0 command: authentication policy and protocol version from the reader, reader
+ * ephemeral public key, transaction ID, reader ID, and optional vendor extension.
+ */
 struct woz_aliro_auth0_command {
 	uint8_t command_parameters;
 	uint8_t authentication_policy;
@@ -36,6 +40,10 @@ struct woz_aliro_auth0_command {
 	size_t vendor_extension_length;
 };
 
+/**
+ * Parsed NFC AUTH0 response: credential ephemeral public key (65 bytes), cryptogram (variable
+ * length), and optional vendor extension.
+ */
 struct woz_aliro_auth0_response {
 	uint8_t credential_ephemeral_public_key[WOZ_ALIRO_PUBLIC_KEY_SIZE];
 	const uint8_t *cryptogram;
@@ -44,6 +52,11 @@ struct woz_aliro_auth0_response {
 	size_t vendor_extension_length;
 };
 
+/**
+ * Parsed NFC AUTH1 response: credential public key (65 bytes), signature (variable length),
+ * signaling bitmap, and two signed timestamps (credential and revocation, each 20 bytes if
+ * present).
+ */
 struct woz_aliro_auth1_response {
 	uint8_t credential_public_key[WOZ_ALIRO_PUBLIC_KEY_SIZE];
 	uint8_t signature[WOZ_ALIRO_SIGNATURE_SIZE];

@@ -1,6 +1,12 @@
 <!-- generated documentation — edit the source, not this file -->
 # `modules/woz_aliro_stack/src/session.cpp`
 
+@file session.cpp
+Aliro reader BLE session state machine and cryptographic session context. Manages NFC APDU
+limits, response timeouts, connection setup, fast-path and standard key derivation, message
+encryption and decryption, and reader-status notifications. Processes events from the BLE
+transport and application layer.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](../modules.woz_aliro_stack.src.protocol/access_document.h.md), [`modules/woz_aliro_stack/src/protocol/ble_message.h`](../modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](../modules.woz_aliro_stack.src.protocol/ble_timeout.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](../modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](../modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](../modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md)
 
 ```mermaid

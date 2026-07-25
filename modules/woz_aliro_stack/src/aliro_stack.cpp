@@ -95,12 +95,21 @@ bool IsValidDate(int year, int month, int day)
 
 } // namespace
 
+/**
+ * Return a human-readable null-terminated string for this error code. Valid for all error enum
+ * values; returns "Unknown error" if the code is out of bounds.
+ */
 const char *AliroError::ToString() const
 {
 	const unsigned int code = static_cast<unsigned int>(mCode);
 	return code < std::size(kErrorStrings) ? kErrorStrings[code] : "Unknown error";
 }
 
+/**
+ * Convert an integer error code to an AliroError object. Returns ALIRO_ERROR_UNKNOWN if the code is
+ * out of bounds (negative or >= ALIRO_ERROR_MAX); otherwise returns the corresponding error enum
+ * value.
+ */
 AliroError AliroError::FromInt(int ec)
 {
 	if (ec < 0 || ec >= ALIRO_ERROR_MAX) {
