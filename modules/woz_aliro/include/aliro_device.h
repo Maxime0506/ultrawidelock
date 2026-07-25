@@ -104,6 +104,11 @@ int aliro_device_derive_session(const uint8_t shared_x[32], const uint8_t txid[1
 
 /* ---- full initiator state machine (uses EC via aliro_prim) ---- */
 
+/* Cap on the BleSK salt: reader_supported_versions || selected_version, and the
+ * readers bound their advertised list at 8 (ALIRO_MAX_VERSIONS, aliro_ble.c), so
+ * 2 * (8 + 1) bytes is the most §11.8.1 can ask for. */
+#define ALIRO_DEV_BLESK_SALT_MAX 18u
+
 enum aliro_device_phase {
 	ALIRO_DEV_IDLE = 0,
 	ALIRO_DEV_SENT_AUTH0_RESP,
@@ -131,6 +136,17 @@ struct aliro_device {
 	struct aliro_dev_secchan sc;     /* Access-Protocol channel (S0/S1), from AUTH1 */
 	struct aliro_dev_secchan sc_ble; /* BleSK ranging channel, from the same block */
 
+	/* §11.8.1 BleSK salt = reader_supported_versions || selected_version. It is a
+	 * property of the PEER, not of us: our ESP32 reader publishes {0x0100} alone
+	 * (salt 01 00 01 00) while the nRF publishes {0x0100, 0x0009} (salt
+	 * 01 00 00 09 01 00, measured on air 2026-07-25), so it cannot be a constant.
+	 * aliro_device_init installs the single-version v1.0 default; any transport
+	 * that has really read the peer's GATT list MUST override it via
+	 * aliro_device_set_blesk_salt, or the ranging channel derives a key the peer
+	 * does not share and the first sealed SDU fails as a GCM tag mismatch. */
+	uint8_t blesk_salt[ALIRO_DEV_BLESK_SALT_MAX];
+	size_t blesk_salt_len;
+
 	const uint8_t *a5; /* 0xA5 proprietary-info TLV for the salt (CSA v1.0 default) */
 	size_t a5n;
 
@@ -142,6 +158,12 @@ struct aliro_device {
  * 0xA5 salt TLV. Returns 0 on success, <0 if the EC public-key recovery fails. */
 int aliro_device_init(struct aliro_device *d, const uint8_t cred_priv[32],
 		      const uint8_t reader_id[32], const uint8_t reader_verif_pub[65]);
+
+/* Install the peer's real BleSK salt, overriding the v1.0 default. Build it with
+ * aliro_ble_central_blesk_salt from the versions the GATT reader-SPSM READ
+ * actually returned. Must be called before AUTH1, which is where the ranging
+ * channel is derived. Returns 0, or -1 on an empty/odd/oversized salt. */
+int aliro_device_set_blesk_salt(struct aliro_device *d, const uint8_t *salt, size_t len);
 
 /* Feed one inbound Access-Protocol command payload (the bytes inside the BLE
  * envelope: an ISO7816 APDU) and produce the response payload (<TLV|ct||tag> SW).

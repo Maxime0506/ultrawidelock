@@ -381,6 +381,65 @@ static void test_blesk_channel(void)
 	}
 }
 
+/* ---- test 4b: the BleSK salt is the PEER's version list, not a constant ----
+ *
+ * §11.8.1: salt = reader_supported_versions || selected_version. Our ESP32 reader
+ * publishes {0x0100} alone, but the nRF5340 reader was measured on air publishing
+ * {0x0100, 0x0009} (2026-07-25, GATT reader-SPSM READ), so a device that hardcodes
+ * the single-version salt derives a BleSK the nRF does not share. Those two salts
+ * and their expected divergence are what this pins.
+ */
+static void test_blesk_salt(void)
+{
+	printf("\n== BleSK salt follows the peer's published versions ==\n");
+
+	/* both halves v1.0: what a single-version peer (our ESP32 reader) implies */
+	static const uint8_t salt_v10[] = {0x01, 0x00, 0x01, 0x00};
+	/* {0x0100, 0x0009} published, 0x0100 selected: measured from the nRF reader */
+	static const uint8_t salt_nrf[] = {0x01, 0x00, 0x00, 0x09, 0x01, 0x00};
+
+	uint8_t block[ALIRO_KEY_BLOCK_LEN];
+
+	for (size_t i = 0; i < sizeof(block); i++) {
+		block[i] = (uint8_t)(0x40u + i);
+	}
+
+	struct aliro_dev_secchan ch_v10, ch_nrf;
+	uint8_t r_v10[32], d_v10[32], r_nrf[32], d_nrf[32];
+
+	T_OK("salt.v10.init",
+	     aliro_dev_blesk_init(&ch_v10, block, salt_v10, sizeof(salt_v10)) == 0);
+	T_OK("salt.nrf.init", aliro_dev_blesk_init(&ch_nrf, block, salt_nrf, sizeof(salt_nrf)) == 0);
+	T_OK("salt.v10.matches-derive",
+	     aliro_crypto_derive_ble_keys(block, salt_v10, sizeof(salt_v10), r_v10, d_v10) == 0 &&
+		     memcmp(ch_v10.s0, r_v10, 32) == 0 && memcmp(ch_v10.s1, d_v10, 32) == 0);
+	T_OK("salt.nrf.matches-derive",
+	     aliro_crypto_derive_ble_keys(block, salt_nrf, sizeof(salt_nrf), r_nrf, d_nrf) == 0 &&
+		     memcmp(ch_nrf.s0, r_nrf, 32) == 0 && memcmp(ch_nrf.s1, d_nrf, 32) == 0);
+	/* The whole point: same block, different published list, different key. If this
+	 * ever passes as equal the salt has stopped reaching the KDF. */
+	T_OK("salt.v10!=nrf.reader", memcmp(ch_v10.s0, ch_nrf.s0, 32) != 0);
+	T_OK("salt.v10!=nrf.device", memcmp(ch_v10.s1, ch_nrf.s1, 32) != 0);
+
+	/* setter validation, on a zeroed struct so this needs no EC */
+	struct aliro_device d;
+
+	memset(&d, 0, sizeof(d));
+	T_OK("salt.set.ok", aliro_device_set_blesk_salt(&d, salt_nrf, sizeof(salt_nrf)) == 0);
+	T_OK("salt.set.stored",
+	     d.blesk_salt_len == sizeof(salt_nrf) &&
+		     memcmp(d.blesk_salt, salt_nrf, sizeof(salt_nrf)) == 0);
+	T_OK("salt.set.rejects-null", aliro_device_set_blesk_salt(&d, NULL, 4) == -1);
+	T_OK("salt.set.rejects-short", aliro_device_set_blesk_salt(&d, salt_nrf, 2) == -1);
+	T_OK("salt.set.rejects-odd", aliro_device_set_blesk_salt(&d, salt_nrf, 5) == -1);
+	T_OK("salt.set.rejects-oversized",
+	     aliro_device_set_blesk_salt(&d, salt_nrf, ALIRO_DEV_BLESK_SALT_MAX + 2u) == -1);
+	/* a rejected salt must not have disturbed the accepted one */
+	T_OK("salt.set.reject-leaves-prior",
+	     d.blesk_salt_len == sizeof(salt_nrf) &&
+		     memcmp(d.blesk_salt, salt_nrf, sizeof(salt_nrf)) == 0);
+}
+
 /* ---- test 5: full standard-path loopback (target-gated: needs real EC) ---- */
 
 #if defined(ALIRO_DEVICE_HAVE_EC)
@@ -406,6 +465,15 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 
 	if (aliro_device_init(&dev, cred_priv, reader_id, reader_verif_pub) != 0) {
 		return -1;
+	}
+	/* The loopback's peer is our own reader, which publishes v1.0 alone, so it runs
+	 * on init's default salt and every ranging assert below stays valid unchanged. */
+	{
+		static const uint8_t want[] = {0x01, 0x00, 0x01, 0x00};
+
+		T_OK("loopback.blesk-salt-default",
+		     dev.blesk_salt_len == sizeof(want) &&
+			     memcmp(dev.blesk_salt, want, sizeof(want)) == 0);
 	}
 
 	/* reader: ephemeral + txid -> AUTH0 */
@@ -624,6 +692,7 @@ int aliro_device_selftest(void)
 	test_secchan();
 	test_key_schedule();
 	test_blesk_channel();
+	test_blesk_salt();
 
 	printf("\n== full standard-path loopback ==\n");
 #if defined(ALIRO_DEVICE_HAVE_EC)

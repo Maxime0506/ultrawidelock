@@ -210,7 +210,28 @@ int aliro_device_init(struct aliro_device *d, const uint8_t cred_priv[32],
 	d->a5 = k_a5_csa_v1;
 	d->a5n = sizeof(k_a5_csa_v1);
 	d->version = ALIRO_DEV_VERSION;
+	/* Default salt for a peer that publishes v1.0 and nothing else: the list half
+	 * and the selected half are both ALIRO_DEV_VERSION. Correct against our ESP32
+	 * reader, wrong against any multi-version peer — see the struct field. */
+	d->blesk_salt[0] = (uint8_t)(ALIRO_DEV_VERSION >> 8);
+	d->blesk_salt[1] = (uint8_t)(ALIRO_DEV_VERSION & 0xffu);
+	d->blesk_salt[2] = d->blesk_salt[0];
+	d->blesk_salt[3] = d->blesk_salt[1];
+	d->blesk_salt_len = 4;
 	d->phase = ALIRO_DEV_IDLE;
+	return 0;
+}
+
+int aliro_device_set_blesk_salt(struct aliro_device *d, const uint8_t *salt, size_t len)
+{
+	/* Every entry is a big-endian u16 and the selected version is always appended,
+	 * so a usable salt is even and holds at least two of them. */
+	if (d == NULL || salt == NULL || len < 4u || (len & 1u) != 0u ||
+	    len > ALIRO_DEV_BLESK_SALT_MAX) {
+		return -1;
+	}
+	memcpy(d->blesk_salt, salt, len);
+	d->blesk_salt_len = len;
 	return 0;
 }
 
@@ -280,20 +301,16 @@ int aliro_device_on_command(struct aliro_device *d, const uint8_t *ap_payload, s
 		}
 		/* Same block feeds the BleSK ranging channel (§11.8.1), which must be up
 		 * before the reader's AP-Completed arrives — that SDU is the first thing
-		 * sealed under it. Salt = reader_supported_versions || selected_version;
-		 * v1.0 is the only version either side speaks, so both halves are
-		 * ALIRO_DEV_VERSION and the salt is 01 00 01 00 (mirrors the reader's
-		 * init_ble_channel). */
-		{
-			const uint8_t ble_salt[4] = {(uint8_t)(ALIRO_DEV_VERSION >> 8),
-						     (uint8_t)(ALIRO_DEV_VERSION & 0xffu),
-						     (uint8_t)(ALIRO_DEV_VERSION >> 8),
-						     (uint8_t)(ALIRO_DEV_VERSION & 0xffu)};
-
-			if (aliro_dev_blesk_init(&d->sc_ble, block, ble_salt, sizeof(ble_salt)) !=
+		 * sealed under it. Salt = reader_supported_versions || selected_version,
+		 * which is the PEER's published list and so cannot be a constant:
+		 * aliro_device_init defaults it to the v1.0-only 01 00 01 00 and a
+		 * transport that read the peer's GATT list overrides it. A zero length
+		 * means the struct was cleared behind init's back; fail here rather than
+		 * derive a key the peer does not share. */
+		if (d->blesk_salt_len == 0u ||
+		    aliro_dev_blesk_init(&d->sc_ble, block, d->blesk_salt, d->blesk_salt_len) !=
 			    0) {
-				goto fail;
-			}
+			goto fail;
 		}
 		/* Sign the device-usage transcript with the credential key, then build +
 		 * seal the AUTH1Response (device signature + presented credential key). */

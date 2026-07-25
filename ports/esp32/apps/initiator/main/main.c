@@ -45,8 +45,11 @@ static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *
 		ESP_LOGI(TAG, "  version[%u] 0x%04x", (unsigned)i, (unsigned)peer->versions[i]);
 	}
 
-	/* The version list is the BleSK salt input; showing it here makes the value
-	 * the next slice will feed to aliro_dev_blesk_init visible on the bench. */
+	/* The version list is the BleSK salt input (§11.8.1). Logging it is all we can
+	 * do until this app owns a struct aliro_device, which needs a credential; the
+	 * next slice hands these exact bytes to aliro_device_set_blesk_salt before
+	 * AUTH1. Do not let it fall back to the v1.0 default: the nRF reader publishes
+	 * two versions, so the default derives a BleSK it does not share. */
 	uint8_t salt[2u * (ALIRO_BLE_CENTRAL_MAX_VERSIONS + 1u)];
 	size_t salt_len = 0;
 
