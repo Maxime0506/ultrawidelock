@@ -11,6 +11,7 @@
 #include "board_pins.h"
 #include "deca_device_api.h"
 #include "dw3000_spi.h"
+#include "uwb_cirdiag.h" /* uwb_cirdiag_flush — emit latched CIA diag off the event path */
 #include "esp_cpu.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
@@ -91,6 +92,9 @@ static void dw3000_isr_task(void *arg)
 			dwt_isr();
 		}
 		g_dw_cyc_isrdone = esp_cpu_get_cycle_count();
+		/* IRQ line drained, next slot is ≥1 slot away: emit the CIA diag snapshot the
+		 * RX shim latched (uwb_cirdiag, lab-armed; no-op while disarmed). */
+		uwb_cirdiag_flush();
 	}
 }
 

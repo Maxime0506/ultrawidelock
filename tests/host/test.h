@@ -40,6 +40,7 @@ void t_eqi_(const char *name, long got, long want, const char *file, int line);
 void test_aliro_advertising(void);
 void test_aliro_ble(void);
 void test_aliro_nfc(void);
+void test_pn532(void);
 void test_ccc_kdf(void);
 void test_ccc_mac(void);
 void test_ccc_sts(void);
@@ -68,6 +69,7 @@ void test_ccc_shim_wrap(void);
 void test_uwb_min(void);
 void test_uwb_isr(void);
 void test_uwb_rxdiag(void);
+void test_uwb_cirdiag(void);
 void test_uwb_selftest(void);
 void test_aliro_shell(void);
 

@@ -24,6 +24,7 @@ int main(void)
 	test_uwb_min();
 	test_uwb_isr();
 	test_uwb_rxdiag();
+	test_uwb_cirdiag();
 	test_uwb_selftest();
 	test_aliro_shell();
 

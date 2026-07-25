@@ -47,6 +47,12 @@ set(WOZ_SRCS
     "port/woz_wrap_stubs.c"
 )
 
+# CIA/CIR diagnostics: per-reception first-path summary + windowed CIR tap dump
+# (gated, default n; the RX-shim call sites no-op when unset).
+if(CONFIG_WOZ_UWB_CIRDIAG)
+    list(APPEND WOZ_SRCS "${WOZ}/driver/uwb_cirdiag.c")
+endif()
+
 # Flight recorder: record a live walk-up into a RAM ring for host replay
 # (gated, default n; the ccc_shim_rx.c call sites no-op when unset).
 if(CONFIG_WOZ_FLIGHT_RECORDER)
