@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**171 subsystems in 28 directories · 1145/1243 symbols documented (92%)**
+**171 subsystems in 28 directories · 1239/1243 symbols documented (99%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -49,10 +49,10 @@ flowchart LR
 | [`modules/woz_aliro/include/`](architecture/modules.woz_aliro.include/README.md) | 11 | 26/26 (100%) |
 | [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 16 | 201/201 (100%) |
 | [`modules/woz_aliro_ecp/src/`](architecture/modules.woz_aliro_ecp.src/README.md) | 1 | 5/5 (100%) |
-| [`modules/woz_aliro_stack/src/`](architecture/modules.woz_aliro_stack.src/README.md) | 4 | 4/77 (5%) |
+| [`modules/woz_aliro_stack/src/`](architecture/modules.woz_aliro_stack.src/README.md) | 4 | 77/77 (100%) |
 | [`modules/woz_aliro_stack/src/protocol/`](architecture/modules.woz_aliro_stack.src.protocol/README.md) | 14 | 67/67 (100%) |
 | [`modules/woz_nfc/include/woz_nfc/`](architecture/modules.woz_nfc.include.woz_nfc/README.md) | 1 | 1/1 (100%) |
-| [`modules/woz_nfc/src/`](architecture/modules.woz_nfc.src/README.md) | 9 | 43/64 (67%) |
+| [`modules/woz_nfc/src/`](architecture/modules.woz_nfc.src/README.md) | 9 | 64/64 (100%) |
 | [`modules/woz_port/include/`](architecture/modules.woz_port.include/README.md) | 2 | 12/12 (100%) |
 | [`modules/woz_uwb/src/aliro/`](architecture/modules.woz_uwb.src.aliro/README.md) | 10 | 83/83 (100%) |
 | [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/README.md) | 2 | 4/4 (100%) |
@@ -76,7 +76,7 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `8bbfb55`.*
+*Mined from git history as of `fd68a7f`.*
 
 **Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (19 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (14 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (11 commits), [`scripts/docs.sh`](architecture/scripts/docs.sh.md) (9 commits), [`tools/docs_start.py`](architecture/tools/docs_start.md) (8 commits).
 
