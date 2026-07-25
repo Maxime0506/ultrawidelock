@@ -126,7 +126,7 @@ config WOZ_RSSI_GATE_POLL_MS
 	  How often the transport reads the controller RSSI while the Aliro
 	  L2CAP channel is up (one HCI Read RSSI per period; negligible next
 	  to the UWB RX it replaces). The first read fires at channel-open so
-	  a connect-at-the-door walk-up is never delayed by the poll cadence.
+	  a connect-at-the-door walk-up is never delayed by the poll interval.
 
 config WOZ_ALIRO_STEPUP
 	bool "Enable the Aliro step-up (Access Document) phase"

@@ -138,6 +138,13 @@ The study this instrumentation exists for: **mA versus unlock latency versus
 approach speed** on a bare DW3000, gated versus ungated. Prerequisite reading
 for anyone putting this in a retrofit deadbolt.
 
+> **Not run yet.** No power capture exists. What follows is the protocol and the
+> tooling, both ready; the current numbers are missing and the case for the gate
+> currently rests on radio duty cycle rather than measured milliamps. The
+> behavioural results further down *are* measured. If you have an analyzer and a
+> provisioned phone, this is the gap to close, and `--ppk` will take a CSV from
+> anything that can emit `<t_ms>,<current_uA>` rows.
+
 ### Bench setup
 
 1. Power analyzer (PPK2 in source-meter mode, or a Joulescope) inline on the
