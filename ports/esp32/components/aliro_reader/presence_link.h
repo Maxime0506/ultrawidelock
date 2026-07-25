@@ -26,17 +26,12 @@
 extern "C" {
 #endif
 
-/* Load the pairing key and generate or load the device signing key. Call once after
- * the reader is up.
+/* Generate or load the device signing key. Call once after the reader is up.
  *
  * drive_wallet_grant: send the phone the Reader-Status-Changed grant/relock as the
  * presence verdict changes. Pass false from any app that already drives that from
  * its own lock state, or the two owners will contradict each other. */
 void presence_link_init(bool drive_wallet_grant);
-
-/* Persist a 32-byte pairing key to NVS and use it immediately. 0 on success,
- * negative on an NVS error. Also reachable as `presence key <hex>`. */
-int presence_link_set_key(const uint8_t key[32]);
 
 /* Console handler for the `presence` command; registered by the app shell. */
 int presence_link_cmd(int argc, char **argv);

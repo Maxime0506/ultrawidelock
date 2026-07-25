@@ -14,7 +14,6 @@
  * overrun rather than a compile error, so it is checked at compile time. */
 _Static_assert(ALIRO_ASSERT_SIG_LEN == ALIRO_P256_SIG, "assertion signature size != P-256 sig");
 _Static_assert(ALIRO_ASSERT_PUB_LEN == ALIRO_P256_POINT, "assertion pubkey size != P-256 point");
-_Static_assert(ALIRO_ASSERT_KEY_LEN == ALIRO_P256_SCALAR, "assertion key size != P-256 scalar");
 
 int aliro_assert_ec_sign(void *ctx, const uint8_t *msg, size_t msg_len,
 			 uint8_t sig[ALIRO_ASSERT_SIG_LEN])

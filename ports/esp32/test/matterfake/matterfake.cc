@@ -927,6 +927,8 @@ esp_err_t bsp_iot_button_create(button_handle_t btn_array[], int *btn_cnt, int b
 
 /* ---- aliro reader / ble / lab / lat / uwb stubs ------------------------------------ */
 int mfk_reader_start_calls;
+int mfk_status_tick_calls;
+int64_t mfk_status_tick_last_ms;
 int mfk_reader_start_rc;
 int mfk_ble_prepare_null;
 int mfk_notify_unlock_calls;
@@ -965,6 +967,15 @@ int aliro_reader_start_attached(void)
 {
 	mfk_reader_start_calls++;
 	return mfk_reader_start_rc;
+}
+
+/* Released by the approach loop, not at startup: a held Wallet status only goes
+ * out because this is called every pass, so the count is recorded rather than
+ * swallowed and the wiring test can assert the loop really drives it. */
+void aliro_reader_status_tick(int64_t now_ms)
+{
+	mfk_status_tick_calls++;
+	mfk_status_tick_last_ms = now_ms;
 }
 
 const void *aliro_reader_ble_prepare(void)
@@ -1194,6 +1205,8 @@ void mfk_reset(void)
 	mfk_bsp_button_calls = 0;
 	mfk_reader_start_calls = 0;
 	mfk_reader_start_rc = 0;
+	mfk_status_tick_calls = 0;
+	mfk_status_tick_last_ms = 0;
 	mfk_ble_prepare_null = 0;
 	mfk_notify_unlock_calls = 0;
 	mfk_notify_unlock_last = -1;

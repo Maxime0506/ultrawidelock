@@ -1865,8 +1865,13 @@ int aliro_reader_provision_clear(void)
 /* ---- Identity clone (bench: replicate a reader onto a second board) ------ *
  * Serialise/adopt the full identity + trust store so a phone's existing Wallet
  * credential transacts with a second device carrying the same reader identity.
- * export_blob emits sign_priv; the console commands that reach these are
- * compiled only under CONFIG_WOZ_ALIRO_CLONE, off in production. */
+ *
+ * export_blob emits sign_priv. These functions are NOT compile-gated; only the
+ * console commands that reach them are, under CONFIG_WOZ_ALIRO_CLONE (off by
+ * default). With that option off nothing in the tree calls them, so whether the
+ * code reaches the image is left to --gc-sections rather than guaranteed. Treat
+ * the option, not this file, as the control: a board built with it on will hand
+ * the reader private key to anyone holding the USB cable. */
 
 // Serialise the reader's current identity + trust store into a self-describing blob
 // (aliro_prov_serialize format) so it can be loaded onto a second board. Snapshots

@@ -44,7 +44,7 @@ target_src() {
 # Extra sources a target links beyond its parser (dependencies compiled in).
 target_extra() {
 	case "$1" in
-	aliro_assert) echo "$APDU_SRC/aliro_hash.c" ;; # HMAC/SHA the verifier calls
+	aliro_assert) echo "$APDU_SRC/aliro_hash.c" ;; # SHA-256 behind cred_id
 	*) echo "" ;;
 	esac
 }

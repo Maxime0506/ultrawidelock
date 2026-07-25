@@ -51,14 +51,11 @@ extern "C" {
 
 #define ALIRO_ASSERT_NONCE_LEN  16u
 #define ALIRO_ASSERT_CREDID_LEN 8u  /* first 8 bytes of SHA-256(credential pub) */
-#define ALIRO_ASSERT_MAC_LEN    32u /* HMAC-SHA256 tag */
 #define ALIRO_ASSERT_SIG_LEN    64u /* ECDSA-P256 signature, r||s, 32 bytes each */
-#define ALIRO_ASSERT_KEY_LEN    32u /* symmetric pairing key */
 #define ALIRO_ASSERT_PUB_LEN    65u /* uncompressed P-256 point, 0x04 || X || Y */
 
-/* Signed prefix is identical for both algorithms; only the trailing tag differs. */
+/* The signed prefix; only the trailing signature follows it. */
 #define ALIRO_ASSERT_SIGNED_LEN 47u
-#define ALIRO_ASSERT_WIRE_HMAC  (ALIRO_ASSERT_SIGNED_LEN + ALIRO_ASSERT_MAC_LEN) /* 79 */
 #define ALIRO_ASSERT_WIRE_P256  (ALIRO_ASSERT_SIGNED_LEN + ALIRO_ASSERT_SIG_LEN) /* 111 */
 #define ALIRO_ASSERT_WIRE_MAX   ALIRO_ASSERT_WIRE_P256 /* size any receive buffer by this */
 
@@ -69,7 +66,9 @@ extern "C" {
  * guess and so a frame can never be verified under the algorithm it was not
  * built for. Values are wire-visible; do not renumber. */
 enum aliro_assert_alg {
-	ALIRO_ASSERT_ALG_HMAC_SHA256 = 1,
+	/* 1 was HMAC-SHA256, retired with the paired-host PAM path it existed for.
+	 * Deliberately not reused: a v1 frame must reject as unknown-alg rather
+	 * than be reinterpreted under a scheme it was never signed with. */
 	ALIRO_ASSERT_ALG_ECDSA_P256 = 2,
 };
 
@@ -83,8 +82,8 @@ enum aliro_assert_status {
  * The assertion fields. Wire layout (big-endian multi-byte), the tag covers
  * every byte before it:
  *   magic(2)=A1 50 | version(1)=02 | alg(1) | status(1) | nonce(16) |
- *   cred_id(8) | distance_cm(2) | uptime_ms(8) | unix_ms(8) | tag(32 or 64)
- * = 79 bytes with an HMAC tag, 111 with a P-256 signature.
+ *   cred_id(8) | distance_cm(2) | uptime_ms(8) | unix_ms(8) | sig(64)
+ * = 111 bytes.
  */
 struct aliro_assert {
 	uint8_t status;                           /* enum aliro_assert_status */
@@ -142,11 +141,6 @@ typedef int (*aliro_assert_sign_fn)(void *ctx, const uint8_t *msg, size_t msg_le
 typedef int (*aliro_assert_verify_fn)(void *ctx, const uint8_t *msg, size_t msg_len,
 				      const uint8_t sig[ALIRO_ASSERT_SIG_LEN]);
 
-/* Serialise + HMAC an assertion into an ALIRO_ASSERT_WIRE_HMAC-byte frame under
- * key. Returns 0 and sets *wire_len; -1 if wire_cap is too small. */
-int aliro_assert_build(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const struct aliro_assert *a,
-		       uint8_t *wire, size_t wire_cap, size_t *wire_len);
-
 /* Serialise an assertion and have sign() sign it, producing an
  * ALIRO_ASSERT_WIRE_P256-byte frame. Returns 0 and sets *wire_len; -1 if
  * wire_cap is too small, sign is NULL, or sign() fails. */
@@ -154,32 +148,24 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
 			    uint8_t *wire, size_t wire_cap, size_t *wire_len);
 
 /*
- * Parse + fully verify a P-256 frame. Identical to aliro_assert_verify except
- * that authentication is delegated to verify(); every later check, and the
- * order they run in, is shared with the HMAC path. A failed signature reports
- * ALIRO_ASSERT_E_MAC, the same as a failed HMAC -- from the caller's side both
- * mean "this frame is not authentic".
+ * Parse + fully verify a frame, delegating authentication to verify(). Checks,
+ * in order: length/magic/version, alg == ECDSA-P256, signature, nonce echo,
+ * forward-progress (uptime_ms > min_uptime_ms; pass 0 to skip), status ==
+ * PRESENT, distance_cm <= threshold_cm.
+ *
+ * Returns ALIRO_ASSERT_OK (0) only when all pass; otherwise the first failing
+ * reason. A failed signature reports ALIRO_ASSERT_E_MAC, whatever the backend's
+ * own reason was: from the caller's side they all mean "not authentic".
+ *
+ * *out, when non-NULL, is populated with whatever parsed AFTER the signature
+ * check passed (for logging / cred-allowlist); it is left untouched if the
+ * signature or framing is bad, and must never be trusted for an unlock on a
+ * non-zero return. threshold_cm is inclusive.
  */
 int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,
 			     size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
 			     uint16_t threshold_cm, uint64_t min_uptime_ms,
 			     struct aliro_assert *out);
-
-/*
- * Parse + fully verify an HMAC frame. Checks, in order: length/magic/version,
- * alg == HMAC-SHA256, HMAC (constant-time), nonce echo, forward-progress
- * (uptime_ms > min_uptime_ms; pass 0 to skip), status == PRESENT, distance_cm
- * <= threshold_cm.
- *
- * Returns ALIRO_ASSERT_OK (0) only when all pass; otherwise the first failing
- * reason. *out, when non-NULL, is populated with whatever parsed AFTER the tag
- * check passed (for logging / cred-allowlist); it is left untouched if the tag
- * or framing is bad, and must never be trusted for an unlock on a non-zero
- * return. threshold_cm is inclusive.
- */
-int aliro_assert_verify(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const uint8_t *wire,
-			size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
-			uint16_t threshold_cm, uint64_t min_uptime_ms, struct aliro_assert *out);
 
 #ifdef __cplusplus
 }

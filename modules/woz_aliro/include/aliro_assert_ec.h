@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include "aliro_assert.h"
+#include "aliro_prim.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +28,7 @@ extern "C" {
 /* Key material the two binders expect as their ctx. Pass a pointer to one of
  * these as the void *ctx argument of aliro_assert_build_p256 / _verify_p256. */
 struct aliro_assert_ec_priv {
-	uint8_t d[ALIRO_ASSERT_KEY_LEN]; /* P-256 private scalar */
+	uint8_t d[ALIRO_P256_SCALAR]; /* P-256 private scalar */
 };
 
 struct aliro_assert_ec_pub {

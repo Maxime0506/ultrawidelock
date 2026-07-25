@@ -861,6 +861,7 @@ static void section_reader_task(void)
 	/* run 1: no authenticated credential; full approach + depart + silence */
 	mfk_reader_start_calls = 0;
 	mfk_reader_start_rc = 0;
+	mfk_status_tick_calls = 0;
 	mfk_auth_cred_have = 0;
 	mfk_notify_unlock_calls = 0;
 	mfk_dls_set_lock_calls = 0;
@@ -893,6 +894,9 @@ static void section_reader_task(void)
 
 	okc("wait loop released by host sync + free advertiser", delays >= 3);
 	okc("reader started once on the shared host", mfk_reader_start_calls == 1);
+	/* Every pass, not once at startup: a held Wallet status is released by this
+	 * tick, so an approach that produces no grant would never deliver one. */
+	okc("status tick runs on every approach pass", mfk_status_tick_calls >= mfk_wake_len);
 	okc("range listener installed", mfk_range_listener != nullptr);
 	okc("wallet notified exactly twice: grant with the bolt, secured on depart",
 	    mfk_notify_unlock_calls == 2);

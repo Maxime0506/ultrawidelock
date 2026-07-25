@@ -164,7 +164,6 @@ class DriftTests(unittest.TestCase):
     def test_field_widths(self):
         for py, c in (("NONCE_LEN", "ALIRO_ASSERT_NONCE_LEN"),
                       ("CREDID_LEN", "ALIRO_ASSERT_CREDID_LEN"),
-                      ("MAC_LEN", "ALIRO_ASSERT_MAC_LEN"),
                       ("SIG_LEN", "ALIRO_ASSERT_SIG_LEN"),
                       ("PUB_LEN", "ALIRO_ASSERT_PUB_LEN"),
                       ("SIGNED_LEN", "ALIRO_ASSERT_SIGNED_LEN")):
@@ -172,7 +171,6 @@ class DriftTests(unittest.TestCase):
                 self.assertEqual(getattr(pv, py), self.dh[c])
 
     def test_frame_lengths_follow_from_the_widths(self):
-        self.assertEqual(pv.WIRE_HMAC, 79)
         self.assertEqual(pv.WIRE_P256, 111)
 
     def test_magic_and_version(self):
@@ -180,8 +178,15 @@ class DriftTests(unittest.TestCase):
         self.assertEqual(pv.VERSION, self.dc["ASSERT_VERSION"])
 
     def test_algorithm_ids(self):
-        self.assertEqual(pv.ALG_HMAC_SHA256, self.enums["ALIRO_ASSERT_ALG_HMAC_SHA256"])
         self.assertEqual(pv.ALG_ECDSA_P256, self.enums["ALIRO_ASSERT_ALG_ECDSA_P256"])
+
+    def test_retired_algorithm_id_is_not_reused(self):
+        # 1 was HMAC-SHA256. If it ever reappears as an ALGORITHM id under another
+        # name, a v1 frame stops being rejected and starts being reinterpreted.
+        # Scoped to the alg enum: 1 is a valid value elsewhere (PRESENCE_PRESENT).
+        algs = {n: v for n, v in self.enums.items() if n.startswith("ALIRO_ASSERT_ALG_")}
+        self.assertNotIn(1, algs.values())
+        self.assertEqual(algs, {"ALIRO_ASSERT_ALG_ECDSA_P256": 2})
 
     def test_status_values(self):
         self.assertEqual(pv.PRESENCE_ABSENT, self.enums["ALIRO_PRESENCE_ABSENT"])
@@ -263,14 +268,14 @@ class FramingTests(unittest.TestCase):
         f = build_prefix(version=1) + b"\x00" * 64
         self.assertEqual(pv.check_framing(f), pv.E_MALFORMED)
 
-    def test_hmac_frame_reports_wrong_algorithm_not_malformed(self):
-        # A well-formed 79-byte HMAC frame is a misconfigured peer, not corruption.
-        f = build_prefix(alg=pv.ALG_HMAC_SHA256) + b"\x00" * 32
+    def test_retired_hmac_frame_reports_wrong_algorithm_not_malformed(self):
+        # A well-formed 79-byte v1 frame is a stale peer, not corruption.
+        f = build_prefix(alg=1) + b"\x00" * 32
         self.assertEqual(pv.check_framing(f), pv.E_ALG)
 
     def test_algorithm_is_checked_before_length(self):
         # Same wrong algorithm, wrong length too: still E_ALG, matching the C.
-        f = build_prefix(alg=pv.ALG_HMAC_SHA256) + b"\x00" * 64
+        f = build_prefix(alg=1) + b"\x00" * 64
         self.assertEqual(pv.check_framing(f), pv.E_ALG)
 
     def test_wrong_length_for_the_named_algorithm(self):

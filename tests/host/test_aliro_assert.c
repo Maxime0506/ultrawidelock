@@ -2,8 +2,8 @@
  *
  * The security core of the non-door primitive: a spoofed USB device must not be
  * able to assert presence. Covers the happy path and every distinct reject:
- * wrong key (forged MAC), replayed/other nonce, stale uptime, absent status,
- * out-of-range distance, and malformed framing.
+ * forged or tampered signature, replayed/other nonce, stale uptime, absent
+ * status, out-of-range distance, and malformed framing.
  */
 #include <string.h>
 
@@ -71,12 +71,7 @@ static int fake_ec_verify(void *ctx, const uint8_t *msg, size_t msg_len,
 	return memcmp(want, sig, sizeof(want)) == 0 ? 0 : -1;
 }
 
-/* A fixed pairing key + a built assertion the tests mutate. */
-static const uint8_t k_key[ALIRO_ASSERT_KEY_LEN] = {
-	0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa,
-	0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a,
-	0x69, 0x78, 0x87, 0x96, 0xa5, 0xb4, 0xc3, 0xd2, 0xe1, 0xf0,
-};
+/* A fixed challenge nonce + a built assertion the tests mutate. */
 static const uint8_t k_nonce[ALIRO_ASSERT_NONCE_LEN] = {
 	0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04,
 	0xa5, 0xa5, 0x5a, 0x5a, 0x10, 0x20, 0x30, 0x40,
@@ -99,223 +94,193 @@ static void base_assertion(struct aliro_assert *a)
 
 void test_aliro_assert(void)
 {
+	struct fake_ec fec;
+	memset(&fec, 0, sizeof(fec));
 	struct aliro_assert a;
 	base_assertion(&a);
-	uint8_t wire[ALIRO_ASSERT_WIRE_HMAC];
+	uint8_t wire[ALIRO_ASSERT_WIRE_P256];
 	size_t wlen = 0;
 
 	t_group("build");
-	T_EQ("build.rc", aliro_assert_build(k_key, &a, wire, sizeof(wire), &wlen), 0);
-	T_EQ("build.len", (long)wlen, ALIRO_ASSERT_WIRE_HMAC);
+	T_EQ("build.rc",
+	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, wire, sizeof(wire), &wlen), 0);
+	T_EQ("build.len", (long)wlen, ALIRO_ASSERT_WIRE_P256);
 	T_EQ("build.magic0", wire[0], 0xA1);
 	T_EQ("build.magic1", wire[1], 0x50);
 	T_EQ("build.version", wire[2], 0x02);
-	T_EQ("build.alg", wire[3], ALIRO_ASSERT_ALG_HMAC_SHA256);
+	T_EQ("build.alg", wire[3], ALIRO_ASSERT_ALG_ECDSA_P256);
 	uint8_t tiny[8];
-	T_EQ("build.too_small", aliro_assert_build(k_key, &a, tiny, sizeof(tiny), &wlen), -1);
-	/* Lock the whole 79-byte frame so the wire format + MAC cannot drift. Frame
-	 * and tag were derived independently (Python hmac) before being pinned here.
-	 * magic|ver=02|alg=01|status|nonce|cred_id|dist=0019(25)|
-	 * uptime=0f4240(1e6)|unix=019f9a4a7a00(1785000000000)|HMAC. */
-	t_vec("build.frame", wire, sizeof(wire),
-	      "a150020101deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c7001900"
-	      "000000000f42400000019f9a4a7a00339543684e90639413024ab06d2f49f888"
-	      "29baaef4730ea900db1f0d5bcf639c");
+	T_EQ("build.too_small",
+	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, tiny, sizeof(tiny), &wlen), -1);
+	/* Lock the 47-byte signed prefix so the wire layout cannot drift. Derived
+	 * independently (Python struct) before being pinned here. The signature is
+	 * not pinned: it comes from the test double, so it would pin the double
+	 * rather than the format.
+	 * magic|ver=02|alg=02|status|nonce|cred_id|dist=0019(25)|
+	 * uptime=0f4240(1e6)|unix=019f9a4a7a00(1785000000000). */
+	t_vec("build.prefix", wire, ALIRO_ASSERT_SIGNED_LEN,
+	      "a150020201deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c700190000"
+	      "0000000f42400000019f9a4a7a00");
+	/* The backend must be handed the signed prefix -- all of it, and nothing
+	 * but it. A backend fed the wrong span would still round-trip against
+	 * itself, so this is checked directly rather than inferred. */
+	T_EQ("build.signed_len", (long)fec.last_msg_len, ALIRO_ASSERT_SIGNED_LEN);
+	T_OK("build.signed_bytes", memcmp(fec.last_msg, wire, ALIRO_ASSERT_SIGNED_LEN) == 0);
 
 	t_group("verify OK");
 	struct aliro_assert out;
 	memset(&out, 0, sizeof(out));
-	T_EQ("ok", aliro_assert_verify(k_key, wire, wlen, k_nonce, 40, 0, &out), ALIRO_ASSERT_OK);
+	T_EQ("ok", aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_OK);
 	T_EQ("ok.dist", out.distance_cm, 25);
 	T_EQ("ok.status", out.status, ALIRO_PRESENCE_PRESENT);
 	T_OK("ok.credid", memcmp(out.cred_id, a.cred_id, ALIRO_ASSERT_CREDID_LEN) == 0);
-	/* Decode side of the two 64-bit clocks: the frame KAT above pins how they
+	/* Decode side of the two 64-bit clocks: the prefix KAT above pins how they
 	 * are written, this pins that verify hands them back. */
 	T_OK("ok.uptime", out.uptime_ms == 1000000ULL);
 	T_OK("ok.unix", out.unix_ms == 1785000000000ULL);
 	/* Threshold is inclusive: exactly at the boundary passes. */
-	T_EQ("ok.boundary", aliro_assert_verify(k_key, wire, wlen, k_nonce, 25, 0, &out),
+	T_EQ("ok.boundary",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 25, 0, &out),
 	     ALIRO_ASSERT_OK);
 	/* Forward-progress guard: uptime strictly greater than the floor passes. */
-	T_EQ("ok.fresh", aliro_assert_verify(k_key, wire, wlen, k_nonce, 40, 999999, &out),
+	T_EQ("ok.fresh",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 999999, &out),
 	     ALIRO_ASSERT_OK);
 
-	t_group("reject: wrong key (forged MAC)");
-	uint8_t badkey[ALIRO_ASSERT_KEY_LEN];
-	memcpy(badkey, k_key, sizeof(badkey));
-	badkey[0] ^= 0x01;
-	T_EQ("wrong_key", aliro_assert_verify(badkey, wire, wlen, k_nonce, 40, 0, &out),
-	     ALIRO_ASSERT_E_MAC);
-	/* Any single-bit tamper of the MAC'd region also fails the MAC. */
-	uint8_t tampered[ALIRO_ASSERT_WIRE_HMAC];
+	t_group("reject: tampered / unauthentic");
+	/* Any single-bit tamper of the signed region fails authentication. */
+	uint8_t tampered[ALIRO_ASSERT_WIRE_P256];
 	memcpy(tampered, wire, sizeof(tampered));
-	tampered[28] ^= 0x08; /* flip distance high byte */
-	T_EQ("tamper", aliro_assert_verify(k_key, tampered, sizeof(tampered), k_nonce, 40, 0, &out),
+	tampered[29] ^= 0x08; /* flip distance high byte: claim a different distance */
+	T_EQ("tamper.prefix",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_MAC);
+	memcpy(tampered, wire, sizeof(tampered));
+	tampered[ALIRO_ASSERT_SIGNED_LEN] ^= 0x01; /* tamper the signature itself */
+	T_EQ("tamper.sig",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce, 40,
+				      0, &out),
+	     ALIRO_ASSERT_E_MAC);
+	/* Backend failures propagate as not-authentic, never as a silently accepted
+	 * frame -- a backend error must not read as a pass. */
+	fec.force_fail = 1;
+	T_EQ("backend_fails",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 0, &out),
+	     ALIRO_ASSERT_E_MAC);
+	T_EQ("sign_fails",
+	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, tampered, sizeof(tampered), NULL), -1);
+	fec.force_fail = 0;
 
 	t_group("reject: replay / nonce mismatch");
 	uint8_t other_nonce[ALIRO_ASSERT_NONCE_LEN];
 	memcpy(other_nonce, k_nonce, sizeof(other_nonce));
 	other_nonce[15] ^= 0xFF;
-	T_EQ("nonce", aliro_assert_verify(k_key, wire, wlen, other_nonce, 40, 0, &out),
+	T_EQ("nonce",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, other_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_NONCE);
 
 	t_group("reject: stale (uptime not advancing)");
 	/* uptime_ms == min is stale; a replayed frame at the same uptime is rejected. */
-	T_EQ("stale.eq", aliro_assert_verify(k_key, wire, wlen, k_nonce, 40, 1000000, &out),
+	T_EQ("stale.eq",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 1000000, &out),
 	     ALIRO_ASSERT_E_STALE);
-	T_EQ("stale.lt", aliro_assert_verify(k_key, wire, wlen, k_nonce, 40, 1000001, &out),
+	T_EQ("stale.lt",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 1000001, &out),
 	     ALIRO_ASSERT_E_STALE);
 
 	t_group("reject: absent status");
 	struct aliro_assert absent = a;
 	absent.status = ALIRO_PRESENCE_ABSENT;
-	uint8_t awire[ALIRO_ASSERT_WIRE_HMAC];
-	aliro_assert_build(k_key, &absent, awire, sizeof(awire), NULL);
-	T_EQ("absent", aliro_assert_verify(k_key, awire, sizeof(awire), k_nonce, 40, 0, &out),
+	uint8_t awire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &absent, awire, sizeof(awire), NULL);
+	T_EQ("absent",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, awire, sizeof(awire), k_nonce, 40, 0,
+				      &out),
 	     ALIRO_ASSERT_E_ABSENT);
 
 	t_group("reject: out of range / no range");
 	struct aliro_assert far = a;
 	far.distance_cm = 41;
-	uint8_t fwire[ALIRO_ASSERT_WIRE_HMAC];
-	aliro_assert_build(k_key, &far, fwire, sizeof(fwire), NULL);
-	T_EQ("far", aliro_assert_verify(k_key, fwire, sizeof(fwire), k_nonce, 40, 0, &out),
+	uint8_t fwire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &far, fwire, sizeof(fwire), NULL);
+	T_EQ("far",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, fwire, sizeof(fwire), k_nonce, 40, 0,
+				      &out),
 	     ALIRO_ASSERT_E_RANGE);
 	struct aliro_assert norange = a;
 	norange.distance_cm = ALIRO_ASSERT_DIST_NONE;
-	uint8_t nwire[ALIRO_ASSERT_WIRE_HMAC];
-	aliro_assert_build(k_key, &norange, nwire, sizeof(nwire), NULL);
-	T_EQ("no_range", aliro_assert_verify(k_key, nwire, sizeof(nwire), k_nonce, 0xFFFE, 0, &out),
+	uint8_t nwire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &norange, nwire, sizeof(nwire), NULL);
+	T_EQ("no_range",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, nwire, sizeof(nwire), k_nonce, 0xFFFE, 0,
+				      &out),
 	     ALIRO_ASSERT_E_RANGE);
 
 	t_group("reject: malformed framing");
-	T_EQ("short_len", aliro_assert_verify(k_key, wire, wlen - 1u, k_nonce, 40, 0, &out),
+	T_EQ("short_len",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen - 1u, k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
-	uint8_t bad[ALIRO_ASSERT_WIRE_HMAC];
+	uint8_t bad[ALIRO_ASSERT_WIRE_P256];
 	memcpy(bad, wire, sizeof(bad));
 	bad[0] = 0x00; /* bad magic */
-	T_EQ("bad_magic", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	T_EQ("bad_magic",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	memcpy(bad, wire, sizeof(bad));
 	bad[2] = 0x03; /* bad version (0x02 is current) */
-	T_EQ("bad_version", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	T_EQ("bad_version",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	/* A frame naming an algorithm this verifier does not implement must be
-	 * refused as a wrong ALGORITHM, not mislabelled as a bad tag -- otherwise a
-	 * P-256 frame arriving at the HMAC path looks like tampering. Rejected
-	 * before the tag is even computed, so the MAC here is deliberately stale. */
+	 * refused as a wrong ALGORITHM, not mislabelled as a bad signature. Alg 1 is
+	 * the retired HMAC mode: a v1 frame must reject here rather than be
+	 * reinterpreted. Rejected before the signature is even checked. */
 	memcpy(bad, wire, sizeof(bad));
-	bad[3] = ALIRO_ASSERT_ALG_ECDSA_P256;
-	T_EQ("wrong_alg", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	bad[3] = 0x01;
+	T_EQ("retired_alg",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_ALG);
 	memcpy(bad, wire, sizeof(bad));
 	bad[3] = 0x7F; /* unknown algorithm */
-	T_EQ("unknown_alg", aliro_assert_verify(k_key, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	T_EQ("unknown_alg",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
 	     ALIRO_ASSERT_E_ALG);
 
 	t_group("wire length by algorithm");
-	T_EQ("len.hmac", (long)aliro_assert_wire_len(ALIRO_ASSERT_ALG_HMAC_SHA256),
-	     ALIRO_ASSERT_WIRE_HMAC);
 	T_EQ("len.p256", (long)aliro_assert_wire_len(ALIRO_ASSERT_ALG_ECDSA_P256),
 	     ALIRO_ASSERT_WIRE_P256);
+	/* The retired HMAC value has no length: a scanner must not size a buffer
+	 * from it, and the value stays reserved rather than being reassigned. */
+	T_EQ("len.retired", (long)aliro_assert_wire_len(0x01), 0);
 	T_EQ("len.unknown", (long)aliro_assert_wire_len(0x7F), 0);
-	T_EQ("peek.alg", aliro_assert_peek_alg(wire, sizeof(wire)),
-	     ALIRO_ASSERT_ALG_HMAC_SHA256);
+	T_EQ("peek.alg", aliro_assert_peek_alg(wire, sizeof(wire)), ALIRO_ASSERT_ALG_ECDSA_P256);
 	/* Too short to contain the alg byte's own prefix: report invalid, not a
 	 * read past the end of the caller's buffer. */
 	T_EQ("peek.short", aliro_assert_peek_alg(wire, ALIRO_ASSERT_SIGNED_LEN - 1u), 0);
 
-	t_group("p256 mode");
-	struct fake_ec fec;
-	memset(&fec, 0, sizeof(fec));
-	uint8_t pwire[ALIRO_ASSERT_WIRE_P256];
-	size_t plen = 0;
-
-	T_EQ("p256.build.rc", aliro_assert_build_p256(fake_ec_sign, &fec, &a, pwire, sizeof(pwire),
-						      &plen),
-	     0);
-	T_EQ("p256.build.len", (long)plen, ALIRO_ASSERT_WIRE_P256);
-	T_EQ("p256.build.version", pwire[2], 0x02);
-	T_EQ("p256.build.alg", pwire[3], ALIRO_ASSERT_ALG_ECDSA_P256);
-	/* The backend must be handed the signed prefix -- all of it, and nothing
-	 * but it. A backend fed the wrong span would still round-trip against
-	 * itself, so this is checked directly rather than inferred. */
-	T_EQ("p256.signed_len", (long)fec.last_msg_len, ALIRO_ASSERT_SIGNED_LEN);
-	T_OK("p256.signed_bytes", memcmp(fec.last_msg, pwire, ALIRO_ASSERT_SIGNED_LEN) == 0);
-	/* Both modes must authenticate identical bytes: the P-256 prefix differs
-	 * from the HMAC prefix only in the alg byte. */
-	T_OK("p256.prefix.alg_only", pwire[3] != wire[3] &&
-					    memcmp(pwire, wire, 3) == 0 &&
-					    memcmp(pwire + 4, wire + 4, ALIRO_ASSERT_SIGNED_LEN - 4) == 0);
-
-	memset(&out, 0, sizeof(out));
-	T_EQ("p256.verify", aliro_assert_verify_p256(fake_ec_verify, &fec, pwire, plen, k_nonce, 40,
-						     0, &out),
-	     ALIRO_ASSERT_OK);
-	T_EQ("p256.verify.dist", out.distance_cm, 25);
-	T_OK("p256.verify.unix", out.unix_ms == 1785000000000ULL);
-
-	/* Tamper anywhere in the signed prefix -> authentication fails. */
-	uint8_t ptam[ALIRO_ASSERT_WIRE_P256];
-	memcpy(ptam, pwire, sizeof(ptam));
-	ptam[29] ^= 0x01; /* distance_cm high byte: claim a different distance */
-	T_EQ("p256.tamper.prefix", aliro_assert_verify_p256(fake_ec_verify, &fec, ptam,
-							    sizeof(ptam), k_nonce, 40, 0, &out),
-	     ALIRO_ASSERT_E_MAC);
-	memcpy(ptam, pwire, sizeof(ptam));
-	ptam[ALIRO_ASSERT_SIGNED_LEN] ^= 0x01; /* tamper the signature itself */
-	T_EQ("p256.tamper.sig", aliro_assert_verify_p256(fake_ec_verify, &fec, ptam, sizeof(ptam),
-							 k_nonce, 40, 0, &out),
-	     ALIRO_ASSERT_E_MAC);
-
-	/* Cross-algorithm confusion, both directions, must name the algorithm as
-	 * the problem rather than look like tampering. */
-	T_EQ("p256.hmac_frame", aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce,
-							 40, 0, &out),
-	     ALIRO_ASSERT_E_ALG);
-	T_EQ("hmac.p256_frame", aliro_assert_verify(k_key, pwire, plen, k_nonce, 40, 0, &out),
-	     ALIRO_ASSERT_E_ALG);
-
-	/* Backend failures propagate as build failure / not-authentic, never as a
-	 * silently accepted frame. */
-	fec.force_fail = 1;
-	T_EQ("p256.sign_fails", aliro_assert_build_p256(fake_ec_sign, &fec, &a, pwire,
-							sizeof(pwire), &plen),
-	     -1);
-	T_EQ("p256.verify_fails", aliro_assert_verify_p256(fake_ec_verify, &fec, ptam,
-							   sizeof(ptam), k_nonce, 40, 0, &out),
-	     ALIRO_ASSERT_E_MAC);
-	fec.force_fail = 0;
-
-	/* Misuse: no backend, and a buffer too small for the longer frame. */
-	T_EQ("p256.null_sign", aliro_assert_build_p256(NULL, &fec, &a, pwire, sizeof(pwire), &plen),
-	     -1);
-	T_EQ("p256.small_buf", aliro_assert_build_p256(fake_ec_sign, &fec, &a, pwire,
-						       ALIRO_ASSERT_WIRE_P256 - 1u, &plen),
-	     -1);
-	T_EQ("p256.null_verify", aliro_assert_verify_p256(NULL, &fec, pwire, ALIRO_ASSERT_WIRE_P256,
-							  k_nonce, 40, 0, &out),
-	     ALIRO_ASSERT_E_MALFORMED);
-
 	/* NULL arguments are caller bugs, but they must fail loudly at the guard
 	 * rather than dereference: these are the paths a wrong integration hits. */
 	t_group("misuse: NULL arguments");
-	T_EQ("null.build_assert", aliro_assert_build(k_key, NULL, pwire, sizeof(pwire), &plen), -1);
-	T_EQ("null.build_wire", aliro_assert_build(k_key, &a, NULL, ALIRO_ASSERT_WIRE_HMAC, &plen),
+	T_EQ("null.build_assert",
+	     aliro_assert_build_p256(fake_ec_sign, &fec, NULL, wire, sizeof(wire), &wlen), -1);
+	T_EQ("null.build_wire",
+	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, NULL, ALIRO_ASSERT_WIRE_P256, &wlen),
 	     -1);
-	T_EQ("null.p256_assert", aliro_assert_build_p256(fake_ec_sign, &fec, NULL, pwire,
-							 sizeof(pwire), &plen),
+	T_EQ("null.build_sign",
+	     aliro_assert_build_p256(NULL, &fec, &a, wire, sizeof(wire), &wlen), -1);
+	T_EQ("null.build_small",
+	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, wire, ALIRO_ASSERT_WIRE_P256 - 1u,
+				     &wlen),
 	     -1);
-	T_EQ("null.p256_wire", aliro_assert_build_p256(fake_ec_sign, &fec, &a, NULL,
-						       ALIRO_ASSERT_WIRE_P256, &plen),
-	     -1);
-	T_EQ("null.verify_wire", aliro_assert_verify(k_key, NULL, ALIRO_ASSERT_WIRE_HMAC, k_nonce,
-						     40, 0, &out),
+	T_EQ("null.verify_wire",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, NULL, ALIRO_ASSERT_WIRE_P256, k_nonce,
+				      40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
-	T_EQ("null.p256_verify_wire", aliro_assert_verify_p256(fake_ec_verify, &fec, NULL,
-							       ALIRO_ASSERT_WIRE_P256, k_nonce, 40,
-							       0, &out),
+	T_EQ("null.verify_fn",
+	     aliro_assert_verify_p256(NULL, &fec, wire, ALIRO_ASSERT_WIRE_P256, k_nonce, 40, 0,
+				      &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	T_EQ("null.peek", aliro_assert_peek_alg(NULL, ALIRO_ASSERT_WIRE_MAX), 0);
 

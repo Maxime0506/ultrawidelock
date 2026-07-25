@@ -26,56 +26,18 @@
 #include "presence_link.h"
 
 #define PRESENCE_NS     "presence"
-#define PRESENCE_KEY    "kpair"
 #define PRESENCE_DEVKEY "kdev"
 /* A range must have latched within this window for the dongle to call it PRESENT;
  * otherwise the phone has walked away and presence has gone stale. */
 #define RANGE_FRESH_MS 5000
 
 static bool s_drive_wallet;
-static uint8_t s_key[ALIRO_ASSERT_KEY_LEN];
-static bool s_key_set;
 
 /* Device signing identity. Only the private scalar is persisted; the public point
  * is re-derived at every boot so the two can never drift apart in NVS. */
 static struct aliro_assert_ec_priv s_dev;
 static uint8_t s_dev_pub[ALIRO_ASSERT_PUB_LEN];
 static bool s_dev_set;
-
-static void load_key(void)
-{
-	nvs_handle_t h;
-
-	if (nvs_open(PRESENCE_NS, NVS_READONLY, &h) != ESP_OK) {
-		return;
-	}
-	size_t len = sizeof(s_key);
-	if (nvs_get_blob(h, PRESENCE_KEY, s_key, &len) == ESP_OK && len == sizeof(s_key)) {
-		s_key_set = true;
-	}
-	nvs_close(h);
-}
-
-int presence_link_set_key(const uint8_t key[32])
-{
-	nvs_handle_t h;
-
-	if (nvs_open(PRESENCE_NS, NVS_READWRITE, &h) != ESP_OK) {
-		return -1;
-	}
-	esp_err_t e = nvs_set_blob(h, PRESENCE_KEY, key, ALIRO_ASSERT_KEY_LEN);
-
-	if (e == ESP_OK) {
-		e = nvs_commit(h);
-	}
-	nvs_close(h);
-	if (e != ESP_OK) {
-		return -1;
-	}
-	memcpy(s_key, key, ALIRO_ASSERT_KEY_LEN);
-	s_key_set = true;
-	return 0;
-}
 
 // Load the device signing key from NVS, generating and persisting one on first
 // boot. This key IS the dongle's identity to every third-party verifier, so it has
@@ -84,7 +46,7 @@ int presence_link_set_key(const uint8_t key[32])
 static void load_or_make_dev_key(void)
 {
 	nvs_handle_t h;
-	uint8_t priv[ALIRO_ASSERT_KEY_LEN];
+	uint8_t priv[ALIRO_P256_SCALAR];
 	size_t len = sizeof(priv);
 	bool have = false;
 
@@ -129,7 +91,6 @@ void presence_link_init(bool drive_wallet_grant)
 	/* Idempotent (psa_crypto_init is), and aliro_reader_start() has already run
 	 * it. Repeated here so the keygen below does not depend on that ordering. */
 	(void)aliro_prim_init();
-	load_key();
 	load_or_make_dev_key();
 	s_drive_wallet = drive_wallet_grant;
 	/* No range listener on purpose. The range latch already carries its own age,
@@ -241,24 +202,10 @@ static int parse_hex(const char *s, uint8_t *out, size_t n)
 	return 0;
 }
 
-// Assemble + HMAC the assertion for a challenge nonce. Only the paired host, holding
-// the same secret, can check this. With no pairing key yet, sign under an all-zero
-// key so the host's check fails cleanly (a clean deny) rather than the dongle going
-// silent and the host blocking on a response that never comes.
-static void answer_hmac(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
-{
-	static const uint8_t zero_key[ALIRO_ASSERT_KEY_LEN] = { 0 };
-	struct aliro_assert a;
-	uint8_t wire[ALIRO_ASSERT_WIRE_HMAC];
-
-	fill_assert(&a, nonce);
-	aliro_assert_build(s_key_set ? s_key : zero_key, &a, wire, sizeof(wire), NULL);
-	emit_hex("PRESENCE-HMAC", wire, sizeof(wire));
-}
-
-// As above but signed under the device key, so any holder of the public point can
-// verify it without sharing a secret. This is what makes a presence proof portable
-// to a third party (a CI job, a second reviewer) rather than only to this host.
+// Assemble + sign the assertion for a challenge nonce under the device key, so any
+// holder of the public point can verify it without sharing a secret. That is what
+// makes a presence proof portable to a third party (a CI job, a second reviewer)
+// rather than only to one paired host.
 static void answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 {
 	struct aliro_assert a;
@@ -278,8 +225,7 @@ int presence_link_cmd(int argc, char **argv)
 	uint8_t nonce[ALIRO_ASSERT_NONCE_LEN];
 
 	if (argc < 2) {
-		printf("PRESENCE-ERR usage: presence pub|assert <nonce-hex>|hmac <nonce-hex>|"
-		       "key <hex>\n");
+		printf("PRESENCE-ERR usage: presence pub|assert <nonce-hex>\n");
 		return 1;
 	}
 
@@ -291,33 +237,13 @@ int presence_link_cmd(int argc, char **argv)
 		return 0;
 	}
 
-	if (strcmp(argv[1], "assert") == 0 || strcmp(argv[1], "hmac") == 0) {
+	if (strcmp(argv[1], "assert") == 0) {
 		if (argc < 3 || parse_hex(argv[2], nonce, sizeof(nonce)) != 0) {
 			printf("PRESENCE-ERR expected a %u-byte nonce as %u hex chars\n",
 			       (unsigned)sizeof(nonce), (unsigned)(2 * sizeof(nonce)));
 			return 1;
 		}
-		if (argv[1][0] == 'a') {
-			answer_p256(nonce);
-		} else {
-			answer_hmac(nonce);
-		}
-		return 0;
-	}
-
-	if (strcmp(argv[1], "key") == 0) {
-		uint8_t key[ALIRO_ASSERT_KEY_LEN];
-
-		if (argc < 3 || parse_hex(argv[2], key, sizeof(key)) != 0) {
-			printf("PRESENCE-ERR expected a %u-byte key as %u hex chars\n",
-			       (unsigned)sizeof(key), (unsigned)(2 * sizeof(key)));
-			return 1;
-		}
-		if (presence_link_set_key(key) != 0) {
-			printf("PRESENCE-ERR could not persist the pairing key\n");
-			return 1;
-		}
-		printf("PRESENCE-KEY ok\n");
+		answer_p256(nonce);
 		return 0;
 	}
 

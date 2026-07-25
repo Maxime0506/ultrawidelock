@@ -79,8 +79,6 @@ static int ct_equal(const uint8_t *a, const uint8_t *b, size_t n)
 size_t aliro_assert_wire_len(uint8_t alg)
 {
 	switch (alg) {
-	case ALIRO_ASSERT_ALG_HMAC_SHA256:
-		return ALIRO_ASSERT_WIRE_HMAC;
 	case ALIRO_ASSERT_ALG_ECDSA_P256:
 		return ALIRO_ASSERT_WIRE_P256;
 	default:
@@ -186,24 +184,6 @@ static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
 	return ALIRO_ASSERT_OK;
 }
 
-int aliro_assert_build(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const struct aliro_assert *a,
-		       uint8_t *wire, size_t wire_cap, size_t *wire_len)
-{
-	if (wire == NULL || a == NULL || wire_cap < ALIRO_ASSERT_WIRE_HMAC) {
-		return -1;
-	}
-
-	put_prefix(wire, ALIRO_ASSERT_ALG_HMAC_SHA256, a);
-
-	/* MAC over every byte before the tag. */
-	aliro_hmac_sha256(key, ALIRO_ASSERT_KEY_LEN, wire, OFF_TAG, wire + OFF_TAG);
-
-	if (wire_len != NULL) {
-		*wire_len = ALIRO_ASSERT_WIRE_HMAC;
-	}
-	return 0;
-}
-
 int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct aliro_assert *a,
 			    uint8_t *wire, size_t wire_cap, size_t *wire_len)
 {
@@ -213,8 +193,8 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
 
 	put_prefix(wire, ALIRO_ASSERT_ALG_ECDSA_P256, a);
 
-	/* Sign every byte before the tag -- the same prefix the HMAC path MACs, so
-	 * the two modes authenticate identical bytes. */
+	/* Sign every byte before the tag: magic, version, alg and all the claimed
+	 * facts, so none of them can be edited without breaking the signature. */
 	if (sign(ctx, wire, OFF_TAG, wire + OFF_TAG) != 0) {
 		return -1;
 	}
@@ -223,27 +203,6 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
 		*wire_len = ALIRO_ASSERT_WIRE_P256;
 	}
 	return 0;
-}
-
-int aliro_assert_verify(const uint8_t key[ALIRO_ASSERT_KEY_LEN], const uint8_t *wire,
-			size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
-			uint16_t threshold_cm, uint64_t min_uptime_ms, struct aliro_assert *out)
-{
-	int fr = check_framing(wire, wire_len, ALIRO_ASSERT_ALG_HMAC_SHA256);
-
-	if (fr != ALIRO_ASSERT_OK) {
-		return fr;
-	}
-
-	/* Authenticate before interpreting any field. */
-	uint8_t mac[ALIRO_ASSERT_MAC_LEN];
-
-	aliro_hmac_sha256(key, ALIRO_ASSERT_KEY_LEN, wire, OFF_TAG, mac);
-	if (!ct_equal(mac, wire + OFF_TAG, ALIRO_ASSERT_MAC_LEN)) {
-		return ALIRO_ASSERT_E_MAC;
-	}
-
-	return parse_and_check(wire, expected_nonce, threshold_cm, min_uptime_ms, out);
 }
 
 int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,

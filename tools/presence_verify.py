@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Verify an ECDSA-P256 presence assertion against a dongle's public key.
 
-This is the portable half of the presence primitive. An HMAC assertion can only
-be checked by the host that holds the pairing key -- the same key that could
-forge it -- so it proves nothing to anyone else. A P-256 assertion is checkable
-by any holder of the dongle's public point, which is what lets a CI job, a
-release-tag hook or a second reviewer accept "a human was physically at that
-machine" without being trusted with a secret.
+This is the portable half of the presence primitive. A P-256 assertion is
+checkable by any holder of the dongle's public point, which is what lets a CI
+job, a release-tag hook or a second reviewer accept "a human was physically at
+that machine" without being trusted with a secret. A shared-secret assertion
+could only be checked by a holder of the key that could equally forge it, which
+is why that mode was retired rather than kept alongside this one.
 
 Stdlib only. The curve arithmetic is delegated to the openssl binary already
 present on any machine that can run a CI job, so nothing is vendored and no
@@ -52,15 +52,14 @@ VERSION = 2
 
 NONCE_LEN = 16
 CREDID_LEN = 8
-MAC_LEN = 32
 SIG_LEN = 64
 PUB_LEN = 65
 
 SIGNED_LEN = 47
-WIRE_HMAC = SIGNED_LEN + MAC_LEN  # 79
 WIRE_P256 = SIGNED_LEN + SIG_LEN  # 111
 
-ALG_HMAC_SHA256 = 1
+# 1 was HMAC-SHA256, retired with the paired-host PAM path. Never reused: a v1
+# frame must reject as unknown-alg rather than be read under another scheme.
 ALG_ECDSA_P256 = 2
 
 DIST_NONE = 0xFFFF
@@ -208,7 +207,7 @@ def check_framing(wire: bytes, want_alg: int = ALG_ECDSA_P256) -> int:
         return E_MALFORMED
     if wire[OFF_ALG] != want_alg:
         return E_ALG
-    if len(wire) != (WIRE_P256 if want_alg == ALG_ECDSA_P256 else WIRE_HMAC):
+    if len(wire) != WIRE_P256:
         return E_MALFORMED
     return OK
 

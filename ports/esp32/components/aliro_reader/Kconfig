@@ -191,20 +191,23 @@ config WOZ_ALIRO_STEPUP
 	  identical to today and the fast-path auth segment is untouched.
 
 config WOZ_PRESENCE
-	bool "Presence dongle mode (non-door primitive)"
+	bool "Presence assertions (non-door primitive)"
 	default n
 	help
-	  Turn the reader into a USB presence dongle: instead of the interactive
-	  console, it serves a binary challenge/response on the console UART. A host
-	  (the pam_aliro module) sends a nonce; the dongle answers with an
-	  HMAC-signed statement of the current trusted-range presence state
-	  (aliro_assert.c), so proximity of a provisioned iPhone becomes a second
-	  factor for host authentication -- no door involved.
+	  Add a `presence` command to this board's console. `presence assert <nonce>`
+	  answers with a P-256-signed statement of the current trusted-range presence
+	  state (aliro_assert.c); `presence pub` emits the board's public point for
+	  enrolment. Proximity of a provisioned iPhone, measured by UWB time of
+	  flight, becomes a proof a third party can check -- no door involved.
 
-	  The pairing key is stored in NVS and loaded over the same link. OFF by
-	  default; when on it replaces the REPL, so enable it only on a dongle board.
-	  Bench-only / experimental (the on-phone at-rest behaviour it depends on is
-	  still being validated).
+	  The signing key is generated on first boot and persisted in NVS, so the
+	  public point stays valid across reboots and reflashes. Alongside the normal
+	  console, not instead of it, so the board a phone is provisioned against can
+	  serve presence without being cloned.
+
+	  Each check costs a phone wake plus roughly 3.5 s to a trusted range, so this
+	  suits rare deliberate actions (signing a release tag), not anything
+	  frequent or ambient. OFF by default. Host side: tools/presence_git.py.
 
 config WOZ_ALIRO_CLONE
 	bool "Reader identity clone/export console commands (bench only)"

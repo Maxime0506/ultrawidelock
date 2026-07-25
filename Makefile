@@ -35,8 +35,8 @@ PORT     ?=
 BAUD     ?= 115200
 LOG      ?=
 
-# Presence-signed tags (make presence-verify TAG=v1.2.0). MAXCM is the distance
-# threshold in cm; 40 matches host/presence/aliro_presence.c's default.
+# Presence-signed tags (make presence-verify TAG=presence/1.2.0). MAXCM is the
+# distance threshold in cm; 40 matches tools/presence_verify.py's default.
 TAG      ?=
 MAXCM    ?= 40
 
@@ -51,7 +51,7 @@ ENV := $(strip \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web test-presence presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -126,7 +126,6 @@ verify:
 	@$(MAKE) --no-print-directory test-web
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory test-san
-	@$(MAKE) --no-print-directory test-presence
 	@$(MAKE) --no-print-directory fuzz
 	@$(MAKE) --no-print-directory cbmc
 	@if command -v node >/dev/null 2>&1; then \
@@ -136,19 +135,13 @@ verify:
 	fi
 	@printf '\n  ✓ all host gates passed\n'
 
-## test-presence: host unit tests for the presence second factor (PAM/dongle)
-##   Config, wire framing, verification, TTL cache, and the challenge/verify flow
-##   over a socketpair. Plain C, no PAM or hardware. See host/presence/.
-test-presence:
-	@$(REPO_ROOT)/host/presence/run.sh
-
-## presence-verify: check a tag's presence assertion  ·  TAG=v1.2.0  (what CI runs)
+## presence-verify: check a tag's presence assertion  ·  TAG=presence/1.2.0  (what CI runs)
 ##   Confirms a human was physically at the machine when the tag was made. Pure
 ##   host check — no dongle, no serial port. Trusted keys come from
 ##   .presence/enrolled, never from the tag. Building and signing live in
 ##   ports/esp32/apps/reader (make presence-probe / presence-sign).
 presence-verify:
-	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-verify TAG=v1.2.0" >&2; exit 1; }
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-verify TAG=presence/1.2.0" >&2; exit 1; }
 	@python3 $(REPO_ROOT)/tools/presence_git.py verify --tag "$(TAG)" --max-cm $(MAXCM)
 
 ## check: every host-side suite under one banner  ->  live rows + summary table

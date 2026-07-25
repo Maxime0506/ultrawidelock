@@ -806,6 +806,8 @@ extern int mfk_bsp_button_calls;
 
 /* aliro reader / ble / lab / lat / uwb stubs */
 extern int mfk_reader_start_calls;
+extern int mfk_status_tick_calls;
+extern int64_t mfk_status_tick_last_ms;
 extern int mfk_reader_start_rc;
 extern int mfk_ble_prepare_null; /* nonzero -> aliro_reader_ble_prepare NULL */
 extern int mfk_notify_unlock_calls;
