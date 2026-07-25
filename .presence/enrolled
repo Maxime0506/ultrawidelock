@@ -1,0 +1,14 @@
+# Trusted presence dongles.
+#
+# Format:  <name> <65-byte uncompressed P-256 public point, hex>
+#
+# A presence-signed tag names only a key id (the first 8 bytes of SHA-256 over
+# the point). The key material is always read from this file, never from the
+# tag, so a tag cannot introduce a key nobody vetted. Adding a dongle is a
+# reviewable change in history like any other.
+#
+# Enrol with:
+#   python3 tools/presence_git.py enroll --port <serial> --name <label>
+#
+# Empty on purpose: no dongle has been enrolled yet, so any tag claiming
+# presence is rejected until someone deliberately adds one here.
