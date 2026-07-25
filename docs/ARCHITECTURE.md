@@ -444,15 +444,14 @@ CIRDIAG_CIR_EVERY.
 
 ### [`modules/woz_aliro_stack/src/aliro_stack.cpp`](architecture/modules.woz_aliro_stack.src/aliro_stack.cpp.md)
 
-Clean-room implementation of the Nordic Aliro public API used by this app.
+Independent implementation of the Nordic Aliro public API used by this app.
 Protocol constants and wire formats come from Aliro Specification 1.0.
-No implementation detail from the proprietary archive is used here.
 
 **depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
 
 ### [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
 
-Clean-room Aliro BLE advertising primitives.
+Aliro BLE advertising primitives.
 Kept as portable C so the byte-order rules can be tested on the host using
 the specification's published known-answer vectors.
 
@@ -1494,7 +1493,7 @@ scripts/build.sh rebuild                # force a clean pristine build
 PRISTINE=1 scripts/build.sh build       # same as rebuild
 UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
+ALIRO_SOURCE=1 scripts/build.sh build   # independent source stack (discovery slice)
 UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)

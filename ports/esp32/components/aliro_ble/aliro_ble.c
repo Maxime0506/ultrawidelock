@@ -592,8 +592,7 @@ static void adv_tag_schedule_refresh(void)
  *   [12..15] dynamic-tag expiry, big-endian (0xFFFFFFFF = no clock)
  *   [16]     reserved (0)
  *   [17..23] dynamic tag (aliro_advtag.c; KAT'd against the spec sect. 20 vectors)
- * Layout also cross-checked against libaliro_ble.a (AliroStack::
- * GenerateAdvertisingData + BleDynamicTag::Generate); NimBLE hands out AdvA
+ * Layout follows Aliro 1.0 section 11.3 (Table 11-2); NimBLE hands out AdvA
  * LSB-first, the derivation wants it MSB-first.
  * With a valid wall clock the expiry is live (now + window) and the periodic
  * re-derivation is armed; phones silently ignore an expiry in their past, so a

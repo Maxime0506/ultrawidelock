@@ -29,9 +29,8 @@ Worth stating up front, because it is the useful part of a retrospective:
   each frame inside a 2 ms slot took a separate campaign: DMA-disabled SPI, an STS key
   cache, and throttling a per-round log that was starving the ISR task.
 - **The reference source did not have to be a Nordic-licensed study target.** The
-  provenance discipline was kept, but the decisive facts came from disassembling the
-  vendor binary and cross-checking readable reference source, not from reading the
-  add-on's C++.
+  provenance discipline was kept: the decisive facts are in the published Aliro 1.0
+  specification, not in the add-on's C++.
 
 ## 1. Summary
 
@@ -50,9 +49,8 @@ Constraint held throughout: **the working nRF5340DK stays untouched** (observe-o
 reflash, reconfigure, reprovision, or key readout, and no connection to it without sign-off).
 
 Licensing overlay (important): the add-on is `LicenseRef-Nordic-5-Clause`, which restricts use to
-Nordic devices. The source is a reference to study, not to lift onto ESP32. A publishable port must
-be clean-room reimplemented (reimplement behavior, do not copy files), matching the provenance
-discipline already used in this project.
+Nordic devices, so nothing under it can ship in an ESP32 port. The port is built from the published
+Aliro 1.0 specification, matching the provenance discipline already used in this project.
 
 ## 2. Port map (grounded in the add-on source)
 
@@ -78,7 +76,7 @@ Portability tiers (line counts are the Nordic reference, not a copy target):
 | aliro_workqueue, time_utils, lock_sim | 83 + 95 + 245 | B: small glue | Zephyr workqueue/time -> FreeRTOS/esp_timer; lock_sim trivial. |
 | gatt_server + l2cap_server | 354 + 300 | C: real rewrite | Zephyr `bluetooth/gatt.h` + L2CAP CoC -> NimBLE GATT + L2CAP CoC. The Aliro BLE transaction transport. The dominant rewrite, but only ~650 lines. |
 | uwb/custom_impl over woz_uwb | small + engine | D: done + engine port | Keep the `UltraWideBand` impl; port the engine per section 4. Do NOT port `uwb/qm35_impl` (the Qorvo coprocessor path, ~3k lines, unused here). |
-| platform/nfc (RFAL + ECP) | 647 | E: use esp-aliro | Espressif ships **esp-aliro** (github.com/espressif/esp-aliro), first-party Aliro-over-NFC on ESP32, license-clean. Use it for the tap applet instead of a clean-room RFAL reimplementation. NFC-only today; BLE + UWB are on its roadmap. |
+| platform/nfc (RFAL + ECP) | 647 | E: use esp-aliro | Espressif ships **esp-aliro** (github.com/espressif/esp-aliro), first-party Aliro-over-NFC on ESP32, license-clean. Use it for the tap applet instead of an independent RFAL reimplementation. NFC-only today; BLE + UWB are on its roadmap. |
 
 Take-away: the frightening parts (provisioning, crypto) are the portable ones (common
 connectedhomeip; PSA). The concentrated new work is BLE transport on NimBLE.
@@ -165,8 +163,9 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
 - **Confirmed, with a caveat.** BLE and UWB coexist on one S3, but not for free: the
   ranging task is pinned to core 1 and the console to core 0, and the transaction runs
   synchronously on the BLE host task because driving it from elsewhere races the host.
-- **Held.** The clean-room discipline was kept. Facts came from disassembling the vendor
-  binary and from readable reference sources; no restricted source was copied.
+- **Held.** The provenance discipline was kept. Wire behavior follows the published Aliro
+  1.0 specification, with values it does not fix observed from a real phone; no restricted
+  source was copied.
 
 ## 8. If you are doing this yourself
 

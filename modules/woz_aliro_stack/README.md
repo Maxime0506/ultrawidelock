@@ -1,8 +1,12 @@
 # Aliro source stack
 
-This Zephyr module is a clean-room implementation of the public API declared by
-the Nordic Aliro headers. Wire behavior is derived from Aliro Specification 1.0.
-It does not use implementation details from Nordic's proprietary archive.
+This Zephyr module reimplements the public API declared by the Nordic Aliro headers.
+Wire behavior follows the published Aliro 1.0 specification, and no Nordic source is
+present in this tree.
+
+The credential-auth facts are cited to specification section and line in
+[`docs/esp32-gotchas.md` section 4](../../docs/esp32-gotchas.md), which also records the
+field-of-use terms a downstream user inherits.
 
 Enable it for the existing nRF application with:
 

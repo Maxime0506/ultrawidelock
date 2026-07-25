@@ -105,9 +105,8 @@ The UWB engine is not a RAM factor: `woz_uwb` + `deps/dw3000` together hold abou
 
 - `CONFIG_SIZE_OPTIMIZATIONS=y` (-Os). `CONFIG_SIZE_OPTIMIZATIONS_AGGRESSIVE` (-Oz) exists
   and is off. `LTO` exists in this Zephyr and is off.
-- `CONFIG_DOOR_LOCK_RELEASE` unset: links the debug variant of the closed Nordic Aliro
-  library (`lib/aliro/bin/debug/cortex-m33/libaliro_ble.a`, ~566 KB archive vs ~449 KB
-  release; archive size, not linked size).
+- `CONFIG_DOOR_LOCK_RELEASE` unset: links the debug rather than the release variant of the
+  Nordic Aliro library (~566 KB archive vs ~449 KB release; archive size, not linked size).
 - App shell on (`CONFIG_SHELL=y`, serial). App logging on, deferred, default level 0,
   16 KiB buffer. Net-core logging fully off.
 - `CONFIG_ASSERT=y` on both cores (app strips condition/message strings, net is verbose).

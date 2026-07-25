@@ -24,7 +24,7 @@
  * module carries no elliptic-curve dependency: the target wires the PSA-backed
  * aliro_ecdsa_p256_verify, the host KAT injects its own.
  *
- * Provenance: clean-room. Structures from the Aliro v1.0 spec (§7, §8.4, §14.6)
+ * Provenance: original. Structures from the Aliro v1.0 spec (§7, §8.4, §14.6)
  * and ISO 18013-5; the code is original.
  */
 #pragma once

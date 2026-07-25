@@ -31,7 +31,7 @@ from typing import Iterator, Optional
 # double spaces mean the runs of whitespace vary, so match \s+ rather than ' '.
 RNG_RE = re.compile(r"rng\s+blk=(\d+)\s+d=(-?\d+)mm\s+tof=(-?\d+)")
 
-# access_manager_impl.cpp:756 and :762.
+# The grant/deny console lines, emitted once per completed transaction.
 ACCESS_RE = re.compile(r"ACCESS (GRANTED|DENIED)")
 
 

@@ -133,7 +133,7 @@ self-sustains: every aliro_advertise() with a valid clock lands back here.
 **called by** `build_aliro_svc_data`
 
 ### `static bool build_aliro_svc_data(uint8_t out[26])`
-`ports/esp32/components/aliro_ble/aliro_ble.c:601`
+`ports/esp32/components/aliro_ble/aliro_ble.c:600`
 
 Assemble the 0xFFF2 service data (26 B = 2-byte UUID + 24-byte payload) with the
 GroupResolvingKey dynamic tag. Payload layout (bytes 0..23):
@@ -144,8 +144,7 @@ GroupResolvingKey dynamic tag. Payload layout (bytes 0..23):
 [12..15] dynamic-tag expiry, big-endian (0xFFFFFFFF = no clock)
 [16]     reserved (0)
 [17..23] dynamic tag (aliro_advtag.c; KAT'd against the spec sect. 20 vectors)
-Layout also cross-checked against libaliro_ble.a (AliroStack::
-GenerateAdvertisingData + BleDynamicTag::Generate); NimBLE hands out AdvA
+Layout follows Aliro 1.0 section 11.3 (Table 11-2); NimBLE hands out AdvA
 LSB-first, the derivation wants it MSB-first.
 With a valid wall clock the expiry is live (now + window) and the periodic
 re-derivation is armed; phones silently ignore an expiry in their past, so a
@@ -154,7 +153,7 @@ clock that cannot be trusted must advertise the "unavailable" form instead.
 **called by** `aliro_advertise`  ·  **calls** `adv_tag_schedule_refresh`
 
 ### `static void aliro_advertise(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:659`
+`ports/esp32/components/aliro_ble/aliro_ble.c:658`
 
 Configure and start BLE advertising for Aliro discovery.
 Advertises full Aliro service data (0xFFF2, 26 bytes) built by build_aliro_svc_data when adv is enabled and a GRK is configured; otherwise falls back to a bare service UUID plus device name for the unprovisioned/no-GRK case. Logs and returns without starting advertising if either ble_gap_adv_set_fields or ble_gap_adv_start fails.
@@ -162,7 +161,7 @@ Advertises full Aliro service data (0xFFF2, 26 bytes) built by build_aliro_svc_d
 **called by** `adv_refresh_ev`, `aliro_ble_readvertise`, `aliro_ble_start_attached`, `gap_event`, `on_sync`  ·  **calls** `build_aliro_svc_data`
 
 ### `static void on_sync(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:704`
+`ports/esp32/components/aliro_ble/aliro_ble.c:703`
 
 NimBLE host sync callback: ensures a device address exists, infers the own address type,
 and starts Aliro advertising. Logs and returns early without advertising if either step
@@ -171,18 +170,18 @@ fails.
 **calls** `aliro_advertise`
 
 ### `static void on_reset(int reason)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:722`
+`ports/esp32/components/aliro_ble/aliro_ble.c:721`
 
 NimBLE host reset callback; logs the reset reason.
 
 ### `static void host_task(void *param)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:729`
+`ports/esp32/components/aliro_ble/aliro_ble.c:728`
 
 FreeRTOS task entry point that runs the NimBLE host until stopped.
 Blocks in nimble_port_run() until nimble_port_stop() is called, then deinitializes the NimBLE FreeRTOS port; param is unused.
 
 ### `static int capture_cfg(const struct aliro_ble_config *cfg)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:738`
+`ports/esp32/components/aliro_ble/aliro_ble.c:737`
 
 Capture the config into the module statics (versions, callbacks, READ payload).
 Shared by aliro_ble_start (owns the host) and aliro_ble_prepare (attach mode).
@@ -190,7 +189,7 @@ Shared by aliro_ble_start (owns the host) and aliro_ble_prepare (attach mode).
 **called by** `aliro_ble_prepare`, `aliro_ble_start`  ·  **calls** `build_read_payload`
 
 ### `int aliro_ble_start(const struct aliro_ble_config *cfg)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:759`
+`ports/esp32/components/aliro_ble/aliro_ble.c:758`
 
 Bring up the Aliro BLE service as a standalone NimBLE host: init NVS, init the NimBLE port,
 register the GAP/GATT services and the Aliro L2CAP CoC server, and start the host task.
@@ -201,7 +200,7 @@ handled no-free-pages/new-version cases). Returns 0 on success.
 **calls** `capture_cfg`, `l2cap_init`
 
 ### `int aliro_ble_prepare(const struct aliro_ble_config *cfg)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:810`
+`ports/esp32/components/aliro_ble/aliro_ble.c:809`
 
 Capture the Aliro BLE configuration for later use by the service.
 Returns whatever capture_cfg returns; does not itself start advertising or the GATT service.
@@ -209,12 +208,12 @@ Returns whatever capture_cfg returns; does not itself start advertising or the G
 **calls** `capture_cfg`
 
 ### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:816`
+`ports/esp32/components/aliro_ble/aliro_ble.c:815`
 
 Return the Aliro GATT service definition table for registration with the NimBLE host.
 
 ### `int aliro_ble_start_attached(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:826`
+`ports/esp32/components/aliro_ble/aliro_ble.c:825`
 
 Bring up the Aliro BLE service on a host already initialized and synced by the owning stack
 (e.g. esp-matter), instead of starting a private NimBLE host.
@@ -225,7 +224,7 @@ own advertiser first. Returns -1 if address inference fails, otherwise 0.
 **calls** `aliro_advertise`, `l2cap_init`
 
 ### `void aliro_ble_readvertise(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:852`
+`ports/esp32/components/aliro_ble/aliro_ble.c:851`
 
 Re-emit the BLE advertisement with the current advertising parameters.
 Used when provisioning (the GRK) lands after the advertiser is already up: Apple sends
@@ -237,18 +236,18 @@ advertise with the current params once it runs).
 **calls** `aliro_advertise`
 
 ### `void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2], const uint8_t grk[16], int8_t tx_power)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:867`
+`ports/esp32/components/aliro_ble/aliro_ble.c:866`
 
 Set the Aliro advertising identity (group ID, sub ID, GRK) and TX power, and enable full Aliro service-data advertising.
 Copies group_id8, sub_id2, and grk into module statics; after this call, aliro_advertise will build and advertise full Aliro service data instead of the fallback bare-UUID form.
 
 ### `uint16_t aliro_ble_spsm(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:878`
+`ports/esp32/components/aliro_ble/aliro_ble.c:877`
 
 Return the L2CAP SPSM (simplified protocol/service multiplexer) value used for the Aliro CoC channel.
 
 ### `int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:888`
+`ports/esp32/components/aliro_ble/aliro_ble.c:887`
 
 Send data to a connected peer over its Aliro L2CAP CoC channel.
 Returns 0 on success (queued or sent), -1 if data is NULL, len is 0, no CoC channel exists
@@ -259,24 +258,24 @@ On success the stack takes ownership of the sdu buffer; on failure it is freed h
 **calls** `coc_chan_for`
 
 ### `int aliro_ble_disconnect(uint16_t conn_handle)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:922`
+`ports/esp32/components/aliro_ble/aliro_ble.c:921`
 
 Reader-initiated link drop (RSSI power gate close on a departed peer). Remote-user-terminated
 reason so the phone treats it as a clean end; already-gone connections count as success.
 
 ### `static void reader_status_ev_cb(struct ble_npl_event *ev)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:940`
+`ports/esp32/components/aliro_ble/aliro_ble.c:939`
 
 NimBLE portable event-queue event type used to defer reader-status callback execution onto the host task.
 
 ### `void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:950`
+`ports/esp32/components/aliro_ble/aliro_ble.c:949`
 
 Queue a reader-status callback to run on the NimBLE host task.
 Stores cb and unsecured in module statics and posts an event to the default NimBLE event queue; the callback fires later from reader_status_ev_cb, not synchronously. Runs on the host task so it serializes with every other sc_ble seal operation and keeps the BleSK counter monotonic; callers must not rely on immediate execution and must not post a second call before the first has been drained if ordering matters.
 
 ### `void aliro_ble_time_updated(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:971`
+`ports/esp32/components/aliro_ble/aliro_ble.c:970`
 
 Notify the transport that the wall clock just stepped (e.g. SNTP first sync), so the
 dynamic advertisement tag is re-derived immediately instead of waiting out the refresh

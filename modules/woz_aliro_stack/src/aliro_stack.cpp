@@ -1,7 +1,6 @@
 /*
- * Clean-room implementation of the Nordic Aliro public API used by this app.
+ * Independent implementation of the Nordic Aliro public API used by this app.
  * Protocol constants and wire formats come from Aliro Specification 1.0.
- * No implementation detail from the proprietary archive is used here.
  */
 
 #include "advertising_core.h"
@@ -182,13 +181,13 @@ void BleTypes::AdvertisingServiceData::SetDynamicTag(const uint8_t *dynamicTag)
 
 AliroError AliroStack::Init()
 {
-	LOG_INF("Clean-room Aliro source stack enabled");
+	LOG_INF("Aliro source stack enabled");
 	return ALIRO_NO_ERROR;
 }
 
 const char *AliroStack::GetLibraryVersion()
 {
-	return "openaliro-cleanroom/0.2";
+	return "openaliro/0.2";
 }
 
 const ProtocolVersion *AliroStack::GetExpeditedStandardProtocolVersions(size_t &versionCount) const

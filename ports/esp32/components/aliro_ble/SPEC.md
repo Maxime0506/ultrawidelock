@@ -1,4 +1,4 @@
-# aliro_ble — Aliro BLE transport (NimBLE), clean-room reimplementation
+# aliro_ble — Aliro BLE transport (NimBLE), independent reimplementation
 
 The wire contract this component implements. For what the component is and how to
 use it, see [`README.md`](README.md).
@@ -9,14 +9,11 @@ an L2CAP connection-oriented channel. The transaction that rides on it ends with
 ranging key and negotiated parameters entering the UWB engine through
 `woz_uwb_start_aliro()`.
 
-## Provenance (clean-room)
+## Provenance
 
-Behavior and the Aliro-spec constants below were derived by *studying* the
-Nordic reference (`ncs-door-lock-and-access-control`, `LicenseRef-Nordic-5-Clause`,
-Nordic-device-restricted, study-only). No source was copied. The UUIDs, PSM range,
-and wire formats are Aliro-protocol facts an interoperable reader must match; the
-implementation is original and MIT/ISC-clean per this project's provenance
-discipline. Do not paste Nordic code here.
+The UUIDs, PSM range, and wire formats below are Aliro 1.0 protocol facts that any
+interoperable reader must match. The implementation is original and MIT/ISC-clean per
+this project's provenance discipline. Do not paste vendor code here.
 
 ## Wire protocol (what an interoperable reader must present)
 

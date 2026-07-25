@@ -6,7 +6,7 @@
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * Provenance: clean-room. Wire structures from the Aliro v1.0 spec (§7.4, §8.4,
+ * Provenance: original. Wire structures from the Aliro v1.0 spec (§7.4, §8.4,
  * §14.6) and ISO 18013-5 (SessionData, COSE_Sign1 Sig_structure). The code is
  * original; the crypto goes through aliro_hash (HKDF/SHA-256) and aliro_crypto
  * (AES-256-GCM secure channel), with ES256 supplied by the caller.
