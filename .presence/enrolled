@@ -12,3 +12,4 @@
 #
 # Empty on purpose: no dongle has been enrolled yet, so any tag claiming
 # presence is rejected until someone deliberately adds one here.
+desk-lock 04f0e5f6d60cc0c13011e65edb3619637b5c8c5b3e5d94352ac0d05ef0655eb53db8ee7f2a1b58e7de8bc28ab7ed6e71b2d5debbf2ff4861f3faf34c67302a11ee
