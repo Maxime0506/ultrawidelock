@@ -66,6 +66,7 @@ ws-seed:
 ##            STRICT=1 (drop suspect ranges)
 ##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
 ##            ALIRO_SOURCE=1  ALIRO_TRACE=1 (temporary BLE/UWB capture)
+##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720
 build:
 	@$(ENV) ./scripts/build.sh build

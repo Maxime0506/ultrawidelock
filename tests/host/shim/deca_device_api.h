@@ -166,6 +166,52 @@ void dwt_readrxdata(uint8_t *buffer, uint16_t length, uint16_t rxBufferOffset);
 uint16_t dwt_getframelength(uint8_t *rng);
 int dwt_readstsquality(int16_t *rxStsQualityIndex, int stsSegment);
 
+/* ── CIA/CIR diagnostics surface for uwb_cirdiag.c ───────────────────────────
+ * Types/constants mirror deps/dw3000/dwt_uwb_driver/deca_device_api.h; the
+ * doubles in drvfake.c are link-only (no theatre test arms the CIR readout). */
+typedef enum {
+	DWT_ACC_IDX_IP_M = 0,
+	DWT_ACC_IDX_STS0_M,
+	DWT_ACC_IDX_STS1_M,
+} dwt_acc_idx_e;
+
+typedef enum {
+	DWT_CIR_READ_FULL = 0,
+	DWT_CIR_READ_LO,
+	DWT_CIR_READ_MID,
+	DWT_CIR_READ_HI,
+} dwt_cir_read_mode_e;
+
+#define DWT_CIR_LEN_IP_PRF64 1016
+#define DW_CIA_DIAG_LOG_ALL  0x1
+#define DW_CIA_DIAG_LOG_MAX  0x8
+
+/* Subset of the real dwt_rxdiag_t: exactly the fields uwb_cirdiag.c reads. */
+typedef struct {
+	uint16_t ipatovFpIndex;
+	uint16_t ipatovAccumCount;
+	uint32_t ipatovPeak;
+	uint32_t ipatovPower;
+	uint32_t ipatovF1;
+	uint32_t ipatovF2;
+	uint32_t ipatovF3;
+	uint16_t stsFpIndex;
+	uint16_t stsAccumCount;
+	uint32_t stsPeak;
+	uint32_t stsPower;
+	uint32_t stsF1;
+	uint32_t stsF2;
+	uint32_t stsF3;
+	int16_t xtalOffset;
+	uint32_t ciaDiag1;
+} dwt_rxdiag_t;
+
+void dwt_readdiagnostics(dwt_rxdiag_t *diagnostics);
+int dwt_readcir(uint32_t *buffer, dwt_acc_idx_e cir_idx, uint16_t sample_offs,
+		uint16_t num_samples, dwt_cir_read_mode_e mode);
+int dwt_readstsstatus(uint16_t *stsStatus, int sts_num);
+void dwt_configciadiag(uint8_t enable_mask);
+
 /* Recording state for the doubles above — reset with woz_host_rx_reset(). */
 struct woz_host_rx_rec {
 	unsigned rxenable_calls;      /* __real_dwt_rxenable invocations */

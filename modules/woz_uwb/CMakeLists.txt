@@ -94,6 +94,11 @@ if(CONFIG_WOZ_UWB)
         zephyr_library_sources(${SRC}/driver/uwb_selftest.c)
       endif()
 
+      # CIA/CIR diagnostics: per-reception first-path summary + windowed CIR tap dump
+      # (gated, default n; the RX-shim call sites no-op when unset).
+      if(CONFIG_WOZ_UWB_CIRDIAG)
+        zephyr_library_sources(${SRC}/driver/uwb_cirdiag.c)
+      endif()
       # Flight recorder: record a live walk-up into a RAM ring for host replay
       # (gated, default n; the ccc_shim_rx.c call sites no-op when unset).
       if(CONFIG_WOZ_FLIGHT_RECORDER)

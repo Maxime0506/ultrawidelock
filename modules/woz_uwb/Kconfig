@@ -90,6 +90,22 @@ config WOZ_RANGE_GATE_STRICT
 	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
 	  (consensus) are always active in fira_session.c regardless of this option.
 
+config WOZ_UWB_CIRDIAG
+	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"
+	depends on WOZ_ALIRO
+	help
+	  Latch the DW3000's CIA diagnostic bank on each reception (Ipatov/STS
+	  first-path index, F1..F3, power, peak, STS quality, crystal offset) and
+	  emit it as one "[ALAB] ev=uwb.diag" line from task context, plus an
+	  independently-armed 64-tap Ipatov window around the first path
+	  ("[ALAB] ev=uwb.cir"). tools/aliro_lab.py --cir consumes both.
+	  OFF at boot; `aliro cir on` arms the summary, `aliro cir dump on` the
+	  taps, and `aliro cir probe` runs a one-shot accumulator read diagnostic.
+	  The window read is only valid while the receiver is idle, so it is taken
+	  before the RX shim re-arms and only on one Final in four; even so it costs
+	  walk-up latency while armed, so arm it only for a capture run. Default n =
+	  compiled out, and the two RX-shim call sites cost nothing.
+
 config WOZ_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	depends on WOZ_ALIRO

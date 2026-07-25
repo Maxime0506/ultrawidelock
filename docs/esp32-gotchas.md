@@ -480,6 +480,47 @@ vanish across reboot, suspect an id collision with a reserved slot.
   Every reader→phone message was checked byte-for-byte against the reference; only one
   (the session-id) actually differed.
 
+### 9.1 Three wrong theories, and the probe that ended them
+
+**VERIFIED (2026-07-25).** The channel-impulse CIR tap dump returned a fixed
+non-physical blob for most receptions: byte-identical at every accumulator offset,
+saturated at the `int16` limits. Six bench runs and three failed hypotheses before the
+real cause, which is that **the DW3000 accumulator cannot be read while the receiver is
+up.** The capture ran after chaining to the blob's RX handler, and on the Final that
+handler immediately re-arms an SP0 listen, so the receiver was overwriting the
+accumulator underneath the read.
+
+Kept here because the wrong turns are the reusable part:
+
+| Theory | Killed by |
+|---|---|
+| The 97-byte read splits across the ESP32's 64 B non-DMA SPI limit | Splitting into 8-tap sub-reads made it **worse** (0/16 windows real, against 3/16 and 4/16 before). Reverted |
+| `dwt_readcir`'s ACC clock forcing was not sticking | `CLK_CTRL` read back identical (`11796992`) in both the working and the broken case |
+| The RSSI power gate was closing and dropping the link | No gate-close line anywhere in the log; the gate only ever held AP-Completed |
+
+What actually cracked it was a throwaway shell command, `lab cir probe`
+(`uwb_cirdiag_probe`): read the same window at three different accumulator offsets, then
+repeat the first offset, then repeat it once more in `DWT_CIR_READ_FULL` so the raw
+24-bit words are visible before the reduced modes saturate them. It reads as:
+
+- passes at different offsets identical → the sample offset is being ignored
+- first and repeated pass differ at the same offset → the read is racing something
+- `clk` without the ACC enable bits → the clock forcing did not stick
+
+It showed idle reads are perfect (offsets differ, the repeat is byte-identical, values
+sit at a physical noise floor) and only live-session reads are corrupt. That pointed
+straight at the receiver. Worth keeping for the next opaque-peripheral bug: **an A/B that
+varies one address and repeats one measurement beats any amount of reasoning about the
+bus.**
+
+Two lessons that generalise past this chip:
+
+- **A fix that makes the symptom worse is a result, not a setback.** The sub-read split
+  going from 4/16 to 0/16 was what ruled out the entire SPI layer.
+- **Instrument the boundary you cannot see.** Every hypothesis here was about the
+  transport; none of them survived contact with a probe that could distinguish
+  "addressing wrong" from "data wrong" from "timing wrong."
+
 ---
 
 ## 10. Current status — approach-unlock works end to end

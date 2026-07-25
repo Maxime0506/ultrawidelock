@@ -38,6 +38,7 @@
 #include "esp_log.h"
 #include "aliro_lat.h"
 #include "woz_diag.h"
+#include "uwb_cirdiag.h"
 
 #include "app_priv.h"
 #include "app_shell.h"
@@ -1118,6 +1119,14 @@ static void section_shell(void)
 	okc("lab off", run_cmd("lab", 2, "off") == 0 && mfk_lab_on == 0);
 	okc("lab bare prints state", run_cmd("lab", 1) == 0);
 	okc("lab usage on bad arg", run_cmd("lab", 2, "maybe") == 0);
+	okc("lab cir on arms the dump",
+	    run_cmd("lab", 3, "cir", "on") == 0 && uwb_cirdiag_dump_enabled());
+	okc("lab cir off disarms it",
+	    run_cmd("lab", 3, "cir", "off") == 0 && !uwb_cirdiag_dump_enabled());
+	mfk_cir_probes = 0;
+	okc("lab cir probe runs the accumulator diagnostic",
+	    run_cmd("lab", 3, "cir", "probe") == 0 && mfk_cir_probes == 1);
+	okc("lab cir usage on bad arg", run_cmd("lab", 3, "cir", "maybe") == 0);
 
 	mfk_prov_clear_calls = 0;
 	mfk_em_factory_resets = 0;
