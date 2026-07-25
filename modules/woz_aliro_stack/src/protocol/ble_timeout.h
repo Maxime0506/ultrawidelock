@@ -55,6 +55,10 @@ enum woz_aliro_ble_timeout_action {
 	WOZ_ALIRO_BLE_TIMEOUT_TERMINATE,
 };
 
+/**
+ * BLE timeout state machine: tracks the current role (reader or mobile) and which message (if any)
+ * is pending a response. Used to enforce timeouts on authentication steps.
+ */
 struct woz_aliro_ble_timeout_state {
 	enum woz_aliro_ble_timeout_role role;
 	enum woz_aliro_ble_timeout_message pending_message;

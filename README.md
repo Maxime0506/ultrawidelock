@@ -80,15 +80,15 @@ an ARM binary, so nothing links it on Xtensa. That whole layer is reimplemented 
 **nRF5340 DK:**
 
 ```bash
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0   # once per machine
-
-make bootstrap     # fetch NCS v3.3.0 + the Nordic add-on (~6.5 GB) into ./workspace
+make bootstrap     # host tools, the NCS v3.3.0 toolchain, then NCS + the
+                   # Nordic add-on (~6.5 GB) into ./workspace — once per machine
 make build         # → ./build/merged.hex
 make flash-erase   # first flash of a net-core image
 make flash         # every flash after that
 ```
 
 Also available: `make test` (host test suite, no toolchain or hardware required),
+`make tools` (what the CI gates need on this machine, and what is missing),
 `make coverage`, `make selftest` (boot self-test, no iPhone required), `make rebuild`,
 `make term`, and `make clean`. Run `make` alone for the full grouped list. Options pass
 as variables: `make build PRETTY=1 CHIP=dw3720` (also `PRISTINE=1`, `SELFTEST=1`).
@@ -111,10 +111,15 @@ make go            # build + flash + monitor
 **No hardware** (laptop only — run the whole host-side gate):
 
 ```bash
+make tools         # what the CI gates need here, and what is missing
 make test          # 578-assertion KAT suite, plain cc, sub-second
 make test-port     # ESP32 port suite (crypto KATs, codec, provisioning)
-make verify        # everything: test + sanitizers + fuzz + CBMC
+make verify        # every host-runnable CI gate in one sweep, ~35s
 ```
+
+`make verify` is the pre-PR sweep: one row per CI job, so green locally and green
+on the PR mean the same thing. A gate whose tool is missing fails it rather than
+passing quietly, because CI runs that gate either way.
 
 See [`ports/README.md`](ports/README.md) for the port index, and
 [`docs/esp32-bringup.md`](docs/esp32-bringup.md) to wire the radio up.

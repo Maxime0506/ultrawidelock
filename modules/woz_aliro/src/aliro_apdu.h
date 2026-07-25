@@ -11,7 +11,7 @@
  * 4-byte L2CAP envelope. Pure byte manipulation, no crypto and no platform
  * dependency, so it is host-KAT verifiable against the recovered layouts.
  *
- * Provenance: clean-room. Byte layouts from the project's reverse-engineering
+ * Provenance: original. Byte layouts from the project's reverse-engineering
  * notes; the code is original.
  */
 #pragma once

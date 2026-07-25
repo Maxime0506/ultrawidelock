@@ -350,6 +350,11 @@ static struct {
 	uint8_t txid[ALIRO_TXID_LEN];
 } s_spare_eph;
 
+/**
+ * Generate and cache a fresh ephemeral P-256 keypair and random transaction ID in the global spare
+ * (for immediate reuse on the next connection). Sets spare_eph.valid to 0 if either generation
+ * fails.
+ */
 static void spare_eph_refill(void)
 {
 	s_spare_eph.valid = aliro_ec_p256_keygen(s_spare_eph.priv, s_spare_eph.pub) == 0 &&
@@ -1067,6 +1072,12 @@ static void reader_status_send(struct aliro_session *s, bool unsecured)
 	s_last_unsecured = unsecured;
 }
 
+/**
+ * Send Reader-Status-Changed (Aliro step 23) on an established session: locked (Secured grant to
+ * unlock) or unlocked (Unsecured). Deduplicates consecutive identical messages. Logs Secured
+ * delivery failure and flags for replay on the next session if the peer disconnected before we
+ * could send.
+ */
 static void reader_status_send_on_host(bool unsecured)
 {
 	struct aliro_session *s = NULL;

@@ -100,6 +100,7 @@ def repo_slug() -> str:
 
 
 def fetch(url: str) -> bytes:
+    """Fetch and return the complete response body from a URL with 60-second timeout."""
     with urllib.request.urlopen(url, timeout=60) as resp:
         return resp.read()
 
@@ -119,6 +120,7 @@ def inject(page: Path, anchor: str, addition: str, before: bool) -> str:
 
 
 def link_site() -> None:
+    """Inject the flash-page hub link and landing quickstart call-to-action into the rendered site, and validate optional stylesheet and animation styles."""
     hub = inject(SITE / "start.html", HUB_ANCHOR, HUB_ROW, before=True)
     qs = inject(SITE / "index.html", QS_ANCHOR, QS_LEDE, before=False)
     sheet = SITE / "style.css"
@@ -147,6 +149,7 @@ def prune_manifest(dst: Path) -> None:
 
 
 def main() -> int:
+    """Assemble the web flasher page: stage firmware assets (from local build or latest release), copy the flasher HTML, and link the site navigation."""
     if not SITE.is_dir():
         print("docs_flash: site/ not found — run the generators first", file=sys.stderr)
         return 1

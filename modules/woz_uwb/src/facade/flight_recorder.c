@@ -1,3 +1,8 @@
+/**
+ * @file flight_recorder.c
+ * Binary flight-recorder format: framed records (magic, metadata, configuration, events, end) with
+ * little-endian integers and truncation handling; read/write operations with overflow detection.
+ */
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -14,43 +19,67 @@
 
 /* ── little-endian cursor primitives ─────────────────────────────────────── */
 
+/**
+ * Write a 1-byte unsigned integer to buffer at offset o and advance o.
+ */
 static void p8(uint8_t *b, size_t *o, uint8_t v)
 {
 	b[(*o)++] = v;
 }
+/**
+ * Write a 2-byte little-endian unsigned integer to buffer at offset o and advance o.
+ */
 static void p16(uint8_t *b, size_t *o, uint16_t v)
 {
 	b[(*o)++] = (uint8_t)v;
 	b[(*o)++] = (uint8_t)(v >> 8);
 }
+/**
+ * Write a 4-byte little-endian unsigned integer to buffer at offset o and advance o.
+ */
 static void p32(uint8_t *b, size_t *o, uint32_t v)
 {
 	for (int i = 0; i < 4; i++) {
 		b[(*o)++] = (uint8_t)(v >> (8 * i));
 	}
 }
+/**
+ * Write an 8-byte little-endian unsigned integer to buffer at offset o and advance o.
+ */
 static void p64(uint8_t *b, size_t *o, uint64_t v)
 {
 	for (int i = 0; i < 8; i++) {
 		b[(*o)++] = (uint8_t)(v >> (8 * i));
 	}
 }
+/**
+ * Copy n bytes from s to buffer at offset o and advance o.
+ */
 static void pbytes(uint8_t *b, size_t *o, const uint8_t *s, size_t n)
 {
 	memcpy(b + *o, s, n);
 	*o += n;
 }
 
+/**
+ * Read and advance a 1-byte unsigned integer from buffer at offset o.
+ */
 static uint8_t g8(const uint8_t *b, size_t *o)
 {
 	return b[(*o)++];
 }
+/**
+ * Read and advance a 2-byte little-endian unsigned integer from buffer at offset o.
+ */
 static uint16_t g16(const uint8_t *b, size_t *o)
 {
 	uint16_t v = (uint16_t)b[*o] | ((uint16_t)b[*o + 1] << 8);
 	*o += 2;
 	return v;
 }
+/**
+ * Read and advance a 4-byte little-endian unsigned integer from buffer at offset o.
+ */
 static uint32_t g32(const uint8_t *b, size_t *o)
 {
 	uint32_t v = 0;
@@ -60,6 +89,9 @@ static uint32_t g32(const uint8_t *b, size_t *o)
 	*o += 4;
 	return v;
 }
+/**
+ * Read and advance an 8-byte little-endian unsigned integer from buffer at offset o.
+ */
 static uint64_t g64(const uint8_t *b, size_t *o)
 {
 	uint64_t v = 0;
@@ -93,6 +125,10 @@ static int fr_emit(fr_writer_t *w, uint8_t type, const uint8_t *payload, size_t 
 	return 0;
 }
 
+/**
+ * Initialize a flight-recorder writer with an output buffer; write the magic prefix if capacity
+ * permits, otherwise latch overflow flag.
+ */
 void fr_writer_init(fr_writer_t *w, uint8_t *buf, size_t cap)
 {
 	size_t o = 0;
@@ -109,6 +145,10 @@ void fr_writer_init(fr_writer_t *w, uint8_t *buf, size_t cap)
 	w->len = o;
 }
 
+/**
+ * Emit a META record containing flight-recorder version, host port, and optional commit SHA; return
+ * 0 on success or -1 on buffer overflow.
+ */
 int fr_write_meta(fr_writer_t *w, uint16_t port, const char *sha)
 {
 	uint8_t pl[3 + FR_SHA_MAX];
@@ -125,6 +165,11 @@ int fr_write_meta(fr_writer_t *w, uint16_t port, const char *sha)
 	return fr_emit(w, FR_REC_META, pl, o);
 }
 
+/**
+ * Emit a CONFIG record containing Aliro session parameters and UWB radio configuration; truncate
+ * URSK and radio controller data to maximum lengths if needed; return 0 on success or -1 on buffer
+ * overflow.
+ */
 int fr_write_config(fr_writer_t *w, const struct fr_config *c)
 {
 	uint8_t pl[25 + FR_URSK_LEN + 2 + FR_RC_MAX];
@@ -145,6 +190,10 @@ int fr_write_config(fr_writer_t *w, const struct fr_config *c)
 	return fr_emit(w, FR_REC_CONFIG, pl, o);
 }
 
+/**
+ * Emit an EV record containing DW3000 register snapshot and received frame data; truncate frame to
+ * maximum length if needed; return 0 on success or -1 on buffer overflow.
+ */
 int fr_write_ev(fr_writer_t *w, const struct fr_ev *e)
 {
 	uint8_t pl[36 + FR_FRAME_MAX];
@@ -165,6 +214,10 @@ int fr_write_ev(fr_writer_t *w, const struct fr_ev *e)
 	return fr_emit(w, FR_REC_EV, pl, o);
 }
 
+/**
+ * Emit an END record with event count and truncation flag; return 0 on success or -1 on buffer
+ * overflow.
+ */
 int fr_write_end(fr_writer_t *w, uint32_t n_events, bool truncated)
 {
 	uint8_t pl[5];
@@ -177,6 +230,10 @@ int fr_write_end(fr_writer_t *w, uint32_t n_events, bool truncated)
 
 /* ── reader ──────────────────────────────────────────────────────────────── */
 
+/**
+ * Initialize a flight-recorder reader to parse a binary buffer; do not validate the magic prefix
+ * until the first read.
+ */
 void fr_reader_init(fr_reader_t *r, const uint8_t *buf, size_t len)
 {
 	r->buf = buf;
@@ -185,6 +242,11 @@ void fr_reader_init(fr_reader_t *r, const uint8_t *buf, size_t len)
 	r->checked_magic = false;
 }
 
+/**
+ * Parse one flight-recorder record from the reader buffer; check magic prefix on first call,
+ * validate frame format and type; return the record type on success, 0 for clean end-of-buffer, or
+ * -1 on malformed input.
+ */
 int fr_read_next(fr_reader_t *r, struct fr_record *out)
 {
 	uint8_t type;
@@ -343,6 +405,9 @@ static bool s_trunc;
  * them; NULL routes to woz_printf (the real UART/console). */
 static void (*s_sink)(const char *line);
 
+/**
+ * Decode a 5-byte little-endian unsigned integer.
+ */
 static uint64_t fr_ts5(const uint8_t t[5])
 {
 	uint64_t v = 0;
@@ -375,6 +440,10 @@ bool fr_enabled(void)
 	return s_armed;
 }
 
+/**
+ * Set an optional callback function to receive each line of flight-recorder dump output; if NULL,
+ * output goes to stdout.
+ */
 void fr_set_dump_sink(void (*sink)(const char *line))
 {
 	s_sink = sink;
@@ -466,6 +535,9 @@ size_t fr_finalize(const uint8_t **buf)
 	return s_w.len;
 }
 
+/**
+ * Emit a line to the registered dump sink if set, otherwise print to stdout.
+ */
 static void fr_emit_line(const char *line)
 {
 	if (s_sink != NULL) {

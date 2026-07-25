@@ -45,23 +45,30 @@ A flattened `...;` declaration -> (kind, name, signature) or None.
 
 **called by** `fill_page`  ·  **calls** `classify`, `clean_brief`
 
+### `entry_html(path: str, line: int, kind: str, name: str, sig: str, brief: str) -> str`
+`tools/docs_api.py:141`
+
+Render one API entry as HTML: function or macro signature with kind badge, source location, and optional docstring paragraph. Highlights the symbol name in bold.
+
+**called by** `fill_page`
+
 ### `fill_page(page_path: Path) -> list[tuple[str, str, str, str]]`
-`tools/docs_api.py:159`
+`tools/docs_api.py:160`
 
 -> [(kind, name, anchor-href)] appended to this page.
 
 **called by** `main`  ·  **calls** `entry_html`, `parse_header`
 
 ### `index_rows(rows: list[tuple[str, str, str, str]]) -> int`
-`tools/docs_api.py:187`
+`tools/docs_api.py:188`
 
 Append new entries to the search palette's index in nav.js.
 
 **called by** `main`
 
-<details><summary>Undocumented (2)</summary>
+### `main() -> int`
+`tools/docs_api.py:213`
 
-- `entry_html`
-- `main`
+Fill all rendered site pages with API declarations: parse symbol index, extract signatures and briefs, inject entries into pages, and merge new rows into the search index. Returns count of declarations added to the index, or -1 on error.
 
-</details>
+**calls** `fill_page`, `index_rows`

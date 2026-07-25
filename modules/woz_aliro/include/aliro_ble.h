@@ -9,7 +9,7 @@
  *
  * aliro_ble — Aliro BLE transport (NimBLE) for the ESP32-S3 port.
  * Advertises the Aliro GATT service, negotiates the BLE-UWB protocol version,
- * and carries the Aliro transaction over an L2CAP CoC. Clean-room
+ * and carries the Aliro transaction over an L2CAP CoC. Independent
  * reimplementation; see SPEC.md for the wire protocol and provenance.
  */
 #pragma once

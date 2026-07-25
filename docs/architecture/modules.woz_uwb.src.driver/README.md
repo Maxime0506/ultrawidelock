@@ -3,6 +3,7 @@
 
 | subsystem | about |
 |---|---|
+| [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](uwb_cirdiag.c.md) | @file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0/1). |
 | [`modules/woz_uwb/src/driver/uwb_isr.c`](uwb_isr.c.md) | @file uwb_isr.c — DW3000 interrupt-callback registration (implementation). |
 | [`modules/woz_uwb/src/driver/uwb_isr.h`](uwb_isr.h.md) | @file uwb_isr.h — DW3000 interrupt-callback registration (public surface). |
 | [`modules/woz_uwb/src/driver/uwb_min.c`](uwb_min.c.md) | @file uwb_min.c — DW3110 bring-up driver (implementation). |

@@ -54,6 +54,11 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 #define PN532_WAKEUP_HOLD_MS   10
 #define PN532_WAKEUP_SETTLE_MS 10
 
+/**
+ * PN532 SPI driver state: SPI bus spec, optional IRQ GPIO, semaphore-gated interrupt, and
+ * pre-allocated frame buffers for SPI read and write. The read_tx/read_rx buffers are kept in a
+ * single descriptor to prevent the nrfx driver from splitting long PN532 responses.
+ */
 struct pn532_spi {
 	struct spi_dt_spec bus;
 	struct gpio_dt_spec irq;
@@ -73,6 +78,11 @@ static struct pn532_spi ctx_spi = {
 	.irq = GPIO_DT_SPEC_INST_GET_OR(0, irq_gpios, {0}),
 };
 
+/**
+ * GPIO interrupt handler for PN532 readiness. Fires when the IRQ line goes active and signals a
+ * semaphore to wake the PN532 driver's polling task. Used only if an IRQ GPIO is configured in the
+ * device tree.
+ */
 static void irq_ready(const struct device *port, struct gpio_callback *callback,
 		      gpio_port_pins_t pins)
 {
@@ -83,6 +93,12 @@ static void irq_ready(const struct device *port, struct gpio_callback *callback,
 	k_sem_give(&c->irq_sem);
 }
 
+/**
+ * Read the PN532 SPI bus status register and return the device status byte.
+ * Executes a PN532_SPI_STATREAD transaction on the configured SPI bus.
+ * Returns PN532_OK on success and writes the status byte to *status; returns PN532_ERR_IO if the
+ * SPI transceive fails.
+ */
 static int spi_status(struct pn532_spi *c, uint8_t *status)
 {
 	const uint8_t tx[2] = {PN532_SPI_STATREAD, 0x00};
@@ -99,6 +115,11 @@ static int spi_status(struct pn532_spi *c, uint8_t *status)
 	return PN532_OK;
 }
 
+/**
+ * Write bytes to the PN532 NFC controller via SPI. Caller provides a buffer and length; this
+ * function prepends the PN532 DATAWRITE command (0xD5) and transmits via the SPI bus. Returns
+ * PN532_OK on success, PN532_ERR_IO if the buffer exceeds PN532_FRAME_BUF_SIZE or SPI write fails.
+ */
 static int bus_write(void *ctx, const uint8_t *buf, size_t len)
 {
 	struct pn532_spi *c = ctx;
@@ -114,6 +135,9 @@ static int bus_write(void *ctx, const uint8_t *buf, size_t len)
 	return spi_write_dt(&c->bus, &txs) == 0 ? PN532_OK : PN532_ERR_IO;
 }
 
+/**
+ * Poll the PN532 SPI status register and return true if a response is ready (bit 0 set).
+ */
 static bool spi_is_response_ready(struct pn532_spi *c)
 {
 	uint8_t status = 0;
@@ -124,6 +148,11 @@ static bool spi_is_response_ready(struct pn532_spi *c)
 	return (status & 0x01) != 0;
 }
 
+/**
+ * Wait for the PN532 to be ready: poll the IRQ GPIO if configured (with semaphore fallback), else
+ * poll SPI status. Timeout in milliseconds. Returns PN532_OK on ready, PN532_ERR_TIMEOUT on expiry,
+ * PN532_ERR_IO on GPIO error.
+ */
 static int bus_wait_ready(void *ctx, int timeout_ms)
 {
 	struct pn532_spi *c = ctx;
@@ -192,11 +221,21 @@ const struct pn532_bus_ops pn532_bus_ops = {
 	.read = bus_read,
 };
 
+/**
+ * Return the SPI bus context for PN532 operations. Caller uses this opaque pointer to route I/O
+ * callbacks to the correct PN532 device instance.
+ */
 void *pn532_bus_ctx(void)
 {
 	return &ctx_spi;
 }
 
+/**
+ * Initialize the PN532 SPI bus, GPIO IRQ (if configured), and perform a cold-start wake pulse on
+ * the chip-select line. Logs whether readiness is detected via IRQ or SPI polling. Returns 0 on
+ * success, -1 if SPI/GPIO is not ready or interrupt setup fails. Must be called once before any
+ * PN532 transactions.
+ */
 int pn532_bus_init(void)
 {
 	if (!spi_is_ready_dt(&ctx_spi.bus)) {

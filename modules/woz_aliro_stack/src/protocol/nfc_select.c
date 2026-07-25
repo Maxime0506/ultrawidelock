@@ -1,3 +1,11 @@
+/**
+ * @file nfc_select.c
+ * NFC SELECT command builder and response parser for Aliro. build_select_command emits 00 A4 04 00
+ * 09 <AID> 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
+ * extracting protocol version (expedited phase only) and extended-length sizes (0x7f66 TLV).
+ * parse_select_response and parse_select_response_ex validate the trailing 9000, check AID, and
+ * call parse_proprietary_information.
+ */
 #include "nfc_select.h"
 
 #include "tlv.h"
@@ -13,6 +21,10 @@ const uint8_t woz_aliro_step_up_aid[WOZ_ALIRO_AID_SIZE] = {
 	0xa0, 0x00, 0x00, 0x09, 0x09, 0xac, 0xce, 0x55, 0x02,
 };
 
+/**
+ * Map a SELECT phase (EXPEDITED or STEP_UP) to its corresponding Aliro AID byte sequence; return
+ * NULL if phase is unknown.
+ */
 static const uint8_t *aid_for_phase(enum woz_aliro_select_phase phase)
 {
 	if (phase == WOZ_ALIRO_SELECT_EXPEDITED) {
@@ -38,6 +50,12 @@ int woz_aliro_build_select_command(enum woz_aliro_select_phase phase,
 	return WOZ_ALIRO_SELECT_OK;
 }
 
+/**
+ * Parse proprietary information TLV data from a SELECT response: validate type tag 0x80, extract
+ * protocol version from expedited phase 0x5c, and decode extended-length sizes from 0x7f66 if
+ * present; return WOZ_ALIRO_SELECT_OK on valid parse or error code if format or content is
+ * malformed.
+ */
 static int parse_proprietary_information(const uint8_t *data, size_t length,
 					 enum woz_aliro_select_phase phase,
 					 struct woz_aliro_select_response *result)
@@ -141,6 +159,12 @@ int woz_aliro_parse_select_response(const uint8_t *response, size_t response_len
 	return status;
 }
 
+/**
+ * Parse a complete ISO 7816 SELECT response APDU (ending with 9000), validate the AID matches the
+ * requested phase (EXPEDITED or STEP_UP), extract proprietary information TLV, and decode protocol
+ * version and extended-length sizes. Return WOZ_ALIRO_SELECT_OK on success or an error code
+ * (WRONG_APPLICATION, STATUS_ERROR, INVALID_APDU, INVALID_ARGUMENT).
+ */
 int woz_aliro_parse_select_response_ex(const uint8_t *response, size_t response_length,
 				       enum woz_aliro_select_phase phase,
 				       struct woz_aliro_select_response *result)

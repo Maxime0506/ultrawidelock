@@ -68,6 +68,10 @@ enum pn532_frame_error {
 #define PN532_REG_CIU_TX_MODE 0x6302
 #define PN532_REG_CIU_RX_MODE 0x6303
 
+/**
+ * Bus interface for PN532: write (full host frame), wait_ready (poll for chip ready), read (frame
+ * bytes, bus prefix stripped). Each returns 0 on success.
+ */
 struct pn532_bus_ops {
 	/* Write one complete host frame. Returns 0 on success. */
 	int (*write)(void *ctx, const uint8_t *buf, size_t len);
@@ -80,6 +84,11 @@ struct pn532_bus_ops {
 	int (*read)(void *ctx, uint8_t *buf, size_t cap);
 };
 
+/**
+ * PN532 NFC reader state: bus ops (read/write/wait_ready callbacks), timeouts (ack_ms,
+ * response_ms), and diagnostic fields (last status, frame error, data length, checksum, head
+ * bytes).
+ */
 struct pn532 {
 	const struct pn532_bus_ops *ops;
 	void *ctx;

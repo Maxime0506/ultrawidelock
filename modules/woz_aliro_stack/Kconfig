@@ -1,4 +1,4 @@
-# Clean-room Aliro stack implementation derived from the published specification.
+# Aliro stack implementation derived from the published specification.
 
 config WOZ_ALIRO_SOURCE_STACK
 	bool "Use the in-tree Aliro source implementation"

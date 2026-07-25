@@ -322,22 +322,22 @@ loc() { wc -l <"$ROOT/$1" | tr -d ' '; }
 # under measurement — cheap, and their pass/fail already gated in run.sh.
 PYCOV_JSON="$OUT/pycov.json"
 rm -f "$OUT/pycov" "$PYCOV_JSON"
-if python3 -m coverage --version >/dev/null 2>&1; then
+if "$PY" -m coverage --version >/dev/null 2>&1; then
 	PY_INCLUDE="$ROOT/tools/aliro_lab.py"
 	PY_INCLUDE+=",$ROOT/tools/power_profile.py"
 	PY_INCLUDE+=",$ROOT/integration/homeassistant/aliro_mqtt_bridge.py"
 	PY_INCLUDE+=",$ROOT/scripts/flash_html.py"
 	for t in test_aliro_lab test_power_profile test_mqtt_bridge test_flash_html; do
-		COVERAGE_FILE="$OUT/pycov" python3 -m coverage run -a \
+		COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage run -a \
 			--include="$PY_INCLUDE" \
 			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
 	done
-	COVERAGE_FILE="$OUT/pycov" python3 -m coverage json -q -o "$PYCOV_JSON"
+	COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage json -q -o "$PYCOV_JSON"
 fi
 
 pypct() { # <repo-relative .py> -> "NN.N" (empty when unmeasured)
 	[ -f "$PYCOV_JSON" ] || return 0
-	python3 - "$ROOT/$1" "$PYCOV_JSON" <<-'EOF'
+	"$PY" - "$ROOT/$1" "$PYCOV_JSON" <<-'EOF'
 	import json, os, sys
 	target = os.path.realpath(sys.argv[1])
 	for name, info in json.load(open(sys.argv[2]))["files"].items():
@@ -380,7 +380,7 @@ nshl="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' -exec cat 
 surf "scripts/ + release/ shell ($nsh scripts)" "$nshl" \
 	"shellcheck-gated; tests/tooling covers ws-seed + patch drift"
 
-python3 "$ROOT/tests/host/coverage_report.py" \
+"$PY" "$ROOT/tests/host/coverage_report.py" \
 	"$OUT/summary.json" "$OUT/html/index.html" "$UNBUILT_TSV" "$SURFACES_TSV"
 
 # Surface a failing suite without aborting the coverage report.

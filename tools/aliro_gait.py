@@ -3,15 +3,14 @@
 
 Usage: python3 tools/aliro_gait.py [-o report.html] [label=]capture.log ...
 
-E1 probe of the passive carry verification experiment (see
-internal/passive-verify-scoping.md): for every walk-up transaction in the
-given "[ALAB]" captures, detrend the per-block trusted-range series, FFT the
-residual, and report the carry-motion features (cadence, stride regularity,
-approach speed, deceleration, closest approach, residual RMS) plus a
-per-window carried/stationary verdict. With two or more labels (one per
-carrier, e.g. alice=alice.log bob=bob.log) it also runs leave-one-out
-nearest-centroid classification to measure whether the features separate the
-carriers — the pre-registered Tier-2 GO bar is >= 80%.
+E1 probe of the passive carry verification experiment: for every walk-up
+transaction in the given "[ALAB]" captures, detrend the per-block
+trusted-range series, FFT the residual, and report the carry-motion features
+(cadence, stride regularity, approach speed, deceleration, closest approach,
+residual RMS) plus a per-window carried/stationary verdict. With two or more
+labels (one per carrier, e.g. alice=alice.log bob=bob.log) it also runs
+leave-one-out nearest-centroid classification to measure whether the features
+separate the carriers — the pre-registered Tier-2 GO bar is >= 80%.
 
 The block duration (and the phone's implied RAN multiplier) is derived from
 the range timestamps themselves, so no extra firmware logging is needed.
@@ -67,6 +66,7 @@ class WalkUp:
     """One analyzed walk-up: identity, series shape, features (or skip reason)."""
 
     def __init__(self, label, txn_index):
+        """Initialize one walk-up record: label and transaction index are fixed; n, dur_s, block_ms, ran, features, and skip are populated by analysis."""
         self.label = label
         self.txn_index = txn_index
         self.n = 0
@@ -80,6 +80,7 @@ class WalkUp:
 # ---- small numeric helpers (stdlib only, series are <100 samples) ----
 
 def _median(xs):
+    """Return the median of xs (middle value if odd length, average of two middle values if even)."""
     s = sorted(xs)
     n = len(s)
     return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2.0
@@ -145,6 +146,7 @@ def _resample(ts, xs, dt):
 
 
 def _hann(n):
+    """Return a Hann window of length n as a list; for n < 2 return all 1.0 (no window)."""
     if n < 2:
         return [1.0] * n
     return [0.5 - 0.5 * math.cos(2.0 * math.pi * i / (n - 1)) for i in range(n)]
@@ -207,6 +209,7 @@ def _gait_spectra(resid, fs, nfft):
 
 
 def _goertzel_power(xs, f_hz, fs_hz):
+    """Compute the power at frequency f_hz in a signal xs sampled at fs_hz using the Goertzel algorithm: real-time single-pass O(n) equivalent to FFT bin power."""
     coeff = 2.0 * math.cos(2.0 * math.pi * f_hz / fs_hz)
     s1 = s2 = 0.0
     for x in xs:
@@ -345,6 +348,7 @@ def _approach_windows(txn):
 
 
 def walkups_from_text(label, text):
+    """Parse Aliro Lab event text into transactions, extract individual approaches (windowed ranges) from each, and return a list of WalkUp objects with features and skip reasons analyzed per approach."""
     walkups = []
     idx = 0
     for txn in aliro_lab.split_transactions(aliro_lab.parse_events(text)):
@@ -355,6 +359,7 @@ def walkups_from_text(label, text):
 
 
 def load_walkups(labeled_paths):
+    """Load walk-up event sets from a list of labeled file paths. For each path, open the file and parse all transactions and approaches from its text, returning a list of WalkUp objects with features and skip reasons analyzed per approach."""
     walkups = []
     for label, path in labeled_paths:
         with open(path, "r", errors="replace") as f:
@@ -392,6 +397,7 @@ def classify(walkups):
             std.append(math.sqrt(var))
 
         def z(vec_):
+            """Z-score a feature vector: compute mean and std of each feature across all samples, then return (vec[k] - mean[k]) / std[k] for each k (or 0.0 if std is negligible)."""
             return [0.0 if std[k] < 1e-9 else (vec_[k] - mean[k]) / std[k]
                     for k in range(nf)]
 
@@ -417,7 +423,9 @@ def classify(walkups):
 # ---- terminal report ----
 
 def render_terminal(walkups, cls, use_color):
+    """Render walk-up data as a terminal table with optional ANSI color. Columns: label, transaction index, event count, duration (s), block (ms), ranged-sample count, cadence (Hz), incident cadence (Hz), prominence, regularity, speed (cm/s), RMS (cm), verdict (CARRY+, carry, or still). Skipped walk-ups show skip reason. If classifier results provided, display leave-one-out accuracy and confusion matrix. Prom weights the cadence estimate (Tier 2); motion verdict combines cadence and approach detection."""
     def paint(code, text):
+        """Return the string text wrapped in ANSI color code if use_color is true, otherwise return text unchanged."""
         return "\033[%sm%s\033[0m" % (code, text) if use_color else text
 
     out = []
@@ -534,9 +542,11 @@ def _scatter_svg(walkups):
     y_lo, y_hi = 0.0, 1.0
 
     def sx(v):
+        """Map a value v on the x-axis (cadence_hz range) to SVG pixel coordinate m + (v - x_lo) / (x_hi - x_lo) * (wpx - 2*m), where m is margin and wpx is plot width."""
         return m + (v - x_lo) / (x_hi - x_lo) * (wpx - 2 * m)
 
     def sy(v):
+        """Map a value v on the y-axis (regularity range) to SVG pixel coordinate hpx - m - (v - y_lo) / (y_hi - y_lo) * (hpx - 2*m), where m is margin and hpx is plot height (inverted so higher values are higher on the plot)."""
         return hpx - m - (v - y_lo) / (y_hi - y_lo) * (hpx - 2 * m)
 
     out = ['<svg class="scatter" viewBox="0 0 %d %d">' % (wpx, hpx)]
@@ -570,6 +580,7 @@ def _scatter_svg(walkups):
 
 
 def render_html(walkups, cls, title):
+    """Render walk-ups as a standalone HTML document with a table of features (cadence, regularity, speed, RMS), a cadence-vs-regularity scatter plot, and (if classifier results provided) a leave-one-out confusion matrix. Title appears in <title> and <h1>."""
     rows = []
     for w in walkups:
         if w.skip:
@@ -616,6 +627,7 @@ def render_html(walkups, cls, title):
 # ---- CLI ----
 
 def main(argv):
+    """Parse command-line arguments (label=path pairs or bare paths), load walk-ups from files, run leave-one-out nearest-centroid classifier (if >= 2 labels), and render terminal output (with ANSI color if stdout is a TTY). If -o is given, also render HTML report to that file. Return 2 on argument error, 0 on success, or OSError on file read failure."""
     args = argv[1:]
     html_path = None
     labeled = []

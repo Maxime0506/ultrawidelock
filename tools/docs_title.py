@@ -41,6 +41,7 @@ MD_SLOTS = (re.compile(rb"(?m)^# .*$"),)
 
 
 def git(*args: str) -> str:
+    """Run a git command and return its stdout stripped, or an empty string if git is not found or the command fails."""
     try:
         return subprocess.run(
             ["git", *args], capture_output=True, text=True, check=True
@@ -54,6 +55,7 @@ def retitle(raw: bytes, slots, token: re.Pattern[bytes], repo: bytes) -> tuple[b
     edits = 0
 
     def fix(m: re.Match[bytes]) -> bytes:
+        """Replace a single occurrence of the checkout name with the repo name inside a matched title slot; increment the edit counter and return the fixed bytes."""
         nonlocal edits
         fixed, count = token.subn(repo, m.group(0))
         edits += count
@@ -65,6 +67,7 @@ def retitle(raw: bytes, slots, token: re.Pattern[bytes], repo: bytes) -> tuple[b
 
 
 def main() -> int:
+    """Detect worktree name mismatch and retitle all docstring title slots and HTML title tags from checkout name to repo name (one-time per worktree); report count of edits and files touched."""
     checkout = Path.cwd().name
     common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
     if not common:

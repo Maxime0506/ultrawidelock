@@ -255,11 +255,18 @@ bool ccc_shim_rx_awaiting_poll(void)
 	return g_await_poll;
 }
 
+/**
+ * Return true if CCC UWB reception is awaiting either POLL or FINAL frame from the responder, false
+ * otherwise.
+ */
 bool ccc_shim_rx_deadline_pending(void)
 {
 	return g_await_poll || g_await_final;
 }
 
+/**
+ * Return true if CCC UWB reception is awaiting a FINAL frame from the responder, false otherwise.
+ */
 bool ccc_shim_rx_awaiting_final(void)
 {
 	return g_await_final;

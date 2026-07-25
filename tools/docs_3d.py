@@ -180,6 +180,7 @@ def ensure_lib() -> bool:
 
 
 def cta() -> str:
+    """Render the 3D graph call-to-action block: heading, description, and button link to graph3d.html. Returns styled HTML with inline CSS."""
     return f"""<div class="gv3d" {CTA_MARK}><div>
 <b>Fly through the whole surface</b>
 <span>Every file the docs cover, in one 3D graph — orbit it, filter it, click a node for what it does.</span></div>
@@ -194,6 +195,7 @@ background:linear-gradient(135deg,var(--tint),transparent 65%)}}
 
 
 def page(nodes, links, syms, slots) -> str:
+    """Generate the interactive 3D graph page: embed node/link data and symbol lookup as JSON, substitute into the template HTML, and inject threejs library code."""
     data = json.dumps({
         "nodes": [{k: n[k] for k in ("id", "name", "grp", "slug", "blurb")}
                   for n in nodes],
@@ -207,6 +209,7 @@ def page(nodes, links, syms, slots) -> str:
 
 
 def main() -> int:
+    """Build the 3D graph if a rendered site exists: mine nodes and symbols, generate page, inject the CTA button into architecture.html if present. Prints node/edge/symbol counts."""
     if not (SITE / "index.html").is_file() or not ARCH.is_dir():
         print("    no rendered site — nothing to build")
         return 0

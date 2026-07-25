@@ -1,7 +1,6 @@
 /*
- * Clean-room implementation of the Nordic Aliro public API used by this app.
+ * Independent implementation of the Nordic Aliro public API used by this app.
  * Protocol constants and wire formats come from Aliro Specification 1.0.
- * No implementation detail from the proprietary archive is used here.
  */
 
 #include "advertising_core.h"
@@ -59,11 +58,18 @@ constexpr const char *kErrorStrings[]{
 
 static_assert(std::size(kErrorStrings) == ALIRO_ERROR_MAX);
 
+/**
+ * Returns true if value is an ASCII digit character (0x30–0x39).
+ */
 bool IsDigit(uint8_t value)
 {
 	return value >= '0' && value <= '9';
 }
 
+/**
+ * Parses a decimal number from length bytes starting at value. Returns the parsed integer, or –1 if
+ * any byte is not an ASCII digit.
+ */
 int ParseDecimal(const uint8_t *value, size_t length)
 {
 	int result = 0;
@@ -76,11 +82,18 @@ int ParseDecimal(const uint8_t *value, size_t length)
 	return result;
 }
 
+/**
+ * Returns true if year is a leap year.
+ */
 bool IsLeapYear(int year)
 {
 	return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
 }
 
+/**
+ * Returns true if the given year, month, and day form a valid date. Accounts for leap years;
+ * rejects dates with year ≤ 0, month outside [1, 12], or day outside [1, days-in-month].
+ */
 bool IsValidDate(int year, int month, int day)
 {
 	constexpr int kDaysPerMonth[]{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -96,12 +109,21 @@ bool IsValidDate(int year, int month, int day)
 
 } // namespace
 
+/**
+ * Return a human-readable null-terminated string for this error code. Valid for all error enum
+ * values; returns "Unknown error" if the code is out of bounds.
+ */
 const char *AliroError::ToString() const
 {
 	const unsigned int code = static_cast<unsigned int>(mCode);
 	return code < std::size(kErrorStrings) ? kErrorStrings[code] : "Unknown error";
 }
 
+/**
+ * Convert an integer error code to an AliroError object. Returns ALIRO_ERROR_UNKNOWN if the code is
+ * out of bounds (negative or >= ALIRO_ERROR_MAX); otherwise returns the corresponding error enum
+ * value.
+ */
 AliroError AliroError::FromInt(int ec)
 {
 	if (ec < 0 || ec >= ALIRO_ERROR_MAX) {
@@ -117,6 +139,11 @@ static_assert(sizeof(BleTypes::AdvertisingServiceData::ServiceFlags) == 1);
 static_assert(sizeof(BleTypes::AdvertisingServiceData) == 24);
 static_assert(sizeof(BleTypes::AdvertisingService) == 26);
 
+/**
+ * Parses an RFC 3339 fixed-width timestamp in the form YYYY-MM-DDTHH:MM:SSZ (exactly 20 bytes).
+ * Returns a Time object on success; returns std::nullopt if the input is null, the wrong length, or
+ * contains an invalid date or time component.
+ */
 std::optional<Time> Time::FromTimestamp(const uint8_t *timestamp, size_t length)
 {
 	/* Timestamp is the fixed-width RFC 3339 form YYYY-MM-DDTHH:MM:SSZ. */
@@ -139,33 +166,53 @@ std::optional<Time> Time::FromTimestamp(const uint8_t *timestamp, size_t length)
 	return Time(year, month, day, hour, minute, second);
 }
 
+/**
+ * Sets the advertising version field (masked to kAdvertisingVersionMask bits).
+ */
 void BleTypes::AdvertisingServiceData::SetVersion(uint8_t version)
 {
 	mServiceFlags.version = version & static_cast<uint8_t>(kAdvertisingVersionMask);
 }
 
+/**
+ * Sets the notification field (masked to kNotificationMask bits).
+ */
 void BleTypes::AdvertisingServiceData::SetNotification(Notification notification)
 {
 	mServiceFlags.notification =
 		static_cast<uint8_t>(notification) & static_cast<uint8_t>(kNotificationMask);
 }
 
+/**
+ * Sets the TX power level in dBm.
+ */
 void BleTypes::AdvertisingServiceData::SetTxPowerLevel(TxPowerLevel powerLevelDbm)
 {
 	mTxPowerLevelDbm = powerLevelDbm;
 }
 
+/**
+ * Copies the first kTruncatedReaderGroupIdLength bytes of readerGroupId into
+ * mTruncatedReaderGroupId.
+ */
 void BleTypes::AdvertisingServiceData::SetTruncatedReaderGroupId(const uint8_t *readerGroupId)
 {
 	std::memcpy(mTruncatedReaderGroupId, readerGroupId, sizeof(mTruncatedReaderGroupId));
 }
 
+/**
+ * Copies the first kTruncatedReaderGroupSubIdLength bytes of readerGroupSubId into
+ * mTruncatedReaderGroupSubId.
+ */
 void BleTypes::AdvertisingServiceData::SetTruncatedReaderGroupSubId(const uint8_t *readerGroupSubId)
 {
 	std::memcpy(mTruncatedReaderGroupSubId, readerGroupSubId,
 		    sizeof(mTruncatedReaderGroupSubId));
 }
 
+/**
+ * Encodes expiryTimestampUnix as a big-endian 32-bit integer into mDynamicTagExpiryTime.
+ */
 void BleTypes::AdvertisingServiceData::SetDynamicTagExpiryTimestamp(
 	BleExpiryTimestamp expiryTimestampUnix)
 {
@@ -175,28 +222,45 @@ void BleTypes::AdvertisingServiceData::SetDynamicTagExpiryTimestamp(
 	mDynamicTagExpiryTime[3] = static_cast<uint8_t>(expiryTimestampUnix);
 }
 
+/**
+ * Copies dynamicTag (kWOZ_ALIRO_DYNAMIC_TAG_SIZE bytes) into mDynamicTag.
+ */
 void BleTypes::AdvertisingServiceData::SetDynamicTag(const uint8_t *dynamicTag)
 {
 	std::memcpy(mDynamicTag, dynamicTag, sizeof(mDynamicTag));
 }
 
+/**
+ * Initializes the Aliro stack. Returns ALIRO_NO_ERROR on success.
+ */
 AliroError AliroStack::Init()
 {
-	LOG_INF("Clean-room Aliro source stack enabled");
+	LOG_INF("Aliro source stack enabled");
 	return ALIRO_NO_ERROR;
 }
 
+/**
+ * Returns the library version string.
+ */
 const char *AliroStack::GetLibraryVersion()
 {
-	return "openaliro-cleanroom/0.2";
+	return "openaliro/0.2";
 }
 
+/**
+ * Returns the array of protocol versions supported for expedited standard procedure, and sets
+ * versionCount to the array length.
+ */
 const ProtocolVersion *AliroStack::GetExpeditedStandardProtocolVersions(size_t &versionCount) const
 {
 	versionCount = std::size(kProtocolVersions);
 	return kProtocolVersions;
 }
 
+/**
+ * Returns a bitmask of supported features: expedited fast phase, step-up phase, and BLE UWB, based
+ * on build configuration.
+ */
 uint8_t AliroStack::GetFeatures() const
 {
 	uint8_t features = 0;
@@ -214,6 +278,12 @@ uint8_t AliroStack::GetFeatures() const
 
 #ifdef CONFIG_NCS_ALIRO_BLE_UWB
 
+/**
+ * Generates an Aliro BLE advertisement from the provided address, power level, reader identifier,
+ * notification state, and expiration timestamp. Validates inputs and derives the dynamic tag via
+ * encryption. Returns ALIRO_NO_ERROR on success; ALIRO_INVALID_ARGUMENT if txPowerLevel is outside
+ * [–100, 20] dBm or notification is out of range.
+ */
 AliroError AliroStack::GenerateAdvertisingData(
 	BleTypes::AdvertisingServiceData &outData, const BleTypes::BleAddress &address,
 	BleTypes::TxPowerLevel txPowerLevel, const Identifier &readerIdentifier,
@@ -251,11 +321,18 @@ AliroError AliroStack::GenerateAdvertisingData(
 	return ALIRO_NO_ERROR;
 }
 
+/**
+ * Returns the BLE advertising version supported by this stack.
+ */
 uint8_t AliroStack::GetBleAdvertisingVersion()
 {
 	return 0;
 }
 
+/**
+ * Returns the array of protocol versions supported over BLE UWB, and sets versionCount to the array
+ * length.
+ */
 const ProtocolVersion *AliroStack::GetBleUwbProtocolVersions(size_t &versionCount) const
 {
 	versionCount = std::size(kProtocolVersions);

@@ -47,6 +47,11 @@ make_primary() {
 	mkdir -p "$dir"
 	git -C "$dir" init -q
 	git -C "$dir" config user.email t@t; git -C "$dir" config user.name t
+	# Machine hooks do not belong in a hermetic test. A global core.hooksPath —
+	# an identity guard, a leak scanner — sees this sandbox's throwaway author
+	# and blocks the commit below, failing the gate for a reason that has
+	# nothing to do with the code under test and does not exist in CI.
+	git -C "$dir" config core.hooksPath /dev/null
 	mkdir -p "$dir/scripts"
 	cp "$WS_SEED" "$dir/scripts/ws-seed.sh"; chmod +x "$dir/scripts/ws-seed.sh"
 	cp "$BUILD_SH" "$dir/scripts/build.sh"; chmod +x "$dir/scripts/build.sh"

@@ -56,8 +56,9 @@ Yield console lines from stdin ('-') or from a serial port.
 
 **called by** `main`
 
-<details><summary>Undocumented (1)</summary>
+### `main() -> int`
+`integration/homeassistant/aliro_mqtt_bridge.py:120`
 
-- `main`
+Parse a serial line or read lines from stdin ('-'), decode range and access readings, publish to MQTT (or stdout in dry-run mode), and notify Home Assistant via discovery payloads; return 0 on clean exit or KeyboardInterrupt.
 
-</details>
+**calls** `discovery_payloads`, `open_lines`, `parse_line`, `reading_to_message`

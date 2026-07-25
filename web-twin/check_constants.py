@@ -12,6 +12,8 @@
 #
 # Usage: python3 web-twin/check_constants.py   (from anywhere; exits nonzero on drift)
 
+"""Verify that the web-twin's hardcoded firmware constants in index.html stay synchronized with their source definitions. Parses the FW table, reads the cited source lines, and reports any mismatches or missing citations."""
+
 import re
 import sys
 from pathlib import Path
@@ -23,12 +25,14 @@ ENTRY = re.compile(r"^\s*([A-Z][A-Z0-9_]*):\s*(-?\d+),\s*// ([\w./-]+):(\d+)\s*$
 
 
 def value_on_line(value: str, line: str) -> bool:
+    """Return true if the given value appears on the line as a standalone literal (not embedded in a longer number or identifier), allowing C integer suffixes like u."""
     # Match the literal with C integer suffixes allowed (192u) but reject it
     # embedded in a longer number or identifier (300, x30, 1.30).
     return re.search(r"(?<![\w.])" + re.escape(value) + r"(?![0-9.])", line) is not None
 
 
 def main() -> int:
+    """Parse the FW constant table from the web-twin index.html and verify that each cited constant matches the exact line and value in the source tree. Reports which constants drifted and returns 1 if any do; 0 if all are in sync."""
     text = HTML.read_text(encoding="utf-8")
     m = re.search(r"const FW = \{(.*?)\n\};", text, re.S)
     if not m:

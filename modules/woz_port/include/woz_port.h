@@ -1,3 +1,8 @@
+/**
+ * @file woz_port.h
+ * Portable platform shim: allocates memory, measures uptime and cycle counts, provides sleep stubs
+ * for host tests, and wraps mutexes (no-op on single-threaded host).
+ */
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

@@ -116,11 +116,30 @@ it separates near from far. Returns the best-margin threshold or None.
 
 **called by** `main`  ·  **calls** `pct`, `print_table`
 
-<details><summary>Undocumented (4)</summary>
+### `print_table(hdr, rows)`
+`tools/power_profile.py:237`
 
-- `print_table`
-- `fmt_ms`
-- `fmt_ma`
-- `main`
+Print a table with uniform column widths: header row, separator, and data rows, each column left-justified.
 
-</details>
+**called by** `calibrate`, `main`
+
+### `fmt_ms(us)`
+`tools/power_profile.py:247`
+
+Format a time duration in microseconds to milliseconds as a string, or "-" if None.
+
+**called by** `main`
+
+### `fmt_ma(ma)`
+`tools/power_profile.py:252`
+
+Format a current measurement in milliamps as a string, or "-" if None.
+
+**called by** `main`
+
+### `main(argv)`
+`tools/power_profile.py:257`
+
+Parse command-line options (--ppk, --tag, --shift, --csv, --calibrate, --near-cm, --pair-ms), load walk-up logs and optional PPK power samples, compute per-run power duty cycles and current spans, optionally calibrate dBm-to-distance thresholds, print and append results to CSV.
+
+**calls** `align_ppk`, `analyze`, `calibrate`, `fmt_ma`, `fmt_ms`, `pair_range_rssi`, `parse_log`, `parse_ppk`

@@ -118,6 +118,10 @@ static volatile bool g_pending;
  * g_dump is cleared, so in the intended "walk up, then dump off" workflow no live flush races it.
  */
 #define CIRDIAG_RING_RECS 16u
+/**
+ * Channel impulse response diagnostic record: timestamp (microseconds), sample count, base index,
+ * and tap array (I/Q magnitude or signed values) for post-processing.
+ */
 struct cirdiag_rec {
 	int64_t t_us;
 	uint32_t n;
@@ -148,21 +152,34 @@ static void cirdiag_drain(void)
 	g_ring_head = 0;
 }
 
+/**
+ * Return the count of CIR windows currently in the ring buffer (0 to CIRDIAG_RING_RECS).
+ */
 uint32_t uwb_cirdiag_ring_count(void)
 {
 	return g_ring_count;
 }
 
+/**
+ * Enable or disable CIA diagnostic capture globally.
+ */
 void uwb_cirdiag_set_enabled(bool on)
 {
 	g_on = on;
 }
 
+/**
+ * Return true if CIA diagnostic capture is enabled.
+ */
 bool uwb_cirdiag_enabled(void)
 {
 	return g_on;
 }
 
+/**
+ * Arm or disarm CIR window capture. When arming, also arms the summary diagnostics. When disarming,
+ * drains all buffered windows to the console via ev=uwb.cir lines and clears the ring.
+ */
 void uwb_cirdiag_dump_set_enabled(bool on)
 {
 	/* The window read needs the summary path armed too (it supplies the first-path index and
@@ -179,11 +196,20 @@ void uwb_cirdiag_dump_set_enabled(bool on)
 	}
 }
 
+/**
+ * Return true if CIR window dump is armed (enabled and CIA logging armed).
+ */
 bool uwb_cirdiag_dump_enabled(void)
 {
 	return g_dump;
 }
 
+/**
+ * Capture one reception's CIR diagnostic snapshot: arm CIA logging on first RX, then latch the
+ * status, frame length, STS quality/status, and (if window dump is enabled and the radio is idle) a
+ * fixed-size Ipatov-centred CIR window. Returns true if capture succeeded; false on first RX or if
+ * already pending. Seqlock-protected; safe to call from RX callback.
+ */
 bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
 {
 	if (!g_on) {
@@ -236,6 +262,10 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pen
 /** @brief Decimation tick: the shims call this once per Final, so it advances per ranging block. */
 static uint32_t g_win_tick;
 
+/**
+ * Return true on every CIRDIAG_CIR_EVERY-th call if capture is enabled, CIA logging is armed, and
+ * window dump is armed; used to throttle window reads during streaming.
+ */
 bool uwb_cirdiag_window_due(void)
 {
 	if (!g_on || !g_dump || !g_cia_armed) {
@@ -244,6 +274,12 @@ bool uwb_cirdiag_window_due(void)
 	return (g_win_tick++ % CIRDIAG_CIR_EVERY) == 0u;
 }
 
+/**
+ * Diagnostic: read and print the CIR at four sample offsets (three distinct addresses plus one
+ * repeat) to verify addressing and detect non-determinism. Requires CIA logging armed (one
+ * reception taken). Outputs one pass in MID mode (int16 real/imag) and one in FULL mode (raw
+ * 24-bit) at the base offset.
+ */
 void uwb_cirdiag_probe(void)
 {
 	/* Offsets to sample, in taps, relative to the window base. The first three are distinct
@@ -301,6 +337,11 @@ void uwb_cirdiag_probe(void)
 	}
 }
 
+/**
+ * Emit the pending CIR snapshot: write the summary line ([ALAB] ev=uwb.diag) with Ipatov and STS
+ * peak/power/quality fields, and either defer the window to the ring buffer (if window dump is
+ * enabled) or skip it. Retry up to 3 times if the seqlock detects concurrent capture. Idempotent.
+ */
 void uwb_cirdiag_flush(void)
 {
 	dwt_rxdiag_t d;

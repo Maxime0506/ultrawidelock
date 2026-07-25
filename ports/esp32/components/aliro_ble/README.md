@@ -6,7 +6,7 @@ negotiation, and carries the transaction over an L2CAP connection-oriented chann
 
 The exact wire formats an interoperable reader must present — UUIDs, the SPSM payload
 layout, the version-selection write, and the CoC parameters — are in
-[`SPEC.md`](SPEC.md), along with the clean-room provenance statement for this component.
+[`SPEC.md`](SPEC.md), along with the provenance statement for this component.
 
 ## What it provides
 

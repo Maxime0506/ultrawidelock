@@ -219,6 +219,7 @@ def theme(sheet: Path, css: str) -> str:
 
 
 def main() -> int:
+    """Apply CSS theme overrides (fonts and color scheme) to the main site shell and API reference tree if they exist; report what was themed."""
     did = []
     if SHEET.is_file():
         did.append(f"site shell {theme(SHEET, THEME)}")

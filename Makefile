@@ -48,13 +48,40 @@ ENV := $(strip \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
   $(if $(NFC),NFC=$(NFC)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
-## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
-##   Options: HA=1 also applies the Home Assistant data-model patches
+## tools: what every host CI gate needs, what this machine has, how to fill gaps
+##   Reports each tool, the gate it serves, and the version CI pins where it
+##   pins one. Installs nothing. Exits nonzero when something is missing, so
+##   `make verify` skipping a gate is never a surprise.
+tools:
+	@$(REPO_ROOT)/scripts/toolchain.sh check
+
+## tools-install: install the missing host tools  ·  prints the commands, asks first
+##   macOS/Linux, via whichever of brew/apt/dnf/pacman/zypper is present, plus
+##   pipx for the version-pinned python tools. Nothing runs before you agree;
+##   `-y` or ASSUME_YES=1 answers in advance. Also fetches nrfutil, which is
+##   reported but never required: it belongs to `make build`, not to any gate,
+##   so its absence never fails this target. The firmware toolchains themselves
+##   are separate: `make bootstrap` (NCS) and ESP-IDF, see docs/set-up.md.
+tools-install:
+	@$(REPO_ROOT)/scripts/toolchain.sh install
+
+## bootstrap: set this machine up for the repo  ·  the only command before build
+##   Three phases, so a fresh clone reaches `make build` without a manual step
+##   in the middle: `make tools-install` for the host gate tools and nrfutil;
+##   the NCS v3.3.0 toolchain (~2 GB, skipped when already installed); then NCS
+##   + the Nordic add-on (~6.5 GB), patched for this repo. Anything it cannot
+##   install stops the run before the big fetch, not after it.
+##   CI never runs this target — it calls scripts/bootstrap.sh directly — so no
+##   runner has its packages touched.
+##   Options: NO_TOOLS=1 skip the tool phase, straight to the fetch
+##            NO_TOOLCHAIN=1 skip the NCS toolchain phase
+##            HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make build HA=1`; not hardware-validated)
 bootstrap:
+	@[ -n "$(NO_TOOLS)" ] || $(REPO_ROOT)/scripts/toolchain.sh install
 	@$(ENV) ./scripts/bootstrap.sh
 
 ## ws-seed: give THIS worktree its own workspace (APFS COW clone, ~0 disk)
@@ -114,25 +141,22 @@ fuzz:
 cbmc:
 	@$(REPO_ROOT)/tests/host/cbmc.sh
 
-## verify: run every host gate in one shot  ·  pre-PR sweep
-##   test-web -> test -> test-san -> fuzz -> cbmc -> twin selftest, sequential +
-##   fail-fast. The cheap drift gate runs first; the later ones need clang /
-##   cbmc / node. The twin self-test replays the scenario against the committed
-##   web-twin/twin.js (node only, no emsdk); the rebuild + byte-diff staleness
-##   gate stays in CI / `make test-twin`. Plain `make test` stays sub-second for
-##   the edit loop, so this is the full sweep, not the inner-loop gate.
+## verify: run every host-runnable CI gate in one shot  ·  pre-push sweep
+##   The 18 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
+##   twin-wasm, patch-drift, docs, test-san, test-port, test-ws, test-verify,
+##   coverage (with the 90% floor), zizmor, licences, cbmc — run in parallel
+##   lanes behind a 4s serial tripwire, so a 1s formatting slip stops it at once.
+##   ~34s all in (83s if run one at a time). A gate whose tool is missing
+##   FAILS the sweep (`make tools-install` fixes it), because CI runs that gate
+##   regardless. cbmc is the exception: 64s on its own, twice the rest of the
+##   sweep, so it is off unless WITH_CBMC=1 (~72s), and its row says so.
+##   Builds no firmware, not even in a shell with ESP-IDF sourced (test-port's
+##   target-build layer is held off, as it is on CI's runner). firmware-builds
+##   and release stay out: ESP-IDF + NCS, tens of minutes.
+##   Options: WITH_CBMC=1 adds the proof  ·  SKIP="fuzz docs" drops named gates
+##            SERIAL=1 one gate at a time  ·  COV_MIN=90 coverage floor
 verify:
-	@$(MAKE) --no-print-directory test-web
-	@$(MAKE) --no-print-directory test
-	@$(MAKE) --no-print-directory test-san
-	@$(MAKE) --no-print-directory fuzz
-	@$(MAKE) --no-print-directory cbmc
-	@if command -v node >/dev/null 2>&1; then \
-		node $(REPO_ROOT)/web-twin/selftest.cjs; \
-	else \
-		printf '  ~ web-twin selftest skipped (node not found)\n'; \
-	fi
-	@printf '\n  ✓ all host gates passed\n'
+	@$(REPO_ROOT)/scripts/verify.sh
 
 ## check: every host-side suite under one banner  ->  live rows + summary table
 ##   Parallel by default; SERIAL=1 streams suites one at a time, SUITES="..."
@@ -150,6 +174,16 @@ test-port:
 ##   never touches this repo's own workspace/ or build/.
 test-ws:
 	@$(REPO_ROOT)/tests/tooling/ws_seed_test.sh
+
+## test-verify: tests for the pre-push sweep itself  ·  make verify's own gate
+##   Two halves. Static: the gate table still covers every job in
+##   .github/workflows/, so a new CI job cannot be added without either a local
+##   gate or a written reason. Behavioral: a copy of verify.sh run against stub
+##   tools in a temp git repo, checking that a missing tool, a failed tripwire
+##   and an unmet coverage floor each fail the sweep rather than passing quietly.
+##   Nothing real is compiled; the whole file runs in a couple of seconds.
+test-verify:
+	@$(REPO_ROOT)/tests/tooling/verify_test.sh
 
 ## test-web: drift-gate the web-twin page against the firmware it cites
 ##   Re-reads every constant web-twin/index.html cites (file:line) from the C

@@ -45,8 +45,9 @@ The og/twitter block for one page, titled from its own <title>.
 
 **called by** `main`
 
-<details><summary>Undocumented (1)</summary>
+### `main() -> int`
+`tools/docs_media.py:102`
 
-- `main`
+Copy demo media files into the rendered site and inject demo figure HTML into the landing page; inject social card metadata (og:image, etc.) into HTML pages using origin remote as base URL.
 
-</details>
+**calls** `pages_url`, `social_meta`

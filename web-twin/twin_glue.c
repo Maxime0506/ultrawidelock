@@ -56,6 +56,9 @@ static uint64_t g_ts;      /* rolling radio timestamp base, DTU */
 static uint64_t g_t2;      /* this round's POLL RX timestamp */
 static uint32_t g_latches; /* accepted latches since the page last asked */
 
+/**
+ * Increment the digital twin's latch counter on each successful Aliro unlock decision.
+ */
 static void twin_on_latch(void)
 {
 	g_latches++;
@@ -249,16 +252,25 @@ EMSCRIPTEN_KEEPALIVE unsigned twin_stat_rxenable(void)
 	return woz_host_rx.rxenable_calls;
 }
 
+/**
+ * Retrieve the count of transmit-start calls logged by the digital twin's host-shim radio interface.
+ */
 EMSCRIPTEN_KEEPALIVE unsigned twin_stat_starttx(void)
 {
 	return woz_host_rx.starttx_calls;
 }
 
+/**
+ * Retrieve the current poll queue index in the digital twin's main loop.
+ */
 EMSCRIPTEN_KEEPALIVE unsigned twin_poll_index(void)
 {
 	return g_idx;
 }
 
+/**
+ * Retrieve the current UWB block (repetition) counter in the digital twin.
+ */
 EMSCRIPTEN_KEEPALIVE unsigned twin_block_no(void)
 {
 	return g_blockn;

@@ -15,7 +15,7 @@
 #   PRISTINE=1 scripts/build.sh build       # same as rebuild
 #   UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 #   PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-#   ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
+#   ALIRO_SOURCE=1 scripts/build.sh build   # independent source stack (discovery slice)
 #   UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 set -euo pipefail
 
@@ -57,6 +57,7 @@ BOARD="nrf5340dk/nrf5340/cpuapp"
 if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
   launch() { "$@"; }
 else
+  # Launch a command in the NCS toolchain environment for the configured version.
   launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
 fi
 # Compute SHA-1 hash; tries shasum first (BSD/macOS), falls back to sha1sum (Linux). Filters output to the hash hex string only.
@@ -145,7 +146,7 @@ do_build() {
   local strict=""
   [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
 
-  # ALIRO_SOURCE=1: compile the clean-room public API directly into the nRF app.
+  # ALIRO_SOURCE=1: compile the independent public API directly into the nRF app.
   # NFC expedited-standard, expedited-fast, and step-up use the source stack.
   local aliro_source=""
   [ "${ALIRO_SOURCE:-0}" = 1 ] && aliro_source="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y"

@@ -1,3 +1,9 @@
+/**
+ * @file nfc_select.h
+ * Parsed result of an NFC SELECT command for the Aliro applet: negotiated protocol version, maximum
+ * command and response data lengths (from TLV or default), extended-length support, and the raw
+ * proprietary information TLV (A5 tag) for further parsing.
+ */
 #pragma once
 
 #include <stddef.h>
@@ -27,6 +33,11 @@ enum woz_aliro_select_result {
 	WOZ_ALIRO_SELECT_VERSION_NOT_SUPPORTED = -6,
 };
 
+/**
+ * Parsed NFC SELECT response: negotiated protocol version, max command/response data lengths (from
+ * 7F66 TLV or defaults), extended-length support flag, and the complete proprietary information TLV
+ * (A5 tag). The TLV view is valid only as long as the input response buffer is valid.
+ */
 struct woz_aliro_select_response {
 	uint16_t selected_protocol_version;
 	/* Defaults required for a short-only peer when 7F66 is absent. */

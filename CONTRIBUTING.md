@@ -6,8 +6,10 @@ best-effort; small, focused changes land fastest.
 ## Building and testing
 
 Prerequisites and build steps are in the [README](README.md#quick-start). The short
-version for the nRF5340 DK target: `make bootstrap` once, then `make build`. Host-side
-tests need no toolchain or hardware: `make test` runs the KAT suite, `make coverage` the
+version for the nRF5340 DK target: `make bootstrap` once, then `make build`. Bootstrap is
+the only command between a clone and a build — it installs the host tools, then the NCS
+toolchain, then fetches the SDK, skipping whatever is already there. Host-side tests need
+no toolchain or hardware at all: `make test` runs the KAT suite, `make coverage` the
 coverage report.
 
 For the ESP32-S3 ports, build from the app directory (`ports/esp32/apps/reader` or
@@ -17,8 +19,21 @@ Their host tests run without ESP-IDF: `make test-port`.
 Every PR must pass the CI gates that run automatically: host tests + coverage floor,
 sanitizers, fuzz, CBMC, the ESP32 port suite, clang-format and clang-tidy over
 `modules/`, shellcheck, patch drift, workflow lint, and compile checks of both
-targets' firmware. `make verify` runs the host-side gates locally in one go; add
-`make test-port` if you touched a port.
+targets' firmware. `make verify` runs the host-side gates locally in one go, the
+ESP32 port suite included. CBMC is the one exception: it is half the sweep's
+runtime on its own, so it is opt-in as `WITH_CBMC=1 make verify`, and the summary says
+on every run that it did not run. A gate whose tool is not installed fails the
+sweep rather than passing quietly, because CI runs it either way: `make tools` lists
+what each gate needs and what this machine is missing, and `make tools-install`
+installs it after showing you the commands ([`docs/set-up.md`](docs/set-up.md)).
+
+`make verify` holds one row per CI job, and `make test-verify` is what keeps that true.
+If your change adds a job to `.github/workflows/`, those tests fail until the job is
+accounted for: either name the local gate that reproduces it, or write down why it
+cannot have one (the firmware builds cannot — they need the full toolchains). That is
+the whole point, so please do not work around it. The same tests fail if a gate is
+deleted while a job still expects it, or if a gate needs a tool `make tools` cannot
+install.
 
 ## Ground rules
 

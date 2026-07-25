@@ -40,6 +40,7 @@ NAV_ANCHOR = '<script defer src="nav.js"></script>'
 
 
 def repo_url() -> str:
+    """Return the GitHub URL (https://github.com/owner/repo) of the origin remote, or an empty string if the remote is not configured or not a GitHub URL."""
     try:
         url = subprocess.run(
             ["git", "remote", "get-url", "origin"],
@@ -52,6 +53,7 @@ def repo_url() -> str:
 
 
 def chip(cmd: str) -> str:
+    """Render a shell command in a copyable chip with a Copy button and dollar-sign prompt. No comments allowed inline; context goes in surrounding prose."""
     # Command only — no `# comment` in or next to anything copyable. Context
     # goes in prose around the chip instead.
     return (
@@ -62,6 +64,7 @@ def chip(cmd: str) -> str:
 
 
 def row(href: str, name: str, desc: str) -> str:
+    """Render a navigation card row with a link, title, and description text."""
     return (
         f'<li><a href="{href}"><span class="row-name">{name}</span>'
         f'<span class="row-desc">{desc}</span></a></li>'
@@ -117,6 +120,7 @@ HERO = (
 # Every page and anchor referenced here is validated by the link pass that
 # runs after this one, so a renamed guide fails the build instead of rotting.
 def main_html(gh: str) -> str:
+    """Render the main content section of the Get-Started landing page as a series of collapsible track cards. Each card contains links, code chips, and prose explaining the Hardware, Software, Build/Test/Verify, Architecture, Protocol, and Project tracks. Embeds the provided GitHub URL into clone and repository-link rows. Returns HTML."""
     tracks = []
     tracks.append(("chip", "Hardware", "Boards, wiring, and the UWB radio", (
         '<ul class="rows">'
@@ -140,10 +144,11 @@ def main_html(gh: str) -> str:
         '<details class="p-sub" open><summary>nRF5340 — the primary target</summary>'
         '<div class="s-body">'
         + (chip(f"git clone {gh}.git") + chip("cd openaliro") if gh else "")
-        + chip("nrfutil sdk-manager toolchain install --ncs-version v3.3.0")
         + chip("make bootstrap")
-        + "<p>The first command runs once per machine; bootstrap pulls "
-          "~6.5 GB into <code>./workspace</code>.</p>"
+        + "<p>One command, three phases: the host tools, the NCS v3.3.0 "
+          "toolchain, then ~6.5 GB of NCS and the Nordic add-on into "
+          "<code>./workspace</code>. Already have a toolchain? It is detected "
+          "and skipped.</p>"
         + "</div></details>"
         '<details class="p-sub"><summary>ESP32-S3 port</summary>'
         '<div class="s-body">'
@@ -161,16 +166,18 @@ def main_html(gh: str) -> str:
         + row("set-up.html", "Installing",
               "The full install guide — every target, every knob.")
         + "</ul>"
-        '<p>The five-step version of this track sits on the '
+        '<p>The step-by-step version of this track sits on the '
         '<a href="index.html#get-running">landing page</a>.</p>'
     )))
     tracks.append(("play", "Build, flash &amp; test", "The make targets that drive everything", (
         chip("make build")
         + chip("make flash-erase")
         + chip("make test")
-        + chip("make coverage")
+        + chip("make verify")
         + "<p>Images land in <code>./build/merged.hex</code>; first flash "
-          "needs the erase; tests run on the host, no hardware.</p>"
+          "needs the erase; tests run on the host, no hardware. "
+          "<code>make verify</code> is the pre-PR sweep — every CI gate a "
+          "host can run, in about 35 seconds.</p>"
         + '<ul class="rows">'
         + row("configuring.html", "Configuring",
               "Build options, Kconfig overlays, and the runtime consoles.")
@@ -213,12 +220,22 @@ def main_html(gh: str) -> str:
         + row("porting.html", "Porting openaliro",
               "What moving the engine to a new chipset costs, and how to prove it.")
         + "</ul>"
-        '<details class="p-sub"><summary>What CI checks on every push</summary>'
+        '<details class="p-sub" open><summary>What CI checks, and how to run it '
+        "here</summary>"
         '<div class="s-body"><p>Host tests with a coverage floor, ASan/UBSan '
         "sanitizer runs, clang-format and clang-tidy, shell and workflow "
         "lint, fuzzing, CBMC proofs, port tests, firmware image builds for "
         "both targets, and a patch-drift gate that keeps the ports "
-        "honest.</p></div></details>"
+        "honest.</p>"
+        + chip("make tools")
+        + chip("make verify")
+        + "<p>Every one of those a laptop can run is a row in "
+          "<code>make verify</code>, so a green sweep and a green PR mean the "
+          "same thing. <code>make tools</code> says what each gate needs and "
+          "what is missing here; a gate whose tool is absent fails the sweep "
+          "rather than passing quietly, because CI runs it either way. Only "
+          "the firmware image builds stay out — they need the full "
+          "toolchains.</p></div></details>"
     )))
 
     cards = "".join(
@@ -262,6 +279,7 @@ else go()})();
 
 
 def build_page(template: str, gh: str) -> str:
+    """Build the Get-Started page by injecting main_html(gh) into the site template, then update the hero button link and search index. Applies title, og:title, breadcrumb, and active-nav-marker rewrites. Returns the modified page as a string."""
     page = template
     page = re.sub(
         r"<title>[^<]*</title>", "<title>Get started</title>", page, count=1
@@ -290,6 +308,7 @@ def build_page(template: str, gh: str) -> str:
 
 
 def add_search_row(page_name: str) -> None:
+    """Add an entry for the given page name to the nav.js search array if not already present. Inserts at position 1 (after the index entry) and rewrites the JSON in place. Does nothing silently if nav.js is absent."""
     nav_path = SITE / "nav.js"
     if not nav_path.is_file():
         return
@@ -307,6 +326,7 @@ def add_search_row(page_name: str) -> None:
 
 
 def main() -> int:
+    """Render the Get-Started landing page and inject it into site/start.html, wire the wayfinding guide into every page, and update navigation and hero-button references. Reports counts of pages modified and returns 1 if the template layout has changed. Requires the site to be rendered first."""
     if not TEMPLATE.is_file():
         print("    no rendered site — nothing to build the landing from")
         return 0
