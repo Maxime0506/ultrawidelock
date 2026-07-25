@@ -110,25 +110,16 @@ fuzz:
 cbmc:
 	@$(REPO_ROOT)/tests/host/cbmc.sh
 
-## verify: run every host gate in one shot  ·  pre-PR sweep
-##   test-web -> test -> test-san -> fuzz -> cbmc -> twin selftest, sequential +
-##   fail-fast. The cheap drift gate runs first; the later ones need clang /
-##   cbmc / node. The twin self-test replays the scenario against the committed
-##   web-twin/twin.js (node only, no emsdk); the rebuild + byte-diff staleness
-##   gate stays in CI / `make test-twin`. Plain `make test` stays sub-second for
-##   the edit loop, so this is the full sweep, not the inner-loop gate.
+## verify: run every host-runnable CI gate in one shot  ·  pre-push sweep
+##   The 17 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
+##   twin-wasm, patch-drift, docs, test-san, test-port, test-ws, coverage (with
+##   the 90% floor), zizmor, licences, cbmc — cheapest-first and fail-fast, so a
+##   1s formatting slip never costs cbmc's 86s. A gate whose tool is missing is
+##   SKIPPED LOUDLY and counted in the summary, never silently passed. ~170s all
+##   in. Excludes firmware-builds / release: those need ESP-IDF + NCS.
+##   Options: SKIP="cbmc fuzz" drops named gates  ·  COV_MIN=90 coverage floor
 verify:
-	@$(MAKE) --no-print-directory test-web
-	@$(MAKE) --no-print-directory test
-	@$(MAKE) --no-print-directory test-san
-	@$(MAKE) --no-print-directory fuzz
-	@$(MAKE) --no-print-directory cbmc
-	@if command -v node >/dev/null 2>&1; then \
-		node $(REPO_ROOT)/web-twin/selftest.cjs; \
-	else \
-		printf '  ~ web-twin selftest skipped (node not found)\n'; \
-	fi
-	@printf '\n  ✓ all host gates passed\n'
+	@$(REPO_ROOT)/scripts/verify.sh
 
 ## check: every host-side suite under one banner  ->  live rows + summary table
 ##   Parallel by default; SERIAL=1 streams suites one at a time, SUITES="..."
