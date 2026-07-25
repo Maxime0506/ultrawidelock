@@ -41,6 +41,7 @@ JOURNEY = [
     ("Set up", "configuring"),
     ("Set up", "troubleshooting"),
     ("Hardware", "nrf5340-bringup"),
+    ("Hardware", "nrf5340-wiring"),
     ("Hardware", "esp32-bringup"),
     ("Hardware", "hardware-validation"),
     ("Deep dives", "architecture"),
