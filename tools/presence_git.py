@@ -187,10 +187,17 @@ def open_port(port: str, timeout=8.0):
         import serial  # pyserial, only needed to talk to a real dongle
     except ImportError as exc:
         raise PresenceError(
-            "pyserial is required to talk to a dongle (pip install pyserial); "
-            "'verify' does not need it"
+            "pyserial is required to talk to a dongle. Either 'pip install pyserial', "
+            "or run this script under 'uv run --with pyserial'. Note that "
+            "'uv tool install pyserial' does NOT work: it exposes only pyserial's "
+            "own commands, not the importable library. 'verify' needs none of this."
         ) from exc
-    return serial.Serial(port, 115200, timeout=timeout)
+    try:
+        return serial.Serial(port, 115200, timeout=timeout)
+    except serial.SerialException as exc:
+        # A wrong port name is the most common bring-up mistake by far; a
+        # traceback here would look like a bug in the tool rather than a typo.
+        raise PresenceError(f"cannot open {port}: {exc}") from exc
 
 
 def read_exact(ser, n: int) -> bytes:
