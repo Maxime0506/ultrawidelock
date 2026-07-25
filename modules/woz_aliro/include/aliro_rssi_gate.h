@@ -30,19 +30,19 @@ struct aliro_rssi_gate_cfg {
 
 /* Kconfig-tunable defaults, with host-build fallbacks (no sdkconfig there). */
 #ifndef CONFIG_WOZ_RSSI_GATE_OPEN_DBM
-#define CONFIG_WOZ_RSSI_GATE_OPEN_DBM -55
+#define CONFIG_WOZ_RSSI_GATE_OPEN_DBM (-55)
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_CLOSE_DBM
-#define CONFIG_WOZ_RSSI_GATE_CLOSE_DBM -65
+#define CONFIG_WOZ_RSSI_GATE_CLOSE_DBM (-65)
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_CLOSE_HOLD_MS
-#define CONFIG_WOZ_RSSI_GATE_CLOSE_HOLD_MS 3000
+#define CONFIG_WOZ_RSSI_GATE_CLOSE_HOLD_MS (3000)
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_SLOPE_DB
-#define CONFIG_WOZ_RSSI_GATE_SLOPE_DB 8
+#define CONFIG_WOZ_RSSI_GATE_SLOPE_DB (8)
 #endif
 #ifndef CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS
-#define CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS 0
+#define CONFIG_WOZ_RSSI_GATE_MAX_HOLD_MS (0)
 #endif
 
 #define ALIRO_RSSI_GATE_CFG_DEFAULT                                                                \

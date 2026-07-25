@@ -20,3 +20,4 @@
 | [`tools/docs_title.py`](docs_title.md) | Title the generated pages after the repository, not after the checkout directory. |
 | [`tools/docs_twin.py`](docs_twin.md) | Fold the interactive walk-up digital twin into the rendered site. |
 | [`tools/flight_recorder.py`](flight_recorder.md) | flight_recorder.py — carry a recorded UWB walk-up off the device and turn it |
+| [`tools/power_profile.py`](power_profile.md) | Power profile: turn a gated-walk-up serial log (+ optional power capture) |

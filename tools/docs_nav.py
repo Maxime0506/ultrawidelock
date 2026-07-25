@@ -48,6 +48,7 @@ JOURNEY = [
     ("Deep dives", "protocol-notes"),
     ("Deep dives", "wireshark"),
     ("Deep dives", "approach-direction"),
+    ("Deep dives", "power-profile"),
     ("Deep dives", "passive-carry-verification"),
     ("Deep dives", "porting-esp32-phase3"),
     ("Deep dives", "chipset-memory"),

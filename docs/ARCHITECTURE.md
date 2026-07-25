@@ -122,7 +122,7 @@ transaction phase and secure-channel state, and exposes start/attach entry point
 standalone and Matter-attached BLE transports, plus provisioning and diagnostic APIs used by
 Matter commissioning and the bench console.
 
-**depends on** [`modules/woz_aliro/include/aliro_ble.h`](architecture/modules.woz_aliro.include/aliro_ble.h.md), [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md), [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md), [`modules/woz_aliro/include/aliro_reader.h`](architecture/modules.woz_aliro.include/aliro_reader.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md), [`modules/woz_aliro/src/aliro_ranging.h`](architecture/modules.woz_aliro.src/aliro_ranging.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
+**depends on** [`modules/woz_aliro/include/aliro_ble.h`](architecture/modules.woz_aliro.include/aliro_ble.h.md), [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md), [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md), [`modules/woz_aliro/include/aliro_reader.h`](architecture/modules.woz_aliro.include/aliro_reader.h.md), [`modules/woz_aliro/include/aliro_rssi_gate.h`](architecture/modules.woz_aliro.include/aliro_rssi_gate.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md), [`modules/woz_aliro/src/aliro_ranging.h`](architecture/modules.woz_aliro.src/aliro_ranging.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
 ### [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md)
 
@@ -205,6 +205,16 @@ Also implements the trust-store membership check and add-with-dedup operations u
 whether a presented credential public key is trusted.
 
 **depends on** [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md)
+
+### [`modules/woz_aliro/src/aliro_rssi_gate.c`](architecture/modules.woz_aliro.src/aliro_rssi_gate.c.md)
+
+BLE-RSSI ranging power gate implementation: EWMA smoothing in Q4 fixed point,
+open/close hysteresis with a sustained-below close hold, and an optional
+rise-rate fast open so a fast approach is not penalized by the smoothing lag.
+Pure logic — no radio, clock, or logging dependencies — so the host suite can
+drive it with synthetic approach traces.
+
+**depends on** [`modules/woz_aliro/include/aliro_rssi_gate.h`](architecture/modules.woz_aliro.include/aliro_rssi_gate.h.md)
 
 ### [`modules/woz_aliro/src/aliro_ranging.h`](architecture/modules.woz_aliro.src/aliro_ranging.h.md)
 
@@ -1165,6 +1175,43 @@ With a `.log` input the reconstructed trace is written next to it as `.frc`.
 With a corpus_dir the frames are written there as `frame_NNNN.bin`. Stdlib only;
 the binary format mirrors flight_recorder.h byte for byte.
 
+### [`tools/power_profile.py`](architecture/tools/power_profile.md)
+
+Power profile: turn a gated-walk-up serial log (+ optional power capture)
+into the mA / unlock-latency / approach numbers of the RSSI-gate study.
+
+Usage: python3 tools/power_profile.py <capture.log> [--ppk trace.csv]
+                                      [--tag LABEL] [--shift SECONDS] [--csv out.csv]
+       python3 tools/power_profile.py <capture.log> --calibrate
+                                      [--near-cm CM] [--pair-ms MS]
+
+--calibrate answers a different question from the same captures: what the BLE
+level actually means in metres on THIS reader in THIS room. Every walk-up already
+interleaves `range cm=` (UWB ground truth) with `rssi dbm=`, so it pairs them,
+prints the level per distance bin with its spread, and scores each candidate open
+threshold on how well it separates near from far. That is what should set
+WOZ_RSSI_GATE_OPEN_DBM / CLOSE_DBM, which ship as placeholders. No analyzer needed.
+
+Parses the same "[ALAB] t=<us> ev=..." trace aliro_lab.py reads (firmware built
+with CONFIG_WOZ_ALIRO_LAB, `lab on`), now including the RSSI power-gate events
+(ev=rssi/gate.hold/gate.open/gate.close, dbm=...), and reports per walk-up:
+
+  held    connect -> gate.open (auth done, UWB deliberately dark)
+  g->bolt gate.open -> bolt (the latency the gate actually costs at the door)
+  c->bolt connect -> bolt (whole walk-up)
+  uwb-on  m4 -> gate.close/session end (the window the DW3000 is powered)
+  duty    uwb-on as % of the connected time
+  rssi    smoothed level at gate.open (dBm)
+
+--ppk merges a power-analyzer CSV export (PPK2-style: header line, then
+"<t_ms>,<current_uA>" rows) and adds mean mA over idle / held / uwb-on spans.
+Alignment: the largest positive current step in the capture is assumed to be
+the DW3000 waking at m4 (--shift SECONDS overrides with a manual offset from
+capture start to the first m4). --tag labels every row (e.g. the approach
+speed: slow/normal/fast) so runs concatenate into one study CSV.
+
+Exit status: 0 = parsed at least one walk-up, 2 = usage/input error.
+
 ## `modules/woz_port/include/`
 
 ### [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)
@@ -1246,6 +1293,16 @@ credential is authenticated.
 ### [`modules/woz_aliro/include/aliro_reader.h`](architecture/modules.woz_aliro.include/aliro_reader.h.md)
 
 **used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+
+### [`modules/woz_aliro/include/aliro_rssi_gate.h`](architecture/modules.woz_aliro.include/aliro_rssi_gate.h.md)
+
+BLE-RSSI ranging power gate: decides when the phone is close enough that arming
+UWB ranging is worth the radio's RX power. Pure sample-in/state-out logic (EWMA
+smoothing, open/close hysteresis with a close hold-off, optional rise-rate fast
+open for fast approaches) so it host-tests without a radio; the reader feeds it
+connection RSSI samples and defers Reader-Status-AP-Completed until it opens.
+
+**used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_rssi_gate.c`](architecture/modules.woz_aliro.src/aliro_rssi_gate.c.md)
 
 ### [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md)
 

@@ -12,4 +12,5 @@
 | [`modules/woz_aliro/include/aliro_prim.h`](aliro_prim.h.md) |  |
 | [`modules/woz_aliro/include/aliro_prov.h`](aliro_prov.h.md) | Persistent reader provisioning storage: identity and credential trust anchors saved to and |
 | [`modules/woz_aliro/include/aliro_reader.h`](aliro_reader.h.md) |  |
+| [`modules/woz_aliro/include/aliro_rssi_gate.h`](aliro_rssi_gate.h.md) | BLE-RSSI ranging power gate: decides when the phone is close enough that arming |
 | [`modules/woz_aliro/include/aliro_stepup.h`](aliro_stepup.h.md) | Aliro step-up (Access Document) phase: builds the mdoc DeviceRequest, unwraps and decrypts the |
