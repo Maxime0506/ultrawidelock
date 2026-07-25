@@ -772,15 +772,14 @@ Aliro Gait: carry-motion features from Aliro Lab walk-up captures.
 
 Usage: python3 tools/aliro_gait.py [-o report.html] [label=]capture.log ...
 
-E1 probe of the passive carry verification experiment (see
-internal/passive-verify-scoping.md): for every walk-up transaction in the
-given "[ALAB]" captures, detrend the per-block trusted-range series, FFT the
-residual, and report the carry-motion features (cadence, stride regularity,
-approach speed, deceleration, closest approach, residual RMS) plus a
-per-window carried/stationary verdict. With two or more labels (one per
-carrier, e.g. alice=alice.log bob=bob.log) it also runs leave-one-out
-nearest-centroid classification to measure whether the features separate the
-carriers — the pre-registered Tier-2 GO bar is >= 80%.
+E1 probe of the passive carry verification experiment: for every walk-up
+transaction in the given "[ALAB]" captures, detrend the per-block
+trusted-range series, FFT the residual, and report the carry-motion features
+(cadence, stride regularity, approach speed, deceleration, closest approach,
+residual RMS) plus a per-window carried/stationary verdict. With two or more
+labels (one per carrier, e.g. alice=alice.log bob=bob.log) it also runs
+leave-one-out nearest-centroid classification to measure whether the features
+separate the carriers — the pre-registered Tier-2 GO bar is >= 80%.
 
 The block duration (and the phone's implied RAN multiplier) is derived from
 the range timestamps themselves, so no extra firmware logging is needed.

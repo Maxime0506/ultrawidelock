@@ -161,8 +161,8 @@ int aliro_apdu_build_auth0(uint8_t exp_phase, uint8_t user_policy, uint16_t vers
 	aliro_tlv_w_init(&w, out, cap);
 	/* ExpeditedPhaseType is a 1-byte value (0 = standard path), NOT a zero-length
 	 * item: the reference TLVWriter::Put(Tag, uint8) always writes length 1, and
-	 * nyrek's kormax/ST-sourced builder writes `41 01 00`. A zero-length mandatory
-	 * field is what the phone rejected (GeneralError). */
+	 * an independent kormax/ST-sourced builder writes `41 01 00`. A zero-length
+	 * mandatory field is what the phone rejected (GeneralError). */
 	aliro_tlv_put_u8(&w, ALIRO_TAG_EXP_PHASE, exp_phase);
 	aliro_tlv_put_u8(&w, ALIRO_TAG_USER_POL, user_policy);
 	aliro_tlv_put_u16(&w, ALIRO_TAG_VERSION, version);
