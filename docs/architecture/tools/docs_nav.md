@@ -34,7 +34,7 @@ flowchart TD
 ## API
 
 ### `curate_index(index: Path) -> int | None`
-`tools/docs_nav.py:93`
+`tools/docs_nav.py:94`
 
 Rebuild the Guides section into the journey's buckets.
 

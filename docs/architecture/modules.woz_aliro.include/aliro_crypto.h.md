@@ -4,7 +4,7 @@
 Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
 seal/open framing shared by the reader and device sides of an Aliro session.
 
-**used by** [`modules/woz_aliro/include/aliro_stepup.h`](aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_crypto.c`](../modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](../modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](../modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](../modules.woz_aliro.src/aliro_stepup.c.md)
+**used by** [`modules/woz_aliro/include/aliro_device.h`](aliro_device.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_crypto.c`](../modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_device.c`](../modules.woz_aliro.src/aliro_device.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](../modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](../modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](../modules.woz_aliro.src/aliro_stepup.c.md)
 
 ## API
 

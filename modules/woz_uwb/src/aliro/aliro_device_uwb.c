@@ -1,3 +1,8 @@
+// Device-side UWB ranging-service setup codec: parses the reader's M1 and M3
+// setup messages, picks the device's answer to M1 (select_m2), and builds the M2
+// and M4 replies. The inverse of the reader path in aliro_uwb_msg.c, written over
+// the same TLV parser and builder helpers. No crypto and no session state, so a
+// host loopback can drive the real reader codec end to end.
 /** @file aliro_device_uwb.c — device-side UWB ranging-service setup codec.
  *  See aliro_device_uwb.h.
  *

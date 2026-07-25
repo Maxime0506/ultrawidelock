@@ -7,7 +7,10 @@
 | [`modules/woz_aliro/src/aliro_apdu.c`](aliro_apdu.c.md) | Aliro APDU TLV codec: builds command payloads (AUTH0, AUTH1, AuthData, EXCHANGE) and parses |
 | [`modules/woz_aliro/src/aliro_apdu.h`](aliro_apdu.h.md) | APDU framing and parsing for the Aliro Access Protocol: builds outbound command APDUs via a |
 | [`modules/woz_aliro/src/aliro_approach.c`](aliro_approach.c.md) | *first commit: "approach: predict time-of-arrival, open the bolt at arrival"* |
+| [`modules/woz_aliro/src/aliro_ble_central.c`](aliro_ble_central.c.md) | Platform-free half of the device-side BLE transport declared in |
 | [`modules/woz_aliro/src/aliro_crypto.c`](aliro_crypto.c.md) | Aliro cryptographic primitives: key derivation (KDF/HKDF), key-block splitting, AES-GCM secure |
+| [`modules/woz_aliro/src/aliro_device.c`](aliro_device.c.md) | Aliro initiator (User-Device) session machine: the implementation behind |
+| [`modules/woz_aliro/src/aliro_device_apdu.c`](aliro_device_apdu.c.md) | Implementation of the device-side Access-Protocol wire codec declared in |
 | [`modules/woz_aliro/src/aliro_hash.c`](aliro_hash.c.md) | Self-contained SHA-256, HMAC-SHA256, HKDF, and ANSI-X9.63 KDF implementation for the ESP32-IDF |
 | [`modules/woz_aliro/src/aliro_hash.h`](aliro_hash.h.md) | Streaming SHA-256 (FIPS 180-4) implementation used by the Aliro crypto layer. |
 | [`modules/woz_aliro/src/aliro_lat.c`](aliro_lat.c.md) | Walk-up latency trace: first-hit phase timestamps + the consolidated budget line. |

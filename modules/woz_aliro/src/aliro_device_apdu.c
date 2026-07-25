@@ -1,3 +1,9 @@
+// Implementation of the device-side Access-Protocol wire codec declared in
+// aliro_device_apdu.h: ISO7816 case-4 unwrapping, status-word appending, parsers
+// for the reader's AUTH0, AUTH1 and EXCHANGE command TLVs, and builders for the
+// three device responses. Every function is bounds-checked byte manipulation over
+// caller-owned buffers with no allocation, so it round-trips against the reader's
+// own builders and parsers in aliro_apdu.c under the host tests.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

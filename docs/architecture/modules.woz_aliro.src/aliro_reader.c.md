@@ -307,14 +307,14 @@ Logs the session's message count and final transaction phase before deactivating
 ### `static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)`
 `modules/woz_aliro/src/aliro_reader.c:1385`
 
-BLE data-received callback: looks up the session for conn_handle and feeds the data into its
-transaction state machine.
+BLE data-received callback: looks up the session for conn_handle and feeds each Aliro envelope
+in the received buffer into its transaction state machine.
 Logs a warning and drops the data if no active session exists for conn_handle.
 
 **calls** `session_find`, `transaction_feed`
 
 ### `static struct aliro_ble_config make_ble_cfg(void)`
-`modules/woz_aliro/src/aliro_reader.c:1399`
+`modules/woz_aliro/src/aliro_reader.c:1419`
 
 The reader's BLE transport config: advertised versions/features + the
 transaction transport callbacks. Shared by the standalone + attached starts.
@@ -322,14 +322,14 @@ transaction transport callbacks. Shared by the standalone + attached starts.
 **called by** `aliro_reader_ble_prepare`, `aliro_reader_start`
 
 ### `static int reader_engine_init(void)`
-`modules/woz_aliro/src/aliro_reader.c:1425`
+`modules/woz_aliro/src/aliro_reader.c:1445`
 
 crypto + provisioning load + UWB ranging setup, shared by both start paths.
 
 **called by** `aliro_reader_start`, `aliro_reader_start_attached`  ·  **calls** `load_provisioning`, `spare_eph_refill`
 
 ### `int aliro_reader_start(void)`
-`modules/woz_aliro/src/aliro_reader.c:1443`
+`modules/woz_aliro/src/aliro_reader.c:1463`
 
 Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging) and brings up
 the BLE transport using the default advertising config. Returns 0 on success; returns -1 if
@@ -338,7 +338,7 @@ engine initialization fails, or the underlying aliro_ble_start result otherwise.
 **calls** `make_ble_cfg`, `reader_engine_init`
 
 ### `const void *aliro_reader_ble_prepare(void)`
-`modules/woz_aliro/src/aliro_reader.c:1461`
+`modules/woz_aliro/src/aliro_reader.c:1481`
 
 Prepares the BLE transport and returns the Aliro GATT service definition for external
 registration, without starting the transport. Returns NULL if aliro_ble_prepare fails; on success
@@ -347,7 +347,7 @@ returns the pointer from aliro_ble_service_def(), owned by the BLE layer.
 **calls** `make_ble_cfg`
 
 ### `int aliro_reader_start_attached(void)`
-`modules/woz_aliro/src/aliro_reader.c:1478`
+`modules/woz_aliro/src/aliro_reader.c:1498`
 
 Starts the Aliro reader in "attached" transport mode: initializes the engine, applies provisioned
 resolvable advertising parameters if a real GRK is present, then starts the attached BLE
@@ -359,7 +359,7 @@ initialization fails, or the underlying aliro_ble_start_attached result otherwis
 **calls** `reader_engine_init`
 
 ### `void aliro_reader_refresh_adv(void)`
-`modules/woz_aliro/src/aliro_reader.c:1515`
+`modules/woz_aliro/src/aliro_reader.c:1535`
 
 Refreshes the BLE advertisement to include the resolvable service data once a real
 GroupResolvingKey (GRK) is available. Handles the case where Matter provisioning
@@ -369,7 +369,7 @@ all-zero. On a nonzero GRK, derives the two-byte subgroup ID from reader_id[16..
 aliro_ble_set_adv_params + aliro_ble_readvertise to make the reader approach-resolvable.
 
 ### `void aliro_reader_prov_print(void)`
-`modules/woz_aliro/src/aliro_reader.c:1546`
+`modules/woz_aliro/src/aliro_reader.c:1566`
 
 Print the reader's provisioning state (identity, trust anchors, last presented credential)
 to the console for diagnostics.
@@ -379,7 +379,7 @@ so UART I/O does not hold the lock during the BLE task's trust check.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_trust_last(void)`
-`modules/woz_aliro/src/aliro_reader.c:1590`
+`modules/woz_aliro/src/aliro_reader.c:1610`
 
 Add the most recently presented credential's public key to the trust store and persist it.
 Returns 1 if no credential has been presented yet or it is already trusted (nothing
@@ -389,7 +389,7 @@ unchanged on failure), 0 if newly added and committed.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_trust_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:1633`
+`modules/woz_aliro/src/aliro_reader.c:1653`
 
 Empty the trust store and persist the empty store, keeping the reader identity.
 Returns 1 if the store was already empty (nothing persisted), -1 if the NVS write fails
@@ -401,7 +401,7 @@ reset does not touch this namespace, so without this the only way out is erasing
 **calls** `load_provisioning`
 
 ### `void aliro_reader_stepup_arm(void)`
-`modules/woz_aliro/src/aliro_reader.c:1660`
+`modules/woz_aliro/src/aliro_reader.c:1680`
 
 Arm a one-shot Access-Document request (see aliro_reader.h). No-op with a note
 when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
@@ -409,14 +409,14 @@ when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
 **calls** `load_provisioning`
 
 ### `void aliro_reader_stepup_status(void)`
-`modules/woz_aliro/src/aliro_reader.c:1674`
+`modules/woz_aliro/src/aliro_reader.c:1694`
 
 Print the armed state and the most recent verification verdict (see aliro_reader.h).
 
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN], const uint8_t sign_priv[ALIRO_READER_PRIV_LEN], const uint8_t grk[ALIRO_GRK_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:1714`
+`modules/woz_aliro/src/aliro_reader.c:1734`
 
 Store a Matter-provisioned reader identity (reader ID, signing private key, GRK), keeping
 any trust anchors already present, and persist it to NVS.
@@ -427,7 +427,7 @@ compute_reader_group_x since the signing key changed.
 **calls** `compute_reader_group_x`, `load_provisioning`
 
 ### `int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:1747`
+`modules/woz_aliro/src/aliro_reader.c:1767`
 
 Add a Matter-provisioned credential public key to the reader's trust store and persist it.
 Returns 0 if newly added and stored, 1 if the credential was already trusted (nothing
@@ -437,7 +437,7 @@ fails. On failure the in-memory trust store (s_trust) is left unchanged.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:1781`
+`modules/woz_aliro/src/aliro_reader.c:1801`
 
 Revert the reader's provisioning to the default dev identity and empty trust store, and
 persist that state to NVS.

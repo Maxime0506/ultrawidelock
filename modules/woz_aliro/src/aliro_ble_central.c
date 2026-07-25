@@ -1,3 +1,10 @@
+// Platform-free half of the device-side BLE transport declared in
+// aliro_ble_central.h: decodes the reader's 0xFFF2 service-data advert, decodes
+// the reader-SPSM GATT READ payload (SPSM, supported protocol versions, feature
+// mask), and assembles the BleSK salt from the version list the reader actually
+// published rather than from a compiled-in constant. No BLE stack calls and no
+// allocation, so it builds on the host and is checked byte for byte against the
+// reader's own emitters.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

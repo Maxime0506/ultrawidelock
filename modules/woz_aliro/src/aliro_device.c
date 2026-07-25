@@ -1,3 +1,12 @@
+// Aliro initiator (User-Device) session machine: the implementation behind
+// aliro_device.h. Feeds one reader command at a time through
+// aliro_device_on_command, which parses AUTH0/AUTH1/EXCHANGE with the inverse
+// codec, runs the mirror of the reader's key schedule (ephemeral ECDH, the two
+// ECDSA transcripts, the session salt) and returns the sealed response. Owns the
+// two AES-256-GCM channels the device holds, the Access-Protocol channel and the
+// BleSK ranging channel, both split out of the same 160-byte key block, plus the
+// standard-path derivation factored EC-free so host tests can drive it with a
+// supplied shared secret.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

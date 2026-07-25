@@ -1,3 +1,9 @@
+// Device/initiator side of the UWB ranging-service setup codec: the interface for
+// parsing the reader's M1 and M3 and building the device's M2 and M4. Declares the
+// decoded views of M1 and M3, the parameter structs the two builders take, and
+// select_m2, which chooses a config and slot layout from what M1 offered. Pure
+// TLV, no crypto and no session state, so it is host-testable against the reader's
+// own codec by loopback.
 /** @file aliro_device_uwb.h — device/initiator side of the UWB ranging-service
  *  setup codec: the inverse of the reader's M1/M3 builders + M2/M4 handlers in
  *  aliro_uwb_msg.c. The reader builds M1/M3 and consumes M2/M4; the device (phone/

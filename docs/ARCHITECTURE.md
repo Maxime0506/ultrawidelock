@@ -5,6 +5,7 @@ Every subsystem on one page, in reading order: entry points (nothing imports the
 
 ```mermaid
 flowchart LR
+  modules.woz_aliro.include --> modules.woz_aliro.src
   modules.woz_aliro.src --> modules.woz_aliro.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -46,6 +47,16 @@ flowchart LR
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_util.h`](architecture/modules.woz_uwb.src.facade/woz_util.h.md)
 
+### [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md)
+
+Device-side UWB ranging-service setup codec: parses the reader's M1 and M3
+setup messages, picks the device's answer to M1 (select_m2), and builds the M2
+and M4 replies. The inverse of the reader path in aliro_uwb_msg.c, written over
+the same TLV parser and builder helpers. No crypto and no session state, so a
+host loopback can drive the real reader codec end to end.
+
+**depends on** [`modules/woz_uwb/src/aliro/aliro_device_uwb.h`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md)
+
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
 
 @file aliro_uwb_session.c — per-session lifecycle and state machine.
@@ -74,25 +85,36 @@ flowchart LR
 
 @file aliro_uwb_msg.h — message framing accessors, dispatch and builders.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md)
 
 @file aliro_uwb_msg_builder.h — big-endian TLV message builder.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md)
 
 @file aliro_uwb_msg_parser.h — TLV attribute iteration and big-endian reads.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md)
 
 @file aliro_uwb_msg_spec.h — UWB ranging-service framing constants.
 
-**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
+**used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.h`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
+
+### [`modules/woz_uwb/src/aliro/aliro_device_uwb.h`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.h.md)
+
+Device/initiator side of the UWB ranging-service setup codec: the interface for
+parsing the reader's M1 and M3 and building the device's M2 and M4. Declares the
+decoded views of M1 and M3, the parameter structs the two builders take, and
+select_m2, which chooses a config and slot layout from what M1 offered. Pure
+TLV, no crypto and no session state, so it is host-testable against the reader's
+own codec by loopback.
+
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md)
 
@@ -123,6 +145,20 @@ standalone and Matter-attached BLE transports, plus provisioning and diagnostic 
 Matter commissioning and the bench console.
 
 **depends on** [`modules/woz_aliro/include/aliro_ble.h`](architecture/modules.woz_aliro.include/aliro_ble.h.md), [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md), [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md), [`modules/woz_aliro/include/aliro_reader.h`](architecture/modules.woz_aliro.include/aliro_reader.h.md), [`modules/woz_aliro/include/aliro_rssi_gate.h`](architecture/modules.woz_aliro.include/aliro_rssi_gate.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md), [`modules/woz_aliro/src/aliro_ranging.h`](architecture/modules.woz_aliro.src/aliro_ranging.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
+
+### [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md)
+
+Aliro initiator (User-Device) session machine: the implementation behind
+aliro_device.h. Feeds one reader command at a time through
+aliro_device_on_command, which parses AUTH0/AUTH1/EXCHANGE with the inverse
+codec, runs the mirror of the reader's key schedule (ephemeral ECDH, the two
+ECDSA transcripts, the session salt) and returns the sealed response. Owns the
+two AES-256-GCM channels the device holds, the Access-Protocol channel and the
+BleSK ranging channel, both split out of the same 160-byte key block, plus the
+standard-path derivation factored EC-free so host tests can drive it with a
+supplied shared secret.
+
+**depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md), [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)
 
 ### [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md)
 
@@ -155,6 +191,29 @@ Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1), share
 BLE transport (live advertising) and the host KAT suite (spec section 20 worked examples).
 
 **depends on** [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
+
+### [`modules/woz_aliro/src/aliro_ble_central.c`](architecture/modules.woz_aliro.src/aliro_ble_central.c.md)
+
+Platform-free half of the device-side BLE transport declared in
+aliro_ble_central.h: decodes the reader's 0xFFF2 service-data advert, decodes
+the reader-SPSM GATT READ payload (SPSM, supported protocol versions, feature
+mask), and assembles the BleSK salt from the version list the reader actually
+published rather than from a compiled-in constant. No BLE stack calls and no
+allocation, so it builds on the host and is checked byte for byte against the
+reader's own emitters.
+
+**depends on** [`modules/woz_aliro/include/aliro_ble_central.h`](architecture/modules.woz_aliro.include/aliro_ble_central.h.md)
+
+### [`modules/woz_aliro/src/aliro_device_apdu.c`](architecture/modules.woz_aliro.src/aliro_device_apdu.c.md)
+
+Implementation of the device-side Access-Protocol wire codec declared in
+aliro_device_apdu.h: ISO7816 case-4 unwrapping, status-word appending, parsers
+for the reader's AUTH0, AUTH1 and EXCHANGE command TLVs, and builders for the
+three device responses. Every function is bounds-checked byte manipulation over
+caller-owned buffers with no allocation, so it round-trips against the reader's
+own builders and parsers in aliro_apdu.c under the host tests.
+
+**depends on** [`modules/woz_aliro/include/aliro_device_apdu.h`](architecture/modules.woz_aliro.include/aliro_device_apdu.h.md)
 
 ### [`modules/woz_aliro/src/aliro_stepup_parse.c`](architecture/modules.woz_aliro.src/aliro_stepup_parse.c.md)
 
@@ -229,7 +288,7 @@ APDU framing and parsing for the Aliro Access Protocol: builds outbound command 
 TLV writer and parses the AUTH0/AUTH1 response APDUs exchanged during the reader-device
 handshake.
 
-**used by** [`modules/woz_aliro/src/aliro_apdu.c`](architecture/modules.woz_aliro.src/aliro_apdu.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+**used by** [`modules/woz_aliro/include/aliro_device_apdu.h`](architecture/modules.woz_aliro.include/aliro_device_apdu.h.md), [`modules/woz_aliro/src/aliro_apdu.c`](architecture/modules.woz_aliro.src/aliro_apdu.c.md), [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
 
 ### [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md)
 
@@ -1257,7 +1316,7 @@ aliro_ble_service_def with the host's combined service table.
 Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
 seal/open framing shared by the reader and device sides of an Aliro session.
 
-**used by** [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
+**used by** [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](architecture/modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
 
 ### [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md)
 
@@ -1278,7 +1337,7 @@ strip it from a hardened production image.
 
 ### [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
 
-**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_prim_psa.c`](architecture/modules.woz_aliro.src/aliro_prim_psa.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md), [`modules/woz_aliro/src/aliro_prim_psa.c`](architecture/modules.woz_aliro.src/aliro_prim_psa.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
 
 ### [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md)
 
@@ -1313,12 +1372,46 @@ logged and stored, never gates the unlock (the provisioned trust store remains t
 
 **depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_aliro/src/aliro_stepup_parse.c`](architecture/modules.woz_aliro.src/aliro_stepup_parse.c.md)
 
+### [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md)
+
+Aliro initiator (User-Device) session layer: the device-side counterpart of
+aliro_reader.c. Drives the credential-auth handshake from the phone/fob role —
+parses the reader's AUTH0/AUTH1/EXCHANGE commands, runs the mirror-image key
+schedule (ECDH, the two ECDSA transcripts, the §8.3.1.13 salt), and produces
+the sealed responses. The result is the same 32-byte URSK the reader derives.
+
+**depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_device_apdu.h`](architecture/modules.woz_aliro.include/aliro_device_apdu.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md)
+
 ### [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md)
 
 Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1): the 7-byte
 GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of interest.
 
-**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md)
+**used by** [`modules/woz_aliro/include/aliro_ble_central.h`](architecture/modules.woz_aliro.include/aliro_ble_central.h.md), [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md)
+
+### [`modules/woz_aliro/include/aliro_ble_central.h`](architecture/modules.woz_aliro.include/aliro_ble_central.h.md)
+
+Device-side (User-Device) BLE transport interface: the central/client mirror of
+aliro_ble.h. Where the reader advertises 0xFFF2, serves the GATT characteristics
+and runs an L2CAP CoC server, the initiator scans, connects, reads the reader's
+SPSM/versions, writes its selected version and opens a CoC client to that SPSM.
+The platform-free half (advert + READ-payload decoding, BleSK salt assembly)
+lives in aliro_ble_central.c and is host-testable; the NimBLE backend for the
+transport calls sits in ports/esp32, so a Zephyr bt_gap_*/bt_l2cap_* backend
+can be written behind this same header.
+
+**depends on** [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ble_central.c`](architecture/modules.woz_aliro.src/aliro_ble_central.c.md)
+
+### [`modules/woz_aliro/include/aliro_device_apdu.h`](architecture/modules.woz_aliro.include/aliro_device_apdu.h.md)
+
+Device (User-Device) side of the Aliro Access-Protocol wire codec: the inverse
+of aliro_apdu.c. Where aliro_apdu builds reader commands and parses device
+responses, this parses the reader's AUTH0/AUTH1/EXCHANGE commands and builds
+the device's AUTH0/AUTH1/EXCHANGE responses. Pure byte manipulation, no crypto
+and no platform dependency, so it is host-KAT verifiable against the reader's
+own builders/parsers (round-trip) and the recovered layouts.
+
+**depends on** [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)  ·  **used by** [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md), [`modules/woz_aliro/src/aliro_device_apdu.c`](architecture/modules.woz_aliro.src/aliro_device_apdu.c.md)
 
 ### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
@@ -1383,6 +1476,19 @@ needed for a dry run.
 NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
 Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
 
+## `ports/esp32/apps/initiator/main/`
+
+### [`ports/esp32/apps/initiator/main/main.c`](architecture/ports.esp32.apps.initiator.main/main.c.md)
+
+ESP32-S3 application entry for the Aliro initiator, the User-Device role that
+stands in for an iPhone on the bench. Stage 1a wires the BLE transport only: it
+starts the NimBLE central, which scans for the reader's 0xFFF2 advert, connects,
+reads the reader's SPSM, supported versions and features, writes the version it
+selects, and opens the L2CAP channel. It then reports what it learned, including
+the BleSK salt those versions imply, and dumps whatever the reader sends. It
+stops before AUTH0, because running the transaction needs an Access Credential
+the reader trusts and both ends must be provisioned out of band first.
+
 ## `ports/esp32/components/aliro_ble/`
 
 ### [`ports/esp32/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32.components.aliro_ble/aliro_ble.c.md)
@@ -1395,6 +1501,16 @@ aliro_ble_start_attached). Tracks CoC channels per connection handle in a fixed-
 and exposes send/receive plus reader-status notification helpers to the rest of the Aliro
 reader.
 
+## `ports/esp32/components/aliro_ble_central/`
+
+### [`ports/esp32/components/aliro_ble_central/aliro_ble_central_nimble.c`](architecture/ports.esp32.components.aliro_ble_central/aliro_ble_central_nimble.c.md)
+
+NimBLE central/client backend for the Aliro initiator: the mirror of
+components/aliro_ble/aliro_ble.c. That file advertises 0xFFF2, serves the
+characteristics and runs a CoC server; this one scans for 0xFFF2, connects,
+discovers, reads the reader's SPSM/versions, writes the selected version and
+opens a CoC client to that SPSM.
+
 ## `ports/esp32/components/aliro_reader/`
 
 ### [`ports/esp32/components/aliro_reader/aliro_prov_nvs.c`](architecture/ports.esp32.components.aliro_reader/aliro_prov_nvs.c.md)
@@ -1406,6 +1522,18 @@ Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_
 ### [`ports/esp32/components/aliro_reader/aliro_stepup_worker.c`](architecture/ports.esp32.components.aliro_reader/aliro_stepup_worker.c.md)
 
 *No module docstring. First commit: "esp32: add the Aliro step-up (Access Document) phase".*
+
+## `ports/nrf5340dk/on_target_ec/src/`
+
+### [`ports/nrf5340dk/on_target_ec/src/main.c`](architecture/ports.nrf5340dk.on_target_ec.src/main.c.md)
+
+nRF5340DK on-target self-test for the Aliro device (initiator) EC path: a
+minimal Zephyr application that brings up the real PSA backend (nrf_security on
+CryptoCell), runs the same credential-auth crypto suite the host tests run, and
+prints PASS or FAIL to the DK console. It exists because the host suite proves
+the maths against a software curve only; this proves the same vectors on the
+silicon that will ship, and it caught a PSA import failure that no host run
+could see. Crypto only: no BLE, no UWB, no iPhone.
 
 ## `release/esp32-matter-lock/`
 
