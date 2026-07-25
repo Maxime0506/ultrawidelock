@@ -164,9 +164,29 @@ static void read_full(uint8_t *b, size_t n)
 	}
 }
 
+/* Wallet unlock animation (Reader-Status-Changed, Aliro transaction step 23).
+ * Latched so the grant fires on the edge, not once per challenge: the phone
+ * animates when a presence check first succeeds and relocks when a later check
+ * finds the range stale. Deliberately demand-driven -- no host challenge, no
+ * animation -- so the phone confirms exactly the moment a proof was taken. */
+static bool s_wallet_granted;
+
+// Send the phone the grant/relock notification when the presence verdict changes.
+// Runs in the serve-loop task, never on the UWB RX path, because the send seals on
+// the BLE channel. A no-op with no established session (the reader logs and drops).
+static void notify_wallet(bool present)
+{
+	if (present == s_wallet_granted) {
+		return;
+	}
+	s_wallet_granted = present;
+	aliro_reader_notify_unlock(present);
+}
+
 // Fill in the assertion body both signing paths share: the challenge nonce plus
 // the current presence verdict from the range latch and the authenticated
 // credential. Signing is the caller's job, so the two modes state identical facts.
+// Also drives the Wallet grant/relock edge, so no signing path can forget it.
 static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 {
 	memset(a, 0, sizeof(*a));
@@ -191,6 +211,7 @@ static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT
 		a->status = ALIRO_PRESENCE_ABSENT;
 		a->distance_cm = ALIRO_ASSERT_DIST_NONE;
 	}
+	notify_wallet(fresh && have_cred);
 }
 
 // Assemble + HMAC the assertion for a challenge nonce and write it to the host.
