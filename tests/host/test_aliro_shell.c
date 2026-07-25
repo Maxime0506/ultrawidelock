@@ -142,13 +142,19 @@ void test_aliro_shell(void)
 	{
 		char dump_s[] = "dump";
 		char *argv3[3];
+		int rc;
 
 		argv3[1] = dump_s;
 		argv3[2] = on_s;
 		T_EQ("cir dump on rc", run("cir", 3, argv3), 0);
 		T_OK("cir dump on", uwb_cirdiag_dump_enabled());
 		argv3[2] = off_s;
-		T_EQ("cir dump off rc", run("cir", 3, argv3), 0);
+		/* The disarm drains the CIR ring to serial. Muted around the call
+		 * only, so the rc check below still reports a failure. */
+		t_mute();
+		rc = run("cir", 3, argv3);
+		t_unmute();
+		T_EQ("cir dump off rc", rc, 0);
 		T_OK("cir dump off", !uwb_cirdiag_dump_enabled());
 		argv3[2] = junk_s;
 		T_EQ("cir dump junk rc", run("cir", 3, argv3), -22);
@@ -156,9 +162,13 @@ void test_aliro_shell(void)
 	{
 		/* `cir probe` takes the accumulator-read diagnostic branch: no toggle, always 0. */
 		char probe_s[] = "probe";
+		int rc;
 
 		argv2[1] = probe_s;
-		T_EQ("cir probe rc", run("cir", 2, argv2), 0);
+		t_mute(); /* the probe prints every tap it reads */
+		rc = run("cir", 2, argv2);
+		t_unmute();
+		T_EQ("cir probe rc", rc, 0);
 	}
 	uwb_cirdiag_set_enabled(false);
 
