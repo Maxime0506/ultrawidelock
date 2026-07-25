@@ -1,0 +1,28 @@
+/* PN532 NFC reader on spi1 — slotting in where X-NUCLEO ST25R shield was.
+ *
+ * A PN532 build has no ST shield, so this reuses spi1 directly (rather than
+ * i2c1, which is the same nRF5340 serial box and cannot coexist with spi1):
+ * the ST25R child is disabled and a pn532 node takes its chip-select. spi1's
+ * bus pins and CS come from dw3000-nfc.overlay, which this layers after.
+ *
+ * Wiring (Elechouse V3 / Adafruit breakout, jumpers set to SPI):
+ *   SCK  -> P0.06 (A2)   MOSI -> P0.07 (A3)   MISO -> P0.25 (A4)
+ *   NSS  -> P0.26 (A5)   VCC  -> 3V3          GND  -> GND
+ */
+
+&spi1 {
+	/* Retire the ST25R shield node; its CS (P0.26) is handed to the PN532. */
+	nucleo_nfc@0 {
+		status = "disabled";
+	};
+
+	pn532: pn532@0 {
+		compatible = "nxp,pn532-spi";
+		reg = <0>;
+		/* Short exchanges passed at 2 MHz, but near-maximum response frames
+		 * intermittently arrived with an invalid host-frame checksum.  Keep the
+		 * PN532 at the last known-good rate for full-length step-up responses. */
+		spi-max-frequency = <1000000>;
+		irq-gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;
+	};
+};
