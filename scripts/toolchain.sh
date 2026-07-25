@@ -2,7 +2,7 @@
 #
 # toolchain.sh — what the CI gates need, whether this host has it, how to get it.
 #
-# `make verify` runs seventeen CI gates and skips loudly when a gate's tool is
+# `make verify` runs eighteen CI gates and skips loudly when a gate's tool is
 # absent. Skipping loudly is honest, but it leaves the reader to work out what
 # to install, from where, and at which version. That is this script: one
 # manifest, two modes.
