@@ -62,6 +62,10 @@ TRAILER_KEY_ID = "Presence-Key-Id"
 TRAILER_ASSERTION = "Presence-Assertion"
 
 # Serial framing understood by the dongle (ports/esp32/apps/reader/main/presence_link.c).
+# Console bytes tolerated ahead of a frame while resyncing: roomy enough for a
+# ROM boot banner, small enough that a port babbling something else fails fast.
+RESYNC_BUDGET = 4096
+
 FRAME_LEAD = b"A"
 FRAME_CHALLENGE_P256 = b"P"
 FRAME_PUBKEY = b"Q"
@@ -211,7 +215,36 @@ def read_exact(ser, n: int) -> bytes:
     return buf
 
 
+def read_framed(ser, magic: bytes, n: int, what: str) -> bytes:
+    """Read an n-byte frame starting with magic, skipping any console text first.
+
+    The dongle's binary frames share one UART with the ROM boot banner and with
+    any firmware printf that is not routed through the log level, so the bytes
+    waiting after a request are not reliably the response. Scanning for the magic
+    rather than trusting alignment is what the leading constant is for. Without
+    it a single stray line shifts the frame by a few bytes and the signature
+    check fails, which reads as a crypto or key problem when it is really a
+    framing one -- a genuinely misleading way to lose an afternoon.
+    """
+    win = b""
+    skipped = 0
+    while True:
+        b = ser.read(1)
+        if not b:
+            raise PresenceError(f"timed out waiting for the {what}")
+        win = (win + b)[-len(magic) :]
+        if win == magic:
+            return magic + read_exact(ser, n - len(magic))
+        skipped += 1
+        if skipped > RESYNC_BUDGET:
+            raise PresenceError(
+                f"no {what} in {RESYNC_BUDGET} bytes of console output. The dongle is "
+                "talking, but not this protocol: check it was flashed with presence mode on."
+            )
+
+
 def dongle_pubkey(ser) -> bytes:
+    ser.reset_input_buffer()
     ser.write(FRAME_LEAD + FRAME_PUBKEY)
     ser.flush()
     point = read_exact(ser, pv.PUB_LEN)
@@ -221,9 +254,14 @@ def dongle_pubkey(ser) -> bytes:
 
 
 def dongle_assert(ser, nonce: bytes) -> bytes:
+    ser.reset_input_buffer()
     ser.write(FRAME_LEAD + FRAME_CHALLENGE_P256 + nonce)
     ser.flush()
-    return read_exact(ser, pv.WIRE_P256)
+    # Frame on magic + version + algorithm, not magic alone: two bytes turn up in
+    # noise often enough to lock onto the wrong offset, and every byte of this
+    # prefix is fixed for the P-256 response we just asked for.
+    prefix = pv.MAGIC + bytes([pv.VERSION, pv.ALG_ECDSA_P256])
+    return read_framed(ser, prefix, pv.WIRE_P256, "assertion frame")
 
 
 def cmd_nonce(args) -> int:

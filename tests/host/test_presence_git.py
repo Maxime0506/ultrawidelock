@@ -38,6 +38,11 @@ POINT_A = tpv.KAT_POINT
 POINT_B = bytes.fromhex(
     "04" + "11" * 32 + "22" * 32
 )
+# A frame with the right header and a junk body: enough to test framing, which
+# runs before anyone looks at the signature.
+P256_FRAME = pv.MAGIC + bytes([pv.VERSION, pv.ALG_ECDSA_P256]) + bytes(
+    (i * 7) & 0xFF for i in range(pv.WIRE_P256 - 4)
+)
 
 
 @contextlib.contextmanager
@@ -117,12 +122,20 @@ class FakeSerial:
         self.chunk = chunk
         self.written = b""
         self.closed = False
+        self.flushed_input = 0
 
     def write(self, data):
         self.written += data
 
     def flush(self):
         pass
+
+    def reset_input_buffer(self):
+        # Counted, not enacted: the script holds responses the dongle has yet to
+        # send, not bytes already sitting in an OS buffer, so discarding it here
+        # would model the opposite of what pyserial does. Resync against injected
+        # console text is covered separately, on the read path.
+        self.flushed_input += 1
 
     def read(self, n):
         if self.chunk is not None:
@@ -363,9 +376,8 @@ class SerialTests(unittest.TestCase):
 
     def test_challenge_sends_lead_type_and_nonce(self):
         nonce = bytes(range(16))
-        frame = b"\x00" * pv.WIRE_P256
-        ser = FakeSerial(frame)
-        self.assertEqual(pg.dongle_assert(ser, nonce), frame)
+        ser = FakeSerial(P256_FRAME)
+        self.assertEqual(pg.dongle_assert(ser, nonce), P256_FRAME)
         self.assertEqual(ser.written, b"AP" + nonce)
 
     def test_short_reads_are_reassembled(self):
@@ -388,6 +400,44 @@ class SerialTests(unittest.TestCase):
         ser = FakeSerial(b"\x02" + b"\x11" * 64)
         with self.assertRaises(pg.PresenceError):
             pg.dongle_pubkey(ser)
+
+    def test_stale_input_is_flushed_before_each_request(self):
+        ser = FakeSerial(POINT_A)
+        pg.dongle_pubkey(ser)
+        self.assertEqual(ser.flushed_input, 1)
+        ser.script = bytearray(P256_FRAME)
+        pg.dongle_assert(ser, bytes(16))
+        self.assertEqual(ser.flushed_input, 2)
+
+    def test_console_text_before_a_frame_is_skipped(self):
+        # A firmware printf lands in the same UART as the binary frame. Framing on
+        # the header is what keeps that from reading as a signature failure.
+        noise = b"I (523) ccc_shim: arm#0 slot=2 key0 wr deadbeef\n"
+        ser = FakeSerial(noise + P256_FRAME)
+        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
+
+    def test_magic_alone_in_the_noise_does_not_derail_resync(self):
+        # The magic pair turns up in binary noise; only magic+version+alg starts a
+        # frame. Locking onto the decoy would shift every field by four bytes.
+        decoy = pv.MAGIC + b"\x99\x99" + b"\x00" * 20
+        ser = FakeSerial(decoy + P256_FRAME)
+        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
+
+    def test_resync_finds_a_frame_split_across_reads(self):
+        ser = FakeSerial(b"stray\n" + P256_FRAME, chunk=3)
+        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
+
+    def test_endless_console_noise_fails_with_advice(self):
+        ser = FakeSerial(b"z" * (pg.RESYNC_BUDGET + 10))
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.dongle_assert(ser, bytes(16))
+        self.assertIn("presence mode", str(cm.exception))
+
+    def test_silent_port_times_out_rather_than_spinning(self):
+        ser = FakeSerial(b"")
+        with self.assertRaises(pg.PresenceError) as cm:
+            pg.dongle_assert(ser, bytes(16))
+        self.assertIn("timed out", str(cm.exception))
 
 
 @needs_openssl
