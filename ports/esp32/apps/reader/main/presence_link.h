@@ -1,8 +1,16 @@
 // Presence dongle protocol (CONFIG_WOZ_PRESENCE): serve a host challenge/response
-// on the console UART. On each challenge the dongle answers with an HMAC-signed
+// on the console UART. On each challenge the dongle answers with a signed
 // statement of the current trusted-range presence state (aliro_assert), turning
 // proximity of a provisioned iPhone into a host second factor. See
 // host/presence/ for the other end.
+//
+// Wire frames, each led by 'A' so a desynchronised reader can resynchronise:
+//   'A''C' + 16-byte nonce -> 79-byte HMAC assertion, verifiable only by the
+//                             host holding the pairing key
+//   'A''P' + 16-byte nonce -> 111-byte ECDSA-P256 assertion, verifiable by any
+//                             holder of the device public key
+//   'A''Q'                 -> 65-byte uncompressed P-256 public point (enrolment)
+//   'A''K' + 32-byte key   -> load the pairing key, no response
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
