@@ -26,6 +26,16 @@ LOG ?=
 # make flash FORCE=1 stops whatever holds the UART (a monitor/tio) before flashing.
 FORCE ?=
 
+# Presence-dongle options (see the Presence group below).
+#   NAME=  label recorded when enrolling a dongle   TAG=  tag to sign
+#   MAXCM= distance threshold in cm (40 matches the host config default)
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../../..)
+PRESENCE  := $(REPO_ROOT)/tools/presence_git.py
+SDKCONFIG := sdkconfig
+NAME  ?=
+TAG   ?=
+MAXCM ?= 40
+
 # USB vendor ids (decimal, as ioreg reports them) used to classify ports.
 # Keep values trailing-whitespace-free: an inline comment would leak spaces into
 # the value and break the awk string compares below.
@@ -73,7 +83,8 @@ if [ -n "$$holder" ]; then \
 fi
 endef
 
-.PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean
+.PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean \
+        presence-on presence-off presence-flash presence-probe presence-enroll presence-sign
 
 check-idf:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -133,6 +144,51 @@ term:
 	printf '  tio %s @ %s 8N1  ·  ctrl-t q quits  ·  release before make flash\n' "$$port" '$(BAUD)'; \
 	exec tio -b $(BAUD) $$logargs "$$port"
 
+##@ Presence dongle  (CONFIG_WOZ_PRESENCE · replaces the REPL with a binary link)
+## presence-on: switch sdkconfig into dongle mode  ·  idempotent
+##   Dongle mode serves a binary challenge/response on the console UART, so it
+##   MUTES all logging and removes the shell. Bring the board up as a normal
+##   reader first and confirm ranging; debugging a silent board is much worse.
+presence-on:
+	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — run 'make build' once first" >&2; exit 1; }
+	@if grep -qx 'CONFIG_WOZ_PRESENCE=y' $(SDKCONFIG); then echo "  presence already on"; \
+	else printf '\nCONFIG_WOZ_PRESENCE=y\n' >> $(SDKCONFIG); echo "  presence ON  ·  next: make presence-flash"; fi
+
+## presence-off: back to the normal reader (logs + interactive shell)
+presence-off:
+	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — nothing to turn off"; exit 0; }
+	@sed -i '' '/^CONFIG_WOZ_PRESENCE=y$$/d' $(SDKCONFIG) && echo "  presence OFF  ·  next: make flash"
+
+## presence-flash: turn presence on, then build + flash
+##   Never erases: the device signing key and the Aliro trust store both live in
+##   NVS, and erasing regenerates the key, invalidating every enrolment.
+presence-flash: presence-on
+	@$(MAKE) --no-print-directory flash
+
+## presence-probe: bring-up check  ·  does the dongle sign a frame we accept?
+##   Prints signature and presence verdicts separately. "signature VERIFIED"
+##   with "E_ABSENT" is a PASS: crypto works, no phone has ranged yet.
+presence-probe:
+	@$(RESOLVE_PORT); \
+	echo "  probing $$port"; \
+	python3 $(PRESENCE) probe --port "$$port" --max-cm $(MAXCM)
+
+## presence-enroll: record this dongle's public key as trusted  ·  NAME=desk-dongle
+##   Appends to .presence/enrolled at the repo root, which is committed so the
+##   trust set is reviewable in history.
+presence-enroll:
+	@[ -n "$(NAME)" ] || { echo "  set NAME=  ·  e.g. make presence-enroll NAME=desk-dongle" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) enroll --port "$$port" --name "$(NAME)"
+
+## presence-sign: create a presence-signed annotated tag  ·  TAG=v1.2.0
+##   Wake the phone and hold it near the dongle first; this refuses to tag
+##   unless presence actually verifies.
+presence-sign:
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-sign TAG=v1.2.0" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) sign --tag "$(TAG)" --port "$$port" --max-cm $(MAXCM)
+
 ##@ Housekeeping
 ## ports: list attached usbmodem ports, labelled by board
 ports:
@@ -159,6 +215,6 @@ help:
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
-	     printf "    %s%-12s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
+	     printf "    %s%-16s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
 	  $(MAKEFILE_LIST); \
 	printf '\n'

@@ -35,6 +35,11 @@ PORT     ?=
 BAUD     ?= 115200
 LOG      ?=
 
+# Presence-signed tags (make presence-verify TAG=v1.2.0). MAXCM is the distance
+# threshold in cm; 40 matches host/presence/aliro_presence.c's default.
+TAG      ?=
+MAXCM    ?= 40
+
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
   $(if $(CHIP),UWB_CHIP=$(CHIP)) \
@@ -46,7 +51,7 @@ ENV := $(strip \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web test-presence docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web test-presence presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -129,6 +134,15 @@ verify:
 ##   over a socketpair. Plain C, no PAM or hardware. See host/presence/.
 test-presence:
 	@$(REPO_ROOT)/host/presence/run.sh
+
+## presence-verify: check a tag's presence assertion  ·  TAG=v1.2.0  (what CI runs)
+##   Confirms a human was physically at the machine when the tag was made. Pure
+##   host check — no dongle, no serial port. Trusted keys come from
+##   .presence/enrolled, never from the tag. Building and signing live in
+##   ports/esp32/apps/reader (make presence-probe / presence-sign).
+presence-verify:
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-verify TAG=v1.2.0" >&2; exit 1; }
+	@python3 $(REPO_ROOT)/tools/presence_git.py verify --tag "$(TAG)" --max-cm $(MAXCM)
 
 ## check: every host-side suite under one banner  ->  live rows + summary table
 ##   Parallel by default; SERIAL=1 streams suites one at a time, SUITES="..."
@@ -222,7 +236,7 @@ help:
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
-	     printf "    %s%-14s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
+	     printf "    %s%-16s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
 	  $(MAKEFILE_LIST); \
 	printf '\n  %sOptions%s  %s·  set on the command line, e.g. make build PRETTY=1%s\n' "$$y" "$$r" "$$d" "$$r"; \
 	printf '    %sCHIP=dw3720  PRETTY=1  PRISTINE=1  SELFTEST=1  STRICT=1%s\n' "$$d" "$$r"; \
