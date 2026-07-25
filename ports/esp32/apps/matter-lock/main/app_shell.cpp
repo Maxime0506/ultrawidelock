@@ -27,6 +27,9 @@
 #include <aliro_lab.h>   // aliro_lab_set_enabled — the transaction-trace runtime gate
 #include <uwb_cirdiag.h> // uwb_cirdiag_set_enabled — per-reception CIA diag stream, rides `lab`
 #endif
+#ifdef CONFIG_WOZ_FLIGHT_RECORDER
+#include <flight_recorder.h> // fr_set_enabled / fr_dump — walk-up record/replay gate
+#endif
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -333,6 +336,31 @@ static int cmd_lab(int argc, char **argv)
 }
 #endif
 
+#ifdef CONFIG_WOZ_FLIGHT_RECORDER
+/* Flight recorder: record a live walk-up into a RAM ring for host replay. OFF at
+ * boot (it reads extra DW3000 registers while armed, costing walk-up latency).
+ * `fr on` before a walk-up, `fr off` after, `fr dump` to emit the `[FREC]` hex
+ * that tools/flight_recorder.py turns into a .frc trace + fuzz corpus. */
+static int cmd_frec(int argc, char **argv)
+{
+	if (argc == 2 && strcmp(argv[1], "on") == 0) {
+		fr_set_enabled(true);
+	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
+		fr_set_enabled(false);
+	} else if (argc == 2 && strcmp(argv[1], "dump") == 0) {
+		fr_dump();
+		return 0;
+	} else if (argc == 2 && strcmp(argv[1], "clear") == 0) {
+		fr_clear();
+	} else if (argc != 1) {
+		printf("usage: fr [on|off|dump|clear]\n");
+		return 0;
+	}
+	printf("flight recorder: %s\n", fr_enabled() ? "armed" : "off");
+	return 0;
+}
+#endif
+
 // Shell handler for the "clear" command; clears the terminal screen. Always returns 0.
 static int cmd_clear(int argc, char **argv)
 {
@@ -399,6 +427,12 @@ void app_shell_start(void)
 		 .help = "lab [on|off]: Aliro Lab transaction trace (boot default off)",
 		 .hint = NULL,
 		 .func = cmd_lab},
+#endif
+#ifdef CONFIG_WOZ_FLIGHT_RECORDER
+		{.command = "fr",
+		 .help = "fr [on|off|dump|clear]: flight recorder walk-up capture (boot default off)",
+		 .hint = NULL,
+		 .func = cmd_frec},
 #endif
 #endif
 		{.command = "log",

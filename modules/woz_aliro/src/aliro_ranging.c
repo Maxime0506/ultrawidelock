@@ -70,14 +70,43 @@ static bool s_sess_active;
  * seal the engine's outbound SDUs. Borrowed for the session's lifetime. */
 static struct aliro_secchan *s_sc_ble;
 
-/* Stamp the first still-unmarked phase of an expected message sequence (the
- * one-shot marks double as the sequence counter). Diagnostics only: a resent
- * or extra setup message shifts later labels, never the protocol. */
-static void lat_mark_seq(const enum aliro_lat_phase *phases, unsigned int n)
+/* Ranging-SDU identity, as [proto][id] on the wire. Mirrors the engine's
+ * aliro_uwb_msg_spec.h, which is private to woz_uwb; test_aliro_ranging.c
+ * asserts these still agree with the frames the engine builds. */
+#define RSDU_PROTO_RANGING      0x01u
+#define RSDU_PROTO_NOTIFICATION 0x02u
+#define RSDU_RANGING_M1         0x00u
+#define RSDU_RANGING_M2         0x01u
+#define RSDU_RANGING_M3         0x02u
+#define RSDU_RANGING_M4         0x03u
+#define RSDU_NOTIFY_RANGING     0x01u /* Initiate-Ranging-Session */
+
+/* Stamp the latency phase this SDU actually is, by identity rather than by
+ * arrival order. Order-based labelling was wrong on real hardware: the phone
+ * sends a proto-3 (supplementary-service) SDU ahead of
+ * Initiate-Ranging-Session, which shifted every device->reader label by one
+ * frame and stamped "M2 received" on the IRS, i.e. before M1 had been sent.
+ * Diagnostics only; the protocol never depended on this. */
+static void lat_mark_sdu(uint8_t proto, uint8_t id)
 {
-	for (unsigned int i = 0; i < n; i++) {
-		if (aliro_lat_mark(phases[i])) {
-			return;
+	if (proto == RSDU_PROTO_NOTIFICATION && id == RSDU_NOTIFY_RANGING) {
+		(void)aliro_lat_mark(ALIRO_LAT_IRS_RX);
+	} else if (proto == RSDU_PROTO_RANGING) {
+		switch (id) {
+		case RSDU_RANGING_M1:
+			(void)aliro_lat_mark(ALIRO_LAT_M1_TX);
+			break;
+		case RSDU_RANGING_M2:
+			(void)aliro_lat_mark(ALIRO_LAT_M2_RX);
+			break;
+		case RSDU_RANGING_M3:
+			(void)aliro_lat_mark(ALIRO_LAT_M3_TX);
+			break;
+		case RSDU_RANGING_M4:
+			(void)aliro_lat_mark(ALIRO_LAT_M4_RX);
+			break;
+		default:
+			break;
 		}
 	}
 }
@@ -102,15 +131,13 @@ static void uwb_tx_cb(struct aliro_uwb_message *message, struct aliro_uwb_sessio
 		 * (§11.8.2, the 4-byte header as AAD) before it goes on the wire. */
 		if (s_sc_ble != NULL && aliro_msg_seal(s_sc_ble, message->data, message->len, wire,
 						       sizeof(wire), &wl) == 0) {
-			static const enum aliro_lat_phase k_tx_seq[] = {ALIRO_LAT_M1_TX,
-									ALIRO_LAT_M3_TX};
 			int rc = aliro_ble_send(conn, wire, wl);
 
-			lat_mark_seq(k_tx_seq, 2u);
+			lat_mark_sdu(message->data[0], message->data[1]);
 
 			LOG_DBG("[conn %u] ranging TX proto=0x%02x id=0x%02x (%u B, rc=%d)", conn,
 				message->data[0], message->data[1], (unsigned)wl, rc);
-			aliro_lab_evi("rtx", "id", message->data[1]);
+			aliro_lab_evi2("rtx", "proto", message->data[0], "id", message->data[1]);
 			(void)rc;
 		} else {
 			LOG_ERR("[conn %u] ranging TX seal failed (%u B)", conn,
@@ -293,10 +320,9 @@ int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 		return -1;
 	}
 
-	/* Expected device->reader setup order: Initiate-Ranging-Session, M2, M4. */
-	static const enum aliro_lat_phase k_rx_seq[] = {ALIRO_LAT_IRS_RX, ALIRO_LAT_M2_RX,
-							ALIRO_LAT_M4_RX};
-	lat_mark_seq(k_rx_seq, 3u);
+	/* Device->reader setup: Initiate-Ranging-Session, M2, M4 — but not
+	 * necessarily as the first three SDUs, so stamp on identity. */
+	lat_mark_sdu(data[0], data[1]);
 
 	/* Stack-framed message (the engine copies/consumes it, does not retain). */
 	uint8_t storage[sizeof(struct aliro_uwb_message) + ALIRO_RANGING_MSG_MAX]
@@ -305,7 +331,7 @@ int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 
 	msg->len = len;
 	memcpy(msg->data, data, len);
-	aliro_lab_evi("rrx", "id", data[1]);
+	aliro_lab_evi2("rrx", "proto", data[0], "id", data[1]);
 
 	/* M4 makes the engine start the responder (cherry_ccc_shim ->
 	 * woz_uwb_start_aliro) with the negotiated params. A hard error may DEINIT

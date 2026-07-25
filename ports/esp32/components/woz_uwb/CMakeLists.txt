@@ -48,6 +48,12 @@ set(WOZ_SRCS
     "port/woz_wrap_stubs.c"
 )
 
+# Flight recorder: record a live walk-up into a RAM ring for host replay
+# (gated, default n; the ccc_shim_rx.c call sites no-op when unset).
+if(CONFIG_WOZ_FLIGHT_RECORDER)
+    list(APPEND WOZ_SRCS "${WOZ}/facade/flight_recorder.c")
+endif()
+
 idf_component_register(
     SRCS ${WOZ_SRCS}
     INCLUDE_DIRS

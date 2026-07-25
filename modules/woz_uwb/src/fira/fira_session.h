@@ -68,6 +68,10 @@ bool fira_session_sts_quality_ok(int32_t driver_verdict, int16_t quality_index);
  *  ranges have been latched. Cleared by any implausible or outlier block. */
 bool fira_session_range_trusted(void);
 
+/** @brief Layer 4 diagnostic: the live run length of agreeing plausible blocks
+ *  (0..FIRA_RANGE_TRUST_K) behind fira_session_range_trusted(). */
+uint8_t fira_session_trust_level(void);
+
 /** @brief Register a callback fired after each accepted range latch (NULL to
  *  clear). Runs on the UWB RX path — keep it to a task wake, nothing heavier. */
 void fira_session_set_range_listener(void (*cb)(void));

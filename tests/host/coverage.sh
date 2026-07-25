@@ -248,6 +248,9 @@ run_suite esp_wrap "$OUT/cov_esp_wrap"
 MLOCK="$EAPPS/matter-lock/main"
 MFAKE="$ET/matterfake"
 cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
+# app_main.cpp's reader task drives the shared aliro_approach controller (C);
+# link it in like lock_led.c or the app_main.o has undefined references.
+cov_cc -I"$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$OUT/aliro_approach_matter_cov.o"
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
 	-DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
@@ -257,7 +260,8 @@ cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
 	"$MLOCK/app_driver.cpp" "$MLOCK/app_main.cpp" "$MLOCK/app_shell.cpp" \
 	"$MLOCK/lock/door_lock_manager.cpp" "$MLOCK/lock/door_lock_callbacks.cpp" \
 	"$MLOCK/lock/aliro_reader_delegate.cpp" \
-	"$MFAKE/matterfake.cc" "$OUT/lock_led_matter_cov.o" -o "$OUT/cov_esp_matter"
+	"$MFAKE/matterfake.cc" "$OUT/lock_led_matter_cov.o" \
+	"$OUT/aliro_approach_matter_cov.o" -o "$OUT/cov_esp_matter"
 run_suite esp_matter "$OUT/cov_esp_matter"
 
 llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
@@ -319,9 +323,10 @@ PYCOV_JSON="$OUT/pycov.json"
 rm -f "$OUT/pycov" "$PYCOV_JSON"
 if python3 -m coverage --version >/dev/null 2>&1; then
 	PY_INCLUDE="$ROOT/tools/aliro_lab.py"
+	PY_INCLUDE+=",$ROOT/tools/power_profile.py"
 	PY_INCLUDE+=",$ROOT/integration/homeassistant/aliro_mqtt_bridge.py"
 	PY_INCLUDE+=",$ROOT/scripts/flash_html.py"
-	for t in test_aliro_lab test_mqtt_bridge test_flash_html; do
+	for t in test_aliro_lab test_power_profile test_mqtt_bridge test_flash_html; do
 		COVERAGE_FILE="$OUT/pycov" python3 -m coverage run -a \
 			--include="$PY_INCLUDE" \
 			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
@@ -353,6 +358,7 @@ pyrow() { # <repo-relative .py> <test file>: surf row with measured %
 }
 
 pyrow "tools/aliro_lab.py" "test_aliro_lab.py"
+pyrow "tools/power_profile.py" "test_power_profile.py"
 pyrow "integration/homeassistant/aliro_mqtt_bridge.py" "test_mqtt_bridge.py"
 pyrow "scripts/flash_html.py" "test_flash_html.py"
 surf "web-twin/index.html" "$(loc web-twin/index.html)" \

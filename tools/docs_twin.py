@@ -27,6 +27,7 @@ from pathlib import Path
 
 SITE = Path("site")
 TWIN_SRC = Path("web-twin/index.html")
+TWIN_JS = Path("web-twin/twin.js")  # the page's firmware (woz_uwb compiled to WASM)
 TWIN_DEST_NAME = "twin.html"
 
 # The landing page's explore-card list; the CTA goes right before it, the same
@@ -66,9 +67,14 @@ def main() -> int:
     if not TWIN_SRC.is_file():
         print(f"docs_twin: missing {TWIN_SRC}", file=sys.stderr)
         return 1
+    if not TWIN_JS.is_file():
+        print(f"docs_twin: missing {TWIN_JS} — run `make twin-wasm`", file=sys.stderr)
+        return 1
 
-    # The page is self-contained, so a plain copy renders identically to file://.
+    # The page + its WASM firmware are a flat file pair; a plain copy renders
+    # identically to file:// (twin.html loads twin.js relatively).
     shutil.copyfile(TWIN_SRC, SITE / TWIN_DEST_NAME)
+    shutil.copyfile(TWIN_JS, SITE / TWIN_JS.name)
 
     raw = index.read_bytes()
     if CTA_MARKER in raw:

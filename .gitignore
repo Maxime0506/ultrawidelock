@@ -39,3 +39,12 @@ CLAUDE.md
 
 # internal working notes / plans (not part of the project)
 internal/
+
+# BLE/UWB captures: they carry personal Bluetooth data (paired device names,
+# nearby IDs, notification metadata) and must never be committed. Keep the
+# dissector's real-capture testing (tools/aliro.lua) out of the repo.
+*.pcap
+*.pcapng
+*.pklg
+*.btsnoop
+btsnoop_hci.log

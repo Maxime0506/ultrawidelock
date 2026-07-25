@@ -40,6 +40,12 @@ int fake_gap_update_calls;
 struct ble_gap_upd_params fake_gap_update_params;
 int fake_gap_conn_find_rc;
 struct ble_gap_conn_desc fake_gap_conn_desc;
+int fake_gap_rssi_rc;
+int8_t fake_gap_rssi_value;
+int fake_gap_terminate_rc;
+int fake_gap_terminate_calls;
+uint16_t fake_gap_terminate_conn;
+uint8_t fake_gap_terminate_reason;
 struct ble_npl_event *fake_eventq[16];
 int fake_eventq_count;
 struct ble_npl_callout *fake_last_callout;
@@ -97,6 +103,12 @@ void fake_nimble_reset(void)
 	memset(&fake_gap_update_params, 0, sizeof(fake_gap_update_params));
 	fake_gap_conn_find_rc = 0;
 	memset(&fake_gap_conn_desc, 0, sizeof(fake_gap_conn_desc));
+	fake_gap_rssi_rc = 0;
+	fake_gap_rssi_value = -60;
+	fake_gap_terminate_rc = 0;
+	fake_gap_terminate_calls = 0;
+	fake_gap_terminate_conn = 0;
+	fake_gap_terminate_reason = 0;
 	memset(fake_eventq, 0, sizeof(fake_eventq));
 	fake_eventq_count = 0;
 	fake_last_callout = NULL;
@@ -267,6 +279,24 @@ int ble_gap_conn_find(uint16_t conn_handle, struct ble_gap_conn_desc *out)
 	}
 	*out = fake_gap_conn_desc;
 	return 0;
+}
+
+int ble_gap_conn_rssi(uint16_t conn_handle, int8_t *out_rssi)
+{
+	(void)conn_handle;
+	if (fake_gap_rssi_rc != 0) {
+		return fake_gap_rssi_rc;
+	}
+	*out_rssi = fake_gap_rssi_value;
+	return 0;
+}
+
+int ble_gap_terminate(uint16_t conn_handle, uint8_t reason)
+{
+	fake_gap_terminate_calls++;
+	fake_gap_terminate_conn = conn_handle;
+	fake_gap_terminate_reason = reason;
+	return fake_gap_terminate_rc;
 }
 
 /* ---- npl events / callouts ---- */

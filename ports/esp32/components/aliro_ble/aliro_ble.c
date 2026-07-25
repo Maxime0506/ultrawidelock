@@ -170,6 +170,72 @@ static int coc_arm_rx(struct ble_l2cap_chan *chan)
 	return ble_l2cap_recv_ready(chan, rx);
 }
 
+/* ---- Connection-RSSI poll (ranging power gate) ---------------------------- *
+ * Armed only when the engine registered an on_rssi callback. One callout on the
+ * default (host-task) event queue reads the controller RSSI every
+ * CONFIG_WOZ_RSSI_GATE_POLL_MS while the Aliro CoC is up and feeds the sample
+ * to the engine. The first read fires inline at CoC-open so the gate is primed
+ * before the fast auth can complete — otherwise a walk-up that connects at the
+ * door would pay up to one poll period before ranging is allowed to start. */
+#ifndef CONFIG_WOZ_RSSI_GATE_POLL_MS
+#define CONFIG_WOZ_RSSI_GATE_POLL_MS 250
+#endif
+
+static struct ble_npl_callout s_rssi_poll;
+static bool s_rssi_poll_init;
+static bool s_rssi_poll_on;
+static uint16_t s_rssi_conn;
+
+static void rssi_poll_sample(void)
+{
+	int8_t rssi = 0;
+
+	if (ble_gap_conn_rssi(s_rssi_conn, &rssi) == 0 && s_cb.on_rssi != NULL) {
+		s_cb.on_rssi(s_rssi_conn, rssi);
+	}
+}
+
+static void rssi_poll_ev(struct ble_npl_event *ev)
+{
+	(void)ev;
+	if (!s_rssi_poll_on) {
+		return;
+	}
+	rssi_poll_sample();
+	ble_npl_callout_reset(&s_rssi_poll,
+			      ble_npl_time_ms_to_ticks32(CONFIG_WOZ_RSSI_GATE_POLL_MS));
+}
+
+/* Call after on_connected: the first inline sample must find the engine's
+ * session already allocated. */
+static void rssi_poll_start(uint16_t conn_handle)
+{
+	if (s_cb.on_rssi == NULL) {
+		return;
+	}
+	if (!s_rssi_poll_init) {
+		ble_npl_callout_init(&s_rssi_poll, nimble_port_get_dflt_eventq(), rssi_poll_ev,
+				     NULL);
+		s_rssi_poll_init = true;
+	}
+	s_rssi_conn = conn_handle;
+	s_rssi_poll_on = true;
+	rssi_poll_sample();
+	ble_npl_callout_reset(&s_rssi_poll,
+			      ble_npl_time_ms_to_ticks32(CONFIG_WOZ_RSSI_GATE_POLL_MS));
+}
+
+static void rssi_poll_stop(void)
+{
+	if (!s_rssi_poll_on) {
+		return;
+	}
+	s_rssi_poll_on = false;
+	if (s_rssi_poll_init) {
+		ble_npl_callout_stop(&s_rssi_poll);
+	}
+}
+
 // NimBLE L2CAP event callback that tracks connection-oriented channel (CoC) lifecycle events (connect, disconnect, data) for the Aliro L2CAP server.
 static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 {
@@ -190,9 +256,11 @@ static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 		if (s_cb.on_connected) {
 			s_cb.on_connected(event->connect.conn_handle);
 		}
+		rssi_poll_start(event->connect.conn_handle);
 		return 0;
 
 	case BLE_L2CAP_EVENT_COC_DISCONNECTED:
+		rssi_poll_stop();
 		coc_untrack(event->disconnect.chan);
 		ESP_LOGI(TAG, "coc disconnected (conn %u)", event->disconnect.conn_handle);
 		if (s_cb.on_disconnected) {
@@ -478,6 +546,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 		if (s_conn_upd_retry_init) {
 			ble_npl_callout_stop(&s_conn_upd_retry);
 		}
+		rssi_poll_stop(); /* a GAP-level drop can race the CoC teardown */
 		aliro_advertise();
 		return 0;
 	case BLE_GAP_EVENT_ADV_COMPLETE:
@@ -846,6 +915,19 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 	os_mbuf_free_chain(sdu);
 	ESP_LOGW(TAG, "ble_l2cap_send rc=%d", rc);
 	return -1;
+}
+
+// Reader-initiated link drop (RSSI power gate close on a departed peer). Remote-user-terminated
+// reason so the phone treats it as a clean end; already-gone connections count as success.
+int aliro_ble_disconnect(uint16_t conn_handle)
+{
+	int rc = ble_gap_terminate(conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+
+	if (rc != 0 && rc != BLE_HS_ENOTCONN) {
+		ESP_LOGW(TAG, "gap terminate (conn %u) rc=%d", conn_handle, rc);
+		return -1;
+	}
+	return 0;
 }
 
 /* ---- Cross-task reader->phone status send (host-task marshaling) ----------- */

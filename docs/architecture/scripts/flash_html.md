@@ -20,7 +20,7 @@ flowchart TD
 
 <details><summary>Undocumented (2)</summary>
 
-- `render`
+- `render` — tested: committed html up to date; deterministic; title fallback is parent dir
 - `main`
 
 </details>

@@ -162,6 +162,19 @@ class CheckBranchTest(unittest.TestCase):
         _, checks = self.one(events)
         self.assertEqual(status_of(checks, "setup"), "fail")
 
+    def test_setup_irs_identified_by_proto(self):
+        """proto-1 id-1 is M2, not the IRS: an M2-only setup must fail."""
+        events = [(t, ev) if ev != "rrx id=1" else (t, "rrx proto=1 id=1")
+                  for t, ev in GOOD_FAST]
+        _, checks = self.one(events)
+        self.assertEqual(status_of(checks, "setup"), "fail")
+
+    def test_setup_accepts_proto_tagged_irs(self):
+        events = [(t, ev) if ev != "rrx id=1" else (t, "rrx proto=2 id=1")
+                  for t, ev in GOOD_FAST]
+        _, checks = self.one(events)
+        self.assertEqual(status_of(checks, "setup"), "pass")
+
     def test_bolt_without_trusted(self):
         _, checks = self.one(without(GOOD_FAST, "ph.trusted"))
         self.assertEqual(status_of(checks, "trusted-bolt"), "fail")
@@ -340,6 +353,28 @@ class MainTest(unittest.TestCase):
         rc, term, _ = self.run_main("just noise\n")
         self.assertEqual(rc, 0)
         self.assertIn("no [ALAB] transactions", term)
+
+    def test_sdu_label_named_when_proto_present(self):
+        ev = aliro_lab.Event(1, "rrx", {"proto": 2, "id": 1}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rrx IRS")
+        ev = aliro_lab.Event(1, "rrx", {"proto": 1, "id": 1}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rrx M2")
+        ev = aliro_lab.Event(1, "rtx", {"proto": 1, "id": 0}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rtx M1")
+
+    def test_sdu_label_falls_back_without_proto(self):
+        """Captures from before the id-based stamping carry no proto."""
+        ev = aliro_lab.Event(1, "rrx", {"id": 1}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rrx id=1")
+
+    def test_sdu_label_unknown_pair(self):
+        ev = aliro_lab.Event(1, "rrx", {"proto": 7, "id": 9}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rrx proto=7 id=9")
+
+    def test_sdu_label_names_protocol_when_id_unknown(self):
+        """The proto-3 SDU iPhones send ahead of the IRS."""
+        ev = aliro_lab.Event(1, "rrx", {"proto": 3, "id": 0}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rrx SUPPL id=0")
 
     def test_usage_error(self):
         stderr = io.StringIO()
