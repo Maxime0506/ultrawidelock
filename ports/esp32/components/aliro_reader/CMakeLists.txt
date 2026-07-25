@@ -29,7 +29,12 @@ idf_component_register(
 		"${ALIRO}/src/aliro_assert_ec.c"
 		"aliro_stepup_worker.c"
 		"aliro_prov_nvs.c"
-	INCLUDE_DIRS "${ALIRO}/include"
+		# The `presence` console command. Lives here rather than in one app so
+		# both the standalone reader and the Matter lock can serve presence: the
+		# lock is the board a phone is actually provisioned against, so requiring
+		# a separate dongle app would mean cloning an identity to use it at all.
+		"presence_link.c"
+	INCLUDE_DIRS "${ALIRO}/include" "."
 	PRIV_INCLUDE_DIRS "${ALIRO}/src"
 	# woz_port.h / woz_log.h (the platform contract aliro_reader.c and
 	# aliro_ranging.c are written to) come via woz_uwb's public include dirs

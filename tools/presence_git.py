@@ -294,30 +294,51 @@ def read_bare_hex(ser, min_chars: int, what: str) -> str:
     raise PresenceError(advice)
 
 
+# The two apps spell these differently: the standalone reader registers
+# `aliro-export`/`aliro-import`, the Matter lock registers them as subcommands of
+# `aliro`. Either can be the source of an identity, so try both spellings rather
+# than making the caller know which app a board is running.
+EXPORT_COMMANDS = ("aliro-export", "aliro export")
+IMPORT_COMMANDS = ("aliro-import", "aliro import")
+
+
 def export_identity(ser) -> str:
     """Read a reader identity + trust blob from a provisioned board, as hex."""
-    ser.reset_input_buffer()
-    ser.write(b"aliro-export\n")
-    ser.flush()
-    return read_bare_hex(ser, BLOB_MIN_HEX, "identity blob")
+    last = None
+    for command in EXPORT_COMMANDS:
+        ser.reset_input_buffer()
+        ser.write((command + "\n").encode())
+        ser.flush()
+        try:
+            return read_bare_hex(ser, BLOB_MIN_HEX, "identity blob")
+        except PresenceError as exc:
+            last = exc
+    raise last
 
 
 def import_identity(ser, blob_hex: str) -> str:
     """Load an identity blob into a board. Returns the console's confirmation line."""
-    command = f"aliro-import {blob_hex}"
-    if len(command) + 1 > CONSOLE_LINE_MAX:
+    # Checked once, before either spelling is tried: an over-long line arrives
+    # truncated and comes back as "malformed blob", which blames the blob for what
+    # is really a transport limit.
+    longest = max(len(c) for c in IMPORT_COMMANDS) + 1 + len(blob_hex) + 1
+    if longest > CONSOLE_LINE_MAX:
         raise PresenceError(
             f"identity blob is {len(blob_hex) // 2} bytes, which does not fit the "
             f"{CONSOLE_LINE_MAX}-char console line. Raise max_cmdline_length in both "
             "app shells, or move the transfer off the command line."
         )
-    ser.reset_input_buffer()
-    ser.write((command + "\n").encode())
-    ser.flush()
-    for _ in range(REPLY_LINE_BUDGET):
-        line = read_line(ser)
-        if line.startswith("aliro-import:"):
-            return line
+    for command_name in IMPORT_COMMANDS:
+        ser.reset_input_buffer()
+        ser.write((f"{command_name} {blob_hex}" + "\n").encode())
+        ser.flush()
+        try:
+            for _ in range(REPLY_LINE_BUDGET):
+                line = read_line(ser)
+                if "aliro-import:" in line or "aliro import:" in line:
+                    return line
+        except PresenceError:
+            continue
     raise PresenceError("the destination board never acknowledged the import")
 
 

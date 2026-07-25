@@ -60,7 +60,9 @@ void app_main(void)
 	 * shell below picks up the `presence` command. Deliberately not a separate mode
 	 * -- the same board then serves presence AND stays provisionable over the same
 	 * console, which is what removes the reflash-to-switch-modes dance. */
-	presence_link_init();
+	/* true: this app has no lock state of its own, so presence owns the Wallet
+	 * grant here. The Matter lock passes false and grants from its approach loop. */
+	presence_link_init(true);
 	ESP_LOGI(TAG, "presence commands registered (see `presence` in help)");
 #endif
 

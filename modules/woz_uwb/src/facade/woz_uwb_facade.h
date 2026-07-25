@@ -71,6 +71,16 @@ bool woz_uwb_last_range_cm(int32_t *cm_out);
 bool woz_uwb_trusted_range_cm(int32_t *cm_out);
 
 /**
+ * As woz_uwb_trusted_range_cm(), plus how long ago that range landed. For
+ * callers that must judge whether a range is still CURRENT rather than merely
+ * the most recent one seen -- a distance from two minutes ago says nothing
+ * about who is standing here now. Polling this beats registering a range
+ * listener to timestamp latches: there is only one listener slot, and an app
+ * that already owns it (the lock's approach loop) would otherwise be displaced.
+ */
+bool woz_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out);
+
+/**
  * Register a callback fired after each accepted range latch (NULL to clear),
  * so the unlock seam can block on an event instead of polling. The callback
  * runs on the UWB RX path — keep it to a task wake, nothing heavier. A no-op

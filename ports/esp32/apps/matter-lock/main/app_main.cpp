@@ -43,6 +43,9 @@
 #include <aliro_lat.h>
 #include <esp_netif_sntp.h>
 #include <woz_uwb_facade.h>
+#ifdef CONFIG_WOZ_PRESENCE
+#include <presence_link.h>
+#endif
 #include "door_lock_manager.h"
 #include <platform/PlatformManager.h>
 #include <vector>
@@ -227,6 +230,12 @@ static void aliro_reader_task(void *arg)
 	}
 
 	woz_uwb_set_range_listener(on_uwb_range);
+
+#ifdef CONFIG_WOZ_PRESENCE
+	/* false: this app already grants and relocks the phone from its own approach
+	 * loop below, so presence must not also drive the Wallet notification. */
+	presence_link_init(false);
+#endif
 
 	int rc = aliro_reader_start_attached();
 	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,

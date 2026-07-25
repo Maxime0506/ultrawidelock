@@ -19,15 +19,20 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Register the range-latch listener, load the pairing key, and generate or load the
- * device signing key. Call once after the reader is up. */
-void presence_link_init(void);
+/* Load the pairing key and generate or load the device signing key. Call once after
+ * the reader is up.
+ *
+ * drive_wallet_grant: send the phone the Reader-Status-Changed grant/relock as the
+ * presence verdict changes. Pass false from any app that already drives that from
+ * its own lock state, or the two owners will contradict each other. */
+void presence_link_init(bool drive_wallet_grant);
 
 /* Persist a 32-byte pairing key to NVS and use it immediately. 0 on success,
  * negative on an NVS error. Also reachable as `presence key <hex>`. */

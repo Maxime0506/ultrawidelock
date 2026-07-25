@@ -146,13 +146,18 @@ void woz_uwb_set_range_listener(void (*cb)(void))
 
 bool woz_uwb_trusted_range_cm(int32_t *cm_out)
 {
+	return woz_uwb_trusted_range_age_cm(cm_out, NULL);
+}
+
+bool woz_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out)
+{
 #if defined(CONFIG_WOZ_ALIRO)
 	/* Layer 4: only surface the range to the unlock seam once K consecutive
 	 * agreeing plausible blocks have built trust, so a lone spoofed block
 	 * cannot flip open-allowed. */
-	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL) &&
+	return fira_session_last_range(cm_out, NULL, NULL, NULL, age_ms_out) &&
 	       fira_session_range_trusted();
 #else
-	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL);
+	return fira_session_last_range(cm_out, NULL, NULL, NULL, age_ms_out);
 #endif
 }

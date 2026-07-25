@@ -30,11 +30,9 @@
 #define PRESENCE_DEVKEY "kdev"
 /* A range must have latched within this window for the dongle to call it PRESENT;
  * otherwise the phone has walked away and presence has gone stale. */
-#define RANGE_FRESH_US (5 * 1000 * 1000)
+#define RANGE_FRESH_MS 5000
 
-static volatile int32_t s_last_cm;
-static volatile int64_t s_last_us;
-static volatile bool s_have_range;
+static bool s_drive_wallet;
 static uint8_t s_key[ALIRO_ASSERT_KEY_LEN];
 static bool s_key_set;
 
@@ -43,19 +41,6 @@ static bool s_key_set;
 static struct aliro_assert_ec_priv s_dev;
 static uint8_t s_dev_pub[ALIRO_ASSERT_PUB_LEN];
 static bool s_dev_set;
-
-// Range-latch listener (runs on the UWB RX path): record the latest trusted range
-// + the time it landed. Keep it to a couple of stores, nothing heavier.
-static void range_cb(void)
-{
-	int32_t cm;
-
-	if (woz_uwb_trusted_range_cm(&cm)) {
-		s_last_cm = cm;
-		s_last_us = esp_timer_get_time();
-		s_have_range = true;
-	}
-}
 
 static void load_key(void)
 {
@@ -139,14 +124,18 @@ static void load_or_make_dev_key(void)
 	s_dev_set = true;
 }
 
-void presence_link_init(void)
+void presence_link_init(bool drive_wallet_grant)
 {
 	/* Idempotent (psa_crypto_init is), and aliro_reader_start() has already run
 	 * it. Repeated here so the keygen below does not depend on that ordering. */
 	(void)aliro_prim_init();
 	load_key();
 	load_or_make_dev_key();
-	woz_uwb_set_range_listener(range_cb);
+	s_drive_wallet = drive_wallet_grant;
+	/* No range listener on purpose. The range latch already carries its own age,
+	 * so presence can read freshness when a challenge arrives, and the single
+	 * listener slot stays free for whichever app actually needs to wake on a
+	 * range -- the Matter lock's approach loop does. */
 }
 
 /* Wallet unlock animation (Reader-Status-Changed, Aliro transaction step 23).
@@ -157,11 +146,15 @@ void presence_link_init(void)
 static bool s_wallet_granted;
 
 // Send the phone the grant/relock notification when the presence verdict changes.
-// Runs in the serve-loop task, never on the UWB RX path, because the send seals on
-// the BLE channel. A no-op with no established session (the reader logs and drops).
+// Runs in the console task, never on the UWB RX path, because the send seals on the
+// BLE channel. A no-op with no established session (the reader logs and drops).
+//
+// Off unless the host app asked for it. An app with its own lock state already owns
+// this notification (the Matter lock grants on its approach loop), and two owners
+// would fight over what the phone is being told.
 static void notify_wallet(bool present)
 {
-	if (present == s_wallet_granted) {
+	if (!s_drive_wallet || present == s_wallet_granted) {
 		return;
 	}
 	s_wallet_granted = present;
@@ -183,14 +176,16 @@ static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT
 	 * verifier's nonce being unpredictable -- which holds for a third-party
 	 * verifier of a P-256 frame exactly as it does for the paired host. */
 
-	int64_t now = esp_timer_get_time();
 	uint8_t cred_pub[65];
-	bool fresh = s_have_range && (now - s_last_us) <= RANGE_FRESH_US && s_last_cm >= 0;
+	int32_t cm = -1;
+	int64_t age_ms = 0;
+	bool fresh = woz_uwb_trusted_range_age_cm(&cm, &age_ms) && cm >= 0 &&
+		     age_ms <= RANGE_FRESH_MS;
 	bool have_cred = aliro_reader_authenticated_credential(cred_pub);
 
 	if (fresh && have_cred) {
 		a->status = ALIRO_PRESENCE_PRESENT;
-		a->distance_cm = (s_last_cm > 0xFFFE) ? 0xFFFEu : (uint16_t)s_last_cm;
+		a->distance_cm = (cm > 0xFFFE) ? 0xFFFEu : (uint16_t)cm;
 		aliro_assert_cred_id(cred_pub, a->cred_id);
 	} else {
 		a->status = ALIRO_PRESENCE_ABSENT;

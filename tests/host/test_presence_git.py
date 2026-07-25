@@ -125,15 +125,25 @@ def signed_frame(nonce, distance=25, status=pv.PRESENCE_PRESENT):
 class FakeSerial:
     """Enough of pyserial for the dongle helpers, with a scriptable read stream."""
 
-    def __init__(self, script=b"", chunk=None):
+    def __init__(self, script=b"", chunk=None, answers=None):
         self.script = bytearray(script)
         self.chunk = chunk
         self.written = b""
         self.closed = False
         self.flushed_input = 0
+        # command substring -> bytes the board replies with. Needed to model a
+        # board that rejects one command and then says nothing: with a single
+        # pre-loaded script, a later command's answer would be read as if it had
+        # answered the earlier one, and a fallback would look like it worked.
+        self.answers = answers or {}
 
     def write(self, data):
         self.written += data
+        text = data.decode("utf-8", "replace")
+        for key, reply in self.answers.items():
+            if key in text:
+                self.script += reply
+                break
 
     def flush(self):
         pass
@@ -478,6 +488,26 @@ class CloneTests(unittest.TestCase):
         line = pg.import_identity(ser, self.BLOB)
         self.assertIn("adopted", line)
         self.assertEqual(ser.written, f"aliro-import {self.BLOB}\n".encode())
+
+    def test_export_falls_back_to_the_matter_lock_spelling(self):
+        # The standalone reader registers aliro-export; the Matter lock registers
+        # it as a subcommand of aliro. Either board can be the identity source, so
+        # a board that rejects the first spelling must still be read by the second.
+        ser = FakeSerial(answers={
+            "aliro-export": b"Unrecognized command\n",
+            "aliro export": self.BLOB.encode() + b"\n",
+        })
+        self.assertEqual(pg.export_identity(ser), self.BLOB)
+        self.assertIn(b"aliro-export\n", ser.written)
+        self.assertIn(b"aliro export\n", ser.written)
+
+    def test_import_falls_back_to_the_matter_lock_spelling(self):
+        ser = FakeSerial(answers={
+            "aliro-import ": b"Unrecognized command\n",
+            "aliro import ": b"aliro import: adopted 238-byte identity\n",
+        })
+        self.assertIn("adopted", pg.import_identity(ser, self.BLOB))
+        self.assertIn(f"aliro import {self.BLOB}\n".encode(), ser.written)
 
     def test_blob_too_long_for_the_console_is_refused_before_sending(self):
         # A blob that overflows max_cmdline_length arrives truncated and is rejected

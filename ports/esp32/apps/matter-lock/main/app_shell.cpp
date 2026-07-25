@@ -36,6 +36,9 @@
 
 #include "app_shell.h"
 #include "door_lock_manager.h"
+#ifdef CONFIG_WOZ_PRESENCE
+#include <presence_link.h>
+#endif
 
 using namespace chip;
 using namespace chip::app::Clusters;
@@ -480,6 +483,13 @@ void app_shell_start(void)
 #endif
 		 .hint = NULL,
 		 .func = cmd_aliro},
+#ifdef CONFIG_WOZ_PRESENCE
+		{.command = "presence",
+		 .help = "presence pub|assert <nonce-hex>|hmac <nonce-hex>|key <hex>: signed "
+			 "statements of the current trusted-range presence",
+		 .hint = NULL,
+		 .func = presence_link_cmd},
+#endif
 		{.command = "uwbdiag",
 		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off; "
 			 "costs slot deadlines)",
