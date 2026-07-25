@@ -64,13 +64,16 @@ tools:
 tools-install:
 	@$(REPO_ROOT)/scripts/toolchain.sh install
 
-## bootstrap: set this machine up for the repo  ·  host tools, then NCS (~6.5 GB)
-##   Two phases. `make tools-install` first, for the tools every host CI gate
-##   needs; then NCS v3.3.0 + the Nordic add-on, patched for this repo. A tool
-##   it cannot install stops the run before the 6.5 GB fetch, not after it.
+## bootstrap: set this machine up for the repo  ·  the only command before build
+##   Three phases, so a fresh clone reaches `make build` without a manual step
+##   in the middle: `make tools-install` for the host gate tools and nrfutil;
+##   the NCS v3.3.0 toolchain (~2 GB, skipped when already installed); then NCS
+##   + the Nordic add-on (~6.5 GB), patched for this repo. Anything it cannot
+##   install stops the run before the big fetch, not after it.
 ##   CI never runs this target — it calls scripts/bootstrap.sh directly — so no
 ##   runner has its packages touched.
 ##   Options: NO_TOOLS=1 skip the tool phase, straight to the fetch
+##            NO_TOOLCHAIN=1 skip the NCS toolchain phase
 ##            HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make build HA=1`; not hardware-validated)
 bootstrap:

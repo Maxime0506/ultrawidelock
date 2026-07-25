@@ -14,29 +14,38 @@ Every command below runs from this directory.
 
 ## nRF5340 DK (primary target)
 
-Two commands: the first once per machine, the second once per checkout.
+One command:
 
 ```bash
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0
 make bootstrap
 ```
 
-`make bootstrap` runs in two phases. First `make tools-install`, covered
-[below](#development-tools-macos--linux): the host tools every CI gate needs.
-Then it pulls NCS v3.3.0 + the Nordic door-lock add-on (~6.5 GB) into
-`./workspace` and applies this repo's patches. A tool it cannot install stops
-the run before the download, not after. Knobs:
+It runs in three phases, so a clone reaches a build without a manual step in
+the middle:
+
+1. `make tools-install`, covered [below](#development-tools-macos--linux): the
+   host tools every CI gate needs, plus `nrfutil` itself.
+2. The NCS v3.3.0 toolchain, via `nrfutil sdk-manager toolchain install`. An
+   already-installed toolchain costs a query rather than a re-download, so this
+   is safe on every run.
+3. NCS v3.3.0 + the Nordic door-lock add-on (~6.5 GB) into `./workspace`, with
+   this repo's patches applied on top.
+
+Anything it cannot install stops the run before the 6.5 GB download rather than
+after it, which is where that failure used to surface. Knobs:
 
 | Knob | Effect |
 |---|---|
-| `NO_TOOLS=1` | skip the tool phase, go straight to the fetch |
+| `NO_TOOLS=1` | skip phase 1, the host tools |
+| `NO_TOOLCHAIN=1` | skip phase 2, for a host that manages the toolchain itself |
 | `ALIRO_WS=/big/disk/ws` | put the workspace somewhere else |
 | `ALIRO_SHALLOW=1` | shallow fetch, saves several GB (what CI uses) |
 | `ALIRO_TOOLCHAIN=env` | use the toolchain already on `PATH` |
 | `HA=1` | Home Assistant patches (pair with `make build HA=1`) |
 
 CI never runs `make bootstrap`; it calls `scripts/bootstrap.sh` directly, so no
-runner has its packages touched.
+runner has its packages touched, and it builds in a container with the
+toolchain already on `PATH` (`ALIRO_TOOLCHAIN=env`), which skips phase 2 too.
 
 Then:
 
@@ -92,6 +101,7 @@ What the gates use, and why:
 | `llvm-cov` | `coverage` (macOS reaches it through `xcrun`, so Xcode CLT is enough) |
 | `reuse` | licence store |
 | `cbmc` | the parser memory-safety proof |
+| `nrfutil` | no gate — `make bootstrap`/`build`/`flash` only, so its absence is reported and never fails `make tools` |
 | python `markdown`, `coverage` | not checked by any gate, but CI installs both: without them the flash-HTML drift check and the python coverage rows silently skip |
 
 Version pins are read from `.github/workflows/` at run time, so bumping a pin in

@@ -10,8 +10,8 @@
 #   - Nordic add-on  ncs-door-lock-and-access-control @ the pin below
 #   - NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
 #
-# Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
-#   nrfutil sdk-manager toolchain install --ncs-version v3.3.0
+# The NCS v3.3.0 toolchain it needs is installed here too, once per machine, so
+# a clone reaches a build in one command instead of three.
 #
 # Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 #         ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
@@ -33,6 +33,35 @@ if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
   launch() { "$@"; }
 else
   launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
+fi
+
+# 0. The NCS toolchain (compiler, west, ccache — about 2 GB), once per machine.
+#    This was the one prerequisite the script documented and did not do, which
+#    left a manual step in the middle of getting from a clone to a build. Its
+#    cost when skipped was not the typing: it surfaced as a failure AFTER the
+#    multi-GB fetch below, which is the worst place to learn about it.
+#
+#    Safe to run every time. `toolchain list` prints one row per installed
+#    version, so an existing toolchain costs a query and nothing else.
+#
+#    ALIRO_TOOLCHAIN=env means the toolchain is already on PATH — the NCS
+#    container CI builds in, where nrfutil's toolchain index is not even
+#    reachable — so there is nothing to install and nothing to ask.
+#    NO_TOOLCHAIN=1 skips the phase for a host that manages it another way.
+if [ "${ALIRO_TOOLCHAIN:-}" != env ] && [ -z "${NO_TOOLCHAIN:-}" ]; then
+  echo "==> NCS $NCS_VER toolchain"
+  if ! command -v nrfutil >/dev/null 2>&1; then
+    echo "ERROR: nrfutil not found on PATH — it is what installs the toolchain." >&2
+    echo "       run: make tools-install" >&2
+    echo "       or:  https://www.nordicsemi.com/Products/Development-tools/nrf-util" >&2
+    exit 1
+  fi
+  if nrfutil sdk-manager toolchain list 2>/dev/null | grep -q "^${NCS_VER}[[:space:]]"; then
+    echo "    already installed — nothing to fetch"
+  else
+    echo "    installing (~2 GB, once per machine)"
+    nrfutil sdk-manager toolchain install --ncs-version "$NCS_VER"
+  fi
 fi
 
 # 1. Fetch pristine upstream into $WS. A sentinel marks a completed fetch so an

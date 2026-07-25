@@ -122,6 +122,16 @@ TOOLS=(
 	node doxygen dot llvm-cov zizmor reuse cbmc emcc markdown coverage
 )
 
+# Firmware, not gates. nrfutil is what installs the NCS toolchain, so
+# `make bootstrap` needs it, and it is reported here because "what does this
+# machine still need" is the question this script answers.
+#
+# It is kept in its own list because it must NEVER set the exit status. Someone
+# who only runs the host suites has every tool they need without it, and
+# `make tools && make verify` has to keep meaning what it says for them. The
+# row is reported, and `install` offers it; nothing here fails without it.
+FW_TOOLS=(nrfutil)
+
 # Which gate stops working without it. This is the "why do I need this" column,
 # and it is the reason a row exists at all.
 tool_gate() {
@@ -146,6 +156,7 @@ tool_gate() {
 	# on a weaker measurement than CI made.
 	markdown) echo "test, coverage (silently weaker)" ;;
 	coverage) echo "coverage (python rows)" ;;
+	nrfutil) echo "make bootstrap / build / flash" ;;
 	esac
 }
 
@@ -376,6 +387,16 @@ tool_install() {
 	markdown | coverage)
 		echo "python3 -m venv .venv && .venv/bin/pip install --quiet --upgrade pip 'markdown==$(tool_pin markdown)' coverage"
 		;;
+	# Nordic ships it as a signed binary from their own site, and only Homebrew
+	# packages it. Every other host gets the note instead of a wrong command:
+	# the distro repos do not carry it, so guessing one would fail loudly on a
+	# tool nobody needs unless they are building firmware.
+	nrfutil)
+		case "$PM" in
+		brew) echo "brew install nrfutil" ;;
+		*) echo "" ;;
+		esac
+		;;
 	esac
 }
 
@@ -384,6 +405,7 @@ tool_note() {
 	case "$1" in
 	cbmc) echo "no package for this host — releases: https://github.com/diffblue/cbmc/releases" ;;
 	actionlint) echo "no checksum-pinned build for ${OS}/${ARCH} — releases: https://github.com/rhysd/actionlint/releases/tag/v$(tool_pin actionlint)" ;;
+	nrfutil) echo "firmware only — https://www.nordicsemi.com/Products/Development-tools/nrf-util" ;;
 	*) echo "install it however this host prefers, then re-run" ;;
 	esac
 }
@@ -478,6 +500,23 @@ printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
 printf '  %s%d tools %s %d present %s %d missing %s %d off the CI pin%s\n\n' \
 	"$DIM" "${#TOOLS[@]}" "$DOT" "$nok" "$DOT" "$nmiss" "$DOT" "$nold" "$RESET"
 
+# Firmware rows, below the line and outside every count above. A missing one is
+# a fact about what this machine can build, not a gap in what it can verify, so
+# it is stated and then left alone.
+nfw=0
+for t in "${FW_TOOLS[@]}"; do
+	if got="$(tool_probe "$t")"; then
+		printf '  %s%s%s %-12s %s%-33s%s%s\n' \
+			"$GRN" "$CHK" "$RESET" "$t" "$DIM" "$(tool_gate "$t")" "$RESET" "$got"
+	else
+		nfw=$((nfw + 1))
+		NEEDED+=("$t")
+		printf '  %s%s%s %-12s %s%-33s%snot installed — firmware builds only%s\n' \
+			"$YEL" "$TIL" "$RESET" "$t" "$DIM" "$(tool_gate "$t")" "$YEL" "$RESET"
+	fi
+done
+printf '\n'
+
 if [ "$nold" -gt 0 ]; then
 	printf '  %s%s A version off the CI pin can disagree with CI in either direction —%s\n' \
 		"$YEL" "$TIL" "$RESET"
@@ -511,7 +550,9 @@ if [ "$nmiss" -eq 0 ] && [ "$nold" -eq 0 ]; then
 	{ [ -n "$missing_rows" ] || [ -n "$stale_pins" ] || [ -n "$unparsed" ]; } && exit 1
 	printf '  %s%s every host gate has its tool. `make verify` will skip nothing.%s\n\n' \
 		"$GRN" "$CHK" "$RESET"
-	exit 0
+	# Every gate is covered, so this is a success whatever the firmware row
+	# says. `install` still goes on to offer it; `check` has said its piece.
+	[ "$MODE" = install ] && [ "$nfw" -gt 0 ] || exit 0
 fi
 
 CMDS=()

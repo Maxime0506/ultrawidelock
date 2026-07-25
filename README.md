@@ -80,9 +80,8 @@ an ARM binary, so nothing links it on Xtensa. That whole layer is reimplemented 
 **nRF5340 DK:**
 
 ```bash
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0   # once per machine
-
-make bootstrap     # fetch NCS v3.3.0 + the Nordic add-on (~6.5 GB) into ./workspace
+make bootstrap     # host tools, the NCS v3.3.0 toolchain, then NCS + the
+                   # Nordic add-on (~6.5 GB) into ./workspace — once per machine
 make build         # → ./build/merged.hex
 make flash-erase   # first flash of a net-core image
 make flash         # every flash after that
