@@ -19,12 +19,12 @@ Also keeps the dwt_configurestsmode pass-through the essential RX path needs.
 ## API
 
 ### `void __wrap_dwt_configurestsmode(uint8_t stsMode)`
-`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:25`
+`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:26`
 
 Wrapped __real_dwt_configurestsmode with no added behavior; forwards stsMode unchanged.
 
 ### `static void shim_rxok(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:45`
+`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:46`
 
 RX-good shim: feed the empirical STS-index tracker, run the blob's arm
 (prepoll_rx_rearm), then — unless this RX is the awaited POLL — decode the
@@ -32,21 +32,21 @@ Pre-POLL to warm the next block's STS.  Mirrors uwb_rxdiag.c:shim_rxok minus
 the tallies/cadence/event logging.
 
 ### `static void shim_rxto(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:61`
+`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:80`
 
 RX-timeout callback shim; forwards the event to g_blob_rxto if a handler is registered, otherwise no-op.
 
 ### `static void shim_rxerr(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:69`
+`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:88`
 
 RX-error callback shim; forwards the event to g_blob_rxerr if a handler is registered, otherwise no-op.
 
 ### `static void shim_txdone(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:77`
+`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:96`
 
 TX-done callback shim; forwards the event to g_blob_txdone if a handler is registered, otherwise no-op.
 
 ### `void __wrap_dwt_setcallbacks(dwt_callbacks_s *callbacks)`
-`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:85`
+`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c:104`
 
 Intercept the callback registration and insert the RX-good bootstrap shim.

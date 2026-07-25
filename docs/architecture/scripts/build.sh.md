@@ -78,14 +78,14 @@ Build the Aliro UWB firmware image. Runs preflight checks, resolves chip config,
 **calls** `die`, `hdr`, `kv`, `launch`, `ok`, `preflight`, `resolve_chip`, `sha`
 
 ### `require_built()`
-`scripts/build.sh:267`
+`scripts/build.sh:273`
 
 Verify that a west build has completed in BUILD directory (build.ninja exists). Called before flash operations to fail fast if build has not run.
 
 **calls** `die`
 
 ### `resolve_snr()`
-`scripts/build.sh:275`
+`scripts/build.sh:281`
 
 Resolve which J-Link probe to flash, into SNR. Only nRF5340DKs (board version
 PCA10095 in nrfutil device list) qualify, so another attached probe (e.g. a

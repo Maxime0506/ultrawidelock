@@ -8,8 +8,8 @@ any other local checkout — a clean upstream fetch every time.
 Fetches (all public):
 - Nordic add-on  ncs-door-lock-and-access-control @ the pin below
 - NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
-Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0
+The NCS v3.3.0 toolchain it needs is installed here too, once per machine, so
+a clone reaches a build in one command instead of three.
 Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 
@@ -18,7 +18,7 @@ ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewher
 ## API
 
 ### `apply_to()`
-`scripts/bootstrap.sh:79`
+`scripts/bootstrap.sh:108`
 
 Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
 

@@ -358,13 +358,41 @@ ccc_ran_params.
 
 @file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
 
 @file uwb_isr.c — DW3000 interrupt-callback registration (implementation).
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md)
+
+@file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0/1).
+Split the work across the two contexts the ALAB contract demands: the RX callback only
+latches registers into a snapshot (uwb_cirdiag_capture, plain stores + one SPI read), and a
+task-side uwb_cirdiag_flush formats/prints the line. On the nRF the flush runs on the
+sysworkq (uwb_rxdiag.c submits it); on the ESP32 the pinned ISR-service task calls it after
+its IRQ drain loop, so capture and flush are sequential there. A seqlock covers the
+one real race (nRF: a new capture preempting a flush mid-copy): torn snapshots are dropped,
+the next reception re-latches.
+Stage 1 adds an independently-armed windowed-CIR dump: when armed, capture also reads a
+fixed window of Ipatov complex taps centred on the first-path index into the snapshot. The
+taps are NOT printed on the RX/flush path — a full window is ~64 serial lines per reception,
+enough blocking UART to overrun the ranging slot and stall a live walk-up. Instead flush
+appends each window to a small RAM ring (the last CIRDIAG_RING_RECS receptions), and the taps
+are drained to `ev=uwb.cir` lines only when the dump is disarmed (uwb_cirdiag_dump_set_enabled
+(false)) — that runs in console/task context after the walk-up, so the unlock is unaffected
+while capturing. Deferring the printing was necessary but not sufficient: the window READ is
+itself too long to sit inside a live ranging block, where the responder still owes a POLL or
+Final reception. The shims pass that down as deadline_pending and the window is taken only on
+the Final. Nor was that sufficient: the accumulator cannot be read at all while the receiver
+is up, and the shim re-arms an SP0 listen the moment the Final is serviced, so the read has to
+happen BEFORE that (the shims gate it on ccc_shim_rx_awaiting_final). Doing it on every block
+then cost every range, so uwb_cirdiag_window_due decimates it to one Final in
+CIRDIAG_CIR_EVERY.
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
 
@@ -395,6 +423,14 @@ ccc_ran_params.
 @file uwb_isr.h — DW3000 interrupt-callback registration (public surface).
 
 **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
+
+## `modules/woz_uwb/src/shell/`
+
+### [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+@file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ## `modules/woz_aliro_stack/src/`
 
@@ -476,6 +512,16 @@ engine is bound and unbound via internal ursk and stop calls.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
 
+### [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
+
+@file uwb_cirdiag.h — Per-reception CIA first-path/STS diagnostics stream (channel-impulse
+Stage 0). The RX callback latches the DW3000's CIA diagnostic bank (Ipatov/STS first-path
+index, F1..F3, power, peak, STS quality, xtal offset); task context emits it as one
+"[ALAB] t=<us> ev=uwb.diag ..." line for tools/aliro_lab.py. OFF at boot; armed at runtime
+(nRF `aliro cir on`, ESP32 rides the `lab on` gate).
+
+**used by** [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
 ### [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
 
 @file trace.h — Structured [WOZ_TRACE] emit helpers, gated on CONFIG_WOZ_E2E_TRACE.
@@ -503,14 +549,6 @@ and a threshold below ERR still lets ERR through. So mute per-source at runtime.
 Reversible: compiled only under CONFIG_WOZ_PRETTY_SHELL (PRETTY=1). Drop PRETTY
 and every one of these lines returns for raw diagnosis. Needs
 CONFIG_LOG_RUNTIME_FILTERING=y (set in ports/nrf5340dk/overlays/woz-pretty.conf).
-
-## `modules/woz_uwb/src/shell/`
-
-### [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
-
-@file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ## `ports/esp32/apps/matter-lock/main/`
 
@@ -791,13 +829,17 @@ Exit status: 0 = report produced, 2 = usage/input error.
 
 Aliro Lab: score a captured reader serial log.
 
-Usage: python3 tools/aliro_lab.py <capture.log> [report.html]
+Usage: python3 tools/aliro_lab.py [--cir <taps.csv>] <capture.log> [report.html]
 
 Parses the structured "[ALAB] t=<us> ev=..." trace lines the firmware emits
 when CONFIG_WOZ_ALIRO_LAB is enabled (see modules/woz_aliro/src/aliro_lab.h),
 groups them into walk-up transactions, and reports phase timings, the flow
 taken (fast vs standard), and pass/warn/fail invariant checks — to the
 terminal and as a self-contained HTML report (default: <capture.log>.html).
+
+With --cir, the windowed-CIR taps (ev=uwb.cir, channel-impulse Stage 1) are
+also written to a CSV (t_us,n,i,re,im,mag2) for offline inside/outside
+labeling and analysis; the scoring/report output is unchanged.
 
 Every check encodes an invariant of this repo's reader implementation (see
 internal notes in the check text), nothing else. Exit status: 0 = no failing
@@ -1217,13 +1259,13 @@ Exit status: 0 = parsed at least one walk-up, 2 = usage/input error.
 
 *No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
 
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
 
 ### [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
 *No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
 
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
 
 ## `modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`
 
@@ -1433,8 +1475,8 @@ any other local checkout — a clean upstream fetch every time.
 Fetches (all public):
 - Nordic add-on  ncs-door-lock-and-access-control @ the pin below
 - NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
-Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0
+The NCS v3.3.0 toolchain it needs is installed here too, once per machine, so
+a clone reaches a build in one command instead of three.
 Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 
