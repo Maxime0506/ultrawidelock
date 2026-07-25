@@ -39,6 +39,7 @@
 
 #include "aliro_ble.h"
 #include "aliro_crypto.h"
+#include "aliro_lat.h"
 #include "aliro_prim.h"
 #include "aliro_ranging.h"
 
@@ -466,6 +467,48 @@ int main(void)
 	okc("f.ok.msg",
 	    s_handles == 1 && s_handle_sess == (struct aliro_uwb_session *)&s_sess_dummy &&
 		    s_handle_len == sizeof(irs) && memcmp(s_handle_buf, irs, sizeof(irs)) == 0);
+	/* Latency phases are stamped from each SDU's [proto][id], not from the
+	 * order SDUs arrive in. The bench showed why: the phone sends a proto-2
+	 * notification ahead of Initiate-Ranging-Session, and order-based
+	 * labelling then shifted every device->reader stamp by one frame,
+	 * putting "M2 received" on the IRS — before M1 had even been sent.
+	 *
+	 * aliro_lat_mark returns nonzero only when IT stamped the phase, so a
+	 * nonzero here means "still unstamped", i.e. nothing mislabelled it.
+	 * Each probe consumes its phase, so every scenario starts a fresh
+	 * walk-up and asserts one thing. */
+	printf("L: latency stamps follow message identity\n");
+	{
+		/* proto-2 id-0 (NOTIFICATION_EVENT): the stray SDU that used to
+		 * eat the IRS label. */
+		const uint8_t evt[8] = {0x02, 0x00, 0x00, 0x04, 0, 0, 0, 0};
+		/* proto-1: M1/M2/M3/M4 are ids 0/1/2/3. */
+		const uint8_t m2[8] = {0x01, 0x01, 0x00, 0x04, 0, 0, 0, 0};
+		const uint8_t m4[8] = {0x01, 0x03, 0x00, 0x04, 0, 0, 0, 0};
+
+		aliro_lat_begin();
+		okc("l.stray_notify_keeps_irs_free",
+		    aliro_ranging_feed(7, evt, sizeof(evt)) == 0 &&
+			    aliro_lat_mark(ALIRO_LAT_IRS_RX) != 0);
+
+		aliro_lat_begin();
+		okc("l.irs_is_not_m2", aliro_ranging_feed(7, irs, sizeof(irs)) == 0 &&
+					       aliro_lat_mark(ALIRO_LAT_M2_RX) != 0);
+
+		aliro_lat_begin();
+		okc("l.irs_stamps_irs", aliro_ranging_feed(7, irs, sizeof(irs)) == 0 &&
+						aliro_lat_mark(ALIRO_LAT_IRS_RX) == 0);
+
+		aliro_lat_begin();
+		okc("l.m2_stamps_m2", aliro_ranging_feed(7, m2, sizeof(m2)) == 0 &&
+					      aliro_lat_mark(ALIRO_LAT_M2_RX) == 0);
+
+		aliro_lat_begin();
+		okc("l.m4_stamps_m4", aliro_ranging_feed(7, m4, sizeof(m4)) == 0 &&
+					      aliro_lat_mark(ALIRO_LAT_M4_RX) == 0);
+	}
+
+	printf("F: feed (engine errors)\n");
 	s_handle_rc = ALIRO_UWB_ERR_MESSAGE_STATE;
 	okc("f.engine_reject", aliro_ranging_feed(7, irs, sizeof(irs)) == -1);
 	okc("f.engine_reject.session_kept", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
@@ -540,6 +583,29 @@ int main(void)
 	okc("x.deinit_echo", aliro_ranging_feed(9, irs, 8) == -1);
 
 	okc("x.restart", aliro_ranging_start(3, 5, ursk, &sc) == 0);
+
+	/* TX-side identity stamping, deliberately last: it pushes extra engine
+	 * messages, which would shift the free/nonce counters T and X assert on.
+	 * The second reader transmission of a setup is M3, and it must not be
+	 * able to claim the M1 label merely by being a transmission. */
+	printf("L: latency stamps follow message identity (TX)\n");
+	{
+		const uint8_t m1[8] = {0x01, 0x00, 0x00, 0x04, 0, 0, 0, 0};
+		const uint8_t m3[8] = {0x01, 0x02, 0x00, 0x04, 0, 0, 0, 0};
+
+		aliro_lat_begin();
+		tx_push(m3, sizeof(m3), 3);
+		okc("l.m3_is_not_m1", aliro_lat_mark(ALIRO_LAT_M1_TX) != 0);
+
+		aliro_lat_begin();
+		tx_push(m1, sizeof(m1), 3);
+		okc("l.m1_stamps_m1", aliro_lat_mark(ALIRO_LAT_M1_TX) == 0);
+
+		aliro_lat_begin();
+		tx_push(m3, sizeof(m3), 3);
+		okc("l.m3_stamps_m3", aliro_lat_mark(ALIRO_LAT_M3_TX) == 0);
+	}
+
 	aliro_ranging_stop(3);
 
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");

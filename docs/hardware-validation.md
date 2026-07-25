@@ -65,6 +65,8 @@ No NFC tap path exists on this target, so there is no equivalent of HV-5.
 | EV-14 | Unlock, then stand still at the door for 10 s | No `relock.sent`, bolt does not cycle. iOS pauses ranging when still; a relock here is the regression |
 | EV-15 | Unlock, then leave briskly | `relock.sent` appears **before** `session.end`, and the phone shows locked as you go |
 | EV-16 | Re-approach after EV-15 | No `relock.sent` between `ph.apc` and the grant, i.e. the Wallet does not flash locked then unlocked |
+| EV-17 | Score any capture that reached UWB-active with `tools/aliro_lab.py` | The `order` check passes. `ph.m1` before `ph.m2` and `ph.m3` before `ph.m4rx`: setup stamps follow message identity, not arrival order |
+| EV-18 | Read the `ranging setup:` line of that report | Reads `rrx EVENT, rrx IRS, rtx M1, rrx M2, rtx M3, rrx M4` (names, not raw ids). A raw `id=` means pre-fix firmware |
 
 EV-7 is the row that matters most and the one most easily faked: the bolt moving is not
 a pass. The Wallet animation is the pass criterion, because that is what proves the
@@ -74,6 +76,12 @@ EV-12 to EV-16 gate the RSSI power gate and the relock policy; see
 [`power-profile.md`](power-profile.md) for what each measurement means and for the
 thresholds they depend on. EV-14 and EV-16 are regression rows: both behaviours were
 shipped broken once and are invisible unless specifically looked for.
+
+EV-17 and EV-18 are the third such row. The ranging-setup latency stamps used to be
+assigned by arrival order, and the phone sends a notification ahead of
+Initiate-Ranging-Session, so every device-to-reader label sat one frame early — the
+report claimed M2 arrived before M1 was sent. Nothing in the protocol depended on it,
+but every setup timing read from those captures was wrong.
 
 ## Recording results
 
