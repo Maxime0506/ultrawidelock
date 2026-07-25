@@ -219,9 +219,31 @@ static int on_spsm_read(uint16_t conn_handle, const struct ble_gatt_error *error
 		 (unsigned)s_peer.peer.spsm, (unsigned)s_peer.peer.versions_count,
 		 s_peer.peer.features);
 
-	/* Tell the reader which version we selected, then open the channel. */
-	uint8_t sel[2] = {(uint8_t)(s_cfg.selected_version >> 8),
-			  (uint8_t)(s_cfg.selected_version & 0xffu)};
+	/* A version the peer does not publish is the worst failure shape here: the
+	 * nRF reader's write handler returns SUCCESS but skips recording it
+	 * (gatt_server.cpp:115), and the L2CAP accept hook gates on that record
+	 * (aliro_service.cpp:256), so the only symptom is a refused CoC several
+	 * steps later. Catch it while it can still be named. */
+	bool supported = false;
+
+	for (size_t i = 0; i < s_peer.peer.versions_count; i++) {
+		if (s_peer.peer.versions[i] == s_cfg.selected_version) {
+			supported = true;
+			break;
+		}
+	}
+	if (!supported) {
+		abandon("peer does not publish our version", (int)s_cfg.selected_version);
+		return 0;
+	}
+
+	/* Tell the reader which version we selected, then open the channel. The
+	 * characteristic is [version_be16][features_len][features...]; both readers
+	 * reject anything under 3 bytes (aliro_ble.c:315, gatt_server.cpp:85). We
+	 * support none of the optional features (timesync procedures 0 and 1, LE
+	 * Coded PHY), so the byte is zero — but it still has to be on the wire. */
+	uint8_t sel[4] = {(uint8_t)(s_cfg.selected_version >> 8),
+			  (uint8_t)(s_cfg.selected_version & 0xffu), 1u, 0u};
 	int rc = ble_gattc_write_flat(conn_handle, s_peer.devver_val_handle, sel, sizeof(sel),
 				      on_devver_write, NULL);
 
