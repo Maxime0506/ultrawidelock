@@ -13,6 +13,7 @@ The frame-building helpers are shared with test_presence_verify.py rather than
 duplicated, so both suites exercise the same signing path.
 """
 
+import argparse
 import contextlib
 import io
 import os
@@ -387,6 +388,60 @@ class SerialTests(unittest.TestCase):
         ser = FakeSerial(b"\x02" + b"\x11" * 64)
         with self.assertRaises(pg.PresenceError):
             pg.dongle_pubkey(ser)
+
+
+@needs_openssl
+class ProbeTests(unittest.TestCase):
+    """The bring-up path, driven through a fake dongle on a fixed nonce."""
+
+    NONCE = bytes(range(16))
+
+    def run_probe(self, script, max_cm=40):
+        """Drive cmd_probe over a scripted port. Returns (rc, stdout)."""
+        port = FakeSerial(script)
+        args = argparse.Namespace(port="fake", max_cm=max_cm, openssl="openssl")
+        buf = io.StringIO()
+        real_open, real_urandom = pg.open_port, os.urandom
+        pg.open_port = lambda *_a, **_k: port
+        os.urandom = lambda n: self.NONCE[:n]
+        try:
+            with contextlib.redirect_stdout(buf):
+                rc = pg.cmd_probe(args)
+        finally:
+            pg.open_port, os.urandom = real_open, real_urandom
+        return rc, buf.getvalue()
+
+    def test_present_dongle_passes(self):
+        point, frame = signed_frame(self.NONCE, distance=20)
+        rc, out = self.run_probe(point + frame)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("signature  VERIFIED", out)
+        self.assertIn("OK", out)
+        self.assertIn("20 cm", out)
+
+    def test_absent_dongle_is_still_a_crypto_pass(self):
+        # The realistic first-flash result: keys work, no phone has ranged yet.
+        point, frame = signed_frame(self.NONCE, distance=pv.DIST_NONE,
+                                    status=pv.PRESENCE_ABSENT)
+        rc, out = self.run_probe(point + frame)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("signature  VERIFIED", out)
+        self.assertIn("E_ABSENT", out)
+        self.assertIn("distance   none", out)
+        self.assertIn("Crypto chain is good", out)
+
+    def test_mismatched_key_fails_loudly(self):
+        # Proves the probe is not permissive: a frame the pubkey did not sign
+        # must report FAILED, which is the real bring-up failure mode.
+        _, frame = signed_frame(self.NONCE, distance=20)
+        other, _ = signed_frame(self.NONCE, distance=20)
+        rc, out = self.run_probe(other + frame)
+        self.assertEqual(rc, 1)
+        self.assertIn("signature  FAILED", out)
+
+    def test_keyless_dongle_refused_before_any_challenge(self):
+        with self.assertRaises(pg.PresenceError):
+            self.run_probe(b"\x00" * pv.PUB_LEN)
 
 
 class CliTests(unittest.TestCase):

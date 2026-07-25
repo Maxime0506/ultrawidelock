@@ -225,6 +225,50 @@ def cmd_nonce(args) -> int:
     return 0
 
 
+# Verdicts that can only be reached once the signature has already verified.
+# Everything else means the frame itself was rejected.
+AUTHENTIC_VERDICTS = (pv.OK, pv.E_NONCE, pv.E_STALE, pv.E_ABSENT, pv.E_RANGE)
+
+
+def cmd_probe(args) -> int:
+    """Bring-up check: does this dongle produce a frame the verifier accepts?
+
+    Separates the two questions a first flash needs answered, which the normal
+    verdict conflates. "Signature verified but ABSENT" means the whole crypto
+    chain works and merely no phone has ranged -- a pass. "Signature failed"
+    means keygen, signing or framing is broken -- the real failure.
+    """
+    ser = open_port(args.port)
+    try:
+        point = dongle_pubkey(ser)
+        nonce = os.urandom(pv.NONCE_LEN)
+        frame = dongle_assert(ser, nonce)
+    finally:
+        ser.close()
+
+    verdict, fields = pv.verify(frame, point, nonce, max_cm=args.max_cm, openssl=args.openssl)
+    authentic = verdict in AUTHENTIC_VERDICTS
+
+    print(f"pubkey     {point.hex()}")
+    print(f"key id     {key_id(point).hex()}")
+    print(f"frame      {len(frame)} bytes")
+    print(f"signature  {'VERIFIED' if authentic else 'FAILED'}")
+    print(f"presence   {pv.VERDICT_NAME[verdict]}: {pv.VERDICT_REASON[verdict]}")
+    if fields is not None:
+        dist = fields["distance_cm"]
+        shown = "none" if dist == pv.DIST_NONE else f"{dist} cm"
+        print(f"distance   {shown}")
+        print(f"uptime     {fields['uptime_ms']} ms")
+        print(f"cred id    {fields['cred_id'].hex()}")
+
+    if not authentic:
+        return 1
+    if verdict != pv.OK:
+        print("\nCrypto chain is good. Presence itself was not established — "
+              "wake the phone and hold it near the dongle, then run this again.")
+    return 0
+
+
 def cmd_enroll(args) -> int:
     ser = open_port(args.port)
     try:
@@ -309,6 +353,12 @@ def build_parser():
     p.add_argument("--tag", required=True)
     p.add_argument("--commit", help="defaults to what the tag resolves to")
     p.set_defaults(func=cmd_nonce)
+
+    p = sub.add_parser("probe", help="bring-up check against a connected dongle")
+    p.add_argument("--port", required=True, help="dongle serial port")
+    p.add_argument("--max-cm", type=int, default=40)
+    p.add_argument("--openssl", default="openssl")
+    p.set_defaults(func=cmd_probe)
 
     p = sub.add_parser("enroll", help="record a dongle's public key as trusted")
     p.add_argument("--port", required=True, help="dongle serial port")
