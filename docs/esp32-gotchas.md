@@ -43,7 +43,50 @@ compares against `4966` / `6790` / `12346`. Keep the guard; don't bypass it.
 message. Override with `FORCE=1` only after confirming no other session owns the port.
 (commit `8ce132a`)
 
-### 1.4 Host tests are the target's proof
+**VERIFIED addendum.** `lsof -t "$port"` silently missed a live `idf.py monitor` on one
+Mac, so the guard passed and a `make app-flash` spent a full build before esptool died
+on `[Errno 35] Could not exclusively lock port`. The cause was never reproduced, so the
+guard no longer relies on naming the holder: when `lsof` finds nothing it also tries to
+take the exclusive `flock` that esptool needs, and refuses if that fails. `FORCE=1`
+still kills a named PID and now says so plainly when there is a lock but no PID to kill.
+
+### 1.4 A Kconfig `default` does not reach an app that already has an `sdkconfig`
+**VERIFIED, and it cost three bench sessions.** Changing `default` in a `Kconfig` only
+seeds a **fresh** `sdkconfig`. An app with an existing one keeps its old value forever,
+so the build silently ships the previous setting and every measurement after it is
+profiling the old firmware.
+
+- **What hid it:** *new* symbols behave the opposite way. They are absent from
+  `sdkconfig`, so they do track their Kconfig default. A batch of changes can therefore
+  half-apply, which reads as "the config took" when it did not.
+- **Fix:** pin anything that matters in `sdkconfig.defaults`, which this repo already
+  treats as the tracked source of truth (see the app `.gitignore`), **and** confirm what
+  actually shipped before trusting a bench number:
+  ```
+  grep WOZ_RSSI_GATE ports/esp32/apps/matter-lock/sdkconfig
+  ```
+- **Do not** just `rm sdkconfig` to force a regeneration unless you know everything you
+  need is in `sdkconfig.defaults`; menuconfig-only settings are lost with it.
+
+### 1.5 The apps have incompatible flash layouts, and they share your board
+**VERIFIED.** Flashing one app over another leaves a bootloader that cannot find the
+next app's partition table, and the board sits in a reset loop reporting
+`partition 0 invalid magic number 0xffff`.
+
+| app | flash size | partition table |
+|---|---|---|
+| `apps/matter-lock` | 4 MB | 0xC000 |
+| `apps/initiator` (HIL) | 2 MB | 0x8000 |
+
+- **Tell:** the boot banner's `SPI Flash Size` disagrees with the app you think you
+  flashed, and its `compile time` is not your build's.
+- **Fix:** a full `make flash`, never `app-flash`. Only the full target rewrites the
+  bootloader and partition table together.
+- **Related:** the board may physically have more flash than the image header declares
+  (16 MB part, 4 MB header). The bootloader honours the header, and the
+  `spi_flash: Detected size larger than ... image header` warning is benign.
+
+### 1.6 Host tests are the target's proof
 The crypto core (`aliro_hash.c`) compiles **host == target** so host KATs pin target
 behaviour. Run `ports/esp32/test/run.sh` before believing any crypto change. A
 compact AES-256-GCM host double (`aliro_prim_host.c`) lets the KATs run without PSA.
