@@ -167,7 +167,33 @@ sys.exit(0 if pct >= floor else 1)'
 			-std=c11 "${sysroot[@]}" "${DEFS[@]}" "${INCS[@]}"
 		;;
 	zizmor) zizmor .github/workflows ;;
-	licenses) reuse lint ;;
+	licenses)
+		# tooling.yml gates the licence *store*, not full REUSE compliance:
+		# most of this tree predates the per-file header convention, so a bare
+		# `reuse lint` exits nonzero where CI passes. CI tolerates that exit and
+		# filters the JSON down to six categories. Reproduce that, not the
+		# stricter thing the command does by default.
+		local rj rc
+		rj="$(mktemp -t oa-reuse.XXXXXX)"
+		reuse lint --json >"$rj" 2>/dev/null || true
+		REUSE_JSON="$rj" python3 -c '
+import json, os, sys
+nc = json.load(open(os.environ["REUSE_JSON"]))["non_compliant"]
+gated = ("missing_licenses", "unused_licenses", "bad_licenses",
+         "deprecated_licenses", "licenses_without_extension", "read_errors")
+bad = {k: nc[k] for k in gated if nc.get(k)}
+for k in ("missing_licensing_info", "missing_copyright_info"):
+    label = k.split("_")[1]
+    print(f"  note: {len(nc.get(k, []))} file(s) without {label} header")
+if bad:
+    for k, v in bad.items():
+        print(f"  FAIL {k}: {v}", file=sys.stderr)
+    sys.exit(1)
+print("  licence store consistent")'
+		rc=$?
+		rm -f "$rj"
+		return "$rc"
+		;;
 	cbmc) make --no-print-directory cbmc ;;
 	esac
 }
