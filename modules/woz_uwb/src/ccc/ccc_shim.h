@@ -75,6 +75,16 @@ bool ccc_shim_rx_awaiting_poll(void);
  * only. */
 bool ccc_shim_rx_deadline_pending(void);
 
+/** True while an SP3 Final RX is armed. Sample it BEFORE chaining to the blob's RX handler and it
+ * says "the reception being serviced IS the Final" — the handler clears the flag and immediately
+ * re-arms an SP0 listen. That pre-chain instant is the only point in a ranging block where the
+ * radio is idle: no auto-re-enable is configured, so a completed RX leaves the DW3000 in IDLE
+ * until the shim arms the next one. The accumulator can only be read there. Reading it after the
+ * re-arm returns a fixed non-physical blob, byte-identical at every offset — the receiver is
+ * overwriting the accumulator underneath the read (bench runs 2-4, and `cir probe` shows a clean,
+ * correctly-addressed, repeatable window once the session ends). Target only. */
+bool ccc_shim_rx_awaiting_final(void);
+
 /** BENCH toggle — run the standalone SP0 Pre-POLL listener instead of the FiRa session. */
 #define WOZ_CCC_PREPOLL_LISTEN 1
 

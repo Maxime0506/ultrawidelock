@@ -336,6 +336,11 @@ bool ccc_shim_rx_deadline_pending(void)
 	return drvfake.rx_deadline;
 }
 
+bool ccc_shim_rx_awaiting_final(void)
+{
+	return drvfake.rx_final;
+}
+
 void ccc_shim_rx_notify_rx(uint32_t status)
 {
 	drvfake.notify_calls++;

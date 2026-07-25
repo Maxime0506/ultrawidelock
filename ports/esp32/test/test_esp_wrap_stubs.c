@@ -58,6 +58,7 @@ static bool s_awaiting, s_deadline;
 static uint32_t s_notified_status;
 static int s_notify_calls, s_prepoll_calls;
 static uint16_t s_prepoll_len;
+static bool s_final;
 
 bool ccc_shim_rx_awaiting_poll(void)
 {
@@ -67,6 +68,11 @@ bool ccc_shim_rx_awaiting_poll(void)
 bool ccc_shim_rx_deadline_pending(void)
 {
 	return s_deadline;
+}
+
+bool ccc_shim_rx_awaiting_final(void)
+{
+	return s_final;
 }
 
 void ccc_shim_rx_notify_rx(uint32_t status)
@@ -81,12 +87,19 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 	s_prepoll_calls++;
 }
 
+/* Chain counter for the blob's RX-good callback; declared ahead of the cirdiag
+ * double, which records it to pin capture-before-re-arm ordering. */
+static int s_blob_rxok;
+
 /* uwb_cirdiag_capture double: shim_rxok latches the CIA diag through it; the
  * real latch lives in the woz_uwb driver, out of this wrap-seam suite. Records
  * deadline_pending, the flag that keeps the windowed-CIR read out of a live
- * ranging block. */
+ * ranging block, plus the blob-chain count at call time — on the Final the
+ * capture must run BEFORE the blob re-arms the receiver, because the
+ * accumulator is only readable while the radio is idle. */
 static int s_cirdiag_calls;
 static bool s_cirdiag_deadline;
+static int s_cirdiag_blob_at_call;
 
 bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
 {
@@ -94,11 +107,11 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pen
 	(void)datalength;
 	s_cirdiag_calls++;
 	s_cirdiag_deadline = deadline_pending;
+	s_cirdiag_blob_at_call = s_blob_rxok;
 	return false;
 }
 
-/* ---- the blob's own callbacks (recording) -------------------------------- */
-static int s_blob_rxok, s_blob_rxto, s_blob_rxerr, s_blob_txdone;
+static int s_blob_rxto, s_blob_rxerr, s_blob_txdone;
 static const dwt_cb_data_t *s_blob_rxok_arg;
 
 static void blob_rxok(const dwt_cb_data_t *d)
@@ -159,9 +172,9 @@ int main(void)
 	okc("tracker fed the status", s_notify_calls == 1 && s_notified_status == 0x12345678u);
 	okc("blob rxok chained", s_blob_rxok == 1 && s_blob_rxok_arg == &d);
 	okc("prepoll decode ran", s_prepoll_calls == 1 && s_prepoll_len == 36);
-	/* Block idle after this reception (the Final case): cirdiag is cleared to take the long
-	 * windowed-CIR read. */
-	okc("cirdiag latched, block idle", s_cirdiag_calls == 1 && !s_cirdiag_deadline);
+	/* Not the Final: the capture runs AFTER the blob re-arms, summary only. */
+	okc("non-final: cirdiag deferred past the arm, summary only",
+	    s_cirdiag_calls == 1 && s_cirdiag_deadline && s_cirdiag_blob_at_call == 1);
 
 	/* Awaiting the POLL: the RX is the POLL itself, no Pre-POLL decode. */
 	s_awaiting = true;
@@ -170,18 +183,30 @@ int main(void)
 	    s_prepoll_calls == 1 && s_notify_calls == 2 && s_blob_rxok == 2);
 	s_awaiting = false;
 
+	/* The Final: sampled before the arm, awaiting_final is set. The capture must run ahead of
+	 * the blob (blob count still at its pre-call value) and be cleared for the window read —
+	 * that pre-arm instant is the only time the radio is idle. */
+	s_final = true;
+	int blob_before = s_blob_rxok;
+
+	s_real_registered.cbRxOk(&d);
+	okc("final: cirdiag captured before the re-arm",
+	    s_cirdiag_calls == 3 && s_cirdiag_blob_at_call == blob_before);
+	okc("final: window read allowed", !s_cirdiag_deadline);
+	s_final = false;
+
 	/* The blob's handler leaves a POLL or Final RX armed behind a live block; cirdiag must
 	 * hear about it so it skips the windowed-CIR read for that reception. */
 	s_deadline = true;
 	s_real_registered.cbRxOk(&d);
 	okc("live block: cirdiag told a deadline is pending",
-	    s_cirdiag_calls == 3 && s_cirdiag_deadline);
+	    s_cirdiag_calls == 4 && s_cirdiag_deadline);
 	s_deadline = false;
 
 	/* NULL event data: blob still chains, no tracker feed, no decode. */
 	s_real_registered.cbRxOk(NULL);
 	okc("NULL data tolerated",
-	    s_blob_rxok == 4 && s_notify_calls == 3 && s_prepoll_calls == 2);
+	    s_blob_rxok == 5 && s_notify_calls == 4 && s_prepoll_calls == 3);
 
 	printf("-- passthrough shims --\n");
 

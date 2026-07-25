@@ -87,6 +87,7 @@ struct drvfake_state {
 	unsigned wrap_log_reset_calls;
 	bool rx_awaiting;
 	bool rx_deadline; /* ccc_shim_rx_deadline_pending — gates the Stage 1 CIR window read */
+	bool rx_final; /* ccc_shim_rx_awaiting_final — sampled pre-arm; true means radio idle */
 	unsigned notify_calls;
 	uint32_t last_notify_status;
 	unsigned try_prepoll_calls;

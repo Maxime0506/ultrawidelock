@@ -108,6 +108,18 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	}
 	/* sp reflects THIS reception's mode, so log before the arm below re-arms. */
 	rxdiag_ev_log("ok", d);
+	/* Channel-impulse: sampled BEFORE the blob re-arms, this says the reception being serviced
+	 * is the Final — and the radio is still idle, which is the only state in which the
+	 * accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
+	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
+	 * absorbs the read before the SP0 listen goes back up. */
+	bool is_final = ccc_shim_rx_awaiting_final();
+	bool latched = false;
+
+	if (is_final) {
+		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					      d != NULL ? d->datalength : 0u, false);
+	}
 	/* Arm the SP3 POLL window first, ahead of the Pre-POLL decode, using the pre-warmed STS. */
 	if (g_blob_rxok != NULL) {
 		g_blob_rxok(d);
@@ -120,12 +132,14 @@ static void shim_rxok(const dwt_cb_data_t *d)
 		ccc_shim_rx_try_prepoll(d->datalength);
 		g_ccc_dbg_decode = dwt_readsystimestamphi32() - s0;
 	}
-	/* Channel-impulse Stage 0: latch this reception's CIA diagnostics last (armed by
-	 * `aliro cir on`), then hand the printk to the sysworkq — never print on this thread.
-	 * The deadline flag is read after the arm above, so it reports what THIS reception left
-	 * outstanding; the Stage 1 window read only runs when nothing is. */
-	if (uwb_cirdiag_capture(d != NULL ? d->status : 0u, d != NULL ? d->datalength : 0u,
-				ccc_shim_rx_deadline_pending())) {
+	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
+	 * the POLL/Final deadlines are met first. Either way the printk goes to the sysworkq —
+	 * never print on this thread. */
+	if (!is_final) {
+		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					      d != NULL ? d->datalength : 0u, true);
+	}
+	if (latched) {
 		k_work_submit(&g_cirdiag_work);
 	}
 }

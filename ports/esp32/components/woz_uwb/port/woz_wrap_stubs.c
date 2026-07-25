@@ -50,18 +50,30 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	if (d != NULL) {
 		ccc_shim_rx_notify_rx(d->status);
 	}
+	/* Channel-impulse: sampled BEFORE the blob re-arms, this says the reception being
+	 * serviced is the Final — and the radio is still idle, which is the only state in which
+	 * the accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
+	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
+	 * absorbs the read before the SP0 listen goes back up. */
+	bool is_final = ccc_shim_rx_awaiting_final();
+
+	if (is_final) {
+		(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					  d != NULL ? d->datalength : 0u, false);
+	}
 	if (g_blob_rxok != NULL) {
 		g_blob_rxok(d);
 	}
 	if (d != NULL && !await) {
 		ccc_shim_rx_try_prepoll(d->datalength);
 	}
-	/* Channel-impulse Stage 0: latch this reception's CIA diagnostics last (armed by
-	 * `lab on`); dw3000_isr_task emits the [ALAB] line after its IRQ drain loop.
-	 * The deadline flag is read after the arm above, so it reports what THIS reception left
-	 * outstanding; the Stage 1 window read only runs when nothing is. */
-	(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u, d != NULL ? d->datalength : 0u,
-				  ccc_shim_rx_deadline_pending());
+	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
+	 * the POLL/Final deadlines are met first. dw3000_isr_task emits the [ALAB] line after its
+	 * IRQ drain loop. */
+	if (!is_final) {
+		(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					  d != NULL ? d->datalength : 0u, true);
+	}
 }
 
 // RX-timeout callback shim; forwards the event to g_blob_rxto if a handler is registered, otherwise no-op.
