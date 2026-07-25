@@ -109,3 +109,14 @@ INCS=(
 # WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
 # those headers #error rather than guess a platform.
 DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
+
+# PY — the interpreter the python-side suites run under.
+#
+# `markdown` and `coverage` are imported by the suites, so they have to live in
+# the interpreter that runs them; a pipx venv is invisible to an import. Where
+# the system python is externally-managed (PEP 668) pip will not install them
+# there at all, so scripts/toolchain.sh puts them in a repo-local .venv and
+# every runner finds it here. Nothing is added to PATH and no shell needs
+# activating: the venv is either present in the checkout or it is not.
+PY="$ROOT/.venv/bin/python3"
+[ -x "$PY" ] || PY=python3

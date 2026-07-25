@@ -89,6 +89,7 @@ make flash         # every flash after that
 ```
 
 Also available: `make test` (host test suite, no toolchain or hardware required),
+`make tools` (what the CI gates need on this machine, and what is missing),
 `make coverage`, `make selftest` (boot self-test, no iPhone required), `make rebuild`,
 `make term`, and `make clean`. Run `make` alone for the full grouped list. Options pass
 as variables: `make build PRETTY=1 CHIP=dw3720` (also `PRISTINE=1`, `SELFTEST=1`).

@@ -46,9 +46,24 @@ ENV := $(strip \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
+## tools: what every host CI gate needs, what this machine has, how to fill gaps
+##   Reports each tool, the gate it serves, and the version CI pins where it
+##   pins one. Installs nothing. Exits nonzero when something is missing, so
+##   `make verify` skipping a gate is never a surprise.
+tools:
+	@$(REPO_ROOT)/scripts/toolchain.sh check
+
+## tools-install: install the missing host tools  ·  prints the commands, asks first
+##   macOS/Linux, via whichever of brew/apt/dnf/pacman/zypper is present, plus
+##   pipx for the version-pinned python tools. Nothing runs before you agree;
+##   `-y` or ASSUME_YES=1 answers in advance. Firmware toolchains are separate:
+##   `make bootstrap` (NCS) and ESP-IDF, see docs/set-up.md.
+tools-install:
+	@$(REPO_ROOT)/scripts/toolchain.sh install
+
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
 ##   Options: HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make build HA=1`; not hardware-validated)
@@ -113,11 +128,17 @@ cbmc:
 ## verify: run every host-runnable CI gate in one shot  ·  pre-push sweep
 ##   The 17 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
 ##   twin-wasm, patch-drift, docs, test-san, test-port, test-ws, coverage (with
-##   the 90% floor), zizmor, licences, cbmc — cheapest-first and fail-fast, so a
-##   1s formatting slip never costs cbmc's 86s. A gate whose tool is missing is
-##   SKIPPED LOUDLY and counted in the summary, never silently passed. ~170s all
-##   in. Excludes firmware-builds / release: those need ESP-IDF + NCS.
-##   Options: SKIP="cbmc fuzz" drops named gates  ·  COV_MIN=90 coverage floor
+##   the 90% floor), zizmor, licences, cbmc — run in parallel lanes behind a
+##   4s serial tripwire, so a 1s formatting slip still stops it immediately.
+##   ~34s all in (83s if run one at a time). A gate whose tool is missing
+##   FAILS the sweep (`make tools-install` fixes it), because CI runs that gate
+##   regardless. cbmc is the exception: 64s on its own, twice the rest of the
+##   sweep, so it is off unless WITH_CBMC=1 (~72s), and its row says so.
+##   Builds no firmware, not even in a shell with ESP-IDF sourced (test-port's
+##   target-build layer is held off, as it is on CI's runner). firmware-builds
+##   and release stay out: ESP-IDF + NCS, tens of minutes.
+##   Options: WITH_CBMC=1 adds the proof  ·  SKIP="fuzz docs" drops named gates
+##            SERIAL=1 one gate at a time  ·  COV_MIN=90 coverage floor
 verify:
 	@$(REPO_ROOT)/scripts/verify.sh
 

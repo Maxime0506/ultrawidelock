@@ -17,8 +17,13 @@ Their host tests run without ESP-IDF: `make test-port`.
 Every PR must pass the CI gates that run automatically: host tests + coverage floor,
 sanitizers, fuzz, CBMC, the ESP32 port suite, clang-format and clang-tidy over
 `modules/`, shellcheck, patch drift, workflow lint, and compile checks of both
-targets' firmware. `make verify` runs the host-side gates locally in one go; add
-`make test-port` if you touched a port.
+targets' firmware. `make verify` runs the host-side gates locally in one go, the
+ESP32 port suite included. CBMC is the one exception: it is half the sweep's
+runtime on its own, so it is opt-in as `WITH_CBMC=1 make verify`, and the summary says
+on every run that it did not run. A gate whose tool is not installed fails the
+sweep rather than passing quietly, because CI runs it either way: `make tools` lists
+what each gate needs and what this machine is missing, and `make tools-install`
+installs it after showing you the commands ([`docs/set-up.md`](docs/set-up.md)).
 
 ## Ground rules
 

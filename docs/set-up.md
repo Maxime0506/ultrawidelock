@@ -54,6 +54,58 @@ make test
 make coverage
 ```
 
+## Development tools (macOS / Linux)
+
+Everything above needs a compiler and nothing else. The CI gates need more, and
+`make verify` fails on a gate whose tool is absent rather than passing quietly,
+because CI runs that gate whatever your machine has. Two commands answer what is
+missing and fix it:
+
+```bash
+make tools           # what each gate needs, what this machine has, what's missing
+make tools-install   # install the missing ones; prints the commands, asks first
+```
+
+`make tools` installs nothing and exits nonzero while anything is missing, so
+`make tools && make verify` is a safe sequence. `make tools-install` uses
+whichever of `brew`, `apt-get`, `dnf`, `pacman` or `zypper` is present, plus
+`pipx` for the four tools CI pins to a version; `-y` skips the prompt.
+
+What the gates use, and why:
+
+| Tool | Gate |
+|---|---|
+| C compiler | `test`, `test-san`, `fuzz` |
+| `python3` | `test-web`, `coverage`, `licenses` |
+| `shellcheck` | `shellcheck` |
+| `actionlint`, `zizmor` | workflow lint + security audit |
+| `clang-format`, `clang-tidy` | `format`, `clang-tidy` (CI pins both; a different version disagrees with CI) |
+| `node`, emsdk | the WASM twin |
+| `doxygen`, `graphviz` | `docs` |
+| `llvm-cov` | `coverage` (macOS reaches it through `xcrun`, so Xcode CLT is enough) |
+| `reuse` | licence store |
+| `cbmc` | the parser memory-safety proof |
+| python `markdown`, `coverage` | not checked by any gate, but CI installs both: without them the flash-HTML drift check and the python coverage rows silently skip |
+
+Version pins are read from `.github/workflows/` at run time, so bumping a pin in
+CI is enough, and nothing here restates it.
+
+Most of these are installed system-wide by the package manager. The four tools
+CI pins to a version go through `pipx`, which gives each its own virtualenv and
+puts the binary on `PATH`.
+
+The two python packages are the exception: the suites `import` them, so they
+have to be visible to the interpreter that runs the gates, and a `pipx`
+virtualenv would not be. They go into a repo-local `.venv/` instead (about
+16 MB, gitignored). Nothing needs activating and `PATH` is untouched: the test
+runners resolve `.venv/bin/python3` themselves when it exists and fall back to
+the system `python3` when it does not. That also sidesteps PEP 668, which
+otherwise refuses the install outright on Homebrew and most current distros.
+
+A gate whose python package is missing fails the sweep exactly as a missing
+binary does. Without `markdown`, `make test` runs 11 fewer checks than CI does,
+including the one that catches a stale committed `FLASH.html`.
+
 ## ESP32-S3 ports
 
 Both apps expect ESP-IDF at `~/esp/esp-idf` (override: `IDF_EXPORT=`); CI
@@ -87,7 +139,7 @@ Wiring: [esp32-bringup.md](esp32-bringup.md). Traps:
 ## Documentation site
 
 ```bash
-brew install doxygen graphviz
+brew install doxygen graphviz   # or: make tools-install
 make docs
 ```
 

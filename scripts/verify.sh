@@ -12,14 +12,35 @@
 # ESP-IDF and NCS (~6.5 GB of toolchain) and take tens of minutes — not a push
 # gate. `make build` covers them once the toolchain is bootstrapped.
 #
-# Gates are ordered cheapest-first and the run stops at the first failure, so a
-# one-second formatting slip never costs the eighty-six seconds of cbmc.
+# The gates run in lanes, several at once, because serially they are ~83s of
+# work on a machine with eight cores. A short serial tripwire goes first, so a
+# formatting slip still stops the sweep about four seconds in; then the
+# expensive gates run together and the sweep costs its slowest lane rather than
+# the sum of all of them. Measured back to back on an idle host: 83s serial,
+# 34s in lanes, and 72s in lanes with cbmc on against 147s serial.
 #
-# A gate whose tool is missing is SKIPPED LOUDLY: it says so on its row, it is
-# counted in the summary, and the final line names it. It never silently passes,
-# because CI will still run it.
+# SERIAL=1 puts it back to one gate at a time, for a busy machine or for reading
+# a confusing failure in order.
+#
+# One gate does not run by default: cbmc. At 64s it is twice the rest of the
+# sweep put together, spent on the gate whose input moves least — the wire
+# parsers it proves have been stable for months, and the fuzz gate exercises the
+# same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
+#
+# It still gets a summary row saying it did not run. cbmc.yml has no path
+# filter, so the PR runs it whatever happened here; a gate that quietly
+# disappears from the sweep is the exact failure this script exists to prevent.
+#
+# A gate whose tool is missing FAILS the sweep. It says so on its row, it is
+# counted apart from a hand-scoped SKIP=, and the run exits nonzero. Anything
+# softer is the original bug wearing a warning label: CI runs that gate whatever
+# this host has installed, so "could not check" has to read as "not verified",
+# not as "fine". `make tools-install` is the fix; SKIP="<gate>" is the override
+# for someone who has decided to accept the gap.
 #
 # Env:
+#   WITH_CBMC=1        also run the cbmc proof (off by default, see above)
+#   SERIAL=1           one gate at a time, fail-fast, instead of lanes
 #   SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
 #   COV_MIN=90         line-coverage floor, matching host-tests.yml
 #   NO_COLOR=1         plain output
@@ -27,6 +48,11 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
+
+# Brings $PY (the interpreter the python suites run under, repo-local .venv when
+# present) plus the source lists the clang-tidy gate compiles against.
+# shellcheck disable=SC1091  # repo-local, sourced for its arrays and $PY
+. "$ROOT/tests/host/sources.sh"
 
 COV_MIN="${COV_MIN:-90}"
 SKIP="${SKIP:-}"
@@ -41,16 +67,11 @@ else
 	CHK="+" CRS="x" ARR=">" TIL="~" DOT="*"
 fi
 
-# A running gate prints a "▸ name label" line that its result overwrites. That
-# only works on a terminal: piped to a file or a hook, CR and erase-to-EOL would
-# just be noise, so there the row is printed once, when it is done.
-if [[ -t 1 ]]; then ISTTY=1 CR=$'\r' EL=$'\033[K'; else ISTTY=0 CR="" EL=""; fi
-
 # ---- gate table -----------------------------------------------------------
-# Cheapest-first, by wall time measured on an 8-core Apple silicon host with
-# warm caches. A gate whose tool is absent costs nothing, so position is set by
-# what it costs when the tool IS there. cbmc is last because it is 82s of the
-# ~179s total; everything above it together is under a hundred seconds.
+# One row per CI job, with the wall time each takes alone on an 8-core Apple
+# silicon host with warm caches. This order is the summary's, not the run's:
+# what runs when is set by TRIPWIRE and LANES below. The times are what those
+# are packed against, so a gate that gets much slower wants repacking.
 HR="--------------------------------------------"
 GATES=(
 	test-web    # 0s   twin-web.yml : drift-gate
@@ -72,6 +93,69 @@ GATES=(
 	cbmc        # 82s  cbmc.yml
 )
 
+# ---- lanes ----------------------------------------------------------------
+# Run serially the table above is 103s of work on a machine with eight cores,
+# which is mostly idle waiting. Lanes run at once; gates inside a lane run in
+# order. Two rules set the shape:
+#
+#   1. Gates that write the same path must share a lane. Exactly one pair does:
+#      `test` and `test-san` are the same run.sh writing the same
+#      build/host_test* binaries, so side by side they would overwrite each
+#      other's build with no error at all. twin-wasm and docs share one for a
+#      softer reason: docs renders the twin, so it should see the rebuilt
+#      twin.js, which is the order the old serial sweep happened to have.
+#   2. Everything else is already hermetic and was checked one at a time:
+#      test-ws and patch-drift build under `mktemp -d`, test-port under
+#      `mktemp -t` per binary, coverage under build/coverage/, fuzz under
+#      build/fuzz/, cbmc writes only its own logs. The lint gates only read.
+#
+# TRIPWIRE runs first and serially, and a failure there stops the sweep. It is
+# the whole sub-2s set, so a formatting slip costs four seconds instead of the
+# full run: the fail-fast the parallel phase gives up, bought back where it is
+# cheap. It also runs the two whole-tree scanners (licenses, format) before
+# anything starts writing, so neither reads a file mid-rewrite.
+TRIPWIRE="test-web actionlint zizmor format shellcheck licenses"
+#
+# Packed, not one lane per gate. coverage sets the floor at ~25s and nothing
+# finishes before it, so lanes past that buy nothing and cost real time: one
+# lane per gate measured 75s against 34s packed, and burned more than twice the
+# CPU to do it. Packing to roughly the floor leaves the machine some headroom.
+#
+# Repack by the times in the gate table when they drift, and re-measure rather
+# than reason about it: a run under Spotlight indexing said cbmc cost 234s in a
+# lane, which is three times what a quiet machine says, and a schedule was
+# designed around that number before the second measurement caught it.
+LANES=(
+	"coverage"                 # 25s  the floor: nothing finishes before this
+	"test-ws patch-drift"      # 23s
+	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
+	"test-port fuzz"           # 17s
+	"test test-san"            # 15s  same run.sh, same build/host_test* paths
+	"cbmc"                     # 64s  WITH_CBMC=1 only, and then it is the floor
+)
+
+# Every gate placed exactly once. A gate dropped from both lists would keep its
+# row in the table above and quietly never run, which is precisely the failure
+# this script exists to catch, so it is checked rather than trusted.
+placed="$TRIPWIRE ${LANES[*]}"
+misplaced=""
+for g in "${GATES[@]}"; do
+	cnt=0
+	for p in $placed; do [ "$p" = "$g" ] && cnt=$((cnt + 1)); done
+	[ "$cnt" = 1 ] || misplaced="${misplaced:+$misplaced }$g(in $cnt lanes)"
+done
+for p in $placed; do
+	case " ${GATES[*]} " in
+	*" $p "*) ;;
+	*) misplaced="${misplaced:+$misplaced }$p(not a gate)" ;;
+	esac
+done
+if [ -n "$misplaced" ]; then
+	printf 'verify.sh: lane assignment does not cover the gate table: %s\n' \
+		"$misplaced" >&2
+	exit 2
+fi
+
 # What each gate needs on PATH. Empty = nothing beyond a shell and a compiler.
 # A bash-3.2 case function, not an associative array: macOS ships bash 3.2 and
 # tests/host/fuzz.sh already sets this precedent.
@@ -88,6 +172,19 @@ gate_need() {
 	zizmor) echo "zizmor" ;;
 	licenses) echo "reuse" ;;
 	cbmc) echo "cbmc" ;;
+	*) echo "" ;;
+	esac
+}
+
+# Python packages a gate's suites import. `command -v` cannot see these: they
+# are modules inside an interpreter, not binaries on PATH, which is exactly how
+# they went unnoticed. Absent, the suites still run and still report success,
+# having quietly skipped the checks that need them — host-tests.yml installs
+# both, so CI runs those checks whatever this host has.
+gate_need_py() {
+	case "$1" in
+	test) echo "markdown" ;;            # test_flash_html: 11 checks
+	coverage) echo "markdown coverage" ;; # the same suite, under measurement
 	*) echo "" ;;
 	esac
 }
@@ -140,7 +237,11 @@ gate_run() {
 	patch-drift) tests/tooling/patch_drift_check.sh ;;
 	docs) make --no-print-directory docs ;;
 	test-san) make --no-print-directory test-san ;;
-	test-port) make --no-print-directory test-port ;;
+	# Host layers only. Its third layer, verify_port.sh, shells out to `idf.py
+	# build` whenever ESP-IDF is sourced -- which port-tests.yml's runner never
+	# is, so CI does not run it either. Left alone it would drop a multi-minute
+	# firmware build into a 33s sweep, from a shell state the sweep cannot see.
+	test-port) WOZ_NO_TARGET_BUILD=1 make --no-print-directory test-port ;;
 	test-ws) make --no-print-directory test-ws ;;
 	coverage)
 		# host-tests.yml runs `make coverage` and THEN enforces the floor as a
@@ -161,8 +262,6 @@ sys.exit(0 if pct >= floor else 1)'
 		if [ "$(uname -s)" = Darwin ]; then
 			sysroot=(-isysroot "$(xcrun --show-sdk-path)")
 		fi
-		# shellcheck disable=SC1091  # repo-local, sourced for its arrays
-		. tests/host/sources.sh
 		clang-tidy --quiet "${UNIT_SRCS[@]}" -- \
 			-std=c11 "${sysroot[@]}" "${DEFS[@]}" "${INCS[@]}"
 		;;
@@ -198,69 +297,181 @@ print("  licence store consistent")'
 	esac
 }
 
+# ---- execution ------------------------------------------------------------
+# Lanes run as background subshells, so they cannot report back through shell
+# variables. $RUNDIR is the channel: one <gate>.rc per finished gate holding
+# "status<TAB>seconds<TAB>reason", and one <gate>.out with its output. Written
+# to a .tmp and renamed, because the parent reads these while lanes are still
+# running and a half-written line would be read as a status.
+RUNDIR="$(mktemp -d -t oa-verify.XXXXXX)"
+trap 'rm -rf "$RUNDIR"' EXIT
+
+gate_result() { # <gate> <status> <secs> <reason>
+	printf '%s\t%s\t%s\n' "$2" "$3" "$4" >"$RUNDIR/$1.rc.tmp"
+	mv -f "$RUNDIR/$1.rc.tmp" "$RUNDIR/$1.rc"
+}
+
+# Prints the gate's row as it finishes. Concurrent lanes write these
+# interleaved, which is fine: each row is a single printf, and the summary
+# below is rebuilt from the .rc files rather than from what was printed.
+gate_row() { # <gate> <status> <secs> <reason>
+	case "$2" in
+	pass) printf '  %s%s%s %-12s %s%-36s%4ds%s\n' \
+		"$GRN" "$CHK" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$3" "$RESET" ;;
+	fail) printf '  %s%s%s %-12s %s%-36s%4ds  FAILED (%s)%s\n' \
+		"$RED" "$CRS" "$RESET" "$1" "$RED" "$(gate_label "$1")" "$3" "$4" "$RESET" ;;
+	skip-req) printf '  %s%s%s %-12s %s%-36s%sskipped via SKIP=%s\n' \
+		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$RESET" ;;
+	skip-optin) printf '  %s%s%s %-12s %s%-36s%sskipped — opt-in, WITH_CBMC=1 make verify%s\n' \
+		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$RESET" ;;
+	skip-tool) printf '  %s%s%s %-12s %s%-36s%sSKIPPED — %s (CI still runs it)%s\n' \
+		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$4" "$RESET" ;;
+	esac
+}
+
+# 0 passed, 1 failed, 2 did not run. Called from inside a lane subshell.
+run_gate() { # <gate>
+	local g="$1" t0 t1 rc=0 missing="" tool mod secs
+
+	case " $SKIP " in
+	*" $g "*)
+		gate_result "$g" skip-req 0 "SKIP="
+		gate_row "$g" skip-req 0 ""
+		return 2
+		;;
+	esac
+
+	# Off by default, on with WITH_CBMC=1. Not CBMC=1: tests/host/cbmc.sh reads
+	# $CBMC as the path to the solver binary, and this environment reaches it
+	# through `make cbmc`, so CBMC=1 would send it looking for a binary named 1.
+	#
+	# This sits ahead of the tool check on purpose: a gate that is not going to
+	# run cannot fail the sweep for a missing tool, so a host with no cbmc
+	# installed is not held to it.
+	if [ "$g" = cbmc ] && [ -z "${WITH_CBMC:-}" ]; then
+		gate_result "$g" skip-optin 0 "opt-in, WITH_CBMC=1"
+		gate_row "$g" skip-optin 0 ""
+		return 2
+	fi
+
+	for tool in $(gate_need "$g"); do
+		command -v "$tool" >/dev/null 2>&1 || missing="${missing:+$missing }$tool"
+	done
+	for mod in $(gate_need_py "$g"); do
+		"$PY" -c "import $mod" >/dev/null 2>&1 || missing="${missing:+$missing }python:$mod"
+	done
+	if [ -n "$missing" ]; then
+		# Counted apart from a SKIP= skip, and fatal at the end. Scoping a gate
+		# out by hand is a decision; not having installed its tool is not, and
+		# an exit status of 0 here is what lets it reach CI.
+		gate_result "$g" skip-tool 0 "needs $missing"
+		gate_row "$g" skip-tool 0 "needs $missing"
+		return 2
+	fi
+
+	t0=$(date +%s)
+	(gate_run "$g") >"$RUNDIR/$g.out" 2>&1 || rc=$?
+	t1=$(date +%s)
+	secs=$((t1 - t0))
+
+	if [ "$rc" -eq 0 ]; then
+		gate_result "$g" pass "$secs" ""
+		gate_row "$g" pass "$secs" ""
+		return 0
+	fi
+	gate_result "$g" fail "$secs" "exit $rc"
+	gate_row "$g" fail "$secs" "exit $rc"
+	return 1
+}
+
+# One lane, in order. A failure stops the rest of that lane but not the others:
+# the gates sharing a lane share a build directory, so running the next one over
+# a half-built tree would only produce a second, confusing failure.
+run_lane() { # <lane index>
+	local g rc
+	for g in ${LANES[$1]}; do
+		rc=0
+		run_gate "$g" || rc=$?
+		[ "$rc" = 1 ] && return 1
+	done
+	return 0
+}
+
 # ---- run ------------------------------------------------------------------
 printf '\n  %s%sopenaliro verify%s  %s%s  every host-runnable CI gate%s\n\n' \
 	"$BOLD" "$CYAN" "$RESET" "$DIM" "$DOT" "$RESET"
 
 n=${#GATES[@]}
-STATUS=() TIMES=() REASON=()
-failed_gate="" nfail=0 nskip=0 npass=0 t_all0=$(date +%s)
+t_all0=$(date +%s)
 
-for ((i = 0; i < n; i++)); do
-	g="${GATES[i]}"
-	STATUS[i]="notrun" TIMES[i]=0 REASON[i]=""
-
-	# explicitly scoped out for this run
-	case " $SKIP " in
-	*" $g "*)
-		STATUS[i]="skip" REASON[i]="SKIP=" nskip=$((nskip + 1))
-		printf '  %s%s%s %-12s %s%-36s%sskipped via SKIP=%s\n' \
-			"$YEL" "$TIL" "$RESET" "$g" "$DIM" "$(gate_label "$g")" "$YEL" "$RESET"
-		continue
-		;;
-	esac
-
-	# tool availability
-	missing=""
-	for tool in $(gate_need "$g"); do
-		command -v "$tool" >/dev/null 2>&1 || missing="${missing:+$missing }$tool"
-	done
-	if [ -n "$missing" ]; then
-		STATUS[i]="skip" REASON[i]="needs $missing" nskip=$((nskip + 1))
-		printf '  %s%s%s %-12s %s%-36s%sSKIPPED — needs %s (CI still runs it)%s\n' \
-			"$YEL" "$TIL" "$RESET" "$g" "$DIM" "$(gate_label "$g")" "$YEL" "$missing" "$RESET"
-		continue
-	fi
-
-	[ "$ISTTY" = 1 ] && printf '  %s%s%s %-12s %s%s%s' \
-		"$CYAN" "$ARR" "$RESET" "$g" "$DIM" "$(gate_label "$g")" "$RESET"
-	out="$(mktemp -t oa-verify.XXXXXX)"
-	t0=$(date +%s)
+# Serial, fail-fast, cheapest-first: a formatting slip stops here, four seconds
+# in, rather than after the parallel phase has run everything anyway.
+tripwire_failed=""
+for g in $TRIPWIRE; do
 	rc=0
-	(gate_run "$g") >"$out" 2>&1 || rc=$?
-	t1=$(date +%s)
-	TIMES[i]=$((t1 - t0))
-
-	if [ "$rc" -eq 0 ]; then
-		STATUS[i]="pass" npass=$((npass + 1))
-		printf '%s  %s%s%s %-12s %s%-36s%4ds%s%s\n' "$CR" \
-			"$GRN" "$CHK" "$RESET" "$g" "$DIM" "$(gate_label "$g")" "${TIMES[i]}" "$RESET" "$EL"
-		rm -f "$out"
-	else
-		STATUS[i]="fail" REASON[i]="exit $rc" nfail=$((nfail + 1)) failed_gate="$g"
-		printf '%s  %s%s%s %-12s %s%-36s%4ds  FAILED (exit %d)%s%s\n' "$CR" \
-			"$RED" "$CRS" "$RESET" "$g" "$RED" "$(gate_label "$g")" "${TIMES[i]}" "$rc" "$RESET" "$EL"
-		printf '\n%s---- %s output ----------------------%s\n' "$DIM" "$g" "$RESET"
-		cat "$out"
-		printf '%s%s%s\n\n' "$DIM" "$HR" "$RESET"
-		rm -f "$out"
-		break # fail fast: the cheap gates ran first for exactly this reason
+	run_gate "$g" || rc=$?
+	if [ "$rc" = 1 ]; then
+		tripwire_failed="$g"
+		break
 	fi
 done
+
+if [ -z "$tripwire_failed" ]; then
+	if [ -n "${SERIAL:-}" ]; then
+		# SERIAL=1: one lane at a time, stopping at the first failure. For a
+		# contended machine, or for reading the output of a gate in order.
+		for ((l = 0; l < ${#LANES[@]}; l++)); do
+			run_lane "$l" || break
+		done
+	else
+		printf '  %s%s %d lanes in parallel, rows appear as gates finish%s\n' \
+			"$DIM" "$ARR" "${#LANES[@]}" "$RESET"
+		for ((l = 0; l < ${#LANES[@]}; l++)); do
+			run_lane "$l" &
+		done
+		wait
+	fi
+fi
 
 t_all=$(($(date +%s) - t_all0))
 
 # ---- summary --------------------------------------------------------------
+# Rebuilt from the .rc files, not from what scrolled past: with lanes running at
+# once the printed order is arrival order, and this table is the gate table's.
+STATUS=() TIMES=() REASON=()
+nfail=0 nskip=0 npass=0 nskip_tool=0 nskip_optin=0
+for ((i = 0; i < n; i++)); do
+	g="${GATES[i]}"
+	if [ -f "$RUNDIR/$g.rc" ]; then
+		IFS=$'\t' read -r st secs reason <"$RUNDIR/$g.rc"
+	else
+		st=notrun secs=0 reason=""
+	fi
+	STATUS[i]="$st" TIMES[i]="$secs" REASON[i]="$reason"
+	case "$st" in
+	pass) npass=$((npass + 1)) ;;
+	fail) nfail=$((nfail + 1)) ;;
+	skip-req) nskip=$((nskip + 1)) ;;
+	skip-optin) nskip=$((nskip + 1)) nskip_optin=$((nskip_optin + 1)) ;;
+	skip-tool) nskip=$((nskip + 1)) nskip_tool=$((nskip_tool + 1)) ;;
+	esac
+done
+
+# Why a gate never started: its own lane stopped, or the tripwire did.
+why_notrun() { # <gate>
+	local l g st
+	[ -n "$tripwire_failed" ] && { printf 'tripwire failed at %s' "$tripwire_failed"; return; }
+	for ((l = 0; l < ${#LANES[@]}; l++)); do
+		case " ${LANES[l]} " in *" $1 "*) ;; *) continue ;; esac
+		for g in ${LANES[l]}; do
+			[ -f "$RUNDIR/$g.rc" ] || continue
+			IFS=$'\t' read -r st _ _ <"$RUNDIR/$g.rc"
+			[ "$st" = fail ] && { printf 'its lane stopped at %s' "$g"; return; }
+		done
+	done
+	printf 'did not start'
+}
+
 printf '\n  %sGate           Status     Time%s\n' "$BOLD" "$RESET"
 printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
 for ((i = 0; i < n; i++)); do
@@ -268,8 +479,8 @@ for ((i = 0; i < n; i++)); do
 	case "${STATUS[i]}" in
 	pass) printf '  %s%s%s %-12s %spassed%s %6ds\n' "$GRN" "$CHK" "$RESET" "$g" "$GRN" "$RESET" "${TIMES[i]}" ;;
 	fail) printf '  %s%s%s %-12s %sFAILED%s %6ds\n' "$RED" "$CRS" "$RESET" "$g" "$RED" "$RESET" "${TIMES[i]}" ;;
-	skip) printf '  %s%s%s %-12s %sskipped%s     %s— %s%s\n' "$YEL" "$TIL" "$RESET" "$g" "$YEL" "$RESET" "$DIM" "${REASON[i]}" "$RESET" ;;
-	*) printf '    %-12s %snot run%s     %s— stopped at %s%s\n' "$g" "$DIM" "$RESET" "$DIM" "$failed_gate" "$RESET" ;;
+	notrun) printf '    %-12s %snot run%s     %s— %s%s\n' "$g" "$DIM" "$RESET" "$DIM" "$(why_notrun "$g")" "$RESET" ;;
+	*) printf '  %s%s%s %-12s %sskipped%s     %s— %s%s\n' "$YEL" "$TIL" "$RESET" "$g" "$YEL" "$RESET" "$DIM" "${REASON[i]}" "$RESET" ;;
 	esac
 done
 printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
@@ -281,7 +492,7 @@ printf '  %s%d gates %s %d passed %s %d failed %s %d skipped %s %ds total%s\n\n'
 if [ "$nskip" -gt 0 ]; then
 	names=""
 	for ((i = 0; i < n; i++)); do
-		[ "${STATUS[i]}" = skip ] || continue
+		case "${STATUS[i]}" in skip-*) ;; *) continue ;; esac
 		names="${names:+$names, }${GATES[i]} (${REASON[i]})"
 	done
 	printf '  %s%s %d gate(s) SKIPPED, CI will still run them: %s%s\n\n' \
@@ -289,14 +500,48 @@ if [ "$nskip" -gt 0 ]; then
 fi
 
 if [ "$nfail" -gt 0 ]; then
-	printf '  %s%s verify FAILED at %s — fix it and re-run.%s\n' "$RED" "$CRS" "$failed_gate" "$RESET"
-	printf '  %sRe-run just the rest with SKIP="%s"%s\n\n' "$DIM" "$failed_gate" "$RESET"
+	# Every failure, in gate-table order. Lanes run at once, so more than one
+	# can fail in a single sweep and showing only the first would send someone
+	# round the loop twice.
+	failed_names=""
+	for ((i = 0; i < n; i++)); do
+		[ "${STATUS[i]}" = fail ] || continue
+		g="${GATES[i]}"
+		failed_names="${failed_names:+$failed_names }$g"
+		printf '%s---- %s output ----------------------%s\n' "$DIM" "$g" "$RESET"
+		cat "$RUNDIR/$g.out"
+		printf '%s%s%s\n\n' "$DIM" "$HR" "$RESET"
+	done
+	printf '  %s%s verify FAILED: %s%s\n' "$RED" "$CRS" "$failed_names" "$RESET"
+	printf '  %sRe-run one gate on its own with SKIP= listing the others.%s\n\n' \
+		"$DIM" "$RESET"
 	exit 1
 fi
 
-if [ "$nskip" -gt 0 ]; then
-	printf '  %s%s %d gates passed, %d skipped — NOT the full CI set.%s\n\n' \
+# A gate that could not run because its tool is absent is a failure of this
+# sweep, not a footnote to it. Exiting 0 here is the whole bug: a pre-push hook
+# sees success, the push lands, and CI runs the gate that never ran locally.
+if [ "$nskip_tool" -gt 0 ]; then
+	printf '  %s%s %d gate(s) COULD NOT RUN — the tool is not installed. CI will run them.%s\n' \
+		"$RED" "$CRS" "$nskip_tool" "$RESET"
+	printf '  %sInstall what is missing:  %smake tools-install%s\n' "$DIM" "$BOLD" "$RESET"
+	printf '  %sOr accept the gap on purpose for this run:  SKIP="<gate>"%s\n\n' "$DIM" "$RESET"
+	exit 1
+fi
+
+# A hand-scoped SKIP= is unusual and gets the loud line. The cbmc opt-out is the
+# default, so it gets a plain one: a warning that fires on every single run is a
+# warning nobody reads, and then the loud line means nothing when it matters.
+if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_optin" ]; then
+	printf '  %s%s %d gates passed, %d skipped by request — NOT the full CI set.%s\n\n' \
 		"$YEL" "$CHK" "$npass" "$nskip" "$RESET"
+elif [ "$nskip_optin" -gt 0 ]; then
+	printf '  %s%s %d gates passed. cbmc did not run (opt-in).%s\n' \
+		"$GRN" "$CHK" "$npass" "$RESET"
+	printf '  %sAdd the memory-safety proof:  %sWITH_CBMC=1 make verify%s\n' \
+		"$DIM" "$BOLD" "$RESET"
+	printf '  %sFirmware builds (ESP-IDF / NCS) and hardware validation run separately.%s\n\n' \
+		"$DIM" "$RESET"
 else
 	printf '  %s%s all %d host-runnable CI gates passed.%s\n' "$GRN" "$CHK" "$npass" "$RESET"
 	printf '  %sFirmware builds (ESP-IDF / NCS) and hardware validation run separately.%s\n\n' \

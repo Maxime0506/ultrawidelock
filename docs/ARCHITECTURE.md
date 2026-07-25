@@ -1513,6 +1513,34 @@ Default: suites run in parallel, output replayed in order when done.
 SERIAL=1 streams them live, one at a time. SUITES="firmware shared" scopes.
 Exit is nonzero if any suite fails. Colour off when not a TTY or NO_COLOR.
 
+### [`scripts/toolchain.sh`](architecture/scripts/toolchain.sh.md)
+
+toolchain.sh — what the CI gates need, whether this host has it, how to get it.
+`make verify` runs seventeen CI gates and skips loudly when a gate's tool is
+absent. Skipping loudly is honest, but it leaves the reader to work out what
+to install, from where, and at which version. That is this script: one
+manifest, two modes.
+scripts/toolchain.sh            report every tool, its gate, and its status
+scripts/toolchain.sh install    install the missing ones, after confirming
+Nothing is installed without being printed first and agreed to. `install`
+shows the exact command list and waits for a y; -y answers it in advance for
+unattended use.
+Versions matter for four of these. clang-format and clang-tidy change their
+output between releases, so a host one version off the CI pin fails a gate
+that CI passes (or worse, the reverse). Those rows carry the pin CI uses and
+say so when the host disagrees.
+Out of scope, same boundary as verify.sh: the firmware toolchains. NCS (~6.5
+GB, `make bootstrap`) and ESP-IDF are per-target installs with their own
+documented procedures — see docs/set-up.md. This covers the host gates only.
+Adding a gate to verify.sh without adding its tool here is caught: `check`
+reads verify.sh's own gate_need + gate_need_py tables and fails on any name it
+cannot explain, and fails again if either table stops parsing. What it does
+NOT catch is a row here that no gate needs any more, and none of it runs in
+CI — only when someone runs `make tools`.
+Env:
+ASSUME_YES=1   same as `install -y`
+NO_COLOR=1     plain output
+
 ### [`scripts/twin-suite.sh`](architecture/scripts/twin-suite.sh.md)
 
 The web-twin suite for the umbrella runner (make check): the constant-drift
@@ -1542,12 +1570,30 @@ here re-opens the gap this script exists to close.
 Out of scope, deliberately: firmware-builds.yml and release.yml. They need
 ESP-IDF and NCS (~6.5 GB of toolchain) and take tens of minutes — not a push
 gate. `make build` covers them once the toolchain is bootstrapped.
-Gates are ordered cheapest-first and the run stops at the first failure, so a
-one-second formatting slip never costs the eighty-six seconds of cbmc.
-A gate whose tool is missing is SKIPPED LOUDLY: it says so on its row, it is
-counted in the summary, and the final line names it. It never silently passes,
-because CI will still run it.
+The gates run in lanes, several at once, because serially they are ~83s of
+work on a machine with eight cores. A short serial tripwire goes first, so a
+formatting slip still stops the sweep about four seconds in; then the
+expensive gates run together and the sweep costs its slowest lane rather than
+the sum of all of them. Measured back to back on an idle host: 83s serial,
+34s in lanes, and 72s in lanes with cbmc on against 147s serial.
+SERIAL=1 puts it back to one gate at a time, for a busy machine or for reading
+a confusing failure in order.
+One gate does not run by default: cbmc. At 64s it is twice the rest of the
+sweep put together, spent on the gate whose input moves least — the wire
+parsers it proves have been stable for months, and the fuzz gate exercises the
+same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
+It still gets a summary row saying it did not run. cbmc.yml has no path
+filter, so the PR runs it whatever happened here; a gate that quietly
+disappears from the sweep is the exact failure this script exists to prevent.
+A gate whose tool is missing FAILS the sweep. It says so on its row, it is
+counted apart from a hand-scoped SKIP=, and the run exits nonzero. Anything
+softer is the original bug wearing a warning label: CI runs that gate whatever
+this host has installed, so "could not check" has to read as "not verified",
+not as "fine". `make tools-install` is the fix; SKIP="<gate>" is the override
+for someone who has decided to accept the gap.
 Env:
+WITH_CBMC=1        also run the cbmc proof (off by default, see above)
+SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
 COV_MIN=90         line-coverage floor, matching host-tests.yml
 NO_COLOR=1         plain output

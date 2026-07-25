@@ -21,6 +21,16 @@ fail=0
 note() { printf '  %-4s %s\n' "$1" "$2"; }
 check() { if eval "$2"; then note ok "$1"; else note FAIL "$1"; fail=1; fi; }
 
+# Building firmware is firmware-builds.yml's job. port-tests.yml runs `make
+# test-port` on a runner with no ESP-IDF, so CI never reaches the build below;
+# WOZ_NO_TARGET_BUILD=1 makes a developer shell that HAS ESP-IDF sourced behave
+# the same way, so a pre-PR sweep stays host-only instead of turning into a
+# multi-minute build the sweep was never meant to include.
+if [ -n "${WOZ_NO_TARGET_BUILD:-}" ]; then
+	echo "SKIP verify_port.sh: target build off by request (WOZ_NO_TARGET_BUILD=1)."
+	exit 0
+fi
+
 if ! command -v idf.py >/dev/null 2>&1; then
 	echo "SKIP verify_port.sh: idf.py not on PATH (run '. ~/esp/esp-idf/export.sh' first)."
 	exit 0

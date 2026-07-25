@@ -89,7 +89,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 # the full unittest log is replayed on failure.
 py_suite() { # <name> <script> <note>
 	local out ran skipped note
-	if ! out="$(python3 "$2" 2>&1)"; then
+	if ! out="$("$PY" "$2" 2>&1)"; then
 		printf '%s\n' "$out"
 		printf '  %s: FAIL\n' "$1"
 		exit 1
