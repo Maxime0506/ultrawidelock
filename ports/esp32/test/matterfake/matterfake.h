@@ -826,6 +826,7 @@ extern int mfk_prov_clear_calls;
 extern int mfk_refresh_adv_calls;
 extern int mfk_ble_time_updated_calls;
 extern int mfk_lab_on;
+extern unsigned mfk_cir_probes;
 extern int mfk_lab_evi_calls;
 extern long mfk_lab_evi_last;
 extern int mfk_lat_marks[32];

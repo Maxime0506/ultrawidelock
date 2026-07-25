@@ -948,6 +948,7 @@ int mfk_prov_clear_calls;
 int mfk_refresh_adv_calls;
 int mfk_ble_time_updated_calls;
 int mfk_lab_on;
+unsigned mfk_cir_probes;
 int mfk_lab_evi_calls;
 long mfk_lab_evi_last;
 int mfk_lat_marks[32];
@@ -1070,6 +1071,11 @@ void uwb_cirdiag_dump_set_enabled(bool on)
 bool uwb_cirdiag_dump_enabled(void)
 {
 	return mfk_cir_dump_on != 0;
+}
+
+void uwb_cirdiag_probe(void)
+{
+	mfk_cir_probes++;
 }
 
 void aliro_lab_ev(const char *ev)

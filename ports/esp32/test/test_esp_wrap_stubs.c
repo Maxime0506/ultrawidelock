@@ -54,7 +54,7 @@ void __real_dwt_configurestsmode(uint8_t stsMode)
 	s_sts_mode = stsMode;
 }
 
-static bool s_awaiting;
+static bool s_awaiting, s_deadline;
 static uint32_t s_notified_status;
 static int s_notify_calls, s_prepoll_calls;
 static uint16_t s_prepoll_len;
@@ -62,6 +62,11 @@ static uint16_t s_prepoll_len;
 bool ccc_shim_rx_awaiting_poll(void)
 {
 	return s_awaiting;
+}
+
+bool ccc_shim_rx_deadline_pending(void)
+{
+	return s_deadline;
 }
 
 void ccc_shim_rx_notify_rx(uint32_t status)
@@ -77,11 +82,18 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 }
 
 /* uwb_cirdiag_capture double: shim_rxok latches the CIA diag through it; the
- * real latch lives in the woz_uwb driver, out of this wrap-seam suite. */
-bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength)
+ * real latch lives in the woz_uwb driver, out of this wrap-seam suite. Records
+ * deadline_pending, the flag that keeps the windowed-CIR read out of a live
+ * ranging block. */
+static int s_cirdiag_calls;
+static bool s_cirdiag_deadline;
+
+bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
 {
 	(void)status;
 	(void)datalength;
+	s_cirdiag_calls++;
+	s_cirdiag_deadline = deadline_pending;
 	return false;
 }
 
@@ -147,6 +159,9 @@ int main(void)
 	okc("tracker fed the status", s_notify_calls == 1 && s_notified_status == 0x12345678u);
 	okc("blob rxok chained", s_blob_rxok == 1 && s_blob_rxok_arg == &d);
 	okc("prepoll decode ran", s_prepoll_calls == 1 && s_prepoll_len == 36);
+	/* Block idle after this reception (the Final case): cirdiag is cleared to take the long
+	 * windowed-CIR read. */
+	okc("cirdiag latched, block idle", s_cirdiag_calls == 1 && !s_cirdiag_deadline);
 
 	/* Awaiting the POLL: the RX is the POLL itself, no Pre-POLL decode. */
 	s_awaiting = true;
@@ -155,10 +170,18 @@ int main(void)
 	    s_prepoll_calls == 1 && s_notify_calls == 2 && s_blob_rxok == 2);
 	s_awaiting = false;
 
+	/* The blob's handler leaves a POLL or Final RX armed behind a live block; cirdiag must
+	 * hear about it so it skips the windowed-CIR read for that reception. */
+	s_deadline = true;
+	s_real_registered.cbRxOk(&d);
+	okc("live block: cirdiag told a deadline is pending",
+	    s_cirdiag_calls == 3 && s_cirdiag_deadline);
+	s_deadline = false;
+
 	/* NULL event data: blob still chains, no tracker feed, no decode. */
 	s_real_registered.cbRxOk(NULL);
 	okc("NULL data tolerated",
-	    s_blob_rxok == 3 && s_notify_calls == 2 && s_prepoll_calls == 1);
+	    s_blob_rxok == 4 && s_notify_calls == 3 && s_prepoll_calls == 2);
 
 	printf("-- passthrough shims --\n");
 

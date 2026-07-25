@@ -67,6 +67,14 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength);
 /** True while an SP3 POLL RX is armed (the next RX-good event is its result). Target only. */
 bool ccc_shim_rx_awaiting_poll(void);
 
+/** True while the responder still owes the current ranging block a radio event: an armed POLL RX
+ * (a few slots out) or an armed Final RX (~2 ms out). Sample it AFTER chaining to the blob's RX
+ * handler and it names the reception just serviced: only the Final leaves it false, with the
+ * whole ~192 ms inter-block gap as slack. Diagnostics that need a long SPI burst (the
+ * windowed-CIR read) must run only then — bench-proven to cost the round otherwise. Target
+ * only. */
+bool ccc_shim_rx_deadline_pending(void);
+
 /** BENCH toggle — run the standalone SP0 Pre-POLL listener instead of the FiRa session. */
 #define WOZ_CCC_PREPOLL_LISTEN 1
 

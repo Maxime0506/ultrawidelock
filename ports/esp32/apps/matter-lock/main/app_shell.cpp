@@ -300,12 +300,16 @@ static int cmd_log(int argc, char **argv)
 static int cmd_lab(int argc, char **argv)
 {
 	if (argc == 3 && strcmp(argv[1], "cir") == 0) {
+		if (strcmp(argv[2], "probe") == 0) {
+			uwb_cirdiag_probe();
+			return 0;
+		}
 		if (strcmp(argv[2], "on") == 0) {
 			uwb_cirdiag_dump_set_enabled(true);
 		} else if (strcmp(argv[2], "off") == 0) {
 			uwb_cirdiag_dump_set_enabled(false);
 		} else {
-			printf("usage: lab cir [on|off]\n");
+			printf("usage: lab cir [on|off|probe]\n");
 			return 0;
 		}
 		bool cir_on = uwb_cirdiag_dump_enabled();
@@ -321,7 +325,7 @@ static int cmd_lab(int argc, char **argv)
 		aliro_lab_set_enabled(false);
 		uwb_cirdiag_set_enabled(false);
 	} else if (argc != 1) {
-		printf("usage: lab [on|off] | lab cir [on|off]\n");
+		printf("usage: lab [on|off] | lab cir [on|off|probe]\n");
 		return 0;
 	}
 	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");

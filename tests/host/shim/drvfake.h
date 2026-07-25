@@ -67,6 +67,7 @@ struct drvfake_state {
 	unsigned configciadiag_calls;
 	uint8_t last_ciadiag_mask;
 	unsigned readcir_calls;
+	uint16_t first_cir_base; /* sample_offs of the first dwt_readcir since reset */
 	uint16_t last_cir_base; /* sample_offs of the last dwt_readcir */
 	uint16_t last_cir_num;  /* num_samples of the last dwt_readcir */
 	int cir_ret;            /* dwt_readcir return (0 = DWT_SUCCESS) */
@@ -85,6 +86,7 @@ struct drvfake_state {
 	bool ccc_active;
 	unsigned wrap_log_reset_calls;
 	bool rx_awaiting;
+	bool rx_deadline; /* ccc_shim_rx_deadline_pending — gates the Stage 1 CIR window read */
 	unsigned notify_calls;
 	uint32_t last_notify_status;
 	unsigned try_prepoll_calls;

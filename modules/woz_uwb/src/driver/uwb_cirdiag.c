@@ -15,7 +15,12 @@
  * appends each window to a small RAM ring (the last CIRDIAG_RING_RECS receptions), and the taps
  * are drained to `ev=uwb.cir` lines only when the dump is disarmed (uwb_cirdiag_dump_set_enabled
  * (false)) — that runs in console/task context after the walk-up, so the unlock is unaffected
- * while capturing.
+ * while capturing. Deferring the printing was necessary but not sufficient: the window READ is
+ * itself too long to sit inside a live ranging block, where the responder still owes a POLL or
+ * Final reception. The shims pass that down as deadline_pending and the window is taken only on
+ * the Final, which has the whole inter-block gap behind it (bench run 3: walk-up unlocks).
+ * Nor was that sufficient on its own — the read must also be issued in CIRDIAG_CIR_SUBREAD-tap
+ * pieces so no single accumulator burst exceeds the port's non-DMA SPI limit.
  */
 
 #include "uwb_cirdiag.h"
@@ -38,8 +43,24 @@
  * while staying cheap on serial (~64 lines) and RAM (256 B in DWT_CIR_READ_MID: 1 word/tap). */
 #define CIRDIAG_CIR_WIN 64u
 
+/** @brief Taps per dwt_readcir() call. The driver fetches 1 + 6*N raw bytes per accumulator
+ * burst, so N=8 keeps each burst at 49 bytes — inside the ESP32's 64-byte non-DMA SPI limit,
+ * which every other DW3000 read in the system also stays under. Asking for all 64 taps in one
+ * call requests 97 bytes, which the port splits across two bursts; bench runs 2 and 3 returned
+ * ~75 percent of those windows as a fixed non-physical pattern (identical samples at different
+ * accumulator offsets, saturated at int16 limits). Must divide CIRDIAG_CIR_WIN. */
+#define CIRDIAG_CIR_SUBREAD 8u
+
 /** @brief ipatovFpIndex is Q10.6 (6 fractional bits); the integer sample index is the high bits. */
 #define CIRDIAG_FP_FRAC_BITS 6u
+
+/** @brief CLK_CTRL_ID. dwt_readcir ORs the ACC_MCLK_EN|ACC_CLK_EN bits in here on every call and
+ * never clears them; the probe reads it back so a failed force shows up as data, not inference. */
+#define CIRDIAG_CLK_CTRL 0x110004UL
+
+/** @brief Taps per probe pass. Matches CIRDIAG_CIR_SUBREAD so the probe exercises the same
+ * accumulator burst size the capture path uses. */
+#define CIRDIAG_PROBE_TAPS 8u
 
 /** @brief Runtime arm state (console-toggled; OFF at boot). */
 static volatile bool g_on;
@@ -68,6 +89,19 @@ static uint32_t g_n;
 static uint32_t g_cir[CIRDIAG_CIR_WIN];
 static uint16_t g_cir_base;
 static bool g_cir_have;
+
+/** @brief Absolute Ipatov sample index of tap 0 for a window centred on the latched first path,
+ * clamped into the valid accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN]. */
+static uint16_t cirdiag_window_base(void)
+{
+	uint16_t fp_int = (uint16_t)(g_diag.ipatovFpIndex >> CIRDIAG_FP_FRAC_BITS);
+	uint16_t base = (fp_int > (CIRDIAG_CIR_WIN / 2u)) ? (fp_int - CIRDIAG_CIR_WIN / 2u) : 0u;
+
+	if ((uint32_t)base + CIRDIAG_CIR_WIN > (uint32_t)DWT_CIR_LEN_IP_PRF64) {
+		base = (uint16_t)(DWT_CIR_LEN_IP_PRF64 - CIRDIAG_CIR_WIN);
+	}
+	return base;
+}
 
 /** @brief Seqlock around the snapshot: odd while the RX path writes; the flush copies only
  * between two equal even reads. */
@@ -148,7 +182,7 @@ bool uwb_cirdiag_dump_enabled(void)
 	return g_dump;
 }
 
-bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength)
+bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
 {
 	if (!g_on) {
 		return false;
@@ -178,26 +212,86 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength)
 	g_sts_stat = 0;
 	g_sts_stat_ret = dwt_readstsstatus(&g_sts_stat, 0);
 	g_cir_have = false;
-	if (g_dump) {
+	if (g_dump && !deadline_pending) {
 		/* Centre a fixed window on the integer first-path index, clamped into the valid
 		 * Ipatov accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN]. dwt_readcir forces the
 		 * ACC clocks on itself; MID mode gives int16 real/imag with headroom for the early
-		 * taps. Inside the seqlock bracket so the flush copies a consistent window. */
-		uint16_t fp_int = (uint16_t)(g_diag.ipatovFpIndex >> CIRDIAG_FP_FRAC_BITS);
-		uint16_t base =
-			(fp_int > (CIRDIAG_CIR_WIN / 2u)) ? (fp_int - CIRDIAG_CIR_WIN / 2u) : 0u;
+		 * taps. Inside the seqlock bracket so the flush copies a consistent window.
+		 * Taken only once the block owes no further radio event (see deadline_pending):
+		 * this read is long enough to lose an armed POLL or Final — bench-proven to kill
+		 * every range of the walk-up when it runs inside a live block. */
+		uint16_t base = cirdiag_window_base();
+		bool ok = true;
 
-		if ((uint32_t)base + CIRDIAG_CIR_WIN > (uint32_t)DWT_CIR_LEN_IP_PRF64) {
-			base = (uint16_t)(DWT_CIR_LEN_IP_PRF64 - CIRDIAG_CIR_WIN);
-		}
 		g_cir_base = base;
-		g_cir_have = (dwt_readcir(g_cir, DWT_ACC_IDX_IP_M, base, CIRDIAG_CIR_WIN,
-					  DWT_CIR_READ_MID) == DWT_SUCCESS);
+
+		for (unsigned off = 0; ok && off < CIRDIAG_CIR_WIN; off += CIRDIAG_CIR_SUBREAD) {
+			ok = (dwt_readcir(&g_cir[off], DWT_ACC_IDX_IP_M, (uint16_t)(base + off),
+					  CIRDIAG_CIR_SUBREAD, DWT_CIR_READ_MID) == DWT_SUCCESS);
+		}
+		g_cir_have = ok;
 	}
 	g_n++;
 	g_seq++; /* even: stable */
 	g_pending = true;
 	return true;
+}
+
+void uwb_cirdiag_probe(void)
+{
+	/* Offsets to sample, in taps, relative to the window base. The first three are distinct
+	 * accumulator addresses; the fourth repeats the first. Reading the same address twice
+	 * separates "the offset is ignored" from "the read is non-deterministic": if passes 0..2
+	 * agree the addressing is dead, and if 0 and 3 disagree the read is racing something. */
+	static const uint16_t offs[] = {0u, CIRDIAG_PROBE_TAPS, 2u * CIRDIAG_PROBE_TAPS, 0u};
+	/* Sized for DWT_CIR_READ_FULL, which writes 6 bytes per tap (2 words) — MID uses half. */
+	uint32_t buf[2u * CIRDIAG_PROBE_TAPS];
+	uint16_t base;
+
+	if (!g_cia_armed) {
+		woz_printf("cir.probe: not ready: the chip-side CIA enable happens on the "
+			   "RX path, so arm the stream and take one reception first\n");
+		return;
+	}
+	base = cirdiag_window_base();
+	woz_printf("cir.probe: base=%u fp=%u clk=%lu\n", (unsigned)base,
+		   (unsigned)g_diag.ipatovFpIndex, (unsigned long)dwt_read_reg(CIRDIAG_CLK_CTRL));
+
+	for (unsigned p = 0; p < (sizeof(offs) / sizeof(offs[0])); p++) {
+		const int16_t *s = (const int16_t *)buf;
+		uint16_t at = (uint16_t)(base + offs[p]);
+		int rc;
+
+		memset(buf, 0, sizeof(buf));
+		rc = dwt_readcir(buf, DWT_ACC_IDX_IP_M, at, CIRDIAG_PROBE_TAPS, DWT_CIR_READ_MID);
+		woz_printf("cir.probe: pass=%u at=%u rc=%d clk=%lu\n", p, (unsigned)at, rc,
+			   (unsigned long)dwt_read_reg(CIRDIAG_CLK_CTRL));
+		for (unsigned i = 0; i < CIRDIAG_PROBE_TAPS; i++) {
+			woz_printf("cir.probe:   p=%u i=%u re=%d im=%d\n", p, i, (int)s[2u * i],
+				   (int)s[2u * i + 1u]);
+		}
+	}
+
+	/* One FULL-mode pass at the base: 24-bit real/imag straight off the wire, before the
+	 * sign-extend/shift/saturate that MID applies. A blob that saturates to +-32767 in MID is
+	 * unreadable; the raw words identify which memory the read actually landed on. */
+	memset(buf, 0, sizeof(buf));
+	{
+		const uint8_t *b = (const uint8_t *)buf;
+		int rc = dwt_readcir(buf, DWT_ACC_IDX_IP_M, base, CIRDIAG_PROBE_TAPS,
+				     DWT_CIR_READ_FULL);
+
+		woz_printf("cir.probe: full at=%u rc=%d\n", (unsigned)base, rc);
+		for (unsigned i = 0; i < CIRDIAG_PROBE_TAPS; i++) {
+			const uint8_t *t = &b[6u * i];
+
+			woz_printf("cir.probe:   full i=%u re24=%lu im24=%lu\n", i,
+				   (unsigned long)((uint32_t)t[0] | ((uint32_t)t[1] << 8) |
+						   ((uint32_t)t[2] << 16)),
+				   (unsigned long)((uint32_t)t[3] | ((uint32_t)t[4] << 8) |
+						   ((uint32_t)t[5] << 16)));
+		}
+	}
 }
 
 void uwb_cirdiag_flush(void)

@@ -217,6 +217,9 @@ int dwt_readcir(uint32_t *buffer, dwt_acc_idx_e cir_idx, uint16_t sample_offs,
 {
 	(void)cir_idx;
 	(void)mode;
+	if (drvfake.readcir_calls == 0) {
+		drvfake.first_cir_base = sample_offs;
+	}
 	drvfake.readcir_calls++;
 	drvfake.last_cir_base = sample_offs;
 	drvfake.last_cir_num = num_samples;
@@ -326,6 +329,11 @@ void ccc_shim_wrap_log_reset(void)
 bool ccc_shim_rx_awaiting_poll(void)
 {
 	return drvfake.rx_awaiting;
+}
+
+bool ccc_shim_rx_deadline_pending(void)
+{
+	return drvfake.rx_deadline;
 }
 
 void ccc_shim_rx_notify_rx(uint32_t status)

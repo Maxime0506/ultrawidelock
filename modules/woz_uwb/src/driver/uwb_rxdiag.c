@@ -121,8 +121,11 @@ static void shim_rxok(const dwt_cb_data_t *d)
 		g_ccc_dbg_decode = dwt_readsystimestamphi32() - s0;
 	}
 	/* Channel-impulse Stage 0: latch this reception's CIA diagnostics last (armed by
-	 * `aliro cir on`), then hand the printk to the sysworkq — never print on this thread. */
-	if (uwb_cirdiag_capture(d != NULL ? d->status : 0u, d != NULL ? d->datalength : 0u)) {
+	 * `aliro cir on`), then hand the printk to the sysworkq — never print on this thread.
+	 * The deadline flag is read after the arm above, so it reports what THIS reception left
+	 * outstanding; the Stage 1 window read only runs when nothing is. */
+	if (uwb_cirdiag_capture(d != NULL ? d->status : 0u, d != NULL ? d->datalength : 0u,
+				ccc_shim_rx_deadline_pending())) {
 		k_work_submit(&g_cirdiag_work);
 	}
 }

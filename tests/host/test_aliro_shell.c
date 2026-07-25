@@ -153,6 +153,13 @@ void test_aliro_shell(void)
 		argv3[2] = junk_s;
 		T_EQ("cir dump junk rc", run("cir", 3, argv3), -22);
 	}
+	{
+		/* `cir probe` takes the accumulator-read diagnostic branch: no toggle, always 0. */
+		char probe_s[] = "probe";
+
+		argv2[1] = probe_s;
+		T_EQ("cir probe rc", run("cir", 2, argv2), 0);
+	}
 	uwb_cirdiag_set_enabled(false);
 
 	t_group("version");
