@@ -64,6 +64,12 @@ SDU_NAMES = {
     (2, 5): "INITIATE-AP", (2, 6): "INITIATE-AP-RKE",
 }
 
+# Protocol names, for SDUs whose message ids the engine does not enumerate.
+# Protocol 3 is the one that matters here: iPhones send a proto-3 id-0 SDU
+# ahead of Initiate-Ranging-Session, which is what broke order-based latency
+# stamping.
+PROTO_NAMES = {0: "AP", 3: "SUPPL", 4: "THIRD-PARTY"}
+
 
 def sdu_label(ev):
     """Human name for an rtx/rrx event, e.g. "rtx M1".
@@ -75,8 +81,11 @@ def sdu_label(ev):
     proto = ev.attrs.get("proto")
     if proto is None:
         return "%s id=%d" % (ev.name, mid)
-    return "%s %s" % (ev.name, SDU_NAMES.get((proto, mid),
-                                             "proto=%d id=%d" % (proto, mid)))
+    named = SDU_NAMES.get((proto, mid))
+    if named is None:
+        named = ("%s id=%d" % (PROTO_NAMES[proto], mid) if proto in PROTO_NAMES
+                 else "proto=%d id=%d" % (proto, mid))
+    return "%s %s" % (ev.name, named)
 
 # Bench-derived timing envelopes (ms): generous margins over the measured
 # walk-up numbers on this hardware (auth segment 203 ms fast / 757 ms

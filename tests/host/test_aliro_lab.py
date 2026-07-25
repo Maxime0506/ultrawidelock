@@ -321,6 +321,11 @@ class MainTest(unittest.TestCase):
         ev = aliro_lab.Event(1, "rrx", {"proto": 7, "id": 9}, 1)
         self.assertEqual(aliro_lab.sdu_label(ev), "rrx proto=7 id=9")
 
+    def test_sdu_label_names_protocol_when_id_unknown(self):
+        """The proto-3 SDU iPhones send ahead of the IRS."""
+        ev = aliro_lab.Event(1, "rrx", {"proto": 3, "id": 0}, 1)
+        self.assertEqual(aliro_lab.sdu_label(ev), "rrx SUPPL id=0")
+
     def test_usage_error(self):
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):

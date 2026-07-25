@@ -83,10 +83,10 @@ static struct aliro_secchan *s_sc_ble;
 
 /* Stamp the latency phase this SDU actually is, by identity rather than by
  * arrival order. Order-based labelling was wrong on real hardware: the phone
- * sends an extra notification ahead of Initiate-Ranging-Session, which shifted
- * every device->reader label by one frame and stamped "M2 received" on the IRS,
- * i.e. before M1 had been sent. Diagnostics only; the protocol never depended
- * on this. */
+ * sends a proto-3 (supplementary-service) SDU ahead of
+ * Initiate-Ranging-Session, which shifted every device->reader label by one
+ * frame and stamped "M2 received" on the IRS, i.e. before M1 had been sent.
+ * Diagnostics only; the protocol never depended on this. */
 static void lat_mark_sdu(uint8_t proto, uint8_t id)
 {
 	if (proto == RSDU_PROTO_NOTIFICATION && id == RSDU_NOTIFY_RANGING) {

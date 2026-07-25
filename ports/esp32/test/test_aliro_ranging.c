@@ -479,9 +479,10 @@ int main(void)
 	 * walk-up and asserts one thing. */
 	printf("L: latency stamps follow message identity\n");
 	{
-		/* proto-2 id-0 (NOTIFICATION_EVENT): the stray SDU that used to
-		 * eat the IRS label. */
-		const uint8_t evt[8] = {0x02, 0x00, 0x00, 0x04, 0, 0, 0, 0};
+		/* proto-3 id-0 (SUPPLEMENTARY_SERVICE): the SDU the phone
+		 * actually sends ahead of the IRS, and which used to eat the
+		 * IRS label. Observed on an iPhone in walkup-20260725-070057. */
+		const uint8_t evt[8] = {0x03, 0x00, 0x00, 0x04, 0, 0, 0, 0};
 		/* proto-1: M1/M2/M3/M4 are ids 0/1/2/3. */
 		const uint8_t m2[8] = {0x01, 0x01, 0x00, 0x04, 0, 0, 0, 0};
 		const uint8_t m4[8] = {0x01, 0x03, 0x00, 0x04, 0, 0, 0, 0};
