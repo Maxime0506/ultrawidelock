@@ -6,10 +6,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
 
-#include "ccc_shim.h"     /* ccc_shim_active */
-#include "fira_session.h" /* fira_session_last_range, fira_session_get_ursk */
-#include "uwb_min.h"      /* uwb_min_read_chipid, uwb_min_selftest, DEV_ID */
-#include "uwb_rxdiag.h"   /* counters + ranging-log stream toggle */
+#include "ccc_shim.h"        /* ccc_shim_active */
+#include "fira_session.h"    /* fira_session_last_range, fira_session_get_ursk */
+#include "flight_recorder.h" /* fr_set_enabled / fr_dump — walk-up record/replay (gated) */
+#include "uwb_min.h"         /* uwb_min_read_chipid, uwb_min_selftest, DEV_ID */
+#include "uwb_rxdiag.h"      /* counters + ranging-log stream toggle */
 
 /* Short commit SHA baked in by CMake; "unknown" for a git-less build. */
 #ifndef WOZ_GIT_SHA
@@ -201,6 +202,37 @@ static int cmd_frames(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+#if defined(CONFIG_WOZ_FLIGHT_RECORDER)
+/**
+ * @brief Arm/disarm the flight recorder, or dump/clear its RAM ring.
+ * @param sh Shell context.
+ * @param argc Argument count; if ≥2, argv[1] is on|off|dump|clear.
+ * @param argv Command arguments.
+ * @return 0 on success; -EINVAL on an unrecognised sub-argument.
+ */
+static int cmd_frec(const struct shell *sh, size_t argc, char **argv)
+{
+	if (argc >= 2) {
+		if (strcmp(argv[1], "on") == 0) {
+			fr_set_enabled(true);
+		} else if (strcmp(argv[1], "off") == 0) {
+			fr_set_enabled(false);
+		} else if (strcmp(argv[1], "dump") == 0) {
+			fr_dump(); /* hex `[FREC]` lines for tools/flight_recorder.py */
+			return 0;
+		} else if (strcmp(argv[1], "clear") == 0) {
+			fr_clear();
+		} else {
+			shell_print(sh, "  " C_YEL "usage: aliro frec [on|off|dump|clear]" C_RST);
+			return -EINVAL;
+		}
+	}
+	shell_print(sh, "  flight recorder %s",
+		    fr_enabled() ? C_GRN "● armed" C_RST : C_DIM "○ off" C_RST);
+	return 0;
+}
+#endif /* CONFIG_WOZ_FLIGHT_RECORDER */
+
 /**
  * @brief Display the build commit SHA.
  * @param sh Shell context.
@@ -319,6 +351,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(log, NULL, "Ranging heartbeat: `log on` | `log off`.", cmd_log),
 	SHELL_CMD(frames, NULL, "Per-block distance stream: `frames on` | `frames off`.",
 		  cmd_frames),
+#if defined(CONFIG_WOZ_FLIGHT_RECORDER)
+	SHELL_CMD(frec, NULL, "Flight recorder: `frec on|off|dump|clear`.", cmd_frec),
+#endif
 	SHELL_CMD(version, NULL, "Firmware build: short commit SHA.", cmd_version),
 	SHELL_SUBCMD_SET_END);
 

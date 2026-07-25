@@ -103,5 +103,7 @@ py_suite() { # <name> <script> <note>
 }
 py_suite aliro-lab "$ROOT/tests/host/test_aliro_lab.py" "python, log-report tooling"
 py_suite power-profile "$ROOT/tests/host/test_power_profile.py" "python, power/calibration reduction"
+py_suite flight-recorder "$ROOT/tests/host/test_flight_recorder.py" "python, trace/replay tooling"
+py_suite gait "$ROOT/tests/host/test_aliro_gait.py" "python, gait feature probe"
 py_suite mqtt-bridge "$ROOT/tests/host/test_mqtt_bridge.py" "python, fake paho/serial"
 py_suite flash-html "$ROOT/tests/host/test_flash_html.py" "python, needs markdown pkg"
