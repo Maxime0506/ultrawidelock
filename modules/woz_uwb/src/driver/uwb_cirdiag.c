@@ -18,9 +18,11 @@
  * while capturing. Deferring the printing was necessary but not sufficient: the window READ is
  * itself too long to sit inside a live ranging block, where the responder still owes a POLL or
  * Final reception. The shims pass that down as deadline_pending and the window is taken only on
- * the Final, which has the whole inter-block gap behind it (bench run 3: walk-up unlocks).
- * Nor was that sufficient on its own — the read must also be issued in CIRDIAG_CIR_SUBREAD-tap
- * pieces so no single accumulator burst exceeds the port's non-DMA SPI limit.
+ * the Final. Nor was that sufficient: the accumulator cannot be read at all while the receiver
+ * is up, and the shim re-arms an SP0 listen the moment the Final is serviced, so the read has to
+ * happen BEFORE that (the shims gate it on ccc_shim_rx_awaiting_final). Doing it on every block
+ * then cost every range, so uwb_cirdiag_window_due decimates it to one Final in
+ * CIRDIAG_CIR_EVERY.
  */
 
 #include "uwb_cirdiag.h"
@@ -43,13 +45,13 @@
  * while staying cheap on serial (~64 lines) and RAM (256 B in DWT_CIR_READ_MID: 1 word/tap). */
 #define CIRDIAG_CIR_WIN 64u
 
-/** @brief Taps per dwt_readcir() call. The driver fetches 1 + 6*N raw bytes per accumulator
- * burst, so N=8 keeps each burst at 49 bytes — inside the ESP32's 64-byte non-DMA SPI limit,
- * which every other DW3000 read in the system also stays under. Asking for all 64 taps in one
- * call requests 97 bytes, which the port splits across two bursts; bench runs 2 and 3 returned
- * ~75 percent of those windows as a fixed non-physical pattern (identical samples at different
- * accumulator offsets, saturated at int16 limits). Must divide CIRDIAG_CIR_WIN. */
-#define CIRDIAG_CIR_SUBREAD 8u
+/** @brief Take a window on one Final in every N. The read is the most expensive thing this unit
+ * does — the driver walks the accumulator in CHUNK_CIR_NB_SAMP-sample chunks, three SPI
+ * transactions each — and doing it on every block cost every range of the walk-up (bench run 5:
+ * 16/16 windows came back as real CIR, and not one block produced a distance). Sampling every
+ * fourth block still fills the ring across an approach while leaving three blocks in four
+ * untouched. */
+#define CIRDIAG_CIR_EVERY 4u
 
 /** @brief ipatovFpIndex is Q10.6 (6 fractional bits); the integer sample index is the high bits. */
 #define CIRDIAG_FP_FRAC_BITS 6u
@@ -58,8 +60,8 @@
  * never clears them; the probe reads it back so a failed force shows up as data, not inference. */
 #define CIRDIAG_CLK_CTRL 0x110004UL
 
-/** @brief Taps per probe pass. Matches CIRDIAG_CIR_SUBREAD so the probe exercises the same
- * accumulator burst size the capture path uses. */
+/** @brief Taps per probe pass. Small enough that three passes at different offsets stay cheap;
+ * the point is comparing them, not the width. */
 #define CIRDIAG_PROBE_TAPS 8u
 
 /** @brief Runtime arm state (console-toggled; OFF at boot). */
@@ -217,24 +219,29 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pen
 		 * Ipatov accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN]. dwt_readcir forces the
 		 * ACC clocks on itself; MID mode gives int16 real/imag with headroom for the early
 		 * taps. Inside the seqlock bracket so the flush copies a consistent window.
-		 * Taken only once the block owes no further radio event (see deadline_pending):
-		 * this read is long enough to lose an armed POLL or Final — bench-proven to kill
-		 * every range of the walk-up when it runs inside a live block. */
+		 * deadline_pending false means the caller has established the radio is idle —
+		 * on the ranging path that is the Final, sampled before the shim re-arms. */
 		uint16_t base = cirdiag_window_base();
-		bool ok = true;
 
 		g_cir_base = base;
-
-		for (unsigned off = 0; ok && off < CIRDIAG_CIR_WIN; off += CIRDIAG_CIR_SUBREAD) {
-			ok = (dwt_readcir(&g_cir[off], DWT_ACC_IDX_IP_M, (uint16_t)(base + off),
-					  CIRDIAG_CIR_SUBREAD, DWT_CIR_READ_MID) == DWT_SUCCESS);
-		}
-		g_cir_have = ok;
+		g_cir_have = (dwt_readcir(g_cir, DWT_ACC_IDX_IP_M, base, CIRDIAG_CIR_WIN,
+					  DWT_CIR_READ_MID) == DWT_SUCCESS);
 	}
 	g_n++;
 	g_seq++; /* even: stable */
 	g_pending = true;
 	return true;
+}
+
+/** @brief Decimation tick: the shims call this once per Final, so it advances per ranging block. */
+static uint32_t g_win_tick;
+
+bool uwb_cirdiag_window_due(void)
+{
+	if (!g_on || !g_dump || !g_cia_armed) {
+		return false;
+	}
+	return (g_win_tick++ % CIRDIAG_CIR_EVERY) == 0u;
 }
 
 void uwb_cirdiag_probe(void)

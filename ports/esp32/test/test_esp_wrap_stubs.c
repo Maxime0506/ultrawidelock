@@ -101,6 +101,15 @@ static int s_cirdiag_calls;
 static bool s_cirdiag_deadline;
 static int s_cirdiag_blob_at_call;
 
+/* uwb_cirdiag_window_due double: the shim gates the pre-arm window capture on it, so the
+ * suite drives it directly rather than reproducing the decimation counter. */
+static bool s_window_due = true;
+
+bool uwb_cirdiag_window_due(void)
+{
+	return s_window_due;
+}
+
 bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
 {
 	(void)status;
@@ -193,20 +202,33 @@ int main(void)
 	okc("final: cirdiag captured before the re-arm",
 	    s_cirdiag_calls == 3 && s_cirdiag_blob_at_call == blob_before);
 	okc("final: window read allowed", !s_cirdiag_deadline);
+	/* Decimation: a Final whose window is not due falls back to the post-arm summary, so the
+	 * three blocks in four that skip the read keep ranging untouched. */
+	s_window_due = false;
+	int cir_before = s_cirdiag_calls;
+
+	s_real_registered.cbRxOk(&d);
+	okc("final, window not due: summary after the arm",
+	    s_cirdiag_calls == cir_before + 1 && s_cirdiag_deadline &&
+	    s_cirdiag_blob_at_call == s_blob_rxok);
+	s_window_due = true;
 	s_final = false;
 
 	/* The blob's handler leaves a POLL or Final RX armed behind a live block; cirdiag must
 	 * hear about it so it skips the windowed-CIR read for that reception. */
 	s_deadline = true;
+	cir_before = s_cirdiag_calls;
 	s_real_registered.cbRxOk(&d);
 	okc("live block: cirdiag told a deadline is pending",
-	    s_cirdiag_calls == 4 && s_cirdiag_deadline);
+	    s_cirdiag_calls == cir_before + 1 && s_cirdiag_deadline);
 	s_deadline = false;
 
 	/* NULL event data: blob still chains, no tracker feed, no decode. */
+	int blob_n = s_blob_rxok, notify_n = s_notify_calls, prepoll_n = s_prepoll_calls;
+
 	s_real_registered.cbRxOk(NULL);
-	okc("NULL data tolerated",
-	    s_blob_rxok == 5 && s_notify_calls == 4 && s_prepoll_calls == 3);
+	okc("NULL data tolerated", s_blob_rxok == blob_n + 1 && s_notify_calls == notify_n &&
+					   s_prepoll_calls == prepoll_n);
 
 	printf("-- passthrough shims --\n");
 

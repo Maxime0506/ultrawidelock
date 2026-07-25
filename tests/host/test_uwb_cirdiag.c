@@ -13,7 +13,8 @@
  * 1016-sample PRF64 Ipatov accumulator; ipatovFpIndex is Q10.6; RECS is the
  * deferred-dump ring depth (CIRDIAG_RING_RECS). */
 #define WIN     64
-#define SUB     8
+#define SUB     8 /* CIRDIAG_PROBE_TAPS: the probe's per-pass burst width */
+#define EVERY   4 /* CIRDIAG_CIR_EVERY: windows are taken on one Final in EVERY */
 #define IP_LEN  1016
 #define RECS    16
 #define Q(fp)   ((uint16_t)((unsigned)(fp) << 6))
@@ -47,21 +48,19 @@ void test_uwb_cirdiag(void)
 	T_EQ("no CIR read without dump", drvfake.readcir_calls, 0);
 
 	/* Dump arm implies summary; window centres on the integer first path
-	 * (fp_int = ipatovFpIndex >> 6), base = fp_int - WIN/2 when it fits. The window is
-	 * fetched as WIN/SUB contiguous sub-bursts so each accumulator read stays inside the
-	 * ESP32's 64-byte non-DMA SPI limit — a single 64-tap call splits across bursts and
-	 * came back non-physical on the bench. readcir_calls is zeroed before each capture so
-	 * first_cir_base re-latches on that capture's opening sub-burst. */
+	 * (fp_int = ipatovFpIndex >> 6), base = fp_int - WIN/2 when it fits. One dwt_readcir for
+	 * the whole window: splitting it into 8-tap pieces was tried on the bench to dodge the
+	 * ESP32's 64-byte non-DMA SPI limit and made things worse, because the real fault was
+	 * reading while the receiver was up, not the burst size. readcir_calls is zeroed before
+	 * each capture so first_cir_base re-latches on that capture. */
 	uwb_cirdiag_dump_set_enabled(true);
 	T_OK("dump enabled", uwb_cirdiag_dump_enabled());
 	drvfake.diag_fp = Q(200);
 	drvfake.readcir_calls = 0;
 	(void)uwb_cirdiag_capture(0x1u, 12u, false);
-	T_EQ("window read as sub-bursts", drvfake.readcir_calls, WIN / SUB);
-	T_EQ("sub-burst width", drvfake.last_cir_num, SUB);
-	T_EQ("centred base", drvfake.first_cir_base, 200 - WIN / 2);              /* 168 */
-	T_EQ("sub-bursts tile the window", drvfake.last_cir_base,
-	     200 - WIN / 2 + WIN - SUB); /* 224 */
+	T_EQ("window read in one call", drvfake.readcir_calls, 1);
+	T_EQ("full window width", drvfake.last_cir_num, WIN);
+	T_EQ("centred base", drvfake.first_cir_base, 200 - WIN / 2); /* 168 */
 	uwb_cirdiag_flush(); /* dump armed: appends the window to the ring, no inline print */
 	T_EQ("one window buffered", uwb_cirdiag_ring_count(), 1);
 
@@ -111,6 +110,24 @@ void test_uwb_cirdiag(void)
 	/* Flush with nothing pending is a safe no-op. */
 	uwb_cirdiag_flush();
 	uwb_cirdiag_flush();
+
+	/* Decimation: window_due gates the expensive read to one Final in EVERY. It is
+	 * side-effecting by contract (one call per Final), so count a full period. Reading every
+	 * block returns real CIR but costs every range of the walk-up (bench run 5). */
+	uwb_cirdiag_dump_set_enabled(true); /* the disarm above turned it off */
+	{
+		int due = 0;
+
+		for (int i = 0; i < EVERY * 3; i++) {
+			if (uwb_cirdiag_window_due()) {
+				due++;
+			}
+		}
+		T_EQ("window due once per period", due, 3);
+	}
+	uwb_cirdiag_dump_set_enabled(false);
+	T_OK("window never due while the dump is disarmed", !uwb_cirdiag_window_due());
+	uwb_cirdiag_dump_set_enabled(true);
 
 	/* Probe: four MID passes (base, base+SUB, base+2*SUB, base again) then one FULL pass at
 	 * the base, all SUB taps wide. The offsets are what make it diagnostic, so pin the first

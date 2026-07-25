@@ -57,6 +57,13 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pen
  * never call on the RX event path. */
 void uwb_cirdiag_flush(void);
 
+/** @brief Whether this ranging block should take a windowed-CIR read. Call once per Final, before
+ * chaining to the blob's RX handler: it advances an internal counter, so it returns true on one
+ * Final in CIRDIAG_CIR_EVERY and false on the rest. False whenever the dump is disarmed or the
+ * chip-side CIA logging has not been enabled yet. Reading every block returns real CIR but costs
+ * every range of the walk-up (bench run 5); this is the throttle that buys both. */
+bool uwb_cirdiag_window_due(void);
+
 /** @brief One-shot accumulator read diagnostic, for chasing a windowed-CIR dump that returns
  * non-physical taps. Reads the same 8-tap burst at three distinct accumulator offsets, then
  * repeats the first, then repeats it once more in DWT_CIR_READ_FULL so the raw 24-bit words are

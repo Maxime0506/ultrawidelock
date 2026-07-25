@@ -113,10 +113,10 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	 * accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
 	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
 	 * absorbs the read before the SP0 listen goes back up. */
-	bool is_final = ccc_shim_rx_awaiting_final();
+	bool win = ccc_shim_rx_awaiting_final() && uwb_cirdiag_window_due();
 	bool latched = false;
 
-	if (is_final) {
+	if (win) {
 		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
 					      d != NULL ? d->datalength : 0u, false);
 	}
@@ -135,7 +135,7 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
 	 * the POLL/Final deadlines are met first. Either way the printk goes to the sysworkq —
 	 * never print on this thread. */
-	if (!is_final) {
+	if (!win) {
 		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
 					      d != NULL ? d->datalength : 0u, true);
 	}
