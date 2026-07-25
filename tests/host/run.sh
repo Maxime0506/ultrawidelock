@@ -105,4 +105,5 @@ py_suite aliro-lab "$ROOT/tests/host/test_aliro_lab.py" "python, log-report tool
 py_suite flight-recorder "$ROOT/tests/host/test_flight_recorder.py" "python, trace/replay tooling"
 py_suite gait "$ROOT/tests/host/test_aliro_gait.py" "python, gait feature probe"
 py_suite mqtt-bridge "$ROOT/tests/host/test_mqtt_bridge.py" "python, fake paho/serial"
+py_suite presence-verify "$ROOT/tests/host/test_presence_verify.py" "python, real P-256 via openssl"
 py_suite flash-html "$ROOT/tests/host/test_flash_html.py" "python, needs markdown pkg"
