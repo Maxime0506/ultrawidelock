@@ -115,6 +115,10 @@ static bool s_kp_dirty;
  * the next established session replays it. Host-task only, like every other touch
  * point on the session table. */
 static bool s_secured_undelivered;
+/* The state the peer was last told (false = Secured, which is where the bolt boots).
+ * Suppresses duplicate Reader-Status-Changed sends and, with them, the spurious
+ * replays a duplicate would otherwise queue up. */
+static bool s_last_unsecured;
 
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 /* One-shot step-up arm (bench `aliro-stepup arm`): forces the next transaction
@@ -1060,11 +1064,22 @@ static void reader_status_send(struct aliro_session *s, bool unsecured)
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
 	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
 	s_secured_undelivered = false;
+	s_last_unsecured = unsecured;
 }
 
 static void reader_status_send_on_host(bool unsecured)
 {
 	struct aliro_session *s = NULL;
+
+	if (unsecured == s_last_unsecured) {
+		/* The peer already believes this. The gate-close path sends Secured
+		 * itself before dropping the link, so the approach controller's own
+		 * relock (which fires off that very disconnect) arrives here as a
+		 * duplicate. Treating it as already-delivered is what stops it being
+		 * flagged undeliverable and replayed on the next approach, which the
+		 * user sees as the Wallet flashing locked then unlocked on arrival. */
+		return;
+	}
 
 	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
 		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
@@ -1284,6 +1299,16 @@ void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
 			conn_handle, (int)aliro_rssi_gate_level_dbm(&s->rgate));
 		aliro_lab_evi("gate.close", "dbm", aliro_rssi_gate_level_dbm(&s->rgate));
 		aliro_ranging_stop(conn_handle);
+		/* Say goodbye before hanging up. The approach controller relocks off the
+		 * session ending, and the session ends because of the disconnect two
+		 * lines down, so its own Secured would arrive with no channel left to
+		 * carry it and the phone would keep showing the door unlocked until its
+		 * next approach. Sending here costs one sealed 8-byte SDU on a link that
+		 * is about to close anyway. The bolt follows within a poll period, so
+		 * the phone reads Secured a moment early rather than minutes late. */
+		if (s_last_unsecured) {
+			reader_status_send(s, false);
+		}
 		(void)aliro_ble_disconnect(conn_handle);
 	}
 }

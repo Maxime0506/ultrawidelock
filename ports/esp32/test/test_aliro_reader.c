@@ -923,6 +923,20 @@ int main(void)
 		f = tx_next(&n);
 		okc("a.relock_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					     pn == 8 && memcmp(plain, relock, 8) == 0);
+
+		/* Repeating a state the peer already holds sends nothing. The gate-close
+		 * path relocks the phone itself, so the approach controller's relock
+		 * arrives right behind it as a duplicate; forwarding it would flag an
+		 * undeliverable Secured and replay it on the next approach. */
+		aliro_reader_notify_unlock(false);
+		okc("a.duplicate_relock_suppressed", tx_pending() == 0);
+
+		/* Back to unsecured, so the post-disconnect relock below is a real state
+		 * change rather than another duplicate. */
+		aliro_reader_notify_unlock(true);
+		f = tx_next(&n);
+		okc("a.regrant_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
+					      pn == 8 && memcmp(plain, grant, 8) == 0);
 	}
 
 	/* disconnect persists the minted Kpersistent — compare against the
