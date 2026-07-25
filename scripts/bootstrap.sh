@@ -44,21 +44,38 @@ fi
 #    Safe to run every time. `toolchain list` prints one row per installed
 #    version, so an existing toolchain costs a query and nothing else.
 #
-#    ALIRO_TOOLCHAIN=env means the toolchain is already on PATH — the NCS
-#    container CI builds in, where nrfutil's toolchain index is not even
-#    reachable — so there is nothing to install and nothing to ask.
-#    NO_TOOLCHAIN=1 skips the phase for a host that manages it another way.
+#    It asks nrfutil rather than looking at a path, which is what makes a
+#    toolchain installed somewhere unusual findable: `list` reports whatever is
+#    in nrfutil's configured install-dir (`nrfutil sdk-manager config show`),
+#    default or not. And it cannot disagree with the build, because build.sh
+#    reaches the compiler the same way — `toolchain launch` resolves through the
+#    same configuration. A toolchain nrfutil cannot see is one no build here
+#    could have used either.
+#
+#    ALIRO_TOOLCHAIN=env is the way out for a toolchain nrfutil does not manage
+#    at all: it means one is already on PATH — the NCS container CI builds in,
+#    where nrfutil's toolchain index is not even reachable — so there is nothing
+#    to install and nothing to ask. NO_TOOLCHAIN=1 skips just this phase.
+#
+#    --styling never because this output is parsed, not read: colour is off when
+#    piped today, and that is a default rather than a promise.
 if [ "${ALIRO_TOOLCHAIN:-}" != env ] && [ -z "${NO_TOOLCHAIN:-}" ]; then
   echo "==> NCS $NCS_VER toolchain"
   if ! command -v nrfutil >/dev/null 2>&1; then
     echo "ERROR: nrfutil not found on PATH — it is what installs the toolchain." >&2
     echo "       run: make tools-install" >&2
     echo "       or:  https://www.nordicsemi.com/Products/Development-tools/nrf-util" >&2
+    echo "       already have a Zephyr toolchain on PATH? ALIRO_TOOLCHAIN=env make bootstrap" >&2
     exit 1
   fi
-  if nrfutil sdk-manager toolchain list 2>/dev/null | grep -q "^${NCS_VER}[[:space:]]"; then
+  if nrfutil sdk-manager toolchain list --styling never 2>/dev/null \
+     | grep -q "^${NCS_VER}[[:space:]]"; then
     echo "    already installed — nothing to fetch"
   else
+    # If that match ever goes stale, this is the cost: `install` without
+    # --force does not replace an installation that is already there (that is
+    # what --force is documented to do), so the fallback is a no-op, not a
+    # repeat download.
     echo "    installing (~2 GB, once per machine)"
     nrfutil sdk-manager toolchain install --ncs-version "$NCS_VER"
   fi

@@ -27,7 +27,13 @@ the middle:
    host tools every CI gate needs, plus `nrfutil` itself.
 2. The NCS v3.3.0 toolchain, via `nrfutil sdk-manager toolchain install`. An
    already-installed toolchain costs a query rather than a re-download, so this
-   is safe on every run.
+   is safe on every run. It asks nrfutil rather than checking a path, so a
+   toolchain in a non-default location is found as long as nrfutil knows about
+   it (`nrfutil sdk-manager config show` names the directory it looks in). That
+   is the same route `make build` uses to reach the compiler, so the two can
+   never disagree: a toolchain nrfutil cannot see is one the build could not
+   have used. If yours is managed some other way, `ALIRO_TOOLCHAIN=env` uses
+   whatever is already on `PATH` and skips this phase.
 3. NCS v3.3.0 + the Nordic door-lock add-on (~6.5 GB) into `./workspace`, with
    this repo's patches applied on top.
 

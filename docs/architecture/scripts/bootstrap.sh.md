@@ -18,7 +18,7 @@ ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewher
 ## API
 
 ### `apply_to()`
-`scripts/bootstrap.sh:108`
+`scripts/bootstrap.sh:125`
 
 Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
 
