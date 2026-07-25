@@ -107,6 +107,15 @@ void aliro_lab_evi(const char *ev, const char *key, long val)
 	woz_printf("[ALAB] t=%lld ev=%s %s=%ld\n", (long long)woz_uptime_us(), ev, key, val);
 }
 
+void aliro_lab_evi2(const char *ev, const char *k1, long v1, const char *k2, long v2)
+{
+	if (!s_lab_on) {
+		return;
+	}
+	woz_printf("[ALAB] t=%lld ev=%s %s=%ld %s=%ld\n", (long long)woz_uptime_us(), ev, k1, v1,
+		   k2, v2);
+}
+
 void aliro_lab_dump(void)
 {
 	if (!s_lab_on || s_lab_dumped) {

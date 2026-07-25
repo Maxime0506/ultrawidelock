@@ -23,7 +23,7 @@ parsed from the device WRITE). Serialized as one byte: bit0/1/2.
 Transport callbacks into the app / Phase-3 Aliro handler. All optional.
 
 ### `struct aliro_ble_config`
-`modules/woz_aliro/include/aliro_ble.h:44`
+`modules/woz_aliro/include/aliro_ble.h:48`
 
 Reader configuration. `proto_versions` are host-order uint16s; they are the
 provisioned `aliroSupportedBLEUWBProtocolVersions` (Matter attr 133), NOT a

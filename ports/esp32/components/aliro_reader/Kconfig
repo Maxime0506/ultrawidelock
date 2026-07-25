@@ -28,6 +28,130 @@ config WOZ_ALIRO_LAB
 	  aliro-lat stamps, hence the ALIRO_LAT_TRACE dependency. Set n to strip
 	  it entirely from a hardened production image.
 
+config WOZ_RSSI_GATE
+	bool "RSSI-gated UWB ranging (power gate)"
+	default y
+	help
+	  Gate the UWB radio on BLE connection RSSI: the reader completes the
+	  Aliro auth as soon as the phone connects, but holds the one message
+	  the phone waits for before initiating ranging (Reader-Status-AP-
+	  Completed, §11.7.3.4.1) until the smoothed RSSI says the phone is in
+	  the last few metres. Until then the DW3000 stays powered off instead
+	  of listening continuously from BLE range — the difference between a
+	  battery-powered lock and a tethered one. A sustained fade below the
+	  close threshold tears ranging down again and drops the link; the
+	  phone re-runs the fast auth on its next approach. With this off the
+	  radio arms right after auth, exactly as before.
+
+config WOZ_RSSI_GATE_OPEN_DBM
+	int "Gate open threshold (dBm)"
+	depends on WOZ_RSSI_GATE
+	default -55
+	help
+	  Smoothed connection RSSI at or above this opens the gate (allows UWB).
+
+	  Set from a measured 274-sample curve (see docs/power-profile.md), not
+	  from separation alone. Ranging needs about 1.5 s from AP-Completed to
+	  its first trusted range, so the gate has to open roughly 2 m out or the
+	  radio is still warming up when the phone reaches the door. On the bench
+	  rig -55 lands in the 2.0-2.5 m band; -50 separates near from far better
+	  on paper but opens under 1 m, which arrives too late to be useful.
+
+config WOZ_RSSI_GATE_CLOSE_DBM
+	int "Gate close threshold (dBm)"
+	depends on WOZ_RSSI_GATE
+	default -65
+	help
+	  Smoothed RSSI at or below this — sustained for the close hold time —
+	  closes the gate: ranging stops, the DW3000 powers down and the link
+	  is dropped. Keep well below the open threshold (hysteresis) so body
+	  fades cannot flap the radio.
+
+	  10 dB under the open threshold, which on the measured curve puts the
+	  close edge past 3 m: you have to walk a metre back out before the radio
+	  powers down. The old -75 was below the level seen at any distance the
+	  rig could still hold a link at, so the gate effectively never closed.
+
+config WOZ_RSSI_GATE_CLOSE_HOLD_MS
+	int "Gate close hold (ms)"
+	depends on WOZ_RSSI_GATE
+	default 3000
+	help
+	  How long the smoothed RSSI must stay below the close threshold before
+	  the gate closes. Rides out pocket/body fades mid-approach.
+
+config WOZ_RSSI_GATE_MAX_HOLD_MS
+	int "Longest AP-Completed hold (ms; 0 = unbounded)"
+	depends on WOZ_RSSI_GATE
+	default 0
+	help
+	  Cap on how long Reader-Status-AP-Completed may be deferred while the
+	  gate stays closed. 0 holds indefinitely, which is the default, and the
+	  bench is why.
+
+	  The phone will not wait: measured patience is about 1.9 s, after which
+	  it terminates the link (HCI reason 0x13) and reconnects. A capped hold
+	  therefore trades that reconnect for arming UWB. Both arms were run.
+	  Capping at 1200 ms released the gate at -75 and -72 dBm with the phone
+	  still roughly 4 m out, and the DW3000 then listened to nothing for
+	  2.8 s in one session and 6.6 s in the next. That is the exact waste the
+	  gate exists to prevent, and it buys only the avoidance of a reconnect
+	  that costs one fast re-auth, which is BLE-only and about 200 ms.
+
+	  So: hold, let the phone give up, and let it come back when it is closer.
+	  The unlock is not at risk, because an unprimed gate still fails open and
+	  the phone demonstrably retries.
+
+	  Set a nonzero value to take the other trade. If you do, note the cap is
+	  only evaluated when an RSSI sample arrives, so the hold ends up to
+	  WOZ_RSSI_GATE_POLL_MS late: a 1500 ms cap released at 1695 ms on the
+	  bench, leaving 121 ms against the phone's 1873. Budget cap + poll.
+
+config WOZ_RSSI_GATE_SLOPE_DB
+	int "Fast-open rise (dB per 1.5 s window; 0 disables)"
+	depends on WOZ_RSSI_GATE
+	default 8
+	help
+	  A rise of this many dB across the tracking window opens the gate
+	  early (once above the close threshold), so a fast walk-up is not
+	  penalized by the smoothing lag. 0 turns the rise-rate fast open off
+	  (threshold-only gating) — useful as the comparison arm in the power/
+	  latency study.
+
+config WOZ_RSSI_GATE_POLL_MS
+	int "Connection RSSI poll period (ms)"
+	depends on WOZ_RSSI_GATE
+	default 250
+	help
+	  How often the transport reads the controller RSSI while the Aliro
+	  L2CAP channel is up (one HCI Read RSSI per period; negligible next
+	  to the UWB RX it replaces). The first read fires at channel-open so
+	  a connect-at-the-door walk-up is never delayed by the poll interval.
+config WOZ_APPROACH_PREDICT
+	bool "Predictive (ETA) unlock — negative latency"
+	depends on !WOZ_RSSI_GATE
+	default y
+	help
+	  Run the constant-velocity Kalman path in aliro_approach: estimate the
+	  credential's closing speed and start retracting the bolt early, so it
+	  finishes at arrival instead of beginning there.
+
+	  It needs a run-up. The ETA only arms while the estimate is still
+	  OUTSIDE the unlock radius, with a converged filter and a closing speed
+	  above the minimum, so the controller has to see the phone approaching
+	  from beyond a metre.
+
+	  That is exactly what WOZ_RSSI_GATE takes away, which is why this
+	  depends on the gate being off. The gate withholds the message that
+	  starts ranging until the phone is already close, and a further ~1.29 s
+	  elapses before the first trusted range (1286 and 1289 ms, measured).
+	  On the bench the first trusted ranges with the gate on were 48 cm and
+	  6 cm — already inside the radius, so the predictor never armed once in
+	  69 trusted ranges. Stacking them does not blend the two behaviours; it
+	  silently disables this one.
+
+	  Pick per lock: the gate for battery power, this for latency.
+
 config WOZ_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	default n

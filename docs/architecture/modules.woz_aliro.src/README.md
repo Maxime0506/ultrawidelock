@@ -16,5 +16,6 @@
 | [`modules/woz_aliro/src/aliro_ranging.c`](aliro_ranging.c.md) | UWB ranging bring-up and lifecycle for the Aliro reader: initializes the reader's UWB |
 | [`modules/woz_aliro/src/aliro_ranging.h`](aliro_ranging.h.md) | Aliro M1-M4 ranging-setup interface: negotiates UWB ranging parameters with the device and |
 | [`modules/woz_aliro/src/aliro_reader.c`](aliro_reader.c.md) | Aliro reader engine: drives the Access Protocol (AUTH0/AUTH1/EXCHANGE) handshake over BLE, |
+| [`modules/woz_aliro/src/aliro_rssi_gate.c`](aliro_rssi_gate.c.md) | BLE-RSSI ranging power gate implementation: EWMA smoothing in Q4 fixed point, |
 | [`modules/woz_aliro/src/aliro_stepup.c`](aliro_stepup.c.md) | Aliro step-up phase codec + verifier: derives the StepUpSK SessionData keys, builds the mdoc |
 | [`modules/woz_aliro/src/aliro_stepup_parse.c`](aliro_stepup_parse.c.md) | DeviceResponse structural decoder for the Aliro step-up phase: a minimal, bounds-checked, |

@@ -155,11 +155,11 @@ static void t_shell_registration(void)
 	okc("repl started", fake_repl_started == 1);
 	okc("help registered", fake_help_registered == 1);
 	okc("multiline off (flicker fix)", fake_linenoise_multiline == 0);
-	okc("9 commands registered", fake_cmd_count == 9);
+	okc("10 commands registered", fake_cmd_count == 10);
 
-	static const char *want[] = {"status", "range", "aliro-start", "aliro-stop",
-				     "aliro-prov", "aliro-trust", "aliro-stepup",
-				     "uwbdiag", "clear"};
+	static const char *want[] = {"status",     "range",       "aliro-start",  "aliro-stop",
+				     "aliro-prov", "aliro-trust", "aliro-stepup", "uwbdiag",
+				     "lab",        "clear"};
 	int all = 1;
 
 	for (size_t i = 0; i < sizeof(want) / sizeof(want[0]); i++) {

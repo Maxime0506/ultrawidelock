@@ -367,16 +367,15 @@ const FW = {
   ALIRO_APPROACH_MEDIAN_N: 5,  // modules/woz_aliro/include/aliro_approach.h:42
   ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:122
   ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:123
-  ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:124
-  ALIRO_MOTOR_MS: 500,         // ports/esp32/apps/matter-lock/main/app_main.cpp:131
-  ALIRO_PREDICT_MARGIN_MS: 250, // ports/esp32/apps/matter-lock/main/app_main.cpp:132
-  ALIRO_PREDICT_VMIN_CM_S: 30, // ports/esp32/apps/matter-lock/main/app_main.cpp:133
+  ALIRO_MOTOR_MS: 500,         // ports/esp32/apps/matter-lock/main/app_main.cpp:135
+  ALIRO_PREDICT_MARGIN_MS: 250, // ports/esp32/apps/matter-lock/main/app_main.cpp:136
+  ALIRO_PREDICT_VMIN_CM_S: 30, // ports/esp32/apps/matter-lock/main/app_main.cpp:137
   KF_REJECT_MAX: 3,            // modules/woz_aliro/src/aliro_approach.c:18
   KF_STALE_MS: 1000,           // modules/woz_aliro/src/aliro_approach.c:19
   KF_MIN_SAMPLES: 6,           // modules/woz_aliro/src/aliro_approach.c:21
   PRED_DWELL_N: 2,             // modules/woz_aliro/src/aliro_approach.c:26
   PRED_GRACE_MS: 900,          // modules/woz_aliro/src/aliro_approach.c:27
-  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:276
+  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:299
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
   SPOOF_CM: -400,              // tests/host/test_twin.c:127
 };
@@ -444,7 +443,7 @@ class ApproachController {
     this.win = new Array(FW.ALIRO_APPROACH_MEDIAN_N).fill(0);
     this.wlen = 0; this.wpos = 0;
     this.nearDwell = 0; this.farDwell = 0;
-    this.lastActivityMs = 0; this.median = null;
+    this.lastActivityMs = 0; this.median = null; this.granted = false;
     this.unlockCm = FW.ALIRO_UNLOCK_RANGE_CM;                    // the threshold knob
     /* Kalman state — aliro_approach.c kf_rebase()/kf_update() */
     this.kfInit = false; this.accepted = 0; this.rejects = 0;
@@ -531,37 +530,48 @@ class ApproachController {
     } else this.predDwell = 0;
     return null;
   }
+  /* Wallet state, mirrored from app_main's `granted`. The grant rides WITH the
+   * bolt, never with the first trusted range: ranging starts metres out, and
+   * telling the phone "unlocked" there was measured 16.7 s ahead of the bolt. */
+  grant(){
+    if (!this.granted){ this.granted = true; this.ev.grant(this.median); }
+  }
+  ungrant(){
+    if (this.granted){ this.granted = false; this.ev.secured(); }
+  }
   dispatch(act){
-    if (act === "predict") this.ev.predict(this.etaMs, Math.round(-this.v));
-    else if (act === "thresh") this.ev.unlock(this.median);
-    else if (act === "depart") this.ev.relock(this.median);
-    else if (act === "abort") this.ev.abort(Math.round(-this.v));
+    if (act === "predict"){ this.ev.predict(this.etaMs, Math.round(-this.v)); this.grant(); }
+    else if (act === "thresh"){ this.ev.unlock(this.median); this.grant(); }
+    else if (act === "depart"){ this.ev.relock(this.median); this.ungrant(); }
+    else if (act === "abort"){ this.ev.abort(Math.round(-this.v)); this.ungrant(); }
   }
   /* one 200 ms wake — app_main.cpp reader task; `active` = a block latched
    * since the last wake (the task-notify count), NOT the raw timeout path. */
-  tick(nowMs, active){
+  tick(nowMs, active, sessionActive){
     const fw = this.getFw();
     const cm = fw ? fw.trustedCm() : null;                       // woz_uwb_trusted_range_cm
     const trusted = active && cm !== null;
     if (active) this.lastActivityMs = nowMs;
     if (trusted) {
-      if (!this.present) {                                       // Wallet grant, once per approach
-        this.present = true; this.ev.grant(cm);
-      }
+      this.present = true;
       this.dispatch(this.feed(nowMs, cm));
     } else if (this.predOpen && nowMs >= this.predDeadline) {
       /* idle tick only supervises the arrival deadline — aliro_approach_tick */
       this.dispatch(this.predAbort());
     }
-    /* peer gone: no ranging activity at all — aliro_approach_gone() */
-    if (this.present && (nowMs - this.lastActivityMs) >= FW.ALIRO_PEER_GONE_MS) {
+    /* Departure is the Aliro session ending, NOT ranging silence:
+     * aliro_reader_session_active(). iOS stops ranging when the phone stops
+     * moving — silences of 1.6, 2.4 and 3.07 s were measured with the phone
+     * present, the last one 26 cm from the reader, and a timeout here relocked
+     * the bolt under someone standing at the door. */
+    if (this.present && !sessionActive) {
       const wasOpen = !this.locked;
       this.locked = true; this.predOpen = false; this.predDwell = 0;
       this.wlen = 0; this.wpos = 0; this.nearDwell = 0; this.farDwell = 0;
       this.median = null; this.kfInit = false; this.accepted = 0;
       this.rejects = 0; this.etaMs = -1;
       if (wasOpen) this.ev.relock(null);
-      this.ev.secured();
+      this.ungrant();
       this.present = false;
     }
   }
@@ -842,7 +852,7 @@ function step(dtMs){
     if (sim.connected) authAdvance();
     /* `active` = the firmware's accepted-latch notify count, the same seam
      * app_main blocks on; a rejected block never wakes it. */
-    sim.ctrl.tick(sim.t, sim.fw ? sim.fw.takeLatches() > 0 : false);
+    sim.ctrl.tick(sim.t, sim.fw ? sim.fw.takeLatches() > 0 : false, sim.sessionActive);
   }
 }
 

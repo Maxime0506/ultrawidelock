@@ -77,6 +77,17 @@ static void walk_init(struct walk *w, uint32_t seed, float d0)
 	w->d = d0;
 }
 
+/* Same, with an explicit config (used to run a walk with the prediction path
+ * compiled in but disabled, as the RSSI-power-gate builds do). */
+static void walk_init_cfg(struct walk *w, uint32_t seed, float d0,
+			  const struct aliro_approach_cfg *cfg)
+{
+	memset(w, 0, sizeof(*w));
+	aliro_approach_init(&w->ap, cfg);
+	s_rng = seed;
+	w->d = d0;
+}
+
 /* One ranging block: move at v (cm/s, >0 = toward the door), then feed a
  * jittered sample (or the given override, for spike injection). */
 static void walk_block(struct walk *w, float v_cm_s, int32_t noise,
@@ -275,4 +286,31 @@ void test_approach(void)
 	note(&w.r, aliro_approach_feed(&w.ap, 2600, 380), 2600); /* dt clamp */
 	T_OK("clamp.est.stable", aliro_approach_est_cm(&w.ap) > 370 &&
 					 aliro_approach_est_cm(&w.ap) < 390);
+
+	t_group("predict_en=0: prediction path off, presence path untouched");
+	/* The RSSI-power-gate build. Same brisk walk that fires a prediction
+	 * above; with the path disabled the bolt must still open, but only on
+	 * the shipped threshold rule, and no ETA may ever be published. */
+	aliro_approach_defaults(&cfg);
+	T_OK("def.predict_en", cfg.predict_en);
+	cfg.predict_en = false;
+	walk_init_cfg(&w, 0xB01DFACE, 600.0f, &cfg);
+	walk_until(&w, 130.0f, 25, 55.0f, 0, 0);
+	/* The estimator itself keeps running: `vel` still feeds the lab trace,
+	 * it just cannot arm the bolt. */
+	T_OK("off.vel.tracked", aliro_approach_vel_cm_s(&w.ap) > 80 &&
+					aliro_approach_vel_cm_s(&w.ap) < 180);
+	T_EQ("off.eta.never", aliro_approach_eta_ms(&w.ap), -1);
+	/* Arriving and stopping: without the predictor the median has to settle
+	 * inside the ring first, which is precisely the latency the prediction
+	 * path exists to remove. */
+	walk_blocks(&w, 0.0f, 25, 5);
+	T_EQ("off.predict.none", w.r.n_predict, 0);
+	T_EQ("off.abort.none", w.r.n_abort, 0);
+	T_EQ("off.thresh.once", w.r.n_thresh, 1);
+	T_OK("off.unlocked", !aliro_approach_locked(&w.ap));
+	/* Departure still relocks on the presence path. */
+	walk_until(&w, -130.0f, 25, 400.0f, 0, 0);
+	T_EQ("off.depart.once", w.r.n_depart, 1);
+	T_OK("off.relocked", aliro_approach_locked(&w.ap));
 }

@@ -3,8 +3,9 @@
 /build/
 /sdkconfig
 /sdkconfig.old
-# `make lab` capture logs + their rendered reports.
-/walkup-*.log
-/walkup-*.log.html
+# `make lab` / `make term LOG=` capture logs + their rendered reports. Bench
+# artifacts: a capture worth keeping belongs in tests/host/data/, named.
+/*.log
+/*.log.html
 /dependencies.lock
 /managed_components/
