@@ -199,8 +199,9 @@ rm -f "$CSBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes =="
 DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
    -I "$HERE/../../../deps/dw3000/platform" \
    -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
@@ -213,9 +214,10 @@ rm -f "$DBIN"
 echo
 echo "== host: --wrap RX-callback shim chaining =="
 SBIN2="$(mktemp -t esp_wrap_stubs.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
    -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
    -I "$HERE/../../../modules/woz_uwb/src/ccc" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
    "$HERE/test_esp_wrap_stubs.c" \
    "$HERE/../components/woz_uwb/port/woz_wrap_stubs.c" -o "$SBIN2"
 "$SBIN2"
@@ -234,7 +236,7 @@ MBIN="$(mktemp -t esp_matter_lock.XXXXXX)"
 cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
 cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
-   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
+   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
    -DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \

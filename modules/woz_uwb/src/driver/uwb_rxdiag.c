@@ -10,6 +10,7 @@
 
 #include "ccc_shim.h"     /* ccc_shim_rx_notify_rx — empirical STS-index tracker */
 #include "fira_session.h" /* fira_session_last_range — latched DS-TWR distance */
+#include "uwb_cirdiag.h"  /* per-reception CIA diag latch (`aliro cir on`) */
 #include "uwb_rxdiag.h"   /* our accessors + runtime stream toggle */
 #include "woz_diag.h"     /* DIAGK — per-event/cfg/CAD trace, gated off in pretty mode */
 #include "woz_alloc.h"    /* qrtc_get_us — monotonic microsecond wall-clock */
@@ -81,6 +82,14 @@ static void rxdiag_ev_log(const char *cls, const dwt_cb_data_t *d)
 /** @brief Decode-cost probe: last try_prepoll() duration, hi32 (~4 ns) units. */
 uint32_t g_ccc_dbg_decode;
 
+/** @brief Task-side emitter for the latched CIA diagnostics (uwb_cirdiag). */
+static void cirdiag_emit(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	uwb_cirdiag_flush();
+}
+static K_WORK_DEFINE(g_cirdiag_work, cirdiag_emit);
+
 /**
  * @brief RX-good callback shim: log RX diagnostics, invoke the armed CCC callback, then decode the
  * Pre-POLL frame off the critical path.
@@ -99,6 +108,18 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	}
 	/* sp reflects THIS reception's mode, so log before the arm below re-arms. */
 	rxdiag_ev_log("ok", d);
+	/* Channel-impulse: sampled BEFORE the blob re-arms, this says the reception being serviced
+	 * is the Final — and the radio is still idle, which is the only state in which the
+	 * accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
+	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
+	 * absorbs the read before the SP0 listen goes back up. */
+	bool win = ccc_shim_rx_awaiting_final() && uwb_cirdiag_window_due();
+	bool latched = false;
+
+	if (win) {
+		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					      d != NULL ? d->datalength : 0u, false);
+	}
 	/* Arm the SP3 POLL window first, ahead of the Pre-POLL decode, using the pre-warmed STS. */
 	if (g_blob_rxok != NULL) {
 		g_blob_rxok(d);
@@ -110,6 +131,16 @@ static void shim_rxok(const dwt_cb_data_t *d)
 
 		ccc_shim_rx_try_prepoll(d->datalength);
 		g_ccc_dbg_decode = dwt_readsystimestamphi32() - s0;
+	}
+	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
+	 * the POLL/Final deadlines are met first. Either way the printk goes to the sysworkq —
+	 * never print on this thread. */
+	if (!win) {
+		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					      d != NULL ? d->datalength : 0u, true);
+	}
+	if (latched) {
+		k_work_submit(&g_cirdiag_work);
 	}
 }
 

@@ -233,6 +233,56 @@ class ParsingTest(unittest.TestCase):
         self.assertEqual(len(txns), 1)
 
 
+class CirExtractTest(unittest.TestCase):
+    # Two receptions (n=1,2), two taps each; a summary line and unrelated
+    # events must be ignored by the CIR extractor.
+    CAPTURE = (
+        "[ALAB] t=500 ev=uwb.diag n=1 ipfp=2432\n"
+        "[ALAB] t=500 ev=uwb.cir n=1 i=36 re=10 im=-20\n"
+        "[ALAB] t=500 ev=uwb.cir n=1 i=37 re=-3 im=4\n"
+        "[ALAB] t=900 ev=uwb.cir n=2 i=40 re=0 im=0\n"
+        "[ALAB] t=900 ev=uwb.cir n=2 i=41 re=100 im=100\n"
+        "I (999) app: unrelated console noise\n"
+    )
+
+    def test_rows_parsed_with_mag2(self):
+        rows = aliro_lab.cir_rows(aliro_lab.parse_events(self.CAPTURE))
+        self.assertEqual(len(rows), 4)
+        # (t_us, n, i, re, im, mag2)
+        self.assertEqual(rows[0], (500, 1, 36, 10, -20, 10 * 10 + 20 * 20))
+        self.assertEqual(rows[3], (900, 2, 41, 100, 100, 20000))
+
+    def test_incomplete_tap_line_skipped(self):
+        # Missing im= must be dropped, not crash.
+        rows = aliro_lab.cir_rows(aliro_lab.parse_events(
+            "[ALAB] t=1 ev=uwb.cir n=1 i=5 re=7\n"))
+        self.assertEqual(rows, [])
+
+    def test_write_cir_csv_roundtrip(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "taps.csv")
+            n = aliro_lab.write_cir_csv(aliro_lab.parse_events(self.CAPTURE), path)
+            self.assertEqual(n, 4)
+            with open(path) as f:
+                body = f.read().splitlines()
+        self.assertEqual(body[0], "t_us,n,i,re,im,mag2")
+        self.assertEqual(body[1], "500,1,36,10,-20,500")
+        self.assertEqual(len(body), 5)  # header + 4 taps
+
+    def test_main_cir_flag(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = os.path.join(d, "cap.log")
+            csv = os.path.join(d, "taps.csv")
+            with open(log, "w") as f:
+                f.write(self.CAPTURE)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = aliro_lab.main(["aliro_lab.py", "--cir", csv, log])
+            self.assertEqual(rc, 0)
+            self.assertTrue(os.path.exists(csv))
+            self.assertIn("cir taps: 4", buf.getvalue())
+
+
 @unittest.skipUnless(os.path.exists(CAPTURE),
                      "no real capture committed yet (see tests/host/data/README.md)")
 class CaptureArtifactTest(unittest.TestCase):
