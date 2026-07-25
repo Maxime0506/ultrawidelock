@@ -49,27 +49,27 @@ if [[ -t 1 ]]; then ISTTY=1 CR=$'\r' EL=$'\033[K'; else ISTTY=0 CR="" EL=""; fi
 # ---- gate table -----------------------------------------------------------
 # Cheapest-first, by wall time measured on an 8-core Apple silicon host with
 # warm caches. A gate whose tool is absent costs nothing, so position is set by
-# what it costs when the tool IS there. cbmc is last because it is 86s of the
-# ~170s total; everything above it together is under ninety seconds.
+# what it costs when the tool IS there. cbmc is last because it is 82s of the
+# ~179s total; everything above it together is under a hundred seconds.
 HR="--------------------------------------------"
 GATES=(
 	test-web    # 0s   twin-web.yml : drift-gate
 	actionlint  # 0s   workflow-lint.yml : actionlint
+	zizmor      # 0s   workflow-lint.yml : zizmor
 	format      # 1s   format.yml
 	shellcheck  # 1s   tooling.yml : shellcheck
+	licenses    # 3s   tooling.yml : licenses
+	fuzz        # 3s   fuzz.yml
 	clang-tidy  # 4s   clang-tidy.yml
-	fuzz        # 4s   fuzz.yml
 	test        # 5s   host-tests.yml : host
-	twin-wasm   # 7s   twin-web.yml : wasm-firmware
-	patch-drift # 8s   patch-drift.yml
-	docs        # 9s   docs.yml
-	test-san    # 9s   sanitizers.yml
+	twin-wasm   # 7s   twin-web.yml : wasm-firmware  (2s warm, 7s cold)
+	test-san    # 8s   sanitizers.yml
+	patch-drift # 11s  patch-drift.yml
+	docs        # 12s  docs.yml
 	test-port   # 14s  port-tests.yml
 	test-ws     # 14s  tooling.yml : hermetic
-	coverage    # 20s  host-tests.yml : coverage (+ the line floor)
-	zizmor      # ?    workflow-lint.yml : zizmor  (unmeasured, not installed here)
-	licenses    # ?    tooling.yml : licenses      (unmeasured, not installed here)
-	cbmc        # 86s  cbmc.yml
+	coverage    # 18s  host-tests.yml : coverage (+ the line floor)
+	cbmc        # 82s  cbmc.yml
 )
 
 # What each gate needs on PATH. Empty = nothing beyond a shell and a compiler.
