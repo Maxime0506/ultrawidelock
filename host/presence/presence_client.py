@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Client and command gate for the local presenced Unix socket."""
 
+from __future__ import annotations
+
 import argparse
 import json
 import os

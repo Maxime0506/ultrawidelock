@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Fresh, pinned presence proofs behind an owner-only Unix socket."""
 
+from __future__ import annotations
+
 import argparse
 import errno
 import json

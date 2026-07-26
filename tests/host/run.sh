@@ -109,4 +109,5 @@ py_suite mqtt-bridge "$ROOT/tests/host/test_mqtt_bridge.py" "python, fake paho/s
 py_suite presence-verify "$ROOT/tests/host/test_presence_verify.py" "python, real P-256 via openssl"
 py_suite presence-git "$ROOT/tests/host/test_presence_git.py" "python, throwaway git repos"
 py_suite presence-service "$ROOT/tests/host/test_presence_service.py" "python, Unix socket + fake serial"
+py_suite presence-runtime "$ROOT/tests/host/test_presence_runtime.py" "python, deterministic transfer archive"
 py_suite flash-html "$ROOT/tests/host/test_flash_html.py" "python, needs markdown pkg"

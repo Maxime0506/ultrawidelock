@@ -63,3 +63,23 @@ consumer to verify or redeem the presence result itself.
 Do not connect this service to LoginWindow or change macOS authentication
 configuration. Test authentication consumers only in the disposable VM after
 the command-gating workflow is reliable.
+
+## Minimal VM transfer
+
+Build the runtime-only archive from the repository root:
+
+```sh
+make presence-runtime
+```
+
+Transfer `build/presence-runtime.tar.gz` to the VM and extract it:
+
+```sh
+tar -xzf presence-runtime.tar.gz
+cd presence-runtime
+```
+
+The archive contains exactly the three entry points, their two shared service
+modules, and the two existing verifier modules. It contains no firmware source,
+tests, repository enrollment, local enrollment, logs, or build configuration.
+The guest still needs Python, OpenSSL, and the `pyserial` package.
