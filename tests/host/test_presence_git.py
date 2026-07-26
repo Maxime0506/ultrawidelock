@@ -34,6 +34,7 @@ import test_presence_verify as tpv  # noqa: E402
 needs_openssl = tpv.needs_openssl
 
 POINT_A = tpv.KAT_POINT
+CRED_ID = tpv.KAT_CREDID
 # A structurally valid but unenrolled key, for the "not in the trust store" path.
 POINT_B = bytes.fromhex(
     "04" + "11" * 32 + "22" * 32
@@ -47,6 +48,10 @@ P256_FRAME = pv.MAGIC + bytes([pv.VERSION, pv.ALG_ECDSA_P256]) + bytes(
 
 def pub_line(point):
     return f"{pg.TAG_PUB} {point.hex()}\n".encode()
+
+
+def cred_line(cred_id=CRED_ID):
+    return f"{pg.TAG_CRED} {cred_id.hex()}\n".encode()
 
 
 def p256_line(frame):
@@ -98,8 +103,10 @@ def write_enrolled(d, entries):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("# trusted dongles\n")
-        for name, point in entries:
-            fh.write(f"{name} {point.hex()}\n")
+        for entry in entries:
+            name, point = entry[:2]
+            cred_id = entry[2] if len(entry) == 3 else CRED_ID
+            fh.write(f"{name} {point.hex()} {cred_id.hex()}\n")
     return path
 
 
@@ -217,11 +224,12 @@ class EnrolledFileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "enrolled")
             with open(p, "w", encoding="utf-8") as fh:
-                fh.write(f"# a comment\n\nalpha {POINT_A.hex()}\n")
-                fh.write(f"beta {POINT_B.hex()}  # trailing comment\n")
+                fh.write(f"# a comment\n\nalpha {POINT_A.hex()} {CRED_ID.hex()}\n")
+                fh.write(f"beta {POINT_B.hex()} {CRED_ID.hex()}  # trailing comment\n")
             keys = pg.read_enrolled(p)
         self.assertEqual(keys[pg.key_id(POINT_A).hex()][0], "alpha")
         self.assertEqual(keys[pg.key_id(POINT_B).hex()][0], "beta")
+        self.assertEqual(keys[pg.key_id(POINT_A).hex()][2], CRED_ID)
 
     def test_malformed_line_rejected(self):
         with tempfile.TemporaryDirectory() as d:
@@ -235,7 +243,7 @@ class EnrolledFileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "enrolled")
             with open(p, "w", encoding="utf-8") as fh:
-                fh.write("alpha zzzz\n")
+                fh.write(f"alpha zzzz {CRED_ID.hex()}\n")
             with self.assertRaises(pg.PresenceError):
                 pg.read_enrolled(p)
 
@@ -243,7 +251,7 @@ class EnrolledFileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "enrolled")
             with open(p, "w", encoding="utf-8") as fh:
-                fh.write("alpha 0411\n")
+                fh.write(f"alpha 0411 {CRED_ID.hex()}\n")
             with self.assertRaises(pg.PresenceError):
                 pg.read_enrolled(p)
 
@@ -251,7 +259,23 @@ class EnrolledFileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "enrolled")
             with open(p, "w", encoding="utf-8") as fh:
-                fh.write(f"alpha 02{'11' * 32}{'22' * 32}\n")
+                fh.write(f"alpha 02{'11' * 32}{'22' * 32} {CRED_ID.hex()}\n")
+            with self.assertRaises(pg.PresenceError):
+                pg.read_enrolled(p)
+
+    def test_legacy_line_without_credential_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "enrolled")
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(f"alpha {POINT_A.hex()}\n")
+            with self.assertRaises(pg.PresenceError):
+                pg.read_enrolled(p)
+
+    def test_wrong_credential_length_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "enrolled")
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(f"alpha {POINT_A.hex()} 1122\n")
             with self.assertRaises(pg.PresenceError):
                 pg.read_enrolled(p)
 
@@ -364,6 +388,16 @@ class VerifyTagTests(unittest.TestCase):
             verdict, _ = pg.verify_tag("v1.0.0", root=d)
         self.assertEqual(verdict, pv.E_ABSENT)
 
+    def test_wrong_enrolled_credential_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            commit = make_repo(d)
+            nonce = pg.binding_nonce("v1.0.0", commit)
+            point, frame = signed_frame(nonce)
+            write_enrolled(d, [("my-dongle", point, b"\xff" * pv.CREDID_LEN)])
+            make_tag(d, "v1.0.0", commit, pg.key_id(point).hex(), frame.hex())
+            verdict, _ = pg.verify_tag("v1.0.0", root=d)
+        self.assertEqual(verdict, pv.E_CREDENTIAL)
+
     def test_tampered_frame_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             commit = make_repo(d)
@@ -402,20 +436,25 @@ class SerialTests(unittest.TestCase):
     def test_challenge_sends_the_nonce_as_hex(self):
         nonce = bytes(range(16))
         ser = FakeSerial(p256_line(P256_FRAME))
-        self.assertEqual(pg.dongle_assert(ser, nonce), P256_FRAME)
-        self.assertEqual(ser.written, b"presence assert " + nonce.hex().encode() + b"\n")
+        self.assertEqual(pg.dongle_prove(ser, nonce), P256_FRAME)
+        self.assertEqual(ser.written, b"presence prove " + nonce.hex().encode() + b"\n")
+
+    def test_credential_request_sends_the_console_command(self):
+        ser = FakeSerial(cred_line())
+        self.assertEqual(pg.dongle_credential(ser), CRED_ID)
+        self.assertEqual(ser.written, b"presence credential\n")
 
     def test_log_lines_around_the_answer_are_ignored(self):
         # The whole point of moving off a binary channel: an interleaved log line is
         # a line that does not match, where before it corrupted the response.
         noise = b"I (523) ccc_shim: arm#0 slot=2 key0 wr deadbeef\n"
         ser = FakeSerial(noise + b"esp32> \n" + p256_line(P256_FRAME))
-        self.assertEqual(pg.dongle_assert(ser, bytes(16)), P256_FRAME)
+        self.assertEqual(pg.dongle_prove(ser, bytes(16)), P256_FRAME)
 
     def test_dongle_error_line_is_surfaced_not_swallowed(self):
         ser = FakeSerial(b"PRESENCE-ERR no usable device signing key\n")
         with self.assertRaises(pg.PresenceError) as cm:
-            pg.dongle_assert(ser, bytes(16))
+            pg.dongle_prove(ser, bytes(16))
         self.assertIn("no usable device signing key", str(cm.exception))
 
     def test_truncated_answer_fails_loudly(self):
@@ -446,13 +485,13 @@ class SerialTests(unittest.TestCase):
         pg.dongle_pubkey(ser)
         self.assertEqual(ser.flushed_input, 1)
         ser.script = bytearray(p256_line(P256_FRAME))
-        pg.dongle_assert(ser, bytes(16))
+        pg.dongle_prove(ser, bytes(16))
         self.assertEqual(ser.flushed_input, 2)
 
     def test_wrong_firmware_fails_with_advice(self):
         ser = FakeSerial(b"some other board\n" * (pg.REPLY_LINE_BUDGET + 5))
         with self.assertRaises(pg.PresenceError) as cm:
-            pg.dongle_assert(ser, bytes(16))
+            pg.dongle_prove(ser, bytes(16))
         self.assertIn("CONFIG_WOZ_PRESENCE", str(cm.exception))
 
     def test_silent_port_fails_with_the_same_advice(self):
@@ -460,7 +499,7 @@ class SerialTests(unittest.TestCase):
         # nothing. The timeout must carry the advice, since it is what users hit.
         ser = FakeSerial(b"")
         with self.assertRaises(pg.PresenceError) as cm:
-            pg.dongle_assert(ser, bytes(16))
+            pg.dongle_prove(ser, bytes(16))
         self.assertIn("CONFIG_WOZ_PRESENCE", str(cm.exception))
 
 
@@ -546,29 +585,27 @@ class ProbeTests(unittest.TestCase):
 
     def test_present_dongle_passes(self):
         point, frame = signed_frame(self.NONCE, distance=20)
-        rc, out = self.run_probe(pub_line(point) + p256_line(frame))
+        rc, out = self.run_probe(pub_line(point) + cred_line() + p256_line(frame))
         self.assertEqual(rc, 0, out)
         self.assertIn("signature  VERIFIED", out)
         self.assertIn("OK", out)
         self.assertIn("20 cm", out)
 
-    def test_absent_dongle_is_still_a_crypto_pass(self):
-        # The realistic first-flash result: keys work, no phone has ranged yet.
-        point, frame = signed_frame(self.NONCE, distance=pv.DIST_NONE,
-                                    status=pv.PRESENCE_ABSENT)
-        rc, out = self.run_probe(pub_line(point) + p256_line(frame))
-        self.assertEqual(rc, 0, out)
-        self.assertIn("signature  VERIFIED", out)
-        self.assertIn("E_ABSENT", out)
-        self.assertIn("distance   none", out)
-        self.assertIn("Crypto chain is good", out)
+    def test_proof_error_is_surfaced(self):
+        with self.assertRaises(pg.PresenceError) as cm:
+            self.run_probe(
+                pub_line(POINT_A)
+                + cred_line()
+                + b"PRESENCE-ERR fresh proof timed out\n"
+            )
+        self.assertIn("timed out", str(cm.exception))
 
     def test_mismatched_key_fails_loudly(self):
         # Proves the probe is not permissive: a frame the pubkey did not sign
         # must report FAILED, which is the real bring-up failure mode.
         _, frame = signed_frame(self.NONCE, distance=20)
         other, _ = signed_frame(self.NONCE, distance=20)
-        rc, out = self.run_probe(pub_line(other) + p256_line(frame))
+        rc, out = self.run_probe(pub_line(other) + cred_line() + p256_line(frame))
         self.assertEqual(rc, 1)
         self.assertIn("signature  FAILED", out)
 
@@ -657,6 +694,51 @@ class CliTests(unittest.TestCase):
             self.assertEqual(rc, 1)
         finally:
             pg.open_port = saved
+
+    @needs_openssl
+    def test_sign_uses_the_enrolled_credential_and_creates_a_verifiable_tag(self):
+        with tempfile.TemporaryDirectory() as d:
+            commit = make_repo(d)
+            tag = "presence/1.0.0"
+            nonce = pg.binding_nonce(tag, commit)
+            point, frame = signed_frame(nonce, distance=19)
+            enrolled = write_enrolled(d, [("my-dongle", point)])
+            port = FakeSerial(pub_line(point) + cred_line() + p256_line(frame))
+            saved = pg.open_port
+            pg.open_port = lambda *_a, **_k: port
+            try:
+                with chdir(d), quiet():
+                    rc = pg.main(
+                        ["sign", "--tag", tag, "--port", "fake", "--file", enrolled]
+                    )
+            finally:
+                pg.open_port = saved
+
+            self.assertEqual(rc, 0)
+            self.assertIn(b"presence credential\n", port.written)
+            self.assertIn(b"presence prove " + nonce.hex().encode() + b"\n", port.written)
+            verdict, _ = pg.verify_tag(tag, root=d, enrolled_path=enrolled)
+            self.assertEqual(verdict, pv.OK)
+
+    def test_sign_rejects_a_device_credential_that_drifted_from_enrollment(self):
+        with tempfile.TemporaryDirectory() as d:
+            make_repo(d)
+            tag = "presence/1.0.0"
+            enrolled = write_enrolled(d, [("my-dongle", POINT_A)])
+            port = FakeSerial(pub_line(POINT_A) + cred_line(b"\xff" * pv.CREDID_LEN))
+            saved = pg.open_port
+            pg.open_port = lambda *_a, **_k: port
+            try:
+                with chdir(d), quiet():
+                    rc = pg.main(
+                        ["sign", "--tag", tag, "--port", "fake", "--file", enrolled]
+                    )
+            finally:
+                pg.open_port = saved
+
+            self.assertEqual(rc, 1)
+            self.assertNotIn(b"presence prove ", port.written)
+            self.assertEqual(pg.git("tag", "-l", tag, cwd=d), "")
 
 
 if __name__ == "__main__":

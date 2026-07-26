@@ -47,6 +47,9 @@ static uint32_t g_last_range_block;
 static int64_t g_last_range_ms;
 /* Layer 4: run length of consecutive plausible, mutually consistent blocks. */
 static uint8_t g_range_trust;
+/* Post-challenge freshness epoch. Written after every accepted latch, so a
+ * reader that observes a newer generation also observes the associated range. */
+static volatile uint32_t g_range_generation;
 #if defined(CONFIG_WOZ_ALIRO)
 /* Fired (from the UWB RX path) after each accepted latch, so the unlock seam
  * can wake on fresh ranges instead of polling. Keep the callback tiny. */
@@ -99,6 +102,17 @@ uint8_t fira_session_trust_level(void)
 	return g_range_trust;
 }
 
+void fira_session_reset_ranges(void)
+{
+	g_have_range = false;
+	g_range_trust = 0u;
+}
+
+uint32_t fira_session_range_generation(void)
+{
+	return g_range_generation;
+}
+
 void fira_session_set_range_listener(void (*cb)(void))
 {
 	g_range_listener = cb;
@@ -138,6 +152,10 @@ void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block)
 	g_last_range_nlos = 0u;
 	g_last_range_block = block;
 	g_last_range_ms = woz_uptime_ms();
+	g_range_generation++;
+	if (g_range_generation == 0u) {
+		g_range_generation++;
+	}
 
 	/* Accepted latches only: a rejected block must never wake the unlock seam. */
 	if (g_range_listener != NULL) {

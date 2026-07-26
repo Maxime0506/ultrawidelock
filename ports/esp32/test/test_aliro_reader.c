@@ -137,6 +137,25 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 	cb(unsecured); /* the double runs "the host task" inline */
 }
 
+void aliro_ble_post_presence_reset(void (*cb)(void))
+{
+	cb(); /* the double runs "the host task" inline */
+}
+
+static int s_disconnects;
+static uint16_t s_last_disconnected;
+static bool s_disconnect_inline;
+
+int aliro_ble_disconnect(uint16_t conn_handle)
+{
+	s_disconnects++;
+	s_last_disconnected = conn_handle;
+	if (s_disconnect_inline) {
+		s_cfg.cb.on_disconnected(conn_handle);
+	}
+	return 0;
+}
+
 void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
 			      const uint8_t grk[16], int8_t tx_power)
 {
@@ -844,6 +863,8 @@ int main(void)
 	aliro_lab_set_enabled(true); /* stub: stays disabled */
 	okc("t0.lab_stub_off", !aliro_lab_enabled());
 	okc("t0.no_auth_cred_yet", !aliro_reader_authenticated_credential(out65));
+	okc("t0.no_pinned_presence_cred",
+	     !aliro_reader_presence_expected_credential(out65));
 	okc("t0.start", aliro_reader_start() == 0);
 	okc("t0.transport_up", s_ble_started && s_cfg.cb.on_data != NULL);
 	okc("t0.ranging_init", s_rng_inits == 1);
@@ -878,6 +899,9 @@ int main(void)
 	memset(sp, 0x33, sizeof(sp));
 	okc("a.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
 	okc("a.provision_trust", aliro_reader_provision_add_trust(p.cred_pub) == 0);
+	okc("a.pinned_presence_cred",
+	     aliro_reader_presence_expected_credential(out65) &&
+		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
 	aliro_ec_p256_pub_from_priv(sp, p.rvk); /* new verification key */
 
 	s_cfg.cb.on_connected(2);
@@ -942,7 +966,18 @@ int main(void)
 
 	/* disconnect persists the minted Kpersistent — compare against the
 	 * phone's independent derivation of it */
+	uint32_t proof_request = aliro_reader_presence_restart();
+	uint32_t proof_checkpoint = 0;
+
+	okc("a.proof_restart_requested",
+	     proof_request != 0u && s_disconnects == 1 && s_last_disconnected == 2);
+	okc("a.proof_checkpoint_waits_for_disconnect",
+	     !aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	s_cfg.cb.on_disconnected(2);
+	okc("a.proof_checkpoint_ready",
+	     aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
+	okc("a.old_auth_not_fresh",
+	     !aliro_reader_presence_authenticated_after(proof_checkpoint, out65));
 	okc("a.kp_persisted", s_nvs_stores == 3); /* 2 provision calls + this one */
 	okc("a.session_gone_on_disconnect", !aliro_reader_session_active());
 
@@ -1004,6 +1039,9 @@ int main(void)
 		pl[n++] = 0x00;
 		ph_send(3, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
 	}
+	okc("b.new_auth_is_fresh",
+	     aliro_reader_presence_authenticated_after(proof_checkpoint, out65) &&
+		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
 	okc("b.exchange_no_auth1", ph_exchange_resp(&p, 3) == 0); /* next TX is EXCHANGE */
 	okc("b.ap_completed", ph_take_ap_completed(&p) == 0);
 	okc("b.ranging_armed", s_rng_starts == 3);
@@ -1037,7 +1075,13 @@ int main(void)
 	okc("b.replay_disarmed_after_firing", tx_pending() == 0);
 
 	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
-	s_cfg.cb.on_disconnected(3);
+	/* A transport may report disconnect before aliro_ble_disconnect returns.
+	 * The waiter must already be armed or this checkpoint would be lost. */
+	s_disconnect_inline = true;
+	proof_request = aliro_reader_presence_restart();
+	s_disconnect_inline = false;
+	okc("b.inline_disconnect_checkpoint",
+	     aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	okc("b.no_new_persist", s_nvs_stores == 3); /* fast phase mints nothing */
 
 	printf("\n== C: failure paths ==\n");

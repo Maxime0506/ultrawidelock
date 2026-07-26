@@ -1,8 +1,6 @@
-// Presence dongle commands (see presence_link.h). Latches the latest trusted range
-// via the facade's range listener, and answers each nonce with a signed assertion of
-// the current presence state. Two signing paths: an HMAC under the NVS pairing key,
-// verifiable only by the paired host, and ECDSA-P256 under a per-device key
-// generated on first boot, verifiable by anyone holding the public point.
+// Presence dongle commands (see presence_link.h). `prove` ends every old Aliro
+// link, waits for a new trusted credential authentication and a later trusted
+// UWB range, then signs that post-challenge result under a persistent P-256 key.
 //
 // These live on the ordinary console rather than a private binary channel, so one
 // board can be provisioned (aliro-import) and queried for presence without
@@ -15,7 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "esp_timer.h"
 #include "nvs.h"
 
 #include "woz_uwb_facade.h"
@@ -24,12 +21,18 @@
 #include "aliro_assert_ec.h"
 #include "aliro_prim.h"
 #include "presence_link.h"
+#include "woz_port.h"
 
 #define PRESENCE_NS     "presence"
 #define PRESENCE_DEVKEY "kdev"
-/* A range must have latched within this window for the dongle to call it PRESENT;
- * otherwise the phone has walked away and presence has gone stale. */
-#define RANGE_FRESH_MS 5000
+
+#if !defined(CONFIG_WOZ_PRESENCE_TIMEOUT_MS)
+#define CONFIG_WOZ_PRESENCE_TIMEOUT_MS 8000
+#endif
+#if !defined(CONFIG_WOZ_PRESENCE_MAX_CM)
+#define CONFIG_WOZ_PRESENCE_MAX_CM 40
+#endif
+#define PROOF_POLL_MS 20
 
 static bool s_drive_wallet;
 
@@ -122,37 +125,23 @@ static void notify_wallet(bool present)
 	aliro_reader_notify_unlock(present);
 }
 
-// Fill in the assertion body both signing paths share: the challenge nonce plus
-// the current presence verdict from the range latch and the authenticated
-// credential. Signing is the caller's job, so the two modes state identical facts.
-// Also drives the Wallet grant/relock edge, so no signing path can forget it.
-static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+// Fill one successful assertion. Acquisition already proved that both the
+// credential and range are post-challenge, so this function accepts no latch
+// state and has no ABSENT path it could accidentally sign.
+static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
+			const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm)
 {
 	memset(a, 0, sizeof(*a));
 	memcpy(a->nonce, nonce, ALIRO_ASSERT_NONCE_LEN);
-	a->uptime_ms = (uint64_t)(esp_timer_get_time() / 1000);
+	memcpy(a->cred_id, cred_id, ALIRO_ASSERT_CREDID_LEN);
+	a->status = ALIRO_PRESENCE_PRESENT;
+	a->distance_cm = (cm > 0xFFFE) ? 0xFFFEu : (uint16_t)cm;
+	a->uptime_ms = (uint64_t)woz_uptime_ms();
 	/* unix_ms stays ALIRO_ASSERT_TIME_NONE (the memset above): this dongle has
 	 * no trusted wall clock, and claiming one it cannot back would be worse
 	 * than admitting it has none. Freshness therefore rests entirely on the
 	 * verifier's nonce being unpredictable -- which holds for a third-party
 	 * verifier of a P-256 frame exactly as it does for the paired host. */
-
-	uint8_t cred_pub[65];
-	int32_t cm = -1;
-	int64_t age_ms = 0;
-	bool fresh = woz_uwb_trusted_range_age_cm(&cm, &age_ms) && cm >= 0 &&
-		     age_ms <= RANGE_FRESH_MS;
-	bool have_cred = aliro_reader_authenticated_credential(cred_pub);
-
-	if (fresh && have_cred) {
-		a->status = ALIRO_PRESENCE_PRESENT;
-		a->distance_cm = (cm > 0xFFFE) ? 0xFFFEu : (uint16_t)cm;
-		aliro_assert_cred_id(cred_pub, a->cred_id);
-	} else {
-		a->status = ALIRO_PRESENCE_ABSENT;
-		a->distance_cm = ALIRO_ASSERT_DIST_NONE;
-	}
-	notify_wallet(fresh && have_cred);
 }
 
 // Emit one tagged hex line in a single printf. Assembling the line first matters:
@@ -206,18 +195,95 @@ static int parse_hex(const char *s, uint8_t *out, size_t n)
 // holder of the public point can verify it without sharing a secret. That is what
 // makes a presence proof portable to a third party (a CI job, a second reviewer)
 // rather than only to one paired host.
-static void answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+static int answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
+		       const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm)
 {
 	struct aliro_assert a;
 	uint8_t wire[ALIRO_ASSERT_WIRE_P256];
 
-	fill_assert(&a, nonce);
+	fill_assert(&a, nonce, cred_id, cm);
 	if (!s_dev_set || aliro_assert_build_p256(aliro_assert_ec_sign, &s_dev, &a, wire,
 						  sizeof(wire), NULL) != 0) {
 		printf("PRESENCE-ERR no usable device signing key\n");
-		return;
+		return 1;
 	}
 	emit_hex("PRESENCE-P256", wire, sizeof(wire));
+	return 0;
+}
+
+static bool before_deadline(int64_t deadline_ms)
+{
+	return woz_uptime_ms() < deadline_ms;
+}
+
+static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+{
+	uint8_t expected_pub[ALIRO_ASSERT_PUB_LEN];
+	uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN];
+	uint8_t actual_pub[ALIRO_ASSERT_PUB_LEN];
+	uint8_t actual_id[ALIRO_ASSERT_CREDID_LEN];
+	uint32_t auth_checkpoint = 0;
+	uint32_t range_checkpoint;
+	bool saw_far = false;
+	int64_t deadline_ms = woz_uptime_ms() + CONFIG_WOZ_PRESENCE_TIMEOUT_MS;
+
+	if (!aliro_reader_presence_expected_credential(expected_pub)) {
+		printf("PRESENCE-ERR proof requires exactly one provisioned credential\n");
+		return 1;
+	}
+	aliro_assert_cred_id(expected_pub, expected_id);
+
+	/* Relock the Wallet edge before ending the old link. The reset itself is
+	 * host-task-marshaled by the reader and the checkpoint is published only
+	 * after every pre-challenge session has disconnected. */
+	notify_wallet(false);
+	uint32_t request = aliro_reader_presence_restart();
+
+	while (before_deadline(deadline_ms) &&
+	       !aliro_reader_presence_checkpoint(request, &auth_checkpoint)) {
+		woz_sleep_ms(PROOF_POLL_MS);
+	}
+	if (!aliro_reader_presence_checkpoint(request, &auth_checkpoint)) {
+		printf("PRESENCE-ERR proof reset timed out\n");
+		return 1;
+	}
+
+	/* Snapshot after reset completion. A range that races into this tiny gap is
+	 * conservatively discarded; that can cost one extra poll, never admit an
+	 * old measurement. */
+	range_checkpoint = woz_uwb_range_generation();
+
+	while (before_deadline(deadline_ms)) {
+		if (aliro_reader_presence_authenticated_after(auth_checkpoint, actual_pub)) {
+			aliro_assert_cred_id(actual_pub, actual_id);
+			if (memcmp(actual_id, expected_id, sizeof(actual_id)) != 0) {
+				printf("PRESENCE-ERR unexpected credential authenticated\n");
+				return 1;
+			}
+
+			int32_t cm = -1;
+
+			if (woz_uwb_trusted_range_after_cm(&cm, range_checkpoint)) {
+				if (cm >= 0 && cm <= CONFIG_WOZ_PRESENCE_MAX_CM) {
+					if (answer_p256(nonce, expected_id, cm) != 0) {
+						return 1;
+					}
+					notify_wallet(true);
+					return 0;
+				}
+				saw_far = true;
+			}
+		}
+		woz_sleep_ms(PROOF_POLL_MS);
+	}
+
+	if (saw_far) {
+		printf("PRESENCE-ERR proof stayed outside %d cm\n",
+		       CONFIG_WOZ_PRESENCE_MAX_CM);
+	} else {
+		printf("PRESENCE-ERR proof timed out; wake the phone and hold it near the reader\n");
+	}
+	return 1;
 }
 
 int presence_link_cmd(int argc, char **argv)
@@ -225,7 +291,7 @@ int presence_link_cmd(int argc, char **argv)
 	uint8_t nonce[ALIRO_ASSERT_NONCE_LEN];
 
 	if (argc < 2) {
-		printf("PRESENCE-ERR usage: presence pub|assert <nonce-hex>\n");
+		printf("PRESENCE-ERR usage: presence pub|credential|prove <nonce-hex>\n");
 		return 1;
 	}
 
@@ -237,14 +303,26 @@ int presence_link_cmd(int argc, char **argv)
 		return 0;
 	}
 
-	if (strcmp(argv[1], "assert") == 0) {
+	if (strcmp(argv[1], "credential") == 0) {
+		uint8_t cred_pub[ALIRO_ASSERT_PUB_LEN];
+		uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
+
+		if (!aliro_reader_presence_expected_credential(cred_pub)) {
+			printf("PRESENCE-ERR expected exactly one provisioned credential\n");
+			return 1;
+		}
+		aliro_assert_cred_id(cred_pub, cred_id);
+		emit_hex("PRESENCE-CRED", cred_id, sizeof(cred_id));
+		return 0;
+	}
+
+	if (strcmp(argv[1], "prove") == 0) {
 		if (argc < 3 || parse_hex(argv[2], nonce, sizeof(nonce)) != 0) {
 			printf("PRESENCE-ERR expected a %u-byte nonce as %u hex chars\n",
 			       (unsigned)sizeof(nonce), (unsigned)(2 * sizeof(nonce)));
 			return 1;
 		}
-		answer_p256(nonce);
-		return 0;
+		return prove(nonce);
 	}
 
 	printf("PRESENCE-ERR unknown subcommand '%s'\n", argv[1]);

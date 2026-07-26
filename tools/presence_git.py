@@ -5,8 +5,9 @@ A GPG signature proves WHO made a tag. It does not prove they were there: a
 stolen key, a compromised CI runner or a coerced automated pipeline all produce
 perfectly valid signatures. This adds the orthogonal claim -- that a provisioned
 credential was physically within a few tens of centimetres of the machine when
-the tag was made -- measured by UWB time-of-flight, which an attacker cannot
-shorten by relaying.
+the tag was made -- measured by UWB time-of-flight. The protocol structure
+resists a simple relay shortening distance, but this project's relay resistance
+has not been experimentally measured.
 
     presence_git.py enroll --port /dev/tty.usbmodem... --name my-dongle
     presence_git.py sign   --tag presence/1.2.0 --port /dev/tty.usbmodem...
@@ -33,10 +34,10 @@ exists -- but it is real. It closes the day the dongle carries attested time,
 which is precisely why unix_ms is a separate field in the wire format rather
 than something derived from uptime.
 
-Enrolled keys live in .presence/enrolled, committed to the repo so the set of
-trusted dongles is reviewable in history like any other change. The tag carries
-only a key id; the key material always comes from that file, because a tag that
-carried its own public key would let anyone sign with a key they just made up.
+Enrolled keys and allowed credential ids live in .presence/enrolled, committed
+to the repo so both the trusted dongle and named human are reviewable in history
+like any other change. The tag carries only a key id; policy always comes from
+that file, because a tag that carried its own keys would authorize itself.
 
 Stdlib only, except that enroll/sign import pyserial lazily to talk to a real
 dongle. verify -- the half CI runs -- needs no serial port and no extra package.
@@ -76,6 +77,7 @@ TRAILER_ASSERTION = "Presence-Assertion"
 # found by their tag rather than by position, and an interleaved log line is simply
 # a line that does not match.
 TAG_PUB = "PRESENCE-PUB"
+TAG_CRED = "PRESENCE-CRED"
 TAG_P256 = "PRESENCE-P256"
 TAG_ERR = "PRESENCE-ERR"
 
@@ -131,7 +133,7 @@ def tag_trailer(tag: str, key: str, cwd=None) -> str:
 
 
 def read_enrolled(path=ENROLLED_PATH, root=None) -> dict:
-    """Load trusted dongle keys. Returns {key_id_hex: (name, point)}."""
+    """Load trusted dongles. Returns {key_id_hex: (name, point, cred_id)}."""
     full = os.path.join(root, path) if root else path
     keys = {}
     if not os.path.exists(full):
@@ -142,18 +144,26 @@ def read_enrolled(path=ENROLLED_PATH, root=None) -> dict:
             if not line:
                 continue
             parts = line.split()
-            if len(parts) != 2:
-                raise PresenceError(f"{full}:{lineno}: expected '<name> <point-hex>'")
-            name, point_hex = parts
+            if len(parts) != 3:
+                raise PresenceError(
+                    f"{full}:{lineno}: expected '<name> <point-hex> <credential-id-hex>'"
+                )
+            name, point_hex, cred_hex = parts
             try:
                 point = bytes.fromhex(point_hex)
+                cred_id = bytes.fromhex(cred_hex)
             except ValueError as exc:
                 raise PresenceError(f"{full}:{lineno}: bad hex for {name}") from exc
             if len(point) != pv.PUB_LEN or point[0] != 0x04:
                 raise PresenceError(
                     f"{full}:{lineno}: {name} is not a {pv.PUB_LEN}-byte uncompressed point"
                 )
-            keys[key_id(point).hex()] = (name, point)
+            if len(cred_id) != pv.CREDID_LEN:
+                raise PresenceError(
+                    f"{full}:{lineno}: {name} credential id is {len(cred_id)} bytes, "
+                    f"expected {pv.CREDID_LEN}"
+                )
+            keys[key_id(point).hex()] = (name, point, cred_id)
     return keys
 
 
@@ -188,18 +198,26 @@ def verify_tag(tag: str, max_cm=40, root=None, enrolled_path=ENROLLED_PATH, open
         raise PresenceError(
             f"{tag}: signed by dongle {kid}, which is not enrolled in {enrolled_path}"
         )
-    name, point = keys[kid]
+    name, point, cred_id = keys[kid]
     detail["dongle"] = name
+    detail["expected_cred_id"] = cred_id.hex()
 
     nonce = binding_nonce(tag, commit)
     detail["nonce"] = nonce.hex()
 
-    verdict, fields = pv.verify(frame, point, nonce, max_cm=max_cm, openssl=openssl)
+    verdict, fields = pv.verify(
+        frame,
+        point,
+        nonce,
+        cred_id,
+        max_cm=max_cm,
+        openssl=openssl,
+    )
     detail["fields"] = fields
     return verdict, detail
 
 
-def open_port(port: str, timeout=8.0):
+def open_port(port: str, timeout=10.0):
     try:
         import serial  # pyserial, only needed to talk to a real dongle
     except ImportError as exc:
@@ -358,9 +376,17 @@ def dongle_pubkey(ser) -> bytes:
     return point
 
 
-def dongle_assert(ser, nonce: bytes) -> bytes:
-    payload = ask(ser, f"presence assert {nonce.hex()}", TAG_P256, "assertion")
-    return unhex(payload, pv.WIRE_P256, "assertion")
+def dongle_credential(ser) -> bytes:
+    return unhex(
+        ask(ser, "presence credential", TAG_CRED, "credential id"),
+        pv.CREDID_LEN,
+        "credential id",
+    )
+
+
+def dongle_prove(ser, nonce: bytes) -> bytes:
+    payload = ask(ser, f"presence prove {nonce.hex()}", TAG_P256, "fresh proof")
+    return unhex(payload, pv.WIRE_P256, "fresh proof")
 
 
 def cmd_nonce(args) -> int:
@@ -371,26 +397,35 @@ def cmd_nonce(args) -> int:
 
 # Verdicts that can only be reached once the signature has already verified.
 # Everything else means the frame itself was rejected.
-AUTHENTIC_VERDICTS = (pv.OK, pv.E_NONCE, pv.E_STALE, pv.E_ABSENT, pv.E_RANGE)
+AUTHENTIC_VERDICTS = (
+    pv.OK,
+    pv.E_NONCE,
+    pv.E_STALE,
+    pv.E_ABSENT,
+    pv.E_RANGE,
+    pv.E_CREDENTIAL,
+)
 
 
 def cmd_probe(args) -> int:
-    """Bring-up check: does this dongle produce a frame the verifier accepts?
-
-    Separates the two questions a first flash needs answered, which the normal
-    verdict conflates. "Signature verified but ABSENT" means the whole crypto
-    chain works and merely no phone has ranged -- a pass. "Signature failed"
-    means keygen, signing or framing is broken -- the real failure.
-    """
+    """Run one complete fresh transaction, range, signature and verification."""
     ser = open_port(args.port)
     try:
         point = dongle_pubkey(ser)
+        cred_id = dongle_credential(ser)
         nonce = os.urandom(pv.NONCE_LEN)
-        frame = dongle_assert(ser, nonce)
+        frame = dongle_prove(ser, nonce)
     finally:
         ser.close()
 
-    verdict, fields = pv.verify(frame, point, nonce, max_cm=args.max_cm, openssl=args.openssl)
+    verdict, fields = pv.verify(
+        frame,
+        point,
+        nonce,
+        cred_id,
+        max_cm=args.max_cm,
+        openssl=args.openssl,
+    )
     authentic = verdict in AUTHENTIC_VERDICTS
 
     print(f"pubkey     {point.hex()}")
@@ -407,16 +442,14 @@ def cmd_probe(args) -> int:
 
     if not authentic:
         return 1
-    if verdict != pv.OK:
-        print("\nCrypto chain is good. Presence itself was not established — "
-              "wake the phone and hold it near the dongle, then run this again.")
-    return 0
+    return 0 if verdict == pv.OK else 1
 
 
 def cmd_enroll(args) -> int:
     ser = open_port(args.port)
     try:
         point = dongle_pubkey(ser)
+        cred_id = dongle_credential(ser)
     finally:
         ser.close()
 
@@ -424,15 +457,21 @@ def cmd_enroll(args) -> int:
     os.makedirs(os.path.dirname(args.file) or ".", exist_ok=True)
     existing = read_enrolled(args.file)
     if kid in existing:
+        if existing[kid][2] != cred_id:
+            raise PresenceError(
+                f"{kid} is enrolled for a different credential id; review the trust change"
+            )
         print(f"already enrolled as {existing[kid][0]} ({kid})")
         return 0
     new = not os.path.exists(args.file)
     with open(args.file, "a", encoding="utf-8") as fh:
         if new:
-            fh.write("# Trusted presence dongles: <name> <65-byte uncompressed P-256 point>\n")
-            fh.write("# Reviewed in history like any other change; a tag names only a key id.\n")
-        fh.write(f"{args.name} {point.hex()}\n")
-    print(f"enrolled {args.name} as {kid} in {args.file}")
+            fh.write(
+                "# Trusted presence: <name> <65-byte dongle point> <8-byte credential id>\n"
+            )
+            fh.write("# Both device and named-human policy are reviewed in history.\n")
+        fh.write(f"{args.name} {point.hex()} {cred_id.hex()}\n")
+    print(f"enrolled {args.name} as {kid} for credential {cred_id.hex()} in {args.file}")
     return 0
 
 
@@ -491,14 +530,33 @@ def cmd_sign(args) -> int:
     ser = open_port(args.port)
     try:
         point = dongle_pubkey(ser)
-        frame = dongle_assert(ser, nonce)
+        enrolled = read_enrolled(args.file)
+        kid = key_id(point).hex()
+        if kid not in enrolled:
+            raise PresenceError(
+                f"dongle {kid} is not enrolled in {args.file}; run enroll and review it first"
+            )
+        _, _, expected_cred_id = enrolled[kid]
+        device_cred_id = dongle_credential(ser)
+        if device_cred_id != expected_cred_id:
+            raise PresenceError(
+                "dongle's pinned credential does not match the reviewed enrollment"
+            )
+        frame = dongle_prove(ser, nonce)
     finally:
         ser.close()
 
     # Verify before tagging. A tag carrying an assertion that does not verify is
     # worse than an unsigned one: it looks like a proof to anyone who does not
     # re-check it.
-    verdict, fields = pv.verify(frame, point, nonce, max_cm=args.max_cm, openssl=args.openssl)
+    verdict, fields = pv.verify(
+        frame,
+        point,
+        nonce,
+        expected_cred_id,
+        max_cm=args.max_cm,
+        openssl=args.openssl,
+    )
     if verdict != pv.OK:
         print(f"presence not established: {pv.VERDICT_NAME[verdict]}: "
               f"{pv.VERDICT_REASON[verdict]}", file=sys.stderr)
@@ -569,6 +627,7 @@ def build_parser():
     p.add_argument("--commit", help="defaults to HEAD")
     p.add_argument("-m", "--message", help="tag message body")
     p.add_argument("--max-cm", type=int, default=40)
+    p.add_argument("--file", default=ENROLLED_PATH)
     p.add_argument("--openssl", default="openssl")
     p.set_defaults(func=cmd_sign)
 

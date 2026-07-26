@@ -424,8 +424,8 @@ void app_shell_start(void)
 #endif
 #if defined(CONFIG_WOZ_PRESENCE)
 		{.command = "presence",
-		 .help = "presence pub|assert <nonce-hex>|hmac <nonce-hex>|key <hex>: signed "
-			 "statements of the current trusted-range presence",
+		 .help = "presence pub|credential|prove <nonce-hex>: fresh signed "
+			 "post-challenge presence proof",
 		 .func = presence_link_cmd},
 #endif
 		{.command = "uwbdiag",

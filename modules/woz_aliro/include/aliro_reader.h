@@ -88,6 +88,24 @@ bool aliro_reader_session_active(void);
  * Safe to call from any task. */
 bool aliro_reader_authenticated_credential(uint8_t cred_pub[65]);
 
+/* ---- Demand-driven presence proof --------------------------------------- *
+ * A proof must not reuse the credential/range latches from a prior walk-up.
+ * restart() marshals a disconnect of every current Aliro link onto the BLE
+ * host task and returns a nonzero request ticket. checkpoint() becomes true
+ * only after those links are gone; its auth_generation is the floor a new
+ * transaction must advance past. */
+uint32_t aliro_reader_presence_restart(void);
+bool aliro_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generation);
+
+/* Copy the credential accepted by an authentication newer than checkpoint.
+ * Returns false until a new trusted transaction has authenticated. */
+bool aliro_reader_presence_authenticated_after(uint32_t checkpoint, uint8_t cred_pub[65]);
+
+/* Presence is a named-human primitive, so ambiguity fails closed: returns one
+ * pinned credential only when the provisioned trust store has exactly one
+ * entry. Dev-open and multi-credential readers return false. */
+bool aliro_reader_presence_expected_credential(uint8_t cred_pub[65]);
+
 /* ---- Bench provisioning helpers (Phase 3.4) ---------------------------- *
  * Back the `aliro-prov` / `aliro-trust` console commands. Kept as plain calls
  * so the shell does not need the internal aliro_prov types. */

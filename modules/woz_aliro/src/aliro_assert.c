@@ -1,7 +1,7 @@
 // Presence-assertion wire codec + verifier (see aliro_assert.h). Serialises a
-// dongle's "credential present within N cm for this nonce" statement, MACs it with
-// HMAC-SHA256 under the paired key, and verifies an incoming frame against a
-// challenge nonce + distance threshold. Portable C11; no UWB/BLE/platform deps.
+// dongle's "credential present within N cm for this nonce" statement and verifies
+// an ECDSA-P256 frame against a challenge nonce, enrolled credential and distance
+// threshold. Portable C11; no UWB/BLE/platform dependencies.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -11,10 +11,8 @@
 #include "aliro_assert.h"
 #include "aliro_hash.h"
 
-/* Frame layout (see the header). Offsets of each field within the frame. The
- * signed prefix is the same for every algorithm; only the trailing tag differs
- * in length, so OFF_TAG == ALIRO_ASSERT_SIGNED_LEN == the number of signed
- * bytes. */
+/* Frame layout (see the header). OFF_TAG == ALIRO_ASSERT_SIGNED_LEN == the
+ * number of signed bytes. */
 #define OFF_MAGIC    0u
 #define OFF_VERSION  2u
 #define OFF_ALG      3u
@@ -103,8 +101,7 @@ void aliro_assert_cred_id(const uint8_t cred_pub[ALIRO_ASSERT_PUB_LEN],
 	memcpy(cred_id, digest, ALIRO_ASSERT_CREDID_LEN);
 }
 
-// Writes the signed prefix (everything up to the tag) for one algorithm. Shared
-// so the two build paths cannot drift into producing different prefixes.
+// Writes the signed prefix (everything before the signature).
 static void put_prefix(uint8_t *wire, uint8_t alg, const struct aliro_assert *a)
 {
 	wire[OFF_MAGIC] = ASSERT_MAGIC0;
@@ -120,10 +117,8 @@ static void put_prefix(uint8_t *wire, uint8_t alg, const struct aliro_assert *a)
 }
 
 /*
- * Framing checks common to both verifiers: length for the algorithm actually
- * named in the frame, magic, version, and that the algorithm is the one this
- * verifier implements. Returns ALIRO_ASSERT_OK when the frame is safe to
- * authenticate.
+ * Framing checks: length for the algorithm named in the frame, magic, version,
+ * and that the algorithm is the one this verifier implements.
  */
 static int check_framing(const uint8_t *wire, size_t wire_len, uint8_t want_alg)
 {
@@ -151,11 +146,11 @@ static int check_framing(const uint8_t *wire, size_t wire_len, uint8_t want_alg)
 /*
  * Everything after authentication: parse the fields, hand them to the caller
  * for logging even on a semantic reject, then apply the policy checks in a
- * fixed order. Shared by both verifiers so the two can never disagree about
- * what an authentic frame means.
+ * fixed order.
  */
 static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
-			   uint16_t threshold_cm, uint64_t min_uptime_ms, struct aliro_assert *out)
+			   const uint8_t *expected_cred_id, uint16_t threshold_cm,
+			   uint64_t min_uptime_ms, struct aliro_assert *out)
 {
 	struct aliro_assert a;
 
@@ -171,6 +166,10 @@ static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
 
 	if (expected_nonce == NULL || !ct_equal(a.nonce, expected_nonce, ALIRO_ASSERT_NONCE_LEN)) {
 		return ALIRO_ASSERT_E_NONCE;
+	}
+	if (expected_cred_id == NULL ||
+	    !ct_equal(a.cred_id, expected_cred_id, ALIRO_ASSERT_CREDID_LEN)) {
+		return ALIRO_ASSERT_E_CREDENTIAL;
 	}
 	if (min_uptime_ms != 0u && a.uptime_ms <= min_uptime_ms) {
 		return ALIRO_ASSERT_E_STALE;
@@ -207,6 +206,7 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
 
 int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,
 			     size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
+			     const uint8_t expected_cred_id[ALIRO_ASSERT_CREDID_LEN],
 			     uint16_t threshold_cm, uint64_t min_uptime_ms,
 			     struct aliro_assert *out)
 {
@@ -227,5 +227,6 @@ int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uin
 		return ALIRO_ASSERT_E_MAC;
 	}
 
-	return parse_and_check(wire, expected_nonce, threshold_cm, min_uptime_ms, out);
+	return parse_and_check(wire, expected_nonce, expected_cred_id, threshold_cm, min_uptime_ms,
+			       out);
 }

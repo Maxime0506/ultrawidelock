@@ -130,7 +130,8 @@ void test_aliro_assert(void)
 	t_group("verify OK");
 	struct aliro_assert out;
 	memset(&out, 0, sizeof(out));
-	T_EQ("ok", aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 0, &out),
+	T_EQ("ok", aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id,
+					    40, 0, &out),
 	     ALIRO_ASSERT_OK);
 	T_EQ("ok.dist", out.distance_cm, 25);
 	T_EQ("ok.status", out.status, ALIRO_PRESENCE_PRESENT);
@@ -141,11 +142,13 @@ void test_aliro_assert(void)
 	T_OK("ok.unix", out.unix_ms == 1785000000000ULL);
 	/* Threshold is inclusive: exactly at the boundary passes. */
 	T_EQ("ok.boundary",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 25, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id, 25, 0,
+				      &out),
 	     ALIRO_ASSERT_OK);
 	/* Forward-progress guard: uptime strictly greater than the floor passes. */
 	T_EQ("ok.fresh",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 999999, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id, 40,
+				      999999, &out),
 	     ALIRO_ASSERT_OK);
 
 	t_group("reject: tampered / unauthentic");
@@ -154,20 +157,21 @@ void test_aliro_assert(void)
 	memcpy(tampered, wire, sizeof(tampered));
 	tampered[29] ^= 0x08; /* flip distance high byte: claim a different distance */
 	T_EQ("tamper.prefix",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce, 40,
-				      0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce,
+				      a.cred_id, 40, 0, &out),
 	     ALIRO_ASSERT_E_MAC);
 	memcpy(tampered, wire, sizeof(tampered));
 	tampered[ALIRO_ASSERT_SIGNED_LEN] ^= 0x01; /* tamper the signature itself */
 	T_EQ("tamper.sig",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce, 40,
-				      0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce,
+				      a.cred_id, 40, 0, &out),
 	     ALIRO_ASSERT_E_MAC);
 	/* Backend failures propagate as not-authentic, never as a silently accepted
 	 * frame -- a backend error must not read as a pass. */
 	fec.force_fail = 1;
 	T_EQ("backend_fails",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id, 40, 0,
+				      &out),
 	     ALIRO_ASSERT_E_MAC);
 	T_EQ("sign_fails",
 	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, tampered, sizeof(tampered), NULL), -1);
@@ -178,16 +182,28 @@ void test_aliro_assert(void)
 	memcpy(other_nonce, k_nonce, sizeof(other_nonce));
 	other_nonce[15] ^= 0xFF;
 	T_EQ("nonce",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, other_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, other_nonce, a.cred_id, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_NONCE);
+
+	t_group("reject: credential mismatch");
+	uint8_t other_cred_id[ALIRO_ASSERT_CREDID_LEN];
+	memcpy(other_cred_id, a.cred_id, sizeof(other_cred_id));
+	other_cred_id[0] ^= 0xFF;
+	T_EQ("credential",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, other_cred_id, 40,
+				      0, &out),
+	     ALIRO_ASSERT_E_CREDENTIAL);
 
 	t_group("reject: stale (uptime not advancing)");
 	/* uptime_ms == min is stale; a replayed frame at the same uptime is rejected. */
 	T_EQ("stale.eq",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 1000000, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id, 40,
+				      1000000, &out),
 	     ALIRO_ASSERT_E_STALE);
 	T_EQ("stale.lt",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, 40, 1000001, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id, 40,
+				      1000001, &out),
 	     ALIRO_ASSERT_E_STALE);
 
 	t_group("reject: absent status");
@@ -196,8 +212,8 @@ void test_aliro_assert(void)
 	uint8_t awire[ALIRO_ASSERT_WIRE_P256];
 	aliro_assert_build_p256(fake_ec_sign, &fec, &absent, awire, sizeof(awire), NULL);
 	T_EQ("absent",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, awire, sizeof(awire), k_nonce, 40, 0,
-				      &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, awire, sizeof(awire), k_nonce,
+				      a.cred_id, 40, 0, &out),
 	     ALIRO_ASSERT_E_ABSENT);
 
 	t_group("reject: out of range / no range");
@@ -206,32 +222,35 @@ void test_aliro_assert(void)
 	uint8_t fwire[ALIRO_ASSERT_WIRE_P256];
 	aliro_assert_build_p256(fake_ec_sign, &fec, &far, fwire, sizeof(fwire), NULL);
 	T_EQ("far",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, fwire, sizeof(fwire), k_nonce, 40, 0,
-				      &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, fwire, sizeof(fwire), k_nonce,
+				      a.cred_id, 40, 0, &out),
 	     ALIRO_ASSERT_E_RANGE);
 	struct aliro_assert norange = a;
 	norange.distance_cm = ALIRO_ASSERT_DIST_NONE;
 	uint8_t nwire[ALIRO_ASSERT_WIRE_P256];
 	aliro_assert_build_p256(fake_ec_sign, &fec, &norange, nwire, sizeof(nwire), NULL);
 	T_EQ("no_range",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, nwire, sizeof(nwire), k_nonce, 0xFFFE, 0,
-				      &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, nwire, sizeof(nwire), k_nonce,
+				      a.cred_id, 0xFFFE, 0, &out),
 	     ALIRO_ASSERT_E_RANGE);
 
 	t_group("reject: malformed framing");
 	T_EQ("short_len",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen - 1u, k_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen - 1u, k_nonce, a.cred_id, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	uint8_t bad[ALIRO_ASSERT_WIRE_P256];
 	memcpy(bad, wire, sizeof(bad));
 	bad[0] = 0x00; /* bad magic */
 	T_EQ("bad_magic",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, a.cred_id, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	memcpy(bad, wire, sizeof(bad));
 	bad[2] = 0x03; /* bad version (0x02 is current) */
 	T_EQ("bad_version",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, a.cred_id, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	/* A frame naming an algorithm this verifier does not implement must be
 	 * refused as a wrong ALGORITHM, not mislabelled as a bad signature. Alg 1 is
@@ -240,12 +259,14 @@ void test_aliro_assert(void)
 	memcpy(bad, wire, sizeof(bad));
 	bad[3] = 0x01;
 	T_EQ("retired_alg",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, a.cred_id, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_ALG);
 	memcpy(bad, wire, sizeof(bad));
 	bad[3] = 0x7F; /* unknown algorithm */
 	T_EQ("unknown_alg",
-	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, 40, 0, &out),
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, a.cred_id, 40,
+				      0, &out),
 	     ALIRO_ASSERT_E_ALG);
 
 	t_group("wire length by algorithm");
@@ -276,11 +297,11 @@ void test_aliro_assert(void)
 	     -1);
 	T_EQ("null.verify_wire",
 	     aliro_assert_verify_p256(fake_ec_verify, &fec, NULL, ALIRO_ASSERT_WIRE_P256, k_nonce,
-				      40, 0, &out),
+				      a.cred_id, 40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	T_EQ("null.verify_fn",
-	     aliro_assert_verify_p256(NULL, &fec, wire, ALIRO_ASSERT_WIRE_P256, k_nonce, 40, 0,
-				      &out),
+	     aliro_assert_verify_p256(NULL, &fec, wire, ALIRO_ASSERT_WIRE_P256, k_nonce, a.cred_id,
+				      40, 0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	T_EQ("null.peek", aliro_assert_peek_alg(NULL, ALIRO_ASSERT_WIRE_MAX), 0);
 

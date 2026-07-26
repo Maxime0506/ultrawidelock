@@ -20,7 +20,7 @@ drift-gated against that C source by tests/host/test_presence_verify.py.
 
 Usage:
     presence_verify.py --pubkey <hex|file> --frame <hex|file> --nonce <hex>
-                       [--max-cm N] [--min-uptime-ms N] [--json]
+                       --cred-id <hex> [--max-cm N] [--min-uptime-ms N] [--json]
 
 Exit status is 0 only when presence is confirmed, so it can gate a command
 directly. Every rejection exits 1 and names its reason.
@@ -77,6 +77,7 @@ E_STALE = -4
 E_ABSENT = -5
 E_RANGE = -6
 E_ALG = -7
+E_CREDENTIAL = -8
 
 VERDICT_NAME = {
     OK: "OK",
@@ -87,6 +88,7 @@ VERDICT_NAME = {
     E_ABSENT: "E_ABSENT",
     E_RANGE: "E_RANGE",
     E_ALG: "E_ALG",
+    E_CREDENTIAL: "E_CREDENTIAL",
 }
 
 VERDICT_REASON = {
@@ -98,6 +100,7 @@ VERDICT_REASON = {
     E_ABSENT: "dongle reports no credential present",
     E_RANGE: "no range, or further away than the threshold",
     E_ALG: "not an ECDSA-P256 frame",
+    E_CREDENTIAL: "credential is not the enrolled human",
 }
 
 # The fixed SubjectPublicKeyInfo header for an uncompressed id-ecPublicKey point
@@ -216,6 +219,7 @@ def verify(
     wire: bytes,
     pubkey: bytes,
     expected_nonce: bytes,
+    expected_cred_id: bytes,
     max_cm: int = 40,
     min_uptime_ms: int = 0,
     openssl: str = "openssl",
@@ -223,9 +227,9 @@ def verify(
     """Fully verify a P-256 assertion. Returns (verdict, fields-or-None).
 
     Check order mirrors aliro_assert_verify_p256(): framing, algorithm,
-    signature, nonce echo, forward progress, presence, then distance. Fields are
-    returned only once the signature has passed, so nothing a forger wrote can
-    reach a caller that logs them.
+    signature, nonce echo, enrolled credential, forward progress, presence,
+    then distance. Fields are returned only once the signature has passed, so
+    nothing a forger wrote can reach a caller that logs them.
     """
     fr = check_framing(wire)
     if fr != OK:
@@ -238,6 +242,8 @@ def verify(
 
     if expected_nonce is None or f["nonce"] != expected_nonce:
         return E_NONCE, f
+    if expected_cred_id is None or f["cred_id"] != expected_cred_id:
+        return E_CREDENTIAL, f
     if min_uptime_ms != 0 and f["uptime_ms"] <= min_uptime_ms:
         return E_STALE, f
     if f["status"] != PRESENCE_PRESENT:
@@ -274,6 +280,11 @@ def main(argv=None) -> int:
         help="the 16-byte challenge nonce, hex. Required: replay protection rests entirely on it",
     )
     ap.add_argument(
+        "--cred-id",
+        required=True,
+        help="the enrolled 8-byte credential id, hex; pins the proof to one human",
+    )
+    ap.add_argument(
         "--max-cm",
         type=int,
         default=40,
@@ -292,12 +303,21 @@ def main(argv=None) -> int:
     pubkey = read_bytes(args.pubkey, "--pubkey")
     wire = read_bytes(args.frame, "--frame")
     nonce = read_bytes(args.nonce, "--nonce")
+    cred_id = read_bytes(args.cred_id, "--cred-id")
     if len(nonce) != NONCE_LEN:
         raise SystemExit(f"--nonce: expected {NONCE_LEN} bytes, got {len(nonce)}")
+    if len(cred_id) != CREDID_LEN:
+        raise SystemExit(f"--cred-id: expected {CREDID_LEN} bytes, got {len(cred_id)}")
 
     try:
         verdict, f = verify(
-            wire, pubkey, nonce, args.max_cm, args.min_uptime_ms, openssl=args.openssl
+            wire,
+            pubkey,
+            nonce,
+            cred_id,
+            args.max_cm,
+            args.min_uptime_ms,
+            openssl=args.openssl,
         )
     except OpensslMissing as exc:
         print(f"presence: cannot verify: {exc}", file=sys.stderr)

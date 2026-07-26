@@ -6,19 +6,10 @@
  *
  * A presence dongle answers a challenge with a signed statement: "a provisioned
  * credential is within N cm right now, in response to THIS nonce." The link is
- * treated as hostile, so the statement is authenticated. Two algorithms, chosen
- * per frame by the alg byte, because the two use cases have different verifiers:
- *
- *   HMAC-SHA256  the paired-local path. A symmetric key installed at pairing
- *                time (dongle NVS, host root-only file). Cheapest, and the only
- *                thing needed when the verifier IS the paired host.
- *   ECDSA-P256   the portable path. Anyone holding the dongle's public key can
- *                verify, so an assertion becomes a proof a THIRD party accepts
- *                (a CI runner checking that a human was at the machine when a
- *                release was signed). P-256 rather than Ed25519 because the
- *                Aliro credential keys are already P-256 -- cred_pub below is a
- *                65-byte uncompressed point -- so this reuses curve code that is
- *                already on-target validated, instead of adding a second curve.
+ * treated as hostile, so the statement is authenticated with ECDSA-P256. Anyone
+ * holding the dongle's public key can verify it, so an assertion becomes a proof
+ * a third party accepts (for example, CI checking that a human was at the machine
+ * when a release was signed). P-256 reuses the curve already used by Aliro.
  *
  * Anti-replay is the nonce: the verifier mints a fresh CSPRNG nonce per
  * challenge, accepts one response for it, then forgets it. A captured assertion
@@ -33,8 +24,8 @@
  *
  * This module is the wire codec + verifier only. It knows nothing about UWB or
  * BLE; the dongle firmware fills the fields from a real Aliro ranging round and
- * the host maps the verdict to a decision. Portable C11 (SHA/HMAC via
- * aliro_hash.c), so the exact codec is host-KAT'd and fuzzed.
+ * the host maps the verdict to a decision. Portable C11 (SHA-256 for credential
+ * identifiers via aliro_hash.c), so the exact codec is host-KAT'd and fuzzed.
  *
  * Wire version 2. Version 1 (70 bytes, HMAC-only, no alg byte, no wall clock)
  * was never flashed to a device, so no v1 decoder is kept.
@@ -105,6 +96,7 @@ enum aliro_assert_verdict {
 	ALIRO_ASSERT_E_ABSENT = -5,    /* status != PRESENT */
 	ALIRO_ASSERT_E_RANGE = -6,     /* distance_cm > threshold, or no range */
 	ALIRO_ASSERT_E_ALG = -7,       /* unknown alg, or not the one being verified */
+	ALIRO_ASSERT_E_CREDENTIAL = -8, /* cred_id != enrolled credential */
 };
 
 /* Frame length for an algorithm, or 0 if the algorithm is unknown. The alg byte
@@ -150,8 +142,8 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
 /*
  * Parse + fully verify a frame, delegating authentication to verify(). Checks,
  * in order: length/magic/version, alg == ECDSA-P256, signature, nonce echo,
- * forward-progress (uptime_ms > min_uptime_ms; pass 0 to skip), status ==
- * PRESENT, distance_cm <= threshold_cm.
+ * enrolled credential id, forward-progress (uptime_ms > min_uptime_ms; pass 0
+ * to skip), status == PRESENT, distance_cm <= threshold_cm.
  *
  * Returns ALIRO_ASSERT_OK (0) only when all pass; otherwise the first failing
  * reason. A failed signature reports ALIRO_ASSERT_E_MAC, whatever the backend's
@@ -164,6 +156,7 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
  */
 int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,
 			     size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
+			     const uint8_t expected_cred_id[ALIRO_ASSERT_CREDID_LEN],
 			     uint16_t threshold_cm, uint64_t min_uptime_ms,
 			     struct aliro_assert *out);
 

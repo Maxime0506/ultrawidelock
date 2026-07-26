@@ -20,6 +20,14 @@ const uint8_t *fira_session_get_ursk(void);
 /** @brief Latch a CCC DS-TWR range so it flows up the Aliro mRangingData seam. */
 void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block);
 
+/** @brief Invalidate the old session's range and consensus before a new URSK
+ *  session starts. The monotonic generation is retained so callers can prove
+ *  that a later latch happened after their checkpoint. */
+void fira_session_reset_ranges(void);
+
+/** @brief Monotonic generation incremented after every accepted range latch. */
+uint32_t fira_session_range_generation(void);
+
 /** @brief STS-index slot clock (inert without a MAC time base); returns 0. */
 uint32_t fira_session_current_slot(void);
 

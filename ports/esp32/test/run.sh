@@ -194,6 +194,25 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 \
 rm -f "$WBIN"
 
 echo
+echo "== host: demand-driven presence proof freshness =="
+# The command loop is real. Reader/UWB doubles expose the epoch boundaries, and
+# the real assertion codec proves stale auth/range, wrong credential, far range,
+# reset timeout and ambiguous trust all fail before the signer is called.
+PLBIN="$(mktemp -t esp_presence_link.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
+   -DCONFIG_WOZ_PRESENCE_TIMEOUT_MS=1 -DCONFIG_WOZ_PRESENCE_MAX_CM=40 \
+   -I "$SDKFAKE" -I "$HERE/../components/aliro_reader" \
+   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   "$HERE/test_esp_presence_link.c" \
+   "$HERE/../components/aliro_reader/presence_link.c" \
+   "$ALIRO/src/aliro_assert.c" "$ALIRO/src/aliro_hash.c" \
+   "$SDKFAKE/fake_nvs.c" -o "$PLBIN"
+"$PLBIN" | grep -E '^(--|  ok|  FAIL|RESULT)'
+rm -f "$PLBIN"
+
+echo
 echo "== host: reader bench console vs esp_console fakes =="
 CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \

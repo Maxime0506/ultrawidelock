@@ -190,8 +190,8 @@ presence-clone:
 	cd $(REPO_ROOT) && python3 $(PRESENCE) clone --source "$(SRC)" --port "$$port"
 
 ## presence-probe: bring-up check  ·  does the dongle sign a frame we accept?
-##   Prints signature and presence verdicts separately. "signature VERIFIED"
-##   with "E_ABSENT" is a PASS: crypto works, no phone has ranged yet.
+##   Starts a fresh Aliro authentication + UWB round and succeeds only when the
+##   pinned credential proves present inside the configured distance.
 presence-probe:
 	@$(RESOLVE_PORT); \
 	echo "  probing $$port"; \

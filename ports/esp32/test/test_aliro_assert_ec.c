@@ -62,7 +62,7 @@ int main(void)
 	struct aliro_assert out;
 
 	check("verify", aliro_assert_verify_p256(aliro_assert_ec_verify, &pub, wire, wlen, a.nonce,
-						 100, 0, &out) == ALIRO_ASSERT_OK);
+						 a.cred_id, 100, 0, &out) == ALIRO_ASSERT_OK);
 	check("verify.dist", out.distance_cm == 42);
 	check("verify.unix", out.unix_ms == 1785000000000ULL);
 
@@ -81,7 +81,7 @@ int main(void)
 	check("keys_differ", memcmp(q2, q, sizeof(q2)) != 0);
 	memcpy(other.q, q2, sizeof(q2));
 	check("verify.wrong_key", aliro_assert_verify_p256(aliro_assert_ec_verify, &other, wire,
-							   wlen, a.nonce, 100, 0,
+							   wlen, a.nonce, a.cred_id, 100, 0,
 							   &out) == ALIRO_ASSERT_E_MAC);
 
 	/* Tamper the signed prefix. */
@@ -90,7 +90,7 @@ int main(void)
 	memcpy(tam, wire, sizeof(tam));
 	tam[30] ^= 0x01; /* distance_cm low byte */
 	check("verify.tampered", aliro_assert_verify_p256(aliro_assert_ec_verify, &pub, tam,
-							  sizeof(tam), a.nonce, 100, 0,
+							  sizeof(tam), a.nonce, a.cred_id, 100, 0,
 							  &out) == ALIRO_ASSERT_E_MAC);
 
 	/* NULL key material is a wiring bug: fail, do not dereference. */

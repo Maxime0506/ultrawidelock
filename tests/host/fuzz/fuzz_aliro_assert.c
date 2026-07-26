@@ -32,9 +32,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	 * behind authentication reachable; the happy path is covered by the KAT
 	 * suite. */
 	static const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN] = { 0 };
+	static const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN] = { 0 };
 	struct aliro_assert out;
 
-	(void)aliro_assert_verify_p256(always_ok, NULL, data, size, nonce, 40, 0, &out);
+	(void)aliro_assert_verify_p256(always_ok, NULL, data, size, nonce, cred_id, 40, 0, &out);
 	(void)aliro_assert_peek_alg(data, size);
 	return 0;
 }

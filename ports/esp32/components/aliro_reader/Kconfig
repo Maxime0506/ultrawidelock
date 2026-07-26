@@ -194,11 +194,12 @@ config WOZ_PRESENCE
 	bool "Presence assertions (non-door primitive)"
 	default n
 	help
-	  Add a `presence` command to this board's console. `presence assert <nonce>`
-	  answers with a P-256-signed statement of the current trusted-range presence
-	  state (aliro_assert.c); `presence pub` emits the board's public point for
-	  enrolment. Proximity of a provisioned iPhone, measured by UWB time of
-	  flight, becomes a proof a third party can check -- no door involved.
+	  Add a `presence` command to this board's console. `presence prove <nonce>`
+	  ends old sessions and answers only after a new trusted authentication and
+	  later UWB range; `presence pub` and `presence credential` emit the board
+	  and pinned-human identifiers for enrolment. Proximity of a provisioned
+	  iPhone, measured by UWB time of flight, becomes a proof a third party can
+	  check -- no door involved.
 
 	  The signing key is generated on first boot and persisted in NVS, so the
 	  public point stays valid across reboots and reflashes. Alongside the normal
@@ -208,6 +209,24 @@ config WOZ_PRESENCE
 	  Each check costs a phone wake plus roughly 3.5 s to a trusted range, so this
 	  suits rare deliberate actions (signing a release tag), not anything
 	  frequent or ambient. OFF by default. Host side: tools/presence_git.py.
+
+config WOZ_PRESENCE_TIMEOUT_MS
+	int "Fresh presence proof timeout (ms)"
+	depends on WOZ_PRESENCE
+	range 1000 30000
+	default 8000
+	help
+	  End a proof without signing if a new authentication and trusted UWB range
+	  have not completed in this window.
+
+config WOZ_PRESENCE_MAX_CM
+	int "Maximum signed presence distance (cm)"
+	depends on WOZ_PRESENCE
+	range 0 3000
+	default 40
+	help
+	  Firmware refuses to sign a fresh range beyond this distance. A verifier
+	  may enforce an equal or lower threshold.
 
 config WOZ_ALIRO_CLONE
 	bool "Reader identity clone/export console commands (bench only)"

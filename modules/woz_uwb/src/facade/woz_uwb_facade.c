@@ -64,6 +64,11 @@ int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)
 	}
 
 	woz_hfclk_ensure_128mhz();
+	/* Trust is session-bound. Carrying the prior session's K agreeing blocks
+	 * into a new URSK would let its first measurement appear trusted. */
+#if defined(CONFIG_WOZ_ALIRO)
+	fira_session_reset_ranges();
+#endif
 
 	/* Flight recorder: stamp the session config (incl. URSK) that opens this
 	 * walk-up, so a replay can reconstruct the exact session before feeding it
@@ -159,5 +164,28 @@ bool woz_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out)
 	       fira_session_range_trusted();
 #else
 	return fira_session_last_range(cm_out, NULL, NULL, NULL, age_ms_out);
+#endif
+}
+
+uint32_t woz_uwb_range_generation(void)
+{
+#if defined(CONFIG_WOZ_ALIRO)
+	return fira_session_range_generation();
+#else
+	return 0u;
+#endif
+}
+
+bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after)
+{
+#if defined(CONFIG_WOZ_ALIRO)
+	/* Generation is written after the range fields. A concurrent latch can
+	 * cause one harmless false-negative poll, never acceptance of old data. */
+	uint32_t generation = fira_session_range_generation();
+
+	return (int32_t)(generation - after) > 0 && woz_uwb_trusted_range_cm(cm_out);
+#else
+	(void)after;
+	return woz_uwb_trusted_range_cm(cm_out);
 #endif
 }

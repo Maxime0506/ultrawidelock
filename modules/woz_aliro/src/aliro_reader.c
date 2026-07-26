@@ -105,6 +105,20 @@ static void compute_reader_group_x(void)
 static woz_mutex_t s_prov_lock;
 static bool s_prov_lock_ready;
 
+/* Monotonic epoch for successful trusted authentications. Presence snapshots it
+ * only after every pre-challenge link has disconnected, then requires it to
+ * advance before accepting any range. Guarded by s_prov_lock with the key. */
+static uint32_t s_auth_generation;
+
+/* Cross-task fresh-proof reset handshake. The console allocates a request,
+ * the BLE host task terminates every old session, and only the final disconnect
+ * publishes a checkpoint. Guarded by s_prov_lock except session-table scans,
+ * which run only on the BLE host task. */
+static uint32_t s_presence_request;
+static uint32_t s_presence_ready_request;
+static uint32_t s_presence_ready_auth_generation;
+static bool s_presence_wait_disconnect;
+
 /* Set when a standard phase minted a fresh Kpersistent (s_trust updated in RAM,
  * guarded by s_prov_lock); persisted to NVS on disconnect so the flash write
  * stays off the walk-up critical path. */
@@ -534,6 +548,7 @@ static int try_fast_auth(struct aliro_session *s, const struct aliro_auth0_respo
 		s_have_last_cred = true;
 		memcpy(s_auth_cred_pub, s_trust.cred_pub[match], ALIRO_CRED_PUB_LEN);
 		s_have_auth_cred = true;
+		s_auth_generation++;
 	}
 	woz_mutex_unlock(&s_prov_lock);
 	if (match < 0) {
@@ -788,6 +803,7 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	woz_mutex_lock(&s_prov_lock);
 	memcpy(s_auth_cred_pub, cred_pub, ALIRO_CRED_PUB_LEN);
 	s_have_auth_cred = true;
+	s_auth_generation++;
 	woz_mutex_unlock(&s_prov_lock);
 
 	/* Mint/refresh this credential's Kpersistent (§8.3.1.13): keyed off this
@@ -1206,6 +1222,107 @@ bool aliro_reader_authenticated_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
 	return have;
 }
 
+bool aliro_reader_presence_expected_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
+{
+	bool have;
+
+	load_provisioning();
+	woz_mutex_lock(&s_prov_lock);
+	have = s_trust.count == 1u;
+	if (have) {
+		memcpy(out, s_trust.cred_pub[0], ALIRO_CRED_PUB_LEN);
+	}
+	woz_mutex_unlock(&s_prov_lock);
+	return have;
+}
+
+bool aliro_reader_presence_authenticated_after(uint32_t checkpoint,
+					       uint8_t out[ALIRO_CRED_PUB_LEN])
+{
+	bool fresh;
+
+	load_provisioning();
+	woz_mutex_lock(&s_prov_lock);
+	fresh = s_have_auth_cred && (int32_t)(s_auth_generation - checkpoint) > 0;
+	if (fresh) {
+		memcpy(out, s_auth_cred_pub, ALIRO_CRED_PUB_LEN);
+	}
+	woz_mutex_unlock(&s_prov_lock);
+	return fresh;
+}
+
+static bool any_session_active_on_host(void)
+{
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void presence_checkpoint_ready_on_host(void)
+{
+	woz_mutex_lock(&s_prov_lock);
+	s_presence_ready_request = s_presence_request;
+	s_presence_ready_auth_generation = s_auth_generation;
+	s_presence_wait_disconnect = false;
+	woz_mutex_unlock(&s_prov_lock);
+}
+
+static void presence_reset_on_host(void)
+{
+	bool disconnecting = false;
+
+	/* Set the waiter before asking the transport to disconnect. A host double
+	 * can deliver on_disconnect inline, and a real stack may enqueue it before
+	 * this callback returns. In either case the final disconnect must see the
+	 * waiter armed so it can publish the post-reset checkpoint. */
+	woz_mutex_lock(&s_prov_lock);
+	s_presence_wait_disconnect = true;
+	woz_mutex_unlock(&s_prov_lock);
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active) {
+			disconnecting = true;
+			(void)aliro_ble_disconnect(s_sessions[i].conn_handle);
+		}
+	}
+	if (!disconnecting) {
+		presence_checkpoint_ready_on_host();
+		return;
+	}
+}
+
+uint32_t aliro_reader_presence_restart(void)
+{
+	uint32_t request;
+
+	load_provisioning();
+	woz_mutex_lock(&s_prov_lock);
+	request = ++s_presence_request;
+	if (request == 0u) {
+		request = ++s_presence_request;
+	}
+	s_presence_ready_request = 0u;
+	woz_mutex_unlock(&s_prov_lock);
+	aliro_ble_post_presence_reset(presence_reset_on_host);
+	return request;
+}
+
+bool aliro_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generation)
+{
+	bool ready;
+
+	load_provisioning();
+	woz_mutex_lock(&s_prov_lock);
+	ready = request != 0u && s_presence_ready_request == request;
+	if (ready && auth_generation != NULL) {
+		*auth_generation = s_presence_ready_auth_generation;
+	}
+	woz_mutex_unlock(&s_prov_lock);
+	return ready;
+}
+
 /* Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
  * proprietary-information TLV (short-form BER length; the A5 value is small) and
  * copy the whole TLV (tag+len+value) into out. Returns the stored length, or 0
@@ -1411,6 +1528,12 @@ static void on_disconnected(uint16_t conn_handle)
 		aliro_lab_ev("session.end");
 	}
 	aliro_ranging_stop(conn_handle);
+	woz_mutex_lock(&s_prov_lock);
+	bool presence_wait = s_presence_wait_disconnect;
+	woz_mutex_unlock(&s_prov_lock);
+	if (presence_wait && !any_session_active_on_host()) {
+		presence_checkpoint_ready_on_host();
+	}
 	/* The peer is gone: cheapest moment to regenerate the spare ephemeral pair
 	 * the next walk-up's start_auth will consume. */
 	if (!s_spare_eph.valid) {

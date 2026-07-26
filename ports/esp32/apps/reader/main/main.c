@@ -57,10 +57,9 @@ void app_main(void)
 		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
 
 #if defined(CONFIG_WOZ_PRESENCE)
-	/* Additive: registers the range listener and the device signing key, and the
-	 * shell below picks up the `presence` command. Deliberately not a separate mode
-	 * -- the same board then serves presence AND stays provisionable over the same
-	 * console, which is what removes the reflash-to-switch-modes dance. */
+	/* Additive: loads the device signing key; the shell below picks up the
+	 * `presence` command. Deliberately not a separate mode -- the same board
+	 * serves presence and stays provisionable over the same console. */
 	/* true: this app has no lock state of its own, so presence owns the Wallet
 	 * grant here. The Matter lock passes false and grants from its approach loop. */
 	presence_link_init(true);

@@ -200,13 +200,15 @@ class DriftTests(unittest.TestCase):
                       ("E_STALE", "ALIRO_ASSERT_E_STALE"),
                       ("E_ABSENT", "ALIRO_ASSERT_E_ABSENT"),
                       ("E_RANGE", "ALIRO_ASSERT_E_RANGE"),
-                      ("E_ALG", "ALIRO_ASSERT_E_ALG")):
+                      ("E_ALG", "ALIRO_ASSERT_E_ALG"),
+                      ("E_CREDENTIAL", "ALIRO_ASSERT_E_CREDENTIAL")):
             with self.subTest(verdict=py):
                 self.assertEqual(getattr(pv, py), self.enums[c])
 
     def test_every_verdict_has_a_name_and_a_reason(self):
         for code in (pv.OK, pv.E_MALFORMED, pv.E_MAC, pv.E_NONCE,
-                     pv.E_STALE, pv.E_ABSENT, pv.E_RANGE, pv.E_ALG):
+                     pv.E_STALE, pv.E_ABSENT, pv.E_RANGE, pv.E_ALG,
+                     pv.E_CREDENTIAL):
             self.assertIn(code, pv.VERDICT_NAME)
             self.assertIn(code, pv.VERDICT_REASON)
 
@@ -303,29 +305,45 @@ class KatTests(unittest.TestCase):
     """The fixed vector: a real signature over known bytes must verify."""
 
     def test_kat_verifies(self):
-        verdict, f = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, max_cm=40)
+        verdict, f = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.OK, pv.VERDICT_REASON[verdict])
         self.assertEqual(f["distance_cm"], 25)
 
     def test_wrong_nonce_rejected(self):
-        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, b"\x00" * 16, max_cm=40)
+        verdict, _ = pv.verify(
+            KAT_FRAME,
+            KAT_POINT,
+            b"\x00" * 16,
+            expected_cred_id=KAT_CREDID,
+            max_cm=40,
+        )
         self.assertEqual(verdict, pv.E_NONCE)
 
+    def test_wrong_credential_rejected(self):
+        verdict, _ = pv.verify(
+            KAT_FRAME,
+            KAT_POINT,
+            KAT_NONCE,
+            expected_cred_id=b"\x00" * pv.CREDID_LEN,
+            max_cm=40,
+        )
+        self.assertEqual(verdict, pv.E_CREDENTIAL)
+
     def test_distance_over_threshold_rejected(self):
-        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, max_cm=24)
+        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=24)
         self.assertEqual(verdict, pv.E_RANGE)
 
     def test_threshold_is_inclusive(self):
-        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, max_cm=25)
+        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=25)
         self.assertEqual(verdict, pv.OK)
 
     def test_uptime_not_moving_forward_rejected(self):
-        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, max_cm=40,
+        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=40,
                                min_uptime_ms=1000000)
         self.assertEqual(verdict, pv.E_STALE)
 
     def test_uptime_moving_forward_accepted(self):
-        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, max_cm=40,
+        verdict, _ = pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=40,
                                min_uptime_ms=999999)
         self.assertEqual(verdict, pv.OK)
 
@@ -336,28 +354,34 @@ class KatTests(unittest.TestCase):
             with self.subTest(offset=off):
                 t = bytearray(KAT_FRAME)
                 t[off] ^= 0x01
-                verdict, _ = pv.verify(bytes(t), KAT_POINT, KAT_NONCE, max_cm=40)
+                verdict, _ = pv.verify(
+                    bytes(t), KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=40
+                )
                 self.assertEqual(verdict, pv.E_MAC)
 
     def test_tampered_signature_is_rejected(self):
         t = bytearray(KAT_FRAME)
         t[pv.OFF_TAG] ^= 0x01
-        verdict, _ = pv.verify(bytes(t), KAT_POINT, KAT_NONCE, max_cm=40)
+        verdict, _ = pv.verify(bytes(t), KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.E_MAC)
 
     def test_wrong_public_key_is_rejected(self):
         other, _ = gen_key_and_sign(b"unrelated")
-        verdict, _ = pv.verify(KAT_FRAME, other, KAT_NONCE, max_cm=40)
+        verdict, _ = pv.verify(KAT_FRAME, other, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.E_MAC)
 
     def test_all_zero_public_key_never_verifies(self):
         # What the dongle reports when it has no signing key.
-        verdict, _ = pv.verify(KAT_FRAME, b"\x00" * 65, KAT_NONCE, max_cm=40)
+        verdict, _ = pv.verify(
+            KAT_FRAME, b"\x00" * 65, KAT_NONCE, KAT_CREDID, max_cm=40
+        )
         self.assertEqual(verdict, pv.E_MAC)
 
     def test_no_fields_returned_when_the_signature_fails(self):
         # A forger must not be able to put values into a caller's log.
-        verdict, f = pv.verify(KAT_FRAME, b"\x00" * 65, KAT_NONCE, max_cm=40)
+        verdict, f = pv.verify(
+            KAT_FRAME, b"\x00" * 65, KAT_NONCE, KAT_CREDID, max_cm=40
+        )
         self.assertEqual(verdict, pv.E_MAC)
         self.assertIsNone(f)
 
@@ -369,7 +393,7 @@ class RoundTripTests(unittest.TestCase):
     def test_fresh_key_round_trip(self):
         prefix = build_prefix(distance=12, uptime=4242)
         point, sig = gen_key_and_sign(prefix)
-        verdict, f = pv.verify(prefix + sig, point, KAT_NONCE, max_cm=40)
+        verdict, f = pv.verify(prefix + sig, point, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.OK, pv.VERDICT_REASON[verdict])
         self.assertEqual(f["distance_cm"], 12)
         self.assertEqual(f["uptime_ms"], 4242)
@@ -377,7 +401,7 @@ class RoundTripTests(unittest.TestCase):
     def test_absent_status_rejected_after_a_valid_signature(self):
         prefix = build_prefix(status=pv.PRESENCE_ABSENT, distance=pv.DIST_NONE)
         point, sig = gen_key_and_sign(prefix)
-        verdict, f = pv.verify(prefix + sig, point, KAT_NONCE, max_cm=40)
+        verdict, f = pv.verify(prefix + sig, point, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.E_ABSENT)
         self.assertEqual(f["distance_cm"], pv.DIST_NONE)
 
@@ -385,14 +409,16 @@ class RoundTripTests(unittest.TestCase):
         # A dongle claiming PRESENT with no range must not pass a threshold test.
         prefix = build_prefix(status=pv.PRESENCE_PRESENT, distance=pv.DIST_NONE)
         point, sig = gen_key_and_sign(prefix)
-        verdict, _ = pv.verify(prefix + sig, point, KAT_NONCE, max_cm=0xFFFF)
+        verdict, _ = pv.verify(
+            prefix + sig, point, KAT_NONCE, KAT_CREDID, max_cm=0xFFFF
+        )
         self.assertEqual(verdict, pv.E_RANGE)
 
     def test_signature_from_a_different_prefix_does_not_transfer(self):
         prefix = build_prefix(distance=12)
         point, sig = gen_key_and_sign(prefix)
         other = build_prefix(distance=11)
-        verdict, _ = pv.verify(other + sig, point, KAT_NONCE, max_cm=40)
+        verdict, _ = pv.verify(other + sig, point, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.E_MAC)
 
 
@@ -400,13 +426,14 @@ class OpensslMissingTests(unittest.TestCase):
     def test_missing_binary_raises_rather_than_reporting_a_bad_signature(self):
         # "cannot check" must never be reported as "check failed".
         with self.assertRaises(pv.OpensslMissing):
-            pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, max_cm=40,
+            pv.verify(KAT_FRAME, KAT_POINT, KAT_NONCE, KAT_CREDID, max_cm=40,
                       openssl="/nonexistent/openssl-does-not-exist")
 
     def test_cli_exits_2_when_openssl_is_missing(self):
         with quiet():
             rc = pv.main(["--pubkey", KAT_POINT.hex(), "--frame", KAT_FRAME.hex(),
                           "--nonce", KAT_NONCE.hex(),
+                          "--cred-id", KAT_CREDID.hex(),
                           "--openssl", "/nonexistent/openssl-does-not-exist"])
         self.assertEqual(rc, 2)
 
@@ -440,9 +467,11 @@ class CliTests(unittest.TestCase):
     def test_exit_zero_only_on_presence(self):
         with quiet():
             ok = pv.main(["--pubkey", KAT_POINT.hex(), "--frame", KAT_FRAME.hex(),
-                          "--nonce", KAT_NONCE.hex(), "--max-cm", "40"])
+                          "--nonce", KAT_NONCE.hex(), "--cred-id", KAT_CREDID.hex(),
+                          "--max-cm", "40"])
             bad = pv.main(["--pubkey", KAT_POINT.hex(), "--frame", KAT_FRAME.hex(),
-                           "--nonce", KAT_NONCE.hex(), "--max-cm", "10"])
+                           "--nonce", KAT_NONCE.hex(), "--cred-id", KAT_CREDID.hex(),
+                           "--max-cm", "10"])
         self.assertEqual(ok, 0)
         self.assertEqual(bad, 1)
 
@@ -451,7 +480,8 @@ class CliTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             pv.main(["--pubkey", KAT_POINT.hex(), "--frame", KAT_FRAME.hex(),
-                     "--nonce", KAT_NONCE.hex(), "--json"])
+                     "--nonce", KAT_NONCE.hex(), "--cred-id", KAT_CREDID.hex(),
+                     "--json"])
         out = json.loads(buf.getvalue())
         self.assertEqual(out["verdict"], "OK")
         self.assertEqual(out["fields"]["distance_cm"], 25)

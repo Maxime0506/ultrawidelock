@@ -80,6 +80,14 @@ bool woz_uwb_trusted_range_cm(int32_t *cm_out);
  */
 bool woz_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out);
 
+/** Monotonic accepted-range epoch for post-challenge freshness checkpoints. */
+uint32_t woz_uwb_range_generation(void);
+
+/** Trusted distance only when its accepted-range epoch is newer than @p after.
+ *  This is the demand-driven presence seam: an old latch can never satisfy a
+ *  challenge merely because it remains recent in wall-clock terms. */
+bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after);
+
 /**
  * Register a callback fired after each accepted range latch (NULL to clear),
  * so the unlock seam can block on an event instead of polling. The callback
