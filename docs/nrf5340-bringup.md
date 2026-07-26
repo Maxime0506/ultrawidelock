@@ -9,7 +9,7 @@ Parts on the bench to a healthy first boot; toolchain install is in
 |---|---|
 | nRF5340 DK | Host SoC: BLE + Matter and the ranging engine |
 | DWM3000EVB (DW3110) | UWB radio, on the Arduino header (SPIM4) |
-| X-NUCLEO-NFC12A1 (ST25R300) | NFC reader front end for tap (SPIM2) |
+| X-NUCLEO-NFC12A1 (ST25R300) | NFC reader front end for tap (SPIM1) |
 
 Pin assignments live in
 [`../ports/nrf5340dk/overlays/dw3000-nfc.overlay`](../ports/nrf5340dk/overlays/dw3000-nfc.overlay);

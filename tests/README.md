@@ -6,12 +6,12 @@ hardware. Hardware truth comes separately from the manual
 
 | Command | What it runs | CI workflow |
 |---|---|---|
-| `make test` | [`host/`](host/): the KAT suite for the shared engine + Aliro core (578 assertions), compiled against the `WOZ_PORT_HOST` backend with the Zephyr shims in `host/shim/` | host-tests |
+| `make test` | [`host/`](host/): protocol KATs, state machines, radio/backend fakes, NFC transports, and diagnostic/tooling suites, compiled against the `WOZ_PORT_HOST` backend with the Zephyr shims in `host/shim/` | host-tests |
 | `make coverage` | Same suite instrumented (clang), HTML report, enforced line-coverage floor | host-tests |
 | `make test-san` | Same suite under ASan + UBSan | sanitizers |
 | `make fuzz` | libFuzzer (CI) or corpus replay (macOS) on the wire-facing parsers | fuzz |
 | `make cbmc` | CBMC bounded proofs of memory safety for the wire parsers | cbmc |
-| `make verify` | All of the above host gates, sequential, fail-fast — the pre-PR sweep | — |
+| `make verify` | Every host-runnable CI gate: a short serial tripwire followed by parallel lanes; missing required tools fail the sweep, and CBMC is opt-in with `WITH_CBMC=1` | Not applicable |
 | `make test-port` | [`../ports/esp32/test/`](../ports/esp32/test): the ESP32 port suite (port headers, crypto KATs, codec, provisioning) | port-tests |
 | `make test-ws` | [`tooling/ws_seed_test.sh`](tooling/ws_seed_test.sh): hermetic tests of per-worktree workspace seeding | tooling |
 | `make test-verify` | [`tooling/verify_test.sh`](tooling/verify_test.sh): tests for the sweep above: that its gate table still covers every CI job, and that a missing tool or an unmet coverage floor fails it instead of passing quietly | tooling |

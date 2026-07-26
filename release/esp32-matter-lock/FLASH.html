@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>openaliro on the ESP32-S3: flash guide</title>
+<title>openaliro on ESP32-S3/C5: flash guide</title>
 <style>
 :root {
   color-scheme: light dark;
@@ -61,10 +61,12 @@ footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line
 <body>
 <main>
 <p class="eyebrow"><b>openaliro</b> · flash bundle · evaluation firmware</p>
-<h1>openaliro on the ESP32-S3: flash guide</h1>
-<p>The complete Aliro Matter lock on a single ESP32-S3: it commissions into Apple Home
-over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you walk up
-(BLE + UWB approach unlock; no NFC tap on this target).</p>
+<h1>openaliro on ESP32-S3/C5: flash guide</h1>
+<p>The complete Aliro Matter lock on a single ESP32-S3 or ESP32-C5: it commissions
+into Apple Home over Wi-Fi, your iPhone carries the key in Wallet, and the lock
+opens as you walk up (BLE + UWB approach unlock; no NFC tap on these targets).
+ESP32-S3 is hardware-validated. The C5 image is release-built, with hardware
+validation pending.</p>
 <div class="tablewrap"><table>
 <thead>
 <tr>
@@ -75,11 +77,15 @@ over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you wal
 <tbody>
 <tr>
 <td><code>openaliro-matter-lock-esp32s3.bin</code></td>
-<td>one merged image (bootloader + partitions + app), flashed at 0x0</td>
+<td>merged S3 image (bootloader + partitions + app), flashed at 0x0</td>
+</tr>
+<tr>
+<td><code>openaliro-matter-lock-esp32c5.bin</code></td>
+<td>merged C5 image, release-built but not hardware-validated</td>
 </tr>
 <tr>
 <td><code>flash.sh</code></td>
-<td>flashes the image with esptool</td>
+<td>flashes the S3 image with esptool; use the browser or manual command below for C5</td>
 </tr>
 <tr>
 <td><code>FLASH.md</code> / <code>FLASH.html</code></td>
@@ -101,8 +107,8 @@ over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you wal
 </thead>
 <tbody>
 <tr>
-<td>ESP32-S3 dev board</td>
-<td>host: Wi-Fi, Matter, BLE, ranging engine. Validated on ESP32-S3-WROOM N16R8 (16 MB flash, 8 MB PSRAM); smaller variants untested</td>
+<td>ESP32-S3 or ESP32-C5 dev board</td>
+<td>host: Wi-Fi, Matter, BLE, ranging engine. S3 validated on ESP32-S3-WROOM N16R8. C5 needs at least 8 MB flash and remains bench-pending</td>
 </tr>
 <tr>
 <td>Qorvo DWM3000EVB (DW3110)</td>
@@ -127,7 +133,7 @@ over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you wal
 <li><code>pip install esptool</code> (<code>pip3</code> on some systems, <code>py -m pip</code> on Windows).</li>
 <li>A serial terminal: <code>screen</code> (built into macOS and most Linux), <code>minicom</code>, or PuTTY.</li>
 </ol>
-<p>Boards using the S3's native USB need no driver; boards with a CP210x or CH340 bridge
+<p>Boards using native USB need no driver; boards with a CP210x or CH340 bridge
 may need that vendor's driver on Windows and older macOS.</p>
 <h2>3 · Wire it</h2>
 <blockquote>
@@ -143,6 +149,7 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <th>DWM3000EVB (Arduino pin)</th>
 <th>Signal</th>
 <th>ESP32-S3</th>
+<th>ESP32-C5</th>
 </tr>
 </thead>
 <tbody>
@@ -150,68 +157,85 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <td>D13</td>
 <td>SCLK</td>
 <td>GPIO12</td>
+<td>GPIO8</td>
 </tr>
 <tr>
 <td>D11</td>
 <td>MOSI</td>
 <td>GPIO11</td>
+<td>GPIO9</td>
 </tr>
 <tr>
 <td>D12</td>
 <td>MISO</td>
 <td>GPIO13</td>
+<td>GPIO23</td>
 </tr>
 <tr>
 <td>D10</td>
 <td>CS</td>
+<td>GPIO10</td>
 <td>GPIO10</td>
 </tr>
 <tr>
 <td>D8</td>
 <td>IRQ</td>
 <td>GPIO5</td>
+<td>GPIO5</td>
 </tr>
 <tr>
 <td>D7</td>
 <td>RSTn</td>
+<td>GPIO4</td>
 <td>GPIO4</td>
 </tr>
 <tr>
 <td>D9</td>
 <td>WAKEUP</td>
 <td>GPIO6</td>
+<td>GPIO6</td>
 </tr>
 <tr>
 <td>3V3</td>
 <td>power</td>
+<td>3V3</td>
 <td>3V3</td>
 </tr>
 <tr>
 <td>GND</td>
 <td>ground</td>
 <td>GND</td>
+<td>GND</td>
 </tr>
 <tr>
 <td>D1</td>
 <td>SPI-POL</td>
 <td>GND (mode-0 strap)</td>
+<td>same</td>
 </tr>
 <tr>
 <td>D0</td>
 <td>SPI-PHA</td>
 <td>GND (mode-0 strap)</td>
+<td>same</td>
 </tr>
 </tbody>
 </table></div>
 <p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision already fixes the mode (check its manual).</p>
 <h2>4 · Flash</h2>
+<p>Fastest for either chip: open the
+<a href="https://asxeem.github.io/openaliro/flash/">browser flasher</a> in Chrome or Edge,
+select the board, and choose <strong>Install</strong>. The page and manifest are dry-checked,
+but the repository does not yet record a successful real WebSerial flash.</p>
+<p>The bundled helper currently handles S3 only:</p>
 <pre><code class="language-bash">bash flash.sh
 </code></pre>
 <p>esptool auto-detects the port; to name one, <code>bash flash.sh /dev/ttyACM0</code>
 (<code>/dev/cu.usbmodem…</code> on macOS, <code>COM…</code> on Windows). Chip not detected? Hold BOOT while
 plugging in, retry, then replug.</p>
-<p>Manual equivalent:</p>
+<p>Manual equivalents:</p>
 <pre><code class="language-bash">esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
+esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c5.bin
 </code></pre>
 <p>Reflashing wipes any previous commissioning.</p>
 <h2>5 · Watch it boot</h2>
@@ -280,6 +304,8 @@ and
 <h2>Notes</h2>
 <ul>
 <li>Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.</li>
+<li>ESP32-S3 has live-iPhone hardware validation. ESP32-C5 is build/release-supported
+  and must remain labelled bench-pending.</li>
 <li>Reflashing wipes commissioning; remove the stale accessory from Home before re-adding.</li>
 </ul>
 <footer>Same content as this bundle's <code>FLASH.md</code>.

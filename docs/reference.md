@@ -13,9 +13,12 @@ Use it when you need the exact shape of something:
 - struct members, with the per-field comments
 - include graphs
 
-It covers the code this project owns: `modules/woz_port`, `modules/woz_uwb`,
-`modules/woz_aliro`, `modules/woz_aliro_ecp`, and the ESP32-S3 reader components
-(`aliro_ble`, `aliro_crypto`, `aliro_reader`).
+It covers the code this project owns:
+
+- shared modules: `woz_port`, `woz_uwb`, `woz_aliro`, and `woz_aliro_ecp`;
+- the nRF source-stack and NFC surfaces in `woz_aliro_stack` and `woz_nfc`;
+- ESP32-S3/C5 reader and port surfaces in `aliro_ble`, `aliro_crypto`,
+  `aliro_reader`, and `woz_uwb`, including the target-specific board-pin API.
 
 ## Reference or Architecture?
 

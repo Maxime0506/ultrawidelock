@@ -7,8 +7,14 @@ the manual gate: run
 every applicable item before cutting a release, and record the results table in the
 release notes (see [`RELEASING.md`](RELEASING.md)).
 
-Two targets ship from this repository, so there are two checklists. A release covering
-only one target runs only that target's rows and records the other as `n/a`.
+Two configurations have recorded bench evidence, so there are two checklists: the
+nRF5340 DK with its default ST25R300/RFAL path, and ESP32-S3. A release covering only
+one runs that target's rows and records the other as `n/a`.
+
+ESP32-C5 is built and bundled by the release workflow, but has no hardware
+validation record. Mark it build-only in release notes until a C5 checklist is
+defined and passed. The `ALIRO_SOURCE=1` and PN532 variants likewise have
+automated evidence only and do not inherit the default nRF checklist result.
 
 ## nRF5340 DK
 

@@ -37,7 +37,7 @@ LOG_MODULE_REGISTER(woz_nfc_pn532_spi, CONFIG_WOZ_NFC_LOG_LEVEL);
 
 BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 	     "exactly one enabled nxp,pn532-spi devicetree node is required "
-	     "(see integration/overlays/pn532.overlay)");
+	     "(see ports/nrf5340dk/overlays/pn532.overlay)");
 
 /* SPI mode 0 (CPOL=0, CPHA=0), 8-bit words, LSB-first per the PN532 SPI spec. */
 #define PN532_SPI_OP (SPI_OP_MODE_MASTER | SPI_TRANSFER_LSB | SPI_WORD_SET(8))

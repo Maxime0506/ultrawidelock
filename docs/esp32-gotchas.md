@@ -90,9 +90,9 @@ next app's partition table, and the board sits in a reset loop reporting
 The crypto core (`aliro_hash.c`) compiles **host == target** so host KATs pin target
 behaviour. Run `ports/esp32/test/run.sh` before believing any crypto change. A
 compact AES-256-GCM host double (`aliro_prim_host.c`) lets the KATs run without PSA.
-Build success is not proof — the wire/crypto bugs below all built cleanly. The shared
-`modules/woz_uwb` logic has a second host harness, `tests/host/run.sh` (`make test`,
-578 assertions), which compiles the shared sources **without** `ESP_PLATFORM`: that is
+Build success is not proof: the wire/crypto bugs below all built cleanly. The shared
+`modules/woz_uwb` logic has a second host harness, `tests/host/run.sh` (`make test`),
+which compiles the shared sources **without** `ESP_PLATFORM`: that is
 the proof an ESP-only guard didn't regress the nRF path.
 
 ---

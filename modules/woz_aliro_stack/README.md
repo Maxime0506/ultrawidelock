@@ -18,6 +18,11 @@ The source option removes the imported `aliro` archive from Zephyr's link list,
 while retaining the add-on's public headers and application integration. The
 build then rejects any link map in which `libaliro_ble.a` contributed code.
 
+**Validation:** a dedicated CI job builds the nRF firmware with
+`ALIRO_SOURCE=1`, and the portable advertising and protocol files run in the
+host suite. The full source-stack path has no recorded hardware validation and
+is not included in release bundles.
+
 Implemented:
 
 - library version, feature bitmap, and Aliro 1.0 protocol version lists;
