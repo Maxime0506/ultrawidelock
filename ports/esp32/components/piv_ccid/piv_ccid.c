@@ -91,11 +91,12 @@ static int slot_status(const struct piv_ccid *ccid, uint8_t slot, uint8_t seq,
 }
 
 void piv_ccid_init(struct piv_ccid *ccid,
-		   const struct piv_apdu_backend *backend, void *backend_ctx)
+		   const struct piv_apdu_backend *backend, void *backend_ctx,
+		   bool pin_required)
 {
 	if (ccid != NULL) {
 		memset(ccid, 0, sizeof(*ccid));
-		piv_apdu_init(&ccid->piv, backend, backend_ctx);
+		piv_apdu_init(&ccid->piv, backend, backend_ctx, pin_required);
 	}
 }
 

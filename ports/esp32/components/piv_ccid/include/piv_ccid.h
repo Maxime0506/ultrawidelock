@@ -44,7 +44,8 @@ struct piv_ccid {
 };
 
 void piv_ccid_init(struct piv_ccid *ccid,
-		   const struct piv_apdu_backend *backend, void *backend_ctx);
+		   const struct piv_apdu_backend *backend, void *backend_ctx,
+		   bool pin_required);
 
 /*
  * Process one complete CCID bulk-OUT message.

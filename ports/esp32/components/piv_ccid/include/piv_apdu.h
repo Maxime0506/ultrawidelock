@@ -53,6 +53,7 @@ struct piv_apdu_backend {
 struct piv_apdu {
 	bool selected;
 	bool pin_verified;
+	bool pin_required;
 	const struct piv_apdu_backend *backend;
 	void *backend_ctx;
 	uint8_t pending[PIV_APDU_MAX_RESPONSE];
@@ -61,7 +62,8 @@ struct piv_apdu {
 };
 
 void piv_apdu_init(struct piv_apdu *piv,
-		   const struct piv_apdu_backend *backend, void *backend_ctx);
+		   const struct piv_apdu_backend *backend, void *backend_ctx,
+		   bool pin_required);
 void piv_apdu_reset(struct piv_apdu *piv);
 
 /* Handle one short ISO 7816 command APDU and always include a status word. */

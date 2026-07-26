@@ -515,7 +515,7 @@ static int handle_general_authenticate(struct piv_apdu *piv,
 		return finish(NULL, 0u, SW_BAD_PARAMETERS,
 			      response, response_cap, response_len);
 	}
-	if (!piv->pin_verified) {
+	if (piv->pin_required && !piv->pin_verified) {
 		return finish(NULL, 0u, SW_SECURITY_NOT_SATISFIED,
 			      response, response_cap, response_len);
 	}
@@ -586,7 +586,8 @@ static int handle_general_authenticate(struct piv_apdu *piv,
 }
 
 void piv_apdu_init(struct piv_apdu *piv,
-		   const struct piv_apdu_backend *backend, void *backend_ctx)
+		   const struct piv_apdu_backend *backend, void *backend_ctx,
+		   bool pin_required)
 {
 	if (piv == NULL) {
 		return;
@@ -594,6 +595,7 @@ void piv_apdu_init(struct piv_apdu *piv,
 	memset(piv, 0, sizeof(*piv));
 	piv->backend = backend;
 	piv->backend_ctx = backend_ctx;
+	piv->pin_required = pin_required;
 }
 
 void piv_apdu_reset(struct piv_apdu *piv)

@@ -209,7 +209,7 @@ static void test_slot_and_power(void)
 	size_t rsp_len = 0;
 
 	fake_identity_init(&identity);
-	piv_ccid_init(&ccid, &s_backend, &identity);
+	piv_ccid_init(&ccid, &s_backend, &identity, true);
 	req_len = request(req, PIV_CCID_PC_TO_RDR_GET_SLOT_STATUS,
 			  0, 0, 7, 0, NULL);
 	CHECK(piv_ccid_process(&ccid, req, req_len, rsp, sizeof(rsp),
@@ -290,7 +290,7 @@ static void test_objects_and_chaining(void)
 	size_t first_payload;
 
 	fake_identity_init(&identity);
-	piv_apdu_init(&piv, &s_backend, &identity);
+	piv_apdu_init(&piv, &s_backend, &identity, true);
 	select_piv(&piv);
 
 	CHECK(piv_apdu_transmit(&piv, get_discovery, sizeof(get_discovery),
@@ -354,7 +354,7 @@ static void test_pin_and_presence_signature_boundary(void)
 	size_t response_len = 0u;
 
 	fake_identity_init(&identity);
-	piv_apdu_init(&piv, &s_backend, &identity);
+	piv_apdu_init(&piv, &s_backend, &identity, true);
 	select_piv(&piv);
 	CHECK(piv_apdu_transmit(&piv, verify_status, sizeof(verify_status),
 				response, sizeof(response), &response_len) == 0 &&
@@ -457,6 +457,62 @@ static void test_pin_and_presence_signature_boundary(void)
 	      "a new card session requires PIN verification again");
 }
 
+static void test_pinless_uwb_policy(void)
+{
+	struct fake_identity identity;
+	struct piv_apdu piv;
+	uint8_t command[80] = {
+		0x00u, 0x87u, 0x11u, PIV_KEY_REF_AUTH, 38u,
+		0x7cu, 0x24u, 0x82u, 0x00u, 0x81u,
+		PIV_P256_HASH_BYTES,
+	};
+	uint8_t response[128];
+	size_t response_len = 0u;
+
+	fake_identity_init(&identity);
+	piv_apdu_init(&piv, &s_backend, &identity, false);
+	select_piv(&piv);
+	for (size_t i = 0u; i < PIV_P256_HASH_BYTES; i++) {
+		command[11u + i] = (uint8_t)(0x60u + i);
+	}
+
+	identity.allow_signature = false;
+	CHECK(piv_apdu_transmit(&piv, command, 43u,
+				response, sizeof(response), &response_len) == 0 &&
+	      response[0] == 0x69u && response[1] == 0x82u &&
+	      identity.sign_calls == 1u,
+	      "PIN-less policy still denies a failed fresh UWB proof");
+
+	identity.allow_signature = true;
+	CHECK(piv_apdu_transmit(&piv, command, 43u,
+				response, sizeof(response), &response_len) == 0 &&
+	      response[0] == 0x7cu &&
+	      response[response_len - 2u] == 0x90u &&
+	      identity.sign_calls == 2u,
+	      "PIN-less policy releases 9A only after fresh UWB");
+
+	piv_apdu_reset(&piv);
+	select_piv(&piv);
+	command[3] = PIV_KEY_REF_KEY_MANAGEMENT;
+	command[4] = 71u;
+	command[5] = 0x7cu;
+	command[6] = 0x45u;
+	command[7] = 0x82u;
+	command[8] = 0x00u;
+	command[9] = 0x85u;
+	command[10] = 0x41u;
+	command[11] = 0x04u;
+	for (size_t i = 1u; i < PIV_P256_POINT_BYTES; i++) {
+		command[11u + i] = (uint8_t)(0x30u + i);
+	}
+	CHECK(piv_apdu_transmit(&piv, command, 76u,
+				response, sizeof(response), &response_len) == 0 &&
+	      response[0] == 0x7cu && response[2] == 0x82u &&
+	      response[response_len - 2u] == 0x90u &&
+	      identity.derive_calls == 1u,
+	      "PIN-less policy permits 9D keychain agreement");
+}
+
 static void test_rejections_and_parameters(void)
 {
 	struct piv_ccid ccid;
@@ -467,7 +523,7 @@ static void test_rejections_and_parameters(void)
 	size_t rsp_len = 0;
 
 	fake_identity_init(&identity);
-	piv_ccid_init(&ccid, &s_backend, &identity);
+	piv_ccid_init(&ccid, &s_backend, &identity, true);
 	CHECK(piv_ccid_process(&ccid, req, 9, rsp, sizeof(rsp),
 			       &rsp_len) == -1,
 	      "truncated CCID header produces no guessed response");
@@ -506,6 +562,7 @@ int main(void)
 	test_slot_and_power();
 	test_objects_and_chaining();
 	test_pin_and_presence_signature_boundary();
+	test_pinless_uwb_policy();
 	test_rejections_and_parameters();
 	printf("RESULT %s\n", failures ? "FAIL" : "PASS");
 	return failures ? 1 : 0;
