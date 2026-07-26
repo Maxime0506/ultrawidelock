@@ -16,6 +16,9 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
+#ifdef CONFIG_WOZ_PIV_CCID
+#include <piv_ccid_usb.h>
+#endif
 #if CONFIG_PM_ENABLE
 #include <esp_pm.h>
 #endif
@@ -589,6 +592,16 @@ extern "C" void app_main()
 
 	/* Initialize the ESP NVS layer */
 	nvs_flash_init();
+
+#ifdef CONFIG_WOZ_PIV_CCID
+	/*
+	 * Native USB is deliberately independent of the external USB-UART used
+	 * for flashing and recovery. This option is off in normal firmware.
+	 */
+	err = piv_ccid_usb_start();
+	ABORT_APP_ON_FAILURE(err == ESP_OK,
+			     ESP_LOGE(TAG, "Failed to start PIV CCID USB, err:%d", err));
+#endif
 
 	/* Bolt-state indicator. Before Matter start, so the first LockState update
 	 * that lands already has somewhere to go. */

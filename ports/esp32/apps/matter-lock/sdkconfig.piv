@@ -1,0 +1,7 @@
+# Disposable-VM PIV/CCID bench profile.
+#
+# Load this in a separate build directory. Do not merge it into sdkconfig.defaults:
+# a native PIV token can be claimed by the host during USB enumeration.
+CONFIG_WOZ_PIV_CCID=y
+CONFIG_WOZ_PRESENCE=y
+CONFIG_TINYUSB_DEBUG_LEVEL=0

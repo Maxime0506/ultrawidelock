@@ -213,6 +213,17 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$PLBIN"
 
 echo
+echo "== host: PIV CCID protocol core =="
+PIVBIN="$(mktemp -t esp_piv_ccid.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra -Werror \
+   -I "$HERE/../components/piv_ccid/include" \
+   "$HERE/test_piv_ccid.c" \
+   "$HERE/../components/piv_ccid/piv_ccid.c" \
+   "$HERE/../components/piv_ccid/piv_apdu.c" -o "$PIVBIN"
+"$PIVBIN"
+rm -f "$PIVBIN"
+
+echo
 echo "== host: reader bench console vs esp_console fakes =="
 CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \

@@ -1,0 +1,20 @@
+menu "PIV smart-card token"
+
+config WOZ_PIV_CCID
+	bool "Expose a native-USB PIV/CCID token (VM bench only)"
+	depends on IDF_TARGET_ESP32S3
+	default n
+	help
+	  Enumerate the ESP32-S3 native USB-OTG port as a single-slot CCID
+	  smart-card reader containing a PIV application.
+
+	  Keep this OFF for ordinary firmware development. A host Mac can claim a
+	  PIV device during enumeration and offer to pair it with a local account.
+	  Enable it only for tightly controlled validation in the disposable
+	  Parallels macOS guest, with the board's separate USB-UART connection kept
+	  available for flashing and recovery.
+
+	  This initial option does not alter LoginWindow or enforce smart-card
+	  authentication. Account pairing remains a separate, explicit VM step.
+
+endmenu
