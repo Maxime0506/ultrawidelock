@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "piv_apdu.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,10 +40,11 @@ enum piv_ccid_message {
 
 struct piv_ccid {
 	bool powered;
-	bool piv_selected;
+	struct piv_apdu piv;
 };
 
-void piv_ccid_init(struct piv_ccid *ccid);
+void piv_ccid_init(struct piv_ccid *ccid,
+		   const struct piv_apdu_backend *backend, void *backend_ctx);
 
 /*
  * Process one complete CCID bulk-OUT message.

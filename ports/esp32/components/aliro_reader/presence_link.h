@@ -32,6 +32,14 @@ extern "C" {
  * its own lock state, or the two owners will contradict each other. */
 void presence_link_init(bool drive_wallet_grant);
 
+/*
+ * Require a new credential authentication and a later trusted UWB range.
+ * Returns 0 only when the single provisioned credential ranges within policy.
+ * Concurrent requests are serialized; no previous authentication or range can
+ * authorize the caller.
+ */
+int presence_link_require_fresh(void);
+
 /* Console handler for the `presence` command; registered by the app shell. */
 int presence_link_cmd(int argc, char **argv);
 

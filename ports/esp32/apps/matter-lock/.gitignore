@@ -3,6 +3,7 @@
 /build/
 /sdkconfig
 /sdkconfig.old
+/sdkconfig.piv.generated
 # `make lab` / `make term LOG=` capture logs + their rendered reports. Bench
 # artifacts: a capture worth keeping belongs in tests/host/data/, named.
 /*.log

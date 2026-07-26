@@ -238,6 +238,31 @@ int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *
 	return rc;
 }
 
+int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR],
+			       const uint8_t hash[32],
+			       uint8_t sig[ALIRO_P256_SIG])
+{
+	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+	psa_key_id_t k = 0;
+	size_t slen = 0;
+	int rc = -1;
+
+	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_HASH);
+	psa_set_key_algorithm(&attr, PSA_ALG_ECDSA(PSA_ALG_SHA_256));
+	psa_set_key_type(&attr, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+	psa_set_key_bits(&attr, 256);
+	if (psa_import_key(&attr, priv, ALIRO_P256_SCALAR, &k) != PSA_SUCCESS) {
+		return -1;
+	}
+	if (psa_sign_hash(k, PSA_ALG_ECDSA(PSA_ALG_SHA_256),
+			  hash, 32u, sig, ALIRO_P256_SIG, &slen) == PSA_SUCCESS &&
+	    slen == ALIRO_P256_SIG) {
+		rc = 0;
+	}
+	psa_destroy_key(k);
+	return rc;
+}
+
 // Verify an ECDSA-P256/SHA-256 signature against a message and public key, via PSA Crypto.
 // Returns 0 if the signature verifies, -1 if public key import fails or verification fails.
 int aliro_ecdsa_p256_verify(const uint8_t pub[ALIRO_P256_POINT], const uint8_t *msg, size_t msg_len,

@@ -79,7 +79,9 @@ tar -xzf presence-runtime.tar.gz
 cd presence-runtime
 ```
 
-The archive contains exactly the three entry points, their two shared service
-modules, and the two existing verifier modules. It contains no firmware source,
-tests, repository enrollment, local enrollment, logs, or build configuration.
-The guest still needs Python, OpenSSL, and the `pyserial` package.
+The archive contains exactly the three presence entry points, their two shared
+service modules, the two existing verifier modules, and `tools/piv_pin.py` for
+hidden-input PIV PIN provisioning through macOS PC/SC. It contains no firmware
+source, tests, repository enrollment, local enrollment, logs, or build
+configuration. The guest still needs Python, OpenSSL, and the `pyserial`
+package.

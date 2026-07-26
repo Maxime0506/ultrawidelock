@@ -90,10 +90,12 @@ static int slot_status(const struct piv_ccid *ccid, uint8_t slot, uint8_t seq,
 		     NULL, 0, response, response_cap, response_len);
 }
 
-void piv_ccid_init(struct piv_ccid *ccid)
+void piv_ccid_init(struct piv_ccid *ccid,
+		   const struct piv_apdu_backend *backend, void *backend_ctx)
 {
 	if (ccid != NULL) {
 		memset(ccid, 0, sizeof(*ccid));
+		piv_apdu_init(&ccid->piv, backend, backend_ctx);
 	}
 }
 
@@ -139,7 +141,7 @@ int piv_ccid_process(struct piv_ccid *ccid,
 					   response, response_cap, response_len);
 		}
 		ccid->powered = true;
-		ccid->piv_selected = false;
+		piv_apdu_reset(&ccid->piv);
 		return reply(PIV_CCID_RDR_TO_PC_DATA_BLOCK, slot, seq,
 			     CCID_STATUS_ICC_ACTIVE, 0, 0,
 			     s_atr, sizeof(s_atr),
@@ -153,7 +155,7 @@ int piv_ccid_process(struct piv_ccid *ccid,
 					   response, response_cap, response_len);
 		}
 		ccid->powered = false;
-		ccid->piv_selected = false;
+		piv_apdu_reset(&ccid->piv);
 		return slot_status(ccid, slot, seq, 0, 0,
 				   response, response_cap, response_len);
 
@@ -183,7 +185,7 @@ int piv_ccid_process(struct piv_ccid *ccid,
 					   CCID_ERROR_ICC_MUTE,
 					   response, response_cap, response_len);
 		}
-		if (piv_apdu_transmit(&ccid->piv_selected,
+		if (piv_apdu_transmit(&ccid->piv,
 				      request + PIV_CCID_HEADER_LEN, payload_len,
 				      apdu_response, sizeof(apdu_response),
 				      &apdu_response_len) != 0) {

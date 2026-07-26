@@ -136,7 +136,7 @@ verify:
 	fi
 	@printf '\n  ✓ all host gates passed\n'
 
-## presence-runtime: build the seven-file macOS transfer archive
+## presence-runtime: build the eight-file macOS transfer archive
 ##   Output: build/presence-runtime.tar.gz  ·  override with PRESENCE_RUNTIME_OUT=
 presence-runtime:
 	@python3 $(REPO_ROOT)/scripts/presence_runtime.py --output "$(PRESENCE_RUNTIME_OUT)"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Packaging tests for the seven-file presence runtime bundle."""
+"""Packaging tests for the eight-file presence runtime bundle."""
 
 import ast
 import hashlib
@@ -26,6 +26,7 @@ EXPECTED = {
     "host/presence/presence_client.py": 0o644,
     "tools/presence_git.py": 0o644,
     "tools/presence_verify.py": 0o644,
+    "tools/piv_pin.py": 0o755,
 }
 
 
@@ -55,7 +56,7 @@ class PresenceRuntimeTests(unittest.TestCase):
         runtime.build_bundle(ROOT, output)
         return output
 
-    def test_manifest_is_exactly_the_seven_runtime_files(self):
+    def test_manifest_is_exactly_the_eight_runtime_files(self):
         self.assertEqual(dict(runtime.RUNTIME_FILES), EXPECTED)
 
     def test_archive_contains_only_expected_files_with_fixed_safe_metadata(self):
@@ -141,6 +142,16 @@ class PresenceRuntimeTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn("usage:", result.stdout)
+
+            piv_pin = root / "tools" / "piv_pin.py"
+            result = subprocess.run(
+                [str(piv_pin), "--help"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("usage:", result.stdout)
 
     def test_extracted_entry_points_import_with_macos_system_python(self):
         system_python = pathlib.Path("/usr/bin/python3")

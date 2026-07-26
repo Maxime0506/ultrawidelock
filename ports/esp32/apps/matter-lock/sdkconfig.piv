@@ -5,3 +5,7 @@
 CONFIG_WOZ_PIV_CCID=y
 CONFIG_WOZ_PRESENCE=y
 CONFIG_TINYUSB_DEBUG_LEVEL=0
+
+# First boot creates the persistent slot-9A certificate in app_main. The
+# mbedTLS X.509 writer's call chain exceeds ESP-IDF's default main-task stack.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

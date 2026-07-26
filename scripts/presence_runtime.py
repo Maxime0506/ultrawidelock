@@ -24,6 +24,7 @@ RUNTIME_FILES = (
     ("host/presence/presence_client.py", 0o644),
     ("tools/presence_git.py", 0o644),
     ("tools/presence_verify.py", 0o644),
+    ("tools/piv_pin.py", 0o755),
 )
 
 ARCHIVE_DIRECTORIES = (

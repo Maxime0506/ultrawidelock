@@ -1,9 +1,12 @@
 #include "piv_ccid_usb.h"
 
 #include "piv_ccid.h"
+#include "piv_identity.h"
 
 #include <stdio.h>
 #include <string.h>
+
+#define PIV_TINYUSB_TASK_STACK_SIZE 8192
 
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
@@ -122,7 +125,7 @@ CFG_TUD_MEM_SECTION static uint8_t s_tx[PIV_CCID_MAX_MESSAGE]
 static void ccid_init(void)
 {
 	memset(&s_usb, 0, sizeof(s_usb));
-	piv_ccid_init(&s_usb.protocol);
+	piv_ccid_init(&s_usb.protocol, piv_identity_backend(), NULL);
 }
 
 static bool ccid_deinit(void)
@@ -270,7 +273,12 @@ const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count)
 esp_err_t piv_ccid_usb_start(void)
 {
 	uint8_t mac[6];
-	esp_err_t err = esp_efuse_mac_get_default(mac);
+	esp_err_t err = piv_identity_init();
+
+	if (err != ESP_OK) {
+		return err;
+	}
+	err = esp_efuse_mac_get_default(mac);
 	if (err != ESP_OK) {
 		return err;
 	}
@@ -279,6 +287,12 @@ esp_err_t piv_ccid_usb_start(void)
 		 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
 	tinyusb_config_t config = TINYUSB_DEFAULT_CONFIG();
+	/*
+	 * macOS pairing performs the presence-gated slot-9A ECDSA operation from
+	 * the CCID callback. The PSA/mbedTLS signing path exceeds TinyUSB's 4096
+	 * byte default task stack.
+	 */
+	config.task.size = PIV_TINYUSB_TASK_STACK_SIZE;
 	config.descriptor.device = &s_device_descriptor;
 	config.descriptor.full_speed_config = s_configuration_descriptor;
 	config.descriptor.string = s_string_descriptors;

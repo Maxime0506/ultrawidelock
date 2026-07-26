@@ -35,6 +35,8 @@
 #define PROOF_POLL_MS 20
 
 static bool s_drive_wallet;
+static bool s_initialized;
+static woz_mutex_t s_proof_lock;
 
 /* Device signing identity. Only the private scalar is persisted; the public point
  * is re-derived at every boot so the two can never drift apart in NVS. */
@@ -96,6 +98,10 @@ void presence_link_init(bool drive_wallet_grant)
 	(void)aliro_prim_init();
 	load_or_make_dev_key();
 	s_drive_wallet = drive_wallet_grant;
+	if (!s_initialized) {
+		woz_mutex_init(&s_proof_lock);
+		s_initialized = true;
+	}
 	/* No range listener on purpose. The range latch already carries its own age,
 	 * so presence can read freshness when a challenge arrives, and the single
 	 * listener slot stays free for whichever app actually needs to wake on a
@@ -216,10 +222,10 @@ static bool before_deadline(int64_t deadline_ms)
 	return woz_uptime_ms() < deadline_ms;
 }
 
-static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
+			 int32_t *distance_cm, bool report)
 {
 	uint8_t expected_pub[ALIRO_ASSERT_PUB_LEN];
-	uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN];
 	uint8_t actual_pub[ALIRO_ASSERT_PUB_LEN];
 	uint8_t actual_id[ALIRO_ASSERT_CREDID_LEN];
 	uint32_t auth_checkpoint = 0;
@@ -227,9 +233,12 @@ static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 	bool saw_far = false;
 	int64_t deadline_ms = woz_uptime_ms() + CONFIG_WOZ_PRESENCE_TIMEOUT_MS;
 
-	if (!aliro_reader_presence_expected_credential(expected_pub)) {
-		printf("PRESENCE-ERR proof requires exactly one provisioned credential\n");
-		return 1;
+	if (!s_initialized ||
+	    !aliro_reader_presence_expected_credential(expected_pub)) {
+		if (report) {
+			printf("PRESENCE-ERR proof requires exactly one provisioned credential\n");
+		}
+		return -1;
 	}
 	aliro_assert_cred_id(expected_pub, expected_id);
 
@@ -244,8 +253,10 @@ static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 		woz_sleep_ms(PROOF_POLL_MS);
 	}
 	if (!aliro_reader_presence_checkpoint(request, &auth_checkpoint)) {
-		printf("PRESENCE-ERR proof reset timed out\n");
-		return 1;
+		if (report) {
+			printf("PRESENCE-ERR proof reset timed out\n");
+		}
+		return -1;
 	}
 
 	/* Snapshot after reset completion. A range that races into this tiny gap is
@@ -257,18 +268,17 @@ static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 		if (aliro_reader_presence_authenticated_after(auth_checkpoint, actual_pub)) {
 			aliro_assert_cred_id(actual_pub, actual_id);
 			if (memcmp(actual_id, expected_id, sizeof(actual_id)) != 0) {
-				printf("PRESENCE-ERR unexpected credential authenticated\n");
-				return 1;
+				if (report) {
+					printf("PRESENCE-ERR unexpected credential authenticated\n");
+				}
+				return -1;
 			}
 
 			int32_t cm = -1;
 
 			if (woz_uwb_trusted_range_after_cm(&cm, range_checkpoint)) {
 				if (cm >= 0 && cm <= CONFIG_WOZ_PRESENCE_MAX_CM) {
-					if (answer_p256(nonce, expected_id, cm) != 0) {
-						return 1;
-					}
-					notify_wallet(true);
+					*distance_cm = cm;
 					return 0;
 				}
 				saw_far = true;
@@ -277,13 +287,48 @@ static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 		woz_sleep_ms(PROOF_POLL_MS);
 	}
 
-	if (saw_far) {
-		printf("PRESENCE-ERR proof stayed outside %d cm\n",
-		       CONFIG_WOZ_PRESENCE_MAX_CM);
-	} else {
-		printf("PRESENCE-ERR proof timed out; wake the phone and hold it near the reader\n");
+	if (report) {
+		if (saw_far) {
+			printf("PRESENCE-ERR proof stayed outside %d cm\n",
+			       CONFIG_WOZ_PRESENCE_MAX_CM);
+		} else {
+			printf("PRESENCE-ERR proof timed out; wake the phone and hold it near the reader\n");
+		}
 	}
-	return 1;
+	return -1;
+}
+
+static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
+{
+	uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
+	int32_t distance_cm;
+	int rc;
+
+	woz_mutex_lock(&s_proof_lock);
+	rc = acquire_fresh(cred_id, &distance_cm, true);
+	if (rc == 0) {
+		rc = answer_p256(nonce, cred_id, distance_cm) == 0 ? 0 : -1;
+		if (rc == 0) {
+			notify_wallet(true);
+		}
+	}
+	woz_mutex_unlock(&s_proof_lock);
+	return rc == 0 ? 0 : 1;
+}
+
+int presence_link_require_fresh(void)
+{
+	uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
+	int32_t distance_cm;
+	int rc;
+
+	if (!s_initialized) {
+		return -1;
+	}
+	woz_mutex_lock(&s_proof_lock);
+	rc = acquire_fresh(cred_id, &distance_cm, false);
+	woz_mutex_unlock(&s_proof_lock);
+	return rc;
 }
 
 int presence_link_cmd(int argc, char **argv)
