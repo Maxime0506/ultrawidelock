@@ -61,8 +61,8 @@ SITE = Path("site")
 ARCH = SITE / "architecture.html"
 
 FIGURE_RE = re.compile(
-    r'<figure class="graph-wrap"><div class="graph-shell">'
-    r'<pre class="mermaid">(.*?)</pre></div></figure>',
+    r'<figure class="graph-wrap(?: [^"]*)?"[^>]*><div class="graph-shell">'
+    r'<pre class="mermaid">(.*?)</pre>.*?</figure>',
     re.S,
 )
 PATH_RE = re.compile(r"(?:modules|ports)/[\w./-]+\.(?:cpp|c|h)")

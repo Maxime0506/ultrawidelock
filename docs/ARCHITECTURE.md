@@ -1383,6 +1383,10 @@ serial lines (see modules/woz_uwb/src/facade/flight_recorder.c). This tool:
 Only the frames (already on-air ciphertext) go to the corpus — never the CONFIG
 record's URSK, so a shared corpus carries no session key material.
 
+SECURITY: raw serial logs containing `[FREC]` records and binary `.frc` files
+contain the CONFIG record's full ephemeral URSK. Keep them private and do not
+attach them to public issues. Only the extracted frame corpus excludes the key.
+
 Usage:
   flight_recorder.py <capture.log | trace.frc> [corpus_dir]
 
