@@ -20,7 +20,9 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -428,6 +430,65 @@ class VerifyTagTests(unittest.TestCase):
 
 
 class SerialTests(unittest.TestCase):
+    def test_open_sets_console_lines_before_open_and_drains_boot_output(self):
+        events = []
+
+        class FakePort:
+            def __init__(self, **kwargs):
+                events.append(("construct", kwargs))
+                self.is_open = False
+                self.port = kwargs["port"]
+                self._dtr = True
+                self._rts = True
+
+            @property
+            def dtr(self):
+                return self._dtr
+
+            @dtr.setter
+            def dtr(self, value):
+                self._dtr = value
+                events.append(("dtr", value))
+
+            @property
+            def rts(self):
+                return self._rts
+
+            @rts.setter
+            def rts(self, value):
+                self._rts = value
+                events.append(("rts", value))
+
+            def open(self):
+                events.append(("open", self.port))
+                self.is_open = True
+
+            def reset_input_buffer(self):
+                events.append(("drain", None))
+
+        fake_serial = types.SimpleNamespace(
+            Serial=FakePort,
+            SerialException=Exception,
+        )
+        with (
+            mock.patch.dict(sys.modules, {"serial": fake_serial}),
+            mock.patch.object(pg.time, "sleep") as sleep,
+        ):
+            port = pg.open_port("/dev/cu.test", timeout=3.5)
+
+        self.assertIsInstance(port, FakePort)
+        self.assertEqual(
+            events,
+            [
+                ("construct", {"port": None, "baudrate": 115200, "timeout": 3.5}),
+                ("dtr", True),
+                ("rts", False),
+                ("open", "/dev/cu.test"),
+                ("drain", None),
+            ],
+        )
+        sleep.assert_called_once_with(pg.SERIAL_SETTLE_S)
+
     def test_pubkey_request_sends_the_console_command(self):
         ser = FakeSerial(pub_line(POINT_A))
         self.assertEqual(pg.dongle_pubkey(ser), POINT_A)

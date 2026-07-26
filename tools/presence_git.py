@@ -49,6 +49,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -84,6 +85,12 @@ TAG_ERR = "PRESENCE-ERR"
 # Lines read while looking for a tagged answer. A boot banner plus a busy log stream
 # stays well inside this; a port that is not running this firmware fails fast.
 REPLY_LINE_BUDGET = 400
+
+# A USB-UART bridge can briefly assert modem-control lines as it opens.  The
+# console needs DTR active to receive, while keeping RTS inactive avoids pulsing
+# the ESP32 reset line.  The settle window lets macOS finish attaching the tty
+# before the first shell command.
+SERIAL_SETTLE_S = 1.0
 
 
 class PresenceError(RuntimeError):
@@ -227,9 +234,22 @@ def open_port(port: str, timeout=10.0):
             "'uv tool install pyserial' does NOT work: it exposes only pyserial's "
             "own commands, not the importable library. 'verify' needs none of this."
         ) from exc
+    ser = None
     try:
-        return serial.Serial(port, 115200, timeout=timeout)
+        # Construct the object closed so the line states are selected before
+        # pyserial opens the device.  Serial(port, ...) opens first and only then
+        # gives callers a chance to change them, which can reset ESP32 boards.
+        ser = serial.Serial(port=None, baudrate=115200, timeout=timeout)
+        ser.dtr = True
+        ser.rts = False
+        ser.port = port
+        ser.open()
+        time.sleep(SERIAL_SETTLE_S)
+        ser.reset_input_buffer()
+        return ser
     except serial.SerialException as exc:
+        if ser is not None and ser.is_open:
+            ser.close()
         # A wrong port name is the most common bring-up mistake by far; a
         # traceback here would look like a bug in the tool rather than a typo.
         raise PresenceError(f"cannot open {port}: {exc}") from exc
