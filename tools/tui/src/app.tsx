@@ -77,6 +77,37 @@ const workspaceViewCommands: HelpRow[] = [
   { command: "Tab", description: "Move focus between wizard choices and command prompt." }
 ]
 
+// Ranked by what a stuck user needs first, not by grouping: the strip is one
+// line and gets truncated from the tail, so the order decides what survives on a
+// narrow terminal. `? help` and `quit` lead because they are the two ways out of
+// anything. `factoryreset` sits with the other board-changing commands rather
+// than only in `? help`, so a command that unpairs the lock is discoverable
+// before someone needs to go looking for it.
+export const promptHints = [
+  "? help",
+  "quit",
+  "wizard on|off",
+  "connect",
+  "build",
+  "flash",
+  "factoryreset",
+  "pair",
+  "send <command>",
+  "pane on|off",
+  "terminal clear"
+]
+
+/** Longest ranked prefix of promptHints that fits in `width` columns. */
+export function promptHintLine(width: number): string {
+  let line = ""
+  for (const hint of promptHints) {
+    const next = line === "" ? hint : `${line} · ${hint}`
+    if (next.length > width) break
+    line = next
+  }
+  return line
+}
+
 const clock = (value: number): string =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
 
@@ -1528,9 +1559,7 @@ export function App(
           />
         </box>
         <Show when={!short()}>
-          <text style={{ fg: theme.muted }}>
-            wizard on|off · ? help · connect · send &lt;command&gt; · pane on|off · terminal clear · build · flash · pair · quit
-          </text>
+          <text style={{ fg: theme.muted }}>{promptHintLine(dimensions().width - 4)}</text>
         </Show>
       </box>
     </box>

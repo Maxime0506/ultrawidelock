@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { App, CommandOutput, findRepositoryRoot, SerialTerminal, SidePane, WizardCard } from "../src/app"
+import { App, CommandOutput, findRepositoryRoot, promptHintLine, promptHints, SerialTerminal, SidePane, WizardCard } from "../src/app"
 import { makeBoardState } from "../src/devices"
 import type { Job } from "../src/types"
 
@@ -353,4 +353,23 @@ test("reports rather than guesses when it is started outside a checkout", () => 
   expect(inside.found).toBe(true)
   expect(existsSync(join(inside.path, "Makefile"))).toBe(true)
   expect(existsSync(join(inside.path, "modules"))).toBe(true)
+})
+
+test("the prompt hint keeps the commands that matter when the terminal is narrow", () => {
+  // The strip is truncated from the tail, so this pins the ranking, not the text.
+  const narrow = promptHintLine(76)
+  expect(narrow.length).toBeLessThanOrEqual(76)
+  for (const hint of ["? help", "quit", "connect", "build", "flash", "factoryreset"]) {
+    expect(narrow).toContain(hint)
+  }
+
+  const wide = promptHintLine(200)
+  expect(wide.split(" · ")).toEqual(promptHints)
+  // Never truncate mid-entry: every width must yield a clean separator list.
+  for (let width = 6; width <= 200; width++) {
+    const line = promptHintLine(width)
+    expect(line.length).toBeLessThanOrEqual(width)
+    if (line !== "") expect(promptHints).toContain(line.split(" · ").at(-1) ?? "")
+  }
+  expect(promptHintLine(3)).toBe("")
 })
