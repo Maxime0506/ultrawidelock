@@ -35,6 +35,9 @@ bench.env
 /web-flasher/openaliro-matter-lock-esp32s3.bin
 /web-flasher/openaliro-matter-lock-esp32c5.bin
 
+# Python build artifacts from an editable install of the HA agent
+*.egg-info/
+
 # macOS
 .DS_Store
 
