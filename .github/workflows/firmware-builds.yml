@@ -63,7 +63,7 @@ jobs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
       nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
       esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
-      aliro-source: ${{ steps.filter.outputs.aliro-source }}
+      aliro-blob: ${{ steps.filter.outputs.aliro-blob }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'push' || github.event_name == 'pull_request'
@@ -72,7 +72,7 @@ jobs:
           # Push events diff against the pre-push commit, which a depth-1
           # clone does not have.
           fetch-depth: 0
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         id: filter
         with:
@@ -105,19 +105,20 @@ jobs:
               - scripts/bootstrap.sh
               - scripts/build.sh
               - ports/nrf5340dk/**/!(*.md)
+              - modules/woz_aliro_stack/**/!(*.md)
+              - modules/woz_nfc/**/!(*.md)
               - modules/woz_uwb/**/!(*.md)
               - modules/woz_aliro_ecp/**/!(*.md)
               - modules/woz_port/**/!(*.md)
               - deps/dw3000/**/!(*.md)
               - .github/workflows/firmware-builds.yml
-            # The source-Aliro nRF build (ALIRO_SOURCE=1) below. Its unique
-            # input is the in-tree source stack; the rest are the shared deps the
-            # nRF app compiles either way (a break in them can surface only on
-            # the source path). The blob nrf5340dk job ignores woz_aliro_stack,
-            # so this filter is what gives that tree any CI compile at all.
-            aliro-source:
-              - modules/woz_aliro_stack/**/!(*.md)
+            # Compatibility build for the explicit ALIRO_SOURCE=0 fallback.
+            # Source-stack-only edits cannot affect it; shared nRF inputs can.
+            aliro-blob:
+              - ports/nrf5340dk/**/!(*.md)
+              - modules/woz_nfc/**/!(*.md)
               - modules/woz_uwb/**/!(*.md)
+              - modules/woz_aliro_ecp/**/!(*.md)
               - modules/woz_port/**/!(*.md)
               - deps/dw3000/**/!(*.md)
               - west.yml
@@ -163,8 +164,9 @@ jobs:
           idf.py build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
-  # nRF5340 DK Zephyr/NCS build: bootstrap the pinned west workspace (multi-GB
-  # fetch), then the sysbuild image. The bootstrapped workspace is cached,
+  # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
+  # stack: bootstrap the pinned west workspace (multi-GB fetch), then the
+  # sysbuild image. The bootstrapped workspace is cached,
   # keyed on everything that shapes its content — the pin record (west.yml),
   # the applier (scripts/bootstrap.sh: add-on pin, NCS version and patch list
   # live there) and the patch files — so patch drift forces a cold bootstrap.
@@ -237,21 +239,14 @@ jobs:
           ./scripts/build.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
-  # The same nRF5340 DK app, but with the in-tree Aliro source stack linked
-  # in place of the vendor binary (ALIRO_SOURCE=1 →
-  # CONFIG_WOZ_ALIRO_SOURCE_STACK=y, build.sh). The blob nrf5340dk job never
-  # compiles modules/woz_aliro_stack, so without this the ~5k-line source
-  # replacement rots until someone bench-builds it. Kept off unrelated PRs:
-  # runs on push, manual dispatch, and PRs that touch the source stack or its
-  # shared deps (the aliro-source filter) — so a break is caught before merge,
-  # not after. Shares the blob job's workspace cache (same key: ALIRO_SOURCE is
-  # a compile-time -D and does not change the bootstrapped tree), and bootstraps
-  # itself on a miss so a source-stack-only PR — which the blob job skips — is
-  # still self-sufficient. No nightly: unlike the Matter build every input here
-  # is pinned, so a canary run would add nothing.
-  nrf5340dk-aliro-source:
+  # Compatibility build for the legacy Nordic Aliro archive. The normal
+  # nrf5340dk job above compiles the in-tree source stack; this sibling proves
+  # ALIRO_SOURCE=0 remains usable for regression isolation. It shares the
+  # bootstrapped workspace cache because the choice is compile-time only, but
+  # has a distinct compiler cache. Source-stack-only changes skip this job.
+  nrf5340dk-aliro-blob:
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.aliro-source == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.aliro-blob == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -287,13 +282,13 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
-          key: ccache-nrf5340dk-aliro-source-${{ github.run_id }}
+          key: ccache-nrf5340dk-aliro-blob-${{ github.run_id }}
           restore-keys: |
-            ccache-nrf5340dk-aliro-source-
-      - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild, ALIRO_SOURCE=1)
+            ccache-nrf5340dk-aliro-blob-
+      - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild, ALIRO_SOURCE=0)
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
-          ALIRO_SOURCE=1 ./scripts/build.sh build
+          ALIRO_SOURCE=0 ./scripts/build.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # ESP32-S3 Matter door lock against esp-matter at the bench-validated

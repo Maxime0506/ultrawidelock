@@ -39,6 +39,8 @@ COV_MIN=90         line-coverage floor, matching host-tests.yml
 NO_COLOR=1         plain output (colour is the default, pipe or not)
 FAIL_TAIL=40       lines of a failing gate's log to show inline
 
+**discussed in** [`docs/troubleshooting.md`](../../troubleshooting.md)
+
 ## API
 
 ### `gate_need()`
@@ -78,15 +80,18 @@ runs a raw command, this reproduces it verbatim.
 **called by** `run_gate`
 
 ### `gate_result()`
-`scripts/verify.sh:334`
+`scripts/verify.sh:344`
 
-Write the result of a gate to a temporary file in RUNDIR and atomically rename it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an optional reason string.
-Called from inside a lane subshell; the summary reads these files after all lanes join.
+Write the result of a gate to a temporary file in RUNDIR and atomically rename
+it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an
+optional reason string. Called from inside a lane subshell; the summary reads
+these files after all lanes join. Losing this record must fail the lane: a
+missing result can never be treated as a passing gate.
 
 **called by** `run_gate`
 
 ### `gate_row()`
-`scripts/verify.sh:342`
+`scripts/verify.sh:359`
 
 Prints the gate's row as it finishes. Concurrent lanes write these
 interleaved, which is fine: each row is a single printf, and the summary
@@ -95,14 +100,14 @@ below is rebuilt from the .rc files rather than from what was printed.
 **called by** `run_gate`  ·  **calls** `gate_label`
 
 ### `run_gate()`
-`scripts/verify.sh:358`
+`scripts/verify.sh:375`
 
 0 passed, 1 failed, 2 did not run. Called from inside a lane subshell.
 
 **called by** `run_lane`  ·  **calls** `gate_need`, `gate_need_py`, `gate_result`, `gate_row`, `gate_run`
 
 ### `run_lane()`
-`scripts/verify.sh:415`
+`scripts/verify.sh:432`
 
 One lane, in order. A failure stops the rest of that lane but not the others:
 the gates sharing a lane share a build directory, so running the next one over
@@ -111,6 +116,6 @@ a half-built tree would only produce a second, confusing failure.
 **calls** `run_gate`
 
 ### `why_notrun()`
-`scripts/verify.sh:493`
+`scripts/verify.sh:511`
 
 Why a gate never started: its own lane stopped, or the tripwire did.

@@ -1,7 +1,7 @@
 /**
  * @file nfc_select.c
  * NFC SELECT command builder and response parser for Aliro. build_select_command emits 00 A4 04 00
- * 09 <AID> 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
+ * 09 `AID` 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
  * extracting protocol version (expedited phase only) and extended-length sizes (0x7f66 TLV).
  * parse_select_response and parse_select_response_ex validate the trailing 9000, check AID, and
  * call parse_proprietary_information.

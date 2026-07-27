@@ -15,7 +15,7 @@
 #   PRISTINE=1 scripts/build.sh build       # same as rebuild
 #   UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 #   PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-#   ALIRO_SOURCE=1 scripts/build.sh build   # independent source stack (discovery slice)
+#   ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
 #   UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 set -euo pipefail
 
@@ -146,10 +146,16 @@ do_build() {
   local strict=""
   [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
 
-  # ALIRO_SOURCE=1: compile the independent public API directly into the nRF app.
-  # NFC expedited-standard, expedited-fast, and step-up use the source stack.
-  local aliro_source=""
-  [ "${ALIRO_SOURCE:-0}" = 1 ] && aliro_source="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y"
+  # The independent public API is the default Aliro implementation. Keep the
+  # Nordic archive available as an explicit diagnostic fallback so the two
+  # implementations can still be compared while the source stack matures.
+  local aliro_source="${ALIRO_SOURCE:-1}"
+  local aliro_source_flag=""
+  case "$aliro_source" in
+    1) aliro_source_flag="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y" ;;
+    0) aliro_source_flag="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=n" ;;
+    *) die "unknown ALIRO_SOURCE='$aliro_source'" "use 1 (source, default) or 0 (Nordic binary)" ;;
+  esac
 
   # ALIRO_TRACE=1: capture proprietary/source BLE session boundaries without
   # exposing URSK itself (only its truncated SHA-256 fingerprint is logged).
@@ -168,7 +174,7 @@ do_build() {
     fi
   fi
   # NFC=pn532|st25r|none selects the reader behind the woz_nfc transport seam.
-  # Default: st25r — the upstream X-NUCLEO ST25R500 path, matching the build
+  # Default: st25r, the upstream X-NUCLEO-NFC12A1/ST25R300 path, matching the build
   # before the seam existed. NFC=none is for a DK with no NFC frontend: nothing
   # is compiled in and boot proceeds BLE/UWB-only with no NFC error.
   local -a nfc_flags=()
@@ -234,7 +240,7 @@ do_build() {
   )
   [ -n "$selftest" ] && dflags+=("$selftest")
   [ -n "$strict" ] && dflags+=("$strict")
-  [ -n "$aliro_source" ] && dflags+=("$aliro_source")
+  dflags+=("$aliro_source_flag")
   if [ -n "$aliro_trace" ]; then
     dflags+=(
       "$aliro_trace"
@@ -264,7 +270,12 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_source:+   (Aliro source ON)}${aliro_trace:+   (Aliro trace ON)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_trace:+   (Aliro trace ON)}"
+  if [ "$aliro_source" = 1 ]; then
+    kv "aliro" "in-tree source (default)"
+  else
+    kv "aliro" "Nordic binary (fallback)"
+  fi
   kv "nfc"   "$nfc_name"
   if [ "$pristine" = 1 ]; then
     kv "mode" "${YLW}pristine${RST} ${DIM}($reason)${RST}"
@@ -279,14 +290,14 @@ do_build() {
     ( cd "$WS" && launch west build -d "$BUILD" )
   fi
 
-  if [ -n "$aliro_source" ]; then
+  if [ "$aliro_source" = 1 ]; then
     local aliro_map="$BUILD/matter-aliro-door-lock-app/zephyr/zephyr.map"
     [ -f "$aliro_map" ] || die "Aliro source link map not found" "$aliro_map"
     if grep -q 'libaliro_ble\.a' "$aliro_map"; then
       die "proprietary Aliro archive still contributed linked code" \
-          "source override must define the complete application-used public ABI"
+          "source stack must define the complete application-used public ABI"
     fi
-    ok "Aliro source override linked without libaliro_ble.a members"
+    ok "Aliro source stack linked without libaliro_ble.a members"
   fi
   printf '%s' "$sig" > "$sig_file"
   local secs=$(( SECONDS - start ))

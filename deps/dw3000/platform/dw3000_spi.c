@@ -111,7 +111,13 @@ void dw3000_spi_fini(void)
 static int dw3000_spi_xfer_poll(const struct spi_buf_set* tx,
 								const struct spi_buf_set* rx)
 {
-	struct k_poll_signal sig;
+	/* File-scope, not on the stack: spi_transceive_signal() hands this pointer
+	 * to the driver, which raises it from the SPI END IRQ whenever the transfer
+	 * finally completes.  A stack-local signal that we abandon on the timeout
+	 * path below would be written through after its frame is gone.  Safe as a
+	 * single instance because DW3000 transfers are already serialised -- they
+	 * share the spi_cfg pointer too. */
+	static struct k_poll_signal sig;
 	unsigned int signaled = 0;
 	int result = 0;
 	uint32_t spins = 0;

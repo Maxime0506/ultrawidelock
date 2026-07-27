@@ -323,17 +323,34 @@ print("  licence store consistent")'
 # "status<TAB>seconds<TAB>reason", and one <gate>.out with its output. Written
 # to a .tmp and renamed, because the parent reads these while lanes are still
 # running and a half-written line would be read as a status.
-RUNDIR="$(mktemp -d -t oa-verify.XXXXXX)"
+if ! RUNDIR="$(mktemp -d -t oa-verify.XXXXXX)"; then
+	printf 'verify.sh: could not create the result directory\n' >&2
+	exit 2
+fi
+if [ -z "$RUNDIR" ] || [ ! -d "$RUNDIR" ] || [ ! -w "$RUNDIR" ]; then
+	printf 'verify.sh: result directory is unavailable: %s\n' "${RUNDIR:-<empty>}" >&2
+	exit 2
+fi
 # Kept only when a gate failed: the summary prints the path to its full log, so
 # deleting it on the way out would hand the reader a path to nothing.
 KEEPDIR=""
 trap '[ -n "$KEEPDIR" ] || rm -rf "$RUNDIR"' EXIT
 
-# Write the result of a gate to a temporary file in RUNDIR and atomically rename it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an optional reason string.
-# Called from inside a lane subshell; the summary reads these files after all lanes join.
+# Write the result of a gate to a temporary file in RUNDIR and atomically rename
+# it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an
+# optional reason string. Called from inside a lane subshell; the summary reads
+# these files after all lanes join. Losing this record must fail the lane: a
+# missing result can never be treated as a passing gate.
 gate_result() { # <gate> <status> <secs> <reason>
-	printf '%s\t%s\t%s\n' "$2" "$3" "$4" >"$RUNDIR/$1.rc.tmp"
-	mv -f "$RUNDIR/$1.rc.tmp" "$RUNDIR/$1.rc"
+	if ! printf '%s\t%s\t%s\n' "$2" "$3" "$4" >"$RUNDIR/$1.rc.tmp"; then
+		printf 'verify.sh: could not record result for %s\n' "$1" >&2
+		return 1
+	fi
+	if ! mv -f "$RUNDIR/$1.rc.tmp" "$RUNDIR/$1.rc"; then
+		printf 'verify.sh: could not publish result for %s\n' "$1" >&2
+		rm -f "$RUNDIR/$1.rc.tmp"
+		return 1
+	fi
 }
 
 # Prints the gate's row as it finishes. Concurrent lanes write these
@@ -360,7 +377,7 @@ run_gate() { # <gate>
 
 	case " $SKIP " in
 	*" $g "*)
-		gate_result "$g" skip-req 0 "SKIP="
+		gate_result "$g" skip-req 0 "SKIP=" || return 1
 		gate_row "$g" skip-req 0 ""
 		return 2
 		;;
@@ -374,7 +391,7 @@ run_gate() { # <gate>
 	# run cannot fail the sweep for a missing tool, so a host with no cbmc
 	# installed is not held to it.
 	if [ "$g" = cbmc ] && [ -z "${WITH_CBMC:-}" ]; then
-		gate_result "$g" skip-optin 0 "opt-in, WITH_CBMC=1"
+		gate_result "$g" skip-optin 0 "opt-in, WITH_CBMC=1" || return 1
 		gate_row "$g" skip-optin 0 ""
 		return 2
 	fi
@@ -389,7 +406,7 @@ run_gate() { # <gate>
 		# Counted apart from a SKIP= skip, and fatal at the end. Scoping a gate
 		# out by hand is a decision; not having installed its tool is not, and
 		# an exit status of 0 here is what lets it reach CI.
-		gate_result "$g" skip-tool 0 "needs $missing"
+		gate_result "$g" skip-tool 0 "needs $missing" || return 1
 		gate_row "$g" skip-tool 0 "needs $missing"
 		return 2
 	fi
@@ -400,11 +417,11 @@ run_gate() { # <gate>
 	secs=$((t1 - t0))
 
 	if [ "$rc" -eq 0 ]; then
-		gate_result "$g" pass "$secs" ""
+		gate_result "$g" pass "$secs" "" || return 1
 		gate_row "$g" pass "$secs" ""
 		return 0
 	fi
-	gate_result "$g" fail "$secs" "exit $rc"
+	gate_result "$g" fail "$secs" "exit $rc" || return 1
 	gate_row "$g" fail "$secs" "exit $rc"
 	return 1
 }
@@ -469,7 +486,7 @@ t_all=$(($(date +%s) - t_all0))
 # Rebuilt from the .rc files, not from what scrolled past: with lanes running at
 # once the printed order is arrival order, and this table is the gate table's.
 STATUS=() REASON=()
-nfail=0 nskip=0 npass=0 nskip_tool=0 nskip_optin=0
+nfail=0 nskip=0 npass=0 nnotrun=0 nskip_tool=0 nskip_optin=0
 for ((i = 0; i < n; i++)); do
 	g="${GATES[i]}"
 	if [ -f "$RUNDIR/$g.rc" ]; then
@@ -486,6 +503,7 @@ for ((i = 0; i < n; i++)); do
 	skip-req) nskip=$((nskip + 1)) ;;
 	skip-optin) nskip=$((nskip + 1)) nskip_optin=$((nskip_optin + 1)) ;;
 	skip-tool) nskip=$((nskip + 1)) nskip_tool=$((nskip_tool + 1)) ;;
+	notrun) nnotrun=$((nnotrun + 1)) ;;
 	esac
 done
 
@@ -528,6 +546,15 @@ if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_optin" ]; then
 	done
 	printf '  %s%s %d gate(s) SKIPPED, CI will still run them: %s%s\n\n' \
 		"$YEL" "$TIL" "$nskip" "$names" "$RESET"
+fi
+
+# A normal failed gate has a durable `fail` record; only gates downstream of it
+# may be absent. No recorded failure plus an absent result means bookkeeping
+# broke, and accepting that state recreates the false "all 0 passed" verdict.
+if [ "$nnotrun" -gt 0 ] && [ "$nfail" -eq 0 ]; then
+	printf '  %s%s verify FAILED: result bookkeeping incomplete (%d gate(s) unrecorded)%s\n\n' \
+		"$RED" "$CRS" "$nnotrun" "$RESET"
+	exit 2
 fi
 
 if [ "$nfail" -gt 0 ]; then

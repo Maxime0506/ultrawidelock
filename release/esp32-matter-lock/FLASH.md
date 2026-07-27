@@ -1,13 +1,16 @@
-# openaliro on the ESP32-S3: flash guide
+# openaliro on ESP32-S3/C5: flash guide
 
-The complete Aliro Matter lock on a single ESP32-S3: it commissions into Apple Home
-over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you walk up
-(BLE + UWB approach unlock; no NFC tap on this target).
+The complete Aliro Matter lock on a single ESP32-S3 or ESP32-C5: it commissions
+into Apple Home over Wi-Fi, your iPhone carries the key in Wallet, and the lock
+opens as you walk up (BLE + UWB approach unlock; no NFC tap on these targets).
+ESP32-S3 is hardware-validated. The C5 image is release-built, with hardware
+validation pending.
 
 | File | What it is |
 |---|---|
-| `openaliro-matter-lock-esp32s3.bin` | one merged image (bootloader + partitions + app), flashed at 0x0 |
-| `flash.sh` | flashes the image with esptool |
+| `openaliro-matter-lock-esp32s3.bin` | merged S3 image (bootloader + partitions + app), flashed at 0x0 |
+| `openaliro-matter-lock-esp32c5.bin` | merged C5 image, release-built but not hardware-validated |
+| `flash.sh` | flashes the S3 image with esptool; use the browser or manual command below for C5 |
 | `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
 | `VERSION.txt` | release tag, commit, and build date |
 
@@ -15,7 +18,7 @@ over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you wal
 
 | Part | Role |
 |---|---|
-| ESP32-S3 dev board | host: Wi-Fi, Matter, BLE, ranging engine. Validated on ESP32-S3-WROOM N16R8 (16 MB flash, 8 MB PSRAM); smaller variants untested |
+| ESP32-S3 or ESP32-C5 dev board | host: Wi-Fi, Matter, BLE, ranging engine. S3 validated on ESP32-S3-WROOM N16R8. C5 needs at least 8 MB flash and remains bench-pending |
 | Qorvo DWM3000EVB (DW3110) | UWB radio, hand-wired over SPI (11 connections) |
 | 11 jumper wires | the SPI wiring |
 | USB cable | power, flashing, serial console; must be a data cable |
@@ -30,7 +33,7 @@ Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor), a Home hu
 2. `pip install esptool` (`pip3` on some systems, `py -m pip` on Windows).
 3. A serial terminal: `screen` (built into macOS and most Linux), `minicom`, or PuTTY.
 
-Boards using the S3's native USB need no driver; boards with a CP210x or CH340 bridge
+Boards using native USB need no driver; boards with a CP210x or CH340 bridge
 may need that vendor's driver on Windows and older macOS.
 
 ## 3. Wire it
@@ -42,23 +45,30 @@ may need that vendor's driver on Windows and older macOS.
 Power the EVB from **3V3**, not 5 V (the DW3000 is a 3.3 V part), share ground, and
 wire per the build's source of truth `ports/esp32/components/woz_uwb/port/board_pins.h`:
 
-| DWM3000EVB (Arduino pin) | Signal | ESP32-S3 |
-|---|---|---|
-| D13 | SCLK | GPIO12 |
-| D11 | MOSI | GPIO11 |
-| D12 | MISO | GPIO13 |
-| D10 | CS | GPIO10 |
-| D8 | IRQ | GPIO5 |
-| D7 | RSTn | GPIO4 |
-| D9 | WAKEUP | GPIO6 |
-| 3V3 | power | 3V3 |
-| GND | ground | GND |
-| D1 | SPI-POL | GND (mode-0 strap) |
-| D0 | SPI-PHA | GND (mode-0 strap) |
+| DWM3000EVB (Arduino pin) | Signal | ESP32-S3 | ESP32-C5 |
+|---|---|---|---|
+| D13 | SCLK | GPIO12 | GPIO8 |
+| D11 | MOSI | GPIO11 | GPIO9 |
+| D12 | MISO | GPIO13 | GPIO23 |
+| D10 | CS | GPIO10 | GPIO10 |
+| D8 | IRQ | GPIO5 | GPIO5 |
+| D7 | RSTn | GPIO4 | GPIO4 |
+| D9 | WAKEUP | GPIO6 | GPIO6 |
+| 3V3 | power | 3V3 | 3V3 |
+| GND | ground | GND | GND |
+| D1 | SPI-POL | GND (mode-0 strap) | same |
+| D0 | SPI-PHA | GND (mode-0 strap) | same |
 
 The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision already fixes the mode (check its manual).
 
 ## 4. Flash
+
+Fastest for either chip: open the
+[browser flasher](https://asxeem.github.io/openaliro/flash/) in Chrome or Edge,
+select the board, and choose **Install**. The page and manifest are dry-checked,
+but the repository does not yet record a successful real WebSerial flash.
+
+The bundled helper currently handles S3 only:
 
 ```bash
 bash flash.sh
@@ -68,10 +78,11 @@ esptool auto-detects the port; to name one, `bash flash.sh /dev/ttyACM0`
 (`/dev/cu.usbmodem…` on macOS, `COM…` on Windows). Chip not detected? Hold BOOT while
 plugging in, retry, then replug.
 
-Manual equivalent:
+Manual equivalents:
 
 ```bash
 esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
+esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c5.bin
 ```
 
 Reflashing wipes any previous commissioning.
@@ -119,4 +130,6 @@ and
 ## Notes
 
 - Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.
+- ESP32-S3 has live-iPhone hardware validation. ESP32-C5 is build/release-supported
+  and must remain labelled bench-pending.
 - Reflashing wipes commissioning; remove the stale accessory from Home before re-adding.

@@ -1,6 +1,6 @@
 # Installing
 
-The nRF5340 DK is the primary target; the ESP32-S3 apps port the same engine.
+The nRF5340 DK is the primary target; the ESP32-S3 and ESP32-C5 apps port the same engine.
 No hardware needed until you flash.
 
 ## Get the code
@@ -11,6 +11,19 @@ cd openaliro
 ```
 
 Every command below runs from this directory.
+
+## Fastest install: browser flash for ESP32-S3/C5
+
+Release images can be installed from the
+[browser flasher](https://asxeem.github.io/openaliro/flash/) in Chrome or Edge:
+connect the board, select S3 or C5, and choose **Install**. This path needs no
+ESP-IDF or local flashing tools. Its implementation and local test procedure are
+documented in [`web-flasher/README.md`](../web-flasher/README.md).
+
+The page and dual-chip manifest are shipped and dry-checked, but the repository
+does not record a successful real WebSerial flash yet. Treat browser flashing as
+experimental until that bench check exists. ESP32-S3 is hardware-validated
+through the normal flash path; ESP32-C5 has build and release support only.
 
 ## nRF5340 DK (primary target)
 
@@ -129,17 +142,32 @@ A gate whose python package is missing fails the sweep exactly as a missing
 binary does. Without `markdown`, `make test` runs 11 fewer checks than CI does,
 including the one that catches a stale committed `FLASH.html`.
 
-## ESP32-S3 ports
+The sandboxed `git pr` candidate has a narrower, explicit contract because it
+has no network, real home directory, user-local tools, or gitignored `.venv`.
+Configure its tracked verifier once:
+
+```bash
+git config git-pr.verify scripts/verify-isolated.sh
+```
+
+That wrapper runs the committed twin self-test and every hermetic gate available
+inside the candidate. It names the seven skipped gates in the verdict; CI still
+runs them. Run `make verify` directly for the full developer sweep.
+
+## ESP32-S3 and ESP32-C5 ports
 
 Both apps expect ESP-IDF at `~/esp/esp-idf` (override: `IDF_EXPORT=`); CI
 pins ESP-IDF v5.5.4 and esp-matter in
 [`firmware-builds.yml`](../.github/workflows/firmware-builds.yml).
 
+Use `esp32s3` for the hardware-validated target or `esp32c5` for the
+build/release-supported target. No C5 bench validation is recorded.
+
 **Reader** (`../ports/esp32/apps/reader`): plain ESP-IDF, no esp-matter.
 
 ```bash
 cd ports/esp32/apps/reader
-idf.py set-target esp32s3   # once per checkout, needs the IDF env exported
+idf.py set-target esp32s3   # or: idf.py set-target esp32c5
 make build
 make flash
 ```
@@ -149,14 +177,14 @@ esp-matter at `~/esp/esp-matter` (override: `ESP_MATTER_PATH=`).
 
 ```bash
 cd ports/esp32/apps/matter-lock
-make set-target
+make set-target TARGET=esp32s3   # or: TARGET=esp32c5
 make go
 ```
 
 `make go` = build + flash + monitor; `flash` and `monitor` refuse
 SEGGER/J-Link ports, so they can never touch an nRF5340 DK on the bench.
 
-Wiring: [esp32-bringup.md](esp32-bringup.md). Traps:
+Wiring for both chips: [esp32-bringup.md](esp32-bringup.md). Traps:
 [esp32-gotchas.md](esp32-gotchas.md).
 
 ## Documentation site
