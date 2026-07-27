@@ -59,5 +59,5 @@ committed `docs/` tree, so a contributor never needs it. Regenerating `docs/` do
 - The browser flasher selects the S3 or C5 release image without local tools.
   It is built and dry-checked, but a successful real WebSerial flash is not yet
   recorded. Keep that caveat in release notes until the bench check exists.
-- Other variants (`CHIP=dw3720`, `HA=1`, `ALIRO_SOURCE=1`, `NFC=pn532|none`,
+- Other variants (`CHIP=dw3720`, `HA=1`, `ALIRO_SOURCE=0`, `NFC=pn532|none`,
   and the bench reader app) build from source and are not release-bundled.

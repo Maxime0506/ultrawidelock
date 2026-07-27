@@ -8,20 +8,32 @@ The credential-auth facts are cited to specification section and line in
 [`docs/esp32-gotchas.md` section 4](../../docs/esp32-gotchas.md), which also records the
 field-of-use terms a downstream user inherits.
 
-Enable it for the existing nRF application with:
+The existing nRF application uses this implementation by default:
 
 ```sh
-make build ALIRO_SOURCE=1
+make build
 ```
 
-The source option removes the imported `aliro` archive from Zephyr's link list,
-while retaining the add-on's public headers and application integration. The
-build then rejects any link map in which `libaliro_ble.a` contributed code.
+The source build removes the imported `aliro` archive from Zephyr's link list while
+retaining the add-on's public headers and application integration. The build then
+rejects any link map in which `libaliro_ble.a` contributed code. For regression
+isolation only, `make build ALIRO_SOURCE=0` selects the legacy Nordic archive.
 
-**Validation:** a dedicated CI job builds the nRF firmware with
-`ALIRO_SOURCE=1`, and the portable advertising and protocol files run in the
-host suite. The full source-stack path has no recorded hardware validation and
-is not included in release bundles.
+## Testing
+
+1. `make test` runs the host known-answer and parser suites for the C protocol
+   layer without NCS or hardware.
+2. `make rebuild` compiles the complete nRF source stack. Its post-link check
+   proves that `libaliro_ble.a` supplied no linked member.
+3. Flash that image and run the nRF rows in
+   [`docs/hardware-validation.md`](../../docs/hardware-validation.md). The boot
+   console must include `Aliro source stack enabled`; only the phone tests verify
+   NFC authentication and BLE/UWB session behavior end to end.
+
+**Validation:** the default nRF CI job builds the firmware with this stack, and
+the portable advertising and protocol files run in the host suite. The full
+source-stack path has no recorded hardware validation and must pass the phone
+checklist before the next release.
 
 Implemented:
 

@@ -3,8 +3,10 @@
 How the UWB engine moves to a new chipset, what it costs, and how to prove a port did not
 change the code the validated target runs.
 
-The primary target is the nRF5340 DK on NCS v3.3.0 (hardware-validated end to end). A
-second port, ESP32-S3 on ESP-IDF, lives in [`ports/esp32/`](../ports/esp32/).
+The primary target is the nRF5340 DK on NCS v3.3.0. Its Nordic-binary path is
+hardware-validated end to end; the source-stack default has a dedicated firmware CI build
+and protocol host tests and awaits the full phone checklist. A second port, ESP32-S3 on
+ESP-IDF, lives in [`ports/esp32/`](../ports/esp32/).
 
 ## 1. The contract
 

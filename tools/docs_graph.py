@@ -61,8 +61,11 @@ SITE = Path("site")
 ARCH = SITE / "architecture.html"
 
 FIGURE_RE = re.compile(
-    r'<figure class="graph-wrap(?: [^"]*)?"[^>]*><div class="graph-shell">'
-    r'<pre class="mermaid">(.*?)</pre>.*?</figure>',
+    r'<figure\b(?=[^>]*\bclass="[^"]*\bgraph-wrap\b[^"]*")[^>]*>\s*'
+    r'<div\b(?=[^>]*\bclass="[^"]*\bgraph-shell\b[^"]*")[^>]*>\s*'
+    r'<pre\b(?=[^>]*\bclass="[^"]*\bmermaid\b[^"]*")[^>]*>'
+    r"(.*?)</pre>\s*</div>"
+    r"(?:\s*<figcaption\b[^>]*>.*?</figcaption>)?\s*</figure>",
     re.S,
 )
 PATH_RE = re.compile(r"(?:modules|ports)/[\w./-]+\.(?:cpp|c|h)")
@@ -569,7 +572,8 @@ def main() -> int:
         dirty = True
         print("    architecture graph split into overview + clustered detail")
 
-    if 'class="arch-dir"' in page:
+    grouped = 'class="arch-grp"' in page
+    if 'class="arch-dir"' in page or grouped:
         print("    module sections already tidied")
     else:
         page, heads, blocks = tidy_sections(page, slots)
@@ -586,7 +590,7 @@ def main() -> int:
             f"{blocks} depends-on row(s) compacted"
         )
 
-    if 'class="arch-grp"' in page:
+    if grouped:
         print("    module sections already grouped")
     else:
         page, n = group_sections(page, slots)

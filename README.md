@@ -37,7 +37,8 @@ make flash-erase   # first flash
 make term          # serial console
 ```
 
-Then use `make flash`.
+The in-tree Aliro stack is the default. Use `ALIRO_SOURCE=0` only for
+legacy Nordic-binary comparison. Then use `make flash`.
 
 ### ESP32-S3 / ESP32-C5
 
@@ -61,7 +62,7 @@ S3 is validated; C5 is build/release-tested.
 
 - **Unlock:** Home Key, BLE/UWB approach/relock, and NFC Express Mode.
 - **Security:** credential-bound DS-TWR plus a consistency gate.
-- **Validated:** approach on nRF5340/S3; NFC on nRF5340 + ST25R300.
+- **Validated:** released nRF Nordic-binary and ESP32-S3 approach paths; nRF NFC with ST25R300.
 - **Speed:** credential reuse, PHY prewarm, 15 ms BLE, and fast auth.
 - **Step-up:** Access Document verification and live advertisement tags.
 - **Home controls:** single-antenna cosmetic direction; Matter user attribution.
@@ -75,7 +76,7 @@ S3 is validated; C5 is build/release-tested.
 
 ## Hardware
 
-- **nRF5340:** DK + DW3110 + ST25R300; release/source, NFC + approach validated.
+- **nRF5340:** DK + DW3110 + ST25R300; released Nordic-binary path has NFC + approach validation; source-stack default is CI/host-tested pending the phone checklist.
 - **ESP32-S3:** DW3110; release/source/browser image, approach validated.
 - **ESP32-C5:** DW3110; release/source/browser image, build-tested.
 

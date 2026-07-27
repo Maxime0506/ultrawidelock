@@ -14,7 +14,7 @@ Set on the command line, e.g. `make build PRETTY=1 CHIP=dw3720`:
 | `SELFTEST=1` | radio TX/RX self-test at boot, no iPhone needed |
 | `STRICT=1` | drop suspect UWB range blocks |
 | `HA=1` | Home Assistant variant; needs `make bootstrap HA=1` too |
-| `ALIRO_SOURCE=1` | replace the Nordic Aliro binary with [`modules/woz_aliro_stack`](../modules/woz_aliro_stack); CI compile-gated and protocol host-tested, not hardware-validated |
+| `ALIRO_SOURCE=0` | use the legacy Nordic Aliro binary instead of the default in-tree stack; diagnostic comparison only |
 | `ALIRO_TRACE=1` | declared temporary BLE/session boundary trace; currently unavailable because the required vendor integration patch is absent; see [Capture safety](#capture-safety) |
 | `NFC=st25r` | use the default X-NUCLEO-NFC12A1/ST25R300 RFAL path; hardware-validated |
 | `NFC=pn532` | use the in-tree PN532 SPI transport; driver and APDU layers are host-tested, not hardware-validated |
@@ -37,6 +37,11 @@ touches.
   latency while armed, so use it only for a capture run.
 - `diag-latency.conf`: diagnostic only (`LAT=1` to `scripts/build.sh`),
   Matter debug logs for timing notification delays.
+
+`CONFIG_WOZ_ALIRO_SOURCE_STACK=y` is the nRF default. `scripts/build.sh` sets it
+explicitly and verifies the final link map contains no member from
+`libaliro_ble.a`. Keep `ALIRO_SOURCE=0` for comparison and regression isolation,
+not as the normal build.
 
 ## ESP32-S3 and ESP32-C5
 

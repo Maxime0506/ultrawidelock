@@ -7,14 +7,16 @@ the manual gate: run
 every applicable item before cutting a release, and record the results table in the
 release notes (see [`RELEASING.md`](RELEASING.md)).
 
-Two configurations have recorded bench evidence, so there are two checklists: the
-nRF5340 DK with its default ST25R300/RFAL path, and ESP32-S3. A release covering only
-one runs that target's rows and records the other as `n/a`.
+Two hardware paths have recorded bench evidence: the nRF5340 DK using the legacy
+Nordic binary with its default ST25R300/RFAL reader, and ESP32-S3. The in-tree
+Aliro stack is now the nRF default, but it does not inherit the legacy binary's
+result. It must pass the nRF checklist before release. A release covering only one
+target runs that target's rows and records the other as `n/a`.
 
 ESP32-C5 is built and bundled by the release workflow, but has no hardware
 validation record. Mark it build-only in release notes until a C5 checklist is
-defined and passed. The `ALIRO_SOURCE=1` and PN532 variants likewise have
-automated evidence only and do not inherit the default nRF checklist result.
+defined and passed. The PN532 variant likewise has automated evidence only and
+does not inherit the ST25R300 checklist result.
 
 ## nRF5340 DK
 
@@ -32,7 +34,7 @@ automated evidence only and do not inherit the default nRF checklist result.
 | HV-1 | `make test` on the release commit | Exit 0, all host KATs pass |
 | HV-2 | `make rebuild` (pristine) | Exit 0, image links and fits flash |
 | HV-3 | Flash a `make selftest` build, boot with no phone present | Boot self-test reports pass on the console |
-| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, no errors on the console, BLE advertising starts |
+| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, `Aliro source stack enabled` appears with no errors, BLE advertising starts |
 | HV-5 | Tap the phone on the NFC reader (Express Mode, screen off) | Lock actuates to unlocked; console logs the granted access |
 | HV-6 | Relock, then approach from well outside ranging distance, phone pocketed | Lock unlocks on approach with no phone interaction |
 | HV-7 | Walk away from the lock | Lock relocks after passing the hysteresis margin, and does not oscillate at the boundary |

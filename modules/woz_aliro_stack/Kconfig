@@ -3,10 +3,12 @@
 config WOZ_ALIRO_SOURCE_STACK
 	bool "Use the in-tree Aliro source implementation"
 	depends on NCS_ALIRO_BLE_UWB
+	default y
 	help
-	  Override the public Aliro symbols used by the application with the
-	  in-tree implementation. NFC expedited-standard, expedited-fast,
-	  step-up, and authenticated BLE/UWB messaging are implemented.
+	  Use the in-tree implementation for the public Aliro symbols consumed
+	  by the nRF application. This is the default. The repository build
+	  script can explicitly set this to n with ALIRO_SOURCE=0 for comparison
+	  with the legacy Nordic binary.
 
 config WOZ_ALIRO_APDU_BUFFER_SIZE
 	int "Aliro session APDU buffer size"

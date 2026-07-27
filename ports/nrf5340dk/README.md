@@ -1,7 +1,9 @@
 # nRF5340 DK (primary target)
 
-The primary build: NFC tap + UWB approach unlock, hardware-validated end to end.
-Build it from the repository root:
+The primary build: NFC tap + UWB approach unlock. The hardware path has been validated
+end to end with Nordic's Aliro binary; the in-tree source stack is now the default and
+must pass [`docs/hardware-validation.md`](../../docs/hardware-validation.md) before the
+next release. Build it from the repository root:
 
 ```bash
 make bootstrap     # fetch NCS + the Nordic add-on (~6.5 GB) into ./workspace
@@ -17,7 +19,7 @@ hardware-validated without a new checklist run.
 
 | Option | Selection | Evidence |
 |---|---|---|
-| `ALIRO_SOURCE=1` | in-tree Aliro source stack instead of the Nordic binary | dedicated CI firmware build plus host tests for the portable protocol layer |
+| `ALIRO_SOURCE=0` | legacy Nordic binary instead of the default source stack | diagnostic comparison and regression isolation |
 | `NFC=pn532` | in-tree PN532 SPI transport | driver and APDU host tests only |
 | `NFC=none` | no NFC reader; BLE/UWB remains enabled | source-build option only |
 | `ALIRO_TRACE=1` | temporary session trace | currently unavailable because the required vendor trace patch is absent |
@@ -48,8 +50,11 @@ the target is assembled in layers, from pristine upstream up:
    `diag-latency.conf`) that `make build` options select.
 4. `make build` (see [`scripts/build.sh`](../../scripts/build.sh)) drives `west build`
    with those overlays and injects the in-repo engine via `ZEPHYR_EXTRA_MODULES`
-   (`modules/woz_uwb`, `modules/woz_aliro_ecp`, `modules/woz_nfc`,
-   `modules/woz_aliro_stack`, `deps/dw3000`).
+   (`modules/woz_uwb`, `modules/woz_aliro_stack`, `modules/woz_aliro_ecp`,
+   `modules/woz_nfc`, `deps/dw3000`). The in-tree Aliro stack is the default and
+   the build rejects a link map containing members from Nordic's
+   `libaliro_ble.a`. `ALIRO_SOURCE=0` retains that binary only as a diagnostic
+   fallback.
 
 So the split is: shared engine in `modules/`, everything nRF5340-specific in this
 directory, build orchestration in `scripts/`, and the fetched app in `workspace/`
