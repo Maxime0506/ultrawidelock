@@ -63,8 +63,11 @@ NFC tap unlocks it as well. No app, no button.
 
 ## Targets
 
-Both targets unlock on approach against a live iPhone, and both have been validated on
-hardware. They share the UWB engine in `modules/woz_uwb` byte-for-byte.
+Both targets unlock on approach against a live iPhone and share the UWB engine in
+`modules/woz_uwb` byte-for-byte. The ESP32 path and the nRF path using Nordic's binary
+have been validated on hardware. The nRF source-stack default has a dedicated firmware CI
+build and protocol host tests, but must pass the full phone checklist before the next
+release.
 
 | Target | What it is | Where |
 |---|---|---|
@@ -86,6 +89,9 @@ make build         # → ./build/merged.hex
 make flash-erase   # first flash of a net-core image
 make flash         # every flash after that
 ```
+
+`make build` uses the in-tree Aliro stack. `ALIRO_SOURCE=0` is the legacy Nordic-binary
+fallback for regression isolation.
 
 Also available: `make test` (host test suite, no toolchain or hardware required),
 `make tools` (what the CI gates need on this machine, and what is missing),
@@ -132,7 +138,8 @@ scripts/           the machinery behind it (bootstrap, build, docs, workspace se
 modules/
   woz_port/        THE PORTING SEAM: woz_port.h + woz_log.h, the whole platform contract
   woz_uwb/         UWB engine: driver, FiRa MAC, CCC STS, M1-M4 codec (shared, all targets)
-  woz_aliro/       Aliro credential auth: key schedule, secure channels, wire codec, reader
+  woz_aliro/       ESP32 Aliro credential auth: key schedule, secure channels, wire codec
+  woz_aliro_stack/ nRF Aliro source stack: default replacement for Nordic's binary
   woz_aliro_ecp/   NFC ECP emitter for Express Mode tap (Nordic-licensed)
 ports/
   nrf5340dk/       primary target: patches + overlays laid over the fetched Nordic add-on
@@ -256,19 +263,22 @@ A layered stack; each layer is optional and depends only on the one below it:
   `driver/ fira/ ccc/ aliro/ facade/ shell/`): the CCC key ladder, MAC, STS, and DS-TWR
   responder, driving `deps/dw3000` directly. The M1-M4 ranging-setup codec is in
   `src/aliro/`, and callers come in through `facade/woz_uwb_facade.c`.
-- **`modules/woz_aliro/`**: the Aliro credential-auth reader — key schedule, secure
-  channels, wire codec, provisioning — shared source between the targets.
+- **`modules/woz_aliro/`**: the ESP32 Aliro credential-auth reader: key schedule,
+  secure channels, wire codec, and provisioning.
+- **`modules/woz_aliro_stack/`**: the nRF Aliro credential-auth and session stack,
+  compiled from source by default in place of Nordic's binary.
 - **`modules/woz_aliro_ecp/`**: NFC ECP emitter for the Express Mode (no Face ID) tap.
 - **`deps/dw3000/`**: Bruno Randolf's DW3000 decadriver (ISC).
 - **`ports/`**: one directory per target. `nrf5340dk/` is patches + overlays over the
   Nordic add-on; `esp32/` compiles the modules above unchanged, adds an ESP-IDF DW3000
   backend, and supplies its own reader stack in place of the Nordic add-on.
 
-On nRF the Nordic add-on owns BLE and Matter and hands the engine a plaintext ranging
-key; on ESP32 the port's own reader derives that key and hands it over at the same seam.
-Integration onto the fetched add-on is layered and never edited in place: patches in
-`ports/nrf5340dk/patches/`, configuration in `ports/nrf5340dk/overlays/`, modules in `modules/` +
-`deps/`.
+On nRF the Nordic add-on still owns the BLE transport and Matter application, while the
+in-tree source stack authenticates the credential, derives the ranging key, and hands it
+to the engine. `ALIRO_SOURCE=0` selects Nordic's binary only as a diagnostic fallback.
+On ESP32 the port's own reader reaches the same engine seam. Integration onto the fetched
+add-on is layered and never edited in place: patches in `ports/nrf5340dk/patches/`,
+configuration in `ports/nrf5340dk/overlays/`, modules in `modules/` + `deps/`.
 
 </details>
 

@@ -14,7 +14,9 @@
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-# Options forwarded to build.sh. Set on the command line: make build PRETTY=1
+# Options forwarded to build.sh. Set on the command line: make build PRETTY=1.
+# The in-tree Aliro stack is the default; ALIRO_SOURCE=0 selects the legacy
+# Nordic archive for comparison or regression isolation.
 CHIP     ?=
 PRETTY   ?=
 PRISTINE ?=
@@ -94,7 +96,8 @@ ws-seed:
 ##   Options: CHIP=dw3720 (default dw3000)  PRETTY=1  PRISTINE=1  SELFTEST=1
 ##            STRICT=1 (drop suspect ranges)
 ##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
-##            ALIRO_SOURCE=1  ALIRO_TRACE=1 (temporary BLE/UWB capture)
+##            ALIRO_SOURCE=0 (legacy Nordic binary fallback)
+##            ALIRO_TRACE=1 (temporary BLE/UWB capture)
 ##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
 ##            NFC=pn532|st25r|none (reader transport; default st25r)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720

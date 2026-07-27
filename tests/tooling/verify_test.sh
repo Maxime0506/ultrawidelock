@@ -96,7 +96,7 @@ workflow-lint.yml:zizmor                   zizmor
 firmware-builds.yml:changes                !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
-firmware-builds.yml:nrf5340dk-aliro-source !firmware: ESP-IDF/NCS toolchain
+firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
 release.yml:nrf5340dk                      !release: firmware toolchain
 release.yml:esp32-matter-lock              !release: firmware toolchain

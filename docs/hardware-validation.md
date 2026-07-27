@@ -26,7 +26,7 @@ only one target runs only that target's rows and records the other as `n/a`.
 | HV-1 | `make test` on the release commit | Exit 0, all host KATs pass |
 | HV-2 | `make rebuild` (pristine) | Exit 0, image links and fits flash |
 | HV-3 | Flash a `make selftest` build, boot with no phone present | Boot self-test reports pass on the console |
-| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, no errors on the console, BLE advertising starts |
+| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, `Aliro source stack enabled` appears with no errors, BLE advertising starts |
 | HV-5 | Tap the phone on the NFC reader (Express Mode, screen off) | Lock actuates to unlocked; console logs the granted access |
 | HV-6 | Relock, then approach from well outside ranging distance, phone pocketed | Lock unlocks on approach with no phone interaction |
 | HV-7 | Walk away from the lock | Lock relocks after passing the hysteresis margin, and does not oscillate at the boundary |

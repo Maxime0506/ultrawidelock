@@ -13,7 +13,7 @@ scripts/build.sh rebuild                # force a clean pristine build
 PRISTINE=1 scripts/build.sh build       # same as rebuild
 UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-ALIRO_SOURCE=1 scripts/build.sh build   # independent source stack (discovery slice)
+ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
 UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 
 **discussed in** [`docs/configuring.md`](../../configuring.md), [`docs/porting.md`](../../porting.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
@@ -85,14 +85,14 @@ Build the Aliro UWB firmware image. Runs preflight checks, resolves chip config,
 **calls** `die`, `hdr`, `kv`, `launch`, `ok`, `preflight`, `resolve_chip`, `sha`
 
 ### `require_built()`
-`scripts/build.sh:300`
+`scripts/build.sh:311`
 
 Verify that a west build has completed in BUILD directory (build.ninja exists). Called before flash operations to fail fast if build has not run.
 
 **calls** `die`
 
 ### `resolve_snr()`
-`scripts/build.sh:308`
+`scripts/build.sh:319`
 
 Resolve which J-Link probe to flash, into SNR. Only nRF5340DKs (board version
 PCA10095 in nrfutil device list) qualify, so another attached probe (e.g. a
