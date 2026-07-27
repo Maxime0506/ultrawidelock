@@ -2,22 +2,22 @@
 
 <p align="center"><strong>Build an Aliro lock for iPhone and Apple Watch.</strong><br/>Hands-free over BLE + UWB · Express Mode over NFC · No app</p>
 
-<p align="center"><a href="#start">Start</a> · <a href="#build">Build</a> · <a href="#features">Features</a> · <a href="#hardware">Hardware</a> · <a href="https://asxeem.github.io/openaliro/">Docs ↗</a></p>
+<p align="center"><a href="#start">Start</a> · <a href="#build">Build</a> · <a href="#features">Features</a> · <a href="#hardware">Hardware</a> · <a href="https://asxeem.github.io/openaliro/">Documentation ↗</a></p>
 
 <p align="center"><a href="https://github.com/asxeem/openaliro/actions/workflows/host-tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/asxeem/openaliro/host-tests.yml?branch=main&style=flat-square&label=tests" alt="host tests"/></a> <a href="https://github.com/asxeem/openaliro/actions/workflows/firmware-builds.yml"><img src="https://img.shields.io/github/actions/workflow/status/asxeem/openaliro/firmware-builds.yml?branch=main&style=flat-square&label=firmware" alt="firmware builds"/></a> <a href="https://github.com/asxeem/openaliro/actions/workflows/twin-web.yml"><img src="https://img.shields.io/github/actions/workflow/status/asxeem/openaliro/twin-web.yml?branch=main&style=flat-square&label=web%20twin" alt="web twin"/></a> <a href="https://github.com/asxeem/openaliro/releases"><img src="https://img.shields.io/github/v/release/asxeem/openaliro?style=flat-square" alt="latest release"/></a> <img src="https://img.shields.io/badge/license-source--available-lightgrey?style=flat-square" alt="source-available license"/></p>
 
 <p align="center"><img src="assets/hero.gif" width="720" alt="A real iPhone unlocking openaliro on approach"/><br/><sub>Real hardware · Real Wallet key · Real approach unlock</sub></p>
 
-Lock-side [Aliro](https://csa-iot.org/all-solutions/aliro/) firmware: BLE auth, UWB ranging, proximity/NFC unlock.
+<p align="center"><a href="web-twin/index.html"><kbd>Try web twin →</kbd></a>&nbsp;<a href="https://asxeem.github.io/openaliro/flash/"><kbd>Flash ESP32 →</kbd></a>&nbsp;<a href="https://github.com/asxeem/openaliro/releases/latest"><kbd>Latest release →</kbd></a>&nbsp;<a href="https://asxeem.github.io/openaliro/"><kbd>Documentation →</kbd></a></p>
+
+<p align="center">Lock-side <a href="https://csa-iot.org/all-solutions/aliro/">Aliro</a> firmware · BLE auth · UWB ranging · proximity/NFC unlock</p>
 
 ## Start
 
-- **Try it:** [web twin](web-twin/index.html) → **Walk up** → inspect BLE/UWB.
-- **Flash ESP32:** [browser flasher](https://asxeem.github.io/openaliro/flash/) → Chrome/Edge → connect S3/C5 → **Install**.
-- **Use a release:** download the [latest bundle](https://github.com/asxeem/openaliro/releases/latest), then follow its target `FLASH.md`.
-- **Check the code:** `make test` needs a C compiler, not an SDK or hardware.
-
-**More detail:** [full documentation](https://asxeem.github.io/openaliro/).
+- **Twin:** press **Walk up** to inspect every BLE/UWB step.
+- **Browser flash:** Chrome/Edge · connect S3/C5 · **Install**.
+- **Release:** follow the target `FLASH.md`.
+- **Local test:** `make test` needs a C compiler, not an SDK or hardware.
 
 ## Build
 
@@ -79,12 +79,10 @@ S3 is validated; C5 is build/release-tested.
 - **ESP32-S3:** DW3110; release/source/browser image, approach validated.
 - **ESP32-C5:** DW3110; release/source/browser image, build-tested.
 
-## Thanks
+## Credits
 
-<p align="center"><sub>Thanks: <a href="https://github.com/br101">@br101</a> · <a href="https://github.com/kormax">@kormax</a> · <a href="https://github.com/rednblkx">@rednblkx</a> · <a href="https://github.com/scottjg">@scottjg</a> · RF ideas · Home Key · source stack · PN532 · chipset work</sub></p>
+Thanks: [@br101](https://github.com/br101) · [@kormax](https://github.com/kormax/) · [@rednblkx](https://github.com/rednblkx/) · [@scottjg](https://github.com/scottjg/).
 
-## License
+---
 
-ISC project code; mixed vendor terms; see [`LICENSE`](LICENSE).
-
-<p align="center"><sub>Independent project · No vendor or standards-body affiliation<br/>Provided as is · No warranty · Do not rely on it to secure anything valuable</sub></p>
+<p align="center"><sub>License: ISC project code · mixed vendor terms · <a href="LICENSE">LICENSE</a><br/>Independent project · No affiliation · No warranty · Do not secure valuables with it</sub></p>
