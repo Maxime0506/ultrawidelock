@@ -775,7 +775,7 @@ construction, and response parsing for credential exchange and signature verific
 
 @file nfc_select.c
 NFC SELECT command builder and response parser for Aliro. build_select_command emits 00 A4 04 00
-09 <AID> 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
+09 `AID` 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
 extracting protocol version (expedited phase only) and extended-length sizes (0x7f66 TLV).
 parse_select_response and parse_select_response_ex validate the trailing 9000, check AID, and
 call parse_proprietary_information.
@@ -1382,6 +1382,10 @@ serial lines (see modules/woz_uwb/src/facade/flight_recorder.c). This tool:
 
 Only the frames (already on-air ciphertext) go to the corpus — never the CONFIG
 record's URSK, so a shared corpus carries no session key material.
+
+SECURITY: raw serial logs containing `[FREC]` records and binary `.frc` files
+contain the CONFIG record's full ephemeral URSK. Keep them private and do not
+attach them to public issues. Only the extracted frame corpus excludes the key.
 
 Usage:
   flight_recorder.py <capture.log | trace.frc> [corpus_dir]

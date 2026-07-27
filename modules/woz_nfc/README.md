@@ -2,15 +2,16 @@
 
 The add-on application's five NFC call sites (`Init`/`Start`/`Stop` in
 `init.cpp`, `Send`/`Terminate` in `interface_impl/session.cpp`) are patched by
-`integration/patches/nfc-transport-seam.patch` to call `WozNfc::*` instead of
+[`ports/nrf5340dk/patches/nfc-transport-seam.patch`](../../ports/nrf5340dk/patches/nfc-transport-seam.patch)
+to call `WozNfc::*` instead of
 the concrete `NfcTransportRfal` singleton. This module supplies the selected
 backend:
 
 | `WOZ_NFC_TRANSPORT_…` | Backend | Hardware |
 | --- | --- | --- |
-| `RFAL` (default when `NFC_DRIVER_STM=y`) | forwards to upstream `NfcTransportRfal` | X-NUCLEO ST25R500 shield on `spi1` |
-| `PN532` | in-tree PN532 transport | PN532 breakout on `spi1` — the bus the ST25R shield would use (see `integration/overlays/pn532.overlay`) |
-| `NONE` (default otherwise) | no-op | none — Aliro NFC flow disabled, BLE/UWB unaffected |
+| `RFAL` (default when `NFC_DRIVER_STM=y`) | forwards to upstream `NfcTransportRfal` | [X-NUCLEO-NFC12A1 (ST25R300)](https://www.st.com/en/evaluation-tools/x-nucleo-nfc12a1.html) on `spi1` |
+| `PN532` | in-tree PN532 transport | PN532 breakout on `spi1`, configured by [`ports/nrf5340dk/overlays/pn532.overlay`](../../ports/nrf5340dk/overlays/pn532.overlay) |
+| `NONE` (default otherwise) | no-op | none; Aliro NFC flow disabled, BLE/UWB unaffected |
 
 Build selection from the repo root:
 
@@ -19,6 +20,10 @@ make build              # default: st25r — upstream ST25R/RFAL path
 make build NFC=pn532    # PN532 breakout on spi1
 make build NFC=none     # no reader fitted — Aliro NFC flow disabled
 ```
+
+The default ST25R300/RFAL configuration is hardware-validated. The PN532 driver
+and APDU adaptation run in the host suite against a scripted fake bus, but no
+PN532 firmware-CI or hardware-validation result is recorded.
 
 ## PN532 backend
 
@@ -38,7 +43,7 @@ make build NFC=none     # no reader fitted — Aliro NFC flow disabled
   RFAL transport's threading contract.
 
 The PN532 sits on `spi1`, the same nRF5340 serial box the ST25R shield uses
-(and which `i2c1` shares — they cannot both be enabled). The overlay disables
+(and which `i2c1` shares; they cannot both be enabled). The overlay disables
 the ST25R child and gives its chip-select to the PN532, so no `NFC=st25r` and
 `NFC=pn532` build ever contend for the bus.
 

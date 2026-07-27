@@ -29,6 +29,7 @@ HA            ?=
 ALIRO_SOURCE  ?=
 ALIRO_TRACE   ?=
 NFC           ?=
+CIR           ?=
 
 # Serial monitor (make term). PORT auto-detects the nRF5340DK console (VCOM1 —
 # this firmware's console + Zephyr shell live there; VCOM0 is silent). Override
@@ -48,7 +49,8 @@ ENV := $(strip \
   $(if $(HA),HA=$(HA)) \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
-  $(if $(NFC),NFC=$(NFC)))
+  $(if $(NFC),NFC=$(NFC)) \
+  $(if $(CIR),CIR=$(CIR)))
 
 .PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
@@ -97,7 +99,7 @@ ws-seed:
 ##            STRICT=1 (drop suspect ranges)
 ##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
 ##            ALIRO_SOURCE=0 (legacy Nordic binary fallback)
-##            ALIRO_TRACE=1 (temporary BLE/UWB capture)
+##            ALIRO_TRACE=1 (currently blocked: vendor trace patch is absent)
 ##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
 ##            NFC=pn532|st25r|none (reader transport; default st25r)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720
@@ -280,4 +282,8 @@ help:
 	printf '\n  %sOptions%s  %s·  set on the command line, e.g. make build PRETTY=1%s\n' "$$y" "$$r" "$$d" "$$r"; \
 	printf '    %sCHIP=dw3720  PRETTY=1  PRISTINE=1  SELFTEST=1  STRICT=1%s\n' "$$d" "$$r"; \
 	printf '    %sHA=1  ·  Home Assistant variant; set on bootstrap AND build%s\n' "$$d" "$$r"; \
+	printf '    %sALIRO_SOURCE=0  ·  legacy Nordic binary fallback%s\n' "$$d" "$$r"; \
+	printf '    %sCIR=1  ·  CIA/CIR diagnostics%s\n' "$$d" "$$r"; \
+	printf '    %sALIRO_TRACE=1  ·  unavailable: required vendor trace patch is absent%s\n' "$$d" "$$r"; \
+	printf '    %sNFC=pn532|st25r|none  ·  reader transport; default st25r%s\n' "$$d" "$$r"; \
 	printf '\n'

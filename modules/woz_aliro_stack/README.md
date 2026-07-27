@@ -30,6 +30,11 @@ isolation only, `make build ALIRO_SOURCE=0` selects the legacy Nordic archive.
    console must include `Aliro source stack enabled`; only the phone tests verify
    NFC authentication and BLE/UWB session behavior end to end.
 
+**Validation:** the default nRF CI job builds the firmware with this stack, and
+the portable advertising and protocol files run in the host suite. The full
+source-stack path has no recorded hardware validation and must pass the phone
+checklist before the next release.
+
 Implemented:
 
 - library version, feature bitmap, and Aliro 1.0 protocol version lists;

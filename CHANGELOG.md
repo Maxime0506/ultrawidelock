@@ -10,43 +10,59 @@ the API and behavior may change in minor releases.
 
 ### Added
 
-#### nRF5340 DK (primary target)
+- Independent `ALIRO_SOURCE=1` replacement for the Nordic Aliro binary, with a
+  dedicated nRF CI build and host tests for its portable protocol layer.
+- Selectable PN532 and no-reader NFC transports behind `modules/woz_nfc`; the
+  PN532 driver and APDU adaptation are host-tested.
+- Firmware-backed web twin: the shared UWB responder runs as WASM in the
+  interactive walk-up page and is replayed in CI.
+- Wireshark dissector for the clear-text Aliro BLE plane.
+- Flight recorder for deterministic UWB replay and fuzz-corpus extraction, plus
+  CIA/CIR channel diagnostics integrated with Aliro Lab.
+- RSSI power gate and power-profile tooling for keeping UWB dark until a phone
+  is close enough to approach.
+- Predictive time-of-arrival approach logic, available when the RSSI gate is
+  disabled, plus passive-carry research and the Aliro Gait offline analyzer.
+- Expanded host, target-fake, backend, application-glue, and tooling suites;
+  a 90 percent line-coverage floor; and a pre-push sweep with a serial tripwire
+  followed by parallel lanes.
 
-- NFC ECP tap unlock (Express Mode, no Face ID) via the ST25R300 front end.
-- BLE authentication and key agreement through the Nordic door-lock add-on.
-- On-air Aliro ranging setup (M1-M4 codec).
-- Credential-bound secure UWB ranging (DS-TWR, STS) implemented in firmware on a bare
-  Qorvo DW3110, with no UWB coprocessor.
-- Distance-gated unlock and relock with hysteresis, validated end to end on an nRF5340 DK
-  against a live iPhone.
+### Changed
 
-#### ESP32-S3 port (`ports/esp32/`)
+- `make bootstrap` now checks or installs the host tools and pinned NCS
+  toolchain before fetching the workspace.
+- Per-worktree workspace seeding and a tested, installable local verification
+  toolchain reduce stale builds and CI-only failures.
 
-- A standalone Aliro reader on ESP-IDF: BLE transport (NimBLE GATT + L2CAP CoC),
-  credential authentication, key schedule, and URSK derivation, all reimplemented rather
-  than delegated to a vendor library.
-- The shared `modules/woz_uwb` ranging engine compiled unchanged for Xtensa against
-  the `woz_port.h` platform contract, with an ESP-IDF DW3000 SPI/GPIO backend.
-- Negotiated M1-M4 ranging setup and live DS-TWR distance on the DW3000, tuned for the
-  ESP32's real-time budget (DMA-disabled SPI, STS key cache, hot-path log throttling).
-- A Matter door lock (`ports/esp32/apps/matter-lock`) that commissions into a Home app, provisions
-  a key into Wallet, and hosts the reader on Matter's own NimBLE host.
-- Approach unlock validated end to end on ESP32-S3 against a live iPhone: the Wallet
-  unlock animation plays on approach and the bolt relocks on departure.
-- Reader provisioning seam: NVS-backed reader identity and a credential trust store.
+### Fixed
 
-#### Project
+- Reader relock/status delivery across disconnects, coalesced Aliro envelopes,
+  URSK teardown, CIR capture timing, and diagnostic phase attribution.
 
-- Host KAT test suite with a line-coverage floor, ASan/UBSan runs, patch-drift and
-  shellcheck gates in CI.
-- A second host test suite for the ESP32 port's crypto, wire codec, provisioning, and
-  port headers (`make test-port`, CI-gated).
-- The `modules/woz_port` platform contract (`woz_port.h` + `woz_log.h`): the single
-  seam every target's port builds against.
-- libFuzzer harnesses and CBMC bounded proofs over the wire-facing parsers
-  (`make fuzz`, `make cbmc`), both CI-gated.
-- CI firmware builds for both targets, and a tag-triggered release workflow publishing
-  self-contained flash bundles (firmware, flash script, setup guide) for the
-  nRF5340 DK and the ESP32-S3 Matter lock.
+## [0.2.0] - 2026-07-22
 
-[Unreleased]: https://github.com/asxeem/openaliro/commits/main
+### Added
+
+- ESP32-C5 as a second Matter-lock and bench-reader build target, with
+  per-chip pins and partition layouts. Release-build support was proven;
+  hardware validation remained pending.
+- Dual-chip browser flasher with board auto-detection or explicit S3/C5
+  selection, plus per-chip release image names.
+- Aliro Lab structured traces and scored walk-up reports.
+- Access Document step-up support and live-clock dynamic advertisement tags.
+- Session PHY pre-warm and connection-interval work for sub-second approach.
+
+## [0.1.0] - 2026-07-22
+
+### Added
+
+- First tagged nRF5340 DK and ESP32-S3 Matter Aliro lock firmware bundles.
+- NFC tap, BLE/UWB approach unlock, walk-away relock, Matter commissioning,
+  and Wallet provisioning on the hardware-validated configurations.
+- Shared UWB engine and port contract, ESP32 reader stack, host KATs,
+  sanitizers, fuzzing, bounded parser proofs, and firmware build gates.
+- Zero-toolchain WebSerial flasher for the ESP32-S3 release image.
+
+[Unreleased]: https://github.com/asxeem/openaliro/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/asxeem/openaliro/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/asxeem/openaliro/releases/tag/v0.1.0

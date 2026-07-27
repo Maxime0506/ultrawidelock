@@ -174,7 +174,7 @@ do_build() {
     fi
   fi
   # NFC=pn532|st25r|none selects the reader behind the woz_nfc transport seam.
-  # Default: st25r — the upstream X-NUCLEO ST25R500 path, matching the build
+  # Default: st25r, the upstream X-NUCLEO-NFC12A1/ST25R300 path, matching the build
   # before the seam existed. NFC=none is for a DK with no NFC frontend: nothing
   # is compiled in and boot proceeds BLE/UWB-only with no NFC error.
   local -a nfc_flags=()

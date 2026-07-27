@@ -7,8 +7,16 @@ the manual gate: run
 every applicable item before cutting a release, and record the results table in the
 release notes (see [`RELEASING.md`](RELEASING.md)).
 
-Two targets ship from this repository, so there are two checklists. A release covering
-only one target runs only that target's rows and records the other as `n/a`.
+Two hardware paths have recorded bench evidence: the nRF5340 DK using the legacy
+Nordic binary with its default ST25R300/RFAL reader, and ESP32-S3. The in-tree
+Aliro stack is now the nRF default, but it does not inherit the legacy binary's
+result. It must pass the nRF checklist before release. A release covering only one
+target runs that target's rows and records the other as `n/a`.
+
+ESP32-C5 is built and bundled by the release workflow, but has no hardware
+validation record. Mark it build-only in release notes until a C5 checklist is
+defined and passed. The PN532 variant likewise has automated evidence only and
+does not inherit the ST25R300 checklist result.
 
 ## nRF5340 DK
 
