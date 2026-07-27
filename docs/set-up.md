@@ -142,6 +142,18 @@ A gate whose python package is missing fails the sweep exactly as a missing
 binary does. Without `markdown`, `make test` runs 11 fewer checks than CI does,
 including the one that catches a stale committed `FLASH.html`.
 
+The sandboxed `git pr` candidate has a narrower, explicit contract because it
+has no network, real home directory, user-local tools, or gitignored `.venv`.
+Configure its tracked verifier once:
+
+```bash
+git config git-pr.verify scripts/verify-isolated.sh
+```
+
+That wrapper runs the committed twin self-test and every hermetic gate available
+inside the candidate. It names the seven skipped gates in the verdict; CI still
+runs them. Run `make verify` directly for the full developer sweep.
+
 ## ESP32-S3 and ESP32-C5 ports
 
 Both apps expect ESP-IDF at `~/esp/esp-idf` (override: `IDF_EXPORT=`); CI

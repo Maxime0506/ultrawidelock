@@ -28,6 +28,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 VERIFY="$REPO/scripts/verify.sh"
+ISOLATED_VERIFY="$REPO/scripts/verify-isolated.sh"
 COV_MIN="${COV_MIN:-90}" # gate_label interpolates it; see the lift below
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/verifytest.XXXXXX")"
@@ -284,6 +285,8 @@ chmod +x "$BIN/pystub"
 mkdir -p "$FAKE/scripts" "$FAKE/tests/host" "$FAKE/tests/tooling" \
 	"$FAKE/modules" "$FAKE/web-twin"
 cp "$VERIFY" "$FAKE/scripts/verify.sh"; chmod +x "$FAKE/scripts/verify.sh"
+cp "$ISOLATED_VERIFY" "$FAKE/scripts/verify-isolated.sh"
+chmod +x "$FAKE/scripts/verify-isolated.sh"
 cat > "$FAKE/tests/host/sources.sh" <<'EOF'
 # stub of the real sources.sh: verify.sh wants $PY and three arrays from it.
 PY="pystub"
@@ -445,6 +448,54 @@ assert "S14 and it is named"                 has "strandedgate\(in 0 lanes\)"
 mutant 's/^\t"coverage"  /\t"coverage stowaway"  /'
 assert "S14 a lane entry that is no gate is refused" test "$rc" -eq 2
 assert "S14 and that is named too"           has "stowaway\(not a gate\)"
+
+# S15: result storage is a prerequisite, not an optional convenience. The
+# verifier must stop before running a gate when its temp directory cannot be
+# created, rather than falling through with an empty RUNDIR and writing at /.
+mv "$BIN/mktemp" "$TMP/mktemp.real"
+cat >"$BIN/mktemp" <<'EOF'
+#!/usr/bin/env bash
+exit 73
+EOF
+chmod +x "$BIN/mktemp"
+runv
+rm -f "$BIN/mktemp"
+mv "$TMP/mktemp.real" "$BIN/mktemp"
+assert "S15 result-directory failure exits nonzero" test "$rc" -ne 0
+assert "S15 explains that verification could not start" \
+	has "could not create the result directory"
+assert "S15 never claims zero gates passed" hasnt "all 0 host-runnable CI gates passed"
+
+# S16: defend independently against losing a per-gate result after RUNDIR was
+# created. A lane can print a failure that the parent never sees if the atomic
+# rename fails; an incomplete result set must therefore be fatal on its own.
+mv "$BIN/mv" "$TMP/mv.real"
+cat >"$BIN/mv" <<'EOF'
+#!/usr/bin/env bash
+exit 74
+EOF
+chmod +x "$BIN/mv"
+runv
+rm -f "$BIN/mv"
+mv "$TMP/mv.real" "$BIN/mv"
+assert "S16 lost gate result exits nonzero" test "$rc" -ne 0
+assert "S16 names incomplete bookkeeping" has "result bookkeeping incomplete"
+assert "S16 never claims zero gates passed" hasnt "all 0 host-runnable CI gates passed"
+
+# S17: the tracked git-pr wrapper scopes out only capabilities its sandbox
+# deliberately removes, still runs the committed twin self-test, and makes the
+# reduced scope loud rather than pretending it reproduced the full CI set.
+out="$(cd "$FAKE" && env -i PATH="$BIN" HOME="$TMP/home" TMPDIR="$TMP" \
+	NO_COLOR=1 ./scripts/verify-isolated.sh 2>&1)"
+rc=$?
+assert "S17 isolated candidate sweep exits 0" test "$rc" -eq 0
+assert "S17 committed twin selftest still runs" has "stub node ok"
+assert "S17 reduced scope is explicit" has "NOT the full CI set"
+for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage; do
+	assert "S17 skips unavailable $isolated_gate gate" \
+		has "$isolated_gate \\(SKIP=\\)"
+done
+assert "S17 still runs hermetic sanitizer gate" passed "host suite under ASan \\+ UBSan"
 
 echo
 if [ "$fail" -eq 0 ]; then

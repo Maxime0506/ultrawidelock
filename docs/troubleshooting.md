@@ -150,6 +150,14 @@ rows arrive out of order and two lanes can fail in one sweep. `SERIAL=1 make ver
 one gate at a time in table order. To re-run a single gate, scope the rest out with
 `SKIP=`.
 
+**`git pr` cannot run network, Emscripten, user-local tools, or `.venv` gates.**
+Its disposable candidate deliberately has no network, real home directory, user-local
+`PATH`, or gitignored files. Configure
+`git config git-pr.verify scripts/verify-isolated.sh`; the wrapper runs the hermetic
+candidate checks and explicitly leaves the unavailable seven to CI. Do not configure
+`scripts/verify.sh` directly for that sandbox; it is the full developer sweep and
+correctly treats those missing capabilities as failures.
+
 **`make test-verify` fails after a workflow change.** It gates the mapping between CI
 jobs and local gates. A new job in `.github/workflows/` has to be accounted for — either
 a gate that reproduces it locally, or a written reason it cannot be one. The failure
