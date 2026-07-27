@@ -115,7 +115,11 @@ export const commands: Record<BoardId, CommandDefinition[]> = {
     { id: "frames-off", label: "Disable range stream", command: "aliro frames off", kind: "diagnostic" },
     { id: "cir", label: "CIA/CIR on, off, dump, or probe when built with CIR=1", command: "aliro cir on|off|dump|probe", kind: "diagnostic" },
     { id: "frec", label: "Flight recorder on, off, dump, or clear", command: "aliro frec on|off|dump|clear", kind: "diagnostic" },
-    { id: "version", label: "Read firmware commit", command: "aliro version", kind: "query" }
+    { id: "version", label: "Read firmware commit", command: "aliro version", kind: "query" },
+    // The confirm word is the firmware's own guard; the TUI still confirms
+    // before it is ever sent, so neither side is the only thing standing
+    // between a keystroke and an unpaired lock.
+    { id: "factory-reset", label: "Erase Matter and Aliro state, then reboot", command: "aliro factoryreset yes", kind: "control" }
   ],
   "esp32-lock": [
     { id: "status", label: "Lock, fabric, and range status", command: "status", kind: "query" },

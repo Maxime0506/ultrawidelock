@@ -12,6 +12,8 @@ export type TargetSpec = {
   artifact: string
   setupGuide: string
   supportsPairing: boolean
+  /** The firmware exposes a console command that erases its own stored credentials. */
+  supportsFactoryReset: boolean
   commands: {
     bootstrap?: string[]
     build: string[]
@@ -43,6 +45,7 @@ export const targets: Record<BoardId, TargetSpec> = {
     artifact: "build/merged.hex",
     setupGuide: "docs/set-up.md#nrf5340-dk-primary-target",
     supportsPairing: true,
+    supportsFactoryReset: true,
     commands: {
       bootstrap: ["make", "bootstrap", "ASSUME_YES=1"],
       build: ["make", "build"],
@@ -60,6 +63,7 @@ export const targets: Record<BoardId, TargetSpec> = {
     artifact: "ports/esp32/apps/matter-lock/build/door_lock.bin",
     setupGuide: "ports/esp32/apps/matter-lock/README.md#prerequisites",
     supportsPairing: true,
+    supportsFactoryReset: true,
     commands: {
       build: ["make", "-C", "ports/esp32/apps/matter-lock", "build"],
       rebuild: ["make", "-C", "ports/esp32/apps/matter-lock", "rebuild"],
@@ -76,6 +80,7 @@ export const targets: Record<BoardId, TargetSpec> = {
     artifact: "ports/esp32/apps/reader/build/woz_uwb_esp32s3.bin",
     setupGuide: "docs/set-up.md#esp32-s3-ports",
     supportsPairing: false,
+    supportsFactoryReset: false,
     commands: {
       build: ["make", "-C", "ports/esp32/apps/reader", "build"],
       rebuild: ["make", "-C", "ports/esp32/apps/reader", "clean", "build"],

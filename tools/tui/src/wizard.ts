@@ -7,12 +7,23 @@ export type WizardStage =
   | "bootstrap-confirm"
   | "build-choice"
   | "flash-choice"
-  | "erase-confirm"
+  | "confirm"
   | "pair"
   | "choose-port"
   | "diagnostics"
   | "running"
   | "recovery"
+
+// Every action that programs the board or destroys state it holds. Each one is
+// reachable only through the shared `confirm` stage below, from the wizard and
+// from the command prompt alike, so there is no path that skips the warning.
+export type DestructiveAction = "flash" | "flash-erase" | "rebuild-flash-erase" | "factory-reset"
+
+export const destructiveActions: DestructiveAction[] = ["flash", "flash-erase", "rebuild-flash-erase", "factory-reset"]
+
+export function isDestructive(value: string): value is DestructiveAction {
+  return (destructiveActions as string[]).includes(value)
+}
 
 export type WizardAction =
   | `target:${BoardId}`
@@ -22,10 +33,8 @@ export type WizardAction =
   | "build"
   | "rebuild"
   | "flash-choice"
-  | "flash"
-  | "flash-erase-confirm"
-  | "flash-erase"
-  | "rebuild-flash-erase"
+  | `confirm:${DestructiveAction}`
+  | DestructiveAction
   | "test"
   | "scan"
   | "connect"
@@ -64,6 +73,68 @@ export type WizardContext = {
   inventoryPending?: boolean
   pairingReady: boolean
   recovery?: string
+  pending?: DestructiveAction
+}
+
+type ConfirmSpec = {
+  title: string
+  detail: string
+  confirmName: string
+  confirmDescription: string
+  /** Stage to return to when the confirmation is declined or Left Arrow is pressed. */
+  back: WizardAction
+}
+
+// One shape for every destructive confirmation: same eyebrow, same "go back
+// first" ordering, same single danger-marked accept. The wording differs only
+// where the loss differs, so the screen is recognisable before it is read.
+const confirmSpecs: Record<DestructiveAction, ConfirmSpec> = {
+  flash: {
+    title: "Program the board with this build?",
+    detail:
+      "The running firmware is replaced and the board reboots. Stored commissioning is preserved where the target supports it, but the serial session is dropped while the flashing tool owns the device.",
+    confirmName: "Flash the current build",
+    confirmDescription: "Replace the running firmware and reboot the board.",
+    back: "flash-choice"
+  },
+  "flash-erase": {
+    title: "Erase all persistent board state, then flash?",
+    detail:
+      "This removes Matter commissioning, Aliro provisioning, and trusted credentials. Remove the stale accessory from the home before pairing again.",
+    confirmName: "Erase and flash the current build",
+    confirmDescription: "I understand that I may need to commission and pair again.",
+    back: "flash-choice"
+  },
+  "rebuild-flash-erase": {
+    title: "Rebuild from scratch, erase all board state, then flash?",
+    detail:
+      "The build directory is discarded and reconfigured, then Matter commissioning, Aliro provisioning, and trusted credentials are erased. This is the longest and least reversible path.",
+    confirmName: "Rebuild, erase, and flash",
+    confirmDescription: "I understand that this discards both the build and every stored credential.",
+    back: "flash-choice"
+  },
+  "factory-reset": {
+    title: "Factory reset the connected board?",
+    detail:
+      "The firmware erases its Matter fabrics, its Aliro reader identity, and every trusted phone key, then reboots unprovisioned. Nothing is written to the board's flash image, so no rebuild is needed to recover.",
+    confirmName: "Erase every credential and reboot",
+    confirmDescription: "I understand that the home will need this accessory removed and paired again.",
+    back: "diagnostics"
+  }
+}
+
+export function confirmView(action: DestructiveAction): WizardView {
+  const spec = confirmSpecs[action]
+  return {
+    eyebrow: "destructive confirmation",
+    title: spec.title,
+    detail: spec.detail,
+    danger: true,
+    choices: [
+      { name: "Go back", description: "Nothing is changed on the board or in this clone.", value: spec.back },
+      { name: spec.confirmName, description: spec.confirmDescription, value: action, danger: true }
+    ]
+  }
 }
 
 export type WizardView = {
@@ -71,6 +142,8 @@ export type WizardView = {
   title: string
   detail: string
   choices: WizardChoice[]
+  /** Draw this screen in the terminal's danger colour: it is a point of no return. */
+  danger?: boolean
 }
 
 export function wizardBackAction(stage: WizardStage, context: WizardContext): WizardAction | undefined {
@@ -79,8 +152,10 @@ export function wizardBackAction(stage: WizardStage, context: WizardContext): Wi
   switch (stage) {
     case "home":
       return "target-menu"
-    case "erase-confirm":
-      return "flash-choice"
+    case "confirm":
+      // Left Arrow must land where the confirmation was reached from, never on
+      // the accept, so the escape is always the same key as everywhere else.
+      return context.pending ? confirmSpecs[context.pending].back : "home"
     case "bootstrap-confirm":
     case "build-choice":
     case "flash-choice":
@@ -212,35 +287,27 @@ export function wizardView(stage: WizardStage, context: WizardContext): WizardVi
     return {
       eyebrow: "flash",
       title: "How should the board be programmed?",
-      detail: "The serial connection is released before programming so the flashing tool owns the device.",
+      detail: "The serial connection is released before programming so the flashing tool owns the device. Every option here confirms before it touches the board.",
       choices: [
-        { name: "Normal flash", description: "Write the current application while preserving stored commissioning where supported.", value: "flash" },
+        { name: "Normal flash", description: "Write the current application while preserving stored commissioning where supported.", value: "confirm:flash" },
         {
           name: "Full erase and flash",
-          description: "Erase persistent state first. Pairing and trusted credentials may be lost.",
-          value: "flash-erase-confirm",
+          description: "Erase persistent state first. Pairing and trusted credentials are lost.",
+          value: "confirm:flash-erase",
+          danger: true
+        },
+        {
+          name: "Pristine rebuild, erase, and flash",
+          description: "Rebuild the current repository state from scratch, erase persistent state, then program it.",
+          value: "confirm:rebuild-flash-erase",
           danger: true
         },
         { name: "Go back", description: "Do not program the board.", value: "home" }
       ]
     }
   }
-  if (stage === "erase-confirm") {
-    return {
-      eyebrow: "destructive confirmation",
-      title: "Erase all persistent board state?",
-      detail: "This can remove Matter commissioning, Aliro provisioning, and trusted credentials. Remove stale accessories from the home before pairing again.",
-      choices: [
-        { name: "Go back", description: "Keep the board and its persistent state unchanged.", value: "flash-choice" },
-        {
-          name: "Pristine rebuild, erase, and flash",
-          description: "Rebuild the current repository state from scratch, erase persistent state, then program it.",
-          value: "rebuild-flash-erase",
-          danger: true
-        },
-        { name: "Erase and flash the current build", description: "I understand that I may need to commission and pair again.", value: "flash-erase", danger: true }
-      ]
-    }
+  if (stage === "confirm") {
+    return confirmView(context.pending ?? "flash")
   }
   if (stage === "pair") {
     return {
@@ -298,6 +365,16 @@ export function wizardView(stage: WizardStage, context: WizardContext): WizardVi
             ]),
         { name: "Live capture", description: "Collect an in-memory serial trace for this session.", value: "capture" },
         { name: "Build and flash jobs", description: "Queued work, command, status, and recent output.", value: "pane:jobs" },
+        ...(spec.supportsFactoryReset
+          ? [
+              {
+                name: "Factory reset the board",
+                description: "Ask the connected firmware to erase every credential and reboot. Confirmed first.",
+                value: "confirm:factory-reset" as const,
+                danger: true
+              }
+            ]
+          : []),
         { name: "Back to setup", description: "Return to the guided bench loop.", value: "home" }
       ]
     }

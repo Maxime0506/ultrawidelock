@@ -11,7 +11,7 @@ import { inspectTarget, preferredAvailablePort, targetIds, targets, type TargetS
 import { SerialTerminalBuffer } from "./terminal"
 import { severityColor, theme } from "./theme"
 import type { BoardId, BoardState, Job, JobState, LogEntry, Severity } from "./types"
-import { wizardBackAction, wizardView, type WizardAction, type WizardStage } from "./wizard"
+import { isDestructive, wizardBackAction, wizardView, type DestructiveAction, type WizardAction, type WizardStage } from "./wizard"
 
 registerQRCode()
 
@@ -50,8 +50,9 @@ const benchCommands: HelpRow[] = [
   { command: "bootstrap", description: "Open the prerequisite confirmation; never downloads silently." },
   { command: "build | rebuild", description: "Incremental or pristine firmware build." },
   { command: "flash", description: "Flash the selected target, building first when needed." },
-  { command: "flash-erase", description: "Full erase and flash; an explicit expert command." },
-  { command: "rebuild-flash-erase", description: "Pristine rebuild, confirmed full erase, and flash." },
+  { command: "flash-erase", description: "Full erase and flash." },
+  { command: "rebuild-flash-erase", description: "Pristine rebuild, full erase, and flash." },
+  { command: "factoryreset", description: "Ask the connected firmware to erase its credentials and reboot." },
   { command: "test", description: "Run the target's host-side test path." },
   { command: "diagnose", description: "Run the connected target's read-only diagnostic sweep." },
   { command: "lab on | lab off", description: "Control ESP transaction tracing and its live pane." },
@@ -133,7 +134,10 @@ function HelpPanel() {
           />
         )}
       </For>
-      <text style={{ fg: theme.muted, marginTop: 1 }}>Other text is sent unchanged to the selected connected target.</text>
+      <text style={{ fg: theme.warning, marginTop: 1 }}>
+        Flashing, erasing, and factory reset always confirm first. `send &lt;command&gt;` is the one deliberate bypass.
+      </text>
+      <text style={{ fg: theme.muted }}>Other text is sent unchanged to the selected connected target.</text>
     </box>
   )
 }
@@ -328,19 +332,21 @@ export function WizardCard(props: {
         flexDirection: "column",
         border: true,
         borderStyle: "single",
-        borderColor: props.focused ? theme.foreground : theme.line,
+        borderColor: props.view.danger ? theme.danger : props.focused ? theme.foreground : theme.line,
         paddingLeft: 1,
         paddingRight: 1,
         marginTop: 1
       }}
     >
       <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1, flexShrink: 0 }}>
-        <text style={{ fg: theme.muted }}>{props.view.eyebrow}</text>
+        <text style={{ fg: props.view.danger ? theme.danger : theme.muted }}>{props.view.eyebrow}</text>
         <text style={{ fg: theme.muted }}>
           {`${props.pulse} q close · ${props.canGoBack ? "← back · " : ""}↑↓ choose · Enter · Tab command`}
         </text>
       </box>
-      <text style={{ fg: theme.foreground, height: 1, flexShrink: 0 }}>{props.view.title}</text>
+      <text style={{ fg: props.view.danger ? theme.danger : theme.foreground, height: 1, flexShrink: 0 }}>
+        {props.view.title}
+      </text>
       <Show when={!props.short}>
         <text style={{ fg: theme.muted, height: 2, flexShrink: 0 }}>{props.view.detail}</text>
       </Show>
@@ -516,6 +522,10 @@ export function App(
   const [wizardVisible, setWizardVisible] = createSignal(true)
   const [inventoryPending, setInventoryPending] = createSignal(false)
   const [recovery, setRecovery] = createSignal<string>()
+  // The destructive action awaiting confirmation. Nothing reads it except the
+  // confirm stage, so it cannot leak into a later run: askConfirmation() is the
+  // only writer, and the accept path clears it before doing any work.
+  const [pending, setPending] = createSignal<DestructiveAction>()
   const [focusArea, setFocusArea] = createSignal<FocusArea>("wizard")
   const [activePane, setActivePane] = createSignal<PaneId>("off")
   const [lastPane, setLastPane] = createSignal<Exclude<PaneId, "off">>("diagnostics")
@@ -558,7 +568,8 @@ export function App(
     jobState: activeWorkflowState(),
     inventoryPending: inventoryPending(),
     pairingReady: Boolean(selected().pairing?.qrContent),
-    recovery: recovery()
+    recovery: recovery(),
+    pending: pending()
   }))
   const currentWizardView = createMemo(() => wizardView(wizardStage(), wizardContext()))
   const currentBackAction = createMemo(() => wizardBackAction(wizardStage(), wizardContext()))
@@ -978,6 +989,50 @@ export function App(
     }
   }
 
+  // Single entry point for every destructive action, from the wizard and from
+  // the command prompt alike. Nothing calls the run* functions below directly,
+  // so a new destructive path cannot accidentally ship without a confirmation.
+  const askConfirmation = (action: DestructiveAction): void => {
+    if (rejectDuringWorkflow(`A ${action} request`)) return
+    if (action === "factory-reset" && !targets[activeBoard()].supportsFactoryReset) {
+      report(`${targets[activeBoard()].label} has no factory-reset command.`, "warning")
+      return
+    }
+    setPending(action)
+    setWizardStage("confirm")
+    setWizardVisible(true)
+    focusWizard()
+  }
+
+  const runFactoryReset = async () => {
+    const id = activeBoard()
+    const command = commands[id].find(({ id: commandId }) => commandId === "factory-reset")?.command
+    if (!command) {
+      report(`${boards()[id].label} has no factory-reset command.`, "error")
+      return
+    }
+    if (boards()[id].connection !== "connected" && !(await connect(id))) {
+      report(`Could not factory reset ${boards()[id].label} because it is not connected.`, "error")
+      setWizardStage("recovery")
+      setRecovery("A factory reset needs a live serial connection. Check the port inventory, then try again.")
+      return
+    }
+    report(`Factory reset sent to ${boards()[id].label}. It erases its credentials and reboots.`, "warning")
+    await send(command, id)
+    // The board comes back unprovisioned, so the captured onboarding code is
+    // stale from this moment: keep it out of the pairing pane rather than let
+    // someone scan a QR the firmware no longer honours.
+    patchBoard(id, (board) => ({ ...board, pairing: undefined }))
+    setWizardStage(targets[id].supportsPairing ? "pair" : "home")
+  }
+
+  const runDestructive = (action: DestructiveAction): void => {
+    setPending(undefined)
+    if (action === "factory-reset") return void runFactoryReset()
+    if (action === "rebuild-flash-erase") return void runWorkflow("flash-erase", true)
+    void runWorkflow(action)
+  }
+
   const pairingCodes = async (id = activeBoard(), force = false) => {
     if (!targets[id].supportsPairing) {
       report(`${targets[id].label} has no Matter onboarding flow. Choose a Matter lock target to pair.`, "warning")
@@ -1116,7 +1171,8 @@ export function App(
     if (action === "bootstrap-confirm") return setWizardStage("bootstrap-confirm")
     if (action === "build-choice") return setWizardStage("build-choice")
     if (action === "flash-choice") return setWizardStage("flash-choice")
-    if (action === "flash-erase-confirm") return setWizardStage("erase-confirm")
+    if (action.startsWith("confirm:")) return askConfirmation(action.slice("confirm:".length) as DestructiveAction)
+    if (isDestructive(action)) return runDestructive(action)
     if (action === "pair") return pairingCodes()
     if (action === "diagnostics") return setWizardStage("diagnostics")
     if (action === "choose-port") return setWizardStage("choose-port")
@@ -1148,8 +1204,7 @@ export function App(
       return
     }
     if (action === "command-mode") return focusCommand()
-    if (action === "rebuild-flash-erase") return void runWorkflow("flash-erase", true)
-    if (action === "bootstrap" || action === "build" || action === "rebuild" || action === "test" || action === "flash" || action === "flash-erase") {
+    if (action === "bootstrap" || action === "build" || action === "rebuild" || action === "test") {
       void runWorkflow(action)
     }
   }
@@ -1214,8 +1269,11 @@ export function App(
       focusWizard()
       return
     }
-    if (normalized === "rebuild-flash-erase") return void runWorkflow("flash-erase", true)
-    if (normalized === "build" || normalized === "rebuild" || normalized === "test" || normalized === "flash" || normalized === "flash-erase") {
+    // Typing a destructive command is not itself the confirmation. `send <cmd>`
+    // stays the deliberate, documented bypass for anyone who wants one.
+    if (normalized === "factoryreset" || normalized === "factory-reset") return askConfirmation("factory-reset")
+    if (isDestructive(normalized)) return askConfirmation(normalized)
+    if (normalized === "build" || normalized === "rebuild" || normalized === "test") {
       return void runWorkflow(normalized)
     }
     if (normalized === "status") return void send(commands[activeBoard()].find(({ id }) => id === "status")!.command)

@@ -311,3 +311,31 @@ test("renders captured commissioning data in the dedicated pairing pane", async 
   expect(frame).toContain("MT:Y.K9042C00KA0648G00")
   expect(frame).toMatch(/[█▀▄]/)
 })
+
+test("a destructive command typed at the prompt asks before it does anything", async () => {
+  const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width: 120, height: 42 })
+  teardown = () => view.renderer.destroy()
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  view.mockInput.pressTab()
+  await view.waitForFrame((candidate) => candidate.includes("TUI command mode"))
+  await view.mockInput.typeText("flash-erase")
+  view.mockInput.pressEnter()
+  const frame = await view.waitForFrame((candidate) => candidate.includes("destructive confirmation"))
+  expect(frame).toContain("Erase all persistent board state, then flash?")
+  expect(frame).toContain("Go back")
+  // The typed word is not the confirmation: no job may have been claimed yet.
+  expect(frame).not.toContain("task is running")
+}, 30_000)
+
+test("factory reset typed at the prompt confirms and names the credentials it destroys", async () => {
+  const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width: 120, height: 42 })
+  teardown = () => view.renderer.destroy()
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  view.mockInput.pressTab()
+  await view.waitForFrame((candidate) => candidate.includes("TUI command mode"))
+  await view.mockInput.typeText("factoryreset")
+  view.mockInput.pressEnter()
+  const frame = await view.waitForFrame((candidate) => candidate.includes("destructive confirmation"))
+  expect(frame).toContain("Factory reset the connected board?")
+  expect(frame).toContain("trusted phone key")
+}, 30_000)

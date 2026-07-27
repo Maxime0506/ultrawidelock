@@ -29,8 +29,13 @@ focus to hide only the wizard. `help` or `?` lists every direct command and subc
 `quit`, `exit`, or Ctrl+C closes the application. `make tui` is retained as a compatibility
 alias.
 
-Full erases always require confirmation in the wizard because they can remove Matter
-commissioning and Aliro credentials. ESP-IDF and esp-matter still follow their official
+Every action that programs the board or destroys state it holds stops on a confirmation
+screen first: `flash`, `flash-erase`, `rebuild-flash-erase`, and `factoryreset`. The screen
+is the same shape each time, drawn in the terminal's danger colour, with declining as the
+first choice and Left Arrow returning to where the request came from. Typing the command at
+the prompt is not the confirmation; `send <command>` remains the one deliberate bypass.
+`factoryreset` asks the connected firmware to erase its own credentials and reboot, which
+needs no rebuild to recover from. ESP-IDF and esp-matter still follow their official
 installation paths; the TUI detects and explains them but does not silently install
 toolchains outside this repository.
 

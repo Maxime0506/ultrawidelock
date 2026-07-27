@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { TargetSnapshot } from "../src/targets"
-import { wizardBackAction, wizardView, type WizardContext } from "../src/wizard"
+import { destructiveActions, wizardBackAction, wizardView, type WizardContext } from "../src/wizard"
 
 const snapshot = (values: Partial<TargetSnapshot> = {}): TargetSnapshot => ({
   target: "nrf",
@@ -79,18 +79,44 @@ test("does not invent pairing or automatic toolchain installation for the standa
   expect(actions(view)).toContain("pane:overview")
 })
 
-test("full erase has a separate, explicit credential-loss confirmation", () => {
-  const view = wizardView("erase-confirm", context())
-  expect(view.detail).toContain("Matter commissioning")
-  expect(view.detail).toContain("trusted credentials")
-  expect(view.choices[0]).toMatchObject({
-    name: "Go back",
-    description: "Keep the board and its persistent state unchanged.",
-    value: "flash-choice"
-  })
-  expect(view.choices[0]?.danger).not.toBe(true)
-  expect(view.choices.find(({ value }) => value === "flash-erase")?.danger).toBe(true)
-  expect(view.choices.find(({ value }) => value === "rebuild-flash-erase")?.danger).toBe(true)
+test("no destructive action is reachable from a menu without passing through a confirmation", () => {
+  const ready = snapshot({ setupReady: true, artifact: "current", compatiblePorts: ["/dev/board"] })
+  const reachable = new Set<string>()
+  for (const stage of ["home", "build-choice", "flash-choice", "diagnostics", "recovery", "pair", "choose-port"] as const) {
+    for (const value of actions(wizardView(stage, context({ snapshot: ready, connection: "connected" })))) reachable.add(value)
+  }
+  for (const action of destructiveActions) {
+    expect(reachable).not.toContain(action)
+    expect(reachable).toContain(`confirm:${action}`)
+  }
+})
+
+test("every destructive confirmation offers the same escape-first shape", () => {
+  for (const action of destructiveActions) {
+    const view = wizardView("confirm", context({ pending: action }))
+    expect(view.eyebrow).toBe("destructive confirmation")
+    expect(view.danger).toBe(true)
+    // Declining is always first, so the default highlight can never be the accept.
+    expect(view.choices[0]?.name).toBe("Go back")
+    expect(view.choices[0]?.danger).not.toBe(true)
+    expect(view.choices).toHaveLength(2)
+    expect(view.choices[1]).toMatchObject({ value: action, danger: true })
+  }
+})
+
+test("each confirmation names the loss that is specific to it", () => {
+  expect(wizardView("confirm", context({ pending: "flash" })).detail).toContain("preserved")
+  expect(wizardView("confirm", context({ pending: "flash-erase" })).detail).toContain("trusted credentials")
+  expect(wizardView("confirm", context({ pending: "rebuild-flash-erase" })).detail).toContain("build directory")
+  expect(wizardView("confirm", context({ pending: "factory-reset" })).detail).toContain("trusted phone key")
+})
+
+test("factory reset is offered only on targets whose firmware has the command", () => {
+  const connected = context({ connection: "connected", snapshot: snapshot({ setupReady: true }) })
+  expect(actions(wizardView("diagnostics", connected))).toContain("confirm:factory-reset")
+  expect(
+    actions(wizardView("diagnostics", { ...connected, target: "esp32-reader", snapshot: snapshot({ target: "esp32-reader" }) }))
+  ).not.toContain("confirm:factory-reset")
 })
 
 test("failed work returns to recoverable actions instead of a dead end", () => {
@@ -123,7 +149,8 @@ test("pending inventory replaces stale choices with responsive navigation", () =
 
 test("left-arrow back navigation follows the wizard hierarchy without escaping active work", () => {
   expect(wizardBackAction("choose-port", context())).toBe("home")
-  expect(wizardBackAction("erase-confirm", context())).toBe("flash-choice")
+  expect(wizardBackAction("confirm", context({ pending: "flash-erase" }))).toBe("flash-choice")
+  expect(wizardBackAction("confirm", context({ pending: "factory-reset" }))).toBe("diagnostics")
   expect(wizardBackAction("home", context())).toBe("target-menu")
   expect(wizardBackAction("choose-target", context())).toBeUndefined()
   expect(wizardBackAction("choose-port", context({ jobState: "running" }))).toBeUndefined()
