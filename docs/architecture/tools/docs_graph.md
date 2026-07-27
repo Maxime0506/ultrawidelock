@@ -52,14 +52,14 @@ after docs_github.py and before the link pass.
 ## API
 
 ### `parse_edges(mermaid: str) -> tuple[str, list[tuple[str, str]]]`
-`tools/docs_graph.py:183`
+`tools/docs_graph.py:186`
 
 Parse a mermaid graph block into its header line and a list of (source, target) node pairs, dropping self-loops.
 
 **called by** `figures`
 
 ### `stem_dirs(page: str) -> dict[str, str]`
-`tools/docs_graph.py:194`
+`tools/docs_graph.py:197`
 
 module name -> its source directory, from the page's file headings.
 
@@ -69,14 +69,14 @@ is the one the import graph describes, so modules/ wins.
 **called by** `figures`
 
 ### `cluster_of(directory: str) -> str`
-`tools/docs_graph.py:211`
+`tools/docs_graph.py:214`
 
 Return the top-level cluster name for a source directory: woz_uwb submodule names become "woz_uwb/submodule", others return their first path component.
 
 **called by** `cluster_key`, `figures`, `group_sections`, `head`
 
 ### `color_css(names: list[str], clusters: dict[str, set[str]]) -> str`
-`tools/docs_graph.py:218`
+`tools/docs_graph.py:221`
 
 Theme-aware cluster colors: tinted node fills, hue strokes, dot vars.
 
@@ -87,31 +87,31 @@ win over the OS preference in both directions.
 **called by** `figures`
 
 ### `figures(page: str, mermaid: str) -> tuple[str, dict[str, int]]`
-`tools/docs_graph.py:251`
+`tools/docs_graph.py:254`
 
 Build the architecture overview and clustered detail graphs from a mermaid definition, returning the HTML block and a cluster-to-color-slot mapping.
 
 **called by** `main`  ·  **calls** `cluster_key`, `cluster_of`, `color_css`, `parse_edges`, `stem_dirs`
 
 ### `cluster_key(n: str) -> str | None`
-`tools/docs_graph.py:269`
+`tools/docs_graph.py:272`
 
 Map a node name to its cluster, or None if the node has no directory heading on the page.
 
 **called by** `figures`  ·  **calls** `cluster_of`
 
 ### `chip(m: re.Match) -> str`
-`tools/docs_graph.py:336`
+`tools/docs_graph.py:339`
 
 Format a single chip reference as an HTML link with code formatting, extracting the basename from the full path.
 
 ### `chips_block(m: re.Match) -> str`
-`tools/docs_graph.py:345`
+`tools/docs_graph.py:348`
 
 Rewrite a block of chip references by applying link and formatting to each one, preserving leading and trailing whitespace.
 
 ### `tidy_page(page: str) -> str`
-`tools/docs_graph.py:350`
+`tools/docs_graph.py:353`
 
 The same de-noising the architecture sections get, on a module page:
 base-name chips with the full path on hover, and no "@file <name> — "
@@ -120,7 +120,7 @@ prefix repeating the file name the hero already shows.
 **called by** `main`
 
 ### `tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]`
-`tools/docs_graph.py:361`
+`tools/docs_graph.py:364`
 
 Short file-name headings with a directory eyebrow; base-name chips.
 
@@ -130,14 +130,14 @@ eyebrow, correlating each section with the graphs above.
 **called by** `main`
 
 ### `head(m: re.Match) -> str`
-`tools/docs_graph.py:368`
+`tools/docs_graph.py:371`
 
 Rewrite a module section heading with a shortened directory name, optional color-slot dot, and a hyperlinked source filename.
 
 **calls** `cluster_of`
 
 ### `group_sections(page: str, slots: dict[str, int]) -> tuple[str, int]`
-`tools/docs_graph.py:420`
+`tools/docs_graph.py:423`
 
 Fold the flat run of per-module sections into per-cluster drill-downs.
 
@@ -150,19 +150,19 @@ default.
 **called by** `main`  ·  **calls** `cluster_of`
 
 ### `eat(m: re.Match) -> str`
-`tools/docs_graph.py:431`
+`tools/docs_graph.py:434`
 
 Extract a section heading metadata triple and blurb into the accumulator, returning empty string to erase the matched text.
 
 ### `side_shim(slots: dict[str, int], buckets: list[tuple[str, list[str]]]) -> str`
-`tools/docs_graph.py:532`
+`tools/docs_graph.py:535`
 
 Generate the sidebar shim HTML with color-slot CSS variables and JSON-encoded cluster/bucket metadata for the interactive architecture sidebar.
 
 **called by** `main`
 
 ### `main() -> int`
-`tools/docs_graph.py:544`
+`tools/docs_graph.py:547`
 
 Restructure the rendered architecture page: split its graph into overview and detail, shorten module headings, compact dependency rows, group sections by cluster, and apply layout shimming and sidebar injection to all HTML files.
 

@@ -15,6 +15,7 @@ Set on the command line, e.g. `make build PRETTY=1 CHIP=dw3720`:
 | `STRICT=1` | drop suspect UWB range blocks |
 | `HA=1` | Home Assistant variant; needs `make bootstrap HA=1` too |
 | `PRISTINE=1` | force a clean rebuild |
+| `ALIRO_SOURCE=0` | use the legacy Nordic Aliro binary instead of the default in-tree stack |
 
 ## Kconfig overlays
 
@@ -27,6 +28,11 @@ touches.
 * `woz-pretty.conf`, `woz-ha.conf`: opt-in via `PRETTY=1` / `HA=1`.
 * `diag-latency.conf`: diagnostic only (`LAT=1` to `scripts/build.sh`),
   Matter debug logs for timing notification delays.
+
+`CONFIG_WOZ_ALIRO_SOURCE_STACK=y` is the nRF default. `scripts/build.sh` sets it
+explicitly and verifies the final link map contains no member from
+`libaliro_ble.a`. Keep `ALIRO_SOURCE=0` for comparison and regression isolation,
+not as the normal build.
 
 ## ESP32-S3
 

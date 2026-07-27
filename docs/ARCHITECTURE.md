@@ -1703,7 +1703,7 @@ scripts/build.sh rebuild                # force a clean pristine build
 PRISTINE=1 scripts/build.sh build       # same as rebuild
 UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-ALIRO_SOURCE=1 scripts/build.sh build   # independent source stack (discovery slice)
+ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
 UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
