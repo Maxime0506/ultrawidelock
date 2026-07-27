@@ -41,6 +41,10 @@ The first flash and any net-core config change need the erase; plain
   wiring problem from a protocol one.
 * On the shell: `aliro status`, `aliro chip` (DW3110 device ID over SPI),
   `aliro range`.
+* `aliro factoryreset yes` erases the Matter fabrics, the Aliro reader identity,
+  and every trusted phone key, then reboots. The `yes` is required. Unlike
+  `matter device factoryreset` it survives into release images, where
+  `prj_release.conf` turns off `CONFIG_CHIP_LIB_SHELL`.
 * A healthy release boot is clean on the console and starts BLE advertising.
 
 ## Prove the unlock

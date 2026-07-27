@@ -6,6 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
 
+#include "aliro_shell.h"     /* aliro_shell_set_factory_reset — application seam */
 #include "ccc_shim.h"        /* ccc_shim_active */
 #include "fira_session.h"    /* fira_session_last_range, fira_session_get_ursk */
 #include "flight_recorder.h" /* fr_set_enabled / fr_dump — walk-up record/replay (gated) */
@@ -287,6 +288,50 @@ static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
 }
 #endif /* CONFIG_WOZ_UWB_CIRDIAG */
 
+/* Registered by the application at startup; see aliro_shell.h for why the call
+ * is inverted instead of made directly. NULL until then, and on any build that
+ * links this console without the Matter application behind it. */
+static void (*factory_reset_fn)(void);
+
+void aliro_shell_set_factory_reset(void (*fn)(void))
+{
+	factory_reset_fn = fn;
+}
+
+/**
+ * @brief Erase every stored credential and reboot, but only on an explicit "yes".
+ *
+ * The confirm word is the whole safety mechanism: this is reachable over a bare
+ * UART with no undo, and `aliro fa<TAB>` completes to something that would
+ * otherwise unpair the lock on Enter. Without it the command only explains what
+ * it would destroy.
+ *
+ * @param sh Shell context.
+ * @param argc Argument count; argv[1] must be the literal "yes" to proceed.
+ * @param argv Command arguments.
+ * @return 0 once the reset is scheduled; -EINVAL when unconfirmed; -ENOTSUP when
+ * the application never registered a handler.
+ */
+static int cmd_factoryreset(const struct shell *sh, size_t argc, char **argv)
+{
+	if (argc < 2 || strcmp(argv[1], "yes") != 0) {
+		hdr(sh, C_RED "factory reset" C_RST);
+		shell_print(sh, "  " C_DIM "Erases the Matter fabrics, the Aliro reader identity, and" C_RST);
+		shell_print(sh, "  " C_DIM "every trusted phone key, then reboots unprovisioned." C_RST);
+		shell_print(sh, "  " C_DIM "Remove the stale accessory from the home before pairing again." C_RST);
+		shell_print(sh, "");
+		shell_print(sh, "  " C_YEL "confirm with: aliro factoryreset yes" C_RST);
+		return -EINVAL;
+	}
+	if (factory_reset_fn == NULL) {
+		shell_print(sh, "  " C_RED "factory reset is unavailable in this build" C_RST);
+		return -ENOTSUP;
+	}
+	shell_print(sh, "  " C_RED "factory reset confirmed · erasing and rebooting" C_RST);
+	factory_reset_fn();
+	return 0;
+}
+
 /**
  * @brief Display the build commit SHA.
  * @param sh Shell context.
@@ -391,6 +436,7 @@ static int cmd_aliro(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "  " C_CYN "log     " C_RST C_DIM "ranging heartbeat on|off" C_RST);
 	shell_print(sh, "  " C_CYN "frames  " C_RST C_DIM "per-block distance stream on|off" C_RST);
 	shell_print(sh, "  " C_CYN "version " C_RST C_DIM "build commit SHA" C_RST);
+	shell_print(sh, "  " C_RED "factoryreset" C_RST C_DIM "  erase everything · needs `yes`" C_RST);
 	shell_print(sh, "");
 	return 0;
 }
@@ -414,6 +460,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(frec, NULL, "Flight recorder: `frec on|off|dump|clear`.", cmd_frec),
 #endif
 	SHELL_CMD(version, NULL, "Firmware build: short commit SHA.", cmd_version),
+	SHELL_CMD(factoryreset, NULL, "Erase pairing and credentials: `factoryreset yes`.",
+		  cmd_factoryreset),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(aliro, &sub_aliro, "Aliro UWB firmware console.", cmd_aliro);
