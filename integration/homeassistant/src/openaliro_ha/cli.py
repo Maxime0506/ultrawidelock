@@ -18,6 +18,7 @@ from .serial_transport import SerialPort, discover_serial_ports
 
 CONSOLE_SCHEMA = "streaming-v1"
 MAX_REPLAY_BYTES = 1024 * 1024
+READY_STATES = frozenset({SessionState.READY_STREAMING, SessionState.READY_COMPATIBILITY})
 
 
 def _observation_dict(observation: Observation) -> dict[str, object]:
@@ -82,13 +83,36 @@ def _candidate_label(index: int, port: SerialPort) -> str:
     return f"{index}: {product}, interface {interface}, USB {vid_pid}"
 
 
+def _probe_candidate(port: SerialPort) -> bool:
+    """Report whether one candidate answers the console handshake."""
+
+    probe = DeviceConfig(device_id="probe", serial_port=port.device, serial_identity=port.identity)
+    try:
+        return asyncio.run(probe_device(probe)) in READY_STATES
+    except (AgentError, ConfigError):
+        return False
+
+
 def _select_port(input_fn: object, output_fn: object) -> SerialPort:
     candidates = [port for port in discover_serial_ports() if port.identity is not None]
     if not candidates:
         raise ConfigError("no serial interfaces with stable USB identity were found")
-    output_fn("Select the OpenAliro console interface:")  # type: ignore[operator]
+    output_fn(f"Probing {len(candidates)} serial interfaces...")  # type: ignore[operator]
+    labels = []
+    ready = []
     for index, port in enumerate(candidates, start=1):
-        output_fn(_candidate_label(index, port))  # type: ignore[operator]
+        answered = _probe_candidate(port)
+        labels.append(f"{_candidate_label(index, port)} -> {'ready' if answered else 'no response'}")
+        output_fn(f"  {labels[-1]}")  # type: ignore[operator]
+        if answered:
+            ready.append((index, port))
+    if len(ready) == 1:
+        index, port = ready[0]
+        output_fn(f"Selected interface {index}.")  # type: ignore[operator]
+        return port
+    output_fn("Select the OpenAliro console interface:")  # type: ignore[operator]
+    for label in labels:
+        output_fn(label)  # type: ignore[operator]
     try:
         selected = int(_prompt(input_fn, "Interface number: "))
     except ValueError as error:
@@ -145,7 +169,7 @@ def _configure(arguments: argparse.Namespace, *, input_fn: object = input, outpu
             serial_identity=port.identity,
         )
         state = asyncio.run(probe_device(selected))
-        if state not in {SessionState.READY_STREAMING, SessionState.READY_COMPATIBILITY}:
+        if state not in READY_STATES:
             raise ConfigError("selected serial interface did not reach a ready state")
         mqtt = existing.mqtt if existing is not None else _new_mqtt_config(input_fn)
         old_devices = existing.devices if existing is not None else ()

@@ -1,14 +1,14 @@
 """Typed observations emitted by the HA=1 console parser."""
 
 from dataclasses import dataclass
-from typing import Literal, Union
+from typing import Literal, Optional, Union
 
 
 @dataclass(frozen=True)
 class DistanceReading:
-    """One per-block UWB distance reading from the curated console stream."""
+    """One UWB distance reading; ``block`` is absent on the raw ``DIST`` line."""
 
-    block: int
+    block: Optional[int]
     distance_mm: int
     tof: int
 

@@ -54,6 +54,7 @@ class CliTests(unittest.TestCase):
             lines,
             [
                 "[{\"block\": 7, \"distance_mm\": 1234, \"kind\": \"range\", \"tof\": 567}, "
+                "{\"block\": null, \"distance_mm\": 1234, \"kind\": \"range\", \"tof\": 567}, "
                 "{\"kind\": \"access\", \"verdict\": \"granted\"}, "
                 "{\"kind\": \"access\", \"verdict\": \"denied\"}]"
             ],
@@ -104,7 +105,6 @@ serial_port = "private-path"
         )
         answers = iter(
             (
-                "1",
                 "front-door",
                 "broker.example.invalid",
                 "",
@@ -132,6 +132,35 @@ serial_port = "private-path"
         self.assertIn('ca_path = "/trusted/ca.pem"', rendered)
         self.assertNotIn("private-path", rendered)
         self.assertNotIn("broker.example.invalid", "\n".join(output))
+
+    def test_configure_prompts_when_more_than_one_interface_answers(self):
+        candidates = tuple(
+            SerialPort(
+                device=f"private-path-{suffix}",
+                identity=f"{suffix}" * 24,
+                vid=0x1366,
+                pid=0x1051,
+                interface=None,
+                product="J-Link",
+            )
+            for suffix in ("a", "b")
+        )
+        answers = iter(("2", "front-door", "broker.example.invalid", "", "/trusted/ca.pem", "agent", "MQTT_PASSWORD"))
+        output = []
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "agent.toml"
+            arguments = SimpleNamespace(config=config_path)
+            with patch("openaliro_ha.cli.discover_serial_ports", return_value=candidates), patch(
+                "openaliro_ha.cli.probe_device",
+                new=AsyncMock(return_value=SessionState.READY_STREAMING),
+            ):
+                self.assertEqual(
+                    _configure(arguments, input_fn=lambda _message: next(answers), output_fn=output.append),
+                    0,
+                )
+            rendered = config_path.read_text(encoding="utf-8")
+        self.assertIn("Select the OpenAliro console interface:", output)
+        self.assertIn('serial_identity = "' + "b" * 24 + '"', rendered)
 
     def test_configure_wrong_interface_exits_with_a_concise_error(self):
         stderr = io.StringIO()
@@ -172,7 +201,7 @@ serial_port = "private-path"
                 ),
             )
             arguments = SimpleNamespace(config=config_path)
-            answers = iter(("1", "front-door"))
+            answers = iter(("front-door",))
             with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
                 "openaliro_ha.cli.probe_device",
                 new=AsyncMock(return_value=SessionState.READY_STREAMING),
