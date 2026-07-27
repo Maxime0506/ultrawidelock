@@ -80,12 +80,19 @@ const workspaceViewCommands: HelpRow[] = [
 const clock = (value: number): string =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
 
-const findRepositoryRoot = (): string => {
-  let candidate = process.cwd()
+// Returns found:false rather than a bare path when the walk fails. Silently
+// falling back to cwd is the worst outcome available: prerequisite checks,
+// artifact staleness, and every job's working directory would all still answer,
+// but about the wrong tree, so the workspace looks broken instead of misplaced.
+// The released standalone binary is the case that reaches this.
+export const findRepositoryRoot = (start = process.cwd()): { path: string; found: boolean } => {
+  let candidate = start
   while (true) {
-    if (existsSync(join(candidate, "Makefile")) && existsSync(join(candidate, "modules"))) return candidate
+    if (existsSync(join(candidate, "Makefile")) && existsSync(join(candidate, "modules"))) {
+      return { path: candidate, found: true }
+    }
     const parent = dirname(candidate)
-    if (parent === candidate) return process.cwd()
+    if (parent === candidate) return { path: start, found: false }
     candidate = parent
   }
 }
@@ -505,7 +512,8 @@ export function App(
 ) {
   const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
-  const root = findRepositoryRoot()
+  const repository = findRepositoryRoot()
+  const root = repository.path
   const [activeBoard, setActiveBoard] = createSignal<BoardId>("nrf")
   const [boards, setBoards] = createSignal<Record<BoardId, BoardState>>({
     nrf: makeBoardState("nrf"),
@@ -1366,6 +1374,14 @@ export function App(
     const unsubscribe = runner.onChange(setJobs)
     const pulse = setInterval(() => setPulseIndex((index) => (index + 1) % 4), 280)
     renderer.keyInput.on("keypress", handleGlobalKey)
+    if (!repository.found) {
+      report(
+        `No openaliro checkout found at or above ${root}. Builds, flashing, and prerequisite checks would all report on the wrong directory, so treat everything below as unreliable. Start the workspace with make openaliro from the checkout.`,
+        "error"
+      )
+      setRecovery("This session is not inside an openaliro checkout. Quit, then run make openaliro from the repository.")
+      setWizardStage("recovery")
+    }
     void refreshInventory(false)
     focusWizard()
     onCleanup(() => {

@@ -1,6 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { App, CommandOutput, SerialTerminal, SidePane, WizardCard } from "../src/app"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+import { App, CommandOutput, findRepositoryRoot, SerialTerminal, SidePane, WizardCard } from "../src/app"
 import { makeBoardState } from "../src/devices"
 import type { Job } from "../src/types"
 
@@ -339,3 +341,16 @@ test("factory reset typed at the prompt confirms and names the credentials it de
   expect(frame).toContain("Factory reset the connected board?")
   expect(frame).toContain("trusted phone key")
 }, 30_000)
+
+test("reports rather than guesses when it is started outside a checkout", () => {
+  // Walking up from a directory with no Makefile+modules above it must not
+  // quietly answer with the starting directory as if it were the repository.
+  const outside = findRepositoryRoot("/")
+  expect(outside.found).toBe(false)
+  expect(outside.path).toBe("/")
+
+  const inside = findRepositoryRoot(join(import.meta.dir, ".."))
+  expect(inside.found).toBe(true)
+  expect(existsSync(join(inside.path, "Makefile"))).toBe(true)
+  expect(existsSync(join(inside.path, "modules"))).toBe(true)
+})

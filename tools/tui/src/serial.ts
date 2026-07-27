@@ -21,10 +21,21 @@ function kindForVendor(vendorId?: string): SerialPortKind {
   return "unknown"
 }
 
+// ioreg prints the registry as a tree: "idVendor" sits on the USB device node
+// and is repeated on its interface children, while "IOCalloutDevice" sits on an
+// IOSerialBSDClient somewhere below. So the vendor has to survive the nodes
+// between a device and its ports, but must not survive past the device itself --
+// otherwise a port with no idVendor in its own subtree inherits whatever device
+// was printed before it, and a confident wrong `kind` is worse than "unknown":
+// portMatches() trusts anything that is not "unknown" and would drop a board
+// that is plugged in. Entering the next USB device is the boundary that ends it.
+const IOREG_USB_DEVICE = /\+-o .*<class IOUSBHostDevice|\+-o .*<class IOUSBDevice/
+
 export function parseMacSerialInventory(output: string): Map<string, SerialPortInfo> {
   const inventory = new Map<string, SerialPortInfo>()
   let vendorId: string | undefined
   for (const line of output.split(/\r?\n/)) {
+    if (IOREG_USB_DEVICE.test(line)) vendorId = undefined
     const vendor = line.match(/"idVendor"\s*=\s*(0x[0-9a-f]+|\d+)/i)?.[1]
     if (vendor) vendorId = vendor.startsWith("0x") ? vendor : Number(vendor).toString(16)
     const port = line.match(/"IOCalloutDevice"\s*=\s*"([^"]+)"/)?.[1]
