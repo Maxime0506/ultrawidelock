@@ -102,6 +102,16 @@ def _new_mqtt_config(input_fn: object) -> MqttConfig:
     host = _prompt(input_fn, "MQTT host: ")
     if not host:
         raise ConfigError("MQTT host is required")
+    try:
+        port = int(_prompt(input_fn, "MQTT TLS port [8883]: ", default="8883"))
+    except ValueError as error:
+        raise ConfigError("MQTT TLS port must be a number") from error
+    if not 1 <= port <= 65535:
+        raise ConfigError("MQTT TLS port must be between 1 and 65535")
+    ca_path = _prompt(
+        input_fn,
+        "TLS CA certificate path (leave empty only for a system-trusted broker): ",
+    )
     username = _prompt(input_fn, "MQTT username (leave empty only for explicit anonymous MQTT): ")
     if username:
         password_env = _prompt(
@@ -109,11 +119,17 @@ def _new_mqtt_config(input_fn: object) -> MqttConfig:
             "MQTT password environment variable [OPENALIRO_HA_MQTT_PASSWORD]: ",
             default="OPENALIRO_HA_MQTT_PASSWORD",
         )
-        return MqttConfig(host=host, username=username, password_env=password_env)
+        return MqttConfig(
+            host=host,
+            port=port,
+            username=username,
+            password_env=password_env,
+            ca_path=ca_path or None,
+        )
     confirmation = _prompt(input_fn, "Type ALLOW ANONYMOUS MQTT to continue: ")
     if confirmation != "ALLOW ANONYMOUS MQTT":
         raise ConfigError("anonymous MQTT requires explicit confirmation")
-    return MqttConfig(host=host, allow_anonymous=True)
+    return MqttConfig(host=host, port=port, ca_path=ca_path or None, allow_anonymous=True)
 
 
 def _configure(arguments: argparse.Namespace, *, input_fn: object = input, output_fn: object = print) -> int:
@@ -133,15 +149,14 @@ def _configure(arguments: argparse.Namespace, *, input_fn: object = input, outpu
             raise ConfigError("selected serial interface did not reach a ready state")
         mqtt = existing.mqtt if existing is not None else _new_mqtt_config(input_fn)
         old_devices = existing.devices if existing is not None else ()
-        if any(device.device_id == device_id for device in old_devices):
-            raise ConfigError("device ID is already configured")
         persisted = DeviceConfig(
             device_id=device_id,
             serial_port="auto",
             serial_identity=port.identity,
             baud=selected.baud,
         )
-        write_config(arguments.config, AgentConfig(mqtt=mqtt, devices=(*old_devices, persisted)))
+        retained_devices = tuple(device for device in old_devices if device.device_id != device_id)
+        write_config(arguments.config, AgentConfig(mqtt=mqtt, devices=(*retained_devices, persisted)))
     except (AgentError, ConfigError) as error:
         raise error
     output_fn("configuration saved")  # type: ignore[operator]
@@ -159,7 +174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments.command == "configure":
         try:
             return _configure(arguments)
-        except ConfigError as error:
+        except (AgentError, ConfigError) as error:
             parser.error(str(error))
     if arguments.command in {"doctor", "run"}:
         try:

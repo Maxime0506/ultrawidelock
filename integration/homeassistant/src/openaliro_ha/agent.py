@@ -9,9 +9,9 @@ from typing import Optional
 
 from .config import AgentConfig, DeviceConfig
 from .models import AccessEvent, DistanceReading
-from .mqtt import MqttPublisher
+from .mqtt import MqttError, MqttPublisher
 from .serial_session import SerialSession, SessionState
-from .serial_transport import open_serial_connection, resolve_serial_port
+from .serial_transport import SerialTransportError, open_serial_connection, resolve_serial_port
 
 
 class AgentError(RuntimeError):
@@ -56,6 +56,8 @@ async def doctor(
         session = session_factory(device)
         try:
             state = await session.start()
+        except SerialTransportError as error:
+            raise AgentError(str(error)) from error
         except Exception as error:
             raise AgentError("serial console compatibility check failed") from error
         finally:
@@ -69,6 +71,8 @@ async def doctor(
         try:
             await asyncio.to_thread(publisher.start)
             await asyncio.to_thread(publisher.close)
+        except MqttError as error:
+            raise AgentError(str(error)) from error
         except Exception as error:
             raise AgentError("MQTT authentication, TLS, or broker check failed") from error
     return tuple(results)
@@ -80,6 +84,8 @@ async def probe_device(device: DeviceConfig) -> SessionState:
     session = session_for_device(device)
     try:
         return await session.start()
+    except SerialTransportError as error:
+        raise AgentError(str(error)) from error
     except Exception as error:
         raise AgentError("selected serial interface is not a compatible OpenAliro console") from error
     finally:

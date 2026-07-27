@@ -15,6 +15,7 @@ from openaliro_ha.agent import AgentError, doctor, run_device  # noqa: E402
 from openaliro_ha.config import AgentConfig, DeviceConfig, MqttConfig  # noqa: E402
 from openaliro_ha.models import AccessEvent, DistanceReading  # noqa: E402
 from openaliro_ha.serial_session import SessionState  # noqa: E402
+from openaliro_ha.serial_transport import SerialTransportError  # noqa: E402
 
 
 class FakeSession:
@@ -84,6 +85,28 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(AgentError, "serial console compatibility") as raised:
             await doctor(config(), session_factory=lambda _device: FailedSession())
         self.assertNotIn("private-path", str(raised.exception))
+
+    async def test_doctor_preserves_safe_mqtt_failures(self):
+        class RejectedPublisher(FakePublisher):
+            def start(self):
+                from openaliro_ha.mqtt import MqttError
+
+                raise MqttError("MQTT broker rejected the connection")
+
+        with self.assertRaisesRegex(AgentError, "MQTT broker rejected"):
+            await doctor(
+                config(),
+                session_factory=lambda _device: FakeSession(),
+                publisher_factory=lambda _config, _device: RejectedPublisher(),
+            )
+
+    async def test_doctor_preserves_a_safe_serial_port_collision(self):
+        class BusySession(FakeSession):
+            async def start(self):
+                raise SerialTransportError("serial port is busy")
+
+        with self.assertRaisesRegex(AgentError, "^serial port is busy$"):
+            await doctor(config(), session_factory=lambda _device: BusySession())
 
     async def test_run_device_publishes_only_approved_observations(self):
         session = FakeSession()

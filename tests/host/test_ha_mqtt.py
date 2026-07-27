@@ -39,6 +39,7 @@ class FakeMqttClient:
 
     def loop_start(self):
         self.calls.append(("loop_start",))
+        self.on_connect(self, None, None, 0)
 
     def reconnect_delay_set(self, min_delay, max_delay):
         self.calls.append(("reconnect_delay_set", min_delay, max_delay))
@@ -57,6 +58,12 @@ class FailingPublishMqttClient(FakeMqttClient):
     def publish(self, topic, payload, qos, retain):
         super().publish(topic, payload, qos, retain)
         raise RuntimeError("simulated broker failure")
+
+
+class RejectedMqttClient(FakeMqttClient):
+    def loop_start(self):
+        self.calls.append(("loop_start",))
+        self.on_connect(self, None, None, 4)
 
 
 @unittest.skipUnless(os.environ.get("HA") == "1", "requires explicit HA=1")
@@ -98,6 +105,20 @@ class MqttPublisherTests(unittest.TestCase):
         self.assertEqual(len(publications), 3)
         self.assertTrue(all(call[4] for call in publications))
         self.assertEqual(publications[-1][1:], ("aliro/front_door/status", "online", 1, True))
+
+    def test_start_expands_a_user_relative_ca_path(self):
+        config = MqttConfig(
+            host="broker.example.invalid",
+            username="agent",
+            password_env="OPENALIRO_HA_MQTT_PASSWORD",
+            ca_path="~/openaliro-ca.crt",
+        )
+        publisher, client = self.publisher(config)
+        publisher.start()
+        self.assertEqual(
+            client.calls[1],
+            ("tls_set", {"ca_certs": str(Path.home() / "openaliro-ca.crt")}),
+        )
 
     def test_observations_are_non_retained_and_access_has_no_extra_fields(self):
         publisher, client = self.publisher()
@@ -169,6 +190,22 @@ class MqttPublisherTests(unittest.TestCase):
             environment={"OPENALIRO_HA_MQTT_PASSWORD": "not-a-real-secret"},
         )
         with self.assertRaisesRegex(MqttError, "connection or setup failed"):
+            publisher.start()
+        self.assertEqual(client.calls[-2:], [("loop_stop",), ("disconnect",)])
+
+    def test_start_reports_a_broker_rejection_after_connack(self):
+        client = RejectedMqttClient()
+        publisher = MqttPublisher(
+            MqttConfig(
+                host="broker.example.invalid",
+                username="agent",
+                password_env="OPENALIRO_HA_MQTT_PASSWORD",
+            ),
+            "front_door",
+            client_factory=lambda: client,
+            environment={"OPENALIRO_HA_MQTT_PASSWORD": "not-a-real-secret"},
+        )
+        with self.assertRaisesRegex(MqttError, "broker rejected"):
             publisher.start()
         self.assertEqual(client.calls[-2:], [("loop_stop",), ("disconnect",)])
 

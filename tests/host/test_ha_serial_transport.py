@@ -2,6 +2,7 @@
 """HA=1-only tests for real-transport boundaries without a physical port."""
 
 import asyncio
+import errno
 import os
 import sys
 import unittest
@@ -64,6 +65,30 @@ class SerialTransportTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(SerialTransportError):
             resolve_serial_port("auto", None, ports=ports)
 
+    def test_unknown_interface_uses_endpoint_fingerprint_without_collapsing_ports(self):
+        ports = discover_serial_ports(
+            [
+                SimpleNamespace(
+                    device="private-path-a",
+                    vid=1,
+                    pid=2,
+                    serial_number="board",
+                    interface=None,
+                    product="J-Link",
+                ),
+                SimpleNamespace(
+                    device="private-path-b",
+                    vid=1,
+                    pid=2,
+                    serial_number="board",
+                    interface=None,
+                    product="J-Link",
+                ),
+            ]
+        )
+        self.assertNotEqual(ports[0].identity, ports[1].identity)
+        self.assertEqual(resolve_serial_port("auto", ports[1].identity, ports=ports), "private-path-b")
+
     async def test_open_read_write_and_close_stay_off_the_event_loop(self):
         class FakeSerial:
             def __init__(self, port, **kwargs):
@@ -94,6 +119,14 @@ class SerialTransportTests(unittest.IsolatedAsyncioTestCase):
         await connection.write(b"aliro version\\n")
         connection.close()
         self.assertTrue(created[0].closed)
+        self.assertTrue(created[0].kwargs["exclusive"])
+
+    async def test_busy_port_has_a_specific_redacted_error(self):
+        def factory(*_args, **_kwargs):
+            raise OSError(errno.EBUSY, "private-path")
+
+        with self.assertRaisesRegex(SerialTransportError, "^serial port is busy$"):
+            await open_serial_connection("private-path", 115200, serial_factory=factory)
 
     async def test_open_failure_is_redacted(self):
         def factory(*_args, **_kwargs):

@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "integration" / "homeassistant" / "src"))
 
 from openaliro_ha.cli import _configure, main  # noqa: E402
+from openaliro_ha.agent import AgentError  # noqa: E402
+from openaliro_ha.config import AgentConfig, DeviceConfig, MqttConfig, write_config  # noqa: E402
 from openaliro_ha.serial_session import SessionState  # noqa: E402
 from openaliro_ha.serial_transport import SerialPort  # noqa: E402
 
@@ -100,7 +102,17 @@ serial_port = "private-path"
             interface="VCOM1",
             product="J-Link",
         )
-        answers = iter(("1", "front-door", "broker.example.invalid", "agent", "MQTT_PASSWORD"))
+        answers = iter(
+            (
+                "1",
+                "front-door",
+                "broker.example.invalid",
+                "",
+                "/trusted/ca.pem",
+                "agent",
+                "MQTT_PASSWORD",
+            )
+        )
         output = []
         with tempfile.TemporaryDirectory() as temporary_directory:
             config_path = Path(temporary_directory) / "agent.toml"
@@ -116,8 +128,66 @@ serial_port = "private-path"
             rendered = config_path.read_text(encoding="utf-8")
         self.assertIn('serial_port = "auto"', rendered)
         self.assertIn('serial_identity = "0123456789abcdef01234567"', rendered)
+        self.assertIn('port = 8883', rendered)
+        self.assertIn('ca_path = "/trusted/ca.pem"', rendered)
         self.assertNotIn("private-path", rendered)
         self.assertNotIn("broker.example.invalid", "\n".join(output))
+
+    def test_configure_wrong_interface_exits_with_a_concise_error(self):
+        stderr = io.StringIO()
+        with patch(
+            "openaliro_ha.cli._configure",
+            side_effect=AgentError(
+                "selected serial interface is not a compatible OpenAliro console"
+            ),
+        ), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                main(["configure"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("selected serial interface is not a compatible OpenAliro console", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_configure_replaces_an_existing_device_id(self):
+        candidate = SerialPort(
+            device="private-path-b",
+            identity="0123456789abcdef01234567",
+            vid=0x1366,
+            pid=0x1051,
+            interface=None,
+            product="J-Link",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "agent.toml"
+            write_config(
+                config_path,
+                AgentConfig(
+                    mqtt=MqttConfig(host="broker.example.invalid", allow_anonymous=True),
+                    devices=(
+                        DeviceConfig(
+                            device_id="front-door",
+                            serial_port="auto",
+                            serial_identity="aaaaaaaaaaaaaaaaaaaaaaaa",
+                        ),
+                    ),
+                ),
+            )
+            arguments = SimpleNamespace(config=config_path)
+            answers = iter(("1", "front-door"))
+            with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
+                "openaliro_ha.cli.probe_device",
+                new=AsyncMock(return_value=SessionState.READY_STREAMING),
+            ):
+                self.assertEqual(
+                    _configure(
+                        arguments,
+                        input_fn=lambda _message: next(answers),
+                        output_fn=lambda _message: None,
+                    ),
+                    0,
+                )
+            replaced = config_path.read_text(encoding="utf-8")
+        self.assertEqual(replaced.count("[devices.front-door]"), 1)
+        self.assertIn('serial_identity = "0123456789abcdef01234567"', replaced)
 
 
 if __name__ == "__main__":

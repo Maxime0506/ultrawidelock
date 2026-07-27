@@ -6,6 +6,7 @@ transport, with the current discovery and state topics kept stable.
 
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Callable, Optional, Protocol
 
@@ -17,6 +18,7 @@ DISCOVERY_QOS = 1
 AVAILABILITY_QOS = 1
 OBSERVATION_QOS = 0
 MAX_PASSWORD_FILE_BYTES = 4096
+CONNECTION_TIMEOUT_SECONDS = 10
 
 
 class MqttError(RuntimeError):
@@ -95,7 +97,7 @@ def resolve_password(config: MqttConfig, environment: Optional[dict[str, str]] =
         return value
     if config.password_file:
         try:
-            value = Path(config.password_file).read_bytes()
+            value = Path(config.password_file).expanduser().read_bytes()
         except OSError as error:
             raise MqttError("configured MQTT password file is unavailable") from error
         if len(value) > MAX_PASSWORD_FILE_BYTES:
@@ -108,6 +110,12 @@ def resolve_password(config: MqttConfig, environment: Optional[dict[str, str]] =
             raise MqttError("configured MQTT password file is empty")
         return decoded
     raise MqttError("configured MQTT password source is unavailable")
+
+
+def _expanded_path(value: str) -> str:
+    """Return a user-facing configured path without requiring an absolute home path."""
+
+    return str(Path(value).expanduser())
 
 
 def _default_client_factory() -> MqttClient:
@@ -141,6 +149,8 @@ class MqttPublisher:
         self._environment = environment
         self._client: Optional[MqttClient] = None
         self._announced = False
+        self._connection_event = threading.Event()
+        self._connection_error: Optional[str] = None
 
     @property
     def status_topic(self) -> str:
@@ -153,6 +163,8 @@ class MqttPublisher:
         connected = False
         loop_started = False
         try:
+            self._connection_event.clear()
+            self._connection_error = None
             if self._config.username:
                 client.username_pw_set(
                     self._config.username,
@@ -162,9 +174,15 @@ class MqttPublisher:
                 tls_options = {
                     key: value
                     for key, value in {
-                        "ca_certs": self._config.ca_path,
-                        "certfile": self._config.client_cert,
-                        "keyfile": self._config.client_key,
+                        "ca_certs": _expanded_path(self._config.ca_path)
+                        if self._config.ca_path
+                        else None,
+                        "certfile": _expanded_path(self._config.client_cert)
+                        if self._config.client_cert
+                        else None,
+                        "keyfile": _expanded_path(self._config.client_key)
+                        if self._config.client_key
+                        else None,
                     }.items()
                     if value is not None
                 }
@@ -176,10 +194,13 @@ class MqttPublisher:
             client.will_set(self.status_topic, "offline", qos=AVAILABILITY_QOS, retain=True)
             client.connect(self._config.host, self._config.port, keepalive=60)
             connected = True
-            client.loop_start()
-            loop_started = True
             self._client = client
-            self._announce()
+            loop_started = True
+            client.loop_start()
+            if not self._connection_event.wait(CONNECTION_TIMEOUT_SECONDS):
+                raise MqttError("MQTT broker did not acknowledge the connection")
+            if self._connection_error:
+                raise MqttError(self._connection_error)
         except Exception as error:
             if self._client is client:
                 self._client = None
@@ -235,9 +256,23 @@ class MqttPublisher:
         )
         self._announced = True
 
-    def _on_connect(self, client: MqttClient, *_: object) -> None:
+    def _on_connect(
+        self,
+        client: MqttClient,
+        _userdata: object,
+        _flags: object,
+        reason_code: object,
+        *_: object,
+    ) -> None:
         """Re-announce retained discovery after paho reconnects in its loop thread."""
 
+        failed = getattr(reason_code, "is_failure", None)
+        accepted = not failed if isinstance(failed, bool) else reason_code == 0
+        if not accepted:
+            self._connection_error = "MQTT broker rejected the connection"
+            self._connection_event.set()
+            return
+        self._connection_event.set()
         if client is self._client:
             self._announce()
 

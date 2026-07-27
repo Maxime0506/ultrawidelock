@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -40,13 +41,21 @@ def serial_identity(
     pid: Optional[int],
     serial_number: Optional[str],
     interface: Optional[str],
+    device: Optional[str] = None,
 ) -> Optional[str]:
-    """Hash USB identity components without retaining the USB serial number."""
+    """Hash one USB console endpoint without retaining serial or path text.
+
+    Some macOS J-Link drivers omit the CDC interface name. In that case, include
+    the currently assigned endpoint name so two console endpoints cannot collapse
+    into one identity and silently select the wrong one. A later rename fails
+    closed and requires reconfiguration rather than guessing.
+    """
 
     if vid is None or pid is None or not serial_number:
         return None
+    endpoint = interface or device or ""
     material = "\x1f".join(
-        (f"{vid:04x}", f"{pid:04x}", serial_number, interface or "")
+        (f"{vid:04x}", f"{pid:04x}", serial_number, endpoint)
     ).encode("utf-8")
     return hashlib.sha256(material).hexdigest()[:24]
 
@@ -73,6 +82,7 @@ def discover_serial_ports(
                     pid=pid,
                     serial_number=serial_number,
                     interface=interface,
+                    device=getattr(port, "device"),
                 ),
                 vid=vid,
                 pid=pid,
@@ -161,9 +171,12 @@ async def open_serial_connection(
             serial_factory,
             serial_port,
             baudrate=baud,
+            exclusive=True,
             timeout=0.2,
             write_timeout=3,
         )
     except Exception as error:
+        if getattr(error, "errno", None) == errno.EBUSY:
+            raise SerialTransportError("serial port is busy") from error
         raise SerialTransportError("serial port could not be opened") from error
     return PySerialConnection(connection)
