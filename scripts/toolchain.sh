@@ -122,15 +122,16 @@ TOOLS=(
 	node doxygen dot llvm-cov zizmor reuse cbmc emcc markdown coverage
 )
 
-# Firmware, not gates. nrfutil is what installs the NCS toolchain, so
-# `make bootstrap` needs it, and it is reported here because "what does this
-# machine still need" is the question this script answers.
+# Bench tools, not gates. nrfutil installs the NCS toolchain and tio owns live
+# serial sessions for the TUI and `make term`, so `make bootstrap` offers both.
+# They are reported here because "what does this machine still need" is the
+# question this script answers.
 #
 # It is kept in its own list because it must NEVER set the exit status. Someone
 # who only runs the host suites has every tool they need without it, and
 # `make tools && make verify` has to keep meaning what it says for them. The
 # row is reported, and `install` offers it; nothing here fails without it.
-FW_TOOLS=(nrfutil)
+FW_TOOLS=(tio nrfutil)
 
 # Which gate stops working without it. This is the "why do I need this" column,
 # and it is the reason a row exists at all.
@@ -156,6 +157,7 @@ tool_gate() {
 	# on a weaker measurement than CI made.
 	markdown) echo "test, coverage (silently weaker)" ;;
 	coverage) echo "coverage (python rows)" ;;
+	tio) echo "TUI live serial / make term" ;;
 	nrfutil) echo "make bootstrap / build / flash" ;;
 	esac
 }
@@ -389,6 +391,16 @@ tool_install() {
 	markdown | coverage)
 		echo "python3 -m venv .venv && .venv/bin/pip install --quiet --upgrade pip 'markdown==$(tool_pin markdown)' coverage"
 		;;
+	tio)
+		case "$PM" in
+		brew) echo "brew install tio" ;;
+		apt) echo "${SUDO}apt-get install -y tio" ;;
+		dnf) echo "${SUDO}dnf install -y tio" ;;
+		pacman) echo "${SUDO}pacman -S --needed tio" ;;
+		zypper) echo "${SUDO}zypper install -y tio" ;;
+		*) echo "" ;;
+		esac
+		;;
 	# Nordic ships it as a signed binary from their own site, and only Homebrew
 	# packages it. Every other host gets the note instead of a wrong command:
 	# the distro repos do not carry it, so guessing one would fail loudly on a
@@ -502,9 +514,9 @@ printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
 printf '  %s%d tools %s %d present %s %d missing %s %d off the CI pin%s\n\n' \
 	"$DIM" "${#TOOLS[@]}" "$DOT" "$nok" "$DOT" "$nmiss" "$DOT" "$nold" "$RESET"
 
-# Firmware rows, below the line and outside every count above. A missing one is
-# a fact about what this machine can build, not a gap in what it can verify, so
-# it is stated and then left alone.
+# Bench rows, below the line and outside every count above. A missing one is a
+# fact about what this machine can build or connect to, not a gap in what it can
+# verify, so it is stated and then left alone.
 nfw=0
 for t in "${FW_TOOLS[@]}"; do
 	if got="$(tool_probe "$t")"; then
@@ -513,7 +525,7 @@ for t in "${FW_TOOLS[@]}"; do
 	else
 		nfw=$((nfw + 1))
 		NEEDED+=("$t")
-		printf '  %s%s%s %-12s %s%-33s%snot installed — firmware builds only%s\n' \
+		printf '  %s%s%s %-12s %s%-33s%snot installed · optional bench tool%s\n' \
 			"$YEL" "$TIL" "$RESET" "$t" "$DIM" "$(tool_gate "$t")" "$YEL" "$RESET"
 	fi
 done
