@@ -98,6 +98,10 @@ the custom integration require their own runtime validation.
 `custom_components/openaliro/` now contains the direct-serial beta: a manual
 config flow, Distance sensor, and Access event entity. It deliberately does not
 create a lock-control entity or expose peer, credential, or raw-console data.
+It offers device automation triggers for access granted and access denied.
+Its diagnostics contain only the hashed-identity presence, baud rate, current
+session state, and approved observation availability; they omit serial paths,
+USB serials, and console text.
 
 It is not a distributable custom-component archive yet. A release archive must
 either bundle the separately built `openaliro-home-assistant` library or install

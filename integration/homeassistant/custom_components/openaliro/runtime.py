@@ -15,12 +15,18 @@ Listener = Callable[[], None]
 class OpenAliroRuntime:
     """Own one direct serial session and fan out approved observations."""
 
-    def __init__(self, device: DeviceConfig, session: Optional[SerialSession] = None) -> None:
+    def __init__(
+        self,
+        device: DeviceConfig,
+        session: Optional[SerialSession] = None,
+        access_callback: Optional[Callable[[AccessEvent], None]] = None,
+    ) -> None:
         self.device = device
         self.session = session or session_for_device(device)
         self.distance_mm: Optional[int] = None
         self.last_access: Optional[AccessEvent] = None
         self._listeners: list[Listener] = []
+        self._access_callback = access_callback
         self._stop = asyncio.Event()
         self._maintenance: Optional[asyncio.Task[None]] = None
         self._consumer: Optional[asyncio.Task[None]] = None
@@ -59,6 +65,8 @@ class OpenAliroRuntime:
                 self.distance_mm = observation.distance_mm
             elif isinstance(observation, AccessEvent):
                 self.last_access = observation
+                if self._access_callback is not None:
+                    self._access_callback(observation)
             else:
                 continue
             for listener in tuple(self._listeners):

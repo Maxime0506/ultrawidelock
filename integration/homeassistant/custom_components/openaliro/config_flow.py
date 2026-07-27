@@ -58,3 +58,24 @@ class OpenAliroConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+    async def async_step_reconfigure(self, user_input: dict[str, object] | None = None) -> FlowResult:
+        """Replace only the selected interface after a USB port change."""
+
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            serial_port = str(user_input[CONF_SERIAL_PORT])
+            selected = next((port for port in discover_serial_ports() if port.device == serial_port), None)
+            if selected is not None and selected.identity == entry.data[CONF_SERIAL_IDENTITY]:
+                updates = {CONF_SERIAL_PORT: serial_port, CONF_BAUD: int(user_input[CONF_BAUD])}
+                return self.async_update_reload_and_abort(entry, data_updates=updates)
+            return self.async_show_form(step_id="reconfigure", errors={"base": "serial_identity_unavailable"})
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SERIAL_PORT, default=entry.data[CONF_SERIAL_PORT]): str,
+                    vol.Required(CONF_BAUD, default=entry.data[CONF_BAUD]): int,
+                }
+            ),
+        )

@@ -9,6 +9,11 @@
           "baud": "Baud rate"
         }
       }
+      ,"reconfigure": {
+        "title": "Reconfigure OpenAliro",
+        "description": "Select the reconnected serial interface for this same lock.",
+        "data": {"serial_port": "Serial port", "baud": "Baud rate"}
+      }
     },
     "error": {
       "cannot_connect": "The selected interface did not respond as an OpenAliro console.",

@@ -48,7 +48,7 @@ ENV := $(strip \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
   $(if $(NFC),NFC=$(NFC)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -149,6 +149,14 @@ ha-test:
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_session.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_transport.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_agent.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_package.py
+
+## ha-package: build a local custom-component beta archive
+##   Requires HA=1 and never publishes. The component archive vendors the shared
+##   library so it can be installed as one local custom-component archive.
+ha-package:
+	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-package requires HA=1'; exit 2; }
+	@python3 -B $(REPO_ROOT)/integration/homeassistant/tools/package_component.py
 
 ## fuzz: fuzz the wire-facing parsers  ·  parser-hardening gate
 ##   Coverage-guided libFuzzer where available (CI), else a portable corpus
