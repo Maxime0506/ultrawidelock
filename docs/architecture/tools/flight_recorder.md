@@ -26,7 +26,7 @@ With a `.log` input the reconstructed trace is written next to it as `.frc`.
 With a corpus_dir the frames are written there as `frame_NNNN.bin`. Stdlib only;
 the binary format mirrors flight_recorder.h byte for byte.
 
-**discussed in** [`README.md`](../../../README.md), [`SECURITY.md`](../../../SECURITY.md), [`docs/configuring.md`](../../configuring.md)
+**discussed in** [`SECURITY.md`](../../../SECURITY.md), [`docs/configuring.md`](../../configuring.md)
 
 ## API
 

@@ -27,8 +27,14 @@ INPUT                  = modules/woz_port \
 FILE_PATTERNS          = *.c *.h *.cpp
 RECURSIVE              = YES
 
-# The Zephyr compatibility shim is a port scaffold, not project API.
-EXCLUDE                = ports/esp32/components/woz_uwb/compat/zephyr
+# The Zephyr compatibility shim is a port scaffold, not project API. The two
+# C++ stack files implement classes declared by the external Nordic Aliro
+# headers. Those declarations are deliberately unavailable to this standalone
+# reference build, so their implementation narratives live in
+# docs/architecture/ instead.
+EXCLUDE                = ports/esp32/components/woz_uwb/compat/zephyr \
+                         modules/woz_aliro_stack/src/aliro_stack.cpp \
+                         modules/woz_aliro_stack/src/session.cpp
 EXCLUDE_PATTERNS       = */build/* */test/*
 
 # Only documented symbols. An undocumented symbol should be fixed at the source,
