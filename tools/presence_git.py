@@ -424,6 +424,7 @@ AUTHENTIC_VERDICTS = (
     pv.E_ABSENT,
     pv.E_RANGE,
     pv.E_CREDENTIAL,
+    pv.E_INTEGRITY,
 )
 
 
@@ -457,6 +458,11 @@ def cmd_probe(args) -> int:
         dist = fields["distance_cm"]
         shown = "none" if dist == pv.DIST_NONE else f"{dist} cm"
         print(f"distance   {shown}")
+        sts = "ok" if fields["range_flags"] & pv.RANGE_STS_OK else "SUSPECT"
+        print(
+            f"integrity  STS {sts}  quality={fields['sts_quality']}  "
+            f"consensus={fields['trust_level']} blocks"
+        )
         print(f"uptime     {fields['uptime_ms']} ms")
         print(f"cred id    {fields['cred_id'].hex()}")
 

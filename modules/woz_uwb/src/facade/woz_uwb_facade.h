@@ -88,6 +88,24 @@ uint32_t woz_uwb_range_generation(void);
  *  challenge merely because it remains recent in wall-clock terms. */
 bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after);
 
+/** Layer-2 evidence for a latched range, for a consumer that must fail closed. */
+struct woz_uwb_range_integrity {
+	bool sts_ok;         /**< every block in the agreeing run passed the STS floor */
+	int16_t sts_quality; /**< worst STS quality index in that run */
+	uint8_t trust_level; /**< how many agreeing blocks stand behind the distance */
+};
+
+/**
+ * As woz_uwb_trusted_range_after_cm(), plus the integrity evidence recorded
+ * with that latch. The plain accessor answers "how far", which is all an unlock
+ * decision needs; this one also answers "how well was that measured", which is
+ * what a caller has to know before signing the number into a statement someone
+ * else will believe. Without CONFIG_WOZ_ALIRO there is no evidence to report
+ * and @p ig_out reads back as a failed STS.
+ */
+bool woz_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
+					    struct woz_uwb_range_integrity *ig_out);
+
 /**
  * Register a callback fired after each accepted range latch (NULL to clear),
  * so the unlock seam can block on an event instead of polling. The callback

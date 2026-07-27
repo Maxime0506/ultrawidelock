@@ -48,6 +48,11 @@ int main(void)
 	a.status = ALIRO_PRESENCE_PRESENT;
 	memset(a.nonce, 0x5A, sizeof(a.nonce));
 	a.distance_cm = 42;
+	/* A defended range: without the evidence the verifier below refuses the
+	 * frame on policy and this binder test would never reach the curve. */
+	a.range_flags = ALIRO_ASSERT_RANGE_STS_OK;
+	a.sts_quality = 120;
+	a.trust_level = 3;
 	a.uptime_ms = 123456;
 	a.unix_ms = 1785000000000ULL;
 

@@ -44,6 +44,13 @@ owner-only and refuses insecure, unowned, non-socket, or already-active paths.
 
 ## Security boundaries
 
+- A distance is refused unless the ranging layer vouched for the measurement
+  behind it. Every block in the agreeing run must have correlated its scrambled
+  timestamp sequence (STS) well enough to trust, the firmware will not sign a
+  range that fails this, and the verdict plus its quality index travel inside
+  the signed frame so the verifier checks rather than assumes it. This is what
+  separates a measured 19 cm from a claimed one: a distance-reduction attack
+  produces a perfectly well-formed frame carrying a number it chose.
 - The daemon, not the client, generates every random challenge.
 - The attached device must match the selected enrolled public key and credential
   before the socket starts listening.

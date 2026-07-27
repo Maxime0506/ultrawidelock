@@ -228,6 +228,25 @@ config WOZ_PRESENCE_MAX_CM
 	  Firmware refuses to sign a fresh range beyond this distance. A verifier
 	  may enforce an equal or lower threshold.
 
+config WOZ_RANGE_GATE_STRICT
+	bool "Range gate: enforce STS quality for the lock path too (drop suspect blocks)"
+	default n
+	help
+	  Enforce the layer-2 STS-quality check before a block reaches the range
+	  store, so a poorly correlated block never feeds the unlock seam. Default
+	  n = shadow mode: the verdict is logged (GATE line) and recorded with the
+	  range, but the block still latches, so a mis-tuned threshold cannot lock
+	  a human out of their own door.
+
+	  This option governs the DOOR path only. Presence assertions
+	  (WOZ_PRESENCE) always require a good STS and refuse to sign a range
+	  without one, regardless of this setting, because a signed claim someone
+	  else will act on has to fail closed where a lock must not.
+
+	  Enable only after sizing FIRA_STS_QUALITY_MIN from bench captures. The
+	  symbol previously existed only in the Zephyr Kconfig tree, so on ESP32
+	  the gate could not be turned on at all.
+
 config WOZ_ALIRO_CLONE
 	bool "Reader identity clone/export console commands (bench only)"
 	default n

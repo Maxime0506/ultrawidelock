@@ -189,3 +189,29 @@ bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after)
 	return woz_uwb_trusted_range_cm(cm_out);
 #endif
 }
+
+bool woz_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
+					    struct woz_uwb_range_integrity *ig_out)
+{
+	/* Default to a failed STS before anything else runs, so every early return
+	 * below -- and every build without a ranging layer -- leaves the caller
+	 * holding "not vouched for" rather than an uninitialised verdict. */
+	if (ig_out != NULL) {
+		ig_out->sts_ok = false;
+		ig_out->sts_quality = 0;
+		ig_out->trust_level = 0u;
+	}
+	if (!woz_uwb_trusted_range_after_cm(cm_out, after)) {
+		return false;
+	}
+#if defined(CONFIG_WOZ_ALIRO)
+	struct fira_range_integrity ig;
+
+	if (ig_out != NULL && fira_session_last_range_integrity(&ig)) {
+		ig_out->sts_ok = ig.sts_ok;
+		ig_out->sts_quality = ig.sts_quality;
+		ig_out->trust_level = ig.trust_level;
+	}
+#endif
+	return true;
+}

@@ -20,6 +20,36 @@ const uint8_t *fira_session_get_ursk(void);
 /** @brief Latch a CCC DS-TWR range so it flows up the Aliro mRangingData seam. */
 void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block);
 
+/** @brief Record the layer-2 STS evidence for the block that is about to latch.
+ *
+ * Separate from the latch itself because the responder RX path owns the DW3000
+ * diagnostics and the store does not. Call it immediately before
+ * fira_session_set_ccc_range_cm(); the latch consumes the evidence and clears
+ * it, so a latch with no preceding call records "no evidence", which reads as
+ * a failed STS rather than a passed one.
+ *
+ * @param driver_verdict dwt_readstsquality() return (>=0 good, <0 bad).
+ * @param quality_index  the signed STS quality index it wrote.
+ */
+void fira_session_set_ccc_range_sts(int32_t driver_verdict, int16_t quality_index);
+
+/** @brief Layer-2 evidence accumulated over the current agreement run. */
+struct fira_range_integrity {
+	bool sts_ok;         /**< every block in the run passed the STS floor */
+	int16_t sts_quality; /**< worst STS quality index seen in the run */
+	uint8_t trust_level; /**< layer-4 run length behind the latched range */
+};
+
+/** @brief Read the integrity evidence for the latched range.
+ *
+ * Reports the run, not the last block: a consumer that fails closed needs to
+ * know that every block which built the consensus was well-correlated, since
+ * an attacker who can land one good block among three suspect ones has not
+ * been stopped by a check that only inspects the last.
+ *
+ * @return false (leaving @p out untouched) when no range has been latched. */
+bool fira_session_last_range_integrity(struct fira_range_integrity *out);
+
 /** @brief Invalidate the old session's range and consensus before a new URSK
  *  session starts. The monotonic generation is retained so callers can prove
  *  that a later latch happened after their checkpoint. */
@@ -40,6 +70,15 @@ uint32_t fira_session_current_slot(void);
  * store (fira_session_set_ccc_range_cm); layer 2 is a pure predicate the
  * responder RX path evaluates, since it owns the DW3000 diagnostics. Every
  * threshold below is a bring-up default — tune on the bench.
+ *
+ * Layer 2 is recorded rather than enforced here, on purpose, because its two
+ * consumers want opposite failure modes. A door lock must not refuse to open
+ * on a marginal block — a mis-tuned floor locks a human out of their house —
+ * so it keeps the shadow behaviour and only drops blocks under
+ * CONFIG_WOZ_RANGE_GATE_STRICT. A signed presence assertion is the opposite:
+ * it exists to be believed by someone who was not there, so it must refuse to
+ * state a distance it cannot vouch for. The store therefore carries the
+ * verdict alongside the range and lets each consumer pick.
  */
 
 /* Layer 1 — plausibility band. Below -NEG_TOL is physically impossible (an

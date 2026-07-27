@@ -86,6 +86,11 @@ static void base_assertion(struct aliro_assert *a)
 		a->cred_id[i] = (uint8_t)(0xC0u + i);
 	}
 	a->distance_cm = 25;
+	/* A defended measurement: STS held, and a distinctive positive quality so
+	 * the byte-exact vector below pins where the field sits and how wide it is. */
+	a->range_flags = ALIRO_ASSERT_RANGE_STS_OK;
+	a->sts_quality = 300;
+	a->trust_level = 3;
 	a->uptime_ms = 1000000;
 	/* Non-zero so the byte-exact vector below actually pins where unix_ms
 	 * sits; all-zero would pass even if the field were misplaced. */
@@ -107,20 +112,20 @@ void test_aliro_assert(void)
 	T_EQ("build.len", (long)wlen, ALIRO_ASSERT_WIRE_P256);
 	T_EQ("build.magic0", wire[0], 0xA1);
 	T_EQ("build.magic1", wire[1], 0x50);
-	T_EQ("build.version", wire[2], 0x02);
+	T_EQ("build.version", wire[2], 0x03);
 	T_EQ("build.alg", wire[3], ALIRO_ASSERT_ALG_ECDSA_P256);
 	uint8_t tiny[8];
 	T_EQ("build.too_small",
 	     aliro_assert_build_p256(fake_ec_sign, &fec, &a, tiny, sizeof(tiny), &wlen), -1);
-	/* Lock the 47-byte signed prefix so the wire layout cannot drift. Derived
+	/* Lock the 51-byte signed prefix so the wire layout cannot drift. Derived
 	 * independently (Python struct) before being pinned here. The signature is
 	 * not pinned: it comes from the test double, so it would pin the double
 	 * rather than the format.
-	 * magic|ver=02|alg=02|status|nonce|cred_id|dist=0019(25)|
-	 * uptime=0f4240(1e6)|unix=019f9a4a7a00(1785000000000). */
+	 * magic|ver=03|alg=02|status|nonce|cred_id|dist=0019(25)|flags=01|
+	 * sts=012c(300)|trust=03|uptime=0f4240(1e6)|unix=019f9a4a7a00. */
 	t_vec("build.prefix", wire, ALIRO_ASSERT_SIGNED_LEN,
-	      "a150020201deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c700190000"
-	      "0000000f42400000019f9a4a7a00");
+	      "a150030201deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c700190101"
+	      "2c0300000000000f42400000019f9a4a7a00");
 	/* The backend must be handed the signed prefix -- all of it, and nothing
 	 * but it. A backend fed the wrong span would still round-trip against
 	 * itself, so this is checked directly rather than inferred. */
@@ -140,6 +145,11 @@ void test_aliro_assert(void)
 	 * are written, this pins that verify hands them back. */
 	T_OK("ok.uptime", out.uptime_ms == 1000000ULL);
 	T_OK("ok.unix", out.unix_ms == 1785000000000ULL);
+	/* The integrity evidence reaches the caller, not just the verdict: a policy
+	 * layer above this one tightens the quality floor by reading these. */
+	T_EQ("ok.range_flags", out.range_flags, ALIRO_ASSERT_RANGE_STS_OK);
+	T_EQ("ok.sts_quality", out.sts_quality, 300);
+	T_EQ("ok.trust_level", out.trust_level, 3);
 	/* Threshold is inclusive: exactly at the boundary passes. */
 	T_EQ("ok.boundary",
 	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen, k_nonce, a.cred_id, 25, 0,
@@ -157,6 +167,16 @@ void test_aliro_assert(void)
 	memcpy(tampered, wire, sizeof(tampered));
 	tampered[29] ^= 0x08; /* flip distance high byte: claim a different distance */
 	T_EQ("tamper.prefix",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce,
+				      a.cred_id, 40, 0, &out),
+	     ALIRO_ASSERT_E_MAC);
+	/* The integrity evidence must be inside the signed span too. If it were not,
+	 * an attacker could clear STS_OK on a real frame -- or set it on a suspect
+	 * one -- without touching the distance, which is the entire attack this
+	 * field exists to stop. */
+	memcpy(tampered, wire, sizeof(tampered));
+	tampered[31] ^= 0x01; /* flip range_flags: claim the STS held when it did not */
+	T_EQ("tamper.range_flags",
 	     aliro_assert_verify_p256(fake_ec_verify, &fec, tampered, sizeof(tampered), k_nonce,
 				      a.cred_id, 40, 0, &out),
 	     ALIRO_ASSERT_E_MAC);
@@ -234,6 +254,55 @@ void test_aliro_assert(void)
 				      a.cred_id, 0xFFFE, 0, &out),
 	     ALIRO_ASSERT_E_RANGE);
 
+	t_group("reject: range integrity");
+	/* An in-threshold distance whose STS did not correlate. This is the frame a
+	 * distance-reduction attack wants accepted: the number looks perfect, and
+	 * only the evidence beside it says the timestamp was never measured. */
+	struct aliro_assert suspect = a;
+	suspect.range_flags = 0u;
+	uint8_t swire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &suspect, swire, sizeof(swire), NULL);
+	T_EQ("sts_not_ok",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, swire, sizeof(swire), k_nonce, a.cred_id,
+				      40, 0, &out),
+	     ALIRO_ASSERT_E_INTEGRITY);
+	/* Distance is checked first, so a frame that is both far AND suspect is
+	 * reported as far: the order is pinned, not incidental. */
+	struct aliro_assert farsus = a;
+	farsus.distance_cm = 41;
+	farsus.range_flags = 0u;
+	uint8_t fswire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &farsus, fswire, sizeof(fswire), NULL);
+	T_EQ("far_beats_suspect",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, fswire, sizeof(fswire), k_nonce,
+				      a.cred_id, 40, 0, &out),
+	     ALIRO_ASSERT_E_RANGE);
+	/* A bit this version does not define means the producer is claiming
+	 * something the verifier cannot evaluate. Fail closed rather than mask it
+	 * off and accept the rest. */
+	struct aliro_assert unknown = a;
+	unknown.range_flags = (uint8_t)(ALIRO_ASSERT_RANGE_STS_OK | 0x80u);
+	uint8_t uwire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &unknown, uwire, sizeof(uwire), NULL);
+	T_EQ("unknown_flag_bit",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, uwire, sizeof(uwire), k_nonce, a.cred_id,
+				      40, 0, &out),
+	     ALIRO_ASSERT_E_INTEGRITY);
+	/* The evidence fields survive the round trip, including a negative quality
+	 * index -- the codec must not mangle the sign on the way back. */
+	struct aliro_assert negq = a;
+	negq.sts_quality = -1234;
+	negq.trust_level = 2;
+	uint8_t nqwire[ALIRO_ASSERT_WIRE_P256];
+	aliro_assert_build_p256(fake_ec_sign, &fec, &negq, nqwire, sizeof(nqwire), NULL);
+	memset(&out, 0, sizeof(out));
+	T_EQ("neg_quality.verdict",
+	     aliro_assert_verify_p256(fake_ec_verify, &fec, nqwire, sizeof(nqwire), k_nonce,
+				      a.cred_id, 40, 0, &out),
+	     ALIRO_ASSERT_OK);
+	T_EQ("neg_quality.roundtrip", out.sts_quality, -1234);
+	T_EQ("neg_quality.trust", out.trust_level, 2);
+
 	t_group("reject: malformed framing");
 	T_EQ("short_len",
 	     aliro_assert_verify_p256(fake_ec_verify, &fec, wire, wlen - 1u, k_nonce, a.cred_id, 40,
@@ -247,7 +316,11 @@ void test_aliro_assert(void)
 				      0, &out),
 	     ALIRO_ASSERT_E_MALFORMED);
 	memcpy(bad, wire, sizeof(bad));
-	bad[2] = 0x03; /* bad version (0x02 is current) */
+	/* v2 specifically: it is the version that shipped to a bench board and whose
+	 * frames carry no range-integrity evidence. Reinterpreting one under v3
+	 * would read the flags byte out of the top half of its uptime field, so it
+	 * has to be refused at the version check, not deeper. */
+	bad[2] = 0x02;
 	T_EQ("bad_version",
 	     aliro_assert_verify_p256(fake_ec_verify, &fec, bad, sizeof(bad), k_nonce, a.cred_id, 40,
 				      0, &out),

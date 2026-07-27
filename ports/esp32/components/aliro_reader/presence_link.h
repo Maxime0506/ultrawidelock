@@ -10,7 +10,7 @@
 //
 //   presence pub                 -> PRESENCE-PUB <65 bytes hex>   (enrolment)
 //   presence credential          -> PRESENCE-CRED <8 bytes hex>   (pinned human)
-//   presence prove <nonce-hex>   -> PRESENCE-P256 <111 bytes hex> (fresh proof)
+//   presence prove <nonce-hex>   -> PRESENCE-P256 <115 bytes hex> (fresh proof)
 //   anything rejected            -> PRESENCE-ERR <reason>
 /*
  * Copyright (c) 2026 asxeem

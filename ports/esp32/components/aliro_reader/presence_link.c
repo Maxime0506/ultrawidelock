@@ -135,13 +135,22 @@ static void notify_wallet(bool present)
 // credential and range are post-challenge, so this function accepts no latch
 // state and has no ABSENT path it could accidentally sign.
 static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
-			const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm)
+			const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm,
+			const struct woz_uwb_range_integrity *ig)
 {
 	memset(a, 0, sizeof(*a));
 	memcpy(a->nonce, nonce, ALIRO_ASSERT_NONCE_LEN);
 	memcpy(a->cred_id, cred_id, ALIRO_ASSERT_CREDID_LEN);
 	a->status = ALIRO_PRESENCE_PRESENT;
 	a->distance_cm = (cm > 0xFFFE) ? 0xFFFEu : (uint16_t)cm;
+	/* Acquisition already refused anything without a good STS, so this bit is
+	 * set on every frame this firmware emits. It is still carried, and still
+	 * signed, because the verifier must not have to assume that: it may be
+	 * talking to an older, buggier or cloned producer, and "the check ran" is
+	 * exactly the kind of claim that is worthless unless it is attested. */
+	a->range_flags = ig->sts_ok ? (uint8_t)ALIRO_ASSERT_RANGE_STS_OK : 0u;
+	a->sts_quality = ig->sts_quality;
+	a->trust_level = ig->trust_level;
 	a->uptime_ms = (uint64_t)woz_uptime_ms();
 	/* unix_ms stays ALIRO_ASSERT_TIME_NONE (the memset above): this dongle has
 	 * no trusted wall clock, and claiming one it cannot back would be worse
@@ -202,12 +211,13 @@ static int parse_hex(const char *s, uint8_t *out, size_t n)
 // makes a presence proof portable to a third party (a CI job, a second reviewer)
 // rather than only to one paired host.
 static int answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
-		       const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm)
+		       const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm,
+		       const struct woz_uwb_range_integrity *ig)
 {
 	struct aliro_assert a;
 	uint8_t wire[ALIRO_ASSERT_WIRE_P256];
 
-	fill_assert(&a, nonce, cred_id, cm);
+	fill_assert(&a, nonce, cred_id, cm, ig);
 	if (!s_dev_set || aliro_assert_build_p256(aliro_assert_ec_sign, &s_dev, &a, wire,
 						  sizeof(wire), NULL) != 0) {
 		printf("PRESENCE-ERR no usable device signing key\n");
@@ -223,7 +233,8 @@ static bool before_deadline(int64_t deadline_ms)
 }
 
 static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
-			 int32_t *distance_cm, bool report)
+			 int32_t *distance_cm, struct woz_uwb_range_integrity *integrity,
+			 bool report)
 {
 	uint8_t expected_pub[ALIRO_ASSERT_PUB_LEN];
 	uint8_t actual_pub[ALIRO_ASSERT_PUB_LEN];
@@ -231,6 +242,7 @@ static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
 	uint32_t auth_checkpoint = 0;
 	uint32_t range_checkpoint;
 	bool saw_far = false;
+	bool saw_suspect = false;
 	int64_t deadline_ms = woz_uptime_ms() + CONFIG_WOZ_PRESENCE_TIMEOUT_MS;
 
 	if (!s_initialized ||
@@ -275,20 +287,38 @@ static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
 			}
 
 			int32_t cm = -1;
+			struct woz_uwb_range_integrity ig;
 
-			if (woz_uwb_trusted_range_after_cm(&cm, range_checkpoint)) {
-				if (cm >= 0 && cm <= CONFIG_WOZ_PRESENCE_MAX_CM) {
+			if (woz_uwb_trusted_range_after_checked_cm(&cm, range_checkpoint, &ig)) {
+				/* Integrity before distance, deliberately. A block whose STS
+				 * did not correlate has not measured anything, so asking
+				 * whether its number is inside the threshold is asking the
+				 * wrong question -- that is precisely the number a
+				 * distance-reduction attack gets to choose. Keep polling: a
+				 * marginal block is usually followed by clean ones, and the
+				 * deadline already bounds the wait. */
+				if (!ig.sts_ok) {
+					saw_suspect = true;
+				} else if (cm >= 0 && cm <= CONFIG_WOZ_PRESENCE_MAX_CM) {
 					*distance_cm = cm;
+					*integrity = ig;
 					return 0;
+				} else {
+					saw_far = true;
 				}
-				saw_far = true;
 			}
 		}
 		woz_sleep_ms(PROOF_POLL_MS);
 	}
 
 	if (report) {
-		if (saw_far) {
+		if (saw_suspect) {
+			/* Named separately from a plain timeout because the fix is not
+			 * "hold it closer": either the radio environment is bad enough to
+			 * wreck the STS correlation, or something is trying to forge a
+			 * timestamp. Both deserve to be seen, not folded into a timeout. */
+			printf("PRESENCE-ERR range failed the STS integrity check; refusing to sign it\n");
+		} else if (saw_far) {
 			printf("PRESENCE-ERR proof stayed outside %d cm\n",
 			       CONFIG_WOZ_PRESENCE_MAX_CM);
 		} else {
@@ -302,12 +332,13 @@ static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 {
 	uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
 	int32_t distance_cm;
+	struct woz_uwb_range_integrity ig;
 	int rc;
 
 	woz_mutex_lock(&s_proof_lock);
-	rc = acquire_fresh(cred_id, &distance_cm, true);
+	rc = acquire_fresh(cred_id, &distance_cm, &ig, true);
 	if (rc == 0) {
-		rc = answer_p256(nonce, cred_id, distance_cm) == 0 ? 0 : -1;
+		rc = answer_p256(nonce, cred_id, distance_cm, &ig) == 0 ? 0 : -1;
 		if (rc == 0) {
 			notify_wallet(true);
 		}
@@ -320,13 +351,14 @@ int presence_link_require_fresh(void)
 {
 	uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
 	int32_t distance_cm;
+	struct woz_uwb_range_integrity ig;
 	int rc;
 
 	if (!s_initialized) {
 		return -1;
 	}
 	woz_mutex_lock(&s_proof_lock);
-	rc = acquire_fresh(cred_id, &distance_cm, false);
+	rc = acquire_fresh(cred_id, &distance_cm, &ig, false);
 	woz_mutex_unlock(&s_proof_lock);
 	return rc;
 }

@@ -14,7 +14,7 @@ wrongly-parsed distance is an unlock decision. This is the same drift-gate
 pattern test_mqtt_bridge.py uses against the firmware format string.
 
 Curve.  The frame below carries a real ECDSA-P256 signature produced by openssl
-over a fixed 47-byte prefix, so it pins the exact bytes a verifier must accept.
+over a fixed 51-byte prefix, so it pins the exact bytes a verifier must accept.
 The C host suite can only test its P-256 path against a fake curve double
 (ports/esp32/test/aliro_prim_host.c), so this file is the only place in the repo
 where a presence assertion meets real curve arithmetic.
@@ -38,18 +38,19 @@ import presence_verify as pv  # noqa: E402
 ASSERT_C = os.path.join(ROOT, "modules", "woz_aliro", "src", "aliro_assert.c")
 ASSERT_H = os.path.join(ROOT, "modules", "woz_aliro", "include", "aliro_assert.h")
 
-# A fixed, real P-256 assertion. Field values match the HMAC known-answer vector
-# in tests/host/test_aliro_assert.c, so both vectors describe the same assertion
-# under the two algorithms: PRESENT, 25 cm, uptime 1000000 ms.
+# A fixed, real P-256 assertion. Field values match the known-answer vector in
+# tests/host/test_aliro_assert.c, so both vectors describe the same assertion:
+# PRESENT, 25 cm, STS ok, quality 300, consensus 3, uptime 1000000 ms.
 KAT_POINT = bytes.fromhex(
-    "04b54fc4b52e583108b208070257639c439e247d257dae0adee68a0898d9c178"
-    "6b1b04ae99b216b96be56c2250b13df7f6a1ad82e0235b168e469357e962fb45c0"
+    "04309fb5aa9caabaa07d83c7632818fd630968f6a087bd33d1d468fe0dd96b48"
+    "6f0556f2823758223ca60d571632f36a36dcda48541f744cc6c514016504a1e5"
+    "ee"
 )
 KAT_FRAME = bytes.fromhex(
-    "a150020201deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c7001900"
-    "000000000f42400000019f9a4a7a002c0bd4f7b3e40b82b85331044eec0f92f5"
-    "85abc400d62b572a221b6b9b109774845569a82d49c8223ceeffdafd254120ea"
-    "f50075ba607f9e00f7dd3a2ea7f580"
+    "a150030201deadbeef01020304a5a55a5a10203040c0c1c2c3c4c5c6c7001901"
+    "012c0300000000000f42400000019f9a4a7a0052c68c6a1f8daff1f20f5e8f1b"
+    "6035d55b1f2493760299c8ffcf2ececbe58115cd0e678e39f958a4aa781562b0"
+    "ada8e9b7c0f62b7c3bf80d27e3d1de8d268782"
 )
 KAT_NONCE = bytes.fromhex("deadbeef01020304a5a55a5a10203040")
 KAT_CREDID = bytes.fromhex("c0c1c2c3c4c5c6c7")
@@ -88,14 +89,18 @@ def c_enum_values(path):
 
 
 def build_prefix(status=1, nonce=KAT_NONCE, cred_id=KAT_CREDID, distance=25,
-                 uptime=1000000, unix_ms=1785000000000, alg=pv.ALG_ECDSA_P256, version=2):
-    """Assemble a 47-byte signed prefix, mirroring put_prefix() in the C."""
+                 range_flags=pv.RANGE_STS_OK, sts_quality=300, trust_level=3,
+                 uptime=1000000, unix_ms=1785000000000, alg=pv.ALG_ECDSA_P256, version=3):
+    """Assemble a 51-byte signed prefix, mirroring put_prefix() in the C."""
     return (
         pv.MAGIC
         + bytes([version, alg, status])
         + nonce
         + cred_id
         + distance.to_bytes(2, "big")
+        + bytes([range_flags])
+        + sts_quality.to_bytes(2, "big", signed=True)
+        + bytes([trust_level])
         + uptime.to_bytes(8, "big")
         + unix_ms.to_bytes(8, "big")
     )
@@ -151,7 +156,8 @@ class DriftTests(unittest.TestCase):
 
     def test_field_offsets(self):
         for name in ("MAGIC", "VERSION", "ALG", "STATUS", "NONCE", "CREDID",
-                     "DISTANCE", "UPTIME", "UNIX"):
+                     "DISTANCE", "RANGE_FLAGS", "STS_QUALITY", "TRUST",
+                     "UPTIME", "UNIX"):
             with self.subTest(field=name):
                 self.assertEqual(getattr(pv, f"OFF_{name}"), self.dc[f"OFF_{name}"])
 
@@ -171,7 +177,17 @@ class DriftTests(unittest.TestCase):
                 self.assertEqual(getattr(pv, py), self.dh[c])
 
     def test_frame_lengths_follow_from_the_widths(self):
-        self.assertEqual(pv.WIRE_P256, 111)
+        self.assertEqual(pv.WIRE_P256, 115)
+
+    def test_range_flag_bits(self):
+        self.assertEqual(pv.RANGE_STS_OK, self.dh["ALIRO_ASSERT_RANGE_STS_OK"])
+        self.assertEqual(pv.RANGE_FLAGS_KNOWN, self.dh["ALIRO_ASSERT_RANGE_FLAGS_KNOWN"])
+
+    def test_every_known_flag_bit_is_named(self):
+        # A bit inside FLAGS_KNOWN that no constant names would be silently
+        # accepted by the mask check while meaning nothing to either verifier.
+        named = pv.RANGE_STS_OK
+        self.assertEqual(pv.RANGE_FLAGS_KNOWN, named)
 
     def test_magic_and_version(self):
         self.assertEqual(pv.MAGIC, bytes([self.dc["ASSERT_MAGIC0"], self.dc["ASSERT_MAGIC1"]]))
@@ -201,14 +217,15 @@ class DriftTests(unittest.TestCase):
                       ("E_ABSENT", "ALIRO_ASSERT_E_ABSENT"),
                       ("E_RANGE", "ALIRO_ASSERT_E_RANGE"),
                       ("E_ALG", "ALIRO_ASSERT_E_ALG"),
-                      ("E_CREDENTIAL", "ALIRO_ASSERT_E_CREDENTIAL")):
+                      ("E_CREDENTIAL", "ALIRO_ASSERT_E_CREDENTIAL"),
+                      ("E_INTEGRITY", "ALIRO_ASSERT_E_INTEGRITY")):
             with self.subTest(verdict=py):
                 self.assertEqual(getattr(pv, py), self.enums[c])
 
     def test_every_verdict_has_a_name_and_a_reason(self):
         for code in (pv.OK, pv.E_MALFORMED, pv.E_MAC, pv.E_NONCE,
                      pv.E_STALE, pv.E_ABSENT, pv.E_RANGE, pv.E_ALG,
-                     pv.E_CREDENTIAL):
+                     pv.E_CREDENTIAL, pv.E_INTEGRITY):
             self.assertIn(code, pv.VERDICT_NAME)
             self.assertIn(code, pv.VERDICT_REASON)
 
@@ -270,8 +287,16 @@ class FramingTests(unittest.TestCase):
         f = build_prefix(version=1) + b"\x00" * 64
         self.assertEqual(pv.check_framing(f), pv.E_MALFORMED)
 
+    def test_v2_frame_is_refused_rather_than_reinterpreted(self):
+        # v2 carried no range-integrity evidence. Read under v3 its uptime field
+        # would supply the flags byte, so a stale frame could appear to claim a
+        # good STS it never made. The version check has to catch it first.
+        f = build_prefix(version=2) + b"\x00" * 64
+        self.assertEqual(pv.check_framing(f), pv.E_MALFORMED)
+
     def test_retired_hmac_frame_reports_wrong_algorithm_not_malformed(self):
-        # A well-formed 79-byte v1 frame is a stale peer, not corruption.
+        # A well-formed frame naming the retired v1 HMAC algorithm is a stale
+        # peer, not corruption -- and its length is wrong for this alg too.
         f = build_prefix(alg=1) + b"\x00" * 32
         self.assertEqual(pv.check_framing(f), pv.E_ALG)
 
@@ -296,8 +321,18 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(f["nonce"], KAT_NONCE)
         self.assertEqual(f["cred_id"], KAT_CREDID)
         self.assertEqual(f["distance_cm"], 25)
+        self.assertEqual(f["range_flags"], pv.RANGE_STS_OK)
+        self.assertEqual(f["sts_quality"], 300)
+        self.assertEqual(f["trust_level"], 3)
         self.assertEqual(f["uptime_ms"], 1000000)
         self.assertEqual(f["unix_ms"], 1785000000000)
+
+    def test_sts_quality_decodes_signed(self):
+        # An unsigned read would turn a negative index into ~65000 and sail past
+        # any floor a verifier set.
+        prefix = build_prefix(sts_quality=-1234)
+        f = pv.parse_fields(prefix + b"\x00" * 64)
+        self.assertEqual(f["sts_quality"], -1234)
 
 
 @needs_openssl
@@ -350,7 +385,8 @@ class KatTests(unittest.TestCase):
     def test_any_tampered_signed_byte_is_rejected(self):
         # Flipping a bit anywhere in the signed prefix must break the signature.
         for off in (pv.OFF_STATUS, pv.OFF_NONCE, pv.OFF_CREDID,
-                    pv.OFF_DISTANCE, pv.OFF_UPTIME, pv.OFF_UNIX):
+                    pv.OFF_DISTANCE, pv.OFF_RANGE_FLAGS, pv.OFF_STS_QUALITY,
+                    pv.OFF_TRUST, pv.OFF_UPTIME, pv.OFF_UNIX):
             with self.subTest(offset=off):
                 t = bytearray(KAT_FRAME)
                 t[off] ^= 0x01
@@ -369,6 +405,64 @@ class KatTests(unittest.TestCase):
         other, _ = gen_key_and_sign(b"unrelated")
         verdict, _ = pv.verify(KAT_FRAME, other, KAT_NONCE, KAT_CREDID, max_cm=40)
         self.assertEqual(verdict, pv.E_MAC)
+
+
+@needs_openssl
+class IntegrityTests(unittest.TestCase):
+    """Frames whose distance is inside the threshold but was never vouched for.
+
+    Each is signed for real, so the only thing standing between the frame and
+    acceptance is the evidence check. That is the point: a distance-reduction
+    attack does not have to produce a malformed frame or a bad signature. It
+    produces a perfectly well-formed one carrying a number it chose.
+    """
+
+    def signed(self, **kw):
+        prefix = build_prefix(**kw)
+        point, sig = gen_key_and_sign(prefix)
+        return prefix + sig, point
+
+    def test_sts_not_ok_is_rejected(self):
+        frame, point = self.signed(range_flags=0)
+        verdict, f = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40)
+        self.assertEqual(verdict, pv.E_INTEGRITY)
+        # Fields still come back for logging: the operator needs to see WHICH
+        # distance was refused, not just that something was.
+        self.assertEqual(f["distance_cm"], 25)
+
+    def test_unknown_flag_bit_is_rejected(self):
+        frame, point = self.signed(range_flags=pv.RANGE_STS_OK | 0x80)
+        verdict, _ = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40)
+        self.assertEqual(verdict, pv.E_INTEGRITY)
+
+    def test_distance_is_checked_before_integrity(self):
+        # Mirrors the C's order, so the two verifiers name the same reason for
+        # the same frame.
+        frame, point = self.signed(distance=41, range_flags=0)
+        verdict, _ = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40)
+        self.assertEqual(verdict, pv.E_RANGE)
+
+    def test_quality_floor_can_be_tightened_above_the_producers(self):
+        frame, point = self.signed(sts_quality=50)
+        ok, _ = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40)
+        self.assertEqual(ok, pv.OK)
+        tight, _ = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40,
+                             min_sts_quality=51)
+        self.assertEqual(tight, pv.E_INTEGRITY)
+
+    def test_default_quality_floor_changes_nothing(self):
+        # 0 must be inert: the producer's own floor already refuses a negative
+        # index, so the default must not add policy nobody asked for.
+        frame, point = self.signed(sts_quality=0)
+        verdict, _ = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40)
+        self.assertEqual(verdict, pv.OK)
+
+    def test_a_good_frame_still_passes(self):
+        # Negative control for the whole class: if this failed, the rejections
+        # above would prove nothing about the evidence check.
+        frame, point = self.signed()
+        verdict, _ = pv.verify(frame, point, KAT_NONCE, KAT_CREDID, max_cm=40)
+        self.assertEqual(verdict, pv.OK)
 
     def test_all_zero_public_key_never_verifies(self):
         # What the dongle reports when it has no signing key.

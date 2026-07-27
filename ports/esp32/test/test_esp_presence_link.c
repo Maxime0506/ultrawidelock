@@ -78,6 +78,7 @@ static bool have_expected;
 static bool reset_ready;
 static bool auth_fresh;
 static bool range_fresh;
+static bool range_sts_ok;
 static int32_t range_cm;
 static uint32_t range_generation;
 static int restart_calls;
@@ -128,12 +129,19 @@ uint32_t woz_uwb_range_generation(void)
 	return range_generation;
 }
 
-bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after)
+bool woz_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
+					    struct woz_uwb_range_integrity *ig_out)
 {
+	ig_out->sts_ok = false;
+	ig_out->sts_quality = 0;
+	ig_out->trust_level = 0u;
 	if (!range_fresh || after != range_generation) {
 		return false;
 	}
 	*cm_out = range_cm;
+	ig_out->sts_ok = range_sts_ok;
+	ig_out->sts_quality = range_sts_ok ? 120 : -7;
+	ig_out->trust_level = 3u;
 	return true;
 }
 
@@ -143,6 +151,7 @@ static void reset_scenario(void)
 	reset_ready = true;
 	auth_fresh = true;
 	range_fresh = true;
+	range_sts_ok = true;
 	range_cm = 25;
 	range_generation++;
 	expected_pub[0] = 0x04;
@@ -180,6 +189,11 @@ int main(void)
 	okc("success.credential", memcmp(signed_prefix + 21, expected_id,
 					 ALIRO_ASSERT_CREDID_LEN) == 0);
 	okc("success.distance", signed_prefix[29] == 0 && signed_prefix[30] == 25);
+	/* The evidence the range arrived with reaches the signed bytes, rather than
+	 * the firmware asserting a fixed "all good" of its own. */
+	okc("success.range_flags", signed_prefix[31] == ALIRO_ASSERT_RANGE_STS_OK);
+	okc("success.sts_quality", signed_prefix[32] == 0 && signed_prefix[33] == 120);
+	okc("success.trust_level", signed_prefix[34] == 3);
 	okc("success.wallet_after_sign", wallet_grants == 1);
 
 	printf("-- stale range --\n");
@@ -206,6 +220,17 @@ int main(void)
 	okc("too_far.rc", prove() != 0);
 	okc("too_far.no_signature", sign_calls == 0);
 
+	printf("-- suspect STS --\n");
+	reset_scenario();
+	range_sts_ok = false;
+	/* An in-threshold distance from a block whose STS did not correlate. The
+	 * firmware must refuse to sign it at all rather than sign it with the bit
+	 * clear and leave the refusal to whoever reads the frame: a proof that has
+	 * left the device is one the device no longer controls. */
+	okc("suspect_sts.rc", prove() != 0);
+	okc("suspect_sts.no_signature", sign_calls == 0);
+	okc("suspect_sts.no_wallet_grant", wallet_grants == 0);
+
 	printf("-- reset timeout --\n");
 	reset_scenario();
 	reset_ready = false;
@@ -215,8 +240,13 @@ int main(void)
 	printf("-- ambiguous trust --\n");
 	reset_scenario();
 	have_expected = false;
+	int restarts_before = restart_calls;
+
 	okc("ambiguous.rc", prove() != 0);
-	okc("ambiguous.no_restart", restart_calls == 6);
+	/* Compared against the live count rather than a literal: the claim is that
+	 * this scenario starts no transaction, which should not need re-deriving
+	 * every time a scenario is added above it. */
+	okc("ambiguous.no_restart", restart_calls == restarts_before);
 	okc("ambiguous.no_signature", sign_calls == 0);
 
 	printf("RESULT: %s\n", fails ? "FAIL" : "PASS");

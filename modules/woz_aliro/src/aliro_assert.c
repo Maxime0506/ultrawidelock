@@ -13,20 +13,23 @@
 
 /* Frame layout (see the header). OFF_TAG == ALIRO_ASSERT_SIGNED_LEN == the
  * number of signed bytes. */
-#define OFF_MAGIC    0u
-#define OFF_VERSION  2u
-#define OFF_ALG      3u
-#define OFF_STATUS   4u
-#define OFF_NONCE    5u
-#define OFF_CREDID   21u
-#define OFF_DISTANCE 29u
-#define OFF_UPTIME   31u
-#define OFF_UNIX     39u
-#define OFF_TAG      ALIRO_ASSERT_SIGNED_LEN /* == number of signed bytes */
+#define OFF_MAGIC       0u
+#define OFF_VERSION     2u
+#define OFF_ALG         3u
+#define OFF_STATUS      4u
+#define OFF_NONCE       5u
+#define OFF_CREDID      21u
+#define OFF_DISTANCE    29u
+#define OFF_RANGE_FLAGS 31u
+#define OFF_STS_QUALITY 32u
+#define OFF_TRUST       34u
+#define OFF_UPTIME      35u
+#define OFF_UNIX        43u
+#define OFF_TAG         ALIRO_ASSERT_SIGNED_LEN /* == number of signed bytes */
 
 #define ASSERT_MAGIC0  0xA1u
 #define ASSERT_MAGIC1  0x50u
-#define ASSERT_VERSION 0x02u
+#define ASSERT_VERSION 0x03u
 
 // Writes v as 2 big-endian bytes to p.
 static void put_be16(uint8_t *p, uint16_t v)
@@ -39,6 +42,16 @@ static void put_be16(uint8_t *p, uint16_t v)
 static uint16_t get_be16(const uint8_t *p)
 {
 	return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
+}
+
+// Reads 2 big-endian bytes from p as a signed value. Goes through uint16_t and
+// an explicit two's-complement fold rather than casting, so the result does not
+// depend on the implementation-defined narrowing of an out-of-range cast.
+static int16_t get_be16_signed(const uint8_t *p)
+{
+	uint16_t raw = get_be16(p);
+
+	return (raw & 0x8000u) ? (int16_t)((int32_t)raw - 65536) : (int16_t)raw;
 }
 
 // Writes v as 8 big-endian bytes to p.
@@ -112,6 +125,9 @@ static void put_prefix(uint8_t *wire, uint8_t alg, const struct aliro_assert *a)
 	memcpy(wire + OFF_NONCE, a->nonce, ALIRO_ASSERT_NONCE_LEN);
 	memcpy(wire + OFF_CREDID, a->cred_id, ALIRO_ASSERT_CREDID_LEN);
 	put_be16(wire + OFF_DISTANCE, a->distance_cm);
+	wire[OFF_RANGE_FLAGS] = a->range_flags;
+	put_be16(wire + OFF_STS_QUALITY, (uint16_t)a->sts_quality);
+	wire[OFF_TRUST] = a->trust_level;
 	put_be64(wire + OFF_UPTIME, a->uptime_ms);
 	put_be64(wire + OFF_UNIX, a->unix_ms);
 }
@@ -158,6 +174,9 @@ static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
 	memcpy(a.nonce, wire + OFF_NONCE, ALIRO_ASSERT_NONCE_LEN);
 	memcpy(a.cred_id, wire + OFF_CREDID, ALIRO_ASSERT_CREDID_LEN);
 	a.distance_cm = get_be16(wire + OFF_DISTANCE);
+	a.range_flags = wire[OFF_RANGE_FLAGS];
+	a.sts_quality = get_be16_signed(wire + OFF_STS_QUALITY);
+	a.trust_level = wire[OFF_TRUST];
 	a.uptime_ms = get_be64(wire + OFF_UPTIME);
 	a.unix_ms = get_be64(wire + OFF_UNIX);
 	if (out != NULL) {
@@ -179,6 +198,14 @@ static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
 	}
 	if (a.distance_cm == ALIRO_ASSERT_DIST_NONE || a.distance_cm > threshold_cm) {
 		return ALIRO_ASSERT_E_RANGE;
+	}
+	/* Last, because it is the most specific complaint about the distance: the
+	 * number is in bounds but its measurement was never vouched for. An unknown
+	 * flag bit lands here too -- this verifier cannot evaluate what the frame is
+	 * claiming, and an unreadable security field must fail closed. */
+	if ((a.range_flags & ~(uint8_t)ALIRO_ASSERT_RANGE_FLAGS_KNOWN) != 0u ||
+	    (a.range_flags & (uint8_t)ALIRO_ASSERT_RANGE_STS_OK) == 0u) {
+		return ALIRO_ASSERT_E_INTEGRITY;
 	}
 	return ALIRO_ASSERT_OK;
 }
