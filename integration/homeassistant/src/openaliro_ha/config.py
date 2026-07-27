@@ -43,6 +43,7 @@ class DeviceConfig:
 
     device_id: str
     serial_port: str = "auto"
+    serial_identity: Optional[str] = None
     baud: int = 115200
     distance_mode: Literal["auto", "streaming", "compatibility"] = "auto"
 
@@ -155,8 +156,13 @@ def _parse_mqtt(values: Mapping[str, Any]) -> MqttConfig:
 def _parse_device(device_id: str, values: Mapping[str, Any]) -> DeviceConfig:
     if not DEVICE_ID_RE.fullmatch(device_id):
         raise ConfigError("device ID must contain only lowercase letters, numbers, _ or -")
-    _reject_unknown(values, {"serial_port", "baud", "distance_mode"}, "device")
+    _reject_unknown(values, {"serial_port", "serial_identity", "baud", "distance_mode"}, "device")
     serial_port = _string(values.get("serial_port", "auto"), "device.serial_port")
+    serial_identity = _string(values.get("serial_identity"), "device.serial_identity", optional=True)
+    if serial_identity is not None and not re.fullmatch(r"[0-9a-f]{24}", serial_identity):
+        raise ConfigError("device.serial_identity is invalid")
+    if serial_port == "auto" and serial_identity is None:
+        raise ConfigError("device.serial_port=auto requires device.serial_identity")
     baud = _integer(values.get("baud"), "device.baud", default=115200)
     if not 1200 <= baud <= 4_000_000:
         raise ConfigError("device.baud is outside the supported range")
@@ -166,6 +172,7 @@ def _parse_device(device_id: str, values: Mapping[str, Any]) -> DeviceConfig:
     return DeviceConfig(
         device_id=device_id,
         serial_port=serial_port,
+        serial_identity=serial_identity,
         baud=baud,
         distance_mode=distance_mode,
     )
@@ -235,6 +242,7 @@ def serialize_config(config: AgentConfig) -> str:
             "devices": {
                 device.device_id: {
                     "serial_port": device.serial_port,
+                    "serial_identity": device.serial_identity,
                     "baud": device.baud,
                     "distance_mode": device.distance_mode,
                 }
@@ -255,6 +263,11 @@ def serialize_config(config: AgentConfig) -> str:
                 "",
                 f"[devices.{device.device_id}]",
                 f"serial_port = {_toml_string(device.serial_port)}",
+                *(
+                    [f"serial_identity = {_toml_string(device.serial_identity)}"]
+                    if device.serial_identity is not None
+                    else []
+                ),
                 f"baud = {device.baud}",
                 f"distance_mode = {_toml_string(device.distance_mode)}",
             ]
@@ -308,6 +321,7 @@ def redacted_config(config: AgentConfig) -> dict[str, Any]:
             {
                 "device_id": device.device_id,
                 "serial_port": "auto" if device.serial_port == "auto" else "<redacted>",
+                "serial_identity_configured": device.serial_identity is not None,
                 "baud": device.baud,
                 "distance_mode": device.distance_mode,
             }

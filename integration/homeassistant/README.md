@@ -5,7 +5,7 @@ Assistant Discovery entities:
 
 | Entity | Platform | Source line |
 | --- | --- | --- |
-| Distance (mm) | `sensor` | `rng  blk=N d=Xmm  tof=Y` (`modules/woz_uwb/src/ccc/ccc_shim_rx.c:498`) |
+| Distance (mm) | `sensor` | `rng  blk=N d=Xmm  tof=Y` (`modules/woz_uwb/src/ccc/ccc_shim_rx.c:609`) |
 | Access | `event`, types `granted` / `denied` | `ACCESS GRANTED` / `ACCESS DENIED` |
 
 Nothing on the device changes. The bridge only reads the console, so it runs
@@ -68,3 +68,38 @@ diagnostic that carries the same distance value: the parser requires the
 
 `--dry-run` prints each topic and payload instead of connecting, which is the
 quickest way to check a parser change against a captured log.
+
+## Staged standalone agent
+
+The productized agent is under active development and is kept out of normal
+repository targets: use `make ha-test HA=1` for its host test suite. Its package
+commands deliberately do **not** require an `HA=1` environment variable:
+
+```bash
+openaliro-ha configure
+openaliro-ha doctor
+openaliro-ha run
+openaliro-ha replay <sanitized-capture> --json
+openaliro-ha version
+```
+
+`configure` records a hash of the selected USB interface rather than its raw
+USB serial number or current device path. It probes the selected console before
+writing a user-only configuration file. `doctor` checks that configuration, the
+console protocol, and the configured MQTT/TLS path; it never prints broker
+secrets, device paths, raw console lines, or USB serial numbers.
+
+The agent is not a Home Assistant custom component yet. The current supported
+runtime path remains MQTT Discovery; direct Home Assistant serial ownership and
+the custom integration require their own runtime validation.
+
+## Direct Home Assistant integration beta
+
+`custom_components/openaliro/` now contains the direct-serial beta: a manual
+config flow, Distance sensor, and Access event entity. It deliberately does not
+create a lock-control entity or expose peer, credential, or raw-console data.
+
+It is not a distributable custom-component archive yet. A release archive must
+either bundle the separately built `openaliro-home-assistant` library or install
+that tested library through a supported dependency path. Direct serial ownership
+on Home Assistant OS, Container, and Core also remains a release gate.

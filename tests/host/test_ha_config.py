@@ -37,11 +37,13 @@ password_env = "OPENALIRO_HA_MQTT_PASSWORD"
 
 [devices.front_door]
 serial_port = "auto"
+serial_identity = "0123456789abcdef01234567"
 baud = 115200
 distance_mode = "auto"
 
 [devices.side_door]
 serial_port = "auto"
+serial_identity = "89abcdef0123456701234567"
 baud = 115200
 distance_mode = "streaming"
 """
@@ -63,6 +65,7 @@ class ConfigTests(unittest.TestCase):
             [device.device_id for device in config.devices],
             ["front_door", "side_door"],
         )
+        self.assertTrue(config.devices[0].serial_identity)
 
     def test_inline_password_is_rejected_without_echoing_it(self):
         raw_password = "not-a-real-secret"
@@ -76,6 +79,12 @@ class ConfigTests(unittest.TestCase):
         text = VALID_CONFIG.replace("tls = true", "tls = false")
         with tempfile.TemporaryDirectory() as temporary_directory:
             with self.assertRaisesRegex(ConfigError, "allow_insecure"):
+                load_config(self.write_text(Path(temporary_directory), text))
+
+    def test_auto_serial_port_requires_recorded_identity(self):
+        text = VALID_CONFIG.replace('serial_identity = "0123456789abcdef01234567"\n', "")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with self.assertRaisesRegex(ConfigError, "serial_identity"):
                 load_config(self.write_text(Path(temporary_directory), text))
 
     def test_tls_client_certificate_requires_a_matching_key(self):

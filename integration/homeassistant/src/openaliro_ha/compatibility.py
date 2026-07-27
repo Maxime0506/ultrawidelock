@@ -20,6 +20,7 @@ class RangeResponseParser:
 
     def __init__(self) -> None:
         self._active = False
+        self._finished = False
         self._distance_cm: Optional[int] = None
         self._nlos: Optional[bool] = None
         self._block: Optional[int] = None
@@ -29,6 +30,7 @@ class RangeResponseParser:
         """Start a new response, discarding any interrupted prior response."""
 
         self._active = True
+        self._finished = False
         self._distance_cm = None
         self._nlos = None
         self._block = None
@@ -42,6 +44,7 @@ class RangeResponseParser:
         text = strip_ansi(line)
         if NO_RANGE_RE.search(text):
             self._active = False
+            self._finished = True
             return None
         if match := DISTANCE_RE.search(text):
             self._distance_cm = int(match.group(1))
@@ -58,8 +61,15 @@ class RangeResponseParser:
         if match := TRUSTED_RE.search(text):
             reading = self._complete_reading(trusted=match.group(1) == "yes")
             self._active = False
+            self._finished = True
             return reading
         return None
+
+    @property
+    def finished(self) -> bool:
+        """Whether the active response reached a safe terminal line."""
+
+        return self._finished
 
     def _complete_reading(self, trusted: bool) -> Optional[CompatibilityRangeReading]:
         if None in (self._distance_cm, self._nlos, self._block, self._age_ms):

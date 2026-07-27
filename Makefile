@@ -146,6 +146,9 @@ ha-test:
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_mqtt.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_cli.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_compatibility.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_session.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_transport.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_agent.py
 
 ## fuzz: fuzz the wire-facing parsers  ·  parser-hardening gate
 ##   Coverage-guided libFuzzer where available (CI), else a portable corpus
