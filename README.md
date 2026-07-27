@@ -85,4 +85,4 @@ Thanks: [@br101](https://github.com/br101) · [@kormax](https://github.com/korma
 
 ---
 
-<p align="center"><sub>License: ISC project code · mixed vendor terms · <a href="LICENSE">LICENSE</a><br/>Independent project · No affiliation · No warranty · Do not secure valuables with it</sub></p>
+<p align="center"><sub>License: ISC project code · mixed vendor terms · <a href="LICENSE">LICENSE</a> · <a href="PRIVACY.md">Privacy</a><br/>Independent project · No affiliation · No warranty · Do not secure valuables with it</sub></p>
