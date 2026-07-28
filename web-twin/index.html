@@ -30,28 +30,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>openaliro — walk-up digital twin</title>
 <style>
+  /* The same three faces the site loads, so the twin does not fall back to
+   * whatever the platform's default sans happens to be while the rest of the
+   * product is on Inter. Fallbacks are first-class: nothing here waits on the
+   * network to be legible. */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..600&family=Source+Serif+4:opsz,wght@8..60,400..600&display=swap');
+
   /* Design tokens mirror the openaliro docs site's warm-paper theme
    * (tools/docs_theme.py) so the twin reads as the same product: ivory paper,
    * near-black ink, a terracotta accent, and Source Serif 4 display. Light
    * default, dark via prefers-color-scheme, and a data-theme override the
-   * toggle stamps (the site's own precedence). The canvas reads
+   * toggle stamps (the site's own precedence). Every foreground clears 4.5:1
+   * on the surfaces it lands on, which is why --muted, --faint and the
+   * terracotta used as text are darker here than the accent it is drawn
+   * from; --btn is a separate step because a white label on the accent
+   * itself is 3.90:1. The canvas reads
    * --bg/--panel/--amber/etc. through getComputedStyle, so those adapter names
    * are defined per theme and the drawing follows automatically. The four
    * state channels (BLE/UWB/unlock/reject) are kept off the terracotta accent
    * so they stay legible against warm paper and never read as "interactive". */
   :root {
     --ground:#faf9f5; --surface:#faf9f5; --raise:#f0eee6; --card:#ffffff;
-    --ink:#3d3d3a; --strong:#141413; --muted:#73726c; --faint:#9c9a92;
-    --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);
-    --accent:#c96442; --accent-ink:#a34f31; --tint:rgba(20,20,19,.07); --tint-line:rgba(31,30,29,.24);
+    --ink:#3d3d3a; --strong:#141413; --muted:#5c5b54; --faint:#6b6960;
+    --line:rgba(31,30,29,.14); --hairline:rgba(31,30,29,.07);
+    --accent:#c96442; --accent-ink:#a94c2d; --tint:rgba(201,100,66,.10); --tint-line:rgba(201,100,66,.30);
+    --btn:#b35232; --btn-hover:#9c4221; --btn-ink:#ffffff;
     --shadow:0 1px 2px rgba(31,30,29,.04),0 12px 32px -20px rgba(31,30,29,.16);
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --shadow-hover:0 2px 4px rgba(31,30,29,.05),0 18px 40px -22px rgba(31,30,29,.28);
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
     --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
-    --topbar-h:3.25rem;
+    --topbar-h:3.4rem;
     /* canvas adapter + state channels (state, not accent), tuned for paper */
     --bg:var(--ground); --panel:var(--surface); --panel2:var(--raise);
-    --amber:#9c6b16;  /* UWB / measurement — ochre, yellower than terracotta */
+    --amber:#8f6013;  /* UWB / measurement — ochre, yellower than terracotta */
     --cyan:#2f6f83;   /* BLE — cool teal, clear contrast */
     --green:#4f7a4a;  /* unlocked / pass — earthy green */
     --red:#be2f2f;    /* reject / spoof — a redder red than the accent */
@@ -59,27 +71,33 @@
   }
   @media (prefers-color-scheme:dark){:root{
     --ground:#1f1e1d; --surface:#1b1a19; --raise:#302f2c; --card:#262624;
-    --ink:#c2c0b6; --strong:#faf9f5; --muted:#9e9c93; --faint:#6e6c64;
+    --ink:#c2c0b6; --strong:#faf9f5; --muted:#a5a39a; --faint:#9b998f;
     --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
-    --accent:#d97757; --accent-ink:#d4a27f; --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.38);
+    --accent:#d97757; --accent-ink:#d4a27f; --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.36);
+    --btn:#d97757; --btn-hover:#e08c6d; --btn-ink:#1f1e1d;
     --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 34px -16px rgba(0,0,0,.55);
+    --shadow-hover:0 2px 4px rgba(0,0,0,.5),0 20px 44px -18px rgba(0,0,0,.65);
     --amber:#d7a94a; --cyan:#6fb3c4; --green:#86b56f; --red:#e5645c; --door-open:#2f3a2a;
   }}
   :root[data-theme="light"]{
     --ground:#faf9f5; --surface:#faf9f5; --raise:#f0eee6; --card:#ffffff;
-    --ink:#3d3d3a; --strong:#141413; --muted:#73726c; --faint:#9c9a92;
-    --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);
-    --accent:#c96442; --accent-ink:#a34f31; --tint:rgba(20,20,19,.07); --tint-line:rgba(31,30,29,.24);
+    --ink:#3d3d3a; --strong:#141413; --muted:#5c5b54; --faint:#6b6960;
+    --line:rgba(31,30,29,.14); --hairline:rgba(31,30,29,.07);
+    --accent:#c96442; --accent-ink:#a94c2d; --tint:rgba(201,100,66,.10); --tint-line:rgba(201,100,66,.30);
+    --btn:#b35232; --btn-hover:#9c4221; --btn-ink:#ffffff;
     --shadow:0 1px 2px rgba(31,30,29,.04),0 12px 32px -20px rgba(31,30,29,.16);
-    --amber:#9c6b16; --cyan:#2f6f83; --green:#4f7a4a; --red:#be2f2f; --door-open:#dfe9d8;
+    --shadow-hover:0 2px 4px rgba(31,30,29,.05),0 18px 40px -22px rgba(31,30,29,.28);
+    --amber:#8f6013; --cyan:#2f6f83; --green:#4f7a4a; --red:#be2f2f; --door-open:#dfe9d8;
     color-scheme:light;
   }
   :root[data-theme="dark"]{
     --ground:#1f1e1d; --surface:#1b1a19; --raise:#302f2c; --card:#262624;
-    --ink:#c2c0b6; --strong:#faf9f5; --muted:#9e9c93; --faint:#6e6c64;
+    --ink:#c2c0b6; --strong:#faf9f5; --muted:#a5a39a; --faint:#9b998f;
     --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
-    --accent:#d97757; --accent-ink:#d4a27f; --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.38);
+    --accent:#d97757; --accent-ink:#d4a27f; --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.36);
+    --btn:#d97757; --btn-hover:#e08c6d; --btn-ink:#1f1e1d;
     --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 34px -16px rgba(0,0,0,.55);
+    --shadow-hover:0 2px 4px rgba(0,0,0,.5),0 20px 44px -18px rgba(0,0,0,.65);
     --amber:#d7a94a; --cyan:#6fb3c4; --green:#86b56f; --red:#e5645c; --door-open:#2f3a2a;
     color-scheme:dark;
   }
@@ -95,18 +113,18 @@
   }
   ::selection { background: var(--tint); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-  /* topbar — the site's frosted sticky lockup; fixed height so the sticky
-   * scene can offset against it on phones */
+  /* topbar — the site's sticky lockup, solid rather than frosted: the blur
+   * smeared the scene as it scrolled underneath on phones. Fixed height so
+   * the sticky scene can offset against it. */
   .topbar {
     position: sticky; top: 0; z-index: 30;
     display: flex; align-items: center; gap: .8rem; height: var(--topbar-h);
     padding: 0 1.2rem;
-    background: color-mix(in srgb, var(--ground) 78%, transparent);
-    -webkit-backdrop-filter: saturate(1.6) blur(14px); backdrop-filter: saturate(1.6) blur(14px);
+    background: var(--ground);
     border-bottom: 1px solid var(--hairline);
   }
   .brand { display: flex; align-items: baseline; gap: .55rem; white-space: nowrap; }
-  .brand b { font-family: var(--mono); font-weight: 650; font-size: 1rem; letter-spacing: -.02em; color: var(--strong); }
+  .brand b { font-family: var(--sans); font-weight: 600; font-size: 1rem; letter-spacing: -.02em; color: var(--strong); }
   .brand .tag {
     font-size: .58rem; font-weight: 650; letter-spacing: .14em; text-transform: uppercase; color: var(--faint);
     border: 1px solid var(--line); border-radius: 99px; padding: .14rem .45rem;
@@ -117,7 +135,7 @@
     border: 1px solid var(--line); border-radius: 8px; padding: .28rem .62rem;
     transition: border-color .15s, color .15s;
   }
-  .back-link:hover { border-color: var(--tint-line); color: var(--accent); }
+  .back-link:hover { border-color: var(--tint-line); color: var(--accent-ink); }
   .topbar .sub {
     color: var(--muted); font-size: .82rem; flex: 1; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -130,7 +148,7 @@
     background: var(--ground); border: 1px solid var(--line); border-radius: 8px;
     color: var(--muted); cursor: pointer; transition: border-color .15s, color .15s;
   }
-  .icon-btn:hover { border-color: var(--tint-line); color: var(--ink); }
+  .icon-btn:hover { border-color: var(--tint-line); color: var(--accent-ink); background: var(--tint); }
   .icon-btn svg { width: 1rem; height: 1rem; }
   .sun { display: none; } .moon { display: block; }
   :root[data-theme="dark"] .sun { display: block; } :root[data-theme="dark"] .moon { display: none; }
@@ -158,13 +176,22 @@
   }
   section {
     background: var(--card); border: 1px solid var(--hairline);
-    border-radius: 14px; padding: .9rem 1rem;
+    border-radius: 16px; padding: 1rem 1.05rem;
+    transition: border-color .16s ease, box-shadow .16s ease;
   }
+  section:hover { border-color: var(--line); box-shadow: var(--shadow); }
+  /* Panel titles follow the site's rail heading rather than its 11px
+   * uppercase section rail: at 372px wide there is no room for the display
+   * size, but the serif and the sentence case are the part that carries. */
   section h2 {
-    font-size: .66rem; font-weight: 650; text-transform: uppercase;
-    letter-spacing: .12em; color: var(--faint); margin-bottom: .6rem;
+    font-family: var(--serif); font-size: 1.02rem; font-weight: 500;
+    text-transform: none; letter-spacing: 0; color: var(--strong);
+    margin-bottom: .7rem;
   }
-  section h2 .cite { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--faint); }
+  section h2 .cite {
+    font-family: var(--mono); font-size: .68rem; font-weight: 400;
+    letter-spacing: 0; color: var(--faint); margin-left: .25rem;
+  }
   /* phase pipeline */
   #pipeline { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .5rem; }
   .phase {
@@ -186,8 +213,11 @@
     display: inline-block; font-family: var(--mono); font-size: .72rem; font-weight: 600;
     padding: .12rem .5rem; border-radius: 6px; border: 1px solid var(--line); color: var(--ink);
   }
-  .chip.unlocked { color: #fff; background: var(--green); border-color: var(--green); }
-  .chip.granted { color: #fff; background: var(--accent); border-color: var(--accent); }
+  /* Both chips are small bold type on a filled ground, so they take the
+   * button's label pairing rather than a flat white: white on the accent
+   * itself is 3.90:1. */
+  .chip.unlocked { color: var(--btn-ink); background: var(--green); border-color: var(--green); }
+  .chip.granted { color: var(--btn-ink); background: var(--btn); border-color: var(--btn); }
   .pips { display: inline-flex; gap: .25rem; vertical-align: middle; }
   .pip { width: .55rem; height: .55rem; border-radius: 50%; border: 1px solid var(--faint); transition: background .2s; }
   .pip.on { background: var(--amber); border-color: var(--amber); }
@@ -215,19 +245,24 @@
   #ctl-ble input[type=range] { accent-color: var(--cyan); }
   .ctl input[type=checkbox] { accent-color: var(--accent); width: 1rem; height: 1rem; }
   .btnrow { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .3rem; }
+  /* The site's pill buttons, tokens and all: --btn is a darker step than the
+   * accent so the label on it clears 4.5:1, and the lift on hover is the
+   * same 160ms transform the explore cards use. */
   button {
-    font-family: var(--sans); font-size: .8rem; font-weight: 550; color: var(--ink);
-    background: var(--ground); border: 1px solid var(--line); border-radius: 8px;
-    padding: .4rem .75rem; min-height: 2.1rem; cursor: pointer;
-    transition: border-color .15s, background .15s, color .15s;
+    font-family: var(--sans); font-size: .82rem; font-weight: 550; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 99px;
+    padding: .42rem .95rem; min-height: 2.1rem; cursor: pointer;
+    transition: border-color .16s ease, background .16s ease, color .16s ease,
+                box-shadow .16s ease, transform .16s ease;
   }
-  button:hover { border-color: var(--tint-line); }
-  button.primary { border-color: transparent; background: var(--accent); color: #fff; box-shadow: var(--shadow); }
-  button.primary:hover { background: var(--accent-ink); }
+  button:hover { border-color: var(--tint-line); color: var(--accent-ink); box-shadow: var(--shadow); transform: translateY(-1px); }
+  button:active { transform: none; }
+  button.primary { border-color: var(--btn); background: var(--btn); color: var(--btn-ink); box-shadow: var(--shadow); }
+  button.primary:hover { border-color: var(--btn-hover); background: var(--btn-hover); color: var(--btn-ink); box-shadow: var(--shadow-hover); }
   button.danger { border-color: color-mix(in srgb, var(--red) 55%, transparent); color: var(--red); }
-  button.danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
-  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--tint); }
-  button.primary[aria-pressed="true"] { color: #fff; }
+  button.danger:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+  button[aria-pressed="true"] { border-color: var(--tint-line); color: var(--accent-ink); background: var(--tint); }
+  button.primary[aria-pressed="true"] { color: var(--btn-ink); }
   button:disabled { opacity: .45; cursor: default; }
   /* logs */
   #log { font-family: var(--mono); font-size: .7rem; max-height: 9.5rem; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
