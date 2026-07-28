@@ -230,10 +230,12 @@ jobs:
         # before zipping.
         run: |
           chmod +x dist/openaliro-nrf5340dk/flash.sh \
-            dist/openaliro-esp32-matter-lock/flash.sh \
-            dist/openaliro-tui/openaliro-tui-*
+            dist/openaliro-esp32-matter-lock/flash.sh
           mkdir out
-          for d in dist/*/; do
+          # Only the firmware targets are zipped. The TUI ships as the bare
+          # executables copied below, so installing it is one curl and one
+          # chmod rather than a download-and-unpack.
+          for d in dist/openaliro-nrf5340dk dist/openaliro-esp32-matter-lock; do
             b="$(basename "$d")"
             (cd dist && zip -qr "../out/$b.zip" "$b")
           done
@@ -260,8 +262,10 @@ jobs:
             echo "flash script, and the setup guide as both FLASH.md and FLASH.html"
             echo "(open it in a browser) covering tools, wiring, flashing, and Apple"
             echo "Home setup. Evaluation firmware with Matter test certificates."
-            echo "The guided bench is also available as a standalone macOS or Linux"
-            echo "executable built and tested from this tag."
+            echo "The guided bench is a standalone macOS or Linux executable built"
+            echo "and tested from this tag. Release assets carry no permission bit,"
+            echo "so make it executable after downloading:"
+            echo "curl -L <the asset URL> -o openaliro-tui && chmod +x openaliro-tui"
             echo
             echo "The ESP32 images (S3 and C5) also flash straight from the browser,"
             echo "no tools at all: https://${REPO%%/*}.github.io/${REPO#*/}/flash/"
