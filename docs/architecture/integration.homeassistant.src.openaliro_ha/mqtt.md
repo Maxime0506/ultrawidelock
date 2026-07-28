@@ -101,7 +101,7 @@ Publish offline availability before stopping the broker loop.
 - `MqttClient.tls_set`
 - `MqttClient.tls_insecure_set`
 - `MqttClient.will_set`
-- `MqttClient.connect`
+- `MqttClient.connect` — tested: malformed json fails closed; oversized request fails closed
 - `MqttClient.loop_start`
 - `MqttClient.reconnect_delay_set`
 - `MqttClient.loop_stop`

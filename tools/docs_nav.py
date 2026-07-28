@@ -51,7 +51,11 @@ JOURNEY = [
     ("Deep dives", "approach-direction"),
     ("Deep dives", "power-profile"),
     ("Deep dives", "passive-carry-verification"),
+    # presence first, then what a signed distance is actually worth, then the
+    # macOS consumer: each one assumes the previous.
     ("Deep dives", "presence"),
+    ("Deep dives", "range-integrity"),
+    ("Deep dives", "uwb-mac-login"),
     ("Deep dives", "porting-esp32-phase3"),
     ("Deep dives", "chipset-memory"),
     ("Deep dives", "home-assistant-internals"),

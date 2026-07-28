@@ -73,7 +73,13 @@ Sign a message with ECDSA over P-256 using SHA-256, via PSA Crypto.
 Writes the signature to sig. Returns 0 on success, -1 if private key import or signing fails.
 
 ### `int aliro_ecdsa_p256_verify(const uint8_t pub[ALIRO_P256_POINT], const uint8_t *msg, size_t msg_len, const uint8_t sig[ALIRO_P256_SIG])`
-`modules/woz_aliro/src/aliro_prim_psa.c:243`
+`modules/woz_aliro/src/aliro_prim_psa.c:268`
 
 Verify an ECDSA-P256/SHA-256 signature against a message and public key, via PSA Crypto.
 Returns 0 if the signature verifies, -1 if public key import fails or verification fails.
+
+<details><summary>Undocumented (1)</summary>
+
+- `aliro_ecdsa_p256_sign_hash` — tested: aliro prim psa
+
+</details>

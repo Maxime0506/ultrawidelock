@@ -5,6 +5,8 @@
 |---|---|
 | [`modules/woz_aliro/include/aliro_advtag.h`](aliro_advtag.h.md) | Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1): the 7-byte |
 | [`modules/woz_aliro/include/aliro_approach.h`](aliro_approach.h.md) | @file aliro_approach.h |
+| [`modules/woz_aliro/include/aliro_assert.h`](aliro_assert.h.md) | *first commit: "aliro: presence-assertion protocol (HMAC-signed range statement)"* |
+| [`modules/woz_aliro/include/aliro_assert_ec.h`](aliro_assert_ec.h.md) | *first commit: "assert: bind the P-256 seam to aliro_prim"* |
 | [`modules/woz_aliro/include/aliro_ble.h`](aliro_ble.h.md) | Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport |
 | [`modules/woz_aliro/include/aliro_crypto.h`](aliro_crypto.h.md) | Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message |
 | [`modules/woz_aliro/include/aliro_lab.h`](aliro_lab.h.md) | Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries, |

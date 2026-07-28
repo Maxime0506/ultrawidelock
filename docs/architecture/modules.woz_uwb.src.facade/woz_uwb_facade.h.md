@@ -24,3 +24,8 @@ engine is bound and unbound via internal ursk and stop calls.
 @param ranging_config Serialized RangingConfiguration (CCC SaltedHash input), or NULL to use URSK
 fallback.
 @param rc_len RangingConfiguration length in bytes (typically 17).
+
+### `struct woz_uwb_range_integrity`
+`modules/woz_uwb/src/facade/woz_uwb_facade.h:92`
+
+Layer-2 evidence for a latched range, for a consumer that must fail closed.
