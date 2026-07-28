@@ -11,85 +11,85 @@ transport, with the current discovery and state topics kept stable.
 ## API
 
 ### `class MqttError(RuntimeError)`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:24`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:29`
 
 An MQTT error that intentionally omits broker and secret values.
 
 **called by** `MqttPublisher.__init__`, `MqttPublisher._publish`, `MqttPublisher.close`, `MqttPublisher.start`, `_default_client_factory`, `resolve_password`
 
 ### `class MqttClient(Protocol)`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:28`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:33`
 
 The small paho client surface needed by the standalone adapter.
 
-### `discovery_payloads(node: str) -> list[tuple[str, dict[str, object]]]`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:52`
+### `discovery_payloads(node: str, model: str=DEFAULT_MODEL) -> list[tuple[str, dict[str, object]]]`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:57`
 
 Return the legacy MQTT Discovery contract for one configured device.
 
 **called by** `MqttPublisher._announce`
 
 ### `resolve_password(config: MqttConfig, environment: Optional[dict[str, str]]=None) -> str`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:90`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:97`
 
 Resolve exactly one configured password reference without logging its value.
 
 **called by** `MqttPublisher.start`  ·  **calls** `MqttError`
 
 ### `_expanded_path(value: str) -> str`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:115`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:122`
 
 Return a user-facing configured path without requiring an absolute home path.
 
 **called by** `MqttPublisher.start`
 
 ### `class MqttPublisher`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:129`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:136`
 
 Publish discovery, availability, distance, and access observations.
 
 #### `MqttPublisher.start(self) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:159`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:166`
 
 Connect securely, then announce retained discovery and availability.
 
 **calls** `MqttClient.connect`, `MqttClient.disconnect`, `MqttClient.loop_start`, `MqttClient.loop_stop`, `MqttClient.reconnect_delay_set`, `MqttClient.tls_insecure_set`, `MqttClient.tls_set`, `MqttClient.username_pw_set`
 
 #### `MqttPublisher.publish_distance(self, reading: DistanceReading) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:223`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:230`
 
 Publish a fresh distance sample without retaining it.
 
 **calls** `MqttPublisher._publish`
 
 #### `MqttPublisher.publish_access(self, event: AccessEvent) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:228`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:235`
 
 Publish a credential-independent access event without retaining it.
 
 **calls** `MqttPublisher._publish`
 
 #### `MqttPublisher._announce(self) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:244`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:251`
 
 Publish retained discovery and online availability once per connection.
 
 **called by** `MqttPublisher._on_connect`  ·  **calls** `MqttClient.publish`, `discovery_payloads`
 
 #### `MqttPublisher._on_connect(self, client: MqttClient, _userdata: object, _flags: object, reason_code: object, *_: object) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:259`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:266`
 
 Re-announce retained discovery after paho reconnects in its loop thread.
 
 **calls** `MqttPublisher._announce`
 
 #### `MqttPublisher._on_disconnect(self, client: MqttClient, *_: object) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:279`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:286`
 
 Allow the next successful connection to refresh retained state.
 
 #### `MqttPublisher.close(self) -> None`
-`integration/homeassistant/src/openaliro_ha/mqtt.py:285`
+`integration/homeassistant/src/openaliro_ha/mqtt.py:292`
 
 Publish offline availability before stopping the broker loop.
 

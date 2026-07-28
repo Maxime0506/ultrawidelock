@@ -32,6 +32,7 @@
 
 #include "esp_console.h"
 #include "esp_matter.h"
+#include "iot_button.h" // BUTTON_LONG_PRESS_START — the commissioning-window press
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -759,7 +760,31 @@ static void section_app_main(void)
 	    mfk_em_start_calls == 1 && mfk_em_event_cb != nullptr);
 	okc("uncommissioned boot starts no reader task", mfk_task_count == 0);
 	okc("console repl started with the command set",
-	    mfk_repl_started == 1 && mfk_cmd_count == 11 && mfk_help_registered == 1);
+	    mfk_repl_started == 1 && mfk_cmd_count == 12 && mfk_help_registered == 1);
+	/* The button handle used to be created and dropped. A long press is the
+	 * recovery path for a board with no console attached. */
+	okc("boot hangs the commissioning window off a long press",
+	    mfk_btn_register_calls == 1 && mfk_btn_last_event == (int)BUTTON_LONG_PRESS_START);
+	{
+		/* Save and restore every counter the press moves: the fabric-removal
+		 * block later in this file reads them absolutely, not as deltas. */
+		int open_before = mfk_cw_open_calls;
+		int sched_before = mfk_sched_calls;
+		int adv_before = mfk_cw_last_adv;
+		int was_open = mfk_cw_is_open;
+
+		mfk_cw_is_open = 0;
+		mfk_btn_fire_long_press();
+		okc("long press opens a window advertising over BLE",
+		    mfk_cw_open_calls == open_before + 1 &&
+			    mfk_cw_last_adv ==
+				    (int)chip::CommissioningWindowAdvertisement::kAllSupported);
+
+		mfk_cw_open_calls = open_before;
+		mfk_sched_calls = sched_before;
+		mfk_cw_last_adv = adv_before;
+		mfk_cw_is_open = was_open;
+	}
 	okc("console echoes single chars only (multiline off)",
 	    mfk_linenoise_multiline == 0);
 }
@@ -1107,9 +1132,43 @@ static void section_shell(void)
 		    mfk_dls_last_state == (int)DlLockState::kUnlocked &&
 		    mfk_dls_last_source == (int)OperationSourceEnum::kManual);
 
+	/* Deliberately NOT PrintOnboardingCodes(): it logs at CHIP Progress level,
+	 * which the default WARN build compiles out of the CHIP library, so `codes`
+	 * printed nothing at all until it was moved onto the Get* pair. */
 	mfk_print_codes_calls = 0;
+	mfk_qr_calls = 0;
+	mfk_manual_calls = 0;
+	mfk_lockstack_calls = 0;
 	okc("codes reprints onboarding codes under the stack lock",
-	    run_cmd("codes", 1) == 0 && mfk_print_codes_calls == 1);
+	    run_cmd("codes", 1) == 0 && mfk_qr_calls == 1 && mfk_manual_calls == 1 &&
+		    mfk_print_codes_calls == 0 && mfk_lockstack_calls == 1);
+
+	/* commission: the recovery path for a board that is commissioned but has no
+	 * network, so nothing can reach it to open a window the normal way. */
+	mfk_cw_open_calls = 0;
+	mfk_cw_close_calls = 0;
+	mfk_cw_is_open = 0;
+	okc("commission opens a window advertising over BLE",
+	    run_cmd("commission", 1) == 0 && mfk_cw_open_calls == 1 &&
+		    mfk_cw_last_adv == (int)chip::CommissioningWindowAdvertisement::kAllSupported);
+	okc("commission prints the codes a controller needs",
+	    mfk_qr_calls == 2 && mfk_manual_calls == 2);
+
+	mfk_cw_open_calls = 0;
+	mfk_cw_is_open = 1;
+	okc("commission on an open window does not reopen it",
+	    run_cmd("commission", 1) == 0 && mfk_cw_open_calls == 0);
+
+	okc("commission close shuts an open window",
+	    run_cmd("commission", 2, "close") == 0 && mfk_cw_close_calls == 1);
+	okc("commission close on a shut window is a no-op",
+	    run_cmd("commission", 2, "close") == 0 && mfk_cw_close_calls == 1);
+
+	mfk_cw_open_calls = 0;
+	mfk_cw_close_calls = 0;
+	okc("commission rejects a bad argument",
+	    run_cmd("commission", 2, "bogus") == 0 && mfk_cw_open_calls == 0 &&
+		    mfk_cw_close_calls == 0);
 
 	mfk_log_set_calls = 0;
 	okc("log sets a runtime level",

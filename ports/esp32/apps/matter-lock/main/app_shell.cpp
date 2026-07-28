@@ -36,7 +36,11 @@
 #endif
 
 #include "app_shell.h"
+#include <app_priv.h> // app_commissioning_window_open, app_print_onboarding_codes
 #include "door_lock_manager.h"
+#ifdef CONFIG_ENABLE_HA_MQTT
+#include "ha_mqtt.h" // ha_mqtt_shell_cmd — the `hamqtt` broker provisioning command
+#endif
 #ifdef CONFIG_WOZ_PRESENCE
 #include <presence_link.h>
 #endif
@@ -313,14 +317,68 @@ static int cmd_unlock(int argc, char **argv)
 }
 
 /* The boot log scrolls away long before you need to pair; this puts the QR URL
- * and manual code back on demand. */
+ * and manual code back on demand. Not PrintOnboardingCodes(): it logs at CHIP
+ * Progress level, which the default WARN build compiles out of the CHIP library
+ * entirely, so this command used to print nothing at all. */
 static int cmd_codes(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
+	app_print_onboarding_codes();
+	return 0;
+}
+
+/* Recovery for the one corner this firmware had no exit from: commissioned, so
+ * it does not advertise commissionable, but with no working network, so no
+ * controller can reach it to open a window. Opening one here lets a controller
+ * re-push Wi-Fi credentials over BLE with every fabric and the Aliro trust store
+ * intact, which is exactly what `factoryreset` costs. */
+static int cmd_commission(int argc, char **argv)
+{
+	bool open;
+
+	if (argc > 2 || (argc == 2 && strcmp(argv[1], "close") != 0)) {
+		printf("usage: commission [close]\n");
+		return 0;
+	}
+
 	DeviceLayer::PlatformMgr().LockChipStack();
-	PrintOnboardingCodes(RendezvousInformationFlags(RendezvousInformationFlag::kBLE));
+	open = Server::GetInstance().GetCommissioningWindowManager().IsCommissioningWindowOpen();
 	DeviceLayer::PlatformMgr().UnlockChipStack();
+
+	if (argc == 2) { /* close */
+		if (!open) {
+			printf("commission: no window open\n");
+			return 0;
+		}
+		CHIP_ERROR sched = DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+			Server::GetInstance().GetCommissioningWindowManager().CloseCommissioningWindow();
+		});
+
+		printf("commission: %s\n",
+		       sched == CHIP_NO_ERROR ? "closing" : "close could not be scheduled");
+		return 0;
+	}
+
+	if (open) {
+		printf("commission: %swindow already open%s\n", col(C_OK), col(C_RST));
+	} else {
+		app_commissioning_window_open();
+		printf("commission: opening; re-run to confirm, `commission close` to stop\n");
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+		/* The shared NimBLE host has one legacy advertiser, and the reader
+		 * only takes it once Matter releases it (start_aliro_reader_once).
+		 * Matter takes it back to advertise commissionable, so walk-up
+		 * stops meanwhile. Worth it during a recovery, worth knowing about
+		 * when it is not one. */
+		printf("            note: the Aliro reader shares the one BLE advertiser, "
+		       "so walk-up\n            stops until the window closes or you "
+		       "reboot\n");
+#endif
+	}
+	/* A window nobody can see the pairing code for is useless, and the boot log
+	 * is long gone by the time anyone reaches for this. */
+	app_print_onboarding_codes();
 	return 0;
 }
 
@@ -535,10 +593,23 @@ void app_shell_start(void)
 		 .func = cmd_frec},
 #endif
 #endif
+#ifdef CONFIG_ENABLE_HA_MQTT
+		{.command = "hamqtt",
+		 .help = "hamqtt <show|broker <host> [port]|user <name>|pass|node <name>|ca|"
+			 "clear|start>: Home Assistant broker (pass and ca are never echoed)",
+		 .hint = NULL,
+		 .func = ha_mqtt_shell_cmd},
+#endif
 		{.command = "log",
 		 .help = "log <tag|*> <level>: runtime log level (boot default warn)",
 		 .hint = NULL,
 		 .func = cmd_log},
+		{.command = "commission",
+		 .help = "commission [close]: open a BLE commissioning window so a "
+			 "controller can re-push Wi-Fi or add a fabric, keeping the ones "
+			 "you have (long-press the button for the same thing)",
+		 .hint = NULL,
+		 .func = cmd_commission},
 		{.command = "factoryreset",
 		 .help = "erase all Matter state and reboot",
 		 .hint = NULL,

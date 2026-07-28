@@ -206,6 +206,19 @@ config WOZ_ALIRO_STEPUP
 	  trust store alone decides. With this option unset the reader is byte-for-byte
 	  identical to today and the fast-path auth segment is untouched.
 
+config WOZ_ALIRO_ACCESS_LISTENER
+	bool "Expose the access verdict to a registered listener"
+	default n
+	help
+	  Compile aliro_reader_set_access_listener() and the three notify points on
+	  the credential trust gate, so an application can observe whether each Aliro
+	  transaction was granted or denied. The listener gets the verdict and nothing
+	  else, never a credential.
+
+	  Selected automatically by the Home Assistant MQTT option; there is no reason
+	  to set it by hand. Off by default because it is otherwise dead weight on the
+	  transaction path: unset, the reader is byte-for-byte identical to today.
+
 config WOZ_PRESENCE
 	bool "Presence assertions (non-door primitive)"
 	default n

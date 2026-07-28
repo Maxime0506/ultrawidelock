@@ -17,6 +17,11 @@ from .models import AccessEvent, DistanceReading
 DISCOVERY_QOS = 1
 AVAILABILITY_QOS = 1
 OBSERVATION_QOS = 0
+# Home Assistant device model, "<target> Aliro lock". This agent only drives the
+# nRF5340 console, so that is the default; the ESP32 firmware publishes the same
+# discovery contract natively and fills in its own target. Both sides must keep
+# the shape, because the model is what tells the two devices apart in HA.
+DEFAULT_MODEL = "nRF5340 Aliro lock"
 MAX_PASSWORD_FILE_BYTES = 4096
 CONNECTION_TIMEOUT_SECONDS = 10
 
@@ -49,14 +54,16 @@ class MqttClient(Protocol):
     def publish(self, topic: str, payload: str, qos: int, retain: bool) -> object: ...
 
 
-def discovery_payloads(node: str) -> list[tuple[str, dict[str, object]]]:
+def discovery_payloads(
+    node: str, model: str = DEFAULT_MODEL
+) -> list[tuple[str, dict[str, object]]]:
     """Return the legacy MQTT Discovery contract for one configured device."""
 
     device = {
         "identifiers": [node],
         "name": node,
         "manufacturer": "openaliro",
-        "model": "nRF5340 Aliro lock",
+        "model": model,
     }
     base = f"aliro/{node}"
     return [

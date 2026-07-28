@@ -25,6 +25,20 @@ TARGET ?= esp32s3
 # because the subsequent idf.py call fails loudly.
 IDFPY := export ESP_MATTER_PATH="$(ESP_MATTER_PATH)" && . "$(IDF_EXPORT)" >/dev/null 2>&1 && \
          . "$(ESP_MATTER_PATH)/export.sh" >/dev/null 2>&1 && idf.py
+# HAMQTT=1 layers sdkconfig.defaults.hamqtt on top of the defaults: the Home
+# Assistant MQTT option plus the mbedTLS record sizing it needs. Kept out of
+# sdkconfig.defaults so the plain build stays byte-for-byte unchanged. The
+# per-target sdkconfig.defaults.$(TARGET) is still picked up either way.
+# Switching this on or off changes sdkconfig, so it forces a full rebuild.
+# Set either way, never left unset: cmake caches SDKCONFIG_DEFAULTS, so a build
+# that once passed the fragment keeps using it forever and dropping HAMQTT=1
+# silently keeps producing the Home Assistant image.
+HAMQTT ?=
+ifeq ($(HAMQTT),1)
+IDFPY += -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.hamqtt"
+else
+IDFPY += -DSDKCONFIG_DEFAULTS="sdkconfig.defaults"
+endif
 
 # Serial-port override (else auto-detected). BAUD is the console rate; LOG tees
 # the tio session to a file (make term LOG=session.log).

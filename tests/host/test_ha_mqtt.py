@@ -15,7 +15,12 @@ sys.path.insert(0, str(ROOT / "integration" / "homeassistant" / "src"))
 import aliro_mqtt_bridge as legacy_bridge  # noqa: E402
 from openaliro_ha.config import MqttConfig  # noqa: E402
 from openaliro_ha.models import AccessEvent, DistanceReading  # noqa: E402
-from openaliro_ha.mqtt import MqttError, MqttPublisher, discovery_payloads  # noqa: E402
+from openaliro_ha.mqtt import (  # noqa: E402
+    DEFAULT_MODEL,
+    MqttError,
+    MqttPublisher,
+    discovery_payloads,
+)
 
 
 class FakeMqttClient:
@@ -88,6 +93,26 @@ class MqttPublisherTests(unittest.TestCase):
             discovery_payloads("front_door"),
             legacy_bridge.discovery_payloads("front_door"),
         )
+
+    def test_discovery_default_model_names_the_target_this_agent_drives(self):
+        self.assertEqual(DEFAULT_MODEL, "nRF5340 Aliro lock")
+        self.assertEqual(DEFAULT_MODEL, legacy_bridge.DEFAULT_MODEL)
+        for _, payload in discovery_payloads("front_door"):
+            self.assertEqual(payload["device"]["model"], DEFAULT_MODEL)
+
+    def test_discovery_model_is_overridable_for_another_target(self):
+        # The ESP32 firmware publishes this same contract natively under its own
+        # target name; only the model may differ between the two devices.
+        esp = discovery_payloads("front_door", "ESP32-S3 Aliro lock")
+        for (topic, payload), (base_topic, base_payload) in zip(
+            esp, discovery_payloads("front_door")
+        ):
+            self.assertEqual(topic, base_topic)
+            self.assertEqual(payload["device"]["model"], "ESP32-S3 Aliro lock")
+            self.assertEqual(
+                {k: v for k, v in payload.items() if k != "device"},
+                {k: v for k, v in base_payload.items() if k != "device"},
+            )
 
     def test_start_uses_authenticated_tls_and_retained_discovery(self):
         publisher, client = self.publisher()

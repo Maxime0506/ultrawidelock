@@ -79,6 +79,24 @@ void aliro_reader_status_tick(int64_t now_ms);
  * task -- a plain read of the session table, no lock needed for a boolean. */
 bool aliro_reader_session_active(void);
 
+/* Register a listener for the per-transaction access verdict: true once a
+ * credential has authenticated and passed the trust gate (including the
+ * expedited-fast path and the dev-identity accept), false when one was presented
+ * and rejected. This is the same decision the nRF5340's vendor application prints
+ * as ACCESS GRANTED / ACCESS DENIED, and it is deliberately credential-independent
+ * — the listener gets a verdict and nothing else, so an observer of it can never
+ * leak a credential identifier.
+ *
+ * Called from the BLE-host task inside the transaction, alongside the software
+ * P-256 work, so the listener must return immediately and must not block. Pass NULL
+ * to unregister.
+ *
+ * Present only under CONFIG_WOZ_ALIRO_ACCESS_LISTENER; without it the hook and its
+ * three notify points compile away entirely. */
+#if defined(CONFIG_WOZ_ALIRO_ACCESS_LISTENER)
+void aliro_reader_set_access_listener(void (*cb)(bool granted));
+#endif
+
 /* Copy out the credential public key (uncompressed P-256, 65 bytes) of the most
  * recent session that passed the trust check. The Matter door lock resolves it to
  * the user that owns it, so the LockOperation event names who unlocked; without

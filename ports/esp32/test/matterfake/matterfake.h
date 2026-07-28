@@ -520,8 +520,10 @@ struct ChipDeviceEvent {
 class PlatformManager {
 public:
 	/* Executes the work immediately (recording); the production sources hop
-	 * to "the Matter task" — here that hop is synchronous by design. */
-	void ScheduleWork(void (*fn)(intptr_t), intptr_t arg = 0);
+	 * to "the Matter task" — here that hop is synchronous by design. Returns
+	 * CHIP_ERROR like the real one, so callers that check whether the hop was
+	 * even accepted compile here too; mfk_sched_rc forces the failure branch. */
+	CHIP_ERROR ScheduleWork(void (*fn)(intptr_t), intptr_t arg = 0);
 	void LockChipStack();
 	void UnlockChipStack();
 };
@@ -569,8 +571,13 @@ public:
 class CommissioningWindowManager {
 public:
 	bool IsCommissioningWindowOpen() const;
-	CHIP_ERROR OpenBasicCommissioningWindow(System::Clock::Seconds16 timeout,
-						CommissioningWindowAdvertisement adv);
+	/* Defaulted like the real signature, so the recovery path in app_main can
+	 * call it bare and still get kAllSupported (BLE included), which is the
+	 * whole point of that path over the dnssd-only one on fabric removal. */
+	CHIP_ERROR OpenBasicCommissioningWindow(
+		System::Clock::Seconds16 timeout = System::Clock::Seconds16(900),
+		CommissioningWindowAdvertisement adv = CommissioningWindowAdvertisement::kAllSupported);
+	void CloseCommissioningWindow();
 };
 
 class Server {
@@ -677,9 +684,18 @@ extern int mfk_cw_open_calls;
 extern uint32_t mfk_cw_open_rc; /* raw CHIP error code returned */
 extern uint16_t mfk_cw_last_timeout;
 extern int mfk_cw_last_adv;
+extern int mfk_cw_close_calls;
+
+/* Button recorder. mfk_btn_fire_long_press() invokes whatever app_main hung on
+ * BUTTON_LONG_PRESS_START, which is how a test presses the board's button. */
+extern int mfk_btn_register_calls;
+extern int mfk_btn_last_event;
+extern int mfk_btn_register_rc; /* esp_err_t, as int: this header predates esp_err.h */
+void mfk_btn_fire_long_press(void);
 
 /* PlatformMgr / BLEMgr */
 extern int mfk_sched_calls;
+extern uint32_t mfk_sched_rc; /* non-zero: ScheduleWork refuses and runs nothing */
 extern int mfk_lockstack_calls;
 extern int mfk_unlockstack_calls;
 extern int mfk_blemgr_calls;
@@ -733,6 +749,10 @@ extern int mfk_qr_fail;
 extern int mfk_qr_url_fail;
 extern int mfk_manual_fail;
 extern int mfk_print_codes_calls;
+/* app_print_onboarding_codes() uses these, not PrintOnboardingCodes(), because the
+ * default WARN build compiles CHIP Progress logging out and that prints nothing. */
+extern int mfk_qr_calls;
+extern int mfk_manual_calls;
 
 /* console + linenoise + log */
 struct mfk_console_cmd {

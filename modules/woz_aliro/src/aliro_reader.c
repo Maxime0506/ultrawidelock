@@ -67,6 +67,27 @@ static bool s_have_last_cred;
 static uint8_t s_auth_cred_pub[ALIRO_CRED_PUB_LEN];
 static bool s_have_auth_cred;
 
+#if defined(CONFIG_WOZ_ALIRO_ACCESS_LISTENER)
+/* Optional observer of the access verdict (see aliro_reader.h). NULL unless a port
+ * registers one, and the notify below is then a single predicted branch on the
+ * transaction path. Written once at startup, read from the BLE-host task. */
+static void (*s_access_listener)(bool granted);
+
+// Tell the registered observer, if any, how this transaction's credential check came out.
+static void notify_access(bool granted)
+{
+	void (*cb)(bool) = s_access_listener;
+
+	if (cb != NULL) {
+		cb(granted);
+	}
+}
+#else
+/* Unselected, the whole hook compiles away, so an image that does not want it is
+ * byte-for-byte what it was. */
+#define notify_access(granted) ((void)0)
+#endif
+
 /* Reader group key X = the X coordinate of pub(sign_priv). This is salt field 1
  * (reader_group_identifier_key.x) in the §8.3.1.13 key schedule; both sides must
  * agree on it, so it is derived from the provisioned signingKey (its public
@@ -573,6 +594,9 @@ static int try_fast_auth(struct aliro_session *s, const struct aliro_auth0_respo
 	LOG_INF("[conn %u] expedited-FAST cryptogram match (cred %d): AUTH1 skipped",
 		s->conn_handle, match);
 	aliro_lab_evi("flow.fast", "cred", match);
+	/* The cryptogram only opens under a Kpersistent minted for a trusted
+	 * credential, so a match is the trust gate for this path. */
+	notify_access(true);
 	send_exchange(s);
 	return 0;
 }
@@ -799,9 +823,13 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	} else {
 		LOG_WRN("[conn %u] credential key NOT trusted (%s); rejecting", s->conn_handle,
 			tv == 1 ? "no anchors provisioned" : "not in trust store");
+		notify_access(false);
 		s->phase = PH_FAILED;
 		return;
 	}
+	/* Granted covers the dev-identity accept too: the bolt opens either way, so
+	 * reporting only the enforced case would under-report real unlocks. */
+	notify_access(true);
 
 	/* Accepted: remember which key it was, so the unlock this session goes on to
 	 * grant can be attributed to the Matter user that owns it. */
@@ -1213,6 +1241,15 @@ bool aliro_reader_session_active(void)
 	}
 	return false;
 }
+
+#if defined(CONFIG_WOZ_ALIRO_ACCESS_LISTENER)
+// Registers (or with NULL clears) the observer of the per-transaction access verdict.
+// See aliro_reader.h for what the listener may do; call it before the reader starts.
+void aliro_reader_set_access_listener(void (*cb)(bool granted))
+{
+	s_access_listener = cb;
+}
+#endif
 
 // Copies the credential public key that most recently passed the trust check into out.
 // Returns true if a credential has authenticated since boot (out written), false otherwise
