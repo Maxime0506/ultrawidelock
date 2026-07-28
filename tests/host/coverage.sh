@@ -327,8 +327,19 @@ if "$PY" -m coverage --version >/dev/null 2>&1; then
 	PY_INCLUDE+=",$ROOT/tools/power_profile.py"
 	PY_INCLUDE+=",$ROOT/integration/homeassistant/aliro_mqtt_bridge.py"
 	PY_INCLUDE+=",$ROOT/scripts/flash_html.py"
+	PY_INCLUDE+=",$ROOT/integration/homeassistant/src/openaliro_ha/*.py"
 	for t in test_aliro_lab test_power_profile test_mqtt_bridge test_flash_html; do
 		COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage run -a \
+			--include="$PY_INCLUDE" \
+			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
+	done
+	# The agent suites gate themselves on HA=1 so productization work stays out
+	# of the default test path; measuring them still needs the variable set, or
+	# every case skips and the rows read 0%.
+	for t in test_ha_parser test_ha_config test_ha_mqtt test_ha_cli \
+		test_ha_compatibility test_ha_serial_session test_ha_serial_transport \
+		test_ha_agent test_ha_stage0; do
+		COVERAGE_FILE="$OUT/pycov" HA=1 "$PY" -m coverage run -a \
 			--include="$PY_INCLUDE" \
 			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
 	done
@@ -362,6 +373,10 @@ pyrow "tools/aliro_lab.py" "test_aliro_lab.py"
 pyrow "tools/power_profile.py" "test_power_profile.py"
 pyrow "integration/homeassistant/aliro_mqtt_bridge.py" "test_mqtt_bridge.py"
 pyrow "scripts/flash_html.py" "test_flash_html.py"
+for agent_module in parser models config mqtt serial_transport serial_session \
+	compatibility agent cli; do
+	pyrow "integration/homeassistant/src/openaliro_ha/$agent_module.py" "test_ha_*.py"
+done
 surf "web-twin/index.html" "$(loc web-twin/index.html)" \
 	"constants drift-gated in CI; JS logic untested"
 surf "web-flasher/index.html" "$(loc web-flasher/index.html)" "no tests"

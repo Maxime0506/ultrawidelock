@@ -31,6 +31,12 @@ from typing import Iterator, Optional
 # double spaces mean the runs of whitespace vary, so match \s+ rather than ' '.
 RNG_RE = re.compile(r"rng\s+blk=(\d+)\s+d=(-?\d+)mm\s+tof=(-?\d+)")
 
+# The curated line above exists only under CONFIG_WOZ_PRETTY_SHELL with
+# `aliro frames` on. The unconditional diagnostic nine lines earlier in the
+# same block (ccc_shim_rx.c:600) is the only distance line most builds emit.
+# Its phone_d field is the peer's own estimate and is deliberately unused.
+DIST_RE = re.compile(r"DIST tof=(-?\d+) d=(-?\d+)mm")
+
 # The grant/deny console lines, emitted once per completed transaction.
 ACCESS_RE = re.compile(r"ACCESS (GRANTED|DENIED)")
 
@@ -48,6 +54,15 @@ def parse_line(line: str) -> Optional[dict]:
             "block": int(m.group(1)),
             "distance_mm": int(m.group(2)),
             "tof": int(m.group(3)),
+        }
+
+    m = DIST_RE.search(line)
+    if m:
+        return {
+            "kind": "range",
+            "block": None,
+            "distance_mm": int(m.group(2)),
+            "tof": int(m.group(1)),
         }
 
     m = ACCESS_RE.search(line)
