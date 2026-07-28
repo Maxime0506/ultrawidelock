@@ -12,6 +12,13 @@ Two independent paths, and you want both.
 | MQTT bridge (this repo) | Distance sensor in mm, `granted` / `denied` access events, device triggers | An agent process holding the board's serial console |
 | [Matter integration][matter] (built into Home Assistant) | Lock and unlock, lock state, auto-relock, wrong-code limit | The board commissioned to the Home Assistant fabric |
 
+On ESP32 the first row has a second implementation: the firmware can publish those
+same topics itself over TLS, with no agent process at all. It is off by default and
+described in
+[`ports/esp32/apps/matter-lock/README.md`](../ports/esp32/apps/matter-lock/README.md).
+The agent stays the supported path for the nRF5340, and the rest of this page is
+about the agent. Run one publisher per node, never both.
+
 They share nothing at runtime. Lock control keeps working when the agent is
 stopped, and distance keeps flowing if Matter is not set up. The split is
 deliberate: publishing a second lock entity over MQTT would leave two entities

@@ -92,6 +92,36 @@ homeassistant/event/<device>/access/config      retained discovery
 Discovery is re-announced on every reconnect, so a broker restart does not
 strand the entities.
 
+## The ESP32 firmware speaks the same contract
+
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c`, behind `CONFIG_ENABLE_HA_MQTT`
+(default n), publishes those five topics from the board, so the ESP32 needs no
+agent. It is a reimplementation of `mqtt.py`, not a shared one, and the two must
+be changed together:
+
+| Held in step | Where |
+|---|---|
+| Topics, payloads, QoS, retain, last will | `mqtt.py:52-87`, `:194`, `:226`, `:232` |
+| Discovery re-announced per connection | `_on_connect` / `MQTT_EVENT_CONNECTED` |
+| Distance throttle, 1 s or a 100 mm change | `_DistanceThrottle` in `agent.py` |
+| Device model, `"<target> Aliro lock"` | `DEFAULT_MODEL` on both Python sides, `HA_MQTT_MODEL` in the firmware |
+
+The model is the one field that deliberately differs, so two boards do not look
+like the same product in Home Assistant. `test_ha_mqtt.py` pins the default and
+the parity with the legacy bridge, and `test_ha_firmware_contract.py` extracts
+the format strings out of `ha_mqtt.c`, compiles them on the host, and diffs the
+rendered JSON against the agent's — so a discovery field that drifts on either
+side fails `make ha-test HA=1` without a board. Topics, QoS and retain flags are
+not covered that way; change those on both sides by hand.
+
+Two differences are not drift. The firmware has no console to parse, so it reads
+the approach controller's conditioned estimate directly — the same value the
+unlock thresholds act on, in centimetres, published as millimetres — rather than
+the raw per-block `DIST` line the parser sees. And it takes the access verdict
+from the reader's credential trust gate through `aliro_reader_set_access_listener`,
+which is where the vendor `ACCESS GRANTED` / `ACCESS DENIED` lines come from on
+the nRF5340.
+
 ## Testing
 
 ```bash

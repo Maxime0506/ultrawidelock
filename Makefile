@@ -161,6 +161,7 @@ ha-test:
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_setup.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_component.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_package.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_firmware_contract.py
 
 ## ha-package: build a local custom-component beta archive
 ##   Requires HA=1 and never publishes. The component archive vendors the shared

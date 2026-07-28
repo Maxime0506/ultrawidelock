@@ -70,6 +70,7 @@ clear message; `FORCE=1` stops the holder first.
 | `codes` | reprint the commissioning QR URL and manual pairing code |
 | `aliro prov` | show reader identity and credential trust store |
 | `aliro trust` | persist the last-presented credential as trusted |
+| `hamqtt` | provision the Home Assistant broker (only with `CONFIG_ENABLE_HA_MQTT`) |
 | `factoryreset` | erase all Matter state and reboot |
 | `help`, `clear` | REPL built-ins |
 
@@ -109,6 +110,49 @@ to stick:
 The reader attaches to esp-matter's existing NimBLE host rather than starting a second
 BLE stack; the Aliro GATT service is registered through `ConfigureExtraServices` before
 Matter starts.
+
+## Home Assistant without the bridge agent
+
+`CONFIG_ENABLE_HA_MQTT` (default **n**) publishes UWB distance and Aliro access events
+straight to a TLS MQTT broker, on the same topics the Python bridge agent uses. With it on,
+Home Assistant builds the device through MQTT Discovery with no host process holding the
+serial console. Lock control still goes over Matter; the option changes nothing about the
+Matter side.
+
+Build it with the fragment, not with `menuconfig` alone:
+
+```bash
+make build HAMQTT=1     # or: make flash HAMQTT=1
+```
+
+`sdkconfig.defaults.hamqtt` carries the option **and** the mbedTLS record sizing it
+depends on. The stock 16 KiB TLS input record needs a contiguous allocation this target
+cannot spare next to Matter, NimBLE and Wi-Fi: `mbedtls_ssl_setup` returns `-0x7F00`
+(`MBEDTLS_ERR_SSL_ALLOC_FAILED`) and every connect dies before the handshake. Turning the
+option on by hand without the fragment reproduces exactly that. The fragment is kept out of
+`sdkconfig.defaults` so the plain build stays byte-for-byte unchanged; switching `HAMQTT`
+on or off rewrites `sdkconfig` and forces a full rebuild.
+
+Nothing about a broker is compiled in. Provision it once at the console, then reboot:
+
+```
+hamqtt broker homeassistant.local 8883
+hamqtt user openaliro_agent
+hamqtt pass                 # prompts, not echoed, never enters the shell history
+hamqtt node front-door      # 1-32 of [A-Za-z0-9_-]; this is the HA device identity
+hamqtt ca                   # paste the broker CA in PEM, end with a line holding "."
+hamqtt show                 # everything but the password
+```
+
+The publisher attaches when Matter's station gets an address, runs on its own task, and
+drops observations rather than blocking the ranging or credential-auth paths. Distance is
+rate-limited exactly as the agent rate-limits it: at most one per second, with a change of
+100 mm or more let through immediately.
+
+Give the board its own `node` if an agent is already publishing for another lock: the node
+name is the Home Assistant device identity, and two publishers on one node would fight.
+The CA and the login live in the `nvs` partition alongside Matter's own data, so a large
+certificate chain eats headroom there; a single CA is around 1.5 kB of a 48 kB partition.
 
 ## Caveats
 

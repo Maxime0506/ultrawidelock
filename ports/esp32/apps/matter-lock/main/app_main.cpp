@@ -53,6 +53,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #endif
+#ifdef CONFIG_ENABLE_HA_MQTT
+#include "ha_mqtt.h"
+#endif
 
 static const char *TAG = "app_main";
 uint16_t door_lock_endpoint_id = 0;
@@ -235,6 +238,11 @@ static void aliro_reader_task(void *arg)
 	}
 
 	woz_uwb_set_range_listener(on_uwb_range);
+#ifdef CONFIG_ENABLE_HA_MQTT
+	/* Access verdicts reach Home Assistant straight from the trust gate, which
+	 * runs on the BLE-host task; the listener only queues, never publishes. */
+	aliro_reader_set_access_listener(ha_mqtt_publish_access);
+#endif
 
 	int rc = aliro_reader_start_attached();
 	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
@@ -315,6 +323,12 @@ static void aliro_reader_task(void *arg)
 			aliro_lab_evi("range", "cm", cm);
 			present = true;
 			act = aliro_approach_feed(&approach, now, cm);
+#ifdef CONFIG_ENABLE_HA_MQTT
+			/* The conditioned estimate the thresholds above act on, not
+			 * the raw block `range` prints: a single block swings by
+			 * metres, and a sensor showing that is not a distance. */
+			ha_mqtt_publish_distance_cm(aliro_approach_est_cm(&approach));
+#endif
 			if (aliro_approach_eta_ms(&approach) >= 0) {
 				// Estimator overlay for the walk-up report: closing speed
 				// and predicted time of arrival at the unlock radius.
@@ -448,6 +462,13 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 		ESP_LOGI(TAG, "Interface IP Address changed");
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 		start_sntp_once(); /* wall time -> live dynamic-tag expiry */
+#endif
+#ifdef CONFIG_ENABLE_HA_MQTT
+		/* Matter owns the station and the netif; this only attaches once
+		 * that interface has an address. Idempotent, and it does no more
+		 * than spawn the publisher task, so the Matter event loop is not
+		 * held while a TLS session comes up. */
+		ha_mqtt_start_once();
 #endif
 		break;
 

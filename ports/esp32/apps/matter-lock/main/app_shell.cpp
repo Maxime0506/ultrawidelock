@@ -37,6 +37,9 @@
 
 #include "app_shell.h"
 #include "door_lock_manager.h"
+#ifdef CONFIG_ENABLE_HA_MQTT
+#include "ha_mqtt.h" // ha_mqtt_shell_cmd — the `hamqtt` broker provisioning command
+#endif
 
 using namespace chip;
 using namespace chip::app::Clusters;
@@ -436,6 +439,13 @@ void app_shell_start(void)
 		 .hint = NULL,
 		 .func = cmd_frec},
 #endif
+#endif
+#ifdef CONFIG_ENABLE_HA_MQTT
+		{.command = "hamqtt",
+		 .help = "hamqtt <show|broker <host> [port]|user <name>|pass|node <name>|ca|"
+			 "clear|start>: Home Assistant broker (pass and ca are never echoed)",
+		 .hint = NULL,
+		 .func = ha_mqtt_shell_cmd},
 #endif
 		{.command = "log",
 		 .help = "log <tag|*> <level>: runtime log level (boot default warn)",

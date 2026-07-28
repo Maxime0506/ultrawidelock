@@ -40,6 +40,12 @@ DIST_RE = re.compile(r"DIST tof=(-?\d+) d=(-?\d+)mm")
 # The grant/deny console lines, emitted once per completed transaction.
 ACCESS_RE = re.compile(r"ACCESS (GRANTED|DENIED)")
 
+# Home Assistant device model, "<target> Aliro lock". This bridge reads an
+# nRF5340 console; the ESP32 firmware publishes the same contract natively under
+# its own target name. Kept in step with openaliro_ha.mqtt.DEFAULT_MODEL by the
+# discovery parity test.
+DEFAULT_MODEL = "nRF5340 Aliro lock"
+
 
 def parse_line(line: str) -> Optional[dict]:
     """Return a reading dict for a range or access line, else None.
@@ -72,13 +78,13 @@ def parse_line(line: str) -> Optional[dict]:
     return None
 
 
-def discovery_payloads(node: str) -> list[tuple[str, dict]]:
+def discovery_payloads(node: str, model: str = DEFAULT_MODEL) -> list[tuple[str, dict]]:
     """Return (topic, config) pairs announcing both entities to Home Assistant."""
     device = {
         "identifiers": [node],
         "name": node,
         "manufacturer": "openaliro",
-        "model": "nRF5340 Aliro lock",
+        "model": model,
     }
     base = f"aliro/{node}"
     return [

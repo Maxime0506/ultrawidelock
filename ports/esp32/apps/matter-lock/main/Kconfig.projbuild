@@ -8,4 +8,28 @@ menu "Example Configuration"
             features and register the Aliro reader delegate, so Apple Home can
             provision an Express (BLE + UWB) Home Key into Wallet for this reader.
 
+    config ENABLE_HA_MQTT
+        bool "Publish distance and access events to Home Assistant over MQTT"
+        default n
+        depends on ENABLE_ALIRO_BLE_UWB
+        select WOZ_ALIRO_ACCESS_LISTENER
+        help
+            Publish UWB distance and Aliro access verdicts straight to a TLS
+            MQTT broker, on the same topics the Python bridge agent uses
+            (integration/homeassistant), so Home Assistant builds the device
+            through MQTT Discovery with no host-side agent running. Lock
+            control stays on Matter; this carries only what Matter does not
+            expose.
+
+            Off by default: it adds esp-mqtt and a TLS session to the image,
+            and it is useless until a broker is provisioned. Nothing about a
+            broker is compiled in — host, port, login, CA certificate and node
+            name are runtime NVS config, set with the `hamqtt` console command.
+
+            Do not set this on its own. Build with `make build HAMQTT=1`, which
+            also applies the mbedTLS record sizing in
+            sdkconfig.defaults.hamqtt; without it mbedtls_ssl_setup cannot get
+            a contiguous 16 KiB input record next to Matter, NimBLE and Wi-Fi,
+            and every connection fails with -0x7F00 before the handshake.
+
 endmenu
