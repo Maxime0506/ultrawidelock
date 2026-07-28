@@ -65,7 +65,38 @@ for d in uwb_rxdiag uwb_selftest ccc_crypto_psa aliro_shell woz_logquiet dw3000_
 	check "no $d.obj" "! find '$BUILD' -name '$d*.obj' | grep -q ."
 done
 
-echo "4. app fits partition"
+echo "4. presence build (CONFIG_WOZ_PRESENCE=y)"
+# Presence is default n and no sdkconfig.defaults sets it, so everything above
+# this line passes with every line of presence code uncompiled. Build it in its
+# own directory, with its own sdkconfig, so the default build and a developer's
+# working config are both left alone.
+PBUILD="$PROJ/build-presence"
+if ( cd "$PROJ" && idf.py -B build-presence \
+	-DSDKCONFIG=build-presence/sdkconfig \
+	-DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.presence" \
+	build >/dev/null 2>&1 ); then
+	note ok "presence build links"
+	# Linking is not enough: --gc-sections has eliminated these before, which is
+	# why the symbols are named individually rather than trusting the config.
+	# Every name here was checked to be ABSENT from a defaults-only build --
+	# aliro_ec_p256_keygen and aliro_ecdsa_p256_sign were the obvious picks and
+	# are useless, because the Aliro credential path links them either way.
+	PNM="${WOZ_NM:-xtensa-esp32s3-elf-nm}"
+	psym() { "$PNM" "$PBUILD/woz_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
+	if command -v "$PNM" >/dev/null 2>&1; then
+		check "presence_link_init survives gc"      "psym presence_link_init"
+		check "presence_link_cmd survives gc"       "psym presence_link_cmd"
+		check "aliro_assert_build_p256 survives gc" "psym aliro_assert_build_p256"
+		check "aliro_assert_ec_sign survives gc"    "psym aliro_assert_ec_sign"
+	else
+		note skip "presence symbols ($PNM not on PATH; set WOZ_NM=)"
+	fi
+else
+	note FAIL "presence build links"
+	fail=1
+fi
+
+echo "5. app fits partition"
 # check_sizes.py runs at build time and fails the build on overflow; re-assert
 # the app binary is smaller than the 4 MB factory partition as a direct signal.
 SZ=$(stat -f%z "$BUILD/woz_uwb_esp32s3.bin" 2>/dev/null || stat -c%s "$BUILD/woz_uwb_esp32s3.bin")

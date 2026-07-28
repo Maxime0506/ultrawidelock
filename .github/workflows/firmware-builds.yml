@@ -162,6 +162,22 @@ jobs:
           . "$IDF_PATH/export.sh"
           idf.py set-target esp32s3
           idf.py build
+          # CONFIG_WOZ_PRESENCE is default n and no sdkconfig.defaults sets it,
+          # so the build above compiles none of the non-door primitive. Build it
+          # explicitly, in its own directory, or it rots unnoticed the way
+          # CONFIG_WOZ_PIV_CCID did: broken build config, green CI, caught only
+          # when someone finally tried it on a bench.
+          idf.py -B build-presence \
+                 -DSDKCONFIG=build-presence/sdkconfig \
+                 -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.presence" \
+                 build
+          # Linking is not enough -- --gc-sections has eliminated these before.
+          # Both names are absent from a defaults-only build; aliro_ec_p256_keygen
+          # is not, because the Aliro credential path links it either way.
+          xtensa-esp32s3-elf-nm build-presence/woz_uwb_esp32s3.elf \
+            | grep -qE ' T presence_link_init$'
+          xtensa-esp32s3-elf-nm build-presence/woz_uwb_esp32s3.elf \
+            | grep -qE ' T aliro_assert_build_p256$'
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
