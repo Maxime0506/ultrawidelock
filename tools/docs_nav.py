@@ -51,6 +51,7 @@ JOURNEY = [
     ("Deep dives", "approach-direction"),
     ("Deep dives", "power-profile"),
     ("Deep dives", "passive-carry-verification"),
+    ("Deep dives", "presence"),
     ("Deep dives", "porting-esp32-phase3"),
     ("Deep dives", "chipset-memory"),
     ("Deep dives", "home-assistant-internals"),
