@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**221 subsystems in 37 directories · 1410/1661 symbols documented (84%)**
+**222 subsystems in 37 directories · 1410/1674 symbols documented (84%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -87,13 +87,13 @@ flowchart LR
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
 | [`scripts/`](architecture/scripts/README.md) | 12 | 47/52 (90%) |
 | [`tools/`](architecture/tools/README.md) | 21 | 181/213 (84%) |
-| [`web-twin/`](architecture/web-twin/README.md) | 2 | 19/19 (100%) |
+| [`web-twin/`](architecture/web-twin/README.md) | 3 | 19/32 (59%) |
 
 ## Hotspots
 
-*Mined from git history as of `48cfbec`.*
+*Mined from git history as of `1c5b114`.*
 
-**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (19 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (17 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (14 commits), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md) (9 commits), [`scripts/docs.sh`](architecture/scripts/docs.sh.md) (9 commits).
+**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (19 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (18 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (14 commits), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md) (9 commits), [`scripts/docs.sh`](architecture/scripts/docs.sh.md) (9 commits).
 
 **Change together without importing each other:**
 
