@@ -32,21 +32,21 @@ flowchart TD
 ## API
 
 ### `pages_url() -> str`
-`tools/docs_media.py:71`
+`tools/docs_media.py:77`
 
 https://<owner>.github.io/<repo> for the origin remote, or '' if none.
 
 **called by** `main`
 
 ### `social_meta(page: bytes, base: str) -> bytes`
-`tools/docs_media.py:88`
+`tools/docs_media.py:94`
 
 The og/twitter block for one page, titled from its own <title>.
 
 **called by** `main`
 
 ### `main() -> int`
-`tools/docs_media.py:102`
+`tools/docs_media.py:108`
 
 Copy demo media files into the rendered site and inject demo figure HTML into the landing page; inject social card metadata (og:image, etc.) into HTML pages using origin remote as base URL.
 
