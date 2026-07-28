@@ -61,6 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
+      esp32-initiator: ${{ steps.filter.outputs.esp32-initiator }}
       nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
       esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
       aliro-blob: ${{ steps.filter.outputs.aliro-blob }}
@@ -97,6 +98,9 @@ jobs:
             esp32-idf:
               - *esp32-shared
               - ports/esp32/apps/reader/**/!(*.md)
+            esp32-initiator:
+              - *esp32-shared
+              - ports/esp32/apps/initiator/**/!(*.md)
             esp32-matter:
               - *esp32-shared
               - ports/esp32/apps/matter-lock/**/!(*.md)
@@ -178,6 +182,52 @@ jobs:
             | grep -qE ' T presence_link_init$'
           xtensa-esp32s3-elf-nm build-presence/woz_uwb_esp32s3.elf \
             | grep -qE ' T aliro_assert_build_p256$'
+          { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+
+  # Aliro initiator (User-Device role) — the bench HIL peer for our reader.
+  # It links the same modules/woz_aliro core as the reader app but through the
+  # opposite-direction device sources, so a reader-side codec change compiles
+  # here or not at all. Without this job the app rots exactly the way the reader
+  # job's presence build guards against: the two roles must stay codec-synced,
+  # and nothing else in CI ever compiles the device half.
+  esp32-initiator:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.esp32-initiator == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
+    env:
+      IDF_CCACHE_ENABLE: "1"
+      CCACHE_MAXSIZE: 300M
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: restore the compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-esp32-initiator-${{ github.run_id }}
+          restore-keys: |
+            ccache-esp32-initiator-
+      - name: build the initiator app (esp32s3)
+        working-directory: ports/esp32/apps/initiator
+        # Steps bypass the image entrypoint, so source the IDF env explicitly.
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
+          # Linking is not enough -- --gc-sections has eliminated reachable-looking
+          # code before. These four are the device half's entry points: the state
+          # machine, its init, the BleSK ranging-channel mirror, and the advert
+          # decoder. If any is gone the app builds but cannot talk to a reader.
+          for sym in aliro_device_on_command aliro_device_init \
+                     aliro_dev_blesk_init aliro_ble_central_parse_adv; do
+            xtensa-esp32s3-elf-nm build/aliro_initiator_esp32s3.elf \
+              | grep -qE " T $sym\$" || { echo "missing symbol: $sym" >&2; exit 1; }
+          done
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
