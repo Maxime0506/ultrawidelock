@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**183 subsystems in 29 directories · 1267/1384 symbols documented (91%)**
+**204 subsystems in 33 directories · 1353/1544 symbols documented (87%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -47,6 +47,10 @@ flowchart LR
 | directory | subsystems | documented |
 |---|---|---|
 | [`integration/homeassistant/`](architecture/integration.homeassistant/README.md) | 1 | 5/5 (100%) |
+| [`integration/homeassistant/custom_components/openaliro/`](architecture/integration.homeassistant.custom_components.openaliro/README.md) | 8 | 12/34 (35%) |
+| [`integration/homeassistant/scripts/`](architecture/integration.homeassistant.scripts/README.md) | 1 | 1/3 (33%) |
+| [`integration/homeassistant/src/openaliro_ha/`](architecture/integration.homeassistant.src.openaliro_ha/README.md) | 11 | 72/120 (60%) |
+| [`integration/homeassistant/tools/`](architecture/integration.homeassistant.tools/README.md) | 1 | 1/3 (33%) |
 | [`modules/woz_aliro/include/`](architecture/modules.woz_aliro.include/README.md) | 11 | 26/26 (100%) |
 | [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 16 | 201/201 (100%) |
 | [`modules/woz_aliro_ecp/src/`](architecture/modules.woz_aliro_ecp.src/README.md) | 1 | 5/5 (100%) |
@@ -78,7 +82,7 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `02e0c6f`.*
+*Mined from git history as of `bdf7760`.*
 
 **Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (19 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (14 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (11 commits), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md) (9 commits), [`scripts/docs.sh`](architecture/scripts/docs.sh.md) (9 commits).
 

@@ -18,6 +18,7 @@
 - **Browser flash:** Chrome/Edge · connect S3/C5 · **Install**.
 - **Release:** follow the target `FLASH.md`.
 - **Local test:** `make test` needs a C compiler, not an SDK or hardware.
+- **Home Assistant:** `make ha-setup HA=1` wires the broker, agent, and config in one step.
 
 ## Build
 
@@ -74,7 +75,7 @@ S3 is validated; C5 is build/release-tested.
 - **Bare UWB:** DW3110 runs CCC/FiRa, STS, DS-TWR, M1-M4; no coprocessor.
 - **Power:** UWB sleeps out of range; ESP32 uses RSSI gating or predictive ETA.
 - **Ports:** nRF5340, ESP32-S3, and ESP32-C5 share one engine.
-- **Home Assistant:** `HA=1` adds events/proximity; [MQTT](integration/homeassistant/README.md) needs no firmware change.
+- **Home Assistant:** UWB distance and access events over [MQTT](https://asxeem.github.io/openaliro/home-assistant.html), lock control over Matter; no firmware change.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/grid-demo-dark.webp"><source media="(prefers-color-scheme: light)" srcset="assets/grid-demo-light.webp"><img src="assets/grid-demo.webp" alt="Home Key setup, Approach Direction, provisioning, NFC tap, and lock-state notifications on live hardware"/></picture><br/><sub>Home Key · Approach Direction · provisioning · NFC tap · live lock state</sub></p>
 

@@ -407,6 +407,86 @@ ccc_ran_params.
 
 **depends on** [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
 
+## `integration/homeassistant/src/openaliro_ha/`
+
+### [`integration/homeassistant/src/openaliro_ha/__main__.py`](architecture/integration.homeassistant.src.openaliro_ha/__main__.md)
+
+Module entry point for the HA=1-only staging command.
+
+**depends on** [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+### [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md)
+
+HA=1-only staging library for the OpenAliro Home Assistant adapters.
+
+This is intentionally not a published distribution or a stable public API yet.
+The direct Home Assistant adapter remains blocked on Stage 0 hardware evidence.
+
+**depends on** [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)
+
+### [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+Small, non-interactive HA=1 staging CLI for safe offline operations.
+
+**exposes** `main`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__main__.py`](architecture/integration.homeassistant.src.openaliro_ha/__main__.md)
+
+### [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md)
+
+Runnable standalone-agent orchestration over the shared serial library.
+
+**exposes** `AgentError`, `DoctorDeviceResult`, `doctor`, `probe_device`, `run`, `run_device`, `session_for_device`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+### [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md)
+
+Incremental parser for the source-proven ``aliro range`` compatibility mode.
+
+**exposes** `RangeResponseParser`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+### [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md)
+
+Versioned, secret-free TOML configuration for the HA=1-only agent.
+
+**exposes** `AgentConfig`, `ConfigError`, `DeviceConfig`, `MqttConfig`, `load_config`, `redacted_config`, `write_config`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md)
+
+### [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md)
+
+Typed observations emitted by the HA=1 console parser.
+
+**exposes** `AccessEvent`, `CompatibilityRangeReading`, `DistanceReading`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md), [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+### [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md)
+
+Standalone MQTT adapter for the HA=1 staging agent.
+
+The parser and serial session do not import this module. MQTT remains an agent
+transport, with the current discovery and state topics kept stable.
+
+**exposes** `MqttError`, `MqttPublisher`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md)
+
+### [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md)
+
+Narrow parser for the currently verified nRF5340 console output.
+
+**exposes** `parse_console_line`, `strip_ansi`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md), [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+### [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+Async, transport-neutral ownership of one OpenAliro serial console.
+
+The session is deliberately independent of pyserial and Home Assistant. A
+runtime adapter provides an opened byte-stream; this module serializes shell
+commands, parses only the approved observations, and never retains raw console
+lines. The device can be idle after ``aliro frames on``: a stream acknowledgement
+is therefore the capability probe, not the first range reading.
+
+**exposes** `SerialConnection`, `SerialSession`, `SerialSessionError`, `SessionState`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+### [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)
+
+pyserial adapter and privacy-safe serial-port identity helpers.
+
+**exposes** `PySerialConnection`, `SerialPort`, `SerialTransportError`, `discover_serial_ports`, `open_serial_connection`, `resolve_serial_port`, `serial_identity`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
 ## `modules/woz_uwb/src/driver/`
 
 ### [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
@@ -795,6 +875,56 @@ current locked and Aliro-ranging state.
 
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
+
+## `integration/homeassistant/custom_components/openaliro/`
+
+### [`integration/homeassistant/custom_components/openaliro/__init__.py`](architecture/integration.homeassistant.custom_components.openaliro/__init__.md)
+
+HA=1-only OpenAliro direct-serial integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/diagnostics.py`](architecture/integration.homeassistant.custom_components.openaliro/diagnostics.md)
+
+Redacted diagnostics for the HA=1 OpenAliro direct integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/event.py`](architecture/integration.homeassistant.custom_components.openaliro/event.md)
+
+Access outcome event entity for the HA=1 OpenAliro direct integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/sensor.py`](architecture/integration.homeassistant.custom_components.openaliro/sensor.md)
+
+Distance sensor for the HA=1 OpenAliro direct integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/config_flow.py`](architecture/integration.homeassistant.custom_components.openaliro/config_flow.md)
+
+Manual direct-serial config flow for the HA=1 OpenAliro beta.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md)
+
+### [`integration/homeassistant/custom_components/openaliro/device_trigger.py`](architecture/integration.homeassistant.custom_components.openaliro/device_trigger.md)
+
+Granted and denied device-automation triggers for OpenAliro access events.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md)
+
+### [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md)
+
+Constants for the HA=1 OpenAliro custom integration.
+
+**used by** [`integration/homeassistant/custom_components/openaliro/__init__.py`](architecture/integration.homeassistant.custom_components.openaliro/__init__.md), [`integration/homeassistant/custom_components/openaliro/config_flow.py`](architecture/integration.homeassistant.custom_components.openaliro/config_flow.md), [`integration/homeassistant/custom_components/openaliro/device_trigger.py`](architecture/integration.homeassistant.custom_components.openaliro/device_trigger.md), [`integration/homeassistant/custom_components/openaliro/diagnostics.py`](architecture/integration.homeassistant.custom_components.openaliro/diagnostics.md), [`integration/homeassistant/custom_components/openaliro/event.py`](architecture/integration.homeassistant.custom_components.openaliro/event.md), [`integration/homeassistant/custom_components/openaliro/sensor.py`](architecture/integration.homeassistant.custom_components.openaliro/sensor.md)
+
+### [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+Home Assistant runtime bridge over the shared OpenAliro serial session.
+
+**exposes** `OpenAliroRuntime`  ·  **used by** [`integration/homeassistant/custom_components/openaliro/__init__.py`](architecture/integration.homeassistant.custom_components.openaliro/__init__.md), [`integration/homeassistant/custom_components/openaliro/diagnostics.py`](architecture/integration.homeassistant.custom_components.openaliro/diagnostics.md), [`integration/homeassistant/custom_components/openaliro/event.py`](architecture/integration.homeassistant.custom_components.openaliro/event.md), [`integration/homeassistant/custom_components/openaliro/sensor.py`](architecture/integration.homeassistant.custom_components.openaliro/sensor.md)
 
 ## `modules/woz_aliro_stack/src/protocol/`
 
@@ -1685,6 +1815,23 @@ device loss or exchange failure DestroySession(), both from the Aliro
 workqueue, matching the upstream RFAL transport's threading.
 
 **used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
+
+## `integration/homeassistant/scripts/`
+
+### [`integration/homeassistant/scripts/ha-setup.sh`](architecture/integration.homeassistant.scripts/ha-setup.sh.md)
+
+One command from nothing to a working OpenAliro Home Assistant agent.
+Generates the broker TLS material, installs it into the Home Assistant
+Mosquitto add-on over SSH, writes the agent configuration, and runs doctor.
+Every step is idempotent: re-running repairs whatever drifted.
+Override any default with an environment variable, for example
+HA_SSH=my-hass BROKER_HOST=hass.lan ./ha-setup.sh
+
+## `integration/homeassistant/tools/`
+
+### [`integration/homeassistant/tools/package_component.py`](architecture/integration.homeassistant.tools/package_component.md)
+
+Build a local OpenAliro custom-component archive without publishing it.
 
 ## `modules/woz_aliro_ecp/src/`
 

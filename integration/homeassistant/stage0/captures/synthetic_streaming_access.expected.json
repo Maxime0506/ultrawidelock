@@ -1,0 +1,22 @@
+[
+  {
+    "kind": "range",
+    "block": 7,
+    "distance_mm": 1234,
+    "tof": 567
+  },
+  {
+    "kind": "range",
+    "block": null,
+    "distance_mm": 1234,
+    "tof": 567
+  },
+  {
+    "kind": "access",
+    "verdict": "granted"
+  },
+  {
+    "kind": "access",
+    "verdict": "denied"
+  }
+]

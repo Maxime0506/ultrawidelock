@@ -80,6 +80,8 @@ docs.yml:build                             docs
 docs.yml:publish                           !deploys the built site, not a check
 format.yml:clang-format                    format
 fuzz.yml:libfuzzer                         fuzz
+ha-tests.yml:agent                         !HA=1 beta, opt-in: 'make ha-test HA=1' runs it, and it needs paho-mqtt + pyserial that no other gate does
+ha-tests.yml:component                     !advisory on CI too: installs unpinned Home Assistant from PyPI
 host-tests.yml:test                        test
 host-tests.yml:portability                 !the same 'make test' on a 2nd OS/compiler
 host-tests.yml:coverage                    coverage
