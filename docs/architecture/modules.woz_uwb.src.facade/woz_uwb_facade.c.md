@@ -9,8 +9,22 @@ callbacks).
 
 ## API
 
+### `static int woz_hfclk_boost(void)`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:34`
+
+@brief Raise the app-core HFCLK to 128 MHz before any driver initialises.
+The app core boots with HFCLK divided to 64 MHz. What matters here is the
+timing of the boost, not the boost itself: this used to run lazily on the
+first ranging call, changing the core clock domain underneath an already
+configured and actively used SPIM4. Doing it at PRE_KERNEL_1 means every
+driver is configured once, against a clock that then never moves.
+Note what this is NOT for. spi_nrfx_spim only consults the divider to cap
+max_freq, and only when the requested rate exceeds 16 MHz (spi_nrfx_spim.c:182).
+The DW3000 is at 8 MHz, so that clause never fires and the divider has no
+bearing on the SPI bus rate either way.
+
 ### `static void woz_hfclk_ensure_128mhz(void)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:27`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:49`
 
 @brief One-shot boost of the app-core HFCLK to 128 MHz for the DW3000 SPI bus.
 nRF5340-specific platform seam: the app core boots with HFCLK divided to
@@ -20,7 +34,7 @@ so this compiles to a no-op there. See docs/porting.md.
 **called by** `woz_uwb_bind_ursk`, `woz_uwb_prewarm`, `woz_uwb_start_aliro`
 
 ### `int woz_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:45`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:62`
 
 @brief Bind the CCC STS from the add-on-supplied plaintext URSK; returns 0 on success.
 @param ursk Pointer to the URSK bytes.
@@ -30,7 +44,7 @@ so this compiles to a no-op there. See docs/porting.md.
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:60`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:77`
 
 @brief Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
 @param c Configuration struct (channel, sync_code_index, ursk, ranging_config, sts_index0,
@@ -41,7 +55,7 @@ fails.
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `int woz_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:97`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:114`
 
 @brief Pre-apply the expected session PHY so the M4-time start skips dwt_configure.
 @param channel UWB channel the upcoming session is expected to negotiate.
@@ -51,26 +65,26 @@ fails.
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `void woz_uwb_stop(void)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:106`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:123`
 
 @brief Quiesce the radio and unbind the CCC STS shim.
 
 ### `bool woz_uwb_last_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:120`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:137`
 
 @brief Retrieve the last valid DS-TWR distance measurement in centimeters.
 @param cm_out Pointer to store the distance in cm.
 @return True if a valid range has been seen since initialization; false otherwise.
 
 ### `void woz_uwb_set_range_listener(void (*cb)(void))`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:138`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:155`
 
 @brief Register a callback fired after each accepted DS-TWR range latch.
 @param cb Callback invoked on the UWB RX path (keep it to a task wake), or NULL to clear.
 Without CONFIG_WOZ_ALIRO there is no range latch to observe and this is a no-op.
 
 ### `bool woz_uwb_trusted_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:147`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:164`
 
 Latest distance in cm, gated by the range-integrity consensus (layer 4):
 true only when a valid range has been seen AND it is trusted
