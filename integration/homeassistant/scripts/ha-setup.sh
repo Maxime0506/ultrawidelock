@@ -29,7 +29,7 @@ fail() { printf 'ha-setup: %s\n' "$1" >&2; exit 1; }
 
 # 1. Prerequisites -----------------------------------------------------------
 step 1 'checking prerequisites'
-for tool in openssl ssh scp; do
+for tool in openssl ssh scp python3; do
 	command -v "$tool" >/dev/null || fail "$tool is required but not installed"
 done
 command -v openaliro-ha >/dev/null ||
@@ -81,10 +81,38 @@ if [ -z "${MQTT_PASSWORD:-}" ]; then
 	printf '\n' >&2
 fi
 [ -n "$MQTT_PASSWORD" ] || fail 'an MQTT password is required'
-ssh -o BatchMode=yes "$HA_SSH" \
-	"ha addons options core_mosquitto --options '$(printf '{"certfile":"openaliro-mqtt.crt","keyfile":"openaliro-mqtt.key","require_certificate":false,"logins":[{"username":"%s","password":"%s"}]}' "$MQTT_USER" "$MQTT_PASSWORD")'" \
-	>/dev/null
-ssh -o BatchMode=yes "$HA_SSH" 'ha addons restart core_mosquitto' >/dev/null
+# The `ha` CLI has no options subcommand on current releases, so go through the
+# Supervisor API. It replaces the option set wholesale and rejects a body that
+# omits a required key, so merge into whatever the add-on already has rather
+# than sending only the keys we care about. The body travels over stdin rather
+# than argv, which keeps the password out of the process list on the box.
+current_options="$(
+	ssh -o BatchMode=yes "$HA_SSH" 'curl -sS -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
+		http://supervisor/addons/core_mosquitto/info' |
+		python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["data"]["options"]))'
+)" || fail 'cannot read the current Mosquitto add-on options'
+options_result="$(
+	MQTT_USER="$MQTT_USER" MQTT_PASSWORD="$MQTT_PASSWORD" \
+		CURRENT_OPTIONS="$current_options" python3 -c '
+import json, os
+options = json.loads(os.environ["CURRENT_OPTIONS"])
+options.update({
+    "certfile": "openaliro-mqtt.crt",
+    "keyfile": "openaliro-mqtt.key",
+    "require_certificate": False,
+    "logins": [{"username": os.environ["MQTT_USER"], "password": os.environ["MQTT_PASSWORD"]}],
+})
+print(json.dumps({"options": options}))' |
+		ssh -o BatchMode=yes "$HA_SSH" 'curl -sS -X POST \
+			-H "Authorization: Bearer $SUPERVISOR_TOKEN" \
+			-H "Content-Type: application/json" \
+			-d @- http://supervisor/addons/core_mosquitto/options'
+)"
+case "$options_result" in
+*'"result": "ok"'* | *'"result":"ok"'*) ;;
+*) fail "the Mosquitto add-on rejected the options: $options_result" ;;
+esac
+ssh -o BatchMode=yes "$HA_SSH" 'ha apps restart core_mosquitto' >/dev/null
 printf '      waiting for the broker'
 for _ in $(seq 1 30); do
 	if openssl s_client -connect "$BROKER_HOST:$BROKER_PORT" -CAfile "$CERT" \
