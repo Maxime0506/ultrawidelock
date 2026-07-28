@@ -1,8 +1,11 @@
 import { afterEach, expect, test } from "bun:test"
+import type { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { App, CommandOutput, findRepositoryRoot, promptHintLine, promptHints, SerialTerminal, SidePane, WizardCard } from "../src/app"
+import { App, CommandOutput, findRepositoryRoot, promptHints, SerialTerminal, SidePane, WizardCard } from "../src/app"
+import { fitRule } from "../src/motion"
+import { theme } from "../src/theme"
 import { makeBoardState } from "../src/devices"
 import type { Job } from "../src/types"
 
@@ -85,7 +88,8 @@ test("shows the left-arrow shortcut when a wizard screen has a parent", async ()
         }}
         focused
         short={false}
-        pulse="·"
+        width={100}
+        chrome={theme.foreground}
         canGoBack
         onReady={() => undefined}
         onAction={() => undefined}
@@ -195,7 +199,9 @@ test("pane on restores the most recently selected side pane", async () => {
   await view.mockInput.typeText("pane off")
   view.mockInput.pressEnter()
   const closed = await view.waitForFrame((candidate) => !candidate.includes("No jobs in this session."))
-  expect(closed.split("\n").find((line) => line.includes("command output"))).toContain("Shift+PageUp/PageDown")
+  // Closing the pane puts the two primary panels back side by side, which shows
+  // up as both of their border labels sharing one row.
+  expect(closed.split("\n").find((line) => line.includes("command output"))).toContain("serial terminal")
 
   await view.mockInput.typeText("pane on")
   view.mockInput.pressEnter()
@@ -220,6 +226,8 @@ test("keeps command, serial, and job output in separate panes", async () => {
       <CommandOutput
         activity={[{ timestamp: 0, kind: "message", severity: "info", text: "command-only-sentinel" }]}
         showHelp
+        width={76}
+        chrome={theme.line}
         onReady={() => undefined}
       />
     ),
@@ -240,6 +248,8 @@ test("keeps command, serial, and job output in separate panes", async () => {
       <SerialTerminal
         board={board}
         serialLines={["openaliro> ", "serial-only-sentinel"]}
+        width={76}
+        chrome={theme.line}
         onReady={() => undefined}
       />
     ),
@@ -264,6 +274,7 @@ test("keeps command, serial, and job output in separate panes", async () => {
         jobs={[job]}
         capture={{ active: false, entries: [] }}
         compact={false}
+        width={90}
       />
     ),
     { width: 90, height: 18 }
@@ -279,7 +290,7 @@ test("an empty terminal buffer still reports an active serial connection", async
   board.connection = "connected"
   board.port = "/dev/example"
   const view = await testRender(
-    () => <SerialTerminal board={board} serialLines={[]} onReady={() => undefined} />,
+    () => <SerialTerminal board={board} serialLines={[]} width={76} chrome={theme.line} onReady={() => undefined} />,
     { width: 76, height: 12 }
   )
   teardown = () => view.renderer.destroy()
@@ -301,6 +312,7 @@ test("renders captured commissioning data in the dedicated pairing pane", async 
         jobs={[]}
         capture={{ active: false, entries: [] }}
         compact={false}
+        width={52}
       />
     ),
     { width: 52, height: 26 }
@@ -356,20 +368,117 @@ test("reports rather than guesses when it is started outside a checkout", () => 
 })
 
 test("the prompt hint keeps the commands that matter when the terminal is narrow", () => {
-  // The strip is truncated from the tail, so this pins the ranking, not the text.
-  const narrow = promptHintLine(76)
-  expect(narrow.length).toBeLessThanOrEqual(76)
+  // The rule is truncated from the tail, so this pins the ranking, not the text.
+  const narrow = fitRule(promptHints, 80)
   for (const hint of ["? help", "quit", "connect", "build", "flash", "factoryreset"]) {
     expect(narrow).toContain(hint)
   }
 
-  const wide = promptHintLine(200)
-  expect(wide.split(" · ")).toEqual(promptHints)
-  // Never truncate mid-entry: every width must yield a clean separator list.
+  expect(fitRule(promptHints, 200).trim().split(" · ")).toEqual(promptHints)
+  // A border title longer than the box is dropped by OpenTUI rather than
+  // clipped, so overshooting the capacity loses the whole rule. Every width has
+  // to stay inside it, and never truncate mid-entry.
   for (let width = 6; width <= 200; width++) {
-    const line = promptHintLine(width)
-    expect(line.length).toBeLessThanOrEqual(width)
-    if (line !== "") expect(promptHints).toContain(line.split(" · ").at(-1) ?? "")
+    const line = fitRule(promptHints, width)
+    expect(line.length).toBeLessThanOrEqual(width - 4)
+    if (line !== "") expect(promptHints).toContain(line.trim().split(" · ").at(-1) ?? "")
   }
-  expect(promptHintLine(3)).toBe("")
+  expect(fitRule(promptHints, 8)).toBe("")
 })
+
+test("every panel keeps its label in the border rule at both terminal shapes", async () => {
+  for (const [width, height] of [
+    [80, 24],
+    [120, 36]
+  ] as const) {
+    const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width, height })
+    teardown = () => view.renderer.destroy()
+    await view.renderOnce()
+    const frame = view.captureCharFrame()
+    // OpenTUI drops an over-long title outright, so a missing label here is the
+    // symptom of a rule fitted to a width the panel does not actually have.
+    for (const label of ["command output", "serial terminal", "guided setup", "TUI command"]) {
+      expect(frame).toContain(label)
+    }
+    expect(frame).toContain("╭─")
+    expect(frame).toContain("╰─")
+    view.renderer.destroy()
+  }
+})
+
+test("moving the chrome into the borders gives the rows back to content", async () => {
+  // Before the labels moved into the rules, 80x24 showed zero lines of command
+  // output and 120x36 showed eight. Those are the numbers these floors defend.
+  for (const [width, height, floor] of [
+    [80, 24, 2],
+    [120, 36, 12]
+  ] as const) {
+    const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width, height })
+    teardown = () => view.renderer.destroy()
+    await view.renderOnce()
+    const lines = view.captureCharFrame().split("\n")
+    const top = lines.findIndex((line) => line.includes("command output"))
+    const bottom = lines.findIndex((line, index) => index > top && line.includes("PageUp/PageDown"))
+    expect(top).toBeGreaterThanOrEqual(0)
+    expect(bottom - top - 1).toBeGreaterThanOrEqual(floor)
+    view.renderer.destroy()
+  }
+})
+
+test("an idle workspace is completely still", async () => {
+  const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width: 120, height: 36 })
+  teardown = () => view.renderer.destroy()
+  // Past the first-draw stagger and the startup inventory check, nothing is
+  // running, so nothing may move. The old always-on pulse failed this.
+  await new Promise((resolve) => setTimeout(resolve, 900))
+  await view.renderOnce()
+  const first = view.captureCharFrame()
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  await view.renderOnce()
+  expect(view.captureCharFrame()).toBe(first)
+  expect(first).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)
+}, 15_000)
+
+test("the animation clock is attached, so the first draw settles instead of freezing", async () => {
+  // Neither @opentui/core nor @opentui/solid attaches the timeline engine, so a
+  // missing attachMotion() does not throw, it just stops every animation where
+  // it started. The entrance begins at the foreground colour and eases down to
+  // the resting rule, which makes the settled value the detector: without a
+  // clock this border stays bright forever.
+  const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width: 120, height: 36 })
+  teardown = () => view.renderer.destroy()
+  const borderColor = () => {
+    for (const line of view.captureSpans().lines as unknown as { spans: { text: string; fg: RGBA }[] }[]) {
+      for (const span of line.spans) if (span.text.startsWith("╭")) return span.fg.toInts().join(",")
+    }
+    return "no border found"
+  }
+  await new Promise((resolve) => setTimeout(resolve, 600))
+  await view.renderOnce()
+  expect(borderColor()).toBe(theme.line.toInts().join(","))
+  expect(borderColor()).not.toBe(theme.foreground.toInts().join(","))
+}, 15_000)
+
+test("panel labels survive every side-pane layout", async () => {
+  // panelWidths mirrors the flex rules by hand, so this is the test that catches
+  // it drifting: an overestimate makes OpenTUI drop the label entirely, and the
+  // jobs pane takes half the row while the others take a fixed column.
+  for (const [pane, width] of [
+    ["pane jobs", 120],
+    ["pane diagnostics", 120],
+    ["pane overview", 90]
+  ] as const) {
+    const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width, height: 40 })
+    teardown = () => view.renderer.destroy()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    view.mockInput.pressTab()
+    await view.waitForFrame((candidate) => candidate.includes("TUI command mode"))
+    await view.mockInput.typeText(pane)
+    view.mockInput.pressEnter()
+    const frame = await view.waitForFrame((candidate) => candidate.includes(pane.replace("pane ", "")))
+    for (const label of ["command output", "serial terminal", "pane off"]) {
+      expect(frame).toContain(label)
+    }
+    view.renderer.destroy()
+  }
+}, 30_000)

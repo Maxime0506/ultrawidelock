@@ -1,4 +1,4 @@
-import type { InputRenderable, KeyEvent, ScrollBoxRenderable, SelectRenderable, TabSelectRenderable } from "@opentui/core"
+import type { InputRenderable, KeyEvent, RGBA, ScrollBoxRenderable, SelectRenderable, TabSelectRenderable } from "@opentui/core"
 import { ErrorCorrectionLevel, registerQRCode } from "@opentui/qrcode/solid"
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js"
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
@@ -6,10 +6,21 @@ import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { adapters, commands, makeBoardState } from "./devices"
 import { JobRunner } from "./jobs"
+import {
+  attachMotion,
+  createEntrance,
+  createFade,
+  createPulse,
+  createSpinner,
+  fitRule,
+  panelColumns,
+  panelWidths,
+  type SideMode
+} from "./motion"
 import { discoverSerialPortInfo, PosixSerialTransport, type SerialPortInfo } from "./serial"
 import { inspectTarget, preferredAvailablePort, targetIds, targets, type TargetSnapshot } from "./targets"
 import { SerialTerminalBuffer } from "./terminal"
-import { severityColor, theme } from "./theme"
+import { attrs, panelChrome, settle, severityColor, theme } from "./theme"
 import type { BoardId, BoardState, Job, JobState, LogEntry, Severity } from "./types"
 import { isDestructive, wizardBackAction, wizardView, type DestructiveAction, type WizardAction, type WizardStage } from "./wizard"
 
@@ -78,11 +89,11 @@ const workspaceViewCommands: HelpRow[] = [
 ]
 
 // Ranked by what a stuck user needs first, not by grouping: the strip is one
-// line and gets truncated from the tail, so the order decides what survives on a
-// narrow terminal. `? help` and `quit` lead because they are the two ways out of
-// anything. `factoryreset` sits with the other board-changing commands rather
-// than only in `? help`, so a command that unpairs the lock is discoverable
-// before someone needs to go looking for it.
+// border rule and gets truncated from the tail, so the order decides what
+// survives on a narrow terminal. `? help` and `quit` lead because they are the
+// two ways out of anything. `factoryreset` sits with the other board-changing
+// commands rather than only in `? help`, so a command that unpairs the lock is
+// discoverable before someone needs to go looking for it.
 export const promptHints = [
   "? help",
   "quit",
@@ -96,17 +107,6 @@ export const promptHints = [
   "pane on|off",
   "terminal clear"
 ]
-
-/** Longest ranked prefix of promptHints that fits in `width` columns. */
-export function promptHintLine(width: number): string {
-  let line = ""
-  for (const hint of promptHints) {
-    const next = line === "" ? hint : `${line} · ${hint}`
-    if (next.length > width) break
-    line = next
-  }
-  return line
-}
 
 const clock = (value: number): string =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -183,10 +183,21 @@ function HelpPanel() {
 export function CommandOutput(props: {
   activity: ActivityEntry[]
   showHelp: boolean
+  width: number
+  chrome: RGBA
+  /** 0 while the newest line is still arriving, 1 once it has settled to its resting colour. */
+  arrival?: number
   onReady: (output: ScrollBoxRenderable) => void
 }) {
-  const colorFor = (entry: ActivityEntry) =>
+  const restingColor = (entry: ActivityEntry) =>
     entry.kind === "message" && entry.severity === "info" ? theme.muted : severityColor[entry.severity]
+
+  // Only the newest line animates, so the cost of the arrival fade stays flat no
+  // matter how much has scrolled past.
+  const colorFor = (entry: ActivityEntry, newest: boolean) =>
+    newest && props.arrival !== undefined
+      ? settle(theme.foreground, restingColor(entry), props.arrival)
+      : restingColor(entry)
 
   const prefixFor = (entry: ActivityEntry) => {
     if (entry.kind === "command") return "> "
@@ -195,131 +206,113 @@ export function CommandOutput(props: {
     return ""
   }
 
+  const visible = () => props.activity.slice(-300)
+
   return (
-    <box
-      style={{
-        flexDirection: "column",
-        flexGrow: 1
+    <scrollbox
+      ref={(value) => {
+        value.verticalScrollBar.visible = true
+        props.onReady(value)
       }}
+      title={fitRule(["command output"], props.width)}
+      bottomTitle={fitRule(["PageUp/PageDown scroll"], props.width)}
+      bottomTitleAlignment="right"
+      style={{
+        flexGrow: 1,
+        ...panelChrome(props.chrome),
+        paddingLeft: 1,
+        paddingRight: 1
+      }}
+      stickyScroll={!props.showHelp}
+      stickyStart={props.showHelp || props.activity.length === 0 ? "top" : "bottom"}
+      viewportCulling
     >
-      <box
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          height: 1,
-          flexShrink: 0,
-          marginBottom: 1
-        }}
-      >
-        <text style={{ fg: theme.foreground }}>command output</text>
-        <text style={{ fg: theme.muted }}>PageUp/PageDown scroll</text>
-      </box>
-      <scrollbox
-        ref={(value) => {
-          value.verticalScrollBar.visible = true
-          props.onReady(value)
-        }}
-        style={{
-          flexGrow: 1,
-          border: true,
-          borderStyle: "single",
-          borderColor: theme.line,
-          paddingLeft: 1,
-          paddingRight: 1
-        }}
-        stickyScroll={!props.showHelp}
-        stickyStart={props.showHelp || props.activity.length === 0 ? "top" : "bottom"}
-        viewportCulling
-      >
-        <Show when={props.activity.length === 0 && !props.showHelp}>
-          <box style={{ flexDirection: "column" }}>
-            <text style={{ fg: theme.foreground }}>No TUI activity yet.</text>
-            <text style={{ fg: theme.muted }}>Commands, explanations, errors, and help render here.</text>
-            <text style={{ fg: theme.muted }}>Firmware traffic stays in the separate serial terminal.</text>
-          </box>
-        </Show>
-        <For each={props.activity.slice(-300)}>
-          {(entry) => (
-            <text style={{ fg: colorFor(entry) }}>
-              <span style={{ fg: theme.muted }}>{clock(entry.timestamp)} </span>
-              {prefixFor(entry)}
-              {entry.text}
-            </text>
-          )}
-        </For>
-        <Show when={props.showHelp}>
-          <HelpPanel />
-        </Show>
-      </scrollbox>
-    </box>
+      <Show when={props.activity.length === 0 && !props.showHelp}>
+        <box style={{ flexDirection: "column" }}>
+          <text style={{ fg: theme.foreground, attributes: attrs.strong }}>No TUI activity yet.</text>
+          <text style={{ fg: theme.muted }}>Commands, explanations, errors, and help render here.</text>
+          <text style={{ fg: theme.muted }}>Firmware traffic stays in the separate serial terminal.</text>
+        </box>
+      </Show>
+      <For each={visible()}>
+        {(entry, index) => (
+          <text
+            style={{
+              fg: colorFor(entry, index() === visible().length - 1),
+              attributes: entry.kind === "command" ? attrs.strong : attrs.none
+            }}
+          >
+            <span style={{ fg: theme.muted, attributes: attrs.subtle }}>{clock(entry.timestamp)} </span>
+            {prefixFor(entry)}
+            {entry.text}
+          </text>
+        )}
+      </For>
+      <Show when={props.showHelp}>
+        <HelpPanel />
+      </Show>
+    </scrollbox>
   )
 }
 
 export function SerialTerminal(props: {
   board: BoardState
   serialLines: string[]
+  width: number
+  chrome: RGBA
   onReady: (output: ScrollBoxRenderable) => void
 }) {
+  // Ranked so the state word survives on a narrow terminal and the scroll
+  // reminder is the first thing dropped: knowing the port is dead matters more
+  // than being reminded which key scrolls it.
+  const status = () =>
+    props.board.connection === "connected"
+      ? ["live", props.board.port ?? "serial", "115200 baud", "VT"]
+      : [props.board.connection, "Shift+PageUp/PageDown scroll"]
+
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1 }}>
-      <box
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          height: 1,
-          flexShrink: 0,
-          marginBottom: 1
-        }}
-      >
-        <text style={{ fg: theme.foreground }}>serial terminal</text>
-        <text style={{ fg: theme.muted }}>
-          {props.board.connection === "connected"
-            ? `live · ${props.board.port ?? "serial"} · 115200 baud · VT`
-            : `${props.board.connection} · Shift+PageUp/PageDown scroll`}
-        </text>
-      </box>
-      <scrollbox
-        ref={(value) => {
-          value.verticalScrollBar.visible = true
-          props.onReady(value)
-        }}
-        style={{
-          flexGrow: 1,
-          border: true,
-          borderStyle: "single",
-          borderColor: props.board.connection === "connected" ? theme.foreground : theme.line,
-          paddingLeft: 1,
-          paddingRight: 1
-        }}
-        stickyScroll
-        stickyStart={props.serialLines.length === 0 ? "top" : "bottom"}
-        viewportCulling
-      >
-        <Show when={props.serialLines.length === 0}>
-          <Show
-            when={props.board.connection === "connected"}
-            fallback={
-              <box style={{ flexDirection: "column" }}>
-                <text style={{ fg: theme.foreground }}>
-                  {props.board.connection === "connecting" ? "Opening serial console." : "No serial session."}
-                </text>
-                <text style={{ fg: theme.muted }}>Type connect below or choose Connect in the wizard.</text>
-                <text style={{ fg: theme.muted }}>Firmware boot logs, prompts, and command replies render only here.</text>
-              </box>
-            }
-          >
+    <scrollbox
+      ref={(value) => {
+        value.verticalScrollBar.visible = true
+        props.onReady(value)
+      }}
+      title={fitRule(["serial terminal"], props.width)}
+      bottomTitle={fitRule(status(), props.width)}
+      bottomTitleAlignment="right"
+      style={{
+        flexGrow: 1,
+        ...panelChrome(props.chrome),
+        paddingLeft: 1,
+        paddingRight: 1
+      }}
+      stickyScroll
+      stickyStart={props.serialLines.length === 0 ? "top" : "bottom"}
+      viewportCulling
+    >
+      <Show when={props.serialLines.length === 0}>
+        <Show
+          when={props.board.connection === "connected"}
+          fallback={
             <box style={{ flexDirection: "column" }}>
-              <text style={{ fg: theme.foreground }}>Serial console connected.</text>
-              <text style={{ fg: theme.muted }}>The emulated screen is empty. Type status to request fresh output.</text>
-              <text style={{ fg: theme.muted }}>New firmware logs and command replies will render here.</text>
+              <text style={{ fg: theme.foreground, attributes: attrs.strong }}>
+                {props.board.connection === "connecting" ? "Opening serial console." : "No serial session."}
+              </text>
+              <text style={{ fg: theme.muted }}>Type connect below or choose Connect in the wizard.</text>
+              <text style={{ fg: theme.muted }}>Firmware boot logs, prompts, and command replies render only here.</text>
             </box>
-          </Show>
+          }
+        >
+          <box style={{ flexDirection: "column" }}>
+            <text style={{ fg: theme.foreground, attributes: attrs.strong }}>Serial console connected.</text>
+            <text style={{ fg: theme.muted }}>The emulated screen is empty. Type status to request fresh output.</text>
+            <text style={{ fg: theme.muted }}>New firmware logs and command replies will render here.</text>
+          </box>
         </Show>
-        <box style={{ flexDirection: "column" }}>
-          <For each={props.serialLines}>{(line) => <text style={{ fg: theme.foreground }}>{line || " "}</text>}</For>
-        </box>
-      </scrollbox>
-    </box>
+      </Show>
+      <box style={{ flexDirection: "column" }}>
+        <For each={props.serialLines}>{(line) => <text style={{ fg: theme.foreground }}>{line || " "}</text>}</For>
+      </box>
+    </scrollbox>
   )
 }
 
@@ -357,34 +350,47 @@ export function WizardCard(props: {
   view: ReturnType<typeof wizardView>
   focused: boolean
   short: boolean
-  pulse: string
+  width: number
+  chrome: RGBA
+  /** Spinner plus elapsed seconds while a job runs, "" when the bench is idle. */
+  spinner?: string
+  /** 0 when the stage has just changed, 1 once its title has settled. */
+  arrival?: number
   canGoBack: boolean
   onReady: (select: SelectRenderable) => void
   onAction: (action: WizardAction) => void
 }) {
+  const chrome = () => (props.view.danger ? theme.danger : props.chrome)
+  const titleColor = () =>
+    props.view.danger ? theme.danger : settle(theme.muted, theme.foreground, props.arrival ?? 1)
+
+  // Ranked so the two ways out of a screen outlive the refinements when the rule
+  // runs short. The spinner leads only while it exists, because a running job is
+  // the one thing more urgent than knowing how to leave.
+  const hints = () => [
+    props.spinner ?? "",
+    "q close",
+    ...(props.canGoBack ? ["← back"] : []),
+    "↑↓ choose",
+    "Enter",
+    "Tab command"
+  ]
+
   return (
     <box
+      title={fitRule([props.view.eyebrow], props.width)}
+      bottomTitle={fitRule(hints(), props.width)}
       style={{
-        height: props.short ? 7 : 11,
+        height: props.short ? 6 : 10,
         flexShrink: 0,
         flexDirection: "column",
-        border: true,
-        borderStyle: "single",
-        borderColor: props.view.danger ? theme.danger : props.focused ? theme.foreground : theme.line,
+        ...panelChrome(chrome()),
         paddingLeft: 1,
         paddingRight: 1,
         marginTop: 1
       }}
     >
-      <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1, flexShrink: 0 }}>
-        <text style={{ fg: props.view.danger ? theme.danger : theme.muted }}>{props.view.eyebrow}</text>
-        <text style={{ fg: theme.muted }}>
-          {`${props.pulse} q close · ${props.canGoBack ? "← back · " : ""}↑↓ choose · Enter · Tab command`}
-        </text>
-      </box>
-      <text style={{ fg: props.view.danger ? theme.danger : theme.foreground, height: 1, flexShrink: 0 }}>
-        {props.view.title}
-      </text>
+      <text style={{ fg: titleColor(), attributes: attrs.strong, height: 1, flexShrink: 0 }}>{props.view.title}</text>
       <Show when={!props.short}>
         <text style={{ fg: theme.muted, height: 2, flexShrink: 0 }}>{props.view.detail}</text>
       </Show>
@@ -420,16 +426,17 @@ export function SidePane(props: {
   jobs: Job[]
   capture: CaptureSession
   compact: boolean
+  width: number
   onJobsReady?: (output: ScrollBoxRenderable) => void
 }) {
-  const title = () => (props.pane === "off" ? "" : props.pane)
   return (
     <box
+      title={fitRule([props.pane === "off" ? "" : props.pane], props.width)}
+      bottomTitle={fitRule(["pane off"], props.width)}
+      bottomTitleAlignment="right"
       style={{
         flexDirection: "column",
-        border: true,
-        borderStyle: "single",
-        borderColor: theme.line,
+        ...panelChrome(),
         paddingLeft: 1,
         paddingRight: 1,
         width: props.compact ? "100%" : props.pane === "jobs" ? "50%" : 42,
@@ -439,11 +446,6 @@ export function SidePane(props: {
         marginTop: props.compact ? 1 : 0
       }}
     >
-      <box style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <text style={{ fg: theme.foreground }}>{title()}</text>
-        <text style={{ fg: theme.muted }}>pane off</text>
-      </box>
-
       <Show when={props.pane === "overview"}>
         <text style={{ fg: theme.muted }}>{props.snapshot.setupDetail}</text>
         <text style={{ fg: theme.foreground }}>{`artifact  ${props.snapshot.artifact}`}</text>
@@ -488,7 +490,12 @@ export function SidePane(props: {
           <For each={props.jobs.slice().reverse()}>
             {(job) => (
               <box style={{ flexDirection: "column", marginBottom: 1 }}>
-                <text style={{ fg: job.state === "failed" ? theme.danger : job.state === "passed" ? theme.success : theme.foreground }}>
+                <text
+                  style={{
+                    fg: job.state === "failed" ? theme.danger : job.state === "passed" ? theme.success : theme.foreground,
+                    attributes: attrs.strong
+                  }}
+                >
                   {`${job.state} · ${job.label}`}
                 </text>
                 <text style={{ fg: theme.muted }}>{`$ ${job.command.join(" ")}`}</text>
@@ -569,7 +576,6 @@ export function App(
   const [activePane, setActivePane] = createSignal<PaneId>("off")
   const [lastPane, setLastPane] = createSignal<Exclude<PaneId, "off">>("diagnostics")
   const [capture, setCapture] = createSignal<CaptureSession>({ active: false, entries: [] })
-  const [pulseIndex, setPulseIndex] = createSignal(0)
   const [workflowClaimed, setWorkflowClaimed] = createSignal(false)
   const [workflowCancelled, setWorkflowCancelled] = createSignal(false)
   const transports = new Map<BoardId, PosixSerialTransport>()
@@ -598,6 +604,23 @@ export function App(
   const short = createMemo(() => dimensions().height < 32)
   const primaryStacked = createMemo(() => compact() || activePane() !== "off")
   const runningJob = createMemo(() => jobs().find((job) => job.state === "running" || job.state === "queued"))
+  const sideMode = createMemo<SideMode>(() =>
+    activePane() === "off" ? "none" : activePane() === "jobs" ? "half" : "fixed"
+  )
+  // One source of truth for how wide each panel ends up. Border titles are props,
+  // so they have to be fitted before layout runs, and the serial buffer has to be
+  // reflowed to the same number or its lines wrap inside a box that had room.
+  const widths = createMemo(() => panelWidths(dimensions().width, sideMode(), compact(), primaryStacked()))
+
+  // Motion. Every one of these rests at its settled value, so a build with no
+  // animation clock still renders the correct screen rather than a blank one.
+  const [entranceOutput, entranceSerial, entranceWizard, entrancePrompt] = createEntrance(4)
+  const wizardFocus = createFade(theme.line, theme.foreground)
+  const promptFocus = createFade(theme.line, theme.foreground)
+  const serialFocus = createFade(theme.line, theme.foreground)
+  const stageArrival = createPulse()
+  const lineArrival = createPulse(400)
+  const spinner = createSpinner(() => Boolean(runningJob()))
   const activeWorkflowState = createMemo<JobState | undefined>(() => runningJob()?.state ?? (workflowClaimed() ? "queued" : undefined))
   const workflowBusy = () => activeWorkflowState() !== undefined
   const wizardContext = createMemo(() => ({
@@ -1390,20 +1413,33 @@ export function App(
   })
 
   createEffect(() => {
-    const width = dimensions().width
-    const pane = activePane()
-    const available =
-      compact() ? width - 4 : pane === "off" ? Math.floor(width / 2) - 4 : pane === "jobs" ? Math.floor(width / 2) - 3 : width - 47
-    const columns = Math.max(40, available)
+    const columns = Math.max(40, panelColumns(widths().serial))
     for (const id of targetIds) {
       const lines = terminals.get(id)?.resize(columns) ?? []
       setSerialLines((current) => ({ ...current, [id]: lines }))
     }
   })
 
+  // Motion is driven from state, never from the handlers that change it, so a
+  // stage reached by keyboard, by command, or by a finished job all animate the
+  // same way and no new path can forget to.
+  createEffect(() => wizardFocus.settle(focusArea() === "wizard"))
+  createEffect(() => promptFocus.settle(focusArea() === "command"))
+  createEffect(() => serialFocus.settle(selected().connection === "connected"))
+  createEffect((previous) => {
+    const stage = wizardStage()
+    if (previous !== undefined && previous !== stage) stageArrival.restart()
+    return stage
+  })
+  createEffect((previous) => {
+    const newest = activity().at(-1)
+    if (previous !== undefined && previous !== newest) lineArrival.restart()
+    return newest
+  })
+
   onMount(() => {
     const unsubscribe = runner.onChange(setJobs)
-    const pulse = setInterval(() => setPulseIndex((index) => (index + 1) % 4), 280)
+    const detachMotion = attachMotion(renderer)
     renderer.keyInput.on("keypress", handleGlobalKey)
     if (!repository.found) {
       report(
@@ -1417,7 +1453,7 @@ export function App(
     focusWizard()
     onCleanup(() => {
       disposed = true
-      clearInterval(pulse)
+      detachMotion()
       renderer.keyInput.off("keypress", handleGlobalKey)
       runner.cancelAll()
       closeAllTransports()
@@ -1437,8 +1473,10 @@ export function App(
           marginBottom: short() ? 0 : 1
         }}
       >
-        <text style={{ fg: theme.foreground }}>openaliro</text>
-        <text style={{ fg: theme.muted }}>{`${["·", "∙", "•", "∙"][pulseIndex()]} ${selected().label} · ${selected().connection}`}</text>
+        <text style={{ fg: theme.foreground, attributes: attrs.strong }}>openaliro</text>
+        <text style={{ fg: theme.muted }}>
+          {`${spinner() ? `${spinner()} · ` : ""}${selected().label} · ${selected().connection}`}
+        </text>
       </box>
 
       <tab_select
@@ -1472,6 +1510,9 @@ export function App(
             <CommandOutput
               activity={activity()}
               showHelp={showHelp()}
+              width={widths().output}
+              chrome={settle(theme.foreground, theme.line, entranceOutput())}
+              arrival={lineArrival.progress()}
               onReady={(value) => (commandOutput = value)}
             />
           </box>
@@ -1488,6 +1529,8 @@ export function App(
             <SerialTerminal
               board={selected()}
               serialLines={serialLines()[activeBoard()]}
+              width={widths().serial}
+              chrome={settle(theme.foreground, serialFocus.color(), entranceSerial())}
               onReady={(value) => (serialOutput = value)}
             />
           </box>
@@ -1500,6 +1543,7 @@ export function App(
             jobs={jobs()}
             capture={capture()}
             compact={compact()}
+            width={widths().side}
             onJobsReady={(value) => (jobsOutput = value)}
           />
         </Show>
@@ -1510,57 +1554,53 @@ export function App(
           view={currentWizardView()}
           focused={focusArea() === "wizard"}
           short={short()}
-          pulse={runningJob() ? ["∙", "•", "∙", "·"][pulseIndex()] : "·"}
+          width={widths().full}
+          chrome={settle(theme.foreground, wizardFocus.color(), entranceWizard())}
+          spinner={spinner()}
+          arrival={stageArrival.progress()}
           canGoBack={Boolean(currentBackAction())}
           onReady={(value) => (wizardSelect = value)}
           onAction={handleWizardAction}
         />
       </Show>
 
-      <box style={{ flexDirection: "column", height: short() ? 4 : 5, flexShrink: 0, marginTop: 1 }}>
-        <box style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <text style={{ fg: theme.muted }}>
-            {selected().connection === "connected"
-              ? `${selected().label} firmware shell`
-              : `${selected().label} · TUI command`}
-          </text>
-          <text style={{ fg: focusArea() === "command" ? theme.foreground : theme.muted }}>
-            {focusArea() === "command"
+      <box
+        title={fitRule(
+          [
+            selected().connection === "connected" ? `${selected().label} firmware shell` : `${selected().label} · TUI command`,
+            focusArea() === "command"
               ? selected().connection === "connected"
                 ? "unknown commands go directly to firmware"
                 : "TUI command mode"
-              : "Tab to type"}
-          </text>
-        </box>
-        <box
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            height: 3,
-            border: true,
-            borderStyle: "single",
-            borderColor: focusArea() === "command" ? theme.foreground : theme.line,
-            paddingLeft: 1,
-            paddingRight: 1
-          }}
-        >
-          <text style={{ fg: theme.muted, marginRight: 1 }}>{">"}</text>
-          <input
-            ref={(value) => (input = value)}
-            value={prompt()}
-            placeholder={selected().connection === "connected" ? "firmware command or ? for TUI help" : "connect, wizard, or ? for help"}
-            placeholderColor={theme.muted}
-            textColor={theme.foreground}
-            focusedTextColor={theme.foreground}
-            style={{ flexGrow: 1 }}
-            focused={focusArea() === "command"}
-            onInput={setPrompt}
-            on:enter={submitPrompt}
-          />
-        </box>
-        <Show when={!short()}>
-          <text style={{ fg: theme.muted }}>{promptHintLine(dimensions().width - 4)}</text>
-        </Show>
+              : "Tab to type"
+          ],
+          widths().full
+        )}
+        bottomTitle={fitRule(promptHints, widths().full)}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 3,
+          flexShrink: 0,
+          marginTop: 1,
+          ...panelChrome(settle(theme.foreground, promptFocus.color(), entrancePrompt())),
+          paddingLeft: 1,
+          paddingRight: 1
+        }}
+      >
+        <text style={{ fg: theme.muted, marginRight: 1 }}>{">"}</text>
+        <input
+          ref={(value) => (input = value)}
+          value={prompt()}
+          placeholder={selected().connection === "connected" ? "firmware command or ? for TUI help" : "connect, wizard, or ? for help"}
+          placeholderColor={theme.muted}
+          textColor={theme.foreground}
+          focusedTextColor={theme.foreground}
+          style={{ flexGrow: 1 }}
+          focused={focusArea() === "command"}
+          onInput={setPrompt}
+          on:enter={submitPrompt}
+        />
       </box>
     </box>
   )

@@ -39,6 +39,27 @@ needs no rebuild to recover from. ESP-IDF and esp-matter still follow their offi
 installation paths; the TUI detects and explains them but does not silently install
 toolchains outside this repository.
 
+## Visual direction
+
+The workspace imposes no colour scheme. Everything is drawn in the terminal's own default
+foreground and ANSI palette, so it inherits whatever theme is already set, including
+transparent backgrounds. Hierarchy comes from weight instead: bold marks the one thing that
+matters in a region, dim marks what supports it.
+
+Panel labels live in the border rule rather than on a row above it, and hints live in the
+bottom rule. That is worth knowing before editing a panel, because OpenTUI drops a border
+title that does not fit rather than clipping it. Every title goes through `fitRule` in
+`src/motion.ts`, which drops whole entries from the tail; a new one that skips it will
+silently render no label at all on a narrow terminal.
+
+Motion only ever reports that something changed. Focus moves and wizard stages ease over
+180 ms, new output settles over 400 ms, the panels stagger in once on launch, and a braille
+spinner with elapsed seconds appears only while a job runs. An idle workspace is completely
+still and schedules nothing. Animations change colour, never layout, and the only one that
+changes characters is the spinner, so a frame captured before anything moves is still a
+correct screen. Every animated value rests on the theme token rather than a blend, which is
+what keeps a settled panel at the terminal's real palette colour.
+
 ## Customize or add a board
 
 Board adapters live in `src/devices.ts`. An adapter declares its discovery hints, command
