@@ -44,7 +44,6 @@ LOG      ?=
 TAG      ?=
 MAXCM    ?= 40
 PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
-PRESENCE_TOKEN_OUT ?= $(REPO_ROOT)/build/openaliro-presence-token.zip
 
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
@@ -59,7 +58,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-token presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -218,11 +217,6 @@ verify:
 ##   Output: build/presence-runtime.tar.gz  ·  override with PRESENCE_RUNTIME_OUT=
 presence-runtime:
 	@python3 $(REPO_ROOT)/scripts/presence_runtime.py --output "$(PRESENCE_RUNTIME_OUT)"
-
-## presence-token: build the ad-hoc-signed macOS 26 CryptoTokenKit VM bundle
-##   Output: build/openaliro-presence-token.zip  ·  override with PRESENCE_TOKEN_OUT=
-presence-token:
-	@$(REPO_ROOT)/scripts/presence-token-build.sh "$(PRESENCE_TOKEN_OUT)"
 
 ## presence-verify: check a tag's presence assertion  ·  TAG=presence/1.2.0  (what CI runs)
 ##   Confirms a human was physically at the machine when the tag was made. Pure

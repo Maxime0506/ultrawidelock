@@ -2077,34 +2077,6 @@ workqueue, matching the upstream RFAL transport's threading.
 
 **used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
 
-## `host/macos-ctk/Extension/`
-
-### [`host/macos-ctk/Extension/PIVCodec.swift`](architecture/host.macos-ctk.Extension/PIVCodec.swift.md)
-
-*No module docstring. First commit: "piv: add macOS CryptoTokenKit UWB-only profile".*
-
-### [`host/macos-ctk/Extension/PIVTransport.swift`](architecture/host.macos-ctk.Extension/PIVTransport.swift.md)
-
-*No module docstring. First commit: "piv: add macOS CryptoTokenKit UWB-only profile".*
-
-### [`host/macos-ctk/Extension/Token.swift`](architecture/host.macos-ctk.Extension/Token.swift.md)
-
-*No module docstring. First commit: "piv: add macOS CryptoTokenKit UWB-only profile".*
-
-### [`host/macos-ctk/Extension/TokenDriver.swift`](architecture/host.macos-ctk.Extension/TokenDriver.swift.md)
-
-*No module docstring. First commit: "piv: add macOS CryptoTokenKit UWB-only profile".*
-
-### [`host/macos-ctk/Extension/TokenSession.swift`](architecture/host.macos-ctk.Extension/TokenSession.swift.md)
-
-*No module docstring. First commit: "piv: add macOS CryptoTokenKit UWB-only profile".*
-
-## `host/macos-ctk/Tests/`
-
-### [`host/macos-ctk/Tests/PIVCodecTests.swift`](architecture/host.macos-ctk.Tests/PIVCodecTests.swift.md)
-
-*No module docstring. First commit: "piv: add macOS CryptoTokenKit UWB-only profile".*
-
 ## `integration/homeassistant/scripts/`
 
 ### [`integration/homeassistant/scripts/ha-setup.sh`](architecture/integration.homeassistant.scripts/ha-setup.sh.md)
