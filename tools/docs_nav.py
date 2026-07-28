@@ -78,9 +78,13 @@ TITLE_RE = re.compile(r"<title>([^<]*)</title>")
 
 PAGER_CSS = """<style id="gv-pager-css">
 .gv-pager{display:flex;gap:.8rem;margin:2.6rem 0 .4rem;padding-top:1.4rem;border-top:1px solid var(--line)}
-.gv-pager a{flex:1;min-width:0;display:block;padding:.75rem .95rem;border:1px solid var(--line);border-radius:12px;background:var(--card);text-decoration:none;transition:border-color .15s,box-shadow .15s}
-.gv-pager a:hover{border-color:var(--tint-line);box-shadow:var(--shadow)}
-.gv-pager .gv-next{text-align:right}
+.gv-pager a{flex:1 1 0;min-width:0;max-width:calc(50% - .4rem);display:block;padding:.75rem .95rem;border:1px solid var(--line);border-radius:12px;background:var(--card);text-decoration:none;transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.gv-pager a:hover{border-color:var(--tint-line);box-shadow:var(--shadow);transform:translateY(-2px)}
+/* The first and last page of a journey have only one neighbour. Without the
+   cap above, that lone card stretched the full width with its text pinned to
+   one edge and a hand's width of empty card beside it. */
+.gv-pager .gv-next{text-align:right;margin-left:auto}
+@media (max-width:640px){.gv-pager a{max-width:none}}
 .gv-pager .gv-lab{display:block;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:.28rem}
 .gv-pager .gv-pt{display:block;font-weight:600;font-size:.92rem;color:var(--accent-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gv-pager .gv-ps{display:block;font-size:.76rem;color:var(--muted);margin-top:.18rem}

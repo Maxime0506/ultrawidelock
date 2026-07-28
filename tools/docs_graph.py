@@ -171,15 +171,29 @@ DETAIL_CAPTION = (
 # and every colored mark also carries its name as text, so color is never the
 # only channel. Node text keeps the theme ink — the border and wash carry
 # identity.
+# The disclosure arrow, as a stroked path: the "⌄" character it replaces was
+# drawn at a different weight and baseline by every platform.
+CHEV = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" '
+    'aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'
+)
+
+# Slot 1 leads on the site's own terracotta so the busiest cluster sits in the
+# theme rather than against it; the rest keep the spread that makes eight
+# clusters tellable apart. Re-stepped and re-checked as a set on both
+# surfaces — worst adjacent pair CVD dE 9.1 and normal-vision 22.9 in light,
+# 8.4 and 19.8 in dark, against thresholds of 8 and 15. Changing one entry
+# changes two adjacent pairs, so re-run the check over the whole tuple.
 PALETTE = (
+    ("#c9552b", "#d95926"),  # terracotta
     ("#2a78d6", "#3987e5"),  # blue
-    ("#eb6834", "#d95926"),  # orange
     ("#1baf7a", "#199e70"),  # aqua
     ("#eda100", "#c98500"),  # yellow
-    ("#e87ba4", "#d55181"),  # magenta
+    ("#8e4fb5", "#9085e9"),  # violet
     ("#008300", "#008300"),  # green
-    ("#4a3aa7", "#9085e9"),  # violet
-    ("#e34948", "#e66767"),  # red
+    ("#d1477a", "#d55181"),  # magenta
+    ("#4a3aa7", "#5f6fd0"),  # indigo
 )
 
 
@@ -233,6 +247,27 @@ def color_css(names: list[str], clusters: dict[str, set[str]]) -> str:
         f'@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{{dark}}}}}',
         ".gv-dot{display:inline-block;width:.55em;height:.55em;"
         "border-radius:50%;background:var(--c);margin-right:.4em}",
+        # Neutral defaults, first so the per-cluster rules below still win.
+        # mermaid is initialised from the generator's own theme variables,
+        # which are the palette this site no longer uses — and the modules
+        # that belong to no cluster get no rule of their own, so they came
+        # out as near-black boxes on paper. Everything is repainted from the
+        # theme tokens instead; only identity comes from the hues.
+        ".graph-shell .node rect,.graph-shell .node polygon,"
+        ".graph-shell .node circle{fill:var(--card)!important;"
+        "stroke:var(--tint-line)!important}",
+        ".graph-shell .node .nodeLabel,.graph-shell .node text,"
+        ".graph-shell .node span{color:var(--ink)!important;"
+        "fill:var(--ink)!important}",
+        ".graph-shell .cluster rect{fill:transparent!important;"
+        "stroke:var(--line)!important}",
+        ".graph-shell .cluster .nodeLabel,.graph-shell .cluster text,"
+        ".graph-shell .cluster span{color:var(--muted)!important;"
+        "fill:var(--muted)!important}",
+        ".graph-shell .edgePath path,.graph-shell path.flowchart-link"
+        "{stroke:var(--faint)!important}",
+        ".graph-shell marker path,.graph-shell .arrowheadPath"
+        "{fill:var(--faint)!important;stroke:none!important}",
     ]
     for i, c in enumerate(names):
         node_sel = ",".join(
@@ -409,7 +444,8 @@ GRP_CSS = """<style>
 .arch-grp .ag-name{font-family:var(--mono);font-weight:650;font-size:.92rem}
 .arch-grp .ag-dir{font-family:var(--mono);font-size:.72rem;color:var(--faint)}
 .arch-grp .ag-n{margin-left:auto;font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums}
-.arch-grp .ag-chev{color:var(--faint);transition:transform .2s;line-height:.6}
+.arch-grp .ag-chev{flex:none;display:grid;place-items:center;color:var(--faint);transition:transform .2s ease}
+.arch-grp .ag-chev svg{width:1rem;height:1rem}
 .arch-grp[open] .ag-chev{transform:rotate(180deg)}
 .arch-grp .ag-body{padding:.1rem 1rem .8rem;border-top:1px solid var(--hairline)}
 .arch-grp[open] .ag-body{animation:ag-in .25s cubic-bezier(.2,.7,.2,1) both}
@@ -469,7 +505,7 @@ def group_sections(page: str, slots: dict[str, int]) -> tuple[str, int]:
             f'<span class="ag-name">{c}</span>'
             f'<span class="ag-dir">{prefix}</span>'
             f'<span class="ag-n">{len(mods)} module{"s" if len(mods) != 1 else ""}</span>'
-            f'<span class="ag-chev">&#8964;</span></summary>'
+            f'<span class="ag-chev">{CHEV}</span></summary>'
             f'<div class="ag-body"><ul class="rows">\n{rows}\n</ul></div></details>'
         )
     page = page.replace('<div class="arch">', '<div class="arch">\n' + "\n".join(out), 1)

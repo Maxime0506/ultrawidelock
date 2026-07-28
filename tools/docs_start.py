@@ -79,20 +79,25 @@ ICONS = {
     "radio": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4m8.4 0a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2m14.2 0a10 10 0 0 1 0 14.2"/></svg>',
     "branch": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="9" r="2.2"/><path d="M6 7.2v9.6M18 11.2c0 3-3 4-6 4"/></svg>',
     "bolt": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5z"/></svg>',
+    # The disclosure arrows were the "⌄" character, which every platform draws
+    # at a different weight and baseline; a stroked path is the same everywhere.
+    "chev": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
 }
 
 STYLE = """<style>
 .paths{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:1.1rem 0 2rem}
 @media(max-width:860px){.paths{grid-template-columns:1fr}}
-.path{border:1px solid var(--line);border-radius:14px;background:var(--card);transition:border-color .15s,box-shadow .15s}
-.path:hover{border-color:var(--tint-line)}
-.path[open]{grid-column:1/-1;border-color:var(--tint-line);box-shadow:var(--shadow)}
+.path{border:1px solid var(--line);border-radius:16px;background:var(--card);transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.path:hover{border-color:var(--tint-line);box-shadow:var(--shadow);transform:translateY(-2px)}
+.path[open],.path[open]:hover{grid-column:1/-1;border-color:var(--tint-line);box-shadow:var(--shadow);transform:none}
 .path summary{display:flex;align-items:center;gap:.85rem;padding:.95rem 1.05rem;cursor:pointer;list-style:none}
 .path summary::-webkit-details-marker{display:none}
 .p-ico{flex:none;display:grid;place-items:center;width:2.2rem;height:2.2rem;border-radius:10px;background:var(--tint);color:var(--accent-ink)}
 .p-ico svg{width:1.15rem;height:1.15rem}
-.p-t{min-width:0}.p-t b{display:block;font-size:.95rem}.p-t small{display:block;color:var(--muted);font-size:.78rem;margin-top:.12rem}
-.p-chev{margin-left:auto;color:var(--faint);transition:transform .22s;font-size:.9rem}
+.p-t{min-width:0}.p-t b{display:block;font-size:.95rem;color:var(--strong)}.p-t small{display:block;color:var(--muted);font-size:.78rem;margin-top:.12rem}
+.p-chev{flex:none;margin-left:auto;display:grid;place-items:center;color:var(--faint);transition:transform .22s ease,color .16s ease}
+.p-chev svg{width:1.05rem;height:1.05rem}
+.path:hover .p-chev{color:var(--accent-ink)}
 .path[open] .p-chev{transform:rotate(180deg)}
 .p-body{padding:.2rem 1.05rem 1rem;border-top:1px solid var(--hairline)}
 .path[open] .p-body{animation:p-in .28s cubic-bezier(.2,.7,.2,1) both}
@@ -100,8 +105,10 @@ STYLE = """<style>
 .p-sub{border:1px solid var(--hairline);border-radius:10px;margin:.6rem 0;background:var(--surface)}
 .p-sub summary{padding:.55rem .8rem;font-size:.85rem;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center}
 .p-sub summary::-webkit-details-marker{display:none}
-.p-sub summary::after{content:"⌄";margin-left:auto;color:var(--faint);line-height:.5;transition:transform .2s}
-.p-sub[open] summary::after{transform:rotate(180deg)}
+.p-sub summary::after{content:"";margin-left:auto;flex:none;width:.62rem;height:.62rem;
+  border-right:1.6px solid var(--faint);border-bottom:1.6px solid var(--faint);border-radius:1px;
+  transform:translateY(-.14rem) rotate(45deg);transition:transform .2s ease}
+.p-sub[open] summary::after{transform:translateY(.08rem) rotate(225deg)}
 .p-sub .s-body{padding:.1rem .8rem .75rem;font-size:.88rem;color:var(--muted)}
 .p-sub .s-body p{margin:.45rem 0}
 .p-body .cmdchip{margin:.5rem 0;max-width:none}
@@ -241,7 +248,7 @@ def main_html(gh: str) -> str:
     cards = "".join(
         f'<details class="path"><summary><span class="p-ico">{ICONS[ico]}</span>'
         f'<span class="p-t"><b>{title}</b><small>{sub}</small></span>'
-        f'<span class="p-chev">&#8964;</span></summary>'
+        f'<span class="p-chev">{ICONS["chev"]}</span></summary>'
         f'<div class="p-body">{body}</div></details>'
         for ico, title, sub, body in tracks
     )

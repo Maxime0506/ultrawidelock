@@ -12,6 +12,7 @@
 | [`tools/docs_flash.py`](docs_flash.md) | Publish the browser flasher: site/flash/ = the web-flasher/ page + firmware. |
 | [`tools/docs_github.py`](docs_github.md) | Point the rendered site back at its GitHub repository. |
 | [`tools/docs_graph.py`](docs_graph.md) | Make the architecture page's dependency graph legible. |
+| [`tools/docs_hero.py`](docs_hero.md) | Stage the site: a cinematic landing hero, and a reveal layer everywhere. |
 | [`tools/docs_links.py`](docs_links.md) | Repair cross-document links in the rendered site, then assert none are left broken. |
 | [`tools/docs_media.py`](docs_media.md) | Add the repo's imagery to the rendered site: demo screenshots and a share card. |
 | [`tools/docs_nav.py`](docs_nav.md) | Give the rendered site one curated reading order. |
