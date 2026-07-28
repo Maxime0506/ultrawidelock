@@ -39,7 +39,7 @@ void ha_mqtt_start_once(void);
 
 /** Queue one conditioned approach distance, in centimetres (the estimate the
  *  unlock thresholds act on, not a raw block). Never blocks: a full queue drops
- *  the sample. Rate-limited to the agent's own cadence before it is queued. */
+ *  the sample. Rate-limited to the agent's own interval before it is queued. */
 void ha_mqtt_publish_distance_cm(int32_t cm);
 
 /** Queue one credential-independent access verdict. Never blocks: a full queue

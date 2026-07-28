@@ -72,6 +72,7 @@ clear message; `FORCE=1` stops the holder first.
 | `aliro trust` | persist the last-presented credential as trusted |
 | `aliro clear` | empty the trust store, keeping the reader identity |
 | `hamqtt` | provision the Home Assistant broker (only with `CONFIG_ENABLE_HA_MQTT`) |
+| `commission [close]` | open a BLE commissioning window, keeping the fabrics you have |
 | `factoryreset` | erase all Matter state and reboot |
 | `help`, `clear` | REPL built-ins |
 
@@ -99,6 +100,25 @@ phone is still standing there.
 
 The onboard WS2812 on GPIO48 shows bolt state: dark when locked, blue when opened by
 Aliro, green when opened any other way.
+
+### Recovering a lock you cannot reach
+
+A commissioned board does not advertise commissionable, so no controller can start BLE
+commissioning with it; and if it has no working network, no controller can reach it over
+IP to open a window either. `commission` is the way out of that corner. It opens a basic
+window, so a controller can re-push Wi-Fi credentials through the NetworkCommissioning
+cluster or add a fabric, keeping the fabrics already there. A long press on the BOOT
+button (GPIO 0, 5 s) does the same thing with no console attached. `commission close`
+ends the window early; it also expires on its own.
+
+Reach for this instead of `factoryreset`, which additionally clears the Aliro reader
+identity and trust store and so costs every phone its key.
+
+Two things to know. The shared NimBLE host has one legacy advertiser and the reader only
+takes it once Matter releases it, so **walk-up stops while a window is open**, until it
+closes or the board reboots; the command says so when you run it. And press BOOT only
+while the firmware is running, never across a reset, because GPIO 0 is also the
+bootloader strap.
 
 ## Configuration worth knowing
 

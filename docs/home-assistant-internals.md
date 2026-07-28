@@ -96,7 +96,19 @@ strand the entities.
 
 `ports/esp32/apps/matter-lock/main/ha_mqtt.c`, behind `CONFIG_ENABLE_HA_MQTT`
 (default n), publishes those five topics from the board, so the ESP32 needs no
-agent. It is a reimplementation of `mqtt.py`, not a shared one, and the two must
+agent. Build it with `make build HAMQTT=1`, which layers
+`sdkconfig.defaults.hamqtt` on top of the usual defaults; that fragment also
+carries the mbedTLS record sizing and the Wi-Fi IRAM reclaim a TLS session needs
+on this target, and says why each is there.
+
+Turning the option on selects `CONFIG_WOZ_ALIRO_ACCESS_LISTENER` in the reader
+component, which compiles `aliro_reader_set_access_listener()` and the notify
+points on the credential trust gate. There is no reason to set that by hand. It
+is a separate symbol only so the default image pays nothing for it: with it
+unset the reader object is byte-for-byte what it was, which
+`tests/host/test_ha_mqtt.py` and the release build both depend on.
+
+It is a reimplementation of `mqtt.py`, not a shared one, and the two must
 be changed together:
 
 | Held in step | Where |

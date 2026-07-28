@@ -26,7 +26,7 @@ needed for a dry run.
 ## API
 
 ### `parse_line(line: str) -> Optional[dict]`
-`integration/homeassistant/aliro_mqtt_bridge.py:44`
+`integration/homeassistant/aliro_mqtt_bridge.py:50`
 
 Return a reading dict for a range or access line, else None.
 
@@ -35,29 +35,29 @@ patterns are searched for rather than anchored.
 
 **called by** `main`
 
-### `discovery_payloads(node: str) -> list[tuple[str, dict]]`
-`integration/homeassistant/aliro_mqtt_bridge.py:75`
+### `discovery_payloads(node: str, model: str=DEFAULT_MODEL) -> list[tuple[str, dict]]`
+`integration/homeassistant/aliro_mqtt_bridge.py:81`
 
 Return (topic, config) pairs announcing both entities to Home Assistant.
 
 **called by** `main`
 
 ### `reading_to_message(node: str, reading: dict) -> tuple[str, str]`
-`integration/homeassistant/aliro_mqtt_bridge.py:112`
+`integration/homeassistant/aliro_mqtt_bridge.py:118`
 
 Map a parsed reading to the (topic, payload) that carries it.
 
 **called by** `main`
 
 ### `open_lines(port: str, baud: int) -> Iterator[str]`
-`integration/homeassistant/aliro_mqtt_bridge.py:120`
+`integration/homeassistant/aliro_mqtt_bridge.py:126`
 
 Yield console lines from stdin ('-') or from a serial port.
 
 **called by** `main`
 
 ### `main() -> int`
-`integration/homeassistant/aliro_mqtt_bridge.py:135`
+`integration/homeassistant/aliro_mqtt_bridge.py:141`
 
 Parse a serial line or read lines from stdin ('-'), decode range and access readings, publish to MQTT (or stdout in dry-run mode), and notify Home Assistant via discovery payloads; return 0 on clean exit or KeyboardInterrupt.
 
