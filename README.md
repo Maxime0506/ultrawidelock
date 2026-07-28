@@ -27,6 +27,10 @@ git clone https://github.com/asxeem/openaliro.git
 cd openaliro
 ```
 
+Prefer a guided path? Install [Bun](https://bun.sh), then run `make openaliro` for a
+walkthrough of bootstrap, build, flash, pairing, and diagnostics with a live serial
+console. Details in [`tools/tui/`](tools/tui/README.md).
+
 ### nRF5340 DK
 
 Primary hardware: nRF5340 DK + DWM3000EVB/DW3110 + X-NUCLEO-NFC12A1/ST25R300.

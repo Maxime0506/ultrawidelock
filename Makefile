@@ -59,7 +59,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-token presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-token presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -126,6 +126,10 @@ pretty:
 	@$(ENV) PRETTY=1 ./scripts/build.sh build
 
 ##@ Test
+## tui-test: run the OpenTUI source tests (no hardware required)
+tui-test:
+	@cd $(REPO_ROOT)/tools/tui && bun run test
+
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
 test:
 	@$(REPO_ROOT)/tests/host/run.sh
@@ -299,6 +303,28 @@ flash-erase:
 	@$(ENV) ./scripts/build.sh flash-erase
 
 ##@ Monitor
+## tui-setup: install pinned OpenTUI dependencies and build its local bundle
+tui-setup:
+	@command -v bun >/dev/null 2>&1 || { printf '  Bun 1.3+ is required  ·  https://bun.sh\n' >&2; exit 1; }
+	@cd $(REPO_ROOT)/tools/tui && bun install --os='*' --cpu='*' && bun run build
+
+## openaliro: start the guided bench  ·  installs its pinned TUI dependencies on first run
+openaliro:
+	@command -v bun >/dev/null 2>&1 || { \
+	  printf '\n  The guided OpenAliro bench needs Bun 1.3 or newer.\n'; \
+	  printf '  Install Bun, then run this exact command again:  make openaliro\n'; \
+	  printf '  Installation guide: https://bun.sh\n\n'; exit 1; }
+	@cd $(REPO_ROOT)/tools/tui && { \
+	  [ -d node_modules ] || { printf '  First run: preparing the guided bench…\n'; bun install --os='*' --cpu='*'; }; \
+	  bun run dev; }
+
+## tui: compatibility alias for `make openaliro`
+tui: openaliro
+
+## tui-release: build reproducible macOS arm64 + Linux x64 TUI executables
+tui-release:
+	@cd $(REPO_ROOT)/tools/tui && bun install --os='*' --cpu='*' && bun run release
+
 ## term: interactive serial console — live logs + typeable shell (tio, 115200 8N1)
 ##   Auto-detects the nRF5340DK console (VCOM1).  ctrl-t q quits.  Type `help` for shell commands.
 ##   Override: make term PORT=/dev/cu.usbmodemXXXX BAUD=115200 LOG=session.log

@@ -5,8 +5,10 @@
  * shellfake capture buffer, so the checks pin return codes and the substance
  * of each panel (values + state words), not the ANSI art.
  */
+#include <errno.h>
 #include <string.h>
 
+#include "aliro_shell.h"
 #include "drvfake.h"
 #include "test.h"
 #include "uwb_cirdiag.h"
@@ -33,6 +35,16 @@ static int run(const char *sub, int argc, char **argv)
 static int has(const char *needle)
 {
 	return strstr(shellfake_out, needle) != NULL;
+}
+
+/* Stands in for the application's CHIP reset call, which on real hardware never
+ * returns. Counting instead of resetting is what lets the confirm gate be tested
+ * from both sides in one run. */
+static int factory_resets;
+
+static void count_factory_reset(void)
+{
+	factory_resets++;
 }
 
 /** Point the fake DEV_ID surfaces at a healthy DW3110. */
@@ -175,6 +187,39 @@ void test_aliro_shell(void)
 	t_group("version");
 	T_EQ("version rc", run("version", 1, NULL), 0);
 	T_OK("commit line", has("commit"));
+
+	t_group("factory reset");
+	{
+		char yes_s[] = "yes";
+		char *argv[2];
+
+		aliro_shell_set_factory_reset(count_factory_reset);
+		factory_resets = 0;
+		/* Unconfirmed: explains the loss, refuses, and must not fire. */
+		T_EQ("bare rc", run("factoryreset", 1, NULL), -22);
+		T_OK("names what is lost", has("Matter fabrics") && has("trusted phone key"));
+		T_OK("shows the confirm word", has("aliro factoryreset yes"));
+		T_EQ("bare did not reset", factory_resets, 0);
+		argv[1] = junk_s;
+		T_EQ("wrong word rc", run("factoryreset", 2, argv), -22);
+		T_EQ("wrong word did not reset", factory_resets, 0);
+		/* Confirmed. */
+		argv[1] = yes_s;
+		T_EQ("confirmed rc", run("factoryreset", 2, argv), 0);
+		T_EQ("confirmed reset once", factory_resets, 1);
+		T_OK("confirmed announced", has("erasing and rebooting"));
+		/* No application behind the console: refuse loudly, never silently pass.
+		 * The rc is -ENOTSUP, whose value differs per libc, so pin the contract
+		 * (a failure, distinct from the unconfirmed one) rather than the number. */
+		aliro_shell_set_factory_reset(NULL);
+		{
+			int rc = run("factoryreset", 2, argv);
+
+			T_OK("unregistered fails", rc != 0 && rc != -EINVAL);
+		}
+		T_EQ("unregistered did not reset", factory_resets, 1);
+		T_OK("unregistered explained", has("unavailable in this build"));
+	}
 
 	t_group("status panel: all green");
 	(void)uwb_min_hw_reset();
