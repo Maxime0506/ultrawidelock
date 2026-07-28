@@ -10,4 +10,4 @@
 # Enrol with:
 #   python3 tools/presence_git.py enroll --port <serial> --name <label>
 #
-desk-lock 04f0e5f6d60cc0c13011e65edb3619637b5c8c5b3e5d94352ac0d05ef0655eb53db8ee7f2a1b58e7de8bc28ab7ed6e71b2d5debbf2ff4861f3faf34c67302a11ee 8b607fee1b723912
+desk-lock 044063fed86a4990d73cfdc49f2928be89f8a44ad324d4e83239736b6ac000255e603ae5f6d19ebf3835d50ed1f710c0c06531e28a8834521b6ec36fa2934e5e98 b4c26aa39225c3c9
