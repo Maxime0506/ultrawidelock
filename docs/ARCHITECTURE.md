@@ -6,6 +6,7 @@ Every subsystem on one page, in reading order: entry points (nothing imports the
 ```mermaid
 flowchart LR
   integration.homeassistant --> tools.tui.src
+  integration.homeassistant.src.openaliro_ha --> tools.tui.src
   modules.woz_aliro.src --> modules.woz_aliro.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -367,11 +368,11 @@ ccc_ran_params.
 
 ### [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
 
-**depends on** [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md), [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+**depends on** [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md), [`tools/tui/src/search.ts`](architecture/tools.tui.src/search.ts.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md), [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
 
 ### [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
 
-**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
 
 ### [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
 
@@ -386,6 +387,16 @@ ccc_ran_params.
 *No module docstring. First commit: "Give the bench TUI its labels back as border rules".*
 
 **depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/search.ts`](architecture/tools.tui.src/search.ts.md)
+
+Searching the serial scrollback.
+Pure string work, kept out of app.tsx so it can be tested directly instead of
+through a rendered terminal. Matching is case-insensitive and literal: a
+firmware log is full of `[`, `*`, `0x..` and `?`, so treating the query as a
+regular expression would turn ordinary searches into syntax errors.
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
 
 ### [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
 
@@ -485,7 +496,7 @@ is therefore the capability probe, not the first range reading.
 
 pyserial adapter and privacy-safe serial-port identity helpers.
 
-**exposes** `PySerialConnection`, `SerialPort`, `SerialTransportError`, `discover_serial_ports`, `open_serial_connection`, `resolve_serial_port`, `serial_identity`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+**exposes** `PySerialConnection`, `SerialPort`, `SerialTransportError`, `discover_serial_ports`, `open_serial_connection`, `resolve_serial_port`, `serial_identity`  ·  **depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
 
 ## `modules/woz_uwb/src/driver/`
 

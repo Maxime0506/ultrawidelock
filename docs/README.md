@@ -1,13 +1,14 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**204 subsystems in 33 directories · 1353/1544 symbols documented (87%)**
+**205 subsystems in 33 directories · 1357/1548 symbols documented (87%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
 ```mermaid
 flowchart LR
   integration.homeassistant --> tools.tui.src
+  integration.homeassistant.src.openaliro_ha --> tools.tui.src
   modules.woz_aliro.src --> modules.woz_aliro.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -77,12 +78,12 @@ flowchart LR
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
 | [`scripts/`](architecture/scripts/README.md) | 11 | 46/46 (100%) |
 | [`tools/`](architecture/tools/README.md) | 18 | 156/156 (100%) |
-| [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 11 | 21/138 (15%) |
+| [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 25/142 (17%) |
 | [`web-twin/`](architecture/web-twin/README.md) | 2 | 19/19 (100%) |
 
 ## Hotspots
 
-*Mined from git history as of `bdf7760`.*
+*Mined from git history as of `31bef56`.*
 
 **Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (19 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (14 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (11 commits), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md) (9 commits), [`scripts/docs.sh`](architecture/scripts/docs.sh.md) (9 commits).
 

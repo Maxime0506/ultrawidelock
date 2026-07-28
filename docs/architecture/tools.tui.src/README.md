@@ -8,6 +8,7 @@
 | [`tools/tui/src/jobs.ts`](jobs.ts.md) |  |
 | [`tools/tui/src/main.tsx`](main.tsx.md) |  |
 | [`tools/tui/src/motion.ts`](motion.ts.md) | *first commit: "Give the bench TUI its labels back as border rules"* |
+| [`tools/tui/src/search.ts`](search.ts.md) | Searching the serial scrollback. |
 | [`tools/tui/src/serial.ts`](serial.ts.md) |  |
 | [`tools/tui/src/targets.ts`](targets.ts.md) |  |
 | [`tools/tui/src/terminal.ts`](terminal.ts.md) |  |

@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # `tools/tui/src/app.tsx`
 
-**depends on** [`tools/tui/src/devices.ts`](devices.ts.md), [`tools/tui/src/jobs.ts`](jobs.ts.md), [`tools/tui/src/motion.ts`](motion.ts.md), [`tools/tui/src/serial.ts`](serial.ts.md), [`tools/tui/src/targets.ts`](targets.ts.md), [`tools/tui/src/terminal.ts`](terminal.ts.md), [`tools/tui/src/theme.ts`](theme.ts.md), [`tools/tui/src/types.ts`](types.ts.md), [`tools/tui/src/wizard.ts`](wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](main.tsx.md)
+**depends on** [`tools/tui/src/devices.ts`](devices.ts.md), [`tools/tui/src/jobs.ts`](jobs.ts.md), [`tools/tui/src/motion.ts`](motion.ts.md), [`tools/tui/src/search.ts`](search.ts.md), [`tools/tui/src/serial.ts`](serial.ts.md), [`tools/tui/src/targets.ts`](targets.ts.md), [`tools/tui/src/terminal.ts`](terminal.ts.md), [`tools/tui/src/theme.ts`](theme.ts.md), [`tools/tui/src/types.ts`](types.ts.md), [`tools/tui/src/wizard.ts`](wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](main.tsx.md)
 
 ```mermaid
 flowchart TD
@@ -15,8 +15,8 @@ flowchart TD
   App --> createFade
   App --> createPulse
   App --> createSpinner
+  App --> findMatches
   App --> findRepositoryRoot
-  App --> fitRule
 ```
 
 ## API
@@ -47,7 +47,7 @@ While searching, the rule is the search box: the count is the only thing
 that says whether the term is anywhere in the scrollback at all, so it
 outranks every connection detail until Esc puts them back.
 
-**called by** `SerialTerminal`  ·  **calls** `query`
+**called by** `SerialTerminal`  ·  **calls** `matchSummary`, `query`
 
 ### `const hints = () => [ props.spinner ?? "", "q close", ...(props.canGoBack ? ["← back"] : []), "↑↓ choose", "Enter", "Tab command" ]`
 `tools/tui/src/app.tsx:411`
