@@ -8,6 +8,26 @@
 
 static int failures;
 
+/* memmem is a GNU extension, not C. macOS declares it from <string.h>
+ * unconditionally while glibc hides it unless _GNU_SOURCE is defined before the
+ * first system header, so calling it here built clean on a developer's Mac and
+ * failed the Linux CI runner with an implicit declaration. Two call sites do not
+ * justify a feature-test macro that every future include in this file would then
+ * have to stay behind. */
+static const uint8_t *find_bytes(const uint8_t *hay, size_t hay_len, const uint8_t *needle,
+				 size_t needle_len)
+{
+	if (needle_len > hay_len) {
+		return NULL;
+	}
+	for (size_t i = 0; i + needle_len <= hay_len; i++) {
+		if (memcmp(hay + i, needle, needle_len) == 0) {
+			return hay + i;
+		}
+	}
+	return NULL;
+}
+
 #define CHECK(cond, label) do {                                                \
 	if (cond) {                                                            \
 		printf("  ok  %s\n", label);                                    \
@@ -301,8 +321,8 @@ static void test_objects_and_chaining(void)
 	CHECK(piv_apdu_transmit(&piv, get_chuid, sizeof(get_chuid),
 				response, sizeof(response), &response_len) == 0 &&
 	      response[0] == 0x53u &&
-	      memmem(response, response_len - 2u,
-		     identity.guid, sizeof(identity.guid)) != NULL,
+	      find_bytes(response, response_len - 2u,
+			 identity.guid, sizeof(identity.guid)) != NULL,
 	      "CHUID contains the persistent anonymous GUID");
 
 	CHECK(piv_apdu_transmit(&piv, get_cert, sizeof(get_cert),
@@ -323,9 +343,9 @@ static void test_objects_and_chaining(void)
 				sizeof(get_key_management_cert),
 				response, sizeof(response), &response_len) == 0 &&
 	      response[0] == 0x53u &&
-	      memmem(response, response_len - 2u,
-		     identity.key_management_certificate,
-		     sizeof(identity.key_management_certificate)) != NULL &&
+	      find_bytes(response, response_len - 2u,
+			 identity.key_management_certificate,
+			 sizeof(identity.key_management_certificate)) != NULL &&
 	      response[response_len - 2u] == 0x90u,
 	      "slot 9D exposes a distinct key-management certificate");
 	CHECK(piv_apdu_transmit(&piv, get_digital_signature_cert,
