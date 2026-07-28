@@ -26,7 +26,9 @@ LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
 int main(void)
 {
-	LOG_INF("openaliro reader — DWM3001CDK (nRF52833 + DW3110)");
+	/* ASCII only: the console is a byte stream, and a UTF-8 dash renders as
+	 * mojibake in RTT Viewer. */
+	LOG_INF("openaliro reader: DWM3001CDK (nRF52833 + DW3110)");
 
 	int rc = aliro_reader_start();
 

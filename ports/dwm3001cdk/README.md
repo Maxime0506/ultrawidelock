@@ -85,6 +85,33 @@ Cross-checked between the upstream Zephyr board files and Qorvo's own
 | RESETn | P0.25 |
 | WAKEUP | P1.19 |
 
+## Bring-up: the DW3110 answers
+
+```sh
+west build -p always -b decawave_dwm3001cdk -d build-selftest . \
+    -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf
+west flash -d build-selftest
+```
+
+Then open SEGGER RTT Viewer (device `NRF52833_XXAA`, SWD, 4000 kHz, auto-detect
+control block) and reset the board. First boot on real hardware, 2026-07-29:
+
+```
+I: RESET on gpio@50000000 pin 25
+I: WAKEUP on gpio@50000300 pin 19
+I: DW3000 SPI (max 8MHz)
+I: DW3000 raw DEV_ID = 0xdeca0302 (expect 0xDECA03xx)
+I: IRQ on gpio@50000300 pin 2
+```
+
+`0xdeca0302` is a valid Decawave ID, so the pin table above is confirmed on the
+part rather than merely cross-referenced between two documents.
+
+The overlay logs at INF on purpose. Global `CONFIG_LOG_DEFAULT_LEVEL=4` turns on
+debug logging for every Zephyr module, including the arch MPU code that runs on
+each context switch, which floods RTT and wraps the buffer before anything
+useful is readable.
+
 ## Status
 
 Stage 0 of `internal/dwm3001cdk-reader-plan.md`: the image links and the size is
