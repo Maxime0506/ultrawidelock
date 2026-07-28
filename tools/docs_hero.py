@@ -18,9 +18,15 @@ Three things go in:
     a proximity-unlock reader; the rings are the product), over a drifting
     terracotta glow and a fine grain. The wordmark goes up to ~5.5rem of
     serif. The terminal tilts a few degrees out of the page.
+  * The Get-started page gets the same room a size down — same glow, grain
+    and pulses, a shorter band, no terminal or stat row. It is the only
+    other page that is a front door rather than a document, and arriving
+    there from the landing page should not feel like leaving the site. Its
+    rings are injected here, because the page the pass builds it from has
+    none of its own.
   * The explore cards become a bento: three columns, with the first and last
     cell double-width, and the first promoted to a display card. Every card
-    tracks the pointer with a soft spotlight.
+    tracks the pointer with a soft spotlight, as do the Get-started tracks.
   * Sitewide, section headings grow from 11px uppercase rails into serif
     headings, structural blocks fade up as they enter the viewport, the
     numbers in the hero count up once, and a hairline progress bar tracks
@@ -45,10 +51,27 @@ from pathlib import Path
 
 SITE = Path("site")
 INDEX = SITE / "index.html"
+START = SITE / "start.html"
 
 MARK = "gv-stage"
 NAV_ANCHOR = '<script defer src="nav.js"></script>'
 HERO_OPEN = '<header class="hero-band">'
+HERO_IN = '<div class="hero-in">'
+
+# The rings the generator draws on the landing page, repeated for the page
+# docs_start.py builds — it assembles that one from a guide, and guides have
+# no corner art. Same geometry, so one keyframe animation drives both.
+HERO_ART = (
+    '<svg class="hero-art" viewBox="0 0 400 400" aria-hidden="true" fill="none" '
+    'stroke="currentColor">'
+    '<circle cx="330" cy="70" r="40" stroke-width="1"/>'
+    '<circle cx="330" cy="70" r="95" stroke-width="1"/>'
+    '<circle cx="330" cy="70" r="155" stroke-width="1"/>'
+    '<circle cx="330" cy="70" r="220" stroke-width="1"/>'
+    '<circle cx="330" cy="70" r="290" stroke-width="1"/>'
+    '<circle cx="330" cy="70" r="4" fill="currentColor" stroke="none"/>'
+    "</svg>"
+)
 
 # The grain is a two-octave turbulence rendered once into a data URI: cheaper
 # than a PNG, and it scales with the band instead of tiling visibly.
@@ -144,6 +167,24 @@ HERO_CSS = """<style id="gv-stage-hero">
 @media (max-width:900px){.hero-cine .hero-art{width:30rem;height:30rem;
   right:-10rem;top:-8rem;opacity:.5}
   .hero-cine .hero-in{padding-top:3.2rem;padding-bottom:3rem}}
+
+/* The Get-started band: the same room one size down. It carries a title, a
+   lede and three facts, so it needs less height than the landing page and a
+   wordmark that does not compete with it. */
+.hero-lite .hero-in{padding-top:3.7rem;padding-bottom:3.3rem}
+.hero-lite h1{font-size:clamp(2.7rem,5.6vw,4.1rem);font-weight:400;
+  line-height:1.02;letter-spacing:-.018em;color:var(--strong);
+  text-shadow:0 0 60px rgba(224,133,95,.26);margin:.45rem 0 .8rem}
+.hero-lite .lede{font-size:1.14rem;line-height:1.55;max-width:32rem;color:var(--muted)}
+/* Lower and further out than the landing page's: this band is half the height,
+   so the same offset would put the pulses' origin above it and leave only the
+   tail of one arc showing. */
+.hero-lite .hero-art{width:34rem;height:34rem;right:-10rem;top:-1.5rem}
+.hero-lite .start-meta span{color:var(--ink);border-color:var(--line);
+  background:rgba(250,249,245,.045);backdrop-filter:blur(6px)}
+@media (max-width:900px){.hero-lite .hero-art{width:25rem;height:25rem;
+  right:-9rem;top:-1rem;opacity:.5}
+  .hero-lite .hero-in{padding-top:2.8rem;padding-bottom:2.6rem}}
 
 @media (prefers-reduced-motion:reduce){
   .hf-glow{animation:none}
@@ -259,9 +300,9 @@ function counters(){
     if(k<1)requestAnimationFrame(step)});
 }
 
-/* Pointer spotlight on the explore cards. */
+/* Pointer spotlight on the explore cards and the Get-started tracks. */
 function spotlight(){
-  var cards=document.querySelectorAll(".feats a");
+  var cards=document.querySelectorAll(".feats a,.paths .path");
   for(var i=0;i<cards.length;i++)(function(c){
     c.addEventListener("pointermove",function(e){
       var r=c.getBoundingClientRect();
@@ -292,21 +333,31 @@ else go();
 </script>"""
 
 
-def stage_landing(page: str) -> tuple[str, list[str]]:
-    """Turn the landing hero into the dark room; report what was applied."""
-    did: list[str] = []
-    if HERO_OPEN not in page:
-        return page, did
+def darken(page: str, extra: str = "") -> str:
+    """Turn a page's hero band into the dark room, and add the band's stylesheet."""
     page = page.replace(
         HERO_OPEN,
-        '<header class="hero-band hero-cine">' + HERO_FX,
+        f'<header class="hero-band hero-cine{extra}">' + HERO_FX,
         1,
     )
-    page = page.replace(
+    return page.replace(
         NAV_ANCHOR, NAV_ANCHOR + HERO_CSS.replace("__GRAIN__", GRAIN), 1
     )
-    did.append("cinematic hero")
-    return page, did
+
+
+def stage_landing(page: str) -> tuple[str, list[str]]:
+    """Turn the landing hero into the dark room; report what was applied."""
+    if HERO_OPEN not in page:
+        return page, []
+    return darken(page), ["cinematic hero"]
+
+
+def stage_start(page: str) -> tuple[str, list[str]]:
+    """Give the Get-started band the same room, plus rings of its own."""
+    if HERO_OPEN not in page:
+        return page, []
+    page = darken(page, " hero-lite")
+    return page.replace(HERO_IN, HERO_IN + HERO_ART, 1), ["get-started hero"]
 
 
 def main() -> int:
@@ -335,6 +386,9 @@ def main() -> int:
             continue
         if p.name == INDEX.name:
             page, did = stage_landing(page)
+            notes += did
+        elif p.name == START.name:
+            page, did = stage_start(page)
             notes += did
         page = page.replace(NAV_ANCHOR, NAV_ANCHOR + STAGE_CSS + STAGE_JS, 1)
         p.write_text(page)
