@@ -69,12 +69,23 @@ next to it in `ccc_shim_rx.c` is unconditional and carries the same lock-side
 distance. Both are parsed, `rng` first, so a block is never counted twice. The
 `phone_d` field is the peer's own estimate, goes negative, and is discarded.
 
-Only the `ACCESS GRANTED` / `ACCESS DENIED` lines from `access_manager` become
-access events. A lock or unlock driven from Home Assistant or the Matter
-controller prints `[ZCL]Received command: UnlockDoor` and no `ACCESS` line, so
-it does not appear as an access event. Reporting those would need a lock
-entity fed from the Matter side rather than the console, which this bridge
-does not do.
+This bridge deliberately carries only what Matter does not expose: the UWB
+ranging distance and the Aliro credential verdict. Lock state and lock control
+belong to Home Assistant's own [Matter integration][matter], which speaks the
+door-lock cluster directly. Publishing a second lock entity over MQTT would
+leave two entities competing for the same device.
+
+That split is why a lock or unlock driven from a Matter controller prints
+`[ZCL]Received command: UnlockDoor` and no `ACCESS` line: it never went
+through Aliro credential verification, so there is no verdict to report. Only
+`ACCESS GRANTED` / `ACCESS DENIED` from `access_manager` become access events.
+
+For the lock entity itself, commission the board to the Home Assistant fabric.
+Matter supports several fabrics at once, so a board already paired with
+another ecosystem should be shared from that ecosystem rather than reset and
+re-commissioned.
+
+[matter]: https://www.home-assistant.io/integrations/matter/
 
 `--dry-run` prints each topic and payload instead of connecting, which is the
 quickest way to check a parser change against a captured log.
