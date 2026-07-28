@@ -1,0 +1,84 @@
+/*
+ * Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ *
+ * aliro_prov (Zephyr settings backend) — the DWM3001CDK twin of the ESP32
+ * port's aliro_prov_nvs.c. The portable serialisation, dev fallback and trust
+ * logic all live in aliro_prov.c (host-KAT'd); this file only moves that one
+ * blob in and out of the settings store on `storage_partition`.
+ */
+#include <string.h>
+
+#include <zephyr/logging/log.h>
+#include <zephyr/settings/settings.h>
+
+#include "aliro_prov.h"
+
+LOG_MODULE_REGISTER(aliro_prov, CONFIG_LOG_DEFAULT_LEVEL);
+
+#define ALIRO_PROV_KEY "aliro/prov"
+
+static uint8_t s_blob[ALIRO_PROV_BLOB_MAX];
+static size_t s_blob_len;
+
+static int prov_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg)
+{
+	ARG_UNUSED(name);
+
+	if (len > sizeof(s_blob)) {
+		return -EINVAL;
+	}
+
+	ssize_t got = read_cb(cb_arg, s_blob, len);
+
+	if (got < 0) {
+		return (int)got;
+	}
+	s_blob_len = (size_t)got;
+	return 0;
+}
+
+SETTINGS_STATIC_HANDLER_DEFINE(aliro_prov, "aliro", NULL, prov_set, NULL, NULL);
+
+int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *ts)
+{
+	int rc = settings_subsys_init();
+
+	if (rc != 0) {
+		LOG_WRN("settings init rc=%d; using DEV identity", rc);
+		aliro_prov_dev_default(id, ts);
+		return -1;
+	}
+
+	s_blob_len = 0;
+	rc = settings_load_subtree("aliro");
+	if (rc != 0) {
+		LOG_WRN("settings load rc=%d; using DEV identity", rc);
+		aliro_prov_dev_default(id, ts);
+		return -1;
+	}
+
+	if (s_blob_len == 0) {
+		/* Never provisioned. */
+		aliro_prov_dev_default(id, ts);
+		return 1;
+	}
+
+	if (aliro_prov_deserialize(s_blob, s_blob_len, id, ts) != 0) {
+		LOG_WRN("stored blob malformed; using DEV identity");
+		aliro_prov_dev_default(id, ts);
+		return -1;
+	}
+	return 0;
+}
+
+int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)
+{
+	uint8_t blob[ALIRO_PROV_BLOB_MAX];
+	size_t len = 0;
+
+	if (aliro_prov_serialize(id, ts, blob, sizeof(blob), &len) != 0) {
+		return -EINVAL;
+	}
+	return settings_save_one(ALIRO_PROV_KEY, blob, len);
+}
