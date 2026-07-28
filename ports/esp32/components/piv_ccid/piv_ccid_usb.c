@@ -125,13 +125,7 @@ CFG_TUD_MEM_SECTION static uint8_t s_tx[PIV_CCID_MAX_MESSAGE]
 static void ccid_init(void)
 {
 	memset(&s_usb, 0, sizeof(s_usb));
-	piv_ccid_init(&s_usb.protocol, piv_identity_backend(), NULL,
-#ifdef CONFIG_WOZ_PIV_UWB_ONLY
-		      false
-#else
-		      true
-#endif
-	);
+	piv_ccid_init(&s_usb.protocol, piv_identity_backend(), NULL, true);
 }
 
 static bool ccid_deinit(void)
