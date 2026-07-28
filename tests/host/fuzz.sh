@@ -30,14 +30,22 @@ SECONDS_BUDGET="${FUZZ_SECONDS:-20}"
 # target -> parser source under test (harness stays minimal: one parser each).
 # A case function rather than an associative array so this runs on the stock
 # macOS bash 3.2 as well as CI's bash.
-targets=(aliro_uwb_msg ccc_mac aliro_apdu stepup)
+targets=(aliro_uwb_msg ccc_mac aliro_apdu stepup aliro_assert)
 target_src() {
 	case "$1" in
 	aliro_uwb_msg) echo "$SRC/aliro/aliro_uwb_msg_parser.c" ;;
 	ccc_mac) echo "$SRC/ccc/ccc_mac.c" ;;
 	aliro_apdu) echo "$APDU_SRC/aliro_apdu.c" ;;
 	stepup) echo "$APDU_SRC/aliro_stepup_parse.c" ;;
+	aliro_assert) echo "$APDU_SRC/aliro_assert.c" ;;
 	*) return 1 ;;
+	esac
+}
+# Extra sources a target links beyond its parser (dependencies compiled in).
+target_extra() {
+	case "$1" in
+	aliro_assert) echo "$APDU_SRC/aliro_hash.c" ;; # SHA-256 behind cred_id
+	*) echo "" ;;
 	esac
 }
 
@@ -70,18 +78,22 @@ for name in "${targets[@]}"; do
 	corpus="$FZ/corpus/$name"
 	mkdir -p "$corpus"
 	bin="$OUT/$name"
+	# shellcheck disable=SC2086  # extra is a deliberate word-split source list
+	extra="$(target_extra "$name")"
 
 	if [ "$mode" = libfuzzer ]; then
+		# shellcheck disable=SC2086
 		"$CC" -std=c11 -w -g -O1 -fsanitize=fuzzer,address,undefined \
 			-fno-sanitize-recover=all "${DEFS[@]}" "${INCS[@]}" "${EXTRA_INCS[@]}" \
-			"$FZ/fuzz_$name.c" "$src" -o "$bin"
+			"$FZ/fuzz_$name.c" "$src" $extra -o "$bin"
 		printf '  [%s] fuzzing %ss…\n' "$name" "$SECONDS_BUDGET"
 		"$bin" -max_total_time="$SECONDS_BUDGET" -timeout=10 -print_final_stats=1 \
 			"$corpus" || fail=1
 	else
+		# shellcheck disable=SC2086
 		"$CC" -std=c11 -w -g -O1 -fsanitize=address,undefined \
 			-fno-sanitize-recover=all "${DEFS[@]}" "${INCS[@]}" "${EXTRA_INCS[@]}" \
-			"$FZ/fuzz_$name.c" "$src" "$FZ/standalone_main.c" -o "$bin"
+			"$FZ/fuzz_$name.c" "$src" $extra "$FZ/standalone_main.c" -o "$bin"
 		files=("$corpus"/*)
 		printf '  [%s] replaying %d corpus input(s)…\n' "$name" "${#files[@]}"
 		if [ "${#files[@]}" -gt 0 ]; then

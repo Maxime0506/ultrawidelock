@@ -36,7 +36,10 @@ static void sha256_block(uint32_t h[8], const uint8_t p[64])
 {
 	uint32_t w[64];
 
-	for (int i = 0; i < 16; i++) {
+	/* size_t index so i * 4 is computed at pointer width rather than in int
+	 * and widened afterwards. No behavioural change at these bounds; it keeps
+	 * the offset arithmetic honest for the analyser. */
+	for (size_t i = 0; i < 16; i++) {
 		w[i] = (uint32_t)p[i * 4] << 24 | (uint32_t)p[i * 4 + 1] << 16 |
 		       (uint32_t)p[i * 4 + 2] << 8 | (uint32_t)p[i * 4 + 3];
 	}
@@ -149,7 +152,7 @@ void aliro_sha256_final(struct aliro_sha256 *s, uint8_t out[ALIRO_SHA256_LEN])
 		lenbe[i] = (uint8_t)(bits >> (56 - i * 8));
 	}
 	aliro_sha256_update(s, lenbe, 8);
-	for (int i = 0; i < 8; i++) {
+	for (size_t i = 0; i < 8; i++) {
 		out[i * 4] = (uint8_t)(s->h[i] >> 24);
 		out[i * 4 + 1] = (uint8_t)(s->h[i] >> 16);
 		out[i * 4 + 2] = (uint8_t)(s->h[i] >> 8);
@@ -222,7 +225,7 @@ int aliro_hkdf_expand(const uint8_t prk[ALIRO_SHA256_LEN], const uint8_t *info, 
 	uint8_t counter = 1;
 	size_t done = 0;
 
-	if (out_len > 255u * ALIRO_SHA256_LEN) {
+	if (out_len > (size_t)255u * ALIRO_SHA256_LEN) {
 		return -1;
 	}
 	while (done < out_len) {

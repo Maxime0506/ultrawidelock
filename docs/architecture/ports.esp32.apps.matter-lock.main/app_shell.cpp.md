@@ -3,52 +3,71 @@
 
 ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 
-**depends on** [`ports/esp32/apps/matter-lock/main/app_shell.h`](app_shell.h.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h`](../ports.esp32.apps.matter-lock.main.lock/door_lock_manager.h.md)
+**depends on** [`ports/esp32/apps/matter-lock/main/app_shell.h`](app_shell.h.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h`](../ports.esp32.apps.matter-lock.main.lock/door_lock_manager.h.md), [`ports/esp32/components/aliro_reader/presence_link.h`](../ports.esp32.components.aliro_reader/presence_link.h.md)
 
 ```mermaid
 flowchart TD
-  app_shell_start --> print_banner
+  aliro_hexdecode --> aliro_hexnib
 ```
 
 ## API
 
 ### `static const char *col(const char *c)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:59`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:62`
 
 Return the ANSI color escape code c, or an empty string if linenoise is in dumb-terminal mode.
 
 **called by** `cmd_status`, `print_banner`
 
 ### `static void print_banner(void)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:65`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:68`
 
 Prints the shell's startup banner: app name, version, IDF version, and a one-line usage hint.
 
 **called by** `app_shell_start`  ·  **calls** `col`
 
 ### `static int cmd_status(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:82`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:85`
 
 Shell command handler: prints the current Matter door lock state, fabric count, and (when Aliro BLE/UWB is enabled) the last measured and last trusted UWB ranges in cm, or "none" if unavailable. Always returns 0.
 
 **calls** `col`
 
 ### `static int cmd_range(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:139`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:142`
 
 Shell handler for the "range" command; prints the last measured UWB range in cm, or "no range yet"
 if none has been recorded. Always returns 0.
 
+### `static int aliro_hexnib(char c)`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:160`
+
+Maps one hex digit to its 0-15 value, or -1 if not [0-9a-fA-F]. Twin of the
+helper in the standalone reader app_shell.c (kept local to avoid a shared dep).
+
+**called by** `aliro_hexdecode`
+
+### `static int aliro_hexdecode(const char *s, uint8_t *out, size_t out_cap)`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:176`
+
+Decodes an even-length hex string into out (capacity out_cap). Returns the byte
+count on success, or -1 on an odd length, a bad character, or overflow.
+
+**called by** `cmd_aliro`  ·  **calls** `aliro_hexnib`
+
 ### `static int cmd_aliro(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:156`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:199`
 
 Shell handler for the "aliro" command. Subcommands: "prov" prints reader provisioning info;
 "trust" adds the last-presented credential to the trust store and persists it to NVS, reporting
 whether a credential was actually available to trust or whether the store/NVS write failed.
+With CONFIG_WOZ_ALIRO_CLONE, "export"/"import <hex>" clone the identity to a second board.
 Any other or missing argument prints usage. Always returns 0.
 
+**calls** `aliro_hexdecode`
+
 ### `static int cmd_uwbdiag(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:193`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:274`
 
 Shell handler for "uwbdiag": toggles the raw per-frame UWB trace (cia#/PREPOLL/
 POLL/RESPTX/FINALDATA/DIST/GATE). Boot default off: the trace prints
@@ -56,31 +75,31 @@ synchronously from the UWB task and costs ranging-slot deadlines, so turn it
 on only to debug the radio path. With no argument, prints the current state.
 
 ### `static int cmd_lock(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:210`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:291`
 
 Both bolt commands hop to the Matter task: BoltLockMgr drives cluster
 attributes + emits events, which is only safe there.
 
 ### `static int cmd_unlock(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:223`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:304`
 
 Shell handler for the "unlock" command; schedules a manual bolt unlock on the Matter work queue
 and confirms the request was submitted. Always returns 0.
 
 ### `static int cmd_codes(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:236`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:317`
 
 The boot log scrolls away long before you need to pair; this puts the QR URL
 and manual code back on demand.
 
 ### `static int cmd_factoryreset(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:248`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:329`
 
 Shell handler for the "factoryreset" command; erases persisted config and reboots the device via
 esp_matter::factory_reset(). Always returns 0 (the reboot happens before returning is meaningful).
 
 ### `static int cmd_log(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:269`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:350`
 
 Runtime log knob: the boot default is WARN (blocking UART writes in the
 protocol callbacks cost walk-up latency), so bench diagnostics need a way
@@ -89,7 +108,7 @@ back up without a reflash. The compile-time ceiling is DEBUG
 under their module tags (aliro_reader, aliro_ranging, ...).
 
 ### `static int cmd_lab(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:303`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:384`
 
 Aliro Lab transaction trace: OFF at boot (the [ALAB] lines are blocking UART
 writes on the protocol path, so they cost walk-up latency while on). `lab on`
@@ -99,7 +118,7 @@ Stage 1): the taps buffer to RAM while armed and print in a burst on `lab cir
 off`, off the ranging path, so the walk-up still unlocks while capturing.
 
 ### `static int cmd_frec(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:346`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:427`
 
 Flight recorder: record a live walk-up into a RAM ring for host replay. OFF at
 boot (it reads extra DW3000 registers while armed, costing walk-up latency).
@@ -107,12 +126,12 @@ boot (it reads extra DW3000 registers while armed, costing walk-up latency).
 that tools/flight_recorder.py turns into a .frc trace + fuzz corpus.
 
 ### `static int cmd_clear(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:367`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:448`
 
 Shell handler for the "clear" command; clears the terminal screen. Always returns 0.
 
 ### `void app_shell_start(void)`
-`ports/esp32/apps/matter-lock/main/app_shell.cpp:375`
+`ports/esp32/apps/matter-lock/main/app_shell.cpp:456`
 
 Register commands and start the console REPL (own task, pinned to core 0).
 

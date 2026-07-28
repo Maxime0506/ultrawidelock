@@ -198,6 +198,20 @@ psa_status_t psa_sign_message(psa_key_id_t key, psa_algorithm_t alg, const uint8
 	return psafake.sign_ret;
 }
 
+psa_status_t psa_sign_hash(psa_key_id_t key, psa_algorithm_t alg, const uint8_t *hash,
+			   size_t hash_length, uint8_t *signature, size_t signature_size,
+			   size_t *signature_length)
+{
+	(void)key;
+	(void)hash;
+	psafake.sign_calls++;
+	psafake.last_alg = alg;
+	psafake.last_msg_len = hash_length;
+	fill(signature, signature_size, 0x80);
+	*signature_length = olen_of(psafake.sign_olen, 64u);
+	return psafake.sign_ret;
+}
+
 psa_status_t psa_verify_message(psa_key_id_t key, psa_algorithm_t alg, const uint8_t *input,
 				size_t input_length, const uint8_t *signature,
 				size_t signature_length)

@@ -33,6 +33,18 @@ BAUD ?= 115200
 LOG ?=
 # make flash FORCE=1 stops whatever holds the UART (a monitor/tio) before flashing.
 FORCE ?=
+# Presence: this is the board a phone is actually provisioned against, so it is
+# also the one that can answer a presence challenge without cloning an identity.
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../../..)
+PRESENCE  := $(REPO_ROOT)/tools/presence_git.py
+SDKCONFIG := sdkconfig
+PIV_PIN_BUILD := build-piv
+PIV_PIN_CONFIG := sdkconfig.piv.generated
+PIV_UWB_BUILD := build-piv-uwb
+PIV_UWB_CONFIG := sdkconfig.piv-uwb.generated
+NAME  ?=
+TAG   ?=
+MAXCM ?= 40
 
 # USB vendor ids (decimal, as ioreg reports them) used to classify ports.
 # Keep values trailing-whitespace-free: an inline comment would leak spaces into
@@ -88,7 +100,9 @@ if [ -n "$$busy" ]; then \
 fi
 endef
 
-.PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab ports clean
+.PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab ports clean \
+        presence-on presence-off presence-flash presence-probe presence-enroll presence-sign \
+        piv-pin-build piv-pin-app-flash piv-uwb-build piv-uwb-app-flash
 
 check-env:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -130,6 +144,21 @@ menuconfig: check-env
 size: check-env
 	@$(IDFPY) size
 
+## piv-pin-build: isolated recovery build with normal PIV PIN enforcement
+piv-pin-build: check-env
+	@$(IDFPY) -B $(PIV_PIN_BUILD) \
+	  -D SDKCONFIG=$(PIV_PIN_CONFIG) \
+	  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.piv' \
+	  build
+
+## piv-uwb-build: isolated VM build with custom-token UWB-only authorization
+##   Slot 9A still requires a fresh Wallet/UWB proof. Slot 9D is PIN-less.
+piv-uwb-build: check-env
+	@$(IDFPY) -B $(PIV_UWB_BUILD) \
+	  -D SDKCONFIG=$(PIV_UWB_CONFIG) \
+	  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.piv;sdkconfig.piv-uwb' \
+	  build
+
 ##@ Flash  (safe port auto-detect · never a SEGGER/nRF port)
 ## flash: build + write bootloader + partition table + app
 flash: check-env
@@ -144,6 +173,20 @@ app-flash: check-env
 	$(ENSURE_PORT_FREE); \
 	echo "  app-flashing $$port"; \
 	$(IDFPY) -p "$$port" app-flash
+
+## piv-pin-app-flash: restore the PIN-enforced PIV app without erasing NVS
+piv-pin-app-flash: piv-pin-build
+	@$(RESOLVE_PORT); \
+	$(ENSURE_PORT_FREE); \
+	echo "  restoring PIN-enforced PIV app on $$port"; \
+	$(IDFPY) -B $(PIV_PIN_BUILD) -p "$$port" app-flash
+
+## piv-uwb-app-flash: install the custom-token UWB-only app without erasing NVS
+piv-uwb-app-flash: piv-uwb-build
+	@$(RESOLVE_PORT); \
+	$(ENSURE_PORT_FREE); \
+	echo "  app-flashing UWB-only PIV profile on $$port"; \
+	$(IDFPY) -B $(PIV_UWB_BUILD) -p "$$port" app-flash
 
 ## flash-erase: full chip erase, then flash  (drops commissioning + Aliro NVS)
 flash-erase: check-env
@@ -196,6 +239,48 @@ lab:
 	python3 ../../../../tools/aliro_lab.py "$$log" "$$log.html" || true; \
 	{ command -v open >/dev/null 2>&1 && [ -f "$$log.html" ] && open "$$log.html"; } || true
 
+##@ Presence  (CONFIG_WOZ_PRESENCE · adds `presence` to this lock's console)
+## presence-on: add the presence console command  ·  idempotent
+##   Additive. The lock still locks; it also answers signed presence challenges.
+##   This board is the one your phone's credential is provisioned against, so
+##   presence here needs no identity clone and no second board.
+presence-on:
+	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — run 'make set-target' first" >&2; exit 1; }
+	@grep -qx 'CONFIG_WOZ_PRESENCE=y' $(SDKCONFIG) || printf 'CONFIG_WOZ_PRESENCE=y\n' >> $(SDKCONFIG)
+	@echo "  presence ON  ·  next: make presence-flash"
+
+## presence-off: drop the presence command from the build
+presence-off:
+	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — nothing to turn off"; exit 0; }
+	@sed -i '' '/^CONFIG_WOZ_PRESENCE=y$$/d' $(SDKCONFIG) && echo "  presence OFF  ·  next: make flash"
+
+## presence-flash: turn presence on, then build + flash
+##   Never erases: the Matter fabric, the Aliro trust store and the presence
+##   signing key all live in NVS, and erasing means commissioning again.
+presence-flash: presence-on
+	@$(MAKE) --no-print-directory build
+	@$(MAKE) --no-print-directory flash
+
+## presence-probe: bring-up check  ·  does the lock sign a frame we accept?
+presence-probe:
+	@$(RESOLVE_PORT); \
+	echo "  probing $$port"; \
+	python3 $(PRESENCE) probe --port "$$port" --max-cm $(MAXCM)
+
+## presence-enroll: record this board's public key as trusted  ·  NAME=desk-lock
+presence-enroll:
+	@[ -n "$(NAME)" ] || { echo "  set NAME=  ·  e.g. make presence-enroll NAME=desk-lock" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) enroll --port "$$port" --name "$(NAME)"
+
+## presence-sign: create a presence-signed annotated tag  ·  TAG=presence/1.2.0
+##   Wake the phone and hold it near the board first; this refuses to tag
+##   unless presence actually verifies.
+presence-sign:
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-sign TAG=presence/1.2.0" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) sign --tag "$(TAG)" --port "$$port" --max-cm $(MAXCM)
+
 ##@ Housekeeping
 ## ports: list attached usbmodem ports, labelled by board
 ports:
@@ -222,6 +307,6 @@ help:
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
-	     printf "    %s%-12s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
+	     printf "    %s%-16s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
 	  $(MAKEFILE_LIST); \
 	printf '\n'

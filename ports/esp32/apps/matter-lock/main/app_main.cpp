@@ -16,6 +16,9 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
+#ifdef CONFIG_WOZ_PIV_CCID
+#include <piv_ccid_usb.h>
+#endif
 #if CONFIG_PM_ENABLE
 #include <esp_pm.h>
 #endif
@@ -43,6 +46,9 @@
 #include <aliro_lat.h>
 #include <esp_netif_sntp.h>
 #include <woz_uwb_facade.h>
+#ifdef CONFIG_WOZ_PRESENCE
+#include <presence_link.h>
+#endif
 #include "door_lock_manager.h"
 #include <platform/PlatformManager.h>
 #include <vector>
@@ -236,6 +242,12 @@ static void aliro_reader_task(void *arg)
 
 	woz_uwb_set_range_listener(on_uwb_range);
 
+#ifdef CONFIG_WOZ_PRESENCE
+	/* false: this app already grants and relocks the phone from its own approach
+	 * loop below, so presence must not also drive the Wallet notification. */
+	presence_link_init(false);
+#endif
+
 	int rc = aliro_reader_start_attached();
 	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
 		 rc == 0 ? "reader advertising on shared host" : "reader start FAILED");
@@ -302,6 +314,11 @@ static void aliro_reader_task(void *arg)
 		// session-gone check below runs when nothing is ranging.
 		uint32_t woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
 		int64_t now = esp_timer_get_time() / 1000; // ms
+
+		// Release a held stale-Wallet Secured if this approach produced no grant to
+		// supersede it. Free on every other pass: nothing is armed unless a relock
+		// went undelivered, which needs the peer to have vanished mid-notification.
+		aliro_reader_status_tick(now);
 
 		int32_t cm = 0;
 		bool active = (woke > 0);
@@ -579,6 +596,16 @@ extern "C" void app_main()
 
 	/* Initialize the ESP NVS layer */
 	nvs_flash_init();
+
+#ifdef CONFIG_WOZ_PIV_CCID
+	/*
+	 * Native USB is deliberately independent of the external USB-UART used
+	 * for flashing and recovery. This option is off in normal firmware.
+	 */
+	err = piv_ccid_usb_start();
+	ABORT_APP_ON_FAILURE(err == ESP_OK,
+			     ESP_LOGE(TAG, "Failed to start PIV CCID USB, err:%d", err));
+#endif
 
 	/* Bolt-state indicator. Before Matter start, so the first LockState update
 	 * that lands already has somewhere to go. */

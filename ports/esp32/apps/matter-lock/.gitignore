@@ -1,8 +1,12 @@
 # ESP-IDF / esp-matter build output + generated / fetched artifacts.
 # sdkconfig.defaults* are the tracked source of truth.
 /build/
+/build-piv/
+/build-piv-uwb/
 /sdkconfig
 /sdkconfig.old
+/sdkconfig.piv.generated
+/sdkconfig.piv-uwb.generated
 # `make lab` / `make term LOG=` capture logs + their rendered reports. Bench
 # artifacts: a capture worth keeping belongs in tests/host/data/, named.
 /*.log

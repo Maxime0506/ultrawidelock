@@ -1,0 +1,7 @@
+# Disposable-VM custom CryptoTokenKit profile layered after sdkconfig.piv.
+#
+# The custom extension declares its token operations free of CryptoTokenKit
+# authentication constraints. macOS LoginWindow may still require PIN
+# submission before requesting slot 9A. Slot 9A remains gated by a fresh
+# trusted Wallet/UWB proof inside the ESP32 signing backend.
+CONFIG_WOZ_PIV_UWB_ONLY=y

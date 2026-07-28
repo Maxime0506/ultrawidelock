@@ -26,6 +26,16 @@ LOG ?=
 # make flash FORCE=1 stops whatever holds the UART (a monitor/tio) before flashing.
 FORCE ?=
 
+# Presence-dongle options (see the Presence group below).
+#   NAME=  label recorded when enrolling a dongle   TAG=  tag to sign
+#   MAXCM= distance threshold in cm (40 matches the host config default)
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../../..)
+PRESENCE  := $(REPO_ROOT)/tools/presence_git.py
+SDKCONFIG := sdkconfig
+NAME  ?=
+TAG   ?=
+MAXCM ?= 40
+
 # USB vendor ids (decimal, as ioreg reports them) used to classify ports.
 # Keep values trailing-whitespace-free: an inline comment would leak spaces into
 # the value and break the awk string compares below.
@@ -80,7 +90,9 @@ if [ -n "$$busy" ]; then \
 fi
 endef
 
-.PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean
+.PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean \
+        presence-on presence-off presence-flash presence-clone presence-probe presence-enroll \
+        presence-sign
 
 check-idf:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -140,6 +152,67 @@ term:
 	printf '  tio %s @ %s 8N1  ·  ctrl-t q quits  ·  release before make flash\n' "$$port" '$(BAUD)'; \
 	exec tio -b $(BAUD) $$logargs "$$port"
 
+##@ Presence dongle  (CONFIG_WOZ_PRESENCE · adds `presence` to the normal shell)
+## presence-on: add the presence + clone console commands  ·  idempotent
+##   Additive, not a mode: the shell, the logs and ranging all stay exactly as
+##   they are, and `presence` joins them. That is what lets one board be
+##   provisioned (presence-clone) and answer challenges without reflashing.
+##   Also enables CONFIG_WOZ_ALIRO_CLONE, whose aliro-export prints the reader
+##   PRIVATE KEY on the console -- bench only, which is why it stays default n.
+presence-on:
+	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — run 'make build' once first" >&2; exit 1; }
+	@for k in CONFIG_WOZ_PRESENCE CONFIG_WOZ_ALIRO_CLONE; do \
+		grep -qx "$$k=y" $(SDKCONFIG) || printf '%s=y\n' "$$k" >> $(SDKCONFIG); \
+	done; echo "  presence ON (+clone)  ·  next: make presence-flash"
+
+## presence-off: drop the presence + clone commands from the build
+presence-off:
+	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — nothing to turn off"; exit 0; }
+	@sed -i '' -e '/^CONFIG_WOZ_PRESENCE=y$$/d' -e '/^CONFIG_WOZ_ALIRO_CLONE=y$$/d' \
+	  $(SDKCONFIG) && echo "  presence OFF  ·  next: make flash"
+
+## presence-flash: turn presence on, then build + flash
+##   Never erases: the device signing key and the Aliro trust store both live in
+##   NVS, and erasing regenerates the key, invalidating every enrolment.
+presence-flash: presence-on
+	@$(MAKE) --no-print-directory flash
+
+## presence-clone: copy a provisioned reader identity onto the dongle  ·  SRC=/dev/cu...
+##   The phone's Wallet credential was issued against ONE reader identity, so the
+##   dongle has to present that same identity rather than be enrolled separately.
+##   SRC is the provisioned board (it needs aliro-export, i.e. its own presence-on).
+presence-clone:
+	@[ -n "$(SRC)" ] || { echo "  set SRC=  ·  the provisioned board's port (see: make ports)" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	[ "$$port" != "$(SRC)" ] || { echo "  SRC and the dongle resolved to the same port ($$port)" >&2; \
+	  echo "  pass PORT= as well to say which is the dongle" >&2; exit 1; }; \
+	echo "  cloning $(SRC) -> $$port"; \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) clone --source "$(SRC)" --port "$$port"
+
+## presence-probe: bring-up check  ·  does the dongle sign a frame we accept?
+##   Starts a fresh Aliro authentication + UWB round and succeeds only when the
+##   pinned credential proves present inside the configured distance.
+presence-probe:
+	@$(RESOLVE_PORT); \
+	echo "  probing $$port"; \
+	python3 $(PRESENCE) probe --port "$$port" --max-cm $(MAXCM)
+
+## presence-enroll: record this dongle's public key as trusted  ·  NAME=desk-dongle
+##   Appends to .presence/enrolled at the repo root, which is committed so the
+##   trust set is reviewable in history.
+presence-enroll:
+	@[ -n "$(NAME)" ] || { echo "  set NAME=  ·  e.g. make presence-enroll NAME=desk-dongle" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) enroll --port "$$port" --name "$(NAME)"
+
+## presence-sign: create a presence-signed annotated tag  ·  TAG=presence/1.2.0
+##   Wake the phone and hold it near the dongle first; this refuses to tag
+##   unless presence actually verifies.
+presence-sign:
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-sign TAG=presence/1.2.0" >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	cd $(REPO_ROOT) && python3 $(PRESENCE) sign --tag "$(TAG)" --port "$$port" --max-cm $(MAXCM)
+
 ##@ Housekeeping
 ## ports: list attached usbmodem ports, labelled by board
 ports:
@@ -166,6 +239,6 @@ help:
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
-	     printf "    %s%-12s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
+	     printf "    %s%-16s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
 	  $(MAKEFILE_LIST); \
 	printf '\n'

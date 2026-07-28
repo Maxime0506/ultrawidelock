@@ -6,7 +6,7 @@ Capture and replay UWB frames and session configuration from a walk-up to a host
 replay. Records endpoint identity, status registers, frame data, and timing metadata into a
 fixed-size ring buffer; provides reader and writer interfaces for host tools.
 
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](../modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](../modules.woz_uwb.src.shell/aliro_shell.c.md)
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](../modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](../modules.woz_uwb.src.shell/aliro_shell.c.md)  ·  **discussed in** [`docs/range-integrity.md`](../../range-integrity.md)
 
 ## API
 

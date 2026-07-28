@@ -62,6 +62,14 @@ void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm);
  * session is established. */
 void aliro_reader_notify_unlock(bool unsecured);
 
+/* Drives the one deferred piece of the above: a Secured that could not be delivered
+ * because the peer had already gone is held for a few seconds after the next session
+ * establishes, so that a phone which merely woke on the doorstep is not shown a lock
+ * its own grant undoes a second later. Call from any periodic loop with a monotonic
+ * millisecond clock; cheap enough to call unconditionally, and a no-op unless a
+ * replay is pending. Nothing else needs it -- an ordinary walk-up never arms one. */
+void aliro_reader_status_tick(int64_t now_ms);
+
 /* True while some peer holds an established Aliro session (auth done, ranging
  * channel up). This is the reader's presence signal, and it is the one an approach
  * controller should relock on: ranging silence is not a departure, because iOS
@@ -79,6 +87,24 @@ bool aliro_reader_session_active(void);
  * authenticated since boot (cred_pub written), false otherwise (left untouched).
  * Safe to call from any task. */
 bool aliro_reader_authenticated_credential(uint8_t cred_pub[65]);
+
+/* ---- Demand-driven presence proof --------------------------------------- *
+ * A proof must not reuse the credential/range latches from a prior walk-up.
+ * restart() marshals a disconnect of every current Aliro link onto the BLE
+ * host task and returns a nonzero request ticket. checkpoint() becomes true
+ * only after those links are gone; its auth_generation is the floor a new
+ * transaction must advance past. */
+uint32_t aliro_reader_presence_restart(void);
+bool aliro_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generation);
+
+/* Copy the credential accepted by an authentication newer than checkpoint.
+ * Returns false until a new trusted transaction has authenticated. */
+bool aliro_reader_presence_authenticated_after(uint32_t checkpoint, uint8_t cred_pub[65]);
+
+/* Presence is a named-human primitive, so ambiguity fails closed: returns one
+ * pinned credential only when the provisioned trust store has exactly one
+ * entry. Dev-open and multi-credential readers return false. */
+bool aliro_reader_presence_expected_credential(uint8_t cred_pub[65]);
 
 /* ---- Bench provisioning helpers (Phase 3.4) ---------------------------- *
  * Back the `aliro-prov` / `aliro-trust` console commands. Kept as plain calls
@@ -122,6 +148,21 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[65]);
 /** Revert to the dev identity + empty trust store (Matter ClearAliroReaderConfig)
  *  and persist. Returns 0 on success, negative on an NVS error. */
 int aliro_reader_provision_clear(void);
+
+/* ---- Identity clone (bench, CONFIG_WOZ_ALIRO_CLONE) --------------------- *
+ * Replicate a reader's identity + trust store onto a second board so a phone's
+ * existing credential transacts with the clone (the "no pairing dance" path for
+ * the presence-second-factor experiment). export_blob emits the reader private
+ * key, so only the clone-gated console commands reach these. */
+
+/** Serialise the current identity + trust store into a portable blob (backs the
+ *  `aliro-export` console command). Returns 0 and sets *out_len; -1 if cap is
+ *  too small. The blob contains the reader private key. */
+int aliro_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len);
+
+/** Adopt an identity + trust store from an exported blob, persist it, and use it
+ *  live (backs `aliro-import`). 0 ok; -1 malformed blob; -2 NVS write failed. */
+int aliro_reader_import_blob(const uint8_t *buf, size_t len);
 
 /* ---- Step-up (Access Document) bench control (CONFIG_WOZ_ALIRO_STEPUP) ---- *
  * Back the `aliro-stepup` console command. Both are no-ops unless the reader was

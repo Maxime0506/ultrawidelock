@@ -8,6 +8,7 @@
 | [`scripts/docs-publish.sh`](docs-publish.sh.md) | docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch. |
 | [`scripts/docs.sh`](docs.sh.md) | docs.sh — build the documentation site into site/. |
 | [`scripts/flash_html.py`](flash_html.md) | Render a release FLASH.md into a self-contained FLASH.html. |
+| [`scripts/presence_runtime.py`](presence_runtime.md) | Build the minimal, deterministic presence runtime transfer archive. |
 | [`scripts/test-runner.sh`](test-runner.sh.md) | Pretty umbrella runner for every host-side suite: one banner, live per-check |
 | [`scripts/toolchain.sh`](toolchain.sh.md) | toolchain.sh — what the CI gates need, whether this host has it, how to get it. |
 | [`scripts/twin-suite.sh`](twin-suite.sh.md) | The web-twin suite for the umbrella runner (make check): the constant-drift |

@@ -610,6 +610,12 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 					d_mm, (int)tof);
 			}
 #endif
+			/* Publish the layer-2 verdict with the block whatever the build does
+			 * with it. The lock may choose to open on a marginal block; a signed
+			 * presence assertion may not, and it can only refuse if the evidence
+			 * travelled with the range instead of being dropped here. */
+			fira_session_set_ccc_range_sts(g_final_sts_verdict, g_final_sts_index);
+
 			/* Feed the range into fira_session_last_range ->
 			 * UltraWideBandImpl::ReportRange -> AccessManager -> BoltLockMgr -> Matter
 			 * DoorLock cluster. */
