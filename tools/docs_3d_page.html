@@ -543,6 +543,16 @@ function refresh(){Graph.nodeColor(Graph.nodeColor());reglaze()}
 
 function esc(s){var d=document.createElement("i");d.textContent=s;return d.innerHTML}
 function chip(id){return '<span class="chip" data-go="'+esc(id)+'">'+esc(id.split("/").pop())+"</span>"}
+/* swatch + label, built as nodes rather than markup: the colour lands in a
+   style property and the group name in a text node, so neither can be read
+   back as HTML. */
+function swatch(el,g){
+  el.textContent="";
+  var i=document.createElement("i");
+  i.style.setProperty("--c",colOf[g]);
+  el.appendChild(i);
+  el.appendChild(document.createTextNode(g));
+}
 
 /* what a click means depends on where you are: on the surface it selects,
    in a dive symbols open their docs and outer files dive deeper */
@@ -698,7 +708,7 @@ function select(n,fly){
   if(!n){panel.classList.remove("on");syncLabs();refresh();return}
   outs[n.id].forEach(function(t){near[t]=1});
   ins[n.id].forEach(function(t){near[t]=1});
-  document.getElementById("pey").innerHTML='<i style="--c:'+colOf[n.grp]+'"></i>'+esc(n.grp);
+  swatch(document.getElementById("pey"),n.grp);
   document.getElementById("pname").textContent=n.name;
   document.getElementById("ppath").textContent=n.id;
   var b="";
@@ -886,7 +896,7 @@ Object.keys(D.slots).sort().forEach(function(g){
   if(!D.nodes.some(function(n){return n.grp===g}))return;
   var el=document.createElement("button");
   el.type="button";el.className="lg";el.setAttribute("aria-pressed","false");
-  el.innerHTML='<i style="--c:'+colOf[g]+'"></i>'+esc(g);
+  swatch(el,g);
   el.addEventListener("click",function(){
     iso=iso===g?null:g;
     Array.prototype.forEach.call(legend.children,function(c){
