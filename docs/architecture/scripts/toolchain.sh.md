@@ -39,20 +39,20 @@ touch a package it has already installed — which is exactly the repin case.
 **called by** `tool_install`
 
 ### `tool_gate()`
-`scripts/toolchain.sh:137`
+`scripts/toolchain.sh:138`
 
 Which gate stops working without it. This is the "why do I need this" column,
 and it is the reason a row exists at all.
 
 ### `tool_pin()`
-`scripts/toolchain.sh:172`
+`scripts/toolchain.sh:178`
 
 Extract the pinned version string for a tool (clang-format, clang-tidy, zizmor, reuse, actionlint, emcc, or markdown) from the corresponding CI workflow file. Returns the version or empty string if not found or tool name is unrecognized.
 
 **called by** `tool_install`, `tool_note`
 
 ### `actionlint_url()`
-`scripts/toolchain.sh:192`
+`scripts/toolchain.sh:198`
 
 actionlint's Linux install is CI's own: a release tarball checked against a
 sha256. Both come out of the workflow for the same reason the pins do.
@@ -60,14 +60,14 @@ sha256. Both come out of the workflow for the same reason the pins do.
 **called by** `tool_install`
 
 ### `actionlint_sha()`
-`scripts/toolchain.sh:197`
+`scripts/toolchain.sh:203`
 
 Extract the actionlint binary hash (64 hex characters) from workflow-lint.yml, return it or empty string if not found.
 
 **called by** `tool_install`
 
 ### `tool_probe()`
-`scripts/toolchain.sh:207`
+`scripts/toolchain.sh:213`
 
 Present on this host? Echoes the version (or a bare "installed") and returns
 0; returns 1 when absent. Three rows are not a plain `command -v`:
@@ -77,7 +77,7 @@ emcc      twin-wasm.sh sources ~/emsdk/emsdk_env.sh when emcc is off PATH.
 markdown  a python import, not a binary.
 
 ### `tool_install()`
-`scripts/toolchain.sh:265`
+`scripts/toolchain.sh:271`
 
 The command that installs it here. Empty = this host has no packaged route and
 the row prints a pointer instead.
@@ -85,19 +85,19 @@ the row prints a pointer instead.
 **calls** `actionlint_sha`, `actionlint_url`, `pipx_or_pip`, `tool_pin`
 
 ### `tool_note()`
-`scripts/toolchain.sh:406`
+`scripts/toolchain.sh:432`
 
 Printed under a row that has no install command on this host.
 
 **calls** `tool_pin`
 
 ### `version_of()`
-`scripts/toolchain.sh:416`
+`scripts/toolchain.sh:442`
 
 Pull the leading dotted number out of a --version line, for the pin compare.
 
 ### `verify_needs()`
-`scripts/toolchain.sh:426`
+`scripts/toolchain.sh:452`
 
 ---- drift check: every gate tool verify.sh names must have a row here -----
 verify.sh's gate_need() and gate_need_py() are the authority on what the gates

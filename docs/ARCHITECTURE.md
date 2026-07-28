@@ -5,6 +5,8 @@ Every subsystem on one page, in reading order: entry points (nothing imports the
 
 ```mermaid
 flowchart LR
+  integration.homeassistant --> tools.tui.src
+  integration.homeassistant.src.openaliro_ha --> tools.tui.src
   modules.woz_aliro.src --> modules.woz_aliro.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -358,6 +360,64 @@ ccc_ran_params.
 
 **depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
+## `tools/tui/src/`
+
+### [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+
+**depends on** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+**depends on** [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md), [`tools/tui/src/search.ts`](architecture/tools.tui.src/search.ts.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md), [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+
+### [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
+
+**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+
+### [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
+
+**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md)
+
+**depends on** [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md)
+
+*No module docstring. First commit: "Give the bench TUI its labels back as border rules".*
+
+**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/search.ts`](architecture/tools.tui.src/search.ts.md)
+
+Searching the serial scrollback.
+Pure string work, kept out of app.tsx so it can be tested directly instead of
+through a rendered terminal. Matching is case-insensitive and literal: a
+firmware log is full of `[`, `*`, `0x..` and `?`, so treating the query as a
+regular expression would turn ordinary searches into syntax errors.
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+
+**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+### [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md)
+
+### [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+### [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+**depends on** [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
 ## `integration/homeassistant/src/openaliro_ha/`
 
 ### [`integration/homeassistant/src/openaliro_ha/__main__.py`](architecture/integration.homeassistant.src.openaliro_ha/__main__.md)
@@ -436,7 +496,7 @@ is therefore the capability probe, not the first range reading.
 
 pyserial adapter and privacy-safe serial-port identity helpers.
 
-**exposes** `PySerialConnection`, `SerialPort`, `SerialTransportError`, `discover_serial_ports`, `open_serial_connection`, `resolve_serial_port`, `serial_identity`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+**exposes** `PySerialConnection`, `SerialPort`, `SerialTransportError`, `discover_serial_ports`, `open_serial_connection`, `resolve_serial_port`, `serial_identity`  ·  **depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
 
 ## `modules/woz_uwb/src/driver/`
 
@@ -516,7 +576,13 @@ CIRDIAG_CIR_EVERY.
 
 @file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md), [`modules/woz_uwb/src/shell/aliro_shell.h`](architecture/modules.woz_uwb.src.shell/aliro_shell.h.md)
+
+### [`modules/woz_uwb/src/shell/aliro_shell.h`](architecture/modules.woz_uwb.src.shell/aliro_shell.h.md)
+
+@file aliro_shell.h — the one seam the `aliro` console needs from the application.
+
+**used by** [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ## `modules/woz_aliro_stack/src/`
 
@@ -990,6 +1056,32 @@ Aliro 1.0 / ISO 18013-5 NFC step-up message and APDU codecs.
 Minimal strict BER/DER-TLV reader for Aliro APDU payloads.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md), [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
+
+## `integration/homeassistant/`
+
+### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
+
+Republish the lock's console log to MQTT as Home Assistant entities.
+
+Usage: aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 [--broker HOST] [--node NAME]
+       aliro_mqtt_bridge.py --port - --dry-run < captured.log
+
+Reads the UWB console line by line, extracts the per-block range line and the
+access verdict, and publishes them as two MQTT Discovery entities: a distance
+sensor in millimetres and an access event carrying granted/denied. Lines
+matching neither pattern are ignored.
+
+The range line is gated on the firmware side behind CONFIG_WOZ_PRETTY_SHELL and
+uwb_rxdiag_rng_get(), so it only appears once `aliro frames on` has been issued
+on the shell. Without that, the access events still flow but distance stays
+unpublished.
+
+Reading from '-' takes the log on stdin, which with --dry-run exercises the
+parser and the payloads without a broker or a board attached. paho-mqtt is
+imported only when publishing, pyserial only for a real port, so neither is
+needed for a dry run.
+
+**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
 
 ## `ports/esp32/apps/matter-lock/main/lock/`
 
@@ -1734,30 +1826,6 @@ device loss or exchange failure DestroySession(), both from the Aliro
 workqueue, matching the upstream RFAL transport's threading.
 
 **used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
-
-## `integration/homeassistant/`
-
-### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
-
-Republish the lock's console log to MQTT as Home Assistant entities.
-
-Usage: aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 [--broker HOST] [--node NAME]
-       aliro_mqtt_bridge.py --port - --dry-run < captured.log
-
-Reads the UWB console line by line, extracts the per-block range line and the
-access verdict, and publishes them as two MQTT Discovery entities: a distance
-sensor in millimetres and an access event carrying granted/denied. Lines
-matching neither pattern are ignored.
-
-The range line is gated on the firmware side behind CONFIG_WOZ_PRETTY_SHELL and
-uwb_rxdiag_rng_get(), so it only appears once `aliro frames on` has been issued
-on the shell. Without that, the access events still flow but distance stays
-unpublished.
-
-Reading from '-' takes the log on stdin, which with --dry-run exercises the
-parser and the payloads without a broker or a board attached. paho-mqtt is
-imported only when publishing, pyserial only for a real port, so neither is
-needed for a dry run.
 
 ## `integration/homeassistant/scripts/`
 

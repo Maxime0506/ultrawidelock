@@ -102,6 +102,7 @@ INCS=(
 	-I"$SRC/aliro/include"
 	-I"$SRC/fira"
 	-I"$SRC/facade"
+	-I"$SRC/shell"
 	-I"$ALIRO/include"
 	-I"$ROOT/modules/woz_port/include"
 	-I"$ROOT/modules/woz_aliro/include"

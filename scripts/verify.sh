@@ -97,6 +97,7 @@ GATES=(
 	clang-tidy  # 4s   clang-tidy.yml
 	test        # 5s   host-tests.yml : host
 	twin-wasm   # 7s   twin-web.yml : wasm-firmware  (2s warm, 7s cold)
+	test-tui    # 9s   release.yml : tui
 	test-san    # 8s   sanitizers.yml
 	patch-drift # 11s  patch-drift.yml
 	docs        # 12s  docs.yml
@@ -144,6 +145,7 @@ LANES=(
 	"test-ws patch-drift"      # 23s
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
+	"test-tui"                 # 9s   bun only, shares nothing with the C gates
 	"test test-san"            # 15s  same run.sh, same build/host_test* paths
 	"test-verify"              # 15s  13 stub sweeps back to back, under the floor
 	"cbmc"                     # 64s  WITH_CBMC=1 only, and then it is the floor
@@ -188,6 +190,7 @@ gate_need() {
 	zizmor) echo "zizmor" ;;
 	licenses) echo "reuse" ;;
 	cbmc) echo "cbmc" ;;
+	test-tui) echo "bun" ;;
 	*) echo "" ;;
 	esac
 }
@@ -221,6 +224,7 @@ gate_label() {
 	test-san) echo "host suite under ASan + UBSan" ;;
 	test-port) echo "ESP32 port tests" ;;
 	test-ws) echo "workspace auto-seeding" ;;
+	test-tui) echo "guided bench types, tests, build" ;;
 	test-verify) echo "this sweep's own tests" ;;
 	coverage) echo "line coverage >= ${COV_MIN}%" ;;
 	clang-tidy) echo "static analysis of the core" ;;
@@ -262,6 +266,10 @@ gate_run() {
 	# firmware build into a 33s sweep, from a shell state the sweep cannot see.
 	test-port) WOZ_NO_TARGET_BUILD=1 make --no-print-directory test-port ;;
 	test-ws) make --no-print-directory test-ws ;;
+	# All three steps release.yml runs, in its order. `make tui-test` alone would
+	# pass a branch whose types are broken or whose executable does not link,
+	# because CI only finds those in the typecheck and release steps.
+	test-tui) (cd "$ROOT/tools/tui" && bun run typecheck && bun run test && bun run release) ;;
 	test-verify) make --no-print-directory test-verify ;;
 	coverage)
 		# host-tests.yml runs `make coverage` and THEN enforces the floor as a

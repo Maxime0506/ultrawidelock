@@ -88,6 +88,7 @@ host-tests.yml:coverage                    coverage
 patch-drift.yml:drift                      patch-drift
 port-tests.yml:test                        test-port
 sanitizers.yml:asan-ubsan                  test-san
+release.yml:tui                            test-tui
 tooling.yml:ws-seed                        test-ws
 tooling.yml:verify-tests                   test-verify
 tooling.yml:shellcheck                     shellcheck
@@ -242,6 +243,9 @@ mk_tool_stub node twin-wasm
 mk_tool_stub doxygen docs
 mk_tool_stub dot docs
 mk_tool_stub cbmc cbmc
+# test-tui is the one gate that shells out to a tool directly instead of through
+# `make`, so it needs both a stub and somewhere to cd into below.
+mk_tool_stub bun test-tui
 
 # `make <target>`: for every gate that shells out to make, the gate name and the
 # target are the same word, so one stub covers all of them. It also writes the
@@ -285,7 +289,7 @@ chmod +x "$BIN/pystub"
 # The repo the sweep runs in: enough tracked files for the gates that shell out
 # to `git ls-files`, and the two paths verify.sh calls directly.
 mkdir -p "$FAKE/scripts" "$FAKE/tests/host" "$FAKE/tests/tooling" \
-	"$FAKE/modules" "$FAKE/web-twin"
+	"$FAKE/modules" "$FAKE/web-twin" "$FAKE/tools/tui"
 cp "$VERIFY" "$FAKE/scripts/verify.sh"; chmod +x "$FAKE/scripts/verify.sh"
 cp "$ISOLATED_VERIFY" "$FAKE/scripts/verify-isolated.sh"
 chmod +x "$FAKE/scripts/verify-isolated.sh"
@@ -493,7 +497,7 @@ rc=$?
 assert "S17 isolated candidate sweep exits 0" test "$rc" -eq 0
 assert "S17 committed twin selftest still runs" has "stub node ok"
 assert "S17 reduced scope is explicit" has "NOT the full CI set"
-for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage; do
+for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage test-tui; do
 	assert "S17 skips unavailable $isolated_gate gate" \
 		has "$isolated_gate \\(SKIP=\\)"
 done
