@@ -47,28 +47,28 @@ tokens that pass defines) and before the link pass; it adds no links.
 ## API
 
 ### `darken(page: str, extra: str='') -> str`
-`tools/docs_hero.py:336`
+`tools/docs_hero.py:342`
 
 Turn a page's hero band into the dark room, and add the band's stylesheet.
 
 **called by** `stage_landing`, `stage_start`
 
 ### `stage_landing(page: str) -> tuple[str, list[str]]`
-`tools/docs_hero.py:348`
+`tools/docs_hero.py:354`
 
 Turn the landing hero into the dark room; report what was applied.
 
 **called by** `main`  ·  **calls** `darken`
 
 ### `stage_start(page: str) -> tuple[str, list[str]]`
-`tools/docs_hero.py:355`
+`tools/docs_hero.py:361`
 
 Give the Get-started band the same room, plus rings of its own.
 
 **called by** `main`  ·  **calls** `darken`
 
 ### `main() -> int`
-`tools/docs_hero.py:363`
+`tools/docs_hero.py:369`
 
 Inject the landing hero treatment and the sitewide reveal layer into the rendered site; report the pages touched.
 

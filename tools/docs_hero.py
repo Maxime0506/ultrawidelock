@@ -98,6 +98,8 @@ HERO_CSS = """<style id="gv-stage-hero">
   --accent:#e0855f; --accent-ink:#e8a883;
   --tint:rgba(224,133,95,.14); --tint-line:rgba(224,133,95,.34);
   --btn:#d97757; --btn-hover:#e08c6d; --btn-ink:#171614;
+  /* the dark step of --ok, because the page's light one is 1.9:1 in here */
+  --ok:#8ac9a1;
   position:relative;isolation:isolate;background:#171614;color:var(--ink);
   border-bottom:1px solid rgba(250,249,245,.1)}
 .hero-cine .hero-in{position:relative;z-index:2;padding-top:4.6rem;padding-bottom:4.2rem}
@@ -192,7 +194,11 @@ HERO_CSS = """<style id="gv-stage-hero">
   .hero-cine .term{transform:none}}
 </style>"""
 
-HERO_FX = '<div class="hero-fx" aria-hidden="true"><span class="hf-glow"></span><span class="hf-grain"></span></div>'
+# hf-spot is empty until docs_motion.py's script gives it a pointer to follow.
+HERO_FX = (
+    '<div class="hero-fx" aria-hidden="true"><span class="hf-glow"></span>'
+    '<span class="hf-spot"></span><span class="hf-grain"></span></div>'
+)
 
 # ---------------------------------------------------------------------------
 # Bento + the sitewide layer. Four explore cards land as 2+1 / 1+2, which
