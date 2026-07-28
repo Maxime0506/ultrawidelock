@@ -52,7 +52,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -162,6 +162,14 @@ ha-test:
 ha-package:
 	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-package requires HA=1'; exit 2; }
 	@python3 -B $(REPO_ROOT)/integration/homeassistant/tools/package_component.py
+
+## ha-setup: set up the broker TLS, agent config, and credentials in one step
+##   Requires HA=1. Talks to a real broker over SSH and writes into
+##   ~/.config/openaliro-ha, so it is never part of a test or build path.
+##   Override defaults with HA_SSH, BROKER_HOST, MQTT_USER, or DEVICE_ID.
+ha-setup:
+	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-setup requires HA=1'; exit 2; }
+	@$(REPO_ROOT)/integration/homeassistant/scripts/ha-setup.sh
 
 ## fuzz: fuzz the wire-facing parsers  ·  parser-hardening gate
 ##   Coverage-guided libFuzzer where available (CI), else a portable corpus

@@ -63,7 +63,15 @@ def _parser() -> argparse.ArgumentParser:
     replay.add_argument("--json", action="store_true", help="emit a stable JSON array")
     doctor = subcommands.add_parser("doctor", help="check config, console, MQTT, and TLS")
     doctor.add_argument("--json", action="store_true", help="emit stable redacted JSON")
-    subcommands.add_parser("configure", help="discover one console and create or update config")
+    configure = subcommands.add_parser(
+        "configure", help="discover one console and create or update config"
+    )
+    configure.add_argument("--device-id", help="skip the device prompt")
+    configure.add_argument("--mqtt-host", help="configure MQTT from flags instead of prompts")
+    configure.add_argument("--mqtt-port", type=int, default=8883)
+    configure.add_argument("--mqtt-username")
+    configure.add_argument("--mqtt-password-file", help="file holding the MQTT password")
+    configure.add_argument("--mqtt-ca", help="TLS CA certificate path")
     subcommands.add_parser("run", help="run the long-lived MQTT agent")
     return parser
 
@@ -165,13 +173,41 @@ def _new_mqtt_config(input_fn: object) -> MqttConfig:
     return MqttConfig(host=host, port=port, ca_path=ca_path or None, allow_anonymous=True)
 
 
+def _flag(arguments: argparse.Namespace, name: str) -> Optional[object]:
+    """Read an optional configure flag, tolerating callers that omit it."""
+
+    return getattr(arguments, name, None)
+
+
+def _flag_mqtt_config(arguments: argparse.Namespace) -> MqttConfig:
+    """Build an MQTT config from flags so a setup script needs no prompts."""
+
+    username = _flag(arguments, "mqtt_username")
+    password_file = _flag(arguments, "mqtt_password_file")
+    if username and not password_file:
+        raise ConfigError("--mqtt-username requires --mqtt-password-file")
+    port = _flag(arguments, "mqtt_port") or 8883
+    if not 1 <= int(port) <= 65535:
+        raise ConfigError("MQTT TLS port must be between 1 and 65535")
+    return MqttConfig(
+        host=str(_flag(arguments, "mqtt_host")),
+        port=int(port),
+        username=username,
+        password_file=password_file,
+        ca_path=_flag(arguments, "mqtt_ca") or None,
+        allow_anonymous=not username,
+    )
+
+
 def _configure(arguments: argparse.Namespace, *, input_fn: object = input, output_fn: object = print) -> int:
-    """Interactively create or add one device without writing raw port details."""
+    """Create or add one device, from flags when given and prompts otherwise."""
 
     try:
         existing = load_config(arguments.config) if arguments.config.exists() else None
         port = _select_port(input_fn, output_fn)
-        device_id = _prompt(input_fn, "Device ID [front-door]: ", default="front-door")
+        device_id = _flag(arguments, "device_id") or _prompt(
+            input_fn, "Device ID [front-door]: ", default="front-door"
+        )
         selected = DeviceConfig(
             device_id=device_id,
             serial_port=port.device,
@@ -180,7 +216,12 @@ def _configure(arguments: argparse.Namespace, *, input_fn: object = input, outpu
         state = asyncio.run(probe_device(selected))
         if state not in READY_STATES:
             raise ConfigError("selected serial interface did not reach a ready state")
-        mqtt = existing.mqtt if existing is not None else _new_mqtt_config(input_fn)
+        if _flag(arguments, "mqtt_host"):
+            mqtt = _flag_mqtt_config(arguments)
+        elif existing is not None:
+            mqtt = existing.mqtt
+        else:
+            mqtt = _new_mqtt_config(input_fn)
         old_devices = existing.devices if existing is not None else ()
         persisted = DeviceConfig(
             device_id=device_id,

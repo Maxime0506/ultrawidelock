@@ -168,6 +168,72 @@ serial_port = "private-path"
         self.assertIn("Select the OpenAliro console interface:", output)
         self.assertIn('serial_identity = "' + "b" * 24 + '"', rendered)
 
+    def test_configure_from_flags_asks_nothing_and_stores_no_password(self):
+        candidate = SerialPort(
+            device="private-path",
+            identity="0123456789abcdef01234567",
+            vid=0x1366,
+            pid=0x1051,
+            interface=None,
+            product="J-Link",
+        )
+
+        def refuse(_message):
+            raise AssertionError("configure must not prompt when flags are given")
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "agent.toml"
+            password_file = Path(temporary_directory) / "mqtt-password"
+            password_file.write_text("s3cret", encoding="utf-8")
+            arguments = SimpleNamespace(
+                config=config_path,
+                device_id="side-door",
+                mqtt_host="broker.example.invalid",
+                mqtt_port=8883,
+                mqtt_username="agent",
+                mqtt_password_file=str(password_file),
+                mqtt_ca="/trusted/ca.pem",
+            )
+            with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
+                "openaliro_ha.cli.probe_device",
+                new=AsyncMock(return_value=SessionState.READY_STREAMING),
+            ):
+                self.assertEqual(
+                    _configure(arguments, input_fn=refuse, output_fn=lambda _message: None), 0
+                )
+            rendered = config_path.read_text(encoding="utf-8")
+        self.assertIn("[devices.side-door]", rendered)
+        self.assertIn('username = "agent"', rendered)
+        self.assertIn('ca_path = "/trusted/ca.pem"', rendered)
+        self.assertNotIn("s3cret", rendered)
+        self.assertNotIn("password_env", rendered)
+
+    def test_configure_flags_reject_a_username_without_a_password_file(self):
+        candidate = SerialPort(
+            device="private-path",
+            identity="0123456789abcdef01234567",
+            vid=0x1366,
+            pid=0x1051,
+            interface=None,
+            product="J-Link",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            arguments = SimpleNamespace(
+                config=Path(temporary_directory) / "agent.toml",
+                device_id="side-door",
+                mqtt_host="broker.example.invalid",
+                mqtt_port=8883,
+                mqtt_username="agent",
+                mqtt_password_file=None,
+                mqtt_ca=None,
+            )
+            with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
+                "openaliro_ha.cli.probe_device",
+                new=AsyncMock(return_value=SessionState.READY_STREAMING),
+            ):
+                with self.assertRaises(ConfigError):
+                    _configure(arguments, input_fn=lambda _m: "", output_fn=lambda _m: None)
+
     def test_probe_failure_reason_is_shown_without_the_device_path(self):
         failure = AgentError("selected serial interface is not a compatible OpenAliro console")
         failure.__cause__ = RuntimeError("/dev/cu.usbmodem0001 is busy")

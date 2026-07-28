@@ -104,6 +104,37 @@ openaliro-ha replay <sanitized-capture> --json
 openaliro-ha version
 ```
 
+### One-step setup
+
+`make ha-setup HA=1` does the whole first-run sequence: it generates the broker
+TLS certificate, installs it into the Home Assistant Mosquitto add-on over SSH,
+sets the add-on's certfile, keyfile, and login, restarts it, writes the agent
+configuration, and finishes with `doctor`. Every step is idempotent, so
+re-running it repairs a broken state rather than duplicating one; the
+certificate is reused while it still has a month of life and still matches the
+broker name.
+
+It defaults to the SSH alias `homeassistant`, the broker name
+`homeassistant.local`, MQTT user `openaliro_agent`, and device `front-door`.
+Override any of them:
+
+```bash
+make ha-setup HA=1                                  # defaults
+HA_SSH=hass BROKER_HOST=hass.lan make ha-setup HA=1  # different host
+```
+
+The password is read from a prompt (or `MQTT_PASSWORD`) and written to
+`~/.config/openaliro-ha/mqtt-password` with mode 0600, and the config records
+only that path. Nothing needs exporting into the shell before `run`, and the
+password never reaches a process listing. `configure` accepts the same values
+as flags (`--mqtt-host`, `--mqtt-password-file`, and so on) when a script needs
+to drive it without prompts.
+
+If the broker stops accepting TLS, check `/ssl` on the Home Assistant box
+first: Mosquitto's TLS listener never starts when `certfile` or `keyfile` is
+missing, and port 8883 refuses connections while 1883 stays open. Re-running
+`make ha-setup HA=1` restores them.
+
 `configure` records a hash of the selected USB interface rather than its raw
 USB serial number or current device path. It probes the selected console before
 writing a user-only configuration file. `doctor` checks that configuration, the
