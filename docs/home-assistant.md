@@ -52,7 +52,10 @@ Six steps, all idempotent, ending in `doctor`:
 6. run `doctor`.
 
 Re-running repairs a broken state rather than duplicating one, so it is also
-the first thing to try when something stops working.
+the first thing to try when something stops working. The MQTT block is replaced
+and any device other than this one is carried over, so a second board added
+separately survives. A configuration too damaged to parse is moved to
+`agent.toml.unreadable` and named, never discarded quietly.
 
 Defaults suit a stock Home Assistant OS install. Override any of them:
 

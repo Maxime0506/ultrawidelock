@@ -16,14 +16,14 @@ flowchart TD
 ## API
 
 ### `_candidate_label(index: int, port: SerialPort) -> str`
-`integration/homeassistant/src/openaliro_ha/cli.py:85`
+`integration/homeassistant/src/openaliro_ha/cli.py:90`
 
 Describe a candidate without echoing its device path or USB serial.
 
 **called by** `_select_port`
 
 ### `_probe_candidate(port: SerialPort) -> Optional[str]`
-`integration/homeassistant/src/openaliro_ha/cli.py:96`
+`integration/homeassistant/src/openaliro_ha/cli.py:101`
 
 Return None when a candidate answers, else why it did not.
 
@@ -32,28 +32,28 @@ The reason is stripped of device paths so the picker keeps hiding them.
 **called by** `_select_port`
 
 ### `_flag(arguments: argparse.Namespace, name: str) -> Optional[object]`
-`integration/homeassistant/src/openaliro_ha/cli.py:176`
+`integration/homeassistant/src/openaliro_ha/cli.py:181`
 
 Read an optional configure flag, tolerating callers that omit it.
 
 **called by** `_configure`, `_flag_mqtt_config`
 
 ### `_flag_mqtt_config(arguments: argparse.Namespace) -> MqttConfig`
-`integration/homeassistant/src/openaliro_ha/cli.py:182`
+`integration/homeassistant/src/openaliro_ha/cli.py:187`
 
 Build an MQTT config from flags so a setup script needs no prompts.
 
 **called by** `_configure`  ·  **calls** `_flag`
 
 ### `_configure(arguments: argparse.Namespace, *, input_fn: object=input, output_fn: object=print) -> int`
-`integration/homeassistant/src/openaliro_ha/cli.py:202`
+`integration/homeassistant/src/openaliro_ha/cli.py:212`
 
 Create or add one device, from flags when given and prompts otherwise.
 
 **called by** `main`  ·  **calls** `_flag`, `_flag_mqtt_config`, `_new_mqtt_config`, `_prompt`, `_select_port`
 
 ### `main(argv: Sequence[str] | None=None) -> int`
-`integration/homeassistant/src/openaliro_ha/cli.py:240`
+`integration/homeassistant/src/openaliro_ha/cli.py:250`
 
 Run an HA=1-gated offline command without exposing raw capture text.
 

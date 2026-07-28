@@ -114,15 +114,22 @@ case "$options_result" in
 esac
 ssh -o BatchMode=yes "$HA_SSH" 'ha apps restart core_mosquitto' >/dev/null
 printf '      waiting for the broker'
+broker_up=0
 for _ in $(seq 1 30); do
 	if openssl s_client -connect "$BROKER_HOST:$BROKER_PORT" -CAfile "$CERT" \
 		-brief </dev/null 2>&1 | grep -q 'Verification: OK'; then
+		broker_up=1
 		printf ' ok\n'
 		break
 	fi
 	printf '.'
 	sleep 2
 done
+if [ "$broker_up" = 0 ]; then
+	printf '\n'
+	fail "the broker did not accept a verified TLS connection on $BROKER_HOST:$BROKER_PORT.
+       Check the add-on log:  ssh $HA_SSH 'ha apps logs core_mosquitto | tail -30'"
+fi
 
 # 5. Agent configuration -----------------------------------------------------
 # The password lives in a 0600 file rather than an environment variable, so no
@@ -130,14 +137,26 @@ done
 step 5 "writing $CONFIG"
 umask 077
 printf '%s' "$MQTT_PASSWORD" >"$PASSWORD_FILE"
-rm -f "$CONFIG"
-openaliro-ha --config "$CONFIG" configure \
-	--device-id "$DEVICE_ID" \
-	--mqtt-host "$BROKER_HOST" \
-	--mqtt-port "$BROKER_PORT" \
-	--mqtt-username "$MQTT_USER" \
-	--mqtt-password-file "$PASSWORD_FILE" \
-	--mqtt-ca "$CERT"
+chmod 600 "$PASSWORD_FILE"
+# configure merges: the MQTT block comes from these flags and any device other
+# than this one is carried over, so an existing multi-device config survives.
+# A config too damaged to parse would stop it, so that one is moved aside and
+# named, never silently discarded.
+write_config() {
+	openaliro-ha --config "$CONFIG" configure \
+		--device-id "$DEVICE_ID" \
+		--mqtt-host "$BROKER_HOST" \
+		--mqtt-port "$BROKER_PORT" \
+		--mqtt-username "$MQTT_USER" \
+		--mqtt-password-file "$PASSWORD_FILE" \
+		--mqtt-ca "$CERT"
+}
+if ! write_config; then
+	[ -e "$CONFIG" ] || fail 'writing the agent configuration failed'
+	mv "$CONFIG" "$CONFIG.unreadable"
+	printf '      previous config kept at %s.unreadable\n' "$CONFIG"
+	write_config || fail 'writing the agent configuration failed'
+fi
 
 # 6. Verify ------------------------------------------------------------------
 step 6 'running doctor'

@@ -208,6 +208,95 @@ serial_port = "private-path"
         self.assertNotIn("s3cret", rendered)
         self.assertNotIn("password_env", rendered)
 
+    def test_configure_flags_reject_anonymous_mqtt_without_an_opt_in(self):
+        """A forgotten --mqtt-username must not silently disable authentication.
+
+        The prompted path gates anonymous MQTT behind a typed confirmation, so
+        the scripted path needs an equivalent or it becomes the quiet way to
+        write an unauthenticated config.
+        """
+
+        candidate = SerialPort(
+            device="private-path",
+            identity="0123456789abcdef01234567",
+            vid=0x1366,
+            pid=0x1051,
+            interface=None,
+            product="J-Link",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            arguments = SimpleNamespace(
+                config=Path(temporary_directory) / "agent.toml",
+                device_id="side-door",
+                mqtt_host="broker.example.invalid",
+                mqtt_port=8883,
+                mqtt_username=None,
+                mqtt_password_file=None,
+                mqtt_ca=None,
+                allow_anonymous=False,
+            )
+            with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
+                "openaliro_ha.cli.probe_device",
+                new=AsyncMock(return_value=SessionState.READY_STREAMING),
+            ):
+                with self.assertRaises(ConfigError):
+                    _configure(arguments, input_fn=lambda _m: "", output_fn=lambda _m: None)
+
+                arguments.allow_anonymous = True
+                self.assertEqual(
+                    _configure(arguments, input_fn=lambda _m: "", output_fn=lambda _m: None), 0
+                )
+            rendered = arguments.config.read_text(encoding="utf-8")
+        self.assertIn("allow_anonymous = true", rendered)
+
+    def test_configure_merges_into_an_existing_multi_device_config(self):
+        """A re-run must not drop a device someone added separately."""
+
+        candidate = SerialPort(
+            device="private-path",
+            identity="0123456789abcdef01234567",
+            vid=0x1366,
+            pid=0x1051,
+            interface=None,
+            product="J-Link",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "agent.toml"
+            password_file = Path(temporary_directory) / "mqtt-password"
+            password_file.write_text("s3cret", encoding="utf-8")
+            write_config(
+                config_path,
+                AgentConfig(
+                    mqtt=MqttConfig(host="old.example.invalid", allow_anonymous=True),
+                    devices=(
+                        DeviceConfig(device_id="back-door", serial_identity="b" * 24),
+                        DeviceConfig(device_id="front-door", serial_identity="a" * 24),
+                    ),
+                ),
+            )
+            arguments = SimpleNamespace(
+                config=config_path,
+                device_id="front-door",
+                mqtt_host="broker.example.invalid",
+                mqtt_port=8883,
+                mqtt_username="agent",
+                mqtt_password_file=str(password_file),
+                mqtt_ca="/trusted/ca.pem",
+                allow_anonymous=False,
+            )
+            with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
+                "openaliro_ha.cli.probe_device",
+                new=AsyncMock(return_value=SessionState.READY_STREAMING),
+            ):
+                self.assertEqual(
+                    _configure(arguments, input_fn=lambda _m: "", output_fn=lambda _m: None), 0
+                )
+            rendered = config_path.read_text(encoding="utf-8")
+        self.assertIn("[devices.back-door]", rendered)
+        self.assertIn("[devices.front-door]", rendered)
+        self.assertIn('host = "broker.example.invalid"', rendered)
+        self.assertNotIn("old.example.invalid", rendered)
+
     def test_configure_flags_reject_a_username_without_a_password_file(self):
         candidate = SerialPort(
             device="private-path",

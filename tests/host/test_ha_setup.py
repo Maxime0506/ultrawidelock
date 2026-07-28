@@ -65,7 +65,22 @@ class SetupScriptTests(unittest.TestCase):
 
     def test_the_password_file_is_created_privately(self):
         self.assertIn("umask 077", self.text)
+        self.assertIn('chmod 600 "$PASSWORD_FILE"', self.text)
+
+    def test_the_key_is_created_privately(self):
         self.assertIn('chmod 600 "$CERT" "$KEY"', self.text)
+
+    def test_an_unreachable_broker_stops_the_run(self):
+        """A wait loop that falls through leaves a later step to fail obscurely."""
+
+        self.assertIn("broker_up=0", self.text)
+        self.assertIn('if [ "$broker_up" = 0 ]; then', self.text)
+
+    def test_an_existing_config_is_never_deleted(self):
+        """configure merges, so a second device must survive a re-run."""
+
+        self.assertNotIn('rm -f "$CONFIG"', self.text)
+        self.assertIn('mv "$CONFIG" "$CONFIG.unreadable"', self.text)
 
     def test_certificate_carries_a_subject_alternative_name(self):
         """A certificate without a matching SAN fails verification on connect."""

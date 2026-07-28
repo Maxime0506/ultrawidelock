@@ -72,6 +72,11 @@ def _parser() -> argparse.ArgumentParser:
     configure.add_argument("--mqtt-username")
     configure.add_argument("--mqtt-password-file", help="file holding the MQTT password")
     configure.add_argument("--mqtt-ca", help="TLS CA certificate path")
+    configure.add_argument(
+        "--allow-anonymous",
+        action="store_true",
+        help="configure an unauthenticated broker connection",
+    )
     subcommands.add_parser("run", help="run the long-lived MQTT agent")
     return parser
 
@@ -186,6 +191,11 @@ def _flag_mqtt_config(arguments: argparse.Namespace) -> MqttConfig:
     password_file = _flag(arguments, "mqtt_password_file")
     if username and not password_file:
         raise ConfigError("--mqtt-username requires --mqtt-password-file")
+    # The prompted path gates anonymous MQTT behind a typed confirmation. Without
+    # an equivalent here, one forgotten --mqtt-username would quietly write an
+    # unauthenticated broker connection.
+    if not username and not _flag(arguments, "allow_anonymous"):
+        raise ConfigError("--mqtt-username is required unless --allow-anonymous is given")
     port = _flag(arguments, "mqtt_port") or 8883
     if not 1 <= int(port) <= 65535:
         raise ConfigError("MQTT TLS port must be between 1 and 65535")
