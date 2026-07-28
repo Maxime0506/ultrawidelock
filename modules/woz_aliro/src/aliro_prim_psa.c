@@ -238,8 +238,7 @@ int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *
 	return rc;
 }
 
-int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR],
-			       const uint8_t hash[32],
+int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t hash[32],
 			       uint8_t sig[ALIRO_P256_SIG])
 {
 	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
@@ -254,8 +253,8 @@ int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR],
 	if (psa_import_key(&attr, priv, ALIRO_P256_SCALAR, &k) != PSA_SUCCESS) {
 		return -1;
 	}
-	if (psa_sign_hash(k, PSA_ALG_ECDSA(PSA_ALG_SHA_256),
-			  hash, 32u, sig, ALIRO_P256_SIG, &slen) == PSA_SUCCESS &&
+	if (psa_sign_hash(k, PSA_ALG_ECDSA(PSA_ALG_SHA_256), hash, 32u, sig, ALIRO_P256_SIG,
+			  &slen) == PSA_SUCCESS &&
 	    slen == ALIRO_P256_SIG) {
 		rc = 0;
 	}

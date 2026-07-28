@@ -128,13 +128,13 @@ struct aliro_assert {
  * every negative value is a distinct reject reason (for logging + tests). */
 enum aliro_assert_verdict {
 	ALIRO_ASSERT_OK = 0,
-	ALIRO_ASSERT_E_MALFORMED = -1, /* bad length, magic, or version */
-	ALIRO_ASSERT_E_MAC = -2,       /* tag mismatch: wrong key or tampered */
-	ALIRO_ASSERT_E_NONCE = -3,     /* nonce != challenge: replay / mismatch */
-	ALIRO_ASSERT_E_STALE = -4,     /* uptime_ms <= min_uptime_ms */
-	ALIRO_ASSERT_E_ABSENT = -5,    /* status != PRESENT */
-	ALIRO_ASSERT_E_RANGE = -6,     /* distance_cm > threshold, or no range */
-	ALIRO_ASSERT_E_ALG = -7,       /* unknown alg, or not the one being verified */
+	ALIRO_ASSERT_E_MALFORMED = -1,  /* bad length, magic, or version */
+	ALIRO_ASSERT_E_MAC = -2,        /* tag mismatch: wrong key or tampered */
+	ALIRO_ASSERT_E_NONCE = -3,      /* nonce != challenge: replay / mismatch */
+	ALIRO_ASSERT_E_STALE = -4,      /* uptime_ms <= min_uptime_ms */
+	ALIRO_ASSERT_E_ABSENT = -5,     /* status != PRESENT */
+	ALIRO_ASSERT_E_RANGE = -6,      /* distance_cm > threshold, or no range */
+	ALIRO_ASSERT_E_ALG = -7,        /* unknown alg, or not the one being verified */
 	ALIRO_ASSERT_E_CREDENTIAL = -8, /* cred_id != enrolled credential */
 	/* Distance not backed by a good STS, or unknown range_flags bits. */
 	ALIRO_ASSERT_E_INTEGRITY = -9,

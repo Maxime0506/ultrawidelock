@@ -59,8 +59,7 @@ int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t peer_pu
 int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *msg, size_t msg_len,
 			  uint8_t sig[ALIRO_P256_SIG]);
 /* ECDSA-P256 over an already computed SHA-256 digest. sig = r|s. */
-int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR],
-			       const uint8_t hash[32],
+int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t hash[32],
 			       uint8_t sig[ALIRO_P256_SIG]);
 int aliro_ecdsa_p256_verify(const uint8_t pub[ALIRO_P256_POINT], const uint8_t *msg, size_t msg_len,
 			    const uint8_t sig[ALIRO_P256_SIG]);

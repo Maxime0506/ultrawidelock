@@ -1247,8 +1247,7 @@ bool aliro_reader_presence_expected_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
 	return have;
 }
 
-bool aliro_reader_presence_authenticated_after(uint32_t checkpoint,
-					       uint8_t out[ALIRO_CRED_PUB_LEN])
+bool aliro_reader_presence_authenticated_after(uint32_t checkpoint, uint8_t out[ALIRO_CRED_PUB_LEN])
 {
 	bool fresh;
 
