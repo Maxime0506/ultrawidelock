@@ -31,7 +31,7 @@ p: 64-byte input block.
 **called by** `aliro_sha256_update`  ·  **calls** `ror32`
 
 ### `void aliro_sha256_init(struct aliro_sha256 *s)`
-`modules/woz_aliro/src/aliro_hash.c:83`
+`modules/woz_aliro/src/aliro_hash.c:86`
 
 Initialize a streaming SHA-256 context with the FIPS 180-4 initial hash values.
 Resets total byte count and internal buffer length to zero; must be called before feeding data.
@@ -39,7 +39,7 @@ Resets total byte count and internal buffer length to zero; must be called befor
 **called by** `aliro_hkdf_expand`, `aliro_hmac_sha256`, `aliro_sha256`, `aliro_x963_kdf`
 
 ### `void aliro_sha256_update(struct aliro_sha256 *s, const void *data, size_t len)`
-`modules/woz_aliro/src/aliro_hash.c:101`
+`modules/woz_aliro/src/aliro_hash.c:104`
 
 Feeds len bytes of data into a streaming SHA-256 context, buffering a partial block and
 compressing full 64-byte blocks as they accumulate. s: context to update; total byte count and
@@ -49,7 +49,7 @@ len: number of bytes in data.
 **called by** `aliro_hkdf_expand`, `aliro_hmac_sha256`, `aliro_sha256`, `aliro_sha256_final`, `aliro_x963_kdf`  ·  **calls** `sha256_block`
 
 ### `void aliro_sha256_final(struct aliro_sha256 *s, uint8_t out[ALIRO_SHA256_LEN])`
-`modules/woz_aliro/src/aliro_hash.c:136`
+`modules/woz_aliro/src/aliro_hash.c:139`
 
 Finalizes a streaming SHA-256 computation, applying FIPS 180-4 padding and the big-endian
 bit-length suffix, and writes the 32-byte digest to out. s: context to finalize; consumed by this
@@ -59,21 +59,21 @@ digest.
 **called by** `aliro_hkdf_expand`, `aliro_hmac_sha256`, `aliro_sha256`, `aliro_x963_kdf`  ·  **calls** `aliro_sha256_update`
 
 ### `void aliro_sha256(const void *data, size_t len, uint8_t out[ALIRO_SHA256_LEN])`
-`modules/woz_aliro/src/aliro_hash.c:160`
+`modules/woz_aliro/src/aliro_hash.c:163`
 
 One-shot SHA-256.
 
 **called by** `aliro_hmac_sha256`  ·  **calls** `aliro_sha256_final`, `aliro_sha256_init`, `aliro_sha256_update`
 
 ### `void aliro_hmac_sha256(const uint8_t *key, size_t key_len, const void *msg, size_t msg_len, uint8_t out[ALIRO_SHA256_LEN])`
-`modules/woz_aliro/src/aliro_hash.c:169`
+`modules/woz_aliro/src/aliro_hash.c:172`
 
 HMAC-SHA256 (RFC 2104). out is 32 bytes.
 
 **called by** `aliro_hkdf_extract`  ·  **calls** `aliro_sha256`, `aliro_sha256_final`, `aliro_sha256_init`, `aliro_sha256_update`
 
 ### `void aliro_hkdf_extract(const uint8_t *salt, size_t salt_len, const uint8_t *ikm, size_t ikm_len, uint8_t prk[ALIRO_SHA256_LEN])`
-`modules/woz_aliro/src/aliro_hash.c:198`
+`modules/woz_aliro/src/aliro_hash.c:201`
 
 HKDF-SHA256 (RFC 5869).
 extract: PRK = HMAC(salt, ikm); salt==NULL uses a 32-byte zero salt.
@@ -83,7 +83,7 @@ Returns 0 on success, -1 on a bad length.
 **called by** `aliro_hkdf`  ·  **calls** `aliro_hmac_sha256`
 
 ### `int aliro_hkdf_expand(const uint8_t prk[ALIRO_SHA256_LEN], const uint8_t *info, size_t info_len, uint8_t *out, size_t out_len)`
-`modules/woz_aliro/src/aliro_hash.c:217`
+`modules/woz_aliro/src/aliro_hash.c:220`
 
 HKDF-SHA256 expand step (RFC 5869): derives out_len bytes of output keying material from a
 pseudorandom key and context info. prk: 32-byte pseudorandom key, typically from
@@ -96,7 +96,7 @@ Returns 0 on success, or -1 if out_len exceeds the RFC 5869 maximum.
 **called by** `aliro_hkdf`  ·  **calls** `aliro_sha256_final`, `aliro_sha256_init`, `aliro_sha256_update`
 
 ### `int aliro_hkdf(const uint8_t *salt, size_t salt_len, const uint8_t *ikm, size_t ikm_len, const uint8_t *info, size_t info_len, uint8_t *out, size_t out_len)`
-`modules/woz_aliro/src/aliro_hash.c:271`
+`modules/woz_aliro/src/aliro_hash.c:274`
 
 HKDF-SHA256 (RFC 5869): extracts a pseudorandom key from salt and input keying material, then
 expands it to out_len bytes of output. salt: salt bytes for the extract step. salt_len: length of
@@ -109,7 +109,7 @@ Returns 0 on success, or -1 if out_len exceeds the RFC 5869 maximum.
 **calls** `aliro_hkdf_expand`, `aliro_hkdf_extract`
 
 ### `int aliro_x963_kdf(const uint8_t *z, size_t z_len, const uint8_t *info, size_t info_len, uint8_t *out, size_t out_len)`
-`modules/woz_aliro/src/aliro_hash.c:280`
+`modules/woz_aliro/src/aliro_hash.c:283`
 
 ANSI-X9.63 KDF (SEC1 v2 KDF2), SHA-256 variant:
 OKM = Hash(Z | counter_be32=1 | info) | Hash(Z | counter=2 | info) | ...

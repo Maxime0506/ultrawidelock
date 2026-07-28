@@ -2287,10 +2287,6 @@ deleting the worktree deletes it (see `make ws-clean`).
 
 Verify that the web-twin's hardcoded firmware constants in index.html stay synchronized with their source definitions. Parses the FW table, reads the cited source lines, and reports any mismatches or missing citations.
 
-### [`web-twin/twin.js`](architecture/web-twin/twin.js.md)
-
-*No module docstring. First commit: "twin: compile the firmware to WASM (web-twin/twin.js)".*
-
 ### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
 
 @file twin_glue.c — WASM entry points: the twin page's firmware harness.
