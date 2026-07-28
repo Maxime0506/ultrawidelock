@@ -316,9 +316,9 @@ static int cmd_factoryreset(const struct shell *sh, size_t argc, char **argv)
 {
 	if (argc < 2 || strcmp(argv[1], "yes") != 0) {
 		hdr(sh, C_RED "factory reset" C_RST);
-		shell_print(sh, "  " C_DIM "Erases the Matter fabrics, the Aliro reader identity, and" C_RST);
-		shell_print(sh, "  " C_DIM "every trusted phone key, then reboots unprovisioned." C_RST);
-		shell_print(sh, "  " C_DIM "Remove the stale accessory from the home before pairing again." C_RST);
+		shell_print(sh, "  " C_DIM "Erases Matter fabrics, reader identity, and all" C_RST);
+		shell_print(sh, "  " C_DIM "trusted phone keys, then reboots unprovisioned." C_RST);
+		shell_print(sh, "  " C_DIM "Remove the stale accessory before re-pairing." C_RST);
 		shell_print(sh, "");
 		shell_print(sh, "  " C_YEL "confirm with: aliro factoryreset yes" C_RST);
 		return -EINVAL;
@@ -436,7 +436,7 @@ static int cmd_aliro(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "  " C_CYN "log     " C_RST C_DIM "ranging heartbeat on|off" C_RST);
 	shell_print(sh, "  " C_CYN "frames  " C_RST C_DIM "per-block distance stream on|off" C_RST);
 	shell_print(sh, "  " C_CYN "version " C_RST C_DIM "build commit SHA" C_RST);
-	shell_print(sh, "  " C_RED "factoryreset" C_RST C_DIM "  erase everything · needs `yes`" C_RST);
+	shell_print(sh, "  " C_RED "factoryreset" C_RST C_DIM " erase all · needs `yes`" C_RST);
 	shell_print(sh, "");
 	return 0;
 }

@@ -119,7 +119,7 @@ pipx_or_pip() { # $1 = pip spec, e.g. clang-format==22.1.8
 # checks for but CI installs — see tool_gate("markdown") for why they are here.
 TOOLS=(
 	cc python3 shellcheck actionlint clang-format clang-tidy
-	node doxygen dot llvm-cov zizmor reuse cbmc emcc markdown coverage
+	node doxygen dot llvm-cov zizmor reuse cbmc emcc markdown coverage bun
 )
 
 # Bench tools, not gates. nrfutil installs the NCS toolchain and tio owns live
@@ -151,6 +151,10 @@ tool_gate() {
 	reuse) echo "licenses" ;;
 	cbmc) echo "cbmc" ;;
 	emcc) echo "twin-wasm rebuild" ;;
+	# No pin here even though release.yml pins one. That pin exists so the
+	# published executable is reproducible; package.json asks only for >=1.3.0,
+	# and nagging a contributor over a patch release would be noise.
+	bun) echo "test-tui, make openaliro" ;;
 	# No gate names these two, which is exactly the trap. CI installs both, and
 	# without them the suites that use them skip: test_flash_html stops checking
 	# regen drift, and coverage.sh reports no python rows. The gate goes green
@@ -390,6 +394,16 @@ tool_install() {
 	# nothing lands outside the checkout.
 	markdown | coverage)
 		echo "python3 -m venv .venv && .venv/bin/pip install --quiet --upgrade pip 'markdown==$(tool_pin markdown)' coverage"
+		;;
+	# Homebrew only, on purpose. Bun's own route is `curl https://bun.sh/install
+	# | bash`, and this file is not going to hand anyone a pipe-to-shell. Every
+	# other host gets the pointer, which is the same link `make openaliro`
+	# prints when it finds no bun.
+	bun)
+		case "$PM" in
+		brew) echo "brew install oven-sh/bun/bun" ;;
+		*) echo "" ;;
+		esac
 		;;
 	tio)
 		case "$PM" in
