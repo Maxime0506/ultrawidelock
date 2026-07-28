@@ -32,8 +32,10 @@
 
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
+#include <platform/PlatformManager.h> // ScheduleWork — also pulled in below, but not unconditionally
 #include <setup_payload/OnboardingCodesUtil.h>
 #include <setup_payload/QRCodeSetupPayloadGenerator.h> // kMaxQRCodeBase38RepresentationLength
+#include <iot_button.h> // BUTTON_LONG_PRESS_START — the commissioning-window recovery press
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
@@ -589,6 +591,70 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
 
 // Application entry point: initializes NVS, the lock LED, power management, and the Matter node
 // with a door lock endpoint (adding Aliro provisioning/BLE-UWB clusters and delegate when enabled).
+// See app_priv.h. Schedules the open onto the Matter task, which is the only
+// thread allowed to drive the server, and logs the outcome at WARN so it lands
+// in the boot log at the default level rather than needing `log` turned up.
+void app_commissioning_window_open()
+{
+	/* Not discarded: a schedule that fails means the window never opens, and
+	 * both callers would otherwise report success and leave you waiting for an
+	 * advertisement that is not coming. */
+	CHIP_ERROR sched = chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+		CHIP_ERROR e = chip::Server::GetInstance()
+				       .GetCommissioningWindowManager()
+				       .OpenBasicCommissioningWindow();
+
+		if (e == CHIP_NO_ERROR) {
+			ESP_LOGW(TAG, "commissioning window open; pair with the printed codes");
+		} else {
+			ESP_LOGE(TAG, "commissioning window failed: %" CHIP_ERROR_FORMAT,
+				 e.Format());
+		}
+	});
+
+	if (sched != CHIP_NO_ERROR) {
+		ESP_LOGE(TAG, "commissioning window not scheduled: %" CHIP_ERROR_FORMAT,
+			 sched.Format());
+	}
+}
+
+// See app_priv.h.
+void app_print_onboarding_codes()
+{
+	char code[chip::QRCodeBasicSetupPayloadGenerator::kMaxQRCodeBase38RepresentationLength + 1];
+	const chip::RendezvousInformationFlags rendezvous(chip::RendezvousInformationFlag::kBLE);
+
+	chip::DeviceLayer::PlatformMgr().LockChipStack();
+	chip::MutableCharSpan qr(code);
+	if (GetQRCode(qr, rendezvous) == CHIP_NO_ERROR) {
+		char url[512];
+
+		printf("SetupQRCode: [%s]\n", qr.data());
+		if (GetQRCodeUrl(url, sizeof(url), qr) == CHIP_NO_ERROR) {
+			printf("QR code URL: %s\n", url);
+		}
+	} else {
+		printf("SetupQRCode: unavailable\n");
+	}
+	chip::MutableCharSpan manual(code);
+	if (GetManualPairingCode(manual, rendezvous) == CHIP_NO_ERROR) {
+		printf("Manual pairing code: [%s]\n", manual.data());
+	} else {
+		printf("Manual pairing code: unavailable\n");
+	}
+	chip::DeviceLayer::PlatformMgr().UnlockChipStack();
+}
+
+/* Long press opens a commissioning window rather than the factory reset the
+ * esp-matter examples map here. On a lock a mispress should cost a 3 minute
+ * advertisement, not every fabric and the Aliro trust store. */
+static void on_button_long_press(void *button_handle, void *usr_data)
+{
+	(void)button_handle;
+	(void)usr_data;
+	app_commissioning_window_open();
+}
+
 // Registers the Aliro reader's GATT service with the BLE host before esp_matter::start so it
 // coexists with CHIPoBLE. Starts Matter, prints onboarding codes, and if already commissioned (e.g.
 // after a reboot) starts the Aliro reader immediately; otherwise the reader starts on the
@@ -716,25 +782,24 @@ extern "C" void app_main()
 	 * PrintOnboardingCodes emits nothing and no runtime log level can bring
 	 * it back. Print the commissioning codes directly so they are always in
 	 * the boot log (Apple Home / chip-tool). BLE is the initial transport. */
+	app_print_onboarding_codes();
+
+	/* The button handle was being created and immediately dropped. Wire the
+	 * long press (CONFIG_BUTTON_LONG_PRESS_TIME_MS, 5 s) to the commissioning
+	 * window, so a board that lost its Wi-Fi credentials can be recovered with
+	 * no console attached at all. After esp_matter::start, because the callback
+	 * schedules work onto a server that has to exist. */
 	{
-		char code[chip::QRCodeBasicSetupPayloadGenerator::kMaxQRCodeBase38RepresentationLength + 1];
-		const chip::RendezvousInformationFlags rendezvous(
-			chip::RendezvousInformationFlag::kBLE);
-		chip::MutableCharSpan qr(code);
-		if (GetQRCode(qr, rendezvous) == CHIP_NO_ERROR) {
-			char url[512];
-			printf("SetupQRCode: [%s]\n", qr.data());
-			if (GetQRCodeUrl(url, sizeof(url), qr) == CHIP_NO_ERROR) {
-				printf("QR code URL: %s\n", url);
+		app_driver_handle_t btn = app_driver_button_init();
+
+		if (btn != nullptr) {
+			esp_err_t berr = iot_button_register_cb((button_handle_t)btn,
+								BUTTON_LONG_PRESS_START, NULL,
+								on_button_long_press, NULL);
+
+			if (berr != ESP_OK) {
+				ESP_LOGW(TAG, "button long-press hook failed: %d", (int)berr);
 			}
-		} else {
-			printf("SetupQRCode: unavailable\n");
-		}
-		chip::MutableCharSpan manual(code);
-		if (GetManualPairingCode(manual, rendezvous) == CHIP_NO_ERROR) {
-			printf("Manual pairing code: [%s]\n", manual.data());
-		} else {
-			printf("Manual pairing code: unavailable\n");
 		}
 	}
 
