@@ -152,6 +152,22 @@ config WOZ_APPROACH_PREDICT
 
 	  Pick per lock: the gate for battery power, this for latency.
 
+config WOZ_UWB_CIRDIAG
+	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"
+	default n
+	help
+	  Latch the DW3000's CIA diagnostic bank on each reception (Ipatov/STS
+	  first-path index, F1..F3, power, peak, STS quality, crystal offset) and
+	  emit it as one "[ALAB] ev=uwb.diag" line from task context, plus an
+	  independently-armed 64-tap Ipatov window around the first path
+	  ("[ALAB] ev=uwb.cir"). tools/aliro_lab.py --cir consumes both.
+	  The summary rides the `lab on` gate; `lab cir on` arms the taps and
+	  `lab cir probe` runs a one-shot accumulator read diagnostic.
+	  The window read is only valid while the receiver is idle, so it is taken
+	  before the RX shim re-arms and only on one Final in four; even so it costs
+	  walk-up latency while armed, so arm it only for a capture run. Set n to
+	  strip it entirely.
+
 config WOZ_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	default n

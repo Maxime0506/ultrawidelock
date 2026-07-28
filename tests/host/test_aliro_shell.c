@@ -9,6 +9,7 @@
 
 #include "drvfake.h"
 #include "test.h"
+#include "uwb_cirdiag.h"
 #include "uwb_min.h"
 #include "uwb_rxdiag.h"
 
@@ -125,6 +126,51 @@ void test_aliro_shell(void)
 	T_OK("frames off", !uwb_rxdiag_rng_get());
 	argv2[1] = junk_s;
 	T_EQ("frames junk rc", run("frames", 2, argv2), -22);
+
+	t_group("cir panel");
+	uwb_cirdiag_set_enabled(false);
+	uwb_cirdiag_dump_set_enabled(false);
+	argv2[1] = on_s;
+	T_EQ("cir on rc", run("cir", 2, argv2), 0);
+	T_OK("cir on", uwb_cirdiag_enabled());
+	argv2[1] = off_s;
+	T_EQ("cir off rc", run("cir", 2, argv2), 0);
+	T_OK("cir off", !uwb_cirdiag_enabled());
+	argv2[1] = junk_s;
+	T_EQ("cir junk rc", run("cir", 2, argv2), -22);
+	T_EQ("cir query rc", run("cir", 1, NULL), 0);
+	{
+		char dump_s[] = "dump";
+		char *argv3[3];
+		int rc;
+
+		argv3[1] = dump_s;
+		argv3[2] = on_s;
+		T_EQ("cir dump on rc", run("cir", 3, argv3), 0);
+		T_OK("cir dump on", uwb_cirdiag_dump_enabled());
+		argv3[2] = off_s;
+		/* The disarm drains the CIR ring to serial. Muted around the call
+		 * only, so the rc check below still reports a failure. */
+		t_mute();
+		rc = run("cir", 3, argv3);
+		t_unmute();
+		T_EQ("cir dump off rc", rc, 0);
+		T_OK("cir dump off", !uwb_cirdiag_dump_enabled());
+		argv3[2] = junk_s;
+		T_EQ("cir dump junk rc", run("cir", 3, argv3), -22);
+	}
+	{
+		/* `cir probe` takes the accumulator-read diagnostic branch: no toggle, always 0. */
+		char probe_s[] = "probe";
+		int rc;
+
+		argv2[1] = probe_s;
+		t_mute(); /* the probe prints every tap it reads */
+		rc = run("cir", 2, argv2);
+		t_unmute();
+		T_EQ("cir probe rc", rc, 0);
+	}
+	uwb_cirdiag_set_enabled(false);
 
 	t_group("version");
 	T_EQ("version rc", run("version", 1, NULL), 0);

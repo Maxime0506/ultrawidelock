@@ -37,6 +37,10 @@ static bool s_lab_on;
 static bool s_lab_dumped;
 #endif
 
+/**
+ * Initialize latency tracking and record the BLE connection epoch; reset all phase timestamps to
+ * zero and clear the lab-dump flag if CONFIG_WOZ_ALIRO_LAB is enabled.
+ */
 void aliro_lat_begin(void)
 {
 	memset(s_stamp_us, 0, sizeof(s_stamp_us));
@@ -46,6 +50,10 @@ void aliro_lat_begin(void)
 #endif
 }
 
+/**
+ * Record the current uptime for a given Aliro protocol phase if not yet marked; return 1 if newly
+ * recorded, 0 if already marked or phase index is out of range.
+ */
 int aliro_lat_mark(enum aliro_lat_phase phase)
 {
 	if ((unsigned)phase >= ALIRO_LAT_PHASE_COUNT || s_stamp_us[phase] != 0) {
@@ -55,6 +63,11 @@ int aliro_lat_mark(enum aliro_lat_phase phase)
 	return 1;
 }
 
+/**
+ * Print a one-line latency summary to stdout showing each Aliro phase as milliseconds offset from
+ * BLE connect, or "-" if the phase was never reached; also emit any flight-recorder lab traces if
+ * enabled.
+ */
 void aliro_lat_report(void)
 {
 	int64_t t0 = s_stamp_us[ALIRO_LAT_BLE_CONNECT];
@@ -81,16 +94,26 @@ void aliro_lat_report(void)
  * reads the stamps above); Kconfig enforces the dependency. */
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 
+/**
+ * Enable or disable Aliro latency lab tracing (CONFIG_WOZ_ALIRO_LAB flight-recorder output).
+ */
 void aliro_lab_set_enabled(bool on)
 {
 	s_lab_on = on;
 }
 
+/**
+ * Return true if Aliro latency lab tracing (CONFIG_WOZ_ALIRO_LAB) is enabled; false otherwise.
+ */
 bool aliro_lab_enabled(void)
 {
 	return s_lab_on;
 }
 
+/**
+ * Log a timestamped flight-recorder event with description ev to stdout if lab tracing is enabled;
+ * no-op if disabled.
+ */
 void aliro_lab_ev(const char *ev)
 {
 	if (!s_lab_on) {
@@ -99,6 +122,10 @@ void aliro_lab_ev(const char *ev)
 	woz_printf("[ALAB] t=%lld ev=%s\n", (long long)woz_uptime_us(), ev);
 }
 
+/**
+ * Log a timestamped flight-recorder event with description ev and one key=value pair to stdout if
+ * lab tracing is enabled; no-op if disabled.
+ */
 void aliro_lab_evi(const char *ev, const char *key, long val)
 {
 	if (!s_lab_on) {
@@ -107,6 +134,10 @@ void aliro_lab_evi(const char *ev, const char *key, long val)
 	woz_printf("[ALAB] t=%lld ev=%s %s=%ld\n", (long long)woz_uptime_us(), ev, key, val);
 }
 
+/**
+ * Log a timestamped flight-recorder event with description ev and two key=value pairs to stdout if
+ * lab tracing is enabled; no-op if disabled.
+ */
 void aliro_lab_evi2(const char *ev, const char *k1, long v1, const char *k2, long v2)
 {
 	if (!s_lab_on) {
@@ -116,6 +147,10 @@ void aliro_lab_evi2(const char *ev, const char *k1, long v1, const char *k2, lon
 		   k2, v2);
 }
 
+/**
+ * Emit flight-recorder lab traces for every recorded Aliro latency phase to stdout in [ALAB] format
+ * if lab tracing is enabled and has not yet been dumped.
+ */
 void aliro_lab_dump(void)
 {
 	if (!s_lab_on || s_lab_dumped) {

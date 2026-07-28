@@ -61,6 +61,17 @@ struct drvfake_state {
 	uint16_t last_readrx_len;
 	uint32_t read_reg_val; /* dwt_read_reg (rxdiag SYS_CFG peek) */
 
+	/* ── CIA/CIR diagnostics (uwb_cirdiag) ── */
+	uint16_t diag_fp;       /* ipatovFpIndex served by dwt_readdiagnostics (Q10.6) */
+	unsigned readdiag_calls;
+	unsigned configciadiag_calls;
+	uint8_t last_ciadiag_mask;
+	unsigned readcir_calls;
+	uint16_t first_cir_base; /* sample_offs of the first dwt_readcir since reset */
+	uint16_t last_cir_base; /* sample_offs of the last dwt_readcir */
+	uint16_t last_cir_num;  /* num_samples of the last dwt_readcir */
+	int cir_ret;            /* dwt_readcir return (0 = DWT_SUCCESS) */
+
 	/* ── callback registration capture (dwt_setcallbacks + __real_) ── */
 	dwt_callbacks_s cbs;
 	unsigned setcallbacks_calls;
@@ -75,6 +86,8 @@ struct drvfake_state {
 	bool ccc_active;
 	unsigned wrap_log_reset_calls;
 	bool rx_awaiting;
+	bool rx_deadline; /* ccc_shim_rx_deadline_pending — gates the Stage 1 CIR window read */
+	bool rx_final; /* ccc_shim_rx_awaiting_final — sampled pre-arm; true means radio idle */
 	unsigned notify_calls;
 	uint32_t last_notify_status;
 	unsigned try_prepoll_calls;

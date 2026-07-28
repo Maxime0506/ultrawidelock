@@ -70,11 +70,13 @@ struct k_work_delayable {
 	struct k_work work;
 };
 #define K_WORK_DELAYABLE_DEFINE(name, fn) struct k_work_delayable name = {{(fn)}}
+#define K_WORK_DEFINE(name, fn)           struct k_work name = {(fn)}
 
 int k_work_reschedule(struct k_work_delayable *dwork, k_timeout_t delay);
 int k_work_schedule(struct k_work_delayable *dwork, k_timeout_t delay);
 int k_work_cancel_delayable(struct k_work_delayable *dwork);
 void k_work_init_delayable(struct k_work_delayable *dwork, k_work_handler_t handler);
+int k_work_submit(struct k_work *work);
 
 /* Recorded by the fakes above; the suite fires a work item by calling
  * workfake.last->work.handler(&workfake.last->work) itself. */
@@ -84,6 +86,8 @@ struct workfake_state {
 	unsigned int reschedule_calls;
 	unsigned int schedule_calls;
 	unsigned int cancel_calls;
+	struct k_work *last_submit;
+	unsigned int submit_calls;
 };
 extern struct workfake_state workfake;
 

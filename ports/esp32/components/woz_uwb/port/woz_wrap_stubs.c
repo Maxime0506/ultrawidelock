@@ -17,7 +17,8 @@
 
 #include <deca_device_api.h>
 
-#include "ccc_shim.h" /* ccc_shim_rx_{awaiting_poll,notify_rx,try_prepoll} */
+#include "ccc_shim.h"    /* ccc_shim_rx_{awaiting_poll,notify_rx,try_prepoll} */
+#include "uwb_cirdiag.h" /* per-reception CIA diag latch (rides the `lab on` gate) */
 
 void __real_dwt_configurestsmode(uint8_t stsMode);
 
@@ -49,11 +50,29 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	if (d != NULL) {
 		ccc_shim_rx_notify_rx(d->status);
 	}
+	/* Channel-impulse: sampled BEFORE the blob re-arms, this says the reception being
+	 * serviced is the Final — and the radio is still idle, which is the only state in which
+	 * the accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
+	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
+	 * absorbs the read before the SP0 listen goes back up. */
+	bool win = ccc_shim_rx_awaiting_final() && uwb_cirdiag_window_due();
+
+	if (win) {
+		(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					  d != NULL ? d->datalength : 0u, false);
+	}
 	if (g_blob_rxok != NULL) {
 		g_blob_rxok(d);
 	}
 	if (d != NULL && !await) {
 		ccc_shim_rx_try_prepoll(d->datalength);
+	}
+	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
+	 * the POLL/Final deadlines are met first. dw3000_isr_task emits the [ALAB] line after its
+	 * IRQ drain loop. */
+	if (!win) {
+		(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u,
+					  d != NULL ? d->datalength : 0u, true);
 	}
 }
 

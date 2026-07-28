@@ -186,6 +186,10 @@ static void schedule_bolt_unlock(void)
 	});
 }
 
+/**
+ * Schedule the door bolt to lock on the Aliro endpoint, attributing the operation to the credential owner resolved from the current reader authentication context.
+ * Defers the lock call to the Matter device layer work queue.
+ */
 static void schedule_bolt_lock(void)
 {
 	chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {

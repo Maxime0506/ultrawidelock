@@ -13,16 +13,29 @@
 
 #define Q4 16 /* Q4 scale; multiply (never shift) — negatives are involved */
 
+/**
+ * Reset the RSSI gate to its initial state (all fields zeroed). Gate is not primed and will not
+ * filter samples until the first feed.
+ */
 void aliro_rssi_gate_reset(struct aliro_rssi_gate *g)
 {
 	memset(g, 0, sizeof(*g));
 }
 
+/**
+ * Return true if the RSSI gate is currently open (signal is strong enough to unlock), false
+ * otherwise.
+ */
 bool aliro_rssi_gate_is_open(const struct aliro_rssi_gate *g)
 {
 	return g->open;
 }
 
+/**
+ * Begin a hold period for the RSSI gate, marking the start time. Used by the reader to signal that
+ * it is deferring an approach-unlock decision (e.g., awaiting a credential) and will check hold-cap
+ * timeout on future samples.
+ */
 void aliro_rssi_gate_hold_begin(struct aliro_rssi_gate *g, uint32_t now_ms)
 {
 	g->holding = true;
@@ -30,11 +43,20 @@ void aliro_rssi_gate_hold_begin(struct aliro_rssi_gate *g, uint32_t now_ms)
 	g->hold_since_ms = now_ms;
 }
 
+/**
+ * Return true if the gate ever hit the hold-cap timeout (max_hold_ms exceeded without qualifying on
+ * RSSI level alone), false otherwise. Caller uses this to detect when the reader gave up waiting
+ * and opened early.
+ */
 bool aliro_rssi_gate_was_capped(const struct aliro_rssi_gate *g)
 {
 	return g->capped;
 }
 
+/**
+ * Return the smoothed RSSI level in decibel-milliwatts (dBm). The value is the EWMA average of all
+ * samples seen so far.
+ */
 int16_t aliro_rssi_gate_level_dbm(const struct aliro_rssi_gate *g)
 {
 	return (int16_t)(g->ewma_q4 / Q4);
@@ -63,6 +85,13 @@ static void slope_track(struct aliro_rssi_gate *g, const struct aliro_rssi_gate_
 	}
 }
 
+/**
+ * Feed an RSSI sample and timestamp to the gate. Returns true if the gate should remain open (or
+ * just opened). Handles EWMA smoothing, rise-rate fast-open when the signal climbs steeply within a
+ * short window, hold-cap timeout to prevent indefinite deferral, and close-hysteresis to avoid
+ * flapping on fades. Caller must supply configuration and current time; unavailable signals
+ * (ALIRO_RSSI_UNAVAILABLE) are skipped and do not alter the state.
+ */
 bool aliro_rssi_gate_feed(struct aliro_rssi_gate *g, const struct aliro_rssi_gate_cfg *cfg,
 			  int8_t rssi_dbm, uint32_t now_ms)
 {

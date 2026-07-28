@@ -23,14 +23,53 @@ Also part of wayfinding, on every page:
 Run from the repo root, after docs_github.py and before docs_graph.py, so
 the page exists before the sitewide shims and the link pass run.
 
-<details><summary>Undocumented (7)</summary>
+## API
 
-- `repo_url`
-- `chip`
-- `row`
-- `main_html`
-- `build_page`
-- `add_search_row`
-- `main`
+### `repo_url() -> str`
+`tools/docs_start.py:42`
 
-</details>
+Return the GitHub URL (https://github.com/owner/repo) of the origin remote, or an empty string if the remote is not configured or not a GitHub URL.
+
+**called by** `main`
+
+### `chip(cmd: str) -> str`
+`tools/docs_start.py:55`
+
+Render a shell command in a copyable chip with a Copy button and dollar-sign prompt. No comments allowed inline; context goes in surrounding prose.
+
+**called by** `main_html`
+
+### `row(href: str, name: str, desc: str) -> str`
+`tools/docs_start.py:66`
+
+Render a navigation card row with a link, title, and description text.
+
+**called by** `main_html`
+
+### `main_html(gh: str) -> str`
+`tools/docs_start.py:122`
+
+Render the main content section of the Get-Started landing page as a series of collapsible track cards. Each card contains links, code chips, and prose explaining the Hardware, Software, Build/Test/Verify, Architecture, Protocol, and Project tracks. Embeds the provided GitHub URL into clone and repository-link rows. Returns HTML.
+
+**called by** `build_page`  ·  **calls** `chip`, `row`
+
+### `build_page(template: str, gh: str) -> str`
+`tools/docs_start.py:281`
+
+Build the Get-Started page by injecting main_html(gh) into the site template, then update the hero button link and search index. Applies title, og:title, breadcrumb, and active-nav-marker rewrites. Returns the modified page as a string.
+
+**called by** `main`  ·  **calls** `main_html`
+
+### `add_search_row(page_name: str) -> None`
+`tools/docs_start.py:310`
+
+Add an entry for the given page name to the nav.js search array if not already present. Inserts at position 1 (after the index entry) and rewrites the JSON in place. Does nothing silently if nav.js is absent.
+
+**called by** `main`
+
+### `main() -> int`
+`tools/docs_start.py:328`
+
+Render the Get-Started landing page and inject it into site/start.html, wire the wayfinding guide into every page, and update navigation and hero-button references. Reports counts of pages modified and returns 1 if the template layout has changed. Requires the site to be rendered first.
+
+**calls** `add_search_row`, `build_page`, `repo_url`

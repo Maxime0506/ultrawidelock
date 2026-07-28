@@ -37,6 +37,18 @@ jobs:
       - name: hermetic workspace-seeding tests
         run: make test-ws
 
+  verify-tests:
+    # Tests for the pre-push sweep. The static half of them checks that every
+    # job in this directory has a local gate or a written reason, so this job
+    # is what fails when a workflow gains a job the sweep does not run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: tests for the pre-push sweep
+        run: make test-verify
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

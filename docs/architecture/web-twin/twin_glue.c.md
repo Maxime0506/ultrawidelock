@@ -23,14 +23,19 @@ A Ghost-Peak spoof is a negative-tof block through the same full path.
 
 ## API
 
+### `static void twin_on_latch(void)`
+`web-twin/twin_glue.c:62`
+
+Increment the digital twin's latch counter on each successful Aliro unlock decision.
+
 ### `EMSCRIPTEN_KEEPALIVE int twin_boot(void)`
-`web-twin/twin_glue.c:66`
+`web-twin/twin_glue.c:69`
 
 Boot the responder once per module instance (the page's Reset re-instantiates
 the module, i.e. reboots the firmware). Returns 0 on success.
 
 ### `static int32_t tof_for_cm(int32_t cm)`
-`web-twin/twin_glue.c:116`
+`web-twin/twin_glue.c:119`
 
 Target distance -> ToF ticks, the inverse of final_data_decode's
 d_mm = tof * 4692 / 1000 (rounded so the round-trip is stable).
@@ -38,7 +43,7 @@ d_mm = tof * 4692 / 1000 (rounded so the round-trip is stable).
 **called by** `twin_step`
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_step(int cm)`
-`web-twin/twin_glue.c:133`
+`web-twin/twin_glue.c:136`
 
 Run the next leg of the current ranging block against the live firmware:
 0 Pre-POLL RX   — encrypted SP0 frame; RX event arms the SP3 POLL window
@@ -52,63 +57,69 @@ Returns the leg just executed.
 **called by** `twin_block`  ·  **calls** `tof_for_cm`
 
 ### `EMSCRIPTEN_KEEPALIVE void twin_block(int cm)`
-`web-twin/twin_glue.c:181`
+`web-twin/twin_glue.c:184`
 
 Run legs to the end of the current block (one full DS-TWR exchange).
 
 **calls** `twin_step`
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_leg(void)`
-`web-twin/twin_glue.c:191`
+`web-twin/twin_glue.c:194`
 
 Next leg within the block, 0..4 (0 = a fresh block is about to start).
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_last_cm(void)`
-`web-twin/twin_glue.c:197`
+`web-twin/twin_glue.c:200`
 
 Facade telemetry seam: latest latched range, or TWIN_NO_RANGE.
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_trusted_cm(void)`
-`web-twin/twin_glue.c:205`
+`web-twin/twin_glue.c:208`
 
 Facade unlock seam: the trusted range, or TWIN_NO_RANGE while trust is out.
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_trust_level(void)`
-`web-twin/twin_glue.c:213`
+`web-twin/twin_glue.c:216`
 
 Layer-4 trust run length (0..K).
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_trust_k(void)`
-`web-twin/twin_glue.c:219`
+`web-twin/twin_glue.c:222`
 
 FIRA_RANGE_TRUST_K, straight from the compiled firmware.
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_plausible(int cm)`
-`web-twin/twin_glue.c:225`
+`web-twin/twin_glue.c:228`
 
 Layer-1 plausibility predicate (for the self-test).
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_take_latches(void)`
-`web-twin/twin_glue.c:232`
+`web-twin/twin_glue.c:235`
 
 Accepted-latch count since last asked (the app_main task-notify analogue);
 reading clears it. A rejected block never wakes this seam.
 
 ### `EMSCRIPTEN_KEEPALIVE int twin_awaiting_poll(void)`
-`web-twin/twin_glue.c:241`
+`web-twin/twin_glue.c:244`
 
 True while the SP3 RX is armed for the POLL (ccc_shim_rx state).
 
 ### `EMSCRIPTEN_KEEPALIVE unsigned twin_stat_rxenable(void)`
-`web-twin/twin_glue.c:247`
+`web-twin/twin_glue.c:250`
 
 Radio-stub call counters + wire-side identities, for the debug panel.
 
-<details><summary>Undocumented (4)</summary>
+### `EMSCRIPTEN_KEEPALIVE unsigned twin_stat_starttx(void)`
+`web-twin/twin_glue.c:258`
 
-- `twin_on_latch`
-- `twin_stat_starttx`
-- `twin_poll_index`
-- `twin_block_no`
+Retrieve the count of transmit-start calls logged by the digital twin's host-shim radio interface.
 
-</details>
+### `EMSCRIPTEN_KEEPALIVE unsigned twin_poll_index(void)`
+`web-twin/twin_glue.c:266`
+
+Retrieve the current poll queue index in the digital twin's main loop.
+
+### `EMSCRIPTEN_KEEPALIVE unsigned twin_block_no(void)`
+`web-twin/twin_glue.c:274`
+
+Retrieve the current UWB block (repetition) counter in the digital twin.

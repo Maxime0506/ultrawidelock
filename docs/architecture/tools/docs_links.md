@@ -27,8 +27,15 @@ github.com/<owner>/<repo>/blob/<branch> for the current remote, or '' if none.
 
 **called by** `main`  ·  **calls** `git`
 
+### `git(*args: str) -> str`
+`tools/docs_links.py:31`
+
+Run a git command and return its stripped output, or an empty string if the command fails or git is not found.
+
+**called by** `blob_base`
+
 ### `_entries(directory: Path) -> dict[str, str]`
-`tools/docs_links.py:56`
+`tools/docs_links.py:57`
 
 {lowercased name: real name} for a directory, cached. macOS is
 case-insensitive, so `Path.exists()` happily confirms `ARCHITECTURE.html`
@@ -39,23 +46,29 @@ case a link claims is the case that actually exists.
 **called by** `_exact`, `_real`
 
 ### `_real(path: Path) -> Path | None`
-`tools/docs_links.py:70`
+`tools/docs_links.py:71`
 
 `path` with the casing it actually has on disk, or None when absent.
 
 **called by** `fix`  ·  **calls** `_entries`
 
 ### `_exact(path: Path) -> bool`
-`tools/docs_links.py:76`
+`tools/docs_links.py:77`
 
 True only when `path` exists with exactly this casing.
 
 **called by** `main`  ·  **calls** `_entries`
 
-<details><summary>Undocumented (3)</summary>
+### `main() -> int`
+`tools/docs_links.py:82`
 
-- `git`
-- `main`
-- `fix`
+Rewrite all relative links in the rendered site: convert .md citations to .html pages, fix Doxygen's nonexistent bucket-index links, redirect repo-relative links to GitHub, and auto-link prose mentions of site/api/index.html. Verify that all remaining relative links resolve inside the site. Reports link rewrites and broken links (exit 1 if any remain). Requires site/ to exist and optionally a GitHub base URL.
 
-</details>
+**calls** `_exact`, `blob_base`
+
+### `fix(match: re.Match[bytes]) -> bytes`
+`tools/docs_links.py:97`
+
+Replace or repair a single href attribute in an HTML file. Converts .md links to their rendered .html equivalents; fixes broken Doxygen bucket-index links; rewrites repo-relative links to GitHub blob URLs when a base URL is configured. Returns the replacement bytes or the original match if no fix applies.
+
+**calls** `_real`

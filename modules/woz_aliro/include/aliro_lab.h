@@ -56,21 +56,38 @@ void aliro_lab_dump(void);
 
 #else
 
+/**
+ * Enable or disable Aliro Lab instrumentation. When disabled, all recording functions become
+ * no-ops. Caller must invoke before any approach transactions if instrumentation is desired.
+ */
 static inline void aliro_lab_set_enabled(bool on)
 {
 	(void)on;
 }
 
+/**
+ * Return whether Aliro Lab instrumentation is active. Returns false when CONFIG_WOZ_ALIRO_LAB is
+ * not enabled.
+ */
 static inline bool aliro_lab_enabled(void)
 {
 	return false;
 }
 
+/**
+ * Record a named event for Aliro Lab when enabled; no-op stub when disabled. Caller passes a unique
+ * event name; the call is recorded with a timestamp.
+ */
 static inline void aliro_lab_ev(const char *ev)
 {
 	(void)ev;
 }
 
+/**
+ * Record a named event with one integer sample for Aliro Lab when enabled; no-op stub when
+ * disabled. Caller passes event name, key (e.g., "distance_cm"), and value; the triple is recorded
+ * with a timestamp.
+ */
 static inline void aliro_lab_evi(const char *ev, const char *key, long val)
 {
 	(void)ev;
@@ -78,6 +95,10 @@ static inline void aliro_lab_evi(const char *ev, const char *key, long val)
 	(void)val;
 }
 
+/**
+ * Record a named event with two integer samples for Aliro Lab when enabled; no-op stub when
+ * disabled. Caller passes event name, two key-value pairs; both are recorded with a timestamp.
+ */
 static inline void aliro_lab_evi2(const char *ev, const char *k1, long v1, const char *k2, long v2)
 {
 	(void)ev;
@@ -87,6 +108,9 @@ static inline void aliro_lab_evi2(const char *ev, const char *k1, long v1, const
 	(void)v2;
 }
 
+/**
+ * No-op stub when CONFIG_WOZ_ALIRO_LAB is not enabled. Caller may invoke any time; does nothing.
+ */
 static inline void aliro_lab_dump(void)
 {
 }

@@ -8,6 +8,10 @@
 extern "C" {
 #endif
 
+/**
+ * Parsed TLV (Tag-Length-Value): tag (uint32), value (pointer to payload bytes), length (payload
+ * size), encoded_length (total tag+length+value bytes).
+ */
 struct woz_aliro_tlv {
 	uint32_t tag;
 	const uint8_t *value;

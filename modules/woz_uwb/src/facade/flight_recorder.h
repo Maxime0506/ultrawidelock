@@ -1,3 +1,9 @@
+/**
+ * @file flight_recorder.h
+ * Capture and replay UWB frames and session configuration from a walk-up to a host for analysis and
+ * replay. Records endpoint identity, status registers, frame data, and timing metadata into a
+ * fixed-size ring buffer; provides reader and writer interfaces for host tools.
+ */
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -80,12 +86,21 @@ enum fr_ep {
 
 /* ─ Plain-data record mirrors (no pointers; safe to memcpy/serialize) ─ */
 
+/**
+ * Metadata header for a flight recorder stream: protocol version, port identifier (target), and the
+ * firmware commit SHA1.
+ */
 struct fr_meta {
 	uint16_t version;
 	uint16_t port;
 	char sha[FR_SHA_MAX + 1]; /* NUL-terminated */
 };
 
+/**
+ * Captured Aliro session configuration snapshot: channel, timing parameters, STS index, URSK, and
+ * responder credentials. Populated once at the start of each walk-up and replayed to reconstruct
+ * session state during offline analysis.
+ */
 struct fr_config {
 	uint32_t session_id;
 	uint8_t channel;
@@ -100,6 +115,11 @@ struct fr_config {
 	uint8_t rc[FR_RC_MAX];
 };
 
+/**
+ * Single UWB event captured during a walk-up: endpoint identity, status register, frame length,
+ * Ipatov and TX timestamps, STS quality metrics, and up to FR_FRAME_MAX bytes of the received
+ * frame.
+ */
 struct fr_ev {
 	uint8_t ep;          /* enum fr_ep */
 	uint32_t status;     /* dwt_cb_data_t.status (0 for TRY_PREPOLL) */
@@ -114,11 +134,19 @@ struct fr_ev {
 	uint8_t frame[FR_FRAME_MAX];
 };
 
+/**
+ * Trailer record marking the end of a flight recorder session: the count of captured events and a
+ * truncation flag (1 if the ring filled and later events were dropped).
+ */
 struct fr_end {
 	uint32_t n_events;
 	uint8_t truncated; /* 1 if the ring filled and later events were dropped */
 };
 
+/**
+ * One record in a flight recorder stream: a discriminated union holding either a metadata header,
+ * session configuration snapshot, a captured event, or the end-of-session trailer.
+ */
 struct fr_record {
 	uint8_t type; /* enum fr_rec_type */
 	union {
@@ -184,27 +212,51 @@ void fr_set_dump_sink(void (*sink)(const char *line)); /* test hook; NULL => woz
 
 #else
 
+/**
+ * Stub callback that enables or disables flight recording.
+ * No-op when the flight recorder is disabled.
+ */
 static inline void fr_set_enabled(bool on)
 {
 	(void)on;
 }
+/**
+ * Returns true if the flight recorder is enabled and capturing events; false otherwise.
+ * Stub when disabled.
+ */
 static inline bool fr_enabled(void)
 {
 	return false;
 }
+/**
+ * Stub callback invoked when the flight recorder captures the Aliro session configuration.
+ * No-op when the flight recorder is disabled.
+ */
 static inline void fr_capture_config(const struct woz_uwb_aliro_cfg *cfg)
 {
 	(void)cfg;
 }
+/**
+ * Stub callback invoked when the flight recorder captures a UWB event (endpoint fire, status, or
+ * frame length). No-op when the flight recorder is disabled.
+ */
 static inline void fr_capture_ev(uint8_t ep, uint32_t status, uint16_t datalength)
 {
 	(void)ep;
 	(void)status;
 	(void)datalength;
 }
+/**
+ * Stub callback that dumps the flight recorder ring buffer to the host interface.
+ * No-op when the flight recorder is disabled.
+ */
 static inline void fr_dump(void)
 {
 }
+/**
+ * Stub callback that clears the flight recorder ring buffer.
+ * No-op when the flight recorder is disabled.
+ */
 static inline void fr_clear(void)
 {
 }

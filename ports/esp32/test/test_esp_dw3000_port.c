@@ -26,6 +26,12 @@
 #include "dw3000_hw.h"
 #include "dw3000_spi.h"
 
+/* uwb_cirdiag_flush double: dw3000_hw's ISR task calls it after draining IRQs;
+ * the real emitter lives in the woz_uwb driver, out of this port suite. */
+void uwb_cirdiag_flush(void)
+{
+}
+
 static int fails;
 
 static void okc(const char *name, int cond)

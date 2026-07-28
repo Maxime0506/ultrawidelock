@@ -6,7 +6,7 @@
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * Provenance: clean-room. CBOR per RFC 8949 (definite lengths only, indefinite
+ * Provenance: original. CBOR per RFC 8949 (definite lengths only, indefinite
  * rejected); the Aliro remapped-key layout from the v1.0 spec (§7.2 Table 7-1/
  * 7-2, §8.4.2 Table 8-22) and the §14.6 worked example. The code is original.
  */
@@ -19,6 +19,9 @@
 
 #define CB_MAX_DEPTH 20
 
+/**
+ * CBOR stream parser: p (current position), end (buffer limit).
+ */
 struct cbor {
 	const uint8_t *p;
 	const uint8_t *end;
@@ -59,6 +62,10 @@ static int cb_head(struct cbor *c, uint8_t *mt, uint64_t *arg)
 	return 0;
 }
 
+/**
+ * Recursively skip one CBOR value: ints/floats/strings/arrays/maps/tags. Depth-checks CB_MAX_DEPTH.
+ * Returns 0 on success, -1 on overflow or malformed.
+ */
 static int cb_skip_d(struct cbor *c, int depth)
 {
 	uint8_t mt;
@@ -100,11 +107,19 @@ static int cb_skip_d(struct cbor *c, int depth)
 	}
 }
 
+/**
+ * Skip one complete CBOR value (int, string, array, map, tag, float, or null). Returns 0 on
+ * success, -1 on malformed input or depth overflow.
+ */
 static int cb_skip(struct cbor *c)
 {
 	return cb_skip_d(c, 0);
 }
 
+/**
+ * Parse CBOR major type + argument with type check: consume one head, verify mt matches want_mt,
+ * return 0 and set *arg, else -1.
+ */
 static int cb_expect(struct cbor *c, uint8_t want_mt, uint64_t *arg)
 {
 	uint8_t mt;
@@ -115,21 +130,34 @@ static int cb_expect(struct cbor *c, uint8_t want_mt, uint64_t *arg)
 	return 0;
 }
 
+/**
+ * Parse CBOR major type 5 (map) and return the number of key-value pairs.
+ */
 static int cb_map(struct cbor *c, uint64_t *n)
 {
 	return cb_expect(c, 5, n);
 }
 
+/**
+ * Parse CBOR major type 4 (array) and return the element count.
+ */
 static int cb_arr(struct cbor *c, uint64_t *n)
 {
 	return cb_expect(c, 4, n);
 }
 
+/**
+ * Parse CBOR major type 0 (unsigned integer) and return the value.
+ */
 static int cb_uint(struct cbor *c, uint64_t *v)
 {
 	return cb_expect(c, 0, v);
 }
 
+/**
+ * Parse a CBOR byte string or text string (major type 2 or 3) and return a pointer to its data and
+ * length. Returns 0 on success, -1 on type mismatch or overflow.
+ */
 static int cb_bytes(struct cbor *c, uint8_t want_mt, const uint8_t **s, size_t *n)
 {
 	uint64_t arg;
@@ -143,11 +171,17 @@ static int cb_bytes(struct cbor *c, uint8_t want_mt, const uint8_t **s, size_t *
 	return 0;
 }
 
+/**
+ * Parse a CBOR byte string (major type 2) and return a pointer to its data and length.
+ */
 static int cb_bstr(struct cbor *c, const uint8_t **s, size_t *n)
 {
 	return cb_bytes(c, 2, s, n);
 }
 
+/**
+ * Parse a CBOR text string (major type 3) and return a pointer to its data and length.
+ */
 static int cb_tstr(struct cbor *c, const uint8_t **s, size_t *n)
 {
 	return cb_bytes(c, 3, s, n);
@@ -173,6 +207,10 @@ static int cb_int_key(struct cbor *c, int64_t *v)
 	return -1;
 }
 
+/**
+ * Parse one CBOR boolean (major type 7, arg 20 or 21). Returns 0 and sets *b to 0 (false) or 1
+ * (true), -1 on mismatch.
+ */
 static int cb_bool(struct cbor *c, int *b)
 {
 	uint8_t mt;
@@ -185,6 +223,9 @@ static int cb_bool(struct cbor *c, int *b)
 	return 0;
 }
 
+/**
+ * Parse CBOR major type 6 (semantic tag) and return the tag number.
+ */
 static int cb_tag(struct cbor *c, uint64_t *tag)
 {
 	return cb_expect(c, 6, tag);
@@ -207,6 +248,9 @@ static int key_is(const uint8_t *s, size_t n, char c)
 
 /* ---- RFC 3339 tdate (UTC "Z" form) -> epoch seconds ---------------------- */
 
+/**
+ * Parse two decimal digits (s[0], s[1]). Returns 0 and *out = 0-99, else -1.
+ */
 static int digit2(const uint8_t *s, int *out)
 {
 	if (s[0] < '0' || s[0] > '9' || s[1] < '0' || s[1] > '9') {
@@ -254,6 +298,12 @@ static int tdate_epoch(const uint8_t *s, size_t n, int64_t *epoch)
 
 /* ---- MobileSecurityObject (Table 7-1) ------------------------------------ */
 
+/**
+ * Parse the mdoc validity object: extracts validityIteration (key "5") and
+ * signed/validFrom/validUntil times (keys "1"/"2"/"3", each tagged with epoch 0). Returns 0 on
+ * success, -1 on parse error. Sets have_* flags and epoch values in the output struct for each
+ * field found.
+ */
 static int parse_validity(struct cbor *c, struct aliro_stepup_doc *doc)
 {
 	uint64_t n;
@@ -305,6 +355,10 @@ static int parse_validity(struct cbor *c, struct aliro_stepup_doc *doc)
 	return 0;
 }
 
+/**
+ * Parse the mdoc valueDigests map: reads namespace → digest-ID → hash pairs. Collects up to
+ * ALIRO_STEPUP_MAX_DIGESTS SHA-256 hashes (32 bytes). Returns 0 on success, -1 on parse error.
+ */
 static int parse_value_digests(struct cbor *c, struct aliro_stepup_doc *doc)
 {
 	uint64_t nns;
@@ -338,6 +392,11 @@ static int parse_value_digests(struct cbor *c, struct aliro_stepup_doc *doc)
 	return 0;
 }
 
+/**
+ * Parse the mobile security object (MSO): extracts digest algorithm (key "2"), valueDigests (key
+ * "3"), docType (key "5"), validity (key "6"), and timeVerificationRequired (key "7"). Returns 0 on
+ * success, -1 on parse error. Calls parse_validity and parse_value_digests.
+ */
 static int parse_mso(const uint8_t *mso, size_t mso_len, struct aliro_stepup_doc *doc)
 {
 	struct cbor c = {mso, mso + mso_len};
@@ -390,6 +449,11 @@ static int parse_mso(const uint8_t *mso, size_t mso_len, struct aliro_stepup_doc
 
 /* ---- IssuerAuth COSE_Sign1 ----------------------------------------------- */
 
+/**
+ * Parse the issuer authentication COSE Sign1 structure: reads protected header, unprotected map
+ * (extracts kid at key 4 and x5chain at key 33), payload, and signature (64 bytes). Unwraps the
+ * payload from CBOR tag 24 and calls parse_mso. Returns 0 on success, -1 on format error.
+ */
 static int parse_issuer_auth(struct cbor *c, struct aliro_stepup_doc *doc)
 {
 	uint64_t n;
@@ -458,6 +522,11 @@ static int parse_issuer_auth(struct cbor *c, struct aliro_stepup_doc *doc)
 
 /* ---- IssuerSignedItems --------------------------------------------------- */
 
+/**
+ * Parse one mdoc item from an issuer-signed namespace: unwraps CBOR tag 24 and reads elementID (key
+ * "3") and digestID (key "1"). Returns 0 on success, -1 on parse error. Stores the full tagged
+ * bytes and extracted fields in the output struct.
+ */
 static int parse_one_item(struct cbor *c, struct aliro_stepup_item *it)
 {
 	const uint8_t *start = c->p;
@@ -504,6 +573,11 @@ static int parse_one_item(struct cbor *c, struct aliro_stepup_item *it)
 	return 0;
 }
 
+/**
+ * Parse the issuer-signed nameSpaces map: reads namespace → array of items. Stores the first
+ * namespace name found, then collects up to ALIRO_STEPUP_MAX_ITEMS from all namespaces. Returns 0
+ * on success, -1 on parse error.
+ */
 static int parse_name_spaces(struct cbor *c, struct aliro_stepup_doc *doc)
 {
 	uint64_t nns;
@@ -536,6 +610,10 @@ static int parse_name_spaces(struct cbor *c, struct aliro_stepup_doc *doc)
 	return 0;
 }
 
+/**
+ * Parse the issuer-signed wrapper: reads nameSpaces (key "1") and issuerAuth (key "2"). Returns 0
+ * on success, -1 on parse error.
+ */
 static int parse_issuer_signed(struct cbor *c, struct aliro_stepup_doc *doc)
 {
 	uint64_t n;
@@ -565,6 +643,10 @@ static int parse_issuer_signed(struct cbor *c, struct aliro_stepup_doc *doc)
 	return 0;
 }
 
+/**
+ * Parse one mdoc document: reads issuerSigned (key "1") and docType (key "5"). Returns 0 on
+ * success, -1 on parse error. Calls parse_issuer_signed.
+ */
 static int parse_document(struct cbor *c, struct aliro_stepup_doc *doc)
 {
 	uint64_t n;
@@ -598,6 +680,11 @@ static int parse_document(struct cbor *c, struct aliro_stepup_doc *doc)
 	return 0;
 }
 
+/**
+ * Parse a mobile driver license response: top-level CBOR map with status (key "3") and documents
+ * array (key "2"). Extracts the first document only and sets have_document flag. Returns 0 on
+ * success, -1 on null pointer or parse error. Zeros the output struct on entry.
+ */
 int aliro_stepup_parse_response(const uint8_t *buf, size_t len, struct aliro_stepup_doc *doc)
 {
 	if (buf == NULL || doc == NULL) {

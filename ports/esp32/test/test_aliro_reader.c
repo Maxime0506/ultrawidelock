@@ -932,6 +932,27 @@ int main(void)
 							   0);
 	}
 
+	/* Two envelopes in ONE transport receive. The L2CAP CoC layer hands up the phone's
+	 * ranging SDU coalesced with the event that follows it (bench: a 79-byte receive =
+	 * a 57-byte SDU plus a 22-byte one). Both must reach the engine, and each AEAD must
+	 * run over its own envelope length: passing the whole buffer put 22 bytes of the next
+	 * message inside the first one's ciphertext, the tag check failed, and the phone
+	 * dropped the link and restarted the walk-up ~3.5 s later. */
+	{
+		uint8_t p1[6] = {0x01, 0x01, 0x00, 0x02, 0x11, 0x22};
+		uint8_t p2[6] = {0x01, 0x03, 0x00, 0x02, 0x33, 0x44};
+		uint8_t wire[128];
+		size_t w1 = ph_seal_ble(&p, p1, sizeof(p1), wire);
+		size_t w2 = ph_seal_ble(&p, p2, sizeof(p2), wire + w1);
+		int feeds = s_rng_feeds;
+
+		okc("a.coalesced_sealed", w1 > 0 && w2 > 0);
+		s_cfg.cb.on_data(2, wire, (uint16_t)(w1 + w2));
+		okc("a.coalesced_both_fed", s_rng_feeds == feeds + 2);
+		okc("a.coalesced_second_intact",
+		    s_rng_feed_len == sizeof(p2) && memcmp(s_rng_feed_buf, p2, sizeof(p2)) == 0);
+	}
+
 	/* unlock grant + relock notifications (Wallet animation trigger) */
 	{
 		uint8_t plain[64];

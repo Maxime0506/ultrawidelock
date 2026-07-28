@@ -24,7 +24,8 @@
 #include <woz_uwb_facade.h>
 #include <woz_diag.h> // woz_uwb_diag_on — the raw per-frame UWB trace gate
 #ifdef CONFIG_WOZ_ALIRO_LAB
-#include <aliro_lab.h> // aliro_lab_set_enabled — the transaction-trace runtime gate
+#include <aliro_lab.h>   // aliro_lab_set_enabled — the transaction-trace runtime gate
+#include <uwb_cirdiag.h> // uwb_cirdiag_set_enabled — per-reception CIA diag stream, rides `lab`
 #endif
 #ifdef CONFIG_WOZ_FLIGHT_RECORDER
 #include <flight_recorder.h> // fr_set_enabled / fr_dump — walk-up record/replay gate
@@ -376,15 +377,41 @@ static int cmd_log(int argc, char **argv)
 #ifdef CONFIG_WOZ_ALIRO_LAB
 /* Aliro Lab transaction trace: OFF at boot (the [ALAB] lines are blocking UART
  * writes on the protocol path, so they cost walk-up latency while on). `lab on`
- * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log. */
+ * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log.
+ * `lab cir on|off` additionally arms the windowed-CIR tap dump (channel-impulse
+ * Stage 1): the taps buffer to RAM while armed and print in a burst on `lab cir
+ * off`, off the ranging path, so the walk-up still unlocks while capturing. */
 static int cmd_lab(int argc, char **argv)
 {
+#ifdef CONFIG_WOZ_UWB_CIRDIAG
+	if (argc == 3 && strcmp(argv[1], "cir") == 0) {
+		if (strcmp(argv[2], "probe") == 0) {
+			uwb_cirdiag_probe();
+			return 0;
+		}
+		if (strcmp(argv[2], "on") == 0) {
+			uwb_cirdiag_dump_set_enabled(true);
+		} else if (strcmp(argv[2], "off") == 0) {
+			uwb_cirdiag_dump_set_enabled(false);
+		} else {
+			printf("usage: lab cir [on|off|probe]\n");
+			return 0;
+		}
+		bool cir_on = uwb_cirdiag_dump_enabled();
+
+		printf("aliro lab CIR dump: %s%s\n", cir_on ? "on" : "off",
+		       cir_on ? "  (taps print on: lab cir off)" : "");
+		return 0;
+	}
+#endif /* CONFIG_WOZ_UWB_CIRDIAG */
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
 		aliro_lab_set_enabled(true);
+		uwb_cirdiag_set_enabled(true); /* per-reception ev=uwb.diag lines ride the gate */
 	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
 		aliro_lab_set_enabled(false);
+		uwb_cirdiag_set_enabled(false);
 	} else if (argc != 1) {
-		printf("usage: lab [on|off]\n");
+		printf("usage: lab [on|off] | lab cir [on|off|probe]\n");
 		return 0;
 	}
 	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");

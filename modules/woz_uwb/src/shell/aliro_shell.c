@@ -9,6 +9,7 @@
 #include "ccc_shim.h"        /* ccc_shim_active */
 #include "fira_session.h"    /* fira_session_last_range, fira_session_get_ursk */
 #include "flight_recorder.h" /* fr_set_enabled / fr_dump — walk-up record/replay (gated) */
+#include "uwb_cirdiag.h"     /* per-reception CIA diagnostics stream toggle */
 #include "uwb_min.h"         /* uwb_min_read_chipid, uwb_min_selftest, DEV_ID */
 #include "uwb_rxdiag.h"      /* counters + ranging-log stream toggle */
 
@@ -233,6 +234,59 @@ static int cmd_frec(const struct shell *sh, size_t argc, char **argv)
 }
 #endif /* CONFIG_WOZ_FLIGHT_RECORDER */
 
+#if defined(CONFIG_WOZ_UWB_CIRDIAG)
+/**
+ * @brief Control the per-reception CIA diagnostics stream ([ALAB] uwb.diag) and, via the `dump`
+ * sub-form, the windowed-CIR tap dump ([ALAB] uwb.cir).
+ * @param sh Shell context.
+ * @param argc Argument count. `cir [on|off]` toggles the summary stream; `cir dump [on|off]`
+ * toggles the windowed-CIR dump; `cir probe` runs the one-shot accumulator read diagnostic.
+ * @param argv Command arguments.
+ * @return 0 on success; -EINVAL on a malformed argument.
+ */
+static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
+{
+	if (argc >= 2 && strcmp(argv[1], "probe") == 0) {
+		uwb_cirdiag_probe();
+		return 0;
+	}
+	if (argc >= 2 && strcmp(argv[1], "dump") == 0) {
+		if (argc >= 3) {
+			if (strcmp(argv[2], "on") == 0) {
+				uwb_cirdiag_dump_set_enabled(true);
+			} else if (strcmp(argv[2], "off") == 0) {
+				uwb_cirdiag_dump_set_enabled(false);
+			} else {
+				shell_print(sh, "  " C_YEL "usage: aliro cir dump [on|off]" C_RST);
+				return -EINVAL;
+			}
+		}
+		bool don = uwb_cirdiag_dump_enabled();
+
+		shell_print(sh, "  windowed-CIR dump %s%s",
+			    don ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST,
+			    don ? C_DIM "  (taps buffer to RAM; dumped on `cir dump off`)" C_RST
+				: "");
+		return 0;
+	}
+	if (argc >= 2) {
+		if (strcmp(argv[1], "on") == 0) {
+			uwb_cirdiag_set_enabled(true);
+		} else if (strcmp(argv[1], "off") == 0) {
+			uwb_cirdiag_set_enabled(false);
+		} else {
+			shell_print(sh, "  " C_YEL "usage: aliro cir [on|off] | cir dump "
+					"[on|off] | cir probe" C_RST);
+			return -EINVAL;
+		}
+	}
+	bool on = uwb_cirdiag_enabled();
+	shell_print(sh, "  CIA first-path diag stream %s",
+		    on ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST);
+	return 0;
+}
+#endif /* CONFIG_WOZ_UWB_CIRDIAG */
+
 /**
  * @brief Display the build commit SHA.
  * @param sh Shell context.
@@ -349,6 +403,11 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(chip, NULL, "Read the DW3110 DEV_ID over SPI.", cmd_chip),
 	SHELL_CMD(selftest, NULL, "Run the radio TX/RX self-test.", cmd_selftest),
 	SHELL_CMD(log, NULL, "Ranging heartbeat: `log on` | `log off`.", cmd_log),
+#if defined(CONFIG_WOZ_UWB_CIRDIAG)
+	SHELL_CMD(cir, NULL,
+		  "CIA diag stream + windowed CIR: `cir on|off` | `cir dump on|off` | `cir probe`.",
+		  cmd_cir),
+#endif
 	SHELL_CMD(frames, NULL, "Per-block distance stream: `frames on` | `frames off`.",
 		  cmd_frames),
 #if defined(CONFIG_WOZ_FLIGHT_RECORDER)

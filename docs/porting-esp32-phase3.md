@@ -41,7 +41,7 @@ it: a standalone ESP32 reader had to derive the URSK itself. Everything downstre
 URSK was already done, and pure UWB bench testing via the canned-URSK path in `main.c`
 still needs none of it.
 
-## What Phase 3 built (reverse-engineered, per protocol-research.md §4)
+## What Phase 3 built (per protocol-research.md §4)
 
 - **Transport / framing:** L2CAP CoC (already up), one APDU per SDU.
 - **Flow:** a standard path (ephemeral ECDH + mutual signatures) and a fast path off

@@ -235,6 +235,7 @@ def calibrate(pairs, near_cm, edges):
 
 
 def print_table(hdr, rows):
+    """Print a table with uniform column widths: header row, separator, and data rows, each column left-justified."""
     widths = [max(len(h), max((len(r[c]) for r in rows), default=0))
               for c, h in enumerate(hdr)]
     print("| " + " | ".join(h.ljust(w) for h, w in zip(hdr, widths)) + " |")
@@ -244,14 +245,17 @@ def print_table(hdr, rows):
 
 
 def fmt_ms(us):
+    """Format a time duration in microseconds to milliseconds as a string, or "-" if None."""
     return "-" if us is None else "%.0f" % (us / 1e3)
 
 
 def fmt_ma(ma):
+    """Format a current measurement in milliamps as a string, or "-" if None."""
     return "-" if ma is None else "%.1f" % ma
 
 
 def main(argv):
+    """Parse command-line options (--ppk, --tag, --shift, --csv, --calibrate, --near-cm, --pair-ms), load walk-up logs and optional PPK power samples, compute per-run power duty cycles and current spans, optionally calibrate dBm-to-distance thresholds, print and append results to CSV."""
     args, log, ppk, tag, shift, csv_out = argv[1:], None, None, "", None, None
     do_cal, near_cm, pair_ms = False, 100, 300
     it = iter(args)

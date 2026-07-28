@@ -6,7 +6,7 @@ Assistant Discovery entities:
 | Entity | Platform | Source line |
 | --- | --- | --- |
 | Distance (mm) | `sensor` | `rng  blk=N d=Xmm  tof=Y` (`modules/woz_uwb/src/ccc/ccc_shim_rx.c:498`) |
-| Access | `event`, types `granted` / `denied` | `ACCESS GRANTED` / `ACCESS DENIED` (`access_manager_impl.cpp:756`/`:762`) |
+| Access | `event`, types `granted` / `denied` | `ACCESS GRANTED` / `ACCESS DENIED` |
 
 Nothing on the device changes. The bridge only reads the console, so it runs
 alongside the existing Apple Home and Wallet setup without taking a Matter

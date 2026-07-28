@@ -31,7 +31,7 @@ from typing import Iterator, Optional
 # double spaces mean the runs of whitespace vary, so match \s+ rather than ' '.
 RNG_RE = re.compile(r"rng\s+blk=(\d+)\s+d=(-?\d+)mm\s+tof=(-?\d+)")
 
-# access_manager_impl.cpp:756 and :762.
+# The grant/deny console lines, emitted once per completed transaction.
 ACCESS_RE = re.compile(r"ACCESS (GRANTED|DENIED)")
 
 
@@ -118,6 +118,7 @@ def open_lines(port: str, baud: int) -> Iterator[str]:
 
 
 def main() -> int:
+    """Parse a serial line or read lines from stdin ('-'), decode range and access readings, publish to MQTT (or stdout in dry-run mode), and notify Home Assistant via discovery payloads; return 0 on clean exit or KeyboardInterrupt."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", required=True, help="serial device, or '-' for stdin")
     ap.add_argument("--baud", type=int, default=115200)

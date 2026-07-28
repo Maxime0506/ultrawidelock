@@ -15,7 +15,7 @@
 #   PRISTINE=1 scripts/build.sh build       # same as rebuild
 #   UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 #   PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-#   ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
+#   ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
 #   UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 set -euo pipefail
 
@@ -57,6 +57,7 @@ BOARD="nrf5340dk/nrf5340/cpuapp"
 if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
   launch() { "$@"; }
 else
+  # Launch a command in the NCS toolchain environment for the configured version.
   launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
 fi
 # Compute SHA-1 hash; tries shasum first (BSD/macOS), falls back to sha1sum (Linux). Filters output to the hash hex string only.
@@ -145,10 +146,16 @@ do_build() {
   local strict=""
   [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
 
-  # ALIRO_SOURCE=1: compile the clean-room public API directly into the nRF app.
-  # NFC expedited-standard, expedited-fast, and step-up use the source stack.
-  local aliro_source=""
-  [ "${ALIRO_SOURCE:-0}" = 1 ] && aliro_source="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y"
+  # The independent public API is the default Aliro implementation. Keep the
+  # Nordic archive available as an explicit diagnostic fallback so the two
+  # implementations can still be compared while the source stack matures.
+  local aliro_source="${ALIRO_SOURCE:-1}"
+  local aliro_source_flag=""
+  case "$aliro_source" in
+    1) aliro_source_flag="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y" ;;
+    0) aliro_source_flag="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=n" ;;
+    *) die "unknown ALIRO_SOURCE='$aliro_source'" "use 1 (source, default) or 0 (Nordic binary)" ;;
+  esac
 
   # ALIRO_TRACE=1: capture proprietary/source BLE session boundaries without
   # exposing URSK itself (only its truncated SHA-256 fingerprint is logged).
@@ -166,6 +173,30 @@ do_build() {
       die "Aliro BLE trace patch does not match the workspace" "$trace_patch"
     fi
   fi
+  # NFC=pn532|st25r|none selects the reader behind the woz_nfc transport seam.
+  # Default: st25r, the upstream X-NUCLEO-NFC12A1/ST25R300 path, matching the build
+  # before the seam existed. NFC=none is for a DK with no NFC frontend: nothing
+  # is compiled in and boot proceeds BLE/UWB-only with no NFC error.
+  local -a nfc_flags=()
+  local nfc_overlay="" nfc_conf="" nfc_name="none"
+  case "${NFC:-st25r}" in
+    none) ;;
+    pn532)
+      # INF: the reader is up, so keep the console quiet during polling. Raise to
+      # _DBG to get the raw PN532 RX-frame hexdumps back for bus-level debugging.
+      nfc_flags=(-DCONFIG_WOZ_NFC_TRANSPORT_PN532=y -DCONFIG_SPI=y
+                 -DCONFIG_WOZ_NFC_LOG_LEVEL_INF=y)
+      nfc_overlay=";$OV/pn532.overlay"
+      nfc_name="PN532"
+      ;;
+    st25r)
+      nfc_flags=(-DCONFIG_NFC_DRIVER_STM=y -DCONFIG_WOZ_NFC_TRANSPORT_RFAL=y
+                 -DCONFIG_WOZ_NFC_LOG_LEVEL_INF=y)
+      nfc_conf=";$OV/st25r.conf"
+      nfc_name="ST25R"
+      ;;
+    *) die "unknown NFC transport (use pn532, st25r, or none)" "NFC=$NFC" ;;
+  esac
 
   # PRETTY=1: layer woz-pretty.conf after woz-aliro.conf (curated console +
   # log-level cuts). Reversible: drop PRETTY and the flag + levels revert to the
@@ -180,6 +211,12 @@ do_build() {
   local lat_conf=""
   [ "${LAT:-0}" = 1 ] && lat_conf=";$OV/diag-latency.conf"
 
+  # CIR=1: layer diag-cirdiag.conf (CIA/CIR diagnostics: `aliro cir`). Off by
+  # default because the windowed tap read costs walk-up latency while armed.
+  # Rides EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
+  local cir_conf=""
+  [ "${CIR:-0}" = 1 ] && cir_conf=";$OV/diag-cirdiag.conf"
+
   # HA=1: layer woz-ha.conf (Home Assistant / multi-admin). Off by default so the
   # Apple Home demo image is untouched; see that file for why. Needs the matching
   # `make bootstrap HA=1`, which applies the data-model patches this pairs with.
@@ -191,19 +228,19 @@ do_build() {
   # *content* edits are handled incrementally by Zephyr (configure-deps), so only
   # flag changes are captured here.
   local -a dflags=(
-    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}${ha_conf}"
+    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${nfc_conf}${pretty_conf}${lat_conf}${cir_conf}${ha_conf}"
     -Dipc_radio_EXTRA_CONF_FILE="$OV/ipc_radio.conf"
-    -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay"
+    -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
     -DPM_STATIC_YML_FILE="$OV/pm_static.yml"
     -DSB_EXTRA_CONF_FILE="$OV/sysbuild-woz.conf"
-    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_aliro_ecp;$TREE/modules/woz_aliro_stack;$TREE/deps/dw3000"
+    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_aliro_ecp;$TREE/modules/woz_nfc;$TREE/modules/woz_aliro_stack;$TREE/deps/dw3000"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_WOZ_UWB=y -DCONFIG_WOZ_UWB_RESPONDER=y
     -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n
   )
   [ -n "$selftest" ] && dflags+=("$selftest")
   [ -n "$strict" ] && dflags+=("$strict")
-  [ -n "$aliro_source" ] && dflags+=("$aliro_source")
+  dflags+=("$aliro_source_flag")
   if [ -n "$aliro_trace" ]; then
     dflags+=(
       "$aliro_trace"
@@ -212,6 +249,7 @@ do_build() {
       -DCONFIG_DOOR_LOCK_ALIRO_L2CAP_SERVER_LOG_LEVEL_INF=y
     )
   fi
+  [ ${#nfc_flags[@]} -gt 0 ] && dflags+=("${nfc_flags[@]}")
 
   local sig sig_file="${BUILD%/}.aliro_build_sig"
   sig="$(printf '%s\0' "$BOARD" "$APP" "$NCS_VER" "${dflags[@]}" | sha | awk '{print $1}')"
@@ -232,7 +270,13 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_source:+   (Aliro source ON)}${aliro_trace:+   (Aliro trace ON)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_trace:+   (Aliro trace ON)}"
+  if [ "$aliro_source" = 1 ]; then
+    kv "aliro" "in-tree source (default)"
+  else
+    kv "aliro" "Nordic binary (fallback)"
+  fi
+  kv "nfc"   "$nfc_name"
   if [ "$pristine" = 1 ]; then
     kv "mode" "${YLW}pristine${RST} ${DIM}($reason)${RST}"
   else
@@ -246,14 +290,14 @@ do_build() {
     ( cd "$WS" && launch west build -d "$BUILD" )
   fi
 
-  if [ -n "$aliro_source" ]; then
+  if [ "$aliro_source" = 1 ]; then
     local aliro_map="$BUILD/matter-aliro-door-lock-app/zephyr/zephyr.map"
     [ -f "$aliro_map" ] || die "Aliro source link map not found" "$aliro_map"
     if grep -q 'libaliro_ble\.a' "$aliro_map"; then
       die "proprietary Aliro archive still contributed linked code" \
-          "source override must define the complete application-used public ABI"
+          "source stack must define the complete application-used public ABI"
     fi
-    ok "Aliro source override linked without libaliro_ble.a members"
+    ok "Aliro source stack linked without libaliro_ble.a members"
   fi
   printf '%s' "$sig" > "$sig_file"
   local secs=$(( SECONDS - start ))

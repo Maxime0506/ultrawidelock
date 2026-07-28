@@ -41,6 +41,9 @@ enum woz_aliro_ble_result {
 	WOZ_ALIRO_BLE_BUFFER_TOO_SMALL = -4,
 };
 
+/**
+ * Parsed Aliro BLE message: protocol version, message ID, and opaque payload.
+ */
 struct woz_aliro_ble_message {
 	uint8_t protocol;
 	uint8_t message_id;

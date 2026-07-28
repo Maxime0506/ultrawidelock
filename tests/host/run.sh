@@ -32,20 +32,22 @@ WOZ_TEST_QUIET=1 "$ROOT/build/host_test"
 SRC="$ROOT/modules/woz_uwb/src"
 HOSTD="$ROOT/tests/host"
 
-# 1) uwb driver + shell (uwb_min/isr/rxdiag/selftest + aliro_shell) on the
-#    drvfake radio + logfake zephyr surface.
+# 1) uwb driver + shell (uwb_min/isr/rxdiag/cirdiag/selftest + aliro_shell) on
+#    the drvfake radio + logfake zephyr surface.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
-	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 \
+	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
+	"$HOSTD/test_uwb_cirdiag.c" \
 	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
+	"$SRC/driver/uwb_cirdiag.c" \
 	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" \
 	-o "$ROOT/build/host_test_drv"
 WOZ_TEST_QUIET=1 "$ROOT/build/host_test_drv"
@@ -89,7 +91,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 # the full unittest log is replayed on failure.
 py_suite() { # <name> <script> <note>
 	local out ran skipped note
-	if ! out="$(python3 "$2" 2>&1)"; then
+	if ! out="$("$PY" "$2" 2>&1)"; then
 		printf '%s\n' "$out"
 		printf '  %s: FAIL\n' "$1"
 		exit 1

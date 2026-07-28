@@ -100,6 +100,7 @@ def social_meta(page: bytes, base: str) -> bytes:
 
 
 def main() -> int:
+    """Copy demo media files into the rendered site and inject demo figure HTML into the landing page; inject social card metadata (og:image, etc.) into HTML pages using origin remote as base URL."""
     index = SITE / "index.html"
     if not index.is_file():
         print("    no rendered site — nothing to decorate")

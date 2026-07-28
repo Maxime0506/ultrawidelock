@@ -37,6 +37,7 @@ CSS = """<style id="gv-cmds-css">
 
 
 def chip(cmd: str) -> str:
+    """Render a shell command as a copyable chip: dollar sign, escaped command, and copy button with data attribute."""
     # No trailing `# comment`, rendered or copied: a chip is the command and
     # nothing else. Whatever the comment said belongs in the guide's prose.
     return (
@@ -48,6 +49,7 @@ def chip(cmd: str) -> str:
 
 
 def rewrite(match: re.Match[str], counter: list[int]) -> str:
+    """Rewrite a code block to copy chips: extract shell commands (one per line, optional trailing comment stripped), verify format, render each as a chip. Returns the substituted HTML or original text if no commands match. Increments counter on success."""
     lines = [html.unescape(l) for l in match.group(1).split("\n")]
     body = [l for l in lines if l.strip()]
     if not body or not all(LINE_RE.match(l) for l in body):
@@ -61,6 +63,7 @@ def rewrite(match: re.Match[str], counter: list[int]) -> str:
 
 
 def main() -> int:
+    """Rewrite command blocks to copy chips on all rendered site pages: find fenced code blocks matching the allowlist, call rewrite for each, inject CSS once per page. Print counts of blocks and pages modified."""
     if not SITE.is_dir():
         print("    no rendered site — nothing to rewrite")
         return 0

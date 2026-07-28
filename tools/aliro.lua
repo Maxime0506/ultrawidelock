@@ -1,3 +1,6 @@
+-- Wireshark dissector for Aliro: parses BLE advertisement data (adv.dissector) and Time Sync
+-- Procedure 0 frames (ts.dissector). Handles flags, TX power, reader group IDs, expiry timestamps
+-- with UTC decoding and validation, and dynamic tags.
 --[[
   Aliro protocol analyzer for Wireshark (Tier A: clear-text BLE plane).
 
@@ -73,9 +76,14 @@ adv.experts = { e_short, e_no_uwb, e_no_clock, e_odd_exp }
 -- puts a real Aliro expiry there, so we let plausibility pick the endianness
 -- rather than guessing: 0x66.. as MSB reads sane big-endian, garbage little.
 local EXP_LO, EXP_HI = 1577836800, 4102444800  -- 2020-01-01 .. 2100-01-01 UTC
+-- Returns true if timestamp t falls within the plausible expiry range [EXP_LO, EXP_HI].
 local function plausible(t) return t >= EXP_LO and t <= EXP_HI end
+-- Converts a Unix timestamp t to an ISO 8601 UTC string in the format YYYY-MM-DD HH:MM:SS UTC.
 local function utc(t) return os.date("!%Y-%m-%d %H:%M:%S UTC", t) end
 
+-- Dissects an Aliro BLE advertisement from tvb. Parses flags (UWB flow, notification, version), TX
+-- power, reader group ID, expiry timestamp (with UTC decoding and plausibility check), and dynamic
+-- tag. Sets protocol name and info string; returns bytes consumed.
 function adv.dissector(tvb, pinfo, tree)
   local n = tvb:len()
   local t = tree:add(adv, tvb(), "Aliro Advertisement")
@@ -161,6 +169,9 @@ for _, fld in pairs(tf) do ts.fields[#ts.fields + 1] = fld end
 local ts_short = ProtoExpert.new("aliro_timesync.short", "Payload shorter than 23 bytes; not a full Procedure-0 time sync", expert.group.MALFORMED, expert.severity.WARN)
 ts.experts = { ts_short }
 
+-- Dissects an Aliro Time Sync (Procedure 0) message from tvb. Expects 23 bytes: device count (8
+-- LE), UWB time (8 LE), uncertainty (1), skew flag (1), max PPM (2 LE), success (1), retry count (2
+-- LE). Sets protocol name and returns bytes consumed.
 function ts.dissector(tvb, pinfo, tree)
   local n = tvb:len()
   local t = tree:add(ts, tvb(), "Aliro Time Sync (Procedure 0)")
