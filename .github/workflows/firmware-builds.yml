@@ -425,4 +425,24 @@ jobs:
           . "$ESP_MATTER_PATH/export.sh"
           idf.py set-target esp32s3
           idf.py build
+          # Presence second, not instead: the default build above is the only
+          # thing that catches code which compiles ONLY with presence on (an
+          # unused declaration outside the guard, say). The presence build is a
+          # strict superset of the compiled sources -- every CONFIG_WOZ_PRESENCE
+          # site in this app is a bare #ifdef with no #else -- so neither build
+          # subsumes the other's failures.
+          #
+          # Costs a second CHIP tree. Affordable only because this job is
+          # already off PRs (push to main, nightly, manual), and because the
+          # shared ccache makes the CHIP objects hits rather than rebuilds.
+          idf.py -B build-presence \
+                 -D SDKCONFIG=build-presence/sdkconfig \
+                 -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.presence' \
+                 build
+          # Linking is not enough -- --gc-sections has eliminated the P-256 code
+          # from an image that built cleanly before. presence_link_cmd is the
+          # app-facing one: it is what registers the console command, so it is
+          # absent exactly when this app's own presence wiring has rotted.
+          xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
+            | grep -qE ' T presence_link_cmd$'
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"

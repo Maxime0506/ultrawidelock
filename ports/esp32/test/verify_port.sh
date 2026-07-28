@@ -16,7 +16,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # The bench project moved to apps/reader in the ports/ refactor; its build
 # still produces the woz_uwb_esp32s3.* artifacts checked below.
 PROJ="$(cd "$HERE/../apps/reader" && pwd)"
-BUILD="$PROJ/build"
+# NOT $PROJ/build. `idf.py build` there picks up the project's sdkconfig, which
+# is untracked working state -- `make presence-on` writes to it, so a developer
+# who has ever run that gets a local PASS on an image CI would never produce,
+# and every check below silently describes a different configuration than the
+# one that ships. Build from sdkconfig.defaults into a directory of this
+# script's own, so a local run and a CI run assert the same thing, and so
+# running the guard stops clobbering whatever the developer had in build/.
+BUILD="$PROJ/build-verify"
 fail=0
 note() { printf '  %-4s %s\n' "$1" "$2"; }
 check() { if eval "$2"; then note ok "$1"; else note FAIL "$1"; fail=1; fi; }
@@ -36,8 +43,17 @@ if ! command -v idf.py >/dev/null 2>&1; then
 	exit 0
 fi
 
-echo "building esp32s3 target..."
-( cd "$PROJ" && idf.py build >/dev/null )
+echo "building esp32s3 target (defaults only)..."
+( cd "$PROJ" && idf.py -B build-verify \
+	-DSDKCONFIG=build-verify/sdkconfig \
+	-DSDKCONFIG_DEFAULTS="sdkconfig.defaults" \
+	build >/dev/null )
+# The guard is only as good as the config it built. Assert the defaults build is
+# really presence-free, or section 4 below proves nothing by passing.
+if grep -q '^CONFIG_WOZ_PRESENCE=y' "$BUILD/sdkconfig"; then
+	echo "verify_port: FAIL — the defaults build has presence ON; sdkconfig.defaults changed?" >&2
+	exit 1
+fi
 
 echo "1. build artifacts"
 check "app binary"       "[ -f '$BUILD/woz_uwb_esp32s3.bin' ]"
@@ -78,16 +94,22 @@ if ( cd "$PROJ" && idf.py -B build-presence \
 	note ok "presence build links"
 	# Linking is not enough: --gc-sections has eliminated these before, which is
 	# why the symbols are named individually rather than trusting the config.
-	# Every name here was checked to be ABSENT from a defaults-only build --
-	# aliro_ec_p256_keygen and aliro_ecdsa_p256_sign were the obvious picks and
-	# are useless, because the Aliro credential path links them either way.
 	PNM="${WOZ_NM:-xtensa-esp32s3-elf-nm}"
 	psym() { "$PNM" "$PBUILD/woz_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
+	dsym() { "$PNM" "$BUILD/woz_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
 	if command -v "$PNM" >/dev/null 2>&1; then
 		check "presence_link_init survives gc"      "psym presence_link_init"
 		check "presence_link_cmd survives gc"       "psym presence_link_cmd"
 		check "aliro_assert_build_p256 survives gc" "psym aliro_assert_build_p256"
 		check "aliro_assert_ec_sign survives gc"    "psym aliro_assert_ec_sign"
+		# Negative control, asserted rather than assumed: a name that is linked
+		# either way makes the four checks above pass whatever happens to the
+		# presence config. aliro_ec_p256_keygen and aliro_ecdsa_p256_sign were
+		# the obvious picks and are exactly that -- the Aliro credential path
+		# pulls both in with presence off -- so the discrimination is checked
+		# here instead of being taken on trust.
+		check "presence absent from defaults build" \
+			"! dsym presence_link_init && ! dsym aliro_assert_build_p256"
 	else
 		note skip "presence symbols ($PNM not on PATH; set WOZ_NM=)"
 	fi
