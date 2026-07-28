@@ -127,6 +127,19 @@ characteristics, the reader-SPSM (Read) and the device-version (Write), and
 **never prompts to pair** — Aliro runs its own secure channel, so the walk-up
 must not require bonding.
 
+Reading the reader-SPSM characteristic returns `00 80 02 01 00 01 01`:
+
+| Bytes | Meaning |
+|---|---|
+| `00 80` | L2CAP SPSM 0x0080 |
+| `02` | protocol-versions length |
+| `01 00` | version 0x0100 (v1.0) |
+| `01` | features length |
+| `01` | bit0 = timesync procedure 0 |
+
+That is byte-identical to what the ESP32-S3 NimBLE backend publishes, so the
+Zephyr transport matches the shipped one on the wire and not merely in intent.
+
 Both radios run at once: BLE advertising while the DW3110 sits in permanent SP0
 receive listening for Apple Pre-POLL. That is idle coexistence; whether they
 survive concurrent load is a separate question, answered at stage 4.
