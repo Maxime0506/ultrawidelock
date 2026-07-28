@@ -31,8 +31,20 @@ from typing import Iterator, Optional
 # double spaces mean the runs of whitespace vary, so match \s+ rather than ' '.
 RNG_RE = re.compile(r"rng\s+blk=(\d+)\s+d=(-?\d+)mm\s+tof=(-?\d+)")
 
-# access_manager_impl.cpp:756 and :762.
+# The curated line above exists only under CONFIG_WOZ_PRETTY_SHELL with
+# `aliro frames` on. The unconditional diagnostic nine lines earlier in the
+# same block (ccc_shim_rx.c:600) is the only distance line most builds emit.
+# Its phone_d field is the peer's own estimate and is deliberately unused.
+DIST_RE = re.compile(r"DIST tof=(-?\d+) d=(-?\d+)mm")
+
+# The grant/deny console lines, emitted once per completed transaction.
 ACCESS_RE = re.compile(r"ACCESS (GRANTED|DENIED)")
+
+# Home Assistant device model, "<target> Aliro lock". This bridge reads an
+# nRF5340 console; the ESP32 firmware publishes the same contract natively under
+# its own target name. Kept in step with openaliro_ha.mqtt.DEFAULT_MODEL by the
+# discovery parity test.
+DEFAULT_MODEL = "nRF5340 Aliro lock"
 
 
 def parse_line(line: str) -> Optional[dict]:
@@ -50,6 +62,15 @@ def parse_line(line: str) -> Optional[dict]:
             "tof": int(m.group(3)),
         }
 
+    m = DIST_RE.search(line)
+    if m:
+        return {
+            "kind": "range",
+            "block": None,
+            "distance_mm": int(m.group(2)),
+            "tof": int(m.group(1)),
+        }
+
     m = ACCESS_RE.search(line)
     if m:
         return {"kind": "access", "verdict": m.group(1).lower()}
@@ -57,13 +78,13 @@ def parse_line(line: str) -> Optional[dict]:
     return None
 
 
-def discovery_payloads(node: str) -> list[tuple[str, dict]]:
+def discovery_payloads(node: str, model: str = DEFAULT_MODEL) -> list[tuple[str, dict]]:
     """Return (topic, config) pairs announcing both entities to Home Assistant."""
     device = {
         "identifiers": [node],
         "name": node,
         "manufacturer": "openaliro",
-        "model": "nRF5340 Aliro lock",
+        "model": model,
     }
     base = f"aliro/{node}"
     return [
@@ -118,6 +139,7 @@ def open_lines(port: str, baud: int) -> Iterator[str]:
 
 
 def main() -> int:
+    """Parse a serial line or read lines from stdin ('-'), decode range and access readings, publish to MQTT (or stdout in dry-run mode), and notify Home Assistant via discovery payloads; return 0 on clean exit or KeyboardInterrupt."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", required=True, help="serial device, or '-' for stdin")
     ap.add_argument("--baud", type=int, default=115200)

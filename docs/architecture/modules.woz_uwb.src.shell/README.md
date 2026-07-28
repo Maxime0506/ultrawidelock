@@ -4,3 +4,4 @@
 | subsystem | about |
 |---|---|
 | [`modules/woz_uwb/src/shell/aliro_shell.c`](aliro_shell.c.md) | @file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine. |
+| [`modules/woz_uwb/src/shell/aliro_shell.h`](aliro_shell.h.md) | @file aliro_shell.h — the one seam the `aliro` console needs from the application. |

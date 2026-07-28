@@ -13,6 +13,12 @@ public issue or PR for a security problem before it is fixed.
 A useful report includes the affected file or subsystem, the firmware commit, and a
 reproduction (a frame capture, a failing input, or a test case is ideal).
 
+Do not attach raw flight-recorder output to a public report. Serial logs containing
+`[FREC]` records and binary `.frc` files include the session's ephemeral URSK. Share them
+only through the private reporting channel and delete unneeded copies. A fuzz corpus
+exported by `tools/flight_recorder.py` contains received frame bytes only and excludes the
+URSK, but review every artifact before publishing it.
+
 Expectations, honestly stated for a single-maintainer project: acknowledgment within
 7 days, best-effort fixes with no guaranteed timeline, and credit in the release notes
 if you want it. There is no bug bounty.

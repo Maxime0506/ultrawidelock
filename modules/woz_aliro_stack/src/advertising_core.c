@@ -1,3 +1,9 @@
+/**
+ * @file advertising_core.c
+ * Compute dynamic advertisement tag inputs and extract tags from AES ciphertext. The plaintext
+ * input incorporates the device's BLE address and an expiry timestamp; the tag is derived by AES
+ * encryption and truncation for inclusion in Aliro BLE advertisements per specification section 20.
+ */
 #include "advertising_core.h"
 
 #include <string.h>

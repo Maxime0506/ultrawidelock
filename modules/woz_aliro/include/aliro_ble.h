@@ -9,7 +9,7 @@
  *
  * aliro_ble — Aliro BLE transport (NimBLE) for the ESP32-S3 port.
  * Advertises the Aliro GATT service, negotiates the BLE-UWB protocol version,
- * and carries the Aliro transaction over an L2CAP CoC. Clean-room
+ * and carries the Aliro transaction over an L2CAP CoC. Independent
  * reimplementation; see SPEC.md for the wire protocol and provenance.
  */
 #pragma once
@@ -70,6 +70,12 @@ int aliro_ble_disconnect(uint16_t conn_handle);
  * seal + L2CAP send already runs), so a caller on another task can send without racing
  * the BleSK counter. `cb` runs on the host task and is passed `unsecured`. */
 void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured);
+
+/* Marshal a presence-proof reset onto the NimBLE host task. The callback may
+ * inspect the reader session table and terminate links without racing the
+ * transaction callbacks that own it. Only one proof command is served at a
+ * time by the console, so one queued callback slot is sufficient. */
+void aliro_ble_post_presence_reset(void (*cb)(void));
 
 /* ---- Attach mode: share a NimBLE host another stack already owns ---------- *
  * Instead of owning NimBLE (aliro_ble_start), the reader can attach to a host

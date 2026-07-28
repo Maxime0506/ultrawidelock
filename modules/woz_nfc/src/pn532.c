@@ -27,6 +27,10 @@
  * which would otherwise spin the caller on back-to-back round trips forever. */
 #define PN532_MI_MAX_CONTINUATIONS 64
 
+/**
+ * Initialize a PN532 instance with bus operations and opaque context; set default ACK and response
+ * timeouts and clear state.
+ */
 void pn532_init(struct pn532 *p, const struct pn532_bus_ops *ops, void *ctx)
 {
 	memset(p, 0, sizeof(*p));
@@ -74,6 +78,10 @@ static int find_start(const uint8_t *buf, size_t len, size_t *start)
 	return PN532_ERR_FRAME;
 }
 
+/**
+ * Return a human-readable name for a PN532 frame parsing error code: "none", "start-code", "lcs",
+ * "truncated", etc., or "unknown" for unrecognized codes.
+ */
 const char *pn532_frame_error_name(enum pn532_frame_error error)
 {
 	switch (error) {
@@ -104,6 +112,10 @@ const char *pn532_frame_error_name(enum pn532_frame_error error)
 	}
 }
 
+/**
+ * Record a frame parse error in the PN532 state and return PN532_ERR_FRAME; used to aggregate error
+ * details across parse steps.
+ */
 static int frame_error(struct pn532 *p, enum pn532_frame_error error)
 {
 	p->last_frame_error = error;
@@ -263,6 +275,11 @@ int pn532_transact(struct pn532 *p, uint8_t cmd, const uint8_t *params, size_t p
 	return PN532_OK;
 }
 
+/**
+ * Request firmware version from the PN532 chip and receive 4-byte response (IC version, version,
+ * subversion, flags); return PN532_OK on success or error code on transaction failure or invalid
+ * response length.
+ */
 int pn532_get_firmware_version(struct pn532 *p, uint8_t out[4])
 {
 	size_t len = 0;
@@ -283,6 +300,10 @@ int pn532_sam_configuration(struct pn532 *p)
 			      -1);
 }
 
+/**
+ * Enable or disable the PN532 RF field; return PN532_OK on success or error code if the command
+ * fails.
+ */
 int pn532_rf_field(struct pn532 *p, bool on)
 {
 	const uint8_t params[] = {0x01, on ? 0x01 : 0x00};
@@ -307,6 +328,10 @@ int pn532_set_rf_timeouts(struct pn532 *p, uint8_t atr_res_code, uint8_t retry_c
 			      -1);
 }
 
+/**
+ * Write a single byte value to a PN532 register at the given 16-bit address; return PN532_OK on
+ * success or error code if the command fails.
+ */
 int pn532_write_register(struct pn532 *p, uint16_t addr, uint8_t value)
 {
 	const uint8_t params[] = {(uint8_t)(addr >> 8), (uint8_t)addr, value};

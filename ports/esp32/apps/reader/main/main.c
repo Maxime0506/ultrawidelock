@@ -13,8 +13,12 @@
 #include "esp_log.h"
 
 #include "woz_uwb_facade.h"
+#include "woz_port.h" /* woz_uptime_ms for the reader status tick */
 #include "aliro_reader.h"
 #include "app_shell.h"
+#if defined(CONFIG_WOZ_PRESENCE)
+#include "presence_link.h"
+#endif
 
 static const char *TAG = "woz_esp32s3";
 
@@ -52,11 +56,26 @@ void app_main(void)
 	ESP_LOGI(TAG, "aliro_reader_start() = %d %s", brc,
 		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
 
+#if defined(CONFIG_WOZ_PRESENCE)
+	/* Additive: loads the device signing key; the shell below picks up the
+	 * `presence` command. Deliberately not a separate mode -- the same board
+	 * serves presence and stays provisionable over the same console. */
+	/* true: this app has no lock state of its own, so presence owns the Wallet
+	 * grant here. The Matter lock passes false and grants from its approach loop. */
+	presence_link_init(true);
+	ESP_LOGI(TAG, "presence commands registered (see `presence` in help)");
+#endif
+
 	/* Interactive console on the console UART (shares the log stream). */
 	app_shell_start();
 
 	while (1) {
 		int32_t cm;
+
+		/* Same duty as the Matter lock's approach loop: release a held stale-Wallet
+		 * Secured once its window passes without a grant. Only presence_link drives
+		 * grants in this app, so only presence can ever arm one. */
+		aliro_reader_status_tick(woz_uptime_ms());
 
 		if (woz_uwb_last_range_cm(&cm)) {
 			ESP_LOGI(TAG, "range: %d cm", (int)cm);

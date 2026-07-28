@@ -92,14 +92,45 @@ void test_facade(void)
 	cm = -1;
 	T_OK("trusted.present", woz_uwb_trusted_range_cm(&cm));
 	T_EQ("trusted.cm", cm, 150);
+	uint32_t range_checkpoint = woz_uwb_range_generation();
+	T_OK("trusted.old_generation_refused",
+	     !woz_uwb_trusted_range_after_cm(&cm, range_checkpoint));
+	fira_session_set_ccc_range_cm(150, 8u);
+	T_OK("trusted.new_generation_accepted",
+	     woz_uwb_trusted_range_after_cm(&cm, range_checkpoint));
 	/* A spoofed (implausible) block clears trust and does not latch: the raw
 	 * accessor still returns the last good range, but the trusted accessor
 	 * (what the unlock seam uses) refuses it. */
-	fira_session_set_ccc_range_cm(-400, 8u);
+	fira_session_set_ccc_range_cm(-400, 9u);
 	cm = -1;
 	T_OK("spoof.raw.kept", woz_uwb_last_range_cm(&cm));
 	T_EQ("spoof.raw.cm", cm, 150);
 	T_OK("spoof.trusted.refused", !woz_uwb_trusted_range_cm(&cm));
+
+	t_group("trusted_range_age_cm carries the age, and gates the same way");
+	/* Presence needs to know a range is CURRENT, not merely the most recent one
+	 * ever seen: a distance from two minutes ago says nothing about who is here
+	 * now. Polling this is what lets presence skip the single range-listener
+	 * slot, which the lock's approach loop already owns. */
+	int64_t age_ms = -1;
+
+	fira_session_set_ccc_range_cm(150, 10u);
+	fira_session_set_ccc_range_cm(150, 11u);
+	fira_session_set_ccc_range_cm(150, 12u);
+	fira_session_set_ccc_range_cm(150, 13u);
+	cm = -1;
+	T_OK("age.present", woz_uwb_trusted_range_age_cm(&cm, &age_ms));
+	T_EQ("age.cm", cm, 150);
+	T_OK("age.nonneg", age_ms >= 0);
+	/* A NULL age must behave exactly as the older accessor, since that one is
+	 * now implemented by delegating here. */
+	cm = -1;
+	T_OK("age.null.ok", woz_uwb_trusted_range_age_cm(&cm, NULL));
+	T_EQ("age.null.cm", cm, 150);
+	/* The trust gate applies identically: an untrusted range must not surface a
+	 * distance just because the caller also asked for its age. */
+	fira_session_set_ccc_range_cm(-400, 14u);
+	T_OK("age.spoof.refused", !woz_uwb_trusted_range_age_cm(&cm, &age_ms));
 
 	/* Leave the fira store cleared for any later reader. */
 	fira_session_set_provisioned_ursk(NULL);

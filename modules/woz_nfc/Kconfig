@@ -5,7 +5,8 @@ config WOZ_NFC
 	bool "Woz NFC transport seam"
 	help
 	  Compile the WozNfc transport seam into the application. The add-on's
-	  NFC call sites are patched (integration/patches/nfc-transport-seam.patch)
+	  NFC call sites are patched
+	  (ports/nrf5340dk/patches/nfc-transport-seam.patch)
 	  to go through this seam, so exactly one backend below must be selected
 	  in any application build that links those call sites.
 
@@ -20,16 +21,16 @@ config WOZ_NFC_TRANSPORT_RFAL
 	bool "ST25R series via the upstream RFAL transport"
 	depends on NFC_DRIVER_STM
 	help
-	  Forward the seam to the add-on's NfcTransportRfal (X-NUCLEO ST25R500
-	  shield on spi1). Upstream behavior, byte for byte.
+	  Forward the seam to the add-on's NfcTransportRfal (X-NUCLEO-NFC12A1
+	  with ST25R300 on spi1). Upstream behavior, byte for byte.
 
 config WOZ_NFC_TRANSPORT_PN532
 	bool "NXP PN532 over SPI"
 	depends on SPI
 	help
 	  In-tree PN532 reader transport. Needs a devicetree node compatible
-	  "nxp,pn532-spi" (see integration/overlays/pn532.overlay, which reuses
-	  the spi1 bus the ST25R shield would occupy). Emits Apple ECP frames
+	  "nxp,pn532-spi" (see ports/nrf5340dk/overlays/pn532.overlay, which
+	  reuses the spi1 bus the ST25R shield would occupy). Emits Apple ECP frames
 	  while polling so an iPhone auto-presents its Aliro pass, mirroring the
 	  woz_aliro_ecp module on the RFAL path.
 

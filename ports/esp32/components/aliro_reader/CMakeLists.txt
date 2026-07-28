@@ -21,9 +21,21 @@ idf_component_register(
 		# worker's whole body is gated, so it is empty with the option off.
 		"${ALIRO}/src/aliro_stepup.c"
 		"${ALIRO}/src/aliro_stepup_parse.c"
+		# Presence-assertion codec (non-door primitive): pure functions, always
+		# compiled; only the presence dongle app (CONFIG_WOZ_PRESENCE) calls them.
+		# aliro_assert.c is backend-free by design; aliro_assert_ec.c is the
+		# separate shim that binds its P-256 seam to aliro_prim, and is the only
+		# one of the pair with a crypto dependency.
+		"${ALIRO}/src/aliro_assert.c"
+		"${ALIRO}/src/aliro_assert_ec.c"
 		"aliro_stepup_worker.c"
 		"aliro_prov_nvs.c"
-	INCLUDE_DIRS "${ALIRO}/include"
+		# The `presence` console command. Lives here rather than in one app so
+		# both the standalone reader and the Matter lock can serve presence: the
+		# lock is the board a phone is actually provisioned against, so requiring
+		# a separate dongle app would mean cloning an identity to use it at all.
+		"presence_link.c"
+	INCLUDE_DIRS "${ALIRO}/include" "."
 	PRIV_INCLUDE_DIRS "${ALIRO}/src"
 	# woz_port.h / woz_log.h (the platform contract aliro_reader.c and
 	# aliro_ranging.c are written to) come via woz_uwb's public include dirs

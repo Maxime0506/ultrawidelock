@@ -9,8 +9,9 @@ bump means new capability and a patch bump means fixes only.
    build reuses its containers and scripts, so a green gate there predicts a green
    release build.
 2. The working tree is clean and on the release commit.
-3. The [hardware validation checklist](hardware-validation.md) passes on that commit,
-   with the results table filled in.
+3. The [hardware validation checklist](hardware-validation.md) passes on that commit
+   for every configuration with documented bench support. Any bundled configuration
+   without a checklist pass is marked build-only in the release notes.
 
 ## Steps
 
@@ -25,8 +26,9 @@ bump means new capability and a patch bump means fixes only.
    flash bundles (sources in `release/<target>/`), zips them with a `SHA256SUMS.txt`,
    and creates the GitHub release with those assets.
 4. **Release notes.** Edit the created release and append, above the generated bundle
-   table: the changelog section for this version, and the hardware validation results
-   tables (with firmware commit, toolchain versions, phone model, and iOS version).
+   table: the changelog section for this version, the hardware validation results
+   tables (with firmware commit, toolchain versions, phone model, and iOS version),
+   and an explicit build-only label for any configuration without bench evidence.
 
 ## Documentation
 
@@ -50,6 +52,12 @@ committed `docs/` tree, so a contributor never needs it. Regenerating `docs/` do
 - The toolchain pins live in the workflow itself: the NCS toolchain container by
   digest for the nRF bundle, and the ESP-IDF container digest plus a bench-validated
   esp-matter revision (`ESP_MATTER_REV`) for the ESP32 bundle.
-- The bundles cover the default configurations only: nRF5340 DK (DW3110, ST25R300)
-  and the ESP32-S3 Matter lock. Variants (`CHIP=dw3720`, `HA=1`, the bench reader
-  app) build from source.
+- The bundles cover the default nRF5340 DK configuration (DW3110 plus
+  X-NUCLEO-NFC12A1/ST25R300) and Matter-lock images for both ESP32-S3 and
+  ESP32-C5. S3 is hardware-validated; C5 is build/release-supported with bench
+  validation pending. The bundled `flash.sh` remains S3-only.
+- The browser flasher selects the S3 or C5 release image without local tools.
+  It is built and dry-checked, but a successful real WebSerial flash is not yet
+  recorded. Keep that caveat in release notes until the bench check exists.
+- Other variants (`CHIP=dw3720`, `HA=1`, `ALIRO_SOURCE=0`, `NFC=pn532|none`,
+  and the bench reader app) build from source and are not release-bundled.

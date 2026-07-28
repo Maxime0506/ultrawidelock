@@ -70,8 +70,16 @@ clear message; `FORCE=1` stops the holder first.
 | `codes` | reprint the commissioning QR URL and manual pairing code |
 | `aliro prov` | show reader identity and credential trust store |
 | `aliro trust` | persist the last-presented credential as trusted |
+| `aliro clear` | empty the trust store, keeping the reader identity |
+| `hamqtt` | provision the Home Assistant broker (only with `CONFIG_ENABLE_HA_MQTT`) |
+| `commission [close]` | open a BLE commissioning window, keeping the fabrics you have |
 | `factoryreset` | erase all Matter state and reboot |
 | `help`, `clear` | REPL built-ins |
+
+With `CONFIG_WOZ_PRESENCE=y` the same prompt also answers `presence pub`,
+`presence credential` and `presence prove <nonce>`, which turn this lock into a
+signed proof that a named human was within a few tens of centimetres of it. Off
+by default; see [`docs/presence.md`](../../../../docs/presence.md).
 
 ## Commissioning and provisioning
 
@@ -93,6 +101,25 @@ phone is still standing there.
 The onboard WS2812 on GPIO48 shows bolt state: dark when locked, blue when opened by
 Aliro, green when opened any other way.
 
+### Recovering a lock you cannot reach
+
+A commissioned board does not advertise commissionable, so no controller can start BLE
+commissioning with it; and if it has no working network, no controller can reach it over
+IP to open a window either. `commission` is the way out of that corner. It opens a basic
+window, so a controller can re-push Wi-Fi credentials through the NetworkCommissioning
+cluster or add a fabric, keeping the fabrics already there. A long press on the BOOT
+button (GPIO 0, 5 s) does the same thing with no console attached. `commission close`
+ends the window early; it also expires on its own.
+
+Reach for this instead of `factoryreset`, which additionally clears the Aliro reader
+identity and trust store and so costs every phone its key.
+
+Two things to know. The shared NimBLE host has one legacy advertiser and the reader only
+takes it once Matter releases it, so **walk-up stops while a window is open**, until it
+closes or the board reboots; the command says so when you run it. And press BOOT only
+while the firmware is running, never across a reset, because GPIO 0 is also the
+bootloader strap.
+
 ## Configuration worth knowing
 
 Set in `sdkconfig.defaults`; each of these is load-bearing, not a default that happened
@@ -110,6 +137,49 @@ The reader attaches to esp-matter's existing NimBLE host rather than starting a 
 BLE stack; the Aliro GATT service is registered through `ConfigureExtraServices` before
 Matter starts.
 
+## Home Assistant without the bridge agent
+
+`CONFIG_ENABLE_HA_MQTT` (default **n**) publishes UWB distance and Aliro access events
+straight to a TLS MQTT broker, on the same topics the Python bridge agent uses. With it on,
+Home Assistant builds the device through MQTT Discovery with no host process holding the
+serial console. Lock control still goes over Matter; the option changes nothing about the
+Matter side.
+
+Build it with the fragment, not with `menuconfig` alone:
+
+```bash
+make build HAMQTT=1     # or: make flash HAMQTT=1
+```
+
+`sdkconfig.defaults.hamqtt` carries the option **and** the mbedTLS record sizing it
+depends on. The stock 16 KiB TLS input record needs a contiguous allocation this target
+cannot spare next to Matter, NimBLE and Wi-Fi: `mbedtls_ssl_setup` returns `-0x7F00`
+(`MBEDTLS_ERR_SSL_ALLOC_FAILED`) and every connect dies before the handshake. Turning the
+option on by hand without the fragment reproduces exactly that. The fragment is kept out of
+`sdkconfig.defaults` so the plain build stays byte-for-byte unchanged; switching `HAMQTT`
+on or off rewrites `sdkconfig` and forces a full rebuild.
+
+Nothing about a broker is compiled in. Provision it once at the console, then reboot:
+
+```
+hamqtt broker homeassistant.local 8883
+hamqtt user openaliro_agent
+hamqtt pass                 # prompts, not echoed, never enters the shell history
+hamqtt node front-door      # 1-32 of [A-Za-z0-9_-]; this is the HA device identity
+hamqtt ca                   # paste the broker CA in PEM, end with a line holding "."
+hamqtt show                 # everything but the password
+```
+
+The publisher attaches when Matter's station gets an address, runs on its own task, and
+drops observations rather than blocking the ranging or credential-auth paths. Distance is
+rate-limited exactly as the agent rate-limits it: at most one per second, with a change of
+100 mm or more let through immediately.
+
+Give the board its own `node` if an agent is already publishing for another lock: the node
+name is the Home Assistant device identity, and two publishers on one node would fight.
+The CA and the login live in the `nvs` partition alongside Matter's own data, so a large
+certificate chain eats headroom there; a single CA is around 1.5 kB of a 48 kB partition.
+
 ## Caveats
 
 - The reader falls back to a fixed, non-secret **dev identity** with a dev-open trust
@@ -126,5 +196,7 @@ Matter starts.
 - [`docs/esp32-gotchas.md`](../../../../docs/esp32-gotchas.md): every trap hit during
   this bring-up, with symptom and fix. Read this before debugging anything.
 - [`../reader/README.md`](../reader/README.md) — the shared component stack.
+- [`docs/presence.md`](../../../../docs/presence.md): signed proximity proofs from
+  this board, for signing releases rather than opening doors.
 - [`docs/porting-esp32.md`](../../../../docs/porting-esp32.md): how the port was
   planned and how it actually went.

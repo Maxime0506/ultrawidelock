@@ -13,6 +13,11 @@ workspace/
 # Python bytecode from the docs helpers
 __pycache__/
 
+# Local virtualenv holding the host suites' python deps (markdown, coverage).
+# Created by `make tools-install`; the runners resolve it themselves ($PY in
+# tests/host/sources.sh), so it is never activated and never on PATH.
+.venv/
+
 # Build output
 /build/
 build/
@@ -29,6 +34,9 @@ bench.env
 # copy comes from CI (release.yml) via tools/docs_flash.py.
 /web-flasher/openaliro-matter-lock-esp32s3.bin
 /web-flasher/openaliro-matter-lock-esp32c5.bin
+
+# Python build artifacts from an editable install of the HA agent
+*.egg-info/
 
 # macOS
 .DS_Store

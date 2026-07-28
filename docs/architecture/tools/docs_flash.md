@@ -41,24 +41,37 @@ owner/repo for the origin remote, or '' if none.
 
 **called by** `main`
 
+### `fetch(url: str) -> bytes`
+`tools/docs_flash.py:102`
+
+Fetch and return the complete response body from a URL with 60-second timeout.
+
+**called by** `main`
+
 ### `inject(page: Path, anchor: str, addition: str, before: bool) -> str`
-`tools/docs_flash.py:107`
+`tools/docs_flash.py:108`
 
 Insert addition next to anchor in page, once; report what happened.
 
 **called by** `link_site`
 
+### `link_site() -> None`
+`tools/docs_flash.py:122`
+
+Inject the flash-page hub link and landing quickstart call-to-action into the rendered site, and validate optional stylesheet and animation styles.
+
+**called by** `main`  ·  **calls** `inject`
+
 ### `prune_manifest(dst: Path) -> None`
-`tools/docs_flash.py:133`
+`tools/docs_flash.py:135`
 
 Drop manifest builds whose firmware did not get staged.
 
 **called by** `main`
 
-<details><summary>Undocumented (3)</summary>
+### `main() -> int`
+`tools/docs_flash.py:151`
 
-- `fetch`
-- `link_site`
-- `main`
+Assemble the web flasher page: stage firmware assets (from local build or latest release), copy the flasher HTML, and link the site navigation.
 
-</details>
+**calls** `fetch`, `link_site`, `prune_manifest`, `repo_slug`

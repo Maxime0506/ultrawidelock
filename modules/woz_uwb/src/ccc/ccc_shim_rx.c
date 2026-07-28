@@ -255,11 +255,18 @@ bool ccc_shim_rx_awaiting_poll(void)
 	return g_await_poll;
 }
 
+/**
+ * Return true if CCC UWB reception is awaiting either POLL or FINAL frame from the responder, false
+ * otherwise.
+ */
 bool ccc_shim_rx_deadline_pending(void)
 {
 	return g_await_poll || g_await_final;
 }
 
+/**
+ * Return true if CCC UWB reception is awaiting a FINAL frame from the responder, false otherwise.
+ */
 bool ccc_shim_rx_awaiting_final(void)
 {
 	return g_await_final;
@@ -603,6 +610,12 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 					d_mm, (int)tof);
 			}
 #endif
+			/* Publish the layer-2 verdict with the block whatever the build does
+			 * with it. The lock may choose to open on a marginal block; a signed
+			 * presence assertion may not, and it can only refuse if the evidence
+			 * travelled with the range instead of being dropped here. */
+			fira_session_set_ccc_range_sts(g_final_sts_verdict, g_final_sts_index);
+
 			/* Feed the range into fira_session_last_range ->
 			 * UltraWideBandImpl::ReportRange -> AccessManager -> BoltLockMgr -> Matter
 			 * DoorLock cluster. */

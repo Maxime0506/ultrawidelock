@@ -1,0 +1,91 @@
+# Home Assistant MQTT build: CONFIG_ENABLE_HA_MQTT plus the mbedTLS sizing it
+# needs. Layered on top of sdkconfig.defaults, never merged into it, so the
+# default image stays byte-for-byte what it was.
+#
+#   make build HAMQTT=1
+#
+# Why the record buffers move. mbedtls_ssl_setup() allocates the TLS record
+# buffers as two contiguous blocks. The stock 16384-byte input record needs a
+# ~16.6 KiB contiguous allocation, and on a 4 MB S3 with no PSRAM, carrying
+# Matter, NimBLE and Wi-Fi at once, that allocation fails: mbedtls_ssl_setup
+# returns -0x7F00 (MBEDTLS_ERR_SSL_ALLOC_FAILED) and every connect attempt dies
+# before the handshake starts. Measured on the bench, not guessed.
+#
+# 4 KiB in / 2 KiB out is ample here: the peer's whole certificate chain is one
+# self-signed 1.2 KiB certificate, and MQTT control packets are tiny. A build
+# that also does HTTPS OTA from a host with a long chain should raise the input
+# record again, and will then need the heap headroom to match.
+CONFIG_ENABLE_HA_MQTT=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=4096
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=2048
+
+# Release the record buffers between the handshake and the data phase, so the
+# peak allocation is the handshake's alone rather than the sum.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+
+# --- internal RAM for the TLS session -----------------------------------------
+#
+# On ESP32-S3 the IRAM the linker hands to code is reserved out of the DIRAM pool
+# (esp-idf components/heap/port/esp32s3/memory_layout.c:128), and DIRAM carries
+# MALLOC_CAP_8BIT | MALLOC_CAP_DMA | MALLOC_CAP_DEFAULT (same file, 45 and 62).
+# So bytes not spent on Wi-Fi .text come back as ordinary heap, which is what
+# mbedtls_ssl_setup() allocates from. Not true of the original ESP32, where
+# leftover IRAM returns as MALLOC_CAP_32BIT only and malloc cannot touch it.
+#
+# IDF's own help text sizes these: "more than 10Kbytes" and "more than 17Kbytes"
+# (components/esp_wifi/Kconfig:280 and :298). The cost is Wi-Fi throughput, which
+# this feature does not use: a distance sample is four bytes at 1 Hz.
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+
+# Static RX buffers are ~1.6 KiB each and are held for the life of the driver
+# (components/esp_wifi/Kconfig:33), so ten of them is 16 KiB that never comes
+# back. Six is ample for MQTT-sized traffic. Kconfig allows 2 to 25.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+
+# Verified on an ESP32-S3 devkit: Home Assistant creates the device from the
+# retained discovery topics, the distance sensor updates, and access events
+# arrive as granted. `hamqtt show` reports state : online.
+#
+# Both blocks above were needed, and in this order, because neither alone was
+# enough:
+#
+#   record buffers 16384 -> 4096 / 2048
+#       cleared mbedtls_ssl_setup() returning -0x7F00 (ALLOC_FAILED), but the
+#       failure only moved downstream: the Wi-Fi driver then could not get TX
+#       buffers ("wifi:m f null" flooding the console), so the board completed
+#       the TCP connect and never sent a ClientHello.
+#   Wi-Fi IRAM off, static RX buffers 10 -> 6
+#       this is what closed it.
+#
+#   heap :  7135 B free internal, largest block  6144 B   before
+#   heap : 28240 B free internal, largest block 11264 B   after
+#
+# The IRAM saving measured 10,426 B on this build (wifi0iram 7,054 + wifirxiram
+# 3,372, summed out of door_lock.map by section placement). IDF's Kconfig help
+# claims "more than 10Kbytes" and "more than 17Kbytes" for those two options.
+# The second did not hold here. Measure it, do not quote the help text.
+#
+# The 7135 B reading was taken with the MQTT stack already resident, two
+# 6144-byte task stacks among it, so it was never a baseline and never showed
+# that TLS could not fit. For a real baseline: `hamqtt clear`, reboot,
+# `hamqtt show`. cfg_load() fails, the publisher task deletes itself, and the
+# heap line is then read with none of this feature up.
+#
+# PSRAM was tried before any of this and is a dead end worth not repeating. The
+# devkit reports "Embedded PSRAM 8MB (AP_3v3)" with SPIRAM off, so it looked
+# like free headroom. CONFIG_SPIRAM=y + MODE_OCT + USE_MALLOC +
+# TRY_ALLOCATE_WIFI_LWIP + MBEDTLS_EXTERNAL_MEM_ALLOC booted but moved almost
+# nothing, because ALWAYSINTERNAL defaults to 16384 and every allocation under
+# 16 KiB still came from internal RAM. Lowering it to 1024 crash-looped the
+# board ~8.6 s into boot. If PSRAM is ever genuinely needed, keep ALWAYSINTERNAL
+# at its default, let MBEDTLS_EXTERNAL_MEM_ALLOC do the moving, and decode the
+# panic from the coredump partition rather than guessing. Octal PSRAM claims
+# GPIO 33-37; the DW3000 is on SCLK 12, MOSI 11, MISO 13, CS 10, RST 4, IRQ 5,
+# WAKEUP 6, and the LED is 48.
+#
+# If more internal RAM is ever wanted, the next candidates measured out of
+# door_lock.map are libheap.a at 5,906 B (HEAP_PLACE_FUNCTION_INTO_FLASH) and
+# libesp_ringbuf.a at 3,971 B (ESP_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH). Leave
+# libesp_driver_spi.a alone: the DW3000 shares it, and the UWB responder holds
+# a ~1.8 ms slot deadline.

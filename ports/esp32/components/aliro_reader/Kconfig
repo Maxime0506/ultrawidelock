@@ -206,4 +206,89 @@ config WOZ_ALIRO_STEPUP
 	  trust store alone decides. With this option unset the reader is byte-for-byte
 	  identical to today and the fast-path auth segment is untouched.
 
+config WOZ_ALIRO_ACCESS_LISTENER
+	bool "Expose the access verdict to a registered listener"
+	default n
+	help
+	  Compile aliro_reader_set_access_listener() and the three notify points on
+	  the credential trust gate, so an application can observe whether each Aliro
+	  transaction was granted or denied. The listener gets the verdict and nothing
+	  else, never a credential.
+
+	  Selected automatically by the Home Assistant MQTT option; there is no reason
+	  to set it by hand. Off by default because it is otherwise dead weight on the
+	  transaction path: unset, the reader is byte-for-byte identical to today.
+
+config WOZ_PRESENCE
+	bool "Presence assertions (non-door primitive)"
+	default n
+	help
+	  Add a `presence` command to this board's console. `presence prove <nonce>`
+	  ends old sessions and answers only after a new trusted authentication and
+	  later UWB range; `presence pub` and `presence credential` emit the board
+	  and pinned-human identifiers for enrolment. Proximity of a provisioned
+	  iPhone, measured by UWB time of flight, becomes a proof a third party can
+	  check -- no door involved.
+
+	  The signing key is generated on first boot and persisted in NVS, so the
+	  public point stays valid across reboots and reflashes. Alongside the normal
+	  console, not instead of it, so the board a phone is provisioned against can
+	  serve presence without being cloned.
+
+	  Each check costs a phone wake plus roughly 3.5 s to a trusted range, so this
+	  suits rare deliberate actions (signing a release tag), not anything
+	  frequent or ambient. OFF by default. Host side: tools/presence_git.py.
+
+config WOZ_PRESENCE_TIMEOUT_MS
+	int "Fresh presence proof timeout (ms)"
+	depends on WOZ_PRESENCE
+	range 1000 30000
+	default 8000
+	help
+	  End a proof without signing if a new authentication and trusted UWB range
+	  have not completed in this window.
+
+config WOZ_PRESENCE_MAX_CM
+	int "Maximum signed presence distance (cm)"
+	depends on WOZ_PRESENCE
+	range 0 3000
+	default 40
+	help
+	  Firmware refuses to sign a fresh range beyond this distance. A verifier
+	  may enforce an equal or lower threshold.
+
+config WOZ_RANGE_GATE_STRICT
+	bool "Range gate: enforce STS quality for the lock path too (drop suspect blocks)"
+	default n
+	help
+	  Enforce the layer-2 STS-quality check before a block reaches the range
+	  store, so a poorly correlated block never feeds the unlock seam. Default
+	  n = shadow mode: the verdict is logged (GATE line) and recorded with the
+	  range, but the block still latches, so a mis-tuned threshold cannot lock
+	  a human out of their own door.
+
+	  This option governs the DOOR path only. Presence assertions
+	  (WOZ_PRESENCE) always require a good STS and refuse to sign a range
+	  without one, regardless of this setting, because a signed claim someone
+	  else will act on has to fail closed where a lock must not.
+
+	  Enable only after sizing FIRA_STS_QUALITY_MIN from bench captures. The
+	  symbol previously existed only in the Zephyr Kconfig tree, so on ESP32
+	  the gate could not be turned on at all.
+
+config WOZ_ALIRO_CLONE
+	bool "Reader identity clone/export console commands (bench only)"
+	default n
+	help
+	  Compile the `aliro-export` / `aliro-import` console commands, which
+	  serialise the reader identity + trust store (INCLUDING the reader private
+	  key) to a hex blob and load it onto a second board. This replicates a
+	  provisioned reader so a phone's existing Wallet credential transacts with
+	  the clone -- the bench setup for the presence-second-factor experiment
+	  (export from the door reader, import on a dongle board).
+
+	  OFF by default and never appropriate for a deployed reader: exposing the
+	  private key on the console defeats the identity's whole purpose. Enable it
+	  only on bench boards you control, for the duration of the experiment.
+
 endmenu

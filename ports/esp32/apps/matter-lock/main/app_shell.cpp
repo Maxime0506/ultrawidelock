@@ -36,7 +36,14 @@
 #endif
 
 #include "app_shell.h"
+#include <app_priv.h> // app_commissioning_window_open, app_print_onboarding_codes
 #include "door_lock_manager.h"
+#ifdef CONFIG_ENABLE_HA_MQTT
+#include "ha_mqtt.h" // ha_mqtt_shell_cmd — the `hamqtt` broker provisioning command
+#endif
+#ifdef CONFIG_WOZ_PRESENCE
+#include <presence_link.h>
+#endif
 
 using namespace chip;
 using namespace chip::app::Clusters;
@@ -149,9 +156,49 @@ static int cmd_range(int argc, char **argv)
 	return 0;
 }
 
+#ifdef CONFIG_WOZ_ALIRO_CLONE
+#include <aliro_prov.h> // ALIRO_PROV_BLOB_MAX
+
+// Maps one hex digit to its 0-15 value, or -1 if not [0-9a-fA-F]. Twin of the
+// helper in the standalone reader app_shell.c (kept local to avoid a shared dep).
+static int aliro_hexnib(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	return -1;
+}
+
+// Decodes an even-length hex string into out (capacity out_cap). Returns the byte
+// count on success, or -1 on an odd length, a bad character, or overflow.
+static int aliro_hexdecode(const char *s, uint8_t *out, size_t out_cap)
+{
+	size_t n = strlen(s);
+	if (n == 0 || (n & 1u) || n / 2 > out_cap) {
+		return -1;
+	}
+	for (size_t i = 0; i < n; i += 2) {
+		int hi = aliro_hexnib(s[i]);
+		int lo = aliro_hexnib(s[i + 1]);
+		if (hi < 0 || lo < 0) {
+			return -1;
+		}
+		out[i / 2] = (uint8_t)((hi << 4) | lo);
+	}
+	return (int)(n / 2);
+}
+#endif /* CONFIG_WOZ_ALIRO_CLONE */
+
 // Shell handler for the "aliro" command. Subcommands: "prov" prints reader provisioning info;
 // "trust" adds the last-presented credential to the trust store and persists it to NVS, reporting
 // whether a credential was actually available to trust or whether the store/NVS write failed.
+// With CONFIG_WOZ_ALIRO_CLONE, "export"/"import <hex>" clone the identity to a second board.
 // Any other or missing argument prints usage. Always returns 0.
 static int cmd_aliro(int argc, char **argv)
 {
@@ -182,7 +229,45 @@ static int cmd_aliro(int argc, char **argv)
 		}
 		return 0;
 	}
+#ifdef CONFIG_WOZ_ALIRO_CLONE
+	if (argc == 2 && strcmp(argv[1], "export") == 0) {
+		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		size_t len = 0;
+		if (aliro_reader_export_blob(blob, sizeof(blob), &len) != 0) {
+			printf("aliro export: FAILED (buffer)\n");
+			return 0;
+		}
+		printf("aliro export: %u bytes (contains the reader PRIVATE KEY -- bench only)\n",
+		       (unsigned)len);
+		for (size_t i = 0; i < len; i++) {
+			printf("%02x", blob[i]);
+		}
+		printf("\n");
+		return 0;
+	}
+	if (argc == 3 && strcmp(argv[1], "import") == 0) {
+		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		int n = aliro_hexdecode(argv[2], blob, sizeof(blob));
+		if (n < 0) {
+			printf("aliro import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
+			       (unsigned)sizeof(blob));
+			return 0;
+		}
+		int rc = aliro_reader_import_blob(blob, (size_t)n);
+		if (rc == 0) {
+			printf("aliro import: adopted %d-byte identity + trust store (saved to NVS)\n",
+			       n);
+		} else if (rc == -1) {
+			printf("aliro import: malformed blob (bad magic/version/length)\n");
+		} else {
+			printf("aliro import: NVS write FAILED\n");
+		}
+		return 0;
+	}
+	printf("usage: aliro <prov|trust|clear|export|import <hex>>\n");
+#else
 	printf("usage: aliro <prov|trust|clear>\n");
+#endif
 	return 0;
 }
 
@@ -232,14 +317,68 @@ static int cmd_unlock(int argc, char **argv)
 }
 
 /* The boot log scrolls away long before you need to pair; this puts the QR URL
- * and manual code back on demand. */
+ * and manual code back on demand. Not PrintOnboardingCodes(): it logs at CHIP
+ * Progress level, which the default WARN build compiles out of the CHIP library
+ * entirely, so this command used to print nothing at all. */
 static int cmd_codes(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
+	app_print_onboarding_codes();
+	return 0;
+}
+
+/* Recovery for the one corner this firmware had no exit from: commissioned, so
+ * it does not advertise commissionable, but with no working network, so no
+ * controller can reach it to open a window. Opening one here lets a controller
+ * re-push Wi-Fi credentials over BLE with every fabric and the Aliro trust store
+ * intact, which is exactly what `factoryreset` costs. */
+static int cmd_commission(int argc, char **argv)
+{
+	bool open;
+
+	if (argc > 2 || (argc == 2 && strcmp(argv[1], "close") != 0)) {
+		printf("usage: commission [close]\n");
+		return 0;
+	}
+
 	DeviceLayer::PlatformMgr().LockChipStack();
-	PrintOnboardingCodes(RendezvousInformationFlags(RendezvousInformationFlag::kBLE));
+	open = Server::GetInstance().GetCommissioningWindowManager().IsCommissioningWindowOpen();
 	DeviceLayer::PlatformMgr().UnlockChipStack();
+
+	if (argc == 2) { /* close */
+		if (!open) {
+			printf("commission: no window open\n");
+			return 0;
+		}
+		CHIP_ERROR sched = DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+			Server::GetInstance().GetCommissioningWindowManager().CloseCommissioningWindow();
+		});
+
+		printf("commission: %s\n",
+		       sched == CHIP_NO_ERROR ? "closing" : "close could not be scheduled");
+		return 0;
+	}
+
+	if (open) {
+		printf("commission: %swindow already open%s\n", col(C_OK), col(C_RST));
+	} else {
+		app_commissioning_window_open();
+		printf("commission: opening; re-run to confirm, `commission close` to stop\n");
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+		/* The shared NimBLE host has one legacy advertiser, and the reader
+		 * only takes it once Matter releases it (start_aliro_reader_once).
+		 * Matter takes it back to advertise commissionable, so walk-up
+		 * stops meanwhile. Worth it during a recovery, worth knowing about
+		 * when it is not one. */
+		printf("            note: the Aliro reader shares the one BLE advertiser, "
+		       "so walk-up\n            stops until the window closes or you "
+		       "reboot\n");
+#endif
+	}
+	/* A window nobody can see the pairing code for is useless, and the boot log
+	 * is long gone by the time anyone reaches for this. */
+	app_print_onboarding_codes();
 	return 0;
 }
 
@@ -380,6 +519,11 @@ void app_shell_start(void)
 	 * would stall both cores' cache). Pin off the Matter/radio core. */
 	repl_cfg.prompt = "matter> ";
 	repl_cfg.task_core_id = 0;
+#ifdef CONFIG_WOZ_ALIRO_CLONE
+	/* An exported identity+trust blob is a single hex argument up to
+	 * ALIRO_PROV_BLOB_MAX*2 chars, past the 256-byte default line buffer. */
+	repl_cfg.max_cmdline_length = 1024;
+#endif
 
 	esp_console_dev_uart_config_t dev_cfg = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
 
@@ -415,10 +559,22 @@ void app_shell_start(void)
 		 .hint = NULL,
 		 .func = cmd_range},
 		{.command = "aliro",
+#ifdef CONFIG_WOZ_ALIRO_CLONE
+		 .help = "aliro <prov|trust|clear|export|import <hex>>: identity / trust / "
+			 "clone to a second board",
+#else
 		 .help = "aliro <prov|trust|clear>: show identity / trust last credential / "
 			 "empty trust store",
+#endif
 		 .hint = NULL,
 		 .func = cmd_aliro},
+#ifdef CONFIG_WOZ_PRESENCE
+		{.command = "presence",
+		 .help = "presence pub|credential|prove <nonce-hex>: fresh signed "
+			 "post-challenge presence proof",
+		 .hint = NULL,
+		 .func = presence_link_cmd},
+#endif
 		{.command = "uwbdiag",
 		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off; "
 			 "costs slot deadlines)",
@@ -437,10 +593,23 @@ void app_shell_start(void)
 		 .func = cmd_frec},
 #endif
 #endif
+#ifdef CONFIG_ENABLE_HA_MQTT
+		{.command = "hamqtt",
+		 .help = "hamqtt <show|broker <host> [port]|user <name>|pass|node <name>|ca|"
+			 "clear|start>: Home Assistant broker (pass and ca are never echoed)",
+		 .hint = NULL,
+		 .func = ha_mqtt_shell_cmd},
+#endif
 		{.command = "log",
 		 .help = "log <tag|*> <level>: runtime log level (boot default warn)",
 		 .hint = NULL,
 		 .func = cmd_log},
+		{.command = "commission",
+		 .help = "commission [close]: open a BLE commissioning window so a "
+			 "controller can re-push Wi-Fi or add a fabric, keeping the ones "
+			 "you have (long-press the button for the same thing)",
+		 .hint = NULL,
+		 .func = cmd_commission},
 		{.command = "factoryreset",
 		 .help = "erase all Matter state and reboot",
 		 .hint = NULL,

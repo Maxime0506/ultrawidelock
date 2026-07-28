@@ -1,3 +1,7 @@
+/**
+ * @file aliro_stepup_worker.c
+ * Step-up document verification worker for ESP32. Runs on a dedicated FreeRTOS task (6 KB stack, priority 4). Lazily creates a single-slot queue on first submission. Non-blocking submission: if a previous job is still enqueued, the new job is dropped. Verdict and connection handle are stored in shared state (spinlock-protected) and retrieved via aliro_stepup_worker_last(). Logging includes decrypted DeviceResponse hex and verdict breakdown (validity, element count, issuer found, signature OK, doctype OK, time OK, iteration OK).
+ */
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -34,6 +38,9 @@ static struct aliro_stepup_verdict s_last_verdict;
 static uint16_t s_last_conn;
 static bool s_have_last;
 
+/**
+ * Store a verdict and connection handle to shared state, protected by spinlock. Called by the worker task when verification completes.
+ */
 static void store_verdict(const struct aliro_stepup_verdict *v, uint16_t conn)
 {
 	portENTER_CRITICAL(&s_verdict_lock);
@@ -43,6 +50,9 @@ static void store_verdict(const struct aliro_stepup_verdict *v, uint16_t conn)
 	portEXIT_CRITICAL(&s_verdict_lock);
 }
 
+/**
+ * Retrieve the most recent step-up verdict and connection handle from the worker. Return 1 if a verdict is available (verdict and conn populated), 0 otherwise. Thread-safe via spinlock.
+ */
 int aliro_stepup_worker_last(struct aliro_stepup_verdict *verdict, uint16_t *conn)
 {
 	int have;
@@ -59,6 +69,9 @@ int aliro_stepup_worker_last(struct aliro_stepup_verdict *verdict, uint16_t *con
 	return have;
 }
 
+/**
+ * Decrypt and parse a step-up job: open the secure channel with reader and device keys, decrypt SessionData to extract DeviceResponse, parse it, verify the signature and document integrity, and store the verdict. Log the DeviceResponse hex and verdict details.
+ */
 static void run_job(const struct aliro_stepup_job *job)
 {
 	static uint8_t scratch[2100]; /* only the worker task touches this */
@@ -122,6 +135,9 @@ static void run_job(const struct aliro_stepup_job *job)
 		 doc.time_verification_required);
 }
 
+/**
+ * Worker task: infinite loop receiving jobs from the queue and calling run_job to process each one.
+ */
 static void worker_task(void *arg)
 {
 	(void)arg;
@@ -134,6 +150,9 @@ static void worker_task(void *arg)
 	}
 }
 
+/**
+ * Submit a step-up verification job to the worker queue. Create the queue and task on first use. Non-blocking: if a previous job is still queued, drop this one and return -1 (the reader must never stall). Return 0 on success, -1 on queue full or creation failure.
+ */
 int aliro_stepup_worker_submit(const struct aliro_stepup_job *job)
 {
 	/* Lazily create the queue + task on first use (from the BLE-host task). A

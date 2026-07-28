@@ -46,7 +46,11 @@ jobs:
         with:
           persist-credentials: false
       - name: install pinned zizmor
-        run: pip install zizmor==1.27.0
+        # Dependabot only watches the github-actions ecosystem, so pip pins in
+        # run: blocks are hand-maintained. 1.27.0 was yanked from PyPI under
+        # GHSA-f42p-wjw5-97qh; exact pins still install yanked releases, so this
+        # stayed green while sitting on a withdrawn version.
+        run: pip install zizmor==1.28.0
       - name: audit workflow security
         env:
           # Read-only token: lets the online audits check advisories for the

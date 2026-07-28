@@ -1,7 +1,16 @@
+/**
+ * @file pn532_apdu.c
+ * PN532 APDU command planner: parse ISO 7816-4 APDU structure (Case 1-4, short/extended), emit
+ * passthrough or fragmented transport frames, handle GetResponse for extended data retrieval.
+ */
 #include "pn532_apdu.h"
 
 #include <string.h>
 
+/**
+ * Parsed APDU command: data_offset/data_length (position in input, size in bytes), le (response max
+ * size, 256/65536 if encoded as 0), extended (long form), has_data/has_le (flags).
+ */
 struct parsed_apdu {
 	size_t data_offset;
 	size_t data_length;
@@ -11,6 +20,11 @@ struct parsed_apdu {
 	bool has_le;
 };
 
+/**
+ * Parse APDU structure (ISO 7816-4 Case 1-4, short/extended form): identifies CLA/INS/P1/P2,
+ * optional Lc (data length) and data, optional Le (response length). Returns true on valid syntax,
+ * false otherwise.
+ */
 static bool parse_apdu(const uint8_t *input, size_t length, struct parsed_apdu *parsed)
 {
 	memset(parsed, 0, sizeof(*parsed));
@@ -106,6 +120,10 @@ int woz_pn532_apdu_plan_init(const uint8_t *input, size_t input_length,
 	return 0;
 }
 
+/**
+ * Emit a passthrough (raw APDU command): copy input as-is. Returns 0 on success, -2 if buffer too
+ * small or already emitted.
+ */
 static int emit_passthrough(struct woz_pn532_apdu_plan *plan, uint8_t *output,
 			    size_t output_capacity, size_t *output_length)
 {
@@ -118,6 +136,10 @@ static int emit_passthrough(struct woz_pn532_apdu_plan *plan, uint8_t *output,
 	return 0;
 }
 
+/**
+ * Emit a GetResponse command (00 C0 00 00 [Le]): copy input, adjust Le for extended if needed.
+ * Returns 0 on success, -2 if buffer too small or already emitted.
+ */
 static int emit_get_response(struct woz_pn532_apdu_plan *plan, uint8_t *output,
 			     size_t output_capacity, size_t *output_length)
 {
@@ -138,6 +160,11 @@ static int emit_get_response(struct woz_pn532_apdu_plan *plan, uint8_t *output,
 	return 0;
 }
 
+/**
+ * Emit one chunk of an APDU command: fragments data if needed (WOZ_PN532_ENVELOPE_DATA_MAX per
+ * frame), sets more bit if more chunks follow, appends Le if this is the last chunk. Returns 0 on
+ * success, -2 if buffer too small or data exhausted.
+ */
 static int emit_envelope(struct woz_pn532_apdu_plan *plan, uint8_t *output, size_t output_capacity,
 			 size_t *output_length, bool *more_internal)
 {

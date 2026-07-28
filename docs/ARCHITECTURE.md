@@ -5,6 +5,9 @@ Every subsystem on one page, in reading order: entry points (nothing imports the
 
 ```mermaid
 flowchart LR
+  host.presence --> tools
+  integration.homeassistant --> tools.tui.src
+  integration.homeassistant.src.openaliro_ha --> tools.tui.src
   modules.woz_aliro.include --> modules.woz_aliro.src
   modules.woz_aliro.src --> modules.woz_aliro.include
   modules.woz_aliro.src --> modules.woz_port.include
@@ -12,6 +15,7 @@ flowchart LR
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_aliro.src --> modules.woz_uwb.src.facade
   modules.woz_aliro_stack.src --> modules.woz_aliro_stack.src.protocol
+  modules.woz_nfc.src --> modules.woz_nfc.include.woz_nfc
   modules.woz_uwb.src.aliro --> modules.woz_port.include
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.cherry
@@ -37,6 +41,12 @@ flowchart LR
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.facade
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.fira
   ports.esp32.apps.matter-lock.main --> ports.esp32.apps.matter-lock.main.lock
+  ports.esp32.apps.matter-lock.main --> ports.esp32.components.aliro_reader
+  ports.esp32.apps.matter-lock.main --> ports.esp32.components.piv_ccid.include
+  ports.esp32.apps.reader.main --> ports.esp32.components.aliro_reader
+  ports.esp32.components.piv_ccid --> ports.esp32.components.aliro_reader
+  ports.esp32.components.piv_ccid --> ports.esp32.components.piv_ccid.include
+  tools --> tools.tui.src
 ```
 
 ## `modules/woz_uwb/src/aliro/`
@@ -166,6 +176,14 @@ Walk-up latency trace: first-hit phase timestamps + the consolidated budget line
 
 **depends on** [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
+### [`modules/woz_aliro/src/aliro_assert_ec.c`](architecture/modules.woz_aliro.src/aliro_assert_ec.c.md)
+
+Binds the aliro_assert P-256 seam to aliro_prim's ECDSA (see aliro_assert_ec.h).
+The only file in the presence path with a crypto-backend dependency, which is
+exactly why it is separate: aliro_assert.c keeps its cbmc and fuzz harnesses.
+
+**depends on** [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
+
 ### [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md)
 
 Aliro cryptographic primitives: key derivation (KDF/HKDF), key-block splitting, AES-GCM secure
@@ -192,6 +210,14 @@ BLE transport (live advertising) and the host KAT suite (spec section 20 worked 
 
 **depends on** [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
 
+### [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md)
+
+Presence-assertion wire codec + verifier (see aliro_assert.h). Serialises a
+dongle's "credential present within N cm for this nonce" statement and verifies
+an ECDSA-P256 frame against a challenge nonce, enrolled credential and distance
+threshold. Portable C11; no UWB/BLE/platform dependencies.
+
+**depends on** [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md), [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md)
 ### [`modules/woz_aliro/src/aliro_ble_central.c`](architecture/modules.woz_aliro.src/aliro_ble_central.c.md)
 
 Platform-free half of the device-side BLE transport declared in
@@ -235,7 +261,12 @@ payloads, and TLV/APDU parsing helpers used to extract fields from device respon
 
 ### [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
 
-*No module docstring. First commit: "approach: predict time-of-arrival, open the bolt at arrival".*
+@file aliro_approach.c
+Kalman-filtered approach controller for predictive unlock. Tracks distance (cm), velocity (cm/s),
+and estimated time-to-arrival (ms) at the unlock radius. Supervises presence via median filtering
+of trusted ranges and fires predictive unlock when closing speed and ETA meet thresholds. Factory
+defaults: unlock 100 cm, relock 250 cm, dwell times 2 s and 3 s, motor delay 500 ms, margin 250
+ms, velocity floor 30 cm/s, prediction enabled.
 
 **depends on** [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
@@ -296,7 +327,7 @@ Streaming SHA-256 (FIPS 180-4) implementation used by the Aliro crypto layer.
 Declares struct aliro_sha256, the incremental hash context used across init/update/finish
 calls.
 
-**used by** [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
+**used by** [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
 
 ## `modules/woz_uwb/src/ccc/`
 
@@ -411,19 +442,185 @@ ccc_ran_params.
 
 **depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
+## `tools/tui/src/`
+
+### [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+
+**depends on** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+**depends on** [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md), [`tools/tui/src/search.ts`](architecture/tools.tui.src/search.ts.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md), [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+
+### [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
+
+**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/presence_git.py`](architecture/tools/presence_git.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+
+### [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
+
+**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md)
+
+**depends on** [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md)
+
+*No module docstring. First commit: "Give the bench TUI its labels back as border rules".*
+
+**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/search.ts`](architecture/tools.tui.src/search.ts.md)
+
+Searching the serial scrollback.
+Pure string work, kept out of app.tsx so it can be tested directly instead of
+through a rendered terminal. Matching is case-insensitive and literal: a
+firmware log is full of `[`, `*`, `0x..` and `?`, so treating the query as a
+regular expression would turn ordinary searches into syntax errors.
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+
+**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+### [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md)
+
+### [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+### [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+**depends on** [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+## `integration/homeassistant/src/openaliro_ha/`
+
+### [`integration/homeassistant/src/openaliro_ha/__main__.py`](architecture/integration.homeassistant.src.openaliro_ha/__main__.md)
+
+Module entry point for the HA=1-only staging command.
+
+**depends on** [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+### [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md)
+
+HA=1-only staging library for the OpenAliro Home Assistant adapters.
+
+This is intentionally not a published distribution or a stable public API yet.
+The direct Home Assistant adapter remains blocked on Stage 0 hardware evidence.
+
+**depends on** [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)
+
+### [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+Small, non-interactive HA=1 staging CLI for safe offline operations.
+
+**exposes** `main`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__main__.py`](architecture/integration.homeassistant.src.openaliro_ha/__main__.md)
+
+### [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md)
+
+Runnable standalone-agent orchestration over the shared serial library.
+
+**exposes** `AgentError`, `DoctorDeviceResult`, `doctor`, `probe_device`, `run`, `run_device`, `session_for_device`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+### [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md)
+
+Incremental parser for the source-proven ``aliro range`` compatibility mode.
+
+**exposes** `RangeResponseParser`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+### [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md)
+
+Versioned, secret-free TOML configuration for the HA=1-only agent.
+
+**exposes** `AgentConfig`, `ConfigError`, `DeviceConfig`, `MqttConfig`, `load_config`, `redacted_config`, `write_config`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md)
+
+### [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md)
+
+Typed observations emitted by the HA=1 console parser.
+
+**exposes** `AccessEvent`, `CompatibilityRangeReading`, `DistanceReading`  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md), [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+### [`integration/homeassistant/src/openaliro_ha/mqtt.py`](architecture/integration.homeassistant.src.openaliro_ha/mqtt.md)
+
+Standalone MQTT adapter for the HA=1 staging agent.
+
+The parser and serial session do not import this module. MQTT remains an agent
+transport, with the current discovery and state topics kept stable.
+
+**exposes** `MqttError`, `MqttPublisher`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/config.py`](architecture/integration.homeassistant.src.openaliro_ha/config.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md)
+
+### [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md)
+
+Narrow parser for the currently verified nRF5340 console output.
+
+**exposes** `parse_console_line`, `strip_ansi`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md), [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+### [`integration/homeassistant/src/openaliro_ha/serial_session.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_session.md)
+
+Async, transport-neutral ownership of one OpenAliro serial console.
+
+The session is deliberately independent of pyserial and Home Assistant. A
+runtime adapter provides an opened byte-stream; this module serializes shell
+commands, parses only the approved observations, and never retains raw console
+lines. The device can be idle after ``aliro frames on``: a stream acknowledgement
+is therefore the capability probe, not the first range reading.
+
+**exposes** `SerialConnection`, `SerialSession`, `SerialSessionError`, `SessionState`  ·  **depends on** [`integration/homeassistant/src/openaliro_ha/compatibility.py`](architecture/integration.homeassistant.src.openaliro_ha/compatibility.md), [`integration/homeassistant/src/openaliro_ha/models.py`](architecture/integration.homeassistant.src.openaliro_ha/models.md), [`integration/homeassistant/src/openaliro_ha/parser.py`](architecture/integration.homeassistant.src.openaliro_ha/parser.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
+### [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md)
+
+pyserial adapter and privacy-safe serial-port identity helpers.
+
+**exposes** `PySerialConnection`, `SerialPort`, `SerialTransportError`, `discover_serial_ports`, `open_serial_connection`, `resolve_serial_port`, `serial_identity`  ·  **depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)  ·  **used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](architecture/integration.homeassistant.src.openaliro_ha/__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](architecture/integration.homeassistant.src.openaliro_ha/agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](architecture/integration.homeassistant.src.openaliro_ha/cli.md)
+
 ## `modules/woz_uwb/src/driver/`
 
 ### [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
 
 @file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
 
 @file uwb_isr.c — DW3000 interrupt-callback registration (implementation).
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md)
+
+@file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0/1).
+Split the work across the two contexts the ALAB contract demands: the RX callback only
+latches registers into a snapshot (uwb_cirdiag_capture, plain stores + one SPI read), and a
+task-side uwb_cirdiag_flush formats/prints the line. On the nRF the flush runs on the
+sysworkq (uwb_rxdiag.c submits it); on the ESP32 the pinned ISR-service task calls it after
+its IRQ drain loop, so capture and flush are sequential there. A seqlock covers the
+one real race (nRF: a new capture preempting a flush mid-copy): torn snapshots are dropped,
+the next reception re-latches.
+Stage 1 adds an independently-armed windowed-CIR dump: when armed, capture also reads a
+fixed window of Ipatov complex taps centred on the first-path index into the snapshot. The
+taps are NOT printed on the RX/flush path — a full window is ~64 serial lines per reception,
+enough blocking UART to overrun the ranging slot and stall a live walk-up. Instead flush
+appends each window to a small RAM ring (the last CIRDIAG_RING_RECS receptions), and the taps
+are drained to `ev=uwb.cir` lines only when the dump is disarmed (uwb_cirdiag_dump_set_enabled
+(false)) — that runs in console/task context after the walk-up, so the unlock is unaffected
+while capturing. Deferring the printing was necessary but not sufficient: the window READ is
+itself too long to sit inside a live ranging block, where the responder still owes a POLL or
+Final reception. The shims pass that down as deadline_pending and the window is taken only on
+the Final. Nor was that sufficient: the accumulator cannot be read at all while the receiver
+is up, and the shim re-arms an SP0 listen the moment the Final is serviced, so the read has to
+happen BEFORE that (the shims gate it on ccc_shim_rx_awaiting_final). Doing it on every block
+then cost every range, so uwb_cirdiag_window_due decimates it to one Final in
+CIRDIAG_CIR_EVERY.
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
 
@@ -455,27 +652,114 @@ ccc_ran_params.
 
 **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
 
+## `modules/woz_uwb/src/shell/`
+
+### [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+@file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md), [`modules/woz_uwb/src/shell/aliro_shell.h`](architecture/modules.woz_uwb.src.shell/aliro_shell.h.md)
+
+### [`modules/woz_uwb/src/shell/aliro_shell.h`](architecture/modules.woz_uwb.src.shell/aliro_shell.h.md)
+
+@file aliro_shell.h — the one seam the `aliro` console needs from the application.
+
+**used by** [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+## `ports/esp32/apps/matter-lock/main/`
+
+### [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md)
+
+Matter application main: door lock endpoint setup, Matter lifecycle event handling, and (when
+CONFIG_ENABLE_ALIRO_BLE_UWB is set) startup/coexistence wiring for the Aliro BLE+UWB reader
+alongside the Matter BLE commissioning transport.
+Owns the Aliro reader background task (started once on commissioning-complete or at boot if
+already commissioned) and the Matter attribute/identify/device-event callbacks required by
+esp-matter's node/cluster framework.
+
+**depends on** [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md), [`ports/esp32/apps/matter-lock/main/app_shell.h`](architecture/ports.esp32.apps.matter-lock.main/app_shell.h.md), [`ports/esp32/apps/matter-lock/main/ha_mqtt.h`](architecture/ports.esp32.apps.matter-lock.main/ha_mqtt.h.md), [`ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.h`](architecture/ports.esp32.apps.matter-lock.main.lock/aliro_reader_delegate.h.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h`](architecture/ports.esp32.apps.matter-lock.main.lock/door_lock_manager.h.md), [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md), [`ports/esp32/components/piv_ccid/include/piv_ccid_usb.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid_usb.h.md)
+
+### [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md)
+
+ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
+
+**depends on** [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md), [`ports/esp32/apps/matter-lock/main/app_shell.h`](architecture/ports.esp32.apps.matter-lock.main/app_shell.h.md), [`ports/esp32/apps/matter-lock/main/ha_mqtt.h`](architecture/ports.esp32.apps.matter-lock.main/ha_mqtt.h.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h`](architecture/ports.esp32.apps.matter-lock.main.lock/door_lock_manager.h.md), [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md)
+
+### [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md)
+
+Board driver glue for the ESP32 Matter port: button input, WS2812 lock-status LED, and the
+Matter attribute-update hook wired into the app's driver layer.
+
+**depends on** [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md), [`ports/esp32/apps/matter-lock/main/lock_led.h`](architecture/ports.esp32.apps.matter-lock.main/lock_led.h.md)
+
+### [`ports/esp32/apps/matter-lock/main/ha_mqtt.c`](architecture/ports.esp32.apps.matter-lock.main/ha_mqtt.c.md)
+
+Native Home Assistant MQTT publisher for the ESP32 Matter lock — see ha_mqtt.h
+for the wire contract this holds with integration/homeassistant.
+
+**depends on** [`ports/esp32/apps/matter-lock/main/ha_mqtt.h`](architecture/ports.esp32.apps.matter-lock.main/ha_mqtt.h.md)
+
+### [`ports/esp32/apps/matter-lock/main/lock_led.c`](architecture/ports.esp32.apps.matter-lock.main/lock_led.c.md)
+
+Lock-state indicator LED: maps lock state (and Aliro activity) to an RGB colour for the single
+status pixel.
+Locked always extinguishes the indicator; unlocked shows blue during active UWB/Aliro engagement
+and a different colour otherwise, per lock_led_color.
+
+**depends on** [`ports/esp32/apps/matter-lock/main/lock_led.h`](architecture/ports.esp32.apps.matter-lock.main/lock_led.h.md)
+
+### [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md)
+
+**used by** [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md)
+
+### [`ports/esp32/apps/matter-lock/main/app_shell.h`](architecture/ports.esp32.apps.matter-lock.main/app_shell.h.md)
+
+**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md)
+
+### [`ports/esp32/apps/matter-lock/main/ha_mqtt.h`](architecture/ports.esp32.apps.matter-lock.main/ha_mqtt.h.md)
+
+*No module docstring. First commit: "Publish to Home Assistant MQTT natively from the ESP32 lock".*
+
+**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md), [`ports/esp32/apps/matter-lock/main/ha_mqtt.c`](architecture/ports.esp32.apps.matter-lock.main/ha_mqtt.c.md)
+
+### [`ports/esp32/apps/matter-lock/main/lock_led.h`](architecture/ports.esp32.apps.matter-lock.main/lock_led.h.md)
+
+Lock status LED color mapping: derives the RGB color for the lock indicator from the
+current locked and Aliro-ranging state.
+
+**used by** [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md), [`ports/esp32/apps/matter-lock/main/lock_led.c`](architecture/ports.esp32.apps.matter-lock.main/lock_led.c.md)
+
 ## `modules/woz_aliro_stack/src/`
 
 ### [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
+
+@file session.cpp
+Aliro reader BLE session state machine and cryptographic session context. Manages NFC APDU
+limits, response timeouts, connection setup, fast-path and standard key derivation, message
+encryption and decryption, and reader-status notifications. Processes events from the BLE
+transport and application layer.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md), [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md)
 
 ### [`modules/woz_aliro_stack/src/advertising_core.c`](architecture/modules.woz_aliro_stack.src/advertising_core.c.md)
 
+@file advertising_core.c
+Compute dynamic advertisement tag inputs and extract tags from AES ciphertext. The plaintext
+input incorporates the device's BLE address and an expiry timestamp; the tag is derived by AES
+encryption and truncation for inclusion in Aliro BLE advertisements per specification section 20.
+
 **depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
 
 ### [`modules/woz_aliro_stack/src/aliro_stack.cpp`](architecture/modules.woz_aliro_stack.src/aliro_stack.cpp.md)
 
-Clean-room implementation of the Nordic Aliro public API used by this app.
+Independent implementation of the Nordic Aliro public API used by this app.
 Protocol constants and wire formats come from Aliro Specification 1.0.
-No implementation detail from the proprietary archive is used here.
 
 **depends on** [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
 
 ### [`modules/woz_aliro_stack/src/advertising_core.h`](architecture/modules.woz_aliro_stack.src/advertising_core.h.md)
 
-Clean-room Aliro BLE advertising primitives.
+Aliro BLE advertising primitives.
 Kept as portable C so the byte-order rules can be tested on the host using
 the specification's published known-answer vectors.
 
@@ -493,7 +777,9 @@ callbacks).
 
 ### [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md)
 
-*No module docstring. First commit: "flight-recorder: record/replay real UWB walk-ups".*
+@file flight_recorder.c
+Binary flight-recorder format: framed records (magic, metadata, configuration, events, end) with
+little-endian integers and truncation handling; read/write operations with overflow detection.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
 
@@ -519,13 +805,17 @@ engine is bound and unbound via internal ursk and stop calls.
 
 ### [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md)
 
-*No module docstring. First commit: "flight-recorder: record/replay real UWB walk-ups".*
+@file flight_recorder.h
+Capture and replay UWB frames and session configuration from a walk-up to a host for analysis and
+replay. Records endpoint identity, status registers, frame data, and timing metadata into a
+fixed-size ring buffer; provides reader and writer interfaces for host tools.
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ### [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
 
-*No module docstring. First commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract".*
+@file woz_bytes.h
+Byte-order utilities: read/write 16-bit and 32-bit integers in little-endian or big-endian order.
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
@@ -534,6 +824,16 @@ engine is bound and unbound via internal ursk and stop calls.
 @file woz_diag.h — DIAGK(): gate for verbose UWB bring-up diagnostics.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
+
+### [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
+
+@file uwb_cirdiag.h — Per-reception CIA first-path/STS diagnostics stream (channel-impulse
+Stage 0). The RX callback latches the DW3000's CIA diagnostic bank (Ipatov/STS first-path
+index, F1..F3, power, peak, STS quality, xtal offset); task context emits it as one
+"[ALAB] t=<us> ev=uwb.diag ..." line for tools/aliro_lab.py. OFF at boot; armed at runtime
+(nRF `aliro cir on`, ESP32 rides the `lab on` gate).
+
+**used by** [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ### [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
 
@@ -563,63 +863,163 @@ Reversible: compiled only under CONFIG_WOZ_PRETTY_SHELL (PRETTY=1). Drop PRETTY
 and every one of these lines returns for raw diagnosis. Needs
 CONFIG_LOG_RUNTIME_FILTERING=y (set in ports/nrf5340dk/overlays/woz-pretty.conf).
 
-## `modules/woz_uwb/src/shell/`
+## `host/presence/`
 
-### [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+### [`host/presence/presence-run`](architecture/host.presence/presence-run.md)
 
-@file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
+*No module docstring. First commit: "presence: add local daemon and command gate".*
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`host/presence/presence_client.py`](architecture/host.presence/presence_client.md)
 
-## `ports/esp32/apps/matter-lock/main/`
+### [`host/presence/presence-enroll`](architecture/host.presence/presence-enroll.md)
 
-### [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md)
+*No module docstring. First commit: "presence: add local daemon and command gate".*
 
-Matter application main: door lock endpoint setup, Matter lifecycle event handling, and (when
-CONFIG_ENABLE_ALIRO_BLE_UWB is set) startup/coexistence wiring for the Aliro BLE+UWB reader
-alongside the Matter BLE commissioning transport.
-Owns the Aliro reader background task (started once on commissioning-complete or at boot if
-already commissioned) and the Matter attribute/identify/device-event callbacks required by
-esp-matter's node/cluster framework.
+**depends on** [`host/presence/presence_service.py`](architecture/host.presence/presence_service.md)
 
-**depends on** [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md), [`ports/esp32/apps/matter-lock/main/app_shell.h`](architecture/ports.esp32.apps.matter-lock.main/app_shell.h.md), [`ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.h`](architecture/ports.esp32.apps.matter-lock.main.lock/aliro_reader_delegate.h.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h`](architecture/ports.esp32.apps.matter-lock.main.lock/door_lock_manager.h.md)
+### [`host/presence/presenced`](architecture/host.presence/presenced.md)
 
-### [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md)
+*No module docstring. First commit: "presence: add local daemon and command gate".*
 
-Board driver glue for the ESP32 Matter port: button input, WS2812 lock-status LED, and the
-Matter attribute-update hook wired into the app's driver layer.
+**depends on** [`host/presence/presence_service.py`](architecture/host.presence/presence_service.md)
 
-**depends on** [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md), [`ports/esp32/apps/matter-lock/main/lock_led.h`](architecture/ports.esp32.apps.matter-lock.main/lock_led.h.md)
+### [`host/presence/presence_client.py`](architecture/host.presence/presence_client.md)
 
-### [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md)
+Client and command gate for the local presenced Unix socket.
 
-ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
+**depends on** [`host/presence/presence_service.py`](architecture/host.presence/presence_service.md)  ·  **used by** [`host/presence/presence-run`](architecture/host.presence/presence-run.md)
 
-**depends on** [`ports/esp32/apps/matter-lock/main/app_shell.h`](architecture/ports.esp32.apps.matter-lock.main/app_shell.h.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h`](architecture/ports.esp32.apps.matter-lock.main.lock/door_lock_manager.h.md)
+### [`host/presence/presence_service.py`](architecture/host.presence/presence_service.md)
 
-### [`ports/esp32/apps/matter-lock/main/lock_led.c`](architecture/ports.esp32.apps.matter-lock.main/lock_led.c.md)
+Fresh, pinned presence proofs behind an owner-only Unix socket.
 
-Lock-state indicator LED: maps lock state (and Aliro activity) to an RGB colour for the single
-status pixel.
-Locked always extinguishes the indicator; unlocked shows blue during active UWB/Aliro engagement
-and a different colour otherwise, per lock_led_color.
+**depends on** [`tools/presence_git.py`](architecture/tools/presence_git.md), [`tools/presence_verify.py`](architecture/tools/presence_verify.md)  ·  **used by** [`host/presence/presence-enroll`](architecture/host.presence/presence-enroll.md), [`host/presence/presence_client.py`](architecture/host.presence/presence_client.md), [`host/presence/presenced`](architecture/host.presence/presenced.md)
 
-**depends on** [`ports/esp32/apps/matter-lock/main/lock_led.h`](architecture/ports.esp32.apps.matter-lock.main/lock_led.h.md)
+## `modules/woz_nfc/src/`
 
-### [`ports/esp32/apps/matter-lock/main/app_priv.h`](architecture/ports.esp32.apps.matter-lock.main/app_priv.h.md)
+### [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
 
-**used by** [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md)
+WozNfc backend driving an NXP PN532 reader.
+A dedicated thread owns the chip: it runs the discovery loop (RF field on,
+one Apple ECP broadcast, one 106 kbps type A activation attempt, field off,
+sleep) and, once an ISO-DEP User Device is activated, performs the blocking
+APDU round trips. Stack callbacks (CreateSession / HandleSessionData /
+DestroySession) are posted to the Aliro workqueue so the stack observes the
+same threading as with the upstream RFAL transport, and Send() stays
+asynchronous: it hands the APDU to the thread and returns.
+The ECP frame layout mirrors modules/woz_aliro_ecp (the RFAL-path emitter):
+8-byte Aliro ECP v2 header, 8-byte provisioned reader identifier, CRC_A.
+The PN532 cannot inject raw frames mid-discovery the way RFAL's proprietary
+poll hook can, so the frame is broadcast with InCommunicateThru while the
+CIU CRC is switched off, between activation attempts — the same cadence a
+matching iPhone expects: ECP beacon, then WUPA.
 
-### [`ports/esp32/apps/matter-lock/main/app_shell.h`](architecture/ports.esp32.apps.matter-lock.main/app_shell.h.md)
+**depends on** [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md), [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md), [`modules/woz_nfc/src/pn532_apdu.h`](architecture/modules.woz_nfc.src/pn532_apdu.h.md), [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md)
 
-**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md)
+### [`modules/woz_nfc/src/pn532_bus_spi.c`](architecture/modules.woz_nfc.src/pn532_bus_spi.c.md)
 
-### [`ports/esp32/apps/matter-lock/main/lock_led.h`](architecture/ports.esp32.apps.matter-lock.main/lock_led.h.md)
+Zephyr SPI glue for the PN532 host protocol.
+PN532 SPI framing (UM0701-02 §6.2.5): every transaction opens with a
+one-byte command — 0x01 DATAWRITE (host→PN532 frame), 0x02 STATREAD (read a
+one-byte status; bit0 set = a response frame is ready), 0x03 DATAREAD
+(PN532→host frame). The interface is byte-wise LSB-first, which the nRF5340
+SPIM does in hardware (SPI_TRANSFER_LSB), so buffers hold ordinary MSB-order
+bytes here and the peripheral flips them on the wire.
+Each command, status poll, and frame read is its own CS-cycled transaction
+(the same shape as the Adafruit/ESPHome PN532 drivers). DATAREAD clocks its
+command byte and the complete response through one contiguous SPIM transfer.
+The chip re-presents the current frame on each DATAREAD, so reading more bytes
+than a frame holds is harmless as long as CS is dropped between frames — with
+one exception the caller enforces: the ACK read is kept short
+(PN532_ACK_READ_LEN) because the response follows it immediately and a long
+over-read would clock it away.
+Readiness is polled with STATREAD unless irq-gpios is wired (active low =
+frame ready), in which case a GPIO edge wakes the waiting thread.
 
-Lock status LED color mapping: derives the RGB color for the lock indicator from the
-current locked and Aliro-ranging state.
+**depends on** [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md)
 
-**used by** [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md), [`ports/esp32/apps/matter-lock/main/lock_led.c`](architecture/ports.esp32.apps.matter-lock.main/lock_led.c.md)
+### [`modules/woz_nfc/src/pn532.c`](architecture/modules.woz_nfc.src/pn532.c.md)
+
+PN532 host-protocol driver. See pn532.h. OS-free: no Zephyr headers, no
+allocation, no sleeping — waiting is delegated to the bus wait_ready op.
+
+**depends on** [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md)
+
+### [`modules/woz_nfc/src/pn532_apdu.c`](architecture/modules.woz_nfc.src/pn532_apdu.c.md)
+
+@file pn532_apdu.c
+PN532 APDU command planner: parse ISO 7816-4 APDU structure (Case 1-4, short/extended), emit
+passthrough or fragmented transport frames, handle GetResponse for extended data retrieval.
+
+**depends on** [`modules/woz_nfc/src/pn532_apdu.h`](architecture/modules.woz_nfc.src/pn532_apdu.h.md)
+
+### [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md)
+
+WozNfc backend for boards with no NFC frontend: polling never starts and no
+NFC session is ever created, so Send()/Terminate() are unreachable in a
+correct run; Send() reports invalid state defensively.
+
+**depends on** [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md)
+
+### [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
+
+WozNfc backend forwarding to the add-on's ST25R/RFAL transport unchanged.
+
+**depends on** [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md)
+
+### [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md)
+
+NXP PN532 host-protocol driver: frame codec and the command subset needed by
+the Aliro reader transport. Bus-agnostic and OS-free — all I/O goes through
+injected bus operations, so the whole layer compiles and runs in the host
+test suite against a scripted fake bus.
+Protocol reference: NXP UM0701-02 (PN532 User Manual).
+
+**used by** [`modules/woz_nfc/src/pn532.c`](architecture/modules.woz_nfc.src/pn532.c.md), [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
+
+### [`modules/woz_nfc/src/pn532_apdu.h`](architecture/modules.woz_nfc.src/pn532_apdu.h.md)
+
+PN532-specific ISO 7816 APDU adaptation.
+The Aliro stack (including the prebuilt library) negotiates sizes with the
+User Device, but has no API for the reader controller's smaller local limit.
+This adapter keeps that hardware constraint at the transport boundary.
+
+**used by** [`modules/woz_nfc/src/pn532_apdu.c`](architecture/modules.woz_nfc.src/pn532_apdu.c.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
+
+### [`modules/woz_nfc/src/pn532_bus.h`](architecture/modules.woz_nfc.src/pn532_bus.h.md)
+
+Bus binding for the PN532 driver. One implementation is compiled in per
+build (currently SPI: pn532_bus_spi.c). The transport uses only these
+neutral names, so swapping the physical bus never touches pn532.c or
+transport_pn532.cpp.
+
+**depends on** [`modules/woz_nfc/src/pn532.h`](architecture/modules.woz_nfc.src/pn532.h.md)  ·  **used by** [`modules/woz_nfc/src/pn532_bus_spi.c`](architecture/modules.woz_nfc.src/pn532_bus_spi.c.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
+
+## `ports/esp32/components/piv_ccid/`
+
+### [`ports/esp32/components/piv_ccid/piv_ccid_usb.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid_usb.c.md)
+
+*No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
+
+**depends on** [`ports/esp32/components/piv_ccid/include/piv_ccid.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid.h.md), [`ports/esp32/components/piv_ccid/include/piv_ccid_usb.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid_usb.h.md), [`ports/esp32/components/piv_ccid/include/piv_identity.h`](architecture/ports.esp32.components.piv_ccid.include/piv_identity.h.md)
+
+### [`ports/esp32/components/piv_ccid/piv_identity.c`](architecture/ports.esp32.components.piv_ccid/piv_identity.c.md)
+
+*No module docstring. First commit: "piv: gate macOS unlock on fresh presence".*
+
+**depends on** [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md), [`ports/esp32/components/piv_ccid/include/piv_identity.h`](architecture/ports.esp32.components.piv_ccid.include/piv_identity.h.md)
+
+### [`ports/esp32/components/piv_ccid/piv_ccid.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid.c.md)
+
+*No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
+
+**depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md), [`ports/esp32/components/piv_ccid/include/piv_ccid.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid.h.md)
+
+### [`ports/esp32/components/piv_ccid/piv_apdu.c`](architecture/ports.esp32.components.piv_ccid/piv_apdu.c.md)
+
+*No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
+
+**depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)
 
 ## `modules/woz_uwb/src/fira/`
 
@@ -640,37 +1040,134 @@ current locked and Aliro-ranging state.
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
 
+## `integration/homeassistant/custom_components/openaliro/`
+
+### [`integration/homeassistant/custom_components/openaliro/__init__.py`](architecture/integration.homeassistant.custom_components.openaliro/__init__.md)
+
+HA=1-only OpenAliro direct-serial integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/diagnostics.py`](architecture/integration.homeassistant.custom_components.openaliro/diagnostics.md)
+
+Redacted diagnostics for the HA=1 OpenAliro direct integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/event.py`](architecture/integration.homeassistant.custom_components.openaliro/event.md)
+
+Access outcome event entity for the HA=1 OpenAliro direct integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/sensor.py`](architecture/integration.homeassistant.custom_components.openaliro/sensor.md)
+
+Distance sensor for the HA=1 OpenAliro direct integration.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md), [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+### [`integration/homeassistant/custom_components/openaliro/config_flow.py`](architecture/integration.homeassistant.custom_components.openaliro/config_flow.md)
+
+Manual direct-serial config flow for the HA=1 OpenAliro beta.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md)
+
+### [`integration/homeassistant/custom_components/openaliro/device_trigger.py`](architecture/integration.homeassistant.custom_components.openaliro/device_trigger.md)
+
+Granted and denied device-automation triggers for OpenAliro access events.
+
+**depends on** [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md)
+
+### [`integration/homeassistant/custom_components/openaliro/const.py`](architecture/integration.homeassistant.custom_components.openaliro/const.md)
+
+Constants for the HA=1 OpenAliro custom integration.
+
+**used by** [`integration/homeassistant/custom_components/openaliro/__init__.py`](architecture/integration.homeassistant.custom_components.openaliro/__init__.md), [`integration/homeassistant/custom_components/openaliro/config_flow.py`](architecture/integration.homeassistant.custom_components.openaliro/config_flow.md), [`integration/homeassistant/custom_components/openaliro/device_trigger.py`](architecture/integration.homeassistant.custom_components.openaliro/device_trigger.md), [`integration/homeassistant/custom_components/openaliro/diagnostics.py`](architecture/integration.homeassistant.custom_components.openaliro/diagnostics.md), [`integration/homeassistant/custom_components/openaliro/event.py`](architecture/integration.homeassistant.custom_components.openaliro/event.md), [`integration/homeassistant/custom_components/openaliro/sensor.py`](architecture/integration.homeassistant.custom_components.openaliro/sensor.md)
+
+### [`integration/homeassistant/custom_components/openaliro/runtime.py`](architecture/integration.homeassistant.custom_components.openaliro/runtime.md)
+
+Home Assistant runtime bridge over the shared OpenAliro serial session.
+
+**exposes** `OpenAliroRuntime`  ·  **used by** [`integration/homeassistant/custom_components/openaliro/__init__.py`](architecture/integration.homeassistant.custom_components.openaliro/__init__.md), [`integration/homeassistant/custom_components/openaliro/diagnostics.py`](architecture/integration.homeassistant.custom_components.openaliro/diagnostics.md), [`integration/homeassistant/custom_components/openaliro/event.py`](architecture/integration.homeassistant.custom_components.openaliro/event.md), [`integration/homeassistant/custom_components/openaliro/sensor.py`](architecture/integration.homeassistant.custom_components.openaliro/sensor.md)
+
 ## `modules/woz_aliro_stack/src/protocol/`
 
 ### [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md)
+
+@file ble_message.c
+BLE protocol message framing: parse and build protocol/message_id headers and payloads; parse and
+extract Initiate Access, UWB control, Access Completed, and Reader Status Changed messages.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/ble_timeout.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.c.md)
 
+@file ble_timeout.c
+Aliro BLE timeout supervisor (state machine + reply validator). Core: classify_attribute parses
+BLE message type from attribute ID/length; is_allowed_reply maps request→reply types (including
+Busy/GeneralError for any); has_response_timeout marks messages that start a timeout window;
+collision_replaces_pending resolves priority when incoming messages arrive before the previous
+one completes; set_pending / clear_pending manage state transitions. Designed to prevent timeouts
+when the phone is responsive and terminate when not.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/ble_message.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.h.md), [`modules/woz_aliro_stack/src/protocol/ble_timeout.h`](architecture/modules.woz_aliro_stack.src.protocol/ble_timeout.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md)
+
+@file nfc_auth.c
+NFC Aliro protocol command builders: AUTH0 and AUTH1 APDU encoding, authentication data
+construction, and response parsing for credential exchange and signature verification over NFC.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/nfc_auth.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md)
 
+@file nfc_select.c
+NFC SELECT command builder and response parser for Aliro. build_select_command emits 00 A4 04 00
+09 `AID` 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
+extracting protocol version (expedited phase only) and extended-length sizes (0x7f66 TLV).
+parse_select_response and parse_select_response_ex validate the trailing 9000, check AID, and
+call parse_proprietary_information.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md)
+
+@file nfc_step_up.c
+NFC step-up messaging: compact-key CBOR encoder/decoder for Aliro DeviceRequest and SessionData
+(ISO 18013-5). Core: put appends to writer buffer; cbor_head / cbor_bytes / text build encoded
+items; cbor_read_head parses with validation (non-minimal representation rejected);
+build_device_request constructs DeviceRequest (compact keys); wrap_session_data /
+unwrap_session_data encode/decode SessionData; wrap_do53 / unwrap_do53 TLV-wrap messages;
+build_envelope_command / build_get_response_command and collect_response chain ISO APDU commands.
 
 **depends on** [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md), [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/access_document.c`](architecture/modules.woz_aliro_stack.src.protocol/access_document.c.md)
 
+@file access_document.c
+Compact-key CBOR parser for Aliro Access Documents (compact subset of ISO 18013-5 mDoc). Parses
+strictly with iterative depth traversal (no stack recursion), validates CBOR encoding (no floats,
+no simple values with payloads, minimal representation), and enforces a 25-level nesting bound.
+Core: parse_at walks encoded items; root validates full-buffer consumption; child_at / map_find_*
+retrieve nested elements; integer / timestamp extract scalar fields.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
 
+@file tlv.c
+BER-TLV parser and encoder for Aliro protocol: parse TLVs with definite length and advance
+offset, compute encoded sizes, and write new TLVs.
+
 **depends on** [`modules/woz_aliro_stack/src/protocol/tlv.h`](architecture/modules.woz_aliro_stack.src.protocol/tlv.h.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/access_document.h`](architecture/modules.woz_aliro_stack.src.protocol/access_document.h.md)
+
+@file access_document.h
+Aliro access document parsed from CBOR and COSE_Sign1 envelope: device public key, issued data
+element, issuer-signed item, signature, issuer key ID and certificate, validity period, and
+optional iteration count.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/access_document.c`](architecture/modules.woz_aliro_stack.src.protocol/access_document.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
 
@@ -694,6 +1191,11 @@ Aliro 1.0 expedited authentication APDU codecs.
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_select.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.h.md)
 
+@file nfc_select.h
+Parsed result of an NFC SELECT command for the Aliro applet: negotiated protocol version, maximum
+command and response data lengths (from TLV or default), extended-length support, and the raw
+proprietary information TLV (A5 tag) for further parsing.
+
 **used by** [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/session.cpp`](architecture/modules.woz_aliro_stack.src/session.cpp.md)
 
 ### [`modules/woz_aliro_stack/src/protocol/nfc_step_up.h`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.h.md)
@@ -707,6 +1209,55 @@ Aliro 1.0 / ISO 18013-5 NFC step-up message and APDU codecs.
 Minimal strict BER/DER-TLV reader for Aliro APDU payloads.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md), [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
+
+## `ports/esp32/apps/reader/main/`
+
+### [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md)
+
+ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, aliro-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
+
+**depends on** [`ports/esp32/apps/reader/main/app_shell.h`](architecture/ports.esp32.apps.reader.main/app_shell.h.md), [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md)
+
+### [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
+
+Woz UWB ranging engine on ESP32-S3 (ESP-IDF) — minimal bring-up app.
+Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
+polls for a range. With no iPhone/initiator present this proves the SPI +
+DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
+drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
+The demo responder lifecycle + interactive console live in app_shell.c.
+
+**depends on** [`ports/esp32/apps/reader/main/app_shell.h`](architecture/ports.esp32.apps.reader.main/app_shell.h.md), [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md)
+
+### [`ports/esp32/apps/reader/main/app_shell.h`](architecture/ports.esp32.apps.reader.main/app_shell.h.md)
+
+**used by** [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md), [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
+
+## `integration/homeassistant/`
+
+### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
+
+Republish the lock's console log to MQTT as Home Assistant entities.
+
+Usage: aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 [--broker HOST] [--node NAME]
+       aliro_mqtt_bridge.py --port - --dry-run < captured.log
+
+Reads the UWB console line by line, extracts the per-block range line and the
+access verdict, and publishes them as two MQTT Discovery entities: a distance
+sensor in millimetres and an access event carrying granted/denied. Lines
+matching neither pattern are ignored.
+
+The range line is gated on the firmware side behind CONFIG_WOZ_PRETTY_SHELL and
+uwb_rxdiag_rng_get(), so it only appears once `aliro frames on` has been issued
+on the shell. Without that, the access events still flow but distance stays
+unpublished.
+
+Reading from '-' takes the log on stdin, which with --dry-run exercises the
+parser and the payloads without a broker or a board attached. paho-mqtt is
+imported only when publishing, pyserial only for a real port, so neither is
+needed for a dry run.
+
+**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
 
 ## `ports/esp32/apps/matter-lock/main/lock/`
 
@@ -752,28 +1303,47 @@ attributes at init time.
 
 **used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp`](architecture/ports.esp32.apps.matter-lock.main.lock/door_lock_callbacks.cpp.md), [`ports/esp32/apps/matter-lock/main/lock/door_lock_manager.cpp`](architecture/ports.esp32.apps.matter-lock.main.lock/door_lock_manager.cpp.md)
 
-## `ports/esp32/apps/reader/main/`
+## `ports/esp32/components/aliro_reader/`
 
-### [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md)
+### [`ports/esp32/components/aliro_reader/presence_link.c`](architecture/ports.esp32.components.aliro_reader/presence_link.c.md)
 
-ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, aliro-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
+Presence dongle commands (see presence_link.h). `prove` ends every old Aliro
+link, waits for a new trusted credential authentication and a later trusted
+UWB range, then signs that post-challenge result under a persistent P-256 key.
+These live on the ordinary console rather than a private binary channel, so one
+board can be provisioned (aliro-import) and queried for presence without
+reflashing between modes, and so a stray log line is just another line instead of
+a corrupted frame.
 
-**depends on** [`ports/esp32/apps/reader/main/app_shell.h`](architecture/ports.esp32.apps.reader.main/app_shell.h.md)
+**depends on** [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md)
 
-### [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
+### [`ports/esp32/components/aliro_reader/presence_link.h`](architecture/ports.esp32.components.aliro_reader/presence_link.h.md)
 
-Woz UWB ranging engine on ESP32-S3 (ESP-IDF) — minimal bring-up app.
-Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
-polls for a range. With no iPhone/initiator present this proves the SPI +
-DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
-drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
-The demo responder lifecycle + interactive console live in app_shell.c.
+Presence dongle commands (CONFIG_WOZ_PRESENCE): fresh, challenge-driven signed
+statements from a new trusted Aliro authentication and later UWB range, turning
+proximity of a provisioned iPhone into a factor any tool can check. See
+tools/presence_verify.py and tools/presence_git.py for the other end.
+These are console commands rather than a private binary channel, so the shell
+stays available on the same board: provisioning (aliro-import) and presence both
+work without reflashing between modes. Every response is one tagged hex line, so
+a log line landing mid-conversation is just another line rather than corruption:
+presence pub                 -> PRESENCE-PUB <65 bytes hex>   (enrolment)
+presence credential          -> PRESENCE-CRED <8 bytes hex>   (pinned human)
+presence prove <nonce-hex>   -> PRESENCE-P256 <115 bytes hex> (fresh proof)
+anything rejected            -> PRESENCE-ERR <reason>
 
-**depends on** [`ports/esp32/apps/reader/main/app_shell.h`](architecture/ports.esp32.apps.reader.main/app_shell.h.md)
+**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md), [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md), [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md), [`ports/esp32/components/aliro_reader/presence_link.c`](architecture/ports.esp32.components.aliro_reader/presence_link.c.md), [`ports/esp32/components/piv_ccid/piv_identity.c`](architecture/ports.esp32.components.piv_ccid/piv_identity.c.md)
 
-### [`ports/esp32/apps/reader/main/app_shell.h`](architecture/ports.esp32.apps.reader.main/app_shell.h.md)
+### [`ports/esp32/components/aliro_reader/aliro_prov_nvs.c`](architecture/ports.esp32.components.aliro_reader/aliro_prov_nvs.c.md)
 
-**used by** [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md), [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
+NVS-backed persistence for Aliro reader provisioning: loads and stores the serialized reader
+identity and trust store built by aliro_prov.c.
+Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
+
+### [`ports/esp32/components/aliro_reader/aliro_stepup_worker.c`](architecture/ports.esp32.components.aliro_reader/aliro_stepup_worker.c.md)
+
+@file aliro_stepup_worker.c
+Step-up document verification worker for ESP32. Runs on a dedicated FreeRTOS task (6 KB stack, priority 4). Lazily creates a single-slot queue on first submission. Non-blocking submission: if a previous job is still enqueued, the new job is dropped. Verdict and connection handle are stored in shared state (spinlock-protected) and retrieved via aliro_stepup_worker_last(). Logging includes decrypted DeviceResponse hex and verdict breakdown (validity, element count, issuer found, signature OK, doctype OK, time OK, iteration OK).
 
 ## `ports/esp32/components/woz_uwb/port/`
 
@@ -831,15 +1401,14 @@ Aliro Gait: carry-motion features from Aliro Lab walk-up captures.
 
 Usage: python3 tools/aliro_gait.py [-o report.html] [label=]capture.log ...
 
-E1 probe of the passive carry verification experiment (see
-internal/passive-verify-scoping.md): for every walk-up transaction in the
-given "[ALAB]" captures, detrend the per-block trusted-range series, FFT the
-residual, and report the carry-motion features (cadence, stride regularity,
-approach speed, deceleration, closest approach, residual RMS) plus a
-per-window carried/stationary verdict. With two or more labels (one per
-carrier, e.g. alice=alice.log bob=bob.log) it also runs leave-one-out
-nearest-centroid classification to measure whether the features separate the
-carriers — the pre-registered Tier-2 GO bar is >= 80%.
+E1 probe of the passive carry verification experiment: for every walk-up
+transaction in the given "[ALAB]" captures, detrend the per-block
+trusted-range series, FFT the residual, and report the carry-motion features
+(cadence, stride regularity, approach speed, deceleration, closest approach,
+residual RMS) plus a per-window carried/stationary verdict. With two or more
+labels (one per carrier, e.g. alice=alice.log bob=bob.log) it also runs
+leave-one-out nearest-centroid classification to measure whether the features
+separate the carriers — the pre-registered Tier-2 GO bar is >= 80%.
 
 The block duration (and the phone's implied RAN multiplier) is derived from
 the range timestamps themselves, so no extra firmware logging is needed.
@@ -851,7 +1420,7 @@ Exit status: 0 = report produced, 2 = usage/input error.
 
 Aliro Lab: score a captured reader serial log.
 
-Usage: python3 tools/aliro_lab.py <capture.log> [report.html]
+Usage: python3 tools/aliro_lab.py [--cir <taps.csv>] <capture.log> [report.html]
 
 Parses the structured "[ALAB] t=<us> ev=..." trace lines the firmware emits
 when CONFIG_WOZ_ALIRO_LAB is enabled (see modules/woz_aliro/src/aliro_lab.h),
@@ -859,11 +1428,99 @@ groups them into walk-up transactions, and reports phase timings, the flow
 taken (fast vs standard), and pass/warn/fail invariant checks — to the
 terminal and as a self-contained HTML report (default: <capture.log>.html).
 
+With --cir, the windowed-CIR taps (ev=uwb.cir, channel-impulse Stage 1) are
+also written to a CSV (t_us,n,i,re,im,mag2) for offline inside/outside
+labeling and analysis; the scoring/report output is unchanged.
+
 Every check encodes an invariant of this repo's reader implementation (see
 internal notes in the check text), nothing else. Exit status: 0 = no failing
 check, 1 = at least one FAIL, 2 = usage/input error.
 
 **used by** [`tools/aliro_gait.py`](architecture/tools/aliro_gait.md)
+
+### [`tools/presence_git.py`](architecture/tools/presence_git.md)
+
+Presence-signed git tags: prove a human was physically present at a release.
+
+A GPG signature proves WHO made a tag. It does not prove they were there: a
+stolen key, a compromised CI runner or a coerced automated pipeline all produce
+perfectly valid signatures. This adds the orthogonal claim -- that a provisioned
+credential was physically within a few tens of centimetres of the machine when
+the tag was made -- measured by UWB time-of-flight. The protocol structure
+resists a simple relay shortening distance, but this project's relay resistance
+has not been experimentally measured.
+
+    presence_git.py enroll --port /dev/tty.usbmodem... --name my-dongle
+    presence_git.py sign   --tag presence/1.2.0 --port /dev/tty.usbmodem...
+    presence_git.py verify --tag presence/1.2.0          # what CI runs
+
+HOW THE NONCE WORKS, AND WHAT THAT COSTS
+Everywhere else in this protocol the verifier mints a random nonce and remembers
+it, which makes replay impossible. CI cannot do that: it was not present when
+the tag was made, so it has no nonce to remember. The nonce is therefore DERIVED
+from what is being signed:
+
+    nonce = SHA-256("openaliro-presence-tag-v1\0" + tag + "\0" + commit)[:16]
+
+so any verifier can recompute it. The assertion is then cryptographically bound
+to exactly one (tag name, commit) pair and is worthless for any other.
+
+The honest cost, which must not be buried: a derived nonce binds the proof to an
+ARTEFACT, not to a MOMENT. The dongle has no trusted wall clock and reports
+unix_ms = TIME_NONE, so a verifier cannot tell whether the presence happened
+today or last year. Someone who obtained an assertion for this exact (tag,
+commit) pair before it was published could publish that tag themselves without
+being present. That window is narrow -- it requires the assertion before the tag
+exists -- but it is real. It closes the day the dongle carries attested time,
+which is precisely why unix_ms is a separate field in the wire format rather
+than something derived from uptime.
+
+Enrolled keys and allowed credential ids live in .presence/enrolled, committed
+to the repo so both the trusted dongle and named human are reviewable in history
+like any other change. The tag carries only a key id; policy always comes from
+that file, because a tag that carried its own keys would authorize itself.
+
+Stdlib only, except that enroll/sign import pyserial lazily to talk to a real
+dongle. verify -- the half CI runs -- needs no serial port and no extra package.
+
+**depends on** [`tools/presence_verify.py`](architecture/tools/presence_verify.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)  ·  **used by** [`host/presence/presence_service.py`](architecture/host.presence/presence_service.md)
+
+### [`tools/presence_verify.py`](architecture/tools/presence_verify.md)
+
+Verify an ECDSA-P256 presence assertion against a dongle's public key.
+
+This is the portable half of the presence primitive. A P-256 assertion is
+checkable by any holder of the dongle's public point, which is what lets a CI
+job, a release-tag hook or a second reviewer accept "a human was physically at
+that machine" without being trusted with a secret. A shared-secret assertion
+could only be checked by a holder of the key that could equally forge it, which
+is why that mode was retired rather than kept alongside this one.
+
+Stdlib only. The curve arithmetic is delegated to the openssl binary already
+present on any machine that can run a CI job, so nothing is vendored and no
+third-party Python package is required. That also keeps this file honest about
+what it does NOT do: it never implements P-256 itself.
+
+The wire format is defined by modules/woz_aliro/src/aliro_assert.c, and the
+verdicts and their ORDER mirror aliro_assert_verify_p256() exactly, so the two
+implementations cannot disagree about what a frame means. The offsets below are
+drift-gated against that C source by tests/host/test_presence_verify.py.
+
+A distance is only worth as much as the measurement behind it, so the frame also
+carries that measurement's integrity evidence and this verifier refuses a frame
+that does not claim a well-correlated STS. Rejecting is the whole point: an
+undefended 19 cm and a defended 19 cm arrive as the same integer, so a verifier
+that ignores the evidence cannot tell a measurement from an assertion.
+
+Usage:
+    presence_verify.py --pubkey <hex|file> --frame <hex|file> --nonce <hex>
+                       --cred-id <hex> [--max-cm N] [--min-uptime-ms N]
+                       [--min-sts-quality N] [--json]
+
+Exit status is 0 only when presence is confirmed, so it can gate a command
+directly. Every rejection exits 1 and names its reason.
+
+**used by** [`host/presence/presence_service.py`](architecture/host.presence/presence_service.md), [`tools/presence_git.py`](architecture/tools/presence_git.md)
 
 ### [`tools/aliro.lua`](architecture/tools/aliro.lua.md)
 
@@ -1227,12 +1884,20 @@ serial lines (see modules/woz_uwb/src/facade/flight_recorder.c). This tool:
 Only the frames (already on-air ciphertext) go to the corpus — never the CONFIG
 record's URSK, so a shared corpus carries no session key material.
 
+SECURITY: raw serial logs containing `[FREC]` records and binary `.frc` files
+contain the CONFIG record's full ephemeral URSK. Keep them private and do not
+attach them to public issues. Only the extracted frame corpus excludes the key.
+
 Usage:
   flight_recorder.py <capture.log | trace.frc> [corpus_dir]
 
 With a `.log` input the reconstructed trace is written next to it as `.frc`.
 With a corpus_dir the frames are written there as `frame_NNNN.bin`. Stdlib only;
 the binary format mirrors flight_recorder.h byte for byte.
+
+### [`tools/piv_pin.py`](architecture/tools/piv_pin.md)
+
+Provision or change the OpenAliro PIV PIN through macOS PC/SC.
 
 ### [`tools/power_profile.py`](architecture/tools/power_profile.md)
 
@@ -1277,13 +1942,15 @@ Exit status: 0 = parsed at least one walk-up, 2 = usage/input error.
 
 *No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
 
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
 
 ### [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
-*No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
+@file woz_port.h
+Portable platform shim: allocates memory, measures uptime and cycle counts, provides sleep stubs
+for host tests, and wraps mutexes (no-op on single-threaded host).
 
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
 
 ## `modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`
 
@@ -1331,13 +1998,16 @@ strip it from a hardened production image.
 
 ### [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md)
 
-*No module docstring. First commit: "Cut ESP32 walk-up unlock latency: instrument, unblock, and precompute".*
+@file aliro_lat.h
+Latency tracking for Aliro protocol phases during a walk-up: record BLE_CONNECT as epoch zero,
+mark timestamps for each phase, emit a report with elapsed intervals and flight-recorder
+diagnostics.
 
 **used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
 
 ### [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)
 
-**used by** [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md), [`modules/woz_aliro/src/aliro_prim_psa.c`](architecture/modules.woz_aliro.src/aliro_prim_psa.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
+**used by** [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md), [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md), [`modules/woz_aliro/src/aliro_assert_ec.c`](architecture/modules.woz_aliro.src/aliro_assert_ec.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md), [`modules/woz_aliro/src/aliro_prim_psa.c`](architecture/modules.woz_aliro.src/aliro_prim_psa.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md)
 
 ### [`modules/woz_aliro/include/aliro_prov.h`](architecture/modules.woz_aliro.include/aliro_prov.h.md)
 
@@ -1372,6 +2042,11 @@ logged and stored, never gates the unlock (the provisioned trust store remains t
 
 **depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_aliro/src/aliro_stepup_parse.c`](architecture/modules.woz_aliro.src/aliro_stepup_parse.c.md)
 
+### [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md)
+
+*No module docstring. First commit: "assert: bind the P-256 seam to aliro_prim".*
+
+**depends on** [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_assert_ec.c`](architecture/modules.woz_aliro.src/aliro_assert_ec.c.md)
 ### [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md)
 
 Aliro initiator (User-Device) session layer: the device-side counterpart of
@@ -1413,9 +2088,18 @@ own builders/parsers (round-trip) and the recovered layouts.
 
 **depends on** [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)  ·  **used by** [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md), [`modules/woz_aliro/src/aliro_device_apdu.c`](architecture/modules.woz_aliro.src/aliro_device_apdu.c.md)
 
+### [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md)
+
+*No module docstring. First commit: "aliro: presence-assertion protocol (HMAC-signed range statement)".*
+
+**used by** [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md), [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md)
+
 ### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
-*No module docstring. First commit: "approach: predict time-of-arrival, open the bolt at arrival".*
+@file aliro_approach.h
+Configuration and state for approach detection and predictive unlock: unlock/relock thresholds in
+centimeters, sample-count dwell times, motor retraction time, scheduling margin, minimum closing
+speed, and a flag to enable or disable predictive ToA unlock.
 
 **used by** [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
 
@@ -1445,29 +2129,74 @@ own builders/parsers (round-trip) and the recovered layouts.
 
 **used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
 
-## `integration/homeassistant/`
+## `ports/esp32/components/piv_ccid/include/`
 
-### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
+### [`ports/esp32/components/piv_ccid/include/piv_ccid_usb.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid_usb.h.md)
 
-Republish the lock's console log to MQTT as Home Assistant entities.
+*No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
 
-Usage: aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 [--broker HOST] [--node NAME]
-       aliro_mqtt_bridge.py --port - --dry-run < captured.log
+**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/components/piv_ccid/piv_ccid_usb.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid_usb.c.md)
 
-Reads the UWB console line by line, extracts the per-block range line and the
-access verdict, and publishes them as two MQTT Discovery entities: a distance
-sensor in millimetres and an access event carrying granted/denied. Lines
-matching neither pattern are ignored.
+### [`ports/esp32/components/piv_ccid/include/piv_ccid.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid.h.md)
 
-The range line is gated on the firmware side behind CONFIG_WOZ_PRETTY_SHELL and
-uwb_rxdiag_rng_get(), so it only appears once `aliro frames on` has been issued
-on the shell. Without that, the access events still flow but distance stays
-unpublished.
+*No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
 
-Reading from '-' takes the log on stdin, which with --dry-run exercises the
-parser and the payloads without a broker or a board attached. paho-mqtt is
-imported only when publishing, pyserial only for a real port, so neither is
-needed for a dry run.
+**depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)  ·  **used by** [`ports/esp32/components/piv_ccid/piv_ccid.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid.c.md), [`ports/esp32/components/piv_ccid/piv_ccid_usb.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid_usb.c.md)
+
+### [`ports/esp32/components/piv_ccid/include/piv_identity.h`](architecture/ports.esp32.components.piv_ccid.include/piv_identity.h.md)
+
+*No module docstring. First commit: "piv: gate macOS unlock on fresh presence".*
+
+**depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)  ·  **used by** [`ports/esp32/components/piv_ccid/piv_ccid_usb.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid_usb.c.md), [`ports/esp32/components/piv_ccid/piv_identity.c`](architecture/ports.esp32.components.piv_ccid/piv_identity.c.md)
+
+### [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)
+
+*No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
+
+**used by** [`ports/esp32/components/piv_ccid/include/piv_ccid.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid.h.md), [`ports/esp32/components/piv_ccid/include/piv_identity.h`](architecture/ports.esp32.components.piv_ccid.include/piv_identity.h.md), [`ports/esp32/components/piv_ccid/piv_apdu.c`](architecture/ports.esp32.components.piv_ccid/piv_apdu.c.md), [`ports/esp32/components/piv_ccid/piv_ccid.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid.c.md)
+
+## `modules/woz_nfc/include/woz_nfc/`
+
+### [`modules/woz_nfc/include/woz_nfc/transport.h`](architecture/modules.woz_nfc.include.woz_nfc/transport.h.md)
+
+Woz NFC transport seam.
+One reader backend is selected at build time (Kconfig choice WOZ_NFC_TRANSPORT):
+the upstream ST25R/RFAL transport, the in-tree PN532 transport, or none. The
+add-on application calls these five functions instead of a concrete transport
+class; the selected backend supplies the definitions. The semantics mirror the
+upstream NfcTransportRfal public API exactly:
+- Init():  bring up the bus/PAL. Failure is logged by the caller but not fatal.
+- Start(): begin polling for a User Device. May be called again after Stop().
+- Stop():  cease polling and switch the RF field off.
+- Send():  asynchronous. Queues one APDU for the activated device and returns;
+the response is delivered later via AliroStack::HandleSessionData()
+from the Aliro workqueue. Returns ALIRO_INVALID_STATE when no
+device is activated.
+- Terminate(): the stack is done with the session; drop the device and return
+to polling. Does not call back into the stack.
+The backend owns the session lifecycle in the other direction: on ISO-DEP
+activation it calls AliroStack::CreateSession(ConnectionHandle::Nfc()), on
+device loss or exchange failure DestroySession(), both from the Aliro
+workqueue, matching the upstream RFAL transport's threading.
+
+**used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
+
+## `integration/homeassistant/scripts/`
+
+### [`integration/homeassistant/scripts/ha-setup.sh`](architecture/integration.homeassistant.scripts/ha-setup.sh.md)
+
+One command from nothing to a working OpenAliro Home Assistant agent.
+Generates the broker TLS material, installs it into the Home Assistant
+Mosquitto add-on over SSH, writes the agent configuration, and runs doctor.
+Every step is idempotent: re-running repairs whatever drifted.
+Override any default with an environment variable, for example
+HA_SSH=my-hass BROKER_HOST=hass.lan ./ha-setup.sh
+
+## `integration/homeassistant/tools/`
+
+### [`integration/homeassistant/tools/package_component.py`](architecture/integration.homeassistant.tools/package_component.md)
+
+Build a local OpenAliro custom-component archive without publishing it.
 
 ## `modules/woz_aliro_ecp/src/`
 
@@ -1511,18 +2240,6 @@ characteristics and runs a CoC server; this one scans for 0xFFF2, connects,
 discovers, reads the reader's SPSM/versions, writes the selected version and
 opens a CoC client to that SPSM.
 
-## `ports/esp32/components/aliro_reader/`
-
-### [`ports/esp32/components/aliro_reader/aliro_prov_nvs.c`](architecture/ports.esp32.components.aliro_reader/aliro_prov_nvs.c.md)
-
-NVS-backed persistence for Aliro reader provisioning: loads and stores the serialized reader
-identity and trust store built by aliro_prov.c.
-Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
-
-### [`ports/esp32/components/aliro_reader/aliro_stepup_worker.c`](architecture/ports.esp32.components.aliro_reader/aliro_stepup_worker.c.md)
-
-*No module docstring. First commit: "esp32: add the Aliro step-up (Access Document) phase".*
-
 ## `ports/nrf5340dk/on_target_ec/src/`
 
 ### [`ports/nrf5340dk/on_target_ec/src/main.c`](architecture/ports.nrf5340dk.on_target_ec.src/main.c.md)
@@ -1562,8 +2279,8 @@ any other local checkout — a clean upstream fetch every time.
 Fetches (all public):
 - Nordic add-on  ncs-door-lock-and-access-control @ the pin below
 - NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
-Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0
+The NCS v3.3.0 toolchain it needs is installed here too, once per machine, so
+a clone reaches a build in one command instead of three.
 Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 
@@ -1581,7 +2298,7 @@ scripts/build.sh rebuild                # force a clean pristine build
 PRISTINE=1 scripts/build.sh build       # same as rebuild
 UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-ALIRO_SOURCE=1 scripts/build.sh build   # clean-room source stack (discovery slice)
+ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
 UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
@@ -1629,6 +2346,10 @@ next to its source, so regenerate after editing a FLASH.md:
 
 Output is deterministic (no timestamps): it only changes when the source does.
 
+### [`scripts/presence_runtime.py`](architecture/scripts/presence_runtime.md)
+
+Build the minimal, deterministic presence runtime transfer archive.
+
 ### [`scripts/test-runner.sh`](architecture/scripts/test-runner.sh.md)
 
 Pretty umbrella runner for every host-side suite: one banner, live per-check
@@ -1640,6 +2361,34 @@ web twin               scripts/twin-suite.sh    constant-drift gate + WASM selft
 Default: suites run in parallel, output replayed in order when done.
 SERIAL=1 streams them live, one at a time. SUITES="firmware shared" scopes.
 Exit is nonzero if any suite fails. Colour off when not a TTY or NO_COLOR.
+
+### [`scripts/toolchain.sh`](architecture/scripts/toolchain.sh.md)
+
+toolchain.sh — what the CI gates need, whether this host has it, how to get it.
+`make verify` runs eighteen CI gates and skips loudly when a gate's tool is
+absent. Skipping loudly is honest, but it leaves the reader to work out what
+to install, from where, and at which version. That is this script: one
+manifest, two modes.
+scripts/toolchain.sh            report every tool, its gate, and its status
+scripts/toolchain.sh install    install the missing ones, after confirming
+Nothing is installed without being printed first and agreed to. `install`
+shows the exact command list and waits for a y; -y answers it in advance for
+unattended use.
+Versions matter for four of these. clang-format and clang-tidy change their
+output between releases, so a host one version off the CI pin fails a gate
+that CI passes (or worse, the reverse). Those rows carry the pin CI uses and
+say so when the host disagrees.
+Out of scope, same boundary as verify.sh: the firmware toolchains. NCS (~6.5
+GB, `make bootstrap`) and ESP-IDF are per-target installs with their own
+documented procedures — see docs/set-up.md. This covers the host gates only.
+Adding a gate to verify.sh without adding its tool here is caught: `check`
+reads verify.sh's own gate_need + gate_need_py tables and fails on any name it
+cannot explain, and fails again if either table stops parsing. What it does
+NOT catch is a row here that no gate needs any more, and none of it runs in
+CI — only when someone runs `make tools`.
+Env:
+ASSUME_YES=1   same as `install -y`
+NO_COLOR=1     plain output
 
 ### [`scripts/twin-suite.sh`](architecture/scripts/twin-suite.sh.md)
 
@@ -1659,6 +2408,46 @@ flat file pair). The compile is path-prefix-mapped for reproducibility: the
 same emsdk version must produce a byte-identical twin.js on any machine,
 which is what lets CI rebuild and diff it as a staleness gate.
 
+### [`scripts/verify.sh`](architecture/scripts/verify.sh.md)
+
+Pre-push sweep: every CI gate that a host can run, in one shot.
+The point of this script is that "it passed locally" and "it will pass CI"
+mean the same thing. Each row below is one CI *job* (not one workflow —
+tooling.yml and workflow-lint.yml each contribute several), running the same
+command that job runs. Adding a job to .github/workflows/ without adding it
+here re-opens the gap this script exists to close.
+Out of scope, deliberately: firmware-builds.yml and release.yml. They need
+ESP-IDF and NCS (~6.5 GB of toolchain) and take tens of minutes — not a push
+gate. `make build` covers them once the toolchain is bootstrapped.
+The gates run in lanes, several at once, because serially they are ~83s of
+work on a machine with eight cores. A short serial tripwire goes first, so a
+formatting slip still stops the sweep about four seconds in; then the
+expensive gates run together and the sweep costs its slowest lane rather than
+the sum of all of them. Measured back to back on an idle host: 83s serial,
+34s in lanes, and 72s in lanes with cbmc on against 147s serial.
+SERIAL=1 puts it back to one gate at a time, for a busy machine or for reading
+a confusing failure in order.
+One gate does not run by default: cbmc. At 64s it is twice the rest of the
+sweep put together, spent on the gate whose input moves least — the wire
+parsers it proves have been stable for months, and the fuzz gate exercises the
+same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
+It still gets a summary row saying it did not run. cbmc.yml has no path
+filter, so the PR runs it whatever happened here; a gate that quietly
+disappears from the sweep is the exact failure this script exists to prevent.
+A gate whose tool is missing FAILS the sweep. It says so on its row, it is
+counted apart from a hand-scoped SKIP=, and the run exits nonzero. Anything
+softer is the original bug wearing a warning label: CI runs that gate whatever
+this host has installed, so "could not check" has to read as "not verified",
+not as "fine". `make tools-install` is the fix; SKIP="<gate>" is the override
+for someone who has decided to accept the gap.
+Env:
+WITH_CBMC=1        also run the cbmc proof (off by default, see above)
+SERIAL=1           one gate at a time, fail-fast, instead of lanes
+SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
+COV_MIN=90         line-coverage floor, matching host-tests.yml
+NO_COLOR=1         plain output (colour is the default, pipe or not)
+FAIL_TAIL=40       lines of a failing gate's log to show inline
+
 ### [`scripts/ws-seed.sh`](architecture/scripts/ws-seed.sh.md)
 
 ws-seed.sh — give this git worktree its own NCS workspace, cheaply.
@@ -1676,7 +2465,7 @@ deleting the worktree deletes it (see `make ws-clean`).
 
 ### [`web-twin/check_constants.py`](architecture/web-twin/check_constants.md)
 
-*No module docstring. First commit: "web: add the walk-up digital twin as an interactive page".*
+Verify that the web-twin's hardcoded firmware constants in index.html stay synchronized with their source definitions. Parses the FW table, reads the cited source lines, and reports any mismatches or missing citations.
 
 ### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
 

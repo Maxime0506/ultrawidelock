@@ -45,6 +45,7 @@
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
 #include "aliro_reader.h"
+#include "woz_port.h" /* woz_uptime_ms: the clock the status tick's deadline uses */
 
 /* Failure injection into the prim double (aliro_prim_host.c). Every hook
  * defaults off and disarms itself after firing, so the walk-ups before
@@ -134,6 +135,25 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 {
 	cb(unsecured); /* the double runs "the host task" inline */
+}
+
+void aliro_ble_post_presence_reset(void (*cb)(void))
+{
+	cb(); /* the double runs "the host task" inline */
+}
+
+static int s_disconnects;
+static uint16_t s_last_disconnected;
+static bool s_disconnect_inline;
+
+int aliro_ble_disconnect(uint16_t conn_handle)
+{
+	s_disconnects++;
+	s_last_disconnected = conn_handle;
+	if (s_disconnect_inline) {
+		s_cfg.cb.on_disconnected(conn_handle);
+	}
+	return 0;
 }
 
 void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
@@ -843,6 +863,8 @@ int main(void)
 	aliro_lab_set_enabled(true); /* stub: stays disabled */
 	okc("t0.lab_stub_off", !aliro_lab_enabled());
 	okc("t0.no_auth_cred_yet", !aliro_reader_authenticated_credential(out65));
+	okc("t0.no_pinned_presence_cred",
+	     !aliro_reader_presence_expected_credential(out65));
 	okc("t0.start", aliro_reader_start() == 0);
 	okc("t0.transport_up", s_ble_started && s_cfg.cb.on_data != NULL);
 	okc("t0.ranging_init", s_rng_inits == 1);
@@ -877,6 +899,9 @@ int main(void)
 	memset(sp, 0x33, sizeof(sp));
 	okc("a.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
 	okc("a.provision_trust", aliro_reader_provision_add_trust(p.cred_pub) == 0);
+	okc("a.pinned_presence_cred",
+	     aliro_reader_presence_expected_credential(out65) &&
+		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
 	aliro_ec_p256_pub_from_priv(sp, p.rvk); /* new verification key */
 
 	s_cfg.cb.on_connected(2);
@@ -962,7 +987,18 @@ int main(void)
 
 	/* disconnect persists the minted Kpersistent — compare against the
 	 * phone's independent derivation of it */
+	uint32_t proof_request = aliro_reader_presence_restart();
+	uint32_t proof_checkpoint = 0;
+
+	okc("a.proof_restart_requested",
+	     proof_request != 0u && s_disconnects == 1 && s_last_disconnected == 2);
+	okc("a.proof_checkpoint_waits_for_disconnect",
+	     !aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	s_cfg.cb.on_disconnected(2);
+	okc("a.proof_checkpoint_ready",
+	     aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
+	okc("a.old_auth_not_fresh",
+	     !aliro_reader_presence_authenticated_after(proof_checkpoint, out65));
 	okc("a.kp_persisted", s_nvs_stores == 3); /* 2 provision calls + this one */
 	okc("a.session_gone_on_disconnect", !aliro_reader_session_active());
 
@@ -1024,26 +1060,49 @@ int main(void)
 		pl[n++] = 0x00;
 		ph_send(3, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
 	}
+	okc("b.new_auth_is_fresh",
+	     aliro_reader_presence_authenticated_after(proof_checkpoint, out65) &&
+		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
 	okc("b.exchange_no_auth1", ph_exchange_resp(&p, 3) == 0); /* next TX is EXCHANGE */
 	okc("b.ap_completed", ph_take_ap_completed(&p) == 0);
 	okc("b.ranging_armed", s_rng_starts == 3);
 
-	/* Stale-Wallet resync: the Secured lost in A rides out on this session, right
-	 * after AP-Completed, so the phone stops showing a locked door as unlocked.
-	 * Secured only — an unsolicited Unsecured would fire the unlock animation. */
+	/* Stale-Wallet resync: the Secured lost in A rides out on this session so the
+	 * phone stops showing a locked door as unlocked. Secured only — an unsolicited
+	 * Unsecured would fire the unlock animation. Held, not sent at AP-Completed: a
+	 * phone that reconnected because it woke on the doorstep is about to be granted,
+	 * and a Secured the grant overwrites is the Wallet flicker this defers away. */
+	okc("b.replay_held_at_ap_completed", tx_pending() == 0);
 	{
 		uint8_t plain[64];
 		size_t n, pn;
-		const uint8_t *f = tx_next(&n);
+		const uint8_t *f;
 		static const uint8_t relock[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x00};
 
+		/* Still inside the window: a tick before the deadline releases nothing. */
+		aliro_reader_status_tick(woz_uptime_ms());
+		okc("b.replay_held_before_deadline", tx_pending() == 0);
+
+		/* Past it, with no grant having intervened, so the phone gets the truth.
+		 * Offsetting the real clock keeps the deadline exact without a fake one. */
+		aliro_reader_status_tick(woz_uptime_ms() + 10000);
+		f = tx_next(&n);
 		okc("b.secured_replayed", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 						  pn == 8 && memcmp(plain, relock, 8) == 0);
 	}
 	/* One shot: the flag is cleared by the replay, so nothing trails it. */
 	okc("b.replay_not_repeated", tx_pending() == 0);
+	aliro_reader_status_tick(woz_uptime_ms() + 10000);
+	okc("b.replay_disarmed_after_firing", tx_pending() == 0);
+
 	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
-	s_cfg.cb.on_disconnected(3);
+	/* A transport may report disconnect before aliro_ble_disconnect returns.
+	 * The waiter must already be armed or this checkpoint would be lost. */
+	s_disconnect_inline = true;
+	proof_request = aliro_reader_presence_restart();
+	s_disconnect_inline = false;
+	okc("b.inline_disconnect_checkpoint",
+	     aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	okc("b.no_new_persist", s_nvs_stores == 3); /* fast phase mints nothing */
 
 	printf("\n== C: failure paths ==\n");
@@ -1554,6 +1613,61 @@ int main(void)
 		okc("e9.rejected", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(45);
 		okc("e9.trust_last_full", aliro_reader_trust_last() == -1);
+	}
+
+	printf("\n== B2: a grant inside the hold window supersedes the replay ==\n");
+	/* The case the hold exists for, replayed end to end: grant, walk off so the
+	 * relock cannot be delivered, come back, and be granted again inside the window.
+	 * The phone must end up with one Unsecured, not the Secured/Unsecured pair 1.2 s
+	 * apart that the bench saw. Built self-contained — it establishes the prior state
+	 * it needs rather than inheriting it, because a "peer last told Unsecured" that
+	 * some earlier section happened to leave behind is exactly the assumption that
+	 * would let this whole block pass while arming nothing. */
+	{
+		uint8_t plain[64];
+		size_t n, pn;
+		const uint8_t *f;
+		static const uint8_t grant[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x01};
+
+		/* Fast phase throughout: a standard one would mint a fresh Kpersistent. */
+		s_cfg.cb.on_connected(4);
+		ph_initiate(&p, 4, 1);
+		okc("b2.setup_auth0", ph_take_auth0(&p) == 0);
+		okc("b2.setup_fast_resp", ph_auth0_resp_fast(&p, 4, 0xE4) == 0);
+		okc("b2.setup_exchange", ph_exchange_resp(&p, 4) == 0);
+		okc("b2.setup_ap_completed", ph_take_ap_completed(&p) == 0);
+
+		aliro_reader_notify_unlock(true); /* peer now believes the door is open */
+		f = tx_next(&n);
+		okc("b2.setup_grant", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
+					     pn == 8 && memcmp(plain, grant, 8) == 0);
+
+		/* Departure: the relock has nowhere to go, so the phone is stranded showing
+		 * this door unlocked. This is the state the replay exists to repair. */
+		s_cfg.cb.on_disconnected(4);
+		aliro_reader_notify_unlock(false);
+		okc("b2.relock_undeliverable", tx_pending() == 0);
+
+		/* Return. The replay is armed, not sent. */
+		s_cfg.cb.on_connected(5);
+		ph_initiate(&p, 5, 1);
+		okc("b2.auth0", ph_take_auth0(&p) == 0);
+		okc("b2.fast_resp", ph_auth0_resp_fast(&p, 5, 0xE5) == 0);
+		okc("b2.exchange", ph_exchange_resp(&p, 5) == 0);
+		okc("b2.ap_completed", ph_take_ap_completed(&p) == 0);
+		okc("b2.replay_held", tx_pending() == 0);
+
+		/* The approach grant lands inside the window. It must go out despite the
+		 * peer having last been told Unsecured — the reconnect invalidated that
+		 * belief — and it must leave nothing for the tick to release. */
+		aliro_reader_notify_unlock(true);
+		f = tx_next(&n);
+		okc("b2.grant_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
+					    pn == 8 && memcmp(plain, grant, 8) == 0);
+
+		aliro_reader_status_tick(woz_uptime_ms() + 10000);
+		okc("b2.replay_cancelled_by_grant", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(5);
 	}
 
 	/* console/status entry points: exercised for effect-free execution */

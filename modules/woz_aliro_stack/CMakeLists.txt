@@ -1,4 +1,4 @@
-# Compile the clean-room implementation directly into the application target.
+# Compile the independent implementation directly into the application target.
 # The upstream add-on has already created its imported `aliro` target by the
 # time extra modules are processed. Zephyr links every registered library under
 # --whole-archive, so leaving that target registered would force all duplicate

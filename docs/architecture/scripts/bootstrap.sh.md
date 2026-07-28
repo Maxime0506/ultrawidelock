@@ -8,22 +8,22 @@ any other local checkout — a clean upstream fetch every time.
 Fetches (all public):
 - Nordic add-on  ncs-door-lock-and-access-control @ the pin below
 - NCS v3.3.0 + Zephyr + every module (via the add-on's own west manifest)
-Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
-nrfutil sdk-manager toolchain install --ncs-version v3.3.0
+The NCS v3.3.0 toolchain it needs is installed here too, once per machine, so
+a clone reaches a build in one command instead of three.
 Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 
-**discussed in** [`docs/protocol-notes.md`](../../protocol-notes.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
+**discussed in** [`docs/protocol-notes.md`](../../protocol-notes.md), [`docs/set-up.md`](../../set-up.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
 
 ## API
 
+### `launch()`
+`scripts/bootstrap.sh:37`
+
+Execute a command inside the nRF Connect SDK toolchain environment for NCS_VER, forwarding all arguments.
+Wrapper around `nrfutil sdk-manager toolchain launch`.
+
 ### `apply_to()`
-`scripts/bootstrap.sh:79`
+`scripts/bootstrap.sh:127`
 
 Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
-
-<details><summary>Undocumented (1)</summary>
-
-- `launch`
-
-</details>

@@ -13,17 +13,18 @@ for the tiers and what each costs.
 
 | Directory | Target | What it is | Status |
 |---|---|---|---|
-| *(repository root)* | **nRF5340 DK** | The primary build: NFC tap + UWB approach unlock on top of the Nordic door-lock add-on, assembled by `make bootstrap` from patches and overlays in [`nrf5340dk/`](nrf5340dk/) | **Hardware-validated** end to end, including the NFC tap path |
+| *(repository root)* | **nRF5340 DK** | The primary build: NFC tap + UWB approach unlock on top of the Nordic door-lock add-on, assembled by `make bootstrap` from patches and overlays in [`nrf5340dk/`](nrf5340dk/) | Nordic-binary path hardware-validated end to end; source-stack default awaiting the full phone checklist |
 | [`esp32/`](esp32/) | **ESP32-S3** | The complete ESP-IDF port: shared components plus two apps (a Matter door lock and a standalone bench reader) | **Hardware-validated.** Approach unlock driven end to end against a live iPhone, Wallet animation and all |
+| [`esp32/`](esp32/) | **ESP32-C5** | The same two apps with C5 pin, partition, and release-image support | **Build/release-supported.** No hardware validation is recorded |
 
-## The ESP32-S3 port (`esp32/`)
+## The ESP32-S3/C5 port (`esp32/`)
 
 One platform directory, two apps over one set of shared components:
 
 ```
 esp32/
 ├── components/          # the stack, as ESP-IDF components:
-│   ├── woz_uwb/         #   shared UWB engine + ESP-IDF DW3000 backend (SPI/GPIO/pins)
+│   ├── woz_uwb/         #   shared UWB engine + S3/C5 DW3000 backend (SPI/GPIO/pins)
 │   ├── aliro_crypto/    #   credential auth + ranging-key derivation (mbedTLS)
 │   ├── aliro_reader/    #   reader, APDU codec, NVS-backed provisioning
 │   └── aliro_ble/       #   NimBLE transport
@@ -40,10 +41,14 @@ duplicated between them.
 
 What makes it more than a recompile: the reference design hands the credential
 authentication and the ranging key derivation to a closed vendor library that only exists
-as an ARM binary. It cannot be linked on the Xtensa S3, so that layer had to be
-reimplemented from scratch — the key schedule, the secure channels, the wire codec, and
+as an ARM binary. It cannot be linked on either ESP target, so that layer had to be
+reimplemented from scratch: the key schedule, the secure channels, the wire codec, and
 the reader identity. Everything below the ranging key was already open in
-`modules/woz_uwb` and compiles for the S3 unchanged.
+`modules/woz_uwb` and compiles for both ESP chips.
+
+The S3 configuration has completed the live-iPhone hardware checklist. C5 is
+built and bundled by the release workflow, including a browser-flash image, but
+bench validation remains pending.
 
 Two documents carry the detail:
 

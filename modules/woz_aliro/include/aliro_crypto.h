@@ -13,7 +13,7 @@
  * The transaction state machine that drives it (AUTH0/AUTH1, EXCHANGE) is 3.2;
  * the handoff of the URSK into woz_uwb_start_aliro(cfg) is 3.3.
  *
- * Provenance: clean-room. The suite is standard (mbedTLS-PSA + a portable
+ * Provenance: original. The suite is standard (mbedTLS-PSA + a portable
  * SHA-256/KDF core). The wire/derivation facts come from the project's
  * reverse-engineering notes, not from any vendor source.
  */

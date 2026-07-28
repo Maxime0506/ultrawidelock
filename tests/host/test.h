@@ -25,6 +25,14 @@ int t_unhex(uint8_t *dst, const char *hex, size_t cap);
 /* Group header inside a suite. */
 void t_group(const char *name);
 
+/* Silence stdout across a call that prints firmware diagnostics by the
+ * thousand-line (the CIR ring drain, the accumulator probe). Those are driven
+ * for their state changes, not their text, and printing them buries the suite's
+ * own output. Keep assertions OUTSIDE the muted region: t_ok_/t_eqi_ print only
+ * on failure, so a muted assertion fails invisibly. Nesting is a no-op. */
+void t_mute(void);
+void t_unmute(void);
+
 /* Byte-vector check. expect==NULL or "" => RECORD (print value, mark pending). */
 void t_vec(const char *name, const uint8_t *got, size_t len, const char *expect);
 void t_u32(const char *name, uint32_t v, const char *expect);
@@ -51,6 +59,9 @@ void test_aliro_parser(void);
 void test_aliro_adapter(void);
 void test_aliro_msg(void);
 void test_aliro_session(void);
+void test_aliro_prov(void);
+void test_aliro_hash(void);
+void test_aliro_assert(void);
 void test_aliro_device_uwb(void);
 void test_cherry(void);
 void test_fira(void);

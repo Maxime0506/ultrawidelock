@@ -17,6 +17,7 @@
 #include "esp_matter.h"
 #include "esp_netif_sntp.h"
 #include "esp_timer.h"
+#include "iot_button.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host/ble_gap.h"
@@ -161,6 +162,7 @@ Protocols::InteractionModel::Status Get(EndpointId ep, bool *out)
 uint8_t mfk_fabric_count;
 int mfk_cw_is_open;
 int mfk_cw_open_calls;
+int mfk_cw_close_calls;
 uint32_t mfk_cw_open_rc;
 uint16_t mfk_cw_last_timeout;
 int mfk_cw_last_adv = -1;
@@ -184,6 +186,12 @@ CHIP_ERROR CommissioningWindowManager::OpenBasicCommissioningWindow(
 	mfk_cw_last_timeout = timeout.value;
 	mfk_cw_last_adv = (int)adv;
 	return ChipError(mfk_cw_open_rc);
+}
+
+void CommissioningWindowManager::CloseCommissioningWindow()
+{
+	mfk_cw_close_calls++;
+	mfk_cw_is_open = 0;
 }
 
 Server &Server::GetInstance()
@@ -219,13 +227,18 @@ PlatformManager &PlatformMgr()
 } // namespace chip
 
 int mfk_sched_calls;
+uint32_t mfk_sched_rc;
 int mfk_lockstack_calls;
 int mfk_unlockstack_calls;
 
-void chip::DeviceLayer::PlatformManager::ScheduleWork(void (*fn)(intptr_t), intptr_t arg)
+CHIP_ERROR chip::DeviceLayer::PlatformManager::ScheduleWork(void (*fn)(intptr_t), intptr_t arg)
 {
 	mfk_sched_calls++;
+	if (mfk_sched_rc != 0) {
+		return ChipError(mfk_sched_rc); /* refused: the work never runs */
+	}
 	fn(arg); /* synchronous: the fake "Matter task" is the caller */
+	return CHIP_NO_ERROR;
 }
 
 void chip::DeviceLayer::PlatformManager::LockChipStack()
@@ -571,6 +584,8 @@ int mfk_qr_fail;
 int mfk_qr_url_fail;
 int mfk_manual_fail;
 int mfk_print_codes_calls;
+int mfk_qr_calls;
+int mfk_manual_calls;
 
 void PrintOnboardingCodes(chip::RendezvousInformationFlags flags)
 {
@@ -581,6 +596,7 @@ void PrintOnboardingCodes(chip::RendezvousInformationFlags flags)
 CHIP_ERROR GetQRCode(chip::MutableCharSpan &out, chip::RendezvousInformationFlags flags)
 {
 	(void)flags;
+	mfk_qr_calls++;
 	if (mfk_qr_fail) {
 		return CHIP_ERROR_INTERNAL;
 	}
@@ -607,6 +623,7 @@ CHIP_ERROR GetManualPairingCode(chip::MutableCharSpan &out,
 				chip::RendezvousInformationFlags flags)
 {
 	(void)flags;
+	mfk_manual_calls++;
 	if (mfk_manual_fail) {
 		return CHIP_ERROR_INTERNAL;
 	}
@@ -916,6 +933,37 @@ esp_err_t led_strip_refresh(led_strip_handle_t strip)
 	return ESP_OK;
 }
 
+int mfk_btn_register_calls;
+int mfk_btn_last_event = -1;
+int mfk_btn_register_rc;
+static button_cb_t mfk_btn_long_press_cb;
+static void *mfk_btn_long_press_arg;
+
+esp_err_t iot_button_register_cb(button_handle_t btn_handle, button_event_t event,
+				 button_event_args_t *event_args, button_cb_t cb, void *usr_data)
+{
+	(void)event_args;
+	mfk_btn_register_calls++;
+	mfk_btn_last_event = (int)event;
+	if (mfk_btn_register_rc != ESP_OK) {
+		return mfk_btn_register_rc; /* nothing gets hung on the button */
+	}
+	if (event == BUTTON_LONG_PRESS_START) {
+		mfk_btn_long_press_cb = cb;
+		mfk_btn_long_press_arg = usr_data;
+	}
+	(void)btn_handle;
+	return ESP_OK;
+}
+
+// Press and hold the board's button, from a test.
+void mfk_btn_fire_long_press(void)
+{
+	if (mfk_btn_long_press_cb != nullptr) {
+		mfk_btn_long_press_cb(nullptr, mfk_btn_long_press_arg);
+	}
+}
+
 esp_err_t bsp_iot_button_create(button_handle_t btn_array[], int *btn_cnt, int btn_array_size)
 {
 	(void)btn_cnt;
@@ -928,6 +976,8 @@ esp_err_t bsp_iot_button_create(button_handle_t btn_array[], int *btn_cnt, int b
 
 /* ---- aliro reader / ble / lab / lat / uwb stubs ------------------------------------ */
 int mfk_reader_start_calls;
+int mfk_status_tick_calls;
+int64_t mfk_status_tick_last_ms;
 int mfk_reader_start_rc;
 int mfk_ble_prepare_null;
 int mfk_notify_unlock_calls;
@@ -967,6 +1017,15 @@ int aliro_reader_start_attached(void)
 {
 	mfk_reader_start_calls++;
 	return mfk_reader_start_rc;
+}
+
+/* Released by the approach loop, not at startup: a held Wallet status only goes
+ * out because this is called every pass, so the count is recorded rather than
+ * swallowed and the wiring test can assert the loop really drives it. */
+void aliro_reader_status_tick(int64_t now_ms)
+{
+	mfk_status_tick_calls++;
+	mfk_status_tick_last_ms = now_ms;
 }
 
 const void *aliro_reader_ble_prepare(void)
@@ -1174,7 +1233,12 @@ void mfk_reset(void)
 	mfk_cw_open_rc = 0;
 	mfk_cw_last_timeout = 0;
 	mfk_cw_last_adv = -1;
+	mfk_cw_close_calls = 0;
+	mfk_btn_register_calls = 0;
+	mfk_btn_last_event = -1;
+	mfk_btn_register_rc = ESP_OK;
 	mfk_sched_calls = 0;
+	mfk_sched_rc = 0;
 	mfk_lockstack_calls = 0;
 	mfk_unlockstack_calls = 0;
 	mfk_blemgr_calls = 0;
@@ -1210,6 +1274,8 @@ void mfk_reset(void)
 	mfk_qr_url_fail = 0;
 	mfk_manual_fail = 0;
 	mfk_print_codes_calls = 0;
+	mfk_qr_calls = 0;
+	mfk_manual_calls = 0;
 	mfk_task_count = 0;
 	mfk_delay_calls = 0;
 	mfk_delay_hook = NULL;
@@ -1229,6 +1295,8 @@ void mfk_reset(void)
 	mfk_bsp_button_calls = 0;
 	mfk_reader_start_calls = 0;
 	mfk_reader_start_rc = 0;
+	mfk_status_tick_calls = 0;
+	mfk_status_tick_last_ms = 0;
 	mfk_ble_prepare_null = 0;
 	mfk_notify_unlock_calls = 0;
 	mfk_notify_unlock_last = -1;

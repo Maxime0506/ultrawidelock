@@ -1,0 +1,10 @@
+# Overlay that turns the non-door primitive on, for builds whose only job is to
+# prove it still compiles. CONFIG_WOZ_PRESENCE is default n and nothing in the
+# tree sets it, so the ordinary build -- and therefore CI and verify_port --
+# never compiled a line of presence code. CONFIG_WOZ_PIV_CCID sat broken behind
+# exactly that gap until a bench run happened to hit it.
+#
+# Layered ON TOP of sdkconfig.defaults, never instead of it:
+#   idf.py -B build-presence -DSDKCONFIG=build-presence/sdkconfig \
+#          -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.presence" build
+CONFIG_WOZ_PRESENCE=y

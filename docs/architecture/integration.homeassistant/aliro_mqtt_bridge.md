@@ -21,12 +21,12 @@ parser and the payloads without a broker or a board attached. paho-mqtt is
 imported only when publishing, pyserial only for a real port, so neither is
 needed for a dry run.
 
-**discussed in** [`integration/homeassistant/README.md`](../../../integration/homeassistant/README.md)
+**depends on** [`tools/tui/src/serial.ts`](../tools.tui.src/serial.ts.md)  ·  **discussed in** [`docs/home-assistant-internals.md`](../../home-assistant-internals.md), [`integration/homeassistant/README.md`](../../../integration/homeassistant/README.md)
 
 ## API
 
 ### `parse_line(line: str) -> Optional[dict]`
-`integration/homeassistant/aliro_mqtt_bridge.py:38`
+`integration/homeassistant/aliro_mqtt_bridge.py:50`
 
 Return a reading dict for a range or access line, else None.
 
@@ -35,29 +35,30 @@ patterns are searched for rather than anchored.
 
 **called by** `main`
 
-### `discovery_payloads(node: str) -> list[tuple[str, dict]]`
-`integration/homeassistant/aliro_mqtt_bridge.py:60`
+### `discovery_payloads(node: str, model: str=DEFAULT_MODEL) -> list[tuple[str, dict]]`
+`integration/homeassistant/aliro_mqtt_bridge.py:81`
 
 Return (topic, config) pairs announcing both entities to Home Assistant.
 
 **called by** `main`
 
 ### `reading_to_message(node: str, reading: dict) -> tuple[str, str]`
-`integration/homeassistant/aliro_mqtt_bridge.py:97`
+`integration/homeassistant/aliro_mqtt_bridge.py:118`
 
 Map a parsed reading to the (topic, payload) that carries it.
 
 **called by** `main`
 
 ### `open_lines(port: str, baud: int) -> Iterator[str]`
-`integration/homeassistant/aliro_mqtt_bridge.py:105`
+`integration/homeassistant/aliro_mqtt_bridge.py:126`
 
 Yield console lines from stdin ('-') or from a serial port.
 
 **called by** `main`
 
-<details><summary>Undocumented (1)</summary>
+### `main() -> int`
+`integration/homeassistant/aliro_mqtt_bridge.py:141`
 
-- `main`
+Parse a serial line or read lines from stdin ('-'), decode range and access readings, publish to MQTT (or stdout in dry-run mode), and notify Home Assistant via discovery payloads; return 0 on clean exit or KeyboardInterrupt.
 
-</details>
+**calls** `discovery_payloads`, `open_lines`, `parse_line`, `reading_to_message`

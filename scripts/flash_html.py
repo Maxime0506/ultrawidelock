@@ -110,6 +110,9 @@ TEMPLATE = """<!doctype html>
 
 
 def render(src: pathlib.Path) -> pathlib.Path:
+    """Convert a Markdown source file to an HTML page: extract the first H1 as the title (fallback to parent directory name), render Markdown with table and fenced code support, reformat section labels from "## N. TEXT" to "N · TEXT", wrap tables in a scrollable container for mobile, and write to a .html file in the same directory.
+    Returns the path to the rendered HTML file.
+    """
     text = src.read_text(encoding="utf-8")
     title = next(
         (ln[2:].strip() for ln in text.splitlines() if ln.startswith("# ")),
@@ -130,6 +133,7 @@ def render(src: pathlib.Path) -> pathlib.Path:
 
 
 def main() -> int:
+    """Convert a Markdown file to HTML: extract title from first H1 (or parent directory name), render Markdown with code fence and table support, rewrite section headers from "## N. TEXT" to "N · TEXT", wrap tables for mobile scrolling. Write output as .html alongside the source."""
     if len(sys.argv) < 2:
         print(__doc__)
         return 2

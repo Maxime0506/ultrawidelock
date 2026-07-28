@@ -39,7 +39,7 @@ HOSTD="$ROOT/tests/host"
 	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" \
+	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$SRC/shell" \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
@@ -91,7 +91,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 # the full unittest log is replayed on failure.
 py_suite() { # <name> <script> <note>
 	local out ran skipped note
-	if ! out="$(python3 "$2" 2>&1)"; then
+	if ! out="$("$PY" "$2" 2>&1)"; then
 		printf '%s\n' "$out"
 		printf '  %s: FAIL\n' "$1"
 		exit 1
@@ -108,4 +108,9 @@ py_suite power-profile "$ROOT/tests/host/test_power_profile.py" "python, power/c
 py_suite flight-recorder "$ROOT/tests/host/test_flight_recorder.py" "python, trace/replay tooling"
 py_suite gait "$ROOT/tests/host/test_aliro_gait.py" "python, gait feature probe"
 py_suite mqtt-bridge "$ROOT/tests/host/test_mqtt_bridge.py" "python, fake paho/serial"
+py_suite presence-verify "$ROOT/tests/host/test_presence_verify.py" "python, real P-256 via openssl"
+py_suite presence-git "$ROOT/tests/host/test_presence_git.py" "python, throwaway git repos"
+py_suite presence-service "$ROOT/tests/host/test_presence_service.py" "python, Unix socket + fake serial"
+py_suite presence-runtime "$ROOT/tests/host/test_presence_runtime.py" "python, deterministic transfer archive"
+py_suite piv-pin "$ROOT/tests/host/test_piv_pin.py" "python, PIN policy and status handling"
 py_suite flash-html "$ROOT/tests/host/test_flash_html.py" "python, needs markdown pkg"

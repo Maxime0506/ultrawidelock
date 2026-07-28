@@ -9,7 +9,7 @@ Parts on the bench to a healthy first boot; toolchain install is in
 |---|---|
 | nRF5340 DK | Host SoC: BLE + Matter and the ranging engine |
 | DWM3000EVB (DW3110) | UWB radio, on the Arduino header (SPIM4) |
-| X-NUCLEO-NFC12A1 (ST25R300) | NFC reader front end for tap (SPIM2) |
+| X-NUCLEO-NFC12A1 (ST25R300) | NFC reader front end for tap (SPIM1) |
 
 Pin assignments live in
 [`../ports/nrf5340dk/overlays/dw3000-nfc.overlay`](../ports/nrf5340dk/overlays/dw3000-nfc.overlay);
@@ -42,6 +42,10 @@ The first flash and any net-core config change need the erase; plain
   wiring problem from a protocol one.
 * On the shell: `aliro status`, `aliro chip` (DW3110 device ID over SPI),
   `aliro range`.
+* `aliro factoryreset yes` erases the Matter fabrics, the Aliro reader identity,
+  and every trusted phone key, then reboots. The `yes` is required. Unlike
+  `matter device factoryreset` it survives into release images, where
+  `prj_release.conf` turns off `CONFIG_CHIP_LIB_SHELL`.
 * A healthy release boot is clean on the console and starts BLE advertising.
 
 ## Prove the unlock

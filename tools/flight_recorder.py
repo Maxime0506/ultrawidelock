@@ -13,6 +13,10 @@ serial lines (see modules/woz_uwb/src/facade/flight_recorder.c). This tool:
 Only the frames (already on-air ciphertext) go to the corpus — never the CONFIG
 record's URSK, so a shared corpus carries no session key material.
 
+SECURITY: raw serial logs containing `[FREC]` records and binary `.frc` files
+contain the CONFIG record's full ephemeral URSK. Keep them private and do not
+attach them to public issues. Only the extracted frame corpus excludes the key.
+
 Usage:
   flight_recorder.py <capture.log | trace.frc> [corpus_dir]
 
@@ -50,7 +54,9 @@ class TraceError(Exception):
 
 
 class Trace:
+    """In-memory representation of a single UWB walk-up trace: session metadata, radio configuration, received frames, and end-of-trace marker."""
     def __init__(self):
+        """Initialize an empty trace with null metadata, config, and end marker, and an empty frame list."""
         self.meta = None      # dict: version, port, sha
         self.config = None    # dict: session_id, channel, ..., ursk, rc
         self.events = []      # list of dicts
@@ -58,6 +64,7 @@ class Trace:
 
 
 def _is_hex_line(s):
+    """Return true if the string is a valid even-length sequence of hexadecimal digits."""
     return len(s) > 0 and len(s) % 2 == 0 and all(
         c in "0123456789abcdefABCDEF" for c in s)
 
@@ -203,6 +210,7 @@ def summarize(trace):
 
 
 def main(argv):
+    """Parse a capture log or binary trace file, print a summary, optionally write a .frc sidecar, and optionally extract frames into a corpus directory."""
     if len(argv) < 2:
         sys.stderr.write("Usage: %s <capture.log | trace.frc> [corpus_dir]\n"
                          % os.path.basename(argv[0]))

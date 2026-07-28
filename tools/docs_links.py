@@ -29,6 +29,7 @@ SKIP_PREFIXES = ("http://", "https://", "#", "mailto:", "data:", "javascript:")
 def blob_base() -> str:
     """github.com/<owner>/<repo>/blob/<branch> for the current remote, or '' if none."""
     def git(*args: str) -> str:
+        """Run a git command and return its stripped output, or an empty string if the command fails or git is not found."""
         try:
             return subprocess.run(
                 ["git", *args], capture_output=True, text=True, check=True
@@ -79,6 +80,7 @@ def _exact(path: Path) -> bool:
 
 
 def main() -> int:
+    """Rewrite all relative links in the rendered site: convert .md citations to .html pages, fix Doxygen's nonexistent bucket-index links, redirect repo-relative links to GitHub, and auto-link prose mentions of site/api/index.html. Verify that all remaining relative links resolve inside the site. Reports link rewrites and broken links (exit 1 if any remain). Requires site/ to exist and optionally a GitHub base URL."""
     if not SITE.is_dir():
         print("docs_links: site/ not found — run the generators first", file=sys.stderr)
         return 1
@@ -93,6 +95,7 @@ def main() -> int:
         raw = page.read_bytes()
 
         def fix(match: re.Match[bytes]) -> bytes:
+            """Replace or repair a single href attribute in an HTML file. Converts .md links to their rendered .html equivalents; fixes broken Doxygen bucket-index links; rewrites repo-relative links to GitHub blob URLs when a base URL is configured. Returns the replacement bytes or the original match if no fix applies."""
             nonlocal rewritten
             href = match.group(1).decode()
             if href.startswith(SKIP_PREFIXES):

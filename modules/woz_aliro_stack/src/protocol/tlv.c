@@ -1,3 +1,8 @@
+/**
+ * @file tlv.c
+ * BER-TLV parser and encoder for Aliro protocol: parse TLVs with definite length and advance
+ * offset, compute encoded sizes, and write new TLVs.
+ */
 #include "tlv.h"
 
 #include <string.h>
@@ -70,6 +75,10 @@ int woz_aliro_tlv_next(const uint8_t *data, size_t data_length, size_t *offset,
 	return WOZ_ALIRO_TLV_OK;
 }
 
+/**
+ * Compute the BER-TLV tag byte count for a given tag value: 1 byte for 0x00–0xff, 2 for
+ * 0x0100–0xffff, 3 for 0x010000–0xffffff, or 0 if tag is unsupported.
+ */
 static size_t tag_size(uint32_t tag)
 {
 	if (tag <= 0xff) {
@@ -84,6 +93,10 @@ static size_t tag_size(uint32_t tag)
 	return 0;
 }
 
+/**
+ * Compute the BER-TLV length field byte count for a given value length: 1 byte for 0x00–0x7f, 2 for
+ * 0x80–0xff, 3 for 0x0100–0xffff, or 0 if length is unsupported.
+ */
 static size_t length_size(size_t length)
 {
 	if (length < 0x80) {

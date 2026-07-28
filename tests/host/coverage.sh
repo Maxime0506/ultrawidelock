@@ -169,7 +169,7 @@ SIDE_UNIT_SRCS=(
 cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" \
+	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$SRC/shell" \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
@@ -223,7 +223,10 @@ cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 \
 	"$ET/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
 
-cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
+# _POSIX_C_SOURCE because main.c now includes woz_port.h, whose host build calls
+# clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
+# declares both unconditionally, so omitting it builds locally and fails on CI.
+cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
 	-I"$SDKFAKE" -I"$EAPPS/reader/main" -I"$SRC/facade" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
 	"$ET/test_esp_app_shell.c" "$EAPPS/reader/main/app_shell.c" \
@@ -267,7 +270,20 @@ run_suite esp_matter "$OUT/cov_esp_matter"
 
 llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
 
-ALL_UNIT_SRCS=("${UNIT_SRCS[@]}" "${CORE_UNIT_SRCS[@]}" "${SIDE_UNIT_SRCS[@]}")
+# CORE_UNIT_SRCS was written assuming it does not overlap UNIT_SRCS, and that
+# stopped being true once the shared-core units gained host unit tests of their
+# own: aliro_hash.c and aliro_prov.c now appear in both. A repeated path makes
+# llvm-cov print the file twice and count its lines twice in the denominator,
+# which moves the number the CI floor is checked against. Dedupe rather than
+# deleting the entries, so an overlap added later cannot reintroduce it.
+ALL_UNIT_SRCS=()
+for src in "${UNIT_SRCS[@]}" "${CORE_UNIT_SRCS[@]}" "${SIDE_UNIT_SRCS[@]}"; do
+	seen=0
+	for kept in ${ALL_UNIT_SRCS[@]+"${ALL_UNIT_SRCS[@]}"}; do
+		[ "$kept" = "$src" ] && { seen=1; break; }
+	done
+	[ "$seen" -eq 0 ] && ALL_UNIT_SRCS+=("$src")
+done
 
 # Our headers, all of them: llvm-cov attributes inline-function coverage to
 # the header wherever an instrumented TU instantiated it, and silently skips
@@ -322,22 +338,33 @@ loc() { wc -l <"$ROOT/$1" | tr -d ' '; }
 # under measurement — cheap, and their pass/fail already gated in run.sh.
 PYCOV_JSON="$OUT/pycov.json"
 rm -f "$OUT/pycov" "$PYCOV_JSON"
-if python3 -m coverage --version >/dev/null 2>&1; then
+if "$PY" -m coverage --version >/dev/null 2>&1; then
 	PY_INCLUDE="$ROOT/tools/aliro_lab.py"
 	PY_INCLUDE+=",$ROOT/tools/power_profile.py"
 	PY_INCLUDE+=",$ROOT/integration/homeassistant/aliro_mqtt_bridge.py"
 	PY_INCLUDE+=",$ROOT/scripts/flash_html.py"
+	PY_INCLUDE+=",$ROOT/integration/homeassistant/src/openaliro_ha/*.py"
 	for t in test_aliro_lab test_power_profile test_mqtt_bridge test_flash_html; do
-		COVERAGE_FILE="$OUT/pycov" python3 -m coverage run -a \
+		COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage run -a \
 			--include="$PY_INCLUDE" \
 			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
 	done
-	COVERAGE_FILE="$OUT/pycov" python3 -m coverage json -q -o "$PYCOV_JSON"
+	# The agent suites gate themselves on HA=1 so productization work stays out
+	# of the default test path; measuring them still needs the variable set, or
+	# every case skips and the rows read 0%.
+	for t in test_ha_parser test_ha_config test_ha_mqtt test_ha_cli \
+		test_ha_compatibility test_ha_serial_session test_ha_serial_transport \
+		test_ha_agent test_ha_stage0; do
+		COVERAGE_FILE="$OUT/pycov" HA=1 "$PY" -m coverage run -a \
+			--include="$PY_INCLUDE" \
+			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
+	done
+	COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage json -q -o "$PYCOV_JSON"
 fi
 
 pypct() { # <repo-relative .py> -> "NN.N" (empty when unmeasured)
 	[ -f "$PYCOV_JSON" ] || return 0
-	python3 - "$ROOT/$1" "$PYCOV_JSON" <<-'EOF'
+	"$PY" - "$ROOT/$1" "$PYCOV_JSON" <<-'EOF'
 	import json, os, sys
 	target = os.path.realpath(sys.argv[1])
 	for name, info in json.load(open(sys.argv[2]))["files"].items():
@@ -362,6 +389,10 @@ pyrow "tools/aliro_lab.py" "test_aliro_lab.py"
 pyrow "tools/power_profile.py" "test_power_profile.py"
 pyrow "integration/homeassistant/aliro_mqtt_bridge.py" "test_mqtt_bridge.py"
 pyrow "scripts/flash_html.py" "test_flash_html.py"
+for agent_module in parser models config mqtt serial_transport serial_session \
+	compatibility agent cli; do
+	pyrow "integration/homeassistant/src/openaliro_ha/$agent_module.py" "test_ha_*.py"
+done
 surf "web-twin/index.html" "$(loc web-twin/index.html)" \
 	"constants drift-gated in CI; JS logic untested"
 surf "web-flasher/index.html" "$(loc web-flasher/index.html)" "no tests"
@@ -380,7 +411,7 @@ nshl="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' -exec cat 
 surf "scripts/ + release/ shell ($nsh scripts)" "$nshl" \
 	"shellcheck-gated; tests/tooling covers ws-seed + patch drift"
 
-python3 "$ROOT/tests/host/coverage_report.py" \
+"$PY" "$ROOT/tests/host/coverage_report.py" \
 	"$OUT/summary.json" "$OUT/html/index.html" "$UNBUILT_TSV" "$SURFACES_TSV"
 
 # Surface a failing suite without aborting the coverage report.

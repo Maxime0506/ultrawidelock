@@ -32,6 +32,29 @@ app_driver_handle_t app_driver_button_init();
  */
 esp_err_t app_driver_led_init();
 
+/** Open a basic Matter commissioning window.
+ *
+ * The recovery path for a device that is commissioned but unreachable: a
+ * commissioned device does not advertise commissionable, and with no working
+ * network no controller can reach it to open a window. Opening one here lets a
+ * controller re-push Wi-Fi credentials over BLE through the NetworkCommissioning
+ * cluster, keeping every fabric and the Aliro trust store. `factoryreset` is the
+ * only other way out of that corner and it takes both.
+ *
+ * Basic rather than enhanced, so the QR and manual codes already printed at boot
+ * still work. The open runs on the Matter task; failures are logged rather than
+ * returned, because both callers are fire-and-forget.
+ */
+void app_commissioning_window_open();
+
+/** Print the commissioning QR URL and manual pairing code to the console.
+ *
+ * Not PrintOnboardingCodes(): that logs at CHIP Progress level, which
+ * CONFIG_LOG_DEFAULT_LEVEL_WARN compiles out of the CHIP library entirely, so it
+ * emits nothing and no runtime log level brings it back. This printf's instead.
+ */
+void app_print_onboarding_codes();
+
 /** Drive the bolt-state indicator.
  *
  * @param[in] locked true to extinguish the LED, false to light it.

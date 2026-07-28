@@ -1,3 +1,10 @@
+/**
+ * @file session.cpp
+ * Aliro reader BLE session state machine and cryptographic session context. Manages NFC APDU
+ * limits, response timeouts, connection setup, fast-path and standard key derivation, message
+ * encryption and decryption, and reader-status notifications. Processes events from the BLE
+ * transport and application layer.
+ */
 #include "protocol/nfc_auth.h"
 #include "protocol/access_document.h"
 #include "protocol/ble_message.h"
@@ -66,6 +73,10 @@ enum class SessionState : uint8_t {
 	UwbRanging,
 };
 
+/**
+ * Session context holding all state needed to manage an Aliro session: connection handle, protocol
+ * version, cryptographic keys, buffers, counters, and access document details.
+ */
 struct SessionContext {
 	std::optional<ConnectionHandle> mHandle;
 	SessionState mState{SessionState::Free};
@@ -126,6 +137,11 @@ struct SessionContext {
 	uint32_t mResponseTimerGeneration{};
 };
 
+/**
+ * Sets the session's maximum command and response data lengths from the NFC select response,
+ * constrained by the session's buffer sizes and NFC protocol limits, and records whether
+ * extended-length APDUs are supported.
+ */
 void ApplyNfcApduLimits(SessionContext &session, const struct woz_aliro_select_response &selected)
 {
 	session.mMaxCommandData = std::min({selected.max_command_data_length,
@@ -138,6 +154,9 @@ void ApplyNfcApduLimits(SessionContext &session, const struct woz_aliro_select_r
 
 std::array<SessionContext, kSessionCount> sSessions{};
 
+/**
+ * Atomic generation counter used to invalidate stale response timeout expirations.
+ */
 struct ResponseTimerContext {
 	std::atomic<uint32_t> mGeneration{0};
 };
@@ -149,6 +168,10 @@ constexpr uint32_t kResponseTimeoutEventMagic = 0x4152544f; /* "ARTO" */
 constexpr size_t kSessionDataEventCapacity =
 	kApduBufferSize + WOZ_ALIRO_BLE_HEADER_SIZE + WOZ_ALIRO_BLE_AUTH_TAG_SIZE;
 
+/**
+ * Internal event structure for session data notifications; carries the connection handle and a copy
+ * of the received data.
+ */
 struct SessionDataEvent {
 	/* k_fifo reserves and updates the first pointer-sized word. */
 	void *mFifoReserved{};
@@ -157,6 +180,9 @@ struct SessionDataEvent {
 	size_t mLength{};
 	std::array<uint8_t, kSessionDataEventCapacity> mData{};
 
+	/**
+	 * Initializes a session data event by copying the connection handle and data payload.
+	 */
 	SessionDataEvent(ConnectionHandle handle, Data data)
 		: mHandle(handle), mLength(data.mLength)
 	{
@@ -166,12 +192,19 @@ struct SessionDataEvent {
 
 static_assert(offsetof(SessionDataEvent, mFifoReserved) == 0);
 
+/**
+ * Internal event structure for response timeout notifications; carries session index and generation
+ * number to detect stale timeouts.
+ */
 struct ResponseTimeoutEvent {
 	void *mFifoReserved{};
 	uint32_t mMagic{kResponseTimeoutEventMagic};
 	size_t mSessionIndex{};
 	uint32_t mGeneration{};
 
+	/**
+	 * Initializes a response timeout event with the given session index and generation number.
+	 */
 	ResponseTimeoutEvent(size_t sessionIndex, uint32_t generation)
 		: mSessionIndex(sessionIndex), mGeneration(generation)
 	{
@@ -180,11 +213,18 @@ struct ResponseTimeoutEvent {
 
 static_assert(offsetof(ResponseTimeoutEvent, mFifoReserved) == 0);
 
+/**
+ * Internal event structure reserved by the FIFO queue mechanism; carries a magic number for
+ * validation.
+ */
 struct EventHeader {
 	void *mFifoReserved;
 	uint32_t mMagic;
 };
 
+/**
+ * RAII lock guard that acquires the stack mutex on construction and releases it on destruction.
+ */
 class StackLock
 {
       public:
@@ -192,14 +232,24 @@ class StackLock
 	{
 		Interface::Os::Mutex::Lock();
 	}
+	/**
+	 * Releases the stack mutex.
+	 */
 	~StackLock()
 	{
 		Interface::Os::Mutex::Unlock();
 	}
 	StackLock(const StackLock &) = delete;
+	/**
+	 * Deleted copy-assignment operator to prevent copying of the lock guard.
+	 */
 	StackLock &operator=(const StackLock &) = delete;
 };
 
+/**
+ * Returns a pointer to the session matching the given connection handle, or nullptr if no session
+ * is found.
+ */
 SessionContext *FindSession(ConnectionHandle handle)
 {
 	for (auto &session : sSessions) {
@@ -210,11 +260,18 @@ SessionContext *FindSession(ConnectionHandle handle)
 	return nullptr;
 }
 
+/**
+ * Returns the index of the given session in the global session array.
+ */
 size_t SessionIndex(const SessionContext &session)
 {
 	return static_cast<size_t>(&session - sSessions.data());
 }
 
+/**
+ * Atomically increments the generation counter for the session's response timer, updates the
+ * session's stored generation, and returns the new value.
+ */
 uint32_t NextResponseTimerGeneration(SessionContext &session)
 {
 	auto &generation = sResponseTimerContexts[SessionIndex(session)].mGeneration;
@@ -223,6 +280,11 @@ uint32_t NextResponseTimerGeneration(SessionContext &session)
 	return next;
 }
 
+/**
+ * Response timeout callback invoked by the timer; validates the context pointer, constructs a
+ * ResponseTimeoutEvent, and queues it for deferred processing; logs errors if event allocation or
+ * queueing fails.
+ */
 void ResponseTimerExpired(void *context)
 {
 	auto *timerContext = static_cast<ResponseTimerContext *>(context);
@@ -245,6 +307,10 @@ void ResponseTimerExpired(void *context)
 	}
 }
 
+/**
+ * Allocates a free session slot, initializes it with the connection handle, and acquires a response
+ * timer for BLE sessions; returns nullptr if no slots are available or timer acquisition fails.
+ */
 SessionContext *AllocateSession(ConnectionHandle handle)
 {
 	for (auto &session : sSessions) {
@@ -268,6 +334,10 @@ SessionContext *AllocateSession(ConnectionHandle handle)
 	return nullptr;
 }
 
+/**
+ * Destroys a transient cryptographic key if it is non-zero, logs a warning on failure, and zeros
+ * the key ID.
+ */
 void DestroyKey(CryptoTypes::KeyId &keyId)
 {
 	if (keyId != 0) {
@@ -279,6 +349,10 @@ void DestroyKey(CryptoTypes::KeyId &keyId)
 	}
 }
 
+/**
+ * Releases the response timer, destroys all session keys, zeros the URSK, and clears the session
+ * context.
+ */
 void ResetSession(SessionContext &session)
 {
 	if (session.mResponseTimer != Interface::Os::Timer::kInvalidHandle) {
@@ -301,6 +375,10 @@ void ResetSession(SessionContext &session)
 	session = {};
 }
 
+/**
+ * Observes an incoming or outgoing BLE message to update response timeout state (arm, stop, or
+ * terminate the timer); returns true if the timeout action indicates termination.
+ */
 bool ObserveResponseTimeoutMessage(SessionContext &session,
 				   enum woz_aliro_ble_timeout_direction direction,
 				   const uint8_t *data, size_t length)
@@ -331,6 +409,11 @@ bool ObserveResponseTimeoutMessage(SessionContext &session,
 	return action == WOZ_ALIRO_BLE_TIMEOUT_TERMINATE;
 }
 
+/**
+ * Appends data to a buffer, advancing the offset by the data length, and returns true if the append
+ * succeeded without overflow; returns false if data is null, offset exceeds capacity, or the data
+ * length exceeds remaining capacity.
+ */
 bool Append(uint8_t *buffer, size_t capacity, size_t &offset, const uint8_t *data, size_t length)
 {
 	if (data == nullptr || offset > capacity || length > capacity - offset) {
@@ -341,6 +424,11 @@ bool Append(uint8_t *buffer, size_t capacity, size_t &offset, const uint8_t *dat
 	return true;
 }
 
+/**
+ * Appends reader public key, label, reader identifier, interface byte, version TLV, reader
+ * ephemeral public key, transaction identifier, flags, and proprietary information to the salt
+ * buffer; returns false if any append overflows the buffer.
+ */
 bool AppendCommonSalt(SessionContext &session, uint8_t *salt, size_t capacity, size_t &offset,
 		      const char label[12])
 {
@@ -361,6 +449,11 @@ bool AppendCommonSalt(SessionContext &session, uint8_t *salt, size_t capacity, s
 		      session.mProprietaryInformationLength);
 }
 
+/**
+ * Performs key agreement on the ephemeral keys, derives the Kdh key via X9.63 KDF, derives 160
+ * bytes of keying material from Kdh, imports the expedited reader and device keys, imports the
+ * StepUpSK and BleSK roots, and returns early on error.
+ */
 AliroError DeriveVolatileKeys(SessionContext &session)
 {
 	CryptoTypes::SharedSecret sharedSecret{};
@@ -422,6 +515,10 @@ AliroError DeriveVolatileKeys(SessionContext &session)
 	return error;
 }
 
+/**
+ * Derives the persistent key by computing a salt from the credential public key and deriving a
+ * shared key using the Kdh key; returns an error if the salt overflows or key derivation fails.
+ */
 AliroError DerivePersistentKey(SessionContext &session,
 			       const CryptoTypes::PublicKey &credentialPublicKey)
 {
@@ -438,6 +535,11 @@ AliroError DerivePersistentKey(SessionContext &session,
 		salt.data(), saltLength, session.mKpersistentKeyId);
 }
 
+/**
+ * Returns true if the plaintext is exactly 48 bytes and contains the fixed-width cryptogram
+ * structure (signaling bitmap followed by two signed timestamps) as specified in Table 8-6; returns
+ * false otherwise.
+ */
 bool IsValidCryptogramPlaintext(const uint8_t *plaintext, size_t length)
 {
 	/* Table 8-6: signaling bitmap followed by both fixed-width signed
@@ -447,6 +549,12 @@ bool IsValidCryptogramPlaintext(const uint8_t *plaintext, size_t length)
 	       plaintext[26] == 0x92 && plaintext[27] == 0x14;
 }
 
+/**
+ * Attempts fast-path access by deriving keys from a stored persistent key, decrypting the
+ * cryptogram, validating its plaintext, checking whether a new access document is required, and
+ * importing the expedited and BLE keys on success; returns the validation status or ALIRO_NO_ERROR
+ * on a successful fast match.
+ */
 AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKeyId,
 		      const uint8_t *cryptogram, size_t cryptogramLength, bool &matched,
 		      bool &requiresStandard)
@@ -553,6 +661,10 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 	return ALIRO_NO_ERROR;
 }
 
+/**
+ * For NFC, sends the command directly; for BLE, frames the command in a BLE message, sends it, and
+ * observes the timeout message.
+ */
 AliroError SendApCommand(SessionContext &session, const uint8_t *command, size_t commandLength)
 {
 	if (!session.mHandle->IsBle()) {
@@ -587,6 +699,11 @@ AliroError ProcessAccess(SessionContext &session);
 AliroError SendUrskExchange(SessionContext &session);
 AliroError SendNfcCompletionExchange(SessionContext &session, bool useStepUpKeys);
 
+/**
+ * Acquires the reader identity, public key, and ephemeral key pair, generates a random transaction
+ * identifier, optionally loads persistent credential key IDs for fast-path attempts, builds and
+ * sends the Auth0 command, and transitions to AwaitingAuth0.
+ */
 AliroError SendAuth0(SessionContext &session)
 {
 	AliroError error = Interface::Reader::GetIdentifier(session.mReaderIdentifier);
@@ -638,6 +755,15 @@ AliroError SendAuth0(SessionContext &session)
 	return SendApCommand(session, session.mTxBuffer.data(), length);
 }
 
+/**
+ * Decrypt and validate Auth0 response; attempt fast-key authentication if enabled, otherwise derive
+ * volatile keys and build Auth1 command.
+ *
+ * Fails on parse, fast-key, key derivation, signature generation, or command build errors. Attempts
+ * each persistent fast key in order if fast-path enabled; succeeds early if matched and does not
+ * require standard phase. Destroys expedited and volatile keys if fast-path active. Sets state to
+ * AwaitingAuth1. On trace enabled, logs each fast-key trial and final derivation status.
+ */
 AliroError HandleAuth0Response(SessionContext &session, Data data)
 {
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -751,6 +877,10 @@ AliroError HandleAuth0Response(SessionContext &session, Data data)
 	return SendApCommand(session, session.mTxBuffer.data(), commandLength);
 }
 
+/**
+ * Constructs a 12-byte nonce with a device/reader flag in byte 7 and a big-endian counter in bytes
+ * 8–11.
+ */
 CryptoTypes::Nonce MakeNonce(bool device, uint32_t counter)
 {
 	CryptoTypes::Nonce nonce{};
@@ -762,6 +892,10 @@ CryptoTypes::Nonce MakeNonce(bool device, uint32_t counter)
 	return nonce;
 }
 
+/**
+ * Derives the directional BLE session keys (BleSKReader and BleSKDevice) from the BLE key using
+ * protocol versions and standard info labels; returns an error if key derivation fails.
+ */
 AliroError DeriveBleSessionKeys(SessionContext &session)
 {
 	std::array<uint8_t, (std::size(kBleProtocolVersions) + 1) * sizeof(ProtocolVersion)> salt{};
@@ -791,6 +925,11 @@ AliroError DeriveBleSessionKeys(SessionContext &session)
 	return error;
 }
 
+/**
+ * Encrypts a BLE message by parsing the plaintext header, encrypting the payload with the reader
+ * counter and reader key, constructing the protected frame, sending it, and observing the timeout
+ * message; returns an error if the key is absent, counter overflows, or encryption fails.
+ */
 AliroError EncryptBleMessage(SessionContext &session, const uint8_t *plaintext,
 			     size_t plaintextLength)
 {
@@ -839,6 +978,11 @@ AliroError EncryptBleMessage(SessionContext &session, const uint8_t *plaintext,
 	return error;
 }
 
+/**
+ * Decrypts a BLE message using the device key and current device counter as a nonce, validates the
+ * authentication tag, increments the counter, and reconstructs the plaintext with the BLE header;
+ * returns an error if the key is absent, counter overflows, or decryption fails.
+ */
 AliroError DecryptBleMessage(SessionContext &session, const struct woz_aliro_ble_message &message,
 			     uint8_t *plaintext, size_t plaintextCapacity, size_t &plaintextLength)
 {
@@ -877,6 +1021,15 @@ AliroError DecryptBleMessage(SessionContext &session, const struct woz_aliro_ble
 	return ALIRO_NO_ERROR;
 }
 
+/**
+ * Encrypt and send an exchange command (0x80c9) with the given plaintext, reader key, and counter
+ * state.
+ *
+ * Fails if plaintext is null, exceeds 254 bytes (to fit tag), or command length overflows the TX
+ * buffer. Increments reader counter and sets session state to AwaitingExchangeResponse. Caller must
+ * ensure key ID and counter state are correct for the current protocol phase (expedited or
+ * step-up).
+ */
 AliroError SendEncryptedExchange(SessionContext &session, const uint8_t *plaintext,
 				 size_t plaintextLength, CryptoTypes::KeyId readerKeyId,
 				 bool useStepUpKeys)
@@ -912,6 +1065,13 @@ AliroError SendEncryptedExchange(SessionContext &session, const uint8_t *plainte
 	return SendApCommand(session, command, commandLength);
 }
 
+/**
+ * Send a URSK exchange command (0x98 0x00) using the expedited reader key without requesting
+ * step-up.
+ *
+ * Wrapper around SendEncryptedExchange. Used to signal unlock completion when no Access Document is
+ * needed.
+ */
 AliroError SendUrskExchange(SessionContext &session)
 {
 	static constexpr uint8_t plaintext[]{0x98, 0x00};
@@ -919,6 +1079,13 @@ AliroError SendUrskExchange(SessionContext &session)
 				     session.mExpeditedReaderKeyId, false);
 }
 
+/**
+ * Send a final NFC completion exchange (0x97 0x02 0x01 0x00) in the expedited or step-up phase,
+ * matching the reference reader's successful secure state.
+ *
+ * Wrapper around SendEncryptedExchange. Caller specifies which reader key (expedited or step-up)
+ * and phase to use via useStepUpKeys.
+ */
 AliroError SendNfcCompletionExchange(SessionContext &session, bool useStepUpKeys)
 {
 	/* Table 8-15/8-18: NFC transactions end with Reader Status. Match the
@@ -936,6 +1103,10 @@ AliroError SendNfcCompletionExchange(SessionContext &session, bool useStepUpKeys
 
 AliroError StartStepUpExchange(SessionContext &session);
 
+/**
+ * Invokes the appropriate access processing method (fast or standard) based on the session state,
+ * marks access as processed on success, and returns the operation status.
+ */
 AliroError ProcessAccess(SessionContext &session)
 {
 	if (session.mAccessProcessed) {
@@ -954,6 +1125,11 @@ AliroError ProcessAccess(SessionContext &session)
 	return error;
 }
 
+/**
+ * Processes access, derives BLE session keys, extracts the ranging session ID from the transaction
+ * identifier, starts the ranging session, encrypts and sends an access-completed message, destroys
+ * Access Protocol keys, and transitions to UwbRanging on success.
+ */
 AliroError CompleteBleAccess(SessionContext &session)
 {
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -1017,6 +1193,15 @@ AliroError CompleteBleAccess(SessionContext &session)
 	return error;
 }
 
+/**
+ * Decrypt and validate an encrypted exchange response (expedited or step-up phase); optionally
+ * request Access Document via step-up or complete the access.
+ *
+ * Fails on APDU status, decryption, or plaintext validation errors. Expects plaintext 0x00 0x02
+ * 0x00 0x00 (success marker). If NFC, sets state to AccessComplete. If BLE with step-up requested,
+ * calls StartStepUpExchange; otherwise completes access. Caller must have set the correct device
+ * key ID and counter state before calling.
+ */
 AliroError HandleExchangeResponse(SessionContext &session, Data data)
 {
 	if (data.mLength < CryptoTypes::kAuthenticationTagLength + 2 ||
@@ -1050,6 +1235,14 @@ AliroError HandleExchangeResponse(SessionContext &session, Data data)
 	return CompleteBleAccess(session);
 }
 
+/**
+ * Build and send the next envelope command in a step-up exchange, segmenting mExchangeBuffer across
+ * one or more APDUs.
+ *
+ * Fails if segmentation fails or buffer is too small. Updates mExchangeOffset and mLastEnvelope;
+ * sets state to SendingStepUpEnvelope. Caller must have populated mExchangeBuffer, mMaxCommandData,
+ * and mMaxResponseData before calling.
+ */
 AliroError SendNextEnvelope(SessionContext &session)
 {
 	size_t commandLength = 0;
@@ -1073,6 +1266,13 @@ AliroError SendNextEnvelope(SessionContext &session)
 	return SendApCommand(session, session.mTxBuffer.data(), commandLength);
 }
 
+/**
+ * Request the next chunk of a step-up response from the reader via GET RESPONSE command.
+ *
+ * Fails if expectedLength cannot be encoded or buffer is too small. Sets session state to
+ * AwaitingStepUpResponse. Used when a single APDU response is insufficient to deliver the full
+ * step-up plaintext.
+ */
 AliroError SendGetResponse(SessionContext &session, size_t expectedLength)
 {
 	size_t commandLength = 0;
@@ -1084,6 +1284,15 @@ AliroError SendGetResponse(SessionContext &session, size_t expectedLength)
 	return SendApCommand(session, session.mTxBuffer.data(), commandLength);
 }
 
+/**
+ * Derive directional step-up keys, build and encrypt a device request, wrap it in session data and
+ * DO53, then send the first envelope segment.
+ *
+ * Fails if key derivation, request building, encryption, wrapping, or segmentation fails. Resets
+ * reader and device counters to initial value. Sets state to SendingStepUpEnvelope. Caller must
+ * have populated mRequestedElement, mRequestedElementLength, and mIntentToStore before calling. On
+ * trace enabled, performs AEAD round-trip verification.
+ */
 AliroError StartStepUpExchange(SessionContext &session)
 {
 	/* Derive the directional keys only when the step-up phase actually starts.
@@ -1167,6 +1376,10 @@ AliroError StartStepUpExchange(SessionContext &session)
 	return SendNextEnvelope(session);
 }
 
+/**
+ * Encodes the CBOR byte-string header for a given length into output, returning the number of bytes
+ * written (1, 2, or 3 depending on the length value).
+ */
 size_t EncodeBstrHead(size_t length, uint8_t *output)
 {
 	if (length < 24) {
@@ -1184,6 +1397,12 @@ size_t EncodeBstrHead(size_t length, uint8_t *output)
 	return 3;
 }
 
+/**
+ * Parses and validates an access document: verifies the issuer-signed item digest, validates the
+ * issuer certificate or key ID, checks the document's validity period, ensures the device public
+ * key matches, constructs a COSE Sig_structure, verifies the signature, and invokes the access
+ * processing interface.
+ */
 AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8_t *deviceResponse,
 					    size_t deviceResponseLength)
 {
@@ -1347,6 +1566,11 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 	return error;
 }
 
+/**
+ * Unwraps the step-up response DO53 and session-data containers, decrypts the access document using
+ * the device counter and StepUpDeviceKey, validates and processes the access document, and marks
+ * access as processed on success.
+ */
 AliroError FinishStepUpResponse(SessionContext &session)
 {
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -1391,6 +1615,15 @@ AliroError FinishStepUpResponse(SessionContext &session)
 	return error;
 }
 
+/**
+ * Collect one or more envelope responses from the reader and assemble the complete step-up
+ * plaintext.
+ *
+ * Fails if response collection fails or APDU status is non-zero. If more data needed, sends GET
+ * RESPONSE. Otherwise decrypts and validates step-up response, then completes the access (BLE or
+ * NFC). Sets state to AwaitingStepUpResponse or AccessComplete. Caller must have initialized
+ * mExchangeBuffer before calling.
+ */
 AliroError CollectStepUpResponse(SessionContext &session, Data data)
 {
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -1423,6 +1656,16 @@ AliroError CollectStepUpResponse(SessionContext &session, Data data)
 	return error;
 }
 
+/**
+ * Decrypt, validate, and process Auth1 response; derive persistent key; optionally request Access
+ * Document or start step-up exchange.
+ *
+ * Fails on APDU status, decryption, parse, signature verification, or persistent key derivation
+ * errors. Extracts credential public key, verifies signature, and checks signaling bitmap for
+ * Access Document and step-up AID selection requirements. Sets state to SelectingStepUp,
+ * AwaitingAuth1 (BLE with document), or initiates step-up/completion. Caller must have set
+ * mExpeditedDeviceKeyId and mDeviceCounter before calling.
+ */
 AliroError HandleAuth1Response(SessionContext &session, Data data)
 {
 	if (data.mLength < CryptoTypes::kAuthenticationTagLength + 2 ||
@@ -1530,6 +1773,12 @@ AliroError HandleAuth1Response(SessionContext &session, Data data)
 
 } // namespace
 
+/**
+ * Creates a new session for the given connection handle: for NFC, sends a Select command and
+ * transitions to SelectingExpedited; for BLE, validates the protocol version and transitions to
+ * BleConnected; returns an error if the session already exists, allocation fails, or the protocol
+ * version is unsupported.
+ */
 AliroError AliroStack::CreateSession(ConnectionHandle connectionHandle)
 {
 	StackLock lock;
@@ -1567,6 +1816,10 @@ AliroError AliroStack::CreateSession(ConnectionHandle connectionHandle)
 	return ALIRO_NO_ERROR;
 }
 
+/**
+ * Finds the session for the given connection handle and destroys it if found; invokes the session
+ * termination callback on success.
+ */
 void AliroStack::DestroySession(ConnectionHandle connectionHandle)
 {
 	bool found = false;
@@ -1586,6 +1839,16 @@ void AliroStack::DestroySession(ConnectionHandle connectionHandle)
 namespace
 {
 
+/**
+ * Route incoming session data (NFC APDU or reassembled BLE frame) to the appropriate protocol
+ * handler based on session state, forwarding UWB control to the UWB stack if needed.
+ *
+ * On BLE: reassembles fragmented messages, validates frames, decrypts, and routes to
+ * auth/exchange/ranging handlers or timeout control. On NFC: dispatches to
+ * Select/Auth0/Auth1/Exchange response handlers. Destroys session on frame error, parse error, or
+ * explicit termination. Caller must ensure handle and data are valid; data may be null (triggers
+ * session destruction).
+ */
 void ProcessSessionData(ConnectionHandle handle, Data data)
 {
 	if (data.mData == nullptr || data.mLength == 0) {
@@ -1952,6 +2215,11 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 	}
 }
 
+/**
+ * Validates the response timeout expiration (session exists, is BLE, timer handle is valid,
+ * generation matches, and timeout is not idle), destroys the session on confirmed timeout, and logs
+ * a warning.
+ */
 void ProcessResponseTimeout(size_t sessionIndex, uint32_t generation)
 {
 	std::optional<ConnectionHandle> expiredHandle;
@@ -1979,6 +2247,13 @@ void ProcessResponseTimeout(size_t sessionIndex, uint32_t generation)
 
 } // namespace
 
+/**
+ * Accept incoming session data from BLE or NFC and defer or process it synchronously.
+ *
+ * On NFC, processes immediately. On BLE, enqueues as SessionDataEvent for deferred processing to
+ * avoid deadlock. Destroys session on invalid length, allocation failure, or queueing error. Caller
+ * must ensure handle is valid; data may be null.
+ */
 void AliroStack::HandleSessionData(ConnectionHandle handle, Data data)
 {
 	if (!handle.IsBle()) {
@@ -2008,6 +2283,10 @@ void AliroStack::HandleSessionData(ConnectionHandle handle, Data data)
 
 #ifdef CONFIG_NCS_ALIRO_BLE_UWB
 
+/**
+ * Finds the session in UwbRanging state, encrypts the message using the BLE reader key, logs a
+ * warning and destroys the session on failure.
+ */
 void AliroStack::SendBleMessage(ConnectionHandle connectionHandle, const uint8_t *data,
 				size_t length) const
 {
@@ -2027,6 +2306,14 @@ void AliroStack::SendBleMessage(ConnectionHandle connectionHandle, const uint8_t
 	}
 }
 
+/**
+ * Encrypt and broadcast a Reader Status Changed message to all BLE sessions in UWB ranging state,
+ * optionally filtering by credential public key.
+ *
+ * Returns the first error encountered, or ALIRO_NO_ERROR if all sessions received the message (or
+ * were not BLE/not ranging). Used to signal reader state changes (e.g., unlocked, secured) during
+ * active UWB sessions.
+ */
 AliroError AliroStack::SendReaderStatusChangedMessage(
 	OperationSource operationSource, ReaderStateByte readerState,
 	const CryptoTypes::PublicKey *accessCredentialPublicKey) const
@@ -2056,6 +2343,13 @@ AliroError AliroStack::SendReaderStatusChangedMessage(
 
 #endif // CONFIG_NCS_ALIRO_BLE_UWB
 
+/**
+ * Dequeue and process a pending Aliro event (ResponseTimeoutEvent or SessionDataEvent) or log and
+ * ignore unknown events.
+ *
+ * Deletes the event after processing. Called by the OS event loop when an Aliro-owned event is
+ * ready. Caller must pass a non-null event pointer; null triggers a warning log.
+ */
 void AliroStack::ProcessEvent(void *event)
 {
 	if (event == nullptr) {

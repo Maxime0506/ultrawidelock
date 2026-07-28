@@ -59,6 +59,7 @@ unlock logic react &mdash; BLE, UWB ranging, the trust gate, the bolt.</span></s
 
 
 def main() -> int:
+    """Copy the digital-twin firmware bundle into the site and inject a call-to-action card into the landing page's explore list."""
     index = SITE / "index.html"
     if not index.is_file():
         print("    no rendered site — nothing to fold the twin into")

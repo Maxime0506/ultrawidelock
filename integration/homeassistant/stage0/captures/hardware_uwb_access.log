@@ -1,0 +1,27 @@
+[00:30:53.657,196] <inf> access_manager: Current Access Document is up to date
+[00:30:53.743,530] <inf> access_manager: ACCESS GRANTED
+[00:30:53.744,750] <inf> woz_aliro_uwb: Aliro session created
+[00:30:54.288,757] <inf> access_manager: Ranging state changed to Ranging
+[00:30:54.488,861] <inf> lock_sim: Unlocking the lock initiated
+[00:30:54.488,891] <inf> app: Unlock action initiated
+POLL result st=00006700 cper=0 stsq=62/24 resp=armed dec=312us
+FINAL result st=0000a700 cper=0 stsq=62/24
+DIST tof=117 d=548mm phone_d=990mm rep1=127795721 rnd2=127795346 rnd1=127795622 rep2=127794778
+GATE sts=62 verdict=24 sts_ok=1
+[00:30:54.588,897] <inf> lock_sim: Unlocking the lock completed
+  ⟐ rx ✓228 ✗624 ⧗13 tx55 · 17cm stale 398s · sts●
+CAD n=852 peak=b50:47(100ms) 2nd=b71:45(142ms) mean=8 pk/mean=5.2
+DIST tof=143 d=670mm phone_d=375mm rep1=127795415 rnd2=127795668 rnd1=127795360 rep2=127795040
+GATE sts=60 verdict=22 sts_ok=1
+DIST tof=60 d=281mm phone_d=-342mm rep1=127795229 rnd2=127795764 rnd1=127795054 rep2=127795346
+GATE sts=62 verdict=24 sts_ok=1
+DIST tof=914 d=4288mm phone_d=4584mm rep1=127795613 rnd2=127795364 rnd1=127797154 rep2=127793246
+GATE sts=58 verdict=20 sts_ok=1
+[00:31:28.979,858] <inf> nfc_st_rfal_impl: RFAL: Active device type = 0
+[00:31:29.146,820] <inf> access_manager: Current Access Document is up to date
+[00:31:29.146,911] <inf> access_manager: ACCESS GRANTED
+[00:31:29.187,622] <inf> access_manager: Handling session termination
+[00:33:08.567,260] <inf> access_manager: Ranging state changed to Destroyed
+[00:33:08.567,352] <inf> lock_sim: Locking the lock initiated
+  ⟐ idle · no ranging · sts○
+uart:~$

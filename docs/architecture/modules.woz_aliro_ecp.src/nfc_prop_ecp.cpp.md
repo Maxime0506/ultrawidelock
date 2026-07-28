@@ -4,8 +4,6 @@
 NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
 Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
 
-**discussed in** [`README.md`](../../../README.md)
-
 ## API
 
 ### `void Crc16A(const uint8_t *data, unsigned int size, uint8_t *result)`

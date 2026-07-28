@@ -15,6 +15,10 @@
 
 #include "aliro_prim.h"
 
+/**
+ * Derive a 4-byte advertisement tag from a 16-byte global reader key, 6-byte BLE address MSB, and
+ * 32-bit UNIX expiry; tag allows a peer to verify freshness without decryption.
+ */
 int aliro_advtag_derive(const uint8_t grk[16], const uint8_t adva_msb[6], uint32_t expiry_unix,
 			uint8_t tag[ALIRO_ADVTAG_LEN])
 {

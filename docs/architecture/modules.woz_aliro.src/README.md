@@ -6,7 +6,9 @@
 | [`modules/woz_aliro/src/aliro_advtag.c`](aliro_advtag.c.md) | Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1), shared by the |
 | [`modules/woz_aliro/src/aliro_apdu.c`](aliro_apdu.c.md) | Aliro APDU TLV codec: builds command payloads (AUTH0, AUTH1, AuthData, EXCHANGE) and parses |
 | [`modules/woz_aliro/src/aliro_apdu.h`](aliro_apdu.h.md) | APDU framing and parsing for the Aliro Access Protocol: builds outbound command APDUs via a |
-| [`modules/woz_aliro/src/aliro_approach.c`](aliro_approach.c.md) | *first commit: "approach: predict time-of-arrival, open the bolt at arrival"* |
+| [`modules/woz_aliro/src/aliro_approach.c`](aliro_approach.c.md) | @file aliro_approach.c |
+| [`modules/woz_aliro/src/aliro_assert.c`](aliro_assert.c.md) | Presence-assertion wire codec + verifier (see aliro_assert.h). Serialises a |
+| [`modules/woz_aliro/src/aliro_assert_ec.c`](aliro_assert_ec.c.md) | Binds the aliro_assert P-256 seam to aliro_prim's ECDSA (see aliro_assert_ec.h). |
 | [`modules/woz_aliro/src/aliro_ble_central.c`](aliro_ble_central.c.md) | Platform-free half of the device-side BLE transport declared in |
 | [`modules/woz_aliro/src/aliro_crypto.c`](aliro_crypto.c.md) | Aliro cryptographic primitives: key derivation (KDF/HKDF), key-block splitting, AES-GCM secure |
 | [`modules/woz_aliro/src/aliro_device.c`](aliro_device.c.md) | Aliro initiator (User-Device) session machine: the implementation behind |

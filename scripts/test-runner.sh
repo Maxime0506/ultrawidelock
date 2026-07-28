@@ -30,16 +30,19 @@ fi
 
 W_IN=66 # inner width of the banner + summary box
 
+# Repeat a character N times.
 hr() { # <char> <count>
 	local out="" i
 	for ((i = 0; i < $2; i++)); do out+="$1"; done
 	printf '%s' "$out"
 }
 
+# Display length of a string in characters (multibyte-aware), excluding ANSI codes.
 dlen() { # display length in characters (multibyte-aware), not bytes
 	printf '%s' "$1" | wc -m | tr -d ' '
 }
 
+# Center text to display width with even padding on both sides.
 center() { # <text> — centred to W_IN
 	local t="$1" len pad
 	len="$(dlen "$t")"
@@ -47,10 +50,12 @@ center() { # <text> — centred to W_IN
 	printf '%*s%s%*s' "$pad" "" "$t" "$((W_IN - pad - len))" ""
 }
 
+# Print one row: cyan borders, bold box-draw characters, and content centered/left-aligned to display width.
 boxed() { # <plain-row-content already W_IN wide, may hold ANSI>
 	printf '  %s%s%s%s%s%s%s\n' "$CYAN$BOLD" "$VT" "$RESET" "$1" "$RESET" "$CYAN$BOLD$VT" "$RESET"
 }
 
+# Print the test runner banner: title, subtitle, and colored box-draw frame across the display width.
 banner() {
 	printf '\n  %s%s%s%s%s\n' "$CYAN$BOLD" "$TL" "$(hr "$HZ" "$W_IN")" "$TR" "$RESET"
 	boxed "$BOLD$(center "OPENALIRO  $DOT  host-side test suites")"
@@ -67,6 +72,7 @@ suite_cmd() {
 	esac
 }
 
+# Return the human-readable label for a suite name.
 suite_label() {
 	case "$1" in
 	firmware) echo "firmware (C host)" ;;
@@ -113,6 +119,7 @@ render_line() { # <line>
 	esac
 }
 
+# Run one test suite: spawn the suite command, optionally stream output line-by-line in serial mode, capture exit code and timing. Write test counts (passed/failed) and metadata to the metafile.
 run_suite() { # <suite> <outfile> <metafile>
 	local s="$1" out="$2" meta="$3" cmd t0 t1 rc=0
 	cmd="$(suite_cmd "$s")"

@@ -40,6 +40,7 @@ JOURNEY = [
     ("Set up", "set-up"),
     ("Set up", "configuring"),
     ("Set up", "troubleshooting"),
+    ("Set up", "home-assistant"),
     ("Hardware", "nrf5340-bringup"),
     ("Hardware", "nrf5340-wiring"),
     ("Hardware", "esp32-bringup"),
@@ -51,8 +52,14 @@ JOURNEY = [
     ("Deep dives", "approach-direction"),
     ("Deep dives", "power-profile"),
     ("Deep dives", "passive-carry-verification"),
+    # presence first, then what a signed distance is actually worth, then the
+    # macOS consumer: each one assumes the previous.
+    ("Deep dives", "presence"),
+    ("Deep dives", "range-integrity"),
+    ("Deep dives", "uwb-mac-login"),
     ("Deep dives", "porting-esp32-phase3"),
     ("Deep dives", "chipset-memory"),
+    ("Deep dives", "home-assistant-internals"),
     ("Porting", "porting"),
     ("Porting", "porting-esp32"),
     ("Porting", "esp32-gotchas"),
@@ -82,11 +89,13 @@ PAGER_CSS = """<style id="gv-pager-css">
 
 
 def fail(msg: str) -> int:
+    """Print an error message to stderr prefixed with "docs_nav: " and return 1."""
     print(f"docs_nav: {msg}", file=sys.stderr)
     return 1
 
 
 def page_title(slug: str) -> str:
+    """Extract the page title from the <title> tag in an HTML file by path slug; return the slug itself if no title is found."""
     m = TITLE_RE.search((SITE / f"{slug}.html").read_text())
     return m.group(1) if m else slug
 
@@ -127,6 +136,7 @@ def curate_index(index: Path) -> int | None:
 
 
 def add_pagers() -> int | None:
+    """Inject previous/next navigation cards before </main> on each journey page, updating the eyebrow label to the guide bucket name (except on the start page); do nothing if pager already present."""
     added = kept = 0
     for i, (bucket, slug) in enumerate(JOURNEY):
         page = SITE / f"{slug}.html"
@@ -171,6 +181,7 @@ def add_pagers() -> int | None:
 
 
 def main() -> int:
+    """Check that the rendered site exists, rebuild the landing-page guides into journey buckets, inject previous/next pagers into journey pages, report results."""
     index = SITE / "index.html"
     if not index.is_file():
         print("    no rendered site — nothing to curate")

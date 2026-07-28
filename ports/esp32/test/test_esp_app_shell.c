@@ -70,6 +70,7 @@ bool woz_uwb_trusted_range_cm(int32_t *cm_out)
 
 static int s_prov_prints, s_trust_last_rc, s_trust_last_calls;
 static int s_stepup_arms, s_stepup_statuses, s_reader_start_calls, s_reader_start_rc;
+static int s_status_ticks;
 
 void aliro_reader_prov_print(void)
 {
@@ -96,6 +97,15 @@ int aliro_reader_start(void)
 {
 	s_reader_start_calls++;
 	return s_reader_start_rc;
+}
+
+/* The app's forever-loop drives this every pass to release a held Wallet status.
+ * Counted rather than ignored: the loop calling it is the whole delivery path,
+ * and a silent stub would let a future edit drop the call unnoticed. */
+void aliro_reader_status_tick(int64_t now_ms)
+{
+	(void)now_ms;
+	s_status_ticks++;
 }
 
 /* app_main's forever-loop: break out after a few fake vTaskDelay ticks. */
@@ -244,6 +254,7 @@ static void t_app_main(void)
 	fake_esp_reset();
 	s_start_calls = 0;
 	s_reader_start_calls = 0;
+	s_status_ticks = 0;
 	fake_delay_calls = 0;
 	s_have_range = true;
 	fake_delay_hook = main_break;
@@ -255,6 +266,9 @@ static void t_app_main(void)
 	okc("app_main starts the reader", s_reader_start_calls == 1);
 	okc("app_main starts the shell", fake_repl_started == 1);
 	okc("range poll loop ran", fake_delay_calls >= 3);
+	/* Once per pass, not once per boot: a held Wallet status is released by the
+	 * loop, so a tick that only fires at startup would never deliver one. */
+	okc("status tick runs every pass", s_status_ticks >= fake_delay_calls);
 }
 
 int main(void)

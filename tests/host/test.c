@@ -1,13 +1,48 @@
 /** @file test.c — shared host-test harness implementation. */
 #include "test.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 int t_fail;
 int t_pending;
 int t_pass;
+
+/* Saved fd 1 while muted, -1 when not. See the contract in test.h. */
+static int t_stdout_saved = -1;
+
+void t_mute(void)
+{
+	int devnull;
+
+	if (t_stdout_saved >= 0) {
+		return;
+	}
+	fflush(stdout);
+	devnull = open("/dev/null", O_WRONLY);
+	if (devnull < 0) {
+		return; /* no /dev/null: keep the noise rather than lose the output */
+	}
+	t_stdout_saved = dup(STDOUT_FILENO);
+	if (t_stdout_saved >= 0) {
+		dup2(devnull, STDOUT_FILENO);
+	}
+	close(devnull);
+}
+
+void t_unmute(void)
+{
+	if (t_stdout_saved < 0) {
+		return;
+	}
+	fflush(stdout);
+	dup2(t_stdout_saved, STDOUT_FILENO);
+	close(t_stdout_saved);
+	t_stdout_saved = -1;
+}
 
 void t_hex(char *dst, const uint8_t *b, size_t n)
 {

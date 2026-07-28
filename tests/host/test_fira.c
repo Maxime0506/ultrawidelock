@@ -132,6 +132,80 @@ void test_fira(void)
 	fira_session_set_ccc_range_cm(401, 47u); /* 3 -> K reached again */
 	T_OK("sat.full_rebuild_trusted", fira_session_range_trusted());
 
+	t_group("layer 2: evidence recorded with the range");
+	struct fira_range_integrity ig;
+
+	fira_session_reset_ranges();
+	T_OK("ig.none_before_a_range", !fira_session_last_range_integrity(&ig));
+	/* Latches with no preceding evidence call must read as a failed STS. This is
+	 * the fail-closed default the whole design rests on: a producer that says
+	 * nothing about correlation has not said it was good. Run a full K of them,
+	 * so the verdict is being denied by the missing evidence and not merely by
+	 * a consensus that has not built up yet. */
+	for (unsigned i = 0; i < FIRA_RANGE_TRUST_K; i++) {
+		fira_session_set_ccc_range_cm(100 + (int32_t)i, 60u + i);
+	}
+	T_OK("ig.latched", fira_session_last_range_integrity(&ig));
+	T_OK("ig.trust_built_without_evidence", fira_session_range_trusted());
+	T_OK("ig.no_evidence_is_not_ok", !ig.sts_ok);
+	/* K good blocks earn the verdict, and not one block sooner: the evidence
+	 * window is the same K that layer 4 uses for trust. */
+	fira_session_reset_ranges();
+	fira_session_set_ccc_range_sts(0, 200);
+	fira_session_set_ccc_range_cm(100, 61u);
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.one_good_block_insufficient", !ig.sts_ok);
+	fira_session_set_ccc_range_sts(0, 150);
+	fira_session_set_ccc_range_cm(101, 62u);
+	fira_session_set_ccc_range_sts(0, 180);
+	fira_session_set_ccc_range_cm(102, 63u);
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.k_good_blocks_ok", ig.sts_ok);
+	T_EQ("ig.quality_is_the_worst_in_the_run", ig.sts_quality, 150);
+	T_EQ("ig.trust_level_reported", ig.trust_level, FIRA_RANGE_TRUST_K);
+	/* One suspect block drops the verdict even though the distances still agree
+	 * and layer 4 trust is untouched. Without this, an attacker only has to land
+	 * a single spoofed block inside an otherwise clean run. */
+	fira_session_set_ccc_range_sts(-1, 200);
+	fira_session_set_ccc_range_cm(103, 64u);
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.one_suspect_block_clears_it", !ig.sts_ok);
+	T_OK("ig.layer4_trust_survives_it", fira_session_range_trusted());
+	/* ...and it heals after K clean blocks, rather than poisoning a stationary
+	 * phone until the distance happens to jump. */
+	fira_session_set_ccc_range_sts(0, 210);
+	fira_session_set_ccc_range_cm(104, 65u);
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.heal.not_yet", !ig.sts_ok);
+	fira_session_set_ccc_range_sts(0, 220);
+	fira_session_set_ccc_range_cm(105, 66u);
+	fira_session_set_ccc_range_sts(0, 230);
+	fira_session_set_ccc_range_cm(106, 67u);
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.heal.after_k_clean_blocks", ig.sts_ok);
+	T_EQ("ig.heal.quality_forgets_the_bad_run", ig.sts_quality, 210);
+	/* Evidence is consumed, never inherited: a second latch with no fresh call
+	 * must not reuse the previous block's good verdict. */
+	fira_session_reset_ranges();
+	fira_session_set_ccc_range_sts(0, 200);
+	fira_session_set_ccc_range_cm(110, 70u);
+	fira_session_set_ccc_range_cm(111, 71u);
+	fira_session_set_ccc_range_cm(112, 72u);
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.not_inherited", !ig.sts_ok);
+	/* An implausible block clears the evidence as well as the trust. */
+	fira_session_reset_ranges();
+	for (unsigned i = 0; i < FIRA_RANGE_TRUST_K; i++) {
+		fira_session_set_ccc_range_sts(0, 200);
+		fira_session_set_ccc_range_cm(120 + (int32_t)i, 80u + i);
+	}
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.clean_run_ok", ig.sts_ok);
+	fira_session_set_ccc_range_sts(0, 200);
+	fira_session_set_ccc_range_cm(-500, 90u); /* Ghost-Peak: rejected by layer 1 */
+	fira_session_last_range_integrity(&ig);
+	T_OK("ig.implausible_clears_evidence", !ig.sts_ok);
+
 	t_group("range listener fires on accepted latches only");
 	s_listener_hits = 0;
 	fira_session_set_range_listener(range_listener);

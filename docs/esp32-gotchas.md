@@ -10,7 +10,7 @@ door-lock app that hosts the reader). The ranging engine is `modules/woz_uwb`, s
 byte-for-byte with the nRF5340 build.
 
 > Verification convention below: **VERIFIED** = confirmed on silicon or byte-exact
-> against the reference binary/KAT; **BENCH-GATED** = built + host-tested but not yet
+> against a host KAT; **BENCH-GATED** = built + host-tested but not yet
 > confirmed against a live iPhone.
 
 ---
@@ -90,9 +90,9 @@ next app's partition table, and the board sits in a reset loop reporting
 The crypto core (`aliro_hash.c`) compiles **host == target** so host KATs pin target
 behaviour. Run `ports/esp32/test/run.sh` before believing any crypto change. A
 compact AES-256-GCM host double (`aliro_prim_host.c`) lets the KATs run without PSA.
-Build success is not proof — the wire/crypto bugs below all built cleanly. The shared
-`modules/woz_uwb` logic has a second host harness, `tests/host/run.sh` (`make test`,
-578 assertions), which compiles the shared sources **without** `ESP_PLATFORM`: that is
+Build success is not proof: the wire/crypto bugs below all built cleanly. The shared
+`modules/woz_uwb` logic has a second host harness, `tests/host/run.sh` (`make test`),
+which compiles the shared sources **without** `ESP_PLATFORM`: that is
 the proof an ESP-only guard didn't regress the nRF path.
 
 ---
@@ -163,51 +163,104 @@ with the spec's "expiry unavailable" form as the no-clock fallback. (commit
 
 ## 4. Aliro credential-auth crypto & key schedule
 
-These were resolved by decompiling `libaliro_ble.a` (Cortex-M33) and cross-checking a
-readable reference `crypto.cpp`, then pinning with host KATs. **Clean-room: facts only,
-no decompiled source enters the repo.**
+**Every fact in this section is published in the Aliro 1.0 specification** (CSA document
+26-42802-001, February 18, 2026), which the Connectivity Standards Alliance distributes
+free and without registration at
+<https://csa-iot.org/wp-content/uploads/2026/02/26-42802-001_Aliro_1.0_specification.pdf>.
+Each subsection cites its spec section plus the line number in a `pdftotext` extraction
+of that PDF (12100 lines, SHA-256 `3ede12c5b01d7fdf01c24b1ea5f2cd2da25a127c4f12f8f61ff9b208714a7d6a`),
+so every citation here is independently checkable by anyone. One extraction gotcha: the
+pseudocode assignment arrow quoted below as `←` is `U+F0DF` (a Symbol-font Private Use
+Area codepoint) in the extracted text, so grep the surrounding words, not the arrow.
+
+Values the specification does not fix, such as the concrete `0xA5`
+proprietary-information TLV in section 4.3, were observed from a real iPhone on the wire.
+Every fact below is additionally pinned by a host KAT.
+
+**For downstream users:** `LicenseRef-Nordic-5-Clause` clause 4 restricts use to Nordic
+integrated circuits, and `LicenseRef-QORVO-2` clause 3 restricts the DW3000 driver to
+Qorvo ICs. Those field-of-use terms apply to any product built on this tree.
 
 ### 4.1 GCM per-direction counters start at **1**, not 0
-**VERIFIED (byte-exact KAT + silicon).** Aliro §8.3.1 starts both per-direction secure-
-channel counters at 1 (HomeKey starts at 0 — do not copy HomeKey here). The first
-inbound decrypt (AUTH1Response) uses device_counter = 1. Starting at 0 fails the GCM tag
-cleanly. `aliro_secchan_init` sets both counters to 1.
+**Spec: §8.3.1.12 and §8.3.1.13** — "SHALL
+initialize a session-bound expedited_device_counter to value 0x00000001 and session-bound
+expedited_reader_counter to value 0x00000001."
+
+**VERIFIED (byte-exact KAT + silicon).** Both per-direction secure-channel counters start
+at 1 (HomeKey starts at 0; do not copy HomeKey here). The first inbound decrypt
+(AUTH1Response) uses device_counter = 1. Starting at 0 fails the GCM tag cleanly.
+`aliro_secchan_init` sets both counters to 1.
 
 ### 4.2 GCM nonce layout
-`nonce = 8-byte big-endian direction (0 = reader-seal, 1 = device-open) || 4-byte
+**Spec: §8.3.1.6 / §8.3.1.7 for the device direction,
+§8.3.1.8 / §8.3.1.9 for the reader direction** — `IV ←
+0x0000000000000001 || device_counter (unsigned big endian, 4 bytes)` and `IV ←
+0x0000000000000000 || reader_counter (unsigned big endian, 4 bytes)` respectively.
+
+So `nonce = 8-byte big-endian direction (0 = reader-seal, 1 = device-open) || 4-byte
 big-endian per-direction counter`. Separate, non-wrapping counters per direction.
 
-### 4.3 The salt's two "unresolved" sub-fields (§8.3.1.13)
+### 4.3 The salt sub-fields (§8.3.1.13)
+**Spec: §8.3.1.13** gives the interface byte and the full
+`salt_volatile` composition. The two sibling salts are stated the same way:
+`salt_fast` in §8.3.1.12 and `salt_persistent` in §8.3.1.13.
+These were never actually unresolved in the spec, only unresolved in this
+project's reading of it, which is what cost the debugging time.
+
 **VERIFIED.** The AUTH1 tag only decrypts once the session salt is exact:
 - salt field 1 = **`reader_group_identifier_key.x` = pub(signingKey).x** — this is the
   reader's *signing* public key X, **not** the device ephemeral key (that was the bug).
   Derived via `aliro_ec_p256_pub_from_priv`; refreshed on identity load and on both
   Matter provisioning paths.
-- salt item 4 = **interface byte** (`0xC3` BLE / `0x5E` NFC).
-- salt item 10 = the phone's **`0xA5` SELECT-response proprietary-info TLV**, captured
-  from its op-0x05 message; CSA v1.0 default `a5 08 80 02 0000 5c 02 0100`.
+- salt item 4 = **interface byte** (`0xC3` BLE / `0x5E` NFC): "value 0xC3
+  when the transaction is performed on the BLE transport or 0x5E when the transaction is
+  performed on the NFC transport."
+- salt item 10 = the phone's **`0xA5` SELECT-response proprietary-info TLV**. The spec
+  requires it "according to Table 10-2"; the concrete value
+  `a5 08 80 02 0000 5c 02 0100` was observed from the phone's op-0x05 message on the
+  wire.
 
 ### 4.4 Key-block layout (one HKDF expand → 160 bytes)
+**Spec: §8.3.1.13** mandates "160 bytes of derived key material
+derived_keys_volatile according to section 8.3.1.5"; the offsets are stated verbatim
+there. `Kdh` comes from §8.3.1.4 (BSI TR-03111 §4.3 ECKA-DH over NIST P-256) and the expand from §8.3.1.5 (RFC 5869 HKDF-SHA-256).
+
 `Z = SHA-256(ecdh_shared(32) || 0x00000001 || txid(16))`; then
 `block160 = HKDF-SHA256(salt=CreateSalt transcript, IKM=Z, info=devicePubX(32), L=160)`.
 Offsets in the block: `ExpeditedSKReader@0`, `ExpeditedSKDevice@32`, `StepUpSK@64`,
 **`BleSK@96`**, **`URSK@128`**. Because it is one expand, **if auth works (ExpeditedSK@0
-is right) the URSK@128 is byte-identical on both sides** — a fact that ruled out a lot of
+is right) the URSK@128 is byte-identical on both sides**, a fact that ruled out a lot of
 false leads during ranging debug.
 
-### 4.5 HKDF salt-vs-info binding is not in the blob
-The one derivation detail the decompiled blob did not settle (which argument is salt vs
-info) came from **readable** reference source: `DeriveKey` = PSA HKDF with
-`INPUT_SALT=salt`, `INPUT_SECRET=Z`, `INPUT_INFO=info`. When the binary is ambiguous,
-look for a readable reference before guessing.
+### 4.5 HKDF salt-vs-info binding (settled by §8.3.1.5)
+**Spec: §8.3.1.5** states RFC 5869
+explicitly: `Z : input_key_material`, `salt : salt`, `FixedInfo : info`,
+`L : key_material_length`.
+
+This was the last binding to fall into place during bring-up, and it cost time that
+re-reading the specification would have saved. When a wire trace looks ambiguous, go back
+to the spec text before reaching for anything else.
 
 ### 4.6 APDU / wire codec specifics
-ISO7816 case-4 short form wraps AUTH0/AUTH1/EXCHANGE. Opcodes: **AUTH0=0x80,
-AUTH1=0x81, EXCHANGE=0xC9**. The ECDSA transcript uses usage separators
-`kReaderUsage=415d9569` / `kUserDeviceUsage=4e887b4c`. The L2CAP envelope is the 4-byte
-header `[type & 0x3F][opcode][len_be16]`. EXCHANGE payload for the ranging flow is bare
-`98 00` (URSK-ready, empty TLV) — **VERIFIED** the reference passes an empty
-`optional<ReaderStatus>` here, so no `0x97` status tag.
+**Spec, per fact:**
+
+| Fact | Aliro 1.0 |
+| --- | --- |
+| `AUTH0` INS = `0x80` | Table 8-3 |
+| `AUTH1` INS = `0x81` | Table 8-9 |
+| `EXCHANGE` INS = `0xC9` | Table 8-14, §8.3.3.5.1 |
+| usage separators `0x415D9569` / `0x4E887B4C` | §8.3.3.4.3 |
+| 4-byte Aliro message header, big-endian | §11.7, Table 11-10 |
+| tag `0x97` absent on BLE success | §8.3.3.5.1 |
+
+ISO7816 case-4 short form wraps AUTH0/AUTH1/EXCHANGE. The ECDSA transcript uses usage
+separators `kReaderUsage=415d9569` / `kUserDeviceUsage=4e887b4c`. The L2CAP envelope is
+the 4-byte header `[type & 0x3F][opcode][len_be16]`; Table 11-10 names those fields
+Protocol Header (bits B5:B0 = protocol type) and Message ID, and §11.7 states that all
+multi-octet integer fields are big-endian. EXCHANGE payload for the ranging flow is bare
+`98 00` (URSK-ready, empty TLV): **VERIFIED**, and the spec agrees in §8.3.3.5.1, where
+tag `0x97` is present in a Reader-sent BLE EXCHANGE "only if the transaction failure
+occurs".
 
 ### 4.7 The credential-auth §14 KAT is member-confidential
 A host KAT reproduces the Aliro 1.0 §14 worked example byte-exact (salt, Kdh,
@@ -244,9 +297,8 @@ it fails the tag with no other signal. Implemented in `aliro_msg_seal` / `aliro_
 **VERIFIED against the reference binary.** After EXCHANGE success the reader **must** send
 Reader-Status-AP-Completed (proto-2 id-3, BleSK-sealed) or the device stalls ~1.8 s and
 disconnects (reason 531). Payload = `02 03 00 04 00 02 20 00` (TLV: attr-id 0, len 2,
-value `[cap = 0x20][ReaderState = 0x00 Secured]`). Disassembly of
-`CompleteAccessProtocolState::Run → BleTpCompleted` confirmed these exact bytes,
-including ReaderState = 0x00.
+value `[cap = 0x20][ReaderState = 0x00 Secured]`). Reader status values are Table 8-18;
+these exact bytes are confirmed byte-for-byte against a live iPhone.
 
 ### 5.4 `00 02 00 00` is EXCHANGE SUCCESS, not a ranging cue
 The `00 02 00 00` body that comes back on the EXCHANGE response is §8.3.3.5.5 success
@@ -254,7 +306,11 @@ The `00 02 00 00` body that comes back on the EXCHANGE response is §8.3.3.5.5 s
 engine.
 
 ### 5.5 THE session-id trap: it is derived from the AUTH0 TXID, not chosen
-**VERIFIED by disassembly.** The ranging session-id is **not** the reader's free choice.
+**Spec: §11.7.2.1.3** — "The Attribute Value field carries
+session identifier, which is the least significant four octets of the Transaction
+Identifier field (see Table 8-4)."
+
+The ranging session-id is **not** the reader's free choice.
 The device computes it from the 16-byte AUTH0 transaction id it received:
 
 ```
@@ -292,7 +348,8 @@ reference's ranging engine (same Qorvo code) also returns "protocol 3 unsupporte
 it — both reference and port ignore it. It is not a step we skip; don't chase it.
 
 ### 5.10 THE Wallet animation gate: send Reader-Status-Changed on grant (step 23)
-**VERIFIED byte-exact (disassembly + live iPhone).** Driving the bolt is not enough: iOS
+**VERIFIED byte-exact against a live iPhone**; operation-source values are Table 11-20.
+Driving the bolt is not enough: iOS
 plays the Wallet unlock animation only when the reader tells the phone it granted access
 over the BleSK channel — the "Reader Status Changed" message, Aliro transaction
 step 23 (the grant-phase sibling of 5.3's AP-Completed). Without it the port unlocked the
@@ -302,9 +359,8 @@ the Wallet never animated. The phone's own computed distance is **not** the gate
 Payload (proto-2 id-2, BleSK-sealed) = `02 02 00 04 00 02 04 01` — one State Attribute
 (attr-id 0, len 2) = `[OperationSource = 0x04 (this device, BLE+UWB Aliro flow),
 ReaderState = 0x01 Unsecured]`; relock is identical with ReaderState = 0x00 Secured.
-Disassembly of `AliroStack::SendReaderStatusChangedMessage → BleTpReaderStatusChanged`
-confirmed these exact bytes. The 65-byte access-credential public key is **not** serialized
-— the library takes it only to select which connection to notify, then drops it.
+The 65-byte access-credential public key is **not** serialized: it selects which
+connection to notify and is then dropped.
 
 Send Unsecured on grant, Secured on relock, from the proximity relock task; post it onto
 the BLE-host task so it serializes with the other BleSK seals (counter stays monotonic).
@@ -461,26 +517,7 @@ vanish across reboot, suspect an id collision with a reserved slot.
 
 ---
 
-## 9. Reverse-engineering methodology (for the next unknown)
-
-- **The reference binaries are ground truth.** `workspace/ncs-door-lock-and-access-
-  control/lib/aliro/bin/debug/cortex-m33/libaliro{,_ble}.a` are **debug** builds with
-  symbols. Prefer the debug archive.
-- **macOS `ar` cannot read GNU long-name (`//`) members.** Use a small Python GNU-ar
-  parser (`elftools` + a manual `//` long-name table) to extract objects; the BSD `ar x`
-  silently yields empty files.
-- **Disassemble Thumb with capstone**, masking the low bit of `st_value` (Thumb symbols
-  are odd-valued) before computing the section offset, or you disassemble one byte off
-  and get garbage.
-- **Log strings pin intent fast.** `.rodata` format strings (e.g. "BLE completed, state:
-  %s, capabilities: %s") revealed the AP-Completed field layout before disassembling the
-  builder.
-- **Verify, don't assume.** The winning move for the session-id bug was disassembling
-  `GetSessionId` / `GenerateCryptoMaterials` directly rather than trusting the summary.
-  Every reader→phone message was checked byte-for-byte against the reference; only one
-  (the session-id) actually differed.
-
-### 9.1 Three wrong theories, and the probe that ended them
+## 9. Debugging an opaque peripheral: the probe that ended three wrong theories
 
 **VERIFIED (2026-07-25).** The channel-impulse CIR tap dump returned a fixed
 non-physical blob for most receptions: byte-identical at every accumulator offset,

@@ -27,6 +27,9 @@
 #include <aliro/errors.h>
 #include <aliro/types.h>
 
+/**
+ * C++ namespace for NFC transport: Init, Start, Stop, Send (Aliro::Data), Terminate.
+ */
 namespace WozNfc
 {
 

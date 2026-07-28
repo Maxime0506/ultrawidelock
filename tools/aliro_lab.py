@@ -103,7 +103,11 @@ BUDGET_BOLT_MS = 4000
 
 
 class Event:
+    """A timestamped firmware trace event: monotonic microsecond offset from capture start, event name, attributes dictionary, and source line number in the firmware log.
+    Constructed by the parser; used to build transactions and compute timing deltas.
+    """
     def __init__(self, t_us, name, attrs, line_no):
+        """Initialize an Event with its timestamp in microseconds, symbolic name, attribute dictionary (typically containing proto/id/len/payload keys), and line number in the source trace."""
         self.t_us = t_us
         self.name = name
         self.attrs = attrs
@@ -114,11 +118,13 @@ class Transaction:
     """One walk-up: the events between a session.start and its session.end."""
 
     def __init__(self, index):
+        """Initialize a Transaction with a unique walk-up index, an empty event list, and the open flag set (no session.end seen yet)."""
         self.index = index
         self.events = []
         self.open = True  # no session.end seen (truncated capture)
 
     def finish(self):
+        """Sort events by timestamp, extract phase markers (ph.* names, first occurrence only, tracking duplicates), infer flow type (fast or standard) from flow.* markers, and collect trusted range samples (cm values from range events). Skip reason "incomplete" set until flow type is determined."""
         self.events.sort(key=lambda e: e.t_us)
         # First stamp of each phase; duplicates recorded for the `once` check.
         self.phases = {}
@@ -140,15 +146,22 @@ class Transaction:
                        if e.name == "range" and "cm" in e.attrs]
 
     def has(self, name):
+        """Return true if the transaction contains at least one event with the given symbolic name; false otherwise.
+        Used to check for required or optional milestones in the walk-up sequence.
+        """
         return any(e.name == name for e in self.events)
 
     def first(self, name):
+        """Return the first event in this transaction matching the given symbolic name, or None if no such event exists.
+        Used to locate anchor events like session.start or connect for timestamp calculations.
+        """
         for e in self.events:
             if e.name == name:
                 return e
         return None
 
     def named(self, name):
+        """Return a list of all events in this transaction with the given symbolic name."""
         return [e for e in self.events if e.name == name]
 
     def t0(self):
@@ -159,9 +172,11 @@ class Transaction:
         return start.t_us if start else self.events[0].t_us
 
     def offset_ms(self, key):
+        """Compute the millisecond offset from the walk-up zero (connect or session start) to a given phase key. Divide microsecond delta by 1000."""
         return (self.phases[key] - self.t0()) / 1000.0
 
     def last_phase(self):
+        """Return the key of the last phase (in PHASES order) that was observed in this transaction, or None if no phases are present."""
         last = None
         for key, _ in PHASES:
             if key in self.phases:
@@ -170,6 +185,7 @@ class Transaction:
 
 
 def parse_events(text):
+    """Parse firmware log text line-by-line, extracting Aliro Lab events via regex (timestamp, event name, attribute key=value pairs). Return a list of Event objects sorted by line number."""
     events = []
     for line_no, line in enumerate(text.splitlines(), 1):
         m = ALAB_RE.search(line)
@@ -234,6 +250,7 @@ def run_checks(txn):
     results = []
 
     def add(cid, cls, ok, detail, applicable=True):
+        """Append a check result (id, class, status, detail) to results. Status is "n/a" if not applicable, "pass" if ok is true, otherwise the class string (warn or fail)."""
         status = "n/a" if not applicable else ("pass" if ok else cls)
         results.append((cid, cls, status, detail))
 
@@ -361,6 +378,7 @@ def run_checks(txn):
 
 
 def worst_status(all_checks):
+    """Return the worst (most critical) status among all checks across all transactions: "fail" if any check failed, else "warn" if any warned, else "pass"."""
     statuses = [s for checks in all_checks for (_, _, s, _) in checks]
     if "fail" in statuses:
         return "fail"
@@ -370,13 +388,16 @@ def worst_status(all_checks):
 
 
 def fmt_ms(us_delta):
+    """Format a microsecond delta as milliseconds (one decimal place)."""
     return "%.1f" % (us_delta / 1000.0)
 
 
 # ---- terminal report ----
 
 def render_terminal(name, txns, checks_by_txn, use_color):
+    """Render transaction summary, phase timeline, approach ranges, and check results as colored terminal output (ANSI colors if stdout is a TTY)."""
     def paint(status, text):
+        """Wrap text in ANSI color code if use_color is true, otherwise return unchanged. Codes: "32" for green, "33" for yellow, "31" for red."""
         if not use_color:
             return text
         code = {"pass": "32", "warn": "33", "fail": "31"}.get(status)
@@ -541,9 +562,11 @@ def render_approach_svg(txn):
     ymin, ymax = max(0.0, min(ys) - ypad), max(ys) + ypad
 
     def sx(x):
+        """Compute the screen x-coordinate (pixels) for a data value x in the range [xmin, xmax], scaling to the plot width minus left/right padding."""
         return pad_l + (width - pad_l - pad_r) * (x - xmin) / (xmax - xmin)
 
     def sy(y):
+        """Map a y-coordinate to SVG pixel space, scaling from data range [ymin, ymax] into the chart's vertical span minus padding."""
         return pad_t + (height - pad_t - pad_b) * (ymax - y) / (ymax - ymin)
 
     s = ['<svg class="approach" viewBox="0 0 %d %d" role="img" '
@@ -575,6 +598,7 @@ def render_approach_svg(txn):
 
 
 def render_html(name, txns, checks_by_txn):
+    """Render a transaction log and check results as a self-contained HTML document with styling, phase timeline, ranging approach chart, and tabular check details."""
     e = html.escape
     parts = []
     parts.append("<style>%s</style>" % _CSS)
@@ -664,6 +688,7 @@ def render_html(name, txns, checks_by_txn):
 
 
 def main(argv):
+    """Parse command-line arguments, read firmware trace log, extract walk-up transactions and run checks, optionally export CIR tap data to CSV, emit terminal and HTML reports, return exit code based on check results."""
     # Optional --cir <path> anywhere before the positionals; strip it out first
     # so the existing positional parsing is unchanged.
     cir_path = None
