@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "integration" / "homeassistant" / "src"))
 
-from openaliro_ha.agent import AgentError, doctor, run_device  # noqa: E402
+from openaliro_ha.agent import AgentError, _DistanceThrottle, doctor, run_device  # noqa: E402
 from openaliro_ha.config import AgentConfig, DeviceConfig, MqttConfig  # noqa: E402
 from openaliro_ha.models import AccessEvent, DistanceReading  # noqa: E402
 from openaliro_ha.serial_session import SessionState  # noqa: E402
@@ -133,6 +133,41 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(publisher.access, [AccessEvent("granted")])
         self.assertTrue(session.closed)
         self.assertTrue(publisher.closed)
+
+
+@unittest.skipUnless(os.environ.get("HA") == "1", "requires explicit HA=1")
+class DistanceThrottleTests(unittest.TestCase):
+    def setUp(self):
+        self.now = 0.0
+        self.throttle = _DistanceThrottle(
+            min_interval=1.0, significant_change_mm=100, clock=lambda: self.now
+        )
+
+    def test_first_reading_always_publishes(self):
+        self.assertTrue(self.throttle.allows(500))
+
+    def test_small_change_inside_the_interval_is_dropped(self):
+        self.throttle.allows(500)
+        self.now = 0.5
+        self.assertFalse(self.throttle.allows(540))
+
+    def test_large_change_is_published_immediately(self):
+        self.throttle.allows(500)
+        self.now = 0.1
+        self.assertTrue(self.throttle.allows(4288))
+
+    def test_small_change_publishes_once_the_interval_elapses(self):
+        self.throttle.allows(500)
+        self.now = 1.0
+        self.assertTrue(self.throttle.allows(540))
+
+    def test_drops_do_not_extend_the_interval(self):
+        self.throttle.allows(500)
+        for moment in (0.2, 0.4, 0.6, 0.8):
+            self.now = moment
+            self.assertFalse(self.throttle.allows(510), moment)
+        self.now = 1.0
+        self.assertTrue(self.throttle.allows(510))
 
 
 if __name__ == "__main__":

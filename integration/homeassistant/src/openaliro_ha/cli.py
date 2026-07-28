@@ -3,9 +3,10 @@
 import argparse
 import asyncio
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
-from typing import Sequence
+from typing import Optional, Sequence
 
 from . import __version__
 from .agent import AgentError, doctor as run_doctor, probe_device, run as run_agent
@@ -19,6 +20,7 @@ from .serial_transport import SerialPort, discover_serial_ports
 CONSOLE_SCHEMA = "streaming-v1"
 MAX_REPLAY_BYTES = 1024 * 1024
 READY_STATES = frozenset({SessionState.READY_STREAMING, SessionState.READY_COMPATIBILITY})
+DEVICE_PATH_RE = re.compile(r"/dev/\S+")
 
 
 def _observation_dict(observation: Observation) -> dict[str, object]:
@@ -83,14 +85,20 @@ def _candidate_label(index: int, port: SerialPort) -> str:
     return f"{index}: {product}, interface {interface}, USB {vid_pid}"
 
 
-def _probe_candidate(port: SerialPort) -> bool:
-    """Report whether one candidate answers the console handshake."""
+def _probe_candidate(port: SerialPort) -> Optional[str]:
+    """Return None when a candidate answers, else why it did not.
+
+    The reason is stripped of device paths so the picker keeps hiding them.
+    """
 
     probe = DeviceConfig(device_id="probe", serial_port=port.device, serial_identity=port.identity)
     try:
-        return asyncio.run(probe_device(probe)) in READY_STATES
-    except (AgentError, ConfigError):
-        return False
+        state = asyncio.run(probe_device(probe))
+    except (AgentError, ConfigError) as error:
+        cause = error.__cause__
+        reason = f"{error} ({cause})" if cause is not None else str(error)
+        return DEVICE_PATH_RE.sub("the port", reason)
+    return None if state in READY_STATES else f"reached {state.value}"
 
 
 def _select_port(input_fn: object, output_fn: object) -> SerialPort:
@@ -101,10 +109,11 @@ def _select_port(input_fn: object, output_fn: object) -> SerialPort:
     labels = []
     ready = []
     for index, port in enumerate(candidates, start=1):
-        answered = _probe_candidate(port)
-        labels.append(f"{_candidate_label(index, port)} -> {'ready' if answered else 'no response'}")
+        reason = _probe_candidate(port)
+        outcome = f"no response: {reason}" if reason is not None else "ready"
+        labels.append(f"{_candidate_label(index, port)} -> {outcome}")
         output_fn(f"  {labels[-1]}")  # type: ignore[operator]
-        if answered:
+        if reason is None:
             ready.append((index, port))
     if len(ready) == 1:
         index, port = ready[0]

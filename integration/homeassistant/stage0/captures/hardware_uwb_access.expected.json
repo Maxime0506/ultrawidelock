@@ -1,0 +1,34 @@
+[
+  {
+    "kind": "access",
+    "verdict": "granted"
+  },
+  {
+    "kind": "range",
+    "block": null,
+    "distance_mm": 548,
+    "tof": 117
+  },
+  {
+    "kind": "range",
+    "block": null,
+    "distance_mm": 670,
+    "tof": 143
+  },
+  {
+    "kind": "range",
+    "block": null,
+    "distance_mm": 281,
+    "tof": 60
+  },
+  {
+    "kind": "range",
+    "block": null,
+    "distance_mm": 4288,
+    "tof": 914
+  },
+  {
+    "kind": "access",
+    "verdict": "granted"
+  }
+]

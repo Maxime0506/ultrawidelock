@@ -16,9 +16,15 @@ from unittest.mock import AsyncMock, patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "integration" / "homeassistant" / "src"))
 
-from openaliro_ha.cli import _configure, main  # noqa: E402
+from openaliro_ha.cli import _configure, _select_port, main  # noqa: E402
 from openaliro_ha.agent import AgentError  # noqa: E402
-from openaliro_ha.config import AgentConfig, DeviceConfig, MqttConfig, write_config  # noqa: E402
+from openaliro_ha.config import (  # noqa: E402
+    AgentConfig,
+    ConfigError,
+    DeviceConfig,
+    MqttConfig,
+    write_config,
+)
 from openaliro_ha.serial_session import SessionState  # noqa: E402
 from openaliro_ha.serial_transport import SerialPort  # noqa: E402
 
@@ -161,6 +167,29 @@ serial_port = "private-path"
             rendered = config_path.read_text(encoding="utf-8")
         self.assertIn("Select the OpenAliro console interface:", output)
         self.assertIn('serial_identity = "' + "b" * 24 + '"', rendered)
+
+    def test_probe_failure_reason_is_shown_without_the_device_path(self):
+        failure = AgentError("selected serial interface is not a compatible OpenAliro console")
+        failure.__cause__ = RuntimeError("/dev/cu.usbmodem0001 is busy")
+        candidate = SerialPort(
+            device="private-path",
+            identity="0123456789abcdef01234567",
+            vid=0x1366,
+            pid=0x1051,
+            interface=None,
+            product="J-Link",
+        )
+        output = []
+        with patch("openaliro_ha.cli.discover_serial_ports", return_value=(candidate,)), patch(
+            "openaliro_ha.cli.probe_device", new=AsyncMock(side_effect=failure)
+        ):
+            with self.assertRaises(ConfigError):
+                _select_port(lambda _message: "9", output.append)
+        rendered = "\n".join(output)
+        self.assertIn("no response: ", rendered)
+        self.assertIn("is busy", rendered)
+        self.assertNotIn("/dev/", rendered)
+        self.assertNotIn("private-path", rendered)
 
     def test_configure_wrong_interface_exits_with_a_concise_error(self):
         stderr = io.StringIO()

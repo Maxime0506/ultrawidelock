@@ -14,7 +14,6 @@ sys.path.insert(0, str(ROOT / "integration" / "homeassistant" / "src"))
 
 import aliro_mqtt_bridge as legacy_bridge  # noqa: E402
 from openaliro_ha import AccessEvent, DistanceReading, parse_console_line, strip_ansi  # noqa: E402
-from openaliro_ha.parser import DIST_RE  # noqa: E402
 
 
 PREFIX = "[00:01:02.345,678] <inf> woz_uwb: "
@@ -84,13 +83,6 @@ class ParserTests(unittest.TestCase):
             / "synthetic_streaming_access.log"
         )
         for line in fixture.read_text(encoding="utf-8").splitlines():
-            if DIST_RE.search(line):
-                # Intentional divergence: the legacy bridge ignores the raw DIST
-                # diagnostic, which is the only distance line real firmware emits
-                # unless CONFIG_WOZ_PRETTY_SHELL is built with `aliro frames` on.
-                self.assertIsNone(legacy_bridge.parse_line(line), line)
-                self.assertIsInstance(parse_console_line(line), DistanceReading, line)
-                continue
             self.assertEqual(
                 legacy_shape(parse_console_line(line)),
                 legacy_bridge.parse_line(line),

@@ -16,6 +16,20 @@
         "noise",
         "malformed_range"
       ]
+    },
+    {
+      "id": "hardware_uwb_access",
+      "source": "hardware",
+      "status": "complete",
+      "ansi": "off",
+      "log": "hardware_uwb_access.log",
+      "expected": "hardware_uwb_access.expected.json",
+      "covers": [
+        "dist_diagnostic_range",
+        "access_granted",
+        "noise"
+      ],
+      "notes": "nRF5340 DK, one NFC tap and one UWB ranging session. Protocol frame dumps, key material, session identifiers, and Matter transport lines were removed; the retained lines are verbatim."
     }
   ],
   "required_hardware_cases": [

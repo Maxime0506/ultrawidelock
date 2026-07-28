@@ -62,9 +62,19 @@ Discovery configs are published retained under `homeassistant/`.
 
 ## Notes
 
-Lines matching neither pattern are ignored, including the `DIST tof=… d=…mm`
-diagnostic that carries the same distance value: the parser requires the
-`rng`/`blk=` prefix, so a block is never counted twice.
+Two distance lines exist. The curated `rng blk=… d=…mm tof=…` one-liner is
+built only under `CONFIG_WOZ_PRETTY_SHELL` and stays off until `aliro frames
+on`, so most builds never print it. The `DIST tof=… d=…mm phone_d=…mm` line
+next to it in `ccc_shim_rx.c` is unconditional and carries the same lock-side
+distance. Both are parsed, `rng` first, so a block is never counted twice. The
+`phone_d` field is the peer's own estimate, goes negative, and is discarded.
+
+Only the `ACCESS GRANTED` / `ACCESS DENIED` lines from `access_manager` become
+access events. A lock or unlock driven from Home Assistant or the Matter
+controller prints `[ZCL]Received command: UnlockDoor` and no `ACCESS` line, so
+it does not appear as an access event. Reporting those would need a lock
+entity fed from the Matter side rather than the console, which this bridge
+does not do.
 
 `--dry-run` prints each topic and payload instead of connecting, which is the
 quickest way to check a parser change against a captured log.

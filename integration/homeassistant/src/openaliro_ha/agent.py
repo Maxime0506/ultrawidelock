@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Optional
@@ -12,6 +13,10 @@ from .models import AccessEvent, DistanceReading
 from .mqtt import MqttError, MqttPublisher
 from .serial_session import SerialSession, SessionState
 from .serial_transport import SerialTransportError, open_serial_connection, resolve_serial_port
+
+
+DISTANCE_MIN_INTERVAL_S = 1.0
+DISTANCE_SIGNIFICANT_CHANGE_MM = 100
 
 
 class AgentError(RuntimeError):
@@ -92,6 +97,43 @@ async def probe_device(device: DeviceConfig) -> SessionState:
         await session.close()
 
 
+class _DistanceThrottle:
+    """Rate-limit distance publishes without hiding real movement.
+
+    Ranging emits one reading per block, roughly every 192 ms, which is far more
+    than Home Assistant needs. Publish at most once per interval, but let a large
+    change through immediately so an approach or retreat is never delayed.
+    """
+
+    def __init__(
+        self,
+        *,
+        min_interval: float = DISTANCE_MIN_INTERVAL_S,
+        significant_change_mm: int = DISTANCE_SIGNIFICANT_CHANGE_MM,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._min_interval = min_interval
+        self._significant_change_mm = significant_change_mm
+        self._clock = clock
+        self._last_published_at: Optional[float] = None
+        self._last_distance_mm: Optional[int] = None
+
+    def allows(self, distance_mm: int) -> bool:
+        """Report whether this reading should be published, recording it if so."""
+
+        now = self._clock()
+        if (
+            self._last_published_at is not None
+            and self._last_distance_mm is not None
+            and now - self._last_published_at < self._min_interval
+            and abs(distance_mm - self._last_distance_mm) < self._significant_change_mm
+        ):
+            return False
+        self._last_published_at = now
+        self._last_distance_mm = distance_mm
+        return True
+
+
 async def run_device(
     config: AgentConfig,
     device: DeviceConfig,
@@ -104,6 +146,7 @@ async def run_device(
 
     publisher = publisher_factory(config, device)
     session = session_factory(device)
+    throttle = _DistanceThrottle()
     try:
         await asyncio.to_thread(publisher.start)
         maintenance = asyncio.create_task(session.maintain(stop_event))
@@ -123,7 +166,8 @@ async def run_device(
                     break
                 observation = observation_task.result()
                 if isinstance(observation, DistanceReading):
-                    await asyncio.to_thread(publisher.publish_distance, observation)
+                    if throttle.allows(observation.distance_mm):
+                        await asyncio.to_thread(publisher.publish_distance, observation)
                 elif isinstance(observation, AccessEvent):
                     await asyncio.to_thread(publisher.publish_access, observation)
         finally:
