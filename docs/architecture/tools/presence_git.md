@@ -44,7 +44,7 @@ that file, because a tag that carried its own keys would authorize itself.
 Stdlib only, except that enroll/sign import pyserial lazily to talk to a real
 dongle. verify -- the half CI runs -- needs no serial port and no extra package.
 
-**depends on** [`tools/presence_verify.py`](presence_verify.md)  ·  **used by** [`host/presence/presence_service.py`](../host.presence/presence_service.md)  ·  **discussed in** [`docs/presence.md`](../../presence.md)
+**depends on** [`tools/presence_verify.py`](presence_verify.md), [`tools/tui/src/serial.ts`](../tools.tui.src/serial.ts.md)  ·  **used by** [`host/presence/presence_service.py`](../host.presence/presence_service.md)  ·  **discussed in** [`docs/presence.md`](../../presence.md)
 
 ## API
 
