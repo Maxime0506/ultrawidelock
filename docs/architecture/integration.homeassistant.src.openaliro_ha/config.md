@@ -3,7 +3,7 @@
 
 Versioned, secret-free TOML configuration for the HA=1-only agent.
 
-**used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](cli.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](mqtt.md)
+**used by** [`integration/homeassistant/src/openaliro_ha/__init__.py`](__init__.md), [`integration/homeassistant/src/openaliro_ha/agent.py`](agent.md), [`integration/homeassistant/src/openaliro_ha/cli.py`](cli.md), [`integration/homeassistant/src/openaliro_ha/mqtt.py`](mqtt.md)  ·  **discussed in** [`docs/home-assistant-internals.md`](../../home-assistant-internals.md)
 
 ## API
 

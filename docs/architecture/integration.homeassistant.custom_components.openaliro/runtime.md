@@ -16,10 +16,10 @@ Own one direct serial session and fan out approved observations.
 
 - `OpenAliroRuntime.__init__`
 - `OpenAliroRuntime.available`
-- `OpenAliroRuntime.async_start`
-- `OpenAliroRuntime.async_stop`
-- `OpenAliroRuntime.add_listener`
-- `OpenAliroRuntime.remove`
+- `OpenAliroRuntime.async_start` — tested: a removed listener stops being called; access event is recorded and forwarded; distance reaches entities and notifies listeners; stop closes the session and cancels its tasks; stop is safe before any observation arrives
+- `OpenAliroRuntime.async_stop` — tested: a removed listener stops being called; access event is recorded and forwarded; distance reaches entities and notifies listeners; stop closes the session and cancels its tasks; stop is safe before any observation arrives
+- `OpenAliroRuntime.add_listener` — tested: a removed listener stops being called; distance reaches entities and notifies listeners
+- `OpenAliroRuntime.remove` — tested: a removed listener stops being called
 - `OpenAliroRuntime._consume`
 
 </details>

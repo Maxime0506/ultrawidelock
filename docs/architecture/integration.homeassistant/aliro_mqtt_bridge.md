@@ -21,7 +21,7 @@ parser and the payloads without a broker or a board attached. paho-mqtt is
 imported only when publishing, pyserial only for a real port, so neither is
 needed for a dry run.
 
-**discussed in** [`integration/homeassistant/README.md`](../../../integration/homeassistant/README.md)
+**discussed in** [`docs/home-assistant-internals.md`](../../home-assistant-internals.md), [`integration/homeassistant/README.md`](../../../integration/homeassistant/README.md)
 
 ## API
 

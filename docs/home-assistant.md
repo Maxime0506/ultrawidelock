@@ -22,8 +22,10 @@ expose.
 
 ## Before you start
 
-* A board flashed with an `HA=1` build. Check with `make build HA=1` after
-  `make bootstrap HA=1`; both need the variable.
+* A board running this firmware. The bridge reads the `aliro` console, which is
+  built whenever `CONFIG_SHELL` is on, so a standard `make build` is enough.
+  `HA=1` is a separate thing: it layers Matter credential attribution for
+  multi-admin setups and changes nothing the bridge reads.
 * Home Assistant with the Mosquitto broker add-on installed.
 * Passwordless SSH to the Home Assistant host, as a `Host` entry in
   `~/.ssh/config`. The setup script uses it to install certificates and read
@@ -124,9 +126,11 @@ one that answers; which one that is varies, so do not assume the first. When
 neither answers, the reported reason distinguishes a busy port from a board
 that is not talking.
 
-**The board says nothing at all.** Confirm it is running an `HA=1` build. A
-board flashed with something else opens fine and returns no bytes, which looks
-identical to a cable problem.
+**The board says nothing at all.** Confirm it is running this firmware. A board
+flashed with something else opens fine and returns no bytes, which looks
+identical to a cable problem. Comparing the vector table against the local
+build settles it: `nrfjprog --memrd 0x0 --n 16` against the first record of
+`build/merged.hex`.
 
 **Distance stays unknown.** Readings only exist during an active UWB ranging
 session. An NFC tap alone runs no ranging, so nothing is published. Tap with

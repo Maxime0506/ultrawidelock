@@ -5,12 +5,18 @@ Assistant Discovery entities:
 
 | Entity | Platform | Source line |
 | --- | --- | --- |
-| Distance (mm) | `sensor` | `rng  blk=N d=Xmm  tof=Y` (`modules/woz_uwb/src/ccc/ccc_shim_rx.c:609`) |
-| Access | `event`, types `granted` / `denied` | `ACCESS GRANTED` / `ACCESS DENIED` |
+| Distance (mm) | `sensor` | `DIST tof=X d=Ymm phone_d=…` (`ccc_shim_rx.c:600`), or the curated `rng  blk=N d=Ymm  tof=X` (`ccc_shim_rx.c:609`) when the build has it |
+| Access | `event`, types `granted` / `denied` | `ACCESS GRANTED` / `ACCESS DENIED` (`access_manager`) |
 
 Nothing on the device changes. The bridge only reads the console, so it runs
 alongside the existing Apple Home and Wallet setup without taking a Matter
 fabric slot.
+
+Guides on the doc site: [setup and troubleshooting][guide] for running it, and
+[internals][internals] for the console contract, module map, and test layout.
+
+[guide]: https://asxeem.github.io/openaliro/home-assistant.html
+[internals]: https://asxeem.github.io/openaliro/home-assistant-internals.html
 
 ## The optional `HA=1` firmware build
 
