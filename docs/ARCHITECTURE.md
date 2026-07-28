@@ -218,6 +218,7 @@ an ECDSA-P256 frame against a challenge nonce, enrolled credential and distance
 threshold. Portable C11; no UWB/BLE/platform dependencies.
 
 **depends on** [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md), [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md)
+
 ### [`modules/woz_aliro/src/aliro_ble_central.c`](architecture/modules.woz_aliro.src/aliro_ble_central.c.md)
 
 Platform-free half of the device-side BLE transport declared in
@@ -2042,11 +2043,6 @@ logged and stored, never gates the unlock (the provisioned trust store remains t
 
 **depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_aliro/src/aliro_stepup_parse.c`](architecture/modules.woz_aliro.src/aliro_stepup_parse.c.md)
 
-### [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md)
-
-*No module docstring. First commit: "assert: bind the P-256 seam to aliro_prim".*
-
-**depends on** [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_assert_ec.c`](architecture/modules.woz_aliro.src/aliro_assert_ec.c.md)
 ### [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md)
 
 Aliro initiator (User-Device) session layer: the device-side counterpart of
@@ -2057,12 +2053,24 @@ the sealed responses. The result is the same 32-byte URSK the reader derives.
 
 **depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_device_apdu.h`](architecture/modules.woz_aliro.include/aliro_device_apdu.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md)
 
+### [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md)
+
+*No module docstring. First commit: "assert: bind the P-256 seam to aliro_prim".*
+
+**depends on** [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md), [`modules/woz_aliro/include/aliro_prim.h`](architecture/modules.woz_aliro.include/aliro_prim.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_assert_ec.c`](architecture/modules.woz_aliro.src/aliro_assert_ec.c.md)
+
 ### [`modules/woz_aliro/include/aliro_advtag.h`](architecture/modules.woz_aliro.include/aliro_advtag.h.md)
 
 Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1): the 7-byte
 GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of interest.
 
 **used by** [`modules/woz_aliro/include/aliro_ble_central.h`](architecture/modules.woz_aliro.include/aliro_ble_central.h.md), [`modules/woz_aliro/src/aliro_advtag.c`](architecture/modules.woz_aliro.src/aliro_advtag.c.md)
+
+### [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md)
+
+*No module docstring. First commit: "aliro: presence-assertion protocol (HMAC-signed range statement)".*
+
+**used by** [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md), [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md)
 
 ### [`modules/woz_aliro/include/aliro_ble_central.h`](architecture/modules.woz_aliro.include/aliro_ble_central.h.md)
 
@@ -2087,12 +2095,6 @@ and no platform dependency, so it is host-KAT verifiable against the reader's
 own builders/parsers (round-trip) and the recovered layouts.
 
 **depends on** [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)  ·  **used by** [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md), [`modules/woz_aliro/src/aliro_device_apdu.c`](architecture/modules.woz_aliro.src/aliro_device_apdu.c.md)
-
-### [`modules/woz_aliro/include/aliro_assert.h`](architecture/modules.woz_aliro.include/aliro_assert.h.md)
-
-*No module docstring. First commit: "aliro: presence-assertion protocol (HMAC-signed range statement)".*
-
-**used by** [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md), [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md)
 
 ### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
@@ -2210,13 +2212,14 @@ Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
 ### [`ports/esp32/apps/initiator/main/main.c`](architecture/ports.esp32.apps.initiator.main/main.c.md)
 
 ESP32-S3 application entry for the Aliro initiator, the User-Device role that
-stands in for an iPhone on the bench. Stage 1a wires the BLE transport only: it
-starts the NimBLE central, which scans for the reader's 0xFFF2 advert, connects,
-reads the reader's SPSM, supported versions and features, writes the version it
-selects, and opens the L2CAP channel. It then reports what it learned, including
-the BleSK salt those versions imply, and dumps whatever the reader sends. It
-stops before AUTH0, because running the transaction needs an Access Credential
-the reader trusts and both ends must be provisioned out of band first.
+stands in for an iPhone on the bench. Starts the NimBLE central, which scans
+for the reader's 0xFFF2 advert, connects, reads the reader's SPSM, supported
+versions and features, writes the version it selects, and opens the L2CAP
+channel. It then runs the Access Protocol over that channel: every inbound
+AUTH0/AUTH1/EXCHANGE command is fed to the device state machine and the sealed
+response is framed straight back, ending in the same 32-byte URSK the reader
+derives. Credentials are the compiled-in bench pair below, which works only
+against a reader running its dev identity with an empty trust store.
 
 ## `ports/esp32/components/aliro_ble/`
 
