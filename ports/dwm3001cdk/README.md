@@ -112,9 +112,50 @@ debug logging for every Zephyr module, including the arch MPU code that runs on
 each context switch, which floods RTT and wraps the buffer before anything
 useful is readable.
 
+## BLE: an iPhone sees the reader
+
+Default build, no overlay:
+
+```
+I: bt_enable = 0
+I: Aliro reader up; advertising (SPSM 0x0080)
+I: aliro_reader_start: transport up (SPSM 0x0080)
+```
+
+An iPhone running nRF Connect connects and enumerates 0xFFF2 with both
+characteristics, the reader-SPSM (Read) and the device-version (Write), and
+**never prompts to pair** — Aliro runs its own secure channel, so the walk-up
+must not require bonding.
+
+Both radios run at once: BLE advertising while the DW3110 sits in permanent SP0
+receive listening for Apple Pre-POLL. That is idle coexistence; whether they
+survive concurrent load is a separate question, answered at stage 4.
+
+### RTT buffer size is load-bearing
+
+`CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=4096`, not the 1 KB default. RTT is this
+board's only console and the default policy is NO_BLOCK_SKIP: once the buffer
+fills, writes are silently discarded and the log truncates mid-line. That is
+indistinguishable from a firmware hang and will send you chasing a bug that
+does not exist.
+
+The DWM3001C **does** have a 32.768 kHz crystal, so no LFCLK override is needed;
+the stock `CONFIG_CLOCK_CONTROL_NRF_K32SRC_XTAL` works.
+
 ## Status
 
-Stage 0 of `internal/dwm3001cdk-reader-plan.md`: the image links and the size is
-measured. Stages 1-6 (board bring-up, on-target EC self-test, DW3110 DEV_ID,
-BLE transport against the ESP32-S3 initiator rig, iPhone walk-up, contention
-tuning) follow from there.
+Against the stages in `internal/dwm3001cdk-reader-plan.md`:
+
+| Stage | Check | |
+|---|---|---|
+| 0 | Fits: 236,768 B flash / 74,100 B RAM | done |
+| 1 | BLE advert, iPhone enumerates 0xFFF2 | done |
+| 2 | On-target EC self-test against Oberon | open |
+| 3 | DW3110 DEV_ID `0xdeca0302`; TWR vs the DK rig | half done |
+| 4 | ESP32-S3 initiator reaches ESTABLISHED | open |
+| 5 | iPhone Wallet walk-up unlock | open |
+| 6 | >= 95% ranging success over 100 walk-ups | open |
+
+The open risk is unchanged and is not about memory: single-core radio
+contention between the BLE controller and the DW3110's delayed-TX reply window.
+Nothing so far exercises both under load.

@@ -362,7 +362,12 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 		return rc;
 	}
 
+	/* Bring-up instrumentation: bt_enable blocks until the controller is up,
+	 * and on nRF52 it will block FOREVER if the configured LFCLK source never
+	 * starts. Bracketing it is the difference between knowing and guessing. */
+	LOG_INF("bt_enable ...");
 	rc = bt_enable(NULL);
+	LOG_INF("bt_enable = %d", rc);
 	if (rc != 0) {
 		LOG_ERR("bt_enable rc=%d", rc);
 		return rc;
