@@ -226,7 +226,11 @@ rm -f "$PIVBIN"
 echo
 echo "== host: reader bench console vs esp_console fakes =="
 CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
+# _POSIX_C_SOURCE because main.c now includes woz_port.h, whose host build calls
+# clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
+# declares both unconditionally, so omitting it builds locally and fails on CI.
+cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
+   -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
    -I "$SDKFAKE" -I "$HERE/../apps/reader/main" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
