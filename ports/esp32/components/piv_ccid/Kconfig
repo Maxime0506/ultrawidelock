@@ -17,19 +17,4 @@ config WOZ_PIV_CCID
 	  This initial option does not alter LoginWindow or enforce smart-card
 	  authentication. Account pairing remains a separate, explicit VM step.
 
-config WOZ_PIV_UWB_ONLY
-	bool "Permit private-key operations without a PIV PIN (custom CTK lab only)"
-	depends on WOZ_PIV_CCID
-	default n
-	help
-	  Permit GENERAL AUTHENTICATE without a preceding PIV VERIFY command.
-	  Slot 9A still signs only after the Aliro reader completes a fresh trusted
-	  Wallet/UWB proof. Slot 9D key agreement is available without a PIN so
-	  macOS can unwrap the login keychain.
-
-	  Keep this OFF with Apple's built-in PIV token driver, which presents and
-	  enforces its own PIN workflow. Enable it only in a disposable macOS VM
-	  using OpenAliro's custom CryptoTokenKit extension, with password fallback
-	  and a rescue administrator retained.
-
 endmenu

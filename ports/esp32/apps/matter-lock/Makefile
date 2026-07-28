@@ -40,8 +40,6 @@ PRESENCE  := $(REPO_ROOT)/tools/presence_git.py
 SDKCONFIG := sdkconfig
 PIV_PIN_BUILD := build-piv
 PIV_PIN_CONFIG := sdkconfig.piv.generated
-PIV_UWB_BUILD := build-piv-uwb
-PIV_UWB_CONFIG := sdkconfig.piv-uwb.generated
 NAME  ?=
 TAG   ?=
 MAXCM ?= 40
@@ -102,7 +100,7 @@ endef
 
 .PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab ports clean \
         presence-on presence-off presence-flash presence-probe presence-enroll presence-sign \
-        piv-pin-build piv-pin-app-flash piv-uwb-build piv-uwb-app-flash
+        piv-pin-build piv-pin-app-flash
 
 check-env:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -151,14 +149,6 @@ piv-pin-build: check-env
 	  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.piv' \
 	  build
 
-## piv-uwb-build: isolated VM build with custom-token UWB-only authorization
-##   Slot 9A still requires a fresh Wallet/UWB proof. Slot 9D is PIN-less.
-piv-uwb-build: check-env
-	@$(IDFPY) -B $(PIV_UWB_BUILD) \
-	  -D SDKCONFIG=$(PIV_UWB_CONFIG) \
-	  -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.piv;sdkconfig.piv-uwb' \
-	  build
-
 ##@ Flash  (safe port auto-detect · never a SEGGER/nRF port)
 ## flash: build + write bootloader + partition table + app
 flash: check-env
@@ -180,13 +170,6 @@ piv-pin-app-flash: piv-pin-build
 	$(ENSURE_PORT_FREE); \
 	echo "  restoring PIN-enforced PIV app on $$port"; \
 	$(IDFPY) -B $(PIV_PIN_BUILD) -p "$$port" app-flash
-
-## piv-uwb-app-flash: install the custom-token UWB-only app without erasing NVS
-piv-uwb-app-flash: piv-uwb-build
-	@$(RESOLVE_PORT); \
-	$(ENSURE_PORT_FREE); \
-	echo "  app-flashing UWB-only PIV profile on $$port"; \
-	$(IDFPY) -B $(PIV_UWB_BUILD) -p "$$port" app-flash
 
 ## flash-erase: full chip erase, then flash  (drops commissioning + Aliro NVS)
 flash-erase: check-env
