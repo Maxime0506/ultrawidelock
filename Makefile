@@ -154,6 +154,8 @@ ha-test:
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_session.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_transport.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_agent.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_setup.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_component.py
 	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_package.py
 
 ## ha-package: build a local custom-component beta archive
