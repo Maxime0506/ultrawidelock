@@ -39,6 +39,21 @@ needs no rebuild to recover from. ESP-IDF and esp-matter still follow their offi
 installation paths; the TUI detects and explains them but does not silently install
 toolchains outside this repository.
 
+## Layout and searching
+
+The serial console takes the window. The command output is a strip above the prompt, about
+five times its height, because firmware traffic is what a bench session watches and the TUI's
+own notices are a glance. The two share the leftover space in a fixed ratio, so opening the
+wizard or a side pane takes from both instead of squeezing the console flat. Asking for `?`
+help is the one exception: the reference needs room, so it takes the window back until closed.
+
+`Ctrl+F` searches the serial scrollback. The prompt becomes the search box, matches are
+highlighted in place with the current one in bold, `Enter` and the arrow keys step through
+them, and `Esc` restores the console and its live tail. Matching is literal and
+case-insensitive, so `[EM]`, `(S)` and `0x00` are searched as typed rather than as regular
+expressions. `Cmd+F` is not available: every macOS terminal binds it to its own scrollback
+find and never forwards it to the application.
+
 ## Visual direction
 
 The workspace imposes no colour scheme. Everything is drawn in the terminal's own default

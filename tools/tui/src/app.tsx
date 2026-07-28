@@ -13,10 +13,14 @@ import {
   createPulse,
   createSpinner,
   fitRule,
+  CONSOLE_SHARE,
+  outputRows,
+  OUTPUT_SHARE,
   panelColumns,
   panelWidths,
   type SideMode
 } from "./motion"
+import { findMatches, matchSummary, splitByMatch, stepMatch } from "./search"
 import { discoverSerialPortInfo, PosixSerialTransport, type SerialPortInfo } from "./serial"
 import { inspectTarget, preferredAvailablePort, targetIds, targets, type TargetSnapshot } from "./targets"
 import { SerialTerminalBuffer } from "./terminal"
@@ -223,8 +227,6 @@ export function CommandOutput(props: {
         paddingLeft: 1,
         paddingRight: 1
       }}
-      stickyScroll={!props.showHelp}
-      stickyStart={props.showHelp || props.activity.length === 0 ? "top" : "bottom"}
       viewportCulling
     >
       <Show when={props.activity.length === 0 && !props.showHelp}>
@@ -260,15 +262,27 @@ export function SerialTerminal(props: {
   serialLines: string[]
   width: number
   chrome: RGBA
+  /** Active search term, or "" when the console is not being searched. */
+  query?: string
+  /** Index into the match list, used to pick out the one line being looked at. */
+  matchIndex?: number
   onReady: (output: ScrollBoxRenderable) => void
 }) {
-  // Ranked so the state word survives on a narrow terminal and the scroll
-  // reminder is the first thing dropped: knowing the port is dead matters more
-  // than being reminded which key scrolls it.
-  const status = () =>
-    props.board.connection === "connected"
-      ? ["live", props.board.port ?? "serial", "115200 baud", "VT"]
-      : [props.board.connection, "Shift+PageUp/PageDown scroll"]
+  const query = () => props.query ?? ""
+  const matches = createMemo(() => findMatches(props.serialLines, query()))
+  const currentLine = () => matches()[props.matchIndex ?? 0]
+
+  // While searching, the rule is the search box: the count is the only thing
+  // that says whether the term is anywhere in the scrollback at all, so it
+  // outranks every connection detail until Esc puts them back.
+  const status = () => {
+    if (query() !== "") {
+      return [`⌕ ${query()}`, matchSummary(matches().length, props.matchIndex ?? 0), "Enter next", "Esc close"]
+    }
+    return props.board.connection === "connected"
+      ? ["live", props.board.port ?? "serial", "115200 baud", "VT", "Ctrl+F search"]
+      : [props.board.connection, "Ctrl+F search", "Shift+PageUp/PageDown scroll"]
+  }
 
   return (
     <scrollbox
@@ -285,33 +299,60 @@ export function SerialTerminal(props: {
         paddingLeft: 1,
         paddingRight: 1
       }}
-      stickyScroll
-      stickyStart={props.serialLines.length === 0 ? "top" : "bottom"}
       viewportCulling
     >
-      <Show when={props.serialLines.length === 0}>
-        <Show
-          when={props.board.connection === "connected"}
-          fallback={
-            <box style={{ flexDirection: "column" }}>
-              <text style={{ fg: theme.foreground, attributes: attrs.strong }}>
-                {props.board.connection === "connecting" ? "Opening serial console." : "No serial session."}
-              </text>
-              <text style={{ fg: theme.muted }}>Type connect below or choose Connect in the wizard.</text>
-              <text style={{ fg: theme.muted }}>Firmware boot logs, prompts, and command replies render only here.</text>
-            </box>
-          }
-        >
+      {/* One exclusive branch, not an empty-state Show sitting beside the line
+          list. As two siblings the scrollbox counted the idle placeholder as
+          content and scrolled a row past it, which silently ate the oldest
+          line of every session and showed nothing at all when only one had
+          arrived. */}
+      <Show
+        when={props.serialLines.length > 0}
+        fallback={
           <box style={{ flexDirection: "column" }}>
-            <text style={{ fg: theme.foreground, attributes: attrs.strong }}>Serial console connected.</text>
-            <text style={{ fg: theme.muted }}>The emulated screen is empty. Type status to request fresh output.</text>
-            <text style={{ fg: theme.muted }}>New firmware logs and command replies will render here.</text>
+            <Show
+              when={props.board.connection === "connected"}
+              fallback={
+                <box style={{ flexDirection: "column" }}>
+                  <text style={{ fg: theme.foreground, attributes: attrs.strong }}>
+                    {props.board.connection === "connecting" ? "Opening serial console." : "No serial session."}
+                  </text>
+                  <text style={{ fg: theme.muted }}>Type connect below or choose Connect in the wizard.</text>
+                  <text style={{ fg: theme.muted }}>Firmware boot logs, prompts, and command replies render only here.</text>
+                </box>
+              }
+            >
+              <box style={{ flexDirection: "column" }}>
+                <text style={{ fg: theme.foreground, attributes: attrs.strong }}>Serial console connected.</text>
+                <text style={{ fg: theme.muted }}>The emulated screen is empty. Type status to request fresh output.</text>
+                <text style={{ fg: theme.muted }}>New firmware logs and command replies will render here.</text>
+              </box>
+            </Show>
           </box>
-        </Show>
+        }
+      >
+        <box style={{ flexDirection: "column" }}>
+          <For each={props.serialLines}>
+            {(line, index) => (
+              <Show
+                when={query() !== "" && line.toLowerCase().includes(query().toLowerCase())}
+                fallback={<text style={{ fg: theme.foreground }}>{line || " "}</text>}
+              >
+                {/* The line being looked at is bold; the rest of the hits stay in
+                    the warning colour so they read as "also here" rather than
+                    competing with it. */}
+                <text style={{ fg: theme.foreground, attributes: index() === currentLine() ? attrs.strong : attrs.none }}>
+                  <For each={splitByMatch(line, query())}>
+                    {(segment) => (
+                      <span style={{ fg: segment.hit ? theme.warning : theme.foreground }}>{segment.text}</span>
+                    )}
+                  </For>
+                </text>
+              </Show>
+            )}
+          </For>
+        </box>
       </Show>
-      <box style={{ flexDirection: "column" }}>
-        <For each={props.serialLines}>{(line) => <text style={{ fg: theme.foreground }}>{line || " "}</text>}</For>
-      </box>
     </scrollbox>
   )
 }
@@ -441,11 +482,23 @@ export function SidePane(props: {
         paddingRight: 1,
         width: props.compact ? "100%" : props.pane === "jobs" ? "50%" : 42,
         height: props.compact ? 9 : "100%",
-        flexShrink: 0,
+        // Shrinkable when stacked. A compact window cannot always seat a nine-row
+        // pane under the console, and Yoga answers an overflowing row by drawing
+        // the child over its neighbour rather than reporting anything.
+        flexShrink: 1,
+        minHeight: props.compact ? 3 : 0,
+        // Clip rather than overprint. These rows are plain text, not a scrollbox,
+        // so a pane shorter than its content would otherwise stack lines on top
+        // of each other and render an unreadable smear.
+        overflow: "hidden",
         marginLeft: props.compact ? 0 : 1,
         marginTop: props.compact ? 1 : 0
       }}
     >
+      {/* Holds its natural height so the rows keep their own lines and the box
+          above clips the overflow, instead of Yoga compressing every row onto
+          the same one. */}
+      <box style={{ flexDirection: "column", flexGrow: 1, flexShrink: 0 }}>
       <Show when={props.pane === "overview"}>
         <text style={{ fg: theme.muted }}>{props.snapshot.setupDetail}</text>
         <text style={{ fg: theme.foreground }}>{`artifact  ${props.snapshot.artifact}`}</text>
@@ -480,8 +533,6 @@ export function SidePane(props: {
             props.onJobsReady?.(value)
           }}
           style={{ flexGrow: 1 }}
-          stickyScroll
-          stickyStart="bottom"
           viewportCulling
         >
           <Show when={props.jobs.length === 0}>
@@ -538,6 +589,7 @@ export function SidePane(props: {
           <PairingPayload pairing={props.board.pairing} compact={props.compact} />
         </Show>
       </Show>
+      </box>
     </box>
   )
 }
@@ -576,6 +628,12 @@ export function App(
   const [activePane, setActivePane] = createSignal<PaneId>("off")
   const [lastPane, setLastPane] = createSignal<Exclude<PaneId, "off">>("diagnostics")
   const [capture, setCapture] = createSignal<CaptureSession>({ active: false, entries: [] })
+  // Serial search. `searching` is separate from a non-empty query so that
+  // Ctrl+F opens the box before anything is typed, and so clearing the text
+  // does not silently drop back into command mode mid-search.
+  const [searching, setSearching] = createSignal(false)
+  const [searchQuery, setSearchQuery] = createSignal("")
+  const [matchIndex, setMatchIndex] = createSignal(0)
   const [workflowClaimed, setWorkflowClaimed] = createSignal(false)
   const [workflowCancelled, setWorkflowCancelled] = createSignal(false)
   const transports = new Map<BoardId, PosixSerialTransport>()
@@ -607,10 +665,15 @@ export function App(
   const sideMode = createMemo<SideMode>(() =>
     activePane() === "off" ? "none" : activePane() === "jobs" ? "half" : "fixed"
   )
+  const searchMatches = createMemo(() => findMatches(serialLines()[activeBoard()], searchQuery()))
   // One source of truth for how wide each panel ends up. Border titles are props,
   // so they have to be fitted before layout runs, and the serial buffer has to be
   // reflowed to the same number or its lines wrap inside a box that had room.
-  const widths = createMemo(() => panelWidths(dimensions().width, sideMode(), compact(), primaryStacked()))
+  const widths = createMemo(() => panelWidths(dimensions().width, sideMode(), compact()))
+  // The serial console gets the rest of the window; the command output is a
+  // strip above the prompt. That is the ranking a bench session actually has:
+  // firmware traffic is what you watch, TUI notices are what you glance at.
+  const outputHeight = createMemo(() => outputRows(dimensions().height))
 
   // Motion. Every one of these rests at its settled value, so a build with no
   // animation clock still renders the correct screen rather than a blank one.
@@ -676,6 +739,48 @@ export function App(
     setFocusArea("command")
     wizardSelect?.blur()
     input?.focus()
+  }
+
+  // Bring the current hit into view. The scrollbox measures in rows and every
+  // serial line is one row, so the match index is the row: centring it means
+  // the lines around it are visible too, which is the reason to search a log.
+  const revealMatch = (index: number) => {
+    const line = searchMatches()[index]
+    if (line === undefined || !serialOutput) return
+    const viewport = serialOutput.viewport.height || 1
+    serialOutput.scrollTop = Math.max(0, line - Math.floor(viewport / 2))
+  }
+
+  const openSearch = () => {
+    if (searching()) return
+    setSearching(true)
+    setMatchIndex(0)
+    focusCommand()
+  }
+
+  const closeSearch = () => {
+    if (!searching()) return
+    setSearching(false)
+    setSearchQuery("")
+    setMatchIndex(0)
+    // Back to the live tail, which is where the console was before the search.
+    if (serialOutput) serialOutput.scrollTop = serialOutput.scrollHeight
+  }
+
+  // Retyping restarts at the first hit rather than keeping an index that now
+  // points into a different match list.
+  const updateSearch = (value: string) => {
+    setSearchQuery(value)
+    setMatchIndex(0)
+    revealMatch(0)
+  }
+
+  const stepSearch = (delta: number) => {
+    const count = searchMatches().length
+    if (count === 0) return
+    const next = stepMatch(count, matchIndex(), delta)
+    setMatchIndex(next)
+    revealMatch(next)
   }
 
   const hideWizard = () => {
@@ -1357,6 +1462,33 @@ export function App(
   }
 
   const handleGlobalKey = (key: KeyEvent) => {
+    // Ctrl+F is the binding that actually arrives. Cmd+F is what a Mac user
+    // reaches for, but every macOS terminal binds it to its own scrollback find
+    // and never forwards it; `super` only shows up under the kitty protocol, so
+    // it is accepted when offered and never relied on.
+    if (key.name === "f" && (key.ctrl || key.super || key.meta)) {
+      key.preventDefault()
+      key.stopPropagation()
+      openSearch()
+      return
+    }
+    if (searching()) {
+      if (key.name === "escape") {
+        key.preventDefault()
+        closeSearch()
+        return
+      }
+      if (key.name === "up" || (key.name === "return" && key.shift)) {
+        key.preventDefault()
+        stepSearch(-1)
+        return
+      }
+      if (key.name === "down") {
+        key.preventDefault()
+        stepSearch(1)
+        return
+      }
+    }
     if (key.name === "tab") {
       key.preventDefault()
       key.stopPropagation()
@@ -1418,6 +1550,32 @@ export function App(
       const lines = terminals.get(id)?.resize(columns) ?? []
       setSerialLines((current) => ({ ...current, [id]: lines }))
     }
+  })
+
+  // Follow the tail ourselves instead of using the scrollbox's stickyScroll.
+  // OpenTUI 0.4.5 scrolls one row past the end even when the content fits the
+  // viewport, which silently hid the oldest line of every console and showed
+  // nothing at all when only one line had arrived.
+  const tailTo = (box: ScrollBoxRenderable | undefined) => {
+    if (!box) return
+    queueMicrotask(() => (box.scrollTop = box.scrollHeight))
+  }
+
+  createEffect(() => {
+    serialLines()[activeBoard()]
+    // A search drives the scroll position itself; following the tail here would
+    // yank the view off the hit the moment the next line arrives.
+    if (!searching()) tailTo(serialOutput)
+  })
+
+  createEffect(() => {
+    activity()
+    if (!showHelp()) tailTo(commandOutput)
+  })
+
+  createEffect(() => {
+    jobs()
+    tailTo(jobsOutput)
   })
 
   // Motion is driven from state, never from the handlers that change it, so a
@@ -1497,43 +1655,32 @@ export function App(
         onChange={(index) => selectBoard(targetIds[index], false)}
       />
 
-      <box style={{ flexDirection: compact() ? "column" : "row", flexGrow: 1, marginTop: short() ? 0 : 1 }}>
-        <box style={{ flexDirection: primaryStacked() ? "column" : "row", flexGrow: 1 }}>
-          <box
-            style={{
-              flexDirection: "column",
-              flexGrow: 1,
-              width: primaryStacked() ? "100%" : "58%",
-              height: primaryStacked() ? "50%" : "100%"
-            }}
-          >
-            <CommandOutput
-              activity={activity()}
-              showHelp={showHelp()}
-              width={widths().output}
-              chrome={settle(theme.foreground, theme.line, entranceOutput())}
-              arrival={lineArrival.progress()}
-              onReady={(value) => (commandOutput = value)}
-            />
-          </box>
-          <box
-            style={{
-              flexDirection: "column",
-              flexGrow: 1,
-              width: primaryStacked() ? "100%" : "42%",
-              height: primaryStacked() ? "50%" : "100%",
-              marginLeft: primaryStacked() ? 0 : 1,
-              marginTop: primaryStacked() ? 1 : 0
-            }}
-          >
-            <SerialTerminal
-              board={selected()}
-              serialLines={serialLines()[activeBoard()]}
-              width={widths().serial}
-              chrome={settle(theme.foreground, serialFocus.color(), entranceSerial())}
-              onReady={(value) => (serialOutput = value)}
-            />
-          </box>
+      {/* The serial console takes the window. Everything else is a strip around
+          it, because firmware traffic is the thing a bench session watches and
+          the TUI's own notices are a glance. */}
+      {/* minHeight is what stops the console being squeezed to nothing when the
+          wizard, a side pane and the output strip are all open at once. Yoga
+          will overprint a zero-height box rather than complain. */}
+      <box
+        style={{
+          flexDirection: compact() ? "column" : "row",
+          flexGrow: CONSOLE_SHARE,
+          flexShrink: 1,
+          flexBasis: 0,
+          minHeight: 6,
+          marginTop: short() ? 0 : 1
+        }}
+      >
+        <box style={{ flexDirection: "column", flexGrow: 1, minHeight: 5 }}>
+          <SerialTerminal
+            board={selected()}
+            serialLines={serialLines()[activeBoard()]}
+            width={widths().serial}
+            chrome={settle(theme.foreground, serialFocus.color(), entranceSerial())}
+            query={searching() ? searchQuery() : ""}
+            matchIndex={matchIndex()}
+            onReady={(value) => (serialOutput = value)}
+          />
         </box>
         <Show when={activePane() !== "off"}>
           <SidePane
@@ -1547,6 +1694,35 @@ export function App(
             onJobsReady={(value) => (jobsOutput = value)}
           />
         </Show>
+      </box>
+
+      {/* Shrinkable on purpose: when the wizard and a pane are both open this is
+          the strip that gives way, because it is the one whose content is a
+          glance rather than the thing being watched. */}
+      <box
+        style={{
+          flexDirection: "column",
+          // Asking for the reference means wanting to read it, so help takes the
+          // window back off the console for as long as it is open. Without this
+          // the whole command reference renders into a five-row strip.
+          flexGrow: showHelp() ? CONSOLE_SHARE * 2 : OUTPUT_SHARE,
+          flexShrink: 1,
+          flexBasis: 0,
+          // A short terminal cannot afford both minimums and the gap: 24 rows
+          // are already spent on the console, the wizard and the prompt.
+          minHeight: short() ? 3 : 5,
+          maxHeight: showHelp() ? undefined : outputHeight(),
+          marginTop: short() ? 0 : 1
+        }}
+      >
+        <CommandOutput
+          activity={activity()}
+          showHelp={showHelp()}
+          width={widths().output}
+          chrome={settle(theme.foreground, theme.line, entranceOutput())}
+          arrival={lineArrival.progress()}
+          onReady={(value) => (commandOutput = value)}
+        />
       </box>
 
       <Show when={wizardVisible()}>
@@ -1566,17 +1742,19 @@ export function App(
 
       <box
         title={fitRule(
-          [
-            selected().connection === "connected" ? `${selected().label} firmware shell` : `${selected().label} · TUI command`,
-            focusArea() === "command"
-              ? selected().connection === "connected"
-                ? "unknown commands go directly to firmware"
-                : "TUI command mode"
-              : "Tab to type"
-          ],
+          searching()
+            ? ["search serial terminal", matchSummary(searchMatches().length, matchIndex()), "↑↓ or Enter to step"]
+            : [
+                selected().connection === "connected" ? `${selected().label} firmware shell` : `${selected().label} · TUI command`,
+                focusArea() === "command"
+                  ? selected().connection === "connected"
+                    ? "unknown commands go directly to firmware"
+                    : "TUI command mode"
+                  : "Tab to type"
+              ],
           widths().full
         )}
-        bottomTitle={fitRule(promptHints, widths().full)}
+        bottomTitle={fitRule(searching() ? ["Esc close search"] : promptHints, widths().full)}
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -1588,18 +1766,24 @@ export function App(
           paddingRight: 1
         }}
       >
-        <text style={{ fg: theme.muted, marginRight: 1 }}>{">"}</text>
+        <text style={{ fg: searching() ? theme.warning : theme.muted, marginRight: 1 }}>{searching() ? "⌕" : ">"}</text>
         <input
           ref={(value) => (input = value)}
-          value={prompt()}
-          placeholder={selected().connection === "connected" ? "firmware command or ? for TUI help" : "connect, wizard, or ? for help"}
+          value={searching() ? searchQuery() : prompt()}
+          placeholder={
+            searching()
+              ? "type to search the serial scrollback"
+              : selected().connection === "connected"
+                ? "firmware command or ? for TUI help"
+                : "connect, wizard, or ? for help"
+          }
           placeholderColor={theme.muted}
           textColor={theme.foreground}
           focusedTextColor={theme.foreground}
           style={{ flexGrow: 1 }}
           focused={focusArea() === "command"}
-          onInput={setPrompt}
-          on:enter={submitPrompt}
+          onInput={(value) => (searching() ? updateSearch(value) : setPrompt(value))}
+          on:enter={(value: string) => (searching() ? stepSearch(1) : submitPrompt(value))}
         />
       </box>
     </box>

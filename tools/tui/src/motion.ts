@@ -247,15 +247,33 @@ export type PanelWidths = {
  * app.tsx and rounds down at each step: underestimating drops one trailing hint,
  * while overestimating makes the whole label disappear.
  */
-export function panelWidths(width: number, side: SideMode, compact: boolean, stacked: boolean): PanelWidths {
+export function panelWidths(width: number, side: SideMode, compact: boolean): PanelWidths {
   const full = Math.max(0, width - 2)
   const sideWidth =
     side === "none" ? 0 : compact ? full : side === "half" ? Math.floor(full / 2) : Math.min(42, full)
-  const primary = side === "none" || compact ? full : Math.max(0, full - sideWidth - 1)
-  if (stacked) return { full, output: primary, serial: primary, side: sideWidth }
-  const output = Math.floor(primary * 0.58)
-  return { full, output, serial: Math.max(0, primary - output - 1), side: sideWidth }
+  const serial = side === "none" || compact ? full : Math.max(0, full - sideWidth - 1)
+  return { full, output: full, serial, side: sideWidth }
 }
 
 /** Content columns inside a panel of `width`: two for the border, two for the padding. */
 export const panelColumns = (width: number): number => Math.max(0, width - 4)
+
+/**
+ * The most rows the command output strip may take.
+ *
+ * The strip and the console share the leftover space in a fixed ratio (see
+ * OUTPUT_SHARE), which keeps the console dominant whatever else is open. This
+ * caps the strip on a very tall window so the extra rows go to the console
+ * rather than to a notice log nobody is reading, and floors it so a short one
+ * still shows an error. Fifteen is about five times the prompt.
+ */
+export const outputRows = (height: number): number => Math.max(5, Math.min(15, Math.round(height * 0.25)))
+
+/**
+ * How the leftover height splits between the console and the output strip.
+ *
+ * A ratio rather than two fixed heights, so opening the wizard or a side pane
+ * takes from both in proportion instead of squeezing the console to nothing.
+ */
+export const CONSOLE_SHARE = 3
+export const OUTPUT_SHARE = 1

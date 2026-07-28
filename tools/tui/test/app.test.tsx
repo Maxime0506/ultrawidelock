@@ -59,19 +59,21 @@ test("moves from wizard choices to the expert prompt and renders complete help",
   expect(pagedFrames).toContain("Hide the wizard")
 }, 30_000)
 
-test("keeps output, wizard, and prompt separate at 80x24", async () => {
+test("keeps console, output, wizard, and prompt separate at 80x24", async () => {
   const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width: 80, height: 24 })
   teardown = () => view.renderer.destroy()
   await view.renderOnce()
   const frame = view.captureCharFrame()
   const lines = frame.split("\n")
-  const output = lines.findIndex((line) => line.includes("command output"))
   const terminal = lines.findIndex((line) => line.includes("serial terminal"))
+  const output = lines.findIndex((line) => line.includes("command output"))
   const wizard = lines.findIndex((line) => line.includes("What do you want to put on the bench?"))
   const prompt = lines.findIndex((line) => line.includes("connect, wizard, or ? for help"))
-  expect(output).toBeGreaterThan(0)
-  expect(terminal).toBeGreaterThan(output)
-  expect(wizard).toBeGreaterThan(terminal)
+  // The console leads: it is the panel a bench session watches. Everything else
+  // is a strip beneath it, ending at the prompt.
+  expect(terminal).toBeGreaterThan(0)
+  expect(output).toBeGreaterThan(terminal)
+  expect(wizard).toBeGreaterThan(output)
   expect(prompt).toBeGreaterThan(wizard)
   expect(frame).not.toContain("wizard─")
 })
@@ -199,9 +201,11 @@ test("pane on restores the most recently selected side pane", async () => {
   await view.mockInput.typeText("pane off")
   view.mockInput.pressEnter()
   const closed = await view.waitForFrame((candidate) => !candidate.includes("No jobs in this session."))
-  // Closing the pane puts the two primary panels back side by side, which shows
-  // up as both of their border labels sharing one row.
-  expect(closed.split("\n").find((line) => line.includes("command output"))).toContain("serial terminal")
+  // Closing the pane gives its columns back to the console, which is the only
+  // panel that shared the row with it.
+  expect(closed).not.toContain("No jobs in this session.")
+  expect(closed).toContain("serial terminal")
+  expect(closed).toContain("command output")
 
   await view.mockInput.typeText("pane on")
   view.mockInput.pressEnter()
@@ -406,21 +410,29 @@ test("every panel keeps its label in the border rule at both terminal shapes", a
   }
 })
 
-test("moving the chrome into the borders gives the rows back to content", async () => {
-  // Before the labels moved into the rules, 80x24 showed zero lines of command
-  // output and 120x36 showed eight. Those are the numbers these floors defend.
-  for (const [width, height, floor] of [
-    [80, 24, 2],
-    [120, 36, 12]
+test("the console gets the window and the output strip stays a strip", async () => {
+  // The ranking, not a fixed size: firmware traffic is what a bench session
+  // watches, so the console has to keep winning as the window changes shape.
+  for (const [width, height] of [
+    [100, 40],
+    [120, 56]
   ] as const) {
     const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width, height })
     teardown = () => view.renderer.destroy()
     await view.renderOnce()
     const lines = view.captureCharFrame().split("\n")
-    const top = lines.findIndex((line) => line.includes("command output"))
-    const bottom = lines.findIndex((line, index) => index > top && line.includes("PageUp/PageDown"))
-    expect(top).toBeGreaterThanOrEqual(0)
-    expect(bottom - top - 1).toBeGreaterThanOrEqual(floor)
+    const rows = (label: string, closer: string) => {
+      const top = lines.findIndex((line) => line.includes(label))
+      const bottom = lines.findIndex((line, index) => index > top && line.includes(closer))
+      expect(top).toBeGreaterThanOrEqual(0)
+      expect(bottom).toBeGreaterThan(top)
+      return bottom - top + 1
+    }
+    const console_ = rows("serial terminal", "Ctrl+F search")
+    const output = rows("command output", "PageUp/PageDown")
+    expect(console_).toBeGreaterThan(output)
+    // Roughly five times the three-row prompt, and never more.
+    expect(output).toBeLessThanOrEqual(15)
     view.renderer.destroy()
   }
 })
@@ -482,3 +494,94 @@ test("panel labels survive every side-pane layout", async () => {
     view.renderer.destroy()
   }
 }, 30_000)
+
+test("Ctrl+F searches the serial scrollback and Esc puts the console back", async () => {
+  const view = await testRender(() => <App autoConnect={false} discoverPorts={noPorts} />, { width: 120, height: 40 })
+  teardown = () => view.renderer.destroy()
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  view.mockInput.pressKey("f", { ctrl: true })
+  const open = await view.waitForFrame((candidate) => candidate.includes("search serial terminal"))
+  expect(open).toContain("Esc close search")
+  // The prompt becomes the search box rather than a second input needing focus.
+  expect(open).toContain("type to search the serial scrollback")
+
+  view.mockInput.pressEscape()
+  const closed = await view.waitForFrame((candidate) => !candidate.includes("search serial terminal"))
+  expect(closed).toContain("Ctrl+F search")
+}, 30_000)
+
+test("a search reports its hit count and highlights the matching console lines", async () => {
+  const board = makeBoardState("nrf")
+  board.connection = "connected"
+  board.port = "/dev/example"
+  const view = await testRender(
+    () => (
+      <SerialTerminal
+        board={board}
+        serialLines={["boot: aliro ready", "chip: [EM] idle", "boot: aliro ranging"]}
+        width={100}
+        chrome={theme.line}
+        query="aliro"
+        matchIndex={1}
+        onReady={() => undefined}
+      />
+    ),
+    { width: 100, height: 12 }
+  )
+  teardown = () => view.renderer.destroy()
+  await view.renderOnce()
+  const frame = view.captureCharFrame()
+  expect(frame).toContain("\u2315 aliro")
+  expect(frame).toContain("2/2")
+  // Highlighting must not disturb the text: the lines read exactly as before.
+  expect(frame).toContain("boot: aliro ready")
+  expect(frame).toContain("boot: aliro ranging")
+
+  // The matched runs carry the warning colour; the rest of the line does not.
+  const spans = view.captureSpans().lines as unknown as { spans: { text: string; fg: RGBA }[] }[]
+  const warning = theme.warning.toInts().join(",")
+  const highlighted = spans.flatMap((line) => line.spans).filter((span) => span.fg.toInts().join(",") === warning)
+  expect(highlighted.map(({ text }) => text)).toContain("aliro")
+})
+
+test("a search that matches nothing says so instead of looking empty", async () => {
+  const board = makeBoardState("nrf")
+  const view = await testRender(
+    () => (
+      <SerialTerminal
+        board={board}
+        serialLines={["boot: aliro ready"]}
+        width={100}
+        chrome={theme.line}
+        query="nowhere"
+        matchIndex={0}
+        onReady={() => undefined}
+      />
+    ),
+    { width: 100, height: 10 }
+  )
+  teardown = () => view.renderer.destroy()
+  await view.renderOnce()
+  expect(view.captureCharFrame()).toContain("no matches")
+})
+
+test("the console shows every line it is given, including the first", async () => {
+  // OpenTUI 0.4.5's stickyScroll scrolls a row past the end even when the
+  // content fits, so this panel used to drop its oldest line and render nothing
+  // at all from a single-line buffer. Losing firmware output silently is the
+  // worst failure this panel has, so the count is pinned.
+  const board = makeBoardState("nrf")
+  board.connection = "connected"
+  for (const count of [1, 3, 6]) {
+    const lines = Array.from({ length: count }, (_, index) => `line-${index}`)
+    const view = await testRender(
+      () => <SerialTerminal board={board} serialLines={lines} width={60} chrome={theme.line} onReady={() => undefined} />,
+      { width: 60, height: 14 }
+    )
+    teardown = () => view.renderer.destroy()
+    await view.renderOnce()
+    const frame = view.captureCharFrame()
+    for (const line of lines) expect(frame).toContain(line)
+    view.renderer.destroy()
+  }
+})

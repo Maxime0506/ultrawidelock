@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # `tools/tui/src/theme.ts`
 
-**used by** [`tools/tui/src/app.tsx`](app.tsx.md), [`tools/tui/src/devices.ts`](devices.ts.md)
+**used by** [`tools/tui/src/app.tsx`](app.tsx.md), [`tools/tui/src/devices.ts`](devices.ts.md), [`tools/tui/src/motion.ts`](motion.ts.md)
 
 ## API
 
@@ -31,10 +31,10 @@ animation here ends by assigning the theme token rather than `mix(a, b, 1)`.
 
 `mix`, except the endpoints hand back the theme tokens so a settled frame is palette-true.
 
-**called by** `App`, `colorFor`, `titleColor`  ·  **calls** `mix`
+**called by** `App`, `colorFor`, `createFade`, `titleColor`  ·  **calls** `mix`
 
 <details><summary>Undocumented (1)</summary>
 
-- `at` — tested: :preserves bounded log history and flags failures@l29; :serializes bench jobs and captures their output@l4; :the prompt hint keeps the commands that matter when the terminal is narrow@l370
+- `at` — tested: :preserves bounded log history and flags failures@l29; :serializes bench jobs and captures their output@l4; :the prompt hint keeps the commands that matter when the terminal is narrow@l374
 
 </details>

@@ -18,7 +18,7 @@
 - `PosixSerialTransport.on`
 - `PosixSerialTransport.emit`
 - `PosixSerialTransport.open` — tested: checked in sample parses; corpus excludes ursk; csv appends with one header; firmware format drift; log writes frc sidecar; main cir flag; main reports and writes html; sample exit zero and reports
-- `PosixSerialTransport.read` — tested: checked in sample parses; corpus excludes ursk; csv appends with one header; firmware format drift; main reports and writes html; sample exit zero and reports; write cir csv roundtrip
+- `PosixSerialTransport.read`
 - `PosixSerialTransport.write`
 - `PosixSerialTransport.close` — tested: open lines serial
 

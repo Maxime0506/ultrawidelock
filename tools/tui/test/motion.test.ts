@@ -46,14 +46,15 @@ test("panel widths account for the side pane and stay inside the terminal", () =
   for (const width of [60, 80, 108, 120, 200]) {
     for (const side of ["none", "half", "fixed"] as const) {
       const compact = width < 108
-      const stacked = compact || side !== "none"
-      const w = panelWidths(width, side, compact, stacked)
+      const w = panelWidths(width, side, compact)
       expect(w.full).toBe(width - 2)
-      expect(w.output + (stacked ? 0 : w.serial + 1) + (side === "none" || compact ? 0 : w.side + 1)).toBeLessThanOrEqual(w.full)
+      // The console and an open side pane share one row with a gap between them.
+      expect(w.serial + (side === "none" || compact ? 0 : w.side + 1)).toBeLessThanOrEqual(w.full)
+      expect(w.output).toBe(w.full)
       expect(panelColumns(w.serial)).toBe(Math.max(0, w.serial - 4))
     }
   }
-  expect(panelWidths(120, "none", false, false).side).toBe(0)
+  expect(panelWidths(120, "none", false).side).toBe(0)
 })
 
 test("a fade rests on the theme token at both ends and blends only in between", () => {

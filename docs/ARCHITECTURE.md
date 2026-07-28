@@ -359,6 +359,54 @@ ccc_ran_params.
 
 **depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
+## `tools/tui/src/`
+
+### [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+
+**depends on** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+**depends on** [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md), [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
+
+### [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
+
+**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+
+### [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
+
+**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md)
+
+**depends on** [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md)
+
+*No module docstring. First commit: "Give the bench TUI its labels back as border rules".*
+
+**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+
+**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+### [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
+### [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/motion.ts`](architecture/tools.tui.src/motion.ts.md)
+
+### [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)
+
+**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+### [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
+
+**depends on** [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
+
 ## `modules/woz_uwb/src/driver/`
 
 ### [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
@@ -430,48 +478,6 @@ CIRDIAG_CIR_EVERY.
 @file uwb_isr.h — DW3000 interrupt-callback registration (public surface).
 
 **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
-
-## `tools/tui/src/`
-
-### [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
-
-**depends on** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
-
-### [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
-
-**depends on** [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md), [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)  ·  **used by** [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
-
-### [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
-
-**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
-
-### [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
-
-**depends on** [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
-
-### [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md)
-
-**depends on** [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
-
-### [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
-
-**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
-
-### [`tools/tui/src/terminal.ts`](architecture/tools.tui.src/terminal.ts.md)
-
-**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
-
-### [`tools/tui/src/theme.ts`](architecture/tools.tui.src/theme.ts.md)
-
-**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
-
-### [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)
-
-**used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md), [`tools/tui/src/jobs.ts`](architecture/tools.tui.src/jobs.ts.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
-
-### [`tools/tui/src/wizard.ts`](architecture/tools.tui.src/wizard.ts.md)
-
-**depends on** [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md), [`tools/tui/src/types.ts`](architecture/tools.tui.src/types.ts.md)  ·  **used by** [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md)
 
 ## `modules/woz_uwb/src/shell/`
 
