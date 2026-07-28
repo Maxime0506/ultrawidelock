@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 source_dir="$repo_root/host/macos-ctk"
 build_dir="${PRESENCE_TOKEN_BUILD_DIR:-$repo_root/build/presence-token-xcode}"
 output="${1:-$repo_root/build/openaliro-presence-token.zip}"
