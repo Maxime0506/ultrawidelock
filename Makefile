@@ -59,7 +59,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web presence-runtime presence-token presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-token presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -139,6 +139,46 @@ coverage:
 ## test-san: host suite rebuilt under ASan + UBSan  ·  memory-bug gate
 test-san:
 	@SAN=1 $(REPO_ROOT)/tests/host/run.sh
+
+## ha-stage0: validate the HA=1-only Stage 0 evidence and fixture contract
+##   No firmware, serial device, or broker is opened. Requires an explicit
+##   `HA=1` so this productization work cannot enter the default test path.
+ha-stage0:
+	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-stage0 requires HA=1'; exit 2; }
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_stage0.py
+
+## ha-test: run HA=1-only Home Assistant host tests
+##   Starts with Stage 0 evidence and the shared parser. Requires `HA=1`; it
+##   neither builds firmware nor opens a serial device or MQTT connection.
+ha-test:
+	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-test requires HA=1'; exit 2; }
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_stage0.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_parser.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_config.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_mqtt.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_cli.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_compatibility.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_session.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_serial_transport.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_agent.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_setup.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_component.py
+	@HA=1 python3 -B $(REPO_ROOT)/tests/host/test_ha_package.py
+
+## ha-package: build a local custom-component beta archive
+##   Requires HA=1 and never publishes. The component archive vendors the shared
+##   library so it can be installed as one local custom-component archive.
+ha-package:
+	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-package requires HA=1'; exit 2; }
+	@python3 -B $(REPO_ROOT)/integration/homeassistant/tools/package_component.py
+
+## ha-setup: set up the broker TLS, agent config, and credentials in one step
+##   Requires HA=1. Talks to a real broker over SSH and writes into
+##   ~/.config/openaliro-ha, so it is never part of a test or build path.
+##   Override defaults with HA_SSH, BROKER_HOST, MQTT_USER, or DEVICE_ID.
+ha-setup:
+	@[ "$(HA)" = "1" ] || { printf '%s\n' 'ha-setup requires HA=1'; exit 2; }
+	@$(REPO_ROOT)/integration/homeassistant/scripts/ha-setup.sh
 
 ## fuzz: fuzz the wire-facing parsers  ·  parser-hardening gate
 ##   Coverage-guided libFuzzer where available (CI), else a portable corpus

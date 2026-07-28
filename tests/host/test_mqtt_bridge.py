@@ -80,6 +80,27 @@ class ParseLineTests(unittest.TestCase):
             r, {"kind": "range", "block": 7, "distance_mm": 1234, "tof": 567}
         )
 
+    def test_dist_diagnostic_format_drift(self):
+        """The unconditional DIST diagnostic must parse from its own format string."""
+        with open(FW_SRC, encoding="utf-8") as fh:
+            src = fh.read()
+        m = re.search(r'"(DIST tof=%d d=%dmm phone_d=%dmm[^"]*)\\n"', src)
+        self.assertIsNotNone(
+            m, "DIST format string not found in ccc_shim_rx.c — update DIST_RE"
+        )
+        line = m.group(1) % (117, 548, 990, 1, 2, 3, 4)
+        self.assertEqual(
+            bridge.parse_line(line),
+            {"kind": "range", "block": None, "distance_mm": 548, "tof": 117},
+        )
+
+    def test_dist_ignores_the_peer_side_estimate(self):
+        line = "DIST tof=60 d=281mm phone_d=-342mm rep1=1 rnd2=2 rnd1=3 rep2=4"
+        self.assertEqual(
+            bridge.parse_line(line),
+            {"kind": "range", "block": None, "distance_mm": 281, "tof": 60},
+        )
+
 
 class PayloadTests(unittest.TestCase):
     def test_discovery_payloads(self):
