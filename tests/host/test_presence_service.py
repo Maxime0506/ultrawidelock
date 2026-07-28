@@ -25,6 +25,32 @@ import presence_service as ps  # noqa: E402
 import presence_verify as pv  # noqa: E402
 import test_presence_verify as tpv  # noqa: E402
 
+# An AF_UNIX address carries the whole path in a fixed 104-byte field on macOS
+# (108 on Linux), and tempfile follows TMPDIR. The isolated verify sweep points
+# TMPDIR deep inside a copied candidate tree, where "<tmpdir>/presenced.sock" no
+# longer fits and every socket test dies in setUp with "AF_UNIX path too long".
+# Nothing about the product is at fault -- presenced defaults to
+# ~/.openaliro/presenced.sock -- so this belongs in the test, not in the server.
+SUN_PATH_MAX = 104
+SOCKET_NAME = "presenced.sock"
+
+
+def short_socket_dir():
+    """A TemporaryDirectory whose socket path fits an AF_UNIX address.
+
+    TMPDIR is honoured whenever it fits, because a sandbox that sets it means
+    it. The fallback is only for the case where honouring it cannot work.
+    """
+    for base in (None, "/tmp"):
+        try:
+            directory = tempfile.TemporaryDirectory(dir=base)
+        except OSError:
+            continue
+        if len(os.path.join(directory.name, SOCKET_NAME).encode()) < SUN_PATH_MAX:
+            return directory
+        directory.cleanup()
+    raise unittest.SkipTest("no temp directory short enough for an AF_UNIX socket path")
+
 
 class EnrollmentTests(unittest.TestCase):
     def write_store(self, directory, entries):
@@ -319,9 +345,9 @@ class PolicyTests(unittest.TestCase):
 
 class SocketTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
+        self.directory = short_socket_dir()
         os.chmod(self.directory.name, 0o700)
-        self.path = os.path.join(self.directory.name, "presenced.sock")
+        self.path = os.path.join(self.directory.name, SOCKET_NAME)
         self.engine = StubEngine()
         self.service = ps.PresenceService(self.engine, max_cm=40)
         self.server = ps.PresenceUnixServer(self.path, self.service, request_timeout=1)
