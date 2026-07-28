@@ -314,10 +314,17 @@ Queue a reader-status callback to run on the NimBLE host task.
 Stores cb and unsecured in module statics and posts an event to the default NimBLE event queue; the callback fires later from reader_status_ev_cb, not synchronously. Runs on the host task so it serializes with every other sc_ble seal operation and keeps the BleSK counter monotonic; callers must not rely on immediate execution and must not post a second call before the first has been drained if ordering matters.
 
 ### `void aliro_ble_time_updated(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:989`
+`ports/esp32/components/aliro_ble/aliro_ble.c:1007`
 
 Notify the transport that the wall clock just stepped (e.g. SNTP first sync), so the
 dynamic advertisement tag is re-derived immediately instead of waiting out the refresh
 period. Safe from any task (marshaled onto the host task via the default event queue).
 No-op before aliro_ble_start_attached(): the attach path derives with the then-current
 clock, and the queue may not exist yet while the owning stack is still booting.
+
+<details><summary>Undocumented (2)</summary>
+
+- `presence_reset_ev_cb`
+- `aliro_ble_post_presence_reset`
+
+</details>

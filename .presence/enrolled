@@ -1,0 +1,13 @@
+# Trusted presence dongles.
+#
+# Format:  <name> <65-byte uncompressed P-256 public point, hex> <credential-id>
+#
+# A presence-signed tag names only a key id (the first 8 bytes of SHA-256 over
+# the point). The key material and allowed 8-byte credential id are always
+# read from this file, never from the tag, so a tag cannot introduce a device
+# or human nobody vetted. Adding either is a reviewable change in history.
+#
+# Enrol with:
+#   python3 tools/presence_git.py enroll --port <serial> --name <label>
+#
+desk-lock 044063fed86a4990d73cfdc49f2928be89f8a44ad324d4e83239736b6ac000255e603ae5f6d19ebf3835d50ed1f710c0c06531e28a8834521b6ec36fa2934e5e98 b4c26aa39225c3c9

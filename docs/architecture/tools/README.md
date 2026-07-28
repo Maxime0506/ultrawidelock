@@ -20,4 +20,7 @@
 | [`tools/docs_title.py`](docs_title.md) | Title the generated pages after the repository, not after the checkout directory. |
 | [`tools/docs_twin.py`](docs_twin.md) | Fold the interactive walk-up digital twin into the rendered site. |
 | [`tools/flight_recorder.py`](flight_recorder.md) | flight_recorder.py — carry a recorded UWB walk-up off the device and turn it |
+| [`tools/piv_pin.py`](piv_pin.md) | Provision or change the OpenAliro PIV PIN through macOS PC/SC. |
 | [`tools/power_profile.py`](power_profile.md) | Power profile: turn a gated-walk-up serial log (+ optional power capture) |
+| [`tools/presence_git.py`](presence_git.md) | Presence-signed git tags: prove a human was physically present at a release. |
+| [`tools/presence_verify.py`](presence_verify.md) | Verify an ECDSA-P256 presence assertion against a dongle's public key. |

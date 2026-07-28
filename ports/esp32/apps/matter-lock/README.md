@@ -70,9 +70,15 @@ clear message; `FORCE=1` stops the holder first.
 | `codes` | reprint the commissioning QR URL and manual pairing code |
 | `aliro prov` | show reader identity and credential trust store |
 | `aliro trust` | persist the last-presented credential as trusted |
+| `aliro clear` | empty the trust store, keeping the reader identity |
 | `hamqtt` | provision the Home Assistant broker (only with `CONFIG_ENABLE_HA_MQTT`) |
 | `factoryreset` | erase all Matter state and reboot |
 | `help`, `clear` | REPL built-ins |
+
+With `CONFIG_WOZ_PRESENCE=y` the same prompt also answers `presence pub`,
+`presence credential` and `presence prove <nonce>`, which turn this lock into a
+signed proof that a named human was within a few tens of centimetres of it. Off
+by default; see [`docs/presence.md`](../../../../docs/presence.md).
 
 ## Commissioning and provisioning
 
@@ -170,5 +176,7 @@ certificate chain eats headroom there; a single CA is around 1.5 kB of a 48 kB p
 - [`docs/esp32-gotchas.md`](../../../../docs/esp32-gotchas.md): every trap hit during
   this bring-up, with symptom and fix. Read this before debugging anything.
 - [`../reader/README.md`](../reader/README.md) — the shared component stack.
+- [`docs/presence.md`](../../../../docs/presence.md): signed proximity proofs from
+  this board, for signing releases rather than opening doors.
 - [`docs/porting-esp32.md`](../../../../docs/porting-esp32.md): how the port was
   planned and how it actually went.

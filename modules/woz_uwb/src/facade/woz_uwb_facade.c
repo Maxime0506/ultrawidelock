@@ -81,6 +81,11 @@ int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)
 	}
 
 	woz_hfclk_ensure_128mhz();
+	/* Trust is session-bound. Carrying the prior session's K agreeing blocks
+	 * into a new URSK would let its first measurement appear trusted. */
+#if defined(CONFIG_WOZ_ALIRO)
+	fira_session_reset_ranges();
+#endif
 
 	/* Flight recorder: stamp the session config (incl. URSK) that opens this
 	 * walk-up, so a replay can reconstruct the exact session before feeding it
@@ -163,13 +168,67 @@ void woz_uwb_set_range_listener(void (*cb)(void))
 
 bool woz_uwb_trusted_range_cm(int32_t *cm_out)
 {
+	return woz_uwb_trusted_range_age_cm(cm_out, NULL);
+}
+
+bool woz_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out)
+{
 #if defined(CONFIG_WOZ_ALIRO)
 	/* Layer 4: only surface the range to the unlock seam once K consecutive
 	 * agreeing plausible blocks have built trust, so a lone spoofed block
 	 * cannot flip open-allowed. */
-	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL) &&
+	return fira_session_last_range(cm_out, NULL, NULL, NULL, age_ms_out) &&
 	       fira_session_range_trusted();
 #else
-	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL);
+	return fira_session_last_range(cm_out, NULL, NULL, NULL, age_ms_out);
 #endif
+}
+
+uint32_t woz_uwb_range_generation(void)
+{
+#if defined(CONFIG_WOZ_ALIRO)
+	return fira_session_range_generation();
+#else
+	return 0u;
+#endif
+}
+
+bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after)
+{
+#if defined(CONFIG_WOZ_ALIRO)
+	/* Generation is written after the range fields. A concurrent latch can
+	 * cause one harmless false-negative poll, never acceptance of old data. */
+	uint32_t generation = fira_session_range_generation();
+
+	return (int32_t)(generation - after) > 0 && woz_uwb_trusted_range_cm(cm_out);
+#else
+	(void)after;
+	return woz_uwb_trusted_range_cm(cm_out);
+#endif
+}
+
+bool woz_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
+					    struct woz_uwb_range_integrity *ig_out)
+{
+	/* Default to a failed STS before anything else runs, so every early return
+	 * below -- and every build without a ranging layer -- leaves the caller
+	 * holding "not vouched for" rather than an uninitialised verdict. */
+	if (ig_out != NULL) {
+		ig_out->sts_ok = false;
+		ig_out->sts_quality = 0;
+		ig_out->trust_level = 0u;
+	}
+	if (!woz_uwb_trusted_range_after_cm(cm_out, after)) {
+		return false;
+	}
+#if defined(CONFIG_WOZ_ALIRO)
+	struct fira_range_integrity ig;
+
+	if (ig_out != NULL && fira_session_last_range_integrity(&ig)) {
+		ig_out->sts_ok = ig.sts_ok;
+		ig_out->sts_quality = ig.sts_quality;
+		ig_out->trust_level = ig.trust_level;
+	}
+#endif
+	return true;
 }

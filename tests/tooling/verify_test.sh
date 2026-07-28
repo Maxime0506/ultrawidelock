@@ -86,6 +86,7 @@ host-tests.yml:test                        test
 host-tests.yml:portability                 !the same 'make test' on a 2nd OS/compiler
 host-tests.yml:coverage                    coverage
 patch-drift.yml:drift                      patch-drift
+presence-tags.yml:verify                   !tag-triggered: verifies a presence-signed tag, which needs an enrolled dongle and a phone in the room
 port-tests.yml:test                        test-port
 sanitizers.yml:asan-ubsan                  test-san
 release.yml:tui                            test-tui

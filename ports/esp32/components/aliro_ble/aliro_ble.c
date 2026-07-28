@@ -977,6 +977,24 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 	ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_reader_status_ev);
 }
 
+static struct ble_npl_event s_presence_reset_ev;
+static void (*s_presence_reset_cb)(void);
+
+static void presence_reset_ev_cb(struct ble_npl_event *ev)
+{
+	(void)ev;
+	if (s_presence_reset_cb != NULL) {
+		s_presence_reset_cb();
+	}
+}
+
+void aliro_ble_post_presence_reset(void (*cb)(void))
+{
+	s_presence_reset_cb = cb;
+	ble_npl_event_init(&s_presence_reset_ev, presence_reset_ev_cb, NULL);
+	ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_presence_reset_ev);
+}
+
 /* ---- Wall-clock step notification (SNTP / future Matter time sync) --------- */
 
 static struct ble_npl_event s_time_updated_ev;

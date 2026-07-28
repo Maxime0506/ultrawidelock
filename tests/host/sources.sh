@@ -43,6 +43,9 @@ UNIT_SRCS=(
 	"$SRC/facade/woz_logfmt.c"
 	"$SRC/facade/woz_logquiet.c"
 	"$SRC/facade/flight_recorder.c"
+	"$ALIRO/src/aliro_prov.c"
+	"$ALIRO/src/aliro_hash.c"
+	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
 )
 
@@ -64,6 +67,9 @@ TEST_SRCS=(
 	"$HOST/test_aliro_adapter.c"
 	"$HOST/test_aliro_msg.c"
 	"$HOST/test_aliro_session.c"
+	"$HOST/test_aliro_prov.c"
+	"$HOST/test_aliro_hash.c"
+	"$HOST/test_aliro_assert.c"
 	"$HOST/test_cherry.c"
 	"$HOST/test_fira.c"
 	"$HOST/test_facade.c"
@@ -106,6 +112,7 @@ INCS=(
 	-I"$ALIRO/include"
 	-I"$ROOT/modules/woz_port/include"
 	-I"$ROOT/modules/woz_aliro/include"
+	-I"$ROOT/modules/woz_aliro/src"
 )
 
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.

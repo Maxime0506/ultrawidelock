@@ -8,12 +8,12 @@ DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
 drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
 The demo responder lifecycle + interactive console live in app_shell.c.
 
-**depends on** [`ports/esp32/apps/reader/main/app_shell.h`](app_shell.h.md)  ·  **discussed in** [`docs/esp32-gotchas.md`](../../esp32-gotchas.md), [`docs/porting-esp32-phase3.md`](../../porting-esp32-phase3.md)
+**depends on** [`ports/esp32/apps/reader/main/app_shell.h`](app_shell.h.md), [`ports/esp32/components/aliro_reader/presence_link.h`](../ports.esp32.components.aliro_reader/presence_link.h.md)  ·  **discussed in** [`docs/esp32-gotchas.md`](../../esp32-gotchas.md), [`docs/porting-esp32-phase3.md`](../../porting-esp32-phase3.md)
 
 ## API
 
 ### `void app_main(void)`
-`ports/esp32/apps/reader/main/main.c:32`
+`ports/esp32/apps/reader/main/main.c:36`
 
 Application entry point: brings up the DW3000 responder, the Aliro BLE reader,
 and the interactive shell, then polls for ranging results.

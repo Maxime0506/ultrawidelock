@@ -581,11 +581,17 @@ static void t_l2cap_coc(void)
 
 static bool s_status_flag;
 static int s_status_calls;
+static int s_presence_reset_calls;
 
 static void status_cb(bool unsecured)
 {
 	s_status_flag = unsecured;
 	s_status_calls++;
+}
+
+static void presence_reset_cb(void)
+{
+	s_presence_reset_calls++;
 }
 
 static void t_marshaling(void)
@@ -601,6 +607,14 @@ static void t_marshaling(void)
 	aliro_ble_post_reader_status(status_cb, false);
 	fake_nimble_drain_eventq();
 	okc("status ran unsecured=false", s_status_calls == 2 && s_status_flag == false);
+
+	/* Presence reset uses its own event slot and runs on that same host task. */
+	fake_eventq_count = 0;
+	aliro_ble_post_presence_reset(presence_reset_cb);
+	okc("presence reset posted not yet run",
+	    fake_eventq_count == 1 && s_presence_reset_calls == 0);
+	fake_nimble_drain_eventq();
+	okc("presence reset ran", s_presence_reset_calls == 1);
 
 	/* time_updated after attach posts the refresh event. */
 	fake_eventq_count = 0;

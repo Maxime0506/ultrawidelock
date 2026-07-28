@@ -106,6 +106,7 @@ void test_aliro_prim_psa(void)
 	static const uint8_t NONCE[12] = {0};
 	static const uint8_t AAD[5] = {1, 2, 3, 4, 5};
 	static const uint8_t MSG[20] = {7};
+	static const uint8_t HASH[32] = {8};
 
 	t_group("init + random");
 	psafake_reset();
@@ -261,6 +262,19 @@ void test_aliro_prim_psa(void)
 	psafake_reset();
 	psafake.sign_olen = 63;
 	T_EQ("sig olen mismatch -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	psafake_reset();
+	T_EQ("sign hash ok", aliro_ecdsa_p256_sign_hash(priv, HASH, sig), 0);
+	T_EQ("usage SIGN_HASH", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_SIGN_HASH);
+	T_EQ("hash len plumbed", (long)psafake.last_msg_len, 32L);
+	psafake.import_ret = PSA_ERROR_GENERIC;
+	T_EQ("sign hash import fail -> -1", aliro_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
+	psafake_reset();
+	psafake.sign_ret = PSA_ERROR_GENERIC;
+	T_EQ("sign hash fail -> -1", aliro_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
+	psafake_reset();
+	psafake.sign_olen = 63;
+	T_EQ("sign hash olen mismatch -> -1",
+	     aliro_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
 	psafake_reset();
 	T_EQ("verify ok", aliro_ecdsa_p256_verify(pub, MSG, sizeof(MSG), sig), 0);
 	T_EQ("usage VERIFY", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_VERIFY_MESSAGE);

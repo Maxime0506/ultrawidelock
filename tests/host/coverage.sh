@@ -223,7 +223,10 @@ cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 \
 	"$ET/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
 
-cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
+# _POSIX_C_SOURCE because main.c now includes woz_port.h, whose host build calls
+# clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
+# declares both unconditionally, so omitting it builds locally and fails on CI.
+cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
 	-I"$SDKFAKE" -I"$EAPPS/reader/main" -I"$SRC/facade" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
 	"$ET/test_esp_app_shell.c" "$EAPPS/reader/main/app_shell.c" \
@@ -267,7 +270,20 @@ run_suite esp_matter "$OUT/cov_esp_matter"
 
 llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
 
-ALL_UNIT_SRCS=("${UNIT_SRCS[@]}" "${CORE_UNIT_SRCS[@]}" "${SIDE_UNIT_SRCS[@]}")
+# CORE_UNIT_SRCS was written assuming it does not overlap UNIT_SRCS, and that
+# stopped being true once the shared-core units gained host unit tests of their
+# own: aliro_hash.c and aliro_prov.c now appear in both. A repeated path makes
+# llvm-cov print the file twice and count its lines twice in the denominator,
+# which moves the number the CI floor is checked against. Dedupe rather than
+# deleting the entries, so an overlap added later cannot reintroduce it.
+ALL_UNIT_SRCS=()
+for src in "${UNIT_SRCS[@]}" "${CORE_UNIT_SRCS[@]}" "${SIDE_UNIT_SRCS[@]}"; do
+	seen=0
+	for kept in ${ALL_UNIT_SRCS[@]+"${ALL_UNIT_SRCS[@]}"}; do
+		[ "$kept" = "$src" ] && { seen=1; break; }
+	done
+	[ "$seen" -eq 0 ] && ALL_UNIT_SRCS+=("$src")
+done
 
 # Our headers, all of them: llvm-cov attributes inline-function coverage to
 # the header wherever an instrumented TU instantiated it, and silently skips

@@ -71,6 +71,42 @@ bool woz_uwb_last_range_cm(int32_t *cm_out);
 bool woz_uwb_trusted_range_cm(int32_t *cm_out);
 
 /**
+ * As woz_uwb_trusted_range_cm(), plus how long ago that range landed. For
+ * callers that must judge whether a range is still CURRENT rather than merely
+ * the most recent one seen -- a distance from two minutes ago says nothing
+ * about who is standing here now. Polling this beats registering a range
+ * listener to timestamp latches: there is only one listener slot, and an app
+ * that already owns it (the lock's approach loop) would otherwise be displaced.
+ */
+bool woz_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out);
+
+/** Monotonic accepted-range epoch for post-challenge freshness checkpoints. */
+uint32_t woz_uwb_range_generation(void);
+
+/** Trusted distance only when its accepted-range epoch is newer than @p after.
+ *  This is the demand-driven presence seam: an old latch can never satisfy a
+ *  challenge merely because it remains recent in wall-clock terms. */
+bool woz_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after);
+
+/** Layer-2 evidence for a latched range, for a consumer that must fail closed. */
+struct woz_uwb_range_integrity {
+	bool sts_ok;         /**< every block in the agreeing run passed the STS floor */
+	int16_t sts_quality; /**< worst STS quality index in that run */
+	uint8_t trust_level; /**< how many agreeing blocks stand behind the distance */
+};
+
+/**
+ * As woz_uwb_trusted_range_after_cm(), plus the integrity evidence recorded
+ * with that latch. The plain accessor answers "how far", which is all an unlock
+ * decision needs; this one also answers "how well was that measured", which is
+ * what a caller has to know before signing the number into a statement someone
+ * else will believe. Without CONFIG_WOZ_ALIRO there is no evidence to report
+ * and @p ig_out reads back as a failed STS.
+ */
+bool woz_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
+					    struct woz_uwb_range_integrity *ig_out);
+
+/**
  * Register a callback fired after each accepted range latch (NULL to clear),
  * so the unlock seam can block on an event instead of polling. The callback
  * runs on the UWB RX path — keep it to a task wake, nothing heavier. A no-op

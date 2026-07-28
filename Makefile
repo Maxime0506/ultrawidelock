@@ -39,6 +39,12 @@ PORT     ?=
 BAUD     ?= 115200
 LOG      ?=
 
+# Presence-signed tags (make presence-verify TAG=presence/1.2.0). MAXCM is the
+# distance threshold in cm; 40 matches tools/presence_verify.py's default.
+TAG      ?=
+MAXCM    ?= 40
+PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
+
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
   $(if $(CHIP),UWB_CHIP=$(CHIP)) \
@@ -52,7 +58,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -208,6 +214,20 @@ cbmc:
 verify:
 	@$(REPO_ROOT)/scripts/verify.sh
 
+## presence-runtime: build the eight-file macOS transfer archive
+##   Output: build/presence-runtime.tar.gz  ·  override with PRESENCE_RUNTIME_OUT=
+presence-runtime:
+	@python3 $(REPO_ROOT)/scripts/presence_runtime.py --output "$(PRESENCE_RUNTIME_OUT)"
+
+## presence-verify: check a tag's presence assertion  ·  TAG=presence/1.2.0  (what CI runs)
+##   Confirms a human was physically at the machine when the tag was made. Pure
+##   host check — no dongle, no serial port. Trusted keys come from
+##   .presence/enrolled, never from the tag. Building and signing live in
+##   ports/esp32/apps/reader (make presence-probe / presence-sign).
+presence-verify:
+	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-verify TAG=presence/1.2.0" >&2; exit 1; }
+	@python3 $(REPO_ROOT)/tools/presence_git.py verify --tag "$(TAG)" --max-cm $(MAXCM)
+
 ## check: every host-side suite under one banner  ->  live rows + summary table
 ##   Parallel by default; SERIAL=1 streams suites one at a time, SUITES="..."
 ##   scopes (firmware shared webtwin). The pre-push look, runnable any time.
@@ -344,7 +364,7 @@ help:
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
-	     printf "    %s%-14s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
+	     printf "    %s%-16s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
 	  $(MAKEFILE_LIST); \
 	printf '\n  %sOptions%s  %s·  set on the command line, e.g. make build PRETTY=1%s\n' "$$y" "$$r" "$$d" "$$r"; \
 	printf '    %sCHIP=dw3720  PRETTY=1  PRISTINE=1  SELFTEST=1  STRICT=1%s\n' "$$d" "$$r"; \
