@@ -86,11 +86,25 @@ TAG_ERR = "PRESENCE-ERR"
 # stays well inside this; a port that is not running this firmware fails fast.
 REPLY_LINE_BUDGET = 400
 
-# A USB-UART bridge can briefly assert modem-control lines as it opens.  The
-# console needs DTR active to receive, while keeping RTS inactive avoids pulsing
-# the ESP32 reset line.  The settle window lets macOS finish attaching the tty
-# before the first shell command.
+# A USB-UART bridge can briefly assert modem-control lines as it opens, and RTS
+# is left inactive throughout because it pulses the ESP32 reset line.  The settle
+# window lets macOS finish attaching the tty before the first shell command.
 SERIAL_SETTLE_S = 1.0
+
+# DTR means opposite things on the two adapters this tool meets.  Some USB-UART
+# bridges gate transmission on it and stay quiet until it is asserted; the
+# ESP32-S3's native USB Serial/JTAG instead maps it to reset, so asserting it
+# holds the chip down and the port never says anything at all.  Measured on an
+# S3 devkit: dtr=True read 0 bytes and never prompted, dtr=False read 3309 bytes
+# and prompted in 1.6 s.  Nothing about the tty distinguishes the two, so open
+# with DTR inactive and flip it once if the board stays silent.
+#
+# Waiting for the prompt rather than a fixed delay matters separately: a Matter
+# build does not start its shell until WiFi and fabric bring-up finish, and a
+# command sent before then is discarded with no reply, which used to surface as
+# "check the board was flashed with CONFIG_WOZ_PRESENCE=y" on correct firmware.
+SERIAL_READY_S = 12.0
+SERIAL_PROMPT = "> "
 
 
 class PresenceError(RuntimeError):
@@ -224,6 +238,28 @@ def verify_tag(tag: str, max_cm=40, root=None, enrolled_path=ENROLLED_PATH, open
     return verdict, detail
 
 
+def wait_ready(ser) -> bool:
+    """Poll a newline until the board's shell prompts back. True if it did.
+
+    Returning rather than raising on the deadline keeps the diagnosis with the
+    caller: a port that never prompts is usually the wrong port or firmware with
+    no shell at all, and ask() already names both.
+    """
+    deadline = time.monotonic() + SERIAL_READY_S
+    tail = ""
+    while time.monotonic() < deadline:
+        ser.write(b"\n")
+        ser.flush()
+        time.sleep(0.4)
+        pending = ser.in_waiting
+        if pending:
+            tail = (tail + ser.read(pending).decode("utf-8", "replace"))[-256:]
+        if SERIAL_PROMPT in tail:
+            ser.reset_input_buffer()
+            return True
+    return False
+
+
 def open_port(port: str, timeout=10.0):
     try:
         import serial  # pyserial, only needed to talk to a real dongle
@@ -240,12 +276,17 @@ def open_port(port: str, timeout=10.0):
         # pyserial opens the device.  Serial(port, ...) opens first and only then
         # gives callers a chance to change them, which can reset ESP32 boards.
         ser = serial.Serial(port=None, baudrate=115200, timeout=timeout)
-        ser.dtr = True
+        ser.dtr = False
         ser.rts = False
         ser.port = port
         ser.open()
         time.sleep(SERIAL_SETTLE_S)
         ser.reset_input_buffer()
+        if not wait_ready(ser):
+            ser.dtr = True
+            time.sleep(SERIAL_SETTLE_S)
+            ser.reset_input_buffer()
+            wait_ready(ser)
         return ser
     except serial.SerialException as exc:
         if ser is not None and ser.is_open:

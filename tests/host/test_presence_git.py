@@ -440,6 +440,7 @@ class SerialTests(unittest.TestCase):
                 self.port = kwargs["port"]
                 self._dtr = True
                 self._rts = True
+                self._pending = b""
 
             @property
             def dtr(self):
@@ -466,6 +467,25 @@ class SerialTests(unittest.TestCase):
             def reset_input_buffer(self):
                 events.append(("drain", None))
 
+            # A board that is already up prompts back on the first poll, so the
+            # readiness wait costs one round trip rather than a fixed delay.
+            def write(self, data):
+                events.append(("write", data))
+                self._pending = b"matter> "
+                return len(data)
+
+            def flush(self):
+                pass
+
+            @property
+            def in_waiting(self):
+                return len(self._pending)
+
+            def read(self, count):
+                chunk = self._pending[:count]
+                self._pending = self._pending[count:]
+                return chunk
+
         fake_serial = types.SimpleNamespace(
             Serial=FakePort,
             SerialException=Exception,
@@ -481,13 +501,76 @@ class SerialTests(unittest.TestCase):
             events,
             [
                 ("construct", {"port": None, "baudrate": 115200, "timeout": 3.5}),
-                ("dtr", True),
+                ("dtr", False),
                 ("rts", False),
                 ("open", "/dev/cu.test"),
                 ("drain", None),
+                ("write", b"\n"),
+                ("drain", None),
             ],
         )
-        sleep.assert_called_once_with(pg.SERIAL_SETTLE_S)
+        self.assertEqual(sleep.call_args_list[0], mock.call(pg.SERIAL_SETTLE_S))
+
+    def test_open_asserts_dtr_when_the_board_stays_silent(self):
+        """A bridge that gates transmission on DTR gets it, but only as a retry.
+
+        The opposite adapter -- the ESP32-S3's native USB Serial/JTAG -- is held
+        in reset by an asserted DTR and reads zero bytes forever, so leading with
+        it is what made a correct board look like firmware without presence.
+        """
+        dtr_history = []
+
+        class SilentUntilDtr:
+            def __init__(self, **kwargs):
+                self.is_open = False
+                self.port = kwargs["port"]
+                self._dtr = False
+                self.rts = False
+                self._pending = b""
+
+            @property
+            def dtr(self):
+                return self._dtr
+
+            @dtr.setter
+            def dtr(self, value):
+                self._dtr = value
+                dtr_history.append(value)
+
+            def open(self):
+                self.is_open = True
+
+            def reset_input_buffer(self):
+                self._pending = b""
+
+            def write(self, data):
+                if self._dtr:
+                    self._pending = b"matter> "
+                return len(data)
+
+            def flush(self):
+                pass
+
+            @property
+            def in_waiting(self):
+                return len(self._pending)
+
+            def read(self, count):
+                chunk, self._pending = self._pending[:count], self._pending[count:]
+                return chunk
+
+        fake_serial = types.SimpleNamespace(
+            Serial=SilentUntilDtr, SerialException=Exception
+        )
+        with (
+            mock.patch.dict(sys.modules, {"serial": fake_serial}),
+            mock.patch.object(pg, "SERIAL_READY_S", 1.0),
+            mock.patch.object(pg.time, "sleep"),
+        ):
+            port = pg.open_port("/dev/cu.test")
+
+        self.assertEqual(dtr_history, [False, True])
+        self.assertTrue(port.dtr)
 
     def test_pubkey_request_sends_the_console_command(self):
         ser = FakeSerial(pub_line(POINT_A))
