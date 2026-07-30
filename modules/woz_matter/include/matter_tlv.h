@@ -81,12 +81,20 @@ typedef uint64_t matter_tlv_tag_t;
 #define MATTER_TLV_E_TYPE    MATTER_E_TYPE
 
 /*
- * Bounded, and deliberately shallow. Matter's own structures nest ~4 deep; 8
- * leaves room without letting a peer drive nesting. The writer tracks depth
- * with a counter rather than recursion, which is the same reason the reader
- * will be iterative: stack depth must not be a function of peer input.
+ * Bounded, and matched to the SDK rather than guessed. CHIP's only TLV depth
+ * bound is kMaxRecursionDepth = 10 (src/lib/core/TLVUtilities.cpp:44), and the
+ * deepest message a minimal device actually sees is an ACL attribute write at
+ * SEVEN containers: message struct -> IB array -> IB struct -> AttributeDataIB
+ * -> list value -> entry struct -> subjects list. An earlier value of 8 here
+ * was reasoned from "Matter's own structures nest ~4 deep" and would have left
+ * a single level of margin under a real Apple ACL write.
+ *
+ * Raising it is free: the depth is a counter, not an array index, so nothing is
+ * sized by this. The writer counts rather than recurses, which is the same
+ * reason the reader is iterative: stack depth must not be a function of peer
+ * input.
  */
-#define MATTER_TLV_MAX_DEPTH 8
+#define MATTER_TLV_MAX_DEPTH 10
 
 /**
  * Encoder state. Errors are STICKY: the first failure is latched into rc and

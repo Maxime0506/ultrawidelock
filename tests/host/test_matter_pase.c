@@ -13,6 +13,7 @@
  */
 #include <string.h>
 
+#include "matter_mrp.h"
 #include "matter_pase.h"
 
 #include "test.h"
@@ -32,6 +33,33 @@ static const char *const K_PAKE2 =
 	"1530014104000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20212223242526"
 	"2728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f300220202122232425262728292a2b2c2d2e2f"
 	"303132333435363738393a3b3c3d3e3f18";
+/*
+ * REAL WIRE BYTES. Extracted from adafruit/circuitmatter's
+ * test_data/apple_recorded_packets.jsonl, a recorded commissioning by an actual
+ * iPhone against a real node. These are the PASE payloads only -- the Secure
+ * Channel protocol headers were stripped and no addresses are reproduced.
+ *
+ * Everything else in this suite is derived: from CHIP's source, from
+ * CircuitMatter's encoder, from the spec. These five are the only bytes here
+ * that an Apple controller actually put on a wire.
+ */
+static const char *const K_APPLE_REQ =
+	"15300120a882bce8bfdeab50e04ac596bfc05024db5902b7512ed9b278cfaacc125230122502b6e424030028"
+	"0435052501f40125022c012503a00f24041224050b2606000004012407011818";
+static const char *const K_APPLE_RESP =
+	"15300120a882bce8bfdeab50e04ac596bfc05024db5902b7512ed9b278cfaacc12523012300220b09aea1140"
+	"9a97cfc3b5079e0bde89d0f230145383475974c560a505efb25969240301350425011027300220e6e08fd084"
+	"c763323da8111eea17d4e077d8df2ed5a294a4d2a36f86fce786241818";
+static const char *const K_APPLE_PAKE1 =
+	"1530014104eed348b3b4afab1b33b4b421cbc6deea8a1d832bf9e0b955d8253edb1f8b2c199750ee0b24fc5e"
+	"b90d5f44483b05c05a3098b9a4908ddcbaf961e6f87cbcd72b18";
+static const char *const K_APPLE_PAKE2 =
+	"153001410492f502e899ae0a85367551053f49f1e0d4f8c3437f8550fe99af51c734ddb1ae7c6c388fe60986"
+	"c2c1232e773427f97fc3a578820b901c28fa10a5dd5d5550d2300220445f2918b40b5f8571c6e6eb3b74cb60"
+	"6b14f20cf36fd8b09e6b98b9336bd68418";
+static const char *const K_APPLE_PAKE3 =
+	"15300120f04ed65efe58a197035f89f6daa79878779cf82912928a407ec2aeb5cf1311a118";
+
 static const char *const K_PAKE3 =
 	"15300120202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f18";
 
@@ -155,6 +183,72 @@ void test_matter_pase(void)
 		T_EQ("active interval", (long)req.params.active_interval_ms, 300L);
 		/* The fields before and after the nested structure still land. */
 		T_EQ("session id", req.initiator_session_id, 0x1234L);
+	}
+
+	t_group("real Apple wire capture");
+	{
+		struct matter_pase_pbkdf_req req;
+		struct matter_pase_pbkdf_resp resp;
+		struct matter_pase_pake1 p1;
+		struct matter_pase_pake2 p2;
+		struct matter_pase_pake3 p3;
+
+		vlen = t_unhex(vec, K_APPLE_REQ, sizeof(vec));
+		T_EQ("request is 76 bytes", vlen, 76L);
+		T_EQ("decode", matter_pase_pbkdf_req_decode(vec, (size_t)vlen, &req), MATTER_OK);
+		T_EQ("iPhone session id", req.initiator_session_id, 0xE4B6L);
+		T_EQ("passcode id", req.passcode_id, 0L);
+		T_OK("does not have PBKDF params", !req.has_pbkdf_params);
+		/* The intervals a real iPhone advertises are exactly the defaults
+		 * matter_mrp.h took from CHIP and CircuitMatter. */
+		T_OK("idle interval present", req.params.have_idle);
+		T_EQ("idle 500 ms", (long)req.params.idle_interval_ms,
+		     (long)MATTER_MRP_IDLE_INTERVAL_MS);
+		T_OK("active interval present", req.params.have_active);
+		T_EQ("active 300 ms", (long)req.params.active_interval_ms,
+		     (long)MATTER_MRP_ACTIVE_INTERVAL_MS);
+
+		vlen = t_unhex(vec, K_APPLE_RESP, sizeof(vec));
+		T_EQ("response is 117 bytes", vlen, 117L);
+		T_EQ("decode", matter_pase_pbkdf_resp_decode(vec, (size_t)vlen, &resp), MATTER_OK);
+		T_OK("initiator random echoed back",
+		     memcmp(resp.initiator_random, req.initiator_random, MATTER_PASE_RANDOM_LEN) ==
+			     0);
+		T_EQ("responder session id", resp.responder_session_id, 1L);
+		T_OK("params present", resp.pbkdf_params_present);
+		/* A real exchange uses 10000 iterations and a 32-byte salt. Both sit
+		 * inside the bounds this decoder enforces; a tighter ceiling would
+		 * have refused a genuine commissioning. */
+		T_EQ("iterations", (long)resp.iterations, 10000L);
+		T_EQ("salt is the maximum length", resp.salt_len, (long)MATTER_PASE_SALT_MAX);
+		T_OK("iterations within our bounds",
+		     resp.iterations >= MATTER_PASE_ITER_MIN &&
+			     resp.iterations <= MATTER_PASE_ITER_MAX);
+
+		vlen = t_unhex(vec, K_APPLE_PAKE1, sizeof(vec));
+		T_EQ("pake1 is 70 bytes", vlen, 70L);
+		T_EQ("decode", matter_pase_pake1_decode(vec, (size_t)vlen, &p1), MATTER_OK);
+		T_EQ("pA is an uncompressed point", p1.pa[0], 0x04L);
+
+		vlen = t_unhex(vec, K_APPLE_PAKE2, sizeof(vec));
+		T_EQ("pake2 is 105 bytes", vlen, 105L);
+		T_EQ("decode", matter_pase_pake2_decode(vec, (size_t)vlen, &p2), MATTER_OK);
+		T_EQ("pB is an uncompressed point", p2.pb[0], 0x04L);
+
+		vlen = t_unhex(vec, K_APPLE_PAKE3, sizeof(vec));
+		T_EQ("pake3 is 37 bytes", vlen, 37L);
+		T_EQ("decode", matter_pase_pake3_decode(vec, (size_t)vlen, &p3), MATTER_OK);
+
+		/* Re-encoding must reproduce the wire bytes, or we would be sending
+		 * something an iPhone did not send. */
+		T_EQ("re-encode pake1", matter_pase_pake1_encode(&p1, out, sizeof(out), &n),
+		     MATTER_OK);
+		vlen = t_unhex(vec, K_APPLE_PAKE1, sizeof(vec));
+		T_OK("pake1 byte-identical", (long)n == (long)vlen && memcmp(out, vec, n) == 0);
+		T_EQ("re-encode pake3", matter_pase_pake3_encode(&p3, out, sizeof(out), &n),
+		     MATTER_OK);
+		vlen = t_unhex(vec, K_APPLE_PAKE3, sizeof(vec));
+		T_OK("pake3 byte-identical", (long)n == (long)vlen && memcmp(out, vec, n) == 0);
 	}
 
 	t_group("refusals: the peer is not trusted yet");
