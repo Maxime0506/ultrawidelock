@@ -15,7 +15,8 @@ if(CONFIG_WOZ_MATTER)
   zephyr_library_named(woz_matter)
   zephyr_library_sources(
     ${SRC}/matter_tlv.c
-    ${SRC}/matter_msg.c)
+    ${SRC}/matter_msg.c
+    ${SRC}/matter_mrp.c)
 
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 

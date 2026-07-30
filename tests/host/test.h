@@ -77,6 +77,7 @@ void test_trace(void);
 void test_ccc_shim_wrap(void);
 void test_matter_tlv(void);
 void test_matter_msg(void);
+void test_matter_mrp(void);
 
 /* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
 void test_uwb_min(void);

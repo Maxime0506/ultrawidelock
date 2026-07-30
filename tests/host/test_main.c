@@ -65,9 +65,14 @@ int main(void)
 		{ "flight_recorder", test_flight_recorder },
 		{ "matter_tlv", test_matter_tlv },
 		{ "matter_msg", test_matter_msg },
+		{ "matter_mrp", test_matter_mrp },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
-	int npass[32], nfail[32], npend[32];
+	/* Sized from the table, not a literal 32: these are indexed by suite, so a
+	 * fixed bound silently overflows the moment the table outgrows it. */
+	int npass[sizeof(suites) / sizeof(suites[0])];
+	int nfail[sizeof(suites) / sizeof(suites[0])];
+	int npend[sizeof(suites) / sizeof(suites[0])];
 
 	int color = isatty(1) && getenv("NO_COLOR") == NULL;
 	const char *B = color ? "\033[1m" : "";

@@ -48,6 +48,7 @@ UNIT_SRCS=(
 	"$ALIRO/src/aliro_hash.c"
 	"$ROOT/modules/woz_matter/src/matter_tlv.c"
 	"$ROOT/modules/woz_matter/src/matter_msg.c"
+	"$ROOT/modules/woz_matter/src/matter_mrp.c"
 	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
 )
@@ -58,6 +59,7 @@ TEST_SRCS=(
 	"$HOST/test_main.c"
 	"$HOST/test_matter_tlv.c"
 	"$HOST/test_matter_msg.c"
+	"$HOST/test_matter_mrp.c"
 	"$HOST/test_aliro_advertising.c"
 	"$HOST/test_aliro_ble.c"
 	"$HOST/test_aliro_nfc.c"

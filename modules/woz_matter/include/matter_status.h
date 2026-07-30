@@ -31,6 +31,8 @@ enum matter_status {
 	MATTER_E_TRUNC = -5,
 	/** Accessor did not match the element actually present. */
 	MATTER_E_TYPE = -6,
+	/** Message counter already seen. Drop the payload, but still acknowledge. */
+	MATTER_E_DUP = -7,
 };
 
 #ifdef __cplusplus
