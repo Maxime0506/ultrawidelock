@@ -65,7 +65,12 @@ endif # ALIRO_PROV_CONSOLE
 
 config ALIRO_THREAD_GATE
 	bool "Stage 0 contention gate: bring Thread up alongside the reader"
-	depends on OPENTHREAD
+	# NET_L2_OPENTHREAD, not bare OPENTHREAD. The 802.15.4 driver class is
+	# gated on NETWORKING (zephyr/drivers/ieee802154/Kconfig), so a
+	# CONFIG_NETWORKING=n build links the Thread stack with no radio under it
+	# and this gate measures nothing while looking like it works.
+	depends on NET_L2_OPENTHREAD
+	select OPENTHREAD_MANUAL_START
 	default n
 	help
 	  Measurement only, never a shipping option. Starts OpenThread next to the
