@@ -18,6 +18,7 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 # here, so it contributes no sources and the nRF5340 build is unaffected.
 list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_aliro"
+	"${REPO_ROOT}/modules/woz_matter"
 	"${REPO_ROOT}/modules/woz_uwb"
 	"${REPO_ROOT}/deps/dw3000")
 
@@ -52,6 +53,7 @@ target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
+target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_ble_zephyr.c)
 
 # CONFIG_MBEDTLS_MEMORY_DEBUG=y is a NO-OP in this build and sets no define.
 # nrf_security only wires that symbol through configs/legacy_crypto_config.h.template

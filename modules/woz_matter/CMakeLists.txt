@@ -22,4 +22,16 @@ if(CONFIG_WOZ_MATTER)
 
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+  # matter_crypto.c uses aliro_hash.h for SHA-256/HKDF, and the
+  # crypto_aes_ecb_encrypt seam it declares itself. Both already ship in any
+  # image that has the reader -- aliro_hash.c is compiled by the port, and the
+  # AES backend by the CONFIG_WOZ_CRYPTO_* choice -- so this is an include path,
+  # not new code. It is still a real dependency, which CONFIG_WOZ_MATTER records
+  # with `depends on WOZ_ALIRO`.
+  #
+  # The host suite never caught this: tests/host/sources.sh puts
+  # modules/woz_aliro/src on the include path for its own reasons, so
+  # matter_crypto.c compiled there and only failed on the first Zephyr build.
+  zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../woz_aliro/src)
+
 endif(CONFIG_WOZ_MATTER)

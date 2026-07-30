@@ -133,3 +133,56 @@ config ALIRO_HEAP_PROBE
 	  Needs CONFIG_MBEDTLS_MEMORY_DEBUG=y, which is not a shipping setting.
 
 source "Kconfig.zephyr"
+
+config ALIRO_MATTER_BLE
+	bool "Matter commissioning transport: the 0xFFF6 GATT service over BTP"
+	# The framing itself is in modules/woz_matter and has no Zephyr
+	# dependency; this brings in the Zephyr-side adapter that carries it.
+	depends on BT_PERIPHERAL
+	select WOZ_MATTER
+	default n
+	help
+	  Compile the 0xFFF6 service (C1 write, C2 indicate) and the BTP glue
+	  that turns it into a Matter message transport.
+
+	  Nothing starts advertising on its own: the reader owns the advertising
+	  set and advertises Aliro 0xFFF2. matter_ble_advertise_start() exists
+	  for whoever decides how the two coexist.
+
+if ALIRO_MATTER_BLE
+
+config ALIRO_MATTER_BLE_RX_BUF
+	int "Inbound Matter message ceiling, bytes"
+	default 1024
+	help
+	  Size of the BTP reassembly area, and therefore the largest message
+	  this node will accept. A peer declaring more than this in its Start
+	  fragment is refused before a byte is copied, so setting it low costs
+	  compatibility, never memory safety.
+
+config ALIRO_MATTER_BLE_WINDOW
+	int "Largest BTP receive window we will grant"
+	default 4
+	range 2 8
+
+config ALIRO_MATTER_BLE_WQ_STACK
+	int "Matter work queue stack, bytes"
+	default 2048
+	help
+	  PROVISIONAL. Two stack sizes in this project were guessed low and both
+	  faulted on hardware, so size this from CONFIG_THREAD_ANALYZER_AUTO
+	  output rather than by estimate. PASE is what will actually load it.
+
+config ALIRO_MATTER_BLE_WQ_PRIO
+	int "Matter work queue thread priority"
+	default 10
+	help
+	  Must stay BELOW whatever arms the DW3110 reply. Stage 0 measured a CASE
+	  handshake at 262.7 ms of solid CPU against a 0.66 ms FINAL->arm margin,
+	  and ranging survived only because the load sat at a lower priority.
+
+module = ALIRO_MATTER_BLE
+module-str = matter_ble
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # ALIRO_MATTER_BLE

@@ -1,0 +1,490 @@
+/**
+ * @file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
+ *
+ * A thin adapter, on purpose. All the framing lives in modules/woz_matter
+ * (matter_btp.c), which has no Zephyr dependency and is tested on the host
+ * under sanitizers. This file does three things and no more: hand C1 writes to
+ * the reassembler, drive the fragmenter out through C2 indications, and build
+ * the commissionable advertisement.
+ *
+ * Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
+ * service, one write characteristic, one indicate characteristic,
+ * connection-scoped state -- and is proven against live iPhones.
+ */
+/* Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ *
+ * Stage 2 of internal/cdk-matter-plan.md, second half.
+ *
+ * UUIDs and the advertisement layout are from CHIP, not from memory:
+ *   - service 0xFFF6, and the two 128-bit characteristics, at
+ *     workspace/modules/lib/matter/src/platform/Zephyr/BLEManagerImpl.cpp:78-87
+ *     and the attribute table at :104-120. C1 (RX, write) is
+ *     18EE2EF5-263D-4559-959F-4F9C429F9D11 and C2 (TX, indicate) is ...D12,
+ *     spelled below in the little-endian byte order BT_UUID_INIT_128 wants.
+ *   - the 8-byte advertisement payload at
+ *     workspace/modules/lib/matter/src/ble/CHIPBleServiceData.h:52-79.
+ *
+ * NOT wired into the reader's advertising. The reader owns one advertising set
+ * and advertises Aliro 0xFFF2; running both at once needs either extended
+ * advertising with two sets or a deliberate hand-off, and that decision is not
+ * made here. matter_ble_advertise_start() exists and is never called on its
+ * own, so an image with this file compiled in still behaves exactly as before
+ * until something asks for it.
+ */
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/gatt.h>
+#include <zephyr/bluetooth/uuid.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+
+#include <string.h>
+
+#include "matter_btp.h"
+#include "matter_ble_zephyr.h"
+
+LOG_MODULE_REGISTER(matter_ble, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
+
+/* C1, written by the commissioner (BLEManagerImpl.cpp:78-79). */
+static const struct bt_uuid_128 k_chr_c1_uuid =
+	BT_UUID_INIT_128(0x11, 0x9D, 0x9F, 0x42, 0x9C, 0x4F, 0x9F, 0x95, 0x59, 0x45, 0x3D, 0x26,
+			 0xF5, 0x2E, 0xEE, 0x18);
+/* C2, indicated to the commissioner (BLEManagerImpl.cpp:80-81). */
+static const struct bt_uuid_128 k_chr_c2_uuid =
+	BT_UUID_INIT_128(0x12, 0x9D, 0x9F, 0x42, 0x9C, 0x4F, 0x9F, 0x95, 0x59, 0x45, 0x3D, 0x26,
+			 0xF5, 0x2E, 0xEE, 0x18);
+
+/* ---- connection-scoped state --------------------------------------------- */
+
+/*
+ * One commissioning connection at a time. That is not a simplification for
+ * now: a second commissioner arriving mid-PASE would have to be refused
+ * anyway, so the single slot IS the policy.
+ */
+static struct bt_conn *s_conn;
+static struct matter_btp_rx s_rx;
+static uint8_t s_rx_buf[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
+static struct matter_btp_tx s_tx;
+static uint8_t s_frag[MATTER_BTP_MAX_FRAGMENT];
+static bool s_tx_active;
+static bool s_indicate_busy;
+static bool s_handshaked;
+static bool s_subscribed;
+/** Negotiated BTP PDU size, header included. Settled by the handshake. */
+static uint16_t s_fragment_size;
+
+/*
+ * The tx sequence counter lives HERE, not in struct matter_btp_tx, because BTP
+ * numbers per connection rather than per message: a standalone ack consumes a
+ * sequence number just as a data fragment does. The fragmenter is handed the
+ * current value at init and its position is copied back after every emit.
+ */
+static uint8_t s_tx_seq;
+/** A received fragment we still owe an acknowledgement for. */
+static bool s_ack_pending;
+static uint8_t s_ack_seq;
+/** Fragments received since we last acknowledged anything. */
+static uint8_t s_rx_unacked;
+
+static matter_ble_msg_cb s_msg_cb;
+
+/*
+ * The node's own work queue. Stage 0 measured k_sys_work_q at 3,568 of 4,096
+ * bytes during an unlock, and the reader already defers BLE work there, so
+ * anything Matter submits to it overflows it. Owning a queue is the other half
+ * of that constraint; thread priority alone is not enough.
+ *
+ * The stack size is PROVISIONAL and deliberately generous. Two stack sizes were
+ * guessed low earlier in this project and both faulted on hardware, so the rule
+ * now is to start roomy and trim from CONFIG_THREAD_ANALYZER_AUTO output rather
+ * than from a plausible-looking round number. Nothing here is expensive yet;
+ * PASE is what will actually load it, and it must be re-measured then.
+ */
+K_THREAD_STACK_DEFINE(matter_wq_stack, CONFIG_ALIRO_MATTER_BLE_WQ_STACK);
+static struct k_work_queue_config matter_wq_cfg = {.name = "matter_wq"};
+static struct k_work_q matter_wq;
+static struct k_work s_msg_work;
+static size_t s_msg_len;
+
+static bool claim_conn(struct bt_conn *conn);
+
+static void reset_link(void)
+{
+	matter_btp_rx_init(&s_rx, s_rx_buf, sizeof(s_rx_buf), 0u);
+	memset(&s_tx, 0, sizeof(s_tx));
+	s_tx_active = false;
+	s_indicate_busy = false;
+	s_handshaked = false;
+	s_subscribed = false;
+	s_fragment_size = MATTER_BTP_MIN_FRAGMENT;
+	s_tx_seq = 0u;
+	s_ack_pending = false;
+	s_rx_unacked = 0u;
+}
+
+/* ---- outbound ------------------------------------------------------------ */
+
+static void indicate_done(struct bt_conn *conn, struct bt_gatt_indicate_params *params,
+			  uint8_t err);
+static int pump_tx(void);
+
+static struct bt_gatt_indicate_params s_ind_params;
+
+/** Push one fragment, or a raw buffer when @p raw is set (the handshake reply). */
+static int indicate_raw(const uint8_t *data, size_t len);
+
+static void msg_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	if (s_msg_cb != NULL) {
+		s_msg_cb(s_rx_buf, s_msg_len);
+	} else {
+		LOG_WRN("reassembled %u bytes with no handler; dropping", (unsigned int)s_msg_len);
+	}
+	/* The reassembly area is reused for the next message only after the
+	 * handler has had it, which is why this runs on the queue and not in the
+	 * BLE RX callback. */
+	matter_btp_rx_reset(&s_rx);
+}
+
+/* ---- C1: the commissioner writes ----------------------------------------- */
+
+static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf,
+			uint16_t len, uint16_t offset, uint8_t flags)
+{
+	const uint8_t *p = buf;
+	int rc;
+
+	ARG_UNUSED(attr);
+	ARG_UNUSED(flags);
+
+	if (offset != 0) {
+		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
+	}
+	if (!claim_conn(conn)) {
+		return BT_GATT_ERR(BT_ATT_ERR_INSUFFICIENT_RESOURCES);
+	}
+
+	if (!s_handshaked) {
+		struct matter_btp_handshake_req req;
+		struct matter_btp_handshake_resp resp;
+		uint8_t out[MATTER_BTP_RESP_LEN];
+		size_t n = 0;
+
+		rc = matter_btp_req_decode(p, len, &req);
+		if (rc != MATTER_OK) {
+			LOG_ERR("bad BTP handshake request (%d)", rc);
+			return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
+		}
+		rc = matter_btp_accept(&req, bt_gatt_get_mtu(conn), CONFIG_ALIRO_MATTER_BLE_WINDOW,
+				       &resp);
+		if (rc != MATTER_OK) {
+			LOG_ERR("no mutually supported BTP version");
+			return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
+		}
+		if (matter_btp_resp_encode(&resp, out, sizeof(out), &n) != MATTER_OK) {
+			return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
+		}
+
+		/* Peripheral role: we send from 0, the peer's first data fragment is
+		 * 1 (BtpEngine::Init, expect_first_ack=false). */
+		matter_btp_rx_init(&s_rx, s_rx_buf, sizeof(s_rx_buf), 1u);
+		s_fragment_size = resp.fragment_size;
+		s_handshaked = true;
+		LOG_INF("BTP up: fragment=%u window=%u (att mtu %u)",
+			(unsigned int)resp.fragment_size, (unsigned int)resp.window_size,
+			(unsigned int)bt_gatt_get_mtu(conn));
+
+		/* The handshake reply is NOT BTP-framed; it goes out as-is. */
+		if (indicate_raw(out, n) != 0) {
+			return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
+		}
+		return len;
+	}
+
+	rc = matter_btp_rx_fragment(&s_rx, p, len);
+	if (rc == MATTER_OK || rc == MATTER_END) {
+		s_ack_pending = true;
+		s_ack_seq = s_rx.last_seq;
+		if (s_rx_unacked < UINT8_MAX) {
+			s_rx_unacked++;
+		}
+	}
+	if (rc == MATTER_END) {
+		s_msg_len = s_rx.len;
+		k_work_submit_to_queue(&matter_wq, &s_msg_work);
+	} else if (rc != MATTER_OK) {
+		/* BTP has no gap recovery: once the framing desynchronises the only
+		 * move is to drop the link. */
+		LOG_ERR("BTP fragment refused (%d); dropping the connection", rc);
+		(void)bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+		return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
+	}
+
+	/*
+	 * Acknowledge before the peer's window fills, or it stops sending and the
+	 * commissioning stalls with no error anywhere. Half the window is the
+	 * trigger rather than every fragment, which would double the packet count;
+	 * a completed message is always acknowledged so the peer can move on.
+	 *
+	 * Nothing is sent here if a transmission is already in flight: pump_tx()
+	 * piggybacks the pending ack onto the next fragment for free.
+	 */
+	if (s_ack_pending && !s_tx_active && !s_indicate_busy &&
+	    (rc == MATTER_END || s_rx_unacked >= (CONFIG_ALIRO_MATTER_BLE_WINDOW / 2))) {
+		uint8_t ackbuf[3];
+		size_t n = 0;
+
+		if (matter_btp_standalone_ack(s_ack_seq, s_tx_seq, ackbuf, sizeof(ackbuf), &n) ==
+		    MATTER_OK) {
+			s_tx_seq++;
+			s_ack_pending = false;
+			s_rx_unacked = 0u;
+			(void)indicate_raw(ackbuf, n);
+		}
+	}
+	return len;
+}
+
+/* ---- C2: we indicate ----------------------------------------------------- */
+
+static void c2_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
+{
+	ARG_UNUSED(attr);
+	s_subscribed = (value == BT_GATT_CCC_INDICATE);
+	LOG_DBG("C2 subscription %s", s_subscribed ? "on" : "off");
+}
+
+/* Order matters: attrs[4] is the C2 VALUE, which is what an indication targets. */
+BT_GATT_SERVICE_DEFINE(matter_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(0xFFF6)),
+		       BT_GATT_CHARACTERISTIC(&k_chr_c1_uuid.uuid,
+					      BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+					      BT_GATT_PERM_WRITE, NULL, c1_write, NULL),
+		       BT_GATT_CHARACTERISTIC(&k_chr_c2_uuid.uuid, BT_GATT_CHRC_INDICATE,
+					      BT_GATT_PERM_NONE, NULL, NULL, NULL),
+		       BT_GATT_CCC(c2_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
+
+static int indicate_raw(const uint8_t *data, size_t len)
+{
+	if (s_conn == NULL || s_indicate_busy) {
+		return -EBUSY;
+	}
+	memcpy(s_frag, data, len);
+
+	memset(&s_ind_params, 0, sizeof(s_ind_params));
+	s_ind_params.attr = &matter_svc.attrs[4];
+	s_ind_params.func = indicate_done;
+	s_ind_params.data = s_frag;
+	s_ind_params.len = (uint16_t)len;
+
+	s_indicate_busy = true;
+	int rc = bt_gatt_indicate(s_conn, &s_ind_params);
+
+	if (rc != 0) {
+		s_indicate_busy = false;
+		LOG_ERR("bt_gatt_indicate failed (%d)", rc);
+	}
+	return rc;
+}
+
+/** Emit the next BTP fragment, if a message is being sent. */
+static int pump_tx(void)
+{
+	size_t n = 0;
+	int rc;
+
+	if (!s_tx_active || s_indicate_busy) {
+		return 0;
+	}
+	rc = matter_btp_tx_next(&s_tx, s_ack_pending ? &s_ack_seq : NULL, s_frag, sizeof(s_frag),
+				&n);
+	if (rc == MATTER_END) {
+		s_tx_active = false;
+		return 0;
+	}
+	/* The ack rode out on that fragment, so it is no longer owed. */
+	if (s_ack_pending) {
+		s_ack_pending = false;
+		s_rx_unacked = 0u;
+	}
+	s_tx_seq = s_tx.next_seq;
+	if (rc != MATTER_OK) {
+		LOG_ERR("BTP fragmentation failed (%d)", rc);
+		s_tx_active = false;
+		return -EIO;
+	}
+	/* s_frag is already the indication payload; indicate_raw would copy it
+	 * onto itself, so the params are filled in directly here. */
+	memset(&s_ind_params, 0, sizeof(s_ind_params));
+	s_ind_params.attr = &matter_svc.attrs[4];
+	s_ind_params.func = indicate_done;
+	s_ind_params.data = s_frag;
+	s_ind_params.len = (uint16_t)n;
+
+	s_indicate_busy = true;
+	rc = bt_gatt_indicate(s_conn, &s_ind_params);
+	if (rc != 0) {
+		s_indicate_busy = false;
+		s_tx_active = false;
+		LOG_ERR("bt_gatt_indicate failed (%d)", rc);
+	}
+	return rc;
+}
+
+static void indicate_done(struct bt_conn *conn, struct bt_gatt_indicate_params *params, uint8_t err)
+{
+	ARG_UNUSED(conn);
+	ARG_UNUSED(params);
+
+	s_indicate_busy = false;
+	if (err != 0u) {
+		LOG_ERR("indication not confirmed (%u)", (unsigned int)err);
+		s_tx_active = false;
+		return;
+	}
+	/* One indication may be outstanding per connection, so the next fragment
+	 * only goes once the peer has confirmed this one. */
+	(void)pump_tx();
+}
+
+int matter_ble_send(const uint8_t *msg, size_t len)
+{
+	int rc;
+
+	if (msg == NULL || len == 0u) {
+		return -EINVAL;
+	}
+	if (s_conn == NULL || !s_handshaked) {
+		return -ENOTCONN;
+	}
+	if (!s_subscribed) {
+		return -EAGAIN;
+	}
+	if (s_tx_active) {
+		return -EBUSY;
+	}
+
+	/* The fragment size is whatever the handshake settled on, not a constant:
+	 * sending larger than the peer agreed to is how a commissioner silently
+	 * stops reassembling. */
+	rc = matter_btp_tx_init(&s_tx, msg, len, s_fragment_size, s_tx_seq);
+	if (rc != MATTER_OK) {
+		return -EINVAL;
+	}
+	s_tx_active = true;
+	return pump_tx();
+}
+
+void matter_ble_set_msg_handler(matter_ble_msg_cb cb)
+{
+	s_msg_cb = cb;
+}
+
+/* ---- connection tracking ------------------------------------------------- */
+
+/*
+ * The connection is claimed on the first C1 write, NOT on connect. The reader
+ * accepts BLE connections too, and claiming every one of them would let an
+ * Aliro peer occupy the single commissioning slot and lock out a real
+ * commissioner. A peer that writes C1 has identified itself as one.
+ */
+static bool claim_conn(struct bt_conn *conn)
+{
+	if (s_conn == conn) {
+		return true;
+	}
+	if (s_conn != NULL) {
+		return false; /* already commissioning someone else */
+	}
+	s_conn = bt_conn_ref(conn);
+	reset_link();
+	LOG_INF("commissioning link up");
+	return true;
+}
+
+static void on_disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	if (conn != s_conn) {
+		return;
+	}
+	LOG_INF("commissioning link down (0x%02x)", (unsigned int)reason);
+	bt_conn_unref(s_conn);
+	s_conn = NULL;
+	reset_link();
+}
+
+BT_CONN_CB_DEFINE(matter_conn_cb) = {
+	.disconnected = on_disconnected,
+};
+
+/* ---- advertising --------------------------------------------------------- */
+
+/*
+ * ChipBLEDeviceIdentificationInfo, 8 bytes after the 16-bit UUID
+ * (CHIPBleServiceData.h:52-79):
+ *   [0]    opcode, 0x00 = commissionable
+ *   [1]    low 8 bits of the 12-bit discriminator
+ *   [2]    high 4 bits of the discriminator in the low nibble,
+ *          advertisement version in the high nibble
+ *   [3..4] vendor ID, little-endian
+ *   [5..6] product ID, little-endian
+ *   [7]    additional-data flag
+ */
+static uint8_t s_svc_data[2 + 8];
+
+static struct bt_data s_ad[2];
+
+int matter_ble_advertise_start(uint16_t discriminator, uint16_t vendor_id, uint16_t product_id)
+{
+	uint8_t *p = &s_svc_data[2];
+
+	s_svc_data[0] = 0xF6u; /* 0xFFF6, little-endian inside BT_DATA_SVC_DATA16 */
+	s_svc_data[1] = 0xFFu;
+
+	p[0] = 0x00u;
+	p[1] = (uint8_t)(discriminator & 0xFFu);
+	p[2] = (uint8_t)((discriminator >> 8) & 0x0Fu);
+	p[3] = (uint8_t)(vendor_id & 0xFFu);
+	p[4] = (uint8_t)(vendor_id >> 8);
+	p[5] = (uint8_t)(product_id & 0xFFu);
+	p[6] = (uint8_t)(product_id >> 8);
+	p[7] = 0x00u;
+
+	s_ad[0] = (struct bt_data)BT_DATA_BYTES(BT_DATA_FLAGS,
+						(BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR));
+	s_ad[1] = (struct bt_data)BT_DATA(BT_DATA_SVC_DATA16, s_svc_data, sizeof(s_svc_data));
+
+	return bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, s_ad, ARRAY_SIZE(s_ad), NULL, 0);
+}
+
+int matter_ble_advertise_stop(void)
+{
+	return bt_le_adv_stop();
+}
+
+/* ---- init ---------------------------------------------------------------- */
+
+/*
+ * Started by SYS_INIT rather than by the application, because
+ * BT_GATT_SERVICE_DEFINE registers the 0xFFF6 service unconditionally: the C1
+ * write handler is live the moment BLE comes up, whether or not anything asked
+ * for it. Leaving the queue to an explicit call meant the two lifetimes could
+ * disagree, and they did -- with no caller, --gc-sections dropped this function
+ * and matter_wq_stack with it, so a C1 write would have submitted to a work
+ * queue that was never started. Tying the queue to the service removes the
+ * question.
+ */
+static int matter_ble_init(void)
+{
+	k_work_queue_start(&matter_wq, matter_wq_stack, K_THREAD_STACK_SIZEOF(matter_wq_stack),
+			   CONFIG_ALIRO_MATTER_BLE_WQ_PRIO, &matter_wq_cfg);
+	k_work_init(&s_msg_work, msg_work_handler);
+	reset_link();
+	LOG_INF("0xFFF6 service ready (rx buffer %u B)", (unsigned int)sizeof(s_rx_buf));
+	return 0;
+}
+
+SYS_INIT(matter_ble_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
