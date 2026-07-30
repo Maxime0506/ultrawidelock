@@ -26,9 +26,13 @@ on:
       - scripts/twin-wasm.sh
       - Makefile
       - .github/workflows/twin-web.yml
-  # No path filter on PRs: matches the other host gates so a mixed PR always
-  # reports (a path-skipped required check would stick at "Expected").
+  # Docs-only PRs cannot change the result, so skip them; every other PR still
+  # runs unfiltered. Safe because neither `drift-gate` nor `wasm-firmware` is a
+  # required status check: a path-skipped run cannot strand a PR at "Expected".
+  # See cbmc.yml for the full rationale and the list that must stay unfiltered.
   pull_request:
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
 
 # CI only reads the repo: no token write scopes.

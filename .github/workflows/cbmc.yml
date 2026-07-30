@@ -14,8 +14,17 @@ on:
       - tests/host/**
       - Makefile
       - .github/workflows/cbmc.yml
-  # No path filter on PRs: keep it reporting like the other required checks.
+  # Docs-only PRs cannot change the result, so skip them; every other PR still
+  # runs unfiltered. Safe because `cbmc` is not a required status check: a
+  # path-skipped run cannot strand a PR at "Expected". That hazard is real for
+  # host-tests, sanitizers, tooling, patch-drift and workflow-lint, which stay
+  # unfiltered on purpose. Promoting this to required means dropping the filter.
   pull_request:
+    # "**.md" (not "**/*.md"): the latter needs a slash before the filename, so
+    # it misses the root-level READMEs. This is GitHub's documented spelling for
+    # every Markdown file in the repository.
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
 
 # CI only reads the repo: no token write scopes for any job.
