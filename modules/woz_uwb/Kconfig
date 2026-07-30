@@ -90,6 +90,20 @@ config WOZ_RANGE_GATE_STRICT
 	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
 	  (consensus) are always active in fira_session.c regardless of this option.
 
+config WOZ_UWB_FINAL_SNAPSHOT
+	bool "Responder ToF: use the same-round Final-capture timestamp snapshot"
+	depends on WOZ_ALIRO
+	help
+	  When Final_Data is decoded, compute the DS-TWR reply/round intervals from
+	  the snapshot latched at Final RX (ccc_shim_rx.c, g_final_reply1/round2)
+	  instead of the live t2/t3/t6 globals. On a single-core SoC where BLE shares
+	  the core with the ranging callbacks (e.g. the DWM3001CDK's nRF52833), the
+	  next round's POLL/Response can overwrite the live timestamps before
+	  Final_Data is processed, yielding km-scale garbage distances. The snapshot
+	  path is timing-independent. ESP32 always uses it (its dispatch is likewise
+	  jittery); enable this on any single-core Zephyr reader. Default n keeps the
+	  dual-core nRF5340's live-recompute path unchanged.
+
 config WOZ_UWB_CIRDIAG
 	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"
 	depends on WOZ_ALIRO

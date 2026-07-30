@@ -146,10 +146,21 @@ static uint64_t g_t_final_rx;
  * Response have overwritten t2/t3, so recomputing there mixes this round's t6 with the next round's
  * t3 and corrupts round2 (observed as km-scale distances). g_final_round_valid gates the compute
  * (consume-once): a Final_Data with no fresh Final capture is dropped, not turned into garbage. */
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 static uint32_t g_final_reply1;
 static uint32_t g_final_round2;
 static bool g_final_round_valid;
+#endif
+
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+/* Bench instrumentation, read over J-Link (no logging => no ISR/timing impact).
+ * Diagnoses the DS-TWR capture/consume pairing on the single-core CDK. */
+static volatile uint32_t g_dbg_capture_n;   /* Final RFRAME captured (snapshot set valid) */
+static volatile uint32_t g_dbg_fd_calls;    /* final_data_decode entered */
+static volatile uint32_t g_dbg_fd_parsed;   /* ... reached the DS-TWR compute */
+static volatile uint32_t g_dbg_have_round;  /* ... with have_round == true at consume */
+static volatile uint32_t g_dbg_dstwr_ok;    /* ccc_responder_ds_twr returned 0 */
+static volatile int32_t g_dbg_last_dmm;     /* last computed d_mm */
 #endif
 
 /** @brief Cache of the STS key (dURSK) currently loaded in the STS_KEY registers, so the per-arm
@@ -229,8 +240,10 @@ void ccc_shim_rx_log_reset(void)
 	g_poll_ip_for_final = 0u;
 	g_final_sts_verdict = -1; /* fail-closed until a Final RFRAME is measured */
 	g_final_sts_index = 0;
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	g_final_round_valid = false;
+#endif
+#if defined(ESP_PLATFORM)
 	g_sts_key_cached =
 		false; /* new session re-configures the radio -> STS_KEY regs re-cleared */
 #endif
@@ -474,6 +487,9 @@ static uint64_t ts5_to_u64(const uint8_t t[5])
 static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 {
 	static uint32_t g_fd_logged;
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+	g_dbg_fd_calls++;
+#endif
 	struct ccc_mhr_fields mhr;
 	// CCC final message carrying Aliro authentication data (MAC, derived ranging state).
 	struct ccc_final_data fd;
@@ -558,23 +574,31 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		// CCC DS-TWR (double-sided two-way ranging) message carrying poll/response/final
 		// timing and STS data.
 		struct ccc_ds_twr tw;
-#if defined(ESP_PLATFORM)
-		/* ESP32: the Final_Data lands only after the NEXT round's POLL/Response have
-		 * overwritten the live t2/t3 (slow SPI + jittery dispatch), so recomputing here
-		 * mixes this round's t6 with the next round's t3 (km-scale garbage). Consume the
-		 * same-round snapshot taken at Final capture; g_final_round_valid gates it
-		 * consume-once (a Final_Data with no fresh Final is dropped). */
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+		/* ESP32 and single-core nRF (e.g. DWM3001CDK, CONFIG_WOZ_UWB_FINAL_SNAPSHOT):
+		 * the Final_Data lands only after the NEXT round's POLL/Response have
+		 * overwritten the live t2/t3 (slow SPI + jittery dispatch, or BLE sharing the
+		 * one core), so recomputing here mixes this round's t6 with the next round's t3
+		 * (km-scale garbage). Consume the same-round snapshot taken at Final capture;
+		 * g_final_round_valid gates it consume-once (a Final_Data with no fresh Final is
+		 * dropped). */
 		uint32_t t_reply1 = g_final_reply1;
 		uint32_t t_round2 = g_final_round2;
 		bool have_round = g_final_round_valid;
 #else
-		/* Non-ESP (nRF): the Final_Data is processed before the next round overwrites the
-		 * live timestamps, so recompute directly from the globals (original path). */
+		/* Dual-core nRF (nRF5340): the Final_Data is processed before the next round
+		 * overwrites the live timestamps, so recompute directly from the globals. */
 		uint32_t t_reply1 = (uint32_t)(g_t_resp_tx - g_t_poll_rx);
 		uint32_t t_round2 = (uint32_t)(g_t_final_rx - g_t_resp_tx);
 		bool have_round = true;
 #endif
 
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+		g_dbg_fd_parsed++;
+		if (have_round) {
+			g_dbg_have_round++;
+		}
+#endif
 		if (have_round && ccc_responder_ds_twr(&fd, 0u, t_reply1, t_round2, &tw) == 0) {
 			/* Signed ToF: near zero the numerator goes slightly negative (uint32 would
 			 * wrap), so compute it signed for bring-up. 1 tick ~ 15.65 ps, ~4.6917
@@ -585,6 +609,10 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 				(int64_t)tw.t_round1 + tw.t_round2 + tw.t_reply1 + tw.t_reply2;
 			int32_t tof = (den != 0) ? (int32_t)(num / den) : 0;
 			int d_mm = (int)(((int64_t)tof * 4692) / 1000);
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+			g_dbg_dstwr_ok++;
+			g_dbg_last_dmm = d_mm;
+#endif
 			/* Range-integrity gate (layer 2): the STS-quality floor. Shadow by
 			 * default (log the verdict, still latch); define
 			 * CONFIG_WOZ_RANGE_GATE_STRICT to drop a failing block instead. Layers 1
@@ -632,6 +660,13 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			g_final_sts_index = 0;
 #if defined(ESP_PLATFORM)
 			g_final_round_valid = false;
+#elif defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+			/* Single-core CDK: do NOT consume-once. Final RFRAME captures (~90) far
+			 * outnumber Final_Data decodes (~9) and don't pair 1:1, so consume-once
+			 * dropped 8 of 9 ranges. The responder's reply1/round2 are fixed by the
+			 * slot schedule, so the latest snapshot is always a valid stand-in; keep
+			 * it live so every decode latches a range and the approach gate sees a
+			 * steady in-range stream. */
 #endif
 		}
 	}
@@ -1196,14 +1231,18 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		g_await_final = false;
 		if (ip != 0u) {
 			g_t_final_rx = ip40; /* t6: responder Final RX */
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 			/* Snapshot the responder-side DS-TWR intervals NOW, while t2/t3/t6 are all
 			 * from this round; the Final_Data decode (which lands after the next round
-			 * has overwritten the live timestamp globals) consumes these. On nRF the
-			 * decode recomputes from the live globals directly (no snapshot needed). */
+			 * has overwritten the live timestamp globals) consumes these. On the
+			 * dual-core nRF5340 the decode recomputes from the live globals directly
+			 * (no snapshot needed). */
 			g_final_reply1 = (uint32_t)(g_t_resp_tx - g_t_poll_rx);
 			g_final_round2 = (uint32_t)(g_t_final_rx - g_t_resp_tx);
 			g_final_round_valid = true;
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+			g_dbg_capture_n++;
+#endif
 #endif
 			qret = dwt_readstsquality(&stsq, 0);
 			/* Range-integrity gate (layer 2): stash this Final RFRAME's STS
