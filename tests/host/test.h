@@ -81,6 +81,7 @@ void test_matter_mrp(void);
 void test_matter_crypto(void);
 void test_matter_btp(void);
 void test_matter_pase(void);
+void test_matter_spake2p(void);
 
 /* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
 void test_uwb_min(void);

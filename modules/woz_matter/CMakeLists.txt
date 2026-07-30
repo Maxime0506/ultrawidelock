@@ -19,7 +19,8 @@ if(CONFIG_WOZ_MATTER)
     ${SRC}/matter_mrp.c
     ${SRC}/matter_crypto.c
     ${SRC}/matter_btp.c
-    ${SRC}/matter_pase.c)
+    ${SRC}/matter_pase.c
+    ${SRC}/matter_spake2p.c)
 
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 

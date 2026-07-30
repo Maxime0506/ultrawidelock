@@ -52,6 +52,7 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_crypto.c"
 	"$ROOT/modules/woz_matter/src/matter_btp.c"
 	"$ROOT/modules/woz_matter/src/matter_pase.c"
+	"$ROOT/modules/woz_matter/src/matter_spake2p.c"
 	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
 )
@@ -66,6 +67,7 @@ TEST_SRCS=(
 	"$HOST/test_matter_crypto.c"
 	"$HOST/test_matter_btp.c"
 	"$HOST/test_matter_pase.c"
+	"$HOST/test_matter_spake2p.c"
 	"$HOST/test_aliro_advertising.c"
 	"$HOST/test_aliro_ble.c"
 	"$HOST/test_aliro_nfc.c"
@@ -105,6 +107,7 @@ SHIM_SRCS=(
 	"$SHIM/shim.c"
 	"$SHIM/dw_rx_stub.c"
 	"$HOST/logfake/logfake.c"
+	"$HOST/spakefake/spakefake.c"
 )
 
 # Include search path: shim first so <zephyr/...> resolves to the stubs;
