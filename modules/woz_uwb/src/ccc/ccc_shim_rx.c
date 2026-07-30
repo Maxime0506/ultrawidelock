@@ -160,29 +160,29 @@ static bool g_final_round_valid;
 #if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 /* Bench instrumentation, read over J-Link (no logging => no ISR/timing impact).
  * Diagnoses the DS-TWR capture/consume pairing on the single-core CDK. */
-static volatile uint32_t g_dbg_capture_n;   /* Final RFRAME captured (snapshot set valid) */
-static volatile uint32_t g_dbg_fd_calls;    /* final_data_decode entered */
-static volatile uint32_t g_dbg_fd_parsed;   /* ... reached the DS-TWR compute */
-static volatile uint32_t g_dbg_have_round;  /* ... with have_round == true at consume */
-static volatile uint32_t g_dbg_dstwr_ok;    /* ccc_responder_ds_twr returned 0 */
-static volatile int32_t g_dbg_last_dmm;     /* last computed d_mm */
+static volatile uint32_t g_dbg_capture_n;     /* Final RFRAME captured (snapshot set valid) */
+static volatile uint32_t g_dbg_fd_calls;      /* final_data_decode entered */
+static volatile uint32_t g_dbg_fd_parsed;     /* ... reached the DS-TWR compute */
+static volatile uint32_t g_dbg_have_round;    /* ... with have_round == true at consume */
+static volatile uint32_t g_dbg_dstwr_ok;      /* ccc_responder_ds_twr returned 0 */
+static volatile int32_t g_dbg_last_dmm;       /* last computed d_mm */
 static volatile uint32_t g_dbg_try_prepoll_n; /* total SP0 receptions into try_prepoll */
-static volatile uint32_t g_dbg_mhr_ok;      /* SP0 frames whose MHR parsed */
-static volatile uint8_t g_dbg_last_msgid;   /* last SP0 msg_id (0xFF = MHR parse fail) */
-static volatile uint16_t g_dbg_last_sp0_len; /* last SP0 datalength */
+static volatile uint32_t g_dbg_mhr_ok;        /* SP0 frames whose MHR parsed */
+static volatile uint8_t g_dbg_last_msgid;     /* last SP0 msg_id (0xFF = MHR parse fail) */
+static volatile uint16_t g_dbg_last_sp0_len;  /* last SP0 datalength */
 /* Post-FINAL fate: the first RX callback after a FINAL capture is the Final_Data's
  * fate (nothing else is on air between the FINAL and the next block's Pre-POLL).
  * Splits "frame arrived but our SP0 config rejected it" (=> PHY-config fix) from
  * "nothing detected, we sailed to the next Pre-POLL" (=> timing/delayed-RX fix). */
-static volatile uint32_t g_dbg_pf_n;        /* post-FINAL callbacks observed */
-static volatile uint32_t g_dbg_pf_err;      /* ... errored (no RXFCG): frame rejected */
-static volatile uint32_t g_dbg_pf_err_hdr;  /* ... errored WITH a decoded PHR (frame on air) */
-static volatile uint32_t g_dbg_pf_err_final; /* ... errored AND header reads Final_Data (0x02) */
-static volatile uint32_t g_dbg_pf_final;    /* ... a clean Final_Data (msg_id 0x02) */
-static volatile uint32_t g_dbg_pf_prepoll;  /* ... a clean next-block Pre-POLL (msg_id 0x01) */
-static volatile uint32_t g_dbg_pf_last_st;  /* raw status of the last post-FINAL callback */
-static volatile uint8_t g_dbg_pf_last_msgid; /* its msg_id (0xFE = no readable PHR) */
-static volatile int32_t g_dbg_pf_dhi;       /* (post-FINAL frame ip) - (Final ip), hi32 ticks */
+static volatile uint32_t g_dbg_pf_n;          /* post-FINAL callbacks observed */
+static volatile uint32_t g_dbg_pf_err;        /* ... errored (no RXFCG): frame rejected */
+static volatile uint32_t g_dbg_pf_err_hdr;    /* ... errored WITH a decoded PHR (frame on air) */
+static volatile uint32_t g_dbg_pf_err_final;  /* ... errored AND header reads Final_Data (0x02) */
+static volatile uint32_t g_dbg_pf_final;      /* ... a clean Final_Data (msg_id 0x02) */
+static volatile uint32_t g_dbg_pf_prepoll;    /* ... a clean next-block Pre-POLL (msg_id 0x01) */
+static volatile uint32_t g_dbg_pf_last_st;    /* raw status of the last post-FINAL callback */
+static volatile uint8_t g_dbg_pf_last_msgid;  /* its msg_id (0xFE = no readable PHR) */
+static volatile int32_t g_dbg_pf_dhi;         /* (post-FINAL frame ip) - (Final ip), hi32 ticks */
 static volatile uint32_t g_dbg_fdrx_arm_ok;   /* delayed Final_Data RX armed OK */
 static volatile uint32_t g_dbg_fdrx_arm_fail; /* delayed arm refused -> fell back to immediate */
 static volatile int32_t g_dbg_fdrx_margin;    /* last delayed-arm margin (target - now), hi32 */
@@ -734,8 +734,8 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 	g_pp_stash_len = datalength;
 	{
 		struct ccc_mhr_fields m;
-		bool mhr_ok = datalength >= (uint16_t)CCC_MHR_LEN &&
-			      ccc_parse_mhr(g_pp_stash, &m) == 0;
+		bool mhr_ok =
+			datalength >= (uint16_t)CCC_MHR_LEN && ccc_parse_mhr(g_pp_stash, &m) == 0;
 #if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 		g_dbg_last_msgid = mhr_ok ? m.msg_id : 0xFFu;
 		if (mhr_ok) {
@@ -1106,11 +1106,11 @@ static void revert_to_sp0_listen(void)
  * (dwt_isr SPI frame-pull), cb (dwt_isr-done -> here = callback processing). Whichever bucket
  * dominates decides the fix: a large hop => contention (quiet BLE / ISR fast-path); a large
  * isr+cb => irreducible SPI on the critical path (take the CPU off it via DW3000 auto-RX). */
-extern volatile uint32_t g_dw_cyc_gpio;    /* T0: GPIO ISR entry */
-extern volatile uint32_t g_dw_cyc_work;    /* T1: work-handler entry */
-extern volatile uint32_t g_dw_cyc_isrdone; /* T2: dwt_isr loop done */
-extern volatile uint32_t g_dw_cyc_per_us;  /* calibrated CPU cyc/us */
-uint32_t dw3000_dwt_cyccnt(void);          /* free-running DWT cycle counter */
+extern volatile uint32_t g_dw_cyc_gpio;      /* T0: GPIO ISR entry */
+extern volatile uint32_t g_dw_cyc_work;      /* T1: work-handler entry */
+extern volatile uint32_t g_dw_cyc_isrdone;   /* T2: dwt_isr loop done */
+extern volatile uint32_t g_dw_cyc_per_us;    /* calibrated CPU cyc/us */
+uint32_t dw3000_dwt_cyccnt(void);            /* free-running DWT cycle counter */
 static volatile uint32_t g_dbg_final_hop;    /* FINAL: T1-T0 dispatch cyc (contention) */
 static volatile uint32_t g_dbg_final_isr;    /* FINAL: T2-T1 dwt_isr SPI cyc */
 static volatile uint32_t g_dbg_final_cb;     /* FINAL: (arm entry)-T2 callback cyc */
@@ -1120,11 +1120,14 @@ static volatile uint32_t g_dbg_final_per_us; /* cyc/us copy for the J-Link decod
  * (~4 slots). Scheduled in HARDWARE, so the window opens at the right instant no matter how busy
  * the single core is right after the Final. Wide enough that the Final_Data cannot fall between
  * the FINAL and the CPU getting the receiver back up, wherever in the round it actually sits. */
-#define CCC_FDRX_OPEN_HI32 25000u /* ~100 us after the Final RMARKER (skip the Final's own tail) */
-#define CCC_FDRX_WIN_TO    7800u  /* ~8 ms window, dwt 1.0256 us units */
-#define CCC_FDRX_MIN_AHEAD 50000u /* ~200 us: clear the forcetrxoff+cfgsts+setdelay SPI setup so
-				   * DWT_START_RX_DELAYED isn't refused as "already past" (80 us was
-				   * too tight -> arm_ok=0 in build12/13) */
+/* ~100 us after the Final RMARKER, which skips the Final's own tail. */
+#define CCC_FDRX_OPEN_HI32 25000u
+/* ~8 ms window, dwt 1.0256 us units. */
+#define CCC_FDRX_WIN_TO    7800u
+#define CCC_FDRX_MIN_AHEAD                                                                         \
+	50000u /* ~200 us: clear the forcetrxoff+cfgsts+setdelay SPI setup so                      \
+		* DWT_START_RX_DELAYED isn't refused as "already past" (80 us was                  \
+		* too tight -> arm_ok=0 in build12/13) */
 
 static int arm_final_data_sp0(uint32_t final_ip)
 {
@@ -1132,21 +1135,24 @@ static int arm_final_data_sp0(uint32_t final_ip)
 	uint32_t dx = final_ip + CCC_FDRX_OPEN_HI32; /* ideal: just after the Final frame's tail */
 	int r;
 
-	/* Decompose THIS FINAL's dispatch latency (cyc; the stamps are from the FINAL's own IRQ). */
+	/* Decompose THIS FINAL's dispatch latency (cyc; the stamps are from the FINAL's own IRQ).
+	 */
 	g_dbg_final_hop = g_dw_cyc_work - g_dw_cyc_gpio;
 	g_dbg_final_isr = g_dw_cyc_isrdone - g_dw_cyc_work;
 	g_dbg_final_cb = dw3000_dwt_cyccnt() - g_dw_cyc_isrdone;
 	g_dbg_final_per_us = g_dw_cyc_per_us;
 
 	dwt_forcetrxoff();
-	__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_OFF); /* SP0 — Final_Data is a data frame */
+	__real_dwt_configurestsmode(
+		(uint8_t)DWT_STS_MODE_OFF); /* SP0 — Final_Data is a data frame */
 	now = dwt_readsystimestamphi32();
 	/* Record how far the IDEAL open sits from now BEFORE clamping: a strongly negative margin
 	 * means the callback ran so late that the ideal Final+100us window was already in the past
 	 * (the Final_Data, if it lands that early, is physically unrecoverable by any re-arm). */
 	g_dbg_fdrx_margin = (int32_t)(dx - now);
 	if (g_dbg_fdrx_margin < (int32_t)CCC_FDRX_MIN_AHEAD) {
-		dx = now + CCC_FDRX_MIN_AHEAD; /* ideal open already past -> open as early as armable */
+		dx = now +
+		     CCC_FDRX_MIN_AHEAD; /* ideal open already past -> open as early as armable */
 	}
 	dwt_setdelayedtrxtime(dx);
 	dwt_setrxtimeout(CCC_FDRX_WIN_TO);
@@ -1335,8 +1341,8 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 	 * Final_Data still reports msg_id 0x02. */
 	if (g_postfinal_watch) {
 		struct ccc_mhr_fields pfm;
-		bool hdr = ((st & DWT_INT_RXPHD_BIT_MASK) != 0u) &&
-			   len >= (uint16_t)CCC_MHR_LEN && ccc_parse_mhr(b, &pfm) == 0;
+		bool hdr = ((st & DWT_INT_RXPHD_BIT_MASK) != 0u) && len >= (uint16_t)CCC_MHR_LEN &&
+			   ccc_parse_mhr(b, &pfm) == 0;
 
 		g_postfinal_watch = false;
 		g_dbg_pf_n++;
@@ -1416,10 +1422,11 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		g_postfinal_final_ip = ip;
 		g_postfinal_watch = true;
 		/* Warm the next block's STS NOW — AFTER the SP0 receiver is re-armed above, not in
-		 * resp_tx_done (which sits before the FINAL and blocked this callback's re-arm). The
-		 * receiver is listening in hardware, so the Final_Data ~2 ms out is captured even while
-		 * this ~ms software KDF (3 STS derivations + a CCM decrypt) runs; its decode just queues
-		 * behind us. ~190 ms of slack remains before the next block needs the warm. */
+		 * resp_tx_done (which sits before the FINAL and blocked this callback's re-arm).
+		 * The receiver is listening in hardware, so the Final_Data ~2 ms out is captured
+		 * even while this ~ms software KDF (3 STS derivations + a CCM decrypt) runs; its
+		 * decode just queues behind us. ~190 ms of slack remains before the next block
+		 * needs the warm. */
 		if (g_pp_pending) {
 			g_pp_pending = false;
 			prepoll_decode(g_pp_stash, g_pp_stash_len);
