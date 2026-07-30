@@ -1,10 +1,78 @@
 # Copyright (c) 2026 asxeem
 # SPDX-License-Identifier: ISC
 #
-# No application Kconfig options. The reader identity used to arrive here as a
-# build-time string (CONFIG_ALIRO_PROV_SEED_HEX), which put a reader private key
-# into every image and made the firmware unshareable. It is now per-device data
-# in the settings store, typed in over the USB console in provisioning mode, so
-# there is deliberately no knob left that can put a key back into a build.
+# The reader identity used to arrive here as a build-time string
+# (CONFIG_ALIRO_PROV_SEED_HEX), which put a reader private key into every image
+# and made the firmware unshareable. It is now per-device data in the settings
+# store, typed in over the USB console in provisioning mode, so there is
+# deliberately no knob left that can put a key back into a build.
+
+config ALIRO_PROV_CONSOLE
+	bool "USB CDC-ACM provisioning console (SW2 held through reset)"
+	default y
+	help
+	  The runtime provisioning path: hold SW2 through reset and the board comes
+	  up with its radios down and an `aliro` console on the nRF52833's USB port.
+	  Costs 44,288 B flash and 19,648 B RAM, measured.
+
+	  Turn it off for a build that gets its identity some other way -- a Matter
+	  node self-provisions from Apple Home, which makes `aliro import`
+	  redundant, and reader + console + Thread overflows RAM by 1,752 bytes on
+	  this part, so the two cannot coexist.
+
+# These follow the console option rather than sitting unconditionally in
+# prj.conf, because a .conf file cannot make an assignment conditional: with
+# CONFIG_SHELL=n the shell assignments become unsatisfiable and NCS aborts the
+# build on the Kconfig warning. Defaults here are parsed before Kconfig.zephyr,
+# so they win over the upstream ones.
+if ALIRO_PROV_CONSOLE
+
+config USB_DEVICE_STACK
+	default y
+
+config USB_CDC_ACM
+	default y
+
+config USB_DEVICE_MANUFACTURER
+	default "openaliro"
+
+config USB_DEVICE_PRODUCT
+	default "openaliro reader (provisioning)"
+
+config SHELL
+	default y
+
+config SHELL_BACKEND_SERIAL
+	default y
+
+# A full APRV blob is 476 bytes = 952 hex characters plus the command word; the
+# 256-byte default line buffer would silently truncate an import.
+config SHELL_CMD_BUFF_SIZE
+	default 1152
+
+# import/erase commit through a software P-256 derive. Measured peak 2580 B, so
+# the 2048 default faulted the shell thread via the MPU stack guard, which
+# presents as a live USB device with a dead console rather than as a crash.
+config SHELL_STACK_SIZE
+	default 4096
+
+# One import line is 577 characters; the 64-byte default is a single USB bulk
+# packet and drops characters mid-paste.
+config SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE
+	default 1280
+
+endif # ALIRO_PROV_CONSOLE
+
+config ALIRO_THREAD_GATE
+	bool "Stage 0 contention gate: bring Thread up alongside the reader"
+	depends on OPENTHREAD
+	default n
+	help
+	  Measurement only, never a shipping option. Starts OpenThread next to the
+	  running reader so ranging can be measured while an 802.15.4 stack shares
+	  the M4 and the 2.4 GHz radio. Commit 5b8d06b won the walk-up by cutting
+	  FINAL->arm latency to 0.66 ms, and Thread lands on that margin; this
+	  answers whether Matter on this board is possible at all before any Matter
+	  code is written. See ports/dwm3001cdk/app/src/thread_gate.c.
 
 source "Kconfig.zephyr"

@@ -33,8 +33,6 @@ target_sources(app PRIVATE
 	# transport is stage 4 and the settings-backed store is stage 1.
 	src/aliro_ble_zephyr.c
 	src/aliro_prov_settings.c
-	# Provisioning console (USB CDC-ACM, provisioning mode only).
-	src/prov_shell.c
 	# Reader engine.
 	${ALIRO}/src/aliro_reader.c
 	${ALIRO}/src/aliro_ranging.c
@@ -48,4 +46,9 @@ target_sources(app PRIVATE
 	${ALIRO}/src/aliro_rssi_gate.c
 	${ALIRO}/src/aliro_approach.c
 )
+# Provisioning console (USB CDC-ACM, provisioning mode only).
+target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
+# Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
+# every shipping image.
+target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
 target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src)

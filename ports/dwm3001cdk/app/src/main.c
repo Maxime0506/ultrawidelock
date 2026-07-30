@@ -51,6 +51,7 @@ extern volatile int woz_uwb_diag_on;
  * interrupts away from the DW3110's delayed-TX reply window (the timing that
  * commit 5b8d06b had to fight for on this single-core part), and it means the
  * console can never be reached while a walk-up is in flight. */
+#if IS_ENABLED(CONFIG_ALIRO_PROV_CONSOLE)
 static bool provisioning_requested(void)
 {
 	static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
@@ -83,6 +84,7 @@ static void provisioning_mode(void)
 		k_msleep(1000);
 	}
 }
+#endif /* CONFIG_ALIRO_PROV_CONSOLE */
 
 int main(void)
 {
@@ -94,9 +96,11 @@ int main(void)
 	 * mojibake in RTT Viewer. */
 	LOG_INF("openaliro reader: DWM3001CDK (nRF52833 + DW3110)");
 
+#if IS_ENABLED(CONFIG_ALIRO_PROV_CONSOLE)
 	if (provisioning_requested()) {
 		provisioning_mode(); /* never returns */
 	}
+#endif
 
 	int rc = aliro_reader_start();
 
