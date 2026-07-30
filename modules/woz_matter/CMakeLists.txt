@@ -17,7 +17,8 @@ if(CONFIG_WOZ_MATTER)
     ${SRC}/matter_tlv.c
     ${SRC}/matter_msg.c
     ${SRC}/matter_mrp.c
-    ${SRC}/matter_crypto.c)
+    ${SRC}/matter_crypto.c
+    ${SRC}/matter_btp.c)
 
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
