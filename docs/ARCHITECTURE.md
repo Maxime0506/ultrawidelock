@@ -1706,6 +1706,51 @@ not configured, the earlier passes run over a site/ kept from a previous
 build, so a page may already carry the injections. Run from the repo root,
 after docs_github.py and before the link pass.
 
+### [`tools/docs_hero.py`](architecture/tools/docs_hero.md)
+
+Stage the site: a cinematic landing hero, and a reveal layer everywhere.
+
+The page generator lays every page out the same way — a tinted band with a
+title in it, then an article. That is correct and completely flat, and the
+landing page in particular arrives looking like page 240 of the reference
+tree rather than the front of anything. This pass adds the theatre, entirely
+through injections into the rendered output; the generator is never edited.
+
+Three things go in:
+
+  * The landing hero becomes a dark room. `.hero-band` picks up a second
+    class that redefines the theme's own custom properties inside it, so
+    every child — buttons, the command chip, the terminal card, the stat
+    row — restyles itself for a dark surface without a single one of them
+    being touched by name. Behind the type, the concentric SVG the generator
+    already draws in the corner is animated into UWB ranging pulses (this is
+    a proximity-unlock reader; the rings are the product), over a drifting
+    terracotta glow and a fine grain. The wordmark goes up to ~5.5rem of
+    serif. The terminal tilts a few degrees out of the page.
+  * The Get-started page gets the same room a size down — same glow, grain
+    and pulses, a shorter band, no terminal or stat row. It is the only
+    other page that is a front door rather than a document, and arriving
+    there from the landing page should not feel like leaving the site. Its
+    rings are injected here, because the page the pass builds it from has
+    none of its own.
+  * The explore cards become a bento: three columns, with the first and last
+    cell double-width, and the first promoted to a display card. Every card
+    tracks the pointer with a soft spotlight, as do the Get-started tracks.
+  * Sitewide, section headings grow from 11px uppercase rails into serif
+    headings, structural blocks fade up as they enter the viewport, the
+    numbers in the hero count up once, and a hairline progress bar tracks
+    reading position.
+
+All of it is behind `prefers-reduced-motion`: the reveal layer resolves to
+"already visible", the counters print their final value, the pulses and the
+drift stop, and the terminal sits flat. The script is inert on a page with
+none of these hooks, so guides and reference pages take only the heading and
+reveal treatment.
+
+Idempotent: a marker guards each injection, so re-running over a kept site/
+changes nothing. Run from the repo root after docs_theme.py (it builds on the
+tokens that pass defines) and before the link pass; it adds no links.
+
 ### [`tools/docs_links.py`](architecture/tools/docs_links.md)
 
 Repair cross-document links in the rendered site, then assert none are left broken.
@@ -1741,6 +1786,52 @@ Idempotent on purpose: when the page generator is not configured, the earlier
 passes run over a site/ kept from a previous build, so a page may already carry
 the injections. Run from the repo root, after the generators and before the
 link pass.
+
+### [`tools/docs_motion.py`](architecture/tools/docs_motion.md)
+
+The motion layer: choreograph the arrival, and make the page answer back.
+
+docs_theme.py sets the surfaces and docs_hero.py builds the rooms. Both are
+still, though: the site arrives all at once and then sits there. This pass
+adds time and reaction to what those two already drew.
+
+Arrival, in order. The hero's parts rise and unblur on a 60ms beat, the
+wordmark a character at a time behind them, the terminal card last and from
+further away. Then the terminal types itself out: the same two commands the
+page already showed, entered rather than printed, with the caret walking
+down the lines. Nothing here is new content — every one of those characters
+was in the markup already, and is again the moment the animation ends.
+
+Reaction, everywhere after that. The hero tracks the pointer: a warm spot
+follows it across the band, the ranging rings lean away from it, and the
+terminal turns to face it. The explore cards tilt under it. On scroll the
+band's decoration drifts up behind the type and the topbar lifts off the
+page. The "On this page" rail grows a marker that slides between sections
+instead of the accent jumping. Copy buttons pop green when they land, the
+section rules draw themselves in, and where the browser supports it, one
+page cross-fades into the next.
+
+Two rules hold all of it together:
+
+  * Nothing may end up hidden. Every entrance is a CSS animation with
+    `both` fill from the stylesheet in `<head>`, so it cannot be left
+    half-applied by a script that failed to load, and every JS effect only
+    ever sets a custom property or adds a class to something already
+    visible. The one exception is the terminal text, which the typist
+    blanks — so the typist writes it back on the same tick it starts, and
+    only ever runs when it found the text itself.
+  * `prefers-reduced-motion: reduce` removes the entrances, the parallax,
+    the tilt, the typing and the page transition, and leaves the site as
+    docs_hero.py drew it. That is checked in the media query for the CSS
+    and at the top of each function for the script, because a class that
+    was already added cannot be un-added by a media query.
+
+The CSS is appended to site/style.css rather than injected into the pages:
+it is the one stylesheet in `<head>`, and an entrance that starts at
+opacity 0 has to be parsed before the thing it hides is painted. The script
+goes in with the other passes' scripts at the end of the body.
+
+Idempotent by marker. Run from the repo root after docs_hero.py.
 
 ### [`tools/docs_nav.py`](architecture/tools/docs_nav.md)
 
@@ -1807,16 +1898,33 @@ carry the whole theme:
     --ink, --accent, …). Appending a redefinition of those properties at the
     end of the sheet wins the cascade everywhere at once, so the sidebar, the
     landing cards, the command chips and the search palette all follow without
-    touching a single HTML file. A short component layer after the variables
-    covers what variables cannot express: heading typefaces and the always-dark
-    code panels.
+    touching a single HTML file. A component layer after the variables covers
+    what variables cannot express: heading typefaces, the always-dark code
+    panels, hover and focus behaviour, and the two layout repairs below.
   * site/api/doxygen-awesome.css — the reference tree's stylesheet exposes the
     same kind of seam (--page-background-color, --primary-color, …), so the
     API pages get the matching palette and headline face.
 
-The display face is Source Serif 4 from Google Fonts, pulled with @import —
-which CSS requires ahead of every rule, so the import is prepended while the
-overrides are appended. Body text stays on the system sans stack.
+Three faces, all from Google Fonts, pulled with one @import — which CSS
+requires ahead of every rule, so the import is prepended while the overrides
+are appended. Source Serif 4 sets the display headings, Inter the body and UI
+(the system stack stays as the fallback), JetBrains Mono the code. Every face
+is loaded with display=swap, so text paints in the fallback immediately.
+
+The palette is generated from PALETTE below rather than written out four
+times: the base sheet scopes its own variables as OS preference first,
+explicit toggle second, and emit() mirrors that exactly so the toggle keeps
+winning. Every foreground token in PALETTE clears 4.5:1 against the surfaces
+it is actually painted on — see the ratios recorded beside each one.
+
+Two layout repairs ride along, because both are cascade-only:
+
+  * the hero band centred its own text on the full content width while the
+    article below it is pushed left by the "On this page" rail, so a page
+    title and its first heading sat ~88px apart. The hero adopts the article
+    grid when the rail is present, and the two line up.
+  * the landing hero widens to 74rem and had no gutter at all above 1280px,
+    so the terminal card ran flush into the window edge.
 
 Idempotent like the other passes: a marker comment guards both files, so
 re-running over a kept site/ changes nothing. Run from the repo root, any time

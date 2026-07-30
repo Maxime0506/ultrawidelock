@@ -38,19 +38,36 @@ CTA_MARKER = b'class="twin-cta"'
 
 # Self-contained injection (its own <style>), styled through the site tokens so
 # it follows the theme — the same approach docs_media.py takes for its figure.
+# The prose column needs min-width:0 or the nowrap "Open the twin" tail wins
+# the flex fight and squeezes it to one word per line; below 640px the tail
+# drops to its own row instead of competing at all. The icon is an inline SVG
+# rather than an emoji, so it inherits the card's colour and renders the same
+# on every platform.
+DOOR = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" '
+    'aria-hidden="true"><path d="M4 21h16"/><path d="M7 21V4a1 1 0 0 1 '
+    '1-1h8a1 1 0 0 1 1 1v17"/><circle cx="14" cy="12.5" r="1" '
+    'fill="currentColor" stroke="none"/></svg>'
+)
+
 CTA = f"""<style>
 .twin-cta{{display:flex;align-items:center;gap:1rem;margin:2rem 0 .4rem;padding:1rem 1.2rem;
   text-decoration:none;border:1px solid var(--tint-line);border-radius:14px;background:var(--tint);
-  color:var(--ink);transition:border-color .15s,transform .15s}}
-.twin-cta:hover{{border-color:var(--accent);transform:translateY(-1px)}}
+  color:var(--ink);transition:border-color .15s,transform .15s,box-shadow .15s}}
+.twin-cta:hover{{border-color:var(--accent);transform:translateY(-1px);box-shadow:var(--shadow)}}
 .twin-cta .tc-ic{{flex:none;width:2.4rem;height:2.4rem;display:grid;place-items:center;border-radius:11px;
-  background:var(--accent);color:#fff;font-size:1.3rem}}
+  background:var(--accent);color:#fff}}
+.twin-cta .tc-ic svg{{width:1.25rem;height:1.25rem}}
+.twin-cta .tc-t{{flex:1;min-width:0}}
 .twin-cta .tc-t b{{display:block;color:var(--strong);font-size:1rem}}
 .twin-cta .tc-t span{{color:var(--muted);font-size:.85rem}}
-.twin-cta .tc-go{{margin-left:auto;color:var(--accent);font-weight:600;font-size:.85rem;white-space:nowrap}}
+.twin-cta .tc-go{{margin-left:auto;color:var(--accent-ink);font-weight:600;font-size:.85rem;white-space:nowrap}}
+@media (max-width:640px){{.twin-cta{{flex-wrap:wrap}}
+.twin-cta .tc-t,.twin-cta .tc-go{{flex-basis:100%;margin-left:0}}}}
 </style>
 <a class="twin-cta" href="{TWIN_DEST_NAME}">
-<span class="tc-ic">&#x1F6AA;</span>
+<span class="tc-ic">{DOOR}</span>
 <span class="tc-t"><b>Interactive digital twin</b><span>Walk a phone up to the door and watch the reader's real
 unlock logic react &mdash; BLE, UWB ranging, the trust gate, the bolt.</span></span>
 <span class="tc-go">Open the twin &rarr;</span>

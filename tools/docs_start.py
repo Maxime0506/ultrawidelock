@@ -79,41 +79,102 @@ ICONS = {
     "radio": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4m8.4 0a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2m14.2 0a10 10 0 0 1 0 14.2"/></svg>',
     "branch": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="9" r="2.2"/><path d="M6 7.2v9.6M18 11.2c0 3-3 4-6 4"/></svg>',
     "bolt": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5z"/></svg>',
+    # The disclosure arrows were the "⌄" character, which every platform draws
+    # at a different weight and baseline; a stroked path is the same everywhere.
+    "chev": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
 }
 
+# A track is a card, not a row: the icon and the track's number sit on one
+# line and the title block wraps under them, which gives the serif title the
+# width to breathe and leaves the closed grid reading as six equal choices.
+# The number is a counter rather than markup, so reordering the tracks below
+# renumbers them. `.path` is the spotlight host — docs_hero.py feeds it --mx
+# and --my from the pointer, exactly as it does the landing page's cards.
 STYLE = """<style>
-.paths{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:1.1rem 0 2rem}
+/* The band's own styling is docs_hero.py's; these are the shapes, so the page
+   still holds together if only this pass has run. */
+.start-meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.6rem}
+.start-meta span{font-size:.76rem;color:var(--muted);border:1px solid var(--line);
+  border-radius:99px;padding:.32rem .75rem;background:var(--card)}
+/* The sitewide 4.4rem above a section rail separates two sections; here the
+   band is directly above it and does the separating already. */
+.doc .section-h:first-of-type{margin-top:.4rem}
+.paths{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;
+  margin:1.4rem 0 2.4rem;counter-reset:pathn}
 @media(max-width:860px){.paths{grid-template-columns:1fr}}
-.path{border:1px solid var(--line);border-radius:14px;background:var(--card);transition:border-color .15s,box-shadow .15s}
-.path:hover{border-color:var(--tint-line)}
-.path[open]{grid-column:1/-1;border-color:var(--tint-line);box-shadow:var(--shadow)}
-.path summary{display:flex;align-items:center;gap:.85rem;padding:.95rem 1.05rem;cursor:pointer;list-style:none}
-.path summary::-webkit-details-marker{display:none}
-.p-ico{flex:none;display:grid;place-items:center;width:2.2rem;height:2.2rem;border-radius:10px;background:var(--tint);color:var(--accent-ink)}
-.p-ico svg{width:1.15rem;height:1.15rem}
-.p-t{min-width:0}.p-t b{display:block;font-size:.95rem}.p-t small{display:block;color:var(--muted);font-size:.78rem;margin-top:.12rem}
-.p-chev{margin-left:auto;color:var(--faint);transition:transform .22s;font-size:.9rem}
-.path[open] .p-chev{transform:rotate(180deg)}
-.p-body{padding:.2rem 1.05rem 1rem;border-top:1px solid var(--hairline)}
+/* opacity is in the list because the reveal layer fades these in and this
+   rule, being the later one, is the transition they actually get. */
+.path{position:relative;overflow:hidden;counter-increment:pathn;
+  border:1px solid var(--line);border-radius:16px;background:var(--card);
+  transition:opacity .4s ease,border-color .18s ease,box-shadow .18s ease,
+    transform .3s cubic-bezier(.2,.7,.2,1)}
+.path::before{content:"";position:absolute;inset:0;opacity:0;pointer-events:none;
+  transition:opacity .3s ease;background:radial-gradient(14rem 14rem at
+    var(--mx,50%) var(--my,50%),var(--tint),transparent 70%)}
+.path:hover::before{opacity:1}
+.path:hover{border-color:var(--tint-line);box-shadow:var(--shadow-hover);transform:translateY(-2px)}
+.path[open],.path[open]:hover{grid-column:1/-1;border-color:var(--tint-line);
+  box-shadow:var(--shadow);transform:none}
+.path[open]::after{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:linear-gradient(180deg,var(--accent),transparent 70%)}
+.path>summary{position:relative;display:flex;flex-wrap:wrap;align-items:center;
+  gap:.85rem;padding:1.2rem 1.25rem;cursor:pointer;list-style:none}
+.path>summary::-webkit-details-marker{display:none}
+.path>summary::after{content:counter(pathn,decimal-leading-zero);order:1;
+  margin-left:auto;padding-right:2rem;font-family:var(--mono);font-size:.74rem;
+  letter-spacing:.1em;color:var(--faint)}
+.p-ico{order:0;flex:none;display:grid;place-items:center;width:2.6rem;height:2.6rem;
+  border-radius:12px;color:var(--accent-ink);
+  background:linear-gradient(150deg,var(--tint),transparent 78%),var(--surface);
+  box-shadow:inset 0 0 0 1px var(--tint-line);
+  transition:transform .24s cubic-bezier(.2,.7,.2,1)}
+.path:hover .p-ico{transform:scale(1.06) rotate(-3deg)}
+.p-ico svg{width:1.3rem;height:1.3rem}
+.p-t{order:2;flex-basis:100%;min-width:0;margin-top:.2rem}
+.p-t b{display:block;font-family:var(--serif);font-size:1.28rem;font-weight:500;
+  line-height:1.24;color:var(--strong)}
+.p-t small{display:block;margin-top:.32rem;font-size:.85rem;line-height:1.45;color:var(--muted)}
+.p-chev{position:absolute;right:1.25rem;top:1.7rem;display:grid;place-items:center;
+  width:1.6rem;height:1.6rem;border-radius:50%;border:1px solid var(--line);
+  background:var(--surface);color:var(--faint);
+  transition:transform .24s ease,color .16s ease,border-color .16s ease}
+.p-chev svg{width:.9rem;height:.9rem}
+.path:hover .p-chev{color:var(--accent-ink);border-color:var(--tint-line)}
+.path[open] .p-chev{transform:rotate(180deg);color:var(--accent-ink);border-color:var(--tint-line)}
+.p-body{position:relative;padding:.35rem 1.25rem 1.25rem;border-top:1px solid var(--hairline)}
 .path[open] .p-body{animation:p-in .28s cubic-bezier(.2,.7,.2,1) both}
 @keyframes p-in{from{opacity:0;transform:translateY(-5px)}}
-.p-sub{border:1px solid var(--hairline);border-radius:10px;margin:.6rem 0;background:var(--surface)}
-.p-sub summary{padding:.55rem .8rem;font-size:.85rem;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center}
+.p-sub{border:1px solid var(--hairline);border-radius:12px;margin:.7rem 0;background:var(--surface)}
+.p-sub summary{padding:.62rem .85rem;font-size:.85rem;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center}
 .p-sub summary::-webkit-details-marker{display:none}
-.p-sub summary::after{content:"⌄";margin-left:auto;color:var(--faint);line-height:.5;transition:transform .2s}
-.p-sub[open] summary::after{transform:rotate(180deg)}
-.p-sub .s-body{padding:.1rem .8rem .75rem;font-size:.88rem;color:var(--muted)}
+.p-sub summary::after{content:"";margin-left:auto;flex:none;width:.62rem;height:.62rem;
+  border-right:1.6px solid var(--faint);border-bottom:1.6px solid var(--faint);border-radius:1px;
+  transform:translateY(-.14rem) rotate(45deg);transition:transform .2s ease}
+.p-sub[open] summary::after{transform:translateY(.08rem) rotate(225deg)}
+.p-sub .s-body{padding:.1rem .85rem .8rem;font-size:.88rem;color:var(--muted)}
 .p-sub .s-body p{margin:.45rem 0}
 .p-body .cmdchip{margin:.5rem 0;max-width:none}
 .p-body .rows{margin:.4rem 0}
+.p-body .rows a{border-radius:9px;padding-left:.6rem;padding-right:.6rem;
+  transition:background-color .14s ease}
+.p-body .rows a:hover{background:var(--tint)}
 .p-body>p{font-size:.9rem;color:var(--muted);margin:.6rem 0 .2rem}
+@media(prefers-reduced-motion:reduce){
+  .path,.path::before,.p-ico,.p-chev{transition:none}
+  .path[open] .p-body{animation:none}}
 </style>"""
 
+# Three facts, all of them answerable from the tracks below: how many there
+# are, which targets they cover, and that nothing here needs a board on the
+# desk to get moving.
 HERO = (
     '<header class="hero-band"><div class="hero-in">'
     '<div class="eyebrow">Start here</div><h1>Get started</h1>'
     '<p class="lede">From a clean checkout to a phone unlocking the door. '
     "Pick a track; it opens in place.</p>"
+    '<div class="start-meta"><span>Six tracks</span>'
+    "<span>nRF5340 &amp; ESP32-S3</span>"
+    "<span>Host tests need no hardware</span></div>"
     "</div></header>"
 )
 
@@ -241,7 +302,7 @@ def main_html(gh: str) -> str:
     cards = "".join(
         f'<details class="path"><summary><span class="p-ico">{ICONS[ico]}</span>'
         f'<span class="p-t"><b>{title}</b><small>{sub}</small></span>'
-        f'<span class="p-chev">&#8964;</span></summary>'
+        f'<span class="p-chev">{ICONS["chev"]}</span></summary>'
         f'<div class="p-body">{body}</div></details>'
         for ico, title, sub, body in tracks
     )

@@ -102,6 +102,17 @@ python3 tools/docs_3d.py
 echo "==> theme"
 python3 tools/docs_theme.py
 
+# After the theme, because the landing hero restyles itself by redefining the
+# theme's own tokens inside the band, and before the twin card is copied in —
+# the reveal layer picks that card up from the page as it finds it.
+echo "==> staging"
+python3 tools/docs_hero.py
+
+# After the staging, because it animates what that pass draws, and its
+# stylesheet has to sit after the theme's in style.css to win the ties.
+echo "==> motion"
+python3 tools/docs_motion.py
+
 # Last, after every generator-page pass: the twin is a self-contained page with
 # its own chrome, so copying it in earlier trips passes that glob site/*.html
 # expecting the generator's layout (e.g. the github chip's theme-toggle anchor).

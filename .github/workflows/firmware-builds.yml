@@ -36,6 +36,9 @@ on:
       - scripts/bootstrap.sh
       - scripts/build.sh
       - .github/workflows/firmware-builds.yml
+      # Last so it wins, mirroring the push filter above: markdown never
+      # compiles into firmware, and READMEs live inside the build dirs.
+      - "!**/*.md"
   workflow_dispatch:
   # Nightly canary for the Matter build: its setup reaches live upstreams
   # (esp-matter submodules, CHIP CIPD packages), so breakage can appear with

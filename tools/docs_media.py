@@ -50,10 +50,16 @@ CAPTION = (
 FEATS_ANCHOR = b'<ul class="feats">'
 META_ANCHOR = b'<meta name="viewport" content="width=device-width, initial-scale=1">'
 
+# The light rendering is the default and has to say so: the site's own sheet
+# hides .shot-light and reveals it only under the explicit light toggle, so a
+# first visit on a light desktop — no data-theme set yet — used to hide both
+# renderings and leave a gap where the figure should be. This block is inline
+# and therefore later in the cascade, so it wins at equal specificity.
 FIGURE = f"""<style>
 .shots{{margin:2.6rem 0 .4rem;text-align:center}}
 .shots img{{max-width:100%;height:auto;border-radius:16px}}
 .shots figcaption{{margin-top:.9rem;font-size:.82rem;color:var(--muted)}}
+.shot-light{{display:inline}}
 .shot-dark{{display:none}}
 :root[data-theme="dark"] .shot-dark{{display:inline}}
 :root[data-theme="dark"] .shot-light{{display:none}}

@@ -66,9 +66,17 @@ QS_ANCHOR = '<div class="section-h"><h2>Get running</h2><span class="rule"></spa
 # leaves its .twin-cta styles on the landing page, so reusing the class keeps
 # the two cards identical by construction. Only the margins differ — the twin
 # card closes the section, this one opens it, ahead of the toolchain steps.
+# Inline SVG rather than an emoji, matching the twin card: an emoji picks up
+# whatever the platform's font gives it and ignores the card's colour.
+BOLT = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.7" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5z"/></svg>'
+)
+
 QS_LEDE = (
     MARK + '<a class="twin-cta qs-flash" href="flash/">'
-    '<span class="tc-ic">&#x26A1;</span>'
+    f'<span class="tc-ic">{BOLT}</span>'
     '<span class="tc-t"><b>No toolchain handy?</b><span>Flash the ESP32-S3 '
     "or ESP32-C5 build straight from the browser &mdash; this site writes "
     "the firmware over WebSerial (Chrome, Edge, or Firefox), then pick up at "
