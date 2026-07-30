@@ -75,4 +75,25 @@ config ALIRO_THREAD_GATE
 	  answers whether Matter on this board is possible at all before any Matter
 	  code is written. See ports/dwm3001cdk/app/src/thread_gate.c.
 
+config ALIRO_HEAP_PROBE
+	bool "Report the mbedTLS heap high-water mark"
+	depends on MBEDTLS_MEMORY_DEBUG
+	default n
+	help
+	  Measurement only. CONFIG_MBEDTLS_HEAP_SIZE is 16384 here and halving it
+	  was 63% of the RAM freed for a future Matter node, so it needs a number
+	  rather than an argument. The argument says the cut is safe: this build is
+	  OBERON_ONLY_PSA_ENABLED with no MBEDTLS_BIGNUM_C or ECP_C compiled in, so
+	  ECDH/ECDSA run in driver stack buffers and only PSA key-slot material is
+	  ever mbedtls_calloc'd. That is an inference from Kconfig, which is exactly
+	  the reasoning that produced the bare-OpenThread mistake, so measure it.
+
+	  Reports at two points, because the console and the reader never run at the
+	  same time: `aliro heap` in provisioning mode, covering the import path's
+	  P-256 derive, and an RTT line at each unlock in run mode, covering a whole
+	  walk-up. Both read a peak accumulated since boot, so the walk-up figure
+	  includes BLE pairing and the Aliro exchange, not just the ranging.
+
+	  Needs CONFIG_MBEDTLS_MEMORY_DEBUG=y, which is not a shipping setting.
+
 source "Kconfig.zephyr"

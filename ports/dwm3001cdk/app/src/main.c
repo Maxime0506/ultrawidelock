@@ -25,13 +25,34 @@
 #include "aliro_reader.h"
 #include "woz_uwb_facade.h"
 
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#include <mbedtls/memory_buffer_alloc.h>
+#endif
+
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
+
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+/* Reported at the grant, because by then the unlock has done every P-256 and
+ * AES-GCM operation it is going to do. The peak is cumulative since boot, so it
+ * covers BLE pairing and the Aliro exchange too, not only the ranging. */
+static void heap_peak_log(const char *when)
+{
+	size_t used = 0;
+	size_t blocks = 0;
+
+	mbedtls_memory_buffer_alloc_max_get(&used, &blocks);
+	LOG_INF("mbedtls heap peak @%s: %u B of %u (%u blocks)", when,
+		(unsigned int)used, (unsigned int)CONFIG_MBEDTLS_HEAP_SIZE,
+		(unsigned int)blocks);
+}
+#endif /* CONFIG_ALIRO_HEAP_PROBE */
 
 /* The per-frame UWB diagnostic trace (DIAGK) defaults ON for nRF targets but OFF
  * for the ESP32, because its printf on every ranging frame blocks the callback
  * long enough to miss the DW3110 delayed-TX slot deadline -- the ESP port disables
- * it for exactly that reason (bench-correlated late RESPONSE arms). This board has
- * no shell (CONFIG_SHELL=n) to run `uwbdiag off`, so force it off here before any
+ * it for exactly that reason (bench-correlated late RESPONSE arms). What shell this
+ * board has exists only in provisioning mode, where the radios never start, so
+ * `uwbdiag off` can never be typed at a walk-up; force it off here before any
  * ranging starts. See modules/woz_uwb/src/facade/woz_diag.h. */
 extern volatile int woz_uwb_diag_on;
 
@@ -151,6 +172,9 @@ int main(void)
 		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
 			aliro_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			granted = true;
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+			heap_peak_log("unlock");
+#endif
 			break;
 		case ALIRO_APPROACH_RELOCK_DEPART:
 		case ALIRO_APPROACH_RELOCK_ABORT:

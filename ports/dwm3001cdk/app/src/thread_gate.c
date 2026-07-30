@@ -30,10 +30,21 @@
  * no output at all, because there was no radio to bring up.
  *
  * The working Thread config is NET_L2_OPENTHREAD, where the L2 owns interface
- * bring-up, so openthread_run() below is probably the wrong entry point and
- * this needs reworking against net_if_up() before the gate can run. Left in
- * tree because the measurement it exists to make is still the go/no-go for
- * Matter on this board.
+ * bring-up, so openthread_run() below is the wrong entry point. The rework is
+ * CONFIG_OPENTHREAD_MANUAL_START=y (zephyr/modules/openthread/Kconfig:48,
+ * honoured by the L2 at zephyr/subsys/net/l2/openthread/openthread.c:396) so the
+ * dataset can be set before start, then net_if_up().
+ *
+ * SECOND KNOWN FLAW, unfixed: an MTD cannot become leader, so with nothing else
+ * on channel 15 this board sits DETACHED emitting parent requests forever. That
+ * still gives honest RF arbitration, but almost no stack processing -- and stack
+ * processing is the half that lands on the FINAL->arm margin. A pass measured
+ * alone on the channel would mean far less than it looks like. The gate needs a
+ * second 802.15.4 node holding the network up; the nRF5340DK already in this
+ * project can do it as an ot-cli FTD.
+ *
+ * Left in tree because the measurement it exists to make is still the go/no-go
+ * for Matter on this board.
  */
 
 #include <zephyr/kernel.h>
@@ -130,7 +141,14 @@ static int thread_gate_start(void)
 	return 0;
 }
 
-/* After OpenThread's own SYS_INIT (CONFIG_OPENTHREAD_SYS_INIT_PRIORITY, 40) and
- * after the reader engine has started from main(), so the gate never delays the
- * path it is measuring. */
+/* After OpenThread's own SYS_INIT (CONFIG_OPENTHREAD_SYS_INIT_PRIORITY, 40).
+ *
+ * NOTE, and an earlier version of this comment had it backwards: APPLICATION
+ * runs BEFORE main(), not after. z_sys_init_run_level(INIT_LEVEL_APPLICATION)
+ * and the call to main() both happen inside bg_thread_main()
+ * (zephyr/kernel/init.c:318 then :347), so this brings Thread up ahead of the
+ * reader engine rather than behind it. Harmless for a contention gate, since
+ * both are running long before a phone walks up, but the rework should start
+ * Thread from main() after aliro_reader_start() if the reader ever needs to
+ * own the radio first. */
 SYS_INIT(thread_gate_start, APPLICATION, 90);

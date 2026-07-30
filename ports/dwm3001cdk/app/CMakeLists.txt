@@ -51,4 +51,19 @@ target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
 # Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
+
+# CONFIG_MBEDTLS_MEMORY_DEBUG=y is a NO-OP in this build and sets no define.
+# nrf_security only wires that symbol through configs/legacy_crypto_config.h.template
+# (`#cmakedefine MBEDTLS_MEMORY_DEBUG`, line 1268); a PSA-only build
+# (CONFIG_OBERON_ONLY_PSA_ENABLED) generates nrf-config.h from a different
+# template that has no slot for it, so the Kconfig is accepted and silently
+# dropped. The app then compiles against a declaration the library never
+# defined and the link fails on mbedtls_memory_buffer_alloc_max_get.
+#
+# Define it for every target instead. Safe because the only struct it changes,
+# buffer_alloc_ctx, is file-local to mbedtls/library/memory_buffer_alloc.c, so
+# there is no layout to get out of step across compilation units.
+if(CONFIG_ALIRO_HEAP_PROBE)
+	zephyr_compile_definitions(MBEDTLS_MEMORY_DEBUG)
+endif()
 target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src)

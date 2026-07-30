@@ -27,8 +27,13 @@
 #include "aliro_prov.h"
 #include "aliro_reader.h"
 
-/* One blob each way, static because the shell thread's stack is 2 KB and the
- * hex form of a full 476-byte blob is 952 characters on its own. */
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#include <mbedtls/memory_buffer_alloc.h>
+#endif
+
+/* One blob each way, static because the hex form of a full 476-byte blob is 952
+ * characters on its own, against a shell thread stack of
+ * CONFIG_SHELL_STACK_SIZE. */
 static uint8_t s_blob[ALIRO_PROV_BLOB_MAX];
 static char s_hex[2u * ALIRO_PROV_BLOB_MAX + 1u];
 
@@ -186,6 +191,27 @@ static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+/* Run this straight after an `import`: the commit path does a software P-256
+ * derive, which is the reader's heaviest single crypto step, and the peak is
+ * cumulative since boot so one reading covers the whole command. */
+static int cmd_heap(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	size_t used = 0;
+	size_t blocks = 0;
+
+	mbedtls_memory_buffer_alloc_max_get(&used, &blocks);
+	shell_print(sh, "mbedtls heap peak: %u B of %u (%u blocks)", (unsigned int)used,
+		    (unsigned int)CONFIG_MBEDTLS_HEAP_SIZE, (unsigned int)blocks);
+	return 0;
+}
+#else
+#define cmd_heap NULL
+#endif
+
 SHELL_STATIC_SUBCMD_SET_CREATE(
 	sub_aliro,
 	SHELL_CMD(prov, NULL, "Show the stored reader identity and whether it can unlock.",
@@ -196,6 +222,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "`export yes`.", cmd_export, 2, 0),
 	SHELL_CMD_ARG(erase, NULL, "Erase identity and trust anchors: `erase yes`.", cmd_erase, 2,
 		      0),
+	SHELL_COND_CMD(CONFIG_ALIRO_HEAP_PROBE, heap, NULL,
+		       "Peak mbedTLS heap use since boot.", cmd_heap),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(aliro, &sub_aliro, "Aliro reader provisioning.", NULL);
