@@ -1527,6 +1527,28 @@ directly. Every rejection exits 1 and names its reason.
 
 *No module docstring. First commit: "Add Wireshark dissector for the clear-text Aliro BLE plane".*
 
+### [`tools/aliro_blob.py`](architecture/tools/aliro_blob.md)
+
+Inspect an aliro_prov ("APRV") reader-provisioning blob.
+
+The blob is the unit of the clone path: a board commissioned into Apple Home
+exports one with `aliro export`, and a board that cannot be commissioned adopts
+it. This tool answers the question that otherwise costs a hardware cycle to ask
+-- is this blob actually carrying an Apple-issued credential, or is it the dev
+identity with nothing in it?
+
+Two inputs, auto-detected:
+
+  aliro_blob.py 41505256030...      a hex string, as printed by `aliro export`
+  aliro_blob.py nvs.bin             a file, scanned for every APRV blob in it
+
+The file form works on a raw `esptool.py read_flash` dump of the ESP32 nvs
+partition, which is a read-only way to recover the credential from a board you
+do not want to reflash.
+
+Wire format is modules/woz_aliro/src/aliro_prov.c (serialize at :64,
+deserialize at :123); the checks below mirror what the firmware enforces.
+
 ### [`tools/docs_3d.py`](architecture/tools/docs_3d.md)
 
 Render the whole code surface as a flyable 3D graph: site/graph3d.html.
@@ -2328,6 +2350,10 @@ Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
 ### [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+### [`ports/dwm3001cdk/app/src/prov_shell.c`](architecture/ports.dwm3001cdk.app.src/prov_shell.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
 
 ## `ports/esp32/apps/initiator/main/`
 

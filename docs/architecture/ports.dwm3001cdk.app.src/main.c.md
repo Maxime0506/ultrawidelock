@@ -5,20 +5,32 @@
 
 ```mermaid
 flowchart TD
-  main --> seed_provisioning
+  main --> provisioning_mode
+  main --> provisioning_requested
 ```
 
 ## API
 
-### `static int seed_provisioning(void)`
-`ports/dwm3001cdk/app/src/main.c:39`
+### `static bool provisioning_requested(void)`
+`ports/dwm3001cdk/app/src/main.c:54`
 
-Adopts the reader identity baked into the image by CONFIG_ALIRO_PROV_SEED_HEX.
-This board cannot be commissioned into Apple Home on its own, so the only way
-it holds an Apple-issued Aliro credential is to adopt one exported from a board
-that was. Import persists to the settings store and commits in memory, so it
-has to run before aliro_reader_start reads the identity to build the
-advertisement. Returns 0 when nothing was seeded or the seed took.
+Provisioning mode: hold SW2 (the board's sw0 alias, P0.02) through reset.
+The reader identity is per-device data in the settings store, never a string
+in the image, so it has to arrive at runtime. This board's only input path is
+the USB device port wired straight to the nRF52833 -- RTT is output-only --
+so provisioning mode brings up CDC-ACM and the `aliro` console on it.
+The radios stay down in this mode on purpose. It keeps USB's millisecond SOF
+interrupts away from the DW3110's delayed-TX reply window (the timing that
+commit 5b8d06b had to fight for on this single-core part), and it means the
+console can never be reached while a walk-up is in flight.
+
+**called by** `main`
+
+### `static void provisioning_mode(void)`
+`ports/dwm3001cdk/app/src/main.c:70`
+
+Runs the console and nothing else. Never returns: leaving this function would
+start the radios in a mode the user did not ask for.
 
 **called by** `main`
 
