@@ -53,6 +53,7 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_btp.c"
 	"$ROOT/modules/woz_matter/src/matter_pase.c"
 	"$ROOT/modules/woz_matter/src/matter_spake2p.c"
+	"$ROOT/modules/woz_matter/src/matter_pase_sm.c"
 	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
 )
@@ -68,6 +69,7 @@ TEST_SRCS=(
 	"$HOST/test_matter_btp.c"
 	"$HOST/test_matter_pase.c"
 	"$HOST/test_matter_spake2p.c"
+	"$HOST/test_matter_pase_sm.c"
 	"$HOST/test_aliro_advertising.c"
 	"$HOST/test_aliro_ble.c"
 	"$HOST/test_aliro_nfc.c"

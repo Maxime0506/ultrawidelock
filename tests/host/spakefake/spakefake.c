@@ -1,17 +1,33 @@
 /**
- * @file spakefake.c — host stand-in for the one oberon SPAKE2+ call our glue makes.
+ * @file spakefake.c — host stand-in for oberon's SPAKE2+ primitives.
  *
- * matter_spake2p.c calls exactly one of the four oberon primitives:
- * ocrypto_spake2p_p256_reduce(). The other three are elliptic-curve operations
- * that the glue never invokes, so they are not defined here and any host test
- * that reached for them would fail to link -- which is the correct outcome,
- * since a fake curve would prove nothing.
+ * Two different things live here, and the difference matters.
  *
- * The reduction is not a fake. It is a real "40-byte big-endian integer modulo
+ * ocrypto_spake2p_p256_reduce() is REAL: a "40-byte big-endian integer modulo
  * the P-256 group order", done by shift-and-subtract so that no bignum library
  * is needed, and pinned in tests/host/test_matter_spake2p.c against values
  * python computed independently. Oberon's constant-time version is what runs on
  * target; this one only has to agree with it.
+ *
+ * get_key_share() and get_ZV() are NOT a curve. There is no elliptic curve
+ * anywhere in the host build and a fake one would prove nothing. What they do
+ * instead is REPLAY one exchange that tests/host/gen_pase_vector.py computed
+ * with a real P-256, and refuse -- loudly, via spakefake_replay_fault() -- any
+ * input that is not the one recorded. That refusal is the point: it means
+ * tests/host/test_matter_pase_sm.c is checking that the state machine passes N
+ * to the key share and M to get_ZV, that it passes L and not w1, and that the
+ * scalar it uses is the reduction of the entropy it was handed. Swapping M and
+ * N is the single likeliest mistake in this code and it fails here rather than
+ * on a phone.
+ *
+ * Everything downstream of the curve -- the transcript, SHA-256, HKDF, the
+ * confirmations, the session key schedule -- runs for real over these recorded
+ * points, and the results are compared against the same python script's
+ * independently computed cB, Ke and session keys.
+ *
+ * What this deliberately does NOT prove is that oberon computes what the script
+ * computed. Only hardware answers that; see the on-target selftest in
+ * internal/cdk-matter-plan.md stage 2.
  */
 /* Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -81,4 +97,158 @@ void ocrypto_spake2p_p256_reduce(uint8_t x[32], const uint8_t *xs, size_t xs_len
 	}
 
 	memcpy(x, r, 32u);
+}
+
+/* ------------------------------------------------------------- the replay ---
+ *
+ * Not a curve. See the note at the top of this file for why that is the right
+ * answer here and what it does and does not establish.
+ */
+
+#include "spakefake/spakefake.h"
+
+#include "matter_spake2p.h"
+
+static struct {
+	uint8_t w0[32];
+	uint8_t l[65];
+	uint8_t y[32];
+	uint8_t pa[65];
+	uint8_t pb[65];
+	uint8_t z[65];
+	uint8_t v[65];
+	int armed;
+	unsigned key_share_calls;
+	unsigned zv_calls;
+	const char *fault;
+} g_replay;
+
+/** Record the first refusal only: the later ones are consequences of it. */
+static int refuse(const char *why)
+{
+	if (g_replay.fault == NULL) {
+		g_replay.fault = why;
+	}
+	return -1;
+}
+
+void spakefake_replay_arm(const uint8_t w0[32], const uint8_t l[65], const uint8_t y_ws[40],
+			  const uint8_t pa[65], const uint8_t pb[65], const uint8_t z[65],
+			  const uint8_t v[65])
+{
+	memset(&g_replay, 0, sizeof(g_replay));
+	memcpy(g_replay.w0, w0, sizeof(g_replay.w0));
+	memcpy(g_replay.l, l, sizeof(g_replay.l));
+	ocrypto_spake2p_p256_reduce(g_replay.y, y_ws, 40u);
+	memcpy(g_replay.pa, pa, sizeof(g_replay.pa));
+	memcpy(g_replay.pb, pb, sizeof(g_replay.pb));
+	memcpy(g_replay.z, z, sizeof(g_replay.z));
+	memcpy(g_replay.v, v, sizeof(g_replay.v));
+	g_replay.armed = 1;
+}
+
+void spakefake_replay_clear(void)
+{
+	memset(&g_replay, 0, sizeof(g_replay));
+}
+
+const char *spakefake_replay_fault(void)
+{
+	return g_replay.fault;
+}
+
+unsigned spakefake_replay_key_share_calls(void)
+{
+	return g_replay.key_share_calls;
+}
+
+unsigned spakefake_replay_zv_calls(void)
+{
+	return g_replay.zv_calls;
+}
+
+/**
+ * Structural validation only: uncompressed marker present and the coordinates
+ * not all zero.
+ *
+ * That is enough to exercise the state machine's reject path with a point every
+ * real implementation also rejects, and it is honestly all a host build without
+ * a curve can say. A point that is well-formed but off-curve passes here and
+ * would not pass oberon.
+ */
+int ocrypto_spake2p_p256_check_key(const uint8_t K[65])
+{
+	int nonzero = 0;
+
+	if (K[0] != 0x04u) {
+		return -1;
+	}
+	for (size_t i = 1u; i < 65u; i++) {
+		nonzero |= K[i];
+	}
+	return nonzero ? 0 : -1;
+}
+
+int ocrypto_spake2p_p256_get_key_share(uint8_t XY[65], const uint8_t w0[32], const uint8_t xy[32],
+				       const uint8_t MN[65])
+{
+	g_replay.key_share_calls++;
+
+	if (!g_replay.armed) {
+		return refuse("get_key_share with no recording armed");
+	}
+	if (memcmp(w0, g_replay.w0, 32u) != 0) {
+		return refuse("get_key_share got a w0 that is not the verifier's");
+	}
+	if (memcmp(xy, g_replay.y, 32u) != 0) {
+		return refuse("get_key_share got a scalar that is not reduce(y_ws)");
+	}
+	/* The responder's own element is N. Passing M here is the mistake this
+	 * whole replay exists to catch. */
+	if (memcmp(MN, matter_spake2p_N, 65u) != 0) {
+		return refuse("get_key_share got M where the responder must pass N");
+	}
+
+	memcpy(XY, g_replay.pb, 65u);
+	return 0;
+}
+
+int ocrypto_spake2p_p256_get_ZV(uint8_t Z[65], uint8_t V[65], const uint8_t w0[32],
+				const uint8_t w1[32], const uint8_t xy[32], const uint8_t YX[65],
+				const uint8_t NM[65], const uint8_t L[65])
+{
+	g_replay.zv_calls++;
+
+	if (!g_replay.armed) {
+		return refuse("get_ZV with no recording armed");
+	}
+	/* ocrypto_spake2p_p256.h:83,87 -- w1 is NULL on the server side and L is
+	 * NULL on the client side. Supplying the wrong one computes the wrong
+	 * half of the protocol and nothing downstream would notice. */
+	if (w1 != NULL) {
+		return refuse("get_ZV got a w1; the responder side must pass NULL");
+	}
+	if (L == NULL) {
+		return refuse("get_ZV got no L; the responder side must supply it");
+	}
+	if (memcmp(w0, g_replay.w0, 32u) != 0) {
+		return refuse("get_ZV got a w0 that is not the verifier's");
+	}
+	if (memcmp(L, g_replay.l, 65u) != 0) {
+		return refuse("get_ZV got an L that is not the verifier's");
+	}
+	if (memcmp(xy, g_replay.y, 32u) != 0) {
+		return refuse("get_ZV got a scalar that is not reduce(y_ws)");
+	}
+	if (memcmp(YX, g_replay.pa, 65u) != 0) {
+		return refuse("get_ZV got a peer share that is not the recorded pA");
+	}
+	/* The PEER's element is M, the mirror of the key share above. */
+	if (memcmp(NM, matter_spake2p_M, 65u) != 0) {
+		return refuse("get_ZV got N where the responder must pass M");
+	}
+
+	memcpy(Z, g_replay.z, 65u);
+	memcpy(V, g_replay.v, 65u);
+	return 0;
 }

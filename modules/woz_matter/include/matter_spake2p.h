@@ -62,6 +62,12 @@ extern "C" {
 #define MATTER_SPAKE_HASH_LEN   32u
 /** Ka, Ke, KcA and KcB are each half of a SHA-256 output. */
 #define MATTER_SPAKE_HALF_LEN   16u
+/**
+ * The whole transcript: ten little-endian uint64 length prefixes ahead of
+ * 32 + 6*65 + 32 bytes of elements, the two empty identities contributing their
+ * prefixes and nothing else.
+ */
+#define MATTER_SPAKE_TT_LEN     534u
 
 /**
  * The fixed SPAKE2+ points for P-256, uncompressed (CHIPCryptoPAL.h:186-197).
