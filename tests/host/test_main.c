@@ -66,6 +66,7 @@ int main(void)
 		{ "matter_tlv", test_matter_tlv },
 		{ "matter_msg", test_matter_msg },
 		{ "matter_mrp", test_matter_mrp },
+		{ "matter_crypto", test_matter_crypto },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	/* Sized from the table, not a literal 32: these are indexed by suite, so a
