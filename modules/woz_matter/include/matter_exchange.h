@@ -1,0 +1,158 @@
+/**
+ * @file matter_exchange.h — the unsecured exchange PASE runs on.
+ *
+ * Between BTP (a byte pipe) and PASE (five messages) sits the part that makes a
+ * Matter message a message: which session it belongs to, which exchange, whether
+ * it is a duplicate, and whether the peer is owed an acknowledgement.
+ *
+ *   in    message header | protocol header | payload
+ *   out   message header | protocol header | payload
+ *
+ * This handles exactly one exchange on the UNSECURED session, which is all
+ * commissioning needs before PASE finishes: session id 0, no encryption, the
+ * peer as initiator and this node as responder. Secure sessions are a different
+ * object -- they carry keys and a different counter -- and arrive with CASE.
+ *
+ * It deliberately does not know what PASE is. It reports the opcode and hands
+ * back the payload; the caller decides what to answer. That keeps the framing
+ * testable on its own, and means CASE will reuse it rather than fork it.
+ *
+ * No timers here either. Duplicate suppression and the ack bookkeeping are
+ * state, not scheduling; retransmission is matter_mrp.h's, driven by whoever
+ * owns a clock.
+ */
+/* Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ *
+ * Stage 3 of internal/cdk-matter-plan.md.
+ *
+ * Cross-checked against two implementations:
+ *   - CHIP, workspace/modules/lib/matter/src/: the unsecured-session rules in
+ *     transport/SessionManager.cpp, the exchange/ack handling in
+ *     messaging/ExchangeContext.cpp and messaging/ReliableMessageContext.cpp,
+ *     and the header layouts already pinned in matter_msg.h.
+ *   - CircuitMatter (github.com/adafruit/circuitmatter): the same flow at
+ *     circuitmatter/__init__.py, where an unsecured message is recognised by
+ *     session id 0 and answered on the same exchange with the I flag cleared.
+ *
+ * They agree on the shape. The one thing worth stating because it is easy to get
+ * backwards: the responder echoes the initiator's exchange id unchanged and
+ * clears I, rather than allocating an exchange id of its own.
+ */
+#pragma once
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "matter_mrp.h"
+#include "matter_msg.h"
+#include "matter_status.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** Protocol 0x0000, vendor 0x0000. The only protocol this layer accepts. */
+#define MATTER_PROTOCOL_SECURE_CHANNEL 0x0000u
+
+/** Session id 0 is the unsecured session, by definition rather than by policy. */
+#define MATTER_SESSION_ID_UNSECURED 0x0000u
+
+/**
+ * Worst-case bytes this prepends to a payload.
+ *
+ * Both headers at their largest. Real unsecured commissioning messages are far
+ * smaller -- 8 + 6 with an ack, no node ids -- but a caller sizing a buffer
+ * should not have to know that.
+ */
+#define MATTER_EXCHANGE_HEADER_MAX (MATTER_MSG_HEADER_MAX + MATTER_PROTO_HEADER_MAX)
+
+struct matter_exchange {
+	/** The initiator's exchange id, echoed on every reply. */
+	uint16_t exchange_id;
+	/** True once a first message has fixed @ref exchange_id. */
+	bool open;
+	/** Counters this node stamps on what it sends. */
+	struct matter_counter counter;
+	/** Counters seen from the peer, for duplicate suppression. */
+	struct matter_mrp_window window;
+	/**
+	 * The peer counter this node still owes an acknowledgement for, and
+	 * whether it owes one at all. Matter piggybacks the ack on the reply
+	 * when there is one, which is the normal case here: every PASE message
+	 * except the last is answered immediately.
+	 */
+	uint32_t ack_counter;
+	bool ack_pending;
+};
+
+/** What a received message turned out to be. */
+struct matter_exchange_in {
+	uint8_t opcode;
+	/** Points into the caller's buffer; not copied. */
+	const uint8_t *payload;
+	size_t payload_len;
+	/** True when the peer set R and expects an acknowledgement. */
+	bool ack_requested;
+	/** True when the peer acknowledged something of ours. */
+	bool carries_ack;
+	uint32_t acked_counter;
+};
+
+/**
+ * @param entropy a random word seeding the outbound counter; see
+ *        matter_counter_init(). Unsecured counters wrap, so this is about not
+ *        advertising uptime, not about safety.
+ */
+void matter_exchange_init(struct matter_exchange *x, uint32_t entropy);
+
+/**
+ * Decode one received message.
+ *
+ * Everything here arrives from an unauthenticated peer -- the unsecured session
+ * is where a commissioner is still a stranger -- so the checks are exhaustive
+ * rather than trusting: version, DSIZ, session id, session type, protocol id,
+ * and the vendor flag are all refused rather than ignored when wrong.
+ *
+ * @return MATTER_OK; MATTER_E_DUP when the counter has been seen, in which case
+ *         the peer must still be acknowledged but @p in must NOT be acted on;
+ *         MATTER_E_STATE for a message belonging to a different exchange;
+ *         MATTER_E_INVAL for a message this layer will not carry; or whatever
+ *         the header decoders returned.
+ */
+int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t len,
+			 struct matter_exchange_in *in);
+
+/**
+ * Frame a reply on this exchange.
+ *
+ * Carries the outstanding acknowledgement if there is one, and sets R so the
+ * peer acknowledges this in turn -- every Secure Channel message in
+ * commissioning is reliable.
+ *
+ * @param out needs MATTER_EXCHANGE_HEADER_MAX + @p payload_len bytes.
+ * @return MATTER_OK, MATTER_E_NOSPACE, MATTER_E_STATE if no message has been
+ *         received yet, or MATTER_E_INVAL.
+ */
+int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8_t *payload,
+			  size_t payload_len, uint8_t *out, size_t cap, size_t *out_len);
+
+/**
+ * Frame a bare acknowledgement, for when there is nothing to say yet.
+ *
+ * Matter's standalone ack: Secure Channel opcode 0x10, empty payload. Needed
+ * when a reply cannot be produced inside the peer's retransmission timer, and
+ * after the final message of an exchange.
+ *
+ * @return MATTER_OK, MATTER_E_STATE when nothing is pending, else MATTER_E_NOSPACE.
+ */
+int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size_t cap,
+				   size_t *out_len);
+
+/** Secure Channel MsgType 0x10 (Constants.h). Not a PASE opcode. */
+#define MATTER_SC_OP_ACK 0x10u
+
+#ifdef __cplusplus
+}
+#endif

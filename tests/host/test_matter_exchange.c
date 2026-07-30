@@ -1,0 +1,263 @@
+/**
+ * @file test_matter_exchange.c — the unsecured exchange PASE rides on.
+ *
+ * Inbound messages are built here with matter_msg.c's own encoders rather than
+ * pasted as hex. That is deliberate and not circular: those encoders are pinned
+ * bit by bit against CHIP and CircuitMatter in test_matter_msg.c, so using them
+ * to construct a peer's message tests THIS layer's decisions -- which messages
+ * it refuses, which exchange it binds to, when it owes an acknowledgement --
+ * rather than re-testing the header layout underneath it.
+ *
+ * The refusals matter more than the happy path. Every field checked here was
+ * chosen by an unauthenticated stranger: the unsecured session is exactly the
+ * window where a commissioner has proved nothing.
+ */
+#include <string.h>
+
+#include "matter_exchange.h"
+
+#include "test.h"
+
+#define PEER_EXCHANGE_ID 0x1A2Bu
+#define SEED		 0x0BADF00Du
+
+/** Build a message as a peer would send it. */
+static size_t inbound(uint8_t *buf, size_t cap, uint8_t opcode, uint32_t counter,
+		      uint16_t exchange_id, uint16_t session_id, uint16_t protocol_id,
+		      uint8_t extra_sec_flags, uint8_t extra_ex_flags, const uint8_t *payload,
+		      size_t payload_len)
+{
+	struct matter_msg_header mh;
+	struct matter_proto_header ph;
+	size_t mh_len = 0u;
+	size_t ph_len = 0u;
+
+	memset(&mh, 0, sizeof(mh));
+	mh.flags = MATTER_MSG_DSIZ_NONE;
+	mh.session_id = session_id;
+	mh.security_flags = (uint8_t)(MATTER_SESSION_TYPE_UNICAST | extra_sec_flags);
+	mh.message_counter = counter;
+
+	memset(&ph, 0, sizeof(ph));
+	/* The peer is the initiator, and asks to be acknowledged. */
+	ph.exchange_flags = (uint8_t)(MATTER_EX_FLAG_I | MATTER_EX_FLAG_R | extra_ex_flags);
+	ph.opcode = opcode;
+	ph.exchange_id = exchange_id;
+	ph.protocol_id = protocol_id;
+
+	(void)matter_msg_header_encode(&mh, buf, cap, &mh_len);
+	(void)matter_proto_header_encode(&ph, buf + mh_len, cap - mh_len, &ph_len);
+	if (payload_len > 0u) {
+		memcpy(buf + mh_len + ph_len, payload, payload_len);
+	}
+	return mh_len + ph_len + payload_len;
+}
+
+/** A plain PBKDFParamRequest-shaped message on the happy path. */
+static size_t inbound_ok(uint8_t *buf, size_t cap, uint8_t opcode, uint32_t counter,
+			 const uint8_t *payload, size_t payload_len)
+{
+	return inbound(buf, cap, opcode, counter, PEER_EXCHANGE_ID, MATTER_SESSION_ID_UNSECURED,
+		       MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u, payload, payload_len);
+}
+
+void test_matter_exchange(void)
+{
+	struct matter_exchange x;
+	struct matter_exchange_in in;
+	uint8_t msg[256];
+	uint8_t out[256];
+	size_t n;
+	size_t out_len = 0u;
+	static const uint8_t k_payload[] = {0x15, 0x30, 0x01, 0x20, 0xAA, 0xBB, 0x18};
+
+	t_group("a message in, a reply out");
+	{
+		struct matter_msg_header mh;
+		struct matter_proto_header ph;
+		size_t mh_len = 0u;
+		size_t ph_len = 0u;
+
+		matter_exchange_init(&x, SEED);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 100u, k_payload, sizeof(k_payload));
+
+		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("opcode", in.opcode, 0x20L);
+		T_EQ("payload length", (long)in.payload_len, (long)sizeof(k_payload));
+		T_OK("payload bytes", memcmp(in.payload, k_payload, sizeof(k_payload)) == 0);
+		T_OK("peer asked to be acknowledged", in.ack_requested);
+		T_OK("an acknowledgement is now owed", x.ack_pending);
+		T_EQ("and it is for that counter", (long)x.ack_counter, 100L);
+		T_EQ("bound to the peer's exchange", x.exchange_id, (long)PEER_EXCHANGE_ID);
+
+		T_EQ("reply frames",
+		     matter_exchange_reply(&x, 0x21u, k_payload, sizeof(k_payload), out,
+					   sizeof(out), &out_len),
+		     MATTER_OK);
+		T_EQ("decode our own message header",
+		     matter_msg_header_decode(out, out_len, &mh, &mh_len), MATTER_OK);
+		T_EQ("unsecured session", mh.session_id, 0L);
+		T_EQ("unicast", mh.security_flags & MATTER_SEC_SESSION_TYPE_MASK,
+		     (long)MATTER_SESSION_TYPE_UNICAST);
+		T_EQ("no destination node id", mh.flags & MATTER_MSG_DSIZ_MASK,
+		     (long)MATTER_MSG_DSIZ_NONE);
+
+		T_EQ("decode our own protocol header",
+		     matter_proto_header_decode(out + mh_len, out_len - mh_len, &ph, &ph_len),
+		     MATTER_OK);
+		T_EQ("opcode", ph.opcode, 0x21L);
+		T_EQ("same exchange", ph.exchange_id, (long)PEER_EXCHANGE_ID);
+		/* The responder never claims to be the initiator, however many
+		 * messages it goes on to send. */
+		T_OK("I is clear", (ph.exchange_flags & MATTER_EX_FLAG_I) == 0u);
+		T_OK("R is set", (ph.exchange_flags & MATTER_EX_FLAG_R) != 0u);
+		T_OK("A is set", (ph.exchange_flags & MATTER_EX_FLAG_A) != 0u);
+		T_EQ("acking the peer's counter", (long)ph.ack_counter, 100L);
+		T_OK("nothing owed now", !x.ack_pending);
+		T_EQ("payload carried through", (long)(out_len - mh_len - ph_len),
+		     (long)sizeof(k_payload));
+		T_OK("payload bytes", memcmp(out + mh_len + ph_len, k_payload,
+					     sizeof(k_payload)) == 0);
+		T_EQ("Secure Channel", ph.protocol_id, (long)MATTER_PROTOCOL_SECURE_CHANNEL);
+	}
+
+	t_group("a retransmission is acknowledged but not acted on twice");
+	{
+		matter_exchange_init(&x, SEED);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 7u, k_payload, sizeof(k_payload));
+		T_EQ("first time", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("reply", matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out),
+						    &out_len),
+		     MATTER_OK);
+		T_OK("ack consumed", !x.ack_pending);
+
+		/* The peer did not hear the reply and sends the same message again. */
+		T_EQ("second time is a duplicate", matter_exchange_recv(&x, msg, n, &in),
+		     MATTER_E_DUP);
+		/* It still has to be acknowledged: the peer is retransmitting
+		 * because it believes the ack was lost, and staying silent makes
+		 * that true forever. */
+		T_OK("but it is owed an acknowledgement again", x.ack_pending);
+		T_EQ("for the same counter", (long)x.ack_counter, 7L);
+	}
+
+	t_group("what this layer refuses");
+	{
+		matter_exchange_init(&x, SEED);
+		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID, 0x0005u,
+			    MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u, NULL, 0u);
+		T_EQ("a secured session id", matter_exchange_recv(&x, msg, n, &in),
+		     MATTER_E_INVAL);
+
+		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
+			    MATTER_SESSION_ID_UNSECURED, 0x0001u, 0u, 0u, NULL, 0u);
+		T_EQ("a protocol that is not Secure Channel",
+		     matter_exchange_recv(&x, msg, n, &in), MATTER_E_INVAL);
+
+		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
+			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL,
+			    MATTER_SESSION_TYPE_GROUP, 0u, NULL, 0u);
+		T_EQ("a group session", matter_exchange_recv(&x, msg, n, &in), MATTER_E_INVAL);
+
+		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
+			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL,
+			    MATTER_SEC_FLAG_P, 0u, NULL, 0u);
+		T_EQ("privacy we do not implement", matter_exchange_recv(&x, msg, n, &in),
+		     MATTER_E_INVAL);
+
+		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
+			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL,
+			    MATTER_SEC_FLAG_MX, 0u, NULL, 0u);
+		T_EQ("message extensions we do not implement",
+		     matter_exchange_recv(&x, msg, n, &in), MATTER_E_INVAL);
+
+		/* A vendor-scoped protocol id lives in a different namespace, so
+		 * the protocol_id comparison would have meant nothing. */
+		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
+			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL, 0u,
+			    MATTER_EX_FLAG_V, NULL, 0u);
+		T_EQ("a vendor-scoped protocol", matter_exchange_recv(&x, msg, n, &in),
+		     MATTER_E_INVAL);
+
+		T_OK("none of them opened an exchange", !x.open);
+	}
+
+	t_group("one exchange at a time");
+	{
+		matter_exchange_init(&x, SEED);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 1u, NULL, 0u);
+		T_EQ("the first one binds", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+
+		n = inbound(msg, sizeof(msg), 0x20u, 2u, PEER_EXCHANGE_ID + 1u,
+			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u,
+			    NULL, 0u);
+		T_EQ("a second commissioner is refused", matter_exchange_recv(&x, msg, n, &in),
+		     MATTER_E_STATE);
+		T_EQ("still the first exchange", x.exchange_id, (long)PEER_EXCHANGE_ID);
+	}
+
+	t_group("standalone acknowledgement");
+	{
+		struct matter_proto_header ph;
+		struct matter_msg_header mh;
+		size_t mh_len = 0u;
+		size_t ph_len = 0u;
+
+		matter_exchange_init(&x, SEED);
+		T_EQ("nothing to acknowledge yet",
+		     matter_exchange_standalone_ack(&x, out, sizeof(out), &out_len),
+		     MATTER_E_STATE);
+
+		n = inbound_ok(msg, sizeof(msg), 0x24u, 42u, NULL, 0u);
+		T_EQ("message", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("ack frames", matter_exchange_standalone_ack(&x, out, sizeof(out), &out_len),
+		     MATTER_OK);
+
+		(void)matter_msg_header_decode(out, out_len, &mh, &mh_len);
+		T_EQ("decode", matter_proto_header_decode(out + mh_len, out_len - mh_len, &ph,
+							  &ph_len),
+		     MATTER_OK);
+		T_EQ("StandaloneAck opcode", ph.opcode, (long)MATTER_SC_OP_ACK);
+		T_EQ("empty payload", (long)(out_len - mh_len - ph_len), 0L);
+		T_OK("carries the ack", (ph.exchange_flags & MATTER_EX_FLAG_A) != 0u);
+		T_EQ("of the right counter", (long)ph.ack_counter, 42L);
+		/* An ack that asked to be acknowledged would never terminate. */
+		T_OK("does not request one back", (ph.exchange_flags & MATTER_EX_FLAG_R) == 0u);
+
+		T_EQ("and only once",
+		     matter_exchange_standalone_ack(&x, out, sizeof(out), &out_len),
+		     MATTER_E_STATE);
+	}
+
+	t_group("an ack that could not be encoded is still owed");
+	{
+		size_t small_len = 0u;
+
+		matter_exchange_init(&x, SEED);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 5u, k_payload, sizeof(k_payload));
+		T_EQ("message", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_OK("owed", x.ack_pending);
+
+		T_EQ("reply does not fit",
+		     matter_exchange_reply(&x, 0x21u, k_payload, sizeof(k_payload), out, 8u,
+					   &small_len),
+		     MATTER_E_NOSPACE);
+		/* Clearing the flag on a failed encode would drop the ack
+		 * silently, and the peer would retransmit until it gave up. */
+		T_OK("still owed", x.ack_pending);
+
+		T_EQ("and a real buffer works",
+		     matter_exchange_reply(&x, 0x21u, k_payload, sizeof(k_payload), out,
+					   sizeof(out), &out_len),
+		     MATTER_OK);
+		T_OK("now consumed", !x.ack_pending);
+	}
+
+	t_group("replying before anything arrived");
+	{
+		matter_exchange_init(&x, SEED);
+		T_EQ("has no exchange to reply on",
+		     matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out), &out_len),
+		     MATTER_E_STATE);
+	}
+}
