@@ -218,7 +218,67 @@ void test_matter_msg(void)
 	T_EQ("proto encode into a short buffer", matter_proto_header_encode(&p, buf, 11u, &n),
 	     MATTER_E_NOSPACE);
 
+	t_group("outbound counter: starts random in [1, 2^28]");
+	{
+		struct matter_counter c;
+		uint32_t v = 0u;
+
+		/* Only the low 28 bits of the seed are used, so a peer cannot learn
+		 * more about our RNG than that from the first counter it sees. */
+		matter_counter_init(&c, 0xFFFFFFFFu, MATTER_COUNTER_SESSION);
+		T_EQ("seed masked to 28 bits", (long)c.last_used, 0x0FFFFFFFL);
+		T_EQ("first", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("first is one past the masked seed", (long)v, 0x10000000L);
+
+		/* The stored value is the PREDECESSOR, so even a zero seed hands out 1
+		 * rather than 0: the peer starts its idea of our counter at 0 and the
+		 * first message must be strictly greater. */
+		matter_counter_init(&c, 0u, MATTER_COUNTER_SESSION);
+		T_EQ("zero seed", (long)c.last_used, 0L);
+		T_EQ("first from a zero seed", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("is 1, never 0", (long)v, 1L);
+
+		T_EQ("second", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("increments by one", (long)v, 2L);
+		T_EQ("third", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("and again", (long)v, 3L);
+	}
+
+	t_group("outbound counter: a secure session runs out, it does not wrap");
+	{
+		struct matter_counter c;
+		uint32_t v = 0u;
+
+		/* Wrapping would repeat an AEAD nonce under a key still in use, so the
+		 * counter refuses and the session has to be re-established. */
+		matter_counter_init(&c, 0u, MATTER_COUNTER_SESSION);
+		c.last_used = 0xFFFFFFFEu;
+		T_EQ("last usable value", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("is the maximum", (long)(unsigned long)v, (long)0xFFFFFFFFL);
+		T_EQ("and then it is spent", matter_counter_next(&c, &v), MATTER_E_STATE);
+		T_EQ("still spent on a retry", matter_counter_next(&c, &v), MATTER_E_STATE);
+		T_EQ("without having moved", (long)(unsigned long)c.last_used, (long)0xFFFFFFFFL);
+
+		/* The unsecured session has no key to protect, so it wraps instead. */
+		matter_counter_init(&c, 0u, MATTER_COUNTER_UNSECURED);
+		c.last_used = 0xFFFFFFFFu;
+		T_EQ("unsecured wraps", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("round to zero", (long)v, 0L);
+		T_EQ("and carries on", matter_counter_next(&c, &v), MATTER_OK);
+		T_EQ("from one", (long)v, 1L);
+	}
+
 	T_EQ("null arguments", matter_msg_header_decode(NULL, 8u, &m, &n), MATTER_E_INVAL);
 	T_EQ("null proto arguments", matter_proto_header_encode(NULL, buf, sizeof(buf), &n),
 	     MATTER_E_INVAL);
+	{
+		struct matter_counter c;
+		uint32_t v = 0u;
+
+		T_EQ("null counter", matter_counter_next(NULL, &v), MATTER_E_INVAL);
+		matter_counter_init(&c, 0u, MATTER_COUNTER_SESSION);
+		T_EQ("null out", matter_counter_next(&c, NULL), MATTER_E_INVAL);
+		matter_counter_init(NULL, 0u, MATTER_COUNTER_SESSION);
+		T_OK("null init survives", 1);
+	}
 }

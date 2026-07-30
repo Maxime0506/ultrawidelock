@@ -122,6 +122,52 @@ int matter_proto_header_decode(const uint8_t *buf, size_t len, struct matter_pro
 int matter_proto_header_encode(const struct matter_proto_header *h, uint8_t *buf, size_t cap,
 			       size_t *written);
 
+/*
+ * ------------------------------------------------- outbound message counter ---
+ *
+ * The counter this node stamps on messages it sends. Its peer-facing twin, the
+ * replay window over counters RECEIVED, is in matter_mrp.h with the duplicate
+ * suppression it serves.
+ *
+ * The initial value is random in [1, 2^28] rather than 0. That is not for
+ * uniqueness -- a counter starting at 0 would be just as unique -- but to keep
+ * an observer from reading how long a session has been open off the wire
+ * (MessageCounter.h:83-89).
+ */
+
+/** 28-bit mask on the seed (MessageCounter.h:42; CircuitMatter session.py:364). */
+#define MATTER_COUNTER_INIT_MASK 0x0FFFFFFFu
+
+enum matter_counter_kind {
+	/**
+	 * Secure session. Exhausts at 2^32-1 rather than wrapping: reusing a
+	 * counter under the same key would repeat an AEAD nonce, so the session
+	 * has to be re-established instead (MessageHeader.h / MessageCounter.h:
+	 * 93-102).
+	 */
+	MATTER_COUNTER_SESSION = 0,
+	/** Unsecured session. Wraps, because there is no key to compromise. */
+	MATTER_COUNTER_UNSECURED = 1,
+};
+
+struct matter_counter {
+	uint32_t last_used;
+	uint8_t kind;
+};
+
+/**
+ * @param entropy a random word; only its low 28 bits are used. Supplied by the
+ *        caller rather than drawn here, so this layer needs no RNG seam and the
+ *        host tests need no fake for one.
+ */
+void matter_counter_init(struct matter_counter *c, uint32_t entropy, enum matter_counter_kind kind);
+
+/**
+ * Advance and return the next counter to send.
+ * @return MATTER_OK, or MATTER_E_STATE when a secure session's counter is spent.
+ */
+int matter_counter_next(struct matter_counter *c, uint32_t *out);
+
 #ifdef __cplusplus
 }
 #endif

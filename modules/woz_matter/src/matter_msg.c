@@ -208,6 +208,35 @@ int matter_msg_header_encode(const struct matter_msg_header *h, uint8_t *buf, si
 	return MATTER_OK;
 }
 
+void matter_counter_init(struct matter_counter *c, uint32_t entropy, enum matter_counter_kind kind)
+{
+	if (c == NULL) {
+		return;
+	}
+	/* Store the PREDECESSOR, so the first value handed out is one higher and
+	 * therefore never 0 -- a peer starts its idea of our counter at 0, and the
+	 * first message has to be greater than that. */
+	c->last_used = entropy & MATTER_COUNTER_INIT_MASK;
+	c->kind = (uint8_t)kind;
+}
+
+int matter_counter_next(struct matter_counter *c, uint32_t *out)
+{
+	if (c == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	/* Wrapping a secure session's counter would repeat an AEAD nonce under a
+	 * key still in use, so it stops instead. The unsecured counter has no key
+	 * to protect and wraps, which is what CHIP does for each
+	 * (MessageCounter.h:68-72 vs :93-102). */
+	if (c->kind == (uint8_t)MATTER_COUNTER_SESSION && c->last_used == UINT32_MAX) {
+		return MATTER_E_STATE;
+	}
+	c->last_used++;
+	*out = c->last_used;
+	return MATTER_OK;
+}
+
 int matter_proto_header_decode(const uint8_t *buf, size_t len, struct matter_proto_header *h,
 			       size_t *consumed)
 {
