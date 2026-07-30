@@ -64,6 +64,7 @@ int main(void)
 		{ "ccc_shim_wrap", test_ccc_shim_wrap },
 		{ "flight_recorder", test_flight_recorder },
 		{ "matter_tlv", test_matter_tlv },
+		{ "matter_msg", test_matter_msg },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	int npass[32], nfail[32], npend[32];

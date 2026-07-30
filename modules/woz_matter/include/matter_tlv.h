@@ -34,6 +34,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "matter_status.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -64,23 +66,19 @@ typedef uint64_t matter_tlv_tag_t;
 #define MATTER_TLV_ARRAY     0x16u
 #define MATTER_TLV_LIST      0x17u
 
-enum matter_tlv_status {
-	/** No more elements at this level. Expected, not a failure -- hence positive. */
-	MATTER_TLV_END = 1,
-	MATTER_TLV_OK = 0,
-	/** Ran out of output buffer. */
-	MATTER_TLV_E_NOSPACE = -1,
-	/** Caller passed something the encoding cannot represent. */
-	MATTER_TLV_E_INVAL = -2,
-	/** Nesting past MATTER_TLV_MAX_DEPTH. */
-	MATTER_TLV_E_DEPTH = -3,
-	/** end_container with nothing open, or finish with one still open. */
-	MATTER_TLV_E_STATE = -4,
-	/** Input ended inside an element, or a container never closed. */
-	MATTER_TLV_E_TRUNC = -5,
-	/** Accessor did not match the element actually present. */
-	MATTER_TLV_E_TYPE = -6,
-};
+/*
+ * The codec's own names for the shared codes in matter_status.h. Kept because
+ * they read better at a TLV call site, and because they are what the existing
+ * suite already asserts on.
+ */
+#define MATTER_TLV_END       MATTER_END
+#define MATTER_TLV_OK        MATTER_OK
+#define MATTER_TLV_E_NOSPACE MATTER_E_NOSPACE
+#define MATTER_TLV_E_INVAL   MATTER_E_INVAL
+#define MATTER_TLV_E_DEPTH   MATTER_E_DEPTH
+#define MATTER_TLV_E_STATE   MATTER_E_STATE
+#define MATTER_TLV_E_TRUNC   MATTER_E_TRUNC
+#define MATTER_TLV_E_TYPE    MATTER_E_TYPE
 
 /*
  * Bounded, and deliberately shallow. Matter's own structures nest ~4 deep; 8
