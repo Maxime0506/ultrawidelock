@@ -89,6 +89,7 @@ static uint8_t s_ack_seq;
 static uint8_t s_rx_unacked;
 
 static matter_ble_msg_cb s_msg_cb;
+static matter_ble_link_cb s_link_cb;
 
 /*
  * The node's own work queue. Stage 0 measured k_sys_work_q at 3,568 of 4,096
@@ -122,6 +123,10 @@ static void reset_link(void)
 	s_tx_seq = 0u;
 	s_ack_pending = false;
 	s_rx_unacked = 0u;
+
+	if (s_link_cb != NULL) {
+		s_link_cb();
+	}
 }
 
 /* ---- outbound ------------------------------------------------------------ */
@@ -376,6 +381,11 @@ int matter_ble_send(const uint8_t *msg, size_t len)
 	}
 	s_tx_active = true;
 	return pump_tx();
+}
+
+void matter_ble_set_link_handler(matter_ble_link_cb cb)
+{
+	s_link_cb = cb;
 }
 
 void matter_ble_set_msg_handler(matter_ble_msg_cb cb)

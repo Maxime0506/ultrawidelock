@@ -23,6 +23,9 @@
 
 #include "aliro_approach.h"
 #include "aliro_reader.h"
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#include "matter_commission.h"
+#endif
 #include "woz_uwb_facade.h"
 
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
@@ -129,6 +132,13 @@ int main(void)
 		LOG_ERR("aliro_reader_start rc=%d", rc);
 		return rc;
 	}
+
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+	/* After the reader, because the reader owns BLE and the advertising set;
+	 * this only attaches handlers to the 0xFFF6 transport that SYS_INIT
+	 * already brought up. */
+	(void)matter_commission_init();
+#endif
 
 	/* Bridge the trusted UWB range stream to the Wallet grant.
 	 *
