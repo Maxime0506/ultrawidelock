@@ -243,6 +243,51 @@ and STS-only RFRAME RX/TX, and reloading the STS IV on every SP3 slot. One easy 
 the STS index increments on every slot whether or not it is used, so a skipped slot must
 skip its IV too; never reuse it.
 
+### Bench check: the phone honors `N_Resp = 2` (2026-07-17)
+
+The table above is written for general `N_Resp`, but everything this repo ships runs at
+`N_Resp = 1`. To find out whether the phone actually builds the larger round, a firmware
+build advertised `N_Resp = 2` with only one physical anchor present: slot 2 (`Response_0`)
+ours as usual, slot 3 (`Response_1`) reserved and deliberately silent.
+
+The count has to change in two places at once, because both feed the `RangingConfiguration`
+SaltedHash the phone independently recomputes: the M3 `Number Responder Nodes` attribute and
+byte 12 of the `RangingConfiguration` blob in §6. If they disagree, every derived STS, dURSK
+and dUDSK diverges and nothing decodes at all. `aliro_round_config.h` now defines both from
+one macro (`ALIRO_NUM_RESPONDERS`, default 1) so they cannot desync.
+
+Two frames move when `N_Resp` goes from 1 to 2, and they arrive on independent receive paths:
+
+| Frame | Slot | Offset from POLL | `N_Resp=1` | `N_Resp=2` | Measured |
+|---|---|---|---|---|---|
+| Final | `N_Resp+2` | `N_Resp+1` | 2 | 3 | **3** (40 rounds) |
+| Final_Data | `N_Resp+3` | `N_Resp+2` | 3 | 4 | **4** (38 rounds, none at 3) |
+
+```
+FINAL result st=… cper=0 ip=… d=…(…us) slots=3 stsq=…/… idx=…    × 40   (× 4 missed)
+FINALDATA-2RESP blk=… nresp=1 fd_slots=4                          × 38   (× 0 at 3)
+```
+
+Both offsets are differences of real RX timestamps, not printed constants. The Final result
+is the stronger of the two because it fails cleanly rather than quietly: the receiver is
+armed at POLL+3 carrying the STS for index+3, so had the phone kept a 1-responder round its
+Final at POLL+2 would have been missed altogether instead of reported at a wrong offset. 40
+hits at exactly 3 slots with the STS chip-error flag clear (`cper=0`) means the phone
+scrambled that frame with the key for index+3, which it derives only from a 2-responder
+schedule.
+
+**What this establishes.** The phone accepts `N_Resp = 2`, keeps its SaltedHash key
+derivation in step, and grows the round by exactly one slot. Reserving a slot for a second
+anchor is a solved problem on the phone side.
+
+**What it does not.** No second anchor ever transmitted, so a real `Response_1` in slot 3
+(POLL+2, STS index+2) has never been accepted or turned into a range. `Final_Data` reported
+`nresp=1` throughout, which is expected rather than a failure: the phone emits a timestamp
+record only for a responder that actually replied.
+
+Source: commits `9106aed` (the probe) and `2da85c4` (collapsed onto the
+`ALIRO_NUM_RESPONDERS` knob), PR #8. The raw serial capture was never committed.
+
 ### STS index and the key ladder
 
 ```

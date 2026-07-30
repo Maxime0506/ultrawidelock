@@ -13,8 +13,13 @@ on:
       - tests/host/**
       - .clang-tidy
       - .github/workflows/clang-tidy.yml
-  # No path filter on PRs: keep it reporting like the other required checks.
+  # Docs-only PRs cannot change the result, so skip them; every other PR still
+  # runs unfiltered. Safe because `clang-tidy` is not a required status check: a
+  # path-skipped run cannot strand a PR at "Expected". See cbmc.yml for the full
+  # rationale and the list of workflows that must stay unfiltered.
   pull_request:
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
 
 # CI only reads the repo: no token write scopes for any job.
