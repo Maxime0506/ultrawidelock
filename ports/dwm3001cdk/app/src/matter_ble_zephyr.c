@@ -433,36 +433,28 @@ BT_CONN_CB_DEFINE(matter_conn_cb) = {
  *   [5..6] product ID, little-endian
  *   [7]    additional-data flag
  */
-static uint8_t s_svc_data[2 + 8];
-
-static struct bt_data s_ad[2];
-
-int matter_ble_advertise_start(uint16_t discriminator, uint16_t vendor_id, uint16_t product_id)
+int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)
 {
-	uint8_t *p = &s_svc_data[2];
+	uint8_t *p = &out[2];
 
-	s_svc_data[0] = 0xF6u; /* 0xFFF6, little-endian inside BT_DATA_SVC_DATA16 */
-	s_svc_data[1] = 0xFFu;
+	if (out == NULL || cap < MATTER_BLE_SVC_DATA_LEN) {
+		return -EINVAL;
+	}
+
+	out[0] = 0xF6u; /* 0xFFF6, little-endian inside BT_DATA_SVC_DATA16 */
+	out[1] = 0xFFu;
 
 	p[0] = 0x00u;
-	p[1] = (uint8_t)(discriminator & 0xFFu);
-	p[2] = (uint8_t)((discriminator >> 8) & 0x0Fu);
-	p[3] = (uint8_t)(vendor_id & 0xFFu);
-	p[4] = (uint8_t)(vendor_id >> 8);
-	p[5] = (uint8_t)(product_id & 0xFFu);
-	p[6] = (uint8_t)(product_id >> 8);
+	p[1] = (uint8_t)(CONFIG_ALIRO_MATTER_DISCRIMINATOR & 0xFFu);
+	/* Advertisement version 0 in the high nibble. */
+	p[2] = (uint8_t)((CONFIG_ALIRO_MATTER_DISCRIMINATOR >> 8) & 0x0Fu);
+	p[3] = (uint8_t)(CONFIG_ALIRO_MATTER_VENDOR_ID & 0xFFu);
+	p[4] = (uint8_t)(CONFIG_ALIRO_MATTER_VENDOR_ID >> 8);
+	p[5] = (uint8_t)(CONFIG_ALIRO_MATTER_PRODUCT_ID & 0xFFu);
+	p[6] = (uint8_t)(CONFIG_ALIRO_MATTER_PRODUCT_ID >> 8);
 	p[7] = 0x00u;
 
-	s_ad[0] = (struct bt_data)BT_DATA_BYTES(BT_DATA_FLAGS,
-						(BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR));
-	s_ad[1] = (struct bt_data)BT_DATA(BT_DATA_SVC_DATA16, s_svc_data, sizeof(s_svc_data));
-
-	return bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, s_ad, ARRAY_SIZE(s_ad), NULL, 0);
-}
-
-int matter_ble_advertise_stop(void)
-{
-	return bt_le_adv_stop();
+	return 0;
 }
 
 /* ---- init ---------------------------------------------------------------- */

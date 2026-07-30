@@ -31,6 +31,9 @@
 #include "aliro_advtag.h"
 #include "aliro_ble.h"
 #include "aliro_prov.h" /* ALIRO_GRK_LEN */
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#include "matter_ble_zephyr.h" /* the commissionable payload, when unprovisioned */
+#endif
 
 LOG_MODULE_REGISTER(aliro_ble, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -299,8 +302,9 @@ static bool build_aliro_svc_data(uint8_t out[24])
 static int aliro_advertise(void)
 {
 	static uint8_t svc_data[2 + 24]; /* BT_DATA_SVC_DATA16 carries the UUID inline */
-	struct bt_data ad[2];
+	struct bt_data ad[3];
 	size_t ad_len;
+	bool as_reader;
 
 	svc_data[0] = 0xF2u; /* 0xFFF2, little-endian */
 	svc_data[1] = 0xFFu;
@@ -310,20 +314,51 @@ static int aliro_advertise(void)
 
 	if (s_adv_aliro && build_aliro_svc_data(&svc_data[2])) {
 		ad[1] = (struct bt_data)BT_DATA(BT_DATA_SVC_DATA16, svc_data, sizeof(svc_data));
+		ad_len = 2;
+		as_reader = true;
 	} else {
+		as_reader = false;
 		/* Unprovisioned / no GRK: the bare service UUID. A phone cannot
 		 * approach-resolve this, but a scanner can see the reader. */
 		static const uint8_t uuid16[2] = {0xF2u, 0xFFu};
 
 		ad[1] = (struct bt_data)BT_DATA(BT_DATA_UUID16_ALL, uuid16, sizeof(uuid16));
+		ad_len = 2;
+
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+		/* A reader with no identity cannot unlock anything, so the only
+		 * useful thing it can advertise is that it wants commissioning.
+		 * Both elements fit one legacy packet: flags 3 + Matter service
+		 * data 12 + the Aliro UUID 4 = 19 of the 31 bytes available, so
+		 * the scanner affordance above is kept rather than traded away.
+		 *
+		 * This is also why there is no second advertising set. See
+		 * matter_ble_commissionable_svc_data() for the 24.8 KB that
+		 * CONFIG_BT_EXT_ADV would have cost. */
+		static uint8_t matter_svc_data[MATTER_BLE_SVC_DATA_LEN];
+
+		if (matter_ble_commissionable_svc_data(matter_svc_data, sizeof(matter_svc_data)) ==
+		    0) {
+			ad[2] = (struct bt_data)BT_DATA(BT_DATA_SVC_DATA16, matter_svc_data,
+							sizeof(matter_svc_data));
+			ad_len = 3;
+		}
+#endif
 	}
-	ad_len = 2;
 
 	int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, NULL, 0);
 
 	if (rc == -EALREADY) {
 		bt_le_adv_stop();
 		rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, NULL, 0);
+	}
+
+	/* Which of the two the board is offering is the first thing to check on
+	 * a bench, and it is not otherwise visible without a sniffer. */
+	if (rc == 0) {
+		LOG_INF("advertising: %s (%u AD elements)",
+			as_reader ? "Aliro reader 0xFFF2" : "unprovisioned, commissionable",
+			(unsigned int)ad_len);
 	}
 	return rc;
 }

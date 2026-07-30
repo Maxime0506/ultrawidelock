@@ -145,11 +145,35 @@ config ALIRO_MATTER_BLE
 	  Compile the 0xFFF6 service (C1 write, C2 indicate) and the BTP glue
 	  that turns it into a Matter message transport.
 
-	  Nothing starts advertising on its own: the reader owns the advertising
-	  set and advertises Aliro 0xFFF2. matter_ble_advertise_start() exists
-	  for whoever decides how the two coexist.
+	  This does not start advertising. The reader owns the single advertising
+	  set, and asks for the commissionable payload only while it has no
+	  identity of its own -- see ALIRO_MATTER_DISCRIMINATOR.
 
 if ALIRO_MATTER_BLE
+
+config ALIRO_MATTER_DISCRIMINATOR
+	hex "Matter setup discriminator, 12-bit"
+	default 0xF00
+	range 0x000 0xFFF
+	help
+	  Goes out in the commissionable advertisement, and a commissioner uses
+	  it to pick this device out of everything else advertising 0xFFF6. It
+	  must match the discriminator encoded in the setup code the user enters
+	  or the phone will never connect.
+
+	  0xF00 with passcode 20202021 is the pairing CHIP's own test harnesses
+	  use, which makes a bench commissioner work with no extra setup.
+
+config ALIRO_MATTER_VENDOR_ID
+	hex "Matter vendor ID"
+	default 0xFFF1
+	help
+	  0xFFF1 is CHIP's test vendor. A real product needs an allocated one;
+	  a phone will commission a test VID but marks the result uncertified.
+
+config ALIRO_MATTER_PRODUCT_ID
+	hex "Matter product ID"
+	default 0x8001
 
 config ALIRO_MATTER_BLE_RX_BUF
 	int "Inbound Matter message ceiling, bytes"

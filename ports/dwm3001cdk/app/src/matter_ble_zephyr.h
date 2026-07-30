@@ -39,15 +39,30 @@ void matter_ble_set_msg_handler(matter_ble_msg_cb cb);
  */
 int matter_ble_send(const uint8_t *msg, size_t len);
 
+/** UUID plus ChipBLEDeviceIdentificationInfo: what BT_DATA_SVC_DATA16 carries. */
+#define MATTER_BLE_SVC_DATA_LEN 10u
+
 /**
- * Advertise as commissionable.
+ * Build the commissionable-node service data element.
  *
- * NOT called by the reader: it owns the advertising set and advertises Aliro
- * 0xFFF2. Running both needs extended advertising with two sets or a
- * deliberate hand-off, which is an open decision.
+ * This does NOT start advertising, deliberately. The reader owns the single
+ * advertising set (aliro_ble_zephyr.c), and it stays that way: Zephyr's legacy
+ * bt_le_adv_start API has exactly one set, and the alternative -- CONFIG_BT_EXT_ADV
+ * with two sets -- measured +24,844 B of flash and +2,464 B of RAM on this board
+ * before either advertiser was rewritten to use it. On a part where CASE and the
+ * Interaction Model are still unbuilt, that is not a trade worth making for
+ * something the protocol does not ask for: a Matter node advertises as
+ * commissionable only while it has no fabric, which is exactly when this reader
+ * has nothing to advertise as an Aliro reader either.
+ *
+ * So the reader asks for these bytes when it has no identity yet, and stops
+ * asking once it has one.
+ *
+ * @param out receives MATTER_BLE_SVC_DATA_LEN bytes, caller-owned and required to
+ *        outlive the advertisement -- bt_data holds the pointer, not a copy.
+ * @return 0 or -EINVAL.
  */
-int matter_ble_advertise_start(uint16_t discriminator, uint16_t vendor_id, uint16_t product_id);
-int matter_ble_advertise_stop(void);
+int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap);
 
 #ifdef __cplusplus
 }
