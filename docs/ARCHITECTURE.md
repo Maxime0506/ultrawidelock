@@ -2207,6 +2207,20 @@ Build a local OpenAliro custom-component archive without publishing it.
 NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
 Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
 
+## `ports/dwm3001cdk/app/src/`
+
+### [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+### [`ports/dwm3001cdk/app/src/aliro_prov_settings.c`](architecture/ports.dwm3001cdk.app.src/aliro_prov_settings.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+### [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
 ## `ports/esp32/apps/initiator/main/`
 
 ### [`ports/esp32/apps/initiator/main/main.c`](architecture/ports.esp32.apps.initiator.main/main.c.md)

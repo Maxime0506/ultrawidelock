@@ -1691,14 +1691,41 @@ static int reader_engine_init(void)
 	return 0;
 }
 
-// Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging) and brings up
-// the BLE transport using the default advertising config. Returns 0 on success; returns -1 if
-// engine initialization fails, or the underlying aliro_ble_start result otherwise.
+/* Applies the provisioned resolvable advertising parameters when a real GRK is
+ * present. The phone resolves "its" reader by re-deriving the dynamic tag from the
+ * GroupResolvingKey, so without this the advertisement carries only the bare 0xFFF2
+ * UUID and a provisioned Wallet key never approaches. groupId = reader_id[0..7],
+ * subId = reader_id[16..17] (the identity is groupIdentifier(16) ||
+ * groupSubIdentifier(16)). Returns false on the all-zero dev-default GRK. */
+static bool apply_provisioned_adv_params(void)
+{
+	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
+		if (s_id.grk[i] != 0u) {
+			const uint8_t sub2[2] = {s_id.reader_id[16], s_id.reader_id[17]};
+
+			aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk,
+						 0 /* tx power */);
+			return true;
+		}
+	}
+	return false;
+}
+
+// Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging), applies the
+// provisioned advertising parameters when the loaded identity carries a GRK, and brings up the BLE
+// transport. Returns 0 on success; returns -1 if engine initialization fails, or the underlying
+// aliro_ble_start result otherwise.
 int aliro_reader_start(void)
 {
 	if (reader_engine_init() != 0) {
 		return -1;
 	}
+	/* A standalone reader loads its provisioned identity from storage during
+	 * reader_engine_init, so the GRK is already in s_id by here. Without this the
+	 * board advertises unresolvably and a provisioned Wallet key never approaches
+	 * it -- the attached (Matter) path applied these params and this one did not. */
+	apply_provisioned_adv_params();
+
 	struct aliro_ble_config cfg = make_ble_cfg();
 	int rc = aliro_ble_start(&cfg);
 
@@ -1735,23 +1762,10 @@ int aliro_reader_start_attached(void)
 		return -1;
 	}
 
-	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): the phone
-	 * resolves "its" reader by re-deriving the dynamic tag from the GroupResolvingKey.
-	 * groupId = reader_id[0..7], subId = reader_id[16..17] (the reader identity is
-	 * groupIdentifier(16) || groupSubIdentifier(16)). Only advertise the resolvable
-	 * service data when a real GRK is present (Matter-provisioned). */
-	bool have_grk = false;
-	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
-		if (s_id.grk[i] != 0u) {
-			have_grk = true;
-			break;
-		}
-	}
-	if (have_grk) {
-		const uint8_t sub2[2] = {s_id.reader_id[16], s_id.reader_id[17]};
-
-		aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
-	}
+	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): only
+	 * advertise the resolvable service data when a real GRK is present
+	 * (Matter-provisioned); the dev default leaves the bare 0xFFF2 UUID. */
+	apply_provisioned_adv_params();
 
 	int rc = aliro_ble_start_attached();
 
@@ -1774,19 +1788,9 @@ void aliro_reader_refresh_adv(void)
 	 * identity was still the dev default (no GRK), so the reader advertised only the
 	 * bare 0xFFF2 UUID and the phone cannot resolve it. Once the real GRK is in
 	 * s_id (provision_identity ran just before), pull it into the advertisement. */
-	bool have_grk = false;
-	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
-		if (s_id.grk[i] != 0u) {
-			have_grk = true;
-			break;
-		}
-	}
-	if (!have_grk) {
+	if (!apply_provisioned_adv_params()) {
 		return;
 	}
-	const uint8_t sub2[2] = {s_id.reader_id[16], s_id.reader_id[17]};
-
-	aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
 	aliro_ble_readvertise();
 	LOG_INF("advertisement refreshed with provisioned GRK (approach-resolvable)");
 }
@@ -2105,6 +2109,10 @@ int aliro_reader_import_blob(const uint8_t *buf, size_t len)
 	s_trust = ts;
 	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey/grk changed -> refresh salt field 1 */
+	/* Same reason the Matter provisioning path calls this: a new GRK means the
+	 * advertised dynamic tag is stale, and the phone resolves the reader by that
+	 * tag. Without it an imported identity transacts but is never approached. */
+	aliro_reader_refresh_adv();
 	LOG_INF("reader identity imported from clone blob (%s, %u trust anchor(s))",
 		id.is_dev ? "DEV" : "provisioned", ts.count);
 	return 0;

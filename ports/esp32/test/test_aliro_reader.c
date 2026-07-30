@@ -1263,6 +1263,36 @@ int main(void)
 		okc("d.attached_adv_params", s_adv_sets == sets + 1); /* GRK present */
 	}
 
+	/* Standalone start must apply the same params. The DWM3001CDK has no Matter
+	 * image, so aliro_reader_start is the only path that ever builds its
+	 * advertisement; while only start_attached applied them, a board carrying a
+	 * perfectly good cloned identity advertised unresolvably and no phone ever
+	 * approached it. */
+	{
+		int sets = s_adv_sets;
+
+		okc("d.start_standalone", aliro_reader_start() == 0);
+		okc("d.start_adv_params", s_adv_sets == sets + 1 && s_adv_grk[0] == 0xAB);
+	}
+
+	/* Import adopts an identity from another board, so it changes the GRK the
+	 * advertised dynamic tag is derived from, and has to readvertise the way the
+	 * Matter provisioning path does. */
+	{
+		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		size_t blen = 0;
+		struct aliro_reader_identity iid;
+		struct aliro_trust_store its;
+		int readv = s_readv;
+
+		aliro_prov_dev_default(&iid, &its);
+		memset(iid.grk, 0x5C, sizeof(iid.grk));
+		okc("d.import_serialize",
+		    aliro_prov_serialize(&iid, &its, blob, sizeof(blob), &blen) == 0);
+		okc("d.import_blob", aliro_reader_import_blob(blob, blen) == 0);
+		okc("d.import_refreshes_adv", s_readv == readv + 1 && s_adv_grk[0] == 0x5C);
+	}
+
 	/* provisioning error paths + reset to the dev identity */
 	s_nvs_fail = true;
 	okc("d.provision_id_store_fail", aliro_reader_provision_identity(rid, sp, grk0) == -1);
