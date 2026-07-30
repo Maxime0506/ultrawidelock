@@ -1,0 +1,20 @@
+# Hand-written minimal Matter node. Distinct from the Nordic/CHIP Matter stack
+# used by ports/nrf5340dk and from esp-matter in ports/esp32: this is the
+# from-scratch implementation that internal/cdk-matter-plan.md justifies, and it
+# exists because neither of those fits a 516 KB / 128 KB part alongside the
+# reader.
+
+config WOZ_MATTER
+	bool "Hand-written minimal Matter node"
+	help
+	  Compile the from-scratch Matter protocol code: TLV codec, message and
+	  exchange layers, MRP, and the small cluster surface Apple Home
+	  actually exercises.
+
+	  This is NOT a certified Matter stack and does not aim to be. It exists
+	  so a DWM3001CDK can receive its Aliro reader identity from Apple Home
+	  over SetAliroReaderConfig, which is the only way this board can be
+	  provisioned without cloning a credential from a donor.
+
+	  Off by default; every stage lands behind it before anything depends
+	  on it.

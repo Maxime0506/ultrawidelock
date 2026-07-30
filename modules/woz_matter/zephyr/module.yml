@@ -1,0 +1,4 @@
+name: woz_matter
+build:
+  cmake: .
+  kconfig: Kconfig
