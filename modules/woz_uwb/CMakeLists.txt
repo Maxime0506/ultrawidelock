@@ -10,6 +10,13 @@ if(CONFIG_WOZ_UWB)
   set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
   zephyr_library_named(woz_uwb)
+  # LTO and --wrap do not compose: GCC's plugin resolves symbols before ld
+  # applies the wrap, so calls that end up inside an ltrans partition reference
+  # dwt_rxenable / dwt_configurestsiv / dwt_configurestsmode directly and the
+  # link dies on them (all three from ccc_shim_rx.c, the CALLER -- deps/dw3000
+  # is innocent). Compiling this library without LTO keeps its relocations
+  # ordinary so ld can still wrap them.
+  zephyr_library_compile_options(-fno-lto)
   zephyr_library_sources(${SRC}/driver/uwb_min.c)
 
   if(CONFIG_WOZ_UWB_RESPONDER)
