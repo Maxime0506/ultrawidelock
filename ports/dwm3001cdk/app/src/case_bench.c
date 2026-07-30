@@ -164,12 +164,13 @@ static void hkdf(const uint8_t *secret, size_t secret_len, const uint8_t *salt,
 	}
 }
 
-static void case_bench_run(void *a, void *b, void *c)
+/* One CASE handshake, its setup included, returning the microseconds spent in
+ * the measured part. The certificate keys and the signatures over them are
+ * regenerated on every call where a real responder would have them resident, so
+ * a repeated round costs slightly MORE than the real thing rather than less --
+ * which is the direction a contention test should err in. */
+static uint32_t case_round(void)
 {
-	ARG_UNUSED(a);
-	ARG_UNUSED(b);
-	ARG_UNUSED(c);
-
 	const psa_algorithm_t sign_alg = PSA_ALG_ECDSA(PSA_ALG_SHA_256);
 	const psa_algorithm_t aead_alg = PSA_ALG_CCM;
 	psa_key_id_t eph_resp = 0;
@@ -182,21 +183,6 @@ static void case_bench_run(void *a, void *b, void *c)
 	psa_key_id_t v_icac = 0;
 	psa_key_id_t v_noc = 0;
 	size_t olen;
-
-	/* Let the reader finish coming up, so the bench runs against a live
-	 * radio and a live BLE stack rather than an idle machine. */
-	k_sleep(K_SECONDS(8));
-
-	/* The reader already did this from main(); PSA tolerates the repeat and
-	 * it keeps the bench standalone if the reader ever fails to start. */
-	(void)psa_crypto_init();
-
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
-	size_t heap_before = 0;
-	size_t blocks_before = 0;
-
-	mbedtls_memory_buffer_alloc_max_get(&heap_before, &blocks_before);
-#endif
 
 	psa_check("rng", psa_generate_random(initiator_random, sizeof(initiator_random)));
 	psa_check("rng", psa_generate_random(responder_random, sizeof(responder_random)));
@@ -286,6 +272,31 @@ static void case_bench_run(void *a, void *b, void *c)
 	(void)psa_destroy_key(v_icac);
 	(void)psa_destroy_key(v_noc);
 
+	return elapsed_us;
+}
+
+static void case_bench_run(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a);
+	ARG_UNUSED(b);
+	ARG_UNUSED(c);
+
+	/* Let the reader finish coming up, so the bench runs against a live
+	 * radio and a live BLE stack rather than an idle machine. */
+	k_sleep(K_SECONDS(8));
+
+	/* The reader already did this from main(); PSA tolerates the repeat and
+	 * it keeps the bench standalone if the reader ever fails to start. */
+	(void)psa_crypto_init();
+
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+	size_t heap_before = 0;
+	size_t blocks_before = 0;
+
+	mbedtls_memory_buffer_alloc_max_get(&heap_before, &blocks_before);
+#endif
+
+	uint32_t elapsed_us = case_round();
 	size_t unused = 0;
 	int rc = k_thread_stack_space_get(k_current_get(), &unused);
 
@@ -312,6 +323,31 @@ static void case_bench_run(void *a, void *b, void *c)
 	LOG_INF("CASE responder: mbedtls heap peak %u B (was %u before the bench)",
 		(unsigned int)heap_after, (unsigned int)heap_before);
 #endif
+
+	if (CONFIG_ALIRO_CASE_BENCH_PERIOD_MS == 0) {
+		return;
+	}
+
+	/* Contention mode. From here the thread barely idles: a walk-up has to
+	 * complete while P-256 runs on the same core. One round is ~262 ms
+	 * against a FINAL->arm margin of 0.66 ms, so if thread priority alone is
+	 * not enough to protect the ranging path, this is what finds out. */
+	LOG_INF("CASE contention mode: a round every %u ms, %u us of crypto each. Walk up now.",
+		(unsigned int)CONFIG_ALIRO_CASE_BENCH_PERIOD_MS, elapsed_us);
+
+	for (uint32_t iter = 1;; iter++) {
+		k_msleep(CONFIG_ALIRO_CASE_BENCH_PERIOD_MS);
+		elapsed_us = case_round();
+		if (!bench_ok) {
+			LOG_ERR("CASE round %u failed; stopping, so a dead thread cannot be "
+				"mistaken for load", (unsigned int)iter);
+			return;
+		}
+		if ((iter % 20u) == 0u) {
+			LOG_INF("CASE x%u still hammering (last %u us)", (unsigned int)iter,
+				elapsed_us);
+		}
+	}
 }
 
 static int case_bench_start(void)

@@ -93,6 +93,19 @@ config ALIRO_CASE_BENCH
 	  calling thread. Needs CONFIG_PSA_WANT_ALG_CCM, which the reader does not
 	  otherwise enable. See ports/dwm3001cdk/app/src/case_bench.c.
 
+config ALIRO_CASE_BENCH_PERIOD_MS
+	int "Repeat the CASE round every N ms (0 = measure once and stop)"
+	depends on ALIRO_CASE_BENCH
+	default 0
+	help
+	  0 measures once, which is all the sizing question needs. Non-zero turns
+	  the bench into a contention test: CASE keeps running while you walk up,
+	  so a real unlock has to complete against ~262 ms of P-256 per round on
+	  the same core. The reader's FINAL->arm margin is 0.66 ms, so this asks
+	  whether running the Matter thread at a lower priority is by itself
+	  enough to keep ranging alive. Small values are harsher; 50 leaves the
+	  core almost permanently busy.
+
 config ALIRO_HEAP_PROBE
 	bool "Report the mbedTLS heap high-water mark"
 	depends on MBEDTLS_MEMORY_DEBUG
