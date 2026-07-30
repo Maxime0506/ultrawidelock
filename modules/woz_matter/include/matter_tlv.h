@@ -1,5 +1,5 @@
 /**
- * @file matter_tlv.h — Matter TLV encoder (Matter Core spec, Appendix A).
+ * @file matter_tlv.h — Matter TLV codec (Matter Core spec, Appendix A).
  *
  * This is NOT the BER/DER-TLV in modules/woz_aliro_stack/src/protocol/tlv.h.
  * Matter uses its own encoding: one control byte carrying a 3-bit tag control
@@ -41,9 +41,9 @@ extern "C" {
 /** Profile ID reserved for anonymous and context-specific tags (TLVTags.h:74). */
 #define MATTER_TLV_SPECIAL_PROFILE 0xFFFFFFFFu
 /** The Matter common profile (TLVTags.h:97). */
-#define MATTER_TLV_COMMON_PROFILE 0x00000000u
+#define MATTER_TLV_COMMON_PROFILE  0x00000000u
 /** One past kContextTagMaxNum, so it cannot collide with a context tag (TLVTags.h:34-35). */
-#define MATTER_TLV_ANON_TAG_NUM 0x00000100u
+#define MATTER_TLV_ANON_TAG_NUM    0x00000100u
 
 typedef uint64_t matter_tlv_tag_t;
 
@@ -51,9 +51,9 @@ typedef uint64_t matter_tlv_tag_t;
 	(((matter_tlv_tag_t)(uint32_t)(profile) << 32) | (matter_tlv_tag_t)(uint32_t)(num))
 
 /** Anonymous tag: no tag octets on the wire. */
-#define MATTER_TLV_ANON MATTER_TLV_TAG(MATTER_TLV_SPECIAL_PROFILE, MATTER_TLV_ANON_TAG_NUM)
+#define MATTER_TLV_ANON      MATTER_TLV_TAG(MATTER_TLV_SPECIAL_PROFILE, MATTER_TLV_ANON_TAG_NUM)
 /** Context-specific tag, 0..255. The common case inside a structure. */
-#define MATTER_TLV_CTX(n) MATTER_TLV_TAG(MATTER_TLV_SPECIAL_PROFILE, (uint8_t)(n))
+#define MATTER_TLV_CTX(n)    MATTER_TLV_TAG(MATTER_TLV_SPECIAL_PROFILE, (uint8_t)(n))
 /** Common-profile tag. */
 #define MATTER_TLV_COMMON(n) MATTER_TLV_TAG(MATTER_TLV_COMMON_PROFILE, (n))
 /** Explicit profile tag. Encodes implicit if it matches the writer's implicit profile. */
@@ -65,6 +65,8 @@ typedef uint64_t matter_tlv_tag_t;
 #define MATTER_TLV_LIST      0x17u
 
 enum matter_tlv_status {
+	/** No more elements at this level. Expected, not a failure -- hence positive. */
+	MATTER_TLV_END = 1,
 	MATTER_TLV_OK = 0,
 	/** Ran out of output buffer. */
 	MATTER_TLV_E_NOSPACE = -1,
@@ -74,6 +76,10 @@ enum matter_tlv_status {
 	MATTER_TLV_E_DEPTH = -3,
 	/** end_container with nothing open, or finish with one still open. */
 	MATTER_TLV_E_STATE = -4,
+	/** Input ended inside an element, or a container never closed. */
+	MATTER_TLV_E_TRUNC = -5,
+	/** Accessor did not match the element actually present. */
+	MATTER_TLV_E_TYPE = -6,
 };
 
 /*
@@ -135,6 +141,82 @@ int matter_tlv_end_container(struct matter_tlv_writer *w);
  *         MATTER_TLV_E_STATE if a container is still open.
  */
 int matter_tlv_writer_finish(struct matter_tlv_writer *w, size_t *out_len);
+
+/*
+ * ---------------------------------------------------------------- decoder ---
+ *
+ * Every byte here arrives from a peer, so the decoder's job is as much refusal
+ * as decoding. Two properties it must hold, and both are structural rather
+ * than checked:
+ *
+ *   1. NO RECURSION. Skipping an unentered container walks forward with a
+ *      nesting counter capped at MATTER_TLV_MAX_DEPTH. A recursive-descent
+ *      skip would let a peer choose this firmware's stack depth, on a part
+ *      where the system work queue was measured with 528 B to spare.
+ *   2. NO COPYING. Strings and octet strings are returned as a pointer into
+ *      the caller's buffer, so decoding allocates nothing and cannot truncate.
+ *      The pointer is valid exactly as long as that buffer is.
+ *
+ * Iteration is CHIP-shaped because the shape is right: next() moves along the
+ * current level and steps OVER a container it was not told to enter; enter()
+ * descends; exit() skips whatever is left of the current container and lands
+ * just past its end marker.
+ */
+struct matter_tlv_reader {
+	const uint8_t *buf;
+	size_t len;
+	/** Offset the next next() starts scanning from. */
+	size_t next_off;
+	/** Element type of the loaded element, as it appears on the wire. */
+	uint8_t type;
+	matter_tlv_tag_t tag;
+	/** Value bytes: for strings the payload, for integers the width, else 0. */
+	size_t val_off;
+	size_t val_len;
+	/** Containers only: offset of the first child. */
+	size_t body_off;
+	/** Offset just past this element, NOT counting a container's body. */
+	size_t end_off;
+	uint32_t implicit_profile;
+	uint8_t depth;
+	bool implicit_set;
+	bool is_container;
+	bool have;
+};
+
+void matter_tlv_reader_init(struct matter_tlv_reader *r, const uint8_t *buf, size_t len);
+
+/**
+ * Supply the profile ID that implicit-profile tags decode to. Without it, an
+ * implicit tag is rejected rather than guessed -- there is no safe default,
+ * and inventing one would silently mislabel a tag.
+ */
+void matter_tlv_reader_set_implicit_profile(struct matter_tlv_reader *r, uint32_t profile);
+
+/**
+ * Advance to the next element at the current level.
+ * @return MATTER_TLV_OK, MATTER_TLV_END at the end of the level, or an error.
+ */
+int matter_tlv_next(struct matter_tlv_reader *r);
+
+/** Tag of the loaded element. Undefined unless the last next() returned OK. */
+matter_tlv_tag_t matter_tlv_tag(const struct matter_tlv_reader *r);
+/** Raw wire element type of the loaded element. */
+uint8_t matter_tlv_element_type(const struct matter_tlv_reader *r);
+bool matter_tlv_is_container(const struct matter_tlv_reader *r);
+
+int matter_tlv_get_bool(const struct matter_tlv_reader *r, bool *out);
+int matter_tlv_get_u64(const struct matter_tlv_reader *r, uint64_t *out);
+int matter_tlv_get_i64(const struct matter_tlv_reader *r, int64_t *out);
+/** Octet string. @param out receives a pointer INTO the caller's buffer; nothing is copied. */
+int matter_tlv_get_bytes(const struct matter_tlv_reader *r, const uint8_t **out, size_t *len);
+/** UTF-8 string, not NUL-terminated and not validated as UTF-8. Borrowed like get_bytes. */
+int matter_tlv_get_utf8(const struct matter_tlv_reader *r, const char **out, size_t *len);
+
+/** Descend into the loaded container. */
+int matter_tlv_enter(struct matter_tlv_reader *r);
+/** Skip whatever remains of the current container and land just past its end marker. */
+int matter_tlv_exit(struct matter_tlv_reader *r);
 
 #ifdef __cplusplus
 }

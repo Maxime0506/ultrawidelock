@@ -1,5 +1,5 @@
 /**
- * @file matter_tlv.c — Matter TLV encoder.
+ * @file matter_tlv.c — Matter TLV codec, encoder then decoder.
  *
  * Control byte = tag control (top 3 bits) | element type (bottom 5). Then the
  * tag octets, then the value. Everything multi-octet is little-endian.
@@ -24,14 +24,14 @@
 #include "matter_tlv.h"
 
 /* Tag controls, TLVTags.h:105-112. */
-#define TC_ANON         0x00u
-#define TC_CONTEXT      0x20u
-#define TC_COMMON_2     0x40u
-#define TC_COMMON_4     0x60u
-#define TC_IMPLICIT_2   0x80u
-#define TC_IMPLICIT_4   0xA0u
-#define TC_FULLQUAL_6   0xC0u
-#define TC_FULLQUAL_8   0xE0u
+#define TC_ANON       0x00u
+#define TC_CONTEXT    0x20u
+#define TC_COMMON_2   0x40u
+#define TC_COMMON_4   0x60u
+#define TC_IMPLICIT_2 0x80u
+#define TC_IMPLICIT_4 0xA0u
+#define TC_FULLQUAL_6 0xC0u
+#define TC_FULLQUAL_8 0xE0u
 
 /* Element types, TLVTypes.h:60-86. */
 #define ET_INT8          0x00u
@@ -298,7 +298,8 @@ static int put_string(struct matter_tlv_writer *w, matter_tlv_tag_t tag, uint8_t
 	return w->rc;
 }
 
-int matter_tlv_put_utf8(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const char *s, size_t len)
+int matter_tlv_put_utf8(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const char *s,
+			size_t len)
 {
 	return put_string(w, tag, ET_UTF8_LEN1, s, len);
 }
@@ -360,5 +361,417 @@ int matter_tlv_writer_finish(struct matter_tlv_writer *w, size_t *out_len)
 	if (out_len != NULL) {
 		*out_len = w->len;
 	}
+	return MATTER_TLV_OK;
+}
+
+/* ----------------------------------------------------------------- decoder --
+ *
+ * Bounds are checked before every read, not after, and the parse of one element
+ * never trusts a length it has not first fitted inside the buffer. The nesting
+ * walk is a counter, so a peer cannot pick this firmware's stack depth.
+ */
+
+/** One parsed element. Purely local; the reader copies the fields it keeps. */
+struct elem {
+	uint8_t type;
+	matter_tlv_tag_t tag;
+	size_t val_off;
+	size_t val_len;
+	size_t body_off;
+	size_t end;
+	bool is_container;
+};
+
+/** Tag octet count for each tag control, indexed by control >> 5. */
+static const uint8_t tag_octets_by_control[8] = {0u, 1u, 2u, 4u, 2u, 4u, 6u, 8u};
+
+static bool fits(const struct matter_tlv_reader *r, size_t off, size_t n)
+{
+	return off <= r->len && n <= r->len - off;
+}
+
+static uint64_t read_le(const uint8_t *p, size_t n)
+{
+	uint64_t v = 0;
+
+	for (size_t i = 0; i < n; i++) {
+		v |= (uint64_t)p[i] << (8u * i);
+	}
+	return v;
+}
+
+/**
+ * Parse the element whose control byte is at @p off.
+ *
+ * Does not follow container bodies: for a container, end == body_off and the
+ * caller decides whether to enter or skip. That is what keeps this function
+ * non-recursive.
+ */
+static int parse_at(const struct matter_tlv_reader *r, size_t off, struct elem *e)
+{
+	uint8_t control;
+	uint8_t tag_octets;
+	size_t after_tag;
+	size_t width;
+
+	if (!fits(r, off, 1u)) {
+		return MATTER_TLV_E_TRUNC;
+	}
+
+	control = (uint8_t)(r->buf[off] & 0xE0u);
+	e->type = (uint8_t)(r->buf[off] & 0x1Fu);
+	tag_octets = tag_octets_by_control[control >> 5];
+
+	if (!fits(r, off + 1u, tag_octets)) {
+		return MATTER_TLV_E_TRUNC;
+	}
+
+	const uint8_t *tp = &r->buf[off + 1u];
+
+	switch (control) {
+	case TC_ANON:
+		e->tag = MATTER_TLV_ANON;
+		break;
+	case TC_CONTEXT:
+		e->tag = MATTER_TLV_TAG(MATTER_TLV_SPECIAL_PROFILE, tp[0]);
+		break;
+	case TC_COMMON_2:
+	case TC_COMMON_4:
+		e->tag = MATTER_TLV_TAG(MATTER_TLV_COMMON_PROFILE, read_le(tp, tag_octets));
+		break;
+	case TC_IMPLICIT_2:
+	case TC_IMPLICIT_4:
+		/* Refused rather than guessed: with no implicit profile supplied there
+		 * is no correct value, and inventing one mislabels the tag silently. */
+		if (!r->implicit_set) {
+			return MATTER_TLV_E_INVAL;
+		}
+		e->tag = MATTER_TLV_TAG(r->implicit_profile, read_le(tp, tag_octets));
+		break;
+	default: { /* TC_FULLQUAL_6 / TC_FULLQUAL_8 */
+		uint32_t vendor = (uint32_t)read_le(tp, 2u);
+		uint32_t profile_num = (uint32_t)read_le(tp + 2u, 2u);
+
+		e->tag = MATTER_TLV_TAG((vendor << 16) | profile_num,
+					read_le(tp + 4u, (size_t)tag_octets - 4u));
+		break;
+	}
+	}
+
+	after_tag = off + 1u + tag_octets;
+	e->is_container = false;
+	e->body_off = 0u;
+	e->val_off = after_tag;
+	e->val_len = 0u;
+
+	if (e->type <= ET_UINT64) {
+		width = (size_t)1u << (e->type & 0x03u);
+		if (!fits(r, after_tag, width)) {
+			return MATTER_TLV_E_TRUNC;
+		}
+		e->val_len = width;
+		e->end = after_tag + width;
+	} else if (e->type == ET_BOOL_FALSE || e->type == ET_BOOL_TRUE || e->type == ET_NULL) {
+		e->end = after_tag;
+	} else if (e->type >= ET_UTF8_LEN1 && e->type <= ET_BYTES_LEN8) {
+		size_t len_octets = (size_t)1u << (e->type & 0x03u);
+		uint64_t payload;
+
+		if (!fits(r, after_tag, len_octets)) {
+			return MATTER_TLV_E_TRUNC;
+		}
+		payload = read_le(&r->buf[after_tag], len_octets);
+		e->val_off = after_tag + len_octets;
+		/* Compare in uint64 before narrowing: a declared length near 2^64 must
+		 * be rejected, not wrapped into something that fits. */
+		if (payload > (uint64_t)(r->len - e->val_off)) {
+			return MATTER_TLV_E_TRUNC;
+		}
+		e->val_len = (size_t)payload;
+		e->end = e->val_off + e->val_len;
+	} else if (e->type >= MATTER_TLV_STRUCTURE && e->type <= MATTER_TLV_LIST) {
+		e->is_container = true;
+		e->body_off = after_tag;
+		e->end = after_tag;
+	} else {
+		/* Includes ET_END_CONTAINER, which callers handle before reaching here,
+		 * and every unassigned type value. */
+		return MATTER_TLV_E_INVAL;
+	}
+
+	return MATTER_TLV_OK;
+}
+
+/**
+ * Walk forward from @p from to just past the end-of-container marker that
+ * closes the level @p from sits in.
+ *
+ * The nesting counter is the whole trick, and it is capped: deeply nested input
+ * costs one loop iteration per element and never a stack frame.
+ */
+static int scan_past_level_end(const struct matter_tlv_reader *r, size_t from, size_t *out)
+{
+	size_t off = from;
+	unsigned int nest = 0u;
+
+	for (;;) {
+		struct elem e;
+		int rc;
+
+		if (!fits(r, off, 1u)) {
+			return MATTER_TLV_E_TRUNC;
+		}
+		if (r->buf[off] == ET_END_CONTAINER) {
+			off++;
+			if (nest == 0u) {
+				*out = off;
+				return MATTER_TLV_OK;
+			}
+			nest--;
+			continue;
+		}
+
+		rc = parse_at(r, off, &e);
+		if (rc != MATTER_TLV_OK) {
+			return rc;
+		}
+		if (e.is_container) {
+			if (nest >= MATTER_TLV_MAX_DEPTH) {
+				return MATTER_TLV_E_DEPTH;
+			}
+			nest++;
+			off = e.body_off;
+		} else {
+			off = e.end;
+		}
+	}
+}
+
+void matter_tlv_reader_init(struct matter_tlv_reader *r, const uint8_t *buf, size_t len)
+{
+	if (r == NULL) {
+		return;
+	}
+	memset(r, 0, sizeof(*r));
+	r->buf = buf;
+	r->len = (buf == NULL) ? 0u : len;
+}
+
+void matter_tlv_reader_set_implicit_profile(struct matter_tlv_reader *r, uint32_t profile)
+{
+	if (r == NULL) {
+		return;
+	}
+	r->implicit_profile = profile;
+	r->implicit_set = true;
+}
+
+int matter_tlv_next(struct matter_tlv_reader *r)
+{
+	size_t start;
+	struct elem e;
+	int rc;
+
+	if (r == NULL || r->buf == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+
+	if (!r->have) {
+		start = r->next_off;
+	} else if (r->is_container) {
+		/* Loaded but never entered, so step over the whole thing. */
+		rc = scan_past_level_end(r, r->body_off, &start);
+		if (rc != MATTER_TLV_OK) {
+			return rc;
+		}
+	} else {
+		start = r->end_off;
+	}
+
+	r->have = false;
+
+	if (start >= r->len) {
+		/* Running out of bytes is the end at the top level and a truncation
+		 * anywhere else -- an open container owes us its end marker. */
+		return (r->depth == 0u) ? MATTER_TLV_END : MATTER_TLV_E_TRUNC;
+	}
+
+	if (r->buf[start] == ET_END_CONTAINER) {
+		if (r->depth == 0u) {
+			return MATTER_TLV_E_INVAL;
+		}
+		r->next_off = start;
+		return MATTER_TLV_END;
+	}
+
+	rc = parse_at(r, start, &e);
+	if (rc != MATTER_TLV_OK) {
+		return rc;
+	}
+
+	r->type = e.type;
+	r->tag = e.tag;
+	r->val_off = e.val_off;
+	r->val_len = e.val_len;
+	r->body_off = e.body_off;
+	r->end_off = e.end;
+	r->is_container = e.is_container;
+	r->next_off = e.end;
+	r->have = true;
+	return MATTER_TLV_OK;
+}
+
+matter_tlv_tag_t matter_tlv_tag(const struct matter_tlv_reader *r)
+{
+	return (r != NULL && r->have) ? r->tag : MATTER_TLV_ANON;
+}
+
+uint8_t matter_tlv_element_type(const struct matter_tlv_reader *r)
+{
+	return (r != NULL && r->have) ? r->type : 0u;
+}
+
+bool matter_tlv_is_container(const struct matter_tlv_reader *r)
+{
+	return r != NULL && r->have && r->is_container;
+}
+
+int matter_tlv_get_bool(const struct matter_tlv_reader *r, bool *out)
+{
+	if (r == NULL || out == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (!r->have) {
+		return MATTER_TLV_E_STATE;
+	}
+	if (r->type != ET_BOOL_FALSE && r->type != ET_BOOL_TRUE) {
+		return MATTER_TLV_E_TYPE;
+	}
+	*out = (r->type == ET_BOOL_TRUE);
+	return MATTER_TLV_OK;
+}
+
+int matter_tlv_get_u64(const struct matter_tlv_reader *r, uint64_t *out)
+{
+	if (r == NULL || out == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (!r->have) {
+		return MATTER_TLV_E_STATE;
+	}
+	if (r->type < ET_UINT8 || r->type > ET_UINT64) {
+		return MATTER_TLV_E_TYPE;
+	}
+	*out = read_le(&r->buf[r->val_off], r->val_len);
+	return MATTER_TLV_OK;
+}
+
+int matter_tlv_get_i64(const struct matter_tlv_reader *r, int64_t *out)
+{
+	uint64_t raw;
+	unsigned int bits;
+
+	if (r == NULL || out == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (!r->have) {
+		return MATTER_TLV_E_STATE;
+	}
+	if (r->type > ET_INT64) {
+		return MATTER_TLV_E_TYPE;
+	}
+
+	raw = read_le(&r->buf[r->val_off], r->val_len);
+	bits = (unsigned int)(8u * r->val_len);
+	if (bits < 64u) {
+		/* Sign-extend by hand. Shifting a negative signed value is
+		 * implementation-defined, so the arithmetic stays unsigned until the
+		 * final conversion. */
+		uint64_t sign_bit = (uint64_t)1u << (bits - 1u);
+
+		if ((raw & sign_bit) != 0u) {
+			raw |= ~(((uint64_t)1u << bits) - 1u);
+		}
+	}
+	*out = (int64_t)raw;
+	return MATTER_TLV_OK;
+}
+
+static int get_span(const struct matter_tlv_reader *r, uint8_t lo, uint8_t hi, const void **out,
+		    size_t *len)
+{
+	if (r == NULL || out == NULL || len == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (!r->have) {
+		return MATTER_TLV_E_STATE;
+	}
+	if (r->type < lo || r->type > hi) {
+		return MATTER_TLV_E_TYPE;
+	}
+	*out = &r->buf[r->val_off];
+	*len = r->val_len;
+	return MATTER_TLV_OK;
+}
+
+int matter_tlv_get_bytes(const struct matter_tlv_reader *r, const uint8_t **out, size_t *len)
+{
+	return get_span(r, ET_BYTES_LEN1, ET_BYTES_LEN8, (const void **)out, len);
+}
+
+int matter_tlv_get_utf8(const struct matter_tlv_reader *r, const char **out, size_t *len)
+{
+	return get_span(r, ET_UTF8_LEN1, ET_UTF8_LEN8, (const void **)out, len);
+}
+
+int matter_tlv_enter(struct matter_tlv_reader *r)
+{
+	if (r == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (!r->have || !r->is_container) {
+		return MATTER_TLV_E_STATE;
+	}
+	if (r->depth >= MATTER_TLV_MAX_DEPTH) {
+		return MATTER_TLV_E_DEPTH;
+	}
+	r->depth++;
+	r->next_off = r->body_off;
+	r->have = false;
+	return MATTER_TLV_OK;
+}
+
+int matter_tlv_exit(struct matter_tlv_reader *r)
+{
+	size_t from;
+	size_t past;
+	int rc;
+
+	if (r == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (r->depth == 0u) {
+		return MATTER_TLV_E_STATE;
+	}
+
+	if (!r->have) {
+		from = r->next_off;
+	} else if (r->is_container) {
+		rc = scan_past_level_end(r, r->body_off, &from);
+		if (rc != MATTER_TLV_OK) {
+			return rc;
+		}
+	} else {
+		from = r->end_off;
+	}
+
+	rc = scan_past_level_end(r, from, &past);
+	if (rc != MATTER_TLV_OK) {
+		return rc;
+	}
+
+	r->depth--;
+	r->next_off = past;
+	r->have = false;
 	return MATTER_TLV_OK;
 }
