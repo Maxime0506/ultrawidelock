@@ -86,13 +86,25 @@ tools-install:
 ##   install stops the run before the big fetch, not after it.
 ##   CI never runs this target — it calls scripts/bootstrap.sh directly — so no
 ##   runner has its packages touched.
+##   In a linked worktree that has no ./workspace yet, this delegates to ws-seed:
+##   a COW clone of the primary's tree costs ~0 disk, where refetching costs 6.5 GB.
+##   Delegation is skipped once ./workspace exists, because ws-seed is a no-op then
+##   and bootstrap's real job is re-applying THIS branch's patches.
 ##   Options: NO_TOOLS=1 skip the tool phase, straight to the fetch
 ##            NO_TOOLCHAIN=1 skip the NCS toolchain phase
+##            NO_SEED=1 in a worktree, fetch a full independent workspace anyway
+##            (for a different NCS revision, or a primary you suspect is corrupt)
 ##            HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make build HA=1`; not hardware-validated)
 bootstrap:
 	@[ -n "$(NO_TOOLS)" ] || $(REPO_ROOT)/scripts/toolchain.sh install
-	@$(ENV) ./scripts/bootstrap.sh
+	@if [ -z "$(NO_SEED)" ] && [ ! -d workspace/.west ] && \
+	    [ "$$(git rev-parse --git-common-dir)" != "$$(git rev-parse --git-dir)" ]; then \
+	  printf '  linked worktree with no workspace: cloning the primary (NO_SEED=1 to refetch)\n'; \
+	  $(REPO_ROOT)/scripts/ws-seed.sh && exit 0; \
+	  printf '  seeding unavailable; falling back to a full fetch\n'; \
+	fi; \
+	$(ENV) ./scripts/bootstrap.sh
 
 ## ws-seed: give THIS worktree its own workspace (APFS COW clone, ~0 disk)
 ##   Idempotent. Isolates worktrees so branch-bouncing can't build stale patches.
