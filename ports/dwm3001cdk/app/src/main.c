@@ -19,8 +19,10 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
+#include "aliro_approach.h"
 #include "aliro_prov.h"
 #include "aliro_reader.h"
+#include "woz_uwb_facade.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -96,8 +98,70 @@ int main(void)
 		return rc;
 	}
 
+	/* Bridge the trusted UWB range stream to the Wallet grant.
+	 *
+	 * aliro_reader_start brings up BLE and the CCC/FiRa ranging engine, and the engine
+	 * latches a trust-gated distance (fira_session) on every good block -- but nothing
+	 * consumes it on its own. The shipped Matter lock wires this in its app_main
+	 * (ports/esp32/apps/matter-lock): trusted range -> approach controller -> on UNLOCK,
+	 * aliro_reader_notify_unlock(true), which sends Reader Status = Unsecured and animates
+	 * the phone. The standalone reader has to do the same or a perfectly good range never
+	 * becomes an unlock. There is no bolt on this board: the grant IS the product. */
+	struct aliro_approach approach;
+
+	aliro_approach_init(&approach, NULL); /* factory defaults: unlock 100 cm, relock 250 cm */
+
+	uint32_t last_gen = woz_uwb_range_generation();
+	bool present = false;
+	bool granted = false;
+
 	while (1) {
-		aliro_reader_status_tick(k_uptime_get());
+		int64_t now = k_uptime_get();
+		uint32_t gen = woz_uwb_range_generation();
+		int32_t cm = 0;
+		enum aliro_approach_action act;
+
+		aliro_reader_status_tick(now);
+
+		/* Feed exactly one sample per NEWLY accepted trusted range (the generation epoch
+		 * advances only on an accepted latch), mirroring the ESP lock's per-wake feed. A
+		 * stale latch -- iOS stops ranging once the phone holds still -- keeps the old
+		 * generation, so it drives a tick, not a fresh approach sample. */
+		if (gen != last_gen && woz_uwb_trusted_range_cm(&cm)) {
+			last_gen = gen;
+			present = true;
+			act = aliro_approach_feed(&approach, now, cm);
+		} else {
+			act = aliro_approach_tick(&approach, now);
+		}
+
+		switch (act) {
+		case ALIRO_APPROACH_UNLOCK_PREDICT:
+		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+			aliro_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
+			granted = true;
+			break;
+		case ALIRO_APPROACH_RELOCK_DEPART:
+		case ALIRO_APPROACH_RELOCK_ABORT:
+			aliro_reader_notify_unlock(false); /* Reader Status -> Secured */
+			granted = false;
+			break;
+		default:
+			break;
+		}
+
+		/* Departure: the peer's Aliro session ended (walked away / phone pocketed). iOS
+		 * ranging silence alone does NOT mean departed (a still phone stops ranging too),
+		 * so gate on the session, not on range age. Tell Wallet Secured once and reset. */
+		if (present && !aliro_reader_session_active()) {
+			(void)aliro_approach_gone(&approach);
+			if (granted) {
+				aliro_reader_notify_unlock(false);
+				granted = false;
+			}
+			present = false;
+		}
+
 		k_msleep(ALIRO_TICK_MS);
 	}
 	return 0;
