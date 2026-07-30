@@ -33,6 +33,8 @@ target_sources(app PRIVATE
 	# transport is stage 4 and the settings-backed store is stage 1.
 	src/aliro_ble_zephyr.c
 	src/aliro_prov_settings.c
+	# Provisioning console (USB CDC-ACM, provisioning mode only).
+	src/prov_shell.c
 	# Reader engine.
 	${ALIRO}/src/aliro_reader.c
 	${ALIRO}/src/aliro_ranging.c

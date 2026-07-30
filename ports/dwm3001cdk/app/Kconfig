@@ -1,31 +1,10 @@
 # Copyright (c) 2026 asxeem
 # SPDX-License-Identifier: ISC
-
-menu "DWM3001CDK Aliro reader"
-
-config ALIRO_PROV_SEED_HEX
-	string "Reader provisioning blob to seed at boot (hex, bench only)"
-	default ""
-	help
-	  Hex encoding of an aliro_prov ("APRV") blob, as printed by the
-	  `aliro export` console command on a board that has been commissioned
-	  into Apple Home. Empty (the default) leaves the reader on its dev
-	  identity.
-
-	  This board cannot be commissioned itself: no Matter image fits the
-	  nRF52833, so an Apple-issued credential can only be adopted from a
-	  board that was. This build has no console input either (CONFIG_SHELL=n,
-	  RTT is output-only), so the blob arrives as a build-time string rather
-	  than an `aliro-import` command.
-
-	  The blob carries the reader PRIVATE KEY in the clear. A build with this
-	  set is a bench artifact: whoever holds the .hex holds the reader
-	  identity, and can impersonate the lock. Never set it for anything you
-	  would call deployed, and keep the value out of version control.
-
-	  Seeding runs on every boot and overwrites whatever is in the settings
-	  store, so the baked value always wins.
-
-endmenu
+#
+# No application Kconfig options. The reader identity used to arrive here as a
+# build-time string (CONFIG_ALIRO_PROV_SEED_HEX), which put a reader private key
+# into every image and made the firmware unshareable. It is now per-device data
+# in the settings store, typed in over the USB console in provisioning mode, so
+# there is deliberately no knob left that can put a key back into a build.
 
 source "Kconfig.zephyr"

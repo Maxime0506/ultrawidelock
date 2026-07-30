@@ -45,6 +45,11 @@ TAG      ?=
 MAXCM    ?= 40
 PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
 
+# DWM3001CDK target (make cdk / cdk-flash). Its own build dir, so it never
+# fights the nRF5340 build for build/. NCS_VER matches scripts/build.sh.
+NCS_VER   ?= v3.3.0
+CDK_BUILD ?= $(REPO_ROOT)/build-cdk
+
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
   $(if $(CHIP),UWB_CHIP=$(CHIP)) \
@@ -58,7 +63,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty cdk cdk-flash selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -135,6 +140,20 @@ selftest:
 ## pretty: build with curated / quiet console
 pretty:
 	@$(ENV) PRETTY=1 ./scripts/build.sh build
+
+## cdk: build the DWM3001CDK standalone reader   -> build-cdk/app/zephyr/zephyr.hex
+##   One board, no host MCU: nRF52833 + DW3110. Carries no credential; the
+##   identity is typed in over USB in provisioning mode (ports/dwm3001cdk/README.md).
+##   Options: CDK_BUILD=<dir> (default build-cdk)  NCS_VER=<tag> (default v3.3.0)
+cdk:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west build -p auto -b decawave_dwm3001cdk \
+	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app
+
+## cdk-flash: flash the DWM3001CDK over its on-board J-Link OB
+cdk-flash:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west flash -d $(CDK_BUILD)
 
 ##@ Test
 ## tui-test: run the OpenTUI source tests (no hardware required)

@@ -15,12 +15,13 @@
 #include <errno.h>
 #include <string.h>
 
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/usb/usb_device.h>
 
 #include "aliro_approach.h"
-#include "aliro_prov.h"
 #include "aliro_reader.h"
 #include "woz_uwb_facade.h"
 
@@ -39,41 +40,48 @@ extern volatile int woz_uwb_diag_on;
  * the cadence the ESP32 port runs. */
 #define ALIRO_TICK_MS 250
 
-/* Adopts the reader identity baked into the image by CONFIG_ALIRO_PROV_SEED_HEX.
+/* Provisioning mode: hold SW2 (the board's sw0 alias, P0.02) through reset.
  *
- * This board cannot be commissioned into Apple Home on its own, so the only way
- * it holds an Apple-issued Aliro credential is to adopt one exported from a board
- * that was. Import persists to the settings store and commits in memory, so it
- * has to run before aliro_reader_start reads the identity to build the
- * advertisement. Returns 0 when nothing was seeded or the seed took. */
-static int seed_provisioning(void)
+ * The reader identity is per-device data in the settings store, never a string
+ * in the image, so it has to arrive at runtime. This board's only input path is
+ * the USB device port wired straight to the nRF52833 -- RTT is output-only --
+ * so provisioning mode brings up CDC-ACM and the `aliro` console on it.
+ *
+ * The radios stay down in this mode on purpose. It keeps USB's millisecond SOF
+ * interrupts away from the DW3110's delayed-TX reply window (the timing that
+ * commit 5b8d06b had to fight for on this single-core part), and it means the
+ * console can never be reached while a walk-up is in flight. */
+static bool provisioning_requested(void)
 {
-	static uint8_t blob[ALIRO_PROV_BLOB_MAX];
-	const char *hex = CONFIG_ALIRO_PROV_SEED_HEX;
-	size_t hex_len = strlen(hex);
+	static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 
-	if (hex_len == 0u) {
-		return 0;
+	if (!gpio_is_ready_dt(&sw)) {
+		return false;
 	}
-
-	size_t len = hex2bin(hex, hex_len, blob, sizeof(blob));
-
-	if (len == 0u) {
-		LOG_ERR("prov seed: %u hex chars did not decode (odd length, "
-			"non-hex, or over the %u-byte blob cap)",
-			(unsigned int)hex_len, (unsigned int)sizeof(blob));
-		return -EINVAL;
+	if (gpio_pin_configure_dt(&sw, GPIO_INPUT) != 0) {
+		return false;
 	}
+	/* Active low with a pull-up in the board DTS; _dt() returns logical level. */
+	return gpio_pin_get_dt(&sw) == 1;
+}
 
-	int rc = aliro_reader_import_blob(blob, len);
+/* Runs the console and nothing else. Never returns: leaving this function would
+ * start the radios in a mode the user did not ask for. */
+static void provisioning_mode(void)
+{
+	int rc = usb_enable(NULL);
 
 	if (rc != 0) {
-		/* -1 malformed blob, -2 settings write failed. */
-		LOG_ERR("prov seed: import of %u bytes rc=%d", (unsigned int)len, rc);
-		return rc;
+		/* Nothing to fall back to: without USB there is no input path at
+		 * all on this board, so say so on RTT and stop. */
+		LOG_ERR("provisioning mode: usb_enable rc=%d, no console available", rc);
+	} else {
+		LOG_INF("provisioning mode: USB console up, radios down");
 	}
-	LOG_INF("prov seed: adopted a %u-byte cloned identity", (unsigned int)len);
-	return 0;
+
+	while (1) {
+		k_msleep(1000);
+	}
 }
 
 int main(void)
@@ -86,10 +94,9 @@ int main(void)
 	 * mojibake in RTT Viewer. */
 	LOG_INF("openaliro reader: DWM3001CDK (nRF52833 + DW3110)");
 
-	/* Deliberately not fatal: a bad seed leaves the dev identity in place, and a
-	 * board that advertises unresolvably is far easier to diagnose over RTT than
-	 * one that never boots. */
-	(void)seed_provisioning();
+	if (provisioning_requested()) {
+		provisioning_mode(); /* never returns */
+	}
 
 	int rc = aliro_reader_start();
 

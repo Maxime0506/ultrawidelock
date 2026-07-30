@@ -1,0 +1,201 @@
+/*
+ * Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ *
+ * DWM3001CDK provisioning console.
+ *
+ * This board cannot be commissioned into Apple Home on its own (no Matter image
+ * fits an nRF52833), so it adopts a credential exported from a board that was.
+ * The point of this file is WHERE that credential lives: in NVS, as per-device
+ * data typed in over USB, never in the firmware image. One image is then the
+ * same for everybody, and carries no key.
+ *
+ * Reachable only in provisioning mode -- hold SW2 through reset -- where main()
+ * brings up USB CDC-ACM and deliberately never starts the radios. Everything
+ * here therefore reads and writes the settings store directly (aliro_prov_*)
+ * rather than the running engine's state, which in this mode does not exist.
+ * The one exception is `import`, which routes through aliro_reader_import_blob
+ * so the engine's own commit path stays the single place that adopts identity.
+ */
+#include <stdbool.h>
+#include <string.h>
+
+#include <zephyr/kernel.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/sys/util.h>
+
+#include "aliro_prov.h"
+#include "aliro_reader.h"
+
+/* One blob each way, static because the shell thread's stack is 2 KB and the
+ * hex form of a full 476-byte blob is 952 characters on its own. */
+static uint8_t s_blob[ALIRO_PROV_BLOB_MAX];
+static char s_hex[2u * ALIRO_PROV_BLOB_MAX + 1u];
+
+static bool all_zero(const uint8_t *p, size_t len)
+{
+	uint8_t acc = 0;
+
+	for (size_t i = 0; i < len; i++) {
+		acc |= p[i];
+	}
+	return acc == 0;
+}
+
+/* The three ways a syntactically valid blob is still useless, named rather than
+ * left for the walk-up to discover. Same three tools/aliro_blob.py reports on a
+ * flash dump, checked again here because a hex string can arrive by any route.
+ * Returns a reason, or NULL when the blob will actually unlock. */
+static const char *dead_blob_reason(const struct aliro_reader_identity *id,
+				    const struct aliro_trust_store *ts)
+{
+	if (id->is_dev) {
+		return "it is the built-in DEV identity: the source board was never "
+		       "provisioned, or was factory-reset after it was";
+	}
+	if (all_zero(id->grk, ALIRO_GRK_LEN)) {
+		return "the GroupResolvingKey is all zero: SetAliroReaderConfig never "
+		       "landed on the source, so no phone can resolve this reader";
+	}
+	if (ts->count == 0u) {
+		return "there are no trust anchors: no phone key was enrolled on the "
+		       "source";
+	}
+	return NULL;
+}
+
+static int cmd_prov(const struct shell *sh, size_t argc, char **argv)
+{
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	int rc = aliro_prov_load(&id, &ts);
+
+	if (rc < 0) {
+		shell_error(sh, "settings store unreadable; showing the dev fallback");
+	}
+
+	shell_print(sh, "identity   : %s", id.is_dev ? "DEV (not provisioned)" : "provisioned");
+	shell_print(sh, "reader_id  : %02x%02x%02x%02x...%02x%02x%02x%02x", id.reader_id[0],
+		    id.reader_id[1], id.reader_id[2], id.reader_id[3], id.reader_id[28],
+		    id.reader_id[29], id.reader_id[30], id.reader_id[31]);
+	shell_print(sh, "GRK        : %s", all_zero(id.grk, ALIRO_GRK_LEN) ? "all zero (no "
+		    "phone will approach)" : "set");
+	shell_print(sh, "trust      : %u of %u anchor(s)", (unsigned int)ts.count,
+		    (unsigned int)ALIRO_TRUST_MAX);
+
+	const char *why = dead_blob_reason(&id, &ts);
+
+	shell_print(sh, "verdict    : %s", why ? why : "will unlock a phone enrolled on the "
+		    "source home");
+	return 0;
+}
+
+static int cmd_import(const struct shell *sh, size_t argc, char **argv)
+{
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	ARG_UNUSED(argc);
+
+	size_t hex_len = strlen(argv[1]);
+	size_t len = hex2bin(argv[1], hex_len, s_blob, sizeof(s_blob));
+
+	if (len == 0u) {
+		shell_error(sh, "%u hex chars did not decode (odd length, non-hex, or over "
+			    "the %u-byte cap)", (unsigned int)hex_len, (unsigned int)sizeof(s_blob));
+		return -EINVAL;
+	}
+
+	if (aliro_prov_deserialize(s_blob, len, &id, &ts) != 0) {
+		shell_error(sh, "not an APRV blob (bad magic, version, or length)");
+		return -EINVAL;
+	}
+
+	/* Refuse before writing, not after: a board that silently adopted a blob
+	 * which cannot unlock is the failure this whole path exists to avoid. */
+	const char *why = dead_blob_reason(&id, &ts);
+
+	if (why != NULL) {
+		shell_error(sh, "refusing: %s", why);
+		return -EINVAL;
+	}
+
+	int rc = aliro_reader_import_blob(s_blob, len);
+
+	if (rc != 0) {
+		/* -1 malformed (already ruled out above), -2 settings write failed. */
+		shell_error(sh, "import of %u bytes failed rc=%d", (unsigned int)len, rc);
+		return rc;
+	}
+
+	shell_print(sh, "adopted %u bytes: %u trust anchor(s). Reboot without SW2 to run.",
+		    (unsigned int)len, (unsigned int)ts.count);
+	return 0;
+}
+
+static int cmd_export(const struct shell *sh, size_t argc, char **argv)
+{
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+	size_t len = 0;
+
+	ARG_UNUSED(argc);
+
+	if (strcmp(argv[1], "yes") != 0) {
+		shell_error(sh, "this prints the reader PRIVATE KEY. Confirm: aliro export yes");
+		return -EINVAL;
+	}
+
+	(void)aliro_prov_load(&id, &ts);
+	if (aliro_prov_serialize(&id, &ts, s_blob, sizeof(s_blob), &len) != 0) {
+		shell_error(sh, "serialise failed");
+		return -EINVAL;
+	}
+	if (bin2hex(s_blob, len, s_hex, sizeof(s_hex)) == 0u) {
+		shell_error(sh, "hex buffer too small for %u bytes", (unsigned int)len);
+		return -ENOMEM;
+	}
+
+	shell_print(sh, "%s", s_hex);
+	shell_warn(sh, "that string is the reader identity: whoever holds it can impersonate "
+		   "this lock");
+	return 0;
+}
+
+static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+
+	if (strcmp(argv[1], "yes") != 0) {
+		shell_error(sh, "this erases the identity and every trust anchor. "
+			    "Confirm: aliro erase yes");
+		return -EINVAL;
+	}
+
+	int rc = aliro_reader_provision_clear();
+
+	if (rc != 0) {
+		shell_error(sh, "erase failed rc=%d", rc);
+		return rc;
+	}
+	shell_print(sh, "erased: back to the DEV identity with no trust anchors");
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+	sub_aliro,
+	SHELL_CMD(prov, NULL, "Show the stored reader identity and whether it can unlock.",
+		  cmd_prov),
+	SHELL_CMD_ARG(import, NULL, "Adopt an exported identity: `import <hex>`.", cmd_import, 2,
+		      0),
+	SHELL_CMD_ARG(export, NULL, "Print the stored identity, private key and all: "
+		      "`export yes`.", cmd_export, 2, 0),
+	SHELL_CMD_ARG(erase, NULL, "Erase identity and trust anchors: `erase yes`.", cmd_erase, 2,
+		      0),
+	SHELL_SUBCMD_SET_END);
+
+SHELL_CMD_REGISTER(aliro, &sub_aliro, "Aliro reader provisioning.", NULL);

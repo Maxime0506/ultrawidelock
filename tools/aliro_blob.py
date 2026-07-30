@@ -168,7 +168,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source", help="hex string from `aliro export`, or a path to a flash/NVS dump")
     ap.add_argument("--show-private", action="store_true", help="print the reader private key")
-    ap.add_argument("--kconfig", action="store_true", help="emit the CONFIG_ALIRO_PROV_SEED_HEX line")
+    ap.add_argument("--import-cmd", "--kconfig", dest="import_cmd", action="store_true",
+                    help="emit the `aliro import` line to paste into the provisioning console")
     args = ap.parse_args()
 
     src = args.source.strip()
@@ -209,8 +210,8 @@ def main():
             continue
         if report(f, total, args, where):
             ok = True
-            if args.kconfig:
-                print(f'\nCONFIG_ALIRO_PROV_SEED_HEX="{raw[:total].hex()}"')
+            if args.import_cmd:
+                print(f"\naliro import {raw[:total].hex()}")
         print()
 
     return 0 if ok else 1

@@ -24,6 +24,26 @@
  * that is the knob Partition Manager actually reads.
  */
 
+/*
+ * Provisioning console. The DWM3001CDK's second USB port goes straight to the
+ * nRF52833's device interface, so CDC-ACM is the board's only input path (RTT
+ * is output-only and uart0 belongs to the J-Link OB's VCOM). The shell is bound
+ * here rather than to uart0 so that plugging in that port is what reaches the
+ * console. main() only calls usb_enable() in provisioning mode, so this node is
+ * inert on an operational boot.
+ */
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/ {
+	chosen {
+		zephyr,shell-uart = &cdc_acm_uart0;
+	};
+};
+
 &spi3 {
 	dw3000: dw3000@0 {
 		compatible = "decawave,dw3000";

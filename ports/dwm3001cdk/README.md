@@ -21,8 +21,19 @@ cannot read. BLE + UWB walk-up is the whole feature set here.
 ## Build
 
 ```sh
-west build -p always -b decawave_dwm3001cdk -d ports/dwm3001cdk/app/build ports/dwm3001cdk/app
-west flash -d ports/dwm3001cdk/app/build
+make cdk           # -> build-cdk/app/zephyr/zephyr.hex
+make cdk-flash     # over the on-board J-Link OB
+```
+
+The image carries no credential and is the same for every board. Flashing it is
+half the job: a fresh board holds the DEV identity until you provision it, which
+is a runtime step over USB (see "Provision this board" below).
+
+Equivalent by hand, from the west workspace:
+
+```sh
+west build -p always -b decawave_dwm3001cdk -d ../build-cdk ../ports/dwm3001cdk/app
+west flash -d ../build-cdk
 ```
 
 Logging is RTT, not UART: on a single-core part the DW3110 delayed-TX reply
@@ -196,7 +207,7 @@ currently works:
 
 ```sh
 esptool.py -p <PORT> read_flash 0 0x400000 flash.bin
-tools/aliro_blob.py flash.bin --kconfig
+tools/aliro_blob.py flash.bin --import-cmd
 ```
 
 The tool finds every APRV blob in the dump (NVS keeps superseded copies), parses
@@ -210,43 +221,51 @@ source was never provisioned, or was factory-reset since), the GroupResolvingKey
 is all zero (`SetAliroReaderConfig` never landed), or there are no trust anchors
 (no phone key enrolled).
 
-### Seed it into this board
+### Provision this board
 
-There is no console input here (`CONFIG_SHELL=n`, and RTT is output-only), so
-the blob arrives as a build-time string. Keep it out of the repo: it carries the
-reader private key in the clear, so whoever holds the .hex can impersonate the
-lock.
+The identity is per-device data in the settings store. It is never in the image,
+so one build is the same for everybody and carries no key.
 
-```sh
-printf 'CONFIG_ALIRO_PROV_SEED_HEX="%s"\n' "$BLOB_HEX" > /tmp/clone-seed.conf
-west build -p always -b decawave_dwm3001cdk -d build ports/dwm3001cdk/app \
-    -- -DEXTRA_CONF_FILE=/tmp/clone-seed.conf
-west flash -d build
-```
+1. **Hold SW2 and tap RESET.** The board comes up with its radios down and a USB
+   CDC-ACM console on the second USB port, the one wired to the nRF52833.
+2. **Open that port.** `screen /dev/tty.usbmodem*` on macOS, `/dev/ttyACM*` on
+   Linux. RTT shows `provisioning mode: USB console up, radios down`.
+3. **`aliro import <hex>`** with the blob from the export step above.
+4. **Reboot without SW2.** The reader starts on the imported identity.
 
-Seeding runs on every boot and the baked value always wins over the settings
-store; re-seeding the same blob costs no flash writes, because Zephyr's NVS
-compares before it writes (`zephyr/subsys/fs/nvs/nvs.c:1195`).
+| Command | Does |
+|---|---|
+| `aliro prov` | print the stored identity and whether it can actually unlock |
+| `aliro import <hex>` | adopt an exported blob, refusing the three dead cases |
+| `aliro export yes` | print the stored blob, reader private key and all |
+| `aliro erase yes` | back to the DEV identity with no trust anchors |
 
-Captured on silicon, 2026-07-30, with a synthetic 185-byte blob:
+`import` runs the same three checks `tools/aliro_blob.py` runs on a flash dump,
+and refuses **before** writing rather than leaving you to discover a dead
+credential during a walk-up. A board that quietly adopted an unusable blob is the
+exact failure this path exists to prevent.
 
-```
-W: using DEV reader identity (Phase 4 supplies the real one); 0 trust anchor(s)
-I: prov source: dev default
-W: adv: no identity address for the dynamic tag
-I: advertisement refreshed with provisioned GRK (approach-resolvable)
-I: reader identity imported from clone blob (provisioned, 1 trust anchor(s))
-I: prov seed: adopted a 185-byte cloned identity
-```
+Why a button rather than always-on USB: the device stack raises a start-of-frame
+interrupt every millisecond, and this part runs BLE, the DW3110 and the app on
+one M4, where commit 5b8d06b already had to fight for the delayed-TX reply
+window. `usb_enable()` is therefore called only in provisioning mode, and an
+operational boot never runs a USB interrupt next to a ranging round. The cost of
+carrying the console in every image is 44,288 B flash and 19,648 B RAM, measured:
+239,152 B / 74,164 B without it, 283,440 B / 93,812 B with it.
 
-The warning on line 3 is expected and harmless, and worth recognising rather than
-chasing. Seeding runs before `bt_enable`, so when import refreshes the
-advertisement the controller has no identity address yet and the dynamic tag
-cannot be derived. `aliro_reader_start` applies the parameters again once the
-transport is up, and that is the call which actually shapes the advertisement, so
-no second warning follows. The Zephyr `aliro_ble_readvertise` does not honour the
-"no-op until the transport is up" contract its own header states, where the ESP32
-backend does; guarding it on `bt_is_ready()` would drop the line.
+Two of those RAM bytes-per-thousand are worth naming, because both were found on
+hardware and neither shows up in a build. The shell thread commits through a
+software P-256 derive and peaks at 2,580 bytes, so the 2,048-byte default stack
+overflowed; the MPU stack guard turned that into an aborted shell thread, which
+presents as a live USB device with a dead console rather than as a crash. And the
+serial backend's 64-byte RX ring buffer is one USB bulk packet, against an import
+line of 577 characters, so a pasted blob lost characters in transit. Both are
+sized explicitly in `prj.conf` with the measurement in the comment.
+
+The provisioning-mode console is deliberately provisioning-only. `woz_uwb`'s
+`aliro` command tree (status, chip, selftest) is switched off here with
+`CONFIG_WOZ_UWB_SHELL=n`, because in this mode it would drive a radio that was
+never started.
 
 RTT capture on this board needs the control block address read out of the ELF
 (`nm zephyr.elf | grep _SEGGER_RTT`) rather than J-Link's auto-search, which does

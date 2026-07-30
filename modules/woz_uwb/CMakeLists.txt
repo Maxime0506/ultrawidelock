@@ -57,7 +57,7 @@ if(CONFIG_WOZ_UWB)
 
       # `aliro` UART console (status/rx/range/chip/selftest/log/version). Needs
       # the shell subsystem, which an NCS/Matter dependency force-selects.
-      if(CONFIG_SHELL)
+      if(CONFIG_WOZ_UWB_SHELL)
         zephyr_library_sources(${SRC}/shell/aliro_shell.c)
         # Short commit SHA of THIS repo, baked in for `aliro version`. Captured
         # at CMake configure time (git -C works from a worktree too); refreshed
