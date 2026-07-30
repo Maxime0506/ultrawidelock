@@ -75,6 +75,24 @@ config ALIRO_THREAD_GATE
 	  answers whether Matter on this board is possible at all before any Matter
 	  code is written. See ports/dwm3001cdk/app/src/thread_gate.c.
 
+config ALIRO_CASE_BENCH
+	bool "Stage 0a: measure what a Matter CASE responder costs"
+	depends on INIT_STACKS && THREAD_STACK_INFO
+	default n
+	help
+	  Measurement only. Every RAM figure for a hand-written Matter node is an
+	  estimate, and the one that decides the plan -- the peak of the Matter
+	  thread -- cannot be read with `kernel thread stacks`, because that shows
+	  threads which exist and this one does not yet. Runs the responder half of
+	  CASE (ECDH, an ECDSA sign, three ECDSA verifies, two HKDFs, two AES-CCMs)
+	  on a dedicated thread beside the live reader and reports the stack peak,
+	  the static working set, the mbedTLS heap draw and the elapsed time.
+
+	  P-256 is what costs stack here: no CryptoCell on this part, so PSA runs
+	  on the software oberon driver and every curve operation runs on the
+	  calling thread. Needs CONFIG_PSA_WANT_ALG_CCM, which the reader does not
+	  otherwise enable. See ports/dwm3001cdk/app/src/case_bench.c.
+
 config ALIRO_HEAP_PROBE
 	bool "Report the mbedTLS heap high-water mark"
 	depends on MBEDTLS_MEMORY_DEBUG
