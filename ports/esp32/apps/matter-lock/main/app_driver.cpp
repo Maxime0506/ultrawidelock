@@ -9,6 +9,7 @@
 */
 
 #include <esp_log.h>
+#include <sdkconfig.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,9 +23,14 @@
 
 static const char *TAG = "app_driver";
 
-/* Single WS2812 on the ESP32-S3-WROOM N16R8 devkit. GPIO48 per the board
- * pinout; clear of the DW3000 (GPIO 4,5,6,10-13) and of octal PSRAM (33-37). */
+/* Use each official DevKitC board's onboard addressable RGB LED. */
+#if CONFIG_IDF_TARGET_ESP32C6
+#define LOCK_LED_GPIO 8
+#elif CONFIG_IDF_TARGET_ESP32C5
+#define LOCK_LED_GPIO 27
+#else
 #define LOCK_LED_GPIO 48
+#endif
 
 static led_strip_handle_t s_lock_led;
 

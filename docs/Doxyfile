@@ -1,7 +1,7 @@
 # Doxyfile — the "Reference" tree: declarations, macros and types.
 #
 # Covers only the code this project owns and publishes: the UWB/CCC core and the
-# ESP32-S3/C5 reader components. The generated subsystem tree under docs/architecture/
+# ESP32-S3/C5/C6 reader components. The generated subsystem tree under docs/architecture/
 # already covers call graphs and per-file narrative, so this tree exists for what
 # that one cannot show: preprocessor constants, enums and struct members.
 #
@@ -9,7 +9,7 @@
 # link and the link pass both assume that output path.
 
 PROJECT_NAME           = openaliro
-PROJECT_BRIEF          = "Aliro reader: UWB/CCC core and ESP32-S3/C5 port"
+PROJECT_BRIEF          = "Aliro reader: UWB/CCC core and ESP32-S3/C5/C6 port"
 OUTPUT_DIRECTORY       = site
 HTML_OUTPUT            = api
 CREATE_SUBDIRS         = NO

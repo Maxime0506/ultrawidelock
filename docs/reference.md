@@ -17,7 +17,7 @@ It covers the code this project owns:
 
 - shared modules: `woz_port`, `woz_uwb`, `woz_aliro`, and `woz_aliro_ecp`;
 - the nRF source-stack and NFC surfaces in `woz_aliro_stack` and `woz_nfc`;
-- ESP32-S3/C5 reader and port surfaces in `aliro_ble`, `aliro_crypto`,
+- ESP32-S3/C5/C6 reader and port surfaces in `aliro_ble`, `aliro_crypto`,
   `aliro_reader`, and `woz_uwb`, including the target-specific board-pin API.
 
 ## Reference or Architecture?

@@ -45,6 +45,8 @@ static const char *TAG = "ha_mqtt";
 #define HA_MQTT_MODEL "ESP32-S3 Aliro lock"
 #elif CONFIG_IDF_TARGET_ESP32C5
 #define HA_MQTT_MODEL "ESP32-C5 Aliro lock"
+#elif CONFIG_IDF_TARGET_ESP32C6
+#define HA_MQTT_MODEL "ESP32-C6 Aliro lock"
 #else
 #define HA_MQTT_MODEL CONFIG_IDF_TARGET " Aliro lock"
 #endif

@@ -43,15 +43,16 @@ explicitly and verifies the final link map contains no member from
 `libaliro_ble.a`. Keep `ALIRO_SOURCE=0` for comparison and regression isolation,
 not as the normal build.
 
-## ESP32-S3 and ESP32-C5
+## ESP32-S3, ESP32-C5, and ESP32-C6
 
 One `idf.py menuconfig` option, **Enable Aliro over BLE + UWB** (default
 on): it advertises the Aliro features so Apple Home can put a key in
 Wallet. Commissioning is standard Matter over Wi-Fi; `codes` reprints the
 QR URL and pairing code.
 
-ESP32-S3 is hardware-validated. ESP32-C5 has source and release-build support,
-but no hardware validation is recorded.
+ESP32-S3 is hardware-validated. ESP32-C5 has source and release-build support.
+ESP32-C6 is hardware-validated for direct-SPI BU04 bring-up with `ST_NRST`
+held low. No C5 hardware validation is recorded.
 
 ## Runtime consoles
 

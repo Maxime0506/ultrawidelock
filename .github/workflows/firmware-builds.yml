@@ -181,6 +181,15 @@ jobs:
             | grep -qE ' T presence_link_init$'
           xtensa-esp32s3-elf-nm build-presence/woz_uwb_esp32s3.elf \
             | grep -qE ' T aliro_assert_build_p256$'
+          # C6 is the BU04 direct-SPI bring-up target. Keep it in a separate
+          # build tree so the hardware-validated S3 sdkconfig/artifacts remain
+          # unchanged and the RISC-V toolchain gets exercised explicitly.
+          idf.py -B build-c6 \
+                 -D SDKCONFIG=build-c6/sdkconfig \
+                 set-target esp32c6
+          idf.py -B build-c6 \
+                 -D SDKCONFIG=build-c6/sdkconfig \
+                 build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
@@ -448,4 +457,13 @@ jobs:
           # absent exactly when this app's own presence wiring has rotted.
           xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
             | grep -qE ' T presence_link_cmd$'
+          # Build the default Matter image for the single-core C6 as well.
+          # Separate target/build/sdkconfig state prevents cross-contamination
+          # with the S3 and presence variants above.
+          idf.py -B build-c6 \
+                 -D SDKCONFIG=build-c6/sdkconfig \
+                 set-target esp32c6
+          idf.py -B build-c6 \
+                 -D SDKCONFIG=build-c6/sdkconfig \
+                 build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"

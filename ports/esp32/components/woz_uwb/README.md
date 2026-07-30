@@ -2,7 +2,8 @@
 
 This component contains almost no code of its own. Its job is to let
 `modules/woz_uwb/src` and `deps/dw3000` — the same sources the nRF5340 build ships —
-compile for the ESP32-S3. Everything here is the hardware seam that makes that possible.
+compile for the supported ESP32 targets. Everything here is the hardware seam that makes
+that possible.
 
 Keeping one engine is the point. The shared sources are the layer the nRF has already
 proven correct; forking them for ESP32 would mean two engines to keep honest.
@@ -31,8 +32,9 @@ The ESP-IDF DW3000 backend, replacing `deps/dw3000/platform/`:
   than the hardware buffer are chunked under one chip-select window, which the DW3000
   streams through sequentially.
 - **`dw3000_hw.c`** — GPIO reset, wakeup, and the interrupt path. The ISR only gives a
-  semaphore; a dedicated high-priority task pinned to core 1 calls `dwt_isr()`, because
-  that call performs SPI and cannot run in interrupt context.
+  semaphore; a dedicated high-priority task calls `dwt_isr()`, because that call performs
+  SPI and cannot run in interrupt context. It uses core 1 on dual-core targets and core 0
+  on the single-core ESP32-C6.
 - **`board_pins.h`** — the pin map. Source of truth; the wiring table in
   [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md) mirrors it.
 - **`woz_wrap_stubs.c`** — the minimal RX-callback chain that the excluded diagnostic

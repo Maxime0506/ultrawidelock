@@ -1,6 +1,6 @@
-/* DW3000 (DWM3000EVB) wiring per ESP32 target, SPI2/FSPI. Source of truth for
- * the wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB
- * is soldered to your board. */
+/* DW3000-family wiring per ESP32 target, SPI2/FSPI. Source of truth for the
+ * wiring table in docs/esp32-bringup.md. Change to match how the UWB module is
+ * wired to your board. */
 #ifndef WOZ_ESP_BOARD_PINS_H
 #define WOZ_ESP_BOARD_PINS_H
 
@@ -16,17 +16,33 @@
 #define WOZ_DW3000_PIN_SCLK    8
 #define WOZ_DW3000_PIN_MOSI    9
 #define WOZ_DW3000_PIN_MISO   23
-#else
-/* ESP32-S3 (original bring-up target). */
-#define WOZ_DW3000_PIN_SCLK   12
-#define WOZ_DW3000_PIN_MOSI   11
-#define WOZ_DW3000_PIN_MISO   13
-#endif
-
 #define WOZ_DW3000_PIN_CS     10
 #define WOZ_DW3000_PIN_RST     4
 #define WOZ_DW3000_PIN_IRQ     5
 #define WOZ_DW3000_PIN_WAKEUP  6
+#elif CONFIG_IDF_TARGET_ESP32C6
+/* ESP32-C6-DevKitC-1. GPIO6/7/2 are SPI2's direct IO_MUX SCLK/MOSI/MISO
+ * pins. The control pins avoid the C6 strapping pins (4/5/8/9/15), the
+ * native USB Serial/JTAG pair (12/13), and UART0 (16/17). */
+#define WOZ_DW3000_PIN_SCLK    6
+#define WOZ_DW3000_PIN_MOSI    7
+#define WOZ_DW3000_PIN_MISO    2
+#define WOZ_DW3000_PIN_CS     10
+#define WOZ_DW3000_PIN_RST     1
+#define WOZ_DW3000_PIN_IRQ     3
+#define WOZ_DW3000_PIN_WAKEUP  0
+#elif CONFIG_IDF_TARGET_ESP32S3
+/* ESP32-S3 (original bring-up target). */
+#define WOZ_DW3000_PIN_SCLK   12
+#define WOZ_DW3000_PIN_MOSI   11
+#define WOZ_DW3000_PIN_MISO   13
+#define WOZ_DW3000_PIN_CS     10
+#define WOZ_DW3000_PIN_RST     4
+#define WOZ_DW3000_PIN_IRQ     5
+#define WOZ_DW3000_PIN_WAKEUP  6
+#else
+#error "Unsupported ESP32 target for the DW3000 port"
+#endif
 
 /* 2 MHz for init, 8 MHz steady (proven safe with a seated DWM3000EVB; matches
  * the nRF overlay). Raise once wiring is confirmed clean. */

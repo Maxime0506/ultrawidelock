@@ -234,7 +234,14 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
 	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
 run_suite esp_shell "$OUT/cov_esp_shell"
 
-cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
+# Exercise the C6 variant here; the regular port suite builds both S3 and C6.
+# board_pins.h deliberately has no implicit target fallback, and dw3000_hw.c
+# derives its cycle rate and worker core from these target settings.
+cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+	-DCONFIG_IDF_TARGET_ESP32C6=1 \
+	-DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
+	-DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
+	-I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
 	-I"$ROOT/deps/dw3000/platform" -I"$ROOT/deps/dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
 	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
@@ -257,7 +264,7 @@ cov_cc -I"$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$OUT/aliro_approa
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
 	-DCONFIG_WOZ_UWB_CIRDIAG=1 \
-	-DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
+	-DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
 	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" -I"$SRC/facade" \
 	"$ET/test_esp_matter_lock.cpp" \

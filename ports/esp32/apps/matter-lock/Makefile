@@ -1,4 +1,4 @@
-# Makefile — command entry point for the ESP32-S3 Aliro Matter door lock.
+# Makefile — command entry point for the ESP32 Aliro Matter door lock.
 #
 # Same shape as ../reader/Makefile, plus the esp-matter environment this
 # project's CMakeLists requires (ESP_MATTER_PATH). Keeps the serial-port safety
@@ -300,7 +300,7 @@ help:
 	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
 	  b=$$(printf '\033[1m'); c=$$(printf '\033[36m'); y=$$(printf '\033[1;33m'); d=$$(printf '\033[2m'); r=$$(printf '\033[0m'); \
 	else b=; c=; y=; d=; r=; fi; \
-	printf '\n  %sAliro Matter door lock%s  %s·  esp32s3 · ESP-IDF + esp-matter%s\n' "$$b" "$$r" "$$d" "$$r"; \
+	printf '\n  %sAliro Matter door lock%s  %s·  $(TARGET) · ESP-IDF + esp-matter%s\n' "$$b" "$$r" "$$d" "$$r"; \
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \

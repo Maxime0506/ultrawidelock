@@ -1,0 +1,6 @@
+# ESP32-C6-DevKitC-1 target (applied after sdkconfig.defaults; later wins).
+# The official WROOM-1 board has 8 MB flash. The reader does not need the
+# Matter app's OTA slots, so keep the compact layout and its large factory app.
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_4mb.csv"

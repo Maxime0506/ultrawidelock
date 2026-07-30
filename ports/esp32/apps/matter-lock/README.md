@@ -1,18 +1,19 @@
-# Aliro Matter door lock — ESP32-S3
+# Aliro Matter door lock — ESP32
 
-A complete Aliro lock on a single ESP32-S3: it commissions into a Matter home, has a key
+A complete Aliro lock on a single ESP32: it commissions into a Matter home, has a key
 provisioned into the phone's wallet, and then unlocks on approach over BLE + UWB. This is
 the port's front door — the standalone bench app in [`../reader`](../reader) is the
 same reader without Matter around it.
 
-**Status: hardware-validated.** Approach unlock has been driven end to end on an
+**Status:** ESP32-S3 is hardware-validated. Approach unlock has been driven end to end on an
 ESP32-S3 + DWM3000EVB against a live iPhone: the Wallet unlock animation plays as you
-walk up, the bolt opens, and it relocks on departure.
+walk up, the bolt opens, and it relocks on departure. ESP32-C5 has build
+support; ESP32-C6 with a direct-SPI BU04 is hardware-validated.
 
 ## What runs where
 
 ```
-ESP32-S3
+ESP32
 ├─ esp-matter / connectedhomeip ....... commissioning, Door Lock cluster, OTA
 │   └─ aliro_reader_delegate .......... the cluster's Aliro half: reader identity in,
 │                                        provisioning out to Wallet
@@ -33,9 +34,10 @@ the nRF5340 build at the repository root.
 - ESP-IDF and esp-matter, installed and exportable. The Makefile expects them at
   `~/esp/esp-idf` and `~/esp/esp-matter`; override with `IDF_EXPORT=` and
   `ESP_MATTER_PATH=` on any target.
-- ESP32-S3 dev board plus a DWM3000EVB wired per
-  [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md). An ESP32-C5 works too:
-  `make set-target TARGET=esp32c5` and use the C5 pin column in the same doc.
+- A supported ESP32 dev board plus a DWM3000EVB or a BU04 with `ST_NRST` held
+  low, wired per
+  [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md). For C6, run
+  `make set-target TARGET=esp32c6` and use the C6/BU04 table there.
 - An Apple Home setup that can commission a Matter-over-Wi-Fi accessory and mint an Aliro
   key: a home hub, and an iPhone new enough to carry the key.
 
@@ -98,7 +100,7 @@ hysteresis band stops boundary flapping. CHIP's fixed `AutoRelockTime` is set to
 because a fixed timer fundamentally fights approach unlock — it would relock while the
 phone is still standing there.
 
-The onboard WS2812 on GPIO48 shows bolt state: dark when locked, blue when opened by
+The onboard WS2812 (S3 GPIO48, C5 GPIO27, C6 GPIO8) shows bolt state: dark when locked, blue when opened by
 Aliro, green when opened any other way.
 
 ### Recovering a lock you cannot reach
