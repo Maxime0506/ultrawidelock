@@ -60,7 +60,7 @@ on them would train everyone to bypass the gate, taking the ERROR rules with it.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_deps()`
-`scripts/security.sh:222`
+`scripts/security.sh:234`
 
 ---- deps ------------------------------------------------------------------
 osv-scanner is pointed at the lockfile rather than told to walk the tree. The walk resolves its
@@ -73,7 +73,7 @@ comes back from the same query.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_web()`
-`scripts/security.sh:291`
+`scripts/security.sh:303`
 
 ---- gates that live in their own script -----------------------------------
 Each is big enough to want its own file (the web gate parses HTML, the ct gate compiles and
@@ -83,7 +83,7 @@ point that CI, `make security` and verify.sh all share.
 **called by** `run_one`
 
 ### `gate_ct()`
-`scripts/security.sh:300`
+`scripts/security.sh:312`
 
 ct is the one gate that can report neither pass nor fail. There is no valgrind for
 darwin/arm64, so on the primary dev machine the honest answer is "not checked here" — exit 2,
@@ -94,7 +94,7 @@ install. CI runs linux and never sees it.
 **called by** `run_one`
 
 ### `run_one()`
-`scripts/security.sh:308`
+`scripts/security.sh:320`
 
 ---- dispatch --------------------------------------------------------------
 
