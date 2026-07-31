@@ -11,6 +11,10 @@
     {
       "chipFamily": "ESP32-C5",
       "parts": [{ "path": "openaliro-matter-lock-esp32c5.bin", "offset": 0 }]
+    },
+    {
+      "chipFamily": "ESP32-C6",
+      "parts": [{ "path": "openaliro-matter-lock-esp32c6.bin", "offset": 0 }]
     }
   ]
 }

@@ -29,6 +29,13 @@ on:
       # The Matter app builds only on push/nightly/dispatch (see esp32-matter
       # below), so PRs touching nothing but its app dir skip the workflow.
       - "!ports/esp32/apps/matter-lock/**"
+      # Except its target definitions. Adding a target means a new sdkconfig
+      # defaults file and often a new partition table, and those are exactly
+      # what breaks a Matter build — but the negation above meant PR #89's C6
+      # definitions were compiled by nothing until the post-merge push. Last
+      # match wins, so re-including them has to come after the negation.
+      - ports/esp32/apps/matter-lock/sdkconfig.defaults.*
+      - ports/esp32/apps/matter-lock/partitions_*.csv
       - ports/nrf5340dk/**
       - modules/**
       - deps/dw3000/**
@@ -66,6 +73,7 @@ jobs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
       nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
       esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
+      esp32-matter-target: ${{ steps.filter.outputs.esp32-matter-target }}
       aliro-blob: ${{ steps.filter.outputs.aliro-blob }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,6 +111,12 @@ jobs:
             esp32-matter:
               - *esp32-shared
               - ports/esp32/apps/matter-lock/**/!(*.md)
+            # The subset that defines a target rather than changing its code.
+            # The only matter-lock inputs that earn the Matter build on a PR;
+            # see the esp32-matter job's condition.
+            esp32-matter-target:
+              - ports/esp32/apps/matter-lock/sdkconfig.defaults.*
+              - ports/esp32/apps/matter-lock/partitions_*.csv
             nrf5340dk:
               - west.yml
               - scripts/bootstrap.sh
@@ -190,6 +204,48 @@ jobs:
           idf.py -B build-c6 \
                  -D SDKCONFIG=build-c6/sdkconfig \
                  build
+          # C5 is a shipped target -- release.yml builds and publishes a C5
+          # Matter image -- but until now nothing compiled it before release
+          # time, so a C5 break surfaced when a tag was cut. Same isolation as
+          # C6: its own tree, target and sdkconfig.
+          idf.py -B build-c5 \
+                 -D SDKCONFIG=build-c5/sdkconfig \
+                 set-target esp32c5
+          idf.py -B build-c5 \
+                 -D SDKCONFIG=build-c5/sdkconfig \
+                 build
+          # Compiling for RISC-V is not the same as keeping the CCC STS seam.
+          # A dropped --wrap links clean, binds the real dwt_* and silently
+          # never programs the STS key/IV. Nothing else catches that on the
+          # RISC-V targets: test/verify_port.sh owns this check but hardcodes an
+          # S3 build, and never runs in CI anyway (port-tests.yml has no
+          # ESP-IDF, so it skips). Assert it on the artifacts already built.
+          check_seam() {
+            local dir="$1" tag="$2" w
+            for w in dwt_rxenable dwt_configurestsiv dwt_configurestsmode; do
+              grep -q -- "-Wl,--wrap=$w" "$dir/build.ninja" \
+                || { echo "::error::$tag link dropped -Wl,--wrap=$w"; return 1; }
+            done
+            # A flag without a definition is a no-op, so the __wrap_*
+            # interposers must exist. Checked in the objects, not the ELF:
+            # --gc-sections drops the ones the reader's default config never
+            # reaches, so the linked image is not a sound place to look.
+            # Mirrors verify_port.sh section 2.
+            find "$dir" -name '*.obj' -exec riscv32-esp-elf-nm {} \; \
+              2>/dev/null > "$dir-syms.txt"
+            for w in __wrap_dwt_rxenable __wrap_dwt_configurestsiv __wrap_dwt_configurestsmode; do
+              grep -qE " T $w$" "$dir-syms.txt" \
+                || { echo "::error::$tag defines no $w — the STS seam is a no-op"; return 1; }
+            done
+            rm -f "$dir-syms.txt"
+            # Interposition only bites if the caller still names the unwrapped
+            # symbol; uwb_min.c is the RX-arm caller the seam exists for.
+            riscv32-esp-elf-nm "$(find "$dir" -name 'uwb_min.c.obj' | head -1)" \
+              | grep -qE ' U dwt_rxenable$' \
+              || { echo "::error::$tag uwb_min.c.obj no longer references dwt_rxenable"; return 1; }
+          }
+          check_seam build-c6 C6
+          check_seam build-c5 C5
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
@@ -325,14 +381,34 @@ jobs:
   # out. The esp-matter tree (including CHIP's CIPD-fetched gn/zap under
   # .environment) is cached on a static key: its revision is pinned, so only
   # a revision or IDF bump rolls the key.
+  #
+  # One exception, added after PR #89 shipped C6 target definitions this job
+  # never compiled: a PR that adds or edits a sdkconfig defaults file or a
+  # partition table does run it. Those are the changes most likely to break the
+  # build and the least likely to be caught by review, they are rare enough not
+  # to cost much, and a PR reads the base branch's caches, so the run is warm.
   esp32-matter:
     needs: changes
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && needs.changes.outputs.esp32-matter == 'true')
+      (github.event_name == 'push' && needs.changes.outputs.esp32-matter == 'true') ||
+      (github.event_name == 'pull_request' && needs.changes.outputs.esp32-matter-target == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    # One leg per image. Measured on run 30595579021, the three builds ran
+    # sequentially inside one job for 23 min: 4.5 + 4.5 + 10.9 min of build,
+    # each carrying its own CHIP compile. In parallel the job is as slow as its
+    # slowest leg instead of their sum. Not a caching fix -- ccache was already
+    # at 91.9% hits there, and the saved cache was 264 MB against a 1G limit --
+    # the cost was simply three builds in a row.
+    #
+    # fail-fast off: one target breaking is exactly when the others' results
+    # are most worth having.
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [esp32s3, esp32s3-presence, esp32c6, esp32c5]
     container:
       image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
     env:
@@ -406,6 +482,13 @@ jobs:
           }
       # Save before building, so a broken app build does not throw away the
       # expensive fetch + install.
+      #
+      # On a cold cache every matrix leg does its own fetch + install and then
+      # races to save the same key; the losers log "cache already exists" and
+      # carry on. Deliberately not solved with a priming job: the key is static
+      # (only an esp-matter revision or IDF bump rolls it) and the nightly keeps
+      # it alive, so cold runs are rare, while a priming job would serialise
+      # ahead of every warm run forever.
       - name: save the esp-matter cache (cold cache)
         if: steps.esp-matter.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -422,48 +505,76 @@ jobs:
       # See the esp32-idf job for the ccache key/restore-keys rationale.
       # Covers the IDF-side components; the CHIP core built through GN keeps
       # its own compile times.
+      #
+      # Keyed per leg, which the matrix makes mandatory rather than optional:
+      # a shared key would have every leg race to save a cache holding only its
+      # own target's objects, and whichever won would be the one all the others
+      # restore next run. Per-leg caches are also each smaller than the single
+      # 264 MB one they replace, so the restore is quicker too.
       - name: restore the compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
-          key: ccache-esp32-matter-${{ github.run_id }}
+          key: ccache-esp32-matter-${{ matrix.leg }}-${{ github.run_id }}
           restore-keys: |
-            ccache-esp32-matter-
-      - name: build the matter-lock app (esp32s3)
+            ccache-esp32-matter-${{ matrix.leg }}-
+      # Every idf.py invocation below is byte-identical to the sequential
+      # version this replaced; only which leg runs which has changed. The legs
+      # no longer subsume each other's failures the way the old comments
+      # described, because they no longer share a job -- see the notes per leg.
+      - name: build the matter-lock app (${{ matrix.leg }})
         working-directory: ports/esp32/apps/matter-lock
+        env:
+          LEG: ${{ matrix.leg }}
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           . "$IDF_PATH/export.sh"
           . "$ESP_MATTER_PATH/export.sh"
-          idf.py set-target esp32s3
-          idf.py build
-          # Presence second, not instead: the default build above is the only
-          # thing that catches code which compiles ONLY with presence on (an
-          # unused declaration outside the guard, say). The presence build is a
-          # strict superset of the compiled sources -- every CONFIG_WOZ_PRESENCE
-          # site in this app is a bare #ifdef with no #else -- so neither build
-          # subsumes the other's failures.
-          #
-          # Costs a second CHIP tree. Affordable only because this job is
-          # already off PRs (push to main, nightly, manual), and because the
-          # shared ccache makes the CHIP objects hits rather than rebuilds.
-          idf.py -B build-presence \
-                 -D SDKCONFIG=build-presence/sdkconfig \
-                 -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.presence' \
-                 build
-          # Linking is not enough -- --gc-sections has eliminated the P-256 code
-          # from an image that built cleanly before. presence_link_cmd is the
-          # app-facing one: it is what registers the console command, so it is
-          # absent exactly when this app's own presence wiring has rotted.
-          xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
-            | grep -qE ' T presence_link_cmd$'
-          # Build the default Matter image for the single-core C6 as well.
-          # Separate target/build/sdkconfig state prevents cross-contamination
-          # with the S3 and presence variants above.
-          idf.py -B build-c6 \
-                 -D SDKCONFIG=build-c6/sdkconfig \
-                 set-target esp32c6
-          idf.py -B build-c6 \
-                 -D SDKCONFIG=build-c6/sdkconfig \
-                 build
+          case "$LEG" in
+          esp32s3)
+            # The shipping image, and the only leg that catches code which
+            # compiles ONLY with presence on (an unused declaration outside the
+            # guard, say) -- the presence leg is a strict superset of these
+            # sources, since every CONFIG_WOZ_PRESENCE site in this app is a
+            # bare #ifdef with no #else.
+            idf.py set-target esp32s3
+            idf.py build
+            ;;
+          esp32s3-presence)
+            idf.py -B build-presence \
+                   -D SDKCONFIG=build-presence/sdkconfig \
+                   -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.presence' \
+                   build
+            # Linking is not enough -- --gc-sections has eliminated the P-256
+            # code from an image that built cleanly before. presence_link_cmd is
+            # the app-facing one: it is what registers the console command, so
+            # it is absent exactly when this app's own presence wiring has
+            # rotted.
+            xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
+              | grep -qE ' T presence_link_cmd$'
+            ;;
+          esp32c6)
+            # The default Matter image for the single-core C6.
+            idf.py -B build-c6 \
+                   -D SDKCONFIG=build-c6/sdkconfig \
+                   set-target esp32c6
+            idf.py -B build-c6 \
+                   -D SDKCONFIG=build-c6/sdkconfig \
+                   build
+            ;;
+          esp32c5)
+            # release.yml publishes a C5 Matter image, but nothing compiled C5
+            # before a tag was cut, so a C5 break used to surface during a
+            # release. Same recipe release.yml uses, run on every push instead.
+            idf.py -B build-c5 \
+                   -D SDKCONFIG=build-c5/sdkconfig \
+                   set-target esp32c5
+            idf.py -B build-c5 \
+                   -D SDKCONFIG=build-c5/sdkconfig \
+                   build
+            ;;
+          *)
+            echo "::error::no build recipe for matrix leg '$LEG'"; exit 1
+            ;;
+          esac
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"

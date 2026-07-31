@@ -42,10 +42,14 @@ from pathlib import Path
 SITE = Path("site")
 SRC = Path("web-flasher")
 FIRMWARE = "openaliro-matter-lock-esp32s3.bin"
-# The C5 image is optional: releases predating the ESP32-C5 build lack it,
-# and a bench checkout may have merged only one target. The manifest gets
-# pruned to whatever was staged, so the page never advertises a 404.
-FIRMWARE_C5 = "openaliro-matter-lock-esp32c5.bin"
+# The non-S3 images are optional: releases predating a given target's build
+# lack it, and a bench checkout may have merged only one target. The manifest
+# gets pruned to whatever was staged, so the page never advertises a 404.
+# Adding a target is one line here plus its manifest.json entry.
+FIRMWARE_OPTIONAL = (
+    "openaliro-matter-lock-esp32c5.bin",
+    "openaliro-matter-lock-esp32c6.bin",
+)
 RELEASE_MANIFEST = "openaliro-matter-lock.manifest.json"
 
 # Site links to the staged page, each anchored on markup the generator emits
@@ -57,7 +61,7 @@ HUB_ANCHOR = '<li><a href="hardware-validation.html">'
 HUB_ROW = (
     MARK + '<li><a href="flash/"><span class="row-name">Flash an ESP32 lock '
     "from the browser</span><span class=\"row-desc\">No toolchain: this site "
-    "writes the merged firmware image (ESP32-S3 or ESP32-C5) over WebSerial "
+    "writes the merged firmware image (ESP32-S3, C5 or C6) over WebSerial "
     "(Chrome, Edge, or Firefox).</span></a></li>"
 )
 
@@ -77,8 +81,8 @@ BOLT = (
 QS_LEDE = (
     MARK + '<a class="twin-cta qs-flash" href="flash/">'
     f'<span class="tc-ic">{BOLT}</span>'
-    '<span class="tc-t"><b>No toolchain handy?</b><span>Flash the ESP32-S3 '
-    "or ESP32-C5 build straight from the browser &mdash; this site writes "
+    '<span class="tc-t"><b>No toolchain handy?</b><span>Flash the ESP32-S3, '
+    "C5 or C6 build straight from the browser &mdash; this site writes "
     "the firmware over WebSerial (Chrome, Edge, or Firefox), then pick up at "
     "commissioning.</span></span>"
     '<span class="tc-go">Open the flasher &rarr;</span></a>'
@@ -169,8 +173,9 @@ def main() -> int:
     if local.is_file():
         dst.mkdir(parents=True)
         shutil.copyfile(local, dst / FIRMWARE)
-        if (SRC / FIRMWARE_C5).is_file():
-            shutil.copyfile(SRC / FIRMWARE_C5, dst / FIRMWARE_C5)
+        for extra in FIRMWARE_OPTIONAL:
+            if (SRC / extra).is_file():
+                shutil.copyfile(SRC / extra, dst / extra)
         shutil.copyfile(SRC / "manifest.json", dst / "manifest.json")
         source = f"local {local} (manifest version dev)"
     else:
@@ -190,10 +195,11 @@ def main() -> int:
         dst.mkdir(parents=True)
         (dst / FIRMWARE).write_bytes(image)
         (dst / "manifest.json").write_bytes(manifest)
-        try:
-            (dst / FIRMWARE_C5).write_bytes(fetch(base + FIRMWARE_C5))
-        except OSError:
-            pass
+        for extra in FIRMWARE_OPTIONAL:
+            try:
+                (dst / extra).write_bytes(fetch(base + extra))
+            except OSError:
+                pass
         source = f"latest release ({len(image)} bytes)"
     prune_manifest(dst)
 

@@ -1,10 +1,11 @@
-# web-flasher: browser flashing for the ESP32 Matter lock (S3 and C5)
+# web-flasher: browser flashing for the ESP32 Matter lock (S3, C5 and C6)
 
 A static page that flashes the merged lock image over WebSerial with
 [ESP Web Tools](https://esphome.github.io/esp-web-tools/): plug in the board,
 click Install, boot a working lock. One manifest carries a build per chip
 (`openaliro-matter-lock-esp32s3.bin` for the ESP32-S3,
-`openaliro-matter-lock-esp32c5.bin` for the ESP32-C5); ESP Web Tools flashes
+`openaliro-matter-lock-esp32c5.bin` for the ESP32-C5,
+`openaliro-matter-lock-esp32c6.bin` for the ESP32-C6); ESP Web Tools flashes
 the one matching the connected chip, and the page's Board dropdown can pin a
 chip explicitly (it serves the button a single-build manifest built
 client-side, so a mismatched board fails loudly). No ESP-IDF, no esptool, no drivers beyond
@@ -45,8 +46,8 @@ stages it at site-build time, preferring in order:
    server side where CORS does not apply.
 
 Either way `tools/docs_flash.py` prunes manifest builds whose image was not
-staged (an older release without the C5 asset, a bench run that merged only
-one target), so the page never offers a firmware that would 404.
+staged (an older release without the C5 or C6 asset, a bench run that merged
+only one target), so the page never offers a firmware that would 404.
 3. Neither: the flash page is skipped, loudly. Before the first release that
    is the normal state of a fresh checkout.
 
@@ -60,11 +61,15 @@ cd ports/esp32/apps/matter-lock
 idf.py set-target esp32s3 && idf.py build
 idf.py merge-bin -o openaliro-matter-lock-esp32s3.bin
 cp build/openaliro-matter-lock-esp32s3.bin ../../../../web-flasher/
-# ESP32-C5 variant, own build dir so the S3 build survives:
+# ESP32-C5 / C6 variants, own build dirs so the S3 build survives:
 #   idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig set-target esp32c5
 #   idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig build merge-bin \
 #     -o openaliro-matter-lock-esp32c5.bin
 #   cp build-c5/openaliro-matter-lock-esp32c5.bin ../../../../web-flasher/
+#   idf.py -B build-c6 -D SDKCONFIG=build-c6/sdkconfig set-target esp32c6
+#   idf.py -B build-c6 -D SDKCONFIG=build-c6/sdkconfig build merge-bin \
+#     -o openaliro-matter-lock-esp32c6.bin
+#   cp build-c6/openaliro-matter-lock-esp32c6.bin ../../../../web-flasher/
 cd ../../../../web-flasher
 python3 -m http.server 8000
 ```
