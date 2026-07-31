@@ -1,14 +1,28 @@
+# Exact versions, not ranges. A range resolves on whichever runner happens to build, so two
+# builds of the same commit could ship different component code — and for a lock, "what is in
+# this image" has to be answerable from the repository alone.
+#
+# Every version here was READ OUT OF dependencies.lock after `idf.py set-target esp32s3`, not
+# chosen by hand. That distinction is the whole point: an exact set has to be mutually solvable,
+# and picking each line's newest release does not produce one. esp_bsp_devkit 3.0.3 pulls
+# led_indicator ~2.0, which requires led_strip 3.*, which contradicts led_strip 2.5.5 — the
+# solver rejects it outright and every esp32-matter build fails to configure. 3.0.0~2 is what
+# the range actually resolved to, and it pulls led_indicator 1.1.1, which wants led_strip 2.5.5.
+#
+# To change one: edit the range, run `idf.py set-target <target>`, read the new
+# dependencies.lock, and put those values here. The lock itself is gitignored on purpose — it
+# records `target:`, so the four targets this app builds for cannot share one.
 dependencies:
   espressif/cmake_utilities:
-    version: "^1"
+    version: "1.1.1" # was ^1
     rules: # will add "optional_component" only when all if clauses are True
       - if: "idf_version >=5.0"
       - if: "target in [esp32c2]"
   esp_bsp_devkit:
-    version: "^3"
+    version: "3.0.0~2" # was ^3; NOT 3.0.3, which cannot solve against led_strip 2.5.5
   espressif/led_strip:
-    version: "^2.0.0"
+    version: "2.5.5" # was ^2.0.0
   espressif/esp_tinyusb:
-    version: "^2.2.1"
+    version: "2.2.1" # was ^2.2.1; 2.2.1 is the only release in that range
     rules:
       - if: "target in [esp32s3]"

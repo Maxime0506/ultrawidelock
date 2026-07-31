@@ -101,6 +101,13 @@ paths = [
   # pyvenv.cfg records the home directory, so a tree scan reports one hit per script — thirteen
   # on a plain `make tools-install`. Untracked and gitignored, exactly like __pycache__ above.
   '''^\.venv/''',
+  # Components the ESP component manager downloads into the app directory. `idf.py set-target`
+  # fetches ~40 MB of third-party source here, and scanning it produced 1118 findings — ten times
+  # the entire rest of the tree — every one of them somebody else's test vectors and example
+  # keys. Gitignored (ports/esp32/apps/matter-lock/.gitignore:13) and never tracked, exactly like
+  # __pycache__ and .venv above. Anything genuinely wrong with these is the `deps` gate's job.
+  '''managed_components/''',
+  '''^ports/esp32/apps/[^/]+/build[^/]*/''',
   # These four describe the patterns they detect, in prose and in regex form, so they match
   # themselves. Everything else under security/ and scripts/ is still scanned.
   '''^security/gitleaks\.toml$''',
