@@ -13,8 +13,13 @@
 #
 # Why these fail: semgrep parses C without a preprocessor, so it stops on the macro-heavy forms
 # these files use — Zephyr's K_TIMER_DEFINE and LOG_MODULE_REGISTER, the SHELL_* command tables,
-# ESP-IDF driver config initialisers. web-twin/twin.js is generated Emscripten output and
-# twin_glue.c is its shim.
+# ESP-IDF driver config initialisers. twin_glue.c is the shim for the generated Emscripten
+# output.
+#
+# web-twin/twin.js is NOT here, though it used to be. It is excluded in .semgrepignore, so it
+# is never scanned and can never report a parse error — the entry sat here claiming a
+# coverage gap that a different file already accounted for, and the gate now warns when a
+# baselined path parses fine, which is how it was found.
 #
 # What actually covers this code, since semgrep does not:
 #
@@ -43,7 +48,6 @@ ports/esp32/apps/reader/main/app_shell.c
 ports/esp32/components/piv_ccid/piv_ccid_usb.c
 ports/esp32/components/woz_uwb/port/dw3000_hw.c
 ports/esp32/components/woz_uwb/port/dw3000_spi.c
-web-twin/twin.js
 web-twin/twin_glue.c
 
 # Added when .semgrepignore stopped excluding tests/: these two became visible and turn out
