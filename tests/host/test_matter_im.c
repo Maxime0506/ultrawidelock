@@ -70,7 +70,7 @@ struct rep {
  * If the two drift apart the assertion below stops meaning anything, so they
  * are named the same thing on purpose.
  */
-#define PORT_REPORT_MAX 1536u
+#define PORT_REPORT_MAX 2048u
 
 /* Room for every attribute of the widest cluster this node has, plus slack.
  * BasicInformation alone reports 16, which is exactly where this used to sit --
@@ -638,6 +638,29 @@ void test_matter_im(void)
 			 * subscription that silently never reports.
 			 */
 			T_OK("fits the port's report buffer", len <= PORT_REPORT_MAX);
+
+			/*
+			 * And now the report a controller ACTUALLY subscribes
+			 * to: no endpoint either, so it spans every endpoint
+			 * this node has. The case above names endpoint 0 and so
+			 * measured only part of the answer, which was the whole
+			 * truth while there was one endpoint and stopped being
+			 * it the moment the Door Lock existed.
+			 *
+			 * This is the number the unchunked read path lives or
+			 * dies by (matter_commission.c on_read_request), so it
+			 * is asserted separately rather than inferred.
+			 */
+			one.paths[0].have_endpoint = false;
+			T_EQ("full wildcard encodes",
+			     matter_im_report_data_encode(&srv, &one, big, sizeof(big), &len,
+							  &stats),
+			     MATTER_OK);
+			T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
+			T_OK("every endpoint's model fits the port's buffer",
+			     len <= PORT_REPORT_MAX);
+			one.paths[0].have_endpoint = true;
+			one.paths[0].endpoint = MATTER_ENDPOINT_ROOT;
 
 			/*
 			 * And the same report CHUNKED, which is what actually

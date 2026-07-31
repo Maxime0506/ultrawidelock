@@ -100,12 +100,22 @@ static struct matter_im_server s_im;
  */
 /*
  * Sized by the whole data model in one message, not by any single attribute: a
- * controller subscribes to everything the moment it owns the node, and that
- * report measured 1079 B (tests/host/test_matter_im.c asserts it still fits).
+ * controller reads and subscribes to everything the moment it owns the node.
  * A report that does not fit is not truncated, it is refused -- so undersizing
- * this produces a subscription that establishes and then never reports.
+ * this produces a subscription that establishes and then never reports, and a
+ * read that is answered with nothing at all.
+ *
+ * Raised 1536 -> 2048 when endpoint 1 landed. The host assertion that used to
+ * guard this named ENDPOINT 0, so it measured part of the answer and passed
+ * while the real full-wildcard report -- every endpoint, which is what a
+ * controller actually asks for -- had already outgrown the buffer.
+ * tests/host/test_matter_im.c now asserts the wildcard with no endpoint too.
+ *
+ * The subscription path chunks and so survives any size; the READ path
+ * (on_read_request) does not, and this buffer is the whole of its ceiling.
+ * Chunking reads is the real fix and is still owed.
  */
-#define MATTER_REPORT_MAX 1536u
+#define MATTER_REPORT_MAX 2048u
 static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG_LEN];
 
 /** The Interaction Model payload, before framing. */
