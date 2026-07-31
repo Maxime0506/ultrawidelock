@@ -162,6 +162,46 @@ extern "C" {
 #define MATTER_ALIRO_SIGNING_KEY_LEN      32u
 #define MATTER_ALIRO_VERIFICATION_KEY_LEN 65u
 
+/*
+ * SetCredential (0x0022) and its response (0x0023).
+ *
+ * The Aliro credential itself: CredentialData is an uncompressed P-256 public
+ * key, and installing it is what turns a reader with an identity into one that
+ * will actually open for a phone.
+ */
+#define MATTER_CMD_DL_SET_CREDENTIAL          0x0022u
+#define MATTER_CMD_DL_SET_CREDENTIAL_RESPONSE 0x0023u
+
+#define TAG_SETCRED_OPERATION 0u
+#define TAG_SETCRED_CREDENTIAL 1u
+#define TAG_SETCRED_DATA       2u
+#define TAG_SETCRED_USER_INDEX 3u
+
+/* CredentialStruct (DoorLock/Structs.h:48-49), nested inside field 1. */
+#define TAG_CREDSTRUCT_TYPE  0u
+#define TAG_CREDSTRUCT_INDEX 1u
+
+/* SetCredentialResponse fields. */
+#define TAG_SETCREDRESP_STATUS     0u
+#define TAG_SETCREDRESP_USER_INDEX 1u
+#define TAG_SETCREDRESP_NEXT_INDEX 2u
+
+/*
+ * Aliro credential types (DoorLock/Enums.h, CredentialTypeEnum). Only these
+ * three carry a reader trust anchor; PIN, RFID, fingerprint and face are the
+ * surfaces this node does not claim.
+ */
+#define MATTER_DL_CRED_ALIRO_ISSUER_KEY         6u
+#define MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT 7u
+#define MATTER_DL_CRED_ALIRO_ENDPOINT_KEY       8u
+
+/**
+ * Install an Aliro credential public key, set by the port.
+ *
+ * Returns 0 when added, 1 when already present, negative on a bad point or a
+ * full/failed store -- the contract aliro_reader_provision_add_trust() already
+ * has, passed through unchanged so the module invents no policy of its own.
+ */
 /* SetUser fields (DoorLock/Commands.h, SetUser::Fields). Numbered from
  * kOperationType = 0, so every later field sits one above its GetUserResponse
  * twin -- reading one enum for the other silently shifts every value. */
@@ -425,6 +465,8 @@ struct matter_device_info {
 	 * @ref last_commissioning_error below.
 	 */
 	uint16_t last_user_index;
+	/** The status SetCredential decided, held for its response encoder. */
+	uint8_t last_credential_status;
 	/**
 	 * The user table, indexed from 0 for slot 1.
 	 *
@@ -471,6 +513,8 @@ struct matter_device_info {
 	 * NULL is the honest answer. Returns 0 on success; anything else makes
 	 * the command report FAILURE rather than claiming an identity was kept.
 	 */
+	int (*aliro_credential_cb)(uint8_t credential_type,
+				   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN]);
 	int (*aliro_reader_config_cb)(const uint8_t signing_key[MATTER_ALIRO_SIGNING_KEY_LEN],
 				      const uint8_t verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
 				      const uint8_t group_id[MATTER_ALIRO_GROUP_ID_LEN],

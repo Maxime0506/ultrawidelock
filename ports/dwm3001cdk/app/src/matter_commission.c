@@ -841,6 +841,26 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  *
  * NOTHING IS LOGGED but the outcome. Every argument is key material.
  */
+/**
+ * An Aliro credential public key, handed straight to the reader's trust store.
+ *
+ * Not kept here: the store owns it, validates the point, and persists it. This
+ * is what takes "0 trust anchor(s)" to 1 and is the difference between a reader
+ * that knows who it is and one a phone can actually open.
+ */
+static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])
+{
+	int rc = aliro_reader_provision_add_trust(public_key);
+
+	if (rc < 0) {
+		LOG_ERR("  credential type %u REFUSED (%d)", (unsigned int)credential_type, rc);
+		return rc;
+	}
+	LOG_INF("  ALIRO CREDENTIAL %s (type %u)", rc == 1 ? "already present" : "ADDED",
+		(unsigned int)credential_type);
+	return 0;
+}
+
 static int on_aliro_reader_config(const uint8_t signing_key[32],
 				  const uint8_t verification_key[65], const uint8_t group_id[16],
 				  const uint8_t *group_resolving_key)
@@ -1868,6 +1888,7 @@ int matter_commission_init(void)
 	}
 
 	s_info.aliro_reader_config_cb = on_aliro_reader_config;
+	s_info.aliro_credential_cb = on_aliro_credential;
 
 	matter_clusters_init(&s_im, &s_info);
 	matter_ble_set_link_handler(on_link_reset);

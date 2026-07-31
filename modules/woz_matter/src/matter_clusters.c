@@ -1045,6 +1045,51 @@ static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t 
 #define TAG_NOCRESP_FABRIC_INDEX 1u
 
 /** Borrow one octet-string field out of a command's arguments. */
+/**
+ * Read an unsigned field from INSIDE a nested structure field.
+ *
+ * SetCredential carries the credential type one level down, in a
+ * CredentialStruct under field 1. Reading tag 0 at the top level instead finds
+ * OperationType, which is also a small unsigned and decodes perfectly -- so
+ * getting this wrong installs an Aliro key as whatever operation type happened
+ * to be sent, with nothing to report.
+ */
+static bool field_struct_u64(const struct matter_im_invoke *inv, uint8_t outer, uint8_t inner,
+			     uint64_t *out)
+{
+	struct matter_tlv_reader r;
+
+	if (!inv->has_fields || inv->fields == NULL) {
+		return false;
+	}
+	matter_tlv_reader_init(&r, inv->fields, inv->fields_len);
+	if (matter_tlv_next(&r) != MATTER_OK || matter_tlv_enter(&r) != MATTER_OK) {
+		return false;
+	}
+	for (;;) {
+		int rc = matter_tlv_next(&r);
+
+		if (rc != MATTER_OK) {
+			return false;
+		}
+		if (matter_tlv_tag(&r) != MATTER_TLV_CTX(outer)) {
+			continue;
+		}
+		if (!matter_tlv_is_container(&r) || matter_tlv_enter(&r) != MATTER_OK) {
+			return false;
+		}
+		for (;;) {
+			rc = matter_tlv_next(&r);
+			if (rc != MATTER_OK) {
+				return false;
+			}
+			if (matter_tlv_tag(&r) == MATTER_TLV_CTX(inner)) {
+				return matter_tlv_get_u64(&r, out) == MATTER_OK;
+			}
+		}
+	}
+}
+
 static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const uint8_t **out,
 			size_t *len)
 {
@@ -1582,6 +1627,65 @@ static void opcred_fields(const struct matter_device_info *info, uint32_t respon
  * mandatory. Accepting a config without it would leave the reader unable to
  * resolve the group it was just told it belongs to.
  */
+/**
+ * SetCredential: the Aliro trust anchor.
+ *
+ * The reader identity says who this device IS; this says whose key it will
+ * open for. Without it a provisioned reader still holds 0 trust anchors and
+ * no phone can unlock it, which is the last functional gap before a walk-up.
+ *
+ * The key is handed to the port unchanged and NOT stored here: the reader's
+ * own trust store owns it, decides whether it is a valid P-256 point, and
+ * persists it. Duplicating it in this struct would be a second copy of a
+ * secret with no reader to use it.
+ *
+ * The response is REQUIRED even for a refusal -- SetCredential is answered
+ * with SetCredentialResponse carrying a status, not with a bare command
+ * status, and a controller that gets the wrong shape treats it as no answer.
+ */
+static uint8_t set_credential(struct matter_device_info *info,
+			      const struct matter_im_invoke *inv, uint32_t *response_command)
+{
+	const uint8_t *data = NULL;
+	size_t data_len = 0u;
+	uint64_t user_index = 0u;
+	uint64_t cred_type = 0u;
+
+	*response_command = MATTER_CMD_DL_SET_CREDENTIAL_RESPONSE;
+	info->last_credential_status = MATTER_IM_STATUS_FAILURE;
+	info->last_user_index = 0u;
+
+	/* The type lives inside the nested CredentialStruct, not beside it. */
+	if (!field_struct_u64(inv, TAG_SETCRED_CREDENTIAL, TAG_CREDSTRUCT_TYPE, &cred_type) ||
+	    !field_bytes(inv, TAG_SETCRED_DATA, &data, &data_len)) {
+		info->last_credential_status = MATTER_IM_STATUS_INVALID_COMMAND;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
+	if (cred_type != MATTER_DL_CRED_ALIRO_ISSUER_KEY &&
+	    cred_type != MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT &&
+	    cred_type != MATTER_DL_CRED_ALIRO_ENDPOINT_KEY) {
+		/* PIN, RFID, fingerprint, face: surfaces this node does not
+		 * claim, so refusing is the truthful answer rather than storing
+		 * something the reader can never use. */
+		info->last_credential_status = MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
+	if (data_len != MATTER_ALIRO_VERIFICATION_KEY_LEN) {
+		info->last_credential_status = MATTER_IM_STATUS_CONSTRAINT_ERROR;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
+	if (info->aliro_credential_cb == NULL ||
+	    info->aliro_credential_cb((uint8_t)cred_type, data) < 0) {
+		return MATTER_IM_STATUS_SUCCESS; /* status stays FAILURE */
+	}
+
+	if (field_u64(inv, TAG_SETCRED_USER_INDEX, &user_index)) {
+		info->last_user_index = (uint16_t)user_index;
+	}
+	info->last_credential_status = MATTER_IM_STATUS_SUCCESS;
+	return MATTER_IM_STATUS_SUCCESS;
+}
+
 static uint8_t set_aliro_reader_config(struct matter_device_info *info,
 				       const struct matter_im_invoke *inv)
 {
@@ -1654,6 +1758,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		}
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
 			return set_aliro_reader_config(info, inv);
+		}
+		if (inv->command == MATTER_CMD_DL_SET_CREDENTIAL) {
+			return set_credential(info, inv, response_command);
 		}
 		if (inv->command == MATTER_CMD_DL_SET_USER) {
 			/*
@@ -1808,6 +1915,26 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
 
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		if (cluster == MATTER_CLUSTER_DOOR_LOCK &&
+		    response_command == MATTER_CMD_DL_SET_CREDENTIAL_RESPONSE) {
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_SETCREDRESP_STATUS),
+						 info->last_credential_status);
+			if (info->last_user_index != 0u) {
+				(void)matter_tlv_put_u64(
+					w, MATTER_TLV_CTX(TAG_SETCREDRESP_USER_INDEX),
+					info->last_user_index);
+			} else {
+				(void)matter_tlv_put_null(
+					w, MATTER_TLV_CTX(TAG_SETCREDRESP_USER_INDEX));
+			}
+			/* No next index: this node keeps no credential list to
+			 * walk, and a number here would invite a read of a slot
+			 * that does not exist. */
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_SETCREDRESP_NEXT_INDEX));
+			(void)matter_tlv_end_container(w);
+			return;
+		}
 		if (cluster == MATTER_CLUSTER_DOOR_LOCK &&
 		    response_command == MATTER_CMD_DL_GET_CREDENTIAL_STATUS_RESPONSE) {
 			/* Does not exist, and nothing describes a credential
