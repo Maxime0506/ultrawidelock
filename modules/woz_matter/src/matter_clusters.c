@@ -18,6 +18,10 @@
 #define TAG_BCI_FAILSAFE_EXPIRY 0u
 #define TAG_BCI_FAILSAFE_MAX    1u
 
+/* NetworkInfoStruct (python clusters/Objects.py, NetworkInfoStruct). */
+#define TAG_NETINFO_ID        0u
+#define TAG_NETINFO_CONNECTED 1u
+
 static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 {
 	(void)ctx;
@@ -27,7 +31,29 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 	}
 	return cluster == MATTER_CLUSTER_BASIC_INFORMATION ||
 	       cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING ||
+	       cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING ||
 	       cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS;
+}
+
+/*
+ * Every endpoint. One, and it is the root.
+ *
+ * This exists because Apple reads NetworkCommissioning with the endpoint
+ * WILDCARDED, so a node that cannot expand an endpoint wildcard looks like a
+ * node with no network interface anywhere -- which is where commissioning
+ * stopped before this. An array of one is not scaffolding once a second
+ * endpoint (the Door Lock) has to appear in it.
+ */
+static const uint16_t k_endpoints[] = {
+	MATTER_ENDPOINT_ROOT,
+};
+
+static size_t list_endpoints(void *ctx, const uint16_t **out)
+{
+	(void)ctx;
+
+	*out = k_endpoints;
+	return sizeof(k_endpoints) / sizeof(k_endpoints[0]);
 }
 
 static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute)
@@ -48,6 +74,19 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		switch (attribute) {
 		case MATTER_ATTR_BASIC_VENDOR_ID:
 		case MATTER_ATTR_BASIC_PRODUCT_ID:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	case MATTER_CLUSTER_NETWORK_COMMISSIONING:
+		switch (attribute) {
+		case MATTER_ATTR_NC_MAX_NETWORKS:
+		case MATTER_ATTR_NC_NETWORKS:
+		case MATTER_ATTR_NC_SCAN_MAX_TIME_S:
+		case MATTER_ATTR_NC_CONNECT_MAX_TIME_S:
+		case MATTER_ATTR_NC_INTERFACE_ENABLED:
+		case MATTER_ATTR_NC_LAST_NETWORKING_STATUS:
+		case MATTER_ATTR_FEATURE_MAP:
 			return MATTER_IM_STATUS_SUCCESS;
 		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
@@ -100,6 +139,59 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			return;
 		case MATTER_ATTR_BASIC_PRODUCT_ID:
 			(void)matter_tlv_put_u64(w, tag, info->product_id);
+			return;
+		default:
+			return;
+		}
+	}
+
+	if (cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING) {
+		switch (attribute) {
+		case MATTER_ATTR_NC_MAX_NETWORKS:
+			(void)matter_tlv_put_u64(w, tag, 1u);
+			return;
+		case MATTER_ATTR_NC_NETWORKS:
+			/*
+			 * A list of NetworkInfoStruct. Empty until a dataset
+			 * arrives, and then exactly one entry whose networkID is
+			 * the Extended PAN ID -- which is the id ConnectNetwork
+			 * names the network by. `connected` is false and stays
+			 * false: nothing here has joined anything.
+			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			if (info->have_thread_xpanid) {
+				(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
+								 MATTER_TLV_STRUCTURE);
+				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NETINFO_ID),
+							   info->thread_xpanid,
+							   sizeof(info->thread_xpanid));
+				(void)matter_tlv_put_bool(w, MATTER_TLV_CTX(TAG_NETINFO_CONNECTED),
+							  false);
+				(void)matter_tlv_end_container(w);
+			}
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_NC_SCAN_MAX_TIME_S:
+			/* Never scanned; the value still has to be inside the
+			 * spec's 1..255 range to be a legal answer. */
+			(void)matter_tlv_put_u64(w, tag, 30u);
+			return;
+		case MATTER_ATTR_NC_CONNECT_MAX_TIME_S:
+			(void)matter_tlv_put_u64(w, tag, 60u);
+			return;
+		case MATTER_ATTR_NC_INTERFACE_ENABLED:
+			(void)matter_tlv_put_bool(w, tag, true);
+			return;
+		case MATTER_ATTR_NC_LAST_NETWORKING_STATUS:
+			(void)matter_tlv_put_u64(w, tag, info->last_network_status);
+			return;
+		case MATTER_ATTR_FEATURE_MAP:
+			/*
+			 * Thread, and only Thread. This is the answer Apple was
+			 * asking for when it read this cluster with the endpoint
+			 * wildcarded and got silence.
+			 */
+			(void)matter_tlv_put_u64(w, tag, MATTER_NC_FEATURE_THREAD);
 			return;
 		default:
 			return;
@@ -173,6 +265,19 @@ static const uint32_t k_oc_attrs[] = {
 	MATTER_ATTR_OC_COMMISSIONED_FABRICS,
 };
 
+/*
+ * FeatureMap is in this list where it is in no other, because it is the one
+ * global attribute a commissioner cannot proceed without: it says which network
+ * technologies exist. Listing it here commits this node to answering it for
+ * THIS cluster only, which attr_status() above does.
+ */
+static const uint32_t k_nc_attrs[] = {
+	MATTER_ATTR_NC_MAX_NETWORKS,      MATTER_ATTR_NC_NETWORKS,
+	MATTER_ATTR_NC_SCAN_MAX_TIME_S,   MATTER_ATTR_NC_CONNECT_MAX_TIME_S,
+	MATTER_ATTR_NC_INTERFACE_ENABLED, MATTER_ATTR_NC_LAST_NETWORKING_STATUS,
+	MATTER_ATTR_FEATURE_MAP,
+};
+
 static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const uint32_t **out)
 {
 	(void)ctx;
@@ -191,6 +296,10 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
 		*out = k_oc_attrs;
 		return sizeof(k_oc_attrs) / sizeof(k_oc_attrs[0]);
+	}
+	if (cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING) {
+		*out = k_nc_attrs;
+		return sizeof(k_nc_attrs) / sizeof(k_nc_attrs[0]);
 	}
 	return 0u;
 }
@@ -274,6 +383,138 @@ static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const u
 			return matter_tlv_get_bytes(&r, out, len) == MATTER_OK;
 		}
 	}
+}
+
+/* --------------------------------------- NetworkCommissioning --- */
+
+/* AddOrUpdateThreadNetwork / ConnectNetwork field tags, and the two responses. */
+#define TAG_ADDTHREAD_DATASET  0u
+#define TAG_CONNECT_NETWORK_ID 0u
+#define TAG_NCRESP_STATUS      0u
+#define TAG_NCRESP_INDEX       2u
+#define TAG_CONNRESP_STATUS    0u
+#define TAG_CONNRESP_ERROR     2u
+
+/**
+ * Thread meshcop TLV type for the Extended PAN ID (Thread 1.3 spec, 8.10.1.5).
+ *
+ * The operational dataset is a sequence of one-byte type, one-byte length,
+ * value -- a different encoding from everything else here, and unrelated to
+ * Matter TLV.
+ */
+#define MESHCOP_TLV_EXTENDED_PANID 0x02u
+
+/**
+ * Find the Extended PAN ID in a Thread operational dataset.
+ *
+ * Walked rather than indexed: the dataset's TLVs may arrive in any order, and a
+ * length that runs past the end is a malformed dataset rather than a reason to
+ * read past the buffer.
+ */
+static bool dataset_xpanid(const uint8_t *ds, size_t len, uint8_t out[MATTER_THREAD_XPANID_LEN])
+{
+	size_t i = 0u;
+
+	while (i + 2u <= len) {
+		uint8_t type = ds[i];
+		size_t vlen = ds[i + 1u];
+
+		if (i + 2u + vlen > len) {
+			return false;
+		}
+		if (type == MESHCOP_TLV_EXTENDED_PANID && vlen == MATTER_THREAD_XPANID_LEN) {
+			memcpy(out, &ds[i + 2u], MATTER_THREAD_XPANID_LEN);
+			return true;
+		}
+		i += 2u + vlen;
+	}
+	return false;
+}
+
+/**
+ * Run one NetworkCommissioning command.
+ *
+ * @return the IM status. The networking verdict goes in last_network_status and
+ *         travels in the response payload, the same split AddNOC uses.
+ */
+static uint8_t network_command(struct matter_device_info *info, const struct matter_im_invoke *inv,
+			       uint32_t *response_command)
+{
+	const uint8_t *v = NULL;
+	size_t v_len = 0u;
+
+	if (!info->failsafe_armed) {
+		return MATTER_IM_STATUS_FAILSAFE_REQUIRED;
+	}
+
+	switch (inv->command) {
+	case MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK:
+		*response_command = MATTER_CMD_NC_NETWORK_CONFIG_RESPONSE;
+		if (!field_bytes(inv, TAG_ADDTHREAD_DATASET, &v, &v_len) || v_len == 0u ||
+		    v_len > MATTER_THREAD_DATASET_MAX) {
+			info->last_network_status = MATTER_NC_STATUS_OUT_OF_RANGE;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
+		memcpy(info->thread_dataset, v, v_len);
+		info->thread_dataset_len = v_len;
+		info->have_thread_xpanid =
+			dataset_xpanid(info->thread_dataset, v_len, info->thread_xpanid);
+		/*
+		 * Accepted, and truthfully: the dataset IS stored. Joining with
+		 * it is ConnectNetwork's promise, not this one's.
+		 */
+		info->last_network_status = MATTER_NC_STATUS_SUCCESS;
+		return MATTER_IM_STATUS_SUCCESS;
+
+	case MATTER_CMD_NC_CONNECT_NETWORK:
+		*response_command = MATTER_CMD_NC_CONNECT_NETWORK_RESPONSE;
+		/*
+		 * Refused, because there is no Thread stack in this image and
+		 * answering Success would send the commissioner off to look for
+		 * a node on a network it never joined. It would wait out its
+		 * whole discovery timeout and report nothing useful; this way
+		 * it is told immediately and the log says why.
+		 */
+		info->last_network_status = MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR;
+		return MATTER_IM_STATUS_SUCCESS;
+
+	case MATTER_CMD_NC_REMOVE_NETWORK:
+		*response_command = MATTER_CMD_NC_NETWORK_CONFIG_RESPONSE;
+		if (!info->have_thread_xpanid) {
+			info->last_network_status = MATTER_NC_STATUS_NETWORK_ID_NOT_FOUND;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
+		info->thread_dataset_len = 0u;
+		info->have_thread_xpanid = false;
+		info->last_network_status = MATTER_NC_STATUS_SUCCESS;
+		return MATTER_IM_STATUS_SUCCESS;
+
+	default:
+		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
+	}
+}
+
+/** Serialise what network_command() decided. */
+static void network_fields(const struct matter_device_info *info, uint32_t response_command,
+			   struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+
+	if (response_command == MATTER_CMD_NC_CONNECT_NETWORK_RESPONSE) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_CONNRESP_STATUS),
+					 info->last_network_status);
+		/* ErrorValue is nullable and mandatory: null is what a device
+		 * sends when the failure has no driver-specific code behind it. */
+		(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_CONNRESP_ERROR));
+	} else {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_NCRESP_STATUS),
+					 info->last_network_status);
+		if (info->last_network_status == MATTER_NC_STATUS_SUCCESS) {
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_NCRESP_INDEX), 0u);
+		}
+	}
+
+	(void)matter_tlv_end_container(w);
 }
 
 /**
@@ -554,6 +795,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	if (inv->cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
 		return opcred_command(info, inv, response_command);
 	}
+	if (inv->cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING) {
+		return network_command(info, inv, response_command);
+	}
 	if (inv->cluster != MATTER_CLUSTER_GENERAL_COMMISSIONING) {
 		return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
 	}
@@ -623,6 +867,10 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 		opcred_fields(info, response_command, w, tag);
 		return;
 	}
+	if (cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING) {
+		network_fields(info, response_command, w, tag);
+		return;
+	}
 	(void)response_command;
 
 	/*
@@ -646,6 +894,7 @@ void matter_clusters_init(struct matter_im_server *srv, struct matter_device_inf
 	srv->value = attr_value;
 	srv->has_cluster = has_cluster;
 	srv->list_attrs = list_attrs;
+	srv->list_endpoints = list_endpoints;
 	srv->command = command;
 	srv->command_fields = command_fields;
 	srv->ctx = info;

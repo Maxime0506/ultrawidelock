@@ -277,6 +277,59 @@ static void put_report(struct matter_tlv_writer *w, const struct matter_im_serve
 	(void)matter_tlv_end_container(w);
 }
 
+/**
+ * Report a wildcard path whose endpoint is now settled.
+ *
+ * Everything here stays SILENT on a miss. The path the commissioner sent was a
+ * wildcard, and that does not stop being true once this has picked an endpoint
+ * to look on -- an AttributeStatusIB would report "endpoint 0 has no such
+ * attribute" as though the commissioner had asked about endpoint 0, which it
+ * did not (AttributePathExpandIterator.cpp:239-255).
+ */
+static void expand_on_endpoint(struct matter_tlv_writer *w, const struct matter_im_server *srv,
+			       const struct matter_im_path *p, struct matter_im_report_stats *stats)
+{
+	const uint32_t *attrs = NULL;
+	size_t n_attrs = 0u;
+	size_t k;
+
+	if (!srv->has_cluster(srv->ctx, p->endpoint, p->cluster)) {
+		if (stats != NULL) {
+			stats->skipped_wildcard++;
+		}
+		return;
+	}
+
+	if (p->have_attribute) {
+		if (srv->status(srv->ctx, p->endpoint, p->cluster, p->attribute) !=
+		    MATTER_IM_STATUS_SUCCESS) {
+			if (stats != NULL) {
+				stats->skipped_wildcard++;
+			}
+			return;
+		}
+		put_report(w, srv, p);
+		return;
+	}
+
+	if (srv->list_attrs != NULL) {
+		n_attrs = srv->list_attrs(srv->ctx, p->endpoint, p->cluster, &attrs);
+	}
+	if (n_attrs == 0u || attrs == NULL) {
+		if (stats != NULL) {
+			stats->unexpanded_wildcard++;
+		}
+		return;
+	}
+	for (k = 0; k < n_attrs; k++) {
+		struct matter_im_path one = *p;
+
+		one.attribute = attrs[k];
+		one.have_attribute = true;
+		put_report(w, srv, &one);
+	}
+}
+
 int matter_im_report_data_encode(const struct matter_im_server *srv,
 				 const struct matter_im_read *req, uint8_t *out, size_t cap,
 				 size_t *out_len, struct matter_im_report_stats *stats)
@@ -299,57 +352,50 @@ int matter_im_report_data_encode(const struct matter_im_server *srv,
 
 	for (i = 0; i < req->n_paths; i++) {
 		const struct matter_im_path *p = &req->paths[i];
+		const uint16_t *eps = NULL;
+		uint16_t one_ep;
+		size_t n_eps = 0u;
+		size_t e;
 
-		if (matter_im_path_is_wildcard(p)) {
-			const uint32_t *attrs = NULL;
-			size_t n_attrs = 0u;
-			size_t k;
+		if (!matter_im_path_is_wildcard(p)) {
+			put_report(&w, srv, p);
+			continue;
+		}
 
-			/*
-			 * An endpoint or cluster wildcard would need this node to
-			 * enumerate its own endpoints, which it does not do: there
-			 * is one, and inventing a registry for it would be
-			 * scaffolding around a constant. Counted, not silent.
-			 */
-			if (!p->have_endpoint || !p->have_cluster) {
-				if (stats != NULL) {
-					stats->unexpanded_wildcard++;
-				}
-				continue;
-			}
-			/*
-			 * Absent cluster: SILENCE, not an error -- the asymmetry
-			 * documented in matter_im.h.
-			 */
-			if (!srv->has_cluster(srv->ctx, p->endpoint, p->cluster)) {
-				if (stats != NULL) {
-					stats->skipped_wildcard++;
-				}
-				continue;
-			}
-
-			/* Present: report every attribute of it. */
-			if (srv->list_attrs != NULL) {
-				n_attrs =
-					srv->list_attrs(srv->ctx, p->endpoint, p->cluster, &attrs);
-			}
-			if (n_attrs == 0u || attrs == NULL) {
-				if (stats != NULL) {
-					stats->unexpanded_wildcard++;
-				}
-				continue;
-			}
-			for (k = 0; k < n_attrs; k++) {
-				struct matter_im_path one = *p;
-
-				one.attribute = attrs[k];
-				one.have_attribute = true;
-				put_report(&w, srv, &one);
+		/*
+		 * A cluster wildcard would need this node to enumerate a whole
+		 * endpoint's clusters. No commissioner has asked for one, and a
+		 * list that exists only to be walked is scaffolding. Counted,
+		 * not silent.
+		 */
+		if (!p->have_cluster) {
+			if (stats != NULL) {
+				stats->unexpanded_wildcard++;
 			}
 			continue;
 		}
 
-		put_report(&w, srv, p);
+		if (p->have_endpoint) {
+			one_ep = p->endpoint;
+			eps = &one_ep;
+			n_eps = 1u;
+		} else if (srv->list_endpoints != NULL) {
+			n_eps = srv->list_endpoints(srv->ctx, &eps);
+		}
+		if (n_eps == 0u || eps == NULL) {
+			if (stats != NULL) {
+				stats->unexpanded_wildcard++;
+			}
+			continue;
+		}
+
+		for (e = 0; e < n_eps; e++) {
+			struct matter_im_path at = *p;
+
+			at.endpoint = eps[e];
+			at.have_endpoint = true;
+			expand_on_endpoint(&w, srv, &at, stats);
+		}
 	}
 
 	(void)matter_tlv_end_container(&w);

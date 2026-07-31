@@ -364,3 +364,142 @@ void test_matter_addnoc(void)
 		      "1528003601153501370024000024013e24020b1835012400001818181824ff0c18");
 	}
 }
+
+/* --------------------------------------------------- the network --- */
+
+/*
+ * A Thread operational dataset, shaped like a real one: meshcop type/length/
+ * value, in the order a border router emits them. The Extended PAN ID is
+ * deliberately NOT first, so finding it exercises the walk rather than an
+ * index. Every key here is obviously fake.
+ */
+static const uint8_t k_dataset[] = {
+	0x0E, 0x08, 0x00, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, /* active timestamp */
+	0x00, 0x03, 0x00, 0x00, 0x0F,                               /* channel 15 */
+	0x35, 0x04, 0x07, 0xFF, 0xF8, 0x00,                         /* channel mask */
+	0x02, 0x08, 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x11, 0x22, 0x33, /* extended PAN id */
+	0x05, 0x10, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, /* network key */
+	0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0x03, 0x08,
+	'o',  'p',  'e',  'n',  'a',  'l',  'i',  'r', /* network name */
+	0x01, 0x02, 0x12, 0x34,                        /* PAN id */
+};
+
+static const uint8_t k_xpanid[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x11, 0x22, 0x33};
+
+static size_t read_attr(const struct matter_im_server *srv, uint32_t cluster, uint32_t attribute,
+			uint8_t *buf, size_t cap)
+{
+	struct matter_tlv_writer w;
+	size_t n = 0u;
+
+	matter_tlv_writer_init(&w, buf, cap);
+	srv->value(srv->ctx, MATTER_ENDPOINT_ROOT, cluster, attribute, &w, MATTER_TLV_CTX(1u));
+	T_EQ("attribute encodes", matter_tlv_writer_finish(&w, &n), MATTER_OK);
+	return n;
+}
+
+void test_matter_network(void)
+{
+	struct matter_device_info dev;
+	struct matter_im_server srv;
+	struct matter_im_invoke inv;
+	uint8_t fields[512];
+	uint8_t buf[64];
+	uint32_t response = 0u;
+	size_t len;
+	size_t n;
+
+	memset(&dev, 0, sizeof(dev));
+	matter_clusters_init(&srv, &dev);
+
+	t_group("what the commissioner asks first");
+
+	T_EQ("the cluster exists",
+	     srv.has_cluster(srv.ctx, MATTER_ENDPOINT_ROOT, MATTER_CLUSTER_NETWORK_COMMISSIONING),
+	     1);
+	n = read_attr(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING, MATTER_ATTR_FEATURE_MAP, buf,
+		      sizeof(buf));
+	/* context tag 1, uint8, value 2 = ThreadNetworkInterface */
+	T_EQ("FeatureMap is three bytes", n, 3u);
+	T_EQ("and says Thread", buf[2], MATTER_NC_FEATURE_THREAD);
+
+	n = read_attr(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING, MATTER_ATTR_NC_NETWORKS, buf,
+		      sizeof(buf));
+	/* An empty array: control byte, tag octet, end-of-container marker. */
+	T_EQ("Networks is empty", n, 3u);
+	T_EQ("and is an array", buf[0], 0x36u);
+
+	t_group("a dataset outside a fail-safe");
+
+	len = fields_bytes(fields, sizeof(fields), 0u, k_dataset, sizeof(k_dataset));
+	invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
+	inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+	T_EQ("refused", srv.command(srv.ctx, &inv, &response), MATTER_IM_STATUS_FAILSAFE_REQUIRED);
+	T_EQ("nothing stored", dev.thread_dataset_len, 0);
+
+	t_group("the dataset");
+
+	dev.failsafe_armed = true;
+	T_EQ("accepted", srv.command(srv.ctx, &inv, &response), MATTER_IM_STATUS_SUCCESS);
+	T_OK("answered by NetworkConfigResponse",
+	     response == MATTER_CMD_NC_NETWORK_CONFIG_RESPONSE);
+	T_EQ("status is Success", dev.last_network_status, MATTER_NC_STATUS_SUCCESS);
+	T_EQ("stored whole", dev.thread_dataset_len, sizeof(k_dataset));
+	T_OK("stored verbatim", memcmp(dev.thread_dataset, k_dataset, sizeof(k_dataset)) == 0);
+	T_OK("extended PAN id found", dev.have_thread_xpanid);
+	T_OK("and it is the right one", memcmp(dev.thread_xpanid, k_xpanid, sizeof(k_xpanid)) == 0);
+
+	n = read_attr(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING, MATTER_ATTR_NC_NETWORKS, buf,
+		      sizeof(buf));
+	T_OK("Networks now lists one", n > 2u);
+
+	t_group("datasets that are not one");
+	{
+		/* A TLV whose length runs off the end. Nothing may be read past
+		 * the buffer, and no extended PAN id may be claimed. */
+		static const uint8_t runaway[] = {0x0E, 0x08, 0x00, 0x02, 0x40};
+		uint8_t empty[1] = {0};
+
+		len = fields_bytes(fields, sizeof(fields), 0u, runaway, sizeof(runaway));
+		invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
+		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+		T_EQ("still stored", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("status is Success", dev.last_network_status, MATTER_NC_STATUS_SUCCESS);
+		T_OK("but no extended PAN id claimed", !dev.have_thread_xpanid);
+
+		len = fields_bytes(fields, sizeof(fields), 0u, empty, 0u);
+		invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
+		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+		T_EQ("empty dataset runs", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and is refused", dev.last_network_status, MATTER_NC_STATUS_OUT_OF_RANGE);
+	}
+
+	t_group("being asked to connect");
+	{
+		uint8_t out[128];
+
+		len = fields_bytes(fields, sizeof(fields), 0u, k_xpanid, sizeof(k_xpanid));
+		invoke_init(&inv, MATTER_CMD_NC_CONNECT_NETWORK, fields, len);
+		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+		T_EQ("the command runs", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_OK("answered by ConnectNetworkResponse",
+		     response == MATTER_CMD_NC_CONNECT_NETWORK_RESPONSE);
+		/*
+		 * Refused, and honestly: there is no Thread stack in this image.
+		 * Answering Success would send the commissioner to look for a
+		 * node on a network it never joined.
+		 */
+		T_EQ("with a real failure", dev.last_network_status,
+		     MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR);
+
+		n = 0u;
+		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),
+		     MATTER_OK);
+		/* path command 0x07, fields {status 9, errorValue null}. */
+		t_vec("ConnectNetworkResponse", out, n,
+		      "1528003601153500370024000024013124020718350124000934021818181824ff0c18");
+	}
+}

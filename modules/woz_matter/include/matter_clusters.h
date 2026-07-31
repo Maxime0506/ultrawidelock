@@ -43,7 +43,11 @@ extern "C" {
 /* Cluster IDs, each from that cluster's generated ClusterId.h:14. */
 #define MATTER_CLUSTER_BASIC_INFORMATION       0x0028u
 #define MATTER_CLUSTER_GENERAL_COMMISSIONING   0x0030u
+#define MATTER_CLUSTER_NETWORK_COMMISSIONING   0x0031u
 #define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
+
+/** FeatureMap, on every cluster (GlobalAttributeIds.h). */
+#define MATTER_ATTR_FEATURE_MAP 0xFFFCu
 
 /* BasicInformation attributes (BasicInformation/AttributeIds.h:27,35). */
 #define MATTER_ATTR_BASIC_VENDOR_ID  0x0002u
@@ -74,6 +78,39 @@ extern "C" {
 #define MATTER_COMMISSIONING_VALUE_OUTSIDE_RANGE 1u
 #define MATTER_COMMISSIONING_INVALID_AUTH        2u
 #define MATTER_COMMISSIONING_NO_FAIL_SAFE        3u
+
+/* NetworkCommissioning attributes (MTRClusterConstants.h:1165-1169). */
+#define MATTER_ATTR_NC_MAX_NETWORKS           0x0000u
+#define MATTER_ATTR_NC_NETWORKS               0x0001u
+#define MATTER_ATTR_NC_SCAN_MAX_TIME_S        0x0002u
+#define MATTER_ATTR_NC_CONNECT_MAX_TIME_S     0x0003u
+#define MATTER_ATTR_NC_INTERFACE_ENABLED      0x0004u
+#define MATTER_ATTR_NC_LAST_NETWORKING_STATUS 0x0005u
+
+/* NetworkCommissioning commands (MTRClusterConstants.h:6296-6300). */
+#define MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK 0x0003u
+#define MATTER_CMD_NC_REMOVE_NETWORK               0x0004u
+#define MATTER_CMD_NC_NETWORK_CONFIG_RESPONSE      0x0005u
+#define MATTER_CMD_NC_CONNECT_NETWORK              0x0006u
+#define MATTER_CMD_NC_CONNECT_NETWORK_RESPONSE     0x0007u
+
+/** NetworkCommissioning Feature bits (python clusters/Objects.py, Feature). */
+#define MATTER_NC_FEATURE_THREAD 0x2u
+
+/* NetworkCommissioningStatusEnum, the values this node returns. */
+#define MATTER_NC_STATUS_SUCCESS                 0x00u
+#define MATTER_NC_STATUS_OUT_OF_RANGE            0x01u
+#define MATTER_NC_STATUS_NETWORK_ID_NOT_FOUND    0x03u
+#define MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR 0x09u
+
+/**
+ * A Thread operational dataset, kSizeOperationalDataset
+ * (lib/support/ThreadOperationalDataset.h:36).
+ */
+#define MATTER_THREAD_DATASET_MAX 254u
+
+/** Extended PAN ID: 8 bytes, and the id a network is referred to by. */
+#define MATTER_THREAD_XPANID_LEN 8u
 
 /* OperationalCredentials commands (MTRClusterConstants.h:6435-6446). */
 #define MATTER_CMD_OC_ATTESTATION_REQUEST          0x0000u
@@ -196,6 +233,24 @@ struct matter_device_info {
 
 	/** The one fabric this node can hold. Empty until AddNOC succeeds. */
 	struct matter_fabric fabric;
+
+	/*
+	 * ---- the operational network ---------------------------------------
+	 *
+	 * The commissioner hands over a Thread operational dataset -- network
+	 * key, channel, PAN ids, the lot -- and expects the node to go and join
+	 * with it. This node stores it and cannot yet join, so ConnectNetwork
+	 * is answered with a real failure rather than a success it would not
+	 * back up. Storing it is still the point: the dataset is the thing
+	 * OpenThread needs, and there is no other way to obtain it.
+	 */
+	uint8_t thread_dataset[MATTER_THREAD_DATASET_MAX];
+	size_t thread_dataset_len;
+	/** Extended PAN ID, parsed out of the dataset; the network's identity. */
+	uint8_t thread_xpanid[MATTER_THREAD_XPANID_LEN];
+	bool have_thread_xpanid;
+	/** NetworkCommissioningStatusEnum from the last network command. */
+	uint8_t last_network_status;
 	/**
 	 * The NodeOperationalCertStatusEnum the last AddNOC produced, held for
 	 * the same reason as last_commissioning_error: the reply is serialised

@@ -227,11 +227,24 @@ typedef void (*matter_im_command_fields_fn)(void *ctx, uint16_t endpoint, uint32
 typedef size_t (*matter_im_list_attrs_fn)(void *ctx, uint16_t endpoint, uint32_t cluster,
 					  const uint32_t **out);
 
+/**
+ * Every endpoint this node has, for expanding a path that names none.
+ *
+ * A commissioner asks about a cluster without saying where it lives -- Apple
+ * reads NetworkCommissioning exactly that way -- and the only honest answer is
+ * to look on each endpoint. Returning 0 makes such a path unanswerable, which
+ * reads to the commissioner as a node that has no such cluster anywhere.
+ *
+ * @param out receives a borrowed array. @return how many.
+ */
+typedef size_t (*matter_im_list_endpoints_fn)(void *ctx, const uint16_t **out);
+
 struct matter_im_server {
 	matter_im_status_fn status;
 	matter_im_value_fn value;
 	matter_im_has_cluster_fn has_cluster;
 	matter_im_list_attrs_fn list_attrs;
+	matter_im_list_endpoints_fn list_endpoints;
 	matter_im_command_fn command;
 	matter_im_command_fields_fn command_fields;
 	void *ctx;

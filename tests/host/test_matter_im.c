@@ -416,19 +416,43 @@ void test_matter_im(void)
 		m = walk_report(out, len, sreps, &suppress, &revision);
 		T_EQ("both BasicInformation attributes reported", m, 2);
 
-		/* An ENDPOINT wildcard still is not expanded: that would need this
-		 * node to enumerate its own endpoints, which it does not do. It is
-		 * counted rather than passed over in silence. */
+		/* An ENDPOINT wildcard expands over every endpoint this node
+		 * has. Apple reads NetworkCommissioning exactly this way, and
+		 * while it went unexpanded the phone concluded there was no
+		 * network interface anywhere and stopped commissioning. */
 		one.paths[0].have_endpoint = false;
 		one.paths[0].have_attribute = true;
 		one.paths[0].attribute = MATTER_ATTR_BASIC_VENDOR_ID;
 		T_EQ("endpoint wildcard encodes",
 		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
 		     MATTER_OK);
-		T_EQ("counted as unexpanded", stats.unexpanded_wildcard, 1);
+		T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
 		m = walk_report(out, len, sreps, &suppress, &revision);
-		T_EQ("no reports", m, 0);
+		T_EQ("reported on the one endpoint", m, 1);
+		T_EQ("and it is the root", sreps[0].endpoint, 0);
+
+		/*
+		 * The same wildcard naming an attribute this node does NOT have
+		 * is silence, not a status. The commissioner asked "wherever
+		 * this lives", so answering "endpoint 0 has no such attribute"
+		 * would report on an endpoint it never named.
+		 */
+		one.paths[0].attribute = 0x4242u;
+		T_EQ("encodes",
+		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
+		     MATTER_OK);
+		T_EQ("counted as absent", stats.skipped_wildcard, 1);
+		m = walk_report(out, len, sreps, &suppress, &revision);
+		T_EQ("and said nothing", m, 0);
+
+		/* A CLUSTER wildcard is still not expanded, and still counted. */
 		one.paths[0].have_endpoint = true;
+		one.paths[0].have_cluster = false;
+		T_EQ("cluster wildcard encodes",
+		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
+		     MATTER_OK);
+		T_EQ("counted as unexpanded", stats.unexpanded_wildcard, 1);
+		one.paths[0].have_cluster = true;
 	}
 
 	/* --------------------------------------------------------- refusals --- */

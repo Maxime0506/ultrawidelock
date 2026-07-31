@@ -328,6 +328,19 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		LOG_ERR("cannot build InvokeResponse (%d)", rc);
 		return;
 	}
+	if (inv.cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING &&
+	    inv.command == MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK) {
+		/*
+		 * The whole point of this round. The dataset carries the network
+		 * key, so it is dumped ONLY because this build cannot join a
+		 * network with it and the trace is the only way to see what
+		 * arrived. It comes out when OpenThread goes in.
+		 */
+		LOG_INF("  Thread dataset: %u B, extended PAN id %s",
+			(unsigned int)s_info.thread_dataset_len,
+			s_info.have_thread_xpanid ? "found" : "MISSING");
+		LOG_HEXDUMP_INF(s_info.thread_dataset, s_info.thread_dataset_len, "dataset");
+	}
 	if (inv.cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS &&
 	    inv.command == MATTER_CMD_OC_ADD_NOC) {
 		/*

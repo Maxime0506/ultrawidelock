@@ -77,6 +77,7 @@ int main(void)
 		{ "matter_attest", test_matter_attest },
 		{ "matter_fabric", test_matter_fabric },
 		{ "matter_addnoc", test_matter_addnoc },
+		{ "matter_network", test_matter_network },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	/* Sized from the table, not a literal 32: these are indexed by suite, so a
