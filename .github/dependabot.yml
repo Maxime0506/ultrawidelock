@@ -11,3 +11,29 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # The bench TUI. Until this existed, github-actions was the only ecosystem
+  # Dependabot watched, so 116 npm packages went unmonitored — which is how
+  # brace-expansion sat on a HIGH advisory (CVE-2026-14257) and @babel/core on
+  # an arbitrary-file-read one until the security lane's deps gate found both.
+  # The security lane catches a vulnerable dependency; this is what stops one
+  # arriving in the first place.
+  - package-ecosystem: npm
+    directory: /tools/tui
+    schedule:
+      interval: weekly
+    groups:
+      tui:
+        patterns:
+          - "*"
+
+  # The Home Assistant staging agent. Two runtime dependencies (paho-mqtt,
+  # pyserial), both of which run inside someone else's HA instance.
+  - package-ecosystem: pip
+    directory: /integration/homeassistant
+    schedule:
+      interval: weekly
+    groups:
+      homeassistant:
+        patterns:
+          - "*"

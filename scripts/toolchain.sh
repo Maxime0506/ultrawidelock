@@ -120,6 +120,7 @@ pipx_or_pip() { # $1 = pip spec, e.g. clang-format==22.1.8
 TOOLS=(
 	cc python3 shellcheck actionlint clang-format clang-tidy
 	node doxygen dot llvm-cov zizmor reuse cbmc emcc markdown coverage bun
+	gitleaks semgrep osv-scanner pip-audit retire
 )
 
 # Bench tools, not gates. nrfutil installs the NCS toolchain and tio owns live
@@ -161,6 +162,11 @@ tool_gate() {
 	# on a weaker measurement than CI made.
 	markdown) echo "test, coverage (silently weaker)" ;;
 	coverage) echo "coverage (python rows)" ;;
+	gitleaks) echo "secrets" ;;
+	semgrep) echo "semgrep" ;;
+	osv-scanner) echo "deps" ;;
+	pip-audit) echo "deps (the python half)" ;;
+	retire) echo "web (retire check)" ;;
 	tio) echo "TUI live serial / make term" ;;
 	nrfutil) echo "make bootstrap / build / flash" ;;
 	esac
@@ -184,6 +190,15 @@ tool_pin() {
 	actionlint) sed -n 's/.*actionlint_\([0-9][0-9.]*\)_linux_amd64.*/\1/p' "$WF/workflow-lint.yml" | head -1 ;;
 	emcc) sed -n 's/.*EMSDK_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/twin-web.yml" | head -1 ;;
 	markdown) sed -n "s/.*pip install.*markdown==\([0-9][0-9.]*\).*/\1/p" "$WF/host-tests.yml" | head -1 ;;
+	# The security lane pins its scanners as workflow env vars rather than inline
+	# in a pip command, so these read the env block. Same principle as above: the
+	# pin lives in .github/workflows/ because that is what CI reads, and this
+	# looks at the same line rather than keeping a second copy.
+	gitleaks) sed -n 's/.*GITLEAKS_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
+	semgrep) sed -n 's/.*SEMGREP_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
+	osv-scanner) sed -n 's/.*OSV_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
+	pip-audit) sed -n 's/.*PIP_AUDIT_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
+	retire) sed -n 's/.*RETIRE_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
 	*) echo "" ;;
 	esac
 }
@@ -191,7 +206,7 @@ tool_pin() {
 # The tools whose pin MUST resolve. If one of these comes back empty the
 # workflow was reworded and the lookup above stopped working — which would
 # otherwise degrade silently into "no pin, any version is fine".
-PINNED="clang-format clang-tidy zizmor reuse actionlint emcc markdown"
+PINNED="clang-format clang-tidy zizmor reuse actionlint emcc markdown gitleaks semgrep osv-scanner pip-audit retire"
 
 # actionlint's Linux install is CI's own: a release tarball checked against a
 # sha256. Both come out of the workflow for the same reason the pins do.
@@ -355,12 +370,35 @@ tool_install() {
 		*) echo "" ;; # no first-party package elsewhere; see tool_note
 		esac
 		;;
+	# Security scanners shipped as Go binaries. Homebrew has both; elsewhere the
+	# release download is left to the reader rather than emitted as a curl into a
+	# shell — security/semgrep-malicious.yml blocks that pattern in this tree, and
+	# a toolchain script that told you to pipe a download into bash would be the
+	# first thing the gate should catch.
+	gitleaks)
+		case "$PM" in
+		brew) echo "brew install gitleaks" ;;
+		apt | dnf | pacman | zypper) echo "" ;; # see tool_note
+		*) echo "" ;;
+		esac
+		;;
+	osv-scanner)
+		case "$PM" in
+		brew) echo "brew install osv-scanner" ;;
+		*) echo "" ;; # see tool_note
+		esac
+		;;
 	# Pinned python tools. Same spec on every OS, which is the point: this is
 	# the one route that reproduces the CI version exactly.
 	clang-format) pipx_or_pip "clang-format==$(tool_pin clang-format)" ;;
 	clang-tidy) pipx_or_pip "clang-tidy==$(tool_pin clang-tidy)" ;;
 	zizmor) pipx_or_pip "zizmor==$(tool_pin zizmor)" ;;
 	reuse) pipx_or_pip "reuse[charset-normalizer]==$(tool_pin reuse)" ;;
+	semgrep) pipx_or_pip "semgrep==$(tool_pin semgrep)" ;;
+	# npm-global, the same route security.yml uses. No pipx equivalent: retire.js is a node
+	# package and its advisory repo is fetched at run time.
+	retire) echo "npm i -g 'retire@$(tool_pin retire)'" ;;
+	pip-audit) pipx_or_pip "pip-audit==$(tool_pin pip-audit)" ;;
 	actionlint)
 		# Homebrew has it; elsewhere CI's own route is a checksum-pinned release
 		# tarball. That checksum covers linux_amd64 only, so it is the only arch
@@ -433,6 +471,8 @@ tool_note() {
 	case "$1" in
 	cbmc) echo "no package for this host — releases: https://github.com/diffblue/cbmc/releases" ;;
 	actionlint) echo "no checksum-pinned build for ${OS}/${ARCH} — releases: https://github.com/rhysd/actionlint/releases/tag/v$(tool_pin actionlint)" ;;
+	gitleaks) echo "no distro package — releases: https://github.com/gitleaks/gitleaks/releases/tag/v$(tool_pin gitleaks)" ;;
+	osv-scanner) echo "no distro package — releases: https://github.com/google/osv-scanner/releases/tag/v$(tool_pin osv-scanner)" ;;
 	nrfutil) echo "firmware only — https://www.nordicsemi.com/Products/Development-tools/nrf-util" ;;
 	*) echo "install it however this host prefers, then re-run" ;;
 	esac

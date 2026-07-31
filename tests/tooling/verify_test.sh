@@ -98,6 +98,18 @@ twin-web.yml:drift-gate                    test-web
 twin-web.yml:wasm-firmware                 twin-wasm
 workflow-lint.yml:actionlint               actionlint
 workflow-lint.yml:zizmor                   zizmor
+security.yml:secrets                       secrets
+security.yml:mal-diff                      mal-diff
+security.yml:semgrep                       semgrep
+security.yml:deps                          deps
+security.yml:web                           web
+security.yml:ct                            ct
+security.yml:esp                           esp
+security.yml:attest                        attest
+security-deep.yml:codeql                   !deep lane: builds a CodeQL database and runs security-extended, minutes not seconds, and it blocks nothing
+security-deep.yml:secrets-history          !deep lane: scans all 576 commits (~18s and growing); the local secrets gate scans the tree, and the PR gate scans the branch range
+security-deep.yml:semgrep-sarif            !deep lane: the same scan the semgrep gate runs, uploaded as SARIF at every severity instead of failing on ERROR
+security-deep.yml:scorecard                !deep lane: queries GitHub's own branch-protection and workflow settings, so it needs a token and the default branch
 firmware-builds.yml:changes                !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
@@ -247,6 +259,14 @@ mk_tool_stub cbmc cbmc
 # test-tui is the one gate that shells out to a tool directly instead of through
 # `make`, so it needs both a stub and somewhere to cd into below.
 mk_tool_stub bun test-tui
+# The four security gates. These stubs exist only so the missing-tool check sees
+# them as present — the gates themselves go through the scripts/security.sh stub
+# below, which is what decides pass or fail.
+mk_tool_stub gitleaks secrets
+mk_tool_stub retire web
+mk_tool_stub semgrep semgrep
+mk_tool_stub osv-scanner deps
+mk_tool_stub pip-audit deps
 
 # `make <target>`: for every gate that shells out to make, the gate name and the
 # target are the same word, so one stub covers all of them. It also writes the
@@ -307,6 +327,15 @@ case " ${FAIL_GATES:-} " in *" patch-drift "*) echo "stub: drifted" >&2; exit 1 
 echo "stub patch-drift ok"
 EOF
 chmod +x "$FAKE/tests/tooling/patch_drift_check.sh"
+# All four security gates dispatch through this one script, so it stands in for
+# all four. It takes the gate name as $1, which is exactly how verify.sh calls
+# the real one — meaning FAIL_GATES can fail any of them individually.
+cat > "$FAKE/scripts/security.sh" <<'EOF'
+#!/usr/bin/env bash
+case " ${FAIL_GATES:-} " in *" $1 "*) echo "stub security: $1 failed" >&2; exit 1 ;; esac
+echo "stub security $1 ok"
+EOF
+chmod +x "$FAKE/scripts/security.sh"
 echo "int a;" > "$FAKE/modules/a.c"
 echo "// twin" > "$FAKE/web-twin/twin.js"
 echo "// selftest" > "$FAKE/web-twin/selftest.cjs"

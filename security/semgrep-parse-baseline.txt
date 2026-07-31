@@ -1,0 +1,52 @@
+# Files semgrep's parser cannot read, and therefore does not scan.
+#
+# This is a coverage ledger, not a suppression list. Semgrep reports a parse failure as an error
+# and still exits 0, so without this file a source file could stop being scanned — by acquiring a
+# macro form the parser chokes on — and every run would keep reporting success. That is the
+# failure mode this repository already guards against everywhere else: `scripts/verify.sh` fails
+# when a gate's tool is missing, `tests/tooling/verify_test.sh` fails when a CI job has no local
+# gate. Same rule here.
+#
+# The `semgrep` gate in scripts/security.sh fails if a file not listed here fails to parse.
+# Removing a line is always safe; adding one is a deliberate widening of a known blind spot and
+# should say why in the pull request.
+#
+# Why these fail: semgrep parses C without a preprocessor, so it stops on the macro-heavy forms
+# these files use — Zephyr's K_TIMER_DEFINE and LOG_MODULE_REGISTER, the SHELL_* command tables,
+# ESP-IDF driver config initialisers. web-twin/twin.js is generated Emscripten output and
+# twin_glue.c is its shim.
+#
+# What actually covers this code, since semgrep does not:
+#
+#   clang-tidy   compiles it for real, with the include paths and defines, under bugprone-*,
+#                cert-* and clang-analyzer-* with warnings as errors (clang-tidy.yml)
+#   CodeQL       builds a database from `make test` and runs security-extended, which is the
+#                deeper C dataflow analysis (security-deep.yml, weekly)
+#   CBMC         proves memory safety on the wire parsers for all inputs up to each bound
+#   libFuzzer    exercises the parsers with ASan and UBSan
+#
+# So the blind spot is narrower than the list looks: it is semgrep's pattern rules only, over
+# files that four other gates do read.
+
+modules/woz_aliro/src/aliro_ranging.c
+modules/woz_aliro/src/aliro_reader.c
+modules/woz_nfc/src/pn532_bus_spi.c
+modules/woz_uwb/src/ccc/ccc_shim_rx.c
+modules/woz_uwb/src/driver/uwb_rxdiag.c
+modules/woz_uwb/src/facade/woz_logfmt.c
+modules/woz_uwb/src/shell/aliro_shell.c
+ports/esp32/apps/matter-lock/main/app_main.cpp
+ports/esp32/apps/matter-lock/main/app_shell.cpp
+ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.cpp
+ports/esp32/apps/matter-lock/main/lock/door_lock_manager.cpp
+ports/esp32/apps/reader/main/app_shell.c
+ports/esp32/components/piv_ccid/piv_ccid_usb.c
+ports/esp32/components/woz_uwb/port/dw3000_hw.c
+ports/esp32/components/woz_uwb/port/dw3000_spi.c
+web-twin/twin.js
+web-twin/twin_glue.c
+
+# Added when .semgrepignore stopped excluding tests/: these two became visible and turn out
+# to use the same Unity/ESP-IDF macro forms the parser already chokes on elsewhere.
+ports/esp32/test/test_aliro_ranging.c
+ports/esp32/test/test_port_headers.c

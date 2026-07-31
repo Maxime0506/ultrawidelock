@@ -39,6 +39,9 @@ PORT     ?=
 BAUD     ?= 115200
 LOG      ?=
 
+# Which security gates `make security` runs. Empty means all eight.
+GATES    ?=
+
 # Presence-signed tags (make presence-verify TAG=presence/1.2.0). MAXCM is the
 # distance threshold in cm; 40 matches tools/presence_verify.py's default.
 TAG      ?=
@@ -58,7 +61,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -198,14 +201,16 @@ cbmc:
 	@$(REPO_ROOT)/tests/host/cbmc.sh
 
 ## verify: run every host-runnable CI gate in one shot  ·  pre-push sweep
-##   The 18 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
+##   The 22 CI jobs a host can run — format, shellcheck, clang-tidy, fuzz, test,
 ##   twin-wasm, patch-drift, docs, test-san, test-port, test-ws, test-verify,
-##   coverage (with the 90% floor), zizmor, licences, cbmc — run in parallel
-##   lanes behind a 4s serial tripwire, so a 1s formatting slip stops it at once.
-##   ~34s all in (83s if run one at a time). A gate whose tool is missing
+##   coverage (with the 90% floor), zizmor, licences, the four security gates,
+##   cbmc — run in parallel lanes behind a serial tripwire, so a 1s formatting
+##   slip stops it at once. A gate whose tool is missing
 ##   FAILS the sweep (`make tools-install` fixes it), because CI runs that gate
 ##   regardless. cbmc is the exception: 64s on its own, twice the rest of the
 ##   sweep, so it is off unless WITH_CBMC=1 (~72s), and its row says so.
+##   The semgrep gate fetches its registry rule packs, so the sweep now wants
+##   network; SEMGREP_NO_REGISTRY=1 drops to the in-tree rules only.
 ##   Builds no firmware, not even in a shell with ESP-IDF sourced (test-port's
 ##   target-build layer is held off, as it is on CI's runner). firmware-builds
 ##   and release stay out: ESP-IDF + NCS, tens of minutes.
@@ -213,6 +218,52 @@ cbmc:
 ##            SERIAL=1 one gate at a time  ·  COV_MIN=90 coverage floor
 verify:
 	@$(REPO_ROOT)/scripts/verify.sh
+
+## security: the eight blocking security gates  ·  what a PR must pass
+##   secrets (gitleaks) · mal-diff (structural review of this branch's diff) ·
+##   semgrep (SAST, ERROR blocks and WARNING reports) · deps (osv-scanner +
+##   pip-audit, which also covers known-MALICIOUS packages via OSV's MAL- feed) ·
+##   web (CDN pins, SRI, CSP, retire.js) · ct (secret-dependent branches) ·
+##   esp (component registry pins) · attest (release provenance).
+##   ~30s. Identical to what .github/workflows/security.yml runs, because both
+##   call scripts/security.sh. Name one to run it alone:
+##     make security GATES="semgrep deps"
+##   ct reports "not checked" on macOS: there is no valgrind for darwin/arm64,
+##   so it exits 2 rather than passing. CT_DOCKER=1 runs it in a container.
+##   Slower analyses (CodeQL, full-history secrets, SBOM, Scorecard) are not
+##   here: they run weekly in security-deep.yml and block nothing.
+security:
+	@$(REPO_ROOT)/scripts/security.sh $(GATES)
+
+## security-web: browser supply chain  ·  CDN pins, SRI, CSP, retire.js
+##   Covers web-flasher/, web-twin/, release/*/FLASH.html and the docs theme.
+##   Known debt lives in security/web-baseline.txt; an entry there that stops
+##   matching FAILS the gate, so a line cannot outlive its problem.
+security-web:
+	@$(REPO_ROOT)/scripts/security-web.sh
+
+## security-ct: constant-time  ·  secret-dependent branches in the CCC ladder
+##   ctgrind under valgrind: the URSK is poisoned, so a branch on undefined data
+##   IS a branch on the key. No valgrind on darwin/arm64 — the gate says so and
+##   exits 2 rather than passing. CT_DOCKER=1 runs it in a container.
+security-ct:
+	@$(REPO_ROOT)/scripts/security-ct.sh
+
+## security-workspace: the fetched dependencies  ·  west pins, ESP components, SBOM
+##   `esp` needs nothing; `pins sbom vulns` need `make bootstrap` first and run
+##   in the deep CI lane. WS_UPDATE_PINS=1 records the resolved pin set.
+security-workspace:
+	@$(REPO_ROOT)/scripts/security-workspace.sh $(GATES)
+
+## security-fw: the shipped artifact  ·  key material, build-host paths, size
+##   Runs on build/merged.hex, so it needs `make build` first.
+##   FW_UPDATE_BASELINE=1 records the current size as the baseline.
+security-fw:
+	@$(REPO_ROOT)/scripts/security-fw.sh
+
+## security-attest: release provenance is configured  ·  and `verify <tag>` proves it works
+security-attest:
+	@$(REPO_ROOT)/scripts/security-attest.sh workflow
 
 ## presence-runtime: build the eight-file macOS transfer archive
 ##   Output: build/presence-runtime.tar.gz  ·  override with PRESENCE_RUNTIME_OUT=
@@ -245,15 +296,20 @@ test-port:
 test-ws:
 	@$(REPO_ROOT)/tests/tooling/ws_seed_test.sh
 
-## test-verify: tests for the pre-push sweep itself  ·  make verify's own gate
-##   Two halves. Static: the gate table still covers every job in
-##   .github/workflows/, so a new CI job cannot be added without either a local
-##   gate or a written reason. Behavioral: a copy of verify.sh run against stub
-##   tools in a temp git repo, checking that a missing tool, a failed tripwire
-##   and an unmet coverage floor each fail the sweep rather than passing quietly.
-##   Nothing real is compiled; the whole file runs in a couple of seconds.
+## test-verify: tests for the gates themselves  ·  make verify's own gate
+##   Two files. verify_test.sh has two halves — static: the gate table still
+##   covers every job in .github/workflows/, so a new CI job cannot be added
+##   without either a local gate or a written reason; behavioral: a copy of
+##   verify.sh run against stub tools in a temp git repo, checking that a missing
+##   tool, a failed tripwire and an unmet coverage floor each fail the sweep
+##   rather than passing quietly. security_diff_test.sh plants a binary, a mode
+##   change, a symlink and a gitlink in a throwaway repo and checks the
+##   malicious-change gate blocks each one — none of which can be asserted by
+##   reading the script.
+##   Nothing real is compiled; both files run in a couple of seconds.
 test-verify:
 	@$(REPO_ROOT)/tests/tooling/verify_test.sh
+	@$(REPO_ROOT)/tests/tooling/security_diff_test.sh
 
 ## test-web: drift-gate the web-twin page against the firmware it cites
 ##   Re-reads every constant web-twin/index.html cites (file:line) from the C

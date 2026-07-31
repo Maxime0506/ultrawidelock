@@ -90,8 +90,15 @@ GATES=(
 	test-web    # 0s   twin-web.yml : drift-gate
 	actionlint  # 0s   workflow-lint.yml : actionlint
 	zizmor      # 0s   workflow-lint.yml : zizmor
+	mal-diff    # 0s   security.yml : mal-diff
+	esp         # 0s   security.yml : esp
+	attest      # 0s   security.yml : attest
+	ct          # 0s   security.yml : ct   (0s only because it SKIPS: no valgrind on darwin/arm64;
+	            #                           17s in CI, where it is its own job)
 	format      # 1s   format.yml
 	shellcheck  # 1s   tooling.yml : shellcheck
+	secrets     # 2s   security.yml : secrets
+	web         # 7s   security.yml : web  (retire fetches its advisory repo, so it wants network)
 	licenses    # 3s   tooling.yml : licenses
 	fuzz        # 3s   fuzz.yml
 	clang-tidy  # 4s   clang-tidy.yml
@@ -101,10 +108,12 @@ GATES=(
 	test-san    # 8s   sanitizers.yml
 	patch-drift # 11s  patch-drift.yml
 	docs        # 12s  docs.yml
+	deps        # 13s  security.yml : deps  (pip-audit queries PyPI, so it waits on network)
 	test-port   # 14s  port-tests.yml
 	test-ws     # 14s  tooling.yml : ws-seed
 	test-verify # 15s  tooling.yml : verify-tests
 	coverage    # 18s  host-tests.yml : coverage (+ the line floor)
+	semgrep     # 22s  security.yml : semgrep  (registry packs are fetched, so it needs network)
 	cbmc        # 82s  cbmc.yml
 )
 
@@ -124,12 +133,18 @@ GATES=(
 #      `mktemp -t` per binary, coverage under build/coverage/, fuzz under
 #      build/fuzz/, cbmc writes only its own logs. The lint gates only read.
 #
+# Order WITHIN a lane matters for one reason: a lane stops at its first failure,
+# so everything after it reports "not run". That is why secrets and deps sit
+# ahead of test-tui rather than after it — they cost three seconds between them,
+# and putting them behind the longest gate in their lane meant a broken bun
+# toolchain silently took the two security scanners down with it.
+#
 # TRIPWIRE runs first and serially, and a failure there stops the sweep. It is
 # the whole sub-2s set, so a formatting slip costs four seconds instead of the
 # full run: the fail-fast the parallel phase gives up, bought back where it is
 # cheap. It also runs the two whole-tree scanners (licenses, format) before
 # anything starts writing, so neither reads a file mid-rewrite.
-TRIPWIRE="test-web actionlint zizmor format shellcheck licenses"
+TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp attest"
 #
 # Packed, not one lane per gate. coverage sets the floor at ~25s and nothing
 # finishes before it, so lanes past that buy nothing and cost real time: one
@@ -142,12 +157,13 @@ TRIPWIRE="test-web actionlint zizmor format shellcheck licenses"
 # designed around that number before the second measurement caught it.
 LANES=(
 	"coverage"                 # 25s  the floor: nothing finishes before this
+	"semgrep"                  # 22s  own lane: the one gate that waits on the network
 	"test-ws patch-drift"      # 23s
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
-	"test-tui"                 # 9s   bun only, shares nothing with the C gates
+	"secrets deps test-tui"    # 12s  the two read-only scanners first, then bun
 	"test test-san"            # 15s  same run.sh, same build/host_test* paths
-	"test-verify"              # 15s  13 stub sweeps back to back, under the floor
+	"test-verify web ct"       # 22s  ct costs 0s here (it skips); web is retire's network fetch
 	"cbmc"                     # 64s  WITH_CBMC=1 only, and then it is the floor
 )
 
@@ -191,6 +207,18 @@ gate_need() {
 	licenses) echo "reuse" ;;
 	cbmc) echo "cbmc" ;;
 	test-tui) echo "bun" ;;
+	secrets) echo "gitleaks" ;;
+	semgrep) echo "semgrep" ;;
+	web) echo "retire" ;;
+	# ct needs valgrind, which has no darwin/arm64 build at all. It is deliberately NOT listed:
+	# every other row here fails the sweep when its tool is missing, on the argument that "could
+	# not check" must not read as "fine". That argument still holds, but `make tools-install`
+	# cannot answer it on this platform, so the gate returns 2 and gets a skip-tool row instead.
+	ct) echo "" ;;
+	esp | attest) echo "" ;;
+	# pip-audit is the second half of this gate and is checked inside
+	# scripts/security.sh, which fails rather than skipping when it is absent.
+	deps) echo "osv-scanner pip-audit" ;;
 	*) echo "" ;;
 	esac
 }
@@ -231,6 +259,14 @@ gate_label() {
 	zizmor) echo "workflow security audit" ;;
 	licenses) echo "licence store is consistent" ;;
 	cbmc) echo "wire-parser memory-safety proof" ;;
+	secrets) echo "no secrets in the working tree" ;;
+	web) echo "browser supply chain: pins, CSP" ;;
+	ct) echo "no secret-dependent branches" ;;
+	esp) echo "ESP component pins are exact" ;;
+	attest) echo "release provenance configured" ;;
+	mal-diff) echo "no malicious change shapes" ;;
+	semgrep) echo "SAST over the whole tree" ;;
+	deps) echo "no vulnerable or malicious deps" ;;
 	esac
 }
 
@@ -322,6 +358,14 @@ print("  licence store consistent")'
 		return "$rc"
 		;;
 	cbmc) make --no-print-directory cbmc ;;
+	# The four security gates are one script, which is also what security.yml runs
+	# and what `make security` runs. No environment is set: with no SECURITY_BASE,
+	# `secrets` scans the working tree and `mal-diff` compares against the merge
+	# base with origin/main, which is the pre-push question ("what does this branch
+	# add?"). CI passes the pull request's base and head instead.
+	secrets | mal-diff | semgrep | deps | web | ct | esp | attest)
+		scripts/security.sh "$1"
+		;;
 	esac
 }
 
