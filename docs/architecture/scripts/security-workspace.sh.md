@@ -47,7 +47,7 @@ spec form is a RANGE — `version: "~1.0"` resolves at build time, on the runner
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `gate_sbom()`
-`scripts/security-workspace.sh:240`
+`scripts/security-workspace.sh:251`
 
 ---- sbom ------------------------------------------------------------------
 The one that TOOLING.md rejected, run in the only place it means anything. Both roots are
@@ -57,14 +57,14 @@ files is one nobody consumes.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`, `need_workspace`
 
 ### `gate_vulns()`
-`scripts/security-workspace.sh:290`
+`scripts/security-workspace.sh:301`
 
 ---- vulns -----------------------------------------------------------------
 
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`, `need_workspace`
 
 ### `run_one()`
-`scripts/security-workspace.sh:309`
+`scripts/security-workspace.sh:320`
 
 ---- dispatch --------------------------------------------------------------
 

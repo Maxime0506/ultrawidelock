@@ -198,6 +198,18 @@ for t, p in transient:
     print("        A run-time limit, not a property of the file. It is a real coverage gap for")
     print("        this run only; if it repeats on an idle machine, treat it as unparseable.")
 
+# A baselined path that no longer errors is debt outliving its problem, and one that is also in
+# .semgrepignore was never a parse failure at all -- web-twin/twin.js sat here for exactly that
+# reason. Advisory rather than blocking on purpose: a Timeout above removes a file from `bad`
+# without the file having changed, so blocking here would make the gate flaky in the other
+# direction, which is what the transient/PartialParsing split exists to avoid.
+stale = [p for p in sorted(known) if p not in bad]
+for p in stale:
+    print("  warn  %s is baselined but parsed fine this run" % p)
+    print("        Drop it from security/semgrep-parse-baseline.txt, unless a Timeout above")
+    print("        explains it. The file is scanned either way; the list is now claiming a gap")
+    print("        that does not exist.")
+
 print("  %d finding(s): %d blocking, %d advisory" % (len(res), len(errs), len(warns)))
 sys.exit(1 if (errs or new_bad) else 0)'
 	rc=$?

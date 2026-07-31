@@ -1,0 +1,32 @@
+# Files with a capture or flight-recorder extension that ARE meant to be in the repository.
+#
+# security-deep.yml checks every path ever added across all of history for a .log/.frc/.pcap/
+# .pcapng/.pklg/.btsnoop extension, because a real capture is opaque to every content regex once
+# it is compressed or binary — the risk SECURITY.md names is a flight recorder log embedding the
+# session URSK, or a BLE capture carrying personal data, and neither is a question a regex over
+# the bytes can answer. Which FILES exist is the question, so that is what gets checked.
+#
+# The seven below are test fixtures and sample data, committed on purpose and reviewed here:
+# 123 bytes to 10 KB, no MAC addresses, no home paths, and gitleaks over all 600+ commits finds
+# nothing in them. A real capture off the bench is orders of magnitude larger and would not
+# resemble these.
+#
+# Adding a line here is the decision the gate exists to force. Do not add one to make CI green:
+# a file that genuinely came off the bench does not belong in the repository at all, and once it
+# is committed, deleting it does not help — history keeps it, which is why this check reads
+# `git log --all --diff-filter=A` and not the working tree.
+#
+# Paths are matched exactly, as `git log --name-only` prints them.
+
+# Home Assistant stage-0 access fixtures: synthetic request traces for the presence agent tests.
+integration/homeassistant/stage0/captures/hardware_uwb_access.log
+integration/homeassistant/stage0/captures/synthetic_streaming_access.log
+
+# Host KAT inputs: hand-written console transcripts the log parser is tested against.
+tests/host/data/aliro_lab_capture.log
+tests/host/data/aliro_lab_sample.log
+tests/host/data/flight_recorder_sample.frc
+
+# TUI fixtures: a few lines of serial output each, for the console pane's parser tests.
+tools/tui/test/fixtures/esp32-console.log
+tools/tui/test/fixtures/nrf-console.log

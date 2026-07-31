@@ -196,7 +196,10 @@ block, warn, n = [], [], 0
 # and adding one to a security gate to read three files is the wrong trade. The forms that matter
 # are all "  version: <spec>" at a fixed shape.
 VER = re.compile(r'^\s+version:\s*["\']?([^"\'#\s]+)')
-EXACT = re.compile(r'^(==\s*)?\d+\.\d+\.\d+([-+][0-9A-Za-z.]+)?$')
+# `~N` is the ESP component registry's revision suffix: esp_bsp_devkit 3.0.0~2 is revision 2 of
+# 3.0.0, and it is an exact version, not a range. Without it here the gate rejects the one pin
+# the solver actually produces, which is how a gate ends up arguing with reality.
+EXACT = re.compile(r'^(==\s*)?\d+\.\d+\.\d+([-+~][0-9A-Za-z.]+)?$')
 
 for f in files:
     for i, ln in enumerate(open(f), 1):
@@ -208,26 +211,34 @@ for f in files:
         if EXACT.match(spec):
             continue
         if spec == "*":
-            block.append((f, i, spec, "'*' takes whatever the registry serves at build time."))
+            block.append((f, i, spec, "'*' takes whatever the registry serves at build time, so "
+                                      "there is no version this repository can be said to use."))
         else:
+            # The wording matters more than the rule. "Pin the exact version" reads as "pick the
+            # newest release", and doing that here broke every esp32-matter build: esp_bsp_devkit
+            # 3.0.3 pulls led_indicator ~2.0, which needs led_strip 3.*, against a led_strip pin
+            # of 2.5.5, and the solver rejects the set outright. An exact set has to be mutually
+            # SOLVABLE, and the only thing that knows which one is the solver.
             block.append((f, i, spec,
                           "A range resolves on the runner, so the component compiled into a "
-                          "release is not determined by anything in this repository. Pin the "
-                          "exact version and commit dependencies.lock beside it."))
+                          "release is not fixed by this repository. Do NOT pick the newest "
+                          "release by hand -- the versions have to solve together. Run "
+                          "`idf.py set-target <target>` and copy the versions out of the "
+                          "dependencies.lock it writes."))
 
-# The lock is what makes a range survivable, so its absence compounds the above rather than
-# standing alone.
-for f in files:
-    lock = os.path.join(os.path.dirname(f), "dependencies.lock")
-    if not os.path.exists(lock):
-        warn.append((f, 0, "-", "no dependencies.lock committed next to this manifest"))
+# Deliberately no "commit dependencies.lock" check. It is gitignored in this repo on purpose:
+# the file records `target:`, and this app builds for esp32s3, esp32c5 and esp32c6, so one
+# committed lock would be rewritten by whichever target built last. It is the right thing to
+# READ and the wrong thing to commit, which is why the message above says read it.
 
 print("  scope: %d manifest(s), %d version spec(s)" % (len(files), n))
 for f, i, spec, why in block:
     print("  BLOCK %s:%s  version: %s" % (f, i, spec))
     print("        %s" % why)
 for f, i, spec, why in warn:
-    print("  warn  %s — %s" % (f, why))
+    where = "%s:%s  version: %s" % (f, i, spec) if i else f
+    print("  warn  %s" % where)
+    print("        %s" % why)
 print("  %d blocking, %d advisory" % (len(block), len(warn)))
 sys.exit(1 if block else 0)
 PY

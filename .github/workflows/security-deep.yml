@@ -13,6 +13,18 @@
 #
 # Deliberately NOT here, so the omissions are decisions rather than oversights:
 #
+#   CodeQL           GitHub's default setup runs it, configured in the repository settings rather
+#                    than in this file, and the two cannot coexist — an advanced configuration
+#                    uploading SARIF while default setup is enabled is rejected outright with
+#                    "CodeQL analyses from advanced configurations cannot be processed", which is
+#                    how this job spent its first run failing. Default setup wins the trade here:
+#                    GitHub maintains the query packs and the CLI version, and it picks up a new
+#                    language without anyone editing a matrix. What a workflow buys is control of
+#                    the build for compiled languages, and that is worth least in this repository
+#                    — the C is already under clang-tidy, CBMC, ASan/UBSan, libFuzzer and semgrep
+#                    p/c, and the database this job built came from `make test`, so it only ever
+#                    saw the host-compilable subset rather than the firmware.
+#
 #   syft / an SBOM   internal/security-audit/TOOLING.md makes the case against it plainly: syft
 #                    over this source tree finds bun.lock and pyproject.toml and almost nothing
 #                    else, because NCS, Zephyr, ESP-IDF, esp-matter and the ESP component
@@ -50,45 +62,6 @@ env:
   SEMGREP_VERSION: 1.172.0
 
 jobs:
-  # ---------------------------------------------------------------- CodeQL
-  codeql:
-    name: codeql (${{ matrix.language }})
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: c-cpp
-            build-mode: manual
-          - language: python
-            build-mode: none
-          - language: javascript-typescript
-            build-mode: none
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: initialize codeql
-        uses: github/codeql-action/init@a2983b8bed1923f44751c5c43237f479442827b3 # v3
-        with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-          queries: security-extended
-      # The C database is built from `make test`, so it covers exactly the host-compilable set in
-      # tests/host/sources.sh. Anything behind a Zephyr-only or ESP-IDF-only #ifdef is invisible
-      # to it — that blind spot is real and is written down in security/README.md rather than
-      # left for someone to discover from a clean report.
-      - name: build the host sources for the C database
-        if: matrix.language == 'c-cpp'
-        run: make test
-      - name: analyze
-        uses: github/codeql-action/analyze@a2983b8bed1923f44751c5c43237f479442827b3 # v3
-        with:
-          category: /language:${{ matrix.language }}
-
   # ---------------------------------------------------------------- full-history secrets
   secrets-history:
     name: secrets (full history)
@@ -114,15 +87,33 @@ jobs:
       # A file type that should never have been committed is invisible to a content regex once
       # it is compressed or binary, so it is checked by name across all of history too.
       - name: no capture or flight-recorder file has ever been committed
+        # Seven fixtures legitimately carry these extensions, so the check is against
+        # security/capture-baseline.txt rather than against zero. Reviewed there, not here:
+        # adding a path is meant to be a decision someone writes a reason for.
         run: |
           hits="$(git log --all --diff-filter=A --name-only --format= \
             | grep -Ei '\.(log|frc|pcap|pcapng|pklg|btsnoop)$' | sort -u || true)"
-          if [ -n "$hits" ]; then
+          known="$(grep -vE '^\s*(#|$)' security/capture-baseline.txt | sort -u)"
+          new="$(comm -23 <(printf '%s\n' "$hits" | grep -v '^$' | sort -u) \
+                         <(printf '%s\n' "$known"))"
+          if [ -n "$new" ]; then
             echo "::error::files that carry the session URSK or personal Bluetooth data exist in history:"
-            printf '%s\n' "$hits"
+            printf '%s\n' "$new"
+            echo "If one of these is a reviewed fixture, add it to security/capture-baseline.txt"
+            echo "with a reason. If it came off the bench, it does not belong in the repository —"
+            echo "and deleting it now does not help, because history keeps it."
             exit 1
           fi
-          echo "no sensitive-extension file has ever been added"
+          # A baseline entry that stops matching is debt outliving its problem, so it fails too.
+          stale="$(comm -13 <(printf '%s\n' "$hits" | grep -v '^$' | sort -u) \
+                            <(printf '%s\n' "$known"))"
+          if [ -n "$stale" ]; then
+            echo "::error::security/capture-baseline.txt lists paths that were never committed:"
+            printf '%s\n' "$stale"
+            exit 1
+          fi
+          printf 'no unreviewed capture file in history (%s baselined)\n' \
+            "$(printf '%s\n' "$known" | wc -l | tr -d ' ')"
 
   # ---------------------------------------------------------------- semgrep, full report
   semgrep-sarif:
