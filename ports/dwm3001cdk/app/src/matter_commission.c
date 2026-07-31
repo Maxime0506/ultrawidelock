@@ -518,11 +518,18 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		if (aliro_ec_p256_pub_from_priv(s_info.op_priv, derived) == 0 &&
 		    matter_cert_parse(s_info.fabric.noc, s_info.fabric.noc_len, &ci) == MATTER_OK &&
 		    ci.have_public_key) {
-			LOG_INF("  signing key %s the NOC",
+			LOG_INF("  signing key %s the NOC; noc %u B, icac %u B",
 				memcmp(derived, ci.public_key, sizeof(derived)) == 0
 					? "MATCHES"
-					: "does NOT match");
+					: "does NOT match",
+				(unsigned int)s_info.fabric.noc_len,
+				(unsigned int)s_info.fabric.icac_len);
+			/* Kept so the Sigma2 signature can be verified against
+			 * the certificate it ships with. */
+			memcpy(s_case.noc_pub, ci.public_key, sizeof(s_case.noc_pub));
+			s_case.have_noc_pub = true;
 		} else {
+			s_case.have_noc_pub = false;
 			LOG_WRN("  could not check the signing key against the NOC");
 		}
 	}
@@ -601,7 +608,11 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 				       s_case.shared);
 	memset(transcript, 0, sizeof(transcript));
 	if (rc != MATTER_OK) {
-		LOG_ERR("  Sigma2 could not be built (%d)", rc);
+		/* MATTER_E_STATE here now means the signature did not verify
+		 * against the NOC's own public key, which is a far more specific
+		 * thing than "could not be built". */
+		LOG_ERR("  Sigma2 NOT built (%d)%s", rc,
+			rc == MATTER_E_STATE ? " -- crypto step failed (sign/verify/ECDH)" : "");
 		return 0u;
 	}
 
