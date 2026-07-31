@@ -220,6 +220,8 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		case MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION:
 		case MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX:
 		case MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX:
+		case MATTER_ATTR_DL_USERS_MAX:
+		case MATTER_ATTR_DL_CREDS_PER_USER_MAX:
 		/*
 		 * FeatureMap is answered here for the same reason it is on
 		 * NetworkCommissioning: it is what a controller reads to decide
@@ -396,9 +398,15 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 
 	switch (attribute) {
 	case MATTER_ATTR_FEATURE_MAP:
-		(void)matter_tlv_put_u64(w, tag,
-					 MATTER_DL_FEATURE_ALIRO_PROVISIONING |
-						 MATTER_DL_FEATURE_ALIRO_BLE_UWB);
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_FEATURE_ALIRO_PROVISIONING |
+							 MATTER_DL_FEATURE_ALIRO_BLE_UWB |
+							 MATTER_DL_FEATURE_USER);
+		return;
+	case MATTER_ATTR_DL_USERS_MAX:
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_USERS_MAX);
+		return;
+	case MATTER_ATTR_DL_CREDS_PER_USER_MAX:
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_CREDS_PER_USER_MAX);
 		return;
 	case MATTER_ATTR_DL_LOCK_STATE:
 		/*
@@ -866,6 +874,8 @@ static const uint32_t k_lock_attrs[] = {
 	MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION,
 	MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX,
 	MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX,
+	MATTER_ATTR_DL_USERS_MAX,
+	MATTER_ATTR_DL_CREDS_PER_USER_MAX,
 };
 
 static const uint32_t k_ac_attrs[] = {
@@ -1556,6 +1566,26 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		if (inv->cluster != MATTER_CLUSTER_DOOR_LOCK) {
 			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
 		}
+		if (inv->command == MATTER_CMD_DL_GET_USER) {
+			/*
+			 * Answered because a real controller invokes it during
+			 * commissioning and gives up when it is refused -- it
+			 * reported "the specified action or command indicated
+			 * is not supported" and sent RemoveFabric.
+			 *
+			 * The answer is an EMPTY slot, which is the truth:
+			 * there is no user database here yet. UserIndex is
+			 * echoed and every other field is null, which is how
+			 * the spec says an unoccupied slot reads.
+			 */
+			if (!field_u64(inv, TAG_GETUSER_INDEX, &v) || v == 0u ||
+			    v > MATTER_DL_USERS_MAX) {
+				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			info->last_user_index = (uint16_t)v;
+			*response_command = MATTER_CMD_DL_GET_USER_RESPONSE;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
 		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
 	}
 	if (inv->endpoint != MATTER_ENDPOINT_ROOT) {
@@ -1643,6 +1673,29 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 {
 	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
 
+	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		if (cluster == MATTER_CLUSTER_DOOR_LOCK &&
+		    response_command == MATTER_CMD_DL_GET_USER_RESPONSE) {
+			/*
+			 * An unoccupied slot: the index that was asked for, and
+			 * null for everything that describes a user who is not
+			 * there. NextUserIndex is null too -- there is no next
+			 * occupied slot to walk to.
+			 */
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_GETUSER_INDEX),
+						 info->last_user_index);
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NAME));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_UNIQUE_ID));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_STATUS));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_TYPE));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIAL_RULE));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIALS));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREATOR_FABRIC));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_MODIFIER_FABRIC));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NEXT_INDEX));
+		}
+		return;
+	}
 	(void)endpoint;
 
 	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {

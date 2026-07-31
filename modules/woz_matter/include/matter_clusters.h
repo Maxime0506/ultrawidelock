@@ -109,6 +109,42 @@ extern "C" {
  */
 #define MATTER_DL_FEATURE_ALIRO_PROVISIONING 0x2000u
 #define MATTER_DL_FEATURE_ALIRO_BLE_UWB      0x4000u
+/*
+ * User (Enums.h:505). Not claimed for its own sake: a real controller invokes
+ * GetUser on this endpoint during commissioning and abandons the pairing when
+ * it is refused, and Aliro credential keys arrive on the user/credential path
+ * rather than through the reader-config commands
+ * (ports/esp32/.../aliro_reader_delegate.h:36-43).
+ */
+#define MATTER_DL_FEATURE_USER 0x0100u
+
+/* User-feature attributes and commands. */
+#define MATTER_ATTR_DL_USERS_MAX             0x0011u
+#define MATTER_ATTR_DL_CREDS_PER_USER_MAX    0x001Cu
+#define MATTER_CMD_DL_GET_USER               0x001Bu
+#define MATTER_CMD_DL_GET_USER_RESPONSE      0x001Cu
+
+/* GetUserResponse fields (DoorLock/Commands.h, GetUserResponse::Fields). */
+#define TAG_GETUSER_INDEX          0u
+#define TAG_GETUSER_NAME           1u
+#define TAG_GETUSER_UNIQUE_ID      2u
+#define TAG_GETUSER_STATUS         3u
+#define TAG_GETUSER_TYPE           4u
+#define TAG_GETUSER_CREDENTIAL_RULE 5u
+#define TAG_GETUSER_CREDENTIALS    6u
+#define TAG_GETUSER_CREATOR_FABRIC 7u
+#define TAG_GETUSER_MODIFIER_FABRIC 8u
+#define TAG_GETUSER_NEXT_INDEX     9u
+
+/**
+ * How many user slots this lock reports.
+ *
+ * Reported, not stored: this node holds no user database yet. The count has to
+ * be non-zero because a lock claiming the User feature with room for nobody is
+ * not a coherent answer.
+ */
+#define MATTER_DL_USERS_MAX          10u
+#define MATTER_DL_CREDS_PER_USER_MAX 5u
 
 /* LockState (DoorLock/Enums.h:95-99) and OperatingMode (Enums.h:278-284). */
 #define MATTER_DL_LOCK_STATE_LOCKED     1u
@@ -322,6 +358,13 @@ struct matter_device_info {
 	 * different reader. The port owns both the entropy and the store.
 	 */
 	uint8_t aliro_group_sub_id[MATTER_ALIRO_GROUP_ID_LEN];
+	/**
+	 * The UserIndex the last GetUser asked for, held between running the
+	 * command and serialising its response -- matter_im_command_fields_fn
+	 * is pure and cannot recompute it. Same reason as
+	 * @ref last_commissioning_error below.
+	 */
+	uint16_t last_user_index;
 	/**
 	 * Written by the commissioner through GeneralCommissioning so it can
 	 * tell how far a previous attempt got. Mutable, and the reason this

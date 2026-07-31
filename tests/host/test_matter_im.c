@@ -553,11 +553,16 @@ void test_matter_im(void)
 		T_EQ("one report", m, 1);
 		T_OK("not a status", !sreps[0].is_status);
 		T_EQ("on the lock endpoint", sreps[0].endpoint, MATTER_ENDPOINT_LOCK);
-		/* Both Aliro bits and nothing else. Claiming PIN, user or
-		 * schedule features would commit this node to a credential
-		 * surface it has none of. */
-		T_EQ("both Aliro feature bits and only those", sreps[0].vu,
-		     MATTER_DL_FEATURE_ALIRO_PROVISIONING | MATTER_DL_FEATURE_ALIRO_BLE_UWB);
+		/*
+		 * The two Aliro bits and User, and nothing else. User is not
+		 * aspiration: a real controller invokes GetUser during
+		 * commissioning and abandons the pairing when it is refused.
+		 * PIN, RFID, schedules and logging stay out -- claiming those
+		 * would commit this node to surfaces it has none of.
+		 */
+		T_EQ("the three feature bits and only those", sreps[0].vu,
+		     MATTER_DL_FEATURE_ALIRO_PROVISIONING | MATTER_DL_FEATURE_ALIRO_BLE_UWB |
+			     MATTER_DL_FEATURE_USER);
 
 		/*
 		 * The verification key is NULL until SetAliroReaderConfig
