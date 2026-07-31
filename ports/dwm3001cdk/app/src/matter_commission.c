@@ -1019,6 +1019,20 @@ static struct {
 	uint16_t peer_session_id;
 	uint16_t local_session_id;
 	bool active;
+	/**
+	 * Who this handshake is with, and the exact Sigma2 they were sent.
+	 *
+	 * A peer that resends Sigma1 must get back the SAME Sigma2: the
+	 * transcript its Sigma3 is computed over covers those bytes, and the
+	 * signature inside them is randomised, so re-encoding produces a
+	 * different message even from identical inputs. Answering a repeat with
+	 * a fresh handshake made every following Sigma3 fail the AEAD tag, with
+	 * nothing to say why -- observed on hardware as five rejections in a row
+	 * and a pairing that hung.
+	 */
+	uint8_t init_random[MATTER_CASE_RANDOM_LEN];
+	uint8_t sigma2[MATTER_CASE_SIGMA2_MAX];
+	size_t sigma2_len;
 } s_case;
 
 
@@ -1046,13 +1060,33 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	size_t s2_len = 0u;
 	size_t mh_len = 0u;
 	size_t ph_len = 0u;
+	bool repeat;
 	int rc;
 
-	if (aliro_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
+	/*
+	 * A repeat of the Sigma1 already answered, recognised by the initiator's
+	 * session id AND its random -- the session id alone is 16 bits chosen by
+	 * the peer and a fresh handshake may reuse it. Everything below is
+	 * skipped: no new ephemeral key, no new randoms, no new session id, and
+	 * above all no second aliro_sha256_update() on the transcript.
+	 */
+	repeat = s_case.active && s_case.sigma2_len > 0u &&
+		 s_case.peer_session_id == s1->initiator_session_id &&
+		 memcmp(s_case.init_random, s1->initiator_random, MATTER_CASE_RANDOM_LEN) == 0;
+
+	if (!repeat) {
+		/* A new handshake invalidates the stored answer immediately, not
+		 * at the end: if the encode below fails, peer_session_id has
+		 * already moved on and a stale payload must not look replayable.
+		 */
+		s_case.sigma2_len = 0u;
+	}
+
+	if (!repeat && (aliro_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
 	    aliro_random(s_case.responder_random, sizeof(s_case.responder_random)) != 0 ||
 	    aliro_random(s_case.resumption_id, sizeof(s_case.resumption_id)) != 0 ||
 	    aliro_random((uint8_t *)&s_case.local_session_id, sizeof(s_case.local_session_id)) !=
-		    0) {
+		    0)) {
 		LOG_ERR("  no entropy for Sigma2");
 		return 0u;
 	}
@@ -1197,6 +1231,24 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		return 0u;
 	}
 
+	if (repeat) {
+		/*
+		 * The bytes already sent, re-framed. Headers may differ -- this
+		 * carries a new message counter and acknowledges the repeated
+		 * Sigma1 -- but the PAYLOAD must be identical, because that is
+		 * what the peer's transcript already covers.
+		 */
+		if (s_case.sigma2_len > cap - mh_len - ph_len) {
+			LOG_ERR("  no room to resend Sigma2");
+			return 0u;
+		}
+		memcpy(reply + mh_len + ph_len, s_case.sigma2, s_case.sigma2_len);
+		memset(transcript, 0, sizeof(transcript));
+		LOG_INF("  Sigma1 again -- resending the SAME Sigma2 (%u B, session 0x%04x)",
+			(unsigned int)s_case.sigma2_len, (unsigned int)s_case.local_session_id);
+		return mh_len + ph_len + s_case.sigma2_len;
+	}
+
 	rc = matter_case_sigma2_encode(&in, reply + mh_len + ph_len, cap - mh_len - ph_len, &s2_len,
 				       s_case.shared);
 	memset(transcript, 0, sizeof(transcript));
@@ -1210,6 +1262,16 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	}
 
 	s_case.active = true;
+	/* Remembered so a resent Sigma1 can be answered with these exact bytes
+	 * rather than a fresh handshake the peer's Sigma3 cannot verify. */
+	if (s2_len <= sizeof(s_case.sigma2)) {
+		memcpy(s_case.sigma2, reply + mh_len + ph_len, s2_len);
+		s_case.sigma2_len = s2_len;
+		memcpy(s_case.init_random, s1->initiator_random, MATTER_CASE_RANDOM_LEN);
+	} else {
+		/* Cannot be replayed, so do not pretend it can. */
+		s_case.sigma2_len = 0u;
+	}
 	/* The transcript covers payloads, never headers -- the same rule the
 	 * Sigma1 length check above exists to prove. */
 	aliro_sha256_update(&s_case.transcript, reply + mh_len + ph_len, s2_len);
