@@ -848,6 +848,60 @@ int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 	return matter_tlv_writer_finish(&w, out_len);
 }
 
+int matter_im_status_response_encode(uint8_t status, uint8_t *out, size_t cap, size_t *out_len)
+{
+	struct matter_tlv_writer w;
+
+	if (out == NULL || out_len == NULL) {
+		return MATTER_E_INVAL;
+	}
+	matter_tlv_writer_init(&w, out, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_STATUS_STATUS), status);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_IM_REVISION), MATTER_IM_REVISION);
+	(void)matter_tlv_end_container(&w);
+
+	return matter_tlv_writer_finish(&w, out_len);
+}
+
+/* TimedRequestMessage.h: one field, the timeout in milliseconds. */
+#define TAG_TIMED_TIMEOUT_MS 0u
+
+int matter_im_timed_request_decode(const uint8_t *buf, size_t len, uint16_t *timeout_ms)
+{
+	struct matter_tlv_reader r;
+	uint64_t v = 0u;
+	int rc;
+
+	if (buf == NULL || timeout_ms == NULL || len == 0u) {
+		return MATTER_E_INVAL;
+	}
+	*timeout_ms = 0u;
+	matter_tlv_reader_init(&r, buf, len);
+	rc = matter_tlv_next(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_TIMED_TIMEOUT_MS) &&
+		    matter_tlv_get_u64(&r, &v) == MATTER_OK) {
+			*timeout_ms = (uint16_t)v;
+		}
+	}
+	return MATTER_OK;
+}
+
 /* WriteRequestMessage.h:39-44 */
 #define TAG_WRITE_SUPPRESS_RESPONSE 0u
 #define TAG_WRITE_TIMED_REQUEST     1u

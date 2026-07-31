@@ -795,6 +795,41 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * The StatusResponse is not inspected beyond its arrival: a subscriber that
  * rejected the report would say so by not sending one.
  */
+/**
+ * A TimedRequest, which is a handshake and not a request for anything.
+ *
+ * The peer sends it, waits for a StatusResponse, and only then sends the invoke
+ * it actually wanted -- so a node that ignores it is not refusing the command,
+ * it is never being asked. That is what a real controller saw: it sat for its
+ * full 9,999 ms and reported the transaction as timed out, twice, with this
+ * node logging the message as "unhandled" and nothing as an error.
+ *
+ * SUCCESS is the whole answer. Matter uses this to stop a command that must not
+ * be replayed from being replayed, and the deadline it announces belongs to the
+ * peer: it is measured from when this reply arrives. Nothing here enforces it.
+ * Enforcing it would mean answering a late invoke with TIMEOUT rather than
+ * running it, which is a promise worth making only once there is a clock to
+ * make it with.
+ */
+static void on_timed_request(const struct matter_exchange_in *in)
+{
+	uint16_t timeout_ms = 0u;
+	size_t resp_len = 0u;
+
+	if (matter_im_timed_request_decode(in->payload, in->payload_len, &timeout_ms) != MATTER_OK) {
+		LOG_WRN("  malformed TimedRequest");
+		return;
+	}
+	LOG_INF("  timed request: %u ms, answering SUCCESS", (unsigned int)timeout_ms);
+
+	if (matter_im_status_response_encode(MATTER_IM_STATUS_SUCCESS, s_report, sizeof(s_report),
+					     &resp_len) != MATTER_OK) {
+		LOG_ERR("  cannot encode the StatusResponse");
+		return;
+	}
+	send_im(MATTER_IM_OP_STATUS_RESPONSE, s_report, resp_len);
+}
+
 static void on_status_response(const struct matter_exchange_in *in)
 {
 	size_t resp_len = 0u;
@@ -869,6 +904,11 @@ static void on_secure(const struct matter_exchange_in *in)
 	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
 	    in->opcode == MATTER_IM_OP_STATUS_RESPONSE) {
 		on_status_response(in);
+		return;
+	}
+	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
+	    in->opcode == MATTER_IM_OP_TIMED_REQUEST) {
+		on_timed_request(in);
 		return;
 	}
 

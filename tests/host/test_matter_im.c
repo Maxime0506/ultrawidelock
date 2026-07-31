@@ -723,6 +723,61 @@ void test_matter_im(void)
 		one.paths[0].have_cluster = true;
 	}
 
+	/*
+	 * TimedRequest, as a real iPhone sent it.
+	 *
+	 * These nine bytes are from the device log, taken while a pairing hung:
+	 * the phone sent this, waited its full 9,999 ms for a StatusResponse
+	 * that never came, and reported the transaction as timed out. The node
+	 * logged it as "unhandled" and nothing as an error.
+	 *
+	 * Kept verbatim for the reason at the top of this file -- constructing
+	 * it by hand would only prove this decoder agrees with this encoder.
+	 * It carries a timeout and nothing else: no ids, no key material.
+	 */
+	t_group("TimedRequest, as a real iPhone sent it");
+	{
+		static const uint8_t apple_timed[] = {
+			0x15, 0x25, 0x00, 0x0f, 0x27, 0x24, 0xff, 0x0c, 0x18,
+		};
+		uint16_t timeout_ms = 0u;
+		uint8_t sr[32];
+		size_t sr_len = 0u;
+		struct matter_tlv_reader rd;
+		uint64_t v = 0u;
+
+		T_EQ("decodes",
+		     matter_im_timed_request_decode(apple_timed, sizeof(apple_timed), &timeout_ms),
+		     MATTER_OK);
+		T_EQ("carries the peer's deadline", (long)timeout_ms, 9999L);
+
+		/* Truncation must not read as a shorter, valid request. */
+		for (size_t cut = 1u; cut < sizeof(apple_timed); cut++) {
+			uint16_t partial = 0u;
+
+			T_OK("a prefix never decodes as complete",
+			     matter_im_timed_request_decode(apple_timed, cut, &partial) !=
+					     MATTER_OK ||
+				     partial != 9999u);
+		}
+
+		/* The answer is a bare StatusResponse. Decoded rather than
+		 * compared: what matters is that the status is SUCCESS and the
+		 * revision is present, not the byte order they came out in. */
+		T_EQ("status response encodes",
+		     matter_im_status_response_encode(MATTER_IM_STATUS_SUCCESS, sr, sizeof(sr),
+						      &sr_len),
+		     MATTER_OK);
+		T_OK("and is not empty", sr_len > 0u);
+		matter_tlv_reader_init(&rd, sr, sr_len);
+		T_EQ("opens", matter_tlv_next(&rd), MATTER_OK);
+		T_EQ("a structure", matter_tlv_enter(&rd), MATTER_OK);
+		T_EQ("first field", matter_tlv_next(&rd), MATTER_OK);
+		T_EQ("is the status", (long)matter_tlv_tag(&rd), (long)MATTER_TLV_CTX(0));
+		T_EQ("reads", matter_tlv_get_u64(&rd, &v), MATTER_OK);
+		T_EQ("SUCCESS", (long)v, (long)MATTER_IM_STATUS_SUCCESS);
+	}
+
 	/* --------------------------------------------------------- refusals --- */
 
 	T_EQ("null request refused", matter_im_read_request_decode(NULL, 4, &req), MATTER_E_INVAL);

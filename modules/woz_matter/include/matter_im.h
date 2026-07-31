@@ -53,6 +53,16 @@ extern "C" {
 #define MATTER_IM_OP_WRITE_RESPONSE          0x07u
 #define MATTER_IM_OP_INVOKE_COMMAND_REQUEST  0x08u
 #define MATTER_IM_OP_INVOKE_COMMAND_RESPONSE 0x09u
+/**
+ * TimedRequest, which precedes any command that must not be replayed.
+ *
+ * The peer sends this FIRST, waits for a StatusResponse, and only then sends
+ * the invoke it actually wanted. Ignoring it is not an error anywhere: the
+ * peer simply waits out its own timeout and reports the transaction as timed
+ * out, which is what a real controller did to this node for ten seconds
+ * before abandoning a pairing.
+ */
+#define MATTER_IM_OP_TIMED_REQUEST 0x0Au
 
 /**
  * Interaction Model revision this node claims
@@ -169,6 +179,26 @@ int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
  */
 int matter_im_subscribe_response_encode(uint32_t subscription_id, uint16_t max_interval_s,
 					uint8_t *out, size_t cap, size_t *out_len);
+
+/**
+ * Encode a bare StatusResponseMessage (app/MessageDef/StatusResponseMessage.h).
+ *
+ * This is the whole answer to a TimedRequest, and it is also what a subscriber
+ * sends back after a priming report -- the same message in both directions.
+ */
+int matter_im_status_response_encode(uint8_t status, uint8_t *out, size_t cap, size_t *out_len);
+
+/**
+ * Decode a TimedRequestMessage, whose only field is the timeout.
+ *
+ * The timeout is the peer's own deadline for sending the invoke that follows,
+ * measured from when it receives the StatusResponse. Nothing here has to
+ * enforce it to interoperate; a node that does enforce it must answer a late
+ * invoke with TIMEOUT rather than running it.
+ *
+ * @return MATTER_OK, or MATTER_E_INVAL / MATTER_E_TRUNC on a malformed message.
+ */
+int matter_im_timed_request_decode(const uint8_t *buf, size_t len, uint16_t *timeout_ms);
 
 /**
  * Decode a ReadRequestMessage (app/MessageDef/ReadRequestMessage.h).
