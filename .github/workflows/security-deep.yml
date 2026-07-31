@@ -114,15 +114,33 @@ jobs:
       # A file type that should never have been committed is invisible to a content regex once
       # it is compressed or binary, so it is checked by name across all of history too.
       - name: no capture or flight-recorder file has ever been committed
+        # Seven fixtures legitimately carry these extensions, so the check is against
+        # security/capture-baseline.txt rather than against zero. Reviewed there, not here:
+        # adding a path is meant to be a decision someone writes a reason for.
         run: |
           hits="$(git log --all --diff-filter=A --name-only --format= \
             | grep -Ei '\.(log|frc|pcap|pcapng|pklg|btsnoop)$' | sort -u || true)"
-          if [ -n "$hits" ]; then
+          known="$(grep -vE '^\s*(#|$)' security/capture-baseline.txt | sort -u)"
+          new="$(comm -23 <(printf '%s\n' "$hits" | grep -v '^$' | sort -u) \
+                         <(printf '%s\n' "$known"))"
+          if [ -n "$new" ]; then
             echo "::error::files that carry the session URSK or personal Bluetooth data exist in history:"
-            printf '%s\n' "$hits"
+            printf '%s\n' "$new"
+            echo "If one of these is a reviewed fixture, add it to security/capture-baseline.txt"
+            echo "with a reason. If it came off the bench, it does not belong in the repository —"
+            echo "and deleting it now does not help, because history keeps it."
             exit 1
           fi
-          echo "no sensitive-extension file has ever been added"
+          # A baseline entry that stops matching is debt outliving its problem, so it fails too.
+          stale="$(comm -13 <(printf '%s\n' "$hits" | grep -v '^$' | sort -u) \
+                            <(printf '%s\n' "$known"))"
+          if [ -n "$stale" ]; then
+            echo "::error::security/capture-baseline.txt lists paths that were never committed:"
+            printf '%s\n' "$stale"
+            exit 1
+          fi
+          printf 'no unreviewed capture file in history (%s baselined)\n' \
+            "$(printf '%s\n' "$known" | wc -l | tr -d ' ')"
 
   # ---------------------------------------------------------------- semgrep, full report
   semgrep-sarif:
