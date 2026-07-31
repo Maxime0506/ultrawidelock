@@ -223,11 +223,28 @@ static bool s_udp_open;
  */
 static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 {
+	/*
+	 * Sized for a Sigma1, which is the only thing that arrives here yet.
+	 * Static because this runs on OpenThread's own thread, whose stack is
+	 * one of the two things deliberately left un-shrunk.
+	 */
+	static uint8_t buf[512];
+	uint16_t len = otMessageGetLength(msg) - otMessageGetOffset(msg);
+
 	ARG_UNUSED(ctx);
 
-	LOG_INF("UDP %u B on port %u from peer port %u -- no CASE responder yet",
-		(unsigned int)(otMessageGetLength(msg) - otMessageGetOffset(msg)),
+	LOG_INF("UDP %u B on port %u from peer port %u", (unsigned int)len,
 		(unsigned int)info->mSockPort, (unsigned int)info->mPeerPort);
+
+	if (len > sizeof(buf)) {
+		LOG_WRN("  too large to look at (%u B)", (unsigned int)len);
+		return;
+	}
+	if (otMessageRead(msg, otMessageGetOffset(msg), buf, len) != len) {
+		LOG_WRN("  could not be read out");
+		return;
+	}
+	matter_thread_on_datagram(buf, len);
 }
 
 /**

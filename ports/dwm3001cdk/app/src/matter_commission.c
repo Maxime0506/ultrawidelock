@@ -33,11 +33,14 @@
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
 #include "matter_attest.h"
+#include "matter_case.h"
 #include "matter_clusters.h"
 #include "matter_commission.h"
 #include "matter_exchange.h"
 #include "matter_im.h"
+#include "matter_msg.h"
 #include "matter_pase_sm.h"
+#include "matter_thread.h"
 
 LOG_MODULE_DECLARE(matter_ble, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
 
@@ -402,6 +405,77 @@ static void on_secure(const struct matter_exchange_in *in)
 	LOG_INF("secure message: protocol 0x%04x opcode 0x%02x, %u B payload (unhandled)",
 		(unsigned int)in->protocol_id, in->opcode, (unsigned int)in->payload_len);
 	LOG_HEXDUMP_INF(in->payload, in->payload_len, "payload");
+}
+
+/**
+ * A datagram on the operational port. Sigma1, so far, and only Sigma1.
+ *
+ * There is no responder yet, so this answers nothing. What it does establish is
+ * the thing that cannot be checked any other way: whether the identity the
+ * initiator is asking for is THIS node's. The destination identifier is an HMAC
+ * under the fabric's operational IPK, so recomputing it and finding a match
+ * proves the whole chain -- AddNOC's IPK, the compressed fabric id derived from
+ * the root key, the fabric and node ids out of the NOC -- all agree with what a
+ * real commissioner computed independently.
+ */
+void matter_thread_on_datagram(const uint8_t *msg, size_t len)
+{
+	struct matter_msg_header mh;
+	struct matter_proto_header ph;
+	struct matter_case_sigma1 s1;
+	uint8_t cfid[MATTER_COMPRESSED_FABRIC_LEN];
+	uint8_t ipk[MATTER_CASE_IPK_LEN];
+	uint8_t want[MATTER_CASE_DEST_ID_LEN];
+	size_t mh_len = 0u;
+	size_t ph_len = 0u;
+	int rc;
+
+	rc = matter_msg_header_decode(msg, len, &mh, &mh_len);
+	if (rc != MATTER_OK) {
+		LOG_WRN("  not a Matter message (%d)", rc);
+		return;
+	}
+	rc = matter_proto_header_decode(msg + mh_len, len - mh_len, &ph, &ph_len);
+	if (rc != MATTER_OK) {
+		LOG_WRN("  no protocol header (%d)", rc);
+		return;
+	}
+	LOG_INF("  protocol 0x%04x opcode 0x%02x exchange 0x%04x", (unsigned int)ph.protocol_id,
+		ph.opcode, (unsigned int)ph.exchange_id);
+
+	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL ||
+	    ph.opcode != MATTER_OP_CASE_SIGMA1) {
+		return;
+	}
+
+	rc = matter_case_sigma1_decode(msg + mh_len + ph_len, len - mh_len - ph_len, &s1);
+	if (rc != MATTER_OK) {
+		LOG_WRN("  Sigma1 unreadable (%d)", rc);
+		return;
+	}
+	LOG_INF("  Sigma1: initiator session 0x%04x, resumption %s",
+		(unsigned int)s1.initiator_session_id, s1.has_resumption ? "offered" : "none");
+
+	if (s_info.fabric.index == 0u) {
+		LOG_WRN("  no fabric to match it against");
+		return;
+	}
+	if (matter_fabric_compressed_id(s_info.fabric.root_public_key, s_info.fabric.fabric_id,
+					cfid) != MATTER_OK ||
+	    matter_case_operational_ipk(s_info.fabric.ipk, cfid, ipk) != MATTER_OK ||
+	    matter_case_destination_id(ipk, s1.initiator_random, s_info.fabric.root_public_key,
+				       s_info.fabric.fabric_id, s_info.fabric.node_id,
+				       want) != MATTER_OK) {
+		LOG_ERR("  could not recompute the destination identifier");
+		return;
+	}
+
+	if (memcmp(want, s1.destination_id, sizeof(want)) == 0) {
+		LOG_INF("  destination MATCHES fabric %u -- this Sigma1 is for us",
+			s_info.fabric.index);
+	} else {
+		LOG_WRN("  destination does NOT match fabric %u", s_info.fabric.index);
+	}
 }
 
 static void on_message(const uint8_t *msg, size_t len)

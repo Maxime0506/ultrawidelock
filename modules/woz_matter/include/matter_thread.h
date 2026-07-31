@@ -73,6 +73,16 @@ int matter_thread_wait_attached(uint32_t timeout_ms);
  */
 int matter_thread_advertise(const char *instance_name, uint16_t port);
 
+/**
+ * Handle one datagram that arrived on the operational port.
+ *
+ * Supplied by the application rather than called by it: the datagram arrives on
+ * OpenThread's own thread, and the port has no business knowing what a Sigma1
+ * is. Returns nothing because there is no one to return it to -- anything worth
+ * saying about the datagram is said in the log.
+ */
+void matter_thread_on_datagram(const uint8_t *msg, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

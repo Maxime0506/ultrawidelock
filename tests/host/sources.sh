@@ -59,6 +59,7 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_clusters.c"
 	"$ROOT/modules/woz_matter/src/matter_attest.c"
 	"$ROOT/modules/woz_matter/src/matter_fabric.c"
+	"$ROOT/modules/woz_matter/src/matter_case.c"
 	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
 )
@@ -81,6 +82,7 @@ TEST_SRCS=(
 	"$HOST/test_matter_attest_stub.c"
 	"$HOST/test_matter_fabric.c"
 	"$HOST/test_matter_thread_stub.c"
+	"$HOST/test_matter_case.c"
 	"$HOST/test_aliro_advertising.c"
 	"$HOST/test_aliro_ble.c"
 	"$HOST/test_aliro_nfc.c"
