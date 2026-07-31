@@ -1756,6 +1756,16 @@ static void on_link_reset(void)
 	 */
 }
 
+bool matter_commission_has_fabric(void)
+{
+	for (size_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (s_info.fabrics[i].index != 0u) {
+			return true;
+		}
+	}
+	return false;
+}
+
 int matter_commission_init(void)
 {
 	ecdh_known_answer_test();

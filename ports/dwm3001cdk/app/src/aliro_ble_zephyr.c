@@ -32,7 +32,8 @@
 #include "aliro_ble.h"
 #include "aliro_prov.h" /* ALIRO_GRK_LEN */
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
-#include "matter_ble_zephyr.h" /* the commissionable payload, when unprovisioned */
+#include "matter_ble_zephyr.h"
+#include "matter_commission.h" /* the commissionable payload, when unprovisioned */
 #endif
 
 LOG_MODULE_REGISTER(aliro_ble, CONFIG_LOG_DEFAULT_LEVEL);
@@ -312,7 +313,21 @@ static int aliro_advertise(void)
 	ad[0] = (struct bt_data)BT_DATA_BYTES(BT_DATA_FLAGS,
 					      BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR);
 
-	if (s_adv_aliro && build_aliro_svc_data(&svc_data[2])) {
+	/*
+	 * Being FINDABLE outranks being approach-resolvable. Only one of the
+	 * two payloads fits a legacy advert, and a node with no fabric that
+	 * advertises as a reader cannot be commissioned at all -- which is
+	 * what happened to a board the moment SetAliroReaderConfig succeeded
+	 * and the pairing that delivered it then failed: provisioned, no
+	 * fabric, and gone from Add Accessory with no way back but an erase.
+	 */
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+	bool commissioned = matter_commission_has_fabric();
+#else
+	bool commissioned = true;
+#endif
+
+	if (commissioned && s_adv_aliro && build_aliro_svc_data(&svc_data[2])) {
 		ad[1] = (struct bt_data)BT_DATA(BT_DATA_SVC_DATA16, svc_data, sizeof(svc_data));
 		ad_len = 2;
 		as_reader = true;
