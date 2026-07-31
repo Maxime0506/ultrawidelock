@@ -11,7 +11,8 @@ byte-for-byte with the nRF5340 build.
 
 > Verification convention below: **VERIFIED** = confirmed on silicon or byte-exact
 > against a host KAT; **BENCH-GATED** = built + host-tested but not yet
-> confirmed against a live iPhone.
+> confirmed against a live iPhone; **PREDICTED** = derived from vendor source or
+> datasheet only, never observed here, so a hazard to measure rather than a finding.
 
 ---
 
@@ -472,6 +473,59 @@ re-deriving on hardware; (b) any ESP-only tweak to the shared file must be
 snapshot (6.4) and STS-key cache (6.7) are both guarded, verified by the host suite
 (`tests/host/run.sh`, 558/558) compiling the file *without* `ESP_PLATFORM`. (commit
 `d9051c8`)
+
+### 6.10 On the single-core C6, priority 23 no longer isolates the DW3000 worker
+**PREDICTED: derived from ESP-IDF v5.5.4 source and docs. No C6 has been on a bench with
+a DWM3000 yet, so this is a hazard to measure before it bites, not a failure that was
+seen.** (The rest of section 6 is VERIFIED on silicon; this entry is the exception.)
+
+On the S3 the DW3000 IRQ worker owns a core: `dw3000_hw.c` pins it to core 1 via
+`WOZ_DW3000_TASK_CORE` at priority 23 while IDF's built-in radio tasks sit on core 0, so
+its priority never has to win an argument. The C6 has one core, which makes
+`WOZ_DW3000_TASK_CORE` 0 and leaves priority as the only isolation, and 23 does not clear
+the traffic it has to beat:
+
+| task | prio | source |
+| --- | --- | --- |
+| DW3000 IRQ worker | 23 | `xTaskCreatePinnedToCore(…, 23, …)` in `dw3000_hw.c` |
+| Wi-Fi | 23 | IDF `docs/en/api-guides/performance/speed.rst`, single-core list |
+| BT/BLE controller | 23 | `ESP_TASK_BT_CONTROLLER_PRIO` = `ESP_TASK_PRIO_MAX - 2`, and `configMAX_PRIORITIES` is 25 |
+| esp_timer | 22 | `ESP_TASK_TIMER_PRIO` |
+| NimBLE host | 21 | speed.rst, as above |
+| esp_event | 20 | `ESP_TASKD_EVENT_PRIO` |
+| lwIP TCP/IP | 18 | `ESP_TASK_TCPIP_PRIO` |
+
+The C6 controller really does take that constant:
+`components/bt/include/esp32c6/include/esp_bt.h` sets
+`.controller_task_prio = ESP_TASK_BT_CONTROLLER_PRIO` in its default config. So the UWB
+worker ties with the BLE controller, and with Wi-Fi if it is up.
+
+Two FreeRTOS details turn the tie into latency rather than resolving it:
+- **An equal-priority wake does not preempt.** The GPIO ISR's `xSemaphoreGiveFromISR`
+  reaches `xTaskRemoveFromEventList`, whose single-core build (`configNUMBER_OF_CORES == 1`)
+  requests a yield only when `pxUnblockedTCB->uxPriority > pxCurrentTCBs[0]->uxPriority`,
+  strictly greater. At equal priority the worker is appended to the *back* of the
+  priority-23 ready list and the controller keeps the CPU.
+- **It then waits for a time slice.** `configUSE_TIME_SLICING` is 1, and both apps set
+  `CONFIG_FREERTOS_HZ=1000`, so the ready list rotates on the next 1 ms tick (10 ms at
+  IDF's default 100 Hz, which is why that setting is not optional here).
+
+Against 6.1's 1836 µs arm deadline, one tick is over half the budget spent before any SPI
+runs. Expected symptom: intermittent `ARM FAIL … LATE` and lost POLLs on C6 from firmware
+that is clean on S3, correlating with BLE activity, which during an Aliro session is
+continuous because the L2CAP channel is what carries M1–M4.
+
+**Do not raise the worker to 24 without measuring first.** That puts UWB above the radio
+controller, which Espressif explicitly advises against ("it is not recommended to set task
+priorities higher than the built-in … operations as starving them of CPU may make the
+system unstable"), and BLE is load-bearing here: a starved controller drops the very
+session the ranging belongs to. Measure instead. The latch is already in the hot path:
+`dw3000_hw.c` writes `g_dw_cyc_gpio` at GPIO-ISR entry and `g_dw_cyc_work` at worker entry,
+so their difference *is* this latency. But the only code that reads them sits behind
+`#if DIAG_HOT` in `deps/dw3000/dwt_uwb_driver/dw3000/dw3000_device.c`, which is `#define
+DIAG_HOT 0`. Flip that, take the distribution on C6 and on S3, and let the two histograms
+decide. Note `g_dw_cyc_per_us` initialises from `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ`, which is
+160 on C6 and 240 on the Matter S3 build, so the cycle counts convert correctly on both.
 
 ---
 
