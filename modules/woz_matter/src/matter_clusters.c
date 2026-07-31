@@ -1655,6 +1655,18 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
 			return set_aliro_reader_config(info, inv);
 		}
+		if (inv->command == MATTER_CMD_DL_GET_CREDENTIAL_STATUS) {
+			/*
+			 * Asked right after the reader identity lands, to find
+			 * out whether the credential about to be installed is
+			 * already here. It is not: this node holds no
+			 * credential database, so the honest answer is that it
+			 * does not exist. Refusing the command instead ends the
+			 * pairing, exactly as refusing GetUser did.
+			 */
+			*response_command = MATTER_CMD_DL_GET_CREDENTIAL_STATUS_RESPONSE;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
 		if (inv->command == MATTER_CMD_DL_GET_USER) {
 			/*
 			 * Answered because a real controller invokes it during
@@ -1763,6 +1775,23 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
 
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		if (cluster == MATTER_CLUSTER_DOOR_LOCK &&
+		    response_command == MATTER_CMD_DL_GET_CREDENTIAL_STATUS_RESPONSE) {
+			/* Does not exist, and nothing describes a credential
+			 * that is not there. CredentialData is omitted rather
+			 * than null: it is only ever present for a credential
+			 * that exists, and only to an administrator. */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_bool(w, MATTER_TLV_CTX(TAG_CREDSTATUS_EXISTS), false);
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_CREDSTATUS_USER_INDEX));
+			(void)matter_tlv_put_null(w,
+						  MATTER_TLV_CTX(TAG_CREDSTATUS_CREATOR_FABRIC));
+			(void)matter_tlv_put_null(w,
+						  MATTER_TLV_CTX(TAG_CREDSTATUS_MODIFIER_FABRIC));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_CREDSTATUS_NEXT_INDEX));
+			(void)matter_tlv_end_container(w);
+			return;
+		}
 		if (cluster == MATTER_CLUSTER_DOOR_LOCK &&
 		    response_command == MATTER_CMD_DL_GET_USER_RESPONSE) {
 			/*

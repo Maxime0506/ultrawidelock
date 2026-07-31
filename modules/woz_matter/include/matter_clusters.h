@@ -134,6 +134,24 @@ extern "C" {
  */
 #define MATTER_CMD_DL_SET_ALIRO_READER_CONFIG 0x0028u
 
+/*
+ * GetCredentialStatus (CommandIds.h:107-109) and its response.
+ *
+ * Asked immediately after the reader identity lands: the controller is
+ * checking whether the credential it is about to install is already there.
+ * Refusing it ends the pairing just as surely as refusing GetUser did.
+ */
+#define MATTER_CMD_DL_GET_CREDENTIAL_STATUS          0x0024u
+#define MATTER_CMD_DL_GET_CREDENTIAL_STATUS_RESPONSE 0x0025u
+
+/* GetCredentialStatusResponse fields (Commands.h, its Fields enum). */
+#define TAG_CREDSTATUS_EXISTS          0u
+#define TAG_CREDSTATUS_USER_INDEX      1u
+#define TAG_CREDSTATUS_CREATOR_FABRIC  2u
+#define TAG_CREDSTATUS_MODIFIER_FABRIC 3u
+#define TAG_CREDSTATUS_NEXT_INDEX      4u
+#define TAG_CREDSTATUS_DATA            5u
+
 /* SetAliroReaderConfig fields (DoorLock/Commands.h, its Fields enum). */
 #define TAG_ALIRO_CFG_SIGNING_KEY        0u
 #define TAG_ALIRO_CFG_VERIFICATION_KEY   1u
