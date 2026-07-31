@@ -81,6 +81,8 @@ extern "C" {
 #define MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT  0x7Fu /* line 35 */
 #define MATTER_IM_STATUS_UNSUPPORTED_COMMAND   0x81u /* line 37 */
 #define MATTER_IM_STATUS_INVALID_COMMAND       0x85u /* line 41 */
+/** A field was well-formed but the wrong size or out of range (line 55). */
+#define MATTER_IM_STATUS_CONSTRAINT_ERROR      0x87u
 #define MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE 0x86u /* line 42 */
 #define MATTER_IM_STATUS_UNSUPPORTED_WRITE     0x88u /* line 44 */
 #define MATTER_IM_STATUS_RESOURCE_EXHAUSTED    0x89u /* line 45 */

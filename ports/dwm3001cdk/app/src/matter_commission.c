@@ -35,6 +35,7 @@
 #endif
 
 #include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
+#include "aliro_reader.h" /* aliro_reader_provision_identity, for SetAliroReaderConfig */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
 #include "matter_attest.h"
@@ -811,6 +812,48 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * running it, which is a promise worth making only once there is a clock to
  * make it with.
  */
+/**
+ * Where the reader identity Apple delivered actually lands.
+ *
+ * This is the end of the road the whole Matter node was built for: until now
+ * the reader's private key was CONFIG_ALIRO_PROV_SEED_HEX, a build-time string,
+ * so every image carried one identity and unlocked only for the phones enrolled
+ * in whoever built it. After this call the device has its own, in NVS, and a
+ * Wallet key survives a power cycle.
+ *
+ * reader_id is groupIdentifier || groupSubIdentifier, which is the layout
+ * aliro_reader_provision_identity documents (aliro_reader.h:152-156). The
+ * sub-identifier is this node's own and is the same one the Aliro attributes
+ * report, so the pair a controller reads back is the pair that was stored.
+ *
+ * The verification key is not passed on: it is the public half of the signing
+ * key and the reader derives it. It is kept only so the attribute can be read
+ * back.
+ *
+ * NOTHING IS LOGGED but the outcome. Every argument is key material.
+ */
+static int on_aliro_reader_config(const uint8_t signing_key[32],
+				  const uint8_t verification_key[65], const uint8_t group_id[16],
+				  const uint8_t *group_resolving_key)
+{
+	uint8_t reader_id[32];
+	int rc;
+
+	ARG_UNUSED(verification_key);
+
+	memcpy(reader_id, group_id, 16u);
+	memcpy(reader_id + 16, s_info.aliro_group_sub_id, 16u);
+
+	rc = aliro_reader_provision_identity(reader_id, signing_key, group_resolving_key);
+	memset(reader_id, 0, sizeof(reader_id));
+	if (rc != 0) {
+		LOG_ERR("  reader identity NOT stored (%d)", rc);
+		return rc;
+	}
+	LOG_INF("  ALIRO READER PROVISIONED: identity stored, dev key retired");
+	return 0;
+}
+
 static void on_timed_request(const struct matter_exchange_in *in)
 {
 	uint16_t timeout_ms = 0u;
@@ -1739,6 +1782,8 @@ int matter_commission_init(void)
 		aliro_sha256_final(&h, digest);
 		memcpy(s_info.aliro_group_sub_id, digest, MATTER_ALIRO_GROUP_ID_LEN);
 	}
+
+	s_info.aliro_reader_config_cb = on_aliro_reader_config;
 
 	matter_clusters_init(&s_im, &s_info);
 	matter_ble_set_link_handler(on_link_reset);

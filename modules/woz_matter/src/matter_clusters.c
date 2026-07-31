@@ -443,9 +443,28 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 	 * Reporting zeros instead would claim a key that cannot verify.
 	 */
 	case MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY:
+		if (info->have_aliro_reader_config) {
+			(void)matter_tlv_put_bytes(w, tag, info->aliro_verification_key,
+						   MATTER_ALIRO_VERIFICATION_KEY_LEN);
+		} else {
+			(void)matter_tlv_put_null(w, tag);
+		}
+		return;
 	case MATTER_ATTR_DL_ALIRO_GROUP_ID:
+		if (info->have_aliro_reader_config) {
+			(void)matter_tlv_put_bytes(w, tag, info->aliro_group_id,
+						   MATTER_ALIRO_GROUP_ID_LEN);
+		} else {
+			(void)matter_tlv_put_null(w, tag);
+		}
+		return;
 	case MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY:
-		(void)matter_tlv_put_null(w, tag);
+		if (info->have_aliro_group_resolving_key) {
+			(void)matter_tlv_put_bytes(w, tag, info->aliro_group_resolving_key,
+						   MATTER_ALIRO_GROUP_ID_LEN);
+		} else {
+			(void)matter_tlv_put_null(w, tag);
+		}
 		return;
 	case MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID:
 		/* Not nullable and not provisioned: it identifies the reader
@@ -1545,6 +1564,72 @@ static void opcred_fields(const struct matter_device_info *info, uint32_t respon
 	(void)matter_tlv_end_container(w);
 }
 
+/**
+ * SetAliroReaderConfig: the reader identity, delivered by Apple Home.
+ *
+ * This is the point of the whole Matter node. Until now the reader's private
+ * key was a build-time Kconfig string, so every image carried one identity and
+ * only unlocked for the phones in whoever built it. This command is how a
+ * device gets its own.
+ *
+ * NOTHING HERE IS LOGGED. Every field is key material, and the signing key is
+ * not even kept in this struct: it goes straight to the port's callback, which
+ * persists it, and is wiped from the stack on the way out.
+ *
+ * The group resolving key is optional in the schema but not here: this node
+ * claims the BLE-UWB feature, and that is exactly the bit that makes it
+ * mandatory. Accepting a config without it would leave the reader unable to
+ * resolve the group it was just told it belongs to.
+ */
+static uint8_t set_aliro_reader_config(struct matter_device_info *info,
+				       const struct matter_im_invoke *inv)
+{
+	const uint8_t *signing = NULL;
+	const uint8_t *verification = NULL;
+	const uint8_t *group_id = NULL;
+	const uint8_t *grk = NULL;
+	size_t signing_len = 0u;
+	size_t verification_len = 0u;
+	size_t group_id_len = 0u;
+	size_t grk_len = 0u;
+
+	if (!field_bytes(inv, TAG_ALIRO_CFG_SIGNING_KEY, &signing, &signing_len) ||
+	    !field_bytes(inv, TAG_ALIRO_CFG_VERIFICATION_KEY, &verification, &verification_len) ||
+	    !field_bytes(inv, TAG_ALIRO_CFG_GROUP_ID, &group_id, &group_id_len)) {
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+	/*
+	 * Lengths are checked before anything is copied, and checked exactly:
+	 * a 64-byte "P-256 public key" is a different thing from a 65-byte one
+	 * and would be stored happily by a length-tolerant reader.
+	 */
+	if (signing_len != MATTER_ALIRO_SIGNING_KEY_LEN ||
+	    verification_len != MATTER_ALIRO_VERIFICATION_KEY_LEN ||
+	    group_id_len != MATTER_ALIRO_GROUP_ID_LEN) {
+		return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+	}
+	if (!field_bytes(inv, TAG_ALIRO_CFG_GROUP_RESOLVING_KEY, &grk, &grk_len) ||
+	    grk_len != MATTER_ALIRO_GROUP_ID_LEN) {
+		return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+	}
+
+	if (info->aliro_reader_config_cb == NULL) {
+		/* No store to write to. Reporting success would claim an
+		 * identity was kept that will be gone at the next boot. */
+		return MATTER_IM_STATUS_FAILURE;
+	}
+	if (info->aliro_reader_config_cb(signing, verification, group_id, grk) != 0) {
+		return MATTER_IM_STATUS_FAILURE;
+	}
+
+	memcpy(info->aliro_verification_key, verification, MATTER_ALIRO_VERIFICATION_KEY_LEN);
+	memcpy(info->aliro_group_id, group_id, MATTER_ALIRO_GROUP_ID_LEN);
+	memcpy(info->aliro_group_resolving_key, grk, MATTER_ALIRO_GROUP_ID_LEN);
+	info->have_aliro_group_resolving_key = true;
+	info->have_aliro_reader_config = true;
+	return MATTER_IM_STATUS_SUCCESS;
+}
+
 static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *response_command)
 {
 	struct matter_device_info *info = (struct matter_device_info *)ctx;
@@ -1565,6 +1650,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	if (inv->endpoint == MATTER_ENDPOINT_LOCK) {
 		if (inv->cluster != MATTER_CLUSTER_DOOR_LOCK) {
 			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		}
+		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
+			return set_aliro_reader_config(info, inv);
 		}
 		if (inv->command == MATTER_CMD_DL_GET_USER) {
 			/*

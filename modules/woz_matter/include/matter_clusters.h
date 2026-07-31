@@ -124,6 +124,25 @@ extern "C" {
 #define MATTER_CMD_DL_GET_USER               0x001Bu
 #define MATTER_CMD_DL_GET_USER_RESPONSE      0x001Cu
 
+/**
+ * SetAliroReaderConfig (DoorLock/CommandIds.h:122-125).
+ *
+ * The command this whole Matter node exists to receive: it is how Apple Home
+ * hands over the reader identity, and it is what makes this device
+ * provisionable by its owner rather than only by whoever built the firmware.
+ * Always preceded by a TimedRequest, because it must not be replayed.
+ */
+#define MATTER_CMD_DL_SET_ALIRO_READER_CONFIG 0x0028u
+
+/* SetAliroReaderConfig fields (DoorLock/Commands.h, its Fields enum). */
+#define TAG_ALIRO_CFG_SIGNING_KEY        0u
+#define TAG_ALIRO_CFG_VERIFICATION_KEY   1u
+#define TAG_ALIRO_CFG_GROUP_ID           2u
+#define TAG_ALIRO_CFG_GROUP_RESOLVING_KEY 3u
+
+#define MATTER_ALIRO_SIGNING_KEY_LEN      32u
+#define MATTER_ALIRO_VERIFICATION_KEY_LEN 65u
+
 /* GetUserResponse fields (DoorLock/Commands.h, GetUserResponse::Fields). */
 #define TAG_GETUSER_INDEX          0u
 #define TAG_GETUSER_NAME           1u
@@ -365,6 +384,32 @@ struct matter_device_info {
 	 * @ref last_commissioning_error below.
 	 */
 	uint16_t last_user_index;
+
+	/*
+	 * ---- the Aliro reader identity, once Apple has delivered it --------
+	 *
+	 * The SIGNING KEY is deliberately absent. It is the reader's private
+	 * key: it goes straight to @ref aliro_reader_config_cb, which persists
+	 * it, and is never held here, never read back as an attribute, and
+	 * never logged. What stays is only what a controller may read back.
+	 */
+	uint8_t aliro_verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN];
+	uint8_t aliro_group_id[MATTER_ALIRO_GROUP_ID_LEN];
+	uint8_t aliro_group_resolving_key[MATTER_ALIRO_GROUP_ID_LEN];
+	bool have_aliro_group_resolving_key;
+	bool have_aliro_reader_config;
+	/**
+	 * Where the identity actually lands, set by the port.
+	 *
+	 * A function pointer rather than a link seam so the module keeps
+	 * building for host tests, where there is no store to write to and
+	 * NULL is the honest answer. Returns 0 on success; anything else makes
+	 * the command report FAILURE rather than claiming an identity was kept.
+	 */
+	int (*aliro_reader_config_cb)(const uint8_t signing_key[MATTER_ALIRO_SIGNING_KEY_LEN],
+				      const uint8_t verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
+				      const uint8_t group_id[MATTER_ALIRO_GROUP_ID_LEN],
+				      const uint8_t *group_resolving_key);
 	/**
 	 * Written by the commissioner through GeneralCommissioning so it can
 	 * tell how far a previous attempt got. Mutable, and the reason this
