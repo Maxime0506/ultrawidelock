@@ -124,6 +124,24 @@ int matter_attest_ec_keygen(uint8_t priv[32], uint8_t pub[65])
 	return aliro_ec_p256_keygen(priv, pub);
 }
 
+/*
+ * The two matter_case.h declares. ECDH yields the X coordinate only, which is
+ * what the spec means by the shared secret -- the Y coordinate carries no
+ * additional entropy and including it would give a secret neither peer agrees
+ * on.
+ */
+int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_PUBKEY_LEN],
+		     uint8_t secret_out[MATTER_CASE_SECRET_LEN])
+{
+	return aliro_ecdh_p256(priv, peer_pub, secret_out);
+}
+
+int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
+		     uint8_t sig[MATTER_CASE_SIG_LEN])
+{
+	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
+}
+
 /** @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input. */
 static int unhex(const char *s, uint8_t *out, size_t cap, size_t *len)
 {

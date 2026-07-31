@@ -83,6 +83,7 @@ TEST_SRCS=(
 	"$HOST/test_matter_fabric.c"
 	"$HOST/test_matter_thread_stub.c"
 	"$HOST/test_matter_case.c"
+	"$HOST/test_matter_case_stub.c"
 	"$HOST/test_aliro_advertising.c"
 	"$HOST/test_aliro_ble.c"
 	"$HOST/test_aliro_nfc.c"

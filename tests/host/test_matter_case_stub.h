@@ -1,0 +1,25 @@
+/** @file test_matter_case_stub.h — see test_matter_case_stub.c. */
+/* Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ */
+#ifndef WOZ_TEST_MATTER_CASE_STUB_H
+#define WOZ_TEST_MATTER_CASE_STUB_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+/** Exactly the bytes the last matter_case_sign() was given. */
+extern uint8_t g_case_signed[1024];
+extern size_t g_case_signed_len;
+extern uint8_t g_case_sign_priv[32];
+extern int g_case_sign_calls;
+
+extern int g_case_ecdh_calls;
+extern uint8_t g_case_ecdh_peer[65];
+
+extern int g_case_ecdh_fail;
+extern int g_case_sign_fail;
+
+void test_matter_case_stub_reset(void);
+
+#endif /* WOZ_TEST_MATTER_CASE_STUB_H */

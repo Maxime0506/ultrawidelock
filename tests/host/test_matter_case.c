@@ -16,12 +16,14 @@
 /* Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  */
+#include <stdbool.h>
 #include <string.h>
 
 #include "matter_case.h"
 #include "matter_tlv.h"
 
 #include "test.h"
+#include "test_matter_case_stub.h"
 
 static const uint8_t k_ipk_cfid[] = {
 	0x87, 0xE1, 0xB0, 0x04, 0xE2, 0x35, 0xA1, 0x30,
@@ -50,6 +52,20 @@ static const uint8_t k_ipk_op2[] = {
 	0x35, 0xCA, 0x34, 0x6E, 0x5E, 0x24, 0xBB, 0xBE,
 	0x88, 0x9C, 0xF4, 0xD3, 0x5C, 0x5E, 0x82, 0x0A,
 };
+
+/** Is @p needle anywhere in @p hay? Plain search; these are test-sized buffers. */
+static bool memmem_present(const uint8_t *hay, size_t hay_len, const uint8_t *needle, size_t n)
+{
+	if (n > hay_len) {
+		return false;
+	}
+	for (size_t i = 0; i + n <= hay_len; i++) {
+		if (memcmp(hay + i, needle, n) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
 
 /** Build a Sigma1 the way an initiator does (CASESession.cpp:843-848). */
 static size_t build_sigma1(uint8_t *buf, size_t cap, const uint8_t *rnd, const uint8_t *dest,
@@ -231,5 +247,102 @@ void test_matter_case(void)
 			}
 			T_EQ("none accepted", accepted, 0);
 		}
+	}
+
+	t_group("building the Sigma2 that answers it");
+	{
+		struct matter_case_sigma2_in in;
+		uint8_t out[MATTER_CASE_SIGMA2_MAX];
+		uint8_t shared[MATTER_CASE_SECRET_LEN];
+		uint8_t eph_priv[32], eph_pub[MATTER_CASE_PUBKEY_LEN];
+		uint8_t noc[220], hash[32], resume[16], op_priv[32];
+		size_t n = 0u;
+
+		test_matter_case_stub_reset();
+		for (i = 0u; i < sizeof(eph_priv); i++) {
+			eph_priv[i] = (uint8_t)(0x30u + i);
+		}
+		eph_pub[0] = 0x04u;
+		for (i = 1u; i < sizeof(eph_pub); i++) {
+			eph_pub[i] = (uint8_t)(0x70u + i);
+		}
+		for (i = 0u; i < sizeof(noc); i++) {
+			noc[i] = (uint8_t)(0x11u + i);
+		}
+		for (i = 0u; i < sizeof(hash); i++) {
+			hash[i] = (uint8_t)(0x90u + i);
+		}
+		memset(resume, 0x77, sizeof(resume));
+		for (i = 0u; i < sizeof(op_priv); i++) {
+			op_priv[i] = (uint8_t)(0x40u + i);
+		}
+
+		memset(&in, 0, sizeof(in));
+		in.initiator_pubkey = pub;
+		in.transcript_hash = hash;
+		in.ipk = k_ipk_op0;
+		in.noc = noc;
+		in.noc_len = sizeof(noc);
+		in.op_priv = op_priv;
+		in.responder_random = rnd;
+		in.responder_eph_priv = eph_priv;
+		in.responder_eph_pub = eph_pub;
+		in.resumption_id = resume;
+		in.responder_session_id = 0xBEEFu;
+
+		T_EQ("encodes", matter_case_sigma2_encode(&in, out, sizeof(out), &n, shared),
+		     MATTER_OK);
+		T_OK("and is not empty", n > 200u);
+
+		/* ECDH against the INITIATOR's key, with the responder's private
+		 * half -- swapping those is the mistake that still produces a
+		 * plausible-looking secret. */
+		T_EQ("ECDH ran once", g_case_ecdh_calls, 1);
+		T_OK("against the initiator's ephemeral key",
+		     memcmp(g_case_ecdh_peer, pub, sizeof(pub)) == 0);
+
+		/* The signature must cover BOTH ephemeral keys. That binding is
+		 * the only thing stopping a recorded Sigma2 being replayed --
+		 * the certificate chain inside it is public. */
+		T_EQ("signed once", g_case_sign_calls, 1);
+		T_OK("with the operational key",
+		     memcmp(g_case_sign_priv, op_priv, sizeof(op_priv)) == 0);
+		T_OK("over the responder's ephemeral key",
+		     memmem_present(g_case_signed, g_case_signed_len, eph_pub, sizeof(eph_pub)));
+		T_OK("and the initiator's",
+		     memmem_present(g_case_signed, g_case_signed_len, pub, sizeof(pub)));
+		T_OK("and the NOC",
+		     memmem_present(g_case_signed, g_case_signed_len, noc, sizeof(noc)));
+
+		/* The certificate goes out ENCRYPTED. Finding it in the clear
+		 * would mean the AEAD never ran. */
+		T_OK("the NOC is not on the wire in the clear",
+		     !memmem_present(out, n, noc, sizeof(noc)));
+		/* The ephemeral public key IS in the clear -- the peer needs it
+		 * to derive the same key. */
+		T_OK("the ephemeral key is", memmem_present(out, n, eph_pub, sizeof(eph_pub)));
+		T_OK("and the random", memmem_present(out, n, rnd, sizeof(rnd)));
+
+		t_group("Sigma2 refusals");
+
+		T_EQ("NULL input", matter_case_sigma2_encode(NULL, out, sizeof(out), &n, shared),
+		     MATTER_E_INVAL);
+		in.noc = NULL;
+		T_EQ("no NOC", matter_case_sigma2_encode(&in, out, sizeof(out), &n, shared),
+		     MATTER_E_INVAL);
+		in.noc = noc;
+
+		g_case_ecdh_fail = 1;
+		T_EQ("ECDH failure surfaces",
+		     matter_case_sigma2_encode(&in, out, sizeof(out), &n, shared), MATTER_E_STATE);
+		g_case_ecdh_fail = 0;
+
+		g_case_sign_fail = 1;
+		T_EQ("a signing failure surfaces",
+		     matter_case_sigma2_encode(&in, out, sizeof(out), &n, shared), MATTER_E_STATE);
+		g_case_sign_fail = 0;
+
+		T_EQ("a buffer too small", matter_case_sigma2_encode(&in, out, 32u, &n, shared),
+		     MATTER_E_NOSPACE);
 	}
 }

@@ -120,6 +120,82 @@ struct matter_case_sigma1 {
  */
 int matter_case_sigma1_decode(const uint8_t *tlv, size_t len, struct matter_case_sigma1 *out);
 
+/** Raw ECDSA P-256 signature, and a shared secret. */
+#define MATTER_CASE_SIG_LEN    64u
+#define MATTER_CASE_SECRET_LEN 32u
+
+/** Enough for a Sigma2: two certificates, a signature and the framing. */
+#define MATTER_CASE_SIGMA2_MAX 1024u
+
+/**
+ * What building a Sigma2 needs, and nothing it can derive for itself.
+ *
+ * Gathered into one struct because the alternative is an eleven-argument
+ * function whose adjacent 32-byte buffers can be swapped without the compiler
+ * noticing -- and two of them, the random and the transcript hash, are both
+ * 32 bytes and both feed the same salt.
+ */
+struct matter_case_sigma2_in {
+	/** From the Sigma1 this answers. */
+	const uint8_t *initiator_pubkey; /**< 65 bytes. */
+	/** SHA-256 of the Sigma1 payload exactly as it arrived. */
+	const uint8_t *transcript_hash; /**< 32 bytes. */
+	/** The fabric's OPERATIONAL IPK -- see matter_case_operational_ipk(). */
+	const uint8_t *ipk; /**< 16 bytes. */
+
+	/** This node's operational certificate chain and key. */
+	const uint8_t *noc;
+	size_t noc_len;
+	const uint8_t *icac; /**< NULL when the NOC was signed by the root. */
+	size_t icac_len;
+	const uint8_t *op_priv; /**< 32 bytes, the key the NOC certifies. */
+
+	/** Freshly drawn by the caller: this module has no entropy source. */
+	const uint8_t *responder_random;   /**< 32 bytes. */
+	const uint8_t *responder_eph_priv; /**< 32 bytes. */
+	const uint8_t *responder_eph_pub;  /**< 65 bytes. */
+	const uint8_t *resumption_id;      /**< 16 bytes. */
+	uint16_t responder_session_id;
+};
+
+/**
+ * Build the Sigma2 answering a Sigma1.
+ *
+ *   shared   = ECDH(responderEphPriv, initiatorEphPub)
+ *   S2K      = HKDF(shared, salt = IPK || responderRandom ||
+ *                                 responderEphPubKey || transcriptHash,
+ *                   info = "Sigma2", 16)
+ *   TBSData2 = { NOC, ICAC?, responderEphPubKey, initiatorEphPubKey }
+ *   TBEData2 = { NOC, ICAC?, Sign(opPriv, TBSData2), resumptionID }
+ *   Sigma2   = { responderRandom, responderSessionId, responderEphPubKey,
+ *                AES-CCM(TBEData2, S2K, "NCASE_Sigma2N") }
+ *
+ * The signature covers the EPHEMERAL keys of both sides, which is what stops a
+ * recorded Sigma2 being replayed into another handshake: the certificate chain
+ * inside it is public, and only the binding to this exchange's keys is not.
+ *
+ * @param shared_out receives the ECDH secret, which Sigma3 and the session keys
+ *        both still need. Wiped by the caller, not here.
+ * @return MATTER_OK, MATTER_E_NOSPACE, MATTER_E_INVAL, or MATTER_E_STATE when a
+ *         crypto primitive failed.
+ */
+int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *out, size_t cap,
+			      size_t *out_len, uint8_t shared_out[MATTER_CASE_SECRET_LEN]);
+
+/**
+ * ECDH P-256, provided by the platform.
+ *
+ * Declared rather than included so this module stays free of any particular
+ * crypto backend, the same seam matter_attest.h uses for signing. @return 0 on
+ * success.
+ */
+int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_PUBKEY_LEN],
+		     uint8_t secret_out[MATTER_CASE_SECRET_LEN]);
+
+/** ECDSA-P256-SHA256 over a raw message. Same seam. @return 0 on success. */
+int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
+		     uint8_t sig[MATTER_CASE_SIG_LEN]);
+
 #ifdef __cplusplus
 }
 #endif
