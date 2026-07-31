@@ -30,6 +30,10 @@
 #include <errno.h>
 #include <string.h>
 
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#include <mbedtls/memory_buffer_alloc.h>
+#endif
+
 #include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
@@ -1188,6 +1192,23 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	s_info.case_established = true;
 	LOG_INF("  CASE ESTABLISHED: local session 0x%04x, peer 0x%04x",
 		(unsigned int)s_case.local_session_id, (unsigned int)s_case.peer_session_id);
+#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+	/* The third report point. main.c reads the peak at an unlock grant and
+	 * prov_shell.c at an import, and both predate this node: Sigma3 is now
+	 * the heaviest crypto this image does, running an ECDH, a signature
+	 * verify and three HKDF expansions before the session keys exist. The
+	 * peak is cumulative since boot, so reading it HERE covers PASE and both
+	 * earlier Sigma stages too. Sizing MBEDTLS_HEAP_SIZE off the unlock
+	 * figure alone would miss all of it. */
+	{
+		size_t used = 0;
+		size_t blocks = 0;
+
+		mbedtls_memory_buffer_alloc_max_get(&used, &blocks);
+		LOG_INF("  mbedtls heap peak @case: %u B of %u (%u blocks)", (unsigned int)used,
+			(unsigned int)CONFIG_MBEDTLS_HEAP_SIZE, (unsigned int)blocks);
+	}
+#endif
 
 	return case_status_report(req, req_mh, reply, cap);
 }
