@@ -881,15 +881,28 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		return MATTER_IM_STATUS_SUCCESS;
 
 	case MATTER_CMD_GC_COMMISSIONING_COMPLETE:
-		/*
-		 * Answered NO_FAIL_SAFE rather than OK, because it would be a
-		 * lie: completing commissioning means having accepted an
-		 * operational identity over CASE, and nothing here has. The
-		 * commissioner is told the truth and fails cleanly instead of
-		 * believing it owns a node that cannot be reached.
-		 */
-		info->last_commissioning_error = MATTER_COMMISSIONING_NO_FAIL_SAFE;
 		*response_command = MATTER_CMD_GC_COMMISSIONING_COMPLETE_RESPONSE;
+		/*
+		 * Refused over anything but CASE, and NO_FAIL_SAFE rather than
+		 * OK because OK would be a lie: the command asserts that the
+		 * commissioner has reached this node operationally, and until a
+		 * CASE session exists it has not. Telling the truth makes the
+		 * commissioner fail cleanly instead of believing it owns a node
+		 * it cannot reach.
+		 */
+		if (!info->case_established) {
+			info->last_commissioning_error = MATTER_COMMISSIONING_NO_FAIL_SAFE;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
+		/*
+		 * Commit. Disarming the fail-safe is the substance of the
+		 * command, not bookkeeping: until this point every fabric,
+		 * every key and the whole operational identity are provisional
+		 * and matter_clusters_failsafe_expire() will erase them.
+		 */
+		info->commissioning_complete = true;
+		info->failsafe_armed = false;
+		info->last_commissioning_error = MATTER_COMMISSIONING_OK;
 		return MATTER_IM_STATUS_SUCCESS;
 
 	default:

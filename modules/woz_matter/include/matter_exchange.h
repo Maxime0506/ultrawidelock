@@ -128,6 +128,21 @@ struct matter_exchange {
 	 */
 	uint64_t peer_node_id;
 	bool have_peer_node_id;
+	/**
+	 * The two OPERATIONAL node ids, which are what the AEAD nonce is built
+	 * from once a CASE session is running.
+	 *
+	 * Not the same thing as @ref peer_node_id above: that one is the
+	 * initiator's ephemeral id and exists to address unsecured replies.
+	 * These are the fabric identities, they never appear in a header, and
+	 * both sides are simply expected to know them.
+	 *
+	 * Zero for PASE, which is correct rather than a placeholder -- a PASE
+	 * session has no operational identity and CHIP uses kUndefinedNodeId for
+	 * it explicitly (SessionManager.cpp:949-950).
+	 */
+	uint64_t local_op_node_id;
+	uint64_t peer_op_node_id;
 	/** The initiator's exchange id, echoed on every reply. */
 	uint16_t exchange_id;
 	/**
@@ -233,6 +248,19 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
  */
 int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16_t peer_id,
 			    const struct matter_session_keys *keys, uint32_t entropy);
+
+/**
+ * Name the operational identities a CASE session's nonces are built from.
+ *
+ * Call after matter_exchange_promote() for a CASE session; PASE must not call
+ * it at all. The node ids travel in no header, so a wrong pair here produces
+ * messages that are byte-perfect and simply will not authenticate -- and the
+ * peer has nothing to report but silence.
+ *
+ * @param local this node's operational node id, used when sealing.
+ * @param peer the far side's, used when opening.
+ */
+void matter_exchange_set_op_node_ids(struct matter_exchange *x, uint64_t local, uint64_t peer);
 
 /**
  * Frame a reply on this exchange.

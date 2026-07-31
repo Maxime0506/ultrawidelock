@@ -225,11 +225,16 @@ static bool s_udp_open;
 static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 {
 	/*
-	 * Sized for a Sigma1, which is the only thing that arrives here yet.
-	 * Static because this runs on OpenThread's own thread, whose stack is
-	 * one of the two things deliberately left un-shrunk.
+	 * Sized for a Sigma3, not a Sigma1. A Sigma1 is 196 bytes, but a Sigma3
+	 * carries the initiator's whole certificate chain encrypted -- with an
+	 * intermediate certificate present that is comfortably past 512, and the
+	 * only symptom of an undersized buffer here is this function declining to
+	 * look at the message that ends the handshake.
+	 *
+	 * Static because this runs on OpenThread's own thread, whose stack is one
+	 * of the two things deliberately left un-shrunk.
 	 */
-	static uint8_t buf[512];
+	static uint8_t buf[MATTER_CASE_SIGMA3_MAX];
 	/* Sigma2 is the largest thing this sends: two certificates, a signature
 	 * and the framing. Static for the same reason as the receive buffer. */
 	static uint8_t reply[MATTER_CASE_SIGMA2_MAX];

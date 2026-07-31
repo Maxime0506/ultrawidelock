@@ -188,6 +188,57 @@ struct matter_case_sigma2_in {
 int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *out, size_t cap,
 			      size_t *out_len, uint8_t shared_out[MATTER_CASE_SECRET_LEN]);
 
+/** Enough for a Sigma3: a certificate chain, a signature and the framing. */
+#define MATTER_CASE_SIGMA3_MAX 1024u
+
+/** Who the Sigma3 proved its sender to be. */
+struct matter_case_sigma3_out {
+	uint64_t node_id;
+	uint64_t fabric_id;
+	/** The initiator's operational public key, out of the NOC it sent. */
+	uint8_t public_key[MATTER_CASE_PUBKEY_LEN];
+};
+
+/** What opening a Sigma3 needs, all of it already in hand by then. */
+struct matter_case_sigma3_in {
+	const uint8_t *shared;          /**< 32, the ECDH secret kept from Sigma2. */
+	const uint8_t *ipk;             /**< 16, operational. */
+	const uint8_t *transcript_hash; /**< 32, SHA-256 over Sigma1 || Sigma2. */
+	/** Both ephemeral keys, in the roles TBSData3 names them. */
+	const uint8_t *initiator_eph_pub; /**< 65, from the Sigma1. */
+	const uint8_t *responder_eph_pub; /**< 65, the one Sigma2 carried. */
+};
+
+/**
+ * Open and check a Sigma3, the initiator's half of the same proof.
+ *
+ *   S3K      = HKDF(shared, salt = IPK || TranscriptHash(Sigma1 || Sigma2),
+ *                   info = "Sigma3", 16)
+ *   TBEData3 = AES-CCM-open(encrypted3, S3K, "NCASE_Sigma3N")
+ *            = { initiatorNOC, initiatorICAC?, signature }
+ *   TBSData3 = { initiatorNOC, initiatorICAC?, initiatorEphPubKey,
+ *                responderEphPubKey }
+ *
+ * and the signature over TBSData3 must verify under the public key inside the
+ * NOC. Note the tag order: TBSData3 names the SENDER's key first, so Sigma3
+ * puts the initiator's ephemeral key where Sigma2 put the responder's. Getting
+ * that backwards still encodes, still decodes, and never verifies.
+ *
+ * WHAT THIS DOES NOT DO: it does not walk the certificate chain. The signature
+ * proves the sender holds the key its NOC names, and the caller is expected to
+ * compare the fabric id against its own, but nothing here checks that the NOC
+ * was issued by the fabric's root. A peer that reached this point already
+ * proved possession of the IPK to get its destination identifier accepted, so
+ * this is a narrowing rather than a hole -- but it IS a narrowing, and a
+ * complete implementation verifies the chain.
+ *
+ * @return MATTER_OK, MATTER_E_INVAL for a malformed message, MATTER_E_TYPE if
+ *         the AEAD tag or the signature failed, MATTER_E_NOSPACE if the
+ *         message is larger than this node can hold.
+ */
+int matter_case_sigma3_open(const struct matter_case_sigma3_in *in, const uint8_t *tlv, size_t len,
+			    struct matter_case_sigma3_out *out);
+
 /**
  * ECDSA-P256-SHA256 verification, provided by the platform.
  *

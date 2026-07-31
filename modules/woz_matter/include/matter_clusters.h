@@ -270,6 +270,18 @@ struct matter_device_info {
 	 */
 	bool commissioning_complete;
 	/**
+	 * True once a CASE session is running, which is the one precondition
+	 * CommissioningComplete has.
+	 *
+	 * The spec will not accept that command over anything else
+	 * (general-commissioning-cluster.cpp:548-556 answers
+	 * kInvalidAuthentication), and the reason is not ceremony: the command
+	 * asserts the commissioner can reach this node operationally, and only
+	 * a CASE session is evidence of that. The port sets it; this module has
+	 * no way to see a session.
+	 */
+	bool case_established;
+	/**
 	 * The NodeOperationalCertStatusEnum the last AddNOC produced, held for
 	 * the same reason as last_commissioning_error: the reply is serialised
 	 * after the command has run and cannot recompute the verdict.

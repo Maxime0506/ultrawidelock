@@ -9,6 +9,7 @@
 
 #include "aliro_hash.h"
 #include "matter_crypto.h"
+#include "matter_fabric.h"
 #include "matter_im.h"
 #include "matter_tlv.h"
 
@@ -190,6 +191,18 @@ int matter_case_sigma1_decode(const uint8_t *tlv, size_t len, struct matter_case
 /** Resumption identifiers are 16 bytes (CASESession.cpp, kCASEResumptionIDSize). */
 #define RESUMPTION_ID_LEN 16u
 
+/*
+ * Certificates, signatures and the TLV around them, for whichever of Sigma2 and
+ * Sigma3 is in hand. One buffer serves both: Sigma2 is built, sent and finished
+ * with before its Sigma3 can arrive, and both run on the OpenThread thread, so
+ * the two are never live at once. A second kilobyte of scratch is a real cost
+ * on a node with 128 KB of RAM; this is the reason it is not spent.
+ *
+ * Sigma2 uses it twice in turn -- TBSData2 is signed and then no longer needed,
+ * so TBEData2 is built over it.
+ */
+static uint8_t s_scratch[MATTER_CASE_SIGMA2_MAX];
+
 int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *out, size_t cap,
 			      size_t *out_len, uint8_t shared_out[MATTER_CASE_SECRET_LEN])
 {
@@ -200,10 +213,6 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	uint8_t salt[S2K_SALT_LEN];
 	uint8_t s2k[MATTER_KEY_LEN];
 	uint8_t sig[MATTER_CASE_SIG_LEN];
-	/* TBSData2 then TBEData2, one after the other in the same scratch: the
-	 * first is signed and then no longer needed, and two certificates plus a
-	 * signature is most of a kilobyte to hold twice. */
-	static uint8_t scratch[MATTER_CASE_SIGMA2_MAX];
 	struct matter_tlv_writer w;
 	size_t n = 0u;
 	size_t off = 0u;
@@ -244,7 +253,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	 * already has, which is what makes the signature bind this exchange's
 	 * ephemeral keys rather than merely the certificate chain.
 	 */
-	matter_tlv_writer_init(&w, scratch, sizeof(scratch));
+	matter_tlv_writer_init(&w, s_scratch, sizeof(s_scratch));
 	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
 	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_TBS_NOC), in->noc, in->noc_len);
 	if (in->icac != NULL && in->icac_len > 0u) {
@@ -262,7 +271,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 		return rc;
 	}
 
-	if (matter_case_sign(in->op_priv, scratch, n, sig) != 0) {
+	if (matter_case_sign(in->op_priv, s_scratch, n, sig) != 0) {
 		memset(s2k, 0, sizeof(s2k));
 		return MATTER_E_STATE;
 	}
@@ -272,13 +281,13 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	 * nothing about why, so this is the only place "signed wrongly" and
 	 * "derived a different key" can be told apart.
 	 */
-	if (in->verify_pub != NULL && matter_case_verify(in->verify_pub, scratch, n, sig) != 0) {
+	if (in->verify_pub != NULL && matter_case_verify(in->verify_pub, s_scratch, n, sig) != 0) {
 		memset(s2k, 0, sizeof(s2k));
 		return MATTER_E_STATE;
 	}
 
-	/* TBEData2, over the same scratch now that the signature exists. */
-	matter_tlv_writer_init(&w, scratch, sizeof(scratch) - MATTER_TAG_LEN);
+	/* TBEData2, over the same s_scratch now that the signature exists. */
+	matter_tlv_writer_init(&w, s_scratch, sizeof(s_scratch) - MATTER_TAG_LEN);
 	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
 	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_TBE_NOC), in->noc, in->noc_len);
 	if (in->icac != NULL && in->icac_len > 0u) {
@@ -296,7 +305,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	}
 
 	/* Encrypted in place, tag appended. No AAD: Sigma2 has none. */
-	rc = matter_aead_encrypt(s2k, k_nonce, NULL, 0u, scratch, n, scratch, scratch + n);
+	rc = matter_aead_encrypt(s2k, k_nonce, NULL, 0u, s_scratch, n, s_scratch, s_scratch + n);
 	memset(s2k, 0, sizeof(s2k));
 	if (rc != MATTER_OK) {
 		return rc;
@@ -311,7 +320,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 				 in->responder_session_id);
 	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_S2_RESPONDER_PUBKEY),
 				   in->responder_eph_pub, MATTER_CASE_PUBKEY_LEN);
-	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_S2_ENCRYPTED), scratch, n);
+	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_S2_ENCRYPTED), s_scratch, n);
 
 	/*
 	 * Session parameters. Optional in the spec and ALWAYS sent by CHIP
@@ -339,4 +348,173 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	(void)matter_tlv_end_container(&w);
 
 	return matter_tlv_writer_finish(&w, out_len);
+}
+
+/* --------------------------------------------------------- Sigma3 --- */
+
+/* The only field a Sigma3 has (CASESession.cpp:101-104, Sigma3Tags). */
+#define TAG_S3_ENCRYPTED 1u
+
+/** Length of the S3K salt: the IPK and the transcript hash, and nothing else. */
+#define S3K_SALT_LEN (MATTER_CASE_IPK_LEN + 32u)
+
+int matter_case_sigma3_open(const struct matter_case_sigma3_in *in, const uint8_t *tlv, size_t len,
+			    struct matter_case_sigma3_out *out)
+{
+	/* "Sigma3" and "NCASE_Sigma3N" (CASESession.cpp:129,140). */
+	static const uint8_t k_info[] = {0x53, 0x69, 0x67, 0x6D, 0x61, 0x33};
+	static const uint8_t k_nonce[MATTER_NONCE_LEN] = {0x4E, 0x43, 0x41, 0x53, 0x45, 0x5F, 0x53,
+							  0x69, 0x67, 0x6D, 0x61, 0x33, 0x4E};
+	/*
+	 * TBSData3 is rebuilt here rather than received, so it needs a buffer of
+	 * its own: the certificates it copies are still sitting in the decrypted
+	 * TBEData3, so unlike Sigma2's two structures these two ARE live at the
+	 * same moment and cannot share.
+	 */
+	static uint8_t tbs[MATTER_CASE_SIGMA3_MAX];
+	uint8_t salt[S3K_SALT_LEN];
+	uint8_t s3k[MATTER_KEY_LEN];
+	struct matter_cert_info cert;
+	struct matter_tlv_reader r;
+	struct matter_tlv_writer w;
+	const uint8_t *enc = NULL;
+	const uint8_t *noc = NULL;
+	const uint8_t *icac = NULL;
+	const uint8_t *sig = NULL;
+	size_t enc_len = 0u;
+	size_t noc_len = 0u;
+	size_t icac_len = 0u;
+	size_t sig_len = 0u;
+	size_t n = 0u;
+	int rc;
+
+	if (in == NULL || tlv == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	if (in->shared == NULL || in->ipk == NULL || in->transcript_hash == NULL ||
+	    in->initiator_eph_pub == NULL || in->responder_eph_pub == NULL) {
+		return MATTER_E_INVAL;
+	}
+	memset(out, 0, sizeof(*out));
+
+	/* The outer message: one octet string, everything else is inside it. */
+	matter_tlv_reader_init(&r, tlv, len);
+	if (matter_tlv_next(&r) != MATTER_OK ||
+	    matter_tlv_element_type(&r) != MATTER_TLV_STRUCTURE) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_S3_ENCRYPTED) &&
+		    matter_tlv_get_bytes(&r, &enc, &enc_len) != MATTER_OK) {
+			return MATTER_E_TYPE;
+		}
+	}
+	/* Shorter than its own authentication tag means there is no ciphertext
+	 * at all, and the subtraction below would wrap. */
+	if (enc == NULL || enc_len <= MATTER_TAG_LEN) {
+		return MATTER_E_INVAL;
+	}
+	if ((enc_len - MATTER_TAG_LEN) > sizeof(s_scratch)) {
+		return MATTER_E_NOSPACE;
+	}
+
+	memcpy(salt, in->ipk, MATTER_CASE_IPK_LEN);
+	memcpy(&salt[MATTER_CASE_IPK_LEN], in->transcript_hash, 32u);
+	rc = aliro_hkdf(salt, sizeof(salt), in->shared, MATTER_CASE_SECRET_LEN, k_info,
+			sizeof(k_info), s3k, sizeof(s3k));
+	memset(salt, 0, sizeof(salt));
+	if (rc != 0) {
+		return MATTER_E_STATE;
+	}
+
+	/* The tag is the last 16 bytes; no AAD, the same as Sigma2. */
+	n = enc_len - MATTER_TAG_LEN;
+	rc = matter_aead_decrypt(s3k, k_nonce, NULL, 0u, enc, n, enc + n, s_scratch);
+	memset(s3k, 0, sizeof(s3k));
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	/* TBEData3: the initiator's chain and its signature over TBSData3. */
+	matter_tlv_reader_init(&r, s_scratch, n);
+	if (matter_tlv_next(&r) != MATTER_OK ||
+	    matter_tlv_element_type(&r) != MATTER_TLV_STRUCTURE) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_TBE_NOC)) {
+			rc = matter_tlv_get_bytes(&r, &noc, &noc_len);
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_TBE_ICAC)) {
+			rc = matter_tlv_get_bytes(&r, &icac, &icac_len);
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_TBE_SIGNATURE)) {
+			rc = matter_tlv_get_bytes(&r, &sig, &sig_len);
+		} else {
+			rc = MATTER_OK;
+		}
+		if (rc != MATTER_OK) {
+			return MATTER_E_TYPE;
+		}
+	}
+	if (noc == NULL || sig == NULL || sig_len != MATTER_CASE_SIG_LEN) {
+		return MATTER_E_INVAL;
+	}
+
+	/*
+	 * TBSData3. Same tag numbers as TBSData2 but the roles are swapped: the
+	 * SENDER is now the initiator, so its ephemeral key goes in tag 3 and
+	 * this node's in tag 4. Encoding them the other way round produces a
+	 * structure that is well formed, decodes cleanly, and never verifies.
+	 */
+	matter_tlv_writer_init(&w, tbs, sizeof(tbs));
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_TBS_NOC), noc, noc_len);
+	if (icac != NULL && icac_len > 0u) {
+		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_TBS_ICAC), icac, icac_len);
+	}
+	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_TBS_SENDER_PUBKEY), in->initiator_eph_pub,
+				   MATTER_CASE_PUBKEY_LEN);
+	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_TBS_RECV_PUBKEY), in->responder_eph_pub,
+				   MATTER_CASE_PUBKEY_LEN);
+	(void)matter_tlv_end_container(&w);
+	rc = matter_tlv_writer_finish(&w, &n);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	/* The key to check it with comes from the NOC that was sent alongside
+	 * it, which is only worth anything because the chain is bound to the
+	 * fabric -- see the caller's fabric id check. */
+	if (matter_cert_parse(noc, noc_len, &cert) != MATTER_OK || !cert.have_public_key) {
+		return MATTER_E_INVAL;
+	}
+	if (matter_case_verify(cert.public_key, tbs, n, sig) != 0) {
+		return MATTER_E_TYPE;
+	}
+
+	out->node_id = cert.node_id;
+	out->fabric_id = cert.fabric_id;
+	memcpy(out->public_key, cert.public_key, MATTER_CASE_PUBKEY_LEN);
+	return MATTER_OK;
 }

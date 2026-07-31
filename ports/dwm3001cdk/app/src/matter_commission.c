@@ -332,20 +332,96 @@ static int begin_session(void)
 	return 0;
 }
 
+/**
+ * The operational session, once CASE has established one.
+ *
+ * Separate from s_exchange, which belongs to BLE: the two have different keys
+ * and different counter spaces, and Apple keeps BLE open across the handover --
+ * so both can be live at once and neither may borrow the other's counter.
+ */
+static struct matter_exchange s_case_x;
+static bool s_case_ready;
+
+/**
+ * Where a reply goes when the request arrived over Thread rather than BLE.
+ *
+ * The two transports answer in opposite directions: matter_ble_send() pushes,
+ * while the Thread port sends whatever matter_thread_on_datagram() RETURNS. So
+ * a CASE reply has to travel back up the call stack instead of out, and the
+ * handlers in between -- on_read_request, on_invoke_request -- have no business
+ * knowing which of the two they are serving. Non-NULL means "stage it here".
+ */
+static uint8_t *s_thread_reply;
+static size_t s_thread_reply_cap;
+static size_t s_thread_reply_len;
+
 static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
 {
+	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x : &s_exchange;
 	size_t framed = 0u;
 	int rc;
 
-	rc = matter_exchange_reply(&s_exchange, opcode, payload, len, s_out, sizeof(s_out),
-				   &framed);
+	rc = matter_exchange_reply(x, opcode, payload, len, s_out, sizeof(s_out), &framed);
 	if (rc != MATTER_OK) {
 		LOG_ERR("framing opcode 0x%02x rc=%d", opcode, rc);
 		return;
 	}
 	LOG_HEXDUMP_DBG(s_out, framed > 40u ? 40u : framed, "reply (first bytes)");
+
+	if (s_thread_reply != NULL) {
+		if (framed > s_thread_reply_cap) {
+			LOG_ERR("opcode 0x%02x needs %u B, have %u", opcode, (unsigned int)framed,
+				(unsigned int)s_thread_reply_cap);
+			return;
+		}
+		memcpy(s_thread_reply, s_out, framed);
+		s_thread_reply_len = framed;
+		LOG_DBG("staged opcode 0x%02x, %u B for Thread", opcode, (unsigned int)framed);
+		return;
+	}
+
 	rc = matter_ble_send(s_out, framed);
 	LOG_DBG("sent opcode 0x%02x, %u B framed, rc=%d", opcode, (unsigned int)framed, rc);
+}
+
+/**
+ * Send an Interaction Model message on whichever transport asked for it.
+ *
+ * The same split send_framed() makes, and for the same reason. Both IM paths
+ * used to frame on the BLE exchange unconditionally, which over a CASE session
+ * produced a perfectly correct response sealed with the wrong session's keys
+ * and pushed at a link the commissioner had already closed -- no error
+ * anywhere, and a commissioner left waiting for an answer that went out a
+ * different door.
+ */
+static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
+{
+	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x : &s_exchange;
+	size_t framed = 0u;
+	int rc;
+
+	rc = matter_exchange_send(x, MATTER_PROTOCOL_INTERACTION_MODEL, opcode, payload, len, s_out,
+				  sizeof(s_out), &framed);
+	if (rc != MATTER_OK) {
+		LOG_ERR("framing IM opcode 0x%02x rc=%d (%u B)", opcode, rc, (unsigned int)len);
+		return;
+	}
+
+	if (s_thread_reply != NULL) {
+		if (framed > s_thread_reply_cap) {
+			LOG_ERR("IM opcode 0x%02x needs %u B, have %u", opcode, (unsigned int)framed,
+				(unsigned int)s_thread_reply_cap);
+			return;
+		}
+		memcpy(s_thread_reply, s_out, framed);
+		s_thread_reply_len = framed;
+		LOG_INF("  IM opcode 0x%02x staged over CASE, %u B", opcode, (unsigned int)framed);
+		return;
+	}
+
+	rc = matter_ble_send(s_out, framed);
+	LOG_DBG("IM opcode 0x%02x: %u B payload, %u B sealed, rc=%d", opcode, (unsigned int)len,
+		(unsigned int)framed, rc);
 }
 
 /**
@@ -363,7 +439,6 @@ static void on_read_request(const struct matter_exchange_in *in)
 {
 	struct matter_im_report_stats stats;
 	size_t report_len = 0u;
-	size_t framed = 0u;
 	int rc;
 
 	rc = matter_im_read_request_decode(in->payload, in->payload_len, &s_read);
@@ -397,24 +472,15 @@ static void on_read_request(const struct matter_exchange_in *in)
 			stats.unexpanded_wildcard);
 	}
 
-	rc = matter_exchange_send(&s_exchange, MATTER_PROTOCOL_INTERACTION_MODEL,
-				  MATTER_IM_OP_REPORT_DATA, s_report, report_len, s_out,
-				  sizeof(s_out), &framed);
-	if (rc != MATTER_OK) {
-		LOG_ERR("framing ReportData rc=%d (%u B report)", rc, (unsigned int)report_len);
-		return;
-	}
-
-	rc = matter_ble_send(s_out, framed);
-	LOG_DBG("ReportData: %u paths asked, %u B report, %u B sealed, rc=%d", s_read.n_paths,
-		(unsigned int)report_len, (unsigned int)framed, rc);
+	send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len);
+	LOG_DBG("ReportData: %u paths asked, %u B report", s_read.n_paths,
+		(unsigned int)report_len);
 }
 
 static void on_invoke_request(const struct matter_exchange_in *in)
 {
 	static struct matter_im_invoke inv;
 	size_t resp_len = 0u;
-	size_t framed = 0u;
 	int rc;
 
 	rc = matter_im_invoke_request_decode(in->payload, in->payload_len, &inv);
@@ -465,17 +531,8 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		return;
 	}
 
-	rc = matter_exchange_send(&s_exchange, MATTER_PROTOCOL_INTERACTION_MODEL,
-				  MATTER_IM_OP_INVOKE_COMMAND_RESPONSE, s_report, resp_len, s_out,
-				  sizeof(s_out), &framed);
-	if (rc != MATTER_OK) {
-		LOG_ERR("framing InvokeResponse rc=%d (%u B)", rc, (unsigned int)resp_len);
-		return;
-	}
-
-	rc = matter_ble_send(s_out, framed);
-	LOG_DBG("InvokeResponse: %u B, %u B sealed, rc=%d", (unsigned int)resp_len,
-		(unsigned int)framed, rc);
+	send_im(MATTER_IM_OP_INVOKE_COMMAND_RESPONSE, s_report, resp_len);
+	LOG_DBG("InvokeResponse: %u B", (unsigned int)resp_len);
 }
 
 static void on_secure(const struct matter_exchange_in *in)
@@ -522,10 +579,25 @@ static struct {
 	uint8_t resumption_id[16];
 	uint8_t noc_pub[MATTER_CASE_PUBKEY_LEN];
 	bool have_noc_pub;
+	/*
+	 * The initiator's ephemeral key, kept because TBSData3 has to be rebuilt
+	 * from it and the Sigma1 that carried it is long gone by then.
+	 */
+	uint8_t init_eph_pub[MATTER_CASE_PUBKEY_LEN];
+	/*
+	 * The transcript, as a running hash rather than the messages themselves.
+	 * Sigma2's salt needs SHA-256(Sigma1), Sigma3's needs
+	 * SHA-256(Sigma1 || Sigma2) and the session keys need all three -- and
+	 * keeping the ~1.2 KB of messages to re-hash is not affordable here.
+	 * Copy the context and finalise the copy to read an intermediate digest;
+	 * finalising this one would end the transcript a message early.
+	 */
+	struct aliro_sha256 transcript;
 	uint16_t peer_session_id;
 	uint16_t local_session_id;
 	bool active;
 } s_case;
+
 
 /** The unencrypted Matter message counter for the operational exchange. */
 static uint32_t s_case_counter;
@@ -539,8 +611,8 @@ static uint32_t s_case_counter;
  */
 static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk,
 			  const uint8_t *sigma1, size_t sigma1_len,
-			  const struct matter_proto_header *req, uint32_t req_counter,
-			  uint8_t *reply, size_t cap)
+			  const struct matter_proto_header *req,
+			  const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)
 {
 	struct matter_case_sigma2_in in;
 	struct matter_msg_header mh;
@@ -564,8 +636,21 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		s_case.local_session_id = 1u;
 	}
 	s_case.peer_session_id = s1->initiator_session_id;
+	/* A new handshake supersedes any session the last one established, so
+	 * the Sigma3 that follows THIS Sigma2 must be verified rather than
+	 * answered from the old session's StatusReport. */
+	s_case_ready = false;
 
-	aliro_sha256(sigma1, sigma1_len, transcript);
+	/* Start the transcript, and read SHA-256(Sigma1) off a COPY so the
+	 * running context stays open for Sigma2 and Sigma3. */
+	aliro_sha256_init(&s_case.transcript);
+	aliro_sha256_update(&s_case.transcript, sigma1, sigma1_len);
+	{
+		struct aliro_sha256 snapshot = s_case.transcript;
+
+		aliro_sha256_final(&snapshot, transcript);
+	}
+	memcpy(s_case.init_eph_pub, s1->initiator_pubkey, sizeof(s_case.init_eph_pub));
 
 	/*
 	 * The one assumption nothing has ever checked: that the key this signs
@@ -616,13 +701,24 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	/* Framed after both headers, so the payload lands where it will be sent
 	 * from rather than being copied into place afterwards. */
 	/*
-	 * The S flag and a source node id, because Apple sets them on its
-	 * Sigma1 and a receiver correlates an unauthenticated exchange by who
-	 * sent it. A Sigma2 that names nobody has nothing for the peer to match
-	 * against its pending session, and gets dropped without a word --
-	 * exactly what was observed.
+	 * A DESTINATION node id, and no source. Not symmetry with the Sigma1:
+	 * the ephemeral node id belongs to the INITIATOR, and the two directions
+	 * carry it in different fields. SessionManager.cpp:296-302 sets the
+	 * source on an initiator's message and the destination on a responder's,
+	 * both to the same value; the receive side at :763 rejects outright any
+	 * unsecured message carrying both or neither.
+	 *
+	 * Answering with a source node id is what a fresh initiator looks like,
+	 * so the peer allocates a NEW unauthenticated session for it
+	 * (:772-776 "Assume peer is the initiator, we are the responder") rather
+	 * than matching the CASE session waiting on this exchange. The Sigma2 is
+	 * then an unsolicited message with no handler, which ExchangeMgr.cpp:411
+	 * acknowledges and drops. That is the whole observed symptom: a
+	 * StandaloneAck, no StatusReport, and a fresh Sigma1 once the peer's
+	 * session times out. None of the payload is ever looked at, which is why
+	 * every byte inside it verified and none of it helped.
 	 */
-	mh.flags = MATTER_MSG_FLAG_S;
+	mh.flags = MATTER_MSG_DSIZ_NODE;
 	mh.session_id = 0u;
 	mh.security_flags = 0u;
 	/*
@@ -639,8 +735,14 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		s_case_counter &= 0x0FFFFFFFu; /* leave room to increment */
 	}
 	mh.message_counter = ++s_case_counter;
-	mh.source_node_id = s_info.fabric.node_id;
-	mh.dest_node_id = 0u;
+	mh.source_node_id = 0u;
+	/*
+	 * The initiator's EPHEMERAL id, echoed from the Sigma1's source field --
+	 * not this node's operational node id. It is what keys the peer's
+	 * unauthenticated session table, and it is random per handshake, so
+	 * there is nothing to derive it from except the message that carried it.
+	 */
+	mh.dest_node_id = req_mh->source_node_id;
 	mh.dest_group_id = 0u;
 	rc = matter_msg_header_encode(&mh, reply, cap, &mh_len);
 	if (rc != MATTER_OK) {
@@ -660,7 +762,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	ph.protocol_id = MATTER_PROTOCOL_SECURE_CHANNEL;
 	/* Acknowledging the Sigma1's counter, not a fresh one -- an ack that
 	 * names the wrong message is a retransmission trigger, not an ack. */
-	ph.ack_counter = req_counter;
+	ph.ack_counter = req_mh->message_counter;
 	rc = matter_proto_header_encode(&ph, reply + mh_len, cap - mh_len, &ph_len);
 	if (rc != MATTER_OK) {
 		LOG_ERR("  cannot frame Sigma2 protocol header (%d)", rc);
@@ -680,6 +782,9 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	}
 
 	s_case.active = true;
+	/* The transcript covers payloads, never headers -- the same rule the
+	 * Sigma1 length check above exists to prove. */
+	aliro_sha256_update(&s_case.transcript, reply + mh_len + ph_len, s2_len);
 	/*
 	 * The first 48 bytes are the whole TLV skeleton: outer structure, the
 	 * random, the session id, and the start of the ephemeral key. Enough to
@@ -691,6 +796,185 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	LOG_INF("  Sigma2 out: %u B payload, %u B total, session 0x%04x", (unsigned int)s2_len,
 		(unsigned int)(mh_len + ph_len + s2_len), (unsigned int)s_case.local_session_id);
 	return mh_len + ph_len + s2_len;
+}
+
+static size_t case_status_report(const struct matter_proto_header *req,
+				 const struct matter_msg_header *req_mh, uint8_t *reply,
+				 size_t cap);
+
+/**
+ * Answer a Sigma3, which ends the handshake.
+ *
+ * Sigma2 asked the initiator to believe this node; Sigma3 is the initiator
+ * proving the same thing back, and it is the last message either side sends in
+ * the clear. What follows it is encrypted under keys neither side transmitted,
+ * so a mistake here surfaces as silence on the NEXT message rather than as a
+ * failure on this one -- which is the reason for the checks logged below.
+ */
+static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint8_t *ipk,
+			    const struct matter_proto_header *req,
+			    const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)
+{
+	struct matter_case_sigma3_in in;
+	struct matter_case_sigma3_out peer;
+	struct matter_session_keys keys;
+	uint8_t salt[MATTER_CASE_IPK_LEN + 32u];
+	uint8_t digest[32];
+	int rc;
+
+	if (!s_case.active) {
+		LOG_WRN("  Sigma3 with no handshake in progress");
+		return 0u;
+	}
+	/*
+	 * A retransmitted Sigma3. Re-verifying is impossible as well as
+	 * pointless: the transcript that verified the first one was finalised to
+	 * derive the session keys, and SHA-256 cannot be finalised twice. The
+	 * peer resent because it never saw the StatusReport, so send that again
+	 * and touch nothing else.
+	 */
+	if (s_case_ready) {
+		LOG_INF("  Sigma3 again -- resending the StatusReport");
+		return case_status_report(req, req_mh, reply, cap);
+	}
+
+	/* SHA-256(Sigma1 || Sigma2), taken off a COPY so the running context can
+	 * go on to absorb this Sigma3 for the session keys below. */
+	{
+		struct aliro_sha256 snapshot = s_case.transcript;
+
+		aliro_sha256_final(&snapshot, digest);
+	}
+
+	memset(&in, 0, sizeof(in));
+	in.shared = s_case.shared;
+	in.ipk = ipk;
+	in.transcript_hash = digest;
+	in.initiator_eph_pub = s_case.init_eph_pub;
+	in.responder_eph_pub = s_case.eph_pub;
+
+	rc = matter_case_sigma3_open(&in, sigma3, sigma3_len, &peer);
+	if (rc != MATTER_OK) {
+		/* Worth separating: a failed AEAD tag means the key schedule
+		 * diverged, a failed signature means it did NOT and the identity
+		 * is the problem. Both return MATTER_E_TYPE, so this only
+		 * narrows it -- but it narrows it to two. */
+		LOG_ERR("  Sigma3 REJECTED (%d)%s", rc,
+			rc == MATTER_E_TYPE ? " -- AEAD tag or signature failed" : "");
+		return 0u;
+	}
+	LOG_INF("  Sigma3 VERIFIED: peer node 0x%08x%08x", (unsigned int)(peer.node_id >> 32),
+		(unsigned int)peer.node_id);
+
+	/*
+	 * The signature proved the sender holds the key its NOC names. This is
+	 * what ties that NOC to THIS fabric rather than to another fabric the
+	 * same phone also belongs to.
+	 */
+	if (peer.fabric_id != s_info.fabric.fabric_id) {
+		LOG_ERR("  Sigma3 names a different fabric -- refusing");
+		return 0u;
+	}
+
+	/* Only now can the transcript close, over all three messages. */
+	aliro_sha256_update(&s_case.transcript, sigma3, sigma3_len);
+	aliro_sha256_final(&s_case.transcript, digest);
+	memcpy(salt, ipk, MATTER_CASE_IPK_LEN);
+	memcpy(&salt[MATTER_CASE_IPK_LEN], digest, sizeof(digest));
+	rc = matter_derive_session_keys(s_case.shared, MATTER_CASE_SECRET_LEN, salt, sizeof(salt),
+					false, &keys);
+	memset(salt, 0, sizeof(salt));
+	memset(digest, 0, sizeof(digest));
+	if (rc != MATTER_OK) {
+		LOG_ERR("  session keys NOT derived (%d)", rc);
+		return 0u;
+	}
+
+	/*
+	 * A fresh exchange object, not the BLE one: this session has its own
+	 * counter space, and a counter reused under a new key repeats an AEAD
+	 * nonce. The exchange id is released with it, because the commissioner
+	 * opens a new exchange for what comes next.
+	 */
+	{
+		uint32_t seed = 0u;
+
+		/* Drawn, not carried over from s_case_counter: that one is the
+		 * UNSECURED counter and is on the wire in clear text, so seeding
+		 * from it would let a listener predict this session's. */
+		if (aliro_random((uint8_t *)&seed, sizeof(seed)) != 0) {
+			LOG_ERR("  no entropy for the session counter");
+			memset(&keys, 0, sizeof(keys));
+			return 0u;
+		}
+		matter_exchange_init(&s_case_x, seed, true);
+		rc = matter_exchange_promote(&s_case_x, s_case.local_session_id,
+					     s_case.peer_session_id, &keys, seed);
+		/*
+		 * The nonces. Unlike PASE, a CASE session builds them from the
+		 * two OPERATIONAL node ids -- ours when sealing, the peer's when
+		 * opening -- and neither appears in any header. Getting this
+		 * wrong produces messages that decrypt to nothing with no error
+		 * anyone can report.
+		 */
+		matter_exchange_set_op_node_ids(&s_case_x, s_info.fabric.node_id, peer.node_id);
+	}
+	memset(&keys, 0, sizeof(keys));
+	if (rc != MATTER_OK) {
+		LOG_ERR("  CASE session NOT installed (%d)", rc);
+		return 0u;
+	}
+	s_case_ready = true;
+	/* What unblocks CommissioningComplete. The cluster layer cannot see a
+	 * session, so this is the only place that can say so. */
+	s_info.case_established = true;
+	LOG_INF("  CASE ESTABLISHED: local session 0x%04x, peer 0x%04x",
+		(unsigned int)s_case.local_session_id, (unsigned int)s_case.peer_session_id);
+
+	return case_status_report(req, req_mh, reply, cap);
+}
+
+/**
+ * The StatusReport that ends CASE.
+ *
+ * Still unsecured and still addressed to the initiator's ephemeral id: this is
+ * the last message before the keys take effect, not the first one after.
+ */
+static size_t case_status_report(const struct matter_proto_header *req,
+				 const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)
+{
+	struct matter_msg_header mh;
+	struct matter_proto_header ph;
+	size_t mh_len = 0u;
+	size_t ph_len = 0u;
+	size_t sr_len = 0u;
+
+	mh.flags = MATTER_MSG_DSIZ_NODE;
+	mh.session_id = 0u;
+	mh.security_flags = 0u;
+	mh.message_counter = ++s_case_counter;
+	mh.source_node_id = 0u;
+	mh.dest_node_id = req_mh->source_node_id;
+	mh.dest_group_id = 0u;
+	if (matter_msg_header_encode(&mh, reply, cap, &mh_len) != MATTER_OK) {
+		return 0u;
+	}
+
+	ph.exchange_flags = MATTER_EX_FLAG_A | MATTER_EX_FLAG_R;
+	ph.opcode = MATTER_SC_OP_STATUS_REPORT;
+	ph.exchange_id = req->exchange_id;
+	ph.vendor_id = 0u;
+	ph.protocol_id = MATTER_PROTOCOL_SECURE_CHANNEL;
+	ph.ack_counter = req_mh->message_counter;
+	if (matter_proto_header_encode(&ph, reply + mh_len, cap - mh_len, &ph_len) != MATTER_OK) {
+		return 0u;
+	}
+	if (matter_sc_status_report(MATTER_SC_CODE_SUCCESS, reply + mh_len + ph_len,
+				    cap - mh_len - ph_len, &sr_len) != MATTER_OK) {
+		return 0u;
+	}
+	LOG_INF("  StatusReport success out: %u B total", (unsigned int)(mh_len + ph_len + sr_len));
+	return mh_len + ph_len + sr_len;
 }
 
 /**
@@ -721,6 +1005,49 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 		LOG_WRN("  not a Matter message (%d)", rc);
 		return 0u;
 	}
+
+	/*
+	 * A non-zero session id means the rest is encrypted, INCLUDING the
+	 * protocol header -- so this has to branch before anything tries to read
+	 * an opcode out of it. Decoding first is how "protocol 0xe65a opcode
+	 * 0xc1" ends up in a log: those are ciphertext bytes being read as a
+	 * header.
+	 */
+	if (mh.session_id != 0u) {
+		struct matter_exchange_in in;
+
+		if (!s_case_ready || mh.session_id != s_case.local_session_id) {
+			LOG_WRN("  encrypted for session 0x%04x, which is not ours",
+				(unsigned int)mh.session_id);
+			return 0u;
+		}
+		s_thread_reply = reply;
+		s_thread_reply_cap = cap;
+		s_thread_reply_len = 0u;
+
+		rc = matter_exchange_recv(&s_case_x, msg, len, &in, s_pt, sizeof(s_pt));
+		if (rc == MATTER_E_DUP) {
+			(void)matter_exchange_standalone_ack(&s_case_x, s_out, sizeof(s_out),
+							     &s_thread_reply_len);
+			if (s_thread_reply_len > cap) {
+				s_thread_reply_len = 0u;
+			} else {
+				memcpy(reply, s_out, s_thread_reply_len);
+			}
+		} else if (rc != MATTER_OK) {
+			LOG_WRN("  CASE message refused (%d)", rc);
+			s_thread_reply_len = 0u;
+		} else {
+			LOG_INF("  CASE in: protocol 0x%04x opcode 0x%02x, %u B",
+				(unsigned int)in.protocol_id, in.opcode,
+				(unsigned int)in.payload_len);
+			on_secure(&in);
+		}
+
+		s_thread_reply = NULL;
+		return s_thread_reply_len;
+	}
+
 	rc = matter_proto_header_decode(msg + mh_len, len - mh_len, &ph, &ph_len);
 	if (rc != MATTER_OK) {
 		LOG_WRN("  no protocol header (%d)", rc);
@@ -733,12 +1060,50 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	 */
 	LOG_INF("  protocol 0x%04x opcode 0x%02x exchange 0x%04x", (unsigned int)ph.protocol_id,
 		ph.opcode, (unsigned int)ph.exchange_id);
-	LOG_INF("  in hdr: flags 0x%02x sec 0x%02x ctr %u exflags 0x%02x", mh.flags,
+	/* Demoted now that the addressing is proven: three lines per datagram
+	 * fills the 4 KB trace ring inside one handshake, and a full ring looks
+	 * exactly like a board that logged nothing. */
+	LOG_DBG("  in hdr: flags 0x%02x sec 0x%02x ctr %u exflags 0x%02x", mh.flags,
 		mh.security_flags, (unsigned int)mh.message_counter, ph.exchange_flags);
+	LOG_DBG("  in hdr: source node 0x%08x%08x", (unsigned int)(mh.source_node_id >> 32),
+		(unsigned int)mh.source_node_id);
 
 	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL ||
-	    ph.opcode != MATTER_OP_CASE_SIGMA1) {
+	    (ph.opcode != MATTER_OP_CASE_SIGMA1 && ph.opcode != MATTER_OP_CASE_SIGMA3)) {
 		return 0u;
+	}
+
+	/*
+	 * The fabric and its operational key are needed by both halves -- Sigma1
+	 * to recompute a destination identifier, Sigma3 to derive S3K -- so they
+	 * are established before the two paths diverge.
+	 */
+	if (s_info.fabric.index == 0u) {
+		LOG_WRN("  no fabric to match it against");
+		return 0u;
+	}
+	if (matter_fabric_compressed_id(s_info.fabric.root_public_key, s_info.fabric.fabric_id,
+					cfid) != MATTER_OK ||
+	    matter_case_operational_ipk(s_info.fabric.ipk, cfid, ipk) != MATTER_OK) {
+		LOG_ERR("  could not derive the operational key");
+		return 0u;
+	}
+	/*
+	 * The reply is addressed to the id in this field, so its absence is not
+	 * a detail to skip past: there would be nothing to address the answer to
+	 * and the peer would drop it exactly as it dropped the ones before this.
+	 */
+	if ((mh.flags & MATTER_MSG_FLAG_S) == 0u) {
+		LOG_WRN("  no source node id -- cannot address a reply");
+		return 0u;
+	}
+
+	if (ph.opcode == MATTER_OP_CASE_SIGMA3) {
+		LOG_INF("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
+			(unsigned int)mh_len, (unsigned int)ph_len,
+			(unsigned int)(len - mh_len - ph_len));
+		return handle_sigma3(msg + mh_len + ph_len, len - mh_len - ph_len, ipk, &ph, &mh,
+				     reply, cap);
 	}
 
 	rc = matter_case_sigma1_decode(msg + mh_len + ph_len, len - mh_len - ph_len, &s1);
@@ -759,14 +1124,7 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	LOG_INF("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
 		(unsigned int)mh_len, (unsigned int)ph_len, (unsigned int)(len - mh_len - ph_len));
 
-	if (s_info.fabric.index == 0u) {
-		LOG_WRN("  no fabric to match it against");
-		return 0u;
-	}
-	if (matter_fabric_compressed_id(s_info.fabric.root_public_key, s_info.fabric.fabric_id,
-					cfid) != MATTER_OK ||
-	    matter_case_operational_ipk(s_info.fabric.ipk, cfid, ipk) != MATTER_OK ||
-	    matter_case_destination_id(ipk, s1.initiator_random, s_info.fabric.root_public_key,
+	if (matter_case_destination_id(ipk, s1.initiator_random, s_info.fabric.root_public_key,
 				       s_info.fabric.fabric_id, s_info.fabric.node_id,
 				       want) != MATTER_OK) {
 		LOG_ERR("  could not recompute the destination identifier");
@@ -779,8 +1137,8 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	}
 	LOG_INF("  destination MATCHES fabric %u -- answering", s_info.fabric.index);
 
-	return send_sigma2(&s1, ipk, msg + mh_len + ph_len, len - mh_len - ph_len, &ph,
-			   mh.message_counter, reply, cap);
+	return send_sigma2(&s1, ipk, msg + mh_len + ph_len, len - mh_len - ph_len, &ph, &mh, reply,
+			   cap);
 }
 
 static void on_message(const uint8_t *msg, size_t len)

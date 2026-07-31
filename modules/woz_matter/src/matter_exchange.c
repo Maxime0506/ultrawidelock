@@ -85,11 +85,12 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 		 * -- only bytes an attacker chose.
 		 *
 		 * i2r decrypts: we are the responder (CryptoContext.cpp:77-78).
-		 * The nonce carries the SENDER's node id, which for a PASE
-		 * session is undefined and therefore zero
-		 * (SecureSession.h:337, kUndefinedNodeId).
+		 * The nonce carries the SENDER's node id -- the PEER's, on the
+		 * way in. Zero for PASE, which has no operational identity, and
+		 * the far side's real node id once CASE has named one
+		 * (SessionManager.cpp:949-950 branches on exactly this).
 		 */
-		rc = matter_crypto_open(msg, len, x->keys.i2r, MATTER_PASE_NODE_ID, &mh, pt, pt_cap,
+		rc = matter_crypto_open(msg, len, x->keys.i2r, x->peer_op_node_id, &mh, pt, pt_cap,
 					&pt_len);
 		if (rc != MATTER_OK) {
 			return rc;
@@ -211,6 +212,11 @@ int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16
 	matter_counter_init(&x->counter, entropy, MATTER_COUNTER_SESSION);
 	matter_mrp_window_init(&x->window);
 
+	/* Undefined until told otherwise, which is what PASE needs and what a
+	 * caller forgetting matter_exchange_set_op_node_ids() gets. */
+	x->local_op_node_id = MATTER_PASE_NODE_ID;
+	x->peer_op_node_id = MATTER_PASE_NODE_ID;
+
 	/* PASE's exchange is over. The commissioner opens a new one on the
 	 * secure session, so holding the old id would refuse its first message. */
 	x->open = false;
@@ -329,10 +335,11 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 		 *
 		 * Keys are role-relative: this node is the RESPONDER, so it
 		 * encrypts with r2i (CryptoContext.cpp:102-103). The nonce takes
-		 * node id 0 because a PASE session has no operational identity
-		 * (SessionManager.cpp:279-280 with kUndefinedNodeId).
+		 * the SENDER's node id -- this node's, on the way out. Zero for
+		 * PASE, which has no operational identity
+		 * (SessionManager.cpp:279-280).
 		 */
-		rc = matter_crypto_seal(&mh, x->keys.r2i, MATTER_PASE_NODE_ID, out + mh_len,
+		rc = matter_crypto_seal(&mh, x->keys.r2i, x->local_op_node_id, out + mh_len,
 					ph_len + payload_len, out, cap, out_len);
 		if (rc != MATTER_OK) {
 			return rc;
@@ -372,4 +379,13 @@ int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size
 	}
 	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, MATTER_SC_OP_ACK, false, NULL, 0u, out, cap,
 		     out_len);
+}
+
+void matter_exchange_set_op_node_ids(struct matter_exchange *x, uint64_t local, uint64_t peer)
+{
+	if (x == NULL) {
+		return;
+	}
+	x->local_op_node_id = local;
+	x->peer_op_node_id = peer;
 }
