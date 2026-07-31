@@ -260,7 +260,7 @@ gate_label() {
 	licenses) echo "licence store is consistent" ;;
 	cbmc) echo "wire-parser memory-safety proof" ;;
 	secrets) echo "no secrets in the working tree" ;;
-	web) echo "browser supply chain: pins, CSP" ;;
+	web) echo "browser supply chain: pins, CSP, installs" ;;
 	ct) echo "no secret-dependent branches" ;;
 	esp) echo "ESP component pins are exact" ;;
 	attest) echo "release provenance configured" ;;
@@ -326,7 +326,17 @@ gate_run() {
 	# All three steps release.yml runs, in its order. `make tui-test` alone would
 	# pass a branch whose types are broken or whose executable does not link,
 	# because CI only finds those in the typecheck and release steps.
-	test-tui) (cd "$ROOT/tools/tui" && bun run typecheck && bun run test && bun run release) ;;
+	# The install is part of the gate, exactly as release.yml runs it. Without it this gate read
+	# whatever node_modules the developer happened to leave behind: a plain `bun install` omits
+	# the other platforms' optional binaries, and `bun run release` cross-compiles for linux-x64
+	# as well as darwin-arm64, so the gate failed with "Could not resolve
+	# @opentui/core-linux-x64" on a tree that was completely fine. A gate whose answer depends on
+	# ambient state nothing establishes is not a gate.
+	test-tui)
+		(cd "$ROOT/tools/tui" \
+			&& bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*' \
+			&& bun run typecheck && bun run test && bun run release)
+		;;
 	test-verify) make --no-print-directory test-verify ;;
 	coverage)
 		# host-tests.yml runs `make coverage` and THEN enforces the floor as a
