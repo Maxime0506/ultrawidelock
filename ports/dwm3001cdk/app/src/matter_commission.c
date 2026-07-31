@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
 #include "matter_attest.h"
@@ -426,6 +427,128 @@ static void on_secure(const struct matter_exchange_in *in)
 }
 
 /**
+ * State this node keeps between Sigma1 and Sigma3.
+ *
+ * One CASE handshake at a time, because there is one commissioner and one
+ * fabric. A second Sigma1 arriving mid-handshake overwrites this, which is the
+ * correct thing rather than a limitation: a commissioner that resent Sigma1 has
+ * abandoned the earlier attempt, and its ephemeral key with it.
+ */
+static struct {
+	uint8_t shared[MATTER_CASE_SECRET_LEN];
+	uint8_t eph_priv[32];
+	uint8_t eph_pub[MATTER_CASE_PUBKEY_LEN];
+	uint8_t responder_random[MATTER_CASE_RANDOM_LEN];
+	uint8_t resumption_id[16];
+	uint16_t peer_session_id;
+	uint16_t local_session_id;
+	bool active;
+} s_case;
+
+/** The unencrypted Matter message counter for the operational exchange. */
+static uint32_t s_case_counter;
+
+/**
+ * Build and frame the Sigma2 answering @p s1.
+ *
+ * @param sigma1 the Sigma1 payload EXACTLY as it arrived -- the transcript hash
+ *        is over those bytes, and rebuilding them would be rebuilding something
+ *        the peer hashed and this node did not.
+ */
+static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk,
+			  const uint8_t *sigma1, size_t sigma1_len,
+			  const struct matter_proto_header *req, uint32_t req_counter,
+			  uint8_t *reply, size_t cap)
+{
+	struct matter_case_sigma2_in in;
+	struct matter_msg_header mh;
+	struct matter_proto_header ph;
+	uint8_t transcript[32];
+	size_t s2_len = 0u;
+	size_t mh_len = 0u;
+	size_t ph_len = 0u;
+	int rc;
+
+	if (aliro_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
+	    aliro_random(s_case.responder_random, sizeof(s_case.responder_random)) != 0 ||
+	    aliro_random(s_case.resumption_id, sizeof(s_case.resumption_id)) != 0 ||
+	    aliro_random((uint8_t *)&s_case.local_session_id, sizeof(s_case.local_session_id)) !=
+		    0) {
+		LOG_ERR("  no entropy for Sigma2");
+		return 0u;
+	}
+	/* Session id 0 means "unsecured" on the wire, so it can never be ours. */
+	if (s_case.local_session_id == 0u) {
+		s_case.local_session_id = 1u;
+	}
+	s_case.peer_session_id = s1->initiator_session_id;
+
+	aliro_sha256(sigma1, sigma1_len, transcript);
+
+	memset(&in, 0, sizeof(in));
+	in.initiator_pubkey = s1->initiator_pubkey;
+	in.transcript_hash = transcript;
+	in.ipk = ipk;
+	in.noc = s_info.fabric.noc;
+	in.noc_len = s_info.fabric.noc_len;
+	in.icac = s_info.fabric.icac_len > 0u ? s_info.fabric.icac : NULL;
+	in.icac_len = s_info.fabric.icac_len;
+	in.op_priv = s_info.op_priv;
+	in.responder_random = s_case.responder_random;
+	in.responder_eph_priv = s_case.eph_priv;
+	in.responder_eph_pub = s_case.eph_pub;
+	in.resumption_id = s_case.resumption_id;
+	in.responder_session_id = s_case.local_session_id;
+
+	/* Framed after both headers, so the payload lands where it will be sent
+	 * from rather than being copied into place afterwards. */
+	mh.flags = 0u;
+	mh.session_id = 0u;
+	mh.security_flags = 0u;
+	mh.message_counter = ++s_case_counter;
+	mh.source_node_id = 0u;
+	mh.dest_node_id = 0u;
+	mh.dest_group_id = 0u;
+	rc = matter_msg_header_encode(&mh, reply, cap, &mh_len);
+	if (rc != MATTER_OK) {
+		LOG_ERR("  cannot frame Sigma2 (%d)", rc);
+		return 0u;
+	}
+
+	/*
+	 * The responder is NOT the exchange initiator, so the I flag stays
+	 * clear; it acknowledges the Sigma1 it is answering, and asks to be
+	 * acknowledged in turn.
+	 */
+	ph.exchange_flags = MATTER_EX_FLAG_A | MATTER_EX_FLAG_R;
+	ph.opcode = MATTER_OP_CASE_SIGMA2;
+	ph.exchange_id = req->exchange_id;
+	ph.vendor_id = 0u;
+	ph.protocol_id = MATTER_PROTOCOL_SECURE_CHANNEL;
+	/* Acknowledging the Sigma1's counter, not a fresh one -- an ack that
+	 * names the wrong message is a retransmission trigger, not an ack. */
+	ph.ack_counter = req_counter;
+	rc = matter_proto_header_encode(&ph, reply + mh_len, cap - mh_len, &ph_len);
+	if (rc != MATTER_OK) {
+		LOG_ERR("  cannot frame Sigma2 protocol header (%d)", rc);
+		return 0u;
+	}
+
+	rc = matter_case_sigma2_encode(&in, reply + mh_len + ph_len, cap - mh_len - ph_len, &s2_len,
+				       s_case.shared);
+	memset(transcript, 0, sizeof(transcript));
+	if (rc != MATTER_OK) {
+		LOG_ERR("  Sigma2 could not be built (%d)", rc);
+		return 0u;
+	}
+
+	s_case.active = true;
+	LOG_INF("  Sigma2 out: %u B payload, %u B total, session 0x%04x", (unsigned int)s2_len,
+		(unsigned int)(mh_len + ph_len + s2_len), (unsigned int)s_case.local_session_id);
+	return mh_len + ph_len + s2_len;
+}
+
+/**
  * A datagram on the operational port. Sigma1, so far, and only Sigma1.
  *
  * There is no responder yet, so this answers nothing. What it does establish is
@@ -436,7 +559,7 @@ static void on_secure(const struct matter_exchange_in *in)
  * the root key, the fabric and node ids out of the NOC -- all agree with what a
  * real commissioner computed independently.
  */
-void matter_thread_on_datagram(const uint8_t *msg, size_t len)
+size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap)
 {
 	struct matter_msg_header mh;
 	struct matter_proto_header ph;
@@ -451,32 +574,32 @@ void matter_thread_on_datagram(const uint8_t *msg, size_t len)
 	rc = matter_msg_header_decode(msg, len, &mh, &mh_len);
 	if (rc != MATTER_OK) {
 		LOG_WRN("  not a Matter message (%d)", rc);
-		return;
+		return 0u;
 	}
 	rc = matter_proto_header_decode(msg + mh_len, len - mh_len, &ph, &ph_len);
 	if (rc != MATTER_OK) {
 		LOG_WRN("  no protocol header (%d)", rc);
-		return;
+		return 0u;
 	}
 	LOG_INF("  protocol 0x%04x opcode 0x%02x exchange 0x%04x", (unsigned int)ph.protocol_id,
 		ph.opcode, (unsigned int)ph.exchange_id);
 
 	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL ||
 	    ph.opcode != MATTER_OP_CASE_SIGMA1) {
-		return;
+		return 0u;
 	}
 
 	rc = matter_case_sigma1_decode(msg + mh_len + ph_len, len - mh_len - ph_len, &s1);
 	if (rc != MATTER_OK) {
 		LOG_WRN("  Sigma1 unreadable (%d)", rc);
-		return;
+		return 0u;
 	}
 	LOG_INF("  Sigma1: initiator session 0x%04x, resumption %s",
 		(unsigned int)s1.initiator_session_id, s1.has_resumption ? "offered" : "none");
 
 	if (s_info.fabric.index == 0u) {
 		LOG_WRN("  no fabric to match it against");
-		return;
+		return 0u;
 	}
 	if (matter_fabric_compressed_id(s_info.fabric.root_public_key, s_info.fabric.fabric_id,
 					cfid) != MATTER_OK ||
@@ -485,15 +608,17 @@ void matter_thread_on_datagram(const uint8_t *msg, size_t len)
 				       s_info.fabric.fabric_id, s_info.fabric.node_id,
 				       want) != MATTER_OK) {
 		LOG_ERR("  could not recompute the destination identifier");
-		return;
+		return 0u;
 	}
 
-	if (memcmp(want, s1.destination_id, sizeof(want)) == 0) {
-		LOG_INF("  destination MATCHES fabric %u -- this Sigma1 is for us",
-			s_info.fabric.index);
-	} else {
+	if (memcmp(want, s1.destination_id, sizeof(want)) != 0) {
 		LOG_WRN("  destination does NOT match fabric %u", s_info.fabric.index);
+		return 0u;
 	}
+	LOG_INF("  destination MATCHES fabric %u -- answering", s_info.fabric.index);
+
+	return send_sigma2(&s1, ipk, msg + mh_len + ph_len, len - mh_len - ph_len, &ph,
+			   mh.message_counter, reply, cap);
 }
 
 static void on_message(const uint8_t *msg, size_t len)

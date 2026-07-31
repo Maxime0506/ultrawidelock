@@ -78,10 +78,12 @@ int matter_thread_advertise(const char *instance_name, uint16_t port);
  *
  * Supplied by the application rather than called by it: the datagram arrives on
  * OpenThread's own thread, and the port has no business knowing what a Sigma1
- * is. Returns nothing because there is no one to return it to -- anything worth
- * saying about the datagram is said in the log.
+ * is. The reply goes back through @p reply rather than being sent from inside,
+ * for the same reason -- sending is the port's job and parsing is not.
+ *
+ * @return how many bytes of @p reply to send, or 0 for nothing to say.
  */
-void matter_thread_on_datagram(const uint8_t *msg, size_t len);
+size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap);
 
 #ifdef __cplusplus
 }

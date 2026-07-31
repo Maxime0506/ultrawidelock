@@ -18,6 +18,7 @@
 
 /* For MATTER_INSTANCE_NAME_LEN: the SRP instance name is sized by the thing
  * that produces it, matter_fabric_instance_name(). */
+#include "matter_case.h"
 #include "matter_fabric.h"
 
 #include <zephyr/kernel.h>
@@ -229,6 +230,12 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 	 * one of the two things deliberately left un-shrunk.
 	 */
 	static uint8_t buf[512];
+	/* Sigma2 is the largest thing this sends: two certificates, a signature
+	 * and the framing. Static for the same reason as the receive buffer. */
+	static uint8_t reply[MATTER_CASE_SIGMA2_MAX];
+	otMessageInfo reply_info;
+	otMessage *out;
+	size_t reply_len;
 	uint16_t len = otMessageGetLength(msg) - otMessageGetOffset(msg);
 
 	ARG_UNUSED(ctx);
@@ -244,7 +251,38 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 		LOG_WRN("  could not be read out");
 		return;
 	}
-	matter_thread_on_datagram(buf, len);
+
+	reply_len = matter_thread_on_datagram(buf, len, reply, sizeof(reply));
+	if (reply_len == 0u) {
+		return;
+	}
+
+	/*
+	 * Replying to where it came FROM, rather than to the address SRP
+	 * published. They are the same today and need not be: a commissioner
+	 * behind a border router reaches this node from whichever of its
+	 * addresses routes, and answering anywhere else answers a different
+	 * peer.
+	 */
+	memset(&reply_info, 0, sizeof(reply_info));
+	reply_info.mPeerAddr = info->mPeerAddr;
+	reply_info.mPeerPort = info->mPeerPort;
+	reply_info.mSockAddr = info->mSockAddr;
+
+	out = otUdpNewMessage(openthread_get_default_instance(), NULL);
+	if (out == NULL) {
+		LOG_ERR("  no message buffer for the reply");
+		return;
+	}
+	if (otMessageAppend(out, reply, (uint16_t)reply_len) != OT_ERROR_NONE ||
+	    otUdpSend(openthread_get_default_instance(), &s_udp, out, &reply_info) !=
+		    OT_ERROR_NONE) {
+		/* otUdpSend takes ownership on success only. */
+		otMessageFree(out);
+		LOG_ERR("  reply could not be sent");
+		return;
+	}
+	LOG_INF("  replied %u B", (unsigned int)reply_len);
 }
 
 /**
