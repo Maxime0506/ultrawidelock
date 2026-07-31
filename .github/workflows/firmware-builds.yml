@@ -29,6 +29,13 @@ on:
       # The Matter app builds only on push/nightly/dispatch (see esp32-matter
       # below), so PRs touching nothing but its app dir skip the workflow.
       - "!ports/esp32/apps/matter-lock/**"
+      # Except its target definitions. Adding a target means a new sdkconfig
+      # defaults file and often a new partition table, and those are exactly
+      # what breaks a Matter build — but the negation above meant PR #89's C6
+      # definitions were compiled by nothing until the post-merge push. Last
+      # match wins, so re-including them has to come after the negation.
+      - ports/esp32/apps/matter-lock/sdkconfig.defaults.*
+      - ports/esp32/apps/matter-lock/partitions_*.csv
       - ports/nrf5340dk/**
       - modules/**
       - deps/dw3000/**
@@ -66,6 +73,7 @@ jobs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
       nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
       esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
+      esp32-matter-target: ${{ steps.filter.outputs.esp32-matter-target }}
       aliro-blob: ${{ steps.filter.outputs.aliro-blob }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,6 +111,12 @@ jobs:
             esp32-matter:
               - *esp32-shared
               - ports/esp32/apps/matter-lock/**/!(*.md)
+            # The subset that defines a target rather than changing its code.
+            # The only matter-lock inputs that earn the Matter build on a PR;
+            # see the esp32-matter job's condition.
+            esp32-matter-target:
+              - ports/esp32/apps/matter-lock/sdkconfig.defaults.*
+              - ports/esp32/apps/matter-lock/partitions_*.csv
             nrf5340dk:
               - west.yml
               - scripts/bootstrap.sh
@@ -351,12 +365,19 @@ jobs:
   # out. The esp-matter tree (including CHIP's CIPD-fetched gn/zap under
   # .environment) is cached on a static key: its revision is pinned, so only
   # a revision or IDF bump rolls the key.
+  #
+  # One exception, added after PR #89 shipped C6 target definitions this job
+  # never compiled: a PR that adds or edits a sdkconfig defaults file or a
+  # partition table does run it. Those are the changes most likely to break the
+  # build and the least likely to be caught by review, they are rare enough not
+  # to cost much, and a PR reads the base branch's caches, so the run is warm.
   esp32-matter:
     needs: changes
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && needs.changes.outputs.esp32-matter == 'true')
+      (github.event_name == 'push' && needs.changes.outputs.esp32-matter == 'true') ||
+      (github.event_name == 'pull_request' && needs.changes.outputs.esp32-matter-target == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 240
     container:
