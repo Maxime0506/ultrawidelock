@@ -294,7 +294,9 @@ gate_attest() { scripts/security-attest.sh workflow; }
 
 # ct is the one gate that can report neither pass nor fail. There is no valgrind for
 # darwin/arm64, so on the primary dev machine the honest answer is "not checked here" — exit 2,
-# which verify.sh renders as skip-tool rather than as a pass. CI runs linux and never sees it.
+# which verify.sh renders as a skip-host row rather than as a pass. Not skip-tool: that one is
+# fatal to the sweep because `make tools-install` is the fix, and here there is nothing to
+# install. CI runs linux and never sees it.
 gate_ct() {
 	scripts/security-ct.sh
 	local rc=$?
