@@ -665,6 +665,16 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	}
 	LOG_INF("  Sigma1: initiator session 0x%04x, resumption %s",
 		(unsigned int)s1.initiator_session_id, s1.has_resumption ? "offered" : "none");
+	/*
+	 * The transcript hash is over the Sigma1 payload and nothing else, so
+	 * these three have to sum to the datagram. A payload length that is one
+	 * byte long or short still decodes -- the TLV ends where it ends -- and
+	 * still yields the right destination identifier, but hashes to something
+	 * the peer never computed. That failure is completely silent, and this
+	 * is the only place it is visible.
+	 */
+	LOG_INF("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
+		(unsigned int)mh_len, (unsigned int)ph_len, (unsigned int)(len - mh_len - ph_len));
 
 	if (s_info.fabric.index == 0u) {
 		LOG_WRN("  no fabric to match it against");
