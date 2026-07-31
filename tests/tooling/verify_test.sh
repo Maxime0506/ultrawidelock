@@ -529,7 +529,8 @@ rc=$?
 assert "S17 isolated candidate sweep exits 0" test "$rc" -eq 0
 assert "S17 committed twin selftest still runs" has "stub node ok"
 assert "S17 reduced scope is explicit" has "NOT the full CI set"
-for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage test-tui; do
+for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage test-tui \
+	semgrep web deps; do
 	assert "S17 skips unavailable $isolated_gate gate" \
 		has "$isolated_gate \\(SKIP=\\)"
 done

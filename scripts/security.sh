@@ -114,13 +114,27 @@ gate_semgrep() {
 		printf '  %sregistry packs skipped (SEMGREP_NO_REGISTRY)%s\n' "$YEL" "$RESET"
 	fi
 
-	local out rc
+	local out rc src
 	out="$(mktemp -t oa-semgrep.XXXXXX)"
 	semgrep scan --metrics=off --quiet --json --output "$out" \
 		"${cfg[@]}" \
 		--exclude workspace --exclude build --exclude site --exclude .venv \
 		--exclude node_modules --exclude deps/dw3000 --exclude docs/architecture \
-		--exclude 'tests/host/fuzz/corpus' . >/dev/null 2>&1
+		--exclude 'tests/host/fuzz/corpus' . >"$out.log" 2>&1
+	src=$?
+	# semgrep can fail before it writes anything: the registry packs above are fetched per run,
+	# so no network means no rules, no JSON, and a python traceback where a diagnosis belongs.
+	# Report what actually happened. Not downgraded to a skip — the gate genuinely did not run,
+	# and on a host that is merely offline that has to read as "not verified".
+	if [ ! -s "$out" ]; then
+		printf '  %s%s%s semgrep produced no output (exit %s)\n' "$RED" "$CRS" "$RESET" "$src"
+		printf '      The six registry packs are fetched per run, so this is what no network\n'
+		printf '      looks like. SEMGREP_NO_REGISTRY=1 runs the two local rulesets only.\n'
+		sed 's/^/      /' <"$out.log" | tail -n 6
+		rm -f "$out" "$out.log"
+		return 1
+	fi
+	rm -f "$out.log"
 	# One --config per ruleset, so half the array length is the ruleset count.
 	SEMGREP_JSON="$out" NCONFIG="$((${#cfg[@]} / 2))" python3 -c '
 import json, os, sys
