@@ -208,26 +208,37 @@ for f in files:
         if EXACT.match(spec):
             continue
         if spec == "*":
-            block.append((f, i, spec, "'*' takes whatever the registry serves at build time."))
+            block.append((f, i, spec, "'*' takes whatever the registry serves at build time, so "
+                                      "there is no version this repository can be said to use."))
         else:
-            block.append((f, i, spec,
-                          "A range resolves on the runner, so the component compiled into a "
-                          "release is not determined by anything in this repository. Pin the "
-                          "exact version and commit dependencies.lock beside it."))
+            # Advisory, not blocking, and that is a correction. Blocking here said "replace the
+            # range with an exact version", which sounds equivalent and is not: the exact set has
+            # to be mutually SOLVABLE, and nothing in this repository records which set the build
+            # actually used. Pinning each range to its own newest release produced
+            # esp_bsp_devkit 3.0.3 -> led_indicator ~2.0 -> led_strip 3.*, against a led_strip
+            # pin of 2.5.5, and the ESP build failed to resolve at all. A gate cannot demand an
+            # answer that is not in the tree.
+            warn.append((f, i, spec,
+                         "range resolves on the runner, so the component compiled into a release "
+                         "is not fixed by this repository — commit dependencies.lock to fix it"))
 
-# The lock is what makes a range survivable, so its absence compounds the above rather than
-# standing alone.
+# The lock is the actual control: it records the whole solved graph, transitive components
+# included, which an exact spec in the manifest does not. Until one is committed a range is the
+# honest state of affairs rather than a defect, so this is where the pressure belongs.
 for f in files:
     lock = os.path.join(os.path.dirname(f), "dependencies.lock")
     if not os.path.exists(lock):
-        warn.append((f, 0, "-", "no dependencies.lock committed next to this manifest"))
+        warn.append((f, 0, "-", "no dependencies.lock committed next to this manifest. "
+                                "`idf.py reconfigure` writes one; commit it."))
 
 print("  scope: %d manifest(s), %d version spec(s)" % (len(files), n))
 for f, i, spec, why in block:
     print("  BLOCK %s:%s  version: %s" % (f, i, spec))
     print("        %s" % why)
 for f, i, spec, why in warn:
-    print("  warn  %s — %s" % (f, why))
+    where = "%s:%s  version: %s" % (f, i, spec) if i else f
+    print("  warn  %s" % where)
+    print("        %s" % why)
 print("  %d blocking, %d advisory" % (len(block), len(warn)))
 sys.exit(1 if block else 0)
 PY

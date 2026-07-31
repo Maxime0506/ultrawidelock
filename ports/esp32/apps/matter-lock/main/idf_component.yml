@@ -1,20 +1,14 @@
-# Exact versions, not ranges. A caret range resolves on whichever runner happens to build, so
-# two builds of the same commit could ship different component code — and for a lock, "what is
-# in this image" has to be answerable from the repository alone.
-#
-# Each pin is the highest version its former range already resolved to, so this freezes current
-# behaviour rather than changing it. Bump deliberately, and re-run the ESP build when you do.
 dependencies:
   espressif/cmake_utilities:
-    version: "1.1.1" # was ^1
+    version: "^1"
     rules: # will add "optional_component" only when all if clauses are True
       - if: "idf_version >=5.0"
       - if: "target in [esp32c2]"
   esp_bsp_devkit:
-    version: "3.0.3" # was ^3
+    version: "^3"
   espressif/led_strip:
-    version: "2.5.5" # was ^2.0.0
+    version: "^2.0.0"
   espressif/esp_tinyusb:
-    version: "2.2.1" # was ^2.2.1; 2.2.1 is the only release in that range
+    version: "^2.2.1"
     rules:
       - if: "target in [esp32s3]"
