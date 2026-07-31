@@ -8,9 +8,10 @@
 
 #include <string.h>
 
-void matter_exchange_init(struct matter_exchange *x, uint32_t entropy)
+void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp)
 {
 	memset(x, 0, sizeof(*x));
+	x->mrp = mrp;
 	matter_counter_init(&x->counter, entropy, MATTER_COUNTER_UNSECURED);
 	matter_mrp_window_init(&x->window);
 }
@@ -87,6 +88,13 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 		return MATTER_E_STATE;
 	}
 
+	/* Keep the initiator's ephemeral node id: every reply has to be addressed
+	 * back to it (SessionManager.cpp:301-303). */
+	if ((mh.flags & MATTER_MSG_FLAG_S) != 0u) {
+		x->peer_node_id = mh.source_node_id;
+		x->have_peer_node_id = true;
+	}
+
 	in->opcode = ph.opcode;
 	in->payload = msg + mh_len + ph_len;
 	in->payload_len = len - mh_len - ph_len;
@@ -100,7 +108,7 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 	 * must not be acted on twice. Hence the ack is recorded before the
 	 * return, and the caller is told not to use `in`.
 	 */
-	if (in->ack_requested) {
+	if (x->mrp && in->ack_requested) {
 		x->ack_counter = mh.message_counter;
 		x->ack_pending = true;
 	}
@@ -152,18 +160,29 @@ static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const
 	mh.session_id = MATTER_SESSION_ID_UNSECURED;
 	mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
 	mh.message_counter = counter;
-	/* No source or destination node id: on the unsecured session neither
-	 * side has an operational identity yet, and DSIZ_NONE says so. */
-	mh.flags = MATTER_MSG_DSIZ_NONE;
+	/*
+	 * No SOURCE node id -- this node has no operational identity yet -- but
+	 * the DESTINATION is the initiator's ephemeral node id, which is what the
+	 * peer matches the reply against. A responder that leaves this out is
+	 * talking to nobody in particular and gets ignored.
+	 */
+	if (x->have_peer_node_id) {
+		mh.flags = MATTER_MSG_DSIZ_NODE;
+		mh.dest_node_id = x->peer_node_id;
+	} else {
+		mh.flags = MATTER_MSG_DSIZ_NONE;
+	}
 
 	memset(&ph, 0, sizeof(ph));
 	/* I stays clear: the peer initiated this exchange and keeps that role
 	 * for its lifetime, however many messages each side sends. */
 	ph.exchange_flags = 0u;
-	if (reliable) {
+	/* Both flags are MRP's, and MRP does not run over a transport that is
+	 * already reliable (see struct matter_exchange::mrp). */
+	if (reliable && x->mrp) {
 		ph.exchange_flags |= MATTER_EX_FLAG_R;
 	}
-	if (x->ack_pending) {
+	if (x->mrp && x->ack_pending) {
 		ph.exchange_flags |= MATTER_EX_FLAG_A;
 		ph.ack_counter = x->ack_counter;
 	}
@@ -205,7 +224,7 @@ int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size
 	if (x == NULL) {
 		return MATTER_E_INVAL;
 	}
-	if (!x->ack_pending) {
+	if (!x->mrp || !x->ack_pending) {
 		return MATTER_E_STATE;
 	}
 	return frame(x, MATTER_SC_OP_ACK, false, NULL, 0u, out, cap, out_len);

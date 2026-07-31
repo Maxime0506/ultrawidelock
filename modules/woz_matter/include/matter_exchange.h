@@ -69,6 +69,35 @@ extern "C" {
 #define MATTER_EXCHANGE_HEADER_MAX (MATTER_MSG_HEADER_MAX + MATTER_PROTO_HEADER_MAX)
 
 struct matter_exchange {
+	/**
+	 * Whether MRP runs on this exchange at all.
+	 *
+	 * It does NOT over BLE. Matter gates reliable messaging on the transport:
+	 * SecureSession.h:161 and UnauthenticatedSessionTable.h:87 both define
+	 * AllowsMRP() as "the peer address is UDP", and ExchangeContext.cpp:109-112
+	 * only sets the R flag when the session allows MRP. BTP already guarantees
+	 * delivery and ordering, so acknowledging on top of it is duplicated work
+	 * the peer does not expect.
+	 *
+	 * Getting this wrong is not cosmetic. A real iPhone sent
+	 * PBKDFParamRequest with exchange flags 0x01 -- I only, no R -- and
+	 * dropped the link on a reply that came back with R set and no ack.
+	 */
+	bool mrp;
+	/**
+	 * The initiator's ephemeral node id, and whether it sent one.
+	 *
+	 * On an unsecured session the initiator picks an ephemeral node id and
+	 * puts it in the source field; the RESPONDER must send it back as the
+	 * DESTINATION, which is how the peer matches a reply to its session.
+	 * SessionManager.cpp:296-303 makes the asymmetry explicit: initiator sets
+	 * source, responder sets destination.
+	 *
+	 * Omitting it does not produce an error anywhere. A real iPhone simply
+	 * ignored our PBKDFParamResponse and sat on "connecting" until it gave up.
+	 */
+	uint64_t peer_node_id;
+	bool have_peer_node_id;
 	/** The initiator's exchange id, echoed on every reply. */
 	uint16_t exchange_id;
 	/** True once a first message has fixed @ref exchange_id. */
@@ -104,8 +133,10 @@ struct matter_exchange_in {
  * @param entropy a random word seeding the outbound counter; see
  *        matter_counter_init(). Unsecured counters wrap, so this is about not
  *        advertising uptime, not about safety.
+ * @param mrp false for BLE, true for UDP. See struct matter_exchange::mrp --
+ *        this is a property of the transport, not a preference.
  */
-void matter_exchange_init(struct matter_exchange *x, uint32_t entropy);
+void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp);
 
 /**
  * Decode one received message.
@@ -127,9 +158,9 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 /**
  * Frame a reply on this exchange.
  *
- * Carries the outstanding acknowledgement if there is one, and sets R so the
- * peer acknowledges this in turn -- every Secure Channel message in
- * commissioning is reliable.
+ * With MRP on, carries any outstanding acknowledgement and sets R so the peer
+ * acknowledges this in turn. With MRP off -- which is what BLE uses -- neither
+ * flag is ever set, because BTP is already reliable.
  *
  * @param out needs MATTER_EXCHANGE_HEADER_MAX + @p payload_len bytes.
  * @return MATTER_OK, MATTER_E_NOSPACE, MATTER_E_STATE if no message has been
@@ -145,7 +176,8 @@ int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8
  * when a reply cannot be produced inside the peer's retransmission timer, and
  * after the final message of an exchange.
  *
- * @return MATTER_OK, MATTER_E_STATE when nothing is pending, else MATTER_E_NOSPACE.
+ * @return MATTER_OK; MATTER_E_STATE when nothing is pending, or whenever MRP is
+ *         off, since then there is no such thing as an outstanding ack.
  */
 int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size_t cap,
 				   size_t *out_len);

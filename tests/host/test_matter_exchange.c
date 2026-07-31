@@ -20,6 +20,8 @@
 
 #define PEER_EXCHANGE_ID 0x1A2Bu
 #define SEED		 0x0BADF00Du
+/* An initiator's ephemeral node id, as seen on the wire from a real iPhone. */
+#define PEER_NODE_ID	 0x6557F7497EA9A507ULL
 
 /** Build a message as a peer would send it. */
 static size_t inbound(uint8_t *buf, size_t cap, uint8_t opcode, uint32_t counter,
@@ -33,7 +35,10 @@ static size_t inbound(uint8_t *buf, size_t cap, uint8_t opcode, uint32_t counter
 	size_t ph_len = 0u;
 
 	memset(&mh, 0, sizeof(mh));
-	mh.flags = MATTER_MSG_DSIZ_NONE;
+	/* A real commissioner sets S and carries an ephemeral source node id;
+	 * the responder has to echo it back as the DESTINATION. */
+	mh.flags = MATTER_MSG_DSIZ_NONE | MATTER_MSG_FLAG_S;
+	mh.source_node_id = PEER_NODE_ID;
 	mh.session_id = session_id;
 	mh.security_flags = (uint8_t)(MATTER_SESSION_TYPE_UNICAST | extra_sec_flags);
 	mh.message_counter = counter;
@@ -78,7 +83,7 @@ void test_matter_exchange(void)
 		size_t mh_len = 0u;
 		size_t ph_len = 0u;
 
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 100u, k_payload, sizeof(k_payload));
 
 		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
@@ -99,8 +104,14 @@ void test_matter_exchange(void)
 		T_EQ("unsecured session", mh.session_id, 0L);
 		T_EQ("unicast", mh.security_flags & MATTER_SEC_SESSION_TYPE_MASK,
 		     (long)MATTER_SESSION_TYPE_UNICAST);
-		T_EQ("no destination node id", mh.flags & MATTER_MSG_DSIZ_MASK,
-		     (long)MATTER_MSG_DSIZ_NONE);
+		/* SessionManager.cpp:301-303: the responder addresses its reply to
+		 * the initiator's ephemeral node id. Without this the peer cannot
+		 * match the reply to its session and silently ignores it. */
+		T_EQ("destination is a node id", mh.flags & MATTER_MSG_DSIZ_MASK,
+		     (long)MATTER_MSG_DSIZ_NODE);
+		T_OK("and it is the initiator's", mh.dest_node_id == PEER_NODE_ID);
+		T_OK("we send no source node id of our own",
+		     (mh.flags & MATTER_MSG_FLAG_S) == 0u);
 
 		T_EQ("decode our own protocol header",
 		     matter_proto_header_decode(out + mh_len, out_len - mh_len, &ph, &ph_len),
@@ -123,7 +134,7 @@ void test_matter_exchange(void)
 
 	t_group("a retransmission is acknowledged but not acted on twice");
 	{
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 7u, k_payload, sizeof(k_payload));
 		T_EQ("first time", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
 		T_EQ("reply", matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out),
@@ -143,7 +154,7 @@ void test_matter_exchange(void)
 
 	t_group("what this layer refuses");
 	{
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID, 0x0005u,
 			    MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u, NULL, 0u);
 		T_EQ("a secured session id", matter_exchange_recv(&x, msg, n, &in),
@@ -184,7 +195,7 @@ void test_matter_exchange(void)
 
 	t_group("one exchange at a time");
 	{
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 1u, NULL, 0u);
 		T_EQ("the first one binds", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
 
@@ -203,7 +214,7 @@ void test_matter_exchange(void)
 		size_t mh_len = 0u;
 		size_t ph_len = 0u;
 
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		T_EQ("nothing to acknowledge yet",
 		     matter_exchange_standalone_ack(&x, out, sizeof(out), &out_len),
 		     MATTER_E_STATE);
@@ -233,7 +244,7 @@ void test_matter_exchange(void)
 	{
 		size_t small_len = 0u;
 
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 5u, k_payload, sizeof(k_payload));
 		T_EQ("message", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
 		T_OK("owed", x.ack_pending);
@@ -253,9 +264,81 @@ void test_matter_exchange(void)
 		T_OK("now consumed", !x.ack_pending);
 	}
 
+	t_group("over BLE, MRP is off entirely");
+	{
+		/*
+		 * BTP is already reliable, so Matter does not run MRP on top of it:
+		 * AllowsMRP() is "the peer address is UDP" (SecureSession.h:161,
+		 * UnauthenticatedSessionTable.h:87) and ExchangeContext.cpp:109-112
+		 * only sets R when the session allows it.
+		 *
+		 * A real iPhone proved this the hard way: it sent
+		 * PBKDFParamRequest with exchange flags 0x01 -- I only -- and
+		 * dropped the link on a reply that came back with R set.
+		 */
+		struct matter_proto_header ph;
+		struct matter_msg_header mh;
+		size_t mh_len = 0u;
+		size_t ph_len = 0u;
+
+		matter_exchange_init(&x, SEED, false);
+		/* The peer does not set R either; this mirrors the capture. */
+		n = inbound(msg, sizeof(msg), 0x20u, 11u, PEER_EXCHANGE_ID,
+			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u,
+			    k_payload, sizeof(k_payload));
+		/* inbound() always sets R; clear it so the message matches what an
+		 * iPhone actually sends. The exchange flags are the first byte of
+		 * the protocol header, so find where that starts rather than
+		 * assuming -- it moves when the message header carries a node id. */
+		{
+			struct matter_msg_header probe;
+			size_t probe_len = 0u;
+
+			T_EQ("locate the protocol header",
+			     matter_msg_header_decode(msg, n, &probe, &probe_len), MATTER_OK);
+			msg[probe_len] &= (uint8_t)~MATTER_EX_FLAG_R;
+		}
+
+		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_OK("peer did not request an ack", !in.ack_requested);
+		T_OK("so none is owed", !x.ack_pending);
+
+		T_EQ("reply frames",
+		     matter_exchange_reply(&x, 0x21u, k_payload, sizeof(k_payload), out,
+					   sizeof(out), &out_len),
+		     MATTER_OK);
+		(void)matter_msg_header_decode(out, out_len, &mh, &mh_len);
+		T_EQ("decode", matter_proto_header_decode(out + mh_len, out_len - mh_len, &ph,
+							  &ph_len),
+		     MATTER_OK);
+		T_OK("R is NOT set", (ph.exchange_flags & MATTER_EX_FLAG_R) == 0u);
+		T_OK("A is NOT set", (ph.exchange_flags & MATTER_EX_FLAG_A) == 0u);
+		T_OK("I still clear", (ph.exchange_flags & MATTER_EX_FLAG_I) == 0u);
+		T_EQ("still the same exchange", ph.exchange_id, (long)PEER_EXCHANGE_ID);
+
+		/* Nothing to acknowledge means no standalone ack exists either. */
+		T_EQ("no standalone ack over BLE",
+		     matter_exchange_standalone_ack(&x, out, sizeof(out), &out_len),
+		     MATTER_E_STATE);
+
+		/* Even if a peer DID set R, MRP stays off: the transport decides. */
+		matter_exchange_init(&x, SEED, false);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 12u, NULL, 0u);
+		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_OK("peer asked", in.ack_requested);
+		T_OK("but nothing is owed", !x.ack_pending);
+		T_EQ("reply", matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out),
+						    &out_len),
+		     MATTER_OK);
+		(void)matter_msg_header_decode(out, out_len, &mh, &mh_len);
+		(void)matter_proto_header_decode(out + mh_len, out_len - mh_len, &ph, &ph_len);
+		T_OK("still no A", (ph.exchange_flags & MATTER_EX_FLAG_A) == 0u);
+		T_OK("still no R", (ph.exchange_flags & MATTER_EX_FLAG_R) == 0u);
+	}
+
 	t_group("replying before anything arrived");
 	{
-		matter_exchange_init(&x, SEED);
+		matter_exchange_init(&x, SEED, true);
 		T_EQ("has no exchange to reply on",
 		     matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out), &out_len),
 		     MATTER_E_STATE);

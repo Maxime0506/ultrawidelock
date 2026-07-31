@@ -150,7 +150,9 @@ static int begin_session(void)
 		session_id = 1u;
 	}
 
-	matter_exchange_init(&s_exchange, counter_seed);
+	/* false: this exchange runs over BTP, which is already reliable, so MRP
+	 * is off. Matter gates that on the transport -- SecureSession.h:161. */
+	matter_exchange_init(&s_exchange, counter_seed, false);
 	rc = matter_pase_responder_init(&s_pase, &s_verifier, session_id, responder_random,
 					y_entropy);
 	if (rc != MATTER_OK) {
@@ -173,10 +175,9 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
 		LOG_ERR("framing opcode 0x%02x rc=%d", opcode, rc);
 		return;
 	}
+	LOG_HEXDUMP_DBG(s_out, framed > 40u ? 40u : framed, "reply (first bytes)");
 	rc = matter_ble_send(s_out, framed);
-	if (rc != 0) {
-		LOG_ERR("sending opcode 0x%02x rc=%d", opcode, rc);
-	}
+	LOG_DBG("sent opcode 0x%02x, %u B framed, rc=%d", opcode, (unsigned int)framed, rc);
 }
 
 static void on_message(const uint8_t *msg, size_t len)
@@ -195,7 +196,10 @@ static void on_message(const uint8_t *msg, size_t len)
 		return;
 	}
 
+	LOG_DBG("on_message: %u B", (unsigned int)len);
 	rc = matter_exchange_recv(&s_exchange, msg, len, &in);
+	LOG_DBG("exchange_recv rc=%d opcode=0x%02x payload=%u", rc, in.opcode,
+		(unsigned int)in.payload_len);
 	if (rc == MATTER_E_DUP) {
 		/* The peer thinks its last message was lost. Acknowledge it
 		 * again, but do NOT run the payload through PASE twice. */
@@ -232,6 +236,9 @@ static void on_message(const uint8_t *msg, size_t len)
 		s_stale = true;
 		return;
 	}
+
+	LOG_INF("PASE rc=%d, reply opcode 0x%02x (%u B), state=%d", rc, pase_op,
+		(unsigned int)pase_len, (int)matter_pase_responder_state(&s_pase));
 
 	if (matter_pase_responder_state(&s_pase) == MATTER_PASE_ST_DONE) {
 		LOG_INF("PASE complete: session keys derived (peer session id 0x%04x)",

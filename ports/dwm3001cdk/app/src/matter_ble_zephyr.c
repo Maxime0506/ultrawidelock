@@ -71,7 +71,17 @@ static uint8_t s_frag[MATTER_BTP_MAX_FRAGMENT];
 static bool s_tx_active;
 static bool s_indicate_busy;
 static bool s_handshaked;
-static bool s_subscribed;
+
+/*
+ * Whether the peer enabled indications on C2 is NOT mirrored in a local flag.
+ * It was, and the flag was wrong: a commissioner subscribes BEFORE its first C1
+ * write, so c2_ccc_changed() set the flag and claim_conn() -> reset_link() then
+ * cleared it on the very write that opened the link. The queued handshake
+ * response was never sent and the phone sat on "connecting" until it gave up,
+ * with nothing in the log to say why. Zephyr tracks this per connection, so ask
+ * it instead of keeping a second copy that can disagree.
+ */
+static bool is_subscribed(void);
 /** Negotiated BTP PDU size, header included. Settled by the handshake. */
 static uint16_t s_fragment_size;
 
@@ -82,6 +92,20 @@ static uint16_t s_fragment_size;
  * current value at init and its position is copied back after every emit.
  */
 static uint8_t s_tx_seq;
+/*
+ * The BTP handshake response, held until the peer subscribes to C2.
+ *
+ * A commissioner writes the handshake request to C1 FIRST and enables
+ * indications on C2 second, so at the moment the request arrives there is no
+ * subscription to indicate on and bt_gatt_indicate() returns -EINVAL. CHIP does
+ * the same thing for the same reason: HandleCapabilitiesRequestReceived() only
+ * queues the response, and BLEEndPoint.cpp:202-231 sends it from
+ * HandleSubscribeReceived(). Found against a real iPhone, which got as far as
+ * "BTP up: fragment=244 window=4" and then dropped the link.
+ */
+static uint8_t s_hs_resp[MATTER_BTP_RESP_LEN];
+static uint8_t s_hs_resp_len;
+
 /** A received fragment we still owe an acknowledgement for. */
 static bool s_ack_pending;
 static uint8_t s_ack_seq;
@@ -108,6 +132,19 @@ static struct k_work_queue_config matter_wq_cfg = {.name = "matter_wq"};
 static struct k_work_q matter_wq;
 static struct k_work s_msg_work;
 static size_t s_msg_len;
+/*
+ * The handshake response goes out from HERE, not from the GATT callback that
+ * triggers it. CHIP's own Zephyr port does the same: the CCC write and the C1
+ * write only post events (BLEManagerImpl.cpp:765,768), and the indication
+ * happens later on the CHIP thread from HandleTXCharCCCDWrite().
+ *
+ * Indicating inline from c2_ccc_changed() means indicating before Zephyr has
+ * sent the ATT write response for the subscription itself. The phone saw an
+ * indication for a subscribe it had not yet been told succeeded, unsubscribed,
+ * and dropped the link -- with our own log cheerfully reporting the response
+ * as sent.
+ */
+static struct k_work s_hs_work;
 
 static bool claim_conn(struct bt_conn *conn);
 
@@ -118,11 +155,11 @@ static void reset_link(void)
 	s_tx_active = false;
 	s_indicate_busy = false;
 	s_handshaked = false;
-	s_subscribed = false;
 	s_fragment_size = MATTER_BTP_MIN_FRAGMENT;
 	s_tx_seq = 0u;
 	s_ack_pending = false;
 	s_rx_unacked = 0u;
+	s_hs_resp_len = 0u;
 
 	if (s_link_cb != NULL) {
 		s_link_cb();
@@ -139,6 +176,22 @@ static struct bt_gatt_indicate_params s_ind_params;
 
 /** Push one fragment, or a raw buffer when @p raw is set (the handshake reply). */
 static int indicate_raw(const uint8_t *data, size_t len);
+
+static void hs_work_handler(struct k_work *work)
+{
+	uint8_t n = s_hs_resp_len;
+
+	ARG_UNUSED(work);
+
+	/* Not subscribed yet is not an error: c2_ccc_changed() will submit this
+	 * again when the subscription arrives. */
+	if (n == 0u || !is_subscribed()) {
+		return;
+	}
+	s_hs_resp_len = 0u;
+	LOG_INF("BTP handshake response out (%u B)", (unsigned int)n);
+	(void)indicate_raw(s_hs_resp, n);
+}
 
 static void msg_work_handler(struct k_work *work)
 {
@@ -179,6 +232,7 @@ static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
 		uint8_t out[MATTER_BTP_RESP_LEN];
 		size_t n = 0;
 
+		LOG_HEXDUMP_DBG(p, len, "BTP handshake request");
 		rc = matter_btp_req_decode(p, len, &req);
 		if (rc != MATTER_OK) {
 			LOG_ERR("bad BTP handshake request (%d)", rc);
@@ -194,23 +248,51 @@ static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
 			return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
 		}
 
-		/* Peripheral role: we send from 0, the peer's first data fragment is
-		 * 1 (BtpEngine::Init, expect_first_ack=false). */
-		matter_btp_rx_init(&s_rx, s_rx_buf, sizeof(s_rx_buf), 1u);
+		/*
+		 * Sequence numbering after the handshake, and it is NOT symmetric.
+		 *
+		 * BLEEndPoint.cpp:512-514: "If end point plays peripheral role,
+		 * expect ack for indication sent as last step of BTP handshake",
+		 * i.e. expectInitialAck = (role == kBleRole_Peripheral). That
+		 * selects BtpEngine::Init's expect_first_ack branch
+		 * (BtpEngine.cpp:90-95): mTxNextSeqNum = 1, mRxNextSeqNum = 0.
+		 *
+		 * So the handshake indication we just queued IS sequence 0 even
+		 * though it carries no sequence byte, our first framed fragment is
+		 * 1, and the peer's first data fragment is 0.
+		 *
+		 * This was backwards until a real iPhone rejected it: the log said
+		 * "BTP up" and then "BTP fragment refused (-4)" on Apple's very
+		 * first data fragment. Nothing on the host could have caught it --
+		 * matter_btp.c takes the first sequence as a parameter and is
+		 * correct either way; the wrong number was chosen here.
+		 */
+		matter_btp_rx_init(&s_rx, s_rx_buf, sizeof(s_rx_buf), 0u);
+		s_tx_seq = 1u;
 		s_fragment_size = resp.fragment_size;
 		s_handshaked = true;
+		LOG_HEXDUMP_DBG(out, n, "BTP handshake response");
 		LOG_INF("BTP up: fragment=%u window=%u (att mtu %u)",
 			(unsigned int)resp.fragment_size, (unsigned int)resp.window_size,
 			(unsigned int)bt_gatt_get_mtu(conn));
 
-		/* The handshake reply is NOT BTP-framed; it goes out as-is. */
-		if (indicate_raw(out, n) != 0) {
-			return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
-		}
+		/* The reply is NOT BTP-framed; it goes out as-is. But it cannot go
+		 * out yet: the peer subscribes to C2 only after this write, so
+		 * hold it and let c2_ccc_changed() send it. */
+		memcpy(s_hs_resp, out, n);
+		s_hs_resp_len = (uint8_t)n;
+		/* Submit unconditionally. If the peer subscribed first the handler
+		 * sends immediately; if not, it does nothing and c2_ccc_changed()
+		 * submits again. Either order works and neither indicates from a
+		 * GATT callback. */
+		k_work_submit_to_queue(&matter_wq, &s_hs_work);
 		return len;
 	}
 
+	LOG_HEXDUMP_DBG(p, len > 24u ? 24u : len, "C1 data fragment (first bytes)");
 	rc = matter_btp_rx_fragment(&s_rx, p, len);
+	LOG_DBG("C1 fragment: %u B -> rc=%d, reassembled=%u", (unsigned int)len, rc,
+		(unsigned int)s_rx.len);
 	if (rc == MATTER_OK || rc == MATTER_END) {
 		s_ack_pending = true;
 		s_ack_seq = s_rx.last_seq;
@@ -259,8 +341,11 @@ static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
 static void c2_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	ARG_UNUSED(attr);
-	s_subscribed = (value == BT_GATT_CCC_INDICATE);
-	LOG_DBG("C2 subscription %s", s_subscribed ? "on" : "off");
+	LOG_INF("C2 indications %s", value == BT_GATT_CCC_INDICATE ? "on" : "off");
+
+	if (value == BT_GATT_CCC_INDICATE && s_hs_resp_len > 0u) {
+		k_work_submit_to_queue(&matter_wq, &s_hs_work);
+	}
 }
 
 /* Order matters: attrs[4] is the C2 VALUE, which is what an indication targets. */
@@ -272,10 +357,22 @@ BT_GATT_SERVICE_DEFINE(matter_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(0x
 					      BT_GATT_PERM_NONE, NULL, NULL, NULL),
 		       BT_GATT_CCC(c2_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
+static bool is_subscribed(void)
+{
+	return s_conn != NULL &&
+	       bt_gatt_is_subscribed(s_conn, &matter_svc.attrs[4], BT_GATT_CCC_INDICATE);
+}
+
 static int indicate_raw(const uint8_t *data, size_t len)
 {
 	if (s_conn == NULL || s_indicate_busy) {
 		return -EBUSY;
+	}
+	/* Indicating before the peer subscribes is refused by the stack as a bare
+	 * -EINVAL, which says nothing about why. Name it here instead. */
+	if (!is_subscribed()) {
+		LOG_ERR("indicate before the peer subscribed to C2");
+		return -EAGAIN;
 	}
 	memcpy(s_frag, data, len);
 
@@ -345,6 +442,7 @@ static void indicate_done(struct bt_conn *conn, struct bt_gatt_indicate_params *
 	ARG_UNUSED(params);
 
 	s_indicate_busy = false;
+	LOG_DBG("indication confirmed (err %u)", (unsigned int)err);
 	if (err != 0u) {
 		LOG_ERR("indication not confirmed (%u)", (unsigned int)err);
 		s_tx_active = false;
@@ -365,7 +463,7 @@ int matter_ble_send(const uint8_t *msg, size_t len)
 	if (s_conn == NULL || !s_handshaked) {
 		return -ENOTCONN;
 	}
-	if (!s_subscribed) {
+	if (!is_subscribed()) {
 		return -EAGAIN;
 	}
 	if (s_tx_active) {
@@ -484,6 +582,7 @@ static int matter_ble_init(void)
 	k_work_queue_start(&matter_wq, matter_wq_stack, K_THREAD_STACK_SIZEOF(matter_wq_stack),
 			   CONFIG_ALIRO_MATTER_BLE_WQ_PRIO, &matter_wq_cfg);
 	k_work_init(&s_msg_work, msg_work_handler);
+	k_work_init(&s_hs_work, hs_work_handler);
 	reset_link();
 	LOG_INF("0xFFF6 service ready (rx buffer %u B)", (unsigned int)sizeof(s_rx_buf));
 	return 0;
