@@ -128,7 +128,7 @@ static void log_addresses(otInstance *ot)
 
 	for (a = otIp6GetUnicastAddresses(ot); a != NULL; a = a->mNext) {
 		otIp6AddressToString(&a->mAddress, buf, sizeof(buf));
-		LOG_INF("  addr %s  preferred=%d %s", buf, (int)a->mPreferred,
+		LOG_DBG("  addr %s  preferred=%d %s", buf, (int)a->mPreferred,
 			addr_is_offmesh(ot, a) ? "(off-mesh)" : "(local)");
 	}
 	if (count_offmesh(ot) == 0) {

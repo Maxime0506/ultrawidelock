@@ -224,6 +224,17 @@ static int begin_session(void)
 	uint16_t session_id;
 	int rc;
 
+	/*
+	 * A new commissioner is starting, so whatever the last one left behind
+	 * is now stale. Doing it here rather than on link loss is what lets a
+	 * commissioner close BLE and carry on over Thread with its fabric
+	 * intact, while a genuine retry still gets a clean table.
+	 */
+	if (s_info.fabric.index != 0u && !s_info.commissioning_complete) {
+		LOG_INF("new commissioner; rolling back fabric %u", s_info.fabric.index);
+	}
+	matter_clusters_failsafe_expire(&s_info);
+
 	if (aliro_random(responder_random, sizeof(responder_random)) != 0 ||
 	    aliro_random(y_entropy, sizeof(y_entropy)) != 0 ||
 	    aliro_random(seed, sizeof(seed)) != 0) {
@@ -298,7 +309,7 @@ static void on_read_request(const struct matter_exchange_in *in)
 	for (uint8_t i = 0; i < s_read.n_paths; i++) {
 		const struct matter_im_path *p = &s_read.paths[i];
 
-		LOG_INF("  read[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
+		LOG_DBG("  read[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
 			p->have_endpoint ? (int)p->endpoint : -1,
 			p->have_cluster ? (unsigned int)p->cluster : 0xFFFFu,
 			p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
@@ -543,6 +554,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	}
 
 	s_case.active = true;
+	LOG_HEXDUMP_INF(reply, mh_len + ph_len, "out hdr");
 	LOG_INF("  Sigma2 out: %u B payload, %u B total, session 0x%04x", (unsigned int)s2_len,
 		(unsigned int)(mh_len + ph_len + s2_len), (unsigned int)s_case.local_session_id);
 	return mh_len + ph_len + s2_len;
@@ -581,8 +593,15 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 		LOG_WRN("  no protocol header (%d)", rc);
 		return 0u;
 	}
+	/*
+	 * The inbound header, so the reply can be compared against it. A Sigma2
+	 * that is rejected without a word back looks identical whether the TLV
+	 * is wrong or the framing is, and only one of those is visible here.
+	 */
 	LOG_INF("  protocol 0x%04x opcode 0x%02x exchange 0x%04x", (unsigned int)ph.protocol_id,
 		ph.opcode, (unsigned int)ph.exchange_id);
+	LOG_INF("  in hdr: flags 0x%02x sec 0x%02x ctr %u exflags 0x%02x", mh.flags,
+		mh.security_flags, (unsigned int)mh.message_counter, ph.exchange_flags);
 
 	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL ||
 	    ph.opcode != MATTER_OP_CASE_SIGMA1) {
@@ -726,15 +745,16 @@ static void on_link_reset(void)
 	s_stale = true;
 
 	/*
-	 * A commissioner that gave up half way leaves a fabric installed, and
-	 * the next attempt would be answered TableFull -- a refusal that says
-	 * nothing about what actually went wrong. This is the fail-safe doing
-	 * the one thing it exists to do.
+	 * NOT the place to roll the fail-safe back, which is what this used to
+	 * do. A commissioner with concurrent connection closes BLE ON PURPOSE
+	 * once ConnectNetwork succeeds and finishes over Thread -- so the link
+	 * dropping is the normal path, and discarding the fabric here destroyed
+	 * the identity CASE was about to use. Observed exactly that: two Sigma1s
+	 * matched, then "no fabric to match it against" for every one after.
+	 *
+	 * The rollback belongs at the start of the NEXT commissioning attempt
+	 * instead; see begin_session().
 	 */
-	if (s_info.fabric.index != 0u && !s_info.commissioning_complete) {
-		LOG_INF("commissioning abandoned; rolling back fabric %u", s_info.fabric.index);
-	}
-	matter_clusters_failsafe_expire(&s_info);
 }
 
 int matter_commission_init(void)
