@@ -190,6 +190,32 @@ jobs:
           idf.py -B build-c6 \
                  -D SDKCONFIG=build-c6/sdkconfig \
                  build
+          # Compiling for RISC-V is not the same as keeping the CCC STS seam.
+          # A dropped --wrap here links clean, binds the real dwt_* and silently
+          # never programs the STS key/IV. Nothing else catches it on C6:
+          # test/verify_port.sh owns this check but hardcodes an S3 build, and
+          # never runs in CI anyway (port-tests.yml has no ESP-IDF, so it
+          # skips). Assert it on the artifacts this job already built.
+          for w in dwt_rxenable dwt_configurestsiv dwt_configurestsmode; do
+            grep -q -- "-Wl,--wrap=$w" build-c6/build.ninja \
+              || { echo "::error::C6 link dropped -Wl,--wrap=$w"; exit 1; }
+          done
+          # A flag without a definition is a no-op, so the __wrap_* interposers
+          # must exist. Checked in the objects, not the ELF: --gc-sections drops
+          # the ones the reader's default config never reaches, so the linked
+          # image is not a sound place to look. Mirrors verify_port.sh section 2.
+          find build-c6 -name '*.obj' -exec riscv32-esp-elf-nm {} \; \
+            2>/dev/null > build-c6-syms.txt
+          for w in __wrap_dwt_rxenable __wrap_dwt_configurestsiv __wrap_dwt_configurestsmode; do
+            grep -qE " T $w$" build-c6-syms.txt \
+              || { echo "::error::C6 build defines no $w — the STS seam is a no-op"; exit 1; }
+          done
+          rm -f build-c6-syms.txt
+          # Interposition only bites if the caller still names the unwrapped
+          # symbol; uwb_min.c is the RX-arm caller the seam exists for.
+          riscv32-esp-elf-nm "$(find build-c6 -name 'uwb_min.c.obj' | head -1)" \
+            | grep -qE ' U dwt_rxenable$' \
+            || { echo "::error::C6 uwb_min.c.obj no longer references dwt_rxenable"; exit 1; }
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
