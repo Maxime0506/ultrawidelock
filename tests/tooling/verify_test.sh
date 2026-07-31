@@ -106,7 +106,6 @@ security.yml:web                           web
 security.yml:ct                            ct
 security.yml:esp                           esp
 security.yml:attest                        attest
-security-deep.yml:codeql                   !deep lane: builds a CodeQL database and runs security-extended, minutes not seconds, and it blocks nothing
 security-deep.yml:secrets-history          !deep lane: scans all 576 commits (~18s and growing); the local secrets gate scans the tree, and the PR gate scans the branch range
 security-deep.yml:semgrep-sarif            !deep lane: the same scan the semgrep gate runs, uploaded as SARIF at every severity instead of failing on ERROR
 security-deep.yml:scorecard                !deep lane: queries GitHub's own branch-protection and workflow settings, so it needs a token and the default branch

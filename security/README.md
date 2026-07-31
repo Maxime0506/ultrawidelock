@@ -73,13 +73,14 @@ ESP managed components. It runs in the deep lane because it needs a fetched tree
 Written down because a clean report over code nothing read is the failure this whole directory
 exists to prevent.
 
-1. **semgrep cannot parse 19 files** — listed in `semgrep-parse-baseline.txt`, mostly Zephyr and
+1. **semgrep cannot parse 18 files** — listed in `semgrep-parse-baseline.txt`, mostly Zephyr and
    ESP-IDF macro forms. Those files are *not scanned by semgrep at all*. The `semgrep` gate fails
-   if a twentieth appears, and the list names the four gates (clang-tidy, CodeQL, CBMC,
+   if a nineteenth appears, and the list names the four gates (clang-tidy, CodeQL, CBMC,
    libFuzzer) that do read them.
-2. **CodeQL's C database is built from `make test`** — so it covers the host-compilable set in
-   `tests/host/sources.sh`. Anything behind a Zephyr-only or ESP-IDF-only `#ifdef` is invisible
-   to it.
+2. **CodeQL is configured in the repository settings, not in this repository** — GitHub's
+   default setup owns it, so which languages it covers and how it builds them is not answerable
+   from these files. An advanced configuration in `security-deep.yml` cannot coexist with it;
+   that was tried and GitHub rejects the SARIF outright.
 3. **`web-flasher` still loads two unpinned chunks** — `install-button.js` is pinned by exact
    version and SRI, but it `import()`s two further chunks from unpkg at runtime, and dynamic
    imports carry no integrity metadata. They are constrained by the page's CSP origin list only.

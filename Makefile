@@ -230,8 +230,9 @@ verify:
 ##     make security GATES="semgrep deps"
 ##   ct reports "not checked" on macOS: there is no valgrind for darwin/arm64,
 ##   so it exits 2 rather than passing. CT_DOCKER=1 runs it in a container.
-##   Slower analyses (CodeQL, full-history secrets, SBOM, Scorecard) are not
-##   here: they run weekly in security-deep.yml and block nothing.
+##   Slower analyses (full-history secrets, semgrep SARIF, Scorecard) are not
+##   here: they run weekly in security-deep.yml and block nothing. CodeQL runs
+##   under GitHub's default setup, configured in the repository settings.
 security:
 	@$(REPO_ROOT)/scripts/security.sh $(GATES)
 

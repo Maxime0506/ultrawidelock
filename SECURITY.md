@@ -57,8 +57,9 @@ Every pull request must pass four blocking gates before it can merge: secret sca
 capture files), SAST (semgrep), and a dependency check for known-vulnerable and
 known-malicious packages (osv-scanner, pip-audit). They run in about forty seconds.
 
-Slower analyses — CodeQL, a full-history secret scan, and OpenSSF Scorecard — run weekly and
-report to the repository's code-scanning alerts rather than blocking anything.
+Slower analyses — a full-history secret scan, semgrep at every severity, and OpenSSF Scorecard
+— run weekly and report to the repository's code-scanning alerts rather than blocking anything.
+CodeQL runs alongside them under GitHub's default setup, configured in the repository settings.
 
 All of it runs locally too, and is the same code CI runs:
 
@@ -69,7 +70,7 @@ make verify       # those, plus every other host-runnable CI gate
 
 `security/README.md` documents what each gate catches, why ClamAV, DAST and SBOM tooling are
 deliberately not used here, and the four known blind spots — including that semgrep cannot
-parse 17 macro-heavy files, which are covered by clang-tidy, CodeQL, CBMC and fuzzing instead.
+parse 18 macro-heavy files, which are covered by clang-tidy, CodeQL, CBMC and fuzzing instead.
 
 ## Supported versions
 
