@@ -360,8 +360,68 @@ static int begin_session(void)
  * and different counter spaces, and Apple keeps BLE open across the handover --
  * so both can be live at once and neither may borrow the other's counter.
  */
-static struct matter_exchange s_case_x;
-static bool s_case_ready;
+/**
+ * How many CASE sessions this node holds at once.
+ *
+ * Three, which is the CapabilityMinima floor matter_clusters.h already
+ * reports. Holding ONE while claiming three is what made a real pairing fail:
+ * Apple opens a session for the phone on fabric 1 and a second for the home hub
+ * on fabric 2, and the second overwrote the first. Every fabric-1 message after
+ * that was refused as "not ours", taking the subscription with it, and the
+ * accessory hung on "Adding to Home" until it was removed.
+ */
+#define MATTER_CASE_SESSIONS 3u
+
+static struct matter_exchange s_case_x[MATTER_CASE_SESSIONS];
+static bool s_case_ready[MATTER_CASE_SESSIONS];
+/**
+ * The slot serving the datagram in flight. Valid only while s_thread_reply is
+ * set, which is the whole time a reply can be built.
+ *
+ * A reply has to be sealed with the keys of the session its request arrived on.
+ * Picking the wrong slot produces a byte-perfect message the peer cannot open
+ * and cannot report -- the same shape as every other bug in this file.
+ */
+static uint8_t s_case_cur;
+/** Round-robin victim, used only when every slot is live. */
+static uint8_t s_case_next_victim;
+
+/** The slot holding @p session_id, or MATTER_CASE_SESSIONS if none does. */
+static uint8_t case_slot_of(uint16_t session_id)
+{
+	uint8_t i;
+
+	for (i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		if (s_case_ready[i] && s_case_x[i].local_session_id == session_id) {
+			return i;
+		}
+	}
+	return MATTER_CASE_SESSIONS;
+}
+
+/**
+ * A slot for a newly established session: a free one, else the round-robin
+ * victim.
+ *
+ * Evicting is a real loss -- whoever held that session goes silent with no way
+ * to be told -- so it happens only once there are more administrators than
+ * slots, and it is logged.
+ */
+static uint8_t case_alloc_slot(void)
+{
+	uint8_t i;
+
+	for (i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		if (!s_case_ready[i]) {
+			return i;
+		}
+	}
+	i = s_case_next_victim;
+	s_case_next_victim = (uint8_t)((s_case_next_victim + 1u) % MATTER_CASE_SESSIONS);
+	LOG_WRN("  all %u CASE slots live; evicting session 0x%04x", MATTER_CASE_SESSIONS,
+		(unsigned int)s_case_x[i].local_session_id);
+	return i;
+}
 
 /**
  * Where a reply goes when the request arrived over Thread rather than BLE.
@@ -378,7 +438,7 @@ static size_t s_thread_reply_len;
 
 static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
 {
-	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x : &s_exchange;
+	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
 	size_t framed = 0u;
 	int rc;
 
@@ -417,7 +477,7 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
  */
 static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 {
-	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x : &s_exchange;
+	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
 	size_t framed = 0u;
 	int rc;
 
@@ -909,10 +969,14 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		s_case.local_session_id = 1u;
 	}
 	s_case.peer_session_id = s1->initiator_session_id;
-	/* A new handshake supersedes any session the last one established, so
-	 * the Sigma3 that follows THIS Sigma2 must be verified rather than
-	 * answered from the old session's StatusReport. */
-	s_case_ready = false;
+	/*
+	 * Deliberately does NOT tear down established sessions any more. A new
+	 * Sigma1 supersedes the previous HANDSHAKE, which is what s_case holds,
+	 * but it says nothing about sessions already running: Apple opens the
+	 * hub's session while the phone's is still carrying a subscription.
+	 * Clearing them here is what made the second administrator silence the
+	 * first.
+	 */
 
 	/* Start the transcript, and read SHA-256(Sigma1) off a COPY so the
 	 * running context stays open for Sigma2 and Sigma3. */
@@ -1092,6 +1156,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	struct matter_session_keys keys;
 	uint8_t salt[MATTER_CASE_IPK_LEN + 32u];
 	uint8_t digest[32];
+	uint8_t slot;
 	int rc;
 
 	if (!s_case.active) {
@@ -1105,7 +1170,10 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	 * peer resent because it never saw the StatusReport, so send that again
 	 * and touch nothing else.
 	 */
-	if (s_case_ready) {
+	/* Asked of THIS handshake's session id rather than of the node: another
+	 * administrator's session being live says nothing about whether this
+	 * Sigma3 has already been answered. */
+	if (case_slot_of(s_case.local_session_id) < MATTER_CASE_SESSIONS) {
 		LOG_DBG("  Sigma3 again -- resending the StatusReport");
 		return case_status_report(req, req_mh, reply, cap);
 	}
@@ -1179,8 +1247,14 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 			memset(&keys, 0, sizeof(keys));
 			return 0u;
 		}
-		matter_exchange_init(&s_case_x, seed, true);
-		rc = matter_exchange_promote(&s_case_x, s_case.local_session_id,
+		/*
+		 * A slot, not THE slot. Sessions established earlier stay
+		 * live: this node serves a phone and a home hub at once.
+		 */
+		slot = case_alloc_slot();
+		s_case_ready[slot] = false;
+		matter_exchange_init(&s_case_x[slot], seed, true);
+		rc = matter_exchange_promote(&s_case_x[slot], s_case.local_session_id,
 					     s_case.peer_session_id, &keys, seed);
 		/*
 		 * The nonces. Unlike PASE, a CASE session builds them from the
@@ -1189,14 +1263,19 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 		 * wrong produces messages that decrypt to nothing with no error
 		 * anyone can report.
 		 */
-		matter_exchange_set_op_node_ids(&s_case_x, s_case.fabric->node_id, peer.node_id);
+		matter_exchange_set_op_node_ids(&s_case_x[slot], s_case.fabric->node_id,
+						peer.node_id);
 	}
 	memset(&keys, 0, sizeof(keys));
 	if (rc != MATTER_OK) {
 		LOG_ERR("  CASE session NOT installed (%d)", rc);
 		return 0u;
 	}
-	s_case_ready = true;
+	s_case_ready[slot] = true;
+	/* Replies to THIS Sigma3 are sealed on the unsecured exchange, but the
+	 * StatusReport that follows is the last thing that session sends before
+	 * the peer starts using the new one, so point the current slot at it. */
+	s_case_cur = slot;
 	/* What unblocks CommissioningComplete. The cluster layer cannot see a
 	 * session, so this is the only place that can say so. */
 	s_info.case_established = true;
@@ -1304,19 +1383,27 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	 */
 	if (mh.session_id != 0u) {
 		struct matter_exchange_in in;
+		uint8_t slot = case_slot_of(mh.session_id);
 
-		if (!s_case_ready || mh.session_id != s_case.local_session_id) {
+		/*
+		 * Routed by session id across every live session, not compared
+		 * against one. Matching a single session is what made the home
+		 * hub's handshake silence the phone: both are legitimate peers
+		 * and both keep talking.
+		 */
+		if (slot >= MATTER_CASE_SESSIONS) {
 			LOG_WRN("  encrypted for session 0x%04x, which is not ours",
 				(unsigned int)mh.session_id);
 			return 0u;
 		}
+		s_case_cur = slot;
 		s_thread_reply = reply;
 		s_thread_reply_cap = cap;
 		s_thread_reply_len = 0u;
 
-		rc = matter_exchange_recv(&s_case_x, msg, len, &in, s_pt, sizeof(s_pt));
+		rc = matter_exchange_recv(&s_case_x[slot], msg, len, &in, s_pt, sizeof(s_pt));
 		if (rc == MATTER_E_DUP) {
-			(void)matter_exchange_standalone_ack(&s_case_x, s_out, sizeof(s_out),
+			(void)matter_exchange_standalone_ack(&s_case_x[slot], s_out, sizeof(s_out),
 							     &s_thread_reply_len);
 			if (s_thread_reply_len > cap) {
 				s_thread_reply_len = 0u;

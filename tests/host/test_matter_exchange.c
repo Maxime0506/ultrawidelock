@@ -674,4 +674,111 @@ void test_matter_exchange(void)
 		     matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out), &out_len),
 		     MATTER_E_STATE);
 	}
+
+	/*
+	 * Two CASE sessions at once, which is not hypothetical: Apple opens one
+	 * for the phone and a second for the home hub, and both keep talking.
+	 *
+	 * This is the invariant the port's session table stands on. While the
+	 * port held ONE exchange the second handshake overwrote the first, every
+	 * later message from the phone was refused as "not ours", and the
+	 * subscription established seconds earlier went silent -- with the
+	 * accessory stuck on "Adding to Home" and nothing logged as an error.
+	 * The port routes by session id now; this asserts the thing that makes
+	 * routing meaningful, that two promoted exchanges share no state.
+	 */
+	t_group("two sessions, side by side");
+	{
+		struct matter_exchange xa;
+		struct matter_exchange xb;
+		struct matter_session_keys ka;
+		struct matter_session_keys kb;
+		struct matter_proto_header ph;
+		struct matter_msg_header mh;
+		struct matter_exchange_in in;
+		uint8_t plain[128];
+		uint8_t pt[256];
+		size_t plain_len = 0u;
+		size_t sealed_a = 0u;
+		size_t sealed_b = 0u;
+		uint8_t msg_a[256];
+		uint8_t msg_b[256];
+
+		for (size_t i = 0; i < MATTER_KEY_LEN; i++) {
+			ka.i2r[i] = (uint8_t)(0x10u + i);
+			ka.r2i[i] = (uint8_t)(0x40u + i);
+			ka.attestation_challenge[i] = (uint8_t)(0x70u + i);
+			/* Deliberately unrelated: a shared byte would let a
+			 * mix-up still decrypt and hide the bug. */
+			kb.i2r[i] = (uint8_t)(0xA1u + i);
+			kb.r2i[i] = (uint8_t)(0xC5u + i);
+			kb.attestation_challenge[i] = (uint8_t)(0xE9u + i);
+		}
+
+		matter_exchange_init(&xa, SEED, true);
+		matter_exchange_init(&xb, SEED, true);
+		T_EQ("session A promotes",
+		     matter_exchange_promote(&xa, 0x4EF9u, 0x7BEAu, &ka, 0x5EEDu), MATTER_OK);
+		T_EQ("session B promotes",
+		     matter_exchange_promote(&xb, 0x62BBu, 0x7BEBu, &kb, 0x5EEEu), MATTER_OK);
+		/* The two node-id pairs differ too, because they are what the
+		 * AEAD nonce is built from: identical ids would let a message
+		 * sealed for one session open on the other. */
+		matter_exchange_set_op_node_ids(&xa, 0x1111u, 0x2222u);
+		matter_exchange_set_op_node_ids(&xb, 0x3333u, 0x4444u);
+
+		memset(&ph, 0, sizeof(ph));
+		ph.exchange_flags = MATTER_EX_FLAG_I;
+		ph.opcode = 0x02u;
+		ph.exchange_id = 0x9001u;
+		ph.protocol_id = MATTER_PROTOCOL_INTERACTION_MODEL;
+		T_EQ("proto header",
+		     matter_proto_header_encode(&ph, plain, sizeof(plain), &plain_len), MATTER_OK);
+		plain[plain_len++] = 0x15u;
+		plain[plain_len++] = 0x18u;
+
+		memset(&mh, 0, sizeof(mh));
+		mh.flags = MATTER_MSG_DSIZ_NONE;
+		mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
+		mh.session_id = 0x4EF9u;
+		mh.message_counter = 501u;
+		T_EQ("seal for A",
+		     matter_crypto_seal(&mh, ka.i2r, 0x2222u, plain, plain_len, msg_a,
+					sizeof(msg_a), &sealed_a),
+		     MATTER_OK);
+		mh.session_id = 0x62BBu;
+		mh.message_counter = 502u;
+		T_EQ("seal for B",
+		     matter_crypto_seal(&mh, kb.i2r, 0x4444u, plain, plain_len, msg_b,
+					sizeof(msg_b), &sealed_b),
+		     MATTER_OK);
+
+		/* B is established SECOND and must not disturb A. */
+		T_EQ("B opens its own", matter_exchange_recv(&xb, msg_b, sealed_b, &in, pt,
+							     sizeof(pt)),
+		     MATTER_OK);
+		T_EQ("B's opcode", in.opcode, 0x02L);
+		T_EQ("A still opens its own AFTER B was established",
+		     matter_exchange_recv(&xa, msg_a, sealed_a, &in, pt, sizeof(pt)), MATTER_OK);
+		T_EQ("A's opcode", in.opcode, 0x02L);
+		T_EQ("A's session id is untouched", (long)xa.local_session_id, 0x4EF9L);
+		T_EQ("B's session id is untouched", (long)xb.local_session_id, 0x62BBL);
+
+		/*
+		 * And they are genuinely distinct: neither can open the other's
+		 * traffic. Without this the two assertions above would still
+		 * pass on a single shared session.
+		 *
+		 * E_INVAL, not the E_TYPE a wrong key gives: the session id in
+		 * the header does not match, so it is refused before any
+		 * decryption is attempted. Cheaper, and it means a misrouted
+		 * message cannot even reach the AEAD.
+		 */
+		T_EQ("A refuses B's message",
+		     matter_exchange_recv(&xa, msg_b, sealed_b, &in, pt, sizeof(pt)),
+		     MATTER_E_INVAL);
+		T_EQ("B refuses A's message",
+		     matter_exchange_recv(&xb, msg_a, sealed_a, &in, pt, sizeof(pt)),
+		     MATTER_E_INVAL);
+	}
 }
