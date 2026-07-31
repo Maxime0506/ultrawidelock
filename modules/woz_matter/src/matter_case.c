@@ -266,6 +266,16 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 		memset(s2k, 0, sizeof(s2k));
 		return MATTER_E_STATE;
 	}
+	/*
+	 * Verify it here, against the public key out of the very NOC that is
+	 * about to be sent alongside it. A peer that rejects a signature says
+	 * nothing about why, so this is the only place "signed wrongly" and
+	 * "derived a different key" can be told apart.
+	 */
+	if (in->verify_pub != NULL && matter_case_verify(in->verify_pub, scratch, n, sig) != 0) {
+		memset(s2k, 0, sizeof(s2k));
+		return MATTER_E_STATE;
+	}
 
 	/* TBEData2, over the same scratch now that the signature exists. */
 	matter_tlv_writer_init(&w, scratch, sizeof(scratch) - MATTER_TAG_LEN);

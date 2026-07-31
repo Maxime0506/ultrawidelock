@@ -24,6 +24,8 @@ int g_case_ecdh_calls;
 uint8_t g_case_ecdh_peer[MATTER_CASE_PUBKEY_LEN];
 int g_case_ecdh_fail;
 int g_case_sign_fail;
+int g_case_verify_calls;
+int g_case_verify_fail;
 
 void test_matter_case_stub_reset(void)
 {
@@ -35,6 +37,8 @@ void test_matter_case_stub_reset(void)
 	memset(g_case_ecdh_peer, 0, sizeof(g_case_ecdh_peer));
 	g_case_ecdh_fail = 0;
 	g_case_sign_fail = 0;
+	g_case_verify_calls = 0;
+	g_case_verify_fail = 0;
 }
 
 int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_PUBKEY_LEN],
@@ -71,4 +75,16 @@ int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
 		sig[i] = (uint8_t)(0xA0u + i);
 	}
 	return 0;
+}
+
+int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t *msg,
+		       size_t msg_len, uint8_t const sig[MATTER_CASE_SIG_LEN])
+{
+	(void)pub;
+	(void)msg;
+	(void)msg_len;
+	(void)sig;
+	g_case_verify_calls++;
+
+	return g_case_verify_fail ? -1 : 0;
 }

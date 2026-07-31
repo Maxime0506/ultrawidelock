@@ -19,6 +19,8 @@ extern uint8_t g_case_ecdh_peer[65];
 
 extern int g_case_ecdh_fail;
 extern int g_case_sign_fail;
+extern int g_case_verify_calls;
+extern int g_case_verify_fail;
 
 void test_matter_case_stub_reset(void);
 

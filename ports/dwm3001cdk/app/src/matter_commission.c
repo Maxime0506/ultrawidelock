@@ -143,6 +143,12 @@ int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
 	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
 }
 
+int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t *msg,
+		       size_t msg_len, const uint8_t sig[MATTER_CASE_SIG_LEN])
+{
+	return aliro_ecdsa_p256_verify(pub, msg, msg_len, sig);
+}
+
 /** @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input. */
 static int unhex(const char *s, uint8_t *out, size_t cap, size_t *len)
 {
@@ -451,6 +457,8 @@ static struct {
 	uint8_t eph_pub[MATTER_CASE_PUBKEY_LEN];
 	uint8_t responder_random[MATTER_CASE_RANDOM_LEN];
 	uint8_t resumption_id[16];
+	uint8_t noc_pub[MATTER_CASE_PUBKEY_LEN];
+	bool have_noc_pub;
 	uint16_t peer_session_id;
 	uint16_t local_session_id;
 	bool active;
@@ -533,6 +541,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	in.responder_eph_pub = s_case.eph_pub;
 	in.resumption_id = s_case.resumption_id;
 	in.responder_session_id = s_case.local_session_id;
+	in.verify_pub = s_case.have_noc_pub ? s_case.noc_pub : NULL;
 
 	/* Framed after both headers, so the payload lands where it will be sent
 	 * from rather than being copied into place afterwards. */

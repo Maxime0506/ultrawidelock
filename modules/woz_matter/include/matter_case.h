@@ -149,6 +149,12 @@ struct matter_case_sigma2_in {
 	const uint8_t *icac; /**< NULL when the NOC was signed by the root. */
 	size_t icac_len;
 	const uint8_t *op_priv; /**< 32 bytes, the key the NOC certifies. */
+	/**
+	 * The NOC's own public key, to verify the signature just made. Optional;
+	 * NULL skips the check. Never NULL on hardware -- the certificate is
+	 * right there and the check costs one verification.
+	 */
+	const uint8_t *verify_pub;
 
 	/** Freshly drawn by the caller: this module has no entropy source. */
 	const uint8_t *responder_random;   /**< 32 bytes. */
@@ -181,6 +187,19 @@ struct matter_case_sigma2_in {
  */
 int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *out, size_t cap,
 			      size_t *out_len, uint8_t shared_out[MATTER_CASE_SECRET_LEN]);
+
+/**
+ * ECDSA-P256-SHA256 verification, provided by the platform.
+ *
+ * Used to check this node's OWN Sigma2 signature against the certificate it is
+ * about to send with it. A peer that rejects a signature says nothing about
+ * why, so the only way to tell "signed wrongly" from "derived a different key"
+ * is to verify it here, where both halves are in hand.
+ *
+ * @return 0 when the signature verifies.
+ */
+int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t *msg,
+		       size_t msg_len, const uint8_t sig[MATTER_CASE_SIG_LEN]);
 
 /**
  * ECDH P-256, provided by the platform.
