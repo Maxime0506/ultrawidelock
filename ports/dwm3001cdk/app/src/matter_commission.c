@@ -35,6 +35,7 @@
 #endif
 
 #include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
+#include "aliro_ble.h" /* aliro_ble_readvertise, when a fabric arrives */
 #include "aliro_reader.h" /* aliro_reader_provision_identity, for SetAliroReaderConfig */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
@@ -1454,6 +1455,17 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	/* What unblocks CommissioningComplete. The cluster layer cannot see a
 	 * session, so this is the only place that can say so. */
 	s_info.case_established = true;
+	/*
+	 * Now that a fabric exists, the advert can stop being the Matter
+	 * commissionable payload and become the Aliro reader tag. Nothing else
+	 * re-runs it: aliro_advertise() is called at boot and on BLE
+	 * disconnect, so without this the board stayed commissionable forever
+	 * and a phone could never approach-resolve the reader it had just
+	 * provisioned -- the Wallet key screen came up blank and nothing
+	 * installed.
+	 */
+	aliro_ble_readvertise();
+
 	LOG_INF("  CASE ESTABLISHED: local session 0x%04x, peer 0x%04x",
 		(unsigned int)s_case.local_session_id, (unsigned int)s_case.peer_session_id);
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
