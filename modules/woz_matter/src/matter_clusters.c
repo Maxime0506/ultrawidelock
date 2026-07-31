@@ -1540,6 +1540,24 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	struct matter_device_info *info = (struct matter_device_info *)ctx;
 	uint64_t v = 0u;
 
+	/*
+	 * The lock endpoint answers commands too. Refusing every command here
+	 * with UNSUPPORTED_ENDPOINT while Descriptor, PartsList and every
+	 * attribute read say endpoint 1 exists is a direct self-contradiction,
+	 * and it is what a real controller reported back as "the endpoint
+	 * indicated is unsupported on the node" before abandoning the pairing.
+	 *
+	 * UNSUPPORTED_COMMAND is the honest answer for the Door Lock commands
+	 * this node has not implemented: the endpoint and the cluster are both
+	 * real, the command is not. A controller can act on that; it cannot act
+	 * on an endpoint that claims to exist and not exist at once.
+	 */
+	if (inv->endpoint == MATTER_ENDPOINT_LOCK) {
+		if (inv->cluster != MATTER_CLUSTER_DOOR_LOCK) {
+			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		}
+		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
+	}
 	if (inv->endpoint != MATTER_ENDPOINT_ROOT) {
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
