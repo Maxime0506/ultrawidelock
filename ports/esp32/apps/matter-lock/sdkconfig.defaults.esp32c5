@@ -1,8 +1,8 @@
 # ESP32-C5 target (applied by idf.py after sdkconfig.defaults; later wins).
 # The C5 image is ~80 KB too big for the 4 MB layout's OTA slots, so the C5
 # build assumes the WROOM-1 family's 8 MB flash floor and grows both slots
-# (partitions_esp32c5.csv).
+# (partitions_8mb.csv).
 CONFIG_IDF_TARGET="esp32c5"
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_esp32c5.csv"
-CONFIG_PARTITION_TABLE_FILENAME="partitions_esp32c5.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_8mb.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_8mb.csv"

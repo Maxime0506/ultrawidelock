@@ -1,4 +1,4 @@
-# Aliro reader on ESP32-S3 (ESP-IDF)
+# Aliro reader on ESP32 (ESP-IDF)
 
 The full Aliro reader stack — BLE transport, credential authentication, ranging setup,
 and the UWB engine — built as ESP-IDF components, with a small bench app on top. The
@@ -6,9 +6,11 @@ Matter door lock in [`../matter-lock`](../matter-lock) reuses these components
 verbatim; this tree is where they live and where you drive them without Matter in the
 way.
 
-**Status: hardware-validated.** The full chain has run on an ESP32-S3 + DWM3000EVB
+**Status:** ESP32-S3 is hardware-validated. The full chain has run on an
+ESP32-S3 + DWM3000EVB
 against a live iPhone: credential auth, M1-M4 ranging setup, and live DS-TWR distance,
-ending in an approach unlock.
+ending in an approach unlock. ESP32-C5 has build/release support; ESP32-C6 has
+hardware-validated direct-SPI BU04 support with `ST_NRST` held low.
 
 ## Components
 
@@ -40,8 +42,9 @@ alongside `dwt_configurestsiv`, `dwt_configurestsmode`, and `dwt_setcallbacks`.
 Two ESP-specific pieces are worth knowing about. SPI runs with **DMA disabled**: a boot
 benchmark measured about 84 µs per transaction with DMA, most of it descriptor setup and
 cache sync, which dwarfs the bit time for the small register writes on the arm critical
-path. And the DW3000 IRQ hands off to a dedicated high-priority task pinned to core 1
-that calls `dwt_isr()`, because that call does SPI and cannot run in ISR context.
+path. And the DW3000 IRQ hands off to a dedicated high-priority task that calls
+`dwt_isr()`, because that call does SPI and cannot run in ISR context. The task
+uses core 1 where available and core 0 on the single-core C6.
 
 ## Wiring
 
@@ -49,21 +52,22 @@ Source of truth is `../../components/woz_uwb/port/board_pins.h`; the physical
 DWM3000EVB-to-header mapping is in
 [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md).
 
-    SPI2 / FSPI:  SCLK 12   MOSI 11   MISO 13   CS 10
-    control:      RSTn  4   IRQ   5   WAKEUP 6
+    ESP32-S3: SCLK 12  MOSI 11  MISO 13  CS 10  RSTn 4  IRQ 5  WAKEUP 6
+    ESP32-C5: SCLK  8  MOSI  9  MISO 23  CS 10  RSTn 4  IRQ 5  WAKEUP 6
+    ESP32-C6: SCLK  6  MOSI  7  MISO  2  CS 10  RSTn 1  IRQ 3  WAKEUP 0
     clock:        2 MHz init / 8 MHz steady
 
 ## Build, flash, run
 
 ```bash
 cd ports/esp32/apps/reader
-idf.py set-target esp32s3   # once per checkout (esp32c5 also supported)
+make set-target TARGET=esp32c6   # once per checkout; esp32s3/c5 also supported
 make build
 make flash
 make monitor
 ```
 
-`make` alone prints the grouped target list: `build`, `menuconfig`, `size`, `flash`,
+`make` alone prints the grouped target list: `set-target`, `build`, `menuconfig`, `size`, `flash`,
 `app-flash` (app only, fast iteration), `flash-erase`, `monitor`, `term` (tio), `ports`,
 `clean`. ESP-IDF is expected at `~/esp/esp-idf`; override with `IDF_EXPORT=`.
 

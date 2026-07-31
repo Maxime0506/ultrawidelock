@@ -821,6 +821,7 @@ extern int mfk_led_new_rc;
 extern int mfk_led_clears;
 extern int mfk_led_refreshes;
 extern int mfk_led_set_calls;
+extern int mfk_led_gpio;
 extern uint32_t mfk_led_last_index, mfk_led_r, mfk_led_g, mfk_led_b;
 extern int mfk_bsp_button_calls;
 

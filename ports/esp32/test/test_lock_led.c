@@ -4,7 +4,7 @@
  *
  * Host test for the bolt-state indicator policy (lock_led.c): which colour
  * the WS2812 shows for each lock state. The driver half (led_strip/RMT on
- * GPIO48, in app_driver.cpp) is target-only and not linked here.
+ * board-specific GPIO selection in app_driver.cpp) is target-only and not linked here.
  *
  * The case worth pinning is the channel assignment. led_strip_set_pixel()
  * takes (red, green, blue) while the WS2812 itself is GRB, so a swapped

@@ -2,10 +2,10 @@
  * Replaces the Zephyr deps/dw3000/platform/dw3000_hw.c (not compiled here).
  *
  * IRQ mirrors the Zephyr design: the GPIO ISR wakes a dedicated high-priority
- * task (pinned to core 1) that calls dwt_isr() while the IRQ line stays high —
- * dwt_isr does SPI, so it cannot run in true ISR context. Also provides the
- * cycle-counter diag symbols that dwt_uwb_driver/dw3000/dw3000_device.c
- * references (Xtensa CCOUNT via esp_cpu_get_cycle_count). */
+ * task that calls dwt_isr() while the IRQ line stays high — dwt_isr does SPI,
+ * so it cannot run in true ISR context. Dual-core targets pin the worker to
+ * core 1; single-core targets run it on core 0. Also provides the cycle-counter
+ * diag symbols that the decadriver references via esp_cpu_get_cycle_count(). */
 #include "dw3000_hw.h"
 
 #include "board_pins.h"
@@ -26,7 +26,13 @@ static const char *const TAG = "dw3000_hw";
 volatile uint32_t g_dw_cyc_gpio;
 volatile uint32_t g_dw_cyc_work;
 volatile uint32_t g_dw_cyc_isrdone;
-volatile uint32_t g_dw_cyc_per_us = 240; /* ESP32-S3 core @240 MHz */
+volatile uint32_t g_dw_cyc_per_us = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ;
+
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
+#define WOZ_DW3000_TASK_CORE 1
+#else
+#define WOZ_DW3000_TASK_CORE 0
+#endif
 
 // Return the current CPU cycle count, used as the DW3000 driver's cycle-counter timebase on this port.
 uint32_t dw3000_dwt_cyccnt(void) { return esp_cpu_get_cycle_count(); }
@@ -100,8 +106,9 @@ static void dw3000_isr_task(void *arg)
 
 // Configure the DW3000 IRQ GPIO, install the shared ISR service, and start the pinned ISR worker task.
 // Idempotent: safe to call more than once, the ISR service and worker task are each created only once.
-// The worker task runs on core 1 at priority 23 (above esp_timer and Thread) so DS-TWR slot callbacks
+// The worker task runs at priority 23 (above esp_timer and Thread) so DS-TWR slot callbacks
 // (RX/TX-done) are not delayed by preemption; it is bursty and mostly blocked on the IRQ semaphore.
+// It uses core 1 when available and core 0 on single-core targets such as ESP32-C6.
 // Leaves the interrupt enabled. Returns 0 on success, -1 if the ISR service failed to install.
 int dw3000_hw_init_interrupt(void)
 {
@@ -129,18 +136,24 @@ int dw3000_hw_init_interrupt(void)
 	gpio_isr_handler_add(WOZ_DW3000_PIN_IRQ, dw3000_gpio_isr, NULL);
 
 	if (s_irq_task == NULL) {
-		/* Pinned to core 1 (BLE/Wi-Fi live on core 0). Priority 23 (above esp_timer=22
-		 * and the Matter/Thread service tasks): the DW3000 RX/TX-done callbacks drive the
-		 * DS-TWR slot choreography (POLL arm, Response TX, Final-RFRAME arm) with only ~2 ms
-		 * between steps. At 20, esp_timer/Thread preempted this task ~2.4 ms per TX-done,
-		 * so the Final arm (POLL+2 slots) always ran after the Final had passed (t6 lost ->
-		 * garbage ToF). 23 lets the callback fire promptly; the task is bursty and mostly
-		 * blocks on the IRQ semaphore, so it does not starve the system. */
-		xTaskCreatePinnedToCore(dw3000_isr_task, "dw3000_isr", 4096, NULL,
-					23, &s_irq_task, 1);
+		/* On dual-core parts this stays on core 1 while BLE/Wi-Fi live on core 0.
+		 * C6 has one core, so priority 23 is the isolation mechanism there. The
+		 * DW3000 RX/TX-done callbacks drive the DS-TWR slot choreography (POLL
+		 * arm, Response TX, Final-RFRAME arm) with only ~2 ms between steps. At
+		 * priority 20, esp_timer/Thread preempted this task ~2.4 ms per TX-done,
+		 * so the Final arm always ran after the Final had passed. */
+		BaseType_t rc = xTaskCreatePinnedToCore(dw3000_isr_task, "dw3000_isr", 4096,
+						      NULL, 23, &s_irq_task,
+						      WOZ_DW3000_TASK_CORE);
+		if (rc != pdPASS) {
+			ESP_LOGE(TAG, "failed to create IRQ task on core %d",
+				 WOZ_DW3000_TASK_CORE);
+			return -1;
+		}
 	}
 	s_irq_enabled = true;
-	ESP_LOGI(TAG, "IRQ on GPIO%d", WOZ_DW3000_PIN_IRQ);
+	ESP_LOGI(TAG, "IRQ on GPIO%d, worker core %d", WOZ_DW3000_PIN_IRQ,
+		 WOZ_DW3000_TASK_CORE);
 	return 0;
 }
 

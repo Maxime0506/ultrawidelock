@@ -160,9 +160,11 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
   needs.
 - **Confirmed.** `--wrap` on `xtensa-esp32s3-elf-ld` behaves as on any GNU ld;
   `verify_port.sh` guards the seam on every build.
-- **Confirmed, with a caveat.** BLE and UWB coexist on one S3, but not for free: the
-  ranging task is pinned to core 1 and the console to core 0, and the transaction runs
-  synchronously on the BLE host task because driving it from elsewhere races the host.
+- **Confirmed on S3, with a caveat.** BLE and UWB coexist on one S3, but not for free:
+  the ranging task is pinned to core 1 and the console to core 0, and the transaction
+  runs synchronously on the BLE host task because driving it from elsewhere races the
+  host. The hardware-validated C6 shares its single core between BLE/Wi-Fi and the
+  priority-23 UWB worker.
 - **Held.** The provenance discipline was kept. Wire behavior follows the published Aliro
   1.0 specification, with values it does not fix observed from a real phone; no restricted
   source was copied.

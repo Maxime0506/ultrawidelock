@@ -1,6 +1,6 @@
-# partitions.csv squeezed for 4 MB flash (ESP32-C5 default target): same
-# Matter-ready layout, factory app 0x400000 -> 0x3E0000 so nvs + phy + factory +
-# fctry end at 0x3F6000, inside 4 MB. See partitions.csv for the full rationale.
+# Compact target layout (ESP32-C5 4 MB floor; also used by the 8 MB C6 reader):
+# factory app 0x400000 -> 0x3E0000 so nvs + phy + factory + fctry end at
+# 0x3F6000, inside 4 MB. See partitions.csv for the full rationale.
 #
 # Name,     Type, SubType, Offset,  Size,     Flags
 nvs,        data, nvs,     ,        0x6000,

@@ -890,6 +890,7 @@ int mfk_led_new_rc;
 int mfk_led_clears;
 int mfk_led_refreshes;
 int mfk_led_set_calls;
+int mfk_led_gpio;
 uint32_t mfk_led_last_index, mfk_led_r, mfk_led_g, mfk_led_b;
 int mfk_bsp_button_calls;
 static struct led_strip_t *mfk_led_obj = (struct led_strip_t *)&mfk_led_new_rc;
@@ -898,7 +899,7 @@ esp_err_t led_strip_new_rmt_device(const led_strip_config_t *led_config,
 				   const led_strip_rmt_config_t *rmt_config,
 				   led_strip_handle_t *ret_strip)
 {
-	(void)led_config;
+	mfk_led_gpio = led_config->strip_gpio_num;
 	(void)rmt_config;
 	if (mfk_led_new_rc != ESP_OK) {
 		return mfk_led_new_rc;
@@ -1292,6 +1293,7 @@ void mfk_reset(void)
 	mfk_led_clears = 0;
 	mfk_led_refreshes = 0;
 	mfk_led_set_calls = 0;
+	mfk_led_gpio = -1;
 	mfk_bsp_button_calls = 0;
 	mfk_reader_start_calls = 0;
 	mfk_reader_start_rc = 0;

@@ -1,6 +1,7 @@
 # Installing
 
-The nRF5340 DK is the primary target; the ESP32-S3 and ESP32-C5 apps port the same engine.
+The nRF5340 DK is the primary target; the ESP32-S3, ESP32-C5, and ESP32-C6 apps
+port the same engine.
 No hardware needed until you flash.
 
 ## Get the code
@@ -154,20 +155,22 @@ That wrapper runs the committed twin self-test and every hermetic gate available
 inside the candidate. It names the seven skipped gates in the verdict; CI still
 runs them. Run `make verify` directly for the full developer sweep.
 
-## ESP32-S3 and ESP32-C5 ports
+## ESP32-S3, ESP32-C5, and ESP32-C6 ports
 
 Both apps expect ESP-IDF at `~/esp/esp-idf` (override: `IDF_EXPORT=`); CI
 pins ESP-IDF v5.5.4 and esp-matter in
 [`firmware-builds.yml`](../.github/workflows/firmware-builds.yml).
 
-Use `esp32s3` for the hardware-validated target or `esp32c5` for the
-build/release-supported target. No C5 bench validation is recorded.
+Use `esp32s3` for the hardware-validated target, `esp32c5` for the
+build/release-supported target, or `esp32c6` for the direct-SPI BU04 bring-up
+target with `ST_NRST` held low. S3 and C6 are hardware-validated; no C5 bench
+validation is recorded.
 
 **Reader** (`../ports/esp32/apps/reader`): plain ESP-IDF, no esp-matter.
 
 ```bash
 cd ports/esp32/apps/reader
-idf.py set-target esp32s3   # or: idf.py set-target esp32c5
+make set-target TARGET=esp32c6   # or: esp32s3 / esp32c5
 make build
 make flash
 ```
@@ -177,7 +180,7 @@ esp-matter at `~/esp/esp-matter` (override: `ESP_MATTER_PATH=`).
 
 ```bash
 cd ports/esp32/apps/matter-lock
-make set-target TARGET=esp32s3   # or: TARGET=esp32c5
+make set-target TARGET=esp32c6   # or: esp32s3 / esp32c5
 make go
 ```
 
