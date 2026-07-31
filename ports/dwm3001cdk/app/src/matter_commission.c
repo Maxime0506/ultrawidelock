@@ -337,7 +337,7 @@ static void on_read_request(const struct matter_exchange_in *in)
 	}
 
 	rc = matter_ble_send(s_out, framed);
-	LOG_INF("ReportData: %u paths asked, %u B report, %u B sealed, rc=%d", s_read.n_paths,
+	LOG_DBG("ReportData: %u paths asked, %u B report, %u B sealed, rc=%d", s_read.n_paths,
 		(unsigned int)report_len, (unsigned int)framed, rc);
 }
 
@@ -353,7 +353,7 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		LOG_WRN("unreadable InvokeRequest (%d), %u B", rc, (unsigned int)in->payload_len);
 		return;
 	}
-	LOG_INF("invoke: endpoint %u cluster 0x%04x command 0x%04x, %u B fields", inv.endpoint,
+	LOG_DBG("invoke: endpoint %u cluster 0x%04x command 0x%04x, %u B fields", inv.endpoint,
 		(unsigned int)inv.cluster, (unsigned int)inv.command, (unsigned int)inv.fields_len);
 
 	rc = matter_im_invoke_response_encode(&s_im, &inv, s_report, sizeof(s_report), &resp_len);
@@ -405,7 +405,7 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	}
 
 	rc = matter_ble_send(s_out, framed);
-	LOG_INF("InvokeResponse: %u B, %u B sealed, rc=%d", (unsigned int)resp_len,
+	LOG_DBG("InvokeResponse: %u B, %u B sealed, rc=%d", (unsigned int)resp_len,
 		(unsigned int)framed, rc);
 }
 
@@ -574,7 +574,6 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	}
 
 	s_case.active = true;
-	LOG_HEXDUMP_INF(reply, mh_len + ph_len, "out hdr");
 	LOG_INF("  Sigma2 out: %u B payload, %u B total, session 0x%04x", (unsigned int)s2_len,
 		(unsigned int)(mh_len + ph_len + s2_len), (unsigned int)s_case.local_session_id);
 	return mh_len + ph_len + s2_len;
