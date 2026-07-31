@@ -24,7 +24,8 @@ if(CONFIG_WOZ_MATTER)
     ${SRC}/matter_pase_sm.c
     ${SRC}/matter_exchange.c
     ${SRC}/matter_im.c
-    ${SRC}/matter_clusters.c)
+    ${SRC}/matter_clusters.c
+    ${SRC}/matter_attest.c)
 
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 

@@ -25,7 +25,8 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 		return false;
 	}
 	return cluster == MATTER_CLUSTER_BASIC_INFORMATION ||
-	       cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING;
+	       cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING ||
+	       cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS;
 }
 
 static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute)
@@ -186,6 +187,175 @@ static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t 
 	}
 }
 
+/* --------------------------------------------------- attestation --- */
+
+/* AttestationRequest/CSRRequest field tags (OperationalCredentials/Commands.h). */
+#define TAG_ATTEST_NONCE 0u
+#define TAG_CERT_TYPE    0u
+#define TAG_CSR_NONCE    0u
+
+/* Response field tags, same header. */
+#define TAG_RESP_ELEMENTS  0u
+#define TAG_RESP_SIGNATURE 1u
+#define TAG_RESP_CERT      0u
+
+/** Borrow one octet-string field out of a command's arguments. */
+static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const uint8_t **out,
+			size_t *len)
+{
+	struct matter_tlv_reader r;
+
+	if (!inv->has_fields || inv->fields == NULL) {
+		return false;
+	}
+	matter_tlv_reader_init(&r, inv->fields, inv->fields_len);
+	if (matter_tlv_next(&r) != MATTER_OK || !matter_tlv_is_container(&r)) {
+		return false;
+	}
+	if (matter_tlv_enter(&r) != MATTER_OK) {
+		return false;
+	}
+	for (;;) {
+		if (matter_tlv_next(&r) != MATTER_OK) {
+			return false;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(tag)) {
+			return matter_tlv_get_bytes(&r, out, len) == MATTER_OK;
+		}
+	}
+}
+
+/**
+ * Run one OperationalCredentials command.
+ *
+ * Everything expensive happens here -- the signature, and for a CSR a fresh
+ * P-256 key pair -- because this runs exactly once per request while
+ * attest_fields() may not.
+ */
+static uint8_t attest_command(struct matter_device_info *info, const struct matter_im_invoke *inv,
+			      uint32_t *response_command)
+{
+	const uint8_t *nonce = NULL;
+	size_t nonce_len = 0u;
+	uint64_t v = 0u;
+	int rc;
+
+	switch (inv->command) {
+	case MATTER_CMD_OC_CERTIFICATE_CHAIN_REQUEST: {
+		const uint8_t *cert = NULL;
+		size_t cert_len = 0u;
+
+		if (!field_u64(inv, TAG_CERT_TYPE, &v) || v > UINT8_MAX) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		/* Checked here rather than when writing the reply, because a
+		 * reply has no way to say "no such certificate". */
+		if (matter_attest_cert((uint8_t)v, &cert, &cert_len) != MATTER_OK) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		info->cert_type = (uint8_t)v;
+		*response_command = MATTER_CMD_OC_CERTIFICATE_CHAIN_RESPONSE;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
+
+	case MATTER_CMD_OC_ATTESTATION_REQUEST:
+		if (!info->have_challenge) {
+			/* Nothing to bind the signature to. Refusing beats
+			 * signing something a recorded session could reuse. */
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		if (!field_bytes(inv, TAG_ATTEST_NONCE, &nonce, &nonce_len) ||
+		    nonce_len != MATTER_ATTEST_NONCE_LEN) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		/* No clock on this node, and 0 is what a device without one
+		 * sends -- not a placeholder for something better. */
+		rc = matter_attest_elements_encode(nonce, nonce_len, 0u, info->attest_buf,
+						   MATTER_ATTEST_ELEMENTS_MAX, &info->attest_len);
+		if (rc != MATTER_OK) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		rc = matter_attest_sign_with_challenge(
+			info->attest_buf, info->attest_len, sizeof(info->attest_buf),
+			info->attestation_challenge, sizeof(info->attestation_challenge),
+			info->attest_sig);
+		if (rc != MATTER_OK) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		*response_command = MATTER_CMD_OC_ATTESTATION_RESPONSE;
+		return MATTER_IM_STATUS_SUCCESS;
+
+	case MATTER_CMD_OC_CSR_REQUEST: {
+		uint8_t csr[MATTER_CSR_MAX];
+		size_t csr_len = 0u;
+
+		if (!info->have_challenge) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		if (!field_bytes(inv, TAG_CSR_NONCE, &nonce, &nonce_len) ||
+		    nonce_len != MATTER_ATTEST_NONCE_LEN) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		/*
+		 * A FRESH key every time. Reusing one across commissioning
+		 * attempts would let a fabric that saw an earlier CSR recognise
+		 * the node on another.
+		 */
+		if (matter_attest_ec_keygen(info->op_priv, info->op_pub) != 0) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		info->have_op_key = true;
+		if (matter_attest_csr(info->op_priv, info->op_pub, csr, sizeof(csr), &csr_len) !=
+		    MATTER_OK) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		rc = matter_attest_nocsr_encode(csr, csr_len, nonce, nonce_len, info->attest_buf,
+						MATTER_ATTEST_ELEMENTS_MAX, &info->attest_len);
+		if (rc != MATTER_OK) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		rc = matter_attest_sign_with_challenge(
+			info->attest_buf, info->attest_len, sizeof(info->attest_buf),
+			info->attestation_challenge, sizeof(info->attestation_challenge),
+			info->attest_sig);
+		if (rc != MATTER_OK) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		*response_command = MATTER_CMD_OC_CSR_RESPONSE;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
+
+	default:
+		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
+	}
+}
+
+/** Serialise what attest_command() already computed. */
+static void attest_fields(const struct matter_device_info *info, uint32_t response_command,
+			  struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+
+	if (response_command == MATTER_CMD_OC_CERTIFICATE_CHAIN_RESPONSE) {
+		const uint8_t *cert = NULL;
+		size_t cert_len = 0u;
+
+		if (matter_attest_cert(info->cert_type, &cert, &cert_len) == MATTER_OK) {
+			(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_RESP_CERT), cert,
+						   cert_len);
+		}
+	} else {
+		/* AttestationResponse and CSRResponse are the same shape: the
+		 * elements, then the signature over them. */
+		(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_RESP_ELEMENTS), info->attest_buf,
+					   info->attest_len);
+		(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_RESP_SIGNATURE), info->attest_sig,
+					   sizeof(info->attest_sig));
+	}
+
+	(void)matter_tlv_end_container(w);
+}
+
 static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *response_command)
 {
 	struct matter_device_info *info = (struct matter_device_info *)ctx;
@@ -193,6 +363,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 
 	if (inv->endpoint != MATTER_ENDPOINT_ROOT) {
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
+	}
+	if (inv->cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
+		return attest_command(info, inv, response_command);
 	}
 	if (inv->cluster != MATTER_CLUSTER_GENERAL_COMMISSIONING) {
 		return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
@@ -258,7 +431,11 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
 
 	(void)endpoint;
-	(void)cluster;
+
+	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
+		attest_fields(info, response_command, w, tag);
+		return;
+	}
 	(void)response_command;
 
 	/*

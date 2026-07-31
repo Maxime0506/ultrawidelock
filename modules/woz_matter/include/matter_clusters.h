@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "matter_attest.h"
 #include "matter_im.h"
 
 #ifdef __cplusplus
@@ -39,8 +40,9 @@ extern "C" {
 #endif
 
 /* Cluster IDs, each from that cluster's generated ClusterId.h:14. */
-#define MATTER_CLUSTER_BASIC_INFORMATION     0x0028u
-#define MATTER_CLUSTER_GENERAL_COMMISSIONING 0x0030u
+#define MATTER_CLUSTER_BASIC_INFORMATION       0x0028u
+#define MATTER_CLUSTER_GENERAL_COMMISSIONING   0x0030u
+#define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
 
 /* BasicInformation attributes (BasicInformation/AttributeIds.h:27,35). */
 #define MATTER_ATTR_BASIC_VENDOR_ID  0x0002u
@@ -71,6 +73,14 @@ extern "C" {
 #define MATTER_COMMISSIONING_VALUE_OUTSIDE_RANGE 1u
 #define MATTER_COMMISSIONING_INVALID_AUTH        2u
 #define MATTER_COMMISSIONING_NO_FAIL_SAFE        3u
+
+/* OperationalCredentials commands (OperationalCredentials/CommandIds.h:21-50). */
+#define MATTER_CMD_OC_ATTESTATION_REQUEST        0x0000u
+#define MATTER_CMD_OC_ATTESTATION_RESPONSE       0x0001u
+#define MATTER_CMD_OC_CERTIFICATE_CHAIN_REQUEST  0x0002u
+#define MATTER_CMD_OC_CERTIFICATE_CHAIN_RESPONSE 0x0003u
+#define MATTER_CMD_OC_CSR_REQUEST                0x0004u
+#define MATTER_CMD_OC_CSR_RESPONSE               0x0005u
 
 /** The only endpoint this node has. Every Matter node's root endpoint is 0. */
 #define MATTER_ENDPOINT_ROOT 0u
@@ -113,6 +123,42 @@ struct matter_device_info {
 	 * matter_im_command_fields_fn is pure and cannot recompute it.
 	 */
 	uint8_t last_commissioning_error;
+
+	/*
+	 * ---- attestation --------------------------------------------------
+	 *
+	 * A command runs once and its reply is serialised afterwards, so
+	 * whatever the reply needs is recorded here in between. All of it is
+	 * per-session and none of it survives a new commissioner.
+	 */
+
+	/**
+	 * The session's attestation challenge, which every attestation
+	 * signature covers. Copied from the PASE keys when the secure session
+	 * comes up; without it a recorded response could be replayed into a
+	 * different session.
+	 */
+	uint8_t attestation_challenge[MATTER_ATTEST_CHALLENGE_LEN];
+	bool have_challenge;
+
+	/**
+	 * Scratch for the reply, with the headroom
+	 * matter_attest_sign_with_challenge() writes the challenge into.
+	 */
+	uint8_t attest_buf[MATTER_ATTEST_ELEMENTS_MAX + MATTER_ATTEST_CHALLENGE_LEN];
+	size_t attest_len;
+	uint8_t attest_sig[MATTER_ATTEST_SIG_LEN];
+	/** Which certificate CertificateChainResponse should carry. */
+	uint8_t cert_type;
+
+	/**
+	 * The operational key pair, minted when the commissioner asks for a
+	 * CSR. The private half never leaves this node -- that is the point of
+	 * a CSR -- and the commissioner certifies the public half into a NOC.
+	 */
+	uint8_t op_priv[32];
+	uint8_t op_pub[65];
+	bool have_op_key;
 };
 
 /**

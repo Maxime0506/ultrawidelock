@@ -63,6 +63,7 @@ extern "C" {
  * ones a read can produce; the list is long and unused entries are noise.
  */
 #define MATTER_IM_STATUS_SUCCESS               0x00u /* line 31 */
+#define MATTER_IM_STATUS_FAILURE               0x01u /* line 32 */
 #define MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT  0x7Fu /* line 35 */
 #define MATTER_IM_STATUS_UNSUPPORTED_COMMAND   0x81u /* line 37 */
 #define MATTER_IM_STATUS_INVALID_COMMAND       0x85u /* line 41 */

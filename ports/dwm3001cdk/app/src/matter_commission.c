@@ -32,6 +32,7 @@
 
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
+#include "matter_attest.h"
 #include "matter_clusters.h"
 #include "matter_commission.h"
 #include "matter_exchange.h"
@@ -84,11 +85,12 @@ static struct matter_im_server s_im;
 /**
  * Framed reply: both headers, the largest message, and the AEAD tag.
  *
- * Sized by the Interaction Model rather than PASE now: a ReportData answering
- * a commissioner's opening read is ~200 bytes where the largest PASE message is
- * 128. Encryption adds MATTER_TAG_LEN on top of the cleartext.
+ * Sized by the Interaction Model rather than PASE now, and by attestation
+ * rather than by a read: an AttestationResponse carries a 539-byte
+ * certification declaration plus a signature, where the largest PASE message is
+ * 128 bytes. Encryption adds MATTER_TAG_LEN on top of the cleartext.
  */
-#define MATTER_REPORT_MAX 512u
+#define MATTER_REPORT_MAX 1024u
 static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG_LEN];
 
 /** The Interaction Model payload, before framing. */
@@ -102,6 +104,22 @@ static uint8_t s_report[MATTER_REPORT_MAX];
  * would make that depend on the cipher's write order.
  */
 static uint8_t s_pt[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
+
+/*
+ * The two seams matter_attest.h declares. Kept here rather than in the module
+ * so woz_matter stays free of any particular crypto backend; on this board both
+ * are the reader's existing PSA-backed primitives.
+ */
+int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
+			     uint8_t sig[MATTER_ATTEST_SIG_LEN])
+{
+	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
+}
+
+int matter_attest_ec_keygen(uint8_t priv[32], uint8_t pub[65])
+{
+	return aliro_ec_p256_keygen(priv, pub);
+}
 
 /** @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input. */
 static int unhex(const char *s, uint8_t *out, size_t cap, size_t *len)
@@ -444,6 +462,12 @@ static void on_message(const uint8_t *msg, size_t len)
 			s_stale = true;
 			return;
 		}
+		/* Every attestation signature covers this. Copied now because
+		 * the PASE responder is wiped when the next session starts. */
+		memcpy(s_info.attestation_challenge, s_pase.keys.attestation_challenge,
+		       sizeof(s_info.attestation_challenge));
+		s_info.have_challenge = true;
+
 		LOG_INF("PASE complete: secure session up (local 0x%04x, peer 0x%04x)",
 			(unsigned int)s_pase.local_session_id,
 			(unsigned int)s_pase.peer_session_id);
