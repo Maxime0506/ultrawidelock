@@ -574,6 +574,14 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	}
 
 	s_case.active = true;
+	/*
+	 * The first 48 bytes are the whole TLV skeleton: outer structure, the
+	 * random, the session id, and the start of the ephemeral key. Enough to
+	 * decode offline and settle whether the SHAPE is right, which is the
+	 * question no amount of staring at the encoder answers -- and far
+	 * cheaper than another pairing attempt.
+	 */
+	LOG_HEXDUMP_INF(reply + mh_len + ph_len, s2_len < 48u ? s2_len : 48u, "sigma2 head");
 	LOG_INF("  Sigma2 out: %u B payload, %u B total, session 0x%04x", (unsigned int)s2_len,
 		(unsigned int)(mh_len + ph_len + s2_len), (unsigned int)s_case.local_session_id);
 	return mh_len + ph_len + s2_len;
