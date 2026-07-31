@@ -149,6 +149,69 @@ int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t 
 	return aliro_ecdsa_p256_verify(pub, msg, msg_len, sig);
 }
 
+/*
+ * NIST CAVP SP 800-56A ECC CDH P-256, COUNT 0.
+ *
+ * VERIFIED BEFORE USE, not trusted: both points were checked to satisfy
+ * y^2 = x^3 - 3x + b, the private key to produce its own published public key
+ * under scalar multiplication, and d*Q to reproduce Z. That check exists
+ * because two vectors offered for this job turned out to have public keys that
+ * were not on the curve at all -- and aliro_ecdh_p256() would have correctly
+ * rejected them, which reads exactly like the bug being hunted.
+ */
+static const uint8_t k_kat_priv[] = {
+	0x7D, 0x7D, 0xC5, 0xF7, 0x1E, 0xB2, 0x9D, 0xDA, 0xF8, 0x0D, 0x62,
+	0x14, 0x63, 0x2E, 0xEA, 0xE0, 0x3D, 0x90, 0x58, 0xAF, 0x1F, 0xB6,
+	0xD2, 0x2E, 0xD8, 0x0B, 0xAD, 0xB6, 0x2B, 0xC1, 0xA5, 0x34,
+};
+static const uint8_t k_kat_peer[] = {
+	0x04, 0x70, 0x0C, 0x48, 0xF7, 0x7F, 0x56, 0x58, 0x4C, 0x5C, 0xC6, 0x32, 0xCA,
+	0x65, 0x64, 0x0D, 0xB9, 0x1B, 0x6B, 0xAC, 0xCE, 0x3A, 0x4D, 0xF6, 0xB4, 0x2C,
+	0xE7, 0xCC, 0x83, 0x88, 0x33, 0xD2, 0x87, 0xDB, 0x71, 0xE5, 0x09, 0xE3, 0xFD,
+	0x9B, 0x06, 0x0D, 0xDB, 0x20, 0xBA, 0x5C, 0x51, 0xDC, 0xC5, 0x94, 0x8D, 0x46,
+	0xFB, 0xF6, 0x40, 0xDF, 0xE0, 0x44, 0x17, 0x82, 0xCA, 0xB8, 0x5F, 0xA4, 0xAC,
+};
+static const uint8_t k_kat_z[] = {
+	0x46, 0xFC, 0x62, 0x10, 0x64, 0x20, 0xFF, 0x01, 0x2E, 0x54, 0xA4,
+	0x34, 0xFB, 0xDD, 0x2D, 0x25, 0xCC, 0xC5, 0x85, 0x20, 0x60, 0x56,
+	0x1E, 0x68, 0x04, 0x0D, 0xD7, 0x77, 0x89, 0x97, 0xBD, 0x7B,
+};
+/**
+ * Prove the ECDH primitive against a published answer, once, at boot.
+ *
+ * The shared secret is the only input to CASE that neither peer can check
+ * alone: get it wrong and the other side simply cannot decrypt, with nothing
+ * on the wire to say so. This is the one place it can be pinned to something
+ * external.
+ */
+static void ecdh_known_answer_test(void)
+{
+	uint8_t z[32];
+
+	if (aliro_ecdh_p256(k_kat_priv, k_kat_peer, z) != 0) {
+		LOG_ERR("ECDH self-test: primitive REFUSED the NIST vector");
+		return;
+	}
+	if (memcmp(z, k_kat_z, sizeof(z)) == 0) {
+		LOG_INF("ECDH self-test: PASS (NIST CAVP P-256 CDH count 0)");
+		return;
+	}
+	/* Byte-reversal is the classic failure of a hardware accelerator fed
+	 * the wrong way round, and worth naming rather than leaving as "wrong". */
+	{
+		uint8_t rev[32];
+		size_t i;
+
+		for (i = 0u; i < sizeof(rev); i++) {
+			rev[i] = z[sizeof(rev) - 1u - i];
+		}
+		LOG_ERR("ECDH self-test: FAIL%s", memcmp(rev, k_kat_z, sizeof(rev)) == 0
+							  ? " -- output is BYTE-REVERSED"
+							  : "");
+	}
+	LOG_HEXDUMP_ERR(z, sizeof(z), "got");
+}
+
 /** @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input. */
 static int unhex(const char *s, uint8_t *out, size_t cap, size_t *len)
 {
@@ -839,6 +902,8 @@ static void on_link_reset(void)
 
 int matter_commission_init(void)
 {
+	ecdh_known_answer_test();
+
 	if (load_verifier() != 0) {
 		/* Deliberately still registers the handler. A device that cannot
 		 * commission should say so on every attempt rather than look
