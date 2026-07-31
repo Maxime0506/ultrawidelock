@@ -121,6 +121,7 @@ extern "C" {
 /* User-feature attributes and commands. */
 #define MATTER_ATTR_DL_USERS_MAX             0x0011u
 #define MATTER_ATTR_DL_CREDS_PER_USER_MAX    0x001Cu
+#define MATTER_CMD_DL_SET_USER               0x001Au
 #define MATTER_CMD_DL_GET_USER               0x001Bu
 #define MATTER_CMD_DL_GET_USER_RESPONSE      0x001Cu
 
@@ -160,6 +161,28 @@ extern "C" {
 
 #define MATTER_ALIRO_SIGNING_KEY_LEN      32u
 #define MATTER_ALIRO_VERIFICATION_KEY_LEN 65u
+
+/* SetUser fields (DoorLock/Commands.h, SetUser::Fields). Numbered from
+ * kOperationType = 0, so every later field sits one above its GetUserResponse
+ * twin -- reading one enum for the other silently shifts every value. */
+#define TAG_SETUSER_OPERATION       0u
+#define TAG_SETUSER_INDEX           1u
+#define TAG_SETUSER_NAME            2u
+#define TAG_SETUSER_UNIQUE_ID       3u
+#define TAG_SETUSER_STATUS          4u
+#define TAG_SETUSER_TYPE            5u
+#define TAG_SETUSER_CREDENTIAL_RULE 6u
+
+/** One user slot. Reported by GetUser, filled by SetUser. */
+struct matter_user {
+	uint32_t unique_id;
+	uint8_t status;
+	uint8_t type;
+	uint8_t credential_rule;
+	uint8_t creator_fabric;
+	uint8_t modifier_fabric;
+	bool in_use;
+};
 
 /* GetUserResponse fields (DoorLock/Commands.h, GetUserResponse::Fields). */
 #define TAG_GETUSER_INDEX          0u
@@ -402,6 +425,17 @@ struct matter_device_info {
 	 * @ref last_commissioning_error below.
 	 */
 	uint16_t last_user_index;
+	/**
+	 * The user table, indexed from 0 for slot 1.
+	 *
+	 * Small and real rather than stubbed: Apple writes a user with SetUser
+	 * and immediately reads it back with GetUser, so a node that accepts
+	 * the write and then reports an empty slot has told the controller two
+	 * different things. The user NAME is deliberately not stored -- it is
+	 * nullable, nothing here displays it, and it is the only field that
+	 * would cost real RAM.
+	 */
+	struct matter_user users[MATTER_DL_USERS_MAX];
 	/**
 	 * The fabric index of the session being served right now, set by the
 	 * port before it dispatches each secure message.

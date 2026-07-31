@@ -1655,6 +1655,39 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
 			return set_aliro_reader_config(info, inv);
 		}
+		if (inv->command == MATTER_CMD_DL_SET_USER) {
+			/*
+			 * Stored, not merely accepted. Apple writes a user here
+			 * and reads it straight back with GetUser, so a node
+			 * that says SUCCESS and then reports an empty slot has
+			 * told the controller two different things about the
+			 * same user.
+			 *
+			 * OperationType is read but not distinguished: Add and
+			 * Modify differ only in whether the slot was already
+			 * occupied, and overwriting is the right answer to both
+			 * for a table that holds no credentials of its own yet.
+			 */
+			struct matter_user *u;
+			uint64_t idx = 0u;
+
+			if (!field_u64(inv, TAG_SETUSER_INDEX, &idx) || idx == 0u ||
+			    idx > MATTER_DL_USERS_MAX) {
+				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			u = &info->users[idx - 1u];
+			u->in_use = true;
+			u->creator_fabric = info->accessing_fabric_index;
+			u->modifier_fabric = info->accessing_fabric_index;
+			u->unique_id = field_u64(inv, TAG_SETUSER_UNIQUE_ID, &v) ? (uint32_t)v : 0u;
+			u->status = field_u64(inv, TAG_SETUSER_STATUS, &v) ? (uint8_t)v : 1u;
+			u->type = field_u64(inv, TAG_SETUSER_TYPE, &v) ? (uint8_t)v : 0u;
+			u->credential_rule =
+				field_u64(inv, TAG_SETUSER_CREDENTIAL_RULE, &v) ? (uint8_t)v : 0u;
+			/* No response command: SetUser is answered with a bare
+			 * status, which the IM layer sends for SUCCESS. */
+			return MATTER_IM_STATUS_SUCCESS;
+		}
 		if (inv->command == MATTER_CMD_DL_GET_CREDENTIAL_STATUS) {
 			/*
 			 * Asked right after the reader identity lands, to find
@@ -1807,19 +1840,64 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 			 * and the result is a response that encodes without
 			 * error, decodes as garbage, and is simply dropped.
 			 */
-			(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
-			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_GETUSER_INDEX),
-						 info->last_user_index);
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NAME));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_UNIQUE_ID));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_STATUS));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_TYPE));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIAL_RULE));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIALS));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREATOR_FABRIC));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_MODIFIER_FABRIC));
-			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NEXT_INDEX));
-			(void)matter_tlv_end_container(w);
+			{
+				const struct matter_user *u =
+					&info->users[info->last_user_index - 1u];
+
+				(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_GETUSER_INDEX),
+							 info->last_user_index);
+				/* The name is never stored, so it is always null
+				 * -- which is a legal answer and not a claim
+				 * that the slot is empty. */
+				(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NAME));
+				if (!u->in_use) {
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_UNIQUE_ID));
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_STATUS));
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_TYPE));
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIAL_RULE));
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_CREATOR_FABRIC));
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_MODIFIER_FABRIC));
+				} else {
+					(void)matter_tlv_put_u64(
+						w, MATTER_TLV_CTX(TAG_GETUSER_UNIQUE_ID),
+						u->unique_id);
+					(void)matter_tlv_put_u64(
+						w, MATTER_TLV_CTX(TAG_GETUSER_STATUS), u->status);
+					(void)matter_tlv_put_u64(
+						w, MATTER_TLV_CTX(TAG_GETUSER_TYPE), u->type);
+					(void)matter_tlv_put_u64(
+						w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIAL_RULE),
+						u->credential_rule);
+					(void)matter_tlv_put_u64(
+						w, MATTER_TLV_CTX(TAG_GETUSER_CREATOR_FABRIC),
+						u->creator_fabric);
+					(void)matter_tlv_put_u64(
+						w, MATTER_TLV_CTX(TAG_GETUSER_MODIFIER_FABRIC),
+						u->modifier_fabric);
+				}
+				/* Credentials is a LIST, and an empty list is
+				 * not the same answer as null: null says the
+				 * slot is empty, empty says the user exists and
+				 * holds none. */
+				if (u->in_use) {
+					(void)matter_tlv_start_container(
+						w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIALS),
+						MATTER_TLV_ARRAY);
+					(void)matter_tlv_end_container(w);
+				} else {
+					(void)matter_tlv_put_null(
+						w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIALS));
+				}
+				(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NEXT_INDEX));
+				(void)matter_tlv_end_container(w);
+			}
 		}
 		return;
 	}
