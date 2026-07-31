@@ -98,6 +98,18 @@ twin-web.yml:drift-gate                    test-web
 twin-web.yml:wasm-firmware                 twin-wasm
 workflow-lint.yml:actionlint               actionlint
 workflow-lint.yml:zizmor                   zizmor
+security.yml:secrets                       secrets
+security.yml:mal-diff                      mal-diff
+security.yml:semgrep                       semgrep
+security.yml:deps                          deps
+security.yml:web                           web
+security.yml:ct                            ct
+security.yml:esp                           esp
+security.yml:attest                        attest
+security-deep.yml:codeql                   !deep lane: builds a CodeQL database and runs security-extended, minutes not seconds, and it blocks nothing
+security-deep.yml:secrets-history          !deep lane: scans all 576 commits (~18s and growing); the local secrets gate scans the tree, and the PR gate scans the branch range
+security-deep.yml:semgrep-sarif            !deep lane: the same scan the semgrep gate runs, uploaded as SARIF at every severity instead of failing on ERROR
+security-deep.yml:scorecard                !deep lane: queries GitHub's own branch-protection and workflow settings, so it needs a token and the default branch
 firmware-builds.yml:changes                !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
@@ -247,6 +259,14 @@ mk_tool_stub cbmc cbmc
 # test-tui is the one gate that shells out to a tool directly instead of through
 # `make`, so it needs both a stub and somewhere to cd into below.
 mk_tool_stub bun test-tui
+# The four security gates. These stubs exist only so the missing-tool check sees
+# them as present — the gates themselves go through the scripts/security.sh stub
+# below, which is what decides pass or fail.
+mk_tool_stub gitleaks secrets
+mk_tool_stub retire web
+mk_tool_stub semgrep semgrep
+mk_tool_stub osv-scanner deps
+mk_tool_stub pip-audit deps
 
 # `make <target>`: for every gate that shells out to make, the gate name and the
 # target are the same word, so one stub covers all of them. It also writes the
@@ -256,6 +276,7 @@ cat > "$BIN/make" <<'EOF'
 t=""
 for a in "$@"; do case "$a" in -*) ;; *) t="$a"; break ;; esac; done
 case " ${FAIL_GATES:-} " in *" $t "*) echo "stub make: $t failed" >&2; exit 1 ;; esac
+case " ${EXIT2_GATES:-} " in *" $t "*) echo "stub make: $t exited 2" >&2; exit 2 ;; esac
 if [ "$t" = coverage ]; then
 	mkdir -p build/coverage
 	printf '{"data":[{"totals":{"lines":{"percent":%s}}}]}\n' "${COV_PCT:-95.5}" \
@@ -307,6 +328,16 @@ case " ${FAIL_GATES:-} " in *" patch-drift "*) echo "stub: drifted" >&2; exit 1 
 echo "stub patch-drift ok"
 EOF
 chmod +x "$FAKE/tests/tooling/patch_drift_check.sh"
+# All four security gates dispatch through this one script, so it stands in for
+# all four. It takes the gate name as $1, which is exactly how verify.sh calls
+# the real one — meaning FAIL_GATES can fail any of them individually.
+cat > "$FAKE/scripts/security.sh" <<'EOF'
+#!/usr/bin/env bash
+case " ${FAIL_GATES:-} " in *" $1 "*) echo "stub security: $1 failed" >&2; exit 1 ;; esac
+case " ${HOSTSKIP_GATES:-} " in *" $1 "*) echo "stub security: $1 needs a tool this host cannot have" >&2; exit 2 ;; esac
+echo "stub security $1 ok"
+EOF
+chmod +x "$FAKE/scripts/security.sh"
 echo "int a;" > "$FAKE/modules/a.c"
 echo "// twin" > "$FAKE/web-twin/twin.js"
 echo "// selftest" > "$FAKE/web-twin/selftest.cjs"
@@ -498,11 +529,35 @@ rc=$?
 assert "S17 isolated candidate sweep exits 0" test "$rc" -eq 0
 assert "S17 committed twin selftest still runs" has "stub node ok"
 assert "S17 reduced scope is explicit" has "NOT the full CI set"
-for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage test-tui; do
+for isolated_gate in zizmor licenses clang-tidy twin-wasm patch-drift test coverage test-tui \
+	semgrep web deps; do
 	assert "S17 skips unavailable $isolated_gate gate" \
 		has "$isolated_gate \\(SKIP=\\)"
 done
 assert "S17 still runs hermetic sanitizer gate" passed "host suite under ASan \\+ UBSan"
+
+# S18: a gate that exits 2 could not answer the question on this host. `ct` does
+# it on every macOS run, because there is no valgrind for darwin/arm64 and no
+# install fixes that. It must not be a pass — a green row for a gate that ran
+# nothing is precisely how a clean local sweep meets a red CI — and it must not
+# fail the sweep either, because a permanent red on the primary dev machine is a
+# red everyone learns to ignore. Loud, counted as skipped, exit 0.
+runv HOSTSKIP_GATES="ct"
+assert "S18 exit 2 is not a pass"            notpassed "no secret-dependent branches"
+assert "S18 and says so in the row"          has "NOT CHECKED"
+assert "S18 and is counted as skipped"       has "gate\\(s\\) SKIPPED"
+assert "S18 and the verdict is not all-pass" hasnt "all $NGATES host-runnable CI gates passed"
+assert "S18 and the sweep still exits 0"     test "$rc" -eq 0
+assert "S18 and it is not reported failed"   hasnt "verify FAILED"
+
+# S19: and only for that family. Every other gate owns its own exit codes, and
+# docs already uses 2 for "this branch is behind origin/main" — a real problem
+# with an obvious fix. Reading that as "the host cannot check" would turn a
+# blocking answer into a footnote, which is the first version of S18 verbatim.
+runv EXIT2_GATES="docs"
+assert "S19 exit 2 elsewhere is still a failure" has "docs .*FAILED \\(exit 2\\)"
+assert "S19 and it fails the sweep"              test "$rc" -ne 0
+assert "S19 and it is not called NOT CHECKED"    hasnt "NOT CHECKED"
 
 echo
 if [ "$fail" -eq 0 ]; then

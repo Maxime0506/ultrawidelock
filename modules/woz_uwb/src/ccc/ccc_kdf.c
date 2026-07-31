@@ -77,9 +77,9 @@ static uint8_t block_lshift1(const uint8_t in[AES_BLOCK_LEN], uint8_t out[AES_BL
 static void cmac_subkey(const uint8_t l[AES_BLOCK_LEN], uint8_t out[AES_BLOCK_LEN])
 {
 	uint8_t msb = block_lshift1(l, out);
-	if (msb) {
-		out[AES_BLOCK_LEN - 1] ^= CMAC_RB;
-	}
+	/* Branch-free: msb is derived from L = AES_K(0^128), i.e. from the key. */
+	uint8_t mask = (uint8_t)(0u - (uint8_t)(msb & 1u));
+	out[AES_BLOCK_LEN - 1] ^= (uint8_t)(CMAC_RB & mask);
 }
 
 /**
@@ -401,18 +401,20 @@ static void remap_if_reserved(uint8_t *addr, size_t len)
 	int reserved = 1;
 
 	if (len == 2) {
-		/* 0xFFFF and 0xFFFE are the reserved short values. */
-		reserved = (addr[0] == 0xFFu) && (addr[1] >= 0xFEu);
+		/* 0xFFFF and 0xFFFE are the reserved short values. Branch-free: the
+		 * addresses are transmitted, but the pre-remap UAD is not. */
+		uint8_t hi = (uint8_t)((addr[0] ^ 0xFFu) == 0 ? 1u : 0u);
+		reserved = (int)(hi & (uint8_t)(addr[1] >= 0xFEu));
 	} else {
+		uint8_t nonff = 0;
 		for (size_t i = 0; i < len; i++) {
-			if (addr[i] != 0xFFu) {
-				reserved = 0;
-				break;
-			}
+			nonff |= (uint8_t)(addr[i] ^ 0xFFu);
 		}
+		reserved = (nonff == 0);
 	}
-	if (reserved) {
-		addr[0] &= 0x7Fu;
+	{
+		uint8_t m = (uint8_t)(0u - (uint8_t)(reserved & 1));
+		addr[0] &= (uint8_t)(0xFFu ^ (m & 0x80u));
 	}
 }
 

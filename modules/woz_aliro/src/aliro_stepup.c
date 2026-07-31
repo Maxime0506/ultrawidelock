@@ -417,6 +417,25 @@ static const struct aliro_stepup_digest *find_digest(const struct aliro_stepup_d
 }
 
 /**
+ * Compare two byte strings in time independent of their contents; return 1 if all @p n bytes are
+ * equal and 0 otherwise.
+ *
+ * memcmp returns as soon as it finds a difference, so how long it runs says how many leading bytes
+ * matched. On a digest check inside an access-control verifier that is an oracle: it turns forging
+ * a 32-byte value from one 2^256 guess into 32 guesses of 256. The OR-accumulate below always
+ * reads all @p n bytes and branches once, on data the attacker cannot vary.
+ */
+static int ct_bytes_equal(const uint8_t *a, const uint8_t *b, size_t n)
+{
+	uint8_t diff = 0;
+
+	for (size_t i = 0; i < n; i++) {
+		diff |= (uint8_t)(a[i] ^ b[i]);
+	}
+	return diff == 0;
+}
+
+/**
  * Verify a parsed Step-Up document against issuer keys, signature, digests, doctype, time window,
  * and validity iteration; populate verdict struct with per-step validation results and overall
  * validity flag; return 0 if valid, -1 otherwise.
@@ -453,7 +472,7 @@ int aliro_stepup_verify(const struct aliro_stepup_doc *doc,
 			continue;
 		}
 		aliro_sha256(doc->items[i].tagged, doc->items[i].tagged_len, h);
-		if (memcmp(h, d->hash, 32) == 0) {
+		if (ct_bytes_equal(h, d->hash, 32)) {
 			v->valid_elements++;
 		}
 	}

@@ -46,7 +46,7 @@ jobs:
       - name: test and build the guided bench
         working-directory: tools/tui
         run: |
-          bun install --frozen-lockfile --os='*' --cpu='*'
+          bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*'
           bun run typecheck
           bun run test
           bun run release
@@ -235,6 +235,12 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write # create the release and upload its assets
+      # Both are required by attest-build-provenance below and by nothing else. id-token mints
+      # the short-lived Sigstore identity that binds the signature to this workflow; attestations
+      # writes the resulting statement back to the repository. Without them the attest step fails
+      # only when a tag is pushed, which is the worst time to find out.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -265,6 +271,24 @@ jobs:
           cp dist/openaliro-tui/openaliro-tui-* out/
           (cd out && sha256sum ./*.zip ./*.bin ./*.json ./openaliro-tui-* > SHA256SUMS.txt)
           ls -l out
+      # Provenance, before the release exists. SHA256SUMS.txt on its own is a self-referential
+      # claim: it is served from the release it describes, so it proves the download was not
+      # corrupted in transit and nothing else — anyone who can publish a release can publish
+      # matching sums. This binds each artifact to the workflow, repository and commit that
+      # produced it, verifiable by a third party with no trust in the release page.
+      #
+      # SHA256SUMS.txt is in the subject list deliberately. Attesting it turns the sums file
+      # itself into something signed, so the cheap check (verify one file, then use its hashes)
+      # inherits the guarantee.
+      - name: attest the release artifacts
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            out/*.zip
+            out/*.bin
+            out/*.json
+            out/openaliro-tui-*
+            out/SHA256SUMS.txt
       - name: create the release
         env:
           GH_TOKEN: ${{ github.token }}

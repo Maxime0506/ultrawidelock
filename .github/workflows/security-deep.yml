@@ -1,0 +1,190 @@
+# The non-blocking security lane: the analyses that are too slow to sit in front of a merge.
+#
+# security.yml decides whether a pull request may merge and finishes in under two minutes.
+# Everything here takes minutes to tens of minutes, so it runs weekly and on pushes to main, and
+# blocks nothing. Splitting them is the point: a security gate that makes people wait ten minutes
+# for a docs typo is a gate that gets marked non-required within a month, and then the fast
+# checks that were sharing the workflow stop blocking too.
+#
+# Findings land in the repository's code-scanning tab rather than failing a job, which is what
+# `security-events: write` below is for. That is available because this repository is public;
+# on a private repository without Advanced Security the SARIF uploads would need removing and
+# the jobs would have to fail directly instead.
+#
+# Deliberately NOT here, so the omissions are decisions rather than oversights:
+#
+#   syft / an SBOM   internal/security-audit/TOOLING.md makes the case against it plainly: syft
+#                    over this source tree finds bun.lock and pyproject.toml and almost nothing
+#                    else, because NCS, Zephyr, ESP-IDF, esp-matter and the ESP component
+#                    registry are none of them in the tree at scan time. That is most of the
+#                    shipped binary. Publishing an SBOM that omits the RTOS and the TLS stack is
+#                    worse than publishing none, because it looks like an answer. A real one
+#                    means scanning workspace/ after `make bootstrap` and merging the ESP managed
+#                    components, which is its own piece of work.
+#   trivy / grype    a second opinion on the same lockfiles osv-scanner already reads in the fast
+#                    lane. Checked by hand while building this: both agree with osv-scanner on
+#                    this repository, finding the identical two advisories and nothing more.
+#   ZAP / DAST       there is no web application to point it at. The honest dynamic testing here
+#                    is the existing fuzz and sanitizer gates, and RF work on a bench.
+name: security-deep
+
+on:
+  schedule:
+    # 04:17 on Mondays. Off the hour on purpose: scheduled workflows across GitHub bunch up at
+    # :00 and get queued, and nothing here is time-critical.
+    - cron: "17 4 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  SEMGREP_VERSION: 1.172.0
+
+jobs:
+  # ---------------------------------------------------------------- CodeQL
+  codeql:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: c-cpp
+            build-mode: manual
+          - language: python
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: initialize codeql
+        uses: github/codeql-action/init@a2983b8bed1923f44751c5c43237f479442827b3 # v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      # The C database is built from `make test`, so it covers exactly the host-compilable set in
+      # tests/host/sources.sh. Anything behind a Zephyr-only or ESP-IDF-only #ifdef is invisible
+      # to it — that blind spot is real and is written down in security/README.md rather than
+      # left for someone to discover from a clean report.
+      - name: build the host sources for the C database
+        if: matrix.language == 'c-cpp'
+        run: make test
+      - name: analyze
+        uses: github/codeql-action/analyze@a2983b8bed1923f44751c5c43237f479442827b3 # v3
+        with:
+          category: /language:${{ matrix.language }}
+
+  # ---------------------------------------------------------------- full-history secrets
+  secrets-history:
+    name: secrets (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: install pinned gitleaks
+        run: |
+          curl -fsSLo /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+      # Every commit ever made, which the fast lane deliberately does not do (~18s over 576
+      # commits today, and growing). This is the scan that matters for the risk SECURITY.md
+      # names: a flight-recorder log embedding the session URSK is just as exposed if it was
+      # committed once and reverted, because history keeps it.
+      - name: scan all history
+        run: |
+          gitleaks detect --source . --log-opts=--all --redact --config security/gitleaks.toml
+      # A file type that should never have been committed is invisible to a content regex once
+      # it is compressed or binary, so it is checked by name across all of history too.
+      - name: no capture or flight-recorder file has ever been committed
+        run: |
+          hits="$(git log --all --diff-filter=A --name-only --format= \
+            | grep -Ei '\.(log|frc|pcap|pcapng|pklg|btsnoop)$' | sort -u || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::files that carry the session URSK or personal Bluetooth data exist in history:"
+            printf '%s\n' "$hits"
+            exit 1
+          fi
+          echo "no sensitive-extension file has ever been added"
+
+  # ---------------------------------------------------------------- semgrep, full report
+  semgrep-sarif:
+    name: semgrep (full report)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: install pinned semgrep
+        run: pip install "semgrep==${SEMGREP_VERSION}"
+      # Every severity, not just the blocking ones. The fast lane fails only on ERROR, so the
+      # WARNING findings — the NOISY-by-design rules that are most of this ruleset's value over
+      # time — would otherwise never be visible anywhere. Here they become code-scanning alerts
+      # that can be triaged once and dismissed, instead of scrolling past in a log.
+      - name: scan
+        run: |
+          semgrep scan --metrics=off --sarif --output semgrep.sarif \
+            --config security/semgrep-openaliro.yml \
+            --config security/semgrep-malicious.yml \
+            --config p/c --config p/secrets --config p/python \
+            --config p/typescript --config p/javascript --config p/github-actions \
+            --exclude workspace --exclude build --exclude site --exclude .venv \
+            --exclude node_modules --exclude deps/dw3000 --exclude docs/architecture \
+            --exclude 'tests/host/fuzz/corpus' . || true
+      - name: upload
+        uses: github/codeql-action/upload-sarif@a2983b8bed1923f44751c5c43237f479442827b3 # v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # ---------------------------------------------------------------- supply-chain posture
+  scorecard:
+    name: openssf scorecard
+    runs-on: ubuntu-latest
+    # Scorecard reads branch-protection and workflow-permission settings that only exist for the
+    # default branch, so it has nothing to say about a branch or a fork.
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      security-events: write
+      # Scorecard signs its results so a consumer can verify they came from this repository's
+      # own workflow rather than being handed over by someone claiming to be it.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: run scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: false
+      - name: upload
+        uses: github/codeql-action/upload-sarif@a2983b8bed1923f44751c5c43237f479442827b3 # v3
+        with:
+          sarif_file: scorecard.sarif
+          category: scorecard
