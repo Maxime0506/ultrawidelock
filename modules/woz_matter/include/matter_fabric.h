@@ -47,6 +47,16 @@
 /** Uncompressed P-256 point, 0x04 || X || Y. */
 #define MATTER_FABRIC_PUBKEY_LEN 65u
 
+/** Compressed fabric identifier: 64 bits (crypto/CHIPCryptoPAL.cpp:796-833). */
+#define MATTER_COMPRESSED_FABRIC_LEN 8u
+
+/**
+ * The operational instance name, "%08X%08X-%08X%08X" plus its NUL --
+ * compressed fabric id, hyphen, node id, 32 uppercase hex digits in total
+ * (lib/dnssd/ServiceNaming.cpp, MakeInstanceName).
+ */
+#define MATTER_INSTANCE_NAME_LEN 34u
+
 /** What matter_cert_parse() found. Absent fields leave their have_* flag false. */
 struct matter_cert_info {
 	uint64_t node_id;
@@ -98,3 +108,35 @@ struct matter_fabric {
 	uint8_t icac[MATTER_CERT_MAX];
 	size_t icac_len;
 };
+
+/**
+ * Derive the compressed fabric identifier (crypto/CHIPCryptoPAL.cpp:796-833).
+ *
+ *   HKDF-SHA256(ikm  = root public key WITHOUT its 0x04 prefix,
+ *               salt = fabric id, 8 bytes big-endian,
+ *               info = "CompressedFabric",
+ *               len  = 8)
+ *
+ * Two fabrics can share a fabric id -- it is chosen by whoever built them --
+ * so this mixes in the root public key to get something that identifies a
+ * fabric on the wire without being guessable from its number alone.
+ *
+ * The 0x04 is dropped because it says only that the point is uncompressed; it
+ * is the same byte for every key and carries nothing to derive from.
+ *
+ * @param root_pub uncompressed, and refused if it does not start with 0x04.
+ * @return MATTER_OK, or MATTER_E_INVAL.
+ */
+int matter_fabric_compressed_id(const uint8_t root_pub[MATTER_FABRIC_PUBKEY_LEN],
+				uint64_t fabric_id, uint8_t out[MATTER_COMPRESSED_FABRIC_LEN]);
+
+/**
+ * Write the DNS-SD instance name a commissioner looks this node up by.
+ *
+ * "<compressed-fabric-id>-<node-id>", 16 uppercase hex digits each, which is
+ * the instance part of <name>._matter._tcp.local.
+ *
+ * @param out at least MATTER_INSTANCE_NAME_LEN bytes; NUL-terminated.
+ * @return MATTER_OK, or MATTER_E_INVAL.
+ */
+int matter_fabric_instance_name(const struct matter_fabric *fabric, char *out, size_t cap);

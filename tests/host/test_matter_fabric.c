@@ -77,6 +77,17 @@ static const uint8_t k_node01_pubkey[] = {
 	0xAA, 0x80, 0x70, 0x71, 0x01, 0x63, 0x13, 0xB1, 0x59, 0x6C, 0x85, 0x52, 0xCF,
 };
 
+static const uint8_t k_spec_root_pub[] = {
+	0x04, 0x4A, 0x9F, 0x42, 0xB1, 0xCA, 0x48, 0x40, 0xD3, 0x72, 0x92, 0xBB, 0xC7,
+	0xF6, 0xA7, 0xE1, 0x1E, 0x22, 0x20, 0x0C, 0x97, 0x6F, 0xC9, 0x00, 0xDB, 0xC9,
+	0x8A, 0x7A, 0x38, 0x3A, 0x64, 0x1C, 0xB8, 0x25, 0x4A, 0x2E, 0x56, 0xD4, 0xE2,
+	0x95, 0xA8, 0x47, 0x94, 0x3B, 0x4E, 0x38, 0x97, 0xC4, 0xA7, 0x73, 0xE9, 0x30,
+	0x27, 0x7B, 0x4D, 0x9F, 0xBE, 0xDE, 0x8A, 0x05, 0x26, 0x86, 0xBF, 0xAC, 0xFA,
+};
+
+#define SPEC_FABRIC_ID  UINT64_C(0x2906C908D115D362)
+#define SPEC_COMPRESSED UINT64_C(0x87e1b004e235a130)
+
 void test_matter_fabric(void)
 {
 	struct matter_cert_info info;
@@ -137,6 +148,77 @@ void test_matter_fabric(void)
 		 * could cut the signature off and still be believed. */
 		T_EQ("none accepted", accepted, 0);
 		T_EQ("none looked complete", complete, 0);
+	}
+
+	t_group("the compressed fabric id");
+	{
+		/*
+		 * The Matter spec's own Operational Discovery vector, lifted
+		 * from CHIP's TestChipCryptoPAL.cpp:2155-2174 rather than
+		 * retyped. This is the assertion that would catch a derivation
+		 * that is wrong but self-consistent -- the wrong salt endianness
+		 * or the 0x04 prefix left on -- and neither would show up in a
+		 * round trip.
+		 */
+		uint8_t cid[MATTER_COMPRESSED_FABRIC_LEN];
+		uint64_t v = 0u;
+		size_t i;
+
+		T_EQ("derives", matter_fabric_compressed_id(k_spec_root_pub, SPEC_FABRIC_ID, cid),
+		     MATTER_OK);
+		for (i = 0u; i < sizeof(cid); i++) {
+			v = (v << 8) | cid[i];
+		}
+		T_OK("matches the spec vector", v == SPEC_COMPRESSED);
+
+		/* A compressed point is not what the derivation is defined over,
+		 * and silently hashing 64 of its bytes would give a plausible
+		 * wrong answer. */
+		{
+			uint8_t bad[MATTER_FABRIC_PUBKEY_LEN];
+
+			memcpy(bad, k_spec_root_pub, sizeof(bad));
+			bad[0] = 0x02u;
+			T_EQ("a compressed point is refused",
+			     matter_fabric_compressed_id(bad, SPEC_FABRIC_ID, cid), MATTER_E_INVAL);
+		}
+		T_EQ("NULL key refused", matter_fabric_compressed_id(NULL, SPEC_FABRIC_ID, cid),
+		     MATTER_E_INVAL);
+
+		/* A different fabric id over the same root must not collide. */
+		T_EQ("derives again",
+		     matter_fabric_compressed_id(k_spec_root_pub, SPEC_FABRIC_ID + 1u, cid),
+		     MATTER_OK);
+		v ^= 0u;
+		{
+			uint64_t w = 0u;
+
+			for (i = 0u; i < sizeof(cid); i++) {
+				w = (w << 8) | cid[i];
+			}
+			T_OK("and differs", w != SPEC_COMPRESSED);
+		}
+	}
+
+	t_group("the instance name a commissioner looks up");
+	{
+		struct matter_fabric fab;
+		char name[MATTER_INSTANCE_NAME_LEN];
+
+		memset(&fab, 0, sizeof(fab));
+		memcpy(fab.root_public_key, k_spec_root_pub, sizeof(fab.root_public_key));
+		fab.fabric_id = SPEC_FABRIC_ID;
+		fab.node_id = UINT64_C(0xDEDEDEDE00010001);
+
+		T_EQ("builds", matter_fabric_instance_name(&fab, name, sizeof(name)), MATTER_OK);
+		/* Uppercase hex, 16 digits each side, one hyphen -- the format
+		 * MakeInstanceName() produces and a resolver matches on. */
+		T_EQ("is 33 characters", (long)strlen(name), 33);
+		T_OK("names the compressed fabric then the node",
+		     strcmp(name, "87E1B004E235A130-DEDEDEDE00010001") == 0);
+
+		T_EQ("a short buffer is refused",
+		     matter_fabric_instance_name(&fab, name, sizeof(name) - 1u), MATTER_E_INVAL);
 	}
 }
 
@@ -294,6 +376,47 @@ void test_matter_addnoc(void)
 	     MATTER_IM_STATUS_SUCCESS);
 	T_EQ("verdict is TableFull", dev.last_noc_status, MATTER_NOC_STATUS_TABLE_FULL);
 	T_EQ("the first fabric survives", dev.fabric.index, 1);
+
+	t_group("a commissioner that gives up half way");
+	{
+		struct matter_device_info before = dev;
+
+		/* The bug this exists for: without a rollback the fabric
+		 * survives the dropped link, and the NEXT attempt is refused
+		 * TableFull for a reason unrelated to what went wrong. */
+		T_EQ("a fabric is installed", dev.fabric.index, 1);
+		matter_clusters_failsafe_expire(&dev);
+		T_EQ("the fabric is gone", dev.fabric.index, 0);
+		T_OK("and so is the operational key", !dev.have_op_key);
+		{
+			uint8_t zero[32] = {0};
+
+			T_OK("wiped, not merely forgotten",
+			     memcmp(dev.op_priv, zero, sizeof(zero)) == 0);
+		}
+		T_OK("the fail-safe is disarmed", !dev.failsafe_armed);
+
+		/* Retry: the same AddNOC that was refused now succeeds. */
+		dev.failsafe_armed = true;
+		dev.have_op_key = true;
+		memcpy(dev.op_pub, k_node01_pubkey, sizeof(k_node01_pubkey));
+		memcpy(dev.fabric.root_public_key, before.fabric.root_public_key,
+		       sizeof(dev.fabric.root_public_key));
+		dev.fabric.have_root = true;
+		len = fields_addnoc(fields, sizeof(fields), k_node01, sizeof(k_node01), ipk,
+				    sizeof(ipk));
+		invoke_init(&inv, MATTER_CMD_OC_ADD_NOC, fields, len);
+		T_EQ("the retry runs", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and is accepted", dev.last_noc_status, MATTER_NOC_STATUS_OK);
+		T_EQ("on fabric index 1 again", dev.fabric.index, 1);
+
+		/* A FINISHED commissioning is not the fail-safe's to remove. */
+		dev.commissioning_complete = true;
+		matter_clusters_failsafe_expire(&dev);
+		T_EQ("a completed fabric survives", dev.fabric.index, 1);
+		dev.commissioning_complete = false;
+	}
 
 	t_group("what a commissioner can read back");
 	{
@@ -486,6 +609,17 @@ void test_matter_network(void)
 		/* Put a good dataset back and let the stack report success. */
 		test_matter_thread_stub_reset();
 		g_thread_attached = 1;
+		/*
+		 * A commissioned node, because that is the only kind that has a
+		 * name to publish: the instance name is derived from the fabric
+		 * AddNOC installed. Set directly here rather than by replaying
+		 * AddNOC, so this group tests the network half alone.
+		 */
+		dev.fabric.index = 1u;
+		dev.fabric.fabric_id = SPEC_FABRIC_ID;
+		dev.fabric.node_id = UINT64_C(0xDEDEDEDE00010001);
+		memcpy(dev.fabric.root_public_key, k_spec_root_pub,
+		       sizeof(dev.fabric.root_public_key));
 		len = fields_bytes(fields, sizeof(fields), 0u, k_dataset, sizeof(k_dataset));
 		invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
 		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
@@ -514,6 +648,19 @@ void test_matter_network(void)
 		     g_thread_last_timeout_ms < 60000u);
 		T_EQ("and reports Success", dev.last_network_status, MATTER_NC_STATUS_SUCCESS);
 
+		/*
+		 * Being ON the network is not being findable on it. The
+		 * commissioner closes BLE the moment this succeeds, so the SRP
+		 * registration has to have happened by now, not after.
+		 */
+		T_EQ("and registered over SRP", g_thread_advertise_calls, 1);
+		T_EQ("on the Matter operational port", g_thread_last_port, 5540);
+		/* The compressed fabric id derived from this fabric's own root
+		 * key, then the node id -- the exact string a commissioner
+		 * resolves, not merely something of the right shape. */
+		T_OK("under the name a commissioner resolves",
+		     strcmp(g_thread_last_instance, "87E1B004E235A130-DEDEDEDE00010001") == 0);
+
 		n = 0u;
 		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),
 		     MATTER_OK);
@@ -532,10 +679,15 @@ void test_matter_network(void)
 		 * commissioner hunting for a node that is not on the network.
 		 */
 		g_thread_attached = 0;
+		g_thread_advertise_calls = 0;
 		T_EQ("the command runs", srv.command(srv.ctx, &inv, &response),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("and reports a real failure", dev.last_network_status,
 		     MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR);
+		/* Publishing a node that is not reachable would give the
+		 * commissioner an address to fail against instead of an
+		 * answer. */
+		T_EQ("and publishes nothing", g_thread_advertise_calls, 0);
 
 		n = 0u;
 		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),

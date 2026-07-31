@@ -265,6 +265,11 @@ struct matter_device_info {
 	/** NetworkCommissioningStatusEnum from the last network command. */
 	uint8_t last_network_status;
 	/**
+	 * True once a commissioner has finished, which is what makes everything
+	 * above permanent. Until then the fail-safe owns it all.
+	 */
+	bool commissioning_complete;
+	/**
 	 * The NodeOperationalCertStatusEnum the last AddNOC produced, held for
 	 * the same reason as last_commissioning_error: the reply is serialised
 	 * after the command has run and cannot recompute the verdict.
@@ -279,6 +284,27 @@ struct matter_device_info {
  *        written through it.
  */
 void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info);
+
+/**
+ * Undo a commissioning that never finished.
+ *
+ * This is what the fail-safe MEANS, and until AddNOC there was nothing for it
+ * to undo -- so the flag recorded the state without enforcing it. Now a
+ * commissioner that gives up half way leaves a fabric behind, and the next
+ * attempt is answered TableFull for a reason that has nothing to do with what
+ * went wrong. The caller decides when: on this port, when the commissioning
+ * link drops.
+ *
+ * Does nothing once commissioning_complete is set -- a finished fabric is not
+ * the fail-safe's to remove.
+ *
+ * The THREAD attachment is deliberately kept. Strictly the fail-safe owns the
+ * network config too, but the commissioner re-sends the identical dataset on
+ * the next attempt, and staying attached turns the following attach from two
+ * seconds into none. Nothing secret is retained that the next commissioner
+ * would not immediately re-supply.
+ */
+void matter_clusters_failsafe_expire(struct matter_device_info *info);
 
 #ifdef __cplusplus
 }

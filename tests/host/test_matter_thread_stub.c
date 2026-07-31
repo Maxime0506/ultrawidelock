@@ -16,6 +16,9 @@ int g_thread_wait_calls;
 uint32_t g_thread_last_timeout_ms;
 int g_thread_start_fail;
 int g_thread_attached;
+char g_thread_last_instance[64];
+uint16_t g_thread_last_port;
+int g_thread_advertise_calls;
 
 void test_matter_thread_stub_reset(void)
 {
@@ -26,6 +29,9 @@ void test_matter_thread_stub_reset(void)
 	g_thread_last_timeout_ms = 0u;
 	g_thread_start_fail = 0;
 	g_thread_attached = 0;
+	memset(g_thread_last_instance, 0, sizeof(g_thread_last_instance));
+	g_thread_last_port = 0u;
+	g_thread_advertise_calls = 0;
 }
 
 int matter_thread_start(const uint8_t *dataset, size_t len)
@@ -48,4 +54,16 @@ int matter_thread_wait_attached(uint32_t timeout_ms)
 	g_thread_last_timeout_ms = timeout_ms;
 
 	return g_thread_attached ? MATTER_OK : MATTER_E_TIMEOUT;
+}
+
+int matter_thread_advertise(const char *instance_name, uint16_t port)
+{
+	g_thread_advertise_calls++;
+	if (instance_name == NULL || strlen(instance_name) >= sizeof(g_thread_last_instance)) {
+		return MATTER_E_INVAL;
+	}
+	strcpy(g_thread_last_instance, instance_name);
+	g_thread_last_port = port;
+
+	return MATTER_OK;
 }

@@ -331,15 +331,15 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	if (inv.cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING &&
 	    inv.command == MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK) {
 		/*
-		 * The whole point of this round. The dataset carries the network
-		 * key, so it is dumped ONLY because this build cannot join a
-		 * network with it and the trace is the only way to see what
-		 * arrived. It comes out when OpenThread goes in.
+		 * Length and shape only. The full dataset was dumped while
+		 * there was no Thread stack to hand it to and the trace was the
+		 * only way to see what arrived; now OpenThread consumes it, and
+		 * a hexdump of the network key would be 700 bytes of an 8 KB
+		 * trace buffer spent on printing a secret.
 		 */
 		LOG_INF("  Thread dataset: %u B, extended PAN id %s",
 			(unsigned int)s_info.thread_dataset_len,
 			s_info.have_thread_xpanid ? "found" : "MISSING");
-		LOG_HEXDUMP_INF(s_info.thread_dataset, s_info.thread_dataset_len, "dataset");
 	}
 	if (inv.cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS &&
 	    inv.command == MATTER_CMD_OC_ADD_NOC) {
@@ -507,6 +507,17 @@ static void on_message(const uint8_t *msg, size_t len)
 static void on_link_reset(void)
 {
 	s_stale = true;
+
+	/*
+	 * A commissioner that gave up half way leaves a fabric installed, and
+	 * the next attempt would be answered TableFull -- a refusal that says
+	 * nothing about what actually went wrong. This is the fail-safe doing
+	 * the one thing it exists to do.
+	 */
+	if (s_info.fabric.index != 0u && !s_info.commissioning_complete) {
+		LOG_INF("commissioning abandoned; rolling back fabric %u", s_info.fabric.index);
+	}
+	matter_clusters_failsafe_expire(&s_info);
 }
 
 int matter_commission_init(void)

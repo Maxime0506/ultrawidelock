@@ -5,8 +5,10 @@
  */
 #include "matter_fabric.h"
 
+#include <stdio.h>
 #include <string.h>
 
+#include "aliro_hash.h"
 #include "matter_tlv.h"
 
 /* Certificate element tags (credentials/CHIPCert.h:68-78). */
@@ -117,5 +119,72 @@ int matter_cert_parse(const uint8_t *cert, size_t len, struct matter_cert_info *
 		}
 	}
 
+	return MATTER_OK;
+}
+
+/* ------------------------------------------- operational identity --- */
+
+int matter_fabric_compressed_id(const uint8_t root_pub[MATTER_FABRIC_PUBKEY_LEN],
+				uint64_t fabric_id, uint8_t out[MATTER_COMPRESSED_FABRIC_LEN])
+{
+	/* "CompressedFabric", spelled out rather than written as a string
+	 * literal so no NUL can creep into the length. */
+	static const uint8_t k_info[] = {0x43, 0x6F, 0x6D, 0x70, 0x72, 0x65, 0x73, 0x73,
+					 0x65, 0x64, 0x46, 0x61, 0x62, 0x72, 0x69, 0x63};
+	uint8_t salt[MATTER_COMPRESSED_FABRIC_LEN];
+	size_t i;
+
+	if (root_pub == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	/* An uncompressed point, or this is not the key the derivation was
+	 * specified over. */
+	if (root_pub[0] != 0x04u) {
+		return MATTER_E_INVAL;
+	}
+
+	/* Big-endian, "as it appears in certificates". */
+	for (i = 0u; i < sizeof(salt); i++) {
+		salt[i] = (uint8_t)(fabric_id >> (56u - 8u * i));
+	}
+
+	if (aliro_hkdf(salt, sizeof(salt), root_pub + 1, MATTER_FABRIC_PUBKEY_LEN - 1u, k_info,
+		       sizeof(k_info), out, MATTER_COMPRESSED_FABRIC_LEN) != 0) {
+		return MATTER_E_INVAL;
+	}
+	return MATTER_OK;
+}
+
+int matter_fabric_instance_name(const struct matter_fabric *fabric, char *out, size_t cap)
+{
+	uint8_t cid[MATTER_COMPRESSED_FABRIC_LEN];
+	uint64_t compressed = 0u;
+	size_t i;
+	int rc;
+	int n;
+
+	if (fabric == NULL || out == NULL || cap < MATTER_INSTANCE_NAME_LEN) {
+		return MATTER_E_INVAL;
+	}
+
+	rc = matter_fabric_compressed_id(fabric->root_public_key, fabric->fabric_id, cid);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (i = 0u; i < sizeof(cid); i++) {
+		compressed = (compressed << 8) | cid[i];
+	}
+
+	/*
+	 * Two %08X halves rather than one %016llX: the format has to be exactly
+	 * 16 uppercase digits with no width surprises, and a 64-bit conversion
+	 * specifier is the one thing a freestanding printf may not carry.
+	 */
+	n = snprintf(out, cap, "%08X%08X-%08X%08X", (unsigned int)(compressed >> 32),
+		     (unsigned int)compressed, (unsigned int)(fabric->node_id >> 32),
+		     (unsigned int)fabric->node_id);
+	if (n < 0 || (size_t)n >= cap) {
+		return MATTER_E_NOSPACE;
+	}
 	return MATTER_OK;
 }

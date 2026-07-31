@@ -29,6 +29,11 @@ extern int g_thread_start_fail;
 /** Make the next matter_thread_wait_attached() report an attach. */
 extern int g_thread_attached;
 
+/** The instance name the last matter_thread_advertise() was asked to publish. */
+extern char g_thread_last_instance[64];
+extern uint16_t g_thread_last_port;
+extern int g_thread_advertise_calls;
+
 void test_matter_thread_stub_reset(void);
 
 #endif /* WOZ_TEST_MATTER_THREAD_STUB_H */

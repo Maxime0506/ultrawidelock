@@ -432,6 +432,27 @@ static bool dataset_xpanid(const uint8_t *ds, size_t len, uint8_t out[MATTER_THR
 }
 
 /**
+ * Publish "<compressed-fabric-id>-<node-id>._matter._tcp" over SRP.
+ *
+ * Silent when there is no fabric yet: a node with a network but no identity has
+ * no name to register under, and that is a legal intermediate state rather than
+ * a failure. Failures ARE logged by the port, which is where the SRP server's
+ * answer eventually lands.
+ */
+static void advertise_operational(const struct matter_device_info *info)
+{
+	char name[MATTER_INSTANCE_NAME_LEN];
+
+	if (info->fabric.index == 0u) {
+		return;
+	}
+	if (matter_fabric_instance_name(&info->fabric, name, sizeof(name)) != MATTER_OK) {
+		return;
+	}
+	(void)matter_thread_advertise(name, MATTER_OPERATIONAL_PORT);
+}
+
+/**
  * Run one NetworkCommissioning command.
  *
  * @return the IM status. The networking verdict goes in last_network_status and
@@ -485,10 +506,18 @@ static uint8_t network_command(struct matter_device_info *info, const struct mat
 		 * Success before the node is actually on the network would send
 		 * the commissioner hunting for it and cost far more than a wait.
 		 */
-		info->last_network_status =
-			matter_thread_wait_attached(MATTER_THREAD_ATTACH_TIMEOUT_MS) == MATTER_OK
-				? MATTER_NC_STATUS_SUCCESS
-				: MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR;
+		if (matter_thread_wait_attached(MATTER_THREAD_ATTACH_TIMEOUT_MS) != MATTER_OK) {
+			info->last_network_status = MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
+		/*
+		 * On the network, and now findable ON it. The commissioner
+		 * closes BLE the moment this reply says Success and looks the
+		 * node up in DNS-SD; registering after that would be a race
+		 * against a search already under way.
+		 */
+		advertise_operational(info);
+		info->last_network_status = MATTER_NC_STATUS_SUCCESS;
 		return MATTER_IM_STATUS_SUCCESS;
 
 	case MATTER_CMD_NC_REMOVE_NETWORK:
@@ -896,6 +925,27 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 	(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(0u), info->last_commissioning_error);
 	(void)matter_tlv_put_utf8(w, MATTER_TLV_CTX(1u), "", 0u);
 	(void)matter_tlv_end_container(w);
+}
+
+void matter_clusters_failsafe_expire(struct matter_device_info *info)
+{
+	if (info == NULL || info->commissioning_complete) {
+		return;
+	}
+
+	/* The fabric, and the key the NOC in it certifies. Wiped rather than
+	 * zeroed by index alone: op_priv is a private key that outlived the
+	 * only thing that was going to use it. */
+	memset(&info->fabric, 0, sizeof(info->fabric));
+	memset(info->op_priv, 0, sizeof(info->op_priv));
+	memset(info->op_pub, 0, sizeof(info->op_pub));
+	info->have_op_key = false;
+	info->last_noc_status = MATTER_NOC_STATUS_OK;
+
+	/* Not the dataset or the attachment -- see matter_clusters.h. */
+	info->failsafe_armed = false;
+	info->breadcrumb = 0u;
+	info->last_commissioning_error = MATTER_COMMISSIONING_OK;
 }
 
 void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info)

@@ -54,6 +54,25 @@ int matter_thread_start(const uint8_t *dataset, size_t len);
  */
 int matter_thread_wait_attached(uint32_t timeout_ms);
 
+/** The port a Matter node listens on operationally (lib/core/CHIPConfig.h:335). */
+#define MATTER_OPERATIONAL_PORT 5540u
+
+/**
+ * Register this node's operational service so a commissioner can find it.
+ *
+ * Being ON the Thread network is not the same as being reachable: a
+ * commissioner that finished network setup closes BLE and looks the node up in
+ * DNS-SD, which on Thread means the border router answering on its behalf. It
+ * only can if the node has told it, over SRP, that
+ * "<instance>._matter._tcp.local" is at this address and port.
+ *
+ * @param instance_name "<compressed-fabric-id>-<node-id>", from
+ *        matter_fabric_instance_name(). Borrowed for the length of the call.
+ * @return MATTER_OK once the registration is under way -- the SRP server's
+ *         answer arrives later and asynchronously -- or MATTER_E_STATE.
+ */
+int matter_thread_advertise(const char *instance_name, uint16_t port);
+
 #ifdef __cplusplus
 }
 #endif
