@@ -35,6 +35,7 @@
 #include "matter_attest.h"
 #include "matter_fabric.h"
 #include "matter_im.h"
+#include "matter_thread.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,6 +112,16 @@ extern "C" {
 
 /** Extended PAN ID: 8 bytes, and the id a network is referred to by. */
 #define MATTER_THREAD_XPANID_LEN 8u
+
+/**
+ * How long ConnectNetwork waits for the attach before answering.
+ *
+ * Well under the 60 s this node reports as ConnectMaxTimeSeconds, because the
+ * commissioner is blocked on the reply for the whole of it. A Thread attach to
+ * a network whose dataset is already known normally completes in a few seconds;
+ * this leaves room for a retry without leaving the phone waiting a minute.
+ */
+#define MATTER_THREAD_ATTACH_TIMEOUT_MS 20000u
 
 /* OperationalCredentials commands (MTRClusterConstants.h:6435-6446). */
 #define MATTER_CMD_OC_ATTESTATION_REQUEST          0x0000u
@@ -249,6 +260,8 @@ struct matter_device_info {
 	/** Extended PAN ID, parsed out of the dataset; the network's identity. */
 	uint8_t thread_xpanid[MATTER_THREAD_XPANID_LEN];
 	bool have_thread_xpanid;
+	/** True once the stack accepted the dataset and began attaching. */
+	bool thread_started;
 	/** NetworkCommissioningStatusEnum from the last network command. */
 	uint8_t last_network_status;
 	/**

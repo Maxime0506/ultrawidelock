@@ -33,6 +33,14 @@ enum matter_status {
 	MATTER_E_TYPE = -6,
 	/** Message counter already seen. Drop the payload, but still acknowledge. */
 	MATTER_E_DUP = -7,
+	/**
+	 * Waited as long as the caller allowed and it did not happen.
+	 *
+	 * Distinct from MATTER_E_STATE because it is an ANSWER: a Thread attach
+	 * that has not completed yet is a fact to report to the commissioner,
+	 * not a malfunction to hide.
+	 */
+	MATTER_E_TIMEOUT = -8,
 };
 
 #ifdef __cplusplus

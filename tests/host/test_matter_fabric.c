@@ -26,6 +26,7 @@
 #include "matter_tlv.h"
 
 #include "test.h"
+#include "test_matter_thread_stub.h"
 
 static const uint8_t k_root01[] = {
 	0x15, 0x30, 0x01, 0x08, 0x53, 0x4C, 0x45, 0x82, 0x73, 0x62, 0x35, 0x14, 0x24, 0x02, 0x01,
@@ -200,6 +201,7 @@ void test_matter_addnoc(void)
 	}
 
 	memset(&dev, 0, sizeof(dev));
+	test_matter_thread_stub_reset();
 	matter_clusters_init(&srv, &dev);
 
 	t_group("a root outside a fail-safe");
@@ -410,6 +412,7 @@ void test_matter_network(void)
 	size_t n;
 
 	memset(&dev, 0, sizeof(dev));
+	test_matter_thread_stub_reset();
 	matter_clusters_init(&srv, &dev);
 
 	t_group("what the commissioner asks first");
@@ -476,9 +479,28 @@ void test_matter_network(void)
 		T_EQ("and is refused", dev.last_network_status, MATTER_NC_STATUS_OUT_OF_RANGE);
 	}
 
-	t_group("being asked to connect");
+	t_group("being asked to connect, having attached");
 	{
 		uint8_t out[128];
+
+		/* Put a good dataset back and let the stack report success. */
+		test_matter_thread_stub_reset();
+		g_thread_attached = 1;
+		len = fields_bytes(fields, sizeof(fields), 0u, k_dataset, sizeof(k_dataset));
+		invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
+		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+		T_EQ("the dataset is accepted", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		/*
+		 * Handed to the stack at AddOrUpdate, not at ConnectNetwork: the
+		 * attach costs seconds and the commissioner sends a round trip
+		 * in between that would otherwise be wasted.
+		 */
+		T_EQ("and handed straight to the stack", g_thread_start_calls, 1);
+		T_EQ("verbatim", g_thread_last_len, sizeof(k_dataset));
+		T_OK("and unaltered",
+		     memcmp(g_thread_last_dataset, k_dataset, sizeof(k_dataset)) == 0);
+		T_EQ("nothing waited on yet", g_thread_wait_calls, 0);
 
 		len = fields_bytes(fields, sizeof(fields), 0u, k_xpanid, sizeof(k_xpanid));
 		invoke_init(&inv, MATTER_CMD_NC_CONNECT_NETWORK, fields, len);
@@ -487,19 +509,67 @@ void test_matter_network(void)
 		     MATTER_IM_STATUS_SUCCESS);
 		T_OK("answered by ConnectNetworkResponse",
 		     response == MATTER_CMD_NC_CONNECT_NETWORK_RESPONSE);
+		T_EQ("it waited", g_thread_wait_calls, 1);
+		T_OK("within the advertised ConnectMaxTimeSeconds",
+		     g_thread_last_timeout_ms < 60000u);
+		T_EQ("and reports Success", dev.last_network_status, MATTER_NC_STATUS_SUCCESS);
+
+		n = 0u;
+		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),
+		     MATTER_OK);
+		/* path command 0x07, fields {status 0, errorValue null}. */
+		t_vec("ConnectNetworkResponse, attached", out, n,
+		      "1528003601153500370024000024013124020718350124000034021818181824ff0c18");
+	}
+
+	t_group("being asked to connect, having not");
+	{
+		uint8_t out[128];
+
 		/*
-		 * Refused, and honestly: there is no Thread stack in this image.
-		 * Answering Success would send the commissioner to look for a
-		 * node on a network it never joined.
+		 * The case hardware makes expensive: the stack took the dataset
+		 * and then never attached. Success here would send the
+		 * commissioner hunting for a node that is not on the network.
 		 */
-		T_EQ("with a real failure", dev.last_network_status,
+		g_thread_attached = 0;
+		T_EQ("the command runs", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and reports a real failure", dev.last_network_status,
 		     MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR);
 
 		n = 0u;
 		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),
 		     MATTER_OK);
 		/* path command 0x07, fields {status 9, errorValue null}. */
-		t_vec("ConnectNetworkResponse", out, n,
+		t_vec("ConnectNetworkResponse, refused", out, n,
 		      "1528003601153500370024000024013124020718350124000934021818181824ff0c18");
+	}
+
+	t_group("a stack that would not take the dataset");
+	{
+		test_matter_thread_stub_reset();
+		g_thread_start_fail = 1;
+		len = fields_bytes(fields, sizeof(fields), 0u, k_dataset, sizeof(k_dataset));
+		invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
+		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+		T_EQ("storing it still succeeds", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		/* The commissioner asked this node to REMEMBER a network, and it
+		 * has. Whether it can join is ConnectNetwork's question. */
+		T_EQ("as the commissioner asked", dev.last_network_status,
+		     MATTER_NC_STATUS_SUCCESS);
+
+		len = fields_bytes(fields, sizeof(fields), 0u, k_xpanid, sizeof(k_xpanid));
+		invoke_init(&inv, MATTER_CMD_NC_CONNECT_NETWORK, fields, len);
+		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;
+		g_thread_attached = 1; /* would attach, if anything were attaching */
+		T_EQ("connecting runs", srv.command(srv.ctx, &inv, &response),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and fails", dev.last_network_status,
+		     MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR);
+		/* Nothing is attaching, so there is nothing to wait for -- and
+		 * waiting 20 s to say so would block the commissioner for
+		 * nothing. */
+		T_EQ("without waiting at all", g_thread_wait_calls, 0);
 	}
 }

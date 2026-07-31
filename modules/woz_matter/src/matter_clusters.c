@@ -460,22 +460,35 @@ static uint8_t network_command(struct matter_device_info *info, const struct mat
 		info->have_thread_xpanid =
 			dataset_xpanid(info->thread_dataset, v_len, info->thread_xpanid);
 		/*
-		 * Accepted, and truthfully: the dataset IS stored. Joining with
-		 * it is ConnectNetwork's promise, not this one's.
+		 * Start attaching HERE rather than at ConnectNetwork. The
+		 * commissioner sends ArmFailSafe in between and a Thread attach
+		 * costs seconds, so the round trip is free progress. Storing the
+		 * dataset succeeds either way: the commissioner asked this node
+		 * to remember a network, and it has.
 		 */
+		info->thread_started = matter_thread_start(v, v_len) == MATTER_OK;
 		info->last_network_status = MATTER_NC_STATUS_SUCCESS;
 		return MATTER_IM_STATUS_SUCCESS;
 
 	case MATTER_CMD_NC_CONNECT_NETWORK:
 		*response_command = MATTER_CMD_NC_CONNECT_NETWORK_RESPONSE;
+		if (!info->thread_started) {
+			/* Nothing is attaching, so nothing will finish. Said now
+			 * rather than after a pointless wait. */
+			info->last_network_status = MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
 		/*
-		 * Refused, because there is no Thread stack in this image and
-		 * answering Success would send the commissioner off to look for
-		 * a node on a network it never joined. It would wait out its
-		 * whole discovery timeout and report nothing useful; this way
-		 * it is told immediately and the log says why.
+		 * Blocks. The commissioner is waiting on this reply and allows
+		 * up to the ConnectMaxTimeSeconds this node advertises, so the
+		 * bound below has to stay comfortably under it. Reporting
+		 * Success before the node is actually on the network would send
+		 * the commissioner hunting for it and cost far more than a wait.
 		 */
-		info->last_network_status = MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR;
+		info->last_network_status =
+			matter_thread_wait_attached(MATTER_THREAD_ATTACH_TIMEOUT_MS) == MATTER_OK
+				? MATTER_NC_STATUS_SUCCESS
+				: MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR;
 		return MATTER_IM_STATUS_SUCCESS;
 
 	case MATTER_CMD_NC_REMOVE_NETWORK:
