@@ -59,6 +59,17 @@ static const uint32_t k_root_servers[] = {
 	MATTER_CLUSTER_NETWORK_COMMISSIONING, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
 };
 
+/**
+ * Every cluster the lock endpoint serves.
+ *
+ * Descriptor again, because every endpoint has one: it is how a controller
+ * learns what the endpoint IS without being told where to look.
+ */
+static const uint32_t k_lock_servers[] = {
+	MATTER_CLUSTER_DESCRIPTOR,
+	MATTER_CLUSTER_DOOR_LOCK,
+};
+
 /* NetworkInfoStruct (python clusters/Objects.py, NetworkInfoStruct). */
 #define TAG_NETINFO_ID        0u
 #define TAG_NETINFO_CONNECTED 1u
@@ -132,6 +143,10 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 {
 	(void)ctx;
 
+	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		return cluster == MATTER_CLUSTER_DESCRIPTOR ||
+		       cluster == MATTER_CLUSTER_DOOR_LOCK;
+	}
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return false;
 	}
@@ -144,16 +159,18 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 }
 
 /*
- * Every endpoint. One, and it is the root.
+ * Every endpoint.
  *
  * This exists because Apple reads NetworkCommissioning with the endpoint
  * WILDCARDED, so a node that cannot expand an endpoint wildcard looks like a
  * node with no network interface anywhere -- which is where commissioning
- * stopped before this. An array of one is not scaffolding once a second
- * endpoint (the Door Lock) has to appear in it.
+ * stopped before this. Endpoint 1 is the Door Lock, and it must appear here as
+ * well as in the root's PartsList: a wildcard read walks THIS list, so an
+ * endpoint missing from it is invisible no matter what PartsList claims.
  */
 static const uint16_t k_endpoints[] = {
 	MATTER_ENDPOINT_ROOT,
+	MATTER_ENDPOINT_LOCK,
 };
 
 static size_t list_endpoints(void *ctx, const uint16_t **out)
@@ -173,6 +190,49 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 	 * MetadataLookup.cpp:68-88 reports the outermost thing that is missing,
 	 * so a bad endpoint must not be reported as a bad attribute.
 	 */
+	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+			switch (attribute) {
+			case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			case MATTER_ATTR_DESC_SERVER_LIST:
+			case MATTER_ATTR_DESC_CLIENT_LIST:
+			case MATTER_ATTR_DESC_PARTS_LIST:
+				return MATTER_IM_STATUS_SUCCESS;
+			default:
+				return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+			}
+		}
+		if (cluster != MATTER_CLUSTER_DOOR_LOCK) {
+			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		}
+		switch (attribute) {
+		case MATTER_ATTR_DL_LOCK_STATE:
+		case MATTER_ATTR_DL_LOCK_TYPE:
+		case MATTER_ATTR_DL_ACTUATOR_ENABLED:
+		case MATTER_ATTR_DL_OPERATING_MODE:
+		case MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES:
+		case MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY:
+		case MATTER_ATTR_DL_ALIRO_GROUP_ID:
+		case MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID:
+		case MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS:
+		case MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY:
+		case MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS:
+		case MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION:
+		case MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX:
+		case MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX:
+		/*
+		 * FeatureMap is answered here for the same reason it is on
+		 * NetworkCommissioning: it is what a controller reads to decide
+		 * whether this lock is an Aliro reader, and without it the
+		 * Aliro attributes below look like a lock that answers
+		 * questions nobody asked.
+		 */
+		case MATTER_ATTR_FEATURE_MAP:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	}
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
@@ -267,12 +327,155 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 	}
 }
 
+/**
+ * One Aliro protocol version, as the two big-endian bytes the spec asks for.
+ *
+ * Both version lists carry the same single entry, so they share this. The
+ * ESP32 lock encodes it the same way (aliro_reader_delegate.cpp:106-115) and
+ * that is the port Apple Home has actually provisioned.
+ */
+static void put_protocol_version_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	const uint8_t version[2] = {
+		(uint8_t)(MATTER_ALIRO_PROTOCOL_VERSION >> 8),
+		(uint8_t)(MATTER_ALIRO_PROTOCOL_VERSION & 0xFFu),
+	};
+
+	(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+	(void)matter_tlv_put_bytes(w, MATTER_TLV_ANON, version, sizeof(version));
+	(void)matter_tlv_end_container(w);
+}
+
+/**
+ * Endpoint 1: the Door Lock and its own Descriptor.
+ *
+ * Split out rather than folded into attr_value() because the two endpoints
+ * share cluster IDs -- Descriptor is on both -- and a single flat switch on
+ * cluster would answer the root's Descriptor for the lock.
+ */
+static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster,
+			    uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	size_t i;
+
+	if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+		switch (attribute) {
+		case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
+							 MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_TYPE),
+						 MATTER_DEVICE_TYPE_DOOR_LOCK);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_REVISION),
+						 MATTER_DEVICE_TYPE_LOCK_REV);
+			(void)matter_tlv_end_container(w);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_SERVER_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			for (i = 0u; i < sizeof(k_lock_servers) / sizeof(k_lock_servers[0]); i++) {
+				(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, k_lock_servers[i]);
+			}
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_CLIENT_LIST:
+		case MATTER_ATTR_DESC_PARTS_LIST:
+			/* A leaf endpoint: nothing hangs off it and it binds
+			 * nothing as a client. */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_end_container(w);
+			return;
+		default:
+			return;
+		}
+	}
+
+	if (cluster != MATTER_CLUSTER_DOOR_LOCK) {
+		return;
+	}
+
+	switch (attribute) {
+	case MATTER_ATTR_FEATURE_MAP:
+		(void)matter_tlv_put_u64(w, tag,
+					 MATTER_DL_FEATURE_ALIRO_PROVISIONING |
+						 MATTER_DL_FEATURE_ALIRO_BLE_UWB);
+		return;
+	case MATTER_ATTR_DL_LOCK_STATE:
+		/*
+		 * Locked, and honest: this reader has no actuator and nothing
+		 * it reports here moves a bolt. It exists because LockState is
+		 * mandatory and a controller uses it to draw the tile.
+		 */
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_LOCK_STATE_LOCKED);
+		return;
+	case MATTER_ATTR_DL_LOCK_TYPE:
+		/* 0x00 is DeadBolt (DoorLock/Enums.h, DlLockType). */
+		(void)matter_tlv_put_u64(w, tag, 0u);
+		return;
+	case MATTER_ATTR_DL_ACTUATOR_ENABLED:
+		/*
+		 * False. There IS no actuator on this board, and claiming one
+		 * would invite a Lock/Unlock command this endpoint cannot
+		 * honour. The Aliro half is what this device is for.
+		 */
+		(void)matter_tlv_put_bool(w, tag, false);
+		return;
+	case MATTER_ATTR_DL_OPERATING_MODE:
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_OPERATING_MODE_NORMAL);
+		return;
+	case MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES:
+		(void)matter_tlv_put_u64(w, tag, MATTER_DL_SUPPORTED_OPERATING_MODES);
+		return;
+
+	/*
+	 * ---- the Aliro reader configuration -------------------------------
+	 *
+	 * NULL until SetAliroReaderConfig arrives, which is exactly what tells
+	 * a controller this reader is unprovisioned and needs an identity.
+	 * Reporting zeros instead would claim a key that cannot verify.
+	 */
+	case MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY:
+	case MATTER_ATTR_DL_ALIRO_GROUP_ID:
+	case MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY:
+		(void)matter_tlv_put_null(w, tag);
+		return;
+	case MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID:
+		/* Not nullable and not provisioned: it identifies the reader
+		 * GROUP this device belongs to, which it has before any
+		 * controller talks to it. The port supplies it. */
+		(void)matter_tlv_put_bytes(w, tag, info->aliro_group_sub_id,
+					   MATTER_ALIRO_GROUP_ID_LEN);
+		return;
+	case MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS:
+	case MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS:
+		put_protocol_version_list(w, tag);
+		return;
+	case MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION:
+		(void)matter_tlv_put_u64(w, tag, MATTER_ALIRO_BLE_ADV_VERSION);
+		return;
+	case MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX:
+	case MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX:
+		(void)matter_tlv_put_u64(w, tag, MATTER_ALIRO_KEYS_SUPPORTED);
+		return;
+	default:
+		return;
+	}
+}
+
 static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute,
 		       struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 {
 	const struct matter_device_info *info = (const struct matter_device_info *)ctx;
 
-	(void)endpoint; /* attr_status() already refused anything but the root. */
+	/*
+	 * The lock endpoint is answered first and returns, so everything below
+	 * it can still assume the root. attr_status() has already refused any
+	 * endpoint that is neither.
+	 */
+	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		lock_attr_value(info, cluster, attribute, w, tag);
+		return;
+	}
 
 	if (cluster == MATTER_CLUSTER_BASIC_INFORMATION) {
 		switch (attribute) {
@@ -424,11 +627,20 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			(void)matter_tlv_end_container(w);
 			return;
 		case MATTER_ATTR_DESC_CLIENT_LIST:
-		case MATTER_ATTR_DESC_PARTS_LIST:
 			/* Empty, and empty is an answer: this node binds nothing
-			 * as a client, and the root endpoint has no parts until
-			 * the Door Lock endpoint exists. */
+			 * as a client. */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_PARTS_LIST:
+			/*
+			 * The Door Lock. This is the attribute that turns an
+			 * empty tile into a lock: a controller reads the root's
+			 * PartsList to find the endpoints that carry function,
+			 * and a Root Node on its own carries none.
+			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_LOCK);
 			(void)matter_tlv_end_container(w);
 			return;
 		default:
@@ -633,6 +845,29 @@ static const uint32_t k_desc_attrs[] = {
 	MATTER_ATTR_DESC_PARTS_LIST,
 };
 
+/*
+ * FeatureMap leads, because it is the attribute that decides what the rest
+ * mean: without the two Aliro bits a controller reads 0x0080..0x0088 as
+ * attributes a lock has no business answering.
+ */
+static const uint32_t k_lock_attrs[] = {
+	MATTER_ATTR_FEATURE_MAP,
+	MATTER_ATTR_DL_LOCK_STATE,
+	MATTER_ATTR_DL_LOCK_TYPE,
+	MATTER_ATTR_DL_ACTUATOR_ENABLED,
+	MATTER_ATTR_DL_OPERATING_MODE,
+	MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES,
+	MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY,
+	MATTER_ATTR_DL_ALIRO_GROUP_ID,
+	MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID,
+	MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS,
+	MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY,
+	MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS,
+	MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION,
+	MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX,
+	MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX,
+};
+
 static const uint32_t k_ac_attrs[] = {
 	MATTER_ATTR_AC_ACL,
 	MATTER_ATTR_AC_SUBJECTS_PER_ENTRY,
@@ -668,6 +903,10 @@ static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)
 {
 	(void)ctx;
 
+	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		*out = k_lock_servers;
+		return sizeof(k_lock_servers) / sizeof(k_lock_servers[0]);
+	}
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return 0u;
 	}
@@ -679,6 +918,17 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 {
 	(void)ctx;
 
+	if (endpoint == MATTER_ENDPOINT_LOCK) {
+		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+			*out = k_desc_attrs;
+			return sizeof(k_desc_attrs) / sizeof(k_desc_attrs[0]);
+		}
+		if (cluster == MATTER_CLUSTER_DOOR_LOCK) {
+			*out = k_lock_attrs;
+			return sizeof(k_lock_attrs) / sizeof(k_lock_attrs[0]);
+		}
+		return 0u;
+	}
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return 0u;
 	}

@@ -48,6 +48,7 @@ extern "C" {
 #define MATTER_CLUSTER_DESCRIPTOR              0x001Du
 #define MATTER_CLUSTER_ACCESS_CONTROL          0x001Fu
 #define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
+#define MATTER_CLUSTER_DOOR_LOCK               0x0101u
 
 /* Descriptor attributes (Descriptor/AttributeIds.h:19-33). */
 #define MATTER_ATTR_DESC_DEVICE_TYPE_LIST 0x0000u
@@ -64,6 +65,71 @@ extern "C" {
  */
 #define MATTER_DEVICE_TYPE_ROOT_NODE 0x0016u
 #define MATTER_DEVICE_TYPE_ROOT_REV  3u
+
+/*
+ * Door Lock, on endpoint 1 (matter-devices.xml, MA-doorlock).
+ *
+ * This is what makes the accessory a LOCK rather than a bare node: endpoint 0
+ * is a Root Node, which carries no functionality, so a controller that adopts
+ * this node and finds nothing in PartsList correctly shows an empty tile.
+ */
+#define MATTER_DEVICE_TYPE_DOOR_LOCK 0x000Au
+#define MATTER_DEVICE_TYPE_LOCK_REV  3u
+
+/* Door Lock attributes (DoorLock/AttributeIds.h:24-147). */
+#define MATTER_ATTR_DL_LOCK_STATE               0x0000u
+#define MATTER_ATTR_DL_LOCK_TYPE                0x0001u
+#define MATTER_ATTR_DL_ACTUATOR_ENABLED         0x0002u
+#define MATTER_ATTR_DL_OPERATING_MODE           0x0025u
+#define MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES 0x0026u
+
+/*
+ * The Aliro reader attributes (DoorLock/AttributeIds.h:204-247).
+ *
+ * These are not decoration. A controller reads them to decide whether this lock
+ * can be an Aliro reader at all, and only then does it send
+ * SetAliroReaderConfig with the reader private key -- which is the entire
+ * reason this node exists.
+ */
+#define MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY   0x0080u
+#define MATTER_ATTR_DL_ALIRO_GROUP_ID           0x0081u
+#define MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID       0x0082u
+#define MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS 0x0083u
+#define MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY 0x0084u
+#define MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS   0x0085u
+#define MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION    0x0086u
+#define MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX    0x0087u
+#define MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX  0x0088u
+
+/*
+ * FeatureMap bits this lock claims (DoorLock/Enums.h:510-511).
+ *
+ * Only the two Aliro bits. Claiming PIN, RFID, schedules or users would commit
+ * this node to the whole credential and schedule surface, none of which it has.
+ */
+#define MATTER_DL_FEATURE_ALIRO_PROVISIONING 0x2000u
+#define MATTER_DL_FEATURE_ALIRO_BLE_UWB      0x4000u
+
+/* LockState (DoorLock/Enums.h:95-99) and OperatingMode (Enums.h:278-284). */
+#define MATTER_DL_LOCK_STATE_LOCKED     1u
+#define MATTER_DL_LOCK_STATE_UNLOCKED   2u
+#define MATTER_DL_OPERATING_MODE_NORMAL 0u
+/** SupportedOperatingModes is a bitmap; bit 0 is Normal and it is the only one. */
+#define MATTER_DL_SUPPORTED_OPERATING_MODES 0x0001u
+
+/*
+ * The one Aliro protocol version this reader speaks, big-endian, reported for
+ * both the expedited and BLE-UWB lists. Same value the ESP32 lock advertises
+ * (ports/esp32/.../aliro_reader_delegate.cpp:47), which is the port that has
+ * actually been provisioned by Apple Home.
+ */
+#define MATTER_ALIRO_PROTOCOL_VERSION 0x0100u
+/** 0 is the only defined Aliro BLE advertising version. */
+#define MATTER_ALIRO_BLE_ADV_VERSION 0u
+/** Matches the ESP32 lock's kAliroKeysSupported (aliro_reader_delegate.h:94). */
+#define MATTER_ALIRO_KEYS_SUPPORTED 10u
+/** Aliro group identifier, sub-identifier and resolving key are all 16 bytes. */
+#define MATTER_ALIRO_GROUP_ID_LEN 16u
 
 /** Access Control attributes (access-control-cluster.cpp, AclAttribute). */
 #define MATTER_ATTR_AC_ACL                 0x0000u
@@ -238,12 +304,24 @@ extern "C" {
 #define MATTER_NOC_STATUS_MISSING_CSR        4u
 #define MATTER_NOC_STATUS_TABLE_FULL         5u
 
-/** The only endpoint this node has. Every Matter node's root endpoint is 0. */
+/** Every Matter node's root endpoint is 0. */
 #define MATTER_ENDPOINT_ROOT 0u
+/** The Door Lock. Listed in the root endpoint's PartsList. */
+#define MATTER_ENDPOINT_LOCK 1u
 
 struct matter_device_info {
 	uint16_t vendor_id;
 	uint16_t product_id;
+	/**
+	 * AliroReaderGroupSubIdentifier, filled by the port.
+	 *
+	 * Here rather than generated in this module because woz_matter carries
+	 * no RNG and no storage seam, and this value has to be stable for the
+	 * life of the reader group -- a controller that reads a different
+	 * sub-identifier after a reboot is entitled to treat this as a
+	 * different reader. The port owns both the entropy and the store.
+	 */
+	uint8_t aliro_group_sub_id[MATTER_ALIRO_GROUP_ID_LEN];
 	/**
 	 * Written by the commissioner through GeneralCommissioning so it can
 	 * tell how far a previous attempt got. Mutable, and the reason this

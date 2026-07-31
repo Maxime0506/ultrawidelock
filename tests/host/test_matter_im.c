@@ -263,6 +263,20 @@ static int walk_report(const uint8_t *buf, size_t len, struct rep *reps, bool *s
 						if (matter_tlv_exit(&rd) != MATTER_OK) {
 							return -1;
 						}
+					} else if (r->vtype == 0x14u) {
+						/*
+						 * TLV null (0x14), which has no
+						 * accessor because it carries no
+						 * value. It arrived with the
+						 * Aliro reader attributes, where
+						 * null is the meaningful answer:
+						 * an unprovisioned reader. Not
+						 * handling it made every report
+						 * containing one -- including
+						 * the whole data model -- read
+						 * as a malformed message.
+						 */
+						r->vu = 0u;
 					} else if (matter_tlv_get_utf8(&rd, &r->vs, &r->vs_len) ==
 						   MATTER_OK) {
 						/* Tried BEFORE the integer
@@ -456,8 +470,10 @@ void test_matter_im(void)
 		T_OK("is a status", sreps[0].is_status);
 		T_EQ("unsupported cluster", sreps[0].status, MATTER_IM_STATUS_UNSUPPORTED_CLUSTER);
 
-		/* Unknown endpoint outranks both. */
-		one.paths[0].endpoint = 1;
+		/* Unknown endpoint outranks both. Endpoint 2, not 1: 1 is the
+		 * Door Lock and exists, so asking it for BasicInformation is
+		 * an unsupported CLUSTER and would not test the ordering. */
+		one.paths[0].endpoint = 2;
 		one.paths[0].cluster = 0x0028;
 		T_EQ("unknown endpoint encodes",
 		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
@@ -507,9 +523,82 @@ void test_matter_im(void)
 		T_EQ("encodes",
 		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
 		     MATTER_OK);
-		T_EQ("counted as absent", stats.skipped_wildcard, 1);
+		/* Once per endpoint, and there are two: the root and the lock.
+		 * Counting one would mean an endpoint was never walked. */
+		T_EQ("counted as absent on both endpoints", stats.skipped_wildcard, 2);
 		m = walk_report(out, len, sreps, &suppress, &revision);
 		T_EQ("and said nothing", m, 0);
+
+		/*
+		 * ---- endpoint 1, the Door Lock ----------------------------
+		 *
+		 * The reason this node exists. A controller finds this endpoint
+		 * in the root's PartsList, reads its DeviceTypeList to learn it
+		 * is a lock, and reads the Door Lock FeatureMap to decide
+		 * whether it may send SetAliroReaderConfig. A wrong answer to
+		 * any one of those is not an error anywhere -- it is an
+		 * accessory tile with no controls, which is the exact symptom
+		 * this endpoint was added to fix, so each is asserted.
+		 */
+		one.paths[0].have_endpoint = true;
+		one.paths[0].endpoint = MATTER_ENDPOINT_LOCK;
+		one.paths[0].have_cluster = true;
+		one.paths[0].cluster = MATTER_CLUSTER_DOOR_LOCK;
+		one.paths[0].have_attribute = true;
+		one.paths[0].attribute = MATTER_ATTR_FEATURE_MAP;
+		T_EQ("lock FeatureMap encodes",
+		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
+		     MATTER_OK);
+		m = walk_report(out, len, sreps, &suppress, &revision);
+		T_EQ("one report", m, 1);
+		T_OK("not a status", !sreps[0].is_status);
+		T_EQ("on the lock endpoint", sreps[0].endpoint, MATTER_ENDPOINT_LOCK);
+		/* Both Aliro bits and nothing else. Claiming PIN, user or
+		 * schedule features would commit this node to a credential
+		 * surface it has none of. */
+		T_EQ("both Aliro feature bits and only those", sreps[0].vu,
+		     MATTER_DL_FEATURE_ALIRO_PROVISIONING | MATTER_DL_FEATURE_ALIRO_BLE_UWB);
+
+		/*
+		 * The verification key is NULL until SetAliroReaderConfig
+		 * arrives, and that null IS the answer: it is how a controller
+		 * knows this reader still needs an identity. Reporting zeros
+		 * would claim a key that cannot verify. 0x14 is the TLV null
+		 * element type; matter_tlv.h names the containers but not this.
+		 */
+		one.paths[0].attribute = MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY;
+		T_EQ("verification key encodes",
+		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
+		     MATTER_OK);
+		m = walk_report(out, len, sreps, &suppress, &revision);
+		T_EQ("one report", m, 1);
+		T_OK("not a status", !sreps[0].is_status);
+		T_EQ("unprovisioned reads as null", sreps[0].vtype, 0x14u);
+
+		/* The sub-identifier is NOT nullable: it names the reader group
+		 * this device belongs to, which it has before any controller
+		 * speaks to it. A null here would be a different bug. */
+		one.paths[0].attribute = MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID;
+		T_EQ("sub-identifier encodes",
+		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
+		     MATTER_OK);
+		m = walk_report(out, len, sreps, &suppress, &revision);
+		T_EQ("one report", m, 1);
+		T_OK("and it is not null", sreps[0].vtype != 0x14u);
+
+		/* A cluster wildcard on the lock expands to the same two
+		 * clusters has_cluster() answers for, no more. */
+		one.paths[0].have_cluster = false;
+		one.paths[0].have_attribute = true;
+		one.paths[0].attribute = MATTER_ATTR_FEATURE_MAP;
+		T_EQ("lock cluster wildcard encodes",
+		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
+		     MATTER_OK);
+		T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
+		one.paths[0].have_cluster = true;
+		/* Back to the root, so the cases below read the endpoint they
+		 * were written for rather than whichever one ran last. */
+		one.paths[0].endpoint = MATTER_ENDPOINT_ROOT;
 
 		/*
 		 * A CLUSTER wildcard expands over every cluster on the endpoint.
@@ -519,6 +608,11 @@ void test_matter_im(void)
 		 * and then reported nothing at all, forever.
 		 */
 		one.paths[0].have_endpoint = true;
+		/* Named, not inherited. This case is about the ROOT's whole
+		 * model, and it was reading whichever endpoint the previous
+		 * case happened to leave behind -- which stopped being endpoint
+		 * 0 the moment a second endpoint existed. */
+		one.paths[0].endpoint = MATTER_ENDPOINT_ROOT;
 		one.paths[0].have_cluster = false;
 		/* And no attribute either -- the previous case left a
 		 * deliberately absent one here, which would make every cluster
