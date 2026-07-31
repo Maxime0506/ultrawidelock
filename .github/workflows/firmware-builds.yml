@@ -380,6 +380,19 @@ jobs:
       (github.event_name == 'pull_request' && needs.changes.outputs.esp32-matter-target == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    # One leg per image. Measured on run 30595579021, the three builds ran
+    # sequentially inside one job for 23 min: 4.5 + 4.5 + 10.9 min of build,
+    # each carrying its own CHIP compile. In parallel the job is as slow as its
+    # slowest leg instead of their sum. Not a caching fix -- ccache was already
+    # at 91.9% hits there, and the saved cache was 264 MB against a 1G limit --
+    # the cost was simply three builds in a row.
+    #
+    # fail-fast off: one target breaking is exactly when the others' results
+    # are most worth having.
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [esp32s3, esp32s3-presence, esp32c6]
     container:
       image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
     env:
@@ -453,6 +466,13 @@ jobs:
           }
       # Save before building, so a broken app build does not throw away the
       # expensive fetch + install.
+      #
+      # On a cold cache every matrix leg does its own fetch + install and then
+      # races to save the same key; the losers log "cache already exists" and
+      # carry on. Deliberately not solved with a priming job: the key is static
+      # (only an esp-matter revision or IDF bump rolls it) and the nightly keeps
+      # it alive, so cold runs are rare, while a priming job would serialise
+      # ahead of every warm run forever.
       - name: save the esp-matter cache (cold cache)
         if: steps.esp-matter.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -469,48 +489,65 @@ jobs:
       # See the esp32-idf job for the ccache key/restore-keys rationale.
       # Covers the IDF-side components; the CHIP core built through GN keeps
       # its own compile times.
+      #
+      # Keyed per leg, which the matrix makes mandatory rather than optional:
+      # a shared key would have every leg race to save a cache holding only its
+      # own target's objects, and whichever won would be the one all the others
+      # restore next run. Per-leg caches are also each smaller than the single
+      # 264 MB one they replace, so the restore is quicker too.
       - name: restore the compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
-          key: ccache-esp32-matter-${{ github.run_id }}
+          key: ccache-esp32-matter-${{ matrix.leg }}-${{ github.run_id }}
           restore-keys: |
-            ccache-esp32-matter-
-      - name: build the matter-lock app (esp32s3)
+            ccache-esp32-matter-${{ matrix.leg }}-
+      # Every idf.py invocation below is byte-identical to the sequential
+      # version this replaced; only which leg runs which has changed. The legs
+      # no longer subsume each other's failures the way the old comments
+      # described, because they no longer share a job -- see the notes per leg.
+      - name: build the matter-lock app (${{ matrix.leg }})
         working-directory: ports/esp32/apps/matter-lock
+        env:
+          LEG: ${{ matrix.leg }}
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           . "$IDF_PATH/export.sh"
           . "$ESP_MATTER_PATH/export.sh"
-          idf.py set-target esp32s3
-          idf.py build
-          # Presence second, not instead: the default build above is the only
-          # thing that catches code which compiles ONLY with presence on (an
-          # unused declaration outside the guard, say). The presence build is a
-          # strict superset of the compiled sources -- every CONFIG_WOZ_PRESENCE
-          # site in this app is a bare #ifdef with no #else -- so neither build
-          # subsumes the other's failures.
-          #
-          # Costs a second CHIP tree. Affordable only because this job is
-          # already off PRs (push to main, nightly, manual), and because the
-          # shared ccache makes the CHIP objects hits rather than rebuilds.
-          idf.py -B build-presence \
-                 -D SDKCONFIG=build-presence/sdkconfig \
-                 -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.presence' \
-                 build
-          # Linking is not enough -- --gc-sections has eliminated the P-256 code
-          # from an image that built cleanly before. presence_link_cmd is the
-          # app-facing one: it is what registers the console command, so it is
-          # absent exactly when this app's own presence wiring has rotted.
-          xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
-            | grep -qE ' T presence_link_cmd$'
-          # Build the default Matter image for the single-core C6 as well.
-          # Separate target/build/sdkconfig state prevents cross-contamination
-          # with the S3 and presence variants above.
-          idf.py -B build-c6 \
-                 -D SDKCONFIG=build-c6/sdkconfig \
-                 set-target esp32c6
-          idf.py -B build-c6 \
-                 -D SDKCONFIG=build-c6/sdkconfig \
-                 build
+          case "$LEG" in
+          esp32s3)
+            # The shipping image, and the only leg that catches code which
+            # compiles ONLY with presence on (an unused declaration outside the
+            # guard, say) -- the presence leg is a strict superset of these
+            # sources, since every CONFIG_WOZ_PRESENCE site in this app is a
+            # bare #ifdef with no #else.
+            idf.py set-target esp32s3
+            idf.py build
+            ;;
+          esp32s3-presence)
+            idf.py -B build-presence \
+                   -D SDKCONFIG=build-presence/sdkconfig \
+                   -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.presence' \
+                   build
+            # Linking is not enough -- --gc-sections has eliminated the P-256
+            # code from an image that built cleanly before. presence_link_cmd is
+            # the app-facing one: it is what registers the console command, so
+            # it is absent exactly when this app's own presence wiring has
+            # rotted.
+            xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
+              | grep -qE ' T presence_link_cmd$'
+            ;;
+          esp32c6)
+            # The default Matter image for the single-core C6.
+            idf.py -B build-c6 \
+                   -D SDKCONFIG=build-c6/sdkconfig \
+                   set-target esp32c6
+            idf.py -B build-c6 \
+                   -D SDKCONFIG=build-c6/sdkconfig \
+                   build
+            ;;
+          *)
+            echo "::error::no build recipe for matrix leg '$LEG'"; exit 1
+            ;;
+          esac
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
