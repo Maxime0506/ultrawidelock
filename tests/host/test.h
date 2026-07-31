@@ -87,6 +87,8 @@ void test_matter_exchange(void);
 void test_matter_im(void);
 void test_matter_im_invoke(void);
 void test_matter_attest(void);
+void test_matter_fabric(void);
+void test_matter_addnoc(void);
 
 /* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
 void test_uwb_min(void);

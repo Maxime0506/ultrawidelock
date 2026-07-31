@@ -600,7 +600,7 @@ int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 				     size_t *out_len)
 {
 	struct matter_tlv_writer w;
-	uint32_t response_command = 0u;
+	uint32_t response_command = MATTER_IM_NO_RESPONSE;
 	uint8_t status;
 
 	if (srv == NULL || srv->command == NULL || srv->command_fields == NULL || inv == NULL ||
@@ -626,7 +626,7 @@ int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_IRESP_RESPONSES), MATTER_TLV_ARRAY);
 	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
 
-	if (status == MATTER_IM_STATUS_SUCCESS) {
+	if (status == MATTER_IM_STATUS_SUCCESS && response_command != MATTER_IM_NO_RESPONSE) {
 		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_IRESPIB_COMMAND),
 						 MATTER_TLV_STRUCTURE);
 		put_command_path(&w, MATTER_TLV_CTX(TAG_CMDDATA_PATH), inv, response_command);
@@ -640,8 +640,9 @@ int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 	} else {
 		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_IRESPIB_STATUS),
 						 MATTER_TLV_STRUCTURE);
-		/* The path echoes the command that was ASKED for, not a response
-		 * command: there is no response command when nothing ran. */
+		/* The path echoes the command that was ASKED for. There is no
+		 * response command to name here, whether because nothing ran or
+		 * because what ran had nothing to report. */
 		put_command_path(&w, MATTER_TLV_CTX(TAG_CMDSTATUS_PATH), inv, inv->command);
 		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_CMDSTATUS_STATUS),
 						 MATTER_TLV_STRUCTURE);

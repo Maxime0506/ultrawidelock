@@ -328,6 +328,22 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		LOG_ERR("cannot build InvokeResponse (%d)", rc);
 		return;
 	}
+	if (inv.cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS &&
+	    inv.command == MATTER_CMD_OC_ADD_NOC) {
+		/*
+		 * The verdict is inside the response payload, so without this
+		 * an AddNOC this node REFUSED looks identical in the log to one
+		 * it accepted. Split into halves because the log backend
+		 * formats 32 bits at a time. Neither id is a secret: both are
+		 * published in the clear once this node advertises operationally.
+		 */
+		LOG_INF("  AddNOC -> status %u, fabric index %u, node %08x%08x on fabric %08x%08x",
+			s_info.last_noc_status, s_info.fabric.index,
+			(unsigned int)(s_info.fabric.node_id >> 32),
+			(unsigned int)s_info.fabric.node_id,
+			(unsigned int)(s_info.fabric.fabric_id >> 32),
+			(unsigned int)s_info.fabric.fabric_id);
+	}
 	if (resp_len == 0u) {
 		/* The command ran; the peer asked not to be told. */
 		LOG_INF("invoke done, response suppressed");

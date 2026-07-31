@@ -33,6 +33,7 @@
 #include <stdint.h>
 
 #include "matter_attest.h"
+#include "matter_fabric.h"
 #include "matter_im.h"
 
 #ifdef __cplusplus
@@ -74,13 +75,42 @@ extern "C" {
 #define MATTER_COMMISSIONING_INVALID_AUTH        2u
 #define MATTER_COMMISSIONING_NO_FAIL_SAFE        3u
 
-/* OperationalCredentials commands (OperationalCredentials/CommandIds.h:21-50). */
-#define MATTER_CMD_OC_ATTESTATION_REQUEST        0x0000u
-#define MATTER_CMD_OC_ATTESTATION_RESPONSE       0x0001u
-#define MATTER_CMD_OC_CERTIFICATE_CHAIN_REQUEST  0x0002u
-#define MATTER_CMD_OC_CERTIFICATE_CHAIN_RESPONSE 0x0003u
-#define MATTER_CMD_OC_CSR_REQUEST                0x0004u
-#define MATTER_CMD_OC_CSR_RESPONSE               0x0005u
+/* OperationalCredentials commands (MTRClusterConstants.h:6435-6446). */
+#define MATTER_CMD_OC_ATTESTATION_REQUEST          0x0000u
+#define MATTER_CMD_OC_ATTESTATION_RESPONSE         0x0001u
+#define MATTER_CMD_OC_CERTIFICATE_CHAIN_REQUEST    0x0002u
+#define MATTER_CMD_OC_CERTIFICATE_CHAIN_RESPONSE   0x0003u
+#define MATTER_CMD_OC_CSR_REQUEST                  0x0004u
+#define MATTER_CMD_OC_CSR_RESPONSE                 0x0005u
+#define MATTER_CMD_OC_ADD_NOC                      0x0006u
+#define MATTER_CMD_OC_NOC_RESPONSE                 0x0008u
+#define MATTER_CMD_OC_ADD_TRUSTED_ROOT_CERTIFICATE 0x000Bu
+
+/* OperationalCredentials attributes (MTRClusterConstants.h:1988-1989). */
+#define MATTER_ATTR_OC_SUPPORTED_FABRICS    0x0002u
+#define MATTER_ATTR_OC_COMMISSIONED_FABRICS 0x0003u
+
+/**
+ * How many fabrics this node can hold at once.
+ *
+ * One. The spec's floor is five, and a node meant for several homes needs the
+ * table; this one exists to be provisioned by a single Apple Home and there is
+ * a struct matter_fabric of RAM behind each entry.
+ */
+#define MATTER_SUPPORTED_FABRICS 1u
+
+/*
+ * NodeOperationalCertStatusEnum, the verdicts this node actually returns
+ * (OperationalCredentials Enums, python clusters/Objects.py). AddNOC reports
+ * failure THROUGH this enum rather than through an IM status: the commissioner
+ * has to be told which of its inputs was rejected, and a bare FAILURE cannot
+ * say.
+ */
+#define MATTER_NOC_STATUS_OK                 0u
+#define MATTER_NOC_STATUS_INVALID_PUBLIC_KEY 1u
+#define MATTER_NOC_STATUS_INVALID_NOC        3u
+#define MATTER_NOC_STATUS_MISSING_CSR        4u
+#define MATTER_NOC_STATUS_TABLE_FULL         5u
 
 /** The only endpoint this node has. Every Matter node's root endpoint is 0. */
 #define MATTER_ENDPOINT_ROOT 0u
@@ -159,6 +189,19 @@ struct matter_device_info {
 	uint8_t op_priv[32];
 	uint8_t op_pub[65];
 	bool have_op_key;
+
+	/*
+	 * ---- operational identity ------------------------------------------
+	 */
+
+	/** The one fabric this node can hold. Empty until AddNOC succeeds. */
+	struct matter_fabric fabric;
+	/**
+	 * The NodeOperationalCertStatusEnum the last AddNOC produced, held for
+	 * the same reason as last_commissioning_error: the reply is serialised
+	 * after the command has run and cannot recompute the verdict.
+	 */
+	uint8_t last_noc_status;
 };
 
 /**

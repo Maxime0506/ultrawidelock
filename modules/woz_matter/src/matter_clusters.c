@@ -12,6 +12,7 @@
 #include "matter_clusters.h"
 
 #include <stddef.h>
+#include <string.h>
 
 /* GeneralCommissioning/Structs.h:41-44 */
 #define TAG_BCI_FAILSAFE_EXPIRY 0u
@@ -51,6 +52,18 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
 		}
+	case MATTER_CLUSTER_OPERATIONAL_CREDENTIALS:
+		switch (attribute) {
+		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
+		case MATTER_ATTR_OC_COMMISSIONED_FABRICS:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			/* NOCs, Fabrics and TrustedRootCertificates are lists,
+			 * and CurrentFabricIndex is scoped to the reading
+			 * session's fabric -- which, over PASE, there is not
+			 * one of. None has been asked for. */
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
 	case MATTER_CLUSTER_GENERAL_COMMISSIONING:
 		switch (attribute) {
 		case MATTER_ATTR_GC_BREADCRUMB:
@@ -87,6 +100,19 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			return;
 		case MATTER_ATTR_BASIC_PRODUCT_ID:
 			(void)matter_tlv_put_u64(w, tag, info->product_id);
+			return;
+		default:
+			return;
+		}
+	}
+
+	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
+		switch (attribute) {
+		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
+			(void)matter_tlv_put_u64(w, tag, MATTER_SUPPORTED_FABRICS);
+			return;
+		case MATTER_ATTR_OC_COMMISSIONED_FABRICS:
+			(void)matter_tlv_put_u64(w, tag, info->fabric.index != 0u ? 1u : 0u);
 			return;
 		default:
 			return;
@@ -142,6 +168,11 @@ static const uint32_t k_gc_attrs[] = {
 	MATTER_ATTR_GC_SUPPORTS_CONCURRENT_CONNECTION,
 };
 
+static const uint32_t k_oc_attrs[] = {
+	MATTER_ATTR_OC_SUPPORTED_FABRICS,
+	MATTER_ATTR_OC_COMMISSIONED_FABRICS,
+};
+
 static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const uint32_t **out)
 {
 	(void)ctx;
@@ -156,6 +187,10 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 	if (cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING) {
 		*out = k_gc_attrs;
 		return sizeof(k_gc_attrs) / sizeof(k_gc_attrs[0]);
+	}
+	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
+		*out = k_oc_attrs;
+		return sizeof(k_oc_attrs) / sizeof(k_oc_attrs[0]);
 	}
 	return 0u;
 }
@@ -187,17 +222,33 @@ static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t 
 	}
 }
 
-/* --------------------------------------------------- attestation --- */
+/* -------------------------------------- OperationalCredentials --- */
 
-/* AttestationRequest/CSRRequest field tags (OperationalCredentials/Commands.h). */
+/*
+ * Command field tags. Matter numbers a command's arguments from 0 in
+ * declaration order, so these are the positions in
+ * controller/python/matter/clusters/Objects.py, which spells the tag out
+ * rather than leaving it to be counted.
+ */
 #define TAG_ATTEST_NONCE 0u
 #define TAG_CERT_TYPE    0u
 #define TAG_CSR_NONCE    0u
 
-/* Response field tags, same header. */
+#define TAG_ADDNOC_NOC                0u
+#define TAG_ADDNOC_ICAC               1u
+#define TAG_ADDNOC_IPK                2u
+#define TAG_ADDNOC_CASE_ADMIN_SUBJECT 3u
+#define TAG_ADDNOC_ADMIN_VENDOR_ID    4u
+
+#define TAG_ADDROOT_CERT 0u
+
+/* Response field tags, same source. */
 #define TAG_RESP_ELEMENTS  0u
 #define TAG_RESP_SIGNATURE 1u
 #define TAG_RESP_CERT      0u
+
+#define TAG_NOCRESP_STATUS       0u
+#define TAG_NOCRESP_FABRIC_INDEX 1u
 
 /** Borrow one octet-string field out of a command's arguments. */
 static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const uint8_t **out,
@@ -226,13 +277,111 @@ static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const u
 }
 
 /**
+ * Install the root the commissioner wants this node to trust.
+ *
+ * Only the public key is kept -- see matter_fabric.h. Nothing is verified: this
+ * node has no prior opinion about which roots are legitimate, which is exactly
+ * what makes it commissionable.
+ */
+static uint8_t add_trusted_root(struct matter_device_info *info, const struct matter_im_invoke *inv)
+{
+	const uint8_t *cert = NULL;
+	size_t cert_len = 0u;
+	struct matter_cert_info ci;
+
+	if (!field_bytes(inv, TAG_ADDROOT_CERT, &cert, &cert_len) || cert_len > MATTER_CERT_MAX) {
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+	if (matter_cert_parse(cert, cert_len, &ci) != MATTER_OK || !ci.have_public_key) {
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+
+	memcpy(info->fabric.root_public_key, ci.public_key, sizeof(ci.public_key));
+	info->fabric.have_root = true;
+	return MATTER_IM_STATUS_SUCCESS;
+}
+
+/**
+ * Accept the operational identity the commissioner minted for this node.
+ *
+ * @return the NodeOperationalCertStatusEnum for the reply. Every refusal is one
+ *         of these rather than an IM status, because each names WHICH input was
+ *         wrong and a commissioner can act on that.
+ */
+static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_invoke *inv)
+{
+	const uint8_t *noc = NULL;
+	const uint8_t *icac = NULL;
+	const uint8_t *ipk = NULL;
+	size_t noc_len = 0u;
+	size_t icac_len = 0u;
+	size_t ipk_len = 0u;
+	struct matter_cert_info ci;
+	uint64_t v = 0u;
+
+	if (!info->have_op_key) {
+		/* No CSR, so there is no private key behind whatever public key
+		 * this NOC certifies. */
+		return MATTER_NOC_STATUS_MISSING_CSR;
+	}
+	if (!info->fabric.have_root) {
+		return MATTER_NOC_STATUS_INVALID_NOC;
+	}
+	if (info->fabric.index != 0u) {
+		return MATTER_NOC_STATUS_TABLE_FULL;
+	}
+
+	if (!field_bytes(inv, TAG_ADDNOC_NOC, &noc, &noc_len) || noc_len > MATTER_CERT_MAX ||
+	    !field_bytes(inv, TAG_ADDNOC_IPK, &ipk, &ipk_len) || ipk_len != MATTER_IPK_LEN) {
+		return MATTER_NOC_STATUS_INVALID_NOC;
+	}
+	if (matter_cert_parse(noc, noc_len, &ci) != MATTER_OK || !ci.have_node_id ||
+	    !ci.have_fabric_id || !ci.have_public_key) {
+		return MATTER_NOC_STATUS_INVALID_NOC;
+	}
+	/*
+	 * The certified key must be the one this node minted for the CSR.
+	 * Installing an identity whose private half this node does not hold
+	 * would look like success here and surface much later as a CASE that
+	 * never completes, with nothing to point at.
+	 */
+	if (memcmp(ci.public_key, info->op_pub, sizeof(info->op_pub)) != 0) {
+		return MATTER_NOC_STATUS_INVALID_PUBLIC_KEY;
+	}
+	/* Optional: absent when the commissioner signed the NOC with its root
+	 * directly, which is what Apple does. */
+	(void)field_bytes(inv, TAG_ADDNOC_ICAC, &icac, &icac_len);
+	if (icac_len > MATTER_CERT_MAX) {
+		return MATTER_NOC_STATUS_INVALID_NOC;
+	}
+
+	memcpy(info->fabric.noc, noc, noc_len);
+	info->fabric.noc_len = noc_len;
+	if (icac_len != 0u) {
+		memcpy(info->fabric.icac, icac, icac_len);
+	}
+	info->fabric.icac_len = icac_len;
+	memcpy(info->fabric.ipk, ipk, ipk_len);
+	info->fabric.node_id = ci.node_id;
+	info->fabric.fabric_id = ci.fabric_id;
+	if (field_u64(inv, TAG_ADDNOC_CASE_ADMIN_SUBJECT, &v)) {
+		info->fabric.case_admin_subject = v;
+	}
+	if (field_u64(inv, TAG_ADDNOC_ADMIN_VENDOR_ID, &v) && v <= UINT16_MAX) {
+		info->fabric.admin_vendor_id = (uint16_t)v;
+	}
+	info->fabric.index = 1u;
+	return MATTER_NOC_STATUS_OK;
+}
+
+/**
  * Run one OperationalCredentials command.
  *
  * Everything expensive happens here -- the signature, and for a CSR a fresh
  * P-256 key pair -- because this runs exactly once per request while
- * attest_fields() may not.
+ * opcred_fields() may not.
  */
-static uint8_t attest_command(struct matter_device_info *info, const struct matter_im_invoke *inv,
+static uint8_t opcred_command(struct matter_device_info *info, const struct matter_im_invoke *inv,
 			      uint32_t *response_command)
 {
 	const uint8_t *nonce = NULL;
@@ -325,13 +474,37 @@ static uint8_t attest_command(struct matter_device_info *info, const struct matt
 		return MATTER_IM_STATUS_SUCCESS;
 	}
 
+	case MATTER_CMD_OC_ADD_TRUSTED_ROOT_CERTIFICATE:
+		/*
+		 * Both of the commands below change what this node believes
+		 * about who owns it, which is precisely what a fail-safe exists
+		 * to be able to undo. Doing either outside one would leave a
+		 * half-installed identity with nothing scheduled to remove it.
+		 */
+		if (!info->failsafe_armed) {
+			return MATTER_IM_STATUS_FAILSAFE_REQUIRED;
+		}
+		/* No response command: the reply is a bare SUCCESS status. */
+		*response_command = MATTER_IM_NO_RESPONSE;
+		return add_trusted_root(info, inv);
+
+	case MATTER_CMD_OC_ADD_NOC:
+		if (!info->failsafe_armed) {
+			return MATTER_IM_STATUS_FAILSAFE_REQUIRED;
+		}
+		info->last_noc_status = add_noc(info, inv);
+		*response_command = MATTER_CMD_OC_NOC_RESPONSE;
+		/* SUCCESS means "a NOCResponse follows", not "the NOC was
+		 * accepted"; last_noc_status carries the verdict. */
+		return MATTER_IM_STATUS_SUCCESS;
+
 	default:
 		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
 	}
 }
 
-/** Serialise what attest_command() already computed. */
-static void attest_fields(const struct matter_device_info *info, uint32_t response_command,
+/** Serialise what opcred_command() already computed. */
+static void opcred_fields(const struct matter_device_info *info, uint32_t response_command,
 			  struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 {
 	(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
@@ -343,6 +516,20 @@ static void attest_fields(const struct matter_device_info *info, uint32_t respon
 		if (matter_attest_cert(info->cert_type, &cert, &cert_len) == MATTER_OK) {
 			(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_RESP_CERT), cert,
 						   cert_len);
+		}
+	} else if (response_command == MATTER_CMD_OC_NOC_RESPONSE) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_NOCRESP_STATUS),
+					 info->last_noc_status);
+		/*
+		 * FabricIndex only on success, and DebugText not at all. Both
+		 * are optional and CHIP's own device omits them the same way
+		 * (operational-credentials-cluster.cpp, SendNOCResponse) -- an
+		 * index for a fabric that was not created would be a number the
+		 * commissioner could act on.
+		 */
+		if (info->last_noc_status == MATTER_NOC_STATUS_OK) {
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_NOCRESP_FABRIC_INDEX),
+						 info->fabric.index);
 		}
 	} else {
 		/* AttestationResponse and CSRResponse are the same shape: the
@@ -365,7 +552,7 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
 	if (inv->cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
-		return attest_command(info, inv, response_command);
+		return opcred_command(info, inv, response_command);
 	}
 	if (inv->cluster != MATTER_CLUSTER_GENERAL_COMMISSIONING) {
 		return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
@@ -433,7 +620,7 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 	(void)endpoint;
 
 	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
-		attest_fields(info, response_command, w, tag);
+		opcred_fields(info, response_command, w, tag);
 		return;
 	}
 	(void)response_command;

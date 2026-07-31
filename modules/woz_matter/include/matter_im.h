@@ -69,6 +69,19 @@ extern "C" {
 #define MATTER_IM_STATUS_INVALID_COMMAND       0x85u /* line 41 */
 #define MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE 0x86u /* line 42 */
 #define MATTER_IM_STATUS_UNSUPPORTED_CLUSTER   0xC3u /* line 68 */
+#define MATTER_IM_STATUS_FAILSAFE_REQUIRED     0xCAu /* line 75 */
+
+/**
+ * "This command succeeded and has no response payload."
+ *
+ * Most commands answer with a response command; some -- AddTrustedRootCertificate
+ * among them -- answer with a bare SUCCESS status and nothing else. A handler
+ * says so by leaving *response_command at this value, which is also what
+ * matter_im_invoke_response_encode() initialises it to, so forgetting to set a
+ * response command produces a legal empty reply rather than one claiming to be
+ * command 0. kInvalidCommandId (lib/core/DataModelTypes.h:86).
+ */
+#define MATTER_IM_NO_RESPONSE 0xFFFFFFFFu
 
 /**
  * How many attribute paths one ReadRequest may carry before this refuses it.
