@@ -32,8 +32,10 @@
 
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
+#include "matter_clusters.h"
 #include "matter_commission.h"
 #include "matter_exchange.h"
+#include "matter_im.h"
 #include "matter_pase_sm.h"
 
 LOG_MODULE_DECLARE(matter_ble, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
@@ -52,8 +54,45 @@ static bool s_verifier_ok;
  */
 static bool s_stale = true;
 
-/** Framed reply: both headers plus the largest PASE message. */
-static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_PASE_REPLY_MAX];
+/**
+ * What this node says it is, and the data model built over it.
+ *
+ * Sized in seconds and enum values rather than Kconfig strings because these
+ * are what the commissioner reads back; see matter_clusters.h for each.
+ */
+static struct matter_device_info s_info = {
+	.vendor_id = CONFIG_ALIRO_MATTER_VENDOR_ID,
+	.product_id = CONFIG_ALIRO_MATTER_PRODUCT_ID,
+	.breadcrumb = 0u,
+	.regulatory_config = MATTER_REGULATORY_INDOOR,
+	.location_capability = MATTER_REGULATORY_INDOOR,
+	/* The fail-safe window a commissioner may arm, and the ceiling it may
+	 * extend to. CHIP's own defaults; nothing here is slow enough to need
+	 * more. */
+	.failsafe_expiry_s = 60u,
+	.failsafe_max_s = 900u,
+	/*
+	 * True keeps BLE up across the whole of commissioning. False would tell
+	 * the commissioner to expect this node to leave BLE and reappear on its
+	 * operational network -- which it cannot do, having no Thread or Wi-Fi
+	 * yet, so false would promise a return that never happens.
+	 */
+	.supports_concurrent_connection = true,
+};
+static struct matter_im_server s_im;
+
+/**
+ * Framed reply: both headers, the largest message, and the AEAD tag.
+ *
+ * Sized by the Interaction Model rather than PASE now: a ReportData answering
+ * a commissioner's opening read is ~200 bytes where the largest PASE message is
+ * 128. Encryption adds MATTER_TAG_LEN on top of the cleartext.
+ */
+#define MATTER_REPORT_MAX 512u
+static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG_LEN];
+
+/** The Interaction Model payload, before framing. */
+static uint8_t s_report[MATTER_REPORT_MAX];
 
 /**
  * Plaintext of an encrypted message.
@@ -189,6 +228,135 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
 	LOG_DBG("sent opcode 0x%02x, %u B framed, rc=%d", opcode, (unsigned int)framed, rc);
 }
 
+/**
+ * Answer a ReadRequest.
+ *
+ * Kept static rather than on the stack: the request holds up to
+ * MATTER_IM_MAX_PATHS paths and the report another half kilobyte, and this runs
+ * on the Matter work queue, whose size is still an argument rather than a
+ * measurement (see CONFIG_ALIRO_MATTER_BLE_WQ_STACK). Only one commissioner is
+ * ever served at a time, so one of each is enough.
+ */
+static struct matter_im_read s_read;
+
+static void on_read_request(const struct matter_exchange_in *in)
+{
+	struct matter_im_report_stats stats;
+	size_t report_len = 0u;
+	size_t framed = 0u;
+	int rc;
+
+	rc = matter_im_read_request_decode(in->payload, in->payload_len, &s_read);
+	if (rc != MATTER_OK) {
+		LOG_WRN("unreadable ReadRequest (%d), %u B", rc, (unsigned int)in->payload_len);
+		return;
+	}
+
+	/* What was asked, not just how much. Which paths a commissioner reads is
+	 * the specification for what to implement next, and reading it out of a
+	 * hexdump by hand has already cost more than this line does. */
+	for (uint8_t i = 0; i < s_read.n_paths; i++) {
+		const struct matter_im_path *p = &s_read.paths[i];
+
+		LOG_INF("  read[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
+			p->have_endpoint ? (int)p->endpoint : -1,
+			p->have_cluster ? (unsigned int)p->cluster : 0xFFFFu,
+			p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
+	}
+
+	rc = matter_im_report_data_encode(&s_im, &s_read, s_report, sizeof(s_report), &report_len,
+					  &stats);
+	if (rc != MATTER_OK) {
+		LOG_ERR("cannot build ReportData for %u paths (%d)", s_read.n_paths, rc);
+		return;
+	}
+	if (stats.unexpanded_wildcard > 0u) {
+		/* Loud on purpose: the answer went out short, and to the
+		 * commissioner that is indistinguishable from an empty cluster. */
+		LOG_WRN("%u wildcard path(s) not expanded; report is incomplete",
+			stats.unexpanded_wildcard);
+	}
+
+	rc = matter_exchange_send(&s_exchange, MATTER_PROTOCOL_INTERACTION_MODEL,
+				  MATTER_IM_OP_REPORT_DATA, s_report, report_len, s_out,
+				  sizeof(s_out), &framed);
+	if (rc != MATTER_OK) {
+		LOG_ERR("framing ReportData rc=%d (%u B report)", rc, (unsigned int)report_len);
+		return;
+	}
+
+	rc = matter_ble_send(s_out, framed);
+	LOG_INF("ReportData: %u paths asked, %u B report, %u B sealed, rc=%d", s_read.n_paths,
+		(unsigned int)report_len, (unsigned int)framed, rc);
+}
+
+static void on_invoke_request(const struct matter_exchange_in *in)
+{
+	static struct matter_im_invoke inv;
+	size_t resp_len = 0u;
+	size_t framed = 0u;
+	int rc;
+
+	rc = matter_im_invoke_request_decode(in->payload, in->payload_len, &inv);
+	if (rc != MATTER_OK) {
+		LOG_WRN("unreadable InvokeRequest (%d), %u B", rc, (unsigned int)in->payload_len);
+		return;
+	}
+	LOG_INF("invoke: endpoint %u cluster 0x%04x command 0x%04x, %u B fields", inv.endpoint,
+		(unsigned int)inv.cluster, (unsigned int)inv.command, (unsigned int)inv.fields_len);
+
+	rc = matter_im_invoke_response_encode(&s_im, &inv, s_report, sizeof(s_report), &resp_len);
+	if (rc != MATTER_OK) {
+		LOG_ERR("cannot build InvokeResponse (%d)", rc);
+		return;
+	}
+	if (resp_len == 0u) {
+		/* The command ran; the peer asked not to be told. */
+		LOG_INF("invoke done, response suppressed");
+		return;
+	}
+
+	rc = matter_exchange_send(&s_exchange, MATTER_PROTOCOL_INTERACTION_MODEL,
+				  MATTER_IM_OP_INVOKE_COMMAND_RESPONSE, s_report, resp_len, s_out,
+				  sizeof(s_out), &framed);
+	if (rc != MATTER_OK) {
+		LOG_ERR("framing InvokeResponse rc=%d (%u B)", rc, (unsigned int)resp_len);
+		return;
+	}
+
+	rc = matter_ble_send(s_out, framed);
+	LOG_INF("InvokeResponse: %u B, %u B sealed, rc=%d", (unsigned int)resp_len,
+		(unsigned int)framed, rc);
+}
+
+static void on_secure(const struct matter_exchange_in *in)
+{
+	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
+	    in->opcode == MATTER_IM_OP_READ_REQUEST) {
+		on_read_request(in);
+		return;
+	}
+	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
+	    in->opcode == MATTER_IM_OP_INVOKE_COMMAND_REQUEST) {
+		on_invoke_request(in);
+		return;
+	}
+
+	/*
+	 * Anything else is the next piece of work, and the log line names it so
+	 * that piece is aimed rather than guessed -- which is how the read above
+	 * came to be written. The payload is dumped for the same reason: its
+	 * length is never the useful part.
+	 *
+	 * Safe to log. These are commissioning messages over a session whose
+	 * keys are gone by the time anyone reads the trace, and no PASE secret
+	 * is reachable from here.
+	 */
+	LOG_INF("secure message: protocol 0x%04x opcode 0x%02x, %u B payload (unhandled)",
+		(unsigned int)in->protocol_id, in->opcode, (unsigned int)in->payload_len);
+	LOG_HEXDUMP_INF(in->payload, in->payload_len, "payload");
+}
+
 static void on_message(const uint8_t *msg, size_t len)
 {
 	struct matter_exchange_in in;
@@ -221,17 +389,17 @@ static void on_message(const uint8_t *msg, size_t len)
 		return;
 	}
 	if (rc != MATTER_OK) {
-		LOG_WRN("refused a %u-byte message (%d)", (unsigned int)len, rc);
+		/* Name what was turned away. "refused 137 bytes (-4)" cost a whole
+		 * hardware round to interpret; the exchange id and the I flag are
+		 * what actually said which rule fired. */
+		LOG_WRN("refused %u B (%d): protocol 0x%04x opcode 0x%02x exchange 0x%04x %s",
+			(unsigned int)len, rc, (unsigned int)in.protocol_id, in.opcode,
+			in.exchange_id, in.initiator ? "I" : "-");
 		return;
 	}
 
 	if (s_exchange.secure) {
-		/* Decrypted, but there is nothing behind it yet: answering a read
-		 * needs the Interaction Model. Say what was asked so the next
-		 * piece of work is aimed rather than guessed. */
-		LOG_INF("secure message: protocol 0x%04x opcode 0x%02x, %u B payload"
-			" (no Interaction Model yet)",
-			(unsigned int)in.protocol_id, in.opcode, (unsigned int)in.payload_len);
+		on_secure(&in);
 		return;
 	}
 
@@ -302,6 +470,7 @@ int matter_commission_init(void)
 			(unsigned int)CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS);
 	}
 
+	matter_clusters_init(&s_im, &s_info);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
 	return 0;
