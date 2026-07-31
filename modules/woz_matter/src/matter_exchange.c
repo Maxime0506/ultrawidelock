@@ -22,12 +22,18 @@ void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp)
  * Split out because it is a list of refusals rather than a computation, and
  * because every item is a thing an unauthenticated peer chose.
  */
-static int check_msg_header(const struct matter_msg_header *h)
+static int check_msg_header(const struct matter_exchange *x, const struct matter_msg_header *h)
 {
-	/* Only the unsecured session. A non-zero session id means the peer
-	 * believes it holds keys with us; it does not, and answering as though
-	 * it might is how a downgrade starts. */
-	if (h->session_id != MATTER_SESSION_ID_UNSECURED) {
+	if (x->secure) {
+		/* Once keys exist, the clear channel is closed. A peer that holds
+		 * keys and talks in the clear is either confused or probing. */
+		if (h->session_id != x->local_session_id) {
+			return MATTER_E_INVAL;
+		}
+	} else if (h->session_id != MATTER_SESSION_ID_UNSECURED) {
+		/* A non-zero session id before PASE means the peer believes it
+		 * holds keys with us; it does not, and answering as though it
+		 * might is how a downgrade starts. */
 		return MATTER_E_INVAL;
 	}
 	if ((h->security_flags & MATTER_SEC_SESSION_TYPE_MASK) != MATTER_SESSION_TYPE_UNICAST) {
@@ -43,12 +49,15 @@ static int check_msg_header(const struct matter_msg_header *h)
 }
 
 int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t len,
-			 struct matter_exchange_in *in)
+			 struct matter_exchange_in *in, uint8_t *pt, size_t pt_cap)
 {
 	struct matter_msg_header mh;
 	struct matter_proto_header ph;
+	const uint8_t *body;
+	size_t body_len;
 	size_t mh_len = 0u;
 	size_t ph_len = 0u;
+	size_t pt_len = 0u;
 	int rc;
 
 	if (x == NULL || msg == NULL || in == NULL) {
@@ -60,16 +69,46 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 	if (rc != MATTER_OK) {
 		return rc;
 	}
-	rc = check_msg_header(&mh);
+	rc = check_msg_header(x, &mh);
 	if (rc != MATTER_OK) {
 		return rc;
 	}
 
-	rc = matter_proto_header_decode(msg + mh_len, len - mh_len, &ph, &ph_len);
+	if (x->secure) {
+		if (pt == NULL) {
+			return MATTER_E_INVAL;
+		}
+		/*
+		 * Decrypt before anything else is believed. The protocol header
+		 * lives INSIDE the ciphertext on a secure session, so until the
+		 * tag verifies there is no exchange id, no opcode and no payload
+		 * -- only bytes an attacker chose.
+		 *
+		 * i2r decrypts: we are the responder (CryptoContext.cpp:77-78).
+		 * The nonce carries the SENDER's node id, which for a PASE
+		 * session is undefined and therefore zero
+		 * (SecureSession.h:337, kUndefinedNodeId).
+		 */
+		rc = matter_crypto_open(msg, len, x->keys.i2r, MATTER_PASE_NODE_ID, &mh, pt, pt_cap,
+					&pt_len);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		body = pt;
+		body_len = pt_len;
+	} else {
+		body = msg + mh_len;
+		body_len = len - mh_len;
+	}
+
+	rc = matter_proto_header_decode(body, body_len, &ph, &ph_len);
 	if (rc != MATTER_OK) {
 		return rc;
 	}
-	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL) {
+	/* Secure Channel is all commissioning speaks until PASE finishes; the
+	 * Interaction Model only becomes reachable once there are keys. */
+	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL &&
+	    !(x->secure && ph.protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL)) {
 		return MATTER_E_INVAL;
 	}
 	/* A vendor-scoped protocol id is a different namespace entirely, so the
@@ -96,8 +135,9 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 	}
 
 	in->opcode = ph.opcode;
-	in->payload = msg + mh_len + ph_len;
-	in->payload_len = len - mh_len - ph_len;
+	in->protocol_id = ph.protocol_id;
+	in->payload = body + ph_len;
+	in->payload_len = body_len - ph_len;
 	in->ack_requested = (ph.exchange_flags & MATTER_EX_FLAG_R) != 0u;
 	in->carries_ack = (ph.exchange_flags & MATTER_EX_FLAG_A) != 0u;
 	in->acked_counter = ph.ack_counter;
@@ -120,6 +160,32 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 	/* Unsecured, so there is nothing to authenticate before committing; on a
 	 * secure session this would wait until the tag verified. */
 	matter_mrp_window_commit(&x->window, mh.message_counter);
+
+	return MATTER_OK;
+}
+
+int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16_t peer_id,
+			    const struct matter_session_keys *keys, uint32_t entropy)
+{
+	if (x == NULL || keys == NULL || local_id == MATTER_SESSION_ID_UNSECURED) {
+		return MATTER_E_INVAL;
+	}
+
+	x->secure = true;
+	x->local_session_id = local_id;
+	x->peer_session_id = peer_id;
+	x->keys = *keys;
+
+	/* A fresh counter and a fresh replay window. Carrying the unsecured
+	 * session's counter forward would risk repeating one under a key, and a
+	 * repeated counter is a repeated AEAD nonce. */
+	matter_counter_init(&x->counter, entropy, MATTER_COUNTER_SESSION);
+	matter_mrp_window_init(&x->window);
+
+	/* PASE's exchange is over. The commissioner opens a new one on the
+	 * secure session, so holding the old id would refuse its first message. */
+	x->open = false;
+	x->ack_pending = false;
 
 	return MATTER_OK;
 }
@@ -148,6 +214,15 @@ static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const
 		return MATTER_E_INVAL;
 	}
 	if (!x->open) {
+		return MATTER_E_STATE;
+	}
+	/*
+	 * Sending on a secure session is deliberately not here yet. It needs the
+	 * proto header and payload sealed as one plaintext, and this node has
+	 * nothing to say on a secure session until there is an Interaction Model
+	 * to say it with. Refusing loudly beats a half-designed send path.
+	 */
+	if (x->secure) {
 		return MATTER_E_STATE;
 	}
 

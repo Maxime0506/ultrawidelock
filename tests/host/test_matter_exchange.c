@@ -72,6 +72,7 @@ void test_matter_exchange(void)
 	struct matter_exchange_in in;
 	uint8_t msg[256];
 	uint8_t out[256];
+	uint8_t pt[256];
 	size_t n;
 	size_t out_len = 0u;
 	static const uint8_t k_payload[] = {0x15, 0x30, 0x01, 0x20, 0xAA, 0xBB, 0x18};
@@ -86,7 +87,7 @@ void test_matter_exchange(void)
 		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 100u, k_payload, sizeof(k_payload));
 
-		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 		T_EQ("opcode", in.opcode, 0x20L);
 		T_EQ("payload length", (long)in.payload_len, (long)sizeof(k_payload));
 		T_OK("payload bytes", memcmp(in.payload, k_payload, sizeof(k_payload)) == 0);
@@ -136,14 +137,14 @@ void test_matter_exchange(void)
 	{
 		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 7u, k_payload, sizeof(k_payload));
-		T_EQ("first time", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("first time", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 		T_EQ("reply", matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out),
 						    &out_len),
 		     MATTER_OK);
 		T_OK("ack consumed", !x.ack_pending);
 
 		/* The peer did not hear the reply and sends the same message again. */
-		T_EQ("second time is a duplicate", matter_exchange_recv(&x, msg, n, &in),
+		T_EQ("second time is a duplicate", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
 		     MATTER_E_DUP);
 		/* It still has to be acknowledged: the peer is retransmitting
 		 * because it believes the ack was lost, and staying silent makes
@@ -157,37 +158,37 @@ void test_matter_exchange(void)
 		matter_exchange_init(&x, SEED, true);
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID, 0x0005u,
 			    MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u, NULL, 0u);
-		T_EQ("a secured session id", matter_exchange_recv(&x, msg, n, &in),
+		T_EQ("a secured session id", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
 		     MATTER_E_INVAL);
 
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
 			    MATTER_SESSION_ID_UNSECURED, 0x0001u, 0u, 0u, NULL, 0u);
 		T_EQ("a protocol that is not Secure Channel",
-		     matter_exchange_recv(&x, msg, n, &in), MATTER_E_INVAL);
+		     matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_E_INVAL);
 
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
 			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL,
 			    MATTER_SESSION_TYPE_GROUP, 0u, NULL, 0u);
-		T_EQ("a group session", matter_exchange_recv(&x, msg, n, &in), MATTER_E_INVAL);
+		T_EQ("a group session", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_E_INVAL);
 
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
 			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL,
 			    MATTER_SEC_FLAG_P, 0u, NULL, 0u);
-		T_EQ("privacy we do not implement", matter_exchange_recv(&x, msg, n, &in),
+		T_EQ("privacy we do not implement", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
 		     MATTER_E_INVAL);
 
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
 			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL,
 			    MATTER_SEC_FLAG_MX, 0u, NULL, 0u);
 		T_EQ("message extensions we do not implement",
-		     matter_exchange_recv(&x, msg, n, &in), MATTER_E_INVAL);
+		     matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_E_INVAL);
 
 		/* A vendor-scoped protocol id lives in a different namespace, so
 		 * the protocol_id comparison would have meant nothing. */
 		n = inbound(msg, sizeof(msg), 0x20u, 1u, PEER_EXCHANGE_ID,
 			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL, 0u,
 			    MATTER_EX_FLAG_V, NULL, 0u);
-		T_EQ("a vendor-scoped protocol", matter_exchange_recv(&x, msg, n, &in),
+		T_EQ("a vendor-scoped protocol", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
 		     MATTER_E_INVAL);
 
 		T_OK("none of them opened an exchange", !x.open);
@@ -197,12 +198,12 @@ void test_matter_exchange(void)
 	{
 		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 1u, NULL, 0u);
-		T_EQ("the first one binds", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("the first one binds", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 
 		n = inbound(msg, sizeof(msg), 0x20u, 2u, PEER_EXCHANGE_ID + 1u,
 			    MATTER_SESSION_ID_UNSECURED, MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u,
 			    NULL, 0u);
-		T_EQ("a second commissioner is refused", matter_exchange_recv(&x, msg, n, &in),
+		T_EQ("a second commissioner is refused", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
 		     MATTER_E_STATE);
 		T_EQ("still the first exchange", x.exchange_id, (long)PEER_EXCHANGE_ID);
 	}
@@ -220,7 +221,7 @@ void test_matter_exchange(void)
 		     MATTER_E_STATE);
 
 		n = inbound_ok(msg, sizeof(msg), 0x24u, 42u, NULL, 0u);
-		T_EQ("message", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("message", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 		T_EQ("ack frames", matter_exchange_standalone_ack(&x, out, sizeof(out), &out_len),
 		     MATTER_OK);
 
@@ -246,7 +247,7 @@ void test_matter_exchange(void)
 
 		matter_exchange_init(&x, SEED, true);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 5u, k_payload, sizeof(k_payload));
-		T_EQ("message", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("message", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 		T_OK("owed", x.ack_pending);
 
 		T_EQ("reply does not fit",
@@ -299,7 +300,7 @@ void test_matter_exchange(void)
 			msg[probe_len] &= (uint8_t)~MATTER_EX_FLAG_R;
 		}
 
-		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 		T_OK("peer did not request an ack", !in.ack_requested);
 		T_OK("so none is owed", !x.ack_pending);
 
@@ -324,7 +325,7 @@ void test_matter_exchange(void)
 		/* Even if a peer DID set R, MRP stays off: the transport decides. */
 		matter_exchange_init(&x, SEED, false);
 		n = inbound_ok(msg, sizeof(msg), 0x20u, 12u, NULL, 0u);
-		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in), MATTER_OK);
+		T_EQ("accepted", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
 		T_OK("peer asked", in.ack_requested);
 		T_OK("but nothing is owed", !x.ack_pending);
 		T_EQ("reply", matter_exchange_reply(&x, 0x21u, NULL, 0u, out, sizeof(out),
@@ -334,6 +335,96 @@ void test_matter_exchange(void)
 		(void)matter_proto_header_decode(out + mh_len, out_len - mh_len, &ph, &ph_len);
 		T_OK("still no A", (ph.exchange_flags & MATTER_EX_FLAG_A) == 0u);
 		T_OK("still no R", (ph.exchange_flags & MATTER_EX_FLAG_R) == 0u);
+	}
+
+	t_group("the secure session PASE hands over");
+	{
+		/*
+		 * Everything here is what a commissioner does the moment PASE
+		 * finishes: it stops talking in the clear, addresses us by the
+		 * session id we announced, and opens a NEW exchange.
+		 *
+		 * The plaintext is built with our own encoders and sealed with
+		 * matter_crypto_seal(), which is pinned against OpenSSL vectors in
+		 * test_matter_crypto.c -- so this checks the wiring (which key,
+		 * which node id, which session id), not the cipher.
+		 */
+		struct matter_session_keys keys;
+		struct matter_msg_header mh;
+		struct matter_proto_header ph;
+		uint8_t plain[64];
+		size_t plain_len = 0u;
+		size_t sealed = 0u;
+
+		for (size_t i = 0; i < MATTER_KEY_LEN; i++) {
+			keys.i2r[i] = (uint8_t)(0x10u + i);
+			keys.r2i[i] = (uint8_t)(0x40u + i);
+			keys.attestation_challenge[i] = (uint8_t)(0x70u + i);
+		}
+
+		matter_exchange_init(&x, SEED, false);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 3u, NULL, 0u);
+		T_EQ("PASE message first", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
+		     MATTER_OK);
+
+		T_EQ("promote", matter_exchange_promote(&x, 0xABCDu, 0x1234u, &keys, 0x5EEDu),
+		     MATTER_OK);
+		T_OK("secure now", x.secure);
+		/* PASE's exchange is finished; the peer opens a new one. */
+		T_OK("exchange released", !x.open);
+
+		/* Build an Interaction Model message the way the peer would. */
+		memset(&ph, 0, sizeof(ph));
+		ph.exchange_flags = MATTER_EX_FLAG_I;
+		ph.opcode = 0x02u; /* ReadRequest */
+		ph.exchange_id = 0x7777u;
+		ph.protocol_id = MATTER_PROTOCOL_INTERACTION_MODEL;
+		T_EQ("proto header", matter_proto_header_encode(&ph, plain, sizeof(plain),
+								&plain_len),
+		     MATTER_OK);
+		plain[plain_len++] = 0x15u; /* a scrap of TLV payload */
+		plain[plain_len++] = 0x18u;
+
+		memset(&mh, 0, sizeof(mh));
+		mh.flags = MATTER_MSG_DSIZ_NONE;
+		mh.session_id = 0xABCDu; /* addressed to the id we announced */
+		mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
+		mh.message_counter = 900u;
+		T_EQ("seal", matter_crypto_seal(&mh, keys.i2r, MATTER_PASE_NODE_ID, plain, plain_len,
+						msg, sizeof(msg), &sealed),
+		     MATTER_OK);
+
+		T_EQ("accepted", matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)),
+		     MATTER_OK);
+		T_EQ("Interaction Model", in.protocol_id,
+		     (long)MATTER_PROTOCOL_INTERACTION_MODEL);
+		T_EQ("opcode survived decryption", in.opcode, 0x02L);
+		T_EQ("payload length", (long)in.payload_len, 2L);
+		T_OK("payload bytes", in.payload[0] == 0x15u && in.payload[1] == 0x18u);
+		T_EQ("bound to the new exchange", x.exchange_id, 0x7777L);
+
+		/* Wrong key must fail the tag, not produce plausible rubbish. */
+		T_EQ("promote with r2i as the decrypt key",
+		     matter_exchange_promote(&x, 0xABCDu, 0x1234u, &keys, 0x5EEDu), MATTER_OK);
+		memcpy(x.keys.i2r, keys.r2i, MATTER_KEY_LEN);
+		T_EQ("tag refuses", matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)),
+		     MATTER_E_TYPE);
+
+		/* Once keys exist the clear channel is closed. */
+		T_EQ("re-promote", matter_exchange_promote(&x, 0xABCDu, 0x1234u, &keys, 0x5EEDu),
+		     MATTER_OK);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 4u, NULL, 0u);
+		T_EQ("cleartext is refused after PASE",
+		     matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_E_INVAL);
+
+		/* A secure session id we never announced is not ours. */
+		T_EQ("re-promote", matter_exchange_promote(&x, 0xABCDu, 0x1234u, &keys, 0x5EEDu),
+		     MATTER_OK);
+		mh.session_id = 0x0001u;
+		(void)matter_crypto_seal(&mh, keys.i2r, MATTER_PASE_NODE_ID, plain, plain_len, msg,
+					 sizeof(msg), &sealed);
+		T_EQ("wrong session id refused",
+		     matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)), MATTER_E_INVAL);
 	}
 
 	t_group("replying before anything arrived");

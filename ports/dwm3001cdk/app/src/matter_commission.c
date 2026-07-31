@@ -55,6 +55,15 @@ static bool s_stale = true;
 /** Framed reply: both headers plus the largest PASE message. */
 static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_PASE_REPLY_MAX];
 
+/**
+ * Plaintext of an encrypted message.
+ *
+ * Separate from the BTP reassembly area rather than decrypted in place: the
+ * ciphertext has to stay intact while its tag is checked, and aliasing the two
+ * would make that depend on the cipher's write order.
+ */
+static uint8_t s_pt[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
+
 /** @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input. */
 static int unhex(const char *s, uint8_t *out, size_t cap, size_t *len)
 {
@@ -197,7 +206,7 @@ static void on_message(const uint8_t *msg, size_t len)
 	}
 
 	LOG_DBG("on_message: %u B", (unsigned int)len);
-	rc = matter_exchange_recv(&s_exchange, msg, len, &in);
+	rc = matter_exchange_recv(&s_exchange, msg, len, &in, s_pt, sizeof(s_pt));
 	LOG_DBG("exchange_recv rc=%d opcode=0x%02x payload=%u", rc, in.opcode,
 		(unsigned int)in.payload_len);
 	if (rc == MATTER_E_DUP) {
@@ -213,6 +222,16 @@ static void on_message(const uint8_t *msg, size_t len)
 	}
 	if (rc != MATTER_OK) {
 		LOG_WRN("refused a %u-byte message (%d)", (unsigned int)len, rc);
+		return;
+	}
+
+	if (s_exchange.secure) {
+		/* Decrypted, but there is nothing behind it yet: answering a read
+		 * needs the Interaction Model. Say what was asked so the next
+		 * piece of work is aimed rather than guessed. */
+		LOG_INF("secure message: protocol 0x%04x opcode 0x%02x, %u B payload"
+			" (no Interaction Model yet)",
+			(unsigned int)in.protocol_id, in.opcode, (unsigned int)in.payload_len);
 		return;
 	}
 
@@ -240,8 +259,25 @@ static void on_message(const uint8_t *msg, size_t len)
 	LOG_INF("PASE rc=%d, reply opcode 0x%02x (%u B), state=%d", rc, pase_op,
 		(unsigned int)pase_len, (int)matter_pase_responder_state(&s_pase));
 
-	if (matter_pase_responder_state(&s_pase) == MATTER_PASE_ST_DONE) {
-		LOG_INF("PASE complete: session keys derived (peer session id 0x%04x)",
+	if (matter_pase_responder_state(&s_pase) == MATTER_PASE_ST_DONE && !s_exchange.secure) {
+		uint32_t seed = 0u;
+
+		if (aliro_random((uint8_t *)&seed, sizeof(seed)) != 0) {
+			LOG_ERR("CSPRNG failed; cannot open the secure session");
+			s_stale = true;
+			return;
+		}
+		/* The StatusReport went out on the unsecured session above; only
+		 * now does the clear channel close. */
+		rc = matter_exchange_promote(&s_exchange, s_pase.local_session_id,
+					     s_pase.peer_session_id, &s_pase.keys, seed);
+		if (rc != MATTER_OK) {
+			LOG_ERR("promote to secure session rc=%d", rc);
+			s_stale = true;
+			return;
+		}
+		LOG_INF("PASE complete: secure session up (local 0x%04x, peer 0x%04x)",
+			(unsigned int)s_pase.local_session_id,
 			(unsigned int)s_pase.peer_session_id);
 	}
 }

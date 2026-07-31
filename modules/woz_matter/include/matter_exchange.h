@@ -45,6 +45,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "matter_crypto.h"
 #include "matter_mrp.h"
 #include "matter_msg.h"
 #include "matter_status.h"
@@ -68,7 +69,36 @@ extern "C" {
  */
 #define MATTER_EXCHANGE_HEADER_MAX (MATTER_MSG_HEADER_MAX + MATTER_PROTO_HEADER_MAX)
 
+/**
+ * Protocol 0x0001. Everything after commissioning's Secure Channel phase.
+ */
+#define MATTER_PROTOCOL_INTERACTION_MODEL 0x0001u
+
 struct matter_exchange {
+	/**
+	 * The secure session, once PASE has built one.
+	 *
+	 * This object deliberately carries the session as well as the exchange,
+	 * which Matter separates. That is sound HERE and nowhere wider: this node
+	 * accepts one commissioner at a time (CONFIG_BT_MAX_CONN=1, and
+	 * claim_conn() refuses a second), so there is never more than one session
+	 * or more than one live exchange to track. A node that had to serve two
+	 * exchanges at once would have to split them.
+	 *
+	 * `secure` false means the unsecured session, id 0, no keys.
+	 */
+	bool secure;
+	/** The id the peer must address us with. Announced in PBKDFParamResponse. */
+	uint16_t local_session_id;
+	/** The id we address the peer with (SessionManager.cpp:264). */
+	uint16_t peer_session_id;
+	/**
+	 * Keys are role-relative. As the responder we DECRYPT with i2r and
+	 * ENCRYPT with r2i -- CryptoContext.cpp:77-78,102-103 selects them by
+	 * role, and getting them the wrong way round produces a tag failure with
+	 * no hint as to why.
+	 */
+	struct matter_session_keys keys;
 	/**
 	 * Whether MRP runs on this exchange at all.
 	 *
@@ -116,9 +146,18 @@ struct matter_exchange {
 	bool ack_pending;
 };
 
+/**
+ * PASE sessions have no operational identity, so the AEAD nonce carries node id
+ * zero in both directions (SecureSession.h:337, kUndefinedNodeId). CASE brings
+ * real node ids and will need them here.
+ */
+#define MATTER_PASE_NODE_ID 0ULL
+
 /** What a received message turned out to be. */
 struct matter_exchange_in {
 	uint8_t opcode;
+	/** Secure Channel, or the Interaction Model once the session is secure. */
+	uint16_t protocol_id;
 	/** Points into the caller's buffer; not copied. */
 	const uint8_t *payload;
 	size_t payload_len;
@@ -146,6 +185,8 @@ void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp)
  * rather than trusting: version, DSIZ, session id, session type, protocol id,
  * and the vendor flag are all refused rather than ignored when wrong.
  *
+ * @param pt scratch for the plaintext of an encrypted message; @p in points into
+ *        it. Needs @p len bytes. Unused, and may be NULL, while unsecured.
  * @return MATTER_OK; MATTER_E_DUP when the counter has been seen, in which case
  *         the peer must still be acknowledged but @p in must NOT be acted on;
  *         MATTER_E_STATE for a message belonging to a different exchange;
@@ -153,7 +194,25 @@ void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp)
  *         the header decoders returned.
  */
 int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t len,
-			 struct matter_exchange_in *in);
+			 struct matter_exchange_in *in, uint8_t *pt, size_t pt_cap);
+
+/**
+ * Adopt the secure session PASE just established.
+ *
+ * After this, messages addressed to @p local_id are decrypted and anything on
+ * the unsecured session is refused: a peer that has keys has no business
+ * talking in the clear.
+ *
+ * The exchange id is deliberately released here. The commissioner opens a NEW
+ * exchange on the secure session -- PASE's exchange is finished -- so holding
+ * the old id would refuse the first real message.
+ *
+ * @param entropy seeds a FRESH counter. Secure sessions must not reuse the
+ *        unsecured session's counter space: a repeated counter under the same
+ *        key repeats an AEAD nonce.
+ */
+int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16_t peer_id,
+			    const struct matter_session_keys *keys, uint32_t entropy);
 
 /**
  * Frame a reply on this exchange.
