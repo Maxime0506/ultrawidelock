@@ -9,6 +9,7 @@
 
 #include "aliro_hash.h"
 #include "matter_crypto.h"
+#include "matter_im.h"
 #include "matter_tlv.h"
 
 /* Sigma1 field tags (CASESession.cpp:74-83). */
@@ -163,6 +164,14 @@ int matter_case_sigma1_decode(const uint8_t *tlv, size_t len, struct matter_case
 #define TAG_S2_RESPONDER_SESSION 2u
 #define TAG_S2_RESPONDER_PUBKEY  3u
 #define TAG_S2_ENCRYPTED         4u
+#define TAG_S2_SESSION_PARAMS    5u
+
+/* SessionParameters (PairingSession.cpp:120-144, SessionParameters::Tag). */
+#define TAG_SP_IDLE_INTERVAL         1u
+#define TAG_SP_ACTIVE_INTERVAL       2u
+#define TAG_SP_ACTIVE_THRESHOLD      3u
+#define TAG_SP_INTERACTION_MODEL_REV 5u
+#define TAG_SP_MAX_PATHS_PER_INVOKE  7u
 
 /* TBSData and TBEData tags, shared by Sigma2 and Sigma3 (CASESession.cpp:56-72). */
 #define TAG_TBS_NOC           1u
@@ -293,6 +302,30 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_S2_RESPONDER_PUBKEY),
 				   in->responder_eph_pub, MATTER_CASE_PUBKEY_LEN);
 	(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(TAG_S2_ENCRYPTED), scratch, n);
+
+	/*
+	 * Session parameters. Optional in the spec and ALWAYS sent by CHIP
+	 * (PairingSession.cpp:120-144), which is reason enough on its own -- but
+	 * two of these are load-bearing for this node in particular.
+	 *
+	 * The idle interval is this node's Thread poll period. A peer left on
+	 * the 500 ms default retransmits five times into a radio that is asleep
+	 * and concludes the node is gone.
+	 *
+	 * MaxPathsPerInvoke is 1 because matter_im_invoke_request_decode()
+	 * genuinely refuses a batch. Saying nothing lets a commissioner batch
+	 * two commands and be refused for a reason it was never told.
+	 */
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_S2_SESSION_PARAMS),
+					 MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_IDLE_INTERVAL), 3000u);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_ACTIVE_INTERVAL), 300u);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_ACTIVE_THRESHOLD), 4000u);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_INTERACTION_MODEL_REV),
+				 MATTER_IM_REVISION);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_MAX_PATHS_PER_INVOKE), 1u);
+	(void)matter_tlv_end_container(&w);
+
 	(void)matter_tlv_end_container(&w);
 
 	return matter_tlv_writer_finish(&w, out_len);
