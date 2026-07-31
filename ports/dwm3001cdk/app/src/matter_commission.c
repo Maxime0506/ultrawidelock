@@ -513,11 +513,31 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 
 	/* Framed after both headers, so the payload lands where it will be sent
 	 * from rather than being copied into place afterwards. */
-	mh.flags = 0u;
+	/*
+	 * The S flag and a source node id, because Apple sets them on its
+	 * Sigma1 and a receiver correlates an unauthenticated exchange by who
+	 * sent it. A Sigma2 that names nobody has nothing for the peer to match
+	 * against its pending session, and gets dropped without a word --
+	 * exactly what was observed.
+	 */
+	mh.flags = MATTER_MSG_FLAG_S;
 	mh.session_id = 0u;
 	mh.security_flags = 0u;
+	/*
+	 * Randomised once, not started at zero. The spec requires the global
+	 * unencrypted counter to begin at a random value; Apple's is around
+	 * 118 million, and a peer that saw this node restart at 1 would have
+	 * every reason to treat the message as a replay of an old one.
+	 */
+	if (s_case_counter == 0u) {
+		if (aliro_random((uint8_t *)&s_case_counter, sizeof(s_case_counter)) != 0) {
+			LOG_ERR("  no entropy for the message counter");
+			return 0u;
+		}
+		s_case_counter &= 0x0FFFFFFFu; /* leave room to increment */
+	}
 	mh.message_counter = ++s_case_counter;
-	mh.source_node_id = 0u;
+	mh.source_node_id = s_info.fabric.node_id;
 	mh.dest_node_id = 0u;
 	mh.dest_group_id = 0u;
 	rc = matter_msg_header_encode(&mh, reply, cap, &mh_len);
