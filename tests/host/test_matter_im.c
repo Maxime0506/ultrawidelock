@@ -18,6 +18,7 @@
 /* Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  */
+#include <stdio.h>
 #include <string.h>
 
 #include "matter_clusters.h"
@@ -57,9 +58,24 @@ struct rep {
 	/* BasicCommissioningInfo's two fields, when the value is a structure. */
 	uint64_t s0;
 	uint64_t s1;
+	/* Borrowed from the report buffer, when the value is a string. */
+	const char *vs;
+	size_t vs_len;
 };
 
-#define MAX_REPS 16
+/**
+ * What ports/dwm3001cdk/app/src/matter_commission.c gives the encoder.
+ *
+ * Duplicated rather than shared because the module must not depend on a port.
+ * If the two drift apart the assertion below stops meaning anything, so they
+ * are named the same thing on purpose.
+ */
+#define PORT_REPORT_MAX 1536u
+
+/* Room for every attribute of the widest cluster this node has, plus slack.
+ * BasicInformation alone reports 16, which is exactly where this used to sit --
+ * and an overflow here reads as a malformed report rather than a full one. */
+#define MAX_REPS 96
 
 /** Read an AttributePathIB into @p r. Reader is positioned on the list. */
 static int walk_path(struct matter_tlv_reader *rd, struct rep *r)
@@ -201,25 +217,75 @@ static int walk_report(const uint8_t *buf, size_t len, struct rep *reps, bool *s
 					}
 				} else if (matter_tlv_tag(&rd) == MATTER_TLV_CTX(2)) {
 					r->vtype = matter_tlv_element_type(&rd);
-					if (r->vtype == MATTER_TLV_STRUCTURE) {
+					if (r->vtype == MATTER_TLV_STRUCTURE ||
+					    r->vtype == MATTER_TLV_ARRAY ||
+					    r->vtype == MATTER_TLV_LIST) {
+						/*
+						 * Walked generically, capturing
+						 * the first two integers for the
+						 * cases that care. Demanding
+						 * exactly two made every list
+						 * attribute -- the ACL, Fabrics,
+						 * NOCs -- read as a malformed
+						 * report.
+						 */
+						int nint = 0;
+
 						if (matter_tlv_enter(&rd) != MATTER_OK) {
 							return -1;
 						}
-						if (matter_tlv_next(&rd) != MATTER_OK ||
-						    matter_tlv_get_u64(&rd, &r->s0) != MATTER_OK) {
-							return -1;
-						}
-						if (matter_tlv_next(&rd) != MATTER_OK ||
-						    matter_tlv_get_u64(&rd, &r->s1) != MATTER_OK) {
-							return -1;
+						for (;;) {
+							uint64_t v = 0u;
+							int crc = matter_tlv_next(&rd);
+
+							if (crc == MATTER_END) {
+								break;
+							}
+							if (crc != MATTER_OK) {
+								return -1;
+							}
+							if (matter_tlv_is_container(&rd)) {
+								if (matter_tlv_enter(&rd) != MATTER_OK ||
+								    matter_tlv_exit(&rd) != MATTER_OK) {
+									return -1;
+								}
+								continue;
+							}
+							if (matter_tlv_get_u64(&rd, &v) == MATTER_OK) {
+								if (nint == 0) {
+									r->s0 = v;
+								} else if (nint == 1) {
+									r->s1 = v;
+								}
+								nint++;
+							}
 						}
 						if (matter_tlv_exit(&rd) != MATTER_OK) {
 							return -1;
 						}
+					} else if (matter_tlv_get_utf8(&rd, &r->vs, &r->vs_len) ==
+						   MATTER_OK) {
+						/* Tried BEFORE the integer
+						 * accessors, not after: falling
+						 * through to get_u64() is how a
+						 * report full of names came back
+						 * as a malformed message. */
+						r->vs = r->vs;
 					} else if (matter_tlv_get_bool(&rd, &r->vb) == MATTER_OK) {
 						r->vb = r->vb;
-					} else if (matter_tlv_get_u64(&rd, &r->vu) != MATTER_OK) {
-						return -1;
+					} else if (matter_tlv_get_u64(&rd, &r->vu) == MATTER_OK) {
+						r->vu = r->vu;
+					} else {
+						const uint8_t *b = NULL;
+						size_t bl = 0u;
+
+						/* Octet strings: certificates and
+						 * public keys, which arrived with
+						 * the OperationalCredentials
+						 * attributes. */
+						if (matter_tlv_get_bytes(&rd, &b, &bl) != MATTER_OK) {
+							return -1;
+						}
 					}
 				}
 			}
@@ -414,7 +480,7 @@ void test_matter_im(void)
 		T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
 		T_EQ("nothing counted as absent", stats.skipped_wildcard, 0);
 		m = walk_report(out, len, sreps, &suppress, &revision);
-		T_EQ("both BasicInformation attributes reported", m, 2);
+		T_EQ("every BasicInformation attribute reported", m, 16);
 
 		/* An ENDPOINT wildcard expands over every endpoint this node
 		 * has. Apple reads NetworkCommissioning exactly this way, and
@@ -445,13 +511,93 @@ void test_matter_im(void)
 		m = walk_report(out, len, sreps, &suppress, &revision);
 		T_EQ("and said nothing", m, 0);
 
-		/* A CLUSTER wildcard is still not expanded, and still counted. */
+		/*
+		 * A CLUSTER wildcard expands over every cluster on the endpoint.
+		 * A controller subscribes to exactly this -- no endpoint, no
+		 * cluster, no attribute -- the moment it has adopted the node,
+		 * and while it went unexpanded the subscription was established
+		 * and then reported nothing at all, forever.
+		 */
 		one.paths[0].have_endpoint = true;
 		one.paths[0].have_cluster = false;
-		T_EQ("cluster wildcard encodes",
-		     matter_im_report_data_encode(&srv, &one, out, sizeof(out), &len, &stats),
-		     MATTER_OK);
-		T_EQ("counted as unexpanded", stats.unexpanded_wildcard, 1);
+		/* And no attribute either -- the previous case left a
+		 * deliberately absent one here, which would make every cluster
+		 * correctly report nothing and hide whether expansion ran. */
+		one.paths[0].have_attribute = false;
+		{
+			static uint8_t big[4096];
+
+			T_EQ("cluster wildcard encodes",
+			     matter_im_report_data_encode(&srv, &one, big, sizeof(big), &len,
+							  &stats),
+			     MATTER_OK);
+			T_EQ("nothing left unexpanded", stats.unexpanded_wildcard, 0);
+			m = walk_report(big, len, sreps, &suppress, &revision);
+			T_OK("and reported the endpoint's attributes", m > 0);
+			/*
+			 * The whole data model in one message, which is what a
+			 * controller subscribes to. It has to fit the report
+			 * buffer the port hands this encoder
+			 * (MATTER_REPORT_MAX in matter_commission.c) or the
+			 * node answers NOSPACE and sends nothing -- so this
+			 * fails HERE, on the host, rather than as a
+			 * subscription that silently never reports.
+			 */
+			T_OK("fits the port's report buffer", len <= PORT_REPORT_MAX);
+
+			/*
+			 * And the same report CHUNKED, which is what actually
+			 * goes on the wire: one message may not exceed the IPv6
+			 * MTU, and 1079 bytes of reports plus framing does. An
+			 * oversized datagram is not slow, it is never delivered.
+			 */
+			{
+				/*
+				 * Deliberately far below the real ceiling. What
+				 * is under test is the chunk boundary, and this
+				 * fixture holds no fabric -- so its report is
+				 * 1079 B where a commissioned node's is nearly
+				 * 1500, and the real MTU would not split it here
+				 * even though it splits it on hardware.
+				 */
+				/*
+				 * Swept, not a single size. WHERE a chunk
+				 * boundary falls decides whether the rollback
+				 * happens between containers or inside one, and
+				 * only the second case catches a rollback that
+				 * forgets the writer's nesting depth -- which
+				 * one cap missed and hardware did not.
+				 */
+				size_t small;
+
+				for (small = 200u; small <= 700u; small += 37u) {
+				uint16_t sent = 0u;
+				uint16_t emitted = 0u;
+				bool more = true;
+				int chunks = 0;
+				int total = 0;
+
+				while (more && chunks < 24) {
+					T_EQ("chunk encodes",
+					     matter_im_report_data_chunk(&srv, &one, sent, big,
+									 small, &len, &more,
+									 &emitted, &stats),
+					     MATTER_OK);
+					T_OK("chunk stayed within the cap", len <= small);
+					T_OK("chunk carried something", emitted > 0);
+					total += walk_report(big, len, sreps, &suppress,
+							     &revision);
+					sent = (uint16_t)(sent + emitted);
+					chunks++;
+				}
+				T_OK("took more than one chunk", chunks > 1);
+				T_OK("and stopped", !more);
+				/* Every report, once: no gap at a boundary and
+				 * no report sent twice. */
+				T_EQ("delivered every report exactly once", total, m);
+				}
+			}
+		}
 		one.paths[0].have_cluster = true;
 	}
 

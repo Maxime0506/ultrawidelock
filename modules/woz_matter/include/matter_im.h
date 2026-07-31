@@ -47,6 +47,10 @@ extern "C" {
 #define MATTER_IM_OP_STATUS_RESPONSE         0x01u
 #define MATTER_IM_OP_READ_REQUEST            0x02u
 #define MATTER_IM_OP_REPORT_DATA             0x05u
+#define MATTER_IM_OP_SUBSCRIBE_REQUEST       0x03u
+#define MATTER_IM_OP_SUBSCRIBE_RESPONSE      0x04u
+#define MATTER_IM_OP_WRITE_REQUEST           0x06u
+#define MATTER_IM_OP_WRITE_RESPONSE          0x07u
 #define MATTER_IM_OP_INVOKE_COMMAND_REQUEST  0x08u
 #define MATTER_IM_OP_INVOKE_COMMAND_RESPONSE 0x09u
 
@@ -68,6 +72,8 @@ extern "C" {
 #define MATTER_IM_STATUS_UNSUPPORTED_COMMAND   0x81u /* line 37 */
 #define MATTER_IM_STATUS_INVALID_COMMAND       0x85u /* line 41 */
 #define MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE 0x86u /* line 42 */
+#define MATTER_IM_STATUS_UNSUPPORTED_WRITE     0x88u /* line 44 */
+#define MATTER_IM_STATUS_RESOURCE_EXHAUSTED    0x89u /* line 45 */
 #define MATTER_IM_STATUS_UNSUPPORTED_CLUSTER   0xC3u /* line 68 */
 #define MATTER_IM_STATUS_FAILSAFE_REQUIRED     0xCAu /* line 75 */
 
@@ -119,7 +125,50 @@ struct matter_im_read {
 	uint8_t n_paths;
 	/** As sent; recorded rather than acted on, since nothing here is fabric-scoped yet. */
 	bool fabric_filtered;
+	/**
+	 * Non-zero turns a report into a subscription's PRIMING report: the
+	 * SubscriptionId is written and SuppressResponse becomes false, because
+	 * the peer's StatusResponse to that report is what the SubscribeResponse
+	 * answers (ReadHandler.cpp:240-250). A plain read leaves this at zero
+	 * and suppresses the response, which is what Engine.cpp:834-836 does.
+	 */
+	uint32_t subscription_id;
 };
+
+/** A SubscribeRequest: the same paths a read asks for, plus how often. */
+struct matter_im_subscribe {
+	struct matter_im_read read;
+	uint16_t min_interval_s;
+	uint16_t max_interval_s;
+	bool keep_subscriptions;
+};
+
+/**
+ * Decode a SubscribeRequestMessage (app/MessageDef/SubscribeRequestMessage.h).
+ *
+ * The paths live at tag 3 here and at tag 0 in a ReadRequest, which is the only
+ * reason this is not the read decoder.
+ *
+ * @return MATTER_OK; MATTER_E_NOSPACE past MATTER_IM_MAX_PATHS;
+ *         MATTER_E_INVAL for a malformed message.
+ */
+int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
+				       struct matter_im_subscribe *out);
+
+/**
+ * Encode a SubscribeResponseMessage (SubscribeResponseMessage.h:39-42).
+ *
+ * Sent LAST, after the priming report has been answered with a StatusResponse
+ * -- not in reply to the SubscribeRequest itself. Sending it first leaves the
+ * subscriber holding an id for a subscription whose initial values it never
+ * received.
+ *
+ * @param max_interval_s what this node COMMITS to, which must be no larger than
+ *        the ceiling the subscriber asked for: it is the deadline by which the
+ *        next report has to arrive or the subscription is considered dead.
+ */
+int matter_im_subscribe_response_encode(uint32_t subscription_id, uint16_t max_interval_s,
+					uint8_t *out, size_t cap, size_t *out_len);
 
 /**
  * Decode a ReadRequestMessage (app/MessageDef/ReadRequestMessage.h).
@@ -228,6 +277,20 @@ typedef size_t (*matter_im_list_attrs_fn)(void *ctx, uint16_t endpoint, uint32_t
 					  const uint32_t **out);
 
 /**
+ * Every cluster on one endpoint, for expanding a path that names none.
+ *
+ * A commissioner that has just adopted a node subscribes to ALL of it -- no
+ * endpoint, no cluster, no attribute -- and that is not an edge case, it is
+ * what Apple does immediately after writing its ACL. Returning 0 makes such a
+ * subscription report nothing at all, which the subscriber cannot distinguish
+ * from a node that has stopped talking.
+ *
+ * @param out receives a pointer to a static array of cluster ids.
+ * @return how many, or 0 when the endpoint does not exist.
+ */
+typedef size_t (*matter_im_list_clusters_fn)(void *ctx, uint16_t endpoint, const uint32_t **out);
+
+/**
  * Every endpoint this node has, for expanding a path that names none.
  *
  * A commissioner asks about a cluster without saying where it lives -- Apple
@@ -239,14 +302,29 @@ typedef size_t (*matter_im_list_attrs_fn)(void *ctx, uint16_t endpoint, uint32_t
  */
 typedef size_t (*matter_im_list_endpoints_fn)(void *ctx, const uint16_t **out);
 
+/**
+ * Apply one attribute write. Supplied by the cluster layer.
+ *
+ * @param data the encoded value, exactly as it arrived.
+ * @return an IM status: MATTER_IM_STATUS_SUCCESS, or
+ *         MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE / _CLUSTER / _ENDPOINT for a
+ *         path this node does not have, which is what tells a commissioner the
+ *         difference between "refused" and "does not exist".
+ */
+typedef uint8_t (*matter_im_write_fn)(void *ctx, const struct matter_im_path *path,
+				      const uint8_t *data, size_t data_len);
+
 struct matter_im_server {
 	matter_im_status_fn status;
 	matter_im_value_fn value;
 	matter_im_has_cluster_fn has_cluster;
 	matter_im_list_attrs_fn list_attrs;
 	matter_im_list_endpoints_fn list_endpoints;
+	matter_im_list_clusters_fn list_clusters;
 	matter_im_command_fn command;
 	matter_im_command_fields_fn command_fields;
+	/** NULL means this node accepts no writes at all. */
+	matter_im_write_fn write;
 	void *ctx;
 };
 
@@ -261,6 +339,48 @@ struct matter_im_server {
  * @return MATTER_OK, MATTER_E_NOSPACE for a batch, MATTER_E_INVAL for a
  *         malformed message, or whatever the TLV decoder returned.
  */
+/**
+ * One attribute write.
+ *
+ * Exactly one per message, the same restriction matter_im_invoke has and for
+ * the same reason: a commissioner that sent two and saw one status would be
+ * entitled to assume both applied.
+ */
+struct matter_im_write {
+	struct matter_im_path path;
+	/**
+	 * The value, still encoded. Points into the caller's buffer.
+	 *
+	 * Left as TLV rather than decoded because an attribute's type is the
+	 * cluster's business, not the Interaction Model's -- an ACL is a list of
+	 * structures and there is nothing useful this layer could turn it into.
+	 */
+	const uint8_t *data;
+	size_t data_len;
+	bool suppress_response;
+	bool timed_request;
+};
+
+/**
+ * Decode a WriteRequestMessage (app/MessageDef/WriteRequestMessage.h:39-44).
+ *
+ * @return MATTER_OK, MATTER_E_NOSPACE for a batch, MATTER_E_INVAL for a
+ *         malformed message or a path that is not concrete -- a wildcard write
+ *         is refused rather than expanded, because guessing which attributes a
+ *         commissioner meant to overwrite is not a recoverable mistake.
+ */
+int matter_im_write_request_decode(const uint8_t *tlv, size_t len, struct matter_im_write *out);
+
+/**
+ * Run the write and encode its WriteResponseMessage.
+ *
+ * @param out_len set to 0 when the request suppressed the response, which is
+ *        not an error: the write still ran.
+ */
+int matter_im_write_response_encode(const struct matter_im_server *srv,
+				    const struct matter_im_write *wr, uint8_t *out, size_t cap,
+				    size_t *out_len);
+
 int matter_im_invoke_request_decode(const uint8_t *tlv, size_t len, struct matter_im_invoke *out);
 
 /**
@@ -317,6 +437,38 @@ struct matter_im_report_stats {
 int matter_im_report_data_encode(const struct matter_im_server *srv,
 				 const struct matter_im_read *req, uint8_t *out, size_t cap,
 				 size_t *out_len, struct matter_im_report_stats *stats);
+
+/**
+ * The most a Matter message may be, per spec.
+ *
+ * The guaranteed IPv6 MTU is 1280 bytes and Matter does not exceed it
+ * (CHIPConfig.h:320-324); over Thread there is nothing to fragment for. A
+ * report larger than this is not slow, it is UNDELIVERABLE -- the subscriber
+ * simply never sees it and re-subscribes forever, which is exactly what a
+ * 1513-byte report produced.
+ */
+#define MATTER_MAX_MESSAGE_LEN 1232u
+
+/**
+ * Encode ONE CHUNK of a report, continuing where the last one stopped.
+ *
+ * A controller subscribes to the whole data model, and this node's answer to
+ * that does not fit one message. The spec's answer is MoreChunkedMessages: send
+ * what fits, let the peer acknowledge it with a StatusResponse, send the rest.
+ *
+ * @param sent how many attribute reports previous chunks already carried. Zero
+ *        starts a fresh report. Expansion is deterministic, so re-walking and
+ *        skipping is equivalent to resuming -- and far harder to get wrong than
+ *        a cursor into four nested loops.
+ * @param more set true when reports remain; the caller adds @p emitted to
+ *        @p sent and calls again once the peer has acknowledged this chunk.
+ * @param emitted how many this chunk carried. Zero with @p more true means not
+ *        even one report fits in @p cap, which is a caller bug, not a chunk.
+ */
+int matter_im_report_data_chunk(const struct matter_im_server *srv,
+				const struct matter_im_read *req, uint16_t sent, uint8_t *out,
+				size_t cap, size_t *out_len, bool *more, uint16_t *emitted,
+				struct matter_im_report_stats *stats);
 
 #ifdef __cplusplus
 }

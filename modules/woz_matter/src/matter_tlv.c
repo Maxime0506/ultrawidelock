@@ -775,3 +775,39 @@ int matter_tlv_exit(struct matter_tlv_reader *r)
 	r->have = false;
 	return MATTER_TLV_OK;
 }
+
+int matter_tlv_put_encoded(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const uint8_t *elem,
+			   size_t len)
+{
+	if (w == NULL) {
+		return MATTER_TLV_E_INVAL;
+	}
+	if (w->rc != MATTER_TLV_OK) {
+		return w->rc;
+	}
+	/*
+	 * Both tags must be context tags, which makes the whole re-tagging a
+	 * one-byte substitution: a context-tagged element is control, tag,
+	 * value, and only the tag byte differs between "attribute 2 of a write"
+	 * and "attribute 1 of a report". Anything else would mean re-encoding
+	 * the header, and this helper exists precisely because re-encoding a
+	 * value whose type it does not know is what it must not do.
+	 */
+	if (elem == NULL || len < 2u || (elem[0] & 0xE0u) != TC_CONTEXT) {
+		w->rc = MATTER_TLV_E_INVAL;
+		return w->rc;
+	}
+	if (tag_profile(tag) != MATTER_TLV_SPECIAL_PROFILE || tag_number(tag) > 0xFFu) {
+		w->rc = MATTER_TLV_E_INVAL;
+		return w->rc;
+	}
+	if (w->buf == NULL || w->cap - w->len < len) {
+		w->rc = MATTER_TLV_E_NOSPACE;
+		return w->rc;
+	}
+
+	memcpy(w->buf + w->len, elem, len);
+	w->buf[w->len + 1u] = (uint8_t)tag_number(tag);
+	w->len += len;
+	return MATTER_TLV_OK;
+}

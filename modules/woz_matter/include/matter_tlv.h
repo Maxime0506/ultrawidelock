@@ -137,6 +137,22 @@ int matter_tlv_put_bytes(struct matter_tlv_writer *w, matter_tlv_tag_t tag, cons
 			 size_t len);
 
 /** @param type one of MATTER_TLV_STRUCTURE, MATTER_TLV_ARRAY, MATTER_TLV_LIST. */
+/**
+ * Copy an already-encoded element, re-tagged.
+ *
+ * For a value this node stored but never decoded -- an ACL is a list of
+ * structures, and re-encoding one would mean understanding a shape that only
+ * the commissioner cares about. Both tags must be context tags, which reduces
+ * re-tagging to a one-byte substitution; anything else would require rebuilding
+ * a header around a value whose type is unknown here, which is the exact thing
+ * this exists to avoid.
+ *
+ * @param elem one complete element, control byte first.
+ * @return MATTER_TLV_OK, or E_INVAL if either tag is not context-specific.
+ */
+int matter_tlv_put_encoded(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const uint8_t *elem,
+			   size_t len);
+
 int matter_tlv_start_container(struct matter_tlv_writer *w, matter_tlv_tag_t tag, uint8_t type);
 int matter_tlv_end_container(struct matter_tlv_writer *w);
 

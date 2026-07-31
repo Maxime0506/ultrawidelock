@@ -54,6 +54,16 @@ int matter_thread_start(const uint8_t *dataset, size_t len);
  */
 int matter_thread_wait_attached(uint32_t timeout_ms);
 
+/**
+ * The largest datagram this node sends.
+ *
+ * Set by the ReportData answering a subscription to everything, not by any
+ * handshake message: a controller subscribes to the whole data model as soon as
+ * it owns the node. Headroom over the report itself covers both headers and the
+ * AEAD tag.
+ */
+#define MATTER_THREAD_REPLY_MAX 1664u
+
 /** The port a Matter node listens on operationally (lib/core/CHIPConfig.h:335). */
 #define MATTER_OPERATIONAL_PORT 5540u
 

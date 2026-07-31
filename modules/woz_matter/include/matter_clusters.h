@@ -45,14 +45,85 @@ extern "C" {
 #define MATTER_CLUSTER_BASIC_INFORMATION       0x0028u
 #define MATTER_CLUSTER_GENERAL_COMMISSIONING   0x0030u
 #define MATTER_CLUSTER_NETWORK_COMMISSIONING   0x0031u
+#define MATTER_CLUSTER_DESCRIPTOR              0x001Du
+#define MATTER_CLUSTER_ACCESS_CONTROL          0x001Fu
 #define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
+
+/* Descriptor attributes (Descriptor/AttributeIds.h:19-33). */
+#define MATTER_ATTR_DESC_DEVICE_TYPE_LIST 0x0000u
+#define MATTER_ATTR_DESC_SERVER_LIST      0x0001u
+#define MATTER_ATTR_DESC_CLIENT_LIST      0x0002u
+#define MATTER_ATTR_DESC_PARTS_LIST       0x0003u
+
+/*
+ * Root Node, revision 3 (matter-devices.xml:31-38, MA-rootdevice).
+ *
+ * A controller reads this to learn what it has just adopted. Endpoint 0 is
+ * always the Root Node; the Door Lock will be a second endpoint with its own
+ * device type, listed in this endpoint's PartsList.
+ */
+#define MATTER_DEVICE_TYPE_ROOT_NODE 0x0016u
+#define MATTER_DEVICE_TYPE_ROOT_REV  3u
+
+/** Access Control attributes (access-control-cluster.cpp, AclAttribute). */
+#define MATTER_ATTR_AC_ACL                 0x0000u
+#define MATTER_ATTR_AC_EXTENSION           0x0001u
+#define MATTER_ATTR_AC_SUBJECTS_PER_ENTRY  0x0002u
+#define MATTER_ATTR_AC_TARGETS_PER_ENTRY   0x0003u
+#define MATTER_ATTR_AC_ENTRIES_PER_FABRIC  0x0004u
+
+/**
+ * How much of an ACL this node will hold.
+ *
+ * One fabric, and the spec's floor is four entries per fabric; a commissioner
+ * writes the whole list at once, so this bounds the encoded list rather than
+ * any single entry.
+ */
+#define MATTER_ACL_MAX 256u
 
 /** FeatureMap, on every cluster (GlobalAttributeIds.h). */
 #define MATTER_ATTR_FEATURE_MAP 0xFFFCu
 
-/* BasicInformation attributes (BasicInformation/AttributeIds.h:27,35). */
-#define MATTER_ATTR_BASIC_VENDOR_ID  0x0002u
-#define MATTER_ATTR_BASIC_PRODUCT_ID 0x0004u
+/* BasicInformation attributes (BasicInformation/AttributeIds.h:19-77). */
+#define MATTER_ATTR_BASIC_DATA_MODEL_REVISION    0x0000u
+#define MATTER_ATTR_BASIC_VENDOR_NAME            0x0001u
+#define MATTER_ATTR_BASIC_VENDOR_ID              0x0002u
+#define MATTER_ATTR_BASIC_PRODUCT_NAME           0x0003u
+#define MATTER_ATTR_BASIC_PRODUCT_ID             0x0004u
+#define MATTER_ATTR_BASIC_NODE_LABEL             0x0005u
+#define MATTER_ATTR_BASIC_LOCATION               0x0006u
+#define MATTER_ATTR_BASIC_HARDWARE_VERSION       0x0007u
+#define MATTER_ATTR_BASIC_HARDWARE_VERSION_STR   0x0008u
+#define MATTER_ATTR_BASIC_SOFTWARE_VERSION       0x0009u
+#define MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR   0x000Au
+#define MATTER_ATTR_BASIC_SERIAL_NUMBER          0x000Fu
+#define MATTER_ATTR_BASIC_UNIQUE_ID              0x0012u
+#define MATTER_ATTR_BASIC_CAPABILITY_MINIMA      0x0013u
+#define MATTER_ATTR_BASIC_SPECIFICATION_VERSION  0x0015u
+#define MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE   0x0016u
+
+/*
+ * What this node reports about itself.
+ *
+ * DataModelRevision and SpecificationVersion are the 1.2 values, not the SDK's
+ * current 19 / 0x01050000 (SpecificationDefinedRevisions.h:44,53). Claiming 1.5
+ * would claim features this node does not have; 1.2 is what it was written
+ * against and what SPECIFICATION_VERSION in the vendored SDK says.
+ */
+#define MATTER_DATA_MODEL_REVISION   17u
+#define MATTER_SPECIFICATION_VERSION 0x01020000u
+
+/*
+ * CapabilityMinima: the spec's floors, which are also what this node can do
+ * (InteractionModelEngine.h:110-111). One CASE session and one subscription are
+ * what it actually holds -- but the floor is 3 and reporting less than the floor
+ * is not a legal answer, so these are the honest minimum it may claim.
+ */
+#define MATTER_CASE_SESSIONS_PER_FABRIC  3u
+#define MATTER_SUBSCRIPTIONS_PER_FABRIC  3u
+
+/** CHIP_CONFIG_MAX_PATHS_PER_INVOKE (CHIPConfig.h:1877), and what this node parses. */
+#define MATTER_MAX_PATHS_PER_INVOKE 1u
 
 /* GeneralCommissioning attributes (GeneralCommissioning/AttributeIds.h:19-36). */
 #define MATTER_ATTR_GC_BREADCRUMB                     0x0000u
@@ -135,8 +206,12 @@ extern "C" {
 #define MATTER_CMD_OC_ADD_TRUSTED_ROOT_CERTIFICATE 0x000Bu
 
 /* OperationalCredentials attributes (MTRClusterConstants.h:1988-1989). */
+#define MATTER_ATTR_OC_NOCS                 0x0000u
+#define MATTER_ATTR_OC_FABRICS              0x0001u
 #define MATTER_ATTR_OC_SUPPORTED_FABRICS    0x0002u
 #define MATTER_ATTR_OC_COMMISSIONED_FABRICS 0x0003u
+#define MATTER_ATTR_OC_TRUSTED_ROOTS        0x0004u
+#define MATTER_ATTR_OC_CURRENT_FABRIC_INDEX 0x0005u
 
 /**
  * How many fabrics this node can hold at once.
@@ -281,6 +356,22 @@ struct matter_device_info {
 	 * no way to see a session.
 	 */
 	bool case_established;
+
+	/*
+	 * ---- access control -----------------------------------------------
+	 *
+	 * The commissioner's last act is writing itself an ACL entry granting
+	 * Administer over CASE. Stored as the TLV that arrived, because the
+	 * only thing this node does with it is hand it back on a read.
+	 *
+	 * RECORDED, NOT ENFORCED. Nothing consults this before serving a
+	 * request; every peer that completes CASE is already trusted with
+	 * everything. Storing it is what makes the commissioner's write
+	 * truthful, and enforcing it is a separate piece of work that this
+	 * comment exists so nobody assumes is done.
+	 */
+	uint8_t acl[MATTER_ACL_MAX];
+	size_t acl_len;
 	/**
 	 * The NodeOperationalCertStatusEnum the last AddNOC produced, held for
 	 * the same reason as last_commissioning_error: the reply is serialised

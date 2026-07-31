@@ -235,9 +235,15 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 	 * of the two things deliberately left un-shrunk.
 	 */
 	static uint8_t buf[MATTER_CASE_SIGMA3_MAX];
-	/* Sigma2 is the largest thing this sends: two certificates, a signature
-	 * and the framing. Static for the same reason as the receive buffer. */
-	static uint8_t reply[MATTER_CASE_SIGMA2_MAX];
+	/*
+	 * NOT Sigma2. The largest thing this sends is a ReportData answering a
+	 * subscription to the whole data model -- measured at 1479 B of payload
+	 * on hardware against Sigma2's 494 -- plus both headers and the AEAD
+	 * tag. Sized off the report buffer for that reason; while it was sized
+	 * off Sigma2 the node built the report correctly and then could not
+	 * copy it out, which reads in the log as "needs 1513 B, have 1024".
+	 */
+	static uint8_t reply[MATTER_THREAD_REPLY_MAX];
 	otMessageInfo reply_info;
 	otMessage *out;
 	size_t reply_len;
@@ -245,7 +251,7 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 
 	ARG_UNUSED(ctx);
 
-	LOG_INF("UDP %u B on port %u from peer port %u", (unsigned int)len,
+	LOG_DBG("UDP %u B on port %u from peer port %u", (unsigned int)len,
 		(unsigned int)info->mSockPort, (unsigned int)info->mPeerPort);
 
 	if (len > sizeof(buf)) {
@@ -287,7 +293,7 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 		LOG_ERR("  reply could not be sent");
 		return;
 	}
-	LOG_INF("  replied %u B", (unsigned int)reply_len);
+	LOG_DBG("  replied %u B", (unsigned int)reply_len);
 }
 
 /**

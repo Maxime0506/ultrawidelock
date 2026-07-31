@@ -20,7 +20,9 @@
 #define TAG_PATH_ATTRIBUTE 4u
 
 /* ReportDataMessage.h:43-47 */
+#define TAG_REPORT_SUBSCRIPTION_ID   0u
 #define TAG_REPORT_ATTRIBUTE_REPORTS 1u
+#define TAG_REPORT_MORE_CHUNKS       3u
 #define TAG_REPORT_SUPPRESS_RESPONSE 4u
 
 /* AttributeReportIB.h:37-38 */
@@ -286,8 +288,76 @@ static void put_report(struct matter_tlv_writer *w, const struct matter_im_serve
  * attribute" as though the commissioner had asked about endpoint 0, which it
  * did not (AttributePathExpandIterator.cpp:239-255).
  */
+/**
+ * How far through a chunked report we are.
+ *
+ * Threaded through the expansion instead of returned from it, because the
+ * expansion is four nested loops and the alternative is a cursor into all four.
+ */
+struct chunk_ctx {
+	uint16_t skip;    /**< reports earlier chunks already carried */
+	uint16_t seen;    /**< candidates walked in this pass */
+	uint16_t emitted; /**< reports written into this chunk */
+	bool full;        /**< the next report did not fit; stop */
+	size_t reserve;   /**< bytes to keep free for the message's tail */
+};
+
+static int report_encode(const struct matter_im_server *srv, const struct matter_im_read *req,
+			 uint8_t *out, size_t cap, size_t *out_len,
+			 struct matter_im_report_stats *stats, struct chunk_ctx *cc);
+
+/**
+ * Append one report unless this chunk is full or an earlier one carried it.
+ *
+ * The write is attempted and ROLLED BACK when it does not fit, rather than
+ * predicted: the size of a report depends on the value, and a prediction that
+ * is wrong by one byte truncates a message that the peer cannot tell from a
+ * complete one.
+ */
+static void emit(struct matter_tlv_writer *w, const struct matter_im_server *srv,
+		 const struct matter_im_path *p, struct chunk_ctx *cc)
+{
+	size_t save_len;
+	int save_rc;
+	uint8_t save_depth;
+
+	if (cc == NULL) {
+		put_report(w, srv, p);
+		return;
+	}
+	if (cc->full) {
+		return;
+	}
+	if (cc->seen++ < cc->skip) {
+		return;
+	}
+
+	save_len = w->len;
+	save_rc = w->rc;
+	/*
+	 * Depth too. put_report() opens three containers before it writes
+	 * anything that can overflow, so a rollback that restores only the
+	 * length leaves the writer nested inside structures that were never
+	 * closed -- and every later end_container() then unbalances the message
+	 * instead of finishing it.
+	 */
+	save_depth = w->depth;
+	put_report(w, srv, p);
+	/* Out of room, or into the tail reserve, which amounts to the same
+	 * thing: MoreChunkedMessages and the revision still have to fit. */
+	if (w->rc != MATTER_TLV_OK || w->len + cc->reserve > w->cap) {
+		w->len = save_len;
+		w->rc = save_rc;
+		w->depth = save_depth;
+		cc->full = true;
+		return;
+	}
+	cc->emitted++;
+}
+
 static void expand_on_endpoint(struct matter_tlv_writer *w, const struct matter_im_server *srv,
-			       const struct matter_im_path *p, struct matter_im_report_stats *stats)
+			       const struct matter_im_path *p, struct matter_im_report_stats *stats,
+			       struct chunk_ctx *cc)
 {
 	const uint32_t *attrs = NULL;
 	size_t n_attrs = 0u;
@@ -308,7 +378,7 @@ static void expand_on_endpoint(struct matter_tlv_writer *w, const struct matter_
 			}
 			return;
 		}
-		put_report(w, srv, p);
+		emit(w, srv, p, cc);
 		return;
 	}
 
@@ -326,13 +396,45 @@ static void expand_on_endpoint(struct matter_tlv_writer *w, const struct matter_
 
 		one.attribute = attrs[k];
 		one.have_attribute = true;
-		put_report(w, srv, &one);
+		emit(w, srv, &one, cc);
 	}
+}
+
+int matter_im_report_data_chunk(const struct matter_im_server *srv,
+				const struct matter_im_read *req, uint16_t sent, uint8_t *out,
+				size_t cap, size_t *out_len, bool *more, uint16_t *emitted,
+				struct matter_im_report_stats *stats)
+{
+	/*
+	 * MoreChunkedMessages, SuppressResponse, the revision, a subscription id
+	 * and the closing byte, none of which may be squeezed out by one more
+	 * report -- a chunk that cannot say "more follows" is a truncated
+	 * report, and the peer has no way to tell the two apart.
+	 */
+	struct chunk_ctx cc = {.skip = sent, .reserve = 24u};
+	int rc;
+
+	if (more == NULL || emitted == NULL) {
+		return MATTER_E_INVAL;
+	}
+	rc = report_encode(srv, req, out, cap, out_len, stats, &cc);
+	*more = cc.full;
+	*emitted = cc.emitted;
+	return rc;
 }
 
 int matter_im_report_data_encode(const struct matter_im_server *srv,
 				 const struct matter_im_read *req, uint8_t *out, size_t cap,
 				 size_t *out_len, struct matter_im_report_stats *stats)
+{
+	/* Unchunked: every report or an error, which is what a caller with one
+	 * concrete path wants and what the host suite asserts. */
+	return report_encode(srv, req, out, cap, out_len, stats, NULL);
+}
+
+static int report_encode(const struct matter_im_server *srv, const struct matter_im_read *req,
+			 uint8_t *out, size_t cap, size_t *out_len,
+			 struct matter_im_report_stats *stats, struct chunk_ctx *cc)
 {
 	struct matter_tlv_writer w;
 	uint8_t i;
@@ -347,6 +449,10 @@ int matter_im_report_data_encode(const struct matter_im_server *srv,
 
 	matter_tlv_writer_init(&w, out, cap);
 	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	if (req->subscription_id != 0u) {
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_REPORT_SUBSCRIPTION_ID),
+					 req->subscription_id);
+	}
 	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_REPORT_ATTRIBUTE_REPORTS),
 					 MATTER_TLV_ARRAY);
 
@@ -358,20 +464,7 @@ int matter_im_report_data_encode(const struct matter_im_server *srv,
 		size_t e;
 
 		if (!matter_im_path_is_wildcard(p)) {
-			put_report(&w, srv, p);
-			continue;
-		}
-
-		/*
-		 * A cluster wildcard would need this node to enumerate a whole
-		 * endpoint's clusters. No commissioner has asked for one, and a
-		 * list that exists only to be walked is scaffolding. Counted,
-		 * not silent.
-		 */
-		if (!p->have_cluster) {
-			if (stats != NULL) {
-				stats->unexpanded_wildcard++;
-			}
+			emit(&w, srv, p, cc);
 			continue;
 		}
 
@@ -394,13 +487,59 @@ int matter_im_report_data_encode(const struct matter_im_server *srv,
 
 			at.endpoint = eps[e];
 			at.have_endpoint = true;
-			expand_on_endpoint(&w, srv, &at, stats);
+
+			/*
+			 * A path naming no cluster means every cluster on the
+			 * endpoint -- which is what a controller subscribes to
+			 * the moment it owns the node. Enumerating them here
+			 * rather than counting the path as unexpanded is the
+			 * difference between a subscription that reports the
+			 * device and one that reports nothing.
+			 */
+			if (!p->have_cluster) {
+				const uint32_t *cls = NULL;
+				size_t n_cls = 0u;
+				size_t c;
+
+				if (srv->list_clusters != NULL) {
+					n_cls = srv->list_clusters(srv->ctx, eps[e], &cls);
+				}
+				if (n_cls == 0u || cls == NULL) {
+					if (stats != NULL) {
+						stats->unexpanded_wildcard++;
+					}
+					continue;
+				}
+				for (c = 0; c < n_cls; c++) {
+					at.cluster = cls[c];
+					at.have_cluster = true;
+					expand_on_endpoint(&w, srv, &at, stats, cc);
+				}
+				continue;
+			}
+
+			at.have_endpoint = true;
+			expand_on_endpoint(&w, srv, &at, stats, cc);
 		}
 	}
 
 	(void)matter_tlv_end_container(&w);
-	/* Read, not Subscribe: reporting/Engine.cpp:834-836. */
-	(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(TAG_REPORT_SUPPRESS_RESPONSE), true);
+	/*
+	 * More follows. The peer answers a chunk with a StatusResponse and waits
+	 * for the rest; omitting this on a report that WAS cut short is how a
+	 * partial data model gets presented as a complete one.
+	 */
+	if (cc != NULL && cc->full) {
+		(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(TAG_REPORT_MORE_CHUNKS), true);
+	}
+	/*
+	 * A read suppresses the response (reporting/Engine.cpp:834-836) and a
+	 * priming report must NOT: the StatusResponse it draws is what the
+	 * SubscribeResponse is sent in answer to. A chunk must not either --
+	 * that StatusResponse is what asks for the next one.
+	 */
+	(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(TAG_REPORT_SUPPRESS_RESPONSE),
+				  req->subscription_id == 0u && (cc == NULL || !cc->full));
 	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_IM_REVISION), MATTER_IM_REVISION);
 	(void)matter_tlv_end_container(&w);
 
@@ -703,6 +842,300 @@ int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 
 	(void)matter_tlv_end_container(&w);
 	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_IM_REVISION), MATTER_IM_REVISION);
+	(void)matter_tlv_end_container(&w);
+
+	return matter_tlv_writer_finish(&w, out_len);
+}
+
+/* WriteRequestMessage.h:39-44 */
+#define TAG_WRITE_SUPPRESS_RESPONSE 0u
+#define TAG_WRITE_TIMED_REQUEST     1u
+#define TAG_WRITE_REQUESTS          2u
+
+/* WriteResponseMessage.h:39-42 */
+#define TAG_WRESP_RESPONSES 0u
+
+int matter_im_write_request_decode(const uint8_t *tlv, size_t len, struct matter_im_write *out)
+{
+	struct matter_tlv_reader r;
+	unsigned int seen = 0u;
+	int rc;
+
+	if (tlv == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	memset(out, 0, sizeof(*out));
+
+	matter_tlv_reader_init(&r, tlv, len);
+	if (matter_tlv_next(&r) != MATTER_OK ||
+	    matter_tlv_element_type(&r) != MATTER_TLV_STRUCTURE) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	for (;;) {
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_WRITE_SUPPRESS_RESPONSE)) {
+			(void)matter_tlv_get_bool(&r, &out->suppress_response);
+			continue;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_WRITE_TIMED_REQUEST)) {
+			(void)matter_tlv_get_bool(&r, &out->timed_request);
+			continue;
+		}
+		if (matter_tlv_tag(&r) != MATTER_TLV_CTX(TAG_WRITE_REQUESTS)) {
+			continue;
+		}
+
+		/* The array of AttributeDataIB. */
+		rc = matter_tlv_enter(&r);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		for (;;) {
+			rc = matter_tlv_next(&r);
+			if (rc == MATTER_END) {
+				break;
+			}
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+			seen++;
+			if (seen > 1u) {
+				return MATTER_E_NOSPACE;
+			}
+
+			rc = matter_tlv_enter(&r); /* into the AttributeDataIB */
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+			for (;;) {
+				size_t start;
+
+				/* Where this element begins, captured BEFORE it
+				 * is loaded: the reader reports where a value
+				 * sits, not where its header does, and a
+				 * container's body is not part of either. */
+				start = r.next_off;
+
+				rc = matter_tlv_next(&r);
+				if (rc == MATTER_END) {
+					break;
+				}
+				if (rc != MATTER_OK) {
+					return rc;
+				}
+
+				if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_ADATA_PATH)) {
+					rc = decode_path(&r, &out->path);
+					if (rc != MATTER_OK) {
+						return rc;
+					}
+				} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_ADATA_DATA)) {
+					/* Walk it to find where it ends. A value
+					 * of any type is legal here, so its
+					 * extent cannot be assumed from the
+					 * header alone. */
+					if (matter_tlv_is_container(&r)) {
+						rc = matter_tlv_enter(&r);
+						if (rc == MATTER_OK) {
+							rc = matter_tlv_exit(&r);
+						}
+						if (rc != MATTER_OK) {
+							return rc;
+						}
+					}
+					out->data = tlv + start;
+					out->data_len = r.next_off - start;
+				}
+			}
+			rc = matter_tlv_exit(&r);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+		}
+		rc = matter_tlv_exit(&r);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+	}
+
+	if (seen == 0u) {
+		return MATTER_E_INVAL;
+	}
+	/*
+	 * A write needs somewhere concrete to land. Refused rather than
+	 * expanded: a read that guesses too narrowly returns less than was
+	 * asked for, but a write that guesses wrongly overwrites something the
+	 * commissioner never named.
+	 */
+	if (!out->path.have_endpoint || !out->path.have_cluster || !out->path.have_attribute) {
+		return MATTER_E_INVAL;
+	}
+	return MATTER_OK;
+}
+
+int matter_im_write_response_encode(const struct matter_im_server *srv,
+				    const struct matter_im_write *wr, uint8_t *out, size_t cap,
+				    size_t *out_len)
+{
+	struct matter_tlv_writer w;
+	uint8_t status;
+
+	if (srv == NULL || wr == NULL || out == NULL || out_len == NULL) {
+		return MATTER_E_INVAL;
+	}
+	*out_len = 0u;
+
+	/* Run it first. A suppressed response suppresses the REPLY, not the
+	 * write -- returning early here would silently drop it. */
+	if (srv->write == NULL) {
+		status = MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+	} else {
+		status = srv->write(srv->ctx, &wr->path, wr->data, wr->data_len);
+	}
+
+	if (wr->suppress_response) {
+		return MATTER_OK;
+	}
+
+	matter_tlv_writer_init(&w, out, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_WRESP_RESPONSES),
+					 MATTER_TLV_ARRAY);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	put_path(&w, MATTER_TLV_CTX(TAG_ASTATUS_PATH), &wr->path);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_ASTATUS_STATUS),
+					 MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_STATUS_STATUS), status);
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_IM_REVISION), MATTER_IM_REVISION);
+	(void)matter_tlv_end_container(&w);
+
+	return matter_tlv_writer_finish(&w, out_len);
+}
+
+/* SubscribeRequestMessage.h:39-48 */
+#define TAG_SUB_KEEP_SUBSCRIPTIONS 0u
+#define TAG_SUB_MIN_INTERVAL       1u
+#define TAG_SUB_MAX_INTERVAL       2u
+#define TAG_SUB_ATTRIBUTE_REQUESTS 3u
+#define TAG_SUB_FABRIC_FILTERED    7u
+
+/* SubscribeResponseMessage.h:39-42 */
+#define TAG_SUBRESP_SUBSCRIPTION_ID 0u
+#define TAG_SUBRESP_MAX_INTERVAL    2u
+
+int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
+				       struct matter_im_subscribe *out)
+{
+	struct matter_tlv_reader r;
+	int rc;
+
+	if (tlv == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	memset(out, 0, sizeof(*out));
+
+	matter_tlv_reader_init(&r, tlv, len);
+	if (matter_tlv_next(&r) != MATTER_OK ||
+	    matter_tlv_element_type(&r) != MATTER_TLV_STRUCTURE) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	for (;;) {
+		uint64_t v = 0u;
+
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_ATTRIBUTE_REQUESTS)) {
+			if (matter_tlv_element_type(&r) != MATTER_TLV_ARRAY) {
+				return MATTER_E_TYPE;
+			}
+			rc = matter_tlv_enter(&r);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+			for (;;) {
+				rc = matter_tlv_next(&r);
+				if (rc == MATTER_END) {
+					break;
+				}
+				if (rc != MATTER_OK) {
+					return rc;
+				}
+				if (matter_tlv_element_type(&r) != MATTER_TLV_LIST) {
+					return MATTER_E_TYPE;
+				}
+				if (out->read.n_paths >= MATTER_IM_MAX_PATHS) {
+					return MATTER_E_NOSPACE;
+				}
+				rc = decode_path(&r, &out->read.paths[out->read.n_paths]);
+				if (rc != MATTER_OK) {
+					return rc;
+				}
+				out->read.n_paths++;
+			}
+			rc = matter_tlv_exit(&r);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_MIN_INTERVAL)) {
+			if (matter_tlv_get_u64(&r, &v) == MATTER_OK && v <= UINT16_MAX) {
+				out->min_interval_s = (uint16_t)v;
+			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_MAX_INTERVAL)) {
+			if (matter_tlv_get_u64(&r, &v) == MATTER_OK && v <= UINT16_MAX) {
+				out->max_interval_s = (uint16_t)v;
+			}
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_KEEP_SUBSCRIPTIONS)) {
+			(void)matter_tlv_get_bool(&r, &out->keep_subscriptions);
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(TAG_SUB_FABRIC_FILTERED)) {
+			(void)matter_tlv_get_bool(&r, &out->read.fabric_filtered);
+		}
+		/* Event requests, filters and data-version filters are read past:
+		 * this node has no events and reports every value every time. */
+	}
+
+	return matter_tlv_exit(&r);
+}
+
+int matter_im_subscribe_response_encode(uint32_t subscription_id, uint16_t max_interval_s,
+					uint8_t *out, size_t cap, size_t *out_len)
+{
+	struct matter_tlv_writer w;
+
+	if (out == NULL || out_len == NULL) {
+		return MATTER_E_INVAL;
+	}
+
+	matter_tlv_writer_init(&w, out, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SUBRESP_SUBSCRIPTION_ID), subscription_id);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SUBRESP_MAX_INTERVAL), max_interval_s);
 	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_IM_REVISION), MATTER_IM_REVISION);
 	(void)matter_tlv_end_container(&w);
 

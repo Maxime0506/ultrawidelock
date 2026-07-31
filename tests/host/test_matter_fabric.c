@@ -429,9 +429,20 @@ void test_matter_addnoc(void)
 				MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
 				MATTER_ATTR_OC_SUPPORTED_FABRICS),
 		     MATTER_IM_STATUS_SUCCESS);
-		T_EQ("NOCs is not",
+		/* Fabrics is what a commissioner reads over CASE to confirm the
+		 * fabric it just created is the one this node joined. While it
+		 * answered UNSUPPORTED, a real iPhone sat on "Adding to home". */
+		T_EQ("Fabrics is answered",
 		     srv.status(srv.ctx, MATTER_ENDPOINT_ROOT,
-				MATTER_CLUSTER_OPERATIONAL_CREDENTIALS, 0x0000u),
+				MATTER_CLUSTER_OPERATIONAL_CREDENTIALS, MATTER_ATTR_OC_FABRICS),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("NOCs is answered",
+		     srv.status(srv.ctx, MATTER_ENDPOINT_ROOT,
+				MATTER_CLUSTER_OPERATIONAL_CREDENTIALS, MATTER_ATTR_OC_NOCS),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("a genuinely absent attribute still is not",
+		     srv.status(srv.ctx, MATTER_ENDPOINT_ROOT,
+				MATTER_CLUSTER_OPERATIONAL_CREDENTIALS, 0x00FFu),
 		     MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE);
 
 		matter_tlv_writer_init(&w, buf, sizeof(buf));

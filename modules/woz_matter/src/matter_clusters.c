@@ -18,6 +18,47 @@
 #define TAG_BCI_FAILSAFE_EXPIRY 0u
 #define TAG_BCI_FAILSAFE_MAX    1u
 
+/* OperationalCredentials Structs.h:43-49, FabricDescriptorStruct. */
+#define TAG_FABRIC_ROOT_KEY  1u
+#define TAG_FABRIC_VENDOR_ID 2u
+#define TAG_FABRIC_FABRIC_ID 3u
+#define TAG_FABRIC_NODE_ID   4u
+#define TAG_FABRIC_LABEL     5u
+/** Every fabric-scoped struct carries this, always at 254. */
+#define TAG_FABRIC_INDEX     254u
+
+/* Same header, NOCStruct at :84-87. */
+#define TAG_NOC_NOC  1u
+#define TAG_NOC_ICAC 2u
+
+/* BasicInformation/Structs.h:43-44, CapabilityMinimaStruct. */
+#define TAG_CAPMIN_CASE_SESSIONS  0u
+#define TAG_CAPMIN_SUBSCRIPTIONS  1u
+
+/*
+ * Strings this node reports about itself. Build-time, not per-device: this port
+ * has no factory data partition and no per-board serial to read out of one.
+ */
+#define MATTER_VENDOR_NAME   "openaliro"
+#define MATTER_PRODUCT_NAME  "DWM3001CDK Aliro Reader"
+#define MATTER_SERIAL_NUMBER "DWM3001CDK-0001"
+
+/* Descriptor/Structs.h:43-44, DeviceTypeStruct. */
+#define TAG_DEVTYPE_TYPE     0u
+#define TAG_DEVTYPE_REVISION 1u
+
+/**
+ * Every cluster the root endpoint serves, for Descriptor's ServerList.
+ *
+ * Descriptor is in it: a controller that reads ServerList and does not find the
+ * cluster it just read is entitled to conclude the answer is stale.
+ */
+static const uint32_t k_root_servers[] = {
+	MATTER_CLUSTER_DESCRIPTOR,       MATTER_CLUSTER_ACCESS_CONTROL,
+	MATTER_CLUSTER_BASIC_INFORMATION, MATTER_CLUSTER_GENERAL_COMMISSIONING,
+	MATTER_CLUSTER_NETWORK_COMMISSIONING, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+};
+
 /* NetworkInfoStruct (python clusters/Objects.py, NetworkInfoStruct). */
 #define TAG_NETINFO_ID        0u
 #define TAG_NETINFO_CONNECTED 1u
@@ -32,6 +73,8 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 	return cluster == MATTER_CLUSTER_BASIC_INFORMATION ||
 	       cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING ||
 	       cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING ||
+	       cluster == MATTER_CLUSTER_DESCRIPTOR ||
+	       cluster == MATTER_CLUSTER_ACCESS_CONTROL ||
 	       cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS;
 }
 
@@ -72,8 +115,22 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 	switch (cluster) {
 	case MATTER_CLUSTER_BASIC_INFORMATION:
 		switch (attribute) {
+		case MATTER_ATTR_BASIC_DATA_MODEL_REVISION:
+		case MATTER_ATTR_BASIC_VENDOR_NAME:
 		case MATTER_ATTR_BASIC_VENDOR_ID:
+		case MATTER_ATTR_BASIC_PRODUCT_NAME:
 		case MATTER_ATTR_BASIC_PRODUCT_ID:
+		case MATTER_ATTR_BASIC_NODE_LABEL:
+		case MATTER_ATTR_BASIC_LOCATION:
+		case MATTER_ATTR_BASIC_HARDWARE_VERSION:
+		case MATTER_ATTR_BASIC_HARDWARE_VERSION_STR:
+		case MATTER_ATTR_BASIC_SOFTWARE_VERSION:
+		case MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR:
+		case MATTER_ATTR_BASIC_SERIAL_NUMBER:
+		case MATTER_ATTR_BASIC_UNIQUE_ID:
+		case MATTER_ATTR_BASIC_CAPABILITY_MINIMA:
+		case MATTER_ATTR_BASIC_SPECIFICATION_VERSION:
+		case MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE:
 			return MATTER_IM_STATUS_SUCCESS;
 		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
@@ -91,16 +148,36 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
 		}
-	case MATTER_CLUSTER_OPERATIONAL_CREDENTIALS:
+	case MATTER_CLUSTER_DESCRIPTOR:
 		switch (attribute) {
-		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
-		case MATTER_ATTR_OC_COMMISSIONED_FABRICS:
+		case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+		case MATTER_ATTR_DESC_SERVER_LIST:
+		case MATTER_ATTR_DESC_CLIENT_LIST:
+		case MATTER_ATTR_DESC_PARTS_LIST:
 			return MATTER_IM_STATUS_SUCCESS;
 		default:
-			/* NOCs, Fabrics and TrustedRootCertificates are lists,
-			 * and CurrentFabricIndex is scoped to the reading
-			 * session's fabric -- which, over PASE, there is not
-			 * one of. None has been asked for. */
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	case MATTER_CLUSTER_ACCESS_CONTROL:
+		switch (attribute) {
+		case MATTER_ATTR_AC_ACL:
+		case MATTER_ATTR_AC_SUBJECTS_PER_ENTRY:
+		case MATTER_ATTR_AC_TARGETS_PER_ENTRY:
+		case MATTER_ATTR_AC_ENTRIES_PER_FABRIC:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	case MATTER_CLUSTER_OPERATIONAL_CREDENTIALS:
+		switch (attribute) {
+		case MATTER_ATTR_OC_NOCS:
+		case MATTER_ATTR_OC_FABRICS:
+		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
+		case MATTER_ATTR_OC_COMMISSIONED_FABRICS:
+		case MATTER_ATTR_OC_TRUSTED_ROOTS:
+		case MATTER_ATTR_OC_CURRENT_FABRIC_INDEX:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
 		}
 	case MATTER_CLUSTER_GENERAL_COMMISSIONING:
@@ -134,11 +211,64 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 
 	if (cluster == MATTER_CLUSTER_BASIC_INFORMATION) {
 		switch (attribute) {
+		case MATTER_ATTR_BASIC_DATA_MODEL_REVISION:
+			(void)matter_tlv_put_u64(w, tag, MATTER_DATA_MODEL_REVISION);
+			return;
+		case MATTER_ATTR_BASIC_VENDOR_NAME:
+			(void)matter_tlv_put_utf8(w, tag, MATTER_VENDOR_NAME, strlen(MATTER_VENDOR_NAME));
+			return;
 		case MATTER_ATTR_BASIC_VENDOR_ID:
 			(void)matter_tlv_put_u64(w, tag, info->vendor_id);
 			return;
+		case MATTER_ATTR_BASIC_PRODUCT_NAME:
+			(void)matter_tlv_put_utf8(w, tag, MATTER_PRODUCT_NAME,
+						  strlen(MATTER_PRODUCT_NAME));
+			return;
 		case MATTER_ATTR_BASIC_PRODUCT_ID:
 			(void)matter_tlv_put_u64(w, tag, info->product_id);
+			return;
+		case MATTER_ATTR_BASIC_NODE_LABEL:
+			/* Writable, and empty until somebody writes one. A
+			 * controller supplies its own name for the accessory. */
+			(void)matter_tlv_put_utf8(w, tag, "", 0u);
+			return;
+		case MATTER_ATTR_BASIC_LOCATION:
+			/* "XX" is the spec's value for "not configured", and it
+			 * has to be exactly two characters. */
+			(void)matter_tlv_put_utf8(w, tag, "XX", 2u);
+			return;
+		case MATTER_ATTR_BASIC_HARDWARE_VERSION:
+		case MATTER_ATTR_BASIC_SOFTWARE_VERSION:
+			(void)matter_tlv_put_u64(w, tag, 1u);
+			return;
+		case MATTER_ATTR_BASIC_HARDWARE_VERSION_STR:
+		case MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR:
+			(void)matter_tlv_put_utf8(w, tag, "1", 1u);
+			return;
+		case MATTER_ATTR_BASIC_SERIAL_NUMBER:
+		case MATTER_ATTR_BASIC_UNIQUE_ID:
+			/*
+			 * The same string for both, and it is a BUILD-TIME
+			 * constant: this port has no per-device serial to read.
+			 * Two boards running this image are indistinguishable
+			 * here, which matters the moment a home holds both.
+			 */
+			(void)matter_tlv_put_utf8(w, tag, MATTER_SERIAL_NUMBER,
+						  strlen(MATTER_SERIAL_NUMBER));
+			return;
+		case MATTER_ATTR_BASIC_CAPABILITY_MINIMA:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_CAPMIN_CASE_SESSIONS),
+						 MATTER_CASE_SESSIONS_PER_FABRIC);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_CAPMIN_SUBSCRIPTIONS),
+						 MATTER_SUBSCRIPTIONS_PER_FABRIC);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_BASIC_SPECIFICATION_VERSION:
+			(void)matter_tlv_put_u64(w, tag, MATTER_SPECIFICATION_VERSION);
+			return;
+		case MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE:
+			(void)matter_tlv_put_u64(w, tag, MATTER_MAX_PATHS_PER_INVOKE);
 			return;
 		default:
 			return;
@@ -198,8 +328,155 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 		}
 	}
 
-	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
+	if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+		size_t i;
+
 		switch (attribute) {
+		case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			/*
+			 * What this endpoint IS, which is the question a
+			 * controller asks once it owns the node. Endpoint 0 is
+			 * the Root Node and nothing else.
+			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
+							 MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_TYPE),
+						 MATTER_DEVICE_TYPE_ROOT_NODE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_REVISION),
+						 MATTER_DEVICE_TYPE_ROOT_REV);
+			(void)matter_tlv_end_container(w);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_SERVER_LIST:
+			/* Built from the same list has_cluster() answers from,
+			 * so the two cannot drift into disagreeing about what
+			 * this endpoint carries. */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			for (i = 0u; i < sizeof(k_root_servers) / sizeof(k_root_servers[0]); i++) {
+				(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, k_root_servers[i]);
+			}
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_CLIENT_LIST:
+		case MATTER_ATTR_DESC_PARTS_LIST:
+			/* Empty, and empty is an answer: this node binds nothing
+			 * as a client, and the root endpoint has no parts until
+			 * the Door Lock endpoint exists. */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_end_container(w);
+			return;
+		default:
+			return;
+		}
+	}
+
+	if (cluster == MATTER_CLUSTER_ACCESS_CONTROL) {
+		switch (attribute) {
+		case MATTER_ATTR_AC_ACL:
+			/*
+			 * Handed straight back as it arrived. Nothing here has
+			 * decoded it -- see the note on matter_device_info.acl:
+			 * this list is RECORDED, NOT ENFORCED.
+			 */
+			if (info->acl_len > 0u) {
+				(void)matter_tlv_put_encoded(w, tag, info->acl, info->acl_len);
+			} else {
+				(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+				(void)matter_tlv_end_container(w);
+			}
+			return;
+		case MATTER_ATTR_AC_SUBJECTS_PER_ENTRY:
+		case MATTER_ATTR_AC_ENTRIES_PER_FABRIC:
+			/* The spec's floor for both, and what one fabric needs. */
+			(void)matter_tlv_put_u64(w, tag, 4u);
+			return;
+		case MATTER_ATTR_AC_TARGETS_PER_ENTRY:
+			(void)matter_tlv_put_u64(w, tag, 3u);
+			return;
+		default:
+			return;
+		}
+	}
+
+	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
+		bool have = info->fabric.index != 0u;
+
+		switch (attribute) {
+		case MATTER_ATTR_OC_FABRICS:
+			/*
+			 * What the commissioner reads to confirm the fabric it
+			 * just created is the one this node is on. Answering
+			 * UNSUPPORTED here is where "Adding to home" stopped.
+			 *
+			 * Fabric-scoped, so a real implementation filters by
+			 * the reading session's fabric. There is one fabric, so
+			 * the filtered and unfiltered answers are the same.
+			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			if (have) {
+				(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
+								 MATTER_TLV_STRUCTURE);
+				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_FABRIC_ROOT_KEY),
+							   info->fabric.root_public_key,
+							   MATTER_FABRIC_PUBKEY_LEN);
+				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_VENDOR_ID),
+							 info->fabric.admin_vendor_id);
+				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_FABRIC_ID),
+							 info->fabric.fabric_id);
+				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_NODE_ID),
+							 info->fabric.node_id);
+				/* Empty until a commissioner writes one. */
+				(void)matter_tlv_put_utf8(w, MATTER_TLV_CTX(TAG_FABRIC_LABEL), "",
+							  0u);
+				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_INDEX),
+							 info->fabric.index);
+				(void)matter_tlv_end_container(w);
+			}
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_OC_NOCS:
+			/*
+			 * The certificates themselves. Fabric-scoped AND
+			 * access-restricted to Administer in the spec; this node
+			 * enforces neither, which is the same gap the ACL note
+			 * records. Nothing here is secret -- a NOC is public --
+			 * but the restriction exists and is not honoured.
+			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			if (have) {
+				(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
+								 MATTER_TLV_STRUCTURE);
+				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NOC_NOC),
+							   info->fabric.noc, info->fabric.noc_len);
+				if (info->fabric.icac_len > 0u) {
+					(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NOC_ICAC),
+								   info->fabric.icac,
+								   info->fabric.icac_len);
+				} else {
+					/* Nullable, and null is the answer when
+					 * the root signed the NOC directly. */
+					(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_NOC_ICAC));
+				}
+				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_INDEX),
+							 info->fabric.index);
+				(void)matter_tlv_end_container(w);
+			}
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_OC_TRUSTED_ROOTS:
+			/*
+			 * A list of the root CERTIFICATES, which this node does
+			 * not keep -- matter_fabric holds the root public key
+			 * and discards the ~300 bytes around it. Reporting an
+			 * empty list is the honest consequence of that choice.
+			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_OC_CURRENT_FABRIC_INDEX:
+			(void)matter_tlv_put_u64(w, tag, info->fabric.index);
+			return;
 		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
 			(void)matter_tlv_put_u64(w, tag, MATTER_SUPPORTED_FABRICS);
 			return;
@@ -247,11 +524,6 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
  * rest) are deliberately absent. Nothing has asked for them, and a wildcard
  * that names them commits this node to answering them individually too.
  */
-static const uint32_t k_basic_attrs[] = {
-	MATTER_ATTR_BASIC_VENDOR_ID,
-	MATTER_ATTR_BASIC_PRODUCT_ID,
-};
-
 static const uint32_t k_gc_attrs[] = {
 	MATTER_ATTR_GC_BREADCRUMB,
 	MATTER_ATTR_GC_BASIC_COMMISSIONING_INFO,
@@ -260,9 +532,35 @@ static const uint32_t k_gc_attrs[] = {
 	MATTER_ATTR_GC_SUPPORTS_CONCURRENT_CONNECTION,
 };
 
+static const uint32_t k_basic_attrs[] = {
+	MATTER_ATTR_BASIC_DATA_MODEL_REVISION,   MATTER_ATTR_BASIC_VENDOR_NAME,
+	MATTER_ATTR_BASIC_VENDOR_ID,             MATTER_ATTR_BASIC_PRODUCT_NAME,
+	MATTER_ATTR_BASIC_PRODUCT_ID,            MATTER_ATTR_BASIC_NODE_LABEL,
+	MATTER_ATTR_BASIC_LOCATION,              MATTER_ATTR_BASIC_HARDWARE_VERSION,
+	MATTER_ATTR_BASIC_HARDWARE_VERSION_STR,  MATTER_ATTR_BASIC_SOFTWARE_VERSION,
+	MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR,  MATTER_ATTR_BASIC_SERIAL_NUMBER,
+	MATTER_ATTR_BASIC_UNIQUE_ID,             MATTER_ATTR_BASIC_CAPABILITY_MINIMA,
+	MATTER_ATTR_BASIC_SPECIFICATION_VERSION, MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE,
+};
+
+static const uint32_t k_desc_attrs[] = {
+	MATTER_ATTR_DESC_DEVICE_TYPE_LIST,
+	MATTER_ATTR_DESC_SERVER_LIST,
+	MATTER_ATTR_DESC_CLIENT_LIST,
+	MATTER_ATTR_DESC_PARTS_LIST,
+};
+
+static const uint32_t k_ac_attrs[] = {
+	MATTER_ATTR_AC_ACL,
+	MATTER_ATTR_AC_SUBJECTS_PER_ENTRY,
+	MATTER_ATTR_AC_TARGETS_PER_ENTRY,
+	MATTER_ATTR_AC_ENTRIES_PER_FABRIC,
+};
+
 static const uint32_t k_oc_attrs[] = {
-	MATTER_ATTR_OC_SUPPORTED_FABRICS,
-	MATTER_ATTR_OC_COMMISSIONED_FABRICS,
+	MATTER_ATTR_OC_NOCS,          MATTER_ATTR_OC_FABRICS,
+	MATTER_ATTR_OC_SUPPORTED_FABRICS, MATTER_ATTR_OC_COMMISSIONED_FABRICS,
+	MATTER_ATTR_OC_TRUSTED_ROOTS, MATTER_ATTR_OC_CURRENT_FABRIC_INDEX,
 };
 
 /*
@@ -278,6 +576,22 @@ static const uint32_t k_nc_attrs[] = {
 	MATTER_ATTR_FEATURE_MAP,
 };
 
+/**
+ * Every cluster on @p endpoint, which is the same list has_cluster() answers
+ * from and the same one Descriptor's ServerList reports. One array, so the
+ * three cannot drift into disagreeing about what this endpoint carries.
+ */
+static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)
+{
+	(void)ctx;
+
+	if (endpoint != MATTER_ENDPOINT_ROOT) {
+		return 0u;
+	}
+	*out = k_root_servers;
+	return sizeof(k_root_servers) / sizeof(k_root_servers[0]);
+}
+
 static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const uint32_t **out)
 {
 	(void)ctx;
@@ -292,6 +606,14 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 	if (cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING) {
 		*out = k_gc_attrs;
 		return sizeof(k_gc_attrs) / sizeof(k_gc_attrs[0]);
+	}
+	if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+		*out = k_desc_attrs;
+		return sizeof(k_desc_attrs) / sizeof(k_desc_attrs[0]);
+	}
+	if (cluster == MATTER_CLUSTER_ACCESS_CONTROL) {
+		*out = k_ac_attrs;
+		return sizeof(k_ac_attrs) / sizeof(k_ac_attrs[0]);
 	}
 	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
 		*out = k_oc_attrs;
@@ -961,6 +1283,52 @@ void matter_clusters_failsafe_expire(struct matter_device_info *info)
 	info->last_commissioning_error = MATTER_COMMISSIONING_OK;
 }
 
+/**
+ * Apply an attribute write.
+ *
+ * One attribute is writable on this node: the ACL. A commissioner's last act is
+ * writing itself an entry granting Administer over CASE, and refusing it leaves
+ * a home app that finished commissioning and then cannot record that it owns
+ * the node -- which is what "Adding to home" is waiting on.
+ *
+ * The value is stored as the TLV that arrived. Nothing decodes it and nothing
+ * consults it; see the note on matter_device_info.acl.
+ */
+static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const uint8_t *data,
+			  size_t data_len)
+{
+	struct matter_device_info *info = (struct matter_device_info *)ctx;
+
+	if (info == NULL || path->endpoint != MATTER_ENDPOINT_ROOT) {
+		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
+	}
+	if (path->cluster != MATTER_CLUSTER_ACCESS_CONTROL) {
+		/* Every other cluster this node has is read-only, so the honest
+		 * answer distinguishes "no such cluster" from "not writable". */
+		return has_cluster(ctx, path->endpoint, path->cluster)
+			       ? MATTER_IM_STATUS_UNSUPPORTED_WRITE
+			       : MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+	}
+	if (path->attribute != MATTER_ATTR_AC_ACL) {
+		return MATTER_IM_STATUS_UNSUPPORTED_WRITE;
+	}
+	if (data == NULL || data_len == 0u) {
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+	/*
+	 * Refused rather than truncated. A half-stored ACL would be read back as
+	 * a shorter list than the commissioner wrote, and it would look like the
+	 * node had silently dropped entries it was asked to grant.
+	 */
+	if (data_len > sizeof(info->acl)) {
+		return MATTER_IM_STATUS_RESOURCE_EXHAUSTED;
+	}
+
+	memcpy(info->acl, data, data_len);
+	info->acl_len = data_len;
+	return MATTER_IM_STATUS_SUCCESS;
+}
+
 void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info)
 {
 	if (srv == NULL) {
@@ -971,7 +1339,9 @@ void matter_clusters_init(struct matter_im_server *srv, struct matter_device_inf
 	srv->has_cluster = has_cluster;
 	srv->list_attrs = list_attrs;
 	srv->list_endpoints = list_endpoints;
+	srv->list_clusters = list_clusters;
 	srv->command = command;
 	srv->command_fields = command_fields;
+	srv->write = attr_write;
 	srv->ctx = info;
 }

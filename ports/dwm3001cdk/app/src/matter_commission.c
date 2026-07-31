@@ -94,7 +94,14 @@ static struct matter_im_server s_im;
  * certification declaration plus a signature, where the largest PASE message is
  * 128 bytes. Encryption adds MATTER_TAG_LEN on top of the cleartext.
  */
-#define MATTER_REPORT_MAX 1024u
+/*
+ * Sized by the whole data model in one message, not by any single attribute: a
+ * controller subscribes to everything the moment it owns the node, and that
+ * report measured 1079 B (tests/host/test_matter_im.c asserts it still fits).
+ * A report that does not fit is not truncated, it is refused -- so undersizing
+ * this produces a subscription that establishes and then never reports.
+ */
+#define MATTER_REPORT_MAX 1536u
 static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG_LEN];
 
 /** The Interaction Model payload, before framing. */
@@ -453,7 +460,19 @@ static void on_read_request(const struct matter_exchange_in *in)
 	for (uint8_t i = 0; i < s_read.n_paths; i++) {
 		const struct matter_im_path *p = &s_read.paths[i];
 
-		LOG_DBG("  read[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
+		/*
+		 * Loud only over CASE. The BLE phase is settled and its three
+		 * reads carry nine paths each -- 27 lines that filled the trace
+		 * ring before the interesting half of the session began.
+		 */
+		if (s_thread_reply == NULL) {
+			LOG_DBG("  read[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
+				p->have_endpoint ? (int)p->endpoint : -1,
+				p->have_cluster ? (unsigned int)p->cluster : 0xFFFFu,
+				p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
+			continue;
+		}
+		LOG_INF("  read[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
 			p->have_endpoint ? (int)p->endpoint : -1,
 			p->have_cluster ? (unsigned int)p->cluster : 0xFFFFu,
 			p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
@@ -488,8 +507,15 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		LOG_WRN("unreadable InvokeRequest (%d), %u B", rc, (unsigned int)in->payload_len);
 		return;
 	}
-	LOG_DBG("invoke: endpoint %u cluster 0x%04x command 0x%04x, %u B fields", inv.endpoint,
-		(unsigned int)inv.cluster, (unsigned int)inv.command, (unsigned int)inv.fields_len);
+	if (s_thread_reply != NULL) {
+		LOG_INF("  invoke: endpoint %u cluster 0x%04x command 0x%04x, %u B fields",
+			inv.endpoint, (unsigned int)inv.cluster, (unsigned int)inv.command,
+			(unsigned int)inv.fields_len);
+	} else {
+		LOG_DBG("  invoke: endpoint %u cluster 0x%04x command 0x%04x, %u B fields",
+			inv.endpoint, (unsigned int)inv.cluster, (unsigned int)inv.command,
+			(unsigned int)inv.fields_len);
+	}
 
 	rc = matter_im_invoke_response_encode(&s_im, &inv, s_report, sizeof(s_report), &resp_len);
 	if (rc != MATTER_OK) {
@@ -535,8 +561,217 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	LOG_DBG("InvokeResponse: %u B", (unsigned int)resp_len);
 }
 
+/**
+ * Apply a WriteRequest.
+ *
+ * The commissioner's last act, and the one this node used to answer with
+ * silence: an ACL entry granting itself Administer over CASE. A home app that
+ * has finished commissioning and cannot record that it owns the node sits on
+ * "Adding to home" until it gives up.
+ */
+static void on_write_request(const struct matter_exchange_in *in)
+{
+	static struct matter_im_write wr;
+	size_t resp_len = 0u;
+	int rc;
+
+	rc = matter_im_write_request_decode(in->payload, in->payload_len, &wr);
+	if (rc != MATTER_OK) {
+		LOG_WRN("unreadable WriteRequest (%d), %u B", rc, (unsigned int)in->payload_len);
+		return;
+	}
+	LOG_INF("  write: endpoint %u cluster 0x%04x attribute 0x%04x, %u B", wr.path.endpoint,
+		(unsigned int)wr.path.cluster, (unsigned int)wr.path.attribute,
+		(unsigned int)wr.data_len);
+
+	rc = matter_im_write_response_encode(&s_im, &wr, s_report, sizeof(s_report), &resp_len);
+	if (rc != MATTER_OK) {
+		LOG_ERR("cannot build WriteResponse (%d)", rc);
+		return;
+	}
+	if (resp_len == 0u) {
+		/* The write ran; the peer asked not to be told. */
+		LOG_INF("  write done, response suppressed");
+		return;
+	}
+	send_im(MATTER_IM_OP_WRITE_RESPONSE, s_report, resp_len);
+}
+
+/**
+ * The subscription this node is serving, if any.
+ *
+ * One. Apple opens exactly one during commissioning, and a table of them would
+ * be RAM spent on a case that has not arrived.
+ */
+static struct {
+	struct matter_im_read read;
+	uint32_t id;
+	uint16_t max_interval_s;
+	/** Reports already delivered by earlier chunks of the priming report. */
+	uint16_t sent;
+	/** More chunks remain; the next StatusResponse asks for one. */
+	bool more;
+	/* Between the priming report and the StatusResponse that confirms it. */
+	bool priming;
+	bool active;
+} s_sub;
+
+/**
+ * Send one chunk of the priming report.
+ *
+ * The whole data model does not fit one Matter message -- the spec caps a
+ * message at the IPv6 MTU and this node's answer measured 1479 bytes of payload
+ * against a ~1232 byte ceiling. An oversized datagram is not slow, it is never
+ * delivered, and the subscriber re-subscribes forever with nothing to say why.
+ */
+static void send_report_chunk(void)
+{
+	struct matter_im_report_stats stats;
+	size_t report_len = 0u;
+	uint16_t emitted = 0u;
+	int rc;
+
+	rc = matter_im_report_data_chunk(&s_im, &s_sub.read, s_sub.sent, s_report,
+					 MATTER_MAX_MESSAGE_LEN, &report_len, &s_sub.more, &emitted,
+					 &stats);
+	if (rc != MATTER_OK) {
+		LOG_ERR("cannot build the report chunk (%d)", rc);
+		return;
+	}
+	if (emitted == 0u && s_sub.more) {
+		/* Not a chunk boundary -- one report is larger than a whole
+		 * message, and no number of chunks will help. */
+		LOG_ERR("a single attribute does not fit a message; giving up");
+		s_sub.more = false;
+		return;
+	}
+	s_sub.sent += emitted;
+	LOG_INF("  chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
+		s_sub.sent, s_sub.more ? "MORE" : "last");
+	send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len);
+}
+
+/**
+ * Begin a subscription.
+ *
+ * The order is not the obvious one. A SubscribeRequest is answered with the
+ * REPORT, not with the SubscribeResponse: the subscriber acknowledges that
+ * report with a StatusResponse, and only then is the SubscribeResponse sent
+ * (ReadHandler.cpp:240-250). Answering the request directly leaves the
+ * subscriber holding an id for a subscription whose initial values never
+ * arrived, which is indistinguishable from a node that stopped reporting.
+ */
+static void on_subscribe_request(const struct matter_exchange_in *in)
+{
+	static struct matter_im_subscribe sub;
+	int rc;
+
+	rc = matter_im_subscribe_request_decode(in->payload, in->payload_len, &sub);
+	if (rc != MATTER_OK) {
+		LOG_WRN("unreadable SubscribeRequest (%d), %u B", rc, (unsigned int)in->payload_len);
+		return;
+	}
+
+	s_sub.read = sub.read;
+	/*
+	 * Any non-zero id will do -- it is this node's handle and the subscriber
+	 * only ever echoes it back. Counted rather than random so two
+	 * subscriptions in one boot cannot collide, and never zero because zero
+	 * is how a plain read is told apart from a priming report.
+	 */
+	static uint32_t next_id;
+
+	s_sub.id = ++next_id;
+	/*
+	 * The ceiling is the subscriber's limit, not a request: reporting later
+	 * than this is what makes a subscription dead. Committing to it exactly
+	 * is honest only if this node then reports on time -- see the note in
+	 * on_status_response().
+	 */
+	s_sub.max_interval_s = sub.max_interval_s;
+	s_sub.read.subscription_id = s_sub.id;
+	s_sub.priming = true;
+	s_sub.active = false;
+
+	LOG_INF("  subscribe: %u path(s), %u..%u s, id 0x%08x", s_sub.read.n_paths,
+		sub.min_interval_s, sub.max_interval_s, (unsigned int)s_sub.id);
+	/*
+	 * WHICH path, not just how many. A subscription to something this node
+	 * answers with silence produces a priming report that is structurally
+	 * perfect and empty, and a subscriber waiting on a value that will never
+	 * come looks exactly like a subscriber that never got the report.
+	 */
+	for (uint8_t i = 0; i < s_sub.read.n_paths; i++) {
+		const struct matter_im_path *p = &s_sub.read.paths[i];
+
+		LOG_INF("  sub[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
+			p->have_endpoint ? (int)p->endpoint : -1,
+			p->have_cluster ? (unsigned int)p->cluster : 0xFFFFu,
+			p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
+	}
+
+	s_sub.sent = 0u;
+	s_sub.more = false;
+	send_report_chunk();
+}
+
+/**
+ * The subscriber acknowledged the priming report, so the subscription exists.
+ *
+ * The StatusResponse is not inspected beyond its arrival: a subscriber that
+ * rejected the report would say so by not sending one.
+ */
+static void on_status_response(const struct matter_exchange_in *in)
+{
+	size_t resp_len = 0u;
+
+	ARG_UNUSED(in);
+
+	/*
+	 * Between chunks this is the peer asking for the next one, not the
+	 * acknowledgement that ends the priming report. Only the LAST chunk's
+	 * StatusResponse establishes the subscription.
+	 */
+	if (s_sub.more) {
+		send_report_chunk();
+		return;
+	}
+	if (!s_sub.priming) {
+		return;
+	}
+	s_sub.priming = false;
+	s_sub.active = true;
+
+	if (matter_im_subscribe_response_encode(s_sub.id, s_sub.max_interval_s, s_report,
+						sizeof(s_report), &resp_len) != MATTER_OK) {
+		LOG_ERR("cannot build the SubscribeResponse");
+		return;
+	}
+	LOG_INF("  subscription 0x%08x ESTABLISHED, max interval %u s", (unsigned int)s_sub.id,
+		s_sub.max_interval_s);
+	/*
+	 * NOT YET PERIODIC. Nothing here reports again, so this subscription
+	 * lapses once max_interval_s passes and the subscriber is entitled to
+	 * call the node unresponsive. Enough to finish commissioning, and
+	 * flagged because a lapsed subscription looks exactly like a node that
+	 * has gone away.
+	 */
+	send_im(MATTER_IM_OP_SUBSCRIBE_RESPONSE, s_report, resp_len);
+}
+
 static void on_secure(const struct matter_exchange_in *in)
 {
+	/*
+	 * A bare acknowledgement asks nothing. Named here rather than left to
+	 * the unhandled case at the bottom, which spent three log lines per ack
+	 * -- and there is one after every message -- reporting that nothing
+	 * needed doing. That is what kept filling the trace ring.
+	 */
+	if (in->protocol_id == MATTER_PROTOCOL_SECURE_CHANNEL &&
+	    in->opcode == MATTER_SC_OP_ACK) {
+		return;
+	}
+
 	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
 	    in->opcode == MATTER_IM_OP_READ_REQUEST) {
 		on_read_request(in);
@@ -545,6 +780,21 @@ static void on_secure(const struct matter_exchange_in *in)
 	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
 	    in->opcode == MATTER_IM_OP_INVOKE_COMMAND_REQUEST) {
 		on_invoke_request(in);
+		return;
+	}
+	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
+	    in->opcode == MATTER_IM_OP_WRITE_REQUEST) {
+		on_write_request(in);
+		return;
+	}
+	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
+	    in->opcode == MATTER_IM_OP_SUBSCRIBE_REQUEST) {
+		on_subscribe_request(in);
+		return;
+	}
+	if (in->protocol_id == MATTER_PROTOCOL_INTERACTION_MODEL &&
+	    in->opcode == MATTER_IM_OP_STATUS_RESPONSE) {
+		on_status_response(in);
 		return;
 	}
 
@@ -792,7 +1042,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	 * question no amount of staring at the encoder answers -- and far
 	 * cheaper than another pairing attempt.
 	 */
-	LOG_HEXDUMP_INF(reply + mh_len + ph_len, s2_len < 48u ? s2_len : 48u, "sigma2 head");
+	LOG_HEXDUMP_DBG(reply + mh_len + ph_len, s2_len < 48u ? s2_len : 48u, "sigma2 head");
 	LOG_INF("  Sigma2 out: %u B payload, %u B total, session 0x%04x", (unsigned int)s2_len,
 		(unsigned int)(mh_len + ph_len + s2_len), (unsigned int)s_case.local_session_id);
 	return mh_len + ph_len + s2_len;
@@ -834,7 +1084,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	 * and touch nothing else.
 	 */
 	if (s_case_ready) {
-		LOG_INF("  Sigma3 again -- resending the StatusReport");
+		LOG_DBG("  Sigma3 again -- resending the StatusReport");
 		return case_status_report(req, req_mh, reply, cap);
 	}
 
@@ -973,7 +1223,7 @@ static size_t case_status_report(const struct matter_proto_header *req,
 				    cap - mh_len - ph_len, &sr_len) != MATTER_OK) {
 		return 0u;
 	}
-	LOG_INF("  StatusReport success out: %u B total", (unsigned int)(mh_len + ph_len + sr_len));
+	LOG_DBG("  StatusReport success out: %u B total", (unsigned int)(mh_len + ph_len + sr_len));
 	return mh_len + ph_len + sr_len;
 }
 
@@ -1038,7 +1288,7 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 			LOG_WRN("  CASE message refused (%d)", rc);
 			s_thread_reply_len = 0u;
 		} else {
-			LOG_INF("  CASE in: protocol 0x%04x opcode 0x%02x, %u B",
+			LOG_DBG("  CASE in: protocol 0x%04x opcode 0x%02x, %u B",
 				(unsigned int)in.protocol_id, in.opcode,
 				(unsigned int)in.payload_len);
 			on_secure(&in);
@@ -1058,7 +1308,7 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	 * that is rejected without a word back looks identical whether the TLV
 	 * is wrong or the framing is, and only one of those is visible here.
 	 */
-	LOG_INF("  protocol 0x%04x opcode 0x%02x exchange 0x%04x", (unsigned int)ph.protocol_id,
+	LOG_DBG("  protocol 0x%04x opcode 0x%02x exchange 0x%04x", (unsigned int)ph.protocol_id,
 		ph.opcode, (unsigned int)ph.exchange_id);
 	/* Demoted now that the addressing is proven: three lines per datagram
 	 * fills the 4 KB trace ring inside one handshake, and a full ring looks
@@ -1099,7 +1349,7 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	}
 
 	if (ph.opcode == MATTER_OP_CASE_SIGMA3) {
-		LOG_INF("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
+		LOG_DBG("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
 			(unsigned int)mh_len, (unsigned int)ph_len,
 			(unsigned int)(len - mh_len - ph_len));
 		return handle_sigma3(msg + mh_len + ph_len, len - mh_len - ph_len, ipk, &ph, &mh,
@@ -1121,7 +1371,7 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	 * the peer never computed. That failure is completely silent, and this
 	 * is the only place it is visible.
 	 */
-	LOG_INF("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
+	LOG_DBG("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
 		(unsigned int)mh_len, (unsigned int)ph_len, (unsigned int)(len - mh_len - ph_len));
 
 	if (matter_case_destination_id(ipk, s1.initiator_random, s_info.fabric.root_public_key,
