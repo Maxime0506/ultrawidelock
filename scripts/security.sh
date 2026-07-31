@@ -333,4 +333,11 @@ if [ ${#failed[@]} -gt 0 ]; then
 	printf '%s%s security: %s%s\n\n' "$RED" "$CRS" "${failed[*]}" "$RESET"
 	exit 1
 fi
+# Nothing was actually checked. Exiting 0 here is only correct when something else passed —
+# `make security` should not go red because this Mac has no valgrind. But scripts/verify.sh runs
+# one gate per invocation, and there a 0 makes "could not check" render as a green row. Propagate
+# the skip so the caller can tell the two apart.
+if [ ${#skipped[@]} -eq ${#GATES[@]} ]; then
+	exit 2
+fi
 printf '%s%s security: %s%s\n\n' "$GRN" "$CHK" "${GATES[*]}" "$RESET"

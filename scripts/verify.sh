@@ -270,9 +270,30 @@ gate_label() {
 	esac
 }
 
+# The gates that dispatch through scripts/security.sh. One list, because run_gate needs it too:
+# only this family uses an exit status of 2 to mean "this host cannot answer the question", and
+# reading that status the same way everywhere else would be wrong. docs is the example — it exits
+# 2 for "your branch is behind origin/main", which is a real problem with an obvious fix, not a
+# gap in the host.
+gate_is_security() { # <gate>
+	case "$1" in
+	secrets | mal-diff | semgrep | deps | web | ct | esp | attest) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 # The command each gate runs. Where CI runs a make target, so do we; where CI
 # runs a raw command, this reproduces it verbatim.
 gate_run() {
+	# The eight security gates are one script, which is also what security.yml runs and what
+	# `make security` runs. No environment is set: with no SECURITY_BASE, `secrets` scans the
+	# working tree and `mal-diff` compares against the merge base with origin/main, which is the
+	# pre-push question ("what does this branch add?"). CI passes the pull request's base and
+	# head instead.
+	if gate_is_security "$1"; then
+		scripts/security.sh "$1"
+		return
+	fi
 	case "$1" in
 	format)
 		git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' \
@@ -358,14 +379,6 @@ print("  licence store consistent")'
 		return "$rc"
 		;;
 	cbmc) make --no-print-directory cbmc ;;
-	# The four security gates are one script, which is also what security.yml runs
-	# and what `make security` runs. No environment is set: with no SECURITY_BASE,
-	# `secrets` scans the working tree and `mal-diff` compares against the merge
-	# base with origin/main, which is the pre-push question ("what does this branch
-	# add?"). CI passes the pull request's base and head instead.
-	secrets | mal-diff | semgrep | deps | web | ct | esp | attest)
-		scripts/security.sh "$1"
-		;;
 	esac
 }
 
@@ -420,6 +433,11 @@ gate_row() { # <gate> <status> <secs> <reason>
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$RESET" ;;
 	skip-tool) printf '  %s%s%s %-12s %s%-36s%sSKIPPED — %s (CI still runs it)%s\n' \
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$4" "$RESET" ;;
+	# No duration, deliberately. Across this table a printed time means the gate ran and
+	# passed, and tests/tooling/verify_test.sh reads it that way; the seconds a gate spent
+	# discovering it could not run say nothing worth breaking that convention for.
+	skip-host) printf '  %s%s%s %-12s %s%-36s%sNOT CHECKED — %s (CI still runs it)%s\n' \
+		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$4" "$RESET" ;;
 	esac
 }
 
@@ -472,6 +490,19 @@ run_gate() { # <gate>
 		gate_result "$g" pass "$secs" "" || return 1
 		gate_row "$g" pass "$secs" ""
 		return 0
+	fi
+	# 2 from a security gate is "this host cannot answer the question", which is neither a pass
+	# nor a failure, and only where no install closes the gap: there is no valgrind for
+	# darwin/arm64, so `ct` returns 2 on the primary dev machine every time. Left as a pass it
+	# was a green row for a gate that ran nothing, which is the exact shape of failure this
+	# whole sweep exists to prevent. Loud, listed, and not fatal — unlike skip-tool, `make
+	# tools-install` cannot fix it, so failing the sweep would only train people to ignore it.
+	# Scoped to that family on purpose: every other gate is free to use 2 for its own meaning,
+	# and docs does, for "this branch is behind origin/main".
+	if [ "$rc" -eq 2 ] && gate_is_security "$g"; then
+		gate_result "$g" skip-host "$secs" "not checkable on this host" || return 1
+		gate_row "$g" skip-host "$secs" "not checkable on this host"
+		return 2
 	fi
 	gate_result "$g" fail "$secs" "exit $rc" || return 1
 	gate_row "$g" fail "$secs" "exit $rc"
@@ -555,6 +586,7 @@ for ((i = 0; i < n; i++)); do
 	skip-req) nskip=$((nskip + 1)) ;;
 	skip-optin) nskip=$((nskip + 1)) nskip_optin=$((nskip_optin + 1)) ;;
 	skip-tool) nskip=$((nskip + 1)) nskip_tool=$((nskip_tool + 1)) ;;
+	skip-host) nskip=$((nskip + 1)) ;;
 	notrun) nnotrun=$((nnotrun + 1)) ;;
 	esac
 done
