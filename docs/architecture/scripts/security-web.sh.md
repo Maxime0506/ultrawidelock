@@ -37,7 +37,7 @@ NO_COLOR=1          plain output
 
 ```mermaid
 flowchart TD
-  gate_pins_csp --> hdr
+  gate_install --> hdr
 ```
 
 ## API
@@ -64,12 +64,32 @@ will push people towards doing.
 
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
+### `gate_install()`
+`scripts/security-web.sh:291`
+
+---- install -----------------------------------------------------------------
+Installing a package is an arbitrary-code-execution step. npm runs preinstall/postinstall from
+every package in the resolved tree by default, so `npm i` on a runner executes code from
+whoever published any transitive dependency. Bun blocks lifecycle scripts by default but keeps
+a built-in allow-list, so it is not the same guarantee; --ignore-scripts is.
+This is the gate `deps` cannot be: osv-scanner answers "is this package known bad today", which
+a package that is bad and not yet reported passes cleanly. Refusing to execute it does not
+depend on anyone having noticed.
+Two rules, both mechanical:
+1. every install command in a tracked file carries --ignore-scripts
+2. a lockfile-backed install also carries --frozen-lockfile, so a resolution cannot drift
+out from under the lockfile that was reviewed
+and one more, on manifests: no floating version specifier, because "latest" resolves at install
+time to whatever was published since the review.
+
+**called by** `run_one`  ·  **calls** `hdr`
+
 ### `run_one()`
-`scripts/security-web.sh:276`
+`scripts/security-web.sh:369`
 
 ---- dispatch --------------------------------------------------------------
 
-**calls** `gate_pins_csp`, `gate_retire`
+**calls** `gate_install`, `gate_pins_csp`, `gate_retire`
 
 <details><summary>Undocumented (3)</summary>
 
