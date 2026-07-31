@@ -30,7 +30,7 @@ keep meaning the same thing.
 | `mal-diff` | `scripts/security-diff.sh` | binaries, `+x` bits, symlinks, gitlinks, capture files, oversized additions |
 | `semgrep` | `semgrep-openaliro.yml`, `semgrep-malicious.yml`, registry packs | injection, unsafe parsing, crypto misuse, droppers, install hooks |
 | `deps` | osv-scanner, pip-audit | known-vulnerable **and known-malicious** packages |
-| `web` | `security-web.sh`, retire.js | CDN pins, subresource integrity, CSP, vulnerable vendored JS |
+| `web` | `security-web.sh`, retire.js | CDN pins, subresource integrity, CSP, vulnerable vendored JS, package installs that can execute code |
 | `ct` | `security-ct.sh`, ctgrind/valgrind | **secret-dependent branches** — the only gate that can see a timing leak |
 | `esp` | `security-workspace.sh esp` | ESP component ranges that resolve on the runner |
 | `attest` | `security-attest.sh` | release provenance is configured before a tag needs it |

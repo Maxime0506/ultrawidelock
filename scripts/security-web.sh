@@ -257,7 +257,7 @@ PY
 gate_retire() {
 	hdr "web retire · known-vulnerable vendored JavaScript"
 	have retire || {
-		missing retire "npm i -g retire, or bunx retire"
+		missing retire "npm i -g --ignore-scripts retire, or bunx retire"
 		return 1
 	}
 	local n
@@ -272,21 +272,115 @@ gate_retire() {
 	return "${PIPESTATUS[0]}"
 }
 
+# ---- install -----------------------------------------------------------------
+# Installing a package is an arbitrary-code-execution step. npm runs preinstall/postinstall from
+# every package in the resolved tree by default, so `npm i` on a runner executes code from
+# whoever published any transitive dependency. Bun blocks lifecycle scripts by default but keeps
+# a built-in allow-list, so it is not the same guarantee; --ignore-scripts is.
+#
+# This is the gate `deps` cannot be: osv-scanner answers "is this package known bad today", which
+# a package that is bad and not yet reported passes cleanly. Refusing to execute it does not
+# depend on anyone having noticed.
+#
+# Two rules, both mechanical:
+#   1. every install command in a tracked file carries --ignore-scripts
+#   2. a lockfile-backed install also carries --frozen-lockfile, so a resolution cannot drift
+#      out from under the lockfile that was reviewed
+# and one more, on manifests: no floating version specifier, because "latest" resolves at install
+# time to whatever was published since the review.
+gate_install() {
+	hdr "web install · package installs cannot execute code"
+	git ls-files -z \
+		'*.yml' '*.yaml' '*.sh' 'Makefile' '*/Makefile' '*.md' '*.json' \
+		| INSTALL_ROOT="$ROOT" python3 -c '
+import json, os, re, sys
+
+files = [f for f in sys.stdin.buffer.read().decode("utf-8", "replace").split("\0") if f]
+
+# The command, not the word: `npm install` inside prose is not an install step, but the same
+# string in a run: block is. Anchoring on the manager plus its install verb is what separates
+# them, and every hit is printed with its file:line so a false positive is one look away.
+CMD = re.compile(r"\b(npm|pnpm|yarn|bun)\s+(install|ci|add|i)\b(?P<rest>[^\n|&;]*)")
+
+
+def is_prose(line, start):
+    """An install command inside a backtick span is being talked about, not run.
+
+    Every executable form in this tree -- a Makefile recipe, a `run:` block, a line in a .sh --
+    is bare. Prose in a YAML message:, a comment or a markdown paragraph writes it as `npm i`.
+    Matching on that distinction beats an allow-list of filenames, which would have to grow
+    every time someone documents the rule this gate enforces.
+    """
+    return line.count("`", 0, start) % 2 == 1
+
+
+bad, seen, manifests = [], 0, 0
+for f in files:
+    try:
+        text = open(f, encoding="utf-8", errors="replace").read()
+    except OSError:
+        continue
+    for n, line in enumerate(text.splitlines(), 1):
+        for m in CMD.finditer(line):
+            if is_prose(line, m.start()):
+                continue
+            seen += 1
+            rest, mgr = m.group("rest"), m.group(1)
+            if "--ignore-scripts" not in rest:
+                bad.append((f, n, "no --ignore-scripts", line.strip()[:96]))
+            # -g installs resolve globally and have no lockfile to freeze against.
+            elif "-g" not in rest.split() and "--global" not in rest \
+                    and "--frozen-lockfile" not in rest and mgr != "npm":
+                bad.append((f, n, "no --frozen-lockfile", line.strip()[:96]))
+
+FLOAT = re.compile(r"^(latest|\*|)$|^[\^~>=<]")
+for f in files:
+    if os.path.basename(f) != "package.json":
+        continue
+    try:
+        doc = json.load(open(f, encoding="utf-8"))
+    except (OSError, ValueError):
+        continue
+    manifests += 1
+    # devDependencies and overrides are deliberately not checked for ranges: a caret there is
+    # normal and the lockfile pins it. "latest" and "*" are checked everywhere, because they
+    # resolve to whatever exists at install time and no review covers that.
+    for section in ("dependencies", "devDependencies", "overrides", "optionalDependencies"):
+        for name, spec in (doc.get(section) or {}).items():
+            if not isinstance(spec, str):
+                continue
+            if spec.strip() in ("latest", "*", ""):
+                bad.append((f, 0, "floating specifier", "%s: %s = %s" % (section, name, spec)))
+    # A package bun is told it MAY run scripts for, which is the hole --ignore-scripts closes.
+    if doc.get("trustedDependencies"):
+        bad.append((f, 0, "trustedDependencies", ", ".join(doc["trustedDependencies"])))
+
+print("  scope: %d install command(s), %d package manifest(s)" % (seen, manifests))
+for f, n, why, ctx in bad:
+    where = "%s:%d" % (f, n) if n else f
+    print("  BLOCK %s — %s" % (where, why))
+    print("        %s" % ctx)
+print("  %d blocking, 0 advisory" % len(bad))
+sys.exit(1 if bad else 0)'
+	return "${PIPESTATUS[1]}"
+}
+
 # ---- dispatch --------------------------------------------------------------
 run_one() {
 	case "$1" in
 	pins) gate_pins_csp pins ;;
 	csp) gate_pins_csp csp ;;
 	retire) gate_retire ;;
+	install) gate_install ;;
 	*)
-		echo "security-web.sh: unknown check '$1' (pins csp retire)" >&2
+		echo "security-web.sh: unknown check '$1' (pins csp retire install)" >&2
 		return 2
 		;;
 	esac
 }
 
 CHECKS=("$@")
-[ ${#CHECKS[@]} -gt 0 ] || CHECKS=(pins csp retire)
+[ ${#CHECKS[@]} -gt 0 ] || CHECKS=(pins csp retire install)
 
 failed=()
 for c in "${CHECKS[@]}"; do

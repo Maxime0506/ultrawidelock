@@ -46,7 +46,7 @@ jobs:
       - name: test and build the guided bench
         working-directory: tools/tui
         run: |
-          bun install --frozen-lockfile --os='*' --cpu='*'
+          bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*'
           bun run typecheck
           bun run test
           bun run release

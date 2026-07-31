@@ -397,7 +397,7 @@ tool_install() {
 	semgrep) pipx_or_pip "semgrep==$(tool_pin semgrep)" ;;
 	# npm-global, the same route security.yml uses. No pipx equivalent: retire.js is a node
 	# package and its advisory repo is fetched at run time.
-	retire) echo "npm i -g 'retire@$(tool_pin retire)'" ;;
+	retire) echo "npm i -g --ignore-scripts 'retire@$(tool_pin retire)'" ;;
 	pip-audit) pipx_or_pip "pip-audit==$(tool_pin pip-audit)" ;;
 	actionlint)
 		# Homebrew has it; elsewhere CI's own route is a checksum-pinned release

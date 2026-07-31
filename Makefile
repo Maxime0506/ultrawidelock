@@ -223,7 +223,7 @@ verify:
 ##   secrets (gitleaks) · mal-diff (structural review of this branch's diff) ·
 ##   semgrep (SAST, ERROR blocks and WARNING reports) · deps (osv-scanner +
 ##   pip-audit, which also covers known-MALICIOUS packages via OSV's MAL- feed) ·
-##   web (CDN pins, SRI, CSP, retire.js) · ct (secret-dependent branches) ·
+##   web (CDN pins, SRI, CSP, retire.js, install flags) · ct (secret-dependent branches) ·
 ##   esp (component registry pins) · attest (release provenance).
 ##   ~30s. Identical to what .github/workflows/security.yml runs, because both
 ##   call scripts/security.sh. Name one to run it alone:
@@ -235,7 +235,7 @@ verify:
 security:
 	@$(REPO_ROOT)/scripts/security.sh $(GATES)
 
-## security-web: browser supply chain  ·  CDN pins, SRI, CSP, retire.js
+## security-web: browser supply chain  ·  CDN pins, SRI, CSP, retire.js, install flags
 ##   Covers web-flasher/, web-twin/, release/*/FLASH.html and the docs theme.
 ##   Known debt lives in security/web-baseline.txt; an entry there that stops
 ##   matching FAILS the gate, so a line cannot outlive its problem.
@@ -357,7 +357,7 @@ flash-erase:
 ## tui-setup: install pinned OpenTUI dependencies and build its local bundle
 tui-setup:
 	@command -v bun >/dev/null 2>&1 || { printf '  Bun 1.3+ is required  ·  https://bun.sh\n' >&2; exit 1; }
-	@cd $(REPO_ROOT)/tools/tui && bun install --os='*' --cpu='*' && bun run build
+	@cd $(REPO_ROOT)/tools/tui && bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*' && bun run build
 
 ## openaliro: start the guided bench  ·  installs its pinned TUI dependencies on first run
 openaliro:
@@ -366,7 +366,7 @@ openaliro:
 	  printf '  Install Bun, then run this exact command again:  make openaliro\n'; \
 	  printf '  Installation guide: https://bun.sh\n\n'; exit 1; }
 	@cd $(REPO_ROOT)/tools/tui && { \
-	  [ -d node_modules ] || { printf '  First run: preparing the guided bench…\n'; bun install --os='*' --cpu='*'; }; \
+	  [ -d node_modules ] || { printf '  First run: preparing the guided bench…\n'; bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*'; }; \
 	  bun run dev; }
 
 ## tui: compatibility alias for `make openaliro`
@@ -374,7 +374,7 @@ tui: openaliro
 
 ## tui-release: build reproducible macOS arm64 + Linux x64 TUI executables
 tui-release:
-	@cd $(REPO_ROOT)/tools/tui && bun install --os='*' --cpu='*' && bun run release
+	@cd $(REPO_ROOT)/tools/tui && bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*' && bun run release
 
 ## term: interactive serial console — live logs + typeable shell (tio, 115200 8N1)
 ##   Auto-detects the nRF5340DK console (VCOM1).  ctrl-t q quits.  Type `help` for shell commands.
