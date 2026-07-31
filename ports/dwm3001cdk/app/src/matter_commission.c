@@ -496,6 +496,29 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 
 	aliro_sha256(sigma1, sigma1_len, transcript);
 
+	/*
+	 * The one assumption nothing has ever checked: that the key this signs
+	 * with is the key the NOC certifies. Sigma2 is signed with op_priv and
+	 * carries the NOC; if they disagree the peer verifies a signature
+	 * against the wrong public key, fails, and says nothing -- which is
+	 * indistinguishable from every other way this can go wrong.
+	 */
+	{
+		struct matter_cert_info ci;
+		uint8_t derived[MATTER_CASE_PUBKEY_LEN];
+
+		if (aliro_ec_p256_pub_from_priv(s_info.op_priv, derived) == 0 &&
+		    matter_cert_parse(s_info.fabric.noc, s_info.fabric.noc_len, &ci) == MATTER_OK &&
+		    ci.have_public_key) {
+			LOG_INF("  signing key %s the NOC",
+				memcmp(derived, ci.public_key, sizeof(derived)) == 0
+					? "MATCHES"
+					: "does NOT match");
+		} else {
+			LOG_WRN("  could not check the signing key against the NOC");
+		}
+	}
+
 	memset(&in, 0, sizeof(in));
 	in.initiator_pubkey = s1->initiator_pubkey;
 	in.transcript_hash = transcript;
