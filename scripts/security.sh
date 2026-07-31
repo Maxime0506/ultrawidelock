@@ -150,7 +150,19 @@ if warns:
 # so without this the gate is silently blind to exactly the files most likely to be doing
 # something unusual. Two are known-unparseable today (Zephyr macro forms in woz_logfmt.c and
 # aliro_shell.c); the count is reported every run so a third cannot appear unnoticed.
-bad = sorted({e.get("path") for e in d.get("errors", []) if e.get("path")})
+#
+# Only PartialParsing counts. The "type" field on an error entry is a variant name, sometimes
+# wrapped in a list with its payload, and the other variants (Timeout, OutOfMemory) say how
+# loaded the machine was, not about the file. Blocking on those makes the gate flaky, and a
+# blocking gate that goes green on a re-run is worse than no gate: it teaches everyone to re-run.
+def etype(e):
+    t = e.get("type")
+    return t[0] if isinstance(t, list) else t
+
+errored = [e for e in d.get("errors", []) if e.get("path")]
+bad = sorted({e["path"] for e in errored if etype(e) == "PartialParsing"})
+transient = sorted({(str(etype(e)), e["path"]) for e in errored if etype(e) != "PartialParsing"})
+
 known = set()
 try:
     with open("security/semgrep-parse-baseline.txt") as fh:
@@ -167,11 +179,21 @@ for p in new_bad:
     print("        semgrep cannot parse this file, so NONE of its rules ran against it. That is")
     print("        a silent coverage loss, not a clean result. Fix the construct, or add the")
     print("        path to security/semgrep-parse-baseline.txt with a reason.")
+for t, p in transient:
+    print("  warn  %s: %s was not scanned this run" % (t, p))
+    print("        A run-time limit, not a property of the file. It is a real coverage gap for")
+    print("        this run only; if it repeats on an idle machine, treat it as unparseable.")
 
 print("  %d finding(s): %d blocking, %d advisory" % (len(res), len(errs), len(warns)))
 sys.exit(1 if (errs or new_bad) else 0)'
 	rc=$?
-	rm -f "$out"
+	# Kept only on failure, and only then. The first time this gate blocked, it named a file and
+	# deleted the evidence, so the reason could not be recovered afterwards.
+	if [ "$rc" = 0 ]; then
+		rm -f "$out"
+	else
+		printf '  %sraw semgrep output kept for diagnosis: %s%s\n' "$YEL" "$out" "$RESET"
+	fi
 	return "$rc"
 }
 
