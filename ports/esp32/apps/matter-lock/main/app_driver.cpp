@@ -23,13 +23,17 @@
 
 static const char *TAG = "app_driver";
 
-/* Use each official DevKitC board's onboard addressable RGB LED. */
+/* Use each official DevKitC board's onboard addressable RGB LED. A new target
+ * must add its own pin: the S3's GPIO48 does not exist on the C5 (29 GPIOs) or
+ * the C6 (31), so an implicit fallback would silently pick a dead pin. */
 #if CONFIG_IDF_TARGET_ESP32C6
 #define LOCK_LED_GPIO 8
 #elif CONFIG_IDF_TARGET_ESP32C5
 #define LOCK_LED_GPIO 27
-#else
+#elif CONFIG_IDF_TARGET_ESP32S3
 #define LOCK_LED_GPIO 48
+#else
+#error "Unsupported ESP32 target: add its onboard RGB LED GPIO"
 #endif
 
 static led_strip_handle_t s_lock_led;
