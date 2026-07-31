@@ -84,6 +84,8 @@ void test_matter_pase(void);
 void test_matter_spake2p(void);
 void test_matter_pase_sm(void);
 void test_matter_exchange(void);
+void test_matter_im(void);
+void test_matter_im_invoke(void);
 
 /* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
 void test_uwb_min(void);
