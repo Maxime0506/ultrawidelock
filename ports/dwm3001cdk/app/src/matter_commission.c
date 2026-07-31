@@ -376,6 +376,15 @@ static int begin_session(void)
 static struct matter_exchange s_case_x[MATTER_CASE_SESSIONS];
 static bool s_case_ready[MATTER_CASE_SESSIONS];
 /**
+ * The fabric each live session belongs to.
+ *
+ * Kept per SLOT rather than read from s_case, which holds the last
+ * HANDSHAKE and says nothing about a session established before it. This is
+ * what CurrentFabricIndex is answered from, and answering it for the wrong
+ * fabric tells a controller it is not on the fabric it just joined.
+ */
+static uint8_t s_case_fabric[MATTER_CASE_SESSIONS];
+/**
  * The slot serving the datagram in flight. Valid only while s_thread_reply is
  * set, which is the whole time a reply can be built.
  *
@@ -1355,6 +1364,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 		return 0u;
 	}
 	s_case_ready[slot] = true;
+	s_case_fabric[slot] = s_case.fabric->index;
 	/* Replies to THIS Sigma3 are sealed on the unsecured exchange, but the
 	 * StatusReport that follows is the last thing that session sends before
 	 * the peer starts using the new one, so point the current slot at it. */
@@ -1480,6 +1490,8 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 			return 0u;
 		}
 		s_case_cur = slot;
+		/* Whose fabric is asking, for the fabric-scoped attributes. */
+		s_info.accessing_fabric_index = s_case_fabric[slot];
 		s_thread_reply = reply;
 		s_thread_reply_cap = cap;
 		s_thread_reply_len = 0u;

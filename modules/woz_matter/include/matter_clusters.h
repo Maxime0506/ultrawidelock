@@ -384,6 +384,19 @@ struct matter_device_info {
 	 * @ref last_commissioning_error below.
 	 */
 	uint16_t last_user_index;
+	/**
+	 * The fabric index of the session being served right now, set by the
+	 * port before it dispatches each secure message.
+	 *
+	 * CurrentFabricIndex is FABRIC-SCOPED: it must answer "which fabric are
+	 * you, to me", and the answer depends entirely on who is asking. While
+	 * this was hardcoded to the first live fabric, the home hub read it over
+	 * its own session, was told it was fabric 1, concluded it was not on the
+	 * fabric it had just joined, and sent RemoveFabric. Zero means no secure
+	 * session, which is not a legal answer to anyone and is why nothing may
+	 * read it outside one.
+	 */
+	uint8_t accessing_fabric_index;
 
 	/*
 	 * ---- the Aliro reader identity, once Apple has delivered it --------

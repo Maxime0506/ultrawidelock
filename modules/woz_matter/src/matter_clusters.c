@@ -792,12 +792,13 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			return;
 		case MATTER_ATTR_OC_CURRENT_FABRIC_INDEX:
 			/*
-			 * Scoped to the READING session's fabric, which this
-			 * layer cannot see. The lowest live index is right
-			 * whenever there is one fabric and a guess when there
-			 * are two.
+			 * The fabric of whoever is ASKING, which the port
+			 * records from the session the request arrived on.
+			 * Answering with the first live fabric was right while
+			 * there was one and a guess once there were two -- and
+			 * the guess is what made the home hub remove itself.
 			 */
-			(void)matter_tlv_put_u64(w, tag, info->fabrics[0].index);
+			(void)matter_tlv_put_u64(w, tag, info->accessing_fabric_index);
 			return;
 		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
 			(void)matter_tlv_put_u64(w, tag, MATTER_SUPPORTED_FABRICS);
