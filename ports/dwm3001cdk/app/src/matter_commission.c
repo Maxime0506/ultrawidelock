@@ -306,8 +306,8 @@ static int begin_session(void)
 	 * commissioner close BLE and carry on over Thread with its fabric
 	 * intact, while a genuine retry still gets a clean table.
 	 */
-	if (s_info.fabric.index != 0u && !s_info.commissioning_complete) {
-		LOG_INF("new commissioner; rolling back fabric %u", s_info.fabric.index);
+	if (s_info.fabrics[0].index != 0u && !s_info.commissioning_complete) {
+		LOG_INF("new commissioner; rolling back every fabric");
 	}
 	matter_clusters_failsafe_expire(&s_info);
 
@@ -422,7 +422,7 @@ static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 		}
 		memcpy(s_thread_reply, s_out, framed);
 		s_thread_reply_len = framed;
-		LOG_INF("  IM opcode 0x%02x staged over CASE, %u B", opcode, (unsigned int)framed);
+		LOG_DBG("  IM opcode 0x%02x staged over CASE, %u B", opcode, (unsigned int)framed);
 		return;
 	}
 
@@ -545,11 +545,11 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		 * published in the clear once this node advertises operationally.
 		 */
 		LOG_INF("  AddNOC -> status %u, fabric index %u, node %08x%08x on fabric %08x%08x",
-			s_info.last_noc_status, s_info.fabric.index,
-			(unsigned int)(s_info.fabric.node_id >> 32),
-			(unsigned int)s_info.fabric.node_id,
-			(unsigned int)(s_info.fabric.fabric_id >> 32),
-			(unsigned int)s_info.fabric.fabric_id);
+			s_info.last_noc_status, s_info.last_noc_index,
+			(unsigned int)(s_info.fabrics[0].node_id >> 32),
+			(unsigned int)s_info.fabrics[0].node_id,
+			(unsigned int)(s_info.fabrics[0].fabric_id >> 32),
+			(unsigned int)s_info.fabrics[0].fabric_id);
 	}
 	if (resp_len == 0u) {
 		/* The command ran; the peer asked not to be told. */
@@ -646,7 +646,7 @@ static void send_report_chunk(void)
 		return;
 	}
 	s_sub.sent += emitted;
-	LOG_INF("  chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
+	LOG_DBG("  chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
 		s_sub.sent, s_sub.more ? "MORE" : "last");
 	send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len);
 }
@@ -834,6 +834,13 @@ static struct {
 	 * from it and the Sigma1 that carried it is long gone by then.
 	 */
 	uint8_t init_eph_pub[MATTER_CASE_PUBKEY_LEN];
+	/**
+	 * Which fabric this handshake is for, chosen by whichever one's
+	 * destination identifier the Sigma1 matched. With two administrators
+	 * there are two, and every later step -- the NOC to send, the key to
+	 * sign with, the node id in the nonce -- belongs to that one.
+	 */
+	const struct matter_fabric *fabric;
 	/*
 	 * The transcript, as a running hash rather than the messages themselves.
 	 * Sigma2's salt needs SHA-256(Sigma1), Sigma3's needs
@@ -864,6 +871,8 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 			  const struct matter_proto_header *req,
 			  const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)
 {
+	/* The fabric the Sigma1's destination identifier chose. */
+	const struct matter_fabric *f = s_case.fabric;
 	struct matter_case_sigma2_in in;
 	struct matter_msg_header mh;
 	struct matter_proto_header ph;
@@ -913,15 +922,14 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		struct matter_cert_info ci;
 		uint8_t derived[MATTER_CASE_PUBKEY_LEN];
 
-		if (aliro_ec_p256_pub_from_priv(s_info.op_priv, derived) == 0 &&
-		    matter_cert_parse(s_info.fabric.noc, s_info.fabric.noc_len, &ci) == MATTER_OK &&
+		if (aliro_ec_p256_pub_from_priv(f->op_priv, derived) == 0 &&
+		    matter_cert_parse(f->noc, f->noc_len, &ci) == MATTER_OK &&
 		    ci.have_public_key) {
 			LOG_INF("  signing key %s the NOC; noc %u B, icac %u B",
 				memcmp(derived, ci.public_key, sizeof(derived)) == 0
 					? "MATCHES"
 					: "does NOT match",
-				(unsigned int)s_info.fabric.noc_len,
-				(unsigned int)s_info.fabric.icac_len);
+				(unsigned int)f->noc_len, (unsigned int)f->icac_len);
 			/* Kept so the Sigma2 signature can be verified against
 			 * the certificate it ships with. */
 			memcpy(s_case.noc_pub, ci.public_key, sizeof(s_case.noc_pub));
@@ -936,11 +944,11 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	in.initiator_pubkey = s1->initiator_pubkey;
 	in.transcript_hash = transcript;
 	in.ipk = ipk;
-	in.noc = s_info.fabric.noc;
-	in.noc_len = s_info.fabric.noc_len;
-	in.icac = s_info.fabric.icac_len > 0u ? s_info.fabric.icac : NULL;
-	in.icac_len = s_info.fabric.icac_len;
-	in.op_priv = s_info.op_priv;
+	in.noc = f->noc;
+	in.noc_len = f->noc_len;
+	in.icac = f->icac_len > 0u ? s_info.icac.buf : NULL;
+	in.icac_len = f->icac_len;
+	in.op_priv = f->op_priv;
 	in.responder_random = s_case.responder_random;
 	in.responder_eph_priv = s_case.eph_priv;
 	in.responder_eph_pub = s_case.eph_pub;
@@ -1121,7 +1129,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	 * what ties that NOC to THIS fabric rather than to another fabric the
 	 * same phone also belongs to.
 	 */
-	if (peer.fabric_id != s_info.fabric.fabric_id) {
+	if (s_case.fabric == NULL || peer.fabric_id != s_case.fabric->fabric_id) {
 		LOG_ERR("  Sigma3 names a different fabric -- refusing");
 		return 0u;
 	}
@@ -1167,7 +1175,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 		 * wrong produces messages that decrypt to nothing with no error
 		 * anyone can report.
 		 */
-		matter_exchange_set_op_node_ids(&s_case_x, s_info.fabric.node_id, peer.node_id);
+		matter_exchange_set_op_node_ids(&s_case_x, s_case.fabric->node_id, peer.node_id);
 	}
 	memset(&keys, 0, sizeof(keys));
 	if (rc != MATTER_OK) {
@@ -1323,20 +1331,26 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 		return 0u;
 	}
 
-	/*
-	 * The fabric and its operational key are needed by both halves -- Sigma1
-	 * to recompute a destination identifier, Sigma3 to derive S3K -- so they
-	 * are established before the two paths diverge.
-	 */
-	if (s_info.fabric.index == 0u) {
+	if (s_info.fabrics[0].index == 0u) {
 		LOG_WRN("  no fabric to match it against");
 		return 0u;
 	}
-	if (matter_fabric_compressed_id(s_info.fabric.root_public_key, s_info.fabric.fabric_id,
-					cfid) != MATTER_OK ||
-	    matter_case_operational_ipk(s_info.fabric.ipk, cfid, ipk) != MATTER_OK) {
-		LOG_ERR("  could not derive the operational key");
-		return 0u;
+	/*
+	 * Sigma3 continues the handshake Sigma1 chose a fabric for. Deriving the
+	 * key from a different one would decrypt to nothing, so the choice is
+	 * made once, in the Sigma1 branch, and reused here.
+	 */
+	if (ph.opcode == MATTER_OP_CASE_SIGMA3) {
+		if (s_case.fabric == NULL) {
+			LOG_WRN("  Sigma3 with no fabric chosen");
+			return 0u;
+		}
+		if (matter_fabric_compressed_id(s_case.fabric->root_public_key,
+						s_case.fabric->fabric_id, cfid) != MATTER_OK ||
+		    matter_case_operational_ipk(s_case.fabric->ipk, cfid, ipk) != MATTER_OK) {
+			LOG_ERR("  could not derive the operational key");
+			return 0u;
+		}
 	}
 	/*
 	 * The reply is addressed to the id in this field, so its absence is not
@@ -1374,18 +1388,39 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 	LOG_DBG("  lengths: msg %u = hdr %u + proto %u + payload %u", (unsigned int)len,
 		(unsigned int)mh_len, (unsigned int)ph_len, (unsigned int)(len - mh_len - ph_len));
 
-	if (matter_case_destination_id(ipk, s1.initiator_random, s_info.fabric.root_public_key,
-				       s_info.fabric.fabric_id, s_info.fabric.node_id,
-				       want) != MATTER_OK) {
-		LOG_ERR("  could not recompute the destination identifier");
-		return 0u;
-	}
+	/*
+	 * WHICH fabric, by trying each. The destination identifier is an HMAC
+	 * under a fabric's operational key over the identity being asked for, so
+	 * the only way to learn which fabric an initiator means is to recompute
+	 * it for each one and look for a match. That is also what stops an
+	 * unsolicited Sigma1 enumerating this node's fabrics: get the key wrong
+	 * and you learn nothing.
+	 */
+	s_case.fabric = NULL;
+	for (size_t fi = 0u; fi < MATTER_SUPPORTED_FABRICS; fi++) {
+		const struct matter_fabric *f = &s_info.fabrics[fi];
 
-	if (memcmp(want, s1.destination_id, sizeof(want)) != 0) {
-		LOG_WRN("  destination does NOT match fabric %u", s_info.fabric.index);
+		if (f->index == 0u) {
+			continue;
+		}
+		if (matter_fabric_compressed_id(f->root_public_key, f->fabric_id, cfid) !=
+			    MATTER_OK ||
+		    matter_case_operational_ipk(f->ipk, cfid, ipk) != MATTER_OK ||
+		    matter_case_destination_id(ipk, s1.initiator_random, f->root_public_key,
+					       f->fabric_id, f->node_id, want) != MATTER_OK) {
+			LOG_ERR("  could not recompute the destination identifier");
+			return 0u;
+		}
+		if (memcmp(want, s1.destination_id, sizeof(want)) == 0) {
+			s_case.fabric = f;
+			break;
+		}
+	}
+	if (s_case.fabric == NULL) {
+		LOG_WRN("  destination matches NO fabric this node holds");
 		return 0u;
 	}
-	LOG_INF("  destination MATCHES fabric %u -- answering", s_info.fabric.index);
+	LOG_INF("  destination MATCHES fabric %u -- answering", s_case.fabric->index);
 
 	return send_sigma2(&s1, ipk, msg + mh_len + ph_len, len - mh_len - ph_len, &ph, &mh, reply,
 			   cap);

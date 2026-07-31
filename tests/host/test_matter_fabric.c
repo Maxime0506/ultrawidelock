@@ -292,7 +292,7 @@ void test_matter_addnoc(void)
 	invoke_init(&inv, MATTER_CMD_OC_ADD_TRUSTED_ROOT_CERTIFICATE, fields, len);
 	response = 0u;
 	T_EQ("refused", srv.command(srv.ctx, &inv, &response), MATTER_IM_STATUS_FAILSAFE_REQUIRED);
-	T_OK("no root installed", !dev.fabric.have_root);
+	T_OK("no root installed", !dev.fabrics[0].have_root);
 
 	t_group("a root inside one");
 
@@ -302,23 +302,23 @@ void test_matter_addnoc(void)
 	/* AddTrustedRootCertificate has no response command; the reply is a bare
 	 * SUCCESS status. */
 	T_OK("no response command", response == MATTER_IM_NO_RESPONSE);
-	T_OK("root installed", dev.fabric.have_root);
-	T_OK("root key is the certificate's", dev.fabric.root_public_key[0] == 0x04u);
+	T_OK("root installed", dev.fabrics[0].have_root);
+	T_OK("root key is the certificate's", dev.fabrics[0].root_public_key[0] == 0x04u);
 
 	t_group("a root that is not a certificate");
 	{
 		uint8_t bad[16];
 		uint8_t before[MATTER_FABRIC_PUBKEY_LEN];
 
-		memcpy(before, dev.fabric.root_public_key, sizeof(before));
+		memcpy(before, dev.fabrics[0].root_public_key, sizeof(before));
 		memset(bad, 0xAA, sizeof(bad));
 		len = fields_bytes(fields, sizeof(fields), 0u, bad, sizeof(bad));
 		invoke_init(&inv, MATTER_CMD_OC_ADD_TRUSTED_ROOT_CERTIFICATE, fields, len);
 		T_EQ("refused", srv.command(srv.ctx, &inv, &response),
 		     MATTER_IM_STATUS_INVALID_COMMAND);
 		T_OK("the installed root is untouched",
-		     memcmp(before, dev.fabric.root_public_key, sizeof(before)) == 0);
-		T_OK("and still installed", dev.fabric.have_root);
+		     memcmp(before, dev.fabrics[0].root_public_key, sizeof(before)) == 0);
+		T_OK("and still installed", dev.fabrics[0].have_root);
 	}
 
 	t_group("a NOC with no CSR behind it");
@@ -329,7 +329,7 @@ void test_matter_addnoc(void)
 	     MATTER_IM_STATUS_SUCCESS);
 	T_OK("answered by NOCResponse", response == MATTER_CMD_OC_NOC_RESPONSE);
 	T_EQ("verdict is MissingCsr", dev.last_noc_status, MATTER_NOC_STATUS_MISSING_CSR);
-	T_EQ("no fabric created", dev.fabric.index, 0);
+	T_EQ("no fabric created", dev.fabrics[0].index, 0);
 
 	t_group("a NOC certifying somebody else's key");
 
@@ -339,7 +339,7 @@ void test_matter_addnoc(void)
 	     MATTER_IM_STATUS_SUCCESS);
 	T_EQ("verdict is InvalidPublicKey", dev.last_noc_status,
 	     MATTER_NOC_STATUS_INVALID_PUBLIC_KEY);
-	T_EQ("no fabric created", dev.fabric.index, 0);
+	T_EQ("no fabric created", dev.fabrics[0].index, 0);
 
 	t_group("a NOC with a short IPK");
 
@@ -350,7 +350,7 @@ void test_matter_addnoc(void)
 	T_EQ("the command itself succeeds", srv.command(srv.ctx, &inv, &response),
 	     MATTER_IM_STATUS_SUCCESS);
 	T_EQ("verdict is InvalidNOC", dev.last_noc_status, MATTER_NOC_STATUS_INVALID_NOC);
-	T_EQ("no fabric created", dev.fabric.index, 0);
+	T_EQ("no fabric created", dev.fabrics[0].index, 0);
 
 	t_group("the NOC this node asked for");
 
@@ -359,23 +359,48 @@ void test_matter_addnoc(void)
 	T_EQ("the command itself succeeds", srv.command(srv.ctx, &inv, &response),
 	     MATTER_IM_STATUS_SUCCESS);
 	T_EQ("verdict is Ok", dev.last_noc_status, MATTER_NOC_STATUS_OK);
-	T_EQ("fabric index is 1", dev.fabric.index, 1);
-	T_OK("node id taken from the NOC", dev.fabric.node_id == UINT64_C(0xDEDEDEDE00010001));
-	T_OK("fabric id taken from the NOC", dev.fabric.fabric_id == UINT64_C(0xFAB000000000001D));
-	T_EQ("the NOC is kept whole", dev.fabric.noc_len, sizeof(k_node01));
-	T_OK("and kept verbatim", memcmp(dev.fabric.noc, k_node01, sizeof(k_node01)) == 0);
-	T_EQ("no ICAC, as Apple sends none", dev.fabric.icac_len, 0);
-	T_OK("the IPK is kept", memcmp(dev.fabric.ipk, ipk, sizeof(ipk)) == 0);
+	T_EQ("fabric index is 1", dev.fabrics[0].index, 1);
+	T_OK("node id taken from the NOC", dev.fabrics[0].node_id == UINT64_C(0xDEDEDEDE00010001));
+	T_OK("fabric id taken from the NOC", dev.fabrics[0].fabric_id == UINT64_C(0xFAB000000000001D));
+	T_EQ("the NOC is kept whole", dev.fabrics[0].noc_len, sizeof(k_node01));
+	T_OK("and kept verbatim", memcmp(dev.fabrics[0].noc, k_node01, sizeof(k_node01)) == 0);
+	T_EQ("no ICAC, as Apple sends none", dev.fabrics[0].icac_len, 0);
+	T_OK("the IPK is kept", memcmp(dev.fabrics[0].ipk, ipk, sizeof(ipk)) == 0);
 	T_OK("the admin subject is kept",
-	     dev.fabric.case_admin_subject == UINT64_C(0x1122334455667788));
-	T_EQ("the admin vendor is kept", dev.fabric.admin_vendor_id, 0x1349);
+	     dev.fabrics[0].case_admin_subject == UINT64_C(0x1122334455667788));
+	T_EQ("the admin vendor is kept", dev.fabrics[0].admin_vendor_id, 0x1349);
 
-	t_group("a second NOC");
+	t_group("a second NOC without its own root");
 
+	/*
+	 * A second administrator gets a slot, but a slot is not a fabric: it
+	 * needs its OWN AddTrustedRootCertificate first. Refusing with
+	 * InvalidNOC rather than TableFull is the difference between "this node
+	 * is full" and "you skipped a step", and only one of those tells the
+	 * commissioner to try again.
+	 */
 	T_EQ("the command itself succeeds", srv.command(srv.ctx, &inv, &response),
 	     MATTER_IM_STATUS_SUCCESS);
-	T_EQ("verdict is TableFull", dev.last_noc_status, MATTER_NOC_STATUS_TABLE_FULL);
-	T_EQ("the first fabric survives", dev.fabric.index, 1);
+	T_EQ("verdict is InvalidNOC", dev.last_noc_status, MATTER_NOC_STATUS_INVALID_NOC);
+	T_EQ("the first fabric survives", dev.fabrics[0].index, 1);
+	T_EQ("and no second one was created", dev.fabrics[1].index, 0);
+
+	t_group("a second NOC with one");
+
+	/*
+	 * What Apple actually does: the phone and the home hub each commission
+	 * this node onto their own fabric. While only one slot existed the
+	 * second AddNOC answered TableFull and the pairing never completed.
+	 */
+	dev.fabrics[1].have_root = true;
+	memcpy(dev.fabrics[1].root_public_key, dev.fabrics[0].root_public_key,
+	       sizeof(dev.fabrics[1].root_public_key));
+	T_EQ("the command itself succeeds", srv.command(srv.ctx, &inv, &response),
+	     MATTER_IM_STATUS_SUCCESS);
+	T_EQ("verdict is Ok", dev.last_noc_status, MATTER_NOC_STATUS_OK);
+	T_EQ("it took the next index", dev.fabrics[1].index, 2);
+	T_EQ("and the reply named that index", dev.last_noc_index, 2);
+	T_OK("the first fabric is untouched", dev.fabrics[0].index == 1);
 
 	t_group("a commissioner that gives up half way");
 	{
@@ -384,9 +409,9 @@ void test_matter_addnoc(void)
 		/* The bug this exists for: without a rollback the fabric
 		 * survives the dropped link, and the NEXT attempt is refused
 		 * TableFull for a reason unrelated to what went wrong. */
-		T_EQ("a fabric is installed", dev.fabric.index, 1);
+		T_EQ("a fabric is installed", dev.fabrics[0].index, 1);
 		matter_clusters_failsafe_expire(&dev);
-		T_EQ("the fabric is gone", dev.fabric.index, 0);
+		T_EQ("the fabric is gone", dev.fabrics[0].index, 0);
 		T_OK("and so is the operational key", !dev.have_op_key);
 		{
 			uint8_t zero[32] = {0};
@@ -400,21 +425,21 @@ void test_matter_addnoc(void)
 		dev.failsafe_armed = true;
 		dev.have_op_key = true;
 		memcpy(dev.op_pub, k_node01_pubkey, sizeof(k_node01_pubkey));
-		memcpy(dev.fabric.root_public_key, before.fabric.root_public_key,
-		       sizeof(dev.fabric.root_public_key));
-		dev.fabric.have_root = true;
+		memcpy(dev.fabrics[0].root_public_key, before.fabrics[0].root_public_key,
+		       sizeof(dev.fabrics[0].root_public_key));
+		dev.fabrics[0].have_root = true;
 		len = fields_addnoc(fields, sizeof(fields), k_node01, sizeof(k_node01), ipk,
 				    sizeof(ipk));
 		invoke_init(&inv, MATTER_CMD_OC_ADD_NOC, fields, len);
 		T_EQ("the retry runs", srv.command(srv.ctx, &inv, &response),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("and is accepted", dev.last_noc_status, MATTER_NOC_STATUS_OK);
-		T_EQ("on fabric index 1 again", dev.fabric.index, 1);
+		T_EQ("on fabric index 1 again", dev.fabrics[0].index, 1);
 
 		/* A FINISHED commissioning is not the fail-safe's to remove. */
 		dev.commissioning_complete = true;
 		matter_clusters_failsafe_expire(&dev);
-		T_EQ("a completed fabric survives", dev.fabric.index, 1);
+		T_EQ("a completed fabric survives", dev.fabrics[0].index, 1);
 		dev.commissioning_complete = false;
 	}
 
@@ -464,7 +489,7 @@ void test_matter_addnoc(void)
 		 * emptying the table here is what makes this AddNOC succeed --
 		 * setting last_noc_status would be overwritten a moment later.
 		 */
-		dev.fabric.index = 0u;
+		dev.fabrics[0].index = 0u;
 		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),
 		     MATTER_OK);
 		T_EQ("and it succeeded", dev.last_noc_status, MATTER_NOC_STATUS_OK);
@@ -474,15 +499,28 @@ void test_matter_addnoc(void)
 		      "1528003601153500370024000024013e24020818350124000024010118181818"
 		      "24ff0c18");
 
-		/* Again, with the table now full: the same response command,
+		/*
+		 * Again with every slot taken: the same response command,
 		 * carrying a different verdict and NO fabric index -- an index
 		 * for a fabric that was not created is a number a commissioner
-		 * could act on. */
+		 * could act on.
+		 */
+		struct matter_fabric saved[MATTER_SUPPORTED_FABRICS];
+		size_t fi;
+
+		memcpy(saved, dev.fabrics, sizeof(saved));
+		for (fi = 0u; fi < MATTER_SUPPORTED_FABRICS; fi++) {
+			dev.fabrics[fi].index = (uint8_t)(fi + 1u);
+			dev.fabrics[fi].have_root = true;
+		}
 		T_EQ("encodes", matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &n),
 		     MATTER_OK);
 		T_EQ("and it was refused", dev.last_noc_status, MATTER_NOC_STATUS_TABLE_FULL);
 		t_vec("NOCResponse, refused", out, n,
 		      "1528003601153500370024000024013e2402081835012400051818181824ff0c18");
+		/* Put the table back: a full one is this block's fixture, not
+		 * the state every later test expects to start from. */
+		memcpy(dev.fabrics, saved, sizeof(saved));
 	}
 
 	t_group("the AddTrustedRootCertificate reply on the wire");
@@ -626,11 +664,11 @@ void test_matter_network(void)
 		 * AddNOC installed. Set directly here rather than by replaying
 		 * AddNOC, so this group tests the network half alone.
 		 */
-		dev.fabric.index = 1u;
-		dev.fabric.fabric_id = SPEC_FABRIC_ID;
-		dev.fabric.node_id = UINT64_C(0xDEDEDEDE00010001);
-		memcpy(dev.fabric.root_public_key, k_spec_root_pub,
-		       sizeof(dev.fabric.root_public_key));
+		dev.fabrics[0].index = 1u;
+		dev.fabrics[0].fabric_id = SPEC_FABRIC_ID;
+		dev.fabrics[0].node_id = UINT64_C(0xDEDEDEDE00010001);
+		memcpy(dev.fabrics[0].root_public_key, k_spec_root_pub,
+		       sizeof(dev.fabrics[0].root_public_key));
 		len = fields_bytes(fields, sizeof(fields), 0u, k_dataset, sizeof(k_dataset));
 		invoke_init(&inv, MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, len);
 		inv.cluster = MATTER_CLUSTER_NETWORK_COMMISSIONING;

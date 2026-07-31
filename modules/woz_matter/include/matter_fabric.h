@@ -41,6 +41,19 @@
 /** kMaxCHIPCertLength (credentials/CHIPCert.h:54). */
 #define MATTER_CERT_MAX 400u
 
+/**
+ * The largest OPERATIONAL certificate this node stores per fabric.
+ *
+ * Smaller than MATTER_CERT_MAX because a NOC is not a root: it carries one
+ * subject, one issuer and one key, where a root may carry extensions this node
+ * never parses. Apple's is 253 bytes; this leaves room for a longer one without
+ * reserving 400 bytes per fabric on a part with 128 KB of RAM in total.
+ *
+ * An oversized NOC is REFUSED by AddNOC, never truncated -- a certificate
+ * missing its last bytes fails signature verification with nothing to say why.
+ */
+#define MATTER_NOC_MAX 320u
+
 /** The identity protection key: one AES-128 key, shared by a whole fabric. */
 #define MATTER_IPK_LEN 16u
 
@@ -102,11 +115,43 @@ struct matter_fabric {
 	uint16_t admin_vendor_id;
 	uint8_t root_public_key[MATTER_FABRIC_PUBKEY_LEN];
 	uint8_t ipk[MATTER_IPK_LEN];
-	uint8_t noc[MATTER_CERT_MAX];
+	uint8_t noc[MATTER_NOC_MAX];
 	size_t noc_len;
-	/** Empty when the commissioner signed the NOC with the root directly. */
-	uint8_t icac[MATTER_CERT_MAX];
+	/**
+	 * The private half of the key this fabric's NOC certifies.
+	 *
+	 * Per fabric, not per node: each commissioner issues its own CSRRequest
+	 * and certifies a DIFFERENT key, so a node that kept one operational key
+	 * would sign the second fabric's Sigma2 with the first fabric's key --
+	 * verifying against the wrong certificate, failing, and saying nothing.
+	 */
+	uint8_t op_priv[32];
+	/**
+	 * How much of the SHARED intermediate-certificate area this fabric owns.
+	 *
+	 * Zero for a NOC the root signed directly, which is what Apple sends and
+	 * what every fabric on this node has carried so far. The certificate
+	 * itself lives in one buffer for the whole node rather than one per
+	 * fabric: at 400 bytes each it was the largest thing in this struct and
+	 * the least used, and a device with 3 KB of RAM to spare cannot afford
+	 * to reserve it per fabric against a case that has never occurred.
+	 *
+	 * The cost is a real limit, stated here rather than discovered: only ONE
+	 * fabric may hold an intermediate certificate. A second one is REFUSED,
+	 * loudly, not stored partially.
+	 */
 	size_t icac_len;
+};
+
+/**
+ * The one intermediate certificate this node can hold, and whose it is.
+ *
+ * @param owner_index the fabric index holding it, or 0 when free.
+ */
+struct matter_icac_slot {
+	uint8_t buf[MATTER_CERT_MAX];
+	size_t len;
+	uint8_t owner_index;
 };
 
 /**

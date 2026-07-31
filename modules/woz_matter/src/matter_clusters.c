@@ -63,6 +63,71 @@ static const uint32_t k_root_servers[] = {
 #define TAG_NETINFO_ID        0u
 #define TAG_NETINFO_CONNECTED 1u
 
+/**
+ * The slot currently being provisioned, allocating one if needed.
+ *
+ * A commissioner builds a fabric across several commands -- the root arrives
+ * before the NOC -- so the half-built slot must survive between them. A slot
+ * with a root but no index yet is that one. NULL when every slot is taken,
+ * which is what AddNOC reports as TABLE_FULL.
+ */
+static struct matter_fabric *fabric_pending(struct matter_device_info *info)
+{
+	size_t i;
+
+	for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (info->fabrics[i].have_root && info->fabrics[i].index == 0u) {
+			return &info->fabrics[i];
+		}
+	}
+	for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (!info->fabrics[i].have_root && info->fabrics[i].index == 0u) {
+			return &info->fabrics[i];
+		}
+	}
+	return NULL;
+}
+
+/** How many fabrics hold a complete identity. */
+static uint8_t fabric_count(const struct matter_device_info *info)
+{
+	uint8_t n = 0u;
+	size_t i;
+
+	for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (info->fabrics[i].index != 0u) {
+			n++;
+		}
+	}
+	return n;
+}
+
+/**
+ * The lowest index not already taken. Indices are 1-based on the wire.
+ *
+ * Kept in one place because an off-by-one here reports one fabric's
+ * certificate under another's index, which no peer can detect.
+ */
+static uint8_t fabric_next_index(const struct matter_device_info *info)
+{
+	uint8_t want;
+
+	for (want = 1u; want <= MATTER_SUPPORTED_FABRICS; want++) {
+		bool taken = false;
+		size_t i;
+
+		for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+			if (info->fabrics[i].index == want) {
+				taken = true;
+			}
+		}
+		if (!taken) {
+			return want;
+		}
+	}
+	return 0u;
+}
+
 static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 {
 	(void)ctx;
@@ -400,37 +465,45 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 	}
 
 	if (cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
-		bool have = info->fabric.index != 0u;
+		size_t fi;
 
 		switch (attribute) {
 		case MATTER_ATTR_OC_FABRICS:
 			/*
-			 * What the commissioner reads to confirm the fabric it
-			 * just created is the one this node is on. Answering
-			 * UNSUPPORTED here is where "Adding to home" stopped.
+			 * EVERY fabric, not just the first. A commissioner
+			 * reads this to confirm the fabric it created is one
+			 * this node joined -- and with two administrators there
+			 * are two, so reporting one tells the other it was
+			 * never adopted.
 			 *
-			 * Fabric-scoped, so a real implementation filters by
-			 * the reading session's fabric. There is one fabric, so
-			 * the filtered and unfiltered answers are the same.
+			 * Fabric-scoped in the spec: the answer should be
+			 * filtered to the reading session's fabric. This does
+			 * not filter, which over-reports rather than under-
+			 * reports, and is written down because it is a gap.
 			 */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
-			if (have) {
+			for (fi = 0u; fi < MATTER_SUPPORTED_FABRICS; fi++) {
+				const struct matter_fabric *f = &info->fabrics[fi];
+
+				if (f->index == 0u) {
+					continue;
+				}
 				(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
 								 MATTER_TLV_STRUCTURE);
 				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_FABRIC_ROOT_KEY),
-							   info->fabric.root_public_key,
+							   f->root_public_key,
 							   MATTER_FABRIC_PUBKEY_LEN);
 				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_VENDOR_ID),
-							 info->fabric.admin_vendor_id);
+							 f->admin_vendor_id);
 				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_FABRIC_ID),
-							 info->fabric.fabric_id);
+							 f->fabric_id);
 				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_NODE_ID),
-							 info->fabric.node_id);
+							 f->node_id);
 				/* Empty until a commissioner writes one. */
 				(void)matter_tlv_put_utf8(w, MATTER_TLV_CTX(TAG_FABRIC_LABEL), "",
 							  0u);
 				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_INDEX),
-							 info->fabric.index);
+							 f->index);
 				(void)matter_tlv_end_container(w);
 			}
 			(void)matter_tlv_end_container(w);
@@ -438,28 +511,32 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 		case MATTER_ATTR_OC_NOCS:
 			/*
 			 * The certificates themselves. Fabric-scoped AND
-			 * access-restricted to Administer in the spec; this node
-			 * enforces neither, which is the same gap the ACL note
-			 * records. Nothing here is secret -- a NOC is public --
-			 * but the restriction exists and is not honoured.
+			 * restricted to Administer in the spec; this node
+			 * enforces neither, the same gap the ACL note records.
+			 * Nothing here is secret -- a NOC is public -- but the
+			 * restriction exists and is not honoured.
 			 */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
-			if (have) {
+			for (fi = 0u; fi < MATTER_SUPPORTED_FABRICS; fi++) {
+				const struct matter_fabric *f = &info->fabrics[fi];
+
+				if (f->index == 0u) {
+					continue;
+				}
 				(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
 								 MATTER_TLV_STRUCTURE);
-				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NOC_NOC),
-							   info->fabric.noc, info->fabric.noc_len);
-				if (info->fabric.icac_len > 0u) {
+				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NOC_NOC), f->noc,
+							   f->noc_len);
+				if (f->icac_len > 0u) {
 					(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NOC_ICAC),
-								   info->fabric.icac,
-								   info->fabric.icac_len);
+								   info->icac.buf, f->icac_len);
 				} else {
 					/* Nullable, and null is the answer when
 					 * the root signed the NOC directly. */
 					(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_NOC_ICAC));
 				}
 				(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_FABRIC_INDEX),
-							 info->fabric.index);
+							 f->index);
 				(void)matter_tlv_end_container(w);
 			}
 			(void)matter_tlv_end_container(w);
@@ -468,20 +545,26 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			/*
 			 * A list of the root CERTIFICATES, which this node does
 			 * not keep -- matter_fabric holds the root public key
-			 * and discards the ~300 bytes around it. Reporting an
-			 * empty list is the honest consequence of that choice.
+			 * and discards the ~300 bytes around it. An empty list
+			 * is the honest consequence of that choice.
 			 */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
 			(void)matter_tlv_end_container(w);
 			return;
 		case MATTER_ATTR_OC_CURRENT_FABRIC_INDEX:
-			(void)matter_tlv_put_u64(w, tag, info->fabric.index);
+			/*
+			 * Scoped to the READING session's fabric, which this
+			 * layer cannot see. The lowest live index is right
+			 * whenever there is one fabric and a guess when there
+			 * are two.
+			 */
+			(void)matter_tlv_put_u64(w, tag, info->fabrics[0].index);
 			return;
 		case MATTER_ATTR_OC_SUPPORTED_FABRICS:
 			(void)matter_tlv_put_u64(w, tag, MATTER_SUPPORTED_FABRICS);
 			return;
 		case MATTER_ATTR_OC_COMMISSIONED_FABRICS:
-			(void)matter_tlv_put_u64(w, tag, info->fabric.index != 0u ? 1u : 0u);
+			(void)matter_tlv_put_u64(w, tag, fabric_count(info));
 			return;
 		default:
 			return;
@@ -761,14 +844,31 @@ static bool dataset_xpanid(const uint8_t *ds, size_t len, uint8_t out[MATTER_THR
  * a failure. Failures ARE logged by the port, which is where the SRP server's
  * answer eventually lands.
  */
+static void advertise_one(const struct matter_fabric *fabric);
+
 static void advertise_operational(const struct matter_device_info *info)
 {
 	char name[MATTER_INSTANCE_NAME_LEN];
+	size_t fi;
 
-	if (info->fabric.index == 0u) {
-		return;
+	/*
+	 * One instance PER FABRIC. The name is derived from the compressed
+	 * fabric id and this node's id on that fabric, so a second
+	 * administrator resolving the first fabric's name finds an address it
+	 * cannot open a session to.
+	 */
+	for (fi = 0u; fi < MATTER_SUPPORTED_FABRICS; fi++) {
+		if (info->fabrics[fi].index != 0u) {
+			advertise_one(&info->fabrics[fi]);
+		}
 	}
-	if (matter_fabric_instance_name(&info->fabric, name, sizeof(name)) != MATTER_OK) {
+}
+
+static void advertise_one(const struct matter_fabric *fabric)
+{
+	char name[MATTER_INSTANCE_NAME_LEN];
+
+	if (matter_fabric_instance_name(fabric, name, sizeof(name)) != MATTER_OK) {
 		return;
 	}
 	(void)matter_thread_advertise(name, MATTER_OPERATIONAL_PORT);
@@ -901,8 +1001,18 @@ static uint8_t add_trusted_root(struct matter_device_info *info, const struct ma
 		return MATTER_IM_STATUS_INVALID_COMMAND;
 	}
 
-	memcpy(info->fabric.root_public_key, ci.public_key, sizeof(ci.public_key));
-	info->fabric.have_root = true;
+	{
+		struct matter_fabric *f = fabric_pending(info);
+
+		/* Every slot already holds a complete fabric. Refused here
+		 * rather than at AddNOC, so the commissioner learns before it
+		 * mints an operational certificate this node cannot accept. */
+		if (f == NULL) {
+			return MATTER_IM_STATUS_RESOURCE_EXHAUSTED;
+		}
+		memcpy(f->root_public_key, ci.public_key, sizeof(ci.public_key));
+		f->have_root = true;
+	}
 	return MATTER_IM_STATUS_SUCCESS;
 }
 
@@ -922,6 +1032,7 @@ static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_i
 	size_t icac_len = 0u;
 	size_t ipk_len = 0u;
 	struct matter_cert_info ci;
+	struct matter_fabric *fab;
 	uint64_t v = 0u;
 
 	if (!info->have_op_key) {
@@ -929,14 +1040,19 @@ static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_i
 		 * this NOC certifies. */
 		return MATTER_NOC_STATUS_MISSING_CSR;
 	}
-	if (!info->fabric.have_root) {
-		return MATTER_NOC_STATUS_INVALID_NOC;
-	}
-	if (info->fabric.index != 0u) {
+	fab = fabric_pending(info);
+	if (fab == NULL) {
+		/* Every slot holds a complete fabric already. This is what a
+		 * second administrator sees on a node built for one, and it is
+		 * where Apple stopped: the phone and the home hub each want
+		 * their own. */
 		return MATTER_NOC_STATUS_TABLE_FULL;
 	}
+	if (!fab->have_root) {
+		return MATTER_NOC_STATUS_INVALID_NOC;
+	}
 
-	if (!field_bytes(inv, TAG_ADDNOC_NOC, &noc, &noc_len) || noc_len > MATTER_CERT_MAX ||
+	if (!field_bytes(inv, TAG_ADDNOC_NOC, &noc, &noc_len) || noc_len > MATTER_NOC_MAX ||
 	    !field_bytes(inv, TAG_ADDNOC_IPK, &ipk, &ipk_len) || ipk_len != MATTER_IPK_LEN) {
 		return MATTER_NOC_STATUS_INVALID_NOC;
 	}
@@ -960,22 +1076,43 @@ static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_i
 		return MATTER_NOC_STATUS_INVALID_NOC;
 	}
 
-	memcpy(info->fabric.noc, noc, noc_len);
-	info->fabric.noc_len = noc_len;
+	memcpy(fab->noc, noc, noc_len);
+	fab->noc_len = noc_len;
 	if (icac_len != 0u) {
-		memcpy(info->fabric.icac, icac, icac_len);
+		memcpy(info->icac.buf, icac, icac_len);
+		info->icac.len = icac_len;
+		info->icac.owner_index = fabric_next_index(info);
 	}
-	info->fabric.icac_len = icac_len;
-	memcpy(info->fabric.ipk, ipk, ipk_len);
-	info->fabric.node_id = ci.node_id;
-	info->fabric.fabric_id = ci.fabric_id;
+	fab->icac_len = icac_len;
+	memcpy(fab->ipk, ipk, ipk_len);
+	/*
+	 * The key this fabric's NOC certifies, taken from the CSR that preceded
+	 * it. Copied INTO the fabric rather than left in info->op_priv: the next
+	 * administrator issues its own CSRRequest and overwrites that, and a
+	 * node that signed Sigma2 with the wrong fabric's key would verify
+	 * against the wrong certificate and be refused with nothing said.
+	 */
+	memcpy(fab->op_priv, info->op_priv, sizeof(fab->op_priv));
+	fab->node_id = ci.node_id;
+	fab->fabric_id = ci.fabric_id;
 	if (field_u64(inv, TAG_ADDNOC_CASE_ADMIN_SUBJECT, &v)) {
-		info->fabric.case_admin_subject = v;
+		fab->case_admin_subject = v;
 	}
 	if (field_u64(inv, TAG_ADDNOC_ADMIN_VENDOR_ID, &v) && v <= UINT16_MAX) {
-		info->fabric.admin_vendor_id = (uint16_t)v;
+		fab->admin_vendor_id = (uint16_t)v;
 	}
-	info->fabric.index = 1u;
+	fab->index = fabric_next_index(info);
+	/*
+	 * Findable on the new fabric, immediately. A second administrator adds
+	 * its fabric over an EXISTING CASE session and then has to open a new
+	 * one to the identity it has just issued -- which means resolving a
+	 * DNS-SD name that only exists once this runs. Registration at
+	 * ConnectNetwork covers the first fabric only; that is where the second
+	 * administrator stopped, with the fabric accepted and nothing to reach.
+	 */
+	advertise_operational(info);
+	/* Held for the response, which is serialised after this has run. */
+	info->last_noc_index = fab->index;
 	return MATTER_NOC_STATUS_OK;
 }
 
@@ -1134,7 +1271,7 @@ static void opcred_fields(const struct matter_device_info *info, uint32_t respon
 		 */
 		if (info->last_noc_status == MATTER_NOC_STATUS_OK) {
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_NOCRESP_FABRIC_INDEX),
-						 info->fabric.index);
+						 info->last_noc_index);
 		}
 	} else {
 		/* AttestationResponse and CSRResponse are the same shape: the
@@ -1268,10 +1405,16 @@ void matter_clusters_failsafe_expire(struct matter_device_info *info)
 		return;
 	}
 
-	/* The fabric, and the key the NOC in it certifies. Wiped rather than
-	 * zeroed by index alone: op_priv is a private key that outlived the
-	 * only thing that was going to use it. */
-	memset(&info->fabric, 0, sizeof(info->fabric));
+	/*
+	 * Every fabric, and the keys their NOCs certify. Wiped rather than
+	 * cleared by index alone: each holds a private key that outlived the
+	 * only thing that was going to use it.
+	 *
+	 * All of them, because the fail-safe covers the whole window and a
+	 * commissioner that abandoned it mid-way may have created more than one.
+	 */
+	memset(info->fabrics, 0, sizeof(info->fabrics));
+	memset(&info->icac, 0, sizeof(info->icac));
 	memset(info->op_priv, 0, sizeof(info->op_priv));
 	memset(info->op_pub, 0, sizeof(info->op_pub));
 	info->have_op_key = false;

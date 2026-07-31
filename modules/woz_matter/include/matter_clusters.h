@@ -216,11 +216,14 @@ extern "C" {
 /**
  * How many fabrics this node can hold at once.
  *
- * One. The spec's floor is five, and a node meant for several homes needs the
- * table; this one exists to be provisioned by a single Apple Home and there is
- * a struct matter_fabric of RAM behind each entry.
+ * Two, which is not a round number -- it is what a single Apple Home needs.
+ * The phone and the home hub commission the device onto SEPARATE fabrics, each
+ * with its own trusted root and its own operational key, and a node that
+ * advertises one answers the second AddNOC with TABLE_FULL and is never
+ * adopted. The spec's floor is five; there is a struct matter_fabric of RAM
+ * behind every entry and this part has 128 KB in total.
  */
-#define MATTER_SUPPORTED_FABRICS 1u
+#define MATTER_SUPPORTED_FABRICS 2u
 
 /*
  * NodeOperationalCertStatusEnum, the verdicts this node actually returns
@@ -318,7 +321,13 @@ struct matter_device_info {
 	 */
 
 	/** The one fabric this node can hold. Empty until AddNOC succeeds. */
-	struct matter_fabric fabric;
+	struct matter_fabric fabrics[MATTER_SUPPORTED_FABRICS];
+	/**
+	 * The node's single intermediate-certificate slot, shared by every
+	 * fabric because at most one has ever needed it. See the note on
+	 * matter_fabric.icac_len for what that costs.
+	 */
+	struct matter_icac_slot icac;
 
 	/*
 	 * ---- the operational network ---------------------------------------
@@ -378,6 +387,14 @@ struct matter_device_info {
 	 * after the command has run and cannot recompute the verdict.
 	 */
 	uint8_t last_noc_status;
+	/**
+	 * The index AddNOC assigned, held for the NOCResponse.
+	 *
+	 * The reply is serialised after the command has run and cannot recompute
+	 * it -- and with more than one slot, "the fabric that was just created"
+	 * is no longer the same thing as "the only one".
+	 */
+	uint8_t last_noc_index;
 };
 
 /**

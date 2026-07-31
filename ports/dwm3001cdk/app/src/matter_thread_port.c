@@ -19,6 +19,7 @@
 /* For MATTER_INSTANCE_NAME_LEN: the SRP instance name is sized by the thing
  * that produces it, matter_fabric_instance_name(). */
 #include "matter_case.h"
+#include "matter_clusters.h" /* MATTER_SUPPORTED_FABRICS */
 #include "matter_fabric.h"
 
 #include <zephyr/kernel.h>
@@ -201,14 +202,30 @@ int matter_thread_wait_attached(uint32_t timeout_ms)
  * service name on somebody else's border router.
  */
 static char s_host_name[17];
-static char s_instance_name[MATTER_INSTANCE_NAME_LEN];
 static char s_service_type[] = "_matter._tcp";
 static char s_txt_sii[] = "3000";
 static char s_txt_sai[] = "300";
-static char s_subtype[19]; /* "_I" + 16 hex digits + NUL */
-static const char *s_subtype_labels[2];
-static otSrpClientService s_service;
-static otDnsTxtEntry s_txt[2];
+
+/**
+ * One registration per fabric, because a node on two fabrics has two names.
+ *
+ * The instance name is derived from the compressed fabric id and this node's id
+ * ON that fabric, so the second administrator resolving the first fabric's name
+ * finds an address it cannot open a session to. A single slot here published
+ * whichever fabric registered last and left the other unreachable.
+ */
+struct srp_reg {
+	char instance_name[MATTER_INSTANCE_NAME_LEN];
+	char subtype[19]; /* "_I" + 16 hex digits + NUL */
+	const char *subtype_labels[2];
+	otSrpClientService service;
+	otDnsTxtEntry txt[2];
+	bool used;
+};
+static struct srp_reg s_regs[MATTER_SUPPORTED_FABRICS];
+
+/** The SRP host is registered once, whatever number of services hang off it. */
+static bool s_host_ready;
 
 static otUdpSocket s_udp;
 static bool s_udp_open;
@@ -332,15 +349,38 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	otInstance *ot = openthread_get_default_instance();
 	otExtAddress eui;
 	otSockAddr bind_addr;
+	struct srp_reg *reg = NULL;
+	size_t i;
 	otError err;
 
 	if (ot == NULL || instance_name == NULL) {
 		return MATTER_E_INVAL;
 	}
-	if (strlen(instance_name) >= sizeof(s_instance_name)) {
+	if (strlen(instance_name) >= MATTER_INSTANCE_NAME_LEN) {
 		return MATTER_E_INVAL;
 	}
-	strcpy(s_instance_name, instance_name);
+	/*
+	 * One slot per name. Re-registering the SAME name is a no-op rather than
+	 * an error: matter_clusters.c re-advertises every fabric whenever one is
+	 * added, which is simpler than tracking what changed and means this is
+	 * called with names already published.
+	 */
+	for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (s_regs[i].used && strcmp(s_regs[i].instance_name, instance_name) == 0) {
+			return MATTER_OK;
+		}
+	}
+	for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (!s_regs[i].used) {
+			reg = &s_regs[i];
+			break;
+		}
+	}
+	if (reg == NULL) {
+		LOG_ERR("no SRP slot left for %s", instance_name);
+		return MATTER_E_NOSPACE;
+	}
+	strcpy(reg->instance_name, instance_name);
 
 	/* The host name only has to be unique on the SRP server, and the EUI-64
 	 * already is. */
@@ -357,12 +397,12 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	 * conclude the node is gone. Announcing the poll period is what makes
 	 * the next exchange survivable.
 	 */
-	s_txt[0].mKey = "SII";
-	s_txt[0].mValue = (const uint8_t *)s_txt_sii;
-	s_txt[0].mValueLength = (uint16_t)strlen(s_txt_sii);
-	s_txt[1].mKey = "SAI";
-	s_txt[1].mValue = (const uint8_t *)s_txt_sai;
-	s_txt[1].mValueLength = (uint16_t)strlen(s_txt_sai);
+	reg->txt[0].mKey = "SII";
+	reg->txt[0].mValue = (const uint8_t *)s_txt_sii;
+	reg->txt[0].mValueLength = (uint16_t)strlen(s_txt_sii);
+	reg->txt[1].mKey = "SAI";
+	reg->txt[1].mValue = (const uint8_t *)s_txt_sai;
+	reg->txt[1].mValueLength = (uint16_t)strlen(s_txt_sai);
 
 	/*
 	 * The compressed-fabric subtype, "_I" + the id in uppercase hex
@@ -374,20 +414,20 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	 *
 	 * The first 16 characters of the instance name are that id already.
 	 */
-	s_subtype[0] = '_';
-	s_subtype[1] = 'I';
-	memcpy(&s_subtype[2], s_instance_name, 16u);
-	s_subtype[18] = '\0';
-	s_subtype_labels[0] = s_subtype;
-	s_subtype_labels[1] = NULL;
+	reg->subtype[0] = '_';
+	reg->subtype[1] = 'I';
+	memcpy(&reg->subtype[2], reg->instance_name, 16u);
+	reg->subtype[18] = '\0';
+	reg->subtype_labels[0] = reg->subtype;
+	reg->subtype_labels[1] = NULL;
 
-	memset(&s_service, 0, sizeof(s_service));
-	s_service.mName = s_service_type;
-	s_service.mInstanceName = s_instance_name;
-	s_service.mSubTypeLabels = s_subtype_labels;
-	s_service.mPort = port;
-	s_service.mTxtEntries = s_txt;
-	s_service.mNumTxtEntries = 2u;
+	memset(&reg->service, 0, sizeof(reg->service));
+	reg->service.mName = s_service_type;
+	reg->service.mInstanceName = reg->instance_name;
+	reg->service.mSubTypeLabels = reg->subtype_labels;
+	reg->service.mPort = port;
+	reg->service.mTxtEntries = reg->txt;
+	reg->service.mNumTxtEntries = 2u;
 
 	openthread_mutex_lock();
 
@@ -409,17 +449,30 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 		}
 	}
 
-	otSrpClientSetCallback(ot, srp_cb, NULL);
-	err = otSrpClientSetHostName(ot, s_host_name);
-	if (err == OT_ERROR_NONE) {
-		err = otSrpClientEnableAutoHostAddress(ot);
+	/*
+	 * The HOST is registered once; the services hang off it. Calling
+	 * otSrpClientSetHostName() again once the client is running returns
+	 * OT_ERROR_INVALID_STATE (13) and takes the whole registration down with
+	 * it -- which is what refused the second fabric after its AddNOC was
+	 * accepted, leaving the new administrator a fabric it could not resolve.
+	 */
+	err = OT_ERROR_NONE;
+	if (!s_host_ready) {
+		otSrpClientSetCallback(ot, srp_cb, NULL);
+		err = otSrpClientSetHostName(ot, s_host_name);
+		if (err == OT_ERROR_NONE) {
+			err = otSrpClientEnableAutoHostAddress(ot);
+		}
+		if (err == OT_ERROR_NONE) {
+			s_host_ready = true;
+		}
 	}
 	if (err == OT_ERROR_NONE) {
-		err = otSrpClientAddService(ot, &s_service);
+		err = otSrpClientAddService(ot, &reg->service);
 	}
 	if (err == OT_ERROR_NONE) {
 		/* Finds the border router's SRP server itself, from the network
-		 * data it already has as a child. */
+		 * data it already has as a child. Idempotent. */
 		otSrpClientEnableAutoStartMode(ot, NULL, NULL);
 	}
 	openthread_mutex_unlock();
@@ -428,8 +481,9 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 		LOG_ERR("SRP registration refused (%d)", err);
 		return MATTER_E_STATE;
 	}
+	reg->used = true;
 
-	LOG_INF("SRP: %s.%s._matter._tcp on %s.local port %u", s_instance_name, s_subtype,
+	LOG_INF("SRP: %s.%s._matter._tcp on %s.local port %u", reg->instance_name, reg->subtype,
 		s_host_name, port);
 	log_addresses(ot);
 	return MATTER_OK;
