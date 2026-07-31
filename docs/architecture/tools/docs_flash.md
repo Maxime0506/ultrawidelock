@@ -35,42 +35,42 @@ links are absolute or flash-local, so it needs no rewriting. docs.sh drives it.
 ## API
 
 ### `repo_slug() -> str`
-`tools/docs_flash.py:93`
+`tools/docs_flash.py:97`
 
 owner/repo for the origin remote, or '' if none.
 
 **called by** `main`
 
 ### `fetch(url: str) -> bytes`
-`tools/docs_flash.py:110`
+`tools/docs_flash.py:114`
 
 Fetch and return the complete response body from a URL with 60-second timeout.
 
 **called by** `main`
 
 ### `inject(page: Path, anchor: str, addition: str, before: bool) -> str`
-`tools/docs_flash.py:116`
+`tools/docs_flash.py:120`
 
 Insert addition next to anchor in page, once; report what happened.
 
 **called by** `link_site`
 
 ### `link_site() -> None`
-`tools/docs_flash.py:130`
+`tools/docs_flash.py:134`
 
 Inject the flash-page hub link and landing quickstart call-to-action into the rendered site, and validate optional stylesheet and animation styles.
 
 **called by** `main`  ·  **calls** `inject`
 
 ### `prune_manifest(dst: Path) -> None`
-`tools/docs_flash.py:143`
+`tools/docs_flash.py:147`
 
 Drop manifest builds whose firmware did not get staged.
 
 **called by** `main`
 
 ### `main() -> int`
-`tools/docs_flash.py:159`
+`tools/docs_flash.py:163`
 
 Assemble the web flasher page: stage firmware assets (from local build or latest release), copy the flasher HTML, and link the site navigation.
 

@@ -1,8 +1,8 @@
 <!-- generated documentation — edit the source, not this file -->
 # `ports/esp32/components/woz_uwb/port/board_pins.h`
 
-DW3000 (DWM3000EVB) wiring per ESP32 target, SPI2/FSPI. Source of truth for
-the wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB
-is soldered to your board.
+DW3000-family wiring per ESP32 target, SPI2/FSPI. Source of truth for the
+wiring table in docs/esp32-bringup.md. Change to match how the UWB module is
+wired to your board.
 
 **used by** [`ports/esp32/components/woz_uwb/port/dw3000_hw.c`](dw3000_hw.c.md), [`ports/esp32/components/woz_uwb/port/dw3000_spi.c`](dw3000_spi.c.md)  ·  **discussed in** [`docs/esp32-bringup.md`](../../esp32-bringup.md), [`docs/porting-esp32.md`](../../porting-esp32.md), [`ports/esp32/apps/reader/README.md`](../../../ports/esp32/apps/reader/README.md), [`ports/esp32/components/woz_uwb/README.md`](../../../ports/esp32/components/woz_uwb/README.md), [`release/esp32-matter-lock/FLASH.md`](../../../release/esp32-matter-lock/FLASH.md)

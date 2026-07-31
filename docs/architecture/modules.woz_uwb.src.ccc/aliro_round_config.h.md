@@ -3,4 +3,4 @@
 
 @file aliro_round_config.h — one knob for the CCC ranging round's responder count.
 
-**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](../modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](cherry_ccc_shim.c.md)
+**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](../modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](cherry_ccc_shim.c.md)  ·  **discussed in** [`docs/protocol-research.md`](../../protocol-research.md)
