@@ -1681,7 +1681,15 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 			 * null for everything that describes a user who is not
 			 * there. NextUserIndex is null too -- there is no next
 			 * occupied slot to walk to.
+			 *
+			 * The CommandFields STRUCTURE is opened here, by the
+			 * callee, exactly as opcred_fields and network_fields
+			 * do. Writing the fields bare puts them in the
+			 * CommandDataIB beside the path instead of inside it,
+			 * and the result is a response that encodes without
+			 * error, decodes as garbage, and is simply dropped.
 			 */
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_GETUSER_INDEX),
 						 info->last_user_index);
 			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NAME));
@@ -1693,6 +1701,7 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_CREATOR_FABRIC));
 			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_MODIFIER_FABRIC));
 			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NEXT_INDEX));
+			(void)matter_tlv_end_container(w);
 		}
 		return;
 	}

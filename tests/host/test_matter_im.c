@@ -1107,6 +1107,62 @@ void test_matter_im_invoke(void)
 		     MATTER_REGULATORY_INDOOR);
 	}
 
+	/*
+	 * GetUser on the lock endpoint, which is where a real pairing stops.
+	 * Apple invokes it during commissioning and sends RemoveFabric if it
+	 * does not get an answer it can use, so what matters is not that the
+	 * command is accepted but that the RESPONSE decodes and names the right
+	 * path -- a response built for the wrong endpoint or under the invoked
+	 * command's id looks like silence to the controller.
+	 */
+	t_group("GetUser answers with an empty slot");
+	{
+		uint8_t fields[16];
+		struct matter_tlv_writer fw;
+		size_t flen = 0u;
+
+		matter_tlv_writer_init(&fw, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&fw, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&fw, MATTER_TLV_CTX(0), 1u); /* UserIndex */
+		(void)matter_tlv_end_container(&fw);
+		T_EQ("fields encode", matter_tlv_writer_finish(&fw, &flen), MATTER_OK);
+
+		memset(&inv, 0, sizeof(inv));
+		inv.endpoint = MATTER_ENDPOINT_LOCK;
+		inv.cluster = MATTER_CLUSTER_DOOR_LOCK;
+		inv.command = MATTER_CMD_DL_GET_USER;
+		inv.fields = fields;
+		inv.fields_len = flen;
+		inv.has_fields = true;
+
+		T_EQ("encodes a response",
+		     matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &len),
+		     MATTER_OK);
+		T_OK("response is not empty", len > 0u);
+		T_OK("response decodes", walk_invoke_response(out, len, &ir));
+		T_OK("carries a command, not a status", !ir.is_status);
+		T_EQ("on the lock endpoint", ir.endpoint, (long)MATTER_ENDPOINT_LOCK);
+		T_EQ("Door Lock", (long)ir.cluster, (long)MATTER_CLUSTER_DOOR_LOCK);
+		/* The path names GetUserResponse, not the GetUser that was
+		 * invoked. A controller matches on this. */
+		T_EQ("GetUserResponse", (long)ir.command, (long)MATTER_CMD_DL_GET_USER_RESPONSE);
+
+		/* An index outside the table is refused rather than answered
+		 * with an empty slot that implies the slot exists. */
+		matter_tlv_writer_init(&fw, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&fw, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&fw, MATTER_TLV_CTX(0), MATTER_DL_USERS_MAX + 1u);
+		(void)matter_tlv_end_container(&fw);
+		T_EQ("fields encode", matter_tlv_writer_finish(&fw, &flen), MATTER_OK);
+		inv.fields_len = flen;
+		T_EQ("out-of-range encodes",
+		     matter_im_invoke_response_encode(&srv, &inv, out, sizeof(out), &len),
+		     MATTER_OK);
+		T_OK("response decodes", walk_invoke_response(out, len, &ir));
+		T_OK("and it is a status", ir.is_status);
+		T_EQ("invalid command", ir.status, (long)MATTER_IM_STATUS_INVALID_COMMAND);
+	}
+
 	t_group("commands this node does not have");
 	{
 		uint8_t buf[64];
