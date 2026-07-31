@@ -130,7 +130,15 @@ struct matter_exchange {
 	bool have_peer_node_id;
 	/** The initiator's exchange id, echoed on every reply. */
 	uint16_t exchange_id;
-	/** True once a first message has fixed @ref exchange_id. */
+	/**
+	 * True once a message has fixed @ref exchange_id.
+	 *
+	 * One exchange at a time, which is all a single commissioner needs. On a
+	 * SECURE session an authenticated peer may replace it by initiating a new
+	 * one -- Matter gives every interaction its own exchange -- so this node
+	 * follows the peer from one to the next rather than holding the first
+	 * forever. On the unsecured session it does not: see matter_exchange_recv().
+	 */
 	bool open;
 	/** Counters this node stamps on what it sends. */
 	struct matter_counter counter;
@@ -153,11 +161,21 @@ struct matter_exchange {
  */
 #define MATTER_PASE_NODE_ID 0ULL
 
-/** What a received message turned out to be. */
+/**
+ * What a received message turned out to be.
+ *
+ * @ref opcode, @ref protocol_id, @ref exchange_id and @ref initiator are set
+ * even when matter_exchange_recv() goes on to REFUSE the message, so a caller
+ * can log what it turned away. The rest is meaningful only on MATTER_OK.
+ */
 struct matter_exchange_in {
 	uint8_t opcode;
 	/** Secure Channel, or the Interaction Model once the session is secure. */
 	uint16_t protocol_id;
+	/** The exchange the peer sent this on. */
+	uint16_t exchange_id;
+	/** True when the peer set I, claiming to have opened this exchange. */
+	bool initiator;
 	/** Points into the caller's buffer; not copied. */
 	const uint8_t *payload;
 	size_t payload_len;
@@ -189,9 +207,11 @@ void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp)
  *        it. Needs @p len bytes. Unused, and may be NULL, while unsecured.
  * @return MATTER_OK; MATTER_E_DUP when the counter has been seen, in which case
  *         the peer must still be acknowledged but @p in must NOT be acted on;
- *         MATTER_E_STATE for a message belonging to a different exchange;
- *         MATTER_E_INVAL for a message this layer will not carry; or whatever
- *         the header decoders returned.
+ *         MATTER_E_STATE for a message on another exchange that this node will
+ *         not follow -- a second exchange on the UNSECURED session, which means
+ *         a second commissioner, or one that arrives with I clear and so is a
+ *         reply to nothing; MATTER_E_INVAL for a message this layer will not
+ *         carry; or whatever the header decoders returned.
  */
 int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t len,
 			 struct matter_exchange_in *in, uint8_t *pt, size_t pt_cap);
@@ -227,6 +247,24 @@ int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16
  */
 int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8_t *payload,
 			  size_t payload_len, uint8_t *out, size_t cap, size_t *out_len);
+
+/**
+ * Frame a reply on a protocol other than Secure Channel.
+ *
+ * Same framing as matter_exchange_reply(); the protocol id is the only
+ * difference, and it exists because everything after commissioning's Secure
+ * Channel phase is protocol 0x0001.
+ *
+ * On a secure session the proto header and payload are sealed together and
+ * @p out receives the encrypted message, which is @ref MATTER_TAG_LEN bytes
+ * longer than the cleartext equivalent.
+ *
+ * @param out needs MATTER_EXCHANGE_HEADER_MAX + @p payload_len + MATTER_TAG_LEN
+ *        bytes on a secure session.
+ */
+int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode,
+			 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
+			 size_t *out_len);
 
 /**
  * Frame a bare acknowledgement, for when there is nothing to say yet.

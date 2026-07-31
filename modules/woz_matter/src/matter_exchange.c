@@ -117,14 +117,45 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 		return MATTER_E_INVAL;
 	}
 
-	/* The peer opens the exchange and this node answers on it. A second
-	 * exchange id on the same unsecured session is a second commissioner,
-	 * which this node has no room for. */
+	/* Filled before the exchange is checked so a caller can say what it just
+	 * refused. A refusal that cannot name the message is a refusal nobody can
+	 * debug -- which cost one hardware round already. */
+	in->opcode = ph.opcode;
+	in->protocol_id = ph.protocol_id;
+	in->exchange_id = ph.exchange_id;
+	in->initiator = (ph.exchange_flags & MATTER_EX_FLAG_I) != 0u;
+
+	/*
+	 * The peer opens the exchange and this node answers on it.
+	 *
+	 * On the UNSECURED session there is exactly one: PASE, start to finish.
+	 * A second exchange id there is a second commissioner, and this node has
+	 * room for neither.
+	 *
+	 * On a SECURE session the opposite holds, and this is not a relaxation of
+	 * the rule but a different situation. The peer has authenticated by
+	 * completing PASE, and Matter gives an initiator a NEW exchange for every
+	 * interaction -- the read that follows PASE closes its own exchange, and
+	 * the next request arrives on another. Refusing that is refusing the
+	 * whole of commissioning after the first question. A real iPhone did
+	 * exactly this: it took the ReportData, then sent 137 bytes on a new
+	 * exchange, and hung up when nothing answered.
+	 *
+	 * It must still be claiming to INITIATE. A message on an unknown exchange
+	 * with I clear is a reply to something this node never sent, and adopting
+	 * it would mean answering a conversation that does not exist.
+	 */
 	if (!x->open) {
 		x->exchange_id = ph.exchange_id;
 		x->open = true;
 	} else if (ph.exchange_id != x->exchange_id) {
-		return MATTER_E_STATE;
+		if (!x->secure || !in->initiator) {
+			return MATTER_E_STATE;
+		}
+		x->exchange_id = ph.exchange_id;
+		/* Whatever was owed belonged to the exchange that just ended, and
+		 * would now be framed with the wrong exchange id. */
+		x->ack_pending = false;
 	}
 
 	/* Keep the initiator's ephemeral node id: every reply has to be addressed
@@ -134,8 +165,6 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 		x->have_peer_node_id = true;
 	}
 
-	in->opcode = ph.opcode;
-	in->protocol_id = ph.protocol_id;
 	in->payload = body + ph_len;
 	in->payload_len = body_len - ph_len;
 	in->ack_requested = (ph.exchange_flags & MATTER_EX_FLAG_R) != 0u;
@@ -197,8 +226,9 @@ int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16
  *        standalone ack, which would otherwise ask to be acknowledged and never
  *        terminate.
  */
-static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const uint8_t *payload,
-		 size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
+static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode, bool reliable,
+		 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
+		 size_t *out_len)
 {
 	struct matter_msg_header mh;
 	struct matter_proto_header ph;
@@ -216,15 +246,6 @@ static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const
 	if (!x->open) {
 		return MATTER_E_STATE;
 	}
-	/*
-	 * Sending on a secure session is deliberately not here yet. It needs the
-	 * proto header and payload sealed as one plaintext, and this node has
-	 * nothing to say on a secure session until there is an Interaction Model
-	 * to say it with. Refusing loudly beats a half-designed send path.
-	 */
-	if (x->secure) {
-		return MATTER_E_STATE;
-	}
 
 	rc = matter_counter_next(&x->counter, &counter);
 	if (rc != MATTER_OK) {
@@ -232,20 +253,32 @@ static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const
 	}
 
 	memset(&mh, 0, sizeof(mh));
-	mh.session_id = MATTER_SESSION_ID_UNSECURED;
 	mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
 	mh.message_counter = counter;
-	/*
-	 * No SOURCE node id -- this node has no operational identity yet -- but
-	 * the DESTINATION is the initiator's ephemeral node id, which is what the
-	 * peer matches the reply against. A responder that leaves this out is
-	 * talking to nobody in particular and gets ignored.
-	 */
-	if (x->have_peer_node_id) {
-		mh.flags = MATTER_MSG_DSIZ_NODE;
-		mh.dest_node_id = x->peer_node_id;
-	} else {
+	if (x->secure) {
+		/*
+		 * Addressed by session id alone. SessionManager.cpp:262-265 sets
+		 * the counter, the PEER's session id and the session type, and
+		 * nothing else -- a secure message carries no node ids, not even
+		 * the ephemeral one the unsecured exchange needed.
+		 */
+		mh.session_id = x->peer_session_id;
 		mh.flags = MATTER_MSG_DSIZ_NONE;
+	} else {
+		mh.session_id = MATTER_SESSION_ID_UNSECURED;
+		/*
+		 * No SOURCE node id -- this node has no operational identity yet
+		 * -- but the DESTINATION is the initiator's ephemeral node id,
+		 * which is what the peer matches the reply against. A responder
+		 * that leaves this out is talking to nobody in particular and
+		 * gets ignored.
+		 */
+		if (x->have_peer_node_id) {
+			mh.flags = MATTER_MSG_DSIZ_NODE;
+			mh.dest_node_id = x->peer_node_id;
+		} else {
+			mh.flags = MATTER_MSG_DSIZ_NONE;
+		}
 	}
 
 	memset(&ph, 0, sizeof(ph));
@@ -263,7 +296,7 @@ static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const
 	}
 	ph.opcode = opcode;
 	ph.exchange_id = x->exchange_id;
-	ph.protocol_id = MATTER_PROTOCOL_SECURE_CHANNEL;
+	ph.protocol_id = protocol_id;
 
 	rc = matter_msg_header_encode(&mh, out, cap, &mh_len);
 	if (rc != MATTER_OK) {
@@ -280,17 +313,52 @@ static int frame(struct matter_exchange *x, uint8_t opcode, bool reliable, const
 		memcpy(out + mh_len + ph_len, payload, payload_len);
 	}
 
+	if (x->secure) {
+		/*
+		 * The proto header and payload are ONE plaintext; the message
+		 * header is the AAD. Both are already laid out contiguously at
+		 * out + mh_len, so the seal encrypts them where they lie rather
+		 * than through a scratch buffer this layer would have to own.
+		 *
+		 * Sealing in place is safe here for two reasons, and neither is
+		 * incidental: matter_crypto.c runs ccm_mac() over the whole
+		 * plaintext BEFORE ccm_ctr() writes a byte, and ccm_ctr() is
+		 * index-aligned (matter_crypto.c:186-188), so no output byte is
+		 * written before the input byte at that index is consumed. A
+		 * one-shot AEAD that made no such promise would need a copy.
+		 *
+		 * Keys are role-relative: this node is the RESPONDER, so it
+		 * encrypts with r2i (CryptoContext.cpp:102-103). The nonce takes
+		 * node id 0 because a PASE session has no operational identity
+		 * (SessionManager.cpp:279-280 with kUndefinedNodeId).
+		 */
+		rc = matter_crypto_seal(&mh, x->keys.r2i, MATTER_PASE_NODE_ID, out + mh_len,
+					ph_len + payload_len, out, cap, out_len);
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+	} else {
+		*out_len = mh_len + ph_len + payload_len;
+	}
+
 	/* Only now: an ack that was never encoded is an ack still owed. */
 	x->ack_pending = false;
 
-	*out_len = mh_len + ph_len + payload_len;
 	return MATTER_OK;
 }
 
 int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8_t *payload,
 			  size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
 {
-	return frame(x, opcode, true, payload, payload_len, out, cap, out_len);
+	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, opcode, true, payload, payload_len, out,
+		     cap, out_len);
+}
+
+int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode,
+			 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
+			 size_t *out_len)
+{
+	return frame(x, protocol_id, opcode, true, payload, payload_len, out, cap, out_len);
 }
 
 int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size_t cap,
@@ -302,5 +370,6 @@ int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size
 	if (!x->mrp || !x->ack_pending) {
 		return MATTER_E_STATE;
 	}
-	return frame(x, MATTER_SC_OP_ACK, false, NULL, 0u, out, cap, out_len);
+	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, MATTER_SC_OP_ACK, false, NULL, 0u, out, cap,
+		     out_len);
 }
