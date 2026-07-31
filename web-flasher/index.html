@@ -197,8 +197,8 @@ esp-web-install-button button.btn:hover{background:var(--accent-hover)}
 <header class="hero-band"><div class="hero-in">
   <div class="eyebrow">Get started</div>
   <h1>Flash openaliro from your browser</h1>
-  <p class="lede">The complete Aliro Matter lock on a single ESP32-S3 or
-  ESP32-C5: it commissions into Apple Home over Wi-Fi, your iPhone carries
+  <p class="lede">The complete Aliro Matter lock on a single ESP32-S3, C5 or
+  C6: it commissions into Apple Home over Wi-Fi, your iPhone carries
   the key in Wallet, and the lock opens as you walk up (BLE + UWB approach
   unlock). This page detects which chip you plugged in and flashes the right
   firmware over WebSerial. Nothing to install, no ESP-IDF.</p>
@@ -208,8 +208,9 @@ esp-web-install-button button.btn:hover{background:var(--accent-hover)}
 <h2>What you need</h2>
 <ul>
   <li>ESP32-S3 dev board (validated on ESP32-S3-WROOM N16R8; smaller variants
-  untested) or ESP32-C5 dev board (DevKitC-1-compatible pinout; builds, not
-  yet bench-validated)</li>
+  untested), ESP32-C6-DevKitC-1 (UWB ranging is bench-validated on this chip,
+  the full Matter walk-up is not), or ESP32-C5 dev board
+  (DevKitC-1-compatible pinout; builds, not yet bench-validated)</li>
   <li>Qorvo DWM3000EVB (DW3110), the UWB radio, hand-wired over SPI</li>
   <li>11 jumper wires and a USB <strong>data</strong> cable</li>
   <li>Chrome, Edge, or Firefox on a computer (WebSerial; Safari and mobile
@@ -227,22 +228,24 @@ bench once.</div>
 3.3&nbsp;V part), share ground, and wire:</p>
 <div class="tablewrap">
 <table>
-<tr><th>DWM3000EVB (Arduino pin)</th><th>Signal</th><th>ESP32-S3</th><th>ESP32-C5</th></tr>
-<tr><td>D13</td><td>SCLK</td><td>GPIO12</td><td>GPIO8</td></tr>
-<tr><td>D11</td><td>MOSI</td><td>GPIO11</td><td>GPIO9</td></tr>
-<tr><td>D12</td><td>MISO</td><td>GPIO13</td><td>GPIO23</td></tr>
-<tr><td>D10</td><td>CS</td><td>GPIO10</td><td>GPIO10</td></tr>
-<tr><td>D8</td><td>IRQ</td><td>GPIO5</td><td>GPIO5</td></tr>
-<tr><td>D7</td><td>RSTn</td><td>GPIO4</td><td>GPIO4</td></tr>
-<tr><td>D9</td><td>WAKEUP</td><td>GPIO6</td><td>GPIO6</td></tr>
-<tr><td>3V3</td><td>power</td><td>3V3</td><td>3V3</td></tr>
-<tr><td>GND</td><td>ground</td><td>GND</td><td>GND</td></tr>
-<tr><td>D1</td><td>SPI-POL</td><td>GND (mode-0 strap)</td><td>same</td></tr>
-<tr><td>D0</td><td>SPI-PHA</td><td>GND (mode-0 strap)</td><td>same</td></tr>
+<tr><th>DWM3000EVB (Arduino pin)</th><th>Signal</th><th>ESP32-S3</th><th>ESP32-C5</th><th>ESP32-C6</th></tr>
+<tr><td>D13</td><td>SCLK</td><td>GPIO12</td><td>GPIO8</td><td>GPIO6</td></tr>
+<tr><td>D11</td><td>MOSI</td><td>GPIO11</td><td>GPIO9</td><td>GPIO7</td></tr>
+<tr><td>D12</td><td>MISO</td><td>GPIO13</td><td>GPIO23</td><td>GPIO2</td></tr>
+<tr><td>D10</td><td>CS</td><td>GPIO10</td><td>GPIO10</td><td>GPIO10</td></tr>
+<tr><td>D8</td><td>IRQ</td><td>GPIO5</td><td>GPIO5</td><td>GPIO3</td></tr>
+<tr><td>D7</td><td>RSTn</td><td>GPIO4</td><td>GPIO4</td><td>GPIO1</td></tr>
+<tr><td>D9</td><td>WAKEUP</td><td>GPIO6</td><td>GPIO6</td><td>GPIO0</td></tr>
+<tr><td>3V3</td><td>power</td><td>3V3</td><td>3V3</td><td>3V3</td></tr>
+<tr><td>GND</td><td>ground</td><td>GND</td><td>GND</td><td>GND</td></tr>
+<tr><td>D1</td><td>SPI-POL</td><td>GND (mode-0 strap)</td><td>same</td><td>same</td></tr>
+<tr><td>D0</td><td>SPI-PHA</td><td>GND (mode-0 strap)</td><td>same</td><td>same</td></tr>
 </table>
 </div>
 <p>The C5 data pins differ because the S3's GPIO11/12 are the C5's UART0
-console and GPIO13 is its USB-Serial-JTAG.</p>
+console and GPIO13 is its USB-Serial-JTAG. The C6 uses GPIO6/7/2 because those
+are SPI2's direct IO_MUX pins on that part, with the control signals kept clear
+of its strapping pins, its USB Serial/JTAG pair and UART0.</p>
 <p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB
 revision already fixes the mode (check its manual).</p>
 

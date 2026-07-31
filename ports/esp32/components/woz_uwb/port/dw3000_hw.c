@@ -28,6 +28,14 @@ volatile uint32_t g_dw_cyc_work;
 volatile uint32_t g_dw_cyc_isrdone;
 volatile uint32_t g_dw_cyc_per_us = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ;
 
+/* An undefined identifier is 0 in #if, so a renamed Kconfig symbol would move
+ * the worker onto core 0 alongside BLE/Wi-Fi with no build error — the exact
+ * contention the task-creation comment below blames for a 2.4 ms preemption.
+ * Assert the symbol exists rather than guessing which name IDF keeps. */
+#ifndef CONFIG_FREERTOS_NUMBER_OF_CORES
+#error "CONFIG_FREERTOS_NUMBER_OF_CORES undefined: cannot pick the DW3000 worker core"
+#endif
+
 #if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
 #define WOZ_DW3000_TASK_CORE 1
 #else
