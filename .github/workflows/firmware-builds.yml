@@ -204,32 +204,48 @@ jobs:
           idf.py -B build-c6 \
                  -D SDKCONFIG=build-c6/sdkconfig \
                  build
+          # C5 is a shipped target -- release.yml builds and publishes a C5
+          # Matter image -- but until now nothing compiled it before release
+          # time, so a C5 break surfaced when a tag was cut. Same isolation as
+          # C6: its own tree, target and sdkconfig.
+          idf.py -B build-c5 \
+                 -D SDKCONFIG=build-c5/sdkconfig \
+                 set-target esp32c5
+          idf.py -B build-c5 \
+                 -D SDKCONFIG=build-c5/sdkconfig \
+                 build
           # Compiling for RISC-V is not the same as keeping the CCC STS seam.
-          # A dropped --wrap here links clean, binds the real dwt_* and silently
-          # never programs the STS key/IV. Nothing else catches it on C6:
-          # test/verify_port.sh owns this check but hardcodes an S3 build, and
-          # never runs in CI anyway (port-tests.yml has no ESP-IDF, so it
-          # skips). Assert it on the artifacts this job already built.
-          for w in dwt_rxenable dwt_configurestsiv dwt_configurestsmode; do
-            grep -q -- "-Wl,--wrap=$w" build-c6/build.ninja \
-              || { echo "::error::C6 link dropped -Wl,--wrap=$w"; exit 1; }
-          done
-          # A flag without a definition is a no-op, so the __wrap_* interposers
-          # must exist. Checked in the objects, not the ELF: --gc-sections drops
-          # the ones the reader's default config never reaches, so the linked
-          # image is not a sound place to look. Mirrors verify_port.sh section 2.
-          find build-c6 -name '*.obj' -exec riscv32-esp-elf-nm {} \; \
-            2>/dev/null > build-c6-syms.txt
-          for w in __wrap_dwt_rxenable __wrap_dwt_configurestsiv __wrap_dwt_configurestsmode; do
-            grep -qE " T $w$" build-c6-syms.txt \
-              || { echo "::error::C6 build defines no $w — the STS seam is a no-op"; exit 1; }
-          done
-          rm -f build-c6-syms.txt
-          # Interposition only bites if the caller still names the unwrapped
-          # symbol; uwb_min.c is the RX-arm caller the seam exists for.
-          riscv32-esp-elf-nm "$(find build-c6 -name 'uwb_min.c.obj' | head -1)" \
-            | grep -qE ' U dwt_rxenable$' \
-            || { echo "::error::C6 uwb_min.c.obj no longer references dwt_rxenable"; exit 1; }
+          # A dropped --wrap links clean, binds the real dwt_* and silently
+          # never programs the STS key/IV. Nothing else catches that on the
+          # RISC-V targets: test/verify_port.sh owns this check but hardcodes an
+          # S3 build, and never runs in CI anyway (port-tests.yml has no
+          # ESP-IDF, so it skips). Assert it on the artifacts already built.
+          check_seam() {
+            local dir="$1" tag="$2" w
+            for w in dwt_rxenable dwt_configurestsiv dwt_configurestsmode; do
+              grep -q -- "-Wl,--wrap=$w" "$dir/build.ninja" \
+                || { echo "::error::$tag link dropped -Wl,--wrap=$w"; return 1; }
+            done
+            # A flag without a definition is a no-op, so the __wrap_*
+            # interposers must exist. Checked in the objects, not the ELF:
+            # --gc-sections drops the ones the reader's default config never
+            # reaches, so the linked image is not a sound place to look.
+            # Mirrors verify_port.sh section 2.
+            find "$dir" -name '*.obj' -exec riscv32-esp-elf-nm {} \; \
+              2>/dev/null > "$dir-syms.txt"
+            for w in __wrap_dwt_rxenable __wrap_dwt_configurestsiv __wrap_dwt_configurestsmode; do
+              grep -qE " T $w$" "$dir-syms.txt" \
+                || { echo "::error::$tag defines no $w — the STS seam is a no-op"; return 1; }
+            done
+            rm -f "$dir-syms.txt"
+            # Interposition only bites if the caller still names the unwrapped
+            # symbol; uwb_min.c is the RX-arm caller the seam exists for.
+            riscv32-esp-elf-nm "$(find "$dir" -name 'uwb_min.c.obj' | head -1)" \
+              | grep -qE ' U dwt_rxenable$' \
+              || { echo "::error::$tag uwb_min.c.obj no longer references dwt_rxenable"; return 1; }
+          }
+          check_seam build-c6 C6
+          check_seam build-c5 C5
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
@@ -392,7 +408,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        leg: [esp32s3, esp32s3-presence, esp32c6]
+        leg: [esp32s3, esp32s3-presence, esp32c6, esp32c5]
     container:
       image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
     env:
@@ -544,6 +560,17 @@ jobs:
                    set-target esp32c6
             idf.py -B build-c6 \
                    -D SDKCONFIG=build-c6/sdkconfig \
+                   build
+            ;;
+          esp32c5)
+            # release.yml publishes a C5 Matter image, but nothing compiled C5
+            # before a tag was cut, so a C5 break used to surface during a
+            # release. Same recipe release.yml uses, run on every push instead.
+            idf.py -B build-c5 \
+                   -D SDKCONFIG=build-c5/sdkconfig \
+                   set-target esp32c5
+            idf.py -B build-c5 \
+                   -D SDKCONFIG=build-c5/sdkconfig \
                    build
             ;;
           *)
