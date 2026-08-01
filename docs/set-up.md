@@ -7,7 +7,7 @@ No hardware needed until you flash.
 ## Get the code
 
 ```bash
-git clone https://github.com/asxeem/openaliro.git
+git clone https://github.com/openaliro/openaliro.git
 cd openaliro
 ```
 
@@ -16,7 +16,7 @@ Every command below runs from this directory.
 ## Fastest install: browser flash for ESP32-S3/C5
 
 Release images can be installed from the
-[browser flasher](https://asxeem.github.io/openaliro/flash/) in Chrome or Edge:
+[browser flasher](https://openaliro.github.io/openaliro/flash/) in Chrome or Edge:
 connect the board, select S3 or C5, and choose **Install**. This path needs no
 ESP-IDF or local flashing tools. Its implementation and local test procedure are
 documented in [`web-flasher/README.md`](../web-flasher/README.md).

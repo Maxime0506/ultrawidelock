@@ -2354,7 +2354,7 @@ an edit — the way a security control usually dies. `verify` is what a user wou
 only thing that proves the control works rather than that it is configured.
 Exit 0 clean, 1 on a finding, 2 if the mode could not run.
 Env:
-REPO=owner/name    default asxeem/openaliro
+REPO=owner/name    default openaliro/openaliro
 NO_COLOR=1         plain output
 
 ### [`scripts/security-ct.sh`](architecture/scripts/security-ct.sh.md)

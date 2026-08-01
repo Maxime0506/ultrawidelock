@@ -26,14 +26,14 @@
 # Exit 0 clean, 1 on a finding, 2 if the mode could not run.
 #
 # Env:
-#   REPO=owner/name    default asxeem/openaliro
+#   REPO=owner/name    default openaliro/openaliro
 #   NO_COLOR=1         plain output
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
 
-REPO="${REPO:-asxeem/openaliro}"
+REPO="${REPO:-openaliro/openaliro}"
 WORKFLOW=".github/workflows/release.yml"
 
 if [[ -z "${NO_COLOR:-}" ]]; then

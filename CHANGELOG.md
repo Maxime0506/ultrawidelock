@@ -63,6 +63,6 @@ the API and behavior may change in minor releases.
   sanitizers, fuzzing, bounded parser proofs, and firmware build gates.
 - Zero-toolchain WebSerial flasher for the ESP32-S3 release image.
 
-[Unreleased]: https://github.com/asxeem/openaliro/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/asxeem/openaliro/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/asxeem/openaliro/releases/tag/v0.1.0
+[Unreleased]: https://github.com/openaliro/openaliro/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/openaliro/openaliro/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/openaliro/openaliro/releases/tag/v0.1.0

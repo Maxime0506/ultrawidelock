@@ -109,7 +109,7 @@ TEMPLATE = """<!doctype html>
 <p class="eyebrow"><b>openaliro</b> · flash bundle · evaluation firmware</p>
 {body}
 <footer>Same content as this bundle's <code>FLASH.md</code>.
-<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
+<a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
 <script>{script}</script>
 </body>

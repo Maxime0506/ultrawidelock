@@ -94,7 +94,7 @@ jobs:
           cp build/merged.hex build/merged_CPUNET.hex "$out"/
           cp release/nrf5340dk/FLASH.md release/nrf5340dk/FLASH.html \
             release/nrf5340dk/flash.sh "$out"/
-          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/asxeem/openaliro\n' \
+          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/openaliro/openaliro\n' \
             "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -218,7 +218,7 @@ jobs:
           # with | so a dispatch run's branch-name ref cannot end the pattern.
           sed "s|\"version\": \"dev\"|\"version\": \"${REF_NAME}\"|" \
             web-flasher/manifest.json > "$out/manifest.json"
-          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/asxeem/openaliro\n' \
+          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/openaliro/openaliro\n' \
             "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

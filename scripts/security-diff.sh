@@ -298,7 +298,7 @@ fi
 urls="$(git diff -U0 "$BASE" $DIFF_HEAD -- '*.html' '*.js' '*.ts' '*.py' '*.sh' 2>/dev/null \
 	| grep -E '^\+' | grep -vE '^\+\+\+' \
 	| grep -oE 'https?://[a-zA-Z0-9._~:/?#@!$&*+,;=%-]+' \
-	| grep -vE '^https?://(localhost|127\.0\.0\.1|github\.com/asxeem|(www\.)?w3\.org|schemas?\.|spdx\.org)' \
+	| grep -vE '^https?://(localhost|127\.0\.0\.1|github\.com/openaliro|(www\.)?w3\.org|schemas?\.|spdx\.org)' \
 	| sort -u || true)"
 if [ -n "$urls" ]; then
 	n="$(printf '%s\n' "$urls" | wc -l | tr -d ' ')"

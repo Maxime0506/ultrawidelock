@@ -250,11 +250,11 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision already fixes the mode (check its manual).</p>
 <p>The C6 image can also drive the DW radio inside a BU04 module over direct SPI,
 which is how C6 was validated. That wiring differs from the table above; see the
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
 for the BU04 pad map and the <code>ST_NRST</code> requirement.</p>
 <h2>4 · Flash</h2>
 <p>Fastest for either chip: open the
-<a href="https://asxeem.github.io/openaliro/flash/">browser flasher</a> in Chrome or Edge,
+<a href="https://openaliro.github.io/openaliro/flash/">browser flasher</a> in Chrome or Edge,
 select the board, and choose <strong>Install</strong>. The page and manifest are dry-checked,
 but the repository does not yet record a successful real WebSerial flash.</p>
 <p>The bundled helper currently handles S3 only:</p>
@@ -329,9 +329,9 @@ esptool.py --chip esp32c6 --baud 460800 write_flash 0x0 openaliro-matter-lock-es
 </tbody>
 </table></div>
 <p>More depth: the
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
 and
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-gotchas.md">forty-odd known traps</a>.</p>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md">forty-odd known traps</a>.</p>
 <h2>Notes</h2>
 <ul>
 <li>Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.</li>
@@ -348,7 +348,7 @@ and
 <li>Reflashing wipes commissioning; remove the stale accessory from Home before re-adding.</li>
 </ul>
 <footer>Same content as this bundle's <code>FLASH.md</code>.
-<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
+<a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
 <script>
 document.querySelectorAll("pre").forEach(function(pre){

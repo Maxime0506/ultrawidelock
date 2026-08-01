@@ -66,13 +66,13 @@ The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision alr
 
 The C6 image can also drive the DW radio inside a BU04 module over direct SPI,
 which is how C6 was validated. That wiring differs from the table above; see the
-[bring-up checklist](https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md)
+[bring-up checklist](https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md)
 for the BU04 pad map and the `ST_NRST` requirement.
 
 ## 4. Flash
 
 Fastest for either chip: open the
-[browser flasher](https://asxeem.github.io/openaliro/flash/) in Chrome or Edge,
+[browser flasher](https://openaliro.github.io/openaliro/flash/) in Chrome or Edge,
 select the board, and choose **Install**. The page and manifest are dry-checked,
 but the repository does not yet record a successful real WebSerial flash.
 
@@ -132,9 +132,9 @@ The `matter>` console also has `status`, `range`, `lock`/`unlock`, and `factoryr
 | No key in Wallet | Wait a few minutes; needs iOS 26+ and a UWB iPhone |
 
 More depth: the
-[bring-up checklist](https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md)
+[bring-up checklist](https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md)
 and
-[forty-odd known traps](https://github.com/asxeem/openaliro/blob/main/docs/esp32-gotchas.md).
+[forty-odd known traps](https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md).
 
 ## Notes
 

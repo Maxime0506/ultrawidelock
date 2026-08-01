@@ -2,13 +2,13 @@
 
 <p align="center"><strong>Build an Aliro lock for iPhone and Apple Watch.</strong><br/>Hands-free over BLE + UWB · Express Mode over NFC · No app</p>
 
-<p align="center"><a href="#start">Start</a> · <a href="#build">Build</a> · <a href="#features">Features</a> · <a href="#hardware">Hardware</a> · <a href="https://asxeem.github.io/openaliro/">Documentation ↗</a></p>
+<p align="center"><a href="#start">Start</a> · <a href="#build">Build</a> · <a href="#features">Features</a> · <a href="#hardware">Hardware</a> · <a href="https://openaliro.github.io/openaliro/">Documentation ↗</a></p>
 
-<p align="center"><a href="https://github.com/asxeem/openaliro/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/asxeem/openaliro/ci.yml?branch=main&style=flat-square&label=ci" alt="ci"/></a> <a href="https://github.com/asxeem/openaliro/releases"><img src="https://img.shields.io/github/v/release/asxeem/openaliro?style=flat-square" alt="latest release"/></a> <img src="https://img.shields.io/badge/license-source--available-lightgrey?style=flat-square" alt="source-available license"/></p>
+<p align="center"><a href="https://github.com/openaliro/openaliro/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/openaliro/openaliro/ci.yml?branch=main&style=flat-square&label=ci" alt="ci"/></a> <a href="https://github.com/openaliro/openaliro/releases"><img src="https://img.shields.io/github/v/release/openaliro/openaliro?style=flat-square" alt="latest release"/></a> <img src="https://img.shields.io/badge/license-source--available-lightgrey?style=flat-square" alt="source-available license"/></p>
 
 <p align="center"><img src="assets/hero.gif" width="720" alt="A real iPhone unlocking openaliro on approach"/><br/><sub>Real hardware · Real Wallet key · Real approach unlock</sub></p>
 
-<p align="center"><a href="web-twin/index.html"><kbd>Try web twin →</kbd></a>&nbsp;<a href="https://asxeem.github.io/openaliro/flash/"><kbd>Flash ESP32 →</kbd></a>&nbsp;<a href="https://github.com/asxeem/openaliro/releases/latest"><kbd>Latest release →</kbd></a>&nbsp;<a href="https://asxeem.github.io/openaliro/"><kbd>Documentation →</kbd></a></p>
+<p align="center"><a href="web-twin/index.html"><kbd>Try web twin →</kbd></a>&nbsp;<a href="https://openaliro.github.io/openaliro/flash/"><kbd>Flash ESP32 →</kbd></a>&nbsp;<a href="https://github.com/openaliro/openaliro/releases/latest"><kbd>Latest release →</kbd></a>&nbsp;<a href="https://openaliro.github.io/openaliro/"><kbd>Documentation →</kbd></a></p>
 
 <p align="center">Lock-side <a href="https://csa-iot.org/all-solutions/aliro/">Aliro</a> firmware · BLE auth · UWB ranging · proximity/NFC unlock</p>
 
@@ -23,7 +23,7 @@
 ## Build
 
 ```bash
-git clone https://github.com/asxeem/openaliro.git
+git clone https://github.com/openaliro/openaliro.git
 cd openaliro
 ```
 
@@ -75,7 +75,7 @@ S3 is validated; C5 is build/release-tested.
 - **Bare UWB:** DW3110 runs CCC/FiRa, STS, DS-TWR, M1-M4; no coprocessor.
 - **Power:** UWB sleeps out of range; ESP32 uses RSSI gating or predictive ETA.
 - **Ports:** nRF5340, ESP32-S3, and ESP32-C5 share one engine.
-- **Home Assistant:** UWB distance and access events over [MQTT](https://asxeem.github.io/openaliro/home-assistant.html), lock control over Matter; no firmware change.
+- **Home Assistant:** UWB distance and access events over [MQTT](https://openaliro.github.io/openaliro/home-assistant.html), lock control over Matter; no firmware change.
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/grid-demo-dark.webp"><source media="(prefers-color-scheme: light)" srcset="assets/grid-demo-light.webp"><img src="assets/grid-demo.webp" alt="Home Key setup, Approach Direction, provisioning, NFC tap, and lock-state notifications on live hardware"/></picture><br/><sub>Home Key · Approach Direction · provisioning · NFC tap · live lock state</sub></p>
 
