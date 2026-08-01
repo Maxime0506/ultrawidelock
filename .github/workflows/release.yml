@@ -9,13 +9,16 @@
 # cold build is a price worth paying. Same containers and scripts as
 # firmware-builds.yml, so a green gate there predicts a green build here.
 #
-# A workflow_dispatch run from a branch exercises the whole pipeline and leaves
-# the bundles as run artifacts; the release itself is created only for tags.
+# Manual only, and only ever from a version tag. Pushing a tag no longer starts a
+# release: cutting a tag and shipping one are separate decisions, and a tag push
+# used to commit four hours of firmware builds before anyone could reconsider.
+#
+# workflow_dispatch offers every branch and tag in its ref picker, and GitHub
+# gives no way to restrict that list, so the `guard` job below enforces it and
+# fails rather than skips. A skipped job reads like a pass.
 name: release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 # Only the release job needs more than read; it raises its own scope.
@@ -27,10 +30,41 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
+  # The ref check, ahead of everything that costs money. Without it a dispatch
+  # against main still runs all three build jobs (up to four hours, cold and
+  # cache-free by design here) before the release job declines to publish, so
+  # the wrong ref is caught in seconds instead of after the builds.
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: this must be a version tag
+        env:
+          # Via the environment, not inline interpolation: a ref name is
+          # attacker-influenced text and must never reach the shell as code.
+          # Same rule presence-tags.yml follows.
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::release runs only from a tag, but this dispatch targeted the $REF_TYPE '$REF_NAME'."
+            echo "Re-run from Actions -> release -> Run workflow and pick a vN.N.N tag in the ref picker."
+            exit 1
+          fi
+          case "$REF_NAME" in
+          v[0-9]*) ;;
+          *)
+            echo "::error::'$REF_NAME' is a tag but not a version tag (expected vN.N.N)."
+            exit 1
+            ;;
+          esac
+          echo "releasing from tag $REF_NAME"
+
   # Build the contributor bench from this exact checkout. The same source,
   # lockfile, tests, and compiler entry point are available through
   # `make tui-test` and `make tui-release`.
   tui:
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -61,6 +95,7 @@ jobs:
   # nRF5340 DK: cold-bootstrap the pinned west workspace, build the sysbuild
   # image, and bundle both cores' hex files with the flash script + guide.
   nrf5340dk:
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -106,6 +141,7 @@ jobs:
   # revision, build the app, and merge bootloader + partition table + app into
   # one image flashable at 0x0.
   esp32-matter-lock:
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 240
     container:
@@ -226,8 +262,10 @@ jobs:
           path: dist/openaliro-esp32-matter-lock
           if-no-files-found: error
 
-  # Zip each bundle and publish the release. Tags only: a dispatch run stops at
-  # the artifacts above.
+  # Zip each bundle and publish the release. The tag check is redundant now that
+  # `guard` gates every build job, and it stays anyway: this is the only job here
+  # holding contents:write, so it should not depend on another job for the one
+  # condition that decides whether anything gets published.
   release:
     needs: [tui, nrf5340dk, esp32-matter-lock]
     if: github.ref_type == 'tag'
