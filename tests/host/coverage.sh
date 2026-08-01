@@ -16,7 +16,7 @@
 # Excluded entirely: deps/ + workspace/ (fetched upstream) and */test/
 # harnesses.
 #
-# CI (host-tests.yml) enforces the line floor on summary.json, which spans the
+# CI (ci.yml, via the coverage gate) enforces the line floor on summary.json, which spans the
 # instrumented files only; the terminal table's closing "all our code" total
 # additionally folds in the 0% rows.
 #

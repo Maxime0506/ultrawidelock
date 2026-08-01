@@ -1,7 +1,7 @@
 # The non-blocking security lane: the analyses that are too slow to sit in front of a merge.
 #
-# security.yml decides whether a pull request may merge and finishes in under two minutes.
-# Everything here takes minutes to tens of minutes, so it runs weekly and on pushes to main, and
+# ci.yml decides whether a pull request may merge and finishes in a couple of minutes.
+# Everything here takes minutes to tens of minutes, so it runs weekly and on demand, and
 # blocks nothing. Splitting them is the point: a security gate that makes people wait ten minutes
 # for a docs typo is a gate that gets marked non-required within a month, and then the fast
 # checks that were sharing the workflow stop blocking too.
@@ -45,8 +45,10 @@ on:
     # 04:17 on Mondays. Off the hour on purpose: scheduled workflows across GitHub bunch up at
     # :00 and get queued, and nothing here is time-critical.
     - cron: "17 4 * * 1"
-  push:
-    branches: [main]
+  # Deliberately no `push` trigger. This lane blocks nothing, so running it on
+  # every merge to main bought no signal a Monday run does not, while re-scanning
+  # all of history per push with cancel-in-progress off. Use workflow_dispatch to
+  # get an answer before Monday.
   workflow_dispatch:
 
 permissions:
@@ -66,6 +68,7 @@ jobs:
   secrets-history:
     name: secrets (full history)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -119,6 +122,7 @@ jobs:
   semgrep-sarif:
     name: semgrep (full report)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write
@@ -155,9 +159,11 @@ jobs:
   scorecard:
     name: openssf scorecard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Scorecard reads branch-protection and workflow-permission settings that only exist for the
-    # default branch, so it has nothing to say about a branch or a fork.
-    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    # default branch, so it has nothing to say about a branch or a fork. Gated on the ref alone
+    # since the push trigger went away: a workflow_dispatch from a branch must still skip.
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       security-events: write

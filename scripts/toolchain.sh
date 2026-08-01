@@ -180,25 +180,41 @@ tool_gate() {
 # nobody remembers to bump — the bump lands in .github/workflows/ because that
 # is what CI reads. So this reads the same line CI does.
 WF=".github/workflows"
-# Extract the pinned version string for a tool (clang-format, clang-tidy, zizmor, reuse, actionlint, emcc, or markdown) from the corresponding CI workflow file. Returns the version or empty string if not found or tool name is unrecognized.
+# Every pin now lives in one place: the `env:` block at the top of ci.yml, which
+# is the workflow that installs them. Before the CI consolidation these were
+# scattered across seven workflow files and each tool needed its own sed for the
+# shape that file happened to use (inline `pip install x==`, an env var, a
+# release URL). One naming convention replaces all of that.
+#
+# The principle is unchanged and is the reason this reads a workflow at all: the
+# pin lives in .github/workflows/ because that is what CI reads, and this looks
+# at the same line rather than keeping a second copy that goes stale.
+CI_WF="$WF/ci.yml"
+
+# Read `<NAME>: <version>` out of that env block. Quotes are optional so a value
+# YAML would otherwise read as a number (markdown's "3.8") can be written as a
+# string without breaking the lookup.
+wf_pin() { # <ENV_VAR_NAME>
+	sed -n "s/^[[:space:]]*$1:[[:space:]]*[\"']\{0,1\}\([0-9][0-9.]*\).*/\1/p" \
+		"$CI_WF" | head -1
+}
+
+# Extract the pinned version string for a tool. Returns the version, or the empty
+# string when the tool is unrecognised or the lookup stopped matching.
 tool_pin() {
 	case "$1" in
-	clang-format) sed -n 's/.*pip install clang-format==\([0-9][0-9.]*\).*/\1/p' "$WF/format.yml" | head -1 ;;
-	clang-tidy) sed -n 's/.*pip install clang-tidy==\([0-9][0-9.]*\).*/\1/p' "$WF/clang-tidy.yml" | head -1 ;;
-	zizmor) sed -n 's/.*pip install zizmor==\([0-9][0-9.]*\).*/\1/p' "$WF/workflow-lint.yml" | head -1 ;;
-	reuse) sed -n 's/.*reuse\[[^]]*\]==\([0-9][0-9.]*\).*/\1/p' "$WF/tooling.yml" | head -1 ;;
-	actionlint) sed -n 's/.*actionlint_\([0-9][0-9.]*\)_linux_amd64.*/\1/p' "$WF/workflow-lint.yml" | head -1 ;;
-	emcc) sed -n 's/.*EMSDK_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/twin-web.yml" | head -1 ;;
-	markdown) sed -n "s/.*pip install.*markdown==\([0-9][0-9.]*\).*/\1/p" "$WF/host-tests.yml" | head -1 ;;
-	# The security lane pins its scanners as workflow env vars rather than inline
-	# in a pip command, so these read the env block. Same principle as above: the
-	# pin lives in .github/workflows/ because that is what CI reads, and this
-	# looks at the same line rather than keeping a second copy.
-	gitleaks) sed -n 's/.*GITLEAKS_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
-	semgrep) sed -n 's/.*SEMGREP_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
-	osv-scanner) sed -n 's/.*OSV_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
-	pip-audit) sed -n 's/.*PIP_AUDIT_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
-	retire) sed -n 's/.*RETIRE_VERSION: *\([0-9][0-9.]*\).*/\1/p' "$WF/security.yml" | head -1 ;;
+	clang-format) wf_pin CLANG_FORMAT_VERSION ;;
+	clang-tidy) wf_pin CLANG_TIDY_VERSION ;;
+	zizmor) wf_pin ZIZMOR_VERSION ;;
+	reuse) wf_pin REUSE_VERSION ;;
+	actionlint) wf_pin ACTIONLINT_VERSION ;;
+	emcc) wf_pin EMSDK_VERSION ;;
+	markdown) wf_pin MARKDOWN_VERSION ;;
+	gitleaks) wf_pin GITLEAKS_VERSION ;;
+	semgrep) wf_pin SEMGREP_VERSION ;;
+	osv-scanner) wf_pin OSV_VERSION ;;
+	pip-audit) wf_pin PIP_AUDIT_VERSION ;;
+	retire) wf_pin RETIRE_VERSION ;;
 	*) echo "" ;;
 	esac
 }
@@ -209,14 +225,21 @@ tool_pin() {
 PINNED="clang-format clang-tidy zizmor reuse actionlint emcc markdown gitleaks semgrep osv-scanner pip-audit retire"
 
 # actionlint's Linux install is CI's own: a release tarball checked against a
-# sha256. Both come out of the workflow for the same reason the pins do.
+# sha256. Both come out of the workflow for the same reason the pins do. ci.yml
+# builds the URL from ACTIONLINT_VERSION rather than writing it out, so this
+# rebuilds it the same way instead of grepping for a literal.
 actionlint_url() {
-	grep -oE 'https://github.com/rhysd/actionlint/releases/download/[^ ]*_linux_amd64\.tar\.gz' \
-		"$WF/workflow-lint.yml" | head -1
+	local v
+	v="$(tool_pin actionlint)"
+	[ -n "$v" ] || return 0
+	printf 'https://github.com/rhysd/actionlint/releases/download/v%s/actionlint_%s_linux_amd64.tar.gz' "$v" "$v"
 }
-# Extract the actionlint binary hash (64 hex characters) from workflow-lint.yml, return it or empty string if not found.
+# The matching sha256, by name. Not `grep -oE '[0-9a-f]{64}'` any more: ci.yml
+# carries three 64-hex checksums (actionlint, gitleaks, osv-scanner) and a
+# first-match grep would silently return whichever sits highest in the file.
 actionlint_sha() {
-	grep -oE '[0-9a-f]{64}' "$WF/workflow-lint.yml" | head -1
+	sed -n 's/^[[:space:]]*ACTIONLINT_SHA256:[[:space:]]*\([0-9a-f]\{64\}\).*/\1/p' \
+		"$CI_WF" | head -1
 }
 
 # Present on this host? Echoes the version (or a bare "installed") and returns
@@ -395,7 +418,7 @@ tool_install() {
 	zizmor) pipx_or_pip "zizmor==$(tool_pin zizmor)" ;;
 	reuse) pipx_or_pip "reuse[charset-normalizer]==$(tool_pin reuse)" ;;
 	semgrep) pipx_or_pip "semgrep==$(tool_pin semgrep)" ;;
-	# npm-global, the same route security.yml uses. No pipx equivalent: retire.js is a node
+	# npm-global, the same route ci.yml uses. No pipx equivalent: retire.js is a node
 	# package and its advisory repo is fetched at run time.
 	retire) echo "npm i -g --ignore-scripts 'retire@$(tool_pin retire)'" ;;
 	pip-audit) pipx_or_pip "pip-audit==$(tool_pin pip-audit)" ;;

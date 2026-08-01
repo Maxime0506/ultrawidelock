@@ -4,7 +4,7 @@
 #
 # The point of this script is that "it passed locally" and "it will pass CI"
 # mean the same thing. Each row below is one CI *job* (not one workflow —
-# tooling.yml and workflow-lint.yml each contribute several), running the same
+# one job in ci.yml now runs all of them), running the same
 # command that job runs. Adding a job to .github/workflows/ without adding it
 # here re-opens the gap this script exists to close.
 #
@@ -27,7 +27,7 @@
 # parsers it proves have been stable for months, and the fuzz gate exercises the
 # same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
 #
-# It still gets a summary row saying it did not run. cbmc.yml has no path
+# It still gets a summary row saying it did not run. The cbmc gate has no path
 # filter, so the PR runs it whatever happened here; a gate that quietly
 # disappears from the sweep is the exact failure this script exists to prevent.
 #
@@ -42,7 +42,7 @@
 #   WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 #   SERIAL=1           one gate at a time, fail-fast, instead of lanes
 #   SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
-#   COV_MIN=90         line-coverage floor, matching host-tests.yml
+#   COV_MIN=90         line-coverage floor, matching ci.yml
 #   NO_COLOR=1         plain output (colour is the default, pipe or not)
 #   FAIL_TAIL=40       lines of a failing gate's log to show inline
 set -uo pipefail
@@ -86,35 +86,43 @@ fi
 # silicon host with warm caches. This order is the summary's, not the run's:
 # what runs when is set by TRIPWIRE and LANES below. The times are what those
 # are packed against, so a gate that gets much slower wants repacking.
+# Timings are a warm run on an 8-core laptop. The right-hand column is where the
+# gate runs in CI: ci.yml is one job that runs this whole sweep, so almost every
+# row says the same thing now -- before the CI consolidation each of these was
+# its own workflow and its own runner. The exceptions are the interesting part.
 GATES=(
-	test-web    # 0s   twin-web.yml : drift-gate
-	actionlint  # 0s   workflow-lint.yml : actionlint
-	zizmor      # 0s   workflow-lint.yml : zizmor
-	mal-diff    # 0s   security.yml : mal-diff
-	esp         # 0s   security.yml : esp
-	attest      # 0s   security.yml : attest
-	ct          # 0s   security.yml : ct   (0s only because it SKIPS: no valgrind on darwin/arm64;
-	            #                           17s in CI, where it is its own job)
-	format      # 1s   format.yml
-	shellcheck  # 1s   tooling.yml : shellcheck
-	secrets     # 2s   security.yml : secrets
-	web         # 7s   security.yml : web  (retire fetches its advisory repo, so it wants network)
-	licenses    # 3s   tooling.yml : licenses
-	fuzz        # 3s   fuzz.yml
-	clang-tidy  # 4s   clang-tidy.yml
-	test        # 5s   host-tests.yml : host
-	twin-wasm   # 7s   twin-web.yml : wasm-firmware  (2s warm, 7s cold)
-	test-tui    # 9s   release.yml : tui
-	test-san    # 8s   sanitizers.yml
-	patch-drift # 11s  patch-drift.yml
-	docs        # 12s  docs.yml
-	deps        # 13s  security.yml : deps  (pip-audit queries PyPI, so it waits on network)
-	test-port   # 14s  port-tests.yml
-	test-ws     # 14s  tooling.yml : ws-seed
-	test-verify # 15s  tooling.yml : verify-tests
-	coverage    # 18s  host-tests.yml : coverage (+ the line floor)
-	semgrep     # 22s  security.yml : semgrep  (registry packs are fetched, so it needs network)
-	cbmc        # 82s  cbmc.yml
+	test-web    # 0s   ci.yml : verify
+	actionlint  # 0s   ci.yml : verify
+	zizmor      # 0s   ci.yml : verify
+	mal-diff    # 0s   ci.yml : verify
+	esp         # 0s   ci.yml : verify
+	attest      # 0s   ci.yml : verify
+	ct          # 0s   ci.yml : verify   (0s only because it SKIPS: no valgrind on darwin/arm64;
+	            #                         17s in CI, where valgrind is installed)
+	format      # 1s   ci.yml : verify
+	shellcheck  # 1s   ci.yml : verify
+	secrets     # 2s   ci.yml : verify
+	web         # 7s   ci.yml : verify   (retire fetches its advisory repo, so it wants network)
+	licenses    # 3s   ci.yml : verify
+	fuzz        # 3s   ci.yml : verify
+	clang-tidy  # 4s   ci.yml : verify
+	test        # 5s   ci.yml : verify
+	twin-wasm   # 7s   LOCAL ONLY        (2s warm, 7s cold; emsdk is a ~1 GB install, so ci.yml
+	            #                         SKIPs it. test-web still checks the committed twin.js.)
+	test-tui    # 9s   release.yml : tui (needs bun; the TUI ships on a tag, so that is where
+	            #                         CI builds and tests it)
+	test-san    # 8s   ci.yml : verify
+	patch-drift # 11s  ci.yml : verify
+	docs        # 12s  ci.yml : verify   (docs.yml renders and publishes the site from main;
+	            #                         this is the same drift + link check, run per PR)
+	deps        # 13s  ci.yml : verify   (pip-audit queries PyPI, so it waits on network)
+	test-port   # 14s  ci.yml : verify
+	test-ws     # 14s  LOCAL ONLY        (ws-seed clones with cp -c and fails loudly off APFS by
+	            #                         design, so a Linux runner cannot test it)
+	test-verify # 15s  ci.yml : verify
+	coverage    # 18s  ci.yml : verify   (+ the line floor)
+	semgrep     # 22s  ci.yml : verify   (registry packs are fetched, so it needs network)
+	cbmc        # 82s  ci.yml : verify   (opt-in locally via WITH_CBMC=1; ci.yml sets it)
 )
 
 # ---- lanes ----------------------------------------------------------------
@@ -226,7 +234,7 @@ gate_need() {
 # Python packages a gate's suites import. `command -v` cannot see these: they
 # are modules inside an interpreter, not binaries on PATH, which is exactly how
 # they went unnoticed. Absent, the suites still run and still report success,
-# having quietly skipped the checks that need them — host-tests.yml installs
+# having quietly skipped the checks that need them — ci.yml installs
 # both, so CI runs those checks whatever this host has.
 gate_need_py() {
 	case "$1" in
@@ -285,7 +293,7 @@ gate_is_security() { # <gate>
 # The command each gate runs. Where CI runs a make target, so do we; where CI
 # runs a raw command, this reproduces it verbatim.
 gate_run() {
-	# The eight security gates are one script, which is also what security.yml runs and what
+	# The eight security gates are one script, which is also what ci.yml runs and what
 	# `make security` runs. No environment is set: with no SECURITY_BASE, `secrets` scans the
 	# working tree and `mal-diff` compares against the merge base with origin/main, which is the
 	# pre-push question ("what does this branch add?"). CI passes the pull request's base and
@@ -305,7 +313,7 @@ gate_run() {
 	fuzz) make --no-print-directory fuzz ;;
 	test) make --no-print-directory test ;;
 	twin-wasm)
-		# twin-web.yml runs the node selftest against the committed twin.js,
+		# CI runs the node selftest against the committed twin.js,
 		# rebuilds, and runs it again. The rebuild diff is warn-only there
 		# (emsdk binaries differ across host OSes), so it is warn-only here.
 		node web-twin/selftest.cjs \
@@ -318,7 +326,7 @@ gate_run() {
 	docs) make --no-print-directory docs ;;
 	test-san) make --no-print-directory test-san ;;
 	# Host layers only. Its third layer, verify_port.sh, shells out to `idf.py
-	# build` whenever ESP-IDF is sourced -- which port-tests.yml's runner never
+	# build` whenever ESP-IDF is sourced -- which ci.yml's runner never
 	# is, so CI does not run it either. Left alone it would drop a multi-minute
 	# firmware build into a 33s sweep, from a shell state the sweep cannot see.
 	test-port) WOZ_NO_TARGET_BUILD=1 make --no-print-directory test-port ;;
@@ -339,7 +347,7 @@ gate_run() {
 		;;
 	test-verify) make --no-print-directory test-verify ;;
 	coverage)
-		# host-tests.yml runs `make coverage` and THEN enforces the floor as a
+		# CI runs `make coverage` and THEN enforces the floor as a
 		# separate step. Running coverage alone would pass where CI fails.
 		make --no-print-directory coverage || return 1
 		COV_MIN="$COV_MIN" python3 -c '
@@ -362,7 +370,7 @@ sys.exit(0 if pct >= floor else 1)'
 		;;
 	zizmor) zizmor .github/workflows ;;
 	licenses)
-		# tooling.yml gates the licence *store*, not full REUSE compliance:
+		# The licences gate covers the licence *store*, not full REUSE compliance:
 		# most of this tree predates the per-file header convention, so a bare
 		# `reuse lint` exits nonzero where CI passes. CI tolerates that exit and
 		# filters the JSON down to six categories. Reproduce that, not the

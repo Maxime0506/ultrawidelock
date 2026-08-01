@@ -2480,7 +2480,7 @@ NO_COLOR=1          plain output
 ### [`scripts/security.sh`](architecture/scripts/security.sh.md)
 
 security.sh — the four fast security gates, in one place.
-CI (.github/workflows/security.yml), `make security` and the `secrets`/`mal-diff`/`semgrep`/
+CI (.github/workflows/ci.yml, via make verify), `make security` and the `secrets`/`mal-diff`/`semgrep`/
 `deps` rows in scripts/verify.sh all call THIS file. That is the point of it: the repo already
 learned once that a gate reproduced by hand in two places drifts in one of them, which is why
 verify.sh's header insists on running the same command CI runs. Here there is only one command.
@@ -2563,7 +2563,7 @@ which is what lets CI rebuild and diff it as a staleness gate.
 Pre-push sweep: every CI gate that a host can run, in one shot.
 The point of this script is that "it passed locally" and "it will pass CI"
 mean the same thing. Each row below is one CI *job* (not one workflow —
-tooling.yml and workflow-lint.yml each contribute several), running the same
+one job in ci.yml now runs all of them), running the same
 command that job runs. Adding a job to .github/workflows/ without adding it
 here re-opens the gap this script exists to close.
 Out of scope, deliberately: firmware-builds.yml and release.yml. They need
@@ -2581,7 +2581,7 @@ One gate does not run by default: cbmc. At 64s it is twice the rest of the
 sweep put together, spent on the gate whose input moves least — the wire
 parsers it proves have been stable for months, and the fuzz gate exercises the
 same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
-It still gets a summary row saying it did not run. cbmc.yml has no path
+It still gets a summary row saying it did not run. The cbmc gate has no path
 filter, so the PR runs it whatever happened here; a gate that quietly
 disappears from the sweep is the exact failure this script exists to prevent.
 A gate whose tool is missing FAILS the sweep. It says so on its row, it is
@@ -2594,7 +2594,7 @@ Env:
 WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
-COV_MIN=90         line-coverage floor, matching host-tests.yml
+COV_MIN=90         line-coverage floor, matching ci.yml
 NO_COLOR=1         plain output (colour is the default, pipe or not)
 FAIL_TAIL=40       lines of a failing gate's log to show inline
 

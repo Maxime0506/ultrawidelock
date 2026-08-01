@@ -74,49 +74,53 @@ echo "== gate table covers every CI job =="
 #   <workflow>:<job>  <gate>       reproduced locally by that gate
 #   <workflow>:<job>  !<reason>    deliberately not reproduced
 CI_MAP="
-cbmc.yml:cbmc                              cbmc
-clang-tidy.yml:clang-tidy                  clang-tidy
+ci.yml:verify                              test-web
+ci.yml:verify                              actionlint
+ci.yml:verify                              zizmor
+ci.yml:verify                              mal-diff
+ci.yml:verify                              esp
+ci.yml:verify                              attest
+ci.yml:verify                              ct
+ci.yml:verify                              format
+ci.yml:verify                              shellcheck
+ci.yml:verify                              secrets
+ci.yml:verify                              web
+ci.yml:verify                              licenses
+ci.yml:verify                              fuzz
+ci.yml:verify                              clang-tidy
+ci.yml:verify                              test
+ci.yml:verify                              test-san
+ci.yml:verify                              patch-drift
+ci.yml:verify                              docs
+ci.yml:verify                              deps
+ci.yml:verify                              test-port
+ci.yml:verify                              test-verify
+ci.yml:verify                              coverage
+ci.yml:verify                              semgrep
+ci.yml:verify                              cbmc
 docs.yml:build                             docs
 docs.yml:publish                           !deploys the built site, not a check
-format.yml:clang-format                    format
-fuzz.yml:libfuzzer                         fuzz
-ha-tests.yml:agent                         !HA=1 beta, opt-in: 'make ha-test HA=1' runs it, and it needs paho-mqtt + pyserial that no other gate does
-ha-tests.yml:component                     !advisory on CI too: installs unpinned Home Assistant from PyPI
-host-tests.yml:test                        test
-host-tests.yml:portability                 !the same 'make test' on a 2nd OS/compiler
-host-tests.yml:coverage                    coverage
-patch-drift.yml:drift                      patch-drift
 presence-tags.yml:verify                   !tag-triggered: verifies a presence-signed tag, which needs an enrolled dongle and a phone in the room
-port-tests.yml:test                        test-port
-sanitizers.yml:asan-ubsan                  test-san
-release.yml:tui                            test-tui
-tooling.yml:ws-seed                        test-ws
-tooling.yml:verify-tests                   test-verify
-tooling.yml:shellcheck                     shellcheck
-tooling.yml:licenses                       licenses
-twin-web.yml:drift-gate                    test-web
-twin-web.yml:wasm-firmware                 twin-wasm
-workflow-lint.yml:actionlint               actionlint
-workflow-lint.yml:zizmor                   zizmor
-security.yml:secrets                       secrets
-security.yml:mal-diff                      mal-diff
-security.yml:semgrep                       semgrep
-security.yml:deps                          deps
-security.yml:web                           web
-security.yml:ct                            ct
-security.yml:esp                           esp
-security.yml:attest                        attest
 security-deep.yml:secrets-history          !deep lane: scans all 576 commits (~18s and growing); the local secrets gate scans the tree, and the PR gate scans the branch range
 security-deep.yml:semgrep-sarif            !deep lane: the same scan the semgrep gate runs, uploaded as SARIF at every severity instead of failing on ERROR
-security-deep.yml:scorecard                !deep lane: queries GitHub's own branch-protection and workflow settings, so it needs a token and the default branch
-firmware-builds.yml:changes                !firmware: ESP-IDF/NCS toolchain
+security-deep.yml:scorecard                !deep lane: queries GitHub own branch-protection and workflow settings, so it needs a token and the default branch
 firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
+release.yml:tui                            test-tui
 release.yml:nrf5340dk                      !release: firmware toolchain
 release.yml:esp32-matter-lock              !release: firmware toolchain
 release.yml:release                        !release: publishes a tag
+"
+
+# The inverse of a "!reason" row: that form is a CI job with no gate, this is a
+# gate with no CI job. ci.yml runs the sweep with SKIP set for these two, so
+# without this list they would read as orphans -- and the point of the file is
+# that a gap is a written decision, never a silent hole.
+LOCAL_ONLY="
+test-ws     ws-seed.sh clones with cp -c (APFS clonefile) and fails loudly off APFS by design, so only a contributor local sweep on macOS can run it
+twin-wasm   needs emsdk, a ~1 GB install for one gate; the committed twin.js is still checked by test-web, which does run in CI
 "
 
 # Every job id in every workflow, as "<file>:<job>". Job keys are the only
@@ -182,11 +186,29 @@ while read -r key gate _; do
 done <<EOF
 $CI_MAP
 EOF
+local_only=""
+while read -r g _; do
+	[ -n "${g:-}" ] && local_only="$local_only $g"
+done <<EOF
+$LOCAL_ONLY
+EOF
 orphan=""
 for g in "${GATES[@]}"; do
-	case " $gates_claimed " in *" $g "*) ;; *) orphan="${orphan:+$orphan }$g" ;; esac
+	case " $gates_claimed " in *" $g "*) continue ;; esac
+	case " $local_only " in *" $g "*) continue ;; esac
+	orphan="${orphan:+$orphan }$g"
 done
-assert "every gate maps to a CI job${orphan:+ — ORPHANS: $orphan}" test -z "$orphan"
+assert "every gate maps to a CI job or is declared local-only${orphan:+ — ORPHANS: $orphan}" \
+	test -z "$orphan"
+
+# A local-only entry for a gate that CI does run is a stale excuse, and it would
+# hide a real orphan the day the gate leaves the sweep.
+stale_local=""
+for g in $local_only; do
+	case " $gates_claimed " in *" $g "*) stale_local="${stale_local:+$stale_local }$g" ;; esac
+done
+assert "no local-only gate is also claimed by a CI job${stale_local:+ — $stale_local}" \
+	test -z "$stale_local"
 assert "every mapped job still has its gate${missing_gate:+ — GONE: $missing_gate}" \
 	test -z "$missing_gate"
 

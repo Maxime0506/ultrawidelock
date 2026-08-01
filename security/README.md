@@ -7,9 +7,9 @@ is the part that runs on every change.
 
 ## Two lanes
 
-| | `security.yml` | `security-deep.yml` |
+| | `ci.yml` (the `verify` job) | `security-deep.yml` |
 |---|---|---|
-| Runs on | every pull request and push to main | weekly, push to main, manual |
+| Runs on | every pull request and push to main | weekly, manual |
 | Blocks a merge | **yes** | no |
 | Wall time | ~60s (8 parallel jobs) | minutes |
 | Reports via | failing the job | code-scanning alerts (SARIF) |
@@ -91,8 +91,9 @@ exists to prevent.
 
 ## Bumping a pinned tool
 
-Versions and checksums live in `.github/workflows/security.yml`, and `scripts/toolchain.sh` reads
-them from there rather than keeping a second copy. To bump one, change it in the workflow, then:
+Versions and checksums live in the `env:` block of `.github/workflows/ci.yml`, and
+`scripts/toolchain.sh` reads them from there rather than keeping a second copy. To bump one,
+change it in the workflow, then:
 
 ```sh
 make tools          # reports any host tool now off the CI pin

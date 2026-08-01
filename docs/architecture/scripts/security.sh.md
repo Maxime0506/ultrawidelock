@@ -2,7 +2,7 @@
 # `scripts/security.sh`
 
 security.sh — the four fast security gates, in one place.
-CI (.github/workflows/security.yml), `make security` and the `secrets`/`mal-diff`/`semgrep`/
+CI (.github/workflows/ci.yml, via make verify), `make security` and the `secrets`/`mal-diff`/`semgrep`/
 `deps` rows in scripts/verify.sh all call THIS file. That is the point of it: the repo already
 learned once that a gate reproduced by hand in two places drifts in one of them, which is why
 verify.sh's header insists on running the same command CI runs. Here there is only one command.

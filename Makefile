@@ -225,7 +225,7 @@ verify:
 ##   pip-audit, which also covers known-MALICIOUS packages via OSV's MAL- feed) ·
 ##   web (CDN pins, SRI, CSP, retire.js, install flags) · ct (secret-dependent branches) ·
 ##   esp (component registry pins) · attest (release provenance).
-##   ~30s. Identical to what .github/workflows/security.yml runs, because both
+##   ~30s. Identical to what CI runs (ci.yml, via make verify), because both
 ##   call scripts/security.sh. Name one to run it alone:
 ##     make security GATES="semgrep deps"
 ##   ct reports "not checked" on macOS: there is no valgrind for darwin/arm64,

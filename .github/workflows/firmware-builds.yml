@@ -1,153 +1,33 @@
 # Firmware build gates — prove the shipped firmware trees still compile.
-# Heavyweight cross-toolchain builds, so none of these jobs is a required
-# check: a path-skipped job that never reports is fine here (contrast with the
-# required checks, e.g. patch-drift.yml, which must always report on PRs).
 #
-# Workflow-level `paths:` can only gate the whole file, so per-job filtering
-# uses a change-detection job: `changes` computes which build inputs a push/PR
-# actually touched and each build job keys off its output.
+# Manual only. These are the heaviest thing this repository can ask of CI (the
+# NCS and ESP-IDF toolchains, multi-GB workspaces, tens of minutes), and they
+# ran on every push until the CI trim. Nothing here is a required check and
+# nothing here runs by itself: dispatch it before cutting a release, after an
+# upstream bump, or when a change reaches the parts of the tree that the host
+# sweep in ci.yml cannot see — Kconfig, devicetree, linker scripts, flash fit.
+#
+# ci.yml compiles the portable C under modules/ on every push, which catches a
+# change that would not build. It cannot catch the four things above, and no
+# cheap check can: reaching them means running these toolchains.
+#
+# A dispatch builds every target. The change-detection job that used to gate
+# each build on which paths a push touched went with the push trigger.
 name: firmware-builds
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ports/esp32/**
-      - ports/nrf5340dk/**
-      - modules/**
-      - deps/dw3000/**
-      - west.yml
-      - scripts/bootstrap.sh
-      - scripts/build.sh
-      - .github/workflows/firmware-builds.yml
-      # Last so it wins: markdown never compiles into firmware, so pure-docs
-      # pushes (READMEs live inside the build dirs) skip the workflow.
-      - "!**/*.md"
-  pull_request:
-    paths:
-      - ports/esp32/**
-      # The Matter app builds only on push/nightly/dispatch (see esp32-matter
-      # below), so PRs touching nothing but its app dir skip the workflow.
-      - "!ports/esp32/apps/matter-lock/**"
-      # Except its target definitions. Adding a target means a new sdkconfig
-      # defaults file and often a new partition table, and those are exactly
-      # what breaks a Matter build — but the negation above meant PR #89's C6
-      # definitions were compiled by nothing until the post-merge push. Last
-      # match wins, so re-including them has to come after the negation.
-      - ports/esp32/apps/matter-lock/sdkconfig.defaults.*
-      - ports/esp32/apps/matter-lock/partitions_*.csv
-      - ports/nrf5340dk/**
-      - modules/**
-      - deps/dw3000/**
-      - west.yml
-      - scripts/bootstrap.sh
-      - scripts/build.sh
-      - .github/workflows/firmware-builds.yml
-      # Last so it wins, mirroring the push filter above: markdown never
-      # compiles into firmware, and READMEs live inside the build dirs.
-      - "!**/*.md"
   workflow_dispatch:
-  # Nightly canary for the Matter build: its setup reaches live upstreams
-  # (esp-matter submodules, CHIP CIPD packages), so breakage can appear with
-  # no push here. 03:27 UTC.
-  schedule:
-    - cron: "27 3 * * *"
 
 # CI only reads the repo: no token write scopes for any job.
 permissions:
   contents: read
 
-# Superseded runs on the same ref are wasted work — cancel them.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
-  # Which build inputs did this push/PR touch? Feeds the per-job gates below.
-  # On workflow_dispatch and schedule the filter is skipped and every gate's
-  # event condition takes over (a manual run builds everything; the nightly
-  # builds the Matter app).
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
-      nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
-      esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
-      esp32-matter-target: ${{ steps.filter.outputs.esp32-matter-target }}
-      aliro-blob: ${{ steps.filter.outputs.aliro-blob }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
-        with:
-          persist-credentials: false
-          # Push events diff against the pre-push commit, which a depth-1
-          # clone does not have.
-          fetch-depth: 0
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
-        id: filter
-        with:
-          # The esp32 component/module dirs are shared by both ESP32 apps;
-          # per-app dirs are added on top (see the app CMakeLists for the
-          # REPO_ROOT source references the components compile).
-          #
-          # The !(*.md) suffix keeps READMEs from counting as build inputs.
-          # It must sit inside each glob: a filter ORs its patterns, so a
-          # separate `!**/*.md` rule would match every non-markdown file in
-          # the repo, and the `predicate-quantifier: every` mode that does
-          # support bare exclusions breaks multi-directory filters like these
-          # (no file can be in two directories at once).
-          filters: |
-            esp32-shared: &esp32-shared
-              - ports/esp32/components/**/!(*.md)
-              - modules/woz_aliro/**/!(*.md)
-              - modules/woz_port/**/!(*.md)
-              - modules/woz_uwb/**/!(*.md)
-              - deps/dw3000/**/!(*.md)
-              - .github/workflows/firmware-builds.yml
-            esp32-idf:
-              - *esp32-shared
-              - ports/esp32/apps/reader/**/!(*.md)
-            esp32-matter:
-              - *esp32-shared
-              - ports/esp32/apps/matter-lock/**/!(*.md)
-            # The subset that defines a target rather than changing its code.
-            # The only matter-lock inputs that earn the Matter build on a PR;
-            # see the esp32-matter job's condition.
-            esp32-matter-target:
-              - ports/esp32/apps/matter-lock/sdkconfig.defaults.*
-              - ports/esp32/apps/matter-lock/partitions_*.csv
-            nrf5340dk:
-              - west.yml
-              - scripts/bootstrap.sh
-              - scripts/build.sh
-              - ports/nrf5340dk/**/!(*.md)
-              - modules/woz_aliro_stack/**/!(*.md)
-              - modules/woz_nfc/**/!(*.md)
-              - modules/woz_uwb/**/!(*.md)
-              - modules/woz_aliro_ecp/**/!(*.md)
-              - modules/woz_port/**/!(*.md)
-              - deps/dw3000/**/!(*.md)
-              - .github/workflows/firmware-builds.yml
-            # Compatibility build for the explicit ALIRO_SOURCE=0 fallback.
-            # Source-stack-only edits cannot affect it; shared nRF inputs can.
-            aliro-blob:
-              - ports/nrf5340dk/**/!(*.md)
-              - modules/woz_nfc/**/!(*.md)
-              - modules/woz_uwb/**/!(*.md)
-              - modules/woz_aliro_ecp/**/!(*.md)
-              - modules/woz_port/**/!(*.md)
-              - deps/dw3000/**/!(*.md)
-              - west.yml
-              - scripts/bootstrap.sh
-              - scripts/build.sh
-              - .github/workflows/firmware-builds.yml
-
-  # Plain ESP-IDF reader app. All dependencies are in-tree, so this is the
-  # cheapest firmware build: the official IDF container plus idf.py.
   esp32-idf:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.esp32-idf == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     container:
@@ -218,7 +98,7 @@ jobs:
           # A dropped --wrap links clean, binds the real dwt_* and silently
           # never programs the STS key/IV. Nothing else catches that on the
           # RISC-V targets: test/verify_port.sh owns this check but hardcodes an
-          # S3 build, and never runs in CI anyway (port-tests.yml has no
+          # S3 build, and never runs in CI anyway (the test-port gate has no
           # ESP-IDF, so it skips). Assert it on the artifacts already built.
           check_seam() {
             local dir="$1" tag="$2" w
@@ -258,8 +138,6 @@ jobs:
   # that already carries another patch state (patches that add files leave
   # untracked files behind), so a near-miss cache would poison the build.
   nrf5340dk:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nrf5340dk == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -275,7 +153,16 @@ jobs:
       # state at a fraction of the size, so bootstrap and the workspace cache
       # are both much faster. The bench default keeps full clones.
       ALIRO_SHALLOW: "1"
-      CCACHE_MAXSIZE: 1G
+      # 300M, not 1G, and the reason is the repository cache budget rather than
+      # this job. GitHub gives a repository 10 GB of Actions cache and evicts by
+      # LRU. Every ccache here uses a run-unique key, so a full run writes a
+      # brand-new entry per job; at 1G that was 6.3 GB of fresh cache per run
+      # (300M + 1G + 1G + 4x1G), which evicts the two entries that are actually
+      # expensive to rebuild: nrf-workspace and esp-matter. Losing either turns
+      # a warm build into a cold multi-GB upstream fetch, and for esp-matter it
+      # means all four matrix legs cloning CHIP at once. A smaller ccache costs
+      # a few minutes of compile; an evicted workspace cache costs hours.
+      CCACHE_MAXSIZE: 300M
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -327,10 +214,8 @@ jobs:
   # nrf5340dk job above compiles the in-tree source stack; this sibling proves
   # ALIRO_SOURCE=0 remains usable for regression isolation. It shares the
   # bootstrapped workspace cache because the choice is compile-time only, but
-  # has a distinct compiler cache. Source-stack-only changes skip this job.
+  # has a distinct compiler cache.
   nrf5340dk-aliro-blob:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.aliro-blob == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -338,7 +223,8 @@ jobs:
     env:
       ALIRO_TOOLCHAIN: env
       ALIRO_SHALLOW: "1"
-      CCACHE_MAXSIZE: 1G
+      # See the nrf5340dk job above for why this is 300M and not 1G.
+      CCACHE_MAXSIZE: 300M
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -376,24 +262,16 @@ jobs:
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # ESP32-S3 Matter door lock against esp-matter at the bench-validated
-  # revision (6+ GB once the CHIP submodule tree is in). Deliberately kept off
-  # PRs — push to main, nightly and manual runs only — until the cache proves
-  # out. The esp-matter tree (including CHIP's CIPD-fetched gn/zap under
-  # .environment) is cached on a static key: its revision is pinned, so only
-  # a revision or IDF bump rolls the key.
+  # revision (6+ GB once the CHIP submodule tree is in). The esp-matter tree
+  # (including CHIP's CIPD-fetched gn/zap under .environment) is cached on a
+  # static key: its revision is pinned, so only a revision or IDF bump rolls it.
   #
-  # One exception, added after PR #89 shipped C6 target definitions this job
-  # never compiled: a PR that adds or edits a sdkconfig defaults file or a
-  # partition table does run it. Those are the changes most likely to break the
-  # build and the least likely to be caught by review, they are rare enough not
-  # to cost much, and a PR reads the base branch's caches, so the run is warm.
+  # This is the job PR #89 taught the most: it shipped C6 target definitions that
+  # nothing compiled until the post-merge push. Adding or editing a sdkconfig
+  # defaults file or a partition table is the change most likely to break this
+  # build and the least likely to be caught by review, so dispatch this workflow
+  # when a pull request touches one.
   esp32-matter:
-    needs: changes
-    if: >-
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && needs.changes.outputs.esp32-matter == 'true') ||
-      (github.event_name == 'pull_request' && needs.changes.outputs.esp32-matter-target == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 240
     # One leg per image. Measured on run 30595579021, the three builds ran
@@ -405,6 +283,7 @@ jobs:
     #
     # fail-fast off: one target breaking is exactly when the others' results
     # are most worth having.
+    #
     strategy:
       fail-fast: false
       matrix:
@@ -416,7 +295,9 @@ jobs:
       ESP_MATTER_REV: 93b168027bf95f4e467230345ad1f2d147eb1f6b
       ESP_MATTER_PATH: /opt/esp/esp-matter
       IDF_CCACHE_ENABLE: "1"
-      CCACHE_MAXSIZE: 1G
+      # See the nrf5340dk job for why this is 300M and not 1G. It matters most
+      # here: this is the only matrix job, so it writes one fresh ccache per leg.
+      CCACHE_MAXSIZE: 300M
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -485,10 +366,15 @@ jobs:
       #
       # On a cold cache every matrix leg does its own fetch + install and then
       # races to save the same key; the losers log "cache already exists" and
-      # carry on. Deliberately not solved with a priming job: the key is static
-      # (only an esp-matter revision or IDF bump rolls it) and the nightly keeps
-      # it alive, so cold runs are rare, while a priming job would serialise
-      # ahead of every warm run forever.
+      # carry on. Four simultaneous CHIP clones is the worst thing this workflow
+      # can do, so know when it happens: the key is static (only an esp-matter
+      # revision or IDF bump rolls it), but GitHub evicts a cache untouched for
+      # 7 days, and since the nightly was removed nothing refreshes it on a
+      # schedule. Any gap longer than a week between pushes that touch this job
+      # therefore makes the next one cold. If that becomes the common case, the
+      # fix is a weekly cache-refresh cron running one leg, not a nightly
+      # building four, and not a priming job — that would serialise ahead of
+      # every warm run forever.
       - name: save the esp-matter cache (cold cache)
         if: steps.esp-matter.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
