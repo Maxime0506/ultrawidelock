@@ -940,14 +940,34 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * NOTHING IS LOGGED but the outcome. Every argument is key material.
  */
 /**
- * An Aliro credential public key, handed straight to the reader's trust store.
+ * An Aliro credential public key, handed to the reader's trust store -- but only
+ * if it is a key a phone will ever present.
  *
- * Not kept here: the store owns it, validates the point, and persists it. This
- * is what takes "0 trust anchor(s)" to 1 and is the difference between a reader
- * that knows who it is and one a phone can actually open.
+ * The trust check is a raw-key allowlist (aliro_reader.c), so an anchor is a
+ * claim that some device will present exactly these 65 bytes. An ISSUER key
+ * never will: it identifies the home that certifies credentials, not a device.
+ * Storing it produced a reader that reported "1 trust anchor(s)", looked
+ * provisioned, and rejected every phone one step after "device signature OK" --
+ * measured across three pairings on 2026-08-02, where the stored anchor was
+ * byte-identical every time and the presented key was different every time.
+ *
+ * The ESP32 lock, which is the working reference in this repo, has always gated
+ * this on the two endpoint types (door_lock_callbacks.cpp:112-114). This is that
+ * rule, arrived at the long way round.
+ *
+ * The issuer key is still ACCEPTED: refusing it would tell the controller this
+ * node cannot hold one, which is a different and equally untrue claim. It is
+ * simply not an anchor. An empty store is the honest report of a reader no
+ * phone can open yet, and it is what makes the next endpoint key visible.
  */
 static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])
 {
+	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
+		LOG_INF("  ALIRO CREDENTIAL issuer key accepted, NOT an anchor (type %u)",
+			(unsigned int)credential_type);
+		return 0;
+	}
+
 	int rc = aliro_reader_provision_add_trust(public_key);
 
 	if (rc < 0) {
