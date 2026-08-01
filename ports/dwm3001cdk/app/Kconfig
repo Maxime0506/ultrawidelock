@@ -63,6 +63,28 @@ config SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE
 
 endif # ALIRO_PROV_CONSOLE
 
+config ALIRO_PROV_CLEAR_ON_BOOT
+	bool "Erase the stored Aliro identity at boot"
+	default n
+	help
+	  Deletes the `aliro/prov` settings key before anything reads it, so the
+	  board comes up on the DEV identity with no trust anchors, exactly as it
+	  was before it was first provisioned.
+
+	  The Matter path needs a way back. A board provisioned by one home keeps
+	  that identity across a reflash, and on 2026-08-02 a re-added accessory
+	  was observed getting neither SetAliroReaderConfig nor SetCredential --
+	  the stale anchor then rejected the key the phone presented, one step
+	  from the grant. Whether Apple skips provisioning BECAUSE the reader
+	  reports the deleted home's identity is unconfirmed; this is the knob
+	  that lets the question be asked.
+
+	  `west flash --erase` clears it too, and also destroys the SRP client
+	  key, which costs up to 14 days of Thread host-name ownership.
+
+	  It erases on EVERY boot, including the one right after Apple provisions
+	  a new identity. Flash it once, then flash an image without it.
+
 config ALIRO_THREAD_GATE
 	bool "Stage 0 contention gate: bring Thread up alongside the reader"
 	# NET_L2_OPENTHREAD, not bare OPENTHREAD. The 802.15.4 driver class is

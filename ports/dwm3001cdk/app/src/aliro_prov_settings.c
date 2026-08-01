@@ -50,6 +50,13 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 		return -1;
 	}
 
+#if IS_ENABLED(CONFIG_ALIRO_PROV_CLEAR_ON_BOOT)
+	/* Before the load, not after: the point is that nothing ever sees the old
+	 * blob, so the identity this boot reports is the DEV one. */
+	rc = settings_delete(ALIRO_PROV_KEY);
+	LOG_WRN("clear-on-boot: erased " ALIRO_PROV_KEY " (rc=%d)", rc);
+#endif
+
 	s_blob_len = 0;
 	rc = settings_load_subtree("aliro");
 	if (rc != 0) {
