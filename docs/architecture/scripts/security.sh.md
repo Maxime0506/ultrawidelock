@@ -31,22 +31,22 @@ NO_COLOR=1                      plain output
 
 ---- secrets ---------------------------------------------------------------
 Two scopes on purpose. With a range, only the commits being proposed are scanned, which is what
-a pull request needs and costs about two seconds. Without one, the whole working tree is
-scanned. Neither is the full-history scan — that lives in the weekly deep lane, because at ~18s
+a pull request needs and costs about two seconds. Without one, every tracked file is scanned.
+Neither is the full-history scan — that lives in the weekly deep lane, because at ~18s
 over 576 commits it is too slow to sit in front of every push and its answer changes only when
 history is rewritten.
 
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_maldiff()`
-`scripts/security.sh:84`
+`scripts/security.sh:117`
 
 ---- mal-diff --------------------------------------------------------------
 
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `gate_semgrep()`
-`scripts/security.sh:102`
+`scripts/security.sh:135`
 
 ---- semgrep ---------------------------------------------------------------
 One invocation with every config, not one per ruleset: semgrep parses each target file once and
@@ -60,7 +60,7 @@ on them would train everyone to bypass the gate, taking the ERROR rules with it.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_deps()`
-`scripts/security.sh:234`
+`scripts/security.sh:267`
 
 ---- deps ------------------------------------------------------------------
 osv-scanner is pointed at the lockfile rather than told to walk the tree. The walk resolves its
@@ -73,7 +73,7 @@ comes back from the same query.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_web()`
-`scripts/security.sh:303`
+`scripts/security.sh:336`
 
 ---- gates that live in their own script -----------------------------------
 Each is big enough to want its own file (the web gate parses HTML, the ct gate compiles and
@@ -83,7 +83,7 @@ point that CI, `make security` and verify.sh all share.
 **called by** `run_one`
 
 ### `gate_ct()`
-`scripts/security.sh:312`
+`scripts/security.sh:345`
 
 ct is the one gate that can report neither pass nor fail. There is no valgrind for
 darwin/arm64, so on the primary dev machine the honest answer is "not checked here" — exit 2,
@@ -94,7 +94,7 @@ install. CI runs linux and never sees it.
 **called by** `run_one`
 
 ### `run_one()`
-`scripts/security.sh:320`
+`scripts/security.sh:353`
 
 ---- dispatch --------------------------------------------------------------
 

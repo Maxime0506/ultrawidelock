@@ -53,8 +53,8 @@ missing() {
 
 # ---- secrets ---------------------------------------------------------------
 # Two scopes on purpose. With a range, only the commits being proposed are scanned, which is what
-# a pull request needs and costs about two seconds. Without one, the whole working tree is
-# scanned. Neither is the full-history scan — that lives in the weekly deep lane, because at ~18s
+# a pull request needs and costs about two seconds. Without one, every tracked file is scanned.
+# Neither is the full-history scan — that lives in the weekly deep lane, because at ~18s
 # over 576 commits it is too slow to sit in front of every push and its answer changes only when
 # history is rewritten.
 gate_secrets() {
@@ -64,19 +64,52 @@ gate_secrets() {
 		return 1
 	}
 
-	local args=(--redact --no-banner --config security/gitleaks.toml)
-	local nrules
+	local args=(--redact --no-banner --config "$ROOT/security/gitleaks.toml")
+	local nrules tmp
 	# The scope line matters as much as the result. "no leaks found" over nothing looks
-	# identical to "no leaks found" over the whole tree, and only one of those is good news.
+	# identical to "no leaks found" over every tracked file, and only one of those is good news.
 	nrules="$(grep -c '^\[\[rules\]\]' security/gitleaks.toml 2>/dev/null || echo 0)"
 	if [ -n "$BASE" ]; then
 		printf '  %sscope: commits %s..%s  ·  gitleaks defaults + %s repo rules%s\n' \
 			"$DIM" "${BASE:0:7}" "${HEAD_REF:0:7}" "$nrules" "$RESET"
 		gitleaks detect --source . --log-opts="$BASE..$HEAD_REF" "${args[@]}"
 	else
+		# gitleaks is handed a copy of the tracked files rather than the checkout itself.
+		# --no-git means "walk the filesystem" quite literally: it does not read .gitignore,
+		# and while the allowlist paths below do prune the walk, they prune only what somebody
+		# remembered to list. A developer checkout also holds sibling worktrees under .claude/,
+		# and neither .claude/ nor a sibling's own workspace/ matches a `^`-anchored pattern
+		# written for this one — 20 GB walked, measured at 18m26s against 2s in CI's clean
+		# checkout. Staging ends that class of surprise rather than adding one more path to
+		# chase, and makes the scope line — which has always claimed "tracked files" — true.
+		if ! tmp="$(mktemp -d -t oa-secrets.XXXXXX)"; then
+			printf '  %s%s%s could not create a scan directory\n' "$RED" "$CRS" "$RESET"
+			return 1
+		fi
+		# shellcheck disable=SC2064  # $tmp is expanded now on purpose
+		trap "rm -rf '$tmp' '$tmp.list'" RETURN
+		# Paths git still tracks but the working tree no longer has are dropped: that is a
+		# normal state mid-refactor, and tar aborts on a missing member. The list is written
+		# out and checked rather than piped straight in, because GNU tar refuses an empty one.
+		git ls-files -z | while IFS= read -r -d '' f; do
+			[ -f "$f" ] && printf '%s\0' "$f"
+		done >"$tmp.list"
+		if [ ! -s "$tmp.list" ]; then
+			printf '  %s%s%s no tracked files here — is this a checkout?\n' "$RED" "$CRS" "$RESET"
+			return 1
+		fi
+		# tar carries working-tree bytes, so staged and unstaged edits are scanned as they
+		# stand — which a scan of the index, or of HEAD, would miss.
+		if ! tar -cf - --null -T "$tmp.list" | tar -xf - -C "$tmp"; then
+			printf '  %s%s%s could not stage the tracked files for scanning\n' "$RED" "$CRS" "$RESET"
+			return 1
+		fi
 		printf '  %sscope: %s tracked files  ·  gitleaks defaults + %s repo rules%s\n' \
-			"$DIM" "$(git ls-files | wc -l | tr -d ' ')" "$nrules" "$RESET"
-		gitleaks detect --source . --no-git "${args[@]}"
+			"$DIM" "$(find "$tmp" -type f | wc -l | tr -d ' ')" "$nrules" "$RESET"
+		# cd + `--source .`, never `--source "$tmp"`: gitleaks reports each finding's path
+		# exactly as --source spelled it, and every allowlist path in security/gitleaks.toml is
+		# a repo-relative regex anchored with ^. An absolute source would match none of them.
+		(cd "$tmp" && gitleaks detect --source . --no-git "${args[@]}")
 	fi
 }
 

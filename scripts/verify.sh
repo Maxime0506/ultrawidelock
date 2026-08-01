@@ -267,7 +267,7 @@ gate_label() {
 	zizmor) echo "workflow security audit" ;;
 	licenses) echo "licence store is consistent" ;;
 	cbmc) echo "wire-parser memory-safety proof" ;;
-	secrets) echo "no secrets in the working tree" ;;
+	secrets) echo "no secrets in the tracked files" ;;
 	web) echo "browser supply chain: pins, CSP, installs" ;;
 	ct) echo "no secret-dependent branches" ;;
 	esp) echo "ESP component pins are exact" ;;
@@ -294,8 +294,8 @@ gate_is_security() { # <gate>
 # runs a raw command, this reproduces it verbatim.
 gate_run() {
 	# The eight security gates are one script, which is also what ci.yml runs and what
-	# `make security` runs. No environment is set: with no SECURITY_BASE, `secrets` scans the
-	# working tree and `mal-diff` compares against the merge base with origin/main, which is the
+	# `make security` runs. No environment is set: with no SECURITY_BASE, `secrets` scans every
+	# tracked file and `mal-diff` compares against the merge base with origin/main, which is the
 	# pre-push question ("what does this branch add?"). CI passes the pull request's base and
 	# head instead.
 	if gate_is_security "$1"; then
