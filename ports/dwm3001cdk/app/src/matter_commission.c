@@ -365,14 +365,20 @@ static int begin_session(void)
 /**
  * How many CASE sessions this node holds at once.
  *
- * Three, which is the CapabilityMinima floor matter_clusters.h already
- * reports. Holding ONE while claiming three is what made a real pairing fail:
- * Apple opens a session for the phone on fabric 1 and a second for the home hub
- * on fabric 2, and the second overwrote the first. Every fabric-1 message after
- * that was refused as "not ours", taking the subscription with it, and the
- * accessory hung on "Adding to Home" until it was removed.
+ * Was three, the CapabilityMinima floor matter_clusters.h reports. Holding ONE
+ * while claiming three is what made a real pairing fail: Apple opens a session
+ * for the phone on fabric 1 and a second for the home hub on fabric 2, and the
+ * second overwrote the first. Every fabric-1 message after that was refused as
+ * "not ours", taking the subscription with it, and the accessory hung on
+ * "Adding to Home" until it was removed.
+ *
+ * Three was still too few. A home with an iPhone, a HomePod and an Apple TV
+ * puts every one of them on both fabrics, so on 2026-08-02 the eviction warning
+ * preceded EVERY establishment and the node opened nine sessions in five
+ * minutes -- each eviction silencing a controller that reconnected at once.
+ * The floor is what a node must support, not what a home will ask for.
  */
-#define MATTER_CASE_SESSIONS 3u
+#define MATTER_CASE_SESSIONS 6u
 
 static struct matter_exchange s_case_x[MATTER_CASE_SESSIONS];
 static bool s_case_ready[MATTER_CASE_SESSIONS];
@@ -396,6 +402,12 @@ static uint8_t s_case_fabric[MATTER_CASE_SESSIONS];
 static uint8_t s_case_cur;
 /** Round-robin victim, used only when every slot is live. */
 static uint8_t s_case_next_victim;
+
+/**
+ * Release the subscription a dying session held. Defined with the subscription
+ * table below; declared here because eviction is what makes it necessary.
+ */
+static void sub_drop_session(uint16_t session_id);
 
 /** The slot holding @p session_id, or MATTER_CASE_SESSIONS if none does. */
 static uint8_t case_slot_of(uint16_t session_id)
@@ -431,6 +443,10 @@ static uint8_t case_alloc_slot(void)
 	s_case_next_victim = (uint8_t)((s_case_next_victim + 1u) % MATTER_CASE_SESSIONS);
 	LOG_WRN("  all %u CASE slots live; evicting session 0x%04x", MATTER_CASE_SESSIONS,
 		(unsigned int)s_case_x[i].local_session_id);
+	/* Whatever that session was subscribed to dies with it. Leaving the
+	 * subscription behind would hold a slot for a peer that can no longer be
+	 * reached, and answer its StatusResponses to a session that is gone. */
+	sub_drop_session(s_case_x[i].local_session_id);
 	return i;
 }
 
@@ -683,15 +699,28 @@ static void on_write_request(const struct matter_exchange_in *in)
 }
 
 /**
- * The subscription this node is serving, if any.
+ * The subscriptions this node is serving.
  *
- * One. Apple opens exactly one during commissioning, and a table of them would
- * be RAM spent on a case that has not arrived.
+ * One slot per session, because that is the natural bound: a controller
+ * subscribes on the session it holds. This was a SINGLE subscription, on the
+ * argument that Apple opens exactly one during commissioning and a table would
+ * be RAM spent on a case that had not arrived. The case had arrived. Every
+ * SubscribeRequest overwrote the last, so the displaced controller saw its
+ * subscription stop, re-subscribed at once, and displaced the next one -- with
+ * nothing in the log to say so, because each round looks like a healthy
+ * subscribe. Measured on 2026-08-02: nine of these in five minutes and a tile
+ * that never left "No Response".
  */
-static struct {
+struct sub_state {
 	struct matter_im_read read;
 	uint32_t id;
 	uint16_t max_interval_s;
+	/**
+	 * The CASE session this subscriber holds, or 0 when the request arrived
+	 * over BLE. A local session id is never 0 -- see the Sigma2 path -- so
+	 * the two can never collide.
+	 */
+	uint16_t session_id;
 	/** Reports already delivered by earlier chunks of the priming report. */
 	uint16_t sent;
 	/** More chunks remain; the next StatusResponse asks for one. */
@@ -699,7 +728,70 @@ static struct {
 	/* Between the priming report and the StatusResponse that confirms it. */
 	bool priming;
 	bool active;
-} s_sub;
+	bool in_use;
+};
+
+static struct sub_state s_subs[MATTER_CASE_SESSIONS];
+/** Round-robin victim, used only when every subscription slot is live. */
+static uint8_t s_sub_next_victim;
+
+/** The session serving the datagram in flight; 0 when it arrived over BLE. */
+static uint16_t current_session_id(void)
+{
+	if (s_thread_reply != NULL && s_case_cur < MATTER_CASE_SESSIONS &&
+	    s_case_ready[s_case_cur]) {
+		return s_case_x[s_case_cur].local_session_id;
+	}
+	return 0u;
+}
+
+/** The subscription @p session_id holds, or NULL. */
+static struct sub_state *sub_of_session(uint16_t session_id)
+{
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		if (s_subs[i].in_use && s_subs[i].session_id == session_id) {
+			return &s_subs[i];
+		}
+	}
+	return NULL;
+}
+
+static void sub_drop_session(uint16_t session_id)
+{
+	struct sub_state *s = sub_of_session(session_id);
+
+	if (s != NULL) {
+		s->in_use = false;
+	}
+}
+
+/**
+ * The slot for a new subscription from @p session_id.
+ *
+ * Re-subscribing on a session REPLACES what that session already had, rather
+ * than taking a second slot: a controller that asks again has abandoned the
+ * first, and letting one peer hold several is how a table of six starves at
+ * two controllers -- the same failure this table exists to end.
+ */
+static struct sub_state *sub_alloc(uint16_t session_id)
+{
+	struct sub_state *s = sub_of_session(session_id);
+	uint8_t i;
+
+	if (s != NULL) {
+		return s;
+	}
+	for (i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		if (!s_subs[i].in_use) {
+			return &s_subs[i];
+		}
+	}
+	i = s_sub_next_victim;
+	s_sub_next_victim = (uint8_t)((s_sub_next_victim + 1u) % MATTER_CASE_SESSIONS);
+	LOG_WRN("  all %u subscription slots live; dropping 0x%08x", MATTER_CASE_SESSIONS,
+		(unsigned int)s_subs[i].id);
+	return &s_subs[i];
+}
 
 /**
  * Send one chunk of the priming report.
@@ -709,30 +801,30 @@ static struct {
  * against a ~1232 byte ceiling. An oversized datagram is not slow, it is never
  * delivered, and the subscriber re-subscribes forever with nothing to say why.
  */
-static void send_report_chunk(void)
+static void send_report_chunk(struct sub_state *s)
 {
 	struct matter_im_report_stats stats;
 	size_t report_len = 0u;
 	uint16_t emitted = 0u;
 	int rc;
 
-	rc = matter_im_report_data_chunk(&s_im, &s_sub.read, s_sub.sent, s_report,
-					 MATTER_MAX_MESSAGE_LEN, &report_len, &s_sub.more, &emitted,
+	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, s_report,
+					 MATTER_MAX_MESSAGE_LEN, &report_len, &s->more, &emitted,
 					 &stats);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build the report chunk (%d)", rc);
 		return;
 	}
-	if (emitted == 0u && s_sub.more) {
+	if (emitted == 0u && s->more) {
 		/* Not a chunk boundary -- one report is larger than a whole
 		 * message, and no number of chunks will help. */
 		LOG_ERR("a single attribute does not fit a message; giving up");
-		s_sub.more = false;
+		s->more = false;
 		return;
 	}
-	s_sub.sent += emitted;
+	s->sent += emitted;
 	LOG_DBG("  chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
-		s_sub.sent, s_sub.more ? "MORE" : "last");
+		s->sent, s->more ? "MORE" : "last");
 	send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len);
 }
 
@@ -757,7 +849,11 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 		return;
 	}
 
-	s_sub.read = sub.read;
+	struct sub_state *s = sub_alloc(current_session_id());
+
+	s->session_id = current_session_id();
+	s->in_use = true;
+	s->read = sub.read;
 	/*
 	 * Any non-zero id will do -- it is this node's handle and the subscriber
 	 * only ever echoes it back. Counted rather than random so two
@@ -766,28 +862,29 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 	 */
 	static uint32_t next_id;
 
-	s_sub.id = ++next_id;
+	s->id = ++next_id;
 	/*
 	 * The ceiling is the subscriber's limit, not a request: reporting later
 	 * than this is what makes a subscription dead. Committing to it exactly
 	 * is honest only if this node then reports on time -- see the note in
 	 * on_status_response().
 	 */
-	s_sub.max_interval_s = sub.max_interval_s;
-	s_sub.read.subscription_id = s_sub.id;
-	s_sub.priming = true;
-	s_sub.active = false;
+	s->max_interval_s = sub.max_interval_s;
+	s->read.subscription_id = s->id;
+	s->priming = true;
+	s->active = false;
 
-	LOG_INF("  subscribe: %u path(s), %u..%u s, id 0x%08x", s_sub.read.n_paths,
-		sub.min_interval_s, sub.max_interval_s, (unsigned int)s_sub.id);
+	LOG_INF("  subscribe: %u path(s), %u..%u s, id 0x%08x, session 0x%04x", s->read.n_paths,
+		sub.min_interval_s, sub.max_interval_s, (unsigned int)s->id,
+		(unsigned int)s->session_id);
 	/*
 	 * WHICH path, not just how many. A subscription to something this node
 	 * answers with silence produces a priming report that is structurally
 	 * perfect and empty, and a subscriber waiting on a value that will never
 	 * come looks exactly like a subscriber that never got the report.
 	 */
-	for (uint8_t i = 0; i < s_sub.read.n_paths; i++) {
-		const struct matter_im_path *p = &s_sub.read.paths[i];
+	for (uint8_t i = 0; i < s->read.n_paths; i++) {
+		const struct matter_im_path *p = &s->read.paths[i];
 
 		LOG_INF("  sub[%u] endpoint %d cluster 0x%04x attribute 0x%04x", i,
 			p->have_endpoint ? (int)p->endpoint : -1,
@@ -795,9 +892,9 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 			p->have_attribute ? (unsigned int)p->attribute : 0xFFFFu);
 	}
 
-	s_sub.sent = 0u;
-	s_sub.more = false;
-	send_report_chunk();
+	s->sent = 0u;
+	s->more = false;
+	send_report_chunk(s);
 }
 
 /**
@@ -906,31 +1003,41 @@ static void on_timed_request(const struct matter_exchange_in *in)
 static void on_status_response(const struct matter_exchange_in *in)
 {
 	size_t resp_len = 0u;
+	/*
+	 * WHOSE StatusResponse. With one subscription this was implicit, and it
+	 * was wrong the moment a second controller arrived: the acknowledgement
+	 * belongs to the session it came in on, and answering it out of another
+	 * subscriber's state chunks the wrong report to the wrong peer.
+	 */
+	struct sub_state *s = sub_of_session(current_session_id());
 
 	ARG_UNUSED(in);
 
+	if (s == NULL) {
+		return;
+	}
 	/*
 	 * Between chunks this is the peer asking for the next one, not the
 	 * acknowledgement that ends the priming report. Only the LAST chunk's
 	 * StatusResponse establishes the subscription.
 	 */
-	if (s_sub.more) {
-		send_report_chunk();
+	if (s->more) {
+		send_report_chunk(s);
 		return;
 	}
-	if (!s_sub.priming) {
+	if (!s->priming) {
 		return;
 	}
-	s_sub.priming = false;
-	s_sub.active = true;
+	s->priming = false;
+	s->active = true;
 
-	if (matter_im_subscribe_response_encode(s_sub.id, s_sub.max_interval_s, s_report,
+	if (matter_im_subscribe_response_encode(s->id, s->max_interval_s, s_report,
 						sizeof(s_report), &resp_len) != MATTER_OK) {
 		LOG_ERR("cannot build the SubscribeResponse");
 		return;
 	}
-	LOG_INF("  subscription 0x%08x ESTABLISHED, max interval %u s", (unsigned int)s_sub.id,
-		s_sub.max_interval_s);
+	LOG_INF("  subscription 0x%08x ESTABLISHED on session 0x%04x, max interval %u s",
+		(unsigned int)s->id, (unsigned int)s->session_id, s->max_interval_s);
 	/*
 	 * NOT YET PERIODIC. Nothing here reports again, so this subscription
 	 * lapses once max_interval_s passes and the subscriber is entitled to
