@@ -16,6 +16,11 @@
 # workflow_dispatch offers every branch and tag in its ref picker, and GitHub
 # gives no way to restrict that list, so the `guard` job below enforces it and
 # fails rather than skips. A skipped job reads like a pass.
+#
+# A successful run here triggers docs.yml through workflow_run, which rebuilds
+# the site so its browser-flash page picks up the assets published below. That
+# link lives in docs.yml because publishing Pages needs pages:write, and nothing
+# in this workflow should hold it.
 name: release
 
 on:
