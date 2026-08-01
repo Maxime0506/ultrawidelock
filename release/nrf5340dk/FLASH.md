@@ -125,7 +125,7 @@ The boot log prints the Matter onboarding QR code URL and manual pairing code; R
 | No key in Wallet | Wait a few minutes; needs iOS 26+ and a UWB iPhone |
 
 More depth, wiring checks, and a radio self-test:
-<https://github.com/asxeem/openaliro/blob/main/docs/troubleshooting.md>
+<https://github.com/openaliro/openaliro/blob/main/docs/troubleshooting.md>
 
 ## Notes
 

@@ -2,7 +2,7 @@
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * app_shell — interactive console for the ESP32-S3 bring-up app.
+ * app_shell — interactive console for the ESP32 bring-up app.
  *
  * Runs an esp_console REPL on the default console UART (shares the UART0 log
  * stream, like the nRF Zephyr shell), so `make monitor`/`make term` need no

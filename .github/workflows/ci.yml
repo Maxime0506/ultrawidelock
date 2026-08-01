@@ -1,0 +1,145 @@
+# The whole of push/PR CI, in one job.
+#
+# This replaces thirteen separate workflows (cbmc, clang-tidy, format, fuzz,
+# ha-tests, host-tests, patch-drift, port-tests, sanitizers, security, tooling,
+# twin-web, workflow-lint). They ran ~30 jobs per pull request between them, and
+# the checks were never the expensive part: scripts/verify.sh's whole gate table
+# is about 103s of work. What cost real runner time was thirty runner starts,
+# thirty checkouts and thirty tool installs to carry it.
+#
+# So the shape here is one runner, one checkout, one install, then `make verify`,
+# which is the same sweep a contributor runs before pushing. verify.sh runs the
+# gates in parallel lanes and prints a table, so a failure still names the gate
+# it came from. The gate-to-workflow mapping it documents, and the CI_MAP in
+# tests/tooling/verify_test.sh, both point here now.
+#
+# Firmware is deliberately absent. Nothing in this workflow builds an image for
+# any target: the portable C under modules/ is compiled by test, test-san,
+# coverage, clang-tidy, cbmc and fuzz, which is what catches a change that would
+# not compile. What it cannot catch is Kconfig, devicetree, linker and flash-fit
+# breakage, because reaching those means the NCS and ESP-IDF toolchains and tens
+# of minutes. firmware-builds.yml still does exactly that, on demand.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# CI only reads the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every tool pin the host gates use. scripts/toolchain.sh reads this block, so
+# `make tools` offers the same versions CI runs rather than keeping a second
+# copy that goes stale. Bump here and both move together.
+#
+# The two hash-pinned ones are release tarballs, not packages: Dependabot does
+# not watch those, so version AND sha256 are bumped by hand.
+env:
+  ACTIONLINT_VERSION: 1.7.12
+  ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  OSV_VERSION: 2.4.0
+  OSV_SHA256: 15314940c10d26af9c6649f150b8a47c1262e8fc7e17b1d1029b0e479e8ed8a0
+  CLANG_FORMAT_VERSION: 22.1.8
+  CLANG_TIDY_VERSION: 22.1.8
+  ZIZMOR_VERSION: 1.28.0
+  REUSE_VERSION: 6.2.0
+  SEMGREP_VERSION: 1.172.0
+  PIP_AUDIT_VERSION: 2.10.1
+  RETIRE_VERSION: 5.2.7
+  MARKDOWN_VERSION: "3.8"
+  # Not installed below: CI skips the twin-wasm gate (see SKIP in the sweep step)
+  # because emsdk is a ~1 GB install for one gate. The pin stays here because
+  # `make tools` still offers it to contributors, whose local `make verify` does
+  # run that gate.
+  EMSDK_VERSION: 6.0.3
+
+jobs:
+  verify:
+    name: verify (host gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # mal-diff and patch-drift compare against the merge base, and docs
+          # checks whether the branch is behind, so all three need real history.
+          fetch-depth: 0
+      - name: fetch origin/main
+        # A PR checkout has no origin/main ref, and the gates above resolve it by
+        # name. Harmless on main itself, where it is already present.
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+
+      - name: apt packages
+        # clang: test, test-san and fuzz (libFuzzer's runtime is clang-only).
+        # valgrind: the ct gate, which is ctgrind under valgrind.
+        # cbmc: the proof gate.  llvm: llvm-cov for coverage.
+        # doxygen + graphviz: the docs gate.  shellcheck: its own gate.
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            clang valgrind cbmc llvm doxygen graphviz shellcheck
+
+      - name: pinned python tools
+        run: |
+          pip install \
+            "clang-format==${CLANG_FORMAT_VERSION}" \
+            "clang-tidy==${CLANG_TIDY_VERSION}" \
+            "zizmor==${ZIZMOR_VERSION}" \
+            "semgrep==${SEMGREP_VERSION}" \
+            "pip-audit==${PIP_AUDIT_VERSION}" \
+            "markdown==${MARKDOWN_VERSION}" \
+            coverage
+          pipx install "reuse[charset-normalizer]==${REUSE_VERSION}"
+
+      - name: pinned release binaries
+        # Version and checksum both, for the same reason the old security lane
+        # did it: these decide whether code merges, so fetching whatever the
+        # latest release happens to be would put an unreviewed binary there.
+        run: |
+          curl -fsSLo /tmp/actionlint.tgz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tgz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tgz -C /usr/local/bin actionlint
+
+          curl -fsSLo /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+
+          curl -fsSLo /tmp/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c -
+          sudo install -m 0755 /tmp/osv-scanner /usr/local/bin/osv-scanner
+
+      - name: pinned node tools
+        # zizmor flags this as an ad-hoc install, and it is right: the pin fixes
+        # retire's own version but its transitive tree resolves at install time,
+        # because npm has no lockfile for a global install. Accepted rather than
+        # silenced blindly — the exposure is a scanner on a throwaway runner with
+        # a read-only token, and no hooks execute.
+        # zizmor: ignore[adhoc-packages]
+        run: npm i -g --ignore-scripts "retire@${RETIRE_VERSION}"
+
+      - name: the sweep
+        # WITH_CBMC=1 because the proof is worth its 82s here even though it is
+        # opt-in locally. Three gates are skipped, each for a reason that is not
+        # "too slow":
+        #   test-ws    ws-seed.sh clones with cp -c (APFS clonefile) and fails
+        #              loudly off APFS by design, so a Linux runner cannot test
+        #              it. It ran on a macOS runner before; a contributor's local
+        #              `make verify` is now what covers it.
+        #   twin-wasm  needs emsdk, a ~1 GB install for one gate. The committed
+        #              twin.js is still checked by test-web, which does run.
+        #   test-tui   needs bun, and release.yml already builds and tests the
+        #              TUI on every tag, which is when it ships.
+        run: WITH_CBMC=1 make verify SKIP="test-ws twin-wasm test-tui"

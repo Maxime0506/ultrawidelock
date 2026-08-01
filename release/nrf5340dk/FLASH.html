@@ -4,6 +4,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- These pages are wholly self-contained: one inline <style>, no script, no remote
+     subresource. So the policy can be the strictest one that still renders, and any future
+     edit that reaches for a CDN or an inline script fails in the browser rather than shipping.
+     GitHub Pages sends no CSP header and cannot be configured to, so a meta tag is the only
+     place a policy can exist for the published copy. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;
+               base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <title>openaliro on the nRF5340 DK: flash guide</title>
 <style>
 :root {
@@ -276,14 +284,14 @@ nrfutil device program --firmware merged.hex --core application \
 </tbody>
 </table></div>
 <p>More depth, wiring checks, and a radio self-test:
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/troubleshooting.md">https://github.com/asxeem/openaliro/blob/main/docs/troubleshooting.md</a></p>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/troubleshooting.md">https://github.com/openaliro/openaliro/blob/main/docs/troubleshooting.md</a></p>
 <h2>Notes</h2>
 <ul>
 <li>Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.</li>
 <li>Reflashing wipes commissioning; remove the stale accessory from Home before re-adding.</li>
 </ul>
 <footer>Same content as this bundle's <code>FLASH.md</code>.
-<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
+<a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
 <script>
 document.querySelectorAll("pre").forEach(function(pre){

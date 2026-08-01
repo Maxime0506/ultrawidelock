@@ -1,0 +1,62 @@
+# tests/host/ct/host-aes.supp — the one thing the constant-time gate does not check, and why.
+#
+# tests/host/aes_ref.c is a textbook AES: SBOX[256] indexed by state bytes, key_expand() indexed
+# by round key bytes. Under memcheck with the URSK poisoned, every single AES call reports a
+# secret-dependent table lookup — correctly. It is variable-time and always has been.
+#
+# It is suppressed rather than fixed because it is a test double, not shipped code. The primitive
+# that ships is CryptoCell through PSA on nRF5340 and mbedTLS over the AES peripheral on ESP32;
+# both are constant-time claims belonging to their vendors, and neither is reachable from a host
+# build. Rewriting aes_ref.c bitsliced would buy a green run and change nothing about the
+# firmware.
+#
+# What is deliberately NOT suppressed is everything that calls it. ccc_kdf.c, ccc_sts.c and
+# ccc_mac.c are this project's code, and a branch on a key byte in any of them is a real finding.
+# The suppressions below name three functions, not a file and not a wildcard, so a fourth
+# function appearing in aes_ref.c does not inherit the exemption — it shows up as a finding and
+# somebody has to decide about it.
+#
+# Adding an entry here is a decision that a timing leak is acceptable. There should be a very
+# strong reason, and it should be written down in the entry.
+
+{
+   host-aes-double: S-box lookup indexed by state bytes (test double, not the shipped primitive)
+   Memcheck:Cond
+   fun:sub_shift_mix_add
+}
+
+{
+   host-aes-double: S-box lookup, value path
+   Memcheck:Value8
+   fun:sub_shift_mix_add
+}
+
+{
+   host-aes-double: key schedule indexed by round key bytes
+   Memcheck:Cond
+   fun:key_expand
+}
+
+{
+   host-aes-double: key schedule, value path
+   Memcheck:Value8
+   fun:key_expand
+}
+
+{
+   host-aes-double: xtime is a table-free multiply but takes a mask branch on a state byte
+   Memcheck:Cond
+   fun:xtime
+}
+
+{
+   host-aes-double: xtime, value path
+   Memcheck:Value8
+   fun:xtime
+}
+
+{
+   sp0-decrypt: branching on "did this frame authenticate" is inherent to any AEAD
+   Memcheck:Cond
+   fun:ccc_sp0_decrypt
+}

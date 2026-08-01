@@ -3,12 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Content-Security-Policy. Derived from what this page actually does, not copied from a
+     template, so each source is here for a reason:
+       script-src   unpkg.com because esp-web-tools' loader import()s two more chunks from
+                    there at runtime, which SRI cannot cover; 'unsafe-inline' because the board
+                    dropdown at the bottom of this file is an inline <script>. That keeps this
+                    from being a strict policy — but the origin allowlist is the part doing the
+                    work here, since it is what stops a tampered dependency pulling code from
+                    somewhere else entirely.
+       connect-src  blob: because the dropdown builds a single-build manifest client-side and
+                    hands the button a blob URL; 'self' for manifest.json and the .bin images.
+       object-src   none, frame-ancestors none: nothing embeds or is embedded.
+     If the flasher ever stops working after a dependency bump, check the browser console for a
+     CSP violation before anything else. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' 'unsafe-inline' https://unpkg.com;
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data:;
+               connect-src 'self' blob:;
+               object-src 'none';
+               base-uri 'self';
+               form-action 'none';
+               frame-ancestors 'none'">
 <title>Flash openaliro to an ESP32 from the browser</title>
 <style>
 /* Self-contained copy of the site theme (tools/docs_theme.py): this page is
    staged into site/flash/ but must also render standalone from web-flasher/
-   on a bench, so it embeds the palette instead of linking ../style.css. */
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..600&display=swap');
+   on a bench, so it embeds the palette instead of linking ../style.css.
+
+   No webfont @import. This page flashes firmware over WebSerial, so every
+   subresource it pulls is part of that trust chain, and a font is the one with
+   the worst ratio of risk to benefit: it cannot be integrity-checked (the
+   Google Fonts CSS is generated per user-agent, so its bytes differ per
+   request), it tells a third party the IP of everyone who opens the flasher,
+   and --serif below already names Georgia and Times before the generic. The
+   page reads correctly without it. */
 :root{
   --ground:#faf9f5; --raise:#f0eee6; --card:#ffffff;
   --ink:#3d3d3a; --strong:#141413; --muted:#73726c;
@@ -133,7 +163,27 @@ esp-web-install-button button.btn:hover{background:var(--accent-hover)}
   margin-top:3rem; padding-top:1.2rem;
 }
 </style>
-<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<!-- esp-web-tools, pinned. This script drives WebSerial and writes firmware to the board, so it
+     is the highest-trust dependency on the page and it used to be the least pinned: the src was
+     `esp-web-tools@10`, a floating major, fetched with no integrity attribute. Any release on
+     that range — or anyone able to publish one — ran with full flashing rights on every visitor.
+
+     Three changes: an exact version, an integrity hash, and the CSP below.
+
+     Honest limit, because it is not obvious from reading this line: install-button.js is a 2.8 KB
+     loader that dynamically import()s two further chunks from unpkg. SRI covers this file only —
+     `import()` carries no integrity metadata — so those two are constrained by the CSP's origin
+     list and by the fact that their filenames are content-hashed into this exact build, not by a
+     hash we pin. Fully closing that gap means vendoring the dist tree into this directory; the
+     residual is recorded in security/README.md rather than left implicit.
+
+     To bump: change both the version and the hash, regenerating it with
+       curl -sL 'https://unpkg.com/esp-web-tools@<version>/dist/web/install-button.js?module' \
+         | openssl dgst -sha384 -binary | openssl base64 -A -->
+<script type="module"
+        src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"
+        integrity="sha384-f+fR3K1mnKB2tVps4hdEh+qJvLgH2bKw81Yn+eNE3+gE8YpqocjkxQON4k19I3e/"
+        crossorigin="anonymous"></script>
 </head>
 <body>
 <header class="topbar">
@@ -141,14 +191,14 @@ esp-web-install-button button.btn:hover{background:var(--accent-hover)}
   <span class="crumb-sep">/</span>
   <span class="crumb">Flash from the browser</span>
   <div class="spacer"></div>
-  <a class="gh-chip" href="https://github.com/asxeem/openaliro" target="_blank" rel="noopener" aria-label="asxeem/openaliro on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>asxeem/openaliro</a>
+  <a class="gh-chip" href="https://github.com/openaliro/openaliro" target="_blank" rel="noopener" aria-label="openaliro/openaliro on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>openaliro/openaliro</a>
 </header>
 
 <header class="hero-band"><div class="hero-in">
   <div class="eyebrow">Get started</div>
   <h1>Flash openaliro from your browser</h1>
-  <p class="lede">The complete Aliro Matter lock on a single ESP32-S3 or
-  ESP32-C5: it commissions into Apple Home over Wi-Fi, your iPhone carries
+  <p class="lede">The complete Aliro Matter lock on a single ESP32-S3, C5 or
+  C6: it commissions into Apple Home over Wi-Fi, your iPhone carries
   the key in Wallet, and the lock opens as you walk up (BLE + UWB approach
   unlock). This page detects which chip you plugged in and flashes the right
   firmware over WebSerial. Nothing to install, no ESP-IDF.</p>
@@ -158,8 +208,9 @@ esp-web-install-button button.btn:hover{background:var(--accent-hover)}
 <h2>What you need</h2>
 <ul>
   <li>ESP32-S3 dev board (validated on ESP32-S3-WROOM N16R8; smaller variants
-  untested) or ESP32-C5 dev board (DevKitC-1-compatible pinout; builds, not
-  yet bench-validated)</li>
+  untested), ESP32-C6-DevKitC-1 (UWB ranging is bench-validated on this chip,
+  the full Matter walk-up is not), or ESP32-C5 dev board
+  (DevKitC-1-compatible pinout; builds, not yet bench-validated)</li>
   <li>Qorvo DWM3000EVB (DW3110), the UWB radio, hand-wired over SPI</li>
   <li>11 jumper wires and a USB <strong>data</strong> cable</li>
   <li>Chrome, Edge, or Firefox on a computer (WebSerial; Safari and mobile
@@ -177,22 +228,24 @@ bench once.</div>
 3.3&nbsp;V part), share ground, and wire:</p>
 <div class="tablewrap">
 <table>
-<tr><th>DWM3000EVB (Arduino pin)</th><th>Signal</th><th>ESP32-S3</th><th>ESP32-C5</th></tr>
-<tr><td>D13</td><td>SCLK</td><td>GPIO12</td><td>GPIO8</td></tr>
-<tr><td>D11</td><td>MOSI</td><td>GPIO11</td><td>GPIO9</td></tr>
-<tr><td>D12</td><td>MISO</td><td>GPIO13</td><td>GPIO23</td></tr>
-<tr><td>D10</td><td>CS</td><td>GPIO10</td><td>GPIO10</td></tr>
-<tr><td>D8</td><td>IRQ</td><td>GPIO5</td><td>GPIO5</td></tr>
-<tr><td>D7</td><td>RSTn</td><td>GPIO4</td><td>GPIO4</td></tr>
-<tr><td>D9</td><td>WAKEUP</td><td>GPIO6</td><td>GPIO6</td></tr>
-<tr><td>3V3</td><td>power</td><td>3V3</td><td>3V3</td></tr>
-<tr><td>GND</td><td>ground</td><td>GND</td><td>GND</td></tr>
-<tr><td>D1</td><td>SPI-POL</td><td>GND (mode-0 strap)</td><td>same</td></tr>
-<tr><td>D0</td><td>SPI-PHA</td><td>GND (mode-0 strap)</td><td>same</td></tr>
+<tr><th>DWM3000EVB (Arduino pin)</th><th>Signal</th><th>ESP32-S3</th><th>ESP32-C5</th><th>ESP32-C6</th></tr>
+<tr><td>D13</td><td>SCLK</td><td>GPIO12</td><td>GPIO8</td><td>GPIO6</td></tr>
+<tr><td>D11</td><td>MOSI</td><td>GPIO11</td><td>GPIO9</td><td>GPIO7</td></tr>
+<tr><td>D12</td><td>MISO</td><td>GPIO13</td><td>GPIO23</td><td>GPIO2</td></tr>
+<tr><td>D10</td><td>CS</td><td>GPIO10</td><td>GPIO10</td><td>GPIO10</td></tr>
+<tr><td>D8</td><td>IRQ</td><td>GPIO5</td><td>GPIO5</td><td>GPIO3</td></tr>
+<tr><td>D7</td><td>RSTn</td><td>GPIO4</td><td>GPIO4</td><td>GPIO1</td></tr>
+<tr><td>D9</td><td>WAKEUP</td><td>GPIO6</td><td>GPIO6</td><td>GPIO0</td></tr>
+<tr><td>3V3</td><td>power</td><td>3V3</td><td>3V3</td><td>3V3</td></tr>
+<tr><td>GND</td><td>ground</td><td>GND</td><td>GND</td><td>GND</td></tr>
+<tr><td>D1</td><td>SPI-POL</td><td>GND (mode-0 strap)</td><td>same</td><td>same</td></tr>
+<tr><td>D0</td><td>SPI-PHA</td><td>GND (mode-0 strap)</td><td>same</td><td>same</td></tr>
 </table>
 </div>
 <p>The C5 data pins differ because the S3's GPIO11/12 are the C5's UART0
-console and GPIO13 is its USB-Serial-JTAG.</p>
+console and GPIO13 is its USB-Serial-JTAG. The C6 uses GPIO6/7/2 because those
+are SPI2's direct IO_MUX pins on that part, with the control signals kept clear
+of its strapping pins, its USB Serial/JTAG pair and UART0.</p>
 <p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB
 revision already fixes the mode (check its manual).</p>
 
@@ -257,17 +310,17 @@ first boot.</p>
 </table>
 </div>
 <p>More depth: the
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
 and the
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-gotchas.md">known traps</a>.</p>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md">known traps</a>.</p>
 
 <p class="fine">Evaluation firmware with Matter test certificates; do not put
 it in charge of a door you care about. Reflashing wipes commissioning; remove
 the stale accessory from Home before re-adding. The nRF5340 DK target is out
 of scope here: it programs over a SEGGER J-Link probe, not WebSerial. Use its
-<a href="https://github.com/asxeem/openaliro/releases">release bundle</a>
+<a href="https://github.com/openaliro/openaliro/releases">release bundle</a>
 instead. Source and docs:
-<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a>.</p>
+<a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a>.</p>
 </main>
 <script>
 /* Board dropdown: auto-detect uses the committed manifest as-is (ESP Web

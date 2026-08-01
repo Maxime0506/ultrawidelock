@@ -4,6 +4,9 @@
 ## the download to match. Version tracks apps/matter-lock/main/idf_component.yml.
 dependencies:
   espressif/esp_tinyusb:
-    version: "^2.2.1"
+    # Exact, matching apps/matter-lock/main/idf_component.yml, and read out of that app's
+    # dependencies.lock rather than picked. A range here would let the two manifests resolve to
+    # different builds of the same component.
+    version: "2.2.1" # was ^2.2.1
     rules:
       - if: "target in [esp32s3]"

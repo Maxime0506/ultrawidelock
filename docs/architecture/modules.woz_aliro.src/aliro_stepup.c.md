@@ -6,7 +6,7 @@ DeviceRequest and its ENVELOPE/GET RESPONSE APDUs, seals/opens SessionData over 
 AES-256-GCM channel, and runs the six-step Access Document verification of spec 7.4. The ES256
 primitive is injected (verify ctx) so this unit carries no elliptic-curve dependency.
 
-**depends on** [`modules/woz_aliro/include/aliro_crypto.h`](../modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](../modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_hash.h`](aliro_hash.h.md)
+**depends on** [`modules/woz_aliro/include/aliro_crypto.h`](../modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](../modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_hash.h`](aliro_hash.h.md)  ·  **discussed in** [`security/README.md`](../../../security/README.md)
 
 ```mermaid
 flowchart TD
@@ -169,17 +169,29 @@ the digest on success or NULL if not found.
 
 **called by** `aliro_stepup_verify`
 
+### `static int ct_bytes_equal(const uint8_t *a, const uint8_t *b, size_t n)`
+`modules/woz_aliro/src/aliro_stepup.c:428`
+
+Compare two byte strings in time independent of their contents; return 1 if all @p n bytes are
+equal and 0 otherwise.
+memcmp returns as soon as it finds a difference, so how long it runs says how many leading bytes
+matched. On a digest check inside an access-control verifier that is an oracle: it turns forging
+a 32-byte value from one 2^256 guess into 32 guesses of 256. The OR-accumulate below always
+reads all @p n bytes and branches once, on data the attacker cannot vary.
+
+**called by** `aliro_stepup_verify`
+
 ### `int aliro_stepup_verify(const struct aliro_stepup_doc *doc, const struct aliro_stepup_verify_ctx *ctx, struct aliro_stepup_verdict *v)`
-`modules/woz_aliro/src/aliro_stepup.c:424`
+`modules/woz_aliro/src/aliro_stepup.c:443`
 
 Verify a parsed Step-Up document against issuer keys, signature, digests, doctype, time window,
 and validity iteration; populate verdict struct with per-step validation results and overall
 validity flag; return 0 if valid, -1 otherwise.
 
-**called by** `aliro_stepup_run`  ·  **calls** `build_sig_structure`, `find_digest`, `select_issuer`
+**called by** `aliro_stepup_run`  ·  **calls** `build_sig_structure`, `ct_bytes_equal`, `find_digest`, `select_issuer`
 
 ### `int aliro_stepup_run(struct aliro_secchan *sc, const uint8_t *sd_resp, size_t sd_len, const struct aliro_stepup_verify_ctx *ctx, uint8_t *scratch, size_t scratch_cap, struct aliro_stepup_doc *doc, struct aliro_stepup_verdict *verdict)`
-`modules/woz_aliro/src/aliro_stepup.c:501`
+`modules/woz_aliro/src/aliro_stepup.c:520`
 
 Decrypt sessionData from a Step-Up response APDU, parse the plaintext as a document, and verify
 it; return 0 on success or -1 on decryption failure, parse error, or verification failure.

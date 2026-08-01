@@ -1,9 +1,9 @@
 /*
- * Woz UWB ranging engine on ESP32-S3 (ESP-IDF) — minimal bring-up app.
+ * Woz UWB ranging engine on ESP32 (ESP-IDF) — minimal bring-up app.
  *
  * Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
  * polls for a range. With no iPhone/initiator present this proves the SPI +
- * DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
+ * DW3000 + CCC init path comes up; a live range needs a peer that
  * drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
  *
  * The demo responder lifecycle + interactive console live in app_shell.c.
@@ -20,7 +20,7 @@
 #include "presence_link.h"
 #endif
 
-static const char *TAG = "woz_esp32s3";
+static const char *TAG = "woz_esp32";
 
 // Application entry point: brings up the DW3000 responder, the Aliro BLE reader,
 // and the interactive shell, then polls for ranging results.

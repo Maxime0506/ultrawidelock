@@ -30,11 +30,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>openaliro — walk-up digital twin</title>
 <style>
-  /* The same three faces the site loads, so the twin does not fall back to
-   * whatever the platform's default sans happens to be while the rest of the
-   * product is on Inter. Fallbacks are first-class: nothing here waits on the
-   * network to be legible. */
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..600&family=Source+Serif+4:opsz,wght@8..60,400..600&display=swap');
+  /* No webfont @import. The three faces the site loads were pulled from Google
+   * Fonts, which meant every visitor to the twin announced their IP and user
+   * agent to a third party in order to read a simulation. That is a poor trade
+   * for a page about a lock, and the CSS cannot be integrity-checked anyway:
+   * Google serves different bytes per user-agent, so there is no hash to pin.
+   *
+   * Nothing is lost visually. The stacks below already name real fallbacks and
+   * this page never waited on the network to be legible, which was true before
+   * and is now the only path. */
 
   /* Design tokens mirror the openaliro docs site's warm-paper theme
    * (tools/docs_theme.py) so the twin reads as the same product: ivory paper,

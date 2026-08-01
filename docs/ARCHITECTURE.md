@@ -1221,10 +1221,10 @@ ESP32-IDF console shell for the standalone Aliro UWB responder bench app: regist
 
 ### [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
 
-Woz UWB ranging engine on ESP32-S3 (ESP-IDF) — minimal bring-up app.
+Woz UWB ranging engine on ESP32 (ESP-IDF) — minimal bring-up app.
 Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
 polls for a range. With no iPhone/initiator present this proves the SPI +
-DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
+DW3000 + CCC init path comes up; a live range needs a peer that
 drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
 The demo responder lifecycle + interactive console live in app_shell.c.
 
@@ -1353,10 +1353,10 @@ Step-up document verification worker for ESP32. Runs on a dedicated FreeRTOS tas
 ESP-IDF GPIO/IRQ backend for the DW3000 decadriver — implements dw3000_hw.h.
 Replaces the Zephyr deps/dw3000/platform/dw3000_hw.c (not compiled here).
 IRQ mirrors the Zephyr design: the GPIO ISR wakes a dedicated high-priority
-task (pinned to core 1) that calls dwt_isr() while the IRQ line stays high —
-dwt_isr does SPI, so it cannot run in true ISR context. Also provides the
-cycle-counter diag symbols that dwt_uwb_driver/dw3000/dw3000_device.c
-references (Xtensa CCOUNT via esp_cpu_get_cycle_count).
+task that calls dwt_isr() while the IRQ line stays high — dwt_isr does SPI,
+so it cannot run in true ISR context. Dual-core targets pin the worker to
+core 1; single-core targets run it on core 0. Also provides the cycle-counter
+diag symbols that the decadriver references via esp_cpu_get_cycle_count().
 
 **depends on** [`ports/esp32/components/woz_uwb/port/board_pins.h`](architecture/ports.esp32.components.woz_uwb.port/board_pins.h.md)
 
@@ -1373,9 +1373,9 @@ bounce buffer; on reads the body slice of the RX buffer is copied back.
 
 ### [`ports/esp32/components/woz_uwb/port/board_pins.h`](architecture/ports.esp32.components.woz_uwb.port/board_pins.h.md)
 
-DW3000 (DWM3000EVB) wiring per ESP32 target, SPI2/FSPI. Source of truth for
-the wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB
-is soldered to your board.
+DW3000-family wiring per ESP32 target, SPI2/FSPI. Source of truth for the
+wiring table in docs/esp32-bringup.md. Change to match how the UWB module is
+wired to your board.
 
 **used by** [`ports/esp32/components/woz_uwb/port/dw3000_hw.c`](architecture/ports.esp32.components.woz_uwb.port/dw3000_hw.c.md), [`ports/esp32/components/woz_uwb/port/dw3000_spi.c`](architecture/ports.esp32.components.woz_uwb.port/dw3000_spi.c.md)
 
@@ -2501,6 +2501,174 @@ Output is deterministic (no timestamps): it only changes when the source does.
 
 Build the minimal, deterministic presence runtime transfer archive.
 
+### [`scripts/security-attest.sh`](architecture/scripts/security-attest.sh.md)
+
+security-attest.sh — can somebody who downloaded a release prove where it came from?
+Today: no. release.yml assembles the bundles and writes SHA256SUMS.txt, which answers "are these
+the bytes the release page listed" and not "did this repository's CI build them". Those are
+different questions, and the second is the one that matters for a project whose distribution
+path ends in a browser page calling navigator.serial. A SHA256SUMS.txt served from the same
+release as the artifacts it describes is signed by nothing; whoever could replace the .bin could
+replace the sums file in the same motion.
+The fix is one action and two permissions in release.yml (see INTEGRATION.md), producing a
+Sigstore-backed attestation that binds each artifact to the workflow, repository and commit that
+built it. This script is the other half: the part that runs outside CI and checks the CI half is
+real.
+scripts/security-attest.sh workflow          # static: release.yml still emits attestations
+scripts/security-attest.sh verify v0.4.0     # download a release and verify it end to end
+make security-attest
+Two modes, because they answer to different failure modes. `workflow` needs no network and no
+release to exist, so it can sit in the fast lane and catch the attestation step being dropped in
+an edit — the way a security control usually dies. `verify` is what a user would run, and is the
+only thing that proves the control works rather than that it is configured.
+Exit 0 clean, 1 on a finding, 2 if the mode could not run.
+Env:
+REPO=owner/name    default openaliro/openaliro
+NO_COLOR=1         plain output
+
+### [`scripts/security-ct.sh`](architecture/scripts/security-ct.sh.md)
+
+security-ct.sh — secret-dependent branches and table lookups in the CCC key ladder.
+Every other gate in this repo asks whether the code computes the right answer. This one asks
+whether it takes the same amount of time doing it, which no test, no sanitizer and no fuzzer in
+the tree can see: a KDF that early-outs on a key byte passes every existing check with a green
+tick, and hands an attacker the key one byte at a time.
+The mechanism is ctgrind's, and it is almost free. Memcheck already reports a branch or an
+array index that depends on undefined memory. Poison the URSK instead of leaving it
+uninitialised and that same report becomes "this branched on the key". Nothing new is
+instrumented; the harness (tests/host/ct/ct_main.c) just marks the secret and runs the ladder.
+Scope, stated up front because a green run means nothing without it: the AES primitive is
+suppressed. tests/host/aes_ref.c is an S-box implementation and is variable-time by
+construction, and it is not the primitive that ships — nRF5340 uses CryptoCell through PSA,
+ESP32 uses mbedTLS over the AES peripheral. So this gate covers the ladder and the SP0 wrapper,
+which is the code this project wrote, and says nothing about the cipher underneath, which it
+did not. tests/host/ct/host-aes.supp is where that boundary is drawn.
+scripts/security-ct.sh          # build + run under memcheck
+CT_DOCKER=1 scripts/security-ct.sh
+make security-ct
+On Apple silicon there is no valgrind, and there will not be one. That is a real hole in the
+pre-push sweep rather than something to paper over, so the script says so on stdout, exits 2
+(distinct from a finding's 1), and offers CT_DOCKER=1 to run the identical command inside the
+linux/amd64 image CI uses. verify.sh turns the 2 into a row that reads "not run here, runs in
+CI", the same shape cbmc already has.
+Env:
+CT_DOCKER=1     run inside docker (linux/amd64) instead of natively
+CT_CC=clang     compiler (default: cc)
+NO_COLOR=1      plain output
+
+### [`scripts/security-diff.sh`](architecture/scripts/security-diff.sh.md)
+
+security-diff.sh — the structural half of the malicious-change gate.
+security/semgrep-malicious.yml asks what a diff SAYS. This asks what a diff DOES to the shape
+of the tree: a binary appearing where only source lives, a file quietly gaining its executable
+bit, a symlink pointing out of the checkout, a submodule nobody discussed, a capture file that
+SECURITY.md says carries the session URSK. None of those are expressible as a source pattern,
+because in every case the payload is opaque to a text scanner — that is the point of using
+them. So they are checked here, against `git diff --raw`, which reports mode and blob type
+whatever the bytes happen to be.
+scripts/security-diff.sh                 # merge-base with origin/main .. HEAD
+scripts/security-diff.sh <base>          # <base> .. HEAD
+scripts/security-diff.sh <base> <head>   # explicit range, what CI passes
+Exit 0 clean or warnings only, 1 if anything blocking was found, 2 on bad usage.
+Two severities, and the split is deliberate. BLOCK is for changes with no legitimate form in
+this repository — checked against the tree as it stands, which has zero symlinks, zero
+gitlinks, five binary files (two in assets/, three fuzz corpus seeds) and thirty executables
+that are every one of them a shell or python script. WARN is for changes that are usually
+fine but are worth a reviewer's eye: a new dependency, a workflow edit, a new remote URL.
+Warnings do not fail the gate, because a gate that cries wolf on a Dependabot bump is a gate
+that gets bypassed, and then the blocking half goes with it.
+Env:
+SECDIFF_MAX_KB=512   size above which an added file is blocking (see BINARY_OK_DIRS)
+NO_COLOR=1           plain output
+
+### [`scripts/security-fw.sh`](architecture/scripts/security-fw.sh.md)
+
+security-fw.sh — the shipped artifact, which every other gate in this repo reasons about only
+indirectly.
+semgrep, clang-tidy, CodeQL and CBMC all read source. The thing a user actually flashes is
+build/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
+generated device tree, a vendor blob and whatever `west build` decided to bake in. Nothing here
+has ever looked at the result. That gap is where a build-host path leak, a test key that
+survived a #ifdef, or a payload appended after the link would live, and none of those are
+visible to a source scanner by construction.
+scripts/security-fw.sh                       # every check, on build/merged.hex
+scripts/security-fw.sh --image out/x.bin     # explicit artifact
+scripts/security-fw.sh strings               # one: keys strings size dwarf
+make security-fw
+Exit 0 clean, 1 on a finding, 2 if there is no artifact to examine.
+Intel HEX is parsed here rather than shelled out to objcopy. objcopy is not on a mac by default
+and arm-none-eabi-objcopy lives inside the NCS toolchain, so requiring either turns "the gate
+ran" into "the gate ran if you had bootstrapped", which is the soft-skip this repo's gates are
+written to refuse. The parser below is thirty lines and has no dependencies.
+Env:
+FW_IMAGE=path                artifact (default: build/merged.hex, then build/zephyr/merged.hex)
+FW_DENYLIST=path             byte patterns that must not ship (default: security/fw-denylist.txt)
+FW_SIZE_BASELINE=path        recorded sizes (default: security/fw-size-baseline.txt)
+FW_SIZE_WARN=2 FW_SIZE_FAIL=10   growth percentages
+FW_UPDATE_BASELINE=1         rewrite the size record instead of comparing
+NO_COLOR=1                   plain output
+
+### [`scripts/security-web.sh`](architecture/scripts/security-web.sh.md)
+
+security-web.sh — the browser half of the supply chain, which nothing else in this repo looks at.
+scripts/security.sh's `deps` gate reads tools/tui/bun.lock and integration/homeassistant's
+pyproject. Neither of those is what a user actually executes. web-flasher/index.html executes a
+module fetched at page load from a CDN, and that page's whole purpose is to write firmware to a
+board over WebSerial — so whoever controls that module controls what gets flashed onto every
+device of everyone who used the hosted flasher. It is not in any lockfile, so `deps` has never
+seen it; semgrep's p/javascript pack parses .js, not a <script> tag inside .html, so semgrep has
+never seen it either; and security-diff.sh's URL check only fires on a URL being ADDED, so a
+dependency that has been there since the page was written is invisible to all three.
+This gate closes that. It reads every tracked HTML page and asks three questions of it:
+1. Is every remote subresource pinned to an exact version AND carrying an integrity hash?
+A range like `@10` resolves to whatever the registry serves at page load. That is not a
+dependency, it is a promise from a stranger, and `integrity=` is the only thing that makes
+the difference observable to the browser.
+2. Does the page carry a Content-Security-Policy?
+GitHub Pages sends no CSP header and cannot be made to, so a <meta http-equiv> is the only
+place one can exist for this project. Without it, an injected script has the same authority
+as the page: on the flasher, that is navigator.serial.
+3. Is the vendored JavaScript free of known-vulnerable versions? (retire.js)
+scripts/security-web.sh              # every check
+scripts/security-web.sh pins         # one check: pins csp retire
+make security-web
+Exit 0 if everything selected passed, 1 otherwise, 2 on bad usage.
+Baseline, not suppression: security/web-baseline.txt lists paths that are knowingly
+non-compliant, one per line, each with a reason after a '#'. A baselined path still prints, it
+just does not block — so the debt is visible on every run rather than deleted. An entry that no
+longer matches anything is itself an error, because a stale baseline is how a check quietly
+stops applying to the file it was written for.
+Env:
+WEB_BASELINE=path   override the baseline file
+NO_COLOR=1          plain output
+
+### [`scripts/security-workspace.sh`](architecture/scripts/security-workspace.sh.md)
+
+*No module docstring. First commit: "security: add the eight-gate scanning lane".*
+
+### [`scripts/security.sh`](architecture/scripts/security.sh.md)
+
+security.sh — the four fast security gates, in one place.
+CI (.github/workflows/ci.yml, via make verify), `make security` and the `secrets`/`mal-diff`/`semgrep`/
+`deps` rows in scripts/verify.sh all call THIS file. That is the point of it: the repo already
+learned once that a gate reproduced by hand in two places drifts in one of them, which is why
+verify.sh's header insists on running the same command CI runs. Here there is only one command.
+scripts/security.sh              # all four gates, in order
+scripts/security.sh semgrep      # one gate
+make security                    # same thing, through the front door
+Gates:
+secrets    gitleaks over the tree, or over a commit range when one is given
+mal-diff   scripts/security-diff.sh, the structural malicious-change checks
+semgrep    security/*.yml plus the pinned registry packs; ERROR blocks, WARNING reports
+deps       osv-scanner on the bun lockfile, pip-audit on the Home Assistant dependencies
+Exit 0 if every gate selected passed, 1 otherwise. A gate whose tool is missing FAILS rather
+than skipping, for the reason verify.sh gives at length: CI runs it whatever this host has, so
+"could not check" has to read as "not verified", never as "fine".
+Env:
+SECURITY_BASE / SECURITY_HEAD   commit range; CI passes the PR's base and head
+SEMGREP_NO_REGISTRY=1           local rulesets only, skipping the network fetch
+NO_COLOR=1                      plain output
+
 ### [`scripts/test-runner.sh`](architecture/scripts/test-runner.sh.md)
 
 Pretty umbrella runner for every host-side suite: one banner, live per-check
@@ -2564,7 +2732,7 @@ which is what lets CI rebuild and diff it as a staleness gate.
 Pre-push sweep: every CI gate that a host can run, in one shot.
 The point of this script is that "it passed locally" and "it will pass CI"
 mean the same thing. Each row below is one CI *job* (not one workflow —
-tooling.yml and workflow-lint.yml each contribute several), running the same
+one job in ci.yml now runs all of them), running the same
 command that job runs. Adding a job to .github/workflows/ without adding it
 here re-opens the gap this script exists to close.
 Out of scope, deliberately: firmware-builds.yml and release.yml. They need
@@ -2582,7 +2750,7 @@ One gate does not run by default: cbmc. At 64s it is twice the rest of the
 sweep put together, spent on the gate whose input moves least — the wire
 parsers it proves have been stable for months, and the fuzz gate exercises the
 same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
-It still gets a summary row saying it did not run. cbmc.yml has no path
+It still gets a summary row saying it did not run. The cbmc gate has no path
 filter, so the PR runs it whatever happened here; a gate that quietly
 disappears from the sweep is the exact failure this script exists to prevent.
 A gate whose tool is missing FAILS the sweep. It says so on its row, it is
@@ -2595,7 +2763,7 @@ Env:
 WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
-COV_MIN=90         line-coverage floor, matching host-tests.yml
+COV_MIN=90         line-coverage floor, matching ci.yml
 NO_COLOR=1         plain output (colour is the default, pipe or not)
 FAIL_TAIL=40       lines of a failing gate's log to show inline
 

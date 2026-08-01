@@ -4,7 +4,7 @@
 #
 # The point of this script is that "it passed locally" and "it will pass CI"
 # mean the same thing. Each row below is one CI *job* (not one workflow —
-# tooling.yml and workflow-lint.yml each contribute several), running the same
+# one job in ci.yml now runs all of them), running the same
 # command that job runs. Adding a job to .github/workflows/ without adding it
 # here re-opens the gap this script exists to close.
 #
@@ -27,7 +27,7 @@
 # parsers it proves have been stable for months, and the fuzz gate exercises the
 # same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
 #
-# It still gets a summary row saying it did not run. cbmc.yml has no path
+# It still gets a summary row saying it did not run. The cbmc gate has no path
 # filter, so the PR runs it whatever happened here; a gate that quietly
 # disappears from the sweep is the exact failure this script exists to prevent.
 #
@@ -42,7 +42,7 @@
 #   WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 #   SERIAL=1           one gate at a time, fail-fast, instead of lanes
 #   SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
-#   COV_MIN=90         line-coverage floor, matching host-tests.yml
+#   COV_MIN=90         line-coverage floor, matching ci.yml
 #   NO_COLOR=1         plain output (colour is the default, pipe or not)
 #   FAIL_TAIL=40       lines of a failing gate's log to show inline
 set -uo pipefail
@@ -86,26 +86,43 @@ fi
 # silicon host with warm caches. This order is the summary's, not the run's:
 # what runs when is set by TRIPWIRE and LANES below. The times are what those
 # are packed against, so a gate that gets much slower wants repacking.
+# Timings are a warm run on an 8-core laptop. The right-hand column is where the
+# gate runs in CI: ci.yml is one job that runs this whole sweep, so almost every
+# row says the same thing now -- before the CI consolidation each of these was
+# its own workflow and its own runner. The exceptions are the interesting part.
 GATES=(
-	test-web    # 0s   twin-web.yml : drift-gate
-	actionlint  # 0s   workflow-lint.yml : actionlint
-	zizmor      # 0s   workflow-lint.yml : zizmor
-	format      # 1s   format.yml
-	shellcheck  # 1s   tooling.yml : shellcheck
-	licenses    # 3s   tooling.yml : licenses
-	fuzz        # 3s   fuzz.yml
-	clang-tidy  # 4s   clang-tidy.yml
-	test        # 5s   host-tests.yml : host
-	twin-wasm   # 7s   twin-web.yml : wasm-firmware  (2s warm, 7s cold)
-	test-tui    # 9s   release.yml : tui
-	test-san    # 8s   sanitizers.yml
-	patch-drift # 11s  patch-drift.yml
-	docs        # 12s  docs.yml
-	test-port   # 14s  port-tests.yml
-	test-ws     # 14s  tooling.yml : ws-seed
-	test-verify # 15s  tooling.yml : verify-tests
-	coverage    # 18s  host-tests.yml : coverage (+ the line floor)
-	cbmc        # 82s  cbmc.yml
+	test-web    # 0s   ci.yml : verify
+	actionlint  # 0s   ci.yml : verify
+	zizmor      # 0s   ci.yml : verify
+	mal-diff    # 0s   ci.yml : verify
+	esp         # 0s   ci.yml : verify
+	attest      # 0s   ci.yml : verify
+	ct          # 0s   ci.yml : verify   (0s only because it SKIPS: no valgrind on darwin/arm64;
+	            #                         17s in CI, where valgrind is installed)
+	format      # 1s   ci.yml : verify
+	shellcheck  # 1s   ci.yml : verify
+	secrets     # 2s   ci.yml : verify
+	web         # 7s   ci.yml : verify   (retire fetches its advisory repo, so it wants network)
+	licenses    # 3s   ci.yml : verify
+	fuzz        # 3s   ci.yml : verify
+	clang-tidy  # 4s   ci.yml : verify
+	test        # 5s   ci.yml : verify
+	twin-wasm   # 7s   LOCAL ONLY        (2s warm, 7s cold; emsdk is a ~1 GB install, so ci.yml
+	            #                         SKIPs it. test-web still checks the committed twin.js.)
+	test-tui    # 9s   release.yml : tui (needs bun; the TUI ships on a tag, so that is where
+	            #                         CI builds and tests it)
+	test-san    # 8s   ci.yml : verify
+	patch-drift # 11s  ci.yml : verify
+	docs        # 12s  ci.yml : verify   (docs.yml renders and publishes the site from main;
+	            #                         this is the same drift + link check, run per PR)
+	deps        # 13s  ci.yml : verify   (pip-audit queries PyPI, so it waits on network)
+	test-port   # 14s  ci.yml : verify
+	test-ws     # 14s  LOCAL ONLY        (ws-seed clones with cp -c and fails loudly off APFS by
+	            #                         design, so a Linux runner cannot test it)
+	test-verify # 15s  ci.yml : verify
+	coverage    # 18s  ci.yml : verify   (+ the line floor)
+	semgrep     # 22s  ci.yml : verify   (registry packs are fetched, so it needs network)
+	cbmc        # 82s  ci.yml : verify   (opt-in locally via WITH_CBMC=1; ci.yml sets it)
 )
 
 # ---- lanes ----------------------------------------------------------------
@@ -124,12 +141,18 @@ GATES=(
 #      `mktemp -t` per binary, coverage under build/coverage/, fuzz under
 #      build/fuzz/, cbmc writes only its own logs. The lint gates only read.
 #
+# Order WITHIN a lane matters for one reason: a lane stops at its first failure,
+# so everything after it reports "not run". That is why secrets and deps sit
+# ahead of test-tui rather than after it — they cost three seconds between them,
+# and putting them behind the longest gate in their lane meant a broken bun
+# toolchain silently took the two security scanners down with it.
+#
 # TRIPWIRE runs first and serially, and a failure there stops the sweep. It is
 # the whole sub-2s set, so a formatting slip costs four seconds instead of the
 # full run: the fail-fast the parallel phase gives up, bought back where it is
 # cheap. It also runs the two whole-tree scanners (licenses, format) before
 # anything starts writing, so neither reads a file mid-rewrite.
-TRIPWIRE="test-web actionlint zizmor format shellcheck licenses"
+TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp attest"
 #
 # Packed, not one lane per gate. coverage sets the floor at ~25s and nothing
 # finishes before it, so lanes past that buy nothing and cost real time: one
@@ -142,12 +165,13 @@ TRIPWIRE="test-web actionlint zizmor format shellcheck licenses"
 # designed around that number before the second measurement caught it.
 LANES=(
 	"coverage"                 # 25s  the floor: nothing finishes before this
+	"semgrep"                  # 22s  own lane: the one gate that waits on the network
 	"test-ws patch-drift"      # 23s
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
-	"test-tui"                 # 9s   bun only, shares nothing with the C gates
+	"secrets deps test-tui"    # 12s  the two read-only scanners first, then bun
 	"test test-san"            # 15s  same run.sh, same build/host_test* paths
-	"test-verify"              # 15s  13 stub sweeps back to back, under the floor
+	"test-verify web ct"       # 22s  ct costs 0s here (it skips); web is retire's network fetch
 	"cbmc"                     # 64s  WITH_CBMC=1 only, and then it is the floor
 )
 
@@ -191,6 +215,18 @@ gate_need() {
 	licenses) echo "reuse" ;;
 	cbmc) echo "cbmc" ;;
 	test-tui) echo "bun" ;;
+	secrets) echo "gitleaks" ;;
+	semgrep) echo "semgrep" ;;
+	web) echo "retire" ;;
+	# ct needs valgrind, which has no darwin/arm64 build at all. It is deliberately NOT listed:
+	# every other row here fails the sweep when its tool is missing, on the argument that "could
+	# not check" must not read as "fine". That argument still holds, but `make tools-install`
+	# cannot answer it on this platform, so the gate returns 2 and gets a skip-tool row instead.
+	ct) echo "" ;;
+	esp | attest) echo "" ;;
+	# pip-audit is the second half of this gate and is checked inside
+	# scripts/security.sh, which fails rather than skipping when it is absent.
+	deps) echo "osv-scanner pip-audit" ;;
 	*) echo "" ;;
 	esac
 }
@@ -198,7 +234,7 @@ gate_need() {
 # Python packages a gate's suites import. `command -v` cannot see these: they
 # are modules inside an interpreter, not binaries on PATH, which is exactly how
 # they went unnoticed. Absent, the suites still run and still report success,
-# having quietly skipped the checks that need them — host-tests.yml installs
+# having quietly skipped the checks that need them — ci.yml installs
 # both, so CI runs those checks whatever this host has.
 gate_need_py() {
 	case "$1" in
@@ -231,12 +267,41 @@ gate_label() {
 	zizmor) echo "workflow security audit" ;;
 	licenses) echo "licence store is consistent" ;;
 	cbmc) echo "wire-parser memory-safety proof" ;;
+	secrets) echo "no secrets in the working tree" ;;
+	web) echo "browser supply chain: pins, CSP, installs" ;;
+	ct) echo "no secret-dependent branches" ;;
+	esp) echo "ESP component pins are exact" ;;
+	attest) echo "release provenance configured" ;;
+	mal-diff) echo "no malicious change shapes" ;;
+	semgrep) echo "SAST over the whole tree" ;;
+	deps) echo "no vulnerable or malicious deps" ;;
+	esac
+}
+
+# The gates that dispatch through scripts/security.sh. One list, because run_gate needs it too:
+# only this family uses an exit status of 2 to mean "this host cannot answer the question", and
+# reading that status the same way everywhere else would be wrong. docs is the example — it exits
+# 2 for "your branch is behind origin/main", which is a real problem with an obvious fix, not a
+# gap in the host.
+gate_is_security() { # <gate>
+	case "$1" in
+	secrets | mal-diff | semgrep | deps | web | ct | esp | attest) return 0 ;;
+	*) return 1 ;;
 	esac
 }
 
 # The command each gate runs. Where CI runs a make target, so do we; where CI
 # runs a raw command, this reproduces it verbatim.
 gate_run() {
+	# The eight security gates are one script, which is also what ci.yml runs and what
+	# `make security` runs. No environment is set: with no SECURITY_BASE, `secrets` scans the
+	# working tree and `mal-diff` compares against the merge base with origin/main, which is the
+	# pre-push question ("what does this branch add?"). CI passes the pull request's base and
+	# head instead.
+	if gate_is_security "$1"; then
+		scripts/security.sh "$1"
+		return
+	fi
 	case "$1" in
 	format)
 		git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' \
@@ -248,7 +313,7 @@ gate_run() {
 	fuzz) make --no-print-directory fuzz ;;
 	test) make --no-print-directory test ;;
 	twin-wasm)
-		# twin-web.yml runs the node selftest against the committed twin.js,
+		# CI runs the node selftest against the committed twin.js,
 		# rebuilds, and runs it again. The rebuild diff is warn-only there
 		# (emsdk binaries differ across host OSes), so it is warn-only here.
 		node web-twin/selftest.cjs \
@@ -261,7 +326,7 @@ gate_run() {
 	docs) make --no-print-directory docs ;;
 	test-san) make --no-print-directory test-san ;;
 	# Host layers only. Its third layer, verify_port.sh, shells out to `idf.py
-	# build` whenever ESP-IDF is sourced -- which port-tests.yml's runner never
+	# build` whenever ESP-IDF is sourced -- which ci.yml's runner never
 	# is, so CI does not run it either. Left alone it would drop a multi-minute
 	# firmware build into a 33s sweep, from a shell state the sweep cannot see.
 	test-port) WOZ_NO_TARGET_BUILD=1 make --no-print-directory test-port ;;
@@ -269,10 +334,20 @@ gate_run() {
 	# All three steps release.yml runs, in its order. `make tui-test` alone would
 	# pass a branch whose types are broken or whose executable does not link,
 	# because CI only finds those in the typecheck and release steps.
-	test-tui) (cd "$ROOT/tools/tui" && bun run typecheck && bun run test && bun run release) ;;
+	# The install is part of the gate, exactly as release.yml runs it. Without it this gate read
+	# whatever node_modules the developer happened to leave behind: a plain `bun install` omits
+	# the other platforms' optional binaries, and `bun run release` cross-compiles for linux-x64
+	# as well as darwin-arm64, so the gate failed with "Could not resolve
+	# @opentui/core-linux-x64" on a tree that was completely fine. A gate whose answer depends on
+	# ambient state nothing establishes is not a gate.
+	test-tui)
+		(cd "$ROOT/tools/tui" \
+			&& bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*' \
+			&& bun run typecheck && bun run test && bun run release)
+		;;
 	test-verify) make --no-print-directory test-verify ;;
 	coverage)
-		# host-tests.yml runs `make coverage` and THEN enforces the floor as a
+		# CI runs `make coverage` and THEN enforces the floor as a
 		# separate step. Running coverage alone would pass where CI fails.
 		make --no-print-directory coverage || return 1
 		COV_MIN="$COV_MIN" python3 -c '
@@ -295,7 +370,7 @@ sys.exit(0 if pct >= floor else 1)'
 		;;
 	zizmor) zizmor .github/workflows ;;
 	licenses)
-		# tooling.yml gates the licence *store*, not full REUSE compliance:
+		# The licences gate covers the licence *store*, not full REUSE compliance:
 		# most of this tree predates the per-file header convention, so a bare
 		# `reuse lint` exits nonzero where CI passes. CI tolerates that exit and
 		# filters the JSON down to six categories. Reproduce that, not the
@@ -376,6 +451,11 @@ gate_row() { # <gate> <status> <secs> <reason>
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$RESET" ;;
 	skip-tool) printf '  %s%s%s %-12s %s%-36s%sSKIPPED — %s (CI still runs it)%s\n' \
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$4" "$RESET" ;;
+	# No duration, deliberately. Across this table a printed time means the gate ran and
+	# passed, and tests/tooling/verify_test.sh reads it that way; the seconds a gate spent
+	# discovering it could not run say nothing worth breaking that convention for.
+	skip-host) printf '  %s%s%s %-12s %s%-36s%sNOT CHECKED — %s (CI still runs it)%s\n' \
+		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$4" "$RESET" ;;
 	esac
 }
 
@@ -428,6 +508,19 @@ run_gate() { # <gate>
 		gate_result "$g" pass "$secs" "" || return 1
 		gate_row "$g" pass "$secs" ""
 		return 0
+	fi
+	# 2 from a security gate is "this host cannot answer the question", which is neither a pass
+	# nor a failure, and only where no install closes the gap: there is no valgrind for
+	# darwin/arm64, so `ct` returns 2 on the primary dev machine every time. Left as a pass it
+	# was a green row for a gate that ran nothing, which is the exact shape of failure this
+	# whole sweep exists to prevent. Loud, listed, and not fatal — unlike skip-tool, `make
+	# tools-install` cannot fix it, so failing the sweep would only train people to ignore it.
+	# Scoped to that family on purpose: every other gate is free to use 2 for its own meaning,
+	# and docs does, for "this branch is behind origin/main".
+	if [ "$rc" -eq 2 ] && gate_is_security "$g"; then
+		gate_result "$g" skip-host "$secs" "not checkable on this host" || return 1
+		gate_row "$g" skip-host "$secs" "not checkable on this host"
+		return 2
 	fi
 	gate_result "$g" fail "$secs" "exit $rc" || return 1
 	gate_row "$g" fail "$secs" "exit $rc"
@@ -511,6 +604,7 @@ for ((i = 0; i < n; i++)); do
 	skip-req) nskip=$((nskip + 1)) ;;
 	skip-optin) nskip=$((nskip + 1)) nskip_optin=$((nskip_optin + 1)) ;;
 	skip-tool) nskip=$((nskip + 1)) nskip_tool=$((nskip_tool + 1)) ;;
+	skip-host) nskip=$((nskip + 1)) ;;
 	notrun) nnotrun=$((nnotrun + 1)) ;;
 	esac
 done

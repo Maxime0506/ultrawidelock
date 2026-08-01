@@ -27,6 +27,8 @@ Env:
 ASSUME_YES=1   same as `install -y`
 NO_COLOR=1     plain output
 
+**discussed in** [`security/README.md`](../../../security/README.md)
+
 ## API
 
 ### `pipx_or_pip()`
@@ -39,35 +41,49 @@ touch a package it has already installed — which is exactly the repin case.
 **called by** `tool_install`
 
 ### `tool_gate()`
-`scripts/toolchain.sh:138`
+`scripts/toolchain.sh:139`
 
 Which gate stops working without it. This is the "why do I need this" column,
 and it is the reason a row exists at all.
 
+### `wf_pin()`
+`scripts/toolchain.sh:197`
+
+Read `<NAME>: <version>` out of that env block. Quotes are optional so a value
+YAML would otherwise read as a number (markdown's "3.8") can be written as a
+string without breaking the lookup.
+
+**called by** `tool_pin`
+
 ### `tool_pin()`
-`scripts/toolchain.sh:178`
+`scripts/toolchain.sh:204`
 
-Extract the pinned version string for a tool (clang-format, clang-tidy, zizmor, reuse, actionlint, emcc, or markdown) from the corresponding CI workflow file. Returns the version or empty string if not found or tool name is unrecognized.
+Extract the pinned version string for a tool. Returns the version, or the empty
+string when the tool is unrecognised or the lookup stopped matching.
 
-**called by** `tool_install`, `tool_note`
+**called by** `actionlint_url`, `tool_install`, `tool_note`  ·  **calls** `wf_pin`
 
 ### `actionlint_url()`
-`scripts/toolchain.sh:198`
+`scripts/toolchain.sh:231`
 
 actionlint's Linux install is CI's own: a release tarball checked against a
-sha256. Both come out of the workflow for the same reason the pins do.
+sha256. Both come out of the workflow for the same reason the pins do. ci.yml
+builds the URL from ACTIONLINT_VERSION rather than writing it out, so this
+rebuilds it the same way instead of grepping for a literal.
 
-**called by** `tool_install`
+**called by** `tool_install`  ·  **calls** `tool_pin`
 
 ### `actionlint_sha()`
-`scripts/toolchain.sh:203`
+`scripts/toolchain.sh:240`
 
-Extract the actionlint binary hash (64 hex characters) from workflow-lint.yml, return it or empty string if not found.
+The matching sha256, by name. Not `grep -oE '[0-9a-f]{64}'` any more: ci.yml
+carries three 64-hex checksums (actionlint, gitleaks, osv-scanner) and a
+first-match grep would silently return whichever sits highest in the file.
 
 **called by** `tool_install`
 
 ### `tool_probe()`
-`scripts/toolchain.sh:213`
+`scripts/toolchain.sh:251`
 
 Present on this host? Echoes the version (or a bare "installed") and returns
 0; returns 1 when absent. Three rows are not a plain `command -v`:
@@ -77,7 +93,7 @@ emcc      twin-wasm.sh sources ~/emsdk/emsdk_env.sh when emcc is off PATH.
 markdown  a python import, not a binary.
 
 ### `tool_install()`
-`scripts/toolchain.sh:271`
+`scripts/toolchain.sh:309`
 
 The command that installs it here. Empty = this host has no packaged route and
 the row prints a pointer instead.
@@ -85,19 +101,19 @@ the row prints a pointer instead.
 **calls** `actionlint_sha`, `actionlint_url`, `pipx_or_pip`, `tool_pin`
 
 ### `tool_note()`
-`scripts/toolchain.sh:432`
+`scripts/toolchain.sh:493`
 
 Printed under a row that has no install command on this host.
 
 **calls** `tool_pin`
 
 ### `version_of()`
-`scripts/toolchain.sh:442`
+`scripts/toolchain.sh:505`
 
 Pull the leading dotted number out of a --version line, for the pin compare.
 
 ### `verify_needs()`
-`scripts/toolchain.sh:452`
+`scripts/toolchain.sh:515`
 
 ---- drift check: every gate tool verify.sh names must have a row here -----
 verify.sh's gate_need() and gate_need_py() are the authority on what the gates

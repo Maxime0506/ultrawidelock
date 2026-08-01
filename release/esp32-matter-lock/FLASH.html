@@ -4,7 +4,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>openaliro on ESP32-S3/C5: flash guide</title>
+<!-- These pages are wholly self-contained: one inline <style>, no script, no remote
+     subresource. So the policy can be the strictest one that still renders, and any future
+     edit that reaches for a CDN or an inline script fails in the browser rather than shipping.
+     GitHub Pages sends no CSP header and cannot be configured to, so a meta tag is the only
+     place a policy can exist for the published copy. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;
+               base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<title>openaliro on ESP32-S3/C5/C6: flash guide</title>
 <style>
 :root {
   color-scheme: light dark;
@@ -61,12 +69,14 @@ footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line
 <body>
 <main>
 <p class="eyebrow"><b>openaliro</b> · flash bundle · evaluation firmware</p>
-<h1>openaliro on ESP32-S3/C5: flash guide</h1>
-<p>The complete Aliro Matter lock on a single ESP32-S3 or ESP32-C5: it commissions
-into Apple Home over Wi-Fi, your iPhone carries the key in Wallet, and the lock
-opens as you walk up (BLE + UWB approach unlock; no NFC tap on these targets).
-ESP32-S3 is hardware-validated. The C5 image is release-built, with hardware
-validation pending.</p>
+<h1>openaliro on ESP32-S3/C5/C6: flash guide</h1>
+<p>The complete Aliro Matter lock on a single ESP32-S3, ESP32-C5 or ESP32-C6: it
+commissions into Apple Home over Wi-Fi, your iPhone carries the key in Wallet,
+and the lock opens as you walk up (BLE + UWB approach unlock; no NFC tap on
+these targets). ESP32-S3 is the hardware-validated target. On C6 the UWB radio
+is hardware-validated, but the full Matter walk-up on that chip is not; the C5
+image is release-built only. See the Notes at the end for exactly what each
+claim covers.</p>
 <div class="tablewrap"><table>
 <thead>
 <tr>
@@ -84,8 +94,12 @@ validation pending.</p>
 <td>merged C5 image, release-built but not hardware-validated</td>
 </tr>
 <tr>
+<td><code>openaliro-matter-lock-esp32c6.bin</code></td>
+<td>merged C6 image; UWB validated on this chip, full Matter walk-up not yet</td>
+</tr>
+<tr>
 <td><code>flash.sh</code></td>
-<td>flashes the S3 image with esptool; use the browser or manual command below for C5</td>
+<td>flashes the S3 image with esptool; use the browser or manual command below for C5/C6</td>
 </tr>
 <tr>
 <td><code>FLASH.md</code> / <code>FLASH.html</code></td>
@@ -107,8 +121,8 @@ validation pending.</p>
 </thead>
 <tbody>
 <tr>
-<td>ESP32-S3 or ESP32-C5 dev board</td>
-<td>host: Wi-Fi, Matter, BLE, ranging engine. S3 validated on ESP32-S3-WROOM N16R8. C5 needs at least 8 MB flash and remains bench-pending</td>
+<td>ESP32-S3, ESP32-C5 or ESP32-C6 dev board</td>
+<td>host: Wi-Fi, Matter, BLE, ranging engine. S3 validated on ESP32-S3-WROOM N16R8. C5 needs at least 8 MB flash and remains bench-pending. C6 targets the ESP32-C6-DevKitC-1 (8 MB)</td>
 </tr>
 <tr>
 <td>Qorvo DWM3000EVB (DW3110)</td>
@@ -150,6 +164,7 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <th>Signal</th>
 <th>ESP32-S3</th>
 <th>ESP32-C5</th>
+<th>ESP32-C6</th>
 </tr>
 </thead>
 <tbody>
@@ -158,22 +173,26 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <td>SCLK</td>
 <td>GPIO12</td>
 <td>GPIO8</td>
+<td>GPIO6</td>
 </tr>
 <tr>
 <td>D11</td>
 <td>MOSI</td>
 <td>GPIO11</td>
 <td>GPIO9</td>
+<td>GPIO7</td>
 </tr>
 <tr>
 <td>D12</td>
 <td>MISO</td>
 <td>GPIO13</td>
 <td>GPIO23</td>
+<td>GPIO2</td>
 </tr>
 <tr>
 <td>D10</td>
 <td>CS</td>
+<td>GPIO10</td>
 <td>GPIO10</td>
 <td>GPIO10</td>
 </tr>
@@ -182,22 +201,26 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <td>IRQ</td>
 <td>GPIO5</td>
 <td>GPIO5</td>
+<td>GPIO3</td>
 </tr>
 <tr>
 <td>D7</td>
 <td>RSTn</td>
 <td>GPIO4</td>
 <td>GPIO4</td>
+<td>GPIO1</td>
 </tr>
 <tr>
 <td>D9</td>
 <td>WAKEUP</td>
 <td>GPIO6</td>
 <td>GPIO6</td>
+<td>GPIO0</td>
 </tr>
 <tr>
 <td>3V3</td>
 <td>power</td>
+<td>3V3</td>
 <td>3V3</td>
 <td>3V3</td>
 </tr>
@@ -206,11 +229,13 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <td>ground</td>
 <td>GND</td>
 <td>GND</td>
+<td>GND</td>
 </tr>
 <tr>
 <td>D1</td>
 <td>SPI-POL</td>
 <td>GND (mode-0 strap)</td>
+<td>same</td>
 <td>same</td>
 </tr>
 <tr>
@@ -218,13 +243,18 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 <td>SPI-PHA</td>
 <td>GND (mode-0 strap)</td>
 <td>same</td>
+<td>same</td>
 </tr>
 </tbody>
 </table></div>
 <p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision already fixes the mode (check its manual).</p>
+<p>The C6 image can also drive the DW radio inside a BU04 module over direct SPI,
+which is how C6 was validated. That wiring differs from the table above; see the
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
+for the BU04 pad map and the <code>ST_NRST</code> requirement.</p>
 <h2>4 · Flash</h2>
 <p>Fastest for either chip: open the
-<a href="https://asxeem.github.io/openaliro/flash/">browser flasher</a> in Chrome or Edge,
+<a href="https://openaliro.github.io/openaliro/flash/">browser flasher</a> in Chrome or Edge,
 select the board, and choose <strong>Install</strong>. The page and manifest are dry-checked,
 but the repository does not yet record a successful real WebSerial flash.</p>
 <p>The bundled helper currently handles S3 only:</p>
@@ -236,6 +266,7 @@ plugging in, retry, then replug.</p>
 <p>Manual equivalents:</p>
 <pre><code class="language-bash">esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
 esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c5.bin
+esptool.py --chip esp32c6 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c6.bin
 </code></pre>
 <p>Reflashing wipes any previous commissioning.</p>
 <h2>5 · Watch it boot</h2>
@@ -298,18 +329,26 @@ esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 openaliro-matter-lock-es
 </tbody>
 </table></div>
 <p>More depth: the
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
 and
-<a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-gotchas.md">forty-odd known traps</a>.</p>
+<a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md">forty-odd known traps</a>.</p>
 <h2>Notes</h2>
 <ul>
 <li>Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.</li>
-<li>ESP32-S3 has live-iPhone hardware validation. ESP32-C5 is build/release-supported
-  and must remain labelled bench-pending.</li>
+<li>Validation status differs per chip, and the wording is deliberate:<ul>
+<li><strong>ESP32-S3</strong> has live-iPhone hardware validation of the whole path, including
+  the Wallet walk-up unlock.</li>
+<li><strong>ESP32-C6</strong> is hardware-validated for UWB ranging, with a BU04 in direct-SPI
+  mode and <code>ST_NRST</code> held low. The full Matter commissioning and Wallet walk-up
+  on C6 has no recorded validation, so treat that part as untested.</li>
+<li><strong>ESP32-C5</strong> is build/release-supported with no recorded hardware validation
+  at all, and must remain labelled bench-pending.</li>
+</ul>
+</li>
 <li>Reflashing wipes commissioning; remove the stale accessory from Home before re-adding.</li>
 </ul>
 <footer>Same content as this bundle's <code>FLASH.md</code>.
-<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
+<a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
 <script>
 document.querySelectorAll("pre").forEach(function(pre){

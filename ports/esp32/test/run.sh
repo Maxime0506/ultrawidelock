@@ -272,9 +272,30 @@ cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
 rm -f "$CSBIN"
 
 echo
-echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes =="
+echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (S3 dual-core) =="
 DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+   -DCONFIG_IDF_TARGET_ESP32S3=1 \
+   -DCONFIG_FREERTOS_NUMBER_OF_CORES=2 \
+   -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
+   -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   -I "$HERE/../../../deps/dw3000/platform" \
+   -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
+   "$HERE/test_esp_dw3000_port.c" \
+   "$HERE/../components/woz_uwb/port/dw3000_hw.c" \
+   "$HERE/../components/woz_uwb/port/dw3000_spi.c" \
+   "$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$DBIN"
+"$DBIN"
+rm -f "$DBIN"
+
+echo
+echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (C6 single-core) =="
+DBIN="$(mktemp -t esp_dw3000_port_c6.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+   -DCONFIG_IDF_TARGET_ESP32C6=1 \
+   -DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
+   -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \
    -I "$HERE/../../../deps/dw3000/platform" \
@@ -312,7 +333,7 @@ cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
 cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
    -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
-   -DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
+   -DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \

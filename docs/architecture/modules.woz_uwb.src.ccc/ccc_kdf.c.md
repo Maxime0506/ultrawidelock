@@ -167,7 +167,7 @@ lengths), clear its top bit.
 **called by** `ccc_uad_addresses`
 
 ### `int ccc_uad_addresses(const uint8_t uad[CCC_UAD_LEN], uint8_t keysource[CCC_KEYSOURCE_LEN], uint8_t dest_short_addr[CCC_DEST_SHORT_ADDR_LEN], uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:423`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:425`
 
 @brief Split UAD into the UWB addresses (KeySource, destination short address, source long
 address).
@@ -175,7 +175,7 @@ address).
 **calls** `remap_if_reserved`
 
 ### `static void sp0_nonce(uint8_t nonce[CCC_SP0_NONCE_LEN], const uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN], uint32_t frame_counter)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:467`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:469`
 
 @brief Build the SP0 CCM* nonce: SrcLongAddr || FrameCounter(BE) || SecLevel.
 @param nonce Output buffer receiving the assembled nonce.
@@ -185,7 +185,7 @@ address).
 **called by** `ccc_sp0_decrypt`, `ccc_sp0_encrypt`  ·  **calls** `put_be32`
 
 ### `static int sp0_cbc_mac(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t nonce[CCC_SP0_NONCE_LEN], const uint8_t *mhr, size_t mhr_len, const uint8_t *payload, size_t payload_len, uint8_t tag[AES_BLOCK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:487`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:489`
 
 @brief Compute the CCM* CBC-MAC over B0 || l(a)||MHR || payload, zero-padded per block.
 @param key AES-128 key used for the CBC-MAC.
@@ -201,7 +201,7 @@ is 0).
 **called by** `ccc_sp0_decrypt`, `ccc_sp0_encrypt`  ·  **calls** `xor_bytes`
 
 ### `static int sp0_ctr(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t nonce[CCC_SP0_NONCE_LEN], const uint8_t *in, size_t len, uint8_t *out, uint8_t s0[AES_BLOCK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:557`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:559`
 
 @brief Apply CCM* CTR mode: emit the S0 keystream block, then XOR keystream S1.. over in to out
 (symmetric encrypt/decrypt).
@@ -216,21 +216,21 @@ is 0).
 **called by** `ccc_sp0_decrypt`, `ccc_sp0_encrypt`  ·  **calls** `xor_bytes`
 
 ### `static int sp0_ct_diff(const uint8_t *a, const uint8_t *b, size_t n)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:590`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:592`
 
 @brief Constant-time inequality: 0 iff the @p n bytes are equal.
 
 **called by** `ccc_sp0_decrypt`
 
 ### `int ccc_sp0_encrypt(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN], uint32_t frame_counter, const uint8_t *mhr, size_t mhr_len, const uint8_t *payload, size_t payload_len, uint8_t *ciphertext_out, uint8_t mic_out[CCC_SP0_MIC_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:600`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:602`
 
 @brief Encrypt + authenticate an SP0 data frame (AES-CCM*, ENC-MIC-64).
 
 **calls** `sp0_cbc_mac`, `sp0_ctr`, `sp0_nonce`, `xor_bytes`
 
 ### `int ccc_sp0_decrypt(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN], uint32_t frame_counter, const uint8_t *mhr, size_t mhr_len, const uint8_t *ciphertext, size_t ciphertext_len, const uint8_t mic[CCC_SP0_MIC_LEN], uint8_t *payload_out)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:632`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:634`
 
 @brief Decrypt + verify an SP0 data frame; zeroes plaintext and returns -EBADMSG on MIC failure.
 

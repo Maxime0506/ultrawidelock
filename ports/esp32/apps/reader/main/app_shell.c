@@ -368,7 +368,8 @@ void app_shell_start(void)
 	esp_console_repl_t *repl = NULL;
 	esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
 	/* Defaults already give prio 2 + history_save_path = NULL (no flash writes,
-	 * which would stall both cores' cache). Pin off the responder core (core 1). */
+	 * which would stall the instruction cache). Core 0 is the only core on C6
+	 * and keeps the shell away from the IRQ worker on dual-core targets. */
 	repl_cfg.prompt = "esp32>";
 	repl_cfg.task_core_id = 0;
 #if defined(CONFIG_WOZ_ALIRO_CLONE)

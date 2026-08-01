@@ -15,8 +15,8 @@ fabric slot.
 Guides on the doc site: [setup and troubleshooting][guide] for running it, and
 [internals][internals] for the console contract, module map, and test layout.
 
-[guide]: https://asxeem.github.io/openaliro/home-assistant.html
-[internals]: https://asxeem.github.io/openaliro/home-assistant-internals.html
+[guide]: https://openaliro.github.io/openaliro/home-assistant.html
+[internals]: https://openaliro.github.io/openaliro/home-assistant-internals.html
 
 ## The optional `HA=1` firmware build
 

@@ -26,6 +26,14 @@
 #include "dw3000_hw.h"
 #include "dw3000_spi.h"
 
+extern volatile uint32_t g_dw_cyc_per_us;
+
+#if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
+#define EXPECTED_UWB_CORE 1
+#else
+#define EXPECTED_UWB_CORE 0
+#endif
+
 /* uwb_cirdiag_flush double: dw3000_hw's ISR task calls it after draining IRQs;
  * the real emitter lives in the woz_uwb driver, out of this port suite. */
 void uwb_cirdiag_flush(void)
@@ -83,6 +91,22 @@ static void drop_irq_line(int pin)
 
 static void t_spi_init(void)
 {
+#if CONFIG_IDF_TARGET_ESP32C6
+	okc("C6 pin map",
+	    WOZ_DW3000_PIN_SCLK == 6 && WOZ_DW3000_PIN_MOSI == 7 &&
+	    WOZ_DW3000_PIN_MISO == 2 && WOZ_DW3000_PIN_CS == 10 &&
+	    WOZ_DW3000_PIN_RST == 1 && WOZ_DW3000_PIN_IRQ == 3 &&
+	    WOZ_DW3000_PIN_WAKEUP == 0);
+#elif CONFIG_IDF_TARGET_ESP32S3
+	okc("S3 pin map",
+	    WOZ_DW3000_PIN_SCLK == 12 && WOZ_DW3000_PIN_MOSI == 11 &&
+	    WOZ_DW3000_PIN_MISO == 13 && WOZ_DW3000_PIN_CS == 10 &&
+	    WOZ_DW3000_PIN_RST == 4 && WOZ_DW3000_PIN_IRQ == 5 &&
+	    WOZ_DW3000_PIN_WAKEUP == 6);
+#endif
+	okc("cycle rate follows target CPU",
+	    g_dw_cyc_per_us == CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
+
 	printf("-- spi init --\n");
 
 	fake_driver_reset();
@@ -265,8 +289,9 @@ static void t_hw(void)
 	    fake_gpio_mode[WOZ_DW3000_PIN_IRQ] == GPIO_MODE_INPUT &&
 	    fake_gpio_intr[WOZ_DW3000_PIN_IRQ] == GPIO_INTR_POSEDGE);
 	okc("isr handler registered", fake_gpio_isr[WOZ_DW3000_PIN_IRQ] != NULL);
-	okc("irq task pinned to core 1 prio 23",
-	    fake_task_count == 1 && fake_tasks[0].core == 1 && fake_tasks[0].prio == 23);
+	okc("irq task uses target core at prio 23",
+	    fake_task_count == 1 && fake_tasks[0].core == EXPECTED_UWB_CORE &&
+	    fake_tasks[0].prio == 23);
 	okc("interrupt reported enabled", dw3000_hw_interrupt_is_enabled());
 	okc("re-init is idempotent", dw3000_hw_init_interrupt() == 0 && fake_task_count == 1);
 

@@ -93,6 +93,14 @@ TEMPLATE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- These pages are wholly self-contained: one inline <style>, no script, no remote
+     subresource. So the policy can be the strictest one that still renders, and any future
+     edit that reaches for a CDN or an inline script fails in the browser rather than shipping.
+     GitHub Pages sends no CSP header and cannot be configured to, so a meta tag is the only
+     place a policy can exist for the published copy. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:;
+               base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <title>{title}</title>
 <style>{style}</style>
 </head>
@@ -101,7 +109,7 @@ TEMPLATE = """<!doctype html>
 <p class="eyebrow"><b>openaliro</b> · flash bundle · evaluation firmware</p>
 {body}
 <footer>Same content as this bundle's <code>FLASH.md</code>.
-<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
+<a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
 <script>{script}</script>
 </body>

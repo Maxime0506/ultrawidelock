@@ -118,6 +118,7 @@ static void section_app_driver(void)
 
 	mfk_led_new_rc = ESP_OK;
 	okc("led init ok", app_driver_led_init() == ESP_OK);
+	okc("C6 onboard LED is GPIO8", mfk_led_gpio == 8);
 	okc("led cleared on init", mfk_led_clears == 1);
 
 	struct lock_led_rgb c = lock_led_color(true, false);

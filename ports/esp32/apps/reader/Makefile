@@ -1,4 +1,4 @@
-# Makefile — command entry point for the ESP32-S3 Aliro port (self-contained).
+# Makefile — command entry point for the ESP32 Aliro port (self-contained).
 #
 # Thin front over `idf.py`, plus a serial-port safety guard: the flash/monitor
 # targets auto-select the ESP's USB-UART port and REFUSE any SEGGER/J-Link port
@@ -16,6 +16,8 @@
 # ESP-IDF environment. Override if installed elsewhere:
 #   make build IDF_EXPORT=/path/to/esp-idf/export.sh
 IDF_EXPORT ?= $(HOME)/esp/esp-idf/export.sh
+# Chip target for `make set-target` (run once on a fresh checkout).
+TARGET ?= esp32s3
 IDFPY := . "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py
 
 # Serial-port override (else auto-detected). BAUD is the console rate; LOG tees
@@ -90,13 +92,19 @@ if [ -n "$$busy" ]; then \
 fi
 endef
 
-.PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean \
+.PHONY: help check-idf set-target build menuconfig size flash app-flash flash-erase monitor term ports clean \
         presence-on presence-off presence-flash presence-clone presence-probe presence-enroll \
         presence-sign
 
 check-idf:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
 	  echo "  set it: make <target> IDF_EXPORT=/path/to/esp-idf/export.sh" >&2; exit 1; }
+
+##@ Setup
+## set-target: select the chip — run once on a fresh checkout  ·  TARGET=esp32s3
+##   Supported here: esp32s3, esp32c5, esp32c6.
+set-target: check-idf
+	@$(IDFPY) set-target $(TARGET)
 
 ##@ Build
 ## build: compile the app            -> build/woz_uwb_esp32s3.bin
@@ -235,7 +243,7 @@ help:
 	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
 	  b=$$(printf '\033[1m'); c=$$(printf '\033[36m'); y=$$(printf '\033[1;33m'); d=$$(printf '\033[2m'); r=$$(printf '\033[0m'); \
 	else b=; c=; y=; d=; r=; fi; \
-	printf '\n  %sAliro ESP32-S3 port%s  %s·  esp32s3 · ESP-IDF + NimBLE%s\n' "$$b" "$$r" "$$d" "$$r"; \
+	printf '\n  %sAliro ESP32 port%s  %s·  $(TARGET) · ESP-IDF + NimBLE%s\n' "$$b" "$$r" "$$d" "$$r"; \
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \

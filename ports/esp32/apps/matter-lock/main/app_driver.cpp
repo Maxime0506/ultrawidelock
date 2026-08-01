@@ -9,6 +9,7 @@
 */
 
 #include <esp_log.h>
+#include <sdkconfig.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,9 +23,18 @@
 
 static const char *TAG = "app_driver";
 
-/* Single WS2812 on the ESP32-S3-WROOM N16R8 devkit. GPIO48 per the board
- * pinout; clear of the DW3000 (GPIO 4,5,6,10-13) and of octal PSRAM (33-37). */
+/* Use each official DevKitC board's onboard addressable RGB LED. A new target
+ * must add its own pin: the S3's GPIO48 does not exist on the C5 (29 GPIOs) or
+ * the C6 (31), so an implicit fallback would silently pick a dead pin. */
+#if CONFIG_IDF_TARGET_ESP32C6
+#define LOCK_LED_GPIO 8
+#elif CONFIG_IDF_TARGET_ESP32C5
+#define LOCK_LED_GPIO 27
+#elif CONFIG_IDF_TARGET_ESP32S3
 #define LOCK_LED_GPIO 48
+#else
+#error "Unsupported ESP32 target: add its onboard RGB LED GPIO"
+#endif
 
 static led_strip_handle_t s_lock_led;
 

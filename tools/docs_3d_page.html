@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>openaliro — the whole surface in 3D</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400..600&display=swap');
+/* No webfont @import, matching web-flasher/ and web-twin/: the Google Fonts CSS cannot be
+   integrity-checked (its bytes vary per user-agent) and requesting it tells a third party the
+   IP of every visitor. --serif below names Georgia before the generic, so this reads correctly
+   without it. */
 :root{
   --ground:#faf9f5; --card:#ffffff; --ink:#3d3d3a; --strong:#141413; --muted:#73726c;
   --faint:#9c9a92; --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);

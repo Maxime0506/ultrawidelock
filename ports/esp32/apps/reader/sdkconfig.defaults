@@ -6,6 +6,16 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 # 1 kHz tick so k_msleep(ms) has 1 ms granularity (default 100 Hz = 10 ms).
 CONFIG_FREERTOS_HZ=1000
 
+# Match the shipping app's clock. apps/matter-lock pins 240 and this file used
+# to pin nothing, so the S3 bench ran at the IDF default of 160 -- a third less
+# CPU than the image that ships, on the app used for timing work against the
+# ~1836 us arm deadline. The error was in the safe direction (a bench PASS
+# implied a ship PASS), but the numbers it produced described no real build:
+# the ~84 us/transaction of gotcha 6.2 is dominated by CPU-side fixed overhead,
+# so it was measured 1.5x pessimistic. C6 overrides this back to 160, which is
+# that part's maximum (see sdkconfig.defaults.esp32c6); C5 supports 240.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
 # The codec allocates + the DS-TWR bring-up runs on the main task.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 

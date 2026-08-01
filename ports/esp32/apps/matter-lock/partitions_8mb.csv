@@ -1,7 +1,7 @@
-# partitions.csv regrown for the ESP32-C5 (8 MB flash floor: WROOM-1 ships
-# N8/N16). The C5 image overflows the 4 MB layout's 0x1E0000 OTA slots by
-# ~80 KB, so both slots grow to 0x300000; everything before ota_0 keeps the
-# same offsets as partitions.csv (merged image stays flash-at-0x0).
+# partitions.csv regrown for 8 MB ESP32-C5/C6 targets. The C5 image overflows
+# the 4 MB layout's 0x1E0000 OTA slots by ~80 KB, so both slots grow to
+# 0x300000; everything before ota_0 keeps the same offsets as partitions.csv
+# (merged image stays flash-at-0x0).
 # Name,   Type, SubType, Offset,  Size, Flags
 esp_secure_cert,  0x3F, ,0xd000,    0x2000, encrypted
 nvs,      data, nvs,     0x10000,   0xC000,

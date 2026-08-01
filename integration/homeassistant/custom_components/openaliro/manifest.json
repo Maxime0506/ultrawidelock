@@ -2,8 +2,8 @@
   "domain": "openaliro",
   "name": "OpenAliro",
   "config_flow": true,
-  "documentation": "https://github.com/asxeem/openaliro/tree/main/integration/homeassistant",
-  "issue_tracker": "https://github.com/asxeem/openaliro/issues",
+  "documentation": "https://github.com/openaliro/openaliro/tree/main/integration/homeassistant",
+  "issue_tracker": "https://github.com/openaliro/openaliro/issues",
   "iot_class": "local_push",
   "requirements": ["pyserial>=3.5,<4"],
   "version": "0.0.0"
