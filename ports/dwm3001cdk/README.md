@@ -183,7 +183,10 @@ probe-rs trace <addr>        # poll one g_dbg_* counter without spending RTT ban
 ## Size, measured
 
 Stage 0 built the whole thing to find out whether it fits. It does, with room
-to spare:
+to spare — but read this as the question stage 0 asked, not as the current
+image. The room was spent: the numbers below are the reader with no console, no
+Matter and no Thread, and the build that Apple Home commissions now sits at
+96.81% of RAM (see the Build section).
 
 | | Used | Available | |
 |---|---|---|---|
@@ -454,16 +457,30 @@ Covered now by `d.start_adv_params` and `d.import_refreshes_adv` in
 
 Against the stages in `internal/dwm3001cdk-reader-plan.md`:
 
-| Stage | Check | |
-|---|---|---|
-| 0 | Fits: 236,768 B flash / 74,100 B RAM | done |
-| 1 | BLE advert, iPhone enumerates 0xFFF2 | done |
-| 2 | On-target EC self-test against Oberon | open |
-| 3 | DW3110 DEV_ID `0xdeca0302`; TWR vs the DK rig | half done |
-| 4 | ESP32-S3 initiator reaches ESTABLISHED | open |
-| 5 | iPhone Wallet walk-up unlock | open |
-| 6 | >= 95% ranging success over 100 walk-ups | open |
+| Stage | Check | | Evidence |
+|---|---|---|---|
+| 0 | Fits | done | 444,220 B flash / 126,888 B RAM with Matter and Thread |
+| 1 | BLE advert, iPhone enumerates 0xFFF2 | done | |
+| 2 | On-target EC self-test against Oberon | **done** | `ECDH self-test: PASS (NIST CAVP P-256 CDH count 0)` at every boot |
+| 3 | DW3110 DEV_ID, live ranging | **done** | `0xdeca0302` at boot; ranging against an iPhone from 565 cm to 0 cm |
+| 4 | An initiator reaches ESTABLISHED | **done** | the iPhone itself, not the ESP32-S3 stand-in the stage named |
+| 5 | iPhone Wallet walk-up unlock | **done** | four in one session, 2026-08-02 |
+| 6 | >= 95% ranging success over 100 walk-ups | open | never run; the sample so far is single digits |
 
-The open risk is unchanged and is not about memory: single-core radio
-contention between the BLE controller and the DW3110's delayed-TX reply window.
-Nothing so far exercises both under load.
+Stage 0's figure is the Matter image, not the 236,768 B / 74,100 B the plan
+recorded: that was the reader alone, before the console, the Matter node and
+Thread. Stage 4 is marked done on a substitution — the ESP32-S3 initiator was a
+bench stand-in for a phone, and the phone did it, which is the stronger result.
+
+**What is left is stage 6, and it needs someone to walk 100 times.** Everything
+below it has been demonstrated on hardware; nothing above it has been
+demonstrated at a rate.
+
+The single-core radio contention risk is no longer untested, and no longer
+theoretical either. A full session on 2026-08-02 ran BLE, an 802.15.4 MTD and
+the DW3110 together through two-fabric commissioning, two live Matter
+subscriptions and four unlocks, and every unlock completed. In the same session
+thirteen consecutive BLE connections failed to establish inside 4.3 seconds and
+then recovered on their own, which is the shape contention would take and is not
+proof that it was. `aliro_ble_zephyr.c` now counts such runs and reports the
+length when one ends; that number, next time, is what will settle it.

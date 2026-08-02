@@ -3,7 +3,7 @@
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](matter_commission.h.md)
+**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](matter_commission.h.md)  ·  **discussed in** [`ports/dwm3001cdk/README.md`](../../../ports/dwm3001cdk/README.md)
 
 ```mermaid
 flowchart TD
