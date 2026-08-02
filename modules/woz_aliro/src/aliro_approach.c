@@ -145,12 +145,22 @@ void aliro_approach_defaults(struct aliro_approach_cfg *cfg)
 	cfg->margin_ms = 250;
 	cfg->vmin_cm_s = 30;
 	/*
-	 * 1,500 ms. Ranging blocks are 192 ms, so a phone that is still there
-	 * and still ranging cannot be quiet this long by accident, and the
-	 * measured walk-away had 3.2 s of live link left after its last far
-	 * sample -- room to relock twice over.
+	 * 750 ms, and the number is measured rather than chosen. A ranging block
+	 * is 192 ms, so this is four missed blocks -- a phone that is still there
+	 * and still ranging cannot be quiet that long by accident.
+	 *
+	 * It was 1,500 ms, which was too conservative and cost a relock on
+	 * 2026-08-02 17:40 by 500 ms: the last far sample was fed 1,000 ms before
+	 * the session ended, so only ~870 ms of silence had accumulated when the
+	 * link dropped. The walk-away that DID work the same afternoon had 1.2 s.
+	 * Real departures land either side of 1,500 ms and reliably above 750.
+	 *
+	 * Erring short is the safe direction here, and only here: this rule fires
+	 * only when the last measurement was already beyond relock_cm, so being
+	 * early can relock a door the credential has left and can never relock one
+	 * it is standing at.
 	 */
-	cfg->far_silence_ms = 1500;
+	cfg->far_silence_ms = 750;
 	cfg->predict_en = true;
 }
 
