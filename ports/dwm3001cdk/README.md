@@ -153,6 +153,15 @@ Control Block not found" both with `-RTTAddress` pointing straight at the block
 and with an all-of-RAM `-RTTSearchRanges`, `JLinkExe` V9.62 has no `rtt` verbs,
 and `JLinkRTTClient` never reaches port 19021.
 
+**The first block you see is the previous run.** The RTT ring is `_acUpBuffer`
+at `0x20000010`, 8 KB, in its own section at the bottom of RAM, and a reset does
+not clear it — that is deliberate, it is what lets you read what a board printed
+before it died. The cost is that `make cdk-rtt` opens with whatever the *old*
+firmware left there, and it looks exactly like current output. Anchor on the
+`*** Booting nRF Connect SDK ***` line: everything above it is history. Two
+separate conclusions in this project have been drawn from that block and both
+were wrong.
+
 Two traps worth knowing:
 
 - **`--scan-region` defaults to empty**, and with no region and no ELF probe-rs

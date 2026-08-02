@@ -214,6 +214,10 @@ cdk-flash-erase:
 ##   needs no change here -- but the ELF must be the one you FLASHED. Attach with
 ##   an ELF you only built and probe-rs reads a stale address and prints nothing,
 ##   which looks exactly like a dead board.
+##   READ THE FIRST BLOCK WITH SUSPICION. The RTT ring lives in its own section
+##   at the bottom of RAM and is NOT cleared by a reset, so everything printed
+##   before the "*** Booting nRF Connect SDK ***" line is the PREVIOUS run --
+##   old firmware, old bug. That has twice been mistaken for the current one.
 ##   The J-Link tools are not an alternative: JLinkRTTLogger cannot find this
 ##   control block, with -RTTAddress or with an all-of-RAM -RTTSearchRanges.
 ##   Options: CDK_RTT_BUILD=<dir> (defaults to CDK_BUILD, so it follows the
