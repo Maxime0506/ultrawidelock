@@ -85,6 +85,22 @@ S3 is validated; C5 is build/release-tested.
 - **ESP32-S3:** DW3110; release/source/browser image, approach validated.
 - **ESP32-C5:** DW3110; release/source/browser image, build-tested.
 
+## Trademarks and affiliation
+
+This is an independent project. It is not affiliated with, endorsed by, sponsored by, or
+speaking for any company or standards body named here.
+
+Aliro and Matter are trademarks of the Connectivity Standards Alliance. Apple, iPhone and
+Apple Watch are trademarks of Apple Inc. Nordic Semiconductor, Qorvo, DecaWave and
+Espressif are trademarks of their respective owners. All are used here nominatively, to
+say what this firmware interoperates with. All specifications, standards, trademarks and
+other intellectual property referenced remain the property of their owners, along with
+every right, licence and disclaimer attached to them.
+
+Protocol notes in `docs/` cite specification section numbers so a reader can look them up
+in their own copy. They do not reproduce specification text, and no member-confidential
+material is included.
+
 ## Credits
 
 Thanks: [@br101](https://github.com/br101) · [@kormax](https://github.com/kormax/) · [@rednblkx](https://github.com/rednblkx/) · [@scottjg](https://github.com/scottjg/).

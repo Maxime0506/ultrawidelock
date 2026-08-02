@@ -8,8 +8,8 @@ combines:
 
 - public Apple documentation and SDK header contracts;
 - a read-only inspection of the macOS authorization database;
-- strings and arm64e disassembly from the system CryptoTokenKit authorization
-  mechanism;
+- the diagnostic messages the system CryptoTokenKit authorization mechanism
+  emits to the unified log;
 - a read-only inspection of the system Auto Unlock implementation and its code
   signature entitlements; and
 - a controlled test with a paired CryptoTokenKit identity whose signing
@@ -159,26 +159,25 @@ The mechanism is implemented by:
   CryptoTokenKit.bundle/Contents/MacOS/CryptoTokenKit
 ```
 
-Static analysis of the arm64e binary found the following order:
+The mechanism reports its own progress to the unified log. Three of its
+messages describe the path this report depends on:
 
-1. Offsets `0x150c` through `0x1528` fetch the authorization-context key
-   `password` and branch when it is absent.
-2. The missing-value branch at `0x1764` reaches the diagnostic string
-   `PIN not found in authorization context`.
-3. Only after the password check does the code read
-   `authenticated-token-id` and token data.
-4. Offsets `0x19dc` through `0x19ec` write successful token-login data back
-   under the `password` context key.
+```text
+TKAuthMechanismLogin invoked
+PIN not found in authorization context
+Token login data set to the authorization context
+```
 
-The system binary also contains the markers `TKAuthMechanismLogin invoked` and
-`Token login data set to the authorization context`.
+The first marks entry. The second is what a PINless attempt produces, when the
+authorization-context key `password` carries no value. The third appears only
+on success, when token login data is written back under that same key. The
+companion `loginwindow` plug-in reports `Attempt to authenticate with a blank
+password`, consistent with the UI refusing an empty submission. The predicate in
+[Smallest safe experiment](#smallest-safe-experiment) captures the three
+CryptoTokenKit messages; the `loginwindow` one needs a wider sender filter.
 
-The companion `loginwindow` authorization plug-in contains the diagnostic
-`Attempt to authenticate with a blank password`, consistent with the UI
-refusing an empty credential submission.
-
-These observations establish that `TKAuthMechanismLogin` requires the
-authorization-context value before it processes the token identity. They do
+That sequence establishes that `TKAuthMechanismLogin` requires the
+authorization-context value in order to process the token identity. It does
 not establish that the submitted characters are sent to the smart card or
 validated as its PIN.
 
@@ -187,7 +186,7 @@ validated as its PIN.
 Two independently observed designs point to a credential-material requirement:
 
 1. **VERIFIED (observation):** after successful token login,
-   `TKAuthMechanismLogin` writes token login data back under the
+   `TKAuthMechanismLogin` reports writing token login data back under the
    authorization-context key `password`.
 2. **VERIFIED (documentation):** Apple Watch Auto Unlock does not merely return
    an approval. The Mac generates a random 32-byte unlock secret, sends it
@@ -462,9 +461,9 @@ macOS authorization stack.
 
 ## Reproduction boundary
 
-The authorization rules, strings, offsets, control flow, `sharingd` markers,
-and code-signature entitlements above were verified on macOS 26.4.1 build
-25E253 with the macOS 26.4 SDK. Recheck them after every macOS update. The
-conclusion about boolean constraints follows the public SDK contract, while the
-exact `TKAuthMechanismLogin` and Auto Unlock implementations remain
-build-specific reverse-engineering results.
+The authorization rules, log messages, `sharingd` markers, and code-signature
+entitlements above were verified on macOS 26.4.1 build 25E253 with the macOS
+26.4 SDK. Recheck them after every macOS update. The conclusion about boolean
+constraints follows the public SDK contract, while the exact
+`TKAuthMechanismLogin` and Auto Unlock behavior is build-specific and
+undocumented, so treat it as observation of one build rather than a contract.

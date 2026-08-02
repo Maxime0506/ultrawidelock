@@ -183,9 +183,9 @@ integrated circuits, and `LicenseRef-QORVO-2` clause 3 restricts the DW3000 driv
 Qorvo ICs. Those field-of-use terms apply to any product built on this tree.
 
 ### 4.1 GCM per-direction counters start at **1**, not 0
-**Spec: §8.3.1.12 and §8.3.1.13** — "SHALL
-initialize a session-bound expedited_device_counter to value 0x00000001 and session-bound
-expedited_reader_counter to value 0x00000001."
+**Spec: §8.3.1.12 and §8.3.1.13** — both session-bound counters,
+`expedited_device_counter` and `expedited_reader_counter`, are required to be initialized
+to `0x00000001`.
 
 **VERIFIED (byte-exact KAT + silicon).** Both per-direction secure-channel counters start
 at 1 (HomeKey starts at 0; do not copy HomeKey here). The first inbound decrypt
@@ -213,18 +213,17 @@ project's reading of it, which is what cost the debugging time.
   reader's *signing* public key X, **not** the device ephemeral key (that was the bug).
   Derived via `aliro_ec_p256_pub_from_priv`; refreshed on identity load and on both
   Matter provisioning paths.
-- salt item 4 = **interface byte** (`0xC3` BLE / `0x5E` NFC): "value 0xC3
-  when the transaction is performed on the BLE transport or 0x5E when the transaction is
-  performed on the NFC transport."
+- salt item 4 = **interface byte**: `0xC3` when the transaction runs over the BLE
+  transport, `0x5E` when it runs over NFC.
 - salt item 10 = the phone's **`0xA5` SELECT-response proprietary-info TLV**. The spec
-  requires it "according to Table 10-2"; the concrete value
+  requires it per Table 10-2; the concrete value
   `a5 08 80 02 0000 5c 02 0100` was observed from the phone's op-0x05 message on the
   wire.
 
 ### 4.4 Key-block layout (one HKDF expand → 160 bytes)
-**Spec: §8.3.1.13** mandates "160 bytes of derived key material
-derived_keys_volatile according to section 8.3.1.5"; the offsets are stated verbatim
-there. `Kdh` comes from §8.3.1.4 (BSI TR-03111 §4.3 ECKA-DH over NIST P-256) and the expand from §8.3.1.5 (RFC 5869 HKDF-SHA-256).
+**Spec: §8.3.1.13** requires 160 bytes of derived key material
+(`derived_keys_volatile`) produced by the §8.3.1.5 expand; the field offsets within that
+block are enumerated there. `Kdh` comes from §8.3.1.4 (BSI TR-03111 §4.3 ECKA-DH over NIST P-256) and the expand from §8.3.1.5 (RFC 5869 HKDF-SHA-256).
 
 `Z = SHA-256(ecdh_shared(32) || 0x00000001 || txid(16))`; then
 `block160 = HKDF-SHA256(salt=CreateSalt transcript, IKM=Z, info=devicePubX(32), L=160)`.
@@ -259,9 +258,8 @@ separators `kReaderUsage=415d9569` / `kUserDeviceUsage=4e887b4c`. The L2CAP enve
 the 4-byte header `[type & 0x3F][opcode][len_be16]`; Table 11-10 names those fields
 Protocol Header (bits B5:B0 = protocol type) and Message ID, and §11.7 states that all
 multi-octet integer fields are big-endian. EXCHANGE payload for the ranging flow is bare
-`98 00` (URSK-ready, empty TLV): **VERIFIED**, and the spec agrees in §8.3.3.5.1, where
-tag `0x97` is present in a Reader-sent BLE EXCHANGE "only if the transaction failure
-occurs".
+`98 00` (URSK-ready, empty TLV): **VERIFIED**, and the spec agrees in §8.3.3.5.1, which
+admits tag `0x97` in a Reader-sent BLE EXCHANGE only in the transaction-failure case.
 
 ### 4.7 The credential-auth §14 KAT is member-confidential
 A host KAT reproduces the Aliro 1.0 §14 worked example byte-exact (salt, Kdh,
@@ -307,9 +305,9 @@ The `00 02 00 00` body that comes back on the EXCHANGE response is §8.3.3.5.5 s
 engine.
 
 ### 5.5 THE session-id trap: it is derived from the AUTH0 TXID, not chosen
-**Spec: §11.7.2.1.3** — "The Attribute Value field carries
-session identifier, which is the least significant four octets of the Transaction
-Identifier field (see Table 8-4)."
+**Spec: §11.7.2.1.3** — the Attribute Value field carries the
+session identifier, taken as the low-order four octets of the Transaction Identifier
+field (Table 8-4).
 
 The ranging session-id is **not** the reader's free choice.
 The device computes it from the 16-byte AUTH0 transaction id it received:

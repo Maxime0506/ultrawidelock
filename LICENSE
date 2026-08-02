@@ -39,3 +39,18 @@ each file:
 
 Because of the Qorvo terms, the repository as a whole is source-available, not
 open source in the OSI sense.
+
+-------------------------------------------------------------------------------
+TRADEMARKS
+
+No trademark licence is granted by the terms above.
+
+Aliro and Matter are trademarks of the Connectivity Standards Alliance. Apple,
+iPhone and Apple Watch are trademarks of Apple Inc. Nordic Semiconductor, Qorvo,
+DecaWave and Espressif are trademarks of their respective owners. Each is used
+in this repository nominatively, to identify the specifications and parts this
+firmware interoperates with, and for no other purpose.
+
+This project is independent. It is not affiliated with, endorsed by, sponsored
+by, or speaking for any of them. The QORVO-2 terms above additionally forbid
+using the Qorvo name to endorse or promote anything derived from that driver.
