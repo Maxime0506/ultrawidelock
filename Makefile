@@ -53,6 +53,13 @@ PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
 NCS_VER   ?= v3.3.0
 CDK_BUILD ?= $(REPO_ROOT)/build-cdk
 CDK_MATTER_BUILD ?= $(REPO_ROOT)/build-matter
+# Which build `cdk-rtt` reads the RTT control block out of. Deliberately NOT
+# CDK_BUILD: that one defaults to the plain reader, and the Matter build is what
+# this board normally carries. The trap the split creates is worth naming --
+# `make cdk-flash cdk-rtt` with both defaults flashes build-cdk and then decodes
+# against build-matter's ELF, so pass the same dir to both or use neither
+# default.
+CDK_RTT_BUILD ?= $(CDK_MATTER_BUILD)
 # PRISTINE=1 forces a from-scratch build. `-p auto` re-runs CMake when the board
 # or the app directory changes, and NOT when the -D flags do, so switching an
 # existing build dir between the reader and the Matter build needs this.
@@ -71,7 +78,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty cdk-reader cdk-aliro-matter-thread cdk-flash cdk-flash-erase selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty cdk-reader cdk-aliro-matter-thread cdk-flash cdk-flash-erase cdk-rtt selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -187,6 +194,21 @@ cdk-flash:
 cdk-flash-erase:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
 	  --ncs-version $(NCS_VER) -- west flash --erase -d $(CDK_BUILD)
+
+## cdk-rtt: stream the DWM3001CDK's console over RTT  ·  Ctrl-C to stop
+##   This board has no UART console (CONFIG_UART_CONSOLE=n), so `make term` does
+##   not reach it and RTT is the only log there is. probe-rs re-reads _SEGGER_RTT
+##   out of the ELF on every attach, so a rebuild that moves the control block
+##   needs no change here -- but the ELF must be the one you FLASHED. Attach with
+##   an ELF you only built and probe-rs reads a stale address and prints nothing,
+##   which looks exactly like a dead board.
+##   The J-Link tools are not an alternative: JLinkRTTLogger cannot find this
+##   control block, with -RTTAddress or with an all-of-RAM -RTTSearchRanges.
+##   Options: CDK_RTT_BUILD=<dir> (default build-matter)
+cdk-rtt:
+	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  install: make tools-install\n' >&2; exit 1; }
+	@test -f $(CDK_RTT_BUILD)/app/zephyr/zephyr.elf || { printf '  no ELF at %s/app/zephyr/zephyr.elf  ·  build it first\n' '$(CDK_RTT_BUILD)' >&2; exit 1; }
+	@probe-rs attach --chip nRF52833_xxAA $(CDK_RTT_BUILD)/app/zephyr/zephyr.elf
 
 ##@ Test
 ## tui-test: run the OpenTUI source tests (no hardware required)
