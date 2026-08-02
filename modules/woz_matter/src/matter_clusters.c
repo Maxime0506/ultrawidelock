@@ -53,6 +53,14 @@
  * Descriptor is in it: a controller that reads ServerList and does not find the
  * cluster it just read is entitled to conclude the answer is stale.
  */
+/*
+ * Installed by the port. Declared up here rather than beside the command
+ * handler because the WindowStatus ATTRIBUTE is read far earlier in this file
+ * than the commands are dispatched, and a controller reads that attribute to
+ * decide whether its own OpenCommissioningWindow worked.
+ */
+static const struct matter_admin_hooks *s_admin_hooks;
+
 static const uint32_t k_root_servers[] = {
 	MATTER_CLUSTER_DESCRIPTOR,
 	MATTER_CLUSTER_ACCESS_CONTROL,
@@ -60,6 +68,7 @@ static const uint32_t k_root_servers[] = {
 	MATTER_CLUSTER_GENERAL_COMMISSIONING,
 	MATTER_CLUSTER_NETWORK_COMMISSIONING,
 	MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+	MATTER_CLUSTER_ADMIN_COMMISSIONING,
 };
 
 /**
@@ -156,7 +165,8 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 	       cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING ||
 	       cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING ||
 	       cluster == MATTER_CLUSTER_DESCRIPTOR || cluster == MATTER_CLUSTER_ACCESS_CONTROL ||
-	       cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS;
+	       cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS ||
+	       cluster == MATTER_CLUSTER_ADMIN_COMMISSIONING;
 }
 
 /*
@@ -292,6 +302,15 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		case MATTER_ATTR_AC_SUBJECTS_PER_ENTRY:
 		case MATTER_ATTR_AC_TARGETS_PER_ENTRY:
 		case MATTER_ATTR_AC_ENTRIES_PER_FABRIC:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	case MATTER_CLUSTER_ADMIN_COMMISSIONING:
+		switch (attribute) {
+		case MATTER_ATTR_ADMIN_WINDOW_STATUS:
+		case MATTER_ATTR_ADMIN_FABRIC_INDEX:
+		case MATTER_ATTR_ADMIN_VENDOR_ID:
 			return MATTER_IM_STATUS_SUCCESS;
 		default:
 			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
@@ -507,6 +526,49 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		lock_attr_value(info, cluster, attribute, w, tag);
 		return;
+	}
+
+	if (cluster == MATTER_CLUSTER_ADMIN_COMMISSIONING) {
+		/* No hooks installed means no window can ever be open, and saying
+		 * so truthfully is better than refusing the read: a controller
+		 * that cannot read WindowStatus cannot tell why its own
+		 * OpenCommissioningWindow appeared to fail. */
+		bool live = s_admin_hooks != NULL;
+
+		switch (attribute) {
+		case MATTER_ATTR_ADMIN_WINDOW_STATUS:
+			(void)matter_tlv_put_u64(w, tag,
+						 (live && s_admin_hooks->status != NULL)
+							 ? s_admin_hooks->status()
+							 : MATTER_ADMIN_WINDOW_NOT_OPEN);
+			return;
+		case MATTER_ATTR_ADMIN_FABRIC_INDEX: {
+			uint8_t fabric = (live && s_admin_hooks->admin_fabric != NULL)
+						 ? s_admin_hooks->admin_fabric()
+						 : 0u;
+			/* Nullable, and null is the correct answer while shut --
+			 * zero is a fabric index nobody has. */
+			if (fabric == 0u) {
+				(void)matter_tlv_put_null(w, tag);
+			} else {
+				(void)matter_tlv_put_u64(w, tag, fabric);
+			}
+			return;
+		}
+		case MATTER_ATTR_ADMIN_VENDOR_ID: {
+			uint16_t vendor = (live && s_admin_hooks->admin_vendor != NULL)
+						  ? s_admin_hooks->admin_vendor()
+						  : 0u;
+			if (vendor == 0u) {
+				(void)matter_tlv_put_null(w, tag);
+			} else {
+				(void)matter_tlv_put_u64(w, tag, vendor);
+			}
+			return;
+		}
+		default:
+			return;
+		}
 	}
 
 	if (cluster == MATTER_CLUSTER_BASIC_INFORMATION) {
@@ -918,6 +980,19 @@ static const uint32_t k_ac_attrs[] = {
 	MATTER_ATTR_AC_ENTRIES_PER_FABRIC,
 };
 
+/**
+ * AdministratorCommissioning's three attributes.
+ *
+ * A controller reads WindowStatus to decide whether its own
+ * OpenCommissioningWindow succeeded, and reads the other two to show WHO opened
+ * it. Both of those are nullable and are null whenever the window is shut.
+ */
+static const uint32_t k_admin_attrs[] = {
+	MATTER_ATTR_ADMIN_WINDOW_STATUS,
+	MATTER_ATTR_ADMIN_FABRIC_INDEX,
+	MATTER_ATTR_ADMIN_VENDOR_ID,
+};
+
 static const uint32_t k_oc_attrs[] = {
 	MATTER_ATTR_OC_NOCS,
 	MATTER_ATTR_OC_FABRICS,
@@ -981,6 +1056,10 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 	if (cluster == MATTER_CLUSTER_BASIC_INFORMATION) {
 		*out = k_basic_attrs;
 		return sizeof(k_basic_attrs) / sizeof(k_basic_attrs[0]);
+	}
+	if (cluster == MATTER_CLUSTER_ADMIN_COMMISSIONING) {
+		*out = k_admin_attrs;
+		return sizeof(k_admin_attrs) / sizeof(k_admin_attrs[0]);
 	}
 	if (cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING) {
 		*out = k_gc_attrs;
@@ -1220,6 +1299,97 @@ static void advertise_one(const struct matter_fabric *fabric)
  * @return the IM status. The networking verdict goes in last_network_status and
  *         travels in the response payload, the same split AddNOC uses.
  */
+/* ---- AdministratorCommissioning (0x003C) ---------------------------------- */
+/*
+ * The cluster behind Apple Home's "Turn On Pairing Mode", and behind
+ * multi-admin sharing generally. Without it a node is commissioned once, by
+ * whoever got there first, and can never be handed to a second ecosystem --
+ * which is what this board did until now: the button existed in the app and
+ * the node answered UNSUPPORTED_CLUSTER.
+ *
+ * Everything with a side effect is behind hooks the port installs. This file
+ * decodes and validates; opening a window means swapping the SPAKE2+ verifier
+ * the PASE responder uses and putting the commissionable payload back on the
+ * air, and neither belongs in a module that tests/host compiles without Zephyr.
+ */
+void matter_clusters_set_admin_hooks(const struct matter_admin_hooks *hooks)
+{
+	s_admin_hooks = hooks;
+}
+
+/**
+ * Map a hook's cluster-specific status onto an IM status.
+ *
+ * Lossy, and knowingly so: Matter can carry a ClusterStatus alongside FAILURE
+ * so a controller can tell "already open" from "that verifier is malformed",
+ * and this IM does not encode one yet. A controller therefore sees a generic
+ * failure. Worth fixing when something depends on the distinction; nothing
+ * here does, because the only caller that matters retries either way.
+ */
+static uint8_t admin_status(uint8_t cluster_status)
+{
+	return cluster_status == 0u ? MATTER_IM_STATUS_SUCCESS : MATTER_IM_STATUS_FAILURE;
+}
+
+static uint8_t admin_command(const struct matter_im_invoke *inv, uint32_t *response_command)
+{
+	const uint8_t *verifier = NULL;
+	const uint8_t *salt = NULL;
+	size_t verifier_len = 0;
+	size_t salt_len = 0;
+	uint64_t timeout = 0;
+	uint64_t discriminator = 0;
+	uint64_t iterations = 0;
+
+	/* None of the three carries a response payload; the status IS the reply. */
+	*response_command = MATTER_IM_NO_RESPONSE;
+
+	if (s_admin_hooks == NULL) {
+		return MATTER_IM_STATUS_FAILURE;
+	}
+
+	switch (inv->command) {
+	case MATTER_CMD_ADMIN_OPEN_WINDOW:
+		/*
+		 * The commissioner supplies the verifier, so the setup code for
+		 * this window is one IT chose and the factory code is never
+		 * disclosed to the ecosystem being invited in. Field tags are
+		 * positional per the spec: timeout, verifier, discriminator,
+		 * iterations, salt.
+		 */
+		if (!field_u64(inv, 0u, &timeout) ||
+		    !field_bytes(inv, 1u, &verifier, &verifier_len) ||
+		    !field_u64(inv, 2u, &discriminator) || !field_u64(inv, 3u, &iterations) ||
+		    !field_bytes(inv, 4u, &salt, &salt_len)) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		if (s_admin_hooks->open_enhanced == NULL) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		return admin_status(s_admin_hooks->open_enhanced(
+			(uint16_t)timeout, verifier, (uint32_t)verifier_len,
+			(uint16_t)discriminator, (uint32_t)iterations, salt, (uint32_t)salt_len));
+
+	case MATTER_CMD_ADMIN_OPEN_BASIC_WINDOW:
+		if (!field_u64(inv, 0u, &timeout)) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		if (s_admin_hooks->open_basic == NULL) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		return admin_status(s_admin_hooks->open_basic((uint16_t)timeout));
+
+	case MATTER_CMD_ADMIN_REVOKE:
+		if (s_admin_hooks->revoke == NULL) {
+			return MATTER_IM_STATUS_FAILURE;
+		}
+		return admin_status(s_admin_hooks->revoke());
+
+	default:
+		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
+	}
+}
+
 static uint8_t network_command(struct matter_device_info *info, const struct matter_im_invoke *inv,
 			       uint32_t *response_command)
 {
@@ -1865,6 +2035,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	}
 	if (inv->endpoint != MATTER_ENDPOINT_ROOT) {
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
+	}
+	if (inv->cluster == MATTER_CLUSTER_ADMIN_COMMISSIONING) {
+		return admin_command(inv, response_command);
 	}
 	if (inv->cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS) {
 		return opcred_command(info, inv, response_command);

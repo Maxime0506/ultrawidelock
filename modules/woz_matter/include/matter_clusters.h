@@ -48,7 +48,38 @@ extern "C" {
 #define MATTER_CLUSTER_DESCRIPTOR              0x001Du
 #define MATTER_CLUSTER_ACCESS_CONTROL          0x001Fu
 #define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
+#define MATTER_CLUSTER_ADMIN_COMMISSIONING     0x003Cu
 #define MATTER_CLUSTER_DOOR_LOCK               0x0101u
+
+/*
+ * AdministratorCommissioning. This is what Apple Home's "Turn On Pairing Mode"
+ * sends, and what multi-admin sharing runs on: a node that does not serve it
+ * can be commissioned exactly once, by whoever got there first, and can never
+ * be handed to a second ecosystem.
+ *
+ * AdministratorCommissioning/AttributeIds.h:19-31 and CommandIds.h:19-27.
+ */
+#define MATTER_ATTR_ADMIN_WINDOW_STATUS 0x0000u
+#define MATTER_ATTR_ADMIN_FABRIC_INDEX  0x0001u
+#define MATTER_ATTR_ADMIN_VENDOR_ID     0x0002u
+
+#define MATTER_CMD_ADMIN_OPEN_WINDOW       0x0000u
+#define MATTER_CMD_ADMIN_OPEN_BASIC_WINDOW 0x0001u
+#define MATTER_CMD_ADMIN_REVOKE            0x0002u
+
+/** CommissioningWindowStatusEnum (AdministratorCommissioning/Enums.h). */
+#define MATTER_ADMIN_WINDOW_NOT_OPEN 0u
+#define MATTER_ADMIN_WINDOW_ENHANCED 1u
+#define MATTER_ADMIN_WINDOW_BASIC    2u
+
+/*
+ * Cluster-specific status codes, StatusCodeEnum. A controller distinguishes
+ * "you are already open" from "that verifier is malformed" by these, and Apple
+ * Home shows a different message for each.
+ */
+#define MATTER_ADMIN_STATUS_BUSY             1u
+#define MATTER_ADMIN_STATUS_PAKE_PARAM_ERROR 2u
+#define MATTER_ADMIN_STATUS_WINDOW_NOT_OPEN  3u
 
 /* Descriptor attributes (Descriptor/AttributeIds.h:19-33). */
 #define MATTER_ATTR_DESC_DEVICE_TYPE_LIST 0x0000u
@@ -703,6 +734,52 @@ struct matter_device_info {
  * @param info borrowed, not copied, and must outlive @p srv. Breadcrumb is
  *        written through it.
  */
+/**
+ * What the application must do when a controller opens a commissioning window.
+ *
+ * The cluster decodes and validates; everything it would then have to TOUCH --
+ * the SPAKE2+ verifier the PASE responder uses, the BLE advertising payload,
+ * the expiry timer -- belongs to the port. So this module stays free of both
+ * Bluetooth and Zephyr, which is what lets tests/host compile it.
+ *
+ * All three return a MATTER_ADMIN_STATUS_* code, or 0 for success.
+ */
+struct matter_admin_hooks {
+	/**
+	 * OpenCommissioningWindow: commission with a verifier the CONTROLLER
+	 * chose, not the factory one.
+	 *
+	 * @param verifier w0 || L, exactly the layout the PASE responder wants
+	 * @param salt     the PBKDF salt that verifier was derived with
+	 *
+	 * The old verifier must come back when the window closes, or the
+	 * factory setup code stops working for good.
+	 */
+	uint8_t (*open_enhanced)(uint16_t timeout_s, const uint8_t *verifier, uint32_t verifier_len,
+				 uint16_t discriminator, uint32_t iterations, const uint8_t *salt,
+				 uint32_t salt_len);
+	/** OpenBasicCommissioningWindow: reuse the factory verifier. */
+	uint8_t (*open_basic)(uint16_t timeout_s);
+	/** RevokeCommissioning: close early. */
+	uint8_t (*revoke)(void);
+	/** Current MATTER_AC_WINDOW_* value, for the WindowStatus attribute. */
+	uint8_t (*status)(void);
+	/** Fabric index that opened it, 0 when closed. */
+	uint8_t (*admin_fabric)(void);
+	/** Vendor ID that opened it, 0 when closed. */
+	uint16_t (*admin_vendor)(void);
+};
+
+/**
+ * Install the hooks above.
+ *
+ * Until this is called the cluster still APPEARS -- a controller reading
+ * ServerList sees it, which is the point, because a node that hides it can
+ * never be shared with a second ecosystem -- but every command answers
+ * FAILURE rather than pretending to have opened something.
+ */
+void matter_clusters_set_admin_hooks(const struct matter_admin_hooks *hooks);
+
 void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info);
 
 /**

@@ -38,6 +38,9 @@
 
 #include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
 #include "aliro_ble.h" /* aliro_ble_readvertise, when a fabric arrives */
+#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+#include "woz_dfu_rx.h" /* the same gesture opens the update window */
+#endif
 #include "aliro_reader.h" /* aliro_reader_provision_identity, for SetAliroReaderConfig */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
@@ -325,6 +328,140 @@ static int load_verifier(void)
 
 	return 0;
 }
+
+/* ---- AdministratorCommissioning (0x003C) ---------------------------------- */
+/*
+ * What Apple Home's "Turn On Pairing Mode" reaches. The cluster decodes; this
+ * is everything with a side effect, because modules/woz_matter is compiled by
+ * the host suite without Zephyr and must not learn about Bluetooth.
+ *
+ * The commissioner supplies its OWN verifier, so the ecosystem being invited in
+ * never learns this board's factory setup code. That is the whole point of the
+ * enhanced form, and it is why the factory verifier is SAVED and restored: lose
+ * it and the printed setup code stops working permanently.
+ */
+static struct matter_pase_verifier s_factory_verifier;
+static uint8_t s_admin_window = MATTER_ADMIN_WINDOW_NOT_OPEN;
+static uint8_t s_admin_fabric;
+static uint16_t s_admin_vendor;
+
+static void admin_close(void)
+{
+	if (s_admin_window == MATTER_ADMIN_WINDOW_NOT_OPEN) {
+		return;
+	}
+	s_verifier = s_factory_verifier;
+	s_admin_window = MATTER_ADMIN_WINDOW_NOT_OPEN;
+	s_admin_fabric = 0u;
+	s_admin_vendor = 0u;
+	aliro_ble_readvertise();
+	LOG_INF("commissioning window closed; factory setup code back in force");
+}
+
+static void admin_expire(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	admin_close();
+}
+static K_WORK_DELAYABLE_DEFINE(s_admin_timer, admin_expire);
+
+static void admin_arm(uint16_t timeout_s, uint8_t kind)
+{
+	s_admin_window = kind;
+	(void)k_work_reschedule(&s_admin_timer, K_SECONDS(timeout_s));
+	aliro_ble_readvertise();
+#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+	/* The same gesture opens the update window. This is what the SW2 press
+	 * stands in for: an owner who can re-pair the lock is the owner who may
+	 * re-flash it, and both are deliberate acts with a visible prompt. */
+	woz_dfu_window_open((uint32_t)timeout_s * 1000u);
+#endif
+	LOG_INF("commissioning window open for %u s (kind %u)", (unsigned)timeout_s,
+		(unsigned)kind);
+}
+
+static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier,
+				   uint32_t verifier_len, uint16_t discriminator,
+				   uint32_t iterations, const uint8_t *salt, uint32_t salt_len)
+{
+	/*
+	 * DISCRIMINATOR IS ACCEPTED AND IGNORED, and that is a real gap rather
+	 * than an oversight: the advertised discriminator is built into the
+	 * commissionable payload at boot, and re-deriving it here means
+	 * rebuilding that payload. A controller that scans for the value it
+	 * asked for will not find this node. It still works when the controller
+	 * connects by other means, which is what Apple Home does having just
+	 * been talking to it.
+	 */
+	ARG_UNUSED(discriminator);
+
+	if (s_admin_window != MATTER_ADMIN_WINDOW_NOT_OPEN) {
+		return MATTER_ADMIN_STATUS_BUSY;
+	}
+	if (verifier == NULL || salt == NULL || iterations == 0u ||
+	    verifier_len != MATTER_SPAKE_SCALAR_LEN + MATTER_SPAKE_POINT_LEN ||
+	    salt_len == 0u || salt_len > sizeof(s_verifier.salt) ||
+	    verifier[MATTER_SPAKE_SCALAR_LEN] != 0x04u) {
+		LOG_WRN("OpenCommissioningWindow: bad PAKE parameters");
+		return MATTER_ADMIN_STATUS_PAKE_PARAM_ERROR;
+	}
+
+	s_factory_verifier = s_verifier;
+	memcpy(s_verifier.w0, verifier, MATTER_SPAKE_SCALAR_LEN);
+	memcpy(s_verifier.l, verifier + MATTER_SPAKE_SCALAR_LEN, MATTER_SPAKE_POINT_LEN);
+	memcpy(s_verifier.salt, salt, salt_len);
+	s_verifier.salt_len = (uint8_t)salt_len;
+	s_verifier.iterations = iterations;
+
+	admin_arm(timeout_s, MATTER_ADMIN_WINDOW_ENHANCED);
+	return 0u;
+}
+
+static uint8_t admin_open_basic(uint16_t timeout_s)
+{
+	if (s_admin_window != MATTER_ADMIN_WINDOW_NOT_OPEN) {
+		return MATTER_ADMIN_STATUS_BUSY;
+	}
+	/* Basic reuses the factory verifier, so nothing is swapped and nothing
+	 * has to be restored. */
+	s_factory_verifier = s_verifier;
+	admin_arm(timeout_s, MATTER_ADMIN_WINDOW_BASIC);
+	return 0u;
+}
+
+static uint8_t admin_revoke(void)
+{
+	if (s_admin_window == MATTER_ADMIN_WINDOW_NOT_OPEN) {
+		return MATTER_ADMIN_STATUS_WINDOW_NOT_OPEN;
+	}
+	(void)k_work_cancel_delayable(&s_admin_timer);
+	admin_close();
+	return 0u;
+}
+
+static uint8_t admin_status(void)
+{
+	return s_admin_window;
+}
+
+static uint8_t admin_fabric(void)
+{
+	return s_admin_fabric;
+}
+
+static uint16_t admin_vendor(void)
+{
+	return s_admin_vendor;
+}
+
+static const struct matter_admin_hooks k_admin_hooks = {
+	.open_enhanced = admin_open_enhanced,
+	.open_basic = admin_open_basic,
+	.revoke = admin_revoke,
+	.status = admin_status,
+	.admin_fabric = admin_fabric,
+	.admin_vendor = admin_vendor,
+};
 
 /** Fresh randomness for one commissioning attempt. */
 static int begin_session(void)
@@ -2634,6 +2771,10 @@ int matter_commission_init(void)
 	s_info.aliro_credential_cb = on_aliro_credential;
 
 	matter_clusters_init(&s_im, &s_info);
+	/* Without this the cluster still APPEARS in ServerList -- which is the
+	 * point, a node that hides it can never be shared with a second
+	 * ecosystem -- but every command answers FAILURE. */
+	matter_clusters_set_admin_hooks(&k_admin_hooks);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
 	aliro_reader_set_lock_state_listener(on_aliro_lock_state);
