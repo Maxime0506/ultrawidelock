@@ -77,10 +77,10 @@ extern "C" {
 #define MATTER_DEVICE_TYPE_LOCK_REV  3u
 
 /* Door Lock attributes (DoorLock/AttributeIds.h:24-147). */
-#define MATTER_ATTR_DL_LOCK_STATE               0x0000u
-#define MATTER_ATTR_DL_LOCK_TYPE                0x0001u
-#define MATTER_ATTR_DL_ACTUATOR_ENABLED         0x0002u
-#define MATTER_ATTR_DL_OPERATING_MODE           0x0025u
+#define MATTER_ATTR_DL_LOCK_STATE                0x0000u
+#define MATTER_ATTR_DL_LOCK_TYPE                 0x0001u
+#define MATTER_ATTR_DL_ACTUATOR_ENABLED          0x0002u
+#define MATTER_ATTR_DL_OPERATING_MODE            0x0025u
 #define MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES 0x0026u
 
 /*
@@ -91,15 +91,15 @@ extern "C" {
  * SetAliroReaderConfig with the reader private key -- which is the entire
  * reason this node exists.
  */
-#define MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY   0x0080u
-#define MATTER_ATTR_DL_ALIRO_GROUP_ID           0x0081u
-#define MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID       0x0082u
-#define MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS 0x0083u
+#define MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY    0x0080u
+#define MATTER_ATTR_DL_ALIRO_GROUP_ID            0x0081u
+#define MATTER_ATTR_DL_ALIRO_GROUP_SUB_ID        0x0082u
+#define MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS  0x0083u
 #define MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY 0x0084u
-#define MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS   0x0085u
-#define MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION    0x0086u
-#define MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX    0x0087u
-#define MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX  0x0088u
+#define MATTER_ATTR_DL_ALIRO_BLE_UWB_VERSIONS    0x0085u
+#define MATTER_ATTR_DL_ALIRO_BLE_ADV_VERSION     0x0086u
+#define MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX     0x0087u
+#define MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX   0x0088u
 
 /*
  * FeatureMap bits this lock claims (DoorLock/Enums.h:510-511).
@@ -116,14 +116,14 @@ extern "C" {
  * rather than through the reader-config commands
  * (ports/esp32/.../aliro_reader_delegate.h:36-43).
  */
-#define MATTER_DL_FEATURE_USER 0x0100u
+#define MATTER_DL_FEATURE_USER               0x0100u
 
 /* User-feature attributes and commands. */
-#define MATTER_ATTR_DL_USERS_MAX             0x0011u
-#define MATTER_ATTR_DL_CREDS_PER_USER_MAX    0x001Cu
-#define MATTER_CMD_DL_SET_USER               0x001Au
-#define MATTER_CMD_DL_GET_USER               0x001Bu
-#define MATTER_CMD_DL_GET_USER_RESPONSE      0x001Cu
+#define MATTER_ATTR_DL_USERS_MAX          0x0011u
+#define MATTER_ATTR_DL_CREDS_PER_USER_MAX 0x001Cu
+#define MATTER_CMD_DL_SET_USER            0x001Au
+#define MATTER_CMD_DL_GET_USER            0x001Bu
+#define MATTER_CMD_DL_GET_USER_RESPONSE   0x001Cu
 
 /**
  * SetAliroReaderConfig (DoorLock/CommandIds.h:122-125).
@@ -167,9 +167,9 @@ extern "C" {
 #define TAG_CREDSTATUS_DATA            5u
 
 /* SetAliroReaderConfig fields (DoorLock/Commands.h, its Fields enum). */
-#define TAG_ALIRO_CFG_SIGNING_KEY        0u
-#define TAG_ALIRO_CFG_VERIFICATION_KEY   1u
-#define TAG_ALIRO_CFG_GROUP_ID           2u
+#define TAG_ALIRO_CFG_SIGNING_KEY         0u
+#define TAG_ALIRO_CFG_VERIFICATION_KEY    1u
+#define TAG_ALIRO_CFG_GROUP_ID            2u
 #define TAG_ALIRO_CFG_GROUP_RESOLVING_KEY 3u
 
 #define MATTER_ALIRO_SIGNING_KEY_LEN      32u
@@ -185,7 +185,7 @@ extern "C" {
 #define MATTER_CMD_DL_SET_CREDENTIAL          0x0022u
 #define MATTER_CMD_DL_SET_CREDENTIAL_RESPONSE 0x0023u
 
-#define TAG_SETCRED_OPERATION 0u
+#define TAG_SETCRED_OPERATION  0u
 #define TAG_SETCRED_CREDENTIAL 1u
 #define TAG_SETCRED_DATA       2u
 #define TAG_SETCRED_USER_INDEX 3u
@@ -238,16 +238,16 @@ struct matter_user {
 };
 
 /* GetUserResponse fields (DoorLock/Commands.h, GetUserResponse::Fields). */
-#define TAG_GETUSER_INDEX          0u
-#define TAG_GETUSER_NAME           1u
-#define TAG_GETUSER_UNIQUE_ID      2u
-#define TAG_GETUSER_STATUS         3u
-#define TAG_GETUSER_TYPE           4u
+#define TAG_GETUSER_INDEX           0u
+#define TAG_GETUSER_NAME            1u
+#define TAG_GETUSER_UNIQUE_ID       2u
+#define TAG_GETUSER_STATUS          3u
+#define TAG_GETUSER_TYPE            4u
 #define TAG_GETUSER_CREDENTIAL_RULE 5u
-#define TAG_GETUSER_CREDENTIALS    6u
-#define TAG_GETUSER_CREATOR_FABRIC 7u
+#define TAG_GETUSER_CREDENTIALS     6u
+#define TAG_GETUSER_CREATOR_FABRIC  7u
 #define TAG_GETUSER_MODIFIER_FABRIC 8u
-#define TAG_GETUSER_NEXT_INDEX     9u
+#define TAG_GETUSER_NEXT_INDEX      9u
 
 /**
  * How many user slots this lock reports.
@@ -260,9 +260,9 @@ struct matter_user {
 #define MATTER_DL_CREDS_PER_USER_MAX 5u
 
 /* LockState (DoorLock/Enums.h:95-99) and OperatingMode (Enums.h:278-284). */
-#define MATTER_DL_LOCK_STATE_LOCKED     1u
-#define MATTER_DL_LOCK_STATE_UNLOCKED   2u
-#define MATTER_DL_OPERATING_MODE_NORMAL 0u
+#define MATTER_DL_LOCK_STATE_LOCKED         1u
+#define MATTER_DL_LOCK_STATE_UNLOCKED       2u
+#define MATTER_DL_OPERATING_MODE_NORMAL     0u
 /** SupportedOperatingModes is a bitmap; bit 0 is Normal and it is the only one. */
 #define MATTER_DL_SUPPORTED_OPERATING_MODES 0x0001u
 
@@ -274,18 +274,18 @@ struct matter_user {
  */
 #define MATTER_ALIRO_PROTOCOL_VERSION 0x0100u
 /** 0 is the only defined Aliro BLE advertising version. */
-#define MATTER_ALIRO_BLE_ADV_VERSION 0u
+#define MATTER_ALIRO_BLE_ADV_VERSION  0u
 /** Matches the ESP32 lock's kAliroKeysSupported (aliro_reader_delegate.h:94). */
-#define MATTER_ALIRO_KEYS_SUPPORTED 10u
+#define MATTER_ALIRO_KEYS_SUPPORTED   10u
 /** Aliro group identifier, sub-identifier and resolving key are all 16 bytes. */
-#define MATTER_ALIRO_GROUP_ID_LEN 16u
+#define MATTER_ALIRO_GROUP_ID_LEN     16u
 
 /** Access Control attributes (access-control-cluster.cpp, AclAttribute). */
-#define MATTER_ATTR_AC_ACL                 0x0000u
-#define MATTER_ATTR_AC_EXTENSION           0x0001u
-#define MATTER_ATTR_AC_SUBJECTS_PER_ENTRY  0x0002u
-#define MATTER_ATTR_AC_TARGETS_PER_ENTRY   0x0003u
-#define MATTER_ATTR_AC_ENTRIES_PER_FABRIC  0x0004u
+#define MATTER_ATTR_AC_ACL                0x0000u
+#define MATTER_ATTR_AC_EXTENSION          0x0001u
+#define MATTER_ATTR_AC_SUBJECTS_PER_ENTRY 0x0002u
+#define MATTER_ATTR_AC_TARGETS_PER_ENTRY  0x0003u
+#define MATTER_ATTR_AC_ENTRIES_PER_FABRIC 0x0004u
 
 /**
  * How much of an ACL this node will hold.
@@ -300,22 +300,22 @@ struct matter_user {
 #define MATTER_ATTR_FEATURE_MAP 0xFFFCu
 
 /* BasicInformation attributes (BasicInformation/AttributeIds.h:19-77). */
-#define MATTER_ATTR_BASIC_DATA_MODEL_REVISION    0x0000u
-#define MATTER_ATTR_BASIC_VENDOR_NAME            0x0001u
-#define MATTER_ATTR_BASIC_VENDOR_ID              0x0002u
-#define MATTER_ATTR_BASIC_PRODUCT_NAME           0x0003u
-#define MATTER_ATTR_BASIC_PRODUCT_ID             0x0004u
-#define MATTER_ATTR_BASIC_NODE_LABEL             0x0005u
-#define MATTER_ATTR_BASIC_LOCATION               0x0006u
-#define MATTER_ATTR_BASIC_HARDWARE_VERSION       0x0007u
-#define MATTER_ATTR_BASIC_HARDWARE_VERSION_STR   0x0008u
-#define MATTER_ATTR_BASIC_SOFTWARE_VERSION       0x0009u
-#define MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR   0x000Au
-#define MATTER_ATTR_BASIC_SERIAL_NUMBER          0x000Fu
-#define MATTER_ATTR_BASIC_UNIQUE_ID              0x0012u
-#define MATTER_ATTR_BASIC_CAPABILITY_MINIMA      0x0013u
-#define MATTER_ATTR_BASIC_SPECIFICATION_VERSION  0x0015u
-#define MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE   0x0016u
+#define MATTER_ATTR_BASIC_DATA_MODEL_REVISION   0x0000u
+#define MATTER_ATTR_BASIC_VENDOR_NAME           0x0001u
+#define MATTER_ATTR_BASIC_VENDOR_ID             0x0002u
+#define MATTER_ATTR_BASIC_PRODUCT_NAME          0x0003u
+#define MATTER_ATTR_BASIC_PRODUCT_ID            0x0004u
+#define MATTER_ATTR_BASIC_NODE_LABEL            0x0005u
+#define MATTER_ATTR_BASIC_LOCATION              0x0006u
+#define MATTER_ATTR_BASIC_HARDWARE_VERSION      0x0007u
+#define MATTER_ATTR_BASIC_HARDWARE_VERSION_STR  0x0008u
+#define MATTER_ATTR_BASIC_SOFTWARE_VERSION      0x0009u
+#define MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR  0x000Au
+#define MATTER_ATTR_BASIC_SERIAL_NUMBER         0x000Fu
+#define MATTER_ATTR_BASIC_UNIQUE_ID             0x0012u
+#define MATTER_ATTR_BASIC_CAPABILITY_MINIMA     0x0013u
+#define MATTER_ATTR_BASIC_SPECIFICATION_VERSION 0x0015u
+#define MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE  0x0016u
 
 /*
  * What this node reports about itself.
@@ -334,8 +334,8 @@ struct matter_user {
  * what it actually holds -- but the floor is 3 and reporting less than the floor
  * is not a legal answer, so these are the honest minimum it may claim.
  */
-#define MATTER_CASE_SESSIONS_PER_FABRIC  3u
-#define MATTER_SUBSCRIPTIONS_PER_FABRIC  3u
+#define MATTER_CASE_SESSIONS_PER_FABRIC 3u
+#define MATTER_SUBSCRIPTIONS_PER_FABRIC 3u
 
 /** CHIP_CONFIG_MAX_PATHS_PER_INVOKE (CHIPConfig.h:1877), and what this node parses. */
 #define MATTER_MAX_PATHS_PER_INVOKE 1u
@@ -539,10 +539,11 @@ struct matter_device_info {
 	 */
 	int (*aliro_credential_cb)(uint8_t credential_type,
 				   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN]);
-	int (*aliro_reader_config_cb)(const uint8_t signing_key[MATTER_ALIRO_SIGNING_KEY_LEN],
-				      const uint8_t verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
-				      const uint8_t group_id[MATTER_ALIRO_GROUP_ID_LEN],
-				      const uint8_t *group_resolving_key);
+	int (*aliro_reader_config_cb)(
+		const uint8_t signing_key[MATTER_ALIRO_SIGNING_KEY_LEN],
+		const uint8_t verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
+		const uint8_t group_id[MATTER_ALIRO_GROUP_ID_LEN],
+		const uint8_t *group_resolving_key);
 	/**
 	 * Written by the commissioner through GeneralCommissioning so it can
 	 * tell how far a previous attempt got. Mutable, and the reason this

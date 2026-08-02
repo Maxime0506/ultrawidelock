@@ -1066,8 +1066,7 @@ int matter_im_write_response_encode(const struct matter_im_server *srv,
 
 	matter_tlv_writer_init(&w, out, cap);
 	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
-	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_WRESP_RESPONSES),
-					 MATTER_TLV_ARRAY);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_WRESP_RESPONSES), MATTER_TLV_ARRAY);
 	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
 	put_path(&w, MATTER_TLV_CTX(TAG_ASTATUS_PATH), &wr->path);
 	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_ASTATUS_STATUS),

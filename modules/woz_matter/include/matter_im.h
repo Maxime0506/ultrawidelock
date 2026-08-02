@@ -62,7 +62,7 @@ extern "C" {
  * out, which is what a real controller did to this node for ten seconds
  * before abandoning a pairing.
  */
-#define MATTER_IM_OP_TIMED_REQUEST 0x0Au
+#define MATTER_IM_OP_TIMED_REQUEST           0x0Au
 
 /**
  * Interaction Model revision this node claims

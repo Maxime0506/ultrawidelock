@@ -32,8 +32,8 @@
 #define TAG_NOC_ICAC 2u
 
 /* BasicInformation/Structs.h:43-44, CapabilityMinimaStruct. */
-#define TAG_CAPMIN_CASE_SESSIONS  0u
-#define TAG_CAPMIN_SUBSCRIPTIONS  1u
+#define TAG_CAPMIN_CASE_SESSIONS 0u
+#define TAG_CAPMIN_SUBSCRIPTIONS 1u
 
 /*
  * Strings this node reports about itself. Build-time, not per-device: this port
@@ -54,9 +54,12 @@
  * cluster it just read is entitled to conclude the answer is stale.
  */
 static const uint32_t k_root_servers[] = {
-	MATTER_CLUSTER_DESCRIPTOR,       MATTER_CLUSTER_ACCESS_CONTROL,
-	MATTER_CLUSTER_BASIC_INFORMATION, MATTER_CLUSTER_GENERAL_COMMISSIONING,
-	MATTER_CLUSTER_NETWORK_COMMISSIONING, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+	MATTER_CLUSTER_DESCRIPTOR,
+	MATTER_CLUSTER_ACCESS_CONTROL,
+	MATTER_CLUSTER_BASIC_INFORMATION,
+	MATTER_CLUSTER_GENERAL_COMMISSIONING,
+	MATTER_CLUSTER_NETWORK_COMMISSIONING,
+	MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
 };
 
 /**
@@ -144,8 +147,7 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 	(void)ctx;
 
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
-		return cluster == MATTER_CLUSTER_DESCRIPTOR ||
-		       cluster == MATTER_CLUSTER_DOOR_LOCK;
+		return cluster == MATTER_CLUSTER_DESCRIPTOR || cluster == MATTER_CLUSTER_DOOR_LOCK;
 	}
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return false;
@@ -153,8 +155,7 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 	return cluster == MATTER_CLUSTER_BASIC_INFORMATION ||
 	       cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING ||
 	       cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING ||
-	       cluster == MATTER_CLUSTER_DESCRIPTOR ||
-	       cluster == MATTER_CLUSTER_ACCESS_CONTROL ||
+	       cluster == MATTER_CLUSTER_DESCRIPTOR || cluster == MATTER_CLUSTER_ACCESS_CONTROL ||
 	       cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS;
 }
 
@@ -364,8 +365,7 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		switch (attribute) {
 		case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
-			(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
-							 MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_start_container(w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_TYPE),
 						 MATTER_DEVICE_TYPE_DOOR_LOCK);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_REVISION),
@@ -398,9 +398,10 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 
 	switch (attribute) {
 	case MATTER_ATTR_FEATURE_MAP:
-		(void)matter_tlv_put_u64(w, tag, MATTER_DL_FEATURE_ALIRO_PROVISIONING |
-							 MATTER_DL_FEATURE_ALIRO_BLE_UWB |
-							 MATTER_DL_FEATURE_USER);
+		(void)matter_tlv_put_u64(w, tag,
+					 MATTER_DL_FEATURE_ALIRO_PROVISIONING |
+						 MATTER_DL_FEATURE_ALIRO_BLE_UWB |
+						 MATTER_DL_FEATURE_USER);
 		return;
 	case MATTER_ATTR_DL_USERS_MAX:
 		(void)matter_tlv_put_u64(w, tag, MATTER_DL_USERS_MAX);
@@ -514,7 +515,8 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			(void)matter_tlv_put_u64(w, tag, MATTER_DATA_MODEL_REVISION);
 			return;
 		case MATTER_ATTR_BASIC_VENDOR_NAME:
-			(void)matter_tlv_put_utf8(w, tag, MATTER_VENDOR_NAME, strlen(MATTER_VENDOR_NAME));
+			(void)matter_tlv_put_utf8(w, tag, MATTER_VENDOR_NAME,
+						  strlen(MATTER_VENDOR_NAME));
 			return;
 		case MATTER_ATTR_BASIC_VENDOR_ID:
 			(void)matter_tlv_put_u64(w, tag, info->vendor_id);
@@ -638,8 +640,7 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			 * the Root Node and nothing else.
 			 */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
-			(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
-							 MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_start_container(w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_TYPE),
 						 MATTER_DEVICE_TYPE_ROOT_NODE);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_REVISION),
@@ -860,14 +861,22 @@ static const uint32_t k_gc_attrs[] = {
 };
 
 static const uint32_t k_basic_attrs[] = {
-	MATTER_ATTR_BASIC_DATA_MODEL_REVISION,   MATTER_ATTR_BASIC_VENDOR_NAME,
-	MATTER_ATTR_BASIC_VENDOR_ID,             MATTER_ATTR_BASIC_PRODUCT_NAME,
-	MATTER_ATTR_BASIC_PRODUCT_ID,            MATTER_ATTR_BASIC_NODE_LABEL,
-	MATTER_ATTR_BASIC_LOCATION,              MATTER_ATTR_BASIC_HARDWARE_VERSION,
-	MATTER_ATTR_BASIC_HARDWARE_VERSION_STR,  MATTER_ATTR_BASIC_SOFTWARE_VERSION,
-	MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR,  MATTER_ATTR_BASIC_SERIAL_NUMBER,
-	MATTER_ATTR_BASIC_UNIQUE_ID,             MATTER_ATTR_BASIC_CAPABILITY_MINIMA,
-	MATTER_ATTR_BASIC_SPECIFICATION_VERSION, MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE,
+	MATTER_ATTR_BASIC_DATA_MODEL_REVISION,
+	MATTER_ATTR_BASIC_VENDOR_NAME,
+	MATTER_ATTR_BASIC_VENDOR_ID,
+	MATTER_ATTR_BASIC_PRODUCT_NAME,
+	MATTER_ATTR_BASIC_PRODUCT_ID,
+	MATTER_ATTR_BASIC_NODE_LABEL,
+	MATTER_ATTR_BASIC_LOCATION,
+	MATTER_ATTR_BASIC_HARDWARE_VERSION,
+	MATTER_ATTR_BASIC_HARDWARE_VERSION_STR,
+	MATTER_ATTR_BASIC_SOFTWARE_VERSION,
+	MATTER_ATTR_BASIC_SOFTWARE_VERSION_STR,
+	MATTER_ATTR_BASIC_SERIAL_NUMBER,
+	MATTER_ATTR_BASIC_UNIQUE_ID,
+	MATTER_ATTR_BASIC_CAPABILITY_MINIMA,
+	MATTER_ATTR_BASIC_SPECIFICATION_VERSION,
+	MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE,
 };
 
 static const uint32_t k_desc_attrs[] = {
@@ -910,9 +919,12 @@ static const uint32_t k_ac_attrs[] = {
 };
 
 static const uint32_t k_oc_attrs[] = {
-	MATTER_ATTR_OC_NOCS,          MATTER_ATTR_OC_FABRICS,
-	MATTER_ATTR_OC_SUPPORTED_FABRICS, MATTER_ATTR_OC_COMMISSIONED_FABRICS,
-	MATTER_ATTR_OC_TRUSTED_ROOTS, MATTER_ATTR_OC_CURRENT_FABRIC_INDEX,
+	MATTER_ATTR_OC_NOCS,
+	MATTER_ATTR_OC_FABRICS,
+	MATTER_ATTR_OC_SUPPORTED_FABRICS,
+	MATTER_ATTR_OC_COMMISSIONED_FABRICS,
+	MATTER_ATTR_OC_TRUSTED_ROOTS,
+	MATTER_ATTR_OC_CURRENT_FABRIC_INDEX,
 };
 
 /*
@@ -1647,8 +1659,8 @@ static void opcred_fields(const struct matter_device_info *info, uint32_t respon
  * with SetCredentialResponse carrying a status, not with a bare command
  * status, and a controller that gets the wrong shape treats it as no answer.
  */
-static uint8_t set_credential(struct matter_device_info *info,
-			      const struct matter_im_invoke *inv, uint32_t *response_command)
+static uint8_t set_credential(struct matter_device_info *info, const struct matter_im_invoke *inv,
+			      uint32_t *response_command)
 {
 	const uint8_t *data = NULL;
 	size_t data_len = 0u;
@@ -1944,9 +1956,9 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_SETCREDRESP_STATUS),
 						 info->last_credential_status);
 			if (info->last_user_index != 0u) {
-				(void)matter_tlv_put_u64(
-					w, MATTER_TLV_CTX(TAG_SETCREDRESP_USER_INDEX),
-					info->last_user_index);
+				(void)matter_tlv_put_u64(w,
+							 MATTER_TLV_CTX(TAG_SETCREDRESP_USER_INDEX),
+							 info->last_user_index);
 			} else {
 				(void)matter_tlv_put_null(
 					w, MATTER_TLV_CTX(TAG_SETCREDRESP_USER_INDEX));
@@ -1967,8 +1979,7 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_STRUCTURE);
 			(void)matter_tlv_put_bool(w, MATTER_TLV_CTX(TAG_CREDSTATUS_EXISTS), false);
 			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_CREDSTATUS_USER_INDEX));
-			(void)matter_tlv_put_null(w,
-						  MATTER_TLV_CTX(TAG_CREDSTATUS_CREATOR_FABRIC));
+			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_CREDSTATUS_CREATOR_FABRIC));
 			(void)matter_tlv_put_null(w,
 						  MATTER_TLV_CTX(TAG_CREDSTATUS_MODIFIER_FABRIC));
 			(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_CREDSTATUS_NEXT_INDEX));
@@ -2006,8 +2017,8 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 						w, MATTER_TLV_CTX(TAG_GETUSER_UNIQUE_ID));
 					(void)matter_tlv_put_null(
 						w, MATTER_TLV_CTX(TAG_GETUSER_STATUS));
-					(void)matter_tlv_put_null(
-						w, MATTER_TLV_CTX(TAG_GETUSER_TYPE));
+					(void)matter_tlv_put_null(w,
+								  MATTER_TLV_CTX(TAG_GETUSER_TYPE));
 					(void)matter_tlv_put_null(
 						w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIAL_RULE));
 					(void)matter_tlv_put_null(
@@ -2045,7 +2056,8 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 					(void)matter_tlv_put_null(
 						w, MATTER_TLV_CTX(TAG_GETUSER_CREDENTIALS));
 				}
-				(void)matter_tlv_put_null(w, MATTER_TLV_CTX(TAG_GETUSER_NEXT_INDEX));
+				(void)matter_tlv_put_null(w,
+							  MATTER_TLV_CTX(TAG_GETUSER_NEXT_INDEX));
 				(void)matter_tlv_end_container(w);
 			}
 		}
