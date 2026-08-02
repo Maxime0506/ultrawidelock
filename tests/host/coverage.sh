@@ -155,7 +155,7 @@ SIDE_UNIT_SRCS=(
 	"$ECOMP/aliro_reader/aliro_stepup_worker.c"
 	"$ECOMP/woz_uwb/port/dw3000_hw.c"
 	"$ECOMP/woz_uwb/port/dw3000_spi.c"
-	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c"
+	"$ECOMP/woz_uwb/port/woz_seam_stubs.c"
 	"$EAPPS/reader/main/app_shell.c"
 	"$EAPPS/reader/main/main.c"
 	"$EAPPS/matter-lock/main/app_driver.cpp"
@@ -248,10 +248,10 @@ cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
-cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/facade" \
-	"$ET/test_esp_wrap_stubs.c" \
-	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c" -o "$OUT/cov_esp_wrap"
-run_suite esp_wrap "$OUT/cov_esp_wrap"
+cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/driver" -I"$SRC/facade" \
+	"$ET/test_esp_seam_stubs.c" \
+	"$ECOMP/woz_uwb/port/woz_seam_stubs.c" -o "$OUT/cov_esp_seam"
+run_suite esp_seam "$OUT/cov_esp_seam"
 
 # C++ suite: the six matter-lock app sources on the matterfake CHIP/esp-matter
 # doubles (mirror of the run.sh matter-lock stage; lock_led.c is C, own object).

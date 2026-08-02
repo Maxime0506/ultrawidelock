@@ -44,7 +44,7 @@ set(WOZ_SRCS
     # ESP-IDF platform backend (replaces Zephyr dw3000_spi.c / dw3000_hw.c)
     "port/dw3000_spi.c"
     "port/dw3000_hw.c"
-    "port/woz_wrap_stubs.c"
+    "port/woz_seam_stubs.c"
 )
 
 # CIA/CIR diagnostics: per-reception first-path summary + windowed CIR tap dump
@@ -94,19 +94,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     CONFIG_DW3000_CHIP_DW3000=1
 )
 
-# CCC STS substitution seam: intercept the vendor dwt_* the CCC shim overrides.
-#   dwt_configurestsiv   -> __wrap in ccc_shim_wrap.c (TX per-frame STS-IV)
-#   dwt_rxenable         -> __wrap in ccc_shim_rx.c   (RX-arm CCC key/IV)
-#   dwt_configurestsmode -> pass-through in port/woz_wrap_stubs.c (needed so
-#                           ccc_shim_rx.c's __real_dwt_configurestsmode resolves)
-#   dwt_setcallbacks     -> __wrap in port/woz_wrap_stubs.c: installs the RX-good
-#                           shim that runs ccc_shim_rx_try_prepoll to bootstrap the
-#                           STS warm (g_warm_valid) — without it the responder
-#                           receives Pre-POLLs but never arms/replies. Mirrors the
-#                           Nordic uwb_rxdiag.c shim (which this port omits: k_work).
-target_link_libraries(${COMPONENT_LIB} INTERFACE
-    "-Wl,--wrap=dwt_configurestsiv"
-    "-Wl,--wrap=dwt_rxenable"
-    "-Wl,--wrap=dwt_configurestsmode"
-    "-Wl,--wrap=dwt_setcallbacks"
-)
+# The CCC STS seam is modules/woz_uwb/src/driver/uwb_seam.h: every caller reaches
+# the radio through woz_uwb_arm_rx / _set_sts_iv / _set_callbacks / _configure_phy,
+# so there is no link-time interposition to declare here. ccc_shim_rx.c and
+# ccc_shim_wrap.c supply the first two; port/woz_seam_stubs.c supplies the last
+# two, standing in for the uwb_rxdiag.c this port omits (it needs Zephyr k_work).

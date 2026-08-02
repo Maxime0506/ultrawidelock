@@ -29,7 +29,7 @@
  * a firmware change would perturb. */
 struct fr_output {
 	uint8_t ep;                 /* the entry point this event drove */
-	unsigned rxenable_calls;    /* cumulative __real_dwt_rxenable count */
+	unsigned rxenable_calls;    /* cumulative dwt_rxenable count */
 	int32_t last_rxenable_mode; /* mode of the last RX arm */
 	unsigned starttx_calls;     /* cumulative Response TX count */
 	unsigned forcetrxoff_calls; /* cumulative radio-off count */

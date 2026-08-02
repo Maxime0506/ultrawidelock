@@ -99,34 +99,36 @@ jobs:
                  -D SDKCONFIG="$B/esp32-reader-esp32c5/sdkconfig" \
                  build
           # Compiling for RISC-V is not the same as keeping the CCC STS seam.
-          # A dropped --wrap links clean, binds the real dwt_* and silently
-          # never programs the STS key/IV. Nothing else catches that on the
-          # RISC-V targets: test/verify_port.sh owns this check but hardcodes an
-          # S3 build, and never runs in CI anyway (the test-port gate has no
-          # ESP-IDF, so it skips). Assert it on the artifacts already built.
+          # A caller that reaches past uwb_seam.h links clean, binds the real
+          # dwt_* and silently never programs the STS key/IV. The source side is
+          # covered by scripts/check-uwb-seam.sh in the verify gate; this is the
+          # built-artifact side, which nothing else catches on the RISC-V
+          # targets: test/verify_port.sh owns it but hardcodes an S3 build, and
+          # never runs in CI anyway (the test-port gate has no ESP-IDF, so it
+          # skips). Assert it on the artifacts already built.
           check_seam() {
-            local dir="$1" tag="$2" w
-            for w in dwt_rxenable dwt_configurestsiv dwt_configurestsmode; do
-              grep -q -- "-Wl,--wrap=$w" "$dir/build.ninja" \
-                || { echo "::error::$tag link dropped -Wl,--wrap=$w"; return 1; }
-            done
-            # A flag without a definition is a no-op, so the __wrap_*
-            # interposers must exist. Checked in the objects, not the ELF:
-            # --gc-sections drops the ones the reader's default config never
-            # reaches, so the linked image is not a sound place to look.
-            # Mirrors verify_port.sh section 2.
+            local dir="$1" tag="$2" h
+            # Each helper must be defined somewhere, else the seam has no engine
+            # behind it. Checked in the objects, not the ELF: --gc-sections drops
+            # the ones the reader's default config never reaches, so the linked
+            # image is not a sound place to look. Mirrors verify_port.sh §2.
             find "$dir" -name '*.obj' -exec riscv32-esp-elf-nm {} \; \
               2>/dev/null > "$dir-syms.txt"
-            for w in __wrap_dwt_rxenable __wrap_dwt_configurestsiv __wrap_dwt_configurestsmode; do
-              grep -qE " T $w$" "$dir-syms.txt" \
-                || { echo "::error::$tag defines no $w — the STS seam is a no-op"; return 1; }
+            for h in woz_uwb_arm_rx woz_uwb_set_sts_iv woz_uwb_set_callbacks \
+                     woz_uwb_configure_phy; do
+              grep -qE " T $h$" "$dir-syms.txt" \
+                || { echo "::error::$tag defines no $h — the STS seam is a no-op"; return 1; }
             done
             rm -f "$dir-syms.txt"
-            # Interposition only bites if the caller still names the unwrapped
-            # symbol; uwb_min.c is the RX-arm caller the seam exists for.
-            riscv32-esp-elf-nm "$(find "$dir" -name 'uwb_min.c.obj' | head -1)" \
-              | grep -qE ' U dwt_rxenable$' \
-              || { echo "::error::$tag uwb_min.c.obj no longer references dwt_rxenable"; return 1; }
+            # And the caller must go through it; uwb_min.c is the RX-arm caller
+            # the seam exists for.
+            local obj
+            obj="$(find "$dir" -name 'uwb_min.c.obj' | head -1)"
+            riscv32-esp-elf-nm "$obj" | grep -qE ' U woz_uwb_arm_rx$' \
+              || { echo "::error::$tag uwb_min.c.obj does not call woz_uwb_arm_rx"; return 1; }
+            riscv32-esp-elf-nm "$obj" | grep -qE ' U dwt_rxenable$' \
+              && { echo "::error::$tag uwb_min.c.obj still calls dwt_rxenable directly"; return 1; }
+            return 0
           }
           check_seam "$B/esp32-reader-esp32c6" C6
           check_seam "$B/esp32-reader-esp32c5" C5

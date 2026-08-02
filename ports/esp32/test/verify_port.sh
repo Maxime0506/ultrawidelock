@@ -4,7 +4,8 @@
 # covered by tests/host; this checks the things unique to THIS port that can
 # silently regress as main is merged in:
 #   1. the esp32s3 build still links,
-#   2. the CCC STS `--wrap` seam is still wired (flags + __wrap defs present),
+#   2. the CCC STS seam is still wired (all four uwb_seam.h helpers defined, and
+#      the engine reaching the radio through them rather than around them),
 #   3. the excluded diagnostic files stay out of the build,
 #   4. the app still fits its partition.
 #
@@ -79,21 +80,21 @@ check "app binary"       "[ -f '$BUILD/woz_uwb_esp32s3.bin' ]"
 check "app elf"          "[ -f '$BUILD/woz_uwb_esp32s3.elf' ]"
 check "partition table"  "[ -f '$BUILD/partition_table/partition-table.bin' ]"
 
-echo "2. CCC --wrap STS seam"
-NINJA="$BUILD/build.ninja"
-for w in dwt_rxenable dwt_configurestsiv dwt_configurestsmode; do
-	check "link flag --wrap=$w" "grep -q -- '-Wl,--wrap=$w' '$NINJA'"
-done
-# __wrap_* interposers must be defined (T) in some object, else the wrap is a
-# no-op. (A dropped --wrap also fails the build via undefined __real_*, but this
-# names the regression directly.)
-wrapdef() { find "$BUILD" -name '*.obj' -exec nm {} \; 2>/dev/null | grep -qE " T $1$"; }
-check "def __wrap_dwt_rxenable"         "wrapdef __wrap_dwt_rxenable"
-check "def __wrap_dwt_configurestsiv"   "wrapdef __wrap_dwt_configurestsiv"
-check "def __wrap_dwt_configurestsmode" "wrapdef __wrap_dwt_configurestsmode"
-# The caller must still reference the unwrapped name for interposition to bite.
+echo "2. CCC STS seam (modules/woz_uwb/src/driver/uwb_seam.h)"
+# Each helper must be defined (T) in some object, else the seam has no engine
+# behind it and the CCC STS is never programmed.
+seamdef() { find "$BUILD" -name '*.obj' -exec nm {} \; 2>/dev/null | grep -qE " T $1$"; }
+check "def woz_uwb_arm_rx"        "seamdef woz_uwb_arm_rx"
+check "def woz_uwb_set_sts_iv"    "seamdef woz_uwb_set_sts_iv"
+check "def woz_uwb_set_callbacks" "seamdef woz_uwb_set_callbacks"
+check "def woz_uwb_configure_phy" "seamdef woz_uwb_configure_phy"
+# The caller must reach the radio THROUGH the seam. A regression here is silent
+# on the bench: ranging still runs, the STS is just never substituted.
 UWBMIN="$(find "$BUILD" -name 'uwb_min.c.obj' | head -1)"
-check "uwb_min references dwt_rxenable" "[ -n '$UWBMIN' ] && nm '$UWBMIN' | grep -qE ' U dwt_rxenable$'"
+check "uwb_min goes through the seam" \
+	"[ -n '$UWBMIN' ] && nm '$UWBMIN' | grep -qE ' U woz_uwb_arm_rx$'"
+check "uwb_min does not call dwt_rxenable directly" \
+	"[ -n '$UWBMIN' ] && ! nm '$UWBMIN' | grep -qE ' U dwt_rxenable$'"
 
 echo "3. excluded diagnostic files stay out"
 for d in uwb_rxdiag uwb_selftest ccc_crypto_psa aliro_shell woz_logquiet dw3000_spi_trace; do

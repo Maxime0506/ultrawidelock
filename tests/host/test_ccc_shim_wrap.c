@@ -1,7 +1,7 @@
 /**
  * @file test_ccc_shim_wrap.c — the per-frame STS IV intercept (ccc_shim_wrap.c).
  *
- * On target __wrap_dwt_configurestsiv sits behind ld --wrap; on host the suite
+ * woz_uwb_set_sts_iv is the seam entry point (uwb_seam.h); on host the suite
  * calls the wrapper directly. The DW3000 side is the recording shim
  * (tests/host/shim/shim.c + dw_rx_stub.c): woz_host_last_sts_key/iv capture
  * what would hit the radio registers, and dwt_read_reg returns 0 — so this
@@ -17,7 +17,7 @@
 #include "test.h"
 
 /* The wrapper + reset under test (ccc_shim_wrap.c). */
-void __wrap_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv);
+void woz_uwb_set_sts_iv(dwt_sts_cp_iv_t *pStsIv);
 
 /* Capture state from tests/host/shim/shim.c. */
 extern dwt_sts_cp_key_t woz_host_last_sts_key;
@@ -69,7 +69,7 @@ void test_ccc_shim_wrap(void)
 	ccc_shim_unbind();
 	iv = blob_iv(0x11223344u);
 	memset(&woz_host_last_sts_iv, 0, sizeof(woz_host_last_sts_iv));
-	__wrap_dwt_configurestsiv(&iv);
+	woz_uwb_set_sts_iv(&iv);
 	T_OK("iv reaches real load verbatim",
 	     memcmp(&woz_host_last_sts_iv, &iv, sizeof(iv)) == 0);
 
@@ -77,7 +77,7 @@ void test_ccc_shim_wrap(void)
 	T_EQ("bind", ccc_shim_bind_from_ursk(URSK, RC, sizeof(RC), STS0, NSLOT), 0);
 	ccc_shim_wrap_log_reset();
 	iv = blob_iv(0x0badc0deu); /* arbitrary blob origin */
-	__wrap_dwt_configurestsiv(&iv);
+	woz_uwb_set_sts_iv(&iv);
 	/* Independent expectation: frame 0 maps to CCC index STS0 exactly. */
 	T_EQ("kdf ref", ccc_shim_sts_for_index(STS0, dursk, sts_v), 0);
 	T_EQ("key0 packed", (long)woz_host_last_sts_key.key0, (long)regword(dursk, 0));
@@ -91,7 +91,7 @@ void test_ccc_shim_wrap(void)
 
 	t_group("frame 1 learns the stride; block 1 advances one round");
 	iv = blob_iv(0x0badc0deu + 96u);
-	__wrap_dwt_configurestsiv(&iv);
+	woz_uwb_set_sts_iv(&iv);
 	T_EQ("kdf ref blk1", ccc_shim_sts_for_index(STS0 + NSLOT, dursk, sts_v), 0);
 	T_EQ("blk1 iv0", (long)woz_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
 	T_EQ("blk1 iv3", (long)woz_host_last_sts_iv.iv3, (long)regword(sts_v, 3));
@@ -100,7 +100,7 @@ void test_ccc_shim_wrap(void)
 	t_group("past the log budget: substitution continues silently");
 	for (int i = 0; i < 10; i++) {
 		iv = blob_iv(0x0badc0deu + 96u * (uint32_t)(2 + i));
-		__wrap_dwt_configurestsiv(&iv);
+		woz_uwb_set_sts_iv(&iv);
 	}
 	T_EQ("kdf ref blk11", ccc_shim_sts_for_index(STS0 + 11u * NSLOT, dursk, sts_v), 0);
 	T_EQ("blk11 iv0", (long)woz_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
@@ -108,13 +108,13 @@ void test_ccc_shim_wrap(void)
 	t_group("suspended: passthrough again without unbinding");
 	ccc_shim_suspend(true);
 	iv = blob_iv(0x31415926u);
-	__wrap_dwt_configurestsiv(&iv);
+	woz_uwb_set_sts_iv(&iv);
 	T_OK("suspended iv verbatim", memcmp(&woz_host_last_sts_iv, &iv, sizeof(iv)) == 0);
 	ccc_shim_suspend(false);
 
 	t_group("NULL iv: forwarded, capture untouched");
 	iv = woz_host_last_sts_iv;
-	__wrap_dwt_configurestsiv(NULL);
+	woz_uwb_set_sts_iv(NULL);
 	T_OK("null forwarded safely", memcmp(&woz_host_last_sts_iv, &iv, sizeof(iv)) == 0);
 
 	ccc_shim_unbind(); /* leave no session behind for later suites */

@@ -214,15 +214,15 @@ void dwt_configciadiag(uint8_t enable_mask);
 
 /* Recording state for the doubles above — reset with woz_host_rx_reset(). */
 struct woz_host_rx_rec {
-	unsigned rxenable_calls;      /* __real_dwt_rxenable invocations */
+	unsigned rxenable_calls;      /* dwt_rxenable invocations */
 	int32_t last_rxenable_mode;
 	unsigned forcetrxoff_calls;
 	unsigned starttx_calls;
 	unsigned seq;                 /* global call sequencer */
-	unsigned last_rxenable_seq;   /* seq at the last __real_dwt_rxenable */
+	unsigned last_rxenable_seq;   /* seq at the last dwt_rxenable */
 	unsigned last_forcetrxoff_seq;
 	dwt_callbacks_s cbs;          /* captured by dwt_setcallbacks */
-	int32_t rxenable_ret;         /* returned by __real_dwt_rxenable (default DWT_SUCCESS) */
+	int32_t rxenable_ret;         /* returned by dwt_rxenable (default DWT_SUCCESS) */
 	int32_t starttx_ret;
 	/* Injectable RX/TX state, so tests can feed the listener real frames. */
 	uint8_t rxdata[128];          /* served by dwt_readrxdata */

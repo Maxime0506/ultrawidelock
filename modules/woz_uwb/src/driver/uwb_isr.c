@@ -9,6 +9,7 @@
 #include <deca_device_api.h>
 
 #include "trace.h"
+#include "uwb_seam.h" /* woz_uwb_arm_rx / woz_uwb_set_callbacks — the engine's seam */
 
 LOG_MODULE_REGISTER(uwb_isr, LOG_LEVEL_INF);
 
@@ -31,21 +32,21 @@ static void cb_rx_ok(const dwt_cb_data_t *d)
 		  (unsigned)flen, (unsigned int)d->status, peek[0], peek[1], peek[2], peek[3],
 		  peek[4], peek[5], peek[6], peek[7]);
 
-	(void)dwt_rxenable(DWT_START_RX_IMMEDIATE);
+	(void)woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE);
 }
 
 /** @brief RX-timeout callback: frame-wait window expired; re-arms RX. */
 static void cb_rx_to(const dwt_cb_data_t *d)
 {
 	WOZ_TRACE("uwb.rx.to", "status=0x%08X", (unsigned int)d->status);
-	(void)dwt_rxenable(DWT_START_RX_IMMEDIATE);
+	(void)woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE);
 }
 
 /** @brief RX-error callback: frame heard but rejected; logs status and re-arms RX. */
 static void cb_rx_err(const dwt_cb_data_t *d)
 {
 	WOZ_TRACE("uwb.rx.err", "status=0x%08X", (unsigned int)d->status);
-	(void)dwt_rxenable(DWT_START_RX_IMMEDIATE);
+	(void)woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE);
 }
 
 /** @brief TX-done callback: our transmitted frame left the antenna. */
@@ -66,7 +67,7 @@ int uwb_isr_register(void)
 	callbacks.cbSPIRDErr = NULL;
 	callbacks.cbSPIRdy = NULL;
 	callbacks.cbDualSPIEv = NULL;
-	dwt_setcallbacks(&callbacks);
+	woz_uwb_set_callbacks(&callbacks);
 
 	/* Unmask the events we registered handlers for; high-half bits stay 0. */
 	const uint32_t lo_mask = DWT_INT_RXFCG_BIT_MASK |  /* good frame */

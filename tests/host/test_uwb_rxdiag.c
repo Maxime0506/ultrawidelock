@@ -1,7 +1,7 @@
 /**
  * @file test_uwb_rxdiag.c — RX/TX diagnostic tallies + heartbeat (uwb_rxdiag.c)
  * on the drvfake radio and the logfake k_work surface. The suite calls the
- * __wrap_* entry points directly (no ld --wrap on host) and fires the
+ * uwb_seam.h entry points this file implements and fires the
  * heartbeat work item by hand; printk output is diverted to /dev/null while a
  * heartbeat renders. Fake-only: the tallies and chains are proven, the timing
  * (2 s cadence, real ISR context) is not.
@@ -17,33 +17,32 @@
 #include "test.h"
 #include "uwb_rxdiag.h"
 
-/* --wrap entry points + SYS_INIT hook (see uwb_rxdiag.c / logfake init.h). */
-void __wrap_dwt_setcallbacks(dwt_callbacks_s *callbacks);
-int32_t __wrap_dwt_configure(dwt_config_t *config);
-void __wrap_dwt_configurestsmode(uint8_t stsMode);
+/* Seam entry points + SYS_INIT hook (see uwb_seam.h / uwb_rxdiag.c / logfake init.h). */
+void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks);
+int32_t woz_uwb_configure_phy(dwt_config_t *config);
 extern int (*const logfake_sys_init_rxdiag_init)(void);
 
-/* The blob-side callbacks our shims must chain into. */
-static unsigned blob_rxok, blob_rxto, blob_rxerr, blob_txdone;
+/* The MAC-side callbacks our shims must chain into. */
+static unsigned chain_rxok, chain_rxto, chain_rxerr, chain_txdone;
 static void b_rxok(const dwt_cb_data_t *d)
 {
 	(void)d;
-	blob_rxok++;
+	chain_rxok++;
 }
 static void b_rxto(const dwt_cb_data_t *d)
 {
 	(void)d;
-	blob_rxto++;
+	chain_rxto++;
 }
 static void b_rxerr(const dwt_cb_data_t *d)
 {
 	(void)d;
-	blob_rxerr++;
+	chain_rxerr++;
 }
 static void b_txdone(const dwt_cb_data_t *d)
 {
 	(void)d;
-	blob_txdone++;
+	chain_txdone++;
 }
 
 /** Fire the last-scheduled work item with stdout parked on /dev/null. */
@@ -67,8 +66,8 @@ void test_uwb_rxdiag(void)
 
 	t_group("callback interception");
 	drvfake_reset();
-	__wrap_dwt_setcallbacks(NULL);
-	T_EQ("NULL table forwarded", (long)drvfake.real_setcallbacks_calls, 1L);
+	woz_uwb_set_callbacks(NULL);
+	T_EQ("NULL table forwarded", (long)drvfake.setcallbacks_calls, 1L);
 
 	dwt_callbacks_s cbs = {0};
 
@@ -76,7 +75,7 @@ void test_uwb_rxdiag(void)
 	cbs.cbRxTo = b_rxto;
 	cbs.cbRxErr = b_rxerr;
 	cbs.cbTxDone = b_txdone;
-	__wrap_dwt_setcallbacks(&cbs);
+	woz_uwb_set_callbacks(&cbs);
 	T_OK("rx-ok shimmed", cbs.cbRxOk != NULL && cbs.cbRxOk != b_rxok);
 	T_OK("rx-to shimmed", cbs.cbRxTo != NULL && cbs.cbRxTo != b_rxto);
 	T_OK("rx-err shimmed", cbs.cbRxErr != NULL && cbs.cbRxErr != b_rxerr);
@@ -89,12 +88,20 @@ void test_uwb_rxdiag(void)
 	d.datalength = 40;
 	drvfake.rx_awaiting = false;
 	drvfake.cbs.cbRxOk = NULL; /* isolate: use the shimmed table copy */
+
+	/* The tallies are file statics with no reset hook, and uwb_isr_register()
+	 * installs these same shims, so an earlier suite in this binary may already
+	 * have fired events through them. Assert deltas, not absolutes. */
+	uint32_t base_ok, base_err, base_to, base_tx;
+
+	uwb_rxdiag_get_counts(&base_ok, &base_err, &base_to, &base_tx, NULL, NULL);
+
 	cbs.cbRxOk(&d);
 	uwb_rxdiag_get_counts(&ok, &err, &to, &tx, &lerr, &lok);
-	T_EQ("rxok tally", (long)ok, 1L);
+	T_EQ("rxok tally", (long)(ok - base_ok), 1L);
 	T_EQ("ok status latched", (long)lok, (long)0xcafe0001u);
 	T_EQ("index tracker fed", (long)drvfake.notify_calls, 1L);
-	T_EQ("blob chained", (long)blob_rxok, 1L);
+	T_EQ("rx-ok chained", (long)chain_rxok, 1L);
 	T_EQ("prepoll decoded after arm", (long)drvfake.try_prepoll_calls, 1L);
 	T_EQ("decode got the length", (long)drvfake.last_prepoll_len, 40L);
 
@@ -105,7 +112,7 @@ void test_uwb_rxdiag(void)
 
 	cbs.cbRxOk(NULL); /* defensive-NULL path */
 	uwb_rxdiag_get_counts(&ok, NULL, NULL, NULL, NULL, NULL);
-	T_EQ("NULL event still tallied", (long)ok, 3L);
+	T_EQ("NULL event still tallied", (long)(ok - base_ok), 3L);
 	T_EQ("NULL event not notified", (long)drvfake.notify_calls, 2L);
 
 	t_group("timeout / error / tx-done shims");
@@ -113,18 +120,18 @@ void test_uwb_rxdiag(void)
 	cbs.cbRxErr(&d);
 	cbs.cbTxDone(&d);
 	uwb_rxdiag_get_counts(&ok, &err, &to, &tx, &lerr, &lok);
-	T_EQ("to tally", (long)to, 1L);
-	T_EQ("err tally", (long)err, 1L);
-	T_EQ("tx tally", (long)tx, 1L);
+	T_EQ("to tally", (long)(to - base_to), 1L);
+	T_EQ("err tally", (long)(err - base_err), 1L);
+	T_EQ("tx tally", (long)(tx - base_tx), 1L);
 	T_EQ("err status latched", (long)lerr, (long)0xcafe0001u);
-	T_EQ("blob to chained", (long)blob_rxto, 1L);
-	T_EQ("blob err chained", (long)blob_rxerr, 1L);
-	T_EQ("blob txdone chained", (long)blob_txdone, 1L);
+	T_EQ("rx-to chained", (long)chain_rxto, 1L);
+	T_EQ("rx-err chained", (long)chain_rxerr, 1L);
+	T_EQ("tx-done chained", (long)chain_txdone, 1L);
 
-	t_group("NULL blob handlers stay NULL");
+	t_group("NULL handlers stay NULL");
 	dwt_callbacks_s none = {0};
 
-	__wrap_dwt_setcallbacks(&none);
+	woz_uwb_set_callbacks(&none);
 	T_OK("all shims elided", none.cbRxOk == NULL && none.cbRxTo == NULL &&
 				  none.cbRxErr == NULL && none.cbTxDone == NULL);
 
@@ -136,19 +143,16 @@ void test_uwb_rxdiag(void)
 	cbs2.cbRxTo = b_rxto;
 	cbs2.cbRxErr = b_rxerr;
 	cbs2.cbTxDone = b_txdone;
-	__wrap_dwt_setcallbacks(&cbs2);
+	woz_uwb_set_callbacks(&cbs2);
 	cbs = cbs2; /* the shimmed table the rest of the suite drives */
 
 	t_group("config wraps pass through");
 	dwt_config_t cfg = {0};
 
 	cfg.chan = 5;
-	T_EQ("configure chained", __wrap_dwt_configure(&cfg), 0);
-	T_EQ("real configure hit", (long)drvfake.real_configure_calls, 1L);
-	T_EQ("NULL configure chained", __wrap_dwt_configure(NULL), 0);
-	__wrap_dwt_configurestsmode(0x13);
-	T_EQ("stsmode chained", (long)drvfake.real_stsmode_calls, 1L);
-	T_EQ("stsmode value", (long)drvfake.last_stsmode, 0x13L);
+	T_EQ("configure chained", woz_uwb_configure_phy(&cfg), 0);
+	T_EQ("real configure hit", (long)drvfake.configure_calls, 1L);
+	T_EQ("NULL configure chained", woz_uwb_configure_phy(NULL), 0);
 
 	t_group("stream toggles drive the work item");
 	workfake.last = NULL;

@@ -27,7 +27,7 @@ fi
 # The twin's firmware is a deliberate, stable set: the modules/woz_uwb decision
 # logic (DS-TWR responder, CCC crypto + codec, range store, facade). It is NOT
 # the logging backends (woz_logfmt/woz_logquiet — the twin logs via
-# printf -> Module.print) nor the ld --wrap layer (ccc_shim_wrap — the twin
+# printf -> Module.print) nor the STS seam layer (ccc_shim_wrap — the twin
 # uses the host radio doubles in dw_rx_stub.c). An explicit allowlist, not a
 # path filter over the shared UNIT_SRCS: that list is the host-COVERAGE
 # denominator and grows target-only + coverage-only files (a coarse
@@ -47,7 +47,7 @@ WOZ_UWB_SRCS=(
   "$SRC/facade/woz_uwb_facade.c"
 )
 # Radio + STS-register doubles the responder links against (the host shim, not
-# the target ld --wrap). Explicit for the same reason: SHIM_SRCS now carries
+# the target seam). Explicit for the same reason: SHIM_SRCS now carries
 # logfake.c, which only the excluded woz_logfmt.c needs.
 TWIN_SHIM_SRCS=("$SHIM/shim.c" "$SHIM/dw_rx_stub.c")
 

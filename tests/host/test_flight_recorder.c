@@ -27,7 +27,7 @@
 #include "woz_uwb_facade.h"
 #include "test.h"
 
-extern int32_t __wrap_dwt_rxenable(int32_t mode);
+extern int32_t woz_uwb_arm_rx(int32_t mode);
 
 /* ── the recorded DS-TWR scenario (mirrors test_prepoll_round) ───────────── */
 
@@ -522,7 +522,7 @@ void test_flight_recorder(void)
 	test_writer_overflow();
 	test_record_replay();
 	test_dump_transport();
-	(void)__wrap_dwt_rxenable; /* silence unused extern if the round omits it */
+	(void)woz_uwb_arm_rx; /* silence unused extern if the round omits it */
 
 	woz_uwb_stop();
 }

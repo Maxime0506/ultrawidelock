@@ -1,5 +1,5 @@
-/** @file ccc_shim_wrap.c — per-frame STS interception (ld --wrap=dwt_configurestsiv) substituting
- * CCC STS for the FiRa MAC; target only. */
+/** @file ccc_shim_wrap.c — per-frame STS interception: woz_uwb_set_sts_iv() substitutes the CCC STS
+ * for the FiRa MAC; target only. */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -10,6 +10,7 @@
 #include <deca_device_api.h>
 
 #include "ccc_shim.h"
+#include "uwb_seam.h" /* the decadriver seam this file implements */
 
 LOG_MODULE_REGISTER(ccc_shim, LOG_LEVEL_INF);
 
@@ -29,9 +30,6 @@ LOG_MODULE_REGISTER(ccc_shim, LOG_LEVEL_INF);
 /* STS_CFG0.CPS_LEN (low byte) = STS length code: 7 => 64 sym, 3 => 32 sym; read back to confirm the
  * length. */
 #define STS_CFG0_REG 0x20000UL
-
-/** @brief The real decadriver IV load, reachable past the ld `--wrap`. */
-void __real_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv);
 
 /** @brief Count of intercepted IVs; the first @ref CCC_SHIM_LOG_FRAMES are logged. */
 static uint32_t g_log_frames;
@@ -80,10 +78,10 @@ static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 
 /**
  * @brief Intercept DW3000 STS IV configuration, deriving dURSK and STS-V from CCC secrets and
- * configuring the radio; falls through to real dwt_configurestsiv if shim is inactive.
- * @param pStsIv DW3000 STS-IV register structure (also holds the FiRa blob index).
+ * configuring the radio; falls through to the plain decadriver load if the shim is inactive.
+ * @param pStsIv DW3000 STS-IV register structure (also holds the MAC's own frame index).
  */
-void __wrap_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv)
+void woz_uwb_set_sts_iv(dwt_sts_cp_iv_t *pStsIv)
 {
 	if (ccc_shim_active() && pStsIv != NULL) {
 		uint8_t dursk[CCC_DURSK_LEN], sts_v[CCC_STS_V_LEN];
@@ -106,8 +104,8 @@ void __wrap_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv)
 
 			pack_key(&k, dursk);
 			pack_iv(&v, sts_v);
-			dwt_configurestskey(&k);       /* override the blob's FiRa key */
-			__real_dwt_configurestsiv(&v); /* load the CCC STS-V */
+			dwt_configurestskey(&k); /* override the MAC's FiRa key */
+			dwt_configurestsiv(&v);  /* load the CCC STS-V */
 			if (g_log_frames <= CCC_SHIM_LOG_FRAMES) {
 				/* wr = what we programmed, rd = live register; a mismatch means the
 				 * blob clobbers our STS before TX. */
@@ -126,5 +124,5 @@ void __wrap_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv)
 		}
 	}
 
-	__real_dwt_configurestsiv(pStsIv);
+	dwt_configurestsiv(pStsIv);
 }

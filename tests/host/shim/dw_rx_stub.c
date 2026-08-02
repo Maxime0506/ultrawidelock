@@ -1,7 +1,7 @@
 /* Host recording doubles for the DW3000 radio surface that ccc_shim_rx.c (the
  * Pre-POLL listener) drives. Every arm/off call is counted and sequenced so a
  * unit test can assert the listen-gate semantics: after ccc_prepoll_stop() no
- * callback path may reach __real_dwt_rxenable, and the last radio call is the
+ * callback path may reach dwt_rxenable, and the last radio call is the
  * forcetrxoff. Register reads return 0 (so callback paths take their ip==0 /
  * quiet branches unless a test injects status bits via dwt_cb_data_t). */
 #include <string.h>
@@ -9,6 +9,7 @@
 #include "deca_device_api.h"
 #include "uwb_min.h"
 #include "uwb_rxdiag.h"
+#include "uwb_seam.h"
 
 struct woz_host_rx_rec woz_host_rx = { .rxenable_ret = DWT_SUCCESS,
 				       .starttx_ret = DWT_SUCCESS };
@@ -20,23 +21,13 @@ void woz_host_rx_reset(void)
 	woz_host_rx.starttx_ret = DWT_SUCCESS;
 }
 
-/* On target these are the ld --wrap bypasses; on the host they ARE the doubles. */
-int32_t __real_dwt_rxenable(int32_t mode)
+/* The decadriver entries the seam helpers chain into; on the host they ARE the doubles. */
+int32_t dwt_rxenable(int32_t mode)
 {
 	woz_host_rx.rxenable_calls++;
 	woz_host_rx.last_rxenable_mode = mode;
 	woz_host_rx.last_rxenable_seq = ++woz_host_rx.seq;
 	return woz_host_rx.rxenable_ret;
-}
-
-void __real_dwt_configurestsiv(dwt_sts_cp_iv_t *iv)
-{
-	dwt_configurestsiv(iv); /* reuse the capturing no-op */
-}
-
-void __real_dwt_configurestsmode(uint8_t stsMode)
-{
-	(void)stsMode;
 }
 
 void dwt_forcetrxoff(void)
@@ -69,6 +60,17 @@ int32_t dwt_configure(dwt_config_t *config)
 void dwt_configurestsmode(uint8_t stsMode)
 {
 	(void)stsMode;
+}
+
+/* Seam helpers uwb_rxdiag.c defines on target; this binary excludes it (k_work). */
+void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)
+{
+	dwt_setcallbacks(callbacks);
+}
+
+int32_t woz_uwb_configure_phy(dwt_config_t *config)
+{
+	return dwt_configure(config);
 }
 
 void dwt_setinterrupt(uint32_t bitmask_lo, uint32_t bitmask_hi, int options)

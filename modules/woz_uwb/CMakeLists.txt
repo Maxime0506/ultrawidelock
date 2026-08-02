@@ -1,8 +1,8 @@
 # Woz UWB engine as a Zephyr module for the Nordic door-lock add-on.
-# The CCC STS substitution rides one link-time intercept, -Wl,--wrap=dwt_rxenable
-# (ccc_shim_rx.c), which programs the CCC key/IV on every RX-arm. The other
-# --wrap=dwt_* flags below are diagnostics (uwb_rxdiag.c) or have no live caller
-# and are dropped by --gc-sections. The DS-TWR responder runs on deps/dw3000.
+# The CCC STS substitution rides src/driver/uwb_seam.h: every caller reaches the
+# radio through woz_uwb_arm_rx(), which programs the CCC key/IV on every RX-arm,
+# and its three siblings. scripts/check-uwb-seam.sh keeps the seam intact.
+# The DS-TWR responder runs on deps/dw3000.
 # Contributes nothing unless CONFIG_WOZ_UWB=y (stock build byte-identical).
 
 if(CONFIG_WOZ_UWB)
@@ -10,13 +10,6 @@ if(CONFIG_WOZ_UWB)
   set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
   zephyr_library_named(woz_uwb)
-  # LTO and --wrap do not compose: GCC's plugin resolves symbols before ld
-  # applies the wrap, so calls that end up inside an ltrans partition reference
-  # dwt_rxenable / dwt_configurestsiv / dwt_configurestsmode directly and the
-  # link dies on them (all three from ccc_shim_rx.c, the CALLER -- deps/dw3000
-  # is innocent). Compiling this library without LTO keeps its relocations
-  # ordinary so ld can still wrap them.
-  zephyr_library_compile_options(-fno-lto)
   zephyr_library_sources(${SRC}/driver/uwb_min.c)
 
   if(CONFIG_WOZ_UWB_RESPONDER)
@@ -36,7 +29,7 @@ if(CONFIG_WOZ_UWB)
         ${SRC}/ccc/ccc_sts.c ${SRC}/ccc/ccc_session.c
         ${SRC}/ccc/ccc_shim.c ${SRC}/ccc/ccc_shim_wrap.c
         ${SRC}/facade/woz_uwb_facade.c
-        # Responder-RX CCC-STS substitution: program CCC key/IV per dwt_rxenable.
+        # Responder-RX CCC-STS substitution: program CCC key/IV per RX-arm.
         ${SRC}/ccc/ccc_shim_rx.c
         # Diagnostic (removable): tallies on-air RX events.
         ${SRC}/driver/uwb_rxdiag.c)
@@ -111,17 +104,6 @@ if(CONFIG_WOZ_UWB)
       if(CONFIG_WOZ_FLIGHT_RECORDER)
         zephyr_library_sources(${SRC}/facade/flight_recorder.c)
       endif()
-      # Redirect the per-frame STS-IV load into ccc_shim_wrap.c (TX path).
-      zephyr_link_libraries(-Wl,--wrap=dwt_configurestsiv)
-      # Responder-RX CCC-STS: program CCC key/IV at each RX-arm (ccc_shim_rx.c).
-      # NB dwt_configurestskey / dwt_configurestsloadiv are intentionally NOT
-      # wrapped — ccc_shim_rx.c calls them directly to load the CCC STS.
-      zephyr_link_libraries(-Wl,--wrap=dwt_rxenable)
-      # Diagnostic (removable): tally on-air RX events (uwb_rxdiag.c).
-      zephyr_link_libraries(-Wl,--wrap=dwt_setcallbacks)
-      # Diagnostic (removable): log PHY (re)configuration + STS-mode writes.
-      zephyr_link_libraries(-Wl,--wrap=dwt_configure)
-      zephyr_link_libraries(-Wl,--wrap=dwt_configurestsmode)
     endif()
 
     # woz_alloc.h (in ${SRC}/facade, on the path below) covers the qmalloc/qrtc

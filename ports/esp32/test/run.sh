@@ -4,7 +4,7 @@
 #   - test_port_headers: fast host unit test of the pure port headers.
 #   - test_aliro_crypto: host KAT of the Aliro key-schedule core (SHA-256/KDF),
 #                        compiled from the same source as the target.
-#   - verify_port.sh:    on-target build + --wrap seam + exclusion guard (needs
+#   - verify_port.sh:    on-target build + CCC STS seam + exclusion guard (needs
 #                        the ESP-IDF env; skips cleanly without it).
 #
 # On-target functional tests (Unity on the DW3000 SPI/IRQ path) are deferred:
@@ -274,7 +274,7 @@ rm -f "$CSBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (S3 dual-core) =="
 DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_IDF_TARGET_ESP32S3=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=2 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
@@ -292,7 +292,7 @@ rm -f "$DBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (C6 single-core) =="
 DBIN="$(mktemp -t esp_dw3000_port_c6.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_IDF_TARGET_ESP32C6=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
@@ -308,14 +308,15 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 rm -f "$DBIN"
 
 echo
-echo "== host: --wrap RX-callback shim chaining =="
-SBIN2="$(mktemp -t esp_wrap_stubs.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+echo "== host: seam RX-callback shim chaining =="
+SBIN2="$(mktemp -t esp_seam_stubs.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
    -I "$HERE/../../../modules/woz_uwb/src/ccc" \
+   -I "$HERE/../../../modules/woz_uwb/src/driver" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \
-   "$HERE/test_esp_wrap_stubs.c" \
-   "$HERE/../components/woz_uwb/port/woz_wrap_stubs.c" -o "$SBIN2"
+   "$HERE/test_esp_seam_stubs.c" \
+   "$HERE/../components/woz_uwb/port/woz_seam_stubs.c" -o "$SBIN2"
 "$SBIN2"
 rm -f "$SBIN2"
 

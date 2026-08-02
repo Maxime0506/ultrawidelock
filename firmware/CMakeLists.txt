@@ -5,8 +5,8 @@
 # one nRF52833 image and see what it weighs against the 480 KB the single-image
 # partition layout gives us.
 #
-# woz_uwb and deps/dw3000 come in as Zephyr modules because they carry Kconfig
-# gating and -Wl,--wrap link flags. modules/woz_aliro's reader core is listed
+# woz_uwb and deps/dw3000 come in as Zephyr modules because they carry their own
+# Kconfig gating. modules/woz_aliro's reader core is listed
 # directly here, the way ports/nrf5340dk/on_target_ec does, so the nRF5340 build
 # that consumes that module through CONFIG_WOZ_ALIRO_STACK stays untouched.
 cmake_minimum_required(VERSION 3.20.0)

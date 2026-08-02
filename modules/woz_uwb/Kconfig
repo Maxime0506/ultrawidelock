@@ -32,7 +32,7 @@ config WOZ_ALIRO
 	bool "Woz Aliro/CCC credential-bound STS engine"
 	depends on WOZ_UWB_RESPONDER
 	help
-	  CCC credential-bound STS substitution (ccc_shim + --wrap). Consumes an
+	  CCC credential-bound STS substitution (ccc_shim + uwb_seam.h). Consumes an
 	  externally supplied URSK (the add-on hands us the plaintext URSK in
 	  UltraWideBandImpl::_ConfigureRangingSession).
 

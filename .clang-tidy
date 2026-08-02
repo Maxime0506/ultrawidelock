@@ -5,9 +5,9 @@
 # Disabled checks:
 #  - easily-swappable-parameters: wire/crypto APIs take adjacent byte-buffer
 #    pointers and lengths by nature; the check flags nearly every prototype.
-#  - reserved-identifier (+ its cert aliases dcl37-c/dcl51-cpp): the CCC shim's
-#    __wrap_/__real_ symbols are the linker's --wrap contract and IS_ENABLED's
-#    _XXXX1 is the Zephyr token-paste idiom; those names are required, not chosen.
+#  - reserved-identifier (+ its cert aliases dcl37-c/dcl51-cpp): IS_ENABLED's
+#    _XXXX1 is the Zephyr token-paste idiom, and the SoC headers are full of
+#    _-prefixed names; those are required, not chosen.
 #  - insecureAPI.DeprecatedOrUnsafeBufferHandling: flags every fixed-length
 #    memcpy/memset and prescribes Annex K memcpy_s, which none of this code's
 #    libcs (glibc, Darwin, Zephyr minimal) implement. Fires target-dependently

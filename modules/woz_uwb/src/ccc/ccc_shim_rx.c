@@ -1,5 +1,5 @@
-/** @file ccc_shim_rx.c — responder-RX CCC STS substitution (ld --wrap=dwt_rxenable) programming the
- * CCC STS on each RX-arm; target only. */
+/** @file ccc_shim_rx.c — responder-RX CCC STS substitution: woz_uwb_arm_rx() programs the CCC STS
+ * on each RX-arm; target only. */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -16,6 +16,7 @@
 #include "ccc_mac.h"            /* ccc_parse_mhr / ccc_pre_poll_parse — Pre-POLL decode */
 #include "fira_session.h"       /* fira_session_current_slot / fira_session_get_ursk */
 #include "uwb_min.h"            /* uwb_min_radio_init — standalone SP0 Pre-POLL listener */
+#include "uwb_seam.h"           /* the decadriver seam this file implements */
 #include "woz_diag.h"           /* DIAGK — verbose per-frame trace, gated off in pretty mode */
 #include "uwb_rxdiag.h"         /* uwb_rxdiag_stream_get — the `aliro log` runtime toggle */
 #include "flight_recorder.h"    /* fr_capture_ev — record/replay walk-up capture (gated) */
@@ -79,13 +80,6 @@ LOG_MODULE_REGISTER(woz_rng, LOG_LEVEL_INF);
 #define CCC_RX_DWELL                                                                               \
 	1u /**< catches held per Δ candidate (1 = fast full-range sweep; bump if it cycles past). \
 	    */
-
-/** @brief The real decadriver entries, reachable past the ld `--wrap`. */
-int32_t __real_dwt_rxenable(int32_t mode);
-void __real_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv);
-/* Unconditional: both the FORCE_SP3 probe and the Pre-POLL POLL follow-on flip STS mode; the symbol
- * exists via the rxdiag --wrap=dwt_configurestsmode. */
-void __real_dwt_configurestsmode(uint8_t stsMode);
 
 /** @brief Count of intercepted RX-arms; the first @ref CCC_RX_LOG_ARMS are logged. */
 static uint32_t g_rx_arms;
@@ -863,7 +857,7 @@ static void ccc_pack_selftest(void)
 
 	/* A: current word-LE (no reverse) — puts VCounter in iv0, index in iv2. */
 	pack_iv(&v, ccc_pst_v);
-	__real_dwt_configurestsiv(&v);
+	dwt_configurestsiv(&v);
 	dwt_configurestsloadiv();
 	DIAGK("PACKST cur rd %08x %08x %08x %08x ctr %08x\n", (unsigned)dwt_read_reg(STS_IV0_REG),
 	      (unsigned)dwt_read_reg(STS_IV1_REG), (unsigned)dwt_read_reg(STS_IV2_REG),
@@ -871,7 +865,7 @@ static void ccc_pack_selftest(void)
 
 	/* B: whole-16 reverse — puts index in iv1 (spec) but VCounter in iv3 (off-spec). */
 	pack_iv_rev(&v, ccc_pst_v);
-	__real_dwt_configurestsiv(&v);
+	dwt_configurestsiv(&v);
 	dwt_configurestsloadiv();
 	DIAGK("PACKST rev rd %08x %08x %08x %08x ctr %08x\n", (unsigned)dwt_read_reg(STS_IV0_REG),
 	      (unsigned)dwt_read_reg(STS_IV1_REG), (unsigned)dwt_read_reg(STS_IV2_REG),
@@ -882,7 +876,7 @@ static void ccc_pack_selftest(void)
 	v.iv1 = 0x04050607u;
 	v.iv2 = 0x08090a0bu;
 	v.iv3 = 0x0c0d0e0fu;
-	__real_dwt_configurestsiv(&v);
+	dwt_configurestsiv(&v);
 	dwt_configurestsloadiv();
 	DIAGK("PACKST raw wr 00010203 04050607 08090a0b 0c0d0e0f ctr %08x <= counter lane\n",
 	      (unsigned)dwt_readctrdbg());
@@ -890,7 +884,7 @@ static void ccc_pack_selftest(void)
 #endif /* CCC_RX_PACK_SELFTEST */
 
 /** Program the CCC STS for the current ranging slot, then arm RX. */
-int32_t __wrap_dwt_rxenable(int32_t mode)
+int32_t woz_uwb_arm_rx(int32_t mode)
 {
 	if (ccc_shim_active()) {
 #if CCC_RX_PACK_SELFTEST
@@ -930,17 +924,17 @@ int32_t __wrap_dwt_rxenable(int32_t mode)
 
 			pack_key(&k, dursk);
 			pack_iv(&v, sts_v);
-			dwt_configurestskey(&k); /* unwrapped -> direct */
+			dwt_configurestskey(&k);
 #if defined(ESP_PLATFORM)
 			/* wrote STS_KEY out-of-band; drop the arm cache */
 			g_sts_key_cached = false;
 #endif
-			__real_dwt_configurestsiv(&v); /* bypass the TX IV wrap */
-			dwt_configurestsloadiv();      /* reset the HW STS counter to our IV */
+			dwt_configurestsiv(&v);   /* the shim is us; load it directly */
+			dwt_configurestsloadiv(); /* reset the HW STS counter to our IV */
 #if CCC_RX_FORCE_SP3
 			/* The blob armed SP0 (STS engine off); flip CP_SPC to SP3/ND so the STS
-			 * runs on the POLL. Direct __real_ call to skip the rxdiag wrap. */
-			__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND);
+			 * runs on the POLL. */
+			dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND);
 #endif
 
 			/* Synchronous woz_printf (survives deferred-log starvation); rd==wr proves
@@ -953,11 +947,11 @@ int32_t __wrap_dwt_rxenable(int32_t mode)
 			g_rx_arms++;
 		}
 	}
-	return __real_dwt_rxenable(mode);
+	return dwt_rxenable(mode);
 }
 
 #if WOZ_CCC_PREPOLL_LISTEN
-/** Re-arm the SP0 receiver after each RX event; the rxdiag --wrap=dwt_setcallbacks shim runs
+/** Re-arm the SP0 receiver after each RX event; the woz_uwb_set_callbacks shim runs
  * ccc_shim_rx_try_prepoll first, so here we keep the plain SP0 receive listening. */
 #define CCC_RX_DIAG_N                                                                              \
 	110u /**< per-catch lines to emit (~1 catch/block now — spans a full sweep). */
@@ -1011,13 +1005,14 @@ extern uint32_t g_ccc_dbg_decode;
 static volatile bool g_listen_gate;
 
 /** @brief Gate-checked RX arm for every self-rearm site below; refuses once the listen-gate is
- * closed. */
+ * closed. Arms the radio directly: each caller has just programmed the STS for the window it is
+ * opening, so re-running woz_uwb_arm_rx would overwrite it with the current slot's. */
 static int32_t gated_rxenable(int32_t mode)
 {
 	if (!g_listen_gate) {
 		return (int32_t)DWT_ERROR;
 	}
-	return __real_dwt_rxenable(mode);
+	return dwt_rxenable(mode);
 }
 
 /** Flip to SP3/ND, load the pre-warmed CCC STS (g_warm_index), and arm a delayed RX to catch the
@@ -1045,10 +1040,10 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 		g_armed_final_sts_v[i] = g_warm_final_sts_v[i];
 	}
 	pack_iv(&v, pv);
-	sts_key_load(pd); /* cached: writes the 4 STS_KEY regs only on a dURSK change */
-	__real_dwt_configurestsiv(&v);                         /* bypass the TX IV wrap */
-	dwt_configurestsloadiv();                              /* reset HW STS counter to our IV */
-	__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND); /* SP0 -> SP3/ND for the POLL */
+	sts_key_load(pd);         /* cached: writes the 4 STS_KEY regs only on a dURSK change */
+	dwt_configurestsiv(&v);   /* the shim is us; load it directly */
+	dwt_configurestsloadiv(); /* reset HW STS counter to our IV */
+	dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND); /* SP0 -> SP3/ND for the POLL */
 
 	g_prepoll_ip = prepoll_ip; /* anchor for the POLL-result gap (`d=`) log */
 	/* Pin the window to the POLL slot (Pre-POLL + 1 slot).  The arm is sub-µs
@@ -1072,7 +1067,7 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 			      (unsigned)g_warm_index);
 			arm_fail_n++;
 		}
-		__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_OFF); /* revert to SP0 */
+		dwt_configurestsmode((uint8_t)DWT_STS_MODE_OFF); /* revert to SP0 */
 		return -EIO;
 	}
 	return 0;
@@ -1082,7 +1077,7 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 static void revert_to_sp0_listen(void)
 {
 	dwt_forcetrxoff(); /* a refused delayed TX leaves the sequencer pending — clear it first */
-	__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_OFF);
+	dwt_configurestsmode((uint8_t)DWT_STS_MODE_OFF);
 	dwt_setrxtimeout(0u);
 	(void)gated_rxenable(DWT_START_RX_IMMEDIATE);
 }
@@ -1143,8 +1138,7 @@ static int arm_final_data_sp0(uint32_t final_ip)
 	g_dbg_final_per_us = g_dw_cyc_per_us;
 
 	dwt_forcetrxoff();
-	__real_dwt_configurestsmode(
-		(uint8_t)DWT_STS_MODE_OFF); /* SP0 — Final_Data is a data frame */
+	dwt_configurestsmode((uint8_t)DWT_STS_MODE_OFF); /* SP0 — Final_Data is a data frame */
 	now = dwt_readsystimestamphi32();
 	/* Record how far the IDEAL open sits from now BEFORE clamping: a strongly negative margin
 	 * means the callback ran so late that the ideal Final+100us window was already in the past
@@ -1184,8 +1178,8 @@ static int tx_response_sp3(uint32_t poll_ip, uint32_t resp_idx)
 	sts_key_load(
 		g_armed_resp_dursk); /* same dURSK as the POLL round (cached, usually a no-op) */
 	pack_iv(&v, g_armed_resp_sts_v);
-	__real_dwt_configurestsiv(&v); /* Response STS-V (index+1); bypass the TX IV wrap */
-	dwt_configurestsloadiv();      /* reset the HW STS counter to our V */
+	dwt_configurestsiv(&v);   /* Response STS-V (index+1); the shim is us, load it directly */
+	dwt_configurestsloadiv(); /* reset the HW STS counter to our V */
 	/* STS mode stays SP3/ND (the POLL arm set it) — the Response is the same RFRAME. */
 	dx = poll_ip +
 	     CCC_RESP_SLOT_HI32; /* RMARKER = POLL + one negotiated slot, antenna-compensated */
@@ -1220,7 +1214,7 @@ static int arm_final_sp3(uint32_t poll_ip)
 
 	sts_key_load(g_armed_final_dursk); /* same per-cycle dURSK (cached, usually a no-op) */
 	pack_iv(&v, g_armed_final_sts_v);
-	__real_dwt_configurestsiv(&v);
+	dwt_configurestsiv(&v);
 	dwt_configurestsloadiv();
 	dx = poll_ip +
 	     ALIRO_FINAL_SLOT_OFFSET *
@@ -1621,7 +1615,7 @@ static int prepoll_apply_phy(uint8_t channel, uint8_t preamble_code)
 		      (unsigned)channel, (unsigned)preamble_code);
 		return 0;
 	}
-	if (dwt_configure(&cfg) != DWT_SUCCESS) {
+	if (woz_uwb_configure_phy(&cfg) != DWT_SUCCESS) {
 		DIAGK("prepoll_listen: dwt_configure failed\n");
 		g_phy_valid = false;
 		return -EIO;
@@ -1660,7 +1654,8 @@ int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)
 	/* Permanent listen: no RX timeout; the callbacks self-re-arm so a missed/errored frame
 	 * doesn't stop the search for the next Pre-POLL. */
 	dwt_setrxtimeout(0u);
-	dwt_setcallbacks(&cbs); /* rxdiag --wrap installs shim_rxok -> ccc_shim_rx_try_prepoll */
+	/* the rxdiag shim inserts shim_rxok -> ccc_shim_rx_try_prepoll ahead of these */
+	woz_uwb_set_callbacks(&cbs);
 	dwt_setinterrupt(DWT_INT_RXFCG_BIT_MASK | DWT_INT_RXFCE_BIT_MASK | DWT_INT_RXFTO_BIT_MASK |
 				 DWT_INT_RXPTO_BIT_MASK | DWT_INT_RXPHE_BIT_MASK |
 				 DWT_INT_RXSTO_BIT_MASK | DWT_INT_RXFSL_BIT_MASK |
@@ -1672,7 +1667,8 @@ int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)
 	      "for Apple Pre-POLL\n",
 	      (unsigned)channel, (unsigned)CCC_RX_PREPOLL_CODE, (unsigned)preamble_code);
 	g_listen_gate = true; /* reopen the listen-gate a prior ccc_prepoll_stop() closed */
-	(void)__real_dwt_rxenable(DWT_START_RX_IMMEDIATE);
+	/* Plain SP0 listen: no STS is armed for this window, so bypass the CCC arm. */
+	(void)dwt_rxenable(DWT_START_RX_IMMEDIATE);
 	return 0;
 }
 

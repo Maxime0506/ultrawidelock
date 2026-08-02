@@ -12,6 +12,7 @@
 #include "fira_session.h" /* fira_session_last_range — latched DS-TWR distance */
 #include "uwb_cirdiag.h"  /* per-reception CIA diag latch (`aliro cir on`) */
 #include "uwb_rxdiag.h"   /* our accessors + runtime stream toggle */
+#include "uwb_seam.h"     /* the two decadriver seams this file implements */
 #include "woz_diag.h"     /* DIAGK — per-event/cfg/CAD trace, gated off in pretty mode */
 #include "woz_alloc.h"    /* qrtc_get_us — monotonic microsecond wall-clock */
 
@@ -31,11 +32,8 @@ static volatile bool g_stream;
 /** @brief Runtime arm state for the per-block distance stream (backs `aliro frames`). */
 static volatile bool g_rng_stream;
 
-/** @brief The real registration, reachable past the ld --wrap. */
-void __real_dwt_setcallbacks(dwt_callbacks_s *callbacks);
-
-/** @brief The blob's own callbacks, saved so our shims can chain to them. */
-static dwt_cb_t g_blob_rxok, g_blob_rxto, g_blob_rxerr, g_blob_txdone;
+/** @brief The MAC's own callbacks, saved so our shims can chain to them. */
+static dwt_cb_t g_chain_rxok, g_chain_rxto, g_chain_rxerr, g_chain_txdone;
 
 /** @brief Running RX/TX event tallies + the last status word per class. */
 static volatile uint32_t g_rxok, g_rxto, g_rxerr, g_txdone;
@@ -108,7 +106,7 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	}
 	/* sp reflects THIS reception's mode, so log before the arm below re-arms. */
 	rxdiag_ev_log("ok", d);
-	/* Channel-impulse: sampled BEFORE the blob re-arms, this says the reception being serviced
+	/* Channel-impulse: sampled BEFORE the MAC re-arms, this says the reception being serviced
 	 * is the Final — and the radio is still idle, which is the only state in which the
 	 * accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
 	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
@@ -121,8 +119,8 @@ static void shim_rxok(const dwt_cb_data_t *d)
 					      d != NULL ? d->datalength : 0u, false);
 	}
 	/* Arm the SP3 POLL window first, ahead of the Pre-POLL decode, using the pre-warmed STS. */
-	if (g_blob_rxok != NULL) {
-		g_blob_rxok(d);
+	if (g_chain_rxok != NULL) {
+		g_chain_rxok(d);
 	}
 	/* Decode the Pre-POLL after the arm to warm the next block's index; skip on the POLL event.
 	 */
@@ -149,8 +147,8 @@ static void shim_rxto(const dwt_cb_data_t *d)
 {
 	g_rxto++;
 	rxdiag_ev_log("to", d);
-	if (g_blob_rxto != NULL) {
-		g_blob_rxto(d);
+	if (g_chain_rxto != NULL) {
+		g_chain_rxto(d);
 	}
 }
 
@@ -163,8 +161,8 @@ static void shim_rxerr(const dwt_cb_data_t *d)
 		g_last_err_status = d->status;
 	}
 	rxdiag_ev_log("er", d);
-	if (g_blob_rxerr != NULL) {
-		g_blob_rxerr(d);
+	if (g_chain_rxerr != NULL) {
+		g_chain_rxerr(d);
 	}
 }
 
@@ -172,41 +170,33 @@ static void shim_rxerr(const dwt_cb_data_t *d)
 static void shim_txdone(const dwt_cb_data_t *d)
 {
 	g_txdone++;
-	if (g_blob_txdone != NULL) {
-		g_blob_txdone(d);
+	if (g_chain_txdone != NULL) {
+		g_chain_txdone(d);
 	}
 }
 
 /** @brief Intercept the callback registration and insert counting shims. */
-void __wrap_dwt_setcallbacks(dwt_callbacks_s *callbacks)
+void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)
 {
 	if (callbacks != NULL) {
-		g_blob_rxok = callbacks->cbRxOk;
-		g_blob_rxto = callbacks->cbRxTo;
-		g_blob_rxerr = callbacks->cbRxErr;
-		g_blob_txdone = callbacks->cbTxDone;
-		callbacks->cbRxOk = (g_blob_rxok != NULL) ? shim_rxok : NULL;
-		callbacks->cbRxTo = (g_blob_rxto != NULL) ? shim_rxto : NULL;
-		callbacks->cbRxErr = (g_blob_rxerr != NULL) ? shim_rxerr : NULL;
-		callbacks->cbTxDone = (g_blob_txdone != NULL) ? shim_txdone : NULL;
+		g_chain_rxok = callbacks->cbRxOk;
+		g_chain_rxto = callbacks->cbRxTo;
+		g_chain_rxerr = callbacks->cbRxErr;
+		g_chain_txdone = callbacks->cbTxDone;
+		callbacks->cbRxOk = (g_chain_rxok != NULL) ? shim_rxok : NULL;
+		callbacks->cbRxTo = (g_chain_rxto != NULL) ? shim_rxto : NULL;
+		callbacks->cbRxErr = (g_chain_rxerr != NULL) ? shim_rxerr : NULL;
+		callbacks->cbTxDone = (g_chain_txdone != NULL) ? shim_txdone : NULL;
 	}
-	__real_dwt_setcallbacks(callbacks);
+	dwt_setcallbacks(callbacks);
 }
-
-/** @brief The real PHY-config entries, reachable past the ld `--wrap`. */
-int32_t __real_dwt_configure(dwt_config_t *config);
-void __real_dwt_configurestsmode(uint8_t stsMode);
 
 /** @brief Budget for full-PHY-config logs (rare: session setup + reconfigs). */
 #define RXDIAG_CFG_LOG 8
 static uint32_t g_cfg_logged;
 
-/** @brief Budget for STS-mode-write logs (the only other CP_SPC writer). */
-#define RXDIAG_STSMODE_LOG 32
-static uint32_t g_stsmode_logged;
-
-/** @brief Log every full PHY configuration the blob issues. */
-int32_t __wrap_dwt_configure(dwt_config_t *config)
+/** @brief Log every full PHY configuration the engine applies. */
+int32_t woz_uwb_configure_phy(dwt_config_t *config)
 {
 	if (config != NULL && g_cfg_logged < RXDIAG_CFG_LOG) {
 		DIAGK("rxdiag cfg#%u chan=%u plen=%u txc=%u rxc=%u sfd=%u rate=%u phrM=%u phrR=%u "
@@ -219,17 +209,7 @@ int32_t __wrap_dwt_configure(dwt_config_t *config)
 		      (unsigned)config->stsLength);
 		g_cfg_logged++;
 	}
-	return __real_dwt_configure(config);
-}
-
-/** @brief Log every STS-mode (CP_SPC) write the blob issues, then pass through. */
-void __wrap_dwt_configurestsmode(uint8_t stsMode)
-{
-	if (g_stsmode_logged < RXDIAG_STSMODE_LOG) {
-		DIAGK("rxdiag stsmode#%u=%02x\n", (unsigned)g_stsmode_logged, (unsigned)stsMode);
-		g_stsmode_logged++;
-	}
-	__real_dwt_configurestsmode(stsMode);
+	return dwt_configure(config);
 }
 
 static void rxdiag_log(struct k_work *work);

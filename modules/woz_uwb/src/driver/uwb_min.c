@@ -13,6 +13,8 @@
 #include <dw3000_hw.h>
 #include <dw3000_spi.h>
 
+#include "uwb_seam.h" /* woz_uwb_arm_rx / _set_sts_iv / _configure_phy — the engine's seam */
+
 LOG_MODULE_REGISTER(uwb_min, LOG_LEVEL_INF);
 
 /* Idempotent-init flags: g_probed covers the chipid path, g_radio_ready the radio path.
@@ -130,8 +132,8 @@ static int uwb_radio_ensure_init(void)
 		return -EIO;
 	}
 
-	if (dwt_configure((dwt_config_t *)&g_uwb_cfg) != DWT_SUCCESS) {
-		LOG_ERR("dwt_configure failed");
+	if (woz_uwb_configure_phy((dwt_config_t *)&g_uwb_cfg) != DWT_SUCCESS) {
+		LOG_ERR("PHY configure failed");
 		return -EIO;
 	}
 
@@ -258,8 +260,8 @@ int uwb_min_selftest(struct uwb_selftest_result *out)
 	/* RX timeout register units are ~1.0256 us; ~97500 is about 100 ms. */
 	dwt_setrxtimeout(97500);
 
-	if (dwt_rxenable(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
-		LOG_ERR("dwt_rxenable failed");
+	if (woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
+		LOG_ERR("RX arm failed");
 		return -EIO;
 	}
 	out->rx_armed = true;
@@ -303,8 +305,8 @@ int uwb_min_twr_prep(void)
 
 	/* Re-apply the baseline PHY; STS is the caller's to program, so none is set here. */
 	dwt_forcetrxoff();
-	if (dwt_configure((dwt_config_t *)&g_uwb_cfg) != DWT_SUCCESS) {
-		LOG_ERR("rawtwr: dwt_configure failed");
+	if (woz_uwb_configure_phy((dwt_config_t *)&g_uwb_cfg) != DWT_SUCCESS) {
+		LOG_ERR("rawtwr: PHY configure failed");
 		return -EIO;
 	}
 	dwt_configuretxrf((dwt_txconfig_t *)&g_uwb_txcfg);
@@ -347,7 +349,7 @@ void uwb_min_twr_exchange(struct uwb_twr_frame *f)
 
 	/* Arm RX for the RESP; reset the STS counter to the loaded IV so it correlates. */
 	dwt_configurestsloadiv();
-	dwt_rxenable(DWT_START_RX_IMMEDIATE);
+	woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE);
 
 	uint32_t st = 0;
 	int64_t rxdl = woz_uptime_ms() + 80; /* > the 50 ms chip RX timeout */
@@ -383,7 +385,7 @@ int uwb_min_twr_poll(uint32_t n, uint32_t period_ms, struct uwb_twr_result *out)
 	/* Program the fixed static STS key + IV directly (the CCC wrap passes through while
 	 * unbound). */
 	dwt_configurestskey((dwt_sts_cp_key_t *)g_partner_sts_key);
-	dwt_configurestsiv((dwt_sts_cp_iv_t *)g_partner_sts_iv);
+	woz_uwb_set_sts_iv((dwt_sts_cp_iv_t *)g_partner_sts_iv);
 	dwt_configurestsloadiv();
 
 	for (uint32_t i = 0; i < n; i++) {

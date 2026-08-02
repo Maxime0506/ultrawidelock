@@ -255,28 +255,19 @@ uint32_t dwt_readsystimestamphi32(void)
 	return 0u;
 }
 
-/* ── ld --wrap bypasses (uwb_rxdiag.c's __wrap_* chain into these) ─────────── */
-void __real_dwt_setcallbacks(dwt_callbacks_s *callbacks)
+/* ── seam helpers this binary does not link the engine for ─────────────────── */
+/* uwb_min.c and uwb_isr.c reach the radio through uwb_seam.h. uwb_rxdiag.c is in
+ * this binary and supplies the callback + PHY halves itself; the CCC halves come
+ * from ccc_shim_{rx,wrap}.c, which this suite deliberately excludes. Forward
+ * those to the plain doubles so the calls are still counted. */
+int32_t woz_uwb_arm_rx(int32_t mode)
 {
-	drvfake.real_setcallbacks_calls++;
-	if (callbacks != NULL) {
-		drvfake.cbs = *callbacks;
-	}
+	return dwt_rxenable(mode);
 }
 
-int32_t __real_dwt_configure(dwt_config_t *config)
+void woz_uwb_set_sts_iv(dwt_sts_cp_iv_t *iv)
 {
-	drvfake.real_configure_calls++;
-	if (config != NULL) {
-		drvfake.last_cfg = *config;
-	}
-	return drvfake.configure_ret;
-}
-
-void __real_dwt_configurestsmode(uint8_t stsMode)
-{
-	drvfake.real_stsmode_calls++;
-	drvfake.last_stsmode = stsMode;
+	dwt_configurestsiv(iv);
 }
 
 /* ── dw3000 platform glue doubles ──────────────────────────────────────────── */

@@ -72,15 +72,11 @@ struct drvfake_state {
 	uint16_t last_cir_num;  /* num_samples of the last dwt_readcir */
 	int cir_ret;            /* dwt_readcir return (0 = DWT_SUCCESS) */
 
-	/* ── callback registration capture (dwt_setcallbacks + __real_) ── */
+	/* ── callback registration capture (dwt_setcallbacks) ── */
 	dwt_callbacks_s cbs;
 	unsigned setcallbacks_calls;
-	unsigned real_setcallbacks_calls;
 	unsigned setinterrupt_calls;
 	uint32_t last_int_lo;
-	unsigned real_configure_calls;
-	unsigned real_stsmode_calls;
-	uint8_t last_stsmode;
 
 	/* ── ccc_shim / fira_session fakes (aliro_shell + uwb_rxdiag deps) ── */
 	bool ccc_active;

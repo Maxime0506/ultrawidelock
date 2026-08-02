@@ -16,8 +16,8 @@
 #include "woz_uwb_facade.h"
 #include "test.h"
 
-/* The CCC STS substitution wrap — callable directly on the host (no ld --wrap). */
-extern int32_t __wrap_dwt_rxenable(int32_t mode);
+/* The CCC STS substitution seam entry point (uwb_seam.h). */
+extern int32_t woz_uwb_arm_rx(int32_t mode);
 
 #define RND_SID  0x11223344u
 #define RND_STS0 0x00400000u
@@ -155,7 +155,7 @@ void test_prepoll_round(void)
 	T_EQ("start.armed", woz_host_rx.rxenable_calls, 1);
 
 	t_group("STS substitution wrap programs a key while bound");
-	T_EQ("wrap.rxenable", __wrap_dwt_rxenable(DWT_START_RX_IMMEDIATE),
+	T_EQ("wrap.rxenable", woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE),
 	     DWT_SUCCESS);
 
 	t_group("bootstrap: two Pre-POLL decodes learn index + stride");

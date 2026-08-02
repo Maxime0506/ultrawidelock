@@ -12,7 +12,7 @@
 /** @brief Self-test result emitted by @ref uwb_min_selftest. */
 struct uwb_selftest_result {
 	bool tx_done;       /**< SYS_STATUS TXFRS bit observed after TX. */
-	bool rx_armed;      /**< dwt_rxenable() returned success. */
+	bool rx_armed;      /**< the RX arm returned success. */
 	bool rx_event;      /**< Some RX status bit fired (frame, timeout, or error). */
 	uint32_t tx_status; /**< SYS_STATUS captured at end of TX poll. */
 	uint32_t rx_status; /**< SYS_STATUS captured at end of RX poll. */
