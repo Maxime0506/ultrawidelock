@@ -34,7 +34,11 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # files win, so this can only ever override overlay-thread.conf. Note `-p auto`
 # does NOT re-run CMake when these -D flags change (see CDK_PRISTINE above), so
 # switching RELEASE on or off in an existing build dir needs PRISTINE=1.
-CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)
+#
+# LTO=1 appends the LTO overlay. Not the default: whole-program codegen on an
+# image with a ~1836 us ranging arm deadline, which a size number cannot vouch
+# for. See firmware/overlay-lto.conf.
+CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(LTO),;overlay-lto.conf)
 
 # ---- image signing -----------------------------------------------------------
 # Which private key signs the image is the whole answer to "what will this lock
