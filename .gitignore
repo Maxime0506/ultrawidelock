@@ -60,3 +60,6 @@ btsnoop_hci.log
 
 # scratchpad
 scratchpad/
+
+# video generation
+video/
