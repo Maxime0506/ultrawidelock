@@ -362,6 +362,47 @@ void test_approach(void)
 		T_OK("near.still.open", !aliro_approach_locked(&n.ap));
 	}
 
+	/*
+	 * The walk-away hardware actually produces: the far ranges arrive but
+	 * the integrity consensus will not vouch for them, so nothing is FED at
+	 * all and only observe_departure() sees them.
+	 */
+	t_group("departure by silence: an unvouched far range still relocks");
+	{
+		struct walk u;
+
+		walk_init(&u, 17, 600.0f);
+		walk_until(&u, 130.0f, 10, 40.0f, 0, 0);
+		T_OK("unvouched.unlocked", !aliro_approach_locked(&u.ap));
+
+		/* Nothing fed from here on -- only observed. */
+		aliro_approach_observe_departure(&u.ap, u.t + 200, 309);
+		T_EQ("unvouched.holds.inside.the.window",
+		     (long)aliro_approach_tick(&u.ap, u.t + 1000), (long)ALIRO_APPROACH_HOLD);
+		T_EQ("unvouched.relocks.after.it",
+		     (long)aliro_approach_tick(&u.ap, u.t + 1800), (long)ALIRO_APPROACH_RELOCK_DEPART);
+		T_OK("unvouched.locked", aliro_approach_locked(&u.ap));
+	}
+
+	/*
+	 * The asymmetry, stated as a test: an unvouched range may CLOSE a door
+	 * and may never hold one open. A near observation is discarded, so it
+	 * cannot refresh the departure clock and stall a relock.
+	 */
+	t_group("an unvouched NEAR range changes nothing");
+	{
+		struct walk k;
+
+		walk_init(&k, 19, 600.0f);
+		walk_until(&k, 130.0f, 10, 40.0f, 0, 0);
+		aliro_approach_observe_departure(&k.ap, k.t + 100, 380);
+
+		/* A near reading arrives mid-window and must be ignored. */
+		aliro_approach_observe_departure(&k.ap, k.t + 900, 12);
+		T_EQ("near.observation.cannot.delay.the.relock",
+		     (long)aliro_approach_tick(&k.ap, k.t + 1700), (long)ALIRO_APPROACH_RELOCK_DEPART);
+	}
+
 	/* far_silence_ms == 0 restores the sample-only behaviour exactly. */
 	t_group("departure by silence: disabled by config");
 	{
