@@ -21,7 +21,7 @@ do not want to reflash.
 Wire format is modules/woz_aliro/src/aliro_prov.c (serialize at :64,
 deserialize at :123); the checks below mirror what the firmware enforces.
 
-**discussed in** [`ports/dwm3001cdk/README.md`](../../../ports/dwm3001cdk/README.md)
+**discussed in** [`firmware/README.md`](../../../firmware/README.md)
 
 ## API
 

@@ -1,7 +1,5 @@
 <!-- generated documentation — edit the source, not this file -->
-# `ports/dwm3001cdk/app/src/aliro_prov_settings.c`
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+# `firmware/src/aliro_prov_settings.c`
 
 <details><summary>Undocumented (4)</summary>
 

@@ -4,7 +4,8 @@
 | subsystem | about |
 |---|---|
 | [`scripts/bootstrap.sh`](bootstrap.sh.md) | bootstrap.sh — build a self-contained west workspace, PRISTINE from upstream. |
-| [`scripts/build.sh`](build.sh.md) | build.sh {build\|rebuild\|flash\|flash-erase\|build-flash} — build the Aliro |
+| [`scripts/build-nrf5340dk.sh`](build-nrf5340dk.sh.md) | build-nrf5340dk.sh {build\|rebuild\|flash\|flash-erase\|build-flash} — build the |
+| [`scripts/check-approtect.sh`](check-approtect.sh.md) | check-approtect.sh — refuse to ship an image that locks APPROTECT. |
 | [`scripts/docs-publish.sh`](docs-publish.sh.md) | docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch. |
 | [`scripts/docs.sh`](docs.sh.md) | docs.sh — build the documentation site into site/. |
 | [`scripts/flash_html.py`](flash_html.md) | Render a release FLASH.md into a self-contained FLASH.html. |

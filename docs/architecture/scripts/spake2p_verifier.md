@@ -21,11 +21,11 @@ Usage:
     scripts/spake2p_verifier.py --passcode 12345678 --salt-b64 <...>
 
 The output goes into CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER and friends
-(ports/dwm3001cdk/app/Kconfig). Print nothing anywhere it will be logged: the
+(firmware/Kconfig). Print nothing anywhere it will be logged: the
 verifier is not a secret in the way the passcode is, but it identifies the
 device and there is no reason to scatter it.
 
-**discussed in** [`ports/dwm3001cdk/README.md`](../../../ports/dwm3001cdk/README.md)
+**discussed in** [`firmware/README.md`](../../../firmware/README.md)
 
 ## API
 

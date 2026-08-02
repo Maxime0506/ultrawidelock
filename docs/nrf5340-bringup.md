@@ -27,7 +27,7 @@ into both-ends tables with Arduino header positions and the 9 NFC jumpers.
 ```bash
 make build
 make flash-erase
-make term
+make nrf-term
 ```
 
 The image lands in `./build/merged.hex`; the console is on VCOM1 (VCOM0 is

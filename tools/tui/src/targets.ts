@@ -41,18 +41,18 @@ export const targets: Record<BoardId, TargetSpec> = {
     id: "nrf",
     label: "nRF5340 DK",
     shortLabel: "nRF DK",
-    description: "Primary Matter lock with NFC and UWB.",
-    artifact: "build/merged.hex",
-    setupGuide: "docs/set-up.md#nrf5340-dk-primary-target",
+    description: "Matter lock with NFC and UWB; the only target with NFC.",
+    artifact: "build/nrf5340dk/merged.hex",
+    setupGuide: "docs/set-up.md#the-zephyr-boards-dwm3001cdk-and-nrf5340-dk",
     supportsPairing: true,
     supportsFactoryReset: true,
     commands: {
       bootstrap: ["make", "bootstrap", "ASSUME_YES=1"],
-      build: ["make", "build"],
-      rebuild: ["make", "rebuild"],
+      build: ["make", "nrf-build"],
+      rebuild: ["make", "nrf-rebuild"],
       test: ["make", "test"],
-      flash: ["make", "flash"],
-      flashErase: ["make", "flash-erase"]
+      flash: ["make", "nrf-flash"],
+      flashErase: ["make", "nrf-flash-erase"]
     }
   },
   "esp32-lock": {
@@ -60,16 +60,16 @@ export const targets: Record<BoardId, TargetSpec> = {
     label: "ESP32-S3 Matter lock",
     shortLabel: "ESP lock",
     description: "Matter lock with onboarding, Wallet key, and UWB.",
-    artifact: "ports/esp32/apps/matter-lock/build/door_lock.bin",
+    artifact: "build/esp32-matter-lock-esp32s3/door_lock.bin",
     setupGuide: "ports/esp32/apps/matter-lock/README.md#prerequisites",
     supportsPairing: true,
     supportsFactoryReset: true,
     commands: {
-      build: ["make", "-C", "ports/esp32/apps/matter-lock", "build"],
-      rebuild: ["make", "-C", "ports/esp32/apps/matter-lock", "rebuild"],
+      build: ["make", "esp-build", "APP=matter-lock"],
+      rebuild: ["make", "esp-rebuild", "APP=matter-lock"],
       test: ["make", "test-port"],
-      flash: ["make", "-C", "ports/esp32/apps/matter-lock", "flash"],
-      flashErase: ["make", "-C", "ports/esp32/apps/matter-lock", "flash-erase"]
+      flash: ["make", "esp-flash", "APP=matter-lock"],
+      flashErase: ["make", "esp-flash-erase", "APP=matter-lock"]
     }
   },
   "esp32-reader": {
@@ -77,16 +77,16 @@ export const targets: Record<BoardId, TargetSpec> = {
     label: "ESP32-S3 reader",
     shortLabel: "ESP reader",
     description: "Standalone Aliro reader and diagnostic responder.",
-    artifact: "ports/esp32/apps/reader/build/woz_uwb_esp32s3.bin",
+    artifact: "build/esp32-reader-esp32s3/woz_uwb_esp32s3.bin",
     setupGuide: "docs/set-up.md#esp32-s3-ports",
     supportsPairing: false,
     supportsFactoryReset: false,
     commands: {
-      build: ["make", "-C", "ports/esp32/apps/reader", "build"],
-      rebuild: ["make", "-C", "ports/esp32/apps/reader", "clean", "build"],
+      build: ["make", "esp-build", "APP=reader"],
+      rebuild: ["make", "esp-rebuild", "APP=reader"],
       test: ["make", "test-port"],
-      flash: ["make", "-C", "ports/esp32/apps/reader", "flash"],
-      flashErase: ["make", "-C", "ports/esp32/apps/reader", "flash-erase"]
+      flash: ["make", "esp-flash", "APP=reader"],
+      flashErase: ["make", "esp-flash-erase", "APP=reader"]
     }
   }
 }
@@ -106,8 +106,8 @@ function newestMtime(path: string): number {
 }
 
 function sourcePaths(root: string, target: BoardId): string[] {
-  const shared = [join(root, "modules"), join(root, "deps"), join(root, "Makefile")]
-  if (target === "nrf") return [...shared, join(root, "ports/nrf5340dk"), join(root, "scripts/build.sh")]
+  const shared = [join(root, "modules"), join(root, "deps"), join(root, "Makefile"), join(root, "mk")]
+  if (target === "nrf") return [...shared, join(root, "ports/nrf5340dk"), join(root, "scripts/build-nrf5340dk.sh")]
   const app = target === "esp32-lock" ? "matter-lock" : "reader"
   return [...shared, join(root, "ports/esp32/components"), join(root, `ports/esp32/apps/${app}`)]
 }

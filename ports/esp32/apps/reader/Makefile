@@ -1,252 +1,31 @@
-# Makefile — command entry point for the ESP32 Aliro port (self-contained).
+# Makefile — forwarder for the standalone ESP32 Aliro reader (no Matter).
 #
-# Thin front over `idf.py`, plus a serial-port safety guard: the flash/monitor
-# targets auto-select the ESP's USB-UART port and REFUSE any SEGGER/J-Link port
-# (VID 0x1366) so this can never touch the nRF5340DK rig.
+# The recipes live in mk/esp32.mk at the repo root, so the serial-port guard
+# that refuses any SEGGER/J-Link port exists in one place and every build lands
+# under the one build root. This file only supplies APP= and passes the target
+# through, so the commands this app's README documents keep working from here:
 #
-#   make                 # this grouped, colourised help
-#   make build           # idf.py build       -> build/woz_uwb_esp32s3.bin
-#   make flash           # build + flash the ESP (safe port auto-detect)
-#   make monitor         # interactive serial console (ctrl-] to quit)
-#   make ports           # list detected serial ports, labelled
-#   make flash PORT=/dev/cu.usbmodemXXXX   # override the auto-detected port
+#   make set-target TARGET=esp32c6   ->  make -C <root> esp-set-target APP=reader
+#   make build                       ->  make -C <root> esp-build      APP=reader
+#   make presence-clone SRC=/dev/... ->  make -C <root> esp-presence-clone APP=reader
+#
+# Running them from the repo root as `make esp-<target> APP=reader` is the same
+# thing and is what the top-level `make help` lists.
+
+APP  := reader
+ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../../..)
 
 .DEFAULT_GOAL := help
 
-# ESP-IDF environment. Override if installed elsewhere:
-#   make build IDF_EXPORT=/path/to/esp-idf/export.sh
-IDF_EXPORT ?= $(HOME)/esp/esp-idf/export.sh
-# Chip target for `make set-target` (run once on a fresh checkout).
-TARGET ?= esp32s3
-IDFPY := . "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py
-
-# Serial-port override (else auto-detected). BAUD is the console rate; LOG tees
-# the tio session to a file (make term LOG=session.log).
-PORT ?=
-BAUD ?= 115200
-LOG ?=
-# make flash FORCE=1 stops whatever holds the UART (a monitor/tio) before flashing.
-FORCE ?=
-
-# Presence-dongle options (see the Presence group below).
-#   NAME=  label recorded when enrolling a dongle   TAG=  tag to sign
-#   MAXCM= distance threshold in cm (40 matches the host config default)
-REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../../..)
-PRESENCE  := $(REPO_ROOT)/tools/presence_git.py
-SDKCONFIG := sdkconfig
-NAME  ?=
-TAG   ?=
-MAXCM ?= 40
-
-# USB vendor ids (decimal, as ioreg reports them) used to classify ports.
-# Keep values trailing-whitespace-free: an inline comment would leak spaces into
-# the value and break the awk string compares below.
-# 0x1A86 WCH CH343/CH9102 UART bridge (the ESP devkit); 0x303A Espressif native
-# USB (S3 USB-OTG port); 0x1366 SEGGER J-Link = the nRF5340DK, NEVER flash.
-VID_WCH       := 6790
-VID_ESPRESSIF := 12346
-VID_SEGGER    := 4966
-
-# Resolve $$port to a SAFE ESP port, or fail loudly. Refuses SEGGER ports.
-define RESOLVE_PORT
-port='$(PORT)'; \
-table=$$(ioreg -l -w0 2>/dev/null | awk '/"idVendor"/{v=$$0;sub(/.*= /,"",v);vend=v} /"IOCalloutDevice"/&&/usbmodem/{c=$$0;sub(/.*= "/,"",c);sub(/".*/,"",c);print vend"\t"c}'); \
-if [ -n "$$port" ]; then \
-	vend=$$(printf '%s\n' "$$table" | awk -F'\t' -v p="$$port" '$$2==p{print $$1}'); \
-	if [ "$$vend" = "$(VID_SEGGER)" ]; then echo "  refusing $$port: SEGGER/J-Link (nRF) port — protected rig" >&2; exit 1; fi; \
-else \
-	port=$$(printf '%s\n' "$$table" | awk -F'\t' '$$1=="$(VID_WCH)"||$$1=="$(VID_ESPRESSIF)"{print $$2; exit}'); \
-	if [ -z "$$port" ]; then \
-		if printf '%s\n' "$$table" | awk -F'\t' '$$1=="$(VID_SEGGER)"{f=1} END{exit f?0:1}'; then \
-			echo "  only nRF J-Link (SEGGER) ports present — plug the ESP into its UART port, or pass PORT=" >&2; \
-		else \
-			echo "  no ESP serial port found — plug it in or pass PORT=/dev/cu.usbmodemXXXX" >&2; \
-		fi; \
-		ls /dev/cu.usbmodem* 2>/dev/null | sed 's/^/    seen: /' >&2; \
-		exit 1; \
-	fi; \
-fi
-endef
-
-# Flashing needs the UART exclusively. If a monitor/tio holds $$port, refuse with
-# a clear message (FORCE=1 stops the holder first). Non-destructive by default.
-define ENSURE_PORT_FREE
-pids=$$(lsof -t "$$port" 2>/dev/null | tr '\n' ' '); \
-busy="$$pids"; \
-if [ -z "$$busy" ] && command -v python3 >/dev/null 2>&1; then \
-	python3 -c "import fcntl,os,sys;fd=os.open(sys.argv[1],os.O_RDWR|os.O_NONBLOCK);fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)" "$$port" >/dev/null 2>&1 \
-		|| busy="held under an exclusive lock (owner not named by lsof)"; \
-fi; \
-if [ -n "$$busy" ]; then \
-	if [ "$(FORCE)" = "1" ] && [ -n "$$pids" ]; then \
-		echo "  FORCE: stopping port holder(s): $$pids"; \
-		kill $$pids 2>/dev/null || true; \
-		sleep 1; \
-	elif [ "$(FORCE)" = "1" ]; then \
-		echo "  FORCE: $$port is $$busy and has no PID to stop; trying anyway" >&2; \
-	else \
-		echo "  $$port is busy: $$busy" >&2; \
-		echo "  quit it (idf.py monitor: ctrl-]  ·  tio: ctrl-t q) or run: make flash FORCE=1" >&2; \
-		exit 1; \
-	fi; \
-fi
-endef
-
-.PHONY: help check-idf set-target build menuconfig size flash app-flash flash-erase monitor term ports clean \
-        presence-on presence-off presence-flash presence-clone presence-probe presence-enroll \
-        presence-sign
-
-check-idf:
-	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
-	  echo "  set it: make <target> IDF_EXPORT=/path/to/esp-idf/export.sh" >&2; exit 1; }
-
-##@ Setup
-## set-target: select the chip — run once on a fresh checkout  ·  TARGET=esp32s3
-##   Supported here: esp32s3, esp32c5, esp32c6.
-set-target: check-idf
-	@$(IDFPY) set-target $(TARGET)
-
-##@ Build
-## build: compile the app            -> build/woz_uwb_esp32s3.bin
-build: check-idf
-	@$(IDFPY) build
-
-## menuconfig: interactive sdkconfig editor
-menuconfig: check-idf
-	@$(IDFPY) menuconfig
-
-## size: binary size + partition headroom
-size: check-idf
-	@$(IDFPY) size
-
-##@ Flash  (safe port auto-detect · never a SEGGER/nRF port)
-## flash: build + write bootloader + partition table + app
-flash: check-idf
-	@$(RESOLVE_PORT); \
-	$(ENSURE_PORT_FREE); \
-	echo "  flashing $$port"; \
-	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" flash
-
-## app-flash: build + write only the app  (fast iteration)
-app-flash: check-idf
-	@$(RESOLVE_PORT); \
-	$(ENSURE_PORT_FREE); \
-	echo "  app-flashing $$port"; \
-	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" app-flash
-
-## flash-erase: full chip erase, then flash  (after a partition change)
-flash-erase: check-idf
-	@$(RESOLVE_PORT); \
-	$(ENSURE_PORT_FREE); \
-	echo "  erasing + flashing $$port"; \
-	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" erase-flash && idf.py -p "$$port" flash
-
-##@ Monitor
-## monitor: interactive serial console (logs + input)  ·  ctrl-] to quit
-##   Override: make monitor PORT=/dev/cu.usbmodemXXXX BAUD=115200
-monitor: check-idf
-	@$(RESOLVE_PORT); \
-	echo "  monitoring $$port @ $(BAUD)  (ctrl-] quits)"; \
-	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" -b $(BAUD) monitor
-
-## term: interactive serial console via tio (like the nRF `make term`)
-##   Simple + robust, no ESP backtrace decode (use `make monitor` for that).
-##   tio holds the port, so quit it (ctrl-t q) before `make flash`.
-##   Override: make term PORT=/dev/cu.usbmodemXXXX BAUD=115200 LOG=session.log
-term:
-	@command -v tio >/dev/null 2>&1 || { printf '  tio not found  ·  install: brew install tio\n' >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	logargs=; [ -n '$(LOG)' ] && logargs='-L --log-file $(LOG)'; \
-	printf '  tio %s @ %s 8N1  ·  ctrl-t q quits  ·  release before make flash\n' "$$port" '$(BAUD)'; \
-	exec tio -b $(BAUD) $$logargs "$$port"
-
-##@ Presence dongle  (CONFIG_WOZ_PRESENCE · adds `presence` to the normal shell)
-## presence-on: add the presence + clone console commands  ·  idempotent
-##   Additive, not a mode: the shell, the logs and ranging all stay exactly as
-##   they are, and `presence` joins them. That is what lets one board be
-##   provisioned (presence-clone) and answer challenges without reflashing.
-##   Also enables CONFIG_WOZ_ALIRO_CLONE, whose aliro-export prints the reader
-##   PRIVATE KEY on the console -- bench only, which is why it stays default n.
-presence-on:
-	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — run 'make build' once first" >&2; exit 1; }
-	@for k in CONFIG_WOZ_PRESENCE CONFIG_WOZ_ALIRO_CLONE; do \
-		grep -qx "$$k=y" $(SDKCONFIG) || printf '%s=y\n' "$$k" >> $(SDKCONFIG); \
-	done; echo "  presence ON (+clone)  ·  next: make presence-flash"
-
-## presence-off: drop the presence + clone commands from the build
-presence-off:
-	@[ -f $(SDKCONFIG) ] || { echo "  no sdkconfig yet — nothing to turn off"; exit 0; }
-	@sed -i '' -e '/^CONFIG_WOZ_PRESENCE=y$$/d' -e '/^CONFIG_WOZ_ALIRO_CLONE=y$$/d' \
-	  $(SDKCONFIG) && echo "  presence OFF  ·  next: make flash"
-
-## presence-flash: turn presence on, then build + flash
-##   Never erases: the device signing key and the Aliro trust store both live in
-##   NVS, and erasing regenerates the key, invalidating every enrolment.
-presence-flash: presence-on
-	@$(MAKE) --no-print-directory flash
-
-## presence-clone: copy a provisioned reader identity onto the dongle  ·  SRC=/dev/cu...
-##   The phone's Wallet credential was issued against ONE reader identity, so the
-##   dongle has to present that same identity rather than be enrolled separately.
-##   SRC is the provisioned board (it needs aliro-export, i.e. its own presence-on).
-presence-clone:
-	@[ -n "$(SRC)" ] || { echo "  set SRC=  ·  the provisioned board's port (see: make ports)" >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	[ "$$port" != "$(SRC)" ] || { echo "  SRC and the dongle resolved to the same port ($$port)" >&2; \
-	  echo "  pass PORT= as well to say which is the dongle" >&2; exit 1; }; \
-	echo "  cloning $(SRC) -> $$port"; \
-	cd $(REPO_ROOT) && python3 $(PRESENCE) clone --source "$(SRC)" --port "$$port"
-
-## presence-probe: bring-up check  ·  does the dongle sign a frame we accept?
-##   Starts a fresh Aliro authentication + UWB round and succeeds only when the
-##   pinned credential proves present inside the configured distance.
-presence-probe:
-	@$(RESOLVE_PORT); \
-	echo "  probing $$port"; \
-	python3 $(PRESENCE) probe --port "$$port" --max-cm $(MAXCM)
-
-## presence-enroll: record this dongle's public key as trusted  ·  NAME=desk-dongle
-##   Appends to .presence/enrolled at the repo root, which is committed so the
-##   trust set is reviewable in history.
-presence-enroll:
-	@[ -n "$(NAME)" ] || { echo "  set NAME=  ·  e.g. make presence-enroll NAME=desk-dongle" >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	cd $(REPO_ROOT) && python3 $(PRESENCE) enroll --port "$$port" --name "$(NAME)"
-
-## presence-sign: create a presence-signed annotated tag  ·  TAG=presence/1.2.0
-##   Wake the phone and hold it near the dongle first; this refuses to tag
-##   unless presence actually verifies.
-presence-sign:
-	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make presence-sign TAG=presence/1.2.0" >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	cd $(REPO_ROOT) && python3 $(PRESENCE) sign --tag "$(TAG)" --port "$$port" --max-cm $(MAXCM)
-
-##@ Housekeeping
-## ports: list attached usbmodem ports, labelled by board
-ports:
-	@ioreg -l -w0 2>/dev/null | awk \
-	  '/"idVendor"/{v=$$0;sub(/.*= /,"",v);vend=v} \
-	   /"IOCalloutDevice"/&&/usbmodem/{c=$$0;sub(/.*= "/,"",c);sub(/".*/,"",c); \
-	     lbl="unknown ("vend")"; \
-	     if(vend=="$(VID_WCH)")lbl="ESP  (WCH UART)  <- flash target"; \
-	     else if(vend=="$(VID_ESPRESSIF)")lbl="ESP  (native USB) <- flash target"; \
-	     else if(vend=="$(VID_SEGGER)")lbl="nRF J-Link  ** DO NOT FLASH **"; \
-	     printf "  %-34s %s\n", c, lbl}' ; \
-	ls /dev/cu.usbmodem* >/dev/null 2>&1 || echo "  (no usbmodem ports attached)"
-
-## clean: remove the build directory
-clean: check-idf
-	@$(IDFPY) fullclean 2>/dev/null || rm -rf build; echo "  cleaned build/"
-
-## help: this grouped, colourised target list
+.PHONY: help
 help:
-	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
-	  b=$$(printf '\033[1m'); c=$$(printf '\033[36m'); y=$$(printf '\033[1;33m'); d=$$(printf '\033[2m'); r=$$(printf '\033[0m'); \
-	else b=; c=; y=; d=; r=; fi; \
-	printf '\n  %sAliro ESP32 port%s  %s·  $(TARGET) · ESP-IDF + NimBLE%s\n' "$$b" "$$r" "$$d" "$$r"; \
-	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
-	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
-	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
-	     printf "    %s%-16s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
-	  $(MAKEFILE_LIST); \
-	printf '\n'
+	@$(MAKE) --no-print-directory -C $(ROOT) esp-help APP=$(APP)
+
+# Forward anything else to the root as esp-<target>. `force` keeps the pattern
+# rule from ever being considered already-satisfied, and the empty rules below
+# stop make trying to rebuild its own makefiles through this pattern.
+.PHONY: force
+force: ;
+Makefile: ;
+%: force
+	@$(MAKE) --no-print-directory -C $(ROOT) esp-$@ APP=$(APP)

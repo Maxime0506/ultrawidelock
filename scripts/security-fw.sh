@@ -4,13 +4,13 @@
 # indirectly.
 #
 # semgrep, clang-tidy, CodeQL and CBMC all read source. The thing a user actually flashes is
-# build/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
+# build/nrf5340dk/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
 # generated device tree, a vendor blob and whatever `west build` decided to bake in. Nothing here
 # has ever looked at the result. That gap is where a build-host path leak, a test key that
 # survived a #ifdef, or a payload appended after the link would live, and none of those are
 # visible to a source scanner by construction.
 #
-#   scripts/security-fw.sh                       # every check, on build/merged.hex
+#   scripts/security-fw.sh                       # every check, on the nRF5340DK image
 #   scripts/security-fw.sh --image out/x.bin     # explicit artifact
 #   scripts/security-fw.sh strings               # one: keys strings size dwarf
 #   make security-fw
@@ -23,7 +23,9 @@
 # written to refuse. The parser below is thirty lines and has no dependencies.
 #
 # Env:
-#   FW_IMAGE=path                artifact (default: build/merged.hex, then build/zephyr/merged.hex)
+#   FW_IMAGE=path                artifact (default: the nRF5340DK image under $ALIRO_BUILD_ROOT)
+#                                The size baseline is calibrated to THAT image, so pointing this
+#                                at another board's build compares against the wrong record.
 #   FW_DENYLIST=path             byte patterns that must not ship (default: security/fw-denylist.txt)
 #   FW_SIZE_BASELINE=path        recorded sizes (default: security/fw-size-baseline.txt)
 #   FW_SIZE_WARN=2 FW_SIZE_FAIL=10   growth percentages
@@ -62,8 +64,14 @@ while [ "$#" -gt 0 ]; do
 	*) break ;;
 	esac
 done
+# Deliberately the nRF5340DK image and not the CDK one: security/fw-size-baseline.txt
+# is keyed on the artifact basename and its numbers were measured on this board.
+# Retargeting the gate is a FW_IMAGE= call, not a default.
+FW_BUILD_ROOT="${ALIRO_BUILD_ROOT:-$ROOT/build}"
 if [ -z "$IMAGE" ]; then
-	for cand in build/merged.hex build/zephyr/merged.hex build/zephyr/zephyr.hex; do
+	for cand in "$FW_BUILD_ROOT/nrf5340dk/merged.hex" \
+		"$FW_BUILD_ROOT/nrf5340dk/zephyr/merged.hex" \
+		"$FW_BUILD_ROOT/nrf5340dk/zephyr/zephyr.hex"; do
 		[ -f "$cand" ] && {
 			IMAGE="$cand"
 			break
@@ -71,9 +79,9 @@ if [ -z "$IMAGE" ]; then
 	done
 fi
 if [ -z "$IMAGE" ] || [ ! -f "$IMAGE" ]; then
-	printf '\n  %s%s%s no firmware image to examine (looked for build/merged.hex).\n' \
-		"$YEL" "$WRN" "$RESET"
-	printf '      Run `make build`, or pass --image <path>. This gate does not pass without\n'
+	printf '\n  %s%s%s no firmware image to examine (looked under %s/nrf5340dk).\n' \
+		"$YEL" "$WRN" "$RESET" "$FW_BUILD_ROOT"
+	printf '      Run `make nrf-build`, or pass --image <path>. This gate does not pass without\n'
 	printf '      an artifact: "nothing to check" and "checked, clean" are different answers.\n\n'
 	exit 2
 fi
@@ -232,8 +240,17 @@ PY
 # argument for stripping is size, not secrecy, and a hard failure would be theatre.
 gate_dwarf() {
 	hdr "fw dwarf · debug information in a release image"
+	# merged.hex has no ELF of its own; the app's is under the sysbuild image
+	# directory, named for the application. The old fallback looked beside the
+	# build root, where sysbuild has never put it, so this check has been
+	# reporting "nothing to inspect" rather than running.
 	local elf="${IMAGE%.hex}.elf"
-	[ -f "$elf" ] || elf="build/zephyr/zephyr.elf"
+	local cand
+	for cand in "$FW_BUILD_ROOT/nrf5340dk/matter-aliro-door-lock-app/zephyr/zephyr.elf" \
+		"$FW_BUILD_ROOT/nrf5340dk/zephyr/zephyr.elf"; do
+		[ -f "$elf" ] && break
+		elf="$cand"
+	done
 	if [ ! -f "$elf" ]; then
 		printf '  %sno ELF beside the image; nothing to inspect%s\n' "$DIM" "$RESET"
 		return 0

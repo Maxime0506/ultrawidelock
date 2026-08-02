@@ -1,6 +1,8 @@
 # Ports
 
-Every target lives here, one directory per platform. Each port reuses the
+The product is [`firmware/`](../firmware) at the top of the tree: the DWM3001CDK
+lock, built by the bare `make build`. What lives here are the two **ports** of it,
+one directory per platform. Each port reuses the
 platform-neutral engine in [`modules/`](../modules) and the vendor driver in
 [`deps/dw3000`](../deps/dw3000), and keeps all target-specific code inside its
 own directory.
@@ -13,7 +15,8 @@ for the tiers and what each costs.
 
 | Directory | Target | What it is | Status |
 |---|---|---|---|
-| *(repository root)* | **nRF5340 DK** | The primary build: NFC tap + UWB approach unlock on top of the Nordic door-lock add-on, assembled by `make bootstrap` from patches and overlays in [`nrf5340dk/`](nrf5340dk/) | Nordic-binary path hardware-validated end to end; source-stack default awaiting the full phone checklist |
+| [`../firmware/`](../firmware) | **DWM3001CDK** | *(not a port — the primary build)* Reader, Matter node and Thread MTD in one nRF52833 image. `make build` | **Hardware-validated.** Approach unlock plus a live Apple Home lock tile |
+| [`nrf5340dk/`](nrf5340dk/) | **nRF5340 DK** | NFC tap + UWB approach unlock on top of the Nordic door-lock add-on, assembled by `make bootstrap` from the patches and overlays here. `make nrf-build` | Nordic-binary path hardware-validated end to end; source-stack default awaiting the full phone checklist |
 | [`esp32/`](esp32/) | **ESP32-S3** | The complete ESP-IDF port: shared components plus two apps (a Matter door lock and a standalone bench reader) | **Hardware-validated.** Approach unlock driven end to end against a live iPhone, Wallet animation and all |
 | [`esp32/`](esp32/) | **ESP32-C5** | The same two apps with C5 pin, partition, and release-image support | **Build/release-supported.** No hardware validation is recorded |
 
@@ -61,9 +64,9 @@ An early Zephyr-based ESP32-S3 spike (`ports/esp32s3/`, never run on silicon) wa
 removed; its pin map lives on in [`docs/esp32-bringup.md`](../docs/esp32-bringup.md).
 For archaeology, the last commit carrying it is `b11549d`.
 
-## The primary target
+## The nRF5340 DK port
 
-The nRF5340 DK build is assembled at the repository root: the app itself is Nordic's
+The only target with NFC. Its app is not in this repository: it is Nordic's
 door-lock add-on, fetched pristine by `make bootstrap` and patched from
 [`ports/nrf5340dk/patches/`](../ports/nrf5340dk/patches), configured by
 [`ports/nrf5340dk/overlays/`](../ports/nrf5340dk/overlays), with the engine supplied from

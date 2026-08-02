@@ -8,7 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/host/sources.sh"
 
-mkdir -p "$ROOT/build"
+# One build root for the whole repo; the host suites own build/host.
+OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/host"
+mkdir -p "$OUT"
 # SAN=1: same suite rebuilt under ASan + UBSan (`make test-san`).
 san_flags=
 if [ -n "${SAN:-}" ]; then
@@ -19,10 +21,10 @@ fi
 # shellcheck disable=SC2086  # san_flags is a deliberate word-split flag list
 "${CC:-cc}" -std=c11 -O1 -w $san_flags "${DEFS[@]}" "${INCS[@]}" \
    "${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" \
-   -o "$ROOT/build/host_test"
+   -o "$OUT/host_test"
 # Quiet: suites assert, they don't need the UWB diag firehose on stdout (run
 # the binary directly, without WOZ_TEST_QUIET, to get it back).
-WOZ_TEST_QUIET=1 "$ROOT/build/host_test"
+WOZ_TEST_QUIET=1 "$OUT/host_test"
 
 # --- target-only sources, separate small binaries --------------------------
 # These compile production sources whose exported symbols the main binary
@@ -49,8 +51,8 @@ HOSTD="$ROOT/tests/host"
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
 	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" \
-	-o "$ROOT/build/host_test_drv"
-WOZ_TEST_QUIET=1 "$ROOT/build/host_test_drv"
+	-o "$OUT/host_test_drv"
+WOZ_TEST_QUIET=1 "$OUT/host_test_drv"
 
 # 2) PSA/mbedTLS crypto seams over recording fakes (psafake/). The two backend
 #    files define the same crypto_aes_ecb_encrypt symbol as aes_ref.c, so each
@@ -59,31 +61,31 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags -c \
 	-Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
-	"$SRC/ccc/ccc_crypto_psa.c" -o "$ROOT/build/ccc_crypto_psa_host.o"
+	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_host.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags -c \
 	-Dcrypto_aes_ecb_encrypt=woz_test_mbedtls_ecb \
-	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$ROOT/build/ccc_crypto_mbedtls_host.o"
+	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$OUT/ccc_crypto_mbedtls_host.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags \
 	-I"$HOSTD" -I"$ROOT/modules/woz_aliro/include" \
 	"$HOSTD/test.c" "$HOSTD/test_psa_backends.c" "$HOSTD/psafake/psafake.c" \
 	"$ROOT/modules/woz_aliro/src/aliro_prim_psa.c" \
-	"$ROOT/build/ccc_crypto_psa_host.o" "$ROOT/build/ccc_crypto_mbedtls_host.o" \
-	-o "$ROOT/build/host_test_psa"
-"$ROOT/build/host_test_psa"
+	"$OUT/ccc_crypto_psa_host.o" "$OUT/ccc_crypto_mbedtls_host.o" \
+	-o "$OUT/host_test_psa"
+"$OUT/host_test_psa"
 
 # 3) NFC ECP emitter (C++) over fake RFAL/reader-storage headers (ecpfake/).
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$ROOT/build/test_harness_c.o"
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_c.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 	-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/ecpfake" \
 	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp" \
-	"$ROOT/build/test_harness_c.o" \
-	-o "$ROOT/build/host_test_ecp"
-"$ROOT/build/host_test_ecp"
+	"$OUT/test_harness_c.o" \
+	-o "$OUT/host_test_ecp"
+"$OUT/host_test_ecp"
 
 # 4) DWM3001CDK port glue over a fake settings backend (settingsfake/).
 #    Its own binary because the fake <zephyr/settings/settings.h> would collide
@@ -96,10 +98,10 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra $san_flags \
 	-DCONFIG_LOG_DEFAULT_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
-	-I"$ROOT/modules/woz_matter/include" -I"$ROOT/ports/dwm3001cdk/app/src" \
+	-I"$ROOT/modules/woz_matter/include" -I"$ROOT/firmware/src" \
 	"$HOSTD/test.c" "$HOSTD/test_matter_fab_settings.c" \
 	"$HOSTD/settingsfake/settingsfake.c" \
-	"$ROOT/ports/dwm3001cdk/app/src/matter_fab_settings.c" \
+	"$ROOT/firmware/src/matter_fab_settings.c" \
 	-o "$ROOT/build/host_test_cdk"
 "$ROOT/build/host_test_cdk"
 

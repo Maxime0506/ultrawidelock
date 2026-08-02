@@ -27,8 +27,8 @@ macOS; elsewhere it is a
 needs a full erase: use `make flash-erase`, not `make flash`. `make flash` is app-core
 only and leaves the net-core image in place.
 
-**`make term` shows nothing.** The console and Zephyr shell are on the DK's VCOM1; VCOM0
-is silent. `make term` auto-detects VCOM1; override with `PORT=` if detection picks the
+**`make nrf-term` shows nothing.** The console and Zephyr shell are on the DK's VCOM1; VCOM0
+is silent. `make nrf-term` auto-detects VCOM1; override with `PORT=` if detection picks the
 wrong port.
 
 **Build succeeds but the image does not fit.** The default configuration targets a full

@@ -1,5 +1,5 @@
 <!-- generated documentation — edit the source, not this file -->
-# `ports/dwm3001cdk/app/src/matter_thread_port.c`
+# `firmware/src/matter_thread_port.c`
 
 @file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
 The dataset arrives from the commissioner as raw meshcop TLVs and
@@ -14,7 +14,7 @@ link error would be a worse way to learn that Thread was configured out.
 ## API
 
 ### `static bool addr_is_offmesh(otInstance *ot, const otNetifAddress *a)`
-`ports/dwm3001cdk/app/src/matter_thread_port.c:125`
+`firmware/src/matter_thread_port.c:125`
 
 Is this an address something off the Thread mesh could route to?
 NOT a test for "is it global". A border router's off-mesh-routable prefix is
@@ -26,7 +26,7 @@ sound test is against the mesh-local prefix this network actually uses.
 **called by** `count_offmesh`, `log_addresses`
 
 ### `static void log_addresses(otInstance *ot)`
-`ports/dwm3001cdk/app/src/matter_thread_port.c:162`
+`firmware/src/matter_thread_port.c:162`
 
 Every address this node holds, and whether any of them is reachable.
 A registered SRP name is not the same as a reachable node. Auto host address
@@ -39,7 +39,7 @@ printed here instead of assumed.
 **called by** `matter_thread_advertise`, `matter_thread_wait_attached`, `srp_cb`  ·  **calls** `addr_is_offmesh`, `count_offmesh`
 
 ### `struct srp_reg`
-`ports/dwm3001cdk/app/src/matter_thread_port.c:254`
+`firmware/src/matter_thread_port.c:254`
 
 One registration per fabric, because a node on two fabrics has two names.
 The instance name is derived from the compressed fabric id and this node's id
@@ -48,7 +48,7 @@ finds an address it cannot open a session to. A single slot here published
 whichever fabric registered last and left the other unreachable.
 
 ### `static uint32_t srp_host_id(void)`
-`ports/dwm3001cdk/app/src/matter_thread_port.c:287`
+`firmware/src/matter_thread_port.c:287`
 
 The host-name suffix: read it, or mint one and keep it. See SRP_HOST_ID_KEY.
 Zero is the "not stored" marker, so it is never a valid id -- which costs one
@@ -58,7 +58,7 @@ the settings backend.
 **called by** `matter_thread_advertise`
 
 ### `static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClientService *services, const otSrpClientService *removed, void *ctx)`
-`ports/dwm3001cdk/app/src/matter_thread_port.c:481`
+`firmware/src/matter_thread_port.c:481`
 
 The SRP server's verdict, which otSrpClientAddService() cannot give.
 

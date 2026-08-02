@@ -14,17 +14,22 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 # The bench project moved to apps/reader in the ports/ refactor; its build
 # still produces the woz_uwb_esp32s3.* artifacts checked below.
 PROJ="$(cd "$HERE/../apps/reader" && pwd)"
-# NOT $PROJ/build. `idf.py build` there picks up the project's sdkconfig, which
-# is untracked working state -- `make presence-on` writes to it, so a developer
-# who has ever run that gets a local PASS on an image CI would never produce,
-# and every check below silently describes a different configuration than the
-# one that ships. Build from sdkconfig.defaults into a directory of this
-# script's own, so a local run and a CI run assert the same thing, and so
-# running the guard stops clobbering whatever the developer had in build/.
-BUILD="$PROJ/build-verify"
+# NOT the app's own default build directory. `idf.py build` there picks up the
+# project's sdkconfig, which is untracked working state -- `make presence-on`
+# writes to it, so a developer who has ever run that gets a local PASS on an
+# image CI would never produce, and every check below silently describes a
+# different configuration than the one that ships. Build from sdkconfig.defaults
+# into directories of this script's own, so a local run and a CI run assert the
+# same thing, and so running the guard never clobbers a developer's own build.
+#
+# Both live under the one repo build root, so `make clean` removes them. They
+# are absolute because idf.py runs with its cwd in $PROJ, not here.
+BUILD_ROOT="${ALIRO_BUILD_ROOT:-$REPO_ROOT/build}"
+BUILD="$BUILD_ROOT/esp32-reader-esp32s3-verify"
 fail=0
 note() { printf '  %-4s %s\n' "$1" "$2"; }
 check() { if eval "$2"; then note ok "$1"; else note FAIL "$1"; fail=1; fi; }
@@ -58,8 +63,8 @@ if ! command -v idf.py >/dev/null 2>&1; then
 fi
 
 echo "building esp32s3 target (defaults only)..."
-( cd "$PROJ" && idf.py -B build-verify \
-	-DSDKCONFIG=build-verify/sdkconfig \
+( cd "$PROJ" && idf.py -B "$BUILD" \
+	-DSDKCONFIG="$BUILD/sdkconfig" \
 	-DSDKCONFIG_DEFAULTS="sdkconfig.defaults" \
 	build >/dev/null )
 # The guard is only as good as the config it built. Assert the defaults build is
@@ -100,9 +105,9 @@ echo "4. presence build (CONFIG_WOZ_PRESENCE=y)"
 # this line passes with every line of presence code uncompiled. Build it in its
 # own directory, with its own sdkconfig, so the default build and a developer's
 # working config are both left alone.
-PBUILD="$PROJ/build-presence"
-if ( cd "$PROJ" && idf.py -B build-presence \
-	-DSDKCONFIG=build-presence/sdkconfig \
+PBUILD="$BUILD_ROOT/esp32-reader-esp32s3-presence"
+if ( cd "$PROJ" && idf.py -B "$PBUILD" \
+	-DSDKCONFIG="$PBUILD/sdkconfig" \
 	-DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.presence" \
 	build >/dev/null 2>&1 ); then
 	note ok "presence build links"

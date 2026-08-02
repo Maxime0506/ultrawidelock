@@ -20,7 +20,7 @@
 # instrumented files only; the terminal table's closing "all our code" total
 # additionally folds in the 0% rows.
 #
-# Artifacts under build/coverage/ (build/ is gitignored). The instrumented
+# Artifacts under build/host/coverage/ (build/ is gitignored). The instrumented
 # suites may report test failures; coverage is still generated (execution is
 # what counts). A crash (signal) would abort, and should.
 set -euo pipefail
@@ -28,7 +28,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/host/sources.sh"
 
-OUT="$ROOT/build/coverage"
+OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/host/coverage"
 BIN="$OUT/host_test_cov"
 mkdir -p "$OUT"
 rm -f "$OUT"/*.profraw # stale profiles from removed suites break the merge

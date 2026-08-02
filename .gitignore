@@ -18,11 +18,13 @@ __pycache__/
 # tests/host/sources.sh), so it is never activated and never on PATH.
 .venv/
 
-# Build output
+# Build output. One root for the whole repo: every producer writes its own
+# subdirectory under ./build (cdk-matter, nrf5340dk, esp32-<app>-<target>,
+# host, _sig …), so `make clean` is a single rm and nothing is left behind.
+# The unanchored form stays because calling idf.py directly inside an ESP app
+# bypasses the shared root and writes that app's own build/.
 /build/
 build/
-build-*/
-*.aliro_build_sig
 twister-out/
 .west/
 

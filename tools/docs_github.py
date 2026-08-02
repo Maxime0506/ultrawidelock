@@ -78,14 +78,14 @@ QUICKSTART_STEPS = (
     ),
     (
         "Build the firmware",
-        "the merged image lands in ./build/merged.hex",
+        "the DWM3001CDK image lands in ./build/cdk-matter/merged.hex; make nrf-build builds the nRF5340 DK instead",
         "make build",
     ),
     (
         "Flash the board",
-        "the first flash of a net-core image needs the erase; plain "
-        "make flash after that",
-        "make flash-erase",
+        "over the DWM3001CDK's on-board J-Link OB; make monitor then "
+        "streams its RTT console",
+        "make flash",
     ),
 )
 

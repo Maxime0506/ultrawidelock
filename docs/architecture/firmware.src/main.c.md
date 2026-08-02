@@ -1,14 +1,12 @@
 <!-- generated documentation — edit the source, not this file -->
-# `ports/dwm3001cdk/app/src/main.c`
+# `firmware/src/main.c`
 
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_commission.h`](matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](matter_fab_settings.h.md)
+**depends on** [`firmware/src/matter_commission.h`](matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](matter_fab_settings.h.md)
 
 ## API
 
 ### `static void heap_peak_log(const char *when)`
-`ports/dwm3001cdk/app/src/main.c:43`
+`firmware/src/main.c:43`
 
 Reported at the grant, because by then the unlock has done every P-256 and
 AES-GCM operation it is going to do. The peak is cumulative since boot, so it
@@ -17,7 +15,7 @@ covers BLE pairing and the Aliro exchange too, not only the ranging.
 **called by** `main`
 
 ### `static void provisioning_mode(void)`
-`ports/dwm3001cdk/app/src/main.c:97`
+`firmware/src/main.c:97`
 
 Runs the console and nothing else. Never returns: leaving this function would
 start the radios in a mode the user did not ask for.

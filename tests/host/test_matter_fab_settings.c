@@ -2,8 +2,8 @@
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * Host test for ports/dwm3001cdk/app/src/matter_fab_settings.c — the FIRST host
- * coverage any file under ports/dwm3001cdk has had.
+ * Host test for firmware/src/matter_fab_settings.c — the FIRST host
+ * coverage any file under firmware has had.
  *
  * That gap is why this exists. Every defect this port has hit on hardware lived
  * in the Zephyr glue, never in the woz_matter protocol modules (which are 14/14

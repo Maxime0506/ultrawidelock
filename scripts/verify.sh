@@ -97,6 +97,8 @@ GATES=(
 	mal-diff    # 0s   ci.yml : verify
 	esp         # 0s   ci.yml : verify
 	attest      # 0s   ci.yml : verify
+	approtect   # 0s   ci.yml : verify   (source layer only in CI, which builds no firmware; the
+	            #                         generated-.config layer runs on a contributor's tree)
 	ct          # 0s   ci.yml : verify   (0s only because it SKIPS: no valgrind on darwin/arm64;
 	            #                         17s in CI, where valgrind is installed)
 	format      # 1s   ci.yml : verify
@@ -132,14 +134,14 @@ GATES=(
 #
 #   1. Gates that write the same path must share a lane. Exactly one pair does:
 #      `test` and `test-san` are the same run.sh writing the same
-#      build/host_test* binaries, so side by side they would overwrite each
+#      build/host/host_test* binaries, so side by side they would overwrite each
 #      other's build with no error at all. twin-wasm and docs share one for a
 #      softer reason: docs renders the twin, so it should see the rebuilt
 #      twin.js, which is the order the old serial sweep happened to have.
 #   2. Everything else is already hermetic and was checked one at a time:
 #      test-ws and patch-drift build under `mktemp -d`, test-port under
-#      `mktemp -t` per binary, coverage under build/coverage/, fuzz under
-#      build/fuzz/, cbmc writes only its own logs. The lint gates only read.
+#      `mktemp -t` per binary, coverage under build/host/coverage/, fuzz under
+#      build/host/fuzz/, cbmc writes only its own logs. The lint gates only read.
 #
 # Order WITHIN a lane matters for one reason: a lane stops at its first failure,
 # so everything after it reports "not run". That is why secrets and deps sit
@@ -152,7 +154,7 @@ GATES=(
 # full run: the fail-fast the parallel phase gives up, bought back where it is
 # cheap. It also runs the two whole-tree scanners (licenses, format) before
 # anything starts writing, so neither reads a file mid-rewrite.
-TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp attest"
+TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp attest approtect"
 #
 # Packed, not one lane per gate. coverage sets the floor at ~25s and nothing
 # finishes before it, so lanes past that buy nothing and cost real time: one
@@ -170,7 +172,7 @@ LANES=(
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
 	"secrets deps test-tui"    # 12s  the two read-only scanners first, then bun
-	"test test-san"            # 15s  same run.sh, same build/host_test* paths
+	"test test-san"            # 15s  same run.sh, same build/host/host_test* paths
 	"test-verify web ct"       # 22s  ct costs 0s here (it skips); web is retire's network fetch
 	"cbmc"                     # 64s  WITH_CBMC=1 only, and then it is the floor
 )
@@ -270,6 +272,7 @@ gate_label() {
 	secrets) echo "no secrets in the tracked files" ;;
 	web) echo "browser supply chain: pins, CSP, installs" ;;
 	ct) echo "no secret-dependent branches" ;;
+	approtect) echo "no image locks APPROTECT" ;;
 	esp) echo "ESP component pins are exact" ;;
 	attest) echo "release provenance configured" ;;
 	mal-diff) echo "no malicious change shapes" ;;
@@ -308,6 +311,9 @@ gate_run() {
 			| xargs clang-format --dry-run --Werror
 		;;
 	shellcheck) git ls-files '*.sh' | xargs shellcheck -S warning ;;
+	# Its own --self-test runs first, so a run that reports "ok" has proved the
+	# detector still fires before it claims the tree is clean.
+	approtect) scripts/check-approtect.sh --self-test && scripts/check-approtect.sh ;;
 	test-web) make --no-print-directory test-web ;;
 	actionlint) actionlint -color ;;
 	fuzz) make --no-print-directory fuzz ;;
@@ -352,7 +358,7 @@ gate_run() {
 		make --no-print-directory coverage || return 1
 		COV_MIN="$COV_MIN" python3 -c '
 import json, os, sys
-t = json.load(open("build/coverage/summary.json"))["data"][0]["totals"]
+t = json.load(open(os.environ.get("ALIRO_BUILD_ROOT", "build") + "/host/coverage/summary.json"))["data"][0]["totals"]
 pct, floor = t["lines"]["percent"], float(os.environ["COV_MIN"])
 print(f"  total line coverage {pct:.2f}% (floor {floor:.0f}%)")
 sys.exit(0 if pct >= floor else 1)'

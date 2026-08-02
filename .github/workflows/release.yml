@@ -123,7 +123,7 @@ jobs:
             ./scripts/bootstrap.sh
           }
       - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild)
-        run: ./scripts/build.sh build
+        run: ./scripts/build-nrf5340dk.sh build
       - name: assemble the bundle
         env:
           REF_NAME: ${{ github.ref_name }}
@@ -131,7 +131,7 @@ jobs:
         run: |
           out=dist/openaliro-nrf5340dk
           mkdir -p "$out"
-          cp build/merged.hex build/merged_CPUNET.hex "$out"/
+          cp build/nrf5340dk/merged.hex build/nrf5340dk/merged_CPUNET.hex "$out"/
           cp release/nrf5340dk/FLASH.md release/nrf5340dk/FLASH.html \
             release/nrf5340dk/flash.sh "$out"/
           printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/openaliro/openaliro\n' \
@@ -214,9 +214,11 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh"
           . "$ESP_MATTER_PATH/export.sh"
-          idf.py set-target esp32s3
-          idf.py build
-          idf.py merge-bin -o openaliro-matter-lock-esp32s3.bin
+          B="$GITHUB_WORKSPACE/build/esp32-matter-lock-esp32s3"
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32s3
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" \
+            merge-bin -o openaliro-matter-lock-esp32s3.bin
       - name: build the matter-lock app (esp32c5) and merge one image
         # Own build dir + sdkconfig so the S3 build above stays untouched
         # (set-target wipes both otherwise). sdkconfig.defaults.esp32c5 is
@@ -225,9 +227,10 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh"
           . "$ESP_MATTER_PATH/export.sh"
-          idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig set-target esp32c5
-          idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig build
-          idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig \
+          B="$GITHUB_WORKSPACE/build/esp32-matter-lock-esp32c5"
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32c5
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" \
             merge-bin -o openaliro-matter-lock-esp32c5.bin
       - name: build the matter-lock app (esp32c6) and merge one image
         # Same isolation as the C5 step above. C6 has been built by
@@ -238,9 +241,10 @@ jobs:
         run: |
           . "$IDF_PATH/export.sh"
           . "$ESP_MATTER_PATH/export.sh"
-          idf.py -B build-c6 -D SDKCONFIG=build-c6/sdkconfig set-target esp32c6
-          idf.py -B build-c6 -D SDKCONFIG=build-c6/sdkconfig build
-          idf.py -B build-c6 -D SDKCONFIG=build-c6/sdkconfig \
+          B="$GITHUB_WORKSPACE/build/esp32-matter-lock-esp32c6"
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32c6
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" \
             merge-bin -o openaliro-matter-lock-esp32c6.bin
       - name: assemble the bundle
         env:
@@ -249,9 +253,9 @@ jobs:
         run: |
           out=dist/openaliro-esp32-matter-lock
           mkdir -p "$out"
-          cp ports/esp32/apps/matter-lock/build/openaliro-matter-lock-esp32s3.bin "$out"/
-          cp ports/esp32/apps/matter-lock/build-c5/openaliro-matter-lock-esp32c5.bin "$out"/
-          cp ports/esp32/apps/matter-lock/build-c6/openaliro-matter-lock-esp32c6.bin "$out"/
+          cp build/esp32-matter-lock-esp32s3/openaliro-matter-lock-esp32s3.bin "$out"/
+          cp build/esp32-matter-lock-esp32c5/openaliro-matter-lock-esp32c5.bin "$out"/
+          cp build/esp32-matter-lock-esp32c6/openaliro-matter-lock-esp32c6.bin "$out"/
           cp release/esp32-matter-lock/FLASH.md release/esp32-matter-lock/FLASH.html \
             release/esp32-matter-lock/flash.sh "$out"/
           # ESP Web Tools manifest for the browser flasher (web-flasher/):

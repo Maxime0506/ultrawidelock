@@ -35,10 +35,10 @@ touches.
 - `woz-pretty.conf`, `woz-ha.conf`: opt-in via `PRETTY=1` / `HA=1`.
 - `diag-cirdiag.conf`: opt-in via `CIR=1`; reading a CIR window costs walk-up
   latency while armed, so use it only for a capture run.
-- `diag-latency.conf`: diagnostic only (`LAT=1` to `scripts/build.sh`),
+- `diag-latency.conf`: diagnostic only (`LAT=1` to `scripts/build-nrf5340dk.sh`),
   Matter debug logs for timing notification delays.
 
-`CONFIG_WOZ_ALIRO_SOURCE_STACK=y` is the nRF default. `scripts/build.sh` sets it
+`CONFIG_WOZ_ALIRO_SOURCE_STACK=y` is the nRF default. `scripts/build-nrf5340dk.sh` sets it
 explicitly and verifies the final link map contains no member from
 `libaliro_ble.a`. Keep `ALIRO_SOURCE=0` for comparison and regression isolation,
 not as the normal build.
@@ -58,7 +58,7 @@ held low. No C5 hardware validation is recorded.
 
 Every firmware has a serial console; no reflash needed.
 
-**nRF5340** (`make term`): the `aliro` command group: `status`, `rx`,
+**nRF5340** (`make nrf-term`): the `aliro` command group: `status`, `rx`,
 `range`, `chip`, `selftest`, `log`, `frames`, `version`.
 
 **ESP32 Matter lock** (`make monitor`): `status`, `lock`, `unlock`, `codes`,

@@ -3,10 +3,14 @@
 How the UWB engine moves to a new chipset, what it costs, and how to prove a port did not
 change the code the validated target runs.
 
-The primary target is the nRF5340 DK on NCS v3.3.0. Its Nordic-binary path is
-hardware-validated end to end; the source-stack default has a dedicated firmware CI build
-and protocol host tests and awaits the full phone checklist. A second port, ESP32-S3 on
-ESP-IDF, lives in [`ports/esp32/`](../ports/esp32/).
+The primary target is the DWM3001CDK on NCS v3.3.0, built from
+[`firmware/`](../firmware): reader, Matter node and Thread MTD in one nRF52833 image,
+hardware-validated to an approach unlock and a live Apple Home tile. The nRF5340 DK in
+[`ports/nrf5340dk/`](../ports/nrf5340dk/) is the NFC target and the one this chapter's
+regression check uses, because it carries the largest build; its Nordic-binary path is
+hardware-validated end to end and the source-stack default has a dedicated firmware CI
+build and protocol host tests and awaits the full phone checklist. A third port,
+ESP32-S3 on ESP-IDF, lives in [`ports/esp32/`](../ports/esp32/).
 
 ## 1. The contract
 
@@ -129,18 +133,18 @@ change.
 
 ```sh
 SIZE=<zephyr-sdk>/arm-zephyr-eabi/bin/arm-zephyr-eabi-size
-D=build/matter-aliro-door-lock-app/modules/woz_uwb/CMakeFiles/woz_uwb.dir/src
+D=build/nrf5340dk/matter-aliro-door-lock-app/modules/woz_uwb/CMakeFiles/woz_uwb.dir/src
 
-make build                                        # before the change
+make nrf-build                                    # before the change
 find $D -name '*.obj' | sort | xargs $SIZE > /tmp/before.txt
 # ... make the change ...
-make build
+make nrf-build
 find $D -name '*.obj' | sort | xargs $SIZE > /tmp/after.txt
 diff /tmp/before.txt /tmp/after.txt                # must be empty for a pure refactor
 ```
 
 Repeat for the vendored DW3000 objects under
-`build/matter-aliro-door-lock-app/modules/dw3000/` if `deps/dw3000` was touched, and run
+`build/nrf5340dk/matter-aliro-door-lock-app/modules/dw3000/` if `deps/dw3000` was touched, and run
 `make test` (the host KAT suite, no toolchain or hardware needed) plus `make test-port`.
 
 A byte-identical size table proves codegen is unchanged; it does not prove the port works.

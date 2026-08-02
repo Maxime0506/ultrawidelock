@@ -80,6 +80,7 @@ ci.yml:verify                              zizmor
 ci.yml:verify                              mal-diff
 ci.yml:verify                              esp
 ci.yml:verify                              attest
+ci.yml:verify                              approtect
 ci.yml:verify                              ct
 ci.yml:verify                              format
 ci.yml:verify                              shellcheck
@@ -108,6 +109,7 @@ firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-initiator        !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
+firmware-builds.yml:dwm3001cdk             !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
 release.yml:guard                          !release: refuses a dispatch whose ref is not a vN.N.N tag, so it has nothing to reproduce locally
 release.yml:tui                            test-tui
@@ -301,9 +303,12 @@ for a in "$@"; do case "$a" in -*) ;; *) t="$a"; break ;; esac; done
 case " ${FAIL_GATES:-} " in *" $t "*) echo "stub make: $t failed" >&2; exit 1 ;; esac
 case " ${EXIT2_GATES:-} " in *" $t "*) echo "stub make: $t exited 2" >&2; exit 2 ;; esac
 if [ "$t" = coverage ]; then
-	mkdir -p build/coverage
+	# Same path tests/host/coverage.sh writes: one build root, host suites
+	# under build/host. A stale path here makes the floor check read a file
+	# that is never written, which fails as "no coverage summary".
+	mkdir -p build/host/coverage
 	printf '{"data":[{"totals":{"lines":{"percent":%s}}}]}\n' "${COV_PCT:-95.5}" \
-		> build/coverage/summary.json
+		> build/host/coverage/summary.json
 fi
 [ "$t" = twin-wasm ] && [ -n "${TWIN_DRIFTS:-}" ] && echo "rebuilt" >> web-twin/twin.js
 echo "stub make $t"
@@ -361,6 +366,16 @@ case " ${HOSTSKIP_GATES:-} " in *" $1 "*) echo "stub security: $1 needs a tool t
 echo "stub security $1 ok"
 EOF
 chmod +x "$FAKE/scripts/security.sh"
+# The approtect gate is a tripwire, so without a stub here it fails first and
+# every later assertion in this file reads as a cascade from it rather than as
+# its own result. verify.sh invokes it twice — `--self-test`, then bare — and
+# both have to succeed for the gate to pass, so the stub answers both.
+cat > "$FAKE/scripts/check-approtect.sh" <<'EOF'
+#!/usr/bin/env bash
+case " ${FAIL_GATES:-} " in *" approtect "*) echo "stub approtect: failed" >&2; exit 1 ;; esac
+case "${1:-}" in --self-test) echo "stub approtect self-test ok" ;; *) echo "stub approtect ok" ;; esac
+EOF
+chmod +x "$FAKE/scripts/check-approtect.sh"
 echo "int a;" > "$FAKE/modules/a.c"
 echo "// twin" > "$FAKE/web-twin/twin.js"
 echo "// selftest" > "$FAKE/web-twin/selftest.cjs"

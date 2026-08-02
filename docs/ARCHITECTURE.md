@@ -1112,6 +1112,85 @@ transport_pn532.cpp.
 
 **depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)
 
+## `firmware/src/`
+
+### [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
+
+@file matter_commission.c — joins BTP, the exchange and PASE.
+Three finished pieces and no protocol of its own:
+matter_ble_zephyr.c   bytes in and out over the 0xFFF6 service
+matter_exchange.c     which session, which exchange, duplicate, ack
+matter_pase_sm.c      the five commissioning messages
+What is left for this file is the wiring nobody else can do: pulling the
+SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
+what happens when a commissioner disappears halfway through.
+
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+### [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md)
+
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
+
+### [`firmware/src/main.c`](architecture/firmware.src/main.c.md)
+
+**depends on** [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+### [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md)
+
+@file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
+A thin adapter, on purpose. All the framing lives in modules/woz_matter
+(matter_btp.c), which has no Zephyr dependency and is tested on the host
+under sanitizers. This file does three things and no more: hand C1 writes to
+the reassembler, drive the fragmenter out through C2 indications, and build
+the commissionable advertisement.
+Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
+service, one write characteristic, one indicate characteristic,
+connection-scoped state -- and is proven against live iPhones.
+
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
+
+### [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
+
+**depends on** [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+### [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
+
+@file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
+Everything here is Zephyr-side glue. The protocol lives in
+modules/woz_matter, which knows nothing about BLE.
+
+**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
+
+### [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
+
+@file matter_commission.h — start answering commissioning attempts.
+
+**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
+
+### [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+**used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
+
+### [`firmware/src/aliro_prov_settings.c`](architecture/firmware.src/aliro_prov_settings.c.md)
+
+### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
+
+### [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md)
+
+@file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
+The dataset arrives from the commissioner as raw meshcop TLVs and
+otDatasetSetActiveTlvs() takes raw meshcop TLVs, so nothing here has to
+understand the format -- which is the point. This node parses exactly one
+field out of it, the Extended PAN ID, and only so it can name the network
+back to the commissioner.
+Built into every image. Without CONFIG_NET_L2_OPENTHREAD it refuses honestly
+rather than disappearing: matter_clusters.c calls it unconditionally, and a
+link error would be a worse way to learn that Thread was configured out.
+
+### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
+
+### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
+
 ## `modules/woz_uwb/src/fira/`
 
 ### [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
@@ -1130,101 +1209,6 @@ transport_pn532.cpp.
 
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
-
-## `ports/dwm3001cdk/app/src/`
-
-### [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
-
-@file matter_commission.c — joins BTP, the exchange and PASE.
-Three finished pieces and no protocol of its own:
-matter_ble_zephyr.c   bytes in and out over the 0xFFF6 service
-matter_exchange.c     which session, which exchange, duplicate, ack
-matter_pase_sm.c      the five commissioning messages
-What is left for this file is the wiring nobody else can do: pulling the
-SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
-what happens when a commissioner disappears halfway through.
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
-
-### [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md)
-
-### [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
-
-### [`ports/dwm3001cdk/app/src/matter_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.c.md)
-
-@file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
-A thin adapter, on purpose. All the framing lives in modules/woz_matter
-(matter_btp.c), which has no Zephyr dependency and is tested on the host
-under sanitizers. This file does three things and no more: hand C1 writes to
-the reassembler, drive the fragmenter out through C2 indications, and build
-the commissionable advertisement.
-Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
-service, one write characteristic, one indicate characteristic,
-connection-scoped state -- and is proven against live iPhones.
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md)
-
-### [`ports/dwm3001cdk/app/src/matter_fab_settings.c`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
-
-### [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md)
-
-@file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
-Everything here is Zephyr-side glue. The protocol lives in
-modules/woz_matter, which knows nothing about BLE.
-
-**used by** [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/matter_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
-
-### [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md)
-
-@file matter_commission.h — start answering commissioning attempts.
-
-**used by** [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
-
-### [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
-
-*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
-
-**used by** [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.c`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.c.md)
-
-### [`ports/dwm3001cdk/app/src/aliro_prov_settings.c`](architecture/ports.dwm3001cdk.app.src/aliro_prov_settings.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-### [`ports/dwm3001cdk/app/src/case_bench.c`](architecture/ports.dwm3001cdk.app.src/case_bench.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: measure what a Matter CASE handshake costs on this part".*
-
-### [`ports/dwm3001cdk/app/src/matter_thread_port.c`](architecture/ports.dwm3001cdk.app.src/matter_thread_port.c.md)
-
-@file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
-The dataset arrives from the commissioner as raw meshcop TLVs and
-otDatasetSetActiveTlvs() takes raw meshcop TLVs, so nothing here has to
-understand the format -- which is the point. This node parses exactly one
-field out of it, the Extended PAN ID, and only so it can name the network
-back to the commissioner.
-Built into every image. Without CONFIG_NET_L2_OPENTHREAD it refuses honestly
-rather than disappearing: matter_clusters.c calls it unconditionally, and a
-link error would be a worse way to learn that Thread was configured out.
-
-### [`ports/dwm3001cdk/app/src/prov_shell.c`](architecture/ports.dwm3001cdk.app.src/prov_shell.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
-
-### [`ports/dwm3001cdk/app/src/thread_gate.c`](architecture/ports.dwm3001cdk.app.src/thread_gate.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: make the provisioning console optional, and probe Matter's budget".*
 
 ## `integration/homeassistant/custom_components/openaliro/`
 
@@ -2875,22 +2859,62 @@ a clone reaches a build in one command instead of three.
 Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 
-### [`scripts/build.sh`](architecture/scripts/build.sh.md)
+### [`scripts/build-nrf5340dk.sh`](architecture/scripts/build-nrf5340dk.sh.md)
 
-build.sh {build|rebuild|flash|flash-erase|build-flash} — build the Aliro
-NFC+UWB image from the self-contained ./workspace. Run scripts/bootstrap.sh first.
+build-nrf5340dk.sh {build|rebuild|flash|flash-erase|build-flash} — build the
+Aliro NFC+UWB image for the nRF5340 DK from the self-contained ./workspace.
+Run scripts/bootstrap.sh first.
+Named for its board because BOARD below is hardcoded: this script builds
+nrf5340dk/nrf5340/cpuapp and nothing else. The DWM3001CDK is built straight
+from firmware/ by mk/cdk.mk, and the ESP32 apps by mk/esp32.mk.
 Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
-overlays. Output → ./build (git-ignored).
+overlays. Output → build/nrf5340dk (git-ignored), or build/nrf5340dk-blob
+when ALIRO_SOURCE=0, so flipping that flag no longer forces a pristine rebuild.
 Incremental by default — a full from-scratch (pristine) build runs only when it
 has to: first build, changed build flags (UWB chip / self-test / config), or
 when you ask for one. A preflight first checks the workspace is bootstrapped.
-scripts/build.sh build                  # incremental where safe (fast)
-scripts/build.sh rebuild                # force a clean pristine build
-PRISTINE=1 scripts/build.sh build       # same as rebuild
-UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
-PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
-UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
+scripts/build-nrf5340dk.sh build                  # incremental where safe (fast)
+scripts/build-nrf5340dk.sh rebuild                # force a clean pristine build
+PRISTINE=1 scripts/build-nrf5340dk.sh build       # same as rebuild
+UWB_SELFTEST=1 scripts/build-nrf5340dk.sh build   # one-shot boot self-test, no iPhone (diagnostic)
+PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
+ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
+UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
+
+### [`scripts/check-approtect.sh`](architecture/scripts/check-approtect.sh.md)
+
+check-approtect.sh — refuse to ship an image that locks APPROTECT.
+WHAT IS BEING PREVENTED. On the nRF52833 (and the nRF5340), selecting
+CONFIG_NRF_APPROTECT_LOCK makes SystemInit() lock the firmware branch of the
+APPROTECT mechanism on EVERY boot, before any of our code runs. The only way
+back is `nrfjprog --recover`, which mass-erases flash AND UICR. On this
+project that is not "lose the firmware" -- it is:
+* settings_storage (0x7e000) gone, so the Matter fabrics and trust anchors go
+* the reader private key gone (firmware/src/prov_shell.c), and
+EVERY iPhone key already provisioned against this board dies with it
+A board that has done this is not bricked, but every future debug session
+costs a full wipe and a re-provision, and the credentials cannot be recreated.
+NCS defaults to open (NRF_APPROTECT_USE_UICR); the requirement is only that
+nobody turns it on. This gate is what makes "nobody" true.
+scripts/check-approtect.sh              # both layers
+scripts/check-approtect.sh --self-test  # prove the gate can actually fail
+make verify                             # runs this as the `approtect` gate
+Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
+TWO LAYERS, because either one alone is a gate that passes while checking
+nothing:
+sources    Every tracked config file. This is the layer that works in CI,
+which never builds firmware (firmware-builds.yml is
+workflow_dispatch only), so a .config scan there would find zero
+files and report success against nothing.
+generated  Every */zephyr/.config that exists locally. This is the layer
+that catches what the source scan CANNOT: the setting arriving
+from a board defconfig, an SoC Kconfig default, or a sysbuild
+set_config_bool -- none of which appear anywhere in this tree.
+Checking the generated config is the only way to know what was
+actually compiled, which is why the source layer never stands in
+for it.
+The generated layer reporting "0 builds examined" is NOT a pass and is not
+silent: it says so, and it is the reason the source layer is not optional.
 
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
 
@@ -3026,12 +3050,12 @@ NO_COLOR=1           plain output
 security-fw.sh — the shipped artifact, which every other gate in this repo reasons about only
 indirectly.
 semgrep, clang-tidy, CodeQL and CBMC all read source. The thing a user actually flashes is
-build/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
+build/nrf5340dk/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
 generated device tree, a vendor blob and whatever `west build` decided to bake in. Nothing here
 has ever looked at the result. That gap is where a build-host path leak, a test key that
 survived a #ifdef, or a payload appended after the link would live, and none of those are
 visible to a source scanner by construction.
-scripts/security-fw.sh                       # every check, on build/merged.hex
+scripts/security-fw.sh                       # every check, on the nRF5340DK image
 scripts/security-fw.sh --image out/x.bin     # explicit artifact
 scripts/security-fw.sh strings               # one: keys strings size dwarf
 make security-fw
@@ -3041,7 +3065,9 @@ and arm-none-eabi-objcopy lives inside the NCS toolchain, so requiring either tu
 ran" into "the gate ran if you had bootstrapped", which is the soft-skip this repo's gates are
 written to refuse. The parser below is thirty lines and has no dependencies.
 Env:
-FW_IMAGE=path                artifact (default: build/merged.hex, then build/zephyr/merged.hex)
+FW_IMAGE=path                artifact (default: the nRF5340DK image under $ALIRO_BUILD_ROOT)
+The size baseline is calibrated to THAT image, so pointing this
+at another board's build compares against the wrong record.
 FW_DENYLIST=path             byte patterns that must not ship (default: security/fw-denylist.txt)
 FW_SIZE_BASELINE=path        recorded sizes (default: security/fw-size-baseline.txt)
 FW_SIZE_WARN=2 FW_SIZE_FAIL=10   growth percentages
@@ -3131,7 +3157,7 @@ Usage:
     scripts/spake2p_verifier.py --passcode 12345678 --salt-b64 <...>
 
 The output goes into CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER and friends
-(ports/dwm3001cdk/app/Kconfig). Print nothing anywhere it will be logged: the
+(firmware/Kconfig). Print nothing anywhere it will be logged: the
 verifier is not a secret in the way the passcode is, but it identifies the
 device and there is no reason to scatter it.
 

@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 #
-# build.sh {build|rebuild|flash|flash-erase|build-flash} — build the Aliro
-# NFC+UWB image from the self-contained ./workspace. Run scripts/bootstrap.sh first.
+# build-nrf5340dk.sh {build|rebuild|flash|flash-erase|build-flash} — build the
+# Aliro NFC+UWB image for the nRF5340 DK from the self-contained ./workspace.
+# Run scripts/bootstrap.sh first.
+#
+# Named for its board because BOARD below is hardcoded: this script builds
+# nrf5340dk/nrf5340/cpuapp and nothing else. The DWM3001CDK is built straight
+# from firmware/ by mk/cdk.mk, and the ESP32 apps by mk/esp32.mk.
 #
 # Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
-# overlays. Output → ./build (git-ignored).
+# overlays. Output → build/nrf5340dk (git-ignored), or build/nrf5340dk-blob
+# when ALIRO_SOURCE=0, so flipping that flag no longer forces a pristine rebuild.
 #
 # Incremental by default — a full from-scratch (pristine) build runs only when it
 # has to: first build, changed build flags (UWB chip / self-test / config), or
 # when you ask for one. A preflight first checks the workspace is bootstrapped.
 #
-#   scripts/build.sh build                  # incremental where safe (fast)
-#   scripts/build.sh rebuild                # force a clean pristine build
-#   PRISTINE=1 scripts/build.sh build       # same as rebuild
-#   UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
-#   PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-#   ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
-#   UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
+#   scripts/build-nrf5340dk.sh build                  # incremental where safe (fast)
+#   scripts/build-nrf5340dk.sh rebuild                # force a clean pristine build
+#   PRISTINE=1 scripts/build-nrf5340dk.sh build       # same as rebuild
+#   UWB_SELFTEST=1 scripts/build-nrf5340dk.sh build   # one-shot boot self-test, no iPhone (diagnostic)
+#   PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
+#   ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
+#   UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
 set -euo pipefail
 
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,7 +53,18 @@ NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$TREE/ports/nrf5340dk/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
 APP="$ADDON/applications/matter-aliro-door-lock-app"
-BUILD="${ALIRO_BUILD:-$TREE/build}"
+# One build root for the whole repo (Makefile exports ALIRO_BUILD_ROOT); every
+# producer derives its own subdirectory under it, so `make clean` is one rm.
+# ALIRO_SOURCE picks the subdirectory rather than reconfiguring one shared dir:
+# the two link different Aliro implementations, and sharing a directory made
+# every flip a from-scratch rebuild. Validated in do_build, not here, so an
+# unknown value still dies with the message that names the legal ones.
+BUILD_ROOT="${ALIRO_BUILD_ROOT:-$TREE/build}"
+case "${ALIRO_SOURCE:-1}" in
+0) BUILD_NAME="nrf5340dk-blob" ;;
+*) BUILD_NAME="nrf5340dk" ;;
+esac
+BUILD="${ALIRO_BUILD:-$BUILD_ROOT/$BUILD_NAME}"
 BOARD="nrf5340dk/nrf5340/cpuapp"
 
 # Launch a west command through nrfutil's Nordic SDK toolchain manager for the configured NCS version. Ensures all builds use the pinned toolchain without calling bare west.
@@ -251,7 +268,12 @@ do_build() {
   fi
   [ ${#nfc_flags[@]} -gt 0 ] && dflags+=("${nfc_flags[@]}")
 
-  local sig sig_file="${BUILD%/}.aliro_build_sig"
+  # The signature lives beside the build root, never inside the build directory:
+  # `west build -p always` deletes that directory, so a signature stored there
+  # would vanish with it and every build would read as "prior config unknown".
+  local sig sig_file
+  sig_file="$BUILD_ROOT/_sig/$(basename "$BUILD").sig"
+  mkdir -p "$(dirname "$sig_file")"
   sig="$(printf '%s\0' "$BOARD" "$APP" "$NCS_VER" "${dflags[@]}" | sha | awk '{print $1}')"
 
   # Decide: pristine (full, slow) vs incremental (fast).

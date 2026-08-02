@@ -54,21 +54,21 @@ Render the main content section of the Get-Started landing page as a series of c
 **called by** `build_page`  ·  **calls** `chip`, `row`
 
 ### `build_page(template: str, gh: str) -> str`
-`tools/docs_start.py:342`
+`tools/docs_start.py:343`
 
 Build the Get-Started page by injecting main_html(gh) into the site template, then update the hero button link and search index. Applies title, og:title, breadcrumb, and active-nav-marker rewrites. Returns the modified page as a string.
 
 **called by** `main`  ·  **calls** `main_html`
 
 ### `add_search_row(page_name: str) -> None`
-`tools/docs_start.py:371`
+`tools/docs_start.py:372`
 
 Add an entry for the given page name to the nav.js search array if not already present. Inserts at position 1 (after the index entry) and rewrites the JSON in place. Does nothing silently if nav.js is absent.
 
 **called by** `main`
 
 ### `main() -> int`
-`tools/docs_start.py:389`
+`tools/docs_start.py:390`
 
 Render the Get-Started landing page and inject it into site/start.html, wire the wayfinding guide into every page, and update navigation and hero-button references. Reports counts of pages modified and returns 1 if the template layout has changed. Requires the site to be rendered first.
 

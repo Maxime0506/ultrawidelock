@@ -1,7 +1,7 @@
 # Installing
 
-The nRF5340 DK is the primary target; the ESP32-S3, ESP32-C5, and ESP32-C6 apps
-port the same engine.
+The DWM3001CDK is the primary target; the nRF5340 DK and the ESP32-S3, ESP32-C5
+and ESP32-C6 apps port the same engine.
 No hardware needed until you flash.
 
 ## Get the code
@@ -26,7 +26,9 @@ does not record a successful real WebSerial flash yet. Treat browser flashing as
 experimental until that bench check exists. ESP32-S3 is hardware-validated
 through the normal flash path; ESP32-C5 has build and release support only.
 
-## nRF5340 DK (primary target)
+## The Zephyr boards: DWM3001CDK and nRF5340 DK
+
+Both build out of one fetched workspace, so the setup below is shared.
 
 One command:
 
@@ -44,7 +46,7 @@ the middle:
    is safe on every run. It asks nrfutil rather than checking a path, so a
    toolchain in a non-default location is found as long as nrfutil knows about
    it (`nrfutil sdk-manager config show` names the directory it looks in). That
-   is the same route `make build` uses to reach the compiler, so the two can
+   is the same route the builds use to reach the compiler, so the two can
    never disagree: a toolchain nrfutil cannot see is one the build could not
    have used. If yours is managed some other way, `ALIRO_TOOLCHAIN=env` uses
    whatever is already on `PATH` and skips this phase.
@@ -61,22 +63,34 @@ after it, which is where that failure used to surface. Knobs:
 | `ALIRO_WS=/big/disk/ws` | put the workspace somewhere else |
 | `ALIRO_SHALLOW=1` | shallow fetch, saves several GB (what CI uses) |
 | `ALIRO_TOOLCHAIN=env` | use the toolchain already on `PATH` |
-| `HA=1` | Home Assistant patches (pair with `make build HA=1`) |
+| `HA=1` | Home Assistant patches (pair with `make nrf-build HA=1`) |
 
 CI never runs `make bootstrap`; it calls `scripts/bootstrap.sh` directly, so no
 runner has its packages touched, and it builds in a container with the
 toolchain already on `PATH` (`ALIRO_TOOLCHAIN=env`), which skips phase 2 too.
 
-Then:
+Then, for the **DWM3001CDK** — one nRF52833 carrying the reader, the Matter
+node and a Thread MTD:
 
 ```bash
-make build
-make flash-erase
-make term
+make build          # -> build/cdk-matter/merged.hex
+make flash          # over the on-board J-Link OB
+make monitor        # RTT; this board has no UART console
 ```
 
-The image lands in `./build/merged.hex`; the first flash needs the erase,
-plain `make flash` after.
+`make reader` builds the same source without Matter or Thread, which needs no
+commissioner. Details: [`firmware/README.md`](../firmware/README.md).
+
+Or for the **nRF5340 DK**, the only target with NFC:
+
+```bash
+make nrf-build
+make nrf-flash-erase
+make nrf-term
+```
+
+That image lands in `./build/nrf5340dk/merged.hex`; the first flash needs the
+erase, plain `make nrf-flash` after.
 
 Build options: [configuring.md](configuring.md). Board setup:
 [nrf5340-bringup.md](nrf5340-bringup.md).
@@ -169,23 +183,22 @@ validation is recorded.
 **Reader** (`../ports/esp32/apps/reader`): plain ESP-IDF, no esp-matter.
 
 ```bash
-cd ports/esp32/apps/reader
-make set-target TARGET=esp32c6   # or: esp32s3 / esp32c5
-make build
-make flash
+make esp-build APP=reader TARGET=esp32c6   # or: esp32s3 / esp32c5
+make esp-flash APP=reader TARGET=esp32c6
 ```
 
 **Matter door lock** (`../ports/esp32/apps/matter-lock`): also needs
 esp-matter at `~/esp/esp-matter` (override: `ESP_MATTER_PATH=`).
 
 ```bash
-cd ports/esp32/apps/matter-lock
-make set-target TARGET=esp32c6   # or: esp32s3 / esp32c5
-make go
+make esp-go APP=matter-lock TARGET=esp32c6   # or: esp32s3 / esp32c5
 ```
 
-`make go` = build + flash + monitor; `flash` and `monitor` refuse
-SEGGER/J-Link ports, so they can never touch an nRF5340 DK on the bench.
+`esp-go` = build + flash + monitor; every flash and monitor target refuses
+SEGGER/J-Link ports, so they can never touch an nRF board on the bench.
+
+Running these from the app directory still works — `cd ports/esp32/apps/reader
+&& make build` forwards to the same recipes.
 
 Wiring for both chips: [esp32-bringup.md](esp32-bringup.md). Traps:
 [esp32-gotchas.md](esp32-gotchas.md).
