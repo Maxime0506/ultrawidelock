@@ -967,6 +967,30 @@ static void subscription_heartbeat_arm(void)
 	(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(SUBSCRIPTION_HEARTBEAT_S));
 }
 
+/*
+ * The Aliro side of this lock moved, so Matter has to be told.
+ *
+ * A walk-up unlock and its walk-away relock never went through the Door Lock
+ * cluster at all -- they are the reader's own transaction -- so LockState kept
+ * whatever the last tile tap set it to. The Wallet animated "unlocked" while
+ * the Home tile said locked, and the app was not wrong so much as uninformed:
+ * nothing had reported the change.
+ *
+ * Runs on the BLE-host task, so it does the cheapest possible thing: set a byte
+ * and submit. The report itself is built on the system work queue.
+ */
+static void on_aliro_lock_state(bool unlocked)
+{
+	uint8_t want = unlocked ? MATTER_DL_LOCK_STATE_UNLOCKED : MATTER_DL_LOCK_STATE_LOCKED;
+
+	if (s_info.lock_state == want) {
+		return;
+	}
+	s_info.lock_state = want;
+	LOG_INF("Aliro %s the lock; telling Matter", unlocked ? "opened" : "relocked");
+	notify_lock_state_changed();
+}
+
 /** The session serving the datagram in flight; 0 when it arrived over BLE. */
 static uint16_t current_session_id(void)
 {
@@ -2274,6 +2298,7 @@ int matter_commission_init(void)
 	matter_clusters_init(&s_im, &s_info);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
+	aliro_reader_set_lock_state_listener(on_aliro_lock_state);
 
 	/*
 	 * AFTER matter_clusters_init, which zeroes the parts of s_info it owns.

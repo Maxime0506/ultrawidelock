@@ -1142,6 +1142,14 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
 	gated_complete_ap(s);
 }
 
+/* Told when the reader announces a new lock state; see aliro_reader.h. */
+static void (*s_lock_state_listener)(bool unlocked);
+
+void aliro_reader_set_lock_state_listener(void (*cb)(bool unlocked))
+{
+	s_lock_state_listener = cb;
+}
+
 /* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
  * confirmation that fires the iPhone Wallet unlock animation. proto-2 (Notification)
  * message-id 0x02, one State Attribute (id 0x00, len 2) = [OperationSource,
@@ -1168,6 +1176,14 @@ static void reader_status_send(struct aliro_session *s, bool unsecured)
 
 	LOG_INF("[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
+	/*
+	 * Only once it is actually on the wire. This is the instant the phone
+	 * animates, so it is also the instant anything else reporting this
+	 * lock's state -- a Matter tile, say -- becomes wrong if it is not told.
+	 */
+	if (rc == 0 && s_lock_state_listener != NULL) {
+		s_lock_state_listener(unsecured);
+	}
 	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
 	s_secured_undelivered = false;
 	/* Whatever just went out is newer than any held replay, including the replay

@@ -47,6 +47,20 @@ int aliro_reader_start_attached(void);
  *  No-op if the reader has no GRK or is not yet advertising. */
 void aliro_reader_refresh_adv(void);
 
+/* Observe the lock state the reader has just ANNOUNCED to the phone: true when
+ * the grant that fires the Wallet animation goes out, false when the walk-away
+ * relock does.
+ *
+ * Distinct from the access listener above, which reports a credential verdict at
+ * authentication time. That fires on the unlock and never on the relock, so a
+ * Matter tile driven from it would show a lock that opens and never closes.
+ *
+ * Called from the BLE-host task the moment the notification is sent, so the
+ * listener must return immediately and must not block. NULL to unregister.
+ * Unconditional, unlike the access hook: this fires twice per unlock rather than
+ * on the transaction path, so a NULL check is not worth a Kconfig. */
+void aliro_reader_set_lock_state_listener(void (*cb)(bool unlocked));
+
 /* Feed one BLE connection-RSSI sample (dBm) into the session's ranging power gate
  * (CONFIG_WOZ_RSSI_GATE; absent without it). The transport polls the controller
  * every CONFIG_WOZ_RSSI_GATE_POLL_MS while its CoC is up and calls this from the
