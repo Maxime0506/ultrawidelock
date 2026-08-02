@@ -85,9 +85,12 @@ exists to prevent.
    version and SRI, but it `import()`s two further chunks from unpkg at runtime, and dynamic
    imports carry no integrity metadata. They are constrained by the page's CSP origin list only.
    Closing this properly means vendoring the esp-web-tools dist tree.
-4. **No SCA on the firmware dependencies** — Dependabot now watches `tools/tui` (npm) and
-   `integration/homeassistant` (pip), but nothing watches the NCS tree, ESP-IDF, esp-matter, or
-   the ESP component registry, because none is in the tree at scan time.
+4. **No automated dependency updates at all** — Dependabot was removed, so nothing opens a
+   bump PR for `tools/tui` (npm) or `integration/homeassistant` (pip) any more, and nothing
+   ever watched the NCS tree, ESP-IDF, esp-matter, or the ESP component registry, because
+   none is in the tree at scan time. Detection still runs: the `deps` gate (osv-scanner +
+   pip-audit) fails CI on a known-vulnerable dependency on every PR. What is gone is the
+   part that proposes the fix, so upgrades are now a manual job.
 
 ## Bumping a pinned tool
 
