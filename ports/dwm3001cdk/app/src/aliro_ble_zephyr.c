@@ -65,6 +65,8 @@ static uint16_t s_read_payload_len;
 
 /* Resolvable advertising params, set once the reader is provisioned. */
 static bool s_adv_aliro;
+/** Whether the one connection slot is occupied; see aliro_advertise(). */
+static bool s_conn_up;
 static uint8_t s_adv_group_id[8];
 static uint8_t s_adv_sub_id[2];
 static uint8_t s_adv_grk[ALIRO_GRK_LEN];
@@ -361,6 +363,22 @@ static int aliro_advertise(void)
 #endif
 	}
 
+	/*
+	 * CONNECTABLE advertising needs a free connection object, and this board
+	 * is built with exactly one (CONFIG_BT_MAX_CONN=1). While a commissioner
+	 * holds it, bt_le_adv_start() can only return -ENOMEM -- which it did, on
+	 * hardware, when SetAliroReaderConfig refreshed the payload mid-CASE, and
+	 * the honest-looking "the reader is now invisible" below was wrong: the
+	 * board was connected, not invisible.
+	 *
+	 * Nothing is lost by waiting. on_disconnected() schedules a readvertise,
+	 * which rebuilds the payload from whatever the identity is by then.
+	 */
+	if (s_conn_up) {
+		LOG_INF("advertising deferred: connected; the payload lands on disconnect");
+		return 0;
+	}
+
 	int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, NULL, 0);
 
 	if (rc == -EALREADY) {
@@ -420,15 +438,25 @@ static void readvertise_work_fn(struct k_work *w)
 	LOG_ERR("cannot resume advertising after a disconnect; a reset is needed");
 }
 
+static void on_connected(struct bt_conn *conn, uint8_t err)
+{
+	ARG_UNUSED(conn);
+	if (err == 0u) {
+		s_conn_up = true;
+	}
+}
+
 static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	ARG_UNUSED(conn);
+	s_conn_up = false;
 	LOG_INF("BLE disconnected (0x%02x); re-advertising", reason);
 	/* Deferred, and not by much -- see readvertise_work_fn(). */
 	(void)k_work_schedule(&s_readvertise_work, K_MSEC(50));
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
+	.connected = on_connected,
 	.disconnected = on_disconnected,
 };
 

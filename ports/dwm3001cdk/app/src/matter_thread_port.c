@@ -35,7 +35,7 @@ LOG_MODULE_REGISTER(matter_thread, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
 #include <openthread/thread.h>
 #include <openthread/udp.h>
 
-#include <zephyr/random/random.h>
+#include <psa/crypto.h>
 #include <zephyr/settings/settings.h>
 
 #include <stdio.h>
@@ -296,10 +296,19 @@ static uint32_t srp_host_id(void)
 	(void)settings_subsys_init();
 	(void)settings_load_subtree_direct(SRP_HOST_ID_KEY, host_id_read, &id);
 	if (id == 0u) {
-		/* Zephyr's, not otRandomNonCryptoGetUint32(): this runs on the
-		 * Matter work queue without the OpenThread lock held. */
+		/*
+		 * PSA's, not otRandomNonCryptoGetUint32(): this runs on the
+		 * Matter work queue without the OpenThread lock held. A CSPRNG
+		 * for a name that gets published in the clear is not strictly
+		 * required, but security/semgrep-openaliro.yml refuses to let
+		 * this codebase have two classes of random source, and a value
+		 * drawn once per lifetime cannot be the wrong place to pay.
+		 */
 		do {
-			id = sys_rand32_get();
+			if (psa_generate_random((uint8_t *)&id, sizeof(id)) != PSA_SUCCESS) {
+				LOG_ERR("no RNG for the SRP host id");
+				return 0u;
+			}
 		} while (id == 0u);
 		if (settings_save_one(SRP_HOST_ID_KEY, &id, sizeof(id)) != 0) {
 			/* Registration still works; it is the NEXT boot that

@@ -1189,7 +1189,6 @@ static void advertise_one(const struct matter_fabric *fabric);
 
 static void advertise_operational(const struct matter_device_info *info)
 {
-	char name[MATTER_INSTANCE_NAME_LEN];
 	size_t fi;
 
 	/*

@@ -155,6 +155,26 @@ struct matter_exchange {
 	 * forever. On the unsecured session it does not: see matter_exchange_recv().
 	 */
 	bool open;
+	/**
+	 * Exchange ids this node OPENED, newest last, wrapping.
+	 *
+	 * @ref exchange_id follows the PEER. It says nothing about the exchanges
+	 * this node initiates -- subscription reports, which go out with their own
+	 * ids through matter_exchange_send_initiator(). The peer acknowledges each
+	 * one, and that acknowledgement arrives with I CLEAR and an exchange id
+	 * that is not the peer's current one, which is indistinguishable from a
+	 * reply to a conversation this node never started unless the ids it did
+	 * start are remembered. They were not, so every report was refused its
+	 * ack and retransmitted for the whole MRP schedule -- measured on
+	 * hardware as bursts of "CASE message refused (-4)" after each report.
+	 *
+	 * Four, because a report goes to every subscription (two fabrics today)
+	 * and the next event can be reported before the acks for the last one
+	 * arrive. Older ids fall off, which costs a refusal for an ack that late
+	 * and nothing else.
+	 */
+	uint16_t init_exchange[4];
+	uint8_t init_exchange_n;
 	/** Counters this node stamps on what it sends. */
 	struct matter_counter counter;
 	/** Counters seen from the peer, for duplicate suppression. */

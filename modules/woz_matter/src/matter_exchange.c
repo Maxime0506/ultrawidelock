@@ -48,6 +48,33 @@ static int check_msg_header(const struct matter_exchange *x, const struct matter
 	return MATTER_OK;
 }
 
+/** Did this node open @p id? See @ref matter_exchange::init_exchange. */
+static bool exchange_is_ours(const struct matter_exchange *x, uint16_t id)
+{
+	for (uint8_t i = 0u; i < x->init_exchange_n; i++) {
+		if (x->init_exchange[i] == id) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/** Remember it, dropping the oldest. Duplicates are not re-recorded. */
+static void exchange_remember(struct matter_exchange *x, uint16_t id)
+{
+	const uint8_t cap = (uint8_t)(sizeof(x->init_exchange) / sizeof(x->init_exchange[0]));
+
+	if (exchange_is_ours(x, id)) {
+		return;
+	}
+	if (x->init_exchange_n < cap) {
+		x->init_exchange[x->init_exchange_n++] = id;
+		return;
+	}
+	memmove(&x->init_exchange[0], &x->init_exchange[1], (size_t)(cap - 1) * sizeof(uint16_t));
+	x->init_exchange[cap - 1] = id;
+}
+
 int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t len,
 			 struct matter_exchange_in *in, uint8_t *pt, size_t pt_cap)
 {
@@ -150,13 +177,22 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 		x->exchange_id = ph.exchange_id;
 		x->open = true;
 	} else if (ph.exchange_id != x->exchange_id) {
-		if (!x->secure || !in->initiator) {
+		if (!in->initiator && exchange_is_ours(x, ph.exchange_id)) {
+			/*
+			 * An acknowledgement for an exchange this node opened,
+			 * which is the one case where I clear on an unfamiliar
+			 * id is exactly right. Consumed WITHOUT adopting the id:
+			 * the peer's own exchange is still live and moving
+			 * @ref exchange_id here would misaddress its next reply.
+			 */
+		} else if (!x->secure || !in->initiator) {
 			return MATTER_E_STATE;
+		} else {
+			x->exchange_id = ph.exchange_id;
+			/* Whatever was owed belonged to the exchange that just
+			 * ended, and would now be framed with the wrong id. */
+			x->ack_pending = false;
 		}
-		x->exchange_id = ph.exchange_id;
-		/* Whatever was owed belonged to the exchange that just ended, and
-		 * would now be framed with the wrong exchange id. */
-		x->ack_pending = false;
 	}
 
 	/* Keep the initiator's ephemeral node id: every reply has to be addressed
@@ -313,6 +349,11 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 	}
 	ph.opcode = opcode;
 	ph.exchange_id = as_initiator ? init_exchange_id : x->exchange_id;
+	if (as_initiator) {
+		/* So the peer's acknowledgement is recognised when it comes back
+		 * with I clear on an id the peer never opened. */
+		exchange_remember(x, init_exchange_id);
+	}
 	ph.protocol_id = protocol_id;
 
 	rc = matter_msg_header_encode(&mh, out, cap, &mh_len);
