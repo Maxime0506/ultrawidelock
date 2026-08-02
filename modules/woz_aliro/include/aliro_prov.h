@@ -36,9 +36,14 @@ extern "C" {
  * two endpoint keys per pairing, they accumulate across pairings, and nothing
  * evicted them -- so a re-paired reader held 4 stale anchors, rejected the key
  * the phone actually presented, and could not be recovered by pairing again.
- * 8 at 97 B a slot is 388 B for headroom the failure mode does not forgive.
+ * 6 at 97 B a slot: three pairings before anything is evicted, against a
+ * failure mode that used to be permanent. It was briefly 8 and came back down
+ * to buy RAM for the OpenThread stack, which the Interaction Model runs on and
+ * which was overflowing during commissioning -- this part has 128 KB and the
+ * image is at 96%. The number that matters is "more than one pairing's worth",
+ * and eviction (below) is what makes running out survivable rather than fatal.
  */
-#define ALIRO_TRUST_MAX       8u  /* trusted credential keys the store holds */
+#define ALIRO_TRUST_MAX       6u  /* trusted credential keys the store holds */
 #define ALIRO_GRK_LEN         16u /* group resolving key (Aliro BLE-UWB adv tag) */
 #define ALIRO_KPERSISTENT_LEN 32u /* per-credential expedited-fast key (§8.3.1.13) */
 
