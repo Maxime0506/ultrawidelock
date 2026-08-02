@@ -938,6 +938,18 @@ struct sub_persist {
 
 static struct sub_persist s_dormant[MATTER_CASE_SESSIONS];
 
+/*
+ * Subscription ids, and why this is not a local static.
+ *
+ * It restarted at 0 on every boot, so the FIRST subscription after a reboot was
+ * always 0x00000001 -- the same id a resumed record is very likely to carry,
+ * because it was also the first one before the reboot. Observed 2026-08-02
+ * 17:40: a resumed subscription and the controller's fresh one both answering
+ * to 0x00000001. It was benign only because the new request reused the same
+ * slot. Seeded past every stored id at load, the two can no longer collide.
+ */
+static uint32_t s_sub_next_id;
+
 static void sub_persist_save(uint8_t slot, const struct sub_state *s, uint64_t peer_node,
 			     uint8_t fabric_index)
 {
@@ -989,6 +1001,9 @@ static void sub_persist_load(void)
 		(void)settings_load_subtree_direct(key, sub_persist_read, &s_dormant[i]);
 		if (s_dormant[i].used) {
 			n++;
+			if (s_dormant[i].id > s_sub_next_id) {
+				s_sub_next_id = s_dormant[i].id;
+			}
 		}
 	}
 	if (n > 0u) {
@@ -1400,9 +1415,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 	 * subscriptions in one boot cannot collide, and never zero because zero
 	 * is how a plain read is told apart from a priming report.
 	 */
-	static uint32_t next_id;
-
-	s->id = ++next_id;
+	s->id = ++s_sub_next_id;
 	/*
 	 * The ceiling is the subscriber's limit, not a request: reporting later
 	 * than this is what makes a subscription dead. Committing to it exactly

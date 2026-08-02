@@ -139,7 +139,7 @@ void test_approach(void)
 	T_EQ("def.motor_ms", cfg.motor_ms, 500);
 	T_EQ("def.margin_ms", cfg.margin_ms, 250);
 	T_EQ("def.vmin_cm_s", cfg.vmin_cm_s, 30);
-	T_EQ("def.far_silence_ms", cfg.far_silence_ms, 1500);
+	T_EQ("def.far_silence_ms", cfg.far_silence_ms, 750);
 	walk_init(&w, 1, 600.0f);
 	T_EQ("idle.cfg.null.defaults", w.ap.cfg.unlock_cm, 100);
 	T_OK("idle.locked", aliro_approach_locked(&w.ap));
@@ -335,10 +335,10 @@ void test_approach(void)
 		T_OK("silence.still.open.after.two", !aliro_approach_locked(&d.ap));
 
 		T_EQ("silence.nothing.before.the.window",
-		     (long)aliro_approach_tick(&d.ap, d.t + 1000),
+		     (long)aliro_approach_tick(&d.ap, d.t + 500),
 		     (long)ALIRO_APPROACH_HOLD);
 		T_EQ("silence.relocks.after.it",
-		     (long)aliro_approach_tick(&d.ap, d.t + 1500),
+		     (long)aliro_approach_tick(&d.ap, d.t + 750),
 		     (long)ALIRO_APPROACH_RELOCK_DEPART);
 		T_OK("silence.locked", aliro_approach_locked(&d.ap));
 		T_EQ("silence.only.once", (long)aliro_approach_tick(&d.ap, d.t + 9000),
@@ -378,9 +378,9 @@ void test_approach(void)
 		/* Nothing fed from here on -- only observed. */
 		aliro_approach_observe_departure(&u.ap, u.t + 200, 309);
 		T_EQ("unvouched.holds.inside.the.window",
-		     (long)aliro_approach_tick(&u.ap, u.t + 1000), (long)ALIRO_APPROACH_HOLD);
+		     (long)aliro_approach_tick(&u.ap, u.t + 600), (long)ALIRO_APPROACH_HOLD);
 		T_EQ("unvouched.relocks.after.it",
-		     (long)aliro_approach_tick(&u.ap, u.t + 1800), (long)ALIRO_APPROACH_RELOCK_DEPART);
+		     (long)aliro_approach_tick(&u.ap, u.t + 1000), (long)ALIRO_APPROACH_RELOCK_DEPART);
 		T_OK("unvouched.locked", aliro_approach_locked(&u.ap));
 	}
 
@@ -398,9 +398,9 @@ void test_approach(void)
 		aliro_approach_observe_departure(&k.ap, k.t + 100, 380);
 
 		/* A near reading arrives mid-window and must be ignored. */
-		aliro_approach_observe_departure(&k.ap, k.t + 900, 12);
+		aliro_approach_observe_departure(&k.ap, k.t + 500, 12);
 		T_EQ("near.observation.cannot.delay.the.relock",
-		     (long)aliro_approach_tick(&k.ap, k.t + 1700), (long)ALIRO_APPROACH_RELOCK_DEPART);
+		     (long)aliro_approach_tick(&k.ap, k.t + 900), (long)ALIRO_APPROACH_RELOCK_DEPART);
 	}
 
 	/* far_silence_ms == 0 restores the sample-only behaviour exactly. */
