@@ -25,9 +25,11 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/settings/settings.h>
 
 #include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
@@ -895,6 +897,157 @@ static struct sub_state s_subs[MATTER_CASE_SESSIONS];
 static uint8_t s_sub_next_victim;
 
 /*
+ * Subscriptions that outlive a reboot.
+ *
+ * They live in RAM, so a reset destroys every one of them while the controller
+ * still believes in all of them -- and it does not re-subscribe until its own
+ * liveness timer expires, which is the granted max interval. Measured
+ * 2026-08-02: the Home tile sent UnlockDoor, this node answered SUCCESS, no
+ * report went anywhere because no subscription existed to report to, and the
+ * tile sat on "Unlocking" for minutes. After every flash.
+ *
+ * CHIP's answer is subscription resumption: persist, then re-establish CASE
+ * outbound and resume. This node has no CASE initiator -- but it does not need
+ * one, because the controller comes back ON ITS OWN about 25 s after boot to
+ * re-establish CASE (16:37:26 -> 16:37:51, 16:18:10 -> 16:18:35, the same
+ * figure twice). It just never re-subscribes. So the record is stored here and
+ * REBOUND to that new session when it arrives, which costs no handshake, no
+ * outbound MRP and nothing on the OpenThread stack.
+ *
+ * What is NOT stored is the read path set. A revived subscription only ever
+ * carries this node's own LockState reports, which notify_lock_state() builds
+ * from a fixed path; the stored paths exist to build the PRIMING report, and a
+ * resumed subscription does not prime.
+ *
+ * UNPROVEN against a real controller: Apple may refuse a ReportData whose
+ * subscription id it considers bound to the session that died. Its
+ * StatusResponse says so either way, and the log lines below name which
+ * happened -- that is the whole experiment.
+ */
+#define SUB_TREE     "msub"
+#define SUB_KEY_FMT  SUB_TREE "/%u"
+#define SUB_KEY_MAX  16u
+
+struct sub_persist {
+	uint64_t peer_node;
+	uint32_t id;
+	uint16_t max_interval_s;
+	uint8_t fabric_index;
+	uint8_t used;
+};
+
+static struct sub_persist s_dormant[MATTER_CASE_SESSIONS];
+
+static void sub_persist_save(uint8_t slot, const struct sub_state *s, uint64_t peer_node,
+			     uint8_t fabric_index)
+{
+	struct sub_persist p = {
+		.peer_node = peer_node,
+		.id = s->id,
+		.max_interval_s = s->max_interval_s,
+		.fabric_index = fabric_index,
+		.used = 1u,
+	};
+	char key[SUB_KEY_MAX];
+
+	if (peer_node == 0u || fabric_index == 0u) {
+		/* Nothing to match on later, so storing it would only produce a
+		 * record no CASE session can ever claim. */
+		return;
+	}
+	(void)snprintf(key, sizeof(key), SUB_KEY_FMT, (unsigned int)slot);
+	if (settings_save_one(key, &p, sizeof(p)) != 0) {
+		LOG_WRN("  subscription 0x%08x not persisted; it will not survive a reboot",
+			(unsigned int)s->id);
+		return;
+	}
+	s_dormant[slot] = p;
+}
+
+static int sub_persist_read(const char *key, size_t len, settings_read_cb read_cb, void *cb_arg,
+			    void *param)
+{
+	struct sub_persist *out = param;
+
+	ARG_UNUSED(key);
+
+	if (len == sizeof(*out)) {
+		(void)read_cb(cb_arg, out, sizeof(*out));
+	}
+	return 0;
+}
+
+/** Load the stored records, dormant until a matching CASE session turns up. */
+static void sub_persist_load(void)
+{
+	unsigned int n = 0u;
+
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		char key[SUB_KEY_MAX];
+
+		(void)snprintf(key, sizeof(key), SUB_KEY_FMT, (unsigned int)i);
+		(void)settings_load_subtree_direct(key, sub_persist_read, &s_dormant[i]);
+		if (s_dormant[i].used) {
+			n++;
+		}
+	}
+	if (n > 0u) {
+		LOG_INF("  %u subscription(s) held over the reboot, waiting for their controller",
+			n);
+	}
+}
+
+/**
+ * A CASE session just came up. If a stored subscription belongs to this peer on
+ * this fabric, put it back to work on the new session.
+ */
+static void sub_resume_for(uint8_t case_slot, uint64_t peer_node, uint8_t fabric_index,
+			   uint16_t session_id)
+{
+	ARG_UNUSED(case_slot);
+
+	if (peer_node == 0u || fabric_index == 0u) {
+		return;
+	}
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		struct sub_state *s = &s_subs[i];
+
+		if (!s_dormant[i].used || s_dormant[i].peer_node != peer_node ||
+		    s_dormant[i].fabric_index != fabric_index) {
+			continue;
+		}
+		if (s->in_use && s->active && s->id == s_dormant[i].id) {
+			/* Already live -- the controller re-subscribed before we
+			 * got here, which is the outcome that needs no help. */
+			s_dormant[i].used = 0u;
+			continue;
+		}
+		memset(s, 0, sizeof(*s));
+		s->id = s_dormant[i].id;
+		s->max_interval_s = s_dormant[i].max_interval_s;
+		s->session_id = session_id;
+		s->in_use = true;
+		s->active = true;
+		s->priming = false;
+		matter_thread_peer_current(&s->peer);
+		s_dormant[i].used = 0u;
+
+		LOG_INF("  subscription 0x%08x RESUMED on session 0x%04x after the reboot",
+			(unsigned int)s->id, (unsigned int)session_id);
+		subscription_heartbeat_arm();
+	}
+}
+
+/*
+ * There is deliberately no erase for these. A record is only LOADED when a
+ * fabric loads, and can only be CLAIMED by a CASE session whose peer node and
+ * fabric index both match -- a factory reset destroys both, so whatever is left
+ * in NVS is unreachable rather than dangerous, and the next commissioning
+ * overwrites the slots it needs. Three records of 24 bytes is the whole cost of
+ * not adding a second thing that must be kept in step with the fabric erase.
+ */
+
+/*
  * Tell every subscriber that LockState moved.
  *
  * DEFERRED, for two reasons that both cost a night already. It runs on the
@@ -1468,6 +1621,21 @@ static void on_status_response(const struct matter_exchange_in *in)
 	LOG_INF("  subscription 0x%08x ESTABLISHED on session 0x%04x, max interval %u s",
 		(unsigned int)s->id, (unsigned int)s->session_id, s->max_interval_s);
 	send_im(MATTER_IM_OP_SUBSCRIBE_RESPONSE, s_report, resp_len);
+
+	/*
+	 * Written down now, while the session that owns it is still here to say
+	 * WHO subscribed. See struct sub_persist: after a reboot the controller
+	 * comes back but does not re-subscribe, and this record is what lets the
+	 * new session be recognised as the old subscriber's.
+	 */
+	{
+		uint8_t cslot = case_slot_of(s->session_id);
+
+		if (cslot < MATTER_CASE_SESSIONS) {
+			sub_persist_save((uint8_t)(s - s_subs), s,
+					 s_case_x[cslot].peer_op_node_id, s_case_fabric[cslot]);
+		}
+	}
 	/*
 	 * And now it is periodic. Matter's contract is that the server reports
 	 * at least every max_interval even when nothing changed -- a
@@ -2008,6 +2176,16 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 
 	LOG_INF("  CASE ESTABLISHED: local session 0x%04x, peer 0x%04x",
 		(unsigned int)s_case.local_session_id, (unsigned int)s_case.peer_session_id);
+
+	/*
+	 * The controller is back. If it was subscribed before the reboot, this
+	 * is the session that subscription belongs on now -- it will not ask
+	 * again until its own liveness timer expires. Runs while the Sigma3
+	 * datagram is still current, which is what makes the reply address
+	 * available (matter_thread_peer_current).
+	 */
+	sub_resume_for(slot, s_case_x[slot].peer_op_node_id, s_case_fabric[slot],
+		       s_case.local_session_id);
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 	/* The third report point. main.c reads the peak at an unlock grant and
 	 * prov_shell.c at an import, and both predate this node: Sigma3 is now
@@ -2467,6 +2645,10 @@ int matter_commission_init(void)
 		rc = matter_fab_load(&s_info);
 
 		if (rc == 0) {
+			/* Only with a fabric: a record whose fabric did not
+			 * survive can never be claimed, and loading it would
+			 * hold a slot against nothing. */
+			sub_persist_load();
 			rc = matter_clusters_resume(&s_info);
 			if (rc != MATTER_OK) {
 				LOG_ERR("restored a fabric but could not rejoin Thread (%d); "
