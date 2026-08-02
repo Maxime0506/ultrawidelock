@@ -1251,6 +1251,43 @@ void test_matter_im_invoke(void)
 		T_EQ("path names the invoked command", (long)ir.command, 0x00FFL);
 	}
 
+	t_group("the tile's two buttons");
+	{
+		struct matter_im_invoke inv2;
+		struct iresp ir2;
+		size_t len2 = 0u;
+
+		/* Never asked: zero is not a legal LockState, and a reader that
+		 * has been asked nothing is Locked rather than unlocked. */
+		info.lock_state = 0u;
+
+		memset(&inv2, 0, sizeof(inv2));
+		inv2.endpoint = MATTER_ENDPOINT_LOCK;
+		inv2.cluster = MATTER_CLUSTER_DOOR_LOCK;
+		inv2.command = MATTER_CMD_DL_UNLOCK_DOOR;
+
+		T_EQ("UnlockDoor encodes",
+		     matter_im_invoke_response_encode(&srv, &inv2, out, sizeof(out), &len2),
+		     MATTER_OK);
+		T_OK("UnlockDoor decodes", walk_invoke_response(out, len2, &ir2));
+		/* A bare status, not a response command: DoorLock defines no
+		 * LockDoorResponse, and inventing one leaves a controller
+		 * waiting for a message that never comes. */
+		T_OK("answered with a status", ir2.is_status);
+		T_EQ("UnlockDoor SUCCESS", ir2.status, (long)MATTER_IM_STATUS_SUCCESS);
+		T_EQ("state is Unlocked", (long)info.lock_state,
+		     (long)MATTER_DL_LOCK_STATE_UNLOCKED);
+
+		inv2.command = MATTER_CMD_DL_LOCK_DOOR;
+		T_EQ("LockDoor encodes",
+		     matter_im_invoke_response_encode(&srv, &inv2, out, sizeof(out), &len2),
+		     MATTER_OK);
+		T_OK("LockDoor decodes", walk_invoke_response(out, len2, &ir2));
+		T_EQ("LockDoor SUCCESS", ir2.status, (long)MATTER_IM_STATUS_SUCCESS);
+		T_EQ("state is Locked", (long)info.lock_state,
+		     (long)MATTER_DL_LOCK_STATE_LOCKED);
+	}
+
 	t_group("what invoke refuses");
 	{
 		T_EQ("null refused", matter_im_invoke_request_decode(NULL, 4u, &inv),

@@ -136,6 +136,19 @@ extern "C" {
 #define MATTER_CMD_DL_SET_ALIRO_READER_CONFIG 0x0028u
 
 /*
+ * LockDoor and UnlockDoor (CommandIds.h:97-98), which are what the tile in a
+ * controller's UI actually sends. Answering them is what turns "Matter
+ * Accessory / No Response" into a lock a user can press.
+ *
+ * Both carry an OPTIONAL PINCode field this node ignores: it advertises no
+ * PIN_CREDENTIAL feature, so a controller has nothing to send and a PIN that
+ * arrived anyway would be a credential class this reader does not implement.
+ * Both are Timed Invoke commands, which this node already answers.
+ */
+#define MATTER_CMD_DL_LOCK_DOOR   0x0000u
+#define MATTER_CMD_DL_UNLOCK_DOOR 0x0001u
+
+/*
  * GetCredentialStatus (CommandIds.h:107-109) and its response.
  *
  * Asked immediately after the reader identity lands: the controller is
@@ -467,6 +480,17 @@ struct matter_device_info {
 	uint16_t last_user_index;
 	/** The status SetCredential decided, held for its response encoder. */
 	uint8_t last_credential_status;
+	/**
+	 * What LockState reports, and what LockDoor/UnlockDoor change.
+	 *
+	 * Zero is not a legal LockState, so it means "never set" and is reported
+	 * as Locked -- a reader that has been asked nothing is not unlocked.
+	 * There is still no actuator behind this: it moves no bolt, and saying
+	 * Unlocked is a claim about this node's state rather than about a door.
+	 * It matters anyway, because a controller draws the tile from it and
+	 * refuses to send UnlockDoor to something already reporting Unlocked.
+	 */
+	uint8_t lock_state;
 	/**
 	 * The user table, indexed from 0 for slot 1.
 	 *

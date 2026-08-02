@@ -410,11 +410,15 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		return;
 	case MATTER_ATTR_DL_LOCK_STATE:
 		/*
-		 * Locked, and honest: this reader has no actuator and nothing
-		 * it reports here moves a bolt. It exists because LockState is
-		 * mandatory and a controller uses it to draw the tile.
+		 * Still no actuator: nothing reported here moves a bolt. What it
+		 * does report is what LockDoor/UnlockDoor last set, because a
+		 * controller that sends UnlockDoor and then reads Locked has been
+		 * told its command did nothing.
 		 */
-		(void)matter_tlv_put_u64(w, tag, MATTER_DL_LOCK_STATE_LOCKED);
+		(void)matter_tlv_put_u64(w, tag,
+					 info->lock_state == MATTER_DL_LOCK_STATE_UNLOCKED
+						 ? MATTER_DL_LOCK_STATE_UNLOCKED
+						 : MATTER_DL_LOCK_STATE_LOCKED);
 		return;
 	case MATTER_ATTR_DL_LOCK_TYPE:
 		/* 0x00 is DeadBolt (DoorLock/Enums.h, DlLockType). */
@@ -1755,6 +1759,25 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	if (inv->endpoint == MATTER_ENDPOINT_LOCK) {
 		if (inv->cluster != MATTER_CLUSTER_DOOR_LOCK) {
 			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		}
+		if (inv->command == MATTER_CMD_DL_LOCK_DOOR ||
+		    inv->command == MATTER_CMD_DL_UNLOCK_DOOR) {
+			/*
+			 * The tile's two buttons. Answered with a bare status,
+			 * which is what DoorLock defines for both -- there is no
+			 * LockDoorResponse, and inventing one leaves the
+			 * controller waiting.
+			 *
+			 * The optional PINCode field is ignored rather than
+			 * rejected: this node advertises no PIN_CREDENTIAL
+			 * feature, so a controller sends none, and refusing a
+			 * command over a field nobody sends would fail every
+			 * press.
+			 */
+			info->lock_state = (inv->command == MATTER_CMD_DL_UNLOCK_DOOR)
+						   ? MATTER_DL_LOCK_STATE_UNLOCKED
+						   : MATTER_DL_LOCK_STATE_LOCKED;
+			return MATTER_IM_STATUS_SUCCESS;
 		}
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
 			return set_aliro_reader_config(info, inv);
