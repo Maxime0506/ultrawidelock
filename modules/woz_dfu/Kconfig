@@ -54,3 +54,41 @@ config WOZ_DFU_APPLIER_CHUNK
 	  itself is a streaming decoder and imposes no minimum.
 
 endif # WOZ_DFU_APPLIER
+
+config WOZ_DFU_RECEIVER
+	bool "Delta patch receiver (application side)"
+	depends on FLASH && SETTINGS
+	depends on PSA_WANT_ALG_ECDSA && PSA_WANT_ECC_SECP_R1_256
+	help
+	  Receive a signed delta patch into the patch_staging partition and
+	  reboot into the bootloader, which applies it.
+
+	  Set this ONLY on the application image. It writes to flash and checks
+	  a signature; it never patches anything, because it is executing from
+	  the slot a patch rewrites.
+
+	  Transport-independent. On the DWM3001CDK it is fed from a second L2CAP
+	  CoC beside the Aliro one, but nothing in the receiver knows that.
+
+	  NOTHING IS ACCEPTED until woz_dfu_window_open() has been called. That
+	  window is the authorization: the patch is signed and MCUboot re-checks
+	  the result, so no peer can install code either way, but a closed
+	  channel is what stops an unauthenticated peer in radio range from
+	  burning flash cycles and forcing reboots.
+
+if WOZ_DFU_RECEIVER
+
+config WOZ_DFU_WINDOW_MS
+	int "How long an update window stays open, milliseconds"
+	default 300000
+	range 10000 3600000
+	help
+	  Five minutes by default: long enough to push a patch over a connection
+	  interval that Matter and Aliro are also using, short enough that an
+	  owner who opened it and walked away is not leaving it open all day.
+
+module = WOZ_DFU
+module-str = woz_dfu
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # WOZ_DFU_RECEIVER

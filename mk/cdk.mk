@@ -90,8 +90,13 @@ CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
 #
 # The two CONFIG_ assignments are per-image and must not be swapped: each half
 # is inert without a partition and a peer that the other image owns.
+# WOZ_DFU_KEY is the IMAGE-signing key, deliberately. The application checks a
+# staged update against its public half, so one secret authorises both what the
+# bootloader will boot and what the radio will accept, and they cannot drift.
 CDK_DFU  := -DEXTRA_ZEPHYR_MODULES='$(REPO_ROOT)/modules/woz_dfu' \
-            -Dmcuboot_CONFIG_WOZ_DFU_APPLIER=y
+            -DWOZ_DFU_KEY='$(CDK_KEY)' \
+            -Dmcuboot_CONFIG_WOZ_DFU_APPLIER=y \
+            -DCONFIG_WOZ_DFU_RECEIVER=y
 
 # DFU_LOG=1 makes the bootloader narrate what it does with a staged patch.
 #

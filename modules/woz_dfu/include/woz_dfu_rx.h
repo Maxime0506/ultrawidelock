@@ -1,0 +1,97 @@
+/**
+ * @file
+ * @brief Receives a delta patch into the staging partition, application side.
+ *
+ * Transport-independent on purpose. The DWM3001CDK feeds this from a second
+ * L2CAP CoC beside the Aliro one, but nothing here knows that -- it takes
+ * frames and returns replies, so the host tests can drive it without a radio.
+ *
+ * The bootloader half is @ref woz_dfu.h. This side never applies anything: it
+ * writes bytes, checks a signature, and reboots.
+ */
+
+#ifndef WOZ_DFU_RX_H_
+#define WOZ_DFU_RX_H_
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** Request opcodes, first byte of every frame from the host. */
+enum woz_dfu_op {
+	WOZ_DFU_OP_BEGIN = 0x01,  /**< u32 total wire length follows */
+	WOZ_DFU_OP_DATA = 0x02,   /**< payload bytes follow */
+	WOZ_DFU_OP_COMMIT = 0x03, /**< no body; reboots on success */
+	WOZ_DFU_OP_ABORT = 0x04,  /**< no body; erases what was staged */
+};
+
+/** Reply opcodes, first byte of every frame back to the host. */
+enum woz_dfu_rsp {
+	WOZ_DFU_RSP_OK = 0x81,  /**< u32 bytes received so far follows */
+	WOZ_DFU_RSP_ERR = 0x82, /**< one @ref woz_dfu_err byte follows */
+};
+
+/**
+ * Why a frame was refused.
+ *
+ * Deliberately coarse. A peer that has not been let in learns only that it was
+ * refused, not how close it got.
+ */
+enum woz_dfu_err {
+	WOZ_DFU_ERR_CLOSED = 1,    /**< no update window is open */
+	WOZ_DFU_ERR_SEQUENCE = 2,  /**< opcode does not fit the current state */
+	WOZ_DFU_ERR_SIZE = 3,      /**< will not fit patch_staging */
+	WOZ_DFU_ERR_AUTH = 4,      /**< header signature did not verify */
+	WOZ_DFU_ERR_INTEGRITY = 5, /**< length or CRC disagreed at commit */
+	WOZ_DFU_ERR_FLASH = 6,     /**< a write or erase failed */
+	WOZ_DFU_ERR_MALFORMED = 7, /**< frame too short for its opcode */
+};
+
+/** Largest reply this ever produces. */
+#define WOZ_DFU_RSP_MAX 5u
+
+/**
+ * Open the update window for @p duration_ms.
+ *
+ * Until this is called nothing is accepted, and that IS the authorization
+ * model. The patch is signed and MCUboot re-verifies the result, so no peer can
+ * install code regardless; what the window prevents is an unauthenticated
+ * peer in radio range burning flash cycles and forcing reboots. A door lock
+ * that anyone nearby can reset in a loop is a real availability attack, and a
+ * window the owner has to open is what stops it.
+ *
+ * Calling it again while open restarts the clock.
+ */
+void woz_dfu_window_open(uint32_t duration_ms);
+
+/** Close the window immediately and discard any transfer in progress. */
+void woz_dfu_window_close(void);
+
+/** True while the window is open. Transports gate their accept() on this. */
+bool woz_dfu_window_is_open(void);
+
+/**
+ * Handle one frame.
+ *
+ * @param frame     request bytes, opcode first
+ * @param len       length of @p frame
+ * @param rsp       at least @ref WOZ_DFU_RSP_MAX bytes
+ * @param rsp_len   set to the number of reply bytes produced
+ *
+ * @retval 0 always; failures are reported to the peer through @p rsp, because
+ *           a transport has nothing useful to do with an error code.
+ */
+int woz_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, size_t *rsp_len);
+
+/** Drop any transfer in progress. Transports call this on disconnect. */
+void woz_dfu_rx_reset(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* WOZ_DFU_RX_H_ */

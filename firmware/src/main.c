@@ -30,6 +30,11 @@
 #endif
 #include "woz_uwb_facade.h"
 
+#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+/* src/dfu_ble_zephyr.c. One function, so it carries no header of its own. */
+int dfu_ble_start(void);
+#endif
+
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
@@ -198,6 +203,14 @@ int main(void)
 	 * this only attaches handlers to the 0xFFF6 transport that SYS_INIT
 	 * already brought up. */
 	(void)matter_commission_init();
+#endif
+
+#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+	/* Also after the reader, and for the same reason: registering an L2CAP
+	 * PSM needs the host up, and the reader is what enables it. The channel
+	 * refuses every connection until SW2 opens a window, so registering it
+	 * here costs nothing an idle board can be reached through. */
+	(void)dfu_ble_start();
 #endif
 
 	/* Bridge the trusted UWB range stream to the Wallet grant.
