@@ -540,13 +540,57 @@ static void notify_lock_state_changed(void);
 /* Re-arms the periodic report; defined with the table it walks. */
 static void subscription_heartbeat_arm(void);
 
+/*
+ * Storing the operational identity, with the failure NOT swallowed.
+ *
+ * matter_fab_store() checks every settings_save_one() and logs each one, but
+ * its return was discarded here -- so a failed NVS write left s_info saying
+ * commissioning_complete while flash held nothing. Apple Home believed it was
+ * paired, this node believed it was paired, and the divergence surfaced one
+ * reboot later as an accessory that had silently vanished.
+ *
+ * Retried rather than merely reported, because the likely cause is transient: a
+ * garbage-collection pass on a two-sector 8 KB partition this shares with
+ * OpenThread's own keys. Bounded at three, because a partition that is actually
+ * full does not improve by being asked again, and a retry loop on a work queue
+ * is a worse outcome than a lost pairing.
+ */
+#define FAB_STORE_ATTEMPTS   3u
+#define FAB_STORE_BACKOFF_MS 2000
+
+static void fab_store_work_fn(struct k_work *w);
+static K_WORK_DELAYABLE_DEFINE(s_fab_store_work, fab_store_work_fn);
+
 static void fab_store_work_fn(struct k_work *w)
 {
-	ARG_UNUSED(w);
-	(void)matter_fab_store(&s_info);
-}
+	static uint8_t attempts;
+	int rc;
 
-static K_WORK_DEFINE(s_fab_store_work, fab_store_work_fn);
+	ARG_UNUSED(w);
+
+	rc = matter_fab_store(&s_info);
+	if (rc == 0) {
+		attempts = 0u;
+		return;
+	}
+
+	attempts++;
+	if (attempts >= FAB_STORE_ATTEMPTS) {
+		/*
+		 * ERR, and it says what the user will see rather than only what
+		 * failed: the next boot comes up commissionable and Apple Home
+		 * shows this accessory as unresponsive.
+		 */
+		LOG_ERR("operational identity NOT stored after %u attempts (%d) -- this node will "
+			"come back commissionable and need re-pairing",
+			attempts, rc);
+		attempts = 0u;
+		return;
+	}
+	LOG_WRN("storing the operational identity failed (%d); attempt %u of %u in %d ms", rc,
+		attempts, FAB_STORE_ATTEMPTS, FAB_STORE_BACKOFF_MS);
+	(void)k_work_reschedule(&s_fab_store_work, K_MSEC(FAB_STORE_BACKOFF_MS));
+}
 
 
 static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
@@ -756,7 +800,7 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		 * peak, and that peak belongs to the Aliro unlock path, which
 		 * never runs while a commissioner is finishing.
 		 */
-		k_work_submit(&s_fab_store_work);
+		(void)k_work_schedule(&s_fab_store_work, K_NO_WAIT);
 	}
 	if (resp_len == 0u) {
 		/* The command ran; the peer asked not to be told. */
@@ -958,6 +1002,71 @@ static void notify_lock_state_changed(void)
  */
 #define SUBSCRIPTION_HEARTBEAT_S 120u
 
+/*
+ * The largest max interval this node will GRANT, whatever the subscriber asks
+ * for. See where it is applied, in the subscribe handler.
+ *
+ * The two numbers are a pair and must stay one: the heartbeat is what keeps a
+ * subscription alive, so granting an interval at or below it promises a report
+ * this node will not send in time. Anyone lowering this must lower the
+ * heartbeat first.
+ */
+#define SUBSCRIPTION_MAX_INTERVAL_S 180u
+BUILD_ASSERT(SUBSCRIPTION_MAX_INTERVAL_S > SUBSCRIPTION_HEARTBEAT_S,
+	     "a granted interval at or below the heartbeat lapses every subscription");
+
+/*
+ * Never slower than what a subscriber was actually GRANTED.
+ *
+ * The ceiling above bounds what this node hands out, which is what makes the
+ * assert meaningful, but it cannot bound what a subscriber ASKS for: a request
+ * below the ceiling is granted as-is, and a fixed 120 s heartbeat then breaks
+ * it. A controller asking for 60 s was told 60 s and reported to every 120 s --
+ * precisely the lapsed subscription ("Matter Accessory / No Response") the
+ * heartbeat exists to prevent, reintroduced for everyone who is not Apple, and
+ * silent: from this side the report went out fine, and only the peer's own timer
+ * notices. So the constant pair is checked at build time and the runtime period
+ * follows whatever was actually granted.
+ *
+ * Nothing changes for Apple. It asks 600 s, is granted 180 s by the ceiling, and
+ * three quarters of that is 135 s -- above the 120 s heartbeat, so 120 s stands.
+ *
+ * Three quarters rather than the interval itself: a report landing exactly on
+ * the ceiling races the subscriber's timer on a link whose round trip has been
+ * measured at 1.4 s. Being early is cheap; being late is the whole failure.
+ *
+ * Floored, because that granted value is the subscriber's number and a small one
+ * would otherwise wake a sleepy-end-device radio continuously. Below about 7 s
+ * of granted ceiling the floor WINS and the promise is not kept -- 4 s granted
+ * reports every 5 s. That is deliberate and not free: the honest alternatives
+ * are refusing the subscription or letting a controller drive this radio, and
+ * the ceiling cannot be raised to fix it because the response has to sit inside
+ * the range that was requested. No controller observed here comes near it;
+ * Apple's floor is measured in minutes.
+ */
+#define SUBSCRIPTION_HEARTBEAT_MIN_S 5u
+
+static uint32_t subscription_heartbeat_period_s(void)
+{
+	uint32_t period = SUBSCRIPTION_HEARTBEAT_S;
+
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		uint32_t promised;
+
+		if (!s_subs[i].in_use || !s_subs[i].active || s_subs[i].max_interval_s == 0u) {
+			continue;
+		}
+		promised = ((uint32_t)s_subs[i].max_interval_s * 3u) / 4u;
+		if (promised < period) {
+			period = promised;
+		}
+	}
+	if (period < SUBSCRIPTION_HEARTBEAT_MIN_S) {
+		period = SUBSCRIPTION_HEARTBEAT_MIN_S;
+	}
+	return period;
+}
+
 static void heartbeat_work_fn(struct k_work *w)
 {
 	bool any = false;
@@ -973,13 +1082,14 @@ static void heartbeat_work_fn(struct k_work *w)
 	/* Stops re-arming itself once nothing is subscribed, so a node nobody
 	 * is watching is not waking its radio every two minutes. */
 	if (any) {
-		(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(SUBSCRIPTION_HEARTBEAT_S));
+		(void)k_work_schedule(&s_heartbeat_work,
+				      K_SECONDS(subscription_heartbeat_period_s()));
 	}
 }
 
 static void subscription_heartbeat_arm(void)
 {
-	(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(SUBSCRIPTION_HEARTBEAT_S));
+	(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(subscription_heartbeat_period_s()));
 }
 
 /*
@@ -1145,8 +1255,30 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 	 * than this is what makes a subscription dead. Committing to it exactly
 	 * is honest only if this node then reports on time -- see the note in
 	 * on_status_response().
+	 *
+	 * It is a CEILING, so granting less is legal, and less is worth having.
+	 * The granted interval is also the subscriber's liveness timer, and this
+	 * node's subscriptions live in RAM: a reset destroys all of them while
+	 * the controller still believes in every one. Until then it will not
+	 * re-subscribe, and a Home tile that sends UnlockDoor gets acceptance
+	 * and never a LockState report -- measured 2026-08-02 as a tile stuck on
+	 * "Unlocking" for the ten minutes Apple's requested 600 s bought, after
+	 * every single flash.
+	 *
+	 * 180 s costs NOTHING to keep: the heartbeat below already reports every
+	 * SUBSCRIPTION_HEARTBEAT_S, well inside it. Going lower would mean
+	 * lowering the heartbeat too, and that is a real trade on a sleepy end
+	 * device -- four times the report traffic to save two more minutes.
+	 *
+	 * The proper fix is persisting subscriptions and resuming them, which
+	 * needs a CASE initiator this node does not have. This is the cheap
+	 * third of it.
 	 */
 	s->max_interval_s = sub.max_interval_s;
+	if (s->max_interval_s > SUBSCRIPTION_MAX_INTERVAL_S &&
+	    sub.min_interval_s <= SUBSCRIPTION_MAX_INTERVAL_S) {
+		s->max_interval_s = SUBSCRIPTION_MAX_INTERVAL_S;
+	}
 	s->read.subscription_id = s->id;
 	s->priming = true;
 	s->active = false;

@@ -572,6 +572,21 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 		return -ENOMEM;
 	}
 	net_buf_reserve(buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
+	/*
+	 * Checked here rather than left to net_buf's own assert, because
+	 * CONFIG_ASSERT is not set in any image this board ships: net_buf_add()
+	 * compiles its __ASSERT out, so an oversized len would run off the end
+	 * of the pool buffer and corrupt whatever follows it, silently. The
+	 * length comes from the reader's own encoded APDU rather than from the
+	 * wire, so this is a guard on our own framing, not on an attacker --
+	 * which is exactly the kind that disappears when the assert does.
+	 */
+	if (len > net_buf_tailroom(buf)) {
+		LOG_ERR("APDU of %u B does not fit the CoC buffer (%u B tailroom)", (unsigned int)len,
+			(unsigned int)net_buf_tailroom(buf));
+		net_buf_unref(buf);
+		return -EMSGSIZE;
+	}
 	net_buf_add_mem(buf, data, len);
 
 	int rc = bt_l2cap_chan_send(&s_coc.le.chan, buf);
