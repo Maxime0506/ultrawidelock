@@ -438,18 +438,46 @@ static void readvertise_work_fn(struct k_work *w)
 	LOG_ERR("cannot resume advertising after a disconnect; a reset is needed");
 }
 
+/*
+ * A phone that sends CONNECT_IND and is then never heard from again.
+ *
+ * The controller reports 0x3E once the establishment window (six connection
+ * events) passes with no packet received, and the host prints its own line per
+ * attempt -- 13 of them inside 4.3 s on 2026-08-02, then a normal connection.
+ * Individually those lines say nothing: one is ordinary RF, a RUN of them is a
+ * board that could not answer, and the two look identical unless the run is
+ * counted. So count it, and report the run when it ends.
+ */
+static uint16_t s_estab_fails;
+static uint32_t s_estab_first_ms;
+
 static void on_connected(struct bt_conn *conn, uint8_t err)
 {
 	ARG_UNUSED(conn);
-	if (err == 0u) {
-		s_conn_up = true;
+	if (err != 0u) {
+		/* on_disconnected() does the counting; this callback is invoked
+		 * with conn->err set for the same failure (conn.c:1975). */
+		return;
 	}
+	if (s_estab_fails > 0u) {
+		LOG_WRN("connected after %u attempt(s) that never established, over %u ms",
+			(unsigned int)s_estab_fails,
+			(unsigned int)(k_uptime_get_32() - s_estab_first_ms));
+		s_estab_fails = 0u;
+	}
+	s_conn_up = true;
 }
 
 static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	ARG_UNUSED(conn);
 	s_conn_up = false;
+	if (reason == BT_HCI_ERR_CONN_FAIL_TO_ESTAB) {
+		if (s_estab_fails == 0u) {
+			s_estab_first_ms = k_uptime_get_32();
+		}
+		s_estab_fails++;
+	}
 	LOG_INF("BLE disconnected (0x%02x); re-advertising", reason);
 	/* Deferred, and not by much -- see readvertise_work_fn(). */
 	(void)k_work_schedule(&s_readvertise_work, K_MSEC(50));
