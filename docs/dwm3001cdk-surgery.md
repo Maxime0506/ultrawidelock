@@ -1,0 +1,468 @@
+# DWM3001CDK surgery
+
+Hard-won, non-obvious findings from putting a **hand-written Matter node** next to the
+Aliro UWB reader on a DWM3001CDK (nRF52833 + DW3110, NCS v3.3.0 / Zephyr). The goal was
+a board that goes from factory to walk-up unlock **and a working Home tile** with nothing
+but the Home app — no build-time key, no donor ESP32, nothing typed in.
+
+The sibling document for the other port is [`esp32-gotchas.md`](esp32-gotchas.md). This
+one is narrower and deeper: the nRF52833 has **128 KB of RAM**, and almost every trap
+below is either that constraint or a consequence of writing the Matter node by hand
+rather than linking CHIP.
+
+Code lives under [`ports/dwm3001cdk`](../ports/dwm3001cdk), the portable Matter node in
+`modules/woz_matter`, and the reader in `modules/woz_aliro` (shared byte-for-byte with
+the ESP32 port — see §9.2).
+
+> Verification convention: **VERIFIED** = observed on this silicon; **MEASURED** = a
+> number read off the target, not estimated; **PREDICTED** = derived from source or spec
+> and never observed here, so a hazard to measure rather than a finding.
+
+---
+
+## 1. RAM is the binding constraint, and it bites as stack overflows
+
+### 1.1 The budget, measured
+
+**MEASURED.** Reader + hand-written Matter node + Thread MTD/SED, at the end of this
+work: **126,760 B of 131,072 B (96.7%)**, 4,312 B free. Flash was never close —
+442 KB of 504 KB (85%).
+
+**127,352 B has been recorded as unrunnable on this board.** That is an observation, not
+a spec, but treat it as a ceiling: builds above it have failed to come up. Every RAM
+change needs a boot check (§8.4), and the ECDH self-test line is the cheap proof the
+image is alive:
+
+```
+*** Booting nRF Connect SDK v3.3.0 ***
+ECDH self-test: PASS (NIST CAVP P-256 CDH count 0)
+```
+
+### 1.2 Three different stacks overflowed, all from adding one feature
+
+**VERIFIED.** Adding persistence to the Matter node produced three MPU stack-guard
+faults on three different threads, over a few hours. None was diagnosable from the
+symptom, and two presented as something else entirely:
+
+| Stack | Measured peak | What the default bought | Symptom |
+|---|---|---|---|
+| system work queue | **3,872 B** | 4096 left **224 B** | fault mid-unlock, right after `SENT_AUTH0` |
+| `ot_work_q` (the Interaction Model) | **3,072 B** | 3168 default left **96 B** | paired once, then halted at `CommissioningComplete` |
+| `z_main_stack` | — | 4096, blown by a 1,642 B frame | board advertised, froze 4 s into boot |
+| `matter_wq_stack` | 2,776 B of 4,096 | healthy | — measuring it is what *ruled it out* |
+
+The lesson is not "these numbers": it is that **a default is a starting point, not a
+size**, and that two of the three were within a few hundred bytes of fitting. A margin
+that thin fails only when something else happens to run at the same moment, which is why
+identical firmware worked for weeks and then failed twice in an evening.
+
+### 1.3 Read the paint; never estimate
+
+**VERIFIED.** `CONFIG_INIT_STACKS=y` fills stacks with `0xAA` and costs nothing at
+runtime. A debugger reads the high-water mark straight out of RAM, so no analyzer thread
+is needed:
+
+```sh
+# addresses from build-*/app/zephyr/zephyr.map
+JLinkExe … -CommandFile <(printf 'savebin s.bin, 0x20015900, 0x1040\nq\n')
+# skip the 64 B MPU guard at the low end, count the leading 0xAA run:
+#   peak = (size - guard) - run
+```
+
+`CONFIG_THREAD_ANALYZER_AUTO` measures the same paint and costs a thread plus its stack —
+enabling it took an image to 96.6% RAM and past the unrunnable figure. **Use the paint,
+not the analyzer**, on this part.
+
+Two traps when reading it:
+
+- The MPU guard occupies the first 64 B and is never painted. Counting `0xAA` from
+  offset 0 reports "100% used" on a healthy stack.
+- **Symbol addresses move with every BSS change.** A stale address reads as garbage, and
+  a stale `last_count` (§8.3) reads as a *hung board*. Re-read from the map after every
+  build.
+
+### 1.4 Where the bytes went, and the cheap reclaims
+
+**MEASURED.** Two changes cost far more than they looked:
+
+- Raising `ALIRO_TRUST_MAX` 4 → 8 grew `ALIRO_PROV_BLOB_MAX` 476 → 864 B **and**
+  `struct aliro_trust_store` 390 → 778 B. A function holding both had a 1,642 B frame,
+  which went through the bottom of the 4 KB main stack. Fix: the blob is `static`, and
+  the cap settled at 6.
+- A `struct matter_im_read` made `static` to describe **one** attribute costs ~264 B,
+  because it carries `MATTER_IM_MAX_PATHS`. On the stack instead, on a work queue with
+  measured headroom.
+
+General rule on this part: **large single-use objects belong on a stack with known
+headroom, not in BSS** — but only after that headroom has been measured.
+
+---
+
+## 2. Matter state must not be written from the OpenThread thread
+
+**VERIFIED.** Matter datagrams arrive through the OpenThread UDP callback, so the entire
+Interaction Model — decrypt, decode, cluster command, response encode, framing — runs on
+`ot_work_q`. Two separate failures came from that:
+
+1. **An NVS write there overflows it.** `CommissioningComplete → store fabrics → NVS`
+   faulted after both fabrics were accepted, both CASE sessions established and the
+   subscription primed. The pairing succeeded on the wire and failed anyway.
+2. **A write anywhere in a handshake stalls it.** Storing at `AddNOC` wrote ~1.7 KB
+   across several settings keys; an NVS sector erase on this part runs to tens of
+   milliseconds. The commissioner retransmitted Sigma1 and the second fabric's CASE died
+   with `Sigma3 REJECTED (-6)` ×5, then `RemoveFabric`.
+
+**Rule: persist at `CommissioningComplete` only, and submit it to the system work queue.**
+Apple runs commissioning twice (once per administrator), so both fabrics are still
+captured. A fabric is worthless before commissioning completes anyway — if the
+commissioner gives up half way, the fail-safe is supposed to *discard* it.
+
+Deferring also has to happen **after** the response has left: the InvokeResponse is still
+in the shared report buffer at that point, and building a second message there overwrites
+the reply with the report.
+
+---
+
+## 3. A subscription the node can actually serve needs four things
+
+**VERIFIED.** "Matter Accessory / No Response", and a Home tile stuck spinning on
+*Unlocking*, were four independent bugs. Each looked like the whole problem on its own.
+
+### 3.1 The priming report must fit the IPv6 MTU
+
+`MATTER_MAX_MESSAGE_LEN` (1232) is the ceiling for the **whole message** — 1280 less the
+IPv6 and UDP headers — so the exchange headers (36) and the AEAD tag (16) come **out** of
+it, not on top. Spending all 1232 on the payload builds a datagram up to 52 bytes over
+the MTU.
+
+Nothing logs. The framing succeeds, the send returns fine, and the datagram is simply
+never delivered, so the subscriber re-subscribes forever and the CASE table churns.
+
+**BLE hides this.** BTP re-fragments, so the identical report crosses a commissioning
+session intact and only subscriptions carried over Thread fail — which presents as an
+accessory that works while pairing and dies immediately after. **Tell it apart by which
+transport the established subscription sat on**, not by whether one established at all.
+
+### 3.2 The node must be able to *initiate* an exchange
+
+Everything a responder-only node sends answers something. After the priming report the
+**server** has to speak unprompted, and a controller that gets no report calls the
+accessory unresponsive however healthy the session is.
+
+The session role is unchanged, which makes this cheap: keys stay role-relative to CASE
+(still encrypt with `r2i`) and the message counter is per-session, not per-exchange. Only
+the exchange role differs — set `I`, use an id of your own, and **do not** write it back
+over the peer's live exchange id.
+
+Two subtleties, both found by tests rather than by reading the code:
+
+- **Never piggyback the peer's pending ack onto an exchange you just opened.** An ack
+  names a counter *within* an exchange.
+- **Do not clear `ack_pending` on that path.** Clearing an ack that was never encoded
+  makes the peer retransmit a message already handled, and the exchange that owes the ack
+  stalls.
+
+### 3.3 Report on change
+
+The tile reads `LockState`, not the InvokeResponse. A controller takes the `SUCCESS` and
+then waits for the attribute to be reported before the UI moves — so answering the
+command and stopping there is a lock that opens and a UI that spins forever.
+
+### 3.4 Report on a **timer**, not only on change
+
+Matter's contract is a report at least every `max_interval` whether or not anything
+changed (600 s is what Apple asks for here). Reporting only on change means **a lock
+nobody touches for ten minutes stops existing**.
+
+One timer for all subscriptions, not one each: they carry the same attribute, the
+interval is a floor rather than a schedule, and six timers is not a reasonable thing to
+spend at 96.7% RAM. 120 s is deliberately early — a report is ~67 B on a link whose round
+trip measured 1.4 s, so being early is nearly free and being late is the entire failure.
+Stop re-arming when nothing is subscribed, so a node nobody watches is not waking its
+radio.
+
+### 3.5 Bridge the reader's own state into `LockState`
+
+**VERIFIED.** A walk-up unlock never touches the Door Lock cluster — it is the reader's
+own Aliro transaction — so the tile keeps showing whatever the last tile tap set. The
+Wallet animates *unlocked* while the app says locked, and the app is not wrong so much as
+**uninformed**.
+
+Hook the point that sends the reader-status notification, because it carries **both**
+transitions (the grant that fires the animation and the walk-away relock). Do **not** use
+a credential-verdict callback: it fires on the unlock and never on the relock, so the
+tile would show a lock that opens and never closes.
+
+---
+
+## 4. Persistence, and what must *not* be persisted
+
+### 4.1 Nothing Matter-side was persisted at all
+
+**VERIFIED.** The fabric table was plain RAM, so every reset silently un-commissioned the
+node: it came back advertising commissionable, Thread never started because nothing
+replayed the dataset, and the controller showed an accessory that was simply gone. Every
+flash cost a full re-pair, which is also why iterating on this port was so expensive.
+
+Persist the fabrics, the Thread dataset, the xPAN id and the ICAC slot. Then **restore is
+not enough on its own**: a restored identity is commissioned but not *reachable* until
+the dataset is handed to the stack and one SRP instance per fabric is registered. That
+pair is what commissioning does as a side effect; the boot path has no commissioner to
+trigger it.
+
+### 4.2 One settings key per field, not one blob
+
+A single record is ~1.7 KB and needs a buffer that size to build in. Saving each field
+straight out of the struct it already lives in costs **no buffer at all** — which matters
+on a part that has already taken stack-guard faults (§1.2).
+
+### 4.3 A stored record implies `commissioning_complete`
+
+**VERIFIED.** Not persisting it meant a restored node looked mid-commissioning, so the
+next commissioner to open a PASE session rolled back the fabrics that had just been
+restored — silently destroying a working pairing on the first failed connection after a
+reboot. Nothing writes a record before `CommissioningComplete`, so the flag is implied.
+
+### 4.4 Never `west flash --erase` once the node has joined Thread
+
+**VERIFIED, and it costs up to 14 days.** The SRP host name is the EUI-64 from factory
+FICR and is stable across an erase; the SRP client's **key** lives in OpenThread's
+settings and is not. SRP name ownership is first-come-first-served **by key**, so a new
+key for the same name is refused with `OT_ERROR_DUPLICATED` until the border router's key
+lease expires — default **14 days**.
+
+Symptom: Thread attaches and gets a routable address, SRP never registers, the
+commissioner cannot resolve the node, and the controller hangs forever on "Adding to
+Home".
+
+Use the software clears instead (§7). They wipe everything a controller can see and leave
+OpenThread's settings alone.
+
+### 4.5 An erase that cannot fail visibly
+
+**VERIFIED.** Discarding every `settings_delete()` return behind `(void)` and logging
+"erased" unconditionally made a wipe that removed **nothing** indistinguishable from one
+that worked. Several hours were spent re-clearing a board that kept coming back with the
+same fabrics. Report each key's `rc`.
+
+---
+
+## 5. Advertising: one payload, one gate, and three ways to lose it
+
+### 5.1 Only one payload fits a legacy advert
+
+**VERIFIED.** Flags (3) + Matter service data (12) + Aliro service data (26) = 41 bytes of
+the 31 available. A second advertising set costs ~24.8 KB of RAM, which this part does not
+have. So the node advertises **commissionable while it holds no fabric, and Aliro only
+once it does**.
+
+### 5.2 Restarting advertising from the disconnect callback fails
+
+**VERIFIED.** `bt_le_adv_start()` returns **`-12` (`-ENOMEM`)** when called from inside
+the `disconnected` callback — Zephyr has not released the connection object yet. Defer it
+to a work item and retry.
+
+Worse than the failure was the silence: the advert logged only on success, so a failed
+restart left the reader invisible with nothing in the log but the "re-advertising" line
+before it. The board had unlocked once and then ignored every approach, **while the Home
+tile kept working**, because Matter runs over Thread and this is BLE. An advertising
+failure must never be quiet — it presents as dead hardware and points the investigation
+everywhere except at advertising.
+
+### 5.3 Matter provisioning must refresh the advertisement
+
+**VERIFIED, and it hid for weeks.** A phone resolves a reader by a dynamic tag derived
+from the **GRK**. The reader starts advertising long before `SetAliroReaderConfig`
+arrives, since the controller sends it as a post-commissioning operational command — so
+at start the GRK is the dev default's all zeros and only the bare `0xFFF2` UUID goes out.
+
+Without an explicit refresh the board ends up provisioned, holding both credentials,
+reachable over Matter, tile working — **and invisible to every walk-up**.
+
+**A reboot hides it**, because the boot path applies the stored GRK before it advertises
+at all, and every earlier test power-cycled after pairing. It only surfaced when a reboot
+happened *before* a pairing instead.
+
+### 5.4 The advert gate must be re-run after a restore
+
+The advert is chosen at BLE start, **before** stored fabrics are loaded. Without re-running
+it, a restored reader keeps advertising commissionable and never offers `0xFFF2` again —
+a node that unlocks until its first reboot and silently stops after it.
+
+---
+
+## 6. The trust store, and the issuer/endpoint key trap
+
+### 6.1 A full store must evict, not refuse
+
+**VERIFIED.** An Apple home installs **two endpoint keys per pairing**, they accumulate,
+and nothing removed them. With a cap of 4, the store filled on the second pairing and
+`trust_add()` answered a full store with a permanent refusal — so the key the phone
+actually presents could never be added, and pairing again only made it worse by adding
+more stale anchors. **There is no recovery from that on a board with no console.**
+
+Observed as 13 consecutive walk-ups reaching `device signature OK` and then
+`credential key NOT trusted`. The two unlocks that appeared to work in the same session
+had gone through the expedited-fast path, which skips the trust check entirely — so the
+store had not matched a presented key once.
+
+Evict a slot that has never completed a standard phase first (no `Kpersistent` means no
+phone ever authenticated with it), and only then the oldest.
+
+### 6.2 Log the operands, not just the verdict
+
+"not in trust store" names the comparison but not what was compared. The two candidate
+explanations — a credential that was never delivered, versus stale anchors crowding out
+the current one — are told apart **only by the bytes**. Printing the presented key beside
+every anchor turned an evening of guessing into one attempt.
+
+### 6.3 Credential types, and a conclusion that was wrong twice
+
+**VERIFIED.** `SetCredential` delivers **type 6** (issuer key — correctly refused as an
+anchor) and **type 7** (evictable endpoint key — stored). A pairing observed 3 calls:
+one type 6, two type 7.
+
+This project recorded, then withdrew, then partly re-recorded a claim about these keys.
+The lesson that survived: **an absence in a capture is evidence about the capture, not
+about the protocol.** Captures that only ever showed type 6 were captures of pairings
+that never got far enough to send type 7 — the subscription bug (§3.1) was stopping them.
+
+---
+
+## 7. A failed pairing used to be a brick
+
+**VERIFIED, hit four times in one evening.** A commissioning that installs a fabric and
+then times out leaves that fabric stored. The advert gate then offers Aliro `0xFFF2`
+instead of commissionable, so the controller can neither discover the node **nor** open a
+commissioning window on an accessory it has already forgotten. There is no way back.
+
+Clearing it needs a debugger, a toolchain and the SWD header. **A user has none of those,
+and the board looks dead.**
+
+The fix is a factory reset on **SW2 held through reset**: `led0` blinks to confirm the
+hold registered, the reader identity, every trust anchor and the Matter fabrics are
+erased, and the boot continues commissionable. Held-through-reset rather than a
+long-press because it matches the provisioning console's existing idiom on the same
+button, needs no timer or thread at 96.7% RAM, and cannot fire during a walk-up.
+
+**It leaves OpenThread's settings alone** — see §4.4 for the 14 days that erasing them
+costs.
+
+If you are recovering a board without that button (older images), the equivalent is a
+one-boot clear flag, flashed once and then flashed away.
+
+---
+
+## 8. Debugging on this board
+
+### 8.1 Poll the RTT ring with `JLinkExe`
+
+**VERIFIED, after two wrong turns.**
+
+- **`JLinkGDBServer` is wrong here**: it disturbs the target enough to stop BLE, and
+  pairing then fails with the phone stuck on "connecting". Flowing RTT does **not** prove
+  the core is running — that argument was made and was wrong.
+- **`JLinkRTTLogger` only works in the foreground**, so any keystroke kills the capture,
+  and it degrades to "RTT Control Block not found" on every invocation until the board's
+  USB is **replugged** (nothing in software cures it).
+- **`JLinkExe` never failed**, including while the logger was broken, and is
+  non-interactive so it backgrounds cleanly.
+
+Read `WrOff`/`RdOff`, `savebin` the ring, slice host-side for the wrap, then **write
+`RdOff` back**. Without the write-back the ring fills and `NO_BLOCK_SKIP` discards
+everything new — which looks exactly like a board that stopped logging.
+
+Control block layout from the map: `aUp[0] = _SEGGER_RTT + 24`, then
+`sName/pBuffer/SizeOfBuffer/WrOff/RdOff` at `+0/+4/+8/+12/+16`.
+
+### 8.2 Make a failed probe read loud
+
+Silently continuing on a read error makes a broken J-Link indistinguishable from a quiet
+board. That ambiguity cost an hour.
+
+### 8.3 Prove liveness independently
+
+Read `nrf_rtc_timer`'s `last_count` twice: it advances at 32,768 Hz iff the kernel runs.
+**Re-read its address from the map after every build** — a stale address returns a
+constant and reads as a hung board (this produced exactly one false "STILL HUNG").
+
+For a fault, halt and read `IPSR`: `004` is MemManage. Compare the faulting `SP` against
+the stack regions in the map — an `SP` *below* a stack's base is that stack overflowing.
+
+### 8.4 Prove reachability independently of the controller
+
+`dns-sd -B _matter._tcp local` shows the operational services; `dns-sd -Gv6 <host>.local`
+gives the address; `ping6` settles it. **0% loss while the controller reports "No
+Response" means the problem is not the device** — that single check redirected the
+investigation more than once. Expect ~1.2–2.6 s RTT: it is a sleepy end device.
+
+Note the mDNS records are cached by the border router, so stale instances from earlier
+failed pairings linger and are not evidence of anything.
+
+---
+
+## 9. Controller behaviour, and how to test against it
+
+### 9.1 Every reboot costs ~10 minutes of controller sulk
+
+**VERIFIED, and it is not a bug to fix.** Matter subscriptions are RAM on both sides.
+After a reset the controller keeps retransmitting into sessions the node lost — visible as
+`encrypted for session 0xNNNN, which is not ours` — and re-subscribes only when its own
+`max_interval` expires.
+
+**The node cannot force it.** The exchange id needed to answer is inside ciphertext it has
+no key for. (An earlier claim here that a real node replies with a StatusReport was
+withdrawn; CHIP drops these too.)
+
+The practical consequence dominates everything else in this document:
+
+> **Batch changes and test once.** Flashing after each change resets the very state the
+> previous change needed to prove itself. Eight flashes in an hour demonstrated this the
+> expensive way — three separate fixes were built, flashed and left unproven because each
+> flash restarted the controller's timeout.
+
+The other half of the same trap: **the controller provisions late.** Credentials have
+landed ~40 minutes after the pairing UI finished. A capture shorter than the thing being
+waited for will say it never happened.
+
+### 9.2 `modules/` is shared — run **both** suites
+
+**VERIFIED the hard way.** A change under `modules/woz_aliro` was validated against the
+host suite only. The ESP32 suite — which is the *only* one that builds `aliro_reader.c` —
+had been broken by it two commits earlier and nobody noticed:
+
+```sh
+make test                  # host suite
+./ports/esp32/test/run.sh  # host-compiled, no ESP-IDF, no hardware, seconds
+```
+
+When behaviour changes deliberately, **update the stale assertions to the new behaviour
+rather than silencing them** — a test asserting that a full trust store refuses is
+asserting the bug §6.1 exists.
+
+### 9.3 A test proves nothing until you watch it fail
+
+House rule, and it earned its keep repeatedly here: revert the fix, confirm the exact
+checks fail, restore. Two real bugs in §3.2 were found this way and not by reading.
+
+### 9.4 Check exit codes, not output
+
+A build reported success because the pipeline ended in `tail`, and the failure was
+invisible. Write to a file and test `$?`.
+
+---
+
+## 10. What is still open
+
+- **`Sigma3 REJECTED (-6)` on a retransmitted Sigma1.** Latent. An NVS stall made it easy
+  to hit (§2); removing the stall only hid it. Any commissioner that retransmits Sigma1
+  for any reason will meet it.
+- **`CONFIG_ALIRO_PROV_CLEAR_ON_BOOT` does not apply.** Set in `prj.conf` *or* an overlay
+  it still leaves `# CONFIG_… is not set` in `.config`, with **no Kconfig warning**, while
+  a symbol added 22 lines later in the same file applies fine. The symbol has no
+  `depends on` and no enclosing `if`/`menu`. Unexplained. Workaround: force the
+  `#if IS_ENABLED(...)` to `#if 1` for one boot, then revert.
+- **SRP slot exhaustion when re-pairing without a rollback.** Slots are released when
+  fabrics roll back, but a node that is genuinely commissioned and re-paired can still
+  run out.
+- **RAM at 96.7%.** Any further work starts by measuring, not by adding.

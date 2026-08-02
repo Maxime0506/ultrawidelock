@@ -29,7 +29,7 @@ The two trees answer different questions, and neither replaces the other.
 | What are the fields of this struct? What is this constant's value? | Reference |
 | What calls this function, and what does it call? | [Architecture](ARCHITECTURE.md) |
 | Which files make up this subsystem, and what depends on what? | [Architecture](ARCHITECTURE.md) |
-| Why is it built this way? What went wrong on the bench? | The guides, starting with [`esp32-gotchas.md`](esp32-gotchas.md) |
+| Why is it built this way? What went wrong on the bench? | The guides: [`esp32-gotchas.md`](esp32-gotchas.md) for the ESP32-S3 port, [`dwm3001cdk-surgery.md`](dwm3001cdk-surgery.md) for the DWM3001CDK |
 
 Undocumented symbols are omitted from the Reference tree rather than listed empty. If
 something you expect is missing, the fix is a doc comment at the declaration, not a
