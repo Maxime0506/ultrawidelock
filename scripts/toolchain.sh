@@ -123,16 +123,17 @@ TOOLS=(
 	gitleaks semgrep osv-scanner pip-audit retire
 )
 
-# Bench tools, not gates. nrfutil installs the NCS toolchain and tio owns live
-# serial sessions for the TUI and `make term`, so `make bootstrap` offers both.
-# They are reported here because "what does this machine still need" is the
-# question this script answers.
+# Bench tools, not gates. nrfutil installs the NCS toolchain, tio owns live
+# serial sessions for the TUI and `make term`, and probe-rs is the only thing
+# that reads the DWM3001CDK's RTT console (`make cdk-rtt`), so `make bootstrap`
+# offers all three. They are reported here because "what does this machine
+# still need" is the question this script answers.
 #
 # It is kept in its own list because it must NEVER set the exit status. Someone
 # who only runs the host suites has every tool they need without it, and
 # `make tools && make verify` has to keep meaning what it says for them. The
 # row is reported, and `install` offers it; nothing here fails without it.
-FW_TOOLS=(tio nrfutil)
+FW_TOOLS=(tio nrfutil probe-rs)
 
 # Which gate stops working without it. This is the "why do I need this" column,
 # and it is the reason a row exists at all.
@@ -169,6 +170,7 @@ tool_gate() {
 	retire) echo "web (retire check)" ;;
 	tio) echo "TUI live serial / make term" ;;
 	nrfutil) echo "make bootstrap / build / flash" ;;
+	probe-rs) echo "make cdk-rtt (CDK console)" ;;
 	esac
 }
 
@@ -486,6 +488,17 @@ tool_install() {
 		*) echo "" ;;
 		esac
 		;;
+	# The project's own tap is the packaged route; `brew info probe-rs` resolves
+	# to probe-rs/probe-rs, not homebrew/core. The alternative everywhere else is
+	# `cargo install probe-rs-tools`, a multi-minute source build that is not
+	# offered here: this row never blocks a gate, and a toolchain script should
+	# not start a compile on someone's behalf.
+	probe-rs)
+		case "$PM" in
+		brew) echo "brew install probe-rs/probe-rs/probe-rs" ;;
+		*) echo "" ;;
+		esac
+		;;
 	esac
 }
 
@@ -497,6 +510,7 @@ tool_note() {
 	gitleaks) echo "no distro package — releases: https://github.com/gitleaks/gitleaks/releases/tag/v$(tool_pin gitleaks)" ;;
 	osv-scanner) echo "no distro package — releases: https://github.com/google/osv-scanner/releases/tag/v$(tool_pin osv-scanner)" ;;
 	nrfutil) echo "firmware only — https://www.nordicsemi.com/Products/Development-tools/nrf-util" ;;
+	probe-rs) echo "bench only — https://probe.rs/docs/getting-started/installation/" ;;
 	*) echo "install it however this host prefers, then re-run" ;;
 	esac
 }
