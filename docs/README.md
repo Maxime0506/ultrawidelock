@@ -102,9 +102,9 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `b492108`.*
+*Mined from git history as of `253a4c1`.*
 
-**Most-changed:** [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (41 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (20 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (18 commits).
+**Most-changed:** [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (42 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (21 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (18 commits).
 
 **Change together without importing each other:**
 
@@ -112,4 +112,4 @@ flowchart LR
 - [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) ↔ [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (11 shared commits)
 - [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) ↔ [`ports/dwm3001cdk/app/src/matter_thread_port.c`](architecture/ports.dwm3001cdk.app.src/matter_thread_port.c.md) (7 shared commits)
 - [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md) ↔ [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (6 shared commits)
-- [`modules/woz_matter/include/matter_thread.h`](architecture/modules.woz_matter.include/matter_thread.h.md) ↔ [`ports/dwm3001cdk/app/src/matter_thread_port.c`](architecture/ports.dwm3001cdk.app.src/matter_thread_port.c.md) (6 shared commits)
+- [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md) ↔ [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (6 shared commits)

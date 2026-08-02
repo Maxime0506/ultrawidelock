@@ -53,7 +53,7 @@ the same reason: a commissioner that sent two and saw one status would be
 entitled to assume both applied.
 
 ### `struct matter_im_report_stats`
-`modules/woz_matter/include/matter_im.h:432`
+`modules/woz_matter/include/matter_im.h:444`
 
 What encoding a report had to leave out. Worth logging; none of it is fatal.
 
