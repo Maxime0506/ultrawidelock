@@ -239,6 +239,16 @@ int matter_fab_load(struct matter_device_info *info)
 		return 1;
 	}
 
+	/*
+	 * A stored record MEANS commissioning finished -- nothing writes one
+	 * before CommissioningComplete. Restoring it as false leaves a fully
+	 * commissioned node looking like it is mid-pairing, and the next
+	 * commissioner to open a PASE session rolls back the very fabrics that
+	 * were just restored. That silently destroys a working pairing on the
+	 * first failed connection attempt after a reboot.
+	 */
+	info->commissioning_complete = true;
+
 	LOG_INF("operational identity restored (fabric %u/%u, dataset %u B)",
 		(unsigned int)info->fabrics[0].index, (unsigned int)info->fabrics[1].index,
 		(unsigned int)info->thread_dataset_len);
@@ -247,13 +257,29 @@ int matter_fab_load(struct matter_device_info *info)
 
 int matter_fab_erase(void)
 {
-	(void)settings_delete(KEY_VER);
-	(void)settings_delete(KEY_FAB0);
-	(void)settings_delete(KEY_FAB1);
-	(void)settings_delete(KEY_TD);
-	(void)settings_delete(KEY_XP);
-	(void)settings_delete(KEY_ICLEN);
-	(void)settings_delete(KEY_ICAC);
+	static const char *const keys[] = { KEY_VER, KEY_FAB0,  KEY_FAB1, KEY_TD,
+					    KEY_XP,  KEY_ICLEN, KEY_ICAC };
+	int first_err = 0;
+
+	/*
+	 * Every return code checked. These were discarded behind a (void) and
+	 * the function logged "erased" unconditionally, so a wipe that deleted
+	 * NOTHING was indistinguishable from one that worked -- the board came
+	 * back with the same fabrics, which reads as the erase never having been
+	 * asked for rather than having failed.
+	 */
+	for (size_t i = 0u; i < ARRAY_SIZE(keys); i++) {
+		int rc = settings_delete(keys[i]);
+
+		if (rc != 0 && first_err == 0) {
+			first_err = rc;
+		}
+		LOG_WRN("erase %s -> rc=%d", keys[i], rc);
+	}
+	if (first_err != 0) {
+		LOG_ERR("operational identity NOT fully erased (first rc=%d)", first_err);
+		return first_err;
+	}
 	LOG_WRN("operational identity erased");
 	return 0;
 }

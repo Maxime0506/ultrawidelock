@@ -342,6 +342,14 @@ static int begin_session(void)
 	 */
 	if (s_info.fabrics[0].index != 0u && !s_info.commissioning_complete) {
 		LOG_INF("new commissioner; rolling back every fabric");
+		/*
+		 * And the SRP names those fabrics published. Rolling back only
+		 * the table left both registrations pinned to fabrics that no
+		 * longer existed, and the replacement commissioner -- whose
+		 * instance name can never match -- got "no SRP slot left" one
+		 * step after PASE.
+		 */
+		matter_thread_advertise_reset();
 	}
 	matter_clusters_failsafe_expire(&s_info);
 
@@ -520,6 +528,21 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
  * anywhere, and a commissioner left waiting for an answer that went out a
  * different door.
  */
+/*
+ * Persisting the fabric table, off the OpenThread work queue.
+ *
+ * s_info is not passed through the work item: there is one of it, it outlives
+ * every handshake, and the only writer by the time this runs is the
+ * commissioning that has already finished.
+ */
+static void fab_store_work_fn(struct k_work *w)
+{
+	ARG_UNUSED(w);
+	(void)matter_fab_store(&s_info);
+}
+
+static K_WORK_DEFINE(s_fab_store_work, fab_store_work_fn);
+
 static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 {
 	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
@@ -669,19 +692,38 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 			(unsigned int)s_info.fabrics[0].node_id,
 			(unsigned int)(s_info.fabrics[0].fabric_id >> 32),
 			(unsigned int)s_info.fabrics[0].fabric_id);
-		if (s_info.last_noc_status == MATTER_NOC_STATUS_OK) {
-			(void)matter_fab_store(&s_info);
-		}
 	}
 	/*
-	 * Store again at CommissioningComplete: AddNOC captured the fabric, but
-	 * the Thread dataset and the complete flag can still change after it,
-	 * and a record that holds a fabric with no dataset restores a node that
-	 * is commissioned and unreachable.
+	 * ONLY at CommissioningComplete, never at AddNOC.
+	 *
+	 * Storing at AddNOC cost a pairing. This writes ~1.7 KB across several
+	 * settings keys and an NVS sector erase on this part runs to tens of
+	 * milliseconds; doing that inline left the commissioner waiting, it
+	 * retransmitted Sigma1, and the second fabric's CASE then failed --
+	 * "Sigma3 REJECTED (-6)" five times and a RemoveFabric. A fabric is of
+	 * no use before commissioning completes anyway, so there is nothing to
+	 * protect in that window: if the commissioner gives up half way, the
+	 * fail-safe is supposed to discard the fabric, not persist it.
+	 *
+	 * Apple runs commissioning TWICE, once per administrator, so both
+	 * fabrics are still captured -- each round ends here.
 	 */
 	if (inv.cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING &&
 	    inv.command == MATTER_CMD_GC_COMMISSIONING_COMPLETE && s_info.commissioning_complete) {
-		(void)matter_fab_store(&s_info);
+		/*
+		 * Off this thread. Matter datagrams arrive through the
+		 * OpenThread UDP callback, so everything here runs on
+		 * ot_work_q's ~3.2 KB stack, and a settings write through NVS
+		 * does not fit under what the IM path has already spent: it
+		 * overflowed exactly here, after both fabrics were accepted,
+		 * with "Stack overflow on CPU 0" and a halt -- so the pairing
+		 * completed on the wire and still failed.
+		 *
+		 * The system work queue has 6,144 B against a measured 3,872 B
+		 * peak, and that peak belongs to the Aliro unlock path, which
+		 * never runs while a commissioner is finishing.
+		 */
+		k_work_submit(&s_fab_store_work);
 	}
 	if (resp_len == 0u) {
 		/* The command ran; the peer asked not to be told. */
@@ -2079,7 +2121,14 @@ int matter_commission_init(void)
 	 * does the pair that commissioning would have done.
 	 */
 	{
-		int rc = matter_fab_load(&s_info);
+		int rc;
+
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_CLEAR_ON_BOOT)
+		/* Before the load, so nothing this boot ever sees the old
+		 * fabrics -- the same shape as ALIRO_PROV_CLEAR_ON_BOOT. */
+		(void)matter_fab_erase();
+#endif
+		rc = matter_fab_load(&s_info);
 
 		if (rc == 0) {
 			rc = matter_clusters_resume(&s_info);

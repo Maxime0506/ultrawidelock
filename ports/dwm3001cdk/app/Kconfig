@@ -85,6 +85,27 @@ config ALIRO_PROV_CLEAR_ON_BOOT
 	  It erases on EVERY boot, including the one right after Apple provisions
 	  a new identity. Flash it once, then flash an image without it.
 
+config ALIRO_MATTER_CLEAR_ON_BOOT
+	bool "Erase the stored Matter fabrics at boot"
+	depends on ALIRO_MATTER_BLE
+	default n
+	help
+	  Deletes the `mfab/*` settings keys before they are read, so the board
+	  comes up with no fabric and advertises commissionable.
+
+	  The other half of a factory reset, and the reason to prefer this pair
+	  over `west flash --erase`: together they clear everything a controller
+	  can see, while leaving OpenThread's own settings alone. The SRP client
+	  key lives there, the SRP host name is the factory EUI-64 and survives
+	  an erase either way, and name ownership is first-come-first-served BY
+	  KEY -- so an erase asks for the same name with a new key and is refused
+	  with OT_ERROR_DUPLICATED until the border router's key lease expires,
+	  up to 14 DAYS. Thread attaches, SRP never registers, and the
+	  commissioner hangs on "Adding to Home" with nothing to say why.
+
+	  Same caveat as ALIRO_PROV_CLEAR_ON_BOOT: it erases on EVERY boot.
+	  Flash it once, then flash an image without it.
+
 config ALIRO_THREAD_GATE
 	bool "Stage 0 contention gate: bring Thread up alongside the reader"
 	# NET_L2_OPENTHREAD, not bare OPENTHREAD. The 802.15.4 driver class is
