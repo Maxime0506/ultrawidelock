@@ -3,9 +3,10 @@
 
     scripts/woz_push.py update.wdfu
 
-The board accepts nothing until an update window is open. Press SW2 first; the
-window lasts CONFIG_WOZ_DFU_WINDOW_MS (five minutes by default). If you see
-"no update window open", that is what happened.
+The board accepts nothing until an update window is open, so this connects and
+then WAITS, asking once a second and prompting you to press SW2. The window
+lasts CONFIG_WOZ_DFU_WINDOW_MS, five minutes by default. Start the push first
+or press the button first; either order works.
 
 On success the board reboots into MCUboot, which applies the patch -- about
 30 seconds during which it is not on the air. The Bluetooth connection dropping
@@ -59,7 +60,13 @@ class Session:
     def on_notify(self, _sender, data):
         self.replies.put_nowait(bytes(data))
 
-    async def call(self, frame, timeout=20.0):
+    async def call(self, frame, timeout=20.0, tolerate=()):
+        """Send a frame, return the board's byte count.
+
+        Errors listed in `tolerate` come back as a negative code instead of
+        ending the run; everything else is fatal, because there is nothing
+        useful to do with a board that has refused the transfer.
+        """
         await self.client.write_gatt_char(DFU_CHR_UUID, frame, response=True)
         try:
             rsp = await asyncio.wait_for(self.replies.get(), timeout)
@@ -70,10 +77,33 @@ class Session:
             die("empty reply")
         if rsp[0] == RSP_ERR:
             code = rsp[1] if len(rsp) > 1 else 0
+            if code in tolerate:
+                return -code
             die(f"refused: {ERRORS.get(code, f'unknown error {code}')}")
         if rsp[0] != RSP_OK:
             die(f"unexpected reply {rsp[0]:#04x}")
         return struct.unpack("<I", rsp[1:5])[0] if len(rsp) >= 5 else 0
+
+    async def wait_for_window(self, total, deadline):
+        """Retry BEGIN until someone opens the update window.
+
+        The board refuses everything until SW2 is pressed, so a push that
+        started first would otherwise just fail. Asking repeatedly costs the
+        board a comparison and a two-byte notification: no flash, no state.
+        """
+        begin = struct.pack("<BI", OP_BEGIN, total)
+        loop = asyncio.get_event_loop()
+        prompted = False
+
+        while True:
+            if await self.call(begin, tolerate=(1,)) >= 0:
+                return
+            if not prompted:
+                print("\n  >>> PRESS SW2 ON THE BOARD to open the update window <<<\n")
+                prompted = True
+            if loop.time() > deadline:
+                die("no update window opened in time")
+            await asyncio.sleep(1.5)
 
 
 async def run(args):
@@ -118,7 +148,8 @@ async def run(args):
         chunk = max(16, min(args.chunk, mtu - 4))
         print(f"  connected, MTU {mtu}, sending {len(blob):,} B in {chunk} B chunks")
 
-        await session.call(struct.pack("<BI", OP_BEGIN, len(blob)))
+        deadline = asyncio.get_event_loop().time() + args.window_timeout
+        await session.wait_for_window(len(blob), deadline)
 
         sent = 0
         while sent < len(blob):
@@ -143,6 +174,8 @@ def main():
     p.add_argument("--chunk", type=int, default=180,
                    help="bytes of patch per frame, capped by the negotiated MTU")
     p.add_argument("--scan-timeout", type=float, default=15.0)
+    p.add_argument("--window-timeout", type=float, default=120.0,
+                   help="how long to keep asking while waiting for SW2")
     asyncio.run(run(p.parse_args()))
 
 

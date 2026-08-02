@@ -117,10 +117,35 @@ CDK_DFU_LOG := $(if $(DFU_LOG),-Dmcuboot_CONFIG_WOZ_DFU_APPLIER_LOG=y \
                                -Dmcuboot_CONFIG_USE_SEGGER_RTT=y \
                                -Dmcuboot_CONFIG_RTT_CONSOLE=y)
 
-# What `make dfu` uploads: the application plus MCUboot's header and P-256 TLVs.
-# NOT zephyr.bin, which is unsigned and which MCUboot will refuse.
+# ---- over-the-air update -----------------------------------------------------
+#
+# THE .hex, NOT THE .bin, AND THIS IS NOT A PREFERENCE. The build signs the
+# application TWICE, in two separate imgtool runs, and ECDSA signatures are
+# randomised -- so zephyr.signed.bin and zephyr.signed.hex carry the same code
+# under different signatures, 64 bytes apart at the end. Only the .hex reaches
+# merged.hex, so only the .hex is what a flashed board is actually running.
+# An update is a DELTA against those exact bytes, so the wrong file produces a
+# patch the board declines with "not for this image".
+CDK_SIGNED_HEX := $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.signed.hex
+# The old serial-recovery path uploads a whole image and overwrites whatever was
+# there, so it does not care which of the two it gets.
 CDK_SIGNED := $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.signed.bin
 DFU_BAUD   ?= 115200
+
+# WHAT THE BOARD IS RUNNING, recorded here because a delta cannot be computed
+# without it and the board cannot be asked over the air. `flash` and a
+# successful `dfu` both write this, so it tracks the board as long as nothing
+# else programs it. If it goes stale the update is REFUSED rather than
+# mis-applied -- the header carries a CRC of the from-image and the bootloader
+# checks it -- so the failure mode is a wasted transfer, not a brick.
+CDK_DEPLOYED ?= $(ALIRO_BUILD_ROOT)/cdk-deployed/zephyr.signed.hex
+CDK_PATCH    ?= $(CDK_BUILD)/update.wdfu
+
+# The host tooling's Python dependencies, in a throwaway virtualenv rather than
+# in the user's interpreter. detools creates the patch, cryptography signs its
+# header, bleak carries it over Bluetooth.
+CDK_OTA_VENV := $(ALIRO_BUILD_ROOT)/ota-venv
+CDK_OTA_PY   := $(CDK_OTA_VENV)/bin/python
 
 # ALIRO_TOOLCHAIN=env skips the nrfutil wrapper and runs west straight off PATH.
 # scripts/build-nrf5340dk.sh carries the same escape hatch for the same reason:
@@ -137,6 +162,7 @@ endif
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
 .PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
+        dfu-serial ota-patch ota-push ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
@@ -193,6 +219,12 @@ selftest:
 ##   Options: CDK_BUILD=<dir> (default build/cdk-matter)
 flash:
 	@$(CDK_RUN) flash -d $(CDK_BUILD)
+	@# Record what the board now runs, so `make dfu` can diff against it. A
+	@# delta needs the exact bytes that are on the part, and once the probe is
+	@# gone there is no way to ask.
+	@if [ -f '$(CDK_SIGNED_HEX)' ]; then \
+	  mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'; \
+	fi
 
 ## flash-erase: full chip erase + flash the DWM3001CDK
 ##   Costs everything the board learned at runtime: the Matter fabrics, the
@@ -230,21 +262,86 @@ dfu-key:
 	chmod 600 '$(CDK_KEY)'; \
 	printf '  generated  ·  %s\n  Gitignored. Back it up wherever your other secrets live.\n' '$(CDK_KEY)'
 
-## dfu: push a signed image over MCUboot serial recovery  ·  no probe needed
-##   Updates the board down the J-Link OB's VCOM, the USB cable already powering
-##   it. This is the ONLY over-the-wire update this board has, and that is
-##   arithmetic rather than choice: BLE DFU and Matter OTA both stage into a
-##   SECOND slot, and a 512 KB part running a 447 KB app has room for exactly
-##   one. See firmware/sysbuild.conf.
-##   Resets over SWD, so no button is needed. (SW1 DOES reset this board --
-##   PSELRESET is programmed to P0.18 -- but the script needs no operator.)
-##   NOT RELIABLE: one real upload succeeded and has not reproduced since.
-##   scripts/cdk-dfu.sh records everything ruled out.
-##   If both the VCOM and the app's own USB enumerate, the guess may pick the
-##   wrong one: pass DFU_PORT explicitly and it prints which it used.
-##   internal/cdk-dfu-plan.md carries the runbook.
-##   Options: DFU_PORT=/dev/cu.usbmodemXXXX  DFU_BAUD=115200  CDK_BUILD=<dir>
+## dfu: update the board over Bluetooth  ·  no cable, no probe
+##   Builds the current tree, works out the difference from what the board is
+##   already running, signs it, and pushes it. One command, start to finish.
+##
+##   Press SW2 on the board when it asks. That press is the whole authorization
+##   model: the patch is signed and MCUboot re-verifies the RESULT before
+##   booting it, so no peer can install code either way -- what a closed window
+##   prevents is a stranger in radio range spending your flash's erase cycles
+##   and rebooting your lock. The window lasts five minutes.
+##
+##   Two full slots want 844 KB of a 512 KB part, so what travels is a DELTA:
+##   about 7.6 KB between adjacent builds, against a 24.5 KB budget. The board
+##   reboots into MCUboot, which applies it in roughly 20-30 seconds.
+##
+##   Needs to know what the board is running, which it reads from
+##   $(CDK_DEPLOYED) -- written by `make flash` and by a successful `make dfu`.
+##   If that is missing or stale the board REFUSES the patch rather than
+##   mis-applying it, so the cost is a wasted transfer.
+##   Options: CDK_BUILD=<dir>  CDK_DEPLOYED=<hex>  OTA_NAME=<advertised name>
 dfu:
+	@$(MAKE) --no-print-directory build
+	@$(MAKE) --no-print-directory ota-patch
+	@$(MAKE) --no-print-directory ota-push
+
+## ota-patch: build a signed delta from the deployed image to the built one
+##   Leaves it at $(CDK_PATCH). Useful on its own when the board is elsewhere.
+ota-patch: $(CDK_OTA_PY)
+	@if [ ! -f '$(CDK_DEPLOYED)' ]; then \
+	  printf '  no record of what the board is running  ·  %s\n' '$(CDK_DEPLOYED)' >&2; \
+	  printf '  A delta needs the image it starts from. Either `make flash` once over SWD\n' >&2; \
+	  printf '  to set the record, or point CDK_DEPLOYED at the signed .hex it is running.\n' >&2; \
+	  exit 1; \
+	fi
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_patch.py build \
+	  --from '$(CDK_DEPLOYED)' --to '$(CDK_SIGNED_HEX)' \
+	  --build-dir '$(CDK_BUILD)' --key '$(CDK_KEY)' --out '$(CDK_PATCH)'
+
+## ota-push: send an already-built patch over Bluetooth
+##   Waits for you to press SW2, then transfers. On success it records the new
+##   image as deployed, so the next `make dfu` diffs from the right place.
+ota-push: $(CDK_OTA_PY)
+	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make ota-patch`\n' '$(CDK_PATCH)' >&2; exit 1; }
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_push.py '$(CDK_PATCH)' \
+	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
+	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
+	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
+
+## ota-window: open the update window over SWD instead of pressing SW2
+##   BENCH ONLY, and it needs the probe the whole point of this is to avoid. It
+##   exists because an automated test cannot press a button: it writes the
+##   window flag straight into RAM. The symbol is LTO-renamed, so it is looked
+##   up in the ELF rather than hardcoded.
+##   POINT CDK_BUILD AT THE IMAGE THE BOARD IS RUNNING, not the one being
+##   pushed. The address comes out of that ELF, and writing it into the wrong
+##   RAM location does nothing visible -- the push simply keeps waiting.
+ota-window:
+	@elf='$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf'; \
+	nm=$$(ls /opt/nordic/ncs/toolchains/*/opt/zephyr-sdk/arm-zephyr-eabi/bin/arm-zephyr-eabi-nm 2>/dev/null | head -1); \
+	addr=$$($$nm "$$elf" | awk '$$3 ~ /^s_open(\.|$$)/ { print $$1; exit }'); \
+	if [ -z "$$addr" ]; then printf '  cannot find s_open in %s\n' "$$elf" >&2; exit 1; fi; \
+	printf '  opening the update window by writing s_open at 0x%s\n' "$$addr"; \
+	probe-rs write --chip $(CDK_CHIP) b8 "0x$$addr" 1
+
+## ota-deps: create the host virtualenv the update tooling runs in
+ota-deps: $(CDK_OTA_PY)
+$(CDK_OTA_PY):
+	@printf '  creating the update tooling virtualenv  ·  %s\n' '$(CDK_OTA_VENV)'
+	@python3 -m venv '$(CDK_OTA_VENV)'
+	@'$(CDK_OTA_VENV)/bin/pip' install --quiet --disable-pip-version-check \
+	  detools cryptography bleak
+	@printf '  ready  ·  detools, cryptography, bleak\n'
+
+## dfu-serial: the old serial-recovery upload  ·  kept, but it does not work
+##   Uploads a whole image down the J-Link OB's VCOM. One transfer succeeded on
+##   2026-08-02 and it has never reproduced: MCUboot enters its listening window
+##   with a full four seconds available and still does not answer mcumgr.
+##   scripts/cdk-dfu.sh records everything ruled out. `make dfu` is the path
+##   that works.
+##   Options: DFU_PORT=/dev/cu.usbmodemXXXX  DFU_BAUD=115200  CDK_BUILD=<dir>
+dfu-serial:
 	@port='$(DFU_PORT)'; \
 	if [ -z "$$port" ]; then port=$$(ls /dev/cu.usbmodem* 2>/dev/null | head -n1); fi; \
 	if [ -z "$$port" ]; then \
