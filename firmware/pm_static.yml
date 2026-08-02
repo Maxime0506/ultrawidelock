@@ -23,36 +23,66 @@
 #                                DER strips leading zeros from r and s.)
 #
 # ---------------------------------------------------------------------------
-#  0x00000  mcuboot            32,768 B   29,360 used, 3,408 free (10.4%)
-#  0x08000  mcuboot_pad           512 B   image header
-#  0x08200  app               482,816 B   405,296 linked (83.94%), 405,960 signed
+#  0x00000  mcuboot            40,960 B   29,360 used, 11,600 free
+#  0x0a000  mcuboot_pad           512 B   image header
+#  0x0a200  app               441,856 B   405,284 linked (91.72%)
+#  0x76000  patch_staging      32,768 B   one OTA delta patch
 #  0x7e000  settings_storage    8,192 B   UNCHANGED from the pre-MCUboot map
-#  0x80000  end                           32,768 + 512 + 482,816 + 8,192 = 512 KB
+#  0x80000  end                           40,960 + 512 + 441,856 + 32,768 +
+#                                         8,192 = 524,288, the part exactly
 # ---------------------------------------------------------------------------
 #
-# The 83.94% is the app image's own linker report against this map, so the two
-# agree by construction rather than by my arithmetic -- which is the point: an
-# earlier draft of this comment had 0x75e00 as 482,304 B. It is 482,816 B.
+# WHY MCUBOOT GREW FROM 32,768 B, AND WHY THE APP GAVE UP 40,960 B TO A PATCH.
+# Both are the BLE OTA path (internal/cdk-ble-ota-plan.md). This board cannot
+# do a conventional over-the-air update and the arithmetic is not close: two
+# full slots want 844 KB of a 512 KB part, and an LZMA-compressed secondary
+# still wants ~646 KB. There is no external flash to stage into either -- no
+# jedec,spi-nor node in the board DTS. What fits is a DELTA: measured between
+# two adjacent LTO builds of this image, an in-place patch is 10,906 B.
 #
-# THAT 83.94% IS POST-LTO. LTO became the default 2026-08-02 once a walk-up
-# unlock validated it on hardware, and it is worth 41,084 B: the same image
-# measured 446,380 B (92.45%) without it. `make build LTO=0` gets that back, and
-# it still fits, so the map does not depend on LTO being on.
+#   patch_staging  32,768 B   3x the measured patch. It holds ONE patch and
+#                             its control page; nothing else may live here,
+#                             because MCUboot erases it after a successful
+#                             apply.
+#   mcuboot        +8,192 B   the detools in-place applier and heatshrink,
+#                             which run in the bootloader because the
+#                             application cannot rewrite the flash it is
+#                             executing from. MEASURED: the applier costs
+#                             3,176 B (29,380 -> 32,556), so the partition
+#                             ends at 79.48% with 8,404 B still free. The
+#                             grant is four sectors rather than one because
+#                             0x8000 would have left 212 B, and a bootloader
+#                             with 212 B of margin is one commit from an
+#                             overflow in the image that has to still work
+#                             when the application does not.
 #
-# WHY 0x8000 AND NOT PM'S OWN 0xC000. Left to itself PM gives mcuboot 48 KB,
-# which measured 59.73% used while the application sat at 95.32% of what was
-# left -- 21,820 B of margin on the image that is nearly full, and 19,792 B
-# spare on the one that is nowhere near. Moving the boundary down four sectors
-# (0xC000 - 0x8000 = 16,384 B) hands all of that to the side that needs it, and
-# takes the application from 95.32% to 92.46%. Both remain build-time
-# constraints: if either image outgrows its partition the build fails, it does
-# not ship and brick.
+# The application still has room: 441,856 - 405,284 = 36,572 B, of which
+# detools wants ~8 KB as forward-shift slack INSIDE this partition (it shifts
+# the old image forward to patch backwards over it). That leaves ~28 KB, which
+# is more margin than the 83.94% map above actually had once you subtract the
+# staging this design needs. Both images remain build-time constraints: an
+# image that outgrows its partition fails `west build`, it does not ship.
 #
-# The next step down, 0x9000, was considered and not taken. It would leave
-# MCUboot 7,504 B (20.4%) instead of 3,408 B (10.4%) and cost the application
-# 4,096 B of a margin that is already the tighter of the two. Revisit only with
-# a measurement: a bootloader that grows past ~32 KB fails `west build` with a
-# PM overflow, which is a loud failure on a developer's machine, not a field one.
+# THIS MAP ONLY WORKS POST-LTO, and that is a change from the version before it.
+# LTO became the default 2026-08-02 once a walk-up unlock validated it on
+# hardware, and it is worth 41,084 B: the same image measures 446,380 B without
+# it. The map it replaced had 482,816 B for the application, so `make build
+# LTO=0` still fitted there. It does NOT fit here -- 446,380 B against 441,856 B
+# overflows by 4,524 B -- and the build says so rather than shipping. An LTO=0
+# build of this configuration needs the staging partition dropped.
+#
+# WHY 0xA000 FOR MCUBOOT. It was 0x8000, chosen when the bootloader measured
+# 29,360 B and nothing was going to be added to it. The delta applier changes
+# that: detools plus heatshrink plus the glue is ~7 KB and it has to live in the
+# bootloader, because an application cannot rewrite the flash it is executing
+# from. 0x8000 left 3,408 B, which does not hold it. 0xA000 leaves 11,600 B.
+#
+# Left to itself PM gives mcuboot 48 KB (0xC000), which measured 59.73% used
+# while the application sat at 95.32% of what was left. That is still the reason
+# not to take PM's own answer: it hands margin to the image that does not need
+# it. 0xA000 is the smallest boundary that fits the applier with room to grow,
+# and a bootloader that outgrows it fails `west build` with a PM overflow --
+# a loud failure on a developer's machine, not a field one.
 #
 # HOW TO CHECK THIS FILE IS STILL TRUE
 #   west build -d <build> -t partition_manager_report
@@ -65,9 +95,9 @@
 
 mcuboot:
   address: 0x0
-  end_address: 0x8000
+  end_address: 0xa000
   region: flash_primary
-  size: 0x8000
+  size: 0xa000
   placement:
     align:
       end: 0x1000
@@ -75,8 +105,8 @@ mcuboot:
       - mcuboot_primary
 
 mcuboot_pad:
-  address: 0x8000
-  end_address: 0x8200
+  address: 0xa000
+  end_address: 0xa200
   region: flash_primary
   size: 0x200
   placement:
@@ -89,16 +119,16 @@ mcuboot_pad:
 # against, and what mcuboot_primary_app spans. It starts after the pad because
 # the pad is where MCUboot writes the image header.
 app:
-  address: 0x8200
-  end_address: 0x7e000
+  address: 0xa200
+  end_address: 0x76000
   region: flash_primary
-  size: 0x75e00
+  size: 0x6be00
 
 mcuboot_primary_app:
-  address: 0x8200
-  end_address: 0x7e000
+  address: 0xa200
+  end_address: 0x76000
   region: flash_primary
-  size: 0x75e00
+  size: 0x6be00
   orig_span: &id002
     - app
   span: *id002
@@ -110,14 +140,44 @@ mcuboot_primary_app:
 # imgtool enforces the real limit at sign time against this size, so an image
 # that no longer fits fails the build rather than the boot.
 mcuboot_primary:
-  address: 0x8000
-  end_address: 0x7e000
+  address: 0xa000
+  end_address: 0x76000
   region: flash_primary
-  size: 0x76000
+  size: 0x6c000
   orig_span: &id001
     - app
     - mcuboot_pad
   span: *id001
+
+# Where a BLE OTA lands. The application writes a received delta patch here and
+# reboots; MCUboot applies it onto mcuboot_primary and then erases this
+# partition. Nothing else may be stored here, and nothing here survives an
+# update.
+#
+# The first 4,096 B page is the control page, not patch data. It carries the
+# header the application writes after it has checked the patch signature
+# (magic, patch length, the SHA-256 the patch must hash to, and the SHA-256 of
+# the image it applies to), and it carries detools' step counter -- one word per
+# completed step, appended without erasing, so that a power cut mid-apply
+# resumes at the right step instead of restarting into a half-patched image.
+# detools drives that counter itself through its step_set/step_get callbacks
+# (detools.c:1559 skips any step already recorded complete).
+#
+# 32,768 B is 3x the 10,906 B patch measured between two adjacent LTO builds of
+# this image. It is sized for headroom rather than to the measurement because
+# a patch that does not fit is an update that cannot ship, and the partition
+# cannot be resized in the field without the flash map change that OTA exists
+# to avoid.
+patch_staging:
+  address: 0x76000
+  end_address: 0x7e000
+  region: flash_primary
+  size: 0x8000
+  placement:
+    align:
+      start: 0x1000
+    before:
+      - settings_storage
 
 # DO NOT MOVE. The reader identity and the Matter fabrics live here, and
 # `west flash` without --erase is what preserves them across an update --

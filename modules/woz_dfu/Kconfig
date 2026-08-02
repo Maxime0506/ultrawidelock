@@ -1,0 +1,56 @@
+# Delta firmware update for the DWM3001CDK: the halves that live in flash.
+#
+# This board cannot do a conventional over-the-air update and the arithmetic is
+# not close. Two full slots want 844 KB of a 512 KB part; an LZMA-compressed
+# secondary still wants ~646 KB; and there is no external flash to stage into.
+# What fits is a delta -- 10,906 B measured between two adjacent builds of this
+# image. See internal/cdk-ble-ota-plan.md.
+#
+# The two symbols below are deliberately separate and are never both set on one
+# image. The applier goes in the BOOTLOADER, because an application cannot
+# rewrite the flash it is executing from. The receiver goes in the APPLICATION,
+# because the bootloader has no radio.
+
+config WOZ_DFU_APPLIER
+	bool "Delta patch applier (bootloader side)"
+	depends on FLASH
+	help
+	  Compile the detools in-place patch applier and run it from a SYS_INIT
+	  at APPLICATION level, which is after the flash driver is up and before
+	  MCUboot's own main().
+
+	  Set this ONLY on the MCUboot image. On the application it would link a
+	  patcher that can never safely run.
+
+	  MEASURED at 3,176 B of bootloader flash (29,380 -> 32,556 B), which is
+	  why firmware/pm_static.yml gives MCUboot 0xA000 rather than the 0x8000
+	  it needed before: 0x8000 would have left 212 B free.
+
+	  Nothing happens at boot unless a valid header is found in the
+	  patch_staging partition, so the cost on a normal boot is one word read.
+
+if WOZ_DFU_APPLIER
+
+config WOZ_DFU_APPLIER_LOG
+	bool "Print applier progress"
+	depends on PRINTK
+	help
+	  Bench only. MCUboot on this board is built with CONFIG_PRINTK=n and no
+	  LOG (firmware/sysbuild/mcuboot.conf explains what that is worth), so
+	  turning this on also means turning those back on and finding the flash
+	  for them.
+
+	  Worth it exactly once: the first time a patch is applied on hardware,
+	  when the difference between "declined the patch" and "applied it and
+	  produced an image that fails validation" is otherwise invisible.
+
+config WOZ_DFU_APPLIER_CHUNK
+	int "Patch read buffer, bytes"
+	default 256
+	range 64 1024
+	help
+	  How much of the staged patch is read from flash at a time before being
+	  handed to detools. Larger is marginally faster and costs BSS. detools
+	  itself is a streaming decoder and imposes no minimum.
+
+endif # WOZ_DFU_APPLIER

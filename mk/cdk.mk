@@ -74,6 +74,44 @@ CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(CDK_
 CDK_KEY  ?= $(REPO_ROOT)/firmware/keys/mcuboot_ec_p256.pem
 CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
 
+# ---- delta update over BLE ---------------------------------------------------
+# modules/woz_dfu has to reach BOTH images, and they need opposite halves of it:
+# the patch APPLIER is compiled into MCUboot, because an application cannot
+# rewrite the flash it is executing from, and the RECEIVER is compiled into the
+# application, because the bootloader has no radio.
+#
+# So EXTRA_ZEPHYR_MODULES is set at the SYSBUILD level and not in
+# firmware/CMakeLists.txt, whose ZEPHYR_EXTRA_MODULES list is read only by the
+# application image -- the bootloader would never see the module at all. What
+# carries it across is that sysbuild copies every one of its own cache variables
+# into each image's cache file (sysbuild_extensions.cmake:133-147), which is the
+# same route NCS uses to get its MCUboot hooks compiled
+# (nrf/modules/mcuboot/hooks/).
+#
+# The two CONFIG_ assignments are per-image and must not be swapped: each half
+# is inert without a partition and a peer that the other image owns.
+CDK_DFU  := -DEXTRA_ZEPHYR_MODULES='$(REPO_ROOT)/modules/woz_dfu' \
+            -Dmcuboot_CONFIG_WOZ_DFU_APPLIER=y
+
+# DFU_LOG=1 makes the bootloader narrate what it does with a staged patch.
+#
+# Not on by default and not a size trim: MCUboot here has no LOG, no PRINTK and
+# no RTT at all (firmware/sysbuild/mcuboot.conf costs each one), and this turns
+# three of them back on. Worth it exactly when the difference between "declined
+# the patch" and "applied it and produced an image that fails validation" has to
+# be visible, because from the outside those look identical -- both leave an
+# erased staging partition and a board that does not run the new firmware.
+#
+# Read it with MCUboot's OWN elf, not the application's:
+#   probe-rs attach --chip nRF52833_xxAA build/<dir>/mcuboot/zephyr/zephyr.elf
+# The application re-initialises the RTT control block on every boot
+# (CONFIG_SEGGER_RTT_INIT_MODE_ALWAYS in prj.conf, and it has to), so anything
+# the bootloader printed is gone the moment the application starts.
+CDK_DFU_LOG := $(if $(DFU_LOG),-Dmcuboot_CONFIG_WOZ_DFU_APPLIER_LOG=y \
+                               -Dmcuboot_CONFIG_PRINTK=y \
+                               -Dmcuboot_CONFIG_USE_SEGGER_RTT=y \
+                               -Dmcuboot_CONFIG_RTT_CONSOLE=y)
+
 # What `make dfu` uploads: the application plus MCUboot's header and P-256 TLVs.
 # NOT zephyr.bin, which is unsigned and which MCUboot will refuse.
 CDK_SIGNED := $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.signed.bin
@@ -112,7 +150,8 @@ CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 build:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_BUILD) $(CDK_APP) \
-	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ALIRO_MATTER_BLE=y $(CDK_SIGN)
+	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ALIRO_MATTER_BLE=y \
+	     $(CDK_SIGN) $(CDK_DFU) $(CDK_DFU_LOG)
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/.config
 

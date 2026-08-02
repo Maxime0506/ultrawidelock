@@ -1,0 +1,4 @@
+name: woz_dfu
+build:
+  cmake: .
+  kconfig: Kconfig

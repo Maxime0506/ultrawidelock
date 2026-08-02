@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""Build a signed delta patch for the DWM3001CDK's over-the-air update path.
+
+Takes two SIGNED MCUboot images and emits one `.wdfu` file: a header the
+bootloader reads, a signature the application checks, and a detools in-place
+patch that turns the first image into the second.
+
+    scripts/woz_patch.py build --from old/zephyr.signed.bin \\
+                               --to   new/zephyr.signed.bin \\
+                               --build-dir build/cdk-matter \\
+                               --out  update.wdfu
+
+Why SIGNED images and not zephyr.bin: the patch has to reproduce the MCUboot
+header and the ECDSA TLVs as well as the code. Patching only the payload would
+leave the old signature in front of new code, and MCUboot would refuse to boot
+the result -- correctly, and after the update had already overwritten the
+working image.
+
+AND IT MUST BE zephyr.signed.HEX, NOT zephyr.signed.BIN. The build signs the
+image TWICE, in two separate imgtool runs, and ECDSA signatures are randomised,
+so the two artifacts hold the same code under DIFFERENT signatures -- 64 bytes
+apart at the very end of the image. Only the .hex goes into merged.hex and so
+only the .hex is what a flashed board is actually running. MEASURED 2026-08-03:
+device crc 0xd4177b20, zephyr.signed.hex 0xd4177b20, zephyr.signed.bin
+0xbb9ec396.
+
+This does not matter for `make dfu`, which uploads a whole image and overwrites
+whatever was there. It matters completely here, because a delta is computed
+AGAINST the bytes already on the device. Feed it the .bin and the bootloader
+declines the patch with "not for this image" -- which is the good outcome, and
+only because the from-image CRC catches it. This script refuses the .bin rather
+than rely on that.
+
+The `.wdfu` layout, which `modules/woz_dfu/include/woz_dfu.h` is the other half
+of:
+
+      0   32   struct woz_dfu_hdr, little-endian
+     32   64   ECDSA-P256 signature over those 32 bytes, raw r||s
+     96   ..   the detools patch
+
+Needs `detools` and `cryptography`:
+
+    python3 -m pip install detools cryptography
+"""
+
+import argparse
+import io
+import re
+import struct
+import sys
+import zlib
+from pathlib import Path
+
+# Mirrors modules/woz_dfu/include/woz_dfu.h. A change on either side without
+# the other produces a board that stages an update and then declines it, so the
+# constants are named the same and checked at the bottom of this file.
+WOZ_DFU_MAGIC = 0x55464457  # "WDFU"
+WOZ_DFU_ABI_VERSION = 1
+WOZ_DFU_PAGE_SIZE = 4096
+WOZ_DFU_PATCH_OFFSET = 2 * WOZ_DFU_PAGE_SIZE
+WOZ_DFU_HDR_LEN = 32
+WOZ_DFU_HDR_CRC_LEN = 28
+WOZ_DFU_SIG_LEN = 64
+
+# magic, abi_version, flags, patch_len, to_len, patch_crc32, from_crc32, from_len
+HDR_FMT = "<IHHIIIII"
+
+# Heatshrink is configured statically in the bootloader, and detools.c:288-291
+# REJECTS a stream whose header disagrees. These are also detools' own defaults;
+# they are passed explicitly so that a change to either default is a build
+# failure here rather than a patch the board refuses at its first byte.
+HEATSHRINK_WINDOW_SZ2 = 8
+HEATSHRINK_LOOKAHEAD_SZ2 = 7
+
+# detools requires memory_size to be a multiple of segment_size, and the
+# bootloader erases a page at a time, so a segment is a page.
+SEGMENT_SIZE = 4096
+
+
+def die(msg):
+    sys.exit(f"woz_patch: {msg}")
+
+
+def partition(build_dir, name):
+    """Read one partition's size out of a build's generated partitions.yml.
+
+    Parsed rather than hardcoded because the whole update path is invalid if
+    the host and the board disagree about how big the slot is, and
+    firmware/pm_static.yml is allowed to change.
+    """
+    path = Path(build_dir) / "partitions.yml"
+    if not path.is_file():
+        die(f"no partitions.yml in {build_dir} -- build it first")
+
+    text = path.read_text()
+    match = re.search(rf"^{name}:$(.*?)(?=^\S)", text, re.M | re.S)
+    if not match:
+        die(f"no '{name}' partition in {path}")
+    size = re.search(r"^\s+size:\s*(0x[0-9a-fA-F]+|\d+)\s*$", match.group(1), re.M)
+    if not size:
+        die(f"'{name}' in {path} has no size")
+    return int(size.group(1), 0)
+
+
+def read_ihex(text):
+    """Minimal Intel HEX reader. Returns the contiguous bytes it describes.
+
+    Written here rather than pulled in as a dependency because it is twenty
+    lines and this script already asks for detools and cryptography.
+    """
+    data = {}
+    upper = 0
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith(":"):
+            continue
+        raw = bytes.fromhex(line[1:])
+        count, rectype = raw[0], raw[3]
+        addr = (raw[1] << 8) | raw[2]
+        payload = raw[4:4 + count]
+
+        if rectype == 0x00:
+            for i, byte in enumerate(payload):
+                data[upper + addr + i] = byte
+        elif rectype == 0x04:
+            upper = int.from_bytes(payload, "big") << 16
+        elif rectype == 0x02:
+            upper = int.from_bytes(payload, "big") << 4
+        elif rectype == 0x01:
+            break
+
+    if not data:
+        die("Intel HEX file contained no data records")
+
+    lo, hi = min(data), max(data)
+    out = bytearray(b"\xff" * (hi - lo + 1))
+    for addr, byte in data.items():
+        out[addr - lo] = byte
+    return bytes(out)
+
+
+def load_image(path):
+    """Read a signed image, refusing the artifact that will not match a board."""
+    p = Path(path)
+    if not p.is_file():
+        die(f"no such file: {path}")
+    blob = p.read_bytes()
+
+    if blob[:1] == b":":
+        return read_ihex(blob.decode("ascii", "replace"))
+
+    sibling = p.with_suffix(".hex")
+    if sibling.is_file():
+        die(
+            f"{p.name} is a raw binary and {sibling.name} sits beside it.\n"
+            f"  The build signs the image TWICE, in separate imgtool runs, and ECDSA\n"
+            f"  signatures are randomised -- so these two files hold the same code\n"
+            f"  under different signatures, differing in their last 64 bytes. Only\n"
+            f"  the .hex reaches merged.hex, so only the .hex is what a flashed board\n"
+            f"  is running, and a delta must be computed against that.\n"
+            f"  Use: {sibling}"
+        )
+    return blob
+
+
+def sign(key_path, payload):
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec, utils
+    except ImportError:
+        die("needs the 'cryptography' module: python3 -m pip install cryptography")
+
+    key = serialization.load_pem_private_key(Path(key_path).read_bytes(), password=None)
+    if not isinstance(key, ec.EllipticCurvePrivateKey) or key.curve.name != "secp256r1":
+        die(f"{key_path} is not an ECDSA P-256 key")
+
+    r, s = utils.decode_dss_signature(key.sign(payload, ec.ECDSA(hashes.SHA256())))
+    return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+
+def build(args):
+    try:
+        import detools
+    except ImportError:
+        die("needs the 'detools' module: python3 -m pip install detools")
+
+    # Checked BEFORE the patch is created, not when it is used. Creating a patch
+    # over a 400 KB image is the slow part, and discovering afterwards that
+    # nothing can sign it wastes all of it.
+    sign(args.key, b"")
+
+    from_data = load_image(args.from_image)
+    to_data = load_image(args.to_image)
+
+    if args.memory_size:
+        memory_size = args.memory_size
+        staging_size = args.staging_size
+    else:
+        if not args.build_dir:
+            die("pass either --build-dir or both --memory-size and --staging-size")
+        memory_size = partition(args.build_dir, "mcuboot_primary")
+        staging_size = partition(args.build_dir, "patch_staging")
+
+    if memory_size % SEGMENT_SIZE:
+        die(f"slot size {memory_size} is not a multiple of {SEGMENT_SIZE}")
+    for name, data in (("--from", from_data), ("--to", to_data)):
+        if len(data) > memory_size:
+            die(f"{name} is {len(data)} B, larger than the {memory_size} B slot")
+
+    patch_capacity = staging_size - WOZ_DFU_PATCH_OFFSET
+
+    fpatch = io.BytesIO()
+    detools.create_patch(
+        io.BytesIO(from_data),
+        io.BytesIO(to_data),
+        fpatch,
+        patch_type="in-place",
+        compression="heatshrink",
+        memory_size=memory_size,
+        segment_size=SEGMENT_SIZE,
+        minimum_shift_size=args.minimum_shift_size,
+        heatshrink_window_sz2=HEATSHRINK_WINDOW_SZ2,
+        heatshrink_lookahead_sz2=HEATSHRINK_LOOKAHEAD_SZ2,
+    )
+    patch = fpatch.getvalue()
+
+    if len(patch) > patch_capacity:
+        die(
+            f"patch is {len(patch)} B but patch_staging holds {patch_capacity} B "
+            f"({staging_size} B less the two control pages).\n"
+            f"  The two images differ too much for one delta. Either grow "
+            f"patch_staging in firmware/pm_static.yml, which moves the flash map "
+            f"and so cannot be done over the air, or ship the intermediate build."
+        )
+
+    body = struct.pack(
+        HDR_FMT,
+        WOZ_DFU_MAGIC,
+        WOZ_DFU_ABI_VERSION,
+        0,
+        len(patch),
+        len(to_data),
+        zlib.crc32(patch),
+        zlib.crc32(from_data),
+        len(from_data),
+    )
+    header = body + struct.pack("<I", zlib.crc32(body))
+    assert len(header) == WOZ_DFU_HDR_LEN
+    assert len(body) == WOZ_DFU_HDR_CRC_LEN
+
+    signature = sign(args.key, header)
+    Path(args.out).write_bytes(header + signature + patch)
+
+    ratio = 100.0 * len(patch) / len(to_data)
+    print(f"  from      {len(from_data):>9,} B  crc {zlib.crc32(from_data):#010x}")
+    print(f"  to        {len(to_data):>9,} B")
+    print(f"  patch     {len(patch):>9,} B  {ratio:.2f}% of the image")
+    print(f"  capacity  {patch_capacity:>9,} B  {100.0*len(patch)/patch_capacity:.1f}% used")
+    print(f"  wrote     {args.out}")
+
+
+def info(args):
+    blob = Path(args.patch).read_bytes()
+    if len(blob) < WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:
+        die("too short to be a .wdfu")
+
+    fields = struct.unpack(HDR_FMT, blob[:WOZ_DFU_HDR_CRC_LEN])
+    (magic, abi, flags, patch_len, to_len, patch_crc, from_crc, from_len) = fields
+    stored_crc = struct.unpack("<I", blob[WOZ_DFU_HDR_CRC_LEN:WOZ_DFU_HDR_LEN])[0]
+    patch = blob[WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:]
+
+    print(f"  magic       {magic:#010x} {'ok' if magic == WOZ_DFU_MAGIC else 'BAD'}")
+    print(f"  abi         {abi} {'ok' if abi == WOZ_DFU_ABI_VERSION else 'BAD'}")
+    print(f"  flags       {flags:#06x}")
+    print(f"  from        {from_len:,} B  crc {from_crc:#010x}")
+    print(f"  to          {to_len:,} B")
+    print(f"  patch       {patch_len:,} B  crc {patch_crc:#010x}")
+    print(f"  header crc  {stored_crc:#010x} "
+          f"{'ok' if stored_crc == zlib.crc32(blob[:WOZ_DFU_HDR_CRC_LEN]) else 'BAD'}")
+    print(f"  patch crc   {'ok' if patch_crc == zlib.crc32(patch) else 'BAD'}")
+    print(f"  patch len   {'ok' if patch_len == len(patch) else 'BAD'}")
+
+
+def stage(args):
+    """Lay a .wdfu out as a raw image of the patch_staging partition.
+
+    For bench work only: it lets a patch be written over SWD and the APPLIER
+    tested on its own, with no radio and no receiver in the picture. That
+    separation is the point -- when an over-the-air update fails, this says
+    which half failed.
+
+        scripts/woz_patch.py stage update.wdfu --out staging.bin
+        arm-zephyr-eabi-objcopy -I binary -O ihex \\
+            --change-addresses 0x76000 staging.bin staging.hex
+        nrfjprog --program staging.hex --sectorerase --verify -r
+    """
+    blob = Path(args.patch).read_bytes()
+    header = blob[:WOZ_DFU_HDR_LEN]
+    patch = blob[WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:]
+
+    if struct.unpack("<I", header[:4])[0] != WOZ_DFU_MAGIC:
+        die(f"{args.patch} is not a .wdfu")
+
+    # Page 0 header, page 1 the step log left ERASED, page 2 onward the patch.
+    # The step log must be 0xff: a stale one would make the bootloader believe
+    # steps were already applied and skip them.
+    image = bytearray(b"\xff" * WOZ_DFU_PATCH_OFFSET)
+    image[: len(header)] = header
+    image += patch
+    Path(args.out).write_bytes(image)
+    print(f"  wrote {args.out}  ({len(image):,} B, patch at +{WOZ_DFU_PATCH_OFFSET})")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    b = sub.add_parser("build", help="create a signed patch from two signed images")
+    b.add_argument("--from", dest="from_image", required=True,
+                   help="the signed image the board is running now")
+    b.add_argument("--to", dest="to_image", required=True,
+                   help="the signed image it should be running after")
+    b.add_argument("--out", required=True)
+    b.add_argument("--key", default="firmware/keys/mcuboot_ec_p256.pem",
+                   help="signs the header; same key MCUboot verifies images with")
+    b.add_argument("--build-dir",
+                   help="read the slot and staging sizes from its partitions.yml")
+    b.add_argument("--memory-size", type=lambda v: int(v, 0),
+                   help="mcuboot_primary size, if not using --build-dir")
+    b.add_argument("--staging-size", type=lambda v: int(v, 0),
+                   help="patch_staging size, if not using --build-dir")
+    b.add_argument("--minimum-shift-size", type=lambda v: int(v, 0), default=2 * SEGMENT_SIZE,
+                   help="forward-shift slack detools works in; must stay a "
+                        "multiple of the segment size, and 2 segments is its floor")
+    b.set_defaults(func=build)
+
+    i = sub.add_parser("info", help="describe a .wdfu and check its own CRCs")
+    i.add_argument("patch")
+    i.set_defaults(func=info)
+
+    s = sub.add_parser("stage", help="lay a .wdfu out as a patch_staging image, for SWD")
+    s.add_argument("patch")
+    s.add_argument("--out", required=True)
+    s.set_defaults(func=stage)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    assert struct.calcsize(HDR_FMT) == WOZ_DFU_HDR_CRC_LEN, "header layout drifted"
+    main()
