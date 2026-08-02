@@ -97,6 +97,8 @@ GATES=(
 	mal-diff    # 0s   ci.yml : verify
 	esp         # 0s   ci.yml : verify
 	attest      # 0s   ci.yml : verify
+	approtect   # 0s   ci.yml : verify   (source layer only in CI, which builds no firmware; the
+	            #                         generated-.config layer runs on a contributor's tree)
 	ct          # 0s   ci.yml : verify   (0s only because it SKIPS: no valgrind on darwin/arm64;
 	            #                         17s in CI, where valgrind is installed)
 	format      # 1s   ci.yml : verify
@@ -152,7 +154,7 @@ GATES=(
 # full run: the fail-fast the parallel phase gives up, bought back where it is
 # cheap. It also runs the two whole-tree scanners (licenses, format) before
 # anything starts writing, so neither reads a file mid-rewrite.
-TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp attest"
+TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp attest approtect"
 #
 # Packed, not one lane per gate. coverage sets the floor at ~25s and nothing
 # finishes before it, so lanes past that buy nothing and cost real time: one
@@ -270,6 +272,7 @@ gate_label() {
 	secrets) echo "no secrets in the tracked files" ;;
 	web) echo "browser supply chain: pins, CSP, installs" ;;
 	ct) echo "no secret-dependent branches" ;;
+	approtect) echo "no image locks APPROTECT" ;;
 	esp) echo "ESP component pins are exact" ;;
 	attest) echo "release provenance configured" ;;
 	mal-diff) echo "no malicious change shapes" ;;
@@ -308,6 +311,9 @@ gate_run() {
 			| xargs clang-format --dry-run --Werror
 		;;
 	shellcheck) git ls-files '*.sh' | xargs shellcheck -S warning ;;
+	# Its own --self-test runs first, so a run that reports "ok" has proved the
+	# detector still fires before it claims the tree is clean.
+	approtect) scripts/check-approtect.sh --self-test && scripts/check-approtect.sh ;;
 	test-web) make --no-print-directory test-web ;;
 	actionlint) actionlint -color ;;
 	fuzz) make --no-print-directory fuzz ;;

@@ -25,6 +25,28 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(aliro_reader_dwm3001cdk)
 
+# APPROTECT must never be locked on this board. SystemInit() re-asserts the lock
+# on every boot and the only way out is `nrfjprog --recover`, which mass-erases
+# flash AND UICR -- taking settings_storage at 0x7e000 with it, and with that the
+# reader private key and every iPhone key already provisioned against this board.
+#
+# This is the configure-time half of the guard: it fails the build of THIS image
+# before a hex exists. scripts/check-approtect.sh is the other half and is the
+# one that covers MCUboot, whose config lives outside this CMakeLists entirely.
+# Both are needed -- the setting can arrive from a board defconfig or an SoC
+# default that no grep of this tree would find, which is why the check that
+# matters reads the GENERATED .config.
+if(CONFIG_NRF_APPROTECT_LOCK OR CONFIG_NRF_SECURE_APPROTECT_LOCK)
+	message(FATAL_ERROR
+		"APPROTECT lock is enabled for this image. Refusing to build.\n"
+		"  CONFIG_NRF_APPROTECT_LOCK        = ${CONFIG_NRF_APPROTECT_LOCK}\n"
+		"  CONFIG_NRF_SECURE_APPROTECT_LOCK = ${CONFIG_NRF_SECURE_APPROTECT_LOCK}\n"
+		"Locking is a one-way door for this board's DATA: recovering debug "
+		"access costs a mass erase of flash and UICR, which destroys "
+		"settings_storage and the reader identity. Export it first with "
+		"`aliro export yes` if you genuinely intend this.")
+endif()
+
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
 
 target_sources(app PRIVATE
