@@ -454,18 +454,16 @@ static uint32_t s_estab_first_ms;
 static void on_connected(struct bt_conn *conn, uint8_t err)
 {
 	ARG_UNUSED(conn);
-	if (err != 0u) {
-		/* on_disconnected() does the counting; this callback is invoked
-		 * with conn->err set for the same failure (conn.c:1975). */
-		return;
+	/*
+	 * NOT where the run is reported, which took a hardware run to learn.
+	 * The controller completes the connection first and only discovers the
+	 * establishment failure afterwards, so this fires with err == 0 for
+	 * EVERY attempt in a run -- including the ones about to fail. Counting
+	 * the run here turned eight consecutive failures into eight runs of one.
+	 */
+	if (err == 0u) {
+		s_conn_up = true;
 	}
-	if (s_estab_fails > 0u) {
-		LOG_WRN("connected after %u attempt(s) that never established, over %u ms",
-			(unsigned int)s_estab_fails,
-			(unsigned int)(k_uptime_get_32() - s_estab_first_ms));
-		s_estab_fails = 0u;
-	}
-	s_conn_up = true;
 }
 
 static void on_disconnected(struct bt_conn *conn, uint8_t reason)
@@ -477,10 +475,28 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 			s_estab_first_ms = k_uptime_get_32();
 		}
 		s_estab_fails++;
+	} else if (s_estab_fails > 0u) {
+		/*
+		 * Any other reason means the link carried something before it
+		 * ended, so the run is over and its length is worth having in
+		 * one line. 0x3E connections are the ones that never lived.
+		 */
+		LOG_WRN("%u connection(s) never established over %u ms before this one",
+			(unsigned int)s_estab_fails,
+			(unsigned int)(k_uptime_get_32() - s_estab_first_ms));
+		s_estab_fails = 0u;
 	}
 	LOG_INF("BLE disconnected (0x%02x); re-advertising", reason);
-	/* Deferred, and not by much -- see readvertise_work_fn(). */
-	(void)k_work_schedule(&s_readvertise_work, K_MSEC(50));
+	/*
+	 * Deferred out of this callback -- see readvertise_work_fn() -- but the
+	 * 50 ms is for a connection that LIVED, where the peer may still be
+	 * finishing with us. A 0x3E never carried a byte and the phone is
+	 * already retrying, so every millisecond spent not advertising is a
+	 * millisecond it cannot find us: eight failures in one measured burst
+	 * spent 400 ms of that 6 s deliberately invisible.
+	 */
+	(void)k_work_schedule(&s_readvertise_work,
+			      reason == BT_HCI_ERR_CONN_FAIL_TO_ESTAB ? K_NO_WAIT : K_MSEC(50));
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {

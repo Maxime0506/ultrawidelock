@@ -144,6 +144,13 @@ void aliro_approach_defaults(struct aliro_approach_cfg *cfg)
 	cfg->motor_ms = 500;
 	cfg->margin_ms = 250;
 	cfg->vmin_cm_s = 30;
+	/*
+	 * 1,500 ms. Ranging blocks are 192 ms, so a phone that is still there
+	 * and still ranging cannot be quiet this long by accident, and the
+	 * measured walk-away had 3.2 s of live link left after its last far
+	 * sample -- room to relock twice over.
+	 */
+	cfg->far_silence_ms = 1500;
 	cfg->predict_en = true;
 }
 
@@ -203,6 +210,9 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
 	/* Presence path — the shipped median/dwell controller, verbatim: every
 	 * trusted sample enters the window (the median itself rejects spikes),
 	 * dwell counters reset across the dead band. */
+	ap->last_cm = cm;
+	ap->last_feed_ms = now_ms;
+
 	ap->win[ap->wpos] = cm;
 	ap->wpos = (ap->wpos + 1) % ALIRO_APPROACH_MEDIAN_N;
 	if (ap->wlen < ALIRO_APPROACH_MEDIAN_N) {
@@ -271,6 +281,24 @@ enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_
 	 * overdue predictive open acts here. */
 	if (ap->pred_open && now_ms >= ap->pred_deadline_ms) {
 		return pred_abort(ap);
+	}
+
+	/*
+	 * Departure by silence, which is how a real walk-away ends: the far
+	 * samples stop before far_dwell can count three of them. Gated on the
+	 * LAST measurement being beyond the relock radius, so a phone resting
+	 * near the door goes quiet without the bolt moving under its owner.
+	 * See aliro_approach_cfg::far_silence_ms.
+	 */
+	if (!ap->locked && ap->cfg.far_silence_ms > 0 && ap->last_feed_ms != 0 &&
+	    ap->last_cm >= ap->cfg.relock_cm &&
+	    (now_ms - ap->last_feed_ms) >= (int64_t)ap->cfg.far_silence_ms) {
+		ap->locked = true;
+		ap->near_dwell = 0;
+		ap->far_dwell = 0;
+		ap->pred_open = false;
+		ap->pred_dwell = 0;
+		return ALIRO_APPROACH_RELOCK_DEPART;
 	}
 	return ALIRO_APPROACH_HOLD;
 }
