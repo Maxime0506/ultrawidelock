@@ -1003,24 +1003,46 @@ static void notify_lock_state_changed(void)
 #define SUBSCRIPTION_HEARTBEAT_S 120u
 
 /*
- * Never slower than what a subscriber was actually promised.
+ * The largest max interval this node will GRANT, whatever the subscriber asks
+ * for. See where it is applied, in the subscribe handler.
  *
- * 120 s alone is a promise about Apple, not about the protocol.
- * on_subscribe_request() echoes the requested max_interval_s back UNCHANGED and
- * matter_im_subscribe_response_encode() puts it on the wire, so this node
- * commits to whatever the subscriber asked for. Apple asks for 600 s and 120 s
- * comfortably clears it -- but a controller asking for 60 s was told 60 s and
- * then reported to every 120 s, which is precisely the lapsed-subscription
- * failure ("Matter Accessory / No Response") this heartbeat exists to prevent,
- * reintroduced for everyone who is not Apple. Nothing logged it, because from
- * this side the report went out fine; only the peer's own timer notices.
+ * The two numbers are a pair and must stay one: the heartbeat is what keeps a
+ * subscription alive, so granting an interval at or below it promises a report
+ * this node will not send in time. Anyone lowering this must lower the
+ * heartbeat first.
+ */
+#define SUBSCRIPTION_MAX_INTERVAL_S 180u
+BUILD_ASSERT(SUBSCRIPTION_MAX_INTERVAL_S > SUBSCRIPTION_HEARTBEAT_S,
+	     "a granted interval at or below the heartbeat lapses every subscription");
+
+/*
+ * Never slower than what a subscriber was actually GRANTED.
  *
- * Three quarters, not the interval itself: a report that lands exactly on the
- * ceiling races the subscriber's timer, and this link's round trip has been
+ * The ceiling above bounds what this node hands out, which is what makes the
+ * assert meaningful, but it cannot bound what a subscriber ASKS for: a request
+ * below the ceiling is granted as-is, and a fixed 120 s heartbeat then breaks
+ * it. A controller asking for 60 s was told 60 s and reported to every 120 s --
+ * precisely the lapsed subscription ("Matter Accessory / No Response") the
+ * heartbeat exists to prevent, reintroduced for everyone who is not Apple, and
+ * silent: from this side the report went out fine, and only the peer's own timer
+ * notices. So the constant pair is checked at build time and the runtime period
+ * follows whatever was actually granted.
+ *
+ * Nothing changes for Apple. It asks 600 s, is granted 180 s by the ceiling, and
+ * three quarters of that is 135 s -- above the 120 s heartbeat, so 120 s stands.
+ *
+ * Three quarters rather than the interval itself: a report landing exactly on
+ * the ceiling races the subscriber's timer on a link whose round trip has been
  * measured at 1.4 s. Being early is cheap; being late is the whole failure.
  *
- * Floored, because max_interval is the subscriber's number and a small one
- * would otherwise wake a sleepy-end-device radio continuously.
+ * Floored, because that granted value is the subscriber's number and a small one
+ * would otherwise wake a sleepy-end-device radio continuously. Below about 7 s
+ * of granted ceiling the floor WINS and the promise is not kept -- 4 s granted
+ * reports every 5 s. That is deliberate and not free: the honest alternatives
+ * are refusing the subscription or letting a controller drive this radio, and
+ * the ceiling cannot be raised to fix it because the response has to sit inside
+ * the range that was requested. No controller observed here comes near it;
+ * Apple's floor is measured in minutes.
  */
 #define SUBSCRIPTION_HEARTBEAT_MIN_S 5u
 
@@ -1233,8 +1255,30 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 	 * than this is what makes a subscription dead. Committing to it exactly
 	 * is honest only if this node then reports on time -- see the note in
 	 * on_status_response().
+	 *
+	 * It is a CEILING, so granting less is legal, and less is worth having.
+	 * The granted interval is also the subscriber's liveness timer, and this
+	 * node's subscriptions live in RAM: a reset destroys all of them while
+	 * the controller still believes in every one. Until then it will not
+	 * re-subscribe, and a Home tile that sends UnlockDoor gets acceptance
+	 * and never a LockState report -- measured 2026-08-02 as a tile stuck on
+	 * "Unlocking" for the ten minutes Apple's requested 600 s bought, after
+	 * every single flash.
+	 *
+	 * 180 s costs NOTHING to keep: the heartbeat below already reports every
+	 * SUBSCRIPTION_HEARTBEAT_S, well inside it. Going lower would mean
+	 * lowering the heartbeat too, and that is a real trade on a sleepy end
+	 * device -- four times the report traffic to save two more minutes.
+	 *
+	 * The proper fix is persisting subscriptions and resuming them, which
+	 * needs a CASE initiator this node does not have. This is the cheap
+	 * third of it.
 	 */
 	s->max_interval_s = sub.max_interval_s;
+	if (s->max_interval_s > SUBSCRIPTION_MAX_INTERVAL_S &&
+	    sub.min_interval_s <= SUBSCRIPTION_MAX_INTERVAL_S) {
+		s->max_interval_s = SUBSCRIPTION_MAX_INTERVAL_S;
+	}
 	s->read.subscription_id = s->id;
 	s->priming = true;
 	s->active = false;
