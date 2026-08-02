@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `firmware/src/aliro_ble_zephyr.c`
 
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
 **depends on** [`firmware/src/matter_ble_zephyr.h`](matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](matter_commission.h.md)  ·  **discussed in** [`firmware/README.md`](../../../firmware/README.md)
 
 ```mermaid

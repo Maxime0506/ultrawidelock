@@ -99,7 +99,11 @@ clean:
 	@rm -rf $(ALIRO_BUILD_ROOT)
 	@rm -rf $(REPO_ROOT)/ports/esp32/apps/*/build $(REPO_ROOT)/ports/esp32/apps/*/build-piv \
 	        $(REPO_ROOT)/ports/esp32/test/on_target_ec/build $(REPO_ROOT)/ports/nrf5340dk/on_target_ec/build
-	@printf '  removed %s and the app-local build directories\n' '$(ALIRO_BUILD_ROOT)'
+	@# The TUI gate compiles into its own directory rather than the build root
+	@# (bun decides where its output goes), so it needs naming here or `clean`
+	@# leaves it behind. node_modules is a fetched dependency, not output: kept.
+	@rm -rf $(REPO_ROOT)/tools/tui/dist $(REPO_ROOT)/tools/tui/.*.bun-build
+	@printf '  removed %s, the app-local build directories and the TUI bundle\n' '$(ALIRO_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + seeded workspace
 ##   Frees the per-worktree caches; re-seed with `make ws-seed`. A symlinked

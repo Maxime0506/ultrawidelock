@@ -183,17 +183,15 @@ validation is recorded.
 **Reader** (`../ports/esp32/apps/reader`): plain ESP-IDF, no esp-matter.
 
 ```bash
-make esp-set-target APP=reader TARGET=esp32c6   # or: esp32s3 / esp32c5
-make esp-build      APP=reader
-make esp-flash      APP=reader
+make esp-build APP=reader TARGET=esp32c6   # or: esp32s3 / esp32c5
+make esp-flash APP=reader TARGET=esp32c6
 ```
 
 **Matter door lock** (`../ports/esp32/apps/matter-lock`): also needs
 esp-matter at `~/esp/esp-matter` (override: `ESP_MATTER_PATH=`).
 
 ```bash
-make esp-set-target APP=matter-lock TARGET=esp32c6   # or: esp32s3 / esp32c5
-make esp-go         APP=matter-lock
+make esp-go APP=matter-lock TARGET=esp32c6   # or: esp32s3 / esp32c5
 ```
 
 `esp-go` = build + flash + monitor; every flash and monitor target refuses

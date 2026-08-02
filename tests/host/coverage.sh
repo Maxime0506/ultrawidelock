@@ -20,7 +20,7 @@
 # instrumented files only; the terminal table's closing "all our code" total
 # additionally folds in the 0% rows.
 #
-# Artifacts under build/coverage/ (build/ is gitignored). The instrumented
+# Artifacts under build/host/coverage/ (build/ is gitignored). The instrumented
 # suites may report test failures; coverage is still generated (execution is
 # what counts). A crash (signal) would abort, and should.
 set -euo pipefail

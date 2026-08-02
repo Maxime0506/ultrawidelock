@@ -240,8 +240,17 @@ PY
 # argument for stripping is size, not secrecy, and a hard failure would be theatre.
 gate_dwarf() {
 	hdr "fw dwarf · debug information in a release image"
+	# merged.hex has no ELF of its own; the app's is under the sysbuild image
+	# directory, named for the application. The old fallback looked beside the
+	# build root, where sysbuild has never put it, so this check has been
+	# reporting "nothing to inspect" rather than running.
 	local elf="${IMAGE%.hex}.elf"
-	[ -f "$elf" ] || elf="build/zephyr/zephyr.elf"
+	local cand
+	for cand in "$FW_BUILD_ROOT/nrf5340dk/matter-aliro-door-lock-app/zephyr/zephyr.elf" \
+		"$FW_BUILD_ROOT/nrf5340dk/zephyr/zephyr.elf"; do
+		[ -f "$elf" ] && break
+		elf="$cand"
+	done
 	if [ ! -f "$elf" ]; then
 		printf '  %sno ELF beside the image; nothing to inspect%s\n' "$DIM" "$RESET"
 		return 0

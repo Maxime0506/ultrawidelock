@@ -62,7 +62,16 @@ ifeq ($(VARIANT),hamqtt)
 ESP_DEFAULTS := sdkconfig.defaults;sdkconfig.defaults.hamqtt
 endif
 
+# IDF_TARGET is passed on EVERY invocation, not left to a prior `set-target`.
+# The generated config lives in the build directory now, so a fresh directory
+# starts with no target selected and ESP-IDF silently falls back to plain esp32 --
+# which fails deep in the compile as
+#   board_pins.h: #error "Unsupported ESP32 target for the DW3000 port"
+# rather than as "you forgot set-target". Passing it here makes
+# `make esp-build APP=... TARGET=...` correct on its own. Safe to repeat: the
+# directory name already encodes the target, so it can never contradict itself.
 IDFPY := $(ESP_ENV) && idf.py -B "$(ESP_BUILD)" \
+         -D IDF_TARGET="$(TARGET)" \
          -D SDKCONFIG="$(ESP_SDKCONFIG)" \
          -D SDKCONFIG_DEFAULTS="$(ESP_DEFAULTS)"
 
@@ -146,8 +155,10 @@ esp-check-env:
 	$(ESP_CHECK_MATTER)
 
 ##@ ESP32  ·  APP=matter-lock|reader|initiator  TARGET=esp32s3|esp32c5|esp32c6
-## esp-set-target: select the chip — run once per APP/TARGET pair
-##   Regenerates this build's sdkconfig from sdkconfig.defaults for the chip.
+## esp-set-target: regenerate this build's sdkconfig from scratch for TARGET
+##   Not a prerequisite: esp-build passes IDF_TARGET itself, and each APP/TARGET
+##   pair has its own directory and sdkconfig. Use this to discard a config you
+##   have edited (esp-menuconfig, esp-presence-on) and start from the defaults.
 esp-set-target: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) set-target $(TARGET)
 

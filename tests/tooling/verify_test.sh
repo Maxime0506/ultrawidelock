@@ -302,9 +302,12 @@ for a in "$@"; do case "$a" in -*) ;; *) t="$a"; break ;; esac; done
 case " ${FAIL_GATES:-} " in *" $t "*) echo "stub make: $t failed" >&2; exit 1 ;; esac
 case " ${EXIT2_GATES:-} " in *" $t "*) echo "stub make: $t exited 2" >&2; exit 2 ;; esac
 if [ "$t" = coverage ]; then
-	mkdir -p build/coverage
+	# Same path tests/host/coverage.sh writes: one build root, host suites
+	# under build/host. A stale path here makes the floor check read a file
+	# that is never written, which fails as "no coverage summary".
+	mkdir -p build/host/coverage
 	printf '{"data":[{"totals":{"lines":{"percent":%s}}}]}\n' "${COV_PCT:-95.5}" \
-		> build/coverage/summary.json
+		> build/host/coverage/summary.json
 fi
 [ "$t" = twin-wasm ] && [ -n "${TWIN_DRIFTS:-}" ] && echo "rebuilt" >> web-twin/twin.js
 echo "stub make $t"

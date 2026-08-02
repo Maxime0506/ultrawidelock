@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `firmware/src/main.c`
 
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
 **depends on** [`firmware/src/matter_commission.h`](matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](matter_fab_settings.h.md)
 
 ## API

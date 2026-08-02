@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `firmware/src/matter_fab_settings.c`
 
-*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
-
 **depends on** [`firmware/src/matter_fab_settings.h`](matter_fab_settings.h.md)
 
 ## API

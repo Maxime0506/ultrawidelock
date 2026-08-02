@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `firmware/src/prov_shell.c`
 
-*No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
-
 ## API
 
 ### `static const char *dead_blob_reason(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)`

@@ -1112,25 +1112,6 @@ transport_pn532.cpp.
 
 **depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)
 
-## `modules/woz_uwb/src/fira/`
-
-### [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
-
-@file fira_session.c — Range + URSK store for the CCC Pre-POLL responder.
-
-**depends on** [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
-
-### [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
-
-@file fira_session.h — Range + URSK store for the CCC Pre-POLL responder.
-
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
-
-### [`modules/woz_uwb/src/fira/fira_device_config.h`](architecture/modules.woz_uwb.src.fira/fira_device_config.h.md)
-
-@file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
-fira_session.c.
-
 ## `firmware/src/`
 
 ### [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
@@ -1148,13 +1129,9 @@ what happens when a commissioner disappears halfway through.
 
 ### [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md)
 
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
 **depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
 
 ### [`firmware/src/main.c`](architecture/firmware.src/main.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
 **depends on** [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
 
@@ -1174,8 +1151,6 @@ connection-scoped state -- and is proven against live iPhones.
 
 ### [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
 
-*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
-
 **depends on** [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
 
 ### [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
@@ -1194,17 +1169,11 @@ modules/woz_matter, which knows nothing about BLE.
 
 ### [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
 
-*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
-
 **used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
 
 ### [`firmware/src/aliro_prov_settings.c`](architecture/firmware.src/aliro_prov_settings.c.md)
 
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
 ### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: measure what a Matter CASE handshake costs on this part".*
 
 ### [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md)
 
@@ -1220,11 +1189,26 @@ link error would be a worse way to learn that Thread was configured out.
 
 ### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
 
-*No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
-
 ### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
 
-*No module docstring. First commit: "dwm3001cdk: make the provisioning console optional, and probe Matter's budget".*
+## `modules/woz_uwb/src/fira/`
+
+### [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
+
+@file fira_session.c — Range + URSK store for the CCC Pre-POLL responder.
+
+**depends on** [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+
+### [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+
+@file fira_session.h — Range + URSK store for the CCC Pre-POLL responder.
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+### [`modules/woz_uwb/src/fira/fira_device_config.h`](architecture/modules.woz_uwb.src.fira/fira_device_config.h.md)
+
+@file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
+fira_session.c.
 
 ## `integration/homeassistant/custom_components/openaliro/`
 
@@ -2875,22 +2859,27 @@ a clone reaches a build in one command instead of three.
 Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
 ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 
-### [`scripts/build.sh`](architecture/scripts/build.sh.md)
+### [`scripts/build-nrf5340dk.sh`](architecture/scripts/build-nrf5340dk.sh.md)
 
-build.sh {build|rebuild|flash|flash-erase|build-flash} — build the Aliro
-NFC+UWB image from the self-contained ./workspace. Run scripts/bootstrap.sh first.
+build-nrf5340dk.sh {build|rebuild|flash|flash-erase|build-flash} — build the
+Aliro NFC+UWB image for the nRF5340 DK from the self-contained ./workspace.
+Run scripts/bootstrap.sh first.
+Named for its board because BOARD below is hardcoded: this script builds
+nrf5340dk/nrf5340/cpuapp and nothing else. The DWM3001CDK is built straight
+from firmware/ by mk/cdk.mk, and the ESP32 apps by mk/esp32.mk.
 Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
-overlays. Output → ./build (git-ignored).
+overlays. Output → build/nrf5340dk (git-ignored), or build/nrf5340dk-blob
+when ALIRO_SOURCE=0, so flipping that flag no longer forces a pristine rebuild.
 Incremental by default — a full from-scratch (pristine) build runs only when it
 has to: first build, changed build flags (UWB chip / self-test / config), or
 when you ask for one. A preflight first checks the workspace is bootstrapped.
-scripts/build.sh build                  # incremental where safe (fast)
-scripts/build.sh rebuild                # force a clean pristine build
-PRISTINE=1 scripts/build.sh build       # same as rebuild
-UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
-PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
-ALIRO_SOURCE=0 scripts/build.sh build   # legacy Nordic Aliro binary fallback
-UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
+scripts/build-nrf5340dk.sh build                  # incremental where safe (fast)
+scripts/build-nrf5340dk.sh rebuild                # force a clean pristine build
+PRISTINE=1 scripts/build-nrf5340dk.sh build       # same as rebuild
+UWB_SELFTEST=1 scripts/build-nrf5340dk.sh build   # one-shot boot self-test, no iPhone (diagnostic)
+PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
+ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
+UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
 
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
 
@@ -3026,12 +3015,12 @@ NO_COLOR=1           plain output
 security-fw.sh — the shipped artifact, which every other gate in this repo reasons about only
 indirectly.
 semgrep, clang-tidy, CodeQL and CBMC all read source. The thing a user actually flashes is
-build/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
+build/nrf5340dk/merged.hex, and between the source and that file sit a linker, a Kconfig tree, a
 generated device tree, a vendor blob and whatever `west build` decided to bake in. Nothing here
 has ever looked at the result. That gap is where a build-host path leak, a test key that
 survived a #ifdef, or a payload appended after the link would live, and none of those are
 visible to a source scanner by construction.
-scripts/security-fw.sh                       # every check, on build/merged.hex
+scripts/security-fw.sh                       # every check, on the nRF5340DK image
 scripts/security-fw.sh --image out/x.bin     # explicit artifact
 scripts/security-fw.sh strings               # one: keys strings size dwarf
 make security-fw
@@ -3041,7 +3030,9 @@ and arm-none-eabi-objcopy lives inside the NCS toolchain, so requiring either tu
 ran" into "the gate ran if you had bootstrapped", which is the soft-skip this repo's gates are
 written to refuse. The parser below is thirty lines and has no dependencies.
 Env:
-FW_IMAGE=path                artifact (default: build/merged.hex, then build/zephyr/merged.hex)
+FW_IMAGE=path                artifact (default: the nRF5340DK image under $ALIRO_BUILD_ROOT)
+The size baseline is calibrated to THAT image, so pointing this
+at another board's build compares against the wrong record.
 FW_DENYLIST=path             byte patterns that must not ship (default: security/fw-denylist.txt)
 FW_SIZE_BASELINE=path        recorded sizes (default: security/fw-size-baseline.txt)
 FW_SIZE_WARN=2 FW_SIZE_FAIL=10   growth percentages

@@ -232,11 +232,12 @@ def main_html(gh: str) -> str:
     )))
     tracks.append(("play", "Build, flash &amp; test", "The make targets that drive everything", (
         chip("make build")
-        + chip("make flash-erase")
+        + chip("make flash")
         + chip("make test")
         + chip("make verify")
-        + "<p>Images land in <code>./build/merged.hex</code>; first flash "
-          "needs the erase; tests run on the host, no hardware. "
+        + "<p>Bare targets mean the DWM3001CDK; its image lands in "
+          "<code>./build/cdk-matter/merged.hex</code>. <code>make nrf-build</code> "
+          "builds the nRF5340 DK. Tests run on the host, no hardware. "
           "<code>make verify</code> is the pre-PR sweep — every CI gate a "
           "host can run, in about 35 seconds.</p>"
         + '<ul class="rows">'

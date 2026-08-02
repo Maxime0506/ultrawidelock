@@ -27,8 +27,8 @@ From a cold start to a board you can watch:
 
 ```sh
 make build PRISTINE=1   # -> build/cdk-matter/merged.hex
-make flash-erase                      # over the on-board J-Link OB
-make monitor                              # the console, Ctrl-C to stop
+make flash-erase        # over the on-board J-Link OB
+make monitor            # the console, Ctrl-C to stop
 ```
 
 Every CDK target means this image unless you say otherwise: `CDK_BUILD`
@@ -93,7 +93,7 @@ make monitor CDK_RTT_BUILD=build/cdk-reader
 | Identity | self-provisions from Apple Home | typed in over USB, below |
 | Matter / Thread | OpenThread MTD/SED, SRP, 0xFFF6 commissioning | absent |
 | USB console | no — reader + console + Thread overflows RAM by 1,752 B | yes |
-| Measured | 444,220 B flash / 126,888 B RAM | 285,144 B flash / 82,980 B RAM |
+| Measured | 444,548 B flash / 126,888 B RAM | 285,476 B flash / 82,980 B RAM |
 
 Both rows are the linker's own region report, rebuilt at this commit; the
 figures elsewhere in this file are older measurements of smaller trees and are

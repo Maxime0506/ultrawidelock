@@ -68,8 +68,8 @@ legacy Nordic-binary comparison. Then use `make nrf-flash`.
 Requires ESP-IDF, esp-matter, and a DWM3000EVB/DW3110.
 
 ```bash
-make esp-set-target APP=matter-lock TARGET=esp32s3   # or esp32c5; once per target
-make esp-go         APP=matter-lock                  # build + flash + monitor
+make esp-build APP=matter-lock TARGET=esp32s3   # or esp32c5
+make esp-go    APP=matter-lock TARGET=esp32s3   # build + flash + monitor
 ```
 
 The app directories still work as entry points — `cd ports/esp32/apps/matter-lock

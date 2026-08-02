@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `firmware/src/case_bench.c`
 
-*No module docstring. First commit: "dwm3001cdk: measure what a Matter CASE handshake costs on this part".*
-
 ```mermaid
 flowchart TD
   case_bench_run --> case_round
