@@ -105,6 +105,7 @@ security-deep.yml:secrets-history          !deep lane: scans all 576 commits (~1
 security-deep.yml:semgrep-sarif            !deep lane: the same scan the semgrep gate runs, uploaded as SARIF at every severity instead of failing on ERROR
 security-deep.yml:scorecard                !deep lane: queries GitHub own branch-protection and workflow settings, so it needs a token and the default branch
 firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
+firmware-builds.yml:esp32-initiator        !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain

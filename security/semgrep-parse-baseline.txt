@@ -54,3 +54,11 @@ web-twin/twin_glue.c
 # to use the same Unity/ESP-IDF macro forms the parser already chokes on elsewhere.
 ports/esp32/test/test_aliro_ranging.c
 ports/esp32/test/test_port_headers.c
+
+# The DWM3001CDK app: Zephyr's LOG_MODULE_REGISTER, the BT GATT service tables and the
+# settings handler macros, same forms as the entries above. Note the clang-tidy row in the
+# list of compensating controls does NOT cover these: tests/host/sources.sh compiles only
+# modules/ and tests/host, so for this directory the fallback is CodeQL's weekly run alone.
+ports/dwm3001cdk/app/src/aliro_ble_zephyr.c
+ports/dwm3001cdk/app/src/aliro_prov_settings.c
+ports/dwm3001cdk/app/src/matter_commission.c
