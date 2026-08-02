@@ -34,4 +34,14 @@ int16_t log_source_id_get(const char *name);
 #define LOG_DBG(...) ((void)0)
 #endif
 
+/*
+ * On target this arrives through zephyr/toolchain.h, which the real log.h pulls
+ * in -- so a source that uses BUILD_ASSERT and includes only log.h compiles
+ * there and would not compile here. Guarded, because a suite that already has a
+ * real definition must keep it.
+ */
+#ifndef BUILD_ASSERT
+#define BUILD_ASSERT(cond, ...) _Static_assert((cond), "" __VA_ARGS__)
+#endif
+
 #endif /* LOGFAKE_ZEPHYR_LOGGING_LOG_H */

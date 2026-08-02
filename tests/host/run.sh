@@ -85,6 +85,24 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 	-o "$ROOT/build/host_test_ecp"
 "$ROOT/build/host_test_ecp"
 
+# 4) DWM3001CDK port glue over a fake settings backend (settingsfake/).
+#    Its own binary because the fake <zephyr/settings/settings.h> would collide
+#    with the other suites' Zephyr surface, the same reason (1) and (3) are
+#    split out. Compiled with -Wall -Wextra rather than the -w the suites above
+#    use: this port has never been warning-checked by anything, since the
+#    clang-format and clang-tidy gates both cover modules/ only.
+#    Real port source, not a host copy -- the point is to test what ships.
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra $san_flags \
+	-DCONFIG_LOG_DEFAULT_LEVEL=3 \
+	-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
+	-I"$ROOT/modules/woz_matter/include" -I"$ROOT/ports/dwm3001cdk/app/src" \
+	"$HOSTD/test.c" "$HOSTD/test_matter_fab_settings.c" \
+	"$HOSTD/settingsfake/settingsfake.c" \
+	"$ROOT/ports/dwm3001cdk/app/src/matter_fab_settings.c" \
+	-o "$ROOT/build/host_test_cdk"
+"$ROOT/build/host_test_cdk"
+
 # Host-side tooling tests (pure-stdlib Python; no toolchain involved).
 # test_flash_html needs the python-markdown package and skips cleanly without.
 # Each suite is folded to one summary row matching the side binaries above;
