@@ -259,6 +259,30 @@ int main(void)
 		 * ranging silence alone does NOT mean departed (a still phone stops ranging too),
 		 * so gate on the session, not on range age. Tell Wallet Secured once and reset. */
 		if (present && !aliro_reader_session_active()) {
+			/*
+			 * Reaching here with the bolt still open means the silence
+			 * relock in aliro_approach_tick() did NOT fire, and this is
+			 * the only moment that proves it: the Secured is about to go
+			 * out with no session left to carry it.
+			 *
+			 * last_cm is what the controller was actually FED, which is
+			 * not what the status line prints. main.c feeds only a range
+			 * woz_uwb_trusted_range_cm() vouches for; the trace prints
+			 * the raw latch either way, so a walk-away can show 390 cm
+			 * on screen while the controller last saw 199 cm. Printing
+			 * both the value and its age says which of the two gates
+			 * held. MUST run before aliro_approach_gone(), which
+			 * re-inits the struct and erases the evidence.
+			 */
+			if (granted) {
+				LOG_WRN("departure fallback: last FED %d cm, %u ms ago "
+					"(gate: >= %d cm held for %d ms)",
+					approach.last_cm,
+					approach.last_feed_ms != 0
+						? (unsigned int)(now - approach.last_feed_ms)
+						: 0u,
+					approach.cfg.relock_cm, approach.cfg.far_silence_ms);
+			}
 			(void)aliro_approach_gone(&approach);
 			if (granted) {
 				aliro_reader_notify_unlock(false);
