@@ -124,16 +124,17 @@ TOOLS=(
 )
 
 # Bench tools, not gates. nrfutil installs the NCS toolchain, tio owns live
-# serial sessions for the TUI and `make term`, and probe-rs is the only thing
-# that reads the DWM3001CDK's RTT console (`make cdk-rtt`), so `make bootstrap`
-# offers all three. They are reported here because "what does this machine
+# serial sessions for the TUI and `make term`, probe-rs is the only thing that
+# reads the DWM3001CDK's RTT console (`make cdk-rtt`), and mcumgr is the only
+# thing that speaks MCUboot's serial recovery (`make dfu`), so `make bootstrap`
+# offers all four. They are reported here because "what does this machine
 # still need" is the question this script answers.
 #
 # It is kept in its own list because it must NEVER set the exit status. Someone
 # who only runs the host suites has every tool they need without it, and
 # `make tools && make verify` has to keep meaning what it says for them. The
 # row is reported, and `install` offers it; nothing here fails without it.
-FW_TOOLS=(tio nrfutil probe-rs)
+FW_TOOLS=(tio nrfutil probe-rs mcumgr)
 
 # Which gate stops working without it. This is the "why do I need this" column,
 # and it is the reason a row exists at all.
@@ -171,6 +172,7 @@ tool_gate() {
 	tio) echo "TUI live serial / make term" ;;
 	nrfutil) echo "make bootstrap / build / flash" ;;
 	probe-rs) echo "make cdk-rtt (CDK console)" ;;
+	mcumgr) echo "make dfu (CDK serial recovery)" ;;
 	esac
 }
 
@@ -292,6 +294,15 @@ tool_probe() {
 		# version most often disagrees with CI.
 		command -v clang-tidy >/dev/null 2>&1 || return 1
 		clang-tidy --version 2>&1 | sed -n 's/.*LLVM version /clang-tidy /p' | head -1
+		;;
+	mcumgr)
+		# A cobra CLI with no --version flag: it is a SUBCOMMAND. The generic
+		# probe below gets "Error: unknown flag: --version" and prints that in
+		# the version column, which reads as a broken tool rather than a
+		# working one. Upstream builds report "0.0.0-dev" with no pin anywhere,
+		# so any answer here is only ever "it runs".
+		command -v mcumgr >/dev/null 2>&1 || return 1
+		mcumgr version 2>&1 | head -1
 		;;
 	markdown)
 		"$PY" -c 'import markdown; print("markdown " + markdown.__version__)' 2>/dev/null || return 1
@@ -499,6 +510,18 @@ tool_install() {
 		*) echo "" ;;
 		esac
 		;;
+	# Ignores $PM on purpose: no distro or Homebrew formula packages this, and
+	# upstream ships it only as a Go module. So the availability question is
+	# "is there a go", not "which package manager". GOBIN decides where it lands,
+	# which on a version-managed Go is inside that version's directory -- a place
+	# the next `go` upgrade deletes. Worth pointing somewhere stable.
+	mcumgr)
+		if command -v go >/dev/null 2>&1; then
+			echo "go install github.com/apache/mynewt-mcumgr-cli/mcumgr@latest"
+		else
+			echo ""
+		fi
+		;;
 	esac
 }
 
@@ -511,6 +534,7 @@ tool_note() {
 	osv-scanner) echo "no distro package — releases: https://github.com/google/osv-scanner/releases/tag/v$(tool_pin osv-scanner)" ;;
 	nrfutil) echo "firmware only — https://www.nordicsemi.com/Products/Development-tools/nrf-util" ;;
 	probe-rs) echo "bench only — https://probe.rs/docs/getting-started/installation/" ;;
+	mcumgr) echo "bench only — needs a go toolchain: https://github.com/apache/mynewt-mcumgr-cli" ;;
 	*) echo "install it however this host prefers, then re-run" ;;
 	esac
 }

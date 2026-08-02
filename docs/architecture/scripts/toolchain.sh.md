@@ -41,13 +41,13 @@ touch a package it has already installed — which is exactly the repin case.
 **called by** `tool_install`
 
 ### `tool_gate()`
-`scripts/toolchain.sh:140`
+`scripts/toolchain.sh:141`
 
 Which gate stops working without it. This is the "why do I need this" column,
 and it is the reason a row exists at all.
 
 ### `wf_pin()`
-`scripts/toolchain.sh:199`
+`scripts/toolchain.sh:201`
 
 Read `<NAME>: <version>` out of that env block. Quotes are optional so a value
 YAML would otherwise read as a number (markdown's "3.8") can be written as a
@@ -56,7 +56,7 @@ string without breaking the lookup.
 **called by** `tool_pin`
 
 ### `tool_pin()`
-`scripts/toolchain.sh:206`
+`scripts/toolchain.sh:208`
 
 Extract the pinned version string for a tool. Returns the version, or the empty
 string when the tool is unrecognised or the lookup stopped matching.
@@ -64,7 +64,7 @@ string when the tool is unrecognised or the lookup stopped matching.
 **called by** `actionlint_url`, `tool_install`, `tool_note`  ·  **calls** `wf_pin`
 
 ### `actionlint_url()`
-`scripts/toolchain.sh:233`
+`scripts/toolchain.sh:235`
 
 actionlint's Linux install is CI's own: a release tarball checked against a
 sha256. Both come out of the workflow for the same reason the pins do. ci.yml
@@ -74,7 +74,7 @@ rebuilds it the same way instead of grepping for a literal.
 **called by** `tool_install`  ·  **calls** `tool_pin`
 
 ### `actionlint_sha()`
-`scripts/toolchain.sh:242`
+`scripts/toolchain.sh:244`
 
 The matching sha256, by name. Not `grep -oE '[0-9a-f]{64}'` any more: ci.yml
 carries three 64-hex checksums (actionlint, gitleaks, osv-scanner) and a
@@ -83,7 +83,7 @@ first-match grep would silently return whichever sits highest in the file.
 **called by** `tool_install`
 
 ### `tool_probe()`
-`scripts/toolchain.sh:253`
+`scripts/toolchain.sh:255`
 
 Present on this host? Echoes the version (or a bare "installed") and returns
 0; returns 1 when absent. Three rows are not a plain `command -v`:
@@ -93,7 +93,7 @@ emcc      twin-wasm.sh sources ~/emsdk/emsdk_env.sh when emcc is off PATH.
 markdown  a python import, not a binary.
 
 ### `tool_install()`
-`scripts/toolchain.sh:311`
+`scripts/toolchain.sh:322`
 
 The command that installs it here. Empty = this host has no packaged route and
 the row prints a pointer instead.
@@ -101,19 +101,19 @@ the row prints a pointer instead.
 **calls** `actionlint_sha`, `actionlint_url`, `pipx_or_pip`, `tool_pin`
 
 ### `tool_note()`
-`scripts/toolchain.sh:506`
+`scripts/toolchain.sh:529`
 
 Printed under a row that has no install command on this host.
 
 **calls** `tool_pin`
 
 ### `version_of()`
-`scripts/toolchain.sh:519`
+`scripts/toolchain.sh:543`
 
 Pull the leading dotted number out of a --version line, for the pin compare.
 
 ### `verify_needs()`
-`scripts/toolchain.sh:529`
+`scripts/toolchain.sh:553`
 
 ---- drift check: every gate tool verify.sh names must have a row here -----
 verify.sh's gate_need() and gate_need_py() are the authority on what the gates

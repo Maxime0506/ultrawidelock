@@ -198,7 +198,7 @@ dfu-key:
 ##   NOT YET RUN ON HARDWARE. internal/cdk-dfu-plan.md carries the runbook.
 ##   Options: DFU_PORT=/dev/cu.usbmodemXXXX  DFU_BAUD=115200  CDK_BUILD=<dir>
 dfu:
-	@command -v mcumgr >/dev/null 2>&1 || { printf '  mcumgr not found  ·  install: go install github.com/apache/mynewt-mcumgr-cli/mcumgr@latest\n  (smpmgr, the python client, speaks the same protocol)\n' >&2; exit 1; }
+	@command -v mcumgr >/dev/null 2>&1 || { printf '  mcumgr not found  ·  install: make tools-install\n' >&2; exit 1; }
 	@test -f '$(CDK_SIGNED)' || { printf '  no signed image at %s  ·  run `make build` first\n' '$(CDK_SIGNED)' >&2; exit 1; }
 	@port='$(DFU_PORT)'; \
 	if [ -z "$$port" ]; then port=$$(ls /dev/cu.usbmodem* 2>/dev/null | head -n1); fi; \

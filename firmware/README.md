@@ -237,8 +237,9 @@ make dfu        # push it down the J-Link OB's VCOM. Press RESET when told.
 Serial recovery over the cable that already powers the board. MCUboot listens
 for an mcumgr command for 400 ms at every boot
 (`CONFIG_BOOT_SERIAL_WAIT_FOR_DFU_TIMEOUT`), which is too short to hit by hand,
-so `make dfu` retries while you press RESET. It needs `mcumgr` on `PATH` and
-tells you so if it is missing.
+so `make dfu` retries while you press RESET. It needs `mcumgr` on `PATH`
+(`make tools-install`, or `make tools` to see whether you have it) and says so
+if it is missing.
 
 **There is no BLE DFU here, and no Matter OTA, and that is arithmetic rather
 than a decision.** Both work by staging the incoming image into a *second* slot
