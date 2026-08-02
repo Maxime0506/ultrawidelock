@@ -65,6 +65,12 @@ CDK_RTT_BUILD ?= $(CDK_BUILD)
 # or the app directory changes, and NOT when the -D flags do, so switching an
 # existing build dir between the reader and the Matter build needs this.
 CDK_PRISTINE := $(if $(PRISTINE),always,auto)
+# RELEASE=1 appends the release overlay, which trades the 8 KB RTT ring for
+# 7,168 B of RAM. Semicolon because EXTRA_CONF_FILE is a CMake list, and later
+# files win, so this can only ever override overlay-thread.conf. Note `-p auto`
+# does NOT re-run CMake when these -D flags change (see CDK_PRISTINE above), so
+# switching RELEASE on or off in an existing build dir needs PRISTINE=1.
+CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)
 
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
@@ -164,12 +170,16 @@ pretty:
 ##   over BLE and it then shows a live lock tile (ports/dwm3001cdk/README.md).
 ##   Self-provisions, so it needs no USB console. What cdk-flash, cdk-flash-erase
 ##   and cdk-rtt all mean unless you say otherwise.
-##   Options: PRISTINE=1  CDK_BUILD=<dir> (default build-matter)  NCS_VER=<tag>
+##   RELEASE=1 gives up the 8 KB RTT ring for 7,168 B of RAM. Debug is the
+##   default on purpose: on a release image a fault reads as a hang, because a
+##   1 KB ring truncates the boot log and NO_BLOCK_SKIP drops the NEWEST lines.
+##   Options: PRISTINE=1  RELEASE=1  CDK_BUILD=<dir> (default build-matter)
+##            NCS_VER=<tag>
 cdk-aliro-matter-thread:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
 	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
 	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app \
-	  -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
+	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ALIRO_MATTER_BLE=y
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_BUILD)/app/zephyr/.config
 
