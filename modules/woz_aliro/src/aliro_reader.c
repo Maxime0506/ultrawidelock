@@ -1809,6 +1809,15 @@ void aliro_reader_refresh_adv(void)
 	 * bare 0xFFF2 UUID and the phone cannot resolve it. Once the real GRK is in
 	 * s_id (provision_identity ran just before), pull it into the advertisement. */
 	if (!apply_provisioned_adv_params()) {
+		/*
+		 * Was a bare `return`. An all-zero GRK is the one state in which
+		 * the reader keeps advertising a payload no phone can resolve,
+		 * and saying nothing about it is why that went unnoticed through
+		 * a whole pairing: the board looked healthy in every other
+		 * respect and simply never saw an approach.
+		 */
+		LOG_WRN("advertisement NOT refreshed: GRK is still all-zero, so this reader "
+			"cannot be approach-resolved");
 		return;
 	}
 	aliro_ble_readvertise();
@@ -1890,7 +1899,10 @@ int aliro_reader_trust_last(void)
 		return 1; /* already trusted; nothing to persist */
 	}
 	if (add < 0) {
-		return -1; /* store full */
+		/* Not a P-256 point. A FULL store is no longer a refusal -- it
+		 * evicts and returns 2 -- so this branch no longer means what
+		 * its old comment said it did. */
+		return -1;
 	}
 	if (aliro_prov_store(&s_id, &cand) != 0) {
 		return -1; /* not committed; s_trust unchanged */
@@ -2014,6 +2026,26 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	s_id = id;
 	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
+	/*
+	 * And the ADVERTISEMENT, which this path used to leave stale.
+	 *
+	 * The reader starts advertising long before SetAliroReaderConfig
+	 * arrives -- Apple sends it as a post-commissioning operational command
+	 * -- so at start the identity was the dev default with an all-zero GRK
+	 * and the board could only advertise the bare 0xFFF2 UUID. The dynamic
+	 * tag a phone resolves to approach the reader is derived from the GRK,
+	 * so until this runs the reader is provisioned, trusted, reachable over
+	 * Matter, and still invisible to a walk-up.
+	 *
+	 * The clone-import path has always done this and its comment claims
+	 * "the Matter provisioning path calls this" -- it did not. Observed on
+	 * hardware: a pairing that installed the identity and both credentials,
+	 * a tile that worked, and zero Aliro sessions afterwards because every
+	 * advert stayed on the commissionable branch. A REBOOT hid it, because
+	 * the boot path applies the stored GRK before it ever advertises, which
+	 * is why this survived every test that power-cycled after pairing.
+	 */
+	aliro_reader_refresh_adv();
 	LOG_INF("Matter-provisioned reader identity stored");
 	return 0;
 }

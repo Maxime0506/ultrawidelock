@@ -1249,9 +1249,21 @@ int main(void)
 
 		memset(grk, 0xAB, sizeof(grk));
 		okc("d.provision_grk", aliro_reader_provision_identity(rid, sp, grk) == 0);
-		aliro_reader_refresh_adv();
-		okc("d.refresh_readvertises",
+		/*
+		 * PROVISIONING ALONE REFRESHES THE ADVERT. It did not, and the
+		 * gap is invisible from everywhere except a walk-up: on hardware
+		 * a Matter pairing installed the identity and both credentials,
+		 * the Home tile worked, and the reader was never approached once
+		 * because every advert still carried the dev identity's all-zero
+		 * GRK. A reboot hid it -- the boot path applies the stored GRK
+		 * before it advertises at all.
+		 */
+		okc("d.provision_readvertises",
 		    s_readv == 1 && s_adv_sets >= 1 && s_adv_grk[0] == 0xAB);
+		/* And asking again is harmless, which is what lets the import
+		 * path and the Matter path both call it. */
+		aliro_reader_refresh_adv();
+		okc("d.refresh_again_is_safe", s_readv == 2 && s_adv_grk[0] == 0xAB);
 	}
 
 	/* attach-mode entry points */
@@ -1617,8 +1629,11 @@ int main(void)
 		s_cfg.cb.on_disconnected(50);
 	}
 
-	/* E9: trust store filled to the brim + a rejected walk-up: trust_last
-	 * has a presented key but nowhere to put it */
+	/* E9: trust store filled to the brim + a rejected walk-up. It used to
+	 * have "a presented key but nowhere to put it"; a full store now EVICTS
+	 * rather than refusing, so the key always has somewhere to go. That is
+	 * the fix for a reader whose anchors filled up and then rejected every
+	 * phone permanently, with no way back on a board that has no console. */
 	tx_reset();
 	{
 		struct ph q;
@@ -1642,7 +1657,7 @@ int main(void)
 		okc("e9.auth1_resp", ph_auth1_resp(&q, 45, NULL, 0) == 0);
 		okc("e9.rejected", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(45);
-		okc("e9.trust_last_full", aliro_reader_trust_last() == -1);
+		okc("e9.trust_last_evicts", aliro_reader_trust_last() == 0);
 	}
 
 	printf("\n== B2: a grant inside the hold window supersedes the replay ==\n");

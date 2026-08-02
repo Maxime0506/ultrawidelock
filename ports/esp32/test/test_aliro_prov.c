@@ -206,7 +206,17 @@ int main(void)
 	uint8_t over[ALIRO_CRED_PUB_LEN];
 
 	mkpub(over, 0xF0);
-	okc("fill.overflow", aliro_prov_trust_add(&ts, over) == -1);
+	/*
+	 * A FULL STORE EVICTS, it does not refuse. Refusing locked a re-paired
+	 * reader out permanently: anchors accumulate two per pairing, nothing
+	 * removed them, and once full the key the phone actually presents could
+	 * never be added -- the unlock failing one step after the signature
+	 * verified, with no way back on a board that has no console.
+	 * 2 = added, and something was dropped to make room.
+	 */
+	okc("fill.overflow_evicts", aliro_prov_trust_add(&ts, over) == 2);
+	okc("fill.still_full", ts.count == ALIRO_TRUST_MAX);
+	okc("fill.newest_kept", aliro_prov_trust_check(&ts, over) == 0);
 
 	printf("\n== corrupt count / v1 compat / NULL store ==\n");
 	{
