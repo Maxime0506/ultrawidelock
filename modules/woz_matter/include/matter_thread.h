@@ -84,6 +84,17 @@ int matter_thread_wait_attached(uint32_t timeout_ms);
 int matter_thread_advertise(const char *instance_name, uint16_t port);
 
 /**
+ * Release every SRP registration this node holds.
+ *
+ * Call when the fabrics they name are discarded. A registration outlives the
+ * fabric it advertises otherwise, and since the instance name is derived from
+ * the fabric and node ids, a NEW commissioner never matches it -- so the table
+ * fills with names for fabrics that no longer exist and the next commissioning
+ * fails immediately after PASE with nothing to resolve.
+ */
+void matter_thread_advertise_reset(void);
+
+/**
  * Handle one datagram that arrived on the operational port.
  *
  * Supplied by the application rather than called by it: the datagram arrives on

@@ -344,6 +344,32 @@ static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClie
 	log_addresses(openthread_get_default_instance());
 }
 
+void matter_thread_advertise_reset(void)
+{
+	otInstance *ot = openthread_get_default_instance();
+
+	/*
+	 * Rolling back the fabrics has to release their SRP registrations too.
+	 *
+	 * There is one slot per supported fabric and a slot is only reused when
+	 * the instance name matches EXACTLY -- but the name is derived from the
+	 * compressed fabric id and node id, so a new commissioner never matches
+	 * the old one. A board that came up with restored fabrics therefore held
+	 * both slots against names that no longer existed, and the next pairing
+	 * died right after PASE with "no SRP slot left", which looks from the
+	 * phone like an accessory stuck on "connecting".
+	 *
+	 * The host goes with them: the services hang off it, and the next
+	 * advertise re-registers both from scratch.
+	 */
+	if (ot != NULL) {
+		otSrpClientClearHostAndServices(ot);
+	}
+	memset(s_regs, 0, sizeof(s_regs));
+	s_host_ready = false;
+	LOG_INF("SRP registrations released");
+}
+
 int matter_thread_advertise(const char *instance_name, uint16_t port)
 {
 	otInstance *ot = openthread_get_default_instance();
