@@ -144,7 +144,7 @@ config ALIRO_THREAD_GATE
 	  the M4 and the 2.4 GHz radio. Commit 5b8d06b won the walk-up by cutting
 	  FINAL->arm latency to 0.66 ms, and Thread lands on that margin; this
 	  answers whether Matter on this board is possible at all before any Matter
-	  code is written. See ports/dwm3001cdk/app/src/thread_gate.c.
+	  code is written. See firmware/src/thread_gate.c.
 
 config ALIRO_CASE_BENCH
 	bool "Stage 0a: measure what a Matter CASE responder costs"
@@ -162,7 +162,7 @@ config ALIRO_CASE_BENCH
 	  P-256 is what costs stack here: no CryptoCell on this part, so PSA runs
 	  on the software oberon driver and every curve operation runs on the
 	  calling thread. Needs CONFIG_PSA_WANT_ALG_CCM, which the reader does not
-	  otherwise enable. See ports/dwm3001cdk/app/src/case_bench.c.
+	  otherwise enable. See firmware/src/case_bench.c.
 
 config ALIRO_CASE_BENCH_PERIOD_MS
 	int "Repeat the CASE round every N ms (0 = measure once and stop)"
@@ -271,7 +271,7 @@ config ALIRO_MATTER_SETUP_PASSCODE
 
 	  It is here because the setup code cannot be recovered from the verifier,
 	  and a build that cannot say how to commission itself is a build nobody
-	  can use. `make cdk-aliro-matter-thread` prints the 11-digit manual code
+	  can use. `make build` prints the 11-digit manual code
 	  by reading this and the discriminator out of .config -- after
 	  re-deriving the verifier from it and refusing to print anything if the
 	  two disagree, which is the drift check the device itself cannot do.

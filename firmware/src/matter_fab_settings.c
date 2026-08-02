@@ -28,6 +28,26 @@ LOG_MODULE_REGISTER(matter_fab, CONFIG_LOG_DEFAULT_LEVEL);
 #define KEY_XP    FAB_TREE "/xp"
 #define KEY_ICAC  FAB_TREE "/ic"
 #define KEY_ICLEN FAB_TREE "/il"
+/*
+ * The commit record, and the ONLY key whose presence means "this record is
+ * whole". Written last, deleted first.
+ *
+ * One key per field is cheap in RAM (see the note above) but it gives up
+ * atomicity: matter_fab_store() makes up to seven separate backend writes, and
+ * a reset between any two of them used to leave a record that passed every
+ * check here. KEY_VER is written FIRST, so the version guard saw a matching
+ * version; the per-field size checks each saw a field that was either correct
+ * or absent; and matter_fab_load() then set commissioning_complete on the
+ * result, because "a stored record means commissioning finished" is only true
+ * of one that finished being written.
+ *
+ * The node that came back from that advertised operationally with half an
+ * identity and could never complete CASE -- exactly the state the load path
+ * already calls worse than having nothing.
+ */
+#define KEY_OK FAB_TREE "/ok"
+/* Any fixed value; only presence is meaningful. Distinctive to read in a dump. */
+#define FAB_COMMITTED 0x0FABC0DEu
 
 /*
  * Bumped whenever any persisted struct changes shape.
@@ -46,6 +66,8 @@ BUILD_ASSERT(MATTER_SUPPORTED_FABRICS == 2u,
 /* Where a load puts what it finds. Set for the duration of matter_fab_load(). */
 static struct matter_device_info *s_target;
 static bool s_found_fabric;
+/* Set only by the KEY_OK branch below; see the note on the key itself. */
+static bool s_found_commit;
 
 static int fab_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg)
 {
@@ -68,6 +90,18 @@ static int fab_set(const char *name, size_t len, settings_read_cb read_cb, void 
 				(unsigned int)ver, FAB_VERSION);
 			return -EINVAL;
 		}
+		return 0;
+	}
+
+	if (settings_name_steq(name, "ok", &next)) {
+		uint32_t magic = 0u;
+
+		if (len != sizeof(magic) || read_cb(cb_arg, &magic, sizeof(magic)) < 0) {
+			return -EINVAL;
+		}
+		/* A wrong value is a record from something else, not a torn one:
+		 * treat it as absent rather than rejecting the whole subtree. */
+		s_found_commit = (magic == FAB_COMMITTED);
 		return 0;
 	}
 
@@ -151,10 +185,24 @@ SETTINGS_STATIC_HANDLER_DEFINE(matter_fab, FAB_TREE, NULL, fab_set, NULL, NULL);
 int matter_fab_store(const struct matter_device_info *info)
 {
 	uint32_t ver = FAB_VERSION;
+	uint32_t ok = FAB_COMMITTED;
 	int rc;
 
 	if (info == NULL) {
 		return -EINVAL;
+	}
+
+	/*
+	 * Invalidate before touching anything, so the window in which this
+	 * record is half-written is also the window in which it is unreadable.
+	 * A failure here has to abort: leaving a previous commit record in
+	 * place while overwriting the fields under it is precisely the torn
+	 * state this exists to prevent.
+	 */
+	rc = settings_delete(KEY_OK);
+	if (rc != 0) {
+		LOG_ERR("cannot invalidate the stored identity before rewriting it (%d)", rc);
+		return rc;
 	}
 
 	rc = settings_save_one(KEY_VER, &ver, sizeof(ver));
@@ -180,7 +228,17 @@ int matter_fab_store(const struct matter_device_info *info)
 		}
 	}
 	if (info->have_thread_xpanid) {
-		(void)settings_save_one(KEY_XP, info->thread_xpanid, sizeof(info->thread_xpanid));
+		rc = settings_save_one(KEY_XP, info->thread_xpanid, sizeof(info->thread_xpanid));
+		if (rc != 0) {
+			/* Was discarded behind a (void). Low blast radius on its
+			 * own -- the xpanid only feeds an attribute report, and
+			 * the dataset carries it redundantly for rejoining -- but
+			 * a write that failed still means this record is not the
+			 * one that was asked for, and the commit below must not
+			 * claim otherwise. */
+			LOG_ERR("cannot store the Thread extended PAN id (%d)", rc);
+			return rc;
+		}
 	}
 
 	/*
@@ -201,10 +259,34 @@ int matter_fab_store(const struct matter_device_info *info)
 		}
 	}
 
+	/*
+	 * LAST. Everything above is now on the medium, so this is the write
+	 * that makes the record mean something. Until it lands, a load sees an
+	 * uncommitted record and comes up commissionable -- which costs a
+	 * re-pair, against a half-identity costing a device the controller can
+	 * neither reach nor repair.
+	 */
+	rc = settings_save_one(KEY_OK, &ok, sizeof(ok));
+	if (rc != 0) {
+		LOG_ERR("cannot commit the stored identity (%d)", rc);
+		return rc;
+	}
+
 	LOG_INF("operational identity stored (fabric %u/%u, dataset %u B)",
 		(unsigned int)info->fabrics[0].index, (unsigned int)info->fabrics[1].index,
 		(unsigned int)info->thread_dataset_len);
 	return 0;
+}
+
+/* Undo a partial read. Shared, because two paths reject a record and both have
+ * to leave the same nothing behind. */
+static void discard_partial(struct matter_device_info *info)
+{
+	memset(info->fabrics, 0, sizeof(info->fabrics));
+	info->thread_dataset_len = 0u;
+	info->have_thread_xpanid = false;
+	info->icac.len = 0u;
+	info->icac.owner_index = 0u;
 }
 
 int matter_fab_load(struct matter_device_info *info)
@@ -217,6 +299,7 @@ int matter_fab_load(struct matter_device_info *info)
 
 	s_target = info;
 	s_found_fabric = false;
+	s_found_commit = false;
 	rc = settings_load_subtree(FAB_TREE);
 	s_target = NULL;
 
@@ -227,12 +310,24 @@ int matter_fab_load(struct matter_device_info *info)
 		 * cannot complete CASE. Clear what was read.
 		 */
 		LOG_WRN("stored fabrics unusable (%d); clearing and coming up commissionable", rc);
-		memset(info->fabrics, 0, sizeof(info->fabrics));
-		info->thread_dataset_len = 0u;
-		info->have_thread_xpanid = false;
-		info->icac.len = 0u;
-		info->icac.owner_index = 0u;
+		discard_partial(info);
 		return rc;
+	}
+
+	/*
+	 * Read something, but nobody ever said it was finished. See KEY_OK: the
+	 * per-field checks above cannot detect this, because each field they
+	 * saw was individually well formed -- it is the SET that is incomplete.
+	 * Treated as an empty store rather than as an error, because that is
+	 * what it is: no commissioning ever completed against this record.
+	 */
+	if (!s_found_commit) {
+		if (s_found_fabric) {
+			LOG_WRN("stored identity was never committed -- discarding a torn record "
+				"and coming up commissionable");
+		}
+		discard_partial(info);
+		return 1;
 	}
 
 	if (!s_found_fabric) {
@@ -257,8 +352,10 @@ int matter_fab_load(struct matter_device_info *info)
 
 int matter_fab_erase(void)
 {
-	static const char *const keys[] = { KEY_VER, KEY_FAB0,  KEY_FAB1, KEY_TD,
-					    KEY_XP,  KEY_ICLEN, KEY_ICAC };
+	/* KEY_OK first: if the erase is interrupted part way, what is left
+	 * behind is already uncommitted rather than a plausible half-record. */
+	static const char *const keys[] = { KEY_OK, KEY_VER,   KEY_FAB0, KEY_FAB1,
+					    KEY_TD, KEY_XP,    KEY_ICLEN, KEY_ICAC };
 	int first_err = 0;
 
 	/*
