@@ -1,0 +1,10 @@
+# The MCUboot image-signing PRIVATE KEY lives in this directory and is never
+# committed. It is the only thing deciding what this lock will boot: MCUboot
+# embeds the public half and refuses any image the private half did not sign.
+# Commit it and anyone can sign firmware your lock accepts.
+#
+# `make dfu-key` generates one. README.md says what losing it costs.
+*.pem
+*.der
+*.key
+*.p8

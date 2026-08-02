@@ -226,6 +226,61 @@ a J-Link is a bench tool and a fielded lock does not have one. It costs 32 KB of
 flash and ~21 KB of the app's former slot, and it is why the flash figures above
 are a percentage of 482,816 B rather than of 504 KB.
 
+### Updating it without a probe
+
+```bash
+make dfu-key    # once per clone. Generates this checkout's signing key.
+make build
+make dfu        # push it down the J-Link OB's VCOM. Press RESET when told.
+```
+
+Serial recovery over the cable that already powers the board. MCUboot listens
+for an mcumgr command for 400 ms at every boot
+(`CONFIG_BOOT_SERIAL_WAIT_FOR_DFU_TIMEOUT`), which is too short to hit by hand,
+so `make dfu` retries while you press RESET. It needs `mcumgr` on `PATH` and
+tells you so if it is missing.
+
+**There is no BLE DFU here, and no Matter OTA, and that is arithmetic rather
+than a decision.** Both work by staging the incoming image into a *second* slot
+and swapping on reboot. MCUboot itself cannot receive over BLE at all; its only
+recovery transports are UART and CDC-ACM. The space for a second slot does not
+exist:
+
+| | bytes |
+|---|---|
+| flash, nRF52833 | 524,288 |
+| less MCUboot (32 KB) and `settings_storage` (8 KB) | 483,328 for slots |
+| largest slot if halved | **241,664** |
+| application, signed | **447,042** |
+| over by | **205,380 per slot, 1.85x** |
+
+Turning on LTO and `LOG=n` together, both measured, takes 81,484 B off and still
+leaves it 123,896 B over. There is no external flash on this board to stage into
+either, and the nRF52833 has no QSPI peripheral to attach any. A board that must
+be updated over the air needs a part with more flash; see `ports/nrf5340dk/`
+and `ports/esp32/`.
+
+#### The signing key
+
+MCUboot boots slot 0 only if it verifies against a public key compiled into the
+bootloader, so the private half decides what this lock will run. Configure
+nothing and MCUboot signs with `root-ec-p256.pem` out of its own repository,
+where it is published, which makes it a formality rather than a key. MCUboot
+notices and emits a `message(WARNING)`, which in a ten-thousand-line build log
+is indistinguishable from silence.
+
+`firmware/sysbuild.cmake` makes it fatal instead, checked against MCUboot's full
+list of seven default key files and against the path being absolute and present.
+`firmware/keys/README.md` has the rotation rules, the two path traps, and why CI
+signs with a throwaway key rather than a secret.
+
+`settings_storage` at `0x7e000` survives all of this: `make flash` never passes
+`--erase`, and MCUboot lives at the other end of the map.
+
+> **Not yet run on hardware.** Everything above builds and is gated, but no
+> image has been pushed over serial recovery on a real board, and the
+> power-fail soak in `internal/cdk-dfu-plan.md` is unrun.
+
 **APPROTECT must never be locked on this board**, and two independent guards say
 so: `firmware/CMakeLists.txt` fails the configure of this image, and
 `scripts/check-approtect.sh` reads every generated `.config` — including

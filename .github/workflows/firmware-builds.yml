@@ -362,6 +362,14 @@ jobs:
           key: ccache-dwm3001cdk-${{ github.run_id }}
           restore-keys: |
             ccache-dwm3001cdk-
+      - name: generate a throwaway MCUboot signing key
+        # Throwaway ON PURPOSE, not a repository secret. These artifacts are
+        # build verification, nothing more, and a real key in the CI secret
+        # store would be a key that signs images a deployed lock accepts.
+        # A key has to exist before either image will even configure:
+        # firmware/sysbuild.cmake fails the build rather than let it fall back
+        # to MCUboot's PUBLISHED demo key. See firmware/keys/README.md.
+        run: make dfu-key
       - name: build the Matter over Thread image (decawave_dwm3001cdk)
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"

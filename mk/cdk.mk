@@ -36,6 +36,33 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # switching RELEASE on or off in an existing build dir needs PRISTINE=1.
 CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)
 
+# ---- image signing -----------------------------------------------------------
+# Which private key signs the image is the whole answer to "what will this lock
+# boot", so it is never left to MCUboot's default -- that default is a key
+# published in MCUboot's own repository. firmware/sysbuild.cmake refuses to
+# build with any of the seven, and firmware/keys/README.md has the rest.
+#
+# The path MUST be absolute. Sysbuild hands this symbol to the bootloader image
+# through set_config_string(), never through a .conf file, so MCUboot's own
+# base-directory search finds nothing and a relative path falls through to
+# ${MCUBOOT_DIR}/<path> -- resolving INSIDE the MCUboot repo, which is how a
+# wrong path turns silently back into the demo key.
+#
+# The inner quotes are part of the value: zephyr/cmake/modules/kconfig.cmake:264
+# writes a command-line cache variable through verbatim, and a Kconfig string
+# without quotes is a syntax error rather than a fallback.
+#
+# Applied to all three images. `-p auto` does NOT re-run CMake when a -D flag
+# changes (see CDK_PRISTINE), so pointing an existing build dir at a new key
+# needs PRISTINE=1.
+CDK_KEY  ?= $(REPO_ROOT)/firmware/keys/mcuboot_ec_p256.pem
+CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
+
+# What `make dfu` uploads: the application plus MCUboot's header and P-256 TLVs.
+# NOT zephyr.bin, which is unsigned and which MCUboot will refuse.
+CDK_SIGNED := $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.signed.bin
+DFU_BAUD   ?= 115200
+
 # ALIRO_TOOLCHAIN=env skips the nrfutil wrapper and runs west straight off PATH.
 # scripts/build-nrf5340dk.sh carries the same escape hatch for the same reason:
 # inside the NCS toolchain container CI uses, nrfutil's toolchain index is not
@@ -50,7 +77,7 @@ endif
 # Every recipe runs from ./workspace so west finds its manifest.
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
-.PHONY: build rebuild reader selftest flash flash-erase monitor \
+.PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
@@ -67,7 +94,7 @@ CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 build:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_BUILD) $(CDK_APP) \
-	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ALIRO_MATTER_BLE=y
+	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ALIRO_MATTER_BLE=y $(CDK_SIGN)
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/.config
 
@@ -84,7 +111,8 @@ rebuild:
 ##   Options: PRISTINE=1  CDK_READER_BUILD=<dir>
 reader:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
-	  -d $(CDK_READER_BUILD) $(CDK_APP)
+	  -d $(CDK_READER_BUILD) $(CDK_APP) \
+	  -- $(CDK_SIGN)
 
 ## selftest: one-shot UWB init self-test at boot  -> build/cdk-selftest
 ##   The stage-3 bring-up check: uwb_selftest.c runs the full Aliro UWB start
@@ -97,7 +125,7 @@ reader:
 selftest:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_SELFTEST_BUILD) $(CDK_APP) \
-	  -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf
+	  -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf $(CDK_SIGN)
 
 ## flash: flash the DWM3001CDK over its on-board J-Link OB
 ##   Options: CDK_BUILD=<dir> (default build/cdk-matter)
@@ -118,6 +146,63 @@ flash:
 ##   Options: CDK_BUILD=<dir> (default build/cdk-matter)
 flash-erase:
 	@$(CDK_RUN) flash --erase -d $(CDK_BUILD)
+
+## dfu-key: generate this checkout's MCUboot signing key  ·  once per clone
+##   ECDSA P-256 into firmware/keys/, gitignored. Every image build needs it:
+##   without a key firmware/sysbuild.cmake fails the build rather than let it
+##   fall back to MCUboot's PUBLISHED demo key.
+##   REFUSES TO OVERWRITE an existing key. Replacing it strands every board
+##   already carrying the old public half, and with one slot there is no
+##   previous image to fall back to. firmware/keys/README.md has the rotation.
+##   Options: CDK_KEY=<path>
+dfu-key:
+	@if [ -f '$(CDK_KEY)' ]; then \
+	  printf '  key exists, keeping it  ·  %s\n' '$(CDK_KEY)'; exit 0; \
+	fi; \
+	mkdir -p '$(dir $(CDK_KEY))'; \
+	if command -v openssl >/dev/null 2>&1; then \
+	  openssl ecparam -name prime256v1 -genkey -noout -out '$(CDK_KEY)'; \
+	else \
+	  python3 -c 'import sys;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives import serialization as s;open(sys.argv[1],"wb").write(ec.generate_private_key(ec.SECP256R1()).private_bytes(s.Encoding.PEM,s.PrivateFormat.PKCS8,s.NoEncryption()))' '$(CDK_KEY)'; \
+	fi || { printf '  cannot generate a key  ·  need openssl, or python3 with the cryptography module\n' >&2; exit 1; }; \
+	chmod 600 '$(CDK_KEY)'; \
+	printf '  generated  ·  %s\n  Gitignored. Back it up wherever your other secrets live.\n' '$(CDK_KEY)'
+
+## dfu: push a signed image over MCUboot serial recovery  ·  no probe needed
+##   Updates the board down the J-Link OB's VCOM, the USB cable already powering
+##   it. This is the ONLY over-the-wire update this board has, and that is
+##   arithmetic rather than choice: BLE DFU and Matter OTA both stage into a
+##   SECOND slot, and a 512 KB part running a 447 KB app has room for exactly
+##   one. See firmware/sysbuild.conf.
+##   MCUboot listens for 400 ms at each boot, so this retries while you press
+##   RESET. If both the VCOM and the app's own USB enumerate, the guess may pick
+##   the wrong one: pass DFU_PORT explicitly and it prints which it used.
+##   NOT YET RUN ON HARDWARE. internal/cdk-dfu-plan.md carries the runbook.
+##   Options: DFU_PORT=/dev/cu.usbmodemXXXX  DFU_BAUD=115200  CDK_BUILD=<dir>
+dfu:
+	@command -v mcumgr >/dev/null 2>&1 || { printf '  mcumgr not found  ·  install: go install github.com/apache/mynewt-mcumgr-cli/mcumgr@latest\n  (smpmgr, the python client, speaks the same protocol)\n' >&2; exit 1; }
+	@test -f '$(CDK_SIGNED)' || { printf '  no signed image at %s  ·  run `make build` first\n' '$(CDK_SIGNED)' >&2; exit 1; }
+	@port='$(DFU_PORT)'; \
+	if [ -z "$$port" ]; then port=$$(ls /dev/cu.usbmodem* 2>/dev/null | head -n1); fi; \
+	if [ -z "$$port" ]; then \
+	  printf '  no serial port found  ·  plug in the board or pass DFU_PORT=/dev/cu.usbmodemXXXX\n' >&2; \
+	  exit 1; \
+	fi; \
+	conn="dev=$$port,baud=$(DFU_BAUD)"; \
+	printf '  upload %s\n      to %s @ %s\n  PRESS RESET (SW1) NOW  ·  MCUboot listens 400 ms per boot, so this retries\n' \
+	  '$(CDK_SIGNED)' "$$port" '$(DFU_BAUD)'; \
+	n=0; \
+	while [ $$n -lt 12 ]; do \
+	  n=$$((n+1)); \
+	  if mcumgr --conntype serial --connstring "$$conn" image upload '$(CDK_SIGNED)'; then \
+	    printf '  upload OK  ·  resetting into it\n'; \
+	    mcumgr --conntype serial --connstring "$$conn" reset || true; \
+	    exit 0; \
+	  fi; \
+	  printf '  attempt %s/12 did not land  ·  press RESET\n' "$$n" >&2; \
+	done; \
+	printf '  gave up after 12 attempts  ·  is the board entering recovery? internal/cdk-dfu-plan.md\n' >&2; \
+	exit 1
 
 ## monitor: stream the DWM3001CDK's console over RTT  ·  Ctrl-C to stop
 ##   This board has no UART console (CONFIG_UART_CONSOLE=n), so `make nrf-term`
