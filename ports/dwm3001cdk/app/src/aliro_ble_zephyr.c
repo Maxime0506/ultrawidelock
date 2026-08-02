@@ -374,15 +374,58 @@ static int aliro_advertise(void)
 		LOG_INF("advertising: %s (%u AD elements)",
 			as_reader ? "Aliro reader 0xFFF2" : "unprovisioned, commissionable",
 			(unsigned int)ad_len);
+	} else {
+		/*
+		 * LOUD. This used to log only on success, so a failed restart
+		 * left the reader invisible with nothing in the log but the
+		 * "re-advertising" line that preceded it -- a board that had
+		 * unlocked once and then ignored every approach, while Matter
+		 * kept answering over Thread because that is not BLE. Do not
+		 * make an advertising failure quiet again.
+		 */
+		LOG_ERR("advertising FAILED to start (%d); the reader is now invisible", rc);
 	}
 	return rc;
+}
+
+/*
+ * Restarting CONNECTABLE advertising from inside the disconnected callback
+ * fails: Zephyr has not released the connection object yet at that point and
+ * bt_le_adv_start() has no slot to give. The retry is what actually gets the
+ * reader back, so it runs off the callback rather than in it.
+ */
+static void readvertise_work_fn(struct k_work *w);
+static K_WORK_DELAYABLE_DEFINE(s_readvertise_work, readvertise_work_fn);
+
+static void readvertise_work_fn(struct k_work *w)
+{
+	/*
+	 * Rescheduled rather than retried in a loop: this runs on the system
+	 * work queue, which is also where the Aliro access protocol runs, so
+	 * sleeping here would stall an unlock to fix advertising.
+	 */
+	static uint8_t attempts;
+
+	ARG_UNUSED(w);
+
+	if (aliro_advertise() == 0) {
+		attempts = 0u;
+		return;
+	}
+	if (++attempts < 5u) {
+		(void)k_work_schedule(&s_readvertise_work, K_MSEC(100));
+		return;
+	}
+	attempts = 0u;
+	LOG_ERR("cannot resume advertising after a disconnect; a reset is needed");
 }
 
 static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	ARG_UNUSED(conn);
 	LOG_INF("BLE disconnected (0x%02x); re-advertising", reason);
-	(void)aliro_advertise();
+	/* Deferred, and not by much -- see readvertise_work_fn(). */
+	(void)k_work_schedule(&s_readvertise_work, K_MSEC(50));
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
