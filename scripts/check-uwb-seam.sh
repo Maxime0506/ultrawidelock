@@ -41,8 +41,12 @@
 
 set -euo pipefail
 
-R=$'\033[31m' G=$'\033[32m' Y=$'\033[33m' Z=$'\033[0m'
-[ -t 1 ] || { R= G= Y= Z=; }
+# Same shape as scripts/check-approtect.sh, the sibling gate this one mirrors.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+	R=$'\033[31m' G=$'\033[32m' Z=$'\033[0m'
+else
+	R='' G='' Z=''
+fi
 
 cd "$(dirname "$0")/.."
 

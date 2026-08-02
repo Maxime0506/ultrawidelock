@@ -47,21 +47,25 @@ int32_t woz_uwb_configure_phy(dwt_config_t *config);
 
 #else /* no engine below this tier — go straight to the radio */
 
+/** @brief Enable RX. No CCC STS exists at this tier, so this is the bare call. */
 static inline int32_t woz_uwb_arm_rx(int32_t mode)
 {
 	return dwt_rxenable(mode);
 }
 
+/** @brief Load an STS-IV verbatim: there is no CCC STS-V to substitute here. */
 static inline void woz_uwb_set_sts_iv(dwt_sts_cp_iv_t *iv)
 {
 	dwt_configurestsiv(iv);
 }
 
+/** @brief Register callbacks with no shim in front of them. */
 static inline void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)
 {
 	dwt_setcallbacks(callbacks);
 }
 
+/** @brief Apply a full PHY configuration, untraced. */
 static inline int32_t woz_uwb_configure_phy(dwt_config_t *config)
 {
 	return dwt_configure(config);
