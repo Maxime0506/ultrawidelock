@@ -93,12 +93,12 @@ make monitor CDK_RTT_BUILD=build/cdk-reader
 | Identity | self-provisions from Apple Home | typed in over USB, below |
 | Matter / Thread | OpenThread MTD/SED, SRP, 0xFFF6 commissioning | absent |
 | USB console | no — reader + console + Thread overflows RAM by 1,752 B | yes |
-| Measured | 444,644 B flash / 126,888 B RAM | 285,540 B flash / 82,980 B RAM |
+| Measured | 445,704 B flash / 123,880 B RAM | 285,648 B flash / 79,908 B RAM |
 
 Both rows are the linker's own region report, rebuilt at this commit; the
 figures elsewhere in this file are older measurements of smaller trees and are
-labelled with what they were measuring. The Matter image has **4,184 bytes of
-RAM left** (96.81% of 128 KB), so treat any new static allocation on it as a
+labelled with what they were measuring. The Matter image has **7,192 bytes of
+RAM left** (94.51% of 128 KB), so treat any new static allocation on it as a
 decision rather than a detail.
 
 Equivalent by hand, from the west workspace:
