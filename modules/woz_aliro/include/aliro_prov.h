@@ -31,7 +31,19 @@ extern "C" {
 #define ALIRO_READER_ID_LEN   32u
 #define ALIRO_READER_PRIV_LEN 32u
 #define ALIRO_CRED_PUB_LEN    65u /* uncompressed P-256 point: 0x04 | X | Y */
-#define ALIRO_TRUST_MAX       4u  /* trusted credential keys the store holds */
+/*
+ * 4 was too few and the cost of being wrong was total. An Apple home installs
+ * two endpoint keys per pairing, they accumulate across pairings, and nothing
+ * evicted them -- so a re-paired reader held 4 stale anchors, rejected the key
+ * the phone actually presented, and could not be recovered by pairing again.
+ * 6 at 97 B a slot: three pairings before anything is evicted, against a
+ * failure mode that used to be permanent. It was briefly 8 and came back down
+ * to buy RAM for the OpenThread stack, which the Interaction Model runs on and
+ * which was overflowing during commissioning -- this part has 128 KB and the
+ * image is at 96%. The number that matters is "more than one pairing's worth",
+ * and eviction (below) is what makes running out survivable rather than fatal.
+ */
+#define ALIRO_TRUST_MAX       6u  /* trusted credential keys the store holds */
 #define ALIRO_GRK_LEN         16u /* group resolving key (Aliro BLE-UWB adv tag) */
 #define ALIRO_KPERSISTENT_LEN 32u /* per-credential expedited-fast key (§8.3.1.13) */
 
@@ -118,6 +130,21 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 
 /* Persist identity+trust to NVS. 0 on success, negative on an NVS error. */
 int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts);
+
+/**
+ * Forget the stored identity and every trust anchor.
+ *
+ * Half of a factory reset; the Matter fabrics are the other half and belong to
+ * whoever owns that store. Deliberately NOT an erase of the whole settings
+ * partition: OpenThread keeps its SRP client key there, the SRP host name is
+ * the factory EUI-64 and outlives any erase, and name ownership on the border
+ * router is first-come-first-served by key -- so wiping the key asks for the
+ * same name with a new one and is refused until the lease expires, up to 14
+ * days, during which the node attaches to Thread and is unreachable on it.
+ *
+ * @return 0, or a negative errno from the settings backend.
+ */
+int aliro_prov_erase(void);
 
 #ifdef __cplusplus
 }

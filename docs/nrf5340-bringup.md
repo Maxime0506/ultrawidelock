@@ -13,7 +13,8 @@ Parts on the bench to a healthy first boot; toolchain install is in
 
 Pin assignments live in
 [`../ports/nrf5340dk/overlays/dw3000-nfc.overlay`](../ports/nrf5340dk/overlays/dw3000-nfc.overlay);
-that file is the source of truth.
+that file is the source of truth. [nrf5340-wiring.md](nrf5340-wiring.md) transcribes it
+into both-ends tables with Arduino header positions and the 9 NFC jumpers.
 
 ## Before powering
 

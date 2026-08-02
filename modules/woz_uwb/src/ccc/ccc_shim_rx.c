@@ -131,6 +131,11 @@ static uint8_t g_armed_final_dursk[CCC_DURSK_LEN];
 static uint8_t g_armed_final_sts_v[CCC_STS_V_LEN];
 /** @brief True while the SP3 RX is armed for the Final (next RX event = its result). */
 static bool g_await_final;
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+/** @brief Set right after a FINAL capture reverts to SP0: the NEXT callback is the
+ * Final_Data's fate. Diagnostic-only; consumed and cleared by that next callback. */
+static volatile bool g_postfinal_watch;
+#endif
 /** @brief POLL RMARKER of the in-flight round, so the TXDONE can anchor the Final window. */
 static uint32_t g_poll_ip_for_final;
 
@@ -146,10 +151,42 @@ static uint64_t g_t_final_rx;
  * Response have overwritten t2/t3, so recomputing there mixes this round's t6 with the next round's
  * t3 and corrupts round2 (observed as km-scale distances). g_final_round_valid gates the compute
  * (consume-once): a Final_Data with no fresh Final capture is dropped, not turned into garbage. */
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 static uint32_t g_final_reply1;
 static uint32_t g_final_round2;
 static bool g_final_round_valid;
+#endif
+
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+/* Bench instrumentation, read over J-Link (no logging => no ISR/timing impact).
+ * Diagnoses the DS-TWR capture/consume pairing on the single-core CDK. */
+static volatile uint32_t g_dbg_capture_n;     /* Final RFRAME captured (snapshot set valid) */
+static volatile uint32_t g_dbg_fd_calls;      /* final_data_decode entered */
+static volatile uint32_t g_dbg_fd_parsed;     /* ... reached the DS-TWR compute */
+static volatile uint32_t g_dbg_have_round;    /* ... with have_round == true at consume */
+static volatile uint32_t g_dbg_dstwr_ok;      /* ccc_responder_ds_twr returned 0 */
+static volatile int32_t g_dbg_last_dmm;       /* last computed d_mm */
+static volatile uint32_t g_dbg_try_prepoll_n; /* total SP0 receptions into try_prepoll */
+static volatile uint32_t g_dbg_mhr_ok;        /* SP0 frames whose MHR parsed */
+static volatile uint8_t g_dbg_last_msgid;     /* last SP0 msg_id (0xFF = MHR parse fail) */
+static volatile uint16_t g_dbg_last_sp0_len;  /* last SP0 datalength */
+/* Post-FINAL fate: the first RX callback after a FINAL capture is the Final_Data's
+ * fate (nothing else is on air between the FINAL and the next block's Pre-POLL).
+ * Splits "frame arrived but our SP0 config rejected it" (=> PHY-config fix) from
+ * "nothing detected, we sailed to the next Pre-POLL" (=> timing/delayed-RX fix). */
+static volatile uint32_t g_dbg_pf_n;          /* post-FINAL callbacks observed */
+static volatile uint32_t g_dbg_pf_err;        /* ... errored (no RXFCG): frame rejected */
+static volatile uint32_t g_dbg_pf_err_hdr;    /* ... errored WITH a decoded PHR (frame on air) */
+static volatile uint32_t g_dbg_pf_err_final;  /* ... errored AND header reads Final_Data (0x02) */
+static volatile uint32_t g_dbg_pf_final;      /* ... a clean Final_Data (msg_id 0x02) */
+static volatile uint32_t g_dbg_pf_prepoll;    /* ... a clean next-block Pre-POLL (msg_id 0x01) */
+static volatile uint32_t g_dbg_pf_last_st;    /* raw status of the last post-FINAL callback */
+static volatile uint8_t g_dbg_pf_last_msgid;  /* its msg_id (0xFE = no readable PHR) */
+static volatile int32_t g_dbg_pf_dhi;         /* (post-FINAL frame ip) - (Final ip), hi32 ticks */
+static volatile uint32_t g_dbg_fdrx_arm_ok;   /* delayed Final_Data RX armed OK */
+static volatile uint32_t g_dbg_fdrx_arm_fail; /* delayed arm refused -> fell back to immediate */
+static volatile int32_t g_dbg_fdrx_margin;    /* last delayed-arm margin (target - now), hi32 */
+static uint32_t g_postfinal_final_ip;         /* Final ip stashed for the post-FINAL delta */
 #endif
 
 /** @brief Cache of the STS key (dURSK) currently loaded in the STS_KEY registers, so the per-arm
@@ -229,8 +266,10 @@ void ccc_shim_rx_log_reset(void)
 	g_poll_ip_for_final = 0u;
 	g_final_sts_verdict = -1; /* fail-closed until a Final RFRAME is measured */
 	g_final_sts_index = 0;
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	g_final_round_valid = false;
+#endif
+#if defined(ESP_PLATFORM)
 	g_sts_key_cached =
 		false; /* new session re-configures the radio -> STS_KEY regs re-cleared */
 #endif
@@ -474,6 +513,9 @@ static uint64_t ts5_to_u64(const uint8_t t[5])
 static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 {
 	static uint32_t g_fd_logged;
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+	g_dbg_fd_calls++;
+#endif
 	struct ccc_mhr_fields mhr;
 	// CCC final message carrying Aliro authentication data (MAC, derived ranging state).
 	struct ccc_final_data fd;
@@ -558,23 +600,31 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		// CCC DS-TWR (double-sided two-way ranging) message carrying poll/response/final
 		// timing and STS data.
 		struct ccc_ds_twr tw;
-#if defined(ESP_PLATFORM)
-		/* ESP32: the Final_Data lands only after the NEXT round's POLL/Response have
-		 * overwritten the live t2/t3 (slow SPI + jittery dispatch), so recomputing here
-		 * mixes this round's t6 with the next round's t3 (km-scale garbage). Consume the
-		 * same-round snapshot taken at Final capture; g_final_round_valid gates it
-		 * consume-once (a Final_Data with no fresh Final is dropped). */
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+		/* ESP32 and single-core nRF (e.g. DWM3001CDK, CONFIG_WOZ_UWB_FINAL_SNAPSHOT):
+		 * the Final_Data lands only after the NEXT round's POLL/Response have
+		 * overwritten the live t2/t3 (slow SPI + jittery dispatch, or BLE sharing the
+		 * one core), so recomputing here mixes this round's t6 with the next round's t3
+		 * (km-scale garbage). Consume the same-round snapshot taken at Final capture;
+		 * g_final_round_valid gates it consume-once (a Final_Data with no fresh Final is
+		 * dropped). */
 		uint32_t t_reply1 = g_final_reply1;
 		uint32_t t_round2 = g_final_round2;
 		bool have_round = g_final_round_valid;
 #else
-		/* Non-ESP (nRF): the Final_Data is processed before the next round overwrites the
-		 * live timestamps, so recompute directly from the globals (original path). */
+		/* Dual-core nRF (nRF5340): the Final_Data is processed before the next round
+		 * overwrites the live timestamps, so recompute directly from the globals. */
 		uint32_t t_reply1 = (uint32_t)(g_t_resp_tx - g_t_poll_rx);
 		uint32_t t_round2 = (uint32_t)(g_t_final_rx - g_t_resp_tx);
 		bool have_round = true;
 #endif
 
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+		g_dbg_fd_parsed++;
+		if (have_round) {
+			g_dbg_have_round++;
+		}
+#endif
 		if (have_round && ccc_responder_ds_twr(&fd, 0u, t_reply1, t_round2, &tw) == 0) {
 			/* Signed ToF: near zero the numerator goes slightly negative (uint32 would
 			 * wrap), so compute it signed for bring-up. 1 tick ~ 15.65 ps, ~4.6917
@@ -585,6 +635,10 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 				(int64_t)tw.t_round1 + tw.t_round2 + tw.t_reply1 + tw.t_reply2;
 			int32_t tof = (den != 0) ? (int32_t)(num / den) : 0;
 			int d_mm = (int)(((int64_t)tof * 4692) / 1000);
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+			g_dbg_dstwr_ok++;
+			g_dbg_last_dmm = d_mm;
+#endif
 			/* Range-integrity gate (layer 2): the STS-quality floor. Shadow by
 			 * default (log the verdict, still latch); define
 			 * CONFIG_WOZ_RANGE_GATE_STRICT to drop a failing block instead. Layers 1
@@ -632,6 +686,13 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			g_final_sts_index = 0;
 #if defined(ESP_PLATFORM)
 			g_final_round_valid = false;
+#elif defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+			/* Single-core CDK: do NOT consume-once. Final RFRAME captures (~90) far
+			 * outnumber Final_Data decodes (~9) and don't pair 1:1, so consume-once
+			 * dropped 8 of 9 ranges. The responder's reply1/round2 are fixed by the
+			 * slot schedule, so the latest snapshot is always a valid stand-in; keep
+			 * it live so every decode latches a range and the approach gate sees a
+			 * steady in-range stream. */
 #endif
 		}
 	}
@@ -661,6 +722,10 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 	if (!ccc_shim_active() || datalength == 0u || datalength > sizeof(g_pp_stash)) {
 		return; /* (the POLL event is gated out by the shim's await snapshot) */
 	}
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+	g_dbg_try_prepoll_n++;
+	g_dbg_last_sp0_len = datalength;
+#endif
 	if (g_pp_pending) { /* a prior block's POLL-result never ran (missed POLL) — flush it */
 		g_pp_pending = false;
 		prepoll_decode(g_pp_stash, g_pp_stash_len);
@@ -669,11 +734,17 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 	g_pp_stash_len = datalength;
 	{
 		struct ccc_mhr_fields m;
-
+		bool mhr_ok =
+			datalength >= (uint16_t)CCC_MHR_LEN && ccc_parse_mhr(g_pp_stash, &m) == 0;
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+		g_dbg_last_msgid = mhr_ok ? m.msg_id : 0xFFu;
+		if (mhr_ok) {
+			g_dbg_mhr_ok++;
+		}
+#endif
 		/* Final_Data (SP0, msg_id=02) carries the initiator's timestamps; decode it INLINE
 		 * here (never deferred, where its dUDSK decrypt would block the next POLL). */
-		if (datalength >= (uint16_t)CCC_MHR_LEN && ccc_parse_mhr(g_pp_stash, &m) == 0 &&
-		    m.msg_id == CCC_MSG_ID_FINAL_DATA) {
+		if (mhr_ok && m.msg_id == CCC_MSG_ID_FINAL_DATA) {
 			final_data_decode(g_pp_stash, datalength);
 			return;
 		}
@@ -1016,6 +1087,85 @@ static void revert_to_sp0_listen(void)
 	(void)gated_rxenable(DWT_START_RX_IMMEDIATE);
 }
 
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+/** @brief Arm a DELAYED SP0 RX aimed at the Final_Data slot (Final RX + 1 slot), instead of the
+ * immediate SP0 re-arm.
+ *
+ * Bench finding (CDK, single-core nRF52833): after the Final RFRAME the immediate re-arm never
+ * catches the Final_Data (SP0 msg_id 0x02) — the receiver is blind for ~1 slot right after the
+ * Final, so 83% of the time the next clean frame it sees is the NEXT block's Pre-POLL. The
+ * Final_Data is the SAME SP0 PHY we decode the Pre-POLL with cleanly, so this is a timing miss,
+ * not a config reject. A delayed RX pinned to the Final_Data slot opens the window in HARDWARE at
+ * exactly the right time regardless of what the CPU is doing — the same trick arm_final_sp3 uses
+ * for the Final itself. On a refused arm (caller falls back to revert_to_sp0_listen) or a
+ * no-frame timeout (RXFTO -> prepoll_rx_rearm else-branch re-arms immediate SP0), the next
+ * Pre-POLL is never lost, so ranging can only improve. Consumed by the same-round snapshot, so no
+ * live-timestamp race. */
+/* DW3000 IRQ-path cycle stamps (dw3000_hw.c), read to DECOMPOSE the FINAL callback's ~3 ms
+ * latency into its buckets: hop (GPIO-ISR -> workqueue dispatch = BLE/coop contention), isr
+ * (dwt_isr SPI frame-pull), cb (dwt_isr-done -> here = callback processing). Whichever bucket
+ * dominates decides the fix: a large hop => contention (quiet BLE / ISR fast-path); a large
+ * isr+cb => irreducible SPI on the critical path (take the CPU off it via DW3000 auto-RX). */
+extern volatile uint32_t g_dw_cyc_gpio;      /* T0: GPIO ISR entry */
+extern volatile uint32_t g_dw_cyc_work;      /* T1: work-handler entry */
+extern volatile uint32_t g_dw_cyc_isrdone;   /* T2: dwt_isr loop done */
+extern volatile uint32_t g_dw_cyc_per_us;    /* calibrated CPU cyc/us */
+uint32_t dw3000_dwt_cyccnt(void);            /* free-running DWT cycle counter */
+static volatile uint32_t g_dbg_final_hop;    /* FINAL: T1-T0 dispatch cyc (contention) */
+static volatile uint32_t g_dbg_final_isr;    /* FINAL: T2-T1 dwt_isr SPI cyc */
+static volatile uint32_t g_dbg_final_cb;     /* FINAL: (arm entry)-T2 callback cyc */
+static volatile uint32_t g_dbg_final_per_us; /* cyc/us copy for the J-Link decode */
+
+/* Final_Data delayed-RX net (bench-widened): open ~100 us after the Final RMARKER and hold ~8 ms
+ * (~4 slots). Scheduled in HARDWARE, so the window opens at the right instant no matter how busy
+ * the single core is right after the Final. Wide enough that the Final_Data cannot fall between
+ * the FINAL and the CPU getting the receiver back up, wherever in the round it actually sits. */
+/* ~100 us after the Final RMARKER, which skips the Final's own tail. */
+#define CCC_FDRX_OPEN_HI32 25000u
+/* ~8 ms window, dwt 1.0256 us units. */
+#define CCC_FDRX_WIN_TO    7800u
+#define CCC_FDRX_MIN_AHEAD                                                                         \
+	50000u /* ~200 us: clear the forcetrxoff+cfgsts+setdelay SPI setup so                      \
+		* DWT_START_RX_DELAYED isn't refused as "already past" (80 us was                  \
+		* too tight -> arm_ok=0 in build12/13) */
+
+static int arm_final_data_sp0(uint32_t final_ip)
+{
+	uint32_t now;
+	uint32_t dx = final_ip + CCC_FDRX_OPEN_HI32; /* ideal: just after the Final frame's tail */
+	int r;
+
+	/* Decompose THIS FINAL's dispatch latency (cyc; the stamps are from the FINAL's own IRQ).
+	 */
+	g_dbg_final_hop = g_dw_cyc_work - g_dw_cyc_gpio;
+	g_dbg_final_isr = g_dw_cyc_isrdone - g_dw_cyc_work;
+	g_dbg_final_cb = dw3000_dwt_cyccnt() - g_dw_cyc_isrdone;
+	g_dbg_final_per_us = g_dw_cyc_per_us;
+
+	dwt_forcetrxoff();
+	__real_dwt_configurestsmode(
+		(uint8_t)DWT_STS_MODE_OFF); /* SP0 — Final_Data is a data frame */
+	now = dwt_readsystimestamphi32();
+	/* Record how far the IDEAL open sits from now BEFORE clamping: a strongly negative margin
+	 * means the callback ran so late that the ideal Final+100us window was already in the past
+	 * (the Final_Data, if it lands that early, is physically unrecoverable by any re-arm). */
+	g_dbg_fdrx_margin = (int32_t)(dx - now);
+	if (g_dbg_fdrx_margin < (int32_t)CCC_FDRX_MIN_AHEAD) {
+		dx = now +
+		     CCC_FDRX_MIN_AHEAD; /* ideal open already past -> open as early as armable */
+	}
+	dwt_setdelayedtrxtime(dx);
+	dwt_setrxtimeout(CCC_FDRX_WIN_TO);
+	r = gated_rxenable(DWT_START_RX_DELAYED | DWT_IDLE_ON_DLY_ERR);
+	if (r == DWT_SUCCESS) {
+		g_dbg_fdrx_arm_ok++;
+		return 0;
+	}
+	g_dbg_fdrx_arm_fail++;
+	return -EIO;
+}
+#endif
+
 /** @brief Dummy Response_0 body — NOT radiated (SP3/ND sends STS only), but the TX sequence writes
  * a frame body before dwt_starttx. */
 static uint8_t g_resp_payload[4];
@@ -1124,12 +1274,17 @@ static void resp_tx_done(const dwt_cb_data_t *cb)
 			revert_to_sp0_listen();
 		}
 	}
-	/* Deferred Pre-POLL decode (warms the NEXT block's STS) — after the time-critical Final
-	 * arm, in the ~190 ms idle. */
+	/* Deferred Pre-POLL decode (warms the NEXT block's STS). On ESP32/nRF5340 run it here.
+	 * On the single-core CDK this KDF (3 STS derivations + a CCM decrypt, software AES) takes
+	 * ~ms and this callback sits INSIDE the ~2 ms FINAL->Final_Data window, so running it here
+	 * blocks the FINAL callback's re-arm on the shared workqueue and the Final_Data is missed.
+	 * Moved to the FINAL callback there, AFTER the receiver is re-armed (see g_await_final). */
+#if !defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	if (g_pp_pending) {
 		g_pp_pending = false;
 		prepoll_decode(g_pp_stash, g_pp_stash_len);
 	}
+#endif
 }
 
 /**
@@ -1177,6 +1332,39 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 			 ccc_parse_mhr(b, &m) == 0 && m.msg_id == CCC_MSG_ID_PRE_POLL);
 	}
 
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+	/* POST-FINAL FATE: this is the first callback after a FINAL capture reverted to SP0.
+	 * Nothing else is on air between the FINAL and the next block's Pre-POLL, so this event
+	 * IS the Final_Data's fate. Errored (no RXFCG) => the frame arrived but our SP0 config
+	 * rejected it (PHY-config fix); a clean next Pre-POLL => we never detected it (timing/
+	 * delayed-RX fix). Parsing the MHR works even on a CRC-failed frame, so an errored
+	 * Final_Data still reports msg_id 0x02. */
+	if (g_postfinal_watch) {
+		struct ccc_mhr_fields pfm;
+		bool hdr = ((st & DWT_INT_RXPHD_BIT_MASK) != 0u) && len >= (uint16_t)CCC_MHR_LEN &&
+			   ccc_parse_mhr(b, &pfm) == 0;
+
+		g_postfinal_watch = false;
+		g_dbg_pf_n++;
+		g_dbg_pf_last_st = st;
+		g_dbg_pf_last_msgid = hdr ? pfm.msg_id : 0xFEu;
+		g_dbg_pf_dhi = (ip != 0u) ? (int32_t)(ip - g_postfinal_final_ip) : 0;
+		if ((st & DWT_INT_RXFCG_BIT_MASK) == 0u) {
+			g_dbg_pf_err++;
+			if (hdr) {
+				g_dbg_pf_err_hdr++;
+				if (pfm.msg_id == CCC_MSG_ID_FINAL_DATA) {
+					g_dbg_pf_err_final++;
+				}
+			}
+		} else if (hdr && pfm.msg_id == CCC_MSG_ID_FINAL_DATA) {
+			g_dbg_pf_final++;
+		} else if (hdr && pfm.msg_id == CCC_MSG_ID_PRE_POLL) {
+			g_dbg_pf_prepoll++;
+		}
+	}
+#endif
+
 	/* Re-arm. Default: keep listening in SP0. After a decoded Pre-POLL, arm the STS receiver
 	 * (SP3/ND) for the POLL; while pending (g_await_poll) the next RX event is the POLL result.
 	 */
@@ -1196,14 +1384,18 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		g_await_final = false;
 		if (ip != 0u) {
 			g_t_final_rx = ip40; /* t6: responder Final RX */
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 			/* Snapshot the responder-side DS-TWR intervals NOW, while t2/t3/t6 are all
 			 * from this round; the Final_Data decode (which lands after the next round
-			 * has overwritten the live timestamp globals) consumes these. On nRF the
-			 * decode recomputes from the live globals directly (no snapshot needed). */
+			 * has overwritten the live timestamp globals) consumes these. On the
+			 * dual-core nRF5340 the decode recomputes from the live globals directly
+			 * (no snapshot needed). */
 			g_final_reply1 = (uint32_t)(g_t_resp_tx - g_t_poll_rx);
 			g_final_round2 = (uint32_t)(g_t_final_rx - g_t_resp_tx);
 			g_final_round_valid = true;
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+			g_dbg_capture_n++;
+#endif
 #endif
 			qret = dwt_readstsquality(&stsq, 0);
 			/* Range-integrity gate (layer 2): stash this Final RFRAME's STS
@@ -1218,7 +1410,30 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		 * CCC_RX_PREPOLL_LOG rounds so the steady-state callback is print-free: a per-round
 		 * printk here blocks the ISR task ~ms, backing up dispatch (missed Final_Data) and
 		 * tripping the wdt. */
+#if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+		/* CDK: schedule a delayed SP0 RX at the Final_Data slot rather than re-arming
+		 * immediately (the immediate re-arm is blind through the Final_Data — see
+		 * arm_final_data_sp0). Fall back to the immediate listen if the Final ts is missing
+		 * or the delayed arm is refused, so the next Pre-POLL is never lost. */
+		if (ip == 0u || arm_final_data_sp0(ip) != 0) {
+			revert_to_sp0_listen();
+		}
+		/* The next callback is the Final_Data's fate — latch it (post-FINAL diagnostic). */
+		g_postfinal_final_ip = ip;
+		g_postfinal_watch = true;
+		/* Warm the next block's STS NOW — AFTER the SP0 receiver is re-armed above, not in
+		 * resp_tx_done (which sits before the FINAL and blocked this callback's re-arm).
+		 * The receiver is listening in hardware, so the Final_Data ~2 ms out is captured
+		 * even while this ~ms software KDF (3 STS derivations + a CCM decrypt) runs; its
+		 * decode just queues behind us. ~190 ms of slack remains before the next block
+		 * needs the warm. */
+		if (g_pp_pending) {
+			g_pp_pending = false;
+			prepoll_decode(g_pp_stash, g_pp_stash_len);
+		}
+#else
 		revert_to_sp0_listen();
+#endif
 		if (g_pp_logged < CCC_RX_PREPOLL_LOG) {
 #if ALIRO_NUM_RESPONDERS >= 2
 			/* Final result (DS-TWR leg 3): cper=0 => the idx+3 STS correlated; ip is

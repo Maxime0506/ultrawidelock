@@ -5,7 +5,7 @@ APDU framing and parsing for the Aliro Access Protocol: builds outbound command 
 TLV writer and parses the AUTH0/AUTH1 response APDUs exchanged during the reader-device
 handshake.
 
-**used by** [`modules/woz_aliro/src/aliro_apdu.c`](aliro_apdu.c.md), [`modules/woz_aliro/src/aliro_reader.c`](aliro_reader.c.md)
+**used by** [`modules/woz_aliro/include/aliro_device_apdu.h`](../modules.woz_aliro.include/aliro_device_apdu.h.md), [`modules/woz_aliro/src/aliro_apdu.c`](aliro_apdu.c.md), [`modules/woz_aliro/src/aliro_device.c`](aliro_device.c.md), [`modules/woz_aliro/src/aliro_reader.c`](aliro_reader.c.md)
 
 ## API
 

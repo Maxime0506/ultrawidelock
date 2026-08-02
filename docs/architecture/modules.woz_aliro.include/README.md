@@ -8,7 +8,10 @@
 | [`modules/woz_aliro/include/aliro_assert.h`](aliro_assert.h.md) | *first commit: "aliro: presence-assertion protocol (HMAC-signed range statement)"* |
 | [`modules/woz_aliro/include/aliro_assert_ec.h`](aliro_assert_ec.h.md) | *first commit: "assert: bind the P-256 seam to aliro_prim"* |
 | [`modules/woz_aliro/include/aliro_ble.h`](aliro_ble.h.md) | Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport |
+| [`modules/woz_aliro/include/aliro_ble_central.h`](aliro_ble_central.h.md) | Device-side (User-Device) BLE transport interface: the central/client mirror of |
 | [`modules/woz_aliro/include/aliro_crypto.h`](aliro_crypto.h.md) | Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message |
+| [`modules/woz_aliro/include/aliro_device.h`](aliro_device.h.md) | Aliro initiator (User-Device) session layer: the device-side counterpart of |
+| [`modules/woz_aliro/include/aliro_device_apdu.h`](aliro_device_apdu.h.md) | Device (User-Device) side of the Aliro Access-Protocol wire codec: the inverse |
 | [`modules/woz_aliro/include/aliro_lab.h`](aliro_lab.h.md) | Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries, |
 | [`modules/woz_aliro/include/aliro_lat.h`](aliro_lat.h.md) | @file aliro_lat.h |
 | [`modules/woz_aliro/include/aliro_prim.h`](aliro_prim.h.md) |  |

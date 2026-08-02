@@ -50,6 +50,7 @@ int main(void)
 		{ "aliro_prov", test_aliro_prov },
 		{ "aliro_hash", test_aliro_hash },
 		{ "aliro_assert", test_aliro_assert },
+		{ "aliro_device_uwb", test_aliro_device_uwb },
 		{ "cherry", test_cherry },
 		{ "fira", test_fira },
 		{ "facade", test_facade },
@@ -62,9 +63,29 @@ int main(void)
 		{ "trace", test_trace },
 		{ "ccc_shim_wrap", test_ccc_shim_wrap },
 		{ "flight_recorder", test_flight_recorder },
+		{ "matter_tlv", test_matter_tlv },
+		{ "matter_msg", test_matter_msg },
+		{ "matter_mrp", test_matter_mrp },
+		{ "matter_crypto", test_matter_crypto },
+		{ "matter_btp", test_matter_btp },
+		{ "matter_pase", test_matter_pase },
+		{ "matter_spake2p", test_matter_spake2p },
+		{ "matter_pase_sm", test_matter_pase_sm },
+		{ "matter_exchange", test_matter_exchange },
+		{ "matter_im", test_matter_im },
+		{ "matter_im_invoke", test_matter_im_invoke },
+		{ "matter_attest", test_matter_attest },
+		{ "matter_fabric", test_matter_fabric },
+		{ "matter_addnoc", test_matter_addnoc },
+		{ "matter_network", test_matter_network },
+		{ "matter_case", test_matter_case },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
-	int npass[32], nfail[32], npend[32];
+	/* Sized from the table, not a literal 32: these are indexed by suite, so a
+	 * fixed bound silently overflows the moment the table outgrows it. */
+	int npass[sizeof(suites) / sizeof(suites[0])];
+	int nfail[sizeof(suites) / sizeof(suites[0])];
+	int npend[sizeof(suites) / sizeof(suites[0])];
 
 	int color = isatty(1) && getenv("NO_COLOR") == NULL;
 	const char *B = color ? "\033[1m" : "";

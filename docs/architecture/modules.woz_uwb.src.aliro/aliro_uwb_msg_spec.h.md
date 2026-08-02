@@ -3,4 +3,4 @@
 
 @file aliro_uwb_msg_spec.h — UWB ranging-service framing constants.
 
-**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](aliro_uwb_session.c.md)
+**used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.h`](aliro_device_uwb.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](aliro_uwb_session.c.md)

@@ -3,6 +3,8 @@
 
 | subsystem | about |
 |---|---|
+| [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](aliro_device_uwb.c.md) | Device-side UWB ranging-service setup codec: parses the reader's M1 and M3 |
+| [`modules/woz_uwb/src/aliro/aliro_device_uwb.h`](aliro_device_uwb.h.md) | Device/initiator side of the UWB ranging-service setup codec: the interface for |
 | [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](aliro_uwb_adapter.c.md) | @file aliro_uwb_adapter.c — reader-context lifecycle. |
 | [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](aliro_uwb_internal.h.md) | @file aliro_uwb_internal.h — private context types and shared helpers. |
 | [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](aliro_uwb_msg.c.md) | @file aliro_uwb_msg.c — setup/notification message codec. |

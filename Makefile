@@ -48,6 +48,11 @@ TAG      ?=
 MAXCM    ?= 40
 PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
 
+# DWM3001CDK target (make cdk / cdk-flash). Its own build dir, so it never
+# fights the nRF5340 build for build/. NCS_VER matches scripts/build.sh.
+NCS_VER   ?= v3.3.0
+CDK_BUILD ?= $(REPO_ROOT)/build-cdk
+
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
   $(if $(CHIP),UWB_CHIP=$(CHIP)) \
@@ -61,7 +66,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty cdk cdk-flash selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -89,13 +94,25 @@ tools-install:
 ##   install stops the run before the big fetch, not after it.
 ##   CI never runs this target — it calls scripts/bootstrap.sh directly — so no
 ##   runner has its packages touched.
+##   In a linked worktree that has no ./workspace yet, this delegates to ws-seed:
+##   a COW clone of the primary's tree costs ~0 disk, where refetching costs 6.5 GB.
+##   Delegation is skipped once ./workspace exists, because ws-seed is a no-op then
+##   and bootstrap's real job is re-applying THIS branch's patches.
 ##   Options: NO_TOOLS=1 skip the tool phase, straight to the fetch
 ##            NO_TOOLCHAIN=1 skip the NCS toolchain phase
+##            NO_SEED=1 in a worktree, fetch a full independent workspace anyway
+##            (for a different NCS revision, or a primary you suspect is corrupt)
 ##            HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make build HA=1`; not hardware-validated)
 bootstrap:
 	@[ -n "$(NO_TOOLS)" ] || $(REPO_ROOT)/scripts/toolchain.sh install
-	@$(ENV) ./scripts/bootstrap.sh
+	@if [ -z "$(NO_SEED)" ] && [ ! -d workspace/.west ] && \
+	    [ "$$(git rev-parse --git-common-dir)" != "$$(git rev-parse --git-dir)" ]; then \
+	  printf '  linked worktree with no workspace: cloning the primary (NO_SEED=1 to refetch)\n'; \
+	  $(REPO_ROOT)/scripts/ws-seed.sh && exit 0; \
+	  printf '  seeding unavailable; falling back to a full fetch\n'; \
+	fi; \
+	$(ENV) ./scripts/bootstrap.sh
 
 ## ws-seed: give THIS worktree its own workspace (APFS COW clone, ~0 disk)
 ##   Idempotent. Isolates worktrees so branch-bouncing can't build stale patches.
@@ -126,6 +143,20 @@ selftest:
 ## pretty: build with curated / quiet console
 pretty:
 	@$(ENV) PRETTY=1 ./scripts/build.sh build
+
+## cdk: build the DWM3001CDK standalone reader   -> build-cdk/app/zephyr/zephyr.hex
+##   One board, no host MCU: nRF52833 + DW3110. Carries no credential; the
+##   identity is typed in over USB in provisioning mode (ports/dwm3001cdk/README.md).
+##   Options: CDK_BUILD=<dir> (default build-cdk)  NCS_VER=<tag> (default v3.3.0)
+cdk:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west build -p auto -b decawave_dwm3001cdk \
+	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app
+
+## cdk-flash: flash the DWM3001CDK over its on-board J-Link OB
+cdk-flash:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west flash -d $(CDK_BUILD)
 
 ##@ Test
 ## tui-test: run the OpenTUI source tests (no hardware required)

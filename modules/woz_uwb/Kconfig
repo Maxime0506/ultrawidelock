@@ -15,6 +15,19 @@ config WOZ_UWB_RESPONDER
 	  DS-TWR responder that produces a distance in cm. Runs on the ISC
 	  deps/dw3000 driver via ccc_shim_rx.c.
 
+config WOZ_UWB_SHELL
+	bool "`aliro` UWB console commands"
+	depends on WOZ_UWB && SHELL
+	default y
+	help
+	  Registers the `aliro` command tree (status, rx, range, chip, selftest,
+	  log, frames, cir, version, factoryreset). Default y, so every build that
+	  already enables SHELL is unchanged.
+
+	  The DWM3001CDK turns this off. Its shell exists only in provisioning
+	  mode, where the radios are deliberately never started, and these
+	  commands would drive a driver that has not been brought up.
+
 config WOZ_ALIRO
 	bool "Woz Aliro/CCC credential-bound STS engine"
 	depends on WOZ_UWB_RESPONDER
@@ -89,6 +102,20 @@ config WOZ_RANGE_GATE_STRICT
 	  threshold cannot block a real unlock. Enable only after sizing
 	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
 	  (consensus) are always active in fira_session.c regardless of this option.
+
+config WOZ_UWB_FINAL_SNAPSHOT
+	bool "Responder ToF: use the same-round Final-capture timestamp snapshot"
+	depends on WOZ_ALIRO
+	help
+	  When Final_Data is decoded, compute the DS-TWR reply/round intervals from
+	  the snapshot latched at Final RX (ccc_shim_rx.c, g_final_reply1/round2)
+	  instead of the live t2/t3/t6 globals. On a single-core SoC where BLE shares
+	  the core with the ranging callbacks (e.g. the DWM3001CDK's nRF52833), the
+	  next round's POLL/Response can overwrite the live timestamps before
+	  Final_Data is processed, yielding km-scale garbage distances. The snapshot
+	  path is timing-independent. ESP32 always uses it (its dispatch is likewise
+	  jittery); enable this on any single-core Zephyr reader. Default n keeps the
+	  dual-core nRF5340's live-recompute path unchanged.
 
 config WOZ_UWB_CIRDIAG
 	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"

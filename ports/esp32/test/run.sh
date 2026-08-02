@@ -56,6 +56,34 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$ABIN"
 
 echo
+echo "== host: aliro_device initiator codec + crypto KAT =="
+DBIN="$(mktemp -t aliro_device.XXXXXX)"
+# ALIRO_DEVICE_HAVE_EC: run the full standard-path loopback against the fake-EC
+# host double in aliro_prim_host.c (symmetric ECDH + round-tripping ECDSA), not
+# only the EC-free anchors. On target the real aliro_prim_psa curve is linked.
+cc -std=c11 -O1 -Wall -Wextra -DALIRO_DEVICE_HAVE_EC \
+   -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_aliro_device.c" \
+   "$ALIRO/src/aliro_device.c" "$ALIRO/src/aliro_device_apdu.c" \
+   "$ALIRO/src/aliro_apdu.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
+   "$HERE/aliro_prim_host.c" -o "$DBIN"
+"$DBIN"
+rm -f "$DBIN"
+
+echo
+echo "== host: aliro_ble_central device-transport decoders =="
+# The device/initiator side of BLE discovery: the 0xFFF2 advert, the reader-SPSM
+# READ payload, and the BleSK salt assembled from the version list that READ
+# carries. Pure byte work, no BLE stack — the NimBLE backend that calls it is
+# ESP32-only and covered by verify_port.sh.
+BCBIN="$(mktemp -t aliro_ble_central.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$ALIRO/include" \
+   "$HERE/test_aliro_ble_central.c" "$ALIRO/src/aliro_ble_central.c" -o "$BCBIN"
+"$BCBIN"
+rm -f "$BCBIN"
+
+echo
 echo "== host: aliro_stepup Access-Document codec + §7.4 verifier KAT =="
 SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \

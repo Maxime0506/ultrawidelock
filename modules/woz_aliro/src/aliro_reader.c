@@ -823,6 +823,26 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	} else {
 		LOG_WRN("[conn %u] credential key NOT trusted (%s); rejecting", s->conn_handle,
 			tv == 1 ? "no anchors provisioned" : "not in trust store");
+		/*
+		 * "not in trust store" says the comparison failed but not what
+		 * was compared, and the candidate explanations -- a credential
+		 * that was never delivered, versus anchors from an old pairing
+		 * holding every slot -- are told apart only by the bytes. This
+		 * cost a whole evening of guessing when the line was absent, so
+		 * it stays. First 8 of each point; the full key is never logged,
+		 * and this only runs on a rejection.
+		 */
+		LOG_WRN("  presented: %02x %02x %02x %02x %02x %02x %02x %02x", cred_pub[0],
+			cred_pub[1], cred_pub[2], cred_pub[3], cred_pub[4], cred_pub[5],
+			cred_pub[6], cred_pub[7]);
+		for (uint8_t ti = 0u; ti < s_trust.count && ti < ALIRO_TRUST_MAX; ti++) {
+			LOG_WRN("  anchor[%u]: %02x %02x %02x %02x %02x %02x %02x %02x%s", ti,
+				s_trust.cred_pub[ti][0], s_trust.cred_pub[ti][1],
+				s_trust.cred_pub[ti][2], s_trust.cred_pub[ti][3],
+				s_trust.cred_pub[ti][4], s_trust.cred_pub[ti][5],
+				s_trust.cred_pub[ti][6], s_trust.cred_pub[ti][7],
+				(s_trust.kp_valid & (1u << ti)) ? " (has Kpersistent)" : "");
+		}
 		notify_access(false);
 		s->phase = PH_FAILED;
 		return;
@@ -1122,6 +1142,14 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
 	gated_complete_ap(s);
 }
 
+/* Told when the reader announces a new lock state; see aliro_reader.h. */
+static void (*s_lock_state_listener)(bool unlocked);
+
+void aliro_reader_set_lock_state_listener(void (*cb)(bool unlocked))
+{
+	s_lock_state_listener = cb;
+}
+
 /* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
  * confirmation that fires the iPhone Wallet unlock animation. proto-2 (Notification)
  * message-id 0x02, one State Attribute (id 0x00, len 2) = [OperationSource,
@@ -1148,6 +1176,14 @@ static void reader_status_send(struct aliro_session *s, bool unsecured)
 
 	LOG_INF("[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
+	/*
+	 * Only once it is actually on the wire. This is the instant the phone
+	 * animates, so it is also the instant anything else reporting this
+	 * lock's state -- a Matter tile, say -- becomes wrong if it is not told.
+	 */
+	if (rc == 0 && s_lock_state_listener != NULL) {
+		s_lock_state_listener(unsecured);
+	}
 	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
 	s_secured_undelivered = false;
 	/* Whatever just went out is newer than any held replay, including the replay
@@ -1691,14 +1727,41 @@ static int reader_engine_init(void)
 	return 0;
 }
 
-// Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging) and brings up
-// the BLE transport using the default advertising config. Returns 0 on success; returns -1 if
-// engine initialization fails, or the underlying aliro_ble_start result otherwise.
+/* Applies the provisioned resolvable advertising parameters when a real GRK is
+ * present. The phone resolves "its" reader by re-deriving the dynamic tag from the
+ * GroupResolvingKey, so without this the advertisement carries only the bare 0xFFF2
+ * UUID and a provisioned Wallet key never approaches. groupId = reader_id[0..7],
+ * subId = reader_id[16..17] (the identity is groupIdentifier(16) ||
+ * groupSubIdentifier(16)). Returns false on the all-zero dev-default GRK. */
+static bool apply_provisioned_adv_params(void)
+{
+	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
+		if (s_id.grk[i] != 0u) {
+			const uint8_t sub2[2] = {s_id.reader_id[16], s_id.reader_id[17]};
+
+			aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk,
+						 0 /* tx power */);
+			return true;
+		}
+	}
+	return false;
+}
+
+// Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging), applies the
+// provisioned advertising parameters when the loaded identity carries a GRK, and brings up the BLE
+// transport. Returns 0 on success; returns -1 if engine initialization fails, or the underlying
+// aliro_ble_start result otherwise.
 int aliro_reader_start(void)
 {
 	if (reader_engine_init() != 0) {
 		return -1;
 	}
+	/* A standalone reader loads its provisioned identity from storage during
+	 * reader_engine_init, so the GRK is already in s_id by here. Without this the
+	 * board advertises unresolvably and a provisioned Wallet key never approaches
+	 * it -- the attached (Matter) path applied these params and this one did not. */
+	apply_provisioned_adv_params();
+
 	struct aliro_ble_config cfg = make_ble_cfg();
 	int rc = aliro_ble_start(&cfg);
 
@@ -1735,23 +1798,10 @@ int aliro_reader_start_attached(void)
 		return -1;
 	}
 
-	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): the phone
-	 * resolves "its" reader by re-deriving the dynamic tag from the GroupResolvingKey.
-	 * groupId = reader_id[0..7], subId = reader_id[16..17] (the reader identity is
-	 * groupIdentifier(16) || groupSubIdentifier(16)). Only advertise the resolvable
-	 * service data when a real GRK is present (Matter-provisioned). */
-	bool have_grk = false;
-	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
-		if (s_id.grk[i] != 0u) {
-			have_grk = true;
-			break;
-		}
-	}
-	if (have_grk) {
-		const uint8_t sub2[2] = {s_id.reader_id[16], s_id.reader_id[17]};
-
-		aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
-	}
+	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): only
+	 * advertise the resolvable service data when a real GRK is present
+	 * (Matter-provisioned); the dev default leaves the bare 0xFFF2 UUID. */
+	apply_provisioned_adv_params();
 
 	int rc = aliro_ble_start_attached();
 
@@ -1774,19 +1824,18 @@ void aliro_reader_refresh_adv(void)
 	 * identity was still the dev default (no GRK), so the reader advertised only the
 	 * bare 0xFFF2 UUID and the phone cannot resolve it. Once the real GRK is in
 	 * s_id (provision_identity ran just before), pull it into the advertisement. */
-	bool have_grk = false;
-	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
-		if (s_id.grk[i] != 0u) {
-			have_grk = true;
-			break;
-		}
-	}
-	if (!have_grk) {
+	if (!apply_provisioned_adv_params()) {
+		/*
+		 * Was a bare `return`. An all-zero GRK is the one state in which
+		 * the reader keeps advertising a payload no phone can resolve,
+		 * and saying nothing about it is why that went unnoticed through
+		 * a whole pairing: the board looked healthy in every other
+		 * respect and simply never saw an approach.
+		 */
+		LOG_WRN("advertisement NOT refreshed: GRK is still all-zero, so this reader "
+			"cannot be approach-resolved");
 		return;
 	}
-	const uint8_t sub2[2] = {s_id.reader_id[16], s_id.reader_id[17]};
-
-	aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
 	aliro_ble_readvertise();
 	LOG_INF("advertisement refreshed with provisioned GRK (approach-resolvable)");
 }
@@ -1866,7 +1915,10 @@ int aliro_reader_trust_last(void)
 		return 1; /* already trusted; nothing to persist */
 	}
 	if (add < 0) {
-		return -1; /* store full */
+		/* Not a P-256 point. A FULL store is no longer a refusal -- it
+		 * evicts and returns 2 -- so this branch no longer means what
+		 * its old comment said it did. */
+		return -1;
 	}
 	if (aliro_prov_store(&s_id, &cand) != 0) {
 		return -1; /* not committed; s_trust unchanged */
@@ -1990,6 +2042,26 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	s_id = id;
 	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
+	/*
+	 * And the ADVERTISEMENT, which this path used to leave stale.
+	 *
+	 * The reader starts advertising long before SetAliroReaderConfig
+	 * arrives -- Apple sends it as a post-commissioning operational command
+	 * -- so at start the identity was the dev default with an all-zero GRK
+	 * and the board could only advertise the bare 0xFFF2 UUID. The dynamic
+	 * tag a phone resolves to approach the reader is derived from the GRK,
+	 * so until this runs the reader is provisioned, trusted, reachable over
+	 * Matter, and still invisible to a walk-up.
+	 *
+	 * The clone-import path has always done this and its comment claims
+	 * "the Matter provisioning path calls this" -- it did not. Observed on
+	 * hardware: a pairing that installed the identity and both credentials,
+	 * a tile that worked, and zero Aliro sessions afterwards because every
+	 * advert stayed on the commissionable branch. A REBOOT hid it, because
+	 * the boot path applies the stored GRK before it ever advertises, which
+	 * is why this survived every test that power-cycled after pairing.
+	 */
+	aliro_reader_refresh_adv();
 	LOG_INF("Matter-provisioned reader identity stored");
 	return 0;
 }
@@ -2024,6 +2096,11 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
 	woz_mutex_unlock(&s_prov_lock);
+	if (add == 2) {
+		LOG_WRN("trust store was FULL; dropped an anchor to make room. "
+			"ALIRO_TRUST_MAX is %u -- raise it if this repeats",
+			ALIRO_TRUST_MAX);
+	}
 	LOG_INF("Matter-provisioned trust anchor stored (%u total)", cand.count);
 	return 0;
 }
@@ -2105,6 +2182,10 @@ int aliro_reader_import_blob(const uint8_t *buf, size_t len)
 	s_trust = ts;
 	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey/grk changed -> refresh salt field 1 */
+	/* Same reason the Matter provisioning path calls this: a new GRK means the
+	 * advertised dynamic tag is stale, and the phone resolves the reader by that
+	 * tag. Without it an imported identity transacts but is never approached. */
+	aliro_reader_refresh_adv();
 	LOG_INF("reader identity imported from clone blob (%s, %u trust anchor(s))",
 		id.is_dev ? "DEV" : "provisioned", ts.count);
 	return 0;

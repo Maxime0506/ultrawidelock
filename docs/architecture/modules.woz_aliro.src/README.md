@@ -9,7 +9,10 @@
 | [`modules/woz_aliro/src/aliro_approach.c`](aliro_approach.c.md) | @file aliro_approach.c |
 | [`modules/woz_aliro/src/aliro_assert.c`](aliro_assert.c.md) | Presence-assertion wire codec + verifier (see aliro_assert.h). Serialises a |
 | [`modules/woz_aliro/src/aliro_assert_ec.c`](aliro_assert_ec.c.md) | Binds the aliro_assert P-256 seam to aliro_prim's ECDSA (see aliro_assert_ec.h). |
+| [`modules/woz_aliro/src/aliro_ble_central.c`](aliro_ble_central.c.md) | Platform-free half of the device-side BLE transport declared in |
 | [`modules/woz_aliro/src/aliro_crypto.c`](aliro_crypto.c.md) | Aliro cryptographic primitives: key derivation (KDF/HKDF), key-block splitting, AES-GCM secure |
+| [`modules/woz_aliro/src/aliro_device.c`](aliro_device.c.md) | Aliro initiator (User-Device) session machine: the implementation behind |
+| [`modules/woz_aliro/src/aliro_device_apdu.c`](aliro_device_apdu.c.md) | Implementation of the device-side Access-Protocol wire codec declared in |
 | [`modules/woz_aliro/src/aliro_hash.c`](aliro_hash.c.md) | Self-contained SHA-256, HMAC-SHA256, HKDF, and ANSI-X9.63 KDF implementation for the ESP32-IDF |
 | [`modules/woz_aliro/src/aliro_hash.h`](aliro_hash.h.md) | Streaming SHA-256 (FIPS 180-4) implementation used by the Aliro crypto layer. |
 | [`modules/woz_aliro/src/aliro_lat.c`](aliro_lat.c.md) | Walk-up latency trace: first-hit phase timestamps + the consolidated budget line. |

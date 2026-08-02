@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**239 subsystems in 36 directories · 1498/1852 symbols documented (80%)**
+**255 subsystems in 40 directories · 1525/1964 symbols documented (77%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -10,6 +10,7 @@ flowchart LR
   host.presence --> tools
   integration.homeassistant --> tools.tui.src
   integration.homeassistant.src.openaliro_ha --> tools.tui.src
+  modules.woz_aliro.include --> modules.woz_aliro.src
   modules.woz_aliro.src --> modules.woz_aliro.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -60,42 +61,46 @@ flowchart LR
 | [`integration/homeassistant/scripts/`](architecture/integration.homeassistant.scripts/README.md) | 1 | 1/3 (33%) |
 | [`integration/homeassistant/src/openaliro_ha/`](architecture/integration.homeassistant.src.openaliro_ha/README.md) | 11 | 72/120 (60%) |
 | [`integration/homeassistant/tools/`](architecture/integration.homeassistant.tools/README.md) | 1 | 1/3 (33%) |
-| [`modules/woz_aliro/include/`](architecture/modules.woz_aliro.include/README.md) | 13 | 28/29 (96%) |
-| [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 18 | 216/231 (93%) |
+| [`modules/woz_aliro/include/`](architecture/modules.woz_aliro.include/README.md) | 16 | 34/38 (89%) |
+| [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 21 | 217/255 (85%) |
 | [`modules/woz_aliro_ecp/src/`](architecture/modules.woz_aliro_ecp.src/README.md) | 1 | 5/5 (100%) |
 | [`modules/woz_aliro_stack/src/`](architecture/modules.woz_aliro_stack.src/README.md) | 4 | 77/77 (100%) |
 | [`modules/woz_aliro_stack/src/protocol/`](architecture/modules.woz_aliro_stack.src.protocol/README.md) | 14 | 67/67 (100%) |
 | [`modules/woz_nfc/include/woz_nfc/`](architecture/modules.woz_nfc.include.woz_nfc/README.md) | 1 | 1/1 (100%) |
 | [`modules/woz_nfc/src/`](architecture/modules.woz_nfc.src/README.md) | 9 | 64/64 (100%) |
 | [`modules/woz_port/include/`](architecture/modules.woz_port.include/README.md) | 2 | 12/12 (100%) |
-| [`modules/woz_uwb/src/aliro/`](architecture/modules.woz_uwb.src.aliro/README.md) | 10 | 83/83 (100%) |
+| [`modules/woz_uwb/src/aliro/`](architecture/modules.woz_uwb.src.aliro/README.md) | 12 | 90/92 (97%) |
 | [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/README.md) | 2 | 4/4 (100%) |
 | [`modules/woz_uwb/src/aliro/include/cherry/`](architecture/modules.woz_uwb.src.aliro.include.cherry/README.md) | 4 | 13/13 (100%) |
-| [`modules/woz_uwb/src/ccc/`](architecture/modules.woz_uwb.src.ccc/README.md) | 17 | 124/124 (100%) |
+| [`modules/woz_uwb/src/ccc/`](architecture/modules.woz_uwb.src.ccc/README.md) | 17 | 124/125 (99%) |
 | [`modules/woz_uwb/src/driver/`](architecture/modules.woz_uwb.src.driver/README.md) | 8 | 49/49 (100%) |
 | [`modules/woz_uwb/src/facade/`](architecture/modules.woz_uwb.src.facade/README.md) | 12 | 86/86 (100%) |
 | [`modules/woz_uwb/src/fira/`](architecture/modules.woz_uwb.src.fira/README.md) | 3 | 17/17 (100%) |
 | [`modules/woz_uwb/src/shell/`](architecture/modules.woz_uwb.src.shell/README.md) | 2 | 14/14 (100%) |
+| [`ports/dwm3001cdk/app/src/`](architecture/ports.dwm3001cdk.app.src/README.md) | 4 | 8/40 (20%) |
+| [`ports/esp32/apps/initiator/main/`](architecture/ports.esp32.apps.initiator.main/README.md) | 1 | 0/5 (0%) |
 | [`ports/esp32/apps/matter-lock/main/`](architecture/ports.esp32.apps.matter-lock.main/README.md) | 9 | 56/58 (96%) |
 | [`ports/esp32/apps/matter-lock/main/lock/`](architecture/ports.esp32.apps.matter-lock.main.lock/README.md) | 5 | 60/60 (100%) |
 | [`ports/esp32/apps/reader/main/`](architecture/ports.esp32.apps.reader.main/README.md) | 3 | 22/22 (100%) |
 | [`ports/esp32/components/aliro_ble/`](architecture/ports.esp32.components.aliro_ble/README.md) | 1 | 38/40 (95%) |
+| [`ports/esp32/components/aliro_ble_central/`](architecture/ports.esp32.components.aliro_ble_central/README.md) | 1 | 3/18 (16%) |
 | [`ports/esp32/components/aliro_reader/`](architecture/ports.esp32.components.aliro_reader/README.md) | 4 | 17/21 (80%) |
 | [`ports/esp32/components/piv_ccid/`](architecture/ports.esp32.components.piv_ccid/README.md) | 4 | 3/60 (5%) |
 | [`ports/esp32/components/piv_ccid/include/`](architecture/ports.esp32.components.piv_ccid.include/README.md) | 4 | 1/3 (33%) |
 | [`ports/esp32/components/woz_uwb/port/`](architecture/ports.esp32.components.woz_uwb.port/README.md) | 4 | 30/30 (100%) |
+| [`ports/nrf5340dk/on_target_ec/src/`](architecture/ports.nrf5340dk.on_target_ec.src/README.md) | 1 | 0/1 (0%) |
 | [`release/esp32-matter-lock/`](architecture/release.esp32-matter-lock/README.md) | 1 | 0/0 (0%) |
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
 | [`scripts/`](architecture/scripts/README.md) | 19 | 78/101 (77%) |
-| [`tools/`](architecture/tools/README.md) | 23 | 187/219 (85%) |
+| [`tools/`](architecture/tools/README.md) | 24 | 189/224 (84%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 25/142 (17%) |
 | [`web-twin/`](architecture/web-twin/README.md) | 2 | 19/19 (100%) |
 
 ## Hotspots
 
-*Mined from git history as of `3a8a6ac`.*
+*Mined from git history as of `4719dd1`.*
 
-**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (19 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (19 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (16 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (12 commits), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md) (11 commits).
+**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (21 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (20 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (16 commits), [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md) (11 commits), [`scripts/docs.sh`](architecture/scripts/docs.sh.md) (10 commits).
 
 **Change together without importing each other:**
 

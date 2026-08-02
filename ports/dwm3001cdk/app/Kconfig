@@ -1,0 +1,318 @@
+# Copyright (c) 2026 asxeem
+# SPDX-License-Identifier: ISC
+#
+# The reader identity used to arrive here as a build-time string
+# (CONFIG_ALIRO_PROV_SEED_HEX), which put a reader private key into every image
+# and made the firmware unshareable. It is now per-device data in the settings
+# store, typed in over the USB console in provisioning mode, so there is
+# deliberately no knob left that can put a key back into a build.
+
+config ALIRO_PROV_CONSOLE
+	bool "USB CDC-ACM provisioning console (SW2 held through reset)"
+	default y
+	help
+	  The runtime provisioning path: hold SW2 through reset and the board comes
+	  up with its radios down and an `aliro` console on the nRF52833's USB port.
+	  Costs 44,288 B flash and 19,648 B RAM, measured.
+
+	  Turn it off for a build that gets its identity some other way -- a Matter
+	  node self-provisions from Apple Home, which makes `aliro import`
+	  redundant, and reader + console + Thread overflows RAM by 1,752 bytes on
+	  this part, so the two cannot coexist.
+
+# These follow the console option rather than sitting unconditionally in
+# prj.conf, because a .conf file cannot make an assignment conditional: with
+# CONFIG_SHELL=n the shell assignments become unsatisfiable and NCS aborts the
+# build on the Kconfig warning. Defaults here are parsed before Kconfig.zephyr,
+# so they win over the upstream ones.
+if ALIRO_PROV_CONSOLE
+
+config USB_DEVICE_STACK
+	default y
+
+config USB_CDC_ACM
+	default y
+
+config USB_DEVICE_MANUFACTURER
+	default "openaliro"
+
+config USB_DEVICE_PRODUCT
+	default "openaliro reader (provisioning)"
+
+config SHELL
+	default y
+
+config SHELL_BACKEND_SERIAL
+	default y
+
+# A full APRV blob is 476 bytes = 952 hex characters plus the command word; the
+# 256-byte default line buffer would silently truncate an import.
+config SHELL_CMD_BUFF_SIZE
+	default 1152
+
+# import/erase commit through a software P-256 derive. Measured peak 2580 B, so
+# the 2048 default faulted the shell thread via the MPU stack guard, which
+# presents as a live USB device with a dead console rather than as a crash.
+config SHELL_STACK_SIZE
+	default 4096
+
+# One import line is 577 characters; the 64-byte default is a single USB bulk
+# packet and drops characters mid-paste.
+config SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE
+	default 1280
+
+endif # ALIRO_PROV_CONSOLE
+
+config ALIRO_PROV_CLEAR_ON_BOOT
+	bool "Erase the stored Aliro identity at boot"
+	default n
+	help
+	  Deletes the `aliro/prov` settings key before anything reads it, so the
+	  board comes up on the DEV identity with no trust anchors, exactly as it
+	  was before it was first provisioned.
+
+	  The Matter path needs a way back. A board provisioned by one home keeps
+	  that identity across a reflash, and on 2026-08-02 a re-added accessory
+	  was observed getting neither SetAliroReaderConfig nor SetCredential --
+	  the stale anchor then rejected the key the phone presented, one step
+	  from the grant. Whether Apple skips provisioning BECAUSE the reader
+	  reports the deleted home's identity is unconfirmed; this is the knob
+	  that lets the question be asked.
+
+	  `west flash --erase` clears it too, and also destroys the SRP client
+	  key, which costs up to 14 days of Thread host-name ownership.
+
+	  It erases on EVERY boot, including the one right after Apple provisions
+	  a new identity. Flash it once, then flash an image without it.
+
+config ALIRO_FACTORY_RESET_BUTTON
+	bool "Factory reset when SW2 is held through reset"
+	default y
+	help
+	  Erases the stored reader identity, every trust anchor and the Matter
+	  fabrics when the sw0 alias (SW2, P0.02) is held at boot, then carries
+	  on booting -- so the board comes back commissionable.
+
+	  This is not a convenience. A commissioning that installs a fabric and
+	  then times out leaves that fabric stored, the advert gate switches to
+	  the Aliro reader payload, and the controller can neither discover the
+	  node nor open a commissioning window on an accessory it has already
+	  forgotten. Without this button that board needs a debugger, and a user
+	  does not have one.
+
+	  Held through reset rather than long-pressed while running: it matches
+	  the provisioning console's idiom on this same button, needs no timer
+	  or thread on a part already at 96% RAM, and cannot fire during a
+	  walk-up. led0 blinks to confirm the hold registered.
+
+	  OpenThread's settings are left alone -- see aliro_prov_erase() for the
+	  14-day SRP name lease that erasing them costs.
+
+config ALIRO_MATTER_CLEAR_ON_BOOT
+	bool "Erase the stored Matter fabrics at boot"
+	depends on ALIRO_MATTER_BLE
+	default n
+	help
+	  Deletes the `mfab/*` settings keys before they are read, so the board
+	  comes up with no fabric and advertises commissionable.
+
+	  The other half of a factory reset, and the reason to prefer this pair
+	  over `west flash --erase`: together they clear everything a controller
+	  can see, while leaving OpenThread's own settings alone. The SRP client
+	  key lives there, the SRP host name is the factory EUI-64 and survives
+	  an erase either way, and name ownership is first-come-first-served BY
+	  KEY -- so an erase asks for the same name with a new key and is refused
+	  with OT_ERROR_DUPLICATED until the border router's key lease expires,
+	  up to 14 DAYS. Thread attaches, SRP never registers, and the
+	  commissioner hangs on "Adding to Home" with nothing to say why.
+
+	  Same caveat as ALIRO_PROV_CLEAR_ON_BOOT: it erases on EVERY boot.
+	  Flash it once, then flash an image without it.
+
+config ALIRO_THREAD_GATE
+	bool "Stage 0 contention gate: bring Thread up alongside the reader"
+	# NET_L2_OPENTHREAD, not bare OPENTHREAD. The 802.15.4 driver class is
+	# gated on NETWORKING (zephyr/drivers/ieee802154/Kconfig), so a
+	# CONFIG_NETWORKING=n build links the Thread stack with no radio under it
+	# and this gate measures nothing while looking like it works.
+	depends on NET_L2_OPENTHREAD
+	select OPENTHREAD_MANUAL_START
+	default n
+	help
+	  Measurement only, never a shipping option. Starts OpenThread next to the
+	  running reader so ranging can be measured while an 802.15.4 stack shares
+	  the M4 and the 2.4 GHz radio. Commit 5b8d06b won the walk-up by cutting
+	  FINAL->arm latency to 0.66 ms, and Thread lands on that margin; this
+	  answers whether Matter on this board is possible at all before any Matter
+	  code is written. See ports/dwm3001cdk/app/src/thread_gate.c.
+
+config ALIRO_CASE_BENCH
+	bool "Stage 0a: measure what a Matter CASE responder costs"
+	depends on INIT_STACKS && THREAD_STACK_INFO
+	default n
+	help
+	  Measurement only. Every RAM figure for a hand-written Matter node is an
+	  estimate, and the one that decides the plan -- the peak of the Matter
+	  thread -- cannot be read with `kernel thread stacks`, because that shows
+	  threads which exist and this one does not yet. Runs the responder half of
+	  CASE (ECDH, an ECDSA sign, three ECDSA verifies, two HKDFs, two AES-CCMs)
+	  on a dedicated thread beside the live reader and reports the stack peak,
+	  the static working set, the mbedTLS heap draw and the elapsed time.
+
+	  P-256 is what costs stack here: no CryptoCell on this part, so PSA runs
+	  on the software oberon driver and every curve operation runs on the
+	  calling thread. Needs CONFIG_PSA_WANT_ALG_CCM, which the reader does not
+	  otherwise enable. See ports/dwm3001cdk/app/src/case_bench.c.
+
+config ALIRO_CASE_BENCH_PERIOD_MS
+	int "Repeat the CASE round every N ms (0 = measure once and stop)"
+	depends on ALIRO_CASE_BENCH
+	default 0
+	help
+	  0 measures once, which is all the sizing question needs. Non-zero turns
+	  the bench into a contention test: CASE keeps running while you walk up,
+	  so a real unlock has to complete against ~262 ms of P-256 per round on
+	  the same core. The reader's FINAL->arm margin is 0.66 ms, so this asks
+	  whether running the Matter thread at a lower priority is by itself
+	  enough to keep ranging alive. Small values are harsher; 50 leaves the
+	  core almost permanently busy.
+
+config ALIRO_HEAP_PROBE
+	bool "Report the mbedTLS heap high-water mark"
+	depends on MBEDTLS_MEMORY_DEBUG
+	default n
+	help
+	  Measurement only. CONFIG_MBEDTLS_HEAP_SIZE is 16384 here and halving it
+	  was 63% of the RAM freed for a future Matter node, so it needs a number
+	  rather than an argument. The argument says the cut is safe: this build is
+	  OBERON_ONLY_PSA_ENABLED with no MBEDTLS_BIGNUM_C or ECP_C compiled in, so
+	  ECDH/ECDSA run in driver stack buffers and only PSA key-slot material is
+	  ever mbedtls_calloc'd. That is an inference from Kconfig, which is exactly
+	  the reasoning that produced the bare-OpenThread mistake, so measure it.
+
+	  Reports at two points, because the console and the reader never run at the
+	  same time: `aliro heap` in provisioning mode, covering the import path's
+	  P-256 derive, and an RTT line at each unlock in run mode, covering a whole
+	  walk-up. Both read a peak accumulated since boot, so the walk-up figure
+	  includes BLE pairing and the Aliro exchange, not just the ranging.
+
+	  Needs CONFIG_MBEDTLS_MEMORY_DEBUG=y, which is not a shipping setting.
+
+source "Kconfig.zephyr"
+
+config ALIRO_MATTER_BLE
+	bool "Matter commissioning transport: the 0xFFF6 GATT service over BTP"
+	# The framing itself is in modules/woz_matter and has no Zephyr
+	# dependency; this brings in the Zephyr-side adapter that carries it.
+	depends on BT_PERIPHERAL
+	select WOZ_MATTER
+	default n
+	help
+	  Compile the 0xFFF6 service (C1 write, C2 indicate) and the BTP glue
+	  that turns it into a Matter message transport.
+
+	  This does not start advertising. The reader owns the single advertising
+	  set, and asks for the commissionable payload only while it has no
+	  identity of its own -- see ALIRO_MATTER_DISCRIMINATOR.
+
+if ALIRO_MATTER_BLE
+
+config ALIRO_MATTER_DISCRIMINATOR
+	hex "Matter setup discriminator, 12-bit"
+	default 0xF00
+	range 0x000 0xFFF
+	help
+	  Goes out in the commissionable advertisement, and a commissioner uses
+	  it to pick this device out of everything else advertising 0xFFF6. It
+	  must match the discriminator encoded in the setup code the user enters
+	  or the phone will never connect.
+
+	  0xF00 with passcode 20202021 is the pairing CHIP's own test harnesses
+	  use, which makes a bench commissioner work with no extra setup.
+
+config ALIRO_MATTER_VENDOR_ID
+	hex "Matter vendor ID"
+	default 0xFFF1
+	help
+	  0xFFF1 is CHIP's test vendor. A real product needs an allocated one;
+	  a phone will commission a test VID but marks the result uncertified.
+
+config ALIRO_MATTER_PRODUCT_ID
+	hex "Matter product ID"
+	default 0x8001
+
+config ALIRO_MATTER_SPAKE2P_VERIFIER
+	string "SPAKE2+ verifier, hex: w0 (32 B) then L (65 B)"
+	default "b96170aae803346884724fe9a3b287c30330c2a660375d17bb205a8cf1aecb350457f8ab79ee253ab6a8e46bb09e543ae422736de501e3db37d441fe344920d09548e4c18240630c4ff4913c53513839b7c07fcc0627a1b8573a149fcd1fa466cf"
+	help
+	  What the device stores INSTEAD of the setup passcode. Someone who reads
+	  this out of flash can verify a commissioner that knows the passcode and
+	  cannot impersonate one, which is the point of SPAKE2+'s augmented form.
+
+	  Generate with scripts/spake2p_verifier.py. It must be derived from the
+	  same passcode, salt and iteration count as the two options below --
+	  nothing on the device can check that it was, and a mismatched set fails
+	  at Pake3 looking exactly like a wrong passcode.
+
+	  The default is CHIP's own published test verifier for passcode 20202021
+	  (TestOnlyCommissionableDataProvider.h:74-79), so a stock commissioner
+	  pairs with the standard setup code out of the box. Ship a real one.
+
+config ALIRO_MATTER_SPAKE2P_SALT
+	string "SPAKE2+ salt, hex (16 to 32 bytes)"
+	default "5350414b453250204b65792053616c74"
+	help
+	  Sent to the commissioner in PBKDFParamResponse so it can repeat the
+	  derivation. The default is CHIP's test salt, the ASCII "SPAKE2P Key Salt".
+
+config ALIRO_MATTER_SPAKE2P_ITERATIONS
+	int "SPAKE2+ PBKDF2 iterations"
+	default 1000
+	range 1000 100000
+	help
+	  Also sent in PBKDFParamResponse. Costs the COMMISSIONER time, not this
+	  device: the verifier is derived off-device, so a high count is paid by
+	  the phone once per pairing.
+
+config ALIRO_MATTER_BLE_RX_BUF
+	int "Inbound Matter message ceiling, bytes"
+	default 1024
+	help
+	  Size of the BTP reassembly area, and therefore the largest message
+	  this node will accept. A peer declaring more than this in its Start
+	  fragment is refused before a byte is copied, so setting it low costs
+	  compatibility, never memory safety.
+
+config ALIRO_MATTER_BLE_WINDOW
+	int "Largest BTP receive window we will grant"
+	default 4
+	range 2 8
+
+config ALIRO_MATTER_BLE_WQ_STACK
+	int "Matter work queue stack, bytes"
+	default 4096
+	help
+	  PROVISIONAL. Two stack sizes in this project were guessed low and both
+	  faulted on hardware, so size this from CONFIG_THREAD_ANALYZER_AUTO
+	  output rather than by estimate.
+
+	  Raised from 2048 when PASE was wired up, because handling Pake1 is by
+	  far the deepest thing this queue does: a 128-byte reply buffer, then
+	  matter_pase_sm.c's frame holding pA, pB, Z and V (4 x 65 B) and a
+	  SPAKE2+ result, then oberon's P-256 scalar multiplication underneath
+	  all of it. That is an argument, not a measurement, which is exactly the
+	  reasoning the note above says not to trust -- so measure it and trim.
+
+config ALIRO_MATTER_BLE_WQ_PRIO
+	int "Matter work queue thread priority"
+	default 10
+	help
+	  Must stay BELOW whatever arms the DW3110 reply. Stage 0 measured a CASE
+	  handshake at 262.7 ms of solid CPU against a 0.66 ms FINAL->arm margin,
+	  and ranging survived only because the load sat at a lower priority.
+
+module = ALIRO_MATTER_BLE
+module-str = matter_ble
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # ALIRO_MATTER_BLE

@@ -16,6 +16,7 @@ Module roles, consumers, and direct dependencies:
 | [`woz_uwb/`](woz_uwb/) | UWB engine: DW3000 glue, FiRa MAC, CCC key ladder and STS, DS-TWR responder, and M1-M4 codec. | nRF5340, ESP32-S3/C5, host | `woz_port`, `deps/dw3000` |
 | [`woz_aliro/`](woz_aliro/) | Portable C reader used by the ESP32 apps: key schedule, secure channels, wire codec, provisioning, ranging glue, RSSI gate, and approach controller. | ESP32-S3/C5, host | `woz_port`, `woz_uwb` for ranging |
 | [`woz_aliro_stack/`](woz_aliro_stack/) | Default nRF Aliro API implementation; `ALIRO_SOURCE=0` selects the legacy Nordic binary fallback. | nRF5340 default, host protocol tests | Zephyr/NCS integration; portable protocol files are host-tested |
+| [`woz_matter/`](woz_matter/) | Hand-written minimal Matter node: TLV codec today, message/exchange layer, MRP and the Apple-exercised cluster surface next. Exists because CHIP does not fit the nRF52833. | host; DWM3001CDK behind `CONFIG_WOZ_MATTER` | nothing (pure C11) |
 | [`woz_nfc/`](woz_nfc/) | nRF NFC transport seam with RFAL, PN532, and no-reader backends. | nRF5340; PN532 driver/APDU files also build on host | Zephyr/NCS and the selected reader backend |
 | [`woz_aliro_ecp/`](woz_aliro_ecp/) | NFC ECP emitter for Express Mode tap, using Nordic-licensed vendor code. | nRF5340 only | Zephyr/NCS |
 

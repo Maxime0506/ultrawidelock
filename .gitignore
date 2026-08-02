@@ -57,3 +57,9 @@ internal/
 *.pklg
 *.btsnoop
 btsnoop_hci.log
+
+# scratchpad
+scratchpad/
+
+# video generation
+video/

@@ -1,0 +1,190 @@
+/* Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ *
+ * See matter_fabric.h.
+ */
+#include "matter_fabric.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "aliro_hash.h"
+#include "matter_tlv.h"
+
+/* Certificate element tags (credentials/CHIPCert.h:68-78). */
+#define CERT_TAG_SUBJECT    6u
+#define CERT_TAG_PUBLIC_KEY 9u
+
+/*
+ * Distinguished-name attribute tags.
+ *
+ * The context tag number IS the attribute's OID enum -- 17 for matter-node-id,
+ * 21 for matter-fabric-id (lib/asn1/gen_asn1oid.py:137,145) -- with bit 0x80
+ * set when the value is a printable string instead of an integer
+ * (credentials/CHIPCert.cpp:755-758). Both of these are integers, so the flag
+ * is never set on them and a tag carrying it is a different attribute, not
+ * these ones spelled differently.
+ */
+#define DN_TAG_MATTER_NODE_ID   17u
+#define DN_TAG_MATTER_FABRIC_ID 21u
+
+/** Pull the node and fabric ids out of a subject DN the reader is sitting on. */
+static int parse_subject(struct matter_tlv_reader *r, struct matter_cert_info *out)
+{
+	int rc = matter_tlv_enter(r);
+
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	for (;;) {
+		uint64_t v = 0u;
+
+		rc = matter_tlv_next(r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+
+		if (matter_tlv_tag(r) == MATTER_TLV_CTX(DN_TAG_MATTER_NODE_ID)) {
+			if (matter_tlv_get_u64(r, &v) != MATTER_OK) {
+				return MATTER_E_TYPE;
+			}
+			out->node_id = v;
+			out->have_node_id = true;
+		} else if (matter_tlv_tag(r) == MATTER_TLV_CTX(DN_TAG_MATTER_FABRIC_ID)) {
+			if (matter_tlv_get_u64(r, &v) != MATTER_OK) {
+				return MATTER_E_TYPE;
+			}
+			out->fabric_id = v;
+			out->have_fabric_id = true;
+		}
+		/* Every other attribute -- the common name a commissioner may
+		 * add, the CASE authenticated tags -- is skipped by next(). */
+	}
+
+	return matter_tlv_exit(r);
+}
+
+int matter_cert_parse(const uint8_t *cert, size_t len, struct matter_cert_info *out)
+{
+	struct matter_tlv_reader r;
+	int rc;
+
+	if (cert == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	memset(out, 0, sizeof(*out));
+
+	matter_tlv_reader_init(&r, cert, len);
+	if (matter_tlv_next(&r) != MATTER_OK || !matter_tlv_is_container(&r)) {
+		return MATTER_E_TYPE;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+
+	for (;;) {
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(CERT_TAG_PUBLIC_KEY)) {
+			const uint8_t *key = NULL;
+			size_t key_len = 0u;
+
+			if (matter_tlv_get_bytes(&r, &key, &key_len) != MATTER_OK) {
+				return MATTER_E_TYPE;
+			}
+			/* A P-256 certificate whose key is not a P-256 point is
+			 * malformed, not merely uninteresting. */
+			if (key_len != sizeof(out->public_key)) {
+				return MATTER_E_INVAL;
+			}
+			memcpy(out->public_key, key, key_len);
+			out->have_public_key = true;
+		} else if (matter_tlv_tag(&r) == MATTER_TLV_CTX(CERT_TAG_SUBJECT) &&
+			   matter_tlv_is_container(&r)) {
+			rc = parse_subject(&r, out);
+			if (rc != MATTER_OK) {
+				return rc;
+			}
+		}
+	}
+
+	return MATTER_OK;
+}
+
+/* ------------------------------------------- operational identity --- */
+
+int matter_fabric_compressed_id(const uint8_t root_pub[MATTER_FABRIC_PUBKEY_LEN],
+				uint64_t fabric_id, uint8_t out[MATTER_COMPRESSED_FABRIC_LEN])
+{
+	/* "CompressedFabric", spelled out rather than written as a string
+	 * literal so no NUL can creep into the length. */
+	static const uint8_t k_info[] = {0x43, 0x6F, 0x6D, 0x70, 0x72, 0x65, 0x73, 0x73,
+					 0x65, 0x64, 0x46, 0x61, 0x62, 0x72, 0x69, 0x63};
+	uint8_t salt[MATTER_COMPRESSED_FABRIC_LEN];
+	size_t i;
+
+	if (root_pub == NULL || out == NULL) {
+		return MATTER_E_INVAL;
+	}
+	/* An uncompressed point, or this is not the key the derivation was
+	 * specified over. */
+	if (root_pub[0] != 0x04u) {
+		return MATTER_E_INVAL;
+	}
+
+	/* Big-endian, "as it appears in certificates". */
+	for (i = 0u; i < sizeof(salt); i++) {
+		salt[i] = (uint8_t)(fabric_id >> (56u - 8u * i));
+	}
+
+	if (aliro_hkdf(salt, sizeof(salt), root_pub + 1, MATTER_FABRIC_PUBKEY_LEN - 1u, k_info,
+		       sizeof(k_info), out, MATTER_COMPRESSED_FABRIC_LEN) != 0) {
+		return MATTER_E_INVAL;
+	}
+	return MATTER_OK;
+}
+
+int matter_fabric_instance_name(const struct matter_fabric *fabric, char *out, size_t cap)
+{
+	uint8_t cid[MATTER_COMPRESSED_FABRIC_LEN];
+	uint64_t compressed = 0u;
+	size_t i;
+	int rc;
+	int n;
+
+	if (fabric == NULL || out == NULL || cap < MATTER_INSTANCE_NAME_LEN) {
+		return MATTER_E_INVAL;
+	}
+
+	rc = matter_fabric_compressed_id(fabric->root_public_key, fabric->fabric_id, cid);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (i = 0u; i < sizeof(cid); i++) {
+		compressed = (compressed << 8) | cid[i];
+	}
+
+	/*
+	 * Two %08X halves rather than one %016llX: the format has to be exactly
+	 * 16 uppercase digits with no width surprises, and a 64-bit conversion
+	 * specifier is the one thing a freestanding printf may not carry.
+	 */
+	n = snprintf(out, cap, "%08X%08X-%08X%08X", (unsigned int)(compressed >> 32),
+		     (unsigned int)compressed, (unsigned int)(fabric->node_id >> 32),
+		     (unsigned int)fabric->node_id);
+	if (n < 0 || (size_t)n >= cap) {
+		return MATTER_E_NOSPACE;
+	}
+	return MATTER_OK;
+}

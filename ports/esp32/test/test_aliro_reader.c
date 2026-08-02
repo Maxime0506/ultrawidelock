@@ -1249,9 +1249,21 @@ int main(void)
 
 		memset(grk, 0xAB, sizeof(grk));
 		okc("d.provision_grk", aliro_reader_provision_identity(rid, sp, grk) == 0);
-		aliro_reader_refresh_adv();
-		okc("d.refresh_readvertises",
+		/*
+		 * PROVISIONING ALONE REFRESHES THE ADVERT. It did not, and the
+		 * gap is invisible from everywhere except a walk-up: on hardware
+		 * a Matter pairing installed the identity and both credentials,
+		 * the Home tile worked, and the reader was never approached once
+		 * because every advert still carried the dev identity's all-zero
+		 * GRK. A reboot hid it -- the boot path applies the stored GRK
+		 * before it advertises at all.
+		 */
+		okc("d.provision_readvertises",
 		    s_readv == 1 && s_adv_sets >= 1 && s_adv_grk[0] == 0xAB);
+		/* And asking again is harmless, which is what lets the import
+		 * path and the Matter path both call it. */
+		aliro_reader_refresh_adv();
+		okc("d.refresh_again_is_safe", s_readv == 2 && s_adv_grk[0] == 0xAB);
 	}
 
 	/* attach-mode entry points */
@@ -1261,6 +1273,36 @@ int main(void)
 
 		okc("d.start_attached", aliro_reader_start_attached() == 0);
 		okc("d.attached_adv_params", s_adv_sets == sets + 1); /* GRK present */
+	}
+
+	/* Standalone start must apply the same params. The DWM3001CDK has no Matter
+	 * image, so aliro_reader_start is the only path that ever builds its
+	 * advertisement; while only start_attached applied them, a board carrying a
+	 * perfectly good cloned identity advertised unresolvably and no phone ever
+	 * approached it. */
+	{
+		int sets = s_adv_sets;
+
+		okc("d.start_standalone", aliro_reader_start() == 0);
+		okc("d.start_adv_params", s_adv_sets == sets + 1 && s_adv_grk[0] == 0xAB);
+	}
+
+	/* Import adopts an identity from another board, so it changes the GRK the
+	 * advertised dynamic tag is derived from, and has to readvertise the way the
+	 * Matter provisioning path does. */
+	{
+		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		size_t blen = 0;
+		struct aliro_reader_identity iid;
+		struct aliro_trust_store its;
+		int readv = s_readv;
+
+		aliro_prov_dev_default(&iid, &its);
+		memset(iid.grk, 0x5C, sizeof(iid.grk));
+		okc("d.import_serialize",
+		    aliro_prov_serialize(&iid, &its, blob, sizeof(blob), &blen) == 0);
+		okc("d.import_blob", aliro_reader_import_blob(blob, blen) == 0);
+		okc("d.import_refreshes_adv", s_readv == readv + 1 && s_adv_grk[0] == 0x5C);
 	}
 
 	/* provisioning error paths + reset to the dev identity */
@@ -1587,8 +1629,11 @@ int main(void)
 		s_cfg.cb.on_disconnected(50);
 	}
 
-	/* E9: trust store filled to the brim + a rejected walk-up: trust_last
-	 * has a presented key but nowhere to put it */
+	/* E9: trust store filled to the brim + a rejected walk-up. It used to
+	 * have "a presented key but nowhere to put it"; a full store now EVICTS
+	 * rather than refusing, so the key always has somewhere to go. That is
+	 * the fix for a reader whose anchors filled up and then rejected every
+	 * phone permanently, with no way back on a board that has no console. */
 	tx_reset();
 	{
 		struct ph q;
@@ -1612,7 +1657,7 @@ int main(void)
 		okc("e9.auth1_resp", ph_auth1_resp(&q, 45, NULL, 0) == 0);
 		okc("e9.rejected", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(45);
-		okc("e9.trust_last_full", aliro_reader_trust_last() == -1);
+		okc("e9.trust_last_evicts", aliro_reader_trust_last() == 0);
 	}
 
 	printf("\n== B2: a grant inside the hold window supersedes the replay ==\n");

@@ -8,8 +8,9 @@
 #   3. the excluded diagnostic files stay out of the build,
 #   4. the app still fits its partition.
 #
-# Needs the ESP-IDF env (`. ~/esp/esp-idf/export.sh`). Skips with a clear notice
-# if idf.py is absent, so the fast host test (run.sh) never depends on it.
+# Auto-sources the ESP-IDF env via $IDF_EXPORT (default $HOME/esp/esp-idf/export.sh,
+# same convention as apps/reader/Makefile; override to relocate). Skips with a
+# clear notice if ESP-IDF is absent, so the fast host test (run.sh) never needs it.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -38,8 +39,21 @@ if [ -n "${WOZ_NO_TARGET_BUILD:-}" ]; then
 	exit 0
 fi
 
+# Bring the ESP-IDF env onto PATH automatically if it is not already, without
+# baking any machine-specific path into the repo: source $IDF_EXPORT (default
+# $HOME/esp/esp-idf/export.sh, override to relocate). In CI the file is absent,
+# so we fall through to the SKIP below. Relax -e/-u across the source since
+# export.sh is not written for a strict-mode caller.
+IDF_EXPORT="${IDF_EXPORT:-$HOME/esp/esp-idf/export.sh}"
+if ! command -v idf.py >/dev/null 2>&1 && [ -f "$IDF_EXPORT" ]; then
+	set +eu
+	# shellcheck disable=SC1090
+	. "$IDF_EXPORT" >/dev/null 2>&1 || true
+	set -eu
+fi
+
 if ! command -v idf.py >/dev/null 2>&1; then
-	echo "SKIP verify_port.sh: idf.py not on PATH (run '. ~/esp/esp-idf/export.sh' first)."
+	echo "SKIP verify_port.sh: idf.py not on PATH; set IDF_EXPORT=/path/to/esp-idf/export.sh"
 	exit 0
 fi
 
