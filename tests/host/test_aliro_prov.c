@@ -168,6 +168,56 @@ void test_aliro_prov(void)
 	memset(overflow, 0, sizeof(overflow));
 	overflow[0] = 0x04u;
 	overflow[1] = 0xEEu;
-	T_EQ("fill.full", aliro_prov_trust_add(&full, overflow), -1);
+	/*
+	 * A FULL STORE EVICTS, it does not refuse. Refusing locked a re-paired
+	 * reader out permanently: stale anchors held every slot, the key the
+	 * phone presented could never be added, and the unlock failed one step
+	 * after the signature verified. 2 = added, something was dropped.
+	 */
+	T_EQ("fill.evicts", aliro_prov_trust_add(&full, overflow), 2);
+	T_EQ("fill.count_held", (int)full.count, (int)ALIRO_TRUST_MAX);
+	T_EQ("fill.newest_present", aliro_prov_trust_check(&full, overflow), 0);
+
+	/* The victim is the OLDEST when nothing has a Kpersistent. */
+	uint8_t oldest[ALIRO_CRED_PUB_LEN];
+	memset(oldest, 0, sizeof(oldest));
+	oldest[0] = 0x04u;
+	oldest[1] = 0x10u;
+	T_EQ("fill.oldest_gone", aliro_prov_trust_check(&full, oldest), -1);
+
+	/*
+	 * A slot that has completed a standard phase outranks one that never
+	 * has: Kpersistent only exists where a phone actually authenticated, so
+	 * an unused slot is the cheaper thing to lose.
+	 */
+	struct aliro_trust_store used;
+	memset(&used, 0, sizeof(used));
+	for (unsigned i = 0; i < ALIRO_TRUST_MAX; i++) {
+		uint8_t k[ALIRO_CRED_PUB_LEN];
+		memset(k, 0, sizeof(k));
+		k[0] = 0x04u;
+		k[1] = (uint8_t)(0x40u + i);
+		T_EQ("used.add", aliro_prov_trust_add(&used, k), 0);
+	}
+	/* Slot 0 has been used; slot 1 never has. */
+	T_EQ("used.kp_set", aliro_prov_kpersistent_set(&used, 0, key), 0);
+	uint8_t newcomer[ALIRO_CRED_PUB_LEN];
+	memset(newcomer, 0, sizeof(newcomer));
+	newcomer[0] = 0x04u;
+	newcomer[1] = 0xABu;
+	T_EQ("used.evicts", aliro_prov_trust_add(&used, newcomer), 2);
+
+	uint8_t kept[ALIRO_CRED_PUB_LEN];
+	memset(kept, 0, sizeof(kept));
+	kept[0] = 0x04u;
+	kept[1] = 0x40u; /* the one carrying a Kpersistent */
+	T_EQ("used.kept_the_used_one", aliro_prov_trust_check(&used, kept), 0);
+
+	uint8_t dropped[ALIRO_CRED_PUB_LEN];
+	memset(dropped, 0, sizeof(dropped));
+	dropped[0] = 0x04u;
+	dropped[1] = 0x41u; /* never used, so this is the victim */
+	T_EQ("used.dropped_the_unused", aliro_prov_trust_check(&used, dropped), -1);
+
 	T_EQ("kp.bad_idx", aliro_prov_kpersistent_set(&full, -1, key), -1);
 }

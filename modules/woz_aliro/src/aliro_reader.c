@@ -823,6 +823,26 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	} else {
 		LOG_WRN("[conn %u] credential key NOT trusted (%s); rejecting", s->conn_handle,
 			tv == 1 ? "no anchors provisioned" : "not in trust store");
+		/*
+		 * "not in trust store" says the comparison failed but not what
+		 * was compared, and the candidate explanations -- a credential
+		 * that was never delivered, versus anchors from an old pairing
+		 * holding every slot -- are told apart only by the bytes. This
+		 * cost a whole evening of guessing when the line was absent, so
+		 * it stays. First 8 of each point; the full key is never logged,
+		 * and this only runs on a rejection.
+		 */
+		LOG_WRN("  presented: %02x %02x %02x %02x %02x %02x %02x %02x", cred_pub[0],
+			cred_pub[1], cred_pub[2], cred_pub[3], cred_pub[4], cred_pub[5],
+			cred_pub[6], cred_pub[7]);
+		for (uint8_t ti = 0u; ti < s_trust.count && ti < ALIRO_TRUST_MAX; ti++) {
+			LOG_WRN("  anchor[%u]: %02x %02x %02x %02x %02x %02x %02x %02x%s", ti,
+				s_trust.cred_pub[ti][0], s_trust.cred_pub[ti][1],
+				s_trust.cred_pub[ti][2], s_trust.cred_pub[ti][3],
+				s_trust.cred_pub[ti][4], s_trust.cred_pub[ti][5],
+				s_trust.cred_pub[ti][6], s_trust.cred_pub[ti][7],
+				(s_trust.kp_valid & (1u << ti)) ? " (has Kpersistent)" : "");
+		}
 		notify_access(false);
 		s->phase = PH_FAILED;
 		return;
@@ -2028,6 +2048,11 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
 	woz_mutex_unlock(&s_prov_lock);
+	if (add == 2) {
+		LOG_WRN("trust store was FULL; dropped an anchor to make room. "
+			"ALIRO_TRUST_MAX is %u -- raise it if this repeats",
+			ALIRO_TRUST_MAX);
+	}
 	LOG_INF("Matter-provisioned trust anchor stored (%u total)", cand.count);
 	return 0;
 }

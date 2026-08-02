@@ -226,15 +226,51 @@ int aliro_prov_trust_add(struct aliro_trust_store *ts, const uint8_t cred_pub[AL
 	if (aliro_prov_trust_check(ts, cred_pub) == 0) {
 		return 1; /* already present */
 	}
+	int evicted = 0;
+
 	if (ts->count >= ALIRO_TRUST_MAX) {
-		return -1; /* full */
+		/*
+		 * EVICT rather than refuse. Anchors accumulate across pairings
+		 * and nothing ever removed them, so a store that filled stayed
+		 * full for good: the reader kept rejecting the credential the
+		 * phone actually presents, one step after "device signature OK",
+		 * and no amount of re-pairing could recover it. Observed on
+		 * hardware with 4 anchors held and a 5th key being presented.
+		 *
+		 * Evict a slot that has NEVER completed a standard phase first
+		 * -- no Kpersistent means no phone has ever authenticated with
+		 * it, so it is the cheapest thing in the store to lose. Only if
+		 * every slot has been used does the oldest go.
+		 */
+		uint8_t victim = 0u;
+
+		for (uint8_t i = 0u; i < ALIRO_TRUST_MAX; i++) {
+			if ((ts->kp_valid & (uint8_t)(1u << i)) == 0u) {
+				victim = i;
+				break;
+			}
+		}
+		for (uint8_t i = victim; i + 1u < ALIRO_TRUST_MAX; i++) {
+			memcpy(ts->cred_pub[i], ts->cred_pub[i + 1u], ALIRO_CRED_PUB_LEN);
+			memcpy(ts->kpersistent[i], ts->kpersistent[i + 1u], ALIRO_KPERSISTENT_LEN);
+			if (ts->kp_valid & (uint8_t)(1u << (i + 1u))) {
+				ts->kp_valid |= (uint8_t)(1u << i);
+			} else {
+				ts->kp_valid &= (uint8_t)~(1u << i);
+			}
+		}
+		ts->count--;
+		ts->kp_valid &= (uint8_t)~(1u << ts->count);
+		evicted = 1;
 	}
 	memcpy(ts->cred_pub[ts->count], cred_pub, ALIRO_CRED_PUB_LEN);
 	/* the new slot has no Kpersistent yet (a stale bit would alias an old key) */
 	ts->kp_valid &= (uint8_t)~(1u << ts->count);
 	memset(ts->kpersistent[ts->count], 0, ALIRO_KPERSISTENT_LEN);
 	ts->count++;
-	return 0;
+	/* 2 tells the caller an anchor was dropped to make room, which is worth
+	 * a log line -- it is the only visible sign the store is undersized. */
+	return evicted ? 2 : 0;
 }
 
 /**

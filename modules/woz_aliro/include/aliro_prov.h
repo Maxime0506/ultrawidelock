@@ -31,7 +31,14 @@ extern "C" {
 #define ALIRO_READER_ID_LEN   32u
 #define ALIRO_READER_PRIV_LEN 32u
 #define ALIRO_CRED_PUB_LEN    65u /* uncompressed P-256 point: 0x04 | X | Y */
-#define ALIRO_TRUST_MAX       4u  /* trusted credential keys the store holds */
+/*
+ * 4 was too few and the cost of being wrong was total. An Apple home installs
+ * two endpoint keys per pairing, they accumulate across pairings, and nothing
+ * evicted them -- so a re-paired reader held 4 stale anchors, rejected the key
+ * the phone actually presented, and could not be recovered by pairing again.
+ * 8 at 97 B a slot is 388 B for headroom the failure mode does not forgive.
+ */
+#define ALIRO_TRUST_MAX       8u  /* trusted credential keys the store holds */
 #define ALIRO_GRK_LEN         16u /* group resolving key (Aliro BLE-UWB adv tag) */
 #define ALIRO_KPERSISTENT_LEN 32u /* per-credential expedited-fast key (§8.3.1.13) */
 
