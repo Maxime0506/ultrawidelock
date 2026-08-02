@@ -15,8 +15,8 @@
 | [`modules/woz_uwb/src/ccc/ccc_session.h`](ccc_session.h.md) | @file ccc_session.h — Aliro/CCC ranging seam: map an Aliro session's URSK + M1-M4 setup to |
 | [`modules/woz_uwb/src/ccc/ccc_shim.c`](ccc_shim.c.md) | @file ccc_shim.c — CCC STS substitution core (implementation). |
 | [`modules/woz_uwb/src/ccc/ccc_shim.h`](ccc_shim.h.md) | @file ccc_shim.h — map a per-frame STS index to the (dURSK, STS-V) pair the DW3000 STS engine |
-| [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](ccc_shim_rx.c.md) | @file ccc_shim_rx.c — responder-RX CCC STS substitution (ld --wrap=dwt_rxenable) programming the |
-| [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](ccc_shim_wrap.c.md) | @file ccc_shim_wrap.c — per-frame STS interception (ld --wrap=dwt_configurestsiv) substituting |
+| [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](ccc_shim_rx.c.md) | @file ccc_shim_rx.c — responder-RX CCC STS substitution: woz_uwb_arm_rx() programs the CCC STS |
+| [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](ccc_shim_wrap.c.md) | @file ccc_shim_wrap.c — per-frame STS interception: woz_uwb_set_sts_iv() substitutes the CCC STS |
 | [`modules/woz_uwb/src/ccc/ccc_sts.c`](ccc_sts.c.md) | @file ccc_sts.c — DW3000 STS register load for the CCC ranging path. |
 | [`modules/woz_uwb/src/ccc/ccc_sts.h`](ccc_sts.h.md) | @file ccc_sts.h — load a CCC ranging PPDU's STS key + IV into the DW3000 STS engine. |
 | [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](cherry_ccc_shim.c.md) | @file cherry_ccc_shim.c — cherry_ccc_* seam (Aliro responder) implemented over the lock-native |

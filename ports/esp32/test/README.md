@@ -23,7 +23,7 @@ a green build is not evidence of anything on this target — these suites are.
 | `test_esp_stepup_worker.c` | The step-up worker's submit/drop/verdict wiring with the queue+task pumped synchronously; the decrypt/parse/§7.4-verify underneath is the real shared core on the KAT vectors (VALID, tampered, no-issuer, decrypt-fail, parse-fail) |
 | `test_esp_app_shell.c` | The bench console + `app_main`: command registration, every handler's argument branches, the responder single-owner guard, and the boot wiring order, against esp_console/linenoise fakes |
 | `test_esp_dw3000_port.c` | The ESP-IDF DW3000 backend: SPI transaction framing (header/body/crc, 64-byte chunking in one CS window, MISO reassembly), CS/RST/WAKEUP pin choreography, and the IRQ service-loop wiring, against GPIO/SPI recording doubles |
-| `test_esp_wrap_stubs.c` | The `--wrap` RX-callback shim's interception + chaining (STS tracker feed, awaiting-poll gate, NULL handling) with the real decadriver types |
+| `test_esp_seam_stubs.c` | This port's half of `uwb_seam.h`: the RX-callback shim's interception + chaining (STS tracker feed, awaiting-poll gate, NULL handling) and the PHY-config passthrough, with the real decadriver types |
 
 The `test_esp_*` suites compile target-only sources against the recording doubles in
 `sdkfake/` (a minimal fake of the ESP-IDF/NimBLE/FreeRTOS surface those sources touch).
@@ -42,10 +42,10 @@ host result a statement about on-target behavior rather than an approximation.
 ## `verify_port.sh`
 
 Run last by `run.sh`, and skipped with a notice if `idf.py` is not on `PATH`. It builds
-the firmware and then checks four things a compile alone would not catch: the `--wrap`
-link seam survived, the wrapper symbols are defined and the engine still references the
-wrapped symbol, the excluded diagnostic sources stayed out of the build, and the app
-still fits its partition.
+the firmware and then checks four things a compile alone would not catch: the CCC STS
+seam survived, meaning all four `uwb_seam.h` helpers are defined and the engine reaches
+the radio through them rather than around them, the excluded diagnostic sources stayed
+out of the build, and the app still fits its partition.
 
 ## CI
 

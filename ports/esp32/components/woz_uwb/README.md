@@ -37,20 +37,21 @@ The ESP-IDF DW3000 backend, replacing `deps/dw3000/platform/`:
   on the single-core ESP32-C6.
 - **`board_pins.h`** — the pin map. Source of truth; the wiring table in
   [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md) mirrors it.
-- **`woz_wrap_stubs.c`** — the minimal RX-callback chain that the excluded diagnostic
-  sources would otherwise have provided. Without it the responder receives frames but
-  never replies.
+- **`woz_seam_stubs.c`** — this port's half of `uwb_seam.h`: the minimal RX-callback
+  chain that the excluded diagnostic sources would otherwise have provided, plus the
+  PHY-config passthrough. Without it the responder receives frames but never replies.
 
-## Configuration and link seam
+## Configuration and the STS seam
 
 Engine layers are selected as compile definitions rather than Kconfig, mirroring what the
 in-tree `CMakeLists.txt` gates on. Diagnostic and Nordic-specific sources are excluded.
 
-The STS substitution links exactly as it does on Nordic, through `--wrap`. The
-load-bearing one is `dwt_rxenable`, where the CCC key and IV are programmed on every
-RX-arm. `../../test/verify_port.sh` checks after each build that the wrap flags are still
-in the link, that the wrapper symbols are defined, that the engine still references the
-wrapped symbol, and that the excluded sources stayed out.
+The STS substitution rides exactly the seam it does on Nordic,
+`modules/woz_uwb/src/driver/uwb_seam.h`. The load-bearing helper is `woz_uwb_arm_rx()`,
+where the CCC key and IV are programmed on every RX-arm.
+`../../test/verify_port.sh` checks after each build that all four helpers are defined,
+that the engine reaches the radio through them rather than around them, and that the
+excluded sources stayed out.
 
 Warnings are relaxed for this component only (`-Wno-format`,
 `-Wno-maybe-uninitialized`), because ESP-IDF builds with `-Werror` and the shared sources

@@ -336,8 +336,8 @@ calls.
 
 ### [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md)
 
-@file ccc_shim_rx.c — responder-RX CCC STS substitution (ld --wrap=dwt_rxenable) programming the
-CCC STS on each RX-arm; target only.
+@file ccc_shim_rx.c — responder-RX CCC STS substitution: woz_uwb_arm_rx() programs the CCC STS
+on each RX-arm; target only.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
@@ -350,8 +350,8 @@ FiRa MAC; maps each call onto woz_uwb_facade.
 
 ### [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md)
 
-@file ccc_shim_wrap.c — per-frame STS interception (ld --wrap=dwt_configurestsiv) substituting
-CCC STS for the FiRa MAC; target only.
+@file ccc_shim_wrap.c — per-frame STS interception: woz_uwb_set_sts_iv() substitutes the CCC STS
+for the FiRa MAC; target only.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
 
@@ -1548,20 +1548,20 @@ wired to your board.
 
 **used by** [`ports/esp32/components/woz_uwb/port/dw3000_hw.c`](architecture/ports.esp32.components.woz_uwb.port/dw3000_hw.c.md), [`ports/esp32/components/woz_uwb/port/dw3000_spi.c`](architecture/ports.esp32.components.woz_uwb.port/dw3000_spi.c.md)
 
-### [`ports/esp32/components/woz_uwb/port/woz_wrap_stubs.c`](architecture/ports.esp32.components.woz_uwb.port/woz_wrap_stubs.c.md)
+### [`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c`](architecture/ports.esp32.components.woz_uwb.port/woz_seam_stubs.c.md)
 
-Minimal ESP-IDF port of the essential RX-callback shim.
+This port's half of modules/woz_uwb/src/driver/uwb_seam.h.
 The Nordic build routes DW3000 RX events through uwb_rxdiag.c's
-__wrap_dwt_setcallbacks -> shim_rxok, which (after the blob's own
+woz_uwb_set_callbacks -> shim_rxok, which (after the MAC's own
 prepoll_rx_rearm arms the SP3 POLL window) calls ccc_shim_rx_try_prepoll to
 decrypt+warm the NEXT block's STS.  That bootstrap warm is what flips
 g_warm_valid true so the POLL window ever gets armed and Response_0 sent.
 This port omits uwb_rxdiag.c wholesale (its heartbeat needs Zephyr k_work,
-which the compat layer does not provide), so without this shim dwt_setcallbacks
-installs prepoll_rx_rearm directly, ccc_shim_rx_try_prepoll is never reached,
+which the compat layer does not provide), so without this shim the callbacks
+reach the radio unmodified, ccc_shim_rx_try_prepoll is never called,
 g_warm_valid stays false, and the responder receives Pre-POLLs but never
-replies.  Re-create only the essential chain here (no k_work, no diagnostics).
-Also keeps the dwt_configurestsmode pass-through the essential RX path needs.
+replies.  Re-create only the essential chain here (no k_work, no diagnostics),
+plus the PHY-config seam, which this port has nothing to add to.
 
 ## `tools/`
 

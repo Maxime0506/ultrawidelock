@@ -8,26 +8,26 @@
 ## API
 
 ### `static void cb_rx_ok(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_isr.c:19`
+`modules/woz_uwb/src/driver/uwb_isr.c:20`
 
 @brief RX-good callback: peek the frame header, log via WOZ_TRACE, then re-arm RX.
 
 ### `static void cb_rx_to(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_isr.c:38`
+`modules/woz_uwb/src/driver/uwb_isr.c:39`
 
 @brief RX-timeout callback: frame-wait window expired; re-arms RX.
 
 ### `static void cb_rx_err(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_isr.c:45`
+`modules/woz_uwb/src/driver/uwb_isr.c:46`
 
 @brief RX-error callback: frame heard but rejected; logs status and re-arms RX.
 
 ### `static void cb_tx_done(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_isr.c:52`
+`modules/woz_uwb/src/driver/uwb_isr.c:53`
 
 @brief TX-done callback: our transmitted frame left the antenna.
 
 ### `int uwb_isr_register(void)`
-`modules/woz_uwb/src/driver/uwb_isr.c:57`
+`modules/woz_uwb/src/driver/uwb_isr.c:58`
 
 @brief Install RX/TX callbacks and unmask the SYS_ENABLE bits; returns 0.

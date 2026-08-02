@@ -81,6 +81,7 @@ ci.yml:verify                              mal-diff
 ci.yml:verify                              esp
 ci.yml:verify                              attest
 ci.yml:verify                              approtect
+ci.yml:verify                              uwb-seam
 ci.yml:verify                              ct
 ci.yml:verify                              format
 ci.yml:verify                              shellcheck
@@ -376,6 +377,15 @@ case " ${FAIL_GATES:-} " in *" approtect "*) echo "stub approtect: failed" >&2; 
 case "${1:-}" in --self-test) echo "stub approtect self-test ok" ;; *) echo "stub approtect ok" ;; esac
 EOF
 chmod +x "$FAKE/scripts/check-approtect.sh"
+# Same story for the uwb-seam gate: also a tripwire, also invoked twice
+# (--self-test, then bare), so it needs the same two-answer stub or its failure
+# cascades over every assertion below.
+cat > "$FAKE/scripts/check-uwb-seam.sh" <<'EOF'
+#!/usr/bin/env bash
+case " ${FAIL_GATES:-} " in *" uwb-seam "*) echo "stub uwb-seam: failed" >&2; exit 1 ;; esac
+case "${1:-}" in --self-test) echo "stub uwb-seam self-test ok" ;; *) echo "stub uwb-seam ok" ;; esac
+EOF
+chmod +x "$FAKE/scripts/check-uwb-seam.sh"
 echo "int a;" > "$FAKE/modules/a.c"
 echo "// twin" > "$FAKE/web-twin/twin.js"
 echo "// selftest" > "$FAKE/web-twin/selftest.cjs"

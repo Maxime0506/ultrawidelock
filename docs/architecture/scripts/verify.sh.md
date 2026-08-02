@@ -44,7 +44,7 @@ FAIL_TAIL=40       lines of a failing gate's log to show inline
 ## API
 
 ### `gate_need()`
-`scripts/verify.sh:205`
+`scripts/verify.sh:206`
 
 What each gate needs on PATH. Empty = nothing beyond a shell and a compiler.
 A bash-3.2 case function, not an associative array: macOS ships bash 3.2 and
@@ -53,7 +53,7 @@ tests/host/fuzz.sh already sets this precedent.
 **called by** `run_gate`
 
 ### `gate_need_py()`
-`scripts/verify.sh:241`
+`scripts/verify.sh:242`
 
 Python packages a gate's suites import. `command -v` cannot see these: they
 are modules inside an interpreter, not binaries on PATH, which is exactly how
@@ -64,7 +64,7 @@ both, so CI runs those checks whatever this host has.
 **called by** `run_gate`
 
 ### `gate_label()`
-`scripts/verify.sh:251`
+`scripts/verify.sh:252`
 
 Return the human-readable label for a CI gate name.
 Labels are used in the summary row at the end of the verify sweep.
@@ -72,7 +72,7 @@ Labels are used in the summary row at the end of the verify sweep.
 **called by** `gate_row`
 
 ### `gate_is_security()`
-`scripts/verify.sh:289`
+`scripts/verify.sh:291`
 
 The gates that dispatch through scripts/security.sh. One list, because run_gate needs it too:
 only this family uses an exit status of 2 to mean "this host cannot answer the question", and
@@ -83,7 +83,7 @@ gap in the host.
 **called by** `gate_run`, `run_gate`
 
 ### `gate_run()`
-`scripts/verify.sh:298`
+`scripts/verify.sh:300`
 
 The command each gate runs. Where CI runs a make target, so do we; where CI
 runs a raw command, this reproduces it verbatim.
@@ -91,7 +91,7 @@ runs a raw command, this reproduces it verbatim.
 **called by** `run_gate`  ·  **calls** `gate_is_security`
 
 ### `gate_result()`
-`scripts/verify.sh:433`
+`scripts/verify.sh:436`
 
 Write the result of a gate to a temporary file in RUNDIR and atomically rename
 it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an
@@ -102,7 +102,7 @@ missing result can never be treated as a passing gate.
 **called by** `run_gate`
 
 ### `gate_row()`
-`scripts/verify.sh:448`
+`scripts/verify.sh:451`
 
 Prints the gate's row as it finishes. Concurrent lanes write these
 interleaved, which is fine: each row is a single printf, and the summary
@@ -111,14 +111,14 @@ below is rebuilt from the .rc files rather than from what was printed.
 **called by** `run_gate`  ·  **calls** `gate_label`
 
 ### `run_gate()`
-`scripts/verify.sh:469`
+`scripts/verify.sh:472`
 
 0 passed, 1 failed, 2 did not run. Called from inside a lane subshell.
 
 **called by** `run_lane`  ·  **calls** `gate_is_security`, `gate_need`, `gate_need_py`, `gate_result`, `gate_row`, `gate_run`
 
 ### `run_lane()`
-`scripts/verify.sh:539`
+`scripts/verify.sh:542`
 
 One lane, in order. A failure stops the rest of that lane but not the others:
 the gates sharing a lane share a build directory, so running the next one over
@@ -127,6 +127,6 @@ a half-built tree would only produce a second, confusing failure.
 **calls** `run_gate`
 
 ### `why_notrun()`
-`scripts/verify.sh:619`
+`scripts/verify.sh:622`
 
 Why a gate never started: its own lane stopped, or the tripwire did.

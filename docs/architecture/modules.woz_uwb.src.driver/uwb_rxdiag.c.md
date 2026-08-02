@@ -8,26 +8,26 @@
 ## API
 
 ### `static void cad_mark(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:57`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:55`
 
 @brief Bin one RX detection's phase within the 192 ms block grid.
 
 **called by** `shim_rxerr`, `shim_rxok`
 
 ### `static void rxdiag_ev_log(const char *cls, const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:69`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:67`
 
 @brief Log one RX event's frame structure until the budget is spent.
 
 **called by** `shim_rxerr`, `shim_rxok`, `shim_rxto`
 
 ### `static void cirdiag_emit(struct k_work *work)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:86`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:84`
 
 @brief Task-side emitter for the latched CIA diagnostics (uwb_cirdiag).
 
 ### `static void shim_rxok(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:98`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:96`
 
 @brief RX-good callback shim: log RX diagnostics, invoke the armed CCC callback, then decode the
 Pre-POLL frame off the critical path.
@@ -36,70 +36,65 @@ Pre-POLL frame off the critical path.
 **calls** `cad_mark`, `rxdiag_ev_log`
 
 ### `static void shim_rxto(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:148`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:146`
 
 @brief RX-timeout shim: tally, then run the blob's handler.
 
 **calls** `rxdiag_ev_log`
 
 ### `static void shim_rxerr(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:158`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:156`
 
 @brief RX-error shim: tally + latch status (STS/CIA bits), then chain.
 
 **calls** `cad_mark`, `rxdiag_ev_log`
 
 ### `static void shim_txdone(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:172`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:170`
 
 @brief TX-done shim: tally, then run the blob's handler.
 
-### `void __wrap_dwt_setcallbacks(dwt_callbacks_s *callbacks)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:181`
+### `void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:179`
 
 @brief Intercept the callback registration and insert counting shims.
 
-### `int32_t __wrap_dwt_configure(dwt_config_t *config)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:209`
+### `int32_t woz_uwb_configure_phy(dwt_config_t *config)`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:199`
 
-@brief Log every full PHY configuration the blob issues.
-
-### `void __wrap_dwt_configurestsmode(uint8_t stsMode)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:226`
-
-@brief Log every STS-mode (CP_SPC) write the blob issues, then pass through.
+@brief Log every full PHY configuration the engine applies.
 
 ### `static void rxdiag_log(struct k_work *work)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:242`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:222`
 
 @brief Periodic ranging heartbeat (every 2 s); re-arms itself while streaming.
 
 ### `void uwb_rxdiag_get_counts(uint32_t *rxok, uint32_t *rxerr, uint32_t *rxto, uint32_t *txdone, uint32_t *last_err, uint32_t *last_ok)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:307`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:287`
 
 @brief Snapshot the running RX/TX event tallies; out-params optional (NULL to skip).
 
 ### `void uwb_rxdiag_stream_set(bool on)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:330`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:310`
 
 @brief Arm or cancel the periodic ranging heartbeat (backs `aliro log on|off`).
 
 ### `bool uwb_rxdiag_stream_get(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:340`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:320`
 
 @brief Whether the periodic ranging heartbeat is currently armed.
 
 ### `void uwb_rxdiag_rng_set(bool on)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:345`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:325`
 
 @brief Arm or cancel the per-block distance stream (backs `aliro frames on|off`).
 
 ### `bool uwb_rxdiag_rng_get(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:350`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:330`
 
 @brief Whether the per-block distance stream is currently armed.
 
 ### `static int rxdiag_init(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:356`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:336`
 
 @brief Arm the periodic heartbeat at application init.

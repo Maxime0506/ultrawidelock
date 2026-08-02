@@ -25,7 +25,7 @@ Only one seam is target-specific:
 
 - **`../../components/woz_uwb/port/`** — the ESP-IDF DW3000 platform backend (`dw3000_spi.c`,
   `dw3000_hw.c`) replacing the Zephyr `deps/dw3000/platform/` one (SPI-master + GPIO/IRQ),
-  plus `board_pins.h` and a tiny wrap/diag stub (`woz_wrap_stubs.c`).
+  plus `board_pins.h` and a tiny seam/diag stub (`woz_seam_stubs.c`).
 
 There is **no Zephyr compatibility layer**. The engine takes its whole OS surface
 from `modules/woz_port/include/woz_port.h` (eight functions: heap, monotonic
@@ -34,10 +34,12 @@ select an ESP-IDF backend on `ESP_PLATFORM`. The earlier `compat/zephyr/*` shim,
 194 lines of fake `<zephyr/*>` headers, was deleted once those two headers
 existed. See [`docs/porting.md`](../../../../docs/porting.md).
 
-The CCC STS substitution links the same way it does on Nordic: `--wrap=dwt_rxenable`
-(the load-bearing one, where `ccc_shim_rx.c` programs the CCC key and IV on every RX-arm)
-alongside `dwt_configurestsiv`, `dwt_configurestsmode`, and `dwt_setcallbacks`.
-`verify_port.sh` guards that the seam survives a build.
+The CCC STS substitution rides the same seam it does on Nordic,
+`modules/woz_uwb/src/driver/uwb_seam.h`: every caller reaches the radio through
+`woz_uwb_arm_rx()` (the load-bearing one, where `ccc_shim_rx.c` programs the CCC key and
+IV on every RX-arm), `woz_uwb_set_sts_iv()`, `woz_uwb_set_callbacks()` and
+`woz_uwb_configure_phy()`. `scripts/check-uwb-seam.sh` guards the sources and
+`verify_port.sh` guards that the built objects still go through it.
 
 Two ESP-specific pieces are worth knowing about. SPI runs with **DMA disabled**: a boot
 benchmark measured about 84 µs per transaction with DMA, most of it descriptor setup and
