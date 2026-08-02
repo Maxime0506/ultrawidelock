@@ -99,14 +99,14 @@ subscribe. Measured on 2026-08-02: nine of these in five minutes and a tile
 that never left "No Response".
 
 ### `static void sub_persist_load(void)`
-`firmware/src/matter_commission.c:981`
+`firmware/src/matter_commission.c:993`
 
 Load the stored records, dormant until a matching CASE session turns up.
 
 **called by** `matter_commission_init`
 
 ### `static void sub_resume_for(uint8_t case_slot, uint64_t peer_node, uint8_t fabric_index, uint16_t session_id)`
-`firmware/src/matter_commission.c:1004`
+`firmware/src/matter_commission.c:1019`
 
 A CASE session just came up. If a stored subscription belongs to this peer on
 this fabric, put it back to work on the new session.
@@ -114,7 +114,7 @@ this fabric, put it back to work on the new session.
 **called by** `handle_sigma3`  ·  **calls** `subscription_heartbeat_arm`
 
 ### `static void on_aliro_lock_state(bool unlocked)`
-`firmware/src/matter_commission.c:1260`
+`firmware/src/matter_commission.c:1275`
 
 The Aliro side of this lock moved, so Matter has to be told.
 A walk-up unlock and its walk-away relock never went through the Door Lock
@@ -128,21 +128,21 @@ and submit. The report itself is built on the system work queue.
 **calls** `notify_lock_state_changed`
 
 ### `static uint16_t current_session_id(void)`
-`firmware/src/matter_commission.c:1273`
+`firmware/src/matter_commission.c:1288`
 
 The session serving the datagram in flight; 0 when it arrived over BLE.
 
 **called by** `on_status_response`, `on_subscribe_request`
 
 ### `static struct sub_state *sub_of_session(uint16_t session_id)`
-`firmware/src/matter_commission.c:1283`
+`firmware/src/matter_commission.c:1298`
 
 The subscription @p session_id holds, or NULL.
 
 **called by** `on_status_response`, `sub_alloc`, `sub_drop_session`
 
 ### `static struct sub_state *sub_alloc(uint16_t session_id)`
-`firmware/src/matter_commission.c:1310`
+`firmware/src/matter_commission.c:1325`
 
 The slot for a new subscription from @p session_id.
 Re-subscribing on a session REPLACES what that session already had, rather
@@ -153,7 +153,7 @@ two controllers -- the same failure this table exists to end.
 **called by** `on_subscribe_request`  ·  **calls** `sub_of_session`
 
 ### `static void send_report_chunk(struct sub_state *s)`
-`firmware/src/matter_commission.c:1338`
+`firmware/src/matter_commission.c:1353`
 
 Send one chunk of the priming report.
 The whole data model does not fit one Matter message -- the spec caps a
@@ -164,7 +164,7 @@ delivered, and the subscriber re-subscribes forever with nothing to say why.
 **called by** `on_status_response`, `on_subscribe_request`  ·  **calls** `send_im`
 
 ### `static void on_subscribe_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:1380`
+`firmware/src/matter_commission.c:1395`
 
 Begin a subscription.
 The order is not the obvious one. A SubscribeRequest is answered with the
@@ -177,7 +177,7 @@ arrived, which is indistinguishable from a node that stopped reporting.
 **called by** `on_secure`  ·  **calls** `current_session_id`, `send_report_chunk`, `sub_alloc`
 
 ### `static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])`
-`firmware/src/matter_commission.c:1525`
+`firmware/src/matter_commission.c:1538`
 
 An Aliro credential public key, handed to the reader's trust store -- but only
 if it is a key a phone will ever present.
@@ -197,7 +197,7 @@ simply not an anchor. An empty store is the honest report of a reader no
 phone can open yet, and it is what makes the next endpoint key visible.
 
 ### `static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk, const uint8_t *sigma1, size_t sigma1_len, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:1778`
+`firmware/src/matter_commission.c:1791`
 
 Build and frame the Sigma2 answering @p s1.
 @param sigma1 the Sigma1 payload EXACTLY as it arrived -- the transcript hash
@@ -207,7 +207,7 @@ the peer hashed and this node did not.
 **called by** `matter_thread_on_datagram`
 
 ### `static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint8_t *ipk, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2033`
+`firmware/src/matter_commission.c:2046`
 
 Answer a Sigma3, which ends the handshake.
 Sigma2 asked the initiator to believe this node; Sigma3 is the initiator
@@ -219,7 +219,7 @@ failure on this one -- which is the reason for the checks logged below.
 **called by** `matter_thread_on_datagram`  ·  **calls** `case_alloc_slot`, `case_slot_of`, `case_status_report`, `sub_resume_for`
 
 ### `static size_t case_status_report(const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2216`
+`firmware/src/matter_commission.c:2229`
 
 The StatusReport that ends CASE.
 Still unsecured and still addressed to the initiator's ephemeral id: this is
@@ -228,7 +228,7 @@ the last message before the keys take effect, not the first one after.
 **called by** `handle_sigma3`
 
 ### `size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2264`
+`firmware/src/matter_commission.c:2277`
 
 A datagram on the operational port. Sigma1, so far, and only Sigma1.
 There is no responder yet, so this answers nothing. What it does establish is
@@ -242,12 +242,12 @@ real commissioner computed independently.
 **calls** `case_slot_of`, `handle_sigma3`, `on_secure`, `send_sigma2`
 
 ### `static void on_link_reset(void)`
-`firmware/src/matter_commission.c:2554`
+`firmware/src/matter_commission.c:2567`
 
 The link dropped. Cheap here; begin_session() does the real work later.
 
 ### `bool matter_commission_has_fabric(void)`
-`firmware/src/matter_commission.c:2571`
+`firmware/src/matter_commission.c:2584`
 
 Whether this node currently holds a commissioned Matter fabric.
 Asked by the advertiser, which can carry the Matter commissionable
@@ -261,7 +261,7 @@ pairing -- invisible to Add Accessory and impossible to recover without
 erasing it.
 
 ### `int matter_commission_init(void)`
-`firmware/src/matter_commission.c:2581`
+`firmware/src/matter_commission.c:2594`
 
 Register the commissioning handlers on the 0xFFF6 transport.
 Call after the reader is up. Nothing here touches the radio: whether the

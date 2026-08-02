@@ -80,6 +80,7 @@ ci.yml:verify                              zizmor
 ci.yml:verify                              mal-diff
 ci.yml:verify                              esp
 ci.yml:verify                              attest
+ci.yml:verify                              approtect
 ci.yml:verify                              ct
 ci.yml:verify                              format
 ci.yml:verify                              shellcheck
@@ -365,6 +366,16 @@ case " ${HOSTSKIP_GATES:-} " in *" $1 "*) echo "stub security: $1 needs a tool t
 echo "stub security $1 ok"
 EOF
 chmod +x "$FAKE/scripts/security.sh"
+# The approtect gate is a tripwire, so without a stub here it fails first and
+# every later assertion in this file reads as a cascade from it rather than as
+# its own result. verify.sh invokes it twice — `--self-test`, then bare — and
+# both have to succeed for the gate to pass, so the stub answers both.
+cat > "$FAKE/scripts/check-approtect.sh" <<'EOF'
+#!/usr/bin/env bash
+case " ${FAIL_GATES:-} " in *" approtect "*) echo "stub approtect: failed" >&2; exit 1 ;; esac
+case "${1:-}" in --self-test) echo "stub approtect self-test ok" ;; *) echo "stub approtect ok" ;; esac
+EOF
+chmod +x "$FAKE/scripts/check-approtect.sh"
 echo "int a;" > "$FAKE/modules/a.c"
 echo "// twin" > "$FAKE/web-twin/twin.js"
 echo "// selftest" > "$FAKE/web-twin/selftest.cjs"

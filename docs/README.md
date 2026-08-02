@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**295 subsystems in 42 directories · 1668/2330 symbols documented (71%)**
+**296 subsystems in 42 directories · 1670/2332 symbols documented (71%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -95,14 +95,14 @@ flowchart LR
 | [`ports/nrf5340dk/on_target_ec/src/`](architecture/ports.nrf5340dk.on_target_ec.src/README.md) | 1 | 0/1 (0%) |
 | [`release/esp32-matter-lock/`](architecture/release.esp32-matter-lock/README.md) | 1 | 0/0 (0%) |
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
-| [`scripts/`](architecture/scripts/README.md) | 20 | 82/109 (75%) |
+| [`scripts/`](architecture/scripts/README.md) | 21 | 84/111 (75%) |
 | [`tools/`](architecture/tools/README.md) | 24 | 189/224 (84%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 25/142 (17%) |
 | [`web-twin/`](architecture/web-twin/README.md) | 2 | 19/19 (100%) |
 
 ## Hotspots
 
-*Mined from git history as of `320b041`.*
+*Mined from git history as of `e7d372b`.*
 
 **Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (22 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (19 commits), [`ports/esp32/apps/matter-lock/main/app_main.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_main.cpp.md) (16 commits).
 

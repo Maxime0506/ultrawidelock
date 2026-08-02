@@ -1,0 +1,147 @@
+# DWM3001CDK flash map, pinned.
+#
+# WHY THIS FILE EXISTS AT ALL. Partition Manager derives a perfectly good map on
+# its own, and until MCUboot arrived this port deliberately had no pm_static.yml
+# (see boards/decawave_dwm3001cdk.overlay, which explains why the DTS partition
+# nodes are inert here). What changed: settings_storage now has a bootloader in
+# front of it. The derived map is only stable as long as every input to it is,
+# and the one partition whose address MUST NOT MOVE is settings_storage --
+# it holds the Matter fabrics, the trust anchors and the reader private key, and
+# a board is reflashed with plain `west flash`, never `--erase`, precisely so
+# that 0x7e000 survives the update. An address that drifts because MCUboot grew
+# by a sector would silently orphan all of it. So it is pinned.
+#
+# EVERY NUMBER BELOW IS MEASURED, not budgeted. Sources, all at this commit:
+#
+#   MCUboot           29,360 B   sysbuild image, build-dfu/mcuboot/zephyr/zephyr.bin
+#                                (29,328 B standalone; PM integration adds 32 B)
+#   application      446,428 B   linker FLASH region, build-dfu/app
+#   app signed       447,090 B   build-dfu/app/zephyr/zephyr.signed.bin -- the
+#                                raw image plus 663 B of MCUboot header and
+#                                ECDSA-P256 TLVs. Read off the file, not derived.
+#
+# ---------------------------------------------------------------------------
+#  0x00000  mcuboot            32,768 B   29,360 used, 3,408 free (10.4%)
+#  0x08000  mcuboot_pad           512 B   image header
+#  0x08200  app               482,816 B   446,428 linked (92.46%), 447,090 signed
+#  0x7e000  settings_storage    8,192 B   UNCHANGED from the pre-MCUboot map
+#  0x80000  end                           32,768 + 512 + 482,816 + 8,192 = 512 KB
+# ---------------------------------------------------------------------------
+#
+# The 92.46% is the app image's own linker report against this map, so the two
+# agree by construction rather than by my arithmetic -- which is the point: an
+# earlier draft of this comment had 0x75e00 as 482,304 B. It is 482,816 B.
+#
+# WHY 0x8000 AND NOT PM'S OWN 0xC000. Left to itself PM gives mcuboot 48 KB,
+# which measured 59.73% used while the application sat at 95.32% of what was
+# left -- 21,820 B of margin on the image that is nearly full, and 19,792 B
+# spare on the one that is nowhere near. Moving the boundary down four sectors
+# (0xC000 - 0x8000 = 16,384 B) hands all of that to the side that needs it, and
+# takes the application from 95.32% to 92.46%. Both remain build-time
+# constraints: if either image outgrows its partition the build fails, it does
+# not ship and brick.
+#
+# The next step down, 0x9000, was considered and not taken. It would leave
+# MCUboot 7,504 B (20.4%) instead of 3,408 B (10.4%) and cost the application
+# 4,096 B of a margin that is already the tighter of the two. Revisit only with
+# a measurement: a bootloader that grows past ~32 KB fails `west build` with a
+# PM overflow, which is a loud failure on a developer's machine, not a field one.
+#
+# HOW TO CHECK THIS FILE IS STILL TRUE
+#   west build -d <build> -t partition_manager_report
+#   diff <(cat <build>/partitions.yml) — settings_storage must read 0x7e000/0x2000
+#
+# NOTHING HERE MAY LOCK APPROTECT, and no partition change makes that safe:
+# `nrfjprog --recover` erases UICR too, so it takes settings_storage with it and
+# every iPhone key provisioned against this board dies. scripts/check-approtect.sh
+# is the gate.
+
+mcuboot:
+  address: 0x0
+  end_address: 0x8000
+  region: flash_primary
+  size: 0x8000
+  placement:
+    align:
+      end: 0x1000
+    before:
+      - mcuboot_primary
+
+mcuboot_pad:
+  address: 0x8000
+  end_address: 0x8200
+  region: flash_primary
+  size: 0x200
+  placement:
+    align:
+      start: 0x1000
+    before:
+      - mcuboot_primary_app
+
+# `app` is the application's own payload region: what the linker sizes the image
+# against, and what mcuboot_primary_app spans. It starts after the pad because
+# the pad is where MCUboot writes the image header.
+app:
+  address: 0x8200
+  end_address: 0x7e000
+  region: flash_primary
+  size: 0x75e00
+
+mcuboot_primary_app:
+  address: 0x8200
+  end_address: 0x7e000
+  region: flash_primary
+  size: 0x75e00
+  orig_span: &id002
+    - app
+  span: *id002
+
+# The slot MCUboot validates and boots: the header plus the payload. With
+# CONFIG_SINGLE_APPLICATION_SLOT there is no secondary and no swap status area,
+# so the only reserved tail is the boot trailer -- BOOT_MAX_ALIGN * 4 +
+# BOOT_MAGIC_ALIGN_SIZE, tens of bytes (bootutil_area.c, boot_trailer_info_sz).
+# imgtool enforces the real limit at sign time against this size, so an image
+# that no longer fits fails the build rather than the boot.
+mcuboot_primary:
+  address: 0x8000
+  end_address: 0x7e000
+  region: flash_primary
+  size: 0x76000
+  orig_span: &id001
+    - app
+    - mcuboot_pad
+  span: *id001
+
+# DO NOT MOVE. The reader identity and the Matter fabrics live here, and
+# `west flash` without --erase is what preserves them across an update --
+# MEASURED: merged.hex spans 0x0..0x75274 and so stops 36,236 B short of this
+# partition.
+#
+# BACKING IT UP IS NOT `aliro export yes`. That command does not exist on the
+# Matter image: overlay-thread.conf sets CONFIG_ALIRO_PROV_CONSOLE=n and
+# CONFIG_SHELL=n, so prov_shell.c is never compiled and there is no shell and no
+# USB console on the board whose loss would actually hurt. Only the standalone
+# cdk-reader build keeps it. Back this partition up over SWD instead, which also
+# captures the Matter fabrics that `aliro export` never did:
+#
+#   JLinkExe -device nRF52833_xxAA -if SWD -speed 4000 -autoconnect 1 \
+#     -CommanderScript <(printf 'savebin s.bin 0x7E000 0x2000\nexit\n')
+#
+# Then check the result is 8,192 B and not all 0xFF before trusting it: an
+# erased page saves silently and looks exactly like a backup.
+settings_storage:
+  address: 0x7e000
+  end_address: 0x80000
+  region: flash_primary
+  size: 0x2000
+  placement:
+    align:
+      start: 0x1000
+    before:
+      - end
+
+sram_primary:
+  address: 0x20000000
+  end_address: 0x20020000
+  region: sram_primary
+  size: 0x20000

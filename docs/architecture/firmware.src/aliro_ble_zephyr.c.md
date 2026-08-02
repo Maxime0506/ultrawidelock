@@ -48,7 +48,7 @@ LSB-first, same as NimBLE.
 **called by** `aliro_advertise`
 
 ### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`firmware/src/aliro_ble_zephyr.c:671`
+`firmware/src/aliro_ble_zephyr.c:692`
 
 Attach mode exists only so the ESP32 reader can share a NimBLE host with
 esp-matter. Nothing shares this host.

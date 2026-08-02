@@ -93,7 +93,7 @@ make monitor CDK_RTT_BUILD=build/cdk-reader
 | Identity | self-provisions from Apple Home | typed in over USB, below |
 | Matter / Thread | OpenThread MTD/SED, SRP, 0xFFF6 commissioning | absent |
 | USB console | no — reader + console + Thread overflows RAM by 1,752 B | yes |
-| Measured | 446,364 B flash / 123,944 B RAM | 285,648 B flash / 79,908 B RAM |
+| Measured | 446,444 B flash / 123,944 B RAM | 285,712 B flash / 79,908 B RAM |
 
 Both rows are the linker's own region report, rebuilt at this commit; the
 figures elsewhere in this file are older measurements of smaller trees and are
@@ -204,22 +204,35 @@ The planning estimate was ~442 KB. It was roughly double the truth.
 
 The board DTS carries an MCUboot dual-slot map whose app slot is only 224 KB,
 which would not have been enough. It does not apply: NCS builds this under
-Partition Manager, which ignores DTS partitions and derives its own map. With
-`CONFIG_BOOTLOADER_MCUBOOT=n`:
+Partition Manager, which ignores DTS partitions and derives its own map. To
+change that map you add a `pm_static.yml`; a DTS override does nothing, which
+was verified by building with and without one — `partitions.yml` and the memory
+report came out byte-identical both ways.
+
+That is what `pm_static.yml` here now does. MCUboot sits at the front of flash
+and the app follows it, so the app slot is no longer the whole 504 KB:
 
 | Partition | Range | Size |
 |---|---|---|
-| app | 0x00000..0x7e000 | 504 KB |
+| mcuboot | 0x00000..0x08000 | 32 KB |
+| app (after mcuboot + its pad) | 0x08200..0x7e000 | 482,816 B |
 | settings_storage | 0x7e000..0x80000 | 8 KB |
-
-Verified by building with and without a DTS partition override: `partitions.yml`
-and the memory report came out byte-identical both ways. To change the map, add
-a `pm_static.yml`; a DTS override does nothing.
 
 8 KB of settings storage is NVS's two-sector minimum. The provisioning blob is
 476 B, so it fits one 4 KB sector with room for wear levelling.
 
-No MCUboot means no DFU, which is fine on a board with a J-Link OB.
+MCUboot buys DFU on a board that already has a J-Link OB, which matters because
+a J-Link is a bench tool and a fielded lock does not have one. It costs 32 KB of
+flash and ~21 KB of the app's former slot, and it is why the flash figures above
+are a percentage of 482,816 B rather than of 504 KB.
+
+**APPROTECT must never be locked on this board**, and two independent guards say
+so: `firmware/CMakeLists.txt` fails the configure of this image, and
+`scripts/check-approtect.sh` reads every generated `.config` — including
+MCUboot's, whose configuration lives outside this application entirely. Locking
+is a one-way door for *data*: recovering debug access costs `nrfjprog --recover`,
+a mass erase of flash **and** UICR, which takes `settings_storage` with it and
+with it the reader private key and every iPhone key provisioned against it.
 
 ## Wiring (all internal to the module — nothing to solder)
 
