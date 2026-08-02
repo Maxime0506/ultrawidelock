@@ -1482,9 +1482,16 @@ void test_matter_im_write(void)
 		T_OK("a wildcard write is refused",
 		     matter_im_write_request_decode(buf, blen, &wr) != MATTER_OK);
 
+		/*
+		 * A batch is CAPPED, not refused outright. Returning an error
+		 * left the caller with nothing to answer, and a commissioner
+		 * that gets no WriteResponse hangs on "Adding to home" -- so
+		 * the decode succeeds with the first path and says so, and the
+		 * encoder below turns that into RESOURCE_EXHAUSTED.
+		 */
 		blen = build_write(buf, sizeof(buf), 2u, true, false, false);
-		T_EQ("a batch is refused", matter_im_write_request_decode(buf, blen, &wr),
-		     MATTER_E_NOSPACE);
+		T_EQ("a batch decodes", matter_im_write_request_decode(buf, blen, &wr), MATTER_OK);
+		T_OK("and is flagged truncated", wr.truncated);
 
 		blen = build_write(buf, sizeof(buf), 1u, true, true, true);
 		T_EQ("decodes", matter_im_write_request_decode(buf, blen, &wr), MATTER_OK);
@@ -1511,6 +1518,23 @@ void test_matter_im_write(void)
 		     matter_im_write_response_encode(&srv, &wr, out, sizeof(out), &len), MATTER_OK);
 		T_EQ("nothing to send", (long)len, 0L);
 		T_EQ("but the write still ran", info.acl_len, wr.data_len);
+
+		/*
+		 * A batch gets an ANSWER, and nothing runs. The peer asked for
+		 * a set of writes; applying an arbitrary member of it and
+		 * reporting success would be a worse answer than refusing, and
+		 * silence -- what this used to do -- is the worst of the three.
+		 */
+		info.acl_len = 0u;
+		blen = build_write(buf, sizeof(buf), 2u, true, false, false);
+		T_EQ("batch decodes", matter_im_write_request_decode(buf, blen, &wr), MATTER_OK);
+		len = 0u;
+		T_EQ("a truncated batch still encodes a response",
+		     matter_im_write_response_encode(&srv, &wr, out, sizeof(out), &len), MATTER_OK);
+		T_OK("with something to send", len > 0u);
+		T_EQ("and nothing was written", (long)info.acl_len, 0L);
+		T_OK("status is RESOURCE_EXHAUSTED",
+		     memchr(out, MATTER_IM_STATUS_RESOURCE_EXHAUSTED, len) != NULL);
 	}
 
 	t_group("SubscribeRequest");

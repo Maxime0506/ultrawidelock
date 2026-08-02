@@ -391,6 +391,18 @@ struct matter_im_write {
 	size_t data_len;
 	bool suppress_response;
 	bool timed_request;
+	/**
+	 * The request named more attributes than this node can carry (one), so
+	 * @ref path holds the FIRST and the rest were dropped unparsed.
+	 *
+	 * Matter has no MaxAttributesPerWrite for a device to advertise the way
+	 * MaxPathsPerInvoke declares the invoke cap, so a peer cannot know the
+	 * limit before it writes. The encoder answers such a request with
+	 * RESOURCE_EXHAUSTED and runs NOTHING: the peer asked for a set, and
+	 * applying an arbitrary member of it is a worse answer than refusing --
+	 * and either way it gets an answer, where it used to get silence.
+	 */
+	bool truncated;
 };
 
 /**

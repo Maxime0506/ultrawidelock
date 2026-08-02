@@ -181,6 +181,31 @@ enum matter_mrp_action {
 	MATTER_MRP_GIVE_UP,
 };
 
+/*
+ * NOT WIRED UP ON THE DWM3001CDK, DELIBERATELY. Read this before "fixing" it.
+ *
+ * That port drives only matter_mrp_window_* -- duplicate suppression and the
+ * replay window -- and never arms a retransmit timer. Everything it SENDS is a
+ * reply to something the peer just sent, except the subscription report, and
+ * the peer retransmits its own requests until it is answered. So the one thing
+ * a timer here would add is resending a lost report.
+ *
+ * Which is exactly what the heartbeat already covers. matter_commission.c
+ * re-reports every SUBSCRIPTION_HEARTBEAT_S (120 s) against a max_interval of
+ * 600 s, so a lost report costs the subscriber a stale LockState for at most
+ * two minutes and never costs it the subscription. Against that: a retransmit
+ * timer needs a saved copy of every outstanding message on a part with about
+ * 4 KB of RAM left, and it wakes a sleepy end device whose poll period is
+ * 3,000 ms to resend a 67-byte report the heartbeat will resend anyway.
+ *
+ * Wire it up when this node gains something that must arrive PROMPTLY and is
+ * not a reply -- an event, or a report whose staleness matters in seconds
+ * rather than minutes. Until then the cost is real and the benefit is not.
+ *
+ * The engine stays because it is tested (tests/host, matter_mrp) and because
+ * the ESP32 port and any future initiator need it; it is unused here, not dead.
+ */
+
 /** @param base_ms peer's retransmit interval, e.g. MATTER_MRP_ACTIVE_INTERVAL_MS. */
 void matter_mrp_init(struct matter_mrp *m, uint32_t base_ms);
 

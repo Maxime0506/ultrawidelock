@@ -967,7 +967,24 @@ int matter_im_write_request_decode(const uint8_t *tlv, size_t len, struct matter
 			}
 			seen++;
 			if (seen > 1u) {
-				return MATTER_E_NOSPACE;
+				/*
+				 * One attribute per WriteRequest is this node's
+				 * cap. It used to be reported by returning an
+				 * error, which the caller could only answer with
+				 * SILENCE -- and a commissioner that gets no
+				 * WriteResponse waits out its timeout on "Adding
+				 * to home". Matter has no MaxAttributesPerWrite
+				 * to declare the cap with, so the only honest
+				 * way to say it is in the response.
+				 *
+				 * The first path is already parsed and stays
+				 * valid; @ref matter_im_write::truncated makes
+				 * the encoder refuse the whole request with
+				 * RESOURCE_EXHAUSTED rather than apply a write
+				 * the peer asked for as part of a set.
+				 */
+				out->truncated = true;
+				return MATTER_OK;
 			}
 
 			rc = matter_tlv_enter(&r); /* into the AttributeDataIB */
@@ -1054,7 +1071,10 @@ int matter_im_write_response_encode(const struct matter_im_server *srv,
 
 	/* Run it first. A suppressed response suppresses the REPLY, not the
 	 * write -- returning early here would silently drop it. */
-	if (srv->write == NULL) {
+	if (wr->truncated) {
+		/* Nothing runs; see matter_im_write::truncated. */
+		status = MATTER_IM_STATUS_RESOURCE_EXHAUSTED;
+	} else if (srv->write == NULL) {
 		status = MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
 	} else {
 		status = srv->write(srv->ctx, &wr->path, wr->data, wr->data_len);

@@ -704,12 +704,27 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		 * formats 32 bits at a time. Neither id is a secret: both are
 		 * published in the clear once this node advertises operationally.
 		 */
+		/*
+		 * The slot AddNOC actually filled, not slot 0. matter_clusters.c
+		 * assigns the first FREE slot, so the second fabric's line
+		 * reprinted the FIRST one's ids -- two AddNOCs, two indices, the
+		 * same node and fabric id under both, which reads as a node that
+		 * joined the same fabric twice.
+		 */
+		const struct matter_fabric *added = NULL;
+
+		for (size_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+			if (s_info.fabrics[i].index == s_info.last_noc_index) {
+				added = &s_info.fabrics[i];
+				break;
+			}
+		}
 		LOG_INF("  AddNOC -> status %u, fabric index %u, node %08x%08x on fabric %08x%08x",
 			s_info.last_noc_status, s_info.last_noc_index,
-			(unsigned int)(s_info.fabrics[0].node_id >> 32),
-			(unsigned int)s_info.fabrics[0].node_id,
-			(unsigned int)(s_info.fabrics[0].fabric_id >> 32),
-			(unsigned int)s_info.fabrics[0].fabric_id);
+			added ? (unsigned int)(added->node_id >> 32) : 0u,
+			added ? (unsigned int)added->node_id : 0u,
+			added ? (unsigned int)(added->fabric_id >> 32) : 0u,
+			added ? (unsigned int)added->fabric_id : 0u);
 	}
 	/*
 	 * ONLY at CommissioningComplete, never at AddNOC.

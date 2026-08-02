@@ -66,6 +66,8 @@ static size_t inbound_ok(uint8_t *buf, size_t cap, uint8_t opcode, uint32_t coun
 		       MATTER_PROTOCOL_SECURE_CHANNEL, 0u, 0u, payload, payload_len);
 }
 
+static void t_matter_exchange_ack_for_self_initiated(void);
+
 void test_matter_exchange(void)
 {
 	struct matter_exchange x;
@@ -875,4 +877,120 @@ void test_matter_exchange(void)
 		T_EQ("the peer's exchange is untouched", (long)x.exchange_id, 0x7777L);
 		T_OK("and the ack it owes is still owed", x.ack_pending);
 	}
+
+	t_matter_exchange_ack_for_self_initiated();
+}
+
+/*
+ * The acknowledgement for a report this node initiated.
+ *
+ * Measured on hardware before the fix: every LockState report drew ten
+ * "CASE message refused (-4)" -- two subscriptions x five MRP transmissions --
+ * because the controller answers a report with I CLEAR on the REPORT's exchange
+ * id, which is not the peer's exchange id, and that used to be refused as a
+ * reply to a conversation this node never started. The report was therefore
+ * never acknowledged and was retransmitted for the whole MRP schedule.
+ */
+static void t_matter_exchange_ack_for_self_initiated(void)
+{
+	struct matter_exchange x;
+	struct matter_exchange_in in;
+	struct matter_session_keys keys;
+	struct matter_msg_header mh;
+	struct matter_proto_header ph;
+	uint8_t msg[256];
+	uint8_t pt[256];
+	uint8_t out[256];
+	uint8_t plain[64];
+	uint8_t body[5] = {0x15u, 0x24u, 0x00u, 0x01u, 0x18u};
+	size_t out_len = 0u;
+	size_t plain_len = 0u;
+	size_t sealed = 0u;
+	size_t n;
+
+	memset(&keys, 0, sizeof(keys));
+	for (size_t i = 0; i < MATTER_KEY_LEN; i++) {
+		keys.i2r[i] = (uint8_t)(0x10u + i);
+		keys.r2i[i] = (uint8_t)(0x40u + i);
+		keys.attestation_challenge[i] = (uint8_t)(0x70u + i);
+	}
+
+	matter_exchange_init(&x, SEED, true);
+	n = inbound_ok(msg, sizeof(msg), 0x20u, 3u, NULL, 0u);
+	T_EQ("PASE message first", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)), MATTER_OK);
+	T_EQ("promote", matter_exchange_promote(&x, 0xABCDu, 0x1234u, &keys, 0x5EEDu), MATTER_OK);
+
+	/* The peer's own exchange, live, so the ack below is genuinely on a
+	 * different id rather than on the only one in play. */
+	memset(&ph, 0, sizeof(ph));
+	ph.exchange_flags = MATTER_EX_FLAG_I;
+	ph.opcode = 0x02u;
+	ph.exchange_id = 0x7777u;
+	ph.protocol_id = MATTER_PROTOCOL_INTERACTION_MODEL;
+	T_EQ("proto header", matter_proto_header_encode(&ph, plain, sizeof(plain), &plain_len),
+	     MATTER_OK);
+	memset(&mh, 0, sizeof(mh));
+	mh.flags = MATTER_MSG_DSIZ_NONE;
+	mh.session_id = 0xABCDu;
+	mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
+	mh.message_counter = 900u;
+	T_EQ("peer request seals",
+	     matter_crypto_seal(&mh, keys.i2r, MATTER_PASE_NODE_ID, plain, plain_len, msg,
+				sizeof(msg), &sealed),
+	     MATTER_OK);
+	T_EQ("peer request accepted", matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)),
+	     MATTER_OK);
+
+	T_EQ("report sends on our own exchange",
+	     matter_exchange_send_initiator(&x, 0x0042u, MATTER_PROTOCOL_INTERACTION_MODEL, 0x05u,
+					    body, sizeof(body), out, sizeof(out), &out_len),
+	     MATTER_OK);
+
+	/* The controller's standalone ack: I clear, A set, our exchange id. */
+	memset(&ph, 0, sizeof(ph));
+	ph.exchange_flags = MATTER_EX_FLAG_A;
+	ph.opcode = MATTER_SC_OP_ACK;
+	ph.exchange_id = 0x0042u;
+	ph.protocol_id = MATTER_PROTOCOL_SECURE_CHANNEL;
+	ph.ack_counter = 1u;
+	plain_len = 0u;
+	T_EQ("ack header", matter_proto_header_encode(&ph, plain, sizeof(plain), &plain_len),
+	     MATTER_OK);
+	memset(&mh, 0, sizeof(mh));
+	mh.flags = MATTER_MSG_DSIZ_NONE;
+	mh.session_id = 0xABCDu;
+	mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
+	mh.message_counter = 901u;
+	sealed = 0u;
+	T_EQ("ack seals",
+	     matter_crypto_seal(&mh, keys.i2r, MATTER_PASE_NODE_ID, plain, plain_len, msg,
+				sizeof(msg), &sealed),
+	     MATTER_OK);
+
+	T_EQ("the ack for our own exchange is ACCEPTED",
+	     matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)), MATTER_OK);
+	T_OK("and it is seen as carrying an ack", in.carries_ack);
+	T_EQ("naming the report's counter", (long)in.acked_counter, 1L);
+	T_EQ("the peer's exchange is untouched", (long)x.exchange_id, 0x7777L);
+
+	/*
+	 * The rule it must not have relaxed: I clear on an id NOBODY opened is
+	 * still a reply to a conversation that does not exist.
+	 */
+	memset(&ph, 0, sizeof(ph));
+	ph.exchange_flags = MATTER_EX_FLAG_A;
+	ph.opcode = MATTER_SC_OP_ACK;
+	ph.exchange_id = 0x0099u;
+	ph.protocol_id = MATTER_PROTOCOL_SECURE_CHANNEL;
+	plain_len = 0u;
+	T_EQ("stray header", matter_proto_header_encode(&ph, plain, sizeof(plain), &plain_len),
+	     MATTER_OK);
+	mh.message_counter = 902u;
+	sealed = 0u;
+	T_EQ("stray seals",
+	     matter_crypto_seal(&mh, keys.i2r, MATTER_PASE_NODE_ID, plain, plain_len, msg,
+				sizeof(msg), &sealed),
+	     MATTER_OK);
+	T_EQ("an ack for an exchange nobody opened is still refused",
+	     matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)), MATTER_E_STATE);
 }
