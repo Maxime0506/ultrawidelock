@@ -82,17 +82,17 @@ costs one loop iteration per element and never a stack frame.
 - `tag_number`
 - `room`
 - `put_raw`
-- `matter_tlv_writer_init` — tested: matter addnoc; matter im; matter im invoke; matter tlv
+- `matter_tlv_writer_init` — tested: matter addnoc; matter clusters; matter im; matter im invoke; matter tlv
 - `matter_tlv_writer_set_implicit_profile` — tested: matter tlv
 - `matter_tlv_put_bool` — tested: matter im invoke; matter tlv
 - `matter_tlv_put_null` — tested: matter tlv
 - `matter_tlv_put_i64` — tested: matter tlv
-- `matter_tlv_put_u64` — tested: matter im; matter im invoke; matter tlv
+- `matter_tlv_put_u64` — tested: matter clusters; matter im; matter im invoke; matter tlv
 - `matter_tlv_put_utf8` — tested: matter im invoke; matter tlv
 - `matter_tlv_put_bytes` — tested: matter tlv
-- `matter_tlv_start_container` — tested: matter im; matter im invoke; matter tlv
-- `matter_tlv_end_container` — tested: matter im; matter im invoke; matter tlv
-- `matter_tlv_writer_finish` — tested: matter addnoc; matter im; matter im invoke; matter tlv
+- `matter_tlv_start_container` — tested: matter clusters; matter im; matter im invoke; matter tlv
+- `matter_tlv_end_container` — tested: matter clusters; matter im; matter im invoke; matter tlv
+- `matter_tlv_writer_finish` — tested: matter addnoc; matter clusters; matter im; matter im invoke; matter tlv
 - `fits`
 - `read_le`
 - `matter_tlv_reader_init` — tested: matter attest; matter im; matter tlv

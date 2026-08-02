@@ -195,8 +195,8 @@ consults it; see the note on matter_device_info.acl.
 - `set_aliro_reader_config`
 - `command` — tested: matter addnoc; matter network
 - `command_fields`
-- `matter_clusters_resume`
+- `matter_clusters_resume` — tested: matter clusters
 - `matter_clusters_failsafe_expire` — tested: matter addnoc
-- `matter_clusters_init` — tested: matter addnoc; matter im; matter im invoke; matter im write; matter network
+- `matter_clusters_init` — tested: matter addnoc; matter clusters; matter im; matter im invoke; matter im write; matter network
 
 </details>
