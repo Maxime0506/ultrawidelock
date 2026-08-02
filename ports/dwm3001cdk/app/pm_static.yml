@@ -13,21 +13,22 @@
 #
 # EVERY NUMBER BELOW IS MEASURED, not budgeted. Sources, all at this commit:
 #
-#   MCUboot           29,360 B   sysbuild image, build-dfu-dyn/mcuboot
+#   MCUboot           29,360 B   sysbuild image, build-dfu/mcuboot/zephyr/zephyr.bin
 #                                (29,328 B standalone; PM integration adds 32 B)
-#   application      444,612 B   linker FLASH region, build-dfu-dyn/app
-#   app signed       445,275 B   zephyr.signed.bin -- raw + 663 B of MCUboot
-#                                header and ECDSA-P256 TLVs
+#   application      445,768 B   linker FLASH region, build-dfu/app
+#   app signed       446,431 B   build-dfu/app/zephyr/zephyr.signed.bin -- the
+#                                raw image plus 663 B of MCUboot header and
+#                                ECDSA-P256 TLVs. Read off the file, not derived.
 #
 # ---------------------------------------------------------------------------
 #  0x00000  mcuboot            32,768 B   29,360 used, 3,408 free (10.4%)
 #  0x08000  mcuboot_pad           512 B   image header
-#  0x08200  app               482,816 B   444,612 linked (92.09%), 445,275 signed
+#  0x08200  app               482,816 B   445,768 linked (92.33%), 446,431 signed
 #  0x7e000  settings_storage    8,192 B   UNCHANGED from the pre-MCUboot map
 #  0x80000  end                           32,768 + 512 + 482,816 + 8,192 = 512 KB
 # ---------------------------------------------------------------------------
 #
-# The 92.09% is the app image's own linker report against this map, so the two
+# The 92.33% is the app image's own linker report against this map, so the two
 # agree by construction rather than by my arithmetic -- which is the point: an
 # earlier draft of this comment had 0x75e00 as 482,304 B. It is 482,816 B.
 #
@@ -36,7 +37,7 @@
 # left -- 21,820 B of margin on the image that is nearly full, and 19,792 B
 # spare on the one that is nowhere near. Moving the boundary down four sectors
 # (0xC000 - 0x8000 = 16,384 B) hands all of that to the side that needs it, and
-# takes the application from 95.32% to 92.09%. Both remain build-time
+# takes the application from 95.32% to 92.33%. Both remain build-time
 # constraints: if either image outgrows its partition the build fails, it does
 # not ship and brick.
 #
@@ -111,9 +112,23 @@ mcuboot_primary:
     - mcuboot_pad
   span: *id001
 
-# DO NOT MOVE. The reader identity and the Matter fabrics live here, `west flash`
-# without --erase is what preserves them across an update, and `aliro export yes`
-# is the only backup.
+# DO NOT MOVE. The reader identity and the Matter fabrics live here, and
+# `west flash` without --erase is what preserves them across an update --
+# MEASURED: merged.hex spans 0x0..0x74fde and so stops 36,898 B short of this
+# partition.
+#
+# BACKING IT UP IS NOT `aliro export yes`. That command does not exist on the
+# Matter image: overlay-thread.conf sets CONFIG_ALIRO_PROV_CONSOLE=n and
+# CONFIG_SHELL=n, so prov_shell.c is never compiled and there is no shell and no
+# USB console on the board whose loss would actually hurt. Only the standalone
+# cdk-reader build keeps it. Back this partition up over SWD instead, which also
+# captures the Matter fabrics that `aliro export` never did:
+#
+#   JLinkExe -device nRF52833_xxAA -if SWD -speed 4000 -autoconnect 1 \
+#     -CommanderScript <(printf 'savebin s.bin 0x7E000 0x2000\nexit\n')
+#
+# Then check the result is 8,192 B and not all 0xFF before trusting it: an
+# erased page saves silently and looks exactly like a backup.
 settings_storage:
   address: 0x7e000
   end_address: 0x80000
