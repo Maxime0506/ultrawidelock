@@ -100,7 +100,7 @@ read past the buffer.
 **called by** `network_command`
 
 ### `static uint8_t network_command(struct matter_device_info *info, const struct matter_im_invoke *inv, uint32_t *response_command)`
-`modules/woz_matter/src/matter_clusters.c:1224`
+`modules/woz_matter/src/matter_clusters.c:1223`
 
 Run one NetworkCommissioning command.
 @return the IM status. The networking verdict goes in last_network_status and
@@ -109,14 +109,14 @@ travels in the response payload, the same split AddNOC uses.
 **called by** `command`  ·  **calls** `advertise_operational`, `dataset_xpanid`, `field_bytes`
 
 ### `static void network_fields(const struct matter_device_info *info, uint32_t response_command, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:1303`
+`modules/woz_matter/src/matter_clusters.c:1302`
 
 Serialise what network_command() decided.
 
 **called by** `command_fields`
 
 ### `static uint8_t add_trusted_root(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:1332`
+`modules/woz_matter/src/matter_clusters.c:1331`
 
 Install the root the commissioner wants this node to trust.
 Only the public key is kept -- see matter_fabric.h. Nothing is verified: this
@@ -126,7 +126,7 @@ what makes it commissionable.
 **called by** `opcred_command`  ·  **calls** `fabric_pending`, `field_bytes`
 
 ### `static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:1367`
+`modules/woz_matter/src/matter_clusters.c:1366`
 
 Accept the operational identity the commissioner minted for this node.
 @return the NodeOperationalCertStatusEnum for the reply. Every refusal is one
@@ -136,7 +136,7 @@ wrong and a commissioner can act on that.
 **called by** `opcred_command`  ·  **calls** `advertise_operational`, `fabric_next_index`, `fabric_pending`, `field_bytes`, `field_u64`
 
 ### `static uint8_t opcred_command(struct matter_device_info *info, const struct matter_im_invoke *inv, uint32_t *response_command)`
-`modules/woz_matter/src/matter_clusters.c:1467`
+`modules/woz_matter/src/matter_clusters.c:1466`
 
 Run one OperationalCredentials command.
 Everything expensive happens here -- the signature, and for a CSR a fresh
@@ -146,14 +146,14 @@ opcred_fields() may not.
 **called by** `command`  ·  **calls** `add_noc`, `add_trusted_root`, `field_bytes`, `field_u64`
 
 ### `static void opcred_fields(const struct matter_device_info *info, uint32_t response_command, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:1590`
+`modules/woz_matter/src/matter_clusters.c:1589`
 
 Serialise what opcred_command() already computed.
 
 **called by** `command_fields`
 
 ### `static uint8_t set_credential(struct matter_device_info *info, const struct matter_im_invoke *inv, uint32_t *response_command)`
-`modules/woz_matter/src/matter_clusters.c:1662`
+`modules/woz_matter/src/matter_clusters.c:1661`
 
 SetCredential: the Aliro trust anchor.
 The reader identity says who this device IS; this says whose key it will
@@ -170,7 +170,7 @@ status, and a controller that gets the wrong shape treats it as no answer.
 **called by** `command`  ·  **calls** `field_bytes`, `field_struct_u64`, `field_u64`
 
 ### `static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const uint8_t *data, size_t data_len)`
-`modules/woz_matter/src/matter_clusters.c:2150`
+`modules/woz_matter/src/matter_clusters.c:2149`
 
 Apply an attribute write.
 One attribute is writable on this node: the ACL. A commissioner's last act is

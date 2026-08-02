@@ -23,7 +23,7 @@ owns a clock.
 ## API
 
 ### `struct matter_exchange_in`
-`modules/woz_matter/include/matter_exchange.h:186`
+`modules/woz_matter/include/matter_exchange.h:206`
 
 What a received message turned out to be.
 @ref opcode, @ref protocol_id, @ref exchange_id and @ref initiator are set
