@@ -65,7 +65,7 @@ will push people towards doing.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_install()`
-`scripts/security-web.sh:291`
+`scripts/security-web.sh:297`
 
 ---- install -----------------------------------------------------------------
 Installing a package is an arbitrary-code-execution step. npm runs preinstall/postinstall from
@@ -85,7 +85,7 @@ time to whatever was published since the review.
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `run_one()`
-`scripts/security-web.sh:369`
+`scripts/security-web.sh:375`
 
 ---- dispatch --------------------------------------------------------------
 

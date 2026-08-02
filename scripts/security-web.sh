@@ -267,8 +267,14 @@ gate_retire() {
 	# "unknown option '--js'"), and scanning is scoped by --path and --ext instead. The npm-tree
 	# scanner is not wanted here anyway — there is no node_modules to walk, and osv-scanner
 	# already reads bun.lock in the `deps` gate.
+	#
+	# .claude is in the ignore list because --ignore anchors at the scan root: it excludes
+	# ./workspace/ but not .claude/worktrees/<name>/workspace/, so retire walked the fetched
+	# NCS/Zephyr trees inside every git worktree and reported jquery 1.7.1 out of Doxygen
+	# output vendored in trusted-firmware-m. CI never saw it (a runner has no worktrees), so
+	# this failed only on a developer machine, which is the worst place for a false positive.
 	retire --path . --ext js,mjs --outputformat text --exitwith 1 \
-		--ignore workspace,build,site,node_modules,deps 2>&1 | sed 's/^/  /'
+		--ignore workspace,build,site,node_modules,deps,.claude 2>&1 | sed 's/^/  /'
 	return "${PIPESTATUS[0]}"
 }
 
