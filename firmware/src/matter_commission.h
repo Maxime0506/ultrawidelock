@@ -42,6 +42,15 @@ int matter_commission_init(void);
  */
 bool matter_commission_has_fabric(void);
 
+/**
+ * True while an AdministratorCommissioning window is open.
+ *
+ * The advertiser needs this: a node that HAS a fabric normally advertises as
+ * an Aliro reader, and doing that during a commissioning window hides it from
+ * the very ecosystem the window was opened for.
+ */
+bool matter_commission_window_open(void);
+
 #ifdef __cplusplus
 }
 #endif

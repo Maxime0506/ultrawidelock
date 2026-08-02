@@ -541,6 +541,26 @@ BT_CONN_CB_DEFINE(matter_conn_cb) = {
  *   [5..6] product ID, little-endian
  *   [7]    additional-data flag
  */
+/*
+ * Runtime discriminator override, 0 meaning "use the built-in one".
+ *
+ * Set while an OpenCommissioningWindow is open, cleared when it closes. It
+ * exists because CONFIG_ALIRO_MATTER_DISCRIMINATOR is baked into the payload
+ * at build time, and a controller opening a window picks its own.
+ */
+static uint16_t s_discriminator_override;
+
+void matter_ble_set_discriminator(uint16_t discriminator)
+{
+	s_discriminator_override = discriminator;
+}
+
+uint16_t matter_ble_discriminator(void)
+{
+	return s_discriminator_override != 0u ? s_discriminator_override
+					      : (uint16_t)CONFIG_ALIRO_MATTER_DISCRIMINATOR;
+}
+
 int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)
 {
 	uint8_t *p = &out[2];
@@ -553,9 +573,17 @@ int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)
 	out[1] = 0xFFu;
 
 	p[0] = 0x00u;
-	p[1] = (uint8_t)(CONFIG_ALIRO_MATTER_DISCRIMINATOR & 0xFFu);
+	/*
+	 * The discriminator is normally the compile-time one, but
+	 * OpenCommissioningWindow lets a controller choose its own -- and the
+	 * ecosystem being invited in SCANS for that value. Advertising the
+	 * factory one while a window is open makes the node undiscoverable to
+	 * exactly the peer it was opened for, which is what this board did
+	 * until now.
+	 */
+	p[1] = (uint8_t)(matter_ble_discriminator() & 0xFFu);
 	/* Advertisement version 0 in the high nibble. */
-	p[2] = (uint8_t)((CONFIG_ALIRO_MATTER_DISCRIMINATOR >> 8) & 0x0Fu);
+	p[2] = (uint8_t)((matter_ble_discriminator() >> 8) & 0x0Fu);
 	p[3] = (uint8_t)(CONFIG_ALIRO_MATTER_VENDOR_ID & 0xFFu);
 	p[4] = (uint8_t)(CONFIG_ALIRO_MATTER_VENDOR_ID >> 8);
 	p[5] = (uint8_t)(CONFIG_ALIRO_MATTER_PRODUCT_ID & 0xFFu);

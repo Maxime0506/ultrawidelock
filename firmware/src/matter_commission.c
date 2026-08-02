@@ -354,6 +354,7 @@ static void admin_close(void)
 	s_admin_window = MATTER_ADMIN_WINDOW_NOT_OPEN;
 	s_admin_fabric = 0u;
 	s_admin_vendor = 0u;
+	matter_ble_set_discriminator(0u);
 	aliro_ble_readvertise();
 	LOG_INF("commissioning window closed; factory setup code back in force");
 }
@@ -384,17 +385,6 @@ static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier,
 				   uint32_t verifier_len, uint16_t discriminator,
 				   uint32_t iterations, const uint8_t *salt, uint32_t salt_len)
 {
-	/*
-	 * DISCRIMINATOR IS ACCEPTED AND IGNORED, and that is a real gap rather
-	 * than an oversight: the advertised discriminator is built into the
-	 * commissionable payload at boot, and re-deriving it here means
-	 * rebuilding that payload. A controller that scans for the value it
-	 * asked for will not find this node. It still works when the controller
-	 * connects by other means, which is what Apple Home does having just
-	 * been talking to it.
-	 */
-	ARG_UNUSED(discriminator);
-
 	if (s_admin_window != MATTER_ADMIN_WINDOW_NOT_OPEN) {
 		return MATTER_ADMIN_STATUS_BUSY;
 	}
@@ -412,6 +402,11 @@ static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier,
 	memcpy(s_verifier.salt, salt, salt_len);
 	s_verifier.salt_len = (uint8_t)salt_len;
 	s_verifier.iterations = iterations;
+
+	/* The ecosystem being invited in SCANS for the discriminator its
+	 * controller chose, so advertising the factory one would hide this node
+	 * from exactly the peer the window was opened for. */
+	matter_ble_set_discriminator(discriminator);
 
 	admin_arm(timeout_s, MATTER_ADMIN_WINDOW_ENHANCED);
 	return 0u;
@@ -442,6 +437,11 @@ static uint8_t admin_revoke(void)
 static uint8_t admin_status(void)
 {
 	return s_admin_window;
+}
+
+bool matter_commission_window_open(void)
+{
+	return s_admin_window != MATTER_ADMIN_WINDOW_NOT_OPEN;
 }
 
 static uint8_t admin_fabric(void)

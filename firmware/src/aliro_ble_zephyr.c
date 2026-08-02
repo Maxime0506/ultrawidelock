@@ -324,7 +324,14 @@ static int aliro_advertise(void)
 	 * fabric, and gone from Add Accessory with no way back but an erase.
 	 */
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
-	bool commissioned = matter_commission_has_fabric();
+	/*
+	 * A commissioning window makes this node commissionable AGAIN even
+	 * though it holds a fabric. Without this an OpenCommissioningWindow
+	 * kept advertising the Aliro reader tag, so the second ecosystem the
+	 * window was opened for could never find it -- observed on hardware,
+	 * 2026-08-03.
+	 */
+	bool commissioned = matter_commission_has_fabric() && !matter_commission_window_open();
 #else
 	bool commissioned = true;
 #endif
