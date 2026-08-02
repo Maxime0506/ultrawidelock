@@ -83,12 +83,31 @@ struct aliro_approach_cfg {
 			    * >= one ranging block (192 ms) so the discrete
 			    * sample grid cannot miss the window */
 	int32_t vmin_cm_s; /* min closing speed for a prediction to fire */
-	bool predict_en;   /* arm the prediction path at all; false leaves the
-			    * presence path exactly as it shipped. Off whenever
-			    * the RSSI power gate is on: the gate withholds
-			    * ranging until the credential is already inside
-			    * unlock_cm, so no ETA can ever arm and the two
-			    * features would only pretend to cooperate. */
+	/*
+	 * How long a silence that STARTED beyond relock_cm counts as departure.
+	 *
+	 * far_dwell needs consecutive far SAMPLES, and a phone being carried
+	 * away stops producing them: it leaves UWB range, or iOS stops ranging,
+	 * usually after one or two far readings. Measured on hardware -- 13 cm,
+	 * 139 cm, 378 cm, then silence, then the link dropped 3.2 s later with
+	 * far_dwell at 1 of 3. The relock then had no session left to go out
+	 * on and was replayed into the NEXT approach, which the user sees as a
+	 * door that stays unlocked all the way down the street and relocks as
+	 * they come back.
+	 *
+	 * Silence alone must NOT mean departure -- a phone held still nearby
+	 * also stops ranging, and relocking under the owner's hand is the worse
+	 * failure. The last measurement is what separates them: last seen far
+	 * and now quiet is leaving; last seen near and now quiet is standing
+	 * there. 0 disables and restores the sample-only behaviour.
+	 */
+	int32_t far_silence_ms;
+	bool predict_en; /* arm the prediction path at all; false leaves the
+			  * presence path exactly as it shipped. Off whenever
+			  * the RSSI power gate is on: the gate withholds
+			  * ranging until the credential is already inside
+			  * unlock_cm, so no ETA can ever arm and the two
+			  * features would only pretend to cooperate. */
 };
 
 /**
@@ -121,6 +140,12 @@ struct aliro_approach {
 	bool pred_open;           /* opened predictively, not yet arrived */
 	int64_t pred_deadline_ms; /* arrive by this or RELOCK_ABORT */
 	int32_t eta_ms;           /* last ETA to unlock_cm; -1 = none */
+
+	/* departure-by-silence; see aliro_approach_cfg::far_silence_ms */
+	int32_t last_cm;      /* last RAW sample, not the median: the median is
+			       * there to reject spikes while tracking, and the
+			       * question here is what was actually measured last */
+	int64_t last_feed_ms; /* when it arrived; 0 = nothing yet */
 };
 
 /* Fill cfg with the tuned defaults (100/250 cm band, 2/3 dwells, 500 ms
@@ -136,7 +161,8 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
 					       int32_t cm);
 
 /* Periodic call while no sample arrived (the controller's idle tick).
- * Only supervises an overdue predictive open. */
+ * Supervises an overdue predictive open, and relocks a departure whose far
+ * samples stopped before far_dwell could count them (far_silence_ms). */
 enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_t now_ms);
 
 /* Peer gone (ranging silent past the caller's timeout): reset for the next

@@ -20,7 +20,7 @@ vmin_cm_s (min closing speed to arm prediction), predict_en (false disables pred
 presence path unchanged; also false whenever RSSI power gate is active).
 
 ### `struct aliro_approach`
-`modules/woz_aliro/include/aliro_approach.h:102`
+`modules/woz_aliro/include/aliro_approach.h:121`
 
 State machine and Kalman filter for approach detection and predictive unlock.
 locked: bolt mirror state. win/wlen/wpos: median filter for distance. near_dwell/far_dwell:

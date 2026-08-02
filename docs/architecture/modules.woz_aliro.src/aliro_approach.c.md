@@ -47,7 +47,7 @@ unlock enabled.
 **called by** `aliro_approach_init`
 
 ### `void aliro_approach_init(struct aliro_approach *ap, const struct aliro_approach_cfg *cfg)`
-`modules/woz_aliro/src/aliro_approach.c:154`
+`modules/woz_aliro/src/aliro_approach.c:161`
 
 Initialize an approach controller to locked state with zero velocity and no prediction in flight.
 If cfg is NULL, load factory defaults; otherwise copy the provided configuration.
@@ -55,7 +55,7 @@ If cfg is NULL, load factory defaults; otherwise copy the provided configuration
 **called by** `aliro_approach_gone`  ·  **calls** `aliro_approach_defaults`
 
 ### `static enum aliro_approach_action pred_abort(struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:170`
+`modules/woz_aliro/src/aliro_approach.c:177`
 
 Record a predictive unlock abort and relock the door. Called when prediction is active but the
 phone has stopped approaching or moved away.
@@ -63,7 +63,7 @@ phone has stopped approaching or moved away.
 **called by** `aliro_approach_feed`, `aliro_approach_tick`
 
 ### `enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_t now_ms, int32_t cm)`
-`modules/woz_aliro/src/aliro_approach.c:185`
+`modules/woz_aliro/src/aliro_approach.c:192`
 
 Update the Kalman filter state with a new range measurement, compute estimated time-to-arrival
 (ETA) at the unlock radius, track presence via a median-filter window, and supervise predictive
@@ -74,7 +74,7 @@ zone), UNLOCK_PREDICT (fired a predictive unlock), or HOLD (no action).
 **calls** `kf_update`, `pred_abort`, `range_median`
 
 ### `enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_t now_ms)`
-`modules/woz_aliro/src/aliro_approach.c:267`
+`modules/woz_aliro/src/aliro_approach.c:277`
 
 Supervise an active predictive unlock when no new measurement arrives this window. If the
 prediction deadline has passed, abort and relock the door. Return HOLD otherwise.
@@ -82,7 +82,7 @@ prediction deadline has passed, abort and relock the door. Return HOLD otherwise
 **calls** `pred_abort`
 
 ### `enum aliro_approach_action aliro_approach_gone(struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:282`
+`modules/woz_aliro/src/aliro_approach.c:310`
 
 Reset the approach controller to locked state while preserving its configuration. Return
 RELOCK_DEPART if the door was unlocked before the reset, otherwise HOLD.
@@ -90,24 +90,24 @@ RELOCK_DEPART if the door was unlocked before the reset, otherwise HOLD.
 **calls** `aliro_approach_init`
 
 ### `bool aliro_approach_locked(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:294`
+`modules/woz_aliro/src/aliro_approach.c:322`
 
 Return true if the door is locked, false if unlocked.
 
 ### `int32_t aliro_approach_est_cm(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:303`
+`modules/woz_aliro/src/aliro_approach.c:331`
 
 Return the current estimated distance in centimeters. Returns -1 if the Kalman filter has not
 been initialized (no valid measurement yet); otherwise returns the rounded estimate.
 
 ### `int32_t aliro_approach_vel_cm_s(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:315`
+`modules/woz_aliro/src/aliro_approach.c:343`
 
 Return the current velocity in centimeters per second (positive = approaching, negative =
 receding). Returns 0 if the Kalman filter has not been initialized.
 
 ### `int32_t aliro_approach_eta_ms(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:329`
+`modules/woz_aliro/src/aliro_approach.c:357`
 
 Return the estimated time in milliseconds until approach completes (unlock reaches the door).
 Value is -1 if not yet computed, or the reader has already locked the door.

@@ -487,8 +487,16 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 		s_estab_fails = 0u;
 	}
 	LOG_INF("BLE disconnected (0x%02x); re-advertising", reason);
-	/* Deferred, and not by much -- see readvertise_work_fn(). */
-	(void)k_work_schedule(&s_readvertise_work, K_MSEC(50));
+	/*
+	 * Deferred out of this callback -- see readvertise_work_fn() -- but the
+	 * 50 ms is for a connection that LIVED, where the peer may still be
+	 * finishing with us. A 0x3E never carried a byte and the phone is
+	 * already retrying, so every millisecond spent not advertising is a
+	 * millisecond it cannot find us: eight failures in one measured burst
+	 * spent 400 ms of that 6 s deliberately invisible.
+	 */
+	(void)k_work_schedule(&s_readvertise_work,
+			      reason == BT_HCI_ERR_CONN_FAIL_TO_ESTAB ? K_NO_WAIT : K_MSEC(50));
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {

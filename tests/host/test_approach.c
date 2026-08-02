@@ -139,6 +139,7 @@ void test_approach(void)
 	T_EQ("def.motor_ms", cfg.motor_ms, 500);
 	T_EQ("def.margin_ms", cfg.margin_ms, 250);
 	T_EQ("def.vmin_cm_s", cfg.vmin_cm_s, 30);
+	T_EQ("def.far_silence_ms", cfg.far_silence_ms, 1500);
 	walk_init(&w, 1, 600.0f);
 	T_EQ("idle.cfg.null.defaults", w.ap.cfg.unlock_cm, 100);
 	T_OK("idle.locked", aliro_approach_locked(&w.ap));
@@ -313,4 +314,69 @@ void test_approach(void)
 	walk_until(&w, -130.0f, 25, 400.0f, 0, 0);
 	T_EQ("off.depart.once", w.r.n_depart, 1);
 	T_OK("off.relocked", aliro_approach_locked(&w.ap));
+	/*
+	 * The walk-away that hardware actually produces: a couple of far
+	 * samples and then nothing, because the phone leaves UWB range or iOS
+	 * stops ranging. far_dwell needs three and never gets them.
+	 */
+	t_group("departure by silence: two far samples then quiet still relocks");
+	{
+		struct walk d;
+
+		walk_init(&d, 7, 600.0f);
+		walk_until(&d, 130.0f, 10, 40.0f, 0, 0); /* arrive and unlock */
+		T_OK("silence.unlocked", !aliro_approach_locked(&d.ap));
+
+		/* Two far readings -- one short of far_dwell -- then silence. */
+		d.t += BLOCK_MS;
+		note(&d.r, aliro_approach_feed(&d.ap, d.t, 380), d.t);
+		d.t += BLOCK_MS;
+		note(&d.r, aliro_approach_feed(&d.ap, d.t, 420), d.t);
+		T_OK("silence.still.open.after.two", !aliro_approach_locked(&d.ap));
+
+		T_EQ("silence.nothing.before.the.window",
+		     (long)aliro_approach_tick(&d.ap, d.t + 1000),
+		     (long)ALIRO_APPROACH_HOLD);
+		T_EQ("silence.relocks.after.it",
+		     (long)aliro_approach_tick(&d.ap, d.t + 1500),
+		     (long)ALIRO_APPROACH_RELOCK_DEPART);
+		T_OK("silence.locked", aliro_approach_locked(&d.ap));
+		T_EQ("silence.only.once", (long)aliro_approach_tick(&d.ap, d.t + 9000),
+		     (long)ALIRO_APPROACH_HOLD);
+	}
+
+	/*
+	 * The case the gate protects: a phone put down INSIDE the ring also
+	 * stops ranging, and relocking under its owner is the worse failure.
+	 */
+	t_group("silence while near: the bolt stays put");
+	{
+		struct walk n;
+
+		walk_init(&n, 11, 600.0f);
+		walk_until(&n, 130.0f, 10, 40.0f, 0, 0);
+		T_OK("near.unlocked", !aliro_approach_locked(&n.ap));
+
+		T_EQ("near.silence.holds", (long)aliro_approach_tick(&n.ap, n.t + 60000),
+		     (long)ALIRO_APPROACH_HOLD);
+		T_OK("near.still.open", !aliro_approach_locked(&n.ap));
+	}
+
+	/* far_silence_ms == 0 restores the sample-only behaviour exactly. */
+	t_group("departure by silence: disabled by config");
+	{
+		struct walk z;
+		struct aliro_approach_cfg zcfg;
+
+		aliro_approach_defaults(&zcfg);
+		zcfg.far_silence_ms = 0;
+		walk_init_cfg(&z, 13, 600.0f, &zcfg);
+		walk_until(&z, 130.0f, 10, 40.0f, 0, 0);
+		z.t += BLOCK_MS;
+		note(&z.r, aliro_approach_feed(&z.ap, z.t, 380), z.t);
+
+		T_EQ("off.silence.never.fires", (long)aliro_approach_tick(&z.ap, z.t + 60000),
+		     (long)ALIRO_APPROACH_HOLD);
+		T_OK("off.still.open", !aliro_approach_locked(&z.ap));
+	}
 }

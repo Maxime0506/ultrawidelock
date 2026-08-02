@@ -1455,11 +1455,27 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	 * ciphertext here — the real event must be opened below, not read raw. */
 	if (s->phase != PH_ESTABLISHED && type == ALIRO_PROTO_NOTIFICATION &&
 	    opcode == ALIRO_NOTIF_EVENT) {
-		uint8_t code = (pl_len >= 3u) ? pl[2] : 0xffu;
-
-		LOG_WRN("[conn %u] device GeneralError 0x%02x in phase %s", s->conn_handle, code,
-			phase_str(s->phase));
-		s->phase = PH_FAILED;
+		/*
+		 * Only the documented shape kills the transaction. A pre-ranging
+		 * event that is NOT [01 01 <code>] is an event this reader does
+		 * not understand, and "did not understand" is not "fatal".
+		 *
+		 * Measured 2026-08-02: a phone answered AUTH0 with a 2-byte
+		 * event -- too short to be a GeneralError at all, so the code
+		 * logged was this function's own 0xff placeholder -- the session
+		 * latched FAILED, and the REAL 135-byte AUTH0 response arriving
+		 * 2.3 s later was dropped with "message in phase FAILED
+		 * ignored". That cost a whole walk-up; the phone had recovered
+		 * and this end had not.
+		 */
+		if (pl_len >= 3u && pl[0] == 0x01u && pl[1] == 0x01u) {
+			LOG_WRN("[conn %u] device GeneralError 0x%02x in phase %s", s->conn_handle,
+				pl[2], phase_str(s->phase));
+			s->phase = PH_FAILED;
+			return;
+		}
+		LOG_WRN("[conn %u] unrecognised pre-ranging event, %u B, phase %s; not fatal",
+			s->conn_handle, (unsigned)pl_len, phase_str(s->phase));
 		return;
 	}
 
