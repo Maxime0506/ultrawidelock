@@ -21,7 +21,7 @@ cannot read. BLE + UWB walk-up is the whole feature set here.
 ## Build
 
 ```sh
-make cdk           # -> build-cdk/app/zephyr/zephyr.hex
+make cdk-reader    # -> build-cdk/app/zephyr/zephyr.hex
 make cdk-flash     # over the on-board J-Link OB
 ```
 

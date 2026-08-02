@@ -48,10 +48,15 @@ TAG      ?=
 MAXCM    ?= 40
 PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
 
-# DWM3001CDK target (make cdk / cdk-flash). Its own build dir, so it never
+# DWM3001CDK target (make cdk-reader / cdk-flash). Its own build dir, so it never
 # fights the nRF5340 build for build/. NCS_VER matches scripts/build.sh.
 NCS_VER   ?= v3.3.0
 CDK_BUILD ?= $(REPO_ROOT)/build-cdk
+CDK_MATTER_BUILD ?= $(REPO_ROOT)/build-matter
+# PRISTINE=1 forces a from-scratch build. `-p auto` re-runs CMake when the board
+# or the app directory changes, and NOT when the -D flags do, so switching an
+# existing build dir between the reader and the Matter build needs this.
+CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 
 # Assemble the env prefix from whichever options were set.
 ENV := $(strip \
@@ -66,7 +71,7 @@ ENV := $(strip \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(CIR),CIR=$(CIR)))
 
-.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty cdk cdk-flash selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
+.PHONY: help tools tools-install bootstrap ws-seed ws-clean build rebuild pretty cdk-reader cdk-aliro-matter-thread cdk-flash cdk-flash-erase selftest test test-san ha-stage0 ha-test ha-package ha-setup check coverage test-port test-ws test-web presence-runtime presence-verify docs docs-publish fuzz cbmc verify security security-web security-ct security-workspace security-fw security-attest flash flash-erase term openaliro tui tui-setup tui-test tui-release clean
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -144,19 +149,44 @@ selftest:
 pretty:
 	@$(ENV) PRETTY=1 ./scripts/build.sh build
 
-## cdk: build the DWM3001CDK standalone reader   -> build-cdk/app/zephyr/zephyr.hex
+## cdk-reader: build the DWM3001CDK standalone reader   -> build-cdk/app/zephyr/zephyr.hex
 ##   One board, no host MCU: nRF52833 + DW3110. Carries no credential; the
 ##   identity is typed in over USB in provisioning mode (ports/dwm3001cdk/README.md).
-##   Options: CDK_BUILD=<dir> (default build-cdk)  NCS_VER=<tag> (default v3.3.0)
-cdk:
+##   Options: PRISTINE=1  CDK_BUILD=<dir> (default build-cdk)  NCS_VER=<tag> (v3.3.0)
+cdk-reader:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
-	  --ncs-version $(NCS_VER) -- west build -p auto -b decawave_dwm3001cdk \
+	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
 	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app
+
+## cdk-aliro-matter-thread: DWM3001CDK reader + Matter over Thread   -> build-matter/merged.hex
+##   Same board as `cdk-reader`, plus the woz_matter node: Apple Home commissions
+##   it over BLE and it then shows a live lock tile (ports/dwm3001cdk/README.md).
+##   Self-provisions, so it drops the USB console `cdk-reader` needs.
+##   Flash it with: make cdk-flash CDK_BUILD=$(CDK_MATTER_BUILD)
+##   Options: PRISTINE=1  CDK_MATTER_BUILD=<dir> (default build-matter)
+cdk-aliro-matter-thread:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
+	  -d $(CDK_MATTER_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app \
+	  -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
 
 ## cdk-flash: flash the DWM3001CDK over its on-board J-Link OB
 cdk-flash:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
 	  --ncs-version $(NCS_VER) -- west flash -d $(CDK_BUILD)
+
+## cdk-flash-erase: full chip erase + flash the DWM3001CDK  ·  read the warning
+##   Unlike the nRF5340's flash-erase this is NOT a routine step: it also wipes
+##   OpenThread's settings, and the SRP client key lives there. The host name is
+##   the factory EUI-64 and survives, but name ownership is first-come by KEY, so
+##   a new key asks for the same name and the border router refuses it with
+##   OT_ERROR_DUPLICATED for up to 14 DAYS -- Thread attaches, SRP never
+##   registers, and the commissioner hangs on "Adding to Home".
+##   To factory-reset a commissioned board, hold SW2 through reset instead
+##   (ALIRO_FACTORY_RESET_BUTTON), which leaves OpenThread's settings alone.
+cdk-flash-erase:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west flash --erase -d $(CDK_BUILD)
 
 ##@ Test
 ## tui-test: run the OpenTUI source tests (no hardware required)
