@@ -781,4 +781,98 @@ void test_matter_exchange(void)
 		     matter_exchange_recv(&xb, msg_a, sealed_a, &in, pt, sizeof(pt)),
 		     MATTER_E_INVAL);
 	}
+
+	t_group("this node opens an exchange of its own");
+	{
+		/*
+		 * A subscription report is the first thing this node ever sends
+		 * that answers nothing. Until it could, a controller took the
+		 * InvokeResponse SUCCESS for its Lock/Unlock and then waited for
+		 * a LockState report that never came -- the Home tile spinning
+		 * on "Unlocking" over a session that was perfectly healthy.
+		 *
+		 * MRP is ON here: this is the UDP case, which is the only one
+		 * where a server-initiated exchange happens at all.
+		 */
+		struct matter_session_keys keys;
+		struct matter_msg_header mh;
+		struct matter_proto_header ph;
+		struct matter_msg_header got;
+		uint8_t plain[64];
+		uint8_t body[5] = {0x15u, 0x24u, 0x00u, 0x01u, 0x18u};
+		size_t plain_len = 0u;
+		size_t sealed = 0u;
+		size_t opened = 0u;
+
+		for (size_t i = 0; i < MATTER_KEY_LEN; i++) {
+			keys.i2r[i] = (uint8_t)(0x10u + i);
+			keys.r2i[i] = (uint8_t)(0x40u + i);
+			keys.attestation_challenge[i] = (uint8_t)(0x70u + i);
+		}
+
+		matter_exchange_init(&x, SEED, true);
+		n = inbound_ok(msg, sizeof(msg), 0x20u, 3u, NULL, 0u);
+		T_EQ("PASE message first", matter_exchange_recv(&x, msg, n, &in, pt, sizeof(pt)),
+		     MATTER_OK);
+		T_EQ("promote", matter_exchange_promote(&x, 0xABCDu, 0x1234u, &keys, 0x5EEDu),
+		     MATTER_OK);
+
+		/*
+		 * The peer opens ITS exchange and asks to be acknowledged, so
+		 * there is both a live peer exchange id and an ack owed. Both
+		 * have to survive this node opening one of its own.
+		 */
+		memset(&ph, 0, sizeof(ph));
+		ph.exchange_flags = MATTER_EX_FLAG_I | MATTER_EX_FLAG_R;
+		ph.opcode = 0x02u;
+		ph.exchange_id = 0x7777u;
+		ph.protocol_id = MATTER_PROTOCOL_INTERACTION_MODEL;
+		plain_len = 0u;
+		T_EQ("proto header", matter_proto_header_encode(&ph, plain, sizeof(plain), &plain_len),
+		     MATTER_OK);
+		memset(&mh, 0, sizeof(mh));
+		mh.flags = MATTER_MSG_DSIZ_NONE;
+		mh.session_id = 0xABCDu;
+		mh.security_flags = MATTER_SESSION_TYPE_UNICAST;
+		mh.message_counter = 900u;
+		T_EQ("peer request seals",
+		     matter_crypto_seal(&mh, keys.i2r, MATTER_PASE_NODE_ID, plain, plain_len, msg,
+					sizeof(msg), &sealed),
+		     MATTER_OK);
+		T_EQ("peer request accepted",
+		     matter_exchange_recv(&x, msg, sealed, &in, pt, sizeof(pt)), MATTER_OK);
+		T_OK("an ack is owed", x.ack_pending);
+
+		/* Now this node opens 0x0042 and reports on it, unprompted. */
+		T_EQ("report sends",
+		     matter_exchange_send_initiator(&x, 0x0042u, MATTER_PROTOCOL_INTERACTION_MODEL,
+						    0x05u, body, sizeof(body), out, sizeof(out),
+						    &out_len),
+		     MATTER_OK);
+		T_EQ("peer opens it with r2i",
+		     matter_crypto_open(out, out_len, keys.r2i, MATTER_PASE_NODE_ID, &got, pt,
+					sizeof(pt), &opened),
+		     MATTER_OK);
+		/* Still addressed with the PEER's session id: the SESSION role is
+		 * unchanged, only the exchange role differs. */
+		T_EQ("peer session id", got.session_id, 0x1234L);
+		{
+			struct matter_proto_header rph;
+			size_t rph_len = 0u;
+
+			T_EQ("proto header decodes",
+			     matter_proto_header_decode(pt, opened, &rph, &rph_len), MATTER_OK);
+			T_OK("marked initiator", (rph.exchange_flags & MATTER_EX_FLAG_I) != 0u);
+			T_EQ("our exchange id, not the peer's", rph.exchange_id, 0x0042L);
+			T_OK("asks to be acknowledged", (rph.exchange_flags & MATTER_EX_FLAG_R) != 0u);
+			/*
+			 * An ack names a counter WITHIN an exchange, so carrying
+			 * the peer's pending ack out on an exchange it never saw
+			 * acknowledges nothing it can match.
+			 */
+			T_OK("no ack piggybacked", (rph.exchange_flags & MATTER_EX_FLAG_A) == 0u);
+		}
+		T_EQ("the peer's exchange is untouched", (long)x.exchange_id, 0x7777L);
+		T_OK("and the ack it owes is still owed", x.ack_pending);
+	}
 }

@@ -231,10 +231,13 @@ int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16
  * @param reliable sets R. Everything in commissioning is reliable except a
  *        standalone ack, which would otherwise ask to be acknowledged and never
  *        terminate.
+ * @param as_initiator sets I and uses @p init_exchange_id instead of the
+ *        peer's. Only a server-initiated exchange -- a subscription report --
+ *        does this; see matter_exchange_send_initiator().
  */
 static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode, bool reliable,
-		 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
-		 size_t *out_len)
+		 bool as_initiator, uint16_t init_exchange_id, const uint8_t *payload,
+		 size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
 {
 	struct matter_msg_header mh;
 	struct matter_proto_header ph;
@@ -288,20 +291,28 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 	}
 
 	memset(&ph, 0, sizeof(ph));
-	/* I stays clear: the peer initiated this exchange and keeps that role
-	 * for its lifetime, however many messages each side sends. */
-	ph.exchange_flags = 0u;
+	/* On a peer-initiated exchange I stays clear: the peer initiated it and
+	 * keeps that role for its lifetime, however many messages each side
+	 * sends. It is set only when this node opens an exchange of its own. */
+	ph.exchange_flags = as_initiator ? MATTER_EX_FLAG_I : 0u;
 	/* Both flags are MRP's, and MRP does not run over a transport that is
 	 * already reliable (see struct matter_exchange::mrp). */
 	if (reliable && x->mrp) {
 		ph.exchange_flags |= MATTER_EX_FLAG_R;
 	}
-	if (x->mrp && x->ack_pending) {
+	/*
+	 * Never acknowledge on an exchange this node has just opened. An ack
+	 * names a counter WITHIN an exchange, so carrying the peer's pending ack
+	 * out here would acknowledge, on a brand new exchange, a message that
+	 * exchange never carried. The pending ack stays pending and leaves on
+	 * the exchange that owes it.
+	 */
+	if (!as_initiator && x->mrp && x->ack_pending) {
 		ph.exchange_flags |= MATTER_EX_FLAG_A;
 		ph.ack_counter = x->ack_counter;
 	}
 	ph.opcode = opcode;
-	ph.exchange_id = x->exchange_id;
+	ph.exchange_id = as_initiator ? init_exchange_id : x->exchange_id;
 	ph.protocol_id = protocol_id;
 
 	rc = matter_msg_header_encode(&mh, out, cap, &mh_len);
@@ -348,8 +359,18 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 		*out_len = mh_len + ph_len + payload_len;
 	}
 
-	/* Only now: an ack that was never encoded is an ack still owed. */
-	x->ack_pending = false;
+	/*
+	 * Only now: an ack that was never encoded is an ack still owed.
+	 *
+	 * And not at all on an exchange this node initiated, which never
+	 * carried the ack in the first place -- clearing it there drops an
+	 * acknowledgement the peer is waiting for, so the peer retransmits a
+	 * message this node has already handled and the exchange that owes the
+	 * ack stalls. The report going out is not the reply that was owed.
+	 */
+	if (!as_initiator) {
+		x->ack_pending = false;
+	}
 
 	return MATTER_OK;
 }
@@ -357,7 +378,7 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8_t *payload,
 			  size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
 {
-	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, opcode, true, payload, payload_len, out,
+	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, opcode, true, false, 0u, payload, payload_len, out,
 		     cap, out_len);
 }
 
@@ -365,7 +386,15 @@ int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_
 			 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
 			 size_t *out_len)
 {
-	return frame(x, protocol_id, opcode, true, payload, payload_len, out, cap, out_len);
+	return frame(x, protocol_id, opcode, true, false, 0u, payload, payload_len, out, cap, out_len);
+}
+
+int matter_exchange_send_initiator(struct matter_exchange *x, uint16_t exchange_id,
+				   uint16_t protocol_id, uint8_t opcode, const uint8_t *payload,
+				   size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
+{
+	return frame(x, protocol_id, opcode, true, true, exchange_id, payload, payload_len, out, cap,
+		     out_len);
 }
 
 int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size_t cap,
@@ -377,7 +406,7 @@ int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size
 	if (!x->mrp || !x->ack_pending) {
 		return MATTER_E_STATE;
 	}
-	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, MATTER_SC_OP_ACK, false, NULL, 0u, out, cap,
+	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, MATTER_SC_OP_ACK, false, false, 0u, NULL, 0u, out, cap,
 		     out_len);
 }
 

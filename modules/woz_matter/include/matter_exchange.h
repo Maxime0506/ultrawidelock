@@ -290,6 +290,35 @@ int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8
  * @param out needs MATTER_EXCHANGE_HEADER_MAX + @p payload_len + MATTER_TAG_LEN
  *        bytes on a secure session.
  */
+/**
+ * Send as the INITIATOR of a new exchange, on a session this node responds on.
+ *
+ * Everything this node sent until now answered something. A subscription does
+ * not work that way: after the priming report the SERVER is the one that has to
+ * speak, and a controller that gets no report shows the accessory as not
+ * responding however healthy the session is. That is the whole of why the Home
+ * tile spins on "Unlocking" while the invoke it sent was answered SUCCESS.
+ *
+ * The SESSION role is unchanged and that is what makes this cheap: keys stay
+ * role-relative to CASE (this node still encrypts with r2i), and the message
+ * counter is per-session, not per-exchange, so @p x's counter is still the
+ * right one. Only the EXCHANGE role differs.
+ *
+ * @param exchange_id chosen by this node, and its alone. NOT written back into
+ *        @p x -- the peer-initiated exchange that @p x describes is still live
+ *        and still owns x->exchange_id.
+ *
+ * No acknowledgement is ever piggybacked here. An ack names a counter WITHIN an
+ * exchange, so carrying the peer's pending ack out on a different exchange
+ * acknowledges a message that exchange never saw.
+ *
+ * @return MATTER_OK, or MATTER_E_STATE on a closed exchange, or
+ *         MATTER_E_NOSPACE if @p cap cannot hold the framed result.
+ */
+int matter_exchange_send_initiator(struct matter_exchange *x, uint16_t exchange_id,
+				   uint16_t protocol_id, uint8_t opcode, const uint8_t *payload,
+				   size_t payload_len, uint8_t *out, size_t cap, size_t *out_len);
+
 int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode,
 			 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
 			 size_t *out_len);
