@@ -35,11 +35,48 @@ LOG_MODULE_REGISTER(matter_thread, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
 #include <openthread/thread.h>
 #include <openthread/udp.h>
 
+#include <zephyr/random/random.h>
+#include <zephyr/settings/settings.h>
+
 #include <stdio.h>
 #include <string.h>
 
 /** How often to look at the role while waiting. */
 #define ATTACH_POLL_MS 250u
+
+/**
+ * A per-lifetime suffix on the SRP host name, and the reason it exists.
+ *
+ * Name ownership on the border router is first-come BY KEY. The SRP client's
+ * ECDSA key lives in OpenThread's settings, a chip erase destroys it, and the
+ * next boot then asks for a name the server still holds under the OLD key.
+ * That is refused with OT_ERROR_DUPLICATED for as long as the KEY lease runs
+ * -- 14 days at OpenThread's default -- and presents as a node that attaches to
+ * Thread, never registers, and leaves the commissioner on "Adding to Home"
+ * with nothing to say why. The bare EUI-64 is stable across an erase, which is
+ * precisely what makes it collide with itself.
+ *
+ * This value dies in the same erase that takes the key, so a new key always
+ * asks for a name nobody owns. The orphaned registration is left to expire on
+ * its own: it costs a record on somebody else's server and nothing here.
+ *
+ * It is NOT under a tree the factory reset clears, so holding SW2 through
+ * reset keeps the name it already published -- the key survives that too, so
+ * there is nothing to dodge.
+ */
+#define SRP_HOST_ID_KEY "srp/hid"
+
+/**
+ * How long to ask the border router to hold the name against this key.
+ *
+ * OpenThread requests 14 days (OPENTHREAD_CONFIG_SRP_CLIENT_DEFAULT_KEY_LEASE),
+ * which is how long a collision lasts if one ever happens anyway. An hour
+ * bounds that, and costs a re-registration the client is already doing for the
+ * 2-hour service lease. The server clamps this to its own limits and does not
+ * report what it settled on, so it is a request, not a guarantee: the suffix
+ * above is what PREVENTS a collision, this only shortens one.
+ */
+#define SRP_KEY_LEASE_S 3600u
 
 int matter_thread_start(const uint8_t *dataset, size_t len)
 {
@@ -201,7 +238,7 @@ int matter_thread_wait_attached(uint32_t timeout_ms)
  * stack buffer here would be a use-after-return that shows up as a garbled
  * service name on somebody else's border router.
  */
-static char s_host_name[17];
+static char s_host_name[26]; /* 16 hex of EUI-64 + '-' + 8 hex of host id + NUL */
 static char s_service_type[] = "_matter._tcp";
 static char s_txt_sii[] = "3000";
 static char s_txt_sai[] = "300";
@@ -226,6 +263,52 @@ static struct srp_reg s_regs[MATTER_SUPPORTED_FABRICS];
 
 /** The SRP host is registered once, whatever number of services hang off it. */
 static bool s_host_ready;
+
+static int host_id_read(const char *key, size_t len, settings_read_cb read_cb, void *cb_arg,
+			void *param)
+{
+	uint32_t *out = param;
+
+	ARG_UNUSED(key);
+
+	if (len == sizeof(*out)) {
+		(void)read_cb(cb_arg, out, sizeof(*out));
+	}
+	return 0;
+}
+
+/**
+ * The host-name suffix: read it, or mint one and keep it. See SRP_HOST_ID_KEY.
+ *
+ * Zero is the "not stored" marker, so it is never a valid id -- which costs one
+ * value out of 2^32 and saves carrying a separate "have I got one" flag through
+ * the settings backend.
+ */
+static uint32_t srp_host_id(void)
+{
+	static uint32_t id;
+
+	if (id != 0u) {
+		return id;
+	}
+	/* Idempotent, and this can run before anything else has needed
+	 * settings. */
+	(void)settings_subsys_init();
+	(void)settings_load_subtree_direct(SRP_HOST_ID_KEY, host_id_read, &id);
+	if (id == 0u) {
+		/* Zephyr's, not otRandomNonCryptoGetUint32(): this runs on the
+		 * Matter work queue without the OpenThread lock held. */
+		do {
+			id = sys_rand32_get();
+		} while (id == 0u);
+		if (settings_save_one(SRP_HOST_ID_KEY, &id, sizeof(id)) != 0) {
+			/* Registration still works; it is the NEXT boot that
+			 * would ask for a different name and orphan this one. */
+			LOG_WRN("SRP host id not persisted");
+		}
+	}
+	return id;
+}
 
 static otUdpSocket s_udp;
 static bool s_udp_open;
@@ -468,11 +551,12 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	(void)snprintf(reg->instance_name, sizeof(reg->instance_name), "%s", instance_name);
 
 	/* The host name only has to be unique on the SRP server, and the EUI-64
-	 * already is. */
+	 * already is -- across boards. The suffix is what makes it unique across
+	 * this board's own erases; see SRP_HOST_ID_KEY. */
 	otPlatRadioGetIeeeEui64(ot, eui.m8);
-	(void)snprintf(s_host_name, sizeof(s_host_name), "%02X%02X%02X%02X%02X%02X%02X%02X",
+	(void)snprintf(s_host_name, sizeof(s_host_name), "%02X%02X%02X%02X%02X%02X%02X%02X-%08X",
 		       eui.m8[0], eui.m8[1], eui.m8[2], eui.m8[3], eui.m8[4], eui.m8[5], eui.m8[6],
-		       eui.m8[7]);
+		       eui.m8[7], (unsigned int)srp_host_id());
 
 	/*
 	 * SII and SAI are the peer's retransmission timers, in milliseconds.
@@ -544,6 +628,10 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	err = OT_ERROR_NONE;
 	if (!s_host_ready) {
 		otSrpClientSetCallback(ot, srp_cb, NULL);
+		/* Before the first registration: it is sent WITH the update, so
+		 * setting it afterwards would leave the default in force until
+		 * something else refreshed the lease. */
+		otSrpClientSetKeyLeaseInterval(ot, SRP_KEY_LEASE_S);
 		err = otSrpClientSetHostName(ot, s_host_name);
 		if (err == OT_ERROR_NONE) {
 			err = otSrpClientEnableAutoHostAddress(ot);
