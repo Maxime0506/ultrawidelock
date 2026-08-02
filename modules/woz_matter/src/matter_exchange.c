@@ -378,23 +378,24 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8_t *payload,
 			  size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
 {
-	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, opcode, true, false, 0u, payload, payload_len, out,
-		     cap, out_len);
+	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, opcode, true, false, 0u, payload,
+		     payload_len, out, cap, out_len);
 }
 
 int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode,
 			 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
 			 size_t *out_len)
 {
-	return frame(x, protocol_id, opcode, true, false, 0u, payload, payload_len, out, cap, out_len);
+	return frame(x, protocol_id, opcode, true, false, 0u, payload, payload_len, out, cap,
+		     out_len);
 }
 
 int matter_exchange_send_initiator(struct matter_exchange *x, uint16_t exchange_id,
 				   uint16_t protocol_id, uint8_t opcode, const uint8_t *payload,
 				   size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
 {
-	return frame(x, protocol_id, opcode, true, true, exchange_id, payload, payload_len, out, cap,
-		     out_len);
+	return frame(x, protocol_id, opcode, true, true, exchange_id, payload, payload_len, out,
+		     cap, out_len);
 }
 
 int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size_t cap,
@@ -406,8 +407,8 @@ int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size
 	if (!x->mrp || !x->ack_pending) {
 		return MATTER_E_STATE;
 	}
-	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, MATTER_SC_OP_ACK, false, false, 0u, NULL, 0u, out, cap,
-		     out_len);
+	return frame(x, MATTER_PROTOCOL_SECURE_CHANNEL, MATTER_SC_OP_ACK, false, false, 0u, NULL,
+		     0u, out, cap, out_len);
 }
 
 void matter_exchange_set_op_node_ids(struct matter_exchange *x, uint64_t local, uint64_t peer)
