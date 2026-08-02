@@ -535,6 +535,9 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
  * every handshake, and the only writer by the time this runs is the
  * commissioning that has already finished.
  */
+/* Defined with the subscription table it walks; see notify_lock_state(). */
+static void notify_lock_state_changed(void);
+
 static void fab_store_work_fn(struct k_work *w)
 {
 	ARG_UNUSED(w);
@@ -542,6 +545,7 @@ static void fab_store_work_fn(struct k_work *w)
 }
 
 static K_WORK_DEFINE(s_fab_store_work, fab_store_work_fn);
+
 
 static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 {
@@ -663,6 +667,18 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build InvokeResponse (%d)", rc);
 		return;
+	}
+	/*
+	 * The tile reads LockState, not the InvokeResponse. A controller takes
+	 * the SUCCESS and then waits for the attribute to be reported on its
+	 * subscription before it moves -- so answering the command and stopping
+	 * there is a lock that opens and a UI that spins forever. Submitted
+	 * rather than sent: the response is still in s_report and has not left
+	 * yet, and this runs on OpenThread's thread.
+	 */
+	if (inv.cluster == MATTER_CLUSTER_DOOR_LOCK &&
+	    (inv.command == MATTER_CMD_DL_LOCK_DOOR || inv.command == MATTER_CMD_DL_UNLOCK_DOOR)) {
+		notify_lock_state_changed();
 	}
 	if (inv.cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING &&
 	    inv.command == MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK) {
@@ -802,11 +818,109 @@ struct sub_state {
 	bool priming;
 	bool active;
 	bool in_use;
+	/**
+	 * Where to send a report this node originates.
+	 *
+	 * Taken when the SubscribeRequest arrives, because that is the last
+	 * moment the transport knows who asked: a subscription outlives its
+	 * request by up to max_interval_s, and by then there is no datagram in
+	 * flight to reply to.
+	 */
+	struct matter_thread_peer peer;
 };
 
 static struct sub_state s_subs[MATTER_CASE_SESSIONS];
 /** Round-robin victim, used only when every subscription slot is live. */
 static uint8_t s_sub_next_victim;
+
+/*
+ * Tell every subscriber that LockState moved.
+ *
+ * DEFERRED, for two reasons that both cost a night already. It runs on the
+ * system work queue rather than ot_work_q, whose stack the Interaction Model
+ * has already overflowed once; and it runs AFTER the InvokeResponse has left,
+ * because building a second message while the reply is still in s_out would
+ * overwrite the reply with the report.
+ *
+ * Own buffers, small ones: a single-attribute report is tens of bytes, not the
+ * kilobyte-and-a-half a wildcard priming report needs, and this node has under
+ * 5 KB of RAM left.
+ */
+static uint8_t s_notify_tlv[128];
+static uint8_t s_notify_out[MATTER_EXCHANGE_HEADER_MAX + sizeof(s_notify_tlv) + MATTER_TAG_LEN];
+/** Exchange ids this node originates. Any non-zero value the peer is not using. */
+static uint16_t s_next_init_exchange = 0xE000u;
+
+static void notify_lock_state(struct sub_state *s)
+{
+	/*
+	 * On the stack, not static: struct matter_im_read carries
+	 * MATTER_IM_MAX_PATHS of them and this report uses ONE, so keeping it in
+	 * BSS spends ~264 B permanently to describe a single attribute. This
+	 * runs on the system work queue, which has 2,272 B of measured headroom
+	 * over its 3,872 B peak, and this path is shallow.
+	 */
+	struct matter_im_read one;
+	size_t tlv_len = 0u;
+	size_t framed = 0u;
+	uint8_t slot;
+	int rc;
+
+	if (!s->in_use || !s->active || s->session_id == 0u || !s->peer.valid) {
+		return;
+	}
+	slot = case_slot_of(s->session_id);
+	if (slot >= MATTER_CASE_SESSIONS) {
+		return;
+	}
+
+	memset(&one, 0, sizeof(one));
+	one.n_paths = 1u;
+	one.paths[0].endpoint = MATTER_ENDPOINT_LOCK;
+	one.paths[0].have_endpoint = true;
+	one.paths[0].cluster = MATTER_CLUSTER_DOOR_LOCK;
+	one.paths[0].have_cluster = true;
+	one.paths[0].attribute = MATTER_ATTR_DL_LOCK_STATE;
+	one.paths[0].have_attribute = true;
+	/* Non-zero is what makes this a subscription report rather than the
+	 * answer to a read the peer never sent. */
+	one.subscription_id = s->id;
+
+	rc = matter_im_report_data_encode(&s_im, &one, s_notify_tlv, sizeof(s_notify_tlv), &tlv_len,
+					  NULL);
+	if (rc != MATTER_OK) {
+		LOG_ERR("  cannot build the LockState report (%d)", rc);
+		return;
+	}
+
+	rc = matter_exchange_send_initiator(&s_case_x[slot], s_next_init_exchange++,
+					    MATTER_PROTOCOL_INTERACTION_MODEL,
+					    MATTER_IM_OP_REPORT_DATA, s_notify_tlv, tlv_len,
+					    s_notify_out, sizeof(s_notify_out), &framed);
+	if (rc != MATTER_OK) {
+		LOG_ERR("  cannot frame the LockState report (%d)", rc);
+		return;
+	}
+	rc = matter_thread_send_to(&s->peer, s_notify_out, framed);
+	LOG_INF("  LockState report to subscription 0x%08x, %u B, rc=%d", (unsigned int)s->id,
+		(unsigned int)framed, rc);
+}
+
+static void notify_work_fn(struct k_work *w)
+{
+	ARG_UNUSED(w);
+
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		notify_lock_state(&s_subs[i]);
+	}
+}
+
+static K_WORK_DEFINE(s_notify_work, notify_work_fn);
+
+static void notify_lock_state_changed(void)
+{
+	k_work_submit(&s_notify_work);
+}
 
 /** The session serving the datagram in flight; 0 when it arrived over BLE. */
 static uint16_t current_session_id(void)
@@ -931,6 +1045,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 
 	s->session_id = current_session_id();
 	s->in_use = true;
+	matter_thread_peer_current(&s->peer);
 	s->read = sub.read;
 	/*
 	 * Any non-zero id will do -- it is this node's handle and the subscriber

@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -82,6 +83,39 @@ int matter_thread_wait_attached(uint32_t timeout_ms);
  *         answer arrives later and asynchronously -- or MATTER_E_STATE.
  */
 int matter_thread_advertise(const char *instance_name, uint16_t port);
+
+/**
+ * Where a subscriber can be reached, kept opaque on purpose.
+ *
+ * A raw IPv6 address and port rather than an OpenThread type: this header is
+ * the portable seam and the host suite builds it without any Thread stack.
+ */
+struct matter_thread_peer {
+	uint8_t addr[16];
+	uint16_t port;
+	bool valid;
+};
+
+/**
+ * Snapshot the peer of the datagram being processed right now.
+ *
+ * Only meaningful inside matter_thread_on_datagram(); outside it there is no
+ * "current" datagram and @p out is marked invalid. Kept because a subscription
+ * outlives the request that created it, and a report has to go somewhere.
+ */
+void matter_thread_peer_current(struct matter_thread_peer *out);
+
+/**
+ * Send one datagram to @p peer, outside any receive callback.
+ *
+ * The reply path returns its bytes to the caller and the transport sends them;
+ * that cannot express a message this node originates, which is what a
+ * subscription report is.
+ *
+ * @return MATTER_OK, or MATTER_E_STATE when the socket is down or @p peer was
+ *         never captured.
+ */
+int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *msg, size_t len);
 
 /**
  * Release every SRP registration this node holds.

@@ -239,6 +239,53 @@ static bool s_udp_open;
  * to it. Without it, "stuck at connecting" cannot be told apart from a service
  * that was never registered.
  */
+/** The peer of the datagram in flight; see matter_thread_peer_current(). */
+static struct matter_thread_peer s_cur_peer;
+
+void matter_thread_peer_current(struct matter_thread_peer *out)
+{
+	if (out == NULL) {
+		return;
+	}
+	*out = s_cur_peer;
+}
+
+int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *msg, size_t len)
+{
+	otInstance *ot = openthread_get_default_instance();
+	otMessageInfo info;
+	otMessage *out;
+
+	if (peer == NULL || !peer->valid || msg == NULL || len == 0u || ot == NULL || !s_udp_open) {
+		return MATTER_E_STATE;
+	}
+
+	memset(&info, 0, sizeof(info));
+	memcpy(info.mPeerAddr.mFields.m8, peer->addr, sizeof(peer->addr));
+	info.mPeerPort = peer->port;
+	/*
+	 * mSockAddr left unspecified so the stack picks a source address for
+	 * this destination. The reply path can copy the one the request arrived
+	 * on; there is no request here to copy from, and pinning the wrong
+	 * source is how a datagram leaves and is never answered.
+	 */
+
+	out = otUdpNewMessage(ot, NULL);
+	if (out == NULL) {
+		LOG_ERR("no message buffer for an unsolicited send");
+		return MATTER_E_NOSPACE;
+	}
+	if (otMessageAppend(out, msg, (uint16_t)len) != OT_ERROR_NONE ||
+	    otUdpSend(ot, &s_udp, out, &info) != OT_ERROR_NONE) {
+		/* otUdpSend takes ownership on success only. */
+		otMessageFree(out);
+		LOG_ERR("unsolicited %u B send failed", (unsigned int)len);
+		return MATTER_E_STATE;
+	}
+	LOG_DBG("sent %u B unsolicited", (unsigned int)len);
+	return MATTER_OK;
+}
+
 static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 {
 	/*
@@ -280,7 +327,19 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 		return;
 	}
 
+	/*
+	 * Published for the duration of the handler only. A subscription
+	 * outlives the SubscribeRequest that created it and a report has to be
+	 * addressed somewhere, so the handler takes a copy while this is live.
+	 */
+	memcpy(s_cur_peer.addr, info->mPeerAddr.mFields.m8, sizeof(s_cur_peer.addr));
+	s_cur_peer.port = info->mPeerPort;
+	s_cur_peer.valid = true;
+
 	reply_len = matter_thread_on_datagram(buf, len, reply, sizeof(reply));
+
+	s_cur_peer.valid = false;
+
 	if (reply_len == 0u) {
 		return;
 	}
