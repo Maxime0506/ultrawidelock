@@ -1,8 +1,11 @@
-# DWM3001CDK — standalone Aliro reader
+# DWM3001CDK — Aliro reader + Matter over Thread
 
-One board. The nRF52833 runs the BLE peripheral and the Aliro reader engine;
-the DW3110 in the same DWM3001C module does the UWB ranging. No host MCU board,
-no seated DWM3000EVB, no ribbon wiring.
+One board. The nRF52833 runs the BLE peripheral, the Aliro reader engine, a
+Matter node and an OpenThread MTD; the DW3110 in the same DWM3001C module does
+the UWB ranging. No host MCU board, no seated DWM3000EVB, no ribbon wiring.
+Apple Home commissions it and shows a live lock tile, on a part Nordic's own
+CHIP-based lock does not fit in — see "Apple Wallet credentials" for what that
+took and what it cost.
 
 What that buys, versus the other two ports:
 
@@ -20,102 +23,123 @@ cannot read. BLE + UWB walk-up is the whole feature set here.
 
 ## Build
 
-Two images, one board, one source directory:
+From a cold start to a board you can watch:
 
 ```sh
-make cdk-reader                 # standalone reader    -> build-cdk/app/zephyr/zephyr.hex
-make cdk-aliro-matter-thread    # + Matter over Thread -> build-matter/merged.hex
-make cdk-flash                  # over the on-board J-Link OB
+make cdk-aliro-matter-thread PRISTINE=1   # -> build-matter/merged.hex
+make cdk-flash-erase                      # over the on-board J-Link OB
+make cdk-rtt                              # the console, Ctrl-C to stop
 ```
 
-| | `cdk-reader` | `cdk-aliro-matter-thread` |
+Every CDK target means this image unless you say otherwise: `CDK_BUILD`
+defaults to `build-matter`, and `cdk-flash`, `cdk-flash-erase` and `cdk-rtt`
+all follow it. `PRISTINE=1` is not only for when something looks stale —
+`-p auto` re-runs CMake when the board or the application directory changes and
+**not** when the `-D` flags do, so a build directory that has ever held the
+other configuration keeps it.
+
+The image carries no credential and is the same for every board. Flashing is
+half the job: it holds the DEV identity until Apple Home commissions the lock,
+which is what mints the Aliro credential.
+
+### The reader-only build
+
+`make cdk-reader` is the same source without Matter or Thread: Aliro and UWB,
+no commissioner and no Thread network needed, identity typed in over USB. It is
+the quickest way to a working board and the right one for bench work on the
+radio, which is why it still exists.
+
+It builds to `build-cdk`, so flashing and RTT keep meaning the Matter image
+until you point them elsewhere:
+
+```sh
+make cdk-reader PRISTINE=1
+make cdk-flash CDK_BUILD=$(pwd)/build-cdk
+make cdk-rtt   CDK_RTT_BUILD=$(pwd)/build-cdk
+```
+
+| | `cdk-aliro-matter-thread` | `cdk-reader` |
 |---|---|---|
-| Identity | typed in over USB, below | self-provisions from Apple Home |
-| Matter / Thread | absent | OpenThread MTD/SED, SRP, 0xFFF6 commissioning |
-| USB console | yes | no — reader + console + Thread overflows RAM by 1,752 B |
-| Measured | 284,844 B flash / 82,980 B RAM | 443,696 B flash / 126,760 B RAM |
+| Identity | self-provisions from Apple Home | typed in over USB, below |
+| Matter / Thread | OpenThread MTD/SED, SRP, 0xFFF6 commissioning | absent |
+| USB console | no — reader + console + Thread overflows RAM by 1,752 B | yes |
+| Measured | 443,696 B flash / 126,760 B RAM | 284,844 B flash / 82,980 B RAM |
 
-Those two rows are from the linker's own region report, rebuilt at this commit;
-the figures elsewhere in this file are older measurements of smaller trees and
-are labelled with what they were measuring. The Matter image has **4,312 bytes
-of RAM left** (96.71% of 128 KB), so treat any new static allocation on that
-build as a decision rather than a detail.
-
-Neither image carries a credential, and both are the same for every board.
-Flashing is half the job: `cdk-reader` holds the DEV identity until you
-provision it over USB (see "Provision this board"), and
-`cdk-aliro-matter-thread` holds it until Apple Home commissions the lock.
-
-`cdk-flash` flashes `build-cdk`. For the other image, point it at that build
-directory:
-
-```sh
-make cdk-flash CDK_BUILD=$(pwd)/build-matter
-```
-
-Add `PRISTINE=1` to either build for a from-scratch one. It is not only for
-when something looks stale: `-p auto` re-runs CMake when the board or the
-application directory changes and **not** when the `-D` flags do, so a build
-directory reused across these two configurations keeps the first one.
+Both rows are the linker's own region report, rebuilt at this commit; the
+figures elsewhere in this file are older measurements of smaller trees and are
+labelled with what they were measuring. The Matter image has **4,312 bytes of
+RAM left** (96.71% of 128 KB), so treat any new static allocation on it as a
+decision rather than a detail.
 
 Equivalent by hand, from the west workspace:
 
 ```sh
-west build -p always -b decawave_dwm3001cdk -d ../build-cdk ../ports/dwm3001cdk/app
-west flash -d ../build-cdk
-
 west build -p always -b decawave_dwm3001cdk -d ../build-matter ../ports/dwm3001cdk/app \
     -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
+west flash -d ../build-matter
 ```
 
-### `make cdk-flash-erase` is not the routine step it is on the nRF5340
+### What a full erase costs
 
-A chip erase here also wipes OpenThread's settings, and the SRP client key
-lives there. The host name is the factory EUI-64 and survives, but SRP name
-ownership is first-come **by key**: the new key asks for a name the border
-router still holds under the old one, is refused with `OT_ERROR_DUPLICATED`,
-and stays refused for as long as the key lease runs — up to **14 days** at
-OpenThread's default. Thread attaches, SRP never registers, and the
-commissioner sits on "Adding to Home" with nothing to say why.
+`make cdk-flash-erase` takes everything the board learned at runtime: the
+Matter fabrics, the reader identity and its trust anchors. Apple Home has to
+commission it again, and that is the real price.
 
-To reset a commissioned board, hold **SW2 through reset**
-(`ALIRO_FACTORY_RESET_BUTTON`, default on). That clears the reader identity,
-every trust anchor and the Matter fabrics — everything a controller can see —
-and leaves OpenThread's settings alone.
+It also destroys OpenThread's SRP client key. That used to be the expensive
+part — SRP name ownership is first-come **by key**, the host name was the bare
+factory EUI-64 and survived the erase, so the next boot asked for a name the
+border router still held under the old key and was refused with
+`OT_ERROR_DUPLICATED` for as long as the key lease ran, up to **14 days**.
+Thread attached, SRP never registered, and the commissioner sat on "Adding to
+Home" with nothing to say why. Commit `f7d3160` ended that: the host name now
+carries a suffix stored beside the key, so both die in the same erase and the
+next boot asks for a name nobody owns.
 
-Logging is RTT, not UART: on a single-core part the DW3110 delayed-TX reply
-window cannot afford a blocking console write.
+To clear only what a controller can see, hold **SW2 through reset**
+(`ALIRO_FACTORY_RESET_BUTTON`, default on). Same effect on the fabrics, the
+identity and the anchors, and it leaves the Thread settings alone, so the board
+comes back on the name it already published.
+
+## The console is RTT, and probe-rs is the only thing that reads it
+
+There is no UART console on this board (`CONFIG_UART_CONSOLE=n`): on a
+single-core part the DW3110 delayed-TX reply window cannot afford a blocking
+console write. `make term` does not reach it. RTT is the whole log.
 
 ```sh
-JLinkRTTLogger -Device NRF52833_XXAA -If SWD -Speed 4000 -RTTChannel 0 /dev/stdout
+make cdk-rtt                                  # the Matter image
+make cdk-rtt CDK_RTT_BUILD=$(pwd)/build-cdk   # the reader
 ```
 
-### probe-rs is optional, and only for scripted memory access
+That is `probe-rs attach` with the ELF, and the ELF is the point: probe-rs
+re-reads `_SEGGER_RTT` out of it on every attach, so a rebuild that moves the
+control block needs nothing changed here. It has to be the ELF you **flashed** —
+attach with one you only built and probe-rs reads a stale address and prints
+nothing, which looks exactly like a dead board.
 
-The SEGGER commands above are the supported path. `probe-rs` 0.32.0 does drive
-this board's onboard J-Link OB (`probe-rs info` reports `nRF52833_xxAA` over SWD
-with no flash write and no reset), and it is worth having for the one thing the
-SEGGER tools make awkward: reading and writing target memory from a shell
-one-liner instead of a JLinkExe command file.
+The SEGGER tools are not an alternative on this board, which is a measured
+finding and not a preference (commit `a633331`): `JLinkRTTLogger` reports "RTT
+Control Block not found" both with `-RTTAddress` pointing straight at the block
+and with an all-of-RAM `-RTTSearchRanges`, `JLinkExe` V9.62 has no `rtt` verbs,
+and `JLinkRTTClient` never reaches port 19021.
+
+Two traps worth knowing:
+
+- **`--scan-region` defaults to empty**, and with no region and no ELF probe-rs
+  does not scan and does not poll RTT at all — a clean attach and zero output.
+  `make cdk-rtt` passes the ELF, so this only bites a hand-typed attach.
+- **One process at a time owns the probe**, and draining RTT advances the ring's
+  read pointer, so a second attach splits the log rather than duplicating it.
+  To watch from several terminals, let one own the probe and `tail -f` its
+  output.
+
+probe-rs 0.32.0 also reads and writes target memory from a shell one-liner,
+which is the thing a J-Link command file makes awkward:
 
 ```sh
 probe-rs read b32 <addr> 2   # e.g. the RTT ring's WrOff/RdOff, to zero a stale ring
 probe-rs trace <addr>        # poll one g_dbg_* counter without spending RTT bandwidth
 ```
-
-It does not replace `west flash` plus `JLinkRTTLogger`, and its RTT viewing has a
-silent trap. `--scan-region` defaults to empty, and with no region probe-rs **does
-not scan and does not poll RTT at all**: you get a clean attach and zero output,
-which reads exactly like a dead board. Always pass the ELF, or `--scan-region ram`:
-
-```sh
-probe-rs attach --chip nRF52833_xxAA --scan-region ram ../build-cdk/zephyr/zephyr.elf
-```
-
-One process at a time owns the probe, and draining RTT advances the ring's read
-pointer, so a second attach splits the log rather than duplicating it. To watch
-from several terminals, let one process own the probe and `tail -f` its output
-file.
 
 ## Size, measured
 
@@ -350,11 +374,12 @@ The provisioning-mode console is deliberately provisioning-only. `woz_uwb`'s
 `CONFIG_WOZ_UWB_SHELL=n`, because in this mode it would drive a radio that was
 never started.
 
-RTT capture on this board needs the control block address read out of the ELF
-(`nm zephyr.elf | grep _SEGGER_RTT`) rather than J-Link's auto-search, which does
-not find it here even with `-RTTSearchRanges` or `-RTTAddress`. The reliable route
-is `savebin <file>, <up-buffer addr>, 0x1000` from J-Link Commander, where the
-up-buffer address is the `pBuffer` word at control-block offset 0x1c.
+Watch this mode with `make cdk-rtt CDK_RTT_BUILD=$(pwd)/build-cdk` — probe-rs
+takes the control block address from the ELF, which is what J-Link's auto-search
+cannot find here (see "The console is RTT" above). The manual fallback, if you
+are ever without probe-rs, is `savebin <file>, <up-buffer addr>, 0x1000` from
+J-Link Commander, where the up-buffer address is the `pBuffer` word at offset
+0x1c of the block that `nm zephyr.elf | grep _SEGGER_RTT` reports.
 
 ### What had to be fixed for this to work at all
 

@@ -48,18 +48,19 @@ TAG      ?=
 MAXCM    ?= 40
 PRESENCE_RUNTIME_OUT ?= $(REPO_ROOT)/build/presence-runtime.tar.gz
 
-# DWM3001CDK target (make cdk-reader / cdk-flash). Its own build dir, so it never
-# fights the nRF5340 build for build/. NCS_VER matches scripts/build.sh.
+# DWM3001CDK targets. Their own build dirs, so they never fight the nRF5340
+# build for build/. NCS_VER matches scripts/build.sh.
+#
+# CDK_BUILD is the Matter over Thread image, because that is what this board
+# carries: build, flash, erase and rtt all mean it with nothing on the command
+# line. The standalone reader is the special case and keeps its own directory,
+# so no target can flash one image and then decode RTT against the other's ELF.
 NCS_VER   ?= v3.3.0
-CDK_BUILD ?= $(REPO_ROOT)/build-cdk
-CDK_MATTER_BUILD ?= $(REPO_ROOT)/build-matter
-# Which build `cdk-rtt` reads the RTT control block out of. Deliberately NOT
-# CDK_BUILD: that one defaults to the plain reader, and the Matter build is what
-# this board normally carries. The trap the split creates is worth naming --
-# `make cdk-flash cdk-rtt` with both defaults flashes build-cdk and then decodes
-# against build-matter's ELF, so pass the same dir to both or use neither
-# default.
-CDK_RTT_BUILD ?= $(CDK_MATTER_BUILD)
+CDK_BUILD ?= $(REPO_ROOT)/build-matter
+CDK_READER_BUILD ?= $(REPO_ROOT)/build-cdk
+# Split out only so `cdk-rtt` can be pointed at an ELF without moving what the
+# flash targets write. Same directory by default, which is the whole point.
+CDK_RTT_BUILD ?= $(CDK_BUILD)
 # PRISTINE=1 forces a from-scratch build. `-p auto` re-runs CMake when the board
 # or the app directory changes, and NOT when the -D flags do, so switching an
 # existing build dir between the reader and the Matter build needs this.
@@ -156,41 +157,50 @@ selftest:
 pretty:
 	@$(ENV) PRETTY=1 ./scripts/build.sh build
 
-## cdk-reader: build the DWM3001CDK standalone reader   -> build-cdk/app/zephyr/zephyr.hex
-##   One board, no host MCU: nRF52833 + DW3110. Carries no credential; the
-##   identity is typed in over USB in provisioning mode (ports/dwm3001cdk/README.md).
-##   Options: PRISTINE=1  CDK_BUILD=<dir> (default build-cdk)  NCS_VER=<tag> (v3.3.0)
-cdk-reader:
-	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
-	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
-	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app
-
-## cdk-aliro-matter-thread: DWM3001CDK reader + Matter over Thread   -> build-matter/merged.hex
-##   Same board as `cdk-reader`, plus the woz_matter node: Apple Home commissions
-##   it over BLE and it then shows a live lock tile (ports/dwm3001cdk/README.md).
-##   Self-provisions, so it drops the USB console `cdk-reader` needs.
-##   Flash it with: make cdk-flash CDK_BUILD=$(CDK_MATTER_BUILD)
-##   Options: PRISTINE=1  CDK_MATTER_BUILD=<dir> (default build-matter)
+## cdk-aliro-matter-thread: the DWM3001CDK lock, reader + Matter over Thread
+##   -> build-matter/merged.hex.  One nRF52833: the Aliro reader, the DW3110's
+##   ranging, a hand-written Matter node and an OpenThread MTD, in a part
+##   Nordic's own CHIP-based lock does not fit in. Apple Home commissions it
+##   over BLE and it then shows a live lock tile (ports/dwm3001cdk/README.md).
+##   Self-provisions, so it needs no USB console. What cdk-flash, cdk-flash-erase
+##   and cdk-rtt all mean unless you say otherwise.
+##   Options: PRISTINE=1  CDK_BUILD=<dir> (default build-matter)  NCS_VER=<tag>
 cdk-aliro-matter-thread:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
 	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
-	  -d $(CDK_MATTER_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app \
+	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app \
 	  -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
 
+## cdk-reader: the same board WITHOUT Matter   -> build-cdk/app/zephyr/zephyr.hex
+##   Aliro reader and UWB only. Needs no Thread network and no commissioner,
+##   which makes it the quickest way to a working board; the identity is typed
+##   in over USB in provisioning mode (ports/dwm3001cdk/README.md).
+##   Builds elsewhere on purpose, so flashing and RTT keep meaning the Matter
+##   image: pass CDK_BUILD=$(CDK_READER_BUILD) to those to work on this one.
+##   Options: PRISTINE=1  CDK_READER_BUILD=<dir> (default build-cdk)
+cdk-reader:
+	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
+	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
+	  -d $(CDK_READER_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app
+
 ## cdk-flash: flash the DWM3001CDK over its on-board J-Link OB
+##   Options: CDK_BUILD=<dir> (default build-matter)
 cdk-flash:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
 	  --ncs-version $(NCS_VER) -- west flash -d $(CDK_BUILD)
 
-## cdk-flash-erase: full chip erase + flash the DWM3001CDK  ·  read the warning
-##   Unlike the nRF5340's flash-erase this is NOT a routine step: it also wipes
-##   OpenThread's settings, and the SRP client key lives there. The host name is
-##   the factory EUI-64 and survives, but name ownership is first-come by KEY, so
-##   a new key asks for the same name and the border router refuses it with
-##   OT_ERROR_DUPLICATED for up to 14 DAYS -- Thread attaches, SRP never
-##   registers, and the commissioner hangs on "Adding to Home".
-##   To factory-reset a commissioned board, hold SW2 through reset instead
-##   (ALIRO_FACTORY_RESET_BUTTON), which leaves OpenThread's settings alone.
+## cdk-flash-erase: full chip erase + flash the DWM3001CDK
+##   Costs everything the board learned at runtime: the Matter fabrics, the
+##   reader identity and its trust anchors, so Apple Home has to commission it
+##   again. It also destroys OpenThread's SRP client key. That used to be the
+##   expensive part -- the next boot asked for the same name under a new key and
+##   the border router refused it for up to 14 days -- and f7d3160 ended it by
+##   giving the host name a suffix that dies with the key, so an erased board
+##   now registers a name nobody owns.
+##   To clear only what a controller can see, hold SW2 through reset instead
+##   (ALIRO_FACTORY_RESET_BUTTON): same effect on fabrics and anchors, and it
+##   keeps the Thread settings, so the board comes back on the name it had.
+##   Options: CDK_BUILD=<dir> (default build-matter)
 cdk-flash-erase:
 	@cd $(REPO_ROOT)/workspace && nrfutil sdk-manager toolchain launch \
 	  --ncs-version $(NCS_VER) -- west flash --erase -d $(CDK_BUILD)
@@ -204,7 +214,8 @@ cdk-flash-erase:
 ##   which looks exactly like a dead board.
 ##   The J-Link tools are not an alternative: JLinkRTTLogger cannot find this
 ##   control block, with -RTTAddress or with an all-of-RAM -RTTSearchRanges.
-##   Options: CDK_RTT_BUILD=<dir> (default build-matter)
+##   Options: CDK_RTT_BUILD=<dir> (defaults to CDK_BUILD, so it follows the
+##            image the flash targets wrote)
 cdk-rtt:
 	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  install: make tools-install\n' >&2; exit 1; }
 	@test -f $(CDK_RTT_BUILD)/app/zephyr/zephyr.elf || { printf '  no ELF at %s/app/zephyr/zephyr.elf  ·  build it first\n' '$(CDK_RTT_BUILD)' >&2; exit 1; }
