@@ -81,7 +81,20 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 
 int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)
 {
-	uint8_t blob[ALIRO_PROV_BLOB_MAX];
+	/*
+	 * STATIC, not on the stack. ALIRO_PROV_BLOB_MAX scales with
+	 * ALIRO_TRUST_MAX, and raising that 4 -> 8 put this at 864 B on a frame
+	 * that also holds a 778 B struct aliro_trust_store. The result was an
+	 * MPU fault through the bottom of the 4 KB main stack about four
+	 * seconds into boot -- the board advertised, froze, and the phone
+	 * reported "transaction timed out" with nothing in the log after the
+	 * advert line.
+	 *
+	 * Safe as static because every caller reaches here from the reader's
+	 * provisioning paths, which are serialised on s_prov_lock or run on the
+	 * Matter work queue, and provisioning writes are rare besides.
+	 */
+	static uint8_t blob[ALIRO_PROV_BLOB_MAX];
 	size_t len = 0;
 
 	if (aliro_prov_serialize(id, ts, blob, sizeof(blob), &len) != 0) {
