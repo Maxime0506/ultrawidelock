@@ -274,6 +274,21 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
  * Supervise an active predictive unlock when no new measurement arrives this window. If the
  * prediction deadline has passed, abort and relock the door. Return HOLD otherwise.
  */
+void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms, int32_t cm)
+{
+	if (ap == NULL || cm < ap->cfg.relock_cm) {
+		return;
+	}
+	/*
+	 * Only these two, and deliberately: no median window, no dwell counter,
+	 * no filter update. An unvouched range must be able to start the
+	 * departure clock and must not be able to touch anything an unlock
+	 * decision reads.
+	 */
+	ap->last_cm = cm;
+	ap->last_feed_ms = now_ms;
+}
+
 enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_t now_ms)
 {
 	/* No sample this window: the estimate is frozen (no coasting — a
