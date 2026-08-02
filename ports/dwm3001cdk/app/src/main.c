@@ -22,9 +22,11 @@
 #include <zephyr/usb/usb_device.h>
 
 #include "aliro_approach.h"
+#include "aliro_prov.h" /* aliro_prov_erase, for the factory-reset button */
 #include "aliro_reader.h"
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 #include "matter_commission.h"
+#include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
 #endif
 #include "woz_uwb_facade.h"
 
@@ -110,6 +112,60 @@ static void provisioning_mode(void)
 }
 #endif /* CONFIG_ALIRO_PROV_CONSOLE */
 
+/* Factory reset: hold SW2 (the sw0 alias, P0.02) through reset.
+ *
+ * WITHOUT THIS THE BOARD IS A BRICK AFTER A FAILED PAIRING, which is not a
+ * bench annoyance but the ordinary failure. A commissioning that gets far
+ * enough to install a fabric and then times out leaves the fabric stored; the
+ * advert gate then offers Aliro 0xFFF2 instead of commissionable; the
+ * controller can neither discover the node nor open a commissioning window on
+ * an accessory it has already forgotten. On 2026-08-02 that state was reached
+ * four times in one evening and cleared four times with a debugger. A user has
+ * no debugger.
+ *
+ * Held through reset rather than long-pressed while running: it matches the
+ * provisioning console's idiom on this same button, needs no timer, no
+ * debounce and no thread on a part at 96% RAM, and cannot fire while a walk-up
+ * is in flight.
+ *
+ * The Thread credentials are deliberately NOT erased -- see aliro_prov_erase().
+ */
+#if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
+static void factory_reset_if_requested(void)
+{
+	static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
+	static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+
+	if (!gpio_is_ready_dt(&sw) || gpio_pin_configure_dt(&sw, GPIO_INPUT) != 0) {
+		return;
+	}
+	/* Active low with a pull-up in the board DTS; _dt() returns logical level. */
+	if (gpio_pin_get_dt(&sw) != 1) {
+		return;
+	}
+
+	LOG_WRN("SW2 held at boot: FACTORY RESET");
+	/*
+	 * The only feedback this board can give someone without a debugger. RTT
+	 * says it too, but a user holding a button needs to see that the hold
+	 * was long enough and registered.
+	 */
+	if (gpio_is_ready_dt(&led) && gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE) == 0) {
+		for (int i = 0; i < 6; i++) {
+			gpio_pin_toggle_dt(&led);
+			k_sleep(K_MSEC(120));
+		}
+		(void)gpio_pin_set_dt(&led, 0);
+	}
+
+	(void)aliro_prov_erase();
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+	(void)matter_fab_erase();
+#endif
+	LOG_WRN("factory reset done; commissionable on the next boot");
+}
+#endif
+
 int main(void)
 {
 	/* Off before the radio comes up: keeps the ranging callbacks print-free so the
@@ -124,6 +180,10 @@ int main(void)
 	if (provisioning_requested()) {
 		provisioning_mode(); /* never returns */
 	}
+#endif
+
+#if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
+	factory_reset_if_requested();
 #endif
 
 	int rc = aliro_reader_start();

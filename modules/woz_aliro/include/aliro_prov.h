@@ -131,6 +131,21 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 /* Persist identity+trust to NVS. 0 on success, negative on an NVS error. */
 int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts);
 
+/**
+ * Forget the stored identity and every trust anchor.
+ *
+ * Half of a factory reset; the Matter fabrics are the other half and belong to
+ * whoever owns that store. Deliberately NOT an erase of the whole settings
+ * partition: OpenThread keeps its SRP client key there, the SRP host name is
+ * the factory EUI-64 and outlives any erase, and name ownership on the border
+ * router is first-come-first-served by key -- so wiping the key asks for the
+ * same name with a new one and is refused until the lease expires, up to 14
+ * days, during which the node attaches to Thread and is unreachable on it.
+ *
+ * @return 0, or a negative errno from the settings backend.
+ */
+int aliro_prov_erase(void);
+
 #ifdef __cplusplus
 }
 #endif

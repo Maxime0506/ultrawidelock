@@ -79,6 +79,23 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 	return 0;
 }
 
+int aliro_prov_erase(void)
+{
+	int rc = settings_subsys_init();
+
+	if (rc != 0) {
+		LOG_ERR("settings init rc=%d; nothing erased", rc);
+		return rc;
+	}
+	rc = settings_delete(ALIRO_PROV_KEY);
+	/* The rc is reported, not swallowed. A factory reset that quietly did
+	 * nothing is worse than one that fails loudly: the board comes back
+	 * looking reset, pairs, and then rejects the phone with the old
+	 * anchors still in the store. */
+	LOG_WRN("factory reset: erased " ALIRO_PROV_KEY " (rc=%d)", rc);
+	return rc;
+}
+
 int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)
 {
 	/*

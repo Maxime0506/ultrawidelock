@@ -85,6 +85,29 @@ config ALIRO_PROV_CLEAR_ON_BOOT
 	  It erases on EVERY boot, including the one right after Apple provisions
 	  a new identity. Flash it once, then flash an image without it.
 
+config ALIRO_FACTORY_RESET_BUTTON
+	bool "Factory reset when SW2 is held through reset"
+	default y
+	help
+	  Erases the stored reader identity, every trust anchor and the Matter
+	  fabrics when the sw0 alias (SW2, P0.02) is held at boot, then carries
+	  on booting -- so the board comes back commissionable.
+
+	  This is not a convenience. A commissioning that installs a fabric and
+	  then times out leaves that fabric stored, the advert gate switches to
+	  the Aliro reader payload, and the controller can neither discover the
+	  node nor open a commissioning window on an accessory it has already
+	  forgotten. Without this button that board needs a debugger, and a user
+	  does not have one.
+
+	  Held through reset rather than long-pressed while running: it matches
+	  the provisioning console's idiom on this same button, needs no timer
+	  or thread on a part already at 96% RAM, and cannot fire during a
+	  walk-up. led0 blinks to confirm the hold registered.
+
+	  OpenThread's settings are left alone -- see aliro_prov_erase() for the
+	  14-day SRP name lease that erasing them costs.
+
 config ALIRO_MATTER_CLEAR_ON_BOOT
 	bool "Erase the stored Matter fabrics at boot"
 	depends on ALIRO_MATTER_BLE
