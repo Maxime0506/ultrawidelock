@@ -3,6 +3,8 @@
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
+**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](matter_commission.h.md)
+
 ```mermaid
 flowchart TD
   aliro_advertise --> build_aliro_svc_data
@@ -11,13 +13,13 @@ flowchart TD
 ## API
 
 ### `static struct aliro_coc`
-`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:79`
+`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:83`
 
 One peer at a time. CONFIG_BT_MAX_CONN=1 makes that a build-time fact, not a
 hope, so a single channel record is the whole table.
 
 ### `static uint16_t conn_to_handle(struct bt_conn *conn)`
-`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:95`
+`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:99`
 
 The reader engine's transport handle. Zephyr identifies a link by pointer,
 the seam by uint16_t, so hand out the connection index (0..MAX_CONN-1).
@@ -25,14 +27,14 @@ the seam by uint16_t, so hand out the connection index (0..MAX_CONN-1).
 **called by** `coc_connected`, `coc_disconnected`, `coc_recv`
 
 ### `static ssize_t device_ver_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len, uint16_t offset, uint8_t flags)`
-`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:211`
+`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:215`
 
 The peer writes the BLE-UWB protocol version it selected. Both shipped
 readers require at least 3 bytes here (see 588df2e); we only need to accept
 it, the reader engine reads the selection off the transaction itself.
 
 ### `static bool build_aliro_svc_data(uint8_t out[24])`
-`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:250`
+`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:254`
 
 Aliro 1.0 section 11.3 (Table 11-2). 24 payload bytes after the 16-bit UUID:
 [0]      flags: bit7 = BLE+UWB supported, bits2:0 = version (0)
@@ -48,12 +50,12 @@ LSB-first, same as NimBLE.
 **called by** `aliro_advertise`
 
 ### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:491`
+`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c:584`
 
 Attach mode exists only so the ESP32 reader can share a NimBLE host with
 esp-matter. Nothing shares this host.
 
-<details><summary>Undocumented (23)</summary>
+<details><summary>Undocumented (24)</summary>
 
 - `coc_alloc_buf`
 - `coc_recv`
@@ -64,6 +66,7 @@ esp-matter. Nothing shares this host.
 - `build_read_payload`
 - `reader_spsm_read`
 - `aliro_advertise`
+- `readvertise_work_fn`
 - `on_disconnected`
 - `aliro_ble_prepare`
 - `aliro_ble_start`

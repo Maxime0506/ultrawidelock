@@ -16,6 +16,7 @@
 | [`scripts/security-web.sh`](security-web.sh.md) | security-web.sh — the browser half of the supply chain, which nothing else in this repo looks at. |
 | [`scripts/security-workspace.sh`](security-workspace.sh.md) | *first commit: "security: add the eight-gate scanning lane"* |
 | [`scripts/security.sh`](security.sh.md) | security.sh — the four fast security gates, in one place. |
+| [`scripts/spake2p_verifier.py`](spake2p_verifier.md) | Derive a SPAKE2+ verifier (w0 and L) for a Matter setup passcode. |
 | [`scripts/test-runner.sh`](test-runner.sh.md) | Pretty umbrella runner for every host-side suite: one banner, live per-check |
 | [`scripts/toolchain.sh`](toolchain.sh.md) | toolchain.sh — what the CI gates need, whether this host has it, how to get it. |
 | [`scripts/twin-suite.sh`](twin-suite.sh.md) | The web-twin suite for the umbrella runner (make check): the constant-drift |

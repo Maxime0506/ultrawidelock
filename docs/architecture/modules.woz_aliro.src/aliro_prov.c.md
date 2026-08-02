@@ -51,13 +51,13 @@ entry.
 **calls** `aliro_prov_trust_check`
 
 ### `int aliro_prov_trust_find(const struct aliro_trust_store *ts, const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_prov.c:244`
+`modules/woz_aliro/src/aliro_prov.c:280`
 
 Find the index of a credential public key in the trust store. Returns the index (0..count-1) on
 match, -1 if not found or ts is NULL.
 
 ### `int aliro_prov_kpersistent_set(struct aliro_trust_store *ts, int idx, const uint8_t kp[ALIRO_KPERSISTENT_LEN])`
-`modules/woz_aliro/src/aliro_prov.c:262`
+`modules/woz_aliro/src/aliro_prov.c:298`
 
 Set the Kpersistent key for a credential at index idx; marks it valid in the bitmask. Returns 0
 on success, -1 if idx out of range.

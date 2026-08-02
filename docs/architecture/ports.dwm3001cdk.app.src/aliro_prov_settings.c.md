@@ -3,10 +3,11 @@
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
-<details><summary>Undocumented (3)</summary>
+<details><summary>Undocumented (4)</summary>
 
 - `prov_set`
 - `aliro_prov_load`
+- `aliro_prov_erase`
 - `aliro_prov_store`
 
 </details>

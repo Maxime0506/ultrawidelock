@@ -15,6 +15,8 @@ flowchart LR
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_aliro.src --> modules.woz_uwb.src.facade
   modules.woz_aliro_stack.src --> modules.woz_aliro_stack.src.protocol
+  modules.woz_matter.src --> modules.woz_aliro.src
+  modules.woz_matter.src --> modules.woz_matter.include
   modules.woz_nfc.src --> modules.woz_nfc.include.woz_nfc
   modules.woz_uwb.src.aliro --> modules.woz_port.include
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -328,7 +330,7 @@ Streaming SHA-256 (FIPS 180-4) implementation used by the Aliro crypto layer.
 Declares struct aliro_sha256, the incremental hash context used across init/update/finish
 calls.
 
-**used by** [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md)
+**used by** [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md), [`modules/woz_matter/src/matter_crypto.c`](architecture/modules.woz_matter.src/matter_crypto.c.md), [`modules/woz_matter/src/matter_fabric.c`](architecture/modules.woz_matter.src/matter_fabric.c.md), [`modules/woz_matter/src/matter_spake2p.c`](architecture/modules.woz_matter.src/matter_spake2p.c.md)
 
 ## `modules/woz_uwb/src/ccc/`
 
@@ -652,6 +654,94 @@ CIRDIAG_CIR_EVERY.
 @file uwb_isr.h — DW3000 interrupt-callback registration (public surface).
 
 **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
+
+## `modules/woz_matter/src/`
+
+### [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md)
+
+*No module docstring. First commit: "woz_matter: CASE, the responder's first half".*
+
+**depends on** [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md), [`modules/woz_matter/include/matter_case.h`](architecture/modules.woz_matter.include/matter_case.h.md), [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md), [`modules/woz_matter/include/matter_fabric.h`](architecture/modules.woz_matter.include/matter_fabric.h.md), [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md), [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
+
+### [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md)
+
+*No module docstring. First commit: "woz_matter: the Interaction Model, as far as a commissioner needs it".*
+
+**depends on** [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md)
+
+### [`modules/woz_matter/src/matter_pase_sm.c`](architecture/modules.woz_matter.src/matter_pase_sm.c.md)
+
+@file matter_pase_sm.c — PASE responder state machine. See matter_pase_sm.h.
+
+**depends on** [`modules/woz_matter/include/matter_pase_sm.h`](architecture/modules.woz_matter.include/matter_pase_sm.h.md)
+
+### [`modules/woz_matter/src/matter_exchange.c`](architecture/modules.woz_matter.src/matter_exchange.c.md)
+
+@file matter_exchange.c — the unsecured exchange. See matter_exchange.h.
+
+**depends on** [`modules/woz_matter/include/matter_exchange.h`](architecture/modules.woz_matter.include/matter_exchange.h.md)
+
+### [`modules/woz_matter/src/matter_crypto.c`](architecture/modules.woz_matter.src/matter_crypto.c.md)
+
+@file matter_crypto.c — AES-128-CCM, the Matter nonce, and the key schedule.
+
+**depends on** [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md), [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md)
+
+### [`modules/woz_matter/src/matter_fabric.c`](architecture/modules.woz_matter.src/matter_fabric.c.md)
+
+*No module docstring. First commit: "woz_matter: AddNOC, accepted by a real iPhone".*
+
+**depends on** [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md), [`modules/woz_matter/include/matter_fabric.h`](architecture/modules.woz_matter.include/matter_fabric.h.md), [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
+
+### [`modules/woz_matter/src/matter_attest.c`](architecture/modules.woz_matter.src/matter_attest.c.md)
+
+*No module docstring. First commit: "woz_matter: attestation, accepted by a real iPhone".*
+
+**depends on** [`modules/woz_matter/include/matter_attest.h`](architecture/modules.woz_matter.include/matter_attest.h.md), [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
+
+### [`modules/woz_matter/src/matter_im.c`](architecture/modules.woz_matter.src/matter_im.c.md)
+
+*No module docstring. First commit: "woz_matter: the Interaction Model, as far as a commissioner needs it".*
+
+**depends on** [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md)
+
+### [`modules/woz_matter/src/matter_pase.c`](architecture/modules.woz_matter.src/matter_pase.c.md)
+
+@file matter_pase.c — PASE message codec over Matter TLV.
+
+**depends on** [`modules/woz_matter/include/matter_pase.h`](architecture/modules.woz_matter.include/matter_pase.h.md), [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
+
+### [`modules/woz_matter/src/matter_spake2p.c`](architecture/modules.woz_matter.src/matter_spake2p.c.md)
+
+@file matter_spake2p.c — PBKDF2, the SPAKE2+ transcript and confirmations.
+
+**depends on** [`modules/woz_aliro/src/aliro_hash.h`](architecture/modules.woz_aliro.src/aliro_hash.h.md), [`modules/woz_matter/include/matter_spake2p.h`](architecture/modules.woz_matter.include/matter_spake2p.h.md)
+
+### [`modules/woz_matter/src/matter_btp.c`](architecture/modules.woz_matter.src/matter_btp.c.md)
+
+@file matter_btp.c — BTP handshake codec, fragmenter and reassembler.
+
+**depends on** [`modules/woz_matter/include/matter_btp.h`](architecture/modules.woz_matter.include/matter_btp.h.md)
+
+### [`modules/woz_matter/src/matter_mrp.c`](architecture/modules.woz_matter.src/matter_mrp.c.md)
+
+@file matter_mrp.c — MRP backoff schedule, retransmit state, replay window.
+
+**depends on** [`modules/woz_matter/include/matter_mrp.h`](architecture/modules.woz_matter.include/matter_mrp.h.md)
+
+### [`modules/woz_matter/src/matter_msg.c`](architecture/modules.woz_matter.src/matter_msg.c.md)
+
+@file matter_msg.c — Matter message and protocol header codec.
+
+**depends on** [`modules/woz_matter/include/matter_msg.h`](architecture/modules.woz_matter.include/matter_msg.h.md)
+
+### [`modules/woz_matter/src/matter_tlv.c`](architecture/modules.woz_matter.src/matter_tlv.c.md)
+
+@file matter_tlv.c — Matter TLV codec, encoder then decoder.
+Control byte = tag control (top 3 bits) | element type (bottom 5). Then the
+tag octets, then the value. Everything multi-octet is little-endian.
+
+**depends on** [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
 
 ## `modules/woz_uwb/src/shell/`
 
@@ -1040,6 +1130,101 @@ transport_pn532.cpp.
 
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
+
+## `ports/dwm3001cdk/app/src/`
+
+### [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
+
+@file matter_commission.c — joins BTP, the exchange and PASE.
+Three finished pieces and no protocol of its own:
+matter_ble_zephyr.c   bytes in and out over the 0xFFF6 service
+matter_exchange.c     which session, which exchange, duplicate, ack
+matter_pase_sm.c      the five commissioning messages
+What is left for this file is the wiring nobody else can do: pulling the
+SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
+what happens when a commissioner disappears halfway through.
+
+**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+
+### [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md)
+
+### [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+**depends on** [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+
+### [`ports/dwm3001cdk/app/src/matter_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.c.md)
+
+@file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
+A thin adapter, on purpose. All the framing lives in modules/woz_matter
+(matter_btp.c), which has no Zephyr dependency and is tested on the host
+under sanitizers. This file does three things and no more: hand C1 writes to
+the reassembler, drive the fragmenter out through C2 indications, and build
+the commissionable advertisement.
+Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
+service, one write characteristic, one indicate characteristic,
+connection-scoped state -- and is proven against live iPhones.
+
+**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md)
+
+### [`ports/dwm3001cdk/app/src/matter_fab_settings.c`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
+
+**depends on** [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+
+### [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md)
+
+@file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
+Everything here is Zephyr-side glue. The protocol lives in
+modules/woz_matter, which knows nothing about BLE.
+
+**used by** [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/matter_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
+
+### [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md)
+
+@file matter_commission.h — start answering commissioning attempts.
+
+**used by** [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
+
+### [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+
+*No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
+
+**used by** [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.c`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.c.md)
+
+### [`ports/dwm3001cdk/app/src/aliro_prov_settings.c`](architecture/ports.dwm3001cdk.app.src/aliro_prov_settings.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+### [`ports/dwm3001cdk/app/src/case_bench.c`](architecture/ports.dwm3001cdk.app.src/case_bench.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: measure what a Matter CASE handshake costs on this part".*
+
+### [`ports/dwm3001cdk/app/src/matter_thread_port.c`](architecture/ports.dwm3001cdk.app.src/matter_thread_port.c.md)
+
+@file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
+The dataset arrives from the commissioner as raw meshcop TLVs and
+otDatasetSetActiveTlvs() takes raw meshcop TLVs, so nothing here has to
+understand the format -- which is the point. This node parses exactly one
+field out of it, the Extended PAN ID, and only so it can name the network
+back to the commissioner.
+Built into every image. Without CONFIG_NET_L2_OPENTHREAD it refuses honestly
+rather than disappearing: matter_clusters.c calls it unconditionally, and a
+link error would be a worse way to learn that Thread was configured out.
+
+### [`ports/dwm3001cdk/app/src/prov_shell.c`](architecture/ports.dwm3001cdk.app.src/prov_shell.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
+
+### [`ports/dwm3001cdk/app/src/thread_gate.c`](architecture/ports.dwm3001cdk.app.src/thread_gate.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: make the provisioning console optional, and probe Matter's budget".*
 
 ## `integration/homeassistant/custom_components/openaliro/`
 
@@ -2261,6 +2446,279 @@ speed, and a flag to enable or disable predictive ToA unlock.
 
 **used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
 
+## `modules/woz_matter/include/`
+
+### [`modules/woz_matter/include/matter_case.h`](architecture/modules.woz_matter.include/matter_case.h.md)
+
+@file matter_case.h — proving an operational identity, both ways.
+PASE let a commissioner in because it knew a printed code. CASE is what
+happens afterwards, every time: two nodes that already hold certificates from
+the same fabric prove it to each other and agree on session keys. It is the
+only session type the spec will accept CommissioningComplete over, and the
+only way a phone talks to this node once BLE is gone.
+Sigma1  initiator -> responder   who I want, and my ephemeral key
+Sigma2  responder -> initiator   my certificate chain, signed, encrypted
+Sigma3  initiator -> responder   the same, in the other direction
+This file is the responder's half, built in that order.
+The subtle piece is Sigma1's destinationId. It is not an address: it is an
+HMAC that only somebody holding the fabric's identity protection key could
+have produced, over the identity they are asking for. A responder does not
+read a node id out of it -- it recomputes the HMAC for each fabric it holds
+and looks for a match. That is what makes an unsolicited Sigma1 unable to
+enumerate a node's fabrics: get the key wrong and you learn nothing.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md)
+
+### [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md)
+
+@file matter_crypto.h — Matter message crypto: nonce, AES-CCM, session keys.
+Matter secures every message with AES-128-CCM: a 13-byte nonce built from
+fields the peer can see, a 16-byte tag, and the plaintext message header as
+additional authenticated data so the routing fields cannot be edited in
+flight.
+nonce  security_flags:u8  message_counter:u32  node_id:u64   (little-endian)
+aad    the message header exactly as it appears on the wire
+keys   HKDF-SHA256(secret, salt, "SessionKeys") -> i2r | r2i | challenge
+
+**depends on** [`modules/woz_matter/include/matter_msg.h`](architecture/modules.woz_matter.include/matter_msg.h.md), [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_exchange.h`](architecture/modules.woz_matter.include/matter_exchange.h.md), [`modules/woz_matter/include/matter_pase_sm.h`](architecture/modules.woz_matter.include/matter_pase_sm.h.md), [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md), [`modules/woz_matter/src/matter_crypto.c`](architecture/modules.woz_matter.src/matter_crypto.c.md)
+
+### [`modules/woz_matter/include/matter_fabric.h`](architecture/modules.woz_matter.include/matter_fabric.h.md)
+
+@file matter_fabric.h — the operational identity a commissioner installs.
+Attestation ends with the commissioner holding a public key this node proved
+it owns. What follows is the commissioner handing back an identity built on
+that key:
+AddTrustedRootCertificate  trust this root
+AddNOC                     and here is who you are underneath it
+Both certificates arrive as MATTER TLV, not X.509. The spec defines a
+compressed form precisely so a constrained node can read one without an
+ASN.1 decoder, and this file is that reader.
+It reads three things and ignores the rest: the subject's node id, its fabric
+id, and the public key. Validity dates, key usage and the signature are what
+a node checks when VERIFYING a certificate somebody else presents, which is
+CASE's job. A commissioner has no reason to lie to itself about a NOC it just
+minted, and this node cannot check the signature anyway without the issuer's
+key -- which, for the NOC, is the root it was told to trust one command
+earlier and has no independent reason to believe.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md), [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md), [`modules/woz_matter/src/matter_fabric.c`](architecture/modules.woz_matter.src/matter_fabric.c.md)
+
+### [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md)
+
+@file matter_im.h — the Interaction Model, as far as a commissioner needs it.
+Once PASE is done the commissioner stops speaking Secure Channel and starts
+asking questions. The first one is a ReadRequest, and until something answers
+it the phone waits, gives up, and shows "pairing failed" with no further clue.
+in    ReadRequest   (protocol 0x0001, opcode 0x02)
+out   ReportData    (protocol 0x0001, opcode 0x05)
+This is the read half only. Write, Invoke and Subscribe are separate messages
+and land when something needs them; commissioning cannot start without Read.
+It holds no device data. Which endpoints exist and what their attributes say
+is matter_clusters.h's, reached through @ref matter_im_server, so the wire
+format can be tested without a device and the device without a wire.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md), [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)  ·  **used by** [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md), [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md), [`modules/woz_matter/src/matter_im.c`](architecture/modules.woz_matter.src/matter_im.c.md)
+
+### [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
+
+@file matter_tlv.h — Matter TLV codec (Matter Core spec, Appendix A).
+This is NOT the BER/DER-TLV in modules/woz_aliro_stack/src/protocol/tlv.h.
+Matter uses its own encoding: one control byte carrying a 3-bit tag control
+and a 5-bit element type, then 0-8 tag octets, then the value, all
+little-endian. The two share a name and nothing else, so they stay separate.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md), [`modules/woz_matter/src/matter_attest.c`](architecture/modules.woz_matter.src/matter_attest.c.md), [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md), [`modules/woz_matter/src/matter_fabric.c`](architecture/modules.woz_matter.src/matter_fabric.c.md), [`modules/woz_matter/src/matter_pase.c`](architecture/modules.woz_matter.src/matter_pase.c.md), [`modules/woz_matter/src/matter_tlv.c`](architecture/modules.woz_matter.src/matter_tlv.c.md)
+
+### [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md)
+
+@file matter_clusters.h — what this device answers, as opposed to how.
+matter_im.c owns the ReportData wire format and knows nothing about door
+locks or vendor IDs. This is the other half: the endpoints, clusters and
+attributes that exist, and what they say.
+Scope is deliberately the commissioner's FIRST question and no further. A
+real iPhone, immediately after PASE, reads nine attribute paths:
+endpoint 0  GeneralCommissioning 0x0030  attributes 0x00..0x04 and 0x0C
+endpoint 0  BasicInformation     0x0028  VendorID 0x02, ProductID 0x04
+endpoint 0  TimeSynchronization  0x0038  all attributes (wildcard)
+Everything else answers UNSUPPORTED_*, which is a legal answer and a truthful
+one. Clusters get added when a commissioner is observed asking for them,
+rather than because the spec lists them.
+Device-specific values arrive in @ref matter_device_info instead of being
+read from Kconfig here, so the host suite can build this without Zephyr and
+assert on the encoded bytes.
+
+**depends on** [`modules/woz_matter/include/matter_attest.h`](architecture/modules.woz_matter.include/matter_attest.h.md), [`modules/woz_matter/include/matter_fabric.h`](architecture/modules.woz_matter.include/matter_fabric.h.md), [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md), [`modules/woz_matter/include/matter_thread.h`](architecture/modules.woz_matter.include/matter_thread.h.md)  ·  **used by** [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md)
+
+### [`modules/woz_matter/include/matter_pase_sm.h`](architecture/modules.woz_matter.include/matter_pase_sm.h.md)
+
+@file matter_pase_sm.h — PASE responder: the device side of the five messages.
+matter_pase.h is the codec and matter_spake2p.h is the arithmetic; this is
+what drives them. A commissioner opens with PBKDFParamRequest and this
+answers, receives Pake1, answers Pake2, receives Pake3, and ends with a
+StatusReport. What comes out the far side is a session key schedule.
+-> PBKDFParamRequest    <- PBKDFParamResponse   (context hash fixed here)
+-> Pake1 (pA)           <- Pake2 (pB, cB)
+-> Pake3 (cA)           <- StatusReport(success)
+The device never holds the setup passcode. It holds the SPAKE2+ verifier --
+w0 and L -- which is derived from the passcode somewhere else and provisioned
+in. That is the whole point of the augmented form: someone who reads the
+device's flash cannot impersonate a commissioner to it.
+No time and no randomness are taken from the environment. Retransmission is
+MRP's job (matter_mrp.h), and the two random values PASE needs are arguments,
+so the host suite runs the real state machine against a recorded exchange
+rather than against whatever entropy it happened to get.
+
+**depends on** [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md), [`modules/woz_matter/include/matter_pase.h`](architecture/modules.woz_matter.include/matter_pase.h.md), [`modules/woz_matter/include/matter_spake2p.h`](architecture/modules.woz_matter.include/matter_spake2p.h.md), [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/src/matter_pase_sm.c`](architecture/modules.woz_matter.src/matter_pase_sm.c.md)
+
+### [`modules/woz_matter/include/matter_exchange.h`](architecture/modules.woz_matter.include/matter_exchange.h.md)
+
+@file matter_exchange.h — the unsecured exchange PASE runs on.
+Between BTP (a byte pipe) and PASE (five messages) sits the part that makes a
+Matter message a message: which session it belongs to, which exchange, whether
+it is a duplicate, and whether the peer is owed an acknowledgement.
+in    message header | protocol header | payload
+out   message header | protocol header | payload
+This handles exactly one exchange on the UNSECURED session, which is all
+commissioning needs before PASE finishes: session id 0, no encryption, the
+peer as initiator and this node as responder. Secure sessions are a different
+object -- they carry keys and a different counter -- and arrive with CASE.
+It deliberately does not know what PASE is. It reports the opcode and hands
+back the payload; the caller decides what to answer. That keeps the framing
+testable on its own, and means CASE will reuse it rather than fork it.
+No timers here either. Duplicate suppression and the ack bookkeeping are
+state, not scheduling; retransmission is matter_mrp.h's, driven by whoever
+owns a clock.
+
+**depends on** [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md), [`modules/woz_matter/include/matter_mrp.h`](architecture/modules.woz_matter.include/matter_mrp.h.md), [`modules/woz_matter/include/matter_msg.h`](architecture/modules.woz_matter.include/matter_msg.h.md), [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/src/matter_exchange.c`](architecture/modules.woz_matter.src/matter_exchange.c.md)
+
+### [`modules/woz_matter/include/matter_attest.h`](architecture/modules.woz_matter.include/matter_attest.h.md)
+
+@file matter_attest.h — proving to a commissioner that this is a real device.
+After the fail-safe is armed, the commissioner stops asking what this node is
+and starts asking it to prove it. Three questions, in this order:
+CertificateChainRequest  give me your DAC, then your PAI
+AttestationRequest       sign this nonce with the DAC's private key
+CSRRequest               make me a key I can certify, and sign for it
+The certificates are static blobs. The signatures are not: each covers the
+message AND the session's attestation challenge, which is why a recorded
+exchange cannot be replayed into a different session.
+WHAT THESE CREDENTIALS ARE. The DAC, PAI and CD here are the SDK's published
+development credentials for vendor 0xFFF1 / product 0x8001, and the DAC's
+private key is published alongside them. They prove nothing about who built
+this device -- anyone can extract the same key from a public repository, and
+a commissioner that enforces attestation will reject them. They are here so
+commissioning can be developed against a real phone; shipping a product means
+a DAC issued under a real PAI, and its private key must not live in flash
+next to the certificate.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md), [`modules/woz_matter/src/matter_attest.c`](architecture/modules.woz_matter.src/matter_attest.c.md)
+
+### [`modules/woz_matter/include/matter_pase.h`](architecture/modules.woz_matter.include/matter_pase.h.md)
+
+@file matter_pase.h — PASE message codec (the five commissioning messages).
+PASE is how a commissioner proves it knows the setup passcode. Five messages,
+all Matter TLV structures on the Secure Channel protocol:
+PBKDFParamRequest   initiatorRandom, initiatorSessionId, passcodeId,
+hasPBKDFParameters, [initiatorSessionParams]
+PBKDFParamResponse  initiatorRandom, responderRandom, responderSessionId,
+[pbkdfParameters{iterations, salt}], [responderSessionParams]
+Pake1               pA
+Pake2               pB, cB
+Pake3               cA
+This file is the codec only. The SPAKE2+ arithmetic that produces pA/pB/cA/cB
+is separate, and on this part it comes from nrf_oberon
+(nrfxlib/crypto/nrf_oberon/include/ocrypto_spake2p_p256.h), which already
+ships in every image here.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_pase_sm.h`](architecture/modules.woz_matter.include/matter_pase_sm.h.md), [`modules/woz_matter/src/matter_pase.c`](architecture/modules.woz_matter.src/matter_pase.c.md)
+
+### [`modules/woz_matter/include/matter_spake2p.h`](architecture/modules.woz_matter.include/matter_spake2p.h.md)
+
+@file matter_spake2p.h — SPAKE2+ glue: PBKDF2, transcript, confirmations.
+SPAKE2+ is how PASE turns a short setup passcode into a session key without
+ever putting the passcode on the wire. The elliptic-curve arithmetic is NOT
+here: it comes from nrf_oberon, which ships four primitives that do exactly
+the operations SPAKE2+ needs. Everything around them -- deriving w0 and w1
+from the passcode, building the transcript, and turning it into the
+confirmation values -- is this file, and all of it is byte manipulation and
+hashing that the host suite can check.
+w0, w1   PBKDF2-HMAC-SHA256(passcode, salt, iterations) -> 80 B -> two
+40-byte halves, each reduced mod the P-256 group order
+TT       ten elements, each prefixed with its length as a little-endian
+uint64: context, "", "", M, N, pA, pB, Z, V, w0
+Ka|Ke    SHA256(TT), first half and second half
+KcA|KcB  HKDF(Ka, "ConfirmationKeys")
+cA, cB   HMAC(KcA, pB) and HMAC(KcB, pA)
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_pase_sm.h`](architecture/modules.woz_matter.include/matter_pase_sm.h.md), [`modules/woz_matter/src/matter_spake2p.c`](architecture/modules.woz_matter.src/matter_spake2p.c.md)
+
+### [`modules/woz_matter/include/matter_btp.h`](architecture/modules.woz_matter.include/matter_btp.h.md)
+
+@file matter_btp.h — BTP, the Matter commissioning transport over BLE GATT.
+A Matter message is far larger than a BLE ATT payload, so BTP chops it into
+fragments, numbers them, and acknowledges them. This file is the framing
+only: no GATT, no Zephyr, no timers. The 0xFFF6 service that carries it is a
+separate piece.
+handshake req   0x65 0x6C  versions[4]  mtu:u16  window:u8      (9 bytes)
+handshake resp  0x65 0x6C  version:u8   fragment:u16  window:u8 (6 bytes)
+data fragment   flags:u8  [ack:u8 if A]  seq:u8  [len:u16 if S]  payload
+Little-endian, like the rest of Matter.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/src/matter_btp.c`](architecture/modules.woz_matter.src/matter_btp.c.md)
+
+### [`modules/woz_matter/include/matter_mrp.h`](architecture/modules.woz_matter.include/matter_mrp.h.md)
+
+@file matter_mrp.h — Message Reliability Protocol: backoff, retransmit, dedup.
+Matter runs over UDP, so reliability is the application's problem. MRP is the
+answer: mark a message as needing an acknowledgement, retransmit on an
+exponential backoff until it is acked, and drop counters you have already
+seen.
+Two objects with two different lifetimes, deliberately not merged:
+struct matter_mrp_window  per SESSION   — duplicate suppression
+struct matter_mrp         per EXCHANGE  — one un-acked message, one owed ack
+NO TIMERS LIVE HERE. Every entry point takes `now_ms` and the object only
+ever computes deadlines, so the caller owns the timer and this layer stays
+testable on the host with a fake clock. That is also the stage 0 work-queue
+constraint honoured by construction: a module that never arms a timer cannot
+accidentally arm one on k_sys_work_q, which was measured at 3,568 of 4,096
+bytes with the reader running.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_exchange.h`](architecture/modules.woz_matter.include/matter_exchange.h.md), [`modules/woz_matter/src/matter_mrp.c`](architecture/modules.woz_matter.src/matter_mrp.c.md)
+
+### [`modules/woz_matter/include/matter_msg.h`](architecture/modules.woz_matter.include/matter_msg.h.md)
+
+@file matter_msg.h — Matter message header and protocol (exchange) header.
+Two headers, one wire format. The message header is the part that travels in
+clear even on a secure session; the protocol header sits at the front of the
+(decrypted) payload and names the exchange the message belongs to.
+message header   flags:u8  session_id:u16  security_flags:u8  counter:u32
+[source_node_id:u64 if S]  [dest:u64|u16 by DSIZ]
+protocol header  exchange_flags:u8  opcode:u8  exchange_id:u16
+[vendor_id:u16 if V]  protocol_id:u16  [ack_counter:u32 if A]
+All little-endian.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md), [`modules/woz_matter/include/matter_exchange.h`](architecture/modules.woz_matter.include/matter_exchange.h.md), [`modules/woz_matter/src/matter_msg.c`](architecture/modules.woz_matter.src/matter_msg.c.md)
+
+### [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)
+
+@file matter_status.h — return codes shared by every woz_matter layer.
+
+**used by** [`modules/woz_matter/include/matter_attest.h`](architecture/modules.woz_matter.include/matter_attest.h.md), [`modules/woz_matter/include/matter_btp.h`](architecture/modules.woz_matter.include/matter_btp.h.md), [`modules/woz_matter/include/matter_case.h`](architecture/modules.woz_matter.include/matter_case.h.md), [`modules/woz_matter/include/matter_crypto.h`](architecture/modules.woz_matter.include/matter_crypto.h.md), [`modules/woz_matter/include/matter_exchange.h`](architecture/modules.woz_matter.include/matter_exchange.h.md), [`modules/woz_matter/include/matter_fabric.h`](architecture/modules.woz_matter.include/matter_fabric.h.md), [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md), [`modules/woz_matter/include/matter_mrp.h`](architecture/modules.woz_matter.include/matter_mrp.h.md), [`modules/woz_matter/include/matter_msg.h`](architecture/modules.woz_matter.include/matter_msg.h.md), [`modules/woz_matter/include/matter_pase.h`](architecture/modules.woz_matter.include/matter_pase.h.md), [`modules/woz_matter/include/matter_pase_sm.h`](architecture/modules.woz_matter.include/matter_pase_sm.h.md), [`modules/woz_matter/include/matter_spake2p.h`](architecture/modules.woz_matter.include/matter_spake2p.h.md), [`modules/woz_matter/include/matter_thread.h`](architecture/modules.woz_matter.include/matter_thread.h.md), [`modules/woz_matter/include/matter_tlv.h`](architecture/modules.woz_matter.include/matter_tlv.h.md)
+
+### [`modules/woz_matter/include/matter_thread.h`](architecture/modules.woz_matter.include/matter_thread.h.md)
+
+@file matter_thread.h — the seam between a commissioner's dataset and a radio.
+matter_clusters.c is platform-agnostic C11 and the host suite compiles it
+without Zephyr, so it cannot call OpenThread. It calls these two instead; the
+port forwards them to otDatasetSetActiveTlvs() and otThreadGetDeviceRole(),
+and the host suite substitutes a double whose answers a test can choose.
+The split into start and wait is deliberate. Apple sends
+AddOrUpdateThreadNetwork, then ArmFailSafe, then ConnectNetwork, and the
+attach can begin at the first of those rather than the last -- a Thread
+attach costs seconds and the round trips in between are free.
+
+**depends on** [`modules/woz_matter/include/matter_status.h`](architecture/modules.woz_matter.include/matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md)
+
 ## `ports/esp32/components/piv_ccid/include/`
 
 ### [`ports/esp32/components/piv_ccid/include/piv_ccid_usb.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid_usb.h.md)
@@ -2336,24 +2794,6 @@ Build a local OpenAliro custom-component archive without publishing it.
 
 NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
 Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
-
-## `ports/dwm3001cdk/app/src/`
-
-### [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-### [`ports/dwm3001cdk/app/src/aliro_prov_settings.c`](architecture/ports.dwm3001cdk.app.src/aliro_prov_settings.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-### [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-### [`ports/dwm3001cdk/app/src/prov_shell.c`](architecture/ports.dwm3001cdk.app.src/prov_shell.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
 
 ## `ports/esp32/apps/initiator/main/`
 
@@ -2668,6 +3108,32 @@ Env:
 SECURITY_BASE / SECURITY_HEAD   commit range; CI passes the PR's base and head
 SEMGREP_NO_REGISTRY=1           local rulesets only, skipping the network fetch
 NO_COLOR=1                      plain output
+
+### [`scripts/spake2p_verifier.py`](architecture/scripts/spake2p_verifier.md)
+
+Derive a SPAKE2+ verifier (w0 and L) for a Matter setup passcode.
+
+A Matter device never stores its setup passcode. It stores the verifier, which
+is what PBKDF2 over the passcode yields plus one scalar multiplication:
+
+    w0s || w1s = PBKDF2-HMAC-SHA256(passcode as LE uint32, salt, iterations, 80)
+    w0 = w0s mod n     w1 = w1s mod n     L = w1 * G
+
+Someone who reads the flash gets w0 and L, which are enough to VERIFY a
+commissioner that knows the passcode and not enough to impersonate one. That is
+the whole point of the augmented form, and the reason this runs here rather than
+on the device: L needs a base-point multiply, which is not one of the four
+operations nrf_oberon exposes to the reader.
+
+Usage:
+
+    scripts/spake2p_verifier.py                     # CHIP's test pairing
+    scripts/spake2p_verifier.py --passcode 12345678 --salt-b64 <...>
+
+The output goes into CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER and friends
+(ports/dwm3001cdk/app/Kconfig). Print nothing anywhere it will be logged: the
+verifier is not a secret in the way the passcode is, but it identifies the
+device and there is no reason to scatter it.
 
 ### [`scripts/test-runner.sh`](architecture/scripts/test-runner.sh.md)
 

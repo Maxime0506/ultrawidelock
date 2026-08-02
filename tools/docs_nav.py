@@ -63,6 +63,7 @@ JOURNEY = [
     ("Porting", "porting"),
     ("Porting", "porting-esp32"),
     ("Porting", "esp32-gotchas"),
+    ("Porting", "dwm3001cdk-surgery"),
     ("Project", "reference"),
     ("Project", "RELEASING"),
 ]

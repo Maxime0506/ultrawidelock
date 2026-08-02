@@ -3,39 +3,31 @@
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
-```mermaid
-flowchart TD
-  main --> provisioning_mode
-  main --> provisioning_requested
-```
+**depends on** [`ports/dwm3001cdk/app/src/matter_commission.h`](matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](matter_fab_settings.h.md)
 
 ## API
 
-### `static bool provisioning_requested(void)`
-`ports/dwm3001cdk/app/src/main.c:54`
+### `static void heap_peak_log(const char *when)`
+`ports/dwm3001cdk/app/src/main.c:43`
 
-Provisioning mode: hold SW2 (the board's sw0 alias, P0.02) through reset.
-The reader identity is per-device data in the settings store, never a string
-in the image, so it has to arrive at runtime. This board's only input path is
-the USB device port wired straight to the nRF52833 -- RTT is output-only --
-so provisioning mode brings up CDC-ACM and the `aliro` console on it.
-The radios stay down in this mode on purpose. It keeps USB's millisecond SOF
-interrupts away from the DW3110's delayed-TX reply window (the timing that
-commit 5b8d06b had to fight for on this single-core part), and it means the
-console can never be reached while a walk-up is in flight.
+Reported at the grant, because by then the unlock has done every P-256 and
+AES-GCM operation it is going to do. The peak is cumulative since boot, so it
+covers BLE pairing and the Aliro exchange too, not only the ranging.
 
 **called by** `main`
 
 ### `static void provisioning_mode(void)`
-`ports/dwm3001cdk/app/src/main.c:70`
+`ports/dwm3001cdk/app/src/main.c:97`
 
 Runs the console and nothing else. Never returns: leaving this function would
 start the radios in a mode the user did not ask for.
 
 **called by** `main`
 
-<details><summary>Undocumented (1)</summary>
+<details><summary>Undocumented (3)</summary>
 
+- `provisioning_requested`
+- `factory_reset_if_requested`
 - `main`
 
 </details>

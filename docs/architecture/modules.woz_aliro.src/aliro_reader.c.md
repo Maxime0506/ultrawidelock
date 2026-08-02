@@ -8,7 +8,7 @@ transaction phase and secure-channel state, and exposes start/attach entry point
 standalone and Matter-attached BLE transports, plus provisioning and diagnostic APIs used by
 Matter commissioning and the bench console.
 
-**depends on** [`modules/woz_aliro/include/aliro_ble.h`](../modules.woz_aliro.include/aliro_ble.h.md), [`modules/woz_aliro/include/aliro_crypto.h`](../modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_lab.h`](../modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](../modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_aliro/include/aliro_prim.h`](../modules.woz_aliro.include/aliro_prim.h.md), [`modules/woz_aliro/include/aliro_prov.h`](../modules.woz_aliro.include/aliro_prov.h.md), [`modules/woz_aliro/include/aliro_reader.h`](../modules.woz_aliro.include/aliro_reader.h.md), [`modules/woz_aliro/include/aliro_rssi_gate.h`](../modules.woz_aliro.include/aliro_rssi_gate.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](../modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_apdu.h`](aliro_apdu.h.md), [`modules/woz_aliro/src/aliro_ranging.h`](aliro_ranging.h.md), [`modules/woz_port/include/woz_log.h`](../modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](../modules.woz_port.include/woz_port.h.md)  ·  **discussed in** [`docs/esp32-gotchas.md`](../../esp32-gotchas.md), [`ports/esp32/components/aliro_reader/README.md`](../../../ports/esp32/components/aliro_reader/README.md)
+**depends on** [`modules/woz_aliro/include/aliro_ble.h`](../modules.woz_aliro.include/aliro_ble.h.md), [`modules/woz_aliro/include/aliro_crypto.h`](../modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_lab.h`](../modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](../modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_aliro/include/aliro_prim.h`](../modules.woz_aliro.include/aliro_prim.h.md), [`modules/woz_aliro/include/aliro_prov.h`](../modules.woz_aliro.include/aliro_prov.h.md), [`modules/woz_aliro/include/aliro_reader.h`](../modules.woz_aliro.include/aliro_reader.h.md), [`modules/woz_aliro/include/aliro_rssi_gate.h`](../modules.woz_aliro.include/aliro_rssi_gate.h.md), [`modules/woz_aliro/include/aliro_stepup.h`](../modules.woz_aliro.include/aliro_stepup.h.md), [`modules/woz_aliro/src/aliro_apdu.h`](aliro_apdu.h.md), [`modules/woz_aliro/src/aliro_ranging.h`](aliro_ranging.h.md), [`modules/woz_port/include/woz_log.h`](../modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](../modules.woz_port.include/woz_port.h.md)  ·  **discussed in** [`docs/dwm3001cdk-surgery.md`](../../dwm3001cdk-surgery.md), [`docs/esp32-gotchas.md`](../../esp32-gotchas.md), [`ports/esp32/components/aliro_reader/README.md`](../../../ports/esp32/components/aliro_reader/README.md)
 
 ```mermaid
 flowchart TD
@@ -181,7 +181,7 @@ EXCHANGE.
 **called by** `transaction_feed`  ·  **calls** `init_ble_channel`, `notify_access`, `send_exchange`
 
 ### `static void complete_ap_and_range(struct aliro_session *s)`
-`modules/woz_aliro/src/aliro_reader.c:890`
+`modules/woz_aliro/src/aliro_reader.c:910`
 
 Send Reader-Status-AP-Completed (BleSK-sealed) and arm the ranging engine; the
 transaction ends in PH_ESTABLISHED. Shared by the normal EXCHANGE path and the
@@ -190,7 +190,7 @@ step-up path (which runs it only after the DeviceResponse is collected).
 **called by** `aliro_reader_rssi_sample`, `gated_complete_ap`
 
 ### `static void gated_complete_ap(struct aliro_session *s)`
-`modules/woz_aliro/src/aliro_reader.c:954`
+`modules/woz_aliro/src/aliro_reader.c:974`
 
 Run complete_ap_and_range only once the RSSI power gate allows the UWB radio:
 the device does not initiate ranging until it receives AP-Completed (the
@@ -203,7 +203,7 @@ gate is compiled out.
 **called by** `on_exchange_response`, `on_stepup_response`, `stepup_send_request`  ·  **calls** `complete_ap_and_range`
 
 ### `static void stepup_send_request(struct aliro_session *s)`
-`modules/woz_aliro/src/aliro_reader.c:980`
+`modules/woz_aliro/src/aliro_reader.c:1000`
 
 Build the Access-Document DeviceRequest, seal it into a SessionData message on
 the StepUpSK channel, and send it in an ENVELOPE APDU (§8.4). On any build/seal
@@ -212,7 +212,7 @@ failure fall back to completing the AP so the unlock is never blocked.
 **called by** `on_exchange_response`  ·  **calls** `gated_complete_ap`, `send_ap_raw`
 
 ### `static void stepup_submit_job(struct aliro_session *s)`
-`modules/woz_aliro/src/aliro_reader.c:1007`
+`modules/woz_aliro/src/aliro_reader.c:1027`
 
 Hand the collected SessionData response + StepUpSK keys to the background worker
 so the parse/verify runs off the BLE-host task (never in the ranging arm window).
@@ -224,7 +224,7 @@ TimeVerificationRequired document is recorded as time-unverified.
 **called by** `on_stepup_response`
 
 ### `static void on_stepup_response(struct aliro_session *s, const uint8_t *pl, size_t len)`
-`modules/woz_aliro/src/aliro_reader.c:1031`
+`modules/woz_aliro/src/aliro_reader.c:1051`
 
 Collect the DeviceResponse across ENVELOPE / GET RESPONSE (ISO7816 61XX
 chaining) before completing the AP. The worker verifies it afterwards.
@@ -232,7 +232,7 @@ chaining) before completing the AP. The worker verifies it afterwards.
 **called by** `transaction_feed`  ·  **calls** `gated_complete_ap`, `send_ap_raw`, `stepup_submit_job`
 
 ### `static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, size_t len)`
-`modules/woz_aliro/src/aliro_reader.c:1082`
+`modules/woz_aliro/src/aliro_reader.c:1102`
 
 Handle the EXCHANGE response, then complete the AP and arm ranging. The body is
 an AP (proto-0) response on the ExpeditedSK channel: <ct || 16B tag> SW1SW2.
@@ -240,7 +240,7 @@ an AP (proto-0) response on the ExpeditedSK channel: <ct || 16B tag> SW1SW2.
 **called by** `transaction_feed`  ·  **calls** `gated_complete_ap`, `stepup_send_request`
 
 ### `static void reader_status_send(struct aliro_session *s, bool unsecured)`
-`modules/woz_aliro/src/aliro_reader.c:1134`
+`modules/woz_aliro/src/aliro_reader.c:1162`
 
 Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
 confirmation that fires the iPhone Wallet unlock animation. proto-2 (Notification)
@@ -255,7 +255,7 @@ aliro_ble_post_reader_status) so it serializes with the other sc_ble seals.
 **called by** `aliro_reader_rssi_sample`, `reader_status_send_on_host`
 
 ### `static void reader_status_send_on_host(bool unsecured)`
-`modules/woz_aliro/src/aliro_reader.c:1166`
+`modules/woz_aliro/src/aliro_reader.c:1202`
 
 Send Reader-Status-Changed (Aliro step 23) on an established session: locked (Secured grant to
 unlock) or unlocked (Unsecured). Deduplicates consecutive identical messages. Logs Secured
@@ -265,14 +265,14 @@ could send.
 **calls** `reader_status_send`
 
 ### `void aliro_reader_notify_unlock(bool unsecured)`
-`modules/woz_aliro/src/aliro_reader.c:1205`
+`modules/woz_aliro/src/aliro_reader.c:1241`
 
 Sends a Reader-Status BLE notification reporting the lock's unsecured/secured state to the
 connected device. unsecured is true if the reader/lock is currently unsecured (unlocked), false
 if secured.
 
 ### `void aliro_reader_status_tick(int64_t now_ms)`
-`modules/woz_aliro/src/aliro_reader.c:1213`
+`modules/woz_aliro/src/aliro_reader.c:1249`
 
 Releases a held stale-Wallet Secured once its window expires with no grant to supersede it.
 now_ms is the caller's monotonic clock (the same one woz_uptime_ms reads); taking it as an
@@ -281,7 +281,7 @@ argument keeps the deadline testable without a fake clock. No-op unless a replay
 **calls** `aliro_reader_session_active`
 
 ### `bool aliro_reader_session_active(void)`
-`modules/woz_aliro/src/aliro_reader.c:1235`
+`modules/woz_aliro/src/aliro_reader.c:1271`
 
 Reports whether any peer currently holds an established Aliro session.
 Returns true if at least one session slot is active and in the established phase.
@@ -289,13 +289,13 @@ Returns true if at least one session slot is active and in the established phase
 **called by** `aliro_reader_status_tick`
 
 ### `void aliro_reader_set_access_listener(void (*cb)(bool granted))`
-`modules/woz_aliro/src/aliro_reader.c:1248`
+`modules/woz_aliro/src/aliro_reader.c:1284`
 
 Registers (or with NULL clears) the observer of the per-transaction access verdict.
 See aliro_reader.h for what the listener may do; call it before the reader starts.
 
 ### `bool aliro_reader_authenticated_credential(uint8_t out[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:1257`
+`modules/woz_aliro/src/aliro_reader.c:1293`
 
 Copies the credential public key that most recently passed the trust check into out.
 Returns true if a credential has authenticated since boot (out written), false otherwise
@@ -304,7 +304,7 @@ Returns true if a credential has authenticated since boot (out written), false o
 **calls** `load_provisioning`
 
 ### `static size_t capture_a5_tlv(const uint8_t *pl, size_t pl_len, uint8_t *out, size_t cap)`
-`modules/woz_aliro/src/aliro_reader.c:1377`
+`modules/woz_aliro/src/aliro_reader.c:1413`
 
 Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
 proprietary-information TLV (short-form BER length; the A5 value is small) and
@@ -314,14 +314,14 @@ if no well-formed 0xA5 TLV fits.
 **called by** `transaction_feed`
 
 ### `static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint16_t len)`
-`modules/woz_aliro/src/aliro_reader.c:1395`
+`modules/woz_aliro/src/aliro_reader.c:1431`
 
 Consume one inbound Aliro transaction SDU.
 
 **called by** `on_data`  ·  **calls** `capture_a5_tlv`, `on_auth0_response`, `on_auth1_response`, `on_exchange_response`, `on_stepup_response`, `phase_str`, `start_auth`
 
 ### `void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)`
-`modules/woz_aliro/src/aliro_reader.c:1496`
+`modules/woz_aliro/src/aliro_reader.c:1532`
 
 Feeds one connection-RSSI sample into the session's ranging power gate and acts on the
 resulting transition: gate opening completes a held AP (starts ranging); gate closing on an
@@ -331,7 +331,7 @@ on its next approach). Runs on the BLE-host task, same as every other session to
 **calls** `complete_ap_and_range`, `reader_status_send`, `session_find`
 
 ### `static void on_connected(uint16_t conn_handle)`
-`modules/woz_aliro/src/aliro_reader.c:1549`
+`modules/woz_aliro/src/aliro_reader.c:1585`
 
 BLE connection-established callback: allocates a session slot for the new connection.
 Logs an error and returns without effect if no free session slot is available.
@@ -339,7 +339,7 @@ Logs an error and returns without effect if no free session slot is available.
 **calls** `session_alloc`
 
 ### `static void on_disconnected(uint16_t conn_handle)`
-`modules/woz_aliro/src/aliro_reader.c:1564`
+`modules/woz_aliro/src/aliro_reader.c:1600`
 
 BLE disconnection callback: marks the connection's session inactive (if one exists) and
 stops any UWB ranging associated with the connection.
@@ -348,7 +348,7 @@ Logs the session's message count and final transaction phase before deactivating
 **calls** `any_session_active_on_host`, `phase_str`, `presence_checkpoint_ready_on_host`, `session_find`, `spare_eph_refill`
 
 ### `static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)`
-`modules/woz_aliro/src/aliro_reader.c:1619`
+`modules/woz_aliro/src/aliro_reader.c:1655`
 
 BLE data-received callback: looks up the session for conn_handle and feeds each Aliro envelope
 in the received buffer into its transaction state machine.
@@ -357,7 +357,7 @@ Logs a warning and drops the data if no active session exists for conn_handle.
 **calls** `session_find`, `transaction_feed`
 
 ### `static struct aliro_ble_config make_ble_cfg(void)`
-`modules/woz_aliro/src/aliro_reader.c:1653`
+`modules/woz_aliro/src/aliro_reader.c:1689`
 
 The reader's BLE transport config: advertised versions/features + the
 transaction transport callbacks. Shared by the standalone + attached starts.
@@ -365,14 +365,14 @@ transaction transport callbacks. Shared by the standalone + attached starts.
 **called by** `aliro_reader_ble_prepare`, `aliro_reader_start`
 
 ### `static int reader_engine_init(void)`
-`modules/woz_aliro/src/aliro_reader.c:1679`
+`modules/woz_aliro/src/aliro_reader.c:1715`
 
 crypto + provisioning load + UWB ranging setup, shared by both start paths.
 
 **called by** `aliro_reader_start`, `aliro_reader_start_attached`  ·  **calls** `load_provisioning`, `spare_eph_refill`
 
 ### `static bool apply_provisioned_adv_params(void)`
-`modules/woz_aliro/src/aliro_reader.c:1700`
+`modules/woz_aliro/src/aliro_reader.c:1736`
 
 Applies the provisioned resolvable advertising parameters when a real GRK is
 present. The phone resolves "its" reader by re-deriving the dynamic tag from the
@@ -384,7 +384,7 @@ groupSubIdentifier(16)). Returns false on the all-zero dev-default GRK.
 **called by** `aliro_reader_refresh_adv`, `aliro_reader_start`, `aliro_reader_start_attached`
 
 ### `int aliro_reader_start(void)`
-`modules/woz_aliro/src/aliro_reader.c:1718`
+`modules/woz_aliro/src/aliro_reader.c:1754`
 
 Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging), applies the
 provisioned advertising parameters when the loaded identity carries a GRK, and brings up the BLE
@@ -394,7 +394,7 @@ aliro_ble_start result otherwise.
 **calls** `apply_provisioned_adv_params`, `make_ble_cfg`, `reader_engine_init`
 
 ### `const void *aliro_reader_ble_prepare(void)`
-`modules/woz_aliro/src/aliro_reader.c:1742`
+`modules/woz_aliro/src/aliro_reader.c:1778`
 
 Prepares the BLE transport and returns the Aliro GATT service definition for external
 registration, without starting the transport. Returns NULL if aliro_ble_prepare fails; on success
@@ -403,7 +403,7 @@ returns the pointer from aliro_ble_service_def(), owned by the BLE layer.
 **calls** `make_ble_cfg`
 
 ### `int aliro_reader_start_attached(void)`
-`modules/woz_aliro/src/aliro_reader.c:1759`
+`modules/woz_aliro/src/aliro_reader.c:1795`
 
 Starts the Aliro reader in "attached" transport mode: initializes the engine, applies provisioned
 resolvable advertising parameters if a real GRK is present, then starts the attached BLE
@@ -415,7 +415,7 @@ initialization fails, or the underlying aliro_ble_start_attached result otherwis
 **calls** `apply_provisioned_adv_params`, `reader_engine_init`
 
 ### `void aliro_reader_refresh_adv(void)`
-`modules/woz_aliro/src/aliro_reader.c:1783`
+`modules/woz_aliro/src/aliro_reader.c:1819`
 
 Refreshes the BLE advertisement to include the resolvable service data once a real
 GroupResolvingKey (GRK) is available. Handles the case where Matter provisioning
@@ -424,10 +424,10 @@ GroupResolvingKey (GRK) is available. Handles the case where Matter provisioning
 all-zero. On a nonzero GRK, derives the two-byte subgroup ID from reader_id[16..17] and calls
 aliro_ble_set_adv_params + aliro_ble_readvertise to make the reader approach-resolvable.
 
-**called by** `aliro_reader_import_blob`  ·  **calls** `apply_provisioned_adv_params`
+**called by** `aliro_reader_import_blob`, `aliro_reader_provision_identity`  ·  **calls** `apply_provisioned_adv_params`
 
 ### `void aliro_reader_prov_print(void)`
-`modules/woz_aliro/src/aliro_reader.c:1804`
+`modules/woz_aliro/src/aliro_reader.c:1849`
 
 Print the reader's provisioning state (identity, trust anchors, last presented credential)
 to the console for diagnostics.
@@ -437,7 +437,7 @@ so UART I/O does not hold the lock during the BLE task's trust check.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_trust_last(void)`
-`modules/woz_aliro/src/aliro_reader.c:1848`
+`modules/woz_aliro/src/aliro_reader.c:1893`
 
 Add the most recently presented credential's public key to the trust store and persist it.
 Returns 1 if no credential has been presented yet or it is already trusted (nothing
@@ -447,7 +447,7 @@ unchanged on failure), 0 if newly added and committed.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_trust_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:1891`
+`modules/woz_aliro/src/aliro_reader.c:1939`
 
 Empty the trust store and persist the empty store, keeping the reader identity.
 Returns 1 if the store was already empty (nothing persisted), -1 if the NVS write fails
@@ -459,7 +459,7 @@ reset does not touch this namespace, so without this the only way out is erasing
 **calls** `load_provisioning`
 
 ### `void aliro_reader_stepup_arm(void)`
-`modules/woz_aliro/src/aliro_reader.c:1918`
+`modules/woz_aliro/src/aliro_reader.c:1966`
 
 Arm a one-shot Access-Document request (see aliro_reader.h). No-op with a note
 when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
@@ -467,14 +467,14 @@ when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
 **calls** `load_provisioning`
 
 ### `void aliro_reader_stepup_status(void)`
-`modules/woz_aliro/src/aliro_reader.c:1932`
+`modules/woz_aliro/src/aliro_reader.c:1980`
 
 Print the armed state and the most recent verification verdict (see aliro_reader.h).
 
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN], const uint8_t sign_priv[ALIRO_READER_PRIV_LEN], const uint8_t grk[ALIRO_GRK_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:1972`
+`modules/woz_aliro/src/aliro_reader.c:2020`
 
 Store a Matter-provisioned reader identity (reader ID, signing private key, GRK), keeping
 any trust anchors already present, and persist it to NVS.
@@ -482,10 +482,10 @@ Returns -1 if the NVS write fails, in which case in-memory identity (s_id) is un
 returns 0 on success, after which the reader group key salt is recomputed via
 compute_reader_group_x since the signing key changed.
 
-**calls** `compute_reader_group_x`, `load_provisioning`
+**calls** `aliro_reader_refresh_adv`, `compute_reader_group_x`, `load_provisioning`
 
 ### `int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:2005`
+`modules/woz_aliro/src/aliro_reader.c:2073`
 
 Add a Matter-provisioned credential public key to the reader's trust store and persist it.
 Returns 0 if newly added and stored, 1 if the credential was already trusted (nothing
@@ -495,7 +495,7 @@ fails. On failure the in-memory trust store (s_trust) is left unchanged.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:2039`
+`modules/woz_aliro/src/aliro_reader.c:2112`
 
 Revert the reader's provisioning to the default dev identity and empty trust store, and
 persist that state to NVS.
@@ -505,7 +505,7 @@ success, after which the reader group key salt is recomputed via compute_reader_
 **calls** `compute_reader_group_x`, `load_provisioning`
 
 ### `int aliro_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len)`
-`modules/woz_aliro/src/aliro_reader.c:2074`
+`modules/woz_aliro/src/aliro_reader.c:2147`
 
 Serialise the reader's current identity + trust store into a self-describing blob
 (aliro_prov_serialize format) so it can be loaded onto a second board. Snapshots
@@ -515,7 +515,7 @@ sets *out_len on success; -1 if the buffer is too small.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_import_blob(const uint8_t *buf, size_t len)`
-`modules/woz_aliro/src/aliro_reader.c:2094`
+`modules/woz_aliro/src/aliro_reader.c:2167`
 
 Adopt an identity + trust store from a blob written by aliro_reader_export_blob
 (or aliro_prov_serialize): parse, persist to NVS, then commit in memory so the
@@ -525,8 +525,9 @@ so a failed NVS write leaves the live identity unchanged. Returns 0 on success,
 
 **calls** `aliro_reader_refresh_adv`, `compute_reader_group_x`, `load_provisioning`
 
-<details><summary>Undocumented (7)</summary>
+<details><summary>Undocumented (8)</summary>
 
+- `aliro_reader_set_lock_state_listener`
 - `aliro_reader_presence_expected_credential`
 - `aliro_reader_presence_authenticated_after`
 - `any_session_active_on_host`
