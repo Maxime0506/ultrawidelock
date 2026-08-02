@@ -537,6 +537,8 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
  */
 /* Defined with the subscription table it walks; see notify_lock_state(). */
 static void notify_lock_state_changed(void);
+/* Re-arms the periodic report; defined with the table it walks. */
+static void subscription_heartbeat_arm(void);
 
 static void fab_store_work_fn(struct k_work *w)
 {
@@ -916,10 +918,53 @@ static void notify_work_fn(struct k_work *w)
 }
 
 static K_WORK_DEFINE(s_notify_work, notify_work_fn);
+static void heartbeat_work_fn(struct k_work *w);
+static K_WORK_DELAYABLE_DEFINE(s_heartbeat_work, heartbeat_work_fn);
 
 static void notify_lock_state_changed(void)
 {
 	k_work_submit(&s_notify_work);
+}
+
+/*
+ * The periodic half of a subscription.
+ *
+ * A subscriber is promised a report at least every max_interval_s -- 600 s is
+ * what Apple asks for here -- whether or not anything changed. Miss it and the
+ * subscription lapses, which presents as an accessory that has gone away rather
+ * than as a missing message.
+ *
+ * One timer for every subscription rather than one each: they all carry the
+ * same attribute and the period is a floor, not a schedule, so reporting early
+ * is free and reporting per-subscription would cost six timers on a part with
+ * under 5 KB of RAM. The period is deliberately well under the ceiling -- a
+ * report costs ~67 bytes on a sleepy link whose round trip has been measured at
+ * 1.4 s, and being early is cheap while being late is the whole failure.
+ */
+#define SUBSCRIPTION_HEARTBEAT_S 120u
+
+static void heartbeat_work_fn(struct k_work *w)
+{
+	bool any = false;
+
+	ARG_UNUSED(w);
+
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		if (s_subs[i].in_use && s_subs[i].active) {
+			notify_lock_state(&s_subs[i]);
+			any = true;
+		}
+	}
+	/* Stops re-arming itself once nothing is subscribed, so a node nobody
+	 * is watching is not waking its radio every two minutes. */
+	if (any) {
+		(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(SUBSCRIPTION_HEARTBEAT_S));
+	}
+}
+
+static void subscription_heartbeat_arm(void)
+{
+	(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(SUBSCRIPTION_HEARTBEAT_S));
 }
 
 /** The session serving the datagram in flight; 0 when it arrived over BLE. */
@@ -1251,14 +1296,18 @@ static void on_status_response(const struct matter_exchange_in *in)
 	}
 	LOG_INF("  subscription 0x%08x ESTABLISHED on session 0x%04x, max interval %u s",
 		(unsigned int)s->id, (unsigned int)s->session_id, s->max_interval_s);
-	/*
-	 * NOT YET PERIODIC. Nothing here reports again, so this subscription
-	 * lapses once max_interval_s passes and the subscriber is entitled to
-	 * call the node unresponsive. Enough to finish commissioning, and
-	 * flagged because a lapsed subscription looks exactly like a node that
-	 * has gone away.
-	 */
 	send_im(MATTER_IM_OP_SUBSCRIBE_RESPONSE, s_report, resp_len);
+	/*
+	 * And now it is periodic. Matter's contract is that the server reports
+	 * at least every max_interval even when nothing changed -- a
+	 * subscription that goes quiet is a node the subscriber is entitled to
+	 * call unresponsive, and that is exactly what "Matter Accessory / No
+	 * Response" was.
+	 *
+	 * Reporting on CHANGE alone (a407dfa) is not enough for the same reason:
+	 * a lock nobody touches for ten minutes stops existing.
+	 */
+	subscription_heartbeat_arm();
 }
 
 static void on_secure(const struct matter_exchange_in *in)
