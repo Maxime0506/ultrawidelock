@@ -192,35 +192,21 @@ dfu-key:
 ##   arithmetic rather than choice: BLE DFU and Matter OTA both stage into a
 ##   SECOND slot, and a 512 KB part running a 447 KB app has room for exactly
 ##   one. See firmware/sysbuild.conf.
-##   MCUboot listens for 400 ms at each boot, so this retries while you press
-##   RESET. If both the VCOM and the app's own USB enumerate, the guess may pick
-##   the wrong one: pass DFU_PORT explicitly and it prints which it used.
-##   NOT YET RUN ON HARDWARE. internal/cdk-dfu-plan.md carries the runbook.
+##   Resets the board itself over SWD: there is NO button to press, because
+##   CONFIG_GPIO_AS_PINRESET is unset and so SW1 (P0.18) is a plain GPIO that
+##   does not reset anything, whatever the board DTS comment says.
+##   If both the VCOM and the app's own USB enumerate, the guess may pick the
+##   wrong one: pass DFU_PORT explicitly and it prints which it used.
+##   internal/cdk-dfu-plan.md carries the runbook.
 ##   Options: DFU_PORT=/dev/cu.usbmodemXXXX  DFU_BAUD=115200  CDK_BUILD=<dir>
 dfu:
-	@command -v mcumgr >/dev/null 2>&1 || { printf '  mcumgr not found  ·  install: make tools-install\n' >&2; exit 1; }
-	@test -f '$(CDK_SIGNED)' || { printf '  no signed image at %s  ·  run `make build` first\n' '$(CDK_SIGNED)' >&2; exit 1; }
 	@port='$(DFU_PORT)'; \
 	if [ -z "$$port" ]; then port=$$(ls /dev/cu.usbmodem* 2>/dev/null | head -n1); fi; \
 	if [ -z "$$port" ]; then \
-	  printf '  no serial port found  ·  plug in the board or pass DFU_PORT=/dev/cu.usbmodemXXXX\n' >&2; \
+	  printf '  no serial port found  ·  plug the J-Link (J9) in, or pass DFU_PORT=/dev/cu.usbmodemXXXX\n' >&2; \
 	  exit 1; \
 	fi; \
-	conn="dev=$$port,baud=$(DFU_BAUD)"; \
-	printf '  upload %s\n      to %s @ %s\n  PRESS RESET (SW1) NOW  ·  MCUboot listens 400 ms per boot, so this retries\n' \
-	  '$(CDK_SIGNED)' "$$port" '$(DFU_BAUD)'; \
-	n=0; \
-	while [ $$n -lt 12 ]; do \
-	  n=$$((n+1)); \
-	  if mcumgr --conntype serial --connstring "$$conn" image upload '$(CDK_SIGNED)'; then \
-	    printf '  upload OK  ·  resetting into it\n'; \
-	    mcumgr --conntype serial --connstring "$$conn" reset || true; \
-	    exit 0; \
-	  fi; \
-	  printf '  attempt %s/12 did not land  ·  press RESET\n' "$$n" >&2; \
-	done; \
-	printf '  gave up after 12 attempts  ·  is the board entering recovery? internal/cdk-dfu-plan.md\n' >&2; \
-	exit 1
+	$(REPO_ROOT)/scripts/cdk-dfu.sh "$$port" '$(DFU_BAUD)' '$(CDK_SIGNED)' '$(CDK_CHIP)'
 
 ## monitor: stream the DWM3001CDK's console over RTT  ·  Ctrl-C to stop
 ##   This board has no UART console (CONFIG_UART_CONSOLE=n), so `make nrf-term`
