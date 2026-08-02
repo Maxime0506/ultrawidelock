@@ -33,7 +33,13 @@ make cdk-flash                  # over the on-board J-Link OB
 | Identity | typed in over USB, below | self-provisions from Apple Home |
 | Matter / Thread | absent | OpenThread MTD/SED, SRP, 0xFFF6 commissioning |
 | USB console | yes | no — reader + console + Thread overflows RAM by 1,752 B |
-| Measured | 283,440 B flash / 93,812 B RAM | 415,416 B flash / 120,120 B RAM |
+| Measured | 284,844 B flash / 82,980 B RAM | 443,696 B flash / 126,760 B RAM |
+
+Those two rows are from the linker's own region report, rebuilt at this commit;
+the figures elsewhere in this file are older measurements of smaller trees and
+are labelled with what they were measuring. The Matter image has **4,312 bytes
+of RAM left** (96.71% of 128 KB), so treat any new static allocation on that
+build as a decision rather than a detail.
 
 Neither image carries a credential, and both are the same for every board.
 Flashing is half the job: `cdk-reader` holds the DEV identity until you
