@@ -9,13 +9,32 @@
 # instead does not work: nrfjprog spends seconds connecting to the probe before
 # it pulls the line, by which time the window has opened and shut.
 #
-# THERE IS NO BUTTON TO PRESS. The board DTS says SW1 (P0.18) "by default is
-# nRESET", but that default needs CONFIG_GPIO_AS_PINRESET to write the UICR bit
-# and this application does not set it. P0.18 is a plain GPIO here and SW1 resets
-# nothing. Measured 2026-08-02: 180 probes across repeated SW1 presses, zero
-# answers; one SWD reset with a probe loop already running answered immediately.
-# So this resets over SWD and asks the operator for nothing.
+# NO BUTTON IS NEEDED, but not for the reason an earlier version of this comment
+# gave. SW1 DOES reset this board: UICR.PSELRESET reads 0x00000012 (pin 18,
+# CONNECT clear), and a tap produces a full fresh boot on RTT. Check it with
+#   nrfjprog --memrd 0x10001200 --n 8
+# CONFIG_GPIO_AS_PINRESET only WRITES that field, so grepping an app's .config
+# for that symbol says nothing about whether the pin currently resets.
 #
+# This resets over SWD anyway, because that needs no operator and no timing.
+#
+# WHAT DOES NOT WORK, AND IS NOT UNDERSTOOD. Serial recovery completed exactly
+# one real upload (2026-08-02 ~22:00) and has not been reproducible since, on
+# the same config, binary and board. Ruled out by measurement, none of them the
+# cause: the window duration (400 ms and 30000 ms fail identically), a J-Link
+# session blocking the VCOM (a cold boot with no debugger fails too), a stale
+# process on the port, a wedged probe, board health, the provisioned state, and
+# the reset mechanism. Also verified WORKING: UART TX (3,392 bytes out of the
+# app), UART RX electrically (EVENTS_RXDRDY=1 and ERRORSRC=0x1 after 200 bytes
+# in), the pinctrl in both images, and MCUboot reaching its wait window at all
+# (the application appears ~5 s after reset, which is the window elapsing).
+#
+# So MCUboot sits in its window on a working UART and does not answer. The next
+# measurement worth taking is instrumenting MCUboot itself rather than inferring
+# it from outside: CONFIG_MCUBOOT_INDICATION_LED with an mcuboot-led0 alias, or
+# logging over RTT, to see whether boot_serial_check_start is entered and with
+# what timeout.
+
 # Single slot: the upload OVERWRITES the running image. A torn transfer leaves no
 # application, which is recoverable and not a brick -- MCUboot stays in recovery
 # (CONFIG_BOOT_SERIAL_NO_APPLICATION=y) and `make flash` over SWD always works.

@@ -192,9 +192,10 @@ dfu-key:
 ##   arithmetic rather than choice: BLE DFU and Matter OTA both stage into a
 ##   SECOND slot, and a 512 KB part running a 447 KB app has room for exactly
 ##   one. See firmware/sysbuild.conf.
-##   Resets the board itself over SWD: there is NO button to press, because
-##   CONFIG_GPIO_AS_PINRESET is unset and so SW1 (P0.18) is a plain GPIO that
-##   does not reset anything, whatever the board DTS comment says.
+##   Resets over SWD, so no button is needed. (SW1 DOES reset this board --
+##   PSELRESET is programmed to P0.18 -- but the script needs no operator.)
+##   NOT RELIABLE: one real upload succeeded and has not reproduced since.
+##   scripts/cdk-dfu.sh records everything ruled out.
 ##   If both the VCOM and the app's own USB enumerate, the guess may pick the
 ##   wrong one: pass DFU_PORT explicitly and it prints which it used.
 ##   internal/cdk-dfu-plan.md carries the runbook.
