@@ -28,7 +28,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/host/sources.sh"
 
-OUT="$ROOT/build/coverage"
+OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/host/coverage"
 BIN="$OUT/host_test_cov"
 mkdir -p "$OUT"
 rm -f "$OUT"/*.profraw # stale profiles from removed suites break the merge

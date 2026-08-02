@@ -81,7 +81,7 @@ flowchart LR
 | [`modules/woz_uwb/src/facade/`](architecture/modules.woz_uwb.src.facade/README.md) | 12 | 86/86 (100%) |
 | [`modules/woz_uwb/src/fira/`](architecture/modules.woz_uwb.src.fira/README.md) | 3 | 17/17 (100%) |
 | [`modules/woz_uwb/src/shell/`](architecture/modules.woz_uwb.src.shell/README.md) | 2 | 14/14 (100%) |
-| [`ports/dwm3001cdk/app/src/`](architecture/ports.dwm3001cdk.app.src/README.md) | 13 | 49/132 (37%) |
+| [`firmware/src/`](architecture/firmware.src/README.md) | 13 | 49/132 (37%) |
 | [`ports/esp32/apps/initiator/main/`](architecture/ports.esp32.apps.initiator.main/README.md) | 1 | 0/5 (0%) |
 | [`ports/esp32/apps/matter-lock/main/`](architecture/ports.esp32.apps.matter-lock.main/README.md) | 9 | 56/58 (96%) |
 | [`ports/esp32/apps/matter-lock/main/lock/`](architecture/ports.esp32.apps.matter-lock.main.lock/README.md) | 5 | 60/60 (100%) |
@@ -104,12 +104,12 @@ flowchart LR
 
 *Mined from git history as of `253a4c1`.*
 
-**Most-changed:** [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (42 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (21 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (18 commits).
+**Most-changed:** [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md) (42 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (21 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (18 commits).
 
 **Change together without importing each other:**
 
-- [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) ↔ [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (11 shared commits)
-- [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) ↔ [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (11 shared commits)
-- [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) ↔ [`ports/dwm3001cdk/app/src/matter_thread_port.c`](architecture/ports.dwm3001cdk.app.src/matter_thread_port.c.md) (7 shared commits)
+- [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) ↔ [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md) (11 shared commits)
+- [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) ↔ [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md) (11 shared commits)
+- [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md) ↔ [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md) (7 shared commits)
 - [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md) ↔ [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (6 shared commits)
-- [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md) ↔ [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md) (6 shared commits)
+- [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md) ↔ [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md) (6 shared commits)

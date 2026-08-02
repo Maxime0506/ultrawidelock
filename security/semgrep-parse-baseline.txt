@@ -59,6 +59,6 @@ ports/esp32/test/test_port_headers.c
 # settings handler macros, same forms as the entries above. Note the clang-tidy row in the
 # list of compensating controls does NOT cover these: tests/host/sources.sh compiles only
 # modules/ and tests/host, so for this directory the fallback is CodeQL's weekly run alone.
-ports/dwm3001cdk/app/src/aliro_ble_zephyr.c
-ports/dwm3001cdk/app/src/aliro_prov_settings.c
-ports/dwm3001cdk/app/src/matter_commission.c
+firmware/src/aliro_ble_zephyr.c
+firmware/src/aliro_prov_settings.c
+firmware/src/matter_commission.c

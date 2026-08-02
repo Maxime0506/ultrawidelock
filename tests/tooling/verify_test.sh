@@ -108,6 +108,7 @@ firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-initiator        !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
+firmware-builds.yml:dwm3001cdk             !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
 release.yml:guard                          !release: refuses a dispatch whose ref is not a vN.N.N tag, so it has nothing to reproduce locally
 release.yml:tui                            test-tui

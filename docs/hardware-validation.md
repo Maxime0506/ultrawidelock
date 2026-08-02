@@ -25,7 +25,7 @@ does not inherit the ST25R300 checklist result.
 - nRF5340 DK with DWM3000EVB (Arduino header) and X-NUCLEO-NFC12A1, wired per
   [`ports/nrf5340dk/overlays/dw3000-nfc.overlay`](../ports/nrf5340dk/overlays/dw3000-nfc.overlay).
 - An iPhone (or Apple Watch) with the lock's Aliro key provisioned in Wallet.
-- Serial console attached (`make term`) to observe logs.
+- Serial console attached (`make nrf-term`) to observe logs.
 
 ### Checklist
 

@@ -73,7 +73,7 @@ Capture and score:
 
 ```
 # in ports/esp32/apps/matter-lock, on an ESP32-S3 + DWM3000EVB flashed with a lab build
-make term LOG=alice.log          # logs the serial port to a file
+make nrf-term LOG=alice.log          # logs the serial port to a file
 #   at the console: `lab on`, walk up several times from 4-5 m back, `lab off`
 
 # from the repo root

@@ -1,5 +1,5 @@
 <!-- generated documentation — edit the source, not this file -->
-# `ports/dwm3001cdk/app/src/matter_ble_zephyr.c`
+# `firmware/src/matter_ble_zephyr.c`
 
 @file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
 A thin adapter, on purpose. All the framing lives in modules/woz_matter
@@ -11,7 +11,7 @@ Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
 service, one write characteristic, one indicate characteristic,
 connection-scoped state -- and is proven against live iPhones.
 
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](matter_ble_zephyr.h.md)
+**depends on** [`firmware/src/matter_ble_zephyr.h`](matter_ble_zephyr.h.md)
 
 ```mermaid
 flowchart TD
@@ -22,14 +22,14 @@ flowchart TD
 ## API
 
 ### `static int pump_tx(void)`
-`ports/dwm3001cdk/app/src/matter_ble_zephyr.c:396`
+`firmware/src/matter_ble_zephyr.c:396`
 
 Emit the next BTP fragment, if a message is being sent.
 
 **called by** `indicate_done`, `matter_ble_send`
 
 ### `int matter_ble_send(const uint8_t *msg, size_t len)`
-`ports/dwm3001cdk/app/src/matter_ble_zephyr.c:456`
+`firmware/src/matter_ble_zephyr.c:456`
 
 Fragment and indicate a Matter message.
 @return 0, -ENOTCONN before the BTP handshake, -EAGAIN if the peer has not
@@ -38,14 +38,14 @@ subscribed to C2, -EBUSY while another message is still going out.
 **calls** `is_subscribed`, `pump_tx`
 
 ### `void matter_ble_set_msg_handler(matter_ble_msg_cb cb)`
-`ports/dwm3001cdk/app/src/matter_ble_zephyr.c:489`
+`firmware/src/matter_ble_zephyr.c:489`
 
 There is no init call. The work queue is started by SYS_INIT at APPLICATION
 priority, because the GATT service is registered statically and the two must
 come up together.
 
 ### `static bool claim_conn(struct bt_conn *conn)`
-`ports/dwm3001cdk/app/src/matter_ble_zephyr.c:502`
+`firmware/src/matter_ble_zephyr.c:502`
 
 The connection is claimed on the first C1 write, NOT on connect. The reader
 accepts BLE connections too, and claiming every one of them would let an
@@ -55,7 +55,7 @@ commissioner. A peer that writes C1 has identified itself as one.
 **called by** `c1_write`  ·  **calls** `reset_link`
 
 ### `int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)`
-`ports/dwm3001cdk/app/src/matter_ble_zephyr.c:544`
+`firmware/src/matter_ble_zephyr.c:544`
 
 ChipBLEDeviceIdentificationInfo, 8 bytes after the 16-bit UUID
 (CHIPBleServiceData.h:52-79):
@@ -68,7 +68,7 @@ advertisement version in the high nibble
 [7]    additional-data flag
 
 ### `static int matter_ble_init(void)`
-`ports/dwm3001cdk/app/src/matter_ble_zephyr.c:580`
+`firmware/src/matter_ble_zephyr.c:580`
 
 Started by SYS_INIT rather than by the application, because
 BT_GATT_SERVICE_DEFINE registers the 0xFFF6 service unconditionally: the C1

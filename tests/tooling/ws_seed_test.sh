@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ws_seed_test.sh — hermetic tests for the per-worktree workspace auto-seeding
-# (ws-seed.sh + build.sh's workspace resolution).
+# (ws-seed.sh + build-nrf5340dk.sh's workspace resolution).
 #
 # Fully isolated: every scenario runs in a throwaway temp dir with its own git
 # repos and a STUB bootstrap (no west, no fetch, no ~5 GB clone of the real tree).
@@ -10,7 +10,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 WS_SEED="$REPO/scripts/ws-seed.sh"
-BUILD_SH="$REPO/scripts/build.sh"
+BUILD_SH="$REPO/scripts/build-nrf5340dk.sh"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/wsseed.XXXXXX")"
 TMP="$(cd "$TMP" && pwd -P)"   # canonicalize (macOS /var -> /private/var, strip //)
@@ -54,7 +54,7 @@ make_primary() {
 	git -C "$dir" config core.hooksPath /dev/null
 	mkdir -p "$dir/scripts"
 	cp "$WS_SEED" "$dir/scripts/ws-seed.sh"; chmod +x "$dir/scripts/ws-seed.sh"
-	cp "$BUILD_SH" "$dir/scripts/build.sh"; chmod +x "$dir/scripts/build.sh"
+	cp "$BUILD_SH" "$dir/scripts/build-nrf5340dk.sh"; chmod +x "$dir/scripts/build-nrf5340dk.sh"
 	write_stub_bootstrap "$dir"
 	if [ "$bootstrapped" = yes ]; then
 		mkdir -p "$dir/workspace/.west" "$dir/workspace/ncs-door-lock-and-access-control"
@@ -64,9 +64,9 @@ make_primary() {
 	git -C "$dir" add -A; git -C "$dir" commit -qm init
 }
 
-# Resolve WS via build.sh's resolve-only seam; return only its final line (the
+# Resolve WS via build-nrf5340dk.sh's resolve-only seam; return only its final line (the
 # path), so any seed/bootstrap chatter on stdout is ignored.
-resolve() { ( cd "$1" && shift; env "$@" ALIRO_RESOLVE_ONLY=1 ./scripts/build.sh build 2>/dev/null | tail -1 ); }
+resolve() { ( cd "$1" && shift; env "$@" ALIRO_RESOLVE_ONLY=1 ./scripts/build-nrf5340dk.sh build 2>/dev/null | tail -1 ); }
 
 echo "== ws-seed.sh unit scenarios =="
 
@@ -105,7 +105,7 @@ out="$( cd "$TMP/wt5" && BOOTSTRAP_FAIL=1 ./scripts/ws-seed.sh 2>&1 )"; rc=$?
 assert "T5 failed seed nonzero"       test "$rc" -ne 0
 assert "T5 partial clone cleaned up"  test ! -e "$TMP/wt5/workspace"
 
-echo "== build.sh resolution scenarios =="
+echo "== build-nrf5340dk.sh resolution scenarios =="
 
 # T6: an explicit ALIRO_WS always wins (no seeding attempted).
 git -C "$TMP/p1" worktree add -q "$TMP/wt6" >/dev/null 2>&1
@@ -125,7 +125,7 @@ res="$(resolve "$TMP/wt7")"
 assert "T8 resolves local again"      test "$res" = "$TMP/wt7/workspace"
 assert "T8 did not re-seed"           test ! -f "$TMP/wt7/workspace/.bootstrapped"
 
-# T9: when seeding fails, build.sh falls back to the shared primary workspace.
+# T9: when seeding fails, build-nrf5340dk.sh falls back to the shared primary workspace.
 git -C "$TMP/p1" worktree add -q "$TMP/wt9" >/dev/null 2>&1
 res="$(resolve "$TMP/wt9" BOOTSTRAP_FAIL=1)"
 assert "T9 falls back to primary"     test "$res" = "$TMP/p1/workspace"

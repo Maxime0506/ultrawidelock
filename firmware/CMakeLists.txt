@@ -11,7 +11,7 @@
 # that consumes that module through CONFIG_WOZ_ALIRO_STACK stays untouched.
 cmake_minimum_required(VERSION 3.20.0)
 
-get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 # modules/woz_aliro is listed for its Kconfig alone: the reader sources use the
 # LOG_MODULE the `module = WOZ_ALIRO` template declares, so CONFIG_WOZ_ALIRO_LOG_LEVEL
 # has to exist. Its CMakeLists is gated on CONFIG_WOZ_ALIRO_STACK, which stays n

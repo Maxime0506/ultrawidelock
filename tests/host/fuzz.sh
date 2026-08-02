@@ -23,7 +23,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 CC="${CC:-cc}"
 FZ="$ROOT/tests/host/fuzz"
-OUT="$ROOT/build/fuzz"
+OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/host/fuzz"
 APDU_SRC="$ROOT/modules/woz_aliro/src"
 SECONDS_BUDGET="${FUZZ_SECONDS:-20}"
 

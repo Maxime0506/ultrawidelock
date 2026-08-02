@@ -1,5 +1,5 @@
 <!-- generated documentation — edit the source, not this file -->
-# `ports/dwm3001cdk/app/src/thread_gate.c`
+# `firmware/src/thread_gate.c`
 
 *No module docstring. First commit: "dwm3001cdk: make the provisioning console optional, and probe Matter's budget".*
 

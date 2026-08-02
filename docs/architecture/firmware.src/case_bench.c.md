@@ -1,5 +1,5 @@
 <!-- generated documentation — edit the source, not this file -->
-# `ports/dwm3001cdk/app/src/case_bench.c`
+# `firmware/src/case_bench.c`
 
 *No module docstring. First commit: "dwm3001cdk: measure what a Matter CASE handshake costs on this part".*
 
@@ -11,7 +11,7 @@ flowchart TD
 ## API
 
 ### `static psa_status_t make_ecc_key(psa_key_usage_t usage, psa_algorithm_t alg, psa_key_id_t *out)`
-`ports/dwm3001cdk/app/src/case_bench.c:123`
+`firmware/src/case_bench.c:123`
 
 An ECC key pair usable for one algorithm. The bench needs several: two
 ephemeral pairs for the ECDH, and three signing pairs standing in for RCAC,
@@ -20,7 +20,7 @@ ICAC and the initiator's NOC.
 **called by** `case_round`
 
 ### `static void hkdf(const uint8_t *secret, size_t secret_len, const uint8_t *salt, size_t salt_len, const char *info, uint8_t *out, size_t out_len)`
-`ports/dwm3001cdk/app/src/case_bench.c:157`
+`firmware/src/case_bench.c:157`
 
 HKDF-SHA256, the KDF CASE uses for S2K, S3K and the session keys.
 The repo's own aliro_hkdf(), not PSA key derivation, for two reasons. It is
@@ -33,7 +33,7 @@ run of this bench found that the hard way; see prj.conf.
 **called by** `case_round`
 
 ### `static uint32_t case_round(void)`
-`ports/dwm3001cdk/app/src/case_bench.c:172`
+`firmware/src/case_bench.c:172`
 
 One CASE handshake, its setup included, returning the microseconds spent in
 the measured part. The certificate keys and the signatures over them are

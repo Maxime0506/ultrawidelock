@@ -1131,9 +1131,9 @@ transport_pn532.cpp.
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
 
-## `ports/dwm3001cdk/app/src/`
+## `firmware/src/`
 
-### [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
+### [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
 
 @file matter_commission.c — joins BTP, the exchange and PASE.
 Three finished pieces and no protocol of its own:
@@ -1144,21 +1144,21 @@ What is left for this file is the wiring nobody else can do: pulling the
 SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
 what happens when a commissioner disappears halfway through.
 
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
 
-### [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md)
-
-*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
-
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md), [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md)
-
-### [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md)
+### [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
-**depends on** [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
 
-### [`ports/dwm3001cdk/app/src/matter_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.c.md)
+### [`firmware/src/main.c`](architecture/firmware.src/main.c.md)
+
+*No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
+
+**depends on** [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+### [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md)
 
 @file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
 A thin adapter, on purpose. All the framing lives in modules/woz_matter
@@ -1170,43 +1170,43 @@ Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
 service, one write characteristic, one indicate characteristic,
 connection-scoped state -- and is proven against live iPhones.
 
-**depends on** [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md)
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
 
-### [`ports/dwm3001cdk/app/src/matter_fab_settings.c`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.c.md)
+### [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
 
-**depends on** [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+**depends on** [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
 
-### [`ports/dwm3001cdk/app/src/matter_ble_zephyr.h`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.h.md)
+### [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
 
 @file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
 Everything here is Zephyr-side glue. The protocol lives in
 modules/woz_matter, which knows nothing about BLE.
 
-**used by** [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/matter_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/matter_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
+**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
 
-### [`ports/dwm3001cdk/app/src/matter_commission.h`](architecture/ports.dwm3001cdk.app.src/matter_commission.h.md)
+### [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
 
 @file matter_commission.h — start answering commissioning attempts.
 
-**used by** [`ports/dwm3001cdk/app/src/aliro_ble_zephyr.c`](architecture/ports.dwm3001cdk.app.src/aliro_ble_zephyr.c.md), [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md)
+**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
 
-### [`ports/dwm3001cdk/app/src/matter_fab_settings.h`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.h.md)
+### [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
 
 *No module docstring. First commit: "dwm3001cdk: keep the fabric table across a reboot".*
 
-**used by** [`ports/dwm3001cdk/app/src/main.c`](architecture/ports.dwm3001cdk.app.src/main.c.md), [`ports/dwm3001cdk/app/src/matter_commission.c`](architecture/ports.dwm3001cdk.app.src/matter_commission.c.md), [`ports/dwm3001cdk/app/src/matter_fab_settings.c`](architecture/ports.dwm3001cdk.app.src/matter_fab_settings.c.md)
+**used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
 
-### [`ports/dwm3001cdk/app/src/aliro_prov_settings.c`](architecture/ports.dwm3001cdk.app.src/aliro_prov_settings.c.md)
+### [`firmware/src/aliro_prov_settings.c`](architecture/firmware.src/aliro_prov_settings.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: standalone Aliro reader, stage 0 (it fits)".*
 
-### [`ports/dwm3001cdk/app/src/case_bench.c`](architecture/ports.dwm3001cdk.app.src/case_bench.c.md)
+### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: measure what a Matter CASE handshake costs on this part".*
 
-### [`ports/dwm3001cdk/app/src/matter_thread_port.c`](architecture/ports.dwm3001cdk.app.src/matter_thread_port.c.md)
+### [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md)
 
 @file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
 The dataset arrives from the commissioner as raw meshcop TLVs and
@@ -1218,11 +1218,11 @@ Built into every image. Without CONFIG_NET_L2_OPENTHREAD it refuses honestly
 rather than disappearing: matter_clusters.c calls it unconditionally, and a
 link error would be a worse way to learn that Thread was configured out.
 
-### [`ports/dwm3001cdk/app/src/prov_shell.c`](architecture/ports.dwm3001cdk.app.src/prov_shell.c.md)
+### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: runtime provisioning replaces the build-time credential".*
 
-### [`ports/dwm3001cdk/app/src/thread_gate.c`](architecture/ports.dwm3001cdk.app.src/thread_gate.c.md)
+### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
 
 *No module docstring. First commit: "dwm3001cdk: make the provisioning console optional, and probe Matter's budget".*
 
@@ -3131,7 +3131,7 @@ Usage:
     scripts/spake2p_verifier.py --passcode 12345678 --salt-b64 <...>
 
 The output goes into CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER and friends
-(ports/dwm3001cdk/app/Kconfig). Print nothing anywhere it will be logged: the
+(firmware/Kconfig). Print nothing anywhere it will be logged: the
 verifier is not a secret in the way the passcode is, but it identifies the
 device and there is no reason to scatter it.
 

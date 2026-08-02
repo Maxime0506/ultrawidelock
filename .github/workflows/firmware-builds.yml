@@ -57,42 +57,46 @@ jobs:
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           . "$IDF_PATH/export.sh"
-          idf.py set-target esp32s3
-          idf.py build
+          # One build root for the whole repo, the same tree `make esp-build` uses.
+          B="$GITHUB_WORKSPACE/build"
+          idf.py -B "$B/esp32-reader-esp32s3" \
+                 -D SDKCONFIG="$B/esp32-reader-esp32s3/sdkconfig" set-target esp32s3
+          idf.py -B "$B/esp32-reader-esp32s3" \
+                 -D SDKCONFIG="$B/esp32-reader-esp32s3/sdkconfig" build
           # CONFIG_WOZ_PRESENCE is default n and no sdkconfig.defaults sets it,
           # so the build above compiles none of the non-door primitive. Build it
           # explicitly, in its own directory, or it rots unnoticed the way
           # CONFIG_WOZ_PIV_CCID did: broken build config, green CI, caught only
           # when someone finally tried it on a bench.
-          idf.py -B build-presence \
-                 -DSDKCONFIG=build-presence/sdkconfig \
+          idf.py -B "$B/esp32-reader-esp32s3-presence" \
+                 -DSDKCONFIG="$B/esp32-reader-esp32s3-presence/sdkconfig" \
                  -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.presence" \
                  build
           # Linking is not enough -- --gc-sections has eliminated these before.
           # Both names are absent from a defaults-only build; aliro_ec_p256_keygen
           # is not, because the Aliro credential path links it either way.
-          xtensa-esp32s3-elf-nm build-presence/woz_uwb_esp32s3.elf \
+          xtensa-esp32s3-elf-nm "$B/esp32-reader-esp32s3-presence/woz_uwb_esp32s3.elf" \
             | grep -qE ' T presence_link_init$'
-          xtensa-esp32s3-elf-nm build-presence/woz_uwb_esp32s3.elf \
+          xtensa-esp32s3-elf-nm "$B/esp32-reader-esp32s3-presence/woz_uwb_esp32s3.elf" \
             | grep -qE ' T aliro_assert_build_p256$'
           # C6 is the BU04 direct-SPI bring-up target. Keep it in a separate
           # build tree so the hardware-validated S3 sdkconfig/artifacts remain
           # unchanged and the RISC-V toolchain gets exercised explicitly.
-          idf.py -B build-c6 \
-                 -D SDKCONFIG=build-c6/sdkconfig \
+          idf.py -B "$B/esp32-reader-esp32c6" \
+                 -D SDKCONFIG="$B/esp32-reader-esp32c6/sdkconfig" \
                  set-target esp32c6
-          idf.py -B build-c6 \
-                 -D SDKCONFIG=build-c6/sdkconfig \
+          idf.py -B "$B/esp32-reader-esp32c6" \
+                 -D SDKCONFIG="$B/esp32-reader-esp32c6/sdkconfig" \
                  build
           # C5 is a shipped target -- release.yml builds and publishes a C5
           # Matter image -- but until now nothing compiled it before release
           # time, so a C5 break surfaced when a tag was cut. Same isolation as
           # C6: its own tree, target and sdkconfig.
-          idf.py -B build-c5 \
-                 -D SDKCONFIG=build-c5/sdkconfig \
+          idf.py -B "$B/esp32-reader-esp32c5" \
+                 -D SDKCONFIG="$B/esp32-reader-esp32c5/sdkconfig" \
                  set-target esp32c5
-          idf.py -B build-c5 \
-                 -D SDKCONFIG=build-c5/sdkconfig \
+          idf.py -B "$B/esp32-reader-esp32c5" \
+                 -D SDKCONFIG="$B/esp32-reader-esp32c5/sdkconfig" \
                  build
           # Compiling for RISC-V is not the same as keeping the CCC STS seam.
           # A dropped --wrap links clean, binds the real dwt_* and silently
@@ -124,8 +128,8 @@ jobs:
               | grep -qE ' U dwt_rxenable$' \
               || { echo "::error::$tag uwb_min.c.obj no longer references dwt_rxenable"; return 1; }
           }
-          check_seam build-c6 C6
-          check_seam build-c5 C5
+          check_seam "$B/esp32-reader-esp32c6" C6
+          check_seam "$B/esp32-reader-esp32c5" C5
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Aliro initiator (User-Device role) — the bench HIL peer for our reader.
@@ -159,15 +163,16 @@ jobs:
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           . "$IDF_PATH/export.sh"
-          idf.py set-target esp32s3
-          idf.py build
+          B="$GITHUB_WORKSPACE/build/esp32-initiator-esp32s3"
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32s3
+          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
           # Linking is not enough -- --gc-sections has eliminated reachable-looking
           # code before. These four are the device half's entry points: the state
           # machine, its init, the BleSK ranging-channel mirror, and the advert
           # decoder. If any is gone the app builds but cannot talk to a reader.
           for sym in aliro_device_on_command aliro_device_init \
                      aliro_dev_blesk_init aliro_ble_central_parse_adv; do
-            xtensa-esp32s3-elf-nm build/aliro_initiator_esp32s3.elf \
+            xtensa-esp32s3-elf-nm "$B/aliro_initiator_esp32s3.elf" \
               | grep -qE " T $sym\$" || { echo "missing symbol: $sym" >&2; exit 1; }
           done
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
@@ -251,7 +256,7 @@ jobs:
       - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild)
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
-          ./scripts/build.sh build
+          ./scripts/build-nrf5340dk.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
   # Compatibility build for the legacy Nordic Aliro archive. The normal
@@ -302,8 +307,75 @@ jobs:
       - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild, ALIRO_SOURCE=0)
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
-          ALIRO_SOURCE=0 ./scripts/build.sh build
+          ALIRO_SOURCE=0 ./scripts/build-nrf5340dk.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+
+  # The DWM3001CDK, this repository's primary target: reader + Matter node +
+  # OpenThread MTD in one nRF52833 image, plus the standalone reader build.
+  # Both come straight from firmware/ -- no add-on, no patches -- so this job
+  # needs the same NCS container and workspace as the nRF5340 DK jobs but none
+  # of their bootstrap patch state. It restores the same workspace cache those
+  # jobs populate and never saves it: a hit is the fast path, and a miss just
+  # bootstraps, so this job can never poison an entry the DK jobs depend on.
+  #
+  # ALIRO_TOOLCHAIN=env for the reason the DK jobs give: inside this container
+  # the toolchain is already on PATH and nrfutil's toolchain index is not
+  # reachable, so mk/cdk.mk must skip the nrfutil launcher.
+  #
+  # The two images are built into separate directories on purpose. `-p auto`
+  # re-runs CMake when the board or application directory changes and NOT when
+  # the -D flags do, so one directory holding both configurations in turn would
+  # silently keep whichever it configured first.
+  dwm3001cdk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
+      # See the nrf5340dk job above for why this is 300M and not 1G.
+      CCACHE_MAXSIZE: 300M
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: restore the bootstrapped west workspace
+        id: ws
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+      - name: bootstrap the workspace (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        run: |
+          ./scripts/bootstrap.sh || {
+            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
+            ./scripts/bootstrap.sh
+          }
+      - name: restore the compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-dwm3001cdk-${{ github.run_id }}
+          restore-keys: |
+            ccache-dwm3001cdk-
+      - name: build the Matter over Thread image (decawave_dwm3001cdk)
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          make build
+      - name: build the standalone reader image (decawave_dwm3001cdk)
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          make reader
+          { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+      - name: both images exist and fit
+        # The build fails on overflow by itself; this asserts the artifacts are
+        # actually there, so a recipe that silently stopped building one of them
+        # cannot pass as green.
+        run: |
+          test -f build/cdk-matter/merged.hex
+          test -f build/cdk-reader/firmware/zephyr/zephyr.hex
 
   # ESP32-S3 Matter door lock against esp-matter at the bench-validated
   # revision (6+ GB once the CHIP submodule tree is in). The esp-matter tree
@@ -460,6 +532,8 @@ jobs:
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           . "$IDF_PATH/export.sh"
           . "$ESP_MATTER_PATH/export.sh"
+          # One build root for the whole repo, the same tree `make esp-build` uses.
+          B="$GITHUB_WORKSPACE/build"
           case "$LEG" in
           esp32s3)
             # The shipping image, and the only leg that catches code which
@@ -467,12 +541,14 @@ jobs:
             # guard, say) -- the presence leg is a strict superset of these
             # sources, since every CONFIG_WOZ_PRESENCE site in this app is a
             # bare #ifdef with no #else.
-            idf.py set-target esp32s3
-            idf.py build
+            idf.py -B "$B/esp32-matter-lock-esp32s3" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32s3/sdkconfig" set-target esp32s3
+            idf.py -B "$B/esp32-matter-lock-esp32s3" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32s3/sdkconfig" build
             ;;
           esp32s3-presence)
-            idf.py -B build-presence \
-                   -D SDKCONFIG=build-presence/sdkconfig \
+            idf.py -B "$B/esp32-matter-lock-esp32s3-presence" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32s3-presence/sdkconfig" \
                    -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.presence' \
                    build
             # Linking is not enough -- --gc-sections has eliminated the P-256
@@ -480,27 +556,27 @@ jobs:
             # the app-facing one: it is what registers the console command, so
             # it is absent exactly when this app's own presence wiring has
             # rotted.
-            xtensa-esp32s3-elf-nm build-presence/door_lock.elf \
+            xtensa-esp32s3-elf-nm "$B/esp32-matter-lock-esp32s3-presence/door_lock.elf" \
               | grep -qE ' T presence_link_cmd$'
             ;;
           esp32c6)
             # The default Matter image for the single-core C6.
-            idf.py -B build-c6 \
-                   -D SDKCONFIG=build-c6/sdkconfig \
+            idf.py -B "$B/esp32-matter-lock-esp32c6" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32c6/sdkconfig" \
                    set-target esp32c6
-            idf.py -B build-c6 \
-                   -D SDKCONFIG=build-c6/sdkconfig \
+            idf.py -B "$B/esp32-matter-lock-esp32c6" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32c6/sdkconfig" \
                    build
             ;;
           esp32c5)
             # release.yml publishes a C5 Matter image, but nothing compiled C5
             # before a tag was cut, so a C5 break used to surface during a
             # release. Same recipe release.yml uses, run on every push instead.
-            idf.py -B build-c5 \
-                   -D SDKCONFIG=build-c5/sdkconfig \
+            idf.py -B "$B/esp32-matter-lock-esp32c5" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32c5/sdkconfig" \
                    set-target esp32c5
-            idf.py -B build-c5 \
-                   -D SDKCONFIG=build-c5/sdkconfig \
+            idf.py -B "$B/esp32-matter-lock-esp32c5" \
+                   -D SDKCONFIG="$B/esp32-matter-lock-esp32c5/sdkconfig" \
                    build
             ;;
           *)

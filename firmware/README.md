@@ -26,13 +26,13 @@ cannot read. BLE + UWB walk-up is the whole feature set here.
 From a cold start to a board you can watch:
 
 ```sh
-make cdk-aliro-matter-thread PRISTINE=1   # -> build-matter/merged.hex
-make cdk-flash-erase                      # over the on-board J-Link OB
-make cdk-rtt                              # the console, Ctrl-C to stop
+make build PRISTINE=1   # -> build/cdk-matter/merged.hex
+make flash-erase                      # over the on-board J-Link OB
+make monitor                              # the console, Ctrl-C to stop
 ```
 
 Every CDK target means this image unless you say otherwise: `CDK_BUILD`
-defaults to `build-matter`, and `cdk-flash`, `cdk-flash-erase` and `cdk-rtt`
+defaults to `build/cdk-matter`, and `flash`, `flash-erase` and `monitor`
 all follow it. `PRISTINE=1` is not only for when something looks stale —
 `-p auto` re-runs CMake when the board or the application directory changes and
 **not** when the `-D` flags do, so a build directory that has ever held the
@@ -74,44 +74,44 @@ accessory uncertified. A real product replaces all three.
 
 ### The reader-only build
 
-`make cdk-reader` is the same source without Matter or Thread: Aliro and UWB,
+`make reader` is the same source without Matter or Thread: Aliro and UWB,
 no commissioner and no Thread network needed, identity typed in over USB. It is
 the quickest way to a working board and the right one for bench work on the
 radio, which is why it still exists.
 
-It builds to `build-cdk`, so flashing and RTT keep meaning the Matter image
+It builds to `build/cdk-reader`, so flashing and RTT keep meaning the Matter image
 until you point them elsewhere:
 
 ```sh
-make cdk-reader PRISTINE=1
-make cdk-flash CDK_BUILD=$(pwd)/build-cdk
-make cdk-rtt   CDK_RTT_BUILD=$(pwd)/build-cdk
+make reader PRISTINE=1
+make flash   CDK_BUILD=build/cdk-reader
+make monitor CDK_RTT_BUILD=build/cdk-reader
 ```
 
-| | `cdk-aliro-matter-thread` | `cdk-reader` |
+| | `build` | `reader` |
 |---|---|---|
 | Identity | self-provisions from Apple Home | typed in over USB, below |
 | Matter / Thread | OpenThread MTD/SED, SRP, 0xFFF6 commissioning | absent |
 | USB console | no — reader + console + Thread overflows RAM by 1,752 B | yes |
-| Measured | 443,696 B flash / 126,760 B RAM | 284,844 B flash / 82,980 B RAM |
+| Measured | 444,220 B flash / 126,888 B RAM | 285,144 B flash / 82,980 B RAM |
 
 Both rows are the linker's own region report, rebuilt at this commit; the
 figures elsewhere in this file are older measurements of smaller trees and are
-labelled with what they were measuring. The Matter image has **4,312 bytes of
-RAM left** (96.71% of 128 KB), so treat any new static allocation on it as a
+labelled with what they were measuring. The Matter image has **4,184 bytes of
+RAM left** (96.81% of 128 KB), so treat any new static allocation on it as a
 decision rather than a detail.
 
 Equivalent by hand, from the west workspace:
 
 ```sh
-west build -p always -b decawave_dwm3001cdk -d ../build-matter ../ports/dwm3001cdk/app \
+west build -p always -b decawave_dwm3001cdk -d ../build/cdk-matter ../firmware \
     -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
-west flash -d ../build-matter
+west flash -d ../build/cdk-matter
 ```
 
 ### What a full erase costs
 
-`make cdk-flash-erase` takes everything the board learned at runtime: the
+`make flash-erase` takes everything the board learned at runtime: the
 Matter fabrics, the reader identity and its trust anchors. Apple Home has to
 commission it again, and that is the real price.
 
@@ -134,11 +134,11 @@ comes back on the name it already published.
 
 There is no UART console on this board (`CONFIG_UART_CONSOLE=n`): on a
 single-core part the DW3110 delayed-TX reply window cannot afford a blocking
-console write. `make term` does not reach it. RTT is the whole log.
+console write. `make nrf-term` does not reach it. RTT is the whole log.
 
 ```sh
-make cdk-rtt                                  # the Matter image
-make cdk-rtt CDK_RTT_BUILD=$(pwd)/build-cdk   # the reader
+make monitor                                  # the Matter image
+make monitor CDK_RTT_BUILD=build/cdk-reader   # the reader
 ```
 
 That is `probe-rs attach` with the ELF, and the ELF is the point: probe-rs
@@ -156,7 +156,7 @@ and `JLinkRTTClient` never reaches port 19021.
 **The first block you see is the previous run.** The RTT ring is `_acUpBuffer`
 at `0x20000010`, 8 KB, in its own section at the bottom of RAM, and a reset does
 not clear it — that is deliberate, it is what lets you read what a board printed
-before it died. The cost is that `make cdk-rtt` opens with whatever the *old*
+before it died. The cost is that `make monitor` opens with whatever the *old*
 firmware left there, and it looks exactly like current output. Anchor on the
 `*** Booting nRF Connect SDK ***` line: everything above it is history. Two
 separate conclusions in this project have been drawn from that block and both
@@ -166,7 +166,7 @@ Two traps worth knowing:
 
 - **`--scan-region` defaults to empty**, and with no region and no ELF probe-rs
   does not scan and does not poll RTT at all — a clean attach and zero output.
-  `make cdk-rtt` passes the ELF, so this only bites a hand-typed attach.
+  `make monitor` passes the ELF, so this only bites a hand-typed attach.
 - **One process at a time owns the probe**, and draining RTT advances the ring's
   read pointer, so a second attach splits the log rather than duplicating it.
   To watch from several terminals, let one own the probe and `tail -f` its
@@ -239,9 +239,17 @@ Cross-checked between the upstream Zephyr board files and Qorvo's own
 ## Bring-up: the DW3110 answers
 
 ```sh
-west build -p always -b decawave_dwm3001cdk -d build-selftest . \
+make selftest                                  # -> build/cdk-selftest
+make flash   CDK_BUILD=build/cdk-selftest
+make monitor CDK_RTT_BUILD=build/cdk-selftest
+```
+
+Equivalent by hand, from the west workspace:
+
+```sh
+west build -p always -b decawave_dwm3001cdk -d ../build/cdk-selftest ../firmware \
     -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf
-west flash -d build-selftest
+west flash -d ../build/cdk-selftest
 ```
 
 Then open SEGGER RTT Viewer (device `NRF52833_XXAA`, SWD, 4000 kHz, auto-detect
@@ -308,10 +316,10 @@ the stock `CONFIG_CLOCK_CONTROL_NRF_K32SRC_XTAL` works.
 
 ## Apple Wallet credentials: transplanted, not commissioned
 
-> Read this as the reason `cdk-reader` exists, not as a limit of the board.
+> Read this as the reason `reader` exists, not as a limit of the board.
 > It was written when transplanting was the only way in, and it still describes
 > that path — which stays the fastest way to get a working reader, and the only
-> one that needs no Thread network. `cdk-aliro-matter-thread` since made the
+> one that needs no Thread network. `build` since made the
 > other way work: a hand-written Matter node (`modules/woz_matter`) instead of
 > CHIP, measured at 415,416 B flash / 120,120 B RAM with the reader and Thread
 > MTD alongside it (`app/overlay-thread.conf`). The paragraph below is about
@@ -416,7 +424,7 @@ The provisioning-mode console is deliberately provisioning-only. `woz_uwb`'s
 `CONFIG_WOZ_UWB_SHELL=n`, because in this mode it would drive a radio that was
 never started.
 
-Watch this mode with `make cdk-rtt CDK_RTT_BUILD=$(pwd)/build-cdk` — probe-rs
+Watch this mode with `make monitor CDK_RTT_BUILD=build/cdk-reader` — probe-rs
 takes the control block address from the ELF, which is what J-Link's auto-search
 cannot find here (see "The console is RTT" above). The manual fallback, if you
 are ever without probe-rs, is `savebin <file>, <up-buffer addr>, 0x1000` from

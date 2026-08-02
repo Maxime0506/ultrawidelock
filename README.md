@@ -31,31 +31,49 @@ Prefer a guided path? Install [Bun](https://bun.sh), then run `make openaliro` f
 walkthrough of bootstrap, build, flash, pairing, and diagnostics with a live serial
 console. Details in [`tools/tui/`](tools/tui/README.md).
 
-### nRF5340 DK
+### DWM3001CDK
 
-Primary hardware: nRF5340 DK + DWM3000EVB/DW3110 + X-NUCLEO-NFC12A1/ST25R300.
+One board, nothing else: a single nRF52833 carrying the Aliro reader, the
+DW3110's ranging, a hand-written Matter node and an OpenThread MTD. Apple Home
+commissions it over BLE and then shows a live lock tile. The bare targets mean
+this board.
 
 ```bash
 make bootstrap     # once; host tools + pinned NCS + workspace (~8.5 GB)
-make build         # build/merged.hex
-make flash-erase   # first flash
-make term          # serial console
+make build         # build/cdk-matter/merged.hex
+make flash         # over the on-board J-Link OB
+make monitor       # the console, over RTT — this board has no UART
+```
+
+`make reader` is the same source without Matter or Thread, which needs no
+commissioner and is the quickest way to a working board. Details and the
+bring-up log in [`firmware/README.md`](firmware/README.md).
+
+### nRF5340 DK
+
+The only target with NFC: nRF5340 DK + DWM3000EVB/DW3110 + X-NUCLEO-NFC12A1/ST25R300.
+
+```bash
+make bootstrap        # the same one-time setup as above
+make nrf-build        # build/nrf5340dk/merged.hex
+make nrf-flash-erase  # first flash
+make nrf-term         # serial console
 ```
 
 The in-tree Aliro stack is the default. Use `ALIRO_SOURCE=0` only for
-legacy Nordic-binary comparison. Then use `make flash`.
+legacy Nordic-binary comparison. Then use `make nrf-flash`.
 
 ### ESP32-S3 / ESP32-C5
 
 Requires ESP-IDF, esp-matter, and a DWM3000EVB/DW3110.
 
 ```bash
-cd ports/esp32/apps/matter-lock
-make set-target TARGET=esp32s3   # or esp32c5; once per checkout
-make go                          # build + flash + monitor
+make esp-set-target APP=matter-lock TARGET=esp32s3   # or esp32c5; once per target
+make esp-go         APP=matter-lock                  # build + flash + monitor
 ```
 
-S3 is validated; C5 is build/release-tested.
+The app directories still work as entry points — `cd ports/esp32/apps/matter-lock
+&& make go` forwards to the same recipes. S3 is validated; C5 is build/release-tested.
 
 ### Add the key
 
@@ -81,6 +99,7 @@ S3 is validated; C5 is build/release-tested.
 
 ## Hardware
 
+- **DWM3001CDK:** one nRF52833 with the DW3110 on board; reader, Matter node and Thread MTD in a single image, approach unlock and a live Apple Home tile validated.
 - **nRF5340:** DK + DW3110 + ST25R300; released Nordic-binary path has NFC + approach validation; source-stack default is CI/host-tested pending the phone checklist.
 - **ESP32-S3:** DW3110; release/source/browser image, approach validated.
 - **ESP32-C5:** DW3110; release/source/browser image, build-tested.

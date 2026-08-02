@@ -48,7 +48,7 @@ the target is assembled in layers, from pristine upstream up:
    (flash layout), plus reader and diagnostic layers (`st25r.conf`,
    `pn532.overlay`, `woz-pretty.conf`, `woz-ha.conf`, `diag-cirdiag.conf`,
    `diag-latency.conf`) that `make build` options select.
-4. `make build` (see [`scripts/build.sh`](../../scripts/build.sh)) drives `west build`
+4. `make build` (see [`scripts/build-nrf5340dk.sh`](../../scripts/build-nrf5340dk.sh)) drives `west build`
    with those overlays and injects the in-repo engine via `ZEPHYR_EXTRA_MODULES`
    (`modules/woz_uwb`, `modules/woz_aliro_stack`, `modules/woz_aliro_ecp`,
    `modules/woz_nfc`, `deps/dw3000`). The in-tree Aliro stack is the default and
