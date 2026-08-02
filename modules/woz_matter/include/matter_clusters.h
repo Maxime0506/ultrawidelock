@@ -725,6 +725,23 @@ void matter_clusters_init(struct matter_im_server *srv, struct matter_device_inf
  */
 void matter_clusters_failsafe_expire(struct matter_device_info *info);
 
+/**
+ * Bring a restored identity back onto the network.
+ *
+ * A node that reloads its fabric table from storage is commissioned but not
+ * REACHABLE: the Thread dataset has not been handed to the stack and no SRP
+ * instance exists, so the controller resolves nothing and reports the accessory
+ * dead. Commissioning does both of those as a side effect of
+ * AddOrUpdateThreadNetwork and AddNOC; this is that same pair, for the boot
+ * path that has no commissioner to trigger them.
+ *
+ * Call it after loading @p info and only when a fabric was actually restored.
+ *
+ * @return MATTER_OK when Thread started and every fabric was advertised,
+ *         MATTER_E_STATE when there is no stored dataset to start from.
+ */
+int matter_clusters_resume(struct matter_device_info *info);
+
 #ifdef __cplusplus
 }
 #endif

@@ -44,6 +44,7 @@
 #include "matter_clusters.h"
 #include "matter_commission.h"
 #include "matter_exchange.h"
+#include "matter_fab_settings.h" /* the fabric table, across a reboot */
 #include "matter_im.h"
 #include "matter_msg.h"
 #include "matter_pase_sm.h"
@@ -668,6 +669,19 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 			(unsigned int)s_info.fabrics[0].node_id,
 			(unsigned int)(s_info.fabrics[0].fabric_id >> 32),
 			(unsigned int)s_info.fabrics[0].fabric_id);
+		if (s_info.last_noc_status == MATTER_NOC_STATUS_OK) {
+			(void)matter_fab_store(&s_info);
+		}
+	}
+	/*
+	 * Store again at CommissioningComplete: AddNOC captured the fabric, but
+	 * the Thread dataset and the complete flag can still change after it,
+	 * and a record that holds a fabric with no dataset restores a node that
+	 * is commissioned and unreachable.
+	 */
+	if (inv.cluster == MATTER_CLUSTER_GENERAL_COMMISSIONING &&
+	    inv.command == MATTER_CMD_GC_COMMISSIONING_COMPLETE && s_info.commissioning_complete) {
+		(void)matter_fab_store(&s_info);
 	}
 	if (resp_len == 0u) {
 		/* The command ran; the peer asked not to be told. */
@@ -2054,5 +2068,37 @@ int matter_commission_init(void)
 	matter_clusters_init(&s_im, &s_info);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
+
+	/*
+	 * AFTER matter_clusters_init, which zeroes the parts of s_info it owns.
+	 *
+	 * A restored identity is not enough on its own: nothing has handed the
+	 * Thread dataset to the stack and no SRP instance exists, so the node
+	 * would be commissioned and unreachable, which the Home app reports the
+	 * same way as an accessory that was never added. matter_clusters_resume
+	 * does the pair that commissioning would have done.
+	 */
+	{
+		int rc = matter_fab_load(&s_info);
+
+		if (rc == 0) {
+			rc = matter_clusters_resume(&s_info);
+			if (rc != MATTER_OK) {
+				LOG_ERR("restored a fabric but could not rejoin Thread (%d); "
+					"the accessory will read as unresponsive",
+					rc);
+			}
+			/*
+			 * The advert was chosen at BLE start, BEFORE this load, so
+			 * it says commissionable and a restored reader would never
+			 * offer 0xFFF2 again -- a node that unlocks until its first
+			 * reboot and silently stops after it. The gate reads the
+			 * fabric table, which only now has anything in it.
+			 */
+			aliro_ble_readvertise();
+		} else if (rc > 0) {
+			LOG_INF("no stored fabric; commissionable");
+		}
+	}
 	return 0;
 }

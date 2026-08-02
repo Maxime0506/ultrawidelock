@@ -55,6 +55,7 @@ target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
 target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_ble_zephyr.c
                                                           src/matter_commission.c
+                                                          src/matter_fab_settings.c
                                                           src/matter_thread_port.c)
 
 # CONFIG_MBEDTLS_MEMORY_DEBUG=y is a NO-OP in this build and sets no define.

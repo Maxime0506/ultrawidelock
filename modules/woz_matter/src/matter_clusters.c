@@ -2075,6 +2075,28 @@ static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 	(void)matter_tlv_end_container(w);
 }
 
+int matter_clusters_resume(struct matter_device_info *info)
+{
+	if (info == NULL || info->thread_dataset_len == 0u) {
+		return MATTER_E_STATE;
+	}
+
+	info->thread_started =
+		matter_thread_start(info->thread_dataset, info->thread_dataset_len) == MATTER_OK;
+	if (!info->thread_started) {
+		return MATTER_E_STATE;
+	}
+
+	/*
+	 * Advertise every restored fabric, not just the first. The same rule as
+	 * AddNOC: an administrator resolving a name this node never registered
+	 * finds nothing and gives up, and on a reboot there is no commissioner
+	 * coming along afterwards to fix it.
+	 */
+	advertise_operational(info);
+	return MATTER_OK;
+}
+
 void matter_clusters_failsafe_expire(struct matter_device_info *info)
 {
 	if (info == NULL || info->commissioning_complete) {
