@@ -465,7 +465,7 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 		LOG_ERR("no SRP slot left for %s", instance_name);
 		return MATTER_E_NOSPACE;
 	}
-	strcpy(reg->instance_name, instance_name);
+	(void)snprintf(reg->instance_name, sizeof(reg->instance_name), "%s", instance_name);
 
 	/* The host name only has to be unique on the SRP server, and the EUI-64
 	 * already is. */
