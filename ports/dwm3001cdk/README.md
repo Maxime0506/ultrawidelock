@@ -42,6 +42,36 @@ The image carries no credential and is the same for every board. Flashing is
 half the job: it holds the DEV identity until Apple Home commissions the lock,
 which is what mints the Aliro credential.
 
+### The setup code comes from the build, not the board
+
+The first and third commands each end with the line Apple Home is about to ask
+you for:
+
+```
+  setup code  3497-011-2332   ·  discriminator 0x0F00, verifier checked
+```
+
+Add the accessory in Home with "More options…" → "Enter Code"; there is no QR
+label on this board.
+
+Nothing on the device can print that number. A Matter device stores the SPAKE2+
+**verifier**, never the passcode — that is the point of the augmented form, and
+a verifier cannot be run backwards. So the code is derived on the host from the
+`.config` the build just produced, and "verifier checked" is not decoration:
+`scripts/spake2p_verifier.py --from-config` re-derives the verifier from
+`CONFIG_ALIRO_MATTER_SETUP_PASSCODE` and compares it to the one compiled in. A
+mismatch fails the build rather than printing a code that would be accepted by
+the phone and then fail at Pake3 looking exactly like a typo.
+
+`CONFIG_ALIRO_MATTER_SETUP_PASSCODE` is the one symbol here no C file reads, so
+the passcode never enters the image; flash is byte-identical with and without
+it. Change it and the verifier together, from one run of
+`scripts/spake2p_verifier.py --passcode <p>`.
+
+The defaults are CHIP's test pairing (discriminator `0xF00`, passcode
+20202021, test vendor `0xFFF1`), so Home pairs out of the box and marks the
+accessory uncertified. A real product replaces all three.
+
 ### The reader-only build
 
 `make cdk-reader` is the same source without Matter or Thread: Aliro and UWB,

@@ -73,31 +73,19 @@ def mul(k, pt):
     return r
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    # CHIP's own test pairing, so the defaults commission with a stock
-    # chip-tool and with Apple Home using the standard setup code.
-    ap.add_argument("--passcode", type=int, default=20202021)
-    ap.add_argument("--salt-b64", default="U1BBS0UyUCBLZXkgU2FsdA==")
-    ap.add_argument("--salt-hex", default=None, help="overrides --salt-b64")
-    ap.add_argument("--iterations", type=int, default=1000)
-    args = ap.parse_args()
-
-    salt = bytes.fromhex(args.salt_hex) if args.salt_hex else base64.b64decode(args.salt_b64)
-
+def derive(passcode, salt, iterations):
+    """The 97-byte verifier: w0 (32) then L (65, uncompressed)."""
     # Bounds the device also enforces (matter_pase.h, from CHIPCryptoPAL.h:86-89).
     if not 16 <= len(salt) <= 32:
         raise SystemExit(f"salt must be 16..32 bytes, got {len(salt)}")
-    if not 1000 <= args.iterations <= 100000:
+    if not 1000 <= iterations <= 100000:
         raise SystemExit("iterations must be 1000..100000")
-    if not 0 < args.passcode < (1 << 27):
+    if not 0 < passcode < (1 << 27):
         raise SystemExit("passcode must fit 27 bits")
 
     # LITTLE-endian uint32. Getting this backwards produces a verifier that is
     # wrong in a way nothing detects until a commissioner's cA fails.
-    ws = hashlib.pbkdf2_hmac(
-        "sha256", args.passcode.to_bytes(4, "little"), salt, args.iterations, 80
-    )
+    ws = hashlib.pbkdf2_hmac("sha256", passcode.to_bytes(4, "little"), salt, iterations, 80)
     w0 = int.from_bytes(ws[:40], "big") % N
     w1 = int.from_bytes(ws[40:], "big") % N
     L = mul(w1, G)
@@ -106,12 +94,140 @@ def main():
     assert 0 < w0 < N and 0 < w1 < N
 
     l_bytes = b"\x04" + L[0].to_bytes(32, "big") + L[1].to_bytes(32, "big")
-    blob = w0.to_bytes(32, "big") + l_bytes
+    return w0.to_bytes(32, "big") + l_bytes
 
+
+# Verhoeff, over the dihedral group D5. Matter uses it for the manual code's
+# check digit because it catches every single-digit error and every adjacent
+# transposition, which is what a person typing eleven digits into a phone gets
+# wrong. Tables are the standard ones, not derived here.
+_MUL = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+    [2, 3, 4, 0, 1, 7, 8, 9, 5, 6], [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+    [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+    [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+    [8, 7, 6, 5, 9, 3, 2, 1, 0, 4], [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+]
+_PERM = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+    [5, 8, 0, 3, 7, 9, 6, 1, 4, 2], [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+    [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+    [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+]
+_INV = [0, 4, 3, 2, 1, 5, 6, 7, 8, 9]
+
+
+def manual_code(discriminator, passcode):
+    """The 11-digit manual pairing code, short form (no vendor/product id).
+
+    Matter core 5.1.4.1. The digits are the discriminator's top 2 bits, then
+    its next 2 bits packed above the passcode's low 14, then the passcode's
+    high 13, then a check digit -- so BOTH numbers are recoverable from the
+    code, which is why a commissioner needs nothing else to find the device.
+    """
+    digits = "%01d%05d%04d" % (
+        (discriminator >> 10) & 0x3,
+        ((discriminator & 0x300) << 6) | (passcode & 0x3FFF),
+        passcode >> 14,
+    )
+    check = 0
+    for i, ch in enumerate(reversed(digits)):
+        check = _MUL[check][_PERM[(i + 1) % 8][int(ch)]]
+    return digits + str(_INV[check])
+
+
+def read_config(path):
+    """The five symbols the setup code needs, out of a Zephyr .config."""
+    wanted = {
+        "CONFIG_ALIRO_MATTER_DISCRIMINATOR": None,
+        "CONFIG_ALIRO_MATTER_SETUP_PASSCODE": None,
+        "CONFIG_ALIRO_MATTER_SPAKE2P_SALT": None,
+        "CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS": None,
+        "CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER": None,
+    }
+    try:
+        with open(path) as f:
+            for line in f:
+                if "=" not in line or line.startswith("#"):
+                    continue
+                key, _, val = line.strip().partition("=")
+                if key in wanted:
+                    wanted[key] = val.strip('"')
+    except OSError as e:
+        raise SystemExit(f"cannot read {path}: {e}")
+
+    missing = [k for k, v in wanted.items() if v is None]
+    if missing:
+        raise SystemExit(
+            "not a Matter build of this app -- missing %s in %s" % (", ".join(missing), path)
+        )
+    return wanted
+
+
+def from_config(path):
+    """Print the setup code for an image ALREADY BUILT, and prove it first.
+
+    The device stores a verifier and never the passcode, so nothing on the
+    board can print this and nothing on the board can notice the two drifting
+    apart. Here they can be checked against each other: re-derive the verifier
+    from the passcode symbol and compare. A mismatch means the code below would
+    be entered, accepted by the phone, and fail at Pake3 looking exactly like a
+    typo -- so it is an error, not a warning.
+    """
+    cfg = read_config(path)
+    discriminator = int(cfg["CONFIG_ALIRO_MATTER_DISCRIMINATOR"], 0)
+    passcode = int(cfg["CONFIG_ALIRO_MATTER_SETUP_PASSCODE"], 0)
+    salt = bytes.fromhex(cfg["CONFIG_ALIRO_MATTER_SPAKE2P_SALT"])
+    iterations = int(cfg["CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS"], 0)
+
+    built = cfg["CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER"].lower()
+    ours = derive(passcode, salt, iterations).hex()
+    if built != ours:
+        raise SystemExit(
+            "  SETUP CODE UNKNOWN: the verifier in this build is not the one\n"
+            "  passcode %d produces with this salt and %d iterations.\n"
+            "  One of CONFIG_ALIRO_MATTER_SETUP_PASSCODE or\n"
+            "  CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER was changed without the\n"
+            "  other. Regenerate with: scripts/spake2p_verifier.py --passcode <p>"
+            % (passcode, iterations)
+        )
+
+    code = manual_code(discriminator, passcode)
+    print(
+        "  setup code  %s-%s-%s   ·  discriminator 0x%04X, verifier checked"
+        % (code[0:4], code[4:7], code[7:11], discriminator)
+    )
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    # CHIP's own test pairing, so the defaults commission with a stock
+    # chip-tool and with Apple Home using the standard setup code.
+    ap.add_argument("--passcode", type=int, default=20202021)
+    ap.add_argument("--salt-b64", default="U1BBS0UyUCBLZXkgU2FsdA==")
+    ap.add_argument("--salt-hex", default=None, help="overrides --salt-b64")
+    ap.add_argument("--iterations", type=int, default=1000)
+    ap.add_argument(
+        "--from-config",
+        metavar="DOTCONFIG",
+        default=None,
+        help="print the setup code for a built image, after checking its verifier",
+    )
+    args = ap.parse_args()
+
+    if args.from_config:
+        from_config(args.from_config)
+        return
+
+    salt = bytes.fromhex(args.salt_hex) if args.salt_hex else base64.b64decode(args.salt_b64)
+    blob = derive(args.passcode, salt, args.iterations)
+
+    print(f"setup code  {manual_code(0x0F00, args.passcode)}  (with discriminator 0x0F00)")
     print(f"passcode    {args.passcode}")
     print(f"salt        {salt.hex()}  ({len(salt)} bytes)")
     print(f"iterations  {args.iterations}")
     print()
+    print("CONFIG_ALIRO_MATTER_SETUP_PASSCODE=%d" % args.passcode)
     print("CONFIG_ALIRO_MATTER_SPAKE2P_SALT=\"%s\"" % salt.hex())
     print("CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS=%d" % args.iterations)
     print("CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER=\"%s\"" % blob.hex())

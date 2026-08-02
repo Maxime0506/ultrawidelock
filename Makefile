@@ -170,6 +170,8 @@ cdk-aliro-matter-thread:
 	  --ncs-version $(NCS_VER) -- west build -p $(CDK_PRISTINE) -b decawave_dwm3001cdk \
 	  -d $(CDK_BUILD) $(REPO_ROOT)/ports/dwm3001cdk/app \
 	  -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
+	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
+	  --from-config $(CDK_BUILD)/app/zephyr/.config
 
 ## cdk-reader: the same board WITHOUT Matter   -> build-cdk/app/zephyr/zephyr.hex
 ##   Aliro reader and UWB only. Needs no Thread network and no commissioner,
@@ -219,6 +221,10 @@ cdk-flash-erase:
 cdk-rtt:
 	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  install: make tools-install\n' >&2; exit 1; }
 	@test -f $(CDK_RTT_BUILD)/app/zephyr/zephyr.elf || { printf '  no ELF at %s/app/zephyr/zephyr.elf  ·  build it first\n' '$(CDK_RTT_BUILD)' >&2; exit 1; }
+	@# The code you would be asked for while watching this. Never fatal: the
+	@# reader build has no Matter symbols and a console is still worth having.
+	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
+	  --from-config $(CDK_RTT_BUILD)/app/zephyr/.config 2>/dev/null || true
 	@probe-rs attach --chip nRF52833_xxAA $(CDK_RTT_BUILD)/app/zephyr/zephyr.elf
 
 ##@ Test

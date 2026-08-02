@@ -258,6 +258,27 @@ config ALIRO_MATTER_SPAKE2P_VERIFIER
 	  (TestOnlyCommissionableDataProvider.h:74-79), so a stock commissioner
 	  pairs with the standard setup code out of the box. Ship a real one.
 
+config ALIRO_MATTER_SETUP_PASSCODE
+	int "Setup passcode the verifier above was derived from"
+	default 20202021
+	range 1 134217727
+	help
+	  The number a user would type into Apple Home, and the ONLY symbol here
+	  that no C file reads. It is not compiled in: a Kconfig value reaches the
+	  image by being referenced, and nothing references this one, so the
+	  passcode stays out of the firmware exactly as the augmented SPAKE2+ form
+	  intends.
+
+	  It is here because the setup code cannot be recovered from the verifier,
+	  and a build that cannot say how to commission itself is a build nobody
+	  can use. `make cdk-aliro-matter-thread` prints the 11-digit manual code
+	  by reading this and the discriminator out of .config -- after
+	  re-deriving the verifier from it and refusing to print anything if the
+	  two disagree, which is the drift check the device itself cannot do.
+
+	  Change it and CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER together, both from
+	  one run of scripts/spake2p_verifier.py --passcode <p>.
+
 config ALIRO_MATTER_SPAKE2P_SALT
 	string "SPAKE2+ salt, hex (16 to 32 bytes)"
 	default "5350414b453250204b65792053616c74"
