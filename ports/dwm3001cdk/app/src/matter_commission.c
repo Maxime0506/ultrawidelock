@@ -958,6 +958,19 @@ static void notify_lock_state_changed(void)
  */
 #define SUBSCRIPTION_HEARTBEAT_S 120u
 
+/*
+ * The largest max interval this node will GRANT, whatever the subscriber asks
+ * for. See where it is applied, in the subscribe handler.
+ *
+ * The two numbers are a pair and must stay one: the heartbeat is what keeps a
+ * subscription alive, so granting an interval at or below it promises a report
+ * this node will not send in time. Anyone lowering this must lower the
+ * heartbeat first.
+ */
+#define SUBSCRIPTION_MAX_INTERVAL_S 180u
+BUILD_ASSERT(SUBSCRIPTION_MAX_INTERVAL_S > SUBSCRIPTION_HEARTBEAT_S,
+	     "a granted interval at or below the heartbeat lapses every subscription");
+
 static void heartbeat_work_fn(struct k_work *w)
 {
 	bool any = false;
@@ -1145,8 +1158,30 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 	 * than this is what makes a subscription dead. Committing to it exactly
 	 * is honest only if this node then reports on time -- see the note in
 	 * on_status_response().
+	 *
+	 * It is a CEILING, so granting less is legal, and less is worth having.
+	 * The granted interval is also the subscriber's liveness timer, and this
+	 * node's subscriptions live in RAM: a reset destroys all of them while
+	 * the controller still believes in every one. Until then it will not
+	 * re-subscribe, and a Home tile that sends UnlockDoor gets acceptance
+	 * and never a LockState report -- measured 2026-08-02 as a tile stuck on
+	 * "Unlocking" for the ten minutes Apple's requested 600 s bought, after
+	 * every single flash.
+	 *
+	 * 180 s costs NOTHING to keep: the heartbeat below already reports every
+	 * SUBSCRIPTION_HEARTBEAT_S, well inside it. Going lower would mean
+	 * lowering the heartbeat too, and that is a real trade on a sleepy end
+	 * device -- four times the report traffic to save two more minutes.
+	 *
+	 * The proper fix is persisting subscriptions and resuming them, which
+	 * needs a CASE initiator this node does not have. This is the cheap
+	 * third of it.
 	 */
 	s->max_interval_s = sub.max_interval_s;
+	if (s->max_interval_s > SUBSCRIPTION_MAX_INTERVAL_S &&
+	    sub.min_interval_s <= SUBSCRIPTION_MAX_INTERVAL_S) {
+		s->max_interval_s = SUBSCRIPTION_MAX_INTERVAL_S;
+	}
 	s->read.subscription_id = s->id;
 	s->priming = true;
 	s->active = false;
