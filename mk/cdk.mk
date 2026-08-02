@@ -35,10 +35,22 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # does NOT re-run CMake when these -D flags change (see CDK_PRISTINE above), so
 # switching RELEASE on or off in an existing build dir needs PRISTINE=1.
 #
-# LTO=1 appends the LTO overlay. Not the default: whole-program codegen on an
-# image with a ~1836 us ranging arm deadline, which a size number cannot vouch
-# for. See firmware/overlay-lto.conf.
-CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(LTO),;overlay-lto.conf)
+# LTO IS ON BY DEFAULT. `LTO=0` (also n/no/off) opts out, which is what you want
+# when a stack trace has to name every frame.
+#
+# It was gated behind a walk-up unlock on hardware, because a size number cannot
+# vouch for the ~1836 us ranging arm deadline under whole-program codegen. That
+# gate passed 2026-08-02: two grants, a relock at 336 cm, a re-grant on the
+# return leg at 45 cm, 604 RX with the STS live throughout.
+#
+# Applied to BOTH variants on purpose. Debug and release then differ only in the
+# RTT ring, their codegen is identical, and what you debug on the bench is what
+# ships -- which matters most for exactly the timing bugs LTO could cause.
+# RELEASE stays what it already claims to be: a RAM lever, not a codegen one.
+# Worth 41,084 B of flash. See firmware/overlay-lto.conf.
+LTO      ?= 1
+CDK_LTO  := $(filter-out 0 n no off N NO OFF,$(LTO))
+CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(CDK_LTO),;overlay-lto.conf)
 
 # ---- image signing -----------------------------------------------------------
 # Which private key signs the image is the whole answer to "what will this lock
@@ -94,7 +106,9 @@ CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 ##   RELEASE=1 gives up the 8 KB RTT ring for 7,168 B of RAM. Debug is the
 ##   default on purpose: on a release image a fault reads as a hang, because a
 ##   1 KB ring truncates the boot log and NO_BLOCK_SKIP drops the NEWEST lines.
-##   Options: PRISTINE=1  RELEASE=1  CDK_BUILD=<dir>  NCS_VER=<tag>
+##   LTO is ON by default and worth 41,084 B; LTO=0 opts out when you need a
+##   stack trace to name every frame.
+##   Options: PRISTINE=1  RELEASE=1  LTO=0  CDK_BUILD=<dir>  NCS_VER=<tag>
 build:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_BUILD) $(CDK_APP) \

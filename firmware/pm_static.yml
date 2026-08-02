@@ -13,24 +13,31 @@
 #
 # EVERY NUMBER BELOW IS MEASURED, not budgeted. Sources, all at this commit:
 #
-#   MCUboot           29,360 B   sysbuild image, build-dfu/mcuboot/zephyr/zephyr.bin
+#   MCUboot           29,360 B   sysbuild image, build/cdk-matter/mcuboot
 #                                (29,328 B standalone; PM integration adds 32 B)
-#   application      446,428 B   linker FLASH region, build-dfu/app
-#   app signed       447,090 B   build-dfu/app/zephyr/zephyr.signed.bin -- the
-#                                raw image plus 663 B of MCUboot header and
+#   application      405,296 B   linker FLASH region, build/cdk-matter/firmware
+#   app signed       405,960 B   firmware/zephyr/zephyr.signed.bin -- the raw
+#                                image plus 664 B of MCUboot header and
 #                                ECDSA-P256 TLVs. Read off the file, not derived.
+#                                (The TLV block varies a byte or two run to run:
+#                                DER strips leading zeros from r and s.)
 #
 # ---------------------------------------------------------------------------
 #  0x00000  mcuboot            32,768 B   29,360 used, 3,408 free (10.4%)
 #  0x08000  mcuboot_pad           512 B   image header
-#  0x08200  app               482,816 B   446,428 linked (92.46%), 447,090 signed
+#  0x08200  app               482,816 B   405,296 linked (83.94%), 405,960 signed
 #  0x7e000  settings_storage    8,192 B   UNCHANGED from the pre-MCUboot map
 #  0x80000  end                           32,768 + 512 + 482,816 + 8,192 = 512 KB
 # ---------------------------------------------------------------------------
 #
-# The 92.46% is the app image's own linker report against this map, so the two
+# The 83.94% is the app image's own linker report against this map, so the two
 # agree by construction rather than by my arithmetic -- which is the point: an
 # earlier draft of this comment had 0x75e00 as 482,304 B. It is 482,816 B.
+#
+# THAT 83.94% IS POST-LTO. LTO became the default 2026-08-02 once a walk-up
+# unlock validated it on hardware, and it is worth 41,084 B: the same image
+# measured 446,380 B (92.45%) without it. `make build LTO=0` gets that back, and
+# it still fits, so the map does not depend on LTO being on.
 #
 # WHY 0x8000 AND NOT PM'S OWN 0xC000. Left to itself PM gives mcuboot 48 KB,
 # which measured 59.73% used while the application sat at 95.32% of what was

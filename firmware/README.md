@@ -251,14 +251,15 @@ exist:
 | flash, nRF52833 | 524,288 |
 | less MCUboot (32 KB) and `settings_storage` (8 KB) | 483,328 for slots |
 | largest slot if halved | **241,664** |
-| application, signed | **447,042** |
-| over by | **205,380 per slot, 1.85x** |
+| application, signed, LTO on | **405,960** |
+| over by | **164,296 per slot, 1.68x** |
 
-Turning on LTO and `LOG=n` together, both measured, takes 81,484 B off and still
-leaves it 123,896 B over. There is no external flash on this board to stage into
-either, and the nRF52833 has no QSPI peripheral to attach any. A board that must
-be updated over the air needs a part with more flash; see `ports/nrf5340dk/`
-and `ports/esp32/`.
+That figure is already after LTO, which is the default and worth 41,084 B. It
+closed 20% of the gap. `LOG=n` on top, also measured, removes another 40,400 B
+and still leaves it 123,896 B over: fitting would need a further 40% cut after
+both. There is no external flash on this board to stage into either, and the
+nRF52833 has no QSPI peripheral to attach any. A board that must be updated over
+the air needs a part with more flash; see `ports/nrf5340dk/` and `ports/esp32/`.
 
 #### The signing key
 
