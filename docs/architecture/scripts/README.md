@@ -5,6 +5,7 @@
 |---|---|
 | [`scripts/bootstrap.sh`](bootstrap.sh.md) | bootstrap.sh — build a self-contained west workspace, PRISTINE from upstream. |
 | [`scripts/build-nrf5340dk.sh`](build-nrf5340dk.sh.md) | build-nrf5340dk.sh {build\|rebuild\|flash\|flash-erase\|build-flash} — build the |
+| [`scripts/cdk-dfu.sh`](cdk-dfu.sh.md) | cdk-dfu.sh — push a signed image to the DWM3001CDK over MCUboot serial recovery. |
 | [`scripts/check-approtect.sh`](check-approtect.sh.md) | check-approtect.sh — refuse to ship an image that locks APPROTECT. |
 | [`scripts/check-uwb-seam.sh`](check-uwb-seam.sh.md) | check-uwb-seam.sh — keep the CCC STS seam impossible to bypass. |
 | [`scripts/docs-publish.sh`](docs-publish.sh.md) | docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch. |
