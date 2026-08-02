@@ -451,6 +451,33 @@ static void readvertise_work_fn(struct k_work *w)
 static uint16_t s_estab_fails;
 static uint32_t s_estab_first_ms;
 
+/*
+ * THE A/B. Change this number, flash, repeat the same walk-up and walk-away,
+ * and compare the run line above.
+ *
+ *   50 (B, here)  what shipped before fa8f5e2
+ *    0 (A)        what fa8f5e2 changed it to
+ *
+ * fa8f5e2 dropped the wait on the argument that a 0x3E never carried a byte, so
+ * time spent not advertising is time the phone cannot find us. The measurement
+ * that followed does not obviously support it. Bursts predate the change -- 13
+ * and 8 failures -- but at 50 ms their gaps were 233 to 362 ms, consistent with
+ * six connection events plus the wait; at 0 ms the same burst produced gaps of
+ * 125 ms, SHORTER than six connection events can take. Those are not
+ * establishment timeouts, so something else is ending them early.
+ *
+ * The suspicion this tests: restarting an advertising set tears down and
+ * re-schedules radio activity, and a CONNECT_IND landing in that window gets a
+ * connection with no valid anchor. Restarting instantly makes that window come
+ * round more often.
+ *
+ * If B has fewer failures and slower gaps, the restart race is real and the
+ * instant re-advertise has to go. If B differs only in pace, this is innocent
+ * and the cause is RF or single-core contention with the DW3110, which needs
+ * instrumentation rather than a knob.
+ */
+#define READVERTISE_AFTER_ESTAB_FAIL_MS 50
+
 static void on_connected(struct bt_conn *conn, uint8_t err)
 {
 	ARG_UNUSED(conn);
@@ -487,16 +514,10 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 		s_estab_fails = 0u;
 	}
 	LOG_INF("BLE disconnected (0x%02x); re-advertising", reason);
-	/*
-	 * Deferred out of this callback -- see readvertise_work_fn() -- but the
-	 * 50 ms is for a connection that LIVED, where the peer may still be
-	 * finishing with us. A 0x3E never carried a byte and the phone is
-	 * already retrying, so every millisecond spent not advertising is a
-	 * millisecond it cannot find us: eight failures in one measured burst
-	 * spent 400 ms of that 6 s deliberately invisible.
-	 */
 	(void)k_work_schedule(&s_readvertise_work,
-			      reason == BT_HCI_ERR_CONN_FAIL_TO_ESTAB ? K_NO_WAIT : K_MSEC(50));
+			      reason == BT_HCI_ERR_CONN_FAIL_TO_ESTAB
+				      ? K_MSEC(READVERTISE_AFTER_ESTAB_FAIL_MS)
+				      : K_MSEC(50));
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
