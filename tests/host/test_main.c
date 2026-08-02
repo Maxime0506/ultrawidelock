@@ -74,11 +74,13 @@ int main(void)
 		{ "matter_exchange", test_matter_exchange },
 		{ "matter_im", test_matter_im },
 		{ "matter_im_invoke", test_matter_im_invoke },
+		{ "matter_im_write", test_matter_im_write },
 		{ "matter_attest", test_matter_attest },
 		{ "matter_fabric", test_matter_fabric },
 		{ "matter_addnoc", test_matter_addnoc },
 		{ "matter_network", test_matter_network },
 		{ "matter_case", test_matter_case },
+		{ "matter_clusters", test_matter_clusters },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	/* Sized from the table, not a literal 32: these are indexed by suite, so a

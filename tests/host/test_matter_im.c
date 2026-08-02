@@ -1361,3 +1361,192 @@ void test_matter_im_invoke(void)
 		T_OK("but the command still ran", info.failsafe_armed);
 	}
 }
+
+/* ---- WriteRequest and SubscribeRequest ----------------------------------- */
+
+/** One AttributePathIB, as a LIST, inside whatever container is open. */
+static void put_path(struct matter_tlv_writer *w, matter_tlv_tag_t tag, bool have_ep,
+		     uint16_t endpoint, bool have_cl, uint32_t cluster, bool have_at,
+		     uint32_t attribute)
+{
+	(void)matter_tlv_start_container(w, tag, MATTER_TLV_LIST);
+	if (have_ep) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(2), endpoint);
+	}
+	if (have_cl) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(3), cluster);
+	}
+	if (have_at) {
+		(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(4), attribute);
+	}
+	(void)matter_tlv_end_container(w);
+}
+
+/**
+ * A WriteRequestMessage carrying @p n_requests AttributeDataIBs. Two is not a
+ * batch this node supports, and building one is the only way to prove it says so
+ * rather than silently writing the first.
+ */
+static size_t build_write(uint8_t *buf, size_t cap, unsigned int n_requests, bool have_attribute,
+			  bool suppress, bool timed)
+{
+	struct matter_tlv_writer w;
+	unsigned int i;
+	size_t len = 0u;
+
+	matter_tlv_writer_init(&w, buf, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(0), suppress);
+	(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(1), timed);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(2), MATTER_TLV_ARRAY);
+	for (i = 0u; i < n_requests; i++) {
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(0), 0u); /* DataVersion */
+		put_path(&w, MATTER_TLV_CTX(1), true, MATTER_ENDPOINT_ROOT, true,
+			 MATTER_CLUSTER_ACCESS_CONTROL, have_attribute, MATTER_ATTR_AC_ACL);
+		/* An ACL is a list of structures; an empty one is still a value. */
+		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(2), MATTER_TLV_ARRAY);
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_end_container(&w);
+	}
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_writer_finish(&w, &len);
+	return len;
+}
+
+static size_t build_subscribe(uint8_t *buf, size_t cap, unsigned int n_paths, uint16_t min_s,
+			      uint16_t max_s, bool keep, bool paths_as_array)
+{
+	struct matter_tlv_writer w;
+	unsigned int i;
+	size_t len = 0u;
+
+	matter_tlv_writer_init(&w, buf, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(0), keep);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(1), min_s);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(2), max_s);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(3),
+					 paths_as_array ? MATTER_TLV_ARRAY : MATTER_TLV_STRUCTURE);
+	for (i = 0u; i < n_paths; i++) {
+		put_path(&w, MATTER_TLV_ANON, true, MATTER_ENDPOINT_LOCK, true,
+			 MATTER_CLUSTER_DOOR_LOCK, true, (uint32_t)i);
+	}
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_put_bool(&w, MATTER_TLV_CTX(7), true);
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_writer_finish(&w, &len);
+	return len;
+}
+
+/**
+ * The two message types a controller uses after commissioning: the ACL write
+ * that grants it access, and the subscription that keeps a Home tile live. Both
+ * decoders were reachable only from a real controller before this.
+ */
+void test_matter_im_write(void)
+{
+	struct matter_device_info info;
+	struct matter_im_server srv;
+	uint8_t buf[1024];
+	uint8_t out[512];
+	size_t blen;
+	size_t len = 0u;
+
+	fill_info(&info);
+	matter_clusters_init(&srv, &info);
+
+	t_group("WriteRequest");
+	{
+		struct matter_im_write wr;
+
+		blen = build_write(buf, sizeof(buf), 1u, true, false, false);
+		T_OK("request builds", blen > 0u);
+		T_EQ("decodes", matter_im_write_request_decode(buf, blen, &wr), MATTER_OK);
+		T_EQ("endpoint", (long)wr.path.endpoint, (long)MATTER_ENDPOINT_ROOT);
+		T_EQ("cluster", (long)wr.path.cluster, (long)MATTER_CLUSTER_ACCESS_CONTROL);
+		T_EQ("attribute", (long)wr.path.attribute, (long)MATTER_ATTR_AC_ACL);
+		T_OK("value present", wr.data != NULL && wr.data_len > 0u);
+		T_OK("response not suppressed", !wr.suppress_response);
+		T_OK("not a timed request", !wr.timed_request);
+
+		T_EQ("null tlv refused", matter_im_write_request_decode(NULL, blen, &wr),
+		     MATTER_E_INVAL);
+		T_EQ("null out refused", matter_im_write_request_decode(buf, blen, NULL),
+		     MATTER_E_INVAL);
+
+		/* A wildcard write is refused rather than expanded: guessing which
+		 * attributes a commissioner meant to overwrite is not recoverable. */
+		blen = build_write(buf, sizeof(buf), 1u, false, false, false);
+		T_OK("a wildcard write is refused",
+		     matter_im_write_request_decode(buf, blen, &wr) != MATTER_OK);
+
+		blen = build_write(buf, sizeof(buf), 2u, true, false, false);
+		T_EQ("a batch is refused", matter_im_write_request_decode(buf, blen, &wr),
+		     MATTER_E_NOSPACE);
+
+		blen = build_write(buf, sizeof(buf), 1u, true, true, true);
+		T_EQ("decodes", matter_im_write_request_decode(buf, blen, &wr), MATTER_OK);
+		T_OK("suppression carried", wr.suppress_response);
+		T_OK("timed flag carried", wr.timed_request);
+	}
+
+	t_group("WriteResponse");
+	{
+		struct matter_im_write wr;
+
+		blen = build_write(buf, sizeof(buf), 1u, true, false, false);
+		T_EQ("decodes", matter_im_write_request_decode(buf, blen, &wr), MATTER_OK);
+		T_EQ("response encodes",
+		     matter_im_write_response_encode(&srv, &wr, out, sizeof(out), &len), MATTER_OK);
+		T_OK("and has content", len > 0u);
+		T_EQ("the ACL reached the device", info.acl_len, wr.data_len);
+
+		/* Suppressed: nothing to send, but the write still ran. */
+		info.acl_len = 0u;
+		wr.suppress_response = true;
+		len = 1u;
+		T_EQ("suppressed response encodes",
+		     matter_im_write_response_encode(&srv, &wr, out, sizeof(out), &len), MATTER_OK);
+		T_EQ("nothing to send", (long)len, 0L);
+		T_EQ("but the write still ran", info.acl_len, wr.data_len);
+	}
+
+	t_group("SubscribeRequest");
+	{
+		struct matter_im_subscribe sub;
+
+		blen = build_subscribe(buf, sizeof(buf), 3u, 1u, 60u, true, true);
+		T_OK("request builds", blen > 0u);
+		T_EQ("decodes", matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_OK);
+		T_EQ("three paths", (long)sub.read.n_paths, 3L);
+		T_EQ("min interval", (long)sub.min_interval_s, 1L);
+		T_EQ("max interval", (long)sub.max_interval_s, 60L);
+		T_OK("keeps existing subscriptions", sub.keep_subscriptions);
+		T_OK("fabric filter carried", sub.read.fabric_filtered);
+		T_EQ("first path cluster", (long)sub.read.paths[0].cluster,
+		     (long)MATTER_CLUSTER_DOOR_LOCK);
+
+		T_EQ("null tlv refused", matter_im_subscribe_request_decode(NULL, blen, &sub),
+		     MATTER_E_INVAL);
+		T_EQ("null out refused", matter_im_subscribe_request_decode(buf, blen, NULL),
+		     MATTER_E_INVAL);
+
+		/* AttributeRequests is an array; a structure there is a malformed
+		 * message, not a zero-path subscription. */
+		blen = build_subscribe(buf, sizeof(buf), 1u, 1u, 60u, false, false);
+		T_EQ("a non-array path list is refused",
+		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_E_TYPE);
+
+		blen = build_subscribe(buf, sizeof(buf), MATTER_IM_MAX_PATHS + 1u, 1u, 60u, false,
+				       true);
+		T_EQ("more paths than the node can hold is refused",
+		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_E_NOSPACE);
+
+		blen = build_subscribe(buf, sizeof(buf), MATTER_IM_MAX_PATHS, 0u, 0u, false, true);
+		T_EQ("exactly the maximum is accepted",
+		     matter_im_subscribe_request_decode(buf, blen, &sub), MATTER_OK);
+		T_EQ("all of them", (long)sub.read.n_paths, (long)MATTER_IM_MAX_PATHS);
+	}
+}
