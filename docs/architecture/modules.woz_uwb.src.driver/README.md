@@ -10,4 +10,5 @@
 | [`modules/woz_uwb/src/driver/uwb_min.h`](uwb_min.h.md) | @file uwb_min.h — Minimal DW3110 (DWM3000EVB) hardware bring-up driver. |
 | [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](uwb_rxdiag.c.md) | @file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat. |
 | [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](uwb_rxdiag.h.md) | @file uwb_rxdiag.h — Read-side accessors for the RX event tallies + log stream. |
+| [`modules/woz_uwb/src/driver/uwb_seam.h`](uwb_seam.h.md) | @file uwb_seam.h — the DW3000 entry points the CCC engine owns. |
 | [`modules/woz_uwb/src/driver/uwb_selftest.c`](uwb_selftest.c.md) | @file uwb_selftest.c — Kconfig-gated one-shot UWB init self-test (no iPhone). |

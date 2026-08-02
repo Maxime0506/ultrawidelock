@@ -339,7 +339,7 @@ calls.
 @file ccc_shim_rx.c — responder-RX CCC STS substitution: woz_uwb_arm_rx() programs the CCC STS
 on each RX-arm; target only.
 
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
 
@@ -353,7 +353,7 @@ FiRa MAC; maps each call onto woz_uwb_facade.
 @file ccc_shim_wrap.c — per-frame STS interception: woz_uwb_set_sts_iv() substitutes the CCC STS
 for the FiRa MAC; target only.
 
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
 
 ### [`modules/woz_uwb/src/ccc/ccc_session.c`](architecture/modules.woz_uwb.src.ccc/ccc_session.c.md)
 
@@ -589,13 +589,19 @@ pyserial adapter and privacy-safe serial-port identity helpers.
 
 @file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
 
 @file uwb_isr.c — DW3000 interrupt-callback registration (implementation).
 
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
+
+@file uwb_min.c — DW3110 bring-up driver (implementation).
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md)
 
@@ -625,12 +631,6 @@ CIRDIAG_CIR_EVERY.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
 
-### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
-
-@file uwb_min.c — DW3110 bring-up driver (implementation).
-
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md)
-
 ### [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md)
 
 @file uwb_selftest.c — Kconfig-gated one-shot UWB init self-test (no iPhone).
@@ -648,6 +648,30 @@ CIRDIAG_CIR_EVERY.
 @file uwb_rxdiag.h — Read-side accessors for the RX event tallies + log stream.
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+### [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md)
+
+@file uwb_seam.h — the DW3000 entry points the CCC engine owns.
+Four decadriver calls carry engine behaviour that no caller may skip: arming
+RX must program the CCC STS for the slot, loading an STS-IV must substitute
+the CCC STS-V, registering callbacks must insert the Pre-POLL shim, and
+(re)configuring the PHY is traced. Every call site in this module goes
+through the helpers below instead of <deca_device_api.h>, so a site added
+later cannot quietly bypass any of it. scripts/check-uwb-seam.sh enforces
+that mechanically.
+Under CONFIG_WOZ_ALIRO the engine supplies the definitions:
+woz_uwb_arm_rx         ccc_shim_rx.c    program the CCC key/IV, then arm RX
+woz_uwb_set_sts_iv     ccc_shim_wrap.c  substitute the CCC STS-V per frame
+woz_uwb_set_callbacks  uwb_rxdiag.c     insert the tally + Pre-POLL shims
+woz_uwb_configure_phy  uwb_rxdiag.c     log the PHY configuration
+The ESP32 port omits uwb_rxdiag.c (it is k_work-based) and supplies the last
+two from port/woz_seam_stubs.c instead. Below the CONFIG_WOZ_ALIRO tier there
+is no engine to reach, so each helper inlines to the plain decadriver call.
+The implementations are free to call the decadriver directly — that is how
+they reach the hardware, and how a site that has already programmed the STS
+itself (the self-rearm paths in ccc_shim_rx.c) opts out on purpose.
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md)
 
@@ -2915,6 +2939,39 @@ actually compiled, which is why the source layer never stands in
 for it.
 The generated layer reporting "0 builds examined" is NOT a pass and is not
 silent: it says so, and it is the reason the source layer is not optional.
+
+### [`scripts/check-uwb-seam.sh`](architecture/scripts/check-uwb-seam.sh.md)
+
+check-uwb-seam.sh — keep the CCC STS seam impossible to bypass.
+WHAT IS BEING PREVENTED. Four decadriver entry points carry engine behaviour
+that a caller must not skip (modules/woz_uwb/src/driver/uwb_seam.h):
+dwt_rxenable         arming RX must first program the CCC STS for the slot
+dwt_configurestsiv   loading an STS-IV must substitute the CCC STS-V
+dwt_setcallbacks     registering callbacks must insert the Pre-POLL shim,
+which is what warms the next block's STS at all
+dwt_configure        a PHY (re)configuration is traced
+A call site that reaches past the seam is SILENT on the bench: the radio still
+arms, ranging still runs, the phone just never unlocks anything because the
+STS never matched. That is a bad afternoon to debug, and it is exactly the
+failure mode a link-time interposer used to make structurally impossible.
+This gate buys that guarantee back mechanically.
+scripts/check-uwb-seam.sh              # scan the tracked sources
+scripts/check-uwb-seam.sh --self-test  # prove the gate can actually fail
+make verify                            # runs this as the `uwb-seam` gate
+Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
+WHAT IS EXEMPT, and why each one is not a hole:
+uwb_seam.h                 declares the helpers; the non-engine tier inlines
+straight to the driver, which IS the fallback
+ccc_shim_rx.c              implements woz_uwb_arm_rx. Its own self-rearm
+ccc_shim_wrap.c            implements woz_uwb_set_sts_iv          sites have
+uwb_rxdiag.c               implements the other two               already
+port/woz_seam_stubs.c      the ESP32 half of the same two         programmed
+the STS
+ccc_sts.c                  the register-level key/IV packer itself, with no
+production caller (host suites only)
+deps/dw3000/**             the vendor decadriver: it defines these
+tests/**, ports/esp32/test/**, docs/**   host doubles and prose
+Adding a file here is a decision to trust it forever. Prefer calling the seam.
 
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
 
