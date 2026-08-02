@@ -74,7 +74,7 @@ slots, and it is logged.
 **called by** `handle_sigma3`  ·  **calls** `sub_drop_session`
 
 ### `static void on_write_request(const struct matter_exchange_in *in)`
-`ports/dwm3001cdk/app/src/matter_commission.c:779`
+`ports/dwm3001cdk/app/src/matter_commission.c:823`
 
 Apply a WriteRequest.
 The commissioner's last act, and the one this node used to answer with
@@ -85,7 +85,7 @@ has finished commissioning and cannot record that it owns the node sits on
 **called by** `on_secure`  ·  **calls** `send_im`
 
 ### `struct sub_state`
-`ports/dwm3001cdk/app/src/matter_commission.c:820`
+`ports/dwm3001cdk/app/src/matter_commission.c:864`
 
 The subscriptions this node is serving.
 One slot per session, because that is the natural bound: a controller
@@ -99,7 +99,7 @@ subscribe. Measured on 2026-08-02: nine of these in five minutes and a tile
 that never left "No Response".
 
 ### `static void on_aliro_lock_state(bool unlocked)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1010`
+`ports/dwm3001cdk/app/src/matter_commission.c:1107`
 
 The Aliro side of this lock moved, so Matter has to be told.
 A walk-up unlock and its walk-away relock never went through the Door Lock
@@ -113,21 +113,21 @@ and submit. The report itself is built on the system work queue.
 **calls** `notify_lock_state_changed`
 
 ### `static uint16_t current_session_id(void)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1023`
+`ports/dwm3001cdk/app/src/matter_commission.c:1120`
 
 The session serving the datagram in flight; 0 when it arrived over BLE.
 
 **called by** `on_status_response`, `on_subscribe_request`
 
 ### `static struct sub_state *sub_of_session(uint16_t session_id)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1033`
+`ports/dwm3001cdk/app/src/matter_commission.c:1130`
 
 The subscription @p session_id holds, or NULL.
 
 **called by** `on_status_response`, `sub_alloc`, `sub_drop_session`
 
 ### `static struct sub_state *sub_alloc(uint16_t session_id)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1060`
+`ports/dwm3001cdk/app/src/matter_commission.c:1157`
 
 The slot for a new subscription from @p session_id.
 Re-subscribing on a session REPLACES what that session already had, rather
@@ -138,7 +138,7 @@ two controllers -- the same failure this table exists to end.
 **called by** `on_subscribe_request`  ·  **calls** `sub_of_session`
 
 ### `static void send_report_chunk(struct sub_state *s)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1088`
+`ports/dwm3001cdk/app/src/matter_commission.c:1185`
 
 Send one chunk of the priming report.
 The whole data model does not fit one Matter message -- the spec caps a
@@ -149,7 +149,7 @@ delivered, and the subscriber re-subscribes forever with nothing to say why.
 **called by** `on_status_response`, `on_subscribe_request`  ·  **calls** `send_im`
 
 ### `static void on_subscribe_request(const struct matter_exchange_in *in)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1130`
+`ports/dwm3001cdk/app/src/matter_commission.c:1227`
 
 Begin a subscription.
 The order is not the obvious one. A SubscribeRequest is answered with the
@@ -162,7 +162,7 @@ arrived, which is indistinguishable from a node that stopped reporting.
 **called by** `on_secure`  ·  **calls** `current_session_id`, `send_report_chunk`, `sub_alloc`
 
 ### `static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])`
-`ports/dwm3001cdk/app/src/matter_commission.c:1275`
+`ports/dwm3001cdk/app/src/matter_commission.c:1372`
 
 An Aliro credential public key, handed to the reader's trust store -- but only
 if it is a key a phone will ever present.
@@ -182,7 +182,7 @@ simply not an anchor. An empty store is the honest report of a reader no
 phone can open yet, and it is what makes the next endpoint key visible.
 
 ### `static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk, const uint8_t *sigma1, size_t sigma1_len, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1513`
+`ports/dwm3001cdk/app/src/matter_commission.c:1610`
 
 Build and frame the Sigma2 answering @p s1.
 @param sigma1 the Sigma1 payload EXACTLY as it arrived -- the transcript hash
@@ -192,7 +192,7 @@ the peer hashed and this node did not.
 **called by** `matter_thread_on_datagram`
 
 ### `static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint8_t *ipk, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1768`
+`ports/dwm3001cdk/app/src/matter_commission.c:1865`
 
 Answer a Sigma3, which ends the handshake.
 Sigma2 asked the initiator to believe this node; Sigma3 is the initiator
@@ -204,7 +204,7 @@ failure on this one -- which is the reason for the checks logged below.
 **called by** `matter_thread_on_datagram`  ·  **calls** `case_alloc_slot`, `case_slot_of`, `case_status_report`
 
 ### `static size_t case_status_report(const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1941`
+`ports/dwm3001cdk/app/src/matter_commission.c:2038`
 
 The StatusReport that ends CASE.
 Still unsecured and still addressed to the initiator's ephemeral id: this is
@@ -213,7 +213,7 @@ the last message before the keys take effect, not the first one after.
 **called by** `handle_sigma3`
 
 ### `size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap)`
-`ports/dwm3001cdk/app/src/matter_commission.c:1989`
+`ports/dwm3001cdk/app/src/matter_commission.c:2086`
 
 A datagram on the operational port. Sigma1, so far, and only Sigma1.
 There is no responder yet, so this answers nothing. What it does establish is
@@ -227,12 +227,12 @@ real commissioner computed independently.
 **calls** `case_slot_of`, `handle_sigma3`, `on_secure`, `send_sigma2`
 
 ### `static void on_link_reset(void)`
-`ports/dwm3001cdk/app/src/matter_commission.c:2279`
+`ports/dwm3001cdk/app/src/matter_commission.c:2376`
 
 The link dropped. Cheap here; begin_session() does the real work later.
 
 ### `bool matter_commission_has_fabric(void)`
-`ports/dwm3001cdk/app/src/matter_commission.c:2296`
+`ports/dwm3001cdk/app/src/matter_commission.c:2393`
 
 Whether this node currently holds a commissioned Matter fabric.
 Asked by the advertiser, which can carry the Matter commissionable
@@ -246,7 +246,7 @@ pairing -- invisible to Add Accessory and impossible to recover without
 erasing it.
 
 ### `int matter_commission_init(void)`
-`ports/dwm3001cdk/app/src/matter_commission.c:2306`
+`ports/dwm3001cdk/app/src/matter_commission.c:2403`
 
 Register the commissioning handlers on the 0xFFF6 transport.
 Call after the reader is up. Nothing here touches the radio: whether the
@@ -259,7 +259,7 @@ be a reader.
 
 **calls** `load_verifier`
 
-<details><summary>Undocumented (19)</summary>
+<details><summary>Undocumented (20)</summary>
 
 - `matter_attest_ec_keygen` — tested: matter attest
 - `matter_case_sign`
@@ -272,6 +272,7 @@ be a reader.
 - `notify_lock_state`
 - `notify_work_fn`
 - `notify_lock_state_changed`
+- `subscription_heartbeat_period_s`
 - `heartbeat_work_fn`
 - `subscription_heartbeat_arm`
 - `sub_drop_session`
