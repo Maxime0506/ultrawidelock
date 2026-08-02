@@ -20,21 +20,62 @@ cannot read. BLE + UWB walk-up is the whole feature set here.
 
 ## Build
 
+Two images, one board, one source directory:
+
 ```sh
-make cdk-reader    # -> build-cdk/app/zephyr/zephyr.hex
-make cdk-flash     # over the on-board J-Link OB
+make cdk-reader                 # standalone reader    -> build-cdk/app/zephyr/zephyr.hex
+make cdk-aliro-matter-thread    # + Matter over Thread -> build-matter/merged.hex
+make cdk-flash                  # over the on-board J-Link OB
 ```
 
-The image carries no credential and is the same for every board. Flashing it is
-half the job: a fresh board holds the DEV identity until you provision it, which
-is a runtime step over USB (see "Provision this board" below).
+| | `cdk-reader` | `cdk-aliro-matter-thread` |
+|---|---|---|
+| Identity | typed in over USB, below | self-provisions from Apple Home |
+| Matter / Thread | absent | OpenThread MTD/SED, SRP, 0xFFF6 commissioning |
+| USB console | yes | no — reader + console + Thread overflows RAM by 1,752 B |
+| Measured | 283,440 B flash / 93,812 B RAM | 415,416 B flash / 120,120 B RAM |
+
+Neither image carries a credential, and both are the same for every board.
+Flashing is half the job: `cdk-reader` holds the DEV identity until you
+provision it over USB (see "Provision this board"), and
+`cdk-aliro-matter-thread` holds it until Apple Home commissions the lock.
+
+`cdk-flash` flashes `build-cdk`. For the other image, point it at that build
+directory:
+
+```sh
+make cdk-flash CDK_BUILD=$(pwd)/build-matter
+```
+
+Add `PRISTINE=1` to either build for a from-scratch one. It is not only for
+when something looks stale: `-p auto` re-runs CMake when the board or the
+application directory changes and **not** when the `-D` flags do, so a build
+directory reused across these two configurations keeps the first one.
 
 Equivalent by hand, from the west workspace:
 
 ```sh
 west build -p always -b decawave_dwm3001cdk -d ../build-cdk ../ports/dwm3001cdk/app
 west flash -d ../build-cdk
+
+west build -p always -b decawave_dwm3001cdk -d ../build-matter ../ports/dwm3001cdk/app \
+    -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
 ```
+
+### `make cdk-flash-erase` is not the routine step it is on the nRF5340
+
+A chip erase here also wipes OpenThread's settings, and the SRP client key
+lives there. The host name is the factory EUI-64 and survives, but SRP name
+ownership is first-come **by key**: the new key asks for a name the border
+router still holds under the old one, is refused with `OT_ERROR_DUPLICATED`,
+and stays refused for as long as the key lease runs — up to **14 days** at
+OpenThread's default. Thread attaches, SRP never registers, and the
+commissioner sits on "Adding to Home" with nothing to say why.
+
+To reset a commissioned board, hold **SW2 through reset**
+(`ALIRO_FACTORY_RESET_BUTTON`, default on). That clears the reader identity,
+every trust anchor and the Matter fabrics — everything a controller can see —
+and leaves OpenThread's settings alone.
 
 Logging is RTT, not UART: on a single-core part the DW3110 delayed-TX reply
 window cannot afford a blocking console write.
@@ -194,6 +235,15 @@ The DWM3001C **does** have a 32.768 kHz crystal, so no LFCLK override is needed;
 the stock `CONFIG_CLOCK_CONTROL_NRF_K32SRC_XTAL` works.
 
 ## Apple Wallet credentials: transplanted, not commissioned
+
+> Read this as the reason `cdk-reader` exists, not as a limit of the board.
+> It was written when transplanting was the only way in, and it still describes
+> that path — which stays the fastest way to get a working reader, and the only
+> one that needs no Thread network. `cdk-aliro-matter-thread` since made the
+> other way work: a hand-written Matter node (`modules/woz_matter`) instead of
+> CHIP, measured at 415,416 B flash / 120,120 B RAM with the reader and Thread
+> MTD alongside it (`app/overlay-thread.conf`). The paragraph below is about
+> Nordic's CHIP-based lock, and about that it is still correct.
 
 This board cannot be commissioned into Apple Home, and that is a memory fact
 rather than a missing feature. Apple mints an Aliro credential only through
