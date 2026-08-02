@@ -99,7 +99,7 @@ subscribe. Measured on 2026-08-02: nine of these in five minutes and a tile
 that never left "No Response".
 
 ### `static void on_aliro_lock_state(bool unlocked)`
-`firmware/src/matter_commission.c:997`
+`firmware/src/matter_commission.c:1010`
 
 The Aliro side of this lock moved, so Matter has to be told.
 A walk-up unlock and its walk-away relock never went through the Door Lock
@@ -113,21 +113,21 @@ and submit. The report itself is built on the system work queue.
 **calls** `notify_lock_state_changed`
 
 ### `static uint16_t current_session_id(void)`
-`firmware/src/matter_commission.c:1010`
+`firmware/src/matter_commission.c:1023`
 
 The session serving the datagram in flight; 0 when it arrived over BLE.
 
 **called by** `on_status_response`, `on_subscribe_request`
 
 ### `static struct sub_state *sub_of_session(uint16_t session_id)`
-`firmware/src/matter_commission.c:1020`
+`firmware/src/matter_commission.c:1033`
 
 The subscription @p session_id holds, or NULL.
 
 **called by** `on_status_response`, `sub_alloc`, `sub_drop_session`
 
 ### `static struct sub_state *sub_alloc(uint16_t session_id)`
-`firmware/src/matter_commission.c:1047`
+`firmware/src/matter_commission.c:1060`
 
 The slot for a new subscription from @p session_id.
 Re-subscribing on a session REPLACES what that session already had, rather
@@ -138,7 +138,7 @@ two controllers -- the same failure this table exists to end.
 **called by** `on_subscribe_request`  ·  **calls** `sub_of_session`
 
 ### `static void send_report_chunk(struct sub_state *s)`
-`firmware/src/matter_commission.c:1075`
+`firmware/src/matter_commission.c:1088`
 
 Send one chunk of the priming report.
 The whole data model does not fit one Matter message -- the spec caps a
@@ -149,7 +149,7 @@ delivered, and the subscriber re-subscribes forever with nothing to say why.
 **called by** `on_status_response`, `on_subscribe_request`  ·  **calls** `send_im`
 
 ### `static void on_subscribe_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:1117`
+`firmware/src/matter_commission.c:1130`
 
 Begin a subscription.
 The order is not the obvious one. A SubscribeRequest is answered with the
@@ -162,7 +162,7 @@ arrived, which is indistinguishable from a node that stopped reporting.
 **called by** `on_secure`  ·  **calls** `current_session_id`, `send_report_chunk`, `sub_alloc`
 
 ### `static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])`
-`firmware/src/matter_commission.c:1240`
+`firmware/src/matter_commission.c:1275`
 
 An Aliro credential public key, handed to the reader's trust store -- but only
 if it is a key a phone will ever present.
@@ -182,7 +182,7 @@ simply not an anchor. An empty store is the honest report of a reader no
 phone can open yet, and it is what makes the next endpoint key visible.
 
 ### `static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk, const uint8_t *sigma1, size_t sigma1_len, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:1478`
+`firmware/src/matter_commission.c:1513`
 
 Build and frame the Sigma2 answering @p s1.
 @param sigma1 the Sigma1 payload EXACTLY as it arrived -- the transcript hash
@@ -192,7 +192,7 @@ the peer hashed and this node did not.
 **called by** `matter_thread_on_datagram`
 
 ### `static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint8_t *ipk, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:1733`
+`firmware/src/matter_commission.c:1768`
 
 Answer a Sigma3, which ends the handshake.
 Sigma2 asked the initiator to believe this node; Sigma3 is the initiator
@@ -204,7 +204,7 @@ failure on this one -- which is the reason for the checks logged below.
 **called by** `matter_thread_on_datagram`  ·  **calls** `case_alloc_slot`, `case_slot_of`, `case_status_report`
 
 ### `static size_t case_status_report(const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:1906`
+`firmware/src/matter_commission.c:1941`
 
 The StatusReport that ends CASE.
 Still unsecured and still addressed to the initiator's ephemeral id: this is
@@ -213,7 +213,7 @@ the last message before the keys take effect, not the first one after.
 **called by** `handle_sigma3`
 
 ### `size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:1954`
+`firmware/src/matter_commission.c:1989`
 
 A datagram on the operational port. Sigma1, so far, and only Sigma1.
 There is no responder yet, so this answers nothing. What it does establish is
@@ -227,12 +227,12 @@ real commissioner computed independently.
 **calls** `case_slot_of`, `handle_sigma3`, `on_secure`, `send_sigma2`
 
 ### `static void on_link_reset(void)`
-`firmware/src/matter_commission.c:2244`
+`firmware/src/matter_commission.c:2279`
 
 The link dropped. Cheap here; begin_session() does the real work later.
 
 ### `bool matter_commission_has_fabric(void)`
-`firmware/src/matter_commission.c:2261`
+`firmware/src/matter_commission.c:2296`
 
 Whether this node currently holds a commissioned Matter fabric.
 Asked by the advertiser, which can carry the Matter commissionable
@@ -246,7 +246,7 @@ pairing -- invisible to Add Accessory and impossible to recover without
 erasing it.
 
 ### `int matter_commission_init(void)`
-`firmware/src/matter_commission.c:2271`
+`firmware/src/matter_commission.c:2306`
 
 Register the commissioning handlers on the 0xFFF6 transport.
 Call after the reader is up. Nothing here touches the radio: whether the

@@ -160,6 +160,29 @@ void aliro_approach_init(struct aliro_approach *ap, const struct aliro_approach_
 enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_t now_ms,
 					       int32_t cm);
 
+/**
+ * Record a range for the DEPARTURE decision alone, trust gate or no trust gate.
+ *
+ * Ranges beyond relock_cm are precisely the ones the range-integrity consensus
+ * declines to vouch for, so a walk-away can never satisfy a "seen beyond
+ * relock_cm" condition through aliro_approach_feed(). Measured 2026-08-02: the
+ * trace showed 252 cm then 309 cm as the credential left, while the controller
+ * had last been FED 210 cm, and both the silence rule and far_dwell refused --
+ * correctly, on the data they had.
+ *
+ * Using an unvouched range here is safe in the one direction that matters. The
+ * trust gate exists to stop a forged NEAR range opening a door; a forged FAR
+ * range can only CLOSE one, and an attacker gains nothing by locking a lock.
+ * So departure may read what the radio saw, while the unlock decision keeps
+ * requiring what the radio can vouch for.
+ *
+ * Ignores anything nearer than relock_cm, which is what keeps the asymmetry
+ * honest: an unvouched range can cause a relock and can never prevent or delay
+ * one. Feed it only FRESH ranges -- the caller's generation epoch says which --
+ * or the silence in aliro_approach_tick() never accumulates.
+ */
+void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms, int32_t cm);
+
 /* Periodic call while no sample arrived (the controller's idle tick).
  * Supervises an overdue predictive open, and relocks a departure whose far
  * samples stopped before far_dwell could count them (far_silence_ms). */

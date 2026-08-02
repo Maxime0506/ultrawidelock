@@ -73,16 +73,14 @@ zone), UNLOCK_PREDICT (fired a predictive unlock), or HOLD (no action).
 
 **calls** `kf_update`, `pred_abort`, `range_median`
 
-### `enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_t now_ms)`
+### `void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms, int32_t cm)`
 `modules/woz_aliro/src/aliro_approach.c:277`
 
 Supervise an active predictive unlock when no new measurement arrives this window. If the
 prediction deadline has passed, abort and relock the door. Return HOLD otherwise.
 
-**calls** `pred_abort`
-
 ### `enum aliro_approach_action aliro_approach_gone(struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:310`
+`modules/woz_aliro/src/aliro_approach.c:325`
 
 Reset the approach controller to locked state while preserving its configuration. Return
 RELOCK_DEPART if the door was unlocked before the reset, otherwise HOLD.
@@ -90,24 +88,30 @@ RELOCK_DEPART if the door was unlocked before the reset, otherwise HOLD.
 **calls** `aliro_approach_init`
 
 ### `bool aliro_approach_locked(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:322`
+`modules/woz_aliro/src/aliro_approach.c:337`
 
 Return true if the door is locked, false if unlocked.
 
 ### `int32_t aliro_approach_est_cm(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:331`
+`modules/woz_aliro/src/aliro_approach.c:346`
 
 Return the current estimated distance in centimeters. Returns -1 if the Kalman filter has not
 been initialized (no valid measurement yet); otherwise returns the rounded estimate.
 
 ### `int32_t aliro_approach_vel_cm_s(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:343`
+`modules/woz_aliro/src/aliro_approach.c:358`
 
 Return the current velocity in centimeters per second (positive = approaching, negative =
 receding). Returns 0 if the Kalman filter has not been initialized.
 
 ### `int32_t aliro_approach_eta_ms(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:357`
+`modules/woz_aliro/src/aliro_approach.c:372`
 
 Return the estimated time in milliseconds until approach completes (unlock reaches the door).
 Value is -1 if not yet computed, or the reader has already locked the door.
+
+<details><summary>Undocumented (1)</summary>
+
+- `aliro_approach_tick` — tested: approach
+
+</details>

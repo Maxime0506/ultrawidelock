@@ -214,6 +214,8 @@ int main(void)
 	aliro_approach_init(&approach, NULL); /* factory defaults: unlock 100 cm, relock 250 cm */
 
 	uint32_t last_gen = woz_uwb_range_generation();
+	/* The last range OBSERVED for departure, trusted or not; see the loop. */
+	uint32_t last_obs_gen = last_gen;
 	bool present = false;
 	bool granted = false;
 
@@ -231,9 +233,33 @@ int main(void)
 		 * generation, so it drives a tick, not a fresh approach sample. */
 		if (gen != last_gen && woz_uwb_trusted_range_cm(&cm)) {
 			last_gen = gen;
+			last_obs_gen = gen;
 			present = true;
 			act = aliro_approach_feed(&approach, now, cm);
 		} else {
+			/*
+			 * A fresh range the integrity consensus will not vouch
+			 * for still says something -- about DEPARTURE only. Far
+			 * ranges are the ones it declines, so without this the
+			 * walk-away relock can never fire; see
+			 * aliro_approach_observe_departure() for why reading an
+			 * unvouched range is safe in that one direction.
+			 *
+			 * last_gen is deliberately NOT consumed here. Trust can
+			 * arrive late for a latch already taken (the good-run
+			 * counter builds across blocks), and the retry above is
+			 * what catches it. A separate epoch keeps this from
+			 * observing the same range twice, which would refresh
+			 * the silence clock and stop it ever expiring.
+			 */
+			if (gen != last_obs_gen) {
+				int32_t raw = 0;
+
+				last_obs_gen = gen;
+				if (woz_uwb_last_range_cm(&raw)) {
+					aliro_approach_observe_departure(&approach, now, raw);
+				}
+			}
 			act = aliro_approach_tick(&approach, now);
 		}
 
