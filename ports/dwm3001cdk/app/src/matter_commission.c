@@ -123,6 +123,23 @@ static uint8_t s_out[MATTER_EXCHANGE_HEADER_MAX + MATTER_REPORT_MAX + MATTER_TAG
 /** The Interaction Model payload, before framing. */
 static uint8_t s_report[MATTER_REPORT_MAX];
 
+/*
+ * The largest IM payload that still fits one Thread datagram.
+ *
+ * MATTER_MAX_MESSAGE_LEN is the ceiling for the WHOLE message -- the 1280 byte
+ * IPv6 MTU less the IPv6 and UDP headers -- so the exchange headers and the MIC
+ * come out of it rather than being added to it. Spending it all on the payload
+ * builds a datagram up to 52 bytes over the MTU, and an oversized datagram is
+ * not slow, it is never delivered. Nothing is logged either, because the
+ * framing itself succeeded, so the subscriber just re-subscribes forever.
+ *
+ * BLE hides the mistake: BTP re-fragments, so the same report crosses a
+ * commissioning session intact and the subscription only dies once the node
+ * moves to Thread -- which reads as "worked while pairing, then went away".
+ */
+#define MATTER_IM_PAYLOAD_MAX                                                                      \
+	(MATTER_MAX_MESSAGE_LEN - MATTER_EXCHANGE_HEADER_MAX - MATTER_TAG_LEN)
+
 /**
  * Plaintext of an encrypted message.
  *
@@ -809,7 +826,7 @@ static void send_report_chunk(struct sub_state *s)
 	int rc;
 
 	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, s_report,
-					 MATTER_MAX_MESSAGE_LEN, &report_len, &s->more, &emitted,
+					 MATTER_IM_PAYLOAD_MAX, &report_len, &s->more, &emitted,
 					 &stats);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build the report chunk (%d)", rc);
@@ -823,7 +840,12 @@ static void send_report_chunk(struct sub_state *s)
 		return;
 	}
 	s->sent += emitted;
-	LOG_DBG("  chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
+	/*
+	 * INF, not DBG: an undersized chunk count is the only visible symptom of
+	 * a report that frames cleanly and is then dropped by the network, and
+	 * debug level is off in every image that gets flashed.
+	 */
+	LOG_INF("  chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
 		s->sent, s->more ? "MORE" : "last");
 	send_im(MATTER_IM_OP_REPORT_DATA, s_report, report_len);
 }
