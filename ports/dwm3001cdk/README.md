@@ -43,6 +43,33 @@ window cannot afford a blocking console write.
 JLinkRTTLogger -Device NRF52833_XXAA -If SWD -Speed 4000 -RTTChannel 0 /dev/stdout
 ```
 
+### probe-rs is optional, and only for scripted memory access
+
+The SEGGER commands above are the supported path. `probe-rs` 0.32.0 does drive
+this board's onboard J-Link OB (`probe-rs info` reports `nRF52833_xxAA` over SWD
+with no flash write and no reset), and it is worth having for the one thing the
+SEGGER tools make awkward: reading and writing target memory from a shell
+one-liner instead of a JLinkExe command file.
+
+```sh
+probe-rs read b32 <addr> 2   # e.g. the RTT ring's WrOff/RdOff, to zero a stale ring
+probe-rs trace <addr>        # poll one g_dbg_* counter without spending RTT bandwidth
+```
+
+It does not replace `west flash` plus `JLinkRTTLogger`, and its RTT viewing has a
+silent trap. `--scan-region` defaults to empty, and with no region probe-rs **does
+not scan and does not poll RTT at all**: you get a clean attach and zero output,
+which reads exactly like a dead board. Always pass the ELF, or `--scan-region ram`:
+
+```sh
+probe-rs attach --chip nRF52833_xxAA --scan-region ram ../build-cdk/zephyr/zephyr.elf
+```
+
+One process at a time owns the probe, and draining RTT advances the ring's read
+pointer, so a second attach splits the log rather than duplicating it. To watch
+from several terminals, let one process own the probe and `tail -f` its output
+file.
+
 ## Size, measured
 
 Stage 0 built the whole thing to find out whether it fits. It does, with room
