@@ -75,6 +75,26 @@ void woz_dfu_window_close(void);
 bool woz_dfu_window_is_open(void);
 
 /**
+ * Called whenever the window opens or closes.
+ *
+ * Registered rather than a weak symbol so that it survives LTO without
+ * argument, and so a port with no indicator pays nothing.
+ */
+typedef void (*woz_dfu_window_cb)(bool open);
+
+/**
+ * Watch the window, so the board can SHOW that it is open.
+ *
+ * There are three ways in -- SW2, Apple Home's pairing mode, and the bench
+ * SWD write -- and none of them is visible from outside the board. An owner who
+ * pressed the button has no way to tell whether the press registered, and the
+ * five-minute window can expire while they are still looking for the phone.
+ * One callback covers every path because they all end at
+ * woz_dfu_window_open().
+ */
+void woz_dfu_set_window_cb(woz_dfu_window_cb cb);
+
+/**
  * Handle one frame.
  *
  * @param frame     request bytes, opcode first

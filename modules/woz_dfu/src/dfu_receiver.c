@@ -85,6 +85,21 @@ static K_WORK_DELAYABLE_DEFINE(s_reboot, reboot_fn);
 static void window_expire(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(s_window, window_expire);
 static bool s_open;
+static woz_dfu_window_cb s_window_cb;
+
+void woz_dfu_set_window_cb(woz_dfu_window_cb cb)
+{
+	s_window_cb = cb;
+}
+
+/* One place, so that every route in -- the button, Apple Home, the bench SWD
+ * write -- reaches the indicator without knowing it exists. */
+static void window_notify(bool open)
+{
+	if (s_window_cb != NULL) {
+		s_window_cb(open);
+	}
+}
 
 static void window_expire(struct k_work *work)
 {
@@ -92,6 +107,7 @@ static void window_expire(struct k_work *work)
 	LOG_INF("update window closed");
 	s_open = false;
 	woz_dfu_rx_reset();
+	window_notify(false);
 }
 
 void woz_dfu_window_open(uint32_t duration_ms)
@@ -99,6 +115,7 @@ void woz_dfu_window_open(uint32_t duration_ms)
 	s_open = true;
 	(void)k_work_reschedule(&s_window, K_MSEC(duration_ms));
 	LOG_INF("update window open for %u ms", (unsigned)duration_ms);
+	window_notify(true);
 }
 
 void woz_dfu_window_close(void)
@@ -106,6 +123,7 @@ void woz_dfu_window_close(void)
 	(void)k_work_cancel_delayable(&s_window);
 	s_open = false;
 	woz_dfu_rx_reset();
+	window_notify(false);
 }
 
 bool woz_dfu_window_is_open(void)

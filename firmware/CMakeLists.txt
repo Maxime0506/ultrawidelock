@@ -75,6 +75,8 @@ target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
 target_sources_ifdef(CONFIG_WOZ_DFU_RECEIVER app PRIVATE src/dfu_ble_zephyr.c)
+# The update window is otherwise invisible on the board itself.
+target_sources_ifdef(CONFIG_WOZ_DFU_RECEIVER app PRIVATE src/status_led.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
 target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_ble_zephyr.c
                                                           src/matter_commission.c
