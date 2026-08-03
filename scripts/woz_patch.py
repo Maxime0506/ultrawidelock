@@ -47,8 +47,11 @@ import argparse
 import io
 import re
 import hashlib
+import json
 import struct
 import sys
+import time
+import zipfile
 import zlib
 from pathlib import Path
 
@@ -87,7 +90,45 @@ SEGMENT_SIZE = 4096
 MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
 MCUBOOT_HDR_LEN = 32
 MCUBOOT_TLV_INFO_MAGIC = 0x6907
+MCUBOOT_TLV_PROT_INFO_MAGIC = 0x6908
 MCUBOOT_TLV_SHA256 = 0x10
+MCUBOOT_TLV_INFO_LEN = 4
+MCUBOOT_TLV_HDR_LEN = 4
+
+# Where the application slot starts, for the zip manifest's load_address. Read
+# from firmware/pm_static.yml rather than derived: it is documentation for a
+# human reading the archive, not something the board acts on.
+MCUBOOT_PRIMARY_ADDR = 0xA000
+
+
+def image_sha(path):
+    """The SHA-256 MCUboot recorded in a signed image's TLVs.
+
+    The same value the board prints in its image list, which is what makes it
+    worth putting in a filename: comparing the two is then a glance rather than
+    a tool.
+    """
+    d = load_image(path)
+    magic, _, hdr_sz, _, img_sz, _ = struct.unpack_from("<IIHHII", d, 0)
+    if magic != MCUBOOT_IMAGE_MAGIC:
+        die(f"{path} is not a signed MCUboot image")
+
+    base = hdr_sz + img_sz
+    tlv_magic, tlv_tot = struct.unpack_from("<HH", d, base)
+    if tlv_magic == MCUBOOT_TLV_PROT_INFO_MAGIC:
+        base += tlv_tot
+        tlv_magic, tlv_tot = struct.unpack_from("<HH", d, base)
+    if tlv_magic != MCUBOOT_TLV_INFO_MAGIC:
+        die(f"{path} has no TLV block where its header says one should be")
+
+    p, end = base + MCUBOOT_TLV_INFO_LEN, base + tlv_tot
+    while p + MCUBOOT_TLV_HDR_LEN <= end:
+        kind, _, ln = struct.unpack_from("<BBH", d, p)
+        p += MCUBOOT_TLV_HDR_LEN
+        if kind == MCUBOOT_TLV_SHA256 and ln == 32:
+            return d[p : p + 32]
+        p += ln
+    die(f"{path} has no SHA-256 TLV")
 
 
 def die(msg):
@@ -314,12 +355,68 @@ def wrap(args):
     )
 
     out = header + inner + trailer
-    Path(args.out).write_bytes(out)
+
+    # THE NAME CARRIES BOTH HASHES, and that is the point of it.
+    #
+    # A stable name is what makes a stale file dangerous: the phone keeps last
+    # week's copy under the same name as today's, the picker cannot tell them
+    # apart, and the board silently applies the wrong one. That happened --
+    # a phone uploaded an older patch whose target build had already been
+    # overwritten on the host, and identifying what the board was left running
+    # took a flash dump over SWD.
+    #
+    # These are the MCUboot SHA-256 TLVs, the same values the board prints in
+    # its image list, so "does this file apply to what I have" is a comparison
+    # you can do by eye between a filename and a line of output.
+    from_sha = image_sha(args.from_image)
+    to_sha = image_sha(args.to_image)
+    stem = f"openaliro-{from_sha[:8].hex()}-to-{to_sha[:8].hex()}"
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    bin_name = f"{stem}.bin"
+    bin_path = out_dir / bin_name
+    bin_path.write_bytes(out)
+
+    # The zip is what nRF Connect SDK ships and what the phone apps expect to
+    # see; the manifest mirrors nrf/scripts/bootloader/generate_zip.py. The
+    # two sha fields are ours and are not part of that schema -- extra keys are
+    # ignored by readers, and they make the archive self-describing once the
+    # filename has been lost to a share sheet.
+    manifest = {
+        "format-version": 1,
+        "time": int(time.time()),
+        "name": "openaliro delta update",
+        "files": [
+            {
+                "type": "application",
+                "board": "decawave_dwm3001cdk",
+                "soc": "nrf52833",
+                "load_address": MCUBOOT_PRIMARY_ADDR,
+                "image_index": "0",
+                "slot_index_primary": "1",
+                "slot_index_secondary": "2",
+                "version_MCUBOOT": f"{major}.{minor}.{rev}",
+                "size": len(out),
+                "file": bin_name,
+                "modtime": int(time.time()),
+                "from_sha256": from_sha.hex(),
+                "to_sha256": to_sha.hex(),
+            }
+        ],
+    }
+
+    zip_path = out_dir / f"{stem}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("manifest.json", json.dumps(manifest, indent=4))
+        z.write(bin_path, bin_name)
 
     print(f"  patch     {len(inner):>9,} B  crc {zlib.crc32(inner):#010x}")
     print(f"  wrapper   {len(out) - len(inner):>9,} B  header {MCUBOOT_HDR_LEN} + TLV {len(trailer)}")
     print(f"  file      {len(out):>9,} B  v{major}.{minor}.{rev}+{build_num}")
-    print(f"  wrote     {args.out}")
+    print(f"  applies to  {from_sha[:8].hex()}   produces  {to_sha[:8].hex()}")
+    print(f"  wrote     {bin_path}")
+    print(f"  wrote     {zip_path}")
 
 
 def info(args):
@@ -409,7 +506,9 @@ def main():
 
     w = sub.add_parser("wrap", help="dress a .wdfu as an MCUboot image, for phone tooling")
     w.add_argument("patch")
-    w.add_argument("--out", required=True)
+    w.add_argument("--out-dir", required=True, help="where to write the named .bin and .zip")
+    w.add_argument("--from-image", required=True, help="signed image the patch applies to")
+    w.add_argument("--to-image", required=True, help="signed image the patch produces")
     w.add_argument("--version", default="1.0.0", help="major.minor.revision shown by the app")
     w.set_defaults(func=wrap)
 

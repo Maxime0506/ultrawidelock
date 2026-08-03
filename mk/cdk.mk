@@ -331,10 +331,16 @@ fota-build:
 	@$(MAKE) --no-print-directory build
 	@$(MAKE) --no-print-directory ota-patch
 	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_patch.py wrap '$(CDK_PATCH)' \
-	  --version '$(FOTA_VERSION)' --out '$(CDK_FOTA)'
+	  --version '$(FOTA_VERSION)' --out-dir '$(CDK_BUILD)' \
+	  --from-image '$(CDK_DEPLOYED)' --to-image '$(CDK_SIGNED_HEX)'
 	@printf '\n  ---- put this on the phone ----------------------------------\n\n'
-	@printf '  %s\n\n' '$(CDK_FOTA)'
-	@printf '  1. AirDrop that file to the phone, or drop it in Files\n'
+	@ls -t '$(CDK_BUILD)'/openaliro-*.zip '$(CDK_BUILD)'/openaliro-*.bin 2>/dev/null | head -2 | sed 's/^/  /'
+	@printf '\n  The name carries both hashes: openaliro-<applies to>-to-<produces>.\n'
+	@printf '  `make ota-smp-list` prints what the board is running -- the first\n'
+	@printf '  half of the name must match it, or the board will refuse the patch.\n'
+	@printf '  DELETE OLD COPIES ON THE PHONE. A stale file that still looks\n'
+	@printf '  plausible is the one failure this whole path cannot catch for you.\n\n'
+	@printf '  1. AirDrop either file to the phone, or drop it in Files\n'
 	@printf '  2. Press SW2 on the board  (or Apple Home -> Turn On Pairing Mode)\n'
 	@printf '  3. nRF Device Manager -> connect to "openaliro"\n'
 	@printf '  4. Images tab -> SELECT FILE -> that file -> UPLOAD\n'
