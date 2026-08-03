@@ -271,17 +271,29 @@ gate_deps() {
 	hdr "deps · known-vulnerable and known-malicious packages"
 	local rc=0
 
+	# Every JS lockfile in the tree is named here. A missing one is fatal rather than
+	# skipped: a lockfile that stops existing means the project moved or was renamed, and
+	# silently scanning nothing is exactly the failure this gate exists to prevent.
+	local lockfiles=(tools/tui/bun.lock activity/package-lock.json)
+	local lock
+
 	if have osv-scanner; then
-		if [ -f tools/tui/bun.lock ]; then
-			printf '  %sscope: tools/tui/bun.lock (%s npm packages)%s\n' "$DIM" \
-				"$(osv-scanner scan source -L tools/tui/bun.lock 2>/dev/null \
+		for lock in "${lockfiles[@]}"; do
+			if [ ! -f "$lock" ]; then
+				printf '  %s%s%s %s is missing — a named lockfile cannot just vanish\n' \
+					"$RED" "$CRS" "$RESET" "$lock"
+				rc=1
+				continue
+			fi
+			printf '  %sscope: %s (%s npm packages)%s\n' "$DIM" "$lock" \
+				"$(osv-scanner scan source -L "$lock" 2>/dev/null \
 					| sed -n 's/.*found \([0-9]*\) packages.*/\1/p' | head -1)" "$RESET"
-			osv-scanner scan source -L tools/tui/bun.lock 2>/dev/null \
+			osv-scanner scan source -L "$lock" 2>/dev/null \
 				| grep -vE '^(Starting filesystem walk|End status:|Scanned )' || true
 			# osv-scanner exits 1 when it finds something; ask again for the status
 			# alone rather than parsing the table above.
-			osv-scanner scan source -L tools/tui/bun.lock >/dev/null 2>&1 || rc=1
-		fi
+			osv-scanner scan source -L "$lock" >/dev/null 2>&1 || rc=1
+		done
 	else
 		missing osv-scanner "brew install osv-scanner" || rc=1
 	fi

@@ -1560,6 +1560,34 @@ The demo responder lifecycle + interactive console live in app_shell.c.
 
 **used by** [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md), [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
 
+## `activity/src/`
+
+### [`activity/src/discord-boot.ts`](architecture/activity.src/discord-boot.ts.md)
+
+Discord Activity boot shim for the openaliro web twin.
+The twin is a standalone page that knows nothing about Discord and must keep
+working when opened straight off disk. So this file is the entire Discord
+surface: it detects the embedded context, marks the document so CSS can
+adapt, and completes the SDK handshake. It does not touch the simulation, it
+does not request an OAuth scope, and it holds no secret -- the client id is
+public by design and is injected at build time.
+Anything beyond `ready()` belongs in a later phase.
+
+**depends on** [`activity/src/participants.ts`](architecture/activity.src/participants.ts.md)
+
+### [`activity/src/participants.ts`](architecture/activity.src/participants.ts.md)
+
+"N watching": free social presence, no backend.
+Discord synchronises no state between Activity instances, so each viewer
+drives their own twin. This strip is the one honest exception: it shows who
+else has the Activity open, which makes a shared session feel shared without
+a sync server behind it.
+Everything here is untrusted input. Discord's own documentation says not to
+treat what the SDK reports client-side as truth, and a username is a string
+another person chose. Nothing in this file ever reaches innerHTML.
+
+**used by** [`activity/src/discord-boot.ts`](architecture/activity.src/discord-boot.ts.md)
+
 ## `integration/homeassistant/`
 
 ### [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md)
@@ -2942,6 +2970,69 @@ writes bytes, checks a signature, and reboots.
 
 **used by** [`modules/woz_dfu/src/dfu_receiver.c`](architecture/modules.woz_dfu.src/dfu_receiver.c.md), [`modules/woz_dfu/src/dfu_smp_img.c`](architecture/modules.woz_dfu.src/dfu_smp_img.c.md)
 
+## `activity/scripts/`
+
+### [`activity/scripts/boot-probe.py`](architecture/activity.scripts/boot-probe.md)
+
+Phase 1 check: the boot shim must never cost the twin its self-test.
+
+Loads activity/dist/index.html three ways and reports both the page's own
+#selftest verdict and the data-in-discord attribute the shim stamps on <html>.
+
+Usage: boot-probe.py [dist-dir] [case]   (default dist: ../dist)
+
+### [`activity/scripts/iframe-checks.py`](architecture/activity.scripts/iframe-checks.md)
+
+Two Activity checklist items that only mean anything inside an iframe.
+
+1. single-step mode advances the real RX state machine leg by leg
+2. the theme toggle still works when localStorage is unavailable
+
+Both matter because a Discord Activity is a sandboxed iframe: storage can be
+refused there, and single-step is the mode people actually use to explain a
+DS-TWR round to someone else.
+
+Both are driven in a same-origin iframe so the twin's own DOM can be read back.
+Storage is disabled through a Firefox profile pref rather than by faking it, so
+the page hits the real exception path its try/catch was written for.
+
+Usage: iframe-checks.py [dist-dir]   (default: ../dist)
+
+### [`activity/scripts/participants-test.mjs`](architecture/activity.scripts/participants-test.mjs.md)
+
+Hostile-input test for the "N watching" strip.
+Usernames are strings other people chose, and Discord's docs say not to
+trust what the SDK reports client-side. This drives src/participants.ts with
+names designed to break out of the strip, in a real browser DOM, and asserts
+that none of them do. Run: node scripts/participants-test.mjs
+The strip is bundled with esbuild and handed a duck-typed SDK, so the code
+under test is the real module rather than a copy of its logic.
+
+### [`activity/scripts/verify-deploy.mjs`](architecture/activity.scripts/verify-deploy.mjs.md)
+
+Check that what a host actually serves is what we built.
+A CDN is entitled to compress, cache and rewrite. twin.js is a binary file
+wearing a .js extension, so a host that "helpfully" minified or re-encoded it
+would corrupt the firmware while still returning 200 and looking fine in a
+browser tab. This fetches the deployed files and compares them byte for byte
+against the local build, and reports the response headers so an injected CSP
+cannot arrive unnoticed.
+Usage: node scripts/verify-deploy.mjs https://your-host.example
+
+### [`activity/scripts/write-lock.mjs`](architecture/activity.scripts/write-lock.mjs.md)
+
+Regenerate activity/twin.lock.json from the current web-twin/ sources.
+Run this only when the twin was rebuilt on purpose (`make twin-wasm`). The
+lock exists so that a changed firmware blob has to pass through a reviewed
+commit instead of riding along in a deploy, so refreshing it without looking
+at what changed defeats the point.
+
+## `activity/`
+
+### [`activity/vite.config.ts`](architecture/activity/vite.config.ts.md)
+
+*No module docstring. First commit: "activity: serve the twin as a Discord Activity without forking it".*
+
 ## `integration/homeassistant/scripts/`
 
 ### [`integration/homeassistant/scripts/ha-setup.sh`](architecture/integration.homeassistant.scripts/ha-setup.sh.md)
@@ -3891,6 +3982,18 @@ deleting the worktree deletes it (see `make ws-clean`).
 ### [`web-twin/check_constants.py`](architecture/web-twin/check_constants.md)
 
 Verify that the web-twin's hardcoded firmware constants in index.html stay synchronized with their source definitions. Parses the FW table, reads the cited source lines, and reports any mismatches or missing citations.
+
+### [`web-twin/csp_probe.py`](architecture/web-twin/csp_probe.md)
+
+Phase 0 spike, local half.
+
+Serves web-twin/ with a chosen Content-Security-Policy header and loads it
+inside an iframe in headless Firefox, the same shape Discord uses for an
+Activity. The wrapper (served with no CSP of its own) reads #selftest out of
+the frame and POSTs it back here, so the result lands in stdout rather than in
+a screenshot we have to squint at.
+
+Usage: csp_probe.py [dir-to-serve]      (default: the directory holding this file)
 
 ### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
 

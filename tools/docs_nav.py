@@ -60,6 +60,10 @@ JOURNEY = [
     ("Deep dives", "porting-esp32-phase3"),
     ("Deep dives", "chipset-memory"),
     ("Deep dives", "home-assistant-internals"),
+    # the user-facing page first, then the spike that proves it can exist
+    ("Deep dives", "discord-activity"),
+    ("Deep dives", "discord-activity-phase0"),
+    ("Deep dives", "discord-activity-distribution"),
     ("Porting", "porting"),
     ("Porting", "porting-esp32"),
     ("Porting", "esp32-gotchas"),

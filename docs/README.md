@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**321 subsystems in 46 directories · 2290/2501 symbols documented (91%)**
+**330 subsystems in 49 directories · 2294/2527 symbols documented (90%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -58,6 +58,9 @@ flowchart LR
 
 | directory | subsystems | documented |
 |---|---|---|
+| [`activity/`](architecture/activity/README.md) | 1 | 2/4 (50%) |
+| [`activity/scripts/`](architecture/activity.scripts/README.md) | 5 | 0/9 (0%) |
+| [`activity/src/`](architecture/activity.src/README.md) | 2 | 2/8 (25%) |
 | [`firmware/src/`](architecture/firmware.src/README.md) | 15 | 161/164 (98%) |
 | [`host/presence/`](architecture/host.presence/README.md) | 5 | 36/36 (100%) |
 | [`integration/homeassistant/`](architecture/integration.homeassistant/README.md) | 1 | 5/5 (100%) |
@@ -103,11 +106,11 @@ flowchart LR
 | [`scripts/`](architecture/scripts/README.md) | 36 | 155/198 (78%) |
 | [`tools/`](architecture/tools/README.md) | 24 | 206/224 (91%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 51/142 (35%) |
-| [`web-twin/`](architecture/web-twin/README.md) | 2 | 19/19 (100%) |
+| [`web-twin/`](architecture/web-twin/README.md) | 3 | 19/24 (79%) |
 
 ## Hotspots
 
-*Mined from git history as of `62ead92`.*
+*Mined from git history as of `bb973a0`.*
 
 **Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (18 commits).
 

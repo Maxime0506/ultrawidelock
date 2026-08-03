@@ -83,3 +83,10 @@ scratchpad/
 
 # video generation
 video/
+
+# Discord Activity build. dist/ is generated from web-twin/ plus one boot
+# script, and the env file holds the Discord application id, which is public
+# but is still kept out of the tree so nothing here is tied to one Discord app.
+/activity/node_modules/
+/activity/dist/
+/activity/.env

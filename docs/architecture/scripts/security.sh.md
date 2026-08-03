@@ -94,7 +94,7 @@ comes back from the same query.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_web()`
-`scripts/security.sh:339`
+`scripts/security.sh:351`
 
 ---- gates that live in their own script -----------------------------------
 Each is big enough to want its own file (the web gate parses HTML, the ct gate compiles and
@@ -104,21 +104,21 @@ point that CI, `make security` and verify.sh all share.
 **called by** `run_one`
 
 ### `gate_esp()`
-`scripts/security.sh:341`
+`scripts/security.sh:353`
 
 Run the ESP workspace security gate via scripts/security-workspace.sh esp.
 
 **called by** `run_one`
 
 ### `gate_attest()`
-`scripts/security.sh:343`
+`scripts/security.sh:355`
 
 Run the attestation security gate via scripts/security-attest.sh workflow.
 
 **called by** `run_one`
 
 ### `gate_ct()`
-`scripts/security.sh:350`
+`scripts/security.sh:362`
 
 ct is the one gate that can report neither pass nor fail. There is no valgrind for
 darwin/arm64, so on the primary dev machine the honest answer is "not checked here" — exit 2,
@@ -129,7 +129,7 @@ install. CI runs linux and never sees it.
 **called by** `run_one`
 
 ### `run_one()`
-`scripts/security.sh:358`
+`scripts/security.sh:370`
 
 ---- dispatch --------------------------------------------------------------
 

@@ -1,0 +1,13 @@
+{
+  "_comment": "Byte size and SHA-256 of the twin files this Activity serves. The build refuses to run when a source file drifts from these, so a rebuilt WASM twin is a deliberate, reviewed update rather than a silent one. Refresh with `npm run lock` after `make twin-wasm`.",
+  "files": {
+    "index.html": {
+      "bytes": 72891,
+      "sha256": "f9df7c60a217c5edd02997c75ef2fbccaf0965eaa7b26112f7d3679b7ddc2f1c"
+    },
+    "twin.js": {
+      "bytes": 37465,
+      "sha256": "d8453e52453be3f87715beb9b837d9d66f25624300a5978af0234a8bdf2ec920"
+    }
+  }
+}
