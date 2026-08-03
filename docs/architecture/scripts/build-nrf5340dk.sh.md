@@ -20,55 +20,57 @@ UWB_SELFTEST=1 scripts/build-nrf5340dk.sh build   # one-shot boot self-test, no 
 PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
 ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
 UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
+LTO=1 scripts/build-nrf5340dk.sh build            # link-time optimisation, off by default (overlays/lto.conf)
+DFU=1 scripts/build-nrf5340dk.sh build            # MCUboot + Matter OTA, off by default (overlays/sysbuild-dfu.conf)
 
 **discussed in** [`docs/configuring.md`](../../configuring.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
 
 ## API
 
 ### `launch()`
-`scripts/build-nrf5340dk.sh:78`
+`scripts/build-nrf5340dk.sh:80`
 
 Launch a command in the NCS toolchain environment for the configured version.
 
 **called by** `do_build`
 
 ### `sha()`
-`scripts/build-nrf5340dk.sh:81`
+`scripts/build-nrf5340dk.sh:83`
 
 Compute SHA-1 hash; tries shasum first (BSD/macOS), falls back to sha1sum (Linux). Filters output to the hash hex string only.
 
 **called by** `do_build`
 
 ### `hdr()`
-`scripts/build-nrf5340dk.sh:91`
+`scripts/build-nrf5340dk.sh:93`
 
 Print a section header to stdout: blue "==>" followed by bold text. Used to mark the start of major build phases (preflight, build, done).
 
 **called by** `do_build`, `preflight`
 
 ### `ok()`
-`scripts/build-nrf5340dk.sh:93`
+`scripts/build-nrf5340dk.sh:95`
 
 Print a checkmark to stdout in green followed by text. Used to mark successful completion of build steps.
 
 **called by** `do_build`, `preflight`
 
 ### `kv()`
-`scripts/build-nrf5340dk.sh:95`
+`scripts/build-nrf5340dk.sh:97`
 
 Print a key-value pair indented: dim key (9 chars wide) and value. Used to display build configuration during the build phase.
 
 **called by** `do_build`, `resolve_snr`
 
 ### `die()`
-`scripts/build-nrf5340dk.sh:97`
+`scripts/build-nrf5340dk.sh:99`
 
 Print an error message to stderr and exit with status 1. First line prints the error text in red; remaining arguments are printed as indented hints (dim text with arrow prefix). Used by preflight checks and build validation to fail fast on missing prerequisites or configuration errors.
 
 **called by** `do_build`, `preflight`, `require_built`, `resolve_chip`, `resolve_snr`
 
 ### `resolve_chip()`
-`scripts/build-nrf5340dk.sh:105`
+`scripts/build-nrf5340dk.sh:107`
 
 Resolve UWB_CHIP -> the dw3000 decadriver's chip Kconfig choice (deps/dw3000/Kconfig).
 Same DT node + wiring for both; only which *_device.c/dwt_driver builds changes.
@@ -76,28 +78,28 @@ Same DT node + wiring for both; only which *_device.c/dwt_driver builds changes.
 **called by** `do_build`  ·  **calls** `die`
 
 ### `preflight()`
-`scripts/build-nrf5340dk.sh:114`
+`scripts/build-nrf5340dk.sh:116`
 
 Verify bootstrap.sh left everything the build needs. All cheap fs/git checks.
 
 **called by** `do_build`  ·  **calls** `die`, `hdr`, `ok`
 
 ### `do_build()`
-`scripts/build-nrf5340dk.sh:153`
+`scripts/build-nrf5340dk.sh:155`
 
 Build the Aliro UWB firmware image. Runs preflight checks, resolves chip config, applies optional overlays (pretty console, latency diagnostics, self-test), computes a signature from all -D flags, and runs west build (pristine if config changed, incremental otherwise). Writes build signature to a cache file to detect future flag changes. Outputs merged.hex to BUILD directory.
 
 **calls** `die`, `hdr`, `kv`, `launch`, `ok`, `preflight`, `resolve_chip`, `sha`
 
 ### `require_built()`
-`scripts/build-nrf5340dk.sh:333`
+`scripts/build-nrf5340dk.sh:429`
 
 Verify that a west build has completed in BUILD directory (build.ninja exists). Called before flash operations to fail fast if build has not run.
 
 **calls** `die`
 
 ### `resolve_snr()`
-`scripts/build-nrf5340dk.sh:341`
+`scripts/build-nrf5340dk.sh:437`
 
 Resolve which J-Link probe to flash, into SNR. Only nRF5340DKs (board version
 PCA10095 in nrfutil device list) qualify, so another attached probe (e.g. a
@@ -105,3 +107,20 @@ DWM3001CDK) is never a candidate. One DK -> auto-select it; several -> prompt;
 none -> fail loud. The flash always names its target explicitly via --dev-id.
 
 **calls** `die`, `kv`
+
+### `warn_if_locked()`
+`scripts/build-nrf5340dk.sh:477`
+
+Confirm the board we just wrote is not sitting in an APPROTECT-engaged state.
+This runs AFTER the flash rather than before, because a mass erase is one of
+the ways a board gets into that state: `west flash --erase` blanks UICR, and a
+blank UICR reads as APPROTECT ENGAGED on the nRF5340 until firmware writes it
+open again. So the dangerous moment is the one immediately after this command
+succeeds, when everything looks like it worked.
+Failing here is a warning, not a build failure: the image IS on the board and
+saying so is more useful than pretending the flash did not happen. What must
+never happen is silence, because a locked board does not announce itself. It
+serves PARTIAL debug reads, so RAM above some address starts returning
+"memory protection issue" and the board reads as physically broken.
+scripts/check-approtect.sh owns the actual test, including its self-test. This
+is a call site, not a second implementation.

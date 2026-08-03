@@ -28,9 +28,123 @@ hardware-validated without a new checklist run.
 | `NFC=none` | no NFC reader; BLE/UWB remains enabled | source-build option only |
 | `ALIRO_TRACE=1` | temporary session trace | currently unavailable because the required vendor trace patch is absent |
 | `CIR=1` | CIA/CIR capture commands | diagnostic; costs walk-up latency while armed |
+| `LTO=1` | link-time optimisation on the app image | boots on hardware (2026-08-03); **no walk-up unlock and no tap has been run under it** |
+| `DFU=1` | MCUboot plus Matter OTA instead of the bench layout | boots on hardware (2026-08-03), MCUboot chains to the app; no OTA update has been installed |
 
 See [`docs/configuring.md`](../../docs/configuring.md) for the complete option
 list and capture-safety warnings.
+
+## Firmware size, and what the two size options buy
+
+Measured on this port at NCS v3.3.0, default options otherwise. The app core's
+partition is 988 KB in the bench layout; the net core (`ipc_radio`) is 256 KB and
+neither size option changes it, because the net core is a separate sysbuild domain
+and `EXTRA_CONF_FILE` does not cross into it. It DOES reach other images in the
+application's own domain, which is a trap: see `DFU=1` below, where it silently
+reached MCUboot.
+
+| app core | FLASH | of 988 KB | RAM | of 448 KB |
+|---|---|---|---|---|
+| default (no bootloader, no LTO) | 872,284 B | 86.22% | 355,424 B | 77.48% |
+| `LTO=1` | 794,832 B | 78.56% | 357,344 B | 77.89% |
+
+LTO is worth 77,452 B of flash and costs 1,920 B of RAM. The image boots on this
+board, verified 2026-08-03.
+
+It is still off by default here and on by default on the DWM3001CDK, and the
+reason is evidence rather than taste: booting is not the bar. Whole-program
+codegen can move the UWB ranging path, whose arm deadline is ~1836 us, and only a
+walk-up unlock on hardware can show that it did not. The CDK has had that run;
+this board has not, and the tap path only this board has is unproven under LTO for
+the same reason.
+
+## Firmware update over the air (`DFU=1`)
+
+The default build has no bootloader: the app owns flash from `0x0`, and updates go
+over the probe with `make nrf-flash`. That is right for a bench board and wrong for
+a lock on a door. `make nrf-build DFU=1` restores MCUboot and the Matter OTA
+Requestor.
+
+| image | FLASH | of | RAM | of |
+|---|---|---|---|---|
+| application | 905,096 B | 978,432 B (92.50%) | 358,560 B | 440 KB (79.58%) |
+| application, `DFU=1 LTO=1` | 825,208 B | 978,432 B (84.34%) | 360,480 B | 440 KB (80.01%) |
+| `ipc_radio` (net core) | 175,968 B | 222 KB (77.41%) | 57,468 B | 64 KB (87.69%) |
+| `b0n` (net-core immutable bootloader) | 20,768 B | 34,176 B (60.77%) | 3,552 B | 64 KB (5.42%) |
+| `mcuboot` | 24,724 B | 32 KB (75.45%) | 284,752 B | 440 KB (63.20%) |
+
+**LTO more than pays for the bootloader.** MCUboot costs 33,280 B off the
+partition and the OTA code adds 32,812 B to the image, 66,092 B of headroom in
+total. LTO returns 79,888 B here. `DFU=1 LTO=1` therefore leaves 153,224 B free,
+which is 13,796 B MORE free flash than the default bench build has today, while
+also having a bootloader and an update path. That combination is the one to reach
+for if this board ever needs both. Both halves boot on hardware; what is still
+unproven is the walk-up unlock under LTO, and an actual OTA install.
+
+**The second slot is free.** `mcuboot_secondary` lands on the DK's MX25R64 external
+QSPI (`PM_MCUBOOT_SECONDARY_REGION=external_flash`), so dual-slot costs no internal
+flash. What MCUboot does cost is 33,280 B off the front of the app core, which is
+`mcuboot` (`0x8000`) plus `mcuboot_pad` (`0x200`); the app partition drops from
+1,011,712 B to 978,432 B. The UWB engine still fits, with 73,336 B to spare.
+
+**Both cores are in the update.** The build emits `dfu_multi_image.bin`,
+`dfu_application.zip` and `matter.ota`. The manifest carries two images: the
+application at `load_address` 33280, and `ipc_radio` as image index 1. The net core
+is staged through `mcuboot_primary_1` in the `ram_flash` region and `pcd_sram`,
+which is why the application's RAM region is 440 KB here rather than 448 KB, and
+`b0n` is why the net core's flash region is 222 KB rather than 256 KB.
+
+**To actually install an update** you need an OTA Provider on the fabric. `DFU=1`
+turns on the Requestor half only (`CONFIG_CHIP_OTA_REQUESTOR=y`), which queries a
+Provider and downloads from it; it does not serve anything. In practice that means
+running `connectedhomeip`'s `ota-provider-app` with the generated `matter.ota`,
+commissioning it onto the same fabric, and pointing the lock at it. Apple Home does
+not serve arbitrary firmware, so on an Apple-Home-commissioned lock this needs a
+second admin on the fabric. SMP/mcumgr over Bluetooth, which nRF Device Manager
+speaks, is the other option and is deliberately NOT enabled here: it would need
+`CONFIG_CHIP_DFU_OVER_BT_SMP=y`, and it brings an unpaired writable endpoint with
+it.
+
+**Switching a board between the two layouts costs its reader storage.**
+`external_nvs` sits at `0x0` in the bench map and at `0x12f000` in the DFU map, so
+the Aliro reader's external NVS is not where the other build expects it.
+
+**The signing key is MCUboot's published one, and that is the thing to fix before
+this goes on a door.** `DFU=1` leaves `CONFIG_BOOT_SIGNATURE_KEY_FILE` at the
+upstream default, `bootloader/mcuboot/root-ec-p256.pem` in the fetched workspace,
+which is a private key published in MCUboot's own repository. Anyone can sign an
+image the resulting bootloader will accept. The DWM3001CDK does not have this
+problem because `firmware/sysbuild.cmake` refuses to build against any of the
+published demo keys and `make dfu-key` generates a per-checkout one
+(`firmware/keys/README.md`); the equivalent has deliberately not been invented
+here, because a second key mechanism is exactly the duplication this port avoids.
+
+**Boots on hardware.** Verified 2026-08-03 with `DFU=1 LTO=1` on an nRF5340 DK:
+MCUboot verifies the image and chains to the application, which reaches
+`arch_cpu_idle` with `IPSR` 0. No OTA update has been installed yet, so the
+Requestor path itself is still unexercised.
+
+Getting there turned up two bugs worth knowing about, because both present as a
+completely inert board.
+
+**1. RAM power-down under the heap.** See `overlays/woz-aliro.conf`. This one broke
+the default build too, not just `DFU=1`, and it is why MCUboot appeared to be at
+fault: RAM block power survives a soft reset, so an application that powered
+blocks down left MCUboot booting into the same holes, where it bus-faulted in the
+heap its ECDSA verification uses. One fix cured both.
+
+**2. `EXTRA_CONF_FILE` is not application-only.** Sysbuild forwards an
+un-namespaced value to every image in the same domain, so `LTO=1` was also
+building MCUboot with `CONFIG_ISR_TABLES_LOCAL_DECLARATION`. The port never
+noticed because it had no second app-core image until `DFU=1` created one. The
+build now forces both symbols off for `mcuboot` and fails if `CONFIG_LTO=y` shows
+up in `mcuboot`, `b0n` or `ipc_radio`.
+
+**MCUboot cannot tell you when it fails.** It is built with no console, and
+`MCUBOOT_LOG=1` (which adds one) overflows the add-on's 32 KB `mcuboot` partition
+by 4,084 B, because MCUboot already sits at 91.15% of that slot. Anything needing
+the bootloader to talk has to start by giving it room, which means this port
+taking over the flash map instead of borrowing the add-on's.
 
 ## Where the code is
 

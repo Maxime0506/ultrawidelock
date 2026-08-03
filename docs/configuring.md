@@ -68,6 +68,8 @@ Set on the command line, e.g. `make nrf-build PRETTY=1 CHIP=dw3720`:
 | `NFC=pn532` | use the in-tree PN532 SPI transport; driver and APDU layers are host-tested, not hardware-validated |
 | `NFC=none` | build without an NFC reader; BLE/UWB remains enabled |
 | `CIR=1` | compile CIA/CIR diagnostics; arm at runtime with `aliro cir on`, `aliro cir dump on`, or `aliro cir probe` |
+| `LTO=1` | link-time optimisation on the app image; saves 77,452 B of app-core flash and costs 1,920 B of RAM. Off by default here and on by default on the CDK, because only the CDK has a walk-up unlock behind it; not validated on this board's hardware, and neither approach nor tap has been run under it |
+| `DFU=1` | MCUboot plus Matter OTA instead of the no-bootloader bench layout; costs 33,280 B of app-core flash and moves `external_nvs`, so a board switched between the two loses its Aliro reader storage |
 | `PRISTINE=1` | force a clean rebuild |
 
 ### Kconfig overlays (nRF5340 DK)
@@ -81,6 +83,13 @@ touches.
 - `st25r.conf` or `pn532.overlay`: selected by `NFC=st25r|pn532`; `NFC=none`
   selects neither reader.
 - `woz-pretty.conf`, `woz-ha.conf`: opt-in via `PRETTY=1` / `HA=1`.
+- `lto.conf`: opt-in via `LTO=1`. Two Kconfig symbols, both required; the file
+  explains why setting only `CONFIG_LTO=y` is a silent no-op, and the build reads
+  the pair back out of the linked image rather than trusting the request.
+- `dfu.conf` plus `sysbuild-dfu.conf`: opt-in via `DFU=1`. The sysbuild file
+  REPLACES `sysbuild-woz.conf` rather than layering over it, and the flash map
+  becomes the add-on's own `pm_static_nrf5340dk_nrf5340_cpuapp.yml` rather than
+  `pm_static.yml`.
 - `diag-cirdiag.conf`: opt-in via `CIR=1`; reading a CIR window costs walk-up
   latency while armed, so use it only for a capture run.
 - `diag-latency.conf`: diagnostic only (`LAT=1` to `scripts/build-nrf5340dk.sh`),

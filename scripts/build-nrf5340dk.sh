@@ -23,6 +23,8 @@
 #   PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
 #   ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
 #   UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
+#   LTO=1 scripts/build-nrf5340dk.sh build            # link-time optimisation, off by default (overlays/lto.conf)
+#   DFU=1 scripts/build-nrf5340dk.sh build            # MCUboot + Matter OTA, off by default (overlays/sysbuild-dfu.conf)
 set -euo pipefail
 
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -241,15 +243,72 @@ do_build() {
   local ha_conf=""
   [ "${HA:-0}" = 1 ] && ha_conf=";$OV/woz-ha.conf"
 
+  # LTO=1: layer lto.conf (whole-program codegen on the app image). OFF by default
+  # on this board, unlike the CDK, because no walk-up unlock has been run under it
+  # here and a size number cannot vouch for the ranging arm deadline; lto.conf has
+  # the full reasoning and the Kconfig trap. Rides EXTRA_CONF_FILE (in the
+  # signature), so toggling it forces the pristine rebuild that changing codegen
+  # needs anyway. Last in the list so nothing layered before it can undo it.
+  local lto_conf=""
+  local -a lto_flags=()
+  if [ "${LTO:-0}" = 1 ]; then
+    lto_conf=";$OV/lto.conf"
+    # Keep LTO OFF in the bootloader. EXTRA_CONF_FILE is NOT application-only:
+    # sysbuild forwards an un-namespaced value to every image in the same domain,
+    # so with DFU=1 the MCUboot image inherited this overlay too. MCUboot then
+    # built with CONFIG_LTO + CONFIG_ISR_TABLES_LOCAL_DECLARATION and hard-faulted
+    # at boot with the PC inside _sw_isr_table: an RTC interrupt dispatched
+    # through a bad table entry and executed the table as code. The board came up
+    # dead with both consoles silent, because this MCUboot has no logging.
+    # Measured on hardware 2026-08-03 (serial-numbered DK, mass-erased and
+    # reflashed), diagnosed over SWD from the halted PC and the exception frame.
+    #
+    # Undoing it per-image is deliberate: namespacing the whole EXTRA_CONF_FILE to
+    # the application would also stop woz-aliro.conf reaching MCUboot, which is a
+    # bigger behavioural change than this bug warrants. The bootloader has nothing
+    # to gain from whole-program codegen anyway.
+    lto_flags=(-Dmcuboot_CONFIG_LTO=n -Dmcuboot_CONFIG_ISR_TABLES_LOCAL_DECLARATION=n)
+  fi
+
+  # DFU=1: MCUboot + Matter OTA back on. Three coupled switches, which is why they
+  # are decided together here rather than as three independent options: the
+  # sysbuild overlay is SWAPPED (never layered; the two files disagree on every
+  # symbol), the app gets dfu.conf to point Matter's bootloader choice back at
+  # MCUboot, and the flash map becomes the add-on's own MCUboot layout instead of
+  # our no-bootloader one. That last map is named rather than copied into
+  # overlays/, so there is one definition of it and it is upstream's. Not the
+  # _uwb_dfu variant: that one is for a QM35 coprocessor this port does not have
+  # (see sysbuild-dfu.conf).
+  # MCUBOOT_LOG=1: give the bootloader a console. It has none by default, which is
+  # why a bootloader that faults presents as a completely silent board with both
+  # VCOMs dead and nothing to go on but a halted PC over SWD. Mirrors DFU_LOG=1 on
+  # the DWM3001CDK. Diagnostic only: MCUboot's slot is 32 KB and already ~91% full
+  # without this, so it may not fit, and the linker is the thing that will say so.
+  local -a mcuboot_log_flags=()
+  [ "${MCUBOOT_LOG:-0}" = 1 ] && mcuboot_log_flags=(
+    -Dmcuboot_CONFIG_SERIAL=y -Dmcuboot_CONFIG_CONSOLE=y
+    -Dmcuboot_CONFIG_UART_CONSOLE=y -Dmcuboot_CONFIG_PRINTK=y
+    -Dmcuboot_CONFIG_LOG=y -Dmcuboot_CONFIG_LOG_MODE_MINIMAL=y
+  )
+
+  local dfu_conf="" sb_conf="$OV/sysbuild-woz.conf" pm_yml="$OV/pm_static.yml"
+  if [ "${DFU:-0}" = 1 ]; then
+    dfu_conf=";$OV/dfu.conf"
+    sb_conf="$OV/sysbuild-dfu.conf"
+    pm_yml="$APP/pm_static_nrf5340dk_nrf5340_cpuapp.yml"
+    [ -f "$pm_yml" ] || die "add-on MCUboot flash map not found" \
+                            "expected $pm_yml" "run: make bootstrap"
+  fi
+
   # Every -D flag that, if changed, requires a from-scratch configure. Overlay
   # *content* edits are handled incrementally by Zephyr (configure-deps), so only
   # flag changes are captured here.
   local -a dflags=(
-    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${nfc_conf}${pretty_conf}${lat_conf}${cir_conf}${ha_conf}"
+    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${nfc_conf}${pretty_conf}${lat_conf}${cir_conf}${ha_conf}${dfu_conf}${lto_conf}"
     -Dipc_radio_EXTRA_CONF_FILE="$OV/ipc_radio.conf"
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
-    -DPM_STATIC_YML_FILE="$OV/pm_static.yml"
-    -DSB_EXTRA_CONF_FILE="$OV/sysbuild-woz.conf"
+    -DPM_STATIC_YML_FILE="$pm_yml"
+    -DSB_EXTRA_CONF_FILE="$sb_conf"
     -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_aliro_ecp;$TREE/modules/woz_nfc;$TREE/modules/woz_aliro_stack;$TREE/deps/dw3000"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_WOZ_UWB=y -DCONFIG_WOZ_UWB_RESPONDER=y
     -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
@@ -267,6 +326,8 @@ do_build() {
     )
   fi
   [ ${#nfc_flags[@]} -gt 0 ] && dflags+=("${nfc_flags[@]}")
+  [ ${#lto_flags[@]} -gt 0 ] && dflags+=("${lto_flags[@]}")
+  [ ${#mcuboot_log_flags[@]} -gt 0 ] && dflags+=("${mcuboot_log_flags[@]}")
 
   # The signature lives beside the build root, never inside the build directory:
   # `west build -p always` deletes that directory, so a signature stored there
@@ -292,13 +353,18 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_trace:+   (Aliro trace ON)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_trace:+   (Aliro trace ON)}${lto_conf:+   (LTO ON)}"
   if [ "$aliro_source" = 1 ]; then
     kv "aliro" "in-tree source (default)"
   else
     kv "aliro" "Nordic binary (fallback)"
   fi
   kv "nfc"   "$nfc_name"
+  if [ -n "$dfu_conf" ]; then
+    kv "dfu" "MCUboot + Matter OTA   ${DIM}(secondary slot on external QSPI)${RST}"
+  else
+    kv "dfu" "${DIM}none (no bootloader; app owns flash from 0x0)${RST}"
+  fi
   if [ "$pristine" = 1 ]; then
     kv "mode" "${YLW}pristine${RST} ${DIM}($reason)${RST}"
   else
@@ -310,6 +376,36 @@ do_build() {
     ( cd "$WS" && launch west build -b "$BOARD" --sysbuild "$APP" -p always -d "$BUILD" -- "${dflags[@]}" )
   else
     ( cd "$WS" && launch west build -d "$BUILD" )
+  fi
+
+  # LTO asked for is not LTO applied: an unmet Kconfig dependency drops CONFIG_LTO
+  # from the generated .config silently (see overlays/lto.conf), and the build then
+  # succeeds while measuring nothing. Read it back off the artefact instead.
+  if [ -n "$lto_conf" ]; then
+    local app_config="$BUILD/matter-aliro-door-lock-app/zephyr/.config"
+    [ -f "$app_config" ] || die "app .config not found" "$app_config"
+    local sym
+    for sym in CONFIG_LTO CONFIG_ISR_TABLES_LOCAL_DECLARATION; do
+      grep -qx "$sym=y" "$app_config" \
+        || die "LTO=1 requested but $sym is not set in the built image" \
+               "Kconfig dropped it rather than warning; see $OV/lto.conf" \
+               "$app_config"
+    done
+    ok "LTO active in the linked image (CONFIG_LTO + ISR_TABLES_LOCAL_DECLARATION)"
+
+    # ...and NOT active anywhere else. The first version of this guard only
+    # checked that LTO was on where it was wanted, which is why it passed on a
+    # build whose bootloader had silently inherited it and would not boot.
+    local other
+    for other in mcuboot b0n ipc_radio; do
+      local other_config="$BUILD/$other/zephyr/.config"
+      [ -f "$other_config" ] || continue
+      grep -qx "CONFIG_LTO=y" "$other_config" \
+        && die "LTO leaked into the $other image" \
+               "that image is not the application and must not be LTO-built" \
+               "$other_config"
+    done
+    ok "LTO confined to the application image"
   fi
 
   if [ "$aliro_source" = 1 ]; then
@@ -362,11 +458,38 @@ resolve_snr() {
   kv "target" "nRF5340DK $SNR"
 }
 
+# Confirm the board we just wrote is not sitting in an APPROTECT-engaged state.
+#
+# This runs AFTER the flash rather than before, because a mass erase is one of
+# the ways a board gets into that state: `west flash --erase` blanks UICR, and a
+# blank UICR reads as APPROTECT ENGAGED on the nRF5340 until firmware writes it
+# open again. So the dangerous moment is the one immediately after this command
+# succeeds, when everything looks like it worked.
+#
+# Failing here is a warning, not a build failure: the image IS on the board and
+# saying so is more useful than pretending the flash did not happen. What must
+# never happen is silence, because a locked board does not announce itself. It
+# serves PARTIAL debug reads, so RAM above some address starts returning
+# "memory protection issue" and the board reads as physically broken.
+#
+# scripts/check-approtect.sh owns the actual test, including its self-test. This
+# is a call site, not a second implementation.
+warn_if_locked() {
+  local checker="$TREE/scripts/check-approtect.sh" rc=0
+  [ -x "$checker" ] || return 0
+  "$checker" --device "$SNR" || rc=$?
+  if [ "$rc" = 1 ]; then
+    printf '\n  %s^^ the board is locked. It will behave like failing hardware.%s\n' \
+      "$YLW" "$RST" >&2
+  fi
+  return 0
+}
+
 case "${1:-build}" in
   build)        do_build ;;
   rebuild)      PRISTINE=1; do_build ;;
-  flash)        require_built; hdr "flash";         resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ) ;;
-  flash-erase)  require_built; hdr "flash (erase)"; resolve_snr; ( cd "$WS" && launch west flash --erase -d "$BUILD" --dev-id "$SNR" ) ;;
-  build-flash)  do_build; hdr "flash";              resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ) ;;
+  flash)        require_built; hdr "flash";         resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
+  flash-erase)  require_built; hdr "flash (erase)"; resolve_snr; ( cd "$WS" && launch west flash --erase -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
+  build-flash)  do_build; hdr "flash";              resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
   *) echo "usage: [UWB_CHIP=dw3000|dw3720] [PRISTINE=1] $0 {build|rebuild|flash|flash-erase|build-flash}"; exit 2 ;;
 esac

@@ -7,6 +7,12 @@
 # Every target here is nrf-prefixed. Bare build/flash/monitor mean the
 # DWM3001CDK (mk/cdk.mk).
 
+# LTO is OFF by default here and ON by default on the CDK, from the one shared
+# LTO variable (mk/cdk.mk resolves its own default rather than assigning one, so
+# unset reaches this file as empty). Same spelling of the option on both boards,
+# opposite defaults, because only the CDK has a walk-up unlock behind it.
+NRF_LTO := $(filter-out 0 n no off N NO OFF,$(LTO))
+
 # Assemble the env prefix from whichever options were set.
 NRF_ENV := $(strip \
   $(if $(CHIP),UWB_CHIP=$(CHIP)) \
@@ -18,6 +24,8 @@ NRF_ENV := $(strip \
   $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
   $(if $(NFC),NFC=$(NFC)) \
+  $(if $(NRF_LTO),LTO=1) \
+  $(if $(DFU),DFU=$(DFU)) \
   $(if $(CIR),CIR=$(CIR)))
 
 NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
@@ -35,6 +43,13 @@ NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
 ##            ALIRO_TRACE=1 (currently blocked: vendor trace patch is absent)
 ##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
 ##            NFC=pn532|st25r|none (reader transport; default st25r)
+##            LTO=1 (link-time optimisation; OFF by default on this board,
+##                   ON by default on the CDK, because only the CDK has a
+##                   walk-up unlock behind it. Forces a pristine rebuild.)
+##            DFU=1 (MCUboot + Matter OTA; OFF by default. Costs 33,280 B of
+##                   app-core flash and needs an OTA Provider to install an
+##                   update. The default bench build keeps that flash and is
+##                   updated over the probe by `make nrf-flash`.)
 ##   e.g.     make nrf-build PRETTY=1 CHIP=dw3720
 nrf-build:
 	@$(NRF_ENV) $(NRF_BUILD_SH) build

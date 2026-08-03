@@ -14,11 +14,12 @@ A board that has done this is not bricked, but every future debug session
 costs a full wipe and a re-provision, and the credentials cannot be recreated.
 NCS defaults to open (NRF_APPROTECT_USE_UICR); the requirement is only that
 nobody turns it on. This gate is what makes "nobody" true.
-scripts/check-approtect.sh              # both layers
+scripts/check-approtect.sh              # the two config layers
+scripts/check-approtect.sh --device SNR # what the attached board is ACTUALLY in
 scripts/check-approtect.sh --self-test  # prove the gate can actually fail
 make verify                             # runs this as the `approtect` gate
 Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
-TWO LAYERS, because either one alone is a gate that passes while checking
+THREE LAYERS, because any one alone is a gate that passes while checking
 nothing:
 sources    Every tracked config file. This is the layer that works in CI,
 which never builds firmware (firmware-builds.yml is
@@ -31,15 +32,28 @@ set_config_bool -- none of which appear anywhere in this tree.
 Checking the generated config is the only way to know what was
 actually compiled, which is why the source layer never stands in
 for it.
+device     What the SILICON is in right now, read back over the probe.
+Opt-in (--device SNR) because it needs a board attached.
 The generated layer reporting "0 builds examined" is NOT a pass and is not
 silent: it says so, and it is the reason the source layer is not optional.
+WHY THE DEVICE LAYER EXISTS, which is the expensive lesson. Both config layers
+answer "did our firmware ask for the lock". Neither answers "is this board
+locked", and those come apart: a mass erase leaves UICR blank, and on the
+nRF5340 a blank UICR reads as APPROTECT ENGAGED until firmware writes it open
+again. On 2026-08-03 an nRF5340 DK sat in exactly that state while this gate
+reported "3 generated image config(s) examined, all open", which was true and
+useless. The probe then served partial reads: RAM below ~0x20057000 read back
+fine and everything above it returned "memory protection issue", which reads
+exactly like a board with 100 KB of RAM missing. Hours went into a hardware
+theory for what was a protection state, and `nrfutil device recover` cleared it
+in one command. Ask the silicon.
 
-**discussed in** [`firmware/README.md`](../../../firmware/README.md)
+**discussed in** [`CHANGELOG.md`](../../../CHANGELOG.md), [`firmware/README.md`](../../../firmware/README.md)
 
 ## API
 
 ### `scan_sources()`
-`scripts/check-approtect.sh:83`
+`scripts/check-approtect.sh:99`
 
 ---- layer 1: tracked sources ---------------------------------------------
 Matches an ASSIGNMENT, not a mention. The distinction is the whole difficulty
@@ -55,10 +69,16 @@ CMake              set(SYMBOL y|ON|TRUE ...)
 ignored. Anything that sets one of these for real takes one of the two forms.
 
 ### `scan_generated()`
-`scripts/check-approtect.sh:106`
+`scripts/check-approtect.sh:122`
 
 ---- layer 2: generated .config -------------------------------------------
 Every image of every build tree, including MCUboot's own -- which is the whole
 reason this layer exists now. MCUboot is a config file written from scratch,
 so it is the most likely place for the setting to appear, and it is not
 covered by any grep of the application's sources.
+
+<details><summary>Undocumented (1)</summary>
+
+- `scan_device`
+
+</details>

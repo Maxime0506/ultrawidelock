@@ -36,6 +36,27 @@ the API and behavior may change in minor releases.
 - Expanded host, target-fake, backend, application-glue, and tooling suites;
   a 90 percent line-coverage floor; and a pre-push sweep with a serial tripwire
   followed by parallel lanes.
+- `scripts/check-approtect.sh` gained a third layer, `--device <serial>`, which
+  reads the readback-protection state out of the silicon rather than out of a file
+  we wrote. The two config layers only ever answered "did our firmware ask for the
+  lock"; a board can be locked with every config clean, and a locked nRF5340
+  serves partial debug reads that look exactly like failing hardware. Run
+  automatically after every nRF5340 DK flash.
+- `make nrf-build LTO=1`: link-time optimisation for the nRF5340 DK application
+  image, worth 77,452 B of app-core flash and costing 1,920 B of RAM. Off by
+  default on that board and on by default on the DWM3001CDK, because only the
+  CDK has a walk-up unlock behind it. The build reads both required Kconfig
+  symbols back out of the linked image, so a silently dropped `CONFIG_LTO`
+  fails the build instead of quietly measuring nothing.
+- `make nrf-build DFU=1`: MCUboot and Matter OTA on the nRF5340 DK, restoring
+  what the bench layout had switched off. The secondary slot lives on the DK's
+  external QSPI, so dual-slot costs no internal flash, and the produced
+  `dfu_multi_image.bin` / `matter.ota` carry both the application and the net
+  core. The no-bootloader bench layout stays the default and stays selectable.
+  `DFU=1 LTO=1` together leave 13,796 B more free flash than today's default
+  build, so the bootloader more than pays for itself. Both options boot on
+  hardware; no OTA update has been installed yet, and the bootloader still signs
+  with MCUboot's published demo key.
 
 ### Changed
 
@@ -50,6 +71,20 @@ the API and behavior may change in minor releases.
 
 ### Fixed
 
+- nRF5340 DK: the image did not boot. The add-on enables
+  `CONFIG_RAM_POWER_DOWN_LIBRARY` (its `prj.conf`) and calls
+  `power_down_unused_ram()` during Matter init, which switches off every RAM block
+  above the image's data. That is where picolibc puts its malloc arena, since
+  `CONFIG_COMMON_LIBC_MALLOC_ARENA_SIZE` defaults to -1, so the heap bus-faulted
+  writing into powered-down RAM. Disabled in `ports/nrf5340dk/overlays/woz-aliro.conf`.
+  RAM block power survives a soft reset, so this also took MCUboot down on the
+  following boot, inside the heap its signature check uses: one fix, both symptoms.
+- `LTO=1` on the nRF5340 DK also built MCUboot with
+  `CONFIG_ISR_TABLES_LOCAL_DECLARATION`, because sysbuild forwards an
+  un-namespaced `EXTRA_CONF_FILE` to every image in the same domain. Only visible
+  once `DFU=1` gave the port a second app-core image. The build now confines both
+  symbols to the application and fails if `CONFIG_LTO=y` reaches `mcuboot`, `b0n`
+  or `ipc_radio`.
 - Reader relock/status delivery across disconnects, coalesced Aliro envelopes,
   URSK teardown, CIR capture timing, and diagnostic phase attribution.
 

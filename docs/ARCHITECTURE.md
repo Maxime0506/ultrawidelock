@@ -3082,6 +3082,8 @@ UWB_SELFTEST=1 scripts/build-nrf5340dk.sh build   # one-shot boot self-test, no 
 PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
 ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
 UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
+LTO=1 scripts/build-nrf5340dk.sh build            # link-time optimisation, off by default (overlays/lto.conf)
+DFU=1 scripts/build-nrf5340dk.sh build            # MCUboot + Matter OTA, off by default (overlays/sysbuild-dfu.conf)
 
 ### [`scripts/cdk-dfu.sh`](architecture/scripts/cdk-dfu.sh.md)
 
@@ -3131,11 +3133,12 @@ A board that has done this is not bricked, but every future debug session
 costs a full wipe and a re-provision, and the credentials cannot be recreated.
 NCS defaults to open (NRF_APPROTECT_USE_UICR); the requirement is only that
 nobody turns it on. This gate is what makes "nobody" true.
-scripts/check-approtect.sh              # both layers
+scripts/check-approtect.sh              # the two config layers
+scripts/check-approtect.sh --device SNR # what the attached board is ACTUALLY in
 scripts/check-approtect.sh --self-test  # prove the gate can actually fail
 make verify                             # runs this as the `approtect` gate
 Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
-TWO LAYERS, because either one alone is a gate that passes while checking
+THREE LAYERS, because any one alone is a gate that passes while checking
 nothing:
 sources    Every tracked config file. This is the layer that works in CI,
 which never builds firmware (firmware-builds.yml is
@@ -3148,8 +3151,21 @@ set_config_bool -- none of which appear anywhere in this tree.
 Checking the generated config is the only way to know what was
 actually compiled, which is why the source layer never stands in
 for it.
+device     What the SILICON is in right now, read back over the probe.
+Opt-in (--device SNR) because it needs a board attached.
 The generated layer reporting "0 builds examined" is NOT a pass and is not
 silent: it says so, and it is the reason the source layer is not optional.
+WHY THE DEVICE LAYER EXISTS, which is the expensive lesson. Both config layers
+answer "did our firmware ask for the lock". Neither answers "is this board
+locked", and those come apart: a mass erase leaves UICR blank, and on the
+nRF5340 a blank UICR reads as APPROTECT ENGAGED until firmware writes it open
+again. On 2026-08-03 an nRF5340 DK sat in exactly that state while this gate
+reported "3 generated image config(s) examined, all open", which was true and
+useless. The probe then served partial reads: RAM below ~0x20057000 read back
+fine and everything above it returned "memory protection issue", which reads
+exactly like a board with 100 KB of RAM missing. Hours went into a hardware
+theory for what was a protection state, and `nrfutil device recover` cleared it
+in one command. Ask the silicon.
 
 ### [`scripts/check-uwb-seam.sh`](architecture/scripts/check-uwb-seam.sh.md)
 

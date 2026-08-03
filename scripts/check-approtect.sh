@@ -17,13 +17,14 @@
 # NCS defaults to open (NRF_APPROTECT_USE_UICR); the requirement is only that
 # nobody turns it on. This gate is what makes "nobody" true.
 #
-#   scripts/check-approtect.sh              # both layers
+#   scripts/check-approtect.sh              # the two config layers
+#   scripts/check-approtect.sh --device SNR # what the attached board is ACTUALLY in
 #   scripts/check-approtect.sh --self-test  # prove the gate can actually fail
 #   make verify                             # runs this as the `approtect` gate
 #
 # Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
 #
-# TWO LAYERS, because either one alone is a gate that passes while checking
+# THREE LAYERS, because any one alone is a gate that passes while checking
 # nothing:
 #
 #   sources    Every tracked config file. This is the layer that works in CI,
@@ -39,8 +40,23 @@
 #              actually compiled, which is why the source layer never stands in
 #              for it.
 #
+#   device     What the SILICON is in right now, read back over the probe.
+#              Opt-in (--device SNR) because it needs a board attached.
+#
 # The generated layer reporting "0 builds examined" is NOT a pass and is not
 # silent: it says so, and it is the reason the source layer is not optional.
+#
+# WHY THE DEVICE LAYER EXISTS, which is the expensive lesson. Both config layers
+# answer "did our firmware ask for the lock". Neither answers "is this board
+# locked", and those come apart: a mass erase leaves UICR blank, and on the
+# nRF5340 a blank UICR reads as APPROTECT ENGAGED until firmware writes it open
+# again. On 2026-08-03 an nRF5340 DK sat in exactly that state while this gate
+# reported "3 generated image config(s) examined, all open", which was true and
+# useless. The probe then served partial reads: RAM below ~0x20057000 read back
+# fine and everything above it returned "memory protection issue", which reads
+# exactly like a board with 100 KB of RAM missing. Hours went into a hardware
+# theory for what was a protection state, and `nrfutil device recover` cleared it
+# in one command. Ask the silicon.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -129,6 +145,52 @@ scan_generated() {
 	return 0
 }
 
+# ---- layer 3: the attached device ------------------------------------------
+# Reads the readback-protection state out of the silicon rather than out of any
+# file we wrote. Exit 2 (could not check) is deliberately distinct from exit 1
+# (found a lock): no probe attached is not evidence of anything, and must never
+# be reported as a pass.
+#
+# The parse looks for the ENABLED phrasing rather than the disabled one, so an
+# unrecognised nrfutil output reads as "cannot tell" instead of "fine". A gate
+# that treats unfamiliar output as success is the failure this file exists about.
+DEVICE_OK_RE='[Dd]ebug access is enabled'
+DEVICE_BAD_RE='[Dd]ebug access is (currently )?disabled'
+
+scan_device() {
+	local snr="$1" out
+	command -v nrfutil >/dev/null 2>&1 || {
+		printf '%s  nrfutil not on PATH, device state NOT checked%s\n' "$Y" "$Z"
+		return 2
+	}
+	out="$(nrfutil device protection-get --serial-number "$snr" 2>&1)" || {
+		printf '%s  could not read protection state from %s%s\n' "$Y" "$snr" "$Z"
+		printf '%s%s%s\n' "$D" "$(printf '%s' "$out" | sed 's/^/      /')" "$Z"
+		return 2
+	}
+
+	if printf '%s' "$out" | grep -qE "$DEVICE_BAD_RE"; then
+		printf '%s  APPROTECT ENGAGED on device %s:%s\n' "$R" "$snr" "$Z"
+		printf '%s\n' "$out" | sed 's/^/      /'
+		printf '%s  The board is locked NOW. Debug reads will be partial rather than\n' "$R"
+		printf '  refused outright, so this masquerades as broken hardware.\n'
+		printf '  Clear it with:  nrfutil device recover --serial-number %s\n' "$snr"
+		printf '  That mass-erases flash AND UICR, taking settings_storage with it,\n'
+		printf '  so export the identity first if the board is provisioned.%s\n' "$Z"
+		return 1
+	fi
+
+	if printf '%s' "$out" | grep -qE "$DEVICE_OK_RE"; then
+		printf '%s  device %s: debug access enabled%s\n' "$D" "$snr" "$Z"
+		return 0
+	fi
+
+	printf '%s  unrecognised protection output for %s, NOT treated as a pass%s\n' \
+		"$Y" "$snr" "$Z"
+	printf '%s\n' "$out" | sed 's/^/      /'
+	return 2
+}
+
 # ---- self-test -------------------------------------------------------------
 # The lesson this exists for: a gate whose test fixture is wrong passes while
 # checking nothing, and looks identical to a gate that works. So prove the
@@ -207,6 +269,36 @@ self_test() {
 			"$R" "$n_quiet" "$Z"
 		rc=1
 	fi
+
+	# The device layer, against the real nrfutil phrasings. Checked against the
+	# SAME two patterns scan_device uses, for the reason given at the top of this
+	# function. The third case is the one that matters most: output the parser
+	# does not recognise must NOT read as a pass, because that is how a board that
+	# is quietly locked gets waved through.
+	local locked open unknown
+	locked='	access status: Debug access is currently disabled (status value: All)'
+	open='	access status: Debug access is enabled (status value: None)'
+	unknown='	access status: something nrfutil has not said before'
+
+	if printf '%s' "$locked" | grep -qE "$DEVICE_BAD_RE"; then
+		printf '%s  self-test: device layer fires on a locked board%s\n' "$G" "$Z"
+	else
+		printf '%s  self-test FAILED: device layer missed a locked board%s\n' "$R" "$Z"
+		rc=1
+	fi
+	if printf '%s' "$open" | grep -qE "$DEVICE_OK_RE" \
+		&& ! printf '%s' "$open" | grep -qE "$DEVICE_BAD_RE"; then
+		printf '%s  self-test: device layer quiet on an open board%s\n' "$G" "$Z"
+	else
+		printf '%s  self-test FAILED: device layer misread an open board%s\n' "$R" "$Z"
+		rc=1
+	fi
+	if printf '%s' "$unknown" | grep -qE "$DEVICE_OK_RE"; then
+		printf '%s  self-test FAILED: unknown output read as a pass%s\n' "$R" "$Z"
+		rc=1
+	else
+		printf '%s  self-test: device layer refuses to pass unknown output%s\n' "$G" "$Z"
+	fi
 	return $rc
 }
 
@@ -215,9 +307,15 @@ case "${1:-}" in
 	self_test
 	exit $?
 	;;
+--device)
+	[ -n "${2:-}" ] || { printf 'usage: %s --device <serial-number>\n' "$0" >&2; exit 2; }
+	printf '%sapprotect%s  what device %s is actually in\n' "$D" "$Z" "$2"
+	scan_device "$2"
+	exit $?
+	;;
 '') ;;
 *)
-	printf 'usage: %s [--self-test]\n' "$0" >&2
+	printf 'usage: %s [--self-test | --device <serial-number>]\n' "$0" >&2
 	exit 2
 	;;
 esac

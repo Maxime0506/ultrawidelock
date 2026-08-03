@@ -54,8 +54,14 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # debug build, so it wants RELEASE=1 beside it -- firmware/overlay-smp.conf has
 # the measurements and the security note about the unpaired write endpoint.
 # Ordered after overlay-release.conf so nothing it sets can be undone by it.
-LTO      ?= 1
-CDK_LTO  := $(filter-out 0 n no off N NO OFF,$(LTO))
+#
+# The default is resolved HERE rather than assigned with `LTO ?= 1`, because make
+# variables are global across the includes: `?=` would hand every other port a
+# default of 1, and mk/nrf5340dk.mk reads the same LTO variable and has to default
+# OFF (no walk-up has cleared that board). $(origin) distinguishes "user said
+# nothing", which means on for this board, from an explicit LTO=1.
+LTO_SET  := $(filter-out undefined,$(origin LTO))
+CDK_LTO  := $(filter-out 0 n no off N NO OFF,$(if $(LTO_SET),$(LTO),1))
 CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP),;overlay-smp.conf)$(if $(CDK_LTO),;overlay-lto.conf)
 
 # ---- image signing -----------------------------------------------------------
