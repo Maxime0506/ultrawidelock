@@ -118,6 +118,8 @@ GATES=(
 	            #                         contributor sweep is where it is checked.)
 	test-san    # 8s   ci.yml : verify
 	patch-drift # 11s  ci.yml : verify
+	cdk-size    # 1s   ci.yml : verify   (the accounting rule and the comparator's refusals, on
+	            #                         fixtures: CI builds no firmware, so it cannot measure one)
 	docs        # 12s  ci.yml : verify   (docs.yml renders and publishes the site from main;
 	            #                         this is the same drift + link check, run per PR)
 	deps        # 13s  ci.yml : verify   (pip-audit queries PyPI, so it waits on network)
@@ -171,7 +173,7 @@ TRIPWIRE="test-web actionlint zizmor format shellcheck licenses mal-diff esp att
 LANES=(
 	"coverage"                 # 25s  the floor: nothing finishes before this
 	"semgrep"                  # 22s  own lane: the one gate that waits on the network
-	"test-ws patch-drift"      # 23s
+	"test-ws patch-drift cdk-size" # 23s  the tests/tooling/ scripts; cdk-size adds ~1s
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
 	"secrets deps test-tui"    # 12s  the two read-only scanners first, then bun
@@ -261,6 +263,7 @@ gate_label() {
 	test) echo "host KAT suite" ;;
 	twin-wasm) echo "rebuild WASM twin + node selftest" ;;
 	patch-drift) echo "vendored patches still apply" ;;
+	cdk-size) echo "CDK size gate reproduces the linker" ;;
 	docs) echo "site builds, no dead links" ;;
 	test-san) echo "host suite under ASan + UBSan" ;;
 	test-port) echo "ESP32 port tests" ;;
@@ -357,6 +360,7 @@ gate_run() {
 				|| printf '  note: twin.js differs from this rebuild (warn-only, as in CI)\n'; }
 		;;
 	patch-drift) tests/tooling/patch_drift_check.sh ;;
+	cdk-size) tests/tooling/cdk_size_test.sh ;;
 	docs) make --no-print-directory docs ;;
 	test-san) make --no-print-directory test-san ;;
 	# Host layers only. Its third layer, verify_port.sh, shells out to `idf.py

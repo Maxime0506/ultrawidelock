@@ -17,6 +17,31 @@ name: firmware-builds
 
 on:
   workflow_dispatch:
+    inputs:
+      targets:
+        # ONE TARGET AT A TIME, because a dispatch used to build all six and
+        # most reasons to dispatch concern one of them. An upstream NCS bump
+        # wants the nRF three; an sdkconfig change wants the ESP three; a
+        # linker or partition change on the CDK wants exactly one job and not
+        # ninety minutes of ESP-IDF beside it.
+        #
+        # The `nrf` and `esp32` groups exist because those are the two real
+        # blast radii: anything in west.yml or the patches moves all three nRF
+        # builds together, and an esp-matter or IDF bump moves all three ESP
+        # ones.
+        description: "which firmware to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - nrf
+          - esp32
+          - dwm3001cdk
+          - nrf5340dk
+          - nrf5340dk-aliro-blob
+          - esp32-idf
+          - esp32-initiator
+          - esp32-matter
 
 # CI only reads the repo: no token write scopes for any job.
 permissions:
@@ -28,6 +53,7 @@ concurrency:
 
 jobs:
   esp32-idf:
+    if: contains(fromJSON('["all", "esp32", "esp32-idf"]'), inputs.targets)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     container:
@@ -141,6 +167,7 @@ jobs:
   # job's presence build guards against: the two roles must stay codec-synced,
   # and nothing else in CI ever compiles the device half.
   esp32-initiator:
+    if: contains(fromJSON('["all", "esp32", "esp32-initiator"]'), inputs.targets)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     container:
@@ -179,16 +206,80 @@ jobs:
           done
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
 
+  # Bootstrap the west workspace ONCE for the three nRF builds.
+  #
+  # They used to do it themselves, in parallel, on the same cache key: a cold
+  # dispatch fetched ~8.5 GB three times over, and two of them then raced to
+  # save the identical entry (the loser logs "unable to reserve cache"). Doing
+  # it here means one upstream fetch, and the builds restore a cache entry from
+  # GitHub's own storage instead -- far cheaper than three git fetches.
+  #
+  # LOOKUP-ONLY WHEN IT IS ALREADY WARM. There is no point downloading several
+  # gigabytes into a job whose only purpose is to make sure they exist, and the
+  # build jobs restore for themselves regardless (separate runners share no
+  # disk). So a warm dispatch spends about twenty seconds here, and a cold one
+  # pays the fetch exactly once.
+  #
+  # THE KEY is everything that shapes the workspace's content: the pin record
+  # (west.yml), the applier (scripts/bootstrap.sh, where the add-on pin, the
+  # NCS version and the patch list live) and the patch files themselves, so
+  # patch drift forces a cold bootstrap.
+  #
+  # Deliberately no restore-keys: bootstrap.sh cannot re-patch a workspace that
+  # already carries another patch state (patches that add files leave untracked
+  # files behind), so a near-miss cache would poison every build downstream of
+  # it -- which is now all three of them rather than one.
+  #
+  # It does not gate the ESP jobs, which share nothing with it.
+  workspace:
+    if: contains(fromJSON('["all", "nrf", "dwm3001cdk", "nrf5340dk", "nrf5340dk-aliro-blob"]'), inputs.targets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    defaults:
+      run:
+        # bash so the container's BASH_ENV hook puts west on PATH; bootstrap.sh
+        # has a bash shebang and would source it anyway, but the guard step
+        # below runs inline.
+        shell: bash
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: is the workspace already cached
+        id: ws
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+          # Existence, not contents: nothing here uses the workspace.
+          lookup-only: true
+      - name: bootstrap it (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        # One retry: bootstrap is resumable (the fetch sentinel means a rerun
+        # picks up where an interrupted west update stopped), so a transient
+        # fetch failure costs one resume, not the whole multi-GB fetch.
+        run: |
+          ./scripts/bootstrap.sh || {
+            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
+            ./scripts/bootstrap.sh
+          }
+      - name: save it (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: ${{ steps.ws.outputs.cache-primary-key }}
+
   # Default nRF5340 DK Zephyr/NCS build, including the in-tree Aliro source
-  # stack: bootstrap the pinned west workspace (multi-GB fetch), then the
-  # sysbuild image. The bootstrapped workspace is cached,
-  # keyed on everything that shapes its content — the pin record (west.yml),
-  # the applier (scripts/bootstrap.sh: add-on pin, NCS version and patch list
-  # live there) and the patch files — so patch drift forces a cold bootstrap.
-  # Deliberately no restore-keys: bootstrap.sh cannot re-patch a workspace
-  # that already carries another patch state (patches that add files leave
-  # untracked files behind), so a near-miss cache would poison the build.
+  # stack. The workspace it builds against comes from the job above.
   nrf5340dk:
+    needs: workspace
+    if: contains(fromJSON('["all", "nrf", "nrf5340dk"]'), inputs.targets)
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -207,12 +298,20 @@ jobs:
       # 300M, not 1G, and the reason is the repository cache budget rather than
       # this job. GitHub gives a repository 10 GB of Actions cache and evicts by
       # LRU. Every ccache here uses a run-unique key, so a full run writes a
-      # brand-new entry per job; at 1G that was 6.3 GB of fresh cache per run
-      # (300M + 1G + 1G + 4x1G), which evicts the two entries that are actually
-      # expensive to rebuild: nrf-workspace and esp-matter. Losing either turns
-      # a warm build into a cold multi-GB upstream fetch, and for esp-matter it
-      # means all four matrix legs cloning CHIP at once. A smaller ccache costs
-      # a few minutes of compile; an evicted workspace cache costs hours.
+      # brand-new entry per job — nine of them as of this count (esp32-idf,
+      # esp32-initiator, nrf5340dk, nrf5340dk-aliro-blob, dwm3001cdk, and the
+      # esp32-matter matrix's four legs, each keyed on matrix.leg). At 300M that
+      # is up to 2.7 GB of fresh cache on an `all` dispatch, against the two
+      # entries that are actually expensive to rebuild: nrf-workspace and
+      # esp-matter. Losing either turns a warm build into a cold multi-GB
+      # upstream fetch. A smaller ccache costs a few minutes of compile; an
+      # evicted workspace or esp-matter cache costs the rest of the job.
+      #
+      # THE `targets` DISPATCH INPUT IS THE BIGGER LEVER HERE. Nine entries only
+      # happen on `all`; dispatching one job writes one. Re-count this comment
+      # if the job list changes — the number is read off the workflow, not
+      # carried in memory, so it drifts the moment a job is added and nobody
+      # updates the count by hand.
       CCACHE_MAXSIZE: 300M
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -224,30 +323,6 @@ jobs:
         with:
           path: workspace
           key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
-      - name: bootstrap the workspace (cold cache)
-        if: steps.ws.outputs.cache-hit != 'true'
-        # One retry: bootstrap is resumable (the fetch sentinel means a rerun
-        # picks up where an interrupted west update stopped), so a transient
-        # fetch failure costs one resume, not the whole multi-GB fetch.
-        run: |
-          ./scripts/bootstrap.sh || {
-            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
-            ./scripts/bootstrap.sh
-          }
-      # Save before building: the build writes only to ./build, so the
-      # workspace is already complete here, and an expensive bootstrap is not
-      # lost when the build step itself fails (the failure this gate exists
-      # to catch).
-      - name: save the workspace cache (cold cache)
-        if: steps.ws.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: workspace
-          key: ${{ steps.ws.outputs.cache-primary-key }}
-      # See the esp32-idf job for the ccache key/restore-keys rationale. The
-      # NCS toolchain bundles ccache and Zephyr picks it up from PATH
-      # automatically (zephyr/cmake/modules/ccache.cmake), so warm builds
-      # skip most compilation.
       - name: restore the compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -267,6 +342,8 @@ jobs:
   # bootstrapped workspace cache because the choice is compile-time only, but
   # has a distinct compiler cache.
   nrf5340dk-aliro-blob:
+    needs: workspace
+    if: contains(fromJSON('["all", "nrf", "nrf5340dk-aliro-blob"]'), inputs.targets)
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
@@ -286,19 +363,6 @@ jobs:
         with:
           path: workspace
           key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
-      - name: bootstrap the workspace (cold cache)
-        if: steps.ws.outputs.cache-hit != 'true'
-        run: |
-          ./scripts/bootstrap.sh || {
-            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
-            ./scripts/bootstrap.sh
-          }
-      - name: save the workspace cache (cold cache)
-        if: steps.ws.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: workspace
-          key: ${{ steps.ws.outputs.cache-primary-key }}
       - name: restore the compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -329,7 +393,20 @@ jobs:
   # the -D flags do, so one directory holding both configurations in turn would
   # silently keep whichever it configured first.
   dwm3001cdk:
+    needs: workspace
+    if: contains(fromJSON('["all", "nrf", "dwm3001cdk"]'), inputs.targets)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # BASH, NOT THE DEFAULT sh, and this is what makes `make` resolvable.
+        # The NCS container puts west, the Zephyr SDK and its own make on PATH
+        # through a BASH_ENV hook, which bash sources for every non-interactive
+        # shell and sh never does. Actions runs container steps with `sh -e {0}`
+        # by default, so a step calling `make` straight out of the runner died
+        # with "make: not found" and exit 127. The nrf5340dk jobs never hit it
+        # because they invoke scripts/*.sh, whose bash shebangs fire the hook
+        # inside the script.
+        shell: bash
     timeout-minutes: 180
     container:
       image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
@@ -348,13 +425,6 @@ jobs:
         with:
           path: workspace
           key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
-      - name: bootstrap the workspace (cold cache)
-        if: steps.ws.outputs.cache-hit != 'true'
-        run: |
-          ./scripts/bootstrap.sh || {
-            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
-            ./scripts/bootstrap.sh
-          }
       - name: restore the compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -362,6 +432,35 @@ jobs:
           key: ccache-dwm3001cdk-${{ github.run_id }}
           restore-keys: |
             ccache-dwm3001cdk-
+      - name: make sure make exists
+        # THE NCS CONTAINER HAS NO make. Its toolchain bundle ships cmake, ninja
+        # and ccache -- an NCS build is CMake and Ninja end to end -- so nothing
+        # in it ever needed one, and the base image does not carry one either.
+        # `make dfu-key` therefore died with "make: not found" and exit 127.
+        #
+        # The nrf5340dk jobs never hit this because they invoke scripts/*.sh
+        # directly. The CDK recipes live in mk/cdk.mk and make IS the interface,
+        # here and on a contributor's bench; reimplementing them inline would be
+        # a second copy that drifts from the one people actually run.
+        #
+        # Paired with `defaults.run.shell: bash` above, which is a separate fix
+        # for a separate half: bash sources the container's BASH_ENV hook and
+        # that is what puts west and the Zephyr SDK on PATH for the recipes.
+        # Installing make without it gets a make that cannot find west.
+        run: |
+          if command -v make >/dev/null 2>&1; then
+            echo "make $(make --version | head -1)"
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends make
+          elif command -v apk >/dev/null 2>&1; then
+            apk add --no-cache make
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y -q make
+          else
+            echo "::error::no make and no package manager to install one"
+            exit 1
+          fi
+          command -v make
       - name: generate a throwaway MCUboot signing key
         # Throwaway ON PURPOSE, not a repository secret. These artifacts are
         # build verification, nothing more, and a real key in the CI secret
@@ -374,18 +473,130 @@ jobs:
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           make build
+      - name: build the SHIPPING image (decawave_dwm3001cdk, SMP + RELEASE + LTO)
+        # The configuration that actually goes on a board: what `make release`
+        # builds and what `make fota` pushes over Bluetooth.
+        #
+        # UNTIL THIS STEP, NOTHING IN CI COMPILED IT. release.yml is the only
+        # other workflow that builds it and that one is tag-only, so the image
+        # every user installs was the least-built configuration in the tree --
+        # a Kconfig or flash-fit break in it would have surfaced while cutting a
+        # release, which is the worst possible time to find one. The step above
+        # does not cover it: RELEASE and SMP change the Kconfig tree, the RAM
+        # budget and the partition fit, in opposite directions on each region.
+        #
+        # Its own build directory, because `-p auto` does not re-run CMake when
+        # a -D flag changes (see CDK_PRISTINE in mk/cdk.mk), so one directory
+        # holding both configurations in turn would silently keep the first.
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          make build SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
       - name: build the standalone reader image (decawave_dwm3001cdk)
         run: |
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           make reader
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
-      - name: both images exist and fit
+      - name: all three images exist and fit
         # The build fails on overflow by itself; this asserts the artifacts are
         # actually there, so a recipe that silently stopped building one of them
         # cannot pass as green.
         run: |
           test -f build/cdk-matter/merged.hex
+          test -f build/cdk-shipping/merged.hex
           test -f build/cdk-reader/firmware/zephyr/zephyr.hex
+      - name: what the images cost
+        # MEASURES, DOES NOT GATE. cdk-size.yml is the gate; here the builds have
+        # already happened, so the reports are close to free and worth having in
+        # the summary of every dispatch. Not `cdk-size-check`: this workflow is
+        # about whether the trees still compile, and a headroom regression is not
+        # a reason to call a build broken.
+        #
+        # The SHIPPING image first, because it is the one cdk-size.yml gates and
+        # the one whose headroom decides what can still be added. Reporting only
+        # the debug build here would have put the configuration CI does NOT gate
+        # at the top of every dispatch summary.
+        env:
+          CDK_SIZE_TOOLCHAIN: sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276
+        run: |
+          make cdk-size SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
+          make cdk-size
+
+  # Fetch + install esp-matter ONCE for the four esp32-matter legs.
+  #
+  # They used to do it themselves, each restoring the same static cache key and
+  # each cloning esp-matter + CHIP on a miss: the job's own comment already
+  # named this as "the worst thing this workflow can do" and left it as a known
+  # gap rather than a bug, with a note that the eventual fix should be one leg
+  # on a schedule, not a nightly building four. This is that fix, shaped like
+  # the nRF workspace job above: one clone, then everyone restores.
+  #
+  # LOOKUP-ONLY WHEN WARM, same reasoning as the workspace job: nothing here
+  # needs the ~6+ GB tree itself, only the fact that the cache entry exists.
+  # Each matrix leg still restores it for real.
+  #
+  # THE KEY IS STATIC (env.ESP_MATTER_REV, only an esp-matter revision or an
+  # IDF bump moves it), so unlike the west workspace this entry does not churn
+  # on ordinary pushes. It ages out only from seven days with no access at all,
+  # which the esp32-matter job's own restores keep resetting on any week it
+  # runs — this job is the fallback for a week it does not.
+  esp-matter-prep:
+    if: contains(fromJSON('["all", "esp32", "esp32-matter"]'), inputs.targets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
+    env:
+      ESP_MATTER_REV: 93b168027bf95f4e467230345ad1f2d147eb1f6b
+      ESP_MATTER_PATH: /opt/esp/esp-matter
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: is esp-matter already cached
+        id: esp-matter
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/esp/esp-matter
+          key: esp-matter-${{ env.ESP_MATTER_REV }}-idf-v5.5.4
+          lookup-only: true
+      # See the esp32-matter job for why this has to be installed before any
+      # pip install can succeed in this container.
+      - name: install python build headers
+        if: steps.esp-matter.outputs.cache-hit != 'true'
+        run: apt-get update -q && apt-get install -y -q python3-dev
+      - name: fetch + install esp-matter (cold cache)
+        if: steps.esp-matter.outputs.cache-hit != 'true'
+        # Identical to what the esp32-matter job ran per leg; see there for why
+        # each line is what it is. Kept in exactly one place now instead of two.
+        run: |
+          . "$IDF_PATH/export.sh"
+          setup() (
+            rm -rf "$ESP_MATTER_PATH" &&
+            git init -q "$ESP_MATTER_PATH" &&
+            cd "$ESP_MATTER_PATH" &&
+            git remote add origin https://github.com/espressif/esp-matter.git &&
+            git fetch -q --depth 1 origin "$ESP_MATTER_REV" &&
+            git checkout -q FETCH_HEAD &&
+            git submodule update --init --depth 1 &&
+            ./connectedhomeip/connectedhomeip/scripts/checkout_submodules.py \
+              --platform esp32 linux --shallow &&
+            sed -i 's/cffi==1.15.0/cffi==1.17.1/' \
+              connectedhomeip/connectedhomeip/scripts/setup/constraints.txt \
+              connectedhomeip/connectedhomeip/scripts/setup/requirements.all.txt &&
+            sed -i 's/bitarray==2.6.0/bitarray==2.8.2/' \
+              connectedhomeip/connectedhomeip/scripts/setup/requirements.esp32.txt &&
+            ./install.sh --no-host-tool
+          )
+          setup || {
+            echo "::warning::esp-matter setup failed once — retrying from scratch"
+            setup
+          }
+      - name: save the esp-matter cache (cold cache)
+        if: steps.esp-matter.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/esp/esp-matter
+          key: esp-matter-${{ env.ESP_MATTER_REV }}-idf-v5.5.4
 
   # ESP32-S3 Matter door lock against esp-matter at the bench-validated
   # revision (6+ GB once the CHIP submodule tree is in). The esp-matter tree
@@ -398,6 +609,8 @@ jobs:
   # build and the least likely to be caught by review, so dispatch this workflow
   # when a pull request touches one.
   esp32-matter:
+    needs: esp-matter-prep
+    if: contains(fromJSON('["all", "esp32", "esp32-matter"]'), inputs.targets)
     runs-on: ubuntu-latest
     timeout-minutes: 240
     # One leg per image. Measured on run 30595579021, the three builds ran
@@ -428,85 +641,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # esp-matter-prep populated this; every leg here just restores it.
+      # A miss here (the prep job failed, or this ran without it -- see
+      # `needs` above, which should make that impossible) is a hard stop:
+      # there is no per-leg fallback fetch any more, on purpose, since a
+      # fallback here is exactly the four-way clone this was written to end.
       - name: restore esp-matter
         id: esp-matter
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /opt/esp/esp-matter
           key: esp-matter-${{ env.ESP_MATTER_REV }}-idf-v5.5.4
-      # Python build headers, unconditionally (both cache paths install pip
-      # deps into the same container). esp-matter's own requirements.txt and
-      # CHIP's setup pin packages whose old versions ship no cp312 wheel, so
-      # pip compiles them from source against the container's python 3.12 — and
-      # this ubuntu:24.04 image has no Python.h. The version seds below only
-      # cover CHIP's files; installing the headers is the root-cause fix that
-      # lets any from-source wheel build succeed, here and in future domino
-      # pins we do not control.
+      # Python build headers, unconditionally. install.sh in esp-matter-prep
+      # already needed these once; this job still needs them for the pip
+      # install below on a warm cache, and each matrix leg is a fresh
+      # container that starts with none of them.
+      #
+      # esp-matter's own requirements.txt and CHIP's setup pin packages whose
+      # old versions ship no cp312 wheel, so pip compiles them from source
+      # against the container's python 3.12 -- and this ubuntu:24.04 image has
+      # no Python.h without this. esp-matter-prep's version seds cover CHIP's
+      # own pinned files; this covers everything else that might build from
+      # source, here and in future domino pins neither of us controls.
       - name: install python build headers
         run: apt-get update -q && apt-get install -y -q python3-dev
-      - name: fetch + install esp-matter (cold cache)
-        if: steps.esp-matter.outputs.cache-hit != 'true'
-        # Pinned-SHA clone (git clone --branch takes no SHA, so init + fetch),
-        # then the setup esp-matter documents: shallow esp32 submodules and
-        # install.sh, minus the chip-tool/chip-cert host tools the firmware
-        # build never runs. One from-scratch retry absorbs transient fetch
-        # failures. Subshell + && chain on purpose: the cd stays contained,
-        # and `set -e` is suppressed inside a `||` context, so an explicit
-        # chain is the only reliable early-exit.
-        run: |
-          . "$IDF_PATH/export.sh"
-          setup() (
-            rm -rf "$ESP_MATTER_PATH" &&
-            git init -q "$ESP_MATTER_PATH" &&
-            cd "$ESP_MATTER_PATH" &&
-            git remote add origin https://github.com/espressif/esp-matter.git &&
-            git fetch -q --depth 1 origin "$ESP_MATTER_REV" &&
-            git checkout -q FETCH_HEAD &&
-            git submodule update --init --depth 1 &&
-            ./connectedhomeip/connectedhomeip/scripts/checkout_submodules.py \
-              --platform esp32 linux --shallow &&
-            # CHIP pins cffi==1.15.0 for python<3.13, but on Linux the CHIP
-            # venv runs the container's python (3.12 on this ubuntu:24.04
-            # image) — pigweed's python311.json override only covers darwin
-            # and windows — and no cffi 1.15.x ships a cp312 wheel, so pip
-            # compiles it from source and dies in this container. 1.17.1 is
-            # CHIP's own pin for python>=3.13 and ships cp312 wheels.
-            sed -i 's/cffi==1.15.0/cffi==1.17.1/' \
-              connectedhomeip/connectedhomeip/scripts/setup/constraints.txt \
-              connectedhomeip/connectedhomeip/scripts/setup/requirements.all.txt &&
-            # Same story one step later: requirements.esp32.txt pins
-            # bitarray==2.6.0, which has no wheel for the container's build
-            # python 3.12, so pip compiles it from source and fails on a
-            # missing Python.h. 2.8.2 is the first release with a cp312
-            # manylinux x86_64 wheel, so pip installs it prebuilt.
-            sed -i 's/bitarray==2.6.0/bitarray==2.8.2/' \
-              connectedhomeip/connectedhomeip/scripts/setup/requirements.esp32.txt &&
-            ./install.sh --no-host-tool
-          )
-          setup || {
-            echo "::warning::esp-matter setup failed once — retrying from scratch"
-            setup
-          }
-      # Save before building, so a broken app build does not throw away the
-      # expensive fetch + install.
-      #
-      # On a cold cache every matrix leg does its own fetch + install and then
-      # races to save the same key; the losers log "cache already exists" and
-      # carry on. Four simultaneous CHIP clones is the worst thing this workflow
-      # can do, so know when it happens: the key is static (only an esp-matter
-      # revision or IDF bump rolls it), but GitHub evicts a cache untouched for
-      # 7 days, and since the nightly was removed nothing refreshes it on a
-      # schedule. Any gap longer than a week between pushes that touch this job
-      # therefore makes the next one cold. If that becomes the common case, the
-      # fix is a weekly cache-refresh cron running one leg, not a nightly
-      # building four, and not a priming job — that would serialise ahead of
-      # every warm run forever.
-      - name: save the esp-matter cache (cold cache)
-        if: steps.esp-matter.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: /opt/esp/esp-matter
-          key: ${{ steps.esp-matter.outputs.cache-primary-key }}
       - name: install the esp-matter python deps (warm cache)
         if: steps.esp-matter.outputs.cache-hit == 'true'
         # install.sh put these into the IDF python env, which lives in the

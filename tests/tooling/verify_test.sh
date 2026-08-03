@@ -93,6 +93,7 @@ ci.yml:verify                              clang-tidy
 ci.yml:verify                              test
 ci.yml:verify                              test-san
 ci.yml:verify                              patch-drift
+ci.yml:verify                              cdk-size
 ci.yml:verify                              docs
 ci.yml:verify                              deps
 ci.yml:verify                              test-port
@@ -108,10 +109,16 @@ security-deep.yml:semgrep-sarif            !deep lane: the same scan the semgrep
 security-deep.yml:scorecard                !deep lane: queries GitHub own branch-protection and workflow settings, so it needs a token and the default branch
 firmware-builds.yml:esp32-idf              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-initiator        !firmware: ESP-IDF/NCS toolchain
+firmware-builds.yml:workspace              !firmware: bootstraps the pinned west workspace once and caches it for the three nRF jobs; nothing to reproduce locally; make bootstrap is the bench equivalent
 firmware-builds.yml:nrf5340dk              !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:dwm3001cdk             !firmware: ESP-IDF/NCS toolchain
+firmware-builds.yml:esp-matter-prep        !firmware: clones + installs esp-matter once for the four esp32-matter legs and caches it on a static key; nothing to reproduce locally, no ESP-IDF here
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
+cdk-size.yml:size                          !firmware: NCS toolchain and a real link; label-gated so it cannot reverse ci.yml firmware-free decision. The cdk-size gate above covers its accounting and its refusals on fixtures
+cdk-size.yml:keep-warm                     !restores the west workspace cache on a schedule so it does not age out; a restore counts as an access, and without it the size gate would skip forever after a quiet fortnight. Nothing to reproduce locally: there is no GitHub cache here
+cdk-size.yml:baseline                      !firmware: NCS toolchain; re-records firmware/size-baseline.json against CI own toolchain and uploads it as an artifact, on manual dispatch only
+cdk-size-notify.yml:notify                 !posts the size result to Discord after cdk-size finishes; needs the DISCORD_WEBHOOK secret and a completed run to read an artifact from, neither of which exists locally. The cdk-size gate covers its silence rule and its sanitising on fixtures
 release.yml:guard                          !release: refuses a dispatch whose ref is not a vN.N.N tag, so it has nothing to reproduce locally
 release.yml:dwm3001cdk                     !release: firmware toolchain, and the signing key
 release.yml:nrf5340dk                      !release: firmware toolchain
@@ -364,6 +371,15 @@ case " ${FAIL_GATES:-} " in *" patch-drift "*) echo "stub: drifted" >&2; exit 1 
 echo "stub patch-drift ok"
 EOF
 chmod +x "$FAKE/tests/tooling/patch_drift_check.sh"
+# Same shape for the CDK size gate: it is a tests/tooling/ script that the sweep
+# dispatches to directly, so without a stub it is simply absent in the sandbox
+# and every "clean sweep exits 0" assertion below fails as a cascade from it.
+cat > "$FAKE/tests/tooling/cdk_size_test.sh" <<'EOF'
+#!/usr/bin/env bash
+case " ${FAIL_GATES:-} " in *" cdk-size "*) echo "stub: size gate failed" >&2; exit 1 ;; esac
+echo "stub cdk-size ok"
+EOF
+chmod +x "$FAKE/tests/tooling/cdk_size_test.sh"
 # All four security gates dispatch through this one script, so it stands in for
 # all four. It takes the gate name as $1, which is exactly how verify.sh calls
 # the real one — meaning FAIL_GATES can fail any of them individually.

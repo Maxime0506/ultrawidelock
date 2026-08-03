@@ -246,7 +246,27 @@ endif
 # Every recipe runs from ./workspace so west finds its manifest.
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
+# ---- size ---------------------------------------------------------------------
+# RAM is the scarcest thing on this board and the easiest to spend by accident:
+# the Matter image runs at ~95% of the nRF52833's 128 KB, so a new static buffer
+# is a decision rather than a detail. These two targets make that visible and
+# then enforce it. Measurement and judgement are deliberately separate programs:
+# `cdk-size` only ever reports, `cdk-size-check` is the only one that can fail.
+#
+# CDK_SIZE_REPORTS=0 skips Zephyr's ram_report/rom_report. They are the numbers
+# the RAM work in this repo already quotes, so they are on by default, but they
+# cost ~73 s (measured, this image), they need the toolchain, and they are a
+# ninja target with real dependencies -- so on a STALE tree they relink rather
+# than merely measure. Everything else comes straight out of the ELF and needs
+# no toolchain at all, which is why a report is still possible without them.
+CDK_SIZE_JSON     ?= $(CDK_BUILD)/size-report.json
+CDK_SIZE_BASELINE ?= $(REPO_ROOT)/firmware/size-baseline.json
+CDK_SIZE_REPORTS  ?= 1
+CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_SIZE_JSON)' \
+                     $(if $(filter-out 0 n no off N NO OFF,$(CDK_SIZE_REPORTS)),--reports --run-prefix '$(CDK_WEST)')
+
 .PHONY: build rebuild reader selftest flash flash-erase monitor dfu release \
+        cdk-size cdk-size-check cdk-size-baseline \
         dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-push ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
@@ -631,6 +651,57 @@ monitor:
 	  --from-config $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/.config 2>/dev/null || true
 	@probe-rs attach --chip $(CDK_CHIP) $(CDK_PROBE_ARG) \
 	  $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf
+
+## cdk-size: what the image costs and how much room is left  ·  measures only
+##   Reads an ALREADY-BUILT tree and never builds one: `make build` first. Region
+##   sizes come from the linker's own memory configuration and the partition map,
+##   not from the datasheet, so a pm_static.yml change moves these numbers instead
+##   of silently invalidating them.
+##   Reports FREE BYTES, which is the figure that matters here. At ~95% of 128 KB
+##   a 644 B regression moves the percentage by half a point and reads as noise.
+##   Writes JSON for the gate and a table for you. Reports only: it cannot fail.
+##   Options: CDK_BUILD=<dir>  CDK_SIZE_JSON=<path>  CDK_SIZE_REPORTS=0
+cdk-size:
+	@test -f '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' || { \
+	  printf '  no ELF at %s/%s/zephyr/zephyr.elf  ·  run `make build` first\n' \
+	    '$(CDK_BUILD)' '$(CDK_IMAGE)' >&2; exit 2; }
+	@# From ./workspace like every other recipe here, so the west invocation the
+	@# reports need resolves its manifest. Every path handed to the script is
+	@# already absolute, so the working directory does not reach the output.
+	@cd $(REPO_ROOT)/workspace 2>/dev/null || cd $(REPO_ROOT); \
+	 python3 $(REPO_ROOT)/scripts/cdk-size.py $(CDK_SIZE_ARGS) \
+	   $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
+	@printf '  report  ·  %s\n\n' '$(CDK_SIZE_JSON)'
+
+## cdk-size-check: fail if the image lost headroom against the recorded baseline
+##   Measures, then compares against firmware/size-baseline.json. Fails on the
+##   free-bytes floor, and on growth past the cap unless CDK_SIZE_ALLOW_GROWTH=1.
+##   WHAT CI GATES IS THE SHIPPING IMAGE, the one `make release` builds and
+##   `make fota` pushes:
+##       make cdk-size-check SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
+##   That image is at 96.23% of its flash partition and 92.50% of RAM, so FLASH
+##   is its binding region -- the reverse of the debug build, where the 8 KB RTT
+##   ring puts RAM at 95.03%. Both are recorded; each is compared only to itself.
+##   REFUSES TO COMPARE across a different toolchain, overlay set or LTO setting
+##   rather than reporting a delta that is really a configuration change: LTO
+##   alone is worth 41,084 B here and would swamp any real signal.
+##   Options: CDK_BUILD=<dir>  CDK_SIZE_BASELINE=<path>  CDK_SIZE_ALLOW_GROWTH=1
+cdk-size-check:
+	@# Suppressed for the measure step: the comparison table below carries the
+	@# same numbers with the baseline beside them, and two tables in one step
+	@# summary is how a reader ends up reading the wrong one.
+	@$(MAKE) --no-print-directory cdk-size GITHUB_STEP_SUMMARY=
+	@python3 $(REPO_ROOT)/scripts/cdk-size-compare.py \
+	  --baseline '$(CDK_SIZE_BASELINE)' --current '$(CDK_SIZE_JSON)' \
+	  $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
+
+## cdk-size-baseline: record the current tree as the baseline to compare against
+##   Rewrites firmware/size-baseline.json from the build in $(CDK_BUILD), keeping
+##   whatever floor and cap the old record carried. Review the diff: it is the
+##   only account of what moved and why, which is the point of committing it.
+cdk-size-baseline: cdk-size
+	@python3 $(REPO_ROOT)/scripts/cdk-size-baseline.py \
+	  --from '$(CDK_SIZE_JSON)' --out '$(CDK_SIZE_BASELINE)'
 
 # ---- compatibility aliases ---------------------------------------------------
 # The names these targets had while the CDK still lived under ports/. Each does

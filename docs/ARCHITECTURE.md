@@ -3152,6 +3152,111 @@ toolchain nm, no symbol) warns and exits 0, because blocking a console on an
 indeterminate check is worse than the bug.
 Usage: cdk-rtt-elf-check.sh <candidate-elf> <deployed-elf>
 
+### [`scripts/cdk-size-baseline.py`](architecture/scripts/cdk-size-baseline.md)
+
+cdk-size-baseline.py — turn a size report into the committed baseline.
+
+    scripts/cdk-size-baseline.py --from build/cdk-matter/size-report.json                                  --out firmware/size-baseline.json
+    make cdk-size-baseline
+
+Two things happen here and both matter.
+
+VOLATILE FIELDS ARE DROPPED. A timestamp and a build directory change on every
+run, so carrying them would make the committed file churn on every refresh and
+bury the numbers that actually moved in a diff nobody reads. The commit is kept:
+it is what makes the record auditable.
+
+THE GATE SETTINGS SURVIVE A REFRESH. Floor and cap are a decision about how much
+headroom this board must keep, not a measurement, so re-recording the numbers
+must not quietly reset them -- which is exactly how a floor ratchets down to
+meet whatever the image happens to weigh today. They are only ever changed by
+editing the file or passing them here explicitly.
+
+### [`scripts/cdk-size-compare.py`](architecture/scripts/cdk-size-compare.md)
+
+cdk-size-compare.py — head against the recorded baseline, as a gate.
+
+    scripts/cdk-size-compare.py --baseline firmware/size-baseline.json                                 --current build/cdk-matter/size-report.json
+    make cdk-size-check
+
+Exit 0 when the image still fits with room to spare, 1 on a floor or cap
+violation, 2 when there is nothing to compare, and 3 when the two reports were
+not built the same way.
+
+THREE IS NOT A SOFTER ONE. A size delta measured across a toolchain bump, an
+overlay change or an LTO flip is not a delta: LTO alone is worth 41,084 B of
+flash on this image (mk/cdk.mk), which would swamp every real signal in either
+direction. So a configuration difference REFUSES TO PRODUCE A NUMBER rather
+than producing a misleading one, and the fix is to refresh the baseline, not to
+widen the cap.
+
+THE FLOOR IS THE GATE, and it is expressed in free bytes. The CDK image runs at
+roughly 95% of a 128 KB part, where a 644 B regression moves the percentage by
+half a point and reads as rounding. Percentages are printed for orientation and
+nothing is decided on them.
+
+TOP MOVERS ARE A DIAGNOSTIC AND NEVER FAIL A BUILD. Under LTO the symbol names
+are not stable across builds (see normalise_symbol in cdk-size.py), so the
+attribution below is indicative: it tells you where to look, not what happened.
+
+### [`scripts/cdk-size-notify.py`](architecture/scripts/cdk-size-notify.md)
+
+cdk-size-notify.py — say what a change cost the CDK image, in Discord.
+
+    DISCORD_WEBHOOK=https://discord.com/api/webhooks/...       scripts/cdk-size-notify.py --current size-report.json --run-url https://...
+
+Formats a size report against the recorded baseline and posts it. Exit 0 when
+it posted AND when it deliberately said nothing; exit 1 only when a post was
+attempted and failed. Nothing here decides whether code merges: cdk-size-check
+is the gate, this only reports what it decided.
+
+SILENT ON A NO-OP, and that is the whole design. A bot that posts "+0 bytes" on
+every push to every labelled pull request gets muted within a week, and a muted
+bot is worse than none -- it is a channel everyone believes is being watched.
+So a run that passed with both regions unchanged says nothing at all. Anything
+that moved, was blocked, or could not be compared is worth an interruption.
+Raise the bar with CDK_SIZE_NOTIFY_MIN if even that is too chatty.
+
+THE REPORT IS UNTRUSTED INPUT. On a pull request from a fork, every byte of it
+was produced by that fork's code -- including the symbol names, which end up in
+a message this bot posts into your server. So nothing from it is interpolated
+into a shell command, strings are stripped of markdown and length-capped, and
+the payload disables mentions outright: a symbol named `@everyone` is a real
+thing someone can write. The numbers themselves cannot be trusted either, and
+are not meant to be; a fork can lie about its own size. What blocks a merge is
+the gate's exit status, not this message.
+
+### [`scripts/cdk-size.py`](architecture/scripts/cdk-size.md)
+
+cdk-size.py — what the DWM3001CDK image costs, as a machine-readable record.
+
+The CDK image is the constrained one: reader, DW3110 ranging, a hand-written
+Matter node and an OpenThread MTD on a 128 KB-RAM nRF52833. RAM is the scarcest
+resource in the project and the one most easily spent by accident, so this reads
+an already-built tree and says how much of each region is left.
+
+    scripts/cdk-size.py --build build/cdk-matter
+    scripts/cdk-size.py --build build/cdk-matter --json out.json
+    make cdk-size
+
+FREE BYTES, NOT PERCENTAGES. At 97% of 128 KB a 644 B regression moves the
+percentage by half a point and reads as noise; "3,891 B free" does not.
+
+NO TOOLCHAIN REQUIRED for the headline numbers. The ELF is parsed here rather
+than shelled out to arm-none-eabi-size/nm, for the reason scripts/security-fw.sh
+gives about objcopy: those binaries live inside the NCS toolchain, so requiring
+them turns "the gate ran" into "the gate ran if you had bootstrapped". Zephyr's
+own ram_report/rom_report DO need the toolchain and are folded in when they are
+available (--reports), as a cross-check rather than as the only source.
+
+REGION SIZES COME FROM THE BUILD. Origin and length are read out of the linker's
+own Memory Configuration block in zephyr.map, and the partition layout out of
+partitions.yml, so a pm_static change moves these numbers instead of silently
+invalidating a datasheet constant hardcoded here.
+
+Exit 0 on a report, 2 when there is no build tree to measure. Measuring is all
+this does: scripts/cdk-size-compare.py is what fails a build.
+
 ### [`scripts/check-approtect.sh`](architecture/scripts/check-approtect.sh.md)
 
 check-approtect.sh — refuse to ship an image that locks APPROTECT.

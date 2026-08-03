@@ -1,0 +1,429 @@
+# DWM3001CDK size gate — how much headroom a change costs, against a baseline.
+#
+# The CDK Matter image carries the Aliro reader, the DW3110's ranging, a
+# hand-written Matter node and an OpenThread MTD on one nRF52833, and updates
+# itself over Bluetooth. This measures what a pull request costs it and blocks
+# the ones that spend what headroom is left.
+#
+# IT GATES THE SHIPPING IMAGE: SMP=1 RELEASE=1 with LTO on, which is what
+# `make release` builds and `make fota` pushes. Measured on this baseline that
+# image is at 96.23% of its flash partition (16,356 B free) and 92.50% of RAM
+# (9,836 B free), so on the image that actually ships FLASH is the binding
+# constraint -- the reverse of the debug build, where the 8 KB RTT ring puts RAM
+# at 95.03% and flash at 94.69%. Gating the debug image would therefore have
+# watched the wrong region.
+#
+# LABEL-GATED, NOT AUTOMATIC, and that is deliberate rather than timid. ci.yml
+# says in its own header that firmware is absent from push/PR CI on purpose:
+# reaching Kconfig, devicetree and linker breakage means the NCS toolchain and
+# tens of minutes, which is not what every pull request should pay. Running this
+# on every PR would quietly reverse that decision. A maintainer adding the
+# `size` label is the opt-in, and workflow_dispatch is the other way in.
+#
+# It is a near-copy of the dwm3001cdk job in firmware-builds.yml -- same
+# container digest, same ALIRO_TOOLCHAIN=env, same restore-only workspace cache
+# on the same key -- with two deliberate differences, both about not making
+# other people's caches worse:
+#
+#   1. ccache is RESTORE-ONLY here. firmware-builds.yml writes a fresh entry per
+#      run because it runs on demand; this can run on every push to a labelled
+#      pull request. GitHub gives the repo 10 GB of Actions cache with LRU
+#      eviction, and evicting nrf-workspace or esp-matter costs hours, so this
+#      reads the compiler cache and never adds to the pressure.
+#   2. Only the Matter image is built. `make reader` is a different image with
+#      its own budget and nothing here compares against it.
+#
+# NO PR COMMENT, ON PURPOSE. A pull request from a fork gets a read-only
+# GITHUB_TOKEN, so a comment step would fail exactly for the contributors most
+# likely to need the feedback. The report goes to the step summary and the JSON
+# is uploaded as an artifact. If comments are wanted later, the route is a
+# separate workflow_run-triggered workflow with pull-requests: write that
+# downloads that artifact -- NOT pull_request_target, which would run this
+# against a fork's code with a writable token.
+name: cdk-size
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  # Twice a week, to keep the workspace cache from ageing out. See the keep-warm
+  # job for why this exists at all; the max gap is Thursday to Monday, four days,
+  # against GitHub's seven-day eviction. Neither other job matches a schedule
+  # event, so this trigger runs the cheap one only.
+  schedule:
+    - cron: "0 6 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      refresh_baseline:
+        # An input rather than a second workflow, so the build recipe, the
+        # container digest and the cache keys cannot drift apart between the job
+        # that measures and the job that records what to measure against.
+        # The result comes back as an artifact: see the baseline job for why
+        # this does not open a pull request itself.
+        description: "rebuild and re-record firmware/size-baseline.json (uploaded as an artifact to commit by hand)"
+        type: boolean
+        default: false
+
+# Reads the repo and writes a step summary. Nothing here needs more.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  size:
+    # `synchronize` fires on every push to an open pull request, including the
+    # ones nobody labelled, so the label is re-checked here rather than trusted
+    # from the trigger. A dispatch has no label and runs unconditionally.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'size')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # BASH, NOT THE DEFAULT sh, and this is what makes `make` resolvable.
+        # The NCS container puts west, the Zephyr SDK and its own make on PATH
+        # through a BASH_ENV hook, which bash sources for every non-interactive
+        # shell and sh never does. Actions runs container steps with `sh -e {0}`
+        # by default, so a step calling `make` straight out of the runner died
+        # with "make: not found" and exit 127. The nrf5340dk jobs never hit it
+        # because they invoke scripts/*.sh, whose bash shebangs fire the hook
+        # inside the script.
+        shell: bash
+    timeout-minutes: 90
+    container:
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
+      # See the nrf5340dk job in firmware-builds.yml for why this is 300M.
+      CCACHE_MAXSIZE: 300M
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: restore the bootstrapped west workspace
+        id: ws
+        # RESTORE-ONLY and on the key firmware-builds.yml already uses. This job
+        # must never write that entry: the DK jobs depend on it and a partial or
+        # differently-shaped workspace saved from here would poison all of them.
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+
+      - name: refuse to bootstrap a cold workspace
+        id: warm
+        # THIS JOB NEVER FETCHES THE WEST WORKSPACE. A bootstrap is an ~8.5 GB
+        # fetch and tens of minutes, and this runs on every push to a labelled
+        # pull request -- so paying it on a cache miss would quietly make the
+        # cheap gate the most expensive thing in CI.
+        #
+        # A cold cache is therefore a reason NOT TO RUN, not a reason to build.
+        # The job goes green having measured nothing, and says so loudly in the
+        # summary and as a PR annotation: "could not measure" and "measured, no
+        # change" are different answers and this must not pass one off as the
+        # other.
+        #
+        # What warms it: the nrf5340dk jobs in firmware-builds.yml are the only
+        # writers of this key, and the keep-warm job below is what stops an
+        # entry they wrote from ageing out.
+        env:
+          HIT: ${{ steps.ws.outputs.cache-hit }}
+        run: |
+          if [ "$HIT" = "true" ]; then
+            echo "warm=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "warm=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=CDK size gate did not run::no cached west workspace, so nothing was measured. Dispatch firmware-builds once to populate it."
+          {
+            echo "## DWM3001CDK image size — not measured"
+            echo
+            echo "There is no cached west workspace for this key, and this gate does"
+            echo "not fetch one: a bootstrap is an ~8.5 GB download and tens of minutes."
+            echo
+            echo "**Nothing was measured. This is not a pass.**"
+            echo
+            echo "Populate the cache by dispatching \`firmware-builds\` once, then"
+            echo "re-run this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: restore the compiler cache
+        if: steps.warm.outputs.warm == 'true'
+        # Restore, never save: see the header. A miss here costs build time and
+        # nothing else, which is a far cheaper failure than evicting the
+        # workspace or esp-matter entries out from under the other workflows.
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-dwm3001cdk-${{ github.run_id }}
+          restore-keys: |
+            ccache-dwm3001cdk-
+
+      - name: make sure make exists
+        if: steps.warm.outputs.warm == 'true'
+        # THE NCS CONTAINER HAS NO make. Its toolchain bundle ships cmake, ninja
+        # and ccache -- an NCS build is CMake and Ninja end to end -- so nothing
+        # in it ever needed one, and the base image does not carry one either.
+        # `make dfu-key` therefore died with "make: not found" and exit 127.
+        #
+        # The nrf5340dk jobs never hit this because they invoke scripts/*.sh
+        # directly. The CDK recipes live in mk/cdk.mk and make IS the interface,
+        # here and on a contributor's bench; reimplementing them inline would be
+        # a second copy that drifts from the one people actually run.
+        #
+        # Paired with `defaults.run.shell: bash` above, which is a separate fix
+        # for a separate half: bash sources the container's BASH_ENV hook and
+        # that is what puts west and the Zephyr SDK on PATH for the recipes.
+        # Installing make without it gets a make that cannot find west.
+        run: |
+          if command -v make >/dev/null 2>&1; then
+            echo "make $(make --version | head -1)"
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends make
+          elif command -v apk >/dev/null 2>&1; then
+            apk add --no-cache make
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y -q make
+          else
+            echo "::error::no make and no package manager to install one"
+            exit 1
+          fi
+          command -v make
+      - name: generate a throwaway MCUboot signing key
+        if: steps.warm.outputs.warm == 'true'
+        # firmware/sysbuild.cmake refuses to configure without one rather than
+        # fall back to MCUboot's PUBLISHED demo key, so this is not optional.
+        # Throwaway on purpose: these artifacts are measurement, and a real key
+        # in the CI secret store would be a key that signs images a lock accepts.
+        run: make dfu-key
+
+      - name: build the shipping image (decawave_dwm3001cdk, SMP + RELEASE + LTO)
+        if: steps.warm.outputs.warm == 'true'
+        # THE IMAGE THAT SHIPS, not the one bare `make build` produces. This is
+        # the configuration `make release` builds (mk/cdk.mk:564) and the one
+        # `make fota` pushes over Bluetooth, so it is the image that has to fit
+        # a board in somebody's door -- which is the only headroom worth
+        # blocking a merge over.
+        #
+        # It is not simply the debug image plus options: RELEASE gives up the
+        # 8 KB RTT ring for 7,168 B of RAM and SMP spends 3,712 B on mcumgr, so
+        # the two differ in opposite directions on each region. Measured here,
+        # the shipping image has 3,328 B MORE free RAM and 6,668 B LESS free
+        # flash than the debug one, which makes flash the binding constraint at
+        # 96.23% where RAM is the binding one at 95.03% on debug.
+        #
+        # Its own build directory, because `-p auto` does not re-run CMake when
+        # a -D flag changes (see CDK_PRISTINE in mk/cdk.mk): one directory
+        # holding both configurations in turn would silently keep the first.
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          make build SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
+
+      - name: measure and compare against the baseline
+        if: steps.warm.outputs.warm == 'true'
+        # CDK_SIZE_TOOLCHAIN records WHICH toolchain produced the numbers. It is
+        # the largest invisible source of drift -- a container bump moves every
+        # figure here -- and the comparator refuses to report a delta across a
+        # change in it rather than reporting one that is really a toolchain
+        # change. Kept in step with the `container:` digest above.
+        env:
+          CDK_SIZE_TOOLCHAIN: sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276
+        run: make cdk-size-check SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
+
+      - name: upload the size report
+        # Always, including on a failure: the report is most wanted exactly when
+        # the gate blocked, and it is what a follow-up comment workflow would
+        # download rather than rebuilding the image to ask again. Skipped when
+        # the workspace was cold: there is no report then, and an empty artifact
+        # would look like a measurement rather than the absence of one.
+        if: always() && steps.warm.outputs.warm == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cdk-size-report
+          path: build/cdk-shipping/size-report.json
+          if-no-files-found: warn
+
+
+  # Keep the west workspace cache alive, and nothing else.
+  #
+  # THIS EXISTS TO BREAK A DEADLOCK. The size job refuses to bootstrap a cold
+  # workspace, which is right -- an ~8.5 GB fetch on every labelled pull request
+  # is not a cheap gate. But a job that skips on a miss never restores anything,
+  # and GitHub evicts cache entries that have not been ACCESSED in seven days.
+  # So a quiet fortnight would age the entry out, every later run would skip, and
+  # the gate would be permanently and silently dead -- with a green check on it.
+  # That is exactly the failure scripts/verify.sh exists to catch elsewhere.
+  #
+  # A restore counts as an access, so restoring the entry on a schedule keeps it
+  # alive indefinitely. It writes nothing and builds nothing: roughly a minute of
+  # a runner, twice a week, in exchange for the gate still working after a slow
+  # month.
+  #
+  # IT CANNOT CREATE THE ENTRY, only refresh one. The nrf5340dk jobs in
+  # firmware-builds.yml remain the only writers, deliberately -- see the restore
+  # step in the size job. A cold start, or any change to west.yml,
+  # scripts/bootstrap.sh or the patches (all three are in the key), still needs
+  # one firmware-builds dispatch. That is correct: a changed key means a genuinely
+  # different workspace, and reviving the old one would be wrong.
+  #
+  # GitHub disables scheduled workflows after 60 days without repository
+  # activity, so this is not a substitute for the repository being used.
+  keep-warm:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Needed only so hashFiles can see west.yml, bootstrap.sh and the patches:
+      # the key has to be computed the same way the other jobs compute it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: touch the workspace cache
+        id: ws
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+      - name: say whether the gate can still run
+        # A miss here is the early warning: it means the next labelled pull
+        # request will skip, and someone has to dispatch firmware-builds. Not a
+        # failure -- there is nothing broken to fix, and a red X on a scheduled
+        # job every week trains people to ignore it.
+        env:
+          HIT: ${{ steps.ws.outputs.cache-hit }}
+        run: |
+          if [ "$HIT" = "true" ]; then
+            echo "workspace cache is warm; the size gate can run" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=west workspace cache is cold::the CDK size gate will skip until firmware-builds is dispatched once"
+            echo "workspace cache is COLD; dispatch firmware-builds once to repopulate it" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Refresh the recorded baseline against CI's own toolchain, and hand the file
+  # back as an ARTIFACT for a human to commit.
+  #
+  # WHY NOT OPEN A PULL REQUEST. It would need `contents: write` and
+  # `pull-requests: write` here, and -- the part that actually decides it --
+  # GITHUB_TOKEN cannot open a pull request at all unless the REPOSITORY-WIDE
+  # "Allow GitHub Actions to create and approve pull requests" setting is on.
+  # That setting is not scoped to this job or this workflow: turning it on grants
+  # pull-request creation to every workflow in the repository, forever, to buy
+  # convenience on a job that runs maybe twice a year -- on a toolchain bump or
+  # after a deliberate size change. Downloading one file and committing it is a
+  # two-minute job, and it keeps a person in the loop on a change to what
+  # "unchanged" means, which is exactly the change that should have one.
+  #
+  # This job therefore keeps the workflow-level `contents: read` and adds
+  # nothing. It cannot write to the repository at all.
+  baseline:
+    if: github.event_name == 'workflow_dispatch' && inputs.refresh_baseline
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # BASH, NOT THE DEFAULT sh, and this is what makes `make` resolvable.
+        # The NCS container puts west, the Zephyr SDK and its own make on PATH
+        # through a BASH_ENV hook, which bash sources for every non-interactive
+        # shell and sh never does. Actions runs container steps with `sh -e {0}`
+        # by default, so a step calling `make` straight out of the runner died
+        # with "make: not found" and exit 127. The nrf5340dk jobs never hit it
+        # because they invoke scripts/*.sh, whose bash shebangs fire the hook
+        # inside the script.
+        shell: bash
+    timeout-minutes: 90
+    container:
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
+      CCACHE_MAXSIZE: 300M
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: restore the bootstrapped west workspace
+        id: ws
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+      - name: bootstrap the workspace (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        run: ./scripts/bootstrap.sh
+      - name: restore the compiler cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-dwm3001cdk-${{ github.run_id }}
+          restore-keys: |
+            ccache-dwm3001cdk-
+      - name: make sure make exists
+        # THE NCS CONTAINER HAS NO make. Its toolchain bundle ships cmake, ninja
+        # and ccache -- an NCS build is CMake and Ninja end to end -- so nothing
+        # in it ever needed one, and the base image does not carry one either.
+        # `make dfu-key` therefore died with "make: not found" and exit 127.
+        #
+        # The nrf5340dk jobs never hit this because they invoke scripts/*.sh
+        # directly. The CDK recipes live in mk/cdk.mk and make IS the interface,
+        # here and on a contributor's bench; reimplementing them inline would be
+        # a second copy that drifts from the one people actually run.
+        #
+        # Paired with `defaults.run.shell: bash` above, which is a separate fix
+        # for a separate half: bash sources the container's BASH_ENV hook and
+        # that is what puts west and the Zephyr SDK on PATH for the recipes.
+        # Installing make without it gets a make that cannot find west.
+        run: |
+          if command -v make >/dev/null 2>&1; then
+            echo "make $(make --version | head -1)"
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq --no-install-recommends make
+          elif command -v apk >/dev/null 2>&1; then
+            apk add --no-cache make
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y -q make
+          else
+            echo "::error::no make and no package manager to install one"
+            exit 1
+          fi
+          command -v make
+      - name: generate a throwaway MCUboot signing key
+        run: make dfu-key
+      - name: build and re-record
+        env:
+          CDK_SIZE_TOOLCHAIN: sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          make build SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
+          make cdk-size-baseline SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
+      - name: show what moved
+        # The whole point of a baseline refresh is the diff, so it goes in the
+        # step summary where it is read without downloading anything. Nothing
+        # here writes to the repository.
+        run: |
+          set -euo pipefail
+          {
+            echo "## Baseline refresh"
+            echo
+            if git diff --quiet -- firmware/size-baseline.json; then
+              echo "No change: CI already agrees with the committed baseline."
+            else
+              echo "Download the \`cdk-size-baseline\` artifact below, replace"
+              echo "\`firmware/size-baseline.json\` with it, and commit. The diff:"
+              echo
+              echo '```diff'
+              git --no-pager diff -- firmware/size-baseline.json | head -c 60000
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: upload the refreshed baseline
+        # Always: on a no-change dispatch the artifact is still the proof that
+        # CI measured and agreed, which is a different answer from "did not run".
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cdk-size-baseline
+          path: firmware/size-baseline.json
+          if-no-files-found: error

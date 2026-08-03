@@ -7,6 +7,10 @@
 | [`scripts/build-nrf5340dk.sh`](build-nrf5340dk.sh.md) | build-nrf5340dk.sh {build\|rebuild\|flash\|flash-erase\|build-flash} — build the |
 | [`scripts/cdk-dfu.sh`](cdk-dfu.sh.md) | cdk-dfu.sh — push a signed image to the DWM3001CDK over MCUboot serial recovery. |
 | [`scripts/cdk-rtt-elf-check.sh`](cdk-rtt-elf-check.sh.md) | Refuse to attach RTT with an ELF the board is not running. |
+| [`scripts/cdk-size-baseline.py`](cdk-size-baseline.md) | cdk-size-baseline.py — turn a size report into the committed baseline. |
+| [`scripts/cdk-size-compare.py`](cdk-size-compare.md) | cdk-size-compare.py — head against the recorded baseline, as a gate. |
+| [`scripts/cdk-size-notify.py`](cdk-size-notify.md) | cdk-size-notify.py — say what a change cost the CDK image, in Discord. |
+| [`scripts/cdk-size.py`](cdk-size.md) | cdk-size.py — what the DWM3001CDK image costs, as a machine-readable record. |
 | [`scripts/check-approtect.sh`](check-approtect.sh.md) | check-approtect.sh — refuse to ship an image that locks APPROTECT. |
 | [`scripts/check-signing-key.sh`](check-signing-key.sh.md) | check-signing-key.sh — refuse to build a bootloader that anybody can sign for. |
 | [`scripts/check-uwb-seam.sh`](check-uwb-seam.sh.md) | check-uwb-seam.sh — keep the CCC STS seam impossible to bypass. |

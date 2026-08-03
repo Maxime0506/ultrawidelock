@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""cdk-size-baseline.py — turn a size report into the committed baseline.
+
+    scripts/cdk-size-baseline.py --from build/cdk-matter/size-report.json \
+                                 --out firmware/size-baseline.json
+    make cdk-size-baseline
+
+Two things happen here and both matter.
+
+VOLATILE FIELDS ARE DROPPED. A timestamp and a build directory change on every
+run, so carrying them would make the committed file churn on every refresh and
+bury the numbers that actually moved in a diff nobody reads. The commit is kept:
+it is what makes the record auditable.
+
+THE GATE SETTINGS SURVIVE A REFRESH. Floor and cap are a decision about how much
+headroom this board must keep, not a measurement, so re-recording the numbers
+must not quietly reset them -- which is exactly how a floor ratchets down to
+meet whatever the image happens to weigh today. They are only ever changed by
+editing the file or passing them here explicitly.
+"""
+
+import argparse
+import importlib.util
+import json
+import os
+import sys
+
+VOLATILE = ("generated", "build_dir")
+
+# THE CONFIGURATION THE GATE TRACKS is the one that ships: SMP=1 RELEASE=1 with
+# LTO on, which is what `make release` builds (mk/cdk.mk:564) and what `make
+# fota` pushes over Bluetooth. That image is the one that has to fit a board in
+# somebody's door, so it is the one whose headroom is worth blocking a merge
+# over. Bare `make build` -- the debug image, 8 KB of RTT ring and no mcumgr --
+# is recorded too, because it is what a contributor measures locally, but it is
+# a different build with a different budget and is never compared to this one.
+PRIMARY = "thread+release+smp+lto"
+
+# Shared with the comparator rather than duplicated: the two must agree on what
+# names a configuration, or a baseline gets written under a key nothing reads.
+_spec = importlib.util.spec_from_file_location(
+    "cdk_size_compare",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "cdk-size-compare.py"),
+)
+_cmp = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_cmp)
+config_key = _cmp.config_key
+
+# Defaults for a baseline that has none yet. Deliberately not derived from the
+# measurement: a floor computed from the current image is not a floor, it is a
+# restatement, and it would ratchet down every time someone spent headroom.
+#
+# 4,096 B of free RAM is one page and roughly two thread stacks' worth of slack
+# on this image; below that a walk-up unlock is one unlucky allocation from
+# failing. 2,048 B per pull request is about a quarter of the remaining RAM
+# headroom, which is large enough not to trip on ordinary work and small enough
+# that spending the rest takes a conversation.
+#
+# The caps are sized as a share of what is left rather than picked round, and on
+# the shipping image the binding region is FLASH (16,356 B free) and not RAM
+# (9,836 B free) -- the reverse of the debug build, because the 8 KB RTT ring
+# RELEASE gives up is RAM. An 8,192 B flash cap would have let one pull request
+# spend half the remaining flash, so it is 4,096 B: about a quarter of the
+# headroom, matching what 2,048 B is to RAM.
+DEFAULT_GATE = {
+    "ram_free_floor": 4096,
+    "flash_free_floor": 8192,
+    "ram_delta_cap": 2048,
+    "flash_delta_cap": 4096,
+}
+
+
+def main():
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(here)
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--from", dest="src", required=True)
+    ap.add_argument("--out", default=os.path.join(root, "firmware", "size-baseline.json"))
+    ap.add_argument(
+        "--name",
+        help="which configuration this records (default: derived from the overlay set)",
+    )
+    ap.add_argument("--ram-free-floor", type=int)
+    ap.add_argument("--flash-free-floor", type=int)
+    ap.add_argument("--ram-delta-cap", type=int)
+    ap.add_argument("--flash-delta-cap", type=int)
+    args = ap.parse_args()
+
+    if not os.path.isfile(args.src):
+        sys.stderr.write(f"\n  no report at {args.src}  ·  run `make cdk-size` first\n\n")
+        return 2
+    with open(args.src, "r", errors="replace") as fh:
+        report = json.load(fh)
+
+    # One file, one entry per configuration. Recording the shipping image must
+    # not delete the record of the debug one, and vice versa: they are different
+    # builds with different budgets, and each is only ever compared to itself.
+    doc = {"schema": 2, "primary": PRIMARY, "baselines": {}}
+    if os.path.isfile(args.out):
+        with open(args.out, "r", errors="replace") as fh:
+            old = json.load(fh)
+        if isinstance(old.get("baselines"), dict):
+            doc = old
+            doc.setdefault("primary", PRIMARY)
+        elif old.get("config"):
+            # Migrate a single-configuration file rather than dropping it.
+            doc["baselines"][config_key(old.get("config"))] = old
+    doc["schema"] = 2
+
+    key = args.name or config_key(report.get("config"))
+
+    gate = dict(DEFAULT_GATE)
+    gate.update(doc["baselines"].get(key, {}).get("gate", {}))
+    for field in DEFAULT_GATE:
+        override = getattr(args, field, None)
+        if override is not None:
+            gate[field] = override
+
+    for field in VOLATILE:
+        report.pop(field, None)
+    report["gate"] = gate
+
+    ram = report.get("regions", {}).get("RAM", {})
+    if ram and ram.get("free", 0) < gate["ram_free_floor"]:
+        sys.stderr.write(
+            f"\n  refusing to record a baseline that is already below its own floor:\n"
+            f"      {ram['free']:,} B of RAM free against a {gate['ram_free_floor']:,} B floor.\n"
+            "      Recording this would make the gate pass by lowering the bar to meet the\n"
+            "      image, which is the one failure mode a baseline exists to prevent. Free\n"
+            "      RAM first, or change the floor deliberately and say why in the commit.\n\n"
+        )
+        return 1
+
+    doc["baselines"][key] = report
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+    with open(args.out, "w") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=False)
+        fh.write("\n")
+
+    regions = report.get("regions", {})
+    sys.stderr.write(f"\n  baseline written  ·  {args.out}\n")
+    sys.stderr.write(f"      configuration  {key}")
+    sys.stderr.write("  (the one CI gates)\n" if key == PRIMARY else "\n")
+    others = sorted(k for k in doc["baselines"] if k != key)
+    if others:
+        sys.stderr.write(f"      also recorded  {', '.join(others)}\n")
+    for name in ("RAM", "FLASH"):
+        r = regions.get(name)
+        if r:
+            sys.stderr.write(
+                f"      {name:<6} {r['used']:>9,} used   {r['free']:>8,} free   {r['pct']}%\n"
+            )
+    sys.stderr.write(
+        f"      floor  RAM {gate['ram_free_floor']:,} B free, FLASH {gate['flash_free_floor']:,} B free\n"
+        f"      cap    RAM +{gate['ram_delta_cap']:,} B, FLASH +{gate['flash_delta_cap']:,} B\n\n"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

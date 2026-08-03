@@ -1,0 +1,95 @@
+# Post the CDK size result to Discord.
+#
+# SEPARATE FROM cdk-size.yml, and that separation is the security design rather
+# than tidiness. A pull request from a fork gets a read-only token and NO access
+# to repository secrets -- deliberately, because the job runs the fork's code. So
+# a webhook post inside that job would silently do nothing for exactly the
+# contributors whose changes are most worth reporting.
+#
+# `workflow_run` fires after cdk-size finishes, in the context of the BASE
+# repository: it has the secrets, and -- the part that matters -- actions/checkout
+# here checks out the default branch, never the pull request. So the code doing
+# the posting is always this repository's code, and the only thing crossing the
+# boundary is the size report, as data.
+#
+# NOT pull_request_target, which would hand a writable token and the secrets to a
+# workflow running against a fork's tree. That is the mistake this shape exists
+# to avoid.
+#
+# THE REPORT IS STILL UNTRUSTED. A fork controls every byte of it, including the
+# symbol names that end up in the message. scripts/cdk-size-notify.py strips
+# markdown, caps lengths and disables mentions; nothing from the artifact is ever
+# interpolated into a shell command or a workflow expression.
+name: cdk-size-notify
+
+# zizmor flags workflow_run as fundamentally insecure, and it is right that the
+# trigger is privileged: it runs against the base repository with secrets and a
+# token, after a workflow that may have run a fork's code. Accepted here rather
+# than silenced blindly, on three specific properties that hold in this file:
+#
+#   1. NO PULL REQUEST CODE IS CHECKED OUT OR RUN. The checkout below pins
+#      `ref: default_branch` explicitly. Every line executed is this
+#      repository's, at the reviewed revision.
+#   2. THE ONLY THING CROSSING THE BOUNDARY IS ONE JSON FILE, consumed as data
+#      by a python script and never interpolated into a shell command or a
+#      workflow expression. It is treated as hostile throughout
+#      (scripts/cdk-size-notify.py), because on a fork pull request it is.
+#   3. THE TOKEN IS READ-ONLY. `contents: read` and `actions: read`, no write
+#      scope anywhere, so the worst outcome of a crafted report is a wrong
+#      message in a Discord channel -- not a repository change.
+#
+# The alternative the audit warns about is pull_request_target, which would run
+# a fork's tree WITH the secrets. That is the mistake this shape avoids, so
+# taking the finding at face value would push this toward the more dangerous
+# design rather than away from it.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: [cdk-size]
+    types: [completed]
+
+# Reads the repository, and reads the triggering run to fetch its artifact.
+# `actions: read` is what download-artifact needs to reach across runs; nothing
+# here writes anything.
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # The default branch, NOT the pull request: this is the trusted half.
+        # Explicit rather than relied upon, because the difference between this
+        # and the PR head is the whole security argument above.
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: fetch the size report from the run that triggered this
+        id: art
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: cdk-size-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: incoming
+
+      - name: post it
+        # Skipped rather than failed when there is no artifact: the gate can fail
+        # before it ever produces one (a build that did not compile), and a red X
+        # on the notifier would then be a second alarm for one problem.
+        if: steps.art.outcome == 'success'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          # Raise this to stay quiet about small movements. 1 means "say
+          # something whenever any region moved at all"; a passing run with both
+          # regions unchanged is silent at any setting.
+          CDK_SIZE_NOTIFY_MIN: "1"
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          python3 scripts/cdk-size-notify.py \
+            --current incoming/size-report.json \
+            --run-url "$RUN_URL"

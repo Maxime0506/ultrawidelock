@@ -106,7 +106,7 @@ tag does not verify.
 **called by** `matter_crypto_open`  ·  **calls** `ccm_ctr`, `ccm_mac`, `ccm_tag`, `tag_equal`
 
 ### `int matter_crypto_seal(const struct matter_msg_header *h, const uint8_t key[MATTER_KEY_LEN], uint64_t sender_node_id, const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)`
-`modules/woz_matter/src/matter_crypto.c:393`
+`modules/woz_matter/src/matter_crypto.c:397`
 
 Encrypt and authenticate a Matter message: encode header into output buffer, build nonce from
 security flags and counter, and encrypt payload with AAD set to the encoded header bytes. Caller
@@ -116,7 +116,7 @@ on success or encoding error.
 **calls** `matter_aead_encrypt`, `matter_build_nonce`
 
 ### `int matter_crypto_open(const uint8_t *buf, size_t len, const uint8_t key[MATTER_KEY_LEN], uint64_t sender_node_id, struct matter_msg_header *h, uint8_t *pt_out, size_t pt_cap, size_t *pt_len)`
-`modules/woz_matter/src/matter_crypto.c:440`
+`modules/woz_matter/src/matter_crypto.c:444`
 
 Decrypt and verify a Matter message: decode header, extract ciphertext and authentication tag,
 build nonce from security flags and counter, and decrypt with AAD set to the message header.
