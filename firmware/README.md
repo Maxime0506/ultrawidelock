@@ -51,18 +51,18 @@ which is what mints the Aliro credential.
 
 ### The setup code comes from the build, not the board
 
-The first and third commands each end with the line Apple Home is about to ask
-you for:
+`make build` and `make monitor` each end with the line Apple Home is about to
+ask you for:
 
 ```
-  setup code  3497-011-2332   ·  discriminator 0x0F00, verifier checked
+  setup code  3650-503-5696   ·  discriminator 0x0F00, verifier checked
 ```
 
 Add the accessory in Home with "More options…" → "Enter Code"; there is no QR
 label on this board.
 
 Nothing on the device can print that number. A Matter device stores the SPAKE2+
-**verifier**, never the passcode — that is the point of the augmented form, and
+**verifier**, never the passcode, which is the point of the augmented form, and
 a verifier cannot be run backwards. So the code is derived on the host from the
 `.config` the build just produced, and "verifier checked" is not decoration:
 `scripts/spake2p_verifier.py --from-config` re-derives the verifier from
@@ -75,9 +75,22 @@ the passcode never enters the image; flash is byte-identical with and without
 it. Change it and the verifier together, from one run of
 `scripts/spake2p_verifier.py --passcode <p>`.
 
-The defaults are CHIP's test pairing (discriminator `0xF00`, passcode
-20202021, test vendor `0xFFF1`), so Home pairs out of the box and marks the
-accessory uncertified. A real product replaces all three.
+The passcode, salt and verifier used to be CHIP's published test pairing
+(passcode 20202021, and its verifier is printed in the CHIP source). They are
+now this project's own, generated once with the script above, at 20,000 PBKDF2
+iterations rather than the 1,000 floor. That removes the case where a stranger
+commissions the lock knowing nothing but the SDK.
+
+**It is still one pairing for every board built from this tree**, and a binary
+release has to publish its setup code, because nothing on the device can print
+one. The exposure is the commissioning window: the board advertises
+commissionable only while it has no identity, or while a window is open. Per-board
+codes need per-board provisioning data, which this build does not have. If the
+lock guards anything, generate your own and rebuild.
+
+The discriminator (`0xF00`) and vendor ID (`0xFFF1`) are still CHIP's test
+values, so Home pairs out of the box and marks the accessory uncertified. A real
+product needs an allocated vendor ID.
 
 ### The reader-only build
 

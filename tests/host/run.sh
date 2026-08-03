@@ -105,6 +105,128 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 	-o "$ROOT/build/host_test_cdk"
 "$ROOT/build/host_test_cdk"
 
+# 5) Delta update, both halves, over RAM flash partitions that enforce the nRF
+#    driver's word and page alignment rules (dfufake/), the recording PSA
+#    (psafake/) and a scripted detools. Its own binary because dfufake's
+#    <zephyr/storage/flash_map.h> and <pm_config.h> exist nowhere else, and
+#    because the SMP half needs the zcbor/mcumgr doubles in smpfake/.
+#    CONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR is on here so the explicit "rc" key
+#    a legacy client expects is compiled and checked.
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags \
+	-DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
+	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
+	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
+	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
+	-I"$HOSTD/psafake" \
+	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
+	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
+	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c" \
+	-o "$OUT/host_test_dfu"
+"$OUT/host_test_dfu"
+
+# 6) The woz_nfc transport seam (C++), over fake Zephyr SPI/GPIO/kernel and a
+#    recording Aliro stack (nfcfake/). pn532.c and pn532_apdu.c link in for
+#    real, so the frames really are encoded and parsed by the shipping codec.
+#    transport_none.cpp defines the same five symbols as transport_pn532.cpp,
+#    so it is renamed on its own compile step with -DWozNfc=WozNfcNone -- a
+#    compile flag, not a source edit, exactly as (2) renames the two crypto
+#    backends.
+NFC_DEF=(-DCONFIG_WOZ_NFC_LOG_LEVEL=3 -DCONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE=2048
+	-DCONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS=200
+	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000)
+NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
+	-I"$ROOT/modules/woz_nfc/src")
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/src" \
+	-c "$ROOT/modules/woz_nfc/src/pn532.c" -o "$OUT/pn532_nfc.o"
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/src" \
+	-c "$ROOT/modules/woz_nfc/src/pn532_apdu.c" -o "$OUT/pn532_apdu_nfc.o"
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	-c "$ROOT/modules/woz_nfc/src/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	-c "$ROOT/modules/woz_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags -DWozNfc=WozNfcNone \
+	"${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	-c "$ROOT/modules/woz_nfc/src/transport_none.cpp" -o "$OUT/transport_none.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_INC[@]}" \
+	-c "$HOSTD/nfcfake/nfcfake.cpp" -o "$OUT/nfcfake.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	-c "$HOSTD/test_nfc_transport.cpp" -o "$OUT/test_nfc_transport.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
+	"$OUT/test_nfc_transport.o" "$OUT/nfcfake.o" "$OUT/test_harness_nfc.o" \
+	"$OUT/transport_none.o" "$OUT/transport_pn532.o" "$OUT/pn532_bus_spi.o" \
+	"$OUT/pn532_nfc.o" "$OUT/pn532_apdu_nfc.o" \
+	-o "$OUT/host_test_nfc"
+"$OUT/host_test_nfc"
+
+# 7) uwb_seam.h's engine-less tier. Compiled WITHOUT CONFIG_WOZ_ALIRO, alone:
+#    that half of the header is inline bodies, and a header compiled two ways
+#    inside one binary maps the same lines twice. See the file for the rest.
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags \
+	-I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
+	-I"$SRC/driver" -I"$ROOT/deps/dw3000/platform" \
+	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" \
+	-o "$OUT/host_test_seam"
+"$OUT/host_test_seam"
+
+# 8) The Aliro source stack (C++): aliro_stack.cpp and session.cpp over the
+#    Nordic Interface API as recording doubles (stackfake/). The protocol
+#    codecs beside them are the shipping sources, linked in whole, so every
+#    APDU and BLE frame here is built and parsed for real -- only the crypto
+#    and the application callbacks are stand-ins. Its own binary because
+#    stackfake's <aliro/*.h> are a different Aliro surface from the one
+#    ecpfake and nfcfake carry, and all three would collide.
+STK="$ROOT/modules/woz_aliro_stack/src"
+STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
+	-DCONFIG_DOOR_LOCK_EXPEDITED_FAST_PHASE=1 -DCONFIG_DOOR_LOCK_STEP_UP_PHASE=1
+	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_WOZ_ALIRO_APDU_BUFFER_SIZE=1024
+	-DCONFIG_MAX_NUMBER_OF_KPERSISTENT=4
+	-DCONFIG_DOOR_LOCK_STORAGE_MAX_STORED_ACCESS_DOCUMENTS=2)
+STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol")
+STK_OBJS=()
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_stack.o"
+for stk_src in advertising_core protocol/ble_message protocol/ble_timeout protocol/tlv \
+	protocol/nfc_select protocol/nfc_auth protocol/nfc_step_up protocol/access_document; do
+	stk_obj="$OUT/stk_$(basename "$stk_src").o"
+	# shellcheck disable=SC2086
+	"${CC:-cc}" -std=c11 -O1 -w $san_flags "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" \
+		-c "$STK/$stk_src.c" -o "$stk_obj"
+	STK_OBJS+=("$stk_obj")
+done
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
+	-c "$STK/aliro_stack.cpp" -o "$OUT/stk_aliro_stack.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
+	-c "$STK/session.cpp" -o "$OUT/stk_session.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
+	-c "$HOSTD/stackfake/stackfake.cpp" -o "$OUT/stackfake.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
+	-c "$HOSTD/test_aliro_stack.cpp" -o "$OUT/test_aliro_stack.o"
+# shellcheck disable=SC2086
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
+	"$OUT/test_aliro_stack.o" "$OUT/stackfake.o" "$OUT/test_harness_stack.o" \
+	"$OUT/stk_aliro_stack.o" "$OUT/stk_session.o" "${STK_OBJS[@]}" \
+	-o "$OUT/host_test_stack"
+"$OUT/host_test_stack"
+
 # Host-side tooling tests (pure-stdlib Python; no toolchain involved).
 # test_flash_html needs the python-markdown package and skips cleanly without.
 # Each suite is folded to one summary row matching the side binaries above;
