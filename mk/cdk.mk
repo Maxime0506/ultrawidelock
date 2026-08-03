@@ -24,6 +24,18 @@ CDK_SELFTEST_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-selftest
 # flash targets write. Same directory by default, which is the whole point.
 CDK_RTT_BUILD      ?= $(CDK_BUILD)
 
+# EVERY BUILD DIRECTORY IS MADE ABSOLUTE, and that is a bug fix rather than
+# tidiness. west runs with the WORKSPACE as its working directory while every
+# other consumer here resolves against the repo root, so a relative override
+# like CDK_BUILD=build/foo built into workspace/build/foo and then failed at the
+# setup-code step with "cannot read .../.config" -- a confusing error after a
+# build that had actually succeeded, somewhere else. abspath resolves against
+# make's cwd, the repo root, and is a no-op on an already-absolute path.
+CDK_BUILD          := $(abspath $(CDK_BUILD))
+CDK_READER_BUILD   := $(abspath $(CDK_READER_BUILD))
+CDK_SELFTEST_BUILD := $(abspath $(CDK_SELFTEST_BUILD))
+CDK_RTT_BUILD      := $(abspath $(CDK_RTT_BUILD))
+
 # PRISTINE=1 forces a from-scratch build. `-p auto` re-runs CMake when the board
 # or the app directory changes, and NOT when the -D flags do, so switching an
 # existing build dir between the reader and the Matter build needs this.
@@ -174,7 +186,7 @@ endif
 # Every recipe runs from ./workspace so west finds its manifest.
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
-.PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
+.PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key release \
         dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-push ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
@@ -287,8 +299,9 @@ dfu-key:
 ##   and rebooting your lock. The window lasts five minutes.
 ##
 ##   Two full slots want 844 KB of a 512 KB part, so what travels is a DELTA:
-##   about 7.6 KB between adjacent builds, against a 24.5 KB budget. The board
-##   reboots into MCUboot, which applies it in roughly 20-30 seconds.
+##   about 7.6 KB between adjacent builds, against a 32 KB budget (the 40 KB
+##   patch_staging partition less its two control pages). The board reboots into
+##   MCUboot, which applies it in roughly 20-30 seconds.
 ##
 ##   Needs to know what the board is running, which it reads from
 ##   $(CDK_DEPLOYED) -- written by `make flash` and by a successful `make dfu`.
@@ -321,6 +334,7 @@ dfu:
 ##   Options: CDK_FOTA_BUILD=<dir>  CDK_DEPLOYED=<hex>  FOTA_VERSION=<x.y.z>
 FOTA_VERSION   ?= 1.0.0
 CDK_FOTA_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-smp-img
+CDK_FOTA_BUILD := $(abspath $(CDK_FOTA_BUILD))
 CDK_FOTA       := $(CDK_BUILD)/openaliro-fota.bin
 
 fota:
@@ -443,6 +457,82 @@ ota-window:
 	if [ -z "$$addr" ]; then printf '  cannot find s_open in %s\n' "$$elf" >&2; exit 1; fi; \
 	printf '  opening the update window by writing s_open at 0x%s\n' "$$addr"; \
 	probe-rs write --chip $(CDK_CHIP) b8 "0x$$addr" 1
+
+## release: build and bundle the image to publish  ·  needs RELEASE_KEY=<path>
+##   One command, start to finish: a pristine SMP+RELEASE build signed with the
+##   OFFLINE release key, assembled into a folder with the flashing script, the
+##   guide and a SHA256SUMS.txt, ready to attach to a GitHub release.
+##
+##   RELEASE_KEY IS NOT OPTIONAL AND HAS NO DEFAULT. It must not be this
+##   checkout's dev key either, and the target refuses if it is. MCUboot embeds
+##   the public half permanently, so this key decides what every board a
+##   stranger flashes from the release will accept over the air, forever. It
+##   belongs wherever your other production secrets live, offline, and never in
+##   a CI secret store -- see firmware/keys/README.md.
+##
+##   SMP=1 RELEASE=1 are set here rather than inherited, like `fota`: without
+##   SMP a published board cannot be updated from a phone at all, and RELEASE is
+##   what leaves the RAM to run it.
+##   Options: RELEASE_KEY=<path>  CDK_RELEASE_BUILD=<dir>  CDK_RELEASE_OUT=<dir>
+CDK_RELEASE_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-release
+CDK_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-dwm3001cdk
+CDK_RELEASE_BUILD := $(abspath $(CDK_RELEASE_BUILD))
+CDK_RELEASE_OUT   := $(abspath $(CDK_RELEASE_OUT))
+CDK_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
+
+release:
+	@if [ -z '$(RELEASE_KEY)' ]; then \
+	  printf '  RELEASE_KEY is not set.\n' >&2; \
+	  printf '  The release image is signed with your OFFLINE key, and there is no default:\n' >&2; \
+	  printf '  MCUboot embeds its public half permanently, so this decides what every board\n' >&2; \
+	  printf '  flashed from this release will ever accept over the air.\n\n' >&2; \
+	  printf '    make release RELEASE_KEY=/path/to/openaliro-release.pem\n\n' >&2; \
+	  printf '  No key yet?  openssl ecparam -name prime256v1 -genkey -noout -out <path>\n' >&2; \
+	  printf '  Then back it up. Losing it means no released board can be updated again.\n' >&2; \
+	  exit 1; \
+	fi
+	@test -f '$(RELEASE_KEY)' || { printf '  no such key: %s\n' '$(RELEASE_KEY)' >&2; exit 1; }
+	@if [ "$$(cd $(dir $(RELEASE_KEY)) 2>/dev/null && pwd)/$(notdir $(RELEASE_KEY))" = '$(CDK_KEY)' ]; then \
+	  printf '  that is this checkout dev key (%s).\n' '$(CDK_KEY)' >&2; \
+	  printf '  It is gitignored, per-clone and regenerated freely, so signing a published\n' >&2; \
+	  printf '  image with it strands every board that installs one. Use the offline key.\n' >&2; \
+	  exit 1; \
+	fi
+	@$(MAKE) --no-print-directory build PRISTINE=1 SMP=1 RELEASE=1 \
+	  CDK_BUILD='$(CDK_RELEASE_BUILD)' CDK_KEY='$(abspath $(RELEASE_KEY))'
+	@rm -rf '$(CDK_RELEASE_OUT)' && mkdir -p '$(CDK_RELEASE_OUT)'
+	@cp '$(CDK_RELEASE_BUILD)/merged.hex' '$(CDK_RELEASE_OUT)/'
+	@cp $(REPO_ROOT)/release/dwm3001cdk/FLASH.md \
+	    $(REPO_ROOT)/release/dwm3001cdk/FLASH.html \
+	    $(REPO_ROOT)/release/dwm3001cdk/flash.sh '$(CDK_RELEASE_OUT)/'
+	@chmod +x '$(CDK_RELEASE_OUT)/flash.sh'
+	@code=$$(python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
+	    --from-config '$(CDK_RELEASE_BUILD)/$(CDK_IMAGE)/zephyr/.config' \
+	  | awk '/setup code/ { print $$3 }'); \
+	  test -n "$$code" || { printf '  could not read the setup code back\n' >&2; exit 1; }; \
+	  { printf 'openaliro %s\n' '$(CDK_RELEASE_VER)'; \
+	    printf 'commit     %s\n' "$$(git -C $(REPO_ROOT) rev-parse HEAD 2>/dev/null || echo unknown)"; \
+	    printf 'built      %s\n' "$$(date -u +%Y-%m-%dT%H:%MZ)"; \
+	    printf 'board      DWM3001CDK (decawave_dwm3001cdk, nRF52833)\n'; \
+	    printf '\nSETUP CODE %s\n' "$$code"; \
+	    printf 'Type this into Apple Home. There is no QR label on this board.\n'; \
+	  } > '$(CDK_RELEASE_OUT)/VERSION.txt'
+	@# sha256sum on Linux, shasum on macOS. The CI container has only the first
+	@# and a developer Mac only the second, and a release that silently shipped
+	@# no SHA256SUMS.txt would look identical to one that did.
+	@cd '$(CDK_RELEASE_OUT)' && \
+	  if command -v sha256sum >/dev/null 2>&1; then \
+	    sha256sum merged.hex flash.sh FLASH.md FLASH.html VERSION.txt > SHA256SUMS.txt; \
+	  else \
+	    shasum -a 256 merged.hex flash.sh FLASH.md FLASH.html VERSION.txt > SHA256SUMS.txt; \
+	  fi
+	@test -s '$(CDK_RELEASE_OUT)/SHA256SUMS.txt' || { printf '  no checksums written\n' >&2; exit 1; }
+	@printf '\n  bundle ready  ·  %s\n\n' '$(CDK_RELEASE_OUT)'
+	@ls -1 '$(CDK_RELEASE_OUT)' | sed 's/^/    /'
+	@printf '\n'
+	@grep 'SETUP CODE' '$(CDK_RELEASE_OUT)/VERSION.txt' | sed 's/^/    /'
+	@printf '\n  Zip it and attach it to the release:\n'
+	@printf '    (cd %s && zip -qr ../openaliro-dwm3001cdk.zip openaliro-dwm3001cdk)\n\n' '$(dir $(CDK_RELEASE_OUT))'
 
 ## ota-deps: create the host virtualenv the update tooling runs in
 ota-deps: $(CDK_OTA_PY)
