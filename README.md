@@ -178,10 +178,16 @@ DWM3000EVB or DW3110 plus an X-NUCLEO-NFC12A1 or ST25R300, and the wiring in
 
 ```bash
 make bootstrap        # the same one-time setup
+make dfu-key          # the same key as the CDK, skip it if you already ran it
 make nrf-build        # -> build/nrf5340dk/merged.hex
 make nrf-flash-erase  # the first flash
 make nrf-term         # serial console
 ```
+
+This board is signed for the same reason the CDK is: MCUboot plus Matter OTA
+(`DFU=1`) is its default too, and the build refuses to hand the bootloader a key
+this checkout does not own. One key covers both boards. `DFU=0` builds the older
+no-bootloader bench layout, which needs no key.
 
 The in-tree Aliro stack is the default; `ALIRO_SOURCE=0` selects the legacy
 Nordic binary, for regression comparison only. The Nordic-binary path is the one
