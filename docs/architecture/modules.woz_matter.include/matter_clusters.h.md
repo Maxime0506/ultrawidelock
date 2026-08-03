@@ -22,9 +22,19 @@ assert on the encoded bytes.
 ## API
 
 ### `struct matter_user`
-`modules/woz_matter/include/matter_clusters.h:230`
+`modules/woz_matter/include/matter_clusters.h:261`
 
 One user slot. Reported by GetUser, filled by SetUser.
+
+### `struct matter_admin_hooks`
+`modules/woz_matter/include/matter_clusters.h:747`
+
+What the application must do when a controller opens a commissioning window.
+The cluster decodes and validates; everything it would then have to TOUCH --
+the SPAKE2+ verifier the PASE responder uses, the BLE advertising payload,
+the expiry timer -- belongs to the port. So this module stays free of both
+Bluetooth and Zephyr, which is what lets tests/host compile it.
+All three return a MATTER_ADMIN_STATUS_* code, or 0 for success.
 
 <details><summary>Undocumented (1)</summary>
 

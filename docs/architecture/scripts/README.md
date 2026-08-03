@@ -25,4 +25,7 @@
 | [`scripts/twin-suite.sh`](twin-suite.sh.md) | The web-twin suite for the umbrella runner (make check): the constant-drift |
 | [`scripts/twin-wasm.sh`](twin-wasm.sh.md) | Build the web twin's firmware: modules/woz_uwb + the tests/host shim compiled |
 | [`scripts/verify.sh`](verify.sh.md) | Pre-push sweep: every CI gate that a host can run, in one shot. |
+| [`scripts/woz_patch.py`](woz_patch.md) | Build a signed delta patch for the DWM3001CDK's over-the-air update path. |
+| [`scripts/woz_push.py`](woz_push.md) | Push a signed delta patch to a DWM3001CDK over Bluetooth. |
+| [`scripts/woz_smp.py`](woz_smp.md) | Push a delta patch to the board over SMP, the way a phone would. |
 | [`scripts/ws-seed.sh`](ws-seed.sh.md) | ws-seed.sh — give this git worktree its own NCS workspace, cheaply. |

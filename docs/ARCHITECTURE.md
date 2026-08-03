@@ -15,6 +15,7 @@ flowchart LR
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_aliro.src --> modules.woz_uwb.src.facade
   modules.woz_aliro_stack.src --> modules.woz_aliro_stack.src.protocol
+  modules.woz_dfu.src --> modules.woz_dfu.include
   modules.woz_matter.src --> modules.woz_aliro.src
   modules.woz_matter.src --> modules.woz_matter.include
   modules.woz_nfc.src --> modules.woz_nfc.include.woz_nfc
@@ -1199,6 +1200,29 @@ modules/woz_matter, which knows nothing about BLE.
 
 ### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
 
+### [`firmware/src/dfu_ble_zephyr.c`](architecture/firmware.src/dfu_ble_zephyr.c.md)
+
+@file
+@brief The over-the-air update channel: a second L2CAP CoC, and the button
+that opens it.
+WHY NOT mcumgr. SMP over Bluetooth was built and measured first. It costs
+3,717 B of RAM on an image that had 7,448 B left, and its permission model
+defaults to demanding a paired, authenticated link whenever BT_SMP is on --
+which it is here, pulled in by L2CAP CoC. This reader must never ask a phone
+to pair, because the walk-up unlock depends on it not asking. Setting the
+permission to open instead hands an unauthenticated peer a write path into
+flash, and mcumgr's OS group would hand it an unauthenticated reset command
+as well. A lock anyone in radio range can reboot in a loop is a real attack.
+So the patch rides the CoC transport this board already has, on its own PSM,
+and authorization is a WINDOW rather than a handshake.
+WHY A WINDOW IS ENOUGH. The gate is a denial-of-service control, not an
+integrity one. The patch header is signed and the application checks it
+(modules/woz_dfu/src/dfu_receiver.c), and underneath that MCUboot re-verifies
+the P-256 signature of the patched RESULT before booting it. No peer can
+install code no matter what reaches this channel. What a closed channel
+prevents is a stranger spending the flash's erase cycles and the owner's
+uptime.
+
 ### [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md)
 
 @file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
@@ -1212,6 +1236,26 @@ rather than disappearing: matter_clusters.c calls it unconditionally, and a
 link error would be a worse way to learn that Thread was configured out.
 
 ### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
+
+### [`firmware/src/status_led.c`](architecture/firmware.src/status_led.c.md)
+
+@file
+@brief Show that the update window is open, on the board itself.
+The window is the entire authorization model for an update, and until now it
+was invisible. Three things open it -- SW2, Apple Home's "Turn On Pairing
+Mode", and the bench SWD write -- and none of them gave the board any way to
+say so. An owner who pressed the button could not tell whether the press had
+registered, and the five minutes could run out while they were still finding
+the phone. The only feedback was a log line on a debugger that a released
+board does not have attached.
+D10, the blue one, at 2 Hz. Blue because the other three are the DW3000's own
+colours by convention on this board (D13 is tx red / rx green) and a fourth
+red would read as a fault; 2 Hz because a slower heartbeat reads as "alive"
+rather than "waiting for you", which is the wrong message for something that
+expires.
+It follows the window rather than the button, so it is honest about the state
+that actually matters: it goes out when the window expires on its own, not
+when someone stops pressing.
 
 ### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
 
@@ -1403,6 +1447,95 @@ Aliro 1.0 / ISO 18013-5 NFC step-up message and APDU codecs.
 Minimal strict BER/DER-TLV reader for Aliro APDU payloads.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md), [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
+
+## `modules/woz_dfu/src/`
+
+### [`modules/woz_dfu/src/dfu_receiver.c`](architecture/modules.woz_dfu.src/dfu_receiver.c.md)
+
+@file
+@brief Application half of the delta update: receive, verify, stage, reboot.
+Never applies anything. The patch is written into `patch_staging` and the
+board is restarted; MCUboot does the work, because the application executes
+from the slot the patch rewrites (see src/dfu_applier.c).
+WHAT ARRIVES, in order, as one byte stream over whatever transport:
+0   32   struct woz_dfu_hdr
+32   64   ECDSA-P256 signature, raw r||s, over those 32 bytes
+96   ..   the patch
+The header is written to flash LAST, after the whole patch has arrived and
+its CRC has been checked. So a transfer that is cut off leaves a staging
+partition with no valid magic in it, and the next boot ignores it. There is
+no half-staged state that the bootloader can act on.
+THE SIGNATURE IS CHECKED HERE, NOT IN THE BOOTLOADER. This image already has
+PSA ECDSA-P256 linked for Aliro; MCUboot is the flash-starved one. And the
+floor sits under both: CONFIG_BOOT_VALIDATE_SLOT0 makes MCUboot re-verify
+the P-256 signature of the RESULT before booting it, so even a forged header
+cannot install code -- only destroy the installed image, which recovery
+catches.
+
+**depends on** [`modules/woz_dfu/include/woz_dfu.h`](architecture/modules.woz_dfu.include/woz_dfu.h.md), [`modules/woz_dfu/include/woz_dfu_rx.h`](architecture/modules.woz_dfu.include/woz_dfu_rx.h.md)
+
+### [`modules/woz_dfu/src/dfu_smp_img.c`](architecture/modules.woz_dfu.src/dfu_smp_img.c.md)
+
+@file
+@brief SMP image-management group, so a stock mcumgr client can push a delta.
+WHY THIS EXISTS INSTEAD OF ZEPHYR'S img_mgmt. Zephyr's implementation cannot
+be built here, and not for a reason a partition rename fixes:
+CONFIG_MCUMGR_GRP_IMG ... unsatisfied dependencies:
+IMG_MANAGER (=n), (!MCUBOOT_BOOTLOADER_MODE_SINGLE_APP) (=n)
+img_mgmt is gated OFF by single-slot mode itself. That mode is not incidental
+on this board -- it is the only reason MCUboot fits, because two slots want
+844 KB of a 512 KB part (firmware/pm_static.yml does the arithmetic). So the
+choice was to leave single-slot mode, which the flash forbids, or to serve
+group 1 ourselves. This is the second.
+It is a thin adapter, not a reimplementation: every byte still goes through
+woz_dfu_rx_upload(), so the signature check, the size limits, the CRC and the
+window gate are the same ones the native transport uses, in the same order.
+What is new here is only CBOR in and CBOR out.
+WHAT A CLIENT SEES. One image, one slot, active and confirmed, versioned and
+hashed from the running MCUboot header. Uploads are accepted and staged. It
+does NOT pretend to have a second slot, because there is no honest hash to
+report for one -- the staged bytes are a patch, and what they produce is not
+known until the bootloader has applied it.
+SO THE GUIDED "FIRMWARE UPGRADE" WIZARD IS NOT THE TARGET. That flow wants
+upload -> test -> reset -> reconnect -> confirm, and two things break it: the
+device never reports a pending second image to confirm, and the reboot after
+reset spends 17-31 s applying the patch, which outlasts the client's
+reconnect window. The supported path is the plain one, and it is three taps:
+1. Images -> Upload, choose the .woz patch      (this file, group 1 cmd 1)
+2. Device -> Reset                              (os_mgmt, group 0 cmd 5)
+3. wait ~30 s while MCUboot applies it          (src/dfu_applier.c)
+
+**depends on** [`modules/woz_dfu/include/woz_dfu.h`](architecture/modules.woz_dfu.include/woz_dfu.h.md), [`modules/woz_dfu/include/woz_dfu_rx.h`](architecture/modules.woz_dfu.include/woz_dfu_rx.h.md)
+
+### [`modules/woz_dfu/src/dfu_applier.c`](architecture/modules.woz_dfu.src/dfu_applier.c.md)
+
+@file
+@brief Applies a staged delta patch onto the primary slot, from inside
+MCUboot.
+Runs as a SYS_INIT at APPLICATION level. That level is chosen, not
+convenient: it is after the flash driver has initialised (POST_KERNEL) and
+before MCUboot's own main(), which is the only window in which the primary
+slot can be rewritten. It also means NOT ONE LINE of fetched upstream MCUboot
+is edited -- the bootloader loads this the same way it loads every other
+Zephyr module.
+Why this cannot live in the application: the application executes from the
+primary slot. Rewriting it would be rewriting the code doing the rewriting.
+On a normal boot this costs one word read: the header magic does not match
+and the function returns immediately.
+SAFETY. Three things stand between a bad patch and a dead lock, and only the
+third is load-bearing:
+1. the header carries a CRC of itself, written last, so a torn write fails
+2. the patch and the from-image are CRC-checked before a byte is erased
+3. MCUboot re-verifies the P-256 signature of the RESULT before booting it
+(CONFIG_BOOT_VALIDATE_SLOT0=y), and drops to serial recovery if it
+fails (CONFIG_BOOT_SERIAL_NO_APPLICATION=y)
+So the worst a corrupt or forged patch achieves is destroying the installed
+image, which is recoverable, rather than installing code, which is not.
+POWER CUTS ARE EXPECTED, not exceptional: this rewrites most of 442 KB and
+takes seconds. detools' step counter is what makes that survivable -- see
+step_set()/step_get() below.
+
+**depends on** [`modules/woz_dfu/include/woz_dfu.h`](architecture/modules.woz_dfu.include/woz_dfu.h.md)
 
 ## `ports/esp32/apps/reader/main/`
 
@@ -2779,6 +2912,36 @@ workqueue, matching the upstream RFAL transport's threading.
 
 **used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
 
+## `modules/woz_dfu/include/`
+
+### [`modules/woz_dfu/include/woz_dfu.h`](architecture/modules.woz_dfu.include/woz_dfu.h.md)
+
+@file
+@brief The on-flash contract between the application and the bootloader for
+a delta firmware update.
+The application receives a patch over Bluetooth and writes it into the
+`patch_staging` partition. MCUboot reads it on the next boot and applies it
+onto the primary slot. Nothing else connects the two, so this header IS the
+interface: a change here that is not made on both sides produces a board
+that stages an update and then silently declines to install it.
+Plain C11 with no Zephyr dependency, so the host tests and the patch builder
+can include it and agree on the layout by construction rather than by
+transcription.
+
+**used by** [`modules/woz_dfu/src/dfu_applier.c`](architecture/modules.woz_dfu.src/dfu_applier.c.md), [`modules/woz_dfu/src/dfu_receiver.c`](architecture/modules.woz_dfu.src/dfu_receiver.c.md), [`modules/woz_dfu/src/dfu_smp_img.c`](architecture/modules.woz_dfu.src/dfu_smp_img.c.md)
+
+### [`modules/woz_dfu/include/woz_dfu_rx.h`](architecture/modules.woz_dfu.include/woz_dfu_rx.h.md)
+
+@file
+@brief Receives a delta patch into the staging partition, application side.
+Transport-independent on purpose. The DWM3001CDK feeds this from a second
+L2CAP CoC beside the Aliro one, but nothing here knows that -- it takes
+frames and returns replies, so the host tests can drive it without a radio.
+The bootloader half is @ref woz_dfu.h. This side never applies anything: it
+writes bytes, checks a signature, and reboots.
+
+**used by** [`modules/woz_dfu/src/dfu_receiver.c`](architecture/modules.woz_dfu.src/dfu_receiver.c.md), [`modules/woz_dfu/src/dfu_smp_img.c`](architecture/modules.woz_dfu.src/dfu_smp_img.c.md)
+
 ## `integration/homeassistant/scripts/`
 
 ### [`integration/homeassistant/scripts/ha-setup.sh`](architecture/integration.homeassistant.scripts/ha-setup.sh.md)
@@ -2802,6 +2965,21 @@ Build a local OpenAliro custom-component archive without publishing it.
 
 NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
 Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
+
+## `modules/woz_dfu/scripts/`
+
+### [`modules/woz_dfu/scripts/emit_pubkey.py`](architecture/modules.woz_dfu.scripts/emit_pubkey.md)
+
+Emit the public half of the MCUboot signing key as a C array.
+
+The application verifies a staged patch's header against this before writing it
+to flash, so the key that signs images and the key that authorises updates are
+the SAME key. That is the point: one secret to hold, one to rotate, and no way
+for the two to drift apart.
+
+Only the public half is emitted. The private key never enters the build output.
+
+    emit_pubkey.py <signing-key.pem> <out.c>
 
 ## `ports/esp32/apps/initiator/main/`
 
@@ -3348,6 +3526,96 @@ SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
 COV_MIN=90         line-coverage floor, matching ci.yml
 NO_COLOR=1         plain output (colour is the default, pipe or not)
 FAIL_TAIL=40       lines of a failing gate's log to show inline
+
+### [`scripts/woz_patch.py`](architecture/scripts/woz_patch.md)
+
+Build a signed delta patch for the DWM3001CDK's over-the-air update path.
+
+Takes two SIGNED MCUboot images and emits one `.wdfu` file: a header the
+bootloader reads, a signature the application checks, and a detools in-place
+patch that turns the first image into the second.
+
+    scripts/woz_patch.py build --from old/zephyr.signed.bin \
+                               --to   new/zephyr.signed.bin \
+                               --build-dir build/cdk-matter \
+                               --out  update.wdfu
+
+Why SIGNED images and not zephyr.bin: the patch has to reproduce the MCUboot
+header and the ECDSA TLVs as well as the code. Patching only the payload would
+leave the old signature in front of new code, and MCUboot would refuse to boot
+the result -- correctly, and after the update had already overwritten the
+working image.
+
+AND IT MUST BE zephyr.signed.HEX, NOT zephyr.signed.BIN. The build signs the
+image TWICE, in two separate imgtool runs, and ECDSA signatures are randomised,
+so the two artifacts hold the same code under DIFFERENT signatures -- 64 bytes
+apart at the very end of the image. Only the .hex goes into merged.hex and so
+only the .hex is what a flashed board is actually running. MEASURED 2026-08-03:
+device crc 0xd4177b20, zephyr.signed.hex 0xd4177b20, zephyr.signed.bin
+0xbb9ec396.
+
+This does not matter for `make dfu`, which uploads a whole image and overwrites
+whatever was there. It matters completely here, because a delta is computed
+AGAINST the bytes already on the device. Feed it the .bin and the bootloader
+declines the patch with "not for this image" -- which is the good outcome, and
+only because the from-image CRC catches it. This script refuses the .bin rather
+than rely on that.
+
+The `.wdfu` layout, which `modules/woz_dfu/include/woz_dfu.h` is the other half
+of:
+
+      0   32   struct woz_dfu_hdr, little-endian
+     32   64   ECDSA-P256 signature over those 32 bytes, raw r||s
+     96   ..   the detools patch
+
+Needs `detools` and `cryptography`:
+
+    python3 -m pip install detools cryptography
+
+### [`scripts/woz_push.py`](architecture/scripts/woz_push.md)
+
+Push a signed delta patch to a DWM3001CDK over Bluetooth.
+
+    scripts/woz_push.py update.wdfu
+
+The board accepts nothing until an update window is open, so this connects and
+then WAITS, asking once a second and prompting you to press SW2. The window
+lasts CONFIG_WOZ_DFU_WINDOW_MS, five minutes by default. Start the push first
+or press the button first; either order works.
+
+On success the board reboots into MCUboot, which applies the patch -- about
+30 seconds during which it is not on the air. The Bluetooth connection dropping
+right after COMMIT is the expected ending, not a failure.
+
+Needs bleak:
+
+    python3 -m pip install bleak
+
+WHY GATT AND NOT THE L2CAP CoC the firmware also offers: no Python Bluetooth
+library can open an L2CAP connection-oriented channel. CoreBluetooth and BlueZ
+both can, bleak wraps neither, and bleak is the only cross-platform option. The
+firmware carries both transports for exactly this reason; an iPhone app would
+use the CoC and get better throughput.
+
+### [`scripts/woz_smp.py`](architecture/scripts/woz_smp.md)
+
+Push a delta patch to the board over SMP, the way a phone would.
+
+WHY THIS EXISTS BESIDE woz_push.py. woz_push speaks the native framed protocol
+over an L2CAP CoC, which no phone app can open. This one speaks mcumgr over
+GATT -- byte for byte what nRF Device Manager sends -- so the device half can be
+proved from a Mac before anyone starts tapping at a phone. When this works and
+the app does not, the fault is in the app or the file it is given, not in the
+firmware.
+
+    scripts/woz_smp.py build/cdk.woz          push a patch
+    scripts/woz_smp.py --list                 read the image list and stop
+
+Requires the board to be built with SMP=1 (firmware/overlay-smp.conf).
+
+CBOR IS HAND-ROLLED HERE, deliberately. The maps mcumgr exchanges are half a
+dozen keys of ints and byte strings, and vendoring a CBOR library into the OTA
+venv to encode that would be more moving parts than the encoder itself.
 
 ### [`scripts/ws-seed.sh`](architecture/scripts/ws-seed.sh.md)
 

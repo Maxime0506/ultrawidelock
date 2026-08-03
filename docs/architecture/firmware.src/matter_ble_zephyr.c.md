@@ -54,21 +54,41 @@ commissioner. A peer that writes C1 has identified itself as one.
 
 **called by** `c1_write`  ·  **calls** `reset_link`
 
-### `int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)`
-`firmware/src/matter_ble_zephyr.c:544`
+### `void matter_ble_set_discriminator(uint16_t discriminator)`
+`firmware/src/matter_ble_zephyr.c:553`
 
-ChipBLEDeviceIdentificationInfo, 8 bytes after the 16-bit UUID
-(CHIPBleServiceData.h:52-79):
-[0]    opcode, 0x00 = commissionable
-[1]    low 8 bits of the 12-bit discriminator
-[2]    high 4 bits of the discriminator in the low nibble,
-advertisement version in the high nibble
-[3..4] vendor ID, little-endian
-[5..6] product ID, little-endian
-[7]    additional-data flag
+Override the advertised discriminator; 0 restores the built-in one.
+
+### `uint16_t matter_ble_discriminator(void)`
+`firmware/src/matter_ble_zephyr.c:558`
+
+The discriminator currently advertised.
+
+**called by** `matter_ble_commissionable_svc_data`
+
+### `int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)`
+`firmware/src/matter_ble_zephyr.c:564`
+
+Build the commissionable-node service data element.
+This does NOT start advertising, deliberately. The reader owns the single
+advertising set (aliro_ble_zephyr.c), and it stays that way: Zephyr's legacy
+bt_le_adv_start API has exactly one set, and the alternative -- CONFIG_BT_EXT_ADV
+with two sets -- measured +24,844 B of flash and +2,464 B of RAM on this board
+before either advertiser was rewritten to use it. On a part where CASE and the
+Interaction Model are still unbuilt, that is not a trade worth making for
+something the protocol does not ask for: a Matter node advertises as
+commissionable only while it has no fabric, which is exactly when this reader
+has nothing to advertise as an Aliro reader either.
+So the reader asks for these bytes when it has no identity yet, and stops
+asking once it has one.
+@param out receives MATTER_BLE_SVC_DATA_LEN bytes, caller-owned and required to
+outlive the advertisement -- bt_data holds the pointer, not a copy.
+@return 0 or -EINVAL.
+
+**calls** `matter_ble_discriminator`
 
 ### `static int matter_ble_init(void)`
-`firmware/src/matter_ble_zephyr.c:580`
+`firmware/src/matter_ble_zephyr.c:608`
 
 Started by SYS_INIT rather than by the application, because
 BT_GATT_SERVICE_DEFINE registers the 0xFFF6 service unconditionally: the C1

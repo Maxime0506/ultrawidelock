@@ -6,7 +6,7 @@
 ## API
 
 ### `static void heap_peak_log(const char *when)`
-`firmware/src/main.c:43`
+`firmware/src/main.c:48`
 
 Reported at the grant, because by then the unlock has done every P-256 and
 AES-GCM operation it is going to do. The peak is cumulative since boot, so it
@@ -15,7 +15,7 @@ covers BLE pairing and the Aliro exchange too, not only the ranging.
 **called by** `main`
 
 ### `static void provisioning_mode(void)`
-`firmware/src/main.c:97`
+`firmware/src/main.c:102`
 
 Runs the console and nothing else. Never returns: leaving this function would
 start the radios in a mode the user did not ask for.
