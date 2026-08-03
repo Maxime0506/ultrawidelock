@@ -12,13 +12,12 @@ Manual direct-serial config flow for the HA=1 OpenAliro beta.
 
 Ask for a serial port, verify it, and retain a hashed USB identity.
 
+#### `OpenAliroConfigFlow.async_step_user(self, user_input: dict[str, object] | None=None) -> FlowResult`
+`integration/homeassistant/custom_components/openaliro/config_flow.py:20`
+
+Handle the initial user config flow step: discover serial ports, probe the device, deduplicate by identity, create the config entry with device ID and connection parameters.
+
 #### `OpenAliroConfigFlow.async_step_reconfigure(self, user_input: dict[str, object] | None=None) -> FlowResult`
-`integration/homeassistant/custom_components/openaliro/config_flow.py:62`
+`integration/homeassistant/custom_components/openaliro/config_flow.py:63`
 
 Replace only the selected interface after a USB port change.
-
-<details><summary>Undocumented (1)</summary>
-
-- `OpenAliroConfigFlow.async_step_user`
-
-</details>

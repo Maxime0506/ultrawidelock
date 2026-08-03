@@ -25,20 +25,20 @@ into both-ends tables with Arduino header positions and the 9 NFC jumpers.
 ## Build, flash, console
 
 ```bash
-make build
-make flash-erase
+make nrf-build
+make nrf-flash-erase
 make nrf-term
 ```
 
-The image lands in `./build/merged.hex`; the console is on VCOM1 (VCOM0 is
-silent).
+The image lands in `./build/nrf5340dk/merged.hex`; the console is on VCOM1
+(VCOM0 is silent).
 
 The first flash and any net-core config change need the erase; plain
-`make flash` otherwise.
+`make nrf-flash` otherwise.
 
 ## First-boot checks
 
-* `make selftest` exercises the radio with no phone present: it separates a
+* `make nrf-selftest` exercises the radio with no phone present: it separates a
   wiring problem from a protocol one.
 * On the shell: `aliro status`, `aliro chip` (DW3110 device ID over SPI),
   `aliro range`.

@@ -27,21 +27,26 @@ class OpenAliroAccessEvent(EventEntity):
     _attr_translation_key = "access"
 
     def __init__(self, runtime: OpenAliroRuntime) -> None:
+        """Initialize the access event entity with the runtime reference and a unique ID derived from the device ID."""
         self._runtime = runtime
         self._attr_unique_id = f"{runtime.device.device_id}_access"
         self._remove_listener = None
 
     @property
     def available(self) -> bool:
+        """Return the runtime availability (true if the connection is up)."""
         return self._runtime.available
 
     @property
     def device_info(self) -> DeviceInfo:
+        """Return device metadata linking this entity to the OpenAliro device."""
         return DeviceInfo(identifiers={(DOMAIN, self._runtime.device.device_id)}, manufacturer="openaliro")
 
     async def async_added_to_hass(self) -> None:
+        """Register a listener callback that publishes the last access verdict as a Home Assistant event when the runtime changes state."""
         @callback
         def update() -> None:
+            """Invoke when the runtime updates: trigger an event on a fresh access verdict and write the state to Home Assistant."""
             event = self._runtime.last_access
             if event is not None:
                 self._trigger_event(event.verdict)
@@ -50,5 +55,6 @@ class OpenAliroAccessEvent(EventEntity):
         self._remove_listener = self._runtime.add_listener(update)
 
     async def async_will_remove_from_hass(self) -> None:
+        """Unregister the listener callback on entity removal."""
         if self._remove_listener:
             self._remove_listener()

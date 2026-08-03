@@ -14,6 +14,10 @@
 
 #include <string.h>
 
+/**
+ * Extract the instruction byte and data payload from a 5-byte ISO 7816 case-4 short-form APDU with
+ * CLA 0x80, returning 0 on success or -1 if the APDU is malformed.
+ */
 int aliro_apdu_unwrap(const uint8_t *apdu, size_t len, uint8_t *ins, const uint8_t **data,
 		      size_t *data_len)
 {
@@ -34,6 +38,10 @@ int aliro_apdu_unwrap(const uint8_t *apdu, size_t len, uint8_t *ins, const uint8
 	return 0;
 }
 
+/**
+ * Append a 2-byte big-endian status code to the output buffer and increment its length, returning 0
+ * on success or -1 if the buffer is full.
+ */
 int aliro_apdu_append_sw(uint8_t *buf, size_t *len, size_t cap, uint16_t sw)
 {
 	if (*len + 2u > cap) {
@@ -45,6 +53,10 @@ int aliro_apdu_append_sw(uint8_t *buf, size_t *len, size_t cap, uint16_t sw)
 	return 0;
 }
 
+/**
+ * Parse the TLV fields of an AUTH0 command into the struct: extract and validate the phase, user
+ * policy, version, reader ephemeral public key, transaction ID, and reader ID.
+ */
 int aliro_dev_parse_auth0_cmd(const uint8_t *tlv, size_t len, struct aliro_auth0_command *c)
 {
 	const uint8_t *v;
@@ -79,6 +91,10 @@ int aliro_dev_parse_auth0_cmd(const uint8_t *tlv, size_t len, struct aliro_auth0
 	return 0;
 }
 
+/**
+ * Parse the TLV fields of an AUTH1 command into the struct: extract the credential type if present
+ * and the mandatory 64-byte reader signature.
+ */
 int aliro_dev_parse_auth1_cmd(const uint8_t *tlv, size_t len, struct aliro_auth1_command *c)
 {
 	const uint8_t *v;
@@ -95,6 +111,10 @@ int aliro_dev_parse_auth1_cmd(const uint8_t *tlv, size_t len, struct aliro_auth1
 	return 0;
 }
 
+/**
+ * Parse optional TLV fields from an EXCHANGE command plaintext: extract reader status and
+ * URSK-ready flag if present, leaving unset fields at their default values.
+ */
 int aliro_dev_parse_exchange_cmd(const uint8_t *plain, size_t len, struct aliro_exchange_command *c)
 {
 	const uint8_t *v;
@@ -111,6 +131,10 @@ int aliro_dev_parse_exchange_cmd(const uint8_t *plain, size_t len, struct aliro_
 	return 0;
 }
 
+/**
+ * Build a TLV-encoded AUTH0 response containing the device ephemeral public key and optionally a
+ * 64-byte cryptogram.
+ */
 int aliro_dev_build_auth0_resp(const uint8_t device_eph_pub[65], const uint8_t *cryptogram64,
 			       uint8_t *out, size_t cap, size_t *out_len)
 {
@@ -124,6 +148,10 @@ int aliro_dev_build_auth0_resp(const uint8_t device_eph_pub[65], const uint8_t *
 	return aliro_tlv_w_finish(&w, out_len);
 }
 
+/**
+ * Build a TLV-encoded AUTH1 response containing the device signature and optionally the device
+ * public key.
+ */
 int aliro_dev_build_auth1_resp(const uint8_t device_sig[64], const uint8_t *device_pub65,
 			       uint8_t *out, size_t cap, size_t *out_len)
 {
@@ -137,6 +165,10 @@ int aliro_dev_build_auth1_resp(const uint8_t device_sig[64], const uint8_t *devi
 	return aliro_tlv_w_finish(&w, out_len);
 }
 
+/**
+ * Build a 4-byte EXCHANGE response body with length prefix 0x0002 and the given error code in
+ * big-endian format.
+ */
 int aliro_dev_build_exchange_resp(uint16_t error, uint8_t *out, size_t cap, size_t *out_len)
 {
 	/* Reader gates on body[2]==0 && body[3]==0 (§ on_exchange_response). Success

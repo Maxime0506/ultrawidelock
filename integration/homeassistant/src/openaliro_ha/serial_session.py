@@ -53,6 +53,7 @@ class SerialSessionError(RuntimeError):
 
 
 class _ResponseHandler(Protocol):
+    """Protocol for command response handlers: feed one line of console output and return a tuple of (is_complete, result), where is_complete indicates the full response has arrived."""
     def feed(self, line: str) -> tuple[bool, object]:
         """Return whether a command response is complete and its safe result."""
 
@@ -61,11 +62,14 @@ Result = TypeVar("Result")
 
 
 class _ContainsResponse:
+    """Handler that returns true and a provided result as soon as the expected substring appears anywhere in a line, ignoring ANSI escape codes."""
     def __init__(self, expected: str, result: Result) -> None:
+        """Record the substring to match and the result to return when the match is found."""
         self._expected = expected
         self._result = result
 
     def feed(self, line: str) -> tuple[bool, object]:
+        """Return whether the expected substring is present in the line after stripping ANSI codes, and the pre-set result."""
         return (self._expected in strip_ansi(line), self._result)
 
 
@@ -75,6 +79,7 @@ class _StreamResponse:
     _ACKNOWLEDGEMENT = "per-block distance stream"
 
     def feed(self, line: str) -> tuple[bool, object]:
+        """Return whether the ACKNOWLEDGEMENT text is present in the line, and if so whether the response indicates the stream is on or off."""
         text = strip_ansi(line)
         if self._ACKNOWLEDGEMENT not in text:
             return False, None
@@ -82,11 +87,14 @@ class _StreamResponse:
 
 
 class _RangeResponse:
+    """Handler that parses the multiline output of the aliro range command and returns true with the parsed RangeReading when available, or true with None when the parser confirms the response is finished."""
     def __init__(self) -> None:
+        """Initialize the handler and prime the internal range response parser."""
         self._parser = RangeResponseParser()
         self._parser.begin()
 
     def feed(self, line: str) -> tuple[bool, object]:
+        """Feed a line to the internal parser; return true with a RangeReading if a complete range measurement is available, true with None if the parser confirms the response finished, or false if more input is needed."""
         reading = self._parser.feed_line(line)
         if reading is not None:
             return True, reading
@@ -105,6 +113,7 @@ class SerialSession:
         command_timeout: float = 3.0,
         observation_queue_size: int = 256,
     ) -> None:
+        """Initialize a serial session with the given connection factory and optional command and queue limits. Raises ValueError if command_timeout or observation_queue_size is not positive."""
         if command_timeout <= 0:
             raise ValueError("command_timeout must be positive")
         if observation_queue_size <= 0:
@@ -228,6 +237,7 @@ class SerialSession:
         self._state = SessionState.CLOSED
 
     async def _command(self, command: str, handler: _ResponseHandler) -> object:
+        """Send a command string to the serial console, invoke the given response handler on each line of reply, and return the handler's result when the response is complete. Raises SerialSessionError if the connection is closed or the command times out."""
         async with self._command_lock:
             connection = self._connection
             if connection is None:
@@ -247,6 +257,7 @@ class SerialSession:
                     self._response_future = None
 
     async def _read_loop(self) -> None:
+        """Coroutine: read lines from the serial console indefinitely until disconnected. Parse each line for observations (distance/access events) and enqueue them; feed unparsed lines to the current command's response handler. On disconnect or queue overflow, fail all pending responses and mark the session disconnected."""
         try:
             while self._connection is not None:
                 data = await self._connection.readline()
@@ -268,6 +279,7 @@ class SerialSession:
             self._state = SessionState.DISCONNECTED
 
     def _feed_response(self, line: str) -> None:
+        """Feed a line of console output to the current command's response handler, and set the result on the pending future if the handler reports the response is complete."""
         handler, future = self._response_handler, self._response_future
         if handler is None or future is None or future.done():
             return
@@ -276,6 +288,7 @@ class SerialSession:
             future.set_result(result)
 
     def _fail_pending(self, error: SerialSessionError) -> None:
+        """Set an exception on any pending command response future to signal that the response will not arrive, used when the connection fails or is closed."""
         future = self._response_future
         if future is not None and not future.done():
             future.set_exception(error)

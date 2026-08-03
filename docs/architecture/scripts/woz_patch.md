@@ -44,6 +44,8 @@ Needs `detools` and `cryptography`:
 
     python3 -m pip install detools cryptography
 
+**discussed in** [`README.md`](../../../README.md), [`firmware/README.md`](../../../firmware/README.md)
+
 ```mermaid
 flowchart TD
   build --> die
@@ -65,8 +67,15 @@ a tool.
 
 **called by** `wrap`  ·  **calls** `die`, `load_image`
 
+### `die(msg)`
+`scripts/woz_patch.py:134`
+
+Exit the process with the formatted error message prefixed by woz_patch.
+
+**called by** `build`, `image_sha`, `info`, `load_image`, `partition`, `read_ihex`, `sign`, `stage`
+
 ### `partition(build_dir, name)`
-`scripts/woz_patch.py:138`
+`scripts/woz_patch.py:139`
 
 Read one partition's size out of a build's generated partitions.yml.
 
@@ -77,7 +86,7 @@ firmware/pm_static.yml is allowed to change.
 **called by** `build`  ·  **calls** `die`
 
 ### `read_ihex(text)`
-`scripts/woz_patch.py:159`
+`scripts/woz_patch.py:160`
 
 Minimal Intel HEX reader. Returns the contiguous bytes it describes.
 
@@ -87,14 +96,14 @@ lines and this script already asks for detools and cryptography.
 **called by** `load_image`  ·  **calls** `die`
 
 ### `load_image(path)`
-`scripts/woz_patch.py:197`
+`scripts/woz_patch.py:198`
 
 Read a signed image, refusing the artifact that will not match a board.
 
 **called by** `build`, `image_sha`  ·  **calls** `die`, `read_ihex`
 
 ### `wrap(args)`
-`scripts/woz_patch.py:317`
+`scripts/woz_patch.py:318`
 
 Dress a .wdfu as an MCUboot image so a phone's file picker accepts it.
 
@@ -107,7 +116,7 @@ to run it. The board recognises the wrapper by its magic and skips it.
 **calls** `die`, `image_sha`
 
 ### `stage(args)`
-`scripts/woz_patch.py:444`
+`scripts/woz_patch.py:445`
 
 Lay a .wdfu out as a raw image of the patch_staging partition.
 
@@ -123,12 +132,15 @@ which half failed.
 
 **calls** `die`
 
-<details><summary>Undocumented (5)</summary>
+### `main()`
+`scripts/woz_patch.py:475`
 
-- `die`
+Command-line entry point. Dispatches to build, info, stage, or wrap subcommands. build creates a signed delta patch from two signed images; info describes a patch and verifies its CRCs; stage lays a patch as a raw partition image for SWD; wrap dresses a patch as an MCUboot image for phone tooling.
+
+<details><summary>Undocumented (3)</summary>
+
 - `sign`
 - `build`
 - `info`
-- `main`
 
 </details>

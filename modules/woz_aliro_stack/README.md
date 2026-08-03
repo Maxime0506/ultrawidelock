@@ -11,19 +11,19 @@ field-of-use terms a downstream user inherits.
 The existing nRF application uses this implementation by default:
 
 ```sh
-make build
+make nrf-build
 ```
 
 The source build removes the imported `aliro` archive from Zephyr's link list while
 retaining the add-on's public headers and application integration. The build then
 rejects any link map in which `libaliro_ble.a` contributed code. For regression
-isolation only, `make build ALIRO_SOURCE=0` selects the legacy Nordic archive.
+isolation only, `make nrf-build ALIRO_SOURCE=0` selects the legacy Nordic archive.
 
 ## Testing
 
 1. `make test` runs the host known-answer and parser suites for the C protocol
    layer without NCS or hardware.
-2. `make rebuild` compiles the complete nRF source stack. Its post-link check
+2. `make nrf-rebuild` compiles the complete nRF source stack. Its post-link check
    proves that `libaliro_ble.a` supplied no linked member.
 3. Flash that image and run the nRF rows in
    [`docs/hardware-validation.md`](../../docs/hardware-validation.md). The boot

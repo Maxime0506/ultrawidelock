@@ -25,8 +25,16 @@ sound test is against the mesh-local prefix this network actually uses.
 
 **called by** `count_offmesh`, `log_addresses`
 
+### `static int count_offmesh(otInstance *ot)`
+`firmware/src/matter_thread_port.c:143`
+
+Count the number of preferred off-mesh unicast addresses this node holds. Iterates over Thread
+unicast addresses and counts those marked preferred that route to a destination not on the mesh.
+
+**called by** `log_addresses`, `matter_thread_wait_attached`  ·  **calls** `addr_is_offmesh`
+
 ### `static void log_addresses(otInstance *ot)`
-`firmware/src/matter_thread_port.c:162`
+`firmware/src/matter_thread_port.c:166`
 
 Every address this node holds, and whether any of them is reachable.
 A registered SRP name is not the same as a reachable node. Auto host address
@@ -39,7 +47,7 @@ printed here instead of assumed.
 **called by** `matter_thread_advertise`, `matter_thread_wait_attached`, `srp_cb`  ·  **calls** `addr_is_offmesh`, `count_offmesh`
 
 ### `struct srp_reg`
-`firmware/src/matter_thread_port.c:254`
+`firmware/src/matter_thread_port.c:258`
 
 One registration per fabric, because a node on two fabrics has two names.
 The instance name is derived from the compressed fabric id and this node's id
@@ -47,8 +55,14 @@ ON that fabric, so the second administrator resolving the first fabric's name
 finds an address it cannot open a session to. A single slot here published
 whichever fabric registered last and left the other unreachable.
 
+### `static int host_id_read(const char *key, size_t len, settings_read_cb read_cb, void *cb_arg, void *param)`
+`firmware/src/matter_thread_port.c:275`
+
+Settings callback to read a 32-bit host ID from persistent storage. Reads exactly
+sizeof(uint32_t) bytes into the output parameter, returning 0 on all paths.
+
 ### `static uint32_t srp_host_id(void)`
-`firmware/src/matter_thread_port.c:287`
+`firmware/src/matter_thread_port.c:295`
 
 The host-name suffix: read it, or mint one and keep it. See SRP_HOST_ID_KEY.
 Zero is the "not stored" marker, so it is never a valid id -- which costs one
@@ -57,23 +71,59 @@ the settings backend.
 
 **called by** `matter_thread_advertise`
 
+### `void matter_thread_peer_current(struct matter_thread_peer *out)`
+`firmware/src/matter_thread_port.c:349`
+
+Copy the current inbound peer address and port to the caller's buffer. Called by Matter protocol
+handlers to discover where a datagram came from. Returns without effect if out is NULL.
+
+### `int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *msg, size_t len)`
+`firmware/src/matter_thread_port.c:362`
+
+Send a datagram to a peer over Thread UDP. Returns MATTER_E_STATE if the peer is invalid, the
+address family is unsupported, the message buffer cannot be allocated, or the send fails;
+MATTER_E_NOSPACE if the message buffer is full; MATTER_OK on success.
+
+### `static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)`
+`firmware/src/matter_thread_port.c:404`
+
+OpenThread UDP RX callback. Reads the incoming datagram, logs its size, invokes
+matter_thread_on_datagram to generate a reply, and sends the reply back to the peer. Uses static
+buffers sized for Sigma3 (RX) and full subscription reports (reply) respectively. Temporarily
+publishes the peer address so the Matter handler can discover where traffic arrived from.
+
 ### `static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClientService *services, const otSrpClientService *removed, void *ctx)`
-`firmware/src/matter_thread_port.c:481`
+`firmware/src/matter_thread_port.c:504`
 
 The SRP server's verdict, which otSrpClientAddService() cannot give.
 
 **calls** `log_addresses`
 
-<details><summary>Undocumented (9)</summary>
+### `void matter_thread_advertise_reset(void)`
+`firmware/src/matter_thread_port.c:526`
 
-- `count_offmesh`
-- `host_id_read`
-- `matter_thread_peer_current`
-- `matter_thread_send_to`
-- `udp_rx`
-- `matter_thread_advertise_reset`
-- `matter_thread_advertise`
-- `matter_thread_start`
-- `matter_thread_wait_attached`
+Release all SRP registrations for the host and services. Clears both the SRP client state and the
+local registration cache, so the next advertise re-registers from scratch. Called when fabrics
+are rolled back to avoid leaving dangling registrations under old names.
 
-</details>
+### `int matter_thread_advertise(const char *instance_name, uint16_t port)`
+`firmware/src/matter_thread_port.c:708`
+
+Advertise this node's services to SRP. Returns MATTER_E_STATE; Thread is not built into this
+image.
+
+**calls** `log_addresses`, `srp_host_id`
+
+### `int matter_thread_start(const uint8_t *dataset, size_t len)`
+`firmware/src/matter_thread_port.c:720`
+
+Start Thread with the provided operational dataset. Returns MATTER_E_STATE; Thread is not built
+into this image.
+
+### `int matter_thread_wait_attached(uint32_t timeout_ms)`
+`firmware/src/matter_thread_port.c:733`
+
+Stub: always returns MATTER_E_TIMEOUT. Thread attachment checking is not implemented on this
+target.
+
+**calls** `count_offmesh`, `log_addresses`

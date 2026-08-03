@@ -21,8 +21,15 @@ One discoverable serial port with a non-reversible stable identity.
 
 **called by** `discover_serial_ports`
 
+### `_import_serial() -> Any`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:29`
+
+Import pyserial (serial, list_ports); raise SerialTransportError if not installed.
+
+**called by** `discover_serial_ports`, `open_serial_connection`  ·  **calls** `SerialTransportError`
+
 ### `serial_identity(*, vid: Optional[int], pid: Optional[int], serial_number: Optional[str], interface: Optional[str], device: Optional[str]=None) -> Optional[str]`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:38`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:39`
 
 Hash one USB console endpoint without retaining serial or path text.
 
@@ -34,53 +41,51 @@ closed and requires reconfiguration rather than guessing.
 **called by** `discover_serial_ports`
 
 ### `discover_serial_ports(ports: Optional[Iterable[Any]]=None) -> tuple[SerialPort, ...]`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:63`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:64`
 
 List ports without exposing their paths or USB serials in diagnostics.
 
 **called by** `resolve_serial_port`  ·  **calls** `SerialPort`, `_import_serial`, `serial_identity`
 
 ### `resolve_serial_port(serial_port: str, serial_identity_value: Optional[str], *, ports: Optional[Iterable[SerialPort]]=None) -> str`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:96`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:97`
 
 Resolve an explicit path or one unambiguous privacy-safe USB identity.
 
 **calls** `SerialTransportError`, `discover_serial_ports`
 
 ### `class PySerialConnection`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:115`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:116`
 
 Async wrapper around one opened pyserial connection.
 
 **called by** `open_serial_connection`
 
+#### `PySerialConnection.__init__(self, connection: Any) -> None`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:119`
+
+Initialize a serial connection wrapper around an open pyserial port object.
+
 #### `PySerialConnection.readline(self) -> bytes`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:122`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:124`
 
 Wait for a line without blocking the caller's asyncio event loop.
 
 #### `PySerialConnection.write(self, data: bytes) -> None`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:134`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:136`
 
 Write a bounded command without blocking the asyncio event loop.
 
 #### `PySerialConnection.close(self) -> None`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:144`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:146`
 
 Release the serial port and unblock any pending read.
 
 **calls** `SerialTransportError`
 
 ### `open_serial_connection(serial_port: str, baud: int, *, serial_factory: Optional[Callable[..., Any]]=None) -> PySerialConnection`
-`integration/homeassistant/src/openaliro_ha/serial_transport.py:156`
+`integration/homeassistant/src/openaliro_ha/serial_transport.py:158`
 
 Open one serial port with finite read and write timeouts.
 
 **calls** `PySerialConnection`, `SerialTransportError`, `_import_serial`
-
-<details><summary>Undocumented (2)</summary>
-
-- `_import_serial`
-- `PySerialConnection.__init__`
-
-</details>

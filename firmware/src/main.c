@@ -83,6 +83,10 @@ extern volatile int woz_uwb_diag_on;
  * commit 5b8d06b had to fight for on this single-core part), and it means the
  * console can never be reached while a walk-up is in flight. */
 #if IS_ENABLED(CONFIG_ALIRO_PROV_CONSOLE)
+/**
+ * Check GPIO SW0 (active-low, pulled up in DTS) to see if provisioning is requested at boot.
+ * Returns true if SW0 is ready and held (logical 1), false otherwise.
+ */
 static bool provisioning_requested(void)
 {
 	static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
@@ -136,6 +140,12 @@ static void provisioning_mode(void)
  * The Thread credentials are deliberately NOT erased -- see aliro_prov_erase().
  */
 #if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
+/**
+ * Check GPIO SW0 (active-low, pulled up in DTS) at boot. If SW0 is held (logical 1), toggle LED0
+ * six times at 120 ms intervals as user feedback, erase Aliro provisioning and Matter fabric (if
+ * CONFIG_ALIRO_MATTER_BLE is on), and log that the board is now commissionable on the next boot.
+ * Returns silently if GPIO is not ready or if SW0 is not held.
+ */
 static void factory_reset_if_requested(void)
 {
 	static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
@@ -171,6 +181,14 @@ static void factory_reset_if_requested(void)
 }
 #endif
 
+/**
+ * Entry point for the DWM3001CDK reader application. Initializes provisioning and factory-reset
+ * paths, starts the Aliro BLE reader and optional Matter commissioning and DFU receiver, then runs
+ * the approach controller loop. Feeds the controller trusted ranges on each new latch generation
+ * and observes untrusted ranges for departure detection. Grants unlock on approach prediction or
+ * threshold crossing, relocks on departure or abort, and exits with an error code if reader startup
+ * fails.
+ */
 int main(void)
 {
 	/* Off before the radio comes up: keeps the ranging callbacks print-free so the

@@ -69,6 +69,7 @@ def select_enrollment(path: str, key_id: str | None = None) -> Enrollment:
 
 
 def _secure_directory(path: str):
+    """Create a directory with 0o700 permissions (owner-only), validating that it is owned by the current user. Raises ServiceError if the directory exists with different ownership or permissions."""
     os.makedirs(path, mode=0o700, exist_ok=True)
     directory_stat = os.stat(path)
     if directory_stat.st_uid != os.getuid():
@@ -133,6 +134,7 @@ class PresenceEngine:
     """Own the serial device and serialize fresh challenge/proof transactions."""
 
     def __init__(self, serial, point: bytes, cred_id: bytes, openssl: str = "openssl"):
+        """Initialize a presence proof engine with a serial port, curve point, and credential ID. Stores the serial port, point, credential ID, and openssl binary name for use in later prove operations."""
         self.serial = serial
         self.point = point
         self.cred_id = cred_id
@@ -140,6 +142,7 @@ class PresenceEngine:
         self._proof_lock = threading.Lock()
 
     def close(self):
+        """Close the serial port held by this presence engine."""
         self.serial.close()
 
     def prove(self, max_cm: int) -> dict:
@@ -205,12 +208,14 @@ class PresenceService:
     """Validate socket requests before allowing them to touch the serial device."""
 
     def __init__(self, engine: PresenceEngine, max_cm: int = 40):
+        """Initialize a presence service with an engine and maximum distance policy. Validates that max_cm is a positive integer, raising ServiceError otherwise."""
         if isinstance(max_cm, bool) or not isinstance(max_cm, int) or max_cm < 1:
             raise ServiceError("daemon maximum distance must be a positive integer")
         self.engine = engine
         self.max_cm = max_cm
 
     def handle(self, request) -> dict:
+        """Handle an incoming presence proof request. Validates the request contains only op and max_cm, that op is prove, and that the requested distance is a positive integer not exceeding the daemon's policy. Returns ok=true with the proof on success or ok=false with a code and reason on validation failure."""
         if not isinstance(request, dict) or set(request) != {"op", "max_cm"}:
             return {
                 "ok": False,
@@ -241,7 +246,9 @@ class PresenceService:
 
 
 class _RequestHandler(socketserver.StreamRequestHandler):
+    """Socket request handler for presence proof requests. Reads one JSON request line with timeout, parses it, invokes the presence service, and writes the response as JSON back to the client. Silently handles broken pipes and malformed input by responding with structured error codes rather than closing the connection."""
     def _send(self, response):
+        """Send a JSON response line to the client. Serializes the response dict to JSON, appends a newline, and writes it to the socket. Silently handles broken pipe and connection reset errors so the server does not crash on client disconnect."""
         encoded = json.dumps(response, separators=(",", ":"), sort_keys=True).encode()
         try:
             self.wfile.write(encoded + b"\n")
@@ -249,6 +256,7 @@ class _RequestHandler(socketserver.StreamRequestHandler):
             pass
 
     def handle(self):
+        """Parse one incoming JSON request line, validate it contains op and max_cm fields, dispatch to PresenceService.handle, and send a JSON response line to the client; silently handles client disconnect."""
         self.request.settimeout(self.server.request_timeout)
         try:
             raw = self.rfile.readline(MAX_REQUEST_BYTES + 1)
@@ -285,6 +293,7 @@ class _RequestHandler(socketserver.StreamRequestHandler):
 
 
 def _prepare_socket_path(path: str):
+    """Prepare a Unix socket path by securing its parent directory, validating the path is either absent or is a stale socket owned by the current user, and unlinking stale sockets; raises ServiceError if the socket is active or unowned."""
     parent = os.path.dirname(os.path.abspath(path))
     _secure_directory(parent)
 
@@ -322,6 +331,7 @@ class PresenceUnixServer(socketserver.UnixStreamServer):
         service: PresenceService,
         request_timeout: float = DEFAULT_REQUEST_TIMEOUT_S,
     ):
+        """Initialize a Unix socket presence server: prepares the socket path, stores service reference and request timeout, and locks down socket permissions to 0o600. Raises ServiceError if socket path is active or unowned by the current user."""
         _prepare_socket_path(path)
         self.service = service
         self.request_timeout = request_timeout
@@ -332,6 +342,7 @@ class PresenceUnixServer(socketserver.UnixStreamServer):
         self._socket_identity = (created.st_dev, created.st_ino)
 
     def close_and_unlink(self):
+        """Close the Unix socket server and unlink the socket file, but only if the file at the expected path is still the same socket (by device and inode). Returns without unlinking if the file is no longer present or has been replaced."""
         self.server_close()
         try:
             current = os.lstat(self.socket_path)
@@ -345,6 +356,7 @@ class PresenceUnixServer(socketserver.UnixStreamServer):
 
 
 def positive_cm(value: str) -> int:
+    """Parse and validate a distance threshold from a string argument. Returns the integer value if it is between 1 and 65534 inclusive, raising ArgumentTypeError otherwise."""
     try:
         parsed = int(value)
     except ValueError as exc:
@@ -355,6 +367,7 @@ def positive_cm(value: str) -> int:
 
 
 def build_daemon_parser():
+    """Build the argument parser for the presenced daemon. Defines options for serial port, socket path, enrollment file, key selection, maximum distance policy, and openssl binary path."""
     parser = argparse.ArgumentParser(
         description="Serve fresh, pinned Aliro presence proofs over a Unix socket."
     )
@@ -380,6 +393,7 @@ def build_daemon_parser():
 
 
 def build_enroll_parser():
+    """Build the argument parser for the presence enrollment tool. Defines options for serial port, output enrollment file, and a flag to replace an existing enrollment."""
     parser = argparse.ArgumentParser(
         prog="presence-enroll",
         description="Pin the attached device and credential for local presenced use.",
@@ -399,6 +413,7 @@ def build_enroll_parser():
 
 
 def enroll_main(argv=None) -> int:
+    """Main entry point for the presence enrollment tool: parse arguments and enroll the connected device by pinning it to an owner-only file."""
     args = build_enroll_parser().parse_args(argv)
     try:
         enroll_device(args.port, path=args.output, replace=args.replace)
@@ -410,6 +425,7 @@ def enroll_main(argv=None) -> int:
 
 
 def daemon_main(argv=None) -> int:
+    """Main entry point for the presenced daemon: parse arguments, connect to the device, start the Unix socket server, and handle SIGINT/SIGTERM by raising KeyboardInterrupt for clean shutdown."""
     args = build_daemon_parser().parse_args(argv)
     engine = None
     server = None
@@ -421,6 +437,7 @@ def daemon_main(argv=None) -> int:
         server = PresenceUnixServer(args.socket, service)
 
         def stop(_signum, _frame):
+            """Signal handler that converts a SIGTERM or SIGINT into a KeyboardInterrupt to shut down the daemon cleanly."""
             raise KeyboardInterrupt
 
         for signum in (signal.SIGINT, signal.SIGTERM):

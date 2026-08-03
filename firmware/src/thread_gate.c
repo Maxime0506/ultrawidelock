@@ -108,6 +108,11 @@ static const uint8_t gate_network_key[OT_NETWORK_KEY_SIZE] = {
 	0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
 };
 
+/**
+ * OpenThread state change callback. Logs the device role when it changes and, if the node becomes a
+ * child or router, logs its mesh-local EID so a remote peer can discover the address to send
+ * unicast traffic to.
+ */
 static void on_state_changed(otChangedFlags flags, void *context)
 {
 	ARG_UNUSED(context);
@@ -160,6 +165,10 @@ static struct openthread_state_changed_callback gate_cb = {
 K_THREAD_STACK_DEFINE(gate_beat_stack, GATE_BEAT_STACK_SZ);
 static struct k_thread gate_beat_thread;
 
+/**
+ * Periodic thread status log. Runs every GATE_BEAT_MS milliseconds and logs the OpenThread device
+ * role and MAC counters (total RX and TX frames). Runs on a low-priority background thread.
+ */
 static void gate_beat(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -184,6 +193,12 @@ static void gate_beat(void *a, void *b, void *c)
 	}
 }
 
+/**
+ * Start the Thread contention gate. Initializes OpenThread with a fixed operational dataset on the
+ * configured channel and PAN ID, brings up the Thread network interface, starts the OpenThread run
+ * loop, and spawns a periodic log thread. Returns 0 on success or negative on init, interface, or
+ * OpenThread run failure.
+ */
 static int thread_gate_start(void)
 {
 	otInstance *ot = openthread_get_default_instance();

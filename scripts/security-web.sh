@@ -54,8 +54,11 @@ else
 	CHK="+" CRS="x" WRN="!"
 fi
 
+# Return true if the command exists in PATH, false otherwise.
 have() { command -v "$1" >/dev/null 2>&1; }
+# Print a bold section header to stdout preceded by a newline.
 hdr() { printf '\n%s── %s%s\n' "$BOLD" "$1" "$RESET"; }
+# Print a missing-tool error to stdout, note that a missing gate is a failed gate, and return 1.
 missing() {
 	printf '  %s%s%s %s is not installed — %s\n' "$RED" "$CRS" "$RESET" "$1" "$2"
 	printf '      A gate that cannot run is a gate that did not pass. CI runs it regardless.\n'

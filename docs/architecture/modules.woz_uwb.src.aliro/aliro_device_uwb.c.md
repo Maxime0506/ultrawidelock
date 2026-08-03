@@ -17,22 +17,27 @@ host loopback can drive the real reader codec end to end.
 Parse an inbound M1 / M3 message ([proto][id][len_be16][attrs]) into the
 structs above. Returns 0 on success, -1 on a header/attribute mismatch.
 
+### `int aliro_dev_uwb_parse_m3(const uint8_t *msg, size_t len, struct aliro_dev_uwb_m3 *out)`
+`modules/woz_uwb/src/aliro/aliro_device_uwb.c:78`
+
+Parse an M3 UWB message: extract and validate ran multiplier, chaps per slot, number of
+responders, slots per round, sync code index bitmask, hopping configuration, and MAC mode. Return
+0 on success or -1 if the message is malformed or required fields are missing.
+
 ### `void aliro_dev_uwb_select_m2(const struct aliro_dev_uwb_m1 *m1, struct aliro_dev_uwb_m2_params *out)`
-`modules/woz_uwb/src/aliro/aliro_device_uwb.c:134`
+`modules/woz_uwb/src/aliro/aliro_device_uwb.c:139`
 
 Pick M2 selections from a parsed M1: echo the reader's first config, pulse
 shape and channel, and default the remaining fields to values the reader
 accepts. A real device would consult its own capabilities here.
 
 ### `struct aliro_uwb_message *aliro_dev_uwb_build_m2(const struct aliro_dev_uwb_m2_params *p)`
-`modules/woz_uwb/src/aliro/aliro_device_uwb.c:146`
+`modules/woz_uwb/src/aliro/aliro_device_uwb.c:151`
 
 Build an M2 / M4 message. Returns a heap-allocated message (free with
 aliro_uwb_msg_free), or NULL on allocation/encode failure.
 
-<details><summary>Undocumented (2)</summary>
+### `struct aliro_uwb_message *aliro_dev_uwb_build_m4(const struct aliro_dev_uwb_m4_params *p)`
+`modules/woz_uwb/src/aliro/aliro_device_uwb.c:197`
 
-- `aliro_dev_uwb_parse_m3` — tested: aliro device uwb
-- `aliro_dev_uwb_build_m4` — tested: aliro device uwb
-
-</details>
+Build an M4 UWB message from STS index, UWB time, hop mode key, and sync code index.

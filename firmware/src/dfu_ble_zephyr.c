@@ -61,12 +61,21 @@ static struct {
 	bool in_use;
 } s_ch;
 
+/**
+ * DFU RX buffer allocation callback. Allocates a network buffer from the DFU RX pool with no wait,
+ * or returns NULL if the pool is exhausted.
+ */
 static struct net_buf *dfu_alloc_buf(struct bt_l2cap_chan *chan)
 {
 	ARG_UNUSED(chan);
 	return net_buf_alloc(&s_dfu_rx_pool, K_NO_WAIT);
 }
 
+/**
+ * L2CAP channel RX callback for DFU firmware updates. Processes received data through
+ * woz_dfu_rx_frame, allocates a TX buffer for any response, and sends it back over the L2CAP
+ * channel. Returns 0 on all paths.
+ */
 static int dfu_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 {
 	uint8_t rsp[WOZ_DFU_RSP_MAX];
@@ -92,12 +101,20 @@ static int dfu_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	return 0;
 }
 
+/**
+ * L2CAP channel connected callback for DFU firmware updates. Logs that the update channel is open.
+ */
 static void dfu_connected(struct bt_l2cap_chan *chan)
 {
 	ARG_UNUSED(chan);
 	LOG_INF("update channel open");
 }
 
+/**
+ * L2CAP channel disconnected callback for DFU firmware updates. Marks the channel as no longer in
+ * use and resets any staged DFU bytes, so the next attempt starts clean if the connection drops
+ * mid-transfer.
+ */
 static void dfu_disconnected(struct bt_l2cap_chan *chan)
 {
 	ARG_UNUSED(chan);
@@ -116,6 +133,11 @@ static const struct bt_l2cap_chan_ops k_dfu_ops = {
 	.disconnected = dfu_disconnected,
 };
 
+/**
+ * L2CAP channel accept callback for DFU firmware updates. Returns -EACCES if no DFU window is open
+ * (the gate), -ENOMEM if a channel is already in use, or 0 on success with the channel configured
+ * and its pointer assigned to the caller's channel reference.
+ */
 static int dfu_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 		      struct bt_l2cap_chan **chan)
 {
@@ -188,6 +210,11 @@ BT_GATT_SERVICE_DEFINE(s_dfu_gatt, BT_GATT_PRIMARY_SERVICE(&k_dfu_svc_uuid),
 					      dfu_gatt_write, NULL),
 		       BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
 
+/**
+ * GATT write callback for DFU firmware updates. Rejects writes with a nonzero offset, processes the
+ * frame through woz_dfu_rx_frame, and notifies the client of any response. Returns the number of
+ * bytes consumed on success.
+ */
 static ssize_t dfu_gatt_write(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 			      const void *buf, uint16_t len, uint16_t offset,
 			      uint8_t flags)
@@ -227,6 +254,10 @@ static ssize_t dfu_gatt_write(struct bt_conn *conn, const struct bt_gatt_attr *a
 static const struct gpio_dt_spec s_button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static struct gpio_callback s_button_cb;
 
+/**
+ * Work item handler for the DFU button press. Opens a DFU window for the duration specified by
+ * CONFIG_WOZ_DFU_WINDOW_MS.
+ */
 static void button_work_fn(struct k_work *work)
 {
 	ARG_UNUSED(work);
@@ -234,6 +265,10 @@ static void button_work_fn(struct k_work *work)
 }
 static K_WORK_DEFINE(s_button_work, button_work_fn);
 
+/**
+ * GPIO interrupt handler for the DFU button. Submits the button work item to be processed off the
+ * ISR, since opening the DFU window logs and touches a work queue.
+ */
 static void button_pressed(const struct device *dev, struct gpio_callback *cb,
 			   uint32_t pins)
 {
@@ -244,6 +279,12 @@ static void button_pressed(const struct device *dev, struct gpio_callback *cb,
 	(void)k_work_submit(&s_button_work);
 }
 
+/**
+ * Initialize the DFU update channel. Registers the L2CAP server, configures the optional button for
+ * software window control if available, and logs readiness or warnings if the button is not ready.
+ * Returns 0 on success or if button config fails gracefully (software-only mode), negative on L2CAP
+ * server registration failure.
+ */
 int dfu_ble_start(void)
 {
 	int rc = bt_l2cap_server_register(&s_dfu_server);

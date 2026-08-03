@@ -37,6 +37,9 @@ static const uint8_t k_a5_csa_v1[] = {
 
 /* ---- device AES-256-GCM channel (mirror direction of aliro_secchan) ---- */
 
+/**
+ * Initialize a secure channel with two keys and both counters to 1 (per §8.3.1.13).
+ */
 void aliro_dev_secchan_init(struct aliro_dev_secchan *sc, const uint8_t s0[32],
 			    const uint8_t s1[32])
 {
@@ -46,6 +49,10 @@ void aliro_dev_secchan_init(struct aliro_dev_secchan *sc, const uint8_t s0[32],
 	sc->ctr_d2r = 1;
 }
 
+/**
+ * AES-256-GCM decrypt one reader->device message: derive nonce from counter, decrypt and verify
+ * tag, increment counter, return 0 on success or -1 on tag mismatch.
+ */
 int aliro_dev_secchan_open(struct aliro_dev_secchan *sc, const uint8_t *ct, size_t ct_len,
 			   const uint8_t tag[16], uint8_t *pt)
 {
@@ -60,6 +67,10 @@ int aliro_dev_secchan_open(struct aliro_dev_secchan *sc, const uint8_t *ct, size
 	return 0;
 }
 
+/**
+ * AES-256-GCM encrypt one device->reader message: derive nonce from counter, encrypt and compute
+ * tag, increment counter, return 0 on success or -1 on error.
+ */
 int aliro_dev_secchan_seal(struct aliro_dev_secchan *sc, const uint8_t *pt, size_t pt_len,
 			   uint8_t *ct, uint8_t tag[16])
 {
@@ -82,6 +93,10 @@ int aliro_dev_secchan_seal(struct aliro_dev_secchan *sc, const uint8_t *pt, size
  * BleSKDevice (seal, dir 1). Byte-for-byte inverse of aliro_msg_seal/aliro_msg_open.
  */
 
+/**
+ * Initialize a BLE secure channel by deriving session keys from a key block and versions salt, then
+ * initializing the channel with both keys.
+ */
 int aliro_dev_blesk_init(struct aliro_dev_secchan *ch, const uint8_t block[ALIRO_KEY_BLOCK_LEN],
 			 const uint8_t *versions_salt, size_t salt_len)
 {
@@ -95,6 +110,11 @@ int aliro_dev_blesk_init(struct aliro_dev_secchan *ch, const uint8_t block[ALIRO
 	return 0;
 }
 
+/**
+ * Decrypt one BLE-SK wire frame (reader->device direction): validate length header, derive nonce,
+ * decrypt payload under S0 with AAD, increment counter, copy plaintext and return 0 on success or
+ * -1 on length/tag error.
+ */
 int aliro_dev_ble_open(struct aliro_dev_secchan *ch, const uint8_t *wire, size_t wire_len,
 		       uint8_t *plain, size_t plain_cap, size_t *plain_len)
 {
@@ -129,6 +149,11 @@ int aliro_dev_ble_open(struct aliro_dev_secchan *ch, const uint8_t *wire, size_t
 	return 0;
 }
 
+/**
+ * Encrypt one BLE-SK wire frame (device->reader direction): validate plaintext length header,
+ * derive nonce, encrypt payload under S1 with AAD, write wire length header, increment counter,
+ * return 0 on success or -1 on length/tag error.
+ */
 int aliro_dev_ble_seal(struct aliro_dev_secchan *ch, const uint8_t *plain, size_t plain_len,
 		       uint8_t *wire, size_t wire_cap, size_t *wire_len)
 {
@@ -164,6 +189,10 @@ int aliro_dev_ble_seal(struct aliro_dev_secchan *ch, const uint8_t *plain, size_
 	return 0;
 }
 
+/**
+ * AES-256-GCM encrypt with all-zero 12-byte IV and no AAD; plaintext and ciphertext lengths must
+ * match.
+ */
 int aliro_dev_seal_cryptogram(const uint8_t cryptogram_sk[32], const uint8_t *plain,
 			      size_t plain_len, uint8_t *out)
 {
@@ -173,6 +202,11 @@ int aliro_dev_seal_cryptogram(const uint8_t cryptogram_sk[32], const uint8_t *pl
 					plain_len, out, out + plain_len, ALIRO_GCM_TAG_LEN);
 }
 
+/**
+ * Derive a session key block, URSK, and secure channel from an ECDH shared secret, transaction ID,
+ * and reader identity by building a salt, deriving the block, and splitting keys; returns 0 on
+ * success.
+ */
 int aliro_device_derive_session(const uint8_t shared_x[32], const uint8_t txid[16],
 				const uint8_t reader_group_x[32], const uint8_t reader_eph_x[32],
 				const uint8_t reader_id[32], uint8_t exp_phase, const uint8_t *a5,
@@ -205,6 +239,11 @@ int aliro_device_derive_session(const uint8_t shared_x[32], const uint8_t txid[1
 
 /* ---- full initiator state machine (EC via aliro_prim) ---- */
 
+/**
+ * Initialize device with access credential, reader identity and verification key; derive public key
+ * from private scalar; set version to v1.0, BLE-SK salt to v1.0 single-version default, and phase
+ * to idle. Return 0 on success or -1 if public key derivation fails.
+ */
 int aliro_device_init(struct aliro_device *d, const uint8_t cred_priv[32],
 		      const uint8_t reader_id[32], const uint8_t reader_verif_pub[65])
 {
@@ -231,6 +270,10 @@ int aliro_device_init(struct aliro_device *d, const uint8_t cred_priv[32],
 	return 0;
 }
 
+/**
+ * Set BLE-SK salt from big-endian u16 list; must be even length (at least 4 bytes) and fit in
+ * buffer; return 0 on success or -1 if length or format is invalid.
+ */
 int aliro_device_set_blesk_salt(struct aliro_device *d, const uint8_t *salt, size_t len)
 {
 	/* Every entry is a big-endian u16 and the selected version is always appended,
@@ -244,6 +287,12 @@ int aliro_device_set_blesk_salt(struct aliro_device *d, const uint8_t *salt, siz
 	return 0;
 }
 
+/**
+ * Process an incoming Aliro APDU command (AUTH0, AUTH1, or EXCHANGE) and generate the response.
+ * Validates command structure, reader identity, signatures, and key derivation; returns 0 on
+ * success and sets device phase accordingly. On any failure sets phase to ALIRO_DEV_FAILED and
+ * returns -1.
+ */
 int aliro_device_on_command(struct aliro_device *d, const uint8_t *ap_payload, size_t len,
 			    uint8_t *resp, size_t cap, size_t *resp_len)
 {

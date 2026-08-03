@@ -21,6 +21,11 @@ LOG_MODULE_REGISTER(aliro_prov, CONFIG_LOG_DEFAULT_LEVEL);
 static uint8_t s_blob[ALIRO_PROV_BLOB_MAX];
 static size_t s_blob_len;
 
+/**
+ * Settings callback to deserialize and store a provisioning blob read from persistent storage.
+ * Validates that the blob does not exceed s_blob size and returns -EINVAL on overflow or read
+ * error; on success stores the blob length and returns 0.
+ */
 static int prov_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg)
 {
 	ARG_UNUSED(name);
@@ -40,6 +45,12 @@ static int prov_set(const char *name, size_t len, settings_read_cb read_cb, void
 
 SETTINGS_STATIC_HANDLER_DEFINE(aliro_prov, "aliro", NULL, prov_set, NULL, NULL);
 
+/**
+ * Load Aliro reader identity and trust anchors from persistent settings. Returns 0 on success with
+ * stored data loaded, 1 if never provisioned (DEV identity used), -1 on any error (settings init,
+ * load, or malformed blob; DEV identity used). On any failure the loaded identity defaults to DEV
+ * and the error is logged as a warning.
+ */
 int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *ts)
 {
 	int rc = settings_subsys_init();
@@ -79,6 +90,11 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 	return 0;
 }
 
+/**
+ * Erase the stored Aliro provisioning blob from persistent settings. Returns 0 on success, negative
+ * on settings error; the error is logged as a warning and returned rather than suppressed, because
+ * a silent factory reset that left the old anchors in place would pair but then reject the phone.
+ */
 int aliro_prov_erase(void)
 {
 	int rc = settings_subsys_init();
@@ -96,6 +112,11 @@ int aliro_prov_erase(void)
 	return rc;
 }
 
+/**
+ * Serialize and store Aliro reader identity and trust anchors to persistent settings. Uses a static
+ * blob buffer to avoid stack overflow; safe because provisioning writes are rare and serialized on
+ * s_prov_lock or the Matter work queue. Returns the result of settings_save_one.
+ */
 int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)
 {
 	/*

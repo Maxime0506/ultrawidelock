@@ -90,6 +90,10 @@ static struct aliro_device s_dev;
 static uint16_t s_conn;
 static bool s_armed;
 
+/**
+ * Return a human-readable string for an Aliro device phase: IDLE, SENT_AUTH0_RESP, SENT_AUTH1_RESP,
+ * ESTABLISHED, or FAILED.
+ */
 static const char *phase_str(enum aliro_device_phase p)
 {
 	switch (p) {
@@ -106,6 +110,12 @@ static const char *phase_str(enum aliro_device_phase p)
 	}
 }
 
+/**
+ * Callback when the BLE transport is ready after the peer advertises its SPSM and supported
+ * versions. Initialize the device state machine with the credential private key and reader
+ * identity, derive the BleSK salt from the peer's published version list, and arm the device to
+ * wait for AUTH0. Log connection and version details.
+ */
 static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *peer)
 {
 	ESP_LOGI(TAG, "=== transport up (conn %u) ===", conn_handle);
@@ -223,6 +233,11 @@ static void on_closed(uint16_t conn_handle)
 	}
 }
 
+/**
+ * Initialize the Aliro BLE central stack, register event callbacks for ready/data/closed, bring up
+ * the PSA crypto backend, and begin scanning for an Aliro reader. Run forever, yielding
+ * periodically.
+ */
 void app_main(void)
 {
 	struct aliro_ble_central_config cfg;

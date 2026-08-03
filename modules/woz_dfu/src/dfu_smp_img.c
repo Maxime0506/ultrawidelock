@@ -88,6 +88,9 @@ LOG_MODULE_DECLARE(woz_dfu, CONFIG_WOZ_DFU_LOG_LEVEL);
 #define IMAGE_TLV_SHA256          0x10
 #define IMAGE_SHA_LEN             32
 
+/**
+ * MCUboot image version: major, minor, revision, and build number.
+ */
 struct image_version {
 	uint8_t iv_major;
 	uint8_t iv_minor;
@@ -95,6 +98,10 @@ struct image_version {
 	uint32_t iv_build_num;
 };
 
+/**
+ * MCUboot image header: magic, load address, header size, protected TLV size, image size, flags,
+ * version (major, minor, revision, build), and padding.
+ */
 struct image_header {
 	uint32_t ih_magic;
 	uint32_t ih_load_addr;
@@ -106,11 +113,17 @@ struct image_header {
 	uint32_t _pad1;
 };
 
+/**
+ * MCUboot image TLV info: magic marker (0x6907) and total TLV region size in bytes.
+ */
 struct image_tlv_info {
 	uint16_t it_magic;
 	uint16_t it_tlv_tot;
 };
 
+/**
+ * MCUboot image TLV entry: type, padding byte, and length in bytes.
+ */
 struct image_tlv {
 	uint8_t it_type;
 	uint8_t _pad;
@@ -213,6 +226,10 @@ static bool encode_slot(zcbor_state_t *zse)
 	return ok;
 }
 
+/**
+ * Encode and send the image state reply containing one slot (image 0) with splitStatus 0. Returns
+ * MGMT_ERR_EOK on success or MGMT_ERR_EMSGSIZE if the response overflows.
+ */
 static int state_read(struct smp_streamer *ctxt)
 {
 	zcbor_state_t *zse = ctxt->writer->zs;
@@ -252,6 +269,13 @@ static int state_write(struct smp_streamer *ctxt)
 
 /* ---- upload --------------------------------------------------------------- */
 
+/**
+ * Accept an uploaded image chunk. Decodes offset, total size, data, SHA256 hash, image index, and
+ * upgrade flag from the request. Only image 0 is valid. Returns MGMT_ERR_EACCESSDENIED if no update
+ * window is open, MGMT_ERR_EINVAL for missing or invalid offset or wrong image index,
+ * MGMT_ERR_EBADSTATE for other failures, or MGMT_ERR_EOK on success. Echoes back the next expected
+ * offset.
+ */
 static int upload_write(struct smp_streamer *ctxt)
 {
 	zcbor_state_t *zsd = ctxt->reader->zs;
@@ -415,6 +439,10 @@ static struct mgmt_group woz_smp_img_group = {
 #endif
 };
 
+/**
+ * SYS_INIT callback that registers the woz_smp_img group with mcumgr and optionally registers the
+ * reset callback if CONFIG_MCUMGR_GRP_OS_RESET_HOOK is enabled.
+ */
 static void woz_smp_img_init(void)
 {
 	mgmt_register_group(&woz_smp_img_group);

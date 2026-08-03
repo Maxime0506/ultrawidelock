@@ -19,8 +19,9 @@ on direction 0 and opens on direction 1; the device is the mirror — it OPENS
 reader->device traffic (direction 0, key s0) and SEALS device->reader traffic
 (direction 1, key s1). Both per-direction counters start at 1 (§8.3.1.13).
 
-<details><summary>Undocumented (1)</summary>
+### `struct aliro_device`
+`modules/woz_aliro/include/aliro_device.h:125`
 
-- `aliro_device`
-
-</details>
+Aliro device: access credential (private scalar and public point), reader identity and
+verification key, per-transaction ephemeral and channel state, BLE-SK salt, and transaction
+phase.

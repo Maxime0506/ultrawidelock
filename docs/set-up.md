@@ -13,19 +13,6 @@ cd openaliro
 
 Every command below runs from this directory.
 
-## Fastest install: browser flash for ESP32-S3/C5
-
-Release images can be installed from the
-[browser flasher](https://openaliro.github.io/openaliro/flash/) in Chrome or Edge:
-connect the board, select S3 or C5, and choose **Install**. This path needs no
-ESP-IDF or local flashing tools. Its implementation and local test procedure are
-documented in [`web-flasher/README.md`](../web-flasher/README.md).
-
-The page and dual-chip manifest are shipped and dry-checked, but the repository
-does not record a successful real WebSerial flash yet. Treat browser flashing as
-experimental until that bench check exists. ESP32-S3 is hardware-validated
-through the normal flash path; ESP32-C5 has build and release support only.
-
 ## The Zephyr boards: DWM3001CDK and nRF5340 DK
 
 Both build out of one fetched workspace, so the setup below is shared.
@@ -73,13 +60,20 @@ Then, for the **DWM3001CDK** — one nRF52833 carrying the reader, the Matter
 node and a Thread MTD:
 
 ```bash
+make dfu-key        # once per clone: this checkout's image-signing key
 make build          # -> build/cdk-matter/merged.hex
 make flash          # over the on-board J-Link OB
 make monitor        # RTT; this board has no UART console
 ```
 
+`make dfu-key` comes first because every image on this board is signed, and with
+no key the build stops at configure rather than fall back to MCUboot's published
+demo key. The key is gitignored, so a fresh clone or a new git worktree needs its
+own.
+
 `make reader` builds the same source without Matter or Thread, which needs no
-commissioner. Details: [`firmware/README.md`](../firmware/README.md).
+commissioner. Once a board is flashed, `make dfu` updates it over Bluetooth, with
+no cable and no probe. Details: [`firmware/README.md`](../firmware/README.md).
 
 Or for the **nRF5340 DK**, the only target with NFC:
 
@@ -168,6 +162,19 @@ git config git-pr.verify scripts/verify-isolated.sh
 That wrapper runs the committed twin self-test and every hermetic gate available
 inside the candidate. It names the seven skipped gates in the verdict; CI still
 runs them. Run `make verify` directly for the full developer sweep.
+
+## Browser flash for ESP32-S3/C5 (no toolchain)
+
+Release images can be installed from the
+[browser flasher](https://openaliro.github.io/openaliro/flash/) in Chrome or Edge:
+connect the board, select S3 or C5, and choose **Install**. This path needs no
+ESP-IDF or local flashing tools. Its implementation and local test procedure are
+documented in [`web-flasher/README.md`](../web-flasher/README.md).
+
+The page and dual-chip manifest are shipped and dry-checked, but the repository
+does not record a successful real WebSerial flash yet. Treat browser flashing as
+experimental until that bench check exists. ESP32-S3 is hardware-validated
+through the normal flash path; ESP32-C5 has build and release support only.
 
 ## ESP32-S3, ESP32-C5, and ESP32-C6 ports
 

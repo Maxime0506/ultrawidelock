@@ -34,8 +34,22 @@ flowchart TD
 
 ## API
 
+### `have()`
+`scripts/security-attest.sh:49`
+
+Return 0 if command exists in PATH, 1 otherwise.
+
+**called by** `gate_verify`
+
+### `hdr()`
+`scripts/security-attest.sh:51`
+
+Print a section header with bold formatting and a leading newline.
+
+**called by** `gate_verify`, `gate_workflow`
+
 ### `gate_workflow()`
-`scripts/security-attest.sh:56`
+`scripts/security-attest.sh:58`
 
 ---- workflow --------------------------------------------------------------
 A line scanner over the workflow rather than a yaml parse, for the reason security-diff.sh gives
@@ -46,7 +60,7 @@ regex that is honest about what it matches.
 **calls** `hdr`
 
 ### `gate_verify()`
-`scripts/security-attest.sh:122`
+`scripts/security-attest.sh:124`
 
 ---- verify ----------------------------------------------------------------
 What a user would actually do, run against a real release. This is the check that proves the
@@ -54,10 +68,3 @@ control works; `workflow` above only proves it is configured, and the two have f
 independently often enough elsewhere to be worth separating.
 
 **calls** `have`, `hdr`
-
-<details><summary>Undocumented (2)</summary>
-
-- `have`
-- `hdr`
-
-</details>

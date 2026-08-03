@@ -31,8 +31,9 @@ NO_COLOR=1      plain output
 
 **discussed in** [`security/README.md`](../../../security/README.md)
 
-<details><summary>Undocumented (1)</summary>
+## API
 
-- `have`
+### `have()`
+`scripts/security-ct.sh:51`
 
-</details>
+Test whether a command is available in PATH.

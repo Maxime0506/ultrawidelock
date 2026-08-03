@@ -38,6 +38,9 @@ enum piv_ccid_message {
 	PIV_CCID_RDR_TO_PC_DATA_RATE_AND_CLOCK = 0x84,
 };
 
+/**
+ * USB CCID (smart card interface) state: tracks card power status and PIV APDU protocol handler.
+ */
 struct piv_ccid {
 	bool powered;
 	struct piv_apdu piv;

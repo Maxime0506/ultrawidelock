@@ -5,10 +5,13 @@ const ANSI_ESCAPE = /\u001B\[[0-?]*[ -/]*[@-~]/g
 const ALAB_EVENT = /\[ALAB\]\s+t=(\d+)\s+ev=([^\s]+)((?:\s+[^\s=]+=-?\d+)*)/
 const ALAB_ATTRIBUTE = /([^\s=]+)=(-?\d+)/g
 
+// Strip ANSI escape sequences from the input string and return the plain text.
 export function stripAnsi(value: string): string {
   return value.replace(ANSI_ESCAPE, "")
 }
 
+// Create and return a BoardState record initialized with the given board ID, appropriate label and
+// theme color, and empty connection, diagnostic, log, and analyzer state.
 export function makeBoardState(id: BoardId): BoardState {
   const labels: Record<BoardId, string> = {
     nrf: "nRF5340 DK",
@@ -27,6 +30,8 @@ export function makeBoardState(id: BoardId): BoardState {
   }
 }
 
+// Return a severity tier (error, warning, success, or info) by scanning the console line for
+// keywords.
 function severityFor(line: string): Severity {
   if (/\b(fail|failed|error|panic|fatal)\b/i.test(line)) return "error"
   if (/\b(warn|timeout|untrusted|busy)\b/i.test(line)) return "warning"
@@ -60,6 +65,9 @@ function updateEsp32(board: BoardState, line: string): void {
   if (app) board.firmware = `${app[1]} ${app[2].trim()}`
 }
 
+// Extract and merge QR code URL, QR content payload, and manual pairing code from a console line
+// into the current pairing state, returning the updated state or current state if no fields
+// matched.
 function pairingFromLine(current: BoardState["pairing"], line: string): BoardState["pairing"] {
   const pairing = { ...current }
   const urlText = line.match(/(?:QR code URL:|commis)\s*(https?:\/\/\S+)/i)?.[1]

@@ -47,6 +47,9 @@ extern "C" {
 /** One past kContextTagMaxNum, so it cannot collide with a context tag (TLVTags.h:34-35). */
 #define MATTER_TLV_ANON_TAG_NUM    0x00000100u
 
+/**
+ * TLV tag type: a 64-bit unsigned integer encoding context, tag form, and tag number.
+ */
 typedef uint64_t matter_tlv_tag_t;
 
 #define MATTER_TLV_TAG(profile, num)                                                               \

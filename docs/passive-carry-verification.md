@@ -73,11 +73,11 @@ Capture and score:
 
 ```
 # in ports/esp32/apps/matter-lock, on an ESP32-S3 + DWM3000EVB flashed with a lab build
-make nrf-term LOG=alice.log          # logs the serial port to a file
+make term LOG=walkup-1.log           # logs the serial port to a file
 #   at the console: `lab on`, walk up several times from 4-5 m back, `lab off`
 
 # from the repo root
-python3 tools/aliro_gait.py alice=alice.log bob=bob.log -o e1.html
+python3 tools/aliro_gait.py carrier1=walkup-1.log carrier2=walkup-2.log -o e1.html
 ```
 
 Each walk-up must start far enough back that the first logged range reads a couple of

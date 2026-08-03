@@ -47,6 +47,7 @@ ERRORS = {
 
 
 def die(msg):
+    """Exit with a prefixed error message."""
     sys.exit(f"woz_push: {msg}")
 
 
@@ -54,10 +55,12 @@ class Session:
     """One update conversation: write a frame, wait for its reply."""
 
     def __init__(self, client):
+        """Store the BLE client and replies queue for a GATT notification session."""
         self.client = client
         self.replies = asyncio.Queue()
 
     def on_notify(self, _sender, data):
+        """Queue a received GATT notification payload for retrieval by wait_for_window."""
         self.replies.put_nowait(bytes(data))
 
     async def call(self, frame, timeout=20.0, tolerate=()):

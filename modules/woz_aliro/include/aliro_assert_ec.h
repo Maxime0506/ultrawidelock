@@ -31,6 +31,9 @@ struct aliro_assert_ec_priv {
 	uint8_t d[ALIRO_P256_SCALAR]; /* P-256 private scalar */
 };
 
+/**
+ * Uncompressed ECDSA-P256 public key point: 0x04 || X || Y (65 bytes).
+ */
 struct aliro_assert_ec_pub {
 	uint8_t q[ALIRO_ASSERT_PUB_LEN]; /* uncompressed point, 0x04 || X || Y */
 };

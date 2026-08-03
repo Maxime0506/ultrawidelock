@@ -58,12 +58,14 @@ class AgentConfig:
 
 
 def _mapping(value: Any, field: str) -> Mapping[str, Any]:
+    """Coerce value to a dict; raise ConfigError if not a table (Mapping)."""
     if not isinstance(value, dict):
         raise ConfigError(f"{field} must be a table")
     return value
 
 
 def _string(value: Any, field: str, *, optional: bool = False) -> Optional[str]:
+    """Coerce value to a non-empty string, returning None if optional and value is None; raise ConfigError otherwise."""
     if value is None and optional:
         return None
     if not isinstance(value, str) or not value:
@@ -72,6 +74,7 @@ def _string(value: Any, field: str, *, optional: bool = False) -> Optional[str]:
 
 
 def _boolean(value: Any, field: str, *, default: bool = False) -> bool:
+    """Coerce value to bool, returning default if None; raise ConfigError if not a bool."""
     if value is None:
         return default
     if not isinstance(value, bool):
@@ -80,6 +83,7 @@ def _boolean(value: Any, field: str, *, default: bool = False) -> bool:
 
 
 def _integer(value: Any, field: str, *, default: int) -> int:
+    """Coerce value to int, returning default if None; raise ConfigError if not an int or is a bool."""
     if value is None:
         return default
     if not isinstance(value, int) or isinstance(value, bool):
@@ -88,12 +92,14 @@ def _integer(value: Any, field: str, *, default: int) -> int:
 
 
 def _reject_unknown(values: Mapping[str, Any], allowed: set[str], field: str) -> None:
+    """Raise ConfigError if values contains any keys not in allowed."""
     unexpected = set(values) - allowed
     if unexpected:
         raise ConfigError(f"{field} contains unsupported keys")
 
 
 def _parse_mqtt(values: Mapping[str, Any]) -> MqttConfig:
+    """Validate and parse the MQTT configuration block, checking all keys are recognized, validating port and password sources, enforcing mutual exclusivity of authentication methods, and returning an MqttConfig struct."""
     allowed = {
         "host",
         "port",
@@ -154,6 +160,7 @@ def _parse_mqtt(values: Mapping[str, Any]) -> MqttConfig:
 
 
 def _parse_device(device_id: str, values: Mapping[str, Any]) -> DeviceConfig:
+    """Validate and parse one device configuration block, checking device ID format, rejecting unknown keys, validating serial port and baud rate ranges, and returning a DeviceConfig struct."""
     if not DEVICE_ID_RE.fullmatch(device_id):
         raise ConfigError("device ID must contain only lowercase letters, numbers, _ or -")
     _reject_unknown(values, {"serial_port", "serial_identity", "baud", "distance_mode"}, "device")
@@ -213,6 +220,7 @@ def load_config(path: Path) -> AgentConfig:
 
 
 def _toml_string(value: str) -> str:
+    """JSON-encode string with ensure_ascii=False for TOML serialization."""
     return json.dumps(value, ensure_ascii=False)
 
 

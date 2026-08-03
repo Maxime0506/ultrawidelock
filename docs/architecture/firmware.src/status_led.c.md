@@ -19,10 +19,21 @@ It follows the window rather than the button, so it is honest about the state
 that actually matters: it goes out when the window expires on its own, not
 when someone stops pressing.
 
-<details><summary>Undocumented (3)</summary>
+## API
 
-- `blink`
-- `window_changed`
-- `status_led_init`
+### `static void blink(struct k_work *work)`
+`firmware/src/status_led.c:47`
 
-</details>
+Toggle the status LED and reschedule itself at BLINK_MS intervals.
+
+### `static void window_changed(bool open)`
+`firmware/src/status_led.c:60`
+
+Set the status LED lit immediately and start blinking on a window open; cancel blinking and turn
+it off on window close.
+
+### `static int status_led_init(void)`
+`firmware/src/status_led.c:84`
+
+Initialize the status LED on GPIO and register the DFU window state change callback; logs a
+warning but does not fail if the LED is not ready.

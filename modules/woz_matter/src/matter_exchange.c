@@ -8,6 +8,10 @@
 
 #include <string.h>
 
+/**
+ * Initialize a Matter exchange: clear state, set MRP mode, init the message counter with the given
+ * entropy, and init the MRP window.
+ */
 void matter_exchange_init(struct matter_exchange *x, uint32_t entropy, bool mrp)
 {
 	memset(x, 0, sizeof(*x));
@@ -75,6 +79,14 @@ static void exchange_remember(struct matter_exchange *x, uint16_t id)
 	x->init_exchange[cap - 1] = id;
 }
 
+/**
+ * Receive and decode a message on this exchange: decode and validate the message header, decrypt if
+ * secure, decode the protocol header, validate exchange ID and state, check replay window, and
+ * return the parsed message. On secure sessions, the protocol header is decrypted; the plaintext
+ * buffer must be provided and must be large enough. Return MATTER_OK on success; MATTER_E_INVAL if
+ * pointers are null or structure is invalid; MATTER_E_STATE if the exchange ID does not match and
+ * the message is not a valid acknowledgement.
+ */
 int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t len,
 			 struct matter_exchange_in *in, uint8_t *pt, size_t pt_cap)
 {
@@ -230,6 +242,12 @@ int matter_exchange_recv(struct matter_exchange *x, const uint8_t *msg, size_t l
 	return MATTER_OK;
 }
 
+/**
+ * Promote an unsecured exchange to a secure session exchange: set secure flag, IDs, and keys;
+ * reinit counter and MRP window with new entropy; initialize operational node IDs to PASE defaults;
+ * clear open and ack_pending flags. Return MATTER_E_INVAL if pointers are null or local_id is
+ * unsecured, MATTER_OK on success.
+ */
 int matter_exchange_promote(struct matter_exchange *x, uint16_t local_id, uint16_t peer_id,
 			    const struct matter_session_keys *keys, uint32_t entropy)
 {
@@ -416,6 +434,11 @@ static int frame(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode
 	return MATTER_OK;
 }
 
+/**
+ * Frame and send a reply on this exchange in the Secure Channel protocol, setting the initiator
+ * flag to false and clearing the R and A exchange flags. Calls frame() with the given opcode and
+ * payload.
+ */
 int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8_t *payload,
 			  size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
 {
@@ -423,6 +446,9 @@ int matter_exchange_reply(struct matter_exchange *x, uint8_t opcode, const uint8
 		     payload_len, out, cap, out_len);
 }
 
+/**
+ * Frame one outbound message on this exchange with the given protocol ID and opcode.
+ */
 int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_t opcode,
 			 const uint8_t *payload, size_t payload_len, uint8_t *out, size_t cap,
 			 size_t *out_len)
@@ -431,6 +457,10 @@ int matter_exchange_send(struct matter_exchange *x, uint16_t protocol_id, uint8_
 		     out_len);
 }
 
+/**
+ * Frame one outbound message on this exchange as the initiator, setting the exchange ID in the
+ * message header.
+ */
 int matter_exchange_send_initiator(struct matter_exchange *x, uint16_t exchange_id,
 				   uint16_t protocol_id, uint8_t opcode, const uint8_t *payload,
 				   size_t payload_len, uint8_t *out, size_t cap, size_t *out_len)
@@ -439,6 +469,10 @@ int matter_exchange_send_initiator(struct matter_exchange *x, uint16_t exchange_
 		     cap, out_len);
 }
 
+/**
+ * Send a standalone MRP acknowledgment on this exchange if one is pending and MRP is enabled;
+ * returns MATTER_E_STATE if no ack is pending or MRP is not active.
+ */
 int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size_t cap,
 				   size_t *out_len)
 {
@@ -452,6 +486,10 @@ int matter_exchange_standalone_ack(struct matter_exchange *x, uint8_t *out, size
 		     0u, out, cap, out_len);
 }
 
+/**
+ * Set the operational node IDs for this exchange; used to populate node ID fields in secure channel
+ * messages.
+ */
 void matter_exchange_set_op_node_ids(struct matter_exchange *x, uint64_t local, uint64_t peer)
 {
 	if (x == NULL) {

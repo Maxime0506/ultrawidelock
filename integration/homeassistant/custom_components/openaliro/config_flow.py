@@ -18,6 +18,7 @@ class OpenAliroConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input: dict[str, object] | None = None) -> FlowResult:
+        """Handle the initial user config flow step: discover serial ports, probe the device, deduplicate by identity, create the config entry with device ID and connection parameters."""
         errors: dict[str, str] = {}
         if user_input is not None:
             serial_port = str(user_input[CONF_SERIAL_PORT])

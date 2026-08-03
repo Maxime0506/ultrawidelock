@@ -39,6 +39,7 @@ G = (
 
 
 def on_curve(pt):
+    """Test whether a point satisfies the secp256r1 curve equation."""
     if pt is None:
         return True
     x, y = pt
@@ -46,6 +47,7 @@ def on_curve(pt):
 
 
 def add(p1, p2):
+    """Add two points on the secp256r1 elliptic curve using the tangent-and-chord method; return None for the point at infinity."""
     if p1 is None:
         return p2
     if p2 is None:
@@ -200,6 +202,7 @@ def from_config(path):
 
 
 def main():
+    """Derive the 97-byte SPAKE2+ verifier (w0 then L) from passcode, salt and iteration count; print Matter Kconfig with setup code and print the verifier hex; if --from-config is set, read a built .config, verify its SPAKE2+ constants, and print the setup code."""
     ap = argparse.ArgumentParser(description=__doc__)
     # CHIP's own test pairing, so the defaults commission with a stock
     # chip-tool and with Apple Home using the standard setup code.

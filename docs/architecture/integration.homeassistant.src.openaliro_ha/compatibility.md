@@ -12,26 +12,31 @@ Incremental parser for the source-proven ``aliro range`` compatibility mode.
 
 Parse one explicitly started ``aliro range`` command response at a time.
 
+#### `RangeResponseParser.__init__(self) -> None`
+`integration/homeassistant/src/openaliro_ha/compatibility.py:21`
+
+Initialize a range response parser. Sets all internal state to inactive with no measurements.
+
 #### `RangeResponseParser.begin(self) -> None`
-`integration/homeassistant/src/openaliro_ha/compatibility.py:29`
+`integration/homeassistant/src/openaliro_ha/compatibility.py:30`
 
 Start a new response, discarding any interrupted prior response.
 
 #### `RangeResponseParser.feed_line(self, line: str) -> Optional[CompatibilityRangeReading]`
-`integration/homeassistant/src/openaliro_ha/compatibility.py:39`
+`integration/homeassistant/src/openaliro_ha/compatibility.py:40`
 
 Accept one response line and emit only a complete, internally valid reading.
 
 **calls** `RangeResponseParser._complete_reading`
 
 #### `RangeResponseParser.finished(self) -> bool`
-`integration/homeassistant/src/openaliro_ha/compatibility.py:69`
+`integration/homeassistant/src/openaliro_ha/compatibility.py:70`
 
 Whether the active response reached a safe terminal line.
 
-<details><summary>Undocumented (2)</summary>
+#### `RangeResponseParser._complete_reading(self, trusted: bool) -> Optional[CompatibilityRangeReading]`
+`integration/homeassistant/src/openaliro_ha/compatibility.py:75`
 
-- `RangeResponseParser.__init__`
-- `RangeResponseParser._complete_reading`
+Emit a complete reading if all four measurements (distance, NLOS, block, age) are present and non-negative; return None otherwise.
 
-</details>
+**called by** `RangeResponseParser.feed_line`

@@ -25,24 +25,36 @@ deserialize at :123); the checks below mirror what the firmware enforces.
 
 ## API
 
+### `class BadBlob(Exception)`
+`tools/aliro_blob.py:51`
+
+Exception raised when a blob structure is invalid or cannot be parsed.
+
+**called by** `parse`
+
 ### `parse(buf, off=0)`
-`tools/aliro_blob.py:55`
+`tools/aliro_blob.py:56`
 
 Parse one blob at buf[off:]. Returns (fields, total_len).
 
 **called by** `main`  ·  **calls** `BadBlob`
 
 ### `check(f)`
-`tools/aliro_blob.py:115`
+`tools/aliro_blob.py:116`
 
 Return the list of reasons this blob will not produce a Wallet unlock.
 
 **called by** `report`
 
-<details><summary>Undocumented (3)</summary>
+### `report(f, total, args, where='')`
+`tools/aliro_blob.py:139`
 
-- `BadBlob`
-- `report`
+Print a structured report of an APRV blob to stdout showing version, identity, reader ID, signing key, GRK, trust anchors, and unlock verdict.
+
+**called by** `main`  ·  **calls** `check`
+
+<details><summary>Undocumented (1)</summary>
+
 - `main`
 
 </details>

@@ -980,6 +980,10 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 static struct ble_npl_event s_presence_reset_ev;
 static void (*s_presence_reset_cb)(void);
 
+/**
+ * Invoke the presence reset callback posted by aliro_ble_post_presence_reset, if one was
+ * registered.
+ */
 static void presence_reset_ev_cb(struct ble_npl_event *ev)
 {
 	(void)ev;
@@ -988,6 +992,10 @@ static void presence_reset_ev_cb(struct ble_npl_event *ev)
 	}
 }
 
+/**
+ * Post an event callback to be invoked asynchronously on the default NimBLE event queue when
+ * presence is reset.
+ */
 void aliro_ble_post_presence_reset(void (*cb)(void))
 {
 	s_presence_reset_cb = cb;

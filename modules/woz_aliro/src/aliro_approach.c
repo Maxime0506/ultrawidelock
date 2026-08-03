@@ -299,6 +299,11 @@ void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms,
 	ap->last_feed_ms = now_ms;
 }
 
+/**
+ * Advance the approach state machine by one tick: handle predictive unlock abort on deadline,
+ * departure by silence when measurements stop after the phone leaves the relock threshold, and
+ * return the triggered action or HOLD if no action occurred.
+ */
 enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_t now_ms)
 {
 	/* No sample this window: the estimate is frozen (no coasting — a

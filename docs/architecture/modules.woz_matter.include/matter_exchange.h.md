@@ -22,16 +22,17 @@ owns a clock.
 
 ## API
 
+### `struct matter_exchange`
+`modules/woz_matter/include/matter_exchange.h:82`
+
+Matter exchange state including secure session keys, local and peer session IDs, MRP settings,
+exchange ID tracking, message counters, and acknowledgement tracking for a single commissioner
+session.
+
 ### `struct matter_exchange_in`
-`modules/woz_matter/include/matter_exchange.h:206`
+`modules/woz_matter/include/matter_exchange.h:211`
 
 What a received message turned out to be.
 @ref opcode, @ref protocol_id, @ref exchange_id and @ref initiator are set
 even when matter_exchange_recv() goes on to REFUSE the message, so a caller
 can log what it turned away. The rest is meaningful only on MATTER_OK.
-
-<details><summary>Undocumented (1)</summary>
-
-- `matter_exchange`
-
-</details>

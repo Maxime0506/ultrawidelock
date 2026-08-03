@@ -42,8 +42,29 @@ flowchart TD
 
 ## API
 
+### `have()`
+`scripts/security-web.sh:58`
+
+Return true if the command exists in PATH, false otherwise.
+
+**called by** `gate_retire`
+
+### `hdr()`
+`scripts/security-web.sh:60`
+
+Print a bold section header to stdout preceded by a newline.
+
+**called by** `gate_install`, `gate_pins_csp`, `gate_retire`
+
+### `missing()`
+`scripts/security-web.sh:62`
+
+Print a missing-tool error to stdout, note that a missing gate is a failed gate, and return 1.
+
+**called by** `gate_retire`
+
 ### `gate_pins_csp()`
-`scripts/security-web.sh:70`
+`scripts/security-web.sh:73`
 
 ---- pins + csp ------------------------------------------------------------
 Both live in one python pass because both need the same parse of the same files, and the whole
@@ -54,7 +75,7 @@ has pages that contain both.
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `gate_retire()`
-`scripts/security-web.sh:257`
+`scripts/security-web.sh:260`
 
 ---- retire ----------------------------------------------------------------
 Vendored JS only. retire.js is a version-fingerprint scanner, so it has nothing useful to say
@@ -65,7 +86,7 @@ will push people towards doing.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_install()`
-`scripts/security-web.sh:297`
+`scripts/security-web.sh:300`
 
 ---- install -----------------------------------------------------------------
 Installing a package is an arbitrary-code-execution step. npm runs preinstall/postinstall from
@@ -85,16 +106,8 @@ time to whatever was published since the review.
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `run_one()`
-`scripts/security-web.sh:375`
+`scripts/security-web.sh:378`
 
 ---- dispatch --------------------------------------------------------------
 
 **calls** `gate_install`, `gate_pins_csp`, `gate_retire`
-
-<details><summary>Undocumented (3)</summary>
-
-- `have`
-- `hdr`
-- `missing`
-
-</details>

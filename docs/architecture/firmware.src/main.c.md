@@ -14,18 +14,40 @@ covers BLE pairing and the Aliro exchange too, not only the ranging.
 
 **called by** `main`
 
+### `static bool provisioning_requested(void)`
+`firmware/src/main.c:90`
+
+Check GPIO SW0 (active-low, pulled up in DTS) to see if provisioning is requested at boot.
+Returns true if SW0 is ready and held (logical 1), false otherwise.
+
+**called by** `main`
+
 ### `static void provisioning_mode(void)`
-`firmware/src/main.c:102`
+`firmware/src/main.c:106`
 
 Runs the console and nothing else. Never returns: leaving this function would
 start the radios in a mode the user did not ask for.
 
 **called by** `main`
 
-<details><summary>Undocumented (3)</summary>
+### `static void factory_reset_if_requested(void)`
+`firmware/src/main.c:149`
 
-- `provisioning_requested`
-- `factory_reset_if_requested`
-- `main`
+Check GPIO SW0 (active-low, pulled up in DTS) at boot. If SW0 is held (logical 1), toggle LED0
+six times at 120 ms intervals as user feedback, erase Aliro provisioning and Matter fabric (if
+CONFIG_ALIRO_MATTER_BLE is on), and log that the board is now commissionable on the next boot.
+Returns silently if GPIO is not ready or if SW0 is not held.
 
-</details>
+**called by** `main`
+
+### `int main(void)`
+`firmware/src/main.c:192`
+
+Entry point for the DWM3001CDK reader application. Initializes provisioning and factory-reset
+paths, starts the Aliro BLE reader and optional Matter commissioning and DFU receiver, then runs
+the approach controller loop. Feeds the controller trusted ranges on each new latch generation
+and observes untrusted ranges for departure detection. Grants unlock on approach prediction or
+threshold crossing, relocks on departure or abort, and exits with an error code if reader startup
+fails.
+
+**calls** `factory_reset_if_requested`, `heap_peak_log`, `provisioning_mode`, `provisioning_requested`

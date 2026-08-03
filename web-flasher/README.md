@@ -10,8 +10,9 @@ the one matching the connected chip, and the page's Board dropdown can pin a
 chip explicitly (it serves the button a single-build manifest built
 client-side, so a mismatched board fails loudly). No ESP-IDF, no esptool, no drivers beyond
 the browser. Chrome or Edge on a computer; WebSerial does not exist in Safari
-or Firefox. The nRF5340 DK target stays out of scope: it programs over a
-J-Link probe, which no browser API reaches.
+or Firefox. The nRF5340 DK and DWM3001CDK targets stay out of scope: both program
+over a J-Link (an external probe for the DK, the on-board J-Link OB for the CDK),
+which no browser API reaches.
 
 ## How the pieces fit
 

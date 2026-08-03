@@ -37,6 +37,9 @@
 static uint8_t s_blob[ALIRO_PROV_BLOB_MAX];
 static char s_hex[2u * ALIRO_PROV_BLOB_MAX + 1u];
 
+/**
+ * Return true if all bytes in the buffer are zero.
+ */
 static bool all_zero(const uint8_t *p, size_t len)
 {
 	uint8_t acc = 0;
@@ -69,6 +72,10 @@ static const char *dead_blob_reason(const struct aliro_reader_identity *id,
 	return NULL;
 }
 
+/**
+ * Shell command: display the reader's provisioning state — whether it is provisioned, its reader
+ * ID, GRK status, enrolled anchors, and usability verdict.
+ */
 static int cmd_prov(const struct shell *sh, size_t argc, char **argv)
 {
 	struct aliro_reader_identity id;
@@ -99,6 +106,10 @@ static int cmd_prov(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+/**
+ * Deserialize a hex-encoded identity blob, reject it if syntactically valid but useless (no
+ * identity, expired, or no trust anchors), then import it to settings storage if safe.
+ */
 static int cmd_import(const struct shell *sh, size_t argc, char **argv)
 {
 	struct aliro_reader_identity id;
@@ -142,6 +153,10 @@ static int cmd_import(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+/**
+ * Serialize and print the reader identity and trust store as hex after confirming with "aliro
+ * export yes"; the resulting string holds the private key and can impersonate the lock.
+ */
 static int cmd_export(const struct shell *sh, size_t argc, char **argv)
 {
 	struct aliro_reader_identity id;
@@ -171,6 +186,10 @@ static int cmd_export(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+/**
+ * Erase the reader identity and all trust anchors after confirming with "aliro erase yes",
+ * returning to the DEV identity with no anchors.
+ */
 static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);

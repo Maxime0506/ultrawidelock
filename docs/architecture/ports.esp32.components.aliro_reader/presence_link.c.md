@@ -69,8 +69,15 @@ the host frames on whole lines.
 
 **called by** `answer_p256`, `presence_link_cmd`
 
+### `static int hexval(char c)`
+`ports/esp32/components/aliro_reader/presence_link.c:179`
+
+Return the numeric value 0-15 of a hex digit, or -1 if the character is not a valid hex digit.
+
+**called by** `parse_hex`
+
 ### `static int parse_hex(const char *s, uint8_t *out, size_t n)`
-`ports/esp32/components/aliro_reader/presence_link.c:192`
+`ports/esp32/components/aliro_reader/presence_link.c:195`
 
 Parse exactly n bytes of hex. Rejects a short or long string rather than taking a
 prefix: a truncated nonce that still parsed would silently weaken the challenge.
@@ -78,7 +85,7 @@ prefix: a truncated nonce that still parsed would silently weaken the challenge.
 **called by** `presence_link_cmd`  ·  **calls** `hexval`
 
 ### `static int answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN], const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm, const struct woz_uwb_range_integrity *ig)`
-`ports/esp32/components/aliro_reader/presence_link.c:213`
+`ports/esp32/components/aliro_reader/presence_link.c:216`
 
 Assemble + sign the assertion for a challenge nonce under the device key, so any
 holder of the public point can verify it without sharing a secret. That is what
@@ -87,8 +94,15 @@ rather than only to one paired host.
 
 **called by** `prove`  ·  **calls** `emit_hex`, `fill_assert`
 
+### `static bool before_deadline(int64_t deadline_ms)`
+`ports/esp32/components/aliro_reader/presence_link.c:236`
+
+Return true if the current uptime is before the deadline in milliseconds.
+
+**called by** `acquire_fresh`
+
 ### `int presence_link_require_fresh(void)`
-`ports/esp32/components/aliro_reader/presence_link.c:350`
+`ports/esp32/components/aliro_reader/presence_link.c:356`
 
 Require a new credential authentication and a later trusted UWB range.
 Returns 0 only when the single provisioned credential ranges within policy.
@@ -98,16 +112,14 @@ authorize the caller.
 **calls** `acquire_fresh`
 
 ### `int presence_link_cmd(int argc, char **argv)`
-`ports/esp32/components/aliro_reader/presence_link.c:366`
+`ports/esp32/components/aliro_reader/presence_link.c:372`
 
 Console handler for the `presence` command; registered by the app shell.
 
 **calls** `emit_hex`, `parse_hex`, `prove`
 
-<details><summary>Undocumented (4)</summary>
+<details><summary>Undocumented (2)</summary>
 
-- `hexval`
-- `before_deadline`
 - `acquire_fresh`
 - `prove`
 

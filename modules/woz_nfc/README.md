@@ -13,12 +13,15 @@ backend:
 | `PN532` | in-tree PN532 transport | PN532 breakout on `spi1`, configured by [`ports/nrf5340dk/overlays/pn532.overlay`](../../ports/nrf5340dk/overlays/pn532.overlay) |
 | `NONE` (default otherwise) | no-op | none; Aliro NFC flow disabled, BLE/UWB unaffected |
 
+NFC tap is an nRF5340 DK feature only: the DWM3001CDK carries no NFC reader IC,
+so nothing here is built for it.
+
 Build selection from the repo root:
 
 ```sh
-make build              # default: st25r — upstream ST25R/RFAL path
-make build NFC=pn532    # PN532 breakout on spi1
-make build NFC=none     # no reader fitted — Aliro NFC flow disabled
+make nrf-build              # default: st25r, the upstream ST25R/RFAL path
+make nrf-build NFC=pn532    # PN532 breakout on spi1
+make nrf-build NFC=none     # no reader fitted, Aliro NFC flow disabled
 ```
 
 The default ST25R300/RFAL configuration is hardware-validated. The PN532 driver
@@ -27,15 +30,15 @@ PN532 firmware-CI or hardware-validation result is recorded.
 
 ## PN532 backend
 
-- `pn532.[ch]` — host-protocol driver (frames, ACK, command subset, ISO-DEP
+- `pn532.[ch]`: host-protocol driver (frames, ACK, command subset, ISO-DEP
   chaining via the MI bit). OS-free with injected bus ops; unit-tested on the
   host against a scripted fake bus (`tests/host/test_pn532.c`).
-- `pn532_bus.h` + `pn532_bus_spi.c` — Zephyr SPI glue for devicetree
+- `pn532_bus.h` + `pn532_bus_spi.c`: Zephyr SPI glue for devicetree
   `"nxp,pn532-spi"` (mode 0, LSB-first via `SPI_TRANSFER_LSB`; the neutral
   `pn532_bus.h` interface keeps the transport bus-agnostic). Ready-status is
   polled with the STATREAD command unless `irq-gpios` is wired (active low; the
   pad is driven low when a frame is pending).
-- `transport_pn532.cpp` — polling thread and Aliro session lifecycle. Each
+- `transport_pn532.cpp`: polling thread and Aliro session lifecycle. Each
   discovery round raises the RF field, broadcasts one Apple ECP v2 frame
   (same layout as `modules/woz_aliro_ecp`, CRC engines gated off around a raw
   `InCommunicateThru`), attempts one 106 kbps type A activation, then drops

@@ -311,6 +311,7 @@ def read_bytes(arg: str, name: str) -> bytes:
 
 
 def main(argv=None) -> int:
+    """Parse command-line arguments and verify an ECDSA-P256 presence assertion. Arguments include the dongle public key, assertion frame, challenge nonce, credential ID, and optional distance/uptime/STS-quality thresholds. Outputs human-readable or JSON verdict. Returns 0 if the assertion verifies, 1 if it is rejected, 2 if openssl is unavailable."""
     ap = argparse.ArgumentParser(
         description="Verify an ECDSA-P256 presence assertion from an Aliro presence dongle."
     )

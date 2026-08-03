@@ -11,8 +11,13 @@ little-endian. The two share a name and nothing else, so they stay separate.
 
 ## API
 
+### `typedef uint64_t matter_tlv_tag_t`
+`modules/woz_matter/include/matter_tlv.h:53`
+
+TLV tag type: a 64-bit unsigned integer encoding context, tag form, and tag number.
+
 ### `struct matter_tlv_writer`
-`modules/woz_matter/include/matter_tlv.h:106`
+`modules/woz_matter/include/matter_tlv.h:109`
 
 Encoder state. Errors are STICKY: the first failure is latched into rc and
 every later put becomes a no-op, so a long encode sequence is checked once at
@@ -21,7 +26,7 @@ that keeps call sites readable, and it cannot silently truncate -- finish()
 returns the latched error.
 
 ### `struct matter_tlv_reader`
-`modules/woz_matter/include/matter_tlv.h:187`
+`modules/woz_matter/include/matter_tlv.h:190`
 
 ---------------------------------------------------------------- decoder ---
 Every byte here arrives from a peer, so the decoder's job is as much refusal
@@ -38,9 +43,3 @@ Iteration is CHIP-shaped because the shape is right: next() moves along the
 current level and steps OVER a container it was not told to enter; enter()
 descends; exit() skips whatever is left of the current container and lands
 just past its end marker.
-
-<details><summary>Undocumented (1)</summary>
-
-- `matter_tlv_tag_t`
-
-</details>

@@ -87,6 +87,9 @@ static K_WORK_DELAYABLE_DEFINE(s_window, window_expire);
 static bool s_open;
 static woz_dfu_window_cb s_window_cb;
 
+/**
+ * Register a callback to be invoked when the update window opens or closes.
+ */
 void woz_dfu_set_window_cb(woz_dfu_window_cb cb)
 {
 	s_window_cb = cb;
@@ -101,6 +104,10 @@ static void window_notify(bool open)
 	}
 }
 
+/**
+ * Mark the update window closed, reset RX state, and notify all listeners (typically the UI) that
+ * the window is no longer open.
+ */
 static void window_expire(struct k_work *work)
 {
 	ARG_UNUSED(work);
@@ -110,6 +117,10 @@ static void window_expire(struct k_work *work)
 	window_notify(false);
 }
 
+/**
+ * Open the update window for the given duration in milliseconds. Reschedule the close timer and
+ * notify all window listeners.
+ */
 void woz_dfu_window_open(uint32_t duration_ms)
 {
 	s_open = true;
@@ -118,6 +129,10 @@ void woz_dfu_window_open(uint32_t duration_ms)
 	window_notify(true);
 }
 
+/**
+ * Cancel the update window timer, mark it closed, reset RX state, and notify all listeners that the
+ * window is no longer open.
+ */
 void woz_dfu_window_close(void)
 {
 	(void)k_work_cancel_delayable(&s_window);
@@ -126,6 +141,9 @@ void woz_dfu_window_close(void)
 	window_notify(false);
 }
 
+/**
+ * Return true if the update window is currently open.
+ */
 bool woz_dfu_window_is_open(void)
 {
 	return s_open;
@@ -133,6 +151,10 @@ bool woz_dfu_window_is_open(void)
 
 /* ---- staging flash -------------------------------------------------------- */
 
+/**
+ * Open the staging flash area if not already open. Return 0 on success or if already open; nonzero
+ * on error.
+ */
 static int staging_open(void)
 {
 	if (s_fa != NULL) {
@@ -141,6 +163,10 @@ static int staging_open(void)
 	return flash_area_open(PM_PATCH_STAGING_ID, &s_fa);
 }
 
+/**
+ * Flush buffered patch data to the staging flash area, padding to 4-byte alignment if final. Return
+ * 0 on success, -1 on write error. Updates write position and shifts remaining bytes.
+ */
 static int wbuf_flush(bool final)
 {
 	size_t n = s_rx.wlen & ~(size_t)3;
@@ -166,6 +192,10 @@ static int wbuf_flush(bool final)
 	return 0;
 }
 
+/**
+ * Buffer patch data, updating the running CRC32, and flush to flash when the buffer is full. Return
+ * 0 on success or nonzero on flush failure.
+ */
 static int patch_write(const uint8_t *data, size_t len)
 {
 	s_rx.patch_crc = crc32_ieee_update(s_rx.patch_crc, data, len);
@@ -187,6 +217,10 @@ static int patch_write(const uint8_t *data, size_t len)
 
 /* ---- authenticity --------------------------------------------------------- */
 
+/**
+ * Verify the DFU header signature using ECDSA-SHA256 with the built-in public key. Return true if
+ * the signature is valid.
+ */
 static bool head_verifies(void)
 {
 	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
@@ -213,11 +247,18 @@ static bool head_verifies(void)
 
 /* ---- frame handling ------------------------------------------------------- */
 
+/**
+ * Reset the receiver state to empty: clear the RX struct.
+ */
 void woz_dfu_rx_reset(void)
 {
 	memset(&s_rx, 0, sizeof(s_rx));
 }
 
+/**
+ * Write a WOZ_DFU_RSP_OK response: set opcode to OK, append the byte count received as
+ * little-endian 32-bit. Return 5 (response size).
+ */
 static size_t reply_ok(uint8_t *rsp)
 {
 	rsp[0] = WOZ_DFU_RSP_OK;
@@ -225,6 +266,10 @@ static size_t reply_ok(uint8_t *rsp)
 	return 5u;
 }
 
+/**
+ * Reset RX state and encode a two-byte error response with the given error code. Return the
+ * response length (2 bytes).
+ */
 static size_t reply_err(uint8_t *rsp, enum woz_dfu_err code)
 {
 	woz_dfu_rx_reset();
@@ -241,6 +286,11 @@ static size_t reply_err(uint8_t *rsp, enum woz_dfu_err code)
  * accepted; every other value is refused. */
 #define WOZ_DFU_ERR_OK ((enum woz_dfu_err)0)
 
+/**
+ * Validate the patch size, erase the staging area including the step log, and prepare the receiver
+ * to accept upload: initialize RX state with the write position at the patch offset and mark
+ * reception active. Return an error code.
+ */
 static enum woz_dfu_err begin_at(uint32_t total)
 {
 	if (total <= HEAD_LEN || (total - HEAD_LEN) > PATCH_MAX) {
@@ -506,6 +556,10 @@ refused:
 	return -EINVAL;
 }
 
+/**
+ * Return true if a valid patch header is present in the staging flash area; otherwise return false.
+ * The header's magic and ABI version must both match.
+ */
 bool woz_dfu_rx_staged(void)
 {
 	struct woz_dfu_hdr hdr;

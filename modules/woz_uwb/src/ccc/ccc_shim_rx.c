@@ -1124,6 +1124,11 @@ static volatile uint32_t g_dbg_final_per_us; /* cyc/us copy for the J-Link decod
 		* DWT_START_RX_DELAYED isn't refused as "already past" (80 us was                  \
 		* too tight -> arm_ok=0 in build12/13) */
 
+/**
+ * Arm the DW3000 radio to receive Final_Data in SP0 mode (data frame, not STS) at a delayed time
+ * calculated from the Final frame's ideal arrival. Record margin metrics and adjust the open time
+ * if it has already passed. Return 0 on success or -EIO if the arm fails.
+ */
 static int arm_final_data_sp0(uint32_t final_ip)
 {
 	uint32_t now;

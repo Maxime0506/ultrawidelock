@@ -29,29 +29,36 @@ class OpenAliroDistanceSensor(SensorEntity):
     _attr_translation_key = "distance"
 
     def __init__(self, runtime: OpenAliroRuntime) -> None:
+        """Initialize the distance sensor entity with the runtime reference and a unique ID derived from the device ID."""
         self._runtime = runtime
         self._attr_unique_id = f"{runtime.device.device_id}_distance"
         self._remove_listener = None
 
     @property
     def available(self) -> bool:
+        """Return whether the distance sensor is currently receiving valid range measurements from the lock."""
         return self._runtime.available
 
     @property
     def native_value(self) -> int | None:
+        """Return the most recent measured distance to the lock in millimeters, or None if no measurement is available."""
         return self._runtime.distance_mm
 
     @property
     def device_info(self) -> DeviceInfo:
+        """Return Home Assistant device metadata: a unique identifier derived from the lock's device ID and the openaliro manufacturer name."""
         return DeviceInfo(identifiers={(DOMAIN, self._runtime.device.device_id)}, manufacturer="openaliro")
 
     async def async_added_to_hass(self) -> None:
+        """Register a listener callback that syncs the sensor state to Home Assistant when the runtime changes."""
         @callback
         def update() -> None:
+            """Refresh the Home Assistant UI state to reflect the current distance value."""
             self.async_write_ha_state()
 
         self._remove_listener = self._runtime.add_listener(update)
 
     async def async_will_remove_from_hass(self) -> None:
+        """Unregister the listener callback on entity removal."""
         if self._remove_listener:
             self._remove_listener()

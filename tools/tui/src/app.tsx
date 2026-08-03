@@ -112,6 +112,7 @@ export const promptHints = [
   "terminal clear"
 ]
 
+// Format a millisecond timestamp as a clock time with hours, minutes, and seconds.
 const clock = (value: number): string =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
 
@@ -132,8 +133,11 @@ export const findRepositoryRoot = (start = process.cwd()): { path: string; found
   }
 }
 
+// Return a promise that resolves after the given number of milliseconds.
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
+// Render a help section as a column of command/description rows with the given title. Each row
+// shows the command name in fixed width followed by the muted description.
 function HelpGroup(props: { title: string; rows: HelpRow[] }) {
   return (
     <box style={{ flexDirection: "column", marginTop: 1 }}>
@@ -193,6 +197,8 @@ export function CommandOutput(props: {
   arrival?: number
   onReady: (output: ScrollBoxRenderable) => void
 }) {
+  // Return the base color for an activity entry: muted for info messages, otherwise the severity
+  // color (warn, error, etc.).
   const restingColor = (entry: ActivityEntry) =>
     entry.kind === "message" && entry.severity === "info" ? theme.muted : severityColor[entry.severity]
 
@@ -203,6 +209,8 @@ export function CommandOutput(props: {
       ? settle(theme.foreground, restingColor(entry), props.arrival)
       : restingColor(entry)
 
+  // Return the prefix string for an activity entry based on its kind and severity: "> " for
+  // commands, "error: " for error messages, "notice: " for warnings, and "" otherwise.
   const prefixFor = (entry: ActivityEntry) => {
     if (entry.kind === "command") return "> "
     if (entry.kind === "message" && entry.severity === "error") return "error: "
@@ -210,6 +218,7 @@ export function CommandOutput(props: {
     return ""
   }
 
+  // Return the last 300 activity entries for display.
   const visible = () => props.activity.slice(-300)
 
   return (
@@ -268,8 +277,10 @@ export function SerialTerminal(props: {
   matchIndex?: number
   onReady: (output: ScrollBoxRenderable) => void
 }) {
+  // Return the current search query string, or "" if none is set.
   const query = () => props.query ?? ""
   const matches = createMemo(() => findMatches(props.serialLines, query()))
+  // Return the currently selected line in the serial search results, indexed by matchIndex.
   const currentLine = () => matches()[props.matchIndex ?? 0]
 
   // While searching, the rule is the search box: the count is the only thing
@@ -357,6 +368,9 @@ export function SerialTerminal(props: {
   )
 }
 
+// Display a QR code and optional manual code from a Matter pairing payload. Shows only if pairing
+// data is present. The QR height is compact (5 rows) or full (18 rows) depending on the compact
+// prop.
 export function PairingPayload(props: { pairing?: BoardState["pairing"]; compact?: boolean }) {
   return (
     <Show when={props.pairing?.qrContent}>
@@ -401,7 +415,12 @@ export function WizardCard(props: {
   onReady: (select: SelectRenderable) => void
   onAction: (action: WizardAction) => void
 }) {
+  // Return the border color for the enclosing WizardCard: the danger color if the card is marked
+  // dangerous, otherwise the provided chrome color.
   const chrome = () => (props.view.danger ? theme.danger : props.chrome)
+  // Return the border color for the enclosing WizardCard title: the danger color if the card is
+  // marked dangerous, otherwise a color interpolated from muted to foreground based on the arrival
+  // fade.
   const titleColor = () =>
     props.view.danger ? theme.danger : settle(theme.muted, theme.foreground, props.arrival ?? 1)
 
@@ -685,6 +704,7 @@ export function App(
   const lineArrival = createPulse(400)
   const spinner = createSpinner(() => Boolean(runningJob()))
   const activeWorkflowState = createMemo<JobState | undefined>(() => runningJob()?.state ?? (workflowClaimed() ? "queued" : undefined))
+  // Return true if a workflow is currently running, false if idle.
   const workflowBusy = () => activeWorkflowState() !== undefined
   const wizardContext = createMemo(() => ({
     target: activeBoard(),
@@ -706,12 +726,16 @@ export function App(
     }))
   )
 
+  // Update a board's state in the boards map by applying a function to its current value.
   const patchBoard = (id: BoardId, fn: (value: BoardState) => BoardState) =>
     setBoards((current) => ({ ...current, [id]: fn(current[id]) }))
 
+  // Report a message to the activity log with the given severity and trim the log to the last 300
+  // entries.
   const report = (text: string, severity: Severity = "info") =>
     setActivity((entries) => [...entries.slice(-299), { timestamp: Date.now(), kind: "message", severity, text }])
 
+  // Record a command in the activity log and trim the log to the last 300 entries.
   const recordCommand = (text: string) =>
     setActivity((entries) => [...entries.slice(-299), { timestamp: Date.now(), kind: "command", severity: "info", text }])
 
@@ -720,6 +744,7 @@ export function App(
     setSerialLines((current) => ({ ...current, [id]: lines }))
   }
 
+  // Clear the command output log and hide the help overlay.
   const clearCommandOutput = () => {
     setActivity([])
     setShowHelp(false)
@@ -735,6 +760,7 @@ export function App(
     wizardSelect?.focus()
   }
 
+  // Set focus to the command input and blur the wizard select dropdown.
   const focusCommand = () => {
     setFocusArea("command")
     wizardSelect?.blur()
@@ -758,6 +784,8 @@ export function App(
     focusCommand()
   }
 
+  // Close the search overlay, restore the search state to defaults, and scroll the serial console
+  // back to the live tail.
   const closeSearch = () => {
     if (!searching()) return
     setSearching(false)
@@ -775,6 +803,8 @@ export function App(
     revealMatch(0)
   }
 
+  // Step through search matches in the given direction (delta), wrapping at both ends. Brings the
+  // new match into view.
   const stepSearch = (delta: number) => {
     const count = searchMatches().length
     if (count === 0) return
@@ -929,6 +959,7 @@ export function App(
       if (event.type === "line") {
         const previousPairing = boards()[id].pairing?.qrContent
         const updated = adapters[id].ingest(boards()[id], event.line)
+        // Apply the updated board state returned from a workflow execution.
         patchBoard(id, () => updated)
         if (capture().active && capture().target === id) {
           const latest = updated.logs.at(-1)
@@ -976,6 +1007,8 @@ export function App(
     if (pending) return pending
     const attempt = connectOnce(id, requestedPort, quiet, knownSnapshot)
     connectionAttempts.set(id, attempt)
+    // Clear the connection attempt record for the given board and attempt number once that attempt
+    // is complete. Used to stop tracking retries.
     const clear = () => {
       if (connectionAttempts.get(id) === attempt) connectionAttempts.delete(id)
     }
@@ -1024,6 +1057,9 @@ export function App(
 
   type WorkflowJob = "bootstrap" | "build" | "rebuild" | "test" | "flash" | "flash-erase"
 
+  // Assemble the command array for a given workflow job on a given board. Substitutes environment
+  // variables (IDF_EXPORT, ESP_MATTER_PATH, PORT) based on the target and job type. Returns an
+  // empty array if the job is unknown.
   const commandFor = (kind: WorkflowJob, id: BoardId): string[] => {
     const commandsForTarget = targets[id].commands
     const base =

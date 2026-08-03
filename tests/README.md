@@ -19,6 +19,6 @@ hardware. Hardware truth comes separately from the manual
 
 CI additionally runs shellcheck over every script (tooling), clang-format and
 clang-tidy over `modules/`, a linter over the workflows themselves (workflow-lint),
-and compile-gates both targets' firmware (firmware-builds). Hardware behavior stays
-gated on the bench, not the runner: see
+and compile-gates all three firmware targets, DWM3001CDK, nRF5340 DK and ESP32
+(firmware-builds). Hardware behavior stays gated on the bench, not the runner: see
 [hardware-validation.md](../docs/hardware-validation.md).

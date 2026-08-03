@@ -96,7 +96,7 @@ strand the entities.
 
 `ports/esp32/apps/matter-lock/main/ha_mqtt.c`, behind `CONFIG_ENABLE_HA_MQTT`
 (default n), publishes those five topics from the board, so the ESP32 needs no
-agent. Build it with `make build HAMQTT=1`, which layers
+agent. Build it with `make esp-build APP=matter-lock VARIANT=hamqtt`, which layers
 `sdkconfig.defaults.hamqtt` on top of the usual defaults; that fragment also
 carries the mbedTLS record sizing and the Wi-Fi IRAM reclaim a TLS session needs
 on this target, and says why each is there.

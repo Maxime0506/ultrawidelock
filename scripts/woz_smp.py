@@ -54,6 +54,7 @@ MGMT_ERR = {
 
 
 def die(msg):
+    """Exit the process with the formatted error message prefixed by woz_smp."""
     sys.exit(f"woz_smp: {msg}")
 
 
@@ -92,6 +93,7 @@ def image_sha(path):
 
 
 def _head(major, n):
+    """Encode a CBOR unsigned integer length prefix for the given value n and major type. Returns 1, 2, 3, or 5 bytes depending on the magnitude."""
     if n < 24:
         return bytes([major | n])
     if n < 0x100:
@@ -201,12 +203,14 @@ class Smp:
     """One mcumgr conversation. Reassembles responses, matches them by seq."""
 
     def __init__(self, client):
+        """Initialize an SMP protocol instance bound to the given BLE client. Tracks the outgoing sequence number, buffers incoming notification chunks, and queues complete frames."""
         self.client = client
         self.seq = 0
         self.rx = bytearray()
         self.frames = asyncio.Queue()
 
     def on_notify(self, _sender, data):
+        """Reassemble SMP response frames from BLE notifications. Buffers data and enqueues complete frames once the length declared in the 8-byte header is satisfied."""
         # A response longer than one notification arrives in pieces with a
         # single 8-byte header at the front, so buffer until the header's
         # declared length is complete.

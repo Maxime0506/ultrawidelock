@@ -26,8 +26,15 @@ assert on the encoded bytes.
 
 One user slot. Reported by GetUser, filled by SetUser.
 
+### `struct matter_device_info`
+`modules/woz_matter/include/matter_clusters.h:497`
+
+Complete device information structure held by the Matter node, including vendor/product IDs,
+Aliro identity, user table, commissioning state, operational network configuration, and
+session-specific attestation and key data.
+
 ### `struct matter_admin_hooks`
-`modules/woz_matter/include/matter_clusters.h:747`
+`modules/woz_matter/include/matter_clusters.h:752`
 
 What the application must do when a controller opens a commissioning window.
 The cluster decodes and validates; everything it would then have to TOUCH --
@@ -35,9 +42,3 @@ the SPAKE2+ verifier the PASE responder uses, the BLE advertising payload,
 the expiry timer -- belongs to the port. So this module stays free of both
 Bluetooth and Zephyr, which is what lets tests/host compile it.
 All three return a MATTER_ADMIN_STATUS_* code, or 0 for success.
-
-<details><summary>Undocumented (1)</summary>
-
-- `matter_device_info`
-
-</details>

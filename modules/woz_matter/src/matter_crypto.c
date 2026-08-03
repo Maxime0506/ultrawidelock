@@ -48,6 +48,9 @@ struct cbc_mac {
 	size_t part_len;
 };
 
+/**
+ * XOR one 128-bit block into the CBC-MAC state and encrypt it with AES-ECB.
+ */
 static int mac_block(struct cbc_mac *m, const uint8_t b[AES_BLOCK])
 {
 	for (size_t i = 0; i < AES_BLOCK; i++) {
@@ -56,6 +59,10 @@ static int mac_block(struct cbc_mac *m, const uint8_t b[AES_BLOCK])
 	return crypto_aes_ecb_encrypt(m->key, 128u, m->x, m->x);
 }
 
+/**
+ * Update CBC-MAC state with input bytes: accumulate into partial blocks and process full 128-bit
+ * blocks through the cipher. Returns 0 on success or cipher error.
+ */
 static int mac_update(struct cbc_mac *m, const uint8_t *p, size_t len)
 {
 	while (len > 0u) {
@@ -222,6 +229,10 @@ static bool tag_equal(const uint8_t *a, const uint8_t *b, size_t len)
 	return diff == 0u;
 }
 
+/**
+ * Build an AES-CCM nonce from security flags, message counter, and node ID in little-endian form;
+ * returns MATTER_OK on success.
+ */
 int matter_build_nonce(uint8_t security_flags, uint32_t message_counter, uint64_t node_id,
 		       uint8_t out[MATTER_NONCE_LEN])
 {
@@ -238,6 +249,13 @@ int matter_build_nonce(uint8_t security_flags, uint32_t message_counter, uint64_
 	return MATTER_OK;
 }
 
+/**
+ * Derive session keys from a shared secret using HKDF for Matter secure channel setup.
+ * Expands secret into i2r, r2i, and attestation_challenge keys using either normal or resume
+ * derivation context.
+ * Returns MATTER_E_INVAL if secret, out are NULL or secret_len is zero; returns MATTER_E_INVAL if
+ * salt_len is nonzero but salt is NULL; returns MATTER_E_STATE if HKDF fails.
+ */
 int matter_derive_session_keys(const uint8_t *secret, size_t secret_len, const uint8_t *salt,
 			       size_t salt_len, bool resume, struct matter_session_keys *out)
 {
@@ -265,6 +283,11 @@ int matter_derive_session_keys(const uint8_t *secret, size_t secret_len, const u
 	return MATTER_OK;
 }
 
+/**
+ * Encrypt a plaintext with AES-CCM, optionally authenticated with AAD, by computing the CBC-MAC,
+ * generating the authentication tag, and encrypting the plaintext with CTR; returns MATTER_OK on
+ * success.
+ */
 int matter_aead_encrypt(const uint8_t key[MATTER_KEY_LEN], const uint8_t nonce[MATTER_NONCE_LEN],
 			const uint8_t *aad, size_t aad_len, const uint8_t *pt, size_t pt_len,
 			uint8_t *ct_out, uint8_t tag_out[MATTER_TAG_LEN])
@@ -298,6 +321,11 @@ int matter_aead_encrypt(const uint8_t key[MATTER_KEY_LEN], const uint8_t nonce[M
 	return (rc == 0) ? MATTER_OK : MATTER_E_STATE;
 }
 
+/**
+ * Decrypt an AES-CCM ciphertext with an authentication tag and optional AAD, verifying the tag in
+ * constant time before returning plaintext; returns MATTER_OK on success or MATTER_E_TYPE if the
+ * tag does not verify.
+ */
 int matter_aead_decrypt(const uint8_t key[MATTER_KEY_LEN], const uint8_t nonce[MATTER_NONCE_LEN],
 			const uint8_t *aad, size_t aad_len, const uint8_t *ct, size_t ct_len,
 			const uint8_t tag[MATTER_TAG_LEN], uint8_t *pt_out)
@@ -356,6 +384,12 @@ fail:
 	return MATTER_E_STATE;
 }
 
+/**
+ * Encrypt and authenticate a Matter message: encode header into output buffer, build nonce from
+ * security flags and counter, and encrypt payload with AAD set to the encoded header bytes. Caller
+ * must ensure output capacity >= header length + payload length + MATTER_TAG_LEN. Returns MATTER_OK
+ * on success or encoding error.
+ */
 int matter_crypto_seal(const struct matter_msg_header *h, const uint8_t key[MATTER_KEY_LEN],
 		       uint64_t sender_node_id, const uint8_t *payload, size_t payload_len,
 		       uint8_t *out, size_t cap, size_t *out_len)
@@ -397,6 +431,12 @@ int matter_crypto_seal(const struct matter_msg_header *h, const uint8_t key[MATT
 	return MATTER_OK;
 }
 
+/**
+ * Decrypt and verify a Matter message: decode header, extract ciphertext and authentication tag,
+ * build nonce from security flags and counter, and decrypt with AAD set to the message header.
+ * Returns MATTER_OK on successful decryption, MATTER_E_INVAL on bad parameters, MATTER_E_TRUNC if
+ * ciphertext too short for tag, MATTER_E_NOSPACE if plaintext exceeds output capacity.
+ */
 int matter_crypto_open(const uint8_t *buf, size_t len, const uint8_t key[MATTER_KEY_LEN],
 		       uint64_t sender_node_id, struct matter_msg_header *h, uint8_t *pt_out,
 		       size_t pt_cap, size_t *pt_len)

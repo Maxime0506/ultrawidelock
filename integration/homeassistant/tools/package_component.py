@@ -16,6 +16,7 @@ LIBRARY = ROOT / "integration" / "homeassistant" / "src" / "openaliro_ha"
 
 
 def _copy_tree(source: Path, destination: Path) -> None:
+    """Recursively copy source directory to destination, excluding __pycache__, *.pyc, *.pyo."""
     shutil.copytree(
         source,
         destination,
@@ -42,6 +43,7 @@ def build_archive(output: Path) -> Path:
 
 
 def main() -> int:
+    """Parse command-line arguments and build the Home Assistant component archive."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "openaliro-ha-component.zip")
     arguments = parser.parse_args()

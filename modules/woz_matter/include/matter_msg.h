@@ -80,6 +80,10 @@ extern "C" {
 #define MATTER_MSG_HEADER_MAX   24u
 #define MATTER_PROTO_HEADER_MAX 12u
 
+/**
+ * Matter message header decoded from the wire: flags, session ID, security flags, message counter,
+ * optional source/destination node ID (unicast) or group ID (multicast).
+ */
 struct matter_msg_header {
 	uint8_t flags;
 	uint16_t session_id;
@@ -93,6 +97,10 @@ struct matter_msg_header {
 	uint16_t dest_group_id;
 };
 
+/**
+ * Matter protocol/exchange header decoded from the message body: exchange flags, opcode, exchange
+ * ID, optional vendor ID, protocol ID, and optional ACK counter.
+ */
 struct matter_proto_header {
 	uint8_t exchange_flags;
 	uint8_t opcode;
@@ -150,6 +158,9 @@ enum matter_counter_kind {
 	MATTER_COUNTER_UNSECURED = 1,
 };
 
+/**
+ * RX/TX counter state: the last value used and the counter kind (unsecured or session).
+ */
 struct matter_counter {
 	uint32_t last_used;
 	uint8_t kind;

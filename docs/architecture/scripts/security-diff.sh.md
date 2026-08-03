@@ -28,8 +28,24 @@ NO_COLOR=1           plain output
 
 ## API
 
+### `block()`
+`scripts/security-diff.sh:52`
+
+Print a blocking issue to stderr in red with the given title and detail, and increment the block
+counter.
+
+**called by** `inspect`
+
+### `warn()`
+`scripts/security-diff.sh:59`
+
+Print a warning to stderr in yellow with the given title and detail, and increment the warning
+counter.
+
+**called by** `inspect`
+
 ### `binary_ok()`
-`scripts/security-diff.sh:99`
+`scripts/security-diff.sh:103`
 
 ---- allowlists -----------------------------------------------------------
 Directories where a binary is the expected content rather than a surprise. Kept as a prefix
@@ -38,7 +54,7 @@ list rather than a glob so a nested path cannot slip in under a matching leaf na
 **called by** `inspect`
 
 ### `exec_ok()`
-`scripts/security-diff.sh:110`
+`scripts/security-diff.sh:114`
 
 A file allowed to carry the executable bit: something with a shebang, in other words a script.
 The tree's thirty executables are 23 *.sh, 4 *.py and 3 extensionless launchers under
@@ -48,7 +64,7 @@ tracked, or a payload waiting for something to run it.
 **called by** `inspect`
 
 ### `is_binary()`
-`scripts/security-diff.sh:165`
+`scripts/security-diff.sh:169`
 
 is_binary PATH SHA — git's own rule, applied directly: a blob is binary if a NUL byte appears
 in its first 8000 bytes. Never a guess from the extension.
@@ -63,24 +79,17 @@ untracked file), so the bytes come from disk instead of from a blob.
 **called by** `inspect`
 
 ### `size_of()`
-`scripts/security-diff.sh:179`
+`scripts/security-diff.sh:183`
 
 size_of PATH SHA — same split, for the same reason.
 
 **called by** `inspect`
 
 ### `inspect()`
-`scripts/security-diff.sh:189`
+`scripts/security-diff.sh:193`
 
 inspect PATH DSTMODE STATUS DSTSHA — every structural check, for one file. Factored out so an
 untracked file gets exactly the same treatment as a committed one; when this lived inline, the
 working-tree path would have quietly received a weaker set of checks than CI applies.
 
 **calls** `binary_ok`, `block`, `exec_ok`, `is_binary`, `size_of`, `warn`
-
-<details><summary>Undocumented (2)</summary>
-
-- `block`
-- `warn`
-
-</details>

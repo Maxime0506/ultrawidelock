@@ -10,6 +10,16 @@ the API and behavior may change in minor releases.
 
 ### Added
 
+- DWM3001CDK as the primary target: one nRF52833 image in `firmware/` carrying
+  the Aliro reader, a Matter node and an OpenThread MTD, a reader-only build
+  that needs no commissioner, and a CI job that compiles both.
+- Apple Home commissioning on that board through a hand-written Matter node
+  (`modules/woz_matter`) rather than CHIP, with a live lock tile.
+- MCUboot on the DWM3001CDK, signed with a per-checkout key: `make dfu-key` is
+  required once per clone before any CDK build will configure.
+- Firmware update over Bluetooth as a signed delta, applied in place by the
+  bootloader (`make dfu`), plus the same patch pushed from a phone over
+  SMP/mcumgr (`make fota`, `make fota-done`).
 - Independent `ALIRO_SOURCE=1` replacement for the Nordic Aliro binary, with a
   dedicated nRF CI build and host tests for its portable protocol layer.
 - Selectable PN532 and no-reader NFC transports behind `modules/woz_nfc`; the
@@ -29,6 +39,10 @@ the API and behavior may change in minor releases.
 
 ### Changed
 
+- Breaking: the bare make targets now mean the DWM3001CDK (`make build`,
+  `flash`, `flash-erase`, `monitor`). The nRF5340 DK moved to `nrf-` prefixed
+  targets (`make nrf-build`, `nrf-flash-erase`, `nrf-term`) beside the `esp-`
+  prefixed ESP32 ones; `make term` still runs and prints where it went.
 - `make bootstrap` now checks or installs the host tools and pinned NCS
   toolchain before fetching the workspace.
 - Per-worktree workspace seeding and a tested, installable local verification

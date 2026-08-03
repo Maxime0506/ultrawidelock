@@ -36,8 +36,22 @@ flowchart TD
 
 ## API
 
+### `have()`
+`scripts/security-fw.sh:54`
+
+Test whether a command is available in PATH.
+
+**called by** `gate_dwarf`
+
+### `hdr()`
+`scripts/security-fw.sh:56`
+
+Print a section header with leading newline, bold text, and color reset.
+
+**called by** `gate_dwarf`, `gate_keys`, `gate_size`, `gate_strings`
+
 ### `gate_keys()`
-`scripts/security-fw.sh:140`
+`scripts/security-fw.sh:142`
 
 ---- keys ------------------------------------------------------------------
 The denylist is byte patterns, not strings, because the thing being looked for is key material:
@@ -47,7 +61,7 @@ a 32-byte URSK that leaked out of a test fixture into a production image does no
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `gate_strings()`
-`scripts/security-fw.sh:194`
+`scripts/security-fw.sh:196`
 
 ---- strings ---------------------------------------------------------------
 Build-host paths in an image are two problems wearing one coat: they name the machine and the
@@ -58,7 +72,7 @@ is not in effect.
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `gate_dwarf()`
-`scripts/security-fw.sh:241`
+`scripts/security-fw.sh:243`
 
 ---- dwarf -----------------------------------------------------------------
 Advisory, not blocking. Debug information in a shipped image is a reverse-engineering
@@ -68,7 +82,7 @@ argument for stripping is size, not secrecy, and a hard failure would be theatre
 **called by** `run_one`  ·  **calls** `have`, `hdr`
 
 ### `gate_size()`
-`scripts/security-fw.sh:280`
+`scripts/security-fw.sh:282`
 
 ---- size ------------------------------------------------------------------
 Same reasoning as the oversized-file rule in security-diff.sh, applied to the artifact: large
@@ -78,15 +92,8 @@ image nobody looked at is exactly as invisible as a 40 KB blob nobody read.
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `run_one()`
-`scripts/security-fw.sh:316`
+`scripts/security-fw.sh:318`
 
 ---- dispatch --------------------------------------------------------------
 
 **calls** `gate_dwarf`, `gate_keys`, `gate_size`, `gate_strings`
-
-<details><summary>Undocumented (2)</summary>
-
-- `have`
-- `hdr`
-
-</details>

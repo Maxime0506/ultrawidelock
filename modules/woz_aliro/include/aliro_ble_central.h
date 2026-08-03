@@ -83,6 +83,10 @@ int aliro_ble_central_blesk_salt(const struct aliro_ble_central_peer *peer, uint
 
 /* ---- transport (backend-provided; NimBLE one lives in ports/esp32) ---- */
 
+/**
+ * Callbacks for BLE central transport: on_ready when CoC opens and peer facts are known, on_data
+ * for each inbound SDU, on_closed when link or CoC drops.
+ */
 struct aliro_ble_central_callbacks {
 	/* The CoC is open and the peer's GATT facts are known: the Aliro
 	 * transaction can start. peer stays valid only for the call. */
@@ -93,6 +97,10 @@ struct aliro_ble_central_callbacks {
 	void (*on_closed)(uint16_t conn_handle);
 };
 
+/**
+ * Configuration for BLE central transport: reader_id to match by truncated group/sub ID in adverts,
+ * selected_version for device-version characteristic, and callbacks.
+ */
 struct aliro_ble_central_config {
 	/* The reader we are provisioned against; scanning matches its advert by
 	 * the truncated group id/sub id (see aliro_ble_central_adv_matches). */

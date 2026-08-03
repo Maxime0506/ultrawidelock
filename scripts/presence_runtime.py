@@ -36,10 +36,12 @@ ARCHIVE_DIRECTORIES = (
 
 
 class BundleError(RuntimeError):
+    """Exception raised when bundle construction fails."""
     pass
 
 
 def _tarinfo(name: str, mode: int, kind: bytes, size: int = 0):
+    """Create a TarInfo record with deterministic metadata (zero UID/GID, empty user/group names, zero mtime) for tar.gz content. Caller specifies entry name, Unix mode, tarfile type constant, and optional size."""
     info = tarfile.TarInfo(name)
     info.type = kind
     info.mode = mode
@@ -123,6 +125,7 @@ def build_bundle(repo_root, output):
 
 
 def build_parser(repo_root):
+    """Build and return an argument parser for the presence-runtime archive tool with --output option."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--output",

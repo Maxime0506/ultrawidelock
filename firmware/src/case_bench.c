@@ -109,6 +109,10 @@ static struct k_thread case_bench_tcb;
 
 static bool bench_ok = true;
 
+/**
+ * Check a PSA operation status. If nonzero, log an error with the operation name and status code,
+ * and set bench_ok to false.
+ */
 static void psa_check(const char *what, psa_status_t st)
 {
 	if (st != PSA_SUCCESS) {
@@ -133,6 +137,10 @@ static psa_status_t make_ecc_key(psa_key_usage_t usage, psa_algorithm_t alg,
 	return psa_generate_key(&attr, out);
 }
 
+/**
+ * Import a P-256 public key for signature verification. Sets key usage to
+ * PSA_KEY_USAGE_VERIFY_MESSAGE, returns PSA_SUCCESS on success, and writes the key ID to *out.
+ */
 static psa_status_t import_pub(const uint8_t *pub, size_t len, psa_algorithm_t alg,
 			       psa_key_id_t *out)
 {
@@ -275,6 +283,12 @@ static uint32_t case_round(void)
 	return elapsed_us;
 }
 
+/**
+ * Thread entry point for the CASE responder benchmark. Sleeps 8 seconds to allow the reader to
+ * initialize, then runs one round of CASE (5 P-256 ops + 2 HKDF + 2 AES-CCM). If
+ * CONFIG_ALIRO_CASE_BENCH_PERIOD_MS is nonzero, enters contention mode: repeats the benchmark every
+ * N milliseconds to measure whether P-256 running on the same core blocks walk-up ranging.
+ */
 static void case_bench_run(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -350,6 +364,9 @@ static void case_bench_run(void *a, void *b, void *c)
 	}
 }
 
+/**
+ * Initialize the CASE benchmark thread at the lowest application priority. Returns 0.
+ */
 static int case_bench_start(void)
 {
 	(void)k_thread_create(&case_bench_tcb, case_bench_stack, CASE_BENCH_STACK_SZ,

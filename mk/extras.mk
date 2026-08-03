@@ -126,6 +126,8 @@ help:
 	  $(MAKEFILE_LIST); \
 	printf '\n  %sOptions%s  %s·  set on the command line, e.g. make nrf-build PRETTY=1%s\n' "$$y" "$$r" "$$d" "$$r"; \
 	printf '    %sPRISTINE=1  ·  from-scratch build (every port)%s\n' "$$d" "$$r"; \
+	printf '    %sLTO=0  RELEASE=1  SMP=1  DFU_LOG=1  ·  DWM3001CDK%s\n' "$$d" "$$r"; \
+	printf '    %sCDK_BUILD=<dir>  CDK_RTT_BUILD=<dir>  CDK_KEY=<path>  ·  DWM3001CDK%s\n' "$$d" "$$r"; \
 	printf '    %sAPP=matter-lock|reader|initiator  TARGET=esp32s3|esp32c5|esp32c6  VARIANT=presence|hamqtt|piv%s\n' "$$d" "$$r"; \
 	printf '    %sCHIP=dw3720  PRETTY=1  SELFTEST=1  STRICT=1  ·  nRF5340 DK%s\n' "$$d" "$$r"; \
 	printf '    %sHA=1  ·  Home Assistant variant; set on bootstrap AND nrf-build%s\n' "$$d" "$$r"; \

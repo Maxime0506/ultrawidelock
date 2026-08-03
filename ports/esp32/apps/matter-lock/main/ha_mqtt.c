@@ -235,6 +235,9 @@ static void build_topics(void)
 	"\"device\": {\"identifiers\": [\"%s\"], \"name\": \"%s\", "                               \
 	"\"manufacturer\": \"openaliro\", \"model\": \"" HA_MQTT_MODEL "\"}}"
 
+/**
+ * Build a Home Assistant MQTT Discovery payload for the Distance sensor entity in millimeters.
+ */
 static int discovery_distance_payload(char *buf, size_t len)
 {
 	return snprintf(buf, len,
@@ -246,6 +249,10 @@ static int discovery_distance_payload(char *buf, size_t len)
 			s_cfg.node, s_cfg.node, s_cfg.node, s_cfg.node, s_cfg.node);
 }
 
+/**
+ * Build a Home Assistant MQTT Discovery payload for the Access event entity with available and
+ * granted/denied event types.
+ */
 static int discovery_access_payload(char *buf, size_t len)
 {
 	return snprintf(buf, len,

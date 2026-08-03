@@ -86,6 +86,8 @@ scan_paths() {
 
 # ---- scan -------------------------------------------------------------------
 
+# Scan source files for calls to CCC seam symbols that bypass uwb_seam.h and report findings with
+# their line numbers. Return 0 if no violations are found, 1 otherwise.
 scan() {
 	local findings=0 f hits
 	local re

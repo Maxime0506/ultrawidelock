@@ -35,6 +35,7 @@ PublisherFactory = Callable[[AgentConfig, DeviceConfig], MqttPublisher]
 
 
 def _publisher(config: AgentConfig, device: DeviceConfig) -> MqttPublisher:
+    """Create an MQTT publisher from the agent and device configuration."""
     return MqttPublisher(config.mqtt, device.device_id)
 
 
@@ -42,6 +43,7 @@ def session_for_device(device: DeviceConfig) -> SerialSession:
     """Build a reconnecting serial session that resolves ``auto`` on every open."""
 
     async def connection_factory():
+        """Factory coroutine to open a serial connection to the device: resolve the serial port from device.serial_port and device.serial_identity, then open the connection at device.baud."""
         port = resolve_serial_port(device.serial_port, device.serial_identity)
         return await open_serial_connection(port, device.baud)
 
@@ -112,6 +114,7 @@ class _DistanceThrottle:
         significant_change_mm: int = DISTANCE_SIGNIFICANT_CHANGE_MM,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        """Initialize the distance throttle with optional minimum publish interval in seconds, minimum significant change in millimeters, and a clock function. Default min_interval is DISTANCE_MIN_INTERVAL_S, default significant_change_mm is DISTANCE_SIGNIFICANT_CHANGE_MM, and default clock is time.monotonic."""
         self._min_interval = min_interval
         self._significant_change_mm = significant_change_mm
         self._clock = clock

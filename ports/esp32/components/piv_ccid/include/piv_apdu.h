@@ -50,6 +50,10 @@ struct piv_apdu_backend {
 		uint8_t shared_secret[PIV_P256_SHARED_SECRET_BYTES]);
 };
 
+/**
+ * PIV APDU command handler state: tracks APDU selection, PIN verification status, and buffered
+ * response for chunked transmission.
+ */
 struct piv_apdu {
 	bool selected;
 	bool pin_verified;

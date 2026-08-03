@@ -17,14 +17,17 @@ MAX_RESPONSE_BYTES = 4096
 
 
 class PresenceClientError(RuntimeError):
+    """Base exception for client-side presence proof errors (socket, validation, daemon rejection)."""
     pass
 
 
 class PresenceDenied(PresenceClientError):
+    """Exception raised when the presence daemon denies the proof request (proof failed, stale, or out of range)."""
     pass
 
 
 def _validate_response(response) -> dict:
+    """Validate a presenced response JSON object. Raises PresenceClientError if the response structure is invalid or contradictory (e.g., ok:true with missing/invalid distance, or ok:false with missing code/reason). Returns the validated response dict."""
     if not isinstance(response, dict) or type(response.get("ok")) is not bool:
         raise PresenceClientError("presenced returned an invalid response")
     if response["ok"]:
@@ -43,6 +46,7 @@ def _validate_response(response) -> dict:
 
 
 def _validate_socket(path: str):
+    """Validate the presenced socket path: must exist, be a Unix socket, be owned by the current user, and have no group or other access. Raises PresenceClientError if any check fails."""
     try:
         socket_stat = os.lstat(path)
     except FileNotFoundError as exc:
@@ -106,6 +110,7 @@ def execute_command(response: dict, command: list[str], runner=subprocess.run) -
 
 
 def positive_cm(value: str) -> int:
+    """Parse and validate a positive integer argument in cm for the distance threshold."""
     try:
         parsed = int(value)
     except ValueError as exc:
@@ -116,6 +121,7 @@ def positive_cm(value: str) -> int:
 
 
 def positive_timeout(value: str) -> float:
+    """Parse and validate a positive float argument in seconds for the socket and proof deadline."""
     try:
         parsed = float(value)
     except ValueError as exc:
@@ -126,6 +132,7 @@ def positive_timeout(value: str) -> float:
 
 
 def build_client_parser():
+    """Build an argparse parser for the presence-run CLI: socket path, distance threshold in cm, timeout in seconds, and the command to run."""
     parser = argparse.ArgumentParser(
         prog="presence-run",
         description="Run exact argv only after presenced verifies fresh nearby presence.",
@@ -143,6 +150,7 @@ def build_client_parser():
 
 
 def client_main(argv=None) -> int:
+    """Main entry point for presence-run CLI. Request a fresh proof from presenced, confirm it succeeded, print the distance, then execute the given command only if presence succeeded. Returns 0 on success, 1 on proof denial, 2 on unavailable socket/daemon, 126 on execution error, 127 on command not found."""
     parser = build_client_parser()
     args = parser.parse_args(argv)
     command = args.command

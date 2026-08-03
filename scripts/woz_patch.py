@@ -132,6 +132,7 @@ def image_sha(path):
 
 
 def die(msg):
+    """Exit the process with the formatted error message prefixed by woz_patch."""
     sys.exit(f"woz_patch: {msg}")
 
 
@@ -472,6 +473,7 @@ def stage(args):
 
 
 def main():
+    """Command-line entry point. Dispatches to build, info, stage, or wrap subcommands. build creates a signed delta patch from two signed images; info describes a patch and verifies its CRCs; stage lays a patch as a raw partition image for SWD; wrap dresses a patch as an MCUboot image for phone tooling."""
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)

@@ -151,6 +151,10 @@ static uint8_t fabric_next_index(const struct matter_device_info *info)
 	return 0u;
 }
 
+/**
+ * Check whether a given cluster is present on a given endpoint. Returns true if the cluster is
+ * supported on that endpoint, false otherwise.
+ */
 static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 {
 	(void)ctx;
@@ -184,6 +188,9 @@ static const uint16_t k_endpoints[] = {
 	MATTER_ENDPOINT_LOCK,
 };
 
+/**
+ * Return the list of endpoint IDs this device exposes.
+ */
 static size_t list_endpoints(void *ctx, const uint16_t **out)
 {
 	(void)ctx;
@@ -192,6 +199,12 @@ static size_t list_endpoints(void *ctx, const uint16_t **out)
 	return sizeof(k_endpoints) / sizeof(k_endpoints[0]);
 }
 
+/**
+ * Query whether an attribute on a given endpoint and cluster is supported. Returns
+ * MATTER_IM_STATUS_SUCCESS if supported, MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT if the endpoint does
+ * not exist, MATTER_IM_STATUS_UNSUPPORTED_CLUSTER if the cluster does not exist on that endpoint,
+ * or MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE if the attribute does not exist on that cluster.
+ */
 static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute)
 {
 	(void)ctx;
@@ -513,6 +526,12 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 	}
 }
 
+/**
+ * Retrieve the value of an attribute on a given endpoint and cluster. Encodes the value into the
+ * TLV writer using the supplied tag. Handles root and lock endpoints, multiple cluster types
+ * including Door Lock, Descriptor, Basic Information, Network Commissioning, Access Control,
+ * Operational Credentials, Admin Commissioning, and General Commissioning.
+ */
 static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute,
 		       struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 {
@@ -1035,6 +1054,10 @@ static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)
 	return sizeof(k_root_servers) / sizeof(k_root_servers[0]);
 }
 
+/**
+ * Return the attribute IDs for a given endpoint and cluster, or 0 if the endpoint or cluster is not
+ * supported.
+ */
 static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const uint32_t **out)
 {
 	(void)ctx;
@@ -1185,6 +1208,11 @@ static bool field_struct_u64(const struct matter_im_invoke *inv, uint8_t outer, 
 	}
 }
 
+/**
+ * Extract a bytes field from the TLV-encoded command fields by tag. Searches the structure for the
+ * first matching tag and decodes it. Returns true and fills out and len on success, false if the
+ * fields are missing, malformed, or the tag is not found.
+ */
 static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const uint8_t **out,
 			size_t *len)
 {
@@ -1266,6 +1294,10 @@ static bool dataset_xpanid(const uint8_t *ds, size_t len, uint8_t out[MATTER_THR
  */
 static void advertise_one(const struct matter_fabric *fabric);
 
+/**
+ * Advertise one Thread mDNS instance per provisioned fabric, deriving each instance name from the
+ * compressed fabric ID and node ID. Do nothing if no fabrics are provisioned.
+ */
 static void advertise_operational(const struct matter_device_info *info)
 {
 	size_t fi;
@@ -1283,6 +1315,10 @@ static void advertise_operational(const struct matter_device_info *info)
 	}
 }
 
+/**
+ * Advertise this fabric's instance name over Thread on the operational port if the name can be
+ * derived.
+ */
 static void advertise_one(const struct matter_fabric *fabric)
 {
 	char name[MATTER_INSTANCE_NAME_LEN];
@@ -1331,6 +1367,11 @@ static uint8_t admin_status(uint8_t cluster_status)
 	return cluster_status == 0u ? MATTER_IM_STATUS_SUCCESS : MATTER_IM_STATUS_FAILURE;
 }
 
+/**
+ * Decode and dispatch an admin cluster command: open-enhanced-window, open-basic-window, or revoke.
+ * Extract TLV-encoded parameters by tag, validate lengths exactly, delegate to the registered
+ * hooks, and return a status code. None of the three commands carry a response payload.
+ */
 static uint8_t admin_command(const struct matter_im_invoke *inv, uint32_t *response_command)
 {
 	const uint8_t *verifier = NULL;
@@ -1871,6 +1912,11 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
 	return MATTER_IM_STATUS_SUCCESS;
 }
 
+/**
+ * Decode and store Aliro reader configuration: signing key, verification key (P-256 public), group
+ * ID, and group-resolving key. Validate all field lengths exactly, call the registered config hook
+ * to persist them, and store copies in the device info structure. Return a status code.
+ */
 static uint8_t set_aliro_reader_config(struct matter_device_info *info,
 				       const struct matter_im_invoke *inv)
 {
@@ -2115,6 +2161,12 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	}
 }
 
+/**
+ * Encode the fields of a command response based on endpoint, cluster, and response command type.
+ * Handles Door Lock SetCredentialResponse and GetCredentialStatusResponse on the lock endpoint, and
+ * OperationalCredentials, NetworkCommissioning, and GeneralCommissioning responses on the root
+ * endpoint.
+ */
 static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster,
 			   uint32_t response_command, struct matter_tlv_writer *w,
 			   matter_tlv_tag_t tag)
@@ -2281,6 +2333,10 @@ int matter_clusters_resume(struct matter_device_info *info)
 	return MATTER_OK;
 }
 
+/**
+ * Clear all fabric state and credentials when the fail-safe window expires before commissioning
+ * completes, wiping each fabric's private key and intermediate certificate.
+ */
 void matter_clusters_failsafe_expire(struct matter_device_info *info)
 {
 	if (info == NULL || info->commissioning_complete) {
@@ -2354,6 +2410,9 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 	return MATTER_IM_STATUS_SUCCESS;
 }
 
+/**
+ * Register this device's attribute, cluster, and command handlers with a Matter IM server.
+ */
 void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info)
 {
 	if (srv == NULL) {

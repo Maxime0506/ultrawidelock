@@ -1,12 +1,13 @@
 # Memory usage
 
-Scope: the primary nRF5340 DK image only. The ESP32-S3 apps have their own budgets and
-partition layout (`ports/esp32/apps/*/partitions.csv`) and are not measured here.
+Scope: the nRF5340 DK image only. The DWM3001CDK image (`firmware/pm_static.yml`) and the
+ESP32-S3 apps (`ports/esp32/apps/*/partitions.csv`) have their own budgets and partition
+layouts and are not measured here.
 
 Snapshot measured 2026-07-19 from the build artifacts of 2026-07-17 19:55 in `build/`
 (repo HEAD `56df8df` at measurement time). `ports/nrf5340dk/overlays/woz-aliro.conf` and several
 `modules/woz_uwb` sources are newer than these artifacts, so expect small shifts on the next
-`make build`.
+`make nrf-build`.
 ## Hardware budgets
 
 nRF5340 (app core + net core) plus the DK's on-board MX25R64 QSPI NOR.

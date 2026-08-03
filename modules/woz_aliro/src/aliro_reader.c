@@ -1145,6 +1145,9 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
 /* Told when the reader announces a new lock state; see aliro_reader.h. */
 static void (*s_lock_state_listener)(bool unlocked);
 
+/**
+ * Register a callback to be invoked when the lock state changes (unlocked or locked).
+ */
 void aliro_reader_set_lock_state_listener(void (*cb)(bool unlocked))
 {
 	s_lock_state_listener = cb;
@@ -1306,6 +1309,10 @@ bool aliro_reader_authenticated_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
 	return have;
 }
 
+/**
+ * Return true and copy the reader's single expected credential public key to out if exactly one
+ * trust anchor is configured; used to validate single-device scenarios.
+ */
 bool aliro_reader_presence_expected_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
 {
 	bool have;
@@ -1320,6 +1327,10 @@ bool aliro_reader_presence_expected_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
 	return have;
 }
 
+/**
+ * Return true and copy the provisioned reader's public key to out if a fresh authentication has
+ * occurred since the checkpoint generation number; caller must hold the provisioning lock scope.
+ */
 bool aliro_reader_presence_authenticated_after(uint32_t checkpoint, uint8_t out[ALIRO_CRED_PUB_LEN])
 {
 	bool fresh;
@@ -1334,6 +1345,9 @@ bool aliro_reader_presence_authenticated_after(uint32_t checkpoint, uint8_t out[
 	return fresh;
 }
 
+/**
+ * Return true if any session is marked active on this connection.
+ */
 static bool any_session_active_on_host(void)
 {
 	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
@@ -1344,6 +1358,10 @@ static bool any_session_active_on_host(void)
 	return false;
 }
 
+/**
+ * Mark the current presence request as ready and capture the current auth generation. Clear the
+ * disconnect-wait flag.
+ */
 static void presence_checkpoint_ready_on_host(void)
 {
 	woz_mutex_lock(&s_prov_lock);
@@ -1353,6 +1371,11 @@ static void presence_checkpoint_ready_on_host(void)
 	woz_mutex_unlock(&s_prov_lock);
 }
 
+/**
+ * Arm a waiter for disconnect, then ask the BLE transport to close all active sessions. If no
+ * sessions are open, immediately publish a checkpoint; otherwise let the final disconnect event
+ * trigger it.
+ */
 static void presence_reset_on_host(void)
 {
 	bool disconnecting = false;
@@ -1376,6 +1399,10 @@ static void presence_reset_on_host(void)
 	}
 }
 
+/**
+ * Increment the presence request counter (skip zero), clear the ready request, and notify the host
+ * that presence detection has restarted. Return the new request ID.
+ */
 uint32_t aliro_reader_presence_restart(void)
 {
 	uint32_t request;
@@ -1392,6 +1419,10 @@ uint32_t aliro_reader_presence_restart(void)
 	return request;
 }
 
+/**
+ * Return true if the request ID matches the stored ready-to-present checkpoint and optionally copy
+ * the corresponding authentication generation; used to confirm a presence session has completed.
+ */
 bool aliro_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generation)
 {
 	bool ready;

@@ -21,8 +21,15 @@ venv to encode that would be more moving parts than the encoder itself.
 
 ## API
 
+### `die(msg)`
+`scripts/woz_smp.py:56`
+
+Exit the process with the formatted error message prefixed by woz_smp.
+
+**called by** `Smp.call`, `image_sha`, `run`
+
 ### `image_sha(path)`
-`scripts/woz_smp.py:60`
+`scripts/woz_smp.py:61`
 
 The SHA-256 MCUboot recorded in a signed image's TLVs.
 
@@ -33,27 +40,40 @@ on this machine witnessed the transfer.
 
 **called by** `run`  ·  **calls** `die`
 
+### `_head(major, n)`
+`scripts/woz_smp.py:95`
+
+Encode a CBOR unsigned integer length prefix for the given value n and major type. Returns 1, 2, 3, or 5 bytes depending on the magnitude.
+
+**called by** `cbor_encode`
+
 ### `cbor_decode(buf, i=0)`
-`scripts/woz_smp.py:127`
+`scripts/woz_smp.py:129`
 
 Return (value, next_index). Enough of CBOR to read mcumgr's replies.
 
 **called by** `Smp.call`
 
 ### `class Smp`
-`scripts/woz_smp.py:200`
+`scripts/woz_smp.py:202`
 
 One mcumgr conversation. Reassembles responses, matches them by seq.
 
 **called by** `run`
 
-<details><summary>Undocumented (8)</summary>
+#### `Smp.__init__(self, client)`
+`scripts/woz_smp.py:205`
 
-- `die`
-- `_head`
+Initialize an SMP protocol instance bound to the given BLE client. Tracks the outgoing sequence number, buffers incoming notification chunks, and queues complete frames.
+
+#### `Smp.on_notify(self, _sender, data)`
+`scripts/woz_smp.py:212`
+
+Reassemble SMP response frames from BLE notifications. Buffers data and enqueues complete frames once the length declared in the 8-byte header is satisfied.
+
+<details><summary>Undocumented (4)</summary>
+
 - `cbor_encode`
-- `Smp.__init__`
-- `Smp.on_notify`
 - `Smp.call`
 - `run`
 - `main`

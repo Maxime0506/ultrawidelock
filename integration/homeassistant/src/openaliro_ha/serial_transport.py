@@ -27,6 +27,7 @@ class SerialPort:
 
 
 def _import_serial() -> Any:
+    """Import pyserial (serial, list_ports); raise SerialTransportError if not installed."""
     try:
         import serial
         from serial.tools import list_ports
@@ -116,6 +117,7 @@ class PySerialConnection:
     """Async wrapper around one opened pyserial connection."""
 
     def __init__(self, connection: Any) -> None:
+        """Initialize a serial connection wrapper around an open pyserial port object."""
         self._connection = connection
         self._closed = False
 

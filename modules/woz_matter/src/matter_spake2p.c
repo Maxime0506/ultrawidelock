@@ -42,6 +42,10 @@ static const char k_context[] = "CHIP PAKE V1 Commissioning";
 /* CHIPCryptoPAL.cpp:458-468 / pase.py:167. */
 static const char k_confirmation_info[] = "ConfirmationKeys";
 
+/**
+ * Derive an output key using PBKDF2-SHA256 with the given password, salt, and iteration count;
+ * returns MATTER_E_INVAL if parameters are invalid or MATTER_E_NOSPACE if the salt is too long.
+ */
 int matter_pbkdf2_sha256(const uint8_t *password, size_t password_len, const uint8_t *salt,
 			 size_t salt_len, uint32_t iterations, uint8_t *out, size_t out_len)
 {
@@ -100,6 +104,12 @@ int matter_pbkdf2_sha256(const uint8_t *password, size_t password_len, const uin
 	return MATTER_OK;
 }
 
+/**
+ * Derive SPAKE2+ w0 and w1 scalars from a 32-bit passcode using PBKDF2-SHA256 with salt and
+ * iterations. Passcode is encoded little-endian; each result is reduced modulo the P-256 order
+ * using 40 bytes of derived material (8 bytes extra for negligible bias). Returns MATTER_OK on
+ * success.
+ */
 int matter_spake2p_w0w1(uint32_t passcode, const uint8_t *salt, size_t salt_len,
 			uint32_t iterations, uint8_t w0[MATTER_SPAKE_SCALAR_LEN],
 			uint8_t w1[MATTER_SPAKE_SCALAR_LEN])
@@ -137,6 +147,10 @@ int matter_spake2p_w0w1(uint32_t passcode, const uint8_t *salt, size_t salt_len,
 	return MATTER_OK;
 }
 
+/**
+ * Hash the SPAKE2+ context from optional request and response payloads; context is always hashed
+ * but payloads are only included if present.
+ */
 int matter_spake2p_context(const uint8_t *req, size_t req_len, const uint8_t *resp, size_t resp_len,
 			   uint8_t out[MATTER_SPAKE_HASH_LEN])
 {
@@ -179,6 +193,11 @@ static void tt_put(uint8_t *out, size_t *off, const uint8_t *data, size_t len)
 	}
 }
 
+/**
+ * Assemble the SPAKE2+ transcript from context, identity empty strings, M, N, exchange points,
+ * shared secret Z, ephemeral V, and w0 scalar; returns MATTER_E_NOSPACE if output buffer is too
+ * small.
+ */
 int matter_spake2p_transcript(const uint8_t context[MATTER_SPAKE_HASH_LEN],
 			      const uint8_t pa[MATTER_SPAKE_POINT_LEN],
 			      const uint8_t pb[MATTER_SPAKE_POINT_LEN],
@@ -216,6 +235,11 @@ int matter_spake2p_transcript(const uint8_t context[MATTER_SPAKE_HASH_LEN],
 	return MATTER_OK;
 }
 
+/**
+ * Derive confirmation and session keys from the SPAKE2+ transcript and exchange points; swaps Ka
+ * and Ke derivation order and produces confirmation codes Ca over peer's point and Cb over own
+ * point.
+ */
 int matter_spake2p_p2(const uint8_t *tt, size_t tt_len, const uint8_t pa[MATTER_SPAKE_POINT_LEN],
 		      const uint8_t pb[MATTER_SPAKE_POINT_LEN], struct matter_spake2p_result *out)
 {
@@ -249,6 +273,9 @@ int matter_spake2p_p2(const uint8_t *tt, size_t tt_len, const uint8_t pa[MATTER_
 	return MATTER_OK;
 }
 
+/**
+ * Compare two SPAKE2+ hash values in constant time; returns true if they match exactly.
+ */
 bool matter_spake2p_verify(const uint8_t expected[MATTER_SPAKE_HASH_LEN],
 			   const uint8_t got[MATTER_SPAKE_HASH_LEN])
 {

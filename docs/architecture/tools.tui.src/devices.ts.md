@@ -12,14 +12,44 @@ flowchart TD
   ingestLine --> updateNrf
 ```
 
-<details><summary>Undocumented (7)</summary>
+## API
 
-- `stripAnsi` — tested: :strips ansi presentation before parsing console state@l4
-- `makeBoardState` — tested: :a search reports its hit count and highlights the matching console lines@l513; :a search that matches nothing says so instead of looking empty@l547; :an empty terminal buffer still reports an active serial connection@l292; :extracts a scannable matter payload and manual code from firmware output@l42; :extracts n rf matter shell onboarding output@l57; :extracts structured aliro lab events for the live analyzer@l37; :keeps command, serial, and job output in separate panes@l215; :preserves bounded log history and flags failures@l29
-- `severityFor`
+### `export function stripAnsi(value: string): string`
+`tools/tui/src/devices.ts:9`
+
+Strip ANSI escape sequences from the input string and return the plain text.
+
+**called by** `ingestLine`
+
+### `export function makeBoardState(id: BoardId): BoardState`
+`tools/tui/src/devices.ts:15`
+
+Create and return a BoardState record initialized with the given board ID, appropriate label and
+theme color, and empty connection, diagnostic, log, and analyzer state.
+
+**called by** `App`
+
+### `function severityFor(line: string): Severity`
+`tools/tui/src/devices.ts:35`
+
+Return a severity tier (error, warning, success, or info) by scanning the console line for
+keywords.
+
+**called by** `ingestLine`
+
+### `function pairingFromLine(current: BoardState["pairing"], line: string): BoardState["pairing"]`
+`tools/tui/src/devices.ts:71`
+
+Extract and merge QR code URL, QR content payload, and manual pairing code from a console line
+into the current pairing state, returning the updated state or current state if no fields
+matched.
+
+**called by** `ingestLine`
+
+<details><summary>Undocumented (3)</summary>
+
 - `updateNrf`
 - `updateEsp32`
-- `pairingFromLine`
 - `ingestLine` — tested: :extracts a scannable matter payload and manual code from firmware output@l42; :extracts n rf matter shell onboarding output@l57; :extracts structured aliro lab events for the live analyzer@l37; :preserves bounded log history and flags failures@l29; :projects esp32 responder and ranging output into normalized bench state@l19; :projects the n rf curated shell into normalized bench state@l8
 
 </details>
