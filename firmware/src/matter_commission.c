@@ -32,6 +32,9 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Unconditional: srp_sign_self_test() runs in every build of this file. */
+#include <psa/crypto.h>
+
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
@@ -145,6 +148,17 @@ static uint8_t s_report[MATTER_REPORT_MAX];
  */
 #define MATTER_IM_PAYLOAD_MAX                                                                      \
 	(MATTER_MAX_MESSAGE_LEN - MATTER_EXCHANGE_HEADER_MAX - MATTER_TAG_LEN)
+
+/*
+ * The Thread transport's reply buffer is exactly this ceiling, and it is sized
+ * in a header that cannot see the three terms above. Assert the identity here,
+ * where all four are in scope: raising MATTER_MAX_MESSAGE_LEN or either header
+ * without moving the buffer would silently reintroduce the framing that
+ * send_framed() cannot copy out.
+ */
+BUILD_ASSERT(MATTER_THREAD_REPLY_MAX ==
+		     MATTER_EXCHANGE_HEADER_MAX + MATTER_IM_PAYLOAD_MAX + MATTER_TAG_LEN,
+	     "the Thread reply buffer must hold exactly one full-size Matter message");
 
 /**
  * Plaintext of an encrypted message.
@@ -268,6 +282,156 @@ static void ecdh_known_answer_test(void)
 							  : "");
 	}
 	LOG_HEXDUMP_ERR(z, sizeof(z), "got");
+}
+
+/**
+ * The PSA sequence OpenThread runs to sign an SRP update, with the status kept.
+ *
+ * WHY THIS EXISTS. An SRP registration that fails before the message reaches
+ * the wire reports exactly one thing: "Failed to send update: Failed". That is
+ * kErrorFailed, and zephyr/modules/openthread/platform/crypto_psa.c:22-34 maps
+ * EVERY psa_status_t onto it except INVALID_ARGUMENT and BUFFER_TOO_SMALL -- so
+ * INSUFFICIENT_MEMORY, NOT_SUPPORTED, STORAGE_FAILURE and DOES_NOT_EXIST are
+ * one indistinguishable value by the time any log sees them. The number the
+ * mapping throws away is the whole diagnosis, and this is the only way to read
+ * it without editing fetched upstream.
+ *
+ * DETERMINISTIC ECDSA, not randomized, because that is what
+ * otPlatCryptoEcdsaGenerateKey and otPlatCryptoEcdsaSign both ask for
+ * (crypto_psa.c:432 and :465). It is also the one algorithm in this image that
+ * nothing else exercises: PASE and CASE both sign with PSA_ALG_ECDSA, which is
+ * why a board can finish a full commissioning handshake and still be unable to
+ * sign an SRP update.
+ *
+ * The key is generated and thrown away. Nothing here touches the node's own
+ * SRP key, so running it costs one keypair and changes no stored state.
+ */
+static void srp_sign_self_test(void)
+{
+	const psa_algorithm_t alg = PSA_ALG_DETERMINISTIC_ECDSA(PSA_ALG_SHA_256);
+	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+	psa_key_id_t key = 0;
+	psa_status_t st;
+	/* PSA exports an ECC key pair as the raw scalar, 32 B for P-256.
+	 * Oversized on purpose: a driver that returns DER instead must fail as
+	 * BUFFER_TOO_SMALL rather than silently truncating into the stack. */
+	uint8_t priv[96];
+	size_t priv_len = 0u;
+	uint8_t hash[32] = { 0 };
+	uint8_t sig[64];
+	size_t sig_len = 0u;
+
+	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_EXPORT);
+	psa_set_key_algorithm(&attr, alg);
+	psa_set_key_type(&attr, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+	psa_set_key_bits(&attr, 256);
+
+	st = psa_generate_key(&attr, &key);
+	if (st != PSA_SUCCESS) {
+		LOG_ERR("SRP sign self-test: generate FAILED, psa_status=%d", (int)st);
+		return;
+	}
+	st = psa_export_key(key, priv, sizeof(priv), &priv_len);
+	(void)psa_destroy_key(key);
+	if (st != PSA_SUCCESS) {
+		LOG_ERR("SRP sign self-test: export FAILED, psa_status=%d", (int)st);
+		return;
+	}
+
+	/* Re-imported rather than signed with the handle above, because that is
+	 * what OpenThread does: it keeps the exported bytes and imports them
+	 * again on every single update (crypto_psa.c:469). */
+	psa_reset_key_attributes(&attr);
+	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_HASH);
+	psa_set_key_algorithm(&attr, alg);
+	psa_set_key_type(&attr, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+	psa_set_key_bits(&attr, 256);
+
+	key = 0;
+	st = psa_import_key(&attr, priv, priv_len, &key);
+	if (st != PSA_SUCCESS) {
+		LOG_ERR("SRP sign self-test: import FAILED, psa_status=%d (exported %u B)",
+			(int)st, (unsigned int)priv_len);
+		return;
+	}
+	st = psa_sign_hash(key, alg, hash, sizeof(hash), sig, sizeof(sig), &sig_len);
+	(void)psa_destroy_key(key);
+	if (st != PSA_SUCCESS) {
+		LOG_ERR("SRP sign self-test: sign FAILED, psa_status=%d", (int)st);
+		return;
+	}
+	LOG_INF("SRP sign self-test: volatile PASS (exported %u B, signature %u B)",
+		(unsigned int)priv_len, (unsigned int)sig_len);
+
+	/*
+	 * The half that matters, and the reason the volatile half above is not
+	 * enough. This build has OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE=1
+	 * (read out of build/<dir>/firmware/build.ninja, not assumed), so
+	 * Client::ReadOrGenerateKey takes the key-reference branch at
+	 * srp_client.cpp:1144 and Generate() lands on
+	 * otPlatCryptoEcdsaGenerateAndImportKey, which sets
+	 * PSA_KEY_LIFETIME_PERSISTENT (crypto_psa.c:591).
+	 *
+	 * A persistent key is a completely different set of moving parts: the
+	 * material goes through TRUSTED_STORAGE, is sealed with
+	 * ChaCha20-Poly1305, and lands in NVS in the 8 KB settings partition.
+	 * None of that is touched by a volatile key, so a volatile-only test
+	 * passes while the real path fails -- which is worse than no test,
+	 * because it reads like an all-clear.
+	 *
+	 * 0x2F000 is clear of OpenThread's own refs: those are
+	 * OPENTHREAD_CONFIG_PSA_ITS_NVM_OFFSET (0x20000) + 1..7
+	 * (crypto/storage.hpp:102-108, srp_client.hpp:813).
+	 *
+	 * Destroyed at both ends. Destroying first stops a slot surviving from
+	 * an earlier boot and returning ALREADY_EXISTS, which would report a
+	 * storage fault that is really just this test's own litter; destroying
+	 * after is what keeps it from leaking an ITS entry per boot into a
+	 * partition this small.
+	 */
+	{
+		const psa_key_id_t probe_id = 0x2F000;
+		psa_key_id_t pkey = 0;
+		uint8_t pub[65];
+		size_t pub_len = 0u;
+
+		(void)psa_destroy_key(probe_id);
+
+		psa_reset_key_attributes(&attr);
+		psa_set_key_lifetime(&attr, PSA_KEY_LIFETIME_PERSISTENT);
+		psa_set_key_id(&attr, probe_id);
+		psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_EXPORT);
+		psa_set_key_algorithm(&attr, alg);
+		psa_set_key_type(&attr, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+		psa_set_key_bits(&attr, 256);
+
+		st = psa_generate_key(&attr, &pkey);
+		if (st != PSA_SUCCESS) {
+			LOG_ERR("SRP sign self-test: PERSISTENT generate FAILED, psa_status=%d",
+				(int)st);
+			return;
+		}
+		/* srp_client.cpp:1176 calls this on the stored key, and it fails
+		 * into the same one error value as everything else here. */
+		st = psa_export_public_key(pkey, pub, sizeof(pub), &pub_len);
+		if (st != PSA_SUCCESS) {
+			LOG_ERR("SRP sign self-test: PERSISTENT pubkey FAILED, psa_status=%d",
+				(int)st);
+			(void)psa_destroy_key(pkey);
+			return;
+		}
+		st = psa_sign_hash(pkey, alg, hash, sizeof(hash), sig, sizeof(sig), &sig_len);
+		if (st != PSA_SUCCESS) {
+			LOG_ERR("SRP sign self-test: PERSISTENT sign FAILED, psa_status=%d",
+				(int)st);
+			(void)psa_destroy_key(pkey);
+			return;
+		}
+		st = psa_destroy_key(pkey);
+		LOG_INF("SRP sign self-test: PERSISTENT PASS (pubkey %u B, signature %u B, "
+			"destroy psa_status=%d)",
+			(unsigned int)pub_len, (unsigned int)sig_len, (int)st);
+	}
 }
 
 /** @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input. */
@@ -2864,6 +3028,7 @@ bool matter_commission_has_fabric(void)
 int matter_commission_init(void)
 {
 	ecdh_known_answer_test();
+	srp_sign_self_test();
 
 	if (load_verifier() != 0) {
 		/* Deliberately still registers the handler. A device that cannot

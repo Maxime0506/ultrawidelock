@@ -15,20 +15,20 @@ what happens when a commissioner disappears halfway through.
 ## API
 
 ### `int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len, uint8_t sig[MATTER_ATTEST_SIG_LEN])`
-`firmware/src/matter_commission.c:163`
+`firmware/src/matter_commission.c:177`
 
 The two seams matter_attest.h declares. Kept here rather than in the module
 so woz_matter stays free of any particular crypto backend; on this board both
 are the reader's existing PSA-backed primitives.
 
 ### `int matter_attest_ec_keygen(uint8_t priv[32], uint8_t pub[65])`
-`firmware/src/matter_commission.c:173`
+`firmware/src/matter_commission.c:187`
 
 Generate a P-256 keypair for Matter attestation. Fills priv with the 32-byte private key and pub
 with the 65-byte uncompressed public key. Returns 0 on success.
 
 ### `int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_PUBKEY_LEN], uint8_t secret_out[MATTER_CASE_SECRET_LEN])`
-`firmware/src/matter_commission.c:184`
+`firmware/src/matter_commission.c:198`
 
 The two matter_case.h declares. ECDH yields the X coordinate only, which is
 what the spec means by the shared secret -- the Y coordinate carries no
@@ -36,26 +36,26 @@ additional entropy and including it would give a secret neither peer agrees
 on.
 
 ### `int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len, uint8_t sig[MATTER_CASE_SIG_LEN])`
-`firmware/src/matter_commission.c:194`
+`firmware/src/matter_commission.c:208`
 
 Sign a message with a P-256 private key. Fills sig with the MATTER_CASE_SIG_LEN-byte signature.
 Returns 0 on success.
 
 ### `int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t *msg, size_t msg_len, const uint8_t sig[MATTER_CASE_SIG_LEN])`
-`firmware/src/matter_commission.c:204`
+`firmware/src/matter_commission.c:218`
 
 Verify a message signature with a P-256 public key. The public key is MATTER_CASE_PUBKEY_LEN
 bytes, the signature is MATTER_CASE_SIG_LEN bytes. Returns 0 if the signature is valid.
 
 ### `static int unhex(const char *s, uint8_t *out, size_t cap, size_t *len)`
-`firmware/src/matter_commission.c:274`
+`firmware/src/matter_commission.c:438`
 
 @return 0 and the byte count, or -EINVAL on any non-hex or odd-length input.
 
 **called by** `load_verifier`
 
 ### `static int load_verifier(void)`
-`firmware/src/matter_commission.c:306`
+`firmware/src/matter_commission.c:470`
 
 Read the verifier out of Kconfig.
 A verifier and the parameters that produced it have to agree, and nothing on
@@ -67,7 +67,7 @@ warning anyone gets.
 **called by** `matter_commission_init`  ·  **calls** `unhex`
 
 ### `static void admin_close(void)`
-`firmware/src/matter_commission.c:365`
+`firmware/src/matter_commission.c:529`
 
 Close the Matter commissioning window if open. Reset the verifier to the factory default, clear
 the window state, fabric index, and vendor code, set the BLE discriminator to 0, re-advertise,
@@ -76,14 +76,14 @@ and log the closure. If the window is not open, return silently.
 **called by** `admin_expire`, `admin_revoke`
 
 ### `static void admin_expire(struct k_work *work)`
-`firmware/src/matter_commission.c:382`
+`firmware/src/matter_commission.c:546`
 
 Work callback that closes the Matter commissioning window when the timeout expires.
 
 **calls** `admin_close`
 
 ### `static void admin_arm(uint16_t timeout_s, uint8_t kind)`
-`firmware/src/matter_commission.c:395`
+`firmware/src/matter_commission.c:559`
 
 Open the Matter commissioning window for the specified kind (basic or enhanced) and timeout in
 seconds. Set the administrative window state, reschedule the admin timer, re-advertise on BLE,
@@ -93,7 +93,7 @@ and if CONFIG_WOZ_DFU_RECEIVER is enabled, open the DFU update window for the sa
 **called by** `admin_open_basic`, `admin_open_enhanced`
 
 ### `static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier, uint32_t verifier_len, uint16_t discriminator, uint32_t iterations, const uint8_t *salt, uint32_t salt_len)`
-`firmware/src/matter_commission.c:416`
+`firmware/src/matter_commission.c:580`
 
 Open the Matter commissioning window with an enhanced PAKE verifier, new discriminator, and the
 specified timeout in seconds. Validates verifier length, point format (0x04 prefix), salt length,
@@ -103,7 +103,7 @@ MATTER_ADMIN_STATUS_BUSY if a window is already open, otherwise returns 0u.
 **calls** `admin_arm`
 
 ### `static uint8_t admin_open_basic(uint16_t timeout_s)`
-`firmware/src/matter_commission.c:451`
+`firmware/src/matter_commission.c:615`
 
 Open the Matter commissioning window with the factory PAKE verifier and the specified timeout in
 seconds. Returns MATTER_ADMIN_STATUS_BUSY if a window is already open, otherwise returns 0u.
@@ -111,7 +111,7 @@ seconds. Returns MATTER_ADMIN_STATUS_BUSY if a window is already open, otherwise
 **calls** `admin_arm`
 
 ### `static uint8_t admin_revoke(void)`
-`firmware/src/matter_commission.c:467`
+`firmware/src/matter_commission.c:631`
 
 Close the Matter commissioning window if one is open. Returns MATTER_ADMIN_STATUS_WINDOW_NOT_OPEN
 if already closed, otherwise returns 0u.
@@ -119,12 +119,12 @@ if already closed, otherwise returns 0u.
 **calls** `admin_close`
 
 ### `static uint8_t admin_status(void)`
-`firmware/src/matter_commission.c:480`
+`firmware/src/matter_commission.c:644`
 
 Return the administrative window state: one of the MATTER_ADMIN_WINDOW_* constants.
 
 ### `bool matter_commission_window_open(void)`
-`firmware/src/matter_commission.c:485`
+`firmware/src/matter_commission.c:649`
 
 True while an AdministratorCommissioning window is open.
 The advertiser needs this: a node that HAS a fabric normally advertises as
@@ -132,33 +132,33 @@ an Aliro reader, and doing that during a commissioning window hides it from
 the very ecosystem the window was opened for.
 
 ### `static uint8_t admin_fabric(void)`
-`firmware/src/matter_commission.c:494`
+`firmware/src/matter_commission.c:658`
 
 Return the fabric index of the peer commissioning the lock, or 0 if no commissioning is in
 progress.
 
 ### `static uint16_t admin_vendor(void)`
-`firmware/src/matter_commission.c:503`
+`firmware/src/matter_commission.c:667`
 
 Return the vendor code offered by the peer during commissioning, or 0 if no commissioning is in
 progress.
 
 ### `static int begin_session(void)`
-`firmware/src/matter_commission.c:518`
+`firmware/src/matter_commission.c:682`
 
 Fresh randomness for one commissioning attempt.
 
 **called by** `on_message`
 
 ### `static uint8_t case_slot_of(uint16_t session_id)`
-`firmware/src/matter_commission.c:629`
+`firmware/src/matter_commission.c:793`
 
 The slot holding @p session_id, or MATTER_CASE_SESSIONS if none does.
 
 **called by** `handle_sigma3`, `matter_thread_on_datagram`, `notify_lock_state`, `on_status_response`
 
 ### `static uint8_t case_alloc_slot(void)`
-`firmware/src/matter_commission.c:649`
+`firmware/src/matter_commission.c:813`
 
 A slot for a newly established session: a free one, else the round-robin
 victim.
@@ -169,7 +169,7 @@ slots, and it is logged.
 **called by** `handle_sigma3`  ·  **calls** `sub_drop_session`
 
 ### `static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)`
-`firmware/src/matter_commission.c:687`
+`firmware/src/matter_commission.c:851`
 
 Frame and send a Matter message with the specified opcode and payload. Over BLE, send via
 matter_ble_send; over Thread, stage the framed bytes in s_thread_reply. Log errors if framing
@@ -178,7 +178,7 @@ fails or the buffer is too small.
 **called by** `on_message`
 
 ### `static void fab_store_work_fn(struct k_work *w)`
-`firmware/src/matter_commission.c:765`
+`firmware/src/matter_commission.c:929`
 
 Work function to persist the operational Matter fabric identity to settings storage. Retry
 FAB_STORE_ATTEMPTS times with FAB_STORE_BACKOFF_MS delay between retries. If successful, reset
@@ -186,7 +186,7 @@ the attempt counter. If all retries fail, log an error that the fabric was not s
 node will come back commissionable on the next boot, then reset the attempt counter.
 
 ### `static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)`
-`firmware/src/matter_commission.c:802`
+`firmware/src/matter_commission.c:966`
 
 Frame and send a Matter Interaction Model message with the specified opcode and payload. Over
 BLE, send via matter_ble_send; over Thread, stage the framed bytes in s_thread_reply. Log errors
@@ -195,7 +195,7 @@ if framing fails or the buffer is too small.
 **called by** `on_invoke_request`, `on_read_request`, `on_status_response`, `on_timed_request`, `on_write_request`, `send_report_chunk`
 
 ### `static void on_read_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:848`
+`firmware/src/matter_commission.c:1012`
 
 Handle an incoming Matter ReadRequest. Decodes the paths being read, logs them per session type
 (loud over CASE only), and builds a ReportData response. Warns if any wildcard paths could not be
@@ -204,7 +204,7 @@ expanded.
 **called by** `on_secure`  ·  **calls** `send_im`
 
 ### `static void on_invoke_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:908`
+`firmware/src/matter_commission.c:1072`
 
 Handle an incoming Matter InvokeRequest. Decodes the request, builds an InvokeResponse, and on
 successful Door Lock or Network Commissioning commands, submits a notification to trigger
@@ -214,7 +214,7 @@ CommissioningComplete to avoid pairing delays and stack overflow on the receive 
 **called by** `on_secure`  ·  **calls** `notify_lock_state_changed`, `send_im`
 
 ### `static void on_write_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:1040`
+`firmware/src/matter_commission.c:1204`
 
 Apply a WriteRequest.
 The commissioner's last act, and the one this node used to answer with
@@ -225,7 +225,7 @@ has finished commissioning and cannot record that it owns the node sits on
 **called by** `on_secure`  ·  **calls** `send_im`
 
 ### `struct sub_state`
-`firmware/src/matter_commission.c:1081`
+`firmware/src/matter_commission.c:1245`
 
 The subscriptions this node is serving.
 One slot per session, because that is the natural bound: a controller
@@ -239,13 +239,13 @@ subscribe. Measured on 2026-08-02: nine of these in five minutes and a tile
 that never left "No Response".
 
 ### `struct sub_persist`
-`firmware/src/matter_commission.c:1150`
+`firmware/src/matter_commission.c:1314`
 
 Persisted subscription state: peer node ID, subscription ID, maximum heartbeat interval in
 seconds, fabric index, and a used flag.
 
 ### `static void sub_persist_save(uint8_t slot, const struct sub_state *s, uint64_t peer_node, uint8_t fabric_index)`
-`firmware/src/matter_commission.c:1177`
+`firmware/src/matter_commission.c:1341`
 
 Persist one subscription's state to settings storage with the key SUB_KEY_FMT[slot]. Skip
 persisting if peer_node or fabric_index is zero (no match key available). Log a warning if save
@@ -254,20 +254,20 @@ fails; the subscription will not survive reboot.
 **called by** `on_status_response`
 
 ### `static int sub_persist_read(const char *key, size_t len, settings_read_cb read_cb, void *cb_arg, void *param)`
-`firmware/src/matter_commission.c:1207`
+`firmware/src/matter_commission.c:1371`
 
 Settings callback to load one persisted subscription from the settings key-value store. Reads up
 to len bytes into *out if len matches the struct size. Returns 0.
 
 ### `static void sub_persist_load(void)`
-`firmware/src/matter_commission.c:1221`
+`firmware/src/matter_commission.c:1385`
 
 Load the stored records, dormant until a matching CASE session turns up.
 
 **called by** `matter_commission_init`
 
 ### `static void sub_resume_for(uint8_t case_slot, uint64_t peer_node, uint8_t fabric_index, uint16_t session_id)`
-`firmware/src/matter_commission.c:1247`
+`firmware/src/matter_commission.c:1411`
 
 A CASE session just came up. If a stored subscription belongs to this peer on
 this fabric, put it back to work on the new session.
@@ -275,7 +275,7 @@ this fabric, put it back to work on the new session.
 **called by** `handle_sigma3`  ·  **calls** `subscription_heartbeat_arm`
 
 ### `static void notify_lock_state(struct sub_state *s)`
-`firmware/src/matter_commission.c:1317`
+`firmware/src/matter_commission.c:1481`
 
 Send a Matter lock state subscription report to one CASE session. Builds a TLV-encoded data
 report for the DoorLock cluster LockState attribute and sends it as an initiator exchange. Logs
@@ -285,21 +285,21 @@ valid.
 **called by** `heartbeat_work_fn`, `notify_work_fn`  ·  **calls** `case_slot_of`
 
 ### `static void notify_work_fn(struct k_work *w)`
-`firmware/src/matter_commission.c:1375`
+`firmware/src/matter_commission.c:1539`
 
 Work callback that sends lock state subscription reports to all CASE sessions.
 
 **calls** `notify_lock_state`
 
 ### `static void notify_lock_state_changed(void)`
-`firmware/src/matter_commission.c:1391`
+`firmware/src/matter_commission.c:1555`
 
 Submit lock state change notification to the work queue.
 
 **called by** `on_aliro_lock_state`, `on_invoke_request`
 
 ### `static uint32_t subscription_heartbeat_period_s(void)`
-`firmware/src/matter_commission.c:1462`
+`firmware/src/matter_commission.c:1626`
 
 Compute the heartbeat period in seconds for all active subscriptions. Returns the minimum of (3/4
 * max_interval_s) across all subscriptions, or SUBSCRIPTION_HEARTBEAT_S if none are active,
@@ -308,7 +308,7 @@ floored to SUBSCRIPTION_HEARTBEAT_MIN_S.
 **called by** `heartbeat_work_fn`, `subscription_heartbeat_arm`
 
 ### `static void heartbeat_work_fn(struct k_work *w)`
-`firmware/src/matter_commission.c:1487`
+`firmware/src/matter_commission.c:1651`
 
 Work callback that sends lock state subscription reports to all active CASE sessions and
 reschedules itself only if at least one subscription remains active.
@@ -316,14 +316,14 @@ reschedules itself only if at least one subscription remains active.
 **calls** `notify_lock_state`, `subscription_heartbeat_period_s`
 
 ### `static void subscription_heartbeat_arm(void)`
-`firmware/src/matter_commission.c:1510`
+`firmware/src/matter_commission.c:1674`
 
 Schedule the subscription heartbeat work with the minimum period across all active subscriptions.
 
 **called by** `on_status_response`, `sub_resume_for`  ·  **calls** `subscription_heartbeat_period_s`
 
 ### `static void on_aliro_lock_state(bool unlocked)`
-`firmware/src/matter_commission.c:1527`
+`firmware/src/matter_commission.c:1691`
 
 The Aliro side of this lock moved, so Matter has to be told.
 A walk-up unlock and its walk-away relock never went through the Door Lock
@@ -337,21 +337,21 @@ and submit. The report itself is built on the system work queue.
 **calls** `notify_lock_state_changed`
 
 ### `static uint16_t current_session_id(void)`
-`firmware/src/matter_commission.c:1540`
+`firmware/src/matter_commission.c:1704`
 
 The session serving the datagram in flight; 0 when it arrived over BLE.
 
 **called by** `on_status_response`, `on_subscribe_request`
 
 ### `static struct sub_state *sub_of_session(uint16_t session_id)`
-`firmware/src/matter_commission.c:1550`
+`firmware/src/matter_commission.c:1714`
 
 The subscription @p session_id holds, or NULL.
 
 **called by** `on_status_response`, `sub_alloc`, `sub_drop_session`
 
 ### `static void sub_drop_session(uint16_t session_id)`
-`firmware/src/matter_commission.c:1564`
+`firmware/src/matter_commission.c:1728`
 
 Mark the subscription holding session_id as no longer in use, or return silently if no
 subscription holds that session ID.
@@ -359,7 +359,7 @@ subscription holds that session ID.
 **called by** `case_alloc_slot`  ·  **calls** `sub_of_session`
 
 ### `static struct sub_state *sub_alloc(uint16_t session_id)`
-`firmware/src/matter_commission.c:1581`
+`firmware/src/matter_commission.c:1745`
 
 The slot for a new subscription from @p session_id.
 Re-subscribing on a session REPLACES what that session already had, rather
@@ -370,7 +370,7 @@ two controllers -- the same failure this table exists to end.
 **called by** `on_subscribe_request`  ·  **calls** `sub_of_session`
 
 ### `static void send_report_chunk(struct sub_state *s)`
-`firmware/src/matter_commission.c:1609`
+`firmware/src/matter_commission.c:1773`
 
 Send one chunk of the priming report.
 The whole data model does not fit one Matter message -- the spec caps a
@@ -381,7 +381,7 @@ delivered, and the subscriber re-subscribes forever with nothing to say why.
 **called by** `on_status_response`, `on_subscribe_request`  ·  **calls** `send_im`
 
 ### `static void on_subscribe_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:1651`
+`firmware/src/matter_commission.c:1815`
 
 Begin a subscription.
 The order is not the obvious one. A SubscribeRequest is answered with the
@@ -394,7 +394,7 @@ arrived, which is indistinguishable from a node that stopped reporting.
 **called by** `on_secure`  ·  **calls** `current_session_id`, `send_report_chunk`, `sub_alloc`
 
 ### `static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])`
-`firmware/src/matter_commission.c:1794`
+`firmware/src/matter_commission.c:1958`
 
 An Aliro credential public key, handed to the reader's trust store -- but only
 if it is a key a phone will ever present.
@@ -414,14 +414,14 @@ simply not an anchor. An empty store is the honest report of a reader no
 phone can open yet, and it is what makes the next endpoint key visible.
 
 ### `static int on_aliro_reader_config(const uint8_t signing_key[32], const uint8_t verification_key[65], const uint8_t group_id[16], const uint8_t *group_resolving_key)`
-`firmware/src/matter_commission.c:1818`
+`firmware/src/matter_commission.c:1982`
 
 Complete Aliro reader provisioning from a Matter commissioning exchange. Store the reader
 identity (derived from the group ID and group sub-ID) and the signing key into the Aliro reader
 engine, retire the device key, and log success or error.
 
 ### `static void on_timed_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:1844`
+`firmware/src/matter_commission.c:2008`
 
 Handle an incoming Matter TimedRequest. Decodes the timeout and answers with a StatusResponse of
 SUCCESS.
@@ -429,7 +429,7 @@ SUCCESS.
 **called by** `on_secure`  ·  **calls** `send_im`
 
 ### `static void on_status_response(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:1868`
+`firmware/src/matter_commission.c:2032`
 
 Handle a StatusResponse in a subscription priming sequence: send the next report chunk if more
 remain, or finalize the subscription, persist it to settings storage, and arm periodic
@@ -438,7 +438,7 @@ heartbeats.
 **called by** `on_secure`  ·  **calls** `case_slot_of`, `current_session_id`, `send_im`, `send_report_chunk`, `sub_of_session`, `sub_persist_save`, `subscription_heartbeat_arm`
 
 ### `static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk, const uint8_t *sigma1, size_t sigma1_len, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2061`
+`firmware/src/matter_commission.c:2225`
 
 Build and frame the Sigma2 answering @p s1.
 @param sigma1 the Sigma1 payload EXACTLY as it arrived -- the transcript hash
@@ -448,7 +448,7 @@ the peer hashed and this node did not.
 **called by** `matter_thread_on_datagram`
 
 ### `static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint8_t *ipk, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2316`
+`firmware/src/matter_commission.c:2480`
 
 Answer a Sigma3, which ends the handshake.
 Sigma2 asked the initiator to believe this node; Sigma3 is the initiator
@@ -460,7 +460,7 @@ failure on this one -- which is the reason for the checks logged below.
 **called by** `matter_thread_on_datagram`  ·  **calls** `case_alloc_slot`, `case_slot_of`, `case_status_report`, `sub_resume_for`
 
 ### `static size_t case_status_report(const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2499`
+`firmware/src/matter_commission.c:2663`
 
 The StatusReport that ends CASE.
 Still unsecured and still addressed to the initiator's ephemeral id: this is
@@ -469,7 +469,7 @@ the last message before the keys take effect, not the first one after.
 **called by** `handle_sigma3`
 
 ### `size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2547`
+`firmware/src/matter_commission.c:2711`
 
 A datagram on the operational port. Sigma1, so far, and only Sigma1.
 There is no responder yet, so this answers nothing. What it does establish is
@@ -483,12 +483,12 @@ real commissioner computed independently.
 **calls** `case_slot_of`, `handle_sigma3`, `on_secure`, `send_sigma2`
 
 ### `static void on_link_reset(void)`
-`firmware/src/matter_commission.c:2837`
+`firmware/src/matter_commission.c:3001`
 
 The link dropped. Cheap here; begin_session() does the real work later.
 
 ### `bool matter_commission_has_fabric(void)`
-`firmware/src/matter_commission.c:2854`
+`firmware/src/matter_commission.c:3018`
 
 Whether this node currently holds a commissioned Matter fabric.
 Asked by the advertiser, which can carry the Matter commissionable
@@ -502,7 +502,7 @@ pairing -- invisible to Add Accessory and impossible to recover without
 erasing it.
 
 ### `int matter_commission_init(void)`
-`firmware/src/matter_commission.c:2864`
+`firmware/src/matter_commission.c:3028`
 
 Register the commissioning handlers on the 0xFFF6 transport.
 Call after the reader is up. Nothing here touches the radio: whether the
