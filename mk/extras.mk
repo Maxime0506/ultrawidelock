@@ -96,13 +96,28 @@ tui-release:
 ##   One rm for the shared root, plus the directories ESP-IDF writes when idf.py
 ##   is called directly inside an app instead of through `make esp-build`.
 clean:
-	@rm -rf $(ALIRO_BUILD_ROOT)
-	@rm -rf $(REPO_ROOT)/ports/esp32/apps/*/build $(REPO_ROOT)/ports/esp32/apps/*/build-piv \
-	        $(REPO_ROOT)/ports/esp32/test/on_target_ec/build $(REPO_ROOT)/ports/nrf5340dk/on_target_ec/build
+	@# ALIRO_BUILD_ROOT is `?=` and exported (Makefile:38-39), so whatever is in
+	@# the caller's environment wins -- and this line deletes it recursively. A
+	@# stale export from another checkout would aim that delete outside the repo,
+	@# so refuse anything that is not a real subdirectory of it. `..` is rejected
+	@# separately because a path can start with $(REPO_ROOT) and still climb out.
+	@root='$(ALIRO_BUILD_ROOT)'; repo='$(REPO_ROOT)'; \
+	case "$$root" in \
+	  *..*) printf '  refusing: ALIRO_BUILD_ROOT contains ".." -- %s\n' "$$root" >&2; exit 1;; \
+	  "$$repo"/?*) ;; \
+	  *) printf '  refusing: ALIRO_BUILD_ROOT is not inside %s -- %s\n' "$$repo" "$$root" >&2; \
+	     printf '  It is exported, so a value left in your environment redirects this delete.\n' >&2; \
+	     exit 1;; \
+	esac; \
+	rm -rf "$$root"
+	@# The variable is quoted but the globs are not, which is the point: quoting
+	@# the whole word would stop `*` expanding.
+	@rm -rf "$(REPO_ROOT)"/ports/esp32/apps/*/build "$(REPO_ROOT)"/ports/esp32/apps/*/build-piv \
+	        "$(REPO_ROOT)"/ports/esp32/test/on_target_ec/build "$(REPO_ROOT)"/ports/nrf5340dk/on_target_ec/build
 	@# The TUI gate compiles into its own directory rather than the build root
 	@# (bun decides where its output goes), so it needs naming here or `clean`
 	@# leaves it behind. node_modules is a fetched dependency, not output: kept.
-	@rm -rf $(REPO_ROOT)/tools/tui/dist $(REPO_ROOT)/tools/tui/.*.bun-build
+	@rm -rf "$(REPO_ROOT)"/tools/tui/dist "$(REPO_ROOT)"/tools/tui/.*.bun-build
 	@printf '  removed %s, the app-local build directories and the TUI bundle\n' '$(ALIRO_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + seeded workspace

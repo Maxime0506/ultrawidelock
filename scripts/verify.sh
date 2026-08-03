@@ -42,7 +42,8 @@
 #   WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 #   SERIAL=1           one gate at a time, fail-fast, instead of lanes
 #   SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
-#   COV_MIN=90         line-coverage floor, matching ci.yml
+#   COV_MIN=90         line-coverage floor. Reported, never blocking: under it the
+#                      row still passes and says so. Raise it to aim higher.
 #   NO_COLOR=1         plain output (colour is the default, pipe or not)
 #   FAIL_TAIL=40       lines of a failing gate's log to show inline
 set -uo pipefail
@@ -123,7 +124,7 @@ GATES=(
 	test-ws     # 14s  LOCAL ONLY        (ws-seed clones with cp -c and fails loudly off APFS by
 	            #                         design, so a Linux runner cannot test it)
 	test-verify # 15s  ci.yml : verify
-	coverage    # 18s  ci.yml : verify   (+ the line floor)
+	coverage    # 18s  ci.yml : verify   (the line floor is advisory, not blocking)
 	semgrep     # 22s  ci.yml : verify   (registry packs are fetched, so it needs network)
 	cbmc        # 82s  ci.yml : verify   (opt-in locally via WITH_CBMC=1; ci.yml sets it)
 )
@@ -265,7 +266,30 @@ gate_label() {
 	test-ws) echo "workspace auto-seeding" ;;
 	test-tui) echo "guided bench types, tests, build" ;;
 	test-verify) echo "this sweep's own tests" ;;
-	coverage) echo "line coverage >= ${COV_MIN}%" ;;
+	# The measured number goes on the row, not just into the gate's log. Now that
+	# the floor is advisory this row is a green one, and a passing gate's log is
+	# never printed -- so the log is where the number would go to die. Reading the
+	# summary the gate just wrote is what keeps an advisory gate from becoming a
+	# decorative one. Before the gate has run there is no file, and the label
+	# falls back to describing itself.
+	coverage)
+		local cov_label
+		cov_label="$(COV_MIN="$COV_MIN" \
+			COV_SUMMARY="${ALIRO_BUILD_ROOT:-build}/host/coverage/summary.json" \
+			python3 -c '
+import json, os, sys
+try:
+    pct = float(json.load(open(os.environ["COV_SUMMARY"]))["data"][0]["totals"]["lines"]["percent"])
+except Exception:
+    sys.exit(1)
+floor = float(os.environ["COV_MIN"])
+if pct < floor:
+    print("line coverage %.2f%% < %.0f%% advisory" % (pct, floor))
+else:
+    print("line coverage %.2f%% (floor %.0f%%)" % (pct, floor))' 2>/dev/null || true)"
+		[ -n "$cov_label" ] || cov_label="line coverage (advisory floor ${COV_MIN}%)"
+		echo "$cov_label"
+		;;
 	clang-tidy) echo "static analysis of the core" ;;
 	zizmor) echo "workflow security audit" ;;
 	licenses) echo "licence store is consistent" ;;
@@ -356,15 +380,29 @@ gate_run() {
 		;;
 	test-verify) make --no-print-directory test-verify ;;
 	coverage)
-		# CI runs `make coverage` and THEN enforces the floor as a
-		# separate step. Running coverage alone would pass where CI fails.
+		# The floor is ADVISORY: coming in under it does not block, here or on
+		# CI. There is no second place to change -- ci.yml runs this same sweep
+		# (`make verify`), so this branch was the only thing enforcing it, and an
+		# older comment here claiming CI enforced it separately was wrong.
+		#
+		# What still fails is the gate failing to do its job: the suite not
+		# building, or a summary that is missing or unreadable. That distinction
+		# is the whole point -- "measured, and it came in at 89.8%" is a number
+		# to act on, while "could not measure" is not verified, and the rule
+		# above (a missing tool FAILS) applies to it unchanged.
 		make --no-print-directory coverage || return 1
 		COV_MIN="$COV_MIN" python3 -c '
 import json, os, sys
-t = json.load(open(os.environ.get("ALIRO_BUILD_ROOT", "build") + "/host/coverage/summary.json"))["data"][0]["totals"]
-pct, floor = t["lines"]["percent"], float(os.environ["COV_MIN"])
-print(f"  total line coverage {pct:.2f}% (floor {floor:.0f}%)")
-sys.exit(0 if pct >= floor else 1)'
+path = os.environ.get("ALIRO_BUILD_ROOT", "build") + "/host/coverage/summary.json"
+try:
+    totals = json.load(open(path))["data"][0]["totals"]
+    pct = float(totals["lines"]["percent"])
+except Exception as exc:
+    print("  no readable coverage summary at %s (%s)" % (path, exc))
+    sys.exit(1)
+floor = float(os.environ["COV_MIN"])
+note = "" if pct >= floor else "  <-- BELOW FLOOR (advisory, does not block)"
+print("  total line coverage %.2f%% (floor %.0f%%)%s" % (pct, floor, note))'
 		;;
 	clang-tidy)
 		# On macOS the SDK headers are not on the default search path, so

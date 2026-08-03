@@ -62,3 +62,24 @@ ports/esp32/test/test_port_headers.c
 firmware/src/aliro_ble_zephyr.c
 firmware/src/aliro_prov_settings.c
 firmware/src/matter_commission.c
+
+# The BLE DFU path. One construct only: `static K_WORK_DEFINE(...)` and its DELAYABLE
+# twin. Bisected to the exact lines -- dfu_ble_zephyr.c:235, status_led.c:41,
+# dfu_receiver.c:81 and :85 -- and it is not the Zephyr macro that breaks it. Any
+# `static SOME_MACRO(a, b);` at file scope does, because without a preprocessor that
+# reads as a storage class on a call expression. Dropping `static` parses, and is
+# refused here: it turns internal linkage into external across the whole DFU surface,
+# which is a worse defect than the blind spot it buys.
+#
+# The fourth file of this batch, modules/woz_dfu/src/dfu_smp_img.c, is deliberately NOT
+# listed. Its cause was different (an #ifdef between designated initializers) and was
+# fixable without touching semantics, so it was fixed instead -- it parses SMP upload
+# frames off the air and is the one that most wanted the rules run against it.
+#
+# Compensating controls, corrected: the clang-tidy row above does not reach any of
+# these. tests/host/sources.sh compiles woz_aliro, woz_aliro_stack, woz_matter, woz_nfc,
+# woz_port and woz_uwb only -- not firmware/src, and not modules/woz_dfu. CodeQL's
+# weekly run is the whole fallback here.
+firmware/src/dfu_ble_zephyr.c
+firmware/src/status_led.c
+modules/woz_dfu/src/dfu_receiver.c

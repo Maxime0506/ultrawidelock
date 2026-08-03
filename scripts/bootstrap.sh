@@ -123,12 +123,45 @@ fi
 # 2. Apply our patches on top. Each target repo is reset to its pinned HEAD and
 #    verified clean first, so a patch can never land on unexpected local state.
 echo "==> applying integration patches"
-# Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
+# Apply patch files to a repository, resetting it to its pinned HEAD first.
+#
+# That reset is what makes bootstrap idempotent -- the previous run's patches have
+# to come off before this run's go on -- but hand-editing $WS is the normal way
+# upstream gets debugged here, and those edits look identical to it. So say what is
+# about to go, and keep a copy: a run that silently eats an afternoon of debugging
+# is the worst thing this script can do. ALIRO_KEEP_WS_EDITS=1 stops instead, for
+# when the edits are the point and re-patching is not.
 apply_to() {   # $1 = repo, remaining args = patch files
   local repo="$1"; shift
+  local dirty saved
+  dirty="$(git -C "$repo" status --porcelain --untracked-files=no)"
+  if [ -n "$dirty" ]; then
+    if [ "${ALIRO_KEEP_WS_EDITS:-0}" = 1 ]; then
+      echo "ERROR: $repo has local changes and ALIRO_KEEP_WS_EDITS=1 — stopping" >&2
+      printf '%s\n' "$dirty" | sed 's/^/      /' >&2
+      exit 1
+    fi
+    mkdir -p "$WS/.aliro-discarded"
+    saved="$WS/.aliro-discarded/$(basename "$repo")-$(date -u +%Y%m%dT%H%M%SZ).patch"
+    # diff HEAD, not diff: staged work is just as easy to lose and `checkout -- .`
+    # does not touch the index, so it would otherwise survive here and trip the
+    # pristine assertion below with no record of what it was.
+    git -C "$repo" diff HEAD >"$saved"
+    echo "    discarding local changes in $repo:"
+    printf '%s\n' "$dirty" | sed 's/^/      /'
+    echo "    saved to $saved"
+    echo "      restore with: git -C $repo apply '$saved'"
+  fi
   git -C "$repo" checkout -q -- .
-  [ -z "$(git -C "$repo" status --porcelain --untracked-files=no)" ] \
-    || { echo "ERROR: $repo not pristine — refusing to patch"; exit 1; }
+  # Reachable, despite the reset above: `checkout -- .` rewrites the working tree
+  # from the index and leaves the index itself alone, so anything staged survives
+  # to here. Staged work is deliberate work, so stop rather than clear it -- the
+  # copy saved above is the way back if the stop is unwelcome.
+  [ -z "$(git -C "$repo" status --porcelain --untracked-files=no)" ] || {
+    echo "ERROR: $repo still not pristine — staged changes survive 'checkout -- .'" >&2
+    echo "       Unstage them and re-run:  git -C $repo reset" >&2
+    exit 1
+  }
   git -C "$repo" apply --whitespace=nowarn "$@"
 }
 # HA=1 also applies the Home Assistant data-model patches: the DoorLock

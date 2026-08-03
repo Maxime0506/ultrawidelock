@@ -476,6 +476,9 @@ dfu-serial:
 ##   control block needs no change here -- but the ELF must be the one you
 ##   FLASHED. Attach with an ELF you only built and probe-rs reads a stale
 ##   address and prints nothing, which looks exactly like a dead board.
+##   That one is now refused rather than documented: the _SEGGER_RTT address
+##   here is checked against the ELF `make flash` recorded. A check that cannot
+##   be made (nothing flashed yet, no toolchain nm) warns and continues.
 ##   READ THE FIRST BLOCK WITH SUSPICION. The RTT ring lives in its own section
 ##   at the bottom of RAM and is NOT cleared by a reset, so everything printed
 ##   before the "*** Booting nRF Connect SDK ***" line is the PREVIOUS run --
@@ -487,6 +490,8 @@ dfu-serial:
 monitor:
 	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  install: make tools-install\n' >&2; exit 1; }
 	@test -f $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf || { printf '  no ELF at %s/$(CDK_IMAGE)/zephyr/zephyr.elf  ·  build it first\n' '$(CDK_RTT_BUILD)' >&2; exit 1; }
+	@$(REPO_ROOT)/scripts/cdk-rtt-elf-check.sh \
+	  '$(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)'
 	@# The code you would be asked for while watching this. Never fatal: the
 	@# reader build has no Matter symbols and a console is still worth having.
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \

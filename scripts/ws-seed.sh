@@ -21,6 +21,19 @@ if [ -d "$WS/.west" ]; then
   exit 0
 fi
 
+# A $WS that exists but has no .west is an interrupted bootstrap, not a blank
+# slate. It matters because the cleanup trap below removes $WS wholesale when a
+# run fails, and that trap cannot tell a directory this script created from one
+# that was already there holding a part-fetched 6.5 GB. Refuse instead of
+# adopting it, and let the person who knows what is in there decide.
+if [ -e "$WS" ]; then
+  echo "ERROR: $WS exists but has no .west" >&2
+  echo "       That is a part-finished bootstrap, and seeding over it would let a" >&2
+  echo "       failure here delete it. Look first, then clear it deliberately:" >&2
+  echo "         rm -rf '$WS'   # then re-run make ws-seed" >&2
+  exit 1
+fi
+
 # Resolve the primary checkout's workspace (same logic build.sh uses to fall back).
 common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
 [ -n "$common" ] || { echo "ERROR: not a git repo"; exit 1; }
@@ -49,7 +62,10 @@ cleanup() { local rc=$?; [ -n "$created" ] && [ -z "$done" ] && rm -rf "$WS"; ex
 trap cleanup EXIT
 
 echo "==> COW-cloning $primary/workspace -> $WS"
-created=1                             # arm cleanup before the clone so a failed cp also tidies up
+created=1                             # arm cleanup before the clone so a failed cp also tidies up.
+                                      # Only honest because the guard above proved $WS did not
+                                      # exist: reaching here means cp is what creates it, so the
+                                      # trap can only ever delete this script's own partial work.
 cp -c -R "$primary/workspace" "$WS"   # cp -c = APFS clonefile; fails loudly off APFS
 
 echo "==> normalizing patches to this worktree's branch"
