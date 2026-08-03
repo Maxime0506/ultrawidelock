@@ -92,22 +92,39 @@ matter_thread_on_datagram to generate a reply, and sends the reply back to the p
 buffers sized for Sigma3 (RX) and full subscription reports (reply) respectively. Temporarily
 publishes the peer address so the Matter handler can discover where traffic arrived from.
 
+### `static void srp_diag_state_changed(otChangedFlags flags, void *context)`
+`firmware/src/matter_thread_port.c:522`
+
+Whether auto-start ever FOUND a server, printed at the only moment that can change.
+srp_cb() below is the verdict on a registration that was sent. It says nothing
+about one that was never sent, and the two failures are indistinguishable from
+every other log this firmware prints: host and services sit at ToAdd either
+way, and srp_cb() is simply never called, so the "SRP registration FAILED"
+line reads as absent-because-fine rather than absent-because-nothing-happened.
+otSrpClientEnableAutoStartMode() picks its server out of Thread network data,
+so network data changing is the only event that can turn "no server" into
+"server". Hence OT_CHANGED_THREAD_NETDATA rather than a timer: a timer would
+print the same answer repeatedly and still miss the transition.
+Runs on the OpenThread thread with the API lock already held, which is why
+nothing here takes openthread_mutex_lock() -- the same reason thread_gate.c's
+callback does not.
+
 ### `static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClientService *services, const otSrpClientService *removed, void *ctx)`
-`firmware/src/matter_thread_port.c:504`
+`firmware/src/matter_thread_port.c:556`
 
 The SRP server's verdict, which otSrpClientAddService() cannot give.
 
 **calls** `log_addresses`
 
 ### `void matter_thread_advertise_reset(void)`
-`firmware/src/matter_thread_port.c:526`
+`firmware/src/matter_thread_port.c:578`
 
 Release all SRP registrations for the host and services. Clears both the SRP client state and the
 local registration cache, so the next advertise re-registers from scratch. Called when fabrics
 are rolled back to avoid leaving dangling registrations under old names.
 
 ### `int matter_thread_advertise(const char *instance_name, uint16_t port)`
-`firmware/src/matter_thread_port.c:708`
+`firmware/src/matter_thread_port.c:769`
 
 Advertise this node's services to SRP. Returns MATTER_E_STATE; Thread is not built into this
 image.
@@ -115,13 +132,13 @@ image.
 **calls** `log_addresses`, `srp_host_id`
 
 ### `int matter_thread_start(const uint8_t *dataset, size_t len)`
-`firmware/src/matter_thread_port.c:720`
+`firmware/src/matter_thread_port.c:781`
 
 Start Thread with the provided operational dataset. Returns MATTER_E_STATE; Thread is not built
 into this image.
 
 ### `int matter_thread_wait_attached(uint32_t timeout_ms)`
-`firmware/src/matter_thread_port.c:733`
+`firmware/src/matter_thread_port.c:794`
 
 Stub: always returns MATTER_E_TIMEOUT. Thread attachment checking is not implemented on this
 target.

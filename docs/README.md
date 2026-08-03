@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**317 subsystems in 46 directories · 2274/2456 symbols documented (92%)**
+**317 subsystems in 46 directories · 2275/2457 symbols documented (92%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -58,7 +58,7 @@ flowchart LR
 
 | directory | subsystems | documented |
 |---|---|---|
-| [`firmware/src/`](architecture/firmware.src/README.md) | 15 | 160/163 (98%) |
+| [`firmware/src/`](architecture/firmware.src/README.md) | 15 | 161/164 (98%) |
 | [`host/presence/`](architecture/host.presence/README.md) | 5 | 36/36 (100%) |
 | [`integration/homeassistant/`](architecture/integration.homeassistant/README.md) | 1 | 5/5 (100%) |
 | [`integration/homeassistant/custom_components/openaliro/`](architecture/integration.homeassistant.custom_components.openaliro/README.md) | 8 | 31/34 (91%) |
@@ -107,7 +107,7 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `a62704a`.*
+*Mined from git history as of `62ed979`.*
 
 **Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (17 commits).
 

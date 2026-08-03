@@ -500,6 +500,58 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
  * The address to look for is an off-mesh-routable one, which only exists if the
  * border router is publishing a prefix this node has picked up.
  */
+#if defined(CONFIG_ALIRO_SRP_DIAG)
+/**
+ * Whether auto-start ever FOUND a server, printed at the only moment that can change.
+ *
+ * srp_cb() below is the verdict on a registration that was sent. It says nothing
+ * about one that was never sent, and the two failures are indistinguishable from
+ * every other log this firmware prints: host and services sit at ToAdd either
+ * way, and srp_cb() is simply never called, so the "SRP registration FAILED"
+ * line reads as absent-because-fine rather than absent-because-nothing-happened.
+ *
+ * otSrpClientEnableAutoStartMode() picks its server out of Thread network data,
+ * so network data changing is the only event that can turn "no server" into
+ * "server". Hence OT_CHANGED_THREAD_NETDATA rather than a timer: a timer would
+ * print the same answer repeatedly and still miss the transition.
+ *
+ * Runs on the OpenThread thread with the API lock already held, which is why
+ * nothing here takes openthread_mutex_lock() -- the same reason thread_gate.c's
+ * callback does not.
+ */
+static void srp_diag_state_changed(otChangedFlags flags, void *context)
+{
+	ARG_UNUSED(context);
+
+	if ((flags & OT_CHANGED_THREAD_NETDATA) == 0u) {
+		return;
+	}
+
+	otInstance *ot = openthread_get_default_instance();
+	char buf[OT_IP6_ADDRESS_STRING_SIZE];
+	const otSrpClientHostInfo *host;
+	const otSockAddr *server;
+
+	if (!otSrpClientIsRunning(ot)) {
+		LOG_WRN("SRP diag: network data changed, client STILL NOT RUNNING -- "
+			"auto-start has been offered no server by this network");
+		return;
+	}
+
+	host = otSrpClientGetHostInfo(ot);
+	server = otSrpClientGetServerAddress(ot);
+	otIp6AddressToString(&server->mAddress, buf, sizeof(buf));
+	LOG_INF("SRP diag: network data changed, client running against [%s]:%u, host state %d",
+		buf, (unsigned int)server->mPort, host != NULL ? (int)host->mState : -1);
+}
+
+static struct openthread_state_changed_callback srp_diag_cb = {
+	.otCallback = srp_diag_state_changed,
+};
+
+static bool s_srp_diag_registered;
+#endif /* CONFIG_ALIRO_SRP_DIAG */
+
 /** The SRP server's verdict, which otSrpClientAddService() cannot give. */
 static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClientService *services,
 		   const otSrpClientService *removed, void *ctx)
@@ -684,6 +736,15 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 		/* Finds the border router's SRP server itself, from the network
 		 * data it already has as a child. Idempotent. */
 		otSrpClientEnableAutoStartMode(ot, NULL, NULL);
+#if defined(CONFIG_ALIRO_SRP_DIAG)
+		/* Registered here rather than at start-up so it cannot outlive
+		 * the thing it reports on, and once because the register call
+		 * appends to a list. */
+		if (!s_srp_diag_registered) {
+			s_srp_diag_registered =
+				openthread_state_changed_callback_register(&srp_diag_cb) == 0;
+		}
+#endif
 	}
 	openthread_mutex_unlock();
 

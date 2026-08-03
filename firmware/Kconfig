@@ -146,6 +146,29 @@ config ALIRO_THREAD_GATE
 	  answers whether Matter on this board is possible at all before any Matter
 	  code is written. See firmware/src/thread_gate.c.
 
+config ALIRO_SRP_DIAG
+	bool "Report the SRP client's state every time network data changes"
+	depends on NET_L2_OPENTHREAD
+	default n
+	help
+	  Diagnosis only, never shipped. Answers one question the existing logs
+	  cannot: whether otSrpClientEnableAutoStartMode() ever FOUND a server.
+
+	  A registration that is never sent looks exactly like one that was sent
+	  and refused -- both leave the host and services sitting at ToAdd and
+	  neither reaches srp_cb(), so the only "SRP failed" line this firmware
+	  can print is one that never fires. Measured on hardware 2026-08-03:
+	  three minutes as an attached child with a working OMR address, both
+	  services queued at ToAdd, and OpenThread's own INFO log carrying no
+	  server selection at all.
+
+	  Auto-start picks its server out of Thread network data, so network
+	  data changing is the only moment the answer can change. Prints
+	  otSrpClientIsRunning(), the chosen server address and the host state
+	  on each OT_CHANGED_THREAD_NETDATA. Running means the fault is after
+	  server selection; not running once network data has settled means this
+	  node is never offered a server -- see firmware/src/matter_thread_port.c.
+
 config ALIRO_CASE_BENCH
 	bool "Stage 0a: measure what a Matter CASE responder costs"
 	depends on INIT_STACKS && THREAD_STACK_INFO
