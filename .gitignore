@@ -29,7 +29,9 @@ twister-out/
 .west/
 
 # Local bench config / secrets — J-Link serials, iPhone UDIDs, shell TTY.
-# Commit bench.env.example only.
+# Nothing in the tree reads this yet; the rule is here so a scratch file by that
+# name can never be committed by accident. Ship a bench.env.example alongside it
+# if a target ever starts sourcing it.
 bench.env
 
 # Local merged firmware for bench-testing the browser flasher; the published
