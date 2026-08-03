@@ -86,6 +86,12 @@ if(CONFIG_WOZ_DFU_RECEIVER)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_receiver.c
     ${woz_dfu_pubkey_c})
 
+  # Optional second front door onto the same receiver: the SMP image group, for
+  # clients that only speak mcumgr. See the Kconfig help for why Zephyr's own
+  # img_mgmt cannot be used here.
+  zephyr_library_sources_ifdef(CONFIG_WOZ_DFU_SMP_IMG
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_smp_img.c)
+
   # zephyr_include_directories, not the _library_ form: the transport lives in
   # the application (firmware/src/dfu_ble_zephyr.c) and has to include
   # woz_dfu_rx.h. The _library_ form scopes the path to this module's own

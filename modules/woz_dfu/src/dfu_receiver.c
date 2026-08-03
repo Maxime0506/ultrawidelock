@@ -33,6 +33,7 @@
 #include <zephyr/sys/util.h>
 
 #include <psa/crypto.h>
+#include <errno.h>
 #include <string.h>
 
 #include <pm_config.h>
@@ -214,25 +215,27 @@ static size_t reply_err(uint8_t *rsp, enum woz_dfu_err code)
 	return 2u;
 }
 
-static size_t do_begin(const uint8_t *frame, size_t len, uint8_t *rsp)
-{
-	uint32_t total;
+/* The three cores below carry the whole state machine, and they are shared:
+ * the framed protocol wraps them in opcodes, and the SMP image group
+ * (src/dfu_smp_img.c) drives the same three from CBOR. Neither transport holds
+ * any transfer state of its own, so there is one place where a patch can be
+ * accepted and one set of checks in front of it. WOZ_DFU_ERR_OK (0) means
+ * accepted; every other value is refused. */
+#define WOZ_DFU_ERR_OK ((enum woz_dfu_err)0)
 
-	if (len < 5u) {
-		return reply_err(rsp, WOZ_DFU_ERR_MALFORMED);
-	}
-	total = sys_get_le32(&frame[1]);
+static enum woz_dfu_err begin_at(uint32_t total)
+{
 	if (total <= HEAD_LEN || (total - HEAD_LEN) > PATCH_MAX) {
-		return reply_err(rsp, WOZ_DFU_ERR_SIZE);
+		return WOZ_DFU_ERR_SIZE;
 	}
 	if (staging_open() != 0) {
-		return reply_err(rsp, WOZ_DFU_ERR_FLASH);
+		return WOZ_DFU_ERR_FLASH;
 	}
 
 	/* Erase everything, including the step log: a stale one would make the
 	 * bootloader believe steps of THIS patch were already applied. */
 	if (flash_area_erase(s_fa, 0, PM_PATCH_STAGING_SIZE) != 0) {
-		return reply_err(rsp, WOZ_DFU_ERR_FLASH);
+		return WOZ_DFU_ERR_FLASH;
 	}
 
 	woz_dfu_rx_reset();
@@ -240,19 +243,16 @@ static size_t do_begin(const uint8_t *frame, size_t len, uint8_t *rsp)
 	s_rx.total = total;
 	s_rx.wpos = (off_t)WOZ_DFU_PATCH_OFFSET;
 	LOG_INF("update begun, %u B", (unsigned)total);
-	return reply_ok(rsp);
+	return WOZ_DFU_ERR_OK;
 }
 
-static size_t do_data(const uint8_t *frame, size_t len, uint8_t *rsp)
+static enum woz_dfu_err feed_bytes(const uint8_t *p, size_t n)
 {
-	const uint8_t *p = &frame[1];
-	size_t n = len - 1u;
-
 	if (!s_rx.active) {
-		return reply_err(rsp, WOZ_DFU_ERR_SEQUENCE);
+		return WOZ_DFU_ERR_SEQUENCE;
 	}
 	if (s_rx.got + n > s_rx.total) {
-		return reply_err(rsp, WOZ_DFU_ERR_SIZE);
+		return WOZ_DFU_ERR_SIZE;
 	}
 
 	/* Preamble first, then everything else is patch. */
@@ -266,29 +266,31 @@ static size_t do_data(const uint8_t *frame, size_t len, uint8_t *rsp)
 
 		if (s_rx.got == HEAD_LEN && !head_verifies()) {
 			LOG_WRN("rejected: header signature did not verify");
-			return reply_err(rsp, WOZ_DFU_ERR_AUTH);
+			return WOZ_DFU_ERR_AUTH;
 		}
 	}
 
 	if (n > 0U) {
 		if (patch_write(p, n) != 0) {
-			return reply_err(rsp, WOZ_DFU_ERR_FLASH);
+			return WOZ_DFU_ERR_FLASH;
 		}
 		s_rx.got += n;
 	}
 
-	return reply_ok(rsp);
+	return WOZ_DFU_ERR_OK;
 }
 
-static size_t do_commit(uint8_t *rsp)
+/* @p reboot is false only for SMP, where the host sends its own reset command
+ * afterwards and a board that restarted on its own would look like a failure. */
+static enum woz_dfu_err commit_now(bool reboot)
 {
 	struct woz_dfu_hdr hdr;
 
 	if (!s_rx.active || s_rx.got != s_rx.total) {
-		return reply_err(rsp, WOZ_DFU_ERR_SEQUENCE);
+		return WOZ_DFU_ERR_SEQUENCE;
 	}
 	if (wbuf_flush(true) != 0) {
-		return reply_err(rsp, WOZ_DFU_ERR_FLASH);
+		return WOZ_DFU_ERR_FLASH;
 	}
 
 	memcpy(&hdr, s_rx.head, sizeof(hdr));
@@ -297,19 +299,46 @@ static size_t do_commit(uint8_t *rsp)
 	    hdr.hdr_crc32 != crc32_ieee(s_rx.head, WOZ_DFU_HDR_CRC_LEN) ||
 	    hdr.patch_len != (s_rx.total - HEAD_LEN) || hdr.patch_crc32 != s_rx.patch_crc) {
 		LOG_WRN("rejected: staged bytes do not match the header");
-		return reply_err(rsp, WOZ_DFU_ERR_INTEGRITY);
+		return WOZ_DFU_ERR_INTEGRITY;
 	}
 
 	/* The header goes in LAST. Until this write lands there is no magic in
 	 * the staging partition and the bootloader has nothing to act on, so an
 	 * interrupted transfer is indistinguishable from no transfer. */
 	if (flash_area_write(s_fa, (off_t)WOZ_DFU_HDR_OFFSET, s_rx.head, WOZ_DFU_HDR_LEN) != 0) {
-		return reply_err(rsp, WOZ_DFU_ERR_FLASH);
+		return WOZ_DFU_ERR_FLASH;
 	}
 
 	s_rx.active = false;
-	(void)k_work_schedule(&s_reboot, K_MSEC(500));
-	return reply_ok(rsp);
+	if (reboot) {
+		(void)k_work_schedule(&s_reboot, K_MSEC(500));
+	}
+	return WOZ_DFU_ERR_OK;
+}
+
+static size_t do_begin(const uint8_t *frame, size_t len, uint8_t *rsp)
+{
+	enum woz_dfu_err e;
+
+	if (len < 5u) {
+		return reply_err(rsp, WOZ_DFU_ERR_MALFORMED);
+	}
+	e = begin_at(sys_get_le32(&frame[1]));
+	return (e == WOZ_DFU_ERR_OK) ? reply_ok(rsp) : reply_err(rsp, e);
+}
+
+static size_t do_data(const uint8_t *frame, size_t len, uint8_t *rsp)
+{
+	enum woz_dfu_err e = feed_bytes(&frame[1], len - 1u);
+
+	return (e == WOZ_DFU_ERR_OK) ? reply_ok(rsp) : reply_err(rsp, e);
+}
+
+static size_t do_commit(uint8_t *rsp)
+{
+	enum woz_dfu_err e = commit_now(true);
+
+	return (e == WOZ_DFU_ERR_OK) ? reply_ok(rsp) : reply_err(rsp, e);
 }
 
 int woz_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, size_t *rsp_len)
@@ -347,3 +376,70 @@ int woz_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, size_t *rsp
 
 	return 0;
 }
+
+#ifdef CONFIG_WOZ_DFU_SMP_IMG
+
+int woz_dfu_rx_upload(uint32_t off, uint32_t total, const uint8_t *data, size_t len, uint32_t *next)
+{
+	enum woz_dfu_err e;
+
+	if (!s_open) {
+		return -EACCES;
+	}
+
+	if (off == 0U) {
+		/* A restarted upload is normal, not an error: mcumgr clients
+		 * rewind to 0 after a dropped link. Erasing and starting over
+		 * is exactly what BEGIN does. */
+		e = begin_at(total);
+		if (e != WOZ_DFU_ERR_OK) {
+			goto refused;
+		}
+	} else if (off != s_rx.got) {
+		/* Do NOT fail. mcumgr's contract is that the device reports
+		 * where it actually is and the host resends from there, which
+		 * is what makes a dropped chunk recoverable without restarting
+		 * the whole transfer. */
+		*next = s_rx.got;
+		return 0;
+	}
+
+	e = feed_bytes(data, len);
+	if (e != WOZ_DFU_ERR_OK) {
+		goto refused;
+	}
+
+	/* The last chunk stages the header but does not restart the board. The
+	 * host sends os_mgmt reset itself, and a board that rebooted early would
+	 * drop the response and read as a failed upload. */
+	if (s_rx.got == s_rx.total) {
+		e = commit_now(false);
+		if (e != WOZ_DFU_ERR_OK) {
+			goto refused;
+		}
+		LOG_INF("update staged, %u B; awaiting reset", (unsigned)s_rx.total);
+	}
+
+	*next = s_rx.got;
+	return 0;
+
+refused:
+	LOG_WRN("upload refused at %u B (err %d)", (unsigned)s_rx.got, (int)e);
+	woz_dfu_rx_reset();
+	return -EINVAL;
+}
+
+bool woz_dfu_rx_staged(void)
+{
+	struct woz_dfu_hdr hdr;
+
+	if (staging_open() != 0) {
+		return false;
+	}
+	if (flash_area_read(s_fa, (off_t)WOZ_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0) {
+		return false;
+	}
+	return hdr.magic == WOZ_DFU_MAGIC && hdr.abi_version == WOZ_DFU_ABI_VERSION;
+}
+
+#endif /* CONFIG_WOZ_DFU_SMP_IMG */

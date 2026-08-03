@@ -48,9 +48,15 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # ships -- which matters most for exactly the timing bugs LTO could cause.
 # RELEASE stays what it already claims to be: a RAM lever, not a codegen one.
 # Worth 41,084 B of flash. See firmware/overlay-lto.conf.
+#
+# SMP=1 adds mcumgr over Bluetooth, which is what nRF Device Manager and nRF
+# Connect for iOS speak. It costs 3,712 B of RAM and leaves 2,412 B free on a
+# debug build, so it wants RELEASE=1 beside it -- firmware/overlay-smp.conf has
+# the measurements and the security note about the unpaired write endpoint.
+# Ordered after overlay-release.conf so nothing it sets can be undone by it.
 LTO      ?= 1
 CDK_LTO  := $(filter-out 0 n no off N NO OFF,$(LTO))
-CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(CDK_LTO),;overlay-lto.conf)
+CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP),;overlay-smp.conf)$(if $(CDK_LTO),;overlay-lto.conf)
 
 # ---- image signing -----------------------------------------------------------
 # Which private key signs the image is the whole answer to "what will this lock
@@ -162,7 +168,7 @@ endif
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
 .PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
-        dfu-serial ota-patch ota-push ota-window ota-deps \
+        dfu-serial ota-patch ota-push ota-smp ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
@@ -308,6 +314,23 @@ ota-push: $(CDK_OTA_PY)
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
 	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
+
+## ota-smp: push the patch over mcumgr instead, exactly as a phone would
+##
+##   Needs a board built with SMP=1. Sends the same bytes as nRF Device Manager,
+##   so it answers the one question the phone cannot: whether a failure is in
+##   the firmware or in the app. `make ota-smp-list` just reads the image list,
+##   which is the cheapest proof that group 1 is answering at all.
+ota-smp: $(CDK_OTA_PY)
+	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make ota-patch`\n' '$(CDK_PATCH)' >&2; exit 1; }
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py '$(CDK_PATCH)' \
+	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
+	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
+	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
+
+ota-smp-list: $(CDK_OTA_PY)
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py --list \
+	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 
 ## ota-window: open the update window over SWD instead of pressing SW2
 ##   BENCH ONLY, and it needs the probe the whole point of this is to avoid. It

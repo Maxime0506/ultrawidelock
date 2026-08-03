@@ -90,6 +90,33 @@ int woz_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, size_t *rsp
 /** Drop any transfer in progress. Transports call this on disconnect. */
 void woz_dfu_rx_reset(void);
 
+#ifdef CONFIG_WOZ_DFU_SMP_IMG
+/**
+ * Take one SMP image-upload chunk.
+ *
+ * The same bytes and the same checks as @ref woz_dfu_rx_frame, reached from
+ * CBOR instead of opcodes, so that a stock mcumgr client (nRF Device Manager,
+ * `mcumgr image upload`) can push an update. See src/dfu_smp_img.c.
+ *
+ * @param off    offset the host believes this chunk starts at
+ * @param total  whole wire length; only read when @p off is 0
+ * @param data   chunk bytes
+ * @param len    length of @p data
+ * @param[out] next  offset to send next. On a mismatched @p off this comes back
+ *                   as the device's real position and the chunk is discarded --
+ *                   a resync, which the protocol treats as success.
+ *
+ * @retval 0        chunk accepted, or a resync was requested
+ * @retval -EACCES  no update window is open
+ * @retval -EINVAL  refused; the transfer is discarded and must restart at 0
+ */
+int woz_dfu_rx_upload(uint32_t off, uint32_t total, const uint8_t *data, size_t len,
+		      uint32_t *next);
+
+/** True when a complete, verified update is staged and waiting for a reboot. */
+bool woz_dfu_rx_staged(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
