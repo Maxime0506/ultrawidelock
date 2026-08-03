@@ -140,6 +140,7 @@ jobs:
         #              `make verify` is now what covers it.
         #   twin-wasm  needs emsdk, a ~1 GB install for one gate. The committed
         #              twin.js is still checked by test-web, which does run.
-        #   test-tui   needs bun, and release.yml already builds and tests the
-        #              TUI on every tag, which is when it ships.
+        #   test-tui   needs bun. The TUI stopped shipping in releases when they
+        #              became firmware-only, so nothing in CI builds it. It is a
+        #              contributor tool; `make verify` locally is what covers it.
         run: WITH_CBMC=1 make verify SKIP="test-ws twin-wasm test-tui"

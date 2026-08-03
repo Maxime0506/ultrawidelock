@@ -112,8 +112,9 @@ GATES=(
 	test        # 5s   ci.yml : verify
 	twin-wasm   # 7s   LOCAL ONLY        (2s warm, 7s cold; emsdk is a ~1 GB install, so ci.yml
 	            #                         SKIPs it. test-web still checks the committed twin.js.)
-	test-tui    # 9s   release.yml : tui (needs bun; the TUI ships on a tag, so that is where
-	            #                         CI builds and tests it)
+	test-tui    # 9s   LOCAL ONLY        (needs bun. The TUI stopped shipping in releases when
+	            #                         they became firmware-only, so no CI job builds it; a
+	            #                         contributor sweep is where it is checked.)
 	test-san    # 8s   ci.yml : verify
 	patch-drift # 11s  ci.yml : verify
 	docs        # 12s  ci.yml : verify   (docs.yml renders and publishes the site from main;

@@ -113,7 +113,7 @@ firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:dwm3001cdk             !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
 release.yml:guard                          !release: refuses a dispatch whose ref is not a vN.N.N tag, so it has nothing to reproduce locally
-release.yml:tui                            test-tui
+release.yml:dwm3001cdk                     !release: firmware toolchain, and the signing key
 release.yml:nrf5340dk                      !release: firmware toolchain
 release.yml:esp32-matter-lock              !release: firmware toolchain
 release.yml:release                        !release: publishes a tag
@@ -126,6 +126,7 @@ release.yml:release                        !release: publishes a tag
 LOCAL_ONLY="
 test-ws     ws-seed.sh clones with cp -c (APFS clonefile) and fails loudly off APFS by design, so only a contributor local sweep on macOS can run it
 twin-wasm   needs emsdk, a ~1 GB install for one gate; the committed twin.js is still checked by test-web, which does run in CI
+test-tui    needs bun, and the TUI stopped shipping in releases when they became firmware-only, so no CI job builds it any more; it is a contributor tool and a contributor sweep is where it is checked
 "
 
 # Every job id in every workflow, as "<file>:<job>". Job keys are the only
