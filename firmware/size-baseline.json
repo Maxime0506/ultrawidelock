@@ -1612,7 +1612,7 @@
     },
     "thread+release+smp+lto": {
       "schema": 1,
-      "commit": "8d6ede1b9b40aaab74a08cfc8195a33f9358b943",
+      "commit": "37376730b8547a52c25e49ec612cc12dc85e915f",
       "config": {
         "board": "decawave_dwm3001cdk",
         "image": "firmware",
@@ -1629,16 +1629,16 @@
         },
         "zephyr_version": "4.3.99",
         "ncs_version": "3.3.0",
-        "toolchain": "local"
+        "toolchain": "sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276"
       },
       "regions": {
         "FLASH": {
           "origin": 41472,
           "size": 433664,
-          "used": 417308,
-          "free": 16356,
-          "pct": 96.23,
-          "used_by_sections": 410444,
+          "used": 417288,
+          "free": 16376,
+          "pct": 96.22,
+          "used_by_sections": 410424,
           "load_images": 6860,
           "padding": 4
         },
@@ -1657,7 +1657,7 @@
         "text": 365032,
         "bss": 60101,
         "noinit": 52948,
-        "rodata": 43612,
+        "rodata": 43592,
         "datas": 5432,
         "_RTT_SECTION_NAME": 1208,
         "net_buf_pool_area": 720,
@@ -1694,7 +1694,7 @@
         ".last_section": 4
       },
       "artifact": {
-        "merged_hex_bytes": 1240122,
+        "merged_hex_bytes": 1240056,
         "partitions": {
           "app": {
             "address": 41472,
@@ -1745,7 +1745,7 @@
             "size": 131072
           }
         },
-        "signed_hex_bytes": 1149570
+        "signed_hex_bytes": 1149504
       },
       "symbol_floor": 64,
       "symbols": {
@@ -1967,7 +1967,6 @@
         "_ZNK2ot7Message13GetFirstChunkEtRtRNS0_5ChunkE": 98,
         "_ZNK2ot7Message5CloneEt": 178,
         "_ZNK2ot8Neighbor14AddressMatcher7MatchesERKS0_": 156,
-        "_ZZ18otGetVersionStringE8sVersion": 71,
         "__addsf3": 352,
         "__aeabi_f2iz": 76,
         "__aeabi_fadd": 352,
@@ -3224,7 +3223,23 @@
         "zcbor_header_len_ptr": 76,
         "zcbor_map_decode_bulk": 392
       },
-      "reports": null,
+      "reports": {
+        "ram": 121109,
+        "rom": 417260,
+        "error": null
+      },
+      "crosscheck": {
+        "ram": {
+          "regions": 121236,
+          "ram_report": 121109,
+          "delta": 127
+        },
+        "rom": {
+          "regions": 417288,
+          "rom_report": 417260,
+          "delta": 28
+        }
+      },
       "gate": {
         "ram_free_floor": 4096,
         "flash_free_floor": 8192,
