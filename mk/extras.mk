@@ -91,6 +91,39 @@ tui-test:
 tui-release:
 	@cd $(REPO_ROOT)/tools/tui && bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*' && bun run release
 
+##@ Dead code  (analysis only — none of these are gates, and none of them delete)
+## deadcode: functions with no callers, ranked by the flash they occupy
+##   Joins the documate call graph against the linked image. This is the one to
+##   start with: it only lists symbols that actually survived --gc-sections, so
+##   everything it names is real flash. Everything it names is also referenced
+##   by something (a callback table, a linker-array registration), which is why
+##   it survived — so read the reference before believing any single row.
+deadcode:
+	@$(REPO_ROOT)/scripts/deadcode-size.sh
+
+## deadcode-graph: the same call-graph query, tiered by how sure it is
+##   Tier A is the candidate list, and it is only trustworthy with a seeded
+##   workspace: the fetched Nordic add-on calls into modules/ and is not in the
+##   graph. Without it the script says so rather than guessing. `all` adds
+##   tier B (referenced in-tree) and tier U (called by upstream, so alive).
+deadcode-graph:
+	@$(REPO_ROOT)/scripts/deadcode-graph.sh $(TIER)
+
+## deadcode-tidy: clang-tidy against the REAL firmware build, not the host one
+##   The clang-tidy row in `make verify` compiles tests/host/sources.sh with host
+##   flags, which reaches six modules and neither firmware/src nor woz_dfu. This
+##   points the same tool at build/*/compile_commands.json instead, so it sees
+##   the Cortex-M4 target and the generated autoconf.h. Needs `make build` first.
+deadcode-tidy:
+	@$(REPO_ROOT)/scripts/deadcode-tidy.sh
+
+## deadcode-cc: CodeChecker over that same database, with cross-TU analysis
+##   Slower than deadcode-tidy and needs it to have run (it reuses the filtered
+##   database). Worth it for the HTML report and for findings that only appear
+##   when the analyser can see across translation units.
+deadcode-cc:
+	@$(REPO_ROOT)/scripts/deadcode-codechecker.sh
+
 ##@ Housekeeping
 ## clean: remove every build artifact in the tree  ->  ./build and the app-local ones
 ##   One rm for the shared root, plus the directories ESP-IDF writes when idf.py
