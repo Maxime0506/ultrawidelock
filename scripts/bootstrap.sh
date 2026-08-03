@@ -146,9 +146,9 @@ apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync
 apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
 
-# Calculate number of patches applied to $ADDON (always 10 base patches plus the HA patches if HA=1)
-addon_patch_count=$((10 + ${#ha_patches[@]}))
-total_patch_count=$((12 + ${#ha_patches[@]}))
+# Calculate number of patches applied to $ADDON (always 11 base patches plus the HA patches if HA=1)
+addon_patch_count=$((11 + ${#ha_patches[@]}))
+total_patch_count=$((13 + ${#ha_patches[@]}))
 
 echo "    ✓ pristine upstream + $total_patch_count patches (add-on ×$addon_patch_count, nrf, matter)"
 
