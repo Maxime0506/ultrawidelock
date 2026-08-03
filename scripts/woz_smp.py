@@ -57,6 +57,37 @@ def die(msg):
     sys.exit(f"woz_smp: {msg}")
 
 
+def image_sha(path):
+    """The SHA-256 MCUboot recorded in a signed image's TLVs.
+
+    The same hash the board reports in its image list, so comparing the two
+    answers "did the update actually land" with the image's own bytes rather
+    than with anyone's assumption. Used after a phone push, where nothing else
+    on this machine witnessed the transfer.
+    """
+    d = Path(path).read_bytes()
+    magic, _, hdr_sz, _, img_sz, _ = struct.unpack_from("<IIHHII", d, 0)
+    if magic != 0x96F3B83D:
+        die(f"{path} is not an MCUboot image")
+
+    base = hdr_sz + img_sz
+    tlv_magic, tlv_tot = struct.unpack_from("<HH", d, base)
+    if tlv_magic == 0x6908:  # protected block first, unprotected after it
+        base += tlv_tot
+        tlv_magic, tlv_tot = struct.unpack_from("<HH", d, base)
+    if tlv_magic != 0x6907:
+        die(f"{path} has no TLV block where its header says it should")
+
+    p, end = base + 4, base + tlv_tot
+    while p + 4 <= end:
+        kind, _, ln = struct.unpack_from("<BBH", d, p)
+        p += 4
+        if kind == 0x10 and ln == 32:
+            return d[p : p + 32]
+        p += ln
+    die(f"{path} has no SHA-256 TLV")
+
+
 # ---- the smallest CBOR that carries an mcumgr request ------------------------
 
 
@@ -244,6 +275,20 @@ async def run(args):
                 f"sha={img.get('hash', b'')[:8].hex()} "
                 f"active={img.get('active')} confirmed={img.get('confirmed')}"
             )
+        if args.expect:
+            want = image_sha(args.expect)
+            got = next((i.get("hash", b"") for i in state.get("images", [])), b"")
+            if got != want:
+                die(
+                    f"the board is NOT running that image.\n"
+                    f"  board  {got.hex()}\n"
+                    f"  wanted {want.hex()}\n"
+                    f"  The update did not land, so the deployed record must not move:\n"
+                    f"  a delta built from the wrong base is refused by the board."
+                )
+            print(f"  confirmed: the board is running {want[:8].hex()}...")
+            return
+
         if args.list:
             return
 
@@ -300,13 +345,18 @@ def main():
     ap = argparse.ArgumentParser(description="Push a delta patch over SMP, as a phone would.")
     ap.add_argument("patch", nargs="?", help="the .woz patch from scripts/woz_patch.py")
     ap.add_argument("--list", action="store_true", help="read the image list and stop")
+    ap.add_argument(
+        "--expect",
+        metavar="SIGNED_BIN",
+        help="check the board is running this image's SHA-256, then stop",
+    )
     ap.add_argument("--name", default="", help="substring of the advertised name")
     ap.add_argument("--scan", type=float, default=8.0, help="scan seconds")
     ap.add_argument("--no-reset", action="store_true", help="stage without rebooting")
     args = ap.parse_args()
 
-    if not args.list and not args.patch:
-        ap.error("give a patch file, or --list")
+    if not args.list and not args.expect and not args.patch:
+        ap.error("give a patch file, or --list, or --expect")
 
     asyncio.run(run(args))
 

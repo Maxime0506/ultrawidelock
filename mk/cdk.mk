@@ -175,7 +175,7 @@ endif
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
 .PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
-        dfu-serial fota ota-patch ota-push ota-smp ota-smp-list ota-window ota-deps \
+        dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
@@ -312,14 +312,22 @@ dfu:
 ##   is simply not bootable, and nothing ever asks it to be. The board spots
 ##   the wrapper by its magic and steps over it.
 ##
-##   The board must be built and flashed with SMP=1, or it does not speak
-##   mcumgr at all. RELEASE=1 belongs with it: 2,412 B of RAM free without,
-##   9,516 B with.
-##   Options: CDK_BUILD=<dir>  CDK_DEPLOYED=<hex>  FOTA_VERSION=<x.y.z>
-FOTA_VERSION ?= 1.0.0
-CDK_FOTA     := $(CDK_BUILD)/openaliro-fota.bin
+##   SETS SMP=1 RELEASE=1 ITSELF, and builds in its own directory. Those are
+##   not preferences here: a board without SMP does not speak mcumgr at all, so
+##   a patch built without it would take the phone's own transport away, and
+##   RELEASE is what leaves the RAM to run it (2,412 B free without, 9,516 B
+##   with). Inheriting a bare `make`'s defaults would quietly build the wrong
+##   image and diff the board against it, so this target does not inherit them.
+##   Options: CDK_FOTA_BUILD=<dir>  CDK_DEPLOYED=<hex>  FOTA_VERSION=<x.y.z>
+FOTA_VERSION   ?= 1.0.0
+CDK_FOTA_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-smp-img
+CDK_FOTA       := $(CDK_BUILD)/openaliro-fota.bin
 
 fota:
+	@$(MAKE) --no-print-directory fota-build \
+	  SMP=1 RELEASE=1 CDK_BUILD='$(CDK_FOTA_BUILD)'
+
+fota-build:
 	@$(MAKE) --no-print-directory build
 	@$(MAKE) --no-print-directory ota-patch
 	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_patch.py wrap '$(CDK_PATCH)' \
@@ -334,9 +342,32 @@ fota:
 	@printf '  Use the Images tab, NOT the guided firmware-upgrade wizard: that\n'
 	@printf '  flow waits for a second image to confirm and a reconnect that the\n'
 	@printf '  bootloader apply outlasts.\n\n'
+	@printf '  6. back here, run  make fota-done\n\n'
+	@printf '  Step 6 is not optional. A delta is computed against the exact bytes\n'
+	@printf '  on the board, and only this machine keeps the record of what those\n'
+	@printf '  are -- a push from the phone is invisible to it. Skip step 6 and the\n'
+	@printf '  NEXT update is built from the wrong base and the board refuses it.\n\n'
 	@printf '  The window closes after five minutes. Reset is refused outside it\n'
 	@printf '  unless a patch is already staged, which is deliberate -- otherwise\n'
 	@printf '  anyone in radio range could reboot the lock in a loop.\n\n'
+
+## fota-done: after a phone push, confirm it landed and record what the board runs
+##   ASKS THE BOARD rather than assuming. It reads the image list over BLE and
+##   compares the hash against the image the last `make fota` built; the record
+##   moves only if they match, so a failed or half-finished update leaves the
+##   old base in place instead of poisoning the next delta.
+fota-done:
+	@$(MAKE) --no-print-directory fota-confirm \
+	  SMP=1 RELEASE=1 CDK_BUILD='$(CDK_FOTA_BUILD)'
+
+fota-confirm: $(CDK_OTA_PY)
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py \
+	  --expect '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.signed.bin' \
+	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
+	@mkdir -p '$(dir $(CDK_DEPLOYED))'
+	@cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
+	@cp '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)'
+	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
 
 ## ota-patch: build a signed delta from the deployed image to the built one
 ##   Leaves it at $(CDK_PATCH). Useful on its own when the board is elsewhere.
