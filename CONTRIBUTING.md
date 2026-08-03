@@ -1,7 +1,8 @@
 # Contributing
 
 Issues and PRs are welcome. This is a single-maintainer project, so response times are
-best-effort; small, focused changes land fastest.
+best-effort; small, focused changes land fastest. Taking part means following the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 ## Building and testing
 
