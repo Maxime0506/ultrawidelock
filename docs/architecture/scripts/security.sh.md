@@ -22,7 +22,7 @@ SECURITY_BASE / SECURITY_HEAD   commit range; CI passes the PR's base and head
 SEMGREP_NO_REGISTRY=1           local rulesets only, skipping the network fetch
 NO_COLOR=1                      plain output
 
-**discussed in** [`security/README.md`](../../../security/README.md)
+**discussed in** [`docs/set-up.md`](../../set-up.md), [`security/README.md`](../../../security/README.md)
 
 ## API
 
