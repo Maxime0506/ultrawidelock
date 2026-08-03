@@ -142,4 +142,13 @@ jobs:
         #   test-tui   needs bun. The TUI stopped shipping in releases when they
         #              became firmware-only, so nothing in CI builds it. It is a
         #              contributor tool; `make verify` locally is what covers it.
+        #
+        # CC/CXX are clang because coverage.sh instruments with
+        # -fprofile-instr-generate and -fcoverage-mapping, which are clang-only
+        # and which ubuntu's default cc (gcc) rejects outright. test, test-san
+        # and fuzz want clang for the same family of reasons. The old per-gate
+        # workflows each set this; consolidating them into one job dropped it.
+        env:
+          CC: clang
+          CXX: clang++
         run: WITH_CBMC=1 make verify SKIP="test-ws twin-wasm test-tui"

@@ -109,11 +109,25 @@ CT_SRCS=(
 	"$ROOT/tests/host/ct/ct_main.c"
 )
 
+# SHIM_SRCS carries spakefake.c for the host suite, but spakefake references
+# matter_spake2p.c's curve constants, and linking that in would drag aliro_sha256,
+# aliro_hkdf and ocrypto_spake2p_p256_reduce into a harness whose whole scope is
+# the CCC ladder. Nothing linked here calls a spake symbol, so drop the fake
+# instead. Only this gate builds SHIM_SRCS without the rest of the suite, which
+# is why the missing definition surfaces here and nowhere else.
+CT_SHIM_SRCS=()
+for _s in "${SHIM_SRCS[@]}"; do
+	case "$_s" in
+	*/spakefake.c) ;;
+	*) CT_SHIM_SRCS+=("$_s") ;;
+	esac
+done
+
 printf '  %sscope: %d source file(s), -O1, CT_POISON on%s\n' "$DIM" "${#CT_SRCS[@]}" "$RESET"
 
 if ! "$CC" -std=c11 -O1 -g -fno-omit-frame-pointer -DCT_POISON \
 	"${DEFS[@]}" "${INCS[@]}" -I"$ROOT/tests/host/shim" \
-	"${CT_SRCS[@]}" "${SHIM_SRCS[@]}" -o "$OUT/ct" 2>"$OUT/build.log"; then
+	"${CT_SRCS[@]}" "${CT_SHIM_SRCS[@]}" -o "$OUT/ct" 2>"$OUT/build.log"; then
 	printf '  %s%s%s the harness did not build\n' "$RED" "$CRS" "$RESET"
 	sed 's/^/      /' "$OUT/build.log" | head -30
 	exit 1

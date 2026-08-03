@@ -365,7 +365,11 @@ int matter_aead_decrypt(const uint8_t key[MATTER_KEY_LEN], const uint8_t nonce[M
 	}
 
 	if (!tag_equal(want, tag, MATTER_TAG_LEN)) {
-		memset(pt_out, 0, ct_len);
+		/* Guarded like the fail: path below: the check above admits
+		 * pt_out == NULL when ct_len is 0, and memset(NULL, 0, 0) is UB. */
+		if (ct_len > 0u) {
+			memset(pt_out, 0, ct_len);
+		}
 		memset(t, 0, sizeof(t));
 		memset(want, 0, sizeof(want));
 		return MATTER_E_TYPE;
