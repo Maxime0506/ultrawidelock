@@ -3211,6 +3211,83 @@ deps/dw3000/**             the vendor decadriver: it defines these
 tests/**, ports/esp32/test/**, docs/**   host doubles and prose
 Adding a file here is a decision to trust it forever. Prefer calling the seam.
 
+### [`scripts/deadcode-codechecker.sh`](architecture/scripts/deadcode-codechecker.sh.md)
+
+deadcode-codechecker.sh — CodeChecker over the real firmware build.
+Same target as deadcode-tidy.sh and the same database, but it runs the Clang
+Static Analyzer as well as clang-tidy, keeps results in a store so two runs can
+be diffed, and writes an HTML report. Use deadcode-tidy.sh for the quick pass;
+use this when you want the cross-translation-unit analyser or a report to read.
+It reuses the FILTERED database that deadcode-tidy.sh writes, because the raw
+Zephyr one is GCC-flavoured and clang rejects several of its flags outright.
+Running the tidy script first is therefore not optional, and this checks.
+
+### [`scripts/deadcode-graph.sh`](architecture/scripts/deadcode-graph.sh.md)
+
+deadcode-graph.sh — find functions nothing calls, using the documate code graph.
+Why this exists rather than -Wl,--print-gc-sections: that flag lists what the
+linker THREW AWAY, which by definition is not in flash. The dead code worth
+finding is what survives gc-sections because something references it without
+ever calling it -- a function in an ops table, a callback registered into a
+struct nobody dispatches. deps/dw3000's interface_rx_enable was exactly that:
+present in the shipped ELF, zero callers, kept because a dwt_mcps_ops table
+names it. No linker flag can see that; a call graph can.
+Three tiers, because "the graph shows no callers" is not evidence of death:
+A  zero inbound CALLS, referenced nowhere else in the tree, AND absent from
+the unindexed upstream. The only tier worth calling a candidate.
+B  zero inbound CALLS, but referenced somewhere in-tree -- an ops table, a
+SYS_INIT/SHELL_CMD registration, a header declaration. Zephyr registers
+through linker arrays constantly, so most of tier B is alive. This is NOT
+a delete list; it is where table-registered dead code hides, and reading
+the reference is the only way to tell which.
+U  zero inbound CALLS in-tree, but the fetched upstream calls it. Live API.
+Tier U exists because the first version of this script did not have it and
+proposed deleting nine woz_aliro_stack methods -- the module reimplements the
+Nordic Aliro API, and every one of them is called from
+workspace/ncs-door-lock-and-access-control, which documate does not index.
+CLAUDE.md warns about exactly this: fetched upstream is not in the graph.
+Without a workspace to check, tier A is unverifiable and says so.
+Needs .documate/graph.db, which `make docs` builds and .gitignore excludes.
+
+### [`scripts/deadcode-size.sh`](architecture/scripts/deadcode-size.sh.md)
+
+deadcode-size.sh — flash cost of the functions nothing calls.
+deadcode-graph.sh answers "what has no callers". This answers "and what does
+that cost", by joining that list against the symbol sizes in the linked image.
+A zero-caller function that the linker already discarded costs nothing and is
+not worth an argument; one that survived into .text is real flash.
+That distinction is the whole reason -Wl,--print-gc-sections is the wrong tool
+for this: it lists what was REMOVED. What is in the image and unreachable never
+appears in its output.
+./scripts/deadcode-size.sh          rank uncalled symbols by flash bytes
+./scripts/deadcode-size.sh --serve  puncover's interactive view instead
+puncover renders callers/callees and stack depth per symbol from the DWARF,
+which is worth more than any text report once you are chasing a specific
+function. It is a server: it does not exit, so it is not scriptable. Its
+--generate-report writes stack-usage entries only, not symbol sizes.
+
+### [`scripts/deadcode-tidy.sh`](architecture/scripts/deadcode-tidy.sh.md)
+
+deadcode-tidy.sh — run clang-tidy against the REAL firmware build.
+scripts/verify.sh already has a clang-tidy gate, but it compiles UNIT_SRCS out
+of tests/host/sources.sh with host flags: -std=c11, a macOS sysroot, and the
+host fakes. That covers six modules and nothing else. firmware/src and
+modules/woz_dfu are in none of it, which security/semgrep-parse-baseline.txt
+already records as a gap -- and modules/woz_dfu parses signed update payloads
+arriving over Bluetooth.
+This runs the same tool against build/<img>/compile_commands.json instead, so
+the analysis sees the actual Cortex-M4 target, the real include paths and the
+generated autoconf.h, rather than a host approximation of them.
+Two things have to be fixed before clang can read a GCC database:
+1. GCC-only flags are hard errors to clang ("unknown argument"), not
+warnings, so one of them kills the whole file. They are stripped below.
+The list is deliberately explicit: a silent catch-all would also swallow
+a flag that changes semantics.
+2. Zephyr's generated autoconf.h defines negative Kconfig values bare
+(#define CONFIG_SYSTEM_WORKQUEUE_PRIORITY -1), which trips
+bugprone-macro-parentheses ~1000 times per file. The header filter keeps
+findings to this repo's own sources.
+
 ### [`scripts/docs-publish.sh`](architecture/scripts/docs-publish.sh.md)
 
 docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch.
