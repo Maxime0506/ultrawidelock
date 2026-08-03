@@ -193,7 +193,7 @@ static bool encode_slot(zcbor_state_t *zse)
 			       h->ih_ver.iv_minor, h->ih_ver.iv_revision,
 			       (unsigned)h->ih_ver.iv_build_num);
 	} else {
-		(void)strcpy(vers, "0.0.0.0");
+		(void)snprintf(vers, sizeof(vers), "0.0.0.0");
 	}
 
 	zhash.value = (hash != NULL) ? hash : zeros;
