@@ -25,6 +25,11 @@
 #define PIV_PIN_SALT_BYTES 16u
 #define PIV_PIN_RETRIES 3u
 
+/**
+ * Serialized identity blob holding a private key, public key, certificate, provisioned PIN state,
+ * retries, salt, and hash. Magic and version fields used to detect format changes. GUID identifies
+ * the identity. Reserved bytes for future use.
+ */
 struct piv_identity_blob {
 	uint32_t magic;
 	uint16_t version;
@@ -40,6 +45,11 @@ struct piv_identity_blob {
 	uint8_t certificate[PIV_CERT_MAX];
 };
 
+/**
+ * Serialized key management blob holding a private key, public key, and certificate. Magic and
+ * version fields used to detect format changes. Serial field distinguishes multiple key management
+ * keys. Certificate is DER-encoded.
+ */
 struct piv_key_management_blob {
 	uint32_t magic;
 	uint16_t version;
@@ -57,6 +67,9 @@ static bool s_ready;
  * Keep the reverse-writing X.509 scratch out of app_main's task stack. */
 static uint8_t s_certificate_der[PIV_CERT_MAX];
 
+/**
+ * Fill a buffer with random bytes from the Aliro CSPRNG. Return 0 on success or nonzero on error.
+ */
 static int certificate_rng(void *ctx, unsigned char *out, size_t len)
 {
 	(void)ctx;
@@ -103,6 +116,14 @@ static int make_pk_context(const uint8_t private_key[ALIRO_P256_SCALAR],
 	return result;
 }
 
+/**
+ * Encode a self-signed X.509v3 certificate around the given P-256 key pair. Sets the subject and
+ * issuer name to the same string, validity from 2026-01-01 to 2046-01-01, and key usage to the
+ * provided flags. Serial is derived from serial_source, with a fallback of 1 if all bytes are zero.
+ * Returns 0 on success, -1 on failure (null pointer, buffer too small, or mbedTLS operation
+ * failure). Output certificate is DER-encoded at certificate and its length is written to
+ * certificate_len.
+ */
 static int make_certificate(
 	const uint8_t private_key[ALIRO_P256_SCALAR],
 	const uint8_t public_key[ALIRO_P256_POINT],
@@ -168,6 +189,10 @@ out_writer:
 	return rc;
 }
 
+/**
+ * Persist the in-memory identity blob to NVS under the key PIV_IDENTITY_KEY. Returns 0 on success,
+ * -1 on NVS failure (open, set, or commit).
+ */
 static int save_identity(void)
 {
 	nvs_handle_t handle;
@@ -185,6 +210,10 @@ static int save_identity(void)
 	return err == ESP_OK ? 0 : -1;
 }
 
+/**
+ * Persist the in-memory key management blob to NVS under the key PIV_KEY_MANAGEMENT_KEY. Returns 0
+ * on success, -1 on NVS failure (open, set, or commit).
+ */
 static int save_key_management(void)
 {
 	nvs_handle_t handle;
@@ -273,6 +302,10 @@ static int load_key_management(void)
 	return 0;
 }
 
+/**
+ * Return true if the PIN is valid: at least 6 ASCII decimal digits followed by padding bytes of
+ * 0xff, false otherwise.
+ */
 static bool pin_is_valid(const uint8_t pin[PIV_PIN_BYTES])
 {
 	size_t digits = 0u;
@@ -292,6 +325,9 @@ static bool pin_is_valid(const uint8_t pin[PIV_PIN_BYTES])
 	return true;
 }
 
+/**
+ * Return true if the PIN buffer is the unset marker (all bytes 0xff), false otherwise.
+ */
 static bool pin_is_unset_marker(const uint8_t pin[PIV_PIN_BYTES])
 {
 	uint8_t different = 0u;
@@ -302,6 +338,11 @@ static bool pin_is_unset_marker(const uint8_t pin[PIV_PIN_BYTES])
 	return different == 0u;
 }
 
+/**
+ * Hash a PIN with its salt using SHA-256: concatenate salt and PIN, compute the hash, and clear
+ * intermediate buffers. Return 0 on success or -1 if the PSA operation fails or returns a wrong
+ * length.
+ */
 static int hash_pin(const uint8_t salt[PIV_PIN_SALT_BYTES],
 		    const uint8_t pin[PIV_PIN_BYTES],
 		    uint8_t hash[32])
@@ -350,6 +391,10 @@ static int record_wrong_pin(uint8_t *retries)
 	return s_identity.pin_retries == 0u ? -2 : 1;
 }
 
+/**
+ * Retrieve the certificate for a given key reference (AUTH or KEY_MANAGEMENT) and return its
+ * pointer and length. Return 0 on success or -1 on error or invalid key reference.
+ */
 static int backend_get_certificate(void *ctx, uint8_t key_ref,
 				   const uint8_t **certificate,
 				   size_t *certificate_len)
@@ -370,6 +415,10 @@ static int backend_get_certificate(void *ctx, uint8_t key_ref,
 	return 0;
 }
 
+/**
+ * Copy the 16-byte GUID from the PIV identity to the caller's buffer. Return 0 on success or -1 on
+ * error or if the backend is not ready.
+ */
 static int backend_get_guid(void *ctx, uint8_t guid[16])
 {
 	(void)ctx;
@@ -380,6 +429,10 @@ static int backend_get_guid(void *ctx, uint8_t guid[16])
 	return 0;
 }
 
+/**
+ * Return the PIN retry counter and status: 0 if the PIN is provisioned and retries remain, -2 if
+ * the PIN is not provisioned or retries are exhausted, -1 on error or if the backend is not ready.
+ */
 static int backend_pin_status(void *ctx, uint8_t *retries)
 {
 	(void)ctx;
@@ -462,6 +515,10 @@ static int backend_change_pin(void *ctx,
 	return 0;
 }
 
+/**
+ * Sign a 32-byte P-256 hash using the identity private key, after verifying that presence is fresh.
+ * Return 0 on success or -1 on error, if the backend is not ready, or if presence validation fails.
+ */
 static int backend_sign_hash(void *ctx,
 			     const uint8_t hash[PIV_P256_HASH_BYTES],
 			     uint8_t signature[PIV_P256_RAW_SIGNATURE_BYTES])
@@ -475,6 +532,10 @@ static int backend_sign_hash(void *ctx,
 					  hash, signature);
 }
 
+/**
+ * ECDH callback: compute the shared secret using the local P-256 private key and the peer's P-256
+ * public key. Return 0 on success or -1 on error or if the backend is not ready.
+ */
 static int backend_derive_shared(
 	void *ctx, const uint8_t peer_public_key[PIV_P256_POINT_BYTES],
 	uint8_t shared_secret[PIV_P256_SHARED_SECRET_BYTES])
@@ -564,6 +625,9 @@ esp_err_t piv_identity_init(void)
 	return ESP_OK;
 }
 
+/**
+ * Return a pointer to the APDU backend implementation struct for PIV identity operations.
+ */
 const struct piv_apdu_backend *piv_identity_backend(void)
 {
 	return &s_backend;

@@ -19,6 +19,7 @@ class RangeResponseParser:
     """Parse one explicitly started ``aliro range`` command response at a time."""
 
     def __init__(self) -> None:
+        """Initialize a range response parser. Sets all internal state to inactive with no measurements."""
         self._active = False
         self._finished = False
         self._distance_cm: Optional[int] = None
@@ -72,6 +73,7 @@ class RangeResponseParser:
         return self._finished
 
     def _complete_reading(self, trusted: bool) -> Optional[CompatibilityRangeReading]:
+        """Emit a complete reading if all four measurements (distance, NLOS, block, age) are present and non-negative; return None otherwise."""
         if None in (self._distance_cm, self._nlos, self._block, self._age_ms):
             return None
         if self._distance_cm < 0 or self._age_ms < 0:

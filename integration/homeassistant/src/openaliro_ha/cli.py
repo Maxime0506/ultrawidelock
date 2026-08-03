@@ -24,6 +24,7 @@ DEVICE_PATH_RE = re.compile(r"/dev/\S+")
 
 
 def _observation_dict(observation: Observation) -> dict[str, object]:
+    """Convert an Observation union (DistanceReading or AccessEvent) to a dict with a kind field and all dataclass fields. Raises TypeError if the observation is not a recognized type."""
     if isinstance(observation, DistanceReading):
         return {"kind": "range", **asdict(observation)}
     if isinstance(observation, AccessEvent):
@@ -32,6 +33,7 @@ def _observation_dict(observation: Observation) -> dict[str, object]:
 
 
 def _read_capture(path: Path) -> list[Observation]:
+    """Read a UTF-8 sanitized capture file, parse it line by line into Observation objects, and raise ValueError if the file cannot be read, exceeds MAX_REPLAY_BYTES, or contains invalid UTF-8."""
     try:
         data = path.read_bytes()
     except OSError as error:
@@ -46,6 +48,7 @@ def _read_capture(path: Path) -> list[Observation]:
 
 
 def _parser() -> argparse.ArgumentParser:
+    """Build an argument parser for the openaliro-ha CLI tool with subcommands for version, replay, doctor, configure, and run; the configure subcommand accepts optional device discovery and MQTT configuration flags."""
     parser = argparse.ArgumentParser(prog="openaliro-ha")
     parser.add_argument(
         "--config",
@@ -82,6 +85,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _prompt(input_fn: object, message: str, *, default: str | None = None) -> str:
+    """Return the user's input after stripping whitespace, or the default value if the input is empty and a default was provided."""
     value = input_fn(message)  # type: ignore[operator]
     value = value.strip()
     return default if not value and default is not None else value
@@ -115,6 +119,7 @@ def _probe_candidate(port: SerialPort) -> Optional[str]:
 
 
 def _select_port(input_fn: object, output_fn: object) -> SerialPort:
+    """Probe all discoverable serial interfaces with USB identity and select one for the OpenAliro console. List outcomes (ready or probe failure reason), auto-select if exactly one is ready, otherwise prompt for index. Raises ConfigError if no candidates exist or selection is invalid."""
     candidates = [port for port in discover_serial_ports() if port.identity is not None]
     if not candidates:
         raise ConfigError("no serial interfaces with stable USB identity were found")
@@ -145,6 +150,7 @@ def _select_port(input_fn: object, output_fn: object) -> SerialPort:
 
 
 def _new_mqtt_config(input_fn: object) -> MqttConfig:
+    """Interactively prompt for MQTT configuration: host, TLS port, CA certificate path, username. If username is given, prompt for password environment variable. If not, require explicit "ALLOW ANONYMOUS MQTT" confirmation. Return a populated MqttConfig struct."""
     host = _prompt(input_fn, "MQTT host: ")
     if not host:
         raise ConfigError("MQTT host is required")

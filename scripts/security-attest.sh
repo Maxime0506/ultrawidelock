@@ -45,7 +45,9 @@ else
 	CHK="+" CRS="x" WRN="!"
 fi
 
+# Return 0 if command exists in PATH, 1 otherwise.
 have() { command -v "$1" >/dev/null 2>&1; }
+# Print a section header with bold formatting and a leading newline.
 hdr() { printf '\n%s── %s%s\n' "$BOLD" "$1" "$RESET"; }
 
 # ---- workflow --------------------------------------------------------------

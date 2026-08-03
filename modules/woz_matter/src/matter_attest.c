@@ -145,6 +145,10 @@ static const uint8_t k_dac_key[32] = {
 	0xf2, 0xf7, 0x53, 0x08, 0x33, 0xa5, 0x2b, 0x44, 0xfb, 0xff,
 };
 
+/**
+ * Retrieve a prepacked attestation certificate (DAC or PAI) by type. Returns MATTER_OK and fills
+ * out and len on success, or MATTER_E_INVAL if type is not recognized or arguments are NULL.
+ */
 int matter_attest_cert(uint8_t type, const uint8_t **out, size_t *len)
 {
 	if (out == NULL || len == NULL) {
@@ -163,6 +167,11 @@ int matter_attest_cert(uint8_t type, const uint8_t **out, size_t *len)
 	return MATTER_E_INVAL;
 }
 
+/**
+ * Encode and return the attestation elements (nonce, timestamp, certification declaration) as a TLV
+ * structure. Validates nonce, timestamp, out, and out_len pointers. Returns MATTER_OK on success or
+ * MATTER_E_INVAL if any pointer is NULL.
+ */
 int matter_attest_elements_encode(const uint8_t *nonce, size_t nonce_len, uint32_t timestamp,
 				  uint8_t *out, size_t cap, size_t *out_len)
 {
@@ -183,6 +192,10 @@ int matter_attest_elements_encode(const uint8_t *nonce, size_t nonce_len, uint32
 	return matter_tlv_writer_finish(&w, out_len);
 }
 
+/**
+ * Encode the CSR and nonce as a TLV-encoded CertificateChainResponse payload. Validates all input
+ * pointers. Returns MATTER_OK on success or MATTER_E_INVAL if any pointer is NULL.
+ */
 int matter_attest_nocsr_encode(const uint8_t *csr, size_t csr_len, const uint8_t *nonce,
 			       size_t nonce_len, uint8_t *out, size_t cap, size_t *out_len)
 {
@@ -201,6 +214,12 @@ int matter_attest_nocsr_encode(const uint8_t *csr, size_t csr_len, const uint8_t
 	return matter_tlv_writer_finish(&w, out_len);
 }
 
+/**
+ * Sign a payload plus challenge with the DAC private key. Appends the challenge to the buffer,
+ * signs the combined data, and clears the challenge bytes before returning. Returns MATTER_OK on
+ * success, MATTER_E_INVAL if any pointer is NULL, MATTER_E_NOSPACE if the buffer has insufficient
+ * room, or MATTER_E_STATE if the signature operation fails.
+ */
 int matter_attest_sign_with_challenge(uint8_t *buf, size_t payload_len, size_t cap,
 				      const uint8_t *challenge, size_t challenge_len,
 				      uint8_t sig[MATTER_ATTEST_SIG_LEN])
@@ -236,6 +255,10 @@ struct der {
 	bool bad;
 };
 
+/**
+ * Prepend raw bytes to the DER encoding buffer. Marks the buffer bad if there is insufficient
+ * space.
+ */
 static void der_raw(struct der *d, const uint8_t *src, size_t len)
 {
 	if (d->bad || d->pos < len) {
@@ -246,6 +269,10 @@ static void der_raw(struct der *d, const uint8_t *src, size_t len)
 	memcpy(d->buf + d->pos, src, len);
 }
 
+/**
+ * Append one byte to the DER encoding buffer by prepending it to the existing bytes. Marks buffer
+ * bad if insufficient space.
+ */
 static void der_byte(struct der *d, uint8_t b)
 {
 	der_raw(d, &b, 1u);

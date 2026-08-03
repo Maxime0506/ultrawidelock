@@ -15,6 +15,9 @@
 _Static_assert(ALIRO_ASSERT_SIG_LEN == ALIRO_P256_SIG, "assertion signature size != P-256 sig");
 _Static_assert(ALIRO_ASSERT_PUB_LEN == ALIRO_P256_POINT, "assertion pubkey size != P-256 point");
 
+/**
+ * ECDSA-P256-SHA256 sign: hash msg internally and return 64-byte signature, or -1 on error.
+ */
 int aliro_assert_ec_sign(void *ctx, const uint8_t *msg, size_t msg_len,
 			 uint8_t sig[ALIRO_ASSERT_SIG_LEN])
 {
@@ -29,6 +32,10 @@ int aliro_assert_ec_sign(void *ctx, const uint8_t *msg, size_t msg_len,
 	return aliro_ecdsa_p256_sign(k->d, msg, msg_len, sig);
 }
 
+/**
+ * ECDSA-P256-SHA256 verify: return 0 if sig is valid over msg with the stored public point, -1 if
+ * invalid or on error.
+ */
 int aliro_assert_ec_verify(void *ctx, const uint8_t *msg, size_t msg_len,
 			   const uint8_t sig[ALIRO_ASSERT_SIG_LEN])
 {

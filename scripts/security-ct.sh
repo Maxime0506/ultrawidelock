@@ -47,6 +47,7 @@ else
 	CHK="+" CRS="x" WRN="!"
 fi
 
+# Test whether a command is available in PATH.
 have() { command -v "$1" >/dev/null 2>&1; }
 printf '\n%s── ct · secret-dependent control flow%s\n' "$BOLD" "$RESET"
 

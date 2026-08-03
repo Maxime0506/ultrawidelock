@@ -138,6 +138,12 @@ static int decode_path(struct matter_tlv_reader *r, struct matter_im_path *p)
 	return matter_tlv_exit(r);
 }
 
+/**
+ * Decode a Matter read request message from TLV to extract attribute paths and filter settings.
+ * Parses ReadRequestMessage structure to collect attribute paths and fabric_filtered flag.
+ * Returns MATTER_E_INVAL if tlv or out is NULL; returns MATTER_E_TYPE if element types are wrong;
+ * returns MATTER_E_NOSPACE if path count exceeds MATTER_IM_MAX_PATHS.
+ */
 int matter_im_read_request_decode(const uint8_t *tlv, size_t len, struct matter_im_read *out)
 {
 	struct matter_tlv_reader r;
@@ -355,6 +361,13 @@ static void emit(struct matter_tlv_writer *w, const struct matter_im_server *srv
 	cc->emitted++;
 }
 
+/**
+ * Expand a wildcard attribute path by enumerating all attributes in the cluster if present.
+ * If path specifies a single attribute, emit it; if attribute is unspecified, list all available
+ * attributes and emit each.
+ * Increments stats counters for unexpanded and skipped wildcard paths when attributes cannot be
+ * listed or cluster is unavailable.
+ */
 static void expand_on_endpoint(struct matter_tlv_writer *w, const struct matter_im_server *srv,
 			       const struct matter_im_path *p, struct matter_im_report_stats *stats,
 			       struct chunk_ctx *cc)
@@ -432,6 +445,11 @@ int matter_im_report_data_encode(const struct matter_im_server *srv,
 	return report_encode(srv, req, out, cap, out_len, stats, NULL);
 }
 
+/**
+ * Encode a Matter IM report containing attribute values for the requested read paths, expanding
+ * wildcards by enumerating endpoints and clusters as needed. Track statistics on unexpanded
+ * wildcards and set the more-chunks flag if the report was truncated. Return an error code.
+ */
 static int report_encode(const struct matter_im_server *srv, const struct matter_im_read *req,
 			 uint8_t *out, size_t cap, size_t *out_len,
 			 struct matter_im_report_stats *stats, struct chunk_ctx *cc)
@@ -686,6 +704,14 @@ static int decode_command_data(struct matter_tlv_reader *r, struct matter_im_inv
 	return matter_tlv_exit(r);
 }
 
+/**
+ * Decode a Matter invoke request message from TLV to extract command path, arguments, and flags.
+ * Parses InvokeRequestMessage structure: SuppressResponse, TimedRequest booleans and exactly one
+ * CommandDataIB from the Requests array.
+ * Returns MATTER_E_INVAL if tlv or out is NULL, if structure is missing, or if request count is not
+ * exactly one; returns MATTER_E_NOSPACE if more than one command in array; returns MATTER_E_TYPE if
+ * element types are wrong.
+ */
 int matter_im_invoke_request_decode(const uint8_t *tlv, size_t len, struct matter_im_invoke *out)
 {
 	struct matter_tlv_reader r;
@@ -780,6 +806,14 @@ static void put_command_path(struct matter_tlv_writer *w, matter_tlv_tag_t tag,
 	(void)matter_tlv_end_container(w);
 }
 
+/**
+ * Encode a Matter invoke response message from command execution result and request parameters.
+ * Runs the command immediately regardless of SuppressResponse flag; if suppress flag is set,
+ * returns empty response.
+ * Returns the command response on success, or status code on failure or unsupported attribute.
+ * Returns MATTER_E_INVAL if srv, inv, or out is NULL; returns encoder error codes if TLV encoding
+ * fails.
+ */
 int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 				     const struct matter_im_invoke *inv, uint8_t *out, size_t cap,
 				     size_t *out_len)
@@ -848,6 +882,11 @@ int matter_im_invoke_response_encode(const struct matter_im_server *srv,
 	return matter_tlv_writer_finish(&w, out_len);
 }
 
+/**
+ * Encode a Matter status response message with generic status code and revision.
+ * Wraps status code in TLV structure suitable for error replies to read, write, or invoke requests.
+ * Returns MATTER_E_INVAL if out or out_len is NULL; returns encoder error if TLV encoding fails.
+ */
 int matter_im_status_response_encode(uint8_t status, uint8_t *out, size_t cap, size_t *out_len)
 {
 	struct matter_tlv_writer w;
@@ -867,6 +906,12 @@ int matter_im_status_response_encode(uint8_t status, uint8_t *out, size_t cap, s
 /* TimedRequestMessage.h: one field, the timeout in milliseconds. */
 #define TAG_TIMED_TIMEOUT_MS 0u
 
+/**
+ * Decode a Matter timed request message to extract timeout value in milliseconds.
+ * Parses TimedRequestMessage structure for TimeoutMs field, clamped to uint16_t range.
+ * Returns MATTER_E_INVAL if buf, timeout_ms is NULL, or len is zero; returns parser errors on
+ * malformed TLV.
+ */
 int matter_im_timed_request_decode(const uint8_t *buf, size_t len, uint16_t *timeout_ms)
 {
 	struct matter_tlv_reader r;
@@ -910,6 +955,16 @@ int matter_im_timed_request_decode(const uint8_t *buf, size_t len, uint16_t *tim
 /* WriteResponseMessage.h:39-42 */
 #define TAG_WRESP_RESPONSES 0u
 
+/**
+ * Decode a Matter write request message from TLV to extract attribute path, value, and flags.
+ * Parses WriteRequestMessage: exactly one AttributeDataIB containing path and data value,
+ * SuppressResponse and TimedRequest booleans.
+ * Caps at one attribute per write; sets truncated flag if peer sends more, allowing response to
+ * report RESOURCE_EXHAUSTED.
+ * Returns MATTER_E_INVAL if tlv or out is NULL, if structure is missing, or if no attributes
+ * present; returns MATTER_E_NOSPACE when path is incomplete; returns parser errors on malformed
+ * TLV.
+ */
 int matter_im_write_request_decode(const uint8_t *tlv, size_t len, struct matter_im_write *out)
 {
 	struct matter_tlv_reader r;
@@ -1057,6 +1112,14 @@ int matter_im_write_request_decode(const uint8_t *tlv, size_t len, struct matter
 	return MATTER_OK;
 }
 
+/**
+ * Encode a Matter write response message from write operation result.
+ * Runs write immediately regardless of SuppressResponse flag; if suppress flag is set, returns
+ * empty response.
+ * Returns attribute status (success or error) for the written path.
+ * Returns MATTER_E_INVAL if srv, wr, or out is NULL; returns encoder error codes if TLV encoding
+ * fails.
+ */
 int matter_im_write_response_encode(const struct matter_im_server *srv,
 				    const struct matter_im_write *wr, uint8_t *out, size_t cap,
 				    size_t *out_len)
@@ -1112,6 +1175,14 @@ int matter_im_write_response_encode(const struct matter_im_server *srv,
 #define TAG_SUBRESP_SUBSCRIPTION_ID 0u
 #define TAG_SUBRESP_MAX_INTERVAL    2u
 
+/**
+ * Decode a Matter subscription request message from TLV to extract attribute paths and timing
+ * parameters.
+ * Parses SubscribeRequestMessage: attribute paths, min/max interval timers (in seconds),
+ * keep_subscriptions and fabric_filtered flags.
+ * Returns MATTER_E_INVAL if tlv or out is NULL; returns MATTER_E_TYPE if element types are wrong;
+ * returns MATTER_E_NOSPACE if path count exceeds MATTER_IM_MAX_PATHS.
+ */
 int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
 				       struct matter_im_subscribe *out)
 {
@@ -1196,6 +1267,12 @@ int matter_im_subscribe_request_decode(const uint8_t *tlv, size_t len,
 	return matter_tlv_exit(&r);
 }
 
+/**
+ * Encode a Matter subscription response message with subscription ID and maximum reporting
+ * interval.
+ * Wraps subscription details in TLV structure as initial reply to successful SubscribeRequest.
+ * Returns MATTER_E_INVAL if out or out_len is NULL; returns encoder error if TLV encoding fails.
+ */
 int matter_im_subscribe_response_encode(uint32_t subscription_id, uint16_t max_interval_s,
 					uint8_t *out, size_t cap, size_t *out_len)
 {

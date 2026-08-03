@@ -32,8 +32,12 @@ it from outside: CONFIG_MCUBOOT_INDICATION_LED with an mcuboot-led0 alias, or
 logging over RTT, to see whether boot_serial_check_start is entered and with
 what timeout.
 
-<details><summary>Undocumented (1)</summary>
+**discussed in** [`firmware/README.md`](../../../firmware/README.md)
 
-- `probe`
+## API
 
-</details>
+### `probe()`
+`scripts/cdk-dfu.sh:59`
+
+Probe device connectivity by listing MCUmgr images over serial connection with 0.4 second timeout.
+Returns true if device responds, false otherwise.

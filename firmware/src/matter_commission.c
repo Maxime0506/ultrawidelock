@@ -166,6 +166,10 @@ int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t 
 	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
 }
 
+/**
+ * Generate a P-256 keypair for Matter attestation. Fills priv with the 32-byte private key and pub
+ * with the 65-byte uncompressed public key. Returns 0 on success.
+ */
 int matter_attest_ec_keygen(uint8_t priv[32], uint8_t pub[65])
 {
 	return aliro_ec_p256_keygen(priv, pub);
@@ -183,12 +187,20 @@ int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_
 	return aliro_ecdh_p256(priv, peer_pub, secret_out);
 }
 
+/**
+ * Sign a message with a P-256 private key. Fills sig with the MATTER_CASE_SIG_LEN-byte signature.
+ * Returns 0 on success.
+ */
 int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
 		     uint8_t sig[MATTER_CASE_SIG_LEN])
 {
 	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
 }
 
+/**
+ * Verify a message signature with a P-256 public key. The public key is MATTER_CASE_PUBKEY_LEN
+ * bytes, the signature is MATTER_CASE_SIG_LEN bytes. Returns 0 if the signature is valid.
+ */
 int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t *msg,
 		       size_t msg_len, const uint8_t sig[MATTER_CASE_SIG_LEN])
 {
@@ -345,6 +357,11 @@ static uint8_t s_admin_window = MATTER_ADMIN_WINDOW_NOT_OPEN;
 static uint8_t s_admin_fabric;
 static uint16_t s_admin_vendor;
 
+/**
+ * Close the Matter commissioning window if open. Reset the verifier to the factory default, clear
+ * the window state, fabric index, and vendor code, set the BLE discriminator to 0, re-advertise,
+ * and log the closure. If the window is not open, return silently.
+ */
 static void admin_close(void)
 {
 	if (s_admin_window == MATTER_ADMIN_WINDOW_NOT_OPEN) {
@@ -359,6 +376,9 @@ static void admin_close(void)
 	LOG_INF("commissioning window closed; factory setup code back in force");
 }
 
+/**
+ * Work callback that closes the Matter commissioning window when the timeout expires.
+ */
 static void admin_expire(struct k_work *work)
 {
 	ARG_UNUSED(work);
@@ -366,6 +386,12 @@ static void admin_expire(struct k_work *work)
 }
 static K_WORK_DELAYABLE_DEFINE(s_admin_timer, admin_expire);
 
+/**
+ * Open the Matter commissioning window for the specified kind (basic or enhanced) and timeout in
+ * seconds. Set the administrative window state, reschedule the admin timer, re-advertise on BLE,
+ * and if CONFIG_WOZ_DFU_RECEIVER is enabled, open the DFU update window for the same timeout
+ * (converted to milliseconds). Log the window opening.
+ */
 static void admin_arm(uint16_t timeout_s, uint8_t kind)
 {
 	s_admin_window = kind;
@@ -381,6 +407,12 @@ static void admin_arm(uint16_t timeout_s, uint8_t kind)
 		(unsigned)kind);
 }
 
+/**
+ * Open the Matter commissioning window with an enhanced PAKE verifier, new discriminator, and the
+ * specified timeout in seconds. Validates verifier length, point format (0x04 prefix), salt length,
+ * and iterations; returns MATTER_ADMIN_STATUS_PAKE_PARAM_ERROR if any are invalid. Returns
+ * MATTER_ADMIN_STATUS_BUSY if a window is already open, otherwise returns 0u.
+ */
 static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier,
 				   uint32_t verifier_len, uint16_t discriminator,
 				   uint32_t iterations, const uint8_t *salt, uint32_t salt_len)
@@ -412,6 +444,10 @@ static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier,
 	return 0u;
 }
 
+/**
+ * Open the Matter commissioning window with the factory PAKE verifier and the specified timeout in
+ * seconds. Returns MATTER_ADMIN_STATUS_BUSY if a window is already open, otherwise returns 0u.
+ */
 static uint8_t admin_open_basic(uint16_t timeout_s)
 {
 	if (s_admin_window != MATTER_ADMIN_WINDOW_NOT_OPEN) {
@@ -424,6 +460,10 @@ static uint8_t admin_open_basic(uint16_t timeout_s)
 	return 0u;
 }
 
+/**
+ * Close the Matter commissioning window if one is open. Returns MATTER_ADMIN_STATUS_WINDOW_NOT_OPEN
+ * if already closed, otherwise returns 0u.
+ */
 static uint8_t admin_revoke(void)
 {
 	if (s_admin_window == MATTER_ADMIN_WINDOW_NOT_OPEN) {
@@ -434,6 +474,9 @@ static uint8_t admin_revoke(void)
 	return 0u;
 }
 
+/**
+ * Return the administrative window state: one of the MATTER_ADMIN_WINDOW_* constants.
+ */
 static uint8_t admin_status(void)
 {
 	return s_admin_window;
@@ -444,11 +487,19 @@ bool matter_commission_window_open(void)
 	return s_admin_window != MATTER_ADMIN_WINDOW_NOT_OPEN;
 }
 
+/**
+ * Return the fabric index of the peer commissioning the lock, or 0 if no commissioning is in
+ * progress.
+ */
 static uint8_t admin_fabric(void)
 {
 	return s_admin_fabric;
 }
 
+/**
+ * Return the vendor code offered by the peer during commissioning, or 0 if no commissioning is in
+ * progress.
+ */
 static uint16_t admin_vendor(void)
 {
 	return s_admin_vendor;
@@ -628,6 +679,11 @@ static uint8_t *s_thread_reply;
 static size_t s_thread_reply_cap;
 static size_t s_thread_reply_len;
 
+/**
+ * Frame and send a Matter message with the specified opcode and payload. Over BLE, send via
+ * matter_ble_send; over Thread, stage the framed bytes in s_thread_reply. Log errors if framing
+ * fails or the buffer is too small.
+ */
 static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
 {
 	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
@@ -700,6 +756,12 @@ static void subscription_heartbeat_arm(void);
 static void fab_store_work_fn(struct k_work *w);
 static K_WORK_DELAYABLE_DEFINE(s_fab_store_work, fab_store_work_fn);
 
+/**
+ * Work function to persist the operational Matter fabric identity to settings storage. Retry
+ * FAB_STORE_ATTEMPTS times with FAB_STORE_BACKOFF_MS delay between retries. If successful, reset
+ * the attempt counter. If all retries fail, log an error that the fabric was not stored and the
+ * node will come back commissionable on the next boot, then reset the attempt counter.
+ */
 static void fab_store_work_fn(struct k_work *w)
 {
 	static uint8_t attempts;
@@ -732,6 +794,11 @@ static void fab_store_work_fn(struct k_work *w)
 }
 
 
+/**
+ * Frame and send a Matter Interaction Model message with the specified opcode and payload. Over
+ * BLE, send via matter_ble_send; over Thread, stage the framed bytes in s_thread_reply. Log errors
+ * if framing fails or the buffer is too small.
+ */
 static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 {
 	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
@@ -773,6 +840,11 @@ static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
  */
 static struct matter_im_read s_read;
 
+/**
+ * Handle an incoming Matter ReadRequest. Decodes the paths being read, logs them per session type
+ * (loud over CASE only), and builds a ReportData response. Warns if any wildcard paths could not be
+ * expanded.
+ */
 static void on_read_request(const struct matter_exchange_in *in)
 {
 	struct matter_im_report_stats stats;
@@ -827,6 +899,12 @@ static void on_read_request(const struct matter_exchange_in *in)
 		(unsigned int)report_len);
 }
 
+/**
+ * Handle an incoming Matter InvokeRequest. Decodes the request, builds an InvokeResponse, and on
+ * successful Door Lock or Network Commissioning commands, submits a notification to trigger
+ * subscription reports before sending. Stores fabrics and credentials to NVS only on
+ * CommissioningComplete to avoid pairing delays and stack overflow on the receive path.
+ */
 static void on_invoke_request(const struct matter_exchange_in *in)
 {
 	static struct matter_im_invoke inv;
@@ -1065,6 +1143,10 @@ static uint8_t s_sub_next_victim;
 #define SUB_KEY_FMT  SUB_TREE "/%u"
 #define SUB_KEY_MAX  16u
 
+/**
+ * Persisted subscription state: peer node ID, subscription ID, maximum heartbeat interval in
+ * seconds, fabric index, and a used flag.
+ */
 struct sub_persist {
 	uint64_t peer_node;
 	uint32_t id;
@@ -1087,6 +1169,11 @@ static struct sub_persist s_dormant[MATTER_CASE_SESSIONS];
  */
 static uint32_t s_sub_next_id;
 
+/**
+ * Persist one subscription's state to settings storage with the key SUB_KEY_FMT[slot]. Skip
+ * persisting if peer_node or fabric_index is zero (no match key available). Log a warning if save
+ * fails; the subscription will not survive reboot.
+ */
 static void sub_persist_save(uint8_t slot, const struct sub_state *s, uint64_t peer_node,
 			     uint8_t fabric_index)
 {
@@ -1113,6 +1200,10 @@ static void sub_persist_save(uint8_t slot, const struct sub_state *s, uint64_t p
 	s_dormant[slot] = p;
 }
 
+/**
+ * Settings callback to load one persisted subscription from the settings key-value store. Reads up
+ * to len bytes into *out if len matches the struct size. Returns 0.
+ */
 static int sub_persist_read(const char *key, size_t len, settings_read_cb read_cb, void *cb_arg,
 			    void *param)
 {
@@ -1217,6 +1308,12 @@ static uint8_t s_notify_out[MATTER_EXCHANGE_HEADER_MAX + sizeof(s_notify_tlv) + 
 /** Exchange ids this node originates. Any non-zero value the peer is not using. */
 static uint16_t s_next_init_exchange = 0xE000u;
 
+/**
+ * Send a Matter lock state subscription report to one CASE session. Builds a TLV-encoded data
+ * report for the DoorLock cluster LockState attribute and sends it as an initiator exchange. Logs
+ * the subscription ID and byte counts. Returns silently if the session is not in use, active, and
+ * valid.
+ */
 static void notify_lock_state(struct sub_state *s)
 {
 	/*
@@ -1272,6 +1369,9 @@ static void notify_lock_state(struct sub_state *s)
 		(unsigned int)framed, rc);
 }
 
+/**
+ * Work callback that sends lock state subscription reports to all CASE sessions.
+ */
 static void notify_work_fn(struct k_work *w)
 {
 	ARG_UNUSED(w);
@@ -1285,6 +1385,9 @@ static K_WORK_DEFINE(s_notify_work, notify_work_fn);
 static void heartbeat_work_fn(struct k_work *w);
 static K_WORK_DELAYABLE_DEFINE(s_heartbeat_work, heartbeat_work_fn);
 
+/**
+ * Submit lock state change notification to the work queue.
+ */
 static void notify_lock_state_changed(void)
 {
 	k_work_submit(&s_notify_work);
@@ -1351,6 +1454,11 @@ BUILD_ASSERT(SUBSCRIPTION_MAX_INTERVAL_S > SUBSCRIPTION_HEARTBEAT_S,
  */
 #define SUBSCRIPTION_HEARTBEAT_MIN_S 5u
 
+/**
+ * Compute the heartbeat period in seconds for all active subscriptions. Returns the minimum of (3/4
+ * * max_interval_s) across all subscriptions, or SUBSCRIPTION_HEARTBEAT_S if none are active,
+ * floored to SUBSCRIPTION_HEARTBEAT_MIN_S.
+ */
 static uint32_t subscription_heartbeat_period_s(void)
 {
 	uint32_t period = SUBSCRIPTION_HEARTBEAT_S;
@@ -1372,6 +1480,10 @@ static uint32_t subscription_heartbeat_period_s(void)
 	return period;
 }
 
+/**
+ * Work callback that sends lock state subscription reports to all active CASE sessions and
+ * reschedules itself only if at least one subscription remains active.
+ */
 static void heartbeat_work_fn(struct k_work *w)
 {
 	bool any = false;
@@ -1392,6 +1504,9 @@ static void heartbeat_work_fn(struct k_work *w)
 	}
 }
 
+/**
+ * Schedule the subscription heartbeat work with the minimum period across all active subscriptions.
+ */
 static void subscription_heartbeat_arm(void)
 {
 	(void)k_work_schedule(&s_heartbeat_work, K_SECONDS(subscription_heartbeat_period_s()));
@@ -1442,6 +1557,10 @@ static struct sub_state *sub_of_session(uint16_t session_id)
 	return NULL;
 }
 
+/**
+ * Mark the subscription holding session_id as no longer in use, or return silently if no
+ * subscription holds that session ID.
+ */
 static void sub_drop_session(uint16_t session_id)
 {
 	struct sub_state *s = sub_of_session(session_id);
@@ -1691,6 +1810,11 @@ static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key
 	return 0;
 }
 
+/**
+ * Complete Aliro reader provisioning from a Matter commissioning exchange. Store the reader
+ * identity (derived from the group ID and group sub-ID) and the signing key into the Aliro reader
+ * engine, retire the device key, and log success or error.
+ */
 static int on_aliro_reader_config(const uint8_t signing_key[32],
 				  const uint8_t verification_key[65], const uint8_t group_id[16],
 				  const uint8_t *group_resolving_key)
@@ -1713,6 +1837,10 @@ static int on_aliro_reader_config(const uint8_t signing_key[32],
 	return 0;
 }
 
+/**
+ * Handle an incoming Matter TimedRequest. Decodes the timeout and answers with a StatusResponse of
+ * SUCCESS.
+ */
 static void on_timed_request(const struct matter_exchange_in *in)
 {
 	uint16_t timeout_ms = 0u;
@@ -1732,6 +1860,11 @@ static void on_timed_request(const struct matter_exchange_in *in)
 	send_im(MATTER_IM_OP_STATUS_RESPONSE, s_report, resp_len);
 }
 
+/**
+ * Handle a StatusResponse in a subscription priming sequence: send the next report chunk if more
+ * remain, or finalize the subscription, persist it to settings storage, and arm periodic
+ * heartbeats.
+ */
 static void on_status_response(const struct matter_exchange_in *in)
 {
 	size_t resp_len = 0u;

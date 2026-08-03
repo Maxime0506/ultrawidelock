@@ -106,12 +106,19 @@ static uint16_t conn_to_handle(struct bt_conn *conn)
 	return (uint16_t)bt_conn_index(conn);
 }
 
+/**
+ * Allocate a receive net_buf from the CoC pool with no wait.
+ */
 static struct net_buf *coc_alloc_buf(struct bt_l2cap_chan *chan)
 {
 	ARG_UNUSED(chan);
 	return net_buf_alloc(&s_coc_rx_pool, K_NO_WAIT);
 }
 
+/**
+ * Forward received L2CAP CoC data to the registered on_data callback as a transport handle and byte
+ * buffer.
+ */
 static int coc_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 {
 	if (s_cb.on_data != NULL) {
@@ -120,6 +127,9 @@ static int coc_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	return 0;
 }
 
+/**
+ * Handle L2CAP CoC connection establishment by notifying the Aliro engine and logging the event.
+ */
 static void coc_connected(struct bt_l2cap_chan *chan)
 {
 	LOG_INF("L2CAP CoC open (SPSM 0x%04x)", (unsigned)ALIRO_L2CAP_SPSM);
@@ -128,6 +138,10 @@ static void coc_connected(struct bt_l2cap_chan *chan)
 	}
 }
 
+/**
+ * Handle L2CAP CoC disconnection by releasing the channel, clearing state, and notifying the Aliro
+ * engine.
+ */
 static void coc_disconnected(struct bt_l2cap_chan *chan)
 {
 	uint16_t handle = conn_to_handle(chan->conn);
@@ -147,6 +161,10 @@ static const struct bt_l2cap_chan_ops k_coc_ops = {
 	.disconnected = coc_disconnected,
 };
 
+/**
+ * Accept an incoming L2CAP CoC connection if no channel is in use, allocate it to the static
+ * instance, initialize its MTU and callback ops, and bind it to the peer connection.
+ */
 static int coc_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 		      struct bt_l2cap_chan **chan)
 {
@@ -172,6 +190,10 @@ static struct bt_l2cap_server s_l2cap_server = {
 
 /* ---- GATT: reader-SPSM READ + device-version WRITE ------------------------ */
 
+/**
+ * Encode Aliro feature flags (timesync procedures 0 and 1, LE Coded PHY) into a byte bitmap for the
+ * service data advertisement.
+ */
 static uint8_t encode_features(const struct aliro_ble_features *f)
 {
 	uint8_t b = 0;
@@ -188,6 +210,10 @@ static uint8_t encode_features(const struct aliro_ble_features *f)
 	return b;
 }
 
+/**
+ * Build the Aliro BLE advertisement payload containing the L2CAP SPSM, supported protocol versions,
+ * and feature flags.
+ */
 static void build_read_payload(const struct aliro_ble_config *cfg)
 {
 	uint8_t *p = s_read_payload;
@@ -207,6 +233,10 @@ static void build_read_payload(const struct aliro_ble_config *cfg)
 	s_read_payload_len = (uint16_t)(p - s_read_payload);
 }
 
+/**
+ * GATT read callback that returns the static Aliro reader payload (service data with identity
+ * material and features).
+ */
 static ssize_t reader_spsm_read(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf,
 				uint16_t len, uint16_t offset)
 {
@@ -336,6 +366,12 @@ static const struct bt_data smp_sd[] = {
 #define SMP_SD_LEN 0
 #endif
 
+/**
+ * Advertise the Aliro reader service or Matter commissioning availability over BLE, with payload
+ * priority given to findability: reader service when commissioned, commissioning advertisement when
+ * unprovisioned or a window is open, or bare service UUID as fallback. Stops advertising if a
+ * connection is active and schedules re-advertisement on disconnect.
+ */
 static int aliro_advertise(void)
 {
 	static uint8_t svc_data[2 + 24]; /* BT_DATA_SVC_DATA16 carries the UUID inline */
@@ -456,6 +492,11 @@ static int aliro_advertise(void)
 static void readvertise_work_fn(struct k_work *w);
 static K_WORK_DELAYABLE_DEFINE(s_readvertise_work, readvertise_work_fn);
 
+/**
+ * Attempt to resume BLE advertising with exponential backoff (100 ms, max 5 attempts) when a
+ * disconnect requires re-advertisement; runs on the system work queue to avoid blocking the Aliro
+ * access protocol.
+ */
 static void readvertise_work_fn(struct k_work *w)
 {
 	/*
@@ -519,6 +560,10 @@ static uint32_t s_estab_first_ms;
  */
 #define READVERTISE_AFTER_ESTAB_FAIL_MS 50
 
+/**
+ * Mark the BLE connection established on successful controller completion, noting that the callback
+ * fires for every connection attempt including those about to fail.
+ */
 static void on_connected(struct bt_conn *conn, uint8_t err)
 {
 	ARG_UNUSED(conn);
@@ -534,6 +579,10 @@ static void on_connected(struct bt_conn *conn, uint8_t err)
 	}
 }
 
+/**
+ * Mark the BLE connection dropped, count establishment failures and report them in one log line
+ * when the run ends, then schedule re-advertisement.
+ */
 static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	ARG_UNUSED(conn);
@@ -568,6 +617,11 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 
 /* ---- the aliro_ble.h seam ------------------------------------------------ */
 
+/**
+ * Validate and store Aliro BLE configuration: protocol versions and callback handler. Caller must
+ * provide non-null cfg with non-empty proto_versions array sized <= ALIRO_MAX_VERSIONS; returns 0
+ * on success or -EINVAL if any parameter is invalid.
+ */
 int aliro_ble_prepare(const struct aliro_ble_config *cfg)
 {
 	if (cfg == NULL || cfg->proto_versions == NULL || cfg->proto_versions_count == 0 ||
@@ -615,11 +669,19 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 	return 0;
 }
 
+/**
+ * Return the L2CAP protocol/service multiplexer for the Aliro reader channel.
+ */
 uint16_t aliro_ble_spsm(void)
 {
 	return ALIRO_L2CAP_SPSM;
 }
 
+/**
+ * Send an APDU over the active L2CAP CoC link; fails if not connected. Copies data into a reserved
+ * net_buf and asserts the payload fits the pool buffer to catch oversized framing from the reader
+ * itself.
+ */
 int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	ARG_UNUSED(conn_handle);
@@ -660,6 +722,9 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 	return 0;
 }
 
+/**
+ * Disconnect the active L2CAP CoC link, terminating the Aliro protocol exchange.
+ */
 int aliro_ble_disconnect(uint16_t conn_handle)
 {
 	ARG_UNUSED(conn_handle);
@@ -670,6 +735,10 @@ int aliro_ble_disconnect(uint16_t conn_handle)
 	return bt_conn_disconnect(s_coc.conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 }
 
+/**
+ * Store the Aliro reader identity material (group ID, sub ID, GRK, TX power) to populate the
+ * service data advertisement on the next readvertise call.
+ */
 void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
 			      const uint8_t grk[16], int8_t tx_power)
 {
@@ -680,11 +749,19 @@ void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[
 	s_adv_aliro = true;
 }
 
+/**
+ * Re-advertise the Aliro reader service or Matter commissioning availability over BLE after a state
+ * change requiring advertisement resume.
+ */
 void aliro_ble_readvertise(void)
 {
 	(void)aliro_advertise();
 }
 
+/**
+ * Re-advertise the Aliro reader service or Matter commissioning availability over BLE after the
+ * system time is updated.
+ */
 void aliro_ble_time_updated(void)
 {
 	(void)aliro_advertise();
@@ -697,6 +774,9 @@ static void (*s_status_cb)(bool);
 static bool s_status_unsecured;
 static void (*s_presence_cb)(void);
 
+/**
+ * Deferred work callback that invokes the reader status callback with the unsecured flag if set.
+ */
 static void status_work_fn(struct k_work *w)
 {
 	ARG_UNUSED(w);
@@ -706,6 +786,9 @@ static void status_work_fn(struct k_work *w)
 }
 static K_WORK_DEFINE(s_status_work, status_work_fn);
 
+/**
+ * Deferred work callback that invokes the presence reset callback if set.
+ */
 static void presence_work_fn(struct k_work *w)
 {
 	ARG_UNUSED(w);
@@ -715,6 +798,9 @@ static void presence_work_fn(struct k_work *w)
 }
 static K_WORK_DEFINE(s_presence_work, presence_work_fn);
 
+/**
+ * Queue a reader status callback with unsecured state to run asynchronously on the work queue.
+ */
 void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 {
 	s_status_cb = cb;
@@ -722,6 +808,9 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 	k_work_submit(&s_status_work);
 }
 
+/**
+ * Queue a presence reset callback to run asynchronously on the work queue.
+ */
 void aliro_ble_post_presence_reset(void (*cb)(void))
 {
 	s_presence_cb = cb;
@@ -735,6 +824,9 @@ const struct ble_gatt_svc_def *aliro_ble_service_def(void)
 	return NULL;
 }
 
+/**
+ * Not supported on this target; returns ENOTSUP.
+ */
 int aliro_ble_start_attached(void)
 {
 	return -ENOTSUP;

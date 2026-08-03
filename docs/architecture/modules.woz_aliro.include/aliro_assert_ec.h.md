@@ -13,8 +13,7 @@
 Key material the two binders expect as their ctx. Pass a pointer to one of
 these as the void *ctx argument of aliro_assert_build_p256 / _verify_p256.
 
-<details><summary>Undocumented (1)</summary>
+### `struct aliro_assert_ec_pub`
+`modules/woz_aliro/include/aliro_assert_ec.h:37`
 
-- `aliro_assert_ec_pub`
-
-</details>
+Uncompressed ECDSA-P256 public key point: 0x04 || X || Y (65 bytes).

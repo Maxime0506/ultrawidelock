@@ -50,7 +50,9 @@ else
 	CHK="+" CRS="x" WRN="!"
 fi
 
+# Test whether a command is available in PATH.
 have() { command -v "$1" >/dev/null 2>&1; }
+# Print a section header with leading newline, bold text, and color reset.
 hdr() { printf '\n%s── %s%s\n' "$BOLD" "$1" "$RESET"; }
 
 # ---- locate the artifact ---------------------------------------------------

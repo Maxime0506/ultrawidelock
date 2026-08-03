@@ -136,6 +136,11 @@ static int open_message(struct matter_tlv_reader *r, const uint8_t *buf, size_t 
 	return matter_tlv_enter(r);
 }
 
+/**
+ * Decode a PBKDF request message; extracts initiator random, session ID, and optional PBKDF
+ * parameters; returns MATTER_E_STATE if required fields are missing and MATTER_E_INVAL if passcode
+ * ID is not 0.
+ */
 int matter_pase_pbkdf_req_decode(const uint8_t *buf, size_t len, struct matter_pase_pbkdf_req *out)
 {
 	struct matter_tlv_reader r;
@@ -211,6 +216,10 @@ int matter_pase_pbkdf_req_decode(const uint8_t *buf, size_t len, struct matter_p
 	return MATTER_OK;
 }
 
+/**
+ * Encode a PBKDF request message with initiator random, session ID, optional passcode and session
+ * parameters.
+ */
 int matter_pase_pbkdf_req_encode(const struct matter_pase_pbkdf_req *r, uint8_t *buf, size_t cap,
 				 size_t *written)
 {
@@ -230,6 +239,11 @@ int matter_pase_pbkdf_req_encode(const struct matter_pase_pbkdf_req *r, uint8_t 
 	return matter_tlv_writer_finish(&w, written);
 }
 
+/**
+ * Decode a PBKDF parameters structure from the reader's current position; extracts iteration count
+ * and salt, validating that iteration count is within the minimum and maximum allowed range;
+ * returns MATTER_E_STATE if either field is missing.
+ */
 static int read_pbkdf_params(struct matter_tlv_reader *r, struct matter_pase_pbkdf_resp *out)
 {
 	bool got_iter = false;
@@ -284,6 +298,10 @@ static int read_pbkdf_params(struct matter_tlv_reader *r, struct matter_pase_pbk
 	return matter_tlv_exit(r);
 }
 
+/**
+ * Decode a PBKDF response message: extract initiator and responder randomness, responder session
+ * ID, PBKDF parameters, and session parameters. Require all three random and session ID fields.
+ */
 int matter_pase_pbkdf_resp_decode(const uint8_t *buf, size_t len,
 				  struct matter_pase_pbkdf_resp *out)
 {
@@ -354,6 +372,11 @@ int matter_pase_pbkdf_resp_decode(const uint8_t *buf, size_t len,
 	return MATTER_OK;
 }
 
+/**
+ * Encode a PBKDF response message with responder random, session ID, and optional PBKDF parameters
+ * (salt and iteration count); validates that salt and iteration counts are within allowed ranges if
+ * present.
+ */
 int matter_pase_pbkdf_resp_encode(const struct matter_pase_pbkdf_resp *r, uint8_t *buf, size_t cap,
 				  size_t *written)
 {
@@ -388,6 +411,10 @@ int matter_pase_pbkdf_resp_encode(const struct matter_pase_pbkdf_resp *r, uint8_
 
 /* ---- Pake1/2/3, which are just fixed-size byte strings -------------------- */
 
+/**
+ * Decode a single context-tagged field from a PASE message; scans the entire message for the given
+ * tag and copies its fixed-length value to dst, returning MATTER_E_STATE if the tag is not found.
+ */
 static int decode_one(const uint8_t *buf, size_t len, unsigned int tag, uint8_t *dst, size_t want)
 {
 	struct matter_tlv_reader r;
@@ -412,6 +439,9 @@ static int decode_one(const uint8_t *buf, size_t len, unsigned int tag, uint8_t 
 	return got ? MATTER_OK : MATTER_E_STATE;
 }
 
+/**
+ * Decode the initiator's P_A point from a PASE Pake1 message.
+ */
 int matter_pase_pake1_decode(const uint8_t *buf, size_t len, struct matter_pase_pake1 *out)
 {
 	if (out == NULL) {
@@ -421,6 +451,9 @@ int matter_pase_pake1_decode(const uint8_t *buf, size_t len, struct matter_pase_
 	return decode_one(buf, len, PAKE_PA, out->pa, MATTER_PASE_POINT_LEN);
 }
 
+/**
+ * Encode a PAKE1 message containing the initiator's ephemeral public point.
+ */
 int matter_pase_pake1_encode(const struct matter_pase_pake1 *r, uint8_t *buf, size_t cap,
 			     size_t *written)
 {
@@ -436,6 +469,10 @@ int matter_pase_pake1_encode(const struct matter_pase_pake1 *r, uint8_t *buf, si
 	return matter_tlv_writer_finish(&w, written);
 }
 
+/**
+ * Decode a PAKE2 message containing the responder's ephemeral public point and confirmation hash;
+ * returns MATTER_E_STATE if either field is missing.
+ */
 int matter_pase_pake2_decode(const uint8_t *buf, size_t len, struct matter_pase_pake2 *out)
 {
 	struct matter_tlv_reader r;
@@ -478,6 +515,9 @@ int matter_pase_pake2_decode(const uint8_t *buf, size_t len, struct matter_pase_
 	return (got_pb && got_cb) ? MATTER_OK : MATTER_E_STATE;
 }
 
+/**
+ * Encode a PAKE2 message containing the responder's ephemeral public point and confirmation hash.
+ */
 int matter_pase_pake2_encode(const struct matter_pase_pake2 *r, uint8_t *buf, size_t cap,
 			     size_t *written)
 {
@@ -494,6 +534,9 @@ int matter_pase_pake2_encode(const struct matter_pase_pake2 *r, uint8_t *buf, si
 	return matter_tlv_writer_finish(&w, written);
 }
 
+/**
+ * Decode the committer's C_A hash from a PASE Pake3 message.
+ */
 int matter_pase_pake3_decode(const uint8_t *buf, size_t len, struct matter_pase_pake3 *out)
 {
 	if (out == NULL) {
@@ -503,6 +546,9 @@ int matter_pase_pake3_decode(const uint8_t *buf, size_t len, struct matter_pase_
 	return decode_one(buf, len, PAKE_CA, out->ca, MATTER_PASE_HASH_LEN);
 }
 
+/**
+ * Encode a PAKE3 message containing the initiator's confirmation hash.
+ */
 int matter_pase_pake3_encode(const struct matter_pase_pake3 *r, uint8_t *buf, size_t cap,
 			     size_t *written)
 {

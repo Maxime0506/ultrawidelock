@@ -1,22 +1,78 @@
 # Hardware validation
 
 Automated CI gates the host-side logic (KAT suite, coverage floor, sanitizers, fuzz,
-CBMC, the ESP32 port suite) and compile-gates both targets' firmware. What it cannot
+CBMC, the ESP32 port suite), and a dispatch of
+[`firmware-builds.yml`](../.github/workflows/firmware-builds.yml) compile-gates all
+three targets' firmware. What it cannot
 exercise is the product itself, which runs against a live iPhone. This checklist is
 the manual gate: run
 every applicable item before cutting a release, and record the results table in the
 release notes (see [`RELEASING.md`](RELEASING.md)).
 
-Two hardware paths have recorded bench evidence: the nRF5340 DK using the legacy
-Nordic binary with its default ST25R300/RFAL reader, and ESP32-S3. The in-tree
-Aliro stack is now the nRF default, but it does not inherit the legacy binary's
-result. It must pass the nRF checklist before release. A release covering only one
-target runs that target's rows and records the other as `n/a`.
+Three hardware paths have recorded bench evidence: the DWM3001CDK, the nRF5340 DK
+using the legacy Nordic binary with its default ST25R300/RFAL reader, and ESP32-S3.
+The in-tree Aliro stack is now the nRF default, but it does not inherit the legacy
+binary's result. It must pass the nRF checklist before release. A release covering
+only one target runs that target's rows and records the others as `n/a`.
 
 ESP32-C5 is built and bundled by the release workflow, but has no hardware
 validation record. Mark it build-only in release notes until a C5 checklist is
 defined and passed. The PN532 variant likewise has automated evidence only and
 does not inherit the ST25R300 checklist result.
+
+## DWM3001CDK
+
+The primary target, and the shortest bench setup there is: one nRF52833 and the
+DW3110 in the same module, nothing to wire, on-board J-Link OB. No NFC tap path
+exists here and none can, so there is no equivalent of HV-5. The board carries no
+reader IC, and the nRF52833's own NFC peripheral is tag-emulation only.
+
+### Test setup
+
+- A DWM3001CDK on USB, over its on-board J-Link OB. No EVB to seat, no ribbon.
+- `make dfu-key`, once per clone. Every image on this board is signed and the key
+  is gitignored, so a fresh clone or a new git worktree stops at configure until
+  it has one of its own.
+- A Thread border router the phone already reaches, for the Matter image
+  (`make build`). A `make reader` image needs neither that nor a commissioner.
+- An iPhone with the lock's Aliro key in Wallet. Apple Home mints it during
+  CDK-7; a `reader` image takes an imported credential instead, per
+  [`firmware/README.md`](../firmware/README.md).
+- Console attached with `make monitor`. It is RTT, not UART, so `make nrf-term`
+  does not reach this board.
+
+### Checklist
+
+The Recorded column is what this repository has already seen on hardware. It is
+not a substitute for running the row: a release records the result you got, not
+this one.
+
+| ID | Procedure | Pass criterion | Recorded |
+|---|---|---|---|
+| CDK-1 | `make test` on the release commit | Exit 0, all host KATs pass | CI gate |
+| CDK-2 | `make dfu-key`, then `make rebuild` (pristine) | Exit 0; the image links and fits the 433,664 B `app` partition | yes: 409,988 B (94.54%), 125,012 B RAM (95.38%), 6,060 B of RAM spare |
+| CDK-3 | `make reader PRISTINE=1` | Exit 0; the reader-only image links and fits | yes: 285,664 B (65.87%), 79,908 B RAM (60.96%) |
+| CDK-4 | Flash a `make selftest` build, boot with no phone present | `DW3000 raw DEV_ID = 0xdeca0302` on the RTT console | yes |
+| CDK-5 | `make flash-erase` with the release image, then boot | Clean boot, `ECDH self-test: PASS`, BLE advertising starts, no faults | yes |
+| CDK-6 | Connect from an iPhone with a BLE scanner | 0xFFF2 enumerates with both characteristics and never prompts to pair; the reader-SPSM characteristic reads `00 80 02 01 00 01 01` | yes |
+| CDK-7 | Add the accessory in Apple Home with the setup code the build printed | Commissioning completes and the lock tile goes live | yes |
+| CDK-8 | Relock, then approach from well outside ranging distance, phone pocketed | Wallet animation plays and the bolt opens, with no phone interaction | yes: four unlocks in one session, 2026-08-02 |
+| CDK-9 | Walk away | Bolt relocks past the hysteresis margin and does not oscillate at the boundary | no recorded result; run it |
+| CDK-10 | Power-cycle the board, wait for boot, repeat CDK-8 | Unlock works without re-commissioning or re-provisioning | no recorded result; run it |
+| CDK-11 | Change something in the tree, then `make dfu`, pressing SW2 when it asks | The delta goes over Bluetooth and the board's flash comes out byte for byte identical to the target image, with a matching CRC | yes, 2026-08-03 (`bca7534`, `ed1780c`); the apply takes 17 to 31 s |
+| CDK-12 | Repeat CDK-11, opening the window from Apple Home's "Turn On Pairing Mode" instead of pressing SW2 | D10, the blue LED, blinks at 2 Hz while the window is open, and the push is accepted | yes, on a live commissioned lock, for both openers |
+| CDK-13 | `make fota`, push the file from a phone with nRF Device Manager's **Images** tab, then `make fota-done` | The board comes back reporting the target image's SHA-256 | yes, on the commissioned lock (`53b2fe1`, `8447e91`) |
+| CDK-14 | 100 walk-ups, counting the ones that unlock | 95% or better | **open, never run**; the sample so far is single digits |
+| CDK-15 | Cut the power in the middle of a CDK-11 apply, then restore it | The board resumes at the right step and boots the target image | **open, never run** |
+
+CDK-8 is this target's EV-7, and it is faked the same way: the bolt moving is not a
+pass. The Wallet animation is, because that is what proves the reader told the phone
+it granted access rather than just actuating locally.
+
+CDK-14 and CDK-15 are the two open rows, and neither has ever been run. CDK-14 is
+the only rate on this list: everything above it has been demonstrated at least once,
+and none of it at a rate. CDK-15 is the resumable apply, whose step counter is
+exercised by design and by host test but has never met a real power cut.
 
 ## nRF5340 DK
 

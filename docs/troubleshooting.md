@@ -1,17 +1,90 @@
 # Troubleshooting
 
-Common issues, grouped by where they show up. Deeper protocol background is in
+Common issues, grouped by target. Deeper protocol background is in
 [`protocol-research.md`](protocol-research.md) (on-air behavior) and
 [`protocol-notes.md`](protocol-notes.md) (firmware time and credential behavior).
 
-Everything below the ESP32 section is about the primary nRF5340 DK build. For the
-ESP32-S3 ports, start with [ESP32-S3 ports](#esp32-s3-ports) and then the much longer
-[gotchas log](esp32-gotchas.md), which records every trap hit during that
-bring-up with its symptom and fix.
+| Section | Target |
+|---|---|
+| [DWM3001CDK](#dwm3001cdk) | the primary board, one nRF52833 with the DW3110 beside it |
+| [Build and flash](#build-and-flash-nrf5340-dk), [Hardware](#hardware-nrf5340-dk-and-dwm3000evb) | nRF5340 DK, the target with NFC |
+| [ESP32-S3 ports](#esp32-s3-ports) | ESP32, and then the much longer [gotchas log](esp32-gotchas.md) |
+| [Unlock behavior](#unlock-behavior) | any target: this is protocol, not board |
+| [Tests and CI gates](#tests-and-ci-gates) | the host sweep, no hardware involved |
 
-## Build and flash
+Bare make targets mean the DWM3001CDK. The nRF5340 DK is `nrf-` prefixed and the
+ESP32 is `esp-` prefixed; `make` with no target prints the grouped list.
 
-**`make build` can't find the toolchain.** `make bootstrap` installs the NCS v3.3.0
+## DWM3001CDK
+
+Full detail is in [`../firmware/README.md`](../firmware/README.md), and the
+bring-up traps that cost real time are in
+[`dwm3001cdk-surgery.md`](dwm3001cdk-surgery.md). This is the triage list.
+
+**`make build` fails at configure, complaining about a signing key.** Run
+`make dfu-key` once. Every image on this board is signed and the key is
+gitignored, so a fresh clone or a new git worktree has none. The build refuses
+rather than falling back to the demo key published in MCUboot's own repository.
+
+**`make monitor` attaches cleanly and prints nothing.** Usually the ELF: probe-rs
+reads the RTT control block address out of the ELF you pass it, so attaching with
+one you built but did not flash reads a stale address, which looks exactly like a
+dead board. Reflash, or point `CDK_RTT_BUILD` at the image the board is actually
+running.
+
+**A log line looks wrong, or mentions something the code cannot do.** Check it is
+real. probe-rs prints tails of `.rodata` strings out of the ELF, so a phantom
+line can appear with no target involved. A real line has an `HH:MM:SS.mmm:`
+prefix, a complete sentence, and its `%d` and `%s` substituted; a phantom has
+none of those. More than one investigation here has gone down that trail.
+
+**The probe enumerates but nothing can connect to it.** A stale process still
+holds the USB interface, usually after an interrupted `west flash` or a
+SIGTERMed `probe-rs attach`. Replugging works but needs a human; killing the
+holders does not:
+
+```bash
+pkill -f 'jlinkarm_nrf_worker_osx'
+pkill -f 'JLinkGUIServerExe'
+```
+
+A `make flash` that reports "Timed out waiting for response from worker" after
+"Verifying image" has usually programmed the board correctly and only failed on
+the reset. Check with a read before reflashing.
+
+**Apple Home sits on "Adding to Home" and never finishes.** If the board was
+factory-erased, this used to be OpenThread's SRP client: name ownership is
+first-come by key, the erase destroyed the key but not the name, and the border
+router refused the re-registration for as long as the old lease ran, up to 14
+days. Commit `f7d3160` fixed it by storing a name suffix beside the key so both
+die in the same erase. If you are on an older image, that is the symptom.
+
+**The lock works but the phone never approaches it.** The reader only advertises
+its Aliro service with the provisioned advertising parameters once it has an
+identity, and on the Matter image the identity is minted by commissioning. A
+`make flash-erase` takes the fabrics, the identity and the trust anchors with it,
+so the board has to be added to Home again. To clear only what a controller can
+see, hold **SW2 through reset** instead.
+
+**The board refuses an over-the-air patch.** A delta is computed against the
+exact bytes the board is running, and only the build host keeps that record. A
+push from a phone is invisible to it, so `make fota-done` after every phone push
+is what keeps the record true. `make ota-smp-list` prints what the board reports
+running, which is the cheapest way to see the mismatch.
+
+**Nothing happens when you press SW2 during an update.** D10, the blue LED,
+blinks at 2 Hz while the update window is open, and it follows the window rather
+than the button, so it also goes out when the five minutes expire on their own.
+A dark LED means no window, not a failed transfer.
+
+**The image does not fit.** The Matter image is at 94.54% of its flash partition
+and 95.38% of RAM, with 6,060 bytes of RAM left, so a new static allocation is a
+decision rather than a detail. LTO is on by default and worth 41,084 B; `LTO=0`
+no longer fits this flash map at all and the build says so.
+
+## Build and flash (nRF5340 DK)
+
+**`make nrf-build` can't find the toolchain.** `make bootstrap` installs the NCS v3.3.0
 toolchain as its second phase, so this normally means bootstrap has not been run here.
 All builds go through `nrfutil sdk-manager toolchain launch … west`; a bare `west` is
 not used. If your toolchain is managed some other way, `nrfutil sdk-manager config show`
@@ -24,8 +97,8 @@ macOS; elsewhere it is a
 [download from Nordic](https://www.nordicsemi.com/Products/Development-tools/nrf-util).
 
 **A config change flashed but did not take effect.** A change to net-core configuration
-needs a full erase: use `make flash-erase`, not `make flash`. `make flash` is app-core
-only and leaves the net-core image in place.
+needs a full erase: use `make nrf-flash-erase`, not `make nrf-flash`. `make nrf-flash` is
+app-core only and leaves the net-core image in place.
 
 **`make nrf-term` shows nothing.** The console and Zephyr shell are on the DK's VCOM1; VCOM0
 is silent. `make nrf-term` auto-detects VCOM1; override with `PORT=` if detection picks the
@@ -69,7 +142,11 @@ confirm a time sync happened (wrong listen window otherwise), and check for a ne
 parameter mismatch, which yields a different SaltedHash and therefore a different STS with
 no shared frames. See [`protocol-research.md`](protocol-research.md) §6-§7.
 
-## Hardware
+## Hardware (nRF5340 DK and DWM3000EVB)
+
+None of this applies to the DWM3001CDK, where the DW3110 sits on the same module
+as the MCU and the wiring is internal. Its pin table is in
+[`../firmware/README.md`](../firmware/README.md).
 
 Pin assignments are defined in
 [`ports/nrf5340dk/overlays/dw3000-nfc.overlay`](../ports/nrf5340dk/overlays/dw3000-nfc.overlay),
@@ -79,8 +156,8 @@ which is the source of truth. If the overlay changes, the wiring must change wit
 common ground with the host board.
 
 **No SPI response / DW3000 not detected.** Confirm the EVB is powered (see above), the SPI
-lines match the overlay, and the reset and IRQ lines are wired. `make selftest` builds a
-boot self-test that exercises the radio bring-up with no phone present, which isolates a
+lines match the overlay, and the reset and IRQ lines are wired. `make nrf-selftest` builds
+a boot self-test that exercises the radio bring-up with no phone present, which isolates a
 wiring problem from a protocol one.
 
 **The DWM3000EVB has its own power-select jumper.** Wiring the rails correctly is not
@@ -141,7 +218,7 @@ accept it for one run instead, scope it out by name: `SKIP="cbmc docs" make veri
 
 **A gate passed here and failed on the PR.** Two usual causes. A version-pinned tool
 (`clang-format`, `clang-tidy`, `zizmor`, `reuse`) disagreeing with CI's pin: `make tools`
-flags a row that is off the pin. Or a gate that silently ran weaker here — without the
+flags a row that is off the pin. Or a gate that silently ran weaker here: without the
 `markdown` python package the flash-HTML drift check skips, which `make tools` also
 reports.
 
@@ -159,7 +236,7 @@ candidate checks and explicitly leaves the unavailable seven to CI. Do not confi
 correctly treats those missing capabilities as failures.
 
 **`make test-verify` fails after a workflow change.** It gates the mapping between CI
-jobs and local gates. A new job in `.github/workflows/` has to be accounted for — either
+jobs and local gates. A new job in `.github/workflows/` has to be accounted for, either
 a gate that reproduces it locally, or a written reason it cannot be one. The failure
 names the job.
 

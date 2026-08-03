@@ -1,10 +1,10 @@
-# DWM3001CDK — Aliro reader + Matter over Thread
+# DWM3001CDK: Aliro reader + Matter over Thread
 
 One board. The nRF52833 runs the BLE peripheral, the Aliro reader engine, a
 Matter node and an OpenThread MTD; the DW3110 in the same DWM3001C module does
 the UWB ranging. No host MCU board, no seated DWM3000EVB, no ribbon wiring.
 Apple Home commissions it and shows a live lock tile, on a part Nordic's own
-CHIP-based lock does not fit in — see "Apple Wallet credentials" for what that
+CHIP-based lock does not fit in. See "Apple Wallet credentials" for what that
 took and what it cost.
 
 What that buys, versus the other two ports:
@@ -13,7 +13,7 @@ What that buys, versus the other two ports:
 |---|---|---|---|
 | Boards to wire | 2-3 | 2 | **1** |
 | BLE + UWB unlock | yes | yes | yes |
-| NFC / Express Mode | yes | yes | **no hardware** |
+| NFC / Express Mode | yes | no | **no hardware** |
 | Radio cores | 2 (BLE has its own) | 2 | **1, shared** |
 | Debugger | external | external | **J-Link OB on board** |
 
@@ -26,14 +26,21 @@ cannot read. BLE + UWB walk-up is the whole feature set here.
 From a cold start to a board you can watch:
 
 ```sh
+make dfu-key            # once per clone. This checkout's image-signing key.
 make build PRISTINE=1   # -> build/cdk-matter/merged.hex
 make flash-erase        # over the on-board J-Link OB
 make monitor            # the console, Ctrl-C to stop
 ```
 
+`make dfu-key` comes first because every image on this board is signed, and
+with no key `firmware/sysbuild.cmake` fails the configure rather than fall back
+to the demo key published in MCUboot's own repository. The key is gitignored, so
+a fresh clone or a new git worktree needs its own and will stop at configure
+until it has one.
+
 Every CDK target means this image unless you say otherwise: `CDK_BUILD`
 defaults to `build/cdk-matter`, and `flash`, `flash-erase` and `monitor`
-all follow it. `PRISTINE=1` is not only for when something looks stale —
+all follow it. `PRISTINE=1` is not only for when something looks stale:
 `-p auto` re-runs CMake when the board or the application directory changes and
 **not** when the `-D` flags do, so a build directory that has ever held the
 other configuration keeps it.
@@ -92,14 +99,17 @@ make monitor CDK_RTT_BUILD=build/cdk-reader
 |---|---|---|
 | Identity | self-provisions from Apple Home | typed in over USB, below |
 | Matter / Thread | OpenThread MTD/SED, SRP, 0xFFF6 commissioning | absent |
-| USB console | no — reader + console + Thread overflows RAM by 1,752 B | yes |
-| Measured | 446,444 B flash / 123,944 B RAM | 285,712 B flash / 79,908 B RAM |
+| USB console | no. Reader + console + Thread overflows RAM by 1,752 B | yes |
+| Flash | 409,988 B of 433,664 B (94.54%) | 285,664 B (65.87%) |
+| RAM | 125,012 B of 128 KB (95.38%) | 79,908 B (60.96%) |
 
-Both rows are the linker's own region report, rebuilt at this commit; the
+Both columns are the linker's own region report, rebuilt at this commit; the
 figures elsewhere in this file are older measurements of smaller trees and are
-labelled with what they were measuring. The Matter image has **7,128 bytes of
-RAM left** (94.56% of 128 KB), so treat any new static allocation on it as a
-decision rather than a detail.
+labelled with what they were measuring. The Matter image has **6,060 bytes of
+RAM left**, so treat any new static allocation on it as a decision rather than a
+detail. Flash is a percentage of the 433,664 B `app` partition, not of the
+part: MCUboot and the update staging area take the rest, and the map is in
+`firmware/pm_static.yml`.
 
 Equivalent by hand, from the west workspace:
 
@@ -116,7 +126,7 @@ Matter fabrics, the reader identity and its trust anchors. Apple Home has to
 commission it again, and that is the real price.
 
 It also destroys OpenThread's SRP client key. That used to be the expensive
-part — SRP name ownership is first-come **by key**, the host name was the bare
+part. SRP name ownership is first-come **by key**, the host name was the bare
 factory EUI-64 and survived the erase, so the next boot asked for a name the
 border router still held under the old key and was refused with
 `OT_ERROR_DUPLICATED` for as long as the key lease ran, up to **14 days**.
@@ -143,7 +153,7 @@ make monitor CDK_RTT_BUILD=build/cdk-reader   # the reader
 
 That is `probe-rs attach` with the ELF, and the ELF is the point: probe-rs
 re-reads `_SEGGER_RTT` out of it on every attach, so a rebuild that moves the
-control block needs nothing changed here. It has to be the ELF you **flashed** —
+control block needs nothing changed here. It has to be the ELF you **flashed**:
 attach with one you only built and probe-rs reads a stale address and prints
 nothing, which looks exactly like a dead board.
 
@@ -153,24 +163,32 @@ Control Block not found" both with `-RTTAddress` pointing straight at the block
 and with an all-of-RAM `-RTTSearchRanges`, `JLinkExe` V9.62 has no `rtt` verbs,
 and `JLinkRTTClient` never reaches port 19021.
 
-**The first block you see is the previous run.** The RTT ring is `_acUpBuffer`
-at `0x20000010`, 8 KB, in its own section at the bottom of RAM, and a reset does
-not clear it — that is deliberate, it is what lets you read what a board printed
-before it died. The cost is that `make monitor` opens with whatever the *old*
-firmware left there, and it looks exactly like current output. Anchor on the
-`*** Booting nRF Connect SDK ***` line: everything above it is history. Two
-separate conclusions in this project have been drawn from that block and both
-were wrong.
+The RTT ring is `_acUpBuffer` at `0x20000010`, 8 KB, in its own section at the
+bottom of RAM. It used to survive a reset, and the block above
+`*** Booting nRF Connect SDK ***` was then the *previous* firmware looking
+exactly like current output. Two separate conclusions in this project were drawn
+from that block and both were wrong. MCUboot ended it either way: the bootloader
+spans the ring and its control block up to `_image_ram_end` and has no RTT of
+its own, so before commit `4024e85` the console streamed MCUboot's leftover RAM
+as high-bit binary. `CONFIG_SEGGER_RTT_INIT_MODE_ALWAYS=y` in `prj.conf` now
+re-initialises the control block at every boot.
 
-Two traps worth knowing:
+Three traps worth knowing:
 
 - **`--scan-region` defaults to empty**, and with no region and no ELF probe-rs
-  does not scan and does not poll RTT at all — a clean attach and zero output.
+  does not scan and does not poll RTT at all, giving a clean attach and zero output.
   `make monitor` passes the ELF, so this only bites a hand-typed attach.
 - **One process at a time owns the probe**, and draining RTT advances the ring's
   read pointer, so a second attach splits the log rather than duplicating it.
   To watch from several terminals, let one own the probe and `tail -f` its
   output.
+- **Some lines never came from the board.** probe-rs prints tails of `.rodata`
+  strings it read out of the ELF, so `failed: %d` or a front-truncated word can
+  appear with no target involved. A real line carries an `HH:MM:SS.mmm:` prefix,
+  a complete sentence and substituted format specifiers; a phantom has none of
+  those. If it ever matters, dump the ring with
+  `probe-rs read b8 0x20000010 8192` and look for a `%`: zero specifiers in the
+  ring while the terminal shows them means the line is host-side.
 
 probe-rs 0.32.0 also reads and writes target memory from a shell one-liner,
 which is the thing a J-Link command file makes awkward:
@@ -183,17 +201,17 @@ probe-rs trace <addr>        # poll one g_dbg_* counter without spending RTT ban
 ## Size, measured
 
 Stage 0 built the whole thing to find out whether it fits. It does, with room
-to spare — but read this as the question stage 0 asked, not as the current
-image. The room was spent: the numbers below are the reader with no console, no
+to spare. Read this as the question stage 0 asked, though, not as the current
+image: the room was spent. The numbers below are the reader with no console, no
 Matter and no Thread, and the build that Apple Home commissions now sits at
-96.81% of RAM (see the Build section).
+95.38% of RAM (see the Build section).
 
 | | Used | Available | |
 |---|---|---|---|
 | Flash | **236,492 B (231 KB)** | 504 KB | 45.8% |
 | RAM | **70,964 B (69.3 KB)** | 128 KB | 54.1% |
 
-Cross-checked with `arm-zephyr-eabi-size` (236,484 B / 70,946 B — the few bytes
+Cross-checked with `arm-zephyr-eabi-size` (236,484 B / 70,946 B, the few bytes
 of difference are alignment padding), and the engine is confirmed present in
 `.text` rather than garbage-collected: `aliro_ranging_*`, `ccc_derive_*`,
 `fira_session_*`, `aliro_uwb_msg_build_m1`, `dwt_initialise`.
@@ -206,61 +224,175 @@ The board DTS carries an MCUboot dual-slot map whose app slot is only 224 KB,
 which would not have been enough. It does not apply: NCS builds this under
 Partition Manager, which ignores DTS partitions and derives its own map. To
 change that map you add a `pm_static.yml`; a DTS override does nothing, which
-was verified by building with and without one — `partitions.yml` and the memory
+was verified by building with and without one: `partitions.yml` and the memory
 report came out byte-identical both ways.
 
-That is what `pm_static.yml` here now does. MCUboot sits at the front of flash
-and the app follows it, so the app slot is no longer the whole 504 KB:
+That is what `pm_static.yml` here now does. MCUboot sits at the front of flash,
+the app follows it, and the over-the-air update needs somewhere to land, so the
+app slot is no longer the whole 504 KB:
 
-| Partition | Range | Size |
-|---|---|---|
-| mcuboot | 0x00000..0x08000 | 32 KB |
-| app (after mcuboot + its pad) | 0x08200..0x7e000 | 482,816 B |
-| settings_storage | 0x7e000..0x80000 | 8 KB |
+| Partition | Range | Size | Holds |
+|---|---|---|---|
+| `mcuboot` | 0x00000..0x0a000 | 40,960 B | the bootloader and the delta applier |
+| `mcuboot_pad` | 0x0a000..0x0a200 | 512 B | the image header MCUboot verifies |
+| `app` | 0x0a200..0x74000 | 433,664 B | the image |
+| `patch_staging` | 0x74000..0x7e000 | 40,960 B | one received update, and nothing else |
+| `settings_storage` | 0x7e000..0x80000 | 8,192 B | fabrics, identity, trust anchors |
 
-8 KB of settings storage is NVS's two-sector minimum. The provisioning blob is
-476 B, so it fits one 4 KB sector with room for wear levelling.
+Those five add to 524,288 B, the part exactly. 8 KB of settings storage is NVS's
+two-sector minimum; the provisioning blob is 476 B, so it fits one 4 KB sector
+with room for wear levelling. Every number in the map is measured rather than
+budgeted, and `firmware/pm_static.yml` carries the derivation for each one,
+including why the bootloader grew from 0x8000 and why moving a boundary later
+is the one change an over-the-air update cannot deliver.
 
-MCUboot buys DFU on a board that already has a J-Link OB, which matters because
-a J-Link is a bench tool and a fielded lock does not have one. It costs 32 KB of
-flash and ~21 KB of the app's former slot, and it is why the flash figures above
-are a percentage of 482,816 B rather than of 504 KB.
+MCUboot buys updates on a board that already has a J-Link OB, which matters
+because a J-Link is a bench tool and a fielded lock does not have one. It is
+why the flash figures above are a percentage of 433,664 B rather than of 504 KB.
 
-### Updating it without a probe
+**This map only works post-LTO.** LTO is the default and is worth 41,084 B: the
+same image measures 446,380 B without it, which overflows the 433,664 B `app`
+partition by 12,716 B. The build says so rather than shipping. A `make build
+LTO=0` of this configuration needs the staging partition dropped first.
+
+### Updating it over Bluetooth
 
 ```bash
 make dfu-key    # once per clone. Generates this checkout's signing key.
-make build
-make dfu        # push it down the J-Link OB's VCOM. Press RESET when told.
+make dfu        # build, diff, sign, push. Press SW2 when it asks.
 ```
 
-Serial recovery over the cable that already powers the board. MCUboot listens
-for an mcumgr command for 400 ms at every boot
-(`CONFIG_BOOT_SERIAL_WAIT_FOR_DFU_TIMEOUT`), which is too short to hit by hand,
-so `make dfu` retries while you press RESET. It needs `mcumgr` on `PATH`
-(`make tools-install`, or `make tools` to see whether you have it) and says so
-if it is missing.
+No cable, no probe, no J-Link. `make dfu` builds the current tree, works out the
+difference from the image the board is already running, signs it, and pushes it
+over GATT. The board stages what arrives and reboots, and MCUboot applies it.
 
-**There is no BLE DFU here, and no Matter OTA, and that is arithmetic rather
-than a decision.** Both work by staging the incoming image into a *second* slot
-and swapping on reboot. MCUboot itself cannot receive over BLE at all; its only
-recovery transports are UART and CDC-ACM. The space for a second slot does not
-exist:
+**Proven on hardware, 2026-08-03.** A 7,701 B patch went over Bluetooth at MTU
+251 in 180 B chunks, and the board's flash came out byte for byte identical to
+the target image:
+
+```
+push      7,701 B over GATT at MTU 251, 180 B chunks
+bootloader  WDFU staged: len=7605 to=409083
+            WDFU applying from step 0
+            WDFU apply res=409083
+verify    image B      crc 0xc5edcb63
+          on the board crc 0xc5edcb63      <- identical
+          was image A  crc 0xcc9b717d
+```
+
+The apply takes roughly 17 to 31 seconds, all of it inside the bootloader with
+the radios down. Commits `bca7534` (the applier) and `ed1780c` (the receiver).
+
+#### What travels is a delta, and that is arithmetic rather than a decision
+
+A conventional over-the-air update stages the whole incoming image in a *second*
+slot and swaps on reboot. That does not fit here, and it is not close:
 
 | | bytes |
 |---|---|
 | flash, nRF52833 | 524,288 |
-| less MCUboot (32 KB) and `settings_storage` (8 KB) | 483,328 for slots |
-| largest slot if halved | **241,664** |
-| application, signed, LTO on | **405,960** |
-| over by | **164,296 per slot, 1.68x** |
+| two full slots would want | ~844,000 |
+| an LZMA-compressed secondary would still want | ~646,000 |
 
-That figure is already after LTO, which is the default and worth 41,084 B. It
-closed 20% of the gap. `LOG=n` on top, also measured, removes another 40,400 B
-and still leaves it 123,896 B over: fitting would need a further 40% cut after
-both. There is no external flash on this board to stage into either, and the
-nRF52833 has no QSPI peripheral to attach any. A board that must be updated over
-the air needs a part with more flash; see `ports/nrf5340dk/` and `ports/esp32/`.
+There is no external flash to stage into either: the board DTS has no
+`jedec,spi-nor` node, and the nRF52833 has no QSPI peripheral to attach one.
+What does fit is a **patch**. Measured between two adjacent LTO builds of this
+image, an in-place delta is about 7.6 KB against a usable staging budget of
+32,768 B (the 40,960 B partition less its two control pages).
+
+Patch size follows how far code **shifts**, not how much of it changed, which is
+the counter-intuitive part and the reason the partition is sized the way it is:
+
+| Change | Patch |
+|---|---|
+| build timestamp only, no code change | 7,632 B |
+| fifty-two bytes of new code | 17,335 B |
+
+Two small functions added near the top of a file move every symbol after them,
+and the delta pays for all of it.
+
+#### The pieces
+
+| Piece | Does |
+|---|---|
+| `scripts/woz_patch.py` | builds the delta and signs it with this checkout's key |
+| `scripts/woz_push.py` | carries it over GATT to the board |
+| `firmware/src/dfu_ble_zephyr.c` | checks it, writes it into `patch_staging`, reboots |
+| `modules/woz_dfu` | applies it from a `SYS_INIT` inside MCUboot |
+
+The applier runs in the bootloader because an application cannot rewrite the
+flash it is executing from. It costs 3,176 B of bootloader flash; the receiver
+costs 3,104 B of application flash and 1,061 B of RAM. The staging partition
+carries a step counter, appended one word per completed step without erasing, so
+a power cut mid-apply resumes at the right step instead of restarting into a
+half-patched image.
+
+mcumgr was built first and rejected for this path: 3,717 B of RAM against
+7,448 B free, plus an unauthenticated reset command and a permission model that
+defaults to demanding BLE pairing on a reader that must never pair. It is still
+available behind `SMP=1`, for the one case that needs it, which is a phone.
+
+#### Pushing from a phone
+
+`make dfu` needs this machine and its Bluetooth. A phone can carry the update
+instead:
+
+```bash
+make fota        # one file to move to the phone, plus the steps, printed
+                 # ... push it with nRF Device Manager ...
+make fota-done   # ask the board what it now runs, and record it
+```
+
+`make fota` sets `SMP=1 RELEASE=1` itself and builds in its own directory. Those
+are not preferences: a board without SMP does not speak mcumgr at all, and
+`RELEASE` is what leaves the RAM to run it (9,516 B free with it, 2,412 B
+without). It then wraps the signed delta as a well-formed MCUboot image, because
+nRF Device Manager parses a file before offering to upload it and a bare patch
+carries no magic it recognises. The wrapper is never booted; the board spots it
+by its magic and steps over it.
+
+Use the app's **Images** tab, not its guided firmware-upgrade wizard. That flow
+waits for a second image to confirm and for a reconnect that the bootloader's
+apply outlasts.
+
+**`make fota-done` is not optional.** A delta is computed against the exact bytes
+on the board, only this machine keeps the record of what those are, and a push
+from the phone is invisible to it. Skip it and the *next* update is built from
+the wrong base and the board refuses it. `fota-done` asks the board over BLE and
+moves the record only if the hash matches, so a failed or half-finished update
+leaves the old base in place rather than poisoning the next delta.
+
+`make ota-smp` sends the same bytes from here instead of from a phone, which is
+how you tell a firmware failure from an app one. `make ota-smp-list` just reads
+the image list, which is the cheapest proof that the board is answering at all.
+
+#### The window is the authorization model
+
+An update needs an open window. The patch is signed and MCUboot re-verifies the
+result before booting it, so no peer can install code either way; what a closed
+window prevents is a stranger in radio range spending your flash's erase cycles
+and rebooting your lock. It lasts five minutes
+(`CONFIG_WOZ_DFU_WINDOW_MS`, 300,000 ms), and outside it a reset is refused
+unless a patch is already staged.
+
+Three things open it, and the first two are both confirmed on a live
+commissioned lock:
+
+| Opener | Notes |
+|---|---|
+| **Press SW2** | the ordinary way, and the one a fielded lock has |
+| **Apple Home, "Turn On Pairing Mode"** | the node serves AdministratorCommissioning |
+| `make ota-window` | bench only, and it needs the probe this path exists to avoid |
+
+**D10, the blue LED, blinks at 2 Hz while the window is open.** It follows the
+window rather than the button, so it goes out when the five minutes expire on
+their own. Without it, a press that did not register is indistinguishable from
+one that did, on a board with no debugger attached.
+
+`make dfu-serial` is the older serial-recovery upload, kept but not working:
+MCUboot enters its listening window with a full four seconds available and still
+does not answer mcumgr. One transfer succeeded on 2026-08-02 and it has never
+reproduced. `scripts/cdk-dfu.sh` records everything ruled out. Use `make dfu`.
 
 #### The signing key
 
@@ -277,21 +409,25 @@ list of seven default key files and against the path being absolute and present.
 signs with a throwaway key rather than a secret.
 
 `settings_storage` at `0x7e000` survives all of this: `make flash` never passes
-`--erase`, and MCUboot lives at the other end of the map.
+`--erase`, and MCUboot lives at the other end of the map. Measured: `merged.hex`
+spans 0x0 to 0x75274, so it stops 36,236 B short of that partition.
 
-> **Not yet run on hardware.** Everything above builds and is gated, but no
-> image has been pushed over serial recovery on a real board, and the
-> power-fail soak in `internal/cdk-dfu-plan.md` is unrun.
+> **What is proven and what is not.** A patch has gone over Bluetooth and come
+> out byte for byte identical on a real board, and the full path has run on a
+> lock already commissioned in Apple Home and Aliro-provisioned, with both
+> window openers confirmed there. What has **not** been run is a power cut in
+> the middle of an apply: the step counter that makes that resumable is
+> exercised by design and by host test, not by pulling the power.
 
 **APPROTECT must never be locked on this board**, and two independent guards say
 so: `firmware/CMakeLists.txt` fails the configure of this image, and
-`scripts/check-approtect.sh` reads every generated `.config` — including
+`scripts/check-approtect.sh` reads every generated `.config`, including
 MCUboot's, whose configuration lives outside this application entirely. Locking
 is a one-way door for *data*: recovering debug access costs `nrfjprog --recover`,
 a mass erase of flash **and** UICR, which takes `settings_storage` with it and
 with it the reader private key and every iPhone key provisioned against it.
 
-## Wiring (all internal to the module — nothing to solder)
+## Wiring (all internal to the module, nothing to solder)
 
 Cross-checked between the upstream Zephyr board files and Qorvo's own
 `uwb_stack_llhw.cmake` from DW3_QM33_SDK 1.1.1, which agree on every pin:
@@ -353,7 +489,7 @@ I: aliro_reader_start: transport up (SPSM 0x0080)
 
 An iPhone running nRF Connect connects and enumerates 0xFFF2 with both
 characteristics, the reader-SPSM (Read) and the device-version (Write), and
-**never prompts to pair** — Aliro runs its own secure channel, so the walk-up
+**never prompts to pair**, because Aliro runs its own secure channel, so the walk-up
 must not require bonding.
 
 Reading the reader-SPSM characteristic returns `00 80 02 01 00 01 01`:
@@ -375,7 +511,7 @@ survive concurrent load is a separate question, answered at stage 4.
 
 ### RTT buffer size is load-bearing
 
-`CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=4096`, not the 1 KB default. RTT is this
+`CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=8192`, not the 1 KB default. RTT is this
 board's only console and the default policy is NO_BLOCK_SKIP: once the buffer
 fills, writes are silently discarded and the log truncates mid-line. That is
 indistinguishable from a firmware hang and will send you chasing a bug that
@@ -386,16 +522,17 @@ the stock `CONFIG_CLOCK_CONTROL_NRF_K32SRC_XTAL` works.
 
 ## Apple Wallet credentials: transplanted, not commissioned
 
-> Read this as the reason `reader` exists, not as a limit of the board.
+> **Read this as the reason `reader` exists, not as a limit of the board.**
 > It was written when transplanting was the only way in, and it still describes
-> that path — which stays the fastest way to get a working reader, and the only
-> one that needs no Thread network. `build` since made the
-> other way work: a hand-written Matter node (`modules/woz_matter`) instead of
-> CHIP, measured at 415,416 B flash / 120,120 B RAM with the reader and Thread
-> MTD alongside it (`app/overlay-thread.conf`). The paragraph below is about
-> Nordic's CHIP-based lock, and about that it is still correct.
+> that path, which stays the fastest way to get a working reader and the only
+> one that needs no Thread network. `make build` since made the other way work:
+> a hand-written Matter node (`modules/woz_matter`) instead of CHIP, measured at
+> 409,988 B flash / 125,012 B RAM with the reader and the Thread MTD alongside
+> it (`firmware/overlay-thread.conf`). Apple Home commissions that image and
+> mints the credential itself. The paragraph below is about **Nordic's
+> CHIP-based lock**, and about that it is still correct.
 
-This board cannot be commissioned into Apple Home, and that is a memory fact
+This board cannot run Nordic's CHIP-based Matter lock, and that is a memory fact
 rather than a missing feature. Apple mints an Aliro credential only through
 Matter commissioning of a Door Lock, and Nordic's most stripped *supported*
 single-core Matter lock (LTO, no shell, no console, no serial, no logging)
@@ -405,7 +542,8 @@ measures **614,008 B flash / 162,164 B RAM**, against Nordic's published
 over on RAM before a single line of reader or UWB code joins it. There is no
 external-memory escape either: the nRF52833 has no QSPI, so no XIP.
 
-So the credential is copied in from a board that *was* commissioned. A reader
+So on the `reader` build, which has no Matter node of its own, the credential is
+copied in from a board that *was* commissioned. A reader
 identity is pure key material (group identifier, signing key,
 GroupResolvingKey, and the phones' endpoint public keys) and none of it binds
 to a particular SoC. A second board carrying the same identity is the same
@@ -494,7 +632,7 @@ The provisioning-mode console is deliberately provisioning-only. `woz_uwb`'s
 `CONFIG_WOZ_UWB_SHELL=n`, because in this mode it would drive a radio that was
 never started.
 
-Watch this mode with `make monitor CDK_RTT_BUILD=build/cdk-reader` — probe-rs
+Watch this mode with `make monitor CDK_RTT_BUILD=build/cdk-reader`. probe-rs
 takes the control block address from the ELF, which is what J-Link's auto-search
 cannot find here (see "The console is RTT" above). The manual fallback, if you
 are ever without probe-rs, is `savebin <file>, <up-buffer addr>, 0x1000` from
@@ -537,7 +675,7 @@ Against the stages in `internal/dwm3001cdk-reader-plan.md`:
 
 | Stage | Check | | Evidence |
 |---|---|---|---|
-| 0 | Fits | done | 444,220 B flash / 126,888 B RAM with Matter and Thread |
+| 0 | Fits | done | 409,988 B flash / 125,012 B RAM with Matter and Thread |
 | 1 | BLE advert, iPhone enumerates 0xFFF2 | done | |
 | 2 | On-target EC self-test against Oberon | **done** | `ECDH self-test: PASS (NIST CAVP P-256 CDH count 0)` at every boot |
 | 3 | DW3110 DEV_ID, live ranging | **done** | `0xdeca0302` at boot; ranging against an iPhone from 565 cm to 0 cm |
@@ -545,10 +683,15 @@ Against the stages in `internal/dwm3001cdk-reader-plan.md`:
 | 5 | iPhone Wallet walk-up unlock | **done** | four in one session, 2026-08-02 |
 | 6 | >= 95% ranging success over 100 walk-ups | open | never run; the sample so far is single digits |
 
-Stage 0's figure is the Matter image, not the 236,768 B / 74,100 B the plan
-recorded: that was the reader alone, before the console, the Matter node and
-Thread. Stage 4 is marked done on a substitution — the ESP32-S3 initiator was a
-bench stand-in for a phone, and the phone did it, which is the stronger result.
+Two results the plan's stages predate, both on hardware and both above:
+**Apple Home commissions this board** and shows a live lock tile, and
+**an update travels over Bluetooth** and lands byte for byte identical.
+
+Stage 0's figure is the Matter image at this commit, not the 236,768 B /
+74,100 B the plan recorded: that was the reader alone, before the console, the
+Matter node and Thread. Stage 4 is marked done on a substitution, and on the
+stronger side of one: the ESP32-S3 initiator was a bench stand-in for a phone,
+and the phone did it.
 
 **What is left is stage 6, and it needs someone to walk 100 times.** Everything
 below it has been demonstrated on hardware; nothing above it has been

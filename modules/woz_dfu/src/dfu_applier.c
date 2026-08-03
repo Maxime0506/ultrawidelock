@@ -76,6 +76,9 @@ BUILD_ASSERT(sizeof(struct woz_dfu_hdr) == WOZ_DFU_HDR_LEN,
 BUILD_ASSERT(WOZ_DFU_HDR_CRC_LEN == WOZ_DFU_HDR_LEN - sizeof(uint32_t),
 	     "the header CRC must cover everything except itself");
 
+/**
+ * Context passed to detools patch applier callbacks holding the primary and staging flash areas.
+ */
 struct apply_ctx {
 	const struct flash_area *primary;
 	const struct flash_area *staging;
@@ -162,6 +165,10 @@ static int wbuf_flush_all(struct apply_ctx *c)
 	return 0;
 }
 
+/**
+ * Write bytes to the primary flash area during patch application by buffering them and flushing
+ * when the buffer reaches word size or on a discontiguous write; returns -1 on failure.
+ */
 static int mem_write(void *arg_p, uintptr_t dst, void *src_p, size_t size)
 {
 	struct apply_ctx *c = arg_p;
@@ -192,6 +199,10 @@ static int mem_write(void *arg_p, uintptr_t dst, void *src_p, size_t size)
 	return 0;
 }
 
+/**
+ * Read bytes from the primary flash area for a patch segment by flushing any buffered writes first
+ * and reading from the flash area; returns -1 on failure.
+ */
 static int mem_read(void *arg_p, void *dst_p, uintptr_t src, size_t size)
 {
 	struct apply_ctx *c = arg_p;
@@ -207,6 +218,10 @@ static int mem_read(void *arg_p, void *dst_p, uintptr_t src, size_t size)
 	return 0;
 }
 
+/**
+ * Erase flash pages for a patch segment by rounding the size up to page boundaries, validating
+ * alignment and bounds, and flushing any buffered writes first; returns -1 on failure.
+ */
 static int mem_erase(void *arg_p, uintptr_t addr, size_t size)
 {
 	struct apply_ctx *c = arg_p;
@@ -260,6 +275,10 @@ static int mem_erase(void *arg_p, uintptr_t addr, size_t size)
  * between erases, which is the write pattern nRF flash is happiest with.
  */
 
+/**
+ * Record or clear the patch application step counter in the staging area: step 0 erases the page,
+ * positive steps append a word, and out-of-range or negative steps fail; returns -1 on error.
+ */
 static int step_set(void *arg_p, int step)
 {
 	struct apply_ctx *c = arg_p;
@@ -298,6 +317,10 @@ static int step_set(void *arg_p, int step)
 		       : -1;
 }
 
+/**
+ * Retrieve the current step counter from the staging area by reading append-only words until an
+ * erased value is found; returns 0 on success.
+ */
 static int step_get(void *arg_p, int *step_p)
 {
 	struct apply_ctx *c = arg_p;
@@ -355,6 +378,10 @@ static void staging_consume(struct apply_ctx *c)
 
 /* ---- the apply ----------------------------------------------------------- */
 
+/**
+ * Stream a patch from the staging area into detools in chunks, applying it in place to the primary
+ * flash area, and flushing all buffered writes before finalization; returns detools result code.
+ */
 static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
 {
 	size_t left = hdr->patch_len;
@@ -395,6 +422,12 @@ static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
 	return detools_apply_patch_in_place_finalize(&s_patcher);
 }
 
+/**
+ * Apply a staged firmware delta to the primary flash partition during boot. Opens staging and
+ * primary areas, validates header and patch CRC, applies patch in resumable steps, and erases
+ * staging on completion or failure. Returns 0 always; actual success determined by primary image
+ * validity on next boot.
+ */
 static int woz_dfu_apply(void)
 {
 	struct woz_dfu_hdr hdr;

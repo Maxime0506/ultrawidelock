@@ -3,9 +3,57 @@
 Three layers: build options on the make command line, the Kconfig overlays
 behind them, and runtime consoles on the running reader.
 
-## Build options (nRF5340)
+Bare make targets mean the DWM3001CDK, the primary board. The nRF5340 DK is
+`nrf-` prefixed and the ESP32 is `esp-` prefixed. `make` with no target prints
+the grouped list, and each target's own comment block in `mk/*.mk` is the
+authority for its options.
 
-Set on the command line, e.g. `make build PRETTY=1 CHIP=dw3720`:
+## Build options (DWM3001CDK)
+
+Set on the command line, e.g. `make build RELEASE=1 SMP=1`:
+
+| Option | Effect |
+|---|---|
+| `PRISTINE=1` | from-scratch build. Needed whenever a `-D` flag below changes, because `-p auto` does not re-run CMake for those |
+| `LTO=0` | opt out of link-time optimisation, which is on by default and worth 41,084 B. Use it when a stack trace has to name every frame |
+| `RELEASE=1` | trade the 8 KB RTT ring for 7,168 B of RAM. A RAM lever only: codegen is identical either way |
+| `SMP=1` | add mcumgr over Bluetooth, which is what nRF Device Manager speaks. Costs 3,712 B of RAM, so it wants `RELEASE=1` beside it |
+| `DFU_LOG=1` | make the bootloader narrate what it does with a staged patch. Read it with MCUboot's own ELF, not the application's |
+| `CDK_BUILD=<dir>` | which build directory `flash`, `flash-erase` and `monitor` mean. Default `build/cdk-matter` |
+| `CDK_RTT_BUILD=<dir>` | point `monitor` at a different image without moving what the flash targets write |
+| `CDK_KEY=<path>` | the image-signing key. Must be absolute. Default `firmware/keys/mcuboot_ec_p256.pem`, created by `make dfu-key` |
+| `CDK_DEPLOYED=<hex>` | the record of what the board is running, which every delta is computed against |
+| `OTA_NAME=<name>` | the advertised name `make dfu` and `make ota-smp` connect to |
+| `FOTA_VERSION=<x.y.z>` | the version stamped into the file `make fota` leaves for a phone |
+
+`LTO=0` no longer fits the flash map: the image measures 446,380 B without it
+against a 433,664 B `app` partition, and the build fails rather than ships. See
+[`../firmware/pm_static.yml`](../firmware/pm_static.yml), which carries the
+derivation of every number in that map.
+
+`make fota` and `make ota-smp` set `SMP=1 RELEASE=1` themselves and build in
+their own directory. That is deliberate rather than a convenience: a board
+without SMP does not speak mcumgr at all, so inheriting a bare `make`'s defaults
+would build the wrong image and then diff the board against it.
+
+## Kconfig overlays (DWM3001CDK)
+
+They live beside the application in [`../firmware`](../firmware) and are
+selected by the options above:
+
+- `overlay-thread.conf`: always applied by `make build`. The Matter node,
+  OpenThread MTD/SED and SRP. `make reader` omits it, which is the whole
+  difference between the two images.
+- `overlay-release.conf`, `overlay-smp.conf`, `overlay-lto.conf`: `RELEASE=1`,
+  `SMP=1` and the default `LTO=1`. Ordered so that later files win.
+- `overlays/uwb-selftest.conf`: the `make selftest` image, which reads the
+  DW3110's `DEV_ID` at boot and stops.
+- `sysbuild/mcuboot.conf`: the bootloader's own configuration, which is a
+  separate image and does not inherit the application's.
+
+## Build options (nRF5340 DK)
+
+Set on the command line, e.g. `make nrf-build PRETTY=1 CHIP=dw3720`:
 
 | Option | Effect |
 |---|---|
@@ -22,7 +70,7 @@ Set on the command line, e.g. `make build PRETTY=1 CHIP=dw3720`:
 | `CIR=1` | compile CIA/CIR diagnostics; arm at runtime with `aliro cir on`, `aliro cir dump on`, or `aliro cir probe` |
 | `PRISTINE=1` | force a clean rebuild |
 
-## Kconfig overlays
+### Kconfig overlays (nRF5340 DK)
 
 They live in [`../ports/nrf5340dk/overlays`](../ports/nrf5340dk/overlays)
 and layer over the stock Nordic app; each file documents every setting it
@@ -56,19 +104,34 @@ held low. No C5 hardware validation is recorded.
 
 ## Runtime consoles
 
-Every firmware has a serial console; no reflash needed.
+Every firmware has a console, and none of them needs a reflash to use.
 
-**nRF5340** (`make nrf-term`): the `aliro` command group: `status`, `rx`,
+**DWM3001CDK** (`make monitor`): read-only, and it is RTT over `probe-rs`, not a
+serial port. There is no UART console on this board, because on a single-core
+part the DW3110's delayed-transmit reply window cannot afford a blocking console
+write. `make nrf-term` does not reach it. The Matter image has no shell at all,
+by configuration: `CONFIG_ALIRO_PROV_CONSOLE=n` and `CONFIG_SHELL=n`, so
+`aliro export` and friends do not exist there. Back up `settings_storage` over
+SWD instead of trying to export from it.
+
+**DWM3001CDK, `make reader` only**: hold **SW2 and tap RESET** for provisioning
+mode, which brings up a USB CDC-ACM console on the second USB port with the
+radios down. Commands: `aliro prov`, `aliro import <hex>`, `aliro export yes`,
+`aliro erase yes`. Full walkthrough in
+[`../firmware/README.md`](../firmware/README.md).
+
+**nRF5340 DK** (`make nrf-term`): the `aliro` command group: `status`, `rx`,
 `range`, `chip`, `selftest`, `log`, `frames`, `version`.
 
-**ESP32 Matter lock** (`make monitor`): `status`, `lock`, `unlock`, `codes`,
-`range`, `factoryreset`, `aliro <prov|trust|clear>`.
+**ESP32 Matter lock** (`make esp-monitor APP=matter-lock`): `status`, `lock`,
+`unlock`, `codes`, `range`, `factoryreset`, `aliro <prov|trust|clear>`.
 
-**ESP32 reader** (`make monitor`): `status`, `range`, `aliro-start` /
-`aliro-stop` (demo responder, no phone needed), `aliro-prov`, `aliro-trust`.
+**ESP32 reader** (`make esp-monitor APP=reader`): `status`, `range`,
+`aliro-start` / `aliro-stop` (demo responder, no phone needed), `aliro-prov`,
+`aliro-trust`.
 
 `aliro trust` / `aliro-trust` persist the last-seen credential to NVS;
-`factoryreset` and `flash-erase` drop it.
+`factoryreset` and `esp-flash-erase` drop it.
 
 ## Capture safety
 

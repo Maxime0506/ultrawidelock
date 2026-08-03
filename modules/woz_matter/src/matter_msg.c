@@ -14,28 +14,43 @@
 
 #include "matter_msg.h"
 
+/**
+ * Read a little-endian 16-bit unsigned integer from buffer p.
+ */
 static uint16_t rd16(const uint8_t *p)
 {
 	return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
 }
 
+/**
+ * Read a little-endian 32-bit unsigned integer from buffer p.
+ */
 static uint32_t rd32(const uint8_t *p)
 {
 	return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
 	       ((uint32_t)p[3] << 24);
 }
 
+/**
+ * Read a little-endian 64-bit unsigned integer by reading two 32-bit halves and combining them.
+ */
 static uint64_t rd64(const uint8_t *p)
 {
 	return (uint64_t)rd32(p) | ((uint64_t)rd32(p + 4) << 32);
 }
 
+/**
+ * Write a little-endian 16-bit unsigned integer v to buffer p.
+ */
 static void wr16(uint8_t *p, uint16_t v)
 {
 	p[0] = (uint8_t)v;
 	p[1] = (uint8_t)(v >> 8);
 }
 
+/**
+ * Write a little-endian 32-bit unsigned integer v to buffer p.
+ */
 static void wr32(uint8_t *p, uint32_t v)
 {
 	p[0] = (uint8_t)v;
@@ -44,6 +59,9 @@ static void wr32(uint8_t *p, uint32_t v)
 	p[3] = (uint8_t)(v >> 24);
 }
 
+/**
+ * Write a little-endian 64-bit unsigned integer by writing two 32-bit halves.
+ */
 static void wr64(uint8_t *p, uint64_t v)
 {
 	wr32(p, (uint32_t)v);
@@ -83,6 +101,10 @@ static size_t msg_header_len(uint8_t flags)
 	return n;
 }
 
+/**
+ * Calculate the encoded length of a protocol header given the exchange flags; adds 2 bytes if the V
+ * flag (vendor ID) is set and 4 bytes if the A flag (ack) is set.
+ */
 static size_t proto_header_len(uint8_t exchange_flags)
 {
 	size_t n = MATTER_PROTO_HEADER_MIN;
@@ -96,6 +118,10 @@ static size_t proto_header_len(uint8_t exchange_flags)
 	return n;
 }
 
+/**
+ * Return true if this message is encrypted; session ID 0 is unsecured unicast, all group sessions
+ * are secured regardless of ID.
+ */
 bool matter_msg_is_secure(const struct matter_msg_header *h)
 {
 	if (h == NULL) {
@@ -208,6 +234,10 @@ int matter_msg_header_encode(const struct matter_msg_header *h, uint8_t *buf, si
 	return MATTER_OK;
 }
 
+/**
+ * Initialize a counter to track message sequence numbers; the first value handed out will be one
+ * higher than the entropy seed to ensure it is never zero.
+ */
 void matter_counter_init(struct matter_counter *c, uint32_t entropy, enum matter_counter_kind kind)
 {
 	if (c == NULL) {
@@ -220,6 +250,10 @@ void matter_counter_init(struct matter_counter *c, uint32_t entropy, enum matter
 	c->kind = (uint8_t)kind;
 }
 
+/**
+ * Retrieve the next counter value and increment it; for session counters, returns MATTER_E_STATE if
+ * the counter has wrapped to UINT32_MAX to prevent AEAD nonce reuse.
+ */
 int matter_counter_next(struct matter_counter *c, uint32_t *out)
 {
 	if (c == NULL || out == NULL) {
@@ -237,6 +271,11 @@ int matter_counter_next(struct matter_counter *c, uint32_t *out)
 	return MATTER_OK;
 }
 
+/**
+ * Decode a Matter protocol exchange header from a buffer: extract flags, opcode, exchange ID, and
+ * conditional fields (vendor ID, protocol ID, ack counter). Calculate consumed bytes and validate
+ * truncation. Return an error code.
+ */
 int matter_proto_header_decode(const uint8_t *buf, size_t len, struct matter_proto_header *h,
 			       size_t *consumed)
 {
@@ -279,6 +318,10 @@ int matter_proto_header_decode(const uint8_t *buf, size_t len, struct matter_pro
 	return MATTER_OK;
 }
 
+/**
+ * Encode a Matter protocol exchange header into a buffer with the given flags, opcode, exchange ID,
+ * and conditional fields (vendor ID, protocol ID, ack counter). Return an error code.
+ */
 int matter_proto_header_encode(const struct matter_proto_header *h, uint8_t *buf, size_t cap,
 			       size_t *written)
 {

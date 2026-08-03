@@ -10,16 +10,23 @@ flowchart TD
 
 ## API
 
+### `_copy_tree(source: Path, destination: Path) -> None`
+`integration/homeassistant/tools/package_component.py:18`
+
+Recursively copy source directory to destination, excluding __pycache__, *.pyc, *.pyo.
+
+**called by** `build_archive`
+
 ### `build_archive(output: Path) -> Path`
-`integration/homeassistant/tools/package_component.py:26`
+`integration/homeassistant/tools/package_component.py:27`
 
 Create an archive rooted at ``custom_components/openaliro``.
 
 **called by** `main`  ·  **calls** `_copy_tree`
 
-<details><summary>Undocumented (2)</summary>
+### `main() -> int`
+`integration/homeassistant/tools/package_component.py:45`
 
-- `_copy_tree`
-- `main`
+Parse command-line arguments and build the Home Assistant component archive.
 
-</details>
+**calls** `build_archive`

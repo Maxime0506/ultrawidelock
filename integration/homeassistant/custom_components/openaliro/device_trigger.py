@@ -18,6 +18,7 @@ TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol
 
 
 def _openaliro_identifier(hass: HomeAssistant, device_id: str) -> str:
+    """Look up the OpenAliro domain identifier for a Home Assistant device by ID; raise DeviceNotFound if the device does not exist or is not an OpenAliro device."""
     device = dr.async_get(hass).async_get(device_id)
     if device is None:
         raise DeviceNotFound(f"{device_id} is not valid")

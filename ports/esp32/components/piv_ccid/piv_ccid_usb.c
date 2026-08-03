@@ -107,6 +107,10 @@ static const char *s_string_descriptors[] = {
 	"PIV CCID",
 };
 
+/**
+ * USB CCID adapter state: holds protocol handler, host port, and three endpoint addresses (OUT, IN,
+ * INTERRUPT).
+ */
 struct ccid_usb {
 	struct piv_ccid protocol;
 	uint8_t rhport;
@@ -122,6 +126,10 @@ CFG_TUD_MEM_SECTION static uint8_t s_rx[PIV_CCID_MAX_MESSAGE]
 CFG_TUD_MEM_SECTION static uint8_t s_tx[PIV_CCID_MAX_MESSAGE]
 	CFG_TUD_MEM_ALIGN;
 
+/**
+ * Initialize CCID USB state: clear struct and set up PIV protocol handler with identity backend and
+ * PIN required.
+ */
 static void ccid_init(void)
 {
 	memset(&s_usb, 0, sizeof(s_usb));
@@ -140,6 +148,11 @@ static void ccid_reset(uint8_t rhport)
 	s_usb.rhport = rhport;
 }
 
+/**
+ * Open CCID interface: validate interface descriptor, iterate endpoints to locate OUT (command), IN
+ * (response), and INTERRUPT (notification) endpoints, and arm the OUT endpoint for reception.
+ * Returns descriptor length consumed or 0 on failure (missing endpoints or transfer setup failure).
+ */
 static uint16_t ccid_open(uint8_t rhport,
 			  const tusb_desc_interface_t *interface,
 			  uint16_t max_len)
@@ -188,6 +201,10 @@ static uint16_t ccid_open(uint8_t rhport,
 	return (uint16_t)(descriptor - start);
 }
 
+/**
+ * Handle USB control requests for CCID class: process ABORT, GET_CLOCK_FREQUENCIES, and
+ * GET_DATA_RATES requests. Returns false if request is not CCID-related, true otherwise.
+ */
 static bool ccid_control(uint8_t rhport, uint8_t stage,
 			 const tusb_control_request_t *request)
 {
@@ -221,6 +238,11 @@ static bool ccid_control(uint8_t rhport, uint8_t stage,
 	}
 }
 
+/**
+ * Handle USB bulk transfer completion: on OUT endpoint success call piv_ccid_process and send
+ * response on IN; on error retry OUT reception; arm next reception on IN completion. Returns true
+ * to keep processing, false to stall.
+ */
 static bool ccid_transfer(uint8_t rhport, uint8_t endpoint,
 			  xfer_result_t result, uint32_t transferred)
 {
@@ -261,6 +283,10 @@ static const usbd_class_driver_t s_ccid_driver = {
 	.sof = NULL,
 };
 
+/**
+ * Retrieve the CCID class driver callback table for TinyUSB: caller must provide non-null
+ * driver_count output parameter. Returns pointer to single CCID driver descriptor.
+ */
 const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count)
 {
 	if (driver_count == NULL) {
@@ -270,6 +296,11 @@ const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count)
 	return &s_ccid_driver;
 }
 
+/**
+ * Start PIV CCID over USB: initialize identity, extract MAC address, format serial string,
+ * configure and install TinyUSB driver with enlarged task stack (required for PSA/mbedTLS signing
+ * operations). Returns ESP_OK or error code from initialization steps.
+ */
 esp_err_t piv_ccid_usb_start(void)
 {
 	uint8_t mac[6];

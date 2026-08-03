@@ -40,7 +40,7 @@ credential, so the initiator's own throwaway keypair is enough. On the nRF that
 means building with our stack rather than the prebuilt one:
 
 ```sh
-make build ALIRO_SOURCE=1 NFC=none
+make nrf-build ALIRO_SOURCE=1 NFC=none
 ```
 
 `NFC=none` is not required, but the initiator never taps, and it removes the NFC

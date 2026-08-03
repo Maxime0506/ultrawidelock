@@ -84,6 +84,10 @@ struct matter_session_params {
 	bool have_active;
 };
 
+/**
+ * PASE PBKDFParamRequest message holding initiator random, session ID, passcode ID, and optional
+ * PBKDF session parameters.
+ */
 struct matter_pase_pbkdf_req {
 	uint8_t initiator_random[MATTER_PASE_RANDOM_LEN];
 	uint16_t initiator_session_id;
@@ -92,6 +96,10 @@ struct matter_pase_pbkdf_req {
 	struct matter_session_params params;
 };
 
+/**
+ * PASE PBKDFParamResponse message holding initiator and responder randoms, session ID, and optional
+ * PBKDF parameters (iterations and salt) if the initiator did not already have them.
+ */
 struct matter_pase_pbkdf_resp {
 	uint8_t initiator_random[MATTER_PASE_RANDOM_LEN];
 	uint8_t responder_random[MATTER_PASE_RANDOM_LEN];
@@ -110,15 +118,24 @@ struct matter_pase_pbkdf_resp {
 	struct matter_session_params params;
 };
 
+/**
+ * PASE Sigma1 message payload holding the initiator's ephemeral public key point.
+ */
 struct matter_pase_pake1 {
 	uint8_t pa[MATTER_PASE_POINT_LEN];
 };
 
+/**
+ * PASE Sigma2 message payload holding the responder's ephemeral public key point and hash.
+ */
 struct matter_pase_pake2 {
 	uint8_t pb[MATTER_PASE_POINT_LEN];
 	uint8_t cb[MATTER_PASE_HASH_LEN];
 };
 
+/**
+ * PASE Sigma3 message payload holding the initiator's hash for mutual authentication.
+ */
 struct matter_pase_pake3 {
 	uint8_t ca[MATTER_PASE_HASH_LEN];
 };

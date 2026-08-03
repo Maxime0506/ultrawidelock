@@ -23,6 +23,10 @@
 
 int aliro_device_selftest(void);
 
+/**
+ * Run the on-target Aliro device EC self-test: initialize PSA, run the device self-test, and print
+ * PASS or FAIL with return code.
+ */
 int main(void)
 {
 	printf("\n=== on-target Aliro device EC self-test (nRF5340, nrf_security PSA) ===\n");

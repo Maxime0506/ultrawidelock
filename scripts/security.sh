@@ -42,9 +42,12 @@ fi
 BASE="${SECURITY_BASE:-}"
 HEAD_REF="${SECURITY_HEAD:-HEAD}"
 
+# Return true if the command exists in PATH, false otherwise.
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Print a bold section header with label and dim reset, preceded by a newline.
 hdr() { printf '\n%s── %s %s%s\n' "$BOLD" "$1" "${DIM}" "$RESET"; }
+# Print a missing-tool error, note that a missing gate is a failed gate, and return 1.
 missing() {
 	printf '  %s%s%s %s is not installed — %s\n' "$RED" "$CRS" "$RESET" "$1" "$2"
 	printf '      A gate that cannot run is a gate that did not pass. CI runs it regardless.\n'
@@ -334,7 +337,9 @@ for dep in d.get("project", {}).get("dependencies", []):
 # runs a harness under valgrind), but they dispatch through here so there is still one entry
 # point that CI, `make security` and verify.sh all share.
 gate_web() { scripts/security-web.sh; }
+# Run the ESP workspace security gate via scripts/security-workspace.sh esp.
 gate_esp() { scripts/security-workspace.sh esp; }
+# Run the attestation security gate via scripts/security-attest.sh workflow.
 gate_attest() { scripts/security-attest.sh workflow; }
 
 # ct is the one gate that can report neither pass nor fail. There is no valgrind for

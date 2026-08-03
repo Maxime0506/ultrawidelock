@@ -23,12 +23,13 @@ Guides on the doc site: [setup and troubleshooting][guide] for running it, and
 Separate from the bridge, `HA=1` opts into a firmware variant that exposes the
 same information over Matter instead of over the console: a DoorLock
 `LockOperation` event, a UWB-proximity occupancy endpoint, and
-`CONFIG_LOCK_PASS_CREDENTIALS_TO_SET_LOCK_STATE`. It needs both halves, because
-the bootstrap step is what applies the matching data-model patches:
+`CONFIG_LOCK_PASS_CREDENTIALS_TO_SET_LOCK_STATE`. The data-model patches live in
+`ports/nrf5340dk/patches/`, so this is an nRF5340 DK variant only. It needs both
+halves, because the bootstrap step is what applies those patches:
 
 ```
 make bootstrap HA=1
-make build HA=1
+make nrf-build HA=1
 ```
 
 **Not hardware-validated.** This has never been run on a board. It changes the

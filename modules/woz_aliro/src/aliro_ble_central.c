@@ -18,6 +18,10 @@
 
 #include <string.h>
 
+/**
+ * Parse a 26-byte Aliro 0xFFF2 service data payload into the struct: verify the service UUID and
+ * extract flags, TX power, group/sub IDs, expiry, and tag.
+ */
 int aliro_ble_central_parse_adv(const uint8_t *svc_data, size_t len,
 				struct aliro_ble_central_adv *out)
 {
@@ -42,6 +46,10 @@ int aliro_ble_central_parse_adv(const uint8_t *svc_data, size_t len,
 	return 0;
 }
 
+/**
+ * Return true if the advertisement group_id and sub_id fields match the first 8 and last 2 bytes of
+ * the given 32-byte reader_id, false otherwise.
+ */
 int aliro_ble_central_adv_matches(const struct aliro_ble_central_adv *adv,
 				  const uint8_t reader_id[32])
 {
@@ -52,6 +60,10 @@ int aliro_ble_central_adv_matches(const struct aliro_ble_central_adv *adv,
 	       memcmp(adv->sub_id, reader_id + 16, 2) == 0;
 }
 
+/**
+ * Parse a BLE central read response payload containing SPSM, version list, and features; return 0
+ * on success or -1 if the payload is malformed or truncated.
+ */
 int aliro_ble_central_parse_read_payload(const uint8_t *payload, size_t len,
 					 struct aliro_ble_central_peer *out)
 {
@@ -90,6 +102,11 @@ int aliro_ble_central_parse_read_payload(const uint8_t *payload, size_t len,
 	return 0;
 }
 
+/**
+ * Serialize all BLE versions from the peer plus the selected version as big-endian 2-byte pairs
+ * into the output buffer, and return 0 on success or -1 if output is too small or the peer is
+ * invalid.
+ */
 int aliro_ble_central_blesk_salt(const struct aliro_ble_central_peer *peer, uint16_t selected,
 				 uint8_t *out, size_t cap, size_t *out_len)
 {

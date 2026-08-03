@@ -42,6 +42,13 @@ static int fail(struct matter_pase_responder *r, int rc, uint8_t *out, size_t ca
 	return rc;
 }
 
+/**
+ * Encode a Matter secure channel status report with protocol result code.
+ * Wraps result code (success or failure) in TLV with general status, vendor/protocol identifiers
+ * all zero.
+ * Returns MATTER_E_INVAL if out or out_len is NULL; returns MATTER_E_NOSPACE if cap is less than
+ * MATTER_SC_STATUS_LEN.
+ */
 int matter_sc_status_report(uint16_t protocol_code, uint8_t *out, size_t cap, size_t *out_len)
 {
 	uint16_t general;
@@ -70,6 +77,13 @@ int matter_sc_status_report(uint16_t protocol_code, uint8_t *out, size_t cap, si
 	return MATTER_OK;
 }
 
+/**
+ * Initialize a PASE responder state machine with verifier and entropy.
+ * Validates PBKDF salt and iteration count against protocol bounds before storing; derives y value
+ * from entropy.
+ * Returns MATTER_E_INVAL if any parameter is NULL, or if salt_len or iterations fall outside
+ * allowed ranges.
+ */
 int matter_pase_responder_init(struct matter_pase_responder *r,
 			       const struct matter_pase_verifier *v, uint16_t local_session_id,
 			       const uint8_t responder_random[MATTER_PASE_RANDOM_LEN],
@@ -241,6 +255,13 @@ static int on_pake3(struct matter_pase_responder *r, const uint8_t *payload, siz
 	return MATTER_OK;
 }
 
+/**
+ * Process one inbound PASE message and generate the appropriate response.
+ * Dispatches by opcode (PBKDFParamRequest, Pake1, Pake3) to the corresponding state handler; enters
+ * terminal failure state for out-of-sequence messages.
+ * Returns MATTER_E_INVAL if r, payload, out, out_opcode is NULL; returns MATTER_E_NOSPACE if cap is
+ * less than MATTER_PASE_REPLY_MAX; returns MATTER_E_STATE if opcode does not match current state.
+ */
 int matter_pase_responder_recv(struct matter_pase_responder *r, uint8_t opcode,
 			       const uint8_t *payload, size_t len, uint8_t *out, size_t cap,
 			       size_t *out_len, uint8_t *out_opcode)

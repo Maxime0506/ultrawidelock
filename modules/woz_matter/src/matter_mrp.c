@@ -53,6 +53,10 @@ static bool reached(uint32_t now, uint32_t deadline)
 	return elapsed(now, deadline) >= 0;
 }
 
+/**
+ * Compute the MRP backoff delay in milliseconds given a base interval, send count, and random
+ * jitter, applying exponential backoff with saturation at the protocol maximum.
+ */
 uint32_t matter_mrp_backoff_ms(uint32_t base_ms, uint8_t send_count, uint8_t jitter)
 {
 	uint64_t t;
@@ -87,6 +91,9 @@ uint32_t matter_mrp_backoff_ms(uint32_t base_ms, uint8_t send_count, uint8_t jit
 	return (uint32_t)t;
 }
 
+/**
+ * Initialize an MRP replay detection window to accept the first message.
+ */
 void matter_mrp_window_init(struct matter_mrp_window *w)
 {
 	if (w == NULL) {
@@ -97,6 +104,10 @@ void matter_mrp_window_init(struct matter_mrp_window *w)
 	w->synced = false;
 }
 
+/**
+ * Check whether a message counter is a replay, a new message, or too old to verify against the
+ * sliding window; does not update the window.
+ */
 int matter_mrp_window_check(const struct matter_mrp_window *w, uint32_t counter)
 {
 	uint32_t behind;
@@ -127,6 +138,10 @@ int matter_mrp_window_check(const struct matter_mrp_window *w, uint32_t counter)
 	return MATTER_E_DUP;
 }
 
+/**
+ * Update the sliding window to mark a message counter as seen and advance the high-water mark;
+ * handles wrapping and slide-off of old counters.
+ */
 void matter_mrp_window_commit(struct matter_mrp_window *w, uint32_t counter)
 {
 	uint32_t ahead;
@@ -173,6 +188,9 @@ void matter_mrp_window_commit(struct matter_mrp_window *w, uint32_t counter)
 	w->max_counter = counter;
 }
 
+/**
+ * Initialize an MRP state machine with a base retransmission interval in milliseconds.
+ */
 void matter_mrp_init(struct matter_mrp *m, uint32_t base_ms)
 {
 	if (m == NULL) {
@@ -188,6 +206,10 @@ void matter_mrp_init(struct matter_mrp *m, uint32_t base_ms)
 	m->ack_pending = false;
 }
 
+/**
+ * Arm MRP transmission tracking for a datagram counter: record the counter and send count, compute
+ * the backoff delay with SENDER_BOOST, and store the time due.
+ */
 int matter_mrp_arm(struct matter_mrp *m, uint32_t counter, uint32_t now_ms, uint8_t jitter)
 {
 	uint64_t delay;
@@ -219,6 +241,10 @@ int matter_mrp_arm(struct matter_mrp *m, uint32_t counter, uint32_t now_ms, uint
 	return MATTER_OK;
 }
 
+/**
+ * Mark an in-flight message as acknowledged if the counter matches; returns MATTER_E_STATE if no
+ * message is pending or MATTER_E_INVAL if the counter does not match.
+ */
 int matter_mrp_on_ack(struct matter_mrp *m, uint32_t counter)
 {
 	if (m == NULL) {
@@ -238,6 +264,10 @@ int matter_mrp_on_ack(struct matter_mrp *m, uint32_t counter)
 	return MATTER_OK;
 }
 
+/**
+ * Record receipt of a reliable message and arm the standalone acknowledgment timeout; a second
+ * reliable message before the first ack goes out replaces the owed counter.
+ */
 void matter_mrp_on_reliable_recv(struct matter_mrp *m, uint32_t counter, uint32_t now_ms)
 {
 	if (m == NULL) {
@@ -251,6 +281,10 @@ void matter_mrp_on_reliable_recv(struct matter_mrp *m, uint32_t counter, uint32_
 	m->ack_pending = true;
 }
 
+/**
+ * Retrieve and clear the pending acknowledgment counter if one is due; returns false if no
+ * acknowledgment is pending.
+ */
 bool matter_mrp_take_ack(struct matter_mrp *m, uint32_t *counter)
 {
 	if (m == NULL || !m->ack_pending) {
@@ -263,6 +297,10 @@ bool matter_mrp_take_ack(struct matter_mrp *m, uint32_t *counter)
 	return true;
 }
 
+/**
+ * Poll for the next MRP action to take: retransmit a message, send a standalone acknowledgment, or
+ * remain idle; returns MATTER_MRP_GIVE_UP if max retransmissions reached.
+ */
 enum matter_mrp_action matter_mrp_poll(struct matter_mrp *m, uint32_t now_ms, uint32_t *counter)
 {
 	if (m == NULL) {
@@ -289,6 +327,10 @@ enum matter_mrp_action matter_mrp_poll(struct matter_mrp *m, uint32_t now_ms, ui
 	return MATTER_MRP_IDLE;
 }
 
+/**
+ * Return the next MRP deadline and whether any retransmission or acknowledgment is pending; used to
+ * schedule the next poll.
+ */
 bool matter_mrp_next_deadline(const struct matter_mrp *m, uint32_t *out_ms)
 {
 	uint32_t best;

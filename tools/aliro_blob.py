@@ -49,6 +49,7 @@ DEV_SIGN_PRIV = bytes.fromhex(
 
 
 class BadBlob(Exception):
+    """Exception raised when a blob structure is invalid or cannot be parsed."""
     pass
 
 
@@ -136,6 +137,7 @@ def check(f):
 
 
 def report(f, total, args, where=""):
+    """Print a structured report of an APRV blob to stdout showing version, identity, reader ID, signing key, GRK, trust anchors, and unlock verdict."""
     priv_id = hashlib.sha256(f["sign_priv"]).hexdigest()[:16]
     print(f"APRV v{f['version']}, {total} bytes{where}")
     print(f"  identity          {'DEV (built-in)' if f['is_dev'] else 'provisioned'}")

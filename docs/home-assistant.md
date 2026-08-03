@@ -30,7 +30,7 @@ expose.
 ## Before you start
 
 * A board running this firmware. The bridge reads the `aliro` console, which is
-  built whenever `CONFIG_SHELL` is on, so a standard `make build` is enough.
+  built whenever `CONFIG_SHELL` is on, so a standard `make nrf-build` is enough.
   `HA=1` is a separate thing: it layers Matter credential attribution for
   multi-admin setups and changes nothing the bridge reads.
 * Home Assistant with the Mosquitto broker add-on installed.
@@ -140,7 +140,7 @@ that is not talking.
 flashed with something else opens fine and returns no bytes, which looks
 identical to a cable problem. Comparing the vector table against the local
 build settles it: `nrfjprog --memrd 0x0 --n 16` against the first record of
-`build/merged.hex`.
+`build/nrf5340dk/merged.hex`.
 
 **Distance stays unknown.** Readings only exist during an active UWB ranging
 session. An NFC tap alone runs no ranging, so nothing is published. Tap with

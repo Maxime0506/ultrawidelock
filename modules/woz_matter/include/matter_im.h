@@ -346,6 +346,10 @@ typedef size_t (*matter_im_list_endpoints_fn)(void *ctx, const uint16_t **out);
 typedef uint8_t (*matter_im_write_fn)(void *ctx, const struct matter_im_path *path,
 				      const uint8_t *data, size_t data_len);
 
+/**
+ * Callback table for the Matter interaction model server, defining functions to query attribute
+ * status, read values, list endpoints and clusters, and handle write and command operations.
+ */
 struct matter_im_server {
 	matter_im_status_fn status;
 	matter_im_value_fn value;

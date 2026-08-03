@@ -238,6 +238,10 @@ int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *
 	return rc;
 }
 
+/**
+ * Sign a 32-byte SHA-256 hash using a P-256 private key via PSA Crypto; return 0 on success, -1 if
+ * key import, signing, or output length validation fails.
+ */
 int aliro_ecdsa_p256_sign_hash(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t hash[32],
 			       uint8_t sig[ALIRO_P256_SIG])
 {

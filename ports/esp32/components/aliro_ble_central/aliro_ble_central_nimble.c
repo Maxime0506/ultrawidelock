@@ -82,6 +82,9 @@ static struct {
 
 static void start_scan(void);
 
+/**
+ * Clear the peer state structure and reset the connection handle to BLE_HS_CONN_HANDLE_NONE.
+ */
 static void reset_peer(void)
 {
 	memset(&s_peer, 0, sizeof(s_peer));
@@ -102,6 +105,10 @@ static void abandon(const char *why, int rc)
 
 /* ---- L2CAP CoC client ---- */
 
+/**
+ * Allocate and arm an RX buffer on the L2CAP CoC channel. Return BLE_HS_ENOMEM if no buffers are
+ * available, otherwise return the ble_l2cap_recv_ready result.
+ */
 static int coc_arm_rx(struct ble_l2cap_chan *chan)
 {
 	struct os_mbuf *rx = os_mbuf_get_pkthdr(&s_coc_mbuf_pool, 0);
@@ -180,6 +187,10 @@ static void coc_connect(void)
 
 /* ---- GATT discovery chain ---- */
 
+/**
+ * Callback when the device-version characteristic write completes. On success, open the L2CAP CoC
+ * channel to the SPSM previously read. On error, abandon this peer.
+ */
 static int on_devver_write(uint16_t conn_handle, const struct ble_gatt_error *error,
 			   struct ble_gatt_attr *attr, void *arg)
 {
@@ -194,6 +205,12 @@ static int on_devver_write(uint16_t conn_handle, const struct ble_gatt_error *er
 	return 0;
 }
 
+/**
+ * GATT read callback for the reader SPSM characteristic: parse the flat payload to extract SPSM,
+ * supported versions, and features. Verify that the peer publishes the selected version. Write the
+ * selected version and a features byte to the device-version characteristic. On any error, abandon
+ * this peer.
+ */
 static int on_spsm_read(uint16_t conn_handle, const struct ble_gatt_error *error,
 			struct ble_gatt_attr *attr, void *arg)
 {
@@ -253,6 +270,11 @@ static int on_spsm_read(uint16_t conn_handle, const struct ble_gatt_error *error
 	return 0;
 }
 
+/**
+ * GATT characteristic discovery callback: record the val_handle of the SPSM and device-version
+ * characteristics. On discovery completion, read the SPSM characteristic. On error, abandon this
+ * peer and return to scanning.
+ */
 static int on_chr_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 		       const struct ble_gatt_chr *chr, void *arg)
 {
@@ -283,6 +305,11 @@ static int on_chr_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 	return 0;
 }
 
+/**
+ * GATT service discovery callback: record the service handle range for the 0xFFF2 Aliro service. On
+ * discovery completion, discover all characteristics within that range. On error, abandon this
+ * peer.
+ */
 static int on_svc_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 		       const struct ble_gatt_svc *service, void *arg)
 {
@@ -411,6 +438,10 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 	}
 }
 
+/**
+ * Configure and start BLE GAP active scanning with duplicate filtering disabled (the dynamic tag
+ * changes). Return to scanning after connection or on error.
+ */
 static void start_scan(void)
 {
 	struct ble_gap_disc_params params;
@@ -449,11 +480,18 @@ static void on_sync(void)
 	start_scan();
 }
 
+/**
+ * Log that the NimBLE stack has reset and include the reset reason code.
+ */
 static void on_reset(int reason)
 {
 	ESP_LOGW(TAG, "NimBLE reset; reason=%d", reason);
 }
 
+/**
+ * Run the NimBLE host event loop in the current thread until shutdown, then deinitialize the
+ * FreeRTOS integration.
+ */
 static void host_task(void *param)
 {
 	(void)param;
@@ -461,6 +499,10 @@ static void host_task(void *param)
 	nimble_port_freertos_deinit();
 }
 
+/**
+ * Initialize the mbuf pool for CoC data: create a memory pool and mbuf pool with the configured
+ * buffer count and MTU. Return 0 on success or -1 if either pool initialization fails.
+ */
 static int coc_pools_init(void)
 {
 	int rc = os_mempool_init(&s_coc_mempool, ALIRO_COC_BUF_COUNT, ALIRO_L2CAP_MTU, s_coc_mem,
@@ -518,6 +560,11 @@ int aliro_ble_central_start(const struct aliro_ble_central_config *cfg)
 	return 0;
 }
 
+/**
+ * Send data to the peer over the L2CAP CoC: allocate an mbuf, append the data, and submit it via
+ * ble_l2cap_send. Return 0 on success (stack owns the buffer or it is queued); return -1 on failure
+ * (buffer freed on error).
+ */
 int aliro_ble_central_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0 || s_peer.chan == NULL || s_peer.conn_handle != conn_handle) {

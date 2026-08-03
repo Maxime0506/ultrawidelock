@@ -1,14 +1,18 @@
-# nRF5340 DK (primary target)
+# nRF5340 DK (the NFC target)
 
-The primary build: NFC tap + UWB approach unlock. The hardware path has been validated
-end to end with Nordic's Aliro binary; the in-tree source stack is now the default and
-must pass [`docs/hardware-validation.md`](../../docs/hardware-validation.md) before the
-next release. Build it from the repository root:
+The second port, and the only board in this tree that unlocks on a tap: NFC tap + UWB
+approach unlock. The primary board is now the DWM3001CDK
+([`firmware/README.md`](../../firmware/README.md)), which does approach unlock with no
+NFC front end at all. The hardware path here has been validated end to end with Nordic's
+Aliro binary; the in-tree source stack is now the default and must pass
+[`docs/hardware-validation.md`](../../docs/hardware-validation.md) before the next
+release. Build it from the repository root, where every nRF5340 DK target is prefixed
+`nrf-`:
 
 ```bash
 make bootstrap     # fetch NCS + the Nordic add-on (~6.5 GB) into ./workspace
-make build         # -> build/merged.hex
-make flash
+make nrf-build     # -> build/nrf5340dk/merged.hex
+make nrf-flash
 ```
 
 ## Build variants
@@ -47,8 +51,8 @@ the target is assembled in layers, from pristine upstream up:
    pin map), `woz-aliro.conf` (Kconfig for the UWB responder + Aliro), `pm_static.yml`
    (flash layout), plus reader and diagnostic layers (`st25r.conf`,
    `pn532.overlay`, `woz-pretty.conf`, `woz-ha.conf`, `diag-cirdiag.conf`,
-   `diag-latency.conf`) that `make build` options select.
-4. `make build` (see [`scripts/build-nrf5340dk.sh`](../../scripts/build-nrf5340dk.sh)) drives `west build`
+   `diag-latency.conf`) that `make nrf-build` options select.
+4. `make nrf-build` (see [`scripts/build-nrf5340dk.sh`](../../scripts/build-nrf5340dk.sh)) drives `west build`
    with those overlays and injects the in-repo engine via `ZEPHYR_EXTRA_MODULES`
    (`modules/woz_uwb`, `modules/woz_aliro_stack`, `modules/woz_aliro_ecp`,
    `modules/woz_nfc`, `deps/dw3000`). The in-tree Aliro stack is the default and

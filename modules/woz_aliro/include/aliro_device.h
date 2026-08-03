@@ -117,6 +117,11 @@ enum aliro_device_phase {
 	ALIRO_DEV_FAILED,
 };
 
+/**
+ * Aliro device: access credential (private scalar and public point), reader identity and
+ * verification key, per-transaction ephemeral and channel state, BLE-SK salt, and transaction
+ * phase.
+ */
 struct aliro_device {
 	/* identity + the reader this device is provisioned to talk to */
 	uint8_t cred_priv[32];        /* Access Credential private scalar */

@@ -29,15 +29,29 @@ device and there is no reason to scatter it.
 
 ## API
 
+### `on_curve(pt)`
+`scripts/spake2p_verifier.py:41`
+
+Test whether a point satisfies the secp256r1 curve equation.
+
+**called by** `derive`
+
+### `add(p1, p2)`
+`scripts/spake2p_verifier.py:49`
+
+Add two points on the secp256r1 elliptic curve using the tangent-and-chord method; return None for the point at infinity.
+
+**called by** `mul`
+
 ### `derive(passcode, salt, iterations)`
-`scripts/spake2p_verifier.py:76`
+`scripts/spake2p_verifier.py:78`
 
 The 97-byte verifier: w0 (32) then L (65, uncompressed).
 
 **called by** `from_config`, `main`  ·  **calls** `mul`, `on_curve`
 
 ### `manual_code(discriminator, passcode)`
-`scripts/spake2p_verifier.py:120`
+`scripts/spake2p_verifier.py:122`
 
 The 11-digit manual pairing code, short form (no vendor/product id).
 
@@ -49,14 +63,14 @@ code, which is why a commissioner needs nothing else to find the device.
 **called by** `from_config`, `main`
 
 ### `read_config(path)`
-`scripts/spake2p_verifier.py:139`
+`scripts/spake2p_verifier.py:141`
 
 The five symbols the setup code needs, out of a Zephyr .config.
 
 **called by** `from_config`
 
 ### `from_config(path)`
-`scripts/spake2p_verifier.py:167`
+`scripts/spake2p_verifier.py:169`
 
 Print the setup code for an image ALREADY BUILT, and prove it first.
 
@@ -69,11 +83,15 @@ typo -- so it is an error, not a warning.
 
 **called by** `main`  ·  **calls** `derive`, `manual_code`, `read_config`
 
-<details><summary>Undocumented (4)</summary>
+### `main()`
+`scripts/spake2p_verifier.py:204`
 
-- `on_curve`
-- `add`
+Derive the 97-byte SPAKE2+ verifier (w0 then L) from passcode, salt and iteration count; print Matter Kconfig with setup code and print the verifier hex; if --from-config is set, read a built .config, verify its SPAKE2+ constants, and print the setup code.
+
+**calls** `derive`, `from_config`, `manual_code`
+
+<details><summary>Undocumented (1)</summary>
+
 - `mul`
-- `main`
 
 </details>

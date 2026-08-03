@@ -29,6 +29,9 @@ static const uint8_t s_t1_parameters[] = {
 	0x00, /* NAD */
 };
 
+/**
+ * Read a little-endian 32-bit unsigned integer from a 4-byte buffer.
+ */
 static uint32_t get_le32(const uint8_t *p)
 {
 	return (uint32_t)p[0] |
@@ -37,6 +40,9 @@ static uint32_t get_le32(const uint8_t *p)
 	       ((uint32_t)p[3] << 24);
 }
 
+/**
+ * Write a little-endian 32-bit unsigned integer into a 4-byte buffer.
+ */
 static void put_le32(uint8_t *p, uint32_t value)
 {
 	p[0] = (uint8_t)value;
@@ -45,6 +51,10 @@ static void put_le32(uint8_t *p, uint32_t value)
 	p[3] = (uint8_t)(value >> 24);
 }
 
+/**
+ * Encode card status byte reflecting current power state: CCID_STATUS_ICC_ACTIVE if powered, else
+ * CCID_STATUS_ICC_INACTIVE.
+ */
 static uint8_t icc_status(const struct piv_ccid *ccid)
 {
 	return ccid->powered ? CCID_STATUS_ICC_ACTIVE :
@@ -90,6 +100,10 @@ static int slot_status(const struct piv_ccid *ccid, uint8_t slot, uint8_t seq,
 		     NULL, 0, response, response_cap, response_len);
 }
 
+/**
+ * Initialize PIV CCID protocol handler: clear struct, register APDU backend and context, set PIN
+ * requirement flag.
+ */
 void piv_ccid_init(struct piv_ccid *ccid,
 		   const struct piv_apdu_backend *backend, void *backend_ctx,
 		   bool pin_required)

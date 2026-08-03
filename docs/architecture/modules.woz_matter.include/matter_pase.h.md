@@ -26,12 +26,29 @@ ships in every image here.
 MRP parameters a peer advertises for itself. Absent means "use the defaults",
 which is why presence is tracked rather than defaulted here.
 
-<details><summary>Undocumented (5)</summary>
+### `struct matter_pase_pbkdf_req`
+`modules/woz_matter/include/matter_pase.h:91`
 
-- `matter_pase_pbkdf_req`
-- `matter_pase_pbkdf_resp`
-- `matter_pase_pake1`
-- `matter_pase_pake2`
-- `matter_pase_pake3`
+PASE PBKDFParamRequest message holding initiator random, session ID, passcode ID, and optional
+PBKDF session parameters.
 
-</details>
+### `struct matter_pase_pbkdf_resp`
+`modules/woz_matter/include/matter_pase.h:103`
+
+PASE PBKDFParamResponse message holding initiator and responder randoms, session ID, and optional
+PBKDF parameters (iterations and salt) if the initiator did not already have them.
+
+### `struct matter_pase_pake1`
+`modules/woz_matter/include/matter_pase.h:124`
+
+PASE Sigma1 message payload holding the initiator's ephemeral public key point.
+
+### `struct matter_pase_pake2`
+`modules/woz_matter/include/matter_pase.h:131`
+
+PASE Sigma2 message payload holding the responder's ephemeral public key point and hash.
+
+### `struct matter_pase_pake3`
+`modules/woz_matter/include/matter_pase.h:139`
+
+PASE Sigma3 message payload holding the initiator's hash for mutual authentication.

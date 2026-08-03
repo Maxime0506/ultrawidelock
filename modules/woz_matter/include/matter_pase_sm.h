@@ -116,6 +116,11 @@ enum matter_pase_state {
 	MATTER_PASE_ST_FAILED,
 };
 
+/**
+ * PASE responder state machine: tracks the verifier, session IDs, ephemeral scalar y, random nonce,
+ * SPAKE2+ context, expected commitment cA, shared secret ke, derived session keys, and the 534-byte
+ * transcript live only during Pake1 handling.
+ */
 struct matter_pase_responder {
 	struct matter_pase_verifier v;
 	uint8_t state;

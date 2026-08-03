@@ -108,6 +108,7 @@ SERIAL_PROMPT = "> "
 
 
 class PresenceError(RuntimeError):
+    """Exception raised when a board communication error, timeout, or protocol violation occurs during enrollment, signing, or identity operations."""
     pass
 
 
@@ -451,6 +452,7 @@ def dongle_prove(ser, nonce: bytes) -> bytes:
 
 
 def cmd_nonce(args) -> int:
+    """Print the hex-encoded 16-byte binding nonce for the given tag and commit (or the tag's commit if not specified)."""
     commit = args.commit or tag_commit(args.tag)
     print(binding_nonce(args.tag, commit).hex())
     return 0
@@ -641,6 +643,7 @@ def cmd_sign(args) -> int:
 
 
 def cmd_verify(args) -> int:
+    """Verify a tag's presence assertion using enrolled dongle public keys and print the verdict with distance, credential, and commit details, or print not-signed and return 0 if unsigned and --require was not given."""
     verdict, detail = verify_tag(
         args.tag, max_cm=args.max_cm, enrolled_path=args.file, openssl=args.openssl
     )
@@ -663,6 +666,7 @@ def cmd_verify(args) -> int:
 
 
 def build_parser():
+    """Build and return an argument parser for presence-git subcommands: nonce, probe, enroll, clone, sign, and verify, each with its own required arguments and defaults."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 

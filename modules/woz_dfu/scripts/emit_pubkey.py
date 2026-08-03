@@ -16,6 +16,7 @@ from pathlib import Path
 
 
 def main():
+    """Read an ECDSA P-256 private key from PEM format, extract its X9.62 uncompressed point public key, and emit it as a C header file for the MCUboot image-signing key."""
     if len(sys.argv) != 3:
         sys.exit(__doc__)
 

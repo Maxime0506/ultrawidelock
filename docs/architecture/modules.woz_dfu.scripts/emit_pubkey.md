@@ -12,8 +12,9 @@ Only the public half is emitted. The private key never enters the build output.
 
     emit_pubkey.py <signing-key.pem> <out.c>
 
-<details><summary>Undocumented (1)</summary>
+## API
 
-- `main`
+### `main()`
+`modules/woz_dfu/scripts/emit_pubkey.py:18`
 
-</details>
+Read an ECDSA P-256 private key from PEM format, extract its X9.62 uncompressed point public key, and emit it as a C header file for the MCUboot image-signing key.

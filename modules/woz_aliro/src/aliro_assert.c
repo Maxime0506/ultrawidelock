@@ -87,6 +87,9 @@ static int ct_equal(const uint8_t *a, const uint8_t *b, size_t n)
 	return diff == 0;
 }
 
+/**
+ * Return the wire frame length for a given algorithm byte, or 0 if the algorithm is unrecognized.
+ */
 size_t aliro_assert_wire_len(uint8_t alg)
 {
 	switch (alg) {
@@ -97,6 +100,10 @@ size_t aliro_assert_wire_len(uint8_t alg)
 	}
 }
 
+/**
+ * Extract and return the algorithm byte from a wire-encoded attestation frame; return 0 if the
+ * buffer is NULL or shorter than ALIRO_ASSERT_SIGNED_LEN.
+ */
 uint8_t aliro_assert_peek_alg(const uint8_t *buf, size_t len)
 {
 	if (buf == NULL || len < ALIRO_ASSERT_SIGNED_LEN) {
@@ -105,6 +112,10 @@ uint8_t aliro_assert_peek_alg(const uint8_t *buf, size_t len)
 	return buf[OFF_ALG];
 }
 
+/**
+ * Derive a credential ID by hashing the 65-byte P-256 public key and truncating to
+ * ALIRO_ASSERT_CREDID_LEN bytes.
+ */
 void aliro_assert_cred_id(const uint8_t cred_pub[ALIRO_ASSERT_PUB_LEN],
 			  uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN])
 {
@@ -210,6 +221,10 @@ static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
 	return ALIRO_ASSERT_OK;
 }
 
+/**
+ * Encode an Aliro attestation into a wire frame with a P-256 signature, signing all bytes before
+ * the tag; return 0 on success, -1 if any argument is NULL or wire_cap is too small.
+ */
 int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct aliro_assert *a,
 			    uint8_t *wire, size_t wire_cap, size_t *wire_len)
 {
@@ -231,6 +246,12 @@ int aliro_assert_build_p256(aliro_assert_sign_fn sign, void *ctx, const struct a
 	return 0;
 }
 
+/**
+ * Verify and parse a P-256-signed wire frame after authenticating the signature, checking framing,
+ * algorithm, magic, and version; parse fields and validate against expected nonce, credential ID,
+ * distance threshold, and minimum uptime; return ALIRO_ASSERT_OK on success or a specific error
+ * code (ALIRO_ASSERT_E_MALFORMED, ALIRO_ASSERT_E_MAC, etc.).
+ */
 int aliro_assert_verify_p256(aliro_assert_verify_fn verify, void *ctx, const uint8_t *wire,
 			     size_t wire_len, const uint8_t expected_nonce[ALIRO_ASSERT_NONCE_LEN],
 			     const uint8_t expected_cred_id[ALIRO_ASSERT_CREDID_LEN],

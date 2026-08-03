@@ -13,10 +13,21 @@ All little-endian.
 
 **depends on** [`modules/woz_matter/include/matter_status.h`](matter_status.h.md)  ·  **used by** [`modules/woz_matter/include/matter_crypto.h`](matter_crypto.h.md), [`modules/woz_matter/include/matter_exchange.h`](matter_exchange.h.md), [`modules/woz_matter/src/matter_msg.c`](../modules.woz_matter.src/matter_msg.c.md)
 
-<details><summary>Undocumented (3)</summary>
+## API
 
-- `matter_msg_header`
-- `matter_proto_header`
-- `matter_counter`
+### `struct matter_msg_header`
+`modules/woz_matter/include/matter_msg.h:87`
 
-</details>
+Matter message header decoded from the wire: flags, session ID, security flags, message counter,
+optional source/destination node ID (unicast) or group ID (multicast).
+
+### `struct matter_proto_header`
+`modules/woz_matter/include/matter_msg.h:104`
+
+Matter protocol/exchange header decoded from the message body: exchange flags, opcode, exchange
+ID, optional vendor ID, protocol ID, and optional ACK counter.
+
+### `struct matter_counter`
+`modules/woz_matter/include/matter_msg.h:164`
+
+RX/TX counter state: the last value used and the counter kind (unsecured or session).

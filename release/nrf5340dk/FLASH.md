@@ -1,6 +1,6 @@
 # openaliro on the nRF5340 DK: flash guide
 
-The primary openaliro target: an Aliro lock with NFC tap and UWB approach unlock. It
+The openaliro target that taps: an Aliro lock with NFC tap and UWB approach unlock. It
 joins Apple Home over Thread, your iPhone carries the key in Wallet, and the lock
 opens as you walk up or on a tap.
 

@@ -18,8 +18,8 @@ get_certificate selects slot 9A or 9D using key_ref. sign_hash receives the
 off-card SHA-256 digest required by PIV GENERAL AUTHENTICATE. derive_shared
 performs the P-256 ECDH primitive for slot 9D.
 
-<details><summary>Undocumented (1)</summary>
+### `struct piv_apdu`
+`ports/esp32/components/piv_ccid/include/piv_apdu.h:57`
 
-- `piv_apdu`
-
-</details>
+PIV APDU command handler state: tracks APDU selection, PIN verification status, and buffered
+response for chunked transmission.

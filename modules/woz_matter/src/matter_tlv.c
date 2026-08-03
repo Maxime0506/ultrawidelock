@@ -55,11 +55,17 @@
 #define ET_NULL          0x14u
 #define ET_END_CONTAINER 0x18u
 
+/**
+ * Extract the profile (upper 32 bits) from a qualified tag.
+ */
 static uint32_t tag_profile(matter_tlv_tag_t tag)
 {
 	return (uint32_t)(tag >> 32);
 }
 
+/**
+ * Extract the number (lower 32 bits) from a qualified tag.
+ */
 static uint32_t tag_number(matter_tlv_tag_t tag)
 {
 	return (uint32_t)(tag & 0xFFFFFFFFu);
@@ -74,6 +80,11 @@ static bool fail(struct matter_tlv_writer *w, int rc)
 	return false;
 }
 
+/**
+ * Test whether writing n bytes would exceed the writer's capacity.
+ * Fails the writer and latches the error code if buffer is NULL or space is exhausted; returns true
+ * if write can proceed.
+ */
 static bool room(struct matter_tlv_writer *w, size_t n)
 {
 	if (w->buf == NULL) {
@@ -85,6 +96,9 @@ static bool room(struct matter_tlv_writer *w, size_t n)
 	return true;
 }
 
+/**
+ * Copy n bytes from src into the writer buffer at the current position, advancing the position.
+ */
 static void put_raw(struct matter_tlv_writer *w, const void *src, size_t n)
 {
 	memcpy(&w->buf[w->len], src, n);
@@ -162,6 +176,11 @@ static bool live(struct matter_tlv_writer *w)
 	return w != NULL && w->rc == MATTER_TLV_OK;
 }
 
+/**
+ * Initialize a TLV writer to build a buffer.
+ * Sets writer to start-of-buffer state with no depth or errors; if buf is NULL, writes fail
+ * silently.
+ */
 void matter_tlv_writer_init(struct matter_tlv_writer *w, uint8_t *buf, size_t cap)
 {
 	if (w == NULL) {
@@ -172,6 +191,10 @@ void matter_tlv_writer_init(struct matter_tlv_writer *w, uint8_t *buf, size_t ca
 	w->cap = cap;
 }
 
+/**
+ * Set the implicit tag profile for subsequent context-tag (CTX) writes.
+ * Allows the writer to omit the profile qualifier in context tags, compressing the wire format.
+ */
 void matter_tlv_writer_set_implicit_profile(struct matter_tlv_writer *w, uint32_t profile)
 {
 	if (w == NULL) {
@@ -181,6 +204,12 @@ void matter_tlv_writer_set_implicit_profile(struct matter_tlv_writer *w, uint32_
 	w->implicit_set = true;
 }
 
+/**
+ * Append a boolean value to the TLV output.
+ * Encodes as control byte indicating true or false, with the given tag.
+ * Returns MATTER_TLV_E_INVAL if writer is NULL; returns the writer's cached error if previous write
+ * failed.
+ */
 int matter_tlv_put_bool(struct matter_tlv_writer *w, matter_tlv_tag_t tag, bool v)
 {
 	if (!live(w)) {
@@ -190,6 +219,12 @@ int matter_tlv_put_bool(struct matter_tlv_writer *w, matter_tlv_tag_t tag, bool 
 	return w->rc;
 }
 
+/**
+ * Append a null value to the TLV output.
+ * Encodes as control byte with no value, with the given tag.
+ * Returns MATTER_TLV_E_INVAL if writer is NULL; returns the writer's cached error if previous write
+ * failed.
+ */
 int matter_tlv_put_null(struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 {
 	if (!live(w)) {
@@ -199,6 +234,10 @@ int matter_tlv_put_null(struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 	return w->rc;
 }
 
+/**
+ * Write a signed 64-bit integer to TLV with automatic width selection (1/2/4/8 bytes based on value
+ * range). Returns first error encountered in writer, which is latched and persists across calls.
+ */
 int matter_tlv_put_i64(struct matter_tlv_writer *w, matter_tlv_tag_t tag, int64_t v)
 {
 	uint8_t type;
@@ -229,6 +268,11 @@ int matter_tlv_put_i64(struct matter_tlv_writer *w, matter_tlv_tag_t tag, int64_
 	return w->rc;
 }
 
+/**
+ * Write an unsigned 64-bit integer to TLV with automatic width selection (1/2/4/8 bytes based on
+ * value range). Returns first error encountered in writer, which is latched and persists across
+ * calls.
+ */
 int matter_tlv_put_u64(struct matter_tlv_writer *w, matter_tlv_tag_t tag, uint64_t v)
 {
 	uint8_t type;
@@ -298,18 +342,35 @@ static int put_string(struct matter_tlv_writer *w, matter_tlv_tag_t tag, uint8_t
 	return w->rc;
 }
 
+/**
+ * Append a UTF-8 string to the TLV output.
+ * Encodes length-prefixed text string with the given tag.
+ * Returns the writer's cached error if previous write failed or no space.
+ */
 int matter_tlv_put_utf8(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const char *s,
 			size_t len)
 {
 	return put_string(w, tag, ET_UTF8_LEN1, s, len);
 }
 
+/**
+ * Append a byte string to the TLV output.
+ * Encodes length-prefixed byte array with the given tag.
+ * Returns the writer's cached error if previous write failed or no space.
+ */
 int matter_tlv_put_bytes(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const uint8_t *b,
 			 size_t len)
 {
 	return put_string(w, tag, ET_BYTES_LEN1, b, len);
 }
 
+/**
+ * Begin a new TLV container (structure, array, or list) in the output.
+ * Records the container tag and depth; the writer will track where to close it when end_container
+ * is called.
+ * Returns MATTER_TLV_E_INVAL if writer is NULL or type is invalid; returns MATTER_TLV_E_DEPTH if
+ * nesting exceeds MATTER_TLV_MAX_DEPTH.
+ */
 int matter_tlv_start_container(struct matter_tlv_writer *w, matter_tlv_tag_t tag, uint8_t type)
 {
 	if (!live(w)) {
@@ -329,6 +390,10 @@ int matter_tlv_start_container(struct matter_tlv_writer *w, matter_tlv_tag_t tag
 	return w->rc;
 }
 
+/**
+ * Close the current TLV container by writing the end-of-container control byte and decrementing
+ * depth. Caller must have opened a container; fails if depth is already zero.
+ */
 int matter_tlv_end_container(struct matter_tlv_writer *w)
 {
 	if (!live(w)) {
@@ -347,6 +412,12 @@ int matter_tlv_end_container(struct matter_tlv_writer *w)
 	return w->rc;
 }
 
+/**
+ * Finalize TLV encoding and report the encoded byte count.
+ * Validates all containers have been closed (depth is zero).
+ * Returns MATTER_TLV_E_INVAL if writer is NULL; returns MATTER_TLV_E_STATE if containers remain
+ * open; returns the writer's cached error if previous write failed.
+ */
 int matter_tlv_writer_finish(struct matter_tlv_writer *w, size_t *out_len)
 {
 	if (w == NULL) {
@@ -385,11 +456,18 @@ struct elem {
 /** Tag octet count for each tag control, indexed by control >> 5. */
 static const uint8_t tag_octets_by_control[8] = {0u, 1u, 2u, 4u, 2u, 4u, 6u, 8u};
 
+/**
+ * Test whether reading n bytes at offset off would stay within reader bounds.
+ */
 static bool fits(const struct matter_tlv_reader *r, size_t off, size_t n)
 {
 	return off <= r->len && n <= r->len - off;
 }
 
+/**
+ * Read an n-byte little-endian unsigned integer from buffer.
+ * Returns the value as uint64_t; n must be in range [1, 8].
+ */
 static uint64_t read_le(const uint8_t *p, size_t n)
 {
 	uint64_t v = 0;
@@ -547,6 +625,10 @@ static int scan_past_level_end(const struct matter_tlv_reader *r, size_t from, s
 	}
 }
 
+/**
+ * Initialize a TLV reader to parse a buffer.
+ * Sets reader to start-of-buffer state; if buf is NULL, len is set to zero and all reads will fail.
+ */
 void matter_tlv_reader_init(struct matter_tlv_reader *r, const uint8_t *buf, size_t len)
 {
 	if (r == NULL) {
@@ -557,6 +639,11 @@ void matter_tlv_reader_init(struct matter_tlv_reader *r, const uint8_t *buf, siz
 	r->len = (buf == NULL) ? 0u : len;
 }
 
+/**
+ * Set the implicit tag profile for subsequent context-tag (CTX) reads.
+ * Allows the reader to interpret context tags in messages that omit the profile qualifier in the
+ * wire format.
+ */
 void matter_tlv_reader_set_implicit_profile(struct matter_tlv_reader *r, uint32_t profile)
 {
 	if (r == NULL) {
@@ -566,6 +653,14 @@ void matter_tlv_reader_set_implicit_profile(struct matter_tlv_reader *r, uint32_
 	r->implicit_set = true;
 }
 
+/**
+ * Load the next TLV element from the buffer, advancing the reader position.
+ * Parses the control byte and tag at the current offset; skips end-of-container markers at top
+ * level.
+ * Returns MATTER_TLV_OK on success, MATTER_TLV_END when end-of-container marker is reached,
+ * MATTER_TLV_E_TRUNC if buffer is incomplete, MATTER_TLV_E_TYPE or MATTER_TLV_E_INVAL on malformed
+ * data.
+ */
 int matter_tlv_next(struct matter_tlv_reader *r)
 {
 	size_t start;
@@ -621,21 +716,40 @@ int matter_tlv_next(struct matter_tlv_reader *r)
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Return the tag of the loaded TLV element.
+ * Returns the tag value (profile-qualified or anonymous) or MATTER_TLV_ANON if no element loaded or
+ * reader is NULL.
+ */
 matter_tlv_tag_t matter_tlv_tag(const struct matter_tlv_reader *r)
 {
 	return (r != NULL && r->have) ? r->tag : MATTER_TLV_ANON;
 }
 
+/**
+ * Return the element type of the loaded TLV element.
+ * Returns the numeric type code (MATTER_TLV_STRUCTURE, MATTER_TLV_ARRAY, etc.) or zero if no
+ * element loaded or reader is NULL.
+ */
 uint8_t matter_tlv_element_type(const struct matter_tlv_reader *r)
 {
 	return (r != NULL && r->have) ? r->type : 0u;
 }
 
+/**
+ * Test whether the loaded TLV element is a container (structure, array, or list).
+ * Returns true if reader is not NULL, an element is loaded, and it is a container; false otherwise.
+ */
 bool matter_tlv_is_container(const struct matter_tlv_reader *r)
 {
 	return r != NULL && r->have && r->is_container;
 }
 
+/**
+ * Extract a boolean value from the current TLV element.
+ * Returns MATTER_TLV_E_INVAL if reader or out is NULL; returns MATTER_TLV_E_STATE if no element
+ * loaded; returns MATTER_TLV_E_TYPE if element is not a boolean type.
+ */
 int matter_tlv_get_bool(const struct matter_tlv_reader *r, bool *out)
 {
 	if (r == NULL || out == NULL) {
@@ -651,6 +765,10 @@ int matter_tlv_get_bool(const struct matter_tlv_reader *r, bool *out)
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Decode an unsigned 64-bit integer from the current TLV element: read little-endian bytes. Returns
+ * MATTER_TLV_E_TYPE if element type is not an unsigned integer (UINT8..UINT64).
+ */
 int matter_tlv_get_u64(const struct matter_tlv_reader *r, uint64_t *out)
 {
 	if (r == NULL || out == NULL) {
@@ -666,6 +784,11 @@ int matter_tlv_get_u64(const struct matter_tlv_reader *r, uint64_t *out)
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Decode a signed 64-bit integer from the current TLV element: read little-endian bytes and
+ * sign-extend if shorter than 64 bits. Returns MATTER_TLV_E_TYPE if element type is not a signed
+ * integer.
+ */
 int matter_tlv_get_i64(const struct matter_tlv_reader *r, int64_t *out)
 {
 	uint64_t raw;
@@ -697,6 +820,13 @@ int matter_tlv_get_i64(const struct matter_tlv_reader *r, int64_t *out)
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Extract a byte or UTF-8 span from the current TLV element.
+ * Validates element type matches the allowed range [lo, hi], returns pointer into buffer and byte
+ * count.
+ * Returns MATTER_TLV_E_INVAL if out or len is NULL; returns MATTER_TLV_E_STATE if no element
+ * loaded; returns MATTER_TLV_E_TYPE if element type is outside range.
+ */
 static int get_span(const struct matter_tlv_reader *r, uint8_t lo, uint8_t hi, const void **out,
 		    size_t *len)
 {
@@ -714,16 +844,30 @@ static int get_span(const struct matter_tlv_reader *r, uint8_t lo, uint8_t hi, c
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Extract a byte or UTF-8 span from the current TLV element. Returns pointer and length in output
+ * parameters; returns MATTER_TLV_E_TYPE if element is not a byte or UTF-8 span.
+ */
 int matter_tlv_get_bytes(const struct matter_tlv_reader *r, const uint8_t **out, size_t *len)
 {
 	return get_span(r, ET_BYTES_LEN1, ET_BYTES_LEN8, (const void **)out, len);
 }
 
+/**
+ * Extract a UTF-8 string from the current TLV element. Returns pointer and length in output
+ * parameters; returns MATTER_TLV_E_TYPE if element is not a UTF-8 span.
+ */
 int matter_tlv_get_utf8(const struct matter_tlv_reader *r, const char **out, size_t *len)
 {
 	return get_span(r, ET_UTF8_LEN1, ET_UTF8_LEN8, (const void **)out, len);
 }
 
+/**
+ * Descend one level into the current TLV container element.
+ * Prepares the reader to iterate elements within the container body.
+ * Returns MATTER_TLV_E_INVAL if reader is NULL; returns MATTER_TLV_E_STATE if no container is
+ * loaded; returns MATTER_TLV_E_DEPTH if nesting exceeds MATTER_TLV_MAX_DEPTH.
+ */
 int matter_tlv_enter(struct matter_tlv_reader *r)
 {
 	if (r == NULL) {
@@ -741,6 +885,12 @@ int matter_tlv_enter(struct matter_tlv_reader *r)
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Ascend one level out of a TLV container.
+ * Skips any unread elements within the current level and steps past the end-of-container marker.
+ * Returns MATTER_TLV_E_INVAL if reader is NULL; returns MATTER_TLV_E_STATE if at top level; returns
+ * MATTER_TLV_E_TRUNC if container is not properly closed.
+ */
 int matter_tlv_exit(struct matter_tlv_reader *r)
 {
 	size_t from;
@@ -776,6 +926,12 @@ int matter_tlv_exit(struct matter_tlv_reader *r)
 	return MATTER_TLV_OK;
 }
 
+/**
+ * Re-tag a context-tagged TLV element by substituting its tag byte: input element must be
+ * context-tagged (tag form 0xE0 bits set) and both source and destination tags must be context
+ * tags. Single-byte substitution without re-encoding value or length. Returns MATTER_TLV_E_INVAL if
+ * input is not a valid context-tagged element or destination tag is out of range.
+ */
 int matter_tlv_put_encoded(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const uint8_t *elem,
 			   size_t len)
 {

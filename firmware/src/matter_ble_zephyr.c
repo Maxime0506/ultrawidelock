@@ -148,6 +148,11 @@ static struct k_work s_hs_work;
 
 static bool claim_conn(struct bt_conn *conn);
 
+/**
+ * Reset the BLE link state: clear the reassembly buffer, zero TX state, clear all flags (tx_active,
+ * indicate_busy, handshaked), reset fragment size to the minimum, and reset sequence and ack
+ * counters. Invoke the link state callback if registered.
+ */
 static void reset_link(void)
 {
 	matter_btp_rx_init(&s_rx, s_rx_buf, sizeof(s_rx_buf), 0u);
@@ -177,6 +182,11 @@ static struct bt_gatt_indicate_params s_ind_params;
 /** Push one fragment, or a raw buffer when @p raw is set (the handshake reply). */
 static int indicate_raw(const uint8_t *data, size_t len);
 
+/**
+ * Send the BTP handshake response to the peer if subscribed to C2 indications; otherwise do nothing
+ * and let the subscription handler (c2_ccc_changed) resubmit this work when the subscription
+ * arrives.
+ */
 static void hs_work_handler(struct k_work *work)
 {
 	uint8_t n = s_hs_resp_len;
@@ -193,6 +203,12 @@ static void hs_work_handler(struct k_work *work)
 	(void)indicate_raw(s_hs_resp, n);
 }
 
+/**
+ * Work queue handler for a completed BTP message reassembly. If a message callback is registered,
+ * invoke it with the reassembly buffer and message length; otherwise log a warning and drop the
+ * message. Then reset the reassembly state for the next message. Runs on the work queue rather than
+ * in the BLE RX callback to keep the reassembly area exclusive to the handler.
+ */
 static void msg_work_handler(struct k_work *work)
 {
 	ARG_UNUSED(work);
@@ -210,6 +226,13 @@ static void msg_work_handler(struct k_work *work)
 
 /* ---- C1: the commissioner writes ----------------------------------------- */
 
+/**
+ * Handle a BLE GATT write to the Matter BTP C1 characteristic. On first write, decode and accept
+ * the BTP handshake; initialize RX/TX sequence numbers and fragment size; queue the handshake
+ * response for transmission on C2. On subsequent writes, decode incoming BTP fragments, reassemble
+ * messages, send acknowledgments when the peer's window is half-full or a message completes, and
+ * disconnect if framing desynchronizes. Return the number of bytes consumed or a GATT error code.
+ */
 static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf,
 			uint16_t len, uint16_t offset, uint8_t flags)
 {
@@ -338,6 +361,11 @@ static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
 
 /* ---- C2: we indicate ----------------------------------------------------- */
 
+/**
+ * BLE GATT CCC callback for the C2 indication characteristic. If indications are enabled (value ==
+ * BT_GATT_CCC_INDICATE) and a handshake response is staged, submit the hs_work to the Matter work
+ * queue.
+ */
 static void c2_ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	ARG_UNUSED(attr);
@@ -357,12 +385,20 @@ BT_GATT_SERVICE_DEFINE(matter_svc, BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(0x
 					      BT_GATT_PERM_NONE, NULL, NULL, NULL),
 		       BT_GATT_CCC(c2_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
+/**
+ * Return true if a BLE connection is active and subscribed to indications on the C2 characteristic.
+ */
 static bool is_subscribed(void)
 {
 	return s_conn != NULL &&
 	       bt_gatt_is_subscribed(s_conn, &matter_svc.attrs[4], BT_GATT_CCC_INDICATE);
 }
 
+/**
+ * Enqueue a BLE indication (server-to-client notification) of the given data on the Matter C2
+ * characteristic. Returns -EBUSY if no connection exists or an indication is already pending;
+ * -EAGAIN if the peer is not subscribed to indications; 0 on success.
+ */
 static int indicate_raw(const uint8_t *data, size_t len)
 {
 	if (s_conn == NULL || s_indicate_busy) {
@@ -436,6 +472,11 @@ static int pump_tx(void)
 	return rc;
 }
 
+/**
+ * Callback fired when a BLE indication is confirmed by the peer. Clears indicate_busy and logs the
+ * confirmation error. If no error, calls pump_tx to emit the next BTP fragment; if error is
+ * nonzero, sets tx_active to false and logs the error.
+ */
 static void indicate_done(struct bt_conn *conn, struct bt_gatt_indicate_params *params, uint8_t err)
 {
 	ARG_UNUSED(conn);
@@ -481,6 +522,9 @@ int matter_ble_send(const uint8_t *msg, size_t len)
 	return pump_tx();
 }
 
+/**
+ * Register a callback to be invoked when the BLE link state changes (connection or disconnection).
+ */
 void matter_ble_set_link_handler(matter_ble_link_cb cb)
 {
 	s_link_cb = cb;
@@ -513,6 +557,10 @@ static bool claim_conn(struct bt_conn *conn)
 	return true;
 }
 
+/**
+ * BLE disconnection callback. Clears the connection reference, marks any active session as
+ * inactive, and resets the link state (reassembly buffer, TX flags).
+ */
 static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	if (conn != s_conn) {

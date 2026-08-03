@@ -489,6 +489,11 @@ struct matter_user {
 /** The Door Lock. Listed in the root endpoint's PartsList. */
 #define MATTER_ENDPOINT_LOCK 1u
 
+/**
+ * Complete device information structure held by the Matter node, including vendor/product IDs,
+ * Aliro identity, user table, commissioning state, operational network configuration, and
+ * session-specific attestation and key data.
+ */
 struct matter_device_info {
 	uint16_t vendor_id;
 	uint16_t product_id;

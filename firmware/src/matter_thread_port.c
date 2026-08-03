@@ -136,6 +136,10 @@ static bool addr_is_offmesh(otInstance *ot, const otNetifAddress *a)
 	return true;
 }
 
+/**
+ * Count the number of preferred off-mesh unicast addresses this node holds. Iterates over Thread
+ * unicast addresses and counts those marked preferred that route to a destination not on the mesh.
+ */
 static int count_offmesh(otInstance *ot)
 {
 	const otNetifAddress *a;
@@ -264,6 +268,10 @@ static struct srp_reg s_regs[MATTER_SUPPORTED_FABRICS];
 /** The SRP host is registered once, whatever number of services hang off it. */
 static bool s_host_ready;
 
+/**
+ * Settings callback to read a 32-bit host ID from persistent storage. Reads exactly
+ * sizeof(uint32_t) bytes into the output parameter, returning 0 on all paths.
+ */
 static int host_id_read(const char *key, size_t len, settings_read_cb read_cb, void *cb_arg,
 			void *param)
 {
@@ -334,6 +342,10 @@ static bool s_udp_open;
 /** The peer of the datagram in flight; see matter_thread_peer_current(). */
 static struct matter_thread_peer s_cur_peer;
 
+/**
+ * Copy the current inbound peer address and port to the caller's buffer. Called by Matter protocol
+ * handlers to discover where a datagram came from. Returns without effect if out is NULL.
+ */
 void matter_thread_peer_current(struct matter_thread_peer *out)
 {
 	if (out == NULL) {
@@ -342,6 +354,11 @@ void matter_thread_peer_current(struct matter_thread_peer *out)
 	*out = s_cur_peer;
 }
 
+/**
+ * Send a datagram to a peer over Thread UDP. Returns MATTER_E_STATE if the peer is invalid, the
+ * address family is unsupported, the message buffer cannot be allocated, or the send fails;
+ * MATTER_E_NOSPACE if the message buffer is full; MATTER_OK on success.
+ */
 int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *msg, size_t len)
 {
 	otInstance *ot = openthread_get_default_instance();
@@ -378,6 +395,12 @@ int matter_thread_send_to(const struct matter_thread_peer *peer, const uint8_t *
 	return MATTER_OK;
 }
 
+/**
+ * OpenThread UDP RX callback. Reads the incoming datagram, logs its size, invokes
+ * matter_thread_on_datagram to generate a reply, and sends the reply back to the peer. Uses static
+ * buffers sized for Sigma3 (RX) and full subscription reports (reply) respectively. Temporarily
+ * publishes the peer address so the Matter handler can discover where traffic arrived from.
+ */
 static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
 {
 	/*
@@ -495,6 +518,11 @@ static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClie
 	log_addresses(openthread_get_default_instance());
 }
 
+/**
+ * Release all SRP registrations for the host and services. Clears both the SRP client state and the
+ * local registration cache, so the next advertise re-registers from scratch. Called when fabrics
+ * are rolled back to avoid leaving dangling registrations under old names.
+ */
 void matter_thread_advertise_reset(void)
 {
 	otInstance *ot = openthread_get_default_instance();
@@ -673,6 +701,10 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 
 #else /* !CONFIG_NET_L2_OPENTHREAD */
 
+/**
+ * Advertise this node's services to SRP. Returns MATTER_E_STATE; Thread is not built into this
+ * image.
+ */
 int matter_thread_advertise(const char *instance_name, uint16_t port)
 {
 	ARG_UNUSED(instance_name);
@@ -681,6 +713,10 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	return MATTER_E_STATE;
 }
 
+/**
+ * Start Thread with the provided operational dataset. Returns MATTER_E_STATE; Thread is not built
+ * into this image.
+ */
 int matter_thread_start(const uint8_t *dataset, size_t len)
 {
 	ARG_UNUSED(dataset);
@@ -690,6 +726,10 @@ int matter_thread_start(const uint8_t *dataset, size_t len)
 	return MATTER_E_STATE;
 }
 
+/**
+ * Stub: always returns MATTER_E_TIMEOUT. Thread attachment checking is not implemented on this
+ * target.
+ */
 int matter_thread_wait_attached(uint32_t timeout_ms)
 {
 	ARG_UNUSED(timeout_ms);

@@ -5,8 +5,9 @@
 
 **depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](piv_apdu.h.md)  ·  **used by** [`ports/esp32/components/piv_ccid/piv_ccid.c`](../ports.esp32.components.piv_ccid/piv_ccid.c.md), [`ports/esp32/components/piv_ccid/piv_ccid_usb.c`](../ports.esp32.components.piv_ccid/piv_ccid_usb.c.md)
 
-<details><summary>Undocumented (1)</summary>
+## API
 
-- `piv_ccid`
+### `struct piv_ccid`
+`ports/esp32/components/piv_ccid/include/piv_ccid.h:44`
 
-</details>
+USB CCID (smart card interface) state: tracks card power status and PIV APDU protocol handler.

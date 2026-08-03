@@ -41,6 +41,9 @@ static void blink(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(s_blink, blink);
 static bool s_lit;
 
+/**
+ * Toggle the status LED and reschedule itself at BLINK_MS intervals.
+ */
 static void blink(struct k_work *work)
 {
 	ARG_UNUSED(work);
@@ -50,6 +53,10 @@ static void blink(struct k_work *work)
 	(void)k_work_reschedule(&s_blink, K_MSEC(BLINK_MS));
 }
 
+/**
+ * Set the status LED lit immediately and start blinking on a window open; cancel blinking and turn
+ * it off on window close.
+ */
 static void window_changed(bool open)
 {
 	if (!gpio_is_ready_dt(&s_led)) {
@@ -70,6 +77,10 @@ static void window_changed(bool open)
 	}
 }
 
+/**
+ * Initialize the status LED on GPIO and register the DFU window state change callback; logs a
+ * warning but does not fail if the LED is not ready.
+ */
 static int status_led_init(void)
 {
 	if (!gpio_is_ready_dt(&s_led)) {

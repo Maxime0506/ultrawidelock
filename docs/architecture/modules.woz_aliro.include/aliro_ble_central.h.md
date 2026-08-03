@@ -26,9 +26,14 @@ the inverse of build_aliro_svc_data (aliro_ble.c:532).
 What the peer publishes on the reader-SPSM characteristic
 (D3B5A130-9E23-4B3A-8BE4-6B1EE5F980A3), read before the CoC opens.
 
-<details><summary>Undocumented (2)</summary>
+### `struct aliro_ble_central_callbacks`
+`modules/woz_aliro/include/aliro_ble_central.h:90`
 
-- `aliro_ble_central_callbacks`
-- `aliro_ble_central_config`
+Callbacks for BLE central transport: on_ready when CoC opens and peer facts are known, on_data
+for each inbound SDU, on_closed when link or CoC drops.
 
-</details>
+### `struct aliro_ble_central_config`
+`modules/woz_aliro/include/aliro_ble_central.h:104`
+
+Configuration for BLE central transport: reader_id to match by truncated group/sub ID in adverts,
+selected_version for device-version characteristic, and callbacks.

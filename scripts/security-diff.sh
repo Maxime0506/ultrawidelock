@@ -47,11 +47,15 @@ fi
 nblock=0
 nwarn=0
 
+# Print a blocking issue to stderr in red with the given title and detail, and increment the block
+# counter.
 block() {
 	printf '  %s%s%s %s%s%s\n      %s\n' \
 		"$RED" "$CRS" "$RESET" "$BOLD" "$1" "$RESET" "$2"
 	nblock=$((nblock + 1))
 }
+# Print a warning to stderr in yellow with the given title and detail, and increment the warning
+# counter.
 warn() {
 	printf '  %s%s%s %s\n      %s%s%s\n' \
 		"$YEL" "$WRN" "$RESET" "$1" "$DIM" "$2" "$RESET"

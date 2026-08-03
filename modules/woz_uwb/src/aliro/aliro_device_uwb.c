@@ -70,6 +70,11 @@ int aliro_dev_uwb_parse_m1(const uint8_t *msg, size_t len, struct aliro_dev_uwb_
 	return (have_channel && have_session && out->config_count > 0) ? 0 : -1;
 }
 
+/**
+ * Parse an M3 UWB message: extract and validate ran multiplier, chaps per slot, number of
+ * responders, slots per round, sync code index bitmask, hopping configuration, and MAC mode. Return
+ * 0 on success or -1 if the message is malformed or required fields are missing.
+ */
 int aliro_dev_uwb_parse_m3(const uint8_t *msg, size_t len, struct aliro_dev_uwb_m3 *out)
 {
 	if (msg == NULL || len < ALIRO_HEADER_LENGTH ||
@@ -186,6 +191,9 @@ struct aliro_uwb_message *aliro_dev_uwb_build_m2(const struct aliro_dev_uwb_m2_p
 	return b.message;
 }
 
+/**
+ * Build an M4 UWB message from STS index, UWB time, hop mode key, and sync code index.
+ */
 struct aliro_uwb_message *aliro_dev_uwb_build_m4(const struct aliro_dev_uwb_m4_params *p)
 {
 	struct aliro_uwb_msg_builder b;

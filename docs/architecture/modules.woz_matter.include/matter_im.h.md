@@ -44,8 +44,14 @@ A SubscribeRequest: the same paths a read asks for, plus how often.
 
 One command a commissioner asked this node to run.
 
+### `struct matter_im_server`
+`modules/woz_matter/include/matter_im.h:353`
+
+Callback table for the Matter interaction model server, defining functions to query attribute
+status, read values, list endpoints and clusters, and handle write and command operations.
+
 ### `struct matter_im_write`
-`modules/woz_matter/include/matter_im.h:381`
+`modules/woz_matter/include/matter_im.h:385`
 
 One attribute write.
 Exactly one per message, the same restriction matter_im_invoke has and for
@@ -53,12 +59,6 @@ the same reason: a commissioner that sent two and saw one status would be
 entitled to assume both applied.
 
 ### `struct matter_im_report_stats`
-`modules/woz_matter/include/matter_im.h:444`
+`modules/woz_matter/include/matter_im.h:448`
 
 What encoding a report had to leave out. Worth logging; none of it is fatal.
-
-<details><summary>Undocumented (1)</summary>
-
-- `matter_im_server`
-
-</details>

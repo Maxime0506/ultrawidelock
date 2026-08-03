@@ -126,6 +126,7 @@ def _expanded_path(value: str) -> str:
 
 
 def _default_client_factory() -> MqttClient:
+    """Create and return a paho-mqtt Client instance; raise MqttError if the paho-mqtt package is not installed."""
     try:
         import paho.mqtt.client as mqtt
     except ImportError as error:
@@ -144,6 +145,7 @@ class MqttPublisher:
         client_factory: Callable[[], MqttClient] = _default_client_factory,
         environment: Optional[dict[str, str]] = None,
     ) -> None:
+        """Initialize an MqttPublisher with a configuration, node name, and optional client factory and environment variables; validate that TLS or explicit insecure opt-in is set, that certificate and key are both present or both absent, and that authentication is configured (username, certificate, or anonymous opt-in)."""
         if not config.tls and not config.allow_insecure:
             raise MqttError("plaintext MQTT requires explicit insecure opt-in")
         if bool(config.client_cert) != bool(config.client_key):
@@ -161,6 +163,7 @@ class MqttPublisher:
 
     @property
     def status_topic(self) -> str:
+        """Return the MQTT topic path for status messages scoped to this node."""
         return f"aliro/{self._node}/status"
 
     def start(self) -> None:

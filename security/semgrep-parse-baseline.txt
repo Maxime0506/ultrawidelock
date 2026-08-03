@@ -59,27 +59,50 @@ ports/esp32/test/test_port_headers.c
 # settings handler macros, same forms as the entries above. Note the clang-tidy row in the
 # list of compensating controls does NOT cover these: tests/host/sources.sh compiles only
 # modules/ and tests/host, so for this directory the fallback is CodeQL's weekly run alone.
+#
+# dfu_ble_zephyr.c and status_led.c joined them with the over-the-air update work. Same cause,
+# two macro forms not already named above: NET_BUF_POOL_FIXED_DEFINE, and the
+# `static K_WORK_DEFINE(...)` / `static K_WORK_DELAYABLE_DEFINE(...)` spelling, which without a
+# preprocessor is ambiguous with a K&R function definition.
 firmware/src/aliro_ble_zephyr.c
 firmware/src/aliro_prov_settings.c
-firmware/src/matter_commission.c
-
-# The BLE DFU path. One construct only: `static K_WORK_DEFINE(...)` and its DELAYABLE
-# twin. Bisected to the exact lines -- dfu_ble_zephyr.c:235, status_led.c:41,
-# dfu_receiver.c:81 and :85 -- and it is not the Zephyr macro that breaks it. Any
-# `static SOME_MACRO(a, b);` at file scope does, because without a preprocessor that
-# reads as a storage class on a call expression. Dropping `static` parses, and is
-# refused here: it turns internal linkage into external across the whole DFU surface,
-# which is a worse defect than the blind spot it buys.
-#
-# The fourth file of this batch, modules/woz_dfu/src/dfu_smp_img.c, is deliberately NOT
-# listed. Its cause was different (an #ifdef between designated initializers) and was
-# fixable without touching semantics, so it was fixed instead -- it parses SMP upload
-# frames off the air and is the one that most wanted the rules run against it.
-#
-# Compensating controls, corrected: the clang-tidy row above does not reach any of
-# these. tests/host/sources.sh compiles woz_aliro, woz_aliro_stack, woz_matter, woz_nfc,
-# woz_port and woz_uwb only -- not firmware/src, and not modules/woz_dfu. CodeQL's
-# weekly run is the whole fallback here.
 firmware/src/dfu_ble_zephyr.c
+firmware/src/matter_commission.c
 firmware/src/status_led.c
+
+# Bisected, for whoever tries to fix these rather than baseline them:
+# dfu_ble_zephyr.c:235, status_led.c:41, dfu_receiver.c:81 and :85. It is not the Zephyr
+# macro that breaks the parse. Any `static SOME_MACRO(a, b);` at file scope does, because
+# without a preprocessor that reads as a storage class on a call expression. Dropping
+# `static` parses, and is refused here: it turns internal linkage into external across the
+# whole DFU surface, which is a worse defect than the blind spot it buys.
+#
+# modules/woz_dfu below is LOG_MODULE_REGISTER plus the two
+# `static K_WORK_DELAYABLE_DEFINE(...)` in dfu_receiver.c, the same cause.
+#
+# modules/woz_dfu/src/dfu_smp_img.c was in this batch and is deliberately NOT listed. Its
+# cause was a different one -- an #ifdef between designated initializers -- which was
+# fixable without touching semantics, so it was fixed instead: the .mg_group_name
+# assignment moved into woz_smp_img_init(). That file parses SMP upload frames off the
+# air, so it is the one that most wanted the rules run against it. Do not re-add it
+# without first confirming it actually fails to parse.
+#
+# Read this before trusting the compensating-controls list at the top of this file: it does not
+# hold for these. modules/woz_dfu is in none of the fallbacks.
+#
+#   clang-tidy   compiles UNIT_SRCS out of tests/host/sources.sh (scripts/verify.sh:415), and
+#                that file does not mention dfu anywhere
+#   CBMC, fuzz   no harness under tests/host/cbmc or tests/host/fuzz references it
+#   host suite   tests/host/run.sh:23 builds only the sources.sh arrays. A dfu suite is being
+#                written -- tests/host/test_dfu.c and tests/host/dfufake/ -- but both are still
+#                untracked and neither is named in sources.sh, so nothing compiles them yet.
+#                When that lands, this row stops being a gap and this entry should be revisited
+#   CodeQL       the header says it builds from `make test`, which is that same run.sh; if that
+#                is still true the gap applies there too. Not settleable from this tree, since
+#                security-deep.yml:16 says CodeQL runs under GitHub's default setup, configured
+#                in the repository settings.
+#
+# So semgrep was the only static analysis reading this directory, and this line gives that up on
+# the code that parses a signed patch arriving over Bluetooth. The way to narrow this is to get
+# woz_dfu into tests/host/sources.sh, not to grow this list.
 modules/woz_dfu/src/dfu_receiver.c

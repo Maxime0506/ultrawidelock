@@ -35,13 +35,14 @@ L = w1*G, which is not one of the four operations nrf_oberon exposes here, so
 it is generated off-device and provisioned -- which is how Matter intends it
 anyway (the passcode is on the label, the verifier is in the flash).
 
+### `struct matter_pase_responder`
+`modules/woz_matter/include/matter_pase_sm.h:124`
+
+PASE responder state machine: tracks the verifier, session IDs, ephemeral scalar y, random nonce,
+SPAKE2+ context, expected commitment cA, shared secret ke, derived session keys, and the 534-byte
+transcript live only during Pake1 handling.
+
 ### `matter_pase_responder_state`
-`modules/woz_matter/include/matter_pase_sm.h:199`
+`modules/woz_matter/include/matter_pase_sm.h:204`
 
 @return the current state; MATTER_PASE_ST_DONE means keys are usable.
-
-<details><summary>Undocumented (1)</summary>
-
-- `matter_pase_responder`
-
-</details>

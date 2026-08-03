@@ -64,6 +64,10 @@ static const uint8_t s_zero_fascn[] = {
 	0x84, 0x21, 0xc8, 0x42, 0x10, 0xc3, 0xeb,
 };
 
+/**
+ * A parsed ISO 7816 command APDU: class, instruction, parameters, data payload, and optional Le
+ * (expected response length).
+ */
 struct command_apdu {
 	uint8_t cla;
 	uint8_t ins;
@@ -75,6 +79,10 @@ struct command_apdu {
 	size_t le;
 };
 
+/**
+ * Write data and a status word to the response buffer and record its length, returning 0 on success
+ * or -1 if the buffer is too small.
+ */
 static int finish(const uint8_t *data, size_t data_len, uint16_t sw,
 		  uint8_t *response, size_t response_cap, size_t *response_len)
 {
@@ -91,6 +99,10 @@ static int finish(const uint8_t *data, size_t data_len, uint16_t sw,
 	return 0;
 }
 
+/**
+ * Parse an ISO 7816 command APDU from bytes: extract CLA, INS, P1, P2, data length, data, and
+ * optional Le. Return 0 on success or -1 if the length is invalid.
+ */
 static int parse_command(const uint8_t *command, size_t command_len,
 			 struct command_apdu *apdu)
 {
@@ -126,11 +138,19 @@ static int parse_command(const uint8_t *command, size_t command_len,
 	return 0;
 }
 
+/**
+ * Return the number of bytes needed to encode a BER length: 1 if less than 128, 2 if up to 255, or
+ * 3 if up to 65535.
+ */
 static size_t ber_length_bytes(size_t len)
 {
 	return len < 0x80u ? 1u : (len <= 0xffu ? 2u : 3u);
 }
 
+/**
+ * Encode a BER length into the output buffer: 1 byte for lengths under 128, 2 for up to 255, 3 for
+ * up to 65535. Return 0 on success or -1 if the buffer is too small.
+ */
 static int put_ber_length(uint8_t *out, size_t cap, size_t len, size_t *written)
 {
 	if (out == NULL || written == NULL) {
@@ -184,6 +204,10 @@ static int wrap_tlv(uint8_t tag, const uint8_t *value, size_t value_len,
 	return 0;
 }
 
+/**
+ * Emit a chunk of a pending response, up to the requested size, followed by a status word
+ * indicating how many bytes remain: SW_SUCCESS if done, or SW_BYTES_REMAINING with the count.
+ */
 static int emit_pending(struct piv_apdu *piv, size_t requested,
 			uint8_t *response, size_t response_cap,
 			size_t *response_len)
@@ -234,6 +258,9 @@ static int send_data(struct piv_apdu *piv, const uint8_t *data, size_t data_len,
 	return emit_pending(piv, requested, response, response_cap, response_len);
 }
 
+/**
+ * Return true if the data buffer matches the PIV AID or the PIV AID truncated form.
+ */
 static bool aid_matches(const uint8_t *data, size_t len)
 {
 	return (len == sizeof(s_piv_aid) &&
@@ -385,6 +412,10 @@ static int handle_get_data(struct piv_apdu *piv,
 			 response, response_cap, response_len);
 }
 
+/**
+ * Return the status word for a PIN verify or change result: 0x9000 for success, 0x63Cn for retries
+ * remaining, 0x6983 if blocked, or 0x6982 otherwise.
+ */
 static uint16_t pin_result_status(int result, uint8_t retries)
 {
 	if (result == 0) {
@@ -474,6 +505,10 @@ static int handle_change_pin(struct piv_apdu *piv,
 		      response, response_cap, response_len);
 }
 
+/**
+ * Encode a 32-byte value as a DER integer with a leading zero byte if the high bit is set,
+ * returning the encoded length.
+ */
 static size_t der_integer(const uint8_t value[32], uint8_t out[35])
 {
 	size_t first = 0u;
@@ -585,6 +620,10 @@ static int handle_general_authenticate(struct piv_apdu *piv,
 			 response, response_cap, response_len);
 }
 
+/**
+ * Initialize a PIV APDU engine with a backend, backend context, and a flag indicating whether PIN
+ * is required for presence signatures.
+ */
 void piv_apdu_init(struct piv_apdu *piv,
 		   const struct piv_apdu_backend *backend, void *backend_ctx,
 		   bool pin_required)
@@ -598,6 +637,9 @@ void piv_apdu_init(struct piv_apdu *piv,
 	piv->pin_required = pin_required;
 }
 
+/**
+ * Reset the PIV APDU engine state: clear selection, PIN verification, and pending data.
+ */
 void piv_apdu_reset(struct piv_apdu *piv)
 {
 	if (piv == NULL) {

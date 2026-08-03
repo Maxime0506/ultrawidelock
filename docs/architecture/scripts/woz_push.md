@@ -24,17 +24,36 @@ both can, bleak wraps neither, and bleak is the only cross-platform option. The
 firmware carries both transports for exactly this reason; an iPhone app would
 use the CoC and get better throughput.
 
+**discussed in** [`README.md`](../../../README.md), [`firmware/README.md`](../../../firmware/README.md)
+
 ## API
 
+### `die(msg)`
+`scripts/woz_push.py:49`
+
+Exit with a prefixed error message.
+
+**called by** `Session.call`, `Session.wait_for_window`, `run`
+
 ### `class Session`
-`scripts/woz_push.py:53`
+`scripts/woz_push.py:54`
 
 One update conversation: write a frame, wait for its reply.
 
 **called by** `run`
 
+#### `Session.__init__(self, client)`
+`scripts/woz_push.py:57`
+
+Store the BLE client and replies queue for a GATT notification session.
+
+#### `Session.on_notify(self, _sender, data)`
+`scripts/woz_push.py:62`
+
+Queue a received GATT notification payload for retrieval by wait_for_window.
+
 #### `Session.call(self, frame, timeout=20.0, tolerate=())`
-`scripts/woz_push.py:63`
+`scripts/woz_push.py:66`
 
 Send a frame, return the board's byte count.
 
@@ -45,7 +64,7 @@ useful to do with a board that has refused the transfer.
 **called by** `Session.wait_for_window`, `run`  ·  **calls** `die`
 
 #### `Session.wait_for_window(self, total, deadline)`
-`scripts/woz_push.py:87`
+`scripts/woz_push.py:90`
 
 Retry BEGIN until someone opens the update window.
 
@@ -55,11 +74,8 @@ board a comparison and a two-byte notification: no flash, no state.
 
 **called by** `run`  ·  **calls** `Session.call`, `die`
 
-<details><summary>Undocumented (5)</summary>
+<details><summary>Undocumented (2)</summary>
 
-- `die`
-- `Session.__init__`
-- `Session.on_notify`
 - `run`
 - `main`
 

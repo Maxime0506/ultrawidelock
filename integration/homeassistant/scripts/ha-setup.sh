@@ -24,7 +24,9 @@ PASSWORD_FILE="$CONFIG_DIR/mqtt-password"
 CONFIG="$CONFIG_DIR/agent.toml"
 TOTAL=6
 
+# Print a progress step message showing the current step number out of the total.
 step() { printf '[%d/%d] %s\n' "$1" "$TOTAL" "$2"; }
+# Print an error message to stderr prefixed with ha-setup and exit with status 1.
 fail() { printf 'ha-setup: %s\n' "$1" >&2; exit 1; }
 
 # 1. Prerequisites -----------------------------------------------------------

@@ -26,8 +26,29 @@ NO_COLOR=1                      plain output
 
 ## API
 
+### `have()`
+`scripts/security.sh:46`
+
+Return true if the command exists in PATH, false otherwise.
+
+**called by** `gate_deps`, `gate_secrets`, `gate_semgrep`
+
+### `hdr()`
+`scripts/security.sh:49`
+
+Print a bold section header with label and dim reset, preceded by a newline.
+
+**called by** `gate_deps`, `gate_maldiff`, `gate_secrets`, `gate_semgrep`
+
+### `missing()`
+`scripts/security.sh:51`
+
+Print a missing-tool error, note that a missing gate is a failed gate, and return 1.
+
+**called by** `gate_deps`, `gate_secrets`, `gate_semgrep`
+
 ### `gate_secrets()`
-`scripts/security.sh:60`
+`scripts/security.sh:63`
 
 ---- secrets ---------------------------------------------------------------
 Two scopes on purpose. With a range, only the commits being proposed are scanned, which is what
@@ -39,14 +60,14 @@ history is rewritten.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_maldiff()`
-`scripts/security.sh:117`
+`scripts/security.sh:120`
 
 ---- mal-diff --------------------------------------------------------------
 
 **called by** `run_one`  ·  **calls** `hdr`
 
 ### `gate_semgrep()`
-`scripts/security.sh:135`
+`scripts/security.sh:138`
 
 ---- semgrep ---------------------------------------------------------------
 One invocation with every config, not one per ruleset: semgrep parses each target file once and
@@ -60,7 +81,7 @@ on them would train everyone to bypass the gate, taking the ERROR rules with it.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_deps()`
-`scripts/security.sh:267`
+`scripts/security.sh:270`
 
 ---- deps ------------------------------------------------------------------
 osv-scanner is pointed at the lockfile rather than told to walk the tree. The walk resolves its
@@ -73,7 +94,7 @@ comes back from the same query.
 **called by** `run_one`  ·  **calls** `have`, `hdr`, `missing`
 
 ### `gate_web()`
-`scripts/security.sh:336`
+`scripts/security.sh:339`
 
 ---- gates that live in their own script -----------------------------------
 Each is big enough to want its own file (the web gate parses HTML, the ct gate compiles and
@@ -82,8 +103,22 @@ point that CI, `make security` and verify.sh all share.
 
 **called by** `run_one`
 
+### `gate_esp()`
+`scripts/security.sh:341`
+
+Run the ESP workspace security gate via scripts/security-workspace.sh esp.
+
+**called by** `run_one`
+
+### `gate_attest()`
+`scripts/security.sh:343`
+
+Run the attestation security gate via scripts/security-attest.sh workflow.
+
+**called by** `run_one`
+
 ### `gate_ct()`
-`scripts/security.sh:345`
+`scripts/security.sh:350`
 
 ct is the one gate that can report neither pass nor fail. There is no valgrind for
 darwin/arm64, so on the primary dev machine the honest answer is "not checked here" — exit 2,
@@ -94,18 +129,8 @@ install. CI runs linux and never sees it.
 **called by** `run_one`
 
 ### `run_one()`
-`scripts/security.sh:353`
+`scripts/security.sh:358`
 
 ---- dispatch --------------------------------------------------------------
 
 **calls** `gate_attest`, `gate_ct`, `gate_deps`, `gate_esp`, `gate_maldiff`, `gate_secrets`, `gate_semgrep`, `gate_web`
-
-<details><summary>Undocumented (5)</summary>
-
-- `have`
-- `hdr`
-- `missing`
-- `gate_esp`
-- `gate_attest`
-
-</details>

@@ -22,6 +22,7 @@ class PivPinError(RuntimeError):
 
 
 class ScardIoRequest(ctypes.Structure):
+    """PC/SC IO_REQUEST structure with protocol and length fields."""
     _fields_ = [
         ("protocol", ctypes.c_uint32),
         ("length", ctypes.c_uint32),
@@ -37,12 +38,14 @@ def encode_pin(value):
 
 
 def status_word(response):
+    """Extract the two-byte status word from the end of a PIV APDU response; raise PivPinError if the response is truncated."""
     if len(response) < 2:
         raise PivPinError("token returned a truncated APDU response")
     return int.from_bytes(response[-2:], "big")
 
 
 def describe_status(status):
+    """Decode a PIV status word into a human-readable message; include retry count for PIN-guessing failures."""
     if status == 0x6983:
         return "PIN is unprovisioned or blocked"
     if status == 0x6982:
@@ -53,6 +56,7 @@ def describe_status(status):
 
 
 class PcscCard:
+    """Open and manage a PC/SC connection to an OpenAliro PIV card on macOS; establish context, connect to the reader matching reader_match, begin a transaction, and clean up on exit."""
     def __init__(self, reader_match):
         if sys.platform != "darwin":
             raise PivPinError("this helper requires macOS PC/SC")
@@ -93,6 +97,7 @@ class PcscCard:
         self.transaction = True
 
     def _configure_functions(self):
+        """Configure ctypes return types for all PC/SC library functions."""
         library = self.library
         library.SCardEstablishContext.restype = ctypes.c_int32
         library.SCardListReaders.restype = ctypes.c_int32
@@ -105,6 +110,7 @@ class PcscCard:
 
     @staticmethod
     def _check(result, operation):
+        """Raise PivPinError if a PC/SC operation returned nonzero."""
         if result != 0:
             unsigned = ctypes.c_uint32(result).value
             raise PivPinError(f"could not {operation} (PC/SC 0x{unsigned:08x})")
@@ -160,6 +166,7 @@ class PcscCard:
         return bytes(receive[: receive_length.value])
 
     def close(self):
+        """Release the PC/SC transaction, disconnect from the card, and release the context."""
         if self.transaction:
             self.library.SCardEndTransaction(self.card, SCARD_LEAVE_CARD)
             self.transaction = False
@@ -171,6 +178,7 @@ class PcscCard:
             self.context = ctypes.c_int32()
 
     def __enter__(self):
+        """Enter the context manager and return self."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -187,6 +195,7 @@ def select_piv(card):
 
 
 def prompt_new_pin():
+    """Prompt for a new PIV PIN twice, verify they match, encode it, and return the result."""
     first = getpass.getpass("New PIV PIN (6-8 digits): ")
     second = getpass.getpass("Repeat new PIV PIN: ")
     if first != second:
@@ -222,6 +231,7 @@ def provision_or_change(card, change):
 
 
 def build_parser():
+    """Return an argument parser for --change and --reader options."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--change",

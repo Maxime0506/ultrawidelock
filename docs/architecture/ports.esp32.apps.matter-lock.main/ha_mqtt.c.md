@@ -60,8 +60,23 @@ Build every topic once, from the node name the agent also keys its topics on.
 
 **called by** `ha_mqtt_task`
 
+### `static int discovery_distance_payload(char *buf, size_t len)`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:241`
+
+Build a Home Assistant MQTT Discovery payload for the Distance sensor entity in millimeters.
+
+**called by** `announce`
+
+### `static int discovery_access_payload(char *buf, size_t len)`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:256`
+
+Build a Home Assistant MQTT Discovery payload for the Access event entity with available and
+granted/denied event types.
+
+**called by** `announce`
+
 ### `static void announce(void)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:262`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:269`
 
 Publish retained discovery and online availability, once per connection. Runs on
 the publisher task, never in the mqtt event callback, because
@@ -70,13 +85,13 @@ esp_mqtt_client_publish() sends in the caller's context and would deadlock there
 **called by** `ha_mqtt_task`  ·  **calls** `discovery_access_payload`, `discovery_distance_payload`
 
 ### `static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t event_id, void *data)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:279`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:286`
 
 esp-mqtt event callback. Runs on the mqtt task and only flips flags; every publish
 happens on the publisher task, which reads them.
 
 ### `static esp_err_t client_start(void)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:312`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:319`
 
 Bring up the TLS client against the pinned CA. Returns ESP_OK once esp-mqtt owns
 the connection; it reconnects on its own from then on.
@@ -84,7 +99,7 @@ the connection; it reconnects on its own from then on.
 **called by** `ha_mqtt_task`
 
 ### `static void ha_mqtt_task(void *arg)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:350`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:357`
 
 Publisher task: the only place that touches the broker. Everything upstream of it
 hands over a queue entry and returns immediately.
@@ -92,7 +107,7 @@ hands over a queue entry and returns immediately.
 **calls** `announce`, `build_topics`, `cfg_load`, `client_start`
 
 ### `static void ha_mqtt_enqueue(uint8_t kind, int32_t value)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:409`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:416`
 
 Hand one observation to the publisher task. Drops rather than blocks: the callers
 are the Aliro reader task and the NimBLE host task running the credential
@@ -104,7 +119,7 @@ eight unsent messages, which already means the broker is gone.
 **called by** `ha_mqtt_publish_access`, `ha_mqtt_publish_distance_cm`
 
 ### `void ha_mqtt_publish_distance_cm(int32_t cm)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:419`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:426`
 
 Queue one conditioned approach distance, in centimetres (the estimate the
 unlock thresholds act on, not a raw block). Never blocks: a full queue drops
@@ -113,7 +128,7 @@ the sample. Rate-limited to the agent's own interval before it is queued.
 **calls** `ha_mqtt_enqueue`
 
 ### `void ha_mqtt_publish_access(bool granted)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:441`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:448`
 
 Queue one credential-independent access verdict. Never blocks: a full queue
 drops the event. Matches aliro_reader's access-listener signature, so it can
@@ -122,7 +137,7 @@ be registered directly.
 **calls** `ha_mqtt_enqueue`
 
 ### `void ha_mqtt_start_once(void)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:446`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:453`
 
 Bring the publisher up once the station has an address. Idempotent and
 cheap: it only spawns the publisher task, which then does the NVS read, the
@@ -132,7 +147,7 @@ No-op when the broker has not been provisioned.
 **called by** `ha_mqtt_shell_cmd`
 
 ### `static char *read_console_block(size_t max, bool multiline)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:469`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:476`
 
 Read from the console without going through linenoise, so a secret typed here
 never enters the shell's in-RAM history where an up-arrow would recall it. In
@@ -142,7 +157,7 @@ the caller frees, or NULL on overflow or end of input. Nothing is echoed.
 **called by** `ha_mqtt_shell_cmd`
 
 ### `static void cmd_show(void)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:508`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:515`
 
 Print what is provisioned and what the publisher is doing. The password is
 reported as set or unset and never rendered.
@@ -150,16 +165,9 @@ reported as set or unset and never rendered.
 **called by** `ha_mqtt_shell_cmd`  ·  **calls** `cfg_get_str`
 
 ### `int ha_mqtt_shell_cmd(int argc, char **argv)`
-`ports/esp32/apps/matter-lock/main/ha_mqtt.c:549`
+`ports/esp32/apps/matter-lock/main/ha_mqtt.c:556`
 
 `hamqtt` console command: provision the broker, show state, start. Registered
 from app_shell.cpp alongside the other commands.
 
 **calls** `cfg_set_str`, `cmd_show`, `ha_mqtt_start_once`, `node_name_ok`, `read_console_block`
-
-<details><summary>Undocumented (2)</summary>
-
-- `discovery_distance_payload`
-- `discovery_access_payload`
-
-</details>

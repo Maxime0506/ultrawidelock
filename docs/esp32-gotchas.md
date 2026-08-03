@@ -9,6 +9,11 @@ the standalone bring-up app) and [`ports/esp32/apps/matter-lock`](../ports/esp32
 door-lock app that hosts the reader). The ranging engine is `modules/woz_uwb`, shared
 byte-for-byte with the nRF5340 build.
 
+> **Bare `make build`, `make flash` and `make monitor` below are run from inside an app
+> directory**, where the local Makefile forwards them to ESP-IDF. At the repository root
+> those same names mean the DWM3001CDK; the root spelling is `make esp-build`,
+> `make esp-flash` and `make esp-monitor` with `APP=` and `TARGET=`.
+
 > Verification convention below: **VERIFIED** = confirmed on silicon or byte-exact
 > against a host KAT; **BENCH-GATED** = built + host-tested but not yet
 > confirmed against a live iPhone; **PREDICTED** = derived from vendor source or

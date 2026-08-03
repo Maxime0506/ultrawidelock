@@ -173,6 +173,9 @@ static void emit_hex(const char *tag, const uint8_t *b, size_t n)
 	printf("%s\n", line);
 }
 
+/**
+ * Return the numeric value 0-15 of a hex digit, or -1 if the character is not a valid hex digit.
+ */
 static int hexval(char c)
 {
 	if (c >= '0' && c <= '9') {
@@ -227,6 +230,9 @@ static int answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
 	return 0;
 }
 
+/**
+ * Return true if the current uptime is before the deadline in milliseconds.
+ */
 static bool before_deadline(int64_t deadline_ms)
 {
 	return woz_uptime_ms() < deadline_ms;

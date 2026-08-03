@@ -43,8 +43,29 @@ certificate under another's index, which no peer can detect.
 
 **called by** `add_noc`
 
+### `static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)`
+`modules/woz_matter/src/matter_clusters.c:158`
+
+Check whether a given cluster is present on a given endpoint. Returns true if the cluster is
+supported on that endpoint, false otherwise.
+
+**called by** `attr_write`
+
+### `static size_t list_endpoints(void *ctx, const uint16_t **out)`
+`modules/woz_matter/src/matter_clusters.c:194`
+
+Return the list of endpoint IDs this device exposes.
+
+### `static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute)`
+`modules/woz_matter/src/matter_clusters.c:208`
+
+Query whether an attribute on a given endpoint and cluster is supported. Returns
+MATTER_IM_STATUS_SUCCESS if supported, MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT if the endpoint does
+not exist, MATTER_IM_STATUS_UNSUPPORTED_CLUSTER if the cluster does not exist on that endpoint,
+or MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE if the attribute does not exist on that cluster.
+
 ### `static void put_protocol_version_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:359`
+`modules/woz_matter/src/matter_clusters.c:372`
 
 One Aliro protocol version, as the two big-endian bytes the spec asks for.
 Both version lists carry the same single entry, so they share this. The
@@ -54,7 +75,7 @@ that is the port Apple Home has actually provisioned.
 **called by** `lock_attr_value`
 
 ### `static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster, uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:378`
+`modules/woz_matter/src/matter_clusters.c:391`
 
 Endpoint 1: the Door Lock and its own Descriptor.
 Split out rather than folded into attr_value() because the two endpoints
@@ -63,22 +84,38 @@ cluster would answer the root's Descriptor for the lock.
 
 **called by** `attr_value`  ·  **calls** `put_protocol_version_list`
 
+### `static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
+`modules/woz_matter/src/matter_clusters.c:535`
+
+Retrieve the value of an attribute on a given endpoint and cluster. Encodes the value into the
+TLV writer using the supplied tag. Handles root and lock endpoints, multiple cluster types
+including Door Lock, Descriptor, Basic Information, Network Commissioning, Access Control,
+Operational Credentials, Admin Commissioning, and General Commissioning.
+
+**calls** `fabric_count`, `lock_attr_value`
+
 ### `static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)`
-`modules/woz_matter/src/matter_clusters.c:1023`
+`modules/woz_matter/src/matter_clusters.c:1042`
 
 Every cluster on @p endpoint, which is the same list has_cluster() answers
 from and the same one Descriptor's ServerList reports. One array, so the
 three cannot drift into disagreeing about what this endpoint carries.
 
+### `static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const uint32_t **out)`
+`modules/woz_matter/src/matter_clusters.c:1061`
+
+Return the attribute IDs for a given endpoint and cluster, or 0 if the endpoint or cluster is not
+supported.
+
 ### `static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t *out)`
-`modules/woz_matter/src/matter_clusters.c:1088`
+`modules/woz_matter/src/matter_clusters.c:1111`
 
 Read one unsigned field out of a command's TLV arguments.
 
 **called by** `add_noc`, `admin_command`, `command`, `opcred_command`, `set_credential`
 
 ### `static bool field_struct_u64(const struct matter_im_invoke *inv, uint8_t outer, uint8_t inner, uint64_t *out)`
-`modules/woz_matter/src/matter_clusters.c:1152`
+`modules/woz_matter/src/matter_clusters.c:1175`
 
 Read an unsigned field from INSIDE a nested structure field.
 SetCredential carries the credential type one level down, in a
@@ -89,8 +126,17 @@ to be sent, with nothing to report.
 
 **called by** `set_credential`
 
+### `static bool field_bytes(const struct matter_im_invoke *inv, uint8_t tag, const uint8_t **out, size_t *len)`
+`modules/woz_matter/src/matter_clusters.c:1216`
+
+Extract a bytes field from the TLV-encoded command fields by tag. Searches the structure for the
+first matching tag and decodes it. Returns true and fills out and len on success, false if the
+fields are missing, malformed, or the tag is not found.
+
+**called by** `add_noc`, `add_trusted_root`, `admin_command`, `network_command`, `opcred_command`, `set_aliro_reader_config`, `set_credential`
+
 ### `static bool dataset_xpanid(const uint8_t *ds, size_t len, uint8_t out[MATTER_THREAD_XPANID_LEN])`
-`modules/woz_matter/src/matter_clusters.c:1239`
+`modules/woz_matter/src/matter_clusters.c:1267`
 
 Find the Extended PAN ID in a Thread operational dataset.
 Walked rather than indexed: the dataset's TLVs may arrive in any order, and a
@@ -99,8 +145,24 @@ read past the buffer.
 
 **called by** `network_command`
 
+### `static void advertise_operational(const struct matter_device_info *info)`
+`modules/woz_matter/src/matter_clusters.c:1301`
+
+Advertise one Thread mDNS instance per provisioned fabric, deriving each instance name from the
+compressed fabric ID and node ID. Do nothing if no fabrics are provisioned.
+
+**called by** `add_noc`, `matter_clusters_resume`, `network_command`  ·  **calls** `advertise_one`
+
+### `static void advertise_one(const struct matter_fabric *fabric)`
+`modules/woz_matter/src/matter_clusters.c:1322`
+
+Advertise this fabric's instance name over Thread on the operational port if the name can be
+derived.
+
+**called by** `advertise_operational`
+
 ### `void matter_clusters_set_admin_hooks(const struct matter_admin_hooks *hooks)`
-`modules/woz_matter/src/matter_clusters.c:1315`
+`modules/woz_matter/src/matter_clusters.c:1351`
 
 The cluster behind Apple Home's "Turn On Pairing Mode", and behind
 multi-admin sharing generally. Without it a node is commissioned once, by
@@ -113,7 +175,7 @@ the PASE responder uses and putting the commissionable payload back on the
 air, and neither belongs in a module that tests/host compiles without Zephyr.
 
 ### `static uint8_t admin_status(uint8_t cluster_status)`
-`modules/woz_matter/src/matter_clusters.c:1329`
+`modules/woz_matter/src/matter_clusters.c:1365`
 
 Map a hook's cluster-specific status onto an IM status.
 Lossy, and knowingly so: Matter can carry a ClusterStatus alongside FAILURE
@@ -124,15 +186,24 @@ here does, because the only caller that matters retries either way.
 
 **called by** `admin_command`
 
+### `static uint8_t admin_command(const struct matter_im_invoke *inv, uint32_t *response_command)`
+`modules/woz_matter/src/matter_clusters.c:1375`
+
+Decode and dispatch an admin cluster command: open-enhanced-window, open-basic-window, or revoke.
+Extract TLV-encoded parameters by tag, validate lengths exactly, delegate to the registered
+hooks, and return a status code. None of the three commands carry a response payload.
+
+**called by** `command`  ·  **calls** `admin_status`, `field_bytes`, `field_u64`
+
 ### `static void network_fields(const struct matter_device_info *info, uint32_t response_command, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:1472`
+`modules/woz_matter/src/matter_clusters.c:1513`
 
 Serialise what network_command() decided.
 
 **called by** `command_fields`
 
 ### `static uint8_t add_trusted_root(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:1501`
+`modules/woz_matter/src/matter_clusters.c:1542`
 
 Install the root the commissioner wants this node to trust.
 Only the public key is kept -- see matter_fabric.h. Nothing is verified: this
@@ -142,7 +213,7 @@ what makes it commissionable.
 **called by** `opcred_command`  ·  **calls** `fabric_pending`, `field_bytes`
 
 ### `static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:1536`
+`modules/woz_matter/src/matter_clusters.c:1577`
 
 Accept the operational identity the commissioner minted for this node.
 @return the NodeOperationalCertStatusEnum for the reply. Every refusal is one
@@ -152,7 +223,7 @@ wrong and a commissioner can act on that.
 **called by** `opcred_command`  ·  **calls** `advertise_operational`, `fabric_next_index`, `fabric_pending`, `field_bytes`, `field_u64`
 
 ### `static uint8_t opcred_command(struct matter_device_info *info, const struct matter_im_invoke *inv, uint32_t *response_command)`
-`modules/woz_matter/src/matter_clusters.c:1636`
+`modules/woz_matter/src/matter_clusters.c:1677`
 
 Run one OperationalCredentials command.
 Everything expensive happens here -- the signature, and for a CSR a fresh
@@ -162,14 +233,14 @@ opcred_fields() may not.
 **called by** `command`  ·  **calls** `add_noc`, `add_trusted_root`, `field_bytes`, `field_u64`
 
 ### `static void opcred_fields(const struct matter_device_info *info, uint32_t response_command, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:1759`
+`modules/woz_matter/src/matter_clusters.c:1800`
 
 Serialise what opcred_command() already computed.
 
 **called by** `command_fields`
 
 ### `static uint8_t set_credential(struct matter_device_info *info, const struct matter_im_invoke *inv, uint32_t *response_command)`
-`modules/woz_matter/src/matter_clusters.c:1831`
+`modules/woz_matter/src/matter_clusters.c:1872`
 
 SetCredential: the Aliro trust anchor.
 The reader identity says who this device IS; this says whose key it will
@@ -185,8 +256,33 @@ status, and a controller that gets the wrong shape treats it as no answer.
 
 **called by** `command`  ·  **calls** `field_bytes`, `field_struct_u64`, `field_u64`
 
+### `static uint8_t set_aliro_reader_config(struct matter_device_info *info, const struct matter_im_invoke *inv)`
+`modules/woz_matter/src/matter_clusters.c:1920`
+
+Decode and store Aliro reader configuration: signing key, verification key (P-256 public), group
+ID, and group-resolving key. Validate all field lengths exactly, call the registered config hook
+to persist them, and store copies in the device info structure. Return a status code.
+
+**called by** `command`  ·  **calls** `field_bytes`
+
+### `static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t response_command, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
+`modules/woz_matter/src/matter_clusters.c:2170`
+
+Encode the fields of a command response based on endpoint, cluster, and response command type.
+Handles Door Lock SetCredentialResponse and GetCredentialStatusResponse on the lock endpoint, and
+OperationalCredentials, NetworkCommissioning, and GeneralCommissioning responses on the root
+endpoint.
+
+**calls** `network_fields`, `opcred_fields`
+
+### `void matter_clusters_failsafe_expire(struct matter_device_info *info)`
+`modules/woz_matter/src/matter_clusters.c:2340`
+
+Clear all fabric state and credentials when the fail-safe window expires before commissioning
+completes, wiping each fabric's private key and intermediate certificate.
+
 ### `static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const uint8_t *data, size_t data_len)`
-`modules/woz_matter/src/matter_clusters.c:2322`
+`modules/woz_matter/src/matter_clusters.c:2378`
 
 Apply an attribute write.
 One attribute is writable on this node: the ACL. A commissioner's last act is
@@ -198,23 +294,15 @@ consults it; see the note on matter_device_info.acl.
 
 **calls** `has_cluster`
 
-<details><summary>Undocumented (16)</summary>
+### `void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info)`
+`modules/woz_matter/src/matter_clusters.c:2416`
 
-- `has_cluster` — tested: matter network
-- `list_endpoints`
-- `attr_status`
-- `attr_value`
-- `list_attrs`
-- `field_bytes`
-- `advertise_operational`
-- `advertise_one`
-- `admin_command`
+Register this device's attribute, cluster, and command handlers with a Matter IM server.
+
+<details><summary>Undocumented (3)</summary>
+
 - `network_command`
-- `set_aliro_reader_config`
 - `command` — tested: matter addnoc; matter network
-- `command_fields`
 - `matter_clusters_resume` — tested: matter clusters
-- `matter_clusters_failsafe_expire` — tested: matter addnoc
-- `matter_clusters_init` — tested: matter addnoc; matter clusters; matter im; matter im invoke; matter im write; matter network
 
 </details>

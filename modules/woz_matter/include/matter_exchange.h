@@ -74,6 +74,11 @@ extern "C" {
  */
 #define MATTER_PROTOCOL_INTERACTION_MODEL 0x0001u
 
+/**
+ * Matter exchange state including secure session keys, local and peer session IDs, MRP settings,
+ * exchange ID tracking, message counters, and acknowledgement tracking for a single commissioner
+ * session.
+ */
 struct matter_exchange {
 	/**
 	 * The secure session, once PASE has built one.

@@ -69,6 +69,12 @@ static bool s_found_fabric;
 /* Set only by the KEY_OK branch below; see the note on the key itself. */
 static bool s_found_commit;
 
+/**
+ * Settings callback to deserialize and load stored Matter fabrics, Thread dataset, thread extended
+ * PAN ID, ICAC metadata, and ICAC certificate. Validates version and layout match; rejects short
+ * fabric reads and mismatched sizes to avoid loading truncated data. Returns -EINVAL on version or
+ * layout mismatch, or the result of the read callback on success.
+ */
 static int fab_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg)
 {
 	const char *next = NULL;
