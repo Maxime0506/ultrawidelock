@@ -57,8 +57,16 @@ the API and behavior may change in minor releases.
   build, so the bootloader more than pays for itself. That combination is
   hardware-validated (2026-08-03): commissioned into Apple Home, then approach
   unlock, NFC tap and Home-tile lock/unlock all working. Installing an OTA update
-  is still unexercised, and the bootloader signs with MCUboot's published demo
-  key, so `DFU=1` is not yet a shipping configuration.
+  is still unexercised.
+- `scripts/check-signing-key.sh`: one refusal, shared by both Zephyr ports, for a
+  bootloader that would trust a key it does not own. It holds MCUboot's list of
+  seven published demo key files and four checks: nothing configured, a demo
+  basename, a relative path (which resolves inside the MCUboot repository and
+  becomes the demo key silently), and a path that is not there. `--self-test`
+  proves each refusal still fires and that a valid key is still accepted.
+  `firmware/sysbuild.cmake` runs it for the DWM3001CDK and
+  `scripts/build-nrf5340dk.sh` for the nRF5340 DK, which cannot have a
+  `sysbuild.cmake` of its own because its application is fetched upstream.
 
 ### Changed
 
@@ -67,11 +75,15 @@ the API and behavior may change in minor releases.
   out individually. The defaults are the configuration validated on hardware
   2026-08-03, and the pair leaves more free app flash than the old no-bootloader
   default did, because LTO's 77,452 B more than covers the bootloader's 33,280 B.
-  Two consequences to know before reflashing a provisioned board: the flash map
-  moves `external_nvs` from `0x0` to `0x12f000`, which costs that board its Aliro
-  reader storage, and the default image is now signed with MCUboot's published
-  demo key, because this port has no per-checkout key mechanism of its own. Use
-  `DFU=0` to keep the old layout.
+  Two consequences before you reflash a provisioned board: the flash map moves
+  `external_nvs` from `0x0` to `0x12f000`, which costs that board its Aliro
+  reader storage, and `make dfu-key` is now a prerequisite of `make nrf-build`
+  the way it already was of `make build`. Use `DFU=0` to keep the old layout,
+  which has no bootloader and needs no key.
+- `make dfu-key` moved from the DWM3001CDK group to Setup, and the key it makes
+  is now the checkout's rather than that board's: `SIGN_KEY` in the top-level
+  `Makefile`, shared by both Zephyr ports. Same target, same path, same refusal
+  to overwrite. `CDK_KEY` survives as the per-build override `make release` uses.
 - Breaking: the bare make targets now mean the DWM3001CDK (`make build`,
   `flash`, `flash-erase`, `monitor`). The nRF5340 DK moved to `nrf-` prefixed
   targets (`make nrf-build`, `nrf-flash-erase`, `nrf-term`) beside the `esp-`

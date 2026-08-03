@@ -41,6 +41,25 @@ export ALIRO_BUILD_ROOT
 # NCS version for both Zephyr ports. Matches scripts/build-nrf5340dk.sh.
 NCS_VER ?= v3.3.0
 
+# ---- the MCUboot image-signing key ------------------------------------------
+# ONE key per checkout, shared by both Zephyr ports: it is the answer to "what
+# firmware will a board of mine boot", and that question has one answer here.
+# `make dfu-key` (mk/setup.mk) generates it and never overwrites it, both ports
+# refuse to build without it (scripts/check-signing-key.sh), and it is
+# gitignored, so a fresh clone or a new worktree fails at configure until it has
+# one.
+#
+# It stays under firmware/ rather than moving somewhere board-neutral because
+# moving the path is a key rotation for every existing checkout: `make dfu-key`
+# would find nothing at the new location and mint a second key, and boards
+# already carrying the first one would then reject anything signed with it.
+#
+# The path MUST be absolute; scripts/check-signing-key.sh explains why a
+# relative one silently becomes MCUboot's published demo key. Exported so the
+# port scripts read it rather than each keeping its own default.
+SIGN_KEY ?= $(REPO_ROOT)/firmware/keys/mcuboot_ec_p256.pem
+export SIGN_KEY
+
 # ---- options forwarded to the firmware builds -------------------------------
 # Set on the command line: make nrf-build PRETTY=1.
 # The in-tree Aliro stack is the default; ALIRO_SOURCE=0 selects the legacy

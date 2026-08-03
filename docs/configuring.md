@@ -21,7 +21,7 @@ Set on the command line, e.g. `make build RELEASE=1 SMP=1`:
 | `DFU_LOG=1` | make the bootloader narrate what it does with a staged patch. Read it with MCUboot's own ELF, not the application's |
 | `CDK_BUILD=<dir>` | which build directory `flash`, `flash-erase` and `monitor` mean. Default `build/cdk-matter` |
 | `CDK_RTT_BUILD=<dir>` | point `monitor` at a different image without moving what the flash targets write |
-| `CDK_KEY=<path>` | the image-signing key. Must be absolute. Default `firmware/keys/mcuboot_ec_p256.pem`, created by `make dfu-key` |
+| `CDK_KEY=<path>` | the image-signing key for this build only. Must be absolute. Defaults to `SIGN_KEY`, which both Zephyr ports share; `make release` uses it to point one build at a production key |
 | `CDK_DEPLOYED=<hex>` | the record of what the board is running, which every delta is computed against |
 | `OTA_NAME=<name>` | the advertised name `make dfu` and `make ota-smp` connect to |
 | `FOTA_VERSION=<x.y.z>` | the version stamped into the file `make fota` leaves for a phone |
@@ -69,8 +69,9 @@ Set on the command line, e.g. `make nrf-build PRETTY=1 CHIP=dw3720`:
 | `NFC=none` | build without an NFC reader; BLE/UWB remains enabled |
 | `CIR=1` | compile CIA/CIR diagnostics; arm at runtime with `aliro cir on`, `aliro cir dump on`, or `aliro cir probe` |
 | `LTO=0` | opt out of link-time optimisation, which is **on by default**. It saves 77,452 B of app-core flash and costs 1,920 B of RAM, and is hardware-validated 2026-08-03 (approach unlock, NFC tap, Apple Home commissioning and tile control). Turn it off when a stack trace has to name every frame |
-| `DFU=0` | opt out of MCUboot plus Matter OTA, which are **on by default**, and get the old no-bootloader bench layout back. The default costs 33,280 B of app-core flash (LTO more than covers it) and moves `external_nvs` from `0x0` to `0x12f000`, so a board switched between the two loses its Aliro reader storage. Hardware-validated 2026-08-03 as a working lock; installing an OTA update is still unexercised, and the bootloader signs with MCUboot's published demo key |
+| `DFU=0` | opt out of MCUboot plus Matter OTA, which are **on by default**, and get the old no-bootloader bench layout back. The default costs 33,280 B of app-core flash (LTO more than covers it) and moves `external_nvs` from `0x0` to `0x12f000`, so a board switched between the two loses its Aliro reader storage. It also requires `make dfu-key`, whose key the bootloader is signed with. Hardware-validated 2026-08-03 as a working lock; installing an OTA update is still unexercised |
 | `PRISTINE=1` | force a clean rebuild |
+| `SIGN_KEY=<path>` | the MCUboot image-signing key, used when `DFU=1`. Must be absolute. Default `firmware/keys/mcuboot_ec_p256.pem`, created by `make dfu-key`. The same variable and the same key serve the DWM3001CDK |
 
 ### Kconfig overlays (nRF5340 DK)
 

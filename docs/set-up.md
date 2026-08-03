@@ -69,7 +69,8 @@ make monitor        # RTT; this board has no UART console
 `make dfu-key` comes first because every image on this board is signed, and with
 no key the build stops at configure rather than fall back to MCUboot's published
 demo key. The key is gitignored, so a fresh clone or a new git worktree needs its
-own.
+own. One key covers both Zephyr ports: the nRF5340 DK below signs with the same
+one, so you only ever run this once.
 
 `make reader` builds the same source without Matter or Thread, which needs no
 commissioner. Once a board is flashed, `make dfu` updates it over Bluetooth, with
@@ -78,13 +79,16 @@ no cable and no probe. Details: [`firmware/README.md`](../firmware/README.md).
 Or for the **nRF5340 DK**, the only target with NFC:
 
 ```bash
+make dfu-key        # the same key as above; skip it if you already ran it
 make nrf-build
 make nrf-flash-erase
 make nrf-term
 ```
 
 That image lands in `./build/nrf5340dk/merged.hex`; the first flash needs the
-erase, plain `make nrf-flash` after.
+erase, plain `make nrf-flash` after. This board is signed for the same reason the
+CDK is, because `DFU=1` (MCUboot plus Matter OTA) is its default too. `DFU=0`
+builds the older no-bootloader bench layout, which needs no key.
 
 Build options: [configuring.md](configuring.md). Board setup:
 [nrf5340-bringup.md](nrf5340-bringup.md).
@@ -134,7 +138,7 @@ What the gates use, and why:
 | `semgrep` | `semgrep` (fetches its registry packs, so this gate needs network) |
 | `retire` | `web` |
 | `osv-scanner`, `pip-audit` | `deps`, one half each — `pip-audit` is checked inside `scripts/security.sh` and fails rather than skips |
-| `openssl` | no gate — `make dfu-key` only, which every CDK build needs first; falls back to `python3` + `cryptography` |
+| `openssl` | no gate — `make dfu-key` only, which every CDK build and every default nRF5340 DK build needs first; falls back to `python3` + `cryptography` |
 | `valgrind` | `ct`, and deliberately absent from the `make tools` list: there is no darwin/arm64 build, so the gate reports a skip instead of failing the sweep |
 | `nrfutil` | no gate — `make bootstrap`/`build`/`flash` only, so its absence is reported and never fails `make tools` |
 | python `markdown`, `coverage` | not checked by any gate, but CI installs both: without them the flash-HTML drift check and the python coverage rows silently skip |

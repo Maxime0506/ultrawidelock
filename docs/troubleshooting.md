@@ -25,6 +25,8 @@ bring-up traps that cost real time are in
 `make dfu-key` once. Every image on this board is signed and the key is
 gitignored, so a fresh clone or a new git worktree has none. The build refuses
 rather than falling back to the demo key published in MCUboot's own repository.
+`make nrf-build` stops the same way and takes the same fix, because the nRF5340
+DK signs with the same key under its default `DFU=1`.
 
 **`make monitor` attaches cleanly and prints nothing.** Usually the ELF: probe-rs
 reads the RTT control block address out of the ELF you pass it, so attaching with
@@ -83,6 +85,14 @@ decision rather than a detail. LTO is on by default and worth 41,084 B; `LTO=0`
 no longer fits this flash map at all and the build says so.
 
 ## Build and flash (nRF5340 DK)
+
+**`make nrf-build` stops before it starts, saying it will not build a bootloader
+anybody can sign for.** Run `make dfu-key` once per clone. `DFU=1` is the default
+here and MCUboot must be given a key this checkout owns; with none configured it
+would fall back to the one published in MCUboot's own repository, which every
+stock MCUboot already trusts. `DFU=0` builds the older no-bootloader bench layout
+and needs no key. Same key and same target as the DWM3001CDK, so if you have
+built that board you already have one.
 
 **`make nrf-build` can't find the toolchain.** `make bootstrap` installs the NCS v3.3.0
 toolchain as its second phase, so this normally means bootstrap has not been run here.

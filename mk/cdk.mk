@@ -83,6 +83,11 @@ CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP)
 # published in MCUboot's own repository. firmware/sysbuild.cmake refuses to
 # build with any of the seven, and firmware/keys/README.md has the rest.
 #
+# SIGN_KEY (top-level Makefile) is the checkout-wide default, shared with the
+# nRF5340 DK, which signs with the same key for the same reason. CDK_KEY is kept
+# as the per-build override because `make release` uses it to point one build at
+# a production key without disturbing the checkout default.
+#
 # The path MUST be absolute. Sysbuild hands this symbol to the bootloader image
 # through set_config_string(), never through a .conf file, so MCUboot's own
 # base-directory search finds nothing and a relative path falls through to
@@ -96,7 +101,7 @@ CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP)
 # Applied to all three images. `-p auto` does NOT re-run CMake when a -D flag
 # changes (see CDK_PRISTINE), so pointing an existing build dir at a new key
 # needs PRISTINE=1.
-CDK_KEY  ?= $(REPO_ROOT)/firmware/keys/mcuboot_ec_p256.pem
+CDK_KEY  ?= $(SIGN_KEY)
 CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
 
 # ---- delta update over BLE ---------------------------------------------------
@@ -193,7 +198,7 @@ endif
 # Every recipe runs from ./workspace so west finds its manifest.
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
-.PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key release \
+.PHONY: build rebuild reader selftest flash flash-erase monitor dfu release \
         dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-push ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
@@ -273,27 +278,6 @@ flash:
 ##   Options: CDK_BUILD=<dir> (default build/cdk-matter)
 flash-erase:
 	@$(CDK_RUN) flash --erase -d $(CDK_BUILD)
-
-## dfu-key: generate this checkout's MCUboot signing key  ·  once per clone
-##   ECDSA P-256 into firmware/keys/, gitignored. Every image build needs it:
-##   without a key firmware/sysbuild.cmake fails the build rather than let it
-##   fall back to MCUboot's PUBLISHED demo key.
-##   REFUSES TO OVERWRITE an existing key. Replacing it strands every board
-##   already carrying the old public half, and with one slot there is no
-##   previous image to fall back to. firmware/keys/README.md has the rotation.
-##   Options: CDK_KEY=<path>
-dfu-key:
-	@if [ -f '$(CDK_KEY)' ]; then \
-	  printf '  key exists, keeping it  ·  %s\n' '$(CDK_KEY)'; exit 0; \
-	fi; \
-	mkdir -p '$(dir $(CDK_KEY))'; \
-	if command -v openssl >/dev/null 2>&1; then \
-	  openssl ecparam -name prime256v1 -genkey -noout -out '$(CDK_KEY)'; \
-	else \
-	  python3 -c 'import sys;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives import serialization as s;open(sys.argv[1],"wb").write(ec.generate_private_key(ec.SECP256R1()).private_bytes(s.Encoding.PEM,s.PrivateFormat.PKCS8,s.NoEncryption()))' '$(CDK_KEY)'; \
-	fi || { printf '  cannot generate a key  ·  need openssl, or python3 with the cryptography module\n' >&2; exit 1; }; \
-	chmod 600 '$(CDK_KEY)'; \
-	printf '  generated  ·  %s\n  Gitignored. Back it up wherever your other secrets live.\n' '$(CDK_KEY)'
 
 ## dfu: update the board over Bluetooth  ·  no cable, no probe
 ##   Builds the current tree, works out the difference from what the board is

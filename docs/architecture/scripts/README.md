@@ -8,6 +8,7 @@
 | [`scripts/cdk-dfu.sh`](cdk-dfu.sh.md) | cdk-dfu.sh — push a signed image to the DWM3001CDK over MCUboot serial recovery. |
 | [`scripts/cdk-rtt-elf-check.sh`](cdk-rtt-elf-check.sh.md) | Refuse to attach RTT with an ELF the board is not running. |
 | [`scripts/check-approtect.sh`](check-approtect.sh.md) | check-approtect.sh — refuse to ship an image that locks APPROTECT. |
+| [`scripts/check-signing-key.sh`](check-signing-key.sh.md) | check-signing-key.sh — refuse to build a bootloader that anybody can sign for. |
 | [`scripts/check-uwb-seam.sh`](check-uwb-seam.sh.md) | check-uwb-seam.sh — keep the CCC STS seam impossible to bypass. |
 | [`scripts/deadcode-codechecker.sh`](deadcode-codechecker.sh.md) | deadcode-codechecker.sh — CodeChecker over the real firmware build. |
 | [`scripts/deadcode-graph.sh`](deadcode-graph.sh.md) | deadcode-graph.sh — find functions nothing calls, using the documate code graph. |

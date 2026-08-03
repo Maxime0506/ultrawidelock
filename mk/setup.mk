@@ -1,7 +1,7 @@
 # mk/setup.mk — getting a machine ready: host gate tools, then the NCS toolchain
 # and the fetched west workspace both Zephyr ports build against.
 
-.PHONY: tools tools-install bootstrap ws-seed
+.PHONY: tools tools-install bootstrap ws-seed dfu-key
 
 ##@ Setup
 ## tools: what every host CI gate needs, what this machine has, how to fill gaps
@@ -55,3 +55,26 @@ bootstrap:
 ##   Idempotent. Isolates worktrees so branch-bouncing can't build stale patches.
 ws-seed:
 	@$(REPO_ROOT)/scripts/ws-seed.sh
+
+## dfu-key: generate this checkout's MCUboot signing key  ·  once per clone
+##   ECDSA P-256 into firmware/keys/, gitignored. BOTH Zephyr ports need it and
+##   both share the one key: the DWM3001CDK for every build, the nRF5340 DK for
+##   every build that keeps the default DFU=1. Without it they refuse to build
+##   rather than fall back to MCUboot's PUBLISHED demo key, which every stock
+##   MCUboot in the world already trusts (scripts/check-signing-key.sh).
+##   REFUSES TO OVERWRITE an existing key. Replacing it strands every board
+##   already carrying the old public half, and on the CDK's single slot there is
+##   no previous image to fall back to. firmware/keys/README.md has the rotation.
+##   Options: SIGN_KEY=<path> (absolute)
+dfu-key:
+	@if [ -f '$(SIGN_KEY)' ]; then \
+	  printf '  key exists, keeping it  ·  %s\n' '$(SIGN_KEY)'; exit 0; \
+	fi; \
+	mkdir -p '$(dir $(SIGN_KEY))'; \
+	if command -v openssl >/dev/null 2>&1; then \
+	  openssl ecparam -name prime256v1 -genkey -noout -out '$(SIGN_KEY)'; \
+	else \
+	  python3 -c 'import sys;from cryptography.hazmat.primitives.asymmetric import ec;from cryptography.hazmat.primitives import serialization as s;open(sys.argv[1],"wb").write(ec.generate_private_key(ec.SECP256R1()).private_bytes(s.Encoding.PEM,s.PrivateFormat.PKCS8,s.NoEncryption()))' '$(SIGN_KEY)'; \
+	fi || { printf '  cannot generate a key  ·  need openssl, or python3 with the cryptography module\n' >&2; exit 1; }; \
+	chmod 600 '$(SIGN_KEY)'; \
+	printf '  generated  ·  %s\n  Gitignored. Back it up wherever your other secrets live.\n' '$(SIGN_KEY)'

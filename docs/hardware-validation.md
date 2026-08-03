@@ -80,6 +80,9 @@ exercised by design and by host test but has never met a real power cut.
 
 - nRF5340 DK with DWM3000EVB (Arduino header) and X-NUCLEO-NFC12A1, wired per
   [`ports/nrf5340dk/overlays/dw3000-nfc.overlay`](../ports/nrf5340dk/overlays/dw3000-nfc.overlay).
+- `make dfu-key`, once per clone, the same key the DWM3001CDK uses. `DFU=1` is
+  this board's default and the build refuses to give MCUboot a key it does not
+  own. `DFU=0` builds the older no-bootloader layout and needs none.
 - An iPhone (or Apple Watch) with the lock's Aliro key provisioned in Wallet.
 - Serial console attached (`make nrf-term`) to observe logs.
 

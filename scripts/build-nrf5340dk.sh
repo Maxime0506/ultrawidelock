@@ -30,6 +30,10 @@
 # split the DWM3001CDK uses: mk/ is the policy layer and decides what a plain
 # build means, this script only does what it is told. Call it directly and you
 # get neither unless you ask.
+#
+# DFU=1 needs this checkout's image-signing key (`make dfu-key`) and refuses to
+# build without one, because a bootloader that trusts MCUboot's published demo
+# key trusts everybody. SIGN_KEY=<absolute path> overrides where it looks.
 set -euo pipefail
 
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -73,6 +77,16 @@ case "${ALIRO_SOURCE:-1}" in
 esac
 BUILD="${ALIRO_BUILD:-$BUILD_ROOT/$BUILD_NAME}"
 BOARD="nrf5340dk/nrf5340/cpuapp"
+
+# The MCUboot image-signing key, used only when DFU=1 puts a bootloader in the
+# build. One key per checkout, shared with the DWM3001CDK: the top-level
+# Makefile exports SIGN_KEY and this is the same default, spelled again because
+# CI calls this script directly and never goes through make.
+#
+# Absolute on purpose. A relative path resolves inside the MCUboot repository
+# (boot/zephyr/CMakeLists.txt:428) and silently becomes MCUboot's published demo
+# key; scripts/check-signing-key.sh refuses one for that reason.
+SIGN_KEY="${SIGN_KEY:-$TREE/firmware/keys/mcuboot_ec_p256.pem}"
 
 # Launch a west command through nrfutil's Nordic SDK toolchain manager for the configured NCS version. Ensures all builds use the pinned toolchain without calling bare west.
 # ALIRO_TOOLCHAIN=env skips that wrapper and runs the command directly — for
@@ -249,9 +263,10 @@ do_build() {
   [ "${HA:-0}" = 1 ] && ha_conf=";$OV/woz-ha.conf"
 
   # LTO=1: layer lto.conf (whole-program codegen on the app image). OFF by default
-  # on this board, unlike the CDK, because no walk-up unlock has been run under it
-  # here and a size number cannot vouch for the ranging arm deadline; lto.conf has
-  # the full reasoning and the Kconfig trap. Rides EXTRA_CONF_FILE (in the
+  # in this script and ON via `make nrf-build`, which is where the policy lives;
+  # it earned that default on 2026-08-03 with a walk-up unlock, because a size
+  # number cannot vouch for the ranging arm deadline. lto.conf has the full
+  # reasoning and the Kconfig trap. Rides EXTRA_CONF_FILE (in the
   # signature), so toggling it forces the pristine rebuild that changing codegen
   # needs anyway. Last in the list so nothing layered before it can undo it.
   local lto_conf=""
@@ -297,12 +312,31 @@ do_build() {
   )
 
   local dfu_conf="" sb_conf="$OV/sysbuild-woz.conf" pm_yml="$OV/pm_static.yml"
+  local -a sign_flags=()
   if [ "${DFU:-0}" = 1 ]; then
     dfu_conf=";$OV/dfu.conf"
     sb_conf="$OV/sysbuild-dfu.conf"
     pm_yml="$APP/pm_static_nrf5340dk_nrf5340_cpuapp.yml"
     [ -f "$pm_yml" ] || die "add-on MCUboot flash map not found" \
                             "expected $pm_yml" "run: make bootstrap"
+
+    # A bootloader is only worth having if the key it trusts is one only this
+    # checkout holds. Configure nothing and MCUboot signs with the key published
+    # in its own repository, and this build did exactly that until now: the
+    # generated mcuboot .config named workspace/bootloader/mcuboot/root-ec-p256.pem.
+    # The DWM3001CDK has refused that since it grew a bootloader
+    # (firmware/sysbuild.cmake); this is the same refusal, run from here because
+    # the application is a fetched upstream tree that never gets a sysbuild.cmake
+    # of ours. Checked BEFORE the ~90 s configure so the fix arrives immediately.
+    "$TREE/scripts/check-signing-key.sh" "$SIGN_KEY" \
+      || die "refusing to build a bootloader anybody can sign for" \
+             "the reason is printed above" \
+             "DFU=0 builds the no-bootloader bench layout, which needs no key"
+
+    # The inner quotes are part of the value: zephyr/cmake/modules/kconfig.cmake:264
+    # writes a command-line cache variable through verbatim, and a Kconfig string
+    # without quotes is a syntax error rather than a fallback to anything.
+    sign_flags=(-DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE="\"$SIGN_KEY\"")
   fi
 
   # Every -D flag that, if changed, requires a from-scratch configure. Overlay
@@ -332,6 +366,7 @@ do_build() {
   fi
   [ ${#nfc_flags[@]} -gt 0 ] && dflags+=("${nfc_flags[@]}")
   [ ${#lto_flags[@]} -gt 0 ] && dflags+=("${lto_flags[@]}")
+  [ ${#sign_flags[@]} -gt 0 ] && dflags+=("${sign_flags[@]}")
   [ ${#mcuboot_log_flags[@]} -gt 0 ] && dflags+=("${mcuboot_log_flags[@]}")
 
   # The signature lives beside the build root, never inside the build directory:
@@ -367,6 +402,7 @@ do_build() {
   kv "nfc"   "$nfc_name"
   if [ -n "$dfu_conf" ]; then
     kv "dfu" "MCUboot + Matter OTA   ${DIM}(secondary slot on external QSPI)${RST}"
+    kv "key" "$SIGN_KEY"
   else
     kv "dfu" "${DIM}none (no bootloader; app owns flash from 0x0)${RST}"
   fi
@@ -411,6 +447,28 @@ do_build() {
                "$other_config"
     done
     ok "LTO confined to the application image"
+  fi
+
+  # Which key the bootloader ACTUALLY trusts, read off the artefact rather than
+  # inferred from the flag we passed. Same lesson the LTO guard above is made of:
+  # a -D flag that sysbuild declined to honour leaves a build that succeeds while
+  # meaning something else. Here the something else is a bootloader that boots
+  # anybody's firmware, and nothing in the build output would say so -- MCUboot
+  # downgrades it to a message(WARNING) that a ten-thousand-line log swallows.
+  if [ -n "$dfu_conf" ]; then
+    local boot_config="$BUILD/mcuboot/zephyr/.config"
+    [ -f "$boot_config" ] || die "mcuboot .config not found" "$boot_config"
+    local built_key
+    built_key=$(sed -n 's/^CONFIG_BOOT_SIGNATURE_KEY_FILE="\(.*\)"$/\1/p' "$boot_config")
+    "$TREE/scripts/check-signing-key.sh" "$built_key" \
+      || die "the built bootloader trusts a key this checkout does not own" \
+             "SB_CONFIG_BOOT_SIGNATURE_KEY_FILE did not reach the mcuboot image" \
+             "$boot_config"
+    [ "$built_key" = "$SIGN_KEY" ] \
+      || die "the built bootloader signs with a different key than requested" \
+             "asked for $SIGN_KEY" \
+             "got      $built_key"
+    ok "MCUboot signs with this checkout's key, not MCUboot's published one"
   fi
 
   if [ "$aliro_source" = 1 ]; then

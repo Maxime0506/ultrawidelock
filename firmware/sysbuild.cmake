@@ -36,52 +36,38 @@ endif()
 # in a ten-thousand-line build log is indistinguishable from no warning. These
 # are fatal instead.
 #
-# mcuboot_demo_keys is MCUboot's own list, copied from lines 439-447 of that
-# file. Compared by BASENAME, so a demo key copied somewhere else is still
-# caught -- the check is about which key, not which path.
-#
-# Ordering is deliberate: the demo-name check runs before the absolute-path
-# check so that a RELATIVE demo path reports the useful failure rather than the
-# pedantic one.
+# The four refusals -- unset, a demo basename, a relative path, a path that does
+# not exist -- and the list of demo names they are checked against live in
+# scripts/check-signing-key.sh, not here. The nRF5340 DK reaches the same
+# bootloader through a fetched upstream application that this repo never edits,
+# so it cannot be given a sysbuild.cmake of its own and has to make the same
+# decision from its build script. One file both callers run is the only way the
+# two boards cannot drift apart on which keys are acceptable.
 #
 # SB_CONFIG_* is populated here: Kconfig must run before images are added (it is
 # SB_CONFIG_BOOTLOADER_MCUBOOT that causes the MCUboot image to exist at all),
 # and sysbuild.cmake is included only after they have been
-# (sysbuild_extensions.cmake:906-931).
-set(mcuboot_demo_keys
-	root-ec-p256.pem
-	root-ec-p256-pkcs8.pem
-	root-ec-p384.pem
-	root-ec-p384-pkcs8.pem
-	root-ed25519.pem
-	root-rsa-2048.pem
-	root-rsa-3072.pem)
+# (sysbuild_extensions.cmake:906-931). An unset symbol expands to the empty
+# string, which the script reads as "nothing configured" -- the case that would
+# otherwise fall through to the demo key.
+set(sign_key_checker "${CMAKE_CURRENT_LIST_DIR}/../scripts/check-signing-key.sh")
 
-get_filename_component(sign_key_name "${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}" NAME)
+execute_process(
+	COMMAND "${sign_key_checker}" "${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}"
+	RESULT_VARIABLE sign_key_result
+	ERROR_VARIABLE sign_key_error)
 
-if(NOT SB_CONFIG_BOOT_SIGNATURE_KEY_FILE)
-	message(FATAL_ERROR
-		"No MCUboot signing key is configured, so this build would fall back to\n"
-		"MCUboot's PUBLIC demo key. Refusing to build.\n"
-		"  Fix: make dfu-key\n"
-		"See firmware/keys/README.md.")
-elseif(sign_key_name IN_LIST mcuboot_demo_keys)
-	message(FATAL_ERROR
-		"MCUboot's published demo key is not a signing key. Refusing to build.\n"
-		"  SB_CONFIG_BOOT_SIGNATURE_KEY_FILE = ${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}\n"
-		"  Fix: make dfu-key\n"
-		"See firmware/keys/README.md.")
-elseif(NOT IS_ABSOLUTE "${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}")
-	message(FATAL_ERROR
-		"The signing key path must be ABSOLUTE. A relative one is resolved against\n"
-		"the MCUboot repository (boot/zephyr/CMakeLists.txt:428) and lands on the\n"
-		"demo key without saying so. Refusing to build.\n"
-		"  SB_CONFIG_BOOT_SIGNATURE_KEY_FILE = ${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}\n"
-		"See firmware/keys/README.md.")
-elseif(NOT EXISTS "${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}")
-	message(FATAL_ERROR
-		"The configured MCUboot signing key does not exist. Refusing to build.\n"
-		"  SB_CONFIG_BOOT_SIGNATURE_KEY_FILE = ${SB_CONFIG_BOOT_SIGNATURE_KEY_FILE}\n"
-		"  Fix: make dfu-key\n"
-		"See firmware/keys/README.md.")
+# A launch failure -- script missing, or its execute bit lost -- puts a message
+# in RESULT_VARIABLE rather than an exit code, and leaves ERROR_VARIABLE empty.
+# It still fails the build, which is the right way round, but say why instead of
+# raising a blank error.
+if(NOT sign_key_result EQUAL 0)
+	if(sign_key_error STREQUAL "")
+		message(FATAL_ERROR
+			"Could not run the signing-key check, so this build cannot know which\n"
+			"key MCUboot would trust. Refusing to build.\n"
+			"  ${sign_key_checker}\n"
+			"  ${sign_key_result}")
+	endif()
+	message(FATAL_ERROR "\n${sign_key_error}")
 endif()

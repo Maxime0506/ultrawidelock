@@ -416,8 +416,11 @@ where it is published, which makes it a formality rather than a key. MCUboot
 notices and emits a `message(WARNING)`, which in a ten-thousand-line build log
 is indistinguishable from silence.
 
-`firmware/sysbuild.cmake` makes it fatal instead, checked against MCUboot's full
-list of seven default key files and against the path being absolute and present.
+`firmware/sysbuild.cmake` makes it fatal instead, by running
+`scripts/check-signing-key.sh`: MCUboot's full list of seven default key files,
+plus the path being absolute and present. That check is a file rather than a
+paragraph here because the nRF5340 DK runs the same one from its build script,
+so the two boards cannot drift apart on which keys are acceptable.
 `firmware/keys/README.md` has the rotation rules, the two path traps, and why CI
 signs with a throwaway key rather than a secret.
 

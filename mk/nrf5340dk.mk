@@ -25,12 +25,12 @@
 # app partition and the OTA code another 32,812 B, against LTO's 77,452 B, so the
 # pair still leaves more free flash than the old no-bootloader default did.
 #
-# TWO THINGS THE DEFAULT NOW CARRIES, neither of them fixed:
-#   * The bootloader signs with MCUboot's PUBLISHED demo key, because nothing
-#     here configures one. The DWM3001CDK refuses to build in that situation
-#     (firmware/sysbuild.cmake) and generates a per-checkout key with
-#     `make dfu-key`. This board has no equivalent yet, so the default image is
-#     one anybody can sign for. Fine on a bench, not fine on a door.
+# WHAT THE DEFAULT CARRIES, and the one part of it that is still unfixed:
+#   * `make dfu-key` is now a prerequisite of this board too, not just the CDK.
+#     The bootloader signs with this checkout's key and the build refuses to run
+#     without one (scripts/check-signing-key.sh), rather than falling back to
+#     MCUboot's PUBLISHED demo key the way it did when DFU=1 first landed.
+#     One key serves both boards; the top-level Makefile owns the path.
 #   * The flash map moves external_nvs from 0x0 to 0x12f000, so a board carrying
 #     the old no-bootloader layout loses its Aliro reader storage the first time
 #     it takes this build. `DFU=0` keeps the old layout.
@@ -81,9 +81,9 @@ NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data
 ##            DFU=0 (opt OUT of MCUboot + Matter OTA, which are ON by default.
 ##                   DFU=0 gives the old no-bootloader bench layout, which keeps
 ##                   33,280 B of app flash and leaves external_nvs at 0x0.
-##                   NOTE the default now signs with MCUboot's PUBLISHED demo
-##                   key, and moves external_nvs, which costs an already
-##                   provisioned board its reader storage.)
+##                   NOTE the default needs `make dfu-key` first, and moves
+##                   external_nvs, which costs an already provisioned board its
+##                   reader storage.)
 ##   e.g.     make nrf-build PRETTY=1 CHIP=dw3720
 nrf-build:
 	@$(NRF_ENV) $(NRF_BUILD_SH) build

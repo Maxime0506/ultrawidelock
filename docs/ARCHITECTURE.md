@@ -3098,6 +3098,9 @@ NOTE both default to OFF *here* and ON via `make nrf-build`, which is the same
 split the DWM3001CDK uses: mk/ is the policy layer and decides what a plain
 build means, this script only does what it is told. Call it directly and you
 get neither unless you ask.
+DFU=1 needs this checkout's image-signing key (`make dfu-key`) and refuses to
+build without one, because a bootloader that trusts MCUboot's published demo
+key trusts everybody. SIGN_KEY=<absolute path> overrides where it looks.
 
 ### [`scripts/cdk-dfu.sh`](architecture/scripts/cdk-dfu.sh.md)
 
@@ -3197,6 +3200,29 @@ fine and everything above it returned "memory protection issue", which reads
 exactly like a board with 100 KB of RAM missing. Hours went into a hardware
 theory for what was a protection state, and `nrfutil device recover` cleared it
 in one command. Ask the silicon.
+
+### [`scripts/check-signing-key.sh`](architecture/scripts/check-signing-key.sh.md)
+
+check-signing-key.sh — refuse to build a bootloader that anybody can sign for.
+WHAT IS BEING PREVENTED. MCUboot boots slot 0 only if the image verifies
+against a public key compiled into the bootloader, so the private half is the
+whole answer to "what firmware will this lock run". Configure nothing and
+MCUboot signs with root-ec-p256.pem out of its OWN repository, where that key
+is published. Every stock MCUboot in the world accepts images signed with it.
+On a lock that is not a signing key, it is a formality.
+MCUboot does notice, at bootloader/mcuboot/boot/zephyr/CMakeLists.txt:449-452,
+and calls message(WARNING). That is precisely why it survived on this port for
+as long as it did: a warning in a ten-thousand-line build log is
+indistinguishable from no warning. Here it is fatal.
+scripts/check-signing-key.sh <path>      # validate one configured key
+scripts/check-signing-key.sh --self-test # prove the refusals actually fire
+Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
+Both Zephyr ports call this, which is why it is a file rather than a paragraph
+repeated in each: firmware/sysbuild.cmake for the DWM3001CDK, and
+scripts/build-nrf5340dk.sh for the nRF5340 DK. One list, one set of refusals,
+one place to edit when upstream adds an eighth demo key. The DK additionally
+reads the key back out of the built mcuboot .config, because a flag we passed
+is not the same fact as a flag the build honoured.
 
 ### [`scripts/check-uwb-seam.sh`](architecture/scripts/check-uwb-seam.sh.md)
 
