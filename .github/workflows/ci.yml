@@ -78,6 +78,48 @@ jobs:
           # here: persist-credentials is off, so it would have no token.
           fetch-depth: 0
 
+      # Nothing between the checkout and the sweep is diff-sensitive: the same
+      # wheels, the same npm package and the same three release tarballs are
+      # fetched on every run, uncached, in front of a gate table that is ~103s of
+      # work. These caches take the network out of that without changing what is
+      # installed or how it is checked. Every key carries the pins it installs,
+      # so a version bump misses once and then sticks, and a miss costs exactly
+      # what every run costs today.
+      #
+      # The .debs are deliberately not cached. apt wants its archive directory
+      # reachable by the _apt user it drops privileges to, so caching them means
+      # chmod dances around a step that would break the job outright if they were
+      # wrong. Wheels and tarballs are the larger share anyway.
+      - name: cache pip downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # pip's own download cache. pipx installs through an internal pip that
+          # reads the same directory, so `reuse` comes off this too.
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ env.CLANG_FORMAT_VERSION }}-${{ env.CLANG_TIDY_VERSION }}-${{ env.ZIZMOR_VERSION }}-${{ env.SEMGREP_VERSION }}-${{ env.PIP_AUDIT_VERSION }}-${{ env.MARKDOWN_VERSION }}-${{ env.REUSE_VERSION }}
+          # A bump should re-download one wheel, not all eight. Safe to share
+          # across keys: the cache is content-addressed and pip still resolves
+          # the exact pinned version out of it.
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: cache npm downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ env.RETIRE_VERSION }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      - name: cache pinned release tarballs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # The downloads, not the unpacked binaries: the pinned sha256 is of the
+          # tarball, so keeping the tarball means the checksum in the step below
+          # is still verified on a cache hit rather than trusted away.
+          path: ~/.cache/ci-dl
+          key: dl-${{ runner.os }}-${{ env.ACTIONLINT_SHA256 }}-${{ env.GITLEAKS_SHA256 }}-${{ env.OSV_SHA256 }}
+
       - name: apt packages
         # clang: test, test-san and fuzz (libFuzzer's runtime is clang-only).
         # valgrind: the ct gate, which is ctgrind under valgrind.
@@ -104,21 +146,33 @@ jobs:
         # Version and checksum both, for the same reason the old security lane
         # did it: these decide whether code merges, so fetching whatever the
         # latest release happens to be would put an unreviewed binary there.
+        #
+        # curl runs only on a cache miss; sha256sum -c runs either way, so a
+        # poisoned or truncated cache entry fails the job exactly as a bad
+        # download would. The version is in each filename rather than the
+        # directory, so bumping a pin misses that one file and re-fetches it
+        # instead of failing the checksum against a stale one.
         run: |
-          curl -fsSLo /tmp/actionlint.tgz \
+          D=~/.cache/ci-dl
+          mkdir -p "$D"
+
+          A="$D/actionlint-${ACTIONLINT_VERSION}.tgz"
+          [ -f "$A" ] || curl -fsSLo "$A" \
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tgz" | sha256sum -c -
-          tar -xzf /tmp/actionlint.tgz -C /usr/local/bin actionlint
+          echo "${ACTIONLINT_SHA256}  $A" | sha256sum -c -
+          tar -xzf "$A" -C /usr/local/bin actionlint
 
-          curl -fsSLo /tmp/gitleaks.tgz \
+          G="$D/gitleaks-${GITLEAKS_VERSION}.tgz"
+          [ -f "$G" ] || curl -fsSLo "$G" \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
-          sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          echo "${GITLEAKS_SHA256}  $G" | sha256sum -c -
+          sudo tar -xzf "$G" -C /usr/local/bin gitleaks
 
-          curl -fsSLo /tmp/osv-scanner \
+          O="$D/osv-scanner-${OSV_VERSION}"
+          [ -f "$O" ] || curl -fsSLo "$O" \
             "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
-          echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c -
-          sudo install -m 0755 /tmp/osv-scanner /usr/local/bin/osv-scanner
+          echo "${OSV_SHA256}  $O" | sha256sum -c -
+          sudo install -m 0755 "$O" /usr/local/bin/osv-scanner
 
       - name: pinned node tools
         # zizmor flags this as an ad-hoc install, and it is right: the pin fixes
