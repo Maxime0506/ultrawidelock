@@ -35,9 +35,12 @@ twister-out/
 bench.env
 
 # Local merged firmware for bench-testing the browser flasher; the published
-# copy comes from CI (release.yml) via tools/docs_flash.py.
+# copy comes from CI (release.yml) via tools/docs_flash.py. All three targets
+# release.yml builds are listed — c6 was missing, so a local C6 bench build was
+# the one that showed up as committable.
 /web-flasher/openaliro-matter-lock-esp32s3.bin
 /web-flasher/openaliro-matter-lock-esp32c5.bin
+/web-flasher/openaliro-matter-lock-esp32c6.bin
 
 # Python build artifacts from an editable install of the HA agent
 *.egg-info/
@@ -61,6 +64,19 @@ internal/
 *.pklg
 *.btsnoop
 btsnoop_hci.log
+
+# Flight-recorder traces and bench console logs. Same rule as the captures
+# above, and for a sharper reason: tools/flight_recorder.py:20-23 says a .frc
+# carries the live ephemeral URSK, which is the key the whole unlock rests on.
+# `make esp-lab` drops walkup-<timestamp>.log straight into the repo root.
+*.frc
+walkup-*.log
+session.log
+
+# Code graph built by `make docs` (58 MB of SQLite plus its WAL). There is a
+# self-ignore inside .documate/, but that file is one `rm` away from making the
+# whole thing stageable, so anchor it here too.
+/.documate/
 
 # scratchpad
 scratchpad/

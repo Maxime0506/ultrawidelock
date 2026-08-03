@@ -21,7 +21,7 @@ The implementations are free to call the decadriver directly — that is how
 they reach the hardware, and how a site that has already programmed the STS
 itself (the self-rearm paths in ccc_shim_rx.c) opts out on purpose.
 
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](../modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](../modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](uwb_min.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](uwb_rxdiag.c.md)  ·  **discussed in** [`ports/esp32/apps/reader/README.md`](../../../ports/esp32/apps/reader/README.md), [`ports/esp32/components/woz_uwb/README.md`](../../../ports/esp32/components/woz_uwb/README.md)
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](../modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](../modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](uwb_min.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](uwb_rxdiag.c.md)  ·  **discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md), [`docs/porting.md`](../../porting.md), [`ports/esp32/apps/reader/README.md`](../../../ports/esp32/apps/reader/README.md), [`ports/esp32/components/woz_uwb/README.md`](../../../ports/esp32/components/woz_uwb/README.md)
 
 ## API
 

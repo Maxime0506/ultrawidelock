@@ -434,9 +434,6 @@ static struct mgmt_group woz_smp_img_group = {
 	.mg_handlers = (struct mgmt_handler *)woz_smp_img_handlers,
 	.mg_handlers_count = ARRAY_SIZE(woz_smp_img_handlers),
 	.mg_group_id = WOZ_SMP_GRP_IMG,
-#ifdef CONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME
-	.mg_group_name = "img mgmt",
-#endif
 };
 
 /**
@@ -445,6 +442,16 @@ static struct mgmt_group woz_smp_img_group = {
  */
 static void woz_smp_img_init(void)
 {
+	/* Set here rather than in the initializer above, and not for style: semgrep
+	 * parses C without a preprocessor and gives up on an #ifdef between
+	 * designated initializers, which silently drops this entire file from the
+	 * SAST gate. This file parses attacker-supplied SMP upload frames, so that
+	 * is the one place the coverage is worth more than the tidier syntax. The
+	 * same #ifdef inside a function body parses fine. Nothing reads the group
+	 * before the registration below, so the assignment is equivalent. */
+#ifdef CONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME
+	woz_smp_img_group.mg_group_name = "img mgmt";
+#endif
 	mgmt_register_group(&woz_smp_img_group);
 #ifdef CONFIG_MCUMGR_GRP_OS_RESET_HOOK
 	mgmt_callback_register(&woz_smp_reset_cb);

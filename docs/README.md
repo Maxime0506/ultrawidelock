@@ -100,7 +100,7 @@ flowchart LR
 | [`release/dwm3001cdk/`](architecture/release.dwm3001cdk/README.md) | 1 | 0/0 (0%) |
 | [`release/esp32-matter-lock/`](architecture/release.esp32-matter-lock/README.md) | 1 | 0/0 (0%) |
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
-| [`scripts/`](architecture/scripts/README.md) | 26 | 134/146 (91%) |
+| [`scripts/`](architecture/scripts/README.md) | 27 | 135/148 (91%) |
 | [`tools/`](architecture/tools/README.md) | 24 | 206/224 (91%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 51/142 (35%) |
 | [`web-twin/`](architecture/web-twin/README.md) | 2 | 19/19 (100%) |

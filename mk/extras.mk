@@ -91,18 +91,66 @@ tui-test:
 tui-release:
 	@cd $(REPO_ROOT)/tools/tui && bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*' && bun run release
 
+##@ Dead code  (analysis only — none of these are gates, and none of them delete)
+## deadcode: functions with no callers, ranked by the flash they occupy
+##   Joins the documate call graph against the linked image. This is the one to
+##   start with: it only lists symbols that actually survived --gc-sections, so
+##   everything it names is real flash. Everything it names is also referenced
+##   by something (a callback table, a linker-array registration), which is why
+##   it survived — so read the reference before believing any single row.
+deadcode:
+	@$(REPO_ROOT)/scripts/deadcode-size.sh
+
+## deadcode-graph: the same call-graph query, tiered by how sure it is
+##   Tier A is the candidate list, and it is only trustworthy with a seeded
+##   workspace: the fetched Nordic add-on calls into modules/ and is not in the
+##   graph. Without it the script says so rather than guessing. `all` adds
+##   tier B (referenced in-tree) and tier U (called by upstream, so alive).
+deadcode-graph:
+	@$(REPO_ROOT)/scripts/deadcode-graph.sh $(TIER)
+
+## deadcode-tidy: clang-tidy against the REAL firmware build, not the host one
+##   The clang-tidy row in `make verify` compiles tests/host/sources.sh with host
+##   flags, which reaches six modules and neither firmware/src nor woz_dfu. This
+##   points the same tool at build/*/compile_commands.json instead, so it sees
+##   the Cortex-M4 target and the generated autoconf.h. Needs `make build` first.
+deadcode-tidy:
+	@$(REPO_ROOT)/scripts/deadcode-tidy.sh
+
+## deadcode-cc: CodeChecker over that same database, with cross-TU analysis
+##   Slower than deadcode-tidy and needs it to have run (it reuses the filtered
+##   database). Worth it for the HTML report and for findings that only appear
+##   when the analyser can see across translation units.
+deadcode-cc:
+	@$(REPO_ROOT)/scripts/deadcode-codechecker.sh
+
 ##@ Housekeeping
 ## clean: remove every build artifact in the tree  ->  ./build and the app-local ones
 ##   One rm for the shared root, plus the directories ESP-IDF writes when idf.py
 ##   is called directly inside an app instead of through `make esp-build`.
 clean:
-	@rm -rf $(ALIRO_BUILD_ROOT)
-	@rm -rf $(REPO_ROOT)/ports/esp32/apps/*/build $(REPO_ROOT)/ports/esp32/apps/*/build-piv \
-	        $(REPO_ROOT)/ports/esp32/test/on_target_ec/build $(REPO_ROOT)/ports/nrf5340dk/on_target_ec/build
+	@# ALIRO_BUILD_ROOT is `?=` and exported (Makefile:38-39), so whatever is in
+	@# the caller's environment wins -- and this line deletes it recursively. A
+	@# stale export from another checkout would aim that delete outside the repo,
+	@# so refuse anything that is not a real subdirectory of it. `..` is rejected
+	@# separately because a path can start with $(REPO_ROOT) and still climb out.
+	@root='$(ALIRO_BUILD_ROOT)'; repo='$(REPO_ROOT)'; \
+	case "$$root" in \
+	  *..*) printf '  refusing: ALIRO_BUILD_ROOT contains ".." -- %s\n' "$$root" >&2; exit 1;; \
+	  "$$repo"/?*) ;; \
+	  *) printf '  refusing: ALIRO_BUILD_ROOT is not inside %s -- %s\n' "$$repo" "$$root" >&2; \
+	     printf '  It is exported, so a value left in your environment redirects this delete.\n' >&2; \
+	     exit 1;; \
+	esac; \
+	rm -rf "$$root"
+	@# The variable is quoted but the globs are not, which is the point: quoting
+	@# the whole word would stop `*` expanding.
+	@rm -rf "$(REPO_ROOT)"/ports/esp32/apps/*/build "$(REPO_ROOT)"/ports/esp32/apps/*/build-piv \
+	        "$(REPO_ROOT)"/ports/esp32/test/on_target_ec/build "$(REPO_ROOT)"/ports/nrf5340dk/on_target_ec/build
 	@# The TUI gate compiles into its own directory rather than the build root
 	@# (bun decides where its output goes), so it needs naming here or `clean`
 	@# leaves it behind. node_modules is a fetched dependency, not output: kept.
-	@rm -rf $(REPO_ROOT)/tools/tui/dist $(REPO_ROOT)/tools/tui/.*.bun-build
+	@rm -rf "$(REPO_ROOT)"/tools/tui/dist "$(REPO_ROOT)"/tools/tui/.*.bun-build
 	@printf '  removed %s, the app-local build directories and the TUI bundle\n' '$(ALIRO_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + seeded workspace

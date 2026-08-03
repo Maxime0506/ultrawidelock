@@ -35,7 +35,8 @@ Env:
 WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
-COV_MIN=90         line-coverage floor, matching ci.yml
+COV_MIN=90         line-coverage floor. Reported, never blocking: under it the
+row still passes and says so. Raise it to aim higher.
 NO_COLOR=1         plain output (colour is the default, pipe or not)
 FAIL_TAIL=40       lines of a failing gate's log to show inline
 

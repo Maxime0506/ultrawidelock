@@ -79,13 +79,12 @@ int matter_ble_send(const uint8_t *msg, size_t len);
  */
 int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap);
 
-#ifdef __cplusplus
-}
-
 /** Override the advertised discriminator; 0 restores the built-in one. */
 void matter_ble_set_discriminator(uint16_t discriminator);
 
 /** The discriminator currently advertised. */
 uint16_t matter_ble_discriminator(void);
 
+#ifdef __cplusplus
+}
 #endif

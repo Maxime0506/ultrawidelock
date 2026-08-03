@@ -15,9 +15,6 @@
 #include "deca_version.h"
 #include "deca_private.h"
 
-#include "woz_log.h"           /* DIAG: callback-registration trace (temporary) */
-#include "woz_util.h"          /* IS_ENABLED — gate the DIAG printk under PRETTY */
-
 /*! The device ID regiser address, common to all QM33xxx/DW3xxx devices */
 #define DW3XXX_DEVICE_ID (0x0)
 
@@ -548,15 +545,6 @@ void dwt_entersleepafter(int32_t event_mask)
 void dwt_setcallbacks(dwt_callbacks_s *callbacks)
 {
     dw->callbacks = *callbacks;
-    /* DIAG: who registers the dwt callbacks, and what survives?  The MAC
-     * worker is unblocked by its cbSPIRdy/cbRxOk being driven from dwt_isr;
-     * if these end up NULL (or someone clobbers the bundle's), the worker
-     * hangs.  Log the live pointers on every registration. */
-    if (!IS_ENABLED(CONFIG_WOZ_PRETTY_SHELL))
-        printk("DIAG setcallbacks: SPIRdy=%p RxOk=%p TxDone=%p RxTo=%p RxErr=%p\n",
-               (void *)dw->callbacks.cbSPIRdy, (void *)dw->callbacks.cbRxOk,
-               (void *)dw->callbacks.cbTxDone, (void *)dw->callbacks.cbRxTo,
-               (void *)dw->callbacks.cbRxErr);
 }
 
 uint8_t dwt_checkirq(void)

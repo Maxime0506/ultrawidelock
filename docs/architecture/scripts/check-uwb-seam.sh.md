@@ -32,7 +32,7 @@ deps/dw3000/**             the vendor decadriver: it defines these
 tests/**, ports/esp32/test/**, docs/**   host doubles and prose
 Adding a file here is a decision to trust it forever. Prefer calling the seam.
 
-**discussed in** [`ports/esp32/apps/reader/README.md`](../../../ports/esp32/apps/reader/README.md)
+**discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md), [`docs/porting.md`](../../porting.md), [`ports/esp32/apps/reader/README.md`](../../../ports/esp32/apps/reader/README.md)
 
 ## API
 

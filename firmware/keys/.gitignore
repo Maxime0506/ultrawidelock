@@ -4,7 +4,12 @@
 # Commit it and anyone can sign firmware your lock accepts.
 #
 # `make dfu-key` generates one. README.md says what losing it costs.
-*.pem
-*.der
-*.key
-*.p8
+# Deny by default, then allow back the two files that only describe the
+# directory. Listing extensions instead was the old shape and it cannot be made
+# complete -- .p12, .pfx, .jks, a DER blob named "signing-key" with no extension
+# at all -- and one miss here commits the key that decides what this lock boots.
+# Anything genuinely publishable (a public half, a generated header) has to be
+# un-ignored on purpose, by name, which is the right amount of friction.
+*
+!.gitignore
+!README.md
