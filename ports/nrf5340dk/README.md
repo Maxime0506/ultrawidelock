@@ -77,11 +77,11 @@ wrong for a lock on a door.
 
 | image | FLASH | of | RAM | of |
 |---|---|---|---|---|
-| application | 905,096 B | 978,432 B (92.50%) | 358,560 B | 440 KB (79.58%) |
-| application, `DFU=1 LTO=1` | 825,208 B | 978,432 B (84.34%) | 360,480 B | 440 KB (80.01%) |
+| application, `DFU=1 LTO=0` | 905,096 B | 978,432 B (92.50%) | 358,560 B | 440 KB (79.58%) |
+| application, `DFU=1 LTO=1` (the default) | 824,624 B | 978,432 B (84.28%) | 360,480 B | 440 KB (80.01%) |
 | `ipc_radio` (net core) | 175,968 B | 222 KB (77.41%) | 57,468 B | 64 KB (87.69%) |
 | `b0n` (net-core immutable bootloader) | 20,768 B | 34,176 B (60.77%) | 3,552 B | 64 KB (5.42%) |
-| `mcuboot` | 24,724 B | 32 KB (75.45%) | 284,752 B | 440 KB (63.20%) |
+| `mcuboot` | 29,868 B | 32 KB (91.15%) | 284,936 B | 440 KB (63.24%) |
 
 **LTO more than pays for the bootloader.** MCUboot costs 33,280 B off the
 partition and the OTA code adds 32,812 B to the image, 66,092 B of headroom in

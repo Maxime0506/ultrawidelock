@@ -61,3 +61,12 @@ committed `docs/` tree, so a contributor never needs it. Regenerating `docs/` do
   recorded. Keep that caveat in release notes until the bench check exists.
 - Other variants (`CHIP=dw3720`, `HA=1`, `ALIRO_SOURCE=0`, `NFC=pn532|none`,
   and the bench reader app) build from source and are not release-bundled.
+- **Which key each bundle is signed with.** The DWM3001CDK bundle is signed with
+  the key given to `make release RELEASE_KEY=<path>`, which has no default and
+  refuses to be this checkout's dev key, because that one is gitignored and
+  regenerated freely; see [`../firmware/keys/README.md`](../firmware/keys/README.md).
+  The nRF5340 DK bundle is **not** signed and carries no bootloader: the release
+  job calls `scripts/build-nrf5340dk.sh` directly, where `DFU` defaults to off,
+  so the hex owns flash from `0x0` and is flashed over a probe. `DFU=1` — MCUboot
+  plus Matter OTA, and the default of `make nrf-build` — is a from-source
+  configuration only, and it signs with the builder's own per-checkout key.

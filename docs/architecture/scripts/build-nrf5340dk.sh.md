@@ -30,7 +30,7 @@ DFU=1 needs this checkout's image-signing key (`make dfu-key`) and refuses to
 build without one, because a bootloader that trusts MCUboot's published demo
 key trusts everybody. SIGN_KEY=<absolute path> overrides where it looks.
 
-**discussed in** [`CHANGELOG.md`](../../../CHANGELOG.md), [`docs/configuring.md`](../../configuring.md), [`firmware/keys/README.md`](../../../firmware/keys/README.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
+**discussed in** [`CHANGELOG.md`](../../../CHANGELOG.md), [`docs/RELEASING.md`](../../RELEASING.md), [`docs/configuring.md`](../../configuring.md), [`firmware/keys/README.md`](../../../firmware/keys/README.md), [`ports/nrf5340dk/README.md`](../../../ports/nrf5340dk/README.md)
 
 ## API
 
