@@ -132,6 +132,16 @@ radios down. Commands: `aliro prov`, `aliro import <hex>`, `aliro export yes`,
 **nRF5340 DK** (`make nrf-term`): the `aliro` command group: `status`, `rx`,
 `range`, `chip`, `selftest`, `log`, `frames`, `version`.
 
+`make nrf-term` prints this image's Matter pairing code and QR payload before it
+attaches, because on the Matter build there may be nothing else to see: the
+add-on sets `CONFIG_LOG_DEFAULT_LEVEL=0` and enables no UART log backend, and the
+build drops the shell (`CONFIG_SHELL=n`), so an empty terminal on that image is
+the expected result and not a fault. `make nrf-pairing-code` prints the same
+thing on its own. The payload is generated at build time and merged into the hex,
+so it describes what you built rather than what is on the board, and the
+discriminator and passcode are fixed in Kconfig: bench credentials, not
+per-device secrets.
+
 **ESP32 Matter lock** (`make esp-monitor APP=matter-lock`): `status`, `lock`,
 `unlock`, `codes`, `range`, `factoryreset`, `aliro <prov|trust|clear>`.
 

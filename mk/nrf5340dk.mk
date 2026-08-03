@@ -30,7 +30,15 @@ NRF_ENV := $(strip \
 
 NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
 
-.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-term term
+# Where the Matter onboarding payload lands. Generated at BUILD time
+# (CONFIG_CHIP_FACTORY_DATA_GENERATE_ONBOARDING_CODES) and merged into the image
+# (CONFIG_CHIP_FACTORY_DATA_MERGE_WITH_FIRMWARE), so it describes the hex that was
+# built here, not whatever is on the board. Mirrors build-nrf5340dk.sh's own
+# ALIRO_SOURCE split so the code shown belongs to the variant you built.
+NRF_BUILD_DIR := $(ALIRO_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ALIRO_SOURCE)),-blob)
+NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data.txt
+
+.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-term nrf-pairing-code term
 
 ##@ nRF5340 DK  ·  NFC tap + approach unlock
 ## nrf-build: incremental build          -> build/nrf5340dk/merged.hex
@@ -66,6 +74,33 @@ nrf-selftest:
 nrf-pretty:
 	@$(NRF_ENV) PRETTY=1 $(NRF_BUILD_SH) build
 
+## nrf-pairing-code: this image's Matter pairing code + QR  ·  run by nrf-term
+##   Read out of the build, not off the board: the payload is generated at build
+##   time and merged into the hex, so it is a property of what you built. If you
+##   flashed a different variant since, rebuild that one to see its code.
+##   The values come from CONFIG_CHIP_DEVICE_{DISCRIMINATOR,SPAKE2_PASSCODE} and
+##   are fixed in Kconfig rather than random per build, so this is a bench
+##   credential, not a per-device secret.
+nrf-pairing-code:
+	@f='$(NRF_FACTORY)'; \
+	if [ ! -f "$$f" ]; then \
+	  printf '  %sno pairing code yet%s  ·  build first: make nrf-build\n' \
+	    "$$(tput setaf 3 2>/dev/null)" "$$(tput sgr0 2>/dev/null)"; \
+	  printf '    looked in %s\n' "$$f"; \
+	  exit 0; \
+	fi; \
+	m=$$(sed -n 's/^Manualcode[[:space:]]*:[[:space:]]*//p' "$$f" | tr -d '[:space:]'); \
+	q=$$(sed -n 's/^QRCode[[:space:]]*:[[:space:]]*//p' "$$f" | tr -d '[:space:]'); \
+	b=$$(tput bold 2>/dev/null); r=$$(tput sgr0 2>/dev/null); d=$$(tput dim 2>/dev/null); \
+	printf '\n  %sMatter pairing%s\n' "$$b" "$$r"; \
+	if [ -n "$$m" ]; then \
+	  g=$$(printf '%s' "$$m" | sed -E 's/^([0-9]{4})([0-9]{3})([0-9]{4})$$/\1-\2-\3/'); \
+	  printf '    manual code  %s%s%s   %sraw %s%s\n' "$$b" "$$g" "$$r" "$$d" "$$m" "$$r"; \
+	fi; \
+	[ -n "$$q" ] && printf '    QR payload   %s\n' "$$q"; \
+	[ -f "$${f%.txt}.png" ] && printf '    %sQR image     %s%s\n' "$$d" "$${f%.txt}.png" "$$r"; \
+	printf '\n'
+
 ## nrf-flash: app-only flash
 nrf-flash:
 	@$(NRF_ENV) $(NRF_BUILD_SH) flash
@@ -75,11 +110,15 @@ nrf-flash-erase:
 	@$(NRF_ENV) $(NRF_BUILD_SH) flash-erase
 
 ## nrf-term: serial console — live logs + typeable shell (tio, 115200 8N1)
+##   Prints this image's Matter pairing code first, because that is what you came
+##   for and the console itself may have nothing to say: the Matter build has no
+##   log backend (see below), so an empty terminal is the expected result rather
+##   than a fault.
 ##   Auto-detects the nRF5340DK console (VCOM1 — this firmware's console + Zephyr
 ##   shell live there; VCOM0 is silent).  ctrl-t q quits.  `help` lists commands.
 ##   The DWM3001CDK has no UART console; use `make monitor` (RTT) for that board.
 ##   Override: make nrf-term PORT=/dev/cu.usbmodemXXXX BAUD=115200 LOG=session.log
-nrf-term:
+nrf-term: nrf-pairing-code
 	@command -v tio >/dev/null 2>&1 || { printf '  tio not found  ·  install: brew install tio\n' >&2; exit 1; }
 	@port='$(PORT)'; \
 	if [ -z "$$port" ]; then \
