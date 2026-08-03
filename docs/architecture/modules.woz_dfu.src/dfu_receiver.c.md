@@ -167,6 +167,6 @@ The header's magic and ABI version must both match.
 - `do_data`
 - `do_commit`
 - `woz_dfu_rx_frame`
-- `woz_dfu_rx_upload`
+- `woz_dfu_rx_upload` — tested: receiver upload
 
 </details>

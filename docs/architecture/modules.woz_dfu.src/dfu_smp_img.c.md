@@ -141,7 +141,7 @@ window, or a verified patch is already staged and waiting to be applied.
 Outside those two states the reader has no reason to accept a remote reboot.
 
 ### `static void woz_smp_img_init(void)`
-`modules/woz_dfu/src/dfu_smp_img.c:446`
+`modules/woz_dfu/src/dfu_smp_img.c:443`
 
 SYS_INIT callback that registers the woz_smp_img group with mcumgr and optionally registers the
 reset callback if CONFIG_MCUMGR_GRP_OS_RESET_HOOK is enabled.

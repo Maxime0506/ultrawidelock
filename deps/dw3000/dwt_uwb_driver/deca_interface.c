@@ -12,7 +12,6 @@
 #include "deca_interface.h"
 #include "deca_device_api.h"
 #include <stdbool.h>
-#include "woz_log.h"           /* DIAG: llhw<->driver op trace (temporary) */
 
 #ifndef AUTO_DW3300Q_DRIVER
 /**
@@ -129,8 +128,6 @@ int32_t interface_tx_frame(struct dwchip_s *dw, uint8_t *data, size_t len, struc
 {
     const struct dwt_mcps_ops_s *ops = dw->dwt_driver->dwt_mcps_ops;
 
-    printk("DIAG iface_tx_frame len=%u flag=0x%lx\n", (unsigned)len,
-           (unsigned long)info->flag); /* DIAG */
     if (len != 0UL)
     {
         struct dwt_rw_data_s wr = { data, (uint16_t)len, 0U };
@@ -168,7 +165,6 @@ uint64_t interface_get_timestamp(struct dwchip_s *dw)
 int32_t interface_rx_disable(struct dwchip_s *dw)
 {
     const struct dwt_mcps_ops_s *ops = dw->dwt_driver->dwt_mcps_ops;
-    printk("DIAG iface_rx_disable (forcetrxoff)\n"); /* DIAG */
     return ops->ioctl(dw, DWT_FORCETRXOFF, 0, NULL);
 }
 
@@ -180,9 +176,6 @@ int32_t interface_rx_enable(struct dwchip_s *dw, struct dw_rx_frame_info_s *info
     uint32_t timeout_pac = info->rx_timeout_pac;
     int32_t error = ops->ioctl(dw, DWT_SETPREAMBLEDETECTTIMEOUT, 0, (void *)&timeout_pac);
 
-    printk("DIAG iface_rx_enable delayed=%ld date=0x%08lx tmo_pac=%lu pdt_err=%ld\n",
-           (long)rx_delayed, (unsigned long)date_dtu, (unsigned long)timeout_pac,
-           (long)error); /* DIAG */
     if (error == 0)
     {
 #ifndef AUTO_DW3300Q_DRIVER

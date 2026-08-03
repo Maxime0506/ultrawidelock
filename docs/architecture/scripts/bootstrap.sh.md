@@ -24,6 +24,12 @@ Execute a command inside the nRF Connect SDK toolchain environment for NCS_VER, 
 Wrapper around `nrfutil sdk-manager toolchain launch`.
 
 ### `apply_to()`
-`scripts/bootstrap.sh:127`
+`scripts/bootstrap.sh:134`
 
-Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
+Apply patch files to a repository, resetting it to its pinned HEAD first.
+That reset is what makes bootstrap idempotent -- the previous run's patches have
+to come off before this run's go on -- but hand-editing $WS is the normal way
+upstream gets debugged here, and those edits look identical to it. So say what is
+about to go, and keep a copy: a run that silently eats an afternoon of debugging
+is the worst thing this script can do. ALIRO_KEEP_WS_EDITS=1 stops instead, for
+when the edits are the point and re-patching is not.

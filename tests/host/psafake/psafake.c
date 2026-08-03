@@ -217,12 +217,20 @@ psa_status_t psa_verify_message(psa_key_id_t key, psa_algorithm_t alg, const uin
 				size_t signature_length)
 {
 	(void)key;
-	(void)input;
-	(void)signature;
 	psafake.verify_calls++;
 	psafake.last_alg = alg;
 	psafake.last_msg_len = input_length;
 	psafake.last_sig_len = signature_length;
+	if (psafake.verify_replay) {
+		/* Exactly the recorded pair, or nothing. See psafake.h. */
+		if (input_length != psafake.replay_msg_len || signature_length != 64u ||
+		    memcmp(input, psafake.replay_msg, input_length) != 0 ||
+		    memcmp(signature, psafake.replay_sig, 64) != 0) {
+			psafake.verify_rejects++;
+			return PSA_ERROR_GENERIC;
+		}
+		return PSA_SUCCESS;
+	}
 	return psafake.verify_ret;
 }
 

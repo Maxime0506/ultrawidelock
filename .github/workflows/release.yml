@@ -1,7 +1,11 @@
-# Release assets — on a version tag, build the two firmware targets and the
-# contributor TUI. Attach self-contained firmware bundles (firmware + flash
-# script + FLASH.md, plus the ESP32 browser-flash manifest) and TUI executables
-# to a GitHub release. Firmware bundle sources live in release/<target>/.
+# Release assets — on a version tag, build the three Aliro lock firmwares and
+# attach a self-contained bundle for each (firmware + flash script + FLASH.md,
+# plus the ESP32 browser-flash manifest) to a GitHub release. Firmware bundle
+# sources live in release/<target>/.
+#
+# Locks only. The bench reader, the initiator and the UWB self-test images are
+# development tools and are deliberately not published: someone downloading a
+# release should not have to work out which of five files is the lock.
 #
 # Deliberately cache-free, unlike firmware-builds.yml: a release binary must
 # not depend on restored CI state (a poisoned workspace or compiler cache would
@@ -65,36 +69,76 @@ jobs:
           esac
           echo "releasing from tag $REF_NAME"
 
-  # Build the contributor bench from this exact checkout. The same source,
-  # lockfile, tests, and compiler entry point are available through
-  # `make tui-test` and `make tui-release`.
-  tui:
+  # DWM3001CDK: the primary board, and the only signed image here. MCUboot
+  # embeds the public half of the signing key permanently and a single-slot
+  # bootloader has no second image to fall back to, so the key this job uses
+  # decides what every board flashed from this release will ever accept over
+  # the air, with no revocation path. That is why it is the one job gated on an
+  # environment: `release` carries required reviewers, so a compromised token or
+  # a workflow edit cannot sign anything without a human approving the run.
+  #
+  # `make release` does the rest, and refuses to run at all without a key rather
+  # than falling back to a default -- mk/cdk.mk has the two guards.
+  dwm3001cdk:
     needs: guard
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 180
+    # The gate. Nothing else in this workflow may reach the signing key: an
+    # environment secret is readable only by a job that names its environment,
+    # which a repository secret would not have been.
+    environment: release
+    container:
+      # Same digest as firmware-builds.yml and the nrf5340dk job below.
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.3.14
-          # This job publishes the binaries, so a poisoned dependency cache would
-          # ship in a release. Restoring one saves seconds and is not worth that.
-          no-cache: true
-      - name: test and build the guided bench
-        working-directory: tools/tui
+      - name: bootstrap the workspace
         run: |
-          bun install --frozen-lockfile --ignore-scripts --os='*' --cpu='*'
-          bun run typecheck
-          bun run test
-          bun run release
+          ./scripts/bootstrap.sh || {
+            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
+            ./scripts/bootstrap.sh
+          }
+      - name: write the signing key
+        # umask first so the file is never briefly world-readable, and through
+        # the environment rather than inline interpolation so the key cannot
+        # reach a command line, a process list or a log. The runner is
+        # ephemeral, so the file dies with it.
+        env:
+          KEY: ${{ secrets.MCUBOOT_RELEASE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::MCUBOOT_RELEASE_KEY is empty. Add it as an environment secret on the 'release' environment (not a repository secret)."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$KEY" > "$RUNNER_TEMP/release.pem"
+      - name: build, sign and bundle
+        # CDK_RELEASE_VER is passed rather than left to `git describe`: the
+        # checkout is shallow, and the tag is the authority on what this is.
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          make release \
+            RELEASE_KEY="$RUNNER_TEMP/release.pem" \
+            CDK_RELEASE_VER="$TAG"
+      - name: the key is not in the artifact
+        # Cheap, and it catches the one mistake that would be catastrophic and
+        # silent: a private key copied into a bundle that is about to be
+        # published. security-fw.sh gates the image itself; this gates the folder.
+        run: |
+          if grep -rlI 'PRIVATE KEY' build/release/openaliro-dwm3001cdk/ 2>/dev/null | grep -q .; then
+            echo "::error::a PEM private key reached the release bundle"
+            exit 1
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openaliro-tui
-          path: |
-            tools/tui/dist/openaliro-tui-darwin-arm64
-            tools/tui/dist/openaliro-tui-linux-x64
+          name: openaliro-dwm3001cdk
+          path: build/release/openaliro-dwm3001cdk
           if-no-files-found: error
 
   # nRF5340 DK: cold-bootstrap the pinned west workspace, build the sysbuild
@@ -276,7 +320,7 @@ jobs:
   # holding contents:write, so it should not depend on another job for the one
   # condition that decides whether anything gets published.
   release:
-    needs: [tui, nrf5340dk, esp32-matter-lock]
+    needs: [dwm3001cdk, nrf5340dk, esp32-matter-lock]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -296,13 +340,11 @@ jobs:
         # Artifact transport drops file modes, so restore the scripts' exec bit
         # before zipping.
         run: |
-          chmod +x dist/openaliro-nrf5340dk/flash.sh \
+          chmod +x dist/openaliro-dwm3001cdk/flash.sh \
+            dist/openaliro-nrf5340dk/flash.sh \
             dist/openaliro-esp32-matter-lock/flash.sh
           mkdir out
-          # Only the firmware targets are zipped. The TUI ships as the bare
-          # executables copied below, so installing it is one curl and one
-          # chmod rather than a download-and-unpack.
-          for d in dist/openaliro-nrf5340dk dist/openaliro-esp32-matter-lock; do
+          for d in dist/openaliro-dwm3001cdk dist/openaliro-nrf5340dk dist/openaliro-esp32-matter-lock; do
             b="$(basename "$d")"
             (cd dist && zip -qr "../out/$b.zip" "$b")
           done
@@ -315,8 +357,7 @@ jobs:
           cp dist/openaliro-esp32-matter-lock/openaliro-matter-lock-esp32c6.bin out/
           cp dist/openaliro-esp32-matter-lock/manifest.json \
             out/openaliro-matter-lock.manifest.json
-          cp dist/openaliro-tui/openaliro-tui-* out/
-          (cd out && sha256sum ./*.zip ./*.bin ./*.json ./openaliro-tui-* > SHA256SUMS.txt)
+          (cd out && sha256sum ./*.zip ./*.bin ./*.json > SHA256SUMS.txt)
           ls -l out
       # Provenance, before the release exists. SHA256SUMS.txt on its own is a self-referential
       # claim: it is served from the release it describes, so it proves the download was not
@@ -334,7 +375,6 @@ jobs:
             out/*.zip
             out/*.bin
             out/*.json
-            out/openaliro-tui-*
             out/SHA256SUMS.txt
       - name: create the release
         env:
@@ -348,10 +388,12 @@ jobs:
             echo "flash script, and the setup guide as both FLASH.md and FLASH.html"
             echo "(open it in a browser) covering tools, wiring, flashing, and Apple"
             echo "Home setup. Evaluation firmware with Matter test certificates."
-            echo "The guided bench is a standalone macOS or Linux executable built"
-            echo "and tested from this tag. Release assets carry no permission bit,"
-            echo "so make it executable after downloading:"
-            echo "curl -L <the asset URL> -o openaliro-tui && chmod +x openaliro-tui"
+            echo
+            echo "The DWM3001CDK image is signed, and its bootloader only runs"
+            echo "firmware signed by the same key, so builds you make yourself will"
+            echo "not install over the air onto a board flashed from this release."
+            echo "Reflash it once over USB to own it yourself; the pairing survives."
+            echo "openaliro-dwm3001cdk/FLASH.md has the four commands."
             echo
             echo "The ESP32 images (S3 and C5) also flash straight from the browser,"
             echo "no tools at all: https://${REPO%%/*}.github.io/${REPO#*/}/flash/"
@@ -360,9 +402,9 @@ jobs:
             echo
             echo "| Bundle | Hardware | What you get |"
             echo "|---|---|---|"
+            echo "| openaliro-dwm3001cdk | DWM3001CDK alone, nothing to wire | BLE + UWB approach unlock, Matter over Thread, updates over Bluetooth |"
             echo "| openaliro-nrf5340dk | nRF5340 DK + DWM3000EVB + X-NUCLEO-NFC12A1 | NFC tap + UWB approach unlock, Matter over Thread |"
             echo "| openaliro-esp32-matter-lock | ESP32-S3 or ESP32-C5 + DWM3000EVB | Matter lock over Wi-Fi, BLE + UWB approach unlock |"
-            echo "| openaliro-tui | macOS arm64 or Linux x64 | Guided clone-to-bench setup, builds, flashing, pairing, and diagnostics |"
             echo
             echo '```'
             cat out/SHA256SUMS.txt
@@ -370,4 +412,4 @@ jobs:
           } > "$notes"
           gh release create "$TAG" --repo "$REPO" --verify-tag \
             --title "openaliro $TAG" --notes-file "$notes" \
-            out/*.zip out/*.bin out/*.json out/openaliro-tui-* out/SHA256SUMS.txt
+            out/*.zip out/*.bin out/*.json out/SHA256SUMS.txt

@@ -129,6 +129,13 @@ What the gates use, and why:
 | `llvm-cov` | `coverage` (macOS reaches it through `xcrun`, so Xcode CLT is enough) |
 | `reuse` | licence store |
 | `cbmc` | the parser memory-safety proof |
+| `bun` | `test-tui` (the guided bench TUI; `tools/tui/package.json` wants `>=1.3.0`) |
+| `gitleaks` | `secrets` |
+| `semgrep` | `semgrep` (fetches its registry packs, so this gate needs network) |
+| `retire` | `web` |
+| `osv-scanner`, `pip-audit` | `deps`, one half each — `pip-audit` is checked inside `scripts/security.sh` and fails rather than skips |
+| `openssl` | no gate — `make dfu-key` only, which every CDK build needs first; falls back to `python3` + `cryptography` |
+| `valgrind` | `ct`, and deliberately absent from the `make tools` list: there is no darwin/arm64 build, so the gate reports a skip instead of failing the sweep |
 | `nrfutil` | no gate — `make bootstrap`/`build`/`flash` only, so its absence is reported and never fails `make tools` |
 | python `markdown`, `coverage` | not checked by any gate, but CI installs both: without them the flash-HTML drift check and the python coverage rows silently skip |
 

@@ -164,6 +164,14 @@ SIDE_UNIT_SRCS=(
 	"$EAPPS/matter-lock/main/lock/door_lock_manager.cpp"
 	"$EAPPS/matter-lock/main/lock/door_lock_callbacks.cpp"
 	"$EAPPS/matter-lock/main/lock/aliro_reader_delegate.cpp"
+	"$ROOT/modules/woz_dfu/src/dfu_receiver.c"
+	"$ROOT/modules/woz_dfu/src/dfu_applier.c"
+	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c"
+	"$ROOT/modules/woz_nfc/src/pn532_bus_spi.c"
+	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp"
+	"$ROOT/modules/woz_nfc/src/transport_none.cpp"
+	"$ROOT/modules/woz_aliro_stack/src/aliro_stack.cpp"
+	"$ROOT/modules/woz_aliro_stack/src/session.cpp"
 )
 
 cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
@@ -274,6 +282,100 @@ cov_cc -I"$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$OUT/aliro_approa
 	"$MFAKE/matterfake.cc" "$OUT/lock_led_matter_cov.o" \
 	"$OUT/aliro_approach_matter_cov.o" -o "$OUT/cov_esp_matter"
 run_suite esp_matter "$OUT/cov_esp_matter"
+
+# Delta update, both halves plus the SMP front door, on the RAM flash of
+# dfufake/ (which enforces the nRF word/page alignment rules), psafake's
+# recording PSA and a scripted detools. Mirrors run.sh stage 5.
+cov_cc -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
+	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
+	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
+	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
+	-I"$HOSTD/psafake" \
+	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
+	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
+	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c" -o "$OUT/cov_dfu"
+run_suite dfu "$OUT/cov_dfu"
+
+# C++ suite: the woz_nfc transport seam over nfcfake, with the REAL pn532.c and
+# pn532_apdu.c linked in. transport_none.cpp is renamed on its own compile step
+# because it defines the same five symbols as transport_pn532.cpp. Mirrors
+# run.sh stage 6.
+NFC_DEF=(-DCONFIG_WOZ_NFC_LOG_LEVEL=3 -DCONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE=2048
+	-DCONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS=200
+	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000)
+NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
+	-I"$ROOT/modules/woz_nfc/src")
+cov_cxx() {
+	"${CXX:-c++}" -std=c++17 -O0 -g -w \
+		-fprofile-instr-generate -fcoverage-mapping "$@"
+}
+cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc_cov.o"
+cov_cc -c -I"$ROOT/modules/woz_nfc/src" "$ROOT/modules/woz_nfc/src/pn532.c" \
+	-o "$OUT/pn532_nfc_cov.o"
+cov_cc -c -I"$ROOT/modules/woz_nfc/src" "$ROOT/modules/woz_nfc/src/pn532_apdu.c" \
+	-o "$OUT/pn532_apdu_nfc_cov.o"
+cov_cc -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	"$ROOT/modules/woz_nfc/src/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi_cov.o"
+cov_cxx -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532_cov.o"
+cov_cxx -c -DWozNfc=WozNfcNone "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	"$ROOT/modules/woz_nfc/src/transport_none.cpp" -o "$OUT/transport_none_cov.o"
+cov_cxx -c "${NFC_INC[@]}" "$HOSTD/nfcfake/nfcfake.cpp" -o "$OUT/nfcfake_cov.o"
+cov_cxx -c "${NFC_DEF[@]}" "${NFC_INC[@]}" "$HOSTD/test_nfc_transport.cpp" \
+	-o "$OUT/test_nfc_transport_cov.o"
+cov_cxx "$OUT/test_nfc_transport_cov.o" "$OUT/nfcfake_cov.o" "$OUT/test_harness_nfc_cov.o" \
+	"$OUT/transport_none_cov.o" "$OUT/transport_pn532_cov.o" "$OUT/pn532_bus_spi_cov.o" \
+	"$OUT/pn532_nfc_cov.o" "$OUT/pn532_apdu_nfc_cov.o" -o "$OUT/cov_nfc"
+run_suite nfc "$OUT/cov_nfc"
+
+# uwb_seam.h's engine-less tier, alone and WITHOUT CONFIG_WOZ_ALIRO. Every
+# other object here compiles that header as declarations only and so emits no
+# mapping for it; this one carries the inline bodies, which is why it has to
+# stay a translation unit of its own. Mirrors run.sh stage 7.
+cov_cc -I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
+	-I"$SRC/driver" -I"$ROOT/deps/dw3000/platform" \
+	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" -o "$OUT/cov_seam"
+run_suite seam "$OUT/cov_seam"
+
+# C++ suite: the Aliro source stack over the Interface doubles in stackfake/.
+# The protocol codecs beside it are already in UNIT_SRCS and are compiled again
+# here; they carry no conditional compilation, so both objects map the same
+# lines the same way and the profiles merge. Mirrors run.sh stage 8.
+STK="$ROOT/modules/woz_aliro_stack/src"
+STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
+	-DCONFIG_DOOR_LOCK_EXPEDITED_FAST_PHASE=1 -DCONFIG_DOOR_LOCK_STEP_UP_PHASE=1
+	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_WOZ_ALIRO_APDU_BUFFER_SIZE=1024
+	-DCONFIG_MAX_NUMBER_OF_KPERSISTENT=4
+	-DCONFIG_DOOR_LOCK_STORAGE_MAX_STORED_ACCESS_DOCUMENTS=2)
+STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
+	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src")
+STK_OBJS=()
+cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_stack_cov.o"
+for stk_src in advertising_core protocol/ble_message protocol/ble_timeout protocol/tlv \
+	protocol/nfc_select protocol/nfc_auth protocol/nfc_step_up protocol/access_document; do
+	stk_obj="$OUT/stk_$(basename "$stk_src")_cov.o"
+	cov_cc "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" -c "$STK/$stk_src.c" -o "$stk_obj"
+	STK_OBJS+=("$stk_obj")
+done
+# Real symmetric crypto; see run.sh stage 8 for what is real and what is not.
+cov_cc -I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src" \
+	-c "$ROOT/modules/woz_aliro/src/aliro_hash.c" -o "$OUT/stk_aliro_hash_cov.o"
+cov_cc -I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src" \
+	-c "$ROOT/ports/esp32/test/aliro_prim_host.c" -o "$OUT/stk_aliro_prim_host_cov.o"
+cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/aliro_stack.cpp" -o "$OUT/stk_aliro_stack_cov.o"
+cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/session.cpp" -o "$OUT/stk_session_cov.o"
+cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/stackfake/stackfake.cpp" \
+	-o "$OUT/stackfake_cov.o"
+cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/test_aliro_stack.cpp" \
+	-o "$OUT/test_aliro_stack_cov.o"
+cov_cxx "$OUT/test_aliro_stack_cov.o" "$OUT/stackfake_cov.o" "$OUT/test_harness_stack_cov.o" \
+	"$OUT/stk_aliro_stack_cov.o" "$OUT/stk_session_cov.o" "${STK_OBJS[@]}" \
+	"$OUT/stk_aliro_hash_cov.o" "$OUT/stk_aliro_prim_host_cov.o" \
+	-o "$OUT/cov_stack"
+run_suite stack "$OUT/cov_stack"
 
 llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
 

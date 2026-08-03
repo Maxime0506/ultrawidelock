@@ -50,6 +50,24 @@ struct psafake_state {
 	unsigned aead_enc_calls, aead_dec_calls, generate_calls;
 	unsigned export_calls, export_pub_calls, raw_ka_calls;
 	unsigned sign_calls, verify_calls, destroy_calls;
+	/* ---- replayed ECDSA verification -------------------------------------
+	 *
+	 * There is no P-256 in this host build, so a signature check can only
+	 * be made to mean something by replaying one a real curve produced --
+	 * the arrangement spakefake.c already uses for SPAKE2+, with the vector
+	 * generated offline by tests/host/gen_dfu_vector.py.
+	 *
+	 * When verify_replay is set, psa_verify_message() accepts ONLY the
+	 * recorded (message, signature) pair and refuses anything else. That
+	 * refusal is the check: it proves the caller handed PSA exactly the
+	 * bytes a real ECDSA-P256 signed, so a tampered header is rejected for
+	 * a real reason rather than because a knob said so. */
+	int verify_replay;
+	uint8_t replay_msg[64];
+	size_t replay_msg_len;
+	uint8_t replay_sig[64];
+	unsigned verify_rejects;
+
 	uint32_t last_destroyed; /* key id handed to psa_destroy_key */
 	uint32_t last_alg;       /* alg argument of the last operation call */
 	size_t last_nonce_len, last_aad_len, last_in_len, last_random_len;

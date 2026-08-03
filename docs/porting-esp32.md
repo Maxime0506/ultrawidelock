@@ -119,10 +119,11 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
   only (`uwb_rxdiag.c`, `uwb_selftest.c`, `woz_logfmt.c`) and stub or defer.
 - DW3000 platform shim, rewrite on ESP-IDF SPI-master + GPIO: `deps/dw3000/platform/dw3000_spi.c`
   (241), `dw3000_hw.c` (298), `deca_port.c` (60). Leave `deca_compat.c` (1352, vendor) logic intact.
-- Link seam: the 5 `-Wl,--wrap=dwt_*` flags (`modules/woz_uwb/CMakeLists.txt`) via
-  `target_link_options`. Only `--wrap=dwt_rxenable` is load-bearing (`ccc_shim_rx.c` programs the
-  CCC key/IV on every RX-arm); the rest are diagnostics or have no live caller.
-  `xtensa-esp32s3-elf-ld` is GNU binutils; verify `--wrap` once.
+- STS seam: the four helpers in `modules/woz_uwb/src/driver/uwb_seam.h`. This is a compile-time
+  seam and needs no linker feature, so there is nothing toolchain-specific to verify. The port
+  omits `uwb_rxdiag.c`, which is `k_work`-based, and supplies `woz_uwb_set_callbacks` and
+  `woz_uwb_configure_phy` from `port/woz_seam_stubs.c`; `ccc_shim_rx.c` and `ccc_shim_wrap.c`
+  carry `woz_uwb_arm_rx` and `woz_uwb_set_sts_iv` across unchanged.
 - Crypto seam: `ccc_crypto_mbedtls.c` (already selected by the existing scaffold's `prj.conf`).
 - Placement: pin engine + DW3000 SPI to core 1, BLE/Wi-Fi on core 0. Hot buffers in internal SRAM,
   not PSRAM (jitter).
@@ -131,7 +132,7 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
 
 | Phase | Plan | Outcome |
 |---|---|---|
-| 1 — engine on ESP-IDF | Compile the engine behind an OS seam, write a DW3000 backend, range against a second board with a canned URSK. | **Done.** The compat layer let `modules/woz_uwb/src` and `deps/dw3000` compile unchanged, and `--wrap` behaved as on any GNU ld. The one surprise was hardware, not software: an EVB power-select jumper hid the radio for days. |
+| 1 — engine on ESP-IDF | Compile the engine behind an OS seam, write a DW3000 backend, range against a second board with a canned URSK. | **Done.** The compat layer let `modules/woz_uwb/src` and `deps/dw3000` compile unchanged, and the `--wrap` link-time interposer the seam used at the time behaved as on any GNU ld. (That interposer is gone: the seam is now the compile-time one in `uwb_seam.h`, which is why the section above no longer mentions the linker.) The one surprise was hardware, not software: an EVB power-select jumper hid the radio for days. |
 | 2 — BLE transport | Reimplement GATT + L2CAP CoC on NimBLE. Estimated the dominant rewrite. | **Done, and easier than planned.** `ports/esp32/components/aliro_ble`. Advertising, the SPSM/version characteristics, and the CoC came up quickly. |
 | 3 — reader logic and the ranging key | Port the reference's reader logic and storage; the derived key enters the engine at the existing seam. | **Done, and far larger than planned.** The reference does not derive the key in portable code at all — a closed ARM-only library does. This phase became a from-scratch reimplementation of the credential authentication, key schedule, secure channels, and wire codec, plus a provisioning seam. See [`porting-esp32-phase3.md`](porting-esp32-phase3.md). |
 | 4 — Matter provisioning | esp-matter door lock over Wi-Fi with the Aliro cluster and delegate, so the lock self-commissions and provisions a key into the wallet. | **Done.** `ports/esp32/apps/matter-lock`. The Tier-A bet paid off: the cluster and delegate came across with modest change. The reader attaches to esp-matter's NimBLE host rather than starting its own. |
@@ -158,8 +159,13 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
   larger host task stack: the 4096-byte default overflows during software P-256.
 - **Confirmed.** ESP-IDF's mbedTLS-PSA covers the ECDH, ECDSA, and AES-GCM the reader
   needs.
-- **Confirmed.** `--wrap` on `xtensa-esp32s3-elf-ld` behaves as on any GNU ld;
-  `verify_port.sh` guards the seam on every build.
+- **Confirmed, then made moot.** `--wrap` on `xtensa-esp32s3-elf-ld` did behave as on any GNU
+  ld. The risk no longer exists in the form it was written: the seam moved to compile time
+  (`uwb_seam.h`), so no linker feature is involved. What guards it now is
+  `scripts/check-uwb-seam.sh`, the `uwb-seam` gate in `make verify`, which runs on every host
+  sweep and on CI. `verify_port.sh` also checks the seam, but only in a developer shell with
+  ESP-IDF sourced — `make verify` sets `WOZ_NO_TARGET_BUILD=1` and CI's runner has no ESP-IDF,
+  so do not count it as the thing standing behind this.
 - **Confirmed on S3, with a caveat.** BLE and UWB coexist on one S3, but not for free:
   the ranging task is pinned to core 1 and the console to core 0, and the transaction
   runs synchronously on the BLE host task because driving it from elsewhere races the

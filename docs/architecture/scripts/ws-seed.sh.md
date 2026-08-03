@@ -15,7 +15,7 @@ deleting the worktree deletes it (see `make ws-clean`).
 ## API
 
 ### `cleanup()`
-`scripts/ws-seed.sh:48`
+`scripts/ws-seed.sh:61`
 
 Cleanup handler for the workspace-seeding script's exit trap.
 Captures the last command's exit status, and if a workspace was created but the run did not

@@ -113,7 +113,7 @@ firmware-builds.yml:nrf5340dk-aliro-blob   !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:dwm3001cdk             !firmware: ESP-IDF/NCS toolchain
 firmware-builds.yml:esp32-matter           !firmware: ESP-IDF/NCS toolchain
 release.yml:guard                          !release: refuses a dispatch whose ref is not a vN.N.N tag, so it has nothing to reproduce locally
-release.yml:tui                            test-tui
+release.yml:dwm3001cdk                     !release: firmware toolchain, and the signing key
 release.yml:nrf5340dk                      !release: firmware toolchain
 release.yml:esp32-matter-lock              !release: firmware toolchain
 release.yml:release                        !release: publishes a tag
@@ -126,6 +126,7 @@ release.yml:release                        !release: publishes a tag
 LOCAL_ONLY="
 test-ws     ws-seed.sh clones with cp -c (APFS clonefile) and fails loudly off APFS by design, so only a contributor local sweep on macOS can run it
 twin-wasm   needs emsdk, a ~1 GB install for one gate; the committed twin.js is still checked by test-web, which does run in CI
+test-tui    needs bun, and the TUI stopped shipping in releases when they became firmware-only, so no CI job builds it any more; it is a contributor tool and a contributor sweep is where it is checked
 "
 
 # Every job id in every workflow, as "<file>:<job>". Job keys are the only
@@ -308,8 +309,14 @@ if [ "$t" = coverage ]; then
 	# under build/host. A stale path here makes the floor check read a file
 	# that is never written, which fails as "no coverage summary".
 	mkdir -p build/host/coverage
-	printf '{"data":[{"totals":{"lines":{"percent":%s}}}]}\n' "${COV_PCT:-95.5}" \
-		> build/host/coverage/summary.json
+	if [ -n "${COV_BREAK_SUMMARY:-}" ]; then
+		# Stands in for a run that died before writing a valid summary. The
+		# floor is advisory, so this is the case that has to keep failing.
+		printf 'not json at all\n' > build/host/coverage/summary.json
+	else
+		printf '{"data":[{"totals":{"lines":{"percent":%s}}}]}\n' "${COV_PCT:-95.5}" \
+			> build/host/coverage/summary.json
+	fi
 fi
 [ "$t" = twin-wasm ] && [ -n "${TWIN_DRIFTS:-}" ] && echo "rebuilt" >> web-twin/twin.js
 echo "stub make $t"
@@ -448,7 +455,7 @@ assert "S5 a failing gate exits 1"           test "$rc" -eq 1
 assert "S5 both failures are named"          has "verify FAILED: fuzz docs"
 assert "S5 prints the gate's output"         has "stub make: docs failed"
 assert "S5 and points at the full log"       has "full log: +.*/docs\.out"
-assert "S5 other lanes still ran"            passed "line coverage >= [0-9]+%"
+assert "S5 other lanes still ran"            passed "line coverage [0-9.]+% \(floor [0-9]+%\)"
 assert "S5 its lane-mate is 'not run'"       has "clang-tidy .*lane stopped"
 assert "S5 and says which gate stopped it"   has "its lane stopped at docs"
 
@@ -485,13 +492,22 @@ assert "S9 warns it was not the full set"    has "NOT the full CI set"
 assert "S9 lists what CI will still run"     has "docs \(SKIP=\)"
 assert "S9 the skipped gate did not run"     hasnt "stub make docs"
 
-# S10: coverage is `make coverage` PLUS the floor CI enforces as a separate
-# step. Running the target alone would pass here and fail there.
+# S10: the coverage floor is advisory. Coming in under it must NOT fail the
+# sweep -- and must not go quiet either, which is the risk an advisory gate
+# actually carries, so the number and the shortfall both have to be on the row.
 runv COV_PCT=95.0 COV_MIN=96
-assert "S10 below the floor fails"           test "$rc" -eq 1
-assert "S10 names coverage"                  has "verify FAILED: coverage"
+assert "S10 below the floor does not fail"   test "$rc" -eq 0
+assert "S10 below the floor shows on the row" has "line coverage 95.00% < 96% advisory"
 runv COV_PCT=90.0
 assert "S10 exactly at the floor passes"     test "$rc" -eq 0
+assert "S10 at the floor shows the number"   has "line coverage 90.00% \(floor 90%\)"
+
+# S10b: advisory covers the measurement coming in low, not the measurement
+# failing to happen. An unreadable summary is still "not verified" and still
+# fails, which is what stops the gate quietly becoming decorative.
+runv COV_BREAK_SUMMARY=1
+assert "S10b an unreadable summary fails"    test "$rc" -eq 1
+assert "S10b names coverage"                 has "verify FAILED: coverage"
 
 # S11: a broken licence store does fail it, so S3's pass was the filter working
 # and not the check being absent.

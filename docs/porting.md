@@ -115,14 +115,30 @@ guarded by `CONFIG_SOC_NRF5340_CPUAPP`. Other SoCs clock their SPI controller in
 so it compiles to a no-op. A new target needs an equivalent only if its SPI clock is
 divided at boot.
 
-### Linker seam
+### STS seam
 
-The CCC STS substitution rides one load-bearing link-time intercept,
-`-Wl,--wrap=dwt_rxenable`, where `ccc_shim_rx.c` programs the CCC key and IV on every
-RX-arm; the other `--wrap=dwt_*` flags in the build files are diagnostics or have no
-live caller. Any GNU ld supports `--wrap`; it is confirmed working on both
-`arm-zephyr-eabi-ld` and `xtensa-esp32s3-elf-ld`. A port to a non-GNU linker would
-need a different interception strategy.
+The CCC STS substitution rides a compile-time seam, `modules/woz_uwb/src/driver/uwb_seam.h`.
+Four decadriver entry points carry engine behaviour a caller must not skip, so every call
+site in the module goes through a helper instead of `<deca_device_api.h>`:
+
+| Helper | Supplied by | Replaces | Carries |
+|---|---|---|---|
+| `woz_uwb_arm_rx` | `ccc_shim_rx.c` | `dwt_rxenable` | programs the CCC key/IV for the slot |
+| `woz_uwb_set_sts_iv` | `ccc_shim_wrap.c` | `dwt_configurestsiv` | substitutes the CCC STS-V per frame |
+| `woz_uwb_set_callbacks` | `uwb_rxdiag.c` | `dwt_setcallbacks` | inserts the Pre-POLL shim |
+| `woz_uwb_configure_phy` | `uwb_rxdiag.c` | `dwt_configure` | traces the PHY configuration |
+
+Below the `CONFIG_WOZ_ALIRO` tier there is no engine to reach and each helper inlines to the
+plain decadriver call. The ESP32 port omits `uwb_rxdiag.c`, which is `k_work`-based, and
+supplies the last two from `port/woz_seam_stubs.c`.
+
+This replaced an earlier `-Wl,--wrap=dwt_*` link-time interposer, and the reason matters for a
+port: the seam is now plain C, so it needs no linker feature at all and a non-GNU toolchain is
+no longer a porting problem. What the linker used to guarantee structurally is now enforced by
+`scripts/check-uwb-seam.sh` (the `uwb-seam` gate in `make verify`), which scans the tracked
+sources for a call that reaches past the seam and carries a `--self-test` proving it can fail.
+That guarantee is worth keeping mechanical: a site that bypasses the seam is silent on the
+bench, because the radio still arms and ranging still runs, and only the unlock never happens.
 
 ## 4. Verifying a port did not change the validated target
 
