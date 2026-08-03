@@ -73,11 +73,10 @@ jobs:
           persist-credentials: false
           # mal-diff and patch-drift compare against the merge base, and docs
           # checks whether the branch is behind, so all three need real history.
+          # fetch-depth 0 also populates refs/remotes/origin/*, so the gates can
+          # resolve origin/main by name.  Do not add a manual `git fetch origin`
+          # here: persist-credentials is off, so it would have no token.
           fetch-depth: 0
-      - name: fetch origin/main
-        # A PR checkout has no origin/main ref, and the gates above resolve it by
-        # name. Harmless on main itself, where it is already present.
-        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
 
       - name: apt packages
         # clang: test, test-san and fuzz (libFuzzer's runtime is clang-only).

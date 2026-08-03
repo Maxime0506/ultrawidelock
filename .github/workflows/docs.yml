@@ -69,12 +69,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The generator compares prose against the sources on main, and docs.sh
+          # refuses to regenerate from a checkout behind it.  fetch-depth 0
+          # populates refs/remotes/origin/*, which is where that ref comes from.
+          # Do not add a manual `git fetch origin`: persist-credentials is off,
+          # so it would have no token.
           fetch-depth: 0
-      - name: main, for the drift gate
-        # The generator compares prose against the sources on main, and docs.sh
-        # refuses to regenerate from a checkout behind it. Neither ref exists
-        # after a pull-request checkout, which fetches only the merge ref.
-        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
       - name: doxygen
         run: |
           sudo apt-get update
