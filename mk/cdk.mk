@@ -68,10 +68,16 @@ CDK_RTT_BUILD      ?= $(CDK_BUILD)
 # setup-code step with "cannot read .../.config" -- a confusing error after a
 # build that had actually succeeded, somewhere else. abspath resolves against
 # make's cwd, the repo root, and is a no-op on an already-absolute path.
-CDK_BUILD          := $(abspath $(CDK_BUILD))
-CDK_READER_BUILD   := $(abspath $(CDK_READER_BUILD))
-CDK_SELFTEST_BUILD := $(abspath $(CDK_SELFTEST_BUILD))
-CDK_RTT_BUILD      := $(abspath $(CDK_RTT_BUILD))
+#
+# `override` IS LOAD-BEARING. A command-line variable beats every plain
+# assignment in a makefile, so without it these four lines are silently skipped
+# for `make build CDK_BUILD=build/foo` -- the one spelling the fix exists for,
+# and the one the help text tells you to use. It bit again on OTLOG=1. The
+# environment form worked the whole time, which is what made it look fixed.
+override CDK_BUILD          := $(abspath $(CDK_BUILD))
+override CDK_READER_BUILD   := $(abspath $(CDK_READER_BUILD))
+override CDK_SELFTEST_BUILD := $(abspath $(CDK_SELFTEST_BUILD))
+override CDK_RTT_BUILD      := $(abspath $(CDK_RTT_BUILD))
 
 # PRISTINE=1 forces a from-scratch build. `-p auto` re-runs CMake when the board
 # or the app directory changes, and NOT when the -D flags do, so switching an
