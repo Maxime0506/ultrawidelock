@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<a href="https://openaliro.github.io/openaliro/"><img src="assets/social-preview.png" width="880" alt="openaliro — an Aliro digital key lock: iPhone or Apple Watch unlocks it on approach (UWB) or on tap (NFC)"/></a>
+<a href="https://openaliro.github.io/openaliro/"><img src="assets/social-preview.png" width="880" alt="openaliro: an Aliro digital key lock that an iPhone or Apple Watch unlocks on approach (UWB) or on tap (NFC)"/></a>
 
 <h1>openaliro</h1>
 
@@ -99,7 +99,7 @@ Hands-free over BLE + UWB · one board · no app · no cloud · no vendor Aliro 
 ```
 
 The unlock path is local: no app to install, no account, no cloud round trip. Step 3 is
-the design's whole point — the distance is *measured*, using a scrambled timestamp
+the design's whole point. The distance is *measured*, with a scrambled timestamp
 sequence bound to the credential, rather than asserted by whoever is talking.
 
 <div align="right"><sub><a href="#readme-top">↑ back to top</a></sub></div>
@@ -126,8 +126,8 @@ That single part carries all of this at once:
 
 **Putting Matter on this part is the piece that was supposed to be impossible.**
 
-Nordic's most stripped *supported* single-core CHIP Matter lock — LTO on, no shell, no
-console, no logging — measures **614,008 B of flash and 162,164 B of RAM**:
+Nordic's most stripped *supported* single-core CHIP Matter lock (LTO on, no shell,
+no console, no logging) measures **614,008 B of flash and 162,164 B of RAM**:
 
 | | CHIP lock needs | This board has | Over by |
 |:--|--:|--:|--:|
@@ -154,10 +154,9 @@ lock tile, on the part that could not hold the stack it was meant to need.
 | ✅ | Firmware update over Bluetooth | done, byte-identical result, 2026-08-03 |
 | ⬜ | **≥ 95% ranging success over 100 walk-ups** | **open, never run** |
 
-Everything above that last row has been demonstrated on real hardware. Nothing has yet
-been demonstrated *at a rate*: the walk-up sample so far is single digits, and closing it
-needs someone to walk at a door a hundred times. Per-stage evidence, with the log lines,
-is in [`firmware/README.md`](firmware/README.md).
+Nothing has been demonstrated *at a rate* yet: the walk-up sample so far is single
+digits, and closing it needs someone to walk at a door a hundred times. Per-stage
+evidence, with the log lines, is in [`firmware/README.md`](firmware/README.md).
 
 ### There is no NFC tap on this board
 
@@ -203,17 +202,17 @@ Bare targets always mean **this board and its Matter image**:
 | `make rebuild` | the same, forced pristine | `build/cdk-matter` |
 | `make reader` | Aliro + UWB only, no Matter, no Thread | `build/cdk-reader` |
 | `make selftest` | one-shot DW3110 `DEV_ID` read over SPI at boot | `build/cdk-selftest` |
-| `make flash` · `flash-erase` · `monitor` | write it, wipe-and-write it, watch it | — |
+| `make flash` · `flash-erase` · `monitor` | write it, wipe-and-write it, watch it | n/a |
 
-Options are make variables — `PRISTINE=1`, `RELEASE=1`, `LTO=0`, `SMP=1` — and `make`
-with no target prints every one of them, grouped.
+Options are make variables: `PRISTINE=1`, `RELEASE=1`, `LTO=0`, `SMP=1`. `make` with no
+target prints every one of them, grouped.
 
 <table>
 <tr><td width="34" align="center" valign="top">🔢</td><td>
 
 **The setup code comes from the build, not from the board.** `make build` and
 `make monitor` each end by printing the line Apple Home is about to ask you for, because
-a Matter device stores the SPAKE2+ *verifier* and never the passcode — so nothing on the
+a Matter device stores the SPAKE2+ *verifier* and never the passcode, so nothing on the
 device can print it. The code is re-derived on the host from the configuration the build
 just produced, and checked against the verifier that was compiled in. Add the accessory
 with **More options… → Enter Code**: there is no QR label on this board.
@@ -222,13 +221,12 @@ with **More options… → Enter Code**: there is no QR label on this board.
 </table>
 
 <details>
-<summary><kbd> &nbsp; Just the radio &nbsp; </kbd> &nbsp; <b><code>make reader</code></b> — the same source without Matter or Thread</summary>
+<summary><kbd> &nbsp; Just the radio &nbsp; </kbd> &nbsp; <b><code>make reader</code></b>, the same source without Matter or Thread</summary>
 
 <br/>
 
 Aliro and UWB only, no commissioner and no Thread network required, with the reader
-identity typed in over USB. It is the fastest route to a working board and the right one
-for bench work on the radio. It builds elsewhere on purpose, so the flash and console
+identity typed in over USB. It builds elsewhere on purpose, so the flash and console
 targets keep meaning the Matter image:
 
 ```bash
@@ -261,7 +259,7 @@ flash to stage into, so what travels is a signed **delta**.
                                        │
                                        ▼   reboot
                                        woz_dfu, from a SYS_INIT
-                                       INSIDE MCUboot   (17–31 s)
+                                       INSIDE MCUboot   (17-31 s)
                                        │
                                        ▼
                                        MCUboot re-verifies, boots
@@ -281,13 +279,13 @@ make fota-done   # after a phone push, confirm what the board is now running
 An update needs an open window, and **the window is the whole authorization model**. The
 patch is signed and MCUboot re-verifies the result before booting it, so no peer can
 install code either way; what a closed window prevents is a stranger in radio range
-spending your flash's erase cycles. Two ways to open it, both confirmed on a live
-commissioned lock:
+spending your flash's erase cycles. Three ways to open it, the first two confirmed on a
+live commissioned lock:
 
 | Open the window | How |
 |:--|:--|
 | 🔘 **At the board** | Press **SW2**. |
-| 🏠 **From Apple Home** | **"Turn On Pairing Mode"** — the node serves the AdministratorCommissioning cluster. |
+| 🏠 **From Apple Home** | **"Turn On Pairing Mode"**. The node serves the AdministratorCommissioning cluster. |
 | 🔌 **From the host** | `make ota-window`, over SWD, when you would rather not walk to the door. |
 
 The board says so itself while the window is open, on its blue LED, so a press that did
@@ -315,7 +313,7 @@ base and refused.
 board: on a single-core part the DW3110's delayed-transmit reply window cannot afford a
 blocking console write. `make monitor` attaches with the ELF, which must be the one you
 *flashed*. The RTT ring survives a reset on purpose, so the first block you see is the
-previous run — anchor on the `*** Booting nRF Connect SDK ***` line.
+previous run. Anchor on the `*** Booting nRF Connect SDK ***` line.
 
 </td></tr>
 <tr><td width="34" align="center" valign="top">🧹</td><td>
@@ -352,8 +350,8 @@ Both are still here, both still build, and both share the same engine in
 
 | Target | Unlock on approach | NFC tap | Matter | Build prefix |
 |:--|:--:|:--:|:--:|:--|
-| **DWM3001CDK** — the headline | ✅ validated | ❌ no reader IC | ✅ in-tree node | *(bare)* `make build` |
-| **nRF5340 DK** — the one with NFC | ✅ validated | ✅ Express Mode | ✅ CHIP add-on | `make nrf-build` |
+| **DWM3001CDK**, the headline | ✅ validated | ❌ no reader IC | ✅ in-tree node | *(bare)* `make build` |
+| **nRF5340 DK**, the one with NFC | ✅ validated | ✅ Express Mode | ✅ CHIP add-on | `make nrf-build` |
 | **ESP32-S3** | ✅ validated | ❌ | ✅ esp-matter | `make esp-build` |
 | **ESP32-C5 / C6** | ⬜ builds, no recorded run | ❌ | ✅ esp-matter | `make esp-build` |
 
@@ -381,8 +379,8 @@ which needs no key.
 
 The in-tree Aliro stack is the default; `ALIRO_SOURCE=0` selects the legacy Nordic binary,
 for regression comparison only. The Nordic-binary path is the one with a recorded hardware
-result for both NFC tap and approach unlock. The in-tree stack is the default and is host
-and CI tested, and it still owes the full phone checklist in
+result for both NFC tap and approach unlock. The in-tree stack is host and CI tested, and
+it still owes the full phone checklist in
 [`docs/hardware-validation.md`](docs/hardware-validation.md).
 
 </details>
@@ -403,7 +401,7 @@ ESP32-S3 has a recorded hardware result for approach unlock. The other targets b
 are released without one. Details in [`ports/esp32/`](ports/esp32/) and
 [`docs/esp32-gotchas.md`](docs/esp32-gotchas.md).
 
-There is also a browser flasher, if you would rather not install anything:
+A browser flasher, if you would rather not install anything:
 [**Flash an ESP32 from this page ↗**](https://openaliro.github.io/openaliro/flash/)
 
 </details>
@@ -415,12 +413,12 @@ There is also a browser flasher, if you would rather not install anything:
 |  | |
 |:--|:--|
 | 🚪 **Unlock** | Home Key over BLE and UWB on approach, relock on departure, plus NFC Express Mode where the hardware has a reader. |
-| 🛡️ **Security** | Credential-bound DS-TWR with STS, and a [range consistency gate](docs/range-integrity.md) — proximity is measured, not claimed. |
+| 🛡️ **Security** | Credential-bound DS-TWR with STS, and a [range consistency gate](docs/range-integrity.md). Proximity is measured, not claimed. |
 | ⚡ **Speed** | Credential reuse, PHY prewarm, 15 ms BLE intervals, fast auth. |
-| 📻 **Bare UWB** | The DW3110 runs CCC/FiRa, STS, DS-TWR and the M1–M4 codec with **no UWB coprocessor**. |
-| 🧭 **Approach Direction** | Apple Home's own control is exposed, and its Left / Front / Right selection round-trips to the device — [`docs/approach-direction.md`](docs/approach-direction.md). |
+| 📻 **Bare UWB** | The DW3110 runs CCC/FiRa, STS, DS-TWR and the M1-M4 codec with **no UWB coprocessor**. |
+| 🧭 **Approach Direction** | Apple Home's own control is exposed, and its Left / Front / Right selection round-trips to the device. See [`docs/approach-direction.md`](docs/approach-direction.md). |
 | 🏡 **Home Assistant** | UWB distance and access events over [MQTT][ha-docs], lock control over Matter, no firmware change. `make ha-setup HA=1`. |
-| 🧪 **Testable on a laptop** | `make test` runs the host suite with a C compiler — no SDK, no hardware. `make verify` is the whole pre-push sweep. |
+| 🧪 **Testable on a laptop** | `make test` runs the host suite with a C compiler, no SDK and no hardware. `make verify` is the whole pre-push sweep. |
 
 <div align="center">
 <picture>
@@ -436,19 +434,19 @@ There is also a browser flasher, if you would rather not install anything:
 
 ## 🔬 Under the hood
 
-The Aliro stack here is this project's own source, not a vendor binary. On the primary
-board the Matter node is this project's own source too. Every module below is compiled by
-all three targets, from one tree — the full table with per-module portability lives in
+The Aliro stack is this project's own source, and so is the Matter node on the primary
+board. Every module below is compiled by all three targets from one tree. The full table
+with per-module portability lives in
 [`modules/README.md`](modules/README.md).
 
 | Module | What it is |
 |:--|:--|
 | [`woz_port`](modules/woz_port/) | The platform contract: heap, clock, sleeps, mutex, logging. A new RTOS is a new branch in two headers. |
-| [`woz_uwb`](modules/woz_uwb/) | The UWB engine, one Kconfig tier per layer: bare DW3000 bring-up → DS-TWR responder → the CCC credential-bound STS engine and the M1–M4 codec. |
+| [`woz_uwb`](modules/woz_uwb/) | The UWB engine, one Kconfig tier per layer: bare DW3000 bring-up → DS-TWR responder → the CCC credential-bound STS engine and the M1-M4 codec. |
 | [`woz_aliro`](modules/woz_aliro/) | The portable C reader: key schedule, secure channel, wire codec, provisioning, ranging glue, RSSI gate, approach controller. |
 | [`woz_matter`](modules/woz_matter/) | The hand-written Matter node: TLV, message and exchange layers, MRP, BTP, PASE/CASE, attestation, clusters. Exists because CHIP does not fit. |
 | [`woz_dfu`](modules/woz_dfu/) | Delta firmware update over Bluetooth: a receiver in the app, an applier inside MCUboot. |
-| [`woz_aliro_stack`](modules/woz_aliro_stack/) | The Nordic Aliro API reimplemented from the published Aliro 1.0 spec — and a build that rejects any link map the vendor binary contributed to. |
+| [`woz_aliro_stack`](modules/woz_aliro_stack/) | The Nordic Aliro API reimplemented from the published Aliro 1.0 spec, plus a build that rejects any link map the vendor binary contributed to. |
 | [`woz_nfc`](modules/woz_nfc/) · [`woz_aliro_ecp`](modules/woz_aliro_ecp/) | The NFC transport seam (RFAL / PN532 / none) and the ECP emitter for Express tap. nRF5340 only. |
 
 Around them: [`tests/host/`](tests/host/) (KAT suite plus CBMC proofs and fuzz harnesses),
@@ -473,7 +471,7 @@ firmware compiled to WASM so the protocol runs in a browser),
 | `make reader` · `selftest` | The radio without Matter; and the one-shot SPI bring-up check. |
 | `make dfu` · `fota` · `fota-done` | Update over Bluetooth; make the file a phone installs; record what landed. |
 | `make test` · `check` · `verify` | Host suite; every host suite under one banner; the full pre-push sweep. |
-| `make security` | The eight blocking security gates — what a PR must pass. |
+| `make security` | The eight blocking security gates: what a PR must pass. |
 | `make fuzz` · `cbmc` · `coverage` | Parser hardening, bounded model checking, line coverage. |
 | `make docs` | Rebuild the documentation site → `site/index.html`. |
 | `make openaliro` | The guided bench TUI. |
@@ -519,7 +517,7 @@ New here? [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) �
 | 💬 [**Discord**](https://discord.gg/7Ez9SRD87Q) | Live bring-up help, RTT logs that make no sense, and "did anyone get this board working". |
 | 🐛 [**Issues**](https://github.com/openaliro/openaliro/issues) | Reproducible bugs, with the target, the build command and the console output. |
 | 🤝 [**CONTRIBUTING.md**](CONTRIBUTING.md) | What `make verify` expects from a patch before it can land. |
-| 🔐 [**SECURITY.md**](SECURITY.md) | Anything that would let the wrong phone open a door — privately, not in Discord. |
+| 🔐 [**SECURITY.md**](SECURITY.md) | Anything that would let the wrong phone open a door. Privately, not in Discord. |
 
 <div align="right"><sub><a href="#readme-top">↑ back to top</a></sub></div>
 
