@@ -3029,6 +3029,16 @@ the maths against a software curve only; this proves the same vectors on the
 silicon that will ship, and it caught a PSA import failure that no host run
 could see. Crypto only: no BLE, no UWB, no iPhone.
 
+## `release/dwm3001cdk/`
+
+### [`release/dwm3001cdk/flash.sh`](architecture/release.dwm3001cdk/flash.sh.md)
+
+flash.sh — program the openaliro DWM3001CDK firmware over the board's
+on-board J-Link. See FLASH.md for the full walkthrough.
+Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
+One image, not two: the nRF52833 is a single-core part, so unlike the
+nRF5340 DK there is no separate network-core hex to write.
+
 ## `release/esp32-matter-lock/`
 
 ### [`release/esp32-matter-lock/flash.sh`](architecture/release.esp32-matter-lock/flash.sh.md)
