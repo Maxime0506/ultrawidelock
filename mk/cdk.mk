@@ -153,6 +153,13 @@ CDK_PATCH    ?= $(CDK_BUILD)/update.wdfu
 CDK_OTA_VENV := $(ALIRO_BUILD_ROOT)/ota-venv
 CDK_OTA_PY   := $(CDK_OTA_VENV)/bin/python
 
+# The ELF that goes with $(CDK_DEPLOYED), kept because `ota-window` needs the
+# address of a symbol in the image the board is RUNNING, and the build tree only
+# ever holds the image being built next. Those differ the moment you rebuild, and
+# LTO renames the symbol, so a stale lookup writes a live value into the wrong
+# RAM word and the push then fails with access denied for no visible reason.
+CDK_DEPLOYED_ELF := $(dir $(CDK_DEPLOYED))zephyr.elf
+
 # ALIRO_TOOLCHAIN=env skips the nrfutil wrapper and runs west straight off PATH.
 # scripts/build-nrf5340dk.sh carries the same escape hatch for the same reason:
 # inside the NCS toolchain container CI uses, nrfutil's toolchain index is not
@@ -168,7 +175,7 @@ endif
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
 .PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
-        dfu-serial ota-patch ota-push ota-smp ota-smp-list ota-window ota-deps \
+        dfu-serial fota ota-patch ota-push ota-smp ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
@@ -230,6 +237,7 @@ flash:
 	@# gone there is no way to ask.
 	@if [ -f '$(CDK_SIGNED_HEX)' ]; then \
 	  mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'; \
+	  cp '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)' 2>/dev/null || true; \
 	fi
 
 ## flash-erase: full chip erase + flash the DWM3001CDK
@@ -292,6 +300,44 @@ dfu:
 	@$(MAKE) --no-print-directory ota-patch
 	@$(MAKE) --no-print-directory ota-push
 
+## fota: make the file an iPhone can install, and say how  ·  needs SMP=1
+##   Builds the tree, diffs it against what the board is running, signs the
+##   delta, and dresses it as an MCUboot image so a phone's file picker will
+##   accept it. Leaves ONE file to move to the phone and prints the steps.
+##
+##   The wrapper is why this is a separate target from `dfu`. nRF Device
+##   Manager PARSES a file before offering to upload it, and a bare .wdfu has
+##   no magic it recognises, so the phone refuses it at the picker. The wrapped
+##   file is a genuinely well-formed image -- real sizes, a real SHA-256 -- it
+##   is simply not bootable, and nothing ever asks it to be. The board spots
+##   the wrapper by its magic and steps over it.
+##
+##   The board must be built and flashed with SMP=1, or it does not speak
+##   mcumgr at all. RELEASE=1 belongs with it: 2,412 B of RAM free without,
+##   9,516 B with.
+##   Options: CDK_BUILD=<dir>  CDK_DEPLOYED=<hex>  FOTA_VERSION=<x.y.z>
+FOTA_VERSION ?= 1.0.0
+CDK_FOTA     := $(CDK_BUILD)/openaliro-fota.bin
+
+fota:
+	@$(MAKE) --no-print-directory build
+	@$(MAKE) --no-print-directory ota-patch
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_patch.py wrap '$(CDK_PATCH)' \
+	  --version '$(FOTA_VERSION)' --out '$(CDK_FOTA)'
+	@printf '\n  ---- put this on the phone ----------------------------------\n\n'
+	@printf '  %s\n\n' '$(CDK_FOTA)'
+	@printf '  1. AirDrop that file to the phone, or drop it in Files\n'
+	@printf '  2. Press SW2 on the board  (or Apple Home -> Turn On Pairing Mode)\n'
+	@printf '  3. nRF Device Manager -> connect to "openaliro"\n'
+	@printf '  4. Images tab -> SELECT FILE -> that file -> UPLOAD\n'
+	@printf '  5. Device tab -> Reset,  then wait ~30 s\n\n'
+	@printf '  Use the Images tab, NOT the guided firmware-upgrade wizard: that\n'
+	@printf '  flow waits for a second image to confirm and a reconnect that the\n'
+	@printf '  bootloader apply outlasts.\n\n'
+	@printf '  The window closes after five minutes. Reset is refused outside it\n'
+	@printf '  unless a patch is already staged, which is deliberate -- otherwise\n'
+	@printf '  anyone in radio range could reboot the lock in a loop.\n\n'
+
 ## ota-patch: build a signed delta from the deployed image to the built one
 ##   Leaves it at $(CDK_PATCH). Useful on its own when the board is elsewhere.
 ota-patch: $(CDK_OTA_PY)
@@ -313,6 +359,7 @@ ota-push: $(CDK_OTA_PY)
 	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_push.py '$(CDK_PATCH)' \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
+	@cp '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)' 2>/dev/null || true
 	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
 
 ## ota-smp: push the patch over mcumgr instead, exactly as a phone would
@@ -326,6 +373,7 @@ ota-smp: $(CDK_OTA_PY)
 	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py '$(CDK_PATCH)' \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
+	@cp '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)' 2>/dev/null || true
 	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
 
 ota-smp-list: $(CDK_OTA_PY)
@@ -341,7 +389,8 @@ ota-smp-list: $(CDK_OTA_PY)
 ##   pushed. The address comes out of that ELF, and writing it into the wrong
 ##   RAM location does nothing visible -- the push simply keeps waiting.
 ota-window:
-	@elf='$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf'; \
+	@elf='$(CDK_DEPLOYED_ELF)'; \
+	[ -f "$$elf" ] || elf='$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf'; \
 	nm=$$(ls /opt/nordic/ncs/toolchains/*/opt/zephyr-sdk/arm-zephyr-eabi/bin/arm-zephyr-eabi-nm 2>/dev/null | head -1); \
 	addr=$$($$nm "$$elf" | awk '$$3 ~ /^s_open(\.|$$)/ { print $$1; exit }'); \
 	if [ -z "$$addr" ]; then printf '  cannot find s_open in %s\n' "$$elf" >&2; exit 1; fi; \

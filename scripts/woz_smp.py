@@ -248,8 +248,17 @@ async def run(args):
             return
 
         blob = Path(args.patch).read_bytes()
-        if blob[:4] != b"WDFU":
-            die(f"{args.patch} is not a patch (no WDFU magic). Fix: make ota-patch")
+        if blob[:4] == b"WDFU":
+            print("  raw .wdfu")
+        elif struct.unpack_from("<I", blob, 0)[0] == 0x96F3B83D:
+            # The phone-facing file. Sending it here is the point: it exercises
+            # the board's wrapper-skipping on exactly the bytes the app sends.
+            hdr_sz, img_sz = struct.unpack_from("<H", blob, 8)[0], struct.unpack_from("<I", blob, 12)[0]
+            print(f"  mcuboot-wrapped: {hdr_sz} B header + {img_sz} B patch + {len(blob)-hdr_sz-img_sz} B TLV")
+            if blob[hdr_sz : hdr_sz + 4] != b"WDFU":
+                die("wrapped file has no WDFU magic at its payload offset")
+        else:
+            die(f"{args.patch} is neither a .wdfu nor an MCUboot image. Fix: make fota")
 
         # Leave room for the SMP header and the CBOR keys around the data. The
         # board's netbuf is 512 B, so this is bounded by the ATT MTU, not by it.

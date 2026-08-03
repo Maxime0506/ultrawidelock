@@ -46,6 +46,7 @@ Needs `detools` and `cryptography`:
 import argparse
 import io
 import re
+import hashlib
 import struct
 import sys
 import zlib
@@ -75,6 +76,18 @@ HEATSHRINK_LOOKAHEAD_SZ2 = 7
 # detools requires memory_size to be a multiple of segment_size, and the
 # bootloader erases a page at a time, so a segment is a page.
 SEGMENT_SIZE = 4096
+
+# MCUboot's own image format, used by `wrap` to make a patch look like firmware.
+#
+# NOT because anything on the board wants it: the receiver skips straight past
+# it. It is there because nRF Device Manager PARSES a file before it will offer
+# to upload it, and a raw .wdfu has no magic it recognises, so the phone refuses
+# the file at the picker and never gets as far as sending a byte. Wrapping costs
+# 72 B and makes the file acceptable to every version of the app.
+MCUBOOT_IMAGE_MAGIC = 0x96F3B83D
+MCUBOOT_HDR_LEN = 32
+MCUBOOT_TLV_INFO_MAGIC = 0x6907
+MCUBOOT_TLV_SHA256 = 0x10
 
 
 def die(msg):
@@ -260,6 +273,55 @@ def build(args):
     print(f"  wrote     {args.out}")
 
 
+def wrap(args):
+    """Dress a .wdfu as an MCUboot image so a phone's file picker accepts it.
+
+    The result is a WELL-FORMED image, not a decoy: the header sizes describe
+    the real payload and the SHA-256 TLV really is the hash of what precedes it,
+    so an app that validates finds everything consistent. What it is NOT is
+    bootable -- the payload is a delta, not code, and nothing ever asks MCUboot
+    to run it. The board recognises the wrapper by its magic and skips it.
+    """
+    inner = Path(args.patch).read_bytes()
+    if len(inner) < WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:
+        die(f"{args.patch} is too short to be a .wdfu")
+    if struct.unpack("<I", inner[:4])[0] != WOZ_DFU_MAGIC:
+        die(f"{args.patch} is not a .wdfu (no WDFU magic). Did you pass the wrapped file back in?")
+
+    major, minor, rev = (int(x) for x in args.version.split("."))
+    # The build number distinguishes one patch from the next in the phone's
+    # image list, which otherwise shows the same version for every file. The
+    # patch CRC is already the thing `info` prints, so matching them is a check
+    # the user can actually perform.
+    build_num = zlib.crc32(inner) & 0xFFFFFFFF
+
+    # magic, load_addr, hdr_size, protect_tlv_size, img_size, flags | version | _pad1.
+    # The trailing pad is part of the struct, not slack: without it the header is
+    # 28 B, every offset after it shifts, and the board reads the wrong sizes.
+    header = (
+        struct.pack("<IIHHII", MCUBOOT_IMAGE_MAGIC, 0, MCUBOOT_HDR_LEN, 0, len(inner), 0)
+        + struct.pack("<BBHI", major, minor, rev, build_num)
+        + struct.pack("<I", 0)
+    )
+    assert len(header) == MCUBOOT_HDR_LEN
+
+    digest = hashlib.sha256(header + inner).digest()
+    tlv_total = 4 + 4 + len(digest)
+    trailer = (
+        struct.pack("<HH", MCUBOOT_TLV_INFO_MAGIC, tlv_total)
+        + struct.pack("<BBH", MCUBOOT_TLV_SHA256, 0, len(digest))
+        + digest
+    )
+
+    out = header + inner + trailer
+    Path(args.out).write_bytes(out)
+
+    print(f"  patch     {len(inner):>9,} B  crc {zlib.crc32(inner):#010x}")
+    print(f"  wrapper   {len(out) - len(inner):>9,} B  header {MCUBOOT_HDR_LEN} + TLV {len(trailer)}")
+    print(f"  file      {len(out):>9,} B  v{major}.{minor}.{rev}+{build_num}")
+    print(f"  wrote     {args.out}")
+
+
 def info(args):
     blob = Path(args.patch).read_bytes()
     if len(blob) < WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:
@@ -344,6 +406,12 @@ def main():
     s.add_argument("patch")
     s.add_argument("--out", required=True)
     s.set_defaults(func=stage)
+
+    w = sub.add_parser("wrap", help="dress a .wdfu as an MCUboot image, for phone tooling")
+    w.add_argument("patch")
+    w.add_argument("--out", required=True)
+    w.add_argument("--version", default="1.0.0", help="major.minor.revision shown by the app")
+    w.set_defaults(func=wrap)
 
     args = parser.parse_args()
     args.func(args)

@@ -379,6 +379,19 @@ int woz_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, size_t *rsp
 
 #ifdef CONFIG_WOZ_DFU_SMP_IMG
 
+/* MCUboot's image magic and the two header fields needed to measure a wrapper.
+ * Also spelled out in src/dfu_smp_img.c, which walks the running image's TLVs;
+ * this is MCUboot's fixed on-disk format and cannot drift. */
+#define MCUBOOT_IMAGE_MAGIC 0x96f3b83du
+#define MCUBOOT_HDR_MIN     16u
+
+/* The CLIENT's cursor, which stops matching the patch cursor the moment a file
+ * is wrapped. Everything reported back to the host is in this space; s_rx.got
+ * remains the cursor into the patch itself. */
+static uint32_t s_cli_off;
+static uint32_t s_skip;  /**< leading wrapper bytes to discard */
+static uint32_t s_inner; /**< patch bytes inside the file */
+
 int woz_dfu_rx_upload(uint32_t off, uint32_t total, const uint8_t *data, size_t len, uint32_t *next)
 {
 	enum woz_dfu_err e;
@@ -391,39 +404,85 @@ int woz_dfu_rx_upload(uint32_t off, uint32_t total, const uint8_t *data, size_t 
 		/* A restarted upload is normal, not an error: mcumgr clients
 		 * rewind to 0 after a dropped link. Erasing and starting over
 		 * is exactly what BEGIN does. */
-		e = begin_at(total);
+		s_skip = 0U;
+		s_inner = total;
+
+		/* A phone will not offer a file its own parser rejects, so a
+		 * patch meant for one is dressed as an MCUboot image by
+		 * `woz_patch.py wrap`. Step over that wrapper. A raw .wdfu has
+		 * no magic here and is taken as it is, so both files work and
+		 * the native transport is untouched. */
+		if (len >= MCUBOOT_HDR_MIN && sys_get_le32(data) == MCUBOOT_IMAGE_MAGIC) {
+			uint32_t hdr_sz = sys_get_le16(&data[8]);
+			uint32_t img_sz = sys_get_le32(&data[12]);
+
+			if (hdr_sz < MCUBOOT_HDR_MIN || img_sz == 0U || hdr_sz > total ||
+			    img_sz > total - hdr_sz) {
+				e = WOZ_DFU_ERR_MALFORMED;
+				goto refused;
+			}
+			s_skip = hdr_sz;
+			s_inner = img_sz;
+			LOG_INF("mcuboot wrapper: %u B header, %u B payload", (unsigned)hdr_sz,
+				(unsigned)img_sz);
+		}
+
+		e = begin_at(s_inner);
 		if (e != WOZ_DFU_ERR_OK) {
 			goto refused;
 		}
-	} else if (off != s_rx.got) {
+		s_cli_off = 0U;
+	} else if (off != s_cli_off) {
 		/* Do NOT fail. mcumgr's contract is that the device reports
 		 * where it actually is and the host resends from there, which
 		 * is what makes a dropped chunk recoverable without restarting
 		 * the whole transfer. */
-		*next = s_rx.got;
+		*next = s_cli_off;
 		return 0;
 	}
 
-	e = feed_bytes(data, len);
-	if (e != WOZ_DFU_ERR_OK) {
-		goto refused;
+	/* The wrapper's header. */
+	if (s_cli_off < s_skip) {
+		size_t drop = MIN(len, (size_t)(s_skip - s_cli_off));
+
+		data += drop;
+		len -= drop;
+		s_cli_off += drop;
 	}
 
-	/* The last chunk stages the header but does not restart the board. The
-	 * host sends os_mgmt reset itself, and a board that rebooted early would
-	 * drop the response and read as a failed upload. */
-	if (s_rx.got == s_rx.total) {
+	/* The patch. */
+	if (len > 0U && s_rx.got < s_inner) {
+		size_t take = MIN(len, (size_t)(s_inner - s_rx.got));
+
+		e = feed_bytes(data, take);
+		if (e != WOZ_DFU_ERR_OK) {
+			goto refused;
+		}
+		len -= take;
+		s_cli_off += take;
+	}
+
+	/* The wrapper's TLV trailer. Acknowledged and thrown away: the client
+	 * has to be allowed to finish sending the file it holds, and nothing
+	 * past the patch means anything to the bootloader. */
+	s_cli_off += len;
+
+	/* The last patch byte stages the header but does not restart the board.
+	 * The host sends os_mgmt reset itself, and a board that rebooted early
+	 * would drop the response and read as a failed upload. */
+	if (s_rx.active && s_rx.got == s_inner) {
 		e = commit_now(false);
 		if (e != WOZ_DFU_ERR_OK) {
 			goto refused;
 		}
-		LOG_INF("update staged, %u B; awaiting reset", (unsigned)s_rx.total);
+		LOG_INF("update staged, %u B; awaiting reset", (unsigned)s_inner);
 	}
 
-	*next = s_rx.got;
+	*next = s_cli_off;
 	return 0;
 
 refused:
+	s_cli_off = 0U;
 	LOG_WRN("upload refused at %u B (err %d)", (unsigned)s_rx.got, (int)e);
 	woz_dfu_rx_reset();
 	return -EINVAL;
