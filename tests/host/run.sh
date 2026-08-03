@@ -196,7 +196,8 @@ STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
 	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_WOZ_ALIRO_APDU_BUFFER_SIZE=1024
 	-DCONFIG_MAX_NUMBER_OF_KPERSISTENT=4
 	-DCONFIG_DOOR_LOCK_STORAGE_MAX_STORED_ACCESS_DOCUMENTS=2)
-STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol")
+STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
+	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src")
 STK_OBJS=()
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_stack.o"
@@ -208,6 +209,17 @@ for stk_src in advertising_core protocol/ble_message protocol/ble_timeout protoc
 		-c "$STK/$stk_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
+# The symmetric crypto is REAL: aliro_hash.c (SHA-256/HMAC/HKDF, pinned by
+# test_aliro_hash.c) and the reference AES-GCM in aliro_prim_host.c (pinned by
+# test_aliro_crypto.c). Only P-256 stays a stand-in -- this repo has none on host.
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
+	-I"$ROOT/modules/woz_aliro/src" -c "$ROOT/modules/woz_aliro/src/aliro_hash.c" \
+	-o "$OUT/stk_aliro_hash.o"
+# shellcheck disable=SC2086
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
+	-I"$ROOT/modules/woz_aliro/src" -c "$ROOT/ports/esp32/test/aliro_prim_host.c" \
+	-o "$OUT/stk_aliro_prim_host.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
 	-c "$STK/aliro_stack.cpp" -o "$OUT/stk_aliro_stack.o"
@@ -224,6 +236,7 @@ done
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 	"$OUT/test_aliro_stack.o" "$OUT/stackfake.o" "$OUT/test_harness_stack.o" \
 	"$OUT/stk_aliro_stack.o" "$OUT/stk_session.o" "${STK_OBJS[@]}" \
+	"$OUT/stk_aliro_hash.o" "$OUT/stk_aliro_prim_host.o" \
 	-o "$OUT/host_test_stack"
 "$OUT/host_test_stack"
 

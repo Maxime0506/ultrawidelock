@@ -1,18 +1,26 @@
 /* stackfake — test-side control/inspection API for the Aliro Interface the
  * woz_aliro_stack sources call into.
  *
- * THERE IS NO CRYPTOGRAPHY HERE, and that shapes what any suite built on it
- * can claim. Key agreement returns filler. HKDF returns a counter pattern.
- * AES-GCM "encryption" copies the plaintext and writes a tag derived from the
- * key id and nonce, so decryption of the fake's own ciphertext round-trips and
- * anything else fails -- which is enough to drive both branches, and is not
- * evidence that the real AEAD is used correctly. ECDSA verify is a knob.
+ * THE SYMMETRIC CRYPTO IS REAL. SHA-256, HKDF and AES-256-GCM come from this
+ * repo's own host implementations -- modules/woz_aliro/src/aliro_hash.c, which
+ * test_aliro_hash.c pins against published vectors, and the reference GCM in
+ * ports/esp32/test/aliro_prim_host.c, which test_aliro_crypto.c pins against
+ * the GCM spec vectors. So a wrong key, a skipped counter, a corrupted
+ * ciphertext or a forged authentication tag fails HERE the way it fails on the
+ * device, and the key schedule really is derived rather than asserted.
  *
- * WHAT IT IS GOOD FOR is the state machine, which is the bulk of session.cpp:
- * which command is built next, which key id is used for which direction, which
- * counter advances, when a session is torn down, and what the peer is told.
- * Those are decisions the file makes on its own, and every one of them is
- * observable here.
+ * THE ASYMMETRIC CRYPTO IS NOT, AND CANNOT BE. There is no P-256 anywhere in
+ * this repo's host build: aliro_prim_host.c says so in its own banner -- its
+ * EC block is "a deterministic, commutative, trivially forgeable stand-in",
+ * and real curve math runs only in aliro_prim_psa.c on target. So key
+ * agreement, ECDSA signing and ECDSA verification are stand-ins here, their
+ * results are knobs, and nothing in these suites is evidence that a signature
+ * verifies or that an ephemeral exchange is sound.
+ *
+ * WHAT THAT BUYS. The state machine is checked against real key material: the
+ * suites can act as the User Device, seal a response with the same derived key
+ * the reader derived, and the reader either opens it or does not. A test that
+ * sends the wrong counter now fails for the reason the device would fail.
  *
  * The transport side is a recorder: Session::Send keeps every frame, so a
  * suite reads back exactly what would have gone on the wire.
@@ -109,26 +117,8 @@ struct stackfake_state {
 	int derive_raw_ret;
 	int aead_encrypt_ret;
 	int aead_decrypt_ret;
-	/* Accept any tag on decrypt. A response the STACK produced carries a
-	 * tag this fake can recompute, but one a suite hand-builds cannot --
-	 * the key id it was "encrypted" under is chosen inside session.cpp and
-	 * is not visible from outside. With this set a suite scripts a device
-	 * response as plaintext plus sixteen filler bytes and still drives the
-	 * real state machine; last_aead_decrypt_key still records WHICH key the
-	 * stack chose, which is the decision actually under test. Left clear,
-	 * the tag is checked, and one case does exactly that. */
-	bool aead_decrypt_ignore_tag;
 	int encrypt_ret;
 	int sha256_ret;
-	/* Serve this digest instead of the fake's own mixing function. The
-	 * access-document check compares a hash of the issuer-signed item
-	 * against a digest recorded inside the document, and no stand-in is
-	 * going to reproduce a real SHA-256. A suite parses the document with
-	 * the real parser, reads the digest it expects, and installs it here --
-	 * so the comparison is exercised, and it is worth nothing as evidence
-	 * about the hash itself. */
-	bool sha256_forced;
-	uint8_t sha256_force[32];
 	/* Fail the Nth call of a kind, then keep failing. -1 never. */
 	int import_symmetric_fail_in;
 	int import_shared_fail_in;
@@ -143,6 +133,12 @@ struct stackfake_state {
 	uint8_t last_nonce[12];
 	size_t last_salt_len;
 	uint8_t last_salt[512];
+	/* The FIRST DeriveRawKey salt since reset. The fast phase derives
+	 * before the volatile schedule does, so this is the one a suite needs
+	 * to reproduce the cryptogram key -- last_salt has been overwritten by
+	 * the volatile derivation by the time the flow finishes. */
+	size_t first_salt_len;
+	uint8_t first_salt[512];
 	uint8_t last_info[32];
 	size_t last_info_len;
 
@@ -179,19 +175,52 @@ const struct stackfake_send *stackfake_sent(size_t index);
 /** @brief The most recent frame handed to the transport, or NULL. */
 const struct stackfake_send *stackfake_last_send(void);
 
-/** @brief Install @p count persistent credential key ids for the fast path. */
-void stackfake_set_kpersistent(const uint32_t *ids, size_t count);
+/**
+ * @brief Create @p count real persistent credential keys for the fast path.
+ *
+ * Real, because the fast phase derives from them with real HKDF: an id with no
+ * key behind it would fail derivation instead of failing the cryptogram, which
+ * is a different test. Reach them with stackfake_key_nth("kpersistent", i).
+ */
+void stackfake_set_kpersistent(size_t count);
 
 /** @brief Fire the callback of the timer holding @p handle, as expiry would. */
 void stackfake_fire_timer(int handle);
 
-/**
- * @brief Build the tag the fake's AeadEncrypt would produce.
+/* ---- acting as the User Device --------------------------------------------
  *
- * A suite uses this to forge a message the stack will accept, which is the
- * only way to drive the encrypted half of the BLE state machine. It is
- * arithmetic over the key id and nonce, not a MAC.
+ * The reader derives its session keys inside session.cpp. The real peer holds
+ * the same keys, so a suite that wants to answer as the peer needs to reach
+ * them -- not to forge anything, but to seal a response with the key the
+ * device would genuinely have. The key table below is that reach.
+ *
+ * Keys are labelled with what the Interface call could honestly know:
+ *   "shared"     an ImportSharedKey (Kdh, StepUpSK, BleSK)
+ *   "symmetric"  an ImportSymmetricKey (the two expedited directional keys)
+ *   <info>       a DeriveSymmetricKey, labelled with its HKDF info string --
+ *                "SKReader", "SKDevice", "BleSKReader", "BleSKDevice"
  */
-void stackfake_tag(uint32_t key_id, const uint8_t *nonce, uint8_t *tag_out);
+
+/** @brief Key id of the @p index'th key created with @p label, or 0. */
+uint32_t stackfake_key_nth(const char *label, size_t index);
+
+/** @brief Copy the 32 key bytes behind @p key_id; false if unknown. */
+bool stackfake_key_bytes(uint32_t key_id, uint8_t out[32]);
+
+/** @brief How many keys exist, for a suite that wants to assert on churn. */
+size_t stackfake_key_count(void);
+
+/**
+ * @brief Seal @p plaintext as the User Device would, with real AES-256-GCM.
+ *
+ * Writes ciphertext followed by its 16-byte tag and returns the total. The
+ * nonce is built the way the protocol builds it -- byte 7 marks the device
+ * direction, bytes 8..11 carry the counter big-endian -- so a suite that
+ * passes the wrong counter produces a response the reader legitimately
+ * refuses. Returns 0 if @p key_id is unknown.
+ */
+size_t stackfake_seal_as_device(uint32_t key_id, uint32_t counter, const uint8_t *aad,
+				size_t aad_length, const uint8_t *plaintext, size_t length,
+				uint8_t *out);
 
 #endif /* WOZ_STACKFAKE_H */

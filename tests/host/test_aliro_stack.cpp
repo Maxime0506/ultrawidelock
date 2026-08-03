@@ -26,6 +26,8 @@
 
 extern "C" {
 #include "test.h"
+#include "aliro_hash.h"
+#include "aliro_prim.h"
 }
 
 #include "stackfake.h"
@@ -100,14 +102,39 @@ static size_t build_auth0_response(uint8_t *out, bool with_cryptogram)
 	return n;
 }
 
+/*
+ * The key the User Device answers with, and the counter it is on.
+ *
+ * DeriveVolatileKeys imports in a fixed order, so the second ImportSymmetricKey
+ * IS the expedited device key -- the reader derived it, and the real peer holds
+ * the same bytes. Sealing with it is not forgery; using any other key, or the
+ * wrong counter, produces a response the reader rightly refuses.
+ */
+#define DEVICE_KEY()   stackfake_key_nth("symmetric", 1)
+#define STEP_UP_KEY()  stackfake_key_nth("SKDevice", 0)
+#define BLE_DEVICE_KEY() stackfake_key_nth("BleSKDevice", 0)
+
+/** Seal an APDU-layer device response (no AAD) and append the success status. */
+static size_t seal_apdu(uint8_t *out, uint32_t key, uint32_t counter, const uint8_t *plaintext,
+			size_t length)
+{
+	size_t n = stackfake_seal_as_device(key, counter, nullptr, 0, plaintext, length, out);
+
+	if (n == 0U) {
+		return 0;
+	}
+	out[n++] = 0x90;
+	out[n++] = 0x00;
+	return n;
+}
+
 /**
- * AUTH1 response: the plaintext the stack will decrypt, then sixteen filler
- * bytes standing in for the tag, then 9000. Valid only with
- * stackfake.aead_decrypt_ignore_tag set -- see the knob's comment for why the
- * real tag cannot be computed from out here.
+ * AUTH1 response, sealed with the real expedited device key under real
+ * AES-256-GCM. The reader is on device counter 1 when it opens this.
  */
 static size_t build_auth1_response(uint8_t *out, uint16_t signaling, bool with_timestamp)
 {
+	uint8_t plaintext[256];
 	uint8_t key[65];
 	uint8_t signature[64];
 	uint8_t bitmap[2];
@@ -122,32 +149,43 @@ static size_t build_auth1_response(uint8_t *out, uint16_t signaling, bool with_t
 	bitmap[0] = static_cast<uint8_t>(signaling >> 8);
 	bitmap[1] = static_cast<uint8_t>(signaling);
 
-	n += put_tlv(out + n, 0x5a, key, sizeof(key));
-	n += put_tlv(out + n, 0x9e, signature, sizeof(signature));
-	n += put_tlv(out + n, 0x5e, bitmap, sizeof(bitmap));
+	n += put_tlv(plaintext + n, 0x5a, key, sizeof(key));
+	n += put_tlv(plaintext + n, 0x9e, signature, sizeof(signature));
+	n += put_tlv(plaintext + n, 0x5e, bitmap, sizeof(bitmap));
 	if (with_timestamp) {
-		n += put_tlv(out + n, 0x91, timestamp, sizeof(timestamp));
+		n += put_tlv(plaintext + n, 0x91, timestamp, sizeof(timestamp));
 	}
-	std::memset(out + n, 0xee, CryptoTypes::kAuthenticationTagLength); /* stand-in tag */
-	n += CryptoTypes::kAuthenticationTagLength;
-	out[n++] = 0x90;
-	out[n++] = 0x00;
-	return n;
+	return seal_apdu(out, DEVICE_KEY(), 1, plaintext, n);
 }
 
-/** The exchange response the stack accepts: 00 02 00 00, tag stand-in, 9000. */
+/** The same, presenting a chosen credential public key (Access Document tests). */
+static size_t build_auth1_response_for(uint8_t *out, const uint8_t *device_public_key,
+				       uint16_t signaling)
+{
+	uint8_t plaintext[256];
+	uint8_t signature[64];
+	uint8_t bitmap[2];
+	size_t n = 0;
+
+	std::memset(signature, 0x50, sizeof(signature));
+	bitmap[0] = static_cast<uint8_t>(signaling >> 8);
+	bitmap[1] = static_cast<uint8_t>(signaling);
+	n += put_tlv(plaintext + n, 0x5a, device_public_key, 65);
+	n += put_tlv(plaintext + n, 0x9e, signature, sizeof(signature));
+	n += put_tlv(plaintext + n, 0x5e, bitmap, sizeof(bitmap));
+	return seal_apdu(out, DEVICE_KEY(), 1, plaintext, n);
+}
+
+/**
+ * The exchange response, sealed for real. By now the reader has opened one
+ * device message (AUTH1), so it is on device counter 2 -- a test that got that
+ * wrong would be refused, which is the point of doing this properly.
+ */
 static size_t build_exchange_response(uint8_t *out)
 {
 	static const uint8_t success[] = {0x00, 0x02, 0x00, 0x00};
-	size_t n = 0;
 
-	std::memcpy(out, success, sizeof(success));
-	n = sizeof(success);
-	std::memset(out + n, 0xee, CryptoTypes::kAuthenticationTagLength);
-	n += CryptoTypes::kAuthenticationTagLength;
-	out[n++] = 0x90;
-	out[n++] = 0x00;
-	return n;
+	return seal_apdu(out, DEVICE_KEY(), 2, success, sizeof(success));
 }
 
 static AliroStack &stack(void)
@@ -461,12 +499,10 @@ static void test_session_lifecycle(void)
 /** Open an NFC session and walk it as far as the AUTH0 command. */
 static void nfc_to_auth0(bool fast_available)
 {
-	static const uint32_t ids[] = {0x11, 0x22};
 
 	ready();
-	stackfake.aead_decrypt_ignore_tag = true;
 	if (fast_available) {
-		stackfake_set_kpersistent(ids, 2);
+		stackfake_set_kpersistent(2);
 	}
 	T_EQ("nfc session", stack().CreateSession(ConnectionHandle::Nfc()).ToInt(),
 	     (int)ALIRO_NO_ERROR);
@@ -646,7 +682,6 @@ static void test_nfc_failures(void)
 
 static void test_nfc_fast_path(void)
 {
-	static const uint32_t ids[] = {0x11};
 	uint8_t response[512];
 	size_t length;
 
@@ -663,8 +698,7 @@ static void test_nfc_fast_path(void)
 
 	/* A credential whose public key cannot be read is skipped, not fatal. */
 	ready();
-	stackfake.aead_decrypt_ignore_tag = true;
-	stackfake_set_kpersistent(ids, 1);
+	stackfake_set_kpersistent(1);
 	T_EQ("nfc session", stack().CreateSession(ConnectionHandle::Nfc()).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	feed_nfc(kSelectResponse, sizeof(kSelectResponse));
@@ -932,6 +966,30 @@ static size_t build_initiate_access(uint8_t *out)
 			 WOZ_ALIRO_BLE_NOTIFICATION_INITIATE_ACCESS, payload, sizeof(payload));
 }
 
+/**
+ * Seal a BLE-layer message as the User Device: the four-byte header, then real
+ * AES-256-GCM over the plaintext with that header as additional data. Note the
+ * header on the wire declares plaintext+tag, while the AAD declares the
+ * PLAINTEXT length -- get that wrong and the reader rejects the frame, which is
+ * exactly the check being relied on here.
+ */
+static size_t build_ble_protected(uint8_t *out, uint8_t protocol, uint8_t id,
+				  const uint8_t *plaintext, size_t length, uint32_t counter)
+{
+	const uint8_t aad[4] = {protocol, id, static_cast<uint8_t>(length >> 8),
+				static_cast<uint8_t>(length)};
+	const size_t onWire = length + WOZ_ALIRO_BLE_AUTH_TAG_SIZE;
+	size_t sealed;
+
+	out[0] = protocol;
+	out[1] = id;
+	out[2] = static_cast<uint8_t>(onWire >> 8);
+	out[3] = static_cast<uint8_t>(onWire);
+	sealed = stackfake_seal_as_device(BLE_DEVICE_KEY(), counter, aad, sizeof(aad), plaintext,
+					  length, out + WOZ_ALIRO_BLE_HEADER_SIZE);
+	return sealed == 0U ? 0U : WOZ_ALIRO_BLE_HEADER_SIZE + sealed;
+}
+
 /** Wrap an AP response payload the way the peer does: protocol AP, id 1. */
 static size_t frame_ap(uint8_t *out, const uint8_t *payload, size_t length)
 {
@@ -945,7 +1003,6 @@ static void ble_to_auth0(void)
 	size_t length;
 
 	ready();
-	stackfake.aead_decrypt_ignore_tag = true;
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	length = build_initiate_access(frame);
@@ -1040,14 +1097,11 @@ static void test_ble_flow(void)
 		uint8_t protectedFrame[64];
 		size_t n;
 
-		n = frame_ble(protectedFrame, WOZ_ALIRO_BLE_PROTOCOL_UWB, 0, plain, sizeof(plain));
-		/* The peer's frame carries payload + tag; the fake ignores the
-		 * tag bytes but the length must still say they are there. */
-		std::memset(protectedFrame + n, 0xee, WOZ_ALIRO_BLE_AUTH_TAG_SIZE);
-		protectedFrame[2] = 0;
-		protectedFrame[3] = static_cast<uint8_t>(sizeof(plain) + WOZ_ALIRO_BLE_AUTH_TAG_SIZE);
-		n += WOZ_ALIRO_BLE_AUTH_TAG_SIZE;
-
+		/* Sealed for real with the reader's own BleSKDevice, on the
+		 * first device counter. */
+		n = build_ble_protected(protectedFrame, WOZ_ALIRO_BLE_PROTOCOL_UWB, 0, plain,
+					sizeof(plain), 1);
+		T_OK("frame sealed", n > 0u);
 		feed_ble(0, protectedFrame, n);
 		T_EQ("the uwb message was forwarded", (long)stackfake.uwb_handle_calls, 1L);
 		T_EQ("forwarded with its header", (long)stackfake.last_uwb_message_len,
@@ -1085,11 +1139,10 @@ static void test_ble_flow(void)
 		uint8_t protectedFrame[64];
 		size_t n;
 
-		n = frame_ble(protectedFrame, WOZ_ALIRO_BLE_PROTOCOL_AP, 7, plain, sizeof(plain));
-		std::memset(protectedFrame + n, 0xee, WOZ_ALIRO_BLE_AUTH_TAG_SIZE);
-		protectedFrame[3] =
-			static_cast<uint8_t>(sizeof(plain) + WOZ_ALIRO_BLE_AUTH_TAG_SIZE);
-		n += WOZ_ALIRO_BLE_AUTH_TAG_SIZE;
+		/* Counter 2: the reader already opened the UWB frame above. */
+		n = build_ble_protected(protectedFrame, WOZ_ALIRO_BLE_PROTOCOL_AP, 7, plain,
+					sizeof(plain), 2);
+		T_OK("frame sealed", n > 0u);
 		feed_ble(0, protectedFrame, n);
 		T_EQ("the session closed cleanly", (long)stackfake.termination_calls, 1L);
 	}
@@ -1173,14 +1226,13 @@ static void test_ble_flow_failures(void)
 	length = frame_ap(frame, body, build_auth1_response(body, 0x0000, false));
 	feed_ble(0, frame, length);
 	{
-		uint8_t wrong[] = {0x00, 0x02, 0x00, 0x01};
+		/* Correctly sealed and correctly counted -- only the plaintext
+		 * is wrong, so this reaches the content check rather than
+		 * being turned away at the tag. */
+		static const uint8_t wrong[] = {0x00, 0x02, 0x00, 0x01};
 
-		std::memcpy(body, wrong, sizeof(wrong));
-		std::memset(body + sizeof(wrong), 0xee, CryptoTypes::kAuthenticationTagLength);
-		body[sizeof(wrong) + CryptoTypes::kAuthenticationTagLength] = 0x90;
-		body[sizeof(wrong) + CryptoTypes::kAuthenticationTagLength + 1] = 0x00;
-		length = frame_ap(frame, body,
-				  sizeof(wrong) + CryptoTypes::kAuthenticationTagLength + 2);
+		length = seal_apdu(body, DEVICE_KEY(), 2, wrong, sizeof(wrong));
+		length = frame_ap(frame, body, length);
 		feed_ble(0, frame, length);
 		T_EQ("a wrong success marker closes the session",
 		     (long)stackfake.termination_calls, 1L);
@@ -1200,15 +1252,23 @@ static void test_ble_flow_failures(void)
 	 * here that exercises the authentication branch rather than stepping
 	 * over it. */
 	ready();
-	stackfake.aead_decrypt_ignore_tag = false;
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	length = build_initiate_access(frame);
 	feed_ble(0, frame, length);
 	length = frame_ap(frame, body, build_auth0_response(body, false));
 	feed_ble(0, frame, length);
-	length = frame_ap(frame, body, build_auth1_response(body, 0x0000, false));
-	feed_ble(0, frame, length);
+	{
+		/* Sealed correctly, then one ciphertext byte flipped. Real
+		 * AES-256-GCM, so the tag no longer covers these bytes and the
+		 * reader must refuse -- this is the authentication check doing
+		 * its job, not a knob reporting failure. */
+		size_t n = build_auth1_response(body, 0x0000, false);
+
+		body[4] ^= 0x01u;
+		length = frame_ap(frame, body, n);
+		feed_ble(0, frame, length);
+	}
 	T_EQ("a forged tag is refused", (long)stackfake.termination_calls, 1L);
 }
 
@@ -1398,12 +1458,16 @@ static size_t build_step_up_response(uint8_t *out, size_t cap, const uint8_t *do
 	size_t sessionDataLength = 0;
 	size_t wrapped = 0;
 
-	std::memcpy(ciphertext, document, length);
-	std::memset(ciphertext + length, 0xee, CryptoTypes::kAuthenticationTagLength);
+	/* StartStepUpExchange resets the directional counters, so the device is
+	 * back on counter 1 and seals with the step-up device key. */
+	const size_t sealed = stackfake_seal_as_device(STEP_UP_KEY(), 1, nullptr, 0, document,
+						       length, ciphertext);
 
-	if (woz_aliro_wrap_session_data(ciphertext,
-					length + CryptoTypes::kAuthenticationTagLength,
-					sessionData, sizeof(sessionData), &sessionDataLength) != 0) {
+	if (sealed == 0U) {
+		return 0;
+	}
+	if (woz_aliro_wrap_session_data(ciphertext, sealed, sessionData, sizeof(sessionData),
+					&sessionDataLength) != 0) {
 		return 0;
 	}
 	if (woz_aliro_wrap_do53(sessionData, sessionDataLength, out, cap - 2, &wrapped) != 0) {
@@ -1436,9 +1500,6 @@ static void test_access_document(void)
 
 	/* Drive an NFC session to the point where the document is expected. */
 	nfc_to_auth0(false);
-	stackfake.sha256_forced = true;
-	std::memcpy(stackfake.sha256_force, parsed_document.expected_digest,
-		    sizeof(stackfake.sha256_force));
 	stackfake.want_access_document = true;
 	stackfake.element_identifier_len = 8;
 	std::memcpy(stackfake.element_identifier, "element2", 8);
@@ -1450,23 +1511,7 @@ static void test_access_document(void)
 	/* The AUTH1 response must present the SAME device key the document
 	 * binds, or the validator refuses it -- which is exactly the check
 	 * that stops a document being replayed against another credential. */
-	{
-		uint8_t signature[64];
-		uint8_t bitmap[2] = {0x00, 0x01};
-		size_t n = 0;
-
-		for (size_t i = 0; i < sizeof(signature); i++) {
-			signature[i] = static_cast<uint8_t>(0x50 + i);
-		}
-		n += put_tlv(body + n, 0x5a, parsed_document.device_public_key, 65);
-		n += put_tlv(body + n, 0x9e, signature, sizeof(signature));
-		n += put_tlv(body + n, 0x5e, bitmap, sizeof(bitmap));
-		std::memset(body + n, 0xee, CryptoTypes::kAuthenticationTagLength);
-		n += CryptoTypes::kAuthenticationTagLength;
-		body[n++] = 0x90;
-		body[n++] = 0x00;
-		feed_nfc(body, n);
-	}
+	feed_nfc(body, build_auth1_response_for(body, parsed_document.device_public_key, 0x0001));
 	T_EQ("an envelope went out", (long)stackfake.send_count, 4L);
 
 	/* The document comes back wrapped, is validated, and access is granted
@@ -1486,8 +1531,6 @@ static void test_access_document(void)
 		std::memcpy(wrong, parsed_document.expected_digest, sizeof(wrong));
 		wrong[0] ^= 0xffu;
 		nfc_to_auth0(false);
-		stackfake.sha256_forced = true;
-		std::memcpy(stackfake.sha256_force, wrong, sizeof(wrong));
 		stackfake.want_access_document = true;
 		stackfake.element_identifier_len = 8;
 		std::memcpy(stackfake.element_identifier, "element2", 8);
@@ -1507,9 +1550,6 @@ static void test_access_document(void)
 	 * digest and signature are fine: build_auth1_response presents a
 	 * different device key. */
 	nfc_to_auth0(false);
-	stackfake.sha256_forced = true;
-	std::memcpy(stackfake.sha256_force, parsed_document.expected_digest,
-		    sizeof(stackfake.sha256_force));
 	stackfake.want_access_document = true;
 	stackfake.element_identifier_len = 8;
 	std::memcpy(stackfake.element_identifier, "element2", 8);
@@ -1524,9 +1564,6 @@ static void test_access_document(void)
 
 	/* An issuer whose key the reader does not hold. */
 	nfc_to_auth0(false);
-	stackfake.sha256_forced = true;
-	std::memcpy(stackfake.sha256_force, parsed_document.expected_digest,
-		    sizeof(stackfake.sha256_force));
 	stackfake.want_access_document = true;
 	stackfake.element_identifier_len = 8;
 	std::memcpy(stackfake.element_identifier, "element2", 8);
@@ -1541,29 +1578,12 @@ static void test_access_document(void)
 
 	/* A signature that does not verify. */
 	nfc_to_auth0(false);
-	stackfake.sha256_forced = true;
-	std::memcpy(stackfake.sha256_force, parsed_document.expected_digest,
-		    sizeof(stackfake.sha256_force));
 	stackfake.want_access_document = true;
 	stackfake.element_identifier_len = 8;
 	std::memcpy(stackfake.element_identifier, "element2", 8);
 	length = build_auth0_response(body, false);
 	feed_nfc(body, length);
-	{
-		uint8_t signature[64];
-		uint8_t bitmap[2] = {0x00, 0x01};
-		size_t n = 0;
-
-		std::memset(signature, 0x50, sizeof(signature));
-		n += put_tlv(body + n, 0x5a, parsed_document.device_public_key, 65);
-		n += put_tlv(body + n, 0x9e, signature, sizeof(signature));
-		n += put_tlv(body + n, 0x5e, bitmap, sizeof(bitmap));
-		std::memset(body + n, 0xee, CryptoTypes::kAuthenticationTagLength);
-		n += CryptoTypes::kAuthenticationTagLength;
-		body[n++] = 0x90;
-		body[n++] = 0x00;
-		feed_nfc(body, n);
-	}
+	feed_nfc(body, build_auth1_response_for(body, parsed_document.device_public_key, 0x0001));
 	stackfake.verify_ret = ALIRO_INVALID_SIGNATURE;
 	length = build_step_up_response(frame, sizeof(frame), document_bytes, document_length);
 	feed_nfc(frame, length);
@@ -1572,29 +1592,12 @@ static void test_access_document(void)
 
 	/* A validity window the reader judges expired. */
 	nfc_to_auth0(false);
-	stackfake.sha256_forced = true;
-	std::memcpy(stackfake.sha256_force, parsed_document.expected_digest,
-		    sizeof(stackfake.sha256_force));
 	stackfake.want_access_document = true;
 	stackfake.element_identifier_len = 8;
 	std::memcpy(stackfake.element_identifier, "element2", 8);
 	length = build_auth0_response(body, false);
 	feed_nfc(body, length);
-	{
-		uint8_t signature[64];
-		uint8_t bitmap[2] = {0x00, 0x01};
-		size_t n = 0;
-
-		std::memset(signature, 0x50, sizeof(signature));
-		n += put_tlv(body + n, 0x5a, parsed_document.device_public_key, 65);
-		n += put_tlv(body + n, 0x9e, signature, sizeof(signature));
-		n += put_tlv(body + n, 0x5e, bitmap, sizeof(bitmap));
-		std::memset(body + n, 0xee, CryptoTypes::kAuthenticationTagLength);
-		n += CryptoTypes::kAuthenticationTagLength;
-		body[n++] = 0x90;
-		body[n++] = 0x00;
-		feed_nfc(body, n);
-	}
+	feed_nfc(body, build_auth1_response_for(body, parsed_document.device_public_key, 0x0001));
 	stackfake.validity_known = true;
 	stackfake.validity_answer = false;
 	length = build_step_up_response(frame, sizeof(frame), document_bytes, document_length);
@@ -1604,42 +1607,101 @@ static void test_access_document(void)
 
 /* ---- session.cpp: the fast path that matches ------------------------------- */
 
+/**
+ * Build a cryptogram the reader will genuinely open.
+ *
+ * The fast phase derives its cryptogram key with HKDF from a stored persistent
+ * credential and a salt the reader assembles from the transaction. The real
+ * User Device derives the same key from the same inputs, so this does exactly
+ * that: run one probe pass to capture the salt the reader built, derive the key
+ * with the SAME real HKDF, and seal a Table 8-6 plaintext with real
+ * AES-256-GCM under the all-zero nonce the phase uses.
+ *
+ * Nothing here reimplements session.cpp: the salt is taken from what the reader
+ * actually produced, not rebuilt from a copy of its layout.
+ */
+static void seal_fast_cryptogram(const uint8_t *credential_ephemeral_public_key,
+				 uint8_t cryptogram[64])
+{
+	uint8_t plaintext[48] = {0};
+	uint8_t kpersistent[32];
+	uint8_t block[160];
+	const uint8_t nonce[12] = {0};
+
+	/* Table 8-6: signaling bitmap, then both fixed-width signed timestamps. */
+	plaintext[0] = 0x5e;
+	plaintext[1] = 0x02;
+	plaintext[4] = 0x91;
+	plaintext[5] = 0x14;
+	plaintext[26] = 0x92;
+	plaintext[27] = 0x14;
+
+	T_OK("persistent key material available",
+	     stackfake_key_bytes(stackfake_key_nth("kpersistent", 0), kpersistent));
+	T_OK("the reader built a fast salt", stackfake.first_salt_len > 0u);
+
+	/* Same HKDF the reader used, over the salt the reader produced. */
+	T_EQ("derive the cryptogram key",
+	     aliro_hkdf(stackfake.first_salt, stackfake.first_salt_len, kpersistent,
+			sizeof(kpersistent), credential_ephemeral_public_key + 1, 32, block,
+			sizeof(block)),
+	     0);
+	T_EQ("seal the cryptogram",
+	     aliro_aes256_gcm_encrypt(block, nonce, sizeof(nonce), nullptr, 0, plaintext,
+				      sizeof(plaintext), cryptogram, cryptogram + sizeof(plaintext),
+				      16),
+	     0);
+}
+
+/** One AUTH0 response carrying @p cryptogram as the fast-phase cryptogram. */
+static size_t auth0_with_cryptogram(uint8_t *out, const uint8_t *credential_key,
+				    const uint8_t cryptogram[64])
+{
+	size_t n = put_tlv(out, 0x86, credential_key, 65);
+
+	n += put_tlv(out + n, 0x9d, cryptogram, 64);
+	out[n++] = 0x90;
+	out[n++] = 0x00;
+	return n;
+}
+
 static void test_fast_match(void)
 {
-	static const uint32_t ids[] = {0x11};
 	uint8_t response[512];
-	uint8_t key[65];
+	uint8_t credential[65];
 	uint8_t cryptogram[64];
-	size_t n = 0;
+	size_t n;
 
 	t_group("aliro fast path match");
 
-	/* A cryptogram whose plaintext has the fixed-width shape of Table 8-6:
-	 * the signaling bitmap and both signed timestamps, in that order. The
-	 * fake's decrypt hands back the ciphertext body unchanged, so the shape
-	 * is what decides a match. */
-	std::memset(cryptogram, 0, sizeof(cryptogram));
-	cryptogram[0] = 0x5e;
-	cryptogram[1] = 0x02;
-	cryptogram[4] = 0x91;
-	cryptogram[5] = 0x14;
-	cryptogram[26] = 0x92;
-	cryptogram[27] = 0x14;
+	fill_public_key(credential, 0x10);
 
+	/* PROBE PASS: a cryptogram that cannot open, run only to capture the
+	 * salt the reader assembles. Everything the salt is built from is
+	 * deterministic here, so the next pass sees the same one. */
 	ready();
-	stackfake.aead_decrypt_ignore_tag = true;
-	stackfake_set_kpersistent(ids, 1);
+	stackfake_set_kpersistent(1);
 	T_EQ("nfc session", stack().CreateSession(ConnectionHandle::Nfc()).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	feed_nfc(kSelectResponse, sizeof(kSelectResponse));
+	std::memset(cryptogram, 0, sizeof(cryptogram));
+	n = auth0_with_cryptogram(response, credential, cryptogram);
+	feed_nfc(response, n);
+	T_OK("the fast key was derived on the probe", stackfake.derive_raw_calls >= 1u);
+	seal_fast_cryptogram(credential, cryptogram);
 
-	fill_public_key(key, 0x10);
-	n = put_tlv(response, 0x86, key, sizeof(key));
-	n += put_tlv(response + n, 0x9d, cryptogram, sizeof(cryptogram));
-	response[n++] = 0x90;
-	response[n++] = 0x00;
+	/* THE REAL PASS. The reader opens the cryptogram for real, so a match
+	 * here means real AES-256-GCM authenticated it under a key both sides
+	 * derived independently with real HKDF. */
+	ready();
+	stackfake_set_kpersistent(1);
+	T_EQ("nfc session", stack().CreateSession(ConnectionHandle::Nfc()).ToInt(),
+	     (int)ALIRO_NO_ERROR);
+	feed_nfc(kSelectResponse, sizeof(kSelectResponse));
+	n = auth0_with_cryptogram(response, credential, cryptogram);
 	feed_nfc(response, n);
 
+	T_EQ("the cryptogram was opened", (long)stackfake.aead_decrypt_calls, 1L);
 	/* A match skips the standard phase entirely: no AUTH1, straight to the
 	 * completion exchange. That saving is the whole point of the fast
 	 * phase. */
@@ -1652,39 +1714,179 @@ static void test_fast_match(void)
 	     (long)stackfake.process_access_fast_calls, 1L);
 	T_EQ("no signature was generated", (long)stackfake.sign_calls, 0L);
 
+	/* ONE FLIPPED BIT AND IT IS NOT A MATCH. This is the check the fast
+	 * phase rests on, and it is now real: the tag no longer covers these
+	 * bytes, so the reader falls back to expedited-standard. */
+	{
+		uint8_t tampered[64];
+
+		std::memcpy(tampered, cryptogram, sizeof(tampered));
+		tampered[3] ^= 0x01u;
+		ready();
+		stackfake_set_kpersistent(1);
+		T_EQ("nfc session", stack().CreateSession(ConnectionHandle::Nfc()).ToInt(),
+		     (int)ALIRO_NO_ERROR);
+		feed_nfc(kSelectResponse, sizeof(kSelectResponse));
+		n = auth0_with_cryptogram(response, credential, tampered);
+		feed_nfc(response, n);
+		T_EQ("a tampered cryptogram falls back to standard",
+		     (long)stackfake.sign_calls, 1L);
+		if (stackfake_sent(2) != nullptr) {
+			T_EQ("auth1 INS", (long)stackfake_sent(2)->bytes[1], 0x81L);
+		}
+	}
+
 	/* A matched cryptogram can still need the standard phase when the
 	 * application wants a newer Access Document. */
 	ready();
-	stackfake.aead_decrypt_ignore_tag = true;
-	stackfake_set_kpersistent(ids, 1);
+	stackfake_set_kpersistent(1);
 	stackfake.want_access_document = true;
 	stackfake.element_identifier_len = 4;
 	std::memcpy(stackfake.element_identifier, "elem", 4);
 	T_EQ("nfc session", stack().CreateSession(ConnectionHandle::Nfc()).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	feed_nfc(kSelectResponse, sizeof(kSelectResponse));
+	n = auth0_with_cryptogram(response, credential, cryptogram);
 	feed_nfc(response, n);
 	T_EQ("the standard phase ran after all", (long)stackfake.send_count, 3L);
 	if (stackfake_sent(2) != nullptr) {
 		T_EQ("auth1 INS", (long)stackfake_sent(2)->bytes[1], 0x81L);
 	}
+}
 
-	/* The same match over BLE goes to the URSK exchange, not a completion
-	 * exchange. */
+/* ---- session.cpp: the salt layout and the key schedule --------------------- */
+
+static void test_key_schedule(void)
+{
+	uint8_t response[512];
+	uint8_t reader_key[65];
+	uint8_t ephemeral[65];
+	uint8_t credential[65];
+	uint8_t kdh[32];
+	uint8_t block[160];
+	uint8_t got[32];
+	const uint8_t *salt;
+	size_t salt_len;
+
+	t_group("aliro key schedule");
+
+	/* A plain expedited-standard BLE flow, so every key in the schedule is
+	 * derived (BleSK only exists on BLE). */
 	ready();
-	stackfake.aead_decrypt_ignore_tag = true;
-	stackfake_set_kpersistent(ids, 1);
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	{
 		uint8_t frame[512];
-		size_t length = build_initiate_access(frame);
+		size_t n = build_initiate_access(frame);
 
-		feed_ble(0, frame, length);
-		length = frame_ap(frame, response, n);
-		feed_ble(0, frame, length);
+		feed_ble(0, frame, n);
+		n = frame_ap(frame, response, build_auth0_response(response, false));
+		feed_ble(0, frame, n);
 	}
-	T_EQ("the ursk exchange went out", (long)stackfake.send_count, 2L);
+
+	salt = stackfake.first_salt;
+	salt_len = stackfake.first_salt_len;
+
+	/* THE SALT IS A WIRE-VISIBLE STRUCTURE. Both sides build it
+	 * independently and an iPhone will not agree with a reader that orders
+	 * it differently -- and because both sides of THIS suite derive from
+	 * the reader's own salt, only an explicit pin can catch a reordering.
+	 * Table 8-x: reader public key X, a 12-byte label, the reader
+	 * identifier, the interface byte, the version TLV, the reader ephemeral
+	 * X, the transaction identifier, the two flag bytes, then the
+	 * proprietary information. */
+	fill_public_key(reader_key, 0);
+	(void)reader_key;
+	T_OK("salt is long enough to hold the fixed part", salt_len >= 131u);
+	if (salt_len < 131u) {
+		return;
+	}
+	/* Reader public key X coordinate, prefix stripped. */
+	{
+		CryptoTypes::PublicKey rk{};
+
+		T_EQ("reader key available",
+		     Aliro::Interface::Reader::GetPublicKey(rk).ToInt(), (int)ALIRO_NO_ERROR);
+		T_OK("salt[0..32] is the reader public key X",
+		     std::memcmp(salt, rk.data() + 1, 32) == 0);
+	}
+	T_OK("salt[32..44] is the Volatile label",
+	     std::memcmp(salt + 32, "Volatile****", 12) == 0);
+	{
+		Identifier id{};
+
+		T_EQ("reader identifier available",
+		     Aliro::Interface::Reader::GetIdentifier(id).ToInt(), (int)ALIRO_NO_ERROR);
+		T_OK("salt[44..76] is the reader identifier",
+		     std::memcmp(salt + 44, id.data(), 32) == 0);
+	}
+	/* 0xc3 marks BLE; NFC uses 0x5e. Getting this wrong silently derives a
+	 * key the phone will not match on the other transport. */
+	T_EQ("salt[76] is the BLE interface byte", (long)salt[76], 0xc3L);
+	T_EQ("salt[77] version TLV tag", (long)salt[77], 0x5cL);
+	T_EQ("salt[78] version TLV length", (long)salt[78], 0x02L);
+	T_EQ("salt[79] protocol major", (long)salt[79], 0x01L);
+	T_EQ("salt[80] protocol minor", (long)salt[80], 0x00L);
+	/* The reader ephemeral X, then the transaction identifier the reader
+	 * drew, then Command Parameters and Authentication Policy. */
+	T_EQ("salt[129] command parameters", (long)salt[129], 0x00L);
+	T_EQ("salt[130] authentication policy", (long)salt[130], 0x01L);
+
+	/* THE 160-BYTE BLOCK IS SLICED IN A FIXED ORDER. Re-derive it here with
+	 * the same real HKDF and check which slice became which key -- a
+	 * swapped pair would still decrypt against itself and pass every other
+	 * test in this file. */
+	T_OK("Kdh is in the key table",
+	     stackfake_key_bytes(stackfake_key_nth("shared", 0), kdh));
+	fill_public_key(credential, 0x10);
+	(void)ephemeral;
+	T_EQ("re-derive the block",
+	     aliro_hkdf(salt, salt_len, kdh, sizeof(kdh), credential + 1, 32, block,
+			sizeof(block)),
+	     0);
+
+	T_OK("bytes 0..32 became the expedited READER key",
+	     stackfake_key_bytes(stackfake_key_nth("symmetric", 0), got) &&
+		     std::memcmp(got, block, 32) == 0);
+	T_OK("bytes 32..64 became the expedited DEVICE key",
+	     stackfake_key_bytes(stackfake_key_nth("symmetric", 1), got) &&
+		     std::memcmp(got, block + 32, 32) == 0);
+	T_OK("bytes 64..96 became StepUpSK",
+	     stackfake_key_bytes(stackfake_key_nth("shared", 1), got) &&
+		     std::memcmp(got, block + 64, 32) == 0);
+	T_OK("bytes 96..128 became BleSK",
+	     stackfake_key_bytes(stackfake_key_nth("shared", 2), got) &&
+		     std::memcmp(got, block + 96, 32) == 0);
+
+	/* And bytes 128..160 are the URSK handed to the ranging session -- the
+	 * one piece of this schedule that leaves the stack. */
+	{
+		uint8_t frame[512];
+		size_t n;
+
+		stackfake.want_access_document = false;
+		n = frame_ap(frame, response, build_auth1_response(response, 0x0000, false));
+		feed_ble(0, frame, n);
+		n = frame_ap(frame, response, build_exchange_response(response));
+		feed_ble(0, frame, n);
+		T_EQ("ranging started", (long)stackfake.ranging_starts, 1L);
+		T_OK("bytes 128..160 became the URSK",
+		     std::memcmp(stackfake.last_ursk, block + 128, 32) == 0);
+	}
+
+	/* The directional BLE keys come from BleSK by HKDF with the two info
+	 * strings, and they must not be the same key. */
+	{
+		uint8_t reader[32];
+		uint8_t device[32];
+
+		T_OK("BleSKReader derived",
+		     stackfake_key_bytes(stackfake_key_nth("BleSKReader", 0), reader));
+		T_OK("BleSKDevice derived",
+		     stackfake_key_bytes(stackfake_key_nth("BleSKDevice", 0), device));
+		T_OK("the two directions are different keys",
+		     std::memcmp(reader, device, 32) != 0);
+	}
 }
 
 int main(void)
@@ -1706,13 +1908,14 @@ int main(void)
 	test_step_up();
 	test_access_document();
 	test_fast_match();
+	test_key_schedule();
 
 	if (t_fail > 0) {
 		std::printf("  aliro-stack: FAIL (%d of %d)\n", t_fail, t_fail + t_pass);
 		return 1;
 	}
-	std::printf("  aliro-stack: PASS (%d checks — real protocol codecs, "
-		    "stand-in crypto, no key-schedule truth)\n",
+	std::printf("  aliro-stack: PASS (%d checks — real protocol codecs, real "
+		    "SHA-256/HKDF/AES-GCM, stand-in P-256)\n",
 		    t_pass);
 	return 0;
 }

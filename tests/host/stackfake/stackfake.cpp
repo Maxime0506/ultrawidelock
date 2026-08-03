@@ -3,12 +3,59 @@
 
 #include "stackfake.h"
 
+#include <cstdio>
 #include <cstring>
+
+extern "C" {
+#include "aliro_hash.h"
+#include "aliro_prim.h"
+}
 
 struct stackfake_state stackfake;
 
 static uint32_t kpersistent_ids[STACKFAKE_MAX_KPERSIST];
 static size_t kpersistent_id_count;
+
+struct key_slot {
+	uint32_t id;
+	uint8_t bytes[32];
+	size_t len;
+	char label[24];
+};
+
+static struct key_slot keys[STACKFAKE_MAX_KEYS];
+static size_t key_count;
+
+static struct key_slot *key_find(uint32_t id)
+{
+	for (size_t i = 0; i < key_count; i++) {
+		if (keys[i].id == id) {
+			return &keys[i];
+		}
+	}
+	return nullptr;
+}
+
+/* Ids never start at 0: the stack uses 0 to mean "no key" and DestroyKey()
+ * skips an unset slot, so handing one out would hide a real bug. */
+static uint32_t key_store(const uint8_t *bytes, size_t len, const char *label)
+{
+	if (key_count >= STACKFAKE_MAX_KEYS) {
+		return 0;
+	}
+	struct key_slot *slot = &keys[key_count++];
+
+	slot->id = stackfake.next_key_id++;
+	slot->len = len > sizeof(slot->bytes) ? sizeof(slot->bytes) : len;
+	std::memset(slot->bytes, 0, sizeof(slot->bytes));
+	if (bytes != nullptr) {
+		std::memcpy(slot->bytes, bytes, slot->len);
+	}
+	std::snprintf(slot->label, sizeof(slot->label), "%s", label != nullptr ? label : "");
+	return slot->id;
+}
+
+
 
 /* Count a knob down. -1 never fires; 0 fires now and stays fired. */
 static bool knob_fires(int *counter)
@@ -34,6 +81,7 @@ void stackfake_reset(void)
 	stackfake.validity_known = true;
 	stackfake.validity_answer = true;
 	kpersistent_id_count = 0;
+	key_count = 0;
 }
 
 const struct stackfake_send *stackfake_sent(size_t index)
@@ -46,15 +94,21 @@ const struct stackfake_send *stackfake_last_send(void)
 	return stackfake.send_count > 0U ? &stackfake.sends[stackfake.send_count - 1U] : nullptr;
 }
 
-void stackfake_set_kpersistent(const uint32_t *ids, size_t count)
+void stackfake_set_kpersistent(size_t count)
 {
 	if (count > STACKFAKE_MAX_KPERSIST) {
 		count = STACKFAKE_MAX_KPERSIST;
 	}
-	if (ids != nullptr && count > 0U) {
-		std::memcpy(kpersistent_ids, ids, count * sizeof(*ids));
+	kpersistent_id_count = 0;
+	for (size_t i = 0; i < count; i++) {
+		uint8_t material[32];
+
+		for (size_t b = 0; b < sizeof(material); b++) {
+			material[b] = static_cast<uint8_t>(0xd0 + i * 16u + b);
+		}
+		kpersistent_ids[kpersistent_id_count++] =
+			key_store(material, sizeof(material), "kpersistent");
 	}
-	kpersistent_id_count = (ids != nullptr) ? count : 0U;
 	stackfake.kpersistent_count = kpersistent_id_count;
 }
 
@@ -74,15 +128,74 @@ void stackfake_fire_timer(int handle)
 	timer->callback(timer->context);
 }
 
-/* The fake's authentication tag: arithmetic over the key id and nonce, so the
- * fake can recognise its own ciphertext and reject anything else. Not a MAC. */
-void stackfake_tag(uint32_t key_id, const uint8_t *nonce, uint8_t *tag_out)
+/* ---- key table -------------------------------------------------------------
+ *
+ * The stack refers to keys by an opaque id; the real backend keeps the bytes
+ * in PSA. Here they live in this table, because the suites have to be able to
+ * act as the User Device, which genuinely holds the same key material.
+ */
+uint32_t stackfake_key_nth(const char *label, size_t index)
 {
-	for (size_t i = 0; i < Aliro::CryptoTypes::kAuthenticationTagLength; i++) {
-		uint8_t n = (nonce != nullptr) ? nonce[i % Aliro::CryptoTypes::kNonceLength] : 0u;
+	size_t seen = 0;
 
-		tag_out[i] = static_cast<uint8_t>((key_id >> ((i % 4u) * 8u)) ^ n ^ (0x5au + i));
+	for (size_t i = 0; i < key_count; i++) {
+		if (std::strcmp(keys[i].label, label) != 0) {
+			continue;
+		}
+		if (seen == index) {
+			return keys[i].id;
+		}
+		seen++;
 	}
+	return 0;
+}
+
+bool stackfake_key_bytes(uint32_t key_id, uint8_t out[32])
+{
+	const struct key_slot *slot = key_find(key_id);
+
+	if (slot == nullptr) {
+		return false;
+	}
+	std::memcpy(out, slot->bytes, 32);
+	return true;
+}
+
+size_t stackfake_key_count(void)
+{
+	return key_count;
+}
+
+/* The nonce both sides build: byte 7 is the direction, bytes 8..11 the
+ * counter, big-endian. Duplicated from the protocol rather than from
+ * session.cpp's MakeNonce -- a test that reused the code under test to talk to
+ * it would agree with itself no matter what either did. */
+static void device_nonce(uint32_t counter, uint8_t nonce[12])
+{
+	std::memset(nonce, 0, 12);
+	nonce[7] = 1;
+	nonce[8] = static_cast<uint8_t>(counter >> 24);
+	nonce[9] = static_cast<uint8_t>(counter >> 16);
+	nonce[10] = static_cast<uint8_t>(counter >> 8);
+	nonce[11] = static_cast<uint8_t>(counter);
+}
+
+size_t stackfake_seal_as_device(uint32_t key_id, uint32_t counter, const uint8_t *aad,
+				size_t aad_length, const uint8_t *plaintext, size_t length,
+				uint8_t *out)
+{
+	const struct key_slot *slot = key_find(key_id);
+	uint8_t nonce[12];
+
+	if (slot == nullptr) {
+		return 0;
+	}
+	device_nonce(counter, nonce);
+	if (aliro_aes256_gcm_encrypt(slot->bytes, nonce, sizeof(nonce), aad, aad_length, plaintext,
+				     length, out, out + length, 16) != 0) {
+		return 0;
+	}
+	return length + 16u;
 }
 
 namespace Aliro::Interface
@@ -477,7 +590,7 @@ AliroError GenerateEphemeralKeyPair(CryptoTypes::KeyId &keyId,
 	if (stackfake.ephemeral_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.ephemeral_ret);
 	}
-	keyId = stackfake.next_key_id++;
+	keyId = key_store(nullptr, 32, "ephemeral");
 	ephemeralPubKey.fill(0);
 	ephemeralPubKey[0] = CryptoTypes::kEccP256PublicKeyPrefix;
 	for (size_t i = 1; i < ephemeralPubKey.size(); i++) {
@@ -488,30 +601,26 @@ AliroError GenerateEphemeralKeyPair(CryptoTypes::KeyId &keyId,
 
 AliroError ImportSharedKey(const uint8_t *key, size_t keyLength, CryptoTypes::KeyId &keyId)
 {
-	(void)key;
-	(void)keyLength;
 	stackfake.import_shared_calls++;
 	if (knob_fires(&stackfake.import_shared_fail_in) || stackfake.import_shared_ret != 0) {
 		return stackfake.import_shared_ret != 0
 			       ? static_cast<AliroErrorCode>(stackfake.import_shared_ret)
 			       : ALIRO_ERROR_INTERNAL;
 	}
-	keyId = stackfake.next_key_id++;
-	return ALIRO_NO_ERROR;
+	keyId = key_store(key, keyLength, "shared");
+	return keyId != 0 ? AliroError(ALIRO_NO_ERROR) : AliroError(ALIRO_NO_MEMORY);
 }
 
 AliroError ImportSymmetricKey(const uint8_t *key, size_t keyLength, CryptoTypes::KeyId &keyId)
 {
-	(void)key;
-	(void)keyLength;
 	stackfake.import_symmetric_calls++;
 	if (knob_fires(&stackfake.import_symmetric_fail_in) || stackfake.import_symmetric_ret != 0) {
 		return stackfake.import_symmetric_ret != 0
 			       ? static_cast<AliroErrorCode>(stackfake.import_symmetric_ret)
 			       : ALIRO_ERROR_INTERNAL;
 	}
-	keyId = stackfake.next_key_id++;
-	return ALIRO_NO_ERROR;
+	keyId = key_store(key, keyLength, "symmetric");
+	return keyId != 0 ? AliroError(ALIRO_NO_ERROR) : AliroError(ALIRO_NO_MEMORY);
 }
 
 AliroError DestroyKey(CryptoTypes::KeyId &keyId)
@@ -521,6 +630,8 @@ AliroError DestroyKey(CryptoTypes::KeyId &keyId)
 	return static_cast<AliroErrorCode>(stackfake.destroy_ret);
 }
 
+/* STAND-IN. There is no P-256 in this repo's host build, so a signature here
+ * is filler and its verification is a knob. See the banner in stackfake.h. */
 AliroError GenerateSignature(const uint8_t *msg, const size_t msgLength,
 			     CryptoTypes::Signature &signature)
 {
@@ -536,6 +647,7 @@ AliroError GenerateSignature(const uint8_t *msg, const size_t msgLength,
 	return ALIRO_NO_ERROR;
 }
 
+/* STAND-IN, as above: this answers whatever the knob says. */
 AliroError VerifySignature(const CryptoTypes::PublicKey &publicKey, const uint8_t *msg,
 			   const size_t msgLength, const CryptoTypes::Signature &signature)
 {
@@ -547,44 +659,62 @@ AliroError VerifySignature(const CryptoTypes::PublicKey &publicKey, const uint8_
 	return static_cast<AliroErrorCode>(stackfake.verify_ret);
 }
 
+/* STAND-IN: ECDH needs the curve. Deterministic so the key schedule below is
+ * reproducible, which is what lets the suites act as the peer. */
 AliroError RawKeyAgreement(CryptoTypes::KeyId keyId, const CryptoTypes::PublicKey &peerPublicKey,
 			   CryptoTypes::SharedSecret &sharedSecret)
 {
 	(void)keyId;
-	(void)peerPublicKey;
 	stackfake.key_agreement_calls++;
 	if (stackfake.key_agreement_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.key_agreement_ret);
 	}
+	/* Bound to the peer key so two different peers do not share a secret,
+	 * which is the one property the state machine relies on. */
 	for (size_t i = 0; i < sharedSecret.size(); i++) {
-		sharedSecret[i] = static_cast<uint8_t>(0x30 + i);
+		sharedSecret[i] = static_cast<uint8_t>(0x30 + i + peerPublicKey[1]);
 	}
 	return ALIRO_NO_ERROR;
 }
 
+/* REAL HKDF from here down: modules/woz_aliro/src/aliro_hash.c, pinned against
+ * published vectors by test_aliro_hash.c. A wrong salt or a wrong info string
+ * now produces genuinely different key bytes. */
 AliroError DeriveSharedKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t infoLength,
 			   const uint8_t *salt, size_t saltLength, CryptoTypes::KeyId &derivedKeyId)
 {
-	(void)keyId;
-	(void)info;
-	(void)infoLength;
-	(void)salt;
+	const struct key_slot *slot = key_find(keyId);
+	uint8_t out[32];
+
 	stackfake.derive_shared_calls++;
-	stackfake.last_salt_len = saltLength;
+	stackfake.last_salt_len = saltLength > sizeof(stackfake.last_salt)
+					  ? sizeof(stackfake.last_salt)
+					  : saltLength;
+	if (salt != nullptr && stackfake.last_salt_len > 0U) {
+		std::memcpy(stackfake.last_salt, salt, stackfake.last_salt_len);
+	}
 	if (stackfake.derive_shared_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.derive_shared_ret);
 	}
-	derivedKeyId = stackfake.next_key_id++;
-	return ALIRO_NO_ERROR;
+	if (slot == nullptr) {
+		return ALIRO_INVALID_STATE;
+	}
+	if (aliro_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, out,
+		       sizeof(out)) != 0) {
+		return ALIRO_ERROR_INTERNAL;
+	}
+	derivedKeyId = key_store(out, sizeof(out), "derived-shared");
+	return derivedKeyId != 0 ? AliroError(ALIRO_NO_ERROR) : AliroError(ALIRO_NO_MEMORY);
 }
 
 AliroError DeriveSymmetricKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t infoLength,
 			      const uint8_t *salt, size_t saltLength,
 			      CryptoTypes::KeyId &derivedKeyId)
 {
-	(void)keyId;
-	(void)salt;
-	(void)saltLength;
+	const struct key_slot *slot = key_find(keyId);
+	char label[24] = {0};
+	uint8_t out[32];
+
 	stackfake.derive_symmetric_calls++;
 	stackfake.last_info_len = infoLength > sizeof(stackfake.last_info)
 					  ? sizeof(stackfake.last_info)
@@ -597,17 +727,28 @@ AliroError DeriveSymmetricKey(CryptoTypes::KeyId keyId, const uint8_t *info, siz
 			       ? static_cast<AliroErrorCode>(stackfake.derive_symmetric_ret)
 			       : ALIRO_ERROR_INTERNAL;
 	}
-	derivedKeyId = stackfake.next_key_id++;
-	return ALIRO_NO_ERROR;
+	if (slot == nullptr) {
+		return ALIRO_INVALID_STATE;
+	}
+	if (aliro_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, out,
+		       sizeof(out)) != 0) {
+		return ALIRO_ERROR_INTERNAL;
+	}
+	/* Label the slot with its HKDF info ("SKDevice", "BleSKReader", ...) so
+	 * a suite can ask for the directional key by name. */
+	std::memcpy(label, info, stackfake.last_info_len < sizeof(label) - 1
+					 ? stackfake.last_info_len
+					 : sizeof(label) - 1);
+	derivedKeyId = key_store(out, sizeof(out), label);
+	return derivedKeyId != 0 ? AliroError(ALIRO_NO_ERROR) : AliroError(ALIRO_NO_MEMORY);
 }
 
 AliroError DeriveRawKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t infoLength,
 			const uint8_t *salt, size_t saltLength, uint8_t *derivedKey,
 			size_t derivedKeyLength)
 {
-	(void)keyId;
-	(void)info;
-	(void)infoLength;
+	const struct key_slot *slot = key_find(keyId);
+
 	stackfake.derive_raw_calls++;
 	stackfake.last_salt_len = saltLength > sizeof(stackfake.last_salt)
 					  ? sizeof(stackfake.last_salt)
@@ -615,37 +756,47 @@ AliroError DeriveRawKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t in
 	if (salt != nullptr && stackfake.last_salt_len > 0U) {
 		std::memcpy(stackfake.last_salt, salt, stackfake.last_salt_len);
 	}
+	if (stackfake.derive_raw_calls == 1U) {
+		stackfake.first_salt_len = stackfake.last_salt_len;
+		std::memcpy(stackfake.first_salt, stackfake.last_salt, stackfake.last_salt_len);
+	}
 	if (stackfake.derive_raw_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.derive_raw_ret);
 	}
-	/* A counter pattern, so a suite can see which 32-byte slice of the
-	 * 160-byte block became which key. */
-	for (size_t i = 0; i < derivedKeyLength; i++) {
-		derivedKey[i] = static_cast<uint8_t>(i);
+	if (slot == nullptr) {
+		return ALIRO_INVALID_STATE;
 	}
-	return ALIRO_NO_ERROR;
+	return aliro_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, derivedKey,
+			  derivedKeyLength) == 0
+		       ? AliroError(ALIRO_NO_ERROR)
+		       : AliroError(ALIRO_ERROR_INTERNAL);
 }
 
+/* REAL AES-256-GCM: the reference implementation in
+ * ports/esp32/test/aliro_prim_host.c, pinned against the GCM spec vectors by
+ * test_aliro_crypto.c. A wrong key, a skipped counter or a corrupted tag now
+ * fails here exactly as it would on the device. */
 AliroError AeadEncrypt(CryptoTypes::KeyId keyId, const uint8_t *plainTxt, size_t plainTxtLength,
 		       const uint8_t *additionalData, size_t additionalDataLength,
 		       const CryptoTypes::Nonce &nonce, uint8_t *cipherText,
 		       CryptoTypes::AuthenticationTag &authTag)
 {
-	(void)additionalData;
-	(void)additionalDataLength;
+	const struct key_slot *slot = key_find(keyId);
+
 	stackfake.aead_encrypt_calls++;
 	stackfake.last_aead_encrypt_key = keyId;
 	std::memcpy(stackfake.last_nonce, nonce.data(), nonce.size());
 	if (stackfake.aead_encrypt_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.aead_encrypt_ret);
 	}
-	/* "Encryption" is a copy: the suites read the plaintext straight out of
-	 * the recorded frame, which is the whole point of a transport recorder. */
-	if (plainTxt != nullptr && cipherText != nullptr && plainTxtLength > 0U) {
-		std::memmove(cipherText, plainTxt, plainTxtLength);
+	if (slot == nullptr) {
+		return ALIRO_INVALID_STATE;
 	}
-	stackfake_tag(keyId, nonce.data(), authTag.data());
-	return ALIRO_NO_ERROR;
+	return aliro_aes256_gcm_encrypt(slot->bytes, nonce.data(), nonce.size(), additionalData,
+					additionalDataLength, plainTxt, plainTxtLength, cipherText,
+					authTag.data(), authTag.size()) == 0
+		       ? AliroError(ALIRO_NO_ERROR)
+		       : AliroError(ALIRO_ERROR_INTERNAL);
 }
 
 AliroError AeadDecrypt(CryptoTypes::KeyId keyId, const uint8_t *cipherTextWithTag,
@@ -653,11 +804,9 @@ AliroError AeadDecrypt(CryptoTypes::KeyId keyId, const uint8_t *cipherTextWithTa
 		       size_t additionalDataLength, const CryptoTypes::Nonce &nonce,
 		       uint8_t *plainText, size_t &plainTextLength)
 {
-	uint8_t expected[Aliro::CryptoTypes::kAuthenticationTagLength];
+	const struct key_slot *slot = key_find(keyId);
 	size_t bodyLength;
 
-	(void)additionalData;
-	(void)additionalDataLength;
 	stackfake.aead_decrypt_calls++;
 	stackfake.last_aead_decrypt_key = keyId;
 	std::memcpy(stackfake.last_nonce, nonce.data(), nonce.size());
@@ -668,57 +817,49 @@ AliroError AeadDecrypt(CryptoTypes::KeyId keyId, const uint8_t *cipherTextWithTa
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 	bodyLength = cipherTextWithTagLength - CryptoTypes::kAuthenticationTagLength;
-
-	/* The tag must be the one this fake would have produced for this key
-	 * and nonce. That is what makes a wrong key or a skipped counter fail
-	 * here the way it would on the device -- and it is arithmetic, not a
-	 * MAC, so it is no evidence about the real AEAD. */
-	stackfake_tag(keyId, nonce.data(), expected);
-	if (!stackfake.aead_decrypt_ignore_tag &&
-	    std::memcmp(cipherTextWithTag + bodyLength, expected, sizeof(expected)) != 0) {
-		return ALIRO_INVALID_AUTHENTICATION_TAG;
-	}
 	if (bodyLength > plainTextLength) {
 		return ALIRO_NO_MEMORY;
 	}
-	if (plainText != nullptr && bodyLength > 0U) {
-		std::memmove(plainText, cipherTextWithTag, bodyLength);
+	if (slot == nullptr) {
+		return ALIRO_INVALID_STATE;
+	}
+	if (aliro_aes256_gcm_decrypt(slot->bytes, nonce.data(), nonce.size(), additionalData,
+				     additionalDataLength, cipherTextWithTag, bodyLength,
+				     cipherTextWithTag + bodyLength,
+				     CryptoTypes::kAuthenticationTagLength, plainText) != 0) {
+		return ALIRO_INVALID_AUTHENTICATION_TAG;
 	}
 	plainTextLength = bodyLength;
 	return ALIRO_NO_ERROR;
 }
 
+/* REAL AES-128-ECB over a fixed Group Resolving Key: one block, which is
+ * exactly what the dynamic advertising tag is built from. */
 AliroError Encrypt(const uint8_t *plainText, size_t plainTextLength, uint8_t *cipherText)
 {
+	static const uint8_t grk[16] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+					0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+
 	stackfake.encrypt_calls++;
 	if (stackfake.encrypt_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.encrypt_ret);
 	}
-	for (size_t i = 0; i < plainTextLength; i++) {
-		cipherText[i] = static_cast<uint8_t>(plainText[i] ^ 0x5au);
+	if (plainTextLength != 16U) {
+		return ALIRO_INVALID_ARGUMENT;
 	}
-	return ALIRO_NO_ERROR;
+	return aliro_aes128_ecb_encrypt(grk, plainText, cipherText) == 0
+		       ? AliroError(ALIRO_NO_ERROR)
+		       : AliroError(ALIRO_ERROR_INTERNAL);
 }
 
+/* REAL SHA-256, so the access-document digest check is a genuine comparison. */
 AliroError Sha256(const uint8_t *data, size_t dataLength, CryptoTypes::Sha256Hash &hash)
 {
 	stackfake.sha256_calls++;
 	if (stackfake.sha256_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.sha256_ret);
 	}
-	if (stackfake.sha256_forced) {
-		std::memcpy(hash.data(), stackfake.sha256_force, hash.size());
-		return ALIRO_NO_ERROR;
-	}
-	/* Length-and-content sensitive enough that two different inputs almost
-	 * never collide, which is all the access-document digest check needs.
-	 * It is not SHA-256 and nothing here depends on it being one. */
-	hash.fill(0);
-	for (size_t i = 0; i < dataLength; i++) {
-		hash[i % hash.size()] = static_cast<uint8_t>(hash[i % hash.size()] * 31u + data[i] +
-							     static_cast<uint8_t>(i));
-	}
-	hash[0] = static_cast<uint8_t>(hash[0] ^ dataLength);
+	aliro_sha256(data, dataLength, hash.data());
 	return ALIRO_NO_ERROR;
 }
 
