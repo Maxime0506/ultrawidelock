@@ -175,7 +175,7 @@ endif
 CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 
 .PHONY: build rebuild reader selftest flash flash-erase monitor dfu dfu-key \
-        dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-list ota-window ota-deps \
+        dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-push ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
@@ -399,8 +399,18 @@ ota-push: $(CDK_OTA_PY)
 ##   so it answers the one question the phone cannot: whether a failure is in
 ##   the firmware or in the app. `make ota-smp-list` just reads the image list,
 ##   which is the cheapest proof that group 1 is answering at all.
-ota-smp: $(CDK_OTA_PY)
-	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make ota-patch`\n' '$(CDK_PATCH)' >&2; exit 1; }
+#
+# SETS ITS OWN CONFIGURATION, like `fota` and for the same reason: this target
+# is definitionally the mcumgr path, and a board without SMP does not speak it
+# at all. Inheriting a bare `make`'s defaults would look in build/cdk-matter --
+# a different, non-SMP image -- and either find no patch or push one built from
+# the wrong base. RELEASE goes with it because SMP does not fit without it.
+ota-smp:
+	@$(MAKE) --no-print-directory ota-smp-push \
+	  SMP=1 RELEASE=1 CDK_BUILD='$(CDK_FOTA_BUILD)'
+
+ota-smp-push: $(CDK_OTA_PY)
+	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make fota`\n' '$(CDK_PATCH)' >&2; exit 1; }
 	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py '$(CDK_PATCH)' \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'

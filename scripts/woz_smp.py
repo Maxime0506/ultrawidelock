@@ -351,7 +351,13 @@ def main():
         help="check the board is running this image's SHA-256, then stop",
     )
     ap.add_argument("--name", default="", help="substring of the advertised name")
-    ap.add_argument("--scan", type=float, default=8.0, help="scan seconds")
+    # 12 s, not 8. MEASURED: two consecutive 8 s scans missed a board sitting at
+    # -60 dBm that a 12 s scan then found immediately. CoreBluetooth filters
+    # duplicates across back-to-back discovery sessions, so a board that is
+    # plainly present can simply not be reported to a short window -- and the
+    # failure reads as "the board is not advertising", which is the wrong
+    # conclusion entirely.
+    ap.add_argument("--scan", type=float, default=12.0, help="scan seconds")
     ap.add_argument("--no-reset", action="store_true", help="stage without rebooting")
     args = ap.parse_args()
 
