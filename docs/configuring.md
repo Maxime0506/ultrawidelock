@@ -68,8 +68,8 @@ Set on the command line, e.g. `make nrf-build PRETTY=1 CHIP=dw3720`:
 | `NFC=pn532` | use the in-tree PN532 SPI transport; driver and APDU layers are host-tested, not hardware-validated |
 | `NFC=none` | build without an NFC reader; BLE/UWB remains enabled |
 | `CIR=1` | compile CIA/CIR diagnostics; arm at runtime with `aliro cir on`, `aliro cir dump on`, or `aliro cir probe` |
-| `LTO=1` | link-time optimisation on the app image; saves 77,452 B of app-core flash and costs 1,920 B of RAM. Off by default here and on by default on the CDK, because only the CDK has a walk-up unlock behind it; not validated on this board's hardware, and neither approach nor tap has been run under it |
-| `DFU=1` | MCUboot plus Matter OTA instead of the no-bootloader bench layout; costs 33,280 B of app-core flash and moves `external_nvs`, so a board switched between the two loses its Aliro reader storage |
+| `LTO=0` | opt out of link-time optimisation, which is **on by default**. It saves 77,452 B of app-core flash and costs 1,920 B of RAM, and is hardware-validated 2026-08-03 (approach unlock, NFC tap, Apple Home commissioning and tile control). Turn it off when a stack trace has to name every frame |
+| `DFU=0` | opt out of MCUboot plus Matter OTA, which are **on by default**, and get the old no-bootloader bench layout back. The default costs 33,280 B of app-core flash (LTO more than covers it) and moves `external_nvs` from `0x0` to `0x12f000`, so a board switched between the two loses its Aliro reader storage. Hardware-validated 2026-08-03 as a working lock; installing an OTA update is still unexercised, and the bootloader signs with MCUboot's published demo key |
 | `PRISTINE=1` | force a clean rebuild |
 
 ### Kconfig overlays (nRF5340 DK)

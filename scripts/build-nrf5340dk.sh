@@ -23,8 +23,13 @@
 #   PRETTY=1 scripts/build-nrf5340dk.sh build         # curated/clean console (reversible; default verbose)
 #   ALIRO_SOURCE=0 scripts/build-nrf5340dk.sh build   # legacy Nordic Aliro binary fallback
 #   UWB_CHIP=dw3720 scripts/build-nrf5340dk.sh build  # select the plugged-in UWB chip (default: dw3000)
-#   LTO=1 scripts/build-nrf5340dk.sh build            # link-time optimisation, off by default (overlays/lto.conf)
-#   DFU=1 scripts/build-nrf5340dk.sh build            # MCUboot + Matter OTA, off by default (overlays/sysbuild-dfu.conf)
+#   LTO=1 scripts/build-nrf5340dk.sh build            # link-time optimisation (overlays/lto.conf)
+#   DFU=1 scripts/build-nrf5340dk.sh build            # MCUboot + Matter OTA (overlays/sysbuild-dfu.conf)
+#
+# NOTE both default to OFF *here* and ON via `make nrf-build`, which is the same
+# split the DWM3001CDK uses: mk/ is the policy layer and decides what a plain
+# build means, this script only does what it is told. Call it directly and you
+# get neither unless you ask.
 set -euo pipefail
 
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -28,16 +28,17 @@ hardware-validated without a new checklist run.
 | `NFC=none` | no NFC reader; BLE/UWB remains enabled | source-build option only |
 | `ALIRO_TRACE=1` | temporary session trace | currently unavailable because the required vendor trace patch is absent |
 | `CIR=1` | CIA/CIR capture commands | diagnostic; costs walk-up latency while armed |
-| `LTO=1` | link-time optimisation on the app image | boots on hardware (2026-08-03); **no walk-up unlock and no tap has been run under it** |
-| `DFU=1` | MCUboot plus Matter OTA instead of the bench layout | boots on hardware (2026-08-03), MCUboot chains to the app; no OTA update has been installed |
+| `LTO=0` | opt out of link-time optimisation, **on by default** | the default is hardware-validated 2026-08-03: approach unlock, NFC tap, Apple Home commissioning and tile control |
+| `DFU=0` | opt out of MCUboot plus Matter OTA, **on by default** | same run: MCUboot chains to a fully working lock. The OTA Requestor itself is still unexercised, and the bootloader signs with MCUboot's published demo key |
 
 See [`docs/configuring.md`](../../docs/configuring.md) for the complete option
 list and capture-safety warnings.
 
 ## Firmware size, and what the two size options buy
 
-Measured on this port at NCS v3.3.0, default options otherwise. The app core's
-partition is 988 KB in the bench layout; the net core (`ipc_radio`) is 256 KB and
+Measured on this port at NCS v3.3.0. The rows below isolate LTO on the
+no-bootloader layout, so the app partition is the full 988 KB there; with the
+default `DFU=1` it is 978,432 B and the numbers are in the next section. the net core (`ipc_radio`) is 256 KB and
 neither size option changes it, because the net core is a separate sysbuild domain
 and `EXTRA_CONF_FILE` does not cross into it. It DOES reach other images in the
 application's own domain, which is a trap: see `DFU=1` below, where it silently
@@ -45,25 +46,28 @@ reached MCUboot.
 
 | app core | FLASH | of 988 KB | RAM | of 448 KB |
 |---|---|---|---|---|
-| default (no bootloader, no LTO) | 872,284 B | 86.22% | 355,424 B | 77.48% |
-| `LTO=1` | 794,832 B | 78.56% | 357,344 B | 77.89% |
+| `DFU=0 LTO=0` (neither) | 872,284 B | 86.22% | 355,424 B | 77.48% |
+| `DFU=0` (LTO only) | 794,832 B | 78.56% | 357,344 B | 77.89% |
 
-LTO is worth 77,452 B of flash and costs 1,920 B of RAM. The image boots on this
-board, verified 2026-08-03.
+LTO is worth 77,452 B of flash and costs 1,920 B of RAM.
 
-It is still off by default here and on by default on the DWM3001CDK, and the
-reason is evidence rather than taste: booting is not the bar. Whole-program
-codegen can move the UWB ranging path, whose arm deadline is ~1836 us, and only a
-walk-up unlock on hardware can show that it did not. The CDK has had that run;
-this board has not, and the tap path only this board has is unproven under LTO for
-the same reason.
+**The gate that held it back has now passed.** Booting was never the bar:
+whole-program codegen can move the UWB ranging path, whose arm deadline is
+~1836 us, and only hardware can show that it did not. On 2026-08-03 a
+`DFU=1 LTO=1` image was commissioned into Apple Home and then did approach
+unlock, NFC tap, and lock/unlock from the Home tile. That covers the ranging
+path and the tap path, which is the pair this board exists to prove.
 
-## Firmware update over the air (`DFU=1`)
+It is now ON by default here, as it already was on the CDK. `LTO=0` opts out,
+which is what you want when a stack trace has to name every frame. Re-run that
+same walk-up after any change that could move the ranging path.
 
-The default build has no bootloader: the app owns flash from `0x0`, and updates go
-over the probe with `make nrf-flash`. That is right for a bench board and wrong for
-a lock on a door. `make nrf-build DFU=1` restores MCUboot and the Matter OTA
-Requestor.
+## Firmware update over the air (on by default)
+
+MCUboot and the Matter OTA Requestor are built in unless you pass `DFU=0`. That
+opt-out gives the older bench layout, where the app owns flash from `0x0` and
+updates go over the probe with `make nrf-flash`: right for a board on a desk,
+wrong for a lock on a door.
 
 | image | FLASH | of | RAM | of |
 |---|---|---|---|---|
@@ -78,8 +82,8 @@ partition and the OTA code adds 32,812 B to the image, 66,092 B of headroom in
 total. LTO returns 79,888 B here. `DFU=1 LTO=1` therefore leaves 153,224 B free,
 which is 13,796 B MORE free flash than the default bench build has today, while
 also having a bootloader and an update path. That combination is the one to reach
-for if this board ever needs both. Both halves boot on hardware; what is still
-unproven is the walk-up unlock under LTO, and an actual OTA install.
+for, which is why it is the default. Both halves are hardware-validated as a
+working lock; what is still unproven is an actual OTA install.
 
 **The second slot is free.** `mcuboot_secondary` lands on the DK's MX25R64 external
 QSPI (`PM_MCUBOOT_SECONDARY_REGION=external_flash`), so dual-slot costs no internal
@@ -119,10 +123,15 @@ published demo keys and `make dfu-key` generates a per-checkout one
 (`firmware/keys/README.md`); the equivalent has deliberately not been invented
 here, because a second key mechanism is exactly the duplication this port avoids.
 
-**Boots on hardware.** Verified 2026-08-03 with `DFU=1 LTO=1` on an nRF5340 DK:
-MCUboot verifies the image and chains to the application, which reaches
-`arch_cpu_idle` with `IPSR` 0. No OTA update has been installed yet, so the
-Requestor path itself is still unexercised.
+**Hardware-validated 2026-08-03**, `DFU=1 LTO=1` on an nRF5340 DK: MCUboot
+verifies the image and chains to an application that commissions into Apple Home
+and then does approach unlock, NFC tap, and lock/unlock from the Home tile. The
+bootloader costs the lock nothing that anyone can see.
+
+What that run does NOT cover is the OTA Requestor itself, because no update has
+been installed. Booting with the Requestor compiled in is not the same as
+downloading and applying an image, and the second half is the part that can
+brick a board.
 
 Getting there turned up two bugs worth knowing about, because both present as a
 completely inert board.

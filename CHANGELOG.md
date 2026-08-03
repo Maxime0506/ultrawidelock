@@ -54,12 +54,24 @@ the API and behavior may change in minor releases.
   `dfu_multi_image.bin` / `matter.ota` carry both the application and the net
   core. The no-bootloader bench layout stays the default and stays selectable.
   `DFU=1 LTO=1` together leave 13,796 B more free flash than today's default
-  build, so the bootloader more than pays for itself. Both options boot on
-  hardware; no OTA update has been installed yet, and the bootloader still signs
-  with MCUboot's published demo key.
+  build, so the bootloader more than pays for itself. That combination is
+  hardware-validated (2026-08-03): commissioned into Apple Home, then approach
+  unlock, NFC tap and Home-tile lock/unlock all working. Installing an OTA update
+  is still unexercised, and the bootloader signs with MCUboot's published demo
+  key, so `DFU=1` is not yet a shipping configuration.
 
 ### Changed
 
+- Breaking for existing nRF5340 DK boards: `make nrf-build` now defaults to
+  link-time optimisation and to MCUboot plus Matter OTA. `LTO=0` and `DFU=0` opt
+  out individually. The defaults are the configuration validated on hardware
+  2026-08-03, and the pair leaves more free app flash than the old no-bootloader
+  default did, because LTO's 77,452 B more than covers the bootloader's 33,280 B.
+  Two consequences to know before reflashing a provisioned board: the flash map
+  moves `external_nvs` from `0x0` to `0x12f000`, which costs that board its Aliro
+  reader storage, and the default image is now signed with MCUboot's published
+  demo key, because this port has no per-checkout key mechanism of its own. Use
+  `DFU=0` to keep the old layout.
 - Breaking: the bare make targets now mean the DWM3001CDK (`make build`,
   `flash`, `flash-erase`, `monitor`). The nRF5340 DK moved to `nrf-` prefixed
   targets (`make nrf-build`, `nrf-flash-erase`, `nrf-term`) beside the `esp-`

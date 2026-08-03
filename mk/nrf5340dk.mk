@@ -7,11 +7,35 @@
 # Every target here is nrf-prefixed. Bare build/flash/monitor mean the
 # DWM3001CDK (mk/cdk.mk).
 
-# LTO is OFF by default here and ON by default on the CDK, from the one shared
-# LTO variable (mk/cdk.mk resolves its own default rather than assigning one, so
-# unset reaches this file as empty). Same spelling of the option on both boards,
-# opposite defaults, because only the CDK has a walk-up unlock behind it.
-NRF_LTO := $(filter-out 0 n no off N NO OFF,$(LTO))
+# LTO and DFU are both ON by default, `LTO=0` / `DFU=0` opt out (also n/no/off).
+#
+# Both defaults are resolved with $(origin) rather than `?=`, because make
+# variables are global across the includes and `LTO ?= 1` here would also hand
+# mk/cdk.mk a value it is trying to decide for itself. $(origin) distinguishes
+# "the user said nothing" from an explicit LTO=1, so each board keeps its own
+# default while sharing one spelling of the option.
+#
+# LTO earned this on 2026-08-03: a DFU=1 LTO=1 image commissioned into Apple Home
+# and then did approach unlock, NFC tap and Home-tile lock/unlock, which is the
+# ranging path and the tap path together. Worth 77,452 B of flash. See
+# overlays/lto.conf; re-run that walk-up after any change that could move the
+# ranging path.
+#
+# DFU rides the same run, and LTO is what pays for it: MCUboot costs 33,280 B of
+# app partition and the OTA code another 32,812 B, against LTO's 77,452 B, so the
+# pair still leaves more free flash than the old no-bootloader default did.
+#
+# TWO THINGS THE DEFAULT NOW CARRIES, neither of them fixed:
+#   * The bootloader signs with MCUboot's PUBLISHED demo key, because nothing
+#     here configures one. The DWM3001CDK refuses to build in that situation
+#     (firmware/sysbuild.cmake) and generates a per-checkout key with
+#     `make dfu-key`. This board has no equivalent yet, so the default image is
+#     one anybody can sign for. Fine on a bench, not fine on a door.
+#   * The flash map moves external_nvs from 0x0 to 0x12f000, so a board carrying
+#     the old no-bootloader layout loses its Aliro reader storage the first time
+#     it takes this build. `DFU=0` keeps the old layout.
+NRF_LTO := $(filter-out 0 n no off N NO OFF,$(if $(filter undefined,$(origin LTO)),1,$(LTO)))
+NRF_DFU := $(filter-out 0 n no off N NO OFF,$(if $(filter undefined,$(origin DFU)),1,$(DFU)))
 
 # Assemble the env prefix from whichever options were set.
 NRF_ENV := $(strip \
@@ -25,7 +49,7 @@ NRF_ENV := $(strip \
   $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(NRF_LTO),LTO=1) \
-  $(if $(DFU),DFU=$(DFU)) \
+  $(if $(NRF_DFU),DFU=1) \
   $(if $(CIR),CIR=$(CIR)))
 
 NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
@@ -51,13 +75,15 @@ NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data
 ##            ALIRO_TRACE=1 (currently blocked: vendor trace patch is absent)
 ##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
 ##            NFC=pn532|st25r|none (reader transport; default st25r)
-##            LTO=1 (link-time optimisation; OFF by default on this board,
-##                   ON by default on the CDK, because only the CDK has a
-##                   walk-up unlock behind it. Forces a pristine rebuild.)
-##            DFU=1 (MCUboot + Matter OTA; OFF by default. Costs 33,280 B of
-##                   app-core flash and needs an OTA Provider to install an
-##                   update. The default bench build keeps that flash and is
-##                   updated over the probe by `make nrf-flash`.)
+##            LTO=0 (opt OUT of link-time optimisation, which is ON by default
+##                   and worth 77,452 B. Use it when a stack trace has to name
+##                   every frame. Forces a pristine rebuild.)
+##            DFU=0 (opt OUT of MCUboot + Matter OTA, which are ON by default.
+##                   DFU=0 gives the old no-bootloader bench layout, which keeps
+##                   33,280 B of app flash and leaves external_nvs at 0x0.
+##                   NOTE the default now signs with MCUboot's PUBLISHED demo
+##                   key, and moves external_nvs, which costs an already
+##                   provisioned board its reader storage.)
 ##   e.g.     make nrf-build PRETTY=1 CHIP=dw3720
 nrf-build:
 	@$(NRF_ENV) $(NRF_BUILD_SH) build
