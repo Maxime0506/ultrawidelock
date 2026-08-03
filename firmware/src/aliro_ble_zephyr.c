@@ -24,6 +24,9 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/bluetooth/uuid.h>
+#if IS_ENABLED(CONFIG_WOZ_DFU_SMP_IMG)
+#include <zephyr/mgmt/mcumgr/transport/smp_bt.h>
+#endif
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net_buf.h>
@@ -302,6 +305,37 @@ static bool build_aliro_svc_data(uint8_t out[24])
 	return true;
 }
 
+#if IS_ENABLED(CONFIG_WOZ_DFU_SMP_IMG)
+/*
+ * The SMP service, in the SCAN RESPONSE, so that a phone can find this board.
+ *
+ * mcumgr clients -- nRF Device Manager among them -- filter their scan list on
+ * this UUID, and Zephyr's SMP transport registers the GATT service WITHOUT
+ * advertising it, because advertising data belongs to the application. The
+ * result is a board whose mcumgr works perfectly and which is simply absent
+ * from the app's list, indistinguishable from one that is switched off.
+ * MEASURED before this existed: the advertisement carried no service UUIDs at
+ * all, and the name a Mac displayed came from the cached GATT one.
+ *
+ * The scan response and not the advert, because a 128-bit UUID is 18 of the 31
+ * bytes available and the advert is already carrying the Aliro payload an
+ * iPhone needs in order to resolve an approach. The scan response is a second
+ * 31 bytes that costs the advert nothing, and every mcumgr client scans
+ * actively, so it always asks for it. The name goes here too: 18 + 11 = 29,
+ * which fits, and a device with no name in a scanner list is not findable by a
+ * human even when the filter passes it.
+ */
+static const struct bt_data smp_sd[] = {
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, SMP_BT_SVC_UUID_VAL),
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
+#define SMP_SD     smp_sd
+#define SMP_SD_LEN ARRAY_SIZE(smp_sd)
+#else
+#define SMP_SD     NULL
+#define SMP_SD_LEN 0
+#endif
+
 static int aliro_advertise(void)
 {
 	static uint8_t svc_data[2 + 24]; /* BT_DATA_SVC_DATA16 carries the UUID inline */
@@ -386,11 +420,11 @@ static int aliro_advertise(void)
 		return 0;
 	}
 
-	int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, NULL, 0);
+	int rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, SMP_SD, SMP_SD_LEN);
 
 	if (rc == -EALREADY) {
 		bt_le_adv_stop();
-		rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, NULL, 0);
+		rc = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ad_len, SMP_SD, SMP_SD_LEN);
 	}
 
 	/* Which of the two the board is offering is the first thing to check on
