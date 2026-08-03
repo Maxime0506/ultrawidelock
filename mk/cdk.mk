@@ -17,6 +17,43 @@ CDK_APP   := $(REPO_ROOT)/firmware
 CDK_BOARD := decawave_dwm3001cdk
 CDK_CHIP  := nRF52833_xxAA
 
+# WHICH DEBUG PROBE, and why this is not a preference. Empty means "let the tool
+# pick", which is right with one probe attached and unsafe with two: probe
+# enumeration order is NOT stable across replugs, so index 0 is a different board
+# from one session to the next.
+#
+# MEASURED 2026-08-03. Two J-Links attached. `probe-rs list` returned them in one
+# order at 15:53 and the reverse order at 16:13, with no cable touched in
+# between. `make monitor` took index 0 both times and the second attempt died
+# with "Target device responded with a FAULT response to the request" -- which
+# reads like a dead board, not the wrong one. The flash targets would have
+# written the other part and said nothing at all.
+#
+# Defaults to PROBE_RS_PROBE, so the variable probe-rs already documents covers
+# the west targets too. Read the value out of `probe-rs list`; both forms work:
+#   CDK_PROBE=VID:PID:Serial     CDK_PROBE=Serial
+CDK_PROBE ?= $(PROBE_RS_PROBE)
+# probe-rs takes the whole triple; west's runners want the bare serial, which is
+# the last colon-separated field of either form.
+CDK_DEV_ID     := $(lastword $(subst :, ,$(CDK_PROBE)))
+CDK_PROBE_ARG  := $(if $(CDK_PROBE),--probe '$(CDK_PROBE)')
+CDK_DEV_ID_ARG := $(if $(CDK_DEV_ID),--dev-id $(CDK_DEV_ID))
+
+# Refuse to guess where guessing writes flash. A wrong `monitor` prints an error
+# and costs nothing; a wrong `flash` overwrites another board's part, so the
+# ambiguity is fatal here rather than a warning nobody reads. Silent when one
+# probe is attached, and silent when probe-rs is not installed -- this may not
+# become a new reason a flash cannot run.
+CDK_PROBE_GUARD = @if [ -z '$(CDK_PROBE)' ] && \
+	    [ "$$(probe-rs list 2>/dev/null | grep -c '^\[')" -gt 1 ]; then \
+	  printf '  more than one debug probe is attached and CDK_PROBE is unset.\n' >&2; \
+	  probe-rs list >&2; \
+	  printf '  Enumeration order is not stable, so this will not guess which board to write.\n' >&2; \
+	  printf '  Pick one:  make $@ CDK_PROBE=<VID:PID:Serial>\n' >&2; \
+	  printf '  Or once per shell:  export PROBE_RS_PROBE=<VID:PID:Serial>\n' >&2; \
+	  exit 1; \
+	fi
+
 CDK_BUILD          ?= $(ALIRO_BUILD_ROOT)/cdk-matter
 CDK_READER_BUILD   ?= $(ALIRO_BUILD_ROOT)/cdk-reader
 CDK_SELFTEST_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-selftest
@@ -66,9 +103,14 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # debug build, so it wants RELEASE=1 beside it -- firmware/overlay-smp.conf has
 # the measurements and the security note about the unpaired write endpoint.
 # Ordered after overlay-release.conf so nothing it sets can be undone by it.
+# OTLOG=1 turns OpenThread's own logging on, which is off by construction
+# everywhere else: the level Kconfig depends on OPENTHREAD_DEBUG, so with debug
+# off it falls through to 0 and the stack is silent no matter what
+# CONFIG_LOG_DEFAULT_LEVEL says. Diagnosis only, never shipped, and it may not
+# fit -- see firmware/overlay-otlog.conf. Last in the list so nothing undoes it.
 LTO      ?= 1
 CDK_LTO  := $(filter-out 0 n no off N NO OFF,$(LTO))
-CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP),;overlay-smp.conf)$(if $(CDK_LTO),;overlay-lto.conf)
+CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP),;overlay-smp.conf)$(if $(CDK_LTO),;overlay-lto.conf)$(if $(OTLOG),;overlay-otlog.conf)
 
 # ---- image signing -----------------------------------------------------------
 # Which private key signs the image is the whole answer to "what will this lock
@@ -241,9 +283,12 @@ selftest:
 	  -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf $(CDK_SIGN)
 
 ## flash: flash the DWM3001CDK over its on-board J-Link OB
-##   Options: CDK_BUILD=<dir> (default build/cdk-matter)
+##   Options: CDK_BUILD=<dir> (default build/cdk-matter)  CDK_PROBE=<VID:PID:Serial>
+##   Refuses to run when two probes are attached and CDK_PROBE is unset, because
+##   the enumeration order that decides "probe 0" moves between sessions.
 flash:
-	@$(CDK_RUN) flash -d $(CDK_BUILD)
+	$(CDK_PROBE_GUARD)
+	@$(CDK_RUN) flash $(CDK_DEV_ID_ARG) -d $(CDK_BUILD)
 	@# Record what the board now runs, so `make dfu` can diff against it. A
 	@# delta needs the exact bytes that are on the part, and once the probe is
 	@# gone there is no way to ask.
@@ -263,9 +308,10 @@ flash:
 ##   To clear only what a controller can see, hold SW2 through reset instead
 ##   (ALIRO_FACTORY_RESET_BUTTON): same effect on fabrics and anchors, and it
 ##   keeps the Thread settings, so the board comes back on the name it had.
-##   Options: CDK_BUILD=<dir> (default build/cdk-matter)
+##   Options: CDK_BUILD=<dir> (default build/cdk-matter)  CDK_PROBE=<VID:PID:Serial>
 flash-erase:
-	@$(CDK_RUN) flash --erase -d $(CDK_BUILD)
+	$(CDK_PROBE_GUARD)
+	@$(CDK_RUN) flash --erase $(CDK_DEV_ID_ARG) -d $(CDK_BUILD)
 
 ## dfu-key: generate this checkout's MCUboot signing key  ·  once per clone
 ##   ECDSA P-256 into firmware/keys/, gitignored. Every image build needs it:
@@ -456,7 +502,7 @@ ota-window:
 	addr=$$($$nm "$$elf" | awk '$$3 ~ /^s_open(\.|$$)/ { print $$1; exit }'); \
 	if [ -z "$$addr" ]; then printf '  cannot find s_open in %s\n' "$$elf" >&2; exit 1; fi; \
 	printf '  opening the update window by writing s_open at 0x%s\n' "$$addr"; \
-	probe-rs write --chip $(CDK_CHIP) b8 "0x$$addr" 1
+	probe-rs write --chip $(CDK_CHIP) $(CDK_PROBE_ARG) b8 "0x$$addr" 1
 
 ## release: build and bundle the image to publish  ·  needs RELEASE_KEY=<path>
 ##   One command, start to finish: a pristine SMP+RELEASE build signed with the
@@ -581,7 +627,8 @@ monitor:
 	@# reader build has no Matter symbols and a console is still worth having.
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/.config 2>/dev/null || true
-	@probe-rs attach --chip $(CDK_CHIP) $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf
+	@probe-rs attach --chip $(CDK_CHIP) $(CDK_PROBE_ARG) \
+	  $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf
 
 # ---- compatibility aliases ---------------------------------------------------
 # The names these targets had while the CDK still lived under ports/. Each does
