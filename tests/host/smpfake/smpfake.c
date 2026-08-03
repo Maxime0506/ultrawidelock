@@ -127,6 +127,19 @@ bool zcbor_list_end_encode(zcbor_state_t *state, size_t max_num)
 	return true;
 }
 
+/* strnlen is POSIX, not ISO C, and glibc hides it under -std=c11. One call site,
+ * so a local bounded length beats a feature-test macro that would also change
+ * which BSD extensions Darwin exposes to this file. */
+static size_t bounded_len(const char *s, size_t maxlen)
+{
+	size_t n = 0;
+
+	while (n < maxlen && s[n] != '\0') {
+		n++;
+	}
+	return n;
+}
+
 bool zcbor_tstr_put_term_impl(zcbor_state_t *state, const char *str, size_t maxlen)
 {
 	struct smpfake_item *item = append(SMPFAKE_TSTR);
@@ -136,7 +149,7 @@ bool zcbor_tstr_put_term_impl(zcbor_state_t *state, const char *str, size_t maxl
 	if (item == NULL) {
 		return false;
 	}
-	n = strnlen(str, maxlen);
+	n = bounded_len(str, maxlen);
 	if (n >= SMPFAKE_MAX_TEXT) {
 		n = SMPFAKE_MAX_TEXT - 1u;
 	}
