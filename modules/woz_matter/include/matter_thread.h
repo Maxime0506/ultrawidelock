@@ -62,8 +62,20 @@ int matter_thread_wait_attached(uint32_t timeout_ms);
  * handshake message: a controller subscribes to the whole data model as soon as
  * it owns the node. Headroom over the report itself covers both headers and the
  * AEAD tag.
+ *
+ * It was 1664, sized from a 1479 B report measured BEFORE send_report_chunk()
+ * existed. Chunking capped every outbound payload at MATTER_IM_PAYLOAD_MAX, so
+ * headers + payload + tag can no longer exceed MATTER_MAX_MESSAGE_LEN, and the
+ * 432 B above that were buying nothing this node can build. The value is that
+ * ceiling; matter_commission.c BUILD_ASSERTs the identity, because the three
+ * terms it is derived from live in headers this one does not include.
+ *
+ * Lowering it does not narrow what gets delivered, only what gets DIAGNOSED. A
+ * message between this size and the old 1664 was framed, copied and sent, and
+ * then dropped by the network for exceeding the MTU, with nothing logged. It
+ * now trips the capacity check in send_framed() and says so.
  */
-#define MATTER_THREAD_REPLY_MAX 1664u
+#define MATTER_THREAD_REPLY_MAX 1232u
 
 /** The port a Matter node listens on operationally (lib/core/CHIPConfig.h:335). */
 #define MATTER_OPERATIONAL_PORT 5540u
