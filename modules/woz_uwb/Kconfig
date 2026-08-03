@@ -156,3 +156,19 @@ config WOZ_FLIGHT_RECORDER_BYTES
 	  ~40-170 bytes each; 16 KiB holds a full session with headroom. When the ring
 	  fills, capture stops and the END record is flagged truncated (the replayable
 	  prefix is preserved).
+
+config WOZ_E2E_TRACE
+	bool "End-to-end [WOZ_TRACE] lines from the DW3000 interrupt callbacks"
+	depends on WOZ_UWB
+	help
+	  Turn the WOZ_TRACE() macro in src/facade/trace.h into a real LOG_INF, so
+	  the four DW3000 callbacks in src/driver/uwb_isr.c each emit one
+	  "[WOZ_TRACE] src=lock stage=..." line: rx.ok (with the first 8 frame
+	  bytes), rx.to, rx.err and tx.done. Meant for bench bring-up, when what you
+	  need is proof of which callback fired and in what order.
+
+	  Do NOT enable it for a walk-up. All four sites are in interrupt context
+	  and three of them sit immediately in front of woz_uwb_arm_rx(), so the log
+	  is charged against the ~1836 us re-arm deadline and ranging will fail.
+	  Default n = the macro stays an if(0) no-op that still type-checks its
+	  arguments, so the call sites cost nothing.
