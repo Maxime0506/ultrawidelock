@@ -29,6 +29,17 @@ fails the sweep rather than passing quietly, because CI runs it either way: `mak
 lists what each gate needs and what this machine is missing, and `make tools-install`
 installs it after showing you the commands ([`docs/set-up.md`](docs/set-up.md)).
 
+Most gates only read part of the tree, so a gate whose inputs your branch does not
+touch is skipped, with a row saying so. A prose-only change runs five gates instead of
+thirty. The filter is in `scripts/verify.sh`, not in the workflow, so CI applies the
+same rule to the same diff and the two still agree; `FILTER_EXPLAIN=1 scripts/verify.sh`
+prints what it would decide and runs nothing, and `FILTER=0 make verify` sweeps
+everything. Four things turn it off outright: no resolvable base, an empty diff (a push
+to `main` after a merge, which then sweeps everything as the post-merge net), any change
+under `scripts/`, `mk/`, `.github/workflows/`, `tests/tooling/` or `security/`, and
+`FILTER=0`. Five gates always run whatever changed, because the diff itself is their
+input: secrets, mal-diff, licenses, docs and patch-drift.
+
 `make verify` holds one row per CI job, and `make test-verify` is what keeps that true.
 If your change adds a job to `.github/workflows/`, those tests fail until the job is
 accounted for: either name the local gate that reproduces it, or write down why it

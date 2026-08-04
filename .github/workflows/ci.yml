@@ -202,7 +202,28 @@ jobs:
         # and which ubuntu's default cc (gcc) rejects outright. test, test-san
         # and fuzz want clang for the same family of reasons. The old per-gate
         # workflows each set this; consolidating them into one job dropped it.
+        #
+        # The path filter is verify.sh's, not this workflow's, and that is the
+        # point: a `paths:` or `paths-ignore:` here would skip the JOB, and
+        # `verify (host gates)` is a required status check with no bypass actor
+        # — a job that never runs never reports, so the pull request would wait
+        # on a check that can no longer arrive. Filtering inside the job keeps
+        # the check reporting on every pull request and makes the cheap ones
+        # cheap, and a contributor's local `make verify` applies the same filter
+        # to the same diff, so the two still agree.
+        #
+        # FILTER_BASE is the pull request's own base, so a branch targeting
+        # something other than main is measured against what it will merge into.
+        # On push and workflow_dispatch it is deliberately EMPTY, which verify.sh
+        # reads as "no base given" and sweeps everything — the post-merge safety
+        # net, once per merge. Empty has to survive: verify.sh defaults it with
+        # ${FILTER_BASE-origin/main}, unset-only, so this "" is not rewritten
+        # into origin/main. It would be harmless on a push to main, where the
+        # merge base is HEAD and the empty-diff rule sweeps anyway, but a
+        # workflow_dispatch from a branch would then filter against main instead
+        # of doing what the button was pressed for.
         env:
           CC: clang
           CXX: clang++
+          FILTER_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
         run: WITH_CBMC=1 make verify SKIP="test-ws twin-wasm test-tui"

@@ -27,9 +27,11 @@
 # parsers it proves have been stable for months, and the fuzz gate exercises the
 # same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
 #
-# It still gets a summary row saying it did not run. The cbmc gate has no path
-# filter, so the PR runs it whatever happened here; a gate that quietly
+# It still gets a summary row saying it did not run: a gate that quietly
 # disappears from the sweep is the exact failure this script exists to prevent.
+# The PR runs it whenever the branch touches what it proves — which since the
+# path filter below is a narrower claim than this comment used to make, and the
+# reason WITH_CBMC=1 in CI is no longer the same as "on every pull request".
 #
 # A gate whose tool is missing FAILS the sweep. It says so on its row, it is
 # counted apart from a hand-scoped SKIP=, and the run exits nonzero. Anything
@@ -38,10 +40,19 @@
 # not as "fine". `make tools-install` is the fix; SKIP="<gate>" is the override
 # for someone who has decided to accept the gap.
 #
+# Most gates only read part of the tree, so most changes cannot break most of
+# them. A gate whose inputs this branch does not touch is skipped with a row
+# saying so — see the path-filter section below for how that is decided, and for
+# the four conditions that turn the whole thing off and sweep everything.
+#
 # Env:
 #   WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 #   SERIAL=1           one gate at a time, fail-fast, instead of lanes
 #   SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
+#   FILTER=0           run every gate whatever changed, ignoring the path filter
+#   FILTER_BASE=<ref>  what "changed" is measured against. Unset means
+#                      origin/main; set-but-empty means there is no base, and
+#                      the filter is off.
 #   COV_MIN=90         line-coverage floor. Reported, never blocking: under it the
 #                      row still passes and says so. Raise it to aim higher.
 #   NO_COLOR=1         plain output (colour is the default, pipe or not)
@@ -202,6 +213,149 @@ if [ -n "$misplaced" ]; then
 	printf 'verify.sh: lane assignment does not cover the gate table: %s\n' \
 		"$misplaced" >&2
 	exit 2
+fi
+
+# ---- path filter ----------------------------------------------------------
+# What each gate reads, as git pathspecs. A gate is skipped when this branch
+# touches none of them. The bias is deliberately toward running: an EMPTY list
+# means "no filter, always run", so a gate added to the table above without a
+# row here keeps running rather than silently disappearing, which is the failure
+# mode this whole script exists to prevent. Widen a row when in doubt — an extra
+# minute of CI is cheap next to a gate that stopped watching its own inputs.
+#
+# The always-run set is not a leftover. secrets, mal-diff and licenses read the
+# diff itself or the whole tree, so "which files changed" is their input rather
+# than a filter on it; docs and patch-drift are cheap and break from directions
+# their own paths do not predict (a moved anchor, a re-pinned upstream).
+gate_paths() { # <gate>
+	case "$1" in
+	# Whole-tree or diff-shaped: the change IS the input.
+	secrets | mal-diff | licenses | docs | patch-drift) echo "" ;;
+
+	format) echo "modules/" ;;
+	shellcheck) echo "*.sh" ;;
+	actionlint | zizmor) echo ".github/workflows/" ;;
+	attest) echo ".github/workflows/ security/" ;;
+	esp) echo "ports/esp32/ security/" ;;
+	approtect) echo "firmware/ ports/ security/ scripts/check-approtect.sh" ;;
+	uwb-seam) echo "modules/woz_uwb/ security/ scripts/check-uwb-seam.sh" ;;
+	cdk-size) echo "firmware/ scripts/ tests/tooling/" ;;
+	test-web) echo "web-twin/ modules/ firmware/" ;;
+	twin-wasm) echo "web-twin/" ;;
+	web) echo "web-twin/ activity/ integration/ tools/ security/" ;;
+	deps) echo "activity/ tools/tui/ integration/homeassistant/ ports/esp32/ web-twin/ security/" ;;
+	ct) echo "modules/ tests/host/" ;;
+	# The C core and its harnesses. cbmc and fuzz are the two most expensive
+	# gates in the sweep and the two whose input moves least, which is the whole
+	# reason this filter is worth having.
+	test | test-san | coverage | clang-tidy | fuzz | cbmc) echo "modules/ tests/host/ deps/" ;;
+	test-port) echo "ports/esp32/ modules/" ;;
+	test-ws) echo "scripts/ mk/ Makefile" ;;
+	test-tui) echo "tools/tui/" ;;
+	# Its subject is the sweep itself, and FILTER_ALWAYS below already forces a
+	# full run whenever any of that moves. Listed anyway so the row is explicit.
+	test-verify) echo "scripts/ tests/tooling/ mk/ .github/workflows/" ;;
+	# SAST over the whole tree, so its pathspec is every directory that holds
+	# code. Prose is the only thing it cannot have an opinion about.
+	semgrep) echo "modules/ ports/ firmware/ tools/ scripts/ host/ integration/ web-twin/ tests/ deps/ security/ .github/" ;;
+	# The fail-safe: a gate added above and forgotten here runs every time.
+	*) echo "" ;;
+	esac
+}
+
+# Touching any of these means the filter itself, or a gate's definition, may
+# have moved — and then a filtered sweep is reasoning with a stale map. The
+# answer is not a cleverer filter, it is to stop filtering: everything runs.
+FILTER_ALWAYS="scripts/ mk/ Makefile .github/workflows/ tests/tooling/ tests/host/sources.sh security/"
+
+# Resolve what "changed" is measured against. Failing to resolve is not an
+# error and not a reason to guess: it disables the filter and sweeps everything,
+# which is exactly what this script did before the filter existed.
+FILTER="${FILTER:-1}"
+# Unset-only, deliberately: FILTER_BASE= set to the empty string has to stay
+# empty. ci.yml sets it to "" on push and workflow_dispatch to mean "there is no
+# base here, sweep everything", and a :- default would quietly rewrite that into
+# origin/main — which is right by accident on a push to main (the merge base is
+# HEAD, so the empty-diff rule sweeps anyway) and wrong on a workflow_dispatch
+# from a branch, where it would silently filter against main instead.
+FILTER_BASE="${FILTER_BASE-origin/main}"
+FILTER_OFF="" # non-empty = full sweep, and this says why
+
+if [ "$FILTER" = 0 ]; then
+	FILTER_OFF="FILTER=0"
+elif [ -z "$FILTER_BASE" ]; then
+	# Handled here rather than left to merge-base: the reason a reader sees
+	# should say no base was given, not "no merge base with ".
+	FILTER_OFF="no base given"
+elif ! command -v git >/dev/null 2>&1 || ! git rev-parse --git-dir >/dev/null 2>&1; then
+	FILTER_OFF="not a git checkout"
+elif ! FILTER_MB="$(git merge-base "$FILTER_BASE" HEAD 2>/dev/null)" || [ -z "$FILTER_MB" ]; then
+	FILTER_OFF="no merge base with $FILTER_BASE"
+else
+	FILTER_BASE="$FILTER_MB"
+fi
+
+# Changed paths matching a pathspec: committed since the merge base, plus
+# whatever is uncommitted or untracked right now. A pre-push sweep is asked
+# about the tree in front of it, not only about what is already committed.
+#
+# Takes ONE argument: the whole space-separated pathspec list. It is split here,
+# with globbing off, rather than at the call site — `*.sh` is a pathspec for git
+# to interpret, and an unquoted expansion would let the shell match it against
+# the working directory first. Today nothing at the repository root ends in .sh
+# so it survives by luck; the day something does, the shellcheck gate would
+# quietly narrow to that one file. Splitting under `set -f` removes the luck.
+filter_touched() { # <pathspec-list>
+	set -f
+	# shellcheck disable=SC2086  # deliberate split of a pathspec list, globbing off
+	set -- $1
+	set +f
+	[ "$#" -gt 0 ] || return 0
+	{
+		git diff --name-only "$FILTER_BASE" -- "$@" 2>/dev/null
+		git ls-files --others --exclude-standard -- "$@" 2>/dev/null
+	} | head -n 1
+}
+
+if [ -z "$FILTER_OFF" ] && [ -n "$(filter_touched "$FILTER_ALWAYS")" ]; then
+	FILTER_OFF="the sweep's own machinery changed"
+fi
+
+# Nothing differs from the base at all. This is the push to main after a merge,
+# and it is the one case where filtering is actively wrong: the merge base is
+# HEAD, every diff is empty, and a filter that trusted that would skip all 30
+# gates and call the sweep green. An empty diff means "no information", not "no
+# risk", so it sweeps everything — which is also the post-merge safety net.
+if [ -z "$FILTER_OFF" ] && [ -z "$(filter_touched ".")" ]; then
+	FILTER_OFF="nothing differs from the base"
+fi
+
+# 0 = this branch touches nothing the gate reads, so it is skipped.
+gate_unchanged() { # <gate>
+	local paths
+	[ -z "$FILTER_OFF" ] || return 1
+	paths="$(gate_paths "$1")"
+	[ -n "$paths" ] || return 1
+	[ -z "$(filter_touched "$paths")" ]
+}
+
+# FILTER_EXPLAIN=1 prints what the filter would decide and runs nothing. A
+# filter you cannot interrogate is one nobody will trust enough to keep on, and
+# "why did that gate not run" needs an answer cheaper than reading this file.
+if [ -n "${FILTER_EXPLAIN:-}" ]; then
+	if [ -n "$FILTER_OFF" ]; then
+		printf 'filter OFF — %s — all %d gates run\n' "$FILTER_OFF" "${#GATES[@]}"
+	else
+		printf 'filter ON — changes vs %s\n' "$FILTER_BASE"
+	fi
+	for g in "${GATES[@]}"; do
+		if gate_unchanged "$g"; then
+			printf '  skip  %-12s  %s\n' "$g" "$(gate_paths "$g")"
+		else
+			printf '  RUN   %-12s  %s\n' "$g" "$(gate_paths "$g")"
+		fi
+	done
+	exit 0
 fi
 
 # What each gate needs on PATH. Empty = nothing beyond a shell and a compiler.
@@ -501,6 +655,11 @@ gate_row() { # <gate> <status> <secs> <reason>
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$RESET" ;;
 	skip-optin) printf '  %s%s%s %-12s %s%-36s%sskipped — opt-in, WITH_CBMC=1 make verify%s\n' \
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$RESET" ;;
+	# Dim, not yellow, and no warning anywhere: unlike every other skip here this
+	# one is not a gap. CI applies the same filter to the same diff, so there is
+	# no local-versus-CI divergence for the reader to worry about.
+	skip-path) printf '  %s%s%s %-12s %s%-36sunchanged — nothing it reads was touched%s\n' \
+		"$DIM" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$RESET" ;;
 	skip-tool) printf '  %s%s%s %-12s %s%-36s%sSKIPPED — %s (CI still runs it)%s\n' \
 		"$YEL" "$TIL" "$RESET" "$1" "$DIM" "$(gate_label "$1")" "$YEL" "$4" "$RESET" ;;
 	# No duration, deliberately. Across this table a printed time means the gate ran and
@@ -533,6 +692,14 @@ run_gate() { # <gate>
 	if [ "$g" = cbmc ] && [ -z "${WITH_CBMC:-}" ]; then
 		gate_result "$g" skip-optin 0 "opt-in, WITH_CBMC=1" || return 1
 		gate_row "$g" skip-optin 0 ""
+		return 2
+	fi
+
+	# Ahead of the tool check for the same reason the cbmc opt-out is: a gate
+	# that is not going to run cannot fail the sweep for a tool it will not use.
+	if gate_unchanged "$g"; then
+		gate_result "$g" skip-path 0 "unchanged" || return 1
+		gate_row "$g" skip-path 0 ""
 		return 2
 	fi
 
@@ -598,8 +765,17 @@ run_lane() { # <lane index>
 # end of a green one.
 printf '\n  %s%sopenaliro verify%s  %s%s  every host-runnable CI gate%s\n' \
 	"$BOLD" "$CYAN" "$RESET" "$DIM" "$DOT" "$RESET"
-printf '  %sfirmware builds (ESP-IDF / NCS) and hardware validation run separately%s\n\n' \
+printf '  %sfirmware builds (ESP-IDF / NCS) and hardware validation run separately%s\n' \
 	"$DIM" "$RESET"
+# Which mode this run is in, before any row prints. A filtered sweep that did
+# not say it was filtered is indistinguishable from a full one that quietly
+# stopped checking things.
+if [ -n "$FILTER_OFF" ]; then
+	printf '  %severy gate runs %s %s%s\n\n' "$DIM" "$DOT" "$FILTER_OFF" "$RESET"
+else
+	printf '  %sgates whose inputs this branch does not touch are skipped %s vs %s%s\n\n' \
+		"$DIM" "$DOT" "$(git rev-parse --short "$FILTER_BASE" 2>/dev/null || printf '%s' "$FILTER_BASE")" "$RESET"
+fi
 
 n=${#GATES[@]}
 t_all0=$(date +%s)
@@ -639,7 +815,7 @@ t_all=$(($(date +%s) - t_all0))
 # Rebuilt from the .rc files, not from what scrolled past: with lanes running at
 # once the printed order is arrival order, and this table is the gate table's.
 STATUS=() REASON=()
-nfail=0 nskip=0 npass=0 nnotrun=0 nskip_tool=0 nskip_optin=0
+nfail=0 nskip=0 npass=0 nnotrun=0 nskip_tool=0 nskip_optin=0 nskip_path=0
 for ((i = 0; i < n; i++)); do
 	g="${GATES[i]}"
 	if [ -f "$RUNDIR/$g.rc" ]; then
@@ -656,6 +832,7 @@ for ((i = 0; i < n; i++)); do
 	skip-req) nskip=$((nskip + 1)) ;;
 	skip-optin) nskip=$((nskip + 1)) nskip_optin=$((nskip_optin + 1)) ;;
 	skip-tool) nskip=$((nskip + 1)) nskip_tool=$((nskip_tool + 1)) ;;
+	skip-path) nskip=$((nskip + 1)) nskip_path=$((nskip_path + 1)) ;;
 	skip-host) nskip=$((nskip + 1)) ;;
 	notrun) nnotrun=$((nnotrun + 1)) ;;
 	esac
@@ -692,14 +869,20 @@ printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
 # is the exact thing that makes a green sweep and a red CI disagree. The cbmc
 # opt-out is excluded because it is the default — it gets one quiet line in the
 # verdict instead, and a warning that fires every run is a warning nobody reads.
-if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_optin" ]; then
+# The two skips CI agrees with: the cbmc opt-out (CI turns it back on, and says
+# so in its own line) and the path filter (CI runs the same filter over the same
+# diff). Everything else is this host disagreeing with CI, which is the thing
+# the loud line exists to surface.
+nskip_quiet=$((nskip_optin + nskip_path))
+
+if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_quiet" ]; then
 	names=""
 	for ((i = 0; i < n; i++)); do
-		case "${STATUS[i]}" in skip-*) ;; *) continue ;; esac
+		case "${STATUS[i]}" in skip-path) continue ;; skip-*) ;; *) continue ;; esac
 		names="${names:+$names, }${GATES[i]} (${REASON[i]})"
 	done
 	printf '  %s%s %d gate(s) SKIPPED, CI will still run them: %s%s\n\n' \
-		"$YEL" "$TIL" "$nskip" "$names" "$RESET"
+		"$YEL" "$TIL" "$((nskip - nskip_path))" "$names" "$RESET"
 fi
 
 # A normal failed gate has a durable `fail` record; only gates downstream of it
@@ -755,14 +938,21 @@ fi
 # A hand-scoped SKIP= is unusual and gets the loud line. The cbmc opt-out is the
 # default, so it gets a plain one: a warning that fires on every single run is a
 # warning nobody reads, and then the loud line means nothing when it matters.
-if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_optin" ]; then
+if [ "$nskip" -gt 0 ] && [ "$nskip" -ne "$nskip_quiet" ]; then
 	printf '  %s%s %d passed %s %d skipped %s %ds%s  %sNOT the full CI set%s\n\n' \
 		"$YEL" "$CHK" "$npass" "$DOT" "$nskip" "$DOT" "$t_all" "$RESET" "$YEL" "$RESET"
-elif [ "$nskip_optin" -gt 0 ]; then
+elif [ "$nskip_quiet" -gt 0 ]; then
 	printf '  %s%s %d passed %s %d skipped %s %ds%s\n' \
 		"$GRN" "$CHK" "$npass" "$DOT" "$nskip" "$DOT" "$t_all" "$RESET"
-	printf '    %scbmc did not run:  %sWITH_CBMC=1 make verify%s\n\n' \
+	[ "$nskip_optin" -gt 0 ] && printf '    %scbmc did not run:  %sWITH_CBMC=1 make verify%s\n' \
 		"$DIM" "$BOLD" "$RESET"
+	# Named, with the escape hatch on the same line. A gate that skipped itself
+	# is only trustworthy if the reader can see how many did and undo it in one
+	# step; silence here would be the filter quietly becoming the default nobody
+	# audits.
+	[ "$nskip_path" -gt 0 ] && printf '    %s%d gate(s) skipped: nothing they read changed.  %sFILTER=0 make verify%s%s sweeps everything.%s\n' \
+		"$DIM" "$nskip_path" "$BOLD" "$RESET" "$DIM" "$RESET"
+	printf '\n'
 else
 	printf '  %s%s all %d host-runnable CI gates passed %s %ds%s\n\n' \
 		"$GRN" "$CHK" "$npass" "$DOT" "$t_all" "$RESET"

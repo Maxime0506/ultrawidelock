@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `activity/vite.config.ts`
 
-*No module docstring. First commit: "activity: serve the twin as a Discord Activity without forking it".*
-
 **discussed in** [`activity/README.md`](../../../activity/README.md)
 
 ```mermaid

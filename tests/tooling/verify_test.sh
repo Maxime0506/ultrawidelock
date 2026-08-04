@@ -63,6 +63,7 @@ eval "$(awk '/^GATES=\(/,/^\)$/' "$VERIFY")"
 eval "$(awk '/^gate_need\(\)/,/^}$/' "$VERIFY")"
 eval "$(awk '/^gate_need_py\(\)/,/^}$/' "$VERIFY")"
 eval "$(awk '/^gate_label\(\)/,/^}$/' "$VERIFY")"
+eval "$(awk '/^gate_paths\(\)/,/^}$/' "$VERIFY")"
 
 echo "== gate table covers every CI job =="
 
@@ -224,6 +225,40 @@ assert "no local-only gate is also claimed by a CI job${stale_local:+ — $stale
 	test -z "$stale_local"
 assert "every mapped job still has its gate${missing_gate:+ — GONE: $missing_gate}" \
 	test -z "$missing_gate"
+
+# The path filter's one silent failure. A pathspec that matches nothing — a
+# typo, or a directory that moved — makes its gate skip on every change from
+# then on, and nothing anywhere goes red: the gate simply stops appearing, and a
+# sweep with fewer gates in it looks exactly like a sweep with less to do. So
+# every path a gate names must exist. Globs are exempt, having no fixed path to
+# check. Written against the real tree rather than the fixture, because the
+# whole question is whether the filter still points at THIS repository.
+#
+# It has already earned its place: the first draft of the deps row named
+# requirements.txt, package.json and package-lock.json at the repository root,
+# none of which are there, and the gate would have skipped every dependency
+# change ever made.
+dead_paths=""
+for g in "${GATES[@]}"; do
+	for p in $(gate_paths "$g"); do
+		case "$p" in *'*'*) continue ;; esac
+		[ -e "$REPO/$p" ] || dead_paths="${dead_paths:+$dead_paths }$g:$p"
+	done
+done
+assert "every gate_paths entry names a path that exists${dead_paths:+ — DEAD: $dead_paths}" \
+	test -z "$dead_paths"
+
+# The always-run set, named rather than counted. These gates read the diff
+# itself or the whole tree, so a filter cannot reason about them — and the way
+# this list goes wrong is by quietly growing, one "just this once" at a time,
+# until the filter means nothing. Changing it should be a decision someone made
+# on purpose, which is what failing this assertion makes it.
+always=""
+for g in "${GATES[@]}"; do
+	[ -n "$(gate_paths "$g")" ] || always="${always:+$always }$g"
+done
+assert "the always-run set is exactly the intended five${always:+ — got: $always}" \
+	test "$always" = "mal-diff secrets licenses patch-drift docs"
 
 # Advice has to be true: verify.sh tells you to run `make tools-install` when a
 # gate's tool is missing, so every tool a gate names must be one that installs.
@@ -413,10 +448,32 @@ echo "int a;" > "$FAKE/modules/a.c"
 echo "// twin" > "$FAKE/web-twin/twin.js"
 echo "// selftest" > "$FAKE/web-twin/selftest.cjs"
 printf '/build/\n' > "$FAKE/.gitignore"
+# The base commit, built with plumbing rather than `git commit`. A contributor
+# can have a global core.hooksPath — an identity or leak-scanning pre-commit
+# hook is a common setup — and such a hook rejects this fixture's throwaway
+# identity and refuses the commit. That failure used to be swallowed by
+# `>/dev/null 2>&1`, leaving a repository with no HEAD: every scenario below
+# still ran, and the sweep under test saw an unresolvable base where CI's clean
+# runner saw a real one. A fixture that is a different fixture on your machine
+# than on CI is worse than no fixture, and this file's whole subject is sweeps
+# that pass locally and fail on CI.
+#
+# commit-tree runs no hooks and takes its identity from the environment, so it
+# needs no --no-verify and no core.hooksPath override to defeat: there is
+# nothing there to defeat.
 git -C "$FAKE" init -q
-git -C "$FAKE" config user.email t@t; git -C "$FAKE" config user.name t
 git -C "$FAKE" add -A >/dev/null 2>&1
-git -C "$FAKE" commit -qm init >/dev/null 2>&1
+fake_tree="$(git -C "$FAKE" write-tree)" || { echo "fixture: write-tree failed" >&2; exit 1; }
+fake_commit="$(GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t \
+	GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
+	git -C "$FAKE" commit-tree "$fake_tree" -m init)" \
+	|| { echo "fixture: commit-tree failed" >&2; exit 1; }
+git -C "$FAKE" update-ref refs/heads/main "$fake_commit"
+git -C "$FAKE" symbolic-ref HEAD refs/heads/main
+# Loud, and fatal. The bug this replaces was silent, so the replacement checks
+# rather than assumes.
+git -C "$FAKE" rev-parse --verify -q HEAD >/dev/null \
+	|| { echo "fixture: base commit did not stick" >&2; exit 1; }
 
 NGATES=${#GATES[@]}
 
@@ -638,6 +695,84 @@ runv EXIT2_GATES="docs"
 assert "S19 exit 2 elsewhere is still a failure" has "docs .*FAILED \\(exit 2\\)"
 assert "S19 and it fails the sweep"              test "$rc" -ne 0
 assert "S19 and it is not called NOT CHECKED"    hasnt "NOT CHECKED"
+
+echo
+echo "== the path filter =="
+
+# Every scenario above ran with the filter off, and not by arrangement: the fake
+# tree has no origin/main, so the base does not resolve and verify.sh sweeps
+# everything. That is the first assertion here, because it is also what protects
+# the other 88 — if this ever stopped being true, those scenarios would quietly
+# start testing a filtered sweep instead of a full one.
+runv
+assert "F0 an unresolvable base disables the filter" has "no merge base with origin/main"
+assert "F0 and every gate still runs"                hasnt "nothing it reads was touched"
+
+# F1: prose only. The five always-run gates run; the expensive ones do not. The
+# assertions name gates on both sides, because "fewer gates ran" is the correct
+# outcome AND the shape of the bug, and only naming them tells the two apart.
+: > "$FAKE/notes.md"
+runv FILTER_BASE=HEAD WITH_CBMC=1
+rm -f "$FAKE/notes.md"
+assert "F1 a prose-only change exits 0"      test "$rc" -eq 0
+assert "F1 the header says it is filtering"  has "inputs this branch does not touch"
+assert "F1 secrets still runs"               passed "no secrets in the tracked files"
+assert "F1 docs still runs"                  passed "site builds, no dead links"
+assert "F1 the host suite does not"          notpassed "host KAT suite"
+assert "F1 nor the proof"                    notpassed "wire-parser memory-safety proof"
+assert "F1 the row says why"                 has "nothing it reads was touched"
+# The one thing a skipped gate must never look like: a gap. Filtered gates are
+# not in the "CI will still run them" list, because CI ran the same filter.
+assert "F1 is not reported as a CI gap"      hasnt "gate\\(s\\) SKIPPED, CI will still run them"
+assert "F1 nor as a partial sweep"           hasnt "NOT the full CI set"
+
+# F2: touch what a gate reads and it comes back. Without this the suite would
+# pass just as happily against a filter that skips everything forever.
+echo "int b;" >> "$FAKE/modules/a.c"
+runv FILTER_BASE=HEAD WITH_CBMC=1
+assert "F2 a modules/ change runs the host suite" passed "host KAT suite"
+assert "F2 and the proof"                         passed "wire-parser memory-safety proof"
+# test-port reads modules/ as well as ports/esp32/, so it is correctly back too.
+# actionlint is the one that must stay away: nothing under .github/ moved.
+assert "F2 and not the workflow linter"           notpassed "workflow syntax"
+
+# F3: the filter reasons from a map of which gate reads what. Change the map, or
+# any gate's definition, and the map may no longer describe the sweep — so the
+# filter stops rather than reasons from a stale one.
+echo "# touched" >> "$FAKE/scripts/verify.sh"
+runv FILTER_BASE=HEAD
+assert "F3 touching the machinery disables the filter" has "the sweep's own machinery changed"
+assert "F3 and everything runs again"                  hasnt "nothing it reads was touched"
+
+# F4: nothing to compare. This is the push to main after a merge, where the
+# merge base IS head and every diff is empty — the one input on which a filter
+# would skip all 30 gates and call it green.
+runv FILTER_BASE=HEAD
+assert "F4 an empty diff disables the filter" has "nothing differs from the base"
+assert "F4 and every gate runs"               hasnt "nothing it reads was touched"
+
+# F6: the two ways FILTER_BASE can arrive with no value, which are not the same
+# thing. Unset means "nobody said", and the default applies — origin/main, which
+# the fixture does not have, so it lands on the no-merge-base fallback. Set but
+# empty means "there is no base here", which ci.yml sends on push and
+# workflow_dispatch: it has to survive as empty rather than be defaulted back
+# into origin/main, or a dispatch from a branch would filter against main
+# instead of sweeping. That is why the default is ${FILTER_BASE-...} and not
+# ${FILTER_BASE:-...}, and it is a one-character difference nothing else catches.
+: > "$FAKE/notes.md"
+runv
+assert "F6 unset FILTER_BASE defaults to origin/main" has "no merge base with origin/main"
+runv FILTER_BASE=""
+assert "F6 an empty FILTER_BASE is not defaulted"     has "no base given"
+assert "F6 and it disables the filter"                hasnt "nothing it reads was touched"
+rm -f "$FAKE/notes.md"
+
+# F5: the escape hatch the summary tells people about has to work.
+: > "$FAKE/notes.md"
+runv FILTER_BASE=HEAD FILTER=0
+rm -f "$FAKE/notes.md"
+assert "F5 FILTER=0 sweeps everything"    has "every gate runs"
+assert "F5 and skips nothing by path"     hasnt "nothing it reads was touched"
 
 echo
 if [ "$fail" -eq 0 ]; then

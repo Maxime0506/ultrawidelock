@@ -3031,8 +3031,6 @@ at what changed defeats the point.
 
 ### [`activity/vite.config.ts`](architecture/activity/vite.config.ts.md)
 
-*No module docstring. First commit: "activity: serve the twin as a Discord Activity without forking it".*
-
 ## `integration/homeassistant/scripts/`
 
 ### [`integration/homeassistant/scripts/ha-setup.sh`](architecture/integration.homeassistant.scripts/ha-setup.sh.md)
@@ -3856,19 +3854,27 @@ One gate does not run by default: cbmc. At 64s it is twice the rest of the
 sweep put together, spent on the gate whose input moves least — the wire
 parsers it proves have been stable for months, and the fuzz gate exercises the
 same code every run. WITH_CBMC=1 turns it on, taking the sweep to ~72s.
-It still gets a summary row saying it did not run. The cbmc gate has no path
-filter, so the PR runs it whatever happened here; a gate that quietly
+It still gets a summary row saying it did not run: a gate that quietly
 disappears from the sweep is the exact failure this script exists to prevent.
+The PR runs it whenever the branch touches what it proves — which since the
+path filter below is a narrower claim than this comment used to make, and the
+reason WITH_CBMC=1 in CI is no longer the same as "on every pull request".
 A gate whose tool is missing FAILS the sweep. It says so on its row, it is
 counted apart from a hand-scoped SKIP=, and the run exits nonzero. Anything
 softer is the original bug wearing a warning label: CI runs that gate whatever
 this host has installed, so "could not check" has to read as "not verified",
 not as "fine". `make tools-install` is the fix; SKIP="<gate>" is the override
 for someone who has decided to accept the gap.
+Most gates only read part of the tree, so most changes cannot break most of
+them. A gate whose inputs this branch does not touch is skipped with a row
+saying so — see the path-filter section below for how that is decided, and for
+the four conditions that turn the whole thing off and sweep everything.
 Env:
 WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
+FILTER=0           run every gate whatever changed, ignoring the path filter
+FILTER_BASE=<ref>  what "changed" is measured against (default: origin/main)
 COV_MIN=90         line-coverage floor. Reported, never blocking: under it the
 row still passes and says so. Raise it to aim higher.
 NO_COLOR=1         plain output (colour is the default, pipe or not)
