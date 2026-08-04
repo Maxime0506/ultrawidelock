@@ -22,6 +22,15 @@ cd "$REPO_ROOT"
 # (no fetch — run `git fetch origin` first if it might be stale).
 if git rev-parse --verify -q origin/main >/dev/null; then
 	BEHIND="$(git rev-list --count HEAD..origin/main)"
+	# A merge in progress is the exception. HEAD still points at the branch tip,
+	# so the count above says "behind" while the working tree already holds
+	# everything origin/main carries -- which is exactly the state `make sync`
+	# regenerates from. Refusing there would block the one moment the docs most
+	# need rebuilding, so the guard asks the merge, not HEAD.
+	if [ "$BEHIND" -gt 0 ] && MERGING="$(git rev-parse -q --verify MERGE_HEAD)" &&
+		git merge-base --is-ancestor origin/main "$MERGING"; then
+		BEHIND=0
+	fi
 	if [ "$BEHIND" -gt 0 ]; then
 		echo "docs.sh: HEAD is $BEHIND commit(s) behind origin/main — refusing to regenerate." >&2
 		echo "docs.sh: merge or rebase onto origin/main first (git fetch origin && git merge origin/main)." >&2

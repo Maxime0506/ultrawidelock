@@ -337,7 +337,10 @@ mk_tool_stub cbmc cbmc
 mk_tool_stub bun test-tui
 # The bot gate declares `node` (which is what tools-install installs) but drives
 # everything through npm, so the simulated sweep needs the command it invokes.
+# npx too, for the bundle step: it is its own executable, so the npm stub does
+# not answer for it and the real one would go looking for a worker to build.
 mk_tool_stub npm bot
+mk_tool_stub npx bot
 # The four security gates. These stubs exist only so the missing-tool check sees
 # them as present — the gates themselves go through the scripts/security.sh stub
 # below, which is what decides pass or fail.

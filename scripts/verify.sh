@@ -434,7 +434,7 @@ gate_label() {
 	docs) echo "site builds, no dead links" ;;
 	test-san) echo "host suite under ASan + UBSan" ;;
 	test-port) echo "ESP32 port tests" ;;
-	bot) echo "Discord bot: types, suite, citation drift" ;;
+	bot) echo "Discord bot: types, suite, citation drift, bundle" ;;
 	test-ws) echo "workspace auto-seeding" ;;
 	test-tui) echo "guided bench types, tests, build" ;;
 	test-verify) echo "this sweep's own tests" ;;
@@ -529,7 +529,26 @@ gate_run() {
 		;;
 	patch-drift) tests/tooling/patch_drift_check.sh ;;
 	cdk-size) tests/tooling/cdk_size_test.sh ;;
-	docs) make --no-print-directory docs ;;
+	# `make docs` regenerates the committed docs tree in place, so a stale docs/
+	# gets silently repaired here and the gate passes while the commit still
+	# carries the old pages. Worse, that repair moves line numbers inside
+	# docs/ARCHITECTURE.md, which the bot gate's spec index cites -- so the sweep
+	# fixed one artifact, broke another, and reported success. Compare the tree
+	# either side of the build: if building changed anything, docs/ was stale,
+	# and `make sync` is what puts the whole cascade back in one step.
+	#
+	# Quiet where it should be. CI configures no page generator, so docs.sh skips
+	# the generating pass entirely and nothing here can change.
+	docs)
+		docs_was="$(git -C "$ROOT" status --porcelain -- docs/ 2>/dev/null || true)"
+		make --no-print-directory docs || return
+		docs_now="$(git -C "$ROOT" status --porcelain -- docs/ 2>/dev/null || true)"
+		if [ "$docs_was" != "$docs_now" ]; then
+			printf 'docs: committed docs/ was stale; this build regenerated it.\n' >&2
+			printf 'docs: run "make sync" to rebuild the spec index too, then commit.\n' >&2
+			return 1
+		fi
+		;;
 	test-san) make --no-print-directory test-san ;;
 	# Host layers only. Its third layer, verify_port.sh, shells out to `idf.py
 	# build` whenever ESP-IDF is sourced -- which ci.yml's runner never
@@ -540,9 +559,14 @@ gate_run() {
 		# --ignore-scripts because security-web.sh blocks any install command
 		# that can execute package code, and this sweep must not install
 		# differently to the rule it enforces two lanes over.
+		# The bundle step last, exactly as bot.yml orders it: a worker that
+		# typechecks and passes its suite can still fail to bundle, and nothing
+		# else in this sweep would catch that. --outdir points at scratch space
+		# so the gate leaves the tree exactly as it found it.
 		(cd "$ROOT/bot" \
 			&& npm ci --ignore-scripts --no-audit --no-fund \
-			&& npm run typecheck && npm test && npm run drift)
+			&& npm run typecheck && npm test && npm run drift \
+			&& npx wrangler deploy --dry-run --outdir "$(mktemp -d)/bundle")
 		;;
 	test-ws) make --no-print-directory test-ws ;;
 	# All three steps release.yml runs, in its order. `make tui-test` alone would

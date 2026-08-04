@@ -141,7 +141,7 @@ runs a raw command, this reproduces it verbatim.
 **called by** `run_gate`  ·  **calls** `gate_is_security`
 
 ### `gate_result()`
-`scripts/verify.sh:655`
+`scripts/verify.sh:679`
 
 Write the result of a gate to a temporary file in RUNDIR and atomically rename
 it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an
@@ -152,7 +152,7 @@ missing result can never be treated as a passing gate.
 **called by** `run_gate`
 
 ### `gate_row()`
-`scripts/verify.sh:670`
+`scripts/verify.sh:694`
 
 Prints the gate's row as it finishes. Concurrent lanes write these
 interleaved, which is fine: each row is a single printf, and the summary
@@ -161,14 +161,14 @@ below is rebuilt from the .rc files rather than from what was printed.
 **called by** `run_gate`  ·  **calls** `gate_label`
 
 ### `run_gate()`
-`scripts/verify.sh:696`
+`scripts/verify.sh:720`
 
 0 passed, 1 failed, 2 did not run. Called from inside a lane subshell.
 
 **called by** `run_lane`  ·  **calls** `gate_is_security`, `gate_need`, `gate_need_py`, `gate_result`, `gate_row`, `gate_run`, `gate_unchanged`
 
 ### `run_lane()`
-`scripts/verify.sh:774`
+`scripts/verify.sh:798`
 
 One lane, in order. A failure stops the rest of that lane but not the others:
 the gates sharing a lane share a build directory, so running the next one over
@@ -177,6 +177,6 @@ a half-built tree would only produce a second, confusing failure.
 **calls** `run_gate`
 
 ### `why_notrun()`
-`scripts/verify.sh:864`
+`scripts/verify.sh:888`
 
 Why a gate never started: its own lane stopped, or the tripwire did.
