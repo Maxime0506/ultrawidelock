@@ -27,7 +27,7 @@ Fail before doing any work, so a drifted twin never half-builds.
 
 <details><summary>Undocumented (2)</summary>
 
-- `sha256` — tested: domain separated from a bare hash; repeated builds are byte identical
+- `sha256`
 - `writeBundle`
 
 </details>

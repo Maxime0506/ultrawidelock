@@ -3,7 +3,7 @@
 
 Verify that the web-twin's hardcoded firmware constants in index.html stay synchronized with their source definitions. Parses the FW table, reads the cited source lines, and reports any mismatches or missing citations.
 
-**discussed in** [`docs/discord-activity-phase0.md`](../../discord-activity-phase0.md), [`web-twin/README.md`](../../../web-twin/README.md)
+**discussed in** [`docs/discord-activity-phase0.md`](../../discord-activity-phase0.md), [`docs/twin-worker-phase0.md`](../../twin-worker-phase0.md), [`web-twin/README.md`](../../../web-twin/README.md)
 
 ```mermaid
 flowchart TD

@@ -5,6 +5,11 @@ Every subsystem on one page, in reading order: entry points (nothing imports the
 
 ```mermaid
 flowchart LR
+  bot.scripts --> bot.src
+  bot.scripts --> bot.src.commands
+  bot.src --> bot.scripts
+  bot.src --> bot.src.commands
+  bot.src.commands --> bot.src
   host.presence --> tools
   integration.homeassistant --> tools.tui.src
   integration.homeassistant.src.openaliro_ha --> tools.tui.src
@@ -51,6 +56,652 @@ flowchart LR
   ports.esp32.components.piv_ccid --> ports.esp32.components.piv_ccid.include
   tools --> tools.tui.src
 ```
+
+## `bot/src/`
+
+### [`bot/src/index.ts`](architecture/bot.src/index.ts.md)
+
+@file The interactions endpoint.
+An HTTP interactions Worker, not a gateway bot: no persistent socket, no
+privileged intents, no process with an uptime obligation. Discord POSTs
+here, this file answers within the 3 second deadline or defers.
+The order below is load-bearing and is checked by index.test.ts:
+1. reject anything that is not a POST
+2. read the body as TEXT, never as JSON
+3. verify Ed25519 over timestamp + that exact text
+4. only then parse
+Verifying after parsing would still reject bad signatures, but it would
+run a JSON parser on unauthenticated input first, and it would answer
+Discord's deliberately invalid PING with a 400 instead of a 401. Discord
+refuses the URL for the second one.
+
+**depends on** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/env.ts`](architecture/bot.src/env.ts.md), [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md), [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md), [`bot/src/verify.ts`](architecture/bot.src/verify.ts.md)
+
+### [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)
+
+@file Wire constants and response builders for the Discord interactions
+protocol. Kept dependency-free so `test/` can exercise it without a
+Worker runtime.
+
+**used by** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md), [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md), [`bot/src/commands/decode-devid.ts`](architecture/bot.src.commands/decode-devid.ts.md), [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md), [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/commands/ping.ts`](architecture/bot.src.commands/ping.ts.md), [`bot/src/commands/size.ts`](architecture/bot.src.commands/size.ts.md), [`bot/src/commands/spec.ts`](architecture/bot.src.commands/spec.ts.md), [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md), [`bot/src/commands/verify.ts`](architecture/bot.src.commands/verify.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md), [`bot/src/commands/why.ts`](architecture/bot.src.commands/why.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/index.ts`](architecture/bot.src/index.ts.md), [`bot/src/modal.ts`](architecture/bot.src/modal.ts.md), [`bot/src/testRequestContainer.ts`](architecture/bot.src/testRequestContainer.ts.md)
+
+### [`bot/src/env.ts`](architecture/bot.src/env.ts.md)
+
+@file Worker bindings.
+Every secret here is set with `wrangler secret put NAME`. None of them is
+ever committed, logged, or echoed into a response. See bot/README.md for the
+full list and how to set it.
+One Worker serves both halves of this bot — firmware triage and hardware
+compatibility tracking — so this is the union of what both need. Anything
+optional degrades the one feature that reads it rather than failing the
+Worker, which is what lets `npm test` and a fresh clone run with nothing set.
+
+**used by** [`bot/src/api.ts`](architecture/bot.src/api.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/index.ts`](architecture/bot.src/index.ts.md), [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md)
+
+### [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md)
+
+@file Orchestrates the Linked Roles flow across the three plain browser
+routes (`/linked-role`, `/discord-oauth-callback`, `/github-oauth-callback`)
+that `src/index.ts` registers alongside — but structurally separate
+from — the signed interactions endpoint. These are ordinary redirects a
+browser follows, not Discord interactions: no Ed25519 signature is
+involved or expected, which is also why they live on their own routes
+rather than folded into `POST /`.
+Each exported function takes the incoming request's own URL and derives
+both OAuth redirect URIs from its origin, so no separate "base URL"
+secret is needed — the Worker always knows where it is being reached at.
+Metadata is only ever pushed once, right after both OAuth legs complete.
+There is no scheduled refresh: re-running `/linked-role` is how a
+contributor updates their badge later (a periodic full refresh across
+every linked user is a natural follow-up, not built here, since it would
+mean spending every linked user's share of GitHub's search rate limit on
+every sweep tick whether or not anything about them changed).
+
+**depends on** [`bot/src/discordOAuth.ts`](architecture/bot.src/discordOAuth.ts.md), [`bot/src/env.ts`](architecture/bot.src/env.ts.md), [`bot/src/githubOAuth.ts`](architecture/bot.src/githubOAuth.ts.md), [`bot/src/oauthLinks.ts`](architecture/bot.src/oauthLinks.ts.md), [`bot/src/oauthState.ts`](architecture/bot.src/oauthState.ts.md), [`bot/src/roleConnection.ts`](architecture/bot.src/roleConnection.ts.md)  ·  **used by** [`bot/src/index.ts`](architecture/bot.src/index.ts.md)
+
+### [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md)
+
+@file The escalation sweep: "asleep candidates get pinged on a follow-up
+if nobody accepts within a configurable window." Runs off a Cron Trigger
+(wrangler.toml `[triggers]`) rather than any in-request timer, since a
+Worker has no way to schedule work minutes after a request has already
+finished — this is the one part of the bot that is not driven by a
+Discord interaction at all.
+
+**depends on** [`bot/src/discordRest.ts`](architecture/bot.src/discordRest.ts.md), [`bot/src/oauthLinks.ts`](architecture/bot.src/oauthLinks.ts.md), [`bot/src/oauthState.ts`](architecture/bot.src/oauthState.ts.md), [`bot/src/testRequestContainer.ts`](architecture/bot.src/testRequestContainer.ts.md), [`bot/src/testRequests.ts`](architecture/bot.src/testRequests.ts.md)  ·  **used by** [`bot/src/index.ts`](architecture/bot.src/index.ts.md)
+
+### [`bot/src/verify.ts`](architecture/bot.src/verify.ts.md)
+
+@file Ed25519 verification of Discord interaction requests.
+Nothing in this Worker may parse a request body before this file has
+accepted it. Discord enforces that from the outside: when an interactions
+URL is saved it POSTs a deliberately invalid PING, and refuses the URL if
+the endpoint answers instead of rejecting. So the ordering is not a
+preference, it is the thing that makes the endpoint installable at all.
+Fails closed everywhere. A malformed header, a wrong-length key, an
+unsupported curve and a genuinely bad signature all return false, and the
+caller turns every one of them into the same 401.
+
+**used by** [`bot/src/index.ts`](architecture/bot.src/index.ts.md)
+
+### [`bot/src/roleConnection.ts`](architecture/bot.src/roleConnection.ts.md)
+
+@file Linked Roles metadata: the five fields the spec suggests
+(`boards_owned`, `has_nfc`, `ios_major`, `validated_runs`, `merged_prs`),
+their Discord registration schema, and computing four of the five purely
+from this bot's own D1 tables. `merged_prs` is deliberately not computed
+here — it needs the linked GitHub account (githubOAuth.ts) and a call to
+GitHub's own API, a different failure domain from "read our own D1".
+
+**depends on** [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md), [`bot/src/validations.ts`](architecture/bot.src/validations.ts.md)  ·  **used by** [`bot/scripts/register-role-metadata.ts`](architecture/bot.scripts/register-role-metadata.ts.md), [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md)
+
+### [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md)
+
+@file The triage table. Every answer this bot gives comes from here.
+A lookup table, not a model. Each entry is a plain reading, a next command,
+and a `file:line` into this repository. Nothing is written from memory: if a
+failure mode is not documented in the tree it does not get an entry, and the
+bot escalates instead of guessing. A confident wrong diagnosis costs somebody
+an evening, which is worse than no answer at all.
+`expect` is the drift guard. scripts/check-citations.ts reads each cited line
+and fails if the substring is no longer on it, so an edit to mk/cdk.mk that
+moves a line breaks CI rather than quietly turning this table into folklore.
+Keep `expect` short and distinctive, and never let it span a line break.
+
+**depends on** [`bot/src/signatures.ts`](architecture/bot.src/signatures.ts.md)  ·  **used by** [`bot/scripts/check-citations.ts`](architecture/bot.scripts/check-citations.ts.md), [`bot/scripts/drift.ts`](architecture/bot.scripts/drift.ts.md), [`bot/src/commands/decode-devid.ts`](architecture/bot.src.commands/decode-devid.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md), [`bot/src/commands/why.ts`](architecture/bot.src.commands/why.ts.md), [`bot/src/signatures.ts`](architecture/bot.src/signatures.ts.md), [`bot/src/twin.ts`](architecture/bot.src/twin.ts.md)
+
+### [`bot/src/command.ts`](architecture/bot.src/command.ts.md)
+
+@file The shape every command file exports: a Discord command definition
+(for registration) and a handler (for dispatch), together so the two
+never drift apart.
+Separate from commands/index.ts so that followup.ts can take a context
+without importing the command table that imports it back.
+
+**depends on** [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/env.ts`](architecture/bot.src/env.ts.md)  ·  **used by** [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md), [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md), [`bot/src/commands/decode-devid.ts`](architecture/bot.src.commands/decode-devid.ts.md), [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md), [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md), [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/commands/ping.ts`](architecture/bot.src.commands/ping.ts.md), [`bot/src/commands/size.ts`](architecture/bot.src.commands/size.ts.md), [`bot/src/commands/spec.ts`](architecture/bot.src.commands/spec.ts.md), [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md), [`bot/src/commands/verify.ts`](architecture/bot.src.commands/verify.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md), [`bot/src/commands/why.ts`](architecture/bot.src.commands/why.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md)
+
+### [`bot/src/discordOAuth.ts`](architecture/bot.src/discordOAuth.ts.md)
+
+@file The Discord half of Linked Roles: authorize URL, the two OAuth2
+token-endpoint grants (authorization_code, refresh_token), identifying
+who authorized, and pushing the final role-connection metadata. Every
+endpoint and body shape here was checked against docs.discord.com
+(2026-08-04) rather than assumed — this is a different trust boundary
+from the rest of the bot (a real bearer credential granted by an actual
+user, not just their opaque Discord ID), so it is worth being sure.
+`identify` is requested alongside `role_connections.write`: the metadata
+push endpoint is scoped to "whoever this access token belongs to", so the
+callback needs `GET /users/@me` to learn *which* Discord user just
+authorized before it can store anything against them.
+
+**used by** [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md)
+
+### [`bot/src/githubOAuth.ts`](architecture/bot.src/githubOAuth.ts.md)
+
+@file The GitHub half of Linked Roles. It verifies the account, not the
+person, and never learns more than that.
+In practice that means this only ever asks for the account's public
+identity: no scope is requested in the authorize URL at all, since
+`GET /user` returns `id` and `login` for the authenticating account with
+no scope needed — anything broader would be more access than the feature
+uses. The resulting token is used once (by the caller, in the OAuth
+callback) and is never stored; only `id`/`login` persist.
+Endpoints verified against docs.github.com (2026-08-04).
+
+**used by** [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md)
+
+### [`bot/src/oauthLinks.ts`](architecture/bot.src/oauthLinks.ts.md)
+
+@file Every statement this Worker runs against `oauth_links`. Same rule
+as every other D1 module here: no SQL built by concatenation, every
+value a bound parameter. Token encryption itself lives in
+tokenCipher.ts — this file only ever handles already-encrypted blobs.
+
+**depends on** [`bot/src/tokenCipher.ts`](architecture/bot.src/tokenCipher.ts.md)  ·  **used by** [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md), [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md)
+
+### [`bot/src/oauthState.ts`](architecture/bot.src/oauthState.ts.md)
+
+@file The CSRF/session-correlation state that chains the two OAuth legs
+("Discord authorize" then "GitHub authorize") into one flow, and stops a
+forged callback from attaching a GitHub identity to the wrong Discord
+user. Every transition is a single guarded statement (same atomic
+first-writer-wins shape as `claim()` in testRequests.ts), not a
+read-then-write, so a replayed or duplicated callback cannot advance a
+state twice.
+
+**used by** [`bot/src/linkedRoles.ts`](architecture/bot.src/linkedRoles.ts.md), [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md)
+
+### [`bot/src/discordRest.ts`](architecture/bot.src/discordRest.ts.md)
+
+@file The handful of Discord REST calls that need a bot token rather than
+an interaction token: posting to a fixed channel regardless of where a
+command was invoked, starting a thread, and editing a message outside any
+live interaction (the scheduled escalation sweep). Everything else in this
+bot goes through the interaction's own token — see followup.ts — because
+that requires no secret beyond what Discord itself hands the Worker per
+request.
+Every function here fails soft: log and return null/false rather than
+throw, so a REST hiccup degrades one step of a request-routing flow
+instead of losing the D1 state already committed around it.
+
+**used by** [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md)
+
+### [`bot/src/testRequestContainer.ts`](architecture/bot.src/testRequestContainer.ts.md)
+
+@file The `/test-request` status card, and the one-time ping that goes
+with it — kept as two separate messages rather than one, so the ping
+(disposable, mentions-bearing, ordinary `content`) never has to be
+reconstructed when the card (persistent, Components V2, no `content`
+allowed at all per the platform table this bot's spec cites) is edited in
+place later.
+Component shapes below are per docs.discord.com/developers/components
+(checked 2026-08-04): a Section (type 9)'s `accessory` is the documented
+way a Components V2 message carries a Button next to text, not an Action
+Row inside a Container — the docs show no Container -> Action Row nesting
+at all, so that path was not used here. This has not been proven against
+a live Discord render, the same caveat as this bot's modal wire format.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)  ·  **used by** [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md)
+
+### [`bot/src/testRequests.ts`](architecture/bot.src/testRequests.ts.md)
+
+@file Every statement this Worker runs against `test_requests` and
+`test_request_candidates`. Same rule as rigs.ts: no SQL built by
+concatenation, every value a bound parameter.
+
+**used by** [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/scheduled.ts`](architecture/bot.src/scheduled.ts.md)
+
+### [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)
+
+@file Every statement this Worker runs against D1.
+Nothing outside this file writes SQL, and nothing in this file builds SQL
+by concatenation. Each query is a constant with bound parameters, so a
+value arriving from a Discord field cannot become syntax.
+
+**used by** [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md), [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md), [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md), [`bot/src/db.ts`](architecture/bot.src/db.ts.md), [`bot/src/matrix.ts`](architecture/bot.src/matrix.ts.md), [`bot/src/render.ts`](architecture/bot.src/render.ts.md), [`bot/src/roleConnection.ts`](architecture/bot.src/roleConnection.ts.md)
+
+### [`bot/src/validations.ts`](architecture/bot.src/validations.ts.md)
+
+@file Every statement this Worker runs against `validations`. Same rule
+as rigs.ts and testRequests.ts: no SQL built by concatenation, every
+value a bound parameter.
+
+**depends on** [`bot/src/matrix.ts`](architecture/bot.src/matrix.ts.md)  ·  **used by** [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/roleConnection.ts`](architecture/bot.src/roleConnection.ts.md)
+
+### [`bot/src/size-baseline.ts`](architecture/bot.src/size-baseline.ts.md)
+
+@file The recorded CDK size baseline, as six numbers.
+Not a live import of `firmware/size-baseline.json`: that file carries a
+per-symbol breakdown for every recorded config (3,200+ lines) to answer a
+question `/size` needs six numbers for, and bundling it whole nearly
+tripled the Worker (see `scripts/build-size-baseline.ts`). This reads the
+generated extract instead, checked against a fresh read of the real file by
+`test/size-baseline.test.ts`.
+`primary` is the config `cdk-size.yml`'s own header identifies as the
+shipping image: SMP=1 RELEASE=1 with LTO, the one `make release` builds and
+`make fota` pushes.
+
+**depends on** [`bot/src/size-baseline.generated.ts`](architecture/bot.src/size-baseline.generated.ts.md)  ·  **used by** [`bot/scripts/size-baseline-extract.ts`](architecture/bot.scripts/size-baseline-extract.ts.md), [`bot/src/commands/size.ts`](architecture/bot.src.commands/size.ts.md), [`bot/src/size-baseline.generated.ts`](architecture/bot.src/size-baseline.generated.ts.md)
+
+### [`bot/src/signatures.ts`](architecture/bot.src/signatures.ts.md)
+
+@file The console-output matcher.
+A lookup table, not a model. Every entry below is a literal string that this
+repository already documents, with the line that documents it. Nothing here
+was written from what a log "probably" means: if the tree does not say it,
+there is no entry, and the bot escalates instead.
+Patterns are deliberately literal and distinctive. A loose pattern that
+matches half the pastes in a channel is worse than no pattern at all,
+because it produces a confident answer that happens to be wrong, and the
+person believes it for an evening before going back to the start.
+Ranking is by the length of the text that matched, longest first, so a
+specific error string outranks a short token that happened to appear. Ties
+keep declaration order. All matches are shown, never just the best one:
+`URSK_Unavailable` legitimately has two documented causes and choosing
+between them is the reader's job, not this table's.
+
+**depends on** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md)  ·  **used by** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md)
+
+### [`bot/src/api.ts`](architecture/bot.src/api.ts.md)
+
+@file The two Discord calls that need the bot token.
+Creating a forum post and posting into a thread are the only things this bot
+does that an interaction token cannot authorise. The token is a Worker
+secret, is never logged, and is never interpolated into anything that could
+be echoed back.
+Channel IDs are checked against a snowflake pattern before they reach a URL.
+They come from configuration rather than from a user, but a URL built by
+concatenation is worth validating whatever the source.
+
+**depends on** [`bot/src/env.ts`](architecture/bot.src/env.ts.md)  ·  **used by** [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md)
+
+### [`bot/src/build-targets.ts`](architecture/bot.src/build-targets.ts.md)
+
+@file The `targets` choices `firmware-builds.yml` actually accepts.
+Hand-copied from `.github/workflows/firmware-builds.yml`'s `workflow_dispatch`
+input rather than parsed at request time, because a Worker has no access to
+that file. `test/build-targets.test.ts` re-parses the live workflow and
+asserts this list matches it exactly, so an added or renamed target fails
+the build instead of `/build` silently offering a stale choice.
+
+**used by** [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md)
+
+### [`bot/src/db.ts`](architecture/bot.src/db.ts.md)
+
+@file Interaction idempotency and the `/build` cooldown.
+The hardware registry itself lives in rigs.ts, against the `rigs` table.
+This file is what is left once that moved: the two tables that exist to stop
+a command running twice rather than to remember anything about hardware.
+Nothing outside this file and rigs.ts writes SQL, and neither builds SQL by
+concatenation. Each query is a constant with bound parameters, so a value
+arriving from a Discord field cannot become syntax.
+
+**depends on** [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md)
+
+### [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md)
+
+@file Deferring, and the edit that finishes a deferred command.
+Discord gives an interaction 3 seconds. Anything touching D1 defers
+unconditionally rather than racing that clock, because a command that
+usually answers in 200 ms and occasionally does not is a command that
+occasionally fails for no reason a user can see.
+The interaction token authenticates the follow-up edit, so no bot token is
+involved here. It expires 15 minutes after the interaction.
+
+**depends on** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)  ·  **used by** [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md), [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md), [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md), [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md), [`bot/src/commands/verify.ts`](architecture/bot.src.commands/verify.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md)
+
+### [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md)
+
+@file The enums a contributor picks from: board, radio, NFC front-end, and
+UTC offset. Taken from the hardware axes in the spec this bot follows and
+from CLAUDE.md's own target table.
+Board, radio and nfc are enforced as Discord command `choices`, so a
+well-behaved client never sends anything outside the list. They are
+re-validated here anyway: choices are a client-side convenience, not a
+server-side guarantee, and every one of these values reaches a bound SQL
+parameter and a modal `custom_id`.
+
+**used by** [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md), [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md), [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md), [`bot/src/matrix.ts`](architecture/bot.src/matrix.ts.md), [`bot/src/render.ts`](architecture/bot.src/render.ts.md), [`bot/src/testRequestContainer.ts`](architecture/bot.src/testRequestContainer.ts.md)
+
+### [`bot/src/images.ts`](architecture/bot.src/images.ts.md)
+
+@file The images somebody can be running.
+The make targets and their build directories, from the dispatcher in
+`Makefile` and the per-target recipes in `mk/`. Bare targets mean the
+DWM3001CDK; the nRF5340 DK is `nrf-` prefixed and the ESP32 is `esp-`
+prefixed.
+"Not sure" is a real option on purpose. Somebody who does not know which
+image they flashed is exactly the person filing the report, and forcing a
+guess would put a wrong answer into the context block rather than a blank.
+
+**used by** [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md)
+
+### [`bot/src/modal.ts`](architecture/bot.src/modal.ts.md)
+
+@file Modal building and parsing.
+Discord's current modal system wraps each field in a Label (type 18)
+component placed directly in `data.components` — no Action Row wrapper,
+which is the older, now-deprecated shape a text-only modal used. Verified
+against docs.discord.com/developers/interactions/message-components and
+.../components/reference on 2026-08-04: Label carries `label` and
+`description`; the wrapped component (Text Input type 4, String Select
+type 3) carries no label of its own. A submitted modal comes back as a
+*flat* array of component values — not nested inside the Label — each
+with `custom_id` and either `value` (text input) or `values` (select).
+This is a newer, less-travelled part of the API than the rest of this
+bot's wire handling. It has not been proven against a live Discord round
+trip; `test/modal.test.ts` proves only that this file's own
+build/parse pair agrees with itself and with the shapes documented above.
+
+**depends on** [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)  ·  **used by** [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md)
+
+### [`bot/src/cooldown.ts`](architecture/bot.src/cooldown.ts.md)
+
+@file The `/matrix` PNG-rendering cooldown.
+One statement, not a read then a write: SQLite serializes writes to one
+database, so the WHERE guard on the UPDATE is the atomicity. Two
+concurrent `/matrix` calls from the same user landing in the same
+millisecond still only let one through, because there is no gap between
+reading the old timestamp and writing the new one for a second statement
+to land in.
+
+**used by** [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md)
+
+### [`bot/src/matrix.ts`](architecture/bot.src/matrix.ts.md)
+
+@file The compatibility matrix: pure formatting, no D1 and no Discord
+wire types, so it is testable without either.
+Only two of the four documented glyphs are reachable yet. ✅ (validated)
+and ❌ (known-broken) both come from test *results*, which is the
+`/test-request` + `/test-result` machinery — not built. Showing them here
+would be a status this bot has not actually observed, so for now every
+cell is either ⚠️ (someone owns that board/iOS pair) or ❓ (nobody does).
+`matrixTable` takes an optional results map so this file does not need to
+change again once that phase lands.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/render.ts`](architecture/bot.src/render.ts.md), [`bot/src/validations.ts`](architecture/bot.src/validations.ts.md)
+
+### [`bot/src/render.ts`](architecture/bot.src/render.ts.md)
+
+@file The compatibility matrix, as a PNG.
+Satori (JSX-shaped element tree + CSS-subset styles -> SVG) does the text
+shaping itself and bakes glyphs into vector paths, so the SVG it produces
+is self-contained — @resvg/resvg-wasm rasterizes it with no font of its
+own needed. WASM is initialised once per Worker isolate and reused, per
+the spec this bot follows ("Load WASM once at module init").
+Colors are exactly the four semantic accents the spec defines for status
+Containers elsewhere in this bot (0x2ECC71/0xF1C40F/0xE74C3C/0x5865F2):
+reused here rather than inventing a fifth palette, so "owned" and
+"nobody owns it" read the same way in the image as they eventually will
+in a Container.
+
+**depends on** [`bot/src/assets.ts`](architecture/bot.src/assets.ts.md), [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/matrix.ts`](architecture/bot.src/matrix.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md)
+
+### [`bot/src/spec-index.generated.ts`](architecture/bot.src/spec-index.generated.ts.md)
+
+@file Generated by scripts/build-spec-index.ts. Do not hand-edit.
+Regenerate with `npm run spec-index` after editing anything in docs/ that
+cites the Aliro 1.0 specification. spec-index.test.ts fails if this file
+falls out of sync with a fresh scan of the tree.
+
+**depends on** [`bot/scripts/spec-scan.ts`](architecture/bot.scripts/spec-scan.ts.md)  ·  **used by** [`bot/src/commands/spec.ts`](architecture/bot.src.commands/spec.ts.md)
+
+### [`bot/src/awake.ts`](architecture/bot.src/awake.ts.md)
+
+@file Whether a registered owner is awake right now, from their stored
+`utc_offset` (minutes) and local awake window (`awake_start`/`awake_end`,
+hours 0-23). This is the routing logic the spec calls out by name: "a
+router that wakes people at 3 a.m. loses the contributors it was built to
+help", so it is built and tested against explicit timezone cases before
+anything wires it to a ping.
+
+**used by** [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md)
+
+### [`bot/src/maintainer.ts`](architecture/bot.src/maintainer.ts.md)
+
+@file The maintainer allow-list, shared by every maintainer-only command
+(`/who-has`, `/test-request`). A `default_member_permissions: "0"` on the
+command definition hides it from non-administrators, but that is a guild
+setting anyone with server admin can change; this check is not.
+
+**used by** [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md)
+
+### [`bot/src/twin.ts`](architecture/bot.src/twin.ts.md)
+
+@file Runs the compiled woz_uwb digital twin inside this Worker.
+`web-twin/twin.js` embeds its WASM as a decoded byte string and instantiates
+it at runtime with `WebAssembly.instantiate(bytes, imports)` — the one path
+workerd refuses ("Wasm code generation disallowed by embedder", proven
+directly against `wrangler dev`; see docs/twin-worker-phase0.md). twin.js
+itself is never edited: Emscripten's `Module["instantiateWasm"]` hook lets
+this file hand it a build-time-precompiled `WebAssembly.Module` instead
+(imported as a static `.wasm` module, the one WASM path workerd does
+allow), so twin.js's own embedded-bytes loader is never reached.
+twin.wasm is extracted once by scripts/twin-wasm-extract.ts and drift-
+checked against web-twin/twin.js by test/twin-wasm-drift.test.ts on every
+run — a rebuilt twin.js with no matching re-extraction fails that gate
+rather than silently running stale firmware.
+The `.wasm` import below is deliberately dynamic, not a static top-level
+import: Node's own module loader treats a static `import x from "*.wasm"`
+as a native WASM-ES-module and tries to resolve twin.wasm's own imports
+(`wasi_snapshot_preview1`) as JS packages, which crashes immediately under
+plain `node --test` (this repo's own test runner) — a real regression
+caught by running the full bot suite, not something wrangler's bundler
+does. A dynamic `import()` is resolved lazily, only in the branch that
+actually calls it, so Node never touches the WASM path at all.
+
+**depends on** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md)  ·  **used by** [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md)
+
+### [`bot/src/attest.ts`](architecture/bot.src/attest.ts.md)
+
+@file Look up a GitHub build-provenance attestation by subject digest.
+`release.yml` runs `actions/attest-build-provenance` on every published
+asset (`.github/workflows/release.yml`, `scripts/security-attest.sh`), which
+binds an artifact's sha256 to the workflow, repository and commit that built
+it. This is the read half: "does this digest have one", answered from
+GitHub's own public attestations API rather than trusted from a SHA256SUMS
+file served next to the thing it describes.
+Read-only and needs no write scope. A token, if bound, only raises the
+unauthenticated rate limit; the lookup works without one for a public repo.
+
+**used by** [`bot/src/commands/verify.ts`](architecture/bot.src.commands/verify.ts.md)
+
+### [`bot/src/tokenCipher.ts`](architecture/bot.src/tokenCipher.ts.md)
+
+@file AES-256-GCM for the one thing this bot stores that is a real bearer
+credential rather than an opaque Discord user ID: the OAuth access and
+refresh tokens Linked Roles needs to push updated metadata later without
+re-prompting the user. D1 has no column-level encryption of its own, so
+this exists to keep those tokens unreadable from a raw table dump —
+`OAUTH_ENCRYPTION_KEY` is a Worker secret, never a D1 value.
+
+**used by** [`bot/src/oauthLinks.ts`](architecture/bot.src/oauthLinks.ts.md)
+
+### [`bot/src/size-baseline.generated.ts`](architecture/bot.src/size-baseline.generated.ts.md)
+
+@file Generated by scripts/build-size-baseline.ts. Do not hand-edit.
+The six numbers `/size` prints, extracted from firmware/size-baseline.json
+rather than bundling that whole file (see build-size-baseline.ts for why).
+Regenerate with `npm run size-baseline` after `make cdk-size-baseline`
+updates the source file. size-baseline.test.ts fails if this drifts from a
+fresh extraction.
+
+**depends on** [`bot/src/size-baseline.ts`](architecture/bot.src/size-baseline.ts.md)  ·  **used by** [`bot/src/size-baseline.ts`](architecture/bot.src/size-baseline.ts.md)
+
+### [`bot/src/assets.ts`](architecture/bot.src/assets.ts.md)
+
+@file Decodes the generated base64 assets into bytes, once per Worker
+isolate. `atob` is a Web platform global available in both Node's test
+runner and the Workers runtime, so this needs no environment branching.
+
+**depends on** [`bot/src/assets.generated.ts`](architecture/bot.src/assets.generated.ts.md)  ·  **used by** [`bot/src/render.ts`](architecture/bot.src/render.ts.md)
+
+### [`bot/src/assets.generated.ts`](architecture/bot.src/assets.generated.ts.md)
+
+*No module docstring. First commit: "bot: /matrix renders a real PNG (phase 4)".*
+
+**used by** [`bot/src/assets.ts`](architecture/bot.src/assets.ts.md)
+
+### [`bot/src/twin-js.d.ts`](architecture/bot.src/twin-js.d.ts.md)
+
+@file Ambient type for the relative import of ../../web-twin/twin.js.
+twin.js is a plain CommonJS file (Emscripten's default UMD output), not a
+TypeScript module, and lives outside src/ (it is consumed as-is, never
+copied — see twin.ts). This is only a type shape for the bundler's CJS
+interop; it says nothing about what twin.js actually does at runtime.
+
+### [`bot/src/wasm-module.d.ts`](architecture/bot.src/wasm-module.d.ts.md)
+
+@file Ambient type for a static `.wasm` module import.
+Wrangler's bundler compiles a `.wasm` import into a `WebAssembly.Module`
+ahead of time (the one path workerd allows — see twin.ts). TypeScript has
+no built-in type for that import shape.
+
+## `bot/scripts/`
+
+### [`bot/scripts/register-commands.ts`](architecture/bot.scripts/register-commands.ts.md)
+
+@file Upload the command list to Discord.
+Guild-scoped by default because guild registration is instant and global
+registration lags, which during setup reads as "the bot is broken".
+Bulk overwrite (PUT), not create: the array in src/commands/index.ts is the
+whole truth, so a command deleted from the code disappears from Discord on
+the next run instead of lingering as a slash command with no handler.
+DISCORD_APPLICATION_ID=... DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... \
+npm run register
+The token is read from the environment, never from a file in the repo, and
+is never printed, including in error paths.
+
+**depends on** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/scripts/register-role-metadata.ts`](architecture/bot.scripts/register-role-metadata.ts.md)
+
+@file Registers this application's Linked Roles metadata schema (a
+separate, one-time-per-change registration from the slash commands in
+register-commands.ts — different endpoint, no guild involved, since role
+connection metadata is scoped to the application, not a guild).
+Run with DISCORD_APPLICATION_ID and DISCORD_BOT_TOKEN in the environment.
+Neither belongs in this repository.
+
+**depends on** [`bot/src/roleConnection.ts`](architecture/bot.src/roleConnection.ts.md)
+
+### [`bot/scripts/build-size-baseline.ts`](architecture/bot.scripts/build-size-baseline.ts.md)
+
+@file Regenerate src/size-baseline.generated.ts from firmware/size-baseline.json.
+npm run size-baseline
+Importing the full baseline file directly was tried first and rejected: it
+carries a per-symbol breakdown for every recorded config (3,200+ lines) to
+answer a question that needs six numbers, and bundling all of it nearly
+tripled the Worker (62 KiB gzip -> 193 KiB) for data `/size` never reads.
+This extracts only what `/size` prints, the same way spec-index.ts extracts
+only citations out of docs/ instead of bundling the prose. `npm run drift`
+via size-baseline.test.ts fails if this file falls out of sync.
+
+**depends on** [`bot/scripts/size-baseline-extract.ts`](architecture/bot.scripts/size-baseline-extract.ts.md)
+
+### [`bot/scripts/check-citations.ts`](architecture/bot.scripts/check-citations.ts.md)
+
+@file The drift gate.
+npm run drift
+Fails when a line cited by src/citations.ts no longer says what the table
+claims it says, or when a cited file is not one of the paths that starts the
+bot workflow. Both are run by .github/workflows/bot.yml.
+Exit 0 clean, 1 on a finding.
+
+**depends on** [`bot/scripts/drift.ts`](architecture/bot.scripts/drift.ts.md), [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md)
+
+### [`bot/scripts/build-spec-index.ts`](architecture/bot.scripts/build-spec-index.ts.md)
+
+@file Regenerate src/spec-index.generated.ts from the live docs/ tree.
+npm run spec-index
+Run this after editing anything in docs/ that cites the Aliro 1.0
+specification. `npm run drift` (via spec-index.test.ts) fails the build if
+the committed file falls out of sync with a fresh scan, the same way
+citations.ts is checked against the lines it cites.
+
+**depends on** [`bot/scripts/spec-scan.ts`](architecture/bot.scripts/spec-scan.ts.md)
+
+### [`bot/scripts/size-baseline-extract.ts`](architecture/bot.scripts/size-baseline-extract.ts.md)
+
+@file The extraction logic, separate from the file I/O in
+build-size-baseline.ts so size-baseline.test.ts can drive it against a
+fresh read without importing a script that writes files as a side effect.
+
+**depends on** [`bot/src/size-baseline.ts`](architecture/bot.src/size-baseline.ts.md)  ·  **used by** [`bot/scripts/build-size-baseline.ts`](architecture/bot.scripts/build-size-baseline.ts.md)
+
+### [`bot/scripts/drift.ts`](architecture/bot.scripts/drift.ts.md)
+
+@file The drift gate's logic, with no filesystem in it.
+A stale triage table is worse than no triage table, because people trust it.
+These checks are what stop src/citations.ts from turning into folklore: if an
+edit to mk/cdk.mk moves the line a citation points at, CI fails here rather
+than the bot quietly citing the wrong line at somebody for a year.
+Kept free of `node:fs` so the tests can drive it with fixtures instead of
+rewriting the repository.
+
+**depends on** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md)  ·  **used by** [`bot/scripts/check-citations.ts`](architecture/bot.scripts/check-citations.ts.md)
+
+### [`bot/scripts/spec-scan.ts`](architecture/bot.scripts/spec-scan.ts.md)
+
+**used by** [`bot/scripts/build-spec-index.ts`](architecture/bot.scripts/build-spec-index.ts.md), [`bot/src/spec-index.generated.ts`](architecture/bot.src/spec-index.generated.ts.md)
+
+### [`bot/scripts/generate-assets.ts`](architecture/bot.scripts/generate-assets.ts.md)
+
+@file Regenerates src/assets.generated.ts from the vendored font files and
+the installed @resvg/resvg-wasm's WASM binary.
+Both need to reach the Worker as bytes, and need to reach `node --test`
+as the same bytes with no bundler involved — Wrangler can import `.wasm`
+and (with a module rule) arbitrary binary files natively, but Node's
+loader understands neither, and this bot's tests run the TypeScript
+sources directly. Base64-embedding sidesteps that split entirely: no
+import rule to keep in sync between environments, no bundler-vs-`node
+--test` skew. The cost is a large generated file (~1.7 MB gzipped, well
+under Cloudflare's 3 MB free-tier compressed Worker limit, confirmed
+against developers.cloudflare.com/workers/platform/limits on 2026-08-04).
+Run after upgrading @resvg/resvg-wasm or the vendored fonts:
+npm run generate-assets
+
+### [`bot/scripts/twin-wasm-extract.ts`](architecture/bot.scripts/twin-wasm-extract.ts.md)
+
+@file Extract the WASM module embedded in web-twin/twin.js into src/twin.wasm.
+`/twin` runs the compiled firmware inside a Cloudflare Worker, not a
+browser. workerd refuses runtime WASM code generation from a byte array
+(`WebAssembly.instantiate(bytes, …)` — the exact path twin.js's own
+`findWasmBinary()`/`instantiateArrayBuffer()` take — fails there with
+"Wasm code generation disallowed by embedder"; confirmed directly against
+`wrangler dev`, see docs/twin-worker-phase0.md). A WASM module imported as
+a build-time module resource (`import wasmModule from "./twin.wasm"`) is
+compiled ahead of time instead, which workerd does allow, and Emscripten's
+`Module["instantiateWasm"]` hook lets a caller supply that precompiled
+module without twin.js ever reaching its own embedded-bytes path.
+This script produces that file — once, checked in — by requiring the real,
+unmodified twin.js under Node (where runtime WASM codegen is allowed) and
+capturing the exact bytes its own `WebAssembly.instantiate` call receives.
+twin.js is never edited, forked, or re-encoded; only observed.
+Run after any web-twin/twin.js rebuild: `npm run twin-extract` in bot/,
+then commit src/twin.wasm and src/twin.lock.json together. `npm test`'s
+drift guard (test/twin-wasm-drift.test.ts) fails if twin.js changes without
+a matching re-extraction.
 
 ## `modules/woz_uwb/src/aliro/`
 
@@ -844,6 +1495,210 @@ Lock status LED color mapping: derives the RGB color for the lock indicator from
 current locked and Aliro-ranging state.
 
 **used by** [`ports/esp32/apps/matter-lock/main/app_driver.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_driver.cpp.md), [`ports/esp32/apps/matter-lock/main/lock_led.c`](architecture/ports.esp32.apps.matter-lock.main/lock_led.c.md)
+
+## `bot/eval/`
+
+### [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
+
+@file Which candidate fix actually moves the config stratum?
+Four variants over the same golden set, so the Stage 1 build order is chosen
+by measurement rather than by the order the design brief listed them in.
+naive          the committed baseline: 40-line windows
+kconfig        grammar-aware chunks for .conf files
+expand         naive chunks, query expanded through a vocabulary alias table
+kconfig+expand both
+headers        naive chunks, each given a deterministic keyword header
+The alias table and the overfitting hold-out live in `expand.ts`, because the
+independent-set scorer has to run the same expansion.
+
+**depends on** [`bot/eval/chunk-kconfig.ts`](architecture/bot.eval/chunk-kconfig.ts.md), [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/expand.ts`](architecture/bot.eval/expand.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md), [`bot/eval/headers.ts`](architecture/bot.eval/headers.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
+
+### [`bot/eval/independent.ts`](architecture/bot.eval/independent.ts.md)
+
+@file Validate and score a golden set this session did not write.
+Every number in this directory rests on 183 questions written by the same
+agent that then graded them, which is the one weakness the harness cannot
+measure about itself. A question written by somebody who has just read the
+answering line tends to share vocabulary with it, and lexical retrieval is
+exactly the technique that reward biases like that. So the headline finding —
+identifier phrasing retrieves at 0.93, prose phrasing at 0.38 — could in
+principle be an artifact of how the questions were phrased rather than a fact
+about the repository.
+`independent.jsonl` holds 90 questions written by three separate agents, each
+scoped to one slice of the tree and each told to draft its questions from an
+imagined situation BEFORE opening any file that might answer them, so the
+wording could not be copied off the line being cited. None of them read
+`bot/eval/`. This script then:
+1. rejects every anchor that does not resolve, so a hallucinated path or a
+misquoted substring cannot enter the measurement,
+2. classifies each question mechanically as identifier-phrased or
+prose-phrased, by whether it contains a token the retriever can match
+exactly, and
+3. scores the same retrieval stack on both sets under the same classifier.
+Blindness here is by instruction, not by sandbox. It cannot be proved from
+inside, and the honest reason to believe it is the result: an agent that had
+read the answer key would not have produced a set the harness scores 0.34
+lower.
+Usage: node eval/independent.ts [dir]
+no argument   score the committed independent.jsonl
+a directory   score every indep-*.jsonl in it, for vetting a fresh batch
+before merging it in
+
+**depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/expand.ts`](architecture/bot.eval/expand.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md), [`bot/eval/headers.ts`](architecture/bot.eval/headers.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
+
+### [`bot/eval/scope.ts`](architecture/bot.eval/scope.ts.md)
+
+*No module docstring. First commit: "bot/eval: keep the answer key out of the index, and measure scope".*
+
+**depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
+
+### [`bot/eval/stage0.ts`](architecture/bot.eval/stage0.ts.md)
+
+@file Stage 0 baseline D: the lexical floor, measured.
+Recall@k here is a retrieval metric, so this runs with no API key, no network
+and no model call. That matters: the Stage 0 gate can be decided for $0, and
+only the baselines that are somebody else's hosted service cost anything.
+A gold anchor counts as retrieved when a returned chunk covers the line that
+actually contains its `expect` substring at HEAD. That is the same test as
+"the citation resolves to the right lines at a pinned SHA", which is the
+third weighted stratum, so citation correctness is not scored separately for
+this baseline — it is what recall already means here.
+
+**depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
+
+### [`bot/eval/deepwiki.ts`](architecture/bot.eval/deepwiki.ts.md)
+
+@file Baseline A: DeepWiki, scored against the same golden set.
+DeepWiki answers in prose rather than returning chunks, so recall@k has no
+meaning here and pretending otherwise would make the two baselines look
+comparable when they are not. Three things are measured instead:
+fact  — the answer contains the gold `expect` text itself
+file  — the answer names the file the fact lives in
+cite  — the answer gives a `path:line` that RESOLVES to the gold line at
+the pinned SHA, which is Amendment 2's third weighted criterion
+`fact` is strict and understates a prose answer that paraphrases a doc
+comment correctly, so `file` is reported beside it rather than instead of it.
+For a config or identifier anchor, where the gold text is a literal token a
+correct answer has to print, `fact` is the honest measure.
+Responses are cached so scoring can be re-run without re-querying a free
+service.
+
+**depends on** [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md)
+
+### [`bot/eval/score-deepwiki.ts`](architecture/bot.eval/score-deepwiki.ts.md)
+
+@file Re-score the cached DeepWiki answers, with a metric that is fair to prose.
+The strict metric in deepwiki.ts asks whether the answer contains the gold
+`expect` text verbatim. For a config anchor that is nearly fair, but it scored
+this as a miss:
+expect: CONFIG_BT_MAX_CONN=1
+answer: "...for the DWM3001CDK target, this value is set to `1`"
+which is a correct answer. Reporting 0.020 on the identifier stratum off the
+back of that would have been a measurement artifact presented as a finding.
+So two metrics are reported side by side:
+strict — the gold text appears verbatim. A floor.
+fair   — for `SYMBOL=VALUE` anchors, the answer names SYMBOL and states
+VALUE within 120 characters of it. For prose anchors, at least 80%
+of the gold line's distinctive tokens appear.
+`fair` is the honest read of whether the answer carries the fact. `strict`
+stays because it is the one a machine could check without judgement, and the
+gap between them is itself informative.
+
+**depends on** [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md)
+
+### [`bot/eval/chunk-kconfig.ts`](architecture/bot.eval/chunk-kconfig.ts.md)
+
+@file A grammar-aware chunker for Kconfig fragments, and the experiment that
+says whether it earns its place.
+The prediction being tested is that it will NOT fix the config stratum.
+`firmware/prj.conf:226` fails today because the question says "serial port"
+and the file says "console", "RTT" and "UART" — and the naive 40-line window
+already contains that comment. Attaching the comment more precisely does not
+add a word the file never uses.
+What it should improve is precision: one chunk per CONFIG symbol, carrying its
+own comment and its section header and nothing else, means a hit is the fact
+rather than a 40-line neighbourhood that happens to contain it. That shows up
+in MRR and recall@5 rather than recall@10.
+Writing the prediction down first so the measurement can contradict it.
+
+**depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md)  ·  **used by** [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
+
+### [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md)
+
+@file What gets indexed, and how it is cut up for the Stage 0 baseline.
+The chunker here is deliberately naive: fixed line windows with overlap, no
+grammar awareness at all. That is the point. Stage 0 measures the floor, so
+the custom Kconfig/devicetree/Makefile chunkers proposed for Stage 1 have a
+number to beat rather than an assertion to agree with.
+File selection is `git ls-files` minus binaries and minus anything generated,
+so a hit can never come from a file that would be rebuilt rather than edited.
+
+**depends on** [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md)  ·  **used by** [`bot/eval/chunk-kconfig.ts`](architecture/bot.eval/chunk-kconfig.ts.md), [`bot/eval/headers.ts`](architecture/bot.eval/headers.ts.md), [`bot/eval/independent.ts`](architecture/bot.eval/independent.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md), [`bot/eval/scope.ts`](architecture/bot.eval/scope.ts.md), [`bot/eval/stage0.ts`](architecture/bot.eval/stage0.ts.md), [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
+
+### [`bot/eval/expand.ts`](architecture/bot.eval/expand.ts.md)
+
+@file The vocabulary alias table, and query expansion over it.
+Lives on its own because two experiments need it: the Stage 1 probe, which
+measured it as the one candidate fix that moves the config stratum, and the
+independent-set scorer, which has to run the same expansion against questions
+written by somebody who never saw this table.
+On overfitting: it would be trivial to read the miss list, write an alias per
+failing question and report a wonderful number that means nothing. Every entry
+below is written from the domain's own vocabulary -- a serial port IS a UART,
+a console IS where logs go -- and not one was added by looking at which
+questions failed. It is also small enough to read in one screen, which is the
+honest way to let somebody check that claim.
+
+**used by** [`bot/eval/headers.ts`](architecture/bot.eval/headers.ts.md), [`bot/eval/independent.ts`](architecture/bot.eval/independent.ts.md), [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
+
+### [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md)
+
+@file The golden set, and the gate that keeps its labels honest.
+Gold labels key on an `expect` substring, never on a bare line number. That is
+not a style choice: the design brief this eval was written against cited
+`mk/cdk.mk:261-262`, and commit 3737673 grew that file by 71 lines and moved
+every one of those anchors a uniform +20. A golden set keyed on line numbers
+would have silently measured every baseline against the wrong lines.
+Same mechanism as scripts/check-citations.ts, one level stricter: an `expect`
+that matches more than one line in its file is reported too, because an
+ambiguous anchor makes recall look better than it is.
+
+**used by** [`bot/eval/chunk-kconfig.ts`](architecture/bot.eval/chunk-kconfig.ts.md), [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/deepwiki.ts`](architecture/bot.eval/deepwiki.ts.md), [`bot/eval/independent.ts`](architecture/bot.eval/independent.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md), [`bot/eval/scope.ts`](architecture/bot.eval/scope.ts.md), [`bot/eval/score-deepwiki.ts`](architecture/bot.eval/score-deepwiki.ts.md), [`bot/eval/stage0.ts`](architecture/bot.eval/stage0.ts.md), [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
+
+### [`bot/eval/headers.ts`](architecture/bot.eval/headers.ts.md)
+
+@file §7.2 tier 1: a deterministic keyword header on every chunk.
+This is query expansion pointed at the index instead of the question. A chunk
+holding `CONFIG_UART_CONSOLE=n` gains the words `uart` and `console`, and
+through the alias table `serial`, `port`, `tty`, `vcom` — so a question that
+says "serial port" can reach a line that never uses either word.
+Symbol names and the file path are the only sources: no prose is invented,
+nothing is written by hand per symbol, and there is nothing here that could
+have been tuned against a particular golden question.
+Measured as dominated on the self-written golden set and kept anyway, because
+the independent set later showed why that verdict was premature. Questions
+like "how much stack does the main thread get" fail there even though `main`,
+`stack` and `size` are all inside `CONFIG_MAIN_STACK_SIZE`: those words are so
+common in this tree that idf buries the one chunk that matters. Repeating a
+symbol's own words in a header does not add vocabulary, but it does add term
+frequency exactly where the answer is, which is a different lever from the one
+the self-written set was able to test.
+
+**depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/expand.ts`](architecture/bot.eval/expand.ts.md)  ·  **used by** [`bot/eval/independent.ts`](architecture/bot.eval/independent.ts.md), [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
+
+### [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
+
+@file The two lexical retrievers Stage 0 measures, over one shared tokenizer.
+Both baselines take the same term list, so a difference between them is a
+difference in the index and not in how the question was read.
+The FTS5 index is built twice on purpose. SQLite's unicode61 tokenizer treats
+`_` as a separator, which shreds `CONFIG_UART_CONSOLE` into three ordinary
+English words and makes the single most common query shape in this repo
+un-retrievable. `tokenchars '_'` fixes it. Measuring both quantifies how much
+of "lexical search works here" is really "lexical search configured for
+identifiers works here".
+
+**depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md)  ·  **used by** [`bot/eval/independent.ts`](architecture/bot.eval/independent.ts.md), [`bot/eval/scope.ts`](architecture/bot.eval/scope.ts.md), [`bot/eval/stage0.ts`](architecture/bot.eval/stage0.ts.md), [`bot/eval/stage1-probe.ts`](architecture/bot.eval/stage1-probe.ts.md)
 
 ## `modules/woz_aliro_stack/src/`
 
@@ -2421,6 +3276,224 @@ speed: slow/normal/fast) so runs concatenate into one study CSV.
 
 Exit status: 0 = parsed at least one walk-up, 2 = usage/input error.
 
+## `bot/src/commands/`
+
+### [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+@file The command table.
+Registration and dispatch read the same list, so a command cannot be
+registered with Discord without a handler behind it, or gain a handler
+nobody can invoke.
+The modal and component routes are derived from the modules too, rather than
+kept as their own hand-written maps here: a table in this file lets a command
+ship a handler that nothing routes to, and the two drift apart silently.
+
+**depends on** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md), [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md), [`bot/src/commands/decode-devid.ts`](architecture/bot.src.commands/decode-devid.ts.md), [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md), [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md), [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md), [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md), [`bot/src/commands/ping.ts`](architecture/bot.src.commands/ping.ts.md), [`bot/src/commands/size.ts`](architecture/bot.src.commands/size.ts.md), [`bot/src/commands/spec.ts`](architecture/bot.src.commands/spec.ts.md), [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md), [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md), [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md), [`bot/src/commands/verify.ts`](architecture/bot.src.commands/verify.ts.md), [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md), [`bot/src/commands/why.ts`](architecture/bot.src.commands/why.ts.md)  ·  **used by** [`bot/scripts/register-commands.ts`](architecture/bot.scripts/register-commands.ts.md), [`bot/src/index.ts`](architecture/bot.src/index.ts.md)
+
+### [`bot/src/commands/build.ts`](architecture/bot.src.commands/build.ts.md)
+
+@file `/build <target>` — dispatch firmware-builds.yml.
+The heaviest thing this bot can ask CI for: up to six jobs, the NCS and
+ESP-IDF toolchains, tens of minutes. Deferred unconditionally, rate limited
+harder than anything else here, and idempotent on the interaction ID so a
+retried delivery cannot dispatch twice.
+
+**depends on** [`bot/src/api.ts`](architecture/bot.src/api.ts.md), [`bot/src/build-targets.ts`](architecture/bot.src/build-targets.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/db.ts`](architecture/bot.src/db.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/context.ts`](architecture/bot.src.commands/context.ts.md)
+
+@file `/context` — the firmware-side `make doctor` the tree does not have.
+The HA agent has a `doctor` step (`docs/home-assistant.md:120`); nothing
+equivalent exists for the firmware itself. This is not that tool, and it
+does not pretend to be: it cannot inspect a contributor's machine from a
+Cloudflare Worker. What it can do is print the one fact this repository
+pins (the NCS version) next to what a report is missing, as one block
+ready to paste, so asking for it is not a fourth round trip.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/decode-devid.ts`](architecture/bot.src.commands/decode-devid.ts.md)
+
+@file `/decode-devid` — the most common bring-up failure.
+`make selftest` logs the raw DEV_ID read from the DW3110 over SPI. The tree
+documents exactly two outcomes for that value, and this command encodes those
+two. Anything else is reported as unrecognised: a DEV_ID that is neither the
+healthy prefix nor one of the two dead reads is a fact nobody here has
+written down, and inventing a reading for it is how a triage bot starts
+costing people evenings.
+
+**depends on** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/forget.ts`](architecture/bot.src.commands/forget.ts.md)
+
+@file `/forget` — hard delete.
+Not a flag, not a soft delete, not a tombstone. The row goes. With no
+`board` argument, every row for the invoker goes.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/help-me.ts`](architecture/bot.src.commands/help-me.ts.md)
+
+@file `/help-me` — collect the context once, match it, escalate honestly.
+The whole point of this bot. Support here costs three or four round trips
+before anyone knows which board, which image, and what the console said, so
+this asks for all of it in one form and posts a thread that already has the
+answer or already says there isn't one.
+Two interactions, not one. Discord will not let a command defer and then
+open a modal, so board and image are command options (enumerated, validated
+by Discord) and the free text is collected by the modal that the command
+returns. The selections ride through on the modal's custom_id.
+The matcher never speculates. No match is reported as no match and pings the
+maintainer, because "I don't recognise this" is a useful thing to tell
+somebody and a plausible guess is not.
+
+**depends on** [`bot/src/api.ts`](architecture/bot.src/api.ts.md), [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/db.ts`](architecture/bot.src/db.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/images.ts`](architecture/bot.src/images.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md), [`bot/src/signatures.ts`](architecture/bot.src/signatures.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/ihave.ts`](architecture/bot.src.commands/ihave.ts.md)
+
+@file `/ihave` — register hardware.
+Board, radio and NFC front-end are command options: Discord fills these in
+from `choices` before the interaction ever reaches this Worker, which is a
+client-validated dropdown exactly like a modal string select would be, and
+costs nothing against a modal's (unconfirmed) component limit. See
+bot/README.md for why those three fields live here and not in the modal.
+Everything else — phone model, iOS version, the awake window, and the UTC
+offset — is free text or needs a 25-option select the command-option
+`choices` list cannot hold (iOS version) or is genuinely one-shot text
+(the awake window), so it goes in a modal. The three option values are not
+available on the follow-up MODAL_SUBMIT interaction — it is a separate
+interaction — so they are smuggled through the modal's own `custom_id`.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/modal.ts`](architecture/bot.src/modal.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/matrix.ts`](architecture/bot.src.commands/matrix.ts.md)
+
+@file `/matrix` — the compatibility matrix.
+Public and non-ephemeral: this is the artifact people screenshot, and a
+screenshot of a message only its poster can see is not useful to anyone
+else. Tries the PNG render first; falls back to the monospace table from
+bot/README's "phase 3" both when the per-user cooldown is still active
+(PNG rendering is the expensive path) and when rendering itself throws,
+so a WASM or layout failure degrades the command instead of erroring it.
+
+**depends on** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/cooldown.ts`](architecture/bot.src/cooldown.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/matrix.ts`](architecture/bot.src/matrix.ts.md), [`bot/src/render.ts`](architecture/bot.src/render.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md), [`bot/src/validations.ts`](architecture/bot.src/validations.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/ping.ts`](architecture/bot.src.commands/ping.ts.md)
+
+@file `/ping` — the liveness check.
+Answers only if the signature already verified, so a successful reply proves
+three things at once: the endpoint is reachable, the public key binding is
+the right one, and the Worker is inside the 3 second response deadline
+without deferring. That is the whole point of it, and it is why this command
+touches no binding: it must not be able to fail for a second reason.
+
+**depends on** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/size.ts`](architecture/bot.src.commands/size.ts.md)
+
+@file `/size` — the current recorded CDK size baseline.
+Reads `firmware/size-baseline.json` directly (`src/size-baseline.ts`), the
+same file `make cdk-size-check` compares a build against and
+`make cdk-size-baseline` rewrites. This is a snapshot from the last commit
+that updated it, not a live measurement: nothing here can build firmware,
+so a stale answer is possible if the record has not been refreshed since a
+change moved the numbers. The commit the baseline was recorded at is always
+printed so a reader can judge that for themselves.
+
+**depends on** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/size-baseline.ts`](architecture/bot.src/size-baseline.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/spec.ts`](architecture/bot.src.commands/spec.ts.md)
+
+@file `/spec <section>` — which files in this repository cite an Aliro 1.0
+section. Pointers only.
+The spec text itself (`internal/aliro-1.0.txt`) is gitignored and this bot
+never reads it; `SPEC_CITATIONS` is built by scanning the tracked prose
+that already cites the spec, not the spec. Answering with anything more
+than a file and a line would start reproducing member-confidential text
+one paraphrase at a time, which is exactly what this command must not do.
+
+**depends on** [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/spec-index.generated.ts`](architecture/bot.src/spec-index.generated.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/test-request.ts`](architecture/bot.src.commands/test-request.ts.md)
+
+@file `/test-request board: ios: what:` — maintainer-only.
+Looks owners up the same way `/who-has` does, partitions them into awake
+and asleep from their stored UTC offset and awake window, posts a status
+Container to the fixed test-queue channel (not wherever the command was
+run — `TEST_QUEUE_CHANNEL_ID`), and pings only the awake half. Nobody's
+identity appears in the persistent card itself, only aggregate counts,
+matching this bot's "user IDs are not a browsable roster" posture even
+though this command's whole job is finding and reaching specific people:
+the card is what everyone in the channel sees, the ping is a disposable
+message naming exactly the candidates being paged.
+
+**depends on** [`bot/src/awake.ts`](architecture/bot.src/awake.ts.md), [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/discordRest.ts`](architecture/bot.src/discordRest.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/maintainer.ts`](architecture/bot.src/maintainer.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md), [`bot/src/testRequestContainer.ts`](architecture/bot.src/testRequestContainer.ts.md), [`bot/src/testRequests.ts`](architecture/bot.src/testRequests.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/test-result.ts`](architecture/bot.src.commands/test-result.ts.md)
+
+@file `/test-result pass|fail` — run inside the claim thread, by whoever
+claimed it. Closes the job (`claimed -> done`, atomically, so a retried
+or duplicate delivery cannot record two validations for one claim),
+writes a validation row, and edits the original queue Container to a
+pass/fail accent — the one edit in this bot that a component's own
+interaction token cannot make, since this command runs in the thread, a
+different channel from the card it needs to update, so it goes through
+the bot token like the escalation sweep does.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/discordRest.ts`](architecture/bot.src/discordRest.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/testRequestContainer.ts`](architecture/bot.src/testRequestContainer.ts.md), [`bot/src/testRequests.ts`](architecture/bot.src/testRequests.ts.md), [`bot/src/validations.ts`](architecture/bot.src/validations.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/twin.ts`](architecture/bot.src.commands/twin.ts.md)
+
+@file `/twin approach` and `/twin explain` — the WASM digital twin, run inside this Worker.
+`/twin approach` drives the real compiled woz_uwb responder (twin.ts,
+web-twin/twin.js + twin.wasm) through a simulated walk-up and reports what
+the trust gate actually decided, with a file:line citation. It answers
+protocol/crypto-maths questions; it proves nothing about PDoA/AoA, NFC
+Express Mode, iOS point-release behaviour, or physical approach unlock —
+every reply says so.
+`/twin explain <hex>` is NOT implemented. twin_glue.c exports no entry
+point that ingests a raw wire frame — every call in it synthesizes frames
+from a target distance (twin_mk_prepoll/twin_mk_final_data), and the whole
+exchange is CCM*-encrypted against a twin-internal test URSK a real board's
+traffic was never encrypted under. Decoding a pasted ranging block from a
+bug report would need a new C-side entry point in ccc_shim_rx.c/twin_glue.c
+— a firmware change, which this instrumentation task is not allowed to
+make (see the parent prompt's Hard Constraint 4). The subcommand is
+registered so `/twin explain` names its own gap instead of 404ing, and
+says exactly that rather than attempting a decode that cannot work.
+
+**depends on** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/twin.ts`](architecture/bot.src/twin.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/verify.ts`](architecture/bot.src.commands/verify.ts.md)
+
+@file `/verify <sha256>` — attestation lookup by subject digest.
+Answers "did openaliro/openaliro's CI actually build this file", from
+GitHub's public attestations API, not from a SHA256SUMS.txt served next to
+the artifact it describes (a compromise that could replace the binary could
+replace that file in the same motion — `scripts/security-attest.sh`'s own
+reasoning for why this control exists at all).
+
+**depends on** [`bot/src/attest.ts`](architecture/bot.src/attest.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/who-has.ts`](architecture/bot.src.commands/who-has.ts.md)
+
+@file `/who-has` — maintainer-only lookup.
+Returns user IDs to ping, not a browsable roster: `default_member_permissions:
+"0"` hides it from everyone without guild administrator rights, and the
+handler checks the invoker against MAINTAINER_IDS regardless, because the
+first is a server setting somebody can change and the second is not.
+
+**depends on** [`bot/src/boards.ts`](architecture/bot.src/boards.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md), [`bot/src/followup.ts`](architecture/bot.src/followup.ts.md), [`bot/src/maintainer.ts`](architecture/bot.src/maintainer.ts.md), [`bot/src/rigs.ts`](architecture/bot.src/rigs.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
+### [`bot/src/commands/why.ts`](architecture/bot.src.commands/why.ts.md)
+
+@file `/why` — the recurring "is this a bug?" answers.
+Every one of these is a thing the tree already says, that a contributor has
+no reason to have read. Answers publicly rather than ephemerally: the point
+is that the next person sees it too.
+
+**depends on** [`bot/src/citations.ts`](architecture/bot.src/citations.ts.md), [`bot/src/command.ts`](architecture/bot.src/command.ts.md), [`bot/src/discord.ts`](architecture/bot.src/discord.ts.md)  ·  **used by** [`bot/src/commands/index.ts`](architecture/bot.src.commands/index.ts.md)
+
 ## `modules/woz_port/include/`
 
 ### [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)
@@ -3030,6 +4103,28 @@ at what changed defeats the point.
 ## `activity/`
 
 ### [`activity/vite.config.ts`](architecture/activity/vite.config.ts.md)
+
+## `bot/migrations/`
+
+### [`bot/migrations/0001_rigs.sql`](architecture/bot.migrations/0001_rigs.sql.md)
+
+### [`bot/migrations/0002_matrix_cooldowns.sql`](architecture/bot.migrations/0002_matrix_cooldowns.sql.md)
+
+*No module docstring. First commit: "bot: /matrix renders a real PNG (phase 4)".*
+
+### [`bot/migrations/0003_test_requests.sql`](architecture/bot.migrations/0003_test_requests.sql.md)
+
+*No module docstring. First commit: "bot: /test-request routing, Accept button, in-place status Container (phase 5)".*
+
+### [`bot/migrations/0004_validations.sql`](architecture/bot.migrations/0004_validations.sql.md)
+
+*No module docstring. First commit: "bot: /test-result closes the job and feeds the matrix (phase 6)".*
+
+### [`bot/migrations/0005_oauth.sql`](architecture/bot.migrations/0005_oauth.sql.md)
+
+### [`bot/migrations/0006_handled_interactions.sql`](architecture/bot.migrations/0006_handled_interactions.sql.md)
+
+### [`bot/migrations/0007_build_cooldowns.sql`](architecture/bot.migrations/0007_build_cooldowns.sql.md)
 
 ## `integration/homeassistant/scripts/`
 
@@ -3984,6 +5079,12 @@ Cheap because it uses an APFS copy-on-write clone (cp -c): the clone shares
 every block with the primary and costs ~0 extra disk until a patched file
 diverges. Cleanup is automatic — the workspace lives inside the worktree, so
 deleting the worktree deletes it (see `make ws-clean`).
+
+## `web-flasher/`
+
+### [`web-flasher/check_codes.py`](architecture/web-flasher/check_codes.md)
+
+Verify that the Matter commissioning codes shown on the browser flasher page still match the firmware it flashes. Recomputes the QR payload and manual pairing code from the CHIP test-setup constants, checks the page against them, and can regenerate the inline QR image.
 
 ## `web-twin/`
 

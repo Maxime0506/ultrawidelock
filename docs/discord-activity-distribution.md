@@ -1,20 +1,27 @@
-# Distributing the Activity: what it would cost
+# Distributing the Activity: what it cost
 
-Findings only. **Nothing has been submitted, and nothing should be without a deliberate
-decision**, because the price of distribution is paid in identity rather than in effort.
+**This was done on 2026-08-04.** The app is verified, discovery is enabled, and every
+requirement below is satisfied, so the Activity is launchable by anyone rather than by the
+owner alone. The identity cost described further down was paid, knowingly; it is written
+up here so the decision is on the record rather than inferred later from a green checkmark
+in a portal.
 
 Researched 2026-08-04 from Discord's developer support documentation. Treat every figure
 here as needing a re-check before acting on it: these are policy pages, not APIs, and
 they change without notice.
 
-## The situation today
+## The situation before distribution
+
+Kept because it is the state any fork or re-registration starts in, and because the
+symptom reads like a bug when it is not.
 
 The Activity works and is deployed, but **only the app owner and developer-team members
 can launch it**. Everyone else in a voice channel sees nothing in the activity picker.
 That is not a misconfiguration; it is what an undistributed Activity is.
 
-Two ways around that cost nothing, and they should both be exhausted before anyone
-considers the directory.
+Two ways around that cost nothing. They were the recommendation here before distribution
+happened, and they remain the right first answer for anyone standing this up fresh —
+neither needs an identity document.
 
 **App Testers.** The Developer Portal has an App Testers section in the left-hand
 toolbar. Up to **50** people can be added by Discord username; each accepts an email
@@ -55,12 +62,13 @@ own wording rather than a service level, so treat it as an estimate.
 
 ## The part that actually matters here
 
-This project is published under a pseudonym. **Distribution is not compatible with that
-without a decision.** The ID goes to Stripe rather than onto the app's public profile, so
-this is not a case of a legal name appearing next to the twin. But it does mean:
+Distribution requires government-ID verification, and that is **a decision rather than a
+formality** for any project not published under a legal name. The ID goes to Stripe rather
+than onto the app's public profile, so it is not a case of a legal name appearing next to
+the twin. But it does mean:
 
-- a government ID is tied, inside Discord's and Stripe's systems, to an app published
-  under a pseudonym, held for three years
+- a government ID is tied, inside Discord's and Stripe's systems, to the published app,
+  and held for three years
 - a Privacy Policy and Terms of Service have to exist at public URLs, and such documents
   conventionally name a responsible party
 - a public App Profile Page exists and is indexable

@@ -100,9 +100,31 @@ DIFF_HEAD="$HEAD_REF"
 # ---- allowlists -----------------------------------------------------------
 # Directories where a binary is the expected content rather than a surprise. Kept as a prefix
 # list rather than a glob so a nested path cannot slip in under a matching leaf name.
+#
+# bot/src/twin.wasm is named exactly, not a bot/src/* glob: it is the single WASM module
+# extracted from web-twin/twin.js's embedded bytes (bot/scripts/twin-wasm-extract.ts, never
+# hand-edited), the one way `/twin` can run that firmware inside workerd rather than a browser
+# (docs/twin-worker-phase0.md — workerd refuses runtime WASM codegen from bytes). Its size and
+# sha256 are pinned in bot/src/twin.lock.json and re-checked every run by
+# bot/test/twin-wasm-drift.test.ts, so a swapped or stale blob fails that gate before this one
+# would ever need to catch it. A bare bot/src/* entry would let any other surprise binary in
+# unreviewed; this does not.
+#
+# bot/assets/fonts/*.ttf are the two Inter weights satori lays text out with for /matrix's PNG.
+# Restricted to *.ttf inside that one directory rather than bot/assets/*, so the folder cannot
+# become a general dumping ground. Note this is NOT covered by the assets/* prefix above, which
+# is anchored at the repository root.
+#
+# bot/src/assets.generated.ts is text, not a blob, but trips the size gate at ~4 MB: it is
+# `npm run generate-assets` base64-embedding those fonts plus @resvg/resvg-wasm's WASM, so that
+# Wrangler and `node --test` receive byte-identical assets without a bundler in between
+# (bot/scripts/generate-assets.ts explains why an import rule cannot span both). Generated,
+# never hand-edited, and reproducible by re-running that script — which is the review path for
+# it, since nobody reads 4 MB of base64.
 binary_ok() {
 	case "$1" in
-	assets/* | tests/host/fuzz/corpus/* | docs/*.png | docs/*.svg) return 0 ;;
+	assets/* | tests/host/fuzz/corpus/* | docs/*.png | docs/*.svg | bot/src/twin.wasm) return 0 ;;
+	bot/assets/fonts/*.ttf | bot/src/assets.generated.ts) return 0 ;;
 	*) return 1 ;;
 	esac
 }

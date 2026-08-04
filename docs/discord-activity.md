@@ -42,9 +42,14 @@ twin runs on regardless.
 
 ## Availability
 
-Until the app is distributed through Discord's review process, only the owner and
-developer-team members can launch it. Everyone else in the voice channel can watch a
-screen share of it, which for a walkthrough is most of the value anyway.
+The app is verified and discovery is enabled, so **anyone can launch it** — no App
+Testers list, no screen share required. Join a voice channel, open the activity picker,
+and pick it.
+
+This was not always true, and the paragraph that used to sit here said the opposite. An
+undistributed Activity is launchable only by the owner and developer-team members, which
+is what this was until 2026-08-04. `docs/discord-activity-distribution.md` records what
+distribution cost.
 
 The same page is on the web with no Discord involved, and behaves identically: the
 Activity build is the standalone page plus a single 46-byte script tag, and the build

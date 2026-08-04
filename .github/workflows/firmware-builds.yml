@@ -42,6 +42,21 @@ on:
           - esp32-idf
           - esp32-initiator
           - esp32-matter
+      save_ccache:
+        # Every per-job ccache entry below is keyed on github.run_id, so the
+        # combined actions/cache action always writes a fresh ~300 MB entry on
+        # a normal save — that is the intended behaviour for a maintainer's
+        # own dispatch (restore-keys picks up the newest one next time). A
+        # bot answering a one-off Discord /build should not pay that cost: it
+        # is exactly the eviction pressure that can push nrf-workspace or the
+        # esp-matter cache (the two entries actually expensive to rebuild) out
+        # of the repository's 10 GB LRU budget. False makes every per-job
+        # ccache step restore-only for that run; the nrf-workspace and
+        # esp-matter caches are untouched by this flag; they already save only
+        # on a genuine cold miss.
+        description: "save a fresh ccache entry after this run (false for restore-only)"
+        type: boolean
+        default: true
 
 # CI only reads the repo: no token write scopes for any job.
 permissions:
@@ -71,7 +86,7 @@ jobs:
       # caches below, a stale ccache is harmless — worst case is a slower
       # build, never a wrong one.
       - name: restore the compiler cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
           key: ccache-esp32-idf-${{ github.run_id }}
@@ -159,6 +174,12 @@ jobs:
           check_seam "$B/esp32-reader-esp32c6" C6
           check_seam "$B/esp32-reader-esp32c5" C5
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+      - name: save the compiler cache
+        if: always() && inputs.save_ccache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-esp32-idf-${{ github.run_id }}
 
   # Aliro initiator (User-Device role) — the bench HIL peer for our reader.
   # It links the same modules/woz_aliro core as the reader app but through the
@@ -180,7 +201,7 @@ jobs:
         with:
           persist-credentials: false
       - name: restore the compiler cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
           key: ccache-esp32-initiator-${{ github.run_id }}
@@ -205,6 +226,12 @@ jobs:
               | grep -qE " T $sym\$" || { echo "missing symbol: $sym" >&2; exit 1; }
           done
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+      - name: save the compiler cache
+        if: always() && inputs.save_ccache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-esp32-initiator-${{ github.run_id }}
 
   # Bootstrap the west workspace ONCE for the three nRF builds.
   #
@@ -324,7 +351,7 @@ jobs:
           path: workspace
           key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
       - name: restore the compiler cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
           key: ccache-nrf5340dk-${{ github.run_id }}
@@ -335,6 +362,12 @@ jobs:
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           ./scripts/build-nrf5340dk.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+      - name: save the compiler cache
+        if: always() && inputs.save_ccache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-nrf5340dk-${{ github.run_id }}
 
   # Compatibility build for the legacy Nordic Aliro archive. The normal
   # nrf5340dk job above compiles the in-tree source stack; this sibling proves
@@ -364,7 +397,7 @@ jobs:
           path: workspace
           key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
       - name: restore the compiler cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
           key: ccache-nrf5340dk-aliro-blob-${{ github.run_id }}
@@ -375,6 +408,12 @@ jobs:
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
           ALIRO_SOURCE=0 ./scripts/build-nrf5340dk.sh build
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+      - name: save the compiler cache
+        if: always() && inputs.save_ccache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-nrf5340dk-aliro-blob-${{ github.run_id }}
 
   # The DWM3001CDK, this repository's primary target: reader + Matter node +
   # OpenThread MTD in one nRF52833 image, plus the standalone reader build.
@@ -426,7 +465,7 @@ jobs:
           path: workspace
           key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
       - name: restore the compiler cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
           key: ccache-dwm3001cdk-${{ github.run_id }}
@@ -520,6 +559,12 @@ jobs:
         run: |
           make cdk-size SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
           make cdk-size
+      - name: save the compiler cache
+        if: always() && inputs.save_ccache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-dwm3001cdk-${{ github.run_id }}
 
   # Fetch + install esp-matter ONCE for the four esp32-matter legs.
   #
@@ -682,7 +727,7 @@ jobs:
       # restore next run. Per-leg caches are also each smaller than the single
       # 264 MB one they replace, so the restore is quicker too.
       - name: restore the compiler cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .ccache
           key: ccache-esp32-matter-${{ matrix.leg }}-${{ github.run_id }}
@@ -752,3 +797,9 @@ jobs:
             ;;
           esac
           { command -v ccache >/dev/null && ccache -s | head -n 6; } || echo "no ccache on PATH"
+      - name: save the compiler cache
+        if: always() && inputs.save_ccache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-esp32-matter-${{ matrix.leg }}-${{ github.run_id }}

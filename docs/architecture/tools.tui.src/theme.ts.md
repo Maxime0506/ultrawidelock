@@ -35,6 +35,6 @@ animation here ends by assigning the theme token rather than `mix(a, b, 1)`.
 
 <details><summary>Undocumented (1)</summary>
 
-- `at` — tested: :preserves bounded log history and flags failures@l29; :serializes bench jobs and captures their output@l4; :the prompt hint keeps the commands that matter when the terminal is narrow@l374
+- `at` — tested: :/test-request degrades to a named error when d1 is unreachable, rather than crashing@l179; :/test-request posts a pending container, pings only the awake owner, and records both candidates@l116; :/test-request with nobody registered posts nothing and says so@l99; :/test-result on a request with no i os version specified closes it but skips the matrix@l167; :/test-result outside any claim thread says so@l54; :/test-result pass: closes the request, records a validation, and edits the queue card@l88; :/test-result run by someone other than the claimer is refused@l69; :/test-result submitted twice: the second call reports already-recorded and does not double-write a validation@l145
 
 </details>

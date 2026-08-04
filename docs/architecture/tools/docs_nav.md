@@ -34,35 +34,35 @@ flowchart TD
 ## API
 
 ### `fail(msg: str) -> int`
-`tools/docs_nav.py:100`
+`tools/docs_nav.py:106`
 
 Print an error message to stderr prefixed with "docs_nav: " and return 1.
 
 **called by** `add_pagers`, `curate_index`
 
 ### `page_title(slug: str) -> str`
-`tools/docs_nav.py:106`
+`tools/docs_nav.py:112`
 
 Extract the page title from the <title> tag in an HTML file by path slug; return the slug itself if no title is found.
 
 **called by** `add_pagers`
 
 ### `curate_index(index: Path) -> int | None`
-`tools/docs_nav.py:112`
+`tools/docs_nav.py:118`
 
 Rebuild the Guides section into the journey's buckets.
 
 **called by** `main`  ·  **calls** `fail`
 
 ### `add_pagers() -> int | None`
-`tools/docs_nav.py:147`
+`tools/docs_nav.py:153`
 
 Inject previous/next navigation cards before </main> on each journey page, updating the eyebrow label to the guide bucket name (except on the start page); do nothing if pager already present.
 
 **called by** `main`  ·  **calls** `fail`, `page_title`
 
 ### `main() -> int`
-`tools/docs_nav.py:192`
+`tools/docs_nav.py:198`
 
 Check that the rendered site exists, rebuild the landing-page guides into journey buckets, inject previous/next pagers into journey pages, report results.
 

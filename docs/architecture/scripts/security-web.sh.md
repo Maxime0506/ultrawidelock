@@ -33,7 +33,7 @@ Env:
 WEB_BASELINE=path   override the baseline file
 NO_COLOR=1          plain output
 
-**discussed in** [`activity/README.md`](../../../activity/README.md), [`security/README.md`](../../../security/README.md)
+**discussed in** [`activity/README.md`](../../../activity/README.md), [`bot/README.md`](../../../bot/README.md), [`security/README.md`](../../../security/README.md)
 
 ```mermaid
 flowchart TD

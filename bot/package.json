@@ -1,0 +1,39 @@
+{
+  "name": "@openaliro/triage-bot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Discord triage front-end and hardware registry for openaliro. HTTP interactions Worker, no gateway.",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "drift": "node scripts/check-citations.ts",
+    "eval-golden": "node eval/golden.ts",
+    "eval-stage0": "node eval/stage0.ts",
+    "eval-stage1": "node eval/stage1-probe.ts",
+    "eval-independent": "node eval/independent.ts",
+    "spec-index": "node scripts/build-spec-index.ts",
+    "size-baseline": "node scripts/build-size-baseline.ts",
+    "twin-extract": "node scripts/twin-wasm-extract.ts",
+    "generate-assets": "node scripts/generate-assets.ts",
+    "register": "node scripts/register-commands.ts",
+    "register-role-metadata": "node scripts/register-role-metadata.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "verify": "npm run typecheck && npm test && npm run drift"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "@types/node": "^26.0.0",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.33.0"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
+    "hono": "^4.6.0",
+    "satori": "^0.29.0"
+  }
+}

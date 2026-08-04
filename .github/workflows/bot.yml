@@ -1,0 +1,147 @@
+# The Discord triage bot, checked on its own.
+#
+# Deliberately not folded into ci.yml. That workflow is one runner carrying the
+# whole host sweep for the firmware trees, and it installs a toolchain table to
+# do it; bot/ shares none of that and needs Node instead. Bolting a second
+# runtime onto the single verify job would make every firmware pull request pay
+# for it. This job runs only when bot/ changes.
+#
+# Nothing here deploys. `wrangler deploy` is a hand-run step with a Cloudflare
+# credential this repository does not hold and should not: a workflow that can
+# publish the interactions endpoint is a workflow whose compromise redirects
+# every contributor's paste.
+name: bot
+
+# The files below bot/ are the ones bot/src/citations.ts cites. They are here so
+# that editing a cited line runs the drift gate, which is the only edit that can
+# invalidate the triage table. `npm run drift` fails if a cited file is missing
+# from these lists, so the two cannot drift apart either.
+on:
+  push:
+    branches: [main]
+    paths:
+      - bot/**
+      - .github/workflows/bot.yml
+      - mk/cdk.mk
+      - firmware/prj.conf
+      - firmware/overlay-thread.conf
+      # /size imports this directly (src/size-baseline.ts) rather than citing
+      # a line in it, so there is no substring for check-citations.ts to
+      # check -- but size.test.ts compares the reply against a fresh read of
+      # this file, so an update to it is still worth a run.
+      - firmware/size-baseline.json
+      # /build's target list (src/build-targets.ts) is a hand-copied mirror of
+      # this workflow's own workflow_dispatch choices, checked against it by
+      # build-targets.test.ts. Not covered by check-citations.ts either, since
+      # that mechanism is single-line citations and this is a whole list.
+      - .github/workflows/firmware-builds.yml
+      # Broad rather than the individual files src/citations.ts cites: /spec's
+      # index (src/spec-index.generated.ts) is a scan of every docs/*.md file,
+      # not a hand-picked list, and check-citations.ts only validates coverage
+      # for the citations.ts mechanism. docs/** keeps both drift gates honest
+      # without a citation-by-citation trigger list that a new /spec entry
+      # could silently fall outside of.
+      - docs/**
+      # /twin approach runs the compiled woz_uwb responder inside this Worker
+      # (src/twin.ts, src/twin.wasm extracted from web-twin/twin.js). A twin.js
+      # rebuild without a matching re-extraction fails test/twin-wasm-drift.test.ts,
+      # so that half is covered; a fira_session.c change moving the file:line
+      # citations src/commands/twin.ts hardcodes into its trust-gate explanation
+      # is NOT drift-checked the way check-citations.ts covers bot/src/citations.ts's
+      # table — this path trigger only guarantees the suite re-runs, not that a
+      # moved line is caught.
+      - web-twin/**
+      - modules/woz_uwb/**
+  pull_request:
+    paths:
+      - bot/**
+      - .github/workflows/bot.yml
+      - mk/cdk.mk
+      - firmware/prj.conf
+      - firmware/overlay-thread.conf
+      # /size imports this directly (src/size-baseline.ts) rather than citing
+      # a line in it, so there is no substring for check-citations.ts to
+      # check -- but size.test.ts compares the reply against a fresh read of
+      # this file, so an update to it is still worth a run.
+      - firmware/size-baseline.json
+      # /build's target list (src/build-targets.ts) is a hand-copied mirror of
+      # this workflow's own workflow_dispatch choices, checked against it by
+      # build-targets.test.ts. Not covered by check-citations.ts either, since
+      # that mechanism is single-line citations and this is a whole list.
+      - .github/workflows/firmware-builds.yml
+      # Broad rather than the individual files src/citations.ts cites: /spec's
+      # index (src/spec-index.generated.ts) is a scan of every docs/*.md file,
+      # not a hand-picked list, and check-citations.ts only validates coverage
+      # for the citations.ts mechanism. docs/** keeps both drift gates honest
+      # without a citation-by-citation trigger list that a new /spec entry
+      # could silently fall outside of.
+      - docs/**
+      # /twin approach runs the compiled woz_uwb responder inside this Worker
+      # (src/twin.ts, src/twin.wasm extracted from web-twin/twin.js). A twin.js
+      # rebuild without a matching re-extraction fails test/twin-wasm-drift.test.ts,
+      # so that half is covered; a fira_session.c change moving the file:line
+      # citations src/commands/twin.ts hardcodes into its trust-gate explanation
+      # is NOT drift-checked the way check-citations.ts covers bot/src/citations.ts's
+      # table — this path trigger only guarantees the suite re-runs, not that a
+      # moved line is caught.
+      - web-twin/**
+      - modules/woz_uwb/**
+  workflow_dispatch:
+
+# CI only reads the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: bot
+    env:
+      # Wrangler phones home by default. The maintainer here is pseudonymous
+      # and CI should not be the thing that stops being.
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Type stripping, so the Worker sources run as-is under `node --test`
+          # with no build step between the code and the thing under test.
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: bot/package-lock.json
+
+      - name: install
+        # --ignore-scripts because a package install must not be able to run
+        # code (security/ blocks it, and scripts/security-web.sh checks this
+        # file). esbuild and workerd both have a postinstall, and both ship
+        # their platform binary as an optional dependency rather than fetching
+        # it there, so the bundle step below works without either running.
+        run: npm ci --ignore-scripts
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: test
+        run: npm test
+
+      # The triage table still points at what it claims to. This is the gate
+      # that makes a firmware edit the bot's problem: a moved line in mk/cdk.mk
+      # fails here instead of the bot citing the wrong line at somebody.
+      - name: drift
+        run: npm run drift
+
+      # Proves the entrypoint still bundles for the Workers runtime. The tests
+      # above import the same modules under Node, which is close but not the
+      # same resolver, and a broken wrangler.toml is invisible to them.
+      - name: bundle
+        run: npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/bundle"

@@ -1,12 +1,17 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**330 subsystems in 49 directories · 2297/2530 symbols documented (90%)**
+**418 subsystems in 55 directories · 2434/2866 symbols documented (84%)**
 
-**Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
+**Start here:** [`bot/src/index.ts`](architecture/bot.src/index.ts.md), [`bot/scripts/register-commands.ts`](architecture/bot.scripts/register-commands.ts.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) — the doors into the codebase (nothing else imports them).
 
 ```mermaid
 flowchart LR
+  bot.scripts --> bot.src
+  bot.scripts --> bot.src.commands
+  bot.src --> bot.scripts
+  bot.src --> bot.src.commands
+  bot.src.commands --> bot.src
   host.presence --> tools
   integration.homeassistant --> tools.tui.src
   integration.homeassistant.src.openaliro_ha --> tools.tui.src
@@ -61,6 +66,11 @@ flowchart LR
 | [`activity/`](architecture/activity/README.md) | 1 | 2/4 (50%) |
 | [`activity/scripts/`](architecture/activity.scripts/README.md) | 5 | 0/9 (0%) |
 | [`activity/src/`](architecture/activity.src/README.md) | 2 | 2/8 (25%) |
+| [`bot/eval/`](architecture/bot.eval/README.md) | 12 | 15/72 (20%) |
+| [`bot/migrations/`](architecture/bot.migrations/README.md) | 7 | 0/9 (0%) |
+| [`bot/scripts/`](architecture/bot.scripts/README.md) | 10 | 8/15 (53%) |
+| [`bot/src/`](architecture/bot.src/README.md) | 41 | 94/185 (50%) |
+| [`bot/src/commands/`](architecture/bot.src.commands/README.md) | 17 | 12/47 (25%) |
 | [`firmware/src/`](architecture/firmware.src/README.md) | 15 | 161/164 (98%) |
 | [`host/presence/`](architecture/host.presence/README.md) | 5 | 36/36 (100%) |
 | [`integration/homeassistant/`](architecture/integration.homeassistant/README.md) | 1 | 5/5 (100%) |
@@ -106,13 +116,14 @@ flowchart LR
 | [`scripts/`](architecture/scripts/README.md) | 36 | 158/201 (78%) |
 | [`tools/`](architecture/tools/README.md) | 24 | 206/224 (91%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 51/142 (35%) |
+| [`web-flasher/`](architecture/web-flasher/README.md) | 1 | 8/8 (100%) |
 | [`web-twin/`](architecture/web-twin/README.md) | 3 | 19/24 (79%) |
 
 ## Hotspots
 
-*Mined from git history as of `a897999`.*
+*Mined from git history as of `d2e3b8c`.*
 
-**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (19 commits).
+**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (20 commits).
 
 **Change together without importing each other:**
 

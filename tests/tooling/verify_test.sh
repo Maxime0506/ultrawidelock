@@ -102,6 +102,7 @@ ci.yml:verify                              test-verify
 ci.yml:verify                              coverage
 ci.yml:verify                              semgrep
 ci.yml:verify                              cbmc
+bot.yml:checks                             !bot: Node and Wrangler, which the firmware host sweep does not install; reproduced by 'npm run verify' inside bot/, and the job only runs on bot/ and the firmware/docs paths its triage tables cite
 docs.yml:build                             docs
 docs.yml:publish                           !deploys the built site, not a check
 presence-tags.yml:verify                   !tag-triggered: verifies a presence-signed tag, which needs an enrolled dongle and a phone in the room

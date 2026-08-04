@@ -56,6 +56,7 @@ JOURNEY = [
     # macOS consumer: each one assumes the previous.
     ("Deep dives", "presence"),
     ("Deep dives", "range-integrity"),
+    ("Deep dives", "twin-worker-phase0"),
     ("Deep dives", "uwb-mac-login"),
     ("Deep dives", "porting-esp32-phase3"),
     ("Deep dives", "chipset-memory"),
@@ -70,6 +71,11 @@ JOURNEY = [
     ("Porting", "dwm3001cdk-surgery"),
     ("Project", "reference"),
     ("Project", "RELEASING"),
+    # Last in Project because these are the pages linked from outside the site:
+    # Discord's developer portal wants a Privacy Policy URL and a Terms of
+    # Service URL that both resolve.
+    ("Project", "privacy"),
+    ("Project", "terms"),
 ]
 NOT_ROWS = {"start", "architecture"}
 
