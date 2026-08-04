@@ -102,7 +102,7 @@ ci.yml:verify                              test-verify
 ci.yml:verify                              coverage
 ci.yml:verify                              semgrep
 ci.yml:verify                              cbmc
-bot.yml:checks                             !bot: Node and Wrangler, which the firmware host sweep does not install; reproduced by 'npm run verify' inside bot/, and the job only runs on bot/ and the firmware/docs paths its triage tables cite
+bot.yml:checks                             bot
 docs.yml:build                             docs
 docs.yml:publish                           !deploys the built site, not a check
 presence-tags.yml:verify                   !tag-triggered: verifies a presence-signed tag, which needs an enrolled dongle and a phone in the room
@@ -329,6 +329,9 @@ mk_tool_stub cbmc cbmc
 # test-tui is the one gate that shells out to a tool directly instead of through
 # `make`, so it needs both a stub and somewhere to cd into below.
 mk_tool_stub bun test-tui
+# The bot gate declares `node` (which is what tools-install installs) but drives
+# everything through npm, so the simulated sweep needs the command it invokes.
+mk_tool_stub npm bot
 # The four security gates. These stubs exist only so the missing-tool check sees
 # them as present — the gates themselves go through the scripts/security.sh stub
 # below, which is what decides pass or fail.
@@ -390,7 +393,7 @@ chmod +x "$BIN/pystub"
 # The repo the sweep runs in: enough tracked files for the gates that shell out
 # to `git ls-files`, and the two paths verify.sh calls directly.
 mkdir -p "$FAKE/scripts" "$FAKE/tests/host" "$FAKE/tests/tooling" \
-	"$FAKE/modules" "$FAKE/web-twin" "$FAKE/tools/tui"
+	"$FAKE/modules" "$FAKE/web-twin" "$FAKE/tools/tui" "$FAKE/bot"
 cp "$VERIFY" "$FAKE/scripts/verify.sh"; chmod +x "$FAKE/scripts/verify.sh"
 cp "$ISOLATED_VERIFY" "$FAKE/scripts/verify-isolated.sh"
 chmod +x "$FAKE/scripts/verify-isolated.sh"

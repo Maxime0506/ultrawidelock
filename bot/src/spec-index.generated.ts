@@ -11,22 +11,22 @@ export const SPEC_CITATIONS: SpecCitation[] = [
 	{
 		"section": "11.3.1",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 862
+		"line": 860
 	},
 	{
 		"section": "11.7",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 2269
+		"line": 2265
 	},
 	{
 		"section": "11.9",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 2275
+		"line": 2271
 	},
 	{
 		"section": "11.3.1",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 3621
+		"line": 3674
 	},
 	{
 		"section": "Table 8-3",

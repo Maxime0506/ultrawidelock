@@ -18,7 +18,6 @@
 | [`scripts/deadcode-graph.sh`](deadcode-graph.sh.md) | deadcode-graph.sh — find functions nothing calls, using the documate code graph. |
 | [`scripts/deadcode-size.sh`](deadcode-size.sh.md) | deadcode-size.sh — flash cost of the functions nothing calls. |
 | [`scripts/deadcode-tidy.sh`](deadcode-tidy.sh.md) | deadcode-tidy.sh — run clang-tidy against the REAL firmware build. |
-| [`scripts/docs-publish.sh`](docs-publish.sh.md) | docs-publish.sh — snapshot the rendered site/ onto the local gh-pages branch. |
 | [`scripts/docs.sh`](docs.sh.md) | docs.sh — build the documentation site into site/. |
 | [`scripts/flash_html.py`](flash_html.md) | Render a release FLASH.md into a self-contained FLASH.html. |
 | [`scripts/presence_runtime.py`](presence_runtime.md) | Build the minimal, deterministic presence runtime transfer archive. |

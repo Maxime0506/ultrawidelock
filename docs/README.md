@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**420 subsystems in 55 directories · 2449/2881 symbols documented (85%)**
+**419 subsystems in 55 directories · 2449/2881 symbols documented (85%)**
 
 **Start here:** [`bot/src/index.ts`](architecture/bot.src/index.ts.md), [`bot/scripts/register-commands.ts`](architecture/bot.scripts/register-commands.ts.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -113,7 +113,7 @@ flowchart LR
 | [`release/dwm3001cdk/`](architecture/release.dwm3001cdk/README.md) | 1 | 0/0 (0%) |
 | [`release/esp32-matter-lock/`](architecture/release.esp32-matter-lock/README.md) | 1 | 0/0 (0%) |
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
-| [`scripts/`](architecture/scripts/README.md) | 36 | 158/201 (78%) |
+| [`scripts/`](architecture/scripts/README.md) | 35 | 158/201 (78%) |
 | [`tools/`](architecture/tools/README.md) | 26 | 221/239 (92%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 51/142 (35%) |
 | [`web-flasher/`](architecture/web-flasher/README.md) | 1 | 8/8 (100%) |
@@ -121,9 +121,9 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `915c99a`.*
+*Mined from git history as of `238a73f`.*
 
-**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (20 commits).
+**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (21 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits).
 
 **Change together without importing each other:**
 

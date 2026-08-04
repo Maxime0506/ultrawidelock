@@ -3,8 +3,13 @@
 #
 # Output goes to site/, which is publishable rather than intermediate and so is
 # deliberately NOT under the build root.
+#
+# Publishing is not done from here. .github/workflows/docs.yml runs `make docs`
+# on a push to main and hands site/ to actions/deploy-pages, so the live site is
+# built from source by CI rather than snapshotted from a working tree. A local
+# `make docs` is for checking the result, not for shipping it.
 
-.PHONY: docs docs-publish
+.PHONY: docs
 
 ##@ Docs
 ## docs: build the documentation site  ->  site/index.html
@@ -12,9 +17,3 @@
 ##   then a link pass that fails the build on any dead link.
 docs:
 	@$(REPO_ROOT)/scripts/docs.sh
-
-## docs-publish: rebuild the site, then snapshot it onto the local gh-pages branch
-##   Never pushes: publishing stays `git push origin gh-pages`. Refuses a stale
-##   or partial site, uncommitted docs/, or a foreign branch named gh-pages.
-docs-publish: docs
-	@$(REPO_ROOT)/scripts/docs-publish.sh

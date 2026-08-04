@@ -55,7 +55,7 @@ FAIL_TAIL=40       lines of a failing gate's log to show inline
 ## API
 
 ### `gate_paths()`
-`scripts/verify.sh:230`
+`scripts/verify.sh:235`
 
 ---- path filter ----------------------------------------------------------
 What each gate reads, as git pathspecs. A gate is skipped when this branch
@@ -72,7 +72,7 @@ their own paths do not predict (a moved anchor, a re-pinned upstream).
 **called by** `gate_unchanged`
 
 ### `filter_touched()`
-`scripts/verify.sh:308`
+`scripts/verify.sh:314`
 
 Changed paths matching a pathspec: committed since the merge base, plus
 whatever is uncommitted or untracked right now. A pre-push sweep is asked
@@ -87,14 +87,14 @@ quietly narrow to that one file. Splitting under `set -f` removes the luck.
 **called by** `gate_unchanged`
 
 ### `gate_unchanged()`
-`scripts/verify.sh:334`
+`scripts/verify.sh:340`
 
 0 = this branch touches nothing the gate reads, so it is skipped.
 
 **called by** `run_gate`  ·  **calls** `filter_touched`, `gate_paths`
 
 ### `gate_need()`
-`scripts/verify.sh:364`
+`scripts/verify.sh:370`
 
 What each gate needs on PATH. Empty = nothing beyond a shell and a compiler.
 A bash-3.2 case function, not an associative array: macOS ships bash 3.2 and
@@ -103,7 +103,7 @@ tests/host/fuzz.sh already sets this precedent.
 **called by** `run_gate`
 
 ### `gate_need_py()`
-`scripts/verify.sh:400`
+`scripts/verify.sh:407`
 
 Python packages a gate's suites import. `command -v` cannot see these: they
 are modules inside an interpreter, not binaries on PATH, which is exactly how
@@ -114,7 +114,7 @@ both, so CI runs those checks whatever this host has.
 **called by** `run_gate`
 
 ### `gate_label()`
-`scripts/verify.sh:410`
+`scripts/verify.sh:417`
 
 Return the human-readable label for a CI gate name.
 Labels are used in the summary row at the end of the verify sweep.
@@ -122,7 +122,7 @@ Labels are used in the summary row at the end of the verify sweep.
 **called by** `gate_row`
 
 ### `gate_is_security()`
-`scripts/verify.sh:473`
+`scripts/verify.sh:481`
 
 The gates that dispatch through scripts/security.sh. One list, because run_gate needs it too:
 only this family uses an exit status of 2 to mean "this host cannot answer the question", and
@@ -133,7 +133,7 @@ gap in the host.
 **called by** `gate_run`, `run_gate`
 
 ### `gate_run()`
-`scripts/verify.sh:482`
+`scripts/verify.sh:490`
 
 The command each gate runs. Where CI runs a make target, so do we; where CI
 runs a raw command, this reproduces it verbatim.
@@ -141,7 +141,7 @@ runs a raw command, this reproduces it verbatim.
 **called by** `run_gate`  ·  **calls** `gate_is_security`
 
 ### `gate_result()`
-`scripts/verify.sh:633`
+`scripts/verify.sh:649`
 
 Write the result of a gate to a temporary file in RUNDIR and atomically rename
 it, recording status (0 passed, 1 failed, 2 skipped), elapsed seconds, and an
@@ -152,7 +152,7 @@ missing result can never be treated as a passing gate.
 **called by** `run_gate`
 
 ### `gate_row()`
-`scripts/verify.sh:648`
+`scripts/verify.sh:664`
 
 Prints the gate's row as it finishes. Concurrent lanes write these
 interleaved, which is fine: each row is a single printf, and the summary
@@ -161,14 +161,14 @@ below is rebuilt from the .rc files rather than from what was printed.
 **called by** `run_gate`  ·  **calls** `gate_label`
 
 ### `run_gate()`
-`scripts/verify.sh:674`
+`scripts/verify.sh:690`
 
 0 passed, 1 failed, 2 did not run. Called from inside a lane subshell.
 
 **called by** `run_lane`  ·  **calls** `gate_is_security`, `gate_need`, `gate_need_py`, `gate_result`, `gate_row`, `gate_run`, `gate_unchanged`
 
 ### `run_lane()`
-`scripts/verify.sh:752`
+`scripts/verify.sh:768`
 
 One lane, in order. A failure stops the rest of that lane but not the others:
 the gates sharing a lane share a build directory, so running the next one over
@@ -177,6 +177,6 @@ a half-built tree would only produce a second, confusing failure.
 **calls** `run_gate`
 
 ### `why_notrun()`
-`scripts/verify.sh:842`
+`scripts/verify.sh:858`
 
 Why a gate never started: its own lane stopped, or the tripwire did.

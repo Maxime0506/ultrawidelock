@@ -134,6 +134,10 @@ GATES=(
 	docs        # 12s  ci.yml : verify   (docs.yml renders and publishes the site from main;
 	            #                         this is the same drift + link check, run per PR)
 	deps        # 13s  ci.yml : verify   (pip-audit queries PyPI, so it waits on network)
+	bot         # 12s  bot.yml : bot     (bot.yml, not ci.yml: the bot has its own workflow and
+	            #                         this is the same typecheck + suite + drift gate it runs.
+	            #                         Absent from this sweep until 2026-08-05, which is how a
+	            #                         stale spec-index.generated.ts reached CI green locally.)
 	test-port   # 14s  ci.yml : verify
 	test-ws     # 14s  LOCAL ONLY        (ws-seed clones with cp -c and fails loudly off APFS by
 	            #                         design, so a Linux runner cannot test it)
@@ -187,6 +191,7 @@ LANES=(
 	"test-ws patch-drift cdk-size" # 23s  the tests/tooling/ scripts; cdk-size adds ~1s
 	"twin-wasm docs clang-tidy" # 19s  rebuild the twin before docs renders it
 	"test-port fuzz"           # 17s
+	"bot"                      # 12s  node only, and its own clean install; shares nothing above
 	"secrets deps test-tui"    # 12s  the two read-only scanners first, then bun
 	"test test-san"            # 15s  same run.sh, same build/host/host_test* paths
 	"test-verify web ct"       # 22s  ct costs 0s here (it skips); web is retire's network fetch
@@ -250,6 +255,7 @@ gate_paths() { # <gate>
 	# reason this filter is worth having.
 	test | test-san | coverage | clang-tidy | fuzz | cbmc) echo "modules/ tests/host/ deps/" ;;
 	test-port) echo "ports/esp32/ modules/" ;;
+	bot) echo "bot/" ;;
 	test-ws) echo "scripts/ mk/ Makefile" ;;
 	test-tui) echo "tools/tui/" ;;
 	# Its subject is the sweep itself, and FILTER_ALWAYS below already forces a
@@ -369,6 +375,7 @@ gate_need() {
 	test-verify) echo "python3" ;; # its sandbox runs the real floor + licence checks
 	actionlint) echo "actionlint" ;;
 	twin-wasm) echo "node" ;; # emcc is resolved from ~/emsdk by twin-wasm.sh
+	bot) echo "node" ;; # npm ships with it, and tools-install installs node
 	docs) echo "doxygen dot" ;;
 	coverage) echo "python3" ;;
 	clang-tidy) echo "clang-tidy" ;;
@@ -421,6 +428,7 @@ gate_label() {
 	docs) echo "site builds, no dead links" ;;
 	test-san) echo "host suite under ASan + UBSan" ;;
 	test-port) echo "ESP32 port tests" ;;
+	bot) echo "Discord bot: types, suite, citation drift" ;;
 	test-ws) echo "workspace auto-seeding" ;;
 	test-tui) echo "guided bench types, tests, build" ;;
 	test-verify) echo "this sweep's own tests" ;;
@@ -522,6 +530,14 @@ gate_run() {
 	# is, so CI does not run it either. Left alone it would drop a multi-minute
 	# firmware build into a 33s sweep, from a shell state the sweep cannot see.
 	test-port) WOZ_NO_TARGET_BUILD=1 make --no-print-directory test-port ;;
+	bot)
+		# --ignore-scripts because security-web.sh blocks any install command
+		# that can execute package code, and this sweep must not install
+		# differently to the rule it enforces two lanes over.
+		(cd "$ROOT/bot" \
+			&& npm ci --ignore-scripts --no-audit --no-fund \
+			&& npm run typecheck && npm test && npm run drift)
+		;;
 	test-ws) make --no-print-directory test-ws ;;
 	# All three steps release.yml runs, in its order. `make tui-test` alone would
 	# pass a branch whose types are broken or whose executable does not link,
