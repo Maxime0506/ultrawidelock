@@ -4264,8 +4264,8 @@ could see. Crypto only: no BLE, no UWB, no iPhone.
 
 ### [`release/dwm3001cdk/flash.sh`](architecture/release.dwm3001cdk/flash.sh.md)
 
-flash.sh — program the openaliro DWM3001CDK firmware over the board's
-on-board J-Link. See FLASH.md for the full walkthrough.
+flash.sh — program the openaliro DWM3001CDK firmware over its on-board J-Link.
+See FLASH.md for the full walkthrough.
 Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
 One image, not two: the nRF52833 is a single-core part, so unlike the
 nRF5340 DK there is no separate network-core hex to write.
@@ -4274,16 +4274,24 @@ nRF5340 DK there is no separate network-core hex to write.
 
 ### [`release/esp32-matter-lock/flash.sh`](architecture/release.esp32-matter-lock/flash.sh.md)
 
-flash.sh — program the openaliro ESP32-S3 Matter lock (single merged image at
-offset 0x0) with esptool. See FLASH.md for wiring and first run.
-Usage:  bash flash.sh [PORT]       e.g.  bash flash.sh /dev/ttyACM0
+flash.sh — write the openaliro ESP32 Matter lock to a board with esptool.
+One merged image (bootloader, partition table and app) at offset 0x0. See
+FLASH.md for wiring and first run.
+Usage:  bash flash.sh [--chip esp32s3|esp32c5|esp32c6] [PORT]
+bash flash.sh                    ask which chip, let esptool find the port
+bash flash.sh --chip esp32c6     no question
+bash flash.sh --chip esp32s3 /dev/ttyACM0
+The bundle ships an image for each of three chips, and writing the wrong one
+gives a board that flashes cleanly and then never boots. So the chip is asked
+for rather than assumed: this script used to hardcode the S3 and ignore the
+other two images entirely.
 
 ## `release/nrf5340dk/`
 
 ### [`release/nrf5340dk/flash.sh`](architecture/release.nrf5340dk/flash.sh.md)
 
-flash.sh — program the openaliro nRF5340 DK firmware (both cores) over the
-DK's on-board J-Link, using nrfutil. See FLASH.md for setup and first run.
+flash.sh — program both cores of the openaliro nRF5340 DK firmware with nrfutil.
+Goes over the DK's on-board J-Link. See FLASH.md for setup and first run.
 Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
 
 ## `scripts/`
@@ -4699,19 +4707,54 @@ Output is deterministic (no timestamps): it only changes when the source does.
 
 Build the minimal, deterministic presence runtime transfer archive.
 
+### [`scripts/release-bundle.sh`](architecture/scripts/release-bundle.sh.md)
+
+release-bundle.sh — assemble one publishable firmware bundle.
+scripts/release-bundle.sh --target dwm3001cdk --out build/release/... \
+--version v0.5.0 --board 'DWM3001CDK (nRF52833)' \
+--setup-code 12345678 merged.hex
+Options:
+--target <slug>          release/<slug>/ supplies the guide and script
+--out <dir>              destination, wiped and recreated
+--version <text>         the tag, or `git describe` when omitted
+--commit <sha>           defaults to HEAD
+--board <text>           hardware line in VERSION.txt
+--setup-code <code>      Matter setup code, when the build knows it
+--commission-note <text> the line printed under it, or instead of it
+Writes the firmware given as positional arguments, plus flash.sh, FLASH.md,
+FLASH.html and README.txt from release/<slug>/, plus a generated VERSION.txt
+and SHA256SUMS.txt. Every bundle gets all of them: this is the one place that
+decides what a release zip contains, so the three targets cannot drift.
+Exit 0 on a complete bundle, 1 on any failure. There is no partial success —
+a bundle missing a file looks identical to a good one once it is a zip.
+
+### [`scripts/release-notes.sh`](architecture/scripts/release-notes.sh.md)
+
+release-notes.sh — render the GitHub release body from release/NOTES.md.in.
+scripts/release-notes.sh v0.5.0                     # preview it
+scripts/release-notes.sh v0.5.0 out/SHA256SUMS.txt  # what CI publishes
+Placeholders: @TAG@ @REPO@ @PAGES@ @CHANGELOG@ @SUMS@
+Env: REPO=owner/name (default openaliro/openaliro)
+These notes are also the release email: GitHub renders them into the
+notification it sends watchers, so the checksums stay inside a <details> and
+nothing load-bearing sits below the fold.
+
 ### [`scripts/security-attest.sh`](architecture/scripts/security-attest.sh.md)
 
 security-attest.sh — can somebody who downloaded a release prove where it came from?
-Today: no. release.yml assembles the bundles and writes SHA256SUMS.txt, which answers "are these
-the bytes the release page listed" and not "did this repository's CI build them". Those are
-different questions, and the second is the one that matters for a project whose distribution
-path ends in a browser page calling navigator.serial. A SHA256SUMS.txt served from the same
-release as the artifacts it describes is signed by nothing; whoever could replace the .bin could
-replace the sums file in the same motion.
-The fix is one action and two permissions in release.yml (see INTEGRATION.md), producing a
+Yes, since release.yml grew an attest-build-provenance step. It did not always: SHA256SUMS.txt
+on its own answers "are these the bytes the release page listed" and not "did this repository's
+CI build them". Those are different questions, and the second is the one that matters for a
+project whose distribution path ends in a browser page calling navigator.serial. A SHA256SUMS.txt
+served from the same release as the artifacts it describes is signed by nothing; whoever could
+replace the .bin could replace the sums file in the same motion.
+The fix was one action and two permissions in release.yml (see INTEGRATION.md), producing a
 Sigstore-backed attestation that binds each artifact to the workflow, repository and commit that
 built it. This script is the other half: the part that runs outside CI and checks the CI half is
 real.
+The subject list covers the unzipped bundle contents as well as the zips, which is what lets
+each release/<target>/flash.sh verify the exact image it is about to write to a board. A
+guarantee nobody can reach at the moment they need it is not much of a guarantee.
 scripts/security-attest.sh workflow          # static: release.yml still emits attestations
 scripts/security-attest.sh verify v0.4.0     # download a release and verify it end to end
 make security-attest

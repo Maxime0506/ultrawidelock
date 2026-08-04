@@ -253,7 +253,13 @@ gate_paths() { # <gate>
 	# The C core and its harnesses. cbmc and fuzz are the two most expensive
 	# gates in the sweep and the two whose input moves least, which is the whole
 	# reason this filter is worth having.
-	test | test-san | coverage | clang-tidy | fuzz | cbmc) echo "modules/ tests/host/ deps/" ;;
+	test-san | clang-tidy | fuzz | cbmc) echo "modules/ tests/host/ deps/" ;;
+	# The same C core, plus the python suites the other four do not run. One of
+	# those, test_flash_html, is the only check that a release/FLASH.html was
+	# regenerated after its FLASH.md changed — so release/ has to be an input
+	# here. Without it a branch that edits only the guides skips the one gate
+	# that gates the guides, and ships a stale HTML page to every downloader.
+	test | coverage) echo "modules/ tests/host/ deps/ release/" ;;
 	test-port) echo "ports/esp32/ modules/" ;;
 	bot) echo "bot/" ;;
 	test-ws) echo "scripts/ mk/ Makefile" ;;

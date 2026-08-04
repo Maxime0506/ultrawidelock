@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# flash.sh — program the openaliro DWM3001CDK firmware over the board's
-# on-board J-Link. See FLASH.md for the full walkthrough.
+# flash.sh — program the openaliro DWM3001CDK firmware over its on-board J-Link.
+#
+# See FLASH.md for the full walkthrough.
 #
 # Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
 #
@@ -25,17 +26,53 @@ nrfutil device --help >/dev/null 2>&1 || {
   exit 1
 }
 
-# Checksums ship with the bundle; verify when we can rather than assuming. A
-# corrupted download that still flashes is a board that fails in the field
-# instead of failing here.
+# ---- is this the firmware we published? --------------------------------------
+# Two questions, in order of how much they prove.
+#
+# SHA256SUMS.txt answers "did the download arrive intact". It cannot answer
+# "who built this": it travels in the same zip as the files it describes, so
+# whoever could alter the image could alter the sums in the same motion. A
+# mismatch is fatal here — an image that is corrupt but flashes anyway is a
+# board that fails in a doorway rather than on a desk. This used to warn and
+# carry on, which is the same as not checking.
 if [ -f SHA256SUMS.txt ]; then
+  SUMTOOL=()
   if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 -c SHA256SUMS.txt --ignore-missing >/dev/null 2>&1 \
-      || echo "WARNING: checksums do not match. Re-download before trusting this."
+    SUMTOOL=(shasum -a 256 -c)
   elif command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c SHA256SUMS.txt --ignore-missing >/dev/null 2>&1 \
-      || echo "WARNING: checksums do not match. Re-download before trusting this."
+    SUMTOOL=(sha256sum -c)
   fi
+  if [ ${#SUMTOOL[@]} -gt 0 ]; then
+    if "${SUMTOOL[@]}" SHA256SUMS.txt >/dev/null 2>&1; then
+      echo "==> checksums OK"
+    else
+      echo "ERROR: this bundle does not match its own checksums."
+      echo "  Something changed after it was published, or the download is damaged."
+      echo "  Re-download it. Do not flash this."
+      exit 1
+    fi
+  fi
+fi
+
+# The provenance question, which checksums cannot answer. Every file published
+# with this release is signed by the workflow that built it, and the GitHub CLI
+# checks that signature against openaliro's CI identity.
+#
+# NOT fatal, on purpose: a failure here is indistinguishable from being offline,
+# unauthenticated or behind a proxy, and refusing to flash for those would be
+# wrong. It is printed loudly instead, with the command to run deliberately.
+if command -v gh >/dev/null 2>&1; then
+  if gh attestation verify merged.hex --repo openaliro/openaliro >/dev/null 2>&1; then
+    echo "==> provenance OK: merged.hex was built by openaliro's CI"
+  else
+    echo
+    echo "  NOTE: could not confirm where merged.hex came from. That is expected offline."
+    echo "  To check it deliberately:"
+    echo "    gh attestation verify merged.hex --repo openaliro/openaliro"
+    echo
+  fi
+else
+  echo "==> provenance not checked (no GitHub CLI). README.txt shows how."
 fi
 
 SNR=()

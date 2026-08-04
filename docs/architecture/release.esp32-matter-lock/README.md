@@ -3,4 +3,4 @@
 
 | subsystem | about |
 |---|---|
-| [`release/esp32-matter-lock/flash.sh`](flash.sh.md) | flash.sh — program the openaliro ESP32-S3 Matter lock (single merged image at |
+| [`release/esp32-matter-lock/flash.sh`](flash.sh.md) | flash.sh — write the openaliro ESP32 Matter lock to a board with esptool. |

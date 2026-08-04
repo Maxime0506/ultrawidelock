@@ -3,4 +3,4 @@
 
 | subsystem | about |
 |---|---|
-| [`release/dwm3001cdk/flash.sh`](flash.sh.md) | flash.sh — program the openaliro DWM3001CDK firmware over the board's |
+| [`release/dwm3001cdk/flash.sh`](flash.sh.md) | flash.sh — program the openaliro DWM3001CDK firmware over its on-board J-Link. |

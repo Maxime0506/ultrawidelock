@@ -3,4 +3,4 @@
 
 | subsystem | about |
 |---|---|
-| [`release/nrf5340dk/flash.sh`](flash.sh.md) | flash.sh — program the openaliro nRF5340 DK firmware (both cores) over the |
+| [`release/nrf5340dk/flash.sh`](flash.sh.md) | flash.sh — program both cores of the openaliro nRF5340 DK firmware with nrfutil. |

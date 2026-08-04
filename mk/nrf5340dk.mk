@@ -62,7 +62,16 @@ NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
 NRF_BUILD_DIR := $(ALIRO_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ALIRO_SOURCE)),-blob)
 NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data.txt
 
-.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-term nrf-pairing-code term
+NRF_RELEASE_OUT ?= $(ALIRO_BUILD_ROOT)/release/openaliro-nrf5340dk
+NRF_RELEASE_OUT := $(abspath $(NRF_RELEASE_OUT))
+NRF_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.nrf-stage
+NRF_RELEASE_VER ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
+# Exported for the same reason as ESP_RELEASE_VER in mk/esp32.mk: a tag reaches
+# the recipe through the environment rather than being pasted into '...' at Make
+# time, where an apostrophe in it would end the quoting.
+export NRF_RELEASE_VER
+
+.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-term nrf-pairing-code nrf-release term
 
 ##@ nRF5340 DK  ·  NFC tap + approach unlock
 ## nrf-build: incremental build          -> build/nrf5340dk/merged.hex
@@ -161,6 +170,45 @@ nrf-term: nrf-pairing-code
 	logargs=; [ -n '$(LOG)' ] && logargs='-L --log-file $(LOG)'; \
 	printf '  tio %s  @ %s 8N1  ·  logs + shell (type help)  ·  ctrl-t q to quit\n' "$$port" '$(BAUD)'; \
 	exec tio -b $(BAUD) $$logargs "$$port"
+
+## nrf-release: build and bundle the DK image to publish
+##   The same folder shape every target ships, assembled by
+##   scripts/release-bundle.sh: both core hex files, the flashing script, the
+##   guide, README.txt, VERSION.txt and SHA256SUMS.txt. Build it locally to see
+##   exactly what a stranger downloads.
+##
+##   DFU IS DELIBERATELY OFF HERE, unlike `make nrf-build`, and this target says
+##   so rather than inheriting it. MCUboot needs a signing key that only this
+##   checkout holds (scripts/check-signing-key.sh refuses without one), and no
+##   release key exists for this board the way it does for the CDK. So the
+##   published DK image has no bootloader and no Matter OTA, which is what CI
+##   has always shipped by calling build-nrf5340dk.sh directly. Turning it on is
+##   a key-management decision, not a build flag.
+##   Options: NRF_RELEASE_OUT=<dir>  NRF_RELEASE_VER=<tag>
+nrf-release:
+	@# Recursive rather than a DFU=0 prefix on NRF_BUILD_SH: NRF_ENV already
+	@# carries DFU=1 by default, and a second assignment on the same command
+	@# line is won by the later one, so prefixing quietly built a bootloader.
+	@$(MAKE) --no-print-directory nrf-build DFU=0
+	@# The onboarding payload is generated at build time and merged into the
+	@# hex, so the code shipped in VERSION.txt describes the image beside it.
+	@# The QR image rides along when the build produced one: scanning a PNG out
+	@# of the zip beats reading a code off a serial console.
+	@f='$(NRF_FACTORY)'; \
+	  code=$$(sed -n 's/^Manualcode[[:space:]]*:[[:space:]]*//p' "$$f" 2>/dev/null | tr -d '[:space:]'); \
+	  qr=; \
+	  if [ -f "$${f%.txt}.png" ]; then \
+	    mkdir -p '$(NRF_RELEASE_STAGE)'; \
+	    cp "$${f%.txt}.png" '$(NRF_RELEASE_STAGE)/SETUP-QR.png'; \
+	    qr='$(NRF_RELEASE_STAGE)/SETUP-QR.png'; \
+	  fi; \
+	  $(REPO_ROOT)/scripts/release-bundle.sh \
+	    --target nrf5340dk --out '$(NRF_RELEASE_OUT)' \
+	    --version "$$NRF_RELEASE_VER" \
+	    --board 'nRF5340 DK + DWM3000EVB + X-NUCLEO-NFC12A1' \
+	    $${code:+--setup-code "$$code"} \
+	    --commission-note 'Type this into Apple Home, or scan SETUP-QR.png in this folder. Both also print on the serial console at 115200 baud.' \
+	    '$(NRF_BUILD_DIR)/merged.hex' '$(NRF_BUILD_DIR)/merged_CPUNET.hex' $$qr
 
 # Compatibility alias: `term` meant the DK back when the DK was the default
 # board. Does the work and says where it went. Not in the help list.

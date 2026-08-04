@@ -13,9 +13,12 @@ claim covers.
 | `openaliro-matter-lock-esp32s3.bin` | merged S3 image (bootloader + partitions + app), flashed at 0x0 |
 | `openaliro-matter-lock-esp32c5.bin` | merged C5 image, release-built but not hardware-validated |
 | `openaliro-matter-lock-esp32c6.bin` | merged C6 image; UWB validated on this chip, full Matter walk-up not yet |
-| `flash.sh` | flashes the S3 image with esptool; use the browser or manual command below for C5/C6 |
+| `flash.sh` | flashes the image for whichever of the three chips you name |
+| `manifest.json` | the chip list the browser flasher reads |
+| `README.txt` | the short version of this guide, in plain text |
 | `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
 | `VERSION.txt` | release tag, commit, and build date |
+| `SHA256SUMS.txt` | checksums for every file above |
 
 ## 1. What you need
 
@@ -76,15 +79,23 @@ Fastest for either chip: open the
 select the board, and choose **Install**. The page and manifest are dry-checked,
 but the repository does not yet record a successful real WebSerial flash.
 
-The bundled helper currently handles S3 only:
+With tools, the bundled helper handles all three chips:
 
 ```bash
-bash flash.sh
+bash flash.sh                    # asks which board you have
+bash flash.sh --chip esp32c6     # or say so up front
 ```
 
-esptool auto-detects the port; to name one, `bash flash.sh /dev/ttyACM0`
+esptool auto-detects the port; to name one, `bash flash.sh --chip esp32s3 /dev/ttyACM0`
 (`/dev/cu.usbmodem…` on macOS, `COM…` on Windows). Chip not detected? Hold BOOT while
 plugging in, retry, then replug.
+
+Naming the chip matters: the images are not interchangeable, and writing the
+wrong one gives a board that flashes cleanly and then never boots.
+
+Before it writes anything, `flash.sh` checks this bundle against its own
+`SHA256SUMS.txt` and refuses to continue if a file has changed. See "Check it
+really came from us" below.
 
 Manual equivalents:
 
@@ -135,6 +146,32 @@ More depth: the
 [bring-up checklist](https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md)
 and
 [forty-odd known traps](https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md).
+
+## Check it really came from us
+
+`SHA256SUMS.txt` proves your download arrived intact. It cannot prove who built
+it: it travels in the same zip as the files it lists, so whoever could alter an
+image could alter the checksums in the same motion.
+
+Every file published with this release is separately signed at build time, by
+the workflow that built it, using [Sigstore](https://www.sigstore.dev). That
+signature is what proves origin, and anyone can check it without trusting the
+release page or whoever handed them the zip:
+
+```bash
+gh attestation verify openaliro-matter-lock-esp32s3.bin --repo openaliro/openaliro
+```
+
+It prints the repository, the commit and the workflow run that produced the
+file. It needs the [GitHub CLI](https://cli.github.com) and takes a few seconds.
+`flash.sh` runs the same check for the image it is about to write, when the CLI
+is installed, and says so either way.
+
+You can check the zip itself the same way, before unzipping it:
+
+```bash
+gh attestation verify openaliro-esp32-matter-lock.zip --repo openaliro/openaliro
+```
 
 ## Notes
 

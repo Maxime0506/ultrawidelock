@@ -546,6 +546,10 @@ CDK_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-dwm3001cdk
 CDK_RELEASE_BUILD := $(abspath $(CDK_RELEASE_BUILD))
 CDK_RELEASE_OUT   := $(abspath $(CDK_RELEASE_OUT))
 CDK_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
+# Exported for the same reason as ESP_RELEASE_VER in mk/esp32.mk: a tag reaches
+# the recipe through the environment rather than being pasted into '...' at Make
+# time, where an apostrophe in it would end the quoting.
+export CDK_RELEASE_VER
 
 release:
 	@if [ -z '$(RELEASE_KEY)' ]; then \
@@ -567,38 +571,21 @@ release:
 	fi
 	@$(MAKE) --no-print-directory build PRISTINE=1 SMP=1 RELEASE=1 \
 	  CDK_BUILD='$(CDK_RELEASE_BUILD)' CDK_KEY='$(abspath $(RELEASE_KEY))'
-	@rm -rf '$(CDK_RELEASE_OUT)' && mkdir -p '$(CDK_RELEASE_OUT)'
-	@cp '$(CDK_RELEASE_BUILD)/merged.hex' '$(CDK_RELEASE_OUT)/'
-	@cp $(REPO_ROOT)/release/dwm3001cdk/FLASH.md \
-	    $(REPO_ROOT)/release/dwm3001cdk/FLASH.html \
-	    $(REPO_ROOT)/release/dwm3001cdk/flash.sh '$(CDK_RELEASE_OUT)/'
-	@chmod +x '$(CDK_RELEASE_OUT)/flash.sh'
+	@# The setup code is read back out of the build rather than assumed: it is
+	@# generated at configure time and merged into the hex, so the only honest
+	@# source for what a user must type is the image that was just produced.
 	@code=$$(python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	    --from-config '$(CDK_RELEASE_BUILD)/$(CDK_IMAGE)/zephyr/.config' \
 	  | awk '/setup code/ { print $$3 }'); \
 	  test -n "$$code" || { printf '  could not read the setup code back\n' >&2; exit 1; }; \
-	  { printf 'openaliro %s\n' '$(CDK_RELEASE_VER)'; \
-	    printf 'commit     %s\n' "$$(git -C $(REPO_ROOT) rev-parse HEAD 2>/dev/null || echo unknown)"; \
-	    printf 'built      %s\n' "$$(date -u +%Y-%m-%dT%H:%MZ)"; \
-	    printf 'board      DWM3001CDK (decawave_dwm3001cdk, nRF52833)\n'; \
-	    printf '\nSETUP CODE %s\n' "$$code"; \
-	    printf 'Type this into Apple Home. There is no QR label on this board.\n'; \
-	  } > '$(CDK_RELEASE_OUT)/VERSION.txt'
-	@# sha256sum on Linux, shasum on macOS. The CI container has only the first
-	@# and a developer Mac only the second, and a release that silently shipped
-	@# no SHA256SUMS.txt would look identical to one that did.
-	@cd '$(CDK_RELEASE_OUT)' && \
-	  if command -v sha256sum >/dev/null 2>&1; then \
-	    sha256sum merged.hex flash.sh FLASH.md FLASH.html VERSION.txt > SHA256SUMS.txt; \
-	  else \
-	    shasum -a 256 merged.hex flash.sh FLASH.md FLASH.html VERSION.txt > SHA256SUMS.txt; \
-	  fi
-	@test -s '$(CDK_RELEASE_OUT)/SHA256SUMS.txt' || { printf '  no checksums written\n' >&2; exit 1; }
-	@printf '\n  bundle ready  ·  %s\n\n' '$(CDK_RELEASE_OUT)'
-	@ls -1 '$(CDK_RELEASE_OUT)' | sed 's/^/    /'
-	@printf '\n'
-	@grep 'SETUP CODE' '$(CDK_RELEASE_OUT)/VERSION.txt' | sed 's/^/    /'
-	@printf '\n  Zip it and attach it to the release:\n'
+	  $(REPO_ROOT)/scripts/release-bundle.sh \
+	    --target dwm3001cdk --out '$(CDK_RELEASE_OUT)' \
+	    --version "$$CDK_RELEASE_VER" \
+	    --board 'DWM3001CDK (decawave_dwm3001cdk, nRF52833)' \
+	    --setup-code "$$code" \
+	    --commission-note 'Type this into Apple Home. There is no QR label on this board.' \
+	    '$(CDK_RELEASE_BUILD)/merged.hex'
+	@printf '  Zip it and attach it to the release:\n'
 	@printf '    (cd %s && zip -qr ../openaliro-dwm3001cdk.zip openaliro-dwm3001cdk)\n\n' '$(dir $(CDK_RELEASE_OUT))'
 
 ## ota-deps: create the host virtualenv the update tooling runs in

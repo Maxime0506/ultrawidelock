@@ -144,7 +144,24 @@ else
 ESP_CHECK_MATTER :=
 endif
 
+# Publishing. Every chip the browser flasher's manifest lists, because the two
+# have to agree: a manifest offering a chip the release does not carry is a
+# download that 404s inside somebody's browser.
+ESP_RELEASE_CHIPS ?= esp32s3 esp32c5 esp32c6
+ESP_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-esp32-matter-lock
+ESP_RELEASE_OUT   := $(abspath $(ESP_RELEASE_OUT))
+ESP_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.esp-stage
+ESP_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
+# Exported so the recipes below can read it as "$$ESP_RELEASE_VER" instead of
+# pasting it in at Make time. A tag is attacker-influenced text: interpolated
+# into '...' a single quote in it ends the quoting and the rest becomes shell.
+# Export, not plain reference, because Make does not put ordinary variables in a
+# recipe's environment -- in CI the workflow sets it and ?= keeps that value, on
+# a bench `git describe` fills it, and both then reach the shell the same way.
+export ESP_RELEASE_VER
+
 .PHONY: esp-check-env esp-set-target esp-build esp-rebuild esp-reconfigure \
+        esp-merge-bin esp-release \
         esp-menuconfig esp-size esp-flash esp-app-flash esp-flash-erase \
         esp-monitor esp-go esp-run esp-term esp-lab esp-ports esp-clean esp-env \
         esp-presence-on esp-presence-off esp-presence-flash esp-presence-clone \
@@ -223,6 +240,48 @@ esp-reconfigure: esp-check-env
 ## esp-size: binary size + partition headroom
 esp-size: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) size
+
+## esp-merge-bin: fuse bootloader + partition table + app into one 0x0 image
+##   What the release and the browser flasher both ship, so a user writes one
+##   file at one offset instead of three at three.
+esp-merge-bin: esp-check-env
+	@cd "$(ESP_APP_DIR)" && $(IDFPY) merge-bin -o openaliro-$(APP)-$(TARGET).bin
+	@printf '  merged  ·  %s/openaliro-%s-%s.bin\n' '$(ESP_BUILD)' '$(APP)' '$(TARGET)'
+
+## esp-release: build every chip and bundle the images to publish
+##   Recursive per chip on purpose: ESP_BUILD and the sdkconfig path are fixed
+##   when this file is parsed, so one recipe cannot retarget itself, and each
+##   chip needs its own build directory anyway (set-target wipes both).
+##   Options: ESP_RELEASE_CHIPS='esp32s3 ...'  ESP_RELEASE_OUT=  ESP_RELEASE_VER=
+esp-release:
+	@for t in $(ESP_RELEASE_CHIPS); do \
+	  printf '\n  building matter-lock for %s\n' "$$t"; \
+	  $(MAKE) --no-print-directory esp-build APP=matter-lock TARGET="$$t" || exit 1; \
+	  $(MAKE) --no-print-directory esp-merge-bin APP=matter-lock TARGET="$$t" || exit 1; \
+	done
+	@mkdir -p '$(ESP_RELEASE_STAGE)'
+	@# The browser flasher reads the version out of the manifest. Edited as JSON
+	@# rather than by sed: a tag is not pattern-safe text, and in a sed
+	@# replacement an & means the whole match, so a tag containing one would
+	@# quietly corrupt the file the flasher trusts.
+	@python3 -c 'import json,os,sys; m=json.load(open(sys.argv[1])); m["version"]=os.environ["ESP_RELEASE_VER"]; json.dump(m,open(sys.argv[2],"w"),indent=2)' \
+	  $(REPO_ROOT)/web-flasher/manifest.json '$(ESP_RELEASE_STAGE)/manifest.json'
+	@# The setup code is the same on every board flashed from this release: the
+	@# app builds with CHIP's test parameters and no factory-data provider, so
+	@# the passcode is a constant. Derived from web-flasher/check_codes.py rather
+	@# than written out here, because that file is gated against upstream drift
+	@# and a second copy of the number would not be.
+	@bins=; for t in $(ESP_RELEASE_CHIPS); do \
+	    bins="$$bins $(ALIRO_BUILD_ROOT)/esp32-matter-lock-$$t/openaliro-matter-lock-$$t.bin"; \
+	  done; \
+	  code=$$(cd $(REPO_ROOT)/web-flasher && python3 -c 'import check_codes; print(check_codes.manual_code())' 2>/dev/null); \
+	  $(REPO_ROOT)/scripts/release-bundle.sh \
+	    --target esp32-matter-lock --out '$(ESP_RELEASE_OUT)' \
+	    --version "$$ESP_RELEASE_VER" \
+	    --board 'ESP32-S3, ESP32-C5 or ESP32-C6 + DWM3000EVB' \
+	    $${code:+--setup-code "$$code"} \
+	    --commission-note 'Type this into Apple Home. The same code, and a QR to scan instead, print on the serial console at 115200 baud.' \
+	    $$bins '$(ESP_RELEASE_STAGE)/manifest.json'
 
 ## esp-env: sanity-check the toolchain — prints idf.py's version and the paths
 esp-env: esp-check-env

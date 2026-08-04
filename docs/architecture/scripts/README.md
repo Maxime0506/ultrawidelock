@@ -21,6 +21,8 @@
 | [`scripts/docs.sh`](docs.sh.md) | docs.sh — build the documentation site into site/. |
 | [`scripts/flash_html.py`](flash_html.md) | Render a release FLASH.md into a self-contained FLASH.html. |
 | [`scripts/presence_runtime.py`](presence_runtime.md) | Build the minimal, deterministic presence runtime transfer archive. |
+| [`scripts/release-bundle.sh`](release-bundle.sh.md) | release-bundle.sh — assemble one publishable firmware bundle. |
+| [`scripts/release-notes.sh`](release-notes.sh.md) | release-notes.sh — render the GitHub release body from release/NOTES.md.in. |
 | [`scripts/security-attest.sh`](security-attest.sh.md) | security-attest.sh — can somebody who downloaded a release prove where it came from? |
 | [`scripts/security-ct.sh`](security-ct.sh.md) | security-ct.sh — secret-dependent branches and table lookups in the CCC key ladder. |
 | [`scripts/security-diff.sh`](security-diff.sh.md) | security-diff.sh — the structural half of the malicious-change gate. |

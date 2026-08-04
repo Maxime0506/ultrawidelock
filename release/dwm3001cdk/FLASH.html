@@ -49,12 +49,12 @@ a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 code { font-family: var(--mono); font-size: .84em; }
 p code, li code, td code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: .06em .3em; }
-.prewrap { position: relative; margin: 1rem 0; }
-pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 0; }
+/* user-select instead of a copy button: one click selects the whole command,
+   which is the part a reader wants, and it costs no script. The button that
+   used to be here needed 14 lines of inline JavaScript that this page's own
+   default-src 'none' blocked, so it had never worked in any shipped bundle. */
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 1rem 0; user-select: all; -webkit-user-select: all; }
 pre code { background: none; border: 0; padding: 0; }
-.copy { position: absolute; top: .5rem; right: .5rem; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 5px; font-family: var(--sans); font-size: .68rem; padding: .2rem .55rem; opacity: 0; cursor: pointer; transition: opacity .15s, color .15s, border-color .15s; }
-.prewrap:hover .copy, .copy:focus-visible { opacity: 1; }
-.copy.done { color: var(--accent); border-color: var(--accent); opacity: 1; }
 .tablewrap { overflow-x: auto; margin: 1rem 0; }
 table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
 th { text-align: left; font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -95,6 +95,10 @@ is nothing to wire and nothing to solder.</p>
 <td>build details, <strong>and your setup code</strong></td>
 </tr>
 <tr>
+<td><code>README.txt</code></td>
+<td>the short version of this guide, in plain text</td>
+</tr>
+<tr>
 <td><code>FLASH.md</code> / <code>FLASH.html</code></td>
 <td>this guide, plain text and styled</td>
 </tr>
@@ -129,6 +133,10 @@ nrfutil install device
 </code></pre>
 <p>That is the whole step. It takes about twenty seconds and prints your setup code
 at the end.</p>
+<p>Before it writes anything, <code>flash.sh</code> checks this bundle against its own
+<code>SHA256SUMS.txt</code> and refuses to continue if a file has changed. If you have the
+<a href="https://cli.github.com">GitHub CLI</a> installed it also checks who built the
+firmware. See "Check it really came from us" below for what that proves.</p>
 <p>Windows without bash: <code>nrfutil device program --firmware merged.hex --core application --options chip_erase_mode=ERASE_ALL,verify=VERIFY_READ,reset=RESET_SYSTEM</code></p>
 <h2>3 · Add it to Apple Home</h2>
 <p>There is no QR sticker on this board, so you type the code instead.</p>
@@ -178,6 +186,23 @@ have to add it to Home again. You can also set your own setup code at this
 point, which is one line of configuration.</p>
 <p>It is a one-way switch by design: the board belongs to whoever last flashed it
 with a cable.</p>
+<h2>Check it really came from us</h2>
+<p><code>SHA256SUMS.txt</code> proves your download arrived intact. It cannot prove who built
+it: it travels in the same zip as the files it lists, so whoever could alter the
+firmware could alter the checksums in the same motion.</p>
+<p>Every file published with this release is separately signed at build time, by
+the workflow that built it, using <a href="https://www.sigstore.dev">Sigstore</a>. That
+signature is what proves origin, and anyone can check it without trusting the
+release page or whoever handed them the zip:</p>
+<pre><code class="language-bash">gh attestation verify merged.hex --repo openaliro/openaliro
+</code></pre>
+<p>It prints the repository, the commit and the workflow run that produced the
+file. It needs the <a href="https://cli.github.com">GitHub CLI</a> and takes a few seconds.
+<code>flash.sh</code> runs the same check for you when the CLI is installed, and says so
+either way.</p>
+<p>You can check the zip itself the same way, before unzipping it:</p>
+<pre><code class="language-bash">gh attestation verify openaliro-dwm3001cdk.zip --repo openaliro/openaliro
+</code></pre>
 <h2>Read this before you trust it with anything</h2>
 <p>This is a hobby project, not a product. Three specific things, plainly:</p>
 <ul>
@@ -239,19 +264,5 @@ with a cable.</p>
 <footer>Same content as this bundle's <code>FLASH.md</code>.
 <a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
-<script>
-document.querySelectorAll("pre").forEach(function(pre){
-  var wrap=document.createElement("div");wrap.className="prewrap";
-  pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);
-  var btn=document.createElement("button");btn.className="copy";btn.type="button";
-  btn.textContent="Copy";wrap.appendChild(btn);
-  btn.addEventListener("click",function(){
-    navigator.clipboard.writeText(pre.textContent.replace(/\n$/,"")).then(function(){
-      btn.textContent="Copied";btn.classList.add("done");
-      setTimeout(function(){btn.textContent="Copy";btn.classList.remove("done");},1600);
-    });
-  });
-});
-</script>
 </body>
 </html>

@@ -126,15 +126,10 @@ jobs:
           make release \
             RELEASE_KEY="$RUNNER_TEMP/release.pem" \
             CDK_RELEASE_VER="$TAG"
-      - name: the key is not in the artifact
-        # Cheap, and it catches the one mistake that would be catastrophic and
-        # silent: a private key copied into a bundle that is about to be
-        # published. security-fw.sh gates the image itself; this gates the folder.
-        run: |
-          if grep -rlI 'PRIVATE KEY' build/release/openaliro-dwm3001cdk/ 2>/dev/null | grep -q .; then
-            echo "::error::a PEM private key reached the release bundle"
-            exit 1
-          fi
+      # The "no private key in the bundle" check used to live here as its own
+      # step, gating only this folder. It now runs inside
+      # scripts/release-bundle.sh, so all three bundles get it and a local
+      # `make release` gets it too, rather than only a tag build.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openaliro-dwm3001cdk
@@ -166,24 +161,18 @@ jobs:
             echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
             ./scripts/bootstrap.sh
           }
-      - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild)
-        run: ./scripts/build-nrf5340dk.sh build
-      - name: assemble the bundle
+      - name: build and bundle (nrf5340dk/nrf5340/cpuapp, sysbuild)
+        # One target for build and packaging, so what CI publishes is what
+        # `make nrf-release` puts in build/release/ on a bench machine. It
+        # pins DFU=0, which is what this job shipped when it called
+        # build-nrf5340dk.sh directly; mk/nrf5340dk.mk explains why.
         env:
-          REF_NAME: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          out=dist/openaliro-nrf5340dk
-          mkdir -p "$out"
-          cp build/nrf5340dk/merged.hex build/nrf5340dk/merged_CPUNET.hex "$out"/
-          cp release/nrf5340dk/FLASH.md release/nrf5340dk/FLASH.html \
-            release/nrf5340dk/flash.sh "$out"/
-          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/openaliro/openaliro\n' \
-            "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
+          NRF_RELEASE_VER: ${{ github.ref_name }}
+        run: make nrf-release
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openaliro-nrf5340dk
-          path: dist/openaliro-nrf5340dk
+          path: build/release/openaliro-nrf5340dk
           if-no-files-found: error
 
   # ESP32-S3 Matter lock: fetch + install esp-matter at the bench-validated
@@ -253,66 +242,20 @@ jobs:
             echo "::warning::esp-matter setup failed once — retrying from scratch"
             setup
           }
-      - name: build the matter-lock app (esp32s3) and merge one image
-        working-directory: ports/esp32/apps/matter-lock
-        run: |
-          . "$IDF_PATH/export.sh"
-          . "$ESP_MATTER_PATH/export.sh"
-          B="$GITHUB_WORKSPACE/build/esp32-matter-lock-esp32s3"
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32s3
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" \
-            merge-bin -o openaliro-matter-lock-esp32s3.bin
-      - name: build the matter-lock app (esp32c5) and merge one image
-        # Own build dir + sdkconfig so the S3 build above stays untouched
-        # (set-target wipes both otherwise). sdkconfig.defaults.esp32c5 is
-        # picked up automatically once the target is esp32c5.
-        working-directory: ports/esp32/apps/matter-lock
-        run: |
-          . "$IDF_PATH/export.sh"
-          . "$ESP_MATTER_PATH/export.sh"
-          B="$GITHUB_WORKSPACE/build/esp32-matter-lock-esp32c5"
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32c5
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" \
-            merge-bin -o openaliro-matter-lock-esp32c5.bin
-      - name: build the matter-lock app (esp32c6) and merge one image
-        # Same isolation as the C5 step above. C6 has been built by
-        # firmware-builds.yml since PR #89 but shipped in no release, so the
-        # BU04 target could be compiled and never flashed from a tag.
-        # sdkconfig.defaults.esp32c6 is picked up once the target is esp32c6.
-        working-directory: ports/esp32/apps/matter-lock
-        run: |
-          . "$IDF_PATH/export.sh"
-          . "$ESP_MATTER_PATH/export.sh"
-          B="$GITHUB_WORKSPACE/build/esp32-matter-lock-esp32c6"
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" set-target esp32c6
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" build
-          idf.py -B "$B" -D SDKCONFIG="$B/sdkconfig" \
-            merge-bin -o openaliro-matter-lock-esp32c6.bin
-      - name: assemble the bundle
+      - name: build every chip and bundle
+        # One target for three builds and the packaging, so what CI publishes
+        # is what `make esp-release` puts in build/release/ on a bench machine.
+        # Each chip still gets its own build directory and sdkconfig, because
+        # set-target wipes both and the S3 image is the hardware-validated one.
+        # The manifest the browser flasher reads is stamped there too, so the
+        # chip list it offers and the images shipped here cannot drift apart.
         env:
-          REF_NAME: ${{ github.ref_name }}
-          COMMIT: ${{ github.sha }}
-        run: |
-          out=dist/openaliro-esp32-matter-lock
-          mkdir -p "$out"
-          cp build/esp32-matter-lock-esp32s3/openaliro-matter-lock-esp32s3.bin "$out"/
-          cp build/esp32-matter-lock-esp32c5/openaliro-matter-lock-esp32c5.bin "$out"/
-          cp build/esp32-matter-lock-esp32c6/openaliro-matter-lock-esp32c6.bin "$out"/
-          cp release/esp32-matter-lock/FLASH.md release/esp32-matter-lock/FLASH.html \
-            release/esp32-matter-lock/flash.sh "$out"/
-          # ESP Web Tools manifest for the browser flasher (web-flasher/):
-          # same merged image at offset 0, version stamped from the ref. sed
-          # with | so a dispatch run's branch-name ref cannot end the pattern.
-          sed "s|\"version\": \"dev\"|\"version\": \"${REF_NAME}\"|" \
-            web-flasher/manifest.json > "$out/manifest.json"
-          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/openaliro/openaliro\n' \
-            "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
+          ESP_RELEASE_VER: ${{ github.ref_name }}
+        run: make esp-release IDF_EXPORT="$IDF_PATH/export.sh"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openaliro-esp32-matter-lock
-          path: dist/openaliro-esp32-matter-lock
+          path: build/release/openaliro-esp32-matter-lock
           if-no-files-found: error
 
   # Zip each bundle and publish the release. The tag check is redundant now that
@@ -333,6 +276,13 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      # This job needs the checkout only for the release-notes template and its
+      # renderer; every firmware artifact arrives from the build jobs below.
+      # persist-credentials is off because nothing here talks to git, and the
+      # one token this job does need is passed to gh explicitly.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
@@ -368,6 +318,12 @@ jobs:
       # SHA256SUMS.txt is in the subject list deliberately. Attesting it turns the sums file
       # itself into something signed, so the cheap check (verify one file, then use its hashes)
       # inherits the guarantee.
+      #
+      # The unzipped bundle contents are in the list too, and that is what makes the check
+      # usable rather than merely available. Attesting only the zips means a user who has
+      # unzipped one — which is everybody, since flashing requires it — holds nothing that
+      # can be verified, and the guarantee is real but out of reach. With the contents
+      # attested, each flash.sh can verify the exact image it is about to write to a board.
       - name: attest the release artifacts
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
@@ -376,40 +332,22 @@ jobs:
             out/*.bin
             out/*.json
             out/SHA256SUMS.txt
+            dist/openaliro-dwm3001cdk/*
+            dist/openaliro-nrf5340dk/*
+            dist/openaliro-esp32-matter-lock/*
       - name: create the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
+        # The body comes from release/NOTES.md.in through scripts/release-notes.sh,
+        # not from a heredoc here. GitHub renders these notes into the notification
+        # email it sends every watcher, which makes this the most-read page the
+        # project has, and it should be reviewable as prose and previewable on a
+        # laptop (`scripts/release-notes.sh v0.5.0`) rather than only on a tag.
         run: |
           notes="$(mktemp)"
-          {
-            echo "The firmware zips are self-contained: each holds the firmware, a"
-            echo "flash script, and the setup guide as both FLASH.md and FLASH.html"
-            echo "(open it in a browser) covering tools, wiring, flashing, and Apple"
-            echo "Home setup. Evaluation firmware with Matter test certificates."
-            echo
-            echo "The DWM3001CDK image is signed, and its bootloader only runs"
-            echo "firmware signed by the same key, so builds you make yourself will"
-            echo "not install over the air onto a board flashed from this release."
-            echo "Reflash it once over USB to own it yourself; the pairing survives."
-            echo "openaliro-dwm3001cdk/FLASH.md has the four commands."
-            echo
-            echo "The ESP32 images (S3 and C5) also flash straight from the browser,"
-            echo "no tools at all: https://${REPO%%/*}.github.io/${REPO#*/}/flash/"
-            echo "(Chrome or Edge). The loose .bin/.manifest.json assets below feed"
-            echo "that page."
-            echo
-            echo "| Bundle | Hardware | What you get |"
-            echo "|---|---|---|"
-            echo "| openaliro-dwm3001cdk | DWM3001CDK alone, nothing to wire | BLE + UWB approach unlock, Matter over Thread, updates over Bluetooth |"
-            echo "| openaliro-nrf5340dk | nRF5340 DK + DWM3000EVB + X-NUCLEO-NFC12A1 | NFC tap + UWB approach unlock, Matter over Thread |"
-            echo "| openaliro-esp32-matter-lock | ESP32-S3 or ESP32-C5 + DWM3000EVB | Matter lock over Wi-Fi, BLE + UWB approach unlock |"
-            echo
-            echo '```'
-            cat out/SHA256SUMS.txt
-            echo '```'
-          } > "$notes"
+          ./scripts/release-notes.sh "$TAG" out/SHA256SUMS.txt > "$notes"
           gh release create "$TAG" --repo "$REPO" --verify-tag \
             --title "openaliro $TAG" --notes-file "$notes" \
             out/*.zip out/*.bin out/*.json out/SHA256SUMS.txt

@@ -156,7 +156,7 @@ export const DEVID = {
  *  directly means there is nothing to transcribe out of sync. */
 export const SIZE_CITATION: Citation = {
 	file: "mk/cdk.mk",
-	line: 702,
+	line: 689,
 	expect: "cdk-size-baseline: record the current tree as the baseline",
 };
 

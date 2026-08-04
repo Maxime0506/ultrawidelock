@@ -2,17 +2,21 @@
 #
 # security-attest.sh — can somebody who downloaded a release prove where it came from?
 #
-# Today: no. release.yml assembles the bundles and writes SHA256SUMS.txt, which answers "are these
-# the bytes the release page listed" and not "did this repository's CI build them". Those are
-# different questions, and the second is the one that matters for a project whose distribution
-# path ends in a browser page calling navigator.serial. A SHA256SUMS.txt served from the same
-# release as the artifacts it describes is signed by nothing; whoever could replace the .bin could
-# replace the sums file in the same motion.
+# Yes, since release.yml grew an attest-build-provenance step. It did not always: SHA256SUMS.txt
+# on its own answers "are these the bytes the release page listed" and not "did this repository's
+# CI build them". Those are different questions, and the second is the one that matters for a
+# project whose distribution path ends in a browser page calling navigator.serial. A SHA256SUMS.txt
+# served from the same release as the artifacts it describes is signed by nothing; whoever could
+# replace the .bin could replace the sums file in the same motion.
 #
-# The fix is one action and two permissions in release.yml (see INTEGRATION.md), producing a
+# The fix was one action and two permissions in release.yml (see INTEGRATION.md), producing a
 # Sigstore-backed attestation that binds each artifact to the workflow, repository and commit that
 # built it. This script is the other half: the part that runs outside CI and checks the CI half is
 # real.
+#
+# The subject list covers the unzipped bundle contents as well as the zips, which is what lets
+# each release/<target>/flash.sh verify the exact image it is about to write to a board. A
+# guarantee nobody can reach at the moment they need it is not much of a guarantee.
 #
 #   scripts/security-attest.sh workflow          # static: release.yml still emits attestations
 #   scripts/security-attest.sh verify v0.4.0     # download a release and verify it end to end

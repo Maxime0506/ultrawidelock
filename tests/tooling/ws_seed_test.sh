@@ -22,7 +22,7 @@ bad() { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=$((fail+1)); }
 # assert NAME COND-CMD... — runs the command; pass iff it exits 0. No eval.
 assert() { local n="$1"; shift; if "$@"; then ok "$n"; else bad "$n"; fi; }
 # has PATTERN — greps the last captured $out (case-insensitive).
-has() { printf '%s' "${out:-}" | grep -qi -- "$1"; }
+has() { grep -qi -- "$1" <<<"${out:-}"; }
 
 # A stub bootstrap the fake worktrees carry instead of the real one: it fakes a
 # bootstrapped workspace (.west + a marker) and can be told to fail, to exercise

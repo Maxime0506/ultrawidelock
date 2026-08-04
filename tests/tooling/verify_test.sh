@@ -44,7 +44,13 @@ assert() { local n="$1"; shift; if "$@"; then ok "$n"; else bad "$n"; fi; }
 # difference between "skipped" and "SKIPPED" is a difference in meaning here.
 # Summary rows are matched with " +" between the columns rather than counted
 # spaces: the column widths are formatting, not behavior.
-has()  { printf '%s' "${out:-}" | grep -qE -- "$1"; }
+# A here-string, not `printf | grep`: grep -q exits at the first match, which
+# leaves printf writing into a closed pipe. printf then dies with EPIPE, and
+# `set -o pipefail` above turns that into a non-zero pipeline -- so a match got
+# reported as a miss. It only bit when $out was bigger than the pipe buffer, so
+# it read as a flake: the sweep's output grows with the gate count, and a match
+# early in the text leaves the most still unwritten.
+has()  { grep -qE -- "$1" <<<"${out:-}"; }
 hasnt() { ! has "$1"; }
 # passed LABEL — the gate whose label is LABEL ran and passed. A duration is
 # what says so: only a passing row carries one, where skipped and not-run rows

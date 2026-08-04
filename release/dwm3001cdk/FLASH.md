@@ -11,6 +11,7 @@ is nothing to wire and nothing to solder.
 | `merged.hex` | the firmware: bootloader, Aliro reader, Matter node, UWB engine |
 | `flash.sh` | writes it to the board over the on-board debugger |
 | `VERSION.txt` | build details, **and your setup code** |
+| `README.txt` | the short version of this guide, in plain text |
 | `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
 | `SHA256SUMS.txt` | checksums for every file above |
 
@@ -50,6 +51,11 @@ bash flash.sh
 
 That is the whole step. It takes about twenty seconds and prints your setup code
 at the end.
+
+Before it writes anything, `flash.sh` checks this bundle against its own
+`SHA256SUMS.txt` and refuses to continue if a file has changed. If you have the
+[GitHub CLI](https://cli.github.com) installed it also checks who built the
+firmware. See "Check it really came from us" below for what that proves.
 
 Windows without bash: `nrfutil device program --firmware merged.hex --core application --options chip_erase_mode=ERASE_ALL,verify=VERIFY_READ,reset=RESET_SYSTEM`
 
@@ -113,6 +119,32 @@ point, which is one line of configuration.
 
 It is a one-way switch by design: the board belongs to whoever last flashed it
 with a cable.
+
+## Check it really came from us
+
+`SHA256SUMS.txt` proves your download arrived intact. It cannot prove who built
+it: it travels in the same zip as the files it lists, so whoever could alter the
+firmware could alter the checksums in the same motion.
+
+Every file published with this release is separately signed at build time, by
+the workflow that built it, using [Sigstore](https://www.sigstore.dev). That
+signature is what proves origin, and anyone can check it without trusting the
+release page or whoever handed them the zip:
+
+```bash
+gh attestation verify merged.hex --repo openaliro/openaliro
+```
+
+It prints the repository, the commit and the workflow run that produced the
+file. It needs the [GitHub CLI](https://cli.github.com) and takes a few seconds.
+`flash.sh` runs the same check for you when the CLI is installed, and says so
+either way.
+
+You can check the zip itself the same way, before unzipping it:
+
+```bash
+gh attestation verify openaliro-dwm3001cdk.zip --repo openaliro/openaliro
+```
 
 ## Read this before you trust it with anything
 

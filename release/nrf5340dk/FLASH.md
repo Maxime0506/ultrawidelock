@@ -9,8 +9,11 @@ opens as you walk up or on a tap.
 | `merged.hex` | application core image (Matter, Aliro, the UWB engine) |
 | `merged_CPUNET.hex` | network core image (radio controller) |
 | `flash.sh` | flashes both cores over the DK's on-board J-Link |
+| `SETUP-QR.png` | the commissioning QR code: scan it straight from this folder |
+| `README.txt` | the short version of this guide, in plain text |
 | `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
-| `VERSION.txt` | release tag, commit, and build date |
+| `VERSION.txt` | release tag, commit, build date, and the setup code |
+| `SHA256SUMS.txt` | checksums for every file above |
 
 ## 1. What you need
 
@@ -84,6 +87,10 @@ Programs the network core, then the application core, then resets. Both cores ar
 fully erased first, wiping any previous commissioning. Several DKs? Pass a J-Link
 serial: `bash flash.sh 1050012345`.
 
+Before it writes anything, `flash.sh` checks this bundle against its own
+`SHA256SUMS.txt` and refuses to continue if a file has changed. See "Check it
+really came from us" below.
+
 Manual equivalent:
 
 ```bash
@@ -126,6 +133,33 @@ The boot log prints the Matter onboarding QR code URL and manual pairing code; R
 
 More depth, wiring checks, and a radio self-test:
 <https://github.com/openaliro/openaliro/blob/main/docs/troubleshooting.md>
+
+## Check it really came from us
+
+`SHA256SUMS.txt` proves your download arrived intact. It cannot prove who built
+it: it travels in the same zip as the files it lists, so whoever could alter the
+firmware could alter the checksums in the same motion.
+
+Every file published with this release is separately signed at build time, by
+the workflow that built it, using [Sigstore](https://www.sigstore.dev). That
+signature is what proves origin, and anyone can check it without trusting the
+release page or whoever handed them the zip:
+
+```bash
+gh attestation verify merged.hex --repo openaliro/openaliro
+gh attestation verify merged_CPUNET.hex --repo openaliro/openaliro
+```
+
+It prints the repository, the commit and the workflow run that produced each
+file. It needs the [GitHub CLI](https://cli.github.com) and takes a few seconds.
+`flash.sh` runs the same check for both cores when the CLI is installed, and says
+so either way.
+
+You can check the zip itself the same way, before unzipping it:
+
+```bash
+gh attestation verify openaliro-nrf5340dk.zip --repo openaliro/openaliro
+```
 
 ## Notes
 

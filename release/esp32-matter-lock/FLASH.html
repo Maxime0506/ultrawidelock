@@ -49,12 +49,12 @@ a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 code { font-family: var(--mono); font-size: .84em; }
 p code, li code, td code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: .06em .3em; }
-.prewrap { position: relative; margin: 1rem 0; }
-pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 0; }
+/* user-select instead of a copy button: one click selects the whole command,
+   which is the part a reader wants, and it costs no script. The button that
+   used to be here needed 14 lines of inline JavaScript that this page's own
+   default-src 'none' blocked, so it had never worked in any shipped bundle. */
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 1rem 0; user-select: all; -webkit-user-select: all; }
 pre code { background: none; border: 0; padding: 0; }
-.copy { position: absolute; top: .5rem; right: .5rem; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 5px; font-family: var(--sans); font-size: .68rem; padding: .2rem .55rem; opacity: 0; cursor: pointer; transition: opacity .15s, color .15s, border-color .15s; }
-.prewrap:hover .copy, .copy:focus-visible { opacity: 1; }
-.copy.done { color: var(--accent); border-color: var(--accent); opacity: 1; }
 .tablewrap { overflow-x: auto; margin: 1rem 0; }
 table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
 th { text-align: left; font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -99,7 +99,15 @@ claim covers.</p>
 </tr>
 <tr>
 <td><code>flash.sh</code></td>
-<td>flashes the S3 image with esptool; use the browser or manual command below for C5/C6</td>
+<td>flashes the image for whichever of the three chips you name</td>
+</tr>
+<tr>
+<td><code>manifest.json</code></td>
+<td>the chip list the browser flasher reads</td>
+</tr>
+<tr>
+<td><code>README.txt</code></td>
+<td>the short version of this guide, in plain text</td>
 </tr>
 <tr>
 <td><code>FLASH.md</code> / <code>FLASH.html</code></td>
@@ -108,6 +116,10 @@ claim covers.</p>
 <tr>
 <td><code>VERSION.txt</code></td>
 <td>release tag, commit, and build date</td>
+</tr>
+<tr>
+<td><code>SHA256SUMS.txt</code></td>
+<td>checksums for every file above</td>
 </tr>
 </tbody>
 </table></div>
@@ -257,12 +269,18 @@ for the BU04 pad map and the <code>ST_NRST</code> requirement.</p>
 <a href="https://openaliro.github.io/openaliro/flash/">browser flasher</a> in Chrome or Edge,
 select the board, and choose <strong>Install</strong>. The page and manifest are dry-checked,
 but the repository does not yet record a successful real WebSerial flash.</p>
-<p>The bundled helper currently handles S3 only:</p>
-<pre><code class="language-bash">bash flash.sh
+<p>With tools, the bundled helper handles all three chips:</p>
+<pre><code class="language-bash">bash flash.sh                    # asks which board you have
+bash flash.sh --chip esp32c6     # or say so up front
 </code></pre>
-<p>esptool auto-detects the port; to name one, <code>bash flash.sh /dev/ttyACM0</code>
+<p>esptool auto-detects the port; to name one, <code>bash flash.sh --chip esp32s3 /dev/ttyACM0</code>
 (<code>/dev/cu.usbmodem…</code> on macOS, <code>COM…</code> on Windows). Chip not detected? Hold BOOT while
 plugging in, retry, then replug.</p>
+<p>Naming the chip matters: the images are not interchangeable, and writing the
+wrong one gives a board that flashes cleanly and then never boots.</p>
+<p>Before it writes anything, <code>flash.sh</code> checks this bundle against its own
+<code>SHA256SUMS.txt</code> and refuses to continue if a file has changed. See "Check it
+really came from us" below.</p>
 <p>Manual equivalents:</p>
 <pre><code class="language-bash">esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
 esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c5.bin
@@ -332,6 +350,23 @@ esptool.py --chip esp32c6 --baud 460800 write_flash 0x0 openaliro-matter-lock-es
 <a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a>
 and
 <a href="https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md">forty-odd known traps</a>.</p>
+<h2>Check it really came from us</h2>
+<p><code>SHA256SUMS.txt</code> proves your download arrived intact. It cannot prove who built
+it: it travels in the same zip as the files it lists, so whoever could alter an
+image could alter the checksums in the same motion.</p>
+<p>Every file published with this release is separately signed at build time, by
+the workflow that built it, using <a href="https://www.sigstore.dev">Sigstore</a>. That
+signature is what proves origin, and anyone can check it without trusting the
+release page or whoever handed them the zip:</p>
+<pre><code class="language-bash">gh attestation verify openaliro-matter-lock-esp32s3.bin --repo openaliro/openaliro
+</code></pre>
+<p>It prints the repository, the commit and the workflow run that produced the
+file. It needs the <a href="https://cli.github.com">GitHub CLI</a> and takes a few seconds.
+<code>flash.sh</code> runs the same check for the image it is about to write, when the CLI
+is installed, and says so either way.</p>
+<p>You can check the zip itself the same way, before unzipping it:</p>
+<pre><code class="language-bash">gh attestation verify openaliro-esp32-matter-lock.zip --repo openaliro/openaliro
+</code></pre>
 <h2>Notes</h2>
 <ul>
 <li>Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.</li>
@@ -350,19 +385,5 @@ and
 <footer>Same content as this bundle's <code>FLASH.md</code>.
 <a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
-<script>
-document.querySelectorAll("pre").forEach(function(pre){
-  var wrap=document.createElement("div");wrap.className="prewrap";
-  pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);
-  var btn=document.createElement("button");btn.className="copy";btn.type="button";
-  btn.textContent="Copy";wrap.appendChild(btn);
-  btn.addEventListener("click",function(){
-    navigator.clipboard.writeText(pre.textContent.replace(/\n$/,"")).then(function(){
-      btn.textContent="Copied";btn.classList.add("done");
-      setTimeout(function(){btn.textContent="Copy";btn.classList.remove("done");},1600);
-    });
-  });
-});
-</script>
 </body>
 </html>

@@ -54,12 +54,12 @@ a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 code { font-family: var(--mono); font-size: .84em; }
 p code, li code, td code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: .06em .3em; }
-.prewrap { position: relative; margin: 1rem 0; }
-pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 0; }
+/* user-select instead of a copy button: one click selects the whole command,
+   which is the part a reader wants, and it costs no script. The button that
+   used to be here needed 14 lines of inline JavaScript that this page's own
+   default-src 'none' blocked, so it had never worked in any shipped bundle. */
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 1rem 0; user-select: all; -webkit-user-select: all; }
 pre code { background: none; border: 0; padding: 0; }
-.copy { position: absolute; top: .5rem; right: .5rem; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 5px; font-family: var(--sans); font-size: .68rem; padding: .2rem .55rem; opacity: 0; cursor: pointer; transition: opacity .15s, color .15s, border-color .15s; }
-.prewrap:hover .copy, .copy:focus-visible { opacity: 1; }
-.copy.done { color: var(--accent); border-color: var(--accent); opacity: 1; }
 .tablewrap { overflow-x: auto; margin: 1rem 0; }
 table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
 th { text-align: left; font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -69,22 +69,6 @@ blockquote { border-left: 3px solid var(--warn); padding: .1rem 0 .1rem .9rem; m
 blockquote p { margin: .5rem 0; }
 blockquote strong { color: var(--warn); }
 footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
-"""
-
-# Copy buttons on the command blocks.
-SCRIPT = """
-document.querySelectorAll("pre").forEach(function(pre){
-  var wrap=document.createElement("div");wrap.className="prewrap";
-  pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);
-  var btn=document.createElement("button");btn.className="copy";btn.type="button";
-  btn.textContent="Copy";wrap.appendChild(btn);
-  btn.addEventListener("click",function(){
-    navigator.clipboard.writeText(pre.textContent.replace(/\\n$/,"")).then(function(){
-      btn.textContent="Copied";btn.classList.add("done");
-      setTimeout(function(){btn.textContent="Copy";btn.classList.remove("done");},1600);
-    });
-  });
-});
 """
 
 TEMPLATE = """<!doctype html>
@@ -111,7 +95,6 @@ TEMPLATE = """<!doctype html>
 <footer>Same content as this bundle's <code>FLASH.md</code>.
 <a href="https://github.com/openaliro/openaliro">github.com/openaliro/openaliro</a></footer>
 </main>
-<script>{script}</script>
 </body>
 </html>
 """
@@ -134,7 +117,7 @@ def render(src: pathlib.Path) -> pathlib.Path:
     body = body.replace("</table>", "</table></div>")
     out = src.with_suffix(".html")
     out.write_text(
-        TEMPLATE.format(title=title, style=STYLE, body=body, script=SCRIPT),
+        TEMPLATE.format(title=title, style=STYLE, body=body),
         encoding="utf-8",
     )
     return out
