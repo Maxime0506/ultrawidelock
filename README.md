@@ -15,6 +15,7 @@ BLE + UWB · one board · no app · no cloud · no vendor Aliro binary
 <a href="https://github.com/openaliro/openaliro/releases"><img src="https://img.shields.io/github/v/release/openaliro/openaliro?style=flat-square&labelColor=0D1117&color=2ea043&logo=github&logoColor=white" alt="latest release"/></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-source--available-lightgrey?style=flat-square&labelColor=0D1117" alt="source-available license"/></a>
 <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-read-8957e5?style=flat-square&labelColor=0D1117" alt="changelog"/></a>
+<a href="https://deepwiki.com/openaliro/openaliro"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"/></a>
 <a href="https://discord.gg/7Ez9SRD87Q"><img src="https://img.shields.io/badge/discord-join-5865F2?style=flat-square&labelColor=0D1117&logo=discord&logoColor=white" alt="discord"/></a>
 </p>
 
