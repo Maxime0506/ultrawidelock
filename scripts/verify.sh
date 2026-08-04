@@ -240,7 +240,7 @@ gate_paths() { # <gate>
 	approtect) echo "firmware/ ports/ security/ scripts/check-approtect.sh" ;;
 	uwb-seam) echo "modules/woz_uwb/ security/ scripts/check-uwb-seam.sh" ;;
 	cdk-size) echo "firmware/ scripts/ tests/tooling/" ;;
-	test-web) echo "web-twin/ modules/ firmware/" ;;
+	test-web) echo "web-twin/ web-flasher/ modules/ firmware/ ports/esp32/" ;;
 	twin-wasm) echo "web-twin/" ;;
 	web) echo "web-twin/ activity/ integration/ tools/ security/" ;;
 	deps) echo "activity/ tools/tui/ integration/homeassistant/ ports/esp32/ web-twin/ security/" ;;
@@ -411,7 +411,7 @@ gate_label() {
 	case "$1" in
 	format) echo "clang-format over modules/" ;;
 	shellcheck) echo "shellcheck every tracked *.sh" ;;
-	test-web) echo "twin constants match the firmware" ;;
+	test-web) echo "twin constants and flasher codes match the firmware" ;;
 	actionlint) echo "workflow syntax" ;;
 	fuzz) echo "wire-parser fuzz corpus" ;;
 	test) echo "host KAT suite" ;;

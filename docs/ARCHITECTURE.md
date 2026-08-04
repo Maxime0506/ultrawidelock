@@ -1231,7 +1231,7 @@ otDatasetSetActiveTlvs() takes raw meshcop TLVs, so nothing here has to
 understand the format -- which is the point. This node parses exactly one
 field out of it, the Extended PAN ID, and only so it can name the network
 back to the commissioner.
-Built into every image. Without CONFIG_NET_L2_OPENTHREAD it refuses honestly
+Built into every image. Without CONFIG_OPENTHREAD it refuses honestly
 rather than disappearing: matter_clusters.c calls it unconditionally, and a
 link error would be a worse way to learn that Thread was configured out.
 
@@ -3874,7 +3874,9 @@ WITH_CBMC=1        also run the cbmc proof (off by default, see above)
 SERIAL=1           one gate at a time, fail-fast, instead of lanes
 SKIP="cbmc fuzz"   space-separated gate names to leave out of this run
 FILTER=0           run every gate whatever changed, ignoring the path filter
-FILTER_BASE=<ref>  what "changed" is measured against (default: origin/main)
+FILTER_BASE=<ref>  what "changed" is measured against. Unset means
+origin/main; set-but-empty means there is no base, and
+the filter is off.
 COV_MIN=90         line-coverage floor. Reported, never blocking: under it the
 row still passes and says so. Raise it to aim higher.
 NO_COLOR=1         plain output (colour is the default, pipe or not)

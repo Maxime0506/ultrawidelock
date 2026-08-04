@@ -22,6 +22,7 @@ which no browser API reaches.
 | `manifest.json` | committed here | ESP Web Tools manifest: one merged image per chip at offset 0, version `dev` |
 | merged firmware | never committed | CI builds it (`idf.py merge-bin` in release.yml); locally `idf.py merge-bin` in the app dir |
 | `tools/docs_flash.py` | committed | stages page + firmware into `site/flash/` during `make docs` |
+| `check_codes.py` | committed here | drift-gates the commissioning codes the page prints, and regenerates the QR image |
 
 The merged image is flashed at offset 0x0 and contains the bootloader (0x0 on
 the S3), the partition table (0xC000, `CONFIG_PARTITION_TABLE_OFFSET`), and
@@ -51,6 +52,33 @@ staged (an older release without the C5 or C6 asset, a bench run that merged
 only one target), so the page never offers a firmware that would 404.
 3. Neither: the flash page is skipped, loudly. Before the first release that
    is the normal state of a fresh checkout.
+
+## Why the pairing code is printed on the page
+
+The matter-lock image builds with `CONFIG_ENABLE_TEST_SETUP_PARAMS=y` and no
+factory-data provider, so its passcode (20202021) and discriminator (0xF00) are
+CHIP's test constants, identical on every board flashed from here. That is what
+makes a printed code possible: there is nothing per-device to print. It is also
+why the page says out loud that these are test credentials.
+
+`check_codes.py` recomputes both strings from those constants, encodes the QR
+payload the way CHIP's `QRCodeSetupPayloadGenerator` does, and fails if the page
+disagrees. It proves its own encoder against connectedhomeip's test vector on
+every run, so a wrong answer needs the vector to break first. `make test-web`
+runs it, and so does the `test-web` gate in `make verify`.
+
+Changing a constant means regenerating the image, not editing the SVG:
+
+```bash
+python3 -m pip install segno            # only needed to regenerate
+python3 web-flasher/check_codes.py --svg   # prints the comment + <svg> to paste
+```
+
+The provenance comment above the SVG records the payload it was drawn from and
+a sha256 of the element, so a hand-edited or stale image fails the gate rather
+than silently sending people to a code that commissions nothing. With
+`ESP_MATTER_PATH` set the gate also re-reads the four upstream constants from
+that checkout, which is the layer CI cannot run.
 
 ## Trying it locally (BENCH-GATED)
 

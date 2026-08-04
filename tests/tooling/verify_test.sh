@@ -501,8 +501,8 @@ assert "S1 no gate reports FAILED"           hasnt "FAILED"
 # One report, not two: each gate prints its own row as it finishes and nothing
 # reprints them afterwards, so a gate appears exactly once. The label is what
 # proves the row is the live one rather than a bare name in the verdict.
-assert "S1 rows print live, with labels"     has "twin constants match the firmware"
-assert "S1 and each gate appears once"       test "$(printf '%s' "$out" | grep -cE 'twin constants match the firmware')" -eq 1
+assert "S1 rows print live, with labels"     has "twin constants and flasher codes match the firmware"
+assert "S1 and each gate appears once"       test "$(printf '%s' "$out" | grep -cE 'twin constants and flasher codes match the firmware')" -eq 1
 assert "S1 and the parallel phase announces" has "lanes in parallel"
 
 # S2: cbmc is opt-in, and still gets a row saying so. A gate that vanishes from

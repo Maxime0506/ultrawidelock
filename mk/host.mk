@@ -69,13 +69,17 @@ test-verify:
 	@$(REPO_ROOT)/tests/tooling/verify_test.sh
 	@$(REPO_ROOT)/tests/tooling/security_diff_test.sh
 
-## test-web: drift-gate the web-twin page against the firmware it cites
+## test-web: drift-gate the two web pages against the firmware they print
 ##   Re-reads every constant web-twin/index.html cites (file:line) from the C
 ##   tree and fails if a value moved. The decision logic itself is the real
 ##   firmware compiled to WASM (twin.js) — this guards the residual JS-side
 ##   constants (the ESP32 walk-up controller port + world pacing).
+##   Then the same shape for web-flasher/index.html: the Matter QR payload and
+##   manual pairing code it shows are recomputed from the CHIP test-setup
+##   constants, so a stale code cannot ship as a confident instruction.
 test-web:
 	@python3 $(REPO_ROOT)/web-twin/check_constants.py
+	@python3 $(REPO_ROOT)/web-flasher/check_codes.py
 
 ## twin-wasm: compile the twin's firmware to WASM  ->  web-twin/twin.js
 ##   modules/woz_uwb + the tests/host shim under Emscripten (needs emsdk on
