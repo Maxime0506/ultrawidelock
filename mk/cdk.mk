@@ -99,15 +99,18 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # return leg at 45 cm, 604 RX with the STS live throughout.
 #
 # Applied to BOTH variants on purpose. Debug and release then differ only in the
-# RTT ring, their codegen is identical, and what you debug on the bench is what
-# ships -- which matters most for exactly the timing bugs LTO could cause.
-# RELEASE stays what it already claims to be: a RAM lever, not a codegen one.
+# RTT ring size (8 KB vs 1 KB) and the log level (3 vs 1), their codegen is
+# identical, and what you debug on the bench is what ships -- which matters most
+# for exactly the timing bugs LTO could cause. RELEASE stays what it already
+# claims to be: primarily a RAM lever (7,168 B from the RTT ring) plus a flash
+# lever (20,568 B from errors-only logging), not a codegen one.
 # Worth 41,084 B of flash. See firmware/overlay-lto.conf.
 #
 # SMP=1 adds mcumgr over Bluetooth, which is what nRF Device Manager and nRF
-# Connect for iOS speak. It costs 3,712 B of RAM and leaves 2,412 B free on a
-# debug build, so it wants RELEASE=1 beside it -- firmware/overlay-smp.conf has
-# the measurements and the security note about the unpaired write endpoint.
+# Connect for iOS speak. After errors-only logging and standalone OpenThread,
+# debug+SMP leaves 12,764 B free, so RELEASE=1 is no longer required to fit.
+# RELEASE=1 remains the shipping configuration. See firmware/overlay-smp.conf
+# for the measurements and the security note about the unpaired write endpoint.
 # Ordered after overlay-release.conf so nothing it sets can be undone by it.
 # OTLOG=1 turns OpenThread's own logging on, which is off by construction
 # everywhere else: the level Kconfig depends on OPENTHREAD_DEBUG, so with debug
@@ -277,9 +280,10 @@ CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_S
 ##   fit in. Apple Home commissions it over BLE and it then shows a live lock
 ##   tile (firmware/README.md). Self-provisions, so it needs no USB console.
 ##   What flash, flash-erase and monitor all mean unless you say otherwise.
-##   RELEASE=1 gives up the 8 KB RTT ring for 7,168 B of RAM. Debug is the
-##   default on purpose: on a release image a fault reads as a hang, because a
-##   1 KB ring truncates the boot log and NO_BLOCK_SKIP drops the NEWEST lines.
+##   RELEASE=1 gives up the 8 KB RTT ring for 7,168 B of RAM and sets errors-only
+##   logging to save 20,568 B of flash. Debug is the default on purpose: on a
+##   release image a fault reads as a hang, because a 1 KB ring truncates the
+##   boot log and NO_BLOCK_SKIP drops the NEWEST lines.
 ##   LTO is ON by default and worth 41,084 B; LTO=0 opts out when you need a
 ##   stack trace to name every frame.
 ##   Options: PRISTINE=1  RELEASE=1  LTO=0  CDK_BUILD=<dir>  NCS_VER=<tag>

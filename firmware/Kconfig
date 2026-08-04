@@ -105,8 +105,10 @@ config ALIRO_FACTORY_RESET_BUTTON
 	  or thread on a part already at 96% RAM, and cannot fire during a
 	  walk-up. led0 blinks to confirm the hold registered.
 
-	  OpenThread's settings are left alone -- see aliro_prov_erase() for the
-	  14-day SRP name lease that erasing them costs.
+	  OpenThread's settings are left alone, which keeps the Thread dataset
+	  and the SRP client key. That used to be the whole argument, because
+	  losing the key cost a 14-day name collision; f7d3160 ended that. The
+	  reason now is smaller and still real: rejoining beats re-attaching.
 
 config ALIRO_MATTER_CLEAR_ON_BOOT
 	bool "Erase the stored Matter fabrics at boot"
@@ -116,25 +118,42 @@ config ALIRO_MATTER_CLEAR_ON_BOOT
 	  Deletes the `mfab/*` settings keys before they are read, so the board
 	  comes up with no fabric and advertises commissionable.
 
-	  The other half of a factory reset, and the reason to prefer this pair
-	  over `west flash --erase`: together they clear everything a controller
-	  can see, while leaving OpenThread's own settings alone. The SRP client
-	  key lives there, the SRP host name is the factory EUI-64 and survives
-	  an erase either way, and name ownership is first-come-first-served BY
-	  KEY -- so an erase asks for the same name with a new key and is refused
-	  with OT_ERROR_DUPLICATED until the border router's key lease expires,
-	  up to 14 DAYS. Thread attaches, SRP never registers, and the
-	  commissioner hangs on "Adding to Home" with nothing to say why.
+	  The other half of a factory reset, and why this pair is still worth
+	  preferring over `west flash --erase`: together they clear everything a
+	  controller can see while leaving OpenThread's own settings alone, so
+	  the board rejoins its Thread network instead of being commissioned onto
+	  one.
+
+	  THIS PARAGRAPH USED TO SAY SOMETHING STRONGER AND IT IS NO LONGER TRUE.
+	  The old argument was that an erase destroys the SRP client key while
+	  the host name -- the bare factory EUI-64 -- survives it, so the next
+	  boot asks for a name the border router still holds under the OLD key,
+	  gets OT_ERROR_DUPLICATED for up to 14 DAYS, and presents as a node that
+	  attaches to Thread, never registers, and hangs the commissioner on
+	  "Adding to Home" with nothing to say why. f7d3160 fixed that at the
+	  source: matter_thread_port.c appends a per-lifetime suffix (SRP_HOST_ID_KEY,
+	  "srp/hid") that dies in the same erase that takes the key, so a new key
+	  always asks for a name nobody owns, and SRP_KEY_LEASE_S asks for a
+	  1-hour key lease rather than OpenThread's 14-day default to bound any
+	  collision that still happens. An erase is no longer the expensive
+	  operation this text described. It still costs the reader identity and
+	  every iPhone key provisioned against the board, which is reason enough
+	  to reach for this pair first.
 
 	  Same caveat as ALIRO_PROV_CLEAR_ON_BOOT: it erases on EVERY boot.
 	  Flash it once, then flash an image without it.
 
 config ALIRO_THREAD_GATE
 	bool "Stage 0 contention gate: bring Thread up alongside the reader"
-	# NET_L2_OPENTHREAD, not bare OPENTHREAD. The 802.15.4 driver class is
-	# gated on NETWORKING (zephyr/drivers/ieee802154/Kconfig), so a
-	# CONFIG_NETWORKING=n build links the Thread stack with no radio under it
-	# and this gate measures nothing while looking like it works.
+	# Still NET_L2_OPENTHREAD, but for a different reason than it used to say.
+	# The old note here claimed a CONFIG_NETWORKING=n build links the Thread
+	# stack with no radio under it, because the 802.15.4 driver class is gated
+	# on NETWORKING (zephyr/drivers/ieee802154/Kconfig). That is no longer the
+	# whole picture: standalone OpenThread gets its radio from Nordic's
+	# radio_nrf5.c instead, which is exactly how the shipping image now runs.
+	# What keeps this gate on the L2 is its own code -- thread_gate.c brings
+	# the interface up with net_if_up(), and there is no net_if without the L2.
+	# The gate has served its purpose, so it is not worth porting.
 	depends on NET_L2_OPENTHREAD
 	select OPENTHREAD_MANUAL_START
 	default n
@@ -148,7 +167,13 @@ config ALIRO_THREAD_GATE
 
 config ALIRO_SRP_DIAG
 	bool "Report the SRP client's state every time network data changes"
-	depends on NET_L2_OPENTHREAD
+	# OPENTHREAD, not NET_L2_OPENTHREAD: this reads otSrpClient* state out of
+	# matter_thread_port.c and touches no net_if, so it survived the move to
+	# standalone OpenThread. It has to say so explicitly -- overlay-otlog.conf
+	# sets it =y, and a `depends on` that can no longer be satisfied would have
+	# turned `make build OTLOG=1` into a build with no SRP diagnostics and no
+	# error to say why.
+	depends on OPENTHREAD
 	default n
 	help
 	  Diagnosis only, never shipped. Answers one question the existing logs

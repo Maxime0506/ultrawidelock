@@ -16,8 +16,8 @@ Set on the command line, e.g. `make build RELEASE=1 SMP=1`:
 |---|---|
 | `PRISTINE=1` | from-scratch build. Needed whenever a `-D` flag below changes, because `-p auto` does not re-run CMake for those |
 | `LTO=0` | opt out of link-time optimisation, which is on by default and worth 41,084 B. Use it when a stack trace has to name every frame |
-| `RELEASE=1` | trade the 8 KB RTT ring for 7,168 B of RAM. A RAM lever only: codegen is identical either way |
-| `SMP=1` | add mcumgr over Bluetooth, which is what nRF Device Manager speaks. Costs 3,712 B of RAM, so it wants `RELEASE=1` beside it |
+| `RELEASE=1` | trade the 8 KB RTT ring for 7,168 B of RAM, and set errors-only logging to save 20,568 B of flash. Codegen is identical either way |
+| `SMP=1` | add mcumgr over Bluetooth, which is what nRF Device Manager speaks. `make build SMP=1` is a valid debug configuration and leaves 12,764 B free. `RELEASE=1` remains the shipping configuration |
 | `DFU_LOG=1` | make the bootloader narrate what it does with a staged patch. Read it with MCUboot's own ELF, not the application's |
 | `CDK_BUILD=<dir>` | which build directory `flash`, `flash-erase` and `monitor` mean. Default `build/cdk-matter` |
 | `CDK_RTT_BUILD=<dir>` | point `monitor` at a different image without moving what the flash targets write |

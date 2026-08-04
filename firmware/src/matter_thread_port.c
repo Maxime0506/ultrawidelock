@@ -7,7 +7,7 @@
  * field out of it, the Extended PAN ID, and only so it can name the network
  * back to the commissioner.
  *
- * Built into every image. Without CONFIG_NET_L2_OPENTHREAD it refuses honestly
+ * Built into every image. Without CONFIG_OPENTHREAD it refuses honestly
  * rather than disappearing: matter_clusters.c calls it unconditionally, and a
  * link error would be a worse way to learn that Thread was configured out.
  */
@@ -27,7 +27,10 @@
 
 LOG_MODULE_REGISTER(matter_thread, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
 
-#if defined(CONFIG_NET_L2_OPENTHREAD)
+/* CONFIG_OPENTHREAD, not CONFIG_NET_L2_OPENTHREAD: every call below is either
+ * OpenThread's own API or one of the four openthread_*() helpers that the
+ * standalone module provides, so the Zephyr L2 was never what this needed. */
+#if defined(CONFIG_OPENTHREAD)
 
 #include <openthread.h>
 #include <openthread/dataset.h>
@@ -760,7 +763,7 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	return MATTER_OK;
 }
 
-#else /* !CONFIG_NET_L2_OPENTHREAD */
+#else /* !CONFIG_OPENTHREAD */
 
 /**
  * Advertise this node's services to SRP. Returns MATTER_E_STATE; Thread is not built into this
@@ -798,4 +801,4 @@ int matter_thread_wait_attached(uint32_t timeout_ms)
 	return MATTER_E_TIMEOUT;
 }
 
-#endif /* CONFIG_NET_L2_OPENTHREAD */
+#endif /* CONFIG_OPENTHREAD */
