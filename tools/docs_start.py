@@ -2,13 +2,20 @@
 """Give the rendered site a real "Get started" landing.
 
 The hero's Get-started button used to deep-link straight into the ESP32
-bring-up checklist — an fine first page for exactly one kind of reader.
-This pass builds start.html instead: one landing that holds every track
-(hardware, toolchain, build and test, firmware internals, protocol
-research, project and CI), each a card that drills down in place to the
-commands, installs and guides that track needs. The page is assembled from
-an existing rendered guide page, so it always carries the current shell —
-sidebar, palette, theme toggle and the other passes' injections.
+bring-up checklist — a fine first page for exactly one kind of reader.
+This pass builds start.html instead, ordered by what the reader is willing
+to spend rather than by subsystem: three routes of escalating commitment —
+the digital twin (nothing to install), the browser flasher plus Apple Home
+commissioning (no toolchain), then the full clone-bootstrap-flash setup —
+followed by the reference tracks for a reader who is already running. Each
+is a card that drills down in place to the commands, installs and guides
+that route needs. The page is assembled from an existing rendered guide
+page, so it always carries the current shell — sidebar, palette, theme
+toggle and the other passes' injections.
+
+Route 2's browser-flasher row is not written here: docs_flash.py injects it
+into `#flash-slot` only when a firmware image was actually staged, so a
+checkout with no release never shows an Install link that 404s.
 
 Also part of wayfinding, on every page:
 
@@ -123,6 +130,9 @@ STYLE = """<style>
 .path>summary::after{content:counter(pathn,decimal-leading-zero);order:1;
   margin-left:auto;padding-right:2rem;font-family:var(--mono);font-size:.74rem;
   letter-spacing:.1em;color:var(--faint)}
+/* The reference tracks are not a fourth, fifth and sixth route, so they are
+   not numbered as if the reader had to get through them in order. */
+.paths.deeper .path>summary::after{content:none}
 .p-ico{order:0;flex:none;display:grid;place-items:center;width:2.6rem;height:2.6rem;
   border-radius:12px;color:var(--accent-ink);
   background:linear-gradient(150deg,var(--tint),transparent 78%),var(--surface);
@@ -131,6 +141,12 @@ STYLE = """<style>
 .path:hover .p-ico{transform:scale(1.06) rotate(-3deg)}
 .p-ico svg{width:1.3rem;height:1.3rem}
 .p-t{order:2;flex-basis:100%;min-width:0;margin-top:.2rem}
+/* What the route costs, said before its name: the whole page is ordered by
+   commitment, so the price is the thing being chosen between. */
+.p-when{display:inline-block;margin-bottom:.45rem;padding:.18rem .58rem;
+  border:1px solid var(--tint-line);border-radius:99px;background:var(--tint);
+  color:var(--accent-ink);font-family:var(--mono);font-size:.66rem;
+  letter-spacing:.09em;text-transform:uppercase}
 .p-t b{display:block;font-family:var(--serif);font-size:1.28rem;font-weight:500;
   line-height:1.24;color:var(--strong)}
 .p-t small{display:block;margin-top:.32rem;font-size:.85rem;line-height:1.45;color:var(--muted)}
@@ -164,108 +180,205 @@ STYLE = """<style>
   .path[open] .p-body{animation:none}}
 </style>"""
 
-# Three facts, all of them answerable from the tracks below: how many there
-# are, which targets they cover, and that nothing here needs a board on the
-# desk to get moving.
+# Three facts, all of them answerable from the routes below: what the cheapest
+# way in costs, which targets they cover, and that the first one needs nothing
+# on the desk at all.
 HERO = (
     '<header class="hero-band"><div class="hero-in">'
     '<div class="eyebrow">Start here</div><h1>Get started</h1>'
-    '<p class="lede">From a clean checkout to a phone unlocking the door. '
-    "Pick a track; it opens in place.</p>"
-    '<div class="start-meta"><span>Six tracks</span>'
-    "<span>nRF5340 &amp; ESP32-S3</span>"
-    "<span>Host tests need no hardware</span></div>"
+    '<p class="lede">Three routes in, ordered by what they cost you: watch the '
+    "firmware run in a browser tab, flash a real lock without a toolchain, or "
+    "build the whole thing. Pick one; it opens in place.</p>"
+    '<div class="start-meta"><span>Route 1 needs no hardware</span>'
+    "<span>DWM3001CDK &middot; nRF5340 DK &middot; ESP32-S3/C5/C6</span>"
+    "<span>Host tests need no board</span></div>"
     "</div></header>"
 )
 
 # Every page and anchor referenced here is validated by the link pass that
 # runs after this one, so a renamed guide fails the build instead of rotting.
-def main_html(gh: str) -> str:
-    """Render the main content section of the Get-Started landing page as a series of collapsible track cards. Each card contains links, code chips, and prose explaining the Hardware, Software, Build/Test/Verify, Architecture, Protocol, and Project tracks. Embeds the provided GitHub URL into clone and repository-link rows. Returns HTML."""
+def routes_html(gh: str) -> list[tuple[str, str, str, str, str]]:
+    """Return the three getting-started routes as (icon, cost, title, subtitle, body) tuples, ordered by what each one asks of the reader: a browser tab, a board and no toolchain, then a full checkout. Embeds the provided GitHub URL into clone and release rows."""
+    routes = []
+    routes.append((
+        "play", "0 minutes &middot; no hardware", "Watch it run",
+        "The firmware itself, compiled to WASM, in a browser tab", (
+            '<ul class="rows">'
+            + row("twin.html", "Digital twin",
+                  "A lock and a phone on one page: walk the phone in and watch "
+                  "the ranging round, the RSSI gate and the approach controller "
+                  "decide.")
+            + "</ul>"
+            "<p>Not a mock-up of the decision: the twin runs the same "
+            "<code>modules/woz_uwb</code> logic the board runs, compiled to "
+            "WASM, and CI rebuilds it and byte-diffs the result so the page "
+            "cannot drift from the firmware.</p>"
+            '<ul class="rows">'
+            + row("protocol-research.html", "How the unlock works",
+                  "The BLE and UWB exchange the twin is replaying, as observed "
+                  "on air.")
+            + "</ul>"
+        )))
+
+    rel_row = row(f"{gh}/releases", "Release bundles",
+                  "Prebuilt images for every target, if you would rather not "
+                  "flash from the browser.") if gh else ""
+    routes.append((
+        "bolt", "~10 minutes &middot; no toolchain", "Flash a real lock",
+        "An ESP32 written straight from this site, then added to Apple Home", (
+            # docs_flash.py puts the browser-flasher row at the head of this
+            # list, and only when an image was actually staged next to the site.
+            '<ul class="rows" id="flash-slot">'
+            + row("add-the-key.html", "Add the key",
+                  "Commissioning, for every target: the setup code, the "
+                  "uncertified-accessory warning, and what a healthy pairing "
+                  "looks like.")
+            + row("esp32-bringup.html", "ESP32 bring-up (S3, C5, and C6)",
+                  "DWM3000EVB to the board, pin by pin, and what good output "
+                  "looks like — the table CI keeps in sync with "
+                  "<code>board_pins.h</code>.")
+            + rel_row
+            + "</ul>"
+            "<p>What this needs on the desk: an ESP32-S3, C5 or C6 dev board, a "
+            "Qorvo DWM3000EVB, eleven jumper wires and a USB data cable. "
+            "Chrome, Edge or Firefox on a computer does the writing over "
+            "WebSerial.</p>"
+            "<p>Apple\u2019s side: an iPhone with a UWB chip, a home hub, and a "
+            "2.4&nbsp;GHz Wi-Fi network for the board to join. No ESP-IDF, no "
+            "clone, nothing to install.</p>"
+            '<details class="p-sub"><summary>What is actually validated on '
+            'each chip</summary><div class="s-body">'
+            "<p><b>ESP32-S3</b>: approach unlock, on hardware.</p>"
+            "<p><b>ESP32-C6</b>: approach unlock, on hardware; it drives a BU04 "
+            "over direct SPI.</p>"
+            "<p><b>ESP32-C5</b>: builds and releases, no hardware validation "
+            "recorded.</p>"
+            "<p>None of the three has an NFC tap path. That needs the "
+            "nRF5340 DK.</p></div></details>"
+        )))
+
+    clone = (chip(f"git clone {gh}.git") + chip("cd openaliro")) if gh else ""
+    routes.append((
+        "chip", "a full dev setup", "Build it yourself",
+        "Clone, bootstrap the toolchain, and flash the board you have", (
+            '<details class="p-sub" open><summary>DWM3001CDK &mdash; the primary '
+            "target</summary>"
+            '<div class="s-body">'
+            + clone
+            + chip("make dfu-key")
+            + chip("make bootstrap")
+            + chip("make build")
+            + chip("make flash")
+            + chip("make monitor")
+            + "<p>One nRF52833 and the DW3110 in the same module: nothing to "
+              "wire, an on-board J-Link, and the reader, a Matter node and a "
+              "Thread MTD in one image. Bare targets always mean this board; "
+              "the image lands in <code>build/cdk-matter</code>.</p>"
+              "<p><code>make dfu-key</code> is not optional and not "
+              "once-per-machine. Every image is signed, the key is gitignored, "
+              "and without one the build fails at configure rather than falling "
+              "back to MCUboot\u2019s published demo key \u2014 so a fresh clone "
+              "or a new git worktree needs its own.</p>"
+              "<p><code>make bootstrap</code> is the ~8.5&nbsp;GB one: host "
+              "tools, the pinned NCS v3.3.0 toolchain, then NCS itself into "
+              "<code>./workspace</code>. An existing toolchain is detected and "
+              "skipped. <code>make monitor</code> is RTT over "
+              "<code>probe-rs</code>; this board has no UART console at "
+              "all.</p>"
+            + '<ul class="rows">'
+            + row("../firmware/README.md", "The DWM3001CDK manual",
+                  "Sizes, partitions, the RTT console, the update over "
+                  "Bluetooth, and the per-stage hardware status.")
+            + row("dwm3001cdk-surgery.html", "Bring-up traps",
+                  "Every trap this target set, with the symptom that exposed "
+                  "it. Read it before debugging.")
+            + "</ul></div></details>"
+            '<details class="p-sub"><summary>nRF5340 DK &mdash; the target with '
+            "the NFC tap</summary>"
+            '<div class="s-body">'
+            + chip("make nrf-build")
+            + chip("make nrf-flash-erase")
+            + chip("make nrf-term")
+            + "<p>A DK plus a DWM3000EVB shield, and the only target with a "
+              "reader IC, so Express Mode tap works here and nowhere else. "
+              "<code>make nrf-flash-erase</code> is required after any "
+              "net-core config change.</p>"
+            + '<ul class="rows">'
+            + row("nrf5340-bringup.html", "nRF5340 bring-up",
+                  "First flash, the shell, and what a healthy boot looks like.")
+            + row("nrf5340-wiring.html", "nRF5340 wiring",
+                  "The shield and the NFC reader, pin by pin.")
+            + "</ul></div></details>"
+            '<details class="p-sub"><summary>ESP32-S3, C5 and C6</summary>'
+            '<div class="s-body">'
+            + chip("make esp-build APP=matter-lock TARGET=esp32s3")
+            + "<p>ESP-IDF and esp-matter rather than NCS, with the same shared "
+              "<code>modules/</code> underneath. <code>TARGET</code> takes "
+              "<code>esp32s3</code>, <code>esp32c5</code> or "
+              "<code>esp32c6</code>; <code>APP=reader</code> builds the "
+              "standalone bench reader instead of the full lock.</p>"
+            + '<ul class="rows">'
+            + row("esp32-bringup.html", "ESP32 bring-up (S3, C5, and C6)",
+                  "Wiring, first boot, and how to prove a real range.")
+            + row("esp32-gotchas.html", "ESP32 gotchas",
+                  "The numbered list of what this port got wrong first.")
+            + "</ul></div></details>"
+            '<details class="p-sub"><summary>No board yet? The host suites need '
+            "none</summary>"
+            '<div class="s-body">'
+            + chip("make test")
+            + chip("make verify")
+            + "<p><code>make test</code> is the host KAT suite: no NCS "
+              "toolchain, no hardware. <code>make verify</code> is the pre-PR "
+              "sweep \u2014 every CI gate a host can run, in about 35 seconds, "
+              "and the same script CI itself calls.</p></div></details>"
+            + '<ul class="rows">'
+            + row("set-up.html", "Installing",
+                  "The full install guide \u2014 every target, every knob.")
+            + row("configuring.html", "Configuring",
+                  "Build options, Kconfig overlays, and the runtime consoles.")
+            + row("add-the-key.html", "Add the key",
+                  "Commissioning into Apple Home, once something is flashed.")
+            + row("hardware-validation.html", "Hardware validation",
+                  "What to prove on the bench that automated CI cannot.")
+            + row("troubleshooting.html", "Troubleshooting",
+                  "Symptoms, grouped by target, leading with the CDK.")
+            + "</ul>"
+            '<p>The step-by-step version of this route sits on the '
+            '<a href="index.html#get-running">landing page</a>.</p>'
+        )))
+    return routes
+
+
+def deeper_html(gh: str) -> list[tuple[str, str, str, str, str]]:
+    """Return the reference tracks shown under the three routes as (icon, cost, title, subtitle, body) tuples, for a reader who is already running. The cost field is empty: these are not a fourth route. Embeds the provided GitHub URL into the repository rows."""
     tracks = []
-    tracks.append(("chip", "Hardware", "Boards, wiring, and the UWB radio", (
-        '<ul class="rows">'
-        + row("nrf5340-bringup.html", "nRF5340 bring-up",
-              "The primary target: DK + shields, first flash, and what a "
-              "healthy boot looks like.")
-        + row("esp32-bringup.html", "ESP32-S3 wiring checklist",
-              "DWM3000EVB to ESP32-S3, pin by pin — the table CI keeps in "
-              "sync with <code>board_pins.h</code>.")
-        + row("hardware-validation.html", "Hardware validation checklist",
-              "What to prove on the bench that automated CI cannot.")
-        + "</ul>"
-        '<details class="p-sub"><summary>Supported targets</summary>'
-        '<div class="s-body">'
-        "<p>Primary: <b>nRF5340 DK</b> + <b>DWM3000EVB</b> shield "
-        "(validated, measured).</p>"
-        "<p>Port: <b>ESP32-S3</b> with the same DWM3000EVB "
-        "(<code>ports/esp32</code>).</p></div></details>"
-    )))
-    tracks.append(("dl", "Software &amp; toolchain", "Everything to install, per target", (
-        '<details class="p-sub" open><summary>nRF5340 — the primary target</summary>'
-        '<div class="s-body">'
-        + (chip(f"git clone {gh}.git") + chip("cd openaliro") if gh else "")
-        + chip("make bootstrap")
-        + "<p>One command, three phases: the host tools, the NCS v3.3.0 "
-          "toolchain, then ~6.5 GB of NCS and the Nordic add-on into "
-          "<code>./workspace</code>. Already have a toolchain? It is detected "
-          "and skipped.</p>"
-        + "</div></details>"
-        '<details class="p-sub"><summary>ESP32-S3 port</summary>'
-        '<div class="s-body">'
-        '<ul class="rows">'
-        + row("porting-esp32.html", "openaliro on ESP32-S3",
-              "Porting roadmap and retrospective.")
-        + "</ul></div></details>"
-        '<details class="p-sub"><summary>Docs tooling</summary>'
-        '<div class="s-body">'
-        + chip("brew install doxygen graphviz")
-        + chip("make docs")
-        + "<p>The site lands in <code>./site</code>.</p>"
-        + "</div></details>"
-        '<ul class="rows">'
-        + row("set-up.html", "Installing",
-              "The full install guide — every target, every knob.")
-        + "</ul>"
-        '<p>The step-by-step version of this track sits on the '
-        '<a href="index.html#get-running">landing page</a>.</p>'
-    )))
-    tracks.append(("play", "Build, flash &amp; test", "The make targets that drive everything", (
-        chip("make build")
-        + chip("make flash")
-        + chip("make test")
-        + chip("make verify")
-        + "<p>Bare targets mean the DWM3001CDK; its image lands in "
-          "<code>./build/cdk-matter/merged.hex</code>. <code>make nrf-build</code> "
-          "builds the nRF5340 DK. Tests run on the host, no hardware. "
-          "<code>make verify</code> is the pre-PR sweep — every CI gate a "
-          "host can run, in about 35 seconds.</p>"
-        + '<ul class="rows">'
-        + row("configuring.html", "Configuring",
-              "Build options, Kconfig overlays, and the runtime consoles.")
-        + row("troubleshooting.html", "Troubleshooting",
-              "Common issues, grouped by where they show up.")
-        + "</ul>"
-    )))
-    tracks.append(("layers", "Firmware internals", "How the reader is put together", (
+    tracks.append(("layers", "", "Firmware internals",
+                   "How the reader is put together", (
         '<ul class="rows">'
         + row("architecture.html", "Architecture",
               "The module graph, color-keyed by subsystem, and every "
-              "module's declarations.")
+              "module\u2019s declarations.")
+        + row("modules.html", "Modules",
+              "Every file in the tree, grouped by directory, with the brief "
+              "from its own docstring.")
         + row("chipset-memory.html", "Memory usage",
-              "Where the nRF5340 build's flash and RAM go.")
+              "Where the build\u2019s flash and RAM go, measured.")
         + row("reference.html", "Reference",
               "The Doxygen tree, generated from the declarations themselves.")
         + "</ul>"
     )))
-    tracks.append(("radio", "Protocol &amp; research", "How the unlock actually works on air", (
+    tracks.append(("radio", "", "Protocol &amp; research",
+                   "How the unlock actually works on air", (
         '<ul class="rows">'
         + row("protocol-research.html", "Protocol research",
               "BLE + UWB proximity unlock, as observed on air.")
         + row("protocol-notes.html", "Time synchronization",
               "Wall-clock time and credential validity in the firmware.")
         + row("approach-direction.html", "Approach Direction",
-              "The Home app's Left/Front/Right control, end to end.")
+              "The Home app\u2019s Left/Front/Right control, end to end.")
+        + row("range-integrity.html", "Range integrity",
+              "What a signed distance is worth, and what defends it.")
         + row("porting-esp32-phase3.html", "Deriving the ranging key",
               "The credential auth, phase by phase.")
         + "</ul>"
@@ -276,7 +389,8 @@ def main_html(gh: str) -> str:
             row(gh, "Repository", "Source, issues and pull requests on GitHub.")
             + row(f"{gh}/issues", "Issues", "Report a bug or pick something up.")
         )
-    tracks.append(("branch", "Project &amp; contributing", "CI, releasing, and where the work happens", (
+    tracks.append(("branch", "", "Project &amp; contributing",
+                   "CI, releasing, and where the work happens", (
         '<ul class="rows">' + gh_rows
         + row("RELEASING.html", "Releasing", "How a release is cut and what gates it.")
         + row("porting.html", "Porting openaliro",
@@ -285,32 +399,47 @@ def main_html(gh: str) -> str:
         '<details class="p-sub" open><summary>What CI checks, and how to run it '
         "here</summary>"
         '<div class="s-body"><p>Host tests with a coverage floor, ASan/UBSan '
-        "sanitizer runs, clang-format and clang-tidy, shell and workflow "
-        "lint, fuzzing, CBMC proofs, port tests, firmware image builds for "
-        "both targets, and a patch-drift gate that keeps the ports "
-        "honest.</p>"
+        "sanitizer runs, clang-format and clang-tidy, shell and workflow lint, "
+        "fuzzing, CBMC proofs, port tests, and the blocking security "
+        "gates.</p>"
         + chip("make tools")
         + chip("make verify")
-        + "<p>Every one of those a laptop can run is a row in "
-          "<code>make verify</code>, so a green sweep and a green PR mean the "
-          "same thing. <code>make tools</code> says what each gate needs and "
-          "what is missing here; a gate whose tool is absent fails the sweep "
-          "rather than passing quietly, because CI runs it either way. Only "
-          "the firmware image builds stay out — they need the full "
+        + "<p>CI is one job and it runs <code>make verify</code>, so a green "
+          "sweep and a green PR mean the same thing. <code>make tools</code> "
+          "says what each gate needs and what is missing here; a gate whose "
+          "tool is absent fails the sweep rather than passing quietly, because "
+          "CI runs it either way. Firmware images are never built on a push: "
+          "that workflow is dispatch-only, because it needs the full "
           "toolchains.</p></div></details>"
     )))
+    return tracks
 
-    cards = "".join(
+
+def card(ico: str, when: str, title: str, sub: str, body: str) -> str:
+    """Render one route or track as a collapsible summary card. An empty cost field omits the badge, which is what separates a reference track from a numbered route."""
+    badge = f'<span class="p-when">{when}</span>' if when else ""
+    return (
         f'<details class="path"><summary><span class="p-ico">{ICONS[ico]}</span>'
-        f'<span class="p-t"><b>{title}</b><small>{sub}</small></span>'
+        f'<span class="p-t">{badge}<b>{title}</b><small>{sub}</small></span>'
         f'<span class="p-chev">{ICONS["chev"]}</span></summary>'
         f'<div class="p-body">{body}</div></details>'
-        for ico, title, sub, body in tracks
     )
+
+
+def cards(items: list[tuple[str, str, str, str, str]]) -> str:
+    """Render a list of route or track tuples as one run of cards."""
+    return "".join(card(*item) for item in items)
+
+
+def main_html(gh: str) -> str:
+    """Render the main content section of the Get-Started landing page: the three escalating-commitment routes, then the reference tracks for a reader who is already running. Embeds the provided GitHub URL into clone, release and repository rows. Returns HTML."""
     return (
         f'<main class="doc">\n{STYLE}\n'
-        f'<div class="section-h"><h2>Pick a track</h2><span class="rule"></span></div>\n'
-        f'<div class="paths">{cards}</div>\n'
+        f'<div class="section-h"><h2>Pick a route</h2><span class="rule"></span></div>\n'
+        f'<div class="paths">{cards(routes_html(gh))}</div>\n'
+        f'<div class="section-h"><h2>Once it is running</h2>'
+        f'<span class="rule"></span></div>\n'
+        f'<div class="paths deeper">{cards(deeper_html(gh))}</div>\n'
         f"</main>"
     )
 

@@ -87,6 +87,17 @@ python3 tools/docs_start.py
 echo "==> reading order"
 python3 tools/docs_nav.py
 
+# After the reading order, because that pass finds the Guides section by the
+# heading this one removes, and before the sitewide shims, so the new page
+# gets them like any other.
+echo "==> module index"
+python3 tools/docs_modules.py
+
+# Needs both trees: the guides the generator rendered and the doxygen tree
+# built above. Above the pager, so after the reading order.
+echo "==> api cross-links"
+python3 tools/docs_apilinks.py
+
 echo "==> command chips"
 python3 tools/docs_cmds.py
 

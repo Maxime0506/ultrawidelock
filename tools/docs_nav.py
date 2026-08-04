@@ -7,8 +7,9 @@ a reader finishing one page got no pointer to the next. This pass owns the
 order in one place:
 
   * the landing page's Guides section is rebuilt into curated buckets
-    (Set up first, deep dives after) — and because the sidebar shim mirrors
-    the landing page's buckets, the sidebar follows automatically,
+    (get it running first, then the two kinds of depth: research, and this
+    project's own engineering log) — and because the sidebar shim mirrors the
+    landing page's buckets, the sidebar follows automatically,
   * every page on the journey gets a prev/next pager, so there is always a
     next page and it is always the right one,
   * each guide's hero eyebrow names its bucket instead of the generic
@@ -38,6 +39,7 @@ SITE = Path("site")
 JOURNEY = [
     ("Start here", "start"),
     ("Set up", "set-up"),
+    ("Set up", "add-the-key"),
     ("Set up", "configuring"),
     ("Set up", "troubleshooting"),
     ("Set up", "home-assistant"),
@@ -45,26 +47,32 @@ JOURNEY = [
     ("Hardware", "nrf5340-wiring"),
     ("Hardware", "esp32-bringup"),
     ("Hardware", "hardware-validation"),
-    ("Deep dives", "architecture"),
-    ("Deep dives", "protocol-research"),
-    ("Deep dives", "protocol-notes"),
-    ("Deep dives", "wireshark"),
-    ("Deep dives", "approach-direction"),
-    ("Deep dives", "power-profile"),
-    ("Deep dives", "passive-carry-verification"),
+    # Research answers a question about the phone, the protocol or the radio —
+    # something that stays true whoever builds the reader. The engineering log
+    # below records what this repository itself built and what it cost. The
+    # split matters for the reader arriving from a search engine: one half is
+    # citable, the other is a changelog with prose.
+    ("Research", "architecture"),
+    ("Research", "protocol-research"),
+    ("Research", "protocol-notes"),
+    ("Research", "wireshark"),
+    ("Research", "approach-direction"),
+    ("Research", "passive-carry-verification"),
     # presence first, then what a signed distance is actually worth, then the
     # macOS consumer: each one assumes the previous.
-    ("Deep dives", "presence"),
-    ("Deep dives", "range-integrity"),
-    ("Deep dives", "twin-worker-phase0"),
-    ("Deep dives", "uwb-mac-login"),
-    ("Deep dives", "porting-esp32-phase3"),
-    ("Deep dives", "chipset-memory"),
-    ("Deep dives", "home-assistant-internals"),
+    ("Research", "presence"),
+    ("Research", "range-integrity"),
+    ("Research", "uwb-mac-login"),
+    ("Research", "porting-esp32-phase3"),
+    ("Engineering log", "power-profile"),
+    ("Engineering log", "chipset-memory"),
+    ("Engineering log", "home-assistant-internals"),
+    # the /twin spike belongs with the other Discord work, not with the radio
+    ("Engineering log", "twin-worker-phase0"),
     # the user-facing page first, then the spike that proves it can exist
-    ("Deep dives", "discord-activity"),
-    ("Deep dives", "discord-activity-phase0"),
-    ("Deep dives", "discord-activity-distribution"),
+    ("Engineering log", "discord-activity"),
+    ("Engineering log", "discord-activity-phase0"),
+    ("Engineering log", "discord-activity-distribution"),
     ("Porting", "porting"),
     ("Porting", "porting-esp32"),
     ("Porting", "esp32-gotchas"),
@@ -79,10 +87,14 @@ JOURNEY = [
 ]
 NOT_ROWS = {"start", "architecture"}
 
+# Guides run to whatever comes next, which is the per-file listing on a freshly
+# generated page and the close of the main column once docs_modules.py has moved
+# that listing out. Both, because with no page generator configured the passes
+# run over a site/ kept from the previous build, where it is already gone.
 GUIDES_RE = re.compile(
     r'(<div class="section-h"><h2>Guides</h2><span class="rule"></span></div>\n)'
     r"(.*?)"
-    r'(<div class="section-h" id="subsystems">)',
+    r'(<div class="section-h" id="subsystems">|</main>)',
     re.S,
 )
 ROW_RE = re.compile(r'<li><a href="([^"]+?)\.html".*?</li>', re.S)

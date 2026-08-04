@@ -11,7 +11,7 @@
 | [`bot/eval/headers.ts`](headers.ts.md) | @file §7.2 tier 1: a deterministic keyword header on every chunk. |
 | [`bot/eval/independent.ts`](independent.ts.md) | @file Validate and score a golden set this session did not write. |
 | [`bot/eval/retrieve.ts`](retrieve.ts.md) | @file The two lexical retrievers Stage 0 measures, over one shared tokenizer. |
-| [`bot/eval/scope.ts`](scope.ts.md) | *first commit: "bot/eval: keep the answer key out of the index, and measure scope"* |
+| [`bot/eval/scope.ts`](scope.ts.md) |  |
 | [`bot/eval/score-deepwiki.ts`](score-deepwiki.ts.md) | @file Re-score the cached DeepWiki answers, with a metric that is fair to prose. |
 | [`bot/eval/stage0.ts`](stage0.ts.md) | @file Stage 0 baseline D: the lexical floor, measured. |
 | [`bot/eval/stage1-probe.ts`](stage1-probe.ts.md) | @file Which candidate fix actually moves the config stratum? |

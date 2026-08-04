@@ -71,9 +71,15 @@ QUICKSTART_STEPS = (
         "git clone {url}.git",
     ),
     (
+        "Mint this checkout's signing key",
+        "every image is signed and the key is gitignored, so a fresh clone or a "
+        "new worktree fails at configure until it has one",
+        "make dfu-key",
+    ),
+    (
         "Set the machine up",
         "host tools, the NCS v3.3.0 toolchain, then the SDK workspace "
-        "(~6.5 GB) into ./workspace — anything already installed is skipped",
+        "(~8.5 GB) into ./workspace — anything already installed is skipped",
         "make bootstrap",
     ),
     (
@@ -191,8 +197,10 @@ def quickstart(url: str) -> bytes:
 <ol class="qs-steps">
 {steps}
 </ol>
-<p class="qs-note">No toolchain? <code>make test</code> runs as-is. On ESP32-S3,
-start at the <a href="esp32-bringup.html">bring-up checklist</a>.</p>
+<p class="qs-note">No toolchain? <code>make test</code> runs as-is. On an
+ESP32-S3, C5 or C6, start at the
+<a href="esp32-bringup.html">bring-up checklist</a>. Once something is flashed,
+Apple Home has to <a href="add-the-key.html">mint the key</a>.</p>
 </section>
 """.encode()
     )

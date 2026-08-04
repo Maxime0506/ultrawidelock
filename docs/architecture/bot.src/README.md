@@ -4,7 +4,7 @@
 | subsystem | about |
 |---|---|
 | [`bot/src/api.ts`](api.ts.md) | @file The two Discord calls that need the bot token. |
-| [`bot/src/assets.generated.ts`](assets.generated.ts.md) | *first commit: "bot: /matrix renders a real PNG (phase 4)"* |
+| [`bot/src/assets.generated.ts`](assets.generated.ts.md) |  |
 | [`bot/src/assets.ts`](assets.ts.md) | @file Decodes the generated base64 assets into bytes, once per Worker |
 | [`bot/src/attest.ts`](attest.ts.md) | @file Look up a GitHub build-provenance attestation by subject digest. |
 | [`bot/src/awake.ts`](awake.ts.md) | @file Whether a registered owner is awake right now, from their stored |

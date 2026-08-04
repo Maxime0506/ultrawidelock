@@ -57,13 +57,21 @@ RELEASE_MANIFEST = "openaliro-matter-lock.manifest.json"
 # than guessed. Markers keep every edit idempotent over a kept site/.
 MARK = "<!-- flash-page -->"
 
-HUB_ANCHOR = '<li><a href="hardware-validation.html">'
+# docs_start.py leaves this list empty-headed for exactly this row, so the
+# browser-flash route leads with the flasher when one exists and reads as a
+# hardware route when it does not.
+HUB_ANCHOR = '<ul class="rows" id="flash-slot">'
 HUB_ROW = (
     MARK + '<li><a href="flash/"><span class="row-name">Flash an ESP32 lock '
     "from the browser</span><span class=\"row-desc\">No toolchain: this site "
     "writes the merged firmware image (ESP32-S3, C5 or C6) over WebSerial "
     "(Chrome, Edge, or Firefox).</span></a></li>"
 )
+
+# The flasher page links back into the site for the commissioning depth it
+# does not repeat. It is copied in after the link pass, so that link is never
+# validated there; this pass asserts the target exists instead.
+FLASH_LINKS = ("../add-the-key.html",)
 
 QS_ANCHOR = '<div class="section-h"><h2>Get running</h2><span class="rule"></span></div>'
 # Same card the digital twin uses at the foot of this section: the twin pass
@@ -131,9 +139,23 @@ def inject(page: Path, anchor: str, addition: str, before: bool) -> str:
     return "linked"
 
 
+def check_outbound(page: Path) -> int:
+    """Verify the staged flasher page's site-relative links resolve. The link pass has already run by the time this page is copied in, so nothing else checks them. Skipped when the guides were never rendered, where every one of those targets is missing by construction."""
+    if not (SITE / "index.html").is_file():
+        print("    no rendered site — the page's links back into it not checked")
+        return 0
+    missing = [t for t in FLASH_LINKS if not (page.parent / t).is_file()]
+    for target in missing:
+        print(
+            f"docs_flash: {page} links to {target}, which does not exist",
+            file=sys.stderr,
+        )
+    return 1 if missing else 0
+
+
 def link_site() -> None:
     """Inject the flash-page hub link and landing quickstart call-to-action into the rendered site, and validate optional stylesheet and animation styles."""
-    hub = inject(SITE / "start.html", HUB_ANCHOR, HUB_ROW, before=True)
+    hub = inject(SITE / "start.html", HUB_ANCHOR, HUB_ROW, before=False)
     qs = inject(SITE / "index.html", QS_ANCHOR, QS_LEDE, before=False)
     sheet = SITE / "style.css"
     if qs == "linked" and sheet.is_file() and "/* flash-page */" not in sheet.read_text():
@@ -205,6 +227,8 @@ def main() -> int:
 
     shutil.copyfile(SRC / "index.html", dst / "index.html")
     print(f"    {dst / 'index.html'} (firmware: {source})")
+    if check_outbound(dst / "index.html"):
+        return 1
     link_site()
     return 0
 

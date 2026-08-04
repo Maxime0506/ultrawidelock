@@ -558,8 +558,6 @@ runner and the Workers runtime, so this needs no environment branching.
 
 ### [`bot/src/assets.generated.ts`](architecture/bot.src/assets.generated.ts.md)
 
-*No module docstring. First commit: "bot: /matrix renders a real PNG (phase 4)".*
-
 **used by** [`bot/src/assets.ts`](architecture/bot.src/assets.ts.md)
 
 ### [`bot/src/twin-js.d.ts`](architecture/bot.src/twin-js.d.ts.md)
@@ -1547,8 +1545,6 @@ before merging it in
 **depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/expand.ts`](architecture/bot.eval/expand.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md), [`bot/eval/headers.ts`](architecture/bot.eval/headers.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
 
 ### [`bot/eval/scope.ts`](architecture/bot.eval/scope.ts.md)
-
-*No module docstring. First commit: "bot/eval: keep the answer key out of the index, and measure scope".*
 
 **depends on** [`bot/eval/corpus.ts`](architecture/bot.eval/corpus.ts.md), [`bot/eval/golden.ts`](architecture/bot.eval/golden.ts.md), [`bot/eval/retrieve.ts`](architecture/bot.eval/retrieve.ts.md)
 
@@ -2816,6 +2812,30 @@ the generator adds only what it left out. New entries are also appended to
 the search index in nav.js. Run from the repo root, after docs_graph.py and
 before the link pass.
 
+### [`tools/docs_apilinks.py`](architecture/tools/docs_apilinks.md)
+
+Point each narrative page at the declarations it is describing.
+
+The guides and the Doxygen tree are written for the same reader at two
+different moments and never referred to each other: a page explains what the
+STS ladder defends against and stops there, while `ccc_sts.h` states exactly
+what the ladder is, three clicks away with no path between them.
+
+This pass adds one block at the foot of the pages that have a counterpart —
+the header the prose is about, with a line saying why it is the one to open.
+The mapping is curated here rather than derived, because "the API this page
+is about" is a judgement; what is not curated is whether the target exists.
+Every header named below is resolved against the rendered tree and a miss
+fails the build, so a renamed or newly-undocumented header cannot rot into a
+dead link.
+
+Doxygen omits undocumented symbols from the reference tree but still renders
+a source view, so a header with no doc comments resolves to its source page
+and the row says so.
+
+Run from the repo root, after doxygen and after docs_nav.py (the block goes
+above the pager, not below it), and before the link pass.
+
 ### [`tools/docs_cmds.py`](architecture/tools/docs_cmds.md)
 
 Render runnable command blocks as one copy chip per command.
@@ -3018,6 +3038,31 @@ passes run over a site/ kept from a previous build, so a page may already carry
 the injections. Run from the repo root, after the generators and before the
 link pass.
 
+### [`tools/docs_modules.py`](architecture/tools/docs_modules.md)
+
+Move the per-file reference listing off the landing page onto its own.
+
+The generator ends index.html with every file in the tree — 331 of them at
+this size, one row each, grouped by directory. That is a useful index and a
+terrible last impression: it is roughly 60% of the landing page's bytes, it
+buries the Guides section a reader actually wants, and nobody scrolls a
+homepage looking for `ccc_shim_rx.c`.
+
+This pass cuts that section out and republishes it as modules.html, so the
+landing page ends at Guides and the listing gains a page where a directory
+heading is a heading rather than a speed bump. The feature card that used to
+jump to the #subsystems anchor now opens the page instead, and the listing
+grows a per-directory jump strip, which the anchor version never had room
+for.
+
+Nothing here is curated: the rows, their order and their blurbs are the
+generator's, moved verbatim. The page is assembled from an existing rendered
+guide page, so it carries the current shell — sidebar, palette, theme toggle
+and the other passes' injections.
+
+Run from the repo root, after docs_nav.py (whose Guides regex still needs the
+#subsystems heading in place) and before the link pass.
+
 ### [`tools/docs_motion.py`](architecture/tools/docs_motion.md)
 
 The motion layer: choreograph the arrival, and make the page answer back.
@@ -3074,8 +3119,9 @@ a reader finishing one page got no pointer to the next. This pass owns the
 order in one place:
 
   * the landing page's Guides section is rebuilt into curated buckets
-    (Set up first, deep dives after) — and because the sidebar shim mirrors
-    the landing page's buckets, the sidebar follows automatically,
+    (get it running first, then the two kinds of depth: research, and this
+    project's own engineering log) — and because the sidebar shim mirrors the
+    landing page's buckets, the sidebar follows automatically,
   * every page on the journey gets a prev/next pager, so there is always a
     next page and it is always the right one,
   * each guide's hero eyebrow names its bucket instead of the generic
@@ -3095,13 +3141,20 @@ page's buckets as rebuilt here).
 Give the rendered site a real "Get started" landing.
 
 The hero's Get-started button used to deep-link straight into the ESP32
-bring-up checklist — an fine first page for exactly one kind of reader.
-This pass builds start.html instead: one landing that holds every track
-(hardware, toolchain, build and test, firmware internals, protocol
-research, project and CI), each a card that drills down in place to the
-commands, installs and guides that track needs. The page is assembled from
-an existing rendered guide page, so it always carries the current shell —
-sidebar, palette, theme toggle and the other passes' injections.
+bring-up checklist — a fine first page for exactly one kind of reader.
+This pass builds start.html instead, ordered by what the reader is willing
+to spend rather than by subsystem: three routes of escalating commitment —
+the digital twin (nothing to install), the browser flasher plus Apple Home
+commissioning (no toolchain), then the full clone-bootstrap-flash setup —
+followed by the reference tracks for a reader who is already running. Each
+is a card that drills down in place to the commands, installs and guides
+that route needs. The page is assembled from an existing rendered guide
+page, so it always carries the current shell — sidebar, palette, theme
+toggle and the other passes' injections.
+
+Route 2's browser-flasher row is not written here: docs_flash.py injects it
+into `#flash-slot` only when a firmware image was actually staged, so a
+checkout with no release never shows an Install link that 404s.
 
 Also part of wayfinding, on every page:
 
@@ -4110,15 +4163,9 @@ at what changed defeats the point.
 
 ### [`bot/migrations/0002_matrix_cooldowns.sql`](architecture/bot.migrations/0002_matrix_cooldowns.sql.md)
 
-*No module docstring. First commit: "bot: /matrix renders a real PNG (phase 4)".*
-
 ### [`bot/migrations/0003_test_requests.sql`](architecture/bot.migrations/0003_test_requests.sql.md)
 
-*No module docstring. First commit: "bot: /test-request routing, Accept button, in-place status Container (phase 5)".*
-
 ### [`bot/migrations/0004_validations.sql`](architecture/bot.migrations/0004_validations.sql.md)
-
-*No module docstring. First commit: "bot: /test-result closes the job and feeds the matrix (phase 6)".*
 
 ### [`bot/migrations/0005_oauth.sql`](architecture/bot.migrations/0005_oauth.sql.md)
 

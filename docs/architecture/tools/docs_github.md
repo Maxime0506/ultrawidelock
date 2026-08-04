@@ -23,42 +23,42 @@ after docs_media.py and before the link pass.
 ## API
 
 ### `repo_slug() -> str`
-`tools/docs_github.py:93`
+`tools/docs_github.py:99`
 
 owner/repo for the origin remote, or '' if none.
 
 **called by** `main`
 
 ### `topbar_chip(slug: str, url: str) -> bytes`
-`tools/docs_github.py:110`
+`tools/docs_github.py:116`
 
 Render a GitHub repository link chip for the top navigation bar, showing the repo slug with live star and fork counts populated by JavaScript. The chip targets the provided GitHub URL. Returns encoded HTML.
 
 **called by** `main`
 
 ### `tail_block() -> bytes`
-`tools/docs_github.py:123`
+`tools/docs_github.py:129`
 
 Render inline CSS and JavaScript for the GitHub repository chip and quickstart section. The script fetches live star and fork counts from the GitHub API and caches them in localStorage for one hour. Returns encoded HTML.
 
 **called by** `main`
 
 ### `hero_button(url: str) -> bytes`
-`tools/docs_github.py:165`
+`tools/docs_github.py:171`
 
 Render a GitHub link button with 15px SVG icon and "GitHub" text.
 
 **called by** `main`
 
 ### `quickstart(url: str) -> bytes`
-`tools/docs_github.py:173`
+`tools/docs_github.py:179`
 
 Render a numbered quickstart checklist with shell commands, formatted for injection into the Get-Running section of the landing page. Each step embeds a command in a copyable chip with the provided URL template applied. Returns encoded HTML.
 
 **called by** `main`
 
 ### `main() -> int`
-`tools/docs_github.py:201`
+`tools/docs_github.py:209`
 
 Inject GitHub repository metadata into the rendered site: a repository chip on every page (anchored to the theme toggle), a GitHub button on the landing page hero section, and a quickstart checklist below the features list. Reports counts of pages modified and returns 0 on success or 1 if layout anchors are missing. Requires the site to be already rendered and origin remote configured.
 

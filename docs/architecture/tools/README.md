@@ -9,6 +9,7 @@
 | [`tools/aliro_lab.py`](aliro_lab.md) | Aliro Lab: score a captured reader serial log. |
 | [`tools/docs_3d.py`](docs_3d.md) | Render the whole code surface as a flyable 3D graph: site/graph3d.html. |
 | [`tools/docs_api.py`](docs_api.md) | Fill the reference pages the page generator leaves bare. |
+| [`tools/docs_apilinks.py`](docs_apilinks.md) | Point each narrative page at the declarations it is describing. |
 | [`tools/docs_cmds.py`](docs_cmds.md) | Render runnable command blocks as one copy chip per command. |
 | [`tools/docs_flash.py`](docs_flash.md) | Publish the browser flasher: site/flash/ = the web-flasher/ page + firmware. |
 | [`tools/docs_github.py`](docs_github.md) | Point the rendered site back at its GitHub repository. |
@@ -16,6 +17,7 @@
 | [`tools/docs_hero.py`](docs_hero.md) | Stage the site: a cinematic landing hero, and a reveal layer everywhere. |
 | [`tools/docs_links.py`](docs_links.md) | Repair cross-document links in the rendered site, then assert none are left broken. |
 | [`tools/docs_media.py`](docs_media.md) | Add the repo's imagery to the rendered site: demo screenshots and a share card. |
+| [`tools/docs_modules.py`](docs_modules.md) | Move the per-file reference listing off the landing page onto its own. |
 | [`tools/docs_motion.py`](docs_motion.md) | The motion layer: choreograph the arrival, and make the page answer back. |
 | [`tools/docs_nav.py`](docs_nav.md) | Give the rendered site one curated reading order. |
 | [`tools/docs_start.py`](docs_start.md) | Give the rendered site a real "Get started" landing. |

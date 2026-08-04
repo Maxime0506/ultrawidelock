@@ -35,43 +35,50 @@ links are absolute or flash-local, so it needs no rewriting. docs.sh drives it.
 ## API
 
 ### `repo_slug() -> str`
-`tools/docs_flash.py:97`
+`tools/docs_flash.py:105`
 
 owner/repo for the origin remote, or '' if none.
 
 **called by** `main`
 
 ### `fetch(url: str) -> bytes`
-`tools/docs_flash.py:114`
+`tools/docs_flash.py:122`
 
 Fetch and return the complete response body from a URL with 60-second timeout.
 
 **called by** `main`
 
 ### `inject(page: Path, anchor: str, addition: str, before: bool) -> str`
-`tools/docs_flash.py:120`
+`tools/docs_flash.py:128`
 
 Insert addition next to anchor in page, once; report what happened.
 
 **called by** `link_site`
 
+### `check_outbound(page: Path) -> int`
+`tools/docs_flash.py:142`
+
+Verify the staged flasher page's site-relative links resolve. The link pass has already run by the time this page is copied in, so nothing else checks them. Skipped when the guides were never rendered, where every one of those targets is missing by construction.
+
+**called by** `main`
+
 ### `link_site() -> None`
-`tools/docs_flash.py:134`
+`tools/docs_flash.py:156`
 
 Inject the flash-page hub link and landing quickstart call-to-action into the rendered site, and validate optional stylesheet and animation styles.
 
 **called by** `main`  ·  **calls** `inject`
 
 ### `prune_manifest(dst: Path) -> None`
-`tools/docs_flash.py:147`
+`tools/docs_flash.py:169`
 
 Drop manifest builds whose firmware did not get staged.
 
 **called by** `main`
 
 ### `main() -> int`
-`tools/docs_flash.py:163`
+`tools/docs_flash.py:185`
 
 Assemble the web flasher page: stage firmware assets (from local build or latest release), copy the flasher HTML, and link the site navigation.
 
-**calls** `fetch`, `link_site`, `prune_manifest`, `repo_slug`
+**calls** `check_outbound`, `fetch`, `link_site`, `prune_manifest`, `repo_slug`

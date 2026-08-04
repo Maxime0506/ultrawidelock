@@ -25,7 +25,7 @@ The output goes into CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER and friends
 verifier is not a secret in the way the passcode is, but it identifies the
 device and there is no reason to scatter it.
 
-**discussed in** [`firmware/README.md`](../../../firmware/README.md)
+**discussed in** [`docs/add-the-key.md`](../../add-the-key.md), [`firmware/README.md`](../../../firmware/README.md)
 
 ## API
 
