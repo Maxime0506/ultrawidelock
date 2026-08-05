@@ -92,6 +92,12 @@ Local only. No app, no account, no cloud round trip.
 Step 3 is the point. The distance is **measured**, with a scrambled timestamp sequence
 bound to the credential. Not asserted.
 
+<div align="center">
+<img src="assets/hero2.gif" width="720" alt="An Apple Watch home key unlocking the DWM3001CDK on approach"/>
+<br/>
+<sub>The same five steps on the bench: an Apple Watch key and one DWM3001CDK.</sub>
+</div>
+
 <div align="right"><sub><a href="#readme-top">↑ back to top</a></sub></div>
 
 ---
