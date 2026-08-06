@@ -138,8 +138,14 @@ when the run ends, then schedule re-advertisement.
 
 **called by** `coc_disconnected`
 
+### `static void on_le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t latency, uint16_t timeout)`
+`firmware/src/aliro_ble_zephyr.c:617`
+
+Report the connection interval the peer actually granted, which is the only proof the requested
+15-30 ms took effect (prj.conf sets the preferred parameters and the 300 ms request timer).
+
 ### `int aliro_ble_prepare(const struct aliro_ble_config *cfg)`
-`firmware/src/aliro_ble_zephyr.c:625`
+`firmware/src/aliro_ble_zephyr.c:642`
 
 Validate and store Aliro BLE configuration: protocol versions and callback handler. Caller must
 provide non-null cfg with non-empty proto_versions array sized <= ALIRO_MAX_VERSIONS; returns 0
@@ -148,30 +154,30 @@ on success or -EINVAL if any parameter is invalid.
 **called by** `aliro_ble_start`  ·  **calls** `build_read_payload`
 
 ### `uint16_t aliro_ble_spsm(void)`
-`firmware/src/aliro_ble_zephyr.c:675`
+`firmware/src/aliro_ble_zephyr.c:692`
 
 Return the L2CAP protocol/service multiplexer for the Aliro reader channel.
 
 ### `int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)`
-`firmware/src/aliro_ble_zephyr.c:685`
+`firmware/src/aliro_ble_zephyr.c:702`
 
 Send an APDU over the active L2CAP CoC link; fails if not connected. Copies data into a reserved
 net_buf and asserts the payload fits the pool buffer to catch oversized framing from the reader
 itself.
 
 ### `int aliro_ble_disconnect(uint16_t conn_handle)`
-`firmware/src/aliro_ble_zephyr.c:728`
+`firmware/src/aliro_ble_zephyr.c:745`
 
 Disconnect the active L2CAP CoC link, terminating the Aliro protocol exchange.
 
 ### `void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2], const uint8_t grk[16], int8_t tx_power)`
-`firmware/src/aliro_ble_zephyr.c:742`
+`firmware/src/aliro_ble_zephyr.c:759`
 
 Store the Aliro reader identity material (group ID, sub ID, GRK, TX power) to populate the
 service data advertisement on the next readvertise call.
 
 ### `void aliro_ble_readvertise(void)`
-`firmware/src/aliro_ble_zephyr.c:756`
+`firmware/src/aliro_ble_zephyr.c:773`
 
 Re-advertise the Aliro reader service or Matter commissioning availability over BLE after a state
 change requiring advertisement resume.
@@ -179,7 +185,7 @@ change requiring advertisement resume.
 **calls** `aliro_advertise`
 
 ### `void aliro_ble_time_updated(void)`
-`firmware/src/aliro_ble_zephyr.c:765`
+`firmware/src/aliro_ble_zephyr.c:782`
 
 Re-advertise the Aliro reader service or Matter commissioning availability over BLE after the
 system time is updated.
@@ -187,33 +193,33 @@ system time is updated.
 **calls** `aliro_advertise`
 
 ### `static void status_work_fn(struct k_work *w)`
-`firmware/src/aliro_ble_zephyr.c:780`
+`firmware/src/aliro_ble_zephyr.c:797`
 
 Deferred work callback that invokes the reader status callback with the unsecured flag if set.
 
 ### `static void presence_work_fn(struct k_work *w)`
-`firmware/src/aliro_ble_zephyr.c:792`
+`firmware/src/aliro_ble_zephyr.c:809`
 
 Deferred work callback that invokes the presence reset callback if set.
 
 ### `void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)`
-`firmware/src/aliro_ble_zephyr.c:804`
+`firmware/src/aliro_ble_zephyr.c:821`
 
 Queue a reader status callback with unsecured state to run asynchronously on the work queue.
 
 ### `void aliro_ble_post_presence_reset(void (*cb)(void))`
-`firmware/src/aliro_ble_zephyr.c:814`
+`firmware/src/aliro_ble_zephyr.c:831`
 
 Queue a presence reset callback to run asynchronously on the work queue.
 
 ### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`firmware/src/aliro_ble_zephyr.c:822`
+`firmware/src/aliro_ble_zephyr.c:839`
 
 Attach mode exists only so the ESP32 reader can share a NimBLE host with
 esp-matter. Nothing shares this host.
 
 ### `int aliro_ble_start_attached(void)`
-`firmware/src/aliro_ble_zephyr.c:830`
+`firmware/src/aliro_ble_zephyr.c:847`
 
 Not supported on this target; returns ENOTSUP.
 

@@ -16,17 +16,17 @@ export const SPEC_CITATIONS: SpecCitation[] = [
 	{
 		"section": "11.7",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 2265
+		"line": 2302
 	},
 	{
 		"section": "11.9",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 2271
+		"line": 2308
 	},
 	{
 		"section": "11.3.1",
 		"file": "docs/ARCHITECTURE.md",
-		"line": 3674
+		"line": 3711
 	},
 	{
 		"section": "Table 8-3",

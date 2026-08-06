@@ -57,6 +57,7 @@
 #include "matter_msg.h"
 #include "matter_pase_sm.h"
 #include "matter_thread.h"
+#include "status_led.h" /* the lock LED; a tile tap has to move it too */
 
 LOG_MODULE_DECLARE(matter_ble, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
 
@@ -1550,10 +1551,17 @@ static void heartbeat_work_fn(struct k_work *w);
 static K_WORK_DELAYABLE_DEFINE(s_heartbeat_work, heartbeat_work_fn);
 
 /**
- * Submit lock state change notification to the work queue.
+ * Submit lock state change notification to the work queue, and move the lock LED.
+ *
+ * The LED is driven from here rather than from on_aliro_lock_state() because
+ * this is the one point BOTH movers reach: a walk-up arrives through the Aliro
+ * listener, and a Home tile tap arrives through the Door Lock cluster, which
+ * writes s_info.lock_state itself and never touches that listener. Hanging the
+ * light off the listener alone gave a board whose LED ignored the app.
  */
 static void notify_lock_state_changed(void)
 {
+	status_led_signal(STATUS_LED_UNLOCKED, s_info.lock_state == MATTER_DL_LOCK_STATE_UNLOCKED);
 	k_work_submit(&s_notify_work);
 }
 
@@ -2281,15 +2289,27 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	 */
 
 	/* Start the transcript, and read SHA-256(Sigma1) off a COPY so the
-	 * running context stays open for Sigma2 and Sigma3. */
-	aliro_sha256_init(&s_case.transcript);
-	aliro_sha256_update(&s_case.transcript, sigma1, sigma1_len);
-	{
-		struct aliro_sha256 snapshot = s_case.transcript;
+	 * running context stays open for Sigma2 and Sigma3.
+	 *
+	 * NOT on a repeat, and this guard is the fix the repeat comment above
+	 * always demanded: re-initialising here resets the running hash to
+	 * Sigma1 alone, the resend branch never re-adds Sigma2, and the peer's
+	 * Sigma3 -- computed over Sigma1||Sigma2 -- then fails S3K derivation
+	 * with -6. Invisible while the advertised SII was 3000 ms (Apple almost
+	 * never retransmitted Sigma1 mid-handshake); routine at SII=500.
+	 * Measured on hardware 2026-08-06: three Sigma1s inside 500 ms, the
+	 * SAME Sigma2 correctly resent twice, then "Sigma3 REJECTED (-6)" and
+	 * the pairing died. */
+	if (!repeat) {
+		aliro_sha256_init(&s_case.transcript);
+		aliro_sha256_update(&s_case.transcript, sigma1, sigma1_len);
+		{
+			struct aliro_sha256 snapshot = s_case.transcript;
 
-		aliro_sha256_final(&snapshot, transcript);
+			aliro_sha256_final(&snapshot, transcript);
+		}
+		memcpy(s_case.init_eph_pub, s1->initiator_pubkey, sizeof(s_case.init_eph_pub));
 	}
-	memcpy(s_case.init_eph_pub, s1->initiator_pubkey, sizeof(s_case.init_eph_pub));
 
 	/*
 	 * The one assumption nothing has ever checked: that the key this signs
@@ -2800,6 +2820,22 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 
 	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL ||
 	    (ph.opcode != MATTER_OP_CASE_SIGMA1 && ph.opcode != MATTER_OP_CASE_SIGMA3)) {
+		/*
+		 * Not silent any more: what lands here mid-handshake is the
+		 * peer's whole verdict on it. Opcode 0x10 is a standalone ack
+		 * (the peer HAS the message it acknowledges and owes the next
+		 * one); 0x40 is a StatusReport whose payload names the
+		 * rejection. Measured 2026-08-06: Sigma2 out, no Sigma3, and
+		 * nothing logged in 15 s -- this branch was eating the
+		 * evidence either way.
+		 */
+		LOG_INF("  unsecured drop: protocol 0x%04x opcode 0x%02x exchange 0x%04x ack%s",
+			(unsigned int)ph.protocol_id, ph.opcode, (unsigned int)ph.exchange_id,
+			(ph.exchange_flags & MATTER_EX_FLAG_A) ? "+" : "-");
+		if (len > mh_len + ph_len) {
+			LOG_HEXDUMP_INF(msg + mh_len + ph_len,
+					MIN(len - mh_len - ph_len, 16u), "  payload");
+		}
 		return 0u;
 	}
 

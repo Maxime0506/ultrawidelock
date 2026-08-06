@@ -42,7 +42,7 @@ Encode a Sigma2 message by computing ECDH, deriving S2K from a salt, signing TBS
 TBEData2, and wrapping both in TLV with session parameters; returns MATTER_OK on success.
 
 ### `int matter_case_sigma3_open(const struct matter_case_sigma3_in *in, const uint8_t *tlv, size_t len, struct matter_case_sigma3_out *out)`
-`modules/woz_matter/src/matter_case.c:383`
+`modules/woz_matter/src/matter_case.c:385`
 
 Open and validate a Sigma3 message by decrypting TBEData3, verifying the signature over TBSData3
 against the initiator's NOC, and extracting the node ID, fabric ID, and public key; returns

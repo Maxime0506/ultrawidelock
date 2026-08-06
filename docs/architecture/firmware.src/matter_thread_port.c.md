@@ -124,7 +124,7 @@ local registration cache, so the next advertise re-registers from scratch. Calle
 are rolled back to avoid leaving dangling registrations under old names.
 
 ### `int matter_thread_advertise(const char *instance_name, uint16_t port)`
-`firmware/src/matter_thread_port.c:772`
+`firmware/src/matter_thread_port.c:815`
 
 Advertise this node's services to SRP. Returns MATTER_E_STATE; Thread is not built into this
 image.
@@ -132,13 +132,13 @@ image.
 **calls** `log_addresses`, `srp_host_id`
 
 ### `int matter_thread_start(const uint8_t *dataset, size_t len)`
-`firmware/src/matter_thread_port.c:784`
+`firmware/src/matter_thread_port.c:827`
 
 Start Thread with the provided operational dataset. Returns MATTER_E_STATE; Thread is not built
 into this image.
 
 ### `int matter_thread_wait_attached(uint32_t timeout_ms)`
-`firmware/src/matter_thread_port.c:797`
+`firmware/src/matter_thread_port.c:840`
 
 Stub: always returns MATTER_E_TIMEOUT. Thread attachment checking is not implemented on this
 target.

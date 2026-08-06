@@ -1862,6 +1862,165 @@ Fresh, pinned presence proofs behind an owner-only Unix socket.
 
 **depends on** [`tools/presence_git.py`](architecture/tools/presence_git.md), [`tools/presence_verify.py`](architecture/tools/presence_verify.md)  ·  **used by** [`host/presence/presence-enroll`](architecture/host.presence/presence-enroll.md), [`host/presence/presence_client.py`](architecture/host.presence/presence_client.md), [`host/presence/presenced`](architecture/host.presence/presenced.md)
 
+## `firmware/src/`
+
+### [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
+
+@file matter_commission.c — joins BTP, the exchange and PASE.
+Three finished pieces and no protocol of its own:
+matter_ble_zephyr.c   bytes in and out over the 0xFFF6 service
+matter_exchange.c     which session, which exchange, duplicate, ack
+matter_pase_sm.c      the five commissioning messages
+What is left for this file is the wiring nobody else can do: pulling the
+SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
+what happens when a commissioner disappears halfway through.
+
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md), [`firmware/src/status_led.h`](architecture/firmware.src/status_led.h.md)
+
+### [`firmware/src/main.c`](architecture/firmware.src/main.c.md)
+
+**depends on** [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md), [`firmware/src/status_led.h`](architecture/firmware.src/status_led.h.md)
+
+### [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md)
+
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
+
+### [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md)
+
+@file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
+A thin adapter, on purpose. All the framing lives in modules/woz_matter
+(matter_btp.c), which has no Zephyr dependency and is tested on the host
+under sanitizers. This file does three things and no more: hand C1 writes to
+the reassembler, drive the fragmenter out through C2 indications, and build
+the commissionable advertisement.
+Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
+service, one write characteristic, one indicate characteristic,
+connection-scoped state -- and is proven against live iPhones.
+
+**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
+
+### [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
+
+**depends on** [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+### [`firmware/src/status_led.c`](architecture/firmware.src/status_led.c.md)
+
+@file
+@brief The four board LEDs as one state display.
+This board has no console. RTT needs probe-rs and the ELF that was actually
+flashed, uart0 belongs to the J-Link OB, and the USB console only exists in
+provisioning mode -- so on a board doing its job, four LEDs are the entire
+output. They used to carry one bit between them: D10 blinked while the update
+window was open, and a lock that unlocked looked exactly like a lock that had
+hung.
+WHAT EACH LED MEANS. One LED per question, so no two facts ever contend for
+the same lamp and nothing has to be decoded from a rate alone:
+D9  green  the lock      solid = unlocked · one blip per 2 s = locked, alive
+D12 red    attention     solid = fault · 0.5 Hz = no fabric, needs commissioning
+D11 red    the phone     4 Hz = ranging · 1 Hz = Aliro session · off = idle
+D10 blue   a window      2 Hz = update window open · solid = provisioning mode
+D13 is not ours: the DW3110 drives it directly as tx red / rx green, and D20
+belongs to the J-Link OB.
+WHY GREEN IS SOLID WHEN OPEN. The lock LED is on for the state that should
+pull someone's eye across a room, and the unlocked state is that state. The
+one-blip idle is the other half of the same argument: without it, "locked" and
+"the firmware died" are the same picture, and on a board with no console that
+is the ambiguity that costs the most time.
+WHY A PATTERN TABLE. Each LED renders a 16-slot bit pattern at 125 ms a slot,
+so every rate this display can show is one 16-bit literal and the whole
+schedule is a single timer. Adding a rate costs a constant, not a timer, on a
+part with 6 KB of RAM left. The tick stops itself when every pattern is static
+(all-on or all-off), so an idle locked board with the heartbeat compiled out
+costs nothing at all.
+NOTHING HERE BLOCKS except status_led_boot_blink(), which says so. The tick
+handler does four GPIO writes and reschedules; it runs on the system work
+queue, where the existing update-window blink already ran, and it must stay
+that cheap -- the DW3110 reply arm deadline is ~1836 us and this fires eight
+times a second.
+
+**depends on** [`firmware/src/status_led.h`](architecture/firmware.src/status_led.h.md)
+
+### [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
+
+@file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
+Everything here is Zephyr-side glue. The protocol lives in
+modules/woz_matter, which knows nothing about BLE.
+
+**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
+
+### [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
+
+@file matter_commission.h — start answering commissioning attempts.
+
+**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
+
+### [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
+
+**used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
+
+### [`firmware/src/status_led.h`](architecture/firmware.src/status_led.h.md)
+
+@file
+@brief The four board LEDs as one state display, and the only way to drive them.
+Every LED on this board goes through status_led_signal(). Nothing else may
+touch led0..led3: two owners toggling the same pin from a work queue and a
+loop produce a light that flickers between two truths, which is worse than no
+light at all.
+A signal is a fact about the board, not a blink rate. Callers say what is
+true; src/status_led.c decides which LED shows it and how. That split is what
+lets the whole display be re-mapped in one function instead of in five call
+sites, and it is why the callers below can be one line each.
+Safe from any task: the setter is one atomic store and a work submit, so it
+can be called from the BLE host task, from OpenThread, or from the reader
+loop between ranging rounds without taking a lock or blocking. It must never
+be called from the DW3110 callbacks themselves -- nothing may be, the arm
+deadline there is ~1836 us -- but the 250 ms reader loop is fine.
+
+**used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/status_led.c`](architecture/firmware.src/status_led.c.md)
+
+### [`firmware/src/aliro_prov_settings.c`](architecture/firmware.src/aliro_prov_settings.c.md)
+
+### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
+
+### [`firmware/src/dfu_ble_zephyr.c`](architecture/firmware.src/dfu_ble_zephyr.c.md)
+
+@file
+@brief The over-the-air update channel: a second L2CAP CoC, and the button
+that opens it.
+WHY NOT mcumgr. SMP over Bluetooth was built and measured first. It costs
+3,717 B of RAM on an image that had 7,448 B left, and its permission model
+defaults to demanding a paired, authenticated link whenever BT_SMP is on --
+which it is here, pulled in by L2CAP CoC. This reader must never ask a phone
+to pair, because the walk-up unlock depends on it not asking. Setting the
+permission to open instead hands an unauthenticated peer a write path into
+flash, and mcumgr's OS group would hand it an unauthenticated reset command
+as well. A lock anyone in radio range can reboot in a loop is a real attack.
+So the patch rides the CoC transport this board already has, on its own PSM,
+and authorization is a WINDOW rather than a handshake.
+WHY A WINDOW IS ENOUGH. The gate is a denial-of-service control, not an
+integrity one. The patch header is signed and the application checks it
+(modules/woz_dfu/src/dfu_receiver.c), and underneath that MCUboot re-verifies
+the P-256 signature of the patched RESULT before booting it. No peer can
+install code no matter what reaches this channel. What a closed channel
+prevents is a stranger spending the flash's erase cycles and the owner's
+uptime.
+
+### [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md)
+
+@file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
+The dataset arrives from the commissioner as raw meshcop TLVs and
+otDatasetSetActiveTlvs() takes raw meshcop TLVs, so nothing here has to
+understand the format -- which is the point. This node parses exactly one
+field out of it, the Extended PAN ID, and only so it can name the network
+back to the commissioner.
+Built into every image. Without CONFIG_OPENTHREAD it refuses honestly
+rather than disappearing: matter_clusters.c calls it unconditionally, and a
+link error would be a worse way to learn that Thread was configured out.
+
+### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
+
+### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
+
 ## `modules/woz_nfc/src/`
 
 ### [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md)
@@ -1987,128 +2146,6 @@ transport_pn532.cpp.
 *No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
 
 **depends on** [`ports/esp32/components/piv_ccid/include/piv_apdu.h`](architecture/ports.esp32.components.piv_ccid.include/piv_apdu.h.md)
-
-## `firmware/src/`
-
-### [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
-
-@file matter_commission.c — joins BTP, the exchange and PASE.
-Three finished pieces and no protocol of its own:
-matter_ble_zephyr.c   bytes in and out over the 0xFFF6 service
-matter_exchange.c     which session, which exchange, duplicate, ack
-matter_pase_sm.c      the five commissioning messages
-What is left for this file is the wiring nobody else can do: pulling the
-SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
-what happens when a commissioner disappears halfway through.
-
-**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
-
-### [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md)
-
-**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md), [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
-
-### [`firmware/src/main.c`](architecture/firmware.src/main.c.md)
-
-**depends on** [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md), [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
-
-### [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md)
-
-@file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
-A thin adapter, on purpose. All the framing lives in modules/woz_matter
-(matter_btp.c), which has no Zephyr dependency and is tested on the host
-under sanitizers. This file does three things and no more: hand C1 writes to
-the reassembler, drive the fragmenter out through C2 indications, and build
-the commissionable advertisement.
-Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
-service, one write characteristic, one indicate characteristic,
-connection-scoped state -- and is proven against live iPhones.
-
-**depends on** [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
-
-### [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
-
-**depends on** [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
-
-### [`firmware/src/matter_ble_zephyr.h`](architecture/firmware.src/matter_ble_zephyr.h.md)
-
-@file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
-Everything here is Zephyr-side glue. The protocol lives in
-modules/woz_matter, which knows nothing about BLE.
-
-**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/matter_ble_zephyr.c`](architecture/firmware.src/matter_ble_zephyr.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
-
-### [`firmware/src/matter_commission.h`](architecture/firmware.src/matter_commission.h.md)
-
-@file matter_commission.h — start answering commissioning attempts.
-
-**used by** [`firmware/src/aliro_ble_zephyr.c`](architecture/firmware.src/aliro_ble_zephyr.c.md), [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md)
-
-### [`firmware/src/matter_fab_settings.h`](architecture/firmware.src/matter_fab_settings.h.md)
-
-**used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/matter_fab_settings.c`](architecture/firmware.src/matter_fab_settings.c.md)
-
-### [`firmware/src/aliro_prov_settings.c`](architecture/firmware.src/aliro_prov_settings.c.md)
-
-### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
-
-### [`firmware/src/dfu_ble_zephyr.c`](architecture/firmware.src/dfu_ble_zephyr.c.md)
-
-@file
-@brief The over-the-air update channel: a second L2CAP CoC, and the button
-that opens it.
-WHY NOT mcumgr. SMP over Bluetooth was built and measured first. It costs
-3,717 B of RAM on an image that had 7,448 B left, and its permission model
-defaults to demanding a paired, authenticated link whenever BT_SMP is on --
-which it is here, pulled in by L2CAP CoC. This reader must never ask a phone
-to pair, because the walk-up unlock depends on it not asking. Setting the
-permission to open instead hands an unauthenticated peer a write path into
-flash, and mcumgr's OS group would hand it an unauthenticated reset command
-as well. A lock anyone in radio range can reboot in a loop is a real attack.
-So the patch rides the CoC transport this board already has, on its own PSM,
-and authorization is a WINDOW rather than a handshake.
-WHY A WINDOW IS ENOUGH. The gate is a denial-of-service control, not an
-integrity one. The patch header is signed and the application checks it
-(modules/woz_dfu/src/dfu_receiver.c), and underneath that MCUboot re-verifies
-the P-256 signature of the patched RESULT before booting it. No peer can
-install code no matter what reaches this channel. What a closed channel
-prevents is a stranger spending the flash's erase cycles and the owner's
-uptime.
-
-### [`firmware/src/matter_thread_port.c`](architecture/firmware.src/matter_thread_port.c.md)
-
-@file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread.
-The dataset arrives from the commissioner as raw meshcop TLVs and
-otDatasetSetActiveTlvs() takes raw meshcop TLVs, so nothing here has to
-understand the format -- which is the point. This node parses exactly one
-field out of it, the Extended PAN ID, and only so it can name the network
-back to the commissioner.
-Built into every image. Without CONFIG_OPENTHREAD it refuses honestly
-rather than disappearing: matter_clusters.c calls it unconditionally, and a
-link error would be a worse way to learn that Thread was configured out.
-
-### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
-
-### [`firmware/src/status_led.c`](architecture/firmware.src/status_led.c.md)
-
-@file
-@brief Show that the update window is open, on the board itself.
-The window is the entire authorization model for an update, and until now it
-was invisible. Three things open it -- SW2, Apple Home's "Turn On Pairing
-Mode", and the bench SWD write -- and none of them gave the board any way to
-say so. An owner who pressed the button could not tell whether the press had
-registered, and the five minutes could run out while they were still finding
-the phone. The only feedback was a log line on a debugger that a released
-board does not have attached.
-D10, the blue one, at 2 Hz. Blue because the other three are the DW3000's own
-colours by convention on this board (D13 is tx red / rx green) and a fourth
-red would read as a fault; 2 Hz because a slower heartbeat reads as "alive"
-rather than "waiting for you", which is the wrong message for something that
-expires.
-It follows the window rather than the button, so it is honest about the state
-that actually matters: it goes out when the window expires on its own, not
-when someone stops pressing.
-
-### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
 
 ## `modules/woz_uwb/src/fira/`
 
@@ -4374,6 +4411,31 @@ it from outside: CONFIG_MCUBOOT_INDICATION_LED with an mcuboot-led0 alias, or
 logging over RTT, to see whether boot_serial_check_start is entered and with
 what timeout.
 
+### [`scripts/cdk-find-probe.sh`](architecture/scripts/cdk-find-probe.sh.md)
+
+cdk-find-probe.sh — print the probe triple (VID:PID:Serial) wired to the DWM3001CDK.
+Usage: cdk-find-probe.sh <cache-file>
+stdout   the triple, or nothing when pinning is unnecessary
+exit 0   triple printed, or nothing to do (probe-rs absent, 0 or 1 probe attached)
+exit 1   several probes attached and the CDK could not be settled (reason on stderr)
+WHY IDENTIFY BY SILICON. Probe enumeration order is not stable across replugs
+(mk/cdk.mk measured it flipping between two `probe-rs list` calls with no cable
+touched), and every J-Link OB calls itself "J-Link", so nothing in the listing
+says which one sits on the DWM3001CDK. What does say so is the part behind the
+probe: FICR INFO.PART at 0x10000100 reads 0x00052833 on an nRF52833 and the
+read FAULTS through a probe wired to anything else (verified on the bench
+against an nRF5340 DK). So with several probes attached, read that word
+through each candidate and the CDK identifies itself.
+The winning triple is cached in <cache-file> (under firmware/keys/, which is
+deny-all gitignored -- a probe serial is machine-local state and must never be
+committed). While the cached serial is attached it is trusted without touching
+any probe, so the identification cost is paid once per bench, not per flash.
+Unplugged the CDK for good, or moved the cache to the wrong board somehow?
+Delete the cache file and the next probe-touching target re-identifies.
+With zero or one probe attached this prints nothing and exits 0: one probe
+needs no pinning (the tools pick it), and probe-rs being absent must not
+become a new reason a flash cannot run -- both per the guard in mk/cdk.mk.
+
 ### [`scripts/cdk-rtt-elf-check.sh`](architecture/scripts/cdk-rtt-elf-check.sh.md)
 
 Refuse to attach RTT with an ELF the board is not running.
@@ -4677,6 +4739,26 @@ a flag that changes semantics.
 (#define CONFIG_SYSTEM_WORKQUEUE_PRIORITY -1), which trips
 bugprone-macro-parentheses ~1000 times per file. The header filter keeps
 findings to this repo's own sources.
+
+### [`scripts/docs-sync.sh`](architecture/scripts/docs-sync.sh.md)
+
+docs-sync.sh — put the generated artifacts back in step after a merge.
+The committed docs are generated, so when a merge brings in someone else's
+regeneration they conflict on their derived lines: a subsystem count, a
+coverage percentage, a table row. Both sides are right about their own tree
+and both are wrong about the merge, so no resolution is a merge. The only
+correct output is a fresh generation, which is what this does.
+The order is the whole point, because each step invalidates the next:
+1. take our side of any conflicted generated file, so the tree parses again
+2. drop the parse cache, which otherwise replays pre-merge line numbers
+that look plausible and are wrong
+3. regenerate docs/, which MOVES line numbers inside docs/ARCHITECTURE.md
+4. rebuild the spec index, which cites four of those line numbers
+Running 4 before 3 anchors the index to lines the docs build is about to move.
+That passes locally and fails in CI, which is the trap this script exists to
+close. Run it through `make sync`.
+SYNC_NO_VERIFY=1 stops before the sweep, for when you have another reason to
+run it yourself.
 
 ### [`scripts/docs.sh`](architecture/scripts/docs.sh.md)
 

@@ -54,8 +54,8 @@ export const SIGNATURES: Signature[] = [
 			"further than those three.",
 		next: "`make selftest`, then `make monitor CDK_RTT_BUILD=build/cdk-selftest`, and read the raw DEV_ID directly.",
 		citations: [
-			{ file: "mk/cdk.mk", line: 317, expect: "0xDECA03xx" },
-			{ file: "mk/cdk.mk", line: 318, expect: "up as 0x00000000 or 0xFFFFFFFF" },
+			{ file: "mk/cdk.mk", line: 337, expect: "0xDECA03xx" },
+			{ file: "mk/cdk.mk", line: 338, expect: "up as 0x00000000 or 0xFFFFFFFF" },
 		],
 	},
 	{
@@ -67,8 +67,8 @@ export const SIGNATURES: Signature[] = [
 			"'probe 0' moves between sessions.",
 		next: "Re-run with `CDK_PROBE=<VID:PID:Serial>`, or `export PROBE_RS_PROBE=<VID:PID:Serial>` once per shell. `probe-rs list` prints the serials.",
 		citations: [
-			{ file: "mk/cdk.mk", line: 49, expect: "more than one debug probe is attached" },
-			{ file: "mk/cdk.mk", line: 330, expect: "moves between sessions" },
+			{ file: "mk/cdk.mk", line: 69, expect: "more than one debug probe is attached" },
+			{ file: "mk/cdk.mk", line: 353, expect: "moves between sessions" },
 		],
 	},
 	{

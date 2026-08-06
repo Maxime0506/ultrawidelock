@@ -33,6 +33,26 @@ CDK_CHIP  := nRF52833_xxAA
 # the west targets too. Read the value out of `probe-rs list`; both forms work:
 #   CDK_PROBE=VID:PID:Serial     CDK_PROBE=Serial
 CDK_PROBE ?= $(PROBE_RS_PROBE)
+
+# When neither is set and several probes are attached, identify the CDK by
+# silicon instead of refusing: scripts/cdk-find-probe.sh reads FICR INFO.PART
+# through each candidate (0x00052833 = nRF52833 = this board) and pins the
+# winner's triple in the cache below, so the identification runs once per
+# bench, not per flash. The cache lives under firmware/keys/ because that
+# directory is deny-all gitignored and a probe serial is machine-local state
+# that must never be committed. Delete the file to re-identify.
+#
+# Resolution happens at PARSE time, gated to the goals that touch a probe --
+# it cannot happen inside a recipe, because this make expands every recipe
+# line before the first one runs, so a cache written by line 1 is invisible
+# to line 2 (measured on the macOS GNU make this repo is driven by).
+CDK_PROBE_CACHE ?= $(REPO_ROOT)/firmware/keys/cdk-probe
+CDK_PROBE_GOALS := flash flash-erase monitor ota-window
+ifeq ($(strip $(CDK_PROBE)),)
+ifneq ($(filter $(CDK_PROBE_GOALS),$(MAKECMDGOALS)),)
+CDK_PROBE := $(shell '$(REPO_ROOT)/scripts/cdk-find-probe.sh' '$(CDK_PROBE_CACHE)')
+endif
+endif
 # probe-rs takes the whole triple; west's runners want the bare serial, which is
 # the last colon-separated field of either form.
 CDK_DEV_ID     := $(lastword $(subst :, ,$(CDK_PROBE)))
@@ -326,8 +346,11 @@ selftest:
 
 ## flash: flash the DWM3001CDK over its on-board J-Link OB
 ##   Options: CDK_BUILD=<dir> (default build/cdk-matter)  CDK_PROBE=<VID:PID:Serial>
-##   Refuses to run when two probes are attached and CDK_PROBE is unset, because
-##   the enumeration order that decides "probe 0" moves between sessions.
+##   With several probes attached and CDK_PROBE unset it identifies the CDK by
+##   reading FICR INFO.PART through each candidate and pins the winner in
+##   firmware/keys/cdk-probe (delete that file to re-identify). It refuses to
+##   run only when that cannot settle it, because the enumeration order that
+##   decides "probe 0" moves between sessions.
 flash:
 	$(CDK_PROBE_GUARD)
 	@$(CDK_RUN) flash $(CDK_DEV_ID_ARG) -d $(CDK_BUILD)

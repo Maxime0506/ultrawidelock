@@ -49,8 +49,8 @@ export const TOPICS: Topic[] = [
 			"single-core part cannot absorb UART latency.",
 		next: "`make monitor`, which reads RTT over probe-rs. Attach with the ELF you flashed, not one you merely built.",
 		citations: [
-			{ file: "firmware/prj.conf", line: 226, expect: "CONFIG_UART_CONSOLE=n" },
-			{ file: "firmware/prj.conf", line: 250, expect: "RTT, not UART" },
+			{ file: "firmware/prj.conf", line: 266, expect: "CONFIG_UART_CONSOLE=n" },
+			{ file: "firmware/prj.conf", line: 290, expect: "RTT, not UART" },
 		],
 	},
 	{
@@ -62,8 +62,8 @@ export const TOPICS: Topic[] = [
 			"off, because that image is already close to full.",
 		next: "`make reader` builds the same source without Matter or Thread, and that image has the shell.",
 		citations: [
-			{ file: "firmware/overlay-thread.conf", line: 145, expect: "CONFIG_SHELL=n" },
-			{ file: "firmware/overlay-thread.conf", line: 147, expect: "CONFIG_USB_CDC_ACM=n" },
+			{ file: "firmware/overlay-thread.conf", line: 161, expect: "CONFIG_SHELL=n" },
+			{ file: "firmware/overlay-thread.conf", line: 163, expect: "CONFIG_USB_CDC_ACM=n" },
 		],
 	},
 	{
@@ -76,8 +76,8 @@ export const TOPICS: Topic[] = [
 			"is the part that goes missing. Debug is the default for exactly this reason.",
 		next: "Rebuild without `RELEASE=1` and reproduce. Add `LTO=0` if you need a stack trace to name every frame.",
 		citations: [
-			{ file: "mk/cdk.mk", line: 286, expect: "NO_BLOCK_SKIP drops the NEWEST lines" },
-			{ file: "mk/cdk.mk", line: 287, expect: "LTO is ON by default" },
+			{ file: "mk/cdk.mk", line: 306, expect: "NO_BLOCK_SKIP drops the NEWEST lines" },
+			{ file: "mk/cdk.mk", line: 307, expect: "LTO is ON by default" },
 		],
 	},
 	{
@@ -91,8 +91,8 @@ export const TOPICS: Topic[] = [
 			"another board's part.",
 		next: "`make flash CDK_PROBE=<VID:PID:Serial>`, or `export PROBE_RS_PROBE=<VID:PID:Serial>` once per shell. `probe-rs list` prints the serials.",
 		citations: [
-			{ file: "mk/cdk.mk", line: 49, expect: "more than one debug probe is attached" },
-			{ file: "mk/cdk.mk", line: 330, expect: "moves between sessions" },
+			{ file: "mk/cdk.mk", line: 69, expect: "more than one debug probe is attached" },
+			{ file: "mk/cdk.mk", line: 353, expect: "moves between sessions" },
 		],
 	},
 	{
@@ -127,8 +127,8 @@ export const TOPICS: Topic[] = [
 			"again. It also destroys OpenThread's SRP client key.",
 		next: "To clear only what a controller can see, hold SW2 through reset instead. That has the same effect on fabrics and anchors and keeps the Thread settings, so the board comes back on the name it had.",
 		citations: [
-			{ file: "mk/cdk.mk", line: 343, expect: "Costs everything the board learned at runtime" },
-			{ file: "mk/cdk.mk", line: 350, expect: "hold SW2 through reset instead" },
+			{ file: "mk/cdk.mk", line: 366, expect: "Costs everything the board learned at runtime" },
+			{ file: "mk/cdk.mk", line: 373, expect: "hold SW2 through reset instead" },
 		],
 	},
 ];
@@ -144,9 +144,9 @@ export const DEVID = {
 	/** The two documented failure reads. */
 	deadValues: ["00000000", "ffffffff"],
 	citations: [
-		{ file: "mk/cdk.mk", line: 317, expect: "0xDECA03xx" },
-		{ file: "mk/cdk.mk", line: 318, expect: "up as 0x00000000 or 0xFFFFFFFF" },
-		{ file: "mk/cdk.mk", line: 321, expect: "Read it with: make monitor" },
+		{ file: "mk/cdk.mk", line: 337, expect: "0xDECA03xx" },
+		{ file: "mk/cdk.mk", line: 338, expect: "up as 0x00000000 or 0xFFFFFFFF" },
+		{ file: "mk/cdk.mk", line: 341, expect: "Read it with: make monitor" },
 	] as Citation[],
 };
 
@@ -156,7 +156,7 @@ export const DEVID = {
  *  directly means there is nothing to transcribe out of sync. */
 export const SIZE_CITATION: Citation = {
 	file: "mk/cdk.mk",
-	line: 689,
+	line: 712,
 	expect: "cdk-size-baseline: record the current tree as the baseline",
 };
 

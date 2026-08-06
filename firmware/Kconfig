@@ -110,6 +110,37 @@ config ALIRO_FACTORY_RESET_BUTTON
 	  losing the key cost a 14-day name collision; f7d3160 ended that. The
 	  reason now is smaller and still real: rejoining beats re-attaching.
 
+config ALIRO_STATUS_LED
+	bool "Report the board's state on the four LEDs"
+	default y
+	help
+	  D9 green is the lock (solid unlocked, one blip per 2 s locked-and-alive),
+	  D12 red is attention (solid fault, 0.5 Hz needs commissioning), D11 red is
+	  the phone (4 Hz ranging, 1 Hz Aliro session) and D10 blue is a window
+	  (2 Hz update window, solid provisioning mode). src/status_led.c carries
+	  the argument for each.
+
+	  This is the only output a fielded board has. RTT needs probe-rs and the
+	  exact ELF that was flashed, uart0 belongs to the J-Link OB, and the USB
+	  console exists only in provisioning mode -- so with this off, a lock that
+	  unlocked and a lock that hung look identical.
+
+	  One timer and four GPIO writes eight times a second, which is why it is
+	  affordable on a part with 6 KB of RAM left. Turn it off only to buy back
+	  that flash.
+
+config ALIRO_STATUS_LED_HEARTBEAT
+	bool "Blip the lock LED once every 2 s while locked"
+	depends on ALIRO_STATUS_LED
+	default y
+	help
+	  Separates "locked" from "dead", which are the same picture without it.
+
+	  It is also the only thing keeping the 8 Hz tick running on an idle board:
+	  with every LED static the tick stops itself, so turning this off buys an
+	  idle board back to the wake rate it had before, at the cost of the one
+	  signal that proves the firmware is still running.
+
 config ALIRO_MATTER_CLEAR_ON_BOOT
 	bool "Erase the stored Matter fabrics at boot"
 	depends on ALIRO_MATTER_BLE

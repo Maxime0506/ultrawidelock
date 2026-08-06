@@ -247,7 +247,7 @@ int matter_thread_wait_attached(uint32_t timeout_ms)
  */
 static char s_host_name[26]; /* 16 hex of EUI-64 + '-' + 8 hex of host id + NUL */
 static char s_service_type[] = "_matter._tcp";
-static char s_txt_sii[] = "3000";
+static char s_txt_sii[] = "500";
 static char s_txt_sai[] = "300";
 
 /**
@@ -596,8 +596,33 @@ void matter_thread_advertise_reset(void)
 	 * The host goes with them: the services hang off it, and the next
 	 * advertise re-registers both from scratch.
 	 */
+	/*
+	 * RETRACT, do not just forget. otSrpClientClearHostAndServices() is
+	 * local-only: it drops this node's copy and never tells the server, so
+	 * the border router kept advertising every abandoned instance until its
+	 * lease ran out -- seven of them accumulated in one evening of failed
+	 * pairings (dns-sd -B _matter._tcp, 2026-08-06), each one a name a
+	 * commissioner can still resolve and then fail to reach.
+	 *
+	 * aRemoveKeyLease = true: the key lease is what reserves the name for a
+	 * client that will come back, and these names are never coming back --
+	 * the instance name is derived from a fabric that just ceased to exist.
+	 *
+	 * aSendUnregToServer = true: covers the case where this rollback lands
+	 * before the registration was confirmed, which is precisely the failed
+	 * pairing that leaves rubbish behind.
+	 */
 	if (ot != NULL) {
-		otSrpClientClearHostAndServices(ot);
+		otError rm = otSrpClientRemoveHostAndServices(ot, true, true);
+
+		if (rm != OT_ERROR_NONE) {
+			/* ALREADY means nothing is registered, which is the
+			 * outcome wanted anyway; anything else leaves the
+			 * client mid-state, and the local clear is the only
+			 * way back to a usable one. */
+			LOG_INF("SRP remove not started (%d); clearing locally", rm);
+			otSrpClientClearHostAndServices(ot);
+		}
 	}
 	memset(s_regs, 0, sizeof(s_regs));
 	s_host_ready = false;
@@ -652,11 +677,14 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 
 	/*
 	 * SII and SAI are the peer's retransmission timers, in milliseconds.
-	 * They are optional and this node is not: it is a sleepy end device
-	 * polling its parent every 3,000 ms, and a peer left on the 500 ms
-	 * default would retransmit five times into a radio that is asleep and
-	 * conclude the node is gone. Announcing the poll period is what makes
-	 * the next exchange survivable.
+	 * 500/300 are the Matter defaults, republished because the places that
+	 * describe this radio's availability -- this TXT record, the Sigma2
+	 * session parameters in matter_case.c, and the link mode in
+	 * overlay-thread.conf -- have to move together. This node was a
+	 * 3,000 ms sleepy end device once, and advertising that poll was what
+	 * kept peers from giving up on it; the radio is rx-on (MED) now, and a
+	 * stale SII=3000 would do the opposite, pacing every retransmit to a
+	 * sleep that no longer happens.
 	 */
 	reg->txt[0].mKey = "SII";
 	reg->txt[0].mValue = (const uint8_t *)s_txt_sii;
@@ -725,6 +753,21 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 		 * something else refreshed the lease. */
 		otSrpClientSetKeyLeaseInterval(ot, SRP_KEY_LEASE_S);
 		err = otSrpClientSetHostName(ot, s_host_name);
+		if (err == OT_ERROR_INVALID_STATE) {
+			/*
+			 * The only way here is a retraction still in flight from
+			 * matter_thread_advertise_reset(): the host sits in
+			 * STATE_REMOVING and the name cannot be set until the
+			 * server answers. The next fabric must not wait on that
+			 * -- an unresolvable node is a failed pairing -- so give
+			 * up the server round-trip and take the local clear,
+			 * which is exactly the behaviour that shipped before the
+			 * retraction existed.
+			 */
+			LOG_WRN("host name refused mid-retraction; clearing and retrying");
+			otSrpClientClearHostAndServices(ot);
+			err = otSrpClientSetHostName(ot, s_host_name);
+		}
 		if (err == OT_ERROR_NONE) {
 			err = otSrpClientEnableAutoHostAddress(ot);
 		}

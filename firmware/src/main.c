@@ -28,6 +28,7 @@
 #include "matter_commission.h"
 #include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
 #endif
+#include "status_led.h"
 #include "woz_uwb_facade.h"
 
 #if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
@@ -71,6 +72,38 @@ extern volatile int woz_uwb_diag_on;
  * the cadence the ESP32 port runs. */
 #define ALIRO_TICK_MS 250
 
+/* How long the ranging LED holds after the last range landed. Four ticks: long
+ * enough that no rate iOS ranges at can make it stutter, short enough that a
+ * phone put in a pocket drops the light while the person is still in the room. */
+#define ALIRO_LED_RANGE_HOLD_MS 1000
+
+/* Wakes the grant loop the moment a range is latched, instead of on the next
+ * 250 ms tick.
+ *
+ * The tick alone quantized every unlock and relock by 0-250 ms on top of the
+ * structural ~1 s trust floor, and worse, 250 ms beats against the 192 ms
+ * ranging block, so the delay a walk-up got was a lottery rather than a
+ * constant. The tick REMAINS as the take timeout: it is still what ages out a
+ * stalled transaction and decays the power gate when no range is arriving.
+ *
+ * Count limit 1 because the loop reads the generation counter, not a queue --
+ * two latches between wakes still mean exactly one pass.
+ *
+ * Declared and initialised separately rather than with K_SEM_DEFINE: semgrep's
+ * C parser cannot read that macro at file scope, and the security gate treats
+ * an unparseable file as zero rule coverage rather than a clean result, which
+ * would silently drop every rule that guards this file. */
+static struct k_sem s_range_sig;
+
+/**
+ * Wake the grant loop on an accepted range latch. Runs on the UWB RX path, so it does nothing but
+ * give the semaphore -- the float math in the approach controller stays on the main thread.
+ */
+static void on_range_latched(void)
+{
+	k_sem_give(&s_range_sig);
+}
+
 /* Provisioning mode: hold SW2 (the board's sw0 alias, P0.02) through reset.
  *
  * The reader identity is per-device data in the settings store, never a string
@@ -107,6 +140,11 @@ static void provisioning_mode(void)
 {
 	int rc = usb_enable(NULL);
 
+	/* Solid blue for as long as this mode lasts. Provisioning looks exactly
+	 * like a hung boot from the outside otherwise -- the radios are down, so
+	 * nothing else on the board moves. */
+	status_led_signal(STATUS_LED_PROV_MODE, true);
+
 	if (rc != 0) {
 		/* Nothing to fall back to: without USB there is no input path at
 		 * all on this board, so say so on RTT and stop. */
@@ -141,15 +179,14 @@ static void provisioning_mode(void)
  */
 #if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
 /**
- * Check GPIO SW0 (active-low, pulled up in DTS) at boot. If SW0 is held (logical 1), toggle LED0
- * six times at 120 ms intervals as user feedback, erase Aliro provisioning and Matter fabric (if
- * CONFIG_ALIRO_MATTER_BLE is on), and log that the board is now commissionable on the next boot.
- * Returns silently if GPIO is not ready or if SW0 is not held.
+ * Check GPIO SW0 (active-low, pulled up in DTS) at boot. If SW0 is held (logical 1), blink the lock
+ * LED as user feedback, erase Aliro provisioning and Matter fabric (if CONFIG_ALIRO_MATTER_BLE is
+ * on), and log that the board is now commissionable on the next boot. Returns silently if GPIO is
+ * not ready or if SW0 is not held.
  */
 static void factory_reset_if_requested(void)
 {
 	static const struct gpio_dt_spec sw = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
-	static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 
 	if (!gpio_is_ready_dt(&sw) || gpio_pin_configure_dt(&sw, GPIO_INPUT) != 0) {
 		return;
@@ -163,15 +200,12 @@ static void factory_reset_if_requested(void)
 	/*
 	 * The only feedback this board can give someone without a debugger. RTT
 	 * says it too, but a user holding a button needs to see that the hold
-	 * was long enough and registered.
+	 * was long enough and registered. Blocking, and it goes through
+	 * status_led.c because that owns the pin from SYS_INIT onwards -- driving
+	 * it from here as well would put the blink and the heartbeat on the same
+	 * lamp, 120 ms apart.
 	 */
-	if (gpio_is_ready_dt(&led) && gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE) == 0) {
-		for (int i = 0; i < 6; i++) {
-			gpio_pin_toggle_dt(&led);
-			k_sleep(K_MSEC(120));
-		}
-		(void)gpio_pin_set_dt(&led, 0);
-	}
+	status_led_boot_blink();
 
 	(void)aliro_prov_erase();
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
@@ -213,6 +247,11 @@ int main(void)
 
 	if (rc != 0) {
 		LOG_ERR("aliro_reader_start rc=%d", rc);
+		/* main() is about to return and this board has no console, so a
+		 * solid D12 is the only account anyone gets of why it does
+		 * nothing. The LED tick lives on the system work queue and
+		 * outlives this thread, so the light stays on. */
+		status_led_signal(STATUS_LED_FAULT, true);
 		return rc;
 	}
 
@@ -244,9 +283,23 @@ int main(void)
 
 	aliro_approach_init(&approach, NULL); /* factory defaults: unlock 100 cm, relock 250 cm */
 
+	/* Same seam the ESP32 matter-lock uses (app_main.cpp on_uwb_range): the engine
+	 * signals, this thread decides. Both lines run before the listener can fire --
+	 * the semaphore has to exist before anything is allowed to give it, and the
+	 * controller has to be initialised before a signal can reach it. */
+	k_sem_init(&s_range_sig, 0, 1);
+	woz_uwb_set_range_listener(on_range_latched);
+
 	uint32_t last_gen = woz_uwb_range_generation();
 	/* The last range OBSERVED for departure, trusted or not; see the loop. */
 	uint32_t last_obs_gen = last_gen;
+	/* A third epoch, for the activity LED alone. The two above are consumed
+	 * at different moments on purpose -- that is what keeps a late-trusted
+	 * latch from being counted twice and what stops the silence clock being
+	 * refreshed -- so folding a light into either would change when a relock
+	 * fires. This one is read-only with respect to the unlock logic. */
+	uint32_t led_gen = last_gen;
+	int64_t led_range_ms = 0;
 	bool present = false;
 	bool granted = false;
 
@@ -257,6 +310,37 @@ int main(void)
 		enum aliro_approach_action act;
 
 		aliro_reader_status_tick(now);
+
+		/*
+		 * D11: what the phone is doing. The loop wakes on the latch
+		 * itself, so this lights within a round rather than on the next
+		 * 250 ms tick. Any range counts, trusted or not -- the light
+		 * says "the radios are working on someone", which is the
+		 * question being asked when you are standing in front of a
+		 * board that has not opened.
+		 * ALIRO_LED_RANGE_HOLD_MS outlives one round at every rate iOS
+		 * uses, so a walk-up shows as a steady 4 Hz rather than a
+		 * stutter, and it drops back to the 1 Hz session light about a
+		 * second after the phone stops ranging (which a still phone
+		 * does, with the session still up).
+		 */
+		if (gen != led_gen) {
+			led_gen = gen;
+			led_range_ms = now;
+		}
+		/* The != 0 is not redundant: uptime is a few tens of ms when this
+		 * loop first runs, so without it every board reports ranging for
+		 * its first second. */
+		bool ranging = led_range_ms != 0 &&
+			       (now - led_range_ms) < ALIRO_LED_RANGE_HOLD_MS;
+
+		status_led_signal(STATUS_LED_RANGING, ranging);
+		status_led_signal(STATUS_LED_SESSION, aliro_reader_session_active());
+#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+		/* D12: an uncommissioned node cannot unlock anything, and it is
+		 * indistinguishable from a working one until someone walks up. */
+		status_led_signal(STATUS_LED_UNCOMMISSIONED, !matter_commission_has_fabric());
+#endif
 
 		/* Feed exactly one sample per NEWLY accepted trusted range (the generation epoch
 		 * advances only on an accepted latch), mirroring the ESP lock's per-wake feed. A
@@ -298,6 +382,7 @@ int main(void)
 		case ALIRO_APPROACH_UNLOCK_PREDICT:
 		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
 			aliro_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
+			status_led_signal(STATUS_LED_UNLOCKED, true);
 			granted = true;
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 			heap_peak_log("unlock");
@@ -306,6 +391,7 @@ int main(void)
 		case ALIRO_APPROACH_RELOCK_DEPART:
 		case ALIRO_APPROACH_RELOCK_ABORT:
 			aliro_reader_notify_unlock(false); /* Reader Status -> Secured */
+			status_led_signal(STATUS_LED_UNLOCKED, false);
 			granted = false;
 			break;
 		default:
@@ -343,12 +429,16 @@ int main(void)
 			(void)aliro_approach_gone(&approach);
 			if (granted) {
 				aliro_reader_notify_unlock(false);
+				status_led_signal(STATUS_LED_UNLOCKED, false);
 				granted = false;
 			}
 			present = false;
 		}
 
-		k_msleep(ALIRO_TICK_MS);
+		/* Wake on the next latch, or on the housekeeping tick if none comes.
+		 * A latch that lands while this pass is still running leaves the
+		 * semaphore given, so the take returns at once and no range waits. */
+		(void)k_sem_take(&s_range_sig, K_MSEC(ALIRO_TICK_MS));
 	}
 	return 0;
 }

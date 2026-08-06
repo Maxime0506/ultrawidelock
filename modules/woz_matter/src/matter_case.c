@@ -344,9 +344,11 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	 * (PairingSession.cpp:120-144), which is reason enough on its own -- but
 	 * two of these are load-bearing for this node in particular.
 	 *
-	 * The idle interval is this node's Thread poll period. A peer left on
-	 * the 500 ms default retransmits five times into a radio that is asleep
-	 * and concludes the node is gone.
+	 * The idle interval matches the radio. This node is an rx-on MED
+	 * (firmware/overlay-thread.conf), so the spec-default 500 ms is
+	 * honest; it was 3000 while the node was a sleepy end device, and the
+	 * value must follow the link mode. The SRP TXT record in
+	 * firmware/src/matter_thread_port.c advertises the same pair.
 	 *
 	 * MaxPathsPerInvoke is 1 because matter_im_invoke_request_decode()
 	 * genuinely refuses a batch. Saying nothing lets a commissioner batch
@@ -354,7 +356,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	 */
 	(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_S2_SESSION_PARAMS),
 					 MATTER_TLV_STRUCTURE);
-	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_IDLE_INTERVAL), 3000u);
+	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_IDLE_INTERVAL), 500u);
 	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_ACTIVE_INTERVAL), 300u);
 	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_ACTIVE_THRESHOLD), 4000u);
 	(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SP_INTERACTION_MODEL_REV),

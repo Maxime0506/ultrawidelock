@@ -17,4 +17,5 @@
 | [`firmware/src/matter_thread_port.c`](matter_thread_port.c.md) | @file matter_thread_port.c — matter_thread.h on top of Zephyr's OpenThread. |
 | [`firmware/src/prov_shell.c`](prov_shell.c.md) |  |
 | [`firmware/src/status_led.c`](status_led.c.md) | @file |
+| [`firmware/src/status_led.h`](status_led.h.md) | @file |
 | [`firmware/src/thread_gate.c`](thread_gate.c.md) |  |

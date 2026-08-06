@@ -211,6 +211,41 @@ probe-rs read b32 <addr> 2   # e.g. the RTT ring's WrOff/RdOff, to zero a stale 
 probe-rs trace <addr>        # poll one g_dbg_* counter without spending RTT bandwidth
 ```
 
+## The four LEDs are the whole console when the probe is not attached
+
+Everything above needs a debugger and the exact ELF that was flashed. A board on
+a door has neither, so `src/status_led.c` puts the state that matters on the four
+LEDs the DWM3001CDK has. One LED answers one question, so nothing has to be
+decoded from a blink rate alone.
+
+| LED | Question | Pattern | Means |
+|---|---|---|---|
+| **D9 green** | the lock | solid | **unlocked** — an Aliro walk-up grant, or a Home tile tap |
+| | | one blip per 2 s | locked, and the firmware is still running |
+| **D12 red** | attention | solid | a fault the board cannot recover from; `aliro_reader_start()` failed |
+| | | 0.5 Hz | no Matter fabric: it needs commissioning before it can unlock |
+| | | off | nothing to do |
+| **D11 red** | the phone | 4 Hz | UWB ranges are landing now — a walk-up is in flight |
+| | | 1 Hz | an Aliro session is up but not ranging (a still phone stops) |
+| | | off | nobody is talking to it |
+| **D10 blue** | a window | 2 Hz | the firmware update window is open, and closes on its own |
+| | | solid | provisioning mode: USB console up, radios down |
+
+D9 also blinks six times at ~4 Hz when SW2 is held through reset, which is the
+confirmation that the factory-reset hold registered. D13 is **not** the
+firmware's: the DW3110 drives it directly as tx red / rx green. D20 belongs to
+the J-Link OB.
+
+The lock LED is on for **unlocked** on purpose — that is the state worth seeing
+from across a room — and the 2 s blip is what separates "locked" from "the
+firmware died", which are otherwise the same picture.
+
+Each LED renders a 16-slot bit pattern at 125 ms a slot, so the whole display is
+one timer and four 16-bit constants, and the tick stops itself when every
+pattern is static. `CONFIG_ALIRO_STATUS_LED=n` removes it;
+`CONFIG_ALIRO_STATUS_LED_HEARTBEAT=n` drops the 2 s blip and, with it, the last
+reason an idle board wakes eight times a second.
+
 ## Size, measured
 
 Stage 0 built the whole thing to find out whether it fits. It does, with room
@@ -400,7 +435,8 @@ commissioned lock:
 **D10, the blue LED, blinks at 2 Hz while the window is open.** It follows the
 window rather than the button, so it goes out when the five minutes expire on
 their own. Without it, a press that did not register is indistinguishable from
-one that did, on a board with no debugger attached.
+one that did, on a board with no debugger attached. The rest of the display is
+in [The four LEDs](#the-four-leds-are-the-whole-console-when-the-probe-is-not-attached).
 
 `make dfu-serial` is the older serial-recovery upload, kept but not working:
 MCUboot enters its listening window with a full four seconds available and still

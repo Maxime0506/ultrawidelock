@@ -610,9 +610,26 @@ static void on_disconnected(struct bt_conn *conn, uint8_t reason)
 				      : K_MSEC(50));
 }
 
+/**
+ * Report the connection interval the peer actually granted, which is the only proof the requested
+ * 15-30 ms took effect (prj.conf sets the preferred parameters and the 300 ms request timer).
+ */
+static void on_le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t latency,
+				uint16_t timeout)
+{
+	ARG_UNUSED(conn);
+	/* The request is only a request. iOS may grant it, counter it, or ignore
+	 * it, and every BLE round-trip on this board is priced off the answer, so
+	 * the granted value is worth one line per link rather than a guess. */
+	LOG_INF("BLE conn params: interval %u.%02u ms, latency %u, timeout %u ms",
+		(unsigned int)(interval * 125u / 100u), (unsigned int)(interval * 125u % 100u),
+		(unsigned int)latency, (unsigned int)timeout * 10u);
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = on_connected,
 	.disconnected = on_disconnected,
+	.le_param_updated = on_le_param_updated,
 };
 
 /* ---- the aliro_ble.h seam ------------------------------------------------ */

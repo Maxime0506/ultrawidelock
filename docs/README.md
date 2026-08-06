@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**421 subsystems in 55 directories · 2449/2882 symbols documented (84%)**
+**424 subsystems in 55 directories · 2454/2889 symbols documented (84%)**
 
 **Start here:** [`bot/src/index.ts`](architecture/bot.src/index.ts.md), [`bot/scripts/register-commands.ts`](architecture/bot.scripts/register-commands.ts.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -71,7 +71,7 @@ flowchart LR
 | [`bot/scripts/`](architecture/bot.scripts/README.md) | 10 | 8/15 (53%) |
 | [`bot/src/`](architecture/bot.src/README.md) | 41 | 94/185 (50%) |
 | [`bot/src/commands/`](architecture/bot.src.commands/README.md) | 17 | 12/47 (25%) |
-| [`firmware/src/`](architecture/firmware.src/README.md) | 15 | 161/164 (98%) |
+| [`firmware/src/`](architecture/firmware.src/README.md) | 16 | 166/171 (97%) |
 | [`host/presence/`](architecture/host.presence/README.md) | 5 | 36/36 (100%) |
 | [`integration/homeassistant/`](architecture/integration.homeassistant/README.md) | 1 | 5/5 (100%) |
 | [`integration/homeassistant/custom_components/openaliro/`](architecture/integration.homeassistant.custom_components.openaliro/README.md) | 8 | 31/34 (91%) |
@@ -113,7 +113,7 @@ flowchart LR
 | [`release/dwm3001cdk/`](architecture/release.dwm3001cdk/README.md) | 1 | 0/0 (0%) |
 | [`release/esp32-matter-lock/`](architecture/release.esp32-matter-lock/README.md) | 1 | 0/0 (0%) |
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
-| [`scripts/`](architecture/scripts/README.md) | 37 | 158/202 (78%) |
+| [`scripts/`](architecture/scripts/README.md) | 39 | 158/202 (78%) |
 | [`tools/`](architecture/tools/README.md) | 26 | 221/239 (92%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 51/142 (35%) |
 | [`web-flasher/`](architecture/web-flasher/README.md) | 1 | 8/8 (100%) |
@@ -121,9 +121,9 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `39a30bf`.*
+*Mined from git history as of `8572b115`.*
 
-**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (21 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits).
+**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits).
 
 **Change together without importing each other:**
 

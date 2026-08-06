@@ -6,6 +6,7 @@
 | [`scripts/bootstrap.sh`](bootstrap.sh.md) | bootstrap.sh — build a self-contained west workspace, PRISTINE from upstream. |
 | [`scripts/build-nrf5340dk.sh`](build-nrf5340dk.sh.md) | build-nrf5340dk.sh {build\|rebuild\|flash\|flash-erase\|build-flash} — build the |
 | [`scripts/cdk-dfu.sh`](cdk-dfu.sh.md) | cdk-dfu.sh — push a signed image to the DWM3001CDK over MCUboot serial recovery. |
+| [`scripts/cdk-find-probe.sh`](cdk-find-probe.sh.md) | cdk-find-probe.sh — print the probe triple (VID:PID:Serial) wired to the DWM3001CDK. |
 | [`scripts/cdk-rtt-elf-check.sh`](cdk-rtt-elf-check.sh.md) | Refuse to attach RTT with an ELF the board is not running. |
 | [`scripts/cdk-size-baseline.py`](cdk-size-baseline.md) | cdk-size-baseline.py — turn a size report into the committed baseline. |
 | [`scripts/cdk-size-compare.py`](cdk-size-compare.md) | cdk-size-compare.py — head against the recorded baseline, as a gate. |
@@ -18,6 +19,7 @@
 | [`scripts/deadcode-graph.sh`](deadcode-graph.sh.md) | deadcode-graph.sh — find functions nothing calls, using the documate code graph. |
 | [`scripts/deadcode-size.sh`](deadcode-size.sh.md) | deadcode-size.sh — flash cost of the functions nothing calls. |
 | [`scripts/deadcode-tidy.sh`](deadcode-tidy.sh.md) | deadcode-tidy.sh — run clang-tidy against the REAL firmware build. |
+| [`scripts/docs-sync.sh`](docs-sync.sh.md) | docs-sync.sh — put the generated artifacts back in step after a merge. |
 | [`scripts/docs.sh`](docs.sh.md) | docs.sh — build the documentation site into site/. |
 | [`scripts/flash_html.py`](flash_html.md) | Render a release FLASH.md into a self-contained FLASH.html. |
 | [`scripts/presence_runtime.py`](presence_runtime.md) | Build the minimal, deterministic presence runtime transfer archive. |
