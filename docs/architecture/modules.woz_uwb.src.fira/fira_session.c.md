@@ -3,7 +3,7 @@
 
 @file fira_session.c — Range + URSK store for the CCC Pre-POLL responder.
 
-**depends on** [`modules/woz_port/include/woz_port.h`](../modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_kdf.h`](../modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](fira_session.h.md)  ·  **discussed in** [`bot/README.md`](../../../bot/README.md), [`docs/porting-esp32.md`](../../porting-esp32.md), [`web-twin/README.md`](../../../web-twin/README.md)
+**depends on** [`modules/woz_port/include/woz_port.h`](../modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_kdf.h`](../modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](fira_session.h.md)  ·  **discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md), [`web-twin/README.md`](../../../web-twin/README.md)
 
 ## API
 

@@ -1,7 +1,0 @@
-node_modules/
-.wrangler/
-dist/
-*.log
-
-# Baseline A response cache: re-fetchable, and not this repo to publish
-.deepwiki-cache.json

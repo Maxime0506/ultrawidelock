@@ -13,11 +13,8 @@
 #   2. drop the parse cache, which otherwise replays pre-merge line numbers
 #      that look plausible and are wrong
 #   3. regenerate docs/, which MOVES line numbers inside docs/ARCHITECTURE.md
-#   4. rebuild the spec index, which cites four of those line numbers
 #
-# Running 4 before 3 anchors the index to lines the docs build is about to move.
-# That passes locally and fails in CI, which is the trap this script exists to
-# close. Run it through `make sync`.
+# Run it through `make sync`.
 #
 # SYNC_NO_VERIFY=1 stops before the sweep, for when you have another reason to
 # run it yourself.
@@ -50,15 +47,8 @@ fi
 echo "==> docs"
 make --no-print-directory docs
 
-# After the docs build, never before: it cites line numbers that build moves.
-if [ -d bot ]; then
-	echo "==> spec index"
-	npm --prefix bot run spec-index
-fi
-
 echo "==> staging"
 git add -- docs/
-[ -f bot/src/spec-index.generated.ts ] && git add -- bot/src/spec-index.generated.ts
 
 if [ "${SYNC_NO_VERIFY:-0}" = "1" ]; then
 	echo

@@ -45,34 +45,16 @@ counter.
 **called by** `inspect`
 
 ### `binary_ok()`
-`scripts/security-diff.sh:124`
+`scripts/security-diff.sh:103`
 
 ---- allowlists -----------------------------------------------------------
 Directories where a binary is the expected content rather than a surprise. Kept as a prefix
 list rather than a glob so a nested path cannot slip in under a matching leaf name.
-bot/src/twin.wasm is named exactly, not a bot/src/* glob: it is the single WASM module
-extracted from web-twin/twin.js's embedded bytes (bot/scripts/twin-wasm-extract.ts, never
-hand-edited), the one way `/twin` can run that firmware inside workerd rather than a browser
-(docs/twin-worker-phase0.md — workerd refuses runtime WASM codegen from bytes). Its size and
-sha256 are pinned in bot/src/twin.lock.json and re-checked every run by
-bot/test/twin-wasm-drift.test.ts, so a swapped or stale blob fails that gate before this one
-would ever need to catch it. A bare bot/src/* entry would let any other surprise binary in
-unreviewed; this does not.
-bot/assets/fonts/*.ttf are the two Inter weights satori lays text out with for /matrix's PNG.
-Restricted to *.ttf inside that one directory rather than bot/assets/*, so the folder cannot
-become a general dumping ground. Note this is NOT covered by the assets/* prefix above, which
-is anchored at the repository root.
-bot/src/assets.generated.ts is text, not a blob, but trips the size gate at ~4 MB: it is
-`npm run generate-assets` base64-embedding those fonts plus @resvg/resvg-wasm's WASM, so that
-Wrangler and `node --test` receive byte-identical assets without a bundler in between
-(bot/scripts/generate-assets.ts explains why an import rule cannot span both). Generated,
-never hand-edited, and reproducible by re-running that script — which is the review path for
-it, since nobody reads 4 MB of base64.
 
 **called by** `inspect`
 
 ### `exec_ok()`
-`scripts/security-diff.sh:136`
+`scripts/security-diff.sh:114`
 
 A file allowed to carry the executable bit: something with a shebang, in other words a script.
 The tree's thirty executables are 23 *.sh, 4 *.py and 3 extensionless launchers under
@@ -82,7 +64,7 @@ tracked, or a payload waiting for something to run it.
 **called by** `inspect`
 
 ### `is_binary()`
-`scripts/security-diff.sh:191`
+`scripts/security-diff.sh:169`
 
 is_binary PATH SHA — git's own rule, applied directly: a blob is binary if a NUL byte appears
 in its first 8000 bytes. Never a guess from the extension.
@@ -97,14 +79,14 @@ untracked file), so the bytes come from disk instead of from a blob.
 **called by** `inspect`
 
 ### `size_of()`
-`scripts/security-diff.sh:205`
+`scripts/security-diff.sh:183`
 
 size_of PATH SHA — same split, for the same reason.
 
 **called by** `inspect`
 
 ### `inspect()`
-`scripts/security-diff.sh:215`
+`scripts/security-diff.sh:193`
 
 inspect PATH DSTMODE STATUS DSTSHA — every structural check, for one file. Factored out so an
 untracked file gets exactly the same treatment as a committed one; when this lived inline, the

@@ -1,8 +1,0 @@
-{
-  "source": "web-twin/twin.js",
-  "source_bytes": 37465,
-  "source_sha256": "d8453e52453be3f87715beb9b837d9d66f25624300a5978af0234a8bdf2ec920",
-  "wasm_bytes": 25896,
-  "wasm_sha256": "a5bd6bf2bb33a4a212ff6064cf87c25a66b88cae33e56d7c3a636d2aa52084f8",
-  "extracted_at": "2026-08-03T23:14:47.595Z"
-}

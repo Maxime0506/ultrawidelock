@@ -19,7 +19,7 @@ reply2 = round2 - 2*tof, which makes the firmware's own
 (1 tick ~ 15.65 ps, ~4.692 mm — ccc_shim_rx.c final_data_decode).
 A Ghost-Peak spoof is a negative-tof block through the same full path.
 
-**discussed in** [`bot/README.md`](../../../bot/README.md), [`web-twin/README.md`](../../../web-twin/README.md)
+**discussed in** [`web-twin/README.md`](../../../web-twin/README.md)
 
 ## API
 
