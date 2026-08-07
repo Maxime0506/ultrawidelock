@@ -19,7 +19,12 @@ it is today, and puts the store back afterwards.
 Options: `--user` and `--index` pick the first slot pair to use, `--count` how
 many to try, `--base` the anchor count already in the store so the running total
 printed is the real one, `--pre-clear` removes credential indices a previous
-interrupted run left behind, `--storage` moves the controller's key store.
+interrupted run left behind, `--storage` puts the controller's key store at a
+path that survives the run (the default is a private temporary one).
+
+Exit status: 0 a ceiling was measured, 1 no ceiling (raise `--count`, or the
+probe broke before reaching one), 2 the cleanup failed and anchors were left on
+the board -- the printed `--pre-clear` line is how to take them off.
 
 Run `make monitor` alongside. The refusal the lock prints is the evidence:
 
@@ -39,6 +44,7 @@ import argparse
 import asyncio
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -103,6 +109,9 @@ def self_test():
 async def _install(bench, mod, user, cred, key):
     """SetUser then SetCredential, reporting only what the credential write said.
 
+    Returns (sent, status): `sent` False means the SetCredential never got an
+    answer at all, which is a broken probe rather than a measured ceiling.
+
     SetUser fails on its own for reasons that have nothing to do with capacity --
     an index past the lock's user table answers InvalidCommand -- and the
     credential still lands. Treating that as the ceiling ends the probe early.
@@ -113,7 +122,7 @@ async def _install(bench, mod, user, cred, key):
         userStatus=mod.DL.Enums.UserStatusEnum.kOccupiedEnabled,
         userType=mod.DL.Enums.UserTypeEnum.kUnrestrictedUser,
         credentialRule=mod.DL.Enums.CredentialRuleEnum.kSingle))
-    resp = await bench.cmd(
+    sent, resp = await bench.cmd(
         f"SetCredential(type 7, index {cred}, user {user})",
         mod.DL.Commands.SetCredential(
             operationType=mod.DL.Enums.DataOperationTypeEnum.kAdd,
@@ -122,7 +131,7 @@ async def _install(bench, mod, user, cred, key):
             userStatus=mod.DL.Enums.UserStatusEnum.kOccupiedEnabled,
             userType=mod.DL.Enums.UserTypeEnum.kUnrestrictedUser))
     status = getattr(resp, "status", None)
-    return status if status is None else int(status)
+    return sent, (status if status is None else int(status))
 
 
 async def run(args):
@@ -142,7 +151,17 @@ async def run(args):
         disc = args.long_discriminator
     print(f"pairing code parsed: discriminator 0x{disc:03x}")
 
-    stack = ChipStack(persistentStoragePath=args.storage,
+    # A probe with no --storage gets a private temporary one, alive for exactly
+    # this run: the default used to be one fixed path, which two probes sharing a
+    # machine would fight over and which carries a CA from run to run for no
+    # reason. An explicit --storage still means deliberate persistence.
+    tmp = None
+    storage = args.storage
+    if storage is None:
+        tmp = tempfile.TemporaryDirectory(prefix="cap-probe-")
+        storage = os.path.join(tmp.name, "store.json")
+
+    stack = ChipStack(persistentStoragePath=storage,
                       enableServerInteractions=False)
     cam = CertificateAuthorityManager(chipStack=stack)
     cam.LoadAuthoritiesFromStorage()
@@ -153,6 +172,8 @@ async def run(args):
 
     added = []
     ceiling = None
+    aborted = False
+    stranded = []
     try:
         print("opening PASE over BLE -- the commissioning window must be open ...")
         await ctrl.EstablishPASESessionBLE(passcode, disc, mod.NODE_ID)
@@ -165,7 +186,16 @@ async def run(args):
             user, cred = args.user + n, args.index + n
             total = args.base + len(added) + 1
             print(f"--- anchor {total}: user {user}, credential {cred} ---")
-            status = await _install(bench, mod, user, cred, point(4 + n))
+            sent, status = await _install(bench, mod, user, cred, point(4 + n))
+            if not sent:
+                # The invoke itself failed, so the lock never answered. A dead
+                # link and a full partition both end the loop here, and only one
+                # of them is a measurement: say which this was.
+                aborted = True
+                print(f"\nNO ANSWER at anchor {total}: the SetCredential never "
+                      "landed. That is a probe failure, not a capacity limit -- "
+                      "no ceiling was measured.")
+                break
             if status == 0:
                 added.append((user, cred))
                 print(f"  stored: {total} anchor(s) now in the store")
@@ -176,28 +206,44 @@ async def run(args):
                 print("  check the board log for the errno -- -28 is -ENOSPC")
                 break
     except Exception as exc:  # noqa: BLE001 -- report, never traceback at a bench
+        aborted = True
         print(f"FAILED: {type(exc).__name__}: {exc}")
     finally:
         # Leaving anchors behind would move the ceiling for the next run, so the
         # cleanup matters more here than the measurement.
         print(f"\ncleanup: removing the {len(added)} anchor(s) this probe added")
         for user, cred in reversed(added):
-            try:
-                await bench.cmd(f"ClearCredential(7, {cred})",
-                                mod.DL.Commands.ClearCredential(
-                                    credential=bench.credential(cred)))
-                await bench.cmd(f"ClearUser({user})",
-                                mod.DL.Commands.ClearUser(userIndex=user))
-            except Exception as exc:  # noqa: BLE001 -- best-effort teardown
-                print(f"  credential {cred} NOT removed: {exc} -- "
-                      f"re-run with --pre-clear {cred}")
+            # bench.cmd never raises -- it records and returns -- so the removals
+            # have to be checked, not merely attempted. An anchor left behind
+            # moves the ceiling for the next run, which is the one thing this
+            # probe cannot afford to do silently.
+            cleared, _ = await bench.cmd(f"ClearCredential(7, {cred})",
+                                         mod.DL.Commands.ClearCredential(
+                                             credential=bench.credential(cred)))
+            freed, _ = await bench.cmd(f"ClearUser({user})",
+                                       mod.DL.Commands.ClearUser(userIndex=user))
+            if not (cleared and freed):
+                stranded.append((user, cred))
         try:
             await ctrl.UnpairDevice(mod.NODE_ID)
         except Exception:  # noqa: BLE001 -- best-effort teardown
             pass
         ctrl.Shutdown()
         stack.Shutdown()
+        if tmp is not None:
+            tmp.cleanup()
 
+    if stranded:
+        print("\nCLEANUP FAILED. These anchors are still on the board and will "
+              "move the ceiling for the next run:")
+        for user, cred in stranded:
+            print(f"  user {user}, credential {cred}")
+        print("  recover with: python3 tools/matter_cap_probe.py <code> --pre-clear "
+              + " ".join(str(c) for _, c in stranded))
+        print("  the users are harmless; ClearUser them from any admin if you care")
+        return 2
+    if aborted:
+        return 1
     if ceiling is None:
         print(f"\nNo refusal in {args.count} attempt(s): the ceiling is above "
               f"{args.base + len(added)}. Raise --count.")
@@ -221,7 +267,9 @@ def main():
                     help="anchors already stored, so the running total printed is real")
     ap.add_argument("--pre-clear", type=int, nargs="*", default=[],
                     help="credential indices an interrupted run left behind")
-    ap.add_argument("--storage", default="/tmp/cap-probe.json")
+    ap.add_argument("--storage",
+                    help="controller key store; omit for a private temporary one "
+                         "that lives exactly as long as this run")
     args = ap.parse_args()
     if args.dry_run:
         sys.exit(self_test())

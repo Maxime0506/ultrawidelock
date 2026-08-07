@@ -710,11 +710,14 @@ Covered now by `d.start_adv_params` and `d.import_refreshes_adv` in
 
 ### Limits worth knowing before relying on it
 
-- The trust store holds **6** phone keys (`ALIRO_TRUST_MAX`), and the Matter layer
-  now advertises the same 6 in `NumberOfAliroEndpointKeysSupported` rather than
-  10. A `BUILD_ASSERT` in `matter_commission.c` keeps the two equal, because a
-  controller told it may install more than the store holds has the surplus
-  silently evicted.
+- The trust store holds **6** phone keys (`ALIRO_TRUST_MAX`). On this board the
+  Matter node now advertises the same 6 in `NumberOfAliroEndpointKeysSupported`
+  rather than 10, and a `BUILD_ASSERT` in `matter_commission.c` keeps the two
+  equal, because a controller told it may install more than the store holds has
+  the surplus silently evicted. That equality is this target's alone: the ESP32
+  delegate still reports `kAliroKeysSupported = 10`
+  (`ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.h`) against the
+  same 6-anchor store, so a controller there can still be told more than fits.
 - Revocation is implemented and **proven on hardware**, 2026-08-07. A second
   Apple ID was invited to a real home; Apple installed a key for them
   (`ALIRO CREDENTIAL ADDED (type 7, cred idx 1, user idx 1)`), that credential

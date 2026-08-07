@@ -70,12 +70,19 @@ CDK-8 is this target's EV-7, and it is faked the same way: the bolt moving is no
 pass. The Wallet animation is, because that is what proves the reader told the phone
 it granted access rather than just actuating locally.
 
-CDK-14 and CDK-15 are the two open rows, and neither has ever been run. CDK-14 is
-the only rate on this list: everything above it has been demonstrated at least once,
-and none of it at a rate. Forty-nine grants is not a partial answer to it, because a
-rate needs the failures too and nobody was counting them. CDK-15 is the resumable
-apply, whose step counter is exercised by design and by host test but has never met a
-real power cut.
+Four rows are open, and none of them has ever been run: CDK-9, CDK-10, CDK-14 and
+CDK-15.
+
+CDK-9 (walk-away relock) and CDK-10 (unlock after a power cycle) are unrecorded
+rather than known-bad. Both have been seen incidentally -- the bolt does relock and
+the board is power-cycled constantly during development -- but neither was run as
+its own procedure against its own pass criterion, so neither has a result here.
+
+CDK-14 is the only rate on this list: every row with a recorded result has been
+demonstrated at least once, and none of them at a rate. Forty-nine grants is not a
+partial answer to it, because a rate needs the failures too and nobody was counting
+them. CDK-15 is the resumable apply, whose step counter is exercised by design and
+by host test but has never met a real power cut.
 
 CDK-16 has one gap of its own. The store is the only allowlist a key agreement
 consults, so an anchor that is gone cannot be matched, but the removed phone was never

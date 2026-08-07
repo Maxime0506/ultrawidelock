@@ -1339,6 +1339,19 @@ void mfk_reset(void)
 	mfk_prov_identity_rc = 0;
 	mfk_add_trust_calls = 0;
 	mfk_add_trust_rc = 0;
+	mfk_add_trust_type = 0;
+	mfk_add_trust_index = 0;
+	mfk_add_trust_user = 0;
+	memset(mfk_add_trust_key, 0, sizeof(mfk_add_trust_key));
+	/* The revocation half, so a section that forced a failing removal cannot
+	 * leave the next one refusing for a reason it never set. */
+	mfk_remove_trust_calls = 0;
+	mfk_remove_trust_type = 0;
+	mfk_remove_trust_index = 0;
+	mfk_remove_trust_rc = 0;
+	mfk_remove_user_calls = 0;
+	mfk_remove_user_index = 0;
+	mfk_remove_user_rc = 0;
 	mfk_prov_clear_calls = 0;
 	mfk_refresh_adv_calls = 0;
 	mfk_ble_time_updated_calls = 0;

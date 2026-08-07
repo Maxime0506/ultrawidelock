@@ -143,9 +143,34 @@ void aliro_ble_post_presence_reset(void (*cb)(void))
 	cb(); /* the double runs "the host task" inline */
 }
 
+/*
+ * QUEUED, not inline, unlike the two doubles above it. The real slot posts one
+ * shared event onto the host task's queue and the port refuses to queue an event
+ * that is already queued, so two revocations arriving before the host task runs
+ * produce ONE sweep. An inline double cannot show that: it runs a sweep per
+ * revocation and would pass whether the coalescing exists or not.
+ */
+static void (*s_revoke_sweep_pending)(void);
+static int s_revoke_sweep_posts;
+
 void aliro_ble_post_revoke_sweep(void (*cb)(void))
 {
-	cb(); /* the double runs "the host task" inline */
+	s_revoke_sweep_pending = cb;
+	s_revoke_sweep_posts++;
+}
+
+/* Run the pending sweep, if any. Returns how many callbacks ran: never more than
+ * one however many times the slot was posted. */
+static int drain_revoke_sweep(void)
+{
+	void (*cb)(void) = s_revoke_sweep_pending;
+
+	if (cb == NULL) {
+		return 0;
+	}
+	s_revoke_sweep_pending = NULL;
+	cb();
+	return 1;
 }
 
 static int s_disconnects;
@@ -1837,19 +1862,53 @@ int main(void)
 		okc("r.errno_anchor3", aliro_reader_provision_add_trust(rk2, 7u, 46u, 6u) == 0);
 		s_nvs_fail = true;
 		okc("r.errno_remove_type", aliro_reader_provision_remove_type(7u) == -ENOSPC);
-		s_nvs_errno = -1;
 		s_nvs_fail = false;
+
+		/*
+		 * The pending write is retried by the NEXT REVOCATION, not only by a
+		 * disconnect. A removal driven over Matter with no link up has no
+		 * disconnect coming, and until the write lands the anchor is gone
+		 * from RAM only: a reboot would bring it back. An admin repeating a
+		 * command that reported a failure is the caller most likely to exist,
+		 * so that repeat carries the write -- and keeps reporting the failure
+		 * until it lands, rather than answering "already removed".
+		 */
+		okc("r.retry_add", aliro_reader_provision_add_trust(rk1, 7u, 81u, 9u) == 0);
+		s_nvs_fail = true;
+		okc("r.retry_first_fails", aliro_reader_provision_remove_trust(7u, 81u) == -ENOSPC);
+		okc("r.retry_reports_pending",
+		    aliro_reader_provision_remove_trust(7u, 81u) == -ENOSPC);
+		okc("r.retry_pending_via_user", aliro_reader_provision_remove_user(9u) == -ENOSPC);
+		okc("r.retry_pending_via_type", aliro_reader_provision_remove_type(7u) == -ENOSPC);
+		s_nvs_fail = false;
+		okc("r.retry_lands", aliro_reader_provision_remove_trust(7u, 81u) == 1);
+		okc("r.retry_settled", aliro_reader_provision_remove_trust(7u, 81u) == 1);
+		s_nvs_errno = -1;
 
 		/* A revocation drops every live link: an established session keeps
 		 * ranging on a URSK derived before the removal and never re-checks
-		 * the trust store, so the door would keep opening until it ended. */
+		 * the trust store, so the door would keep opening until it ended.
+		 *
+		 * Two anchors and two removals before the drain, because the sweep
+		 * is posted to the host task rather than run in place: what has to
+		 * hold is that the second revocation coalesces into the first
+		 * pending sweep instead of queueing a second one on the same
+		 * static event. */
 		okc("r.clean", aliro_reader_trust_clear() >= 0);
+		(void)drain_revoke_sweep(); /* the clear posted one; start from empty */
 		okc("r.link_add", aliro_reader_provision_add_trust(rk1, 7u, 51u, 7u) == 0);
+		okc("r.link_add2", aliro_reader_provision_add_trust(rk2, 7u, 52u, 7u) == 0);
 		s_cfg.cb.on_connected(41);
 		int before = s_disconnects;
+		int posts = s_revoke_sweep_posts;
 
 		okc("r.link_revoke", aliro_reader_provision_remove_trust(7u, 51u) == 0);
-		okc("r.link_dropped", s_disconnects > before);
+		okc("r.link_revoke2", aliro_reader_provision_remove_trust(7u, 52u) == 0);
+		okc("r.sweep_posted_twice", s_revoke_sweep_posts == posts + 2);
+		okc("r.sweep_deferred", s_disconnects == before);
+		okc("r.sweep_coalesced", drain_revoke_sweep() == 1);
+		okc("r.link_dropped", s_disconnects == before + 1);
+		okc("r.sweep_drained", drain_revoke_sweep() == 0);
 		s_cfg.cb.on_disconnected(41);
 	}
 

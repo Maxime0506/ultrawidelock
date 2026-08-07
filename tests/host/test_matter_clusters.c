@@ -518,6 +518,35 @@ void test_matter_clusters(void)
 		T_EQ("no CredentialData is an invalid command", info.last_credential_status,
 		     MATTER_IM_STATUS_INVALID_COMMAND);
 		T_EQ("and nothing was installed", s_cred_calls, 0);
+
+		/*
+		 * TLV carries both indices as unsigned integers of any width and the
+		 * store's are 16 bits. Truncating 0x10001 to 1 would bind this key to
+		 * an index the admin never sent, and the ClearCredential(1) that
+		 * follows would revoke somebody else's key instead.
+		 */
+		flen = build_cred_fields(fields, sizeof(fields), 0x10001u,
+					 MATTER_DL_CRED_ALIRO_ENDPOINT_KEY, true, verification,
+					 sizeof(verification), true, 1u);
+		T_EQ("command still succeeds",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
+				 fields, flen, &resp),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("a credential index past 16 bits is an invalid command",
+		     info.last_credential_status, MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("and nothing was installed", s_cred_calls, 0);
+
+		flen = build_cred_fields(fields, sizeof(fields), 1u,
+					 MATTER_DL_CRED_ALIRO_ENDPOINT_KEY, true, verification,
+					 sizeof(verification), true, 0x10001u);
+		T_EQ("command still succeeds",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
+				 fields, flen, &resp),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("a user index past 16 bits is an invalid command",
+		     info.last_credential_status, MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("and nothing was installed", s_cred_calls, 0);
+		T_EQ("and no user index is claimed", info.last_user_index, 0u);
 	}
 
 	t_group("SetCredential reports a store that refused");

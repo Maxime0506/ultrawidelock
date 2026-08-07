@@ -998,8 +998,14 @@ static void presence_reset_ev_cb(struct ble_npl_event *ev)
  */
 void aliro_ble_post_presence_reset(void (*cb)(void))
 {
+	static bool init;
+
 	s_presence_reset_cb = cb;
-	ble_npl_event_init(&s_presence_reset_ev, presence_reset_ev_cb, NULL);
+	/* Initialised once, for the reason spelled out at aliro_ble_post_revoke_sweep. */
+	if (!init) {
+		ble_npl_event_init(&s_presence_reset_ev, presence_reset_ev_cb, NULL);
+		init = true;
+	}
 	ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_presence_reset_ev);
 }
 
@@ -1024,8 +1030,21 @@ static void revoke_sweep_ev_cb(struct ble_npl_event *ev)
  */
 void aliro_ble_post_revoke_sweep(void (*cb)(void))
 {
+	static bool init;
+
 	s_revoke_sweep_cb = cb;
-	ble_npl_event_init(&s_revoke_sweep_ev, revoke_sweep_ev_cb, NULL);
+	/*
+	 * Initialised ONCE. There is one shared event here, and the port refuses to
+	 * queue an event that is already queued -- which is exactly the coalescing a
+	 * sweep wants, since one pass drops every link however many credentials went.
+	 * Re-initialising clears the flag that refusal is based on, so a second
+	 * revocation arriving before the host task ran would link the same static
+	 * event into the queue twice.
+	 */
+	if (!init) {
+		ble_npl_event_init(&s_revoke_sweep_ev, revoke_sweep_ev_cb, NULL);
+		init = true;
+	}
 	ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_revoke_sweep_ev);
 }
 

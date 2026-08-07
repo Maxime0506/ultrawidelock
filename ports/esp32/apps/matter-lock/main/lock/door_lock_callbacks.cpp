@@ -123,6 +123,12 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 			ALIRO_CRED_INDEX_NONE);
 		ESP_LOGI(TAG, "Aliro endpoint key -> reader trust store (type=%u rc=%d)",
 			 static_cast<unsigned>(credentialType), rc);
+		// rc == 1 is "already trusted", which is success. A negative rc means the
+		// reader is NOT holding this key, so reporting success would leave the
+		// controller showing an enrolled phone that can never open the door.
+		if (rc < 0) {
+			ok = false;
+		}
 	}
 	// A ClearCredential arrives here as an Available status with empty data
 	// (door-lock-server.cpp calls this hook to erase the slot), so this is the
@@ -136,6 +142,13 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 		ESP_LOGW(TAG, "Aliro endpoint key REVOKED (type=%u index=%u rc=%d)",
 			 static_cast<unsigned>(credentialType),
 			 static_cast<unsigned>(credentialIndex), rc);
+		// rc == 1 is "no such anchor", which is the right answer to a removal
+		// that already happened: still success. A negative rc means the anchor
+		// left RAM but the store was not written, so the removal does not
+		// survive a reboot and the admin has to be told.
+		if (rc < 0) {
+			ok = false;
+		}
 	}
 #endif
 	return ok;

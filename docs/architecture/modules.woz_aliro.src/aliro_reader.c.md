@@ -391,8 +391,21 @@ on its next approach). Runs on the BLE-host task, same as every other session to
 
 **calls** `complete_ap_and_range`, `reader_status_send`, `session_find`
 
+### `static int flush_pending_store(void)`
+`modules/woz_aliro/src/aliro_reader.c:1638`
+
+Write the trust store if something left it dirty: a Kpersistent minted in RAM, or a removal that
+was applied but could not be persisted. Returns 0 when there was nothing pending or the write
+landed, and the store's negative errno when a pending write failed again.
+The dirty flag is cleared BEFORE the write and re-set on failure, not cleared after a success:
+this runs on the BLE-host task and on whatever task a Matter command arrives on, and a
+Kpersistent minted between the snapshot and the clear would otherwise be dropped by the success
+that did not include it.
+
+**called by** `aliro_reader_provision_remove_trust`, `aliro_reader_provision_remove_type`, `aliro_reader_provision_remove_user`, `on_disconnected`
+
 ### `static void on_connected(uint16_t conn_handle)`
-`modules/woz_aliro/src/aliro_reader.c:1632`
+`modules/woz_aliro/src/aliro_reader.c:1673`
 
 BLE connection-established callback: allocates a session slot for the new connection.
 Logs an error and returns without effect if no free session slot is available.
@@ -400,16 +413,16 @@ Logs an error and returns without effect if no free session slot is available.
 **calls** `session_alloc`
 
 ### `static void on_disconnected(uint16_t conn_handle)`
-`modules/woz_aliro/src/aliro_reader.c:1647`
+`modules/woz_aliro/src/aliro_reader.c:1688`
 
 BLE disconnection callback: marks the connection's session inactive (if one exists) and
 stops any UWB ranging associated with the connection.
 Logs the session's message count and final transaction phase before deactivating it.
 
-**calls** `any_session_active_on_host`, `phase_str`, `presence_checkpoint_ready_on_host`, `session_find`, `spare_eph_refill`
+**calls** `any_session_active_on_host`, `flush_pending_store`, `phase_str`, `presence_checkpoint_ready_on_host`, `session_find`, `spare_eph_refill`
 
 ### `static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)`
-`modules/woz_aliro/src/aliro_reader.c:1705`
+`modules/woz_aliro/src/aliro_reader.c:1723`
 
 BLE data-received callback: looks up the session for conn_handle and feeds each Aliro envelope
 in the received buffer into its transaction state machine.
@@ -418,7 +431,7 @@ Logs a warning and drops the data if no active session exists for conn_handle.
 **calls** `session_find`, `transaction_feed`
 
 ### `static struct aliro_ble_config make_ble_cfg(void)`
-`modules/woz_aliro/src/aliro_reader.c:1739`
+`modules/woz_aliro/src/aliro_reader.c:1757`
 
 The reader's BLE transport config: advertised versions/features + the
 transaction transport callbacks. Shared by the standalone + attached starts.
@@ -426,14 +439,14 @@ transaction transport callbacks. Shared by the standalone + attached starts.
 **called by** `aliro_reader_ble_prepare`, `aliro_reader_start`
 
 ### `static int reader_engine_init(void)`
-`modules/woz_aliro/src/aliro_reader.c:1765`
+`modules/woz_aliro/src/aliro_reader.c:1783`
 
 crypto + provisioning load + UWB ranging setup, shared by both start paths.
 
 **called by** `aliro_reader_start`, `aliro_reader_start_attached`  ·  **calls** `load_provisioning`, `spare_eph_refill`
 
 ### `static bool apply_provisioned_adv_params(void)`
-`modules/woz_aliro/src/aliro_reader.c:1786`
+`modules/woz_aliro/src/aliro_reader.c:1804`
 
 Applies the provisioned resolvable advertising parameters when a real GRK is
 present. The phone resolves "its" reader by re-deriving the dynamic tag from the
@@ -445,7 +458,7 @@ groupSubIdentifier(16)). Returns false on the all-zero dev-default GRK.
 **called by** `aliro_reader_refresh_adv`, `aliro_reader_start`, `aliro_reader_start_attached`
 
 ### `int aliro_reader_start(void)`
-`modules/woz_aliro/src/aliro_reader.c:1804`
+`modules/woz_aliro/src/aliro_reader.c:1822`
 
 Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging), applies the
 provisioned advertising parameters when the loaded identity carries a GRK, and brings up the BLE
@@ -455,7 +468,7 @@ aliro_ble_start result otherwise.
 **calls** `apply_provisioned_adv_params`, `make_ble_cfg`, `reader_engine_init`
 
 ### `const void *aliro_reader_ble_prepare(void)`
-`modules/woz_aliro/src/aliro_reader.c:1828`
+`modules/woz_aliro/src/aliro_reader.c:1846`
 
 Prepares the BLE transport and returns the Aliro GATT service definition for external
 registration, without starting the transport. Returns NULL if aliro_ble_prepare fails; on success
@@ -464,7 +477,7 @@ returns the pointer from aliro_ble_service_def(), owned by the BLE layer.
 **calls** `make_ble_cfg`
 
 ### `int aliro_reader_start_attached(void)`
-`modules/woz_aliro/src/aliro_reader.c:1845`
+`modules/woz_aliro/src/aliro_reader.c:1863`
 
 Starts the Aliro reader in "attached" transport mode: initializes the engine, applies provisioned
 resolvable advertising parameters if a real GRK is present, then starts the attached BLE
@@ -476,7 +489,7 @@ initialization fails, or the underlying aliro_ble_start_attached result otherwis
 **calls** `apply_provisioned_adv_params`, `reader_engine_init`
 
 ### `void aliro_reader_refresh_adv(void)`
-`modules/woz_aliro/src/aliro_reader.c:1869`
+`modules/woz_aliro/src/aliro_reader.c:1887`
 
 Refreshes the BLE advertisement to include the resolvable service data once a real
 GroupResolvingKey (GRK) is available. Handles the case where Matter provisioning
@@ -488,7 +501,7 @@ aliro_ble_set_adv_params + aliro_ble_readvertise to make the reader approach-res
 **called by** `aliro_reader_import_blob`, `aliro_reader_provision_identity`  ·  **calls** `apply_provisioned_adv_params`
 
 ### `void aliro_reader_prov_print(void)`
-`modules/woz_aliro/src/aliro_reader.c:1899`
+`modules/woz_aliro/src/aliro_reader.c:1917`
 
 Print the reader's provisioning state (identity, trust anchors, last presented credential)
 to the console for diagnostics.
@@ -498,12 +511,12 @@ so UART I/O does not hold the lock during the BLE task's trust check.
 **calls** `load_provisioning`
 
 ### `static void revoke_sweep_on_host(void)`
-`modules/woz_aliro/src/aliro_reader.c:1952`
+`modules/woz_aliro/src/aliro_reader.c:1972`
 
 Terminate every live Aliro link. Runs on the BLE-host task, which owns the session table.
 
 ### `static void revoke_aftermath(const uint8_t *removed_pub)`
-`modules/woz_aliro/src/aliro_reader.c:1969`
+`modules/woz_aliro/src/aliro_reader.c:1989`
 
 Forget a revoked credential everywhere outside the trust store: the attribution latch that names
 who unlocked, the bench re-add latch that would put it straight back, and any link still ranging
@@ -513,35 +526,42 @@ Call without s_prov_lock held.
 **called by** `aliro_reader_provision_clear`, `aliro_reader_provision_remove_trust`, `aliro_reader_provision_remove_type`, `aliro_reader_provision_remove_user`, `aliro_reader_trust_clear`
 
 ### `static int persist_removal(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)`
-`modules/woz_aliro/src/aliro_reader.c:1996`
+`modules/woz_aliro/src/aliro_reader.c:2023`
 
 Persist a store a removal has ALREADY applied in RAM.
 The opposite order to the add path, deliberately. An add that cannot be persisted must not be
 trusted, so it writes first and commits second. A removal that cannot be persisted must still
 stop opening the door, so it commits first and reports the failure afterwards; the store is left
-dirty and the next disconnect retries the write through the path the Kpersistent flush already
-uses. Returns 0 when the removal is live and persisted, -1 when it is live but unpersisted --
-never 0 for an unpersisted removal, because a Matter admin is told what this returns.
+dirty for flush_pending_store() to retry.
+That retry needs a caller. A disconnect is one, but a revocation with no link up has no
+disconnect coming, so the removal entry points retry a pending write themselves -- an admin
+repeating the command is then what drives it, and until one of the two runs the removal is live
+in RAM and a reboot would bring the anchor back.
+Returns 0 when the removal is live and persisted, or the store's negative errno when it is live
+but unpersisted -- never 0 for an unpersisted removal, because a Matter admin is told what this
+returns.
 
 **called by** `aliro_reader_provision_remove_trust`, `aliro_reader_provision_remove_type`, `aliro_reader_provision_remove_user`, `aliro_reader_trust_clear`
 
 ### `int aliro_reader_trust_last(void)`
-`modules/woz_aliro/src/aliro_reader.c:2016`
+`modules/woz_aliro/src/aliro_reader.c:2045`
 
 Add the most recently presented credential's public key to the trust store and persist it.
 Returns 1 if no credential has been presented yet or it is already trusted (nothing
-persisted), -1 if the store is full or the NVS write fails (in-memory trust store left
-unchanged on failure), 0 if newly added and committed.
+persisted), -1 if the key is not an uncompressed point, the store's negative errno if the
+NVS write fails (in-memory trust store left unchanged on failure), 0 if newly added and
+committed. A full store evicts rather than refusing.
 
 **calls** `load_provisioning`
 
 ### `int aliro_reader_trust_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:2065`
+`modules/woz_aliro/src/aliro_reader.c:2095`
 
 Empty the trust store and persist the empty store, keeping the reader identity.
 Returns 1 if the store was already empty (nothing persisted), 0 if cleared and persisted,
--1 if the NVS write failed -- in which case the store is still empty in RAM, because a
-revocation that cannot be written must not keep opening the door in the meantime.
+or the store's negative errno if the NVS write failed -- in which case the store is still
+empty in RAM, because a revocation that cannot be written must not keep opening the door
+in the meantime.
 Every re-pair mints a fresh credential and nothing evicts the old ones, so the store
 reaches ALIRO_TRUST_MAX and refuses the key currently being presented. A Matter factory
 reset does not touch this namespace, so without this the only way out is erasing NVS.
@@ -549,7 +569,7 @@ reset does not touch this namespace, so without this the only way out is erasing
 **calls** `load_provisioning`, `persist_removal`, `revoke_aftermath`
 
 ### `void aliro_reader_stepup_arm(void)`
-`modules/woz_aliro/src/aliro_reader.c:2095`
+`modules/woz_aliro/src/aliro_reader.c:2125`
 
 Arm a one-shot Access-Document request (see aliro_reader.h). No-op with a note
 when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
@@ -557,14 +577,14 @@ when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
 **calls** `load_provisioning`
 
 ### `void aliro_reader_stepup_status(void)`
-`modules/woz_aliro/src/aliro_reader.c:2109`
+`modules/woz_aliro/src/aliro_reader.c:2139`
 
 Print the armed state and the most recent verification verdict (see aliro_reader.h).
 
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN], const uint8_t sign_priv[ALIRO_READER_PRIV_LEN], const uint8_t grk[ALIRO_GRK_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:2149`
+`modules/woz_aliro/src/aliro_reader.c:2179`
 
 Store a Matter-provisioned reader identity (reader ID, signing private key, GRK), keeping
 any trust anchors already present, and persist it to NVS.
@@ -575,54 +595,59 @@ via compute_reader_group_x since the signing key changed.
 **calls** `aliro_reader_refresh_adv`, `compute_reader_group_x`, `load_provisioning`
 
 ### `int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN], uint8_t cred_type, uint16_t cred_index, uint16_t user_index)`
-`modules/woz_aliro/src/aliro_reader.c:2207`
+`modules/woz_aliro/src/aliro_reader.c:2239`
 
 Add a Matter-provisioned credential public key to the reader's trust store, bind the Matter
 credential/user indices it was installed under, and persist it.
 Returns 0 if newly added and stored, 1 if the credential was already trusted (persisted only
-when its indices changed), -1 if the store is full, cred_pub is not a valid P-256 point, or
-the NVS write fails. On failure the in-memory trust store (s_trust) is left unchanged.
+when its indices changed), -1 if cred_pub is not an uncompressed point, or the store's
+negative errno if the NVS write fails. A FULL store is not a failure: the oldest anchor
+that never completed a standard phase is evicted to make room, which is logged.
+On failure the in-memory trust store (s_trust) is left unchanged.
 The indices are what ClearCredential and ClearUser later name the anchor by; pass
 ALIRO_CRED_INDEX_NONE for either one the caller does not have.
 
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)`
-`modules/woz_aliro/src/aliro_reader.c:2273`
+`modules/woz_aliro/src/aliro_reader.c:2306`
 
 Revoke the trust anchor a Matter admin installed as (cred_type, cred_index). Both halves
 are matched, because a Matter credential index is scoped to its type.
 Returns 1 when no anchor carries that pair (a removal that already happened, or a
 pre-v4 anchor that never had one -- both are answered as success, since the credential
 the admin named is not trusted either way), 0 when the anchor is gone and the store is
-persisted, or the store's negative errno when it is gone from RAM but the write failed.
+persisted, or the store's negative errno when it is gone from RAM but the write failed --
+including a write an EARLIER removal left pending, which this retries.
 
-**calls** `load_provisioning`, `persist_removal`, `revoke_aftermath`
+**calls** `flush_pending_store`, `load_provisioning`, `persist_removal`, `revoke_aftermath`
 
 ### `int aliro_reader_provision_remove_type(uint8_t cred_type)`
-`modules/woz_aliro/src/aliro_reader.c:2313`
+`modules/woz_aliro/src/aliro_reader.c:2353`
 
 Revoke every trust anchor of one Matter credential type, or every anchor there is when
 cred_type is 0. Backs ClearCredential's two wildcards: an index of 0xFFFE (all of that
 type) and an absent Credential field (all types, including anchors a bench command added
 -- those are not Matter credentials, but leaving them would leave the door open).
 Returns the number of anchors removed (0 is success: there were none), or the store's
-negative errno when they are gone from RAM but the write failed.
+negative errno when they are gone from RAM but the write failed -- including a write an
+EARLIER removal left pending, which this retries.
 
-**calls** `load_provisioning`, `persist_removal`, `revoke_aftermath`
+**calls** `flush_pending_store`, `load_provisioning`, `persist_removal`, `revoke_aftermath`
 
 ### `int aliro_reader_provision_remove_user(uint16_t user_index)`
-`modules/woz_aliro/src/aliro_reader.c:2349`
+`modules/woz_aliro/src/aliro_reader.c:2392`
 
 Revoke every trust anchor a Matter admin bound to user index user_index, or all of them
 when user_index is ALIRO_USER_INDEX_ALL.
 Returns the number of anchors removed (0 when the user held none, which is still success),
-or the store's negative errno when they are gone from RAM but the write failed.
+or the store's negative errno when they are gone from RAM but the write failed -- including
+a write an EARLIER removal left pending, which this retries.
 
-**calls** `load_provisioning`, `persist_removal`, `revoke_aftermath`
+**calls** `flush_pending_store`, `load_provisioning`, `persist_removal`, `revoke_aftermath`
 
 ### `int aliro_reader_provision_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:2387`
+`modules/woz_aliro/src/aliro_reader.c:2432`
 
 Revert the reader's provisioning to the default dev identity and empty trust store, and
 persist that state to NVS.
@@ -633,7 +658,7 @@ compute_reader_group_x.
 **calls** `compute_reader_group_x`, `load_provisioning`, `revoke_aftermath`
 
 ### `int aliro_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len)`
-`modules/woz_aliro/src/aliro_reader.c:2428`
+`modules/woz_aliro/src/aliro_reader.c:2473`
 
 Serialise the reader's current identity + trust store into a self-describing blob
 (aliro_prov_serialize format) so it can be loaded onto a second board. Snapshots
@@ -643,7 +668,7 @@ sets *out_len on success; -1 if the buffer is too small.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_import_blob(const uint8_t *buf, size_t len)`
-`modules/woz_aliro/src/aliro_reader.c:2448`
+`modules/woz_aliro/src/aliro_reader.c:2493`
 
 Adopt an identity + trust store from a blob written by aliro_reader_export_blob
 (or aliro_prov_serialize): parse, persist to NVS, then commit in memory so the

@@ -15,7 +15,9 @@ Apple Home, which sends them when it feels like it. This sends them on demand.
 The code is what Apple Home shows under the accessory's "Turn On Pairing Mode"
 (11 digits; dashes optional). Options: --endpoint (default 1), --only, --index
 and --user pick the slots to use, --storage points the controller's key store
-somewhere other than beside this file.
+somewhere other than beside this file, --expected-endpoint-keys turns the key
+count the lock reports into a pass/fail check (it is per-target, so there is no
+default worth having).
 
 IT NEVER COMMISSIONS. A commissioning window is a PASE responder, so this opens
 a PASE session and invokes over that -- no AddNOC, no second fabric consumed,
@@ -101,17 +103,27 @@ class Bench:
         self.failures = []
 
     async def cmd(self, what, payload):
-        """One timed invoke. A refusal is recorded, never raised: the later steps
-        still say something useful about a lock that rejected an earlier one."""
+        """One timed invoke. Returns (sent, response).
+
+        `sent` is False only when the invoke itself failed -- no session, timeout,
+        a refusing IM status raised as an exception. It is NOT the same thing as a
+        response the caller dislikes, and it has to be reported separately: a
+        command that never landed answers None, and so does a command that landed
+        and returned no payload. A caller that cannot tell those apart reads a dead
+        link as a lock saying no.
+
+        A refusal is recorded, never raised: the later steps still say something
+        useful about a lock that rejected an earlier one.
+        """
         try:
             resp = await self.ctrl.SendCommand(NODE_ID, self.ep, payload,
                                                timedRequestTimeoutMs=3000)
             print(f"  {what}: SUCCESS" if resp is None else f"  {what}: {resp}")
-            return resp
+            return True, resp
         except Exception as exc:  # noqa: BLE001 -- any refusal is a failed step
             print(f"  {what}: REFUSED -- {type(exc).__name__}: {exc}")
             self.failures.append(what)
-            return None
+            return False, None
 
     def check(self, what, ok):
         print(f"  {'PASS' if ok else 'FAIL'}: {what}")
@@ -123,7 +135,15 @@ class Bench:
             credentialType=DL.Enums.CredentialTypeEnum.kAliroEvictableEndpointKey,
             credentialIndex=index)
 
-    async def caps(self):
+    async def caps(self, expected=None):
+        """Report the two counts; assert one only when the caller named a value.
+
+        The number is board-specific, not a constant of the protocol: the nRF
+        Matter node reports ALIRO_TRUST_MAX (6), the ESP32 delegate reports its own
+        kAliroKeysSupported (10). Failing a bench run against a lock that is
+        truthfully reporting 10 tells nobody anything, so --expected-endpoint-keys
+        is what turns this into a check.
+        """
         print("[caps] the Aliro key counts the lock reports")
         got = await self.ctrl.ReadAttribute(NODE_ID, [
             (self.ep, DL.Attributes.NumberOfAliroCredentialIssuerKeysSupported),
@@ -134,7 +154,8 @@ class Bench:
               f"{ep[DL.Attributes.NumberOfAliroCredentialIssuerKeysSupported]}")
         endpoint_keys = ep[DL.Attributes.NumberOfAliroEndpointKeysSupported]
         print(f"  endpoint keys supported : {endpoint_keys}")
-        self.check("endpoint keys reported == ALIRO_TRUST_MAX (6)", endpoint_keys == 6)
+        if expected is not None:
+            self.check(f"endpoint keys reported == {expected}", endpoint_keys == expected)
 
     async def install(self, user_index, cred_index, key=TEST_KEY):
         """SetUser then SetCredential, which is the order Apple uses: this node
@@ -145,7 +166,7 @@ class Bench:
             userStatus=DL.Enums.UserStatusEnum.kOccupiedEnabled,
             userType=DL.Enums.UserTypeEnum.kUnrestrictedUser,
             credentialRule=DL.Enums.CredentialRuleEnum.kSingle))
-        resp = await self.cmd(
+        sent, resp = await self.cmd(
             f"SetCredential(type 7, index {cred_index}, user {user_index})",
             DL.Commands.SetCredential(
                 operationType=DL.Enums.DataOperationTypeEnum.kAdd,
@@ -154,7 +175,8 @@ class Bench:
                 userStatus=DL.Enums.UserStatusEnum.kOccupiedEnabled,
                 userType=DL.Enums.UserTypeEnum.kUnrestrictedUser))
         self.check(f"credential installed at index {cred_index}",
-                   getattr(resp, "status", None) is not None and int(resp.status) == 0)
+                   sent and getattr(resp, "status", None) is not None
+                   and int(resp.status) == 0)
 
     async def proof_a(self, user_index, cred_index):
         print("\n[A] ClearCredential revokes the credential it names")
@@ -216,7 +238,7 @@ def verdict(bench, tail=""):
 async def run(args):
     bench = Bench(DryCtrl(), args.endpoint) if args.dry_run else None
     if bench is not None:
-        await bench.caps()
+        await bench.caps(args.expected_endpoint_keys)
         await bench.proof_a(args.user, args.index)
         await bench.proof_b(args.user + 1, args.index + 1)
         return verdict(bench, " (encoding only -- nothing was sent to a board)")
@@ -246,7 +268,7 @@ async def run(args):
         print("opening PASE over BLE -- the commissioning window must be open ...")
         await ctrl.EstablishPASESessionBLE(passcode, discriminator, NODE_ID)
         print("PASE up")
-        await bench.caps()
+        await bench.caps(args.expected_endpoint_keys)
         if args.only in (None, "A"):
             await bench.proof_a(args.user, args.index)
         if args.only in (None, "B"):
@@ -285,6 +307,12 @@ def main():
     ap.add_argument("--user", type=int, default=5, help="first user index to use")
     ap.add_argument("--storage", default=os.path.join(here, "matter-bench-store.json"),
                     help="controller key store (holds a throwaway CA)")
+    # Not defaulted to 6: the count is per-target (nRF reports ALIRO_TRUST_MAX,
+    # the ESP32 delegate reports 10), so a fixed expectation would fail a lock
+    # that is answering correctly.
+    ap.add_argument("--expected-endpoint-keys", type=int,
+                    help="fail unless NumberOfAliroEndpointKeysSupported reports this "
+                         "(nRF Matter node: 6; ESP32 delegate: 10)")
     args = ap.parse_args()
     if not args.dry_run and not args.code:
         ap.error("a pairing code is required unless --dry-run is given")

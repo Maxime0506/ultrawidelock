@@ -19,7 +19,12 @@ it is today, and puts the store back afterwards.
 Options: `--user` and `--index` pick the first slot pair to use, `--count` how
 many to try, `--base` the anchor count already in the store so the running total
 printed is the real one, `--pre-clear` removes credential indices a previous
-interrupted run left behind, `--storage` moves the controller's key store.
+interrupted run left behind, `--storage` puts the controller's key store at a
+path that survives the run (the default is a private temporary one).
+
+Exit status: 0 a ceiling was measured, 1 no ceiling (raise `--count`, or the
+probe broke before reaching one), 2 the cleanup failed and anchors were left on
+the board -- the printed `--pre-clear` line is how to take them off.
 
 Run `make monitor` alongside. The refusal the lock prints is the evidence:
 
@@ -44,23 +49,26 @@ flowchart TD
 ## API
 
 ### `_add(p, q)`
-`tools/matter_cap_probe.py:55`
+`tools/matter_cap_probe.py:61`
 
 Affine point addition, doubling included. Never called on a curve secret.
 
 **called by** `point`
 
 ### `point(k)`
-`tools/matter_cap_probe.py:72`
+`tools/matter_cap_probe.py:78`
 
 k*G as an uncompressed 65-byte SEC1 point, which is what the lock stores.
 
 **called by** `run`  ·  **calls** `_add`
 
 ### `_install(bench, mod, user, cred, key)`
-`tools/matter_cap_probe.py:103`
+`tools/matter_cap_probe.py:109`
 
 SetUser then SetCredential, reporting only what the credential write said.
+
+Returns (sent, status): `sent` False means the SetCredential never got an
+answer at all, which is a broken probe rather than a measured ceiling.
 
 SetUser fails on its own for reasons that have nothing to do with capacity --
 an index past the lock's user table answers InvalidCommand -- and the

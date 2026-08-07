@@ -408,21 +408,21 @@ Returns 0 only when the removal is persisted, because the cluster turns anything
 FAILURE the admin can act on.
 
 ### `static int on_aliro_user_clear(uint16_t user_index)`
-`firmware/src/matter_commission.c:2043`
+`firmware/src/matter_commission.c:2045`
 
 Matter ClearUser: drop every Aliro credential bound to a user, or to all users.
 The user row itself is the cluster's to forget; this is only the trust store half. Returns 0 only
 when the removal is persisted.
 
 ### `static int on_aliro_reader_config(const uint8_t signing_key[32], const uint8_t verification_key[65], const uint8_t group_id[16], const uint8_t *group_resolving_key)`
-`firmware/src/matter_commission.c:2060`
+`firmware/src/matter_commission.c:2062`
 
 Complete Aliro reader provisioning from a Matter commissioning exchange. Store the reader
 identity (derived from the group ID and group sub-ID) and the signing key into the Aliro reader
 engine, retire the device key, and log success or error.
 
 ### `static void on_timed_request(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:2086`
+`firmware/src/matter_commission.c:2088`
 
 Handle an incoming Matter TimedRequest. Decodes the timeout and answers with a StatusResponse of
 SUCCESS.
@@ -430,7 +430,7 @@ SUCCESS.
 **called by** `on_secure`  ·  **calls** `send_im`
 
 ### `static void on_status_response(const struct matter_exchange_in *in)`
-`firmware/src/matter_commission.c:2110`
+`firmware/src/matter_commission.c:2112`
 
 Handle a StatusResponse in a subscription priming sequence: send the next report chunk if more
 remain, or finalize the subscription, persist it to settings storage, and arm periodic
@@ -439,7 +439,7 @@ heartbeats.
 **called by** `on_secure`  ·  **calls** `case_slot_of`, `current_session_id`, `send_im`, `send_report_chunk`, `sub_of_session`, `sub_persist_save`, `subscription_heartbeat_arm`
 
 ### `static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ipk, const uint8_t *sigma1, size_t sigma1_len, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2303`
+`firmware/src/matter_commission.c:2305`
 
 Build and frame the Sigma2 answering @p s1.
 @param sigma1 the Sigma1 payload EXACTLY as it arrived -- the transcript hash
@@ -449,7 +449,7 @@ the peer hashed and this node did not.
 **called by** `matter_thread_on_datagram`
 
 ### `static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint8_t *ipk, const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2570`
+`firmware/src/matter_commission.c:2572`
 
 Answer a Sigma3, which ends the handshake.
 Sigma2 asked the initiator to believe this node; Sigma3 is the initiator
@@ -461,7 +461,7 @@ failure on this one -- which is the reason for the checks logged below.
 **called by** `matter_thread_on_datagram`  ·  **calls** `case_alloc_slot`, `case_slot_of`, `case_status_report`, `sub_resume_for`
 
 ### `static size_t case_status_report(const struct matter_proto_header *req, const struct matter_msg_header *req_mh, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2753`
+`firmware/src/matter_commission.c:2755`
 
 The StatusReport that ends CASE.
 Still unsecured and still addressed to the initiator's ephemeral id: this is
@@ -470,7 +470,7 @@ the last message before the keys take effect, not the first one after.
 **called by** `handle_sigma3`
 
 ### `size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply, size_t cap)`
-`firmware/src/matter_commission.c:2801`
+`firmware/src/matter_commission.c:2803`
 
 A datagram on the operational port. Sigma1, so far, and only Sigma1.
 There is no responder yet, so this answers nothing. What it does establish is
@@ -484,12 +484,12 @@ real commissioner computed independently.
 **calls** `case_slot_of`, `handle_sigma3`, `on_secure`, `send_sigma2`
 
 ### `static void on_link_reset(void)`
-`firmware/src/matter_commission.c:3107`
+`firmware/src/matter_commission.c:3109`
 
 The link dropped. Cheap here; begin_session() does the real work later.
 
 ### `bool matter_commission_has_fabric(void)`
-`firmware/src/matter_commission.c:3124`
+`firmware/src/matter_commission.c:3126`
 
 Whether this node currently holds a commissioned Matter fabric.
 Asked by the advertiser, which can carry the Matter commissionable
@@ -503,7 +503,7 @@ pairing -- invisible to Add Accessory and impossible to recover without
 erasing it.
 
 ### `int matter_commission_init(void)`
-`firmware/src/matter_commission.c:3134`
+`firmware/src/matter_commission.c:3136`
 
 Register the commissioning handlers on the 0xFFF6 transport.
 Call after the reader is up. Nothing here touches the radio: whether the

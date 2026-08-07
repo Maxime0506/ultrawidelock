@@ -61,32 +61,32 @@ Returns the underlying SetCredential result regardless of whether either
 mirror step ran.
 
 ### `bool emberAfPluginDoorLockGetUser(chip::EndpointId endpointId, uint16_t userIndex, EmberAfPluginDoorLockUserInfo &user)`
-`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:146`
+`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:159`
 
 Matter DoorLock plugin hook: fetch a stored user by index for an endpoint.
 Delegates to BoltLockMgr().GetUser; returns true if found.
 
 ### `bool emberAfPluginDoorLockSetUser(chip::EndpointId endpointId, uint16_t userIndex, chip::FabricIndex creator, chip::FabricIndex modifier, const chip::CharSpan &userName, uint32_t uniqueId, UserStatusEnum userStatus, UserTypeEnum usertype, CredentialRuleEnum credentialRule, const CredentialStruct *credentials, size_t totalCredentials)`
-`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:155`
+`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:168`
 
 Matter DoorLock plugin hook: store a user record for an endpoint, including
 name, unique ID, status, type, credential rule, and its list of credentials.
 Delegates to BoltLockMgr().SetUser.
 
 ### `DlStatus emberAfPluginDoorLockGetSchedule(chip::EndpointId endpointId, uint8_t holidayIndex, EmberAfPluginDoorLockHolidaySchedule &holidaySchedule)`
-`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:184`
+`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:197`
 
 Matter DoorLock plugin hook: fetch a holiday schedule entry by index for an
 endpoint. Delegates to BoltLockMgr().GetHolidaySchedule.
 
 ### `DlStatus emberAfPluginDoorLockSetSchedule(chip::EndpointId endpointId, uint8_t holidayIndex, DlScheduleStatus status, uint32_t localStartTime, uint32_t localEndTime, OperatingModeEnum operatingMode)`
-`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:210`
+`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:223`
 
 Matter DoorLock plugin hook: store a holiday schedule entry for an endpoint.
 Delegates to BoltLockMgr().SetHolidaySchedule.
 
 ### `void emberAfPluginDoorLockOnAutoRelock(chip::EndpointId endpointId)`
-`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:220`
+`ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp:233`
 
 Matter DoorLock plugin hook invoked on auto-relock; logs the event only, no
 lock-state change is performed here.

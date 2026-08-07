@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**339 subsystems in 50 directories · 2351/2601 symbols documented (90%)**
+**339 subsystems in 50 directories · 2353/2602 symbols documented (90%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -69,7 +69,7 @@ flowchart LR
 | [`integration/homeassistant/src/openaliro_ha/`](architecture/integration.homeassistant.src.openaliro_ha/README.md) | 11 | 109/120 (90%) |
 | [`integration/homeassistant/tools/`](architecture/integration.homeassistant.tools/README.md) | 1 | 3/3 (100%) |
 | [`modules/woz_aliro/include/`](architecture/modules.woz_aliro.include/README.md) | 16 | 38/38 (100%) |
-| [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 21 | 267/267 (100%) |
+| [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 21 | 268/268 (100%) |
 | [`modules/woz_aliro_ecp/src/`](architecture/modules.woz_aliro_ecp.src/README.md) | 1 | 5/5 (100%) |
 | [`modules/woz_aliro_stack/src/`](architecture/modules.woz_aliro_stack.src/README.md) | 4 | 77/77 (100%) |
 | [`modules/woz_aliro_stack/src/protocol/`](architecture/modules.woz_aliro_stack.src.protocol/README.md) | 14 | 67/67 (100%) |
@@ -104,16 +104,16 @@ flowchart LR
 | [`release/esp32-matter-lock/`](architecture/release.esp32-matter-lock/README.md) | 1 | 0/0 (0%) |
 | [`release/nrf5340dk/`](architecture/release.nrf5340dk/README.md) | 1 | 0/0 (0%) |
 | [`scripts/`](architecture/scripts/README.md) | 39 | 158/202 (78%) |
-| [`tools/`](architecture/tools/README.md) | 28 | 230/261 (88%) |
+| [`tools/`](architecture/tools/README.md) | 28 | 231/261 (88%) |
 | [`tools/tui/src/`](architecture/tools.tui.src/README.md) | 12 | 51/142 (35%) |
 | [`web-flasher/`](architecture/web-flasher/README.md) | 1 | 8/8 (100%) |
 | [`web-twin/`](architecture/web-twin/README.md) | 3 | 19/24 (79%) |
 
 ## Hotspots
 
-*Mined from git history as of `e4e281ff`.*
+*Mined from git history as of `78311d51`.*
 
-**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (26 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (24 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits).
+**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (27 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (24 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (24 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits).
 
 **Change together without importing each other:**
 

@@ -24,6 +24,7 @@
  *      log/lab/factoryreset/clear)
  *   K  app_main reboot path (already commissioned, degraded branches)
  */
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -609,6 +610,7 @@ static void section_manager(void)
 static void section_callbacks(void)
 {
 	printf("-- door_lock_callbacks\n");
+	mfk_reset();
 	door_lock_init();
 
 	mfk_dls_init_server_calls = 0;
@@ -662,8 +664,6 @@ static void section_callbacks(void)
 	/* aliro endpoint key mirror into the reader trust store */
 	static uint8_t key65[65];
 	memset(key65, 0xC3, sizeof(key65));
-	mfk_add_trust_calls = 0;
-	mfk_remove_trust_calls = 0;
 	okc("set-credential mirrors an occupied 65-byte aliro key",
 	    emberAfPluginDoorLockSetCredential(1, 2, 1, 1, DlCredentialStatus::kOccupied,
 					       CredentialTypeEnum::kAliroNonEvictableEndpointKey,
@@ -698,11 +698,46 @@ static void section_callbacks(void)
 	    emberAfPluginDoorLockSetCredential(1, 5, 1, 1, DlCredentialStatus::kAvailable,
 					       CredentialTypeEnum::kPin, chip::ByteSpan()) &&
 		    mfk_remove_trust_calls == 1);
+	/*
+	 * A removal the reader could not persist is live in RAM and gone at the
+	 * next boot. Reporting success there tells the admin a key is revoked when
+	 * a power cycle brings it back, so the hook has to fail.
+	 */
+	mfk_remove_trust_rc = -ENOSPC;
+	okc("set-credential fails when the revocation was not persisted",
+	    !emberAfPluginDoorLockSetCredential(1, 6, 1, 1, DlCredentialStatus::kAvailable,
+						CredentialTypeEnum::kAliroEvictableEndpointKey,
+						chip::ByteSpan()) &&
+		    mfk_remove_trust_calls == 2);
+	mfk_remove_trust_rc = 1; /* "no such anchor": already revoked, still success */
+	okc("set-credential accepts an already-revoked slot",
+	    emberAfPluginDoorLockSetCredential(1, 7, 1, 1, DlCredentialStatus::kAvailable,
+					       CredentialTypeEnum::kAliroEvictableEndpointKey,
+					       chip::ByteSpan()) &&
+		    mfk_remove_trust_calls == 3);
+	mfk_remove_trust_rc = 0;
+	/* Same on the way in: a key the reader is not holding must not be reported
+	 * as installed, or the controller shows an enrolled phone that never opens. */
+	mfk_add_trust_rc = -ENOSPC;
+	okc("set-credential fails when the trust store refused the key",
+	    !emberAfPluginDoorLockSetCredential(1, 8, 1, 1, DlCredentialStatus::kOccupied,
+						CredentialTypeEnum::kAliroEvictableEndpointKey,
+						chip::ByteSpan(key65)) &&
+		    mfk_add_trust_calls == 2);
+	mfk_add_trust_rc = 1; /* already trusted: nothing written, still success */
+	okc("set-credential accepts an already-trusted key",
+	    emberAfPluginDoorLockSetCredential(1, 9, 1, 1, DlCredentialStatus::kOccupied,
+					       CredentialTypeEnum::kAliroEvictableEndpointKey,
+					       chip::ByteSpan(key65)) &&
+		    mfk_add_trust_calls == 3);
+	mfk_add_trust_rc = 0;
+	/* Index 0 is invalid for a PIN, so the lock's own store refuses before the
+	 * aliro mirror is ever reached: the call count must not move. */
 	okc("set-credential propagates a failed store",
 	    !emberAfPluginDoorLockSetCredential(1, 0, 1, 1, DlCredentialStatus::kOccupied,
 						CredentialTypeEnum::kPin,
 						chip::ByteSpan(key65, 4)) &&
-		    mfk_add_trust_calls == 1);
+		    mfk_add_trust_calls == 3);
 
 	EmberAfPluginDoorLockUserInfo user;
 	okc("get-user hook delegates",

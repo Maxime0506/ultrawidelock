@@ -42,17 +42,18 @@ member), 1 (no anchors provisioned). The return order (0, -1, 1) matches the cre
 **called by** `aliro_prov_trust_add`
 
 ### `int aliro_prov_trust_add(struct aliro_trust_store *ts, const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_prov.c:250`
+`modules/woz_aliro/src/aliro_prov.c:251`
 
 Add a credential public key to the trust store if not already present. Returns 0 on success, 1 if
-already present, -1 on error (null pointer, invalid key format, or store full). The key must
-start with 0x04 (uncompressed point). Clears the Kpersistent bit for the new slot and zeroes its
-entry.
+already present, 2 when the store was full and an anchor was evicted to make room, -1 on error
+(null pointer, invalid key format, or a count already past ALIRO_TRUST_MAX). A full store is not
+an error: it evicts. The key must start with 0x04 (uncompressed point). Clears the Kpersistent
+bit for the new slot and zeroes its entry.
 
 **calls** `aliro_prov_trust_check`, `aliro_prov_trust_remove_at`
 
 ### `int aliro_prov_trust_find(const struct aliro_trust_store *ts, const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_prov.c:306`
+`modules/woz_aliro/src/aliro_prov.c:312`
 
 Find the index of a credential public key in the trust store. Returns the index (0..count-1) on
 match, -1 if not found or ts is NULL.
@@ -60,7 +61,7 @@ match, -1 if not found or ts is NULL.
 **called by** `aliro_prov_trust_remove`
 
 ### `int aliro_prov_trust_remove_at(struct aliro_trust_store *ts, int idx)`
-`modules/woz_aliro/src/aliro_prov.c:324`
+`modules/woz_aliro/src/aliro_prov.c:330`
 
 Remove the anchor at idx, shifting every later slot down one and zeroing the slot that falls off
 the top. Returns 0 on success, -1 if ts is NULL or idx is not an occupied slot.
@@ -68,7 +69,7 @@ the top. Returns 0 on success, -1 if ts is NULL or idx is not an occupied slot.
 **called by** `aliro_prov_trust_add`, `aliro_prov_trust_remove`
 
 ### `int aliro_prov_trust_remove(struct aliro_trust_store *ts, const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_prov.c:363`
+`modules/woz_aliro/src/aliro_prov.c:369`
 
 Remove a credential public key from the trust store. Returns 0 if it was removed, 1 if it was not
 there (an already-applied removal is not a failure), -1 if ts is NULL.
@@ -76,20 +77,20 @@ there (an already-applied removal is not a failure), -1 if ts is NULL.
 **calls** `aliro_prov_trust_find`, `aliro_prov_trust_remove_at`
 
 ### `int aliro_prov_cred_bind_set(struct aliro_trust_store *ts, int idx, uint8_t cred_type, uint16_t cred_index, uint16_t user_index)`
-`modules/woz_aliro/src/aliro_prov.c:381`
+`modules/woz_aliro/src/aliro_prov.c:387`
 
 Record the Matter credential and user indices the anchor at idx was installed under. Returns 0 on
 success, -1 if idx is not a stored credential.
 
 ### `int aliro_prov_find_cred_index(const struct aliro_trust_store *ts, uint8_t cred_type, uint16_t cred_index)`
-`modules/woz_aliro/src/aliro_prov.c:398`
+`modules/woz_aliro/src/aliro_prov.c:404`
 
 Find the slot bound to a Matter (credential type, credential index). Returns the slot, or -1 if
 no anchor carries that pair. Type 0 and ALIRO_CRED_INDEX_NONE never match, so an unbound anchor
 cannot be removed by index.
 
 ### `int aliro_prov_kpersistent_set(struct aliro_trust_store *ts, int idx, const uint8_t kp[ALIRO_KPERSISTENT_LEN])`
-`modules/woz_aliro/src/aliro_prov.c:422`
+`modules/woz_aliro/src/aliro_prov.c:428`
 
 Set the Kpersistent key for a credential at index idx; marks it valid in the bitmask. Returns 0
 on success, -1 if idx out of range.

@@ -257,7 +257,7 @@ status, and a controller that gets the wrong shape treats it as no answer.
 **called by** `command`  ·  **calls** `field_bytes`, `field_struct_u64`, `field_u64`
 
 ### `static uint8_t set_aliro_reader_config(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:1932`
+`modules/woz_matter/src/matter_clusters.c:1943`
 
 Decode and store Aliro reader configuration: signing key, verification key (P-256 public), group
 ID, and group-resolving key. Validate all field lengths exactly, call the registered config hook
@@ -266,7 +266,7 @@ to persist them, and store copies in the device info structure. Return a status 
 **called by** `command`  ·  **calls** `field_bytes`
 
 ### `static uint8_t clear_credential(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:1996`
+`modules/woz_matter/src/matter_clusters.c:2007`
 
 ClearCredential (0x0026): stop honouring one Aliro credential, every credential of one type, or
 every credential there is.
@@ -283,7 +283,7 @@ too (:3025-3029).
 **called by** `command`  ·  **calls** `field_struct_u64`
 
 ### `static uint8_t clear_user(struct matter_device_info *info, const struct matter_im_invoke *inv)`
-`modules/woz_matter/src/matter_clusters.c:2040`
+`modules/woz_matter/src/matter_clusters.c:2056`
 
 ClearUser (0x001D): forget a user slot and every credential bound to it.
 Answered because a controller may remove a person without ever naming their credentials -- the
@@ -293,11 +293,15 @@ report an empty slot while still opening for the phone in it.
 The row is cleared before the port is called and stays cleared even when the port reports a
 failure, because the failure means "not persisted", not "still trusted": the credential is
 already untrusted in RAM by then, and a user row that outlived it would be the lie.
+A port that registered no hook is the other way round, which is why the check comes first: no
+removal was attempted, the credential is still trusted, and emptying the row would leave the
+controller reading an empty slot whose key still opens the door. ClearCredential refuses the
+same way.
 
 **called by** `command`  ·  **calls** `field_u64`
 
 ### `static void command_fields(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t response_command, struct matter_tlv_writer *w, matter_tlv_tag_t tag)`
-`modules/woz_matter/src/matter_clusters.c:2267`
+`modules/woz_matter/src/matter_clusters.c:2283`
 
 Encode the fields of a command response based on endpoint, cluster, and response command type.
 Handles Door Lock SetCredentialResponse and GetCredentialStatusResponse on the lock endpoint, and
@@ -307,13 +311,13 @@ endpoint.
 **calls** `network_fields`, `opcred_fields`
 
 ### `void matter_clusters_failsafe_expire(struct matter_device_info *info)`
-`modules/woz_matter/src/matter_clusters.c:2437`
+`modules/woz_matter/src/matter_clusters.c:2453`
 
 Clear all fabric state and credentials when the fail-safe window expires before commissioning
 completes, wiping each fabric's private key and intermediate certificate.
 
 ### `static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const uint8_t *data, size_t data_len)`
-`modules/woz_matter/src/matter_clusters.c:2475`
+`modules/woz_matter/src/matter_clusters.c:2491`
 
 Apply an attribute write.
 One attribute is writable on this node: the ACL. A commissioner's last act is
@@ -326,7 +330,7 @@ consults it; see the note on matter_device_info.acl.
 **calls** `has_cluster`
 
 ### `void matter_clusters_init(struct matter_im_server *srv, struct matter_device_info *info)`
-`modules/woz_matter/src/matter_clusters.c:2513`
+`modules/woz_matter/src/matter_clusters.c:2529`
 
 Register this device's attribute, cluster, and command handlers with a Matter IM server.
 

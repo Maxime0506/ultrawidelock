@@ -243,9 +243,10 @@ int aliro_prov_trust_check(const struct aliro_trust_store *ts,
 
 /**
  * Add a credential public key to the trust store if not already present. Returns 0 on success, 1 if
- * already present, -1 on error (null pointer, invalid key format, or store full). The key must
- * start with 0x04 (uncompressed point). Clears the Kpersistent bit for the new slot and zeroes its
- * entry.
+ * already present, 2 when the store was full and an anchor was evicted to make room, -1 on error
+ * (null pointer, invalid key format, or a count already past ALIRO_TRUST_MAX). A full store is not
+ * an error: it evicts. The key must start with 0x04 (uncompressed point). Clears the Kpersistent
+ * bit for the new slot and zeroes its entry.
  */
 int aliro_prov_trust_add(struct aliro_trust_store *ts, const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 {
@@ -282,7 +283,12 @@ int aliro_prov_trust_add(struct aliro_trust_store *ts, const uint8_t cred_pub[AL
 		/* Same shift a revocation does, so there is one place where a
 		 * slot's key, Kpersistent, valid bit and Matter indices move
 		 * together and one place to get that wrong. */
-		(void)aliro_prov_trust_remove_at(ts, (int)victim);
+		if (aliro_prov_trust_remove_at(ts, (int)victim) != 0) {
+			/* Only a count already past ALIRO_TRUST_MAX gets here, and
+			 * then ts->count is not a slot index: writing the new key
+			 * at it would run off the end of the array. Refuse. */
+			return -1;
+		}
 		evicted = 1;
 	}
 	memcpy(ts->cred_pub[ts->count], cred_pub, ALIRO_CRED_PUB_LEN);

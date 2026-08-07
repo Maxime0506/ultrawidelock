@@ -2011,9 +2011,11 @@ static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credentia
 		return 0;
 	}
 	if (credential_index == MATTER_DL_INDEX_ALL) {
-		/* Type 0 here is the cluster's "every type", which is exactly what
-		 * remove_type takes: only the anchors the admin actually named go,
-		 * so clearing every evictable key leaves the non-evictable ones. */
+		/* remove_type clears BY TYPE: with a real type only anchors
+		 * carrying it go, so clearing every evictable key leaves the
+		 * non-evictable ones. Type 0 is the cluster's "every type" and is
+		 * wider than that -- it takes every anchor in the store, including
+		 * the ones no Matter index ever named, such as a bench add. */
 		int rc = aliro_reader_provision_remove_type(credential_type);
 
 		if (rc < 0) {

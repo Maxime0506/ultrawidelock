@@ -167,8 +167,11 @@ void test_aliro_prov(void)
 	T_EQ("v3.kp_kept", ts2.kp_valid, 0x01);
 	T_EQ("v3.no_cred_index", ts2.cred_index[0], ALIRO_CRED_INDEX_NONE);
 	T_EQ("v3.no_user_index", ts2.user_index[0], ALIRO_CRED_INDEX_NONE);
-	/* And an anchor with no index is not addressable by one. */
-	T_EQ("v3.unaddressable", aliro_prov_find_cred_index(&ts2, 7u, ALIRO_CRED_INDEX_NONE), -1);
+	/* And an anchor with no index is not addressable by one. Asked with a real
+	 * (type, index) pair, so the lookup runs the comparison against the parsed
+	 * anchor instead of stopping at the "caller named no index" guard -- that
+	 * guard would answer -1 for an addressable anchor too, and prove nothing. */
+	T_EQ("v3.unaddressable", aliro_prov_find_cred_index(&ts2, 7u, 1u), -1);
 
 	t_group("trust store logic");
 	struct aliro_trust_store t3;
@@ -214,6 +217,19 @@ void test_aliro_prov(void)
 	T_EQ("fill.evicts", aliro_prov_trust_add(&full, overflow), 2);
 	T_EQ("fill.count_held", (int)full.count, (int)ALIRO_TRUST_MAX);
 	T_EQ("fill.newest_present", aliro_prov_trust_check(&full, overflow), 0);
+
+	/*
+	 * A count past the array is the one case where eviction cannot free a
+	 * slot, and cred_pub[count] would then be written off the end of the
+	 * store. Nothing reachable produces it -- deserialize rejects it and add
+	 * is the only thing that increments -- so this is the guard's only proof.
+	 */
+	struct aliro_trust_store corrupt;
+
+	memset(&corrupt, 0, sizeof(corrupt));
+	corrupt.count = (uint8_t)(ALIRO_TRUST_MAX + 1u);
+	T_EQ("add.corrupt_count", aliro_prov_trust_add(&corrupt, overflow), -1);
+	T_EQ("add.corrupt_untouched", (int)corrupt.count, (int)ALIRO_TRUST_MAX + 1);
 
 	/* The victim is the OLDEST when nothing has a Kpersistent. */
 	uint8_t oldest[ALIRO_CRED_PUB_LEN];

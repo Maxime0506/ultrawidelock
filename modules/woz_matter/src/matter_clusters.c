@@ -1909,9 +1909,20 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
 	 * store reads as "no Matter index" and refuses to match.
 	 */
 	uint64_t cred_index = 0u;
+	bool have_user_index;
 
 	(void)field_struct_u64(inv, TAG_SETCRED_CREDENTIAL, TAG_CREDSTRUCT_INDEX, &cred_index);
-	if (field_u64(inv, TAG_SETCRED_USER_INDEX, &user_index)) {
+	have_user_index = field_u64(inv, TAG_SETCRED_USER_INDEX, &user_index);
+	if (cred_index > 0xFFFFu || user_index > 0xFFFFu) {
+		/* TLV carries these as unsigned integers of any width, and the
+		 * store's are 16-bit. Truncating would bind the anchor to an index
+		 * the admin never sent -- 0x10001 becomes 1 -- and a later
+		 * ClearCredential(1) would then revoke somebody else's key.
+		 * ClearCredential refuses an out-of-range index the same way. */
+		info->last_credential_status = MATTER_IM_STATUS_INVALID_COMMAND;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
+	if (have_user_index) {
 		info->last_user_index = (uint16_t)user_index;
 	}
 	if (info->aliro_credential_cb == NULL ||

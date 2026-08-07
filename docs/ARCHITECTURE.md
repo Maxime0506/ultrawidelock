@@ -1828,7 +1828,12 @@ it is today, and puts the store back afterwards.
 Options: `--user` and `--index` pick the first slot pair to use, `--count` how
 many to try, `--base` the anchor count already in the store so the running total
 printed is the real one, `--pre-clear` removes credential indices a previous
-interrupted run left behind, `--storage` moves the controller's key store.
+interrupted run left behind, `--storage` puts the controller's key store at a
+path that survives the run (the default is a private temporary one).
+
+Exit status: 0 a ceiling was measured, 1 no ceiling (raise `--count`, or the
+probe broke before reaching one), 2 the cleanup failed and anchors were left on
+the board -- the printed `--pre-clear` line is how to take them off.
 
 Run `make monitor` alongside. The refusal the lock prints is the evidence:
 
@@ -1883,7 +1888,9 @@ Apple Home, which sends them when it feels like it. This sends them on demand.
 The code is what Apple Home shows under the accessory's "Turn On Pairing Mode"
 (11 digits; dashes optional). Options: --endpoint (default 1), --only, --index
 and --user pick the slots to use, --storage points the controller's key store
-somewhere other than beside this file.
+somewhere other than beside this file, --expected-endpoint-keys turns the key
+count the lock reports into a pass/fail check (it is per-target, so there is no
+default worth having).
 
 IT NEVER COMMISSIONS. A commissioning window is a PASE responder, so this opens
 a PASE session and invokes over that -- no AddNOC, no second fabric consumed,

@@ -1625,6 +1625,47 @@ void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
 }
 #endif /* CONFIG_WOZ_RSSI_GATE */
 
+/**
+ * Write the trust store if something left it dirty: a Kpersistent minted in RAM, or a removal that
+ * was applied but could not be persisted. Returns 0 when there was nothing pending or the write
+ * landed, and the store's negative errno when a pending write failed again.
+ *
+ * The dirty flag is cleared BEFORE the write and re-set on failure, not cleared after a success:
+ * this runs on the BLE-host task and on whatever task a Matter command arrives on, and a
+ * Kpersistent minted between the snapshot and the clear would otherwise be dropped by the success
+ * that did not include it.
+ */
+static int flush_pending_store(void)
+{
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+	bool dirty;
+
+	woz_mutex_lock(&s_prov_lock);
+	dirty = s_kp_dirty;
+	if (dirty) {
+		id = s_id;
+		ts = s_trust;
+		s_kp_dirty = false;
+	}
+	woz_mutex_unlock(&s_prov_lock);
+	if (!dirty) {
+		return 0;
+	}
+
+	int rc = aliro_prov_store(&id, &ts);
+
+	if (rc != 0) {
+		woz_mutex_lock(&s_prov_lock);
+		s_kp_dirty = true;
+		woz_mutex_unlock(&s_prov_lock);
+		LOG_WRN("trust store persist failed (%d); will retry", rc);
+		return rc;
+	}
+	LOG_INF("trust store persisted");
+	return 0;
+}
+
 /* ---- aliro_ble transport callbacks ---- */
 
 // BLE connection-established callback: allocates a session slot for the new connection.
@@ -1669,34 +1710,11 @@ static void on_disconnected(uint16_t conn_handle)
 	if (!s_spare_eph.valid) {
 		spare_eph_refill();
 	}
-	/* A standard phase may have minted a Kpersistent (RAM only until here).
-	 * Persist it now, where the flash write can't cost the walk-up anything;
-	 * left dirty on failure so a later disconnect retries. All touch points run
-	 * on the BLE-host task, so dirty can't be re-set mid-persist. */
-	bool kp_dirty;
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
-
-	woz_mutex_lock(&s_prov_lock);
-	kp_dirty = s_kp_dirty;
-	if (kp_dirty) {
-		id = s_id;
-		ts = s_trust;
-	}
-	woz_mutex_unlock(&s_prov_lock);
-	if (kp_dirty) {
-		int kp_rc = aliro_prov_store(&id, &ts);
-
-		if (kp_rc == 0) {
-			woz_mutex_lock(&s_prov_lock);
-			s_kp_dirty = false;
-			woz_mutex_unlock(&s_prov_lock);
-			LOG_INF("Kpersistent trust store persisted");
-		} else {
-			LOG_WRN("Kpersistent persist failed (%d); will retry on next disconnect",
-				kp_rc);
-		}
-	}
+	/* A standard phase may have minted a Kpersistent (RAM only until here), or
+	 * a revocation may have failed its write. Persist here, where the flash
+	 * write can't cost the walk-up anything; left dirty on failure so the next
+	 * disconnect -- or the next revocation -- retries. */
+	(void)flush_pending_store();
 }
 
 // BLE data-received callback: looks up the session for conn_handle and feeds each Aliro envelope
@@ -1923,11 +1941,13 @@ void aliro_reader_prov_print(void)
 		for (unsigned j = 0; j < ALIRO_CRED_PUB_LEN; j++) {
 			printf("%02x", ts.cred_pub[i][j]);
 		}
-		/* cred/user are what a Matter ClearCredential or ClearUser names
-		 * this anchor by; 0 means nothing can name it. */
-		printf(" kpersistent=%s cred=%u user=%u\n",
-		       ((ts.kp_valid >> i) & 1u) ? "yes" : "no", (unsigned)ts.cred_index[i],
-		       (unsigned)ts.user_index[i]);
+		/* type+cred is the pair a Matter ClearCredential names this anchor
+		 * by -- both halves, because an index is scoped to its type -- and
+		 * user is what ClearUser names it by. A 0 in either means nothing
+		 * can name it. */
+		printf(" kpersistent=%s type=%u cred=%u user=%u\n",
+		       ((ts.kp_valid >> i) & 1u) ? "yes" : "no", (unsigned)ts.cred_type[i],
+		       (unsigned)ts.cred_index[i], (unsigned)ts.user_index[i]);
 	}
 	printf("last cred : ");
 	if (have) {
@@ -1989,9 +2009,16 @@ static void revoke_aftermath(const uint8_t *removed_pub)
  * The opposite order to the add path, deliberately. An add that cannot be persisted must not be
  * trusted, so it writes first and commits second. A removal that cannot be persisted must still
  * stop opening the door, so it commits first and reports the failure afterwards; the store is left
- * dirty and the next disconnect retries the write through the path the Kpersistent flush already
- * uses. Returns 0 when the removal is live and persisted, -1 when it is live but unpersisted --
- * never 0 for an unpersisted removal, because a Matter admin is told what this returns.
+ * dirty for flush_pending_store() to retry.
+ *
+ * That retry needs a caller. A disconnect is one, but a revocation with no link up has no
+ * disconnect coming, so the removal entry points retry a pending write themselves -- an admin
+ * repeating the command is then what drives it, and until one of the two runs the removal is live
+ * in RAM and a reboot would bring the anchor back.
+ *
+ * Returns 0 when the removal is live and persisted, or the store's negative errno when it is live
+ * but unpersisted -- never 0 for an unpersisted removal, because a Matter admin is told what this
+ * returns.
  */
 static int persist_removal(const struct aliro_reader_identity *id,
 			   const struct aliro_trust_store *ts)
@@ -2004,15 +2031,17 @@ static int persist_removal(const struct aliro_reader_identity *id,
 	woz_mutex_lock(&s_prov_lock);
 	s_kp_dirty = true;
 	woz_mutex_unlock(&s_prov_lock);
-	LOG_ERR("revocation applied in RAM but NOT persisted (%d); retrying on next disconnect",
+	LOG_ERR("revocation applied in RAM but NOT persisted (%d); retrying on the next "
+		"disconnect or revocation",
 		rc);
 	return rc;
 }
 
 // Add the most recently presented credential's public key to the trust store and persist it.
 // Returns 1 if no credential has been presented yet or it is already trusted (nothing
-// persisted), -1 if the store is full or the NVS write fails (in-memory trust store left
-// unchanged on failure), 0 if newly added and committed.
+// persisted), -1 if the key is not an uncompressed point, the store's negative errno if the
+// NVS write fails (in-memory trust store left unchanged on failure), 0 if newly added and
+// committed. A full store evicts rather than refusing.
 int aliro_reader_trust_last(void)
 {
 	load_provisioning();
@@ -2201,8 +2230,10 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 // Add a Matter-provisioned credential public key to the reader's trust store, bind the Matter
 // credential/user indices it was installed under, and persist it.
 // Returns 0 if newly added and stored, 1 if the credential was already trusted (persisted only
-// when its indices changed), -1 if the store is full, cred_pub is not a valid P-256 point, or
-// the NVS write fails. On failure the in-memory trust store (s_trust) is left unchanged.
+// when its indices changed), -1 if cred_pub is not an uncompressed point, or the store's
+// negative errno if the NVS write fails. A FULL store is not a failure: the oldest anchor
+// that never completed a standard phase is evicted to make room, which is logged.
+// On failure the in-memory trust store (s_trust) is left unchanged.
 // The indices are what ClearCredential and ClearUser later name the anchor by; pass
 // ALIRO_CRED_INDEX_NONE for either one the caller does not have.
 int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN], uint8_t cred_type,
@@ -2221,7 +2252,7 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN],
 	int add = aliro_prov_trust_add(&cand, cred_pub);
 
 	if (add < 0) {
-		return -1; /* store full or not a P-256 point */
+		return -1; /* not an uncompressed point, or a corrupt count */
 	}
 
 	int slot = aliro_prov_trust_find(&cand, cred_pub);
@@ -2270,7 +2301,8 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN],
 // Returns 1 when no anchor carries that pair (a removal that already happened, or a
 // pre-v4 anchor that never had one -- both are answered as success, since the credential
 // the admin named is not trusted either way), 0 when the anchor is gone and the store is
-// persisted, or the store's negative errno when it is gone from RAM but the write failed.
+// persisted, or the store's negative errno when it is gone from RAM but the write failed --
+// including a write an EARLIER removal left pending, which this retries.
 int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
 {
 	load_provisioning();
@@ -2294,7 +2326,13 @@ int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
 	woz_mutex_unlock(&s_prov_lock);
 
 	if (idx < 0) {
-		return 1;
+		/* Nothing to take out now, but an earlier removal may still be
+		 * unwritten. This is the caller most likely to exist when there is
+		 * no session to end: an admin repeating a command that reported a
+		 * failure. Report the retry's failure rather than the emptiness. */
+		int pending = flush_pending_store();
+
+		return pending != 0 ? pending : 1;
 	}
 
 	int rc = persist_removal(&id, &cand);
@@ -2310,7 +2348,8 @@ int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
 // type) and an absent Credential field (all types, including anchors a bench command added
 // -- those are not Matter credentials, but leaving them would leave the door open).
 // Returns the number of anchors removed (0 is success: there were none), or the store's
-// negative errno when they are gone from RAM but the write failed.
+// negative errno when they are gone from RAM but the write failed -- including a write an
+// EARLIER removal left pending, which this retries.
 int aliro_reader_provision_remove_type(uint8_t cred_type)
 {
 	load_provisioning();
@@ -2332,7 +2371,9 @@ int aliro_reader_provision_remove_type(uint8_t cred_type)
 	woz_mutex_unlock(&s_prov_lock);
 
 	if (removed == 0) {
-		return 0;
+		/* Same retry the single-anchor path takes: an admin repeating a
+		 * wildcard clear is a chance to land a write left pending. */
+		return flush_pending_store();
 	}
 
 	int rc = persist_removal(&id, &cand);
@@ -2346,7 +2387,8 @@ int aliro_reader_provision_remove_type(uint8_t cred_type)
 // Revoke every trust anchor a Matter admin bound to user index user_index, or all of them
 // when user_index is ALIRO_USER_INDEX_ALL.
 // Returns the number of anchors removed (0 when the user held none, which is still success),
-// or the store's negative errno when they are gone from RAM but the write failed.
+// or the store's negative errno when they are gone from RAM but the write failed -- including
+// a write an EARLIER removal left pending, which this retries.
 int aliro_reader_provision_remove_user(uint16_t user_index)
 {
 	load_provisioning();
@@ -2368,7 +2410,9 @@ int aliro_reader_provision_remove_user(uint16_t user_index)
 	woz_mutex_unlock(&s_prov_lock);
 
 	if (removed == 0) {
-		return 0; /* the user held no anchor; nothing to write */
+		/* The user held no anchor, so there is nothing new to write -- but
+		 * an earlier removal may still owe one. */
+		return flush_pending_store();
 	}
 
 	int rc = persist_removal(&id, &cand);

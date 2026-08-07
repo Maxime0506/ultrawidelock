@@ -5,7 +5,7 @@ Declares AliroReaderDelegate, the Aliro (Apple Home Key) reader-provisioning and
 the Matter DoorLock cluster delegate, bridging controller commands to the on-device reader
 identity, trust store, and BLE advertising state.
 
-**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](../ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.cpp`](aliro_reader_delegate.cpp.md)
+**used by** [`ports/esp32/apps/matter-lock/main/app_main.cpp`](../ports.esp32.apps.matter-lock.main/app_main.cpp.md), [`ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.cpp`](aliro_reader_delegate.cpp.md)  ·  **discussed in** [`firmware/README.md`](../../../firmware/README.md)
 
 ## API
 
