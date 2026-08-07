@@ -22,19 +22,19 @@ assert on the encoded bytes.
 ## API
 
 ### `struct matter_user`
-`modules/woz_matter/include/matter_clusters.h:261`
+`modules/woz_matter/include/matter_clusters.h:287`
 
 One user slot. Reported by GetUser, filled by SetUser.
 
 ### `struct matter_device_info`
-`modules/woz_matter/include/matter_clusters.h:497`
+`modules/woz_matter/include/matter_clusters.h:538`
 
 Complete device information structure held by the Matter node, including vendor/product IDs,
 Aliro identity, user table, commissioning state, operational network configuration, and
 session-specific attestation and key data.
 
 ### `struct matter_admin_hooks`
-`modules/woz_matter/include/matter_clusters.h:752`
+`modules/woz_matter/include/matter_clusters.h:821`
 
 What the application must do when a controller opens a commissioning window.
 The cluster decodes and validates; everything it would then have to TOUCH --

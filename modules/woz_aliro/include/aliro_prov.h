@@ -46,6 +46,18 @@ extern "C" {
 #define ALIRO_TRUST_MAX       6u  /* trusted credential keys the store holds */
 #define ALIRO_GRK_LEN         16u /* group resolving key (Aliro BLE-UWB adv tag) */
 #define ALIRO_KPERSISTENT_LEN 32u /* per-credential expedited-fast key (§8.3.1.13) */
+/*
+ * The credential index of an anchor no Matter admin installed.
+ *
+ * Matter credential and user indices are 1-based (Door Lock cluster: both
+ * fields constrain to `between value="1"`), so zero can never collide with a
+ * real one. An anchor carrying it is unaddressable by ClearCredential, which is
+ * the truth about a key a bench command added.
+ */
+#define ALIRO_CRED_INDEX_NONE 0u
+/* The wildcard both Door Lock clear commands use for "every one of these"
+ * (ClearUser/ClearCredential, index 0xFFFE). */
+#define ALIRO_USER_INDEX_ALL  0xFFFEu
 
 /*
  * The reader's provisioned identity. reader_id rides AUTH0 and both ECDSA
@@ -72,16 +84,38 @@ struct aliro_trust_store {
 	 * Kpersistent agreed with cred_pub[i] in its last standard phase. */
 	uint8_t kp_valid;
 	uint8_t kpersistent[ALIRO_TRUST_MAX][ALIRO_KPERSISTENT_LEN];
+	/*
+	 * What the Matter admin calls this anchor.
+	 *
+	 * ClearCredential names its target by (type, index) and ClearUser by
+	 * user index -- neither carries the key bytes -- so without these three
+	 * a removal cannot be resolved to a slot and revocation is impossible.
+	 * They move with the slot on eviction and removal, and stay
+	 * ALIRO_CRED_INDEX_NONE for anything a bench command added.
+	 *
+	 * The TYPE is part of the name, not decoration: Matter credential
+	 * indices are scoped to their type, so an evictable endpoint key and a
+	 * non-evictable one can both be index 1. Matching on the index alone
+	 * would revoke whichever of the two came first and leave the one the
+	 * admin meant still opening the door.
+	 */
+	uint8_t cred_type[ALIRO_TRUST_MAX];
+	uint16_t cred_index[ALIRO_TRUST_MAX];
+	uint16_t user_index[ALIRO_TRUST_MAX];
 };
 
-/* Serialised blob v3: magic(4) ver(1) flags(1) reader_id(32) sign_priv(32)
- * grk(16) count(1), count * cred_pub(65), kp_valid(1), count * kpersistent(32).
- * (v2 ended at the cred_pub array; v1 also had no grk. Both still parsed.) */
+/* Serialised blob v4: magic(4) ver(1) flags(1) reader_id(32) sign_priv(32)
+ * grk(16) count(1), count * cred_pub(65), kp_valid(1), count * kpersistent(32),
+ * count * (cred_type(1) cred_index(2) user_index(2)), the indices big-endian.
+ * (v3 ended at the kpersistent array, v2 at the cred_pub array, v1 also had no
+ * grk. All three are still parsed; their anchors carry no Matter index, so a
+ * board provisioned before this format cannot have a credential revoked by
+ * index until its owner re-installs it.) */
 #define ALIRO_PROV_BLOB_HDR 6u
 #define ALIRO_PROV_BLOB_MAX                                                                        \
 	(ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN + ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN + 1u +  \
 	 (size_t)ALIRO_TRUST_MAX * ALIRO_CRED_PUB_LEN + 1u +                                       \
-	 (size_t)ALIRO_TRUST_MAX * ALIRO_KPERSISTENT_LEN)
+	 (size_t)ALIRO_TRUST_MAX * ALIRO_KPERSISTENT_LEN + (size_t)ALIRO_TRUST_MAX * 5u)
 
 /* ---- portable core (aliro_prov.c) --------------------------------------- */
 
@@ -112,6 +146,38 @@ int aliro_prov_trust_add(struct aliro_trust_store *ts, const uint8_t cred_pub[AL
 /* Index of a credential key in the store, or -1 if not present. */
 int aliro_prov_trust_find(const struct aliro_trust_store *ts,
 			  const uint8_t cred_pub[ALIRO_CRED_PUB_LEN]);
+
+/**
+ * Drop the anchor at idx and close the gap.
+ *
+ * Everything above idx shifts down one slot and carries its Kpersistent, its
+ * kp_valid bit and its Matter indices with it; the vacated top slot is zeroed.
+ * The bit and the key MUST move together: the expedited-fast path trial-derives
+ * under kpersistent[i] paired with cred_pub[i] and never re-checks the trust
+ * store, so a bit left pointing at a shifted row would authenticate the wrong
+ * credential with no signature at all.
+ *
+ * @return 0 removed; -1 if ts is NULL or idx is not an occupied slot.
+ */
+int aliro_prov_trust_remove_at(struct aliro_trust_store *ts, int idx);
+
+/* Drop a credential key wherever it sits. 0 removed; 1 absent (a removal that
+ * has already happened is not an error); -1 if ts is NULL. */
+int aliro_prov_trust_remove(struct aliro_trust_store *ts,
+			    const uint8_t cred_pub[ALIRO_CRED_PUB_LEN]);
+
+/* Bind the Matter credential type/index and user index a SetCredential installed
+ * this anchor under, so ClearCredential and ClearUser can find it again. Pass
+ * ALIRO_CRED_INDEX_NONE for an index the caller does not have.
+ * 0 on success; -1 if idx is not a stored credential. */
+int aliro_prov_cred_bind_set(struct aliro_trust_store *ts, int idx, uint8_t cred_type,
+			     uint16_t cred_index, uint16_t user_index);
+
+/* Slot holding a given Matter (credential type, credential index), or -1 if none
+ * does. Indices are scoped to their type, so both halves must match. Type 0 and
+ * ALIRO_CRED_INDEX_NONE never match: an unbound anchor is not addressable. */
+int aliro_prov_find_cred_index(const struct aliro_trust_store *ts, uint8_t cred_type,
+			       uint16_t cred_index);
 
 /* Bind a Kpersistent (§8.3.1.13) to the credential at idx (from
  * aliro_prov_trust_find), replacing any earlier one. 0 on success; -1 if idx is

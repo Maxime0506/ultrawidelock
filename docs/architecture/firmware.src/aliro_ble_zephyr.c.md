@@ -202,24 +202,34 @@ Deferred work callback that invokes the reader status callback with the unsecure
 
 Deferred work callback that invokes the presence reset callback if set.
 
+### `static void revoke_work_fn(struct k_work *w)`
+`firmware/src/aliro_ble_zephyr.c:823`
+
+Deferred work callback that invokes the post-revocation link sweep if set.
+
 ### `void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)`
-`firmware/src/aliro_ble_zephyr.c:821`
+`firmware/src/aliro_ble_zephyr.c:835`
 
 Queue a reader status callback with unsecured state to run asynchronously on the work queue.
 
 ### `void aliro_ble_post_presence_reset(void (*cb)(void))`
-`firmware/src/aliro_ble_zephyr.c:831`
+`firmware/src/aliro_ble_zephyr.c:845`
 
 Queue a presence reset callback to run asynchronously on the work queue.
 
+### `void aliro_ble_post_revoke_sweep(void (*cb)(void))`
+`firmware/src/aliro_ble_zephyr.c:854`
+
+Queue a post-revocation link sweep to run asynchronously on the work queue.
+
 ### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`firmware/src/aliro_ble_zephyr.c:839`
+`firmware/src/aliro_ble_zephyr.c:862`
 
 Attach mode exists only so the ESP32 reader can share a NimBLE host with
 esp-matter. Nothing shares this host.
 
 ### `int aliro_ble_start_attached(void)`
-`firmware/src/aliro_ble_zephyr.c:847`
+`firmware/src/aliro_ble_zephyr.c:870`
 
 Not supported on this target; returns ENOTSUP.
 

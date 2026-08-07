@@ -663,21 +663,41 @@ static void section_callbacks(void)
 	static uint8_t key65[65];
 	memset(key65, 0xC3, sizeof(key65));
 	mfk_add_trust_calls = 0;
+	mfk_remove_trust_calls = 0;
 	okc("set-credential mirrors an occupied 65-byte aliro key",
 	    emberAfPluginDoorLockSetCredential(1, 2, 1, 1, DlCredentialStatus::kOccupied,
 					       CredentialTypeEnum::kAliroNonEvictableEndpointKey,
 					       chip::ByteSpan(key65)) &&
 		    mfk_add_trust_calls == 1 && memcmp(mfk_add_trust_key, key65, 65) == 0);
+	/* The index goes with it: ClearCredential names the key by index and never
+	 * by its bytes, so an anchor stored without one can never be revoked. */
+	okc("set-credential binds the credential type and index",
+	    mfk_add_trust_index == 2 &&
+		    mfk_add_trust_type ==
+			    static_cast<uint8_t>(CredentialTypeEnum::kAliroNonEvictableEndpointKey));
 	okc("set-credential does not mirror a pin",
 	    emberAfPluginDoorLockSetCredential(1, 3, 1, 1, DlCredentialStatus::kOccupied,
 					       CredentialTypeEnum::kPin,
 					       chip::ByteSpan(key65, 4)) &&
 		    mfk_add_trust_calls == 1);
-	okc("set-credential does not mirror a cleared slot",
+	/*
+	 * A cleared slot is how ClearCredential reaches this hook: the server
+	 * erases the slot by writing an Available status with empty data. It must
+	 * REVOKE rather than add, and it is the only signal the reader gets that a
+	 * home key was removed in the controller's UI.
+	 */
+	okc("set-credential revokes a cleared aliro slot",
 	    emberAfPluginDoorLockSetCredential(1, 4, 1, 1, DlCredentialStatus::kAvailable,
 					       CredentialTypeEnum::kAliroEvictableEndpointKey,
-					       chip::ByteSpan(key65)) &&
-		    mfk_add_trust_calls == 1);
+					       chip::ByteSpan()) &&
+		    mfk_add_trust_calls == 1 && mfk_remove_trust_calls == 1 &&
+		    mfk_remove_trust_index == 4 &&
+		    mfk_remove_trust_type ==
+			    static_cast<uint8_t>(CredentialTypeEnum::kAliroEvictableEndpointKey));
+	okc("set-credential does not revoke a cleared pin slot",
+	    emberAfPluginDoorLockSetCredential(1, 5, 1, 1, DlCredentialStatus::kAvailable,
+					       CredentialTypeEnum::kPin, chip::ByteSpan()) &&
+		    mfk_remove_trust_calls == 1);
 	okc("set-credential propagates a failed store",
 	    !emberAfPluginDoorLockSetCredential(1, 0, 1, 1, DlCredentialStatus::kOccupied,
 						CredentialTypeEnum::kPin,

@@ -1003,6 +1003,32 @@ void aliro_ble_post_presence_reset(void (*cb)(void))
 	ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_presence_reset_ev);
 }
 
+static struct ble_npl_event s_revoke_sweep_ev;
+static void (*s_revoke_sweep_cb)(void);
+
+/**
+ * Invoke the post-revocation link sweep posted by aliro_ble_post_revoke_sweep, if one was
+ * registered.
+ */
+static void revoke_sweep_ev_cb(struct ble_npl_event *ev)
+{
+	(void)ev;
+	if (s_revoke_sweep_cb != NULL) {
+		s_revoke_sweep_cb();
+	}
+}
+
+/**
+ * Post an event callback to be invoked asynchronously on the default NimBLE event queue once a
+ * credential has been revoked, so the links it may still be ranging on can be dropped.
+ */
+void aliro_ble_post_revoke_sweep(void (*cb)(void))
+{
+	s_revoke_sweep_cb = cb;
+	ble_npl_event_init(&s_revoke_sweep_ev, revoke_sweep_ev_cb, NULL);
+	ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_revoke_sweep_ev);
+}
+
 /* ---- Wall-clock step notification (SNTP / future Matter time sync) --------- */
 
 static struct ble_npl_event s_time_updated_ev;

@@ -62,8 +62,9 @@ this one.
 | CDK-11 | Change something in the tree, then `make dfu`, pressing SW2 when it asks | The delta goes over Bluetooth and the board's flash comes out byte for byte identical to the target image, with a matching CRC | yes, 2026-08-03 (`bca7534`, `ed1780c`); the apply takes 17 to 31 s |
 | CDK-12 | Repeat CDK-11, opening the window from Apple Home's "Turn On Pairing Mode" instead of pressing SW2 | D10, the blue LED, blinks at 2 Hz while the window is open, and the push is accepted | yes, on a live commissioned lock, for both openers |
 | CDK-13 | `make fota`, push the file from a phone with nRF Device Manager's **Images** tab, then `make fota-done` | The board comes back reporting the target image's SHA-256 | yes, on the commissioned lock (`53b2fe1`, `8447e91`) |
-| CDK-14 | 100 walk-ups, counting the ones that unlock | 95% or better | **open, never run**; the sample so far is single digits |
+| CDK-14 | 100 walk-ups, counting the ones that unlock | 95% or better | **open, never run**; 49 grants are on record from 2026-08-07, but they were logged while capturing ranging data, so the attempts were never counted and no rate follows |
 | CDK-15 | Cut the power in the middle of a CDK-11 apply, then restore it | The board resumes at the right step and boots the target image | **open, never run** |
+| CDK-16 | Invite a second Apple ID to the home, let Apple install their key, then remove that person | Apple sends `ClearUser` or `ClearCredential` unprompted; the anchor and its `Kpersistent` leave the store, and a `settings_storage` dump after a reset agrees | yes, 2026-08-07: `ALIRO CREDENTIAL ADDED (type 7, cred idx 1, user idx 1)` then `user index 1 REVOKED 1 anchor(s) (3 left)`; the removed phone was never walked up afterwards, so the negative is inferred from the store, not observed |
 
 CDK-8 is this target's EV-7, and it is faked the same way: the bolt moving is not a
 pass. The Wallet animation is, because that is what proves the reader told the phone
@@ -71,8 +72,14 @@ it granted access rather than just actuating locally.
 
 CDK-14 and CDK-15 are the two open rows, and neither has ever been run. CDK-14 is
 the only rate on this list: everything above it has been demonstrated at least once,
-and none of it at a rate. CDK-15 is the resumable apply, whose step counter is
-exercised by design and by host test but has never met a real power cut.
+and none of it at a rate. Forty-nine grants is not a partial answer to it, because a
+rate needs the failures too and nobody was counting them. CDK-15 is the resumable
+apply, whose step counter is exercised by design and by host test but has never met a
+real power cut.
+
+CDK-16 has one gap of its own. The store is the only allowlist a key agreement
+consults, so an anchor that is gone cannot be matched, but the removed phone was never
+walked up afterwards. The negative is read off flash rather than off the door.
 
 ## nRF5340 DK
 

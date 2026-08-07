@@ -146,12 +146,16 @@ shell, console or logging:
 | ✅ | iPhone enumerates Aliro `0xFFF2` over BLE | done |
 | ✅ | DW3110 ranges live against an iPhone | done, 565 cm to 0 cm |
 | ✅ | An initiator reaches `ESTABLISHED` | done, the iPhone itself |
-| 🏆 | **iPhone Wallet walk-up unlock** | **done**, four in one session, 2026-08-02 |
+| 🏆 | **iPhone Wallet walk-up unlock** | **done**, first on 2026-08-02; 49 grants logged since |
 | ✅ | Firmware update over Bluetooth | done, byte-identical, 2026-08-03 |
-| ⬜ | **≥ 95% ranging success over 100 walk-ups** | **open, never run** |
+| ✅ | Apple Home revokes a key and the lock obeys | done, 2026-08-07, a guest removed from a real home |
+| ⬜ | **≥ 95% ranging success over 100 walk-ups** | **open, still never run** |
 
-Nothing is proven *at a rate* yet. The walk-up sample is single digits, and closing that
-row means walking at a door a hundred times. Log lines per stage:
+Nothing is proven *at a rate* yet. Forty-nine grants are on record across nine RTT logs
+from 2026-08-07, taken while capturing ranging data rather than while counting unlocks, so
+the denominator was never written down: attempts are unknown and a success rate cannot be
+computed from them. Closing that row still means walking at a door a hundred times and
+counting both outcomes. Log lines per stage:
 [`firmware/README.md`](firmware/README.md).
 
 ### No NFC tap here
@@ -338,8 +342,11 @@ private key and every iPhone key ever provisioned against it.
 </td></tr>
 <tr><td width="34" align="center" valign="top">🚧</td><td>
 
-**Nothing revokes yet.** The trust store holds four phone keys, and a phone removed in
-Apple Home still opens the board until the store is cleared.
+**Revocation is proven on hardware, with one path still untested.** A guest was invited
+to a real Apple home, Apple installed their key, and removing the person made Apple send
+`ClearUser` unprompted: the lock dropped the anchor and its `Kpersistent`, and flash read
+back after a reset agreed. What has never fired on hardware is the live-link sweep, because
+no ranging session happened to be up at the moment of a removal.
 
 Read [`firmware/README.md`](firmware/README.md) first. Do not secure valuables with it.
 

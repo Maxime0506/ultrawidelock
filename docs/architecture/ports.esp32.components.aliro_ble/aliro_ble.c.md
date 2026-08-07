@@ -325,8 +325,20 @@ registered.
 Post an event callback to be invoked asynchronously on the default NimBLE event queue when
 presence is reset.
 
+### `static void revoke_sweep_ev_cb(struct ble_npl_event *ev)`
+`ports/esp32/components/aliro_ble/aliro_ble.c:1013`
+
+Invoke the post-revocation link sweep posted by aliro_ble_post_revoke_sweep, if one was
+registered.
+
+### `void aliro_ble_post_revoke_sweep(void (*cb)(void))`
+`ports/esp32/components/aliro_ble/aliro_ble.c:1025`
+
+Post an event callback to be invoked asynchronously on the default NimBLE event queue once a
+credential has been revoked, so the links it may still be ranging on can be dropped.
+
 ### `void aliro_ble_time_updated(void)`
-`ports/esp32/components/aliro_ble/aliro_ble.c:1015`
+`ports/esp32/components/aliro_ble/aliro_ble.c:1041`
 
 Notify the transport that the wall clock just stepped (e.g. SNTP first sync), so the
 dynamic advertisement tag is re-derived immediately instead of waiting out the refresh

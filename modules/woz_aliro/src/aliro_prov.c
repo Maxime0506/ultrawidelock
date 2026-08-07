@@ -34,7 +34,8 @@ static const uint8_t k_dev_sign_priv[ALIRO_READER_PRIV_LEN] = {
 };
 
 static const uint8_t k_magic[4] = {'A', 'P', 'R', 'V'};
-#define ALIRO_PROV_VERSION   0x03u /* current: adds kp_valid + kpersistent rows */
+#define ALIRO_PROV_VERSION   0x04u /* current: adds the Matter credential/user indices */
+#define ALIRO_PROV_VERSION_3 0x03u /* legacy: kp_valid + kpersistent, no indices */
 #define ALIRO_PROV_VERSION_2 0x02u /* legacy: grk but no kpersistent (still parsed) */
 #define ALIRO_PROV_VERSION_1 0x01u /* legacy: no grk (still parsed) */
 #define ALIRO_PROV_FLAG_DEV  0x01u
@@ -57,8 +58,9 @@ void aliro_prov_dev_default(struct aliro_reader_identity *id, struct aliro_trust
 }
 
 /**
- * Serialize reader identity and trust store into a provisioning blob (v3 format with grk and
- * kpersistent). Returns 0 on success, -1 if count exceeds ALIRO_TRUST_MAX or buffer too small.
+ * Serialize reader identity and trust store into a provisioning blob (v4 format with grk,
+ * kpersistent and the Matter credential/user indices). Returns 0 on success, -1 if count exceeds
+ * ALIRO_TRUST_MAX or buffer too small.
  * Outputs blob and sets out_len.
  */
 int aliro_prov_serialize(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts,
@@ -72,7 +74,7 @@ int aliro_prov_serialize(const struct aliro_reader_identity *id, const struct al
 
 	size_t need = ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN + ALIRO_READER_PRIV_LEN +
 		      ALIRO_GRK_LEN + 1u + (size_t)count * ALIRO_CRED_PUB_LEN + 1u +
-		      (size_t)count * ALIRO_KPERSISTENT_LEN;
+		      (size_t)count * ALIRO_KPERSISTENT_LEN + (size_t)count * 5u;
 
 	if (out == NULL || cap < need) {
 		return -1;
@@ -107,6 +109,15 @@ int aliro_prov_serialize(const struct aliro_reader_identity *id, const struct al
 		}
 		p += ALIRO_KPERSISTENT_LEN;
 	}
+	/* Big-endian so the blob reads the same on a board and in a hexdump, and
+	 * so a clone blob moved between architectures cannot re-point an index. */
+	for (uint8_t i = 0; i < count; i++) {
+		*p++ = ts->cred_type[i];
+		*p++ = (uint8_t)(ts->cred_index[i] >> 8);
+		*p++ = (uint8_t)(ts->cred_index[i] & 0xFFu);
+		*p++ = (uint8_t)(ts->user_index[i] >> 8);
+		*p++ = (uint8_t)(ts->user_index[i] & 0xFFu);
+	}
 
 	if (out_len != NULL) {
 		*out_len = (size_t)(p - out);
@@ -116,9 +127,9 @@ int aliro_prov_serialize(const struct aliro_reader_identity *id, const struct al
 
 /**
  * Deserialize a provisioning blob (magic + version + flags + reader_id + sign_priv + grk +
- * credential count + cred_pub list + kpersistent bitmask + kpersistent list). Supports v1 (no grk),
- * v2 (grk, no kpersistent), v3 (both). Returns 0 on success, -1 on invalid
- * magic/version/length/count.
+ * credential count + cred_pub list + kpersistent bitmask + kpersistent list + Matter index pairs).
+ * Supports v1 (no grk), v2 (grk, no kpersistent), v3 (no indices), v4 (all). Returns 0 on success,
+ * -1 on invalid magic/version/length/count.
  */
 int aliro_prov_deserialize(const uint8_t *buf, size_t len, struct aliro_reader_identity *id,
 			   struct aliro_trust_store *ts)
@@ -132,7 +143,12 @@ int aliro_prov_deserialize(const uint8_t *buf, size_t len, struct aliro_reader_i
 	 * parsed for back-compat (their credentials simply have no Kpersistent). */
 	size_t grk_len;
 	int has_kp = 0;
+	int has_idx = 0;
 	if (buf[4] == ALIRO_PROV_VERSION) {
+		grk_len = ALIRO_GRK_LEN;
+		has_kp = 1;
+		has_idx = 1;
+	} else if (buf[4] == ALIRO_PROV_VERSION_3) {
 		grk_len = ALIRO_GRK_LEN;
 		has_kp = 1;
 	} else if (buf[4] == ALIRO_PROV_VERSION_2) {
@@ -155,6 +171,9 @@ int aliro_prov_deserialize(const uint8_t *buf, size_t len, struct aliro_reader_i
 
 	if (has_kp) {
 		want += 1u + (size_t)count * ALIRO_KPERSISTENT_LEN;
+	}
+	if (has_idx) {
+		want += (size_t)count * 5u;
 	}
 	if (count > ALIRO_TRUST_MAX || len != want) {
 		return -1;
@@ -187,6 +206,16 @@ int aliro_prov_deserialize(const uint8_t *buf, size_t len, struct aliro_reader_i
 			for (uint8_t i = 0; i < count; i++) {
 				memcpy(ts->kpersistent[i], k, ALIRO_KPERSISTENT_LEN);
 				k += ALIRO_KPERSISTENT_LEN;
+			}
+		}
+		/* memset above already left every index at ALIRO_CRED_INDEX_NONE,
+		 * which is what a pre-v4 blob's anchors truthfully have. */
+		if (has_idx) {
+			for (uint8_t i = 0; i < count; i++) {
+				ts->cred_type[i] = k[0];
+				ts->cred_index[i] = (uint16_t)(((uint16_t)k[1] << 8) | k[2]);
+				ts->user_index[i] = (uint16_t)(((uint16_t)k[3] << 8) | k[4]);
+				k += 5u;
 			}
 		}
 	}
@@ -250,23 +279,20 @@ int aliro_prov_trust_add(struct aliro_trust_store *ts, const uint8_t cred_pub[AL
 				break;
 			}
 		}
-		for (uint8_t i = victim; i + 1u < ALIRO_TRUST_MAX; i++) {
-			memcpy(ts->cred_pub[i], ts->cred_pub[i + 1u], ALIRO_CRED_PUB_LEN);
-			memcpy(ts->kpersistent[i], ts->kpersistent[i + 1u], ALIRO_KPERSISTENT_LEN);
-			if (ts->kp_valid & (uint8_t)(1u << (i + 1u))) {
-				ts->kp_valid |= (uint8_t)(1u << i);
-			} else {
-				ts->kp_valid &= (uint8_t)~(1u << i);
-			}
-		}
-		ts->count--;
-		ts->kp_valid &= (uint8_t)~(1u << ts->count);
+		/* Same shift a revocation does, so there is one place where a
+		 * slot's key, Kpersistent, valid bit and Matter indices move
+		 * together and one place to get that wrong. */
+		(void)aliro_prov_trust_remove_at(ts, (int)victim);
 		evicted = 1;
 	}
 	memcpy(ts->cred_pub[ts->count], cred_pub, ALIRO_CRED_PUB_LEN);
-	/* the new slot has no Kpersistent yet (a stale bit would alias an old key) */
+	/* the new slot has no Kpersistent yet (a stale bit would alias an old key)
+	 * and no Matter index until a SetCredential binds one */
 	ts->kp_valid &= (uint8_t)~(1u << ts->count);
 	memset(ts->kpersistent[ts->count], 0, ALIRO_KPERSISTENT_LEN);
+	ts->cred_type[ts->count] = 0u;
+	ts->cred_index[ts->count] = ALIRO_CRED_INDEX_NONE;
+	ts->user_index[ts->count] = ALIRO_CRED_INDEX_NONE;
 	ts->count++;
 	/* 2 tells the caller an anchor was dropped to make room, which is worth
 	 * a log line -- it is the only visible sign the store is undersized. */
@@ -285,6 +311,104 @@ int aliro_prov_trust_find(const struct aliro_trust_store *ts,
 	}
 	for (uint8_t i = 0; i < ts->count && i < ALIRO_TRUST_MAX; i++) {
 		if (memcmp(ts->cred_pub[i], cred_pub, ALIRO_CRED_PUB_LEN) == 0) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Remove the anchor at idx, shifting every later slot down one and zeroing the slot that falls off
+ * the top. Returns 0 on success, -1 if ts is NULL or idx is not an occupied slot.
+ */
+int aliro_prov_trust_remove_at(struct aliro_trust_store *ts, int idx)
+{
+	if (ts == NULL || idx < 0 || (unsigned)idx >= ts->count || ts->count > ALIRO_TRUST_MAX) {
+		return -1;
+	}
+	for (uint8_t i = (uint8_t)idx; i + 1u < ts->count; i++) {
+		memcpy(ts->cred_pub[i], ts->cred_pub[i + 1u], ALIRO_CRED_PUB_LEN);
+		memcpy(ts->kpersistent[i], ts->kpersistent[i + 1u], ALIRO_KPERSISTENT_LEN);
+		ts->cred_type[i] = ts->cred_type[i + 1u];
+		ts->cred_index[i] = ts->cred_index[i + 1u];
+		ts->user_index[i] = ts->user_index[i + 1u];
+		/*
+		 * The bit must follow its key. try_fast_auth() pairs
+		 * kpersistent[i] with cred_pub[i] and never consults the trust
+		 * check, so a bit left behind on a shifted row would open the
+		 * door for a revoked phone with no signature verified.
+		 */
+		if (ts->kp_valid & (uint8_t)(1u << (i + 1u))) {
+			ts->kp_valid |= (uint8_t)(1u << i);
+		} else {
+			ts->kp_valid &= (uint8_t)~(1u << i);
+		}
+	}
+	ts->count--;
+	/* Wipe the vacated top slot rather than leaving it to be overwritten: a
+	 * Kpersistent is key material, and the next add must not inherit one. */
+	memset(ts->cred_pub[ts->count], 0, ALIRO_CRED_PUB_LEN);
+	memset(ts->kpersistent[ts->count], 0, ALIRO_KPERSISTENT_LEN);
+	ts->kp_valid &= (uint8_t)~(1u << ts->count);
+	ts->cred_type[ts->count] = 0u;
+	ts->cred_index[ts->count] = ALIRO_CRED_INDEX_NONE;
+	ts->user_index[ts->count] = ALIRO_CRED_INDEX_NONE;
+	return 0;
+}
+
+/**
+ * Remove a credential public key from the trust store. Returns 0 if it was removed, 1 if it was not
+ * there (an already-applied removal is not a failure), -1 if ts is NULL.
+ */
+int aliro_prov_trust_remove(struct aliro_trust_store *ts,
+			    const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
+{
+	if (ts == NULL) {
+		return -1;
+	}
+	int idx = aliro_prov_trust_find(ts, cred_pub);
+
+	if (idx < 0) {
+		return 1; /* already gone; saying so is not an error */
+	}
+	return aliro_prov_trust_remove_at(ts, idx);
+}
+
+/**
+ * Record the Matter credential and user indices the anchor at idx was installed under. Returns 0 on
+ * success, -1 if idx is not a stored credential.
+ */
+int aliro_prov_cred_bind_set(struct aliro_trust_store *ts, int idx, uint8_t cred_type,
+			     uint16_t cred_index, uint16_t user_index)
+{
+	if (ts == NULL || idx < 0 || (unsigned)idx >= ts->count) {
+		return -1;
+	}
+	ts->cred_type[idx] = cred_type;
+	ts->cred_index[idx] = cred_index;
+	ts->user_index[idx] = user_index;
+	return 0;
+}
+
+/**
+ * Find the slot bound to a Matter (credential type, credential index). Returns the slot, or -1 if
+ * no anchor carries that pair. Type 0 and ALIRO_CRED_INDEX_NONE never match, so an unbound anchor
+ * cannot be removed by index.
+ */
+int aliro_prov_find_cred_index(const struct aliro_trust_store *ts, uint8_t cred_type,
+			       uint16_t cred_index)
+{
+	if (ts == NULL || cred_type == 0u || cred_index == ALIRO_CRED_INDEX_NONE) {
+		return -1;
+	}
+	for (uint8_t i = 0; i < ts->count && i < ALIRO_TRUST_MAX; i++) {
+		/*
+		 * Both halves, because a Matter credential index is scoped to
+		 * its type: an evictable and a non-evictable endpoint key can
+		 * both be index 1, and matching on the index alone would revoke
+		 * whichever came first and leave the other one opening the door.
+		 */
+		if (ts->cred_type[i] == cred_type && ts->cred_index[i] == cred_index) {
 			return i;
 		}
 	}

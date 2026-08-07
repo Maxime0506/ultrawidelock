@@ -155,6 +155,32 @@ extern "C" {
 #define MATTER_CMD_DL_SET_USER            0x001Au
 #define MATTER_CMD_DL_GET_USER            0x001Bu
 #define MATTER_CMD_DL_GET_USER_RESPONSE   0x001Cu
+/**
+ * ClearUser (CommandIds.h:117) and ClearCredential (:127).
+ *
+ * Both are mandatory for the USR feature this node claims
+ * (data_model/1.4/clusters/DoorLock.xml:2010-2014 and :2194-2198), and between
+ * them they are the ONLY way the Door Lock cluster expresses "this key must
+ * stop working". Until they were answered, an admin could add a credential and
+ * never take it away: a home key removed in the controller's UI kept opening
+ * the door, which is a security gap rather than a missing feature.
+ *
+ * Both are answered with a bare status, like SetUser and unlike SetCredential.
+ */
+#define MATTER_CMD_DL_CLEAR_USER          0x001Du
+#define MATTER_CMD_DL_CLEAR_CREDENTIAL    0x0026u
+
+/* ClearUser field (DoorLock/Commands.h, ClearUser::Fields). */
+#define TAG_CLEARUSER_INDEX      0u
+/* ClearCredential field: a NULLABLE CredentialStruct, so an absent or null
+ * field means every credential of every type (door-lock-server.cpp:1021-1025). */
+#define TAG_CLEARCRED_CREDENTIAL 0u
+/**
+ * The wildcard index both clear commands use for "all of them"
+ * (door-lock-server.cpp:1040-1044). Not a real slot: 0xFFFE is one below the
+ * invalid 0xFFFF, and indices are otherwise 1-based.
+ */
+#define MATTER_DL_INDEX_ALL      0xFFFEu
 
 /**
  * SetAliroReaderConfig (DoorLock/CommandIds.h:122-125).
@@ -303,13 +329,28 @@ struct matter_user {
  * (ports/esp32/.../aliro_reader_delegate.cpp:47), which is the port that has
  * actually been provisioned by Apple Home.
  */
-#define MATTER_ALIRO_PROTOCOL_VERSION 0x0100u
+#define MATTER_ALIRO_PROTOCOL_VERSION        0x0100u
 /** 0 is the only defined Aliro BLE advertising version. */
-#define MATTER_ALIRO_BLE_ADV_VERSION  0u
-/** Matches the ESP32 lock's kAliroKeysSupported (aliro_reader_delegate.h:94). */
-#define MATTER_ALIRO_KEYS_SUPPORTED   10u
+#define MATTER_ALIRO_BLE_ADV_VERSION         0u
+/**
+ * NumberOfAliroCredentialIssuerKeysSupported (0x0087).
+ *
+ * An issuer key is accepted and deliberately never becomes an anchor, so no
+ * store bounds this one. Left at the ESP32 lock's kAliroKeysSupported.
+ */
+#define MATTER_ALIRO_ISSUER_KEYS_SUPPORTED   10u
+/**
+ * NumberOfAliroEndpointKeysSupported (0x0088): how many endpoint keys the
+ * reader's trust store actually holds, which is ALIRO_TRUST_MAX.
+ *
+ * Claiming 10 while holding 6 invited a controller to install four keys that
+ * would be silently evicted, and eviction is what used to lock a re-paired
+ * reader out for good. The port BUILD_ASSERTs these two agree, because this
+ * module must not include the reader's headers to find out.
+ */
+#define MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED 6u
 /** Aliro group identifier, sub-identifier and resolving key are all 16 bytes. */
-#define MATTER_ALIRO_GROUP_ID_LEN     16u
+#define MATTER_ALIRO_GROUP_ID_LEN            16u
 
 /** Access Control attributes (access-control-cluster.cpp, AclAttribute). */
 #define MATTER_ATTR_AC_ACL                0x0000u
@@ -574,7 +615,35 @@ struct matter_device_info {
 	 * the command report FAILURE rather than claiming an identity was kept.
 	 */
 	int (*aliro_credential_cb)(uint8_t credential_type,
-				   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN]);
+				   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
+				   uint16_t credential_index, uint16_t user_index);
+	/**
+	 * Where a ClearCredential lands, set by the port.
+	 *
+	 * @p credential_index is MATTER_DL_INDEX_ALL for "every credential of
+	 * this type", and @p credential_type is 0 for "every type" (the null
+	 * Credential field). The indices are all the command carries -- it
+	 * never names the key -- which is why the store has to have kept the
+	 * index it was installed under.
+	 *
+	 * Returns 0 when the credential is gone AND that fact is persisted;
+	 * anything else makes the command report FAILURE, because an admin told
+	 * a removal succeeded when it did not survive the next reboot is worse
+	 * than one told it failed.
+	 */
+	int (*aliro_credential_clear_cb)(uint8_t credential_type, uint16_t credential_index);
+	/**
+	 * Where a ClearUser lands, set by the port.
+	 *
+	 * @p user_index is MATTER_DL_INDEX_ALL for every user. Separate from the
+	 * credential hook because a controller may remove a person without ever
+	 * naming their credentials: the reference server clears a user's
+	 * credentials as part of clearing the user
+	 * (door-lock-server.cpp:2109-2135), so a node that ignores ClearUser
+	 * keeps opening for someone the admin has already removed. Same return
+	 * contract as above.
+	 */
+	int (*aliro_user_clear_cb)(uint16_t user_index);
 	int (*aliro_reader_config_cb)(
 		const uint8_t signing_key[MATTER_ALIRO_SIGNING_KEY_LEN],
 		const uint8_t verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],

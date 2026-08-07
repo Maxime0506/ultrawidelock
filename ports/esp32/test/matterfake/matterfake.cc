@@ -997,6 +997,16 @@ int mfk_prov_identity_rc;
 int mfk_add_trust_calls;
 uint8_t mfk_add_trust_key[65];
 int mfk_add_trust_rc;
+uint8_t mfk_add_trust_type;
+uint16_t mfk_add_trust_index;
+uint16_t mfk_add_trust_user;
+int mfk_remove_trust_calls;
+uint8_t mfk_remove_trust_type;
+uint16_t mfk_remove_trust_index;
+int mfk_remove_trust_rc;
+int mfk_remove_user_calls;
+uint16_t mfk_remove_user_index;
+int mfk_remove_user_rc;
 int mfk_prov_clear_calls;
 int mfk_refresh_adv_calls;
 int mfk_ble_time_updated_calls;
@@ -1084,11 +1094,30 @@ int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t s
 	return mfk_prov_identity_rc;
 }
 
-int aliro_reader_provision_add_trust(const uint8_t cred_pub[65])
+int aliro_reader_provision_add_trust(const uint8_t cred_pub[65], uint8_t cred_type,
+				     uint16_t cred_index, uint16_t user_index)
 {
 	mfk_add_trust_calls++;
+	mfk_add_trust_type = cred_type;
+	mfk_add_trust_index = cred_index;
+	mfk_add_trust_user = user_index;
 	memcpy(mfk_add_trust_key, cred_pub, 65);
 	return mfk_add_trust_rc;
+}
+
+int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
+{
+	mfk_remove_trust_calls++;
+	mfk_remove_trust_type = cred_type;
+	mfk_remove_trust_index = cred_index;
+	return mfk_remove_trust_rc;
+}
+
+int aliro_reader_provision_remove_user(uint16_t user_index)
+{
+	mfk_remove_user_calls++;
+	mfk_remove_user_index = user_index;
+	return mfk_remove_user_rc;
 }
 
 int aliro_reader_provision_clear(void)

@@ -31,6 +31,7 @@
  *   D   trust_clear, adv refresh with a provisioned GRK, attach-mode start,
  *       provision_clear back to the dev identity
  */
+#include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -138,6 +139,11 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 }
 
 void aliro_ble_post_presence_reset(void (*cb)(void))
+{
+	cb(); /* the double runs "the host task" inline */
+}
+
+void aliro_ble_post_revoke_sweep(void (*cb)(void))
 {
 	cb(); /* the double runs "the host task" inline */
 }
@@ -253,6 +259,10 @@ static uint8_t s_nvs[ALIRO_PROV_BLOB_MAX];
 static size_t s_nvs_len;
 static bool s_nvs_has;
 static bool s_nvs_fail;
+/* What the failing store reports. -1 keeps the older cases meaning what they
+ * did; a real errno is what the settings backend actually returns, and the
+ * point of the propagation tests below. */
+static int s_nvs_errno = -1;
 static int s_nvs_stores;
 
 int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *ts)
@@ -267,7 +277,7 @@ int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *
 int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)
 {
 	if (s_nvs_fail) {
-		return -1;
+		return s_nvs_errno;
 	}
 	if (aliro_prov_serialize(id, ts, s_nvs, sizeof(s_nvs), &s_nvs_len) != 0) {
 		return -1;
@@ -898,7 +908,7 @@ int main(void)
 	memset(rid, 0xA0, sizeof(rid));
 	memset(sp, 0x33, sizeof(sp));
 	okc("a.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
-	okc("a.provision_trust", aliro_reader_provision_add_trust(p.cred_pub) == 0);
+	okc("a.provision_trust", aliro_reader_provision_add_trust(p.cred_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
 	okc("a.pinned_presence_cred",
 	     aliro_reader_presence_expected_credential(out65) &&
 		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
@@ -1314,7 +1324,7 @@ int main(void)
 		uint8_t badpt[65];
 
 		memset(badpt, 0x05, sizeof(badpt)); /* not an uncompressed point */
-		okc("d.provision_bad_point", aliro_reader_provision_add_trust(badpt) == -1);
+		okc("d.provision_bad_point", aliro_reader_provision_add_trust(badpt, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == -1);
 	}
 	okc("d.provision_clear", aliro_reader_provision_clear() == 0);
 	{
@@ -1344,20 +1354,26 @@ int main(void)
 
 	memset(idle_priv, 0xB7, sizeof(idle_priv));
 	aliro_ec_p256_pub_from_priv(idle_priv, idle_pub);
-	okc("e2.add_trust", aliro_reader_provision_add_trust(idle_pub) == 0);
-	okc("e2.add_trust_dup", aliro_reader_provision_add_trust(idle_pub) == 1);
+	okc("e2.add_trust", aliro_reader_provision_add_trust(idle_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
+	okc("e2.add_trust_dup", aliro_reader_provision_add_trust(idle_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 1);
 	s_nvs_fail = true;
-	okc("e2.add_trust_store_fail", aliro_reader_provision_add_trust(p.cred_pub) == -1);
+	okc("e2.add_trust_store_fail", aliro_reader_provision_add_trust(p.cred_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == -1);
 	okc("e2.trust_clear_store_fail", aliro_reader_trust_clear() == -1);
 	s_nvs_fail = false;
 	aliro_reader_prov_print(); /* anchor-listing loop + last-cred hexdump */
-	okc("e2.trust_clear", aliro_reader_trust_clear() == 0);
+	/*
+	 * The clear that could not be written above still emptied the LIVE store:
+	 * a revocation that cannot be persisted must stop opening the door now and
+	 * report the write failure, not stay trusted until the write succeeds. So
+	 * by here there is nothing left to clear, and 1 says so.
+	 */
+	okc("e2.trust_clear", aliro_reader_trust_clear() == 1);
 
 	/* E3: provisioned identity + two anchors (an idle one first, so the fast
 	 * trial later has a no-Kpersistent slot to skip over) */
 	okc("e3.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
-	okc("e3.trust_idle", aliro_reader_provision_add_trust(idle_pub) == 0);
-	okc("e3.trust_walker", aliro_reader_provision_add_trust(p.cred_pub) == 0);
+	okc("e3.trust_idle", aliro_reader_provision_add_trust(idle_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
+	okc("e3.trust_walker", aliro_reader_provision_add_trust(p.cred_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
 	aliro_ec_p256_pub_from_priv(sp, p.rvk);
 
 	/* E4: AUTH0-response failure paths */
@@ -1641,10 +1657,10 @@ int main(void)
 
 		memset(fill_priv, 0xB8, sizeof(fill_priv));
 		aliro_ec_p256_pub_from_priv(fill_priv, fill_pub);
-		okc("e9.fill3", aliro_reader_provision_add_trust(fill_pub) == 0);
+		okc("e9.fill3", aliro_reader_provision_add_trust(fill_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
 		memset(fill_priv, 0xB9, sizeof(fill_priv));
 		aliro_ec_p256_pub_from_priv(fill_priv, fill_pub);
-		okc("e9.fill4", aliro_reader_provision_add_trust(fill_pub) == 0);
+		okc("e9.fill4", aliro_reader_provision_add_trust(fill_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
 
 		memset(&q, 0, sizeof(q));
 		memcpy(q.rvk, p.rvk, sizeof(q.rvk));
@@ -1713,6 +1729,128 @@ int main(void)
 		aliro_reader_status_tick(woz_uptime_ms() + 10000);
 		okc("b2.replay_cancelled_by_grant", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(5);
+	}
+
+	/*
+	 * ---- R: revocation ------------------------------------------------
+	 *
+	 * The reader half of Matter ClearCredential/ClearUser. This is the only
+	 * suite that compiles the real aliro_reader.c, so it is the only place
+	 * the fail-closed persist policy can be exercised at all.
+	 */
+	printf("\n== R: revocation — ClearCredential / ClearUser reach the store ==\n");
+	{
+		uint8_t rk1[65], rk2[65];
+		uint8_t rp1[32], rp2[32];
+
+		memset(rp1, 0xC1, sizeof(rp1));
+		memset(rp2, 0xC2, sizeof(rp2));
+		aliro_ec_p256_pub_from_priv(rp1, rk1);
+		aliro_ec_p256_pub_from_priv(rp2, rk2);
+
+		okc("r.clear_start", aliro_reader_trust_clear() >= 0);
+		okc("r.add1", aliro_reader_provision_add_trust(rk1, 7u, 11u, 3u) == 0);
+		okc("r.add2", aliro_reader_provision_add_trust(rk2, 7u, 12u, 4u) == 0);
+		/* Same key, same indices: nothing to write. */
+		okc("r.add1_dup", aliro_reader_provision_add_trust(rk1, 7u, 11u, 3u) == 1);
+		/* Same key at a NEW index: still 1, but the binding must be rewritten
+		 * or the anchor becomes one no ClearCredential can name. */
+		okc("r.rebind", aliro_reader_provision_add_trust(rk1, 7u, 21u, 3u) == 1);
+		okc("r.rebound_old_index_gone", aliro_reader_provision_remove_trust(7u, 11u) == 1);
+
+		/* The admin names the credential by index, and it goes. */
+		okc("r.remove", aliro_reader_provision_remove_trust(7u, 21u) == 0);
+		/* Idempotent: a removal that already happened is not a failure. */
+		okc("r.remove_again", aliro_reader_provision_remove_trust(7u, 21u) == 1);
+		/* Gone for real: re-adding is an ADD (0), not a dedup (1). */
+		okc("r.slot_freed", aliro_reader_provision_add_trust(rk1, 7u, 31u, 3u) == 0);
+
+		/* ClearUser takes every anchor bound to that user, and only those. */
+		okc("r.remove_user_none", aliro_reader_provision_remove_user(9u) == 0);
+		okc("r.remove_user", aliro_reader_provision_remove_user(3u) == 1);
+		okc("r.other_user_kept", aliro_reader_provision_remove_trust(7u, 12u) == 0);
+
+		/*
+		 * The type is half the name: a Matter credential index is scoped
+		 * to its type, so clearing (type 8, index 61) must not touch the
+		 * (type 7, index 61) anchor sitting beside it.
+		 */
+		okc("r.type_add", aliro_reader_provision_add_trust(rk1, 7u, 61u, 8u) == 0);
+		okc("r.type_mismatch_misses",
+		    aliro_reader_provision_remove_trust(8u, 61u) == 1);
+		okc("r.type_match_removes", aliro_reader_provision_remove_trust(7u, 61u) == 0);
+
+		/*
+		 * ClearCredential's two wildcards. Clearing one type must leave
+		 * the other alone; clearing type 0 means everything, bench-added
+		 * anchors included -- they are not Matter credentials, but
+		 * leaving them behind would leave the door open.
+		 */
+		okc("r.wild_clean", aliro_reader_trust_clear() >= 0);
+		okc("r.wild_add7", aliro_reader_provision_add_trust(rk1, 7u, 71u, 9u) == 0);
+		okc("r.wild_add8", aliro_reader_provision_add_trust(rk2, 8u, 72u, 9u) == 0);
+		okc("r.wild_type7", aliro_reader_provision_remove_type(7u) == 1);
+		okc("r.wild_type8_kept", aliro_reader_provision_remove_trust(8u, 72u) == 0);
+		okc("r.wild_add_again", aliro_reader_provision_add_trust(rk1, 7u, 73u, 9u) == 0);
+		okc("r.wild_all", aliro_reader_provision_remove_type(0u) == 1);
+		okc("r.wild_all_empty", aliro_reader_provision_remove_type(0u) == 0);
+
+		/*
+		 * Fail closed. The write fails, so the call reports -1 -- and the
+		 * credential is untrusted anyway, which a re-add proves by
+		 * returning 0 rather than 1.
+		 */
+		okc("r.readd", aliro_reader_provision_add_trust(rk2, 7u, 41u, 5u) == 0);
+		s_nvs_fail = true;
+		okc("r.remove_unpersisted", aliro_reader_provision_remove_trust(7u, 41u) == -1);
+		s_nvs_fail = false;
+		okc("r.unpersisted_still_untrusted",
+		    aliro_reader_provision_add_trust(rk2, 7u, 42u, 5u) == 0);
+		s_nvs_fail = true;
+		okc("r.remove_user_unpersisted_reports",
+		    aliro_reader_provision_remove_user(5u) == -1);
+		s_nvs_fail = false;
+
+		/*
+		 * The store's errno REACHES THE CALLER. A full settings
+		 * partition and a malformed key both used to arrive as -1, so
+		 * the log could not tell "this key is bad" from "this board has
+		 * no room left" -- which cost an afternoon on real hardware.
+		 */
+		s_nvs_errno = -ENOSPC;
+		okc("r.errno_anchor1", aliro_reader_provision_add_trust(rk2, 7u, 43u, 5u) == 0);
+		s_nvs_fail = true;
+		okc("r.errno_add", aliro_reader_provision_add_trust(rk1, 7u, 44u, 5u) == -ENOSPC);
+		okc("r.errno_remove", aliro_reader_provision_remove_trust(7u, 43u) == -ENOSPC);
+		okc("r.errno_identity",
+		    aliro_reader_provision_identity(rid, sp, grk0) == -ENOSPC);
+		okc("r.errno_clear", aliro_reader_provision_clear() == -ENOSPC);
+		s_nvs_fail = false;
+
+		/* Each wildcard needs its own anchor: the failed removal above
+		 * already took the last one out of RAM, and a wildcard that
+		 * finds nothing returns 0 rather than reaching the store. */
+		okc("r.errno_anchor2", aliro_reader_provision_add_trust(rk2, 7u, 45u, 6u) == 0);
+		s_nvs_fail = true;
+		okc("r.errno_remove_user", aliro_reader_provision_remove_user(6u) == -ENOSPC);
+		s_nvs_fail = false;
+		okc("r.errno_anchor3", aliro_reader_provision_add_trust(rk2, 7u, 46u, 6u) == 0);
+		s_nvs_fail = true;
+		okc("r.errno_remove_type", aliro_reader_provision_remove_type(7u) == -ENOSPC);
+		s_nvs_errno = -1;
+		s_nvs_fail = false;
+
+		/* A revocation drops every live link: an established session keeps
+		 * ranging on a URSK derived before the removal and never re-checks
+		 * the trust store, so the door would keep opening until it ended. */
+		okc("r.clean", aliro_reader_trust_clear() >= 0);
+		okc("r.link_add", aliro_reader_provision_add_trust(rk1, 7u, 51u, 7u) == 0);
+		s_cfg.cb.on_connected(41);
+		int before = s_disconnects;
+
+		okc("r.link_revoke", aliro_reader_provision_remove_trust(7u, 51u) == 0);
+		okc("r.link_dropped", s_disconnects > before);
+		s_cfg.cb.on_disconnected(41);
 	}
 
 	/* console/status entry points: exercised for effect-free execution */

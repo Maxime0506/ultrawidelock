@@ -77,6 +77,14 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured);
  * time by the console, so one queued callback slot is sufficient. */
 void aliro_ble_post_presence_reset(void (*cb)(void));
 
+/* Marshal a post-revocation link sweep onto the NimBLE host task. Its own slot
+ * rather than a second user of the presence one: both store a single callback
+ * pointer, so sharing would let a bench presence proof and an admin revocation
+ * silently cancel each other, and the revocation is the one that must not be
+ * dropped -- until the link is gone, an already-revoked phone's established
+ * session keeps ranging and keeps opening the door. */
+void aliro_ble_post_revoke_sweep(void (*cb)(void));
+
 /* ---- Attach mode: share a NimBLE host another stack already owns ---------- *
  * Instead of owning NimBLE (aliro_ble_start), the reader can attach to a host
  * brought up by e.g. esp-matter, so both coexist on one controller. Three

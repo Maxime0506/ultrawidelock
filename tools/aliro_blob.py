@@ -34,7 +34,8 @@ PRIV_LEN = 32
 GRK_LEN = 16
 CRED_PUB_LEN = 65
 KPERSISTENT_LEN = 32
-TRUST_MAX = 4
+TRUST_MAX = 6  # ALIRO_TRUST_MAX, modules/woz_aliro/include/aliro_prov.h
+BINDING_LEN = 5  # cred_type(1) + cred_index(2, BE) + user_index(2, BE), v4 on
 FLAG_DEV = 0x01
 
 # modules/woz_aliro/src/aliro_prov.c:25-34. Present in every image, so a blob
@@ -59,7 +60,10 @@ def parse(buf, off=0):
         raise BadBlob("no APRV magic")
 
     version = buf[off + 4]
-    if version == 3:
+    has_idx = False
+    if version == 4:
+        grk_len, has_kp, has_idx = GRK_LEN, True, True
+    elif version == 3:
         grk_len, has_kp = GRK_LEN, True
     elif version == 2:
         grk_len, has_kp = GRK_LEN, False
@@ -76,6 +80,8 @@ def parse(buf, off=0):
     total = fixed + count * CRED_PUB_LEN
     if has_kp:
         total += 1 + count * KPERSISTENT_LEN
+    if has_idx:
+        total += count * BINDING_LEN
     if count > TRUST_MAX:
         raise BadBlob(f"credential count {count} over the {TRUST_MAX} the reader stores")
     if len(buf) - off < total:
@@ -98,10 +104,21 @@ def parse(buf, off=0):
     kp_valid = 0
     if has_kp:
         kp_valid = buf[k] & ((1 << count) - 1)
+        k += 1 + count * KPERSISTENT_LEN
+
+    # Which Matter credential each anchor was installed under. Absent before v4,
+    # and an anchor with no binding is one ClearCredential can never name.
+    bindings = []
+    if has_idx:
+        for _ in range(count):
+            bindings.append((buf[k], (buf[k + 1] << 8) | buf[k + 2],
+                             (buf[k + 3] << 8) | buf[k + 4]))
+            k += BINDING_LEN
 
     return (
         {
             "version": version,
+            "bindings": bindings,
             "is_dev": bool(buf[off + 5] & FLAG_DEV),
             "reader_id": reader_id,
             "sign_priv": sign_priv,
@@ -154,7 +171,12 @@ def report(f, total, args, where=""):
     print(f"  trust anchors     {len(f['creds'])} of {TRUST_MAX}")
     for i, c in enumerate(f["creds"]):
         kp = "yes" if f["kp_valid"] & (1 << i) else "no"
-        print(f"    [{i}] {c[:8].hex()}...{c[-4:].hex()}  Kpersistent: {kp}")
+        line = f"    [{i}] {c[:8].hex()}...{c[-4:].hex()}  Kpersistent: {kp}"
+        if i < len(f["bindings"]):
+            ctype, cidx, uidx = f["bindings"][i]
+            line += (f"  cred: type {ctype} index {cidx}, user {uidx}"
+                     if cidx else "  cred: no Matter index (unrevocable by index)")
+        print(line)
 
     fatal = check(f)
     if fatal:

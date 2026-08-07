@@ -55,12 +55,43 @@ static int s_cred_result;
 static uint8_t s_cred_type;
 static uint8_t s_cred_key[MATTER_ALIRO_VERIFICATION_KEY_LEN];
 
-static int cred_cb(uint8_t credential_type, const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN])
+static uint16_t s_cred_index;
+static uint16_t s_cred_user;
+
+static int cred_cb(uint8_t credential_type,
+		   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
+		   uint16_t credential_index, uint16_t user_index)
 {
 	s_cred_calls++;
 	s_cred_type = credential_type;
+	s_cred_index = credential_index;
+	s_cred_user = user_index;
 	memcpy(s_cred_key, public_key, sizeof(s_cred_key));
 	return s_cred_result;
+}
+
+static int s_clear_cred_calls;
+static int s_clear_cred_result;
+static uint8_t s_clear_cred_type;
+static uint16_t s_clear_cred_index;
+
+static int clear_cred_cb(uint8_t credential_type, uint16_t credential_index)
+{
+	s_clear_cred_calls++;
+	s_clear_cred_type = credential_type;
+	s_clear_cred_index = credential_index;
+	return s_clear_cred_result;
+}
+
+static int s_clear_user_calls;
+static int s_clear_user_result;
+static uint16_t s_clear_user_index;
+
+static int clear_user_cb(uint16_t user_index)
+{
+	s_clear_user_calls++;
+	s_clear_user_index = user_index;
+	return s_clear_user_result;
 }
 
 /* ---- fixtures ------------------------------------------------------------ */
@@ -72,6 +103,15 @@ static void reset_doubles(void)
 	s_cred_calls = 0;
 	s_cred_result = 0;
 	s_cred_type = 0xFFu;
+	s_cred_index = 0xFFFFu;
+	s_cred_user = 0xFFFFu;
+	s_clear_cred_calls = 0;
+	s_clear_cred_result = 0;
+	s_clear_cred_type = 0xFFu;
+	s_clear_cred_index = 0xFFFFu;
+	s_clear_user_calls = 0;
+	s_clear_user_result = 0;
+	s_clear_user_index = 0xFFFFu;
 	memset(s_cfg_signing, 0, sizeof(s_cfg_signing));
 	memset(s_cfg_verification, 0, sizeof(s_cfg_verification));
 	memset(s_cfg_group_id, 0, sizeof(s_cfg_group_id));
@@ -91,6 +131,8 @@ static void fill_info(struct matter_device_info *info)
 	info->supports_concurrent_connection = true;
 	info->aliro_reader_config_cb = cfg_cb;
 	info->aliro_credential_cb = cred_cb;
+	info->aliro_credential_clear_cb = clear_cred_cb;
+	info->aliro_user_clear_cb = clear_user_cb;
 }
 
 /* A byte pattern that differs per field, so a handler that mixes two of them up
@@ -140,10 +182,12 @@ static size_t build_cfg_fields(uint8_t *buf, size_t cap, const uint8_t *signing,
 	return len;
 }
 
-/** SetCredential arguments. @p have_user_index omits field 3 when false. */
-static size_t build_cred_fields(uint8_t *buf, size_t cap, uint64_t cred_type, bool have_cred_struct,
-				const uint8_t *data, size_t data_len, bool have_user_index,
-				uint64_t user_index)
+/** SetCredential arguments. @p have_user_index omits field 3 when false.
+ *  @p cred_index is the CredentialIndex inside the nested CredentialStruct --
+ *  the handle a later ClearCredential names this key by. */
+static size_t build_cred_fields(uint8_t *buf, size_t cap, uint64_t cred_index, uint64_t cred_type,
+				bool have_cred_struct, const uint8_t *data, size_t data_len,
+				bool have_user_index, uint64_t user_index)
 {
 	struct matter_tlv_writer w;
 	size_t len = 0u;
@@ -154,7 +198,7 @@ static size_t build_cred_fields(uint8_t *buf, size_t cap, uint64_t cred_type, bo
 		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_SETCRED_CREDENTIAL),
 						 MATTER_TLV_STRUCTURE);
 		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_CREDSTRUCT_TYPE), cred_type);
-		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_CREDSTRUCT_INDEX), 1u);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_CREDSTRUCT_INDEX), cred_index);
 		(void)matter_tlv_end_container(&w);
 	}
 	if (data != NULL) {
@@ -162,6 +206,52 @@ static size_t build_cred_fields(uint8_t *buf, size_t cap, uint64_t cred_type, bo
 	}
 	if (have_user_index) {
 		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SETCRED_USER_INDEX), user_index);
+	}
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_writer_finish(&w, &len);
+	return len;
+}
+
+/**
+ * ClearCredential arguments.
+ *
+ * @p have_cred_struct false omits the Credential field entirely, which is how a controller says
+ * "every credential of every type"; @p have_index false omits CredentialIndex inside the struct,
+ * which is malformed rather than a wildcard (the wildcard is index 0xFFFE).
+ */
+static size_t build_clear_cred_fields(uint8_t *buf, size_t cap, bool have_cred_struct,
+				      uint64_t cred_type, bool have_index, uint64_t cred_index)
+{
+	struct matter_tlv_writer w;
+	size_t len = 0u;
+
+	matter_tlv_writer_init(&w, buf, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	if (have_cred_struct) {
+		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(TAG_CLEARCRED_CREDENTIAL),
+						 MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_CREDSTRUCT_TYPE), cred_type);
+		if (have_index) {
+			(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_CREDSTRUCT_INDEX),
+						 cred_index);
+		}
+		(void)matter_tlv_end_container(&w);
+	}
+	(void)matter_tlv_end_container(&w);
+	(void)matter_tlv_writer_finish(&w, &len);
+	return len;
+}
+
+/** ClearUser arguments. @p have_index false omits the only field there is. */
+static size_t build_clear_user_fields(uint8_t *buf, size_t cap, bool have_index, uint64_t user_index)
+{
+	struct matter_tlv_writer w;
+	size_t len = 0u;
+
+	matter_tlv_writer_init(&w, buf, cap);
+	(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+	if (have_index) {
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_CLEARUSER_INDEX), user_index);
 	}
 	(void)matter_tlv_end_container(&w);
 	(void)matter_tlv_writer_finish(&w, &len);
@@ -356,8 +446,8 @@ void test_matter_clusters(void)
 			fill_info(&info);
 			matter_clusters_init(&srv, &info);
 
-			flen = build_cred_fields(fields, sizeof(fields), types[i], true, verification,
-						 sizeof(verification), true, 7u);
+			flen = build_cred_fields(fields, sizeof(fields), 4u, types[i], true,
+						 verification, sizeof(verification), true, 7u);
 			T_EQ("command succeeds",
 			     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK,
 					 MATTER_CMD_DL_SET_CREDENTIAL, fields, flen, &resp),
@@ -371,6 +461,13 @@ void test_matter_clusters(void)
 			T_OK("key forwarded verbatim",
 			     memcmp(s_cred_key, verification, sizeof(verification)) == 0);
 			T_EQ("user index recorded", info.last_user_index, 7u);
+			/*
+			 * Both indices reach the store, which is the only reason
+			 * a later ClearCredential can find this key again: the
+			 * clear commands carry indices and never key bytes.
+			 */
+			T_EQ("credential index forwarded", s_cred_index, 4u);
+			T_EQ("user index forwarded", s_cred_user, 7u);
 		}
 	}
 
@@ -383,7 +480,7 @@ void test_matter_clusters(void)
 		matter_clusters_init(&srv, &info);
 
 		/* PIN: a surface this node does not claim. */
-		flen = build_cred_fields(fields, sizeof(fields), 1u, true, verification,
+		flen = build_cred_fields(fields, sizeof(fields), 1u, 1u, true, verification,
 					 sizeof(verification), true, 1u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
@@ -393,7 +490,7 @@ void test_matter_clusters(void)
 		     MATTER_IM_STATUS_UNSUPPORTED_COMMAND);
 		T_EQ("and nothing was installed", s_cred_calls, 0);
 
-		flen = build_cred_fields(fields, sizeof(fields), MATTER_DL_CRED_ALIRO_ISSUER_KEY,
+		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
 					 true, verification, sizeof(verification) - 1u, true, 1u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
@@ -403,7 +500,7 @@ void test_matter_clusters(void)
 		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
 		T_EQ("and nothing was installed", s_cred_calls, 0);
 
-		flen = build_cred_fields(fields, sizeof(fields), 0u, false, verification,
+		flen = build_cred_fields(fields, sizeof(fields), 1u, 0u, false, verification,
 					 sizeof(verification), true, 1u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
@@ -412,7 +509,7 @@ void test_matter_clusters(void)
 		T_EQ("no CredentialStruct is an invalid command", info.last_credential_status,
 		     MATTER_IM_STATUS_INVALID_COMMAND);
 
-		flen = build_cred_fields(fields, sizeof(fields), MATTER_DL_CRED_ALIRO_ISSUER_KEY,
+		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
 					 true, NULL, 0u, true, 1u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
@@ -430,7 +527,7 @@ void test_matter_clusters(void)
 		info.aliro_credential_cb = NULL;
 		matter_clusters_init(&srv, &info);
 
-		flen = build_cred_fields(fields, sizeof(fields), MATTER_DL_CRED_ALIRO_ISSUER_KEY,
+		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
 					 true, verification, sizeof(verification), true, 3u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
@@ -456,7 +553,7 @@ void test_matter_clusters(void)
 		reset_doubles();
 		fill_info(&info);
 		matter_clusters_init(&srv, &info);
-		flen = build_cred_fields(fields, sizeof(fields), MATTER_DL_CRED_ALIRO_ISSUER_KEY,
+		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
 					 true, verification, sizeof(verification), false, 0u);
 		T_EQ("command succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
@@ -624,6 +721,277 @@ void test_matter_clusters(void)
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_USER, NULL, 0u,
 				 NULL),
 		     MATTER_IM_STATUS_INVALID_COMMAND);
+	}
+
+	/*
+	 * ---- revocation ----------------------------------------------------
+	 *
+	 * ClearCredential and ClearUser are the only way the Door Lock cluster
+	 * says "this key must stop working", and both are mandatory for the USR
+	 * feature this node claims. While they answered UNSUPPORTED_COMMAND, a
+	 * home key removed in the controller's UI went on opening the door.
+	 */
+	t_group("ClearCredential revokes the credential it names");
+	{
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		flen = build_clear_cred_fields(fields, sizeof(fields), true,
+					       MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT, true, 4u);
+		T_EQ("accepted",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("port told once", s_clear_cred_calls, 1);
+		T_EQ("type forwarded", s_clear_cred_type, MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT);
+		T_EQ("index forwarded", s_clear_cred_index, 4u);
+
+		/* 0xFFFE: every credential of that type. */
+		reset_doubles();
+		flen = build_clear_cred_fields(fields, sizeof(fields), true,
+					       MATTER_DL_CRED_ALIRO_ENDPOINT_KEY, true,
+					       MATTER_DL_INDEX_ALL);
+		T_EQ("wildcard index accepted",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("wildcard forwarded", s_clear_cred_index, MATTER_DL_INDEX_ALL);
+
+		/* No Credential field at all: every credential of every type, which
+		 * the port is told as type 0 -- not a credential type, so it cannot
+		 * be confused with one. */
+		reset_doubles();
+		flen = build_clear_cred_fields(fields, sizeof(fields), false, 0u, false, 0u);
+		T_EQ("absent credential clears everything",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("all types", s_clear_cred_type, 0u);
+		T_EQ("all indices", s_clear_cred_index, MATTER_DL_INDEX_ALL);
+
+		/* And with no fields whatsoever, which is the same statement. */
+		reset_doubles();
+		T_EQ("no fields clears everything",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 NULL, 0u, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("all types", s_clear_cred_type, 0u);
+	}
+
+	t_group("ClearCredential refuses what it cannot act on");
+	{
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		/* A credential class this node never claimed cannot be holding one. */
+		flen = build_clear_cred_fields(fields, sizeof(fields), true, 1u /* PIN */, true, 1u);
+		T_EQ("a PIN credential is not ours",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("port not told", s_clear_cred_calls, 0);
+
+		/* Indices are 1-based, so 0 is not a slot this lock could hold. */
+		flen = build_clear_cred_fields(fields, sizeof(fields), true,
+					       MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT, true, 0u);
+		T_EQ("index 0 is refused",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
+
+		/* A CredentialStruct with a type and no index names nothing. */
+		flen = build_clear_cred_fields(fields, sizeof(fields), true,
+					       MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT, false, 0u);
+		T_EQ("a missing index is refused",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("port still not told", s_clear_cred_calls, 0);
+	}
+
+	t_group("a revocation the store could not keep reports FAILURE");
+	{
+		/*
+		 * The single most important status in this file. An admin told a key
+		 * was removed stops looking; a removal that would come back on the
+		 * next boot must therefore never be answered SUCCESS.
+		 */
+		reset_doubles();
+		fill_info(&info);
+		s_clear_cred_result = -1;
+		s_clear_user_result = -1;
+		matter_clusters_init(&srv, &info);
+
+		flen = build_clear_cred_fields(fields, sizeof(fields), true,
+					       MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT, true, 4u);
+		T_EQ("ClearCredential reports the failure",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_FAILURE);
+
+		flen = build_clear_user_fields(fields, sizeof(fields), true, 1u);
+		T_EQ("ClearUser reports the failure",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_FAILURE);
+
+		/* A port that registered no hook at all is the same answer: this node
+		 * cannot revoke, and must not pretend it did. */
+		reset_doubles();
+		fill_info(&info);
+		info.aliro_credential_clear_cb = NULL;
+		info.aliro_user_clear_cb = NULL;
+		matter_clusters_init(&srv, &info);
+		info.users[0].in_use = true;
+
+		flen = build_clear_cred_fields(fields, sizeof(fields), true,
+					       MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT, true, 4u);
+		T_EQ("no ClearCredential hook is a FAILURE",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 fields, flen, NULL),
+		     MATTER_IM_STATUS_FAILURE);
+		flen = build_clear_user_fields(fields, sizeof(fields), true, 1u);
+		T_EQ("no ClearUser hook is a FAILURE",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_FAILURE);
+		/* And the row survives it. A refusal that still emptied the slot
+		 * would show the controller an empty user whose credential is
+		 * untouched and still opening the door. */
+		T_OK("refused ClearUser left the row alone", info.users[0].in_use);
+	}
+
+	t_group("ClearUser empties the slot and the credentials in it");
+	{
+		struct matter_tlv_writer w;
+
+		reset_doubles();
+		fill_info(&info);
+		info.accessing_fabric_index = 2u;
+		matter_clusters_init(&srv, &info);
+
+		/* Fill slot 1 the way a controller does, then take it away. */
+		matter_tlv_writer_init(&w, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SETUSER_INDEX), 1u);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(TAG_SETUSER_UNIQUE_ID), 0xABCDu);
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_writer_finish(&w, &flen);
+		T_EQ("user added",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_OK("slot 1 in use", info.users[0].in_use);
+
+		flen = build_clear_user_fields(fields, sizeof(fields), true, 1u);
+		T_EQ("cleared",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		/* Both halves, because either one alone is a lie: an empty slot whose
+		 * credential still opens the door, or a credential gone from a user
+		 * the controller can still read back. */
+		T_OK("slot 1 emptied", !info.users[0].in_use);
+		T_EQ("unique id forgotten", (long)info.users[0].unique_id, 0L);
+		T_EQ("port told once", s_clear_user_calls, 1);
+		T_EQ("user index forwarded", s_clear_user_index, 1u);
+
+		/* 0xFFFE: every user, and every credential under them. */
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		info.users[0].in_use = true;
+		info.users[MATTER_DL_USERS_MAX - 1u].in_use = true;
+		flen = build_clear_user_fields(fields, sizeof(fields), true, MATTER_DL_INDEX_ALL);
+		T_EQ("all users cleared",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_OK("first slot emptied", !info.users[0].in_use);
+		T_OK("last slot emptied", !info.users[MATTER_DL_USERS_MAX - 1u].in_use);
+		T_EQ("wildcard forwarded", s_clear_user_index, MATTER_DL_INDEX_ALL);
+
+		/* Out of range on both ends, exactly as SetUser refuses them. */
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		flen = build_clear_user_fields(fields, sizeof(fields), true, 0u);
+		T_EQ("index 0 is refused",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
+		flen = build_clear_user_fields(fields, sizeof(fields), true,
+					       MATTER_DL_USERS_MAX + 1u);
+		T_EQ("one past the table is refused",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, fields,
+				 flen, NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("no index at all is refused",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER, NULL, 0u,
+				 NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("port never told", s_clear_user_calls, 0);
+	}
+
+	t_group("a real controller's bytes decode to the same three calls");
+	{
+		/*
+		 * Captured from the Matter SDK itself (python home-assistant-chip-clusters
+		 * 2025.7.0, DoorLock.Commands.*.ToTLV()), not written by hand here, because
+		 * every other case in this file encodes the arguments with the same
+		 * TAG_ constants the decoder reads them back with -- so a tag numbered
+		 * wrong would agree with itself and pass. These are the field bytes a
+		 * commissioner actually puts on the wire.
+		 */
+		static const uint8_t sdk_set_cred[] = {
+			0x15, 0x24, 0x00, 0x00, 0x35, 0x01, 0x24, 0x00, 0x07, 0x24, 0x01, 0x09,
+			0x18, 0x30, 0x02, 0x41, 0x04, 0x6b, 0x17, 0xd1, 0xf2, 0xe1, 0x2c, 0x42,
+			0x47, 0xf8, 0xbc, 0xe6, 0xe5, 0x63, 0xa4, 0x40, 0xf2, 0x77, 0x03, 0x7d,
+			0x81, 0x2d, 0xeb, 0x33, 0xa0, 0xf4, 0xa1, 0x39, 0x45, 0xd8, 0x98, 0xc2,
+			0x96, 0x4f, 0xe3, 0x42, 0xe2, 0xfe, 0x1a, 0x7f, 0x9b, 0x8e, 0xe7, 0xeb,
+			0x4a, 0x7c, 0x0f, 0x9e, 0x16, 0x2b, 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e,
+			0xce, 0xcb, 0xb6, 0x40, 0x68, 0x37, 0xbf, 0x51, 0xf5, 0x24, 0x03, 0x05,
+			0x24, 0x04, 0x01, 0x24, 0x05, 0x00, 0x18,
+		};
+		static const uint8_t sdk_clear_cred[] = {
+			0x15, 0x35, 0x00, 0x24, 0x00, 0x07, 0x24, 0x01, 0x09, 0x18, 0x18,
+		};
+		static const uint8_t sdk_clear_user[] = { 0x15, 0x24, 0x00, 0x05, 0x18 };
+
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+
+		T_EQ("SetCredential accepted",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
+				 sdk_set_cred, sizeof(sdk_set_cred), NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("stored once", s_cred_calls, 1);
+		T_EQ("as an evictable endpoint key", s_cred_type,
+		     MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT);
+		T_EQ("under the index the controller named", s_cred_index, 9);
+		T_EQ("bound to the user it named", s_cred_user, 5);
+		T_EQ("key kept whole", (long)s_cred_key[0], 0x04L);
+		T_EQ("to its last byte", (long)s_cred_key[MATTER_ALIRO_VERIFICATION_KEY_LEN - 1u],
+		     0xF5L);
+
+		T_EQ("ClearCredential accepted",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
+				 sdk_clear_cred, sizeof(sdk_clear_cred), NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("removal asked for once", s_clear_cred_calls, 1);
+		T_EQ("of the same type", s_clear_cred_type,
+		     MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT);
+		T_EQ("and the same index", s_clear_cred_index, 9);
+
+		T_EQ("ClearUser accepted",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_USER,
+				 sdk_clear_user, sizeof(sdk_clear_user), NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("forwarded once", s_clear_user_calls, 1);
+		T_EQ("naming the same user", s_clear_user_index, 5);
 	}
 
 	t_group("resume brings Thread back without a commissioner");

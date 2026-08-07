@@ -1808,6 +1808,43 @@ Exit status: 0 = report produced, 2 = usage/input error.
 
 **depends on** [`tools/aliro_lab.py`](architecture/tools/aliro_lab.md)
 
+### [`tools/matter_cap_probe.py`](architecture/tools/matter_cap_probe.md)
+
+Add Aliro endpoint keys to a running lock until one is refused.
+
+  python3 tools/matter_cap_probe.py --dry-run            check the key generator
+  python3 tools/matter_cap_probe.py 1234-567-8901        walk into the ceiling
+  python3 tools/matter_cap_probe.py <code> --long-discriminator 1459
+  python3 tools/matter_cap_probe.py <code> --pre-clear 20 21
+
+The lock advertises `ALIRO_TRUST_MAX` endpoint keys and cannot necessarily
+persist that many. On the DWM3001CDK the settings partition is one 4096-byte
+NVS sector shared with the fabric and the Thread dataset, and garbage collection
+carries the OLD blob forward before the NEW one lands, so a write needs room for
+both at once. The ceiling that follows is not a constant: it moves as ordinary
+Matter traffic changes how much else is live in that sector. This measures where
+it is today, and puts the store back afterwards.
+
+Options: `--user` and `--index` pick the first slot pair to use, `--count` how
+many to try, `--base` the anchor count already in the store so the running total
+printed is the real one, `--pre-clear` removes credential indices a previous
+interrupted run left behind, `--storage` moves the controller's key store.
+
+Run `make monitor` alongside. The refusal the lock prints is the evidence:
+
+    E:   credential type 7 REFUSED (-28)
+
+-28 is -ENOSPC, and it is legible only because the provisioning paths propagate
+the store's errno instead of collapsing it to -1. Anything else -- -1 above all
+-- means the write was rejected for some other reason and says nothing about
+capacity.
+
+Like `matter_revoke_bench.py`, whose session and command helpers it borrows,
+this NEVER commissions: it opens PASE against an open commissioning window and
+invokes over that, consuming no fabric slot.
+
+**depends on** [`tools/matter_revoke_bench.py`](architecture/tools/matter_revoke_bench.md)
+
 ### [`tools/aliro_lab.py`](architecture/tools/aliro_lab.md)
 
 Aliro Lab: score a captured reader serial log.
@@ -1829,6 +1866,41 @@ internal notes in the check text), nothing else. Exit status: 0 = no failing
 check, 1 = at least one FAIL, 2 = usage/input error.
 
 **used by** [`tools/aliro_gait.py`](architecture/tools/aliro_gait.md)
+
+### [`tools/matter_revoke_bench.py`](architecture/tools/matter_revoke_bench.md)
+
+Drive ClearCredential and ClearUser at a running lock, over a PASE session.
+
+Revocation is the one part of the Matter surface no walk-up can exercise: the
+commands only ever arrive from an admin, and the only admin this lock has is
+Apple Home, which sends them when it feels like it. This sends them on demand.
+
+  python3 tools/matter_revoke_bench.py --dry-run          encode only, no board
+  python3 tools/matter_revoke_bench.py 1234-567-8901      both proofs
+  python3 tools/matter_revoke_bench.py <code> --only A    ClearCredential only
+  python3 tools/matter_revoke_bench.py <code> --only B    ClearUser only
+
+The code is what Apple Home shows under the accessory's "Turn On Pairing Mode"
+(11 digits; dashes optional). Options: --endpoint (default 1), --only, --index
+and --user pick the slots to use, --storage points the controller's key store
+somewhere other than beside this file.
+
+IT NEVER COMMISSIONS. A commissioning window is a PASE responder, so this opens
+a PASE session and invokes over that -- no AddNOC, no second fabric consumed,
+nothing to undo, and the window closes on its own timeout. That matters on a
+board with two fabric slots and one already spent on Apple.
+
+Needs the CHIP controller stack, which ships as wheels and needs no SDK build:
+
+  python3 -m venv /tmp/mctl
+  /tmp/mctl/bin/pip install home-assistant-chip-clusters home-assistant-chip-core
+  /tmp/mctl/bin/python tools/matter_revoke_bench.py --dry-run
+
+Run `make monitor` alongside: the lock logs "ALIRO CREDENTIAL ADDED" on the
+install and "ALIRO CLEAR ... REVOKED" on the removal, and those lines are the
+actual evidence. This script only proves the commands were accepted.
+
+**used by** [`tools/matter_cap_probe.py`](architecture/tools/matter_cap_probe.md)
 
 ### [`tools/presence_git.py`](architecture/tools/presence_git.md)
 

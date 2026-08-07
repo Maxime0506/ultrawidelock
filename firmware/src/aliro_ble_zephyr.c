@@ -815,6 +815,20 @@ static void presence_work_fn(struct k_work *w)
 }
 static K_WORK_DEFINE(s_presence_work, presence_work_fn);
 
+static void (*s_revoke_cb)(void);
+
+/**
+ * Deferred work callback that invokes the post-revocation link sweep if set.
+ */
+static void revoke_work_fn(struct k_work *w)
+{
+	ARG_UNUSED(w);
+	if (s_revoke_cb != NULL) {
+		s_revoke_cb();
+	}
+}
+static K_WORK_DEFINE(s_revoke_work, revoke_work_fn);
+
 /**
  * Queue a reader status callback with unsecured state to run asynchronously on the work queue.
  */
@@ -832,6 +846,15 @@ void aliro_ble_post_presence_reset(void (*cb)(void))
 {
 	s_presence_cb = cb;
 	k_work_submit(&s_presence_work);
+}
+
+/**
+ * Queue a post-revocation link sweep to run asynchronously on the work queue.
+ */
+void aliro_ble_post_revoke_sweep(void (*cb)(void))
+{
+	s_revoke_cb = cb;
+	k_work_submit(&s_revoke_work);
 }
 
 /* Attach mode exists only so the ESP32 reader can share a NimBLE host with

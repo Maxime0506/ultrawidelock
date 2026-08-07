@@ -848,6 +848,17 @@ extern int mfk_prov_identity_rc;
 extern int mfk_add_trust_calls;
 extern uint8_t mfk_add_trust_key[65];
 extern int mfk_add_trust_rc;
+/* The Matter indices an add was bound to, and what a revocation named. */
+extern uint8_t mfk_add_trust_type;
+extern uint16_t mfk_add_trust_index;
+extern uint16_t mfk_add_trust_user;
+extern int mfk_remove_trust_calls;
+extern uint8_t mfk_remove_trust_type;
+extern uint16_t mfk_remove_trust_index;
+extern int mfk_remove_trust_rc;
+extern int mfk_remove_user_calls;
+extern uint16_t mfk_remove_user_index;
+extern int mfk_remove_user_rc;
 extern int mfk_prov_clear_calls;
 extern int mfk_refresh_adv_calls;
 extern int mfk_ble_time_updated_calls;

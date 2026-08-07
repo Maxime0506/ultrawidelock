@@ -44,6 +44,7 @@
 #if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
 #include "woz_dfu_rx.h" /* the same gesture opens the update window */
 #endif
+#include "aliro_prov.h" /* ALIRO_TRUST_MAX, to hold the reported cap to the real one */
 #include "aliro_reader.h" /* aliro_reader_provision_identity, for SetAliroReaderConfig */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
@@ -1963,7 +1964,18 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * simply not an anchor. An empty store is the honest report of a reader no
  * phone can open yet, and it is what makes the next endpoint key visible.
  */
-static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65])
+/*
+ * The cluster reports NumberOfAliroEndpointKeysSupported from its own constant,
+ * because woz_matter must not include the reader's headers. This is where the
+ * two meet: a controller told it may install more endpoint keys than the trust
+ * store holds will have the surplus silently evicted, which is the failure that
+ * once locked a re-paired reader out for good.
+ */
+BUILD_ASSERT(MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED == ALIRO_TRUST_MAX,
+	     "reported endpoint-key cap must equal the trust store it describes");
+
+static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65],
+			       uint16_t credential_index, uint16_t user_index)
 {
 	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
 		LOG_INF("  ALIRO CREDENTIAL issuer key accepted, NOT an anchor (type %u)",
@@ -1971,14 +1983,72 @@ static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key
 		return 0;
 	}
 
-	int rc = aliro_reader_provision_add_trust(public_key);
+	int rc = aliro_reader_provision_add_trust(public_key, credential_type, credential_index,
+						  user_index);
 
 	if (rc < 0) {
 		LOG_ERR("  credential type %u REFUSED (%d)", (unsigned int)credential_type, rc);
 		return rc;
 	}
-	LOG_INF("  ALIRO CREDENTIAL %s (type %u)", rc == 1 ? "already present" : "ADDED",
-		(unsigned int)credential_type);
+	LOG_INF("  ALIRO CREDENTIAL %s (type %u, cred idx %u, user idx %u)",
+		rc == 1 ? "already present" : "ADDED", (unsigned int)credential_type,
+		(unsigned int)credential_index, (unsigned int)user_index);
+	return 0;
+}
+
+/**
+ * Matter ClearCredential: stop honouring one Aliro credential, or every one of them.
+ *
+ * An issuer key was never an anchor, so clearing one is already true and says so without touching
+ * the store. Everything else resolves through the credential index the SetCredential recorded.
+ * Returns 0 only when the removal is persisted, because the cluster turns anything else into a
+ * FAILURE the admin can act on.
+ */
+static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credential_index)
+{
+	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
+		LOG_INF("  ALIRO CLEAR issuer key: never an anchor, nothing to revoke");
+		return 0;
+	}
+	if (credential_index == MATTER_DL_INDEX_ALL) {
+		/* Type 0 here is the cluster's "every type", which is exactly what
+		 * remove_type takes: only the anchors the admin actually named go,
+		 * so clearing every evictable key leaves the non-evictable ones. */
+		int rc = aliro_reader_provision_remove_type(credential_type);
+
+		if (rc < 0) {
+			LOG_ERR("  ALIRO CLEAR type %u NOT PERSISTED",
+				(unsigned int)credential_type);
+			return -1;
+		}
+		LOG_WRN("  ALIRO CLEAR type %u revoked %d anchor(s)", (unsigned int)credential_type,
+			rc);
+		return 0;
+	}
+
+	int rc = aliro_reader_provision_remove_trust(credential_type, credential_index);
+
+	LOG_WRN("  ALIRO CLEAR credential type %u index %u -> %s", (unsigned int)credential_type,
+		(unsigned int)credential_index,
+		rc < 0 ? "NOT PERSISTED" : (rc == 1 ? "no such anchor" : "REVOKED"));
+	return rc < 0 ? -1 : 0;
+}
+
+/**
+ * Matter ClearUser: drop every Aliro credential bound to a user, or to all users.
+ *
+ * The user row itself is the cluster's to forget; this is only the trust store half. Returns 0 only
+ * when the removal is persisted.
+ */
+static int on_aliro_user_clear(uint16_t user_index)
+{
+	int rc = aliro_reader_provision_remove_user(user_index);
+
+	if (rc < 0) {
+		LOG_ERR("  ALIRO CLEAR user index %u NOT PERSISTED", (unsigned int)user_index);
+		return -1;
+	}
+	LOG_WRN("  ALIRO CLEAR user index %u revoked %d anchor(s)", (unsigned int)user_index, rc);
 	return 0;
 }
 
@@ -3103,6 +3173,8 @@ int matter_commission_init(void)
 
 	s_info.aliro_reader_config_cb = on_aliro_reader_config;
 	s_info.aliro_credential_cb = on_aliro_credential;
+	s_info.aliro_credential_clear_cb = on_aliro_credential_clear;
+	s_info.aliro_user_clear_cb = on_aliro_user_clear;
 
 	matter_clusters_init(&s_im, &s_info);
 	/* Without this the cluster still APPEARS in ServerList -- which is the

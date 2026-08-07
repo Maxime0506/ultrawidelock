@@ -518,8 +518,10 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		(void)matter_tlv_put_u64(w, tag, MATTER_ALIRO_BLE_ADV_VERSION);
 		return;
 	case MATTER_ATTR_DL_ALIRO_ISSUER_KEYS_MAX:
+		(void)matter_tlv_put_u64(w, tag, MATTER_ALIRO_ISSUER_KEYS_SUPPORTED);
+		return;
 	case MATTER_ATTR_DL_ALIRO_ENDPOINT_KEYS_MAX:
-		(void)matter_tlv_put_u64(w, tag, MATTER_ALIRO_KEYS_SUPPORTED);
+		(void)matter_tlv_put_u64(w, tag, MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED);
 		return;
 	default:
 		return;
@@ -1900,13 +1902,23 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
 		info->last_credential_status = MATTER_IM_STATUS_CONSTRAINT_ERROR;
 		return MATTER_IM_STATUS_SUCCESS;
 	}
-	if (info->aliro_credential_cb == NULL ||
-	    info->aliro_credential_cb((uint8_t)cred_type, data) < 0) {
-		return MATTER_IM_STATUS_SUCCESS; /* status stays FAILURE */
-	}
+	/*
+	 * Both indices are read BEFORE the store is told, because they are the
+	 * only handle a later ClearCredential or ClearUser has on this key --
+	 * neither command carries key bytes. An absent field stays 0, which the
+	 * store reads as "no Matter index" and refuses to match.
+	 */
+	uint64_t cred_index = 0u;
 
+	(void)field_struct_u64(inv, TAG_SETCRED_CREDENTIAL, TAG_CREDSTRUCT_INDEX, &cred_index);
 	if (field_u64(inv, TAG_SETCRED_USER_INDEX, &user_index)) {
 		info->last_user_index = (uint16_t)user_index;
+	}
+	if (info->aliro_credential_cb == NULL ||
+	    info->aliro_credential_cb((uint8_t)cred_type, data, (uint16_t)cred_index,
+				      (uint16_t)user_index) < 0) {
+		info->last_user_index = 0u;      /* nothing was stored to attribute */
+		return MATTER_IM_STATUS_SUCCESS; /* status stays FAILURE */
 	}
 	info->last_credential_status = MATTER_IM_STATUS_SUCCESS;
 	return MATTER_IM_STATUS_SUCCESS;
@@ -1966,6 +1978,90 @@ static uint8_t set_aliro_reader_config(struct matter_device_info *info,
 	return MATTER_IM_STATUS_SUCCESS;
 }
 
+/**
+ * ClearCredential (0x0026): stop honouring one Aliro credential, every credential of one type, or
+ * every credential there is.
+ *
+ * The command names its target by (type, index) and never by key, so this is only answerable
+ * because SetCredential recorded the index the key was installed under. An absent or null
+ * Credential field means all types (door-lock-server.cpp:1021-1025); index 0xFFFE means all of the
+ * named type (:1040-1044).
+ *
+ * FAILURE rather than SUCCESS whenever the port could not make the removal stick. An admin who is
+ * told a key was removed stops looking, so a removal that would come back on the next boot must not
+ * be reported as done. "Nothing carried that index" is NOT such a case: the named credential is not
+ * trusted either way, and the reference server answers a clear of an unoccupied slot with success
+ * too (:3025-3029).
+ */
+static uint8_t clear_credential(struct matter_device_info *info, const struct matter_im_invoke *inv)
+{
+	uint64_t cred_type = 0u;
+	uint64_t cred_index = 0u;
+
+	if (info->aliro_credential_clear_cb == NULL) {
+		return MATTER_IM_STATUS_FAILURE;
+	}
+	if (!field_struct_u64(inv, TAG_CLEARCRED_CREDENTIAL, TAG_CREDSTRUCT_TYPE, &cred_type)) {
+		/* Null or absent: every credential of every type. Type 0 is not a
+		 * credential type, which is what makes it usable as that flag. */
+		return info->aliro_credential_clear_cb(0u, MATTER_DL_INDEX_ALL) == 0
+			       ? MATTER_IM_STATUS_SUCCESS
+			       : MATTER_IM_STATUS_FAILURE;
+	}
+	if (cred_type != MATTER_DL_CRED_ALIRO_ISSUER_KEY &&
+	    cred_type != MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT &&
+	    cred_type != MATTER_DL_CRED_ALIRO_ENDPOINT_KEY) {
+		/* Same answer SetCredential gives for a type this node never
+		 * claimed: it cannot be holding one to clear. */
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+	if (!field_struct_u64(inv, TAG_CLEARCRED_CREDENTIAL, TAG_CREDSTRUCT_INDEX, &cred_index) ||
+	    cred_index == 0u || cred_index > 0xFFFFu) {
+		/* Indices are 1-based, so 0 is not a slot this lock could hold. */
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+	return info->aliro_credential_clear_cb((uint8_t)cred_type, (uint16_t)cred_index) == 0
+		       ? MATTER_IM_STATUS_SUCCESS
+		       : MATTER_IM_STATUS_FAILURE;
+}
+
+/**
+ * ClearUser (0x001D): forget a user slot and every credential bound to it.
+ *
+ * Answered because a controller may remove a person without ever naming their credentials -- the
+ * reference server clears a user's credentials as part of clearing the user
+ * (door-lock-server.cpp:2109-2135). A node that dropped the user row and kept the credential would
+ * report an empty slot while still opening for the phone in it.
+ *
+ * The row is cleared before the port is called and stays cleared even when the port reports a
+ * failure, because the failure means "not persisted", not "still trusted": the credential is
+ * already untrusted in RAM by then, and a user row that outlived it would be the lie.
+ *
+ * A port that registered no hook is the other way round, which is why the check comes first: no
+ * removal was attempted, the credential is still trusted, and emptying the row would leave the
+ * controller reading an empty slot whose key still opens the door. ClearCredential refuses the
+ * same way.
+ */
+static uint8_t clear_user(struct matter_device_info *info, const struct matter_im_invoke *inv)
+{
+	uint64_t idx = 0u;
+
+	if (!field_u64(inv, TAG_CLEARUSER_INDEX, &idx) || idx == 0u ||
+	    (idx > MATTER_DL_USERS_MAX && idx != MATTER_DL_INDEX_ALL)) {
+		return MATTER_IM_STATUS_INVALID_COMMAND;
+	}
+	if (info->aliro_user_clear_cb == NULL) {
+		return MATTER_IM_STATUS_FAILURE;
+	}
+	if (idx == MATTER_DL_INDEX_ALL) {
+		memset(info->users, 0, sizeof(info->users));
+	} else {
+		memset(&info->users[idx - 1u], 0, sizeof(info->users[0]));
+	}
+	return info->aliro_user_clear_cb((uint16_t)idx) == 0 ? MATTER_IM_STATUS_SUCCESS
+							     : MATTER_IM_STATUS_FAILURE;
+}
+
 static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *response_command)
 {
 	struct matter_device_info *info = (struct matter_device_info *)ctx;
@@ -2011,6 +2107,12 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		}
 		if (inv->command == MATTER_CMD_DL_SET_CREDENTIAL) {
 			return set_credential(info, inv, response_command);
+		}
+		if (inv->command == MATTER_CMD_DL_CLEAR_CREDENTIAL) {
+			return clear_credential(info, inv);
+		}
+		if (inv->command == MATTER_CMD_DL_CLEAR_USER) {
+			return clear_user(info, inv);
 		}
 		if (inv->command == MATTER_CMD_DL_SET_USER) {
 			/*

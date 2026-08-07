@@ -75,9 +75,10 @@ int main(void)
 	okc("trust.count2", ts.count == 2);
 
 	okc("ser.ok", aliro_prov_serialize(&id, &ts, blob, sizeof(blob), &n) == 0);
+	/* v4 adds a 5-byte (type, credential index, user index) binding per anchor. */
 	okc("ser.len", n == ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN +
 			   ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN + 1u +
-			   2u * ALIRO_CRED_PUB_LEN + 1u + 2u * ALIRO_KPERSISTENT_LEN);
+			   2u * ALIRO_CRED_PUB_LEN + 1u + 2u * ALIRO_KPERSISTENT_LEN + 2u * 5u);
 	okc("ser.magic", blob[0] == 'A' && blob[1] == 'P' && blob[2] == 'R' &&
 			 blob[3] == 'V');
 
@@ -118,7 +119,7 @@ int main(void)
 	okc("de.badmagic", aliro_prov_deserialize(bad, n, &id2, &ts2) == -1);
 
 	memcpy(bad, blob, n);
-	bad[4] = 0xFF; /* unknown version (0x01..0x03 are valid) */
+	bad[4] = 0xFF; /* unknown version (0x01..0x04 are valid) */
 	okc("de.badver", aliro_prov_deserialize(bad, n, &id2, &ts2) == -1);
 
 	memcpy(bad, blob, n);
@@ -158,13 +159,24 @@ int main(void)
 	okc("kp.de-unset-zero",
 	    memcmp(ts2.kpersistent[0], zeros, ALIRO_KPERSISTENT_LEN) == 0);
 
-	/* a v2 blob (no kpersistent tail) still parses, with no Kpersistent */
+	/* a v2 blob (no kpersistent tail, no index tail) still parses, with no
+	 * Kpersistent -- the two tails are dropped from the v4 blob's length */
 	memcpy(bad, blob, n);
 	bad[4] = 0x02; /* ALIRO_PROV_VERSION_2 */
 	okc("kp.v2-compat",
-	    aliro_prov_deserialize(bad, n - 1u - 2u * ALIRO_KPERSISTENT_LEN, &id2, &ts2) == 0);
+	    aliro_prov_deserialize(bad, n - 1u - 2u * ALIRO_KPERSISTENT_LEN - 2u * 5u, &id2,
+				   &ts2) == 0);
 	okc("kp.v2-no-kp", ts2.kp_valid == 0 && ts2.count == 2 &&
 				   memcmp(ts2.cred_pub[1], k1, ALIRO_CRED_PUB_LEN) == 0);
+
+	/* a v3 blob (kpersistent tail, no index tail): what every board
+	 * provisioned before revocation is carrying */
+	memcpy(bad, blob, n);
+	bad[4] = 0x03; /* ALIRO_PROV_VERSION_3 */
+	okc("kp.v3-compat", aliro_prov_deserialize(bad, n - 2u * 5u, &id2, &ts2) == 0);
+	okc("kp.v3-keeps-kp", ts2.kp_valid == 0x02 && ts2.count == 2);
+	okc("kp.v3-no-index", ts2.cred_index[0] == ALIRO_CRED_INDEX_NONE &&
+				      ts2.cred_index[1] == ALIRO_CRED_INDEX_NONE);
 
 	/* trust_add must not inherit a stale bit for the slot it fills */
 	memset(&ts, 0, sizeof(ts));

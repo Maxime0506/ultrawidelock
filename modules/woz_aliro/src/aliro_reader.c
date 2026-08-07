@@ -1685,13 +1685,16 @@ static void on_disconnected(uint16_t conn_handle)
 	}
 	woz_mutex_unlock(&s_prov_lock);
 	if (kp_dirty) {
-		if (aliro_prov_store(&id, &ts) == 0) {
+		int kp_rc = aliro_prov_store(&id, &ts);
+
+		if (kp_rc == 0) {
 			woz_mutex_lock(&s_prov_lock);
 			s_kp_dirty = false;
 			woz_mutex_unlock(&s_prov_lock);
 			LOG_INF("Kpersistent trust store persisted");
 		} else {
-			LOG_WRN("Kpersistent persist failed; will retry on next disconnect");
+			LOG_WRN("Kpersistent persist failed (%d); will retry on next disconnect",
+				kp_rc);
 		}
 	}
 }
@@ -1920,7 +1923,11 @@ void aliro_reader_prov_print(void)
 		for (unsigned j = 0; j < ALIRO_CRED_PUB_LEN; j++) {
 			printf("%02x", ts.cred_pub[i][j]);
 		}
-		printf(" kpersistent=%s\n", ((ts.kp_valid >> i) & 1u) ? "yes" : "no");
+		/* cred/user are what a Matter ClearCredential or ClearUser names
+		 * this anchor by; 0 means nothing can name it. */
+		printf(" kpersistent=%s cred=%u user=%u\n",
+		       ((ts.kp_valid >> i) & 1u) ? "yes" : "no", (unsigned)ts.cred_index[i],
+		       (unsigned)ts.user_index[i]);
 	}
 	printf("last cred : ");
 	if (have) {
@@ -1931,6 +1938,75 @@ void aliro_reader_prov_print(void)
 	} else {
 		printf("(none presented yet)\n");
 	}
+}
+
+/* ---- revocation aftermath ------------------------------------------------ *
+ * Dropping an anchor is not the whole job. An established session keeps ranging
+ * under a URSK derived long before the removal and never revisits the trust
+ * store, so the door keeps opening until its link ends; and two module latches
+ * still name the key that just lost its trust. */
+
+/**
+ * Terminate every live Aliro link. Runs on the BLE-host task, which owns the session table.
+ */
+static void revoke_sweep_on_host(void)
+{
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active) {
+			LOG_WRN("[conn %u] link dropped: a credential was revoked",
+				s_sessions[i].conn_handle);
+			(void)aliro_ble_disconnect(s_sessions[i].conn_handle);
+		}
+	}
+}
+
+/**
+ * Forget a revoked credential everywhere outside the trust store: the attribution latch that names
+ * who unlocked, the bench re-add latch that would put it straight back, and any link still ranging
+ * on it. Pass NULL when more than one key went, which clears both latches unconditionally.
+ * Call without s_prov_lock held.
+ */
+static void revoke_aftermath(const uint8_t *removed_pub)
+{
+	woz_mutex_lock(&s_prov_lock);
+	if (s_have_auth_cred && (removed_pub == NULL ||
+				 memcmp(s_auth_cred_pub, removed_pub, ALIRO_CRED_PUB_LEN) == 0)) {
+		memset(s_auth_cred_pub, 0, ALIRO_CRED_PUB_LEN);
+		s_have_auth_cred = false;
+	}
+	if (s_have_last_cred && (removed_pub == NULL ||
+				 memcmp(s_last_cred_pub, removed_pub, ALIRO_CRED_PUB_LEN) == 0)) {
+		memset(s_last_cred_pub, 0, ALIRO_CRED_PUB_LEN);
+		s_have_last_cred = false;
+	}
+	woz_mutex_unlock(&s_prov_lock);
+	aliro_ble_post_revoke_sweep(revoke_sweep_on_host);
+}
+
+/**
+ * Persist a store a removal has ALREADY applied in RAM.
+ *
+ * The opposite order to the add path, deliberately. An add that cannot be persisted must not be
+ * trusted, so it writes first and commits second. A removal that cannot be persisted must still
+ * stop opening the door, so it commits first and reports the failure afterwards; the store is left
+ * dirty and the next disconnect retries the write through the path the Kpersistent flush already
+ * uses. Returns 0 when the removal is live and persisted, -1 when it is live but unpersisted --
+ * never 0 for an unpersisted removal, because a Matter admin is told what this returns.
+ */
+static int persist_removal(const struct aliro_reader_identity *id,
+			   const struct aliro_trust_store *ts)
+{
+	int rc = aliro_prov_store(id, ts);
+
+	if (rc == 0) {
+		return 0;
+	}
+	woz_mutex_lock(&s_prov_lock);
+	s_kp_dirty = true;
+	woz_mutex_unlock(&s_prov_lock);
+	LOG_ERR("revocation applied in RAM but NOT persisted (%d); retrying on next disconnect",
+		rc);
+	return rc;
 }
 
 // Add the most recently presented credential's public key to the trust store and persist it.
@@ -1967,8 +2043,10 @@ int aliro_reader_trust_last(void)
 		 * its old comment said it did. */
 		return -1;
 	}
-	if (aliro_prov_store(&s_id, &cand) != 0) {
-		return -1; /* not committed; s_trust unchanged */
+	int store_rc = aliro_prov_store(&s_id, &cand);
+
+	if (store_rc != 0) {
+		return store_rc; /* not committed; s_trust unchanged */
 	}
 	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
@@ -1977,8 +2055,10 @@ int aliro_reader_trust_last(void)
 }
 
 // Empty the trust store and persist the empty store, keeping the reader identity.
-// Returns 1 if the store was already empty (nothing persisted), -1 if the NVS write fails
-// (in-memory trust store left unchanged), 0 if cleared and committed.
+// Returns 1 if the store was already empty (nothing persisted), 0 if cleared and persisted,
+// or the store's negative errno if the NVS write failed -- in which case the store is still
+// empty in RAM, because a revocation that cannot be written must not keep opening the door
+// in the meantime.
 //
 // Every re-pair mints a fresh credential and nothing evicts the old ones, so the store
 // reaches ALIRO_TRUST_MAX and refuses the key currently being presented. A Matter factory
@@ -1987,23 +2067,26 @@ int aliro_reader_trust_clear(void)
 {
 	load_provisioning();
 
+	struct aliro_reader_identity id;
 	struct aliro_trust_store cand;
 
+	/* Emptied under the lock rather than off a snapshot: a snapshot-then-
+	 * commit would silently undo a SetCredential that landed in between, and
+	 * on this path that would put a just-revoked anchor back. */
 	woz_mutex_lock(&s_prov_lock);
+	if (s_trust.count == 0u) {
+		woz_mutex_unlock(&s_prov_lock);
+		return 1;
+	}
+	memset(&s_trust, 0, sizeof(s_trust));
+	id = s_id;
 	cand = s_trust;
 	woz_mutex_unlock(&s_prov_lock);
 
-	if (cand.count == 0) {
-		return 1;
-	}
-	memset(&cand, 0, sizeof(cand));
-	if (aliro_prov_store(&s_id, &cand) != 0) {
-		return -1; /* not committed; s_trust unchanged */
-	}
-	woz_mutex_lock(&s_prov_lock);
-	s_trust = cand;
-	woz_mutex_unlock(&s_prov_lock);
-	return 0;
+	int rc = persist_removal(&id, &cand);
+
+	revoke_aftermath(NULL);
+	return rc;
 }
 
 /* ---- Step-up (Access Document) bench control --------------------------- */
@@ -2061,9 +2144,9 @@ void aliro_reader_stepup_status(void)
 
 // Store a Matter-provisioned reader identity (reader ID, signing private key, GRK), keeping
 // any trust anchors already present, and persist it to NVS.
-// Returns -1 if the NVS write fails, in which case in-memory identity (s_id) is unchanged;
-// returns 0 on success, after which the reader group key salt is recomputed via
-// compute_reader_group_x since the signing key changed.
+// Returns the store's negative errno if the NVS write fails, in which case in-memory identity
+// (s_id) is unchanged; returns 0 on success, after which the reader group key salt is recomputed
+// via compute_reader_group_x since the signing key changed.
 int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN],
 				    const uint8_t sign_priv[ALIRO_READER_PRIV_LEN],
 				    const uint8_t grk[ALIRO_GRK_LEN])
@@ -2082,8 +2165,10 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	ts = s_trust; /* keep any anchors already added */
 	woz_mutex_unlock(&s_prov_lock);
 
-	if (aliro_prov_store(&id, &ts) != 0) {
-		return -1; /* not committed; s_id unchanged */
+	int store_rc = aliro_prov_store(&id, &ts);
+
+	if (store_rc != 0) {
+		return store_rc; /* not committed; s_id unchanged */
 	}
 	woz_mutex_lock(&s_prov_lock);
 	s_id = id;
@@ -2113,11 +2198,15 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	return 0;
 }
 
-// Add a Matter-provisioned credential public key to the reader's trust store and persist it.
-// Returns 0 if newly added and stored, 1 if the credential was already trusted (nothing
-// persisted), -1 if the store is full, cred_pub is not a valid P-256 point, or the NVS write
-// fails. On failure the in-memory trust store (s_trust) is left unchanged.
-int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
+// Add a Matter-provisioned credential public key to the reader's trust store, bind the Matter
+// credential/user indices it was installed under, and persist it.
+// Returns 0 if newly added and stored, 1 if the credential was already trusted (persisted only
+// when its indices changed), -1 if the store is full, cred_pub is not a valid P-256 point, or
+// the NVS write fails. On failure the in-memory trust store (s_trust) is left unchanged.
+// The indices are what ClearCredential and ClearUser later name the anchor by; pass
+// ALIRO_CRED_INDEX_NONE for either one the caller does not have.
+int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN], uint8_t cred_type,
+				     uint16_t cred_index, uint16_t user_index)
 {
 	load_provisioning();
 
@@ -2131,14 +2220,38 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 
 	int add = aliro_prov_trust_add(&cand, cred_pub);
 
-	if (add == 1) {
-		return 1; /* already trusted; nothing to persist */
-	}
 	if (add < 0) {
 		return -1; /* store full or not a P-256 point */
 	}
-	if (aliro_prov_store(&id, &cand) != 0) {
-		return -1; /* not committed; s_trust unchanged */
+
+	int slot = aliro_prov_trust_find(&cand, cred_pub);
+	bool rebind = slot >= 0 &&
+		      (cand.cred_type[slot] != cred_type || cand.cred_index[slot] != cred_index ||
+		       cand.user_index[slot] != user_index);
+
+	(void)aliro_prov_cred_bind_set(&cand, slot, cred_type, cred_index, user_index);
+	if (add == 1 && !rebind) {
+		return 1; /* already trusted under this index; nothing to persist */
+	}
+	if (add == 1) {
+		/* The key is old, its address is not. Apple re-installs a key it
+		 * already sent under a fresh credential index when a user is
+		 * re-added, and an anchor still carrying the previous index is
+		 * one ClearCredential can no longer find. */
+		int rebind_rc = aliro_prov_store(&id, &cand);
+
+		if (rebind_rc != 0) {
+			return rebind_rc;
+		}
+		woz_mutex_lock(&s_prov_lock);
+		s_trust = cand;
+		woz_mutex_unlock(&s_prov_lock);
+		return 1;
+	}
+	int store_rc = aliro_prov_store(&id, &cand);
+
+	if (store_rc != 0) {
+		return store_rc; /* not committed; s_trust unchanged */
 	}
 	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
@@ -2152,10 +2265,126 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 	return 0;
 }
 
+// Revoke the trust anchor a Matter admin installed as (cred_type, cred_index). Both halves
+// are matched, because a Matter credential index is scoped to its type.
+// Returns 1 when no anchor carries that pair (a removal that already happened, or a
+// pre-v4 anchor that never had one -- both are answered as success, since the credential
+// the admin named is not trusted either way), 0 when the anchor is gone and the store is
+// persisted, or the store's negative errno when it is gone from RAM but the write failed.
+int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store cand;
+	uint8_t removed[ALIRO_CRED_PUB_LEN];
+	int idx;
+
+	/* Found, removed and snapshotted in one critical section. The add path
+	 * mutates a snapshot and commits it later, which on a removal would let
+	 * a SetCredential that landed in between put the revoked anchor back. */
+	woz_mutex_lock(&s_prov_lock);
+	idx = aliro_prov_find_cred_index(&s_trust, cred_type, cred_index);
+	if (idx >= 0) {
+		memcpy(removed, s_trust.cred_pub[idx], ALIRO_CRED_PUB_LEN);
+		(void)aliro_prov_trust_remove_at(&s_trust, idx);
+		id = s_id;
+		cand = s_trust;
+	}
+	woz_mutex_unlock(&s_prov_lock);
+
+	if (idx < 0) {
+		return 1;
+	}
+
+	int rc = persist_removal(&id, &cand);
+
+	revoke_aftermath(removed);
+	LOG_INF("credential type %u index %u REVOKED (%u anchor(s) left)", (unsigned int)cred_type,
+		(unsigned int)cred_index, cand.count);
+	return rc;
+}
+
+// Revoke every trust anchor of one Matter credential type, or every anchor there is when
+// cred_type is 0. Backs ClearCredential's two wildcards: an index of 0xFFFE (all of that
+// type) and an absent Credential field (all types, including anchors a bench command added
+// -- those are not Matter credentials, but leaving them would leave the door open).
+// Returns the number of anchors removed (0 is success: there were none), or the store's
+// negative errno when they are gone from RAM but the write failed.
+int aliro_reader_provision_remove_type(uint8_t cred_type)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store cand;
+	int removed = 0;
+
+	woz_mutex_lock(&s_prov_lock);
+	/* Downwards, because removing slot i shifts every later slot into it. */
+	for (int i = (int)s_trust.count - 1; i >= 0; i--) {
+		if (cred_type == 0u || s_trust.cred_type[i] == cred_type) {
+			(void)aliro_prov_trust_remove_at(&s_trust, i);
+			removed++;
+		}
+	}
+	id = s_id;
+	cand = s_trust;
+	woz_mutex_unlock(&s_prov_lock);
+
+	if (removed == 0) {
+		return 0;
+	}
+
+	int rc = persist_removal(&id, &cand);
+
+	revoke_aftermath(NULL);
+	LOG_INF("credential type %u REVOKED %d anchor(s) (%u left)", (unsigned int)cred_type,
+		removed, cand.count);
+	return rc == 0 ? removed : rc;
+}
+
+// Revoke every trust anchor a Matter admin bound to user index user_index, or all of them
+// when user_index is ALIRO_USER_INDEX_ALL.
+// Returns the number of anchors removed (0 when the user held none, which is still success),
+// or the store's negative errno when they are gone from RAM but the write failed.
+int aliro_reader_provision_remove_user(uint16_t user_index)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store cand;
+	int removed = 0;
+
+	woz_mutex_lock(&s_prov_lock);
+	/* Downwards, because removing slot i shifts every later slot into it. */
+	for (int i = (int)s_trust.count - 1; i >= 0; i--) {
+		if (user_index == ALIRO_USER_INDEX_ALL || s_trust.user_index[i] == user_index) {
+			(void)aliro_prov_trust_remove_at(&s_trust, i);
+			removed++;
+		}
+	}
+	id = s_id;
+	cand = s_trust;
+	woz_mutex_unlock(&s_prov_lock);
+
+	if (removed == 0) {
+		return 0; /* the user held no anchor; nothing to write */
+	}
+
+	int rc = persist_removal(&id, &cand);
+
+	/* NULL: more than one key may have gone, so both latches go regardless. */
+	revoke_aftermath(NULL);
+	LOG_INF("user index %u REVOKED %d anchor(s) (%u left)", (unsigned int)user_index, removed,
+		cand.count);
+	return rc == 0 ? removed : rc;
+}
+
 // Revert the reader's provisioning to the default dev identity and empty trust store, and
 // persist that state to NVS.
-// Returns -1 if the NVS write fails, in which case in-memory state is unchanged; returns 0 on
-// success, after which the reader group key salt is recomputed via compute_reader_group_x.
+// Returns the store's negative errno if the NVS write fails, in which case in-memory state is
+// unchanged; returns 0 on success, after which the reader group key salt is recomputed via
+// compute_reader_group_x.
 int aliro_reader_provision_clear(void)
 {
 	load_provisioning();
@@ -2164,14 +2393,20 @@ int aliro_reader_provision_clear(void)
 	struct aliro_trust_store ts;
 
 	aliro_prov_dev_default(&id, &ts);
-	if (aliro_prov_store(&id, &ts) != 0) {
-		return -1;
+
+	int store_rc = aliro_prov_store(&id, &ts);
+
+	if (store_rc != 0) {
+		return store_rc;
 	}
 	woz_mutex_lock(&s_prov_lock);
 	s_id = id;
 	s_trust = ts;
 	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
+	/* The store just lost every anchor, so the same latches and links a
+	 * per-credential revocation drops have to go here too. */
+	revoke_aftermath(NULL);
 	LOG_INF("reader provisioning cleared (reverted to dev identity)");
 	return 0;
 }

@@ -710,12 +710,27 @@ Covered now by `d.start_adv_params` and `d.import_refreshes_adv` in
 
 ### Limits worth knowing before relying on it
 
-- The trust store holds **4** phone keys (`ALIRO_TRUST_MAX`) while the Matter
-  layer advertises 10. A fifth enrolled phone is accepted by Matter and silently
-  dropped by the reader.
-- Nothing revokes. `SetCredential` with `kAvailable` is deliberately not mirrored
-  into the trust store, so a phone removed in Apple Home still opens this board
-  until the store is cleared.
+- The trust store holds **6** phone keys (`ALIRO_TRUST_MAX`), and the Matter layer
+  now advertises the same 6 in `NumberOfAliroEndpointKeysSupported` rather than
+  10. A `BUILD_ASSERT` in `matter_commission.c` keeps the two equal, because a
+  controller told it may install more than the store holds has the surplus
+  silently evicted.
+- Revocation is implemented and **proven on hardware**, 2026-08-07. A second
+  Apple ID was invited to a real home; Apple installed a key for them
+  (`ALIRO CREDENTIAL ADDED (type 7, cred idx 1, user idx 1)`), that credential
+  opened the lock, and removing the person made Apple send `ClearUser` (0x001D)
+  with no prompting: `user index 1 REVOKED 1 anchor(s) (3 left)`. A `settings_-
+  storage` dump taken after a reset shows the anchor gone and the superseded
+  copy still carrying its `Kpersistent`, so the latch went with the key and the
+  removal survived the reboot. Both commands were also driven directly over PASE
+  with `tools/matter_revoke_bench.py`, including the idempotent repeat clear.
+  A removal that cannot be persisted stops opening the door anyway and reports
+  `FAILURE` rather than claiming success. **Still unobserved**: the live-link
+  sweep. No ranging session was up at the moment of any removal, so
+  `link dropped: a credential was revoked` is host-tested only.
+- An anchor installed by a build older than blob v4 carries no Matter credential
+  index, so `ClearCredential` cannot name it. Re-installing the key from the
+  controller binds an index and makes it revocable.
 - The clone and the original are the same reader. Leaving the ESP32-S3
   commissioned is therefore a feature, not a leftover: it stays the Matter face
   of the lock, so Apple can still rotate key material into it and you re-export
@@ -732,12 +747,13 @@ Against the stages in `internal/dwm3001cdk-reader-plan.md`:
 | 2 | On-target EC self-test against Oberon | **done** | `ECDH self-test: PASS (NIST CAVP P-256 CDH count 0)` at every boot |
 | 3 | DW3110 DEV_ID, live ranging | **done** | `0xdeca0302` at boot; ranging against an iPhone from 565 cm to 0 cm |
 | 4 | An initiator reaches ESTABLISHED | **done** | the iPhone itself, not the ESP32-S3 stand-in the stage named |
-| 5 | iPhone Wallet walk-up unlock | **done** | four in one session, 2026-08-02 |
-| 6 | >= 95% ranging success over 100 walk-ups | open | never run; the sample so far is single digits |
+| 5 | iPhone Wallet walk-up unlock | **done** | first four on 2026-08-02; 49 grants across nine RTT logs by 2026-08-07 |
+| 6 | >= 95% ranging success over 100 walk-ups | open | still never run: the 49 grants were logged while capturing ranging data, so attempts were never counted and no rate follows from them |
 
-Two results the plan's stages predate, both on hardware and both above:
-**Apple Home commissions this board** and shows a live lock tile, and
-**an update travels over Bluetooth** and lands byte for byte identical.
+Three results the plan's stages predate, all on hardware and all above:
+**Apple Home commissions this board** and shows a live lock tile,
+**an update travels over Bluetooth** and lands byte for byte identical, and
+**Apple Home revokes a key** and the lock stops trusting it.
 
 Stage 0's figure is the Matter image at this commit, not the 236,768 B /
 74,100 B the plan recorded: that was the reader alone, before the console, the

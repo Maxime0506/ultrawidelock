@@ -152,9 +152,11 @@ void aliro_reader_prov_print(void);
 int aliro_reader_trust_last(void);
 
 /** Empty the trust store and persist it, keeping the reader identity. Returns 0
- *  (cleared + saved), 1 (already empty), negative on an NVS error. Needed because
- *  nothing evicts superseded credentials and a Matter factory reset leaves this
- *  store intact, so it otherwise fills up and rejects the current credential. */
+ *  (cleared + saved), 1 (already empty), negative on an NVS error -- in which case
+ *  the store is still empty in RAM, because a revocation that cannot be written
+ *  must not go on opening the door. Also the ClearCredential "all credentials"
+ *  path. A Matter factory reset leaves this store intact, so this stays the way
+ *  out for a board whose anchors no admin can name. */
 int aliro_reader_trust_clear(void);
 
 /* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
@@ -173,9 +175,45 @@ int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t s
 				    const uint8_t grk[16]);
 
 /** Add a trusted credential public key (uncompressed P-256, 65 bytes) presented
- *  over Matter SetCredential and persist. Returns 0 (added), 1 (already
- *  present), negative (store full / not a P-256 point / NVS error). */
-int aliro_reader_provision_add_trust(const uint8_t cred_pub[65]);
+ *  over Matter SetCredential and persist. @p cred_type, @p cred_index and
+ *  @p user_index are the Door Lock identifiers it arrived under, and are the only
+ *  way ClearCredential and ClearUser can name it later; pass 0 /
+ *  ALIRO_CRED_INDEX_NONE for one the caller does not have, which leaves the
+ *  anchor unaddressable by that identifier. Returns 0 (added), 1 (already
+ *  present), -1 (not a P-256 point), or the store's own negative errno when the
+ *  write failed -- -ENOSPC when the settings partition cannot hold the blob,
+ *  which is the failure a full trust store actually produces on the CDK. */
+int aliro_reader_provision_add_trust(const uint8_t cred_pub[65], uint8_t cred_type,
+				     uint16_t cred_index, uint16_t user_index);
+
+/* ---- Revocation (Matter ClearCredential / ClearUser) -------------------- *
+ * The counterpart to the two calls above, and the reason the indices exist. Both
+ * FAIL CLOSED: the anchor is dropped from the live store first and persisted
+ * second, so a write that fails returns an error while the credential is already
+ * untrusted, and the next disconnect retries the write. Both also drop every
+ * live Aliro link, because an established session keeps ranging under a URSK
+ * derived before the removal and never re-checks the trust store. */
+
+/** Revoke the anchor installed as Door Lock (@p cred_type, @p cred_index). Both
+ *  halves are matched, because a Matter credential index is scoped to its type.
+ *  Returns 0 (revoked and persisted), 1 (no anchor carries that pair, so the
+ *  named credential is not trusted either way), or the store's negative errno
+ *  (revoked in RAM, not persisted). */
+int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index);
+
+/** Revoke every anchor of Door Lock credential type @p cred_type, or every anchor
+ *  there is when @p cred_type is 0 -- ClearCredential's two wildcards, an index
+ *  of 0xFFFE and an absent Credential field. Returns the number revoked (0 is
+ *  success: there were none), or the store's negative errno (revoked in RAM,
+ *  not persisted). */
+int aliro_reader_provision_remove_type(uint8_t cred_type);
+
+/** Revoke every anchor bound to Door Lock user index @p user_index, or all of
+ *  them for ALIRO_USER_INDEX_ALL (0xFFFE). User indices are 1-based; the caller
+ *  is responsible for rejecting 0. Returns the number revoked (0 is success:
+ *  that user held none), or the store's negative errno (revoked in RAM, not
+ *  persisted). */
+int aliro_reader_provision_remove_user(uint16_t user_index);
 
 /** Revert to the dev identity + empty trust store (Matter ClearAliroReaderConfig)
  *  and persist. Returns 0 on success, negative on an NVS error. */
