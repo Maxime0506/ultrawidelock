@@ -15,6 +15,8 @@ flowchart LR
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_aliro.src --> modules.woz_uwb.src.facade
   modules.woz_aliro_stack.src --> modules.woz_aliro_stack.src.protocol
+  modules.woz_anchor.src --> modules.woz_anchor.include
+  modules.woz_anchor.src --> modules.woz_port.include
   modules.woz_dfu.src --> modules.woz_dfu.include
   modules.woz_matter.src --> modules.woz_aliro.src
   modules.woz_matter.src --> modules.woz_matter.include
@@ -134,6 +136,119 @@ own codec by loopback.
 @file aliro_uwb_internal.h — private context types and shared helpers.
 
 **depends on** [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
+
+## `modules/woz_uwb/src/ccc/`
+
+### [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md)
+
+@file ccc_shim_rx.c — responder-RX CCC STS substitution: woz_uwb_arm_rx() programs the CCC STS
+on each RX-arm; target only.
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+
+### [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
+
+@file cherry_ccc_shim.c — cherry_ccc_* seam (Aliro responder) implemented over the lock-native
+FiRa MAC; maps each call onto woz_uwb_facade.
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_util.h`](architecture/modules.woz_uwb.src.facade/woz_util.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md)
+
+@file ccc_shim_wrap.c — per-frame STS interception: woz_uwb_set_sts_iv() substitutes the CCC STS
+for the FiRa MAC; target only.
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_session.c`](architecture/modules.woz_uwb.src.ccc/ccc_session.c.md)
+
+@file ccc_session.c — Aliro/CCC ranging seam implementation. See ccc_session.h.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_session.h`](architecture/modules.woz_uwb.src.ccc/ccc_session.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_mac.c`](architecture/modules.woz_uwb.src.ccc/ccc_mac.c.md)
+
+@file ccc_mac.c — UWB MAC: hopping sequence, SP0 frame codec, ranging schedule.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
+
+@file ccc_sts.c — DW3000 STS register load for the CCC ranging path.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim.c.md)
+
+@file ccc_shim.c — CCC STS substitution core (implementation).
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_mbedtls.c.md)
+
+@file ccc_crypto_mbedtls.c — AES-ECB block via mbedTLS, backing the CCC key schedule on SoCs
+without a PSA provider (e.g. ESP32-S3).
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_crypto_psa.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_psa.c.md)
+
+@file ccc_crypto_psa.c — On-target AES-ECB block (PSA/CC312) backing the CCC key schedule.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_kdf.c`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.c.md)
+
+@file ccc_kdf.c — UWB key schedule + SP0 Pre-POLL frame codec.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
+
+### [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md)
+
+@file aliro_round_config.h — one knob for the CCC ranging round's responder count.
+
+**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
+
+@file ccc_kdf.h
+@brief UWB ranging key schedule + SP0 frame crypto (CONFIG_WOZ_ALIRO).
+Turns the 32-byte URSK into the per-ranging-cycle keys the DW3000 STS engine
+and the SP0 frames consume, over a single AES block-encrypt primitive.
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_mbedtls.c.md), [`modules/woz_uwb/src/ccc/ccc_crypto_psa.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_psa.c.md), [`modules/woz_uwb/src/ccc/ccc_kdf.c`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.c.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md)
+
+@file ccc_mac.h — CCC UWB MAC layer: ranging-round scheduling, SP0 frame codec, DS-TWR.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/fira/ds_twr.h`](architecture/modules.woz_uwb.src.fira/ds_twr.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_mac.c`](architecture/modules.woz_uwb.src.ccc/ccc_mac.c.md), [`modules/woz_uwb/src/ccc/ccc_session.h`](architecture/modules.woz_uwb.src.ccc/ccc_session.h.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md)
+
+@file ccc_shim.h — map a per-frame STS index to the (dURSK, STS-V) pair the DW3000 STS engine
+loads.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+### [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md)
+
+@file aliro_kdf.h — UWB Ranging Secret Key (URSK) length.
+
+**used by** [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_session.h`](architecture/modules.woz_uwb.src.ccc/ccc_session.h.md)
+
+@file ccc_session.h — Aliro/CCC ranging seam: map an Aliro session's URSK + M1-M4 setup to
+ccc_ran_params.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_session.c`](architecture/modules.woz_uwb.src.ccc/ccc_session.c.md)
+
+### [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md)
+
+@file ccc_sts.h — load a CCC ranging PPDU's STS key + IV into the DW3000 STS engine.
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
 ## `modules/woz_aliro/src/`
 
@@ -333,119 +448,6 @@ calls.
 
 **used by** [`modules/woz_aliro/src/aliro_assert.c`](architecture/modules.woz_aliro.src/aliro_assert.c.md), [`modules/woz_aliro/src/aliro_crypto.c`](architecture/modules.woz_aliro.src/aliro_crypto.c.md), [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md), [`modules/woz_aliro/src/aliro_stepup.c`](architecture/modules.woz_aliro.src/aliro_stepup.c.md), [`modules/woz_matter/src/matter_case.c`](architecture/modules.woz_matter.src/matter_case.c.md), [`modules/woz_matter/src/matter_crypto.c`](architecture/modules.woz_matter.src/matter_crypto.c.md), [`modules/woz_matter/src/matter_fabric.c`](architecture/modules.woz_matter.src/matter_fabric.c.md), [`modules/woz_matter/src/matter_spake2p.c`](architecture/modules.woz_matter.src/matter_spake2p.c.md)
 
-## `modules/woz_uwb/src/ccc/`
-
-### [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md)
-
-@file ccc_shim_rx.c — responder-RX CCC STS substitution: woz_uwb_arm_rx() programs the CCC STS
-on each RX-arm; target only.
-
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
-
-### [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
-
-@file cherry_ccc_shim.c — cherry_ccc_* seam (Aliro responder) implemented over the lock-native
-FiRa MAC; maps each call onto woz_uwb_facade.
-
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_util.h`](architecture/modules.woz_uwb.src.facade/woz_util.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md)
-
-@file ccc_shim_wrap.c — per-frame STS interception: woz_uwb_set_sts_iv() substitutes the CCC STS
-for the FiRa MAC; target only.
-
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_session.c`](architecture/modules.woz_uwb.src.ccc/ccc_session.c.md)
-
-@file ccc_session.c — Aliro/CCC ranging seam implementation. See ccc_session.h.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_session.h`](architecture/modules.woz_uwb.src.ccc/ccc_session.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
-
-@file ccc_sts.c — DW3000 STS register load for the CCC ranging path.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_mac.c`](architecture/modules.woz_uwb.src.ccc/ccc_mac.c.md)
-
-@file ccc_mac.c — UWB MAC: hopping sequence, SP0 frame codec, ranging schedule.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim.c.md)
-
-@file ccc_shim.c — CCC STS substitution core (implementation).
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_mbedtls.c.md)
-
-@file ccc_crypto_mbedtls.c — AES-ECB block via mbedTLS, backing the CCC key schedule on SoCs
-without a PSA provider (e.g. ESP32-S3).
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_crypto_psa.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_psa.c.md)
-
-@file ccc_crypto_psa.c — On-target AES-ECB block (PSA/CC312) backing the CCC key schedule.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_kdf.c`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.c.md)
-
-@file ccc_kdf.c — UWB key schedule + SP0 Pre-POLL frame codec.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
-
-### [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md)
-
-@file aliro_round_config.h — one knob for the CCC ranging round's responder count.
-
-**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)
-
-@file ccc_kdf.h
-@brief UWB ranging key schedule + SP0 frame crypto (CONFIG_WOZ_ALIRO).
-Turns the 32-byte URSK into the per-ranging-cycle keys the DW3000 STS engine
-and the SP0 frames consume, over a single AES block-encrypt primitive.
-
-**used by** [`modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_mbedtls.c.md), [`modules/woz_uwb/src/ccc/ccc_crypto_psa.c`](architecture/modules.woz_uwb.src.ccc/ccc_crypto_psa.c.md), [`modules/woz_uwb/src/ccc/ccc_kdf.c`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.c.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md)
-
-@file ccc_mac.h — CCC UWB MAC layer: ranging-round scheduling, SP0 frame codec, DS-TWR.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_mac.c`](architecture/modules.woz_uwb.src.ccc/ccc_mac.c.md), [`modules/woz_uwb/src/ccc/ccc_session.h`](architecture/modules.woz_uwb.src.ccc/ccc_session.h.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md)
-
-@file ccc_shim.h — map a per-frame STS index to the (dURSK, STS-V) pair the DW3000 STS engine
-loads.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
-
-### [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md)
-
-@file aliro_kdf.h — UWB Ranging Secret Key (URSK) length.
-
-**used by** [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_session.h`](architecture/modules.woz_uwb.src.ccc/ccc_session.h.md)
-
-@file ccc_session.h — Aliro/CCC ranging seam: map an Aliro session's URSK + M1-M4 setup to
-ccc_ran_params.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_session.c`](architecture/modules.woz_uwb.src.ccc/ccc_session.c.md)
-
-### [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md)
-
-@file ccc_sts.h — load a CCC ranging PPDU's STS key + IV into the DW3000 STS engine.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
-
 ## `tools/tui/src/`
 
 ### [`tools/tui/src/main.tsx`](architecture/tools.tui.src/main.tsx.md)
@@ -458,7 +460,7 @@ ccc_ran_params.
 
 ### [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
 
-**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/presence_git.py`](architecture/tools/presence_git.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
+**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](architecture/integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](architecture/integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/anchor_c2.py`](architecture/tools/anchor_c2.md), [`tools/presence_git.py`](architecture/tools/presence_git.md), [`tools/tui/src/app.tsx`](architecture/tools.tui.src/app.tsx.md), [`tools/tui/src/targets.ts`](architecture/tools.tui.src/targets.ts.md)
 
 ### [`tools/tui/src/devices.ts`](architecture/tools.tui.src/devices.ts.md)
 
@@ -912,13 +914,6 @@ qrtc_get_us returns monotonic microseconds since boot.
 
 **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
 
-### [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
-
-Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
-engine is bound and unbound via internal ursk and stop calls.
-
-**used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
-
 ### [`modules/woz_uwb/src/facade/flight_recorder.h`](architecture/modules.woz_uwb.src.facade/flight_recorder.h.md)
 
 @file flight_recorder.h
@@ -940,6 +935,13 @@ Byte-order utilities: read/write 16-bit and 32-bit integers in little-endian or 
 @file woz_diag.h — DIAGK(): gate for verbose UWB bring-up diagnostics.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
+
+### [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
+
+Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
+engine is bound and unbound via internal ursk and stop calls.
+
+**used by** [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
 
 ### [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
 
@@ -1304,11 +1306,23 @@ transport_pn532.cpp.
 
 **depends on** [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
+### [`modules/woz_uwb/src/fira/ds_twr.c`](architecture/modules.woz_uwb.src.fira/ds_twr.c.md)
+
+*No module docstring. First commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers".*
+
+**depends on** [`modules/woz_uwb/src/fira/ds_twr.h`](architecture/modules.woz_uwb.src.fira/ds_twr.h.md)
+
 ### [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 @file fira_session.h — Range + URSK store for the CCC Pre-POLL responder.
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+### [`modules/woz_uwb/src/fira/ds_twr.h`](architecture/modules.woz_uwb.src.fira/ds_twr.h.md)
+
+*No module docstring. First commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers".*
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/fira/ds_twr.c`](architecture/modules.woz_uwb.src.fira/ds_twr.c.md)
 
 ### [`modules/woz_uwb/src/fira/fira_device_config.h`](architecture/modules.woz_uwb.src.fira/fira_device_config.h.md)
 
@@ -1485,6 +1499,44 @@ Minimal strict BER/DER-TLV reader for Aliro APDU payloads.
 
 **used by** [`modules/woz_aliro_stack/src/protocol/ble_message.c`](architecture/modules.woz_aliro_stack.src.protocol/ble_message.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_auth.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_auth.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_select.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_select.c.md), [`modules/woz_aliro_stack/src/protocol/nfc_step_up.c`](architecture/modules.woz_aliro_stack.src.protocol/nfc_step_up.c.md), [`modules/woz_aliro_stack/src/protocol/tlv.c`](architecture/modules.woz_aliro_stack.src.protocol/tlv.c.md)
 
+## `modules/woz_anchor/src/`
+
+### [`modules/woz_anchor/src/woz_satellite.c`](architecture/modules.woz_anchor.src/woz_satellite.c.md)
+
+*No module docstring. First commit: "firmware: gate UNLOCK_PREDICT on the second anchor's verdict".*
+
+**depends on** [`modules/woz_anchor/include/woz_satellite.h`](architecture/modules.woz_anchor.include/woz_satellite.h.md)
+
+### [`modules/woz_anchor/src/woz_slam_lis2dh12.c`](architecture/modules.woz_anchor.src/woz_slam_lis2dh12.c.md)
+
+*No module docstring. First commit: "woz_anchor: LIS2DH12 impact and tamper without a sensor thread".*
+
+**depends on** [`modules/woz_anchor/include/woz_slam_hw.h`](architecture/modules.woz_anchor.include/woz_slam_hw.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)
+
+### [`modules/woz_anchor/src/woz_door.c`](architecture/modules.woz_anchor.src/woz_door.c.md)
+
+*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
+
+**depends on** [`modules/woz_anchor/include/woz_door.h`](architecture/modules.woz_anchor.include/woz_door.h.md)
+
+### [`modules/woz_anchor/src/woz_fusion.c`](architecture/modules.woz_anchor.src/woz_fusion.c.md)
+
+*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
+
+**depends on** [`modules/woz_anchor/include/woz_fusion.h`](architecture/modules.woz_anchor.include/woz_fusion.h.md)
+
+### [`modules/woz_anchor/src/woz_report.c`](architecture/modules.woz_anchor.src/woz_report.c.md)
+
+*No module docstring. First commit: "woz_anchor: ARP1 range-report line codec and its host consumer".*
+
+**depends on** [`modules/woz_anchor/include/woz_report.h`](architecture/modules.woz_anchor.include/woz_report.h.md)
+
+### [`modules/woz_anchor/src/woz_slam.c`](architecture/modules.woz_anchor.src/woz_slam.c.md)
+
+*No module docstring. First commit: "woz_anchor: LIS2DH12 impact and tamper without a sensor thread".*
+
+**depends on** [`modules/woz_anchor/include/woz_slam.h`](architecture/modules.woz_anchor.include/woz_slam.h.md)
+
 ## `modules/woz_dfu/src/`
 
 ### [`modules/woz_dfu/src/dfu_receiver.c`](architecture/modules.woz_dfu.src/dfu_receiver.c.md)
@@ -1624,6 +1676,26 @@ treat what the SDK reports client-side as truth, and a username is a string
 another person chose. Nothing in this file ever reaches innerHTML.
 
 **used by** [`activity/src/discord-boot.ts`](architecture/activity.src/discord-boot.ts.md)
+
+## `anchor/src/`
+
+### [`anchor/src/anchor_twr.c`](architecture/anchor.src/anchor_twr.c.md)
+
+*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
+
+**depends on** [`anchor/src/anchor_twr.h`](architecture/anchor.src/anchor_twr.h.md)
+
+### [`anchor/src/main.c`](architecture/anchor.src/main.c.md)
+
+*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
+
+**depends on** [`anchor/src/anchor_twr.h`](architecture/anchor.src/anchor_twr.h.md)
+
+### [`anchor/src/anchor_twr.h`](architecture/anchor.src/anchor_twr.h.md)
+
+*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
+
+**used by** [`anchor/src/anchor_twr.c`](architecture/anchor.src/anchor_twr.c.md), [`anchor/src/main.c`](architecture/anchor.src/main.c.md)
 
 ## `integration/homeassistant/`
 
@@ -1807,6 +1879,35 @@ the range timestamps themselves, so no extra firmware logging is needed.
 Exit status: 0 = report produced, 2 = usage/input error.
 
 **depends on** [`tools/aliro_lab.py`](architecture/tools/aliro_lab.md)
+
+### [`tools/anchor_c2.py`](architecture/tools/anchor_c2.md)
+
+Anchor C2: read the satellite's ARP1 range-report lines and turn them into CSV.
+
+Usage: python3 tools/anchor_c2.py <serial-port> [--baud N] [--csv out.csv] [--quiet]
+       python3 tools/anchor_c2.py -            # read lines from stdin
+       python3 tools/anchor_c2.py <log-file>   # replay a captured console log
+
+Stage C2 of internal/two-anchor-plan.md. The satellite has a UART console the
+door node does not, so the cheapest possible two-anchor data stream is one line
+per accepted round, read here. No transport firmware, no mesh, no sockets.
+
+The line format is defined by modules/woz_anchor/include/woz_report.h and the
+CRC-16/CCITT-FALSE below is the same polynomial woz_report_crc16() implements.
+Lines that fail the CRC are counted and dropped, never repaired: a flipped digit
+that leaves a well-formed line is the exact case the checksum exists for.
+
+Everything that is not an ARP1 line is ignored, so pointing this at a live
+console full of Zephyr log output is the intended way to use it.
+
+Prints a summary on exit (Ctrl-C is a normal way to stop):
+
+  lines 4102  accepted 4038  crc-fail 2  malformed 0  gaps 12 (0.3%)
+
+`gaps` counts missing round sequence numbers, which is the loss measurement the
+plan's pass criterion is stated in.
+
+**depends on** [`tools/tui/src/serial.ts`](architecture/tools.tui.src/serial.ts.md)
 
 ### [`tools/matter_cap_probe.py`](architecture/tools/matter_cap_probe.md)
 
@@ -2600,7 +2701,7 @@ Exit status: 0 = parsed at least one walk-up, 2 = usage/input error.
 
 *No module docstring. First commit: "modules: promote the platform contract to modules/woz_port".*
 
-**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
+**used by** [`modules/woz_aliro/src/aliro_lat.c`](architecture/modules.woz_aliro.src/aliro_lat.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md), [`modules/woz_anchor/src/woz_slam_lis2dh12.c`](architecture/modules.woz_anchor.src/woz_slam_lis2dh12.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/flight_recorder.c`](architecture/modules.woz_uwb.src.facade/flight_recorder.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
 
 ### [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
@@ -3112,6 +3213,116 @@ device loss or exchange failure DestroySession(), both from the Aliro
 workqueue, matching the upstream RFAL transport's threading.
 
 **used by** [`modules/woz_nfc/src/transport_none.cpp`](architecture/modules.woz_nfc.src/transport_none.cpp.md), [`modules/woz_nfc/src/transport_pn532.cpp`](architecture/modules.woz_nfc.src/transport_pn532.cpp.md), [`modules/woz_nfc/src/transport_rfal.cpp`](architecture/modules.woz_nfc.src/transport_rfal.cpp.md)
+
+## `modules/woz_anchor/include/`
+
+### [`modules/woz_anchor/include/woz_satellite.h`](architecture/modules.woz_anchor.include/woz_satellite.h.md)
+
+@file woz_satellite.h — the freshness gate around a second anchor's report.
+woz_fusion.h answers "which side of the door is this phone on" given two
+distances measured at the same moment. This file is what makes that question
+safe to ask on a real door, where the second distance arrives over a link
+that can be slow, lossy or absent.
+Three rules, and they are all about what happens when the satellite is NOT
+there:
+1. A report older than `stale_ms` is not a report. Geometry from a stale
+distance is worse than no geometry, because it looks authoritative.
+2. No fresh report means UNKNOWN, and UNKNOWN PERMITS prediction. A satellite
+that has gone quiet must degrade to exactly today's behaviour, never to a
+door that will not open. The tree already argues this for the range gate:
+"A mis-tuned floor that refuses to open a door locks a human out of their
+house" (docs/range-integrity.md:50-53).
+3. Only a POSITIVE outside verdict, or a failed triangle test, withholds. Both
+are real evidence; absence is not. An unconfigured baseline counts as
+absence rather than as a failed test, so a misconfigured board degrades to
+today's behaviour instead of silently never predicting again.
+WHICH ANCHOR IS WHICH is a mounting fact, not a code fact, so it is a config
+field rather than an assumption. Getting it backwards inverts the verdict --
+it would predict for people outside and withhold from people inside, which is
+the exact opposite of the point. `self_is_inside` makes that a decision
+someone had to write down.
+
+**depends on** [`modules/woz_anchor/include/woz_fusion.h`](architecture/modules.woz_anchor.include/woz_fusion.h.md)  ·  **used by** [`modules/woz_anchor/src/woz_satellite.c`](architecture/modules.woz_anchor.src/woz_satellite.c.md)
+
+### [`modules/woz_anchor/include/woz_slam_hw.h`](architecture/modules.woz_anchor.include/woz_slam_hw.h.md)
+
+@file woz_slam_hw.h — LIS2DH12 transport for the impact latch (Zephyr only).
+Two functions, because that is the whole contract between a door-mounted
+accelerometer and the 250 ms loop: bring the chip up so it raises a pin on a
+hard knock, and let the loop ask whether the pin went high since last time.
+Everything that decides what a strike MEANS lives in woz_slam.h, which is
+pure integer logic and host-tested. This file is the part that cannot be.
+
+**used by** [`modules/woz_anchor/src/woz_slam_lis2dh12.c`](architecture/modules.woz_anchor.src/woz_slam_lis2dh12.c.md)
+
+### [`modules/woz_anchor/include/woz_door.h`](architecture/modules.woz_anchor.include/woz_door.h.md)
+
+*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
+
+**used by** [`modules/woz_anchor/src/woz_door.c`](architecture/modules.woz_anchor.src/woz_door.c.md)
+
+### [`modules/woz_anchor/include/woz_fusion.h`](architecture/modules.woz_anchor.include/woz_fusion.h.md)
+
+*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
+
+**used by** [`modules/woz_anchor/include/woz_satellite.h`](architecture/modules.woz_anchor.include/woz_satellite.h.md), [`modules/woz_anchor/src/woz_fusion.c`](architecture/modules.woz_anchor.src/woz_fusion.c.md)
+
+### [`modules/woz_anchor/include/woz_report.h`](architecture/modules.woz_anchor.include/woz_report.h.md)
+
+@file woz_report.h — one range report, as a line of ASCII.
+Stage C2 of internal/two-anchor-plan.md. The satellite already has a console
+the door node does not, so the cheapest possible two-anchor data stream is
+one line per accepted round, read by a host script. No transport firmware, no
+mesh, no sockets: a cable and a grep.
+The same struct is what a Stage C3 datagram would carry, so the fields are
+chosen for the binary format the plan specifies rather than for the text one.
+That is deliberate -- when the transport changes, only the codec changes.
+## The line
+ARP1 <anchor> <seq> <us_hi> <us_lo> <d_mm> <q> <trust> <flags> <drop> <acc> *<crc>
+Space-separated decimals, one trailing CRC-16/CCITT-FALSE in four uppercase
+hex digits, over every byte before the '*'. Terminated by '\n'.
+WHY A CHECKSUM ON A CABLE. A UART line that gets corrupted usually fails to
+parse and is discarded, which is harmless. The case worth defending against
+is the one that does not: a single flipped digit turns 1004 mm into 1904 mm
+and stays perfectly well-formed. This feeds a security decision, so a
+plausible wrong number is worse than an obvious broken one.
+WHY THE UPTIME IS TWO FIELDS. It is a 64-bit microsecond count, and printing
+one on an embedded target means depending on the C library having 64-bit
+integer conversion compiled in -- which is a Kconfig away from not being
+true, silently, at the point where the line becomes garbage. Splitting it
+into two 32-bit halves removes the dependency. For the same reason this file
+does its own decimal conversion and does not call snprintf at all.
+WHY THE ROUND SEQUENCE IS THE TIMEBASE. Both anchors take part in the same
+numbered DS-TWR round, so a shared exact index already exists and no clock
+needs synchronising. The uptime rides along only so drift can be measured,
+and a later step can decide whether it matters.
+
+**used by** [`modules/woz_anchor/src/woz_report.c`](architecture/modules.woz_anchor.src/woz_report.c.md)
+
+### [`modules/woz_anchor/include/woz_slam.h`](architecture/modules.woz_anchor.include/woz_slam.h.md)
+
+@file woz_slam.h — impact and tamper classification from a latched high-g pin.
+The LIS2DH12 on the DWM3001CDK can raise INT1 when acceleration crosses a
+threshold on any axis. That pin says exactly one thing: "something hit this
+door harder than the threshold". It does not say how hard, and it does not
+say what. Everything else is inferred here, from timing alone.
+WHY THERE IS NO SENSOR DEVICE INVOLVED. Zephyr's lis2dh driver is already
+linked into both shipping CDK images and is currently dead weight. Waking it
+up means picking a trigger mode, and both cost more than this door can pay:
+CONFIG_LIS2DH_TRIGGER_GLOBAL_THREAD puts an ISR bottom half on k_sys_work_q,
+which was measured at 3,568 B of its 4,096 B during a live unlock, and
+CONFIG_LIS2DH_TRIGGER_OWN_THREAD costs a 1,024 B stack. So the transport half
+(woz_slam_lis2dh12.c) writes the chip's registers directly and latches an
+atomic from a GPIO callback, and this half turns that latch into meaning from
+the 250 ms loop that already runs.
+WHAT THIS CANNOT DO, stated so nobody expects it. With no FIFO and no sample
+data there is no way to tell a slam from a hard knock by force -- only by
+PATTERN. One event is an impact; several inside a window is tamper. A single
+very hard knock reads as an impact, and that is correct: the door was struck.
+Integer arithmetic over caller-owned structs. No allocation, no threads, no
+platform dependency, so the host suite is the whole correctness story.
+
+**used by** [`modules/woz_anchor/src/woz_slam.c`](architecture/modules.woz_anchor.src/woz_slam.c.md)
 
 ## `modules/woz_dfu/include/`
 

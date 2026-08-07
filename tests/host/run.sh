@@ -19,9 +19,13 @@ fi
 # -w: the shim intentionally leaves some args unused, and the in-tree modules are
 # lint-gated by the real Zephyr build, not here. Errors still fail the build.
 # shellcheck disable=SC2086  # san_flags is a deliberate word-split flag list
+# -lm: test_woz_door.c derives its expected chord lengths with cos/sqrt rather
+# than restating the module's arithmetic. glibc keeps those in libm, so the link
+# fails on Linux without this; on macOS libSystem already has them and the flag
+# is a no-op, which is why this only ever breaks in CI.
 "${CC:-cc}" -std=c11 -O1 -w $san_flags "${DEFS[@]}" "${INCS[@]}" \
    "${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" \
-   -o "$OUT/host_test"
+   -lm -o "$OUT/host_test"
 # Quiet: suites assert, they don't need the UWB diag firehose on stdout (run
 # the binary directly, without WOZ_TEST_QUIET, to get it back).
 WOZ_TEST_QUIET=1 "$OUT/host_test"

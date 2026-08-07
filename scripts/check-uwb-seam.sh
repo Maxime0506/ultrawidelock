@@ -81,7 +81,8 @@ EXEMPT_RE=${EXEMPT_RE//$'\n'/}
 # excluded above rather than here so the exemption list reads as one thing.
 scan_paths() {
 	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' \
-		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'firmware/*.c' 'firmware/*.h'
+		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'firmware/*.c' 'firmware/*.h' \
+		'anchor/*.c' 'anchor/*.h'
 }
 
 # ---- scan -------------------------------------------------------------------

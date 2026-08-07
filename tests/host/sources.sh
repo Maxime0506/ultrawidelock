@@ -38,6 +38,7 @@ UNIT_SRCS=(
 	"$SRC/ccc/cherry_ccc_shim.c"
 	"$SRC/ccc/ccc_shim_rx.c"
 	"$SRC/ccc/ccc_shim_wrap.c"
+	"$SRC/fira/ds_twr.c"
 	"$SRC/fira/fira_session.c"
 	"$SRC/facade/woz_uwb_facade.c"
 	"$ROOT/modules/woz_aliro/src/aliro_rssi_gate.c"
@@ -62,6 +63,11 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_case.c"
 	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
+	"$ROOT/modules/woz_anchor/src/woz_door.c"
+	"$ROOT/modules/woz_anchor/src/woz_fusion.c"
+	"$ROOT/modules/woz_anchor/src/woz_report.c"
+	"$ROOT/modules/woz_anchor/src/woz_satellite.c"
+	"$ROOT/modules/woz_anchor/src/woz_slam.c"
 )
 
 TEST_SRCS=(
@@ -112,6 +118,11 @@ TEST_SRCS=(
 	"$HOST/test_twin.c"
 	"$HOST/test_rssi_gate.c"
 	"$HOST/test_approach.c"
+	"$HOST/test_woz_door.c"
+	"$HOST/test_woz_fusion.c"
+	"$HOST/test_woz_report.c"
+	"$HOST/test_woz_satellite.c"
+	"$HOST/test_woz_slam.c"
 	"$HOST/test_woz_logfmt.c"
 	"$HOST/test_trace.c"
 	"$HOST/trace_stub.c"
@@ -148,6 +159,7 @@ INCS=(
 	-I"$ROOT/modules/woz_aliro/include"
 	-I"$ROOT/modules/woz_aliro/src"
 	-I"$ROOT/modules/woz_matter/include"
+	-I"$ROOT/modules/woz_anchor/include"
 )
 
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.

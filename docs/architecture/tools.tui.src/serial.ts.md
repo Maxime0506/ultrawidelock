@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # `tools/tui/src/serial.ts`
 
-**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](../integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](../integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/presence_git.py`](../tools/presence_git.md), [`tools/tui/src/app.tsx`](app.tsx.md), [`tools/tui/src/targets.ts`](targets.ts.md)
+**used by** [`integration/homeassistant/aliro_mqtt_bridge.py`](../integration.homeassistant/aliro_mqtt_bridge.md), [`integration/homeassistant/src/openaliro_ha/serial_transport.py`](../integration.homeassistant.src.openaliro_ha/serial_transport.md), [`tools/anchor_c2.py`](../tools/anchor_c2.md), [`tools/presence_git.py`](../tools/presence_git.md), [`tools/tui/src/app.tsx`](app.tsx.md), [`tools/tui/src/targets.ts`](targets.ts.md)
 
 <details><summary>Undocumented (16)</summary>
 

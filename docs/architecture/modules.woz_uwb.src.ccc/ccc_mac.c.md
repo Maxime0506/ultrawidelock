@@ -169,20 +169,13 @@ are null.
 
 **calls** `ccc_hop_round_index`
 
-### `uint32_t ccc_ds_twr_tof(const struct ccc_ds_twr *t)`
+### `int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1, uint32_t t_round2, struct ds_twr *out)`
 `modules/woz_uwb/src/ccc/ccc_mac.c:327`
-
-@brief DS-TWR one-way time-of-flight in timestamp ticks.
-@param t DS-TWR intervals (round-trip and reply times at both ends).
-@return Time-of-flight in ticks, or 0 if the denominator is 0 or input is null.
-
-### `int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1, uint32_t t_round2, struct ccc_ds_twr *out)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:339`
 
 Assemble the DS-TWR intervals at the responder from a received Final_Data.
 
 ### `bool ccc_ursk_exhausted(const struct ccc_ran_params *p, uint32_t block)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:355`
+`modules/woz_uwb/src/ccc/ccc_mac.c:343`
 
 Whether the current URSK is exhausted for a ranging block (true once its highest STS index would
 exceed 2^31-1).

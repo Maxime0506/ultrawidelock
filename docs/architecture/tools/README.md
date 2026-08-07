@@ -7,6 +7,7 @@
 | [`tools/aliro_blob.py`](aliro_blob.md) | Inspect an aliro_prov ("APRV") reader-provisioning blob. |
 | [`tools/aliro_gait.py`](aliro_gait.md) | Aliro Gait: carry-motion features from Aliro Lab walk-up captures. |
 | [`tools/aliro_lab.py`](aliro_lab.md) | Aliro Lab: score a captured reader serial log. |
+| [`tools/anchor_c2.py`](anchor_c2.md) | Anchor C2: read the satellite's ARP1 range-report lines and turn them into CSV. |
 | [`tools/docs_3d.py`](docs_3d.md) | Render the whole code surface as a flyable 3D graph: site/graph3d.html. |
 | [`tools/docs_api.py`](docs_api.md) | Fill the reference pages the page generator leaves bare. |
 | [`tools/docs_apilinks.py`](docs_apilinks.md) | Point each narrative page at the declarations it is describing. |

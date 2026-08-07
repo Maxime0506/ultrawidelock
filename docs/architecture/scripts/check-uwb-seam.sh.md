@@ -54,7 +54,7 @@ excluded above rather than here so the exemption list reads as one thing.
 **called by** `scan`
 
 ### `scan()`
-`scripts/check-uwb-seam.sh:91`
+`scripts/check-uwb-seam.sh:92`
 
 Scan source files for calls to CCC seam symbols that bypass uwb_seam.h and report findings with
 their line numbers. Return 0 if no violations are found, 1 otherwise.
@@ -62,7 +62,7 @@ their line numbers. Return 0 if no violations are found, 1 otherwise.
 **calls** `scan_paths`, `seam_call_re`
 
 ### `check_helpers()`
-`scripts/check-uwb-seam.sh:119`
+`scripts/check-uwb-seam.sh:120`
 
 The seam is only worth enforcing if the helpers exist to be called. A rename
 that left the callers behind would otherwise pass by finding nothing.

@@ -20,7 +20,7 @@ static void mhr_codec(void)
 	struct ccc_mhr_fields in = {
 		.dest_short_addr = 0xbeefu,
 		.frame_counter = 0x11223344u,
-		.key_source = { 0x01, 0x02, 0x03, 0x04 },
+		.key_source = {0x01, 0x02, 0x03, 0x04},
 		.msg_id = CCC_MSG_ID_PRE_POLL,
 		.payload_len = CCC_PRE_POLL_LEN,
 	};
@@ -82,8 +82,8 @@ static void final_data_codec(void)
 	in.final_sts_index = 0x00abcdefu;
 	in.ranging_ts_final_tx = 0x00998877u;
 	in.num_responders = 2u;
-	in.responders[0] = (struct ccc_responder_ts){ 0u, 0x1000u, 3u, 1u };
-	in.responders[1] = (struct ccc_responder_ts){ 1u, 0x2000u, 4u, 0u };
+	in.responders[0] = (struct ccc_responder_ts){0u, 0x1000u, 3u, 1u};
+	in.responders[1] = (struct ccc_responder_ts){1u, 0x2000u, 4u, 0u};
 
 	t_group("Final_Data pack/parse round-trip");
 	T_EQ("fd.pack", ccc_final_data_pack(&in, buf, sizeof(buf), &len), 0);
@@ -93,8 +93,7 @@ static void final_data_codec(void)
 	T_EQ("fd.final_tx", out.ranging_ts_final_tx, in.ranging_ts_final_tx);
 	T_EQ("fd.nresp", out.num_responders, in.num_responders);
 	T_EQ("fd.r1.ts", out.responders[1].timestamp, in.responders[1].timestamp);
-	T_EQ("fd.r1.status", out.responders[1].ranging_status,
-	     in.responders[1].ranging_status);
+	T_EQ("fd.r1.status", out.responders[1].ranging_status, in.responders[1].ranging_status);
 
 	t_group("Final_Data errors");
 	T_EQ("fd.pack.null", ccc_final_data_pack(NULL, buf, sizeof(buf), &len), -EINVAL);
@@ -109,8 +108,12 @@ static void final_data_codec(void)
 static void schedule(void)
 {
 	struct ccc_ran_params none = {
-		.sts_index0 = 0x1000u, .n_slot_per_round = 6u, .n_round = 8u,
-		.n_responder = 2u, .hop_key_rw = 0u, .hop_mode = CCC_HOP_NONE,
+		.sts_index0 = 0x1000u,
+		.n_slot_per_round = 6u,
+		.n_round = 8u,
+		.n_responder = 2u,
+		.hop_key_rw = 0u,
+		.hop_mode = CCC_HOP_NONE,
 	};
 	struct ccc_ran_params cont = none;
 	cont.hop_key_rw = 0x12345678u;
@@ -121,8 +124,7 @@ static void schedule(void)
 	T_EQ("round.none", ccc_block_round(&none, 5u), 0);   /* no-hop stays 0 */
 	uint16_t r = ccc_block_round(&cont, 5u);
 	t_u16("round.cont", r, "0007");
-	t_u32("slot.response", ccc_slot_sts_index(&cont, 5u, r, CCC_SLOT_RESPONSE, 1u),
-	      "0000111d");
+	t_u32("slot.response", ccc_slot_sts_index(&cont, 5u, r, CCC_SLOT_RESPONSE, 1u), "0000111d");
 	/* Every slot role yields a distinct, ordered offset within a round. */
 	uint32_t pre = ccc_slot_sts_index(&none, 0u, 0u, CCC_SLOT_PRE_POLL, 0u);
 	uint32_t poll = ccc_slot_sts_index(&none, 0u, 0u, CCC_SLOT_POLL, 0u);
@@ -143,24 +145,43 @@ static void schedule(void)
 
 static void ds_twr(void)
 {
-	struct ccc_ds_twr t = {
-		.t_round1 = 0x00030000u, .t_reply1 = 0x00010000u,
-		.t_round2 = 0x00028000u, .t_reply2 = 0x00018000u,
+	struct ds_twr t = {
+		.t_round1 = 0x00030000u,
+		.t_reply1 = 0x00010000u,
+		.t_round2 = 0x00028000u,
+		.t_reply2 = 0x00018000u,
 	};
-	struct ccc_ds_twr zero = { 0u, 0u, 0u, 0u };
+	struct ds_twr zero = {0u, 0u, 0u, 0u};
 	struct ccc_final_data fd;
 
 	t_group("DS-TWR time-of-flight");
-	t_u32("tof", ccc_ds_twr_tof(&t), "0000c000");
-	T_EQ("tof.zero_den", ccc_ds_twr_tof(&zero), 0);
-	T_EQ("tof.null", ccc_ds_twr_tof(NULL), 0);
+	T_EQ("tof", ds_twr_tof_signed(&t), 0xc000);
+	T_EQ("tof.zero_den", ds_twr_tof_signed(&zero), 0);
+	T_EQ("tof.null", ds_twr_tof_signed(NULL), 0);
+
+	/*
+	 * THE REGRESSION THIS FUNCTION EXISTS FOR. At contact the round product is
+	 * SMALLER than the reply product, so the numerator is genuinely negative.
+	 * The estimator this replaced accumulated it in a uint64_t, which
+	 * underflowed to ~1.8e19 and turned a few centimetres into a kilometres-
+	 * wide garbage distance -- silently, and only within about a metre, which
+	 * is precisely where a door lock spends its time.
+	 */
+	struct ds_twr contact = {
+		.t_round1 = 0x00030000u,
+		.t_reply1 = 0x00030000u,
+		.t_round2 = 0x0002ff00u,
+		.t_reply2 = 0x00030000u,
+	};
+	T_OK("tof.contact.negative", ds_twr_tof_signed(&contact) < 0);
+	T_OK("tof.contact.small", ds_twr_tof_signed(&contact) > -1000);
 
 	t_group("responder DS-TWR assembly");
 	memset(&fd, 0, sizeof(fd));
 	fd.num_responders = 1u;
 	fd.ranging_ts_final_tx = 0x00050000u;
 	fd.responders[0].timestamp = 0x00030000u;
-	struct ccc_ds_twr out;
+	struct ds_twr out;
 	T_EQ("resp.ok", ccc_responder_ds_twr(&fd, 0u, 0x00010000u, 0x00028000u, &out), 0);
 	T_EQ("resp.round1", out.t_round1, fd.responders[0].timestamp);
 	T_EQ("resp.oob", ccc_responder_ds_twr(&fd, 5u, 0u, 0u, &out), -EINVAL);
@@ -170,8 +191,12 @@ static void ds_twr(void)
 static void ursk_lifetime(void)
 {
 	struct ccc_ran_params p = {
-		.sts_index0 = 0u, .n_slot_per_round = 6u, .n_round = 8u,
-		.n_responder = 2u, .hop_key_rw = 0u, .hop_mode = CCC_HOP_NONE,
+		.sts_index0 = 0u,
+		.n_slot_per_round = 6u,
+		.n_round = 8u,
+		.n_responder = 2u,
+		.hop_key_rw = 0u,
+		.hop_mode = CCC_HOP_NONE,
 	};
 	struct ccc_ran_params late = p;
 	late.sts_index0 = CCC_STS_INDEX_MAX - 10u; /* one more span overflows the cap */

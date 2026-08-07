@@ -19,6 +19,7 @@ Set on the command line, e.g. `make build RELEASE=1 SMP=1`:
 | `RELEASE=1` | trade the 8 KB RTT ring for 7,168 B of RAM, and set errors-only logging to save 20,568 B of flash. Codegen is identical either way |
 | `SMP=1` | add mcumgr over Bluetooth, which is what nRF Device Manager speaks. `make build SMP=1` is a valid debug configuration and leaves 12,764 B free. `RELEASE=1` remains the shipping configuration |
 | `DFU_LOG=1` | make the bootloader narrate what it does with a staged patch. Read it with MCUboot's own ELF, not the application's |
+| `ANCHOR=1` | add `firmware/overlay-anchor.conf`: the two-anchor inside/outside verdict gating `UNLOCK_PREDICT`, and the LIS2DH12 impact interrupt. Off by default, so the shipping image is unchanged. Every threshold in that file is a placeholder until a bench capture replaces it |
 | `CDK_BUILD=<dir>` | which build directory `flash`, `flash-erase` and `monitor` mean. Default `build/cdk-matter` |
 | `CDK_RTT_BUILD=<dir>` | point `monitor` at a different image without moving what the flash targets write |
 | `CDK_KEY=<path>` | the image-signing key for this build only. Must be absolute. Defaults to `SIGN_KEY`, which both Zephyr ports share; `make release` uses it to point one build at a production key |

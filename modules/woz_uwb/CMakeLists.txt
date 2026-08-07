@@ -10,7 +10,12 @@ if(CONFIG_WOZ_UWB)
   set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
   zephyr_library_named(woz_uwb)
-  zephyr_library_sources(${SRC}/driver/uwb_min.c)
+  # ds_twr.c sits at the BASE tier, not under the responder, because the
+  # anchor-to-anchor app (anchor/) ranges another board with no CCC engine in
+  # its image and needs the same estimator the Aliro responder uses.
+  zephyr_library_sources(
+    ${SRC}/driver/uwb_min.c
+    ${SRC}/fira/ds_twr.c)
 
   if(CONFIG_WOZ_UWB_RESPONDER)
     # The responder runs entirely on deps/dw3000 in ccc_shim_rx.c

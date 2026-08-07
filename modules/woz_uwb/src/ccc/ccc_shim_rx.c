@@ -593,7 +593,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 	{
 		// CCC DS-TWR (double-sided two-way ranging) message carrying poll/response/final
 		// timing and STS data.
-		struct ccc_ds_twr tw;
+		struct ds_twr tw;
 #if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 		/* ESP32 and single-core nRF (e.g. DWM3001CDK, CONFIG_WOZ_UWB_FINAL_SNAPSHOT):
 		 * the Final_Data lands only after the NEXT round's POLL/Response have
@@ -620,14 +620,13 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		}
 #endif
 		if (have_round && ccc_responder_ds_twr(&fd, 0u, t_reply1, t_round2, &tw) == 0) {
-			/* Signed ToF: near zero the numerator goes slightly negative (uint32 would
-			 * wrap), so compute it signed for bring-up. 1 tick ~ 15.65 ps, ~4.6917
-			 * mm/tick. */
-			int64_t num = (int64_t)((uint64_t)tw.t_round1 * tw.t_round2) -
-				      (int64_t)((uint64_t)tw.t_reply1 * tw.t_reply2);
-			int64_t den =
-				(int64_t)tw.t_round1 + tw.t_round2 + tw.t_reply1 + tw.t_reply2;
-			int32_t tof = (den != 0) ? (int32_t)(num / den) : 0;
+			/* Signed, because near zero the numerator goes slightly negative and
+			 * an unsigned divide would wrap it into a kilometre. This used to be
+			 * open-coded here to dodge exactly that in ccc_ds_twr_tof(); the
+			 * estimator now lives at the base tier and is signed, so the anchor
+			 * link and this path share one definition. 1 tick ~ 15.65 ps,
+			 * ~4.6917 mm/tick. */
+			int32_t tof = ds_twr_tof_signed(&tw);
 			int d_mm = (int)(((int64_t)tof * 4692) / 1000);
 #if defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 			g_dbg_dstwr_ok++;

@@ -16,8 +16,12 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 # LOG_MODULE the `module = WOZ_ALIRO` template declares, so CONFIG_WOZ_ALIRO_LOG_LEVEL
 # has to exist. Its CMakeLists is gated on CONFIG_WOZ_ALIRO_STACK, which stays n
 # here, so it contributes no sources and the nRF5340 build is unaffected.
+# modules/woz_anchor is listed on the same terms: its CMakeLists is gated on
+# CONFIG_WOZ_ANCHOR, which is default n, so listing it here costs the default
+# build nothing and only makes `overlay-anchor.conf` able to turn it on.
 list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_aliro"
+	"${REPO_ROOT}/modules/woz_anchor"
 	"${REPO_ROOT}/modules/woz_matter"
 	"${REPO_ROOT}/modules/woz_uwb"
 	"${REPO_ROOT}/deps/dw3000")

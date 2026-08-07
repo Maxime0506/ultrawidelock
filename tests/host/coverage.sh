@@ -44,8 +44,10 @@ cov_cc() {
 }
 
 # --- suite 1: the woz_uwb host KAT suite (same sources as run.sh) -----------
+# -lm for the same reason run.sh needs it: test_woz_door.c calls cos/sqrt, which
+# glibc keeps out of libc.
 cov_cc "${DEFS[@]}" "${INCS[@]}" \
-	"${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" -o "$BIN"
+	"${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" -lm -o "$BIN"
 LLVM_PROFILE_FILE="$OUT/host.profraw" "$BIN" >"$OUT/run.log" 2>&1 || true
 
 # --- suite 2..n: shared-core host KATs (mirror of ports/esp32/test/run.sh) --

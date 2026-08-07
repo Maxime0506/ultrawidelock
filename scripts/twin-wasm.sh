@@ -43,7 +43,7 @@ WOZ_UWB_SRCS=(
   "$SRC/aliro/aliro_uwb_msg_builder.c" "$SRC/aliro/aliro_uwb_msg_parser.c"
   "$SRC/aliro/aliro_uwb_adapter.c" "$SRC/aliro/aliro_uwb_msg.c"
   "$SRC/aliro/aliro_uwb_session.c"
-  "$SRC/fira/fira_session.c"
+  "$SRC/fira/ds_twr.c" "$SRC/fira/fira_session.c"
   "$SRC/facade/woz_uwb_facade.c"
 )
 # Radio + STS-register doubles the responder links against (the host shim, not

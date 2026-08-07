@@ -1,0 +1,194 @@
+# Anchor-to-anchor DS-TWR bench app. See internal/two-anchor-plan.md, stage A.
+
+mainmenu "openaliro anchor"
+
+choice
+	prompt "Anchor role"
+	default ANCHOR_ROLE_INITIATOR
+	help
+	  Which end of the DS-TWR round this board is. The pair needs exactly one
+	  of each; two initiators never hear a POLL and two responders never send
+	  one, and both failures present as a silent link.
+
+config ANCHOR_ROLE_INITIATOR
+	bool "Initiator (sends POLL, sets the cadence)"
+
+config ANCHOR_ROLE_RESPONDER
+	bool "Responder (replies, computes the distance)"
+
+endchoice
+
+config ANCHOR_REPLY_DELAY_US
+	int "Delayed-TX reply delay (us)"
+	default 3000
+	range 500 20000
+	help
+	  How long after a received frame's RMARKER the reply is scheduled. This
+	  is the number to raise first if `late` is ever non-zero in the ANCHOR
+	  report line, because a non-zero `late` means the chip found the
+	  programmed instant already past when it looked.
+
+	  3000 is not arbitrary. The engine's own arm-deadline history
+	  (modules/woz_uwb/src/ccc/ccc_shim_rx.c, CCC_RX_POLL_LEAD) records that a
+	  +1676 us deadline did NOT clear a settled dispatch latency of
+	  1433-1616 us, and that moving it to +1836 us turned 60-240 us of margin
+	  into 220-400 us. 3000 us leaves roughly 1.2 ms over the worst dispatch
+	  that history measured, on a link whose cadence nobody else negotiates.
+
+	  Lower it only with the `late` counter as evidence, never to make a
+	  number look better.
+
+config ANCHOR_ROUND_PERIOD_MS
+	int "Initiator round period (ms)"
+	default 100
+	range 20 10000
+	help
+	  Gap between POLLs. 100 ms is 10 Hz, which is the stage-A range-rate pass
+	  criterion. The responder has no equivalent setting: it waits, so the
+	  initiator alone sets the cadence for the pair.
+
+	  Deliberately NOT `depends on ANCHOR_ROLE_INITIATOR`. main() selects the
+	  role with IS_ENABLED(), which compiles both branches and discards one at
+	  link time, so the symbol has to exist in a responder build too. A
+	  `depends on` here builds the initiator and breaks the responder, which is
+	  a confusing way to learn how IS_ENABLED differs from #ifdef.
+
+config ANCHOR_ANT_DLY_DTU
+	int "Lumped antenna-delay calibration (DTU)"
+	default 4092
+	help
+	  Subtracted from the computed time-of-flight before it becomes a
+	  distance. Zero means uncalibrated; 4092 is the measured value for the
+	  DWM3001CDK + nRF5340DK/DWM3000EVB pair this repository ranges with, and
+	  it is only meaningful with CONFIG_ANCHOR_TX_512_ALIGN on. Nothing here
+	  programs the DW3000's own TX_ANTD / CIA_CONF registers.
+
+	  CALIBRATE THE ALIGNMENT BEFORE THE DELAY, NEVER THE OTHER WAY. Before
+	  the 512 DTU alignment the range was bimodal, 817 mm and 1120 mm at a
+	  true 1000, so any constant fitted then was fitted to a mixture and
+	  described neither mode. With the alignment on, 2,229 samples read a mean
+	  of 1003.3 mm and a median of 1004.0 -- a +3.3 mm residual. That residual
+	  is statistically real, its standard error being 0.4 mm, and physically
+	  irrelevant: it is 0.7 DTU, well under what a tape measure resolves.
+	  Fitting it would be calibrating to the ruler.
+
+	  Expect the first ~370 samples to read about 9 mm short of the rest. The
+	  run above opens at 996.4 mm and settles at ~1005 for its remaining five
+	  sixths, so a two-minute calibration will land low. Give it five.
+
+	  Applied in the app rather than pushed into those registers on purpose.
+	  A single distance measurement cannot separate the TX half from the RX
+	  half, so writing two registers would be inventing a split the
+	  measurement does not contain; one lumped constant in one visible place
+	  is the honest shape.
+
+	  IT IS A PER-PAIR CONSTANT, NOT A PER-BOARD ONE. Solving it at a known
+	  distance with two boards absorbs both ends at once. That is exactly
+	  right for a fixed anchor pair and wrong the moment a third board joins,
+	  which will need per-board constants and a different procedure.
+
+	  THE EXPECTED MAGNITUDE PRINTED HERE WAS WRONG AND WOULD HAVE REJECTED
+	  THE CORRECT ANSWER. It said to expect a value near 16,000 and to treat
+	  anything outside 8,000-32,000 as a fault to diagnose. The measured value
+	  is 4,092, which that band calls broken. ~16,000 DTU is the magnitude of
+	  the DW3000's own antenna-delay REGISTERS; this constant is a lumped
+	  correction applied to the one-way time-of-flight instead, and there is
+	  no reason for the two to be the same number. Trust a calibration against
+	  a tape measure over any figure quoted here, including this one.
+
+	  Calibration procedure is in internal/two-anchor-plan.md (stage A).
+
+config ANCHOR_MEDIAN_N
+	int "Median window for the published range (samples, must be odd)"
+	default 1
+	range 1 15
+	help
+	  DEFAULT 1, WHICH MEANS OFF. The filter is kept because the measurement
+	  that retired it is worth not repeating, not because it is useful.
+
+	  It was built for a diagnosis that turned out to be wrong. Stage A's
+	  first run saw eight stationary samples at a tape-measured 1.000 m read
+	  929, 975, 905, 929, 910, 619, 872, 600 mm, and read that as a sporadic
+	  minority mode a median could outvote. Seventy samples later the false
+	  mode was 37%, not 25%, and the median removed almost none of it: mean
+	  absolute error 149.1 mm raw against 129.1 mm filtered. A per-tap
+	  correction table did far better at 31.5 mm, and was also wrong, because
+	  both were treating a symptom.
+
+	  THE REAL DEFECT WAS THE DELAYED-TX TIMESTAMP. t5err, once it reported a
+	  minimum beside its maximum, read 16149..16405 -- a spread of exactly 256
+	  DTU in the difference between the predicted FINAL RMARKER and the one
+	  the chip produced. Through DS-TWR that is 64 DTU of time-of-flight and
+	  so 300.3 mm, against a measured 302 mm between the two range modes.
+	  CONFIG_ANCHOR_TX_512_ALIGN fixes it, and with it on the range is
+	  unimodal at 19.6 mm sd against 151.9 mm before, with 99.4% of 2,229
+	  samples within 60 mm of the median and none outside 924-1083. There is
+	  nothing left for a median to do.
+
+	  WHAT TO TAKE FROM THIS, if a future run looks bimodal again: a maximum
+	  cannot distinguish a constant from a spread, and the whole diagnosis
+	  turned on adding a minimum next to one. Two hypotheses were wrong first
+	  -- a sporadic half-chip slip, then first-path tap selection -- and both
+	  produced plausible correlations. The first-path index correlated with
+	  the range modes at r = -0.768, which looked like a mechanism and was a
+	  coincidence of both being functions of t4's fine timing; after the fix
+	  that correlation is +0.056 over 2,229 samples.
+
+	  N MUST BE ODD, enforced by a BUILD_ASSERT in anchor_twr.c. An even
+	  window has to combine its two middle samples, and against a bimodal
+	  population those two can be one from each mode, so their average falls
+	  in the gap between the modes -- the one value the measurement never
+	  takes. Costs N * 4 B of .bss and the same again of stack.
+
+config ANCHOR_LOG_EACH_RANGE
+	bool "Log every accepted range with its first-path index"
+	default y
+	help
+	  Print one line per accepted range: the published distance, the raw
+	  distance before the median, and ipatovFpIndex from the FINAL reception
+	  that produced it.
+
+	  THIS EXISTS TO TEST ONE THING. The 1 m bench run measured a bimodal
+	  range -- 817.2 mm at 62.9% and 1119.5 mm at 37.1%, separated by 302 mm.
+	  One DW3000 accumulator tap is 1 / 998.4 MHz = 1.0016 ns = 300.4 mm, so
+	  if the leading edge is latching on the adjacent tap the two modes must
+	  differ by exactly one tap in ipatovFpIndex. That is a sharp prediction
+	  and this is the cheapest way to check it.
+
+	  WHY PER-RANGE AND NOT THE PERIODIC LINE. The periodic report samples
+	  once per 20 s while the responder completes ~4.75 ranges per second, so
+	  a 20-minute run yielded 70 observations out of 7,208 ranges. Estimating
+	  a mode fraction from 1% of the population wastes the run.
+
+	  main.c warns that a per-round line is a print every few tens of
+	  milliseconds that the ranging path cannot absorb. That is the
+	  INITIATOR's cadence. This logs only on the RESPONDER, only for ranges
+	  that passed the plausibility check, at ~210 ms apart, and after the
+	  round has completed -- nothing is armed and no deadline is pending.
+	  Turn it off for any run that is measuring timing rather than geometry.
+
+config ANCHOR_TX_512_ALIGN
+	bool "Align delayed transmits to 512 DTU"
+	default y
+	help
+	  Clear the low bit of the delayed-TX register value, so every scheduled
+	  transmit lands on a 512 DTU boundary instead of a 256 DTU one.
+
+	  WHY. The 1 m bench run measured t5err=16149..16405 -- the difference
+	  between the predicted FINAL RMARKER and the one the chip reported spans
+	  exactly 256 DTU. Through DS-TWR that is 64 DTU of time-of-flight and so
+	  300.3 mm, against a measured 302 mm between the two range modes. The
+	  bimodal range is this, not a first-path detection failure.
+
+	  A two-valued 256 DTU error is the signature of hardware that ignores the
+	  low nine bits of system time while the code predicts to eight: the true
+	  instant is then ((dx & ~1) << 8), so the prediction is exact when dx is
+	  even and 256 DTU early when it is odd. Forcing dx even makes it exact.
+
+	  Costs 0 or 256 DTU off the reply delay, which is 4 ns against 3000 us.
+
+	  n restores the previous behaviour, which is what every measurement
+	  before this used. Keep it reachable: if the range stays bimodal with
+	  this on, the theory is wrong and the comparison is the evidence.
+
+source "Kconfig.zephyr"

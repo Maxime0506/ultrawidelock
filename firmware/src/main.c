@@ -30,6 +30,13 @@
 #endif
 #include "status_led.h"
 #include "woz_uwb_facade.h"
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR)
+#include "woz_satellite.h" /* second-anchor verdict; gates PREDICT only */
+#endif
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
+#include "woz_slam.h"
+#include "woz_slam_hw.h"
+#endif
 
 #if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
 /* src/dfu_ble_zephyr.c. One function, so it carries no header of its own. */
@@ -280,6 +287,38 @@ int main(void)
 	 * the phone. The standalone reader has to do the same or a perfectly good range never
 	 * becomes an unlock. There is no bolt on this board: the grant IS the product. */
 	struct aliro_approach approach;
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR)
+	/*
+	 * Second-anchor geometry. Nothing feeds this yet -- Stage C of
+	 * internal/two-anchor-plan.md owns the transport -- and that is a working
+	 * state rather than a gap: with no report the verdict is UNKNOWN, UNKNOWN
+	 * permits prediction, and the door behaves exactly as it does today.
+	 */
+	static struct woz_satellite satellite;
+	const struct woz_fusion_cfg fusion_cfg = {
+		.baseline_mm = CONFIG_WOZ_ANCHOR_BASELINE_MM,
+		.tol_mm = CONFIG_WOZ_ANCHOR_TOL_MM,
+		.deadband_mm = CONFIG_WOZ_ANCHOR_DEADBAND_MM,
+	};
+
+	woz_satellite_init(&satellite, &fusion_cfg, CONFIG_WOZ_ANCHOR_STALE_MS,
+			   IS_ENABLED(CONFIG_WOZ_ANCHOR_SELF_INSIDE));
+#endif
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
+	static struct woz_slam_state slam;
+	const struct woz_slam_cfg slam_cfg = {
+		.debounce_ms = WOZ_SLAM_DEBOUNCE_MS_DEFAULT,
+		.tamper_window_ms = WOZ_SLAM_TAMPER_WINDOW_MS_DEFAULT,
+		.tamper_count = WOZ_SLAM_TAMPER_COUNT_DEFAULT,
+	};
+
+	woz_slam_init(&slam);
+	/* A board with no accelerometer, or one that will not answer, loses the
+	 * tamper signal and keeps the lock. Nothing below depends on it. */
+	if (woz_slam_hw_init() != 0) {
+		LOG_WRN("no impact sensor; tamper detection is off");
+	}
+#endif
 
 	aliro_approach_init(&approach, NULL); /* factory defaults: unlock 100 cm, relock 250 cm */
 
@@ -380,6 +419,28 @@ int main(void)
 
 		switch (act) {
 		case ALIRO_APPROACH_UNLOCK_PREDICT:
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR)
+			/*
+			 * Two-anchor geometry gates PREDICTION and nothing else.
+			 * Prediction is the speculative, early, convenient path;
+			 * suppressing it costs a person half a second at their own
+			 * door. THRESHOLD means the phone is measurably standing
+			 * there, and a geometry bug -- or a satellite with a flat
+			 * battery -- must never be able to lock someone out of
+			 * their house (docs/range-integrity.md:50-53).
+			 *
+			 * approach.last_cm rather than `cm`: PREDICT can be raised
+			 * from the tick branch, where `cm` was never filled in and
+			 * is still zero. Feeding a zero here would read as "phone
+			 * at the door" and pass every geometry test for the wrong
+			 * reason.
+			 */
+			if (!woz_satellite_may_predict(&satellite, approach.last_cm * 10, now)) {
+				LOG_INF("predict withheld: second anchor puts the phone outside");
+				break;
+			}
+#endif
+			/* fall through */
 		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
 			aliro_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			status_led_signal(STATUS_LED_UNLOCKED, true);
@@ -435,9 +496,39 @@ int main(void)
 			present = false;
 		}
 
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
+		/*
+		 * The accelerometer's whole cost at runtime: one atomic read per
+		 * tick. The GPIO callback that sets it does nothing but set it,
+		 * so nothing here runs in interrupt context and nothing competes
+		 * with the ranging arm deadline.
+		 *
+		 * Deliberately after the approach switch: a strike is a report
+		 * about the DOOR, and must not be able to influence whether this
+		 * tick unlocked. Tamper is a signal to surface, not an input to
+		 * the grant.
+		 */
+		switch (woz_slam_poll(&slam_cfg, &slam, woz_slam_hw_take(), now)) {
+		case WOZ_SLAM_TAMPER:
+			LOG_WRN("tamper: repeated impacts on the door");
+			break;
+		case WOZ_SLAM_IMPACT:
+			LOG_INF("impact");
+			break;
+		default:
+			break;
+		}
+#endif
+
 		/* Wake on the next latch, or on the housekeeping tick if none comes.
 		 * A latch that lands while this pass is still running leaves the
-		 * semaphore given, so the take returns at once and no range waits. */
+		 * semaphore given, so the take returns at once and no range waits.
+		 *
+		 * The impact poll above deliberately sits BEFORE this: it now runs on
+		 * every wake rather than on a fixed 250 ms cadence, so a busy walk-up
+		 * polls it more often, never less. Its debounce is a time comparison,
+		 * not a count of ticks, so a faster poll rate cannot make a single
+		 * strike read as several. */
 		(void)k_sem_take(&s_range_sig, K_MSEC(ALIRO_TICK_MS));
 	}
 	return 0;

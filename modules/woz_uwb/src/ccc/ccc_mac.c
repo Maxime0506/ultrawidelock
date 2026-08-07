@@ -319,25 +319,13 @@ struct ccc_hop_decision ccc_initiator_next_hop(const struct ccc_ran_params *p, u
 
 /* ── Double-sided two-way ranging ─────────────────────────────────────────── */
 
-/**
- * @brief DS-TWR one-way time-of-flight in timestamp ticks.
- * @param t DS-TWR intervals (round-trip and reply times at both ends).
- * @return Time-of-flight in ticks, or 0 if the denominator is 0 or input is null.
- */
-uint32_t ccc_ds_twr_tof(const struct ccc_ds_twr *t)
-{
-	uint64_t num, den;
-
-	if (t == NULL) {
-		return 0u;
-	}
-	num = (uint64_t)t->t_round1 * t->t_round2 - (uint64_t)t->t_reply1 * t->t_reply2;
-	den = (uint64_t)t->t_round1 + t->t_round2 + t->t_reply1 + t->t_reply2;
-	return den != 0u ? (uint32_t)(num / den) : 0u;
-}
+/* The estimator itself is ds_twr_tof_signed() in src/fira/ds_twr.c. It used to
+ * be here as an unsigned ccc_ds_twr_tof(), which underflowed near contact and
+ * was never called in production because this file's own consumer open-coded a
+ * signed version to avoid it. */
 
 int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1,
-			 uint32_t t_round2, struct ccc_ds_twr *out)
+			 uint32_t t_round2, struct ds_twr *out)
 {
 	if (fd == NULL || out == NULL || responder >= fd->num_responders) {
 		return -EINVAL;

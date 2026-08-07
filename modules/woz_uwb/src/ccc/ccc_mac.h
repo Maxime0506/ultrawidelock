@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "ccc_kdf.h"
+#include "ds_twr.h"
 
 /** Default hopping round index S(i) in [0, n_round) for a ranging block, keyed by HOP_Key_RW. */
 uint16_t ccc_hop_round_index(uint32_t block_index, uint32_t hop_key_rw, uint32_t n_round);
@@ -142,22 +143,13 @@ struct ccc_hop_decision ccc_initiator_next_hop(const struct ccc_ran_params *p, u
 
 /* ── Double-sided two-way ranging ─────────────────────────────────────────── */
 
-/**
- * @brief The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32).
- */
-struct ccc_ds_twr {
-	uint32_t t_round1; /**< Initiator POLL tx → RESPONSE rx (t4 − t1). */
-	uint32_t t_reply1; /**< Responder POLL rx → RESPONSE tx (t3 − t2). */
-	uint32_t t_round2; /**< Responder RESPONSE tx → FINAL rx (t6 − t3). */
-	uint32_t t_reply2; /**< Initiator RESPONSE rx → FINAL tx (t5 − t4). */
-};
-
-/** DS-TWR one-way time-of-flight in timestamp ticks (0 if the denominator is 0). */
-uint32_t ccc_ds_twr_tof(const struct ccc_ds_twr *t);
+/* The intervals and the estimator itself live at the base UWB tier (ds_twr.h),
+ * because the anchor-to-anchor link needs them without a CCC engine. What stays
+ * here is the CCC-specific half: filling those intervals from a Final_Data. */
 
 /** Assemble the DS-TWR intervals at the responder from a received Final_Data. */
 int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1,
-			 uint32_t t_round2, struct ccc_ds_twr *out);
+			 uint32_t t_round2, struct ds_twr *out);
 
 /* ── URSK lifetime ────────────────────────────────────────────────────────── */
 

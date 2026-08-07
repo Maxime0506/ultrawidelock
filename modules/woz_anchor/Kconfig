@@ -1,0 +1,137 @@
+# Two-anchor geometry and fusion. See internal/two-anchor-plan.md, stages B and E.
+
+config WOZ_ANCHOR
+	bool "Two-anchor door geometry and inside/outside fusion"
+	help
+	  Door swing angle from the frame-to-leaf UWB distance (woz_door.h), and
+	  the side-of-door verdict plus triangle-inequality consistency gate over
+	  two anchors' distances to one phone (woz_fusion.h).
+
+	  Integer arithmetic over caller-owned structs: no allocation, no threads,
+	  no static state, and no platform dependency. The whole module is about
+	  1 KB of flash and zero bytes of RAM until a caller declares a struct.
+
+	  Default n, and nothing selects it yet. The logic was written and
+	  host-tested ahead of the hardware it describes, so turning it on is a
+	  separate decision that comes with a measured RAM budget -- the
+	  DWM3001CDK Matter image has roughly 6 KB free and a new static
+	  allocation there is a decision rather than a detail.
+
+	  Both halves carry a MOUNTING requirement that no code can substitute
+	  for: the two anchors must sit equidistant from the hinge (woz_door),
+	  and symmetrically about the door plane (woz_fusion). Read those headers
+	  before drilling anything.
+
+if WOZ_ANCHOR
+
+config WOZ_ANCHOR_BASELINE_MM
+	int "Distance between the two anchors, millimetres"
+	default 1200
+	range 100 10000
+	help
+	  Measured centre-to-centre between the two anchor antennas. This is the
+	  one side of the phone-anchor-anchor triangle that is known, so every
+	  consistency check is relative to it and a wrong value here silently
+	  mis-sizes all of them.
+
+	  Longer is better for discrimination: the dead band is a fixed number of
+	  millimetres, so a longer baseline spends a smaller fraction of the
+	  approach on "ambiguous". If more than 20% of approaches land in the
+	  dead band, move the anchors further apart rather than shrinking the
+	  band.
+
+config WOZ_ANCHOR_TOL_MM
+	int "Triangle-inequality tolerance, millimetres"
+	default 90
+	range 0 1000
+	help
+	  Slack on both triangle tests, sized at roughly 3 sigma of the ranging
+	  jitter so ordinary noise at the geometric boundary does not read as an
+	  attack. 90 assumes the 30 mm jitter stage A targets; re-derive it from
+	  the jitter actually measured, because a tolerance smaller than the
+	  noise rejects real approaches.
+
+config WOZ_ANCHOR_DEADBAND_MM
+	int "Ambiguity dead band, millimetres"
+	default 60
+	range 0 1000
+	help
+	  Distance-difference smaller than this is called UNKNOWN rather than a
+	  side, because the sign is inside the noise. Roughly 2 sigma of ranging
+	  jitter. A phone in the doorway is genuinely ambiguous and has to read
+	  that way; UNKNOWN permits prediction, so this is a bias toward the door
+	  opening.
+
+config WOZ_ANCHOR_STALE_MS
+	int "Satellite report lifetime, milliseconds"
+	default 1500
+	range 100 30000
+	help
+	  A report older than this is discarded and the verdict falls back to
+	  UNKNOWN, which permits prediction. Geometry from a stale distance is
+	  worse than no geometry because it looks authoritative.
+
+	  Size it above the satellite's worst-case report interval plus its link
+	  latency, or a healthy satellite will keep expiring between reports.
+
+config WOZ_ANCHOR_SELF_INSIDE
+	bool "This node is the INSIDE anchor"
+	default y
+	help
+	  Which side of the door THIS board is mounted on. A mounting fact, not a
+	  code fact, and it has to be written down somewhere -- getting it
+	  backwards inverts the verdict, so the node would withhold prediction
+	  from people inside the house and grant it to people outside.
+
+	  Default y because the door node carries the lock and the credential,
+	  and that belongs on the protected side. Set n only if this specific
+	  board is physically the outer anchor.
+
+config WOZ_ANCHOR_SLAM
+	bool "LIS2DH12 impact and tamper interrupt"
+	depends on I2C && GPIO
+	help
+	  Configure the accelerometer's INT1 generator over I2C and latch its
+	  edges from a GPIO callback, so the existing 250 ms loop can ask whether
+	  the door was struck.
+
+	  Does NOT use Zephyr's lis2dh sensor driver, which is already linked
+	  into both shipping CDK images and stays dead. That is a RAM decision
+	  rather than a preference: CONFIG_LIS2DH_TRIGGER_GLOBAL_THREAD puts an
+	  ISR bottom half on k_sys_work_q, measured at 3,568 B of its 4,096 B
+	  during a live unlock, and CONFIG_LIS2DH_TRIGGER_OWN_THREAD costs a
+	  1,024 B stack. This path costs one gpio_callback, one atomic_t and one
+	  24 B classifier state, with no new thread and no new work queue.
+
+	  Needs a board whose devicetree has an accel0 alias with an irq-gpios
+	  property. The DWM3001CDK has both.
+
+config WOZ_ANCHOR_SLAM_THRESHOLD_MG
+	int "Impact threshold, milli-g"
+	default 2000
+	range 32 4000
+	depends on WOZ_ANCHOR_SLAM
+	help
+	  Transient acceleration that counts as a strike, measured after the
+	  high-pass filter so gravity is not part of the budget. Quantised to
+	  32 mg steps by the +/-4 g full scale the driver selects, and clamped
+	  to the register's 7-bit range.
+
+	  2000 is a PLACEHOLDER, not a recommendation. The number that matters is
+	  "louder than closing this door normally", which is a property of the
+	  door, its hinges and where the board is screwed. Size it from a bench
+	  capture of 20 normal closes and 20 slams; if the two populations
+	  overlap at every threshold, this approach is finished and the honest
+	  move is to ship the angle states with no tamper signal.
+
+config WOZ_ANCHOR_SLAM_LOG_LEVEL
+	int "Log level for the impact driver"
+	default 3
+	range 0 4
+	depends on WOZ_ANCHOR_SLAM
+	help
+	  Init-time only. Nothing on the interrupt path logs, and nothing can:
+	  the callback runs in interrupt context beside a ranging arm deadline of
+	  roughly 1836 us.
+
+endif # WOZ_ANCHOR

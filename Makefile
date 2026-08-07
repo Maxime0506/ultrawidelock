@@ -97,6 +97,9 @@ PRESENCE_RUNTIME_OUT ?= $(ALIRO_BUILD_ROOT)/presence-runtime.tar.gz
 include $(REPO_ROOT)/mk/cdk.mk
 include $(REPO_ROOT)/mk/nrf5340dk.mk
 include $(REPO_ROOT)/mk/esp32.mk
+# After the ports: it reuses cdk.mk's west launcher and probe guard, and it is a
+# bench tool rather than a target anyone flashes a lock with.
+include $(REPO_ROOT)/mk/anchor.mk
 include $(REPO_ROOT)/mk/setup.mk
 include $(REPO_ROOT)/mk/host.mk
 include $(REPO_ROOT)/mk/docs.mk

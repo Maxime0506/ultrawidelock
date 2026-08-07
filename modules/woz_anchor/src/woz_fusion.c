@@ -1,0 +1,69 @@
+/**
+ * @file woz_fusion.c — two-anchor side-of-door fusion (implementation).
+ *
+ * Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ */
+
+#include "woz_fusion.h"
+
+struct woz_fusion_verdict woz_fusion_eval(const struct woz_fusion_cfg *cfg, int32_t d_inside_mm,
+					  int32_t d_outside_mm)
+{
+	struct woz_fusion_verdict v = {WOZ_SIDE_UNKNOWN, false, 0};
+	int32_t diff, sum, adiff;
+
+	if (cfg == NULL || cfg->baseline_mm <= 0 || d_inside_mm < 0 || d_outside_mm < 0) {
+		return v;
+	}
+
+	diff = d_inside_mm - d_outside_mm;
+	sum = d_inside_mm + d_outside_mm;
+	adiff = diff < 0 ? -diff : diff;
+	v.delta_mm = diff;
+
+	/*
+	 * The triangle inequality, both ways round. The phone and the two
+	 * anchors are three points; the anchor separation is the one side that
+	 * is known, so the two measured sides have to be able to close on it.
+	 *
+	 *   sum   >= baseline - tol : the two are long enough to reach across
+	 *   adiff <= baseline + tol : they are not so unequal that no point exists
+	 *
+	 * Both use the SAME tolerance because both failures mean the same thing
+	 * -- a pair no single phone position can produce.
+	 */
+	if (sum < cfg->baseline_mm - cfg->tol_mm) {
+		return v; /* geometry_ok stays false */
+	}
+	if (adiff > cfg->baseline_mm + cfg->tol_mm) {
+		return v;
+	}
+	v.geometry_ok = true;
+
+	/*
+	 * Sign of the difference is the side. Inside the dead band the two
+	 * distances are too close for the sign to mean anything, so the answer
+	 * is UNKNOWN rather than whichever way the noise fell -- a phone in the
+	 * doorway is genuinely ambiguous and must read that way.
+	 */
+	if (adiff <= cfg->deadband_mm) {
+		v.side = WOZ_SIDE_UNKNOWN;
+	} else if (diff < 0) {
+		v.side = WOZ_SIDE_INSIDE; /* nearer the inside anchor */
+	} else {
+		v.side = WOZ_SIDE_OUTSIDE;
+	}
+	return v;
+}
+
+bool woz_fusion_may_predict(const struct woz_fusion_verdict *v)
+{
+	if (v == NULL) {
+		return true; /* no verdict at all is the same as no satellite */
+	}
+	if (!v->geometry_ok) {
+		return false;
+	}
+	return v->side != WOZ_SIDE_OUTSIDE;
+}

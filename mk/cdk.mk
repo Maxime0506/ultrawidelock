@@ -146,7 +146,7 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # are on today, each behind its own walk-up on its own hardware.
 LTO_SET  := $(filter-out undefined,$(origin LTO))
 CDK_LTO  := $(filter-out 0 n no off N NO OFF,$(if $(LTO_SET),$(LTO),1))
-CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP),;overlay-smp.conf)$(if $(CDK_LTO),;overlay-lto.conf)$(if $(OTLOG),;overlay-otlog.conf)
+CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP),;overlay-smp.conf)$(if $(CDK_LTO),;overlay-lto.conf)$(if $(OTLOG),;overlay-otlog.conf)$(if $(ANCHOR),;overlay-anchor.conf)
 
 # ---- image signing -----------------------------------------------------------
 # Which private key signs the image is the whole answer to "what will this lock
@@ -306,7 +306,11 @@ CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_S
 ##   boot log and NO_BLOCK_SKIP drops the NEWEST lines.
 ##   LTO is ON by default and worth 41,084 B; LTO=0 opts out when you need a
 ##   stack trace to name every frame.
-##   Options: PRISTINE=1  RELEASE=1  LTO=0  CDK_BUILD=<dir>  NCS_VER=<tag>
+##   ANCHOR=1 adds firmware/overlay-anchor.conf: two-anchor geometry gating
+##   UNLOCK_PREDICT, plus the accelerometer impact interrupt. Off by default, so
+##   the shipping image is unchanged. Prefer this to writing CDK_CONF by hand,
+##   which replaces the whole list and silently drops overlay-lto.conf.
+##   Options: PRISTINE=1  RELEASE=1  LTO=0  ANCHOR=1  CDK_BUILD=<dir>  NCS_VER=<tag>
 build:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_BUILD) $(CDK_APP) \

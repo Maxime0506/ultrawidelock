@@ -1,0 +1,4 @@
+name: woz_anchor
+build:
+  cmake: .
+  kconfig: Kconfig
