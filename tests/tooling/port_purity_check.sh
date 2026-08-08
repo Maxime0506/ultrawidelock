@@ -28,6 +28,10 @@
 #   woz_aliro_stack/{aliro_stack,session}.cpp  adapters to the Nordic add-on's
 #                                    <aliro/*> API; the add-on's own headers
 #                                    include Zephyr, so these can never be pure
+#   woz_nfc/src/transport_pn532.cpp  same class of adapter: its threading
+#                                    contract IS the add-on's workqueue
+#                                    (AliroWorkqueueSubmit takes a k_work), and
+#                                    it includes aliro/ + reader_storage headers
 #   woz_aliro_ecp/src/nfc_prop_ecp.cpp   same: grafts into the add-on's
 #                                    subsys/nfc_prop, add-on headers included
 #   woz_uwb/src/facade/{woz_bytes,woz_util}.h  portable shims that defer to the
@@ -67,6 +71,7 @@ PERMANENT_RE='^(modules/woz_port/
 |modules/woz_dfu/src/detools/
 |modules/woz_aliro_stack/src/aliro_stack\.cpp
 |modules/woz_aliro_stack/src/session\.cpp
+|modules/woz_nfc/src/transport_pn532\.cpp
 |modules/woz_aliro_ecp/src/nfc_prop_ecp\.cpp
 |modules/woz_uwb/src/facade/woz_bytes\.h
 |modules/woz_uwb/src/facade/woz_util\.h)'
@@ -74,9 +79,7 @@ PERMANENT_RE=${PERMANENT_RE//$'\n'/}
 
 # The ratchet: still-impure files and the tranche that retires each.
 RATCHET=(
-	modules/woz_nfc/src/transport_pn532.cpp        # T2b: convert to woz_osal
-	modules/woz_nfc/src/transport_none.cpp         # T2b: woz_log instead of zephyr log
-	modules/woz_nfc/src/pn532_bus_spi.c            # T2b sem/sleep; T4 move (Zephyr SPI driver)
+	modules/woz_nfc/src/pn532_bus_spi.c            # T4 move: Zephyr SPI driver -> ports/zephyr
 	modules/woz_dfu/src/dfu_receiver.c             # T2c: convert to woz_osal + woz_flash
 	modules/woz_dfu/src/dfu_applier.c              # T2c: convert to woz_flash
 	modules/woz_dfu/src/dfu_smp_img.c              # T4 move: mcumgr/SMP glue -> ports/zephyr

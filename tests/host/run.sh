@@ -142,9 +142,10 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 #    backends.
 NFC_DEF=(-DCONFIG_WOZ_NFC_LOG_LEVEL=3 -DCONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE=2048
 	-DCONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS=200
-	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000)
+	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
+	-DWOZ_PORT_HOST) # transport_none logs through woz_log.h
 NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
-	-I"$ROOT/modules/woz_nfc/src")
+	-I"$ROOT/modules/woz_nfc/src" -I"$ROOT/modules/woz_port/include")
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
 # shellcheck disable=SC2086

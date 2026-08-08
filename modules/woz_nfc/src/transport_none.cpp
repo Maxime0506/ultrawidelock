@@ -4,7 +4,7 @@
 
 #include <woz_nfc/transport.h>
 
-#include <zephyr/logging/log.h>
+#include "woz_log.h"
 
 LOG_MODULE_REGISTER(woz_nfc_none, CONFIG_WOZ_NFC_LOG_LEVEL);
 
