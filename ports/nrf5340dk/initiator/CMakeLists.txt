@@ -17,47 +17,57 @@ set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
 set(UWB "${REPO_ROOT}/modules/woz_uwb/src/aliro")
 set(CCC "${REPO_ROOT}/modules/woz_uwb/src/ccc")
 
+# Shared sources by role manifest (modules/{woz_aliro,woz_uwb}/roles/*.list) —
+# the same lists the ESP32 components and the host suite read.
+include("${REPO_ROOT}/cmake/woz_roles.cmake")
+woz_role_sources("${ALIRO}/roles/ble_central.list" ALIRO_BLE_CENTRAL_SRCS)
+woz_role_sources("${ALIRO}/roles/device.list" ALIRO_DEVICE_SRCS)
+woz_role_sources("${ALIRO}/roles/apdu.list" ALIRO_APDU_SRCS)
+woz_role_sources("${ALIRO}/roles/crypto.list" ALIRO_CRYPTO_SRCS)
+woz_role_sources("${ALIRO}/roles/hash.list" ALIRO_HASH_SRCS)
+set(UWBROLES "${REPO_ROOT}/modules/woz_uwb/roles")
+woz_role_sources("${UWBROLES}/aliro_device.list" UWB_DEVICE_SRCS)
+woz_role_sources("${UWBROLES}/aliro_codec.list" UWB_CODEC_SRCS)
+woz_role_sources("${UWBROLES}/ccc_keys.list" UWB_CCC_KEYS_SRCS)
+woz_role_sources("${UWBROLES}/crypto_psa.list" UWB_CRYPTO_SRCS)
+
 target_sources(app PRIVATE
 	src/main.c
 	# BLE transport. The Zephyr backend lives with the reader's peripheral
 	# mirror in ports/zephyr/ble so the two central/peripheral halves stay side
 	# by side; it depends on no symbol from firmware/Kconfig, which is what
-	# makes it linkable from here. aliro_ble_central.c is the platform-free
+	# makes it linkable from here. The ble_central role is the platform-free
 	# decoder half, the same translation unit the ESP32 port and the host suite
 	# compile.
 	${REPO_ROOT}/ports/zephyr/ble/aliro_ble_central_zephyr.c
-	${ALIRO}/src/aliro_ble_central.c
-	# Access Protocol, device side.
-	${ALIRO}/src/aliro_device.c
-	${ALIRO}/src/aliro_device_apdu.c
-	${ALIRO}/src/aliro_apdu.c
-	# Key schedule and the PSA primitive backend.
-	${ALIRO}/src/aliro_crypto.c
-	${ALIRO}/src/aliro_hash.c
-	${ALIRO}/src/aliro_prim_psa.c
-	# UWB ranging SETUP, device side. Three files, not the woz_uwb Zephyr module:
+	${ALIRO_BLE_CENTRAL_SRCS}
+	# Access Protocol, device side (roles device + apdu), plus the key schedule
+	# and the PSA primitive backend (roles crypto + hash).
+	${ALIRO_DEVICE_SRCS}
+	${ALIRO_APDU_SRCS}
+	${ALIRO_CRYPTO_SRCS}
+	${ALIRO_HASH_SRCS}
+	# UWB ranging SETUP, device side. Roles, not the woz_uwb Zephyr module:
 	# that module's CMakeLists gates everything on CONFIG_WOZ_UWB_RESPONDER and
 	# builds the reader's session, adapter and CCC engine, none of which a device
-	# uses. aliro_device_uwb.c is the M1/M3 parser and M2/M4 builder, host-tested
-	# by tests/host/test_aliro_device_uwb.c against the real reader codec; the
-	# other two are the TLV builder and parser it is written on. No radio here.
+	# uses. aliro_device (aliro_device_uwb.c) is the M1/M3 parser and M2/M4
+	# builder, host-tested by tests/host/test_aliro_device_uwb.c against the real
+	# reader codec; aliro_codec is the TLV builder and parser it is written on.
+	# No radio here.
 	src/ranging.c
-	${UWB}/aliro_device_uwb.c
-	${UWB}/aliro_uwb_msg_builder.c
-	${UWB}/aliro_uwb_msg_parser.c
-	# UWB initiator role, radio side. Four files, again not the woz_uwb module:
-	# its CCC block is gated on CONFIG_WOZ_ALIRO, which `depends on
-	# WOZ_UWB_RESPONDER` and would drag in the reader's session, adapter and
-	# RX engine. The CCC key schedule and MAC are role-neutral -- nothing in
+	${UWB_DEVICE_SRCS}
+	${UWB_CODEC_SRCS}
+	# UWB initiator role, radio side. Again not the woz_uwb module: its CCC
+	# block is gated on CONFIG_WOZ_ALIRO, which `depends on WOZ_UWB_RESPONDER`
+	# and would drag in the reader's session, adapter and RX engine. The CCC
+	# key schedule and MAC (role ccc_keys) are role-neutral -- nothing in
 	# ccc_kdf.c or ccc_mac.c knows which end it is on -- so the initiator links
-	# the same translation units the reader does.
-	src/prepoll_tx.c
-	${CCC}/ccc_kdf.c
-	${CCC}/ccc_mac.c
-	${CCC}/ccc_session.c
-	# AES-ECB seam behind the key schedule. PSA, matching the reader on nRF;
+	# the same translation units the reader does. crypto_psa is the AES-ECB
+	# seam behind the key schedule, matching the reader on nRF;
 	# ccc_crypto_mbedtls.c is the ESP32 branch and is not wanted here.
-	${CCC}/ccc_crypto_psa.c
+	src/prepoll_tx.c
+	${UWB_CCC_KEYS_SRCS}
+	${UWB_CRYPTO_SRCS}
 )
 # src/ is on the path, not just include/: main.c needs aliro_apdu.h for the
 # 4-byte L2CAP envelope, same reason the ESP-IDF component makes it public.

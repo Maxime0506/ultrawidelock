@@ -58,6 +58,18 @@ endif()
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
 set(PORTZ "${REPO_ROOT}/ports/zephyr")
 
+# Reader-role source sets come from the role manifests (modules/woz_aliro/
+# roles/*.list) — the same lists the ESP32 components, the nRF5340 apps and the
+# host suite read, so each role's file set exists in exactly one place.
+include("${REPO_ROOT}/cmake/woz_roles.cmake")
+woz_role_sources("${ALIRO}/roles/reader.list" ALIRO_READER_SRCS)
+woz_role_sources("${ALIRO}/roles/reader_policy.list" ALIRO_POLICY_SRCS)
+woz_role_sources("${ALIRO}/roles/apdu.list" ALIRO_APDU_SRCS)
+woz_role_sources("${ALIRO}/roles/crypto.list" ALIRO_CRYPTO_SRCS)
+woz_role_sources("${ALIRO}/roles/hash.list" ALIRO_HASH_SRCS)
+woz_role_sources("${ALIRO}/roles/dyntag.list" ALIRO_DYNTAG_SRCS)
+woz_role_sources("${ALIRO}/roles/ble_central.list" ALIRO_BLE_CENTRAL_SRCS)
+
 target_sources(app PRIVATE
 	src/main.c
 	# Platform seams the reader engine links against, re-homed to ports/zephyr
@@ -66,18 +78,13 @@ target_sources(app PRIVATE
 	# no Kconfig gate to ride — this app IS the gate.
 	${PORTZ}/ble/aliro_ble_zephyr.c
 	${PORTZ}/store/aliro_prov_settings.c
-	# Reader engine.
-	${ALIRO}/src/aliro_reader.c
-	${ALIRO}/src/aliro_ranging.c
-	${ALIRO}/src/aliro_apdu.c
-	${ALIRO}/src/aliro_crypto.c
-	${ALIRO}/src/aliro_hash.c
-	${ALIRO}/src/aliro_prim_psa.c
-	${ALIRO}/src/aliro_advtag.c
-	${ALIRO}/src/aliro_prov.c
-	${ALIRO}/src/aliro_lat.c
-	${ALIRO}/src/aliro_rssi_gate.c
-	${ALIRO}/src/aliro_approach.c
+	# Reader engine: roles reader + reader_policy + apdu + crypto + hash + dyntag.
+	${ALIRO_READER_SRCS}
+	${ALIRO_POLICY_SRCS}
+	${ALIRO_APDU_SRCS}
+	${ALIRO_CRYPTO_SRCS}
+	${ALIRO_HASH_SRCS}
+	${ALIRO_DYNTAG_SRCS}
 )
 # Provisioning console (USB CDC-ACM, provisioning mode only).
 target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
@@ -97,7 +104,7 @@ target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
 # mirror of aliro_ble_zephyr.c under this gate; the platform-free advert/READ
 # decoder it calls is the same translation unit the ESP32 port and the host
 # suite compile.
-target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ALIRO}/src/aliro_ble_central.c)
+target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ALIRO_BLE_CENTRAL_SRCS})
 # The commissioning policy half; its transport, Thread/fabric ports and fabric
 # table store live in ports/zephyr/{matter,store} under the same gate.
 target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_commission.c)

@@ -1,0 +1,6 @@
+# woz_aliro role: device/initiator session layer (User-Device end of the
+# Access Protocol). Consumers: ports/nrf5340dk/{initiator,on_target_ec},
+# ports/esp32/components/aliro_device.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/woz_aliro/src/aliro_device.c
+modules/woz_aliro/src/aliro_device_apdu.c

@@ -1,0 +1,4 @@
+# woz_aliro role: BLE advert Dynamic Tag derivation.
+# Consumers: firmware/, ports/esp32/components/aliro_crypto.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/woz_aliro/src/aliro_advtag.c

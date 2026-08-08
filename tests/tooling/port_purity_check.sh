@@ -55,6 +55,14 @@
 #   patch symbols      every woz identifier a ports/nrf5340dk/patches/*.patch
 #                      grafts into the Nordic add-on must still be defined in
 #                      modules/ or ports/ (check_patch_symbols)
+#   role manifests     modules/*/roles/*.list is the ONE place a shared source is
+#                      assigned to a role; cmake/woz_roles.cmake and
+#                      tests/host/sources.sh read them instead of carrying their
+#                      own copies. check_manifests keeps that true: every listed
+#                      path exists, no file sits in two roles (a consumer taking
+#                      both would compile it twice), and every shared source
+#                      under MANIFEST_ROOTS is in a role or in the
+#                      NOT_MANIFESTED allowlist below with its reason.
 
 set -euo pipefail
 
@@ -317,6 +325,106 @@ check_patch_symbols() {
 	printf '%s  ok   add-on patches: %d woz symbol(s) still defined in the tree%s\n' "$G" "$n" "$Z"
 }
 
+# ---- role manifests ----------------------------------------------------------
+#
+# Trees whose every tracked .c must be assigned to a role. Deliberately not the
+# whole of modules/: the vendored decadriver is reached BY manifests (core.list
+# points into it) but is not ours to enumerate, and single-port modules
+# (woz_matter, woz_ml, woz_anchor, ...) have one consumer each, so a manifest
+# would be a second copy of a list that exists once.
+MANIFEST_ROOTS=(
+	modules/woz_aliro/src
+	modules/woz_uwb/src
+)
+
+# Shared sources deliberately left out of every role, with the reason. Same
+# ratchet discipline as RATCHET: an entry that becomes manifested, or stops
+# existing, is a FAILURE — the allowlist can only shrink deliberately.
+#
+#   aliro_stepup.c      the step-up worker's engine half; only the ESP reader
+#                       component compiles it, and its worker body is gated to
+#                       empty without CONFIG_WOZ_ALIRO_STEPUP
+#   aliro_assert_ec.c   the P-256 half of the assert pair — the only one with a
+#                       crypto dependency, so it cannot join wire_codecs
+#   uwb_rxdiag.c        Zephyr-module only: the ESP port omits it and stubs the
+#                       two decadriver seams it would otherwise supply
+#   uwb_selftest.c      Zephyr-module only, CONFIG_WOZ_UWB_SELFTEST, default n
+NOT_MANIFESTED=(
+	modules/woz_aliro/src/aliro_assert_ec.c
+	modules/woz_aliro/src/aliro_stepup.c
+	modules/woz_uwb/src/driver/uwb_rxdiag.c
+	modules/woz_uwb/src/driver/uwb_selftest.c
+)
+
+manifest_files() { git ls-files 'modules/*/roles/*.list'; }
+
+# One manifest -> its repo-relative paths, comments and blank lines dropped.
+# The same three rules cmake/woz_roles.cmake and tests/host/sources.sh apply.
+manifest_paths() {
+	sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$@"
+}
+
+check_manifests() {
+	local fails=0 n=0 lists=0 f p dup
+
+	while IFS= read -r f; do
+		lists=$((lists + 1))
+		while IFS= read -r p; do
+			n=$((n + 1))
+			if [ ! -f "$p" ]; then
+				printf '%s  missing manifest path: %s (listed by %s)%s\n' \
+					"$R" "$p" "$f" "$Z" >&2
+				fails=$((fails + 1))
+			fi
+		done < <(manifest_paths "$f")
+	done < <(manifest_files)
+
+	# A file in two roles is compiled twice by any consumer taking both.
+	while IFS= read -r dup; do
+		[ -n "$dup" ] || continue
+		printf '%s  source in two roles: %s%s\n' "$R" "$dup" "$Z" >&2
+		fails=$((fails + 1))
+		# shellcheck disable=SC2046 # tracked manifest paths, no whitespace
+	done < <(manifest_paths $(manifest_files) | LC_ALL=C sort | uniq -d)
+
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d broken role manifest entr(ies)%s\n' "$R" "$fails" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   role manifests: %d list(s), %d path(s), all resolve, none doubled%s\n' \
+		"$G" "$lists" "$n" "$Z"
+
+	# Coverage: every shared source is in a role or on the allowlist.
+	local manifested allow src stale=0
+	# shellcheck disable=SC2046 # tracked manifest paths, no whitespace
+	manifested=$(manifest_paths $(manifest_files) | LC_ALL=C sort -u)
+	allow=$(printf '%s\n' "${NOT_MANIFESTED[@]}" | LC_ALL=C sort -u)
+	while IFS= read -r src; do
+		[ -n "$src" ] || continue
+		printf '%s\n' "$manifested" | grep -qxF "$src" && continue
+		printf '%s\n' "$allow" | grep -qxF "$src" && continue
+		printf '%s  unmanifested shared source: %s%s\n' "$R" "$src" "$Z" >&2
+		fails=$((fails + 1))
+	done < <(git ls-files "${MANIFEST_ROOTS[@]/%//*.c}")
+
+	for src in "${NOT_MANIFESTED[@]}"; do
+		if [ ! -f "$src" ] || printf '%s\n' "$manifested" | grep -qxF "$src"; then
+			printf '%s  stale NOT_MANIFESTED entry: %s%s\n' "$R" "$src" "$Z" >&2
+			stale=$((stale + 1))
+		fi
+	done
+
+	if [ "$fails" -gt 0 ] || [ "$stale" -gt 0 ]; then
+		[ "$fails" -eq 0 ] || printf '%scheck-purity: %d shared source(s) in no role — add to a roles/*.list or to NOT_MANIFESTED with a reason%s\n' \
+			"$R" "$fails" "$Z" >&2
+		[ "$stale" -eq 0 ] || printf '%scheck-purity: %d stale NOT_MANIFESTED entr(ies) — shrink the list%s\n' \
+			"$R" "$stale" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   role coverage: every shared source is in a role, %d allowlisted%s\n' \
+		"$G" "${#NOT_MANIFESTED[@]}" "$Z"
+}
+
 # ---- self-test --------------------------------------------------------------
 #
 # Plant each shape the scan must catch and each it must ignore; fail loudly on
@@ -459,6 +567,32 @@ self_test() {
 		fi
 	done
 	[ "$fails" -ne 0 ] || printf '%s  self-test: patch tripwire fires on invented symbols only%s\n' "$G" "$Z"
+
+	# Manifest parser: comments (whole-line and trailing), blank lines and
+	# stray whitespace vanish; nothing else does. Must agree with
+	# cmake/woz_roles.cmake and tests/host/sources.sh, which parse the same
+	# files with different tools.
+	printf '%s\n' '# a role manifest' '' 'modules/x/src/a.c' \
+		'  modules/x/src/b.c  ' 'modules/x/src/c.c # why' '#modules/x/src/never.c' \
+		>"$fixdir/fix.list"
+	if [ "$(manifest_paths "$fixdir/fix.list")" != "$(printf 'modules/x/src/a.c\nmodules/x/src/b.c\nmodules/x/src/c.c')" ]; then
+		printf '%s  self-test FAILED: manifest parser disagrees on the fixture%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	# ...and a doubled path must be visible to the duplicate detector.
+	if [ "$(manifest_paths "$fixdir/fix.list" "$fixdir/fix.list" | LC_ALL=C sort | uniq -d | wc -l)" -ne 3 ]; then
+		printf '%s  self-test FAILED: duplicate detector missed a doubled path%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	# The allowlist is exact: a file that IS in a role must not be swallowed.
+	for f in modules/woz_aliro/src/aliro_tlv.c modules/woz_uwb/src/ccc/ccc_kdf.c; do
+		if printf '%s\n' "${NOT_MANIFESTED[@]}" | grep -qxF "$f"; then
+			printf '%s  self-test FAILED: %s is allowlisted but lives in a role%s\n' \
+				"$R" "$f" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	[ "$fails" -ne 0 ] || printf '%s  self-test: manifest parser and allowlist are exact%s\n' "$G" "$Z"
 	rm -rf "$fixdir"
 
 	if [ "$fails" -ne 0 ]; then
@@ -475,6 +609,7 @@ case "${1-}" in
 "")
 	rc=0
 	scan || rc=1
+	check_manifests || rc=1
 	check_build_paths || rc=1
 	check_patch_symbols || rc=1
 	exit "$rc"

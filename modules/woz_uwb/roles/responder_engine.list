@@ -1,0 +1,5 @@
+# woz_uwb tier: responder session state machine (CONFIG_WOZ_UWB_RESPONDER) —
+# radio-free, host-compiled. Consumers: modules/woz_uwb/CMakeLists.txt,
+# ports/esp32/components/woz_uwb, tests/host/sources.sh.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/woz_uwb/src/fira/fira_session.c

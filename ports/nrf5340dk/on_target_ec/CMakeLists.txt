@@ -9,15 +9,21 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
 set(TESTDIR "${REPO_ROOT}/ports/esp32/test")
 
+# Device-side shared sources by role manifest (modules/woz_aliro/roles/*.list)
+# — the same lists the initiator app and the ESP32 components read.
+include("${REPO_ROOT}/cmake/woz_roles.cmake")
+woz_role_sources("${ALIRO}/roles/device.list" ALIRO_DEVICE_SRCS)
+woz_role_sources("${ALIRO}/roles/apdu.list" ALIRO_APDU_SRCS)
+woz_role_sources("${ALIRO}/roles/crypto.list" ALIRO_CRYPTO_SRCS)
+woz_role_sources("${ALIRO}/roles/hash.list" ALIRO_HASH_SRCS)
+
 target_sources(app PRIVATE
 	src/main.c
 	${TESTDIR}/test_aliro_device.c
-	${ALIRO}/src/aliro_device.c
-	${ALIRO}/src/aliro_device_apdu.c
-	${ALIRO}/src/aliro_apdu.c
-	${ALIRO}/src/aliro_crypto.c
-	${ALIRO}/src/aliro_hash.c
-	${ALIRO}/src/aliro_prim_psa.c
+	${ALIRO_DEVICE_SRCS}
+	${ALIRO_APDU_SRCS}
+	${ALIRO_CRYPTO_SRCS}
+	${ALIRO_HASH_SRCS}
 )
 target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src)
 target_compile_definitions(app PRIVATE ALIRO_DEVICE_HAVE_EC)

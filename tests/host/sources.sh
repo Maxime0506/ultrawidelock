@@ -13,42 +13,31 @@ ALIRO="$ROOT/modules/woz_aliro"
 SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
 
+# unit_srcs_from_role — append one role manifest (modules/<mod>/roles/<n>.list)
+# to UNIT_SRCS. Same lists cmake/woz_roles.cmake reads, so the host suite and
+# the firmware/ESP builds cannot disagree about which files a role contains.
+# Redirected (not piped) so the appends land in this shell under bash 3.2.
+unit_srcs_from_role() {
+	local _line
+	while IFS= read -r _line || [ -n "$_line" ]; do
+		_line="${_line%%#*}"
+		_line="${_line#"${_line%%[![:space:]]*}"}"
+		_line="${_line%"${_line##*[![:space:]]}"}"
+		[ -n "$_line" ] || continue
+		UNIT_SRCS+=("$ROOT/$_line")
+	done < "$1"
+}
+
 UNIT_SRCS=(
 	"$ROOT/modules/woz_aliro_stack/src/advertising_core.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/ble_message.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/ble_timeout.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_select.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_auth.c"
-	# Shared step-up wire codecs (one source; woz_aliro_stack compiles the same
-	# files on target). Crypto-free, so no aliro_crypto/prim backend needed here.
-	"$ALIRO/src/aliro_tlv.c"
-	"$ALIRO/src/aliro_stepup_wire.c"
-	"$ALIRO/src/aliro_stepup_parse.c"
 	"$ROOT/modules/woz_nfc/src/pn532.c"
 	"$ROOT/modules/woz_nfc/src/pn532_apdu.c"
-	"$SRC/ccc/ccc_kdf.c"
-	"$SRC/ccc/ccc_mac.c"
-	"$SRC/ccc/ccc_session.c"
-	"$SRC/ccc/ccc_shim.c"
-	"$SRC/ccc/ccc_sts.c"
-	"$SRC/aliro/aliro_uwb_msg_builder.c"
-	"$SRC/aliro/aliro_uwb_msg_parser.c"
-	"$SRC/aliro/aliro_uwb_adapter.c"
-	"$SRC/aliro/aliro_uwb_msg.c"
-	"$SRC/aliro/aliro_device_uwb.c"
-	"$SRC/aliro/aliro_uwb_session.c"
-	"$SRC/ccc/cherry_ccc_shim.c"
-	"$SRC/ccc/ccc_shim_rx.c"
-	"$SRC/ccc/ccc_shim_wrap.c"
-	"$SRC/fira/ds_twr.c"
-	"$SRC/fira/fira_session.c"
-	"$SRC/facade/woz_uwb_facade.c"
-	"$ROOT/modules/woz_aliro/src/aliro_rssi_gate.c"
 	"$ROOT/ports/zephyr/log/woz_logfmt.c"
 	"$ROOT/ports/zephyr/log/woz_logquiet.c"
-	"$SRC/facade/flight_recorder.c"
-	"$ALIRO/src/aliro_prov.c"
-	"$ALIRO/src/aliro_hash.c"
 	"$ROOT/modules/woz_matter/src/matter_tlv.c"
 	"$ROOT/modules/woz_matter/src/matter_msg.c"
 	"$ROOT/modules/woz_matter/src/matter_mrp.c"
@@ -63,8 +52,6 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_attest.c"
 	"$ROOT/modules/woz_matter/src/matter_fabric.c"
 	"$ROOT/modules/woz_matter/src/matter_case.c"
-	"$ALIRO/src/aliro_assert.c"
-	"$ALIRO/src/aliro_approach.c"
 	"$ROOT/modules/woz_ml/src/woz_ml_los.c"
 	"$ROOT/modules/woz_ml/src/woz_ml_lin.c"
 	"$ROOT/modules/woz_ml/src/woz_ml_feat.c"
@@ -76,6 +63,28 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_anchor/src/woz_satellite.c"
 	"$ROOT/modules/woz_anchor/src/woz_slam.c"
 )
+
+# woz_aliro roles. wire_codecs = the shared step-up/assert codecs (one source;
+# woz_aliro_stack compiles the same files on target) — crypto-free, so no
+# aliro_crypto/prim backend is needed here. hash + reader_policy are the
+# host-tested halves of the reader.
+unit_srcs_from_role "$ALIRO/roles/wire_codecs.list"
+unit_srcs_from_role "$ALIRO/roles/hash.list"
+unit_srcs_from_role "$ALIRO/roles/reader_policy.list"
+
+# woz_uwb roles. Everything radio-free: the CCC key schedule and STS engine, the
+# M1-M4 codec on BOTH ends (aliro_device = initiator side, tested against the
+# real reader codec), the ranging estimator and responder state machine, and the
+# flight recorder's replay half. base_driver/responder_driver need a DW3000 and
+# are absent by design.
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/ccc_keys.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/ccc_engine.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/aliro_adapter.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/aliro_codec.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/aliro_device.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/base_engine.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/responder_engine.list"
+unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/flight_recorder.list"
 
 TEST_SRCS=(
 	"$HOST/aes_ref.c"

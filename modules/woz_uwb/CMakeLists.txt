@@ -8,47 +8,62 @@
 if(CONFIG_WOZ_UWB)
 
   set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  set(ROLES ${CMAKE_CURRENT_SOURCE_DIR}/roles)
+
+  # Every shared source below comes from a role manifest in roles/ — the same
+  # lists ports/esp32/components/woz_uwb, ports/nrf5340dk/initiator and
+  # tests/host/sources.sh read. The Kconfig tiers stay here; only the membership
+  # of each tier moved into the manifests.
+  include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/woz_roles.cmake)
+  woz_role_sources(${ROLES}/base_driver.list UWB_BASE_DRIVER_SRCS)
+  woz_role_sources(${ROLES}/base_engine.list UWB_BASE_ENGINE_SRCS)
 
   zephyr_library_named(woz_uwb)
   # ds_twr.c sits at the BASE tier, not under the responder, because the
   # anchor-to-anchor app (anchor/) ranges another board with no CCC engine in
   # its image and needs the same estimator the Aliro responder uses.
   zephyr_library_sources(
-    ${SRC}/driver/uwb_min.c
-    ${SRC}/fira/ds_twr.c)
+    ${UWB_BASE_DRIVER_SRCS}
+    ${UWB_BASE_ENGINE_SRCS})
 
   if(CONFIG_WOZ_UWB_RESPONDER)
     # The responder runs entirely on modules/woz_dw3000 in ccc_shim_rx.c
     # (ccc_prepoll_listen). The codec uses only qmalloc/qcalloc/qfree + qrtc_get_us,
     # provided as thin Zephyr wrappers by src/facade/woz_alloc.h.
+    woz_role_sources(${ROLES}/responder_driver.list UWB_RESP_DRIVER_SRCS)
+    woz_role_sources(${ROLES}/responder_engine.list UWB_RESP_ENGINE_SRCS)
     zephyr_library_sources(
-      ${SRC}/driver/uwb_isr.c
-      ${SRC}/fira/fira_session.c
+      ${UWB_RESP_DRIVER_SRCS}
+      ${UWB_RESP_ENGINE_SRCS}
     )
 
     if(CONFIG_WOZ_ALIRO)
       # The add-on hands us the plaintext URSK in _ConfigureRangingSession, so we
-      # only need the CCC STS engine.
+      # only need the CCC STS engine (ccc_keys = key schedule/MAC/session config,
+      # ccc_engine = STS generation + RX-arm shim + facade).
+      woz_role_sources(${ROLES}/ccc_keys.list UWB_CCC_KEYS_SRCS)
+      woz_role_sources(${ROLES}/ccc_engine.list UWB_CCC_ENGINE_SRCS)
       zephyr_library_sources(
-        ${SRC}/ccc/ccc_kdf.c ${SRC}/ccc/ccc_mac.c
-        ${SRC}/ccc/ccc_sts.c ${SRC}/ccc/ccc_session.c
-        ${SRC}/ccc/ccc_shim.c ${SRC}/ccc/ccc_shim_wrap.c
-        ${SRC}/facade/woz_uwb_facade.c
-        # Responder-RX CCC-STS substitution: program CCC key/IV per RX-arm.
-        ${SRC}/ccc/ccc_shim_rx.c
-        # Diagnostic (removable): tallies on-air RX events.
+        ${UWB_CCC_KEYS_SRCS}
+        ${UWB_CCC_ENGINE_SRCS}
+        # Diagnostic (removable): tallies on-air RX events. Single-consumer
+        # literal (allowlisted as NOT_MANIFESTED in
+        # tests/tooling/port_purity_check.sh): the ESP port omits it and stubs
+        # the two seams it would supply.
         ${SRC}/driver/uwb_rxdiag.c)
 
       # AES-ECB crypto seam (ccc_kdf.h): PSA on nRF (default), mbedTLS for SoCs
       # without a PSA provider (e.g. ESP32-S3).
       if(CONFIG_WOZ_CRYPTO_MBEDTLS)
-        zephyr_library_sources(${SRC}/ccc/ccc_crypto_mbedtls.c)
+        woz_role_sources(${ROLES}/crypto_mbedtls.list UWB_CRYPTO_MBEDTLS_SRCS)
+        zephyr_library_sources(${UWB_CRYPTO_MBEDTLS_SRCS})
         # Put mbedTLS headers (<mbedtls/aes.h>) on this library's include path.
         # The PSA branch gets its headers from nrf_security; the mbedTLS branch
         # must pull them from the mbedTLS interface target explicitly.
         zephyr_library_link_libraries(mbedTLS)
       else()
-        zephyr_library_sources(${SRC}/ccc/ccc_crypto_psa.c)
+        woz_role_sources(${ROLES}/crypto_psa.list UWB_CRYPTO_PSA_SRCS)
+        zephyr_library_sources(${UWB_CRYPTO_PSA_SRCS})
       endif()
 
       # The PRETTY log backend (woz_logfmt/woz_logquiet, CONFIG_WOZ_PRETTY_SHELL)
@@ -60,17 +75,17 @@ if(CONFIG_WOZ_UWB)
       # aliro_stack drives via the facade, over the cherry_ccc_* seam that
       # cherry_ccc_shim.c implements on our MAC (fira_session.c + ccc_shim).
       set(_aliro ${SRC}/aliro)
+      woz_role_sources(${ROLES}/aliro_adapter.list UWB_ALIRO_ADAPTER_SRCS)
+      woz_role_sources(${ROLES}/aliro_codec.list UWB_ALIRO_CODEC_SRCS)
       zephyr_library_sources(
-        ${_aliro}/aliro_uwb_adapter.c
-        ${_aliro}/aliro_uwb_msg.c
-        ${_aliro}/aliro_uwb_msg_builder.c
-        ${_aliro}/aliro_uwb_msg_parser.c
-        ${_aliro}/aliro_uwb_session.c
-        ${SRC}/ccc/cherry_ccc_shim.c)
+        ${UWB_ALIRO_ADAPTER_SRCS}
+        ${UWB_ALIRO_CODEC_SRCS})
       zephyr_include_directories(
         ${_aliro}/include
         ${_aliro})
-      # Diagnostic: one-shot boot self-test of the UWB init path (gated, default n).
+      # Diagnostic: one-shot boot self-test of the UWB init path (gated, default
+      # n). Single-consumer literal (allowlisted as NOT_MANIFESTED in
+      # tests/tooling/port_purity_check.sh); no other port builds it.
       if(CONFIG_WOZ_UWB_SELFTEST)
         zephyr_library_sources(${SRC}/driver/uwb_selftest.c)
       endif()
@@ -78,12 +93,14 @@ if(CONFIG_WOZ_UWB)
       # CIA/CIR diagnostics: per-reception first-path summary + windowed CIR tap dump
       # (gated, default n; the RX-shim call sites no-op when unset).
       if(CONFIG_WOZ_UWB_CIRDIAG)
-        zephyr_library_sources(${SRC}/driver/uwb_cirdiag.c)
+        woz_role_sources(${ROLES}/diag_cir.list UWB_DIAG_CIR_SRCS)
+        zephyr_library_sources(${UWB_DIAG_CIR_SRCS})
       endif()
       # Flight recorder: record a live walk-up into a RAM ring for host replay
       # (gated, default n; the ccc_shim_rx.c call sites no-op when unset).
       if(CONFIG_WOZ_FLIGHT_RECORDER)
-        zephyr_library_sources(${SRC}/facade/flight_recorder.c)
+        woz_role_sources(${ROLES}/flight_recorder.list UWB_FLIGHT_SRCS)
+        zephyr_library_sources(${UWB_FLIGHT_SRCS})
       endif()
     endif()
 
