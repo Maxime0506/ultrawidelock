@@ -41,16 +41,23 @@ changelog=""
 CL="$ROOT/CHANGELOG.md"
 if [ -f "$CL" ]; then
 	version="${TAG#v}"
-	section="$(awk -v v="$version" '
-		/^## \[/ {
-			if (found) exit
-			line = $0
-			sub(/^## \[/, "", line)
-			sub(/\].*$/, "", line)
-			if (line == v) { found = 1; print "## What changed"; next }
-		}
-		found { print }
-	' "$CL")"
+	# A pre-release tag (v0.4.0-rc.1) has no changelog section of its own; it
+	# describes the same content as its base version, so try the exact match
+	# first and then the version with the suffix stripped.
+	section=""
+	for v in "$version" "${version%%-*}"; do
+		section="$(awk -v v="$v" '
+			/^## \[/ {
+				if (found) exit
+				line = $0
+				sub(/^## \[/, "", line)
+				sub(/\].*$/, "", line)
+				if (line == v) { found = 1; print "## What changed"; next }
+			}
+			found { print }
+		' "$CL")"
+		[ -n "$section" ] && break
+	done
 	if [ -z "$section" ]; then
 		section="$(awk '
 			/^## \[/ {

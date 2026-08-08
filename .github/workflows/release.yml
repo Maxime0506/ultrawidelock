@@ -397,9 +397,17 @@ jobs:
         # email it sends every watcher, which makes this the most-read page the
         # project has, and it should be reviewable as prose and previewable on a
         # laptop (`scripts/release-notes.sh v0.5.0`) rather than only on a tag.
+        # A tag with a pre-release suffix (any '-': v0.4.0-rc.1) publishes as a
+        # GitHub prerelease. GitHub excludes prereleases from /releases/latest,
+        # so the docs flash page and every releases/latest/download/ consumer
+        # stay on the last stable release until the final tag is cut — an rc can
+        # be flashed and soaked from its own release page without moving what a
+        # stranger downloads.
         run: |
           notes="$(mktemp)"
           ./scripts/release-notes.sh "$TAG" out/SHA256SUMS.txt > "$notes"
-          gh release create "$TAG" --repo "$REPO" --verify-tag \
+          pre=false
+          if [[ "$TAG" == *-* ]]; then pre=true; fi
+          gh release create "$TAG" --repo "$REPO" --verify-tag --prerelease="$pre" \
             --title "openaliro $TAG" --notes-file "$notes" \
             out/*.zip out/*.bin out/*.json out/SHA256SUMS.txt

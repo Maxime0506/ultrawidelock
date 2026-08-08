@@ -8,6 +8,86 @@ the API and behavior may change in minor releases.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-08
+
+### Added
+
+- On-device UWB obstruction classifier: a LOS/NLOS decision tree trained on the
+  public eWINE set restricted to the diagnostics a DW3000 can actually produce,
+  shipped as `modules/woz_ml`. 390 B of flash, zero RAM, 28 B of stack, and the
+  generated C is certified against its scikit-learn parent on every held-out
+  sample rather than regression-pinned. The training pipeline and the bake-off
+  that picked a tree over TFLM live in `ai/tinyml`.
+- nRF5340 DK Aliro initiator, end to end: a Zephyr BLE central backend behind
+  the same `aliro_ble_central.h` seam the ESP32 initiator uses, a DK app that
+  reaches a shared URSK against an unmodified Apple-provisioned reader, and
+  `scripts/aliro-enroll.py`, which enrols the bench initiator the way Apple
+  Home enrols a phone: as a second admin over Matter. The CCC initiator ranging
+  role itself is future work.
+- Anchor-to-anchor DS-TWR: a top-level `anchor/` app that ranges two of this
+  project's own boards against each other at the bare `WOZ_UWB` tier (no
+  credential, no CCC engine in the image), plus `modules/woz_anchor`: door
+  swing angle from ranged distance by hinge geometry and two-anchor
+  side-of-door fusion, host-tested, default off, so every existing image stays
+  byte-identical.
+- An open commissioning window is now published as `_matterc._udp` over DNS-SD
+  (both subtypes, fresh random instance name per window), withdrawn when the
+  window closes. Until now the window was announced over BLE only, which Apple
+  Home happens to use, so no other controller could ever add itself as a second
+  admin.
+- Status LEDs on the DWM3001CDK.
+- `make flash` identifies the CDK among multiple attached J-Links by reading
+  FICR INFO.PART through each candidate, caching the winner per bench, so two
+  probes no longer require `CDK_PROBE=`.
+
+### Changed
+
+- The DWM3001CDK is now an rx-on-when-idle MED rather than a sleepy end device
+  polling every 3,000 ms, and advertises SII=500 to match. Hub-to-node traffic
+  (CASE sigmas, Home-tile invokes, subscription acks) no longer waits a mean
+  1.5 s per frame, which was the largest share of tile-tap and commissioning
+  latency. A battery build that wants SED back should take `POLL_PERIOD=500`
+  with the advertised SII moved to match, never the old 3,000.
+- `NumberOfAliroEndpointKeysSupported` now reports the trust store's real
+  capacity (6) instead of a hard-coded 10 that let a controller install keys
+  the store silently evicted.
+- Trust-store blob v4 records the Matter credential type, credential index and
+  user index each anchor was installed under, which is what makes revocation by
+  name possible. v1-v3 blobs still parse; their anchors carry no binding, so
+  re-install a key from the controller to make it revocable.
+
+### Fixed
+
+- Security: a home key the Matter admin removes now stops opening the door.
+  The reader answers ClearCredential, ClearUser and a SetCredential that
+  transitions to available by revoking the bound trust anchor, fail-closed:
+  the key leaves the live store before the persist is attempted, and
+  established Aliro sessions are swept off the ranging path. Previously Apple
+  Home's key removal changed nothing the reader listened for, and the removed
+  key kept opening the door until the whole trust store was cleared.
+- Security: a revocation that reached RAM but not flash is no longer reported
+  to the controller as success, on all four paths that did it, and the retry
+  now rides the next repeated command rather than waiting for a disconnect
+  that a Matter-only removal never gets.
+- The DS-TWR time-of-flight estimator accumulated its numerator unsigned and
+  underflowed near contact, returning kilometre-scale garbage inside roughly a
+  metre, exactly where a lock spends its time. One shared signed estimator
+  (`ds_twr_tof_signed`) now serves both the CCC responder and the anchor app;
+  a negative near-contact result is a real measurement, and callers apply
+  their own plausibility floor.
+- Five places quoted CDK flash/RAM headroom the images have not had since the
+  IP-layer drop; the budget prose now points at the shipping image's measured
+  baseline.
+
+### Removed
+
+- The Discord bot moved to its own repository, along with its verify lane and
+  docs-pipeline hooks. Nothing in the firmware tree referenced it, and its
+  citation-drift gate was failing firmware pull requests over moved line
+  numbers.
+
+## [0.3.0] - 2026-08-05
+
 ### Added
 
 - DWM3001CDK as the primary target: one nRF52833 image in `firmware/` carrying
@@ -136,6 +216,8 @@ the API and behavior may change in minor releases.
   sanitizers, fuzzing, bounded parser proofs, and firmware build gates.
 - Zero-toolchain WebSerial flasher for the ESP32-S3 release image.
 
-[Unreleased]: https://github.com/openaliro/openaliro/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/openaliro/openaliro/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/openaliro/openaliro/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/openaliro/openaliro/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/openaliro/openaliro/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/openaliro/openaliro/releases/tag/v0.1.0
