@@ -773,7 +773,7 @@ AliroError DeriveRawKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t in
 }
 
 /* REAL AES-256-GCM: the reference implementation in
- * ports/esp32/test/aliro_prim_host.c, pinned against the GCM spec vectors by
+ * tests/shared/aliro_prim_host.c, pinned against the GCM spec vectors by
  * test_aliro_crypto.c. A wrong key, a skipped counter or a corrupted tag now
  * fails here exactly as it would on the device. */
 AliroError AeadEncrypt(CryptoTypes::KeyId keyId, const uint8_t *plainTxt, size_t plainTxtLength,

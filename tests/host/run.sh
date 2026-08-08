@@ -236,7 +236,7 @@ done
 	-o "$OUT/stk_aliro_hash.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
-	-I"$ROOT/modules/woz_aliro/src" -c "$ROOT/ports/esp32/test/aliro_prim_host.c" \
+	-I"$ROOT/modules/woz_aliro/src" -c "$ROOT/tests/shared/aliro_prim_host.c" \
 	-o "$OUT/stk_aliro_prim_host.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \

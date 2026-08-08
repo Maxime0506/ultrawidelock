@@ -243,6 +243,7 @@ BUILD_FILES=(
 	ports/zephyr/CMakeLists.txt
 	modules/*/CMakeLists.txt
 	ports/esp32/components/*/CMakeLists.txt
+	ports/esp32/test/on_target_ec/main/CMakeLists.txt
 )
 
 check_build_paths() {

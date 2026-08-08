@@ -8,7 +8,7 @@
 /*
  * nRF5340 entry for the Aliro device (initiator) EC self-test. Initialises the
  * PSA backend (nrf_security/CryptoCell), runs the same suite as the host test
- * (ports/esp32/test/test_aliro_device.c) against the real P-256 curve, and
+ * (tests/shared/test_aliro_device.c) against the real P-256 curve, and
  * prints the verdict to the DK's UART console. Credential-auth crypto only; no
  * BLE, UWB or iPhone.
  */

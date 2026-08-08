@@ -7,7 +7,10 @@ project(aliro_device_ec_test)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
-set(TESTDIR "${REPO_ROOT}/ports/esp32/test")
+# The device self-test body is port-neutral and lives in tests/shared; the
+# ESP32 host suite compiles the same file against the fake-EC prim double,
+# while this app links it against the real CryptoCell P-256 backend.
+set(TESTDIR "${REPO_ROOT}/tests/shared")
 
 # Device-side shared sources by role manifest (modules/woz_aliro/roles/*.list)
 # — the same lists the initiator app and the ESP32 components read.

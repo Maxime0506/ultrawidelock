@@ -54,6 +54,7 @@ LLVM_PROFILE_FILE="$OUT/host.profraw" "$BIN" >"$OUT/run.log" 2>&1 || true
 
 # --- suite 2..n: shared-core host KATs (mirror of ports/esp32/test/run.sh) --
 ET="$ROOT/ports/esp32/test"
+SHARED="$ROOT/tests/shared"
 ALIRO="$ROOT/modules/woz_aliro"
 LOCK_MAIN="$ROOT/ports/esp32/apps/matter-lock/main"
 
@@ -81,7 +82,7 @@ run_suite() { # <name> <bin>: run one instrumented suite into its own profile
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ET/test_aliro_crypto.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_advtag.c" \
-	"$ET/aliro_prim_host.c" -o "$OUT/cov_crypto"
+	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_crypto"
 run_suite crypto "$OUT/cov_crypto"
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
@@ -93,7 +94,7 @@ cov_cc -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
 	"$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
-	"$ET/aliro_prim_host.c" -o "$OUT/cov_stepup"
+	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_stepup"
 run_suite stepup "$OUT/cov_stepup"
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
@@ -117,7 +118,7 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	"$ALIRO/src/aliro_reader.c" "$ALIRO/src/aliro_apdu.c" \
 	"$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
 	"$ALIRO/src/aliro_prov.c" \
-	"$ET/aliro_prim_host.c" -o "$OUT/cov_reader"
+	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_reader"
 run_suite reader "$OUT/cov_reader"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
@@ -126,7 +127,7 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	"$ET/test_aliro_ranging.c" \
 	"$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
 	"$ALIRO/src/aliro_hash.c" \
-	"$ET/aliro_prim_host.c" -o "$OUT/cov_ranging"
+	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_ranging"
 run_suite ranging "$OUT/cov_ranging"
 
 # Header-inline logic (woz_port.h et al.) is exercised by the port-headers
@@ -219,7 +220,7 @@ run_suite ecp "$OUT/cov_ecp"
 cov_cc -I"$SDKFAKE" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ET/test_esp_aliro_ble.c" "$ECOMP/aliro_ble/aliro_ble.c" \
 	"$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
-	"$ET/aliro_prim_host.c" \
+	"$SHARED/aliro_prim_host.c" \
 	"$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_ble"
 run_suite esp_ble "$OUT/cov_esp_ble"
 
@@ -234,7 +235,7 @@ cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 \
 	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
 	"$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
-	"$ET/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
+	"$SHARED/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
 
 # _POSIX_C_SOURCE because main.c now includes woz_port.h, whose host build calls
@@ -378,7 +379,7 @@ done
 cov_cc -I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src" \
 	-c "$ROOT/modules/woz_aliro/src/aliro_hash.c" -o "$OUT/stk_aliro_hash_cov.o"
 cov_cc -I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src" \
-	-c "$ROOT/ports/esp32/test/aliro_prim_host.c" -o "$OUT/stk_aliro_prim_host_cov.o"
+	-c "$SHARED/aliro_prim_host.c" -o "$OUT/stk_aliro_prim_host_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/aliro_stack.cpp" -o "$OUT/stk_aliro_stack_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/session.cpp" -o "$OUT/stk_session_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/stackfake/stackfake.cpp" \

@@ -11,6 +11,10 @@
 # they need the DWM3000EVB wired up.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Port-neutral test bodies live in tests/shared: the fake-EC/GCM prim double
+# and the device self-test are compiled here AND by an nRF Zephyr app
+# (ports/nrf5340dk/on_target_ec), so neither belongs under ports/esp32.
+SHARED="$HERE/../../../tests/shared"
 
 echo "== host: port headers unit test =="
 BIN="$(mktemp -t woz_port_headers.XXXXXX)"
@@ -30,7 +34,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_crypto.c" \
    "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_advtag.c" \
-   "$HERE/aliro_prim_host.c" -o "$CBIN"
+   "$SHARED/aliro_prim_host.c" -o "$CBIN"
 "$CBIN"
 
 echo
@@ -43,7 +47,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_assert_ec.c" \
    "$ALIRO/src/aliro_assert.c" "$ALIRO/src/aliro_assert_ec.c" "$ALIRO/src/aliro_hash.c" \
-   "$HERE/aliro_prim_host.c" -o "$ECBIN"
+   "$SHARED/aliro_prim_host.c" -o "$ECBIN"
 "$ECBIN"
 
 echo
@@ -63,10 +67,10 @@ DBIN="$(mktemp -t aliro_device.XXXXXX)"
 # only the EC-free anchors. On target the real aliro_prim_psa curve is linked.
 cc -std=c11 -O1 -Wall -Wextra -DALIRO_DEVICE_HAVE_EC \
    -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_device.c" \
+   "$SHARED/test_aliro_device.c" \
    "$ALIRO/src/aliro_device.c" "$ALIRO/src/aliro_device_apdu.c" \
    "$ALIRO/src/aliro_apdu.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
-   "$HERE/aliro_prim_host.c" -o "$DBIN"
+   "$SHARED/aliro_prim_host.c" -o "$DBIN"
 "$DBIN"
 rm -f "$DBIN"
 
@@ -92,7 +96,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
    "$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
    "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
-   "$HERE/aliro_prim_host.c" -o "$SBIN"
+   "$SHARED/aliro_prim_host.c" -o "$SBIN"
 "$SBIN"
 rm -f "$SBIN"
 
@@ -143,7 +147,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$ALIRO/src/aliro_reader.c" "$ALIRO/src/aliro_apdu.c" \
    "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
    "$ALIRO/src/aliro_prov.c" \
-   "$HERE/aliro_prim_host.c" -o "$RBIN"
+   "$SHARED/aliro_prim_host.c" -o "$RBIN"
 "$RBIN"
 rm -f "$RBIN"
 
@@ -162,7 +166,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$HERE/test_aliro_ranging.c" \
    "$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
    "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_lat.c" \
-   "$HERE/aliro_prim_host.c" -o "$GBIN"
+   "$SHARED/aliro_prim_host.c" -o "$GBIN"
 "$GBIN"
 rm -f "$GBIN"
 
@@ -189,7 +193,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$HERE/test_esp_aliro_ble.c" \
    "$HERE/../components/aliro_ble/aliro_ble.c" \
    "$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
-   "$HERE/aliro_prim_host.c" \
+   "$SHARED/aliro_prim_host.c" \
    "$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$EBIN"
 "$EBIN"
 rm -f "$EBIN"
@@ -218,7 +222,7 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 \
    "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
    "$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
    "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
-   "$HERE/aliro_prim_host.c" \
+   "$SHARED/aliro_prim_host.c" \
    "$SDKFAKE/fake_freertos.c" -o "$WBIN"
 "$WBIN"
 rm -f "$WBIN"
