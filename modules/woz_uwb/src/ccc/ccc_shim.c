@@ -16,6 +16,11 @@ static struct {
 	bool cache_valid;
 	uint32_t cache_base;
 	uint8_t cache_dursk[CCC_DURSK_LEN];
+	/* One-deep dUDSK cache, same shape: dUDSK is per ranging cycle too, consumed once per
+	 * Final_Data. */
+	bool cache_dudsk_valid;
+	uint32_t cache_dudsk_base;
+	uint8_t cache_dudsk[CCC_DUDSK_LEN];
 	/* Blob-index calibration: origin + per-block stride learned from the first two indices
 	 * (calib: 0 none, 1 origin, 2 stride). */
 	uint8_t calib;
@@ -59,6 +64,7 @@ int ccc_shim_bind(const uint8_t mursk[CCC_MURSK_LEN],
 	g.sts_index0 = sts_index0;
 	g.n_slot_per_round = n_slot_per_round;
 	g.cache_valid = false;
+	g.cache_dudsk_valid = false;
 	g.calib = 0u; /* re-learn the blob index origin/stride for this session */
 	g.active = true;
 	return 0;
@@ -176,13 +182,24 @@ int ccc_shim_dudsk_for_index(uint32_t sts_index, uint8_t dudsk[CCC_DUDSK_LEN])
 		return -EINVAL;
 	}
 	/* Same per-cycle base as the STS path; dUDSK shares URSK_KT, differs only by the KDF label.
-	 * Derived fresh (no cache). */
+	 * One-deep cache on the base, like the dURSK path above: the value is identical for every
+	 * Final_Data in a cycle. */
 	base = sts_index - ((sts_index - g.sts_index0) % g.n_slot_per_round);
-	rc = ccc_derive_ursk_kt(g.mursk, base, ursk_kt);
-	if (rc != 0) {
-		return rc;
+	if (!g.cache_dudsk_valid || g.cache_dudsk_base != base) {
+		rc = ccc_derive_ursk_kt(g.mursk, base, ursk_kt);
+		if (rc != 0) {
+			return rc;
+		}
+		rc = ccc_derive_dudsk(ursk_kt, g.salted_hash, g.cache_dudsk);
+		if (rc != 0) {
+			return rc;
+		}
+		g.cache_dudsk_base = base;
+		g.cache_dudsk_valid = true;
 	}
-	return ccc_derive_dudsk(ursk_kt, g.salted_hash, dudsk);
+	memcpy(dudsk, g.cache_dudsk, CCC_DUDSK_LEN);
+
+	return 0;
 }
 
 /**

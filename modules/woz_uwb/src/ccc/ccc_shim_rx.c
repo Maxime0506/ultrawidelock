@@ -191,9 +191,17 @@ static uint32_t g_postfinal_final_ip;         /* Final ip stashed for the post-F
 #endif
 
 /** @brief Cache of the STS key (dURSK) currently loaded in the STS_KEY registers, so the per-arm
- * sts_key_load() skips the ~258 us of redundant key writes when the per-cycle-constant dURSK is
- * unchanged. Defined here (ahead of ccc_shim_rx_log_reset) so a session start can invalidate it. */
-#if defined(ESP_PLATFORM)
+ * sts_key_load() skips the redundant key writes when the per-cycle-constant dURSK is
+ * unchanged. Defined here (ahead of ccc_shim_rx_log_reset) so a session start can invalidate it.
+ *
+ * Compiled only where CCC ranging OWNS the STS_KEY registers, because the cache has no
+ * invalidation hook for a foreign writer. ESP32 and the CDK (CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
+ * qualify: their ranging path calls dwt_configurestsiv directly from this file, so the
+ * IV-substitution seam is never entered. The nRF5340 DK does NOT: there the Nordic MAC's
+ * dwt_configurestsiv goes through the seam into woz_uwb_set_sts_iv, and ccc_shim_wrap.c:107
+ * overrides STS_KEY per frame with no invalidation — a cache hit would then skip a write the
+ * registers actually needed, and ranging would run with an STS that never correlates. */
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 static uint8_t g_sts_key_cache[CCC_DURSK_LEN];
 static bool g_sts_key_cached;
 #endif
@@ -271,7 +279,7 @@ void ccc_shim_rx_log_reset(void)
 #if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	g_final_round_valid = false;
 #endif
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	g_sts_key_cached =
 		false; /* new session re-configures the radio -> STS_KEY regs re-cleared */
 #endif
@@ -803,7 +811,8 @@ static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 
 /* The STS key (dURSK) is per ranging CYCLE — POLL, Response, Final and every block in the cycle
  * share it — but each arm re-wrote all four STS_KEY registers: ~258 us of SPI on the critical path,
- * ~40% of the arm latency that misses the ~1836 us slot deadline. Cache the loaded
+ * ~40% of the arm latency that misses the ~1836 us slot deadline (measured on ESP32 SPI; the cost
+ * on nRF is unmeasured, but the writes are redundant either way). Cache the loaded
  * dURSK and skip dwt_configurestskey when unchanged; the STS_KEY registers persist across the
  * per-frame IV/loadiv/mode reprogramming within a session. ccc_shim_rx_log_reset() clears the cache
  * (a new session's dwt_configure re-clears the registers). Only the ~16-byte IV write remains per
@@ -812,7 +821,7 @@ static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 static void sts_key_load(const uint8_t dursk[CCC_DURSK_LEN])
 {
 	dwt_sts_cp_key_t k;
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	size_t i;
 
 	if (g_sts_key_cached) {
@@ -825,7 +834,7 @@ static void sts_key_load(const uint8_t dursk[CCC_DURSK_LEN])
 #endif
 	pack_key(&k, dursk);
 	dwt_configurestskey(&k);
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 	for (i = 0u; i < CCC_DURSK_LEN; i++) {
 		g_sts_key_cache[i] = dursk[i];
 	}
@@ -943,7 +952,7 @@ int32_t woz_uwb_arm_rx(int32_t mode)
 			pack_key(&k, dursk);
 			pack_iv(&v, sts_v);
 			dwt_configurestskey(&k);
-#if defined(ESP_PLATFORM)
+#if defined(ESP_PLATFORM) || defined(CONFIG_WOZ_UWB_FINAL_SNAPSHOT)
 			/* wrote STS_KEY out-of-band; drop the arm cache */
 			g_sts_key_cached = false;
 #endif
@@ -1058,7 +1067,7 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 		g_armed_final_sts_v[i] = g_warm_final_sts_v[i];
 	}
 	pack_iv(&v, pv);
-	sts_key_load(pd);         /* cached: writes the 4 STS_KEY regs only on a dURSK change */
+	sts_key_load(pd);         /* ESP32/CDK: writes the 4 STS_KEY regs only on a dURSK change */
 	dwt_configurestsiv(&v);   /* the shim is us; load it directly */
 	dwt_configurestsloadiv(); /* reset HW STS counter to our IV */
 	dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND); /* SP0 -> SP3/ND for the POLL */
@@ -1198,8 +1207,7 @@ static int tx_response_sp3(uint32_t poll_ip, uint32_t resp_idx)
 
 	/* NO KDF here — pack the Response STS committed at the arm (g_armed_resp_*); the derive
 	 * already ran in the idle. resp_idx is only for the diagnostic print. */
-	sts_key_load(
-		g_armed_resp_dursk); /* same dURSK as the POLL round (cached, usually a no-op) */
+	sts_key_load(g_armed_resp_dursk); /* same dURSK as the POLL round (ESP32/CDK: a no-op) */
 	pack_iv(&v, g_armed_resp_sts_v);
 	dwt_configurestsiv(&v);   /* Response STS-V (index+1); the shim is us, load it directly */
 	dwt_configurestsloadiv(); /* reset the HW STS counter to our V */
@@ -1235,7 +1243,7 @@ static int arm_final_sp3(uint32_t poll_ip)
 	uint32_t dx, now;
 	int r;
 
-	sts_key_load(g_armed_final_dursk); /* same per-cycle dURSK (cached, usually a no-op) */
+	sts_key_load(g_armed_final_dursk); /* same per-cycle dURSK (ESP32/CDK: a no-op) */
 	pack_iv(&v, g_armed_final_sts_v);
 	dwt_configurestsiv(&v);
 	dwt_configurestsloadiv();
