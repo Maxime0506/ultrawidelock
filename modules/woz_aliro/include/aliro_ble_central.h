@@ -7,11 +7,9 @@
 // lives in aliro_ble_central.c and is host-testable; the NimBLE backend for the
 // transport calls sits in ports/esp32, so a Zephyr bt_gap_*/bt_l2cap_* backend
 // can be written behind this same header.
-/*
- * Provenance: clean-room. Every byte layout here is the inverse of our own
- * reader's emitters in ports/esp32/components/aliro_ble/aliro_ble.c
- * (build_aliro_svc_data, build_read_payload).
- */
+// Every byte layout here is the inverse of the reader's emitters in
+// ports/esp32/components/aliro_ble/aliro_ble.c (build_aliro_svc_data,
+// build_read_payload).
 #pragma once
 
 #include <stddef.h>

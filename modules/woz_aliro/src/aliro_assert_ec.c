@@ -1,6 +1,6 @@
 // Binds the aliro_assert P-256 seam to aliro_prim's ECDSA (see aliro_assert_ec.h).
 // The only file in the presence path with a crypto-backend dependency, which is
-// exactly why it is separate: aliro_assert.c keeps its cbmc and fuzz harnesses.
+// exactly why it is separate: aliro_assert.c stays backend-free.
 #include <stddef.h>
 
 #include "aliro_assert_ec.h"

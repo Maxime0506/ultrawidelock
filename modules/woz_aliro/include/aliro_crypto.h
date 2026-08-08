@@ -6,13 +6,9 @@
  * turns a passed credential authentication into the 32-byte URSK (the UWB
  * ranging root) plus the secure-channel keys.
  *
- * This is Phase 3.1: the primitives and the key schedule, host-KAT verifiable.
- * The transaction state machine that drives it (AUTH0/AUTH1, EXCHANGE) is 3.2;
- * the handoff of the URSK into woz_uwb_start_aliro(cfg) is 3.3.
- *
- * Provenance: original. The suite is standard (mbedTLS-PSA + a portable
- * SHA-256/KDF core). The wire/derivation facts come from the project's
- * reverse-engineering notes, not from any vendor source.
+ * This is Phase 3.1: the primitives and the key schedule. The transaction state
+ * machine that drives it (AUTH0/AUTH1, EXCHANGE) is 3.2; the handoff of the URSK
+ * into woz_uwb_start_aliro(cfg) is 3.3.
  */
 #pragma once
 

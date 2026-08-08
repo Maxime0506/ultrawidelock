@@ -2,15 +2,11 @@
 // of aliro_apdu.c. Where aliro_apdu builds reader commands and parses device
 // responses, this parses the reader's AUTH0/AUTH1/EXCHANGE commands and builds
 // the device's AUTH0/AUTH1/EXCHANGE responses. Pure byte manipulation, no crypto
-// and no platform dependency, so it is host-KAT verifiable against the reader's
-// own builders/parsers (round-trip) and the recovered layouts.
+// and no platform dependency.
 /*
  * aliro_device_apdu — the initiator half of the credential-auth wire codec.
  * Compiled only by the device build + host tests; the reader firmware never
  * links it, so the reader image is unchanged.
- *
- * Provenance: clean-room. Byte layouts from the project's reverse-engineering
- * notes and aliro_apdu.h; the code is original.
  */
 #pragma once
 

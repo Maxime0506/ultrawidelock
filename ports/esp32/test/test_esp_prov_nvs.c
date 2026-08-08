@@ -3,8 +3,8 @@
  * the in-RAM NVS fake (sdkfake/fake_nvs.c). "Theatre" suite: no flash is
  * involved, so passing proves the load/store branch logic and the blob's
  * round-trip through the real aliro_prov serializer — not NVS durability.
- * The serializer/deserializer itself is the real shared-core code (KAT'd by
- * test_aliro_prov.c); only the nvs_* calls are doubles.
+ * The serializer/deserializer itself is the real shared-core code; only the
+ * nvs_* calls are doubles.
  */
 #include <stdint.h>
 #include <stdio.h>

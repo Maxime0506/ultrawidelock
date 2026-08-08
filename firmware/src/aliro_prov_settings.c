@@ -1,8 +1,8 @@
 /*
  * aliro_prov (Zephyr settings backend) — the DWM3001CDK twin of the ESP32
  * port's aliro_prov_nvs.c. The portable serialisation, dev fallback and trust
- * logic all live in aliro_prov.c (host-KAT'd); this file only moves that one
- * blob in and out of the settings store on `storage_partition`.
+ * logic all live in aliro_prov.c; this file only moves that one blob in and out
+ * of the settings store on `storage_partition`.
  */
 #include <string.h>
 

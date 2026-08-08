@@ -6,10 +6,7 @@
  * plus the AUTH0/AUTH1 command builders, the ECDSA authentication-data
  * transcript, the AUTH0/AUTH1 response parsers, the EXCHANGE command, and the
  * 4-byte L2CAP envelope. Pure byte manipulation, no crypto and no platform
- * dependency, so it is host-KAT verifiable against the recovered layouts.
- *
- * Provenance: original. Byte layouts from the project's reverse-engineering
- * notes; the code is original.
+ * dependency.
  */
 #pragma once
 

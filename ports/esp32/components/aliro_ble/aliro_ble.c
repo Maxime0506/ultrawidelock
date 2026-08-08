@@ -607,7 +607,7 @@ static void adv_tag_schedule_refresh(void)
  *   [10..11] truncated reader group sub id (2) = reader_id[16..17]
  *   [12..15] dynamic-tag expiry, big-endian (0xFFFFFFFF = no clock)
  *   [16]     reserved (0)
- *   [17..23] dynamic tag (aliro_advtag.c; KAT'd against the spec sect. 20 vectors)
+ *   [17..23] dynamic tag (aliro_advtag.c)
  * Layout follows Aliro 1.0 section 11.3 (Table 11-2); NimBLE hands out AdvA
  * LSB-first, the derivation wants it MSB-first.
  * With a valid wall clock the expiry is live (now + window) and the periodic

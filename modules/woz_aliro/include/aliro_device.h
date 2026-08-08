@@ -8,9 +8,8 @@
  * direction-symmetric crypto (aliro_crypto.c) and EC primitives (aliro_prim.h);
  * the only genuinely new logic is the inverse codec (aliro_device_apdu) and the
  * device view of the two AES-256-GCM channels (opposite seal/open direction to
- * the reader). Compiled by the device build + host tests only.
- *
- * Provenance: clean-room, mirrored from the reader flow in aliro_reader.c.
+ * the reader). Compiled by the device build + host tests only. Mirrors the
+ * reader flow in aliro_reader.c.
  */
 #pragma once
 

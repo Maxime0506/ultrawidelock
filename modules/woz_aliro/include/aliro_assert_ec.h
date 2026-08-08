@@ -2,14 +2,13 @@
  * aliro_assert_ec — binds the aliro_assert P-256 seam to aliro_prim.
  *
  * aliro_assert.c stays free of any crypto backend so it can remain portable
- * C11, model-checked and fuzzed. This is the other half: the two-function shim
- * that hands the seam whatever P-256 the platform already provides, so nothing
- * else has to know the seam exists.
+ * C11. This is the other half: the two-function shim that hands the seam
+ * whatever P-256 the platform already provides, so nothing else has to know the
+ * seam exists.
  *
  * Split into its own translation unit rather than #ifdef'd into aliro_assert.c
- * because it is the only part with a dependency: a build that has no PSA (the
- * main host suite) simply does not compile this file, and the codec keeps its
- * harnesses either way.
+ * because it is the only part with a dependency: a build that has no PSA simply
+ * does not compile this file.
  */
 #pragma once
 

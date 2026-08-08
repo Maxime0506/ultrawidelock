@@ -31,8 +31,8 @@
  * This module is the wire codec + verifier only. It knows nothing about UWB or
  * BLE; the dongle firmware fills the fields from a real Aliro ranging round and
  * the host maps the verdict to a decision. Portable C11 (SHA-256 for credential
- * identifiers via aliro_hash.c), so the exact codec is host-KAT'd and fuzzed.
- * That boundary is why trust_level is reported but not thresholded here: the
+ * identifiers via aliro_hash.c). That boundary is why trust_level is reported
+ * but not thresholded here: the
  * consensus constant belongs to the UWB layer, so the policy layer above owns
  * any floor on it.
  *
@@ -157,8 +157,8 @@ void aliro_assert_cred_id(const uint8_t cred_pub[ALIRO_ASSERT_PUB_LEN],
  *
  * The curve arithmetic deliberately does NOT live in this module. Keeping the
  * codec free of any crypto-backend dependency is what lets it stay portable
- * C11, model-checkable and fuzzable, and it lets each caller bind whatever
- * P-256 it already has -- on target that is aliro_ecdsa_p256_sign/verify from
+ * C11, and it lets each caller bind whatever P-256 it already has -- on target
+ * that is aliro_ecdsa_p256_sign/verify from
  * aliro_prim.h, in tests it is a double that can assert exactly which bytes
  * were presented for signature.
  *

@@ -5,8 +5,8 @@
 /*
  * aliro_prov (portable core) — dev identity, blob (de)serialisation, and the
  * trust-store logic. No ESP-IDF or crypto dependency, so it compiles identically
- * on host and target and is host-KAT'd (test/test_aliro_prov.c). The NVS-backed
- * load/store lives in aliro_prov_nvs.c (target only).
+ * on host and target. The NVS-backed load/store lives in aliro_prov_nvs.c
+ * (target only).
  */
 #include <string.h>
 

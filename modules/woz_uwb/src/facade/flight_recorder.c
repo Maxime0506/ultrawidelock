@@ -7,7 +7,7 @@
  * flight_recorder — trace (de)serialisation + the on-device capture path.
  * See flight_recorder.h for the format rationale. The writer/reader half is
  * portable and pointer-free so the same code builds in the firmware, the host
- * replay harness, and any offline tool; the CONFIG_WOZ_FLIGHT_RECORDER half adds
+ * replay, and any offline tool; the CONFIG_WOZ_FLIGHT_RECORDER half adds
  * the RAM-ring capture hooks and the `[FREC]` serial dump.
  */
 #include "flight_recorder.h"

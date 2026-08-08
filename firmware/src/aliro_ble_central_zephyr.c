@@ -16,9 +16,6 @@
  *   L2CAP CoC connect -> on_ready
  * Any failure logs and returns to scanning, so a reader that reboots mid-chain
  * is picked up again without intervention.
- *
- * Provenance: clean-room. The chain and its failure handling mirror the NimBLE
- * backend; the Zephyr mechanics mirror aliro_ble_zephyr.c.
  */
 #include <string.h>
 

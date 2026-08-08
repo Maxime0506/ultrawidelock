@@ -3,9 +3,9 @@
 // Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
 /*
  * aliro_prov (NVS backend) — target-only load/store of the provisioning blob.
- * The portable serialisation + dev fallback + trust logic is in aliro_prov.c
- * (host-KAT'd); this file only moves that blob in and out of NVS. Not compiled
- * on host (kept out of the test build).
+ * The portable serialisation + dev fallback + trust logic is in aliro_prov.c;
+ * this file only moves that blob in and out of NVS. Not compiled on host (kept
+ * out of the test build).
  */
 #include <string.h>
 

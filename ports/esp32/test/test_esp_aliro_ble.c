@@ -5,8 +5,8 @@
  * branch logic (advert service data, READ payload, version WRITE validation,
  * CoC tracking, send/receive paths, retry/refresh scheduling) — not that a
  * phone can actually connect. The dynamic-tag bytes ARE cross-checked against
- * the independently KAT'd aliro_advtag_derive(), and the wall clock is overridden
- * so both the live-expiry and no-clock advert forms are pinned byte-for-byte.
+ * aliro_advtag_derive(), and the wall clock is overridden so both the
+ * live-expiry and no-clock advert forms are pinned byte-for-byte.
  *
  * Sections (one linear script; the unit's state is process-global):
  *   A  config capture + READ payload (via the GATT access callback)
@@ -320,7 +320,7 @@ static void t_attach_and_advert(void)
 	okc("expiry = now + 900", expiry == (uint32_t)s_fake_now + 900u);
 	okc("reserved byte 0", sd[18] == 0);
 
-	/* Cross-check the tag against the KAT'd derivation (AdvA MSB-first). */
+	/* Cross-check the tag against the derivation (AdvA MSB-first). */
 	uint8_t adva_msb[6] = {0xC4, 0xBB, 0x86, 0xC3, 0x27, 0x10};
 	uint8_t want_tag[ALIRO_ADVTAG_LEN];
 

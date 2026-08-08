@@ -12,8 +12,8 @@
  * real identity.
  *
  * Split like aliro_crypto: the (de)serialisation + dev default + trust logic is
- * portable and host-KAT'd (aliro_prov.c); the NVS load/store is target-only
- * (aliro_prov_nvs.c, not compiled on host). Provenance: original.
+ * portable (aliro_prov.c); the NVS load/store is target-only (aliro_prov_nvs.c,
+ * not compiled on host).
  */
 #pragma once
 

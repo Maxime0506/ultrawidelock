@@ -3,10 +3,10 @@
 // AES-256-GCM channel, and runs the six-step Access Document verification of spec 7.4. The ES256
 // primitive is injected (verify ctx) so this unit carries no elliptic-curve dependency.
 /*
- * Provenance: original. Wire structures from the Aliro v1.0 spec (§7.4, §8.4,
- * §14.6) and ISO 18013-5 (SessionData, COSE_Sign1 Sig_structure). The code is
- * original; the crypto goes through aliro_hash (HKDF/SHA-256) and aliro_crypto
- * (AES-256-GCM secure channel), with ES256 supplied by the caller.
+ * Wire structures from the Aliro v1.0 spec (§7.4, §8.4, §14.6) and ISO 18013-5
+ * (SessionData, COSE_Sign1 Sig_structure). The crypto goes through aliro_hash
+ * (HKDF/SHA-256) and aliro_crypto (AES-256-GCM secure channel), with ES256
+ * supplied by the caller.
  */
 #include <stdint.h>
 #include <string.h>

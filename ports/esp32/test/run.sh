@@ -179,7 +179,7 @@ echo
 echo "== host: aliro_ble transport vs NimBLE fakes =="
 # Target-only sources compiled against the recording doubles in sdkfake/.
 # These suites prove branch logic + wiring against the fakes, not hardware
-# truth; the dynamic-tag advert bytes are cross-checked against the KAT'd
+# truth; the dynamic-tag advert bytes are cross-checked against
 # aliro_advtag_derive. See sdkfake/sdkfake.h.
 SDKFAKE="$HERE/sdkfake"
 EBIN="$(mktemp -t esp_aliro_ble.XXXXXX)"

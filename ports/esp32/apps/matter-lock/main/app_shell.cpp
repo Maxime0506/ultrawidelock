@@ -478,7 +478,7 @@ static int cmd_lab(int argc, char **argv)
 /* Flight recorder: record a live walk-up into a RAM ring for host replay. OFF at
  * boot (it reads extra DW3000 registers while armed, costing walk-up latency).
  * `fr on` before a walk-up, `fr off` after, `fr dump` to emit the `[FREC]` hex
- * thatfrc trace + fuzz corpus. */
+ * that becomes a .frc trace. */
 static int cmd_frec(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {

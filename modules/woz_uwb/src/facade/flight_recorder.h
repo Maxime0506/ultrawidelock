@@ -20,15 +20,14 @@
  * a captured DW3000 timestamp. So a host replay that feeds the recorded inputs
  * through the real ccc_shim_rx.c re-derives the outputs; a firmware change that
  * alters them shows up as a divergence at a specific event. A field failure
- * becomes a deterministic regression test, and the recorded frames seed the
- * fuzzers with genuine RF sessions.
+ * becomes a deterministic regression test.
  *
  * The trace is a flat little-endian record stream (fr_write_* / fr_read_next),
  * allocation-free over a caller-owned buffer so the device recorder writes it
- * into a static RAM ring with no heap on the walk-up path.
- * carries it off the device (hex-encoded `[FREC]` serial lines -> .frc file) and
- * extracts the frames into a fuzz corpus. The replay engine lives host-side
- * (tests/host/fr_replay.c) because it drives the DW3000 shim doubles.
+ * into a static RAM ring with no heap on the walk-up path. It comes off the
+ * device as hex-encoded `[FREC]` serial lines -> .frc file. The replay engine
+ * lives host-side (tests/host/fr_replay.c) because it drives the DW3000 shim
+ * doubles.
  *
  * This header compiles unchanged in the firmware and the host builds; it pulls
  * in no platform surface of its own.

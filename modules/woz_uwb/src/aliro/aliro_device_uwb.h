@@ -9,9 +9,8 @@
  *  aliro_uwb_msg.c. The reader builds M1/M3 and consumes M2/M4; the device (phone/
  *  fob) parses M1/M3 and builds M2/M4. Pure TLV, no crypto and no session state,
  *  so it is host-testable against the reader's own codec (loopback) and against
- *  the M2/M4 attribute sets the reader is proven to accept.
- *
- *  Provenance: clean-room; mirrors aliro_uwb_msg.c.
+ *  the M2/M4 attribute sets the reader is proven to accept. Mirrors
+ *  aliro_uwb_msg.c.
  */
 #pragma once
 

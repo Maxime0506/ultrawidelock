@@ -254,7 +254,7 @@ config WOZ_FLIGHT_RECORDER
 	  frame and its DW3000 register snapshot, in dispatch order) into a RAM ring,
 	  dumped over the console with `fr dump` as hex `[FREC]` lines. The capture
 	  converts to a .frc trace that the host build replays deterministically
-	  (tests/host/fr_replay.c) and into a fuzz corpus.
+	  (tests/host/fr_replay.c).
 	  OFF at boot; `fr on` before a walk-up, `fr off` after. Like the `lab`/
 	  `uwbdiag` traces the capture reads extra registers while armed, so it costs
 	  walk-up latency — arm it only for a capture run. Default n = compiled out,

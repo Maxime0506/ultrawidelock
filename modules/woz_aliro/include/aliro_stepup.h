@@ -6,7 +6,7 @@
  * aliro_stepup — the Aliro §8.4 step-up phase: the ISO 18013-5 (mdoc) document
  * exchange the Reader MAY run in the standard phase to obtain an Access or
  * Revocation Document. Three concerns, split across two translation units so the
- * wire-facing decoder fuzzes with no crypto dependency:
+ * wire-facing decoder carries no crypto dependency:
  *
  *   aliro_stepup_parse.c  pure CBOR decode + DeviceResponse structural parse
  *                         (Table 7-1/7-2/8-22). No crypto, no allocation; every
@@ -19,10 +19,7 @@
  *
  * The ES256 primitive is passed in (aliro_stepup_verify_ctx.ecdsa_verify) so this
  * module carries no elliptic-curve dependency: the target wires the PSA-backed
- * aliro_ecdsa_p256_verify, the host KAT injects its own.
- *
- * Provenance: original. Structures from the Aliro v1.0 spec (§7, §8.4, §14.6)
- * and ISO 18013-5; the code is original.
+ * aliro_ecdsa_p256_verify, the host injects its own.
  */
 #pragma once
 
@@ -152,7 +149,7 @@ struct aliro_stepup_doc {
 };
 
 /* Structural decode of a plaintext DeviceResponse (Table 8-22). CRYPTO-FREE and
- * bounds-checked: this is the fuzz surface. Returns 0 on a well-formed document
+ * bounds-checked. Returns 0 on a well-formed document
  * (which may still be have_document=0), <0 on malformed CBOR / limits exceeded. */
 int aliro_stepup_parse_response(const uint8_t *buf, size_t len, struct aliro_stepup_doc *doc);
 
