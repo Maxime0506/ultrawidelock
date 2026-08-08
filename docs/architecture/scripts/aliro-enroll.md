@@ -56,6 +56,8 @@ The generated header carries the reader's public identity and the initiator's
 PRIVATE credential key. It is written outside version control on purpose. Do not
 commit it, paste it, or put it in a doc.
 
+**discussed in** [`CHANGELOG.md`](../../../CHANGELOG.md)
+
 ## API
 
 ### `decode_manual_code(code)`

@@ -10,7 +10,7 @@ lives in aliro_ble_central.c and is host-testable; the NimBLE backend for the
 transport calls sits in ports/esp32, so a Zephyr bt_gap_*/bt_l2cap_* backend
 can be written behind this same header.
 
-**depends on** [`modules/woz_aliro/include/aliro_advtag.h`](aliro_advtag.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ble_central.c`](../modules.woz_aliro.src/aliro_ble_central.c.md)
+**depends on** [`modules/woz_aliro/include/aliro_advtag.h`](aliro_advtag.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_ble_central.c`](../modules.woz_aliro.src/aliro_ble_central.c.md)  ·  **discussed in** [`CHANGELOG.md`](../../../CHANGELOG.md)
 
 ## API
 

@@ -5247,10 +5247,6 @@ a screenshot we have to squint at.
 
 Usage: csp_probe.py [dir-to-serve]      (default: the directory holding this file)
 
-### [`web-twin/twin.js`](architecture/web-twin/twin.js.md)
-
-*No module docstring. First commit: "twin: compile the firmware to WASM (web-twin/twin.js)".*
-
 ### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
 
 @file twin_glue.c — WASM entry points: the twin page's firmware harness.
