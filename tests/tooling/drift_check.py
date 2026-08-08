@@ -75,7 +75,11 @@ BUILD_TREES = ("mk", "scripts")
 def walk(exts):
     for root in ROOTS:
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in dirnames if d not in ("build", "workspace")]
+            # managed_components is what the IDF component manager downloads
+            # into an app on first build. Third-party drops, same reason as
+            # SKIP above -- and pruned by name because any ESP app grows one.
+            dirnames[:] = [d for d in dirnames
+                           if d not in ("build", "workspace", "managed_components")]
             rel = dirpath.replace(os.sep, "/") + "/"
             if any(rel.startswith(s) for s in SKIP):
                 continue
