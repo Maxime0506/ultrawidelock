@@ -62,7 +62,8 @@ void dwt_configurestsmode(uint8_t stsMode)
 	(void)stsMode;
 }
 
-/* Seam helpers uwb_rxdiag.c defines on target; this binary excludes it (k_work). */
+/* Seam helpers uwb_rxdiag.c defines on target; the main binary links the
+ * engine without the driver, so they are stubbed here instead. */
 void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)
 {
 	dwt_setcallbacks(callbacks);

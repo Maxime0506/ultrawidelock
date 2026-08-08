@@ -41,9 +41,6 @@ typedef int64_t k_timeout_t; /* milliseconds in this fake */
 
 void k_timer_start(struct k_timer *timer, k_timeout_t duration, k_timeout_t period);
 
-/* ── k_work surface for the driver-binary suites (uwb_rxdiag / uwb_selftest).
- * The recording implementations live in tests/host/shim/drvfake.c, which only
- * the driver test binary links; the main host binary never references them. */
 #include <errno.h>
 
 #ifndef printk
@@ -61,34 +58,10 @@ void k_timer_start(struct k_timer *timer, k_timeout_t duration, k_timeout_t peri
 #define IS_ENABLED(config_macro)           LOGFAKE_IE1(config_macro)
 #endif
 
-struct k_work;
-typedef void (*k_work_handler_t)(struct k_work *work);
-struct k_work {
-	k_work_handler_t handler;
-};
-struct k_work_delayable {
-	struct k_work work;
-};
-#define K_WORK_DELAYABLE_DEFINE(name, fn) struct k_work_delayable name = {{(fn)}}
-#define K_WORK_DEFINE(name, fn)           struct k_work name = {(fn)}
-
-int k_work_reschedule(struct k_work_delayable *dwork, k_timeout_t delay);
-int k_work_schedule(struct k_work_delayable *dwork, k_timeout_t delay);
-int k_work_cancel_delayable(struct k_work_delayable *dwork);
-void k_work_init_delayable(struct k_work_delayable *dwork, k_work_handler_t handler);
-int k_work_submit(struct k_work *work);
-
-/* Recorded by the fakes above; the suite fires a work item by calling
- * workfake.last->work.handler(&workfake.last->work) itself. */
-struct workfake_state {
-	struct k_work_delayable *last;
-	k_timeout_t last_delay;
-	unsigned int reschedule_calls;
-	unsigned int schedule_calls;
-	unsigned int cancel_calls;
-	struct k_work *last_submit;
-	unsigned int submit_calls;
-};
-extern struct workfake_state workfake;
+/* No k_work surface here, deliberately. Deferred work in shared code goes
+ * through woz_osal.h, whose host backend (modules/woz_port/src/osal_host.c) IS
+ * the fake — one work queue and one virtual clock for every host binary,
+ * instead of a recording double per fake tree. A file that still needs
+ * <zephyr/kernel.h>'s work API is port glue and belongs under ports/. */
 
 #endif /* LOGFAKE_ZEPHYR_KERNEL_H */
