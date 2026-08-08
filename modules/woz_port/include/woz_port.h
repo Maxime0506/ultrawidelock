@@ -5,30 +5,13 @@
  */
 /*
  * woz_port.h - the platform contract for the UWB engine and the Aliro reader.
- *
- * This header IS the port specification. Everything the ranging engine needs
- * from an operating system is the eight functions below; a new target is a new
- * branch here plus a DW3000 SPI/GPIO backend. Nothing else.
- *
- * woz_mutex_* is the one addition beyond the ranging engine's needs: the Aliro
- * reader in modules/woz_aliro guards its trust store against the BLE-host and
- * REPL tasks, and a second competing port contract for one mutex would be worse
- * than widening this one. It stays a plain blocking lock — no try-lock, no
- * timeout — so every backend is three lines.
- *
- * Deliberately absent: work queues, timers, and init hooks. Those are used only
- * by uwb_rxdiag.c, uwb_selftest.c, woz_logfmt.c, woz_logquiet.c and
- * aliro_shell.c, which are Zephyr-only by design and are not in any port's
- * source list. Admitting them here would multiply the port surface for code
- * that never runs on the ranging path.
- *
- * Also absent: the k_work / k_sem / k_poll surface used by dw3000_spi.c and
- * dw3000_hw.c. Every port supplies its own SPI/GPIO backend for those two
- * files, so they never constrain the contract.
+ * This header IS the port specification: a new target is a new branch here plus
+ * a DW3000 SPI/GPIO backend, nothing else. Work queues, timers and init hooks
+ * are deliberately absent (Zephyr-only diagnostics use them, never the ranging
+ * path); the mutex stays a plain blocking lock so every backend is three lines.
  *
  *   woz_malloc/woz_calloc/woz_free  heap
- *   woz_uptime_us                   monotonic microseconds since boot
- *   woz_uptime_ms                   monotonic milliseconds since boot
+ *   woz_uptime_us / woz_uptime_ms   monotonic time since boot
  *   woz_sleep_ms                    relinquish the CPU for at least ms
  *   woz_sleep_us                    short busy-wait, microseconds (deca_sleep)
  *   woz_cycle_get_32                free-running counter, RX-arm latency probe

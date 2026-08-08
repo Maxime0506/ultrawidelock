@@ -2,33 +2,16 @@
  * @file woz_door.h — door swing angle from a frame-to-leaf distance, and the
  *       closed/ajar/open state machine over it.
  *
- * One anchor on the door frame, one on
- * the leaf; the UWB distance between them is a function of the swing angle by
- * the law of cosines about the hinge:
+ * One anchor on the frame, one on the leaf; law of cosines about the hinge:
  *
  *     d(theta)^2 = a^2 + b^2 - 2ab*cos(theta + theta0)
  *
- * where a is hinge-to-frame-anchor, b is hinge-to-leaf-anchor, and theta0
- * absorbs the shut-door geometry. Integer throughout: the nRF52833 has no FPU,
- * so a float here would be software-emulated and would drag in libm for one
- * arccosine.
- *
- * MOUNTING REQUIREMENT, and it is not a preference: **a and b must be
- * approximately equal.** The angle resolution at a given jitter is
- * woz_door_resolution_mddeg(), and it collapses when they are not. Computed for
- * an 850 mm door with the 30 mm jitter stage A targets:
- *
- *     a = b = 850 mm    ->  2.0 deg at shut, 2.1 deg at 35 deg
- *     a = 850, b = 650  -> 35.7 deg at shut, 2.7 deg at 35 deg
- *
- * A 200 mm mismatch destroys precisely the closed-versus-ajar call this exists
- * to make, while still looking fine at wide angles -- so it fails in the way
- * that is hardest to notice. Mount both anchors the same distance from the
- * hinge, at the same height, and check the number rather than the tape measure.
- *
- * The angle is also inherently coarse near fully open (23 deg at 170 deg, even
- * with a = b), because the distance stops changing as the door swings past the
- * halfway point. That is fine: nothing depends on telling 160 deg from 170 deg.
+ * Integer throughout (no FPU on the nRF52833). MOUNTING REQUIREMENT: a and b
+ * must be approximately equal -- at 30 mm jitter, a = b = 850 mm resolves
+ * 2.0 deg at shut, while a 200 mm mismatch collapses that to 35.7 deg,
+ * destroying exactly the closed-vs-ajar call this exists to make while still
+ * looking fine at wide angles. Check woz_door_resolution_mddeg(), not the tape
+ * measure. Inherently coarse near fully open; nothing depends on that range.
  */
 
 #ifndef WOZ_DOOR_H

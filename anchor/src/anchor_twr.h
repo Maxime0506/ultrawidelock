@@ -15,11 +15,9 @@
  * The responder holds t2, t3 and t6 itself, so the FINAL's two intervals
  * complete the set and it is the responder that computes the distance.
  *
- * Everything here polls SYS_STATUS rather than taking DW3000 callbacks. That is
- * deliberate: it keeps the whole exchange in thread context, so the rule this
- * board lives by -- nothing logs from a ranging callback -- is satisfied by
- * construction rather than by discipline. uwb_min_twr_exchange() already works
- * this way and is the model.
+ * Everything polls SYS_STATUS rather than taking DW3000 callbacks: the whole
+ * exchange stays in thread context, so "nothing logs from a ranging callback"
+ * holds by construction. uwb_min_twr_exchange() is the model.
  */
 
 #ifndef ANCHOR_TWR_H

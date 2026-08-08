@@ -20,11 +20,6 @@
  * read from Kconfig here, so the host suite can build this without Zephyr and
  * assert on the encoded bytes.
  */
-/*
- * Cluster and attribute IDs transcribed from
- * workspace/modules/lib/matter/zzz_generated/app-common/clusters/, cited at
- * each definition below.
- */
 #pragma once
 
 #include <stdbool.h>

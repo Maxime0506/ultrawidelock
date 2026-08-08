@@ -21,14 +21,6 @@
  * a DAC issued under a real PAI, and its private key must not live in flash
  * next to the certificate.
  */
-/*
- *
- *
- * Structures transcribed from workspace/modules/lib/matter/src, cited at each
- * use: credentials/DeviceAttestationConstructor.cpp for the two TLV payloads,
- * crypto/CHIPCryptoPAL.cpp:1060-1215 for the CSR, and
- * app/clusters/operational-credentials-server/ for what is signed over what.
- */
 #pragma once
 
 #include <stddef.h>

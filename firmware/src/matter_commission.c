@@ -10,16 +10,10 @@
  * What is left for this file is the wiring nobody else can do: pulling the
  * SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
  * what happens when a commissioner disappears halfway through.
- */
-/*
- * the part that makes the rest reachable.
  *
- * The device holds a verifier, never the passcode -- see matter_pase_sm.h. The
- * default in Kconfig is CHIP's own published test verifier for passcode
- * 20202021, reproduced byte for byte by scripts/spake2p_verifier.py and checked
- * against workspace/modules/lib/matter/src/include/platform/
- * TestOnlyCommissionableDataProvider.h:74-79. A real deployment runs that script
- * with its own passcode.
+ * The Kconfig default verifier is CHIP's PUBLISHED test verifier for passcode
+ * 20202021. A real deployment runs scripts/spake2p_verifier.py with its own
+ * passcode.
  */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>

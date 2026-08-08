@@ -14,19 +14,8 @@
  * It holds no device data. Which endpoints exist and what their attributes say
  * is matter_clusters.h's, reached through @ref matter_im_server, so the wire
  * format can be tested without a device and the device without a wire.
- */
-/*
- *
- *
- * Every constant here is transcribed from the SDK in
- * workspace/modules/lib/matter/src, cited at its use. The message shapes come
- * from src/app/MessageDef, whose builders name the container type for each
- * information block -- AttributePathIB is a LIST and everything else here is a
- * STRUCTURE, which is not guessable and not symmetric.
- *
- * Independently confirmed on the wire: a real iPhone's first post-PASE message
- * decoded against these tags exactly, AttributePathIB arriving as 0x17 (list).
- * tests/host/test_matter_im.c replays those 106 bytes.
+ * Not guessable and not symmetric: AttributePathIB is a LIST (0x17 on the
+ * wire), every other information block here is a STRUCTURE.
  */
 #pragma once
 

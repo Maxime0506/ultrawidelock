@@ -20,14 +20,6 @@
  * key -- which, for the NOC, is the root it was told to trust one command
  * earlier and has no independent reason to believe.
  */
-/*
- *
- *
- * Certificate element tags from workspace/modules/lib/matter/src/credentials/
- * CHIPCert.h:68-78; distinguished-name attribute tags from
- * src/lib/asn1/gen_asn1oid.py:137-148, encoded as context tags by
- * credentials/CHIPCert.cpp:755-763.
- */
 #pragma once
 
 #include <stdbool.h>

@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-# Same shape as scripts/check-approtect.sh and scripts/check-uwb-seam.sh, the
+# Same shape as scripts/check-approtect.sh and tests/tooling/uwb_seam_check.sh, the
 # sibling gates this one joins.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
 	R=$'\033[31m' G=$'\033[32m' Z=$'\033[0m'

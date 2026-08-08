@@ -8,23 +8,12 @@
 // reader derives. Credentials are the compiled-in bench pair below, which works
 // only against a reader running its dev identity with an empty trust store.
 /*
- * Aliro initiator (User-Device role) — Stage 1a: BLE transport + Access Protocol.
- *
- * Port of ports/esp32/apps/initiator/main/main.c. The two files are the same
- * program on two stacks: everything below the callbacks is shared code, and the
- * only differences are the logging macros and the entry point, because the
- * transport seam (aliro_ble_central.h) is what absorbs NimBLE-vs-Zephyr. Keep
- * them in step.
- *
- * The transport half (scan/connect/discover/READ/WRITE/CoC) lives in
- * firmware/src/aliro_ble_central_zephyr.c; the protocol half is
- * modules/woz_aliro's aliro_device, host-tested and byte-anchored to the spec.
- * This file is only the glue: hand the peer's real version list to the BleSK
- * salt, unwrap the 4-byte L2CAP envelope, and pump commands through
- * aliro_device_on_command.
- *
- * NOT yet wired: UWB. Reaching ESTABLISHED means the two boards agreed a URSK;
- * ranging on it is Stage 1b and needs the DWM3000EVB driver linked in here too.
+ * Port of ports/esp32/apps/initiator/main/main.c -- the same program on two
+ * stacks, differing only in logging macros and entry point (aliro_ble_central.h
+ * absorbs NimBLE-vs-Zephyr); keep them in step. The transport half lives in
+ * firmware/src/aliro_ble_central_zephyr.c, the protocol half in woz_aliro's
+ * aliro_device; this file is only the glue. UWB is NOT yet wired: ESTABLISHED
+ * means the boards agreed a URSK, ranging on it needs the DWM3000EVB driver.
  */
 #include <stdbool.h>
 #include <string.h>

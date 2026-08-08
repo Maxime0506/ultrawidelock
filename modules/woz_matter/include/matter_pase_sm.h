@@ -10,36 +10,12 @@
  *   -> Pake1 (pA)           <- Pake2 (pB, cB)
  *   -> Pake3 (cA)           <- StatusReport(success)
  *
- * The device never holds the setup passcode. It holds the SPAKE2+ verifier --
- * w0 and L -- which is derived from the passcode somewhere else and provisioned
- * in. That is the whole point of the augmented form: someone who reads the
- * device's flash cannot impersonate a commissioner to it.
- *
- * No time and no randomness are taken from the environment. Retransmission is
- * MRP's job (matter_mrp.h), and the two random values PASE needs are arguments,
- * so the host suite runs the real state machine against a recorded exchange
- * rather than against whatever entropy it happened to get.
- */
-/*
- *
- *
- * Cross-checked against two implementations, as with every layer below it:
- *   - CHIP, workspace/modules/lib/matter/src/protocols/secure_channel/
- *     PASESession.cpp: the responder path at :408 (request), :595 (Pake1),
- *     :780 (Pake3), the failure code it answers with at :459,618,723,801 and
- *     the success one at :840. The StatusReport body is
- *     StatusReport.cpp WriteToBuffer() and PairingSession.h:145-150, which is
- *     also where the general code is decided from the protocol code.
- *   - CircuitMatter (github.com/adafruit/circuitmatter): the same sequence at
- *     circuitmatter/__init__.py:290-360, including the detail that the context
- *     hash is taken over the request and response payloads exactly as they were
- *     framed rather than over re-encoded structures.
- *
- * They agree on the order, on which side sends what, and on the StatusReport at
- * the end. One difference worth recording: CHIP answers every PASE failure with
- * kProtocolCodeInvalidParam (0x0002) regardless of what actually went wrong,
- * and this does the same -- telling an unauthenticated peer which step it got
- * wrong is free information about the verifier.
+ * The device never holds the setup passcode -- only the SPAKE2+ verifier (w0,
+ * L), provisioned in, so reading flash cannot impersonate a commissioner. No
+ * time or randomness is taken from the environment: MRP owns retransmission and
+ * the two random values are arguments. Every PASE failure is answered with
+ * kProtocolCodeInvalidParam (0x0002), as CHIP does -- telling an
+ * unauthenticated peer which step failed is free information about the verifier.
  */
 #pragma once
 

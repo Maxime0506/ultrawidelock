@@ -2,39 +2,15 @@
  * @file woz_fusion.h — two-anchor fusion: which side of the door, and whether
  *       the two distances are geometrically possible at all.
  *
- * Two anchors a known distance apart
- * each measure a distance to the same phone. Two independent things fall out:
- *
- * 1. WHICH SIDE. The set of points equidistant from both anchors is the
- *    perpendicular bisector of the baseline, so the sign of (d_inside -
- *    d_outside) says which side of that plane the phone is on. This only means
- *    "inside or outside the door" if the anchors are mounted so that the
- *    bisector IS the door plane -- symmetrically about it, at the same height.
- *    That is a mounting requirement and no amount of code substitutes for it.
- *
- * 2. WHETHER TO BELIEVE IT. Anchor A, anchor B and the phone form a triangle
- *    whose third side is known and fixed, so the two measured sides must
- *    satisfy the triangle inequality.
- *
- * WHAT THE TRIANGLE GATE IS AND IS NOT. It catches ASYMMETRIC manipulation and
- * impossible pairs: one link reporting a distance too short to span the
- * baseline, one link inflated relative to the other, or two ranges that came
- * from different targets or different moments. That covers the realistic
- * distance-reduction attack, where an attacker compromises one link rather
- * than keeping two simultaneously consistent.
- *
- * It does NOT catch a symmetric relay -- one that inflates both links by the
- * same amount through a single point near the door. Both measured distances
- * grow together, the difference is unchanged, and the triangle still closes.
- * That case needs no gate: inflating a distance makes the phone look FURTHER,
- * which fails the unlock radius on its own. The attack that matters is
- * reduction, and what defends it is time-of-flight plus STS, not this.
- *
- * So this is a geometric consistency check layered ON TOP of the existing
- * per-link integrity consensus, never instead of it.
- * Feed it only distances that already passed their own link's gate; a
- * consistency check over untrusted numbers is worse than none, because it
- * looks like evidence.
+ * The sign of (d_inside - d_outside) says which side of the anchors' bisector
+ * the phone is on -- which means "which side of the door" only if the anchors
+ * are mounted symmetrically about the door plane; no code substitutes for that.
+ * The triangle inequality over the known baseline gates asymmetric manipulation
+ * and impossible pairs. It does NOT catch a symmetric relay, and needs not:
+ * inflating both links makes the phone look further, which fails the unlock
+ * radius on its own; reduction is defended by time-of-flight + STS, not this.
+ * A consistency layer ON TOP of per-link integrity consensus, never instead --
+ * feed it only distances that already passed their own link's gate.
  */
 
 #ifndef WOZ_FUSION_H

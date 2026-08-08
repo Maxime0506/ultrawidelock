@@ -1,45 +1,13 @@
 /*
- * Stage 0a: what a Matter CASE responder costs on this part.
- *
- * Every RAM figure for this port is an estimate except the
- * ones under the reader, and the single number the plan turns on -- the peak of
- * the Matter thread -- cannot be measured by `kernel thread stacks`, because
- * that reads threads which already exist and this one does not yet. Written
- * before stages 1-5 rather than after, because finding the peak at stage 6
- * costs months and finding it here costs an afternoon.
- *
- * Models the RESPONDER half of CASE, which is the expensive half and the half
- * this board would run:
- *
- *   Sigma1 in    -- destinationId HMAC, then
- *   Sigma2 out   -- ECDH(responder eph, initiator eph), HKDF -> S2K,
- *                   ECDSA sign over TBSData2, AES-CCM encrypt TBEData2
- *   Sigma3 in    -- AES-CCM decrypt TBEData3, then THREE ECDSA verifies:
- *                   ICAC signed by RCAC, NOC signed by ICAC, and TBSData3
- *                   signed by the initiator's NOC key
- *   session      -- HKDF -> I2R/R2I keys
- *
- * so five P-256 operations, and P-256 is what costs stack here: the nRF52833
- * has no CryptoCell, so PSA lands on the software oberon driver
- * (CONFIG_PSA_CRYPTO_DRIVER_OBERON) and every curve operation runs on the
- * calling thread's stack.
- *
- * WHAT IS MEASURED, and what is not:
- *   - measured: the crypto call depth, on a dedicated thread, and the mbedTLS
- *     heap those calls draw. Buffers are deliberately STATIC so the stack
- *     figure is the crypto's own depth rather than a consequence of where this
- *     file chose to put a certificate. Their total is reported separately, so
- *     a hand-written node can decide stack-vs-bss for itself.
- *   - NOT measured: Matter TLV certificate parsing. No parser exists yet
- *     (stage 1). If it is written recursively its depth adds to everything
- *     below; an iterative walk adds almost nothing. This is the residual
- *     unknown in the number this file prints.
- *
- * Every PSA status is checked. A crypto call that fails costs no stack, so an
- * unchecked failure would report a comfortably small peak that means nothing;
- * one failure here suppresses the result entirely rather than flattering it.
- *
- * Never on in a shipping image: CONFIG_ALIRO_CASE_BENCH defaults n.
+ * Stack/heap bench for a Matter CASE responder on this part: runs the Sigma1..3
+ * crypto (five P-256 operations -- ECDH, sign, three verifies -- plus HKDF and
+ * AES-CCM) on a dedicated thread and reports its peak. P-256 is what costs
+ * stack here: no CryptoCell on the nRF52833, so PSA's oberon driver runs curve
+ * math on the calling thread. Buffers are static so the figure is the crypto's
+ * own depth; TLV certificate parsing is NOT included. Every PSA status is
+ * checked -- a failed call costs no stack, so one failure suppresses the result
+ * rather than flattering it. Never in a shipping image:
+ * CONFIG_ALIRO_CASE_BENCH defaults n.
  */
 
 #include <string.h>

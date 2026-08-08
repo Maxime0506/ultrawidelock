@@ -8,21 +8,14 @@
  * one real race (nRF: a new capture preempting a flush mid-copy): torn snapshots are dropped,
  * the next reception re-latches.
  *
- * Stage 1 adds an independently-armed windowed-CIR dump: when armed, capture also reads a
- * fixed window of Ipatov complex taps centred on the first-path index into the snapshot. The
- * taps are NOT printed on the RX/flush path — a full window is ~64 serial lines per reception,
- * enough blocking UART to overrun the ranging slot and stall a live walk-up. Instead flush
- * appends each window to a small RAM ring (the last CIRDIAG_RING_RECS receptions), and the taps
- * are drained to `ev=uwb.cir` lines only when the dump is disarmed (uwb_cirdiag_dump_set_enabled
- * (false)) — that runs in console/task context after the walk-up, so the unlock is unaffected
- * while capturing. Deferring the printing was necessary but not sufficient: the window READ is
- * itself too long to sit inside a live ranging block, where the responder still owes a POLL or
- * Final reception. The shims pass that down as deadline_pending and the window is taken only on
- * the Final. Nor was that sufficient: the accumulator cannot be read at all while the receiver
- * is up, and the shim re-arms an SP0 listen the moment the Final is serviced, so the read has to
- * happen BEFORE that (the shims gate it on ccc_shim_rx_awaiting_final). Doing it on every block
- * then cost every range, so uwb_cirdiag_window_due decimates it to one Final in
- * CIRDIAG_CIR_EVERY.
+ * The windowed-CIR dump (independently armed) also reads a fixed window of
+ * Ipatov complex taps centred on the first-path index. Taps are never printed
+ * on the RX/flush path (~64 serial lines would stall a walk-up): flush appends
+ * windows to a RAM ring, drained to `ev=uwb.cir` lines only when the dump is
+ * disarmed, in task context. The window READ itself only happens on a Final
+ * (deadline_pending), before the SP0 re-arm (ccc_shim_rx_awaiting_final), and
+ * decimated to one Final in CIRDIAG_CIR_EVERY -- each of those three gates was
+ * measured necessary to keep ranging alive while capturing.
  */
 
 #include "uwb_cirdiag.h"

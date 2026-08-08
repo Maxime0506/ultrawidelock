@@ -1,26 +1,12 @@
 /**
  * @file test_uwb_seam.c — the decadriver seam's engine-less tier.
  *
- * File under test: modules/woz_uwb/src/driver/uwb_seam.h
- *
- * WHY THIS IS ITS OWN BINARY. uwb_seam.h has two halves. Under
- * CONFIG_WOZ_ALIRO the four helpers are extern declarations and the CCC engine
- * supplies the bodies — that is what every other suite, and every shipping
- * build, compiles. Below that tier the header inlines each one to the plain
- * decadriver call, and NOTHING in the tree builds that way, so those four
- * bodies were never once compiled on host.
- *
- * They cannot simply be added to an existing suite: a header compiled two ways
- * inside one binary produces two different coverage mappings for the same
- * lines, which is the merge failure tests/host/coverage.sh already documents
- * for the lat build. So this translation unit is compiled WITHOUT
- * CONFIG_WOZ_ALIRO, alone, and is the only place that half exists.
- *
- * What it proves is small and worth stating plainly: each helper forwards to
- * the decadriver entry point it claims to, passing its argument through
- * unchanged and returning what the radio returned. There is no engine here, so
- * there is no CCC STS to program and nothing about the shipping behaviour of
- * the seam is exercised — that is test_ccc_shim.c's job.
+ * File under test: modules/woz_uwb/src/driver/uwb_seam.h, compiled WITHOUT
+ * CONFIG_WOZ_ALIRO -- the inline-to-decadriver half that no other build
+ * compiles. Its own binary because one header compiled two ways in one binary
+ * breaks coverage merging. It proves only that each helper forwards to the
+ * decadriver entry point it claims, argument and return unchanged; the
+ * shipping seam behaviour is test_ccc_shim.c's job.
  */
 #include <stdio.h>
 #include <string.h>

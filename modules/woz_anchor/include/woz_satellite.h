@@ -6,26 +6,13 @@
  * safe to ask on a real door, where the second distance arrives over a link
  * that can be slow, lossy or absent.
  *
- * Three rules, and they are all about what happens when the satellite is NOT
- * there:
- *
- * 1. A report older than `stale_ms` is not a report. Geometry from a stale
- *    distance is worse than no geometry, because it looks authoritative.
- * 2. No fresh report means UNKNOWN, and UNKNOWN PERMITS prediction. A satellite
- *    that has gone quiet must degrade to exactly today's behaviour, never to a
- *    door that will not open. The tree already argues this for the range gate:
- *    "A mis-tuned floor that refuses to open a door locks a human out of their
- *    house".
- * 3. Only a POSITIVE outside verdict, or a failed triangle test, withholds. Both
- *    are real evidence; absence is not. An unconfigured baseline counts as
- *    absence rather than as a failed test, so a misconfigured board degrades to
- *    today's behaviour instead of silently never predicting again.
- *
- * WHICH ANCHOR IS WHICH is a mounting fact, not a code fact, so it is a config
- * field rather than an assumption. Getting it backwards inverts the verdict --
- * it would predict for people outside and withhold from people inside, which is
- * the exact opposite of the point. `self_is_inside` makes that a decision
- * someone had to write down.
+ * Three rules, all about the satellite NOT being there: a report older than
+ * `stale_ms` is not a report; no fresh report means UNKNOWN, and UNKNOWN
+ * PERMITS prediction (a quiet satellite degrades to today's behaviour, never to
+ * a door that will not open); only a POSITIVE outside verdict or a failed
+ * triangle test withholds -- absence is not evidence, and an unconfigured
+ * baseline counts as absence. `self_is_inside` is a config field because which
+ * anchor is which is a mounting fact; backwards, it inverts the verdict.
  */
 #ifndef WOZ_SATELLITE_H
 #define WOZ_SATELLITE_H

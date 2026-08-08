@@ -20,14 +20,6 @@
  * and looks for a match. That is what makes an unsolicited Sigma1 unable to
  * enumerate a node's fabrics: get the key wrong and you learn nothing.
  */
-/*
- *
- *
- * Derivations transcribed from workspace/modules/lib/matter/src:
- * protocols/secure_channel/CASEDestinationId.cpp for the destination
- * identifier, crypto/CHIPCryptoPAL.cpp:848-860 for the operational key, and
- * protocols/secure_channel/CASESession.cpp:74-83 for the Sigma1 tags.
- */
 #pragma once
 
 #include <stdbool.h>

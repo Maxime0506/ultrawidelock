@@ -6,19 +6,13 @@
  *                                                advertising data
  *   modules/woz_aliro_stack/src/session.cpp      the BLE/NFC session machine
  *
- * The protocol codecs it calls -- nfc_select.c, nfc_auth.c, nfc_step_up.c,
- * ble_message.c, ble_timeout.c, access_document.c, tlv.c, advertising_core.c --
- * are the shipping sources, linked in whole. So every APDU and every BLE frame
- * these tests move is built and parsed by the real encoders, and a response
- * scripted here has to be byte-correct or the parser rejects it.
- *
- * WHAT IS NOT REAL is everything behind aliro/interface.h: key agreement,
- * HKDF, AES-GCM, ECDSA and SHA-256 are all deterministic stand-ins in
- * tests/host/stackfake. Nothing here is evidence that a key schedule is
- * correct, that a cryptogram authenticates, or that a signature verifies. What
- * it IS evidence of is the part session.cpp decides on its own: which command
- * is built next, which key and which counter each direction uses, when a
- * session is torn down, and what the peer is told when something fails.
+ * The protocol codecs it calls are the shipping sources, linked in whole:
+ * every APDU and BLE frame is built and parsed by the real encoders, so a
+ * scripted response must be byte-correct. NOT real: everything behind
+ * aliro/interface.h (crypto stand-ins in tests/host/stackfake) -- no evidence
+ * a cryptogram authenticates, only of what session.cpp decides on its own:
+ * which command next, which key/counter per direction, when a session tears
+ * down, what the peer is told on failure.
  */
 #include <cstdio>
 #include <cstring>

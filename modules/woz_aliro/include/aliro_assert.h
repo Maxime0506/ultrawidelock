@@ -1,46 +1,19 @@
 /*
  * aliro_assert — the presence-assertion protocol for the non-door primitive.
  *
- * A presence dongle answers a challenge with a signed statement: "a provisioned
- * credential is within N cm right now, in response to THIS nonce." The link is
- * treated as hostile, so the statement is authenticated with ECDSA-P256. Anyone
- * holding the dongle's public key can verify it, so an assertion becomes a proof
- * a third party accepts (for example, CI checking that a human was at the machine
- * when a release was signed). P-256 reuses the curve already used by Aliro.
+ * A presence dongle answers a challenge with an ECDSA-P256-signed statement:
+ * "a provisioned credential is within N cm right now, for THIS nonce." One
+ * fresh CSPRNG nonce per challenge, one response accepted, so replays fail; a
+ * strictly-increasing dongle uptime is an optional second guard. unix_ms is
+ * the attested wall clock (ALIRO_ASSERT_TIME_NONE without trusted time).
+ * The signed prefix carries the range-integrity evidence (STS ok, quality,
+ * consensus blocks) so a verifier can tell a defended 19 cm from an attack's
+ * 19 cm; a frame that does not claim a good STS is rejected outright.
  *
- * Anti-replay is the nonce: the verifier mints a fresh CSPRNG nonce per
- * challenge, accepts one response for it, then forgets it. A captured assertion
- * carries a stale nonce and is rejected. A strictly-increasing dongle uptime is
- * an optional second guard (forward-progress) the verifier can enforce.
- *
- * uptime_ms is monotonic since dongle boot, which is enough to order two frames
- * from one session but says nothing to a third party about WHEN. unix_ms is the
- * dongle's attested wall clock for exactly that, and is ALIRO_ASSERT_TIME_NONE
- * on a dongle with no trusted time -- which is why it is a separate field and
- * not a replacement.
- *
- * A distance is only as good as the measurement behind it, so the frame also
- * carries the range-integrity evidence for that measurement: whether the STS
- * correlated well enough to trust the timestamp, the quality index it scored,
- * and how many consecutive agreeing blocks stood behind it. Without those, a
- * verifier is trusting a number it cannot audit -- it cannot tell a defended
- * 19 cm from a distance-reduction attack's 19 cm, because both arrive as the
- * integer 19. The evidence is inside the signed prefix, so it cannot be edited
- * away, and a frame that does not claim a good STS is rejected outright.
- *
- * This module is the wire codec + verifier only. It knows nothing about UWB or
- * BLE; the dongle firmware fills the fields from a real Aliro ranging round and
- * the host maps the verdict to a decision. Portable C11 (SHA-256 for credential
- * identifiers via aliro_hash.c). That boundary is why trust_level is reported
- * but not thresholded here: the
- * consensus constant belongs to the UWB layer, so the policy layer above owns
- * any floor on it.
- *
- * Wire version 3. Version 1 (70 bytes, HMAC-only, no alg byte, no wall clock)
- * was never flashed to a device. Version 2 (111 bytes) reached one bench board
- * but could not state whether its distance was defended, which is exactly the
- * claim a presence assertion exists to make, so it is rejected rather than read
- * without that evidence. No v1 or v2 decoder is kept.
+ * Wire codec + verifier only, portable C11 (SHA-256 via aliro_hash.c); the
+ * dongle firmware fills the fields, the host maps the verdict. trust_level is
+ * reported, not thresholded -- the policy layer owns any floor. Wire version 3;
+ * v1/v2 frames are rejected, no decoder kept.
  */
 #pragma once
 

@@ -2,19 +2,11 @@
  * Host test for the Aliro reader engine (aliro_reader.c): the AUTH0 -> AUTH1 ->
  * EXCHANGE -> AP-Completed transaction, driven end-to-end by a scripted phone.
  *
- * The phone side is NOT the reader's own code path run twice: it re-derives the
- * whole §8.3.1.13 key schedule independently, from the bytes the reader put on
- * the wire (AUTH0's ephemeral key, txid, reader_id, ExpeditedPhaseType) plus the
- * out-of-band secrets a real phone would hold (the credential keypair and the
- * reader's verification key). Every GCM open that succeeds — in either
- * direction — is therefore a cross-check that both independent derivations of
- * the session keys, BleSK channel, and URSK agree byte-for-byte.
- *
- * The EC primitive layer is the deterministic stand-in in aliro_prim_host.c
- * (NOT P-256); everything above it — the state machine, wire codec, HKDF
- * schedule, AES-GCM channels, trust gate, Kpersistent lifecycle — is the real
- * shared-core code. The BLE transport, ranging adapter and NVS backend are
- * recording doubles defined here.
+ * The phone side re-derives the §8.3.1.13 key schedule independently from the
+ * wire bytes plus the out-of-band secrets a real phone holds, so every GCM open
+ * that succeeds cross-checks both derivations byte-for-byte. EC is the
+ * deterministic stand-in (NOT P-256); everything above it is the real
+ * shared-core code, and the BLE/ranging/NVS surfaces are recording doubles.
  *
  * Scenarios, in one linear script (the engine's state is process-global):
  *   T0  dev-identity walk-up: unknown credential accepted (dev-open policy),

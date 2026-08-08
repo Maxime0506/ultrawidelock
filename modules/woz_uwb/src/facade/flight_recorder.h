@@ -5,32 +5,15 @@
  * fixed-size ring buffer; provides reader and writer interfaces for host tools.
  */
 /*
- * flight_recorder — record a live UWB walk-up on the device, replay it into the
- * host build deterministically.
- *
- * WHAT IS RECORDED. The DS-TWR responder's *inputs*: the session config (incl.
- * the ephemeral URSK the Pre-POLL decode needs) and, in dispatch order, every
- * call into the shared ccc_shim_rx.c protocol engine — one record per call,
- * carrying the DW3000 register snapshot that entry point will read (received
- * frame bytes, Ipatov RX timestamp, TX timestamp, system time, STS quality).
- *
- * WHY INPUTS ONLY. The engine's *outputs* (the radio-action sequence: RX arms,
- * Response TX, the latched range) are a pure function of those inputs — there is
- * no RNG on the UWB responder path and every clock read the logic branches on is
- * a captured DW3000 timestamp. So a host replay that feeds the recorded inputs
- * through the real ccc_shim_rx.c re-derives the outputs; a firmware change that
- * alters them shows up as a divergence at a specific event. A field failure
- * becomes a deterministic regression test.
- *
- * The trace is a flat little-endian record stream (fr_write_* / fr_read_next),
- * allocation-free over a caller-owned buffer so the device recorder writes it
- * into a static RAM ring with no heap on the walk-up path. It comes off the
- * device as hex-encoded `[FREC]` serial lines -> .frc file. The replay engine
- * lives host-side (tests/host/fr_replay.c) because it drives the DW3000 shim
- * doubles.
- *
- * This header compiles unchanged in the firmware and the host builds; it pulls
- * in no platform surface of its own.
+ * flight_recorder — record a live UWB walk-up's *inputs* (session config + every
+ * ccc_shim_rx.c call with its DW3000 register snapshot, in dispatch order) and
+ * replay them deterministically on the host. Outputs are a pure function of
+ * those inputs -- no RNG on the responder path, every clock read is a captured
+ * timestamp -- so a field failure becomes a regression test at a specific event.
+ * The trace is a flat little-endian stream (fr_write_* / fr_read_next) over a
+ * caller-owned buffer, off the device as `[FREC]` hex lines -> .frc; the replay
+ * engine is host-side (tests/host/fr_replay.c). Compiles unchanged in firmware
+ * and host builds.
  */
 #ifndef WOZ_FLIGHT_RECORDER_H
 #define WOZ_FLIGHT_RECORDER_H

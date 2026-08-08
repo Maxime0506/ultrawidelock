@@ -11,32 +11,8 @@
  *   struct matter_mrp         per EXCHANGE  — one un-acked message, one owed ack
  *
  * NO TIMERS LIVE HERE. Every entry point takes `now_ms` and the object only
- * ever computes deadlines, so the caller owns the timer and this layer stays
- * testable on the host with a fake clock. That is also the stage 0 work-queue
- * constraint honoured by construction: a module that never arms a timer cannot
- * accidentally arm one on k_sys_work_q, which was measured at 3,568 of 4,096
- * bytes with the reader running.
- */
-/*
- *
- *
- * Constants cross-checked against two implementations, as with matter_msg.h:
- *   - CHIP, workspace/modules/lib/matter/src/: GetBackoff() in
- *     messaging/ReliableMessageMgr.cpp:268-327, the intervals and retry count in
- *     messaging/ReliableMessageProtocolConfig.h:55,83,95,160,180, and the
- *     counter window in transport/PeerMessageCounter.h:253-267,337-366 with its
- *     size at lib/core/CHIPConfig.h:309.
- *   - CircuitMatter (github.com/adafruit/circuitmatter): the same five backoff
- *     parameters at circuitmatter/exchange.py:13-30 and the same 500/300 ms
- *     defaults at circuitmatter/session.py:170-171.
- *
- * They agree everywhere EXCEPT one term, recorded rather than resolved
- * silently: CircuitMatter defines MRP_BACKOFF_MARGIN = 1.1 (exchange.py:23) and
- * then never applies it -- exchange.py:117-121 multiplies only the interval, the
- * base and the jitter. CHIP applies it (ReliableMessageMgr.cpp:284-286) and
- * cites the spec line it comes from, `i = MRP_BACKOFF_MARGIN * i`, Matter Core
- * section 4.12.2.1. This file follows CHIP: a defined-but-unused constant is an
- * omission in CircuitMatter, not a second opinion about the schedule.
+ * computes deadlines, so the caller owns the timer. The backoff applies the
+ * MRP_BACKOFF_MARGIN term per Matter Core §4.12.2.1, as CHIP does.
  */
 #pragma once
 

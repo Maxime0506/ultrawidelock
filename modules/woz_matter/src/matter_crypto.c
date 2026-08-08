@@ -2,23 +2,13 @@
  * @file matter_crypto.c — AES-128-CCM, the Matter nonce, and the key schedule.
  */
 /*
- * The CCM here is written out rather than reusing ccc_sp0_encrypt() from the
- * CCC ladder, which is a complete AES-CCM* already. That one is welded to the
- * 802.15.4 SP0 profile: an 8-byte tag, a nonce it builds internally from a
- * frame counter, and a 128-byte scratch cap (modules/woz_uwb/src/ccc/
- * ccc_kdf.c:457-467,615). Matter needs a 16-byte tag, a caller-supplied nonce,
- * and no length cap, so none of those are parameters that could simply be
- * passed differently.
- *
- * This version keeps no scratch buffer at all: the CBC-MAC runs as a streaming
- * state and the CTR keystream is generated a block at a time, so the stack cost
- * is a handful of 16-byte blocks no matter how long the message is. On a part
- * where the system work queue was measured with 528 B of headroom, a
- * length-proportional buffer is not available.
- *
- * Everything is built on one primitive, crypto_aes_ecb_encrypt(). CCM never
- * needs AES decryption -- both directions are the same keystream -- so the seam
- * stays a single forward block operation.
+ * Written out rather than reusing the CCC ladder's AES-CCM*, which is welded to
+ * SP0 (8-byte tag, internal nonce, 128-byte scratch cap); Matter needs a
+ * 16-byte tag, a caller-supplied nonce and no length cap. No scratch buffer at
+ * all: the CBC-MAC streams and the CTR keystream is generated a block at a
+ * time, so stack cost is a few 16-byte blocks regardless of message length.
+ * One primitive underneath, crypto_aes_ecb_encrypt() -- CCM never needs AES
+ * decryption.
  */
 #include <string.h>
 

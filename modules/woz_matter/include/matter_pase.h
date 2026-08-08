@@ -13,25 +13,8 @@
  *   Pake3               cA
  *
  * This file is the codec only. The SPAKE2+ arithmetic that produces pA/pB/cA/cB
- * is separate, and on this part it comes from nrf_oberon
- * (nrfxlib/crypto/nrf_oberon/include/ocrypto_spake2p_p256.h), which already
- * ships in every image here.
- */
-/*
- * item 5. Two sources again -- unlike
- * BTP, CircuitMatter does implement PASE:
- *   - CHIP, workspace/modules/lib/matter/src/protocols/secure_channel/
- *     PASESession.cpp: the five tag enums at :60-95, the response encoder at
- *     :473-509, the request decoder at :408-433. Sizes and bounds from
- *     crypto/CHIPCryptoPAL.h:86-89,114 and PASESession.h:53.
- *     Session parameter tags from messaging/SessionParameters.h:52-54.
- *   - CircuitMatter (github.com/adafruit/circuitmatter): the same five
- *     structures at circuitmatter/pase.py:31-85, the same sizes at
- *     circuitmatter/crypto.py:23-27, the same session parameter tags at
- *     circuitmatter/session.py:25-26.
- *
- * Every tag number and every size below is stated identically by both. The one
- * place they differ is recorded at pbkdf_params_present below.
+ * comes from nrf_oberon (ocrypto_spake2p_p256.h), which already ships in every
+ * image here.
  */
 #pragma once
 

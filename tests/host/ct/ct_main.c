@@ -1,39 +1,17 @@
 /*
  * ct_main.c — the constant-time harness.
  *
- * WHAT THIS TESTS, AND WHAT IT DOES NOT
+ * ctgrind's technique: mark the secret as *undefined* memory, run under
+ * memcheck, and every secret-dependent branch or table index is reported as a
+ * use of undefined data. Covers OUR key handling -- the CCC ladder (ccc_kdf.c),
+ * STS derivation, the SP0 CCM* wrapper and MIC verification.
  *
- * The technique is ctgrind's: mark the secret as *undefined* memory, then run the code under
- * memcheck. Memcheck already reports a conditional jump or a memory index that depends on
- * undefined data — which, when the undefinedness came from a key rather than from a missing
- * initialiser, is exactly the definition of a secret-dependent branch or a secret-dependent
- * table lookup. So a tool built to find uninitialised reads becomes a tool that finds timing
- * side channels, with no new instrumentation.
- *
- * What it covers here: OUR key handling. The CCC ladder in ccc_kdf.c, the STS derivation, the
- * SP0 CCM* wrapper and its MIC verification. If any of those grows a `if (key[i] == ...)`, an
- * early-out compare, or a length that varies with key content, this fails.
- *
- * What it does NOT cover, and the reason is worth stating plainly rather than leaving for
- * someone to discover from a green run: the AES primitive. tests/host/aes_ref.c is an S-box
- * implementation — SBOX[256] indexed by state bytes — so it is variable-time by construction and
- * would drown every run in findings. It is suppressed (tests/host/ct/host-aes.supp).
- *
- * That suppression is honest rather than convenient, because the host AES is not the AES that
- * ships. On nRF5340 the primitive is CryptoCell through PSA; on ESP32 it is mbedTLS over the
- * hardware AES peripheral. Both are somebody else's constant-time claim to make. The host double
- * exists to make the ladder testable, and its timing behaviour has never been part of the
- * product. So the honest scope of this gate is: everything the project wrote, none of the
- * primitive it calls.
- *
- * PUBLIC OUTPUTS
- *
- * Some ladder outputs are published on air: the UWB addresses out of ccc_uad_addresses(), and
- * the SP0 ciphertext and MIC. Values derived from a secret stay poisoned by default, which is
- * right for key material and wrong for these — code is *supposed* to be able to branch on a
- * frame it is about to transmit. Each one is explicitly declassified below, with a note on why,
- * so that "this is public" is a decision recorded in the harness and not an accident of where
- * the poison happened to stop.
+ * NOT covered: the AES primitive. tests/host/aes_ref.c is S-box-indexed,
+ * variable-time by construction, and suppressed (tests/host/ct/host-aes.supp);
+ * the shipping AES is CryptoCell/mbedTLS-hardware, somebody else's
+ * constant-time claim. Scope: everything the project wrote, none of the
+ * primitive it calls. On-air outputs (UWB addresses, SP0 ciphertext + MIC) are
+ * explicitly declassified below so "this is public" is a recorded decision.
  */
 
 #include <stdint.h>

@@ -1,25 +1,13 @@
 /* dfufake — test-side control/inspection API for the fake Zephyr flash-map,
  * CRC, reboot and detools surfaces that modules/woz_dfu builds against.
  *
- * WHAT IS REAL HERE AND WHAT IS NOT. The flash is real in the ways the code
- * under test depends on: a RAM-backed partition per area, erase writes 0xff,
- * and BOTH alignment rules the nRF driver enforces are enforced here too — a
- * write must be word-offset and word-sized, an erase must be page-offset and
- * page-sized. Those two rules are the entire reason dfu_applier.c carries a
- * write combiner and rounds erases up, so a fake that accepted anything would
- * let the bug the combiner exists to prevent pass unnoticed.
- *
- * CRC-32 is real (the same IEEE polynomial Zephyr uses), because both halves
- * of the protocol agree on a number and a fake one would agree with itself
- * while disagreeing with the host tool.
- *
- * detools is NOT real. `detools.h` here is a scripted double: the test hands
- * it a list of memory operations and it drives the applier's five callbacks
- * with them. That measures the applier's own logic — combining, flushing,
- * page-rounding, the step log, the resume gate — never detools' patch format.
- *
- * PSA is not real either; the receiver's signature check runs on psafake,
- * whose verify status is a knob (see tests/host/psafake/psafake.h).
+ * The flash is real where the code under test depends on it: RAM-backed
+ * partitions, erase writes 0xff, and BOTH nRF alignment rules enforced (word
+ * writes, page erases) -- the entire reason the applier's write combiner and
+ * erase ROUND_UP exist, so a fake accepting anything would hide that bug.
+ * CRC-32 is the real IEEE polynomial. detools is NOT real (a scripted double
+ * driving the applier's five callbacks -- never the patch format), and PSA is
+ * a knob (tests/host/psafake/psafake.h).
  */
 #ifndef WOZ_DFUFAKE_H
 #define WOZ_DFUFAKE_H

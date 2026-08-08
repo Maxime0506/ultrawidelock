@@ -10,27 +10,7 @@
  *   handshake resp  0x65 0x6C  version:u8   fragment:u16  window:u8 (6 bytes)
  *   data fragment   flags:u8  [ack:u8 if A]  seq:u8  [len:u16 if S]  payload
  *
- * Little-endian, like the rest of Matter.
- */
-/*
- * first half.
- *
- * ONE SOURCE, NOT TWO. Every other file in this module was cross-checked
- * against CHIP and CircuitMatter. CircuitMatter has no BLE at all -- it is an
- * IP-only node, with no btp/ble module anywhere in the package -- so BTP has
- * only CHIP to check against, and the usual second opinion is missing. What
- * partly replaces it is CHIP's own test suite, which pins exact bytes rather
- * than restating the header layout:
- *   - layout and validation: src/ble/BtpEngine.h:43-53,80-86 and
- *     src/ble/BtpEngine.cpp:227-355 (the receive path, field order and every
- *     refusal).
- *   - handshake: src/ble/BleLayer.cpp:78-79 (the two check bytes),
- *     :157-241 (both codecs), src/ble/BleLayer.h:87-112,124 (lengths, the
- *     4-bit version packing, V4 as the only supported version).
- *   - golden fragments: src/ble/tests/TestBtpEngine.cpp:60-123, whose byte
- *     arrays are reproduced in the suite rather than paraphrased.
- * Treat anything here that is NOT covered by one of those citations as the
- * weakest part of the module.
+ * Little-endian, like the rest of Matter. BTP V4 is the only supported version.
  */
 #pragma once
 

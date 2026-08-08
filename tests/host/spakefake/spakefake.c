@@ -1,32 +1,14 @@
 /**
  * @file spakefake.c — host stand-in for oberon's SPAKE2+ primitives.
  *
- * Two different things live here, and the difference matters.
- *
- * ocrypto_spake2p_p256_reduce() is REAL: a "40-byte big-endian integer modulo
- * the P-256 group order", done by shift-and-subtract so that no bignum library
- * is needed, and pinned in tests/host/test_matter_spake2p.c against values
- * python computed independently. Oberon's constant-time version is what runs on
- * target; this one only has to agree with it.
- *
- * get_key_share() and get_ZV() are NOT a curve. There is no elliptic curve
- * anywhere in the host build and a fake one would prove nothing. What they do
- * instead is REPLAY one exchange that tests/host/gen_pase_vector.py computed
- * with a real P-256, and refuse -- loudly, via spakefake_replay_fault() -- any
- * input that is not the one recorded. That refusal is the point: it means
- * tests/host/test_matter_pase_sm.c is checking that the state machine passes N
- * to the key share and M to get_ZV, that it passes L and not w1, and that the
- * scalar it uses is the reduction of the entropy it was handed. Swapping M and
- * N is the single likeliest mistake in this code and it fails here rather than
- * on a phone.
- *
- * Everything downstream of the curve -- the transcript, SHA-256, HKDF, the
- * confirmations, the session key schedule -- runs for real over these recorded
- * points, and the results are compared against the same python script's
- * independently computed cB, Ke and session keys.
- *
- * What this deliberately does NOT prove is that oberon computes what the script
- * computed. Only hardware answers that; see the on-target selftest.
+ * reduce() is REAL (shift-and-subtract mod the P-256 group order, pinned
+ * against python-computed values). get_key_share()/get_ZV() are NOT a curve:
+ * they REPLAY one exchange gen_pase_vector.py computed with a real P-256 and
+ * refuse any other input loudly -- which is the point: swapping M and N, or
+ * passing w1 where L belongs, fails here rather than on a phone. Everything
+ * downstream (transcript, SHA-256, HKDF, confirmations, session keys) runs for
+ * real over the recorded points. What this does NOT prove is that oberon
+ * computes what the script computed; only the on-target selftest answers that.
  */
 #include <stddef.h>
 #include <stdint.h>

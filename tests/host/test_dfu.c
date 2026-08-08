@@ -5,30 +5,14 @@
  *   modules/woz_dfu/src/dfu_receiver.c  application side: frame, verify, stage
  *   modules/woz_dfu/src/dfu_applier.c   bootloader side: apply, resume, consume
  *
- * WHAT THESE CHECKS ARE WORTH. The flash is honest: RAM-backed partitions that
- * reject a write which is not word-offset and word-sized and an erase which is
- * not page-offset and page-sized, exactly as the nRF driver does. That makes
- * the applier's write combiner and its ROUND_UP on erase load-bearing here —
- * remove either and these tests fail. CRC-32 is the real IEEE polynomial, so
- * the integrity gates are checked against the same number scripts/woz_patch.py
- * computes.
- *
- * THE UPDATE SIGNATURE IS CHECKED AGAINST A REAL ONE. There is no P-256 in
- * this host build, so the curve ran once, offline, in
- * tests/host/gen_dfu_vector.py, over the exact 32 header bytes this suite
- * stages. psafake replays that result: it accepts only the recorded (message,
- * signature) pair and refuses anything else. So a flipped header byte or a
- * flipped signature byte is rejected because the bytes handed to PSA no longer
- * match what a real ECDSA-P256 signed — not because a knob said so. What it
- * still cannot show is that PSA itself verifies correctly on target.
- *
- * WHAT IS NOT REAL: detools is a scripted double, not the vendored patcher.
- * These tests drive the applier's five callbacks with chosen memory operations
- * and never validate a patch format.
- *
- * ORDER MATTERS IN ONE PLACE, and it is called out where it does: dfu_receiver
- * caches its flash area in a file-static that nothing resets, so the
- * open-failure case has to run before any successful open.
+ * The fake flash enforces the nRF driver's word/page alignment rules, so the
+ * applier's write combiner and erase ROUND_UP are load-bearing here; CRC-32 is
+ * the real IEEE polynomial. The update signature is checked against a REAL
+ * P-256 result: gen_dfu_vector.py signed the exact 32 header bytes offline and
+ * psafake replays only that (message, signature) pair, so a flipped byte fails
+ * for the real reason. detools is a scripted double -- patch format is never
+ * validated. Order matters once: dfu_receiver caches its flash area in a
+ * file-static, so the open-failure case must run before any successful open.
  */
 #include <errno.h>
 #include <stdio.h>

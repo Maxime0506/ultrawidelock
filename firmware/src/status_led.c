@@ -2,42 +2,19 @@
  * @file
  * @brief The four board LEDs as one state display.
  *
- * This board has no console. RTT needs probe-rs and the ELF that was actually
- * flashed, uart0 belongs to the J-Link OB, and the USB console only exists in
- * provisioning mode -- so on a board doing its job, four LEDs are the entire
- * output. They used to carry one bit between them: D10 blinked while the update
- * window was open, and a lock that unlocked looked exactly like a lock that had
- * hung.
- *
- * WHAT EACH LED MEANS. One LED per question, so no two facts ever contend for
- * the same lamp and nothing has to be decoded from a rate alone:
+ * On a board doing its job the four LEDs are the entire output. One LED per
+ * question:
  *
  *   D9  green  the lock      solid = unlocked · one blip per 2 s = locked, alive
  *   D12 red    attention     solid = fault · 0.5 Hz = no fabric, needs commissioning
  *   D11 red    the phone     4 Hz = ranging · 1 Hz = Aliro session · off = idle
  *   D10 blue   a window      2 Hz = update window open · solid = provisioning mode
  *
- * D13 is not ours: the DW3110 drives it directly as tx red / rx green, and D20
- * belongs to the J-Link OB.
- *
- * WHY GREEN IS SOLID WHEN OPEN. The lock LED is on for the state that should
- * pull someone's eye across a room, and the unlocked state is that state. The
- * one-blip idle is the other half of the same argument: without it, "locked" and
- * "the firmware died" are the same picture, and on a board with no console that
- * is the ambiguity that costs the most time.
- *
- * WHY A PATTERN TABLE. Each LED renders a 16-slot bit pattern at 125 ms a slot,
- * so every rate this display can show is one 16-bit literal and the whole
- * schedule is a single timer. Adding a rate costs a constant, not a timer, on a
- * part with 6 KB of RAM left. The tick stops itself when every pattern is static
- * (all-on or all-off), so an idle locked board with the heartbeat compiled out
- * costs nothing at all.
- *
- * NOTHING HERE BLOCKS except status_led_boot_blink(), which says so. The tick
- * handler does four GPIO writes and reschedules; it runs on the system work
- * queue, where the existing update-window blink already ran, and it must stay
- * that cheap -- the DW3110 reply arm deadline is ~1836 us and this fires eight
- * times a second.
+ * D13 is not ours (DW3110 tx/rx), nor is D20 (J-Link OB). Each LED renders a
+ * 16-slot bit pattern at 125 ms a slot off one timer; the tick stops itself when
+ * every pattern is static. Nothing here blocks except status_led_boot_blink():
+ * the tick runs on the system work queue eight times a second and must stay
+ * cheap against the ~1836 us DW3110 reply-arm deadline.
  */
 
 #include <zephyr/device.h>

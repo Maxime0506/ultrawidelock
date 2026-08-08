@@ -1,39 +1,17 @@
 /**
  * @file woz_report.h — one range report, as a line of ASCII.
  *
- * The satellite already has a console
- * the door node does not, so the cheapest possible two-anchor data stream is
- * one line per accepted round, read by a host script. No transport firmware, no
- * mesh, no sockets: a cable and a grep.
- *
- * The same struct is what a Stage C3 datagram would carry, so the fields are
- * chosen for the binary format the plan specifies rather than for the text one.
- * That is deliberate -- when the transport changes, only the codec changes.
- *
- * ## The line
+ * One line per accepted round over the satellite's console, read by a host
+ * script -- no transport firmware, just a cable:
  *
  *     ARP1 <anchor> <seq> <us_hi> <us_lo> <d_mm> <q> <trust> <flags> <drop> <acc> *<crc>
  *
- * Space-separated decimals, one trailing CRC-16/CCITT-FALSE in four uppercase
- * hex digits, over every byte before the '*'. Terminated by '\n'.
- *
- * WHY A CHECKSUM ON A CABLE. A UART line that gets corrupted usually fails to
- * parse and is discarded, which is harmless. The case worth defending against
- * is the one that does not: a single flipped digit turns 1004 mm into 1904 mm
- * and stays perfectly well-formed. This feeds a security decision, so a
- * plausible wrong number is worse than an obvious broken one.
- *
- * WHY THE UPTIME IS TWO FIELDS. It is a 64-bit microsecond count, and printing
- * one on an embedded target means depending on the C library having 64-bit
- * integer conversion compiled in -- which is a Kconfig away from not being
- * true, silently, at the point where the line becomes garbage. Splitting it
- * into two 32-bit halves removes the dependency. For the same reason this file
- * does its own decimal conversion and does not call snprintf at all.
- *
- * WHY THE ROUND SEQUENCE IS THE TIMEBASE. Both anchors take part in the same
- * numbered DS-TWR round, so a shared exact index already exists and no clock
- * needs synchronising. The uptime rides along only so drift can be measured,
- * and a later step can decide whether it matters.
+ * Space-separated decimals; trailing CRC-16/CCITT-FALSE (4 uppercase hex) over
+ * every byte before the '*'; '\n'-terminated. The CRC exists because a flipped
+ * digit turns 1004 mm into 1904 mm and still parses -- this feeds a security
+ * decision. The uptime is two 32-bit halves and the conversion is hand-rolled
+ * so nothing depends on 64-bit printf support. The DS-TWR round sequence is the
+ * shared timebase; uptime rides along only to measure drift.
  */
 #ifndef WOZ_REPORT_H
 #define WOZ_REPORT_H

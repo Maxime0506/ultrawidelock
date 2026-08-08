@@ -5,26 +5,8 @@
  * Matter uses its own encoding: one control byte carrying a 3-bit tag control
  * and a 5-bit element type, then 0-8 tag octets, then the value, all
  * little-endian. The two share a name and nothing else, so they stay separate.
- */
-/*
- * Everything Apple Home sends after
- * commissioning -- SetAliroReaderConfig included -- arrives as Matter TLV, and
- * nothing in this repo could read a byte of it before this file.
- *
- * Constants here are not from memory. They were read out of the vendored CHIP
- * SDK at workspace/modules/lib/matter/src/lib/core/: element types from
- * TLVTypes.h:60-86, tag controls from TLVTags.h:105-112, and the special
- * profile IDs from TLVTags.h:74,97. The encoder is checked against CHIP's own
- * golden vectors (src/lib/core/tests/TestTLV.cpp Encoding2/Encoding3), which is
- * a stronger test than a round-trip: a codec that is wrong in a self-consistent
- * way still round-trips perfectly.
- *
- * A tag is one uint64_t, profile ID in the high 32 bits and tag number in the
- * low 32, because passing it in a register pair costs less than a struct on a
- * part where the system work queue has 528 B of headroom. (CHIP stores the
- * COMPLEMENT of the profile ID in its own Tag type, TLVTags.h:137. That is an
- * internal detail of theirs and is deliberately not copied -- the wire format
- * is what has to match, not the in-memory shape.)
+ * A tag is one uint64_t -- profile ID in the high 32 bits, tag number in the
+ * low 32 -- because a register pair costs less than a struct here.
  */
 #pragma once
 

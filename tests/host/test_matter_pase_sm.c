@@ -1,24 +1,13 @@
 /**
  * @file test_matter_pase_sm.c — the PASE responder, driven by a real exchange.
  *
- * The commissioner here is an actual iPhone: K_APPLE_REQ is the
- * PBKDFParamRequest it put on a wire, taken from
- * adafruit/circuitmatter's test_data/apple_recorded_packets.jsonl (payload
- * only, headers stripped, no addresses reproduced).
- *
- * Everything the responder must produce in answer was computed by
- * tests/host/gen_pase_vector.py, which implements P-256 in plain Python
- * integers and works out Z and V THREE ways -- the verifier's formula
- * y*(pA - w0*M), the prover's x*(pB - w0*N), and directly as (x*y)*G -- so the
- * vector is agreement between independent derivations rather than one
- * implementation's opinion. M and N are read out of matter_spake2p.c by that
- * script and checked to lie on the curve, so a transcription slip in the
- * constants cannot survive into the expected values.
- *
- * The curve itself is replayed, not computed; tests/host/spakefake/spakefake.c
- * says exactly what that does and does not establish. Everything else --
- * the response encoding, the context hash, the 534-byte transcript, the
- * confirmations, the session key schedule -- runs for real here.
+ * K_APPLE_REQ is a real iPhone's PBKDFParamRequest (circuitmatter's recorded
+ * packets, payload only). The expected answers come from gen_pase_vector.py,
+ * which computes Z and V three independent ways and curve-checks M/N read out
+ * of matter_spake2p.c, so the vector is agreement between derivations, not one
+ * implementation's opinion. The curve is replayed, not computed (see
+ * spakefake.c); everything else -- encoding, context hash, transcript,
+ * confirmations, session keys -- runs for real here.
  */
 #include <string.h>
 

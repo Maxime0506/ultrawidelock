@@ -5,7 +5,7 @@
  * shim's interception + chaining logic (save the MAC's callbacks, install the
  * shims, feed the STS tracker, gate the Pre-POLL decode on awaiting-poll) —
  * not that every caller actually goes through the seam, which is
- * scripts/check-uwb-seam.sh's job. Types come from the real deca_device_api.h.
+ * tests/tooling/uwb_seam_check.sh's job. Types come from the real deca_device_api.h.
  */
 #include <stdbool.h>
 #include <stdint.h>

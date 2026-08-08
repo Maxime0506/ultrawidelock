@@ -13,29 +13,10 @@
  * peer as initiator and this node as responder. Secure sessions are a different
  * object -- they carry keys and a different counter -- and arrive with CASE.
  *
- * It deliberately does not know what PASE is. It reports the opcode and hands
- * back the payload; the caller decides what to answer. That keeps the framing
- * testable on its own, and means CASE will reuse it rather than fork it.
- *
- * No timers here either. Duplicate suppression and the ack bookkeeping are
- * state, not scheduling; retransmission is matter_mrp.h's, driven by whoever
- * owns a clock.
- */
-/*
- *
- *
- * Cross-checked against two implementations:
- *   - CHIP, workspace/modules/lib/matter/src/: the unsecured-session rules in
- *     transport/SessionManager.cpp, the exchange/ack handling in
- *     messaging/ExchangeContext.cpp and messaging/ReliableMessageContext.cpp,
- *     and the header layouts already pinned in matter_msg.h.
- *   - CircuitMatter (github.com/adafruit/circuitmatter): the same flow at
- *     circuitmatter/__init__.py, where an unsecured message is recognised by
- *     session id 0 and answered on the same exchange with the I flag cleared.
- *
- * They agree on the shape. The one thing worth stating because it is easy to get
- * backwards: the responder echoes the initiator's exchange id unchanged and
- * clears I, rather than allocating an exchange id of its own.
+ * It deliberately does not know what PASE is: it reports the opcode and hands
+ * back the payload. No timers -- retransmission is matter_mrp.h's, driven by
+ * whoever owns a clock. Easy to get backwards: the responder echoes the
+ * initiator's exchange id unchanged and clears I, never allocating its own.
  */
 #pragma once
 

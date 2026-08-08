@@ -9,27 +9,9 @@
  *   nonce  security_flags:u8  message_counter:u32  node_id:u64   (little-endian)
  *   aad    the message header exactly as it appears on the wire
  *   keys   HKDF-SHA256(secret, salt, "SessionKeys") -> i2r | r2i | challenge
- */
-/*
- * The replay
- * window that subtask also lists lives in matter_mrp.c, with the duplicate
- * suppression it belongs to.
  *
- * Cross-checked against two implementations, as with matter_msg.h and
- * matter_mrp.h:
- *   - CHIP, workspace/modules/lib/matter/src/: BuildNonce() at
- *     transport/CryptoContext.cpp:153-166, the AAD rule at :178-192, the
- *     "SessionKeys" info string at :44 and its use at :73,83, and the 16-byte
- *     key and tag at crypto/CHIPCryptoPAL.h:67-68.
- *   - CircuitMatter (github.com/adafruit/circuitmatter): the same nonce as a
- *     struct format at circuitmatter/session.py:274-279 ("<BIQ", then the
- *     header passed as AAD), the same key schedule at circuitmatter/pase.py:
- *     174-195, and the same sizes at circuitmatter/crypto.py:16-20.
- *
- * The two agree on every field, order and size here -- unlike matter_mrp.h,
- * there was nothing to reconcile. The golden vectors in the suite come from a
- * third place again, OpenSSL via python `cryptography`, so the bytes are not
- * merely what this code produces.
+ * The replay window lives in matter_mrp.c with the duplicate suppression it
+ * belongs to.
  */
 #pragma once
 

@@ -1,81 +1,15 @@
 /*
- * Stage 0 contention gate for putting Matter on this board.
+ * Thread/ranging contention gate: measures whether DS-TWR's FINAL->arm margin
+ * survives sharing the M4 and 2.4 GHz radio with OpenThread. Deliberately harsh:
+ * MED (radio always on), channel 15 on top of BLE ch 38. Never in a shipping
+ * image -- CONFIG_ALIRO_THREAD_GATE defaults n and the file compiles out.
  *
- * The question this answers is not "does Thread build" -- it does -- but whether
- * the ranging that commit 5b8d06b fought for survives sharing the M4 and the
- * 2.4 GHz radio with an 802.15.4 stack. That commit won the walk-up by cutting
- * FINAL->arm latency from 3.0 ms to 0.66 ms; OpenThread's stack processing and
- * radio interrupts land straight on that margin. If ranging degrades here, no
- * amount of Matter code above it matters, so this is measured before any is
- * written.
- *
- * Deliberately harsh, so a pass means something:
- *   - MED, not SED (CONFIG_OPENTHREAD_MTD without MTD_SED): the radio stays on
- *     continuously instead of sleeping between polls.
- *   - Channel 15 (2425 MHz) sits on top of BLE advertising channel 38
- *     (2426 MHz), which is the worst coexistence case rather than a flattering
- *     one.
- * A sleepy end device on a quiet channel is strictly easier than this.
- *
- * Never on in a shipping image: CONFIG_ALIRO_THREAD_GATE defaults n, and the
- * whole file compiles out with it.
- *
- * HISTORY, because the first version of this file measured nothing. It was
- * written against a CONFIG_NETWORKING=n "bare OpenThread" build, which links the
- * Thread stack with NO RADIO DRIVER under it --
- * zephyr/drivers/ieee802154/Kconfig gates the whole 802.15.4 driver class on
- * `depends on NETWORKING`. On hardware the image booted and this file produced
- * no output at all, because there was no radio to bring up. The config that
- * works is NET_L2_OPENTHREAD, and that is what this file now targets.
- *
- * Order matters and is not obvious. The L2 brings the interface up during net
- * init, which normally starts OpenThread immediately, before this file could
- * install a dataset. CONFIG_OPENTHREAD_MANUAL_START=y
- * (zephyr/modules/openthread/Kconfig:48) makes openthread_enable() return 0
- * without starting anything (zephyr/subsys/net/l2/openthread/openthread.c:396),
- * so the interface still comes up but the stack waits. This file then commits
- * the dataset and calls openthread_run() itself. That call finds
- * otDatasetIsCommissioned() true and skips its own credential handling
- * (zephyr/modules/openthread/openthread.c:426), which is exactly the intent:
- * the gate's dataset wins.
- *
- * The gate needs a PEER. An MTD cannot become leader, so alone on channel 15
- * this board sits DETACHED emitting parent requests forever -- honest RF
- * arbitration, but almost no stack processing, and stack processing is the half
- * that lands on the FINAL->arm margin. The peer is an nRF5340DK running
- * nrf/samples/openthread/cli as an FTD, given the same dataset by hand:
- *
- *   ot dataset clear
- *   ot dataset activetimestamp 1
- *   ot dataset channel 15
- *   ot dataset panid 0xf00d
- *   ot dataset extpanid dead00beef00cafe
- *   ot dataset networkkey 00112233445566778899aabbccddeeff
- *   ot dataset networkname openaliro-gate
- *   ot dataset commit active
- *   ot ifconfig up
- *   ot thread start
- *
- * The ext PAN ID is set on the peer but not here, because the child adopts the
- * leader's active dataset once attached; only channel, PAN ID and network key
- * have to agree up front. Load is `ot ping async <mesh-local EID> 64 <n> 0.1`,
- * which the CDK's own Zephyr stack answers, so both radio directions are
- * exercised rather than RX alone.
- *
- * Build it with the provisioning console off (reader + console + Thread
- * overflows RAM by 1,752 B) and an 8 KB RTT ring:
- *
- *   CONFIG_ALIRO_PROV_CONSOLE=n  CONFIG_SHELL=n
- *   CONFIG_USB_DEVICE_STACK=n    CONFIG_USB_CDC_ACM=n
- *   CONFIG_NETWORKING=y  CONFIG_NET_IPV6=y  CONFIG_NET_UDP=y
- *   CONFIG_NET_SOCKETS=y CONFIG_NET_L2_OPENTHREAD=y CONFIG_OPENTHREAD_MTD=y
- *   CONFIG_ALIRO_THREAD_GATE=y   CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=8192
- *
- * The RTT size is not cosmetic. At the default 4096 the ring filled partway
- * through ranging and Zephyr's NO_BLOCK_SKIP policy then silently DROPPED the
- * rest, taking the grant line with it and costing a walk-up to discover.
- * Deliberately NOT combined with the RAM trims: those are unverified on
- * hardware too, and a failed walk-up has to name one cause.
+ * Needs NET_L2_OPENTHREAD (a "bare OpenThread" build links no radio driver) and
+ * CONFIG_OPENTHREAD_MANUAL_START=y so this file can commit its dataset before
+ * openthread_run(). Needs an FTD peer on the same dataset (channel 15, PAN
+ * 0xf00d, the networkkey below); load is `ot ping async` both directions.
+ * Run with CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=8192: at 4096 the ring filled and
+ * NO_BLOCK_SKIP silently dropped the grant line.
  */
 
 #include <zephyr/kernel.h>

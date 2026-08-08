@@ -1,29 +1,13 @@
 /* stackfake — test-side control/inspection API for the Aliro Interface the
  * woz_aliro_stack sources call into.
  *
- * THE SYMMETRIC CRYPTO IS REAL. SHA-256, HKDF and AES-256-GCM come from this
- * repo's own host implementations -- modules/woz_aliro/src/aliro_hash.c, which
- * test_aliro_hash.c pins against published vectors, and the reference GCM in
- * ports/esp32/test/aliro_prim_host.c, which test_aliro_crypto.c pins against
- * the GCM spec vectors. So a wrong key, a skipped counter, a corrupted
- * ciphertext or a forged authentication tag fails HERE the way it fails on the
- * device, and the key schedule really is derived rather than asserted.
- *
- * THE ASYMMETRIC CRYPTO IS NOT, AND CANNOT BE. There is no P-256 anywhere in
- * this repo's host build: aliro_prim_host.c says so in its own banner -- its
- * EC block is "a deterministic, commutative, trivially forgeable stand-in",
- * and real curve math runs only in aliro_prim_psa.c on target. So key
- * agreement, ECDSA signing and ECDSA verification are stand-ins here, their
- * results are knobs, and nothing in these suites is evidence that a signature
- * verifies or that an ephemeral exchange is sound.
- *
- * WHAT THAT BUYS. The state machine is checked against real key material: the
- * suites can act as the User Device, seal a response with the same derived key
- * the reader derived, and the reader either opens it or does not. A test that
- * sends the wrong counter now fails for the reason the device would fail.
- *
- * The transport side is a recorder: Session::Send keeps every frame, so a
- * suite reads back exactly what would have gone on the wire.
+ * SYMMETRIC CRYPTO IS REAL (SHA-256/HKDF from aliro_hash.c, the reference GCM
+ * from aliro_prim_host.c, both vector-pinned): a wrong key, skipped counter or
+ * forged tag fails HERE the way it fails on the device. ASYMMETRIC IS NOT --
+ * no P-256 exists in the host build, EC results are knobs, and nothing here is
+ * evidence a signature verifies. What that buys: the state machine is checked
+ * against real derived key material, and the transport is a recorder
+ * (Session::Send keeps every frame).
  */
 #ifndef WOZ_STACKFAKE_H
 #define WOZ_STACKFAKE_H

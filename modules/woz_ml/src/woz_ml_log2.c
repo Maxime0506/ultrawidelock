@@ -11,14 +11,10 @@
  * approximating is log2(1 + m) over a single octave, and that is what the
  * generated table holds: nine entries, linearly interpolated.
  *
- * WHY NINE ENTRIES IS ENOUGH, measured rather than assumed. Linear
- * interpolation of log2(1+m) over eight segments has a worst-case error of
- * h^2/8 * max|f''| = 0.0029 in log2 units, at m near zero where the curve bends
- * hardest. Through this module's callers that is 0.0086 dB and 0.017 dB. The
- * error that actually limits the feature is neither of those: it is the reader
- * reporting range as a whole number of centimetres, worth ~0.4 dB at the short
- * end, which is why table sizes from 8 to 64 entries all bottom out at the same
- * 0.183 dB in gate 3. Adding entries buys nothing while that term stands.
+ * Nine entries is enough: eight-segment linear interpolation worst-cases at
+ * 0.0029 log2 units (0.017 dB through the callers), and the binding error is
+ * the reader's whole-centimetre range anyway -- table sizes 8 to 64 all bottom
+ * out at the same 0.183 dB.
  */
 
 #include "woz_ml_log2.h"

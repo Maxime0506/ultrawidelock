@@ -12,17 +12,12 @@
  *    32   64   ECDSA-P256 signature, raw r||s, over those 32 bytes
  *    96   ..   the patch
  *
- * The header is written to flash LAST, after the whole patch has arrived and
- * its CRC has been checked. So a transfer that is cut off leaves a staging
- * partition with no valid magic in it, and the next boot ignores it. There is
- * no half-staged state that the bootloader can act on.
- *
- * THE SIGNATURE IS CHECKED HERE, NOT IN THE BOOTLOADER. This image already has
- * PSA ECDSA-P256 linked for Aliro; MCUboot is the flash-starved one. And the
- * floor sits under both: CONFIG_BOOT_VALIDATE_SLOT0 makes MCUboot re-verify
- * the P-256 signature of the RESULT before booting it, so even a forged header
- * cannot install code -- only destroy the installed image, which recovery
- * catches.
+ * The header is written to flash LAST, after the patch's CRC checks out, so a
+ * cut-off transfer leaves no valid magic and the next boot ignores it. The
+ * signature is checked HERE, not in the bootloader (this image already links
+ * PSA ECDSA-P256; MCUboot is the flash-starved one), and the floor sits under
+ * both: CONFIG_BOOT_VALIDATE_SLOT0 re-verifies the RESULT before booting, so a
+ * forged header can only destroy the installed image, never install code.
  */
 
 #include <zephyr/kernel.h>

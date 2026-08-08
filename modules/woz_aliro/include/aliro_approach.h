@@ -7,29 +7,18 @@
 /*
  * aliro_approach — predictive approach controller ("negative latency").
  *
- * Turns the per-block trusted UWB range stream into bolt decisions. Two paths
- * cooperate:
+ * Turns the per-block trusted UWB range stream into bolt decisions. Presence
+ * path: median filter + near/far dwell counters across a hysteresis band (slow
+ * shuffles still unlock). Prediction path: a 1-D constant-velocity Kalman
+ * filter yields distance + closing speed; when the ETA at the unlock radius
+ * drops inside the retraction window (motor_ms + margin_ms), retraction starts
+ * early so it COMPLETES at arrival. Invariant: open only while an authenticated
+ * credential is closing -- prediction needs a converged filter, speed above
+ * vmin_cm_s and two qualifying samples, and an opened bolt relocks the moment
+ * the approach stops or the arrival is overdue.
  *
- *   Presence (threshold) path — the shipped behaviour, unchanged: trusted
- *   ranges go through a median filter (rejects the metre-scale per-block
- *   spikes) and near/far dwell counters across a wide hysteresis band before
- *   the bolt moves. Slow shuffles and stand-at-door still unlock here.
- *
- *   Prediction path — a 1-D constant-velocity Kalman filter over the same
- *   samples yields distance + closing speed. When the estimated time of
- *   arrival at the unlock radius drops inside the bolt's retraction window
- *   (motor_ms + margin_ms), retraction is started early so it COMPLETES at
- *   arrival instead of beginning there. The invariant is "open only while an
- *   authenticated credential is closing on the door": a prediction needs a
- *   converged filter, a closing speed above vmin_cm_s, and two consecutive
- *   qualifying samples. A predictively opened bolt that has not yet arrived
- *   relocks the moment the approach stops (closing speed decays) or the
- *   arrival is overdue — a stationary credential outside the unlock radius
- *   never holds the door open.
- *
- * Pure logic, caller-allocated state, no platform dependencies: the same unit
- * runs on the target and in the host suite / web twin replays. Call from task
- * context only (uses float math; never from the UWB RX/ISR path).
+ * Pure logic, caller-allocated state, no platform dependencies. Call from task
+ * context only (float math; never from the UWB RX/ISR path).
  */
 #ifndef ALIRO_APPROACH_H
 #define ALIRO_APPROACH_H

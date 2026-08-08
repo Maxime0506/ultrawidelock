@@ -7,28 +7,14 @@
  * the reassembler, drive the fragmenter out through C2 indications, and build
  * the commissionable advertisement.
  *
- * Modelled on aliro_ble_zephyr.c, which is the same shape -- proprietary
- * service, one write characteristic, one indicate characteristic,
- * connection-scoped state -- and is proven against live iPhones.
- */
-/*
- * second half.
+ * Modelled on aliro_ble_zephyr.c -- same shape, proven against live iPhones.
+ * C1 (RX, write) is 18EE2EF5-263D-4559-959F-4F9C429F9D11, C2 (TX, indicate)
+ * ...D12, spelled below in the little-endian order BT_UUID_INIT_128 wants.
  *
- * UUIDs and the advertisement layout are from CHIP, not from memory:
- *   - service 0xFFF6, and the two 128-bit characteristics, at
- *     workspace/modules/lib/matter/src/platform/Zephyr/BLEManagerImpl.cpp:78-87
- *     and the attribute table at :104-120. C1 (RX, write) is
- *     18EE2EF5-263D-4559-959F-4F9C429F9D11 and C2 (TX, indicate) is ...D12,
- *     spelled below in the little-endian byte order BT_UUID_INIT_128 wants.
- *   - the 8-byte advertisement payload at
- *     workspace/modules/lib/matter/src/ble/CHIPBleServiceData.h:52-79.
- *
- * NOT wired into the reader's advertising. The reader owns one advertising set
- * and advertises Aliro 0xFFF2; running both at once needs either extended
- * advertising with two sets or a deliberate hand-off, and that decision is not
- * made here. matter_ble_advertise_start() exists and is never called on its
- * own, so an image with this file compiled in still behaves exactly as before
- * until something asks for it.
+ * NOT wired into the reader's advertising: the reader owns one advertising set
+ * (Aliro 0xFFF2), and matter_ble_advertise_start() is never called on its own,
+ * so an image with this file compiled in behaves exactly as before until
+ * something asks for it.
  */
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>

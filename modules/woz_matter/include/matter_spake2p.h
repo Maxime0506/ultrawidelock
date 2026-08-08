@@ -17,25 +17,6 @@
  *   KcA|KcB  HKDF(Ka, "ConfirmationKeys")
  *   cA, cB   HMAC(KcA, pB) and HMAC(KcB, pA)
  */
-/*
- * the second half of item 5.
- *
- * Cross-checked against two implementations:
- *   - CHIP, workspace/modules/lib/matter/src/: the context string at
- *     protocols/secure_channel/PASESession.cpp:106 and the running hash it
- *     feeds at :168-169,382,415,512,540,201; M and N at
- *     crypto/CHIPCryptoPAL.h:186-197; the ConfirmationKeys step at
- *     crypto/CHIPCryptoPAL.cpp:458-468.
- *   - CircuitMatter (github.com/adafruit/circuitmatter): the same PBKDF2 input
- *     encoding and reduction at circuitmatter/pase.py:104-116, the transcript
- *     at :128-153, and Crypto_P2 at :161-172. The commissioning hash it feeds
- *     as `context` is built at circuitmatter/__init__.py:298-299.
- *
- * They agree on every element, order and length prefix. One caution worth
- * carrying: CircuitMatter's own source comments its Z computation with
- * "Z is wrong. V is right" (pase.py:211), so its Z is deliberately NOT used as
- * a reference value anywhere in our suite. Z comes from oberon.
- */
 #pragma once
 
 #include <stdbool.h>

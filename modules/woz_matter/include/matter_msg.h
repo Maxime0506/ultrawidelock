@@ -10,25 +10,8 @@
  *   protocol header  exchange_flags:u8  opcode:u8  exchange_id:u16
  *                    [vendor_id:u16 if V]  protocol_id:u16  [ack_counter:u32 if A]
  *
- * All little-endian.
- */
-/*
- * They are one file
- * because they are one wire format read back to back; splitting them would put
- * a seam where the spec has none.
- *
- * Every bit position below was taken from TWO independent implementations that
- * agree, because unlike the TLV codec there is no convenient golden-byte vector
- * to pin these against:
- *   - CHIP, workspace/modules/lib/matter/src/transport/raw/MessageHeader.h:
- *     exchange flags :103-115, message flags :129-132, security flags :148-155,
- *     and the field diagram at :118-124.
- *   - CircuitMatter (github.com/adafruit/circuitmatter), circuitmatter/message.py:
- *     ExchangeFlags :13-18, SecurityFlags :21-26, and the struct formats
- *     "<BHBI" and "<BBH" at :88 and :61.
- * Where this file states a layout, both of those say the same thing. Anywhere
- * they had differed, the difference would be recorded here rather than resolved
- * silently.
+ * All little-endian. One file because they are one wire format read back to
+ * back.
  */
 #pragma once
 

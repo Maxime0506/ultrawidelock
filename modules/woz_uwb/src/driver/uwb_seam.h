@@ -5,8 +5,8 @@
  * the CCC STS-V, registering callbacks must insert the Pre-POLL shim, and
  * (re)configuring the PHY is traced. Every call site in this module goes
  * through the helpers below instead of <deca_device_api.h>, so a site added
- * later cannot quietly bypass any of it. scripts/check-uwb-seam.sh enforces
- * that mechanically.
+ * later cannot quietly bypass any of it. `make seam` enforces that
+ * mechanically (tests/tooling/uwb_seam_check.sh).
  *
  * Under CONFIG_WOZ_ALIRO the engine supplies the definitions:
  *

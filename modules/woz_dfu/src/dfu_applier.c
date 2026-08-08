@@ -3,32 +3,19 @@
  * @brief Applies a staged delta patch onto the primary slot, from inside
  *        MCUboot.
  *
- * Runs as a SYS_INIT at APPLICATION level. That level is chosen, not
- * convenient: it is after the flash driver has initialised (POST_KERNEL) and
- * before MCUboot's own main(), which is the only window in which the primary
- * slot can be rewritten. It also means NOT ONE LINE of fetched upstream MCUboot
- * is edited -- the bootloader loads this the same way it loads every other
- * Zephyr module.
+ * SYS_INIT at APPLICATION level: after the flash driver (POST_KERNEL), before
+ * MCUboot's main() -- the only window in which the primary slot can be
+ * rewritten, and no upstream MCUboot line is edited. It cannot live in the
+ * application, which executes from the slot being rewritten. A normal boot
+ * costs one word read (header magic mismatch, return).
  *
- * Why this cannot live in the application: the application executes from the
- * primary slot. Rewriting it would be rewriting the code doing the rewriting.
- *
- * On a normal boot this costs one word read: the header magic does not match
- * and the function returns immediately.
- *
- * SAFETY. Three things stand between a bad patch and a dead lock, and only the
- * third is load-bearing:
- *   1. the header carries a CRC of itself, written last, so a torn write fails
- *   2. the patch and the from-image are CRC-checked before a byte is erased
- *   3. MCUboot re-verifies the P-256 signature of the RESULT before booting it
- *      (CONFIG_BOOT_VALIDATE_SLOT0=y), and drops to serial recovery if it
- *      fails (CONFIG_BOOT_SERIAL_NO_APPLICATION=y)
- * So the worst a corrupt or forged patch achieves is destroying the installed
- * image, which is recoverable, rather than installing code, which is not.
- *
- * POWER CUTS ARE EXPECTED, not exceptional: this rewrites most of 442 KB and
- * takes seconds. detools' step counter is what makes that survivable -- see
- * step_set()/step_get() below.
+ * SAFETY: the header CRCs itself (torn write fails); patch and from-image are
+ * CRC-checked before a byte is erased; and MCUboot re-verifies the P-256
+ * signature of the RESULT before booting it, dropping to serial recovery on
+ * failure. The worst a forged patch achieves is destroying the installed image
+ * (recoverable), not installing code. Power cuts are expected -- this rewrites
+ * most of 442 KB over seconds; detools' step counter (step_set/step_get) is
+ * what makes that survivable.
  */
 
 #include <zephyr/init.h>

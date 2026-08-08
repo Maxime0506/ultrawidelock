@@ -1,7 +1,7 @@
 # Woz UWB engine as a Zephyr module for the Nordic door-lock add-on.
 # The CCC STS substitution rides src/driver/uwb_seam.h: every caller reaches the
 # radio through woz_uwb_arm_rx(), which programs the CCC key/IV on every RX-arm,
-# and its three siblings. scripts/check-uwb-seam.sh keeps the seam intact.
+# and its three siblings. tests/tooling/uwb_seam_check.sh keeps the seam intact.
 # The DS-TWR responder runs on modules/woz_dw3000.
 # Contributes nothing unless CONFIG_WOZ_UWB=y (stock build byte-identical).
 
