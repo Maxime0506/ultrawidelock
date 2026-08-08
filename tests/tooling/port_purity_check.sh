@@ -43,8 +43,14 @@
 # tranche, listed in RATCHET below with the tranche that retires it. A ratchet
 # entry that stops tripping the ban is a FAILURE ("stale") — finishing a
 # conversion and shrinking this list are the same commit, so the list can only
-# go down. When RATCHET is empty, modules/ is one-source and this header's
-# permanent list is the whole story.
+# go down. RATCHET is empty: modules/ is one-source and the permanent list
+# above is the whole story.
+#
+# The permanent list is ratcheted the same way, because "permanent" is a claim
+# about today's adapters, not a licence. Each named file must still trip the
+# ban and each named directory must still exist; an adapter that becomes
+# portable, or moves, fails the gate until its line goes too. An exemption
+# nobody can retire is an exemption nobody is checking.
 #
 # TWO MORE PERMANENT CHECKS ride in this gate because no Zephyr/ESP build runs
 # on this machine — a path or symbol a build file hardcodes is otherwise proven
@@ -84,16 +90,30 @@ KERNEL_RE='(^|[^_[:alnum:]])(k_(work|sem|thread|timer|fifo|msleep|sleep|usleep|b
 # comment.
 COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 
-# Permanent exemptions — see the header for why each is not a hole.
-PERMANENT_RE='^(modules/woz_port/
-|modules/woz_dw3000/dwt_uwb_driver/
-|modules/woz_dfu/src/detools/
-|modules/woz_aliro_stack/src/aliro_stack\.cpp
-|modules/woz_aliro_stack/src/session\.cpp
-|modules/woz_nfc/src/transport_pn532\.cpp
-|modules/woz_aliro_ecp/src/nfc_prop_ecp\.cpp
-|modules/woz_uwb/src/facade/woz_util\.h)'
-PERMANENT_RE=${PERMANENT_RE//$'\n'/}
+# Permanent exemptions — see the header for why each is not a hole. Declared as
+# plain paths, once, and compiled into the match regex below: the scan skips
+# them and the staleness check re-proves each one is still needed, so the list
+# cannot outlive its reasons.
+PERMANENT_DIRS=(
+	modules/woz_port                    # the contract itself
+	modules/woz_dw3000/dwt_uwb_driver   # vendored Qorvo decadriver
+	modules/woz_dfu/src/detools         # vendored delta-patch engine
+)
+PERMANENT_FILES=(
+	modules/woz_aliro_stack/src/aliro_stack.cpp
+	modules/woz_aliro_stack/src/session.cpp
+	modules/woz_nfc/src/transport_pn532.cpp
+	modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp
+	modules/woz_uwb/src/facade/woz_util.h
+)
+
+permanent_re() { # the two lists as one anchored alternation, dots literal
+	local p out=''
+	for p in "${PERMANENT_DIRS[@]}"; do out="$out|${p//./\\.}/"; done
+	for p in "${PERMANENT_FILES[@]}"; do out="$out|${p//./\\.}"; done
+	printf '^(%s)' "${out#|}"
+}
+PERMANENT_RE=$(permanent_re)
 
 # The ratchet: still-impure files and the tranche that retires each. EMPTY
 # since T4: modules/ is one-source and the permanent list above is the whole
@@ -149,6 +169,26 @@ scan() {
 		fi
 	done
 
+	# Same discipline for the permanent list, which no tranche will ever empty:
+	# an adapter that became pure, or moved, must lose its exemption in that
+	# commit. Otherwise the entry keeps covering a path nobody is watching.
+	for f in "${PERMANENT_FILES[@]}"; do
+		if [ ! -f "$f" ]; then
+			printf '%s  stale permanent exemption: %s (gone)%s\n' "$R" "$f" "$Z" >&2
+			stale=$((stale + 1))
+		elif [ -z "$(file_hits "$f")" ]; then
+			printf '%s  stale permanent exemption: %s (now pure — drop it)%s\n' \
+				"$R" "$f" "$Z" >&2
+			stale=$((stale + 1))
+		fi
+	done
+	for f in "${PERMANENT_DIRS[@]}"; do
+		if [ ! -d "$f" ]; then
+			printf '%s  stale permanent exemption: %s/ (gone)%s\n' "$R" "$f" "$Z" >&2
+			stale=$((stale + 1))
+		fi
+	done
+
 	if [ "$findings" -gt 0 ] || [ "$stale" -gt 0 ]; then
 		if [ "$findings" -gt 0 ]; then
 			printf '%scheck-purity: %d platform reference(s) in shared modules/%s\n' \
@@ -156,12 +196,14 @@ scan() {
 			printf '  Go through woz_port (woz_port.h / woz_log.h), or move the file\n' >&2
 			printf '  to a port tree. RATCHET additions need a tranche tag and a reason.\n' >&2
 		fi
-		[ "$stale" -eq 0 ] || printf '%scheck-purity: %d stale RATCHET entr(ies) — shrink the list%s\n' \
+		[ "$stale" -eq 0 ] || printf '%scheck-purity: %d stale exemption(s) — an allowlist entry outlived its reason%s\n' \
 			"$R" "$stale" "$Z" >&2
 		return 1
 	fi
 	printf '%s  ok   modules/ is platform-pure outside woz_port and the exempt adapters%s\n' "$G" "$Z"
-	printf '%s  ok   conversion ratchet: %d file(s) remain, none stale%s\n' "$G" "${#RATCHET[@]}" "$Z"
+	printf '%s  ok   exemptions: %d permanent (%d dir, %d file), %d ratchet, none stale%s\n' \
+		"$G" "$((${#PERMANENT_DIRS[@]} + ${#PERMANENT_FILES[@]}))" \
+		"${#PERMANENT_DIRS[@]}" "${#PERMANENT_FILES[@]}" "${#RATCHET[@]}" "$Z"
 	return 0
 }
 
@@ -502,6 +544,35 @@ self_test() {
 		fi
 	done
 	[ "$fails" -ne 0 ] || printf '%s  self-test: exemptions cover only the declared adapters%s\n' "$G" "$Z"
+
+	# ...and every declared exemption is still earning it: the staleness rule
+	# the scan applies, re-run here so --self-test alone names the offender.
+	for f in "${PERMANENT_FILES[@]}"; do
+		if [ ! -f "$f" ]; then
+			printf '%s  self-test FAILED: permanent exemption %s is gone%s\n' "$R" "$f" "$Z" >&2
+			fails=$((fails + 1))
+		elif [ -z "$(file_hits "$f")" ]; then
+			printf '%s  self-test FAILED: permanent exemption %s is pure — drop it%s\n' \
+				"$R" "$f" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	for f in "${PERMANENT_DIRS[@]}"; do
+		if [ ! -d "$f" ]; then
+			printf '%s  self-test FAILED: permanent exemption %s/ is gone%s\n' "$R" "$f" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	# The compiled regex must match exactly what the two lists declare — a
+	# quoting slip there would silently widen or void the exemption set.
+	for f in "${PERMANENT_FILES[@]}" "${PERMANENT_DIRS[@]/%//x.c}"; do
+		if ! [[ $f =~ $PERMANENT_RE ]]; then
+			printf '%s  self-test FAILED: declared exemption %s does not match the compiled regex%s\n' \
+				"$R" "$f" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	[ "$fails" -ne 0 ] || printf '%s  self-test: every declared exemption still trips the ban%s\n' "$G" "$Z"
 
 	# Path extractor: resolves set() variables and REPO_ROOT, joins relative
 	# sources, and stays quiet on comments, EXISTS probes, unresolved ${...}
