@@ -2,6 +2,9 @@
 #ifndef MATTERFAKE_FREERTOS_TASK_H
 #define MATTERFAKE_FREERTOS_TASK_H
 
+/* Shadow sentinel, asserted by test_esp_matter_lock.cpp. */
+#define MATTERFAKE_SHADOWS_FREERTOS_TASK 1
+
 #include "FreeRTOS.h"
 
 typedef struct mfk_task_opaque *TaskHandle_t;

@@ -4,6 +4,9 @@
 #ifndef MATTERFAKE_ESP_CONSOLE_H
 #define MATTERFAKE_ESP_CONSOLE_H
 
+/* Shadow sentinel, asserted by test_esp_matter_lock.cpp. */
+#define MATTERFAKE_SHADOWS_ESP_CONSOLE 1
+
 #include "esp_err.h"
 
 typedef struct esp_console_repl esp_console_repl_t;

@@ -34,6 +34,21 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+/* Include-order sentinel. This binary puts BOTH fake trees on the include path
+ * (-I matterfake -I sdkfake in run.sh) and four header paths exist in both;
+ * matterfake wins by order and must, because its copies carry what the
+ * matter-lock app needs and sdkfake's do not (esp_console's .hint member, task
+ * notifications, the ESP-IDF portYIELD_FROM_ISR spelling, the C++-guarded
+ * NimBLE service type). Each shadowing copy defines its marker; if the order
+ * ever flips, this fails here instead of as unrelated errors inside the app
+ * sources. ble_hs.h is included only for that coverage — app_main.cpp is the
+ * file that actually needs it. */
+#include "host/ble_hs.h"
+#if !defined(MATTERFAKE_SHADOWS_ESP_CONSOLE) || !defined(MATTERFAKE_SHADOWS_FREERTOS) || \
+	!defined(MATTERFAKE_SHADOWS_FREERTOS_TASK) || !defined(MATTERFAKE_SHADOWS_BLE_HS)
+#error "sdkfake shadowed matterfake — check the -I order in ports/esp32/test/run.sh"
+#endif
+
 #include "esp_log.h"
 #include "aliro_lat.h"
 #include "woz_diag.h"

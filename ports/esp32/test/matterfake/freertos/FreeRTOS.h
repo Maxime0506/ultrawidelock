@@ -4,6 +4,9 @@
 #ifndef MATTERFAKE_FREERTOS_H
 #define MATTERFAKE_FREERTOS_H
 
+/* Shadow sentinel, asserted by test_esp_matter_lock.cpp. */
+#define MATTERFAKE_SHADOWS_FREERTOS 1
+
 #include <stdint.h>
 
 typedef int BaseType_t;
