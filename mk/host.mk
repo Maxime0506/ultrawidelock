@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test test-san coverage fuzz cbmc check drift test-ws
+.PHONY: test test-san coverage fuzz cbmc check drift seam test-ws
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -47,6 +47,15 @@ check:
 ##   reflow a file and it still reads the same values.
 drift:
 	@python3 $(REPO_ROOT)/tests/tooling/drift_check.py
+
+## seam: no call reaches the radio past the CCC STS seam
+##   Four decadriver entry points carry engine behaviour a caller must not skip.
+##   Bypassing one is SILENT on the bench — the radio arms, ranging runs, and the
+##   phone simply never unlocks, because the STS never matched. A link-time
+##   interposer used to make that structurally impossible; this buys the
+##   guarantee back by scanning. --self-test proves the detector can still fail.
+seam:
+	@$(REPO_ROOT)/tests/tooling/uwb_seam_check.sh
 
 ## test-ws: hermetic tests for per-worktree workspace auto-seeding
 ##   Runs in a temp dir with a stub bootstrap — no west, no hardware, and it
