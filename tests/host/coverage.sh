@@ -458,7 +458,7 @@ nsh="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' | wc -l | t
 nshl="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' -exec cat {} + |
 	wc -l | tr -d ' ')"
 surf "scripts/ + release/ shell ($nsh scripts)" "$nshl" \
-	"tests/tooling covers ws-seed + patch drift"
+	"tests/tooling covers patch drift"
 
 "$PY" "$ROOT/tests/host/coverage_report.py" \
 	"$OUT/summary.json" "$OUT/html/index.html" "$UNBUILT_TSV" "$SURFACES_TSV"

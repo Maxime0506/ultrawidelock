@@ -71,10 +71,9 @@ NRF_INIT_BUILD := $(ALIRO_BUILD_ROOT)/nrf5340dk-initiator
 # overlays, UWB chip variants and DFU flags that this application has none of.
 #
 # The cost of not using the script is that this does NOT reproduce its workspace
-# resolution, which auto-seeds a per-worktree copy when ./workspace is absent
-# (see its header, and `make ws-seed`). A worktree that has never built anything
-# has no ./workspace and this target will fail; run `make bootstrap` or
-# `make ws-seed` first. Everything else the script does is door-lock specific.
+# resolution. A checkout that has never built anything has no ./workspace and
+# this target will fail; run `make bootstrap` first. Everything else the script
+# does is door-lock specific.
 NRF_WS     := $(REPO_ROOT)/workspace
 NRF_LAUNCH := nrfutil sdk-manager toolchain launch --ncs-version $(NCS_VER) --
 

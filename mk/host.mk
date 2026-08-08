@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test test-san coverage cbmc check drift seam test-ws
+.PHONY: test test-san coverage cbmc check drift seam
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -50,9 +50,4 @@ drift:
 seam:
 	@$(REPO_ROOT)/tests/tooling/uwb_seam_check.sh
 
-## test-ws: hermetic tests for per-worktree workspace auto-seeding
-##   Runs in a temp dir with a stub bootstrap — no west, no hardware, and it
-##   never touches this repo's own workspace/ or build/.
-test-ws:
-	@$(REPO_ROOT)/tests/tooling/ws_seed_test.sh
 

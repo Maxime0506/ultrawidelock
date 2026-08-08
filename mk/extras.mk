@@ -27,10 +27,9 @@ clean:
 	        "$(REPO_ROOT)"/ports/esp32/test/on_target_ec/build "$(REPO_ROOT)"/ports/nrf5340dk/on_target_ec/build
 	@printf '  removed %s and the app-local build directories\n' '$(ALIRO_BUILD_ROOT)'
 
-## ws-clean: remove THIS worktree's local build + seeded workspace
-##   Frees the per-worktree caches; re-seed with `make ws-seed`. A symlinked
-##   workspace (pointing at the primary) is left alone — only a real local dir
-##   is removed, never the shared source.
+## ws-clean: remove THIS worktree's local build + workspace
+##   A symlinked workspace (pointing at the primary) is left alone — only a real
+##   local dir is removed, never the shared source.
 ws-clean: clean
 	@if [ -d workspace ] && [ ! -L workspace ]; then rm -rf workspace && printf '  removed ./workspace\n'; \
 	else printf '  (no local workspace to remove)\n'; fi

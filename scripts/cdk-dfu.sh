@@ -51,7 +51,7 @@ CONN="dev=${PORT},baud=${BAUD}"
 PROBES="${DFU_PROBES:-120}"
 
 command -v mcumgr >/dev/null 2>&1 || {
-	echo "  mcumgr not found  ·  install: make tools-install" >&2; exit 1; }
+	echo "  mcumgr not found  ·  see \`make tools\`" >&2; exit 1; }
 [ -f "$IMAGE" ] || { echo "  no signed image at $IMAGE  ·  run \`make build\` first" >&2; exit 1; }
 
 # Probe device connectivity by listing MCUmgr images over serial connection with 0.4 second timeout.

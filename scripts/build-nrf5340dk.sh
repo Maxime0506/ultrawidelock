@@ -39,26 +39,17 @@ set -euo pipefail
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS="${ALIRO_WS:-$TREE/workspace}"
 
-# A linked git worktree usually has no NCS workspace of its own (the ~6.5 GB tree
-# lives in the primary checkout). Sharing the primary's is a trap: it holds one
-# patch state at a time, so a build here can silently compile a sibling branch's
-# patches. So on the first build in a fresh worktree, auto-seed an isolated
-# copy-on-write clone (near-zero disk on APFS) that carries THIS branch's patches.
-# If seeding can't happen (off APFS, primary not bootstrapped, etc.) fall back to
-# the shared primary workspace so builds still work. An explicit ALIRO_WS wins.
+# A linked git worktree usually has no NCS workspace of its own (the ~6.5 GB
+# tree lives in the primary checkout); fall back to the primary's workspace so
+# builds still work. An explicit ALIRO_WS wins.
 if [ -z "${ALIRO_WS:-}" ] && [ ! -d "$WS/.west" ]; then
-  if ! { [ -x "$TREE/scripts/ws-seed.sh" ] && "$TREE/scripts/ws-seed.sh"; }; then
-    _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
-    if [ -n "$_common" ]; then
-      case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
-      _main="$(cd "$(dirname "$_common")" 2>/dev/null && pwd || true)"
-      if [ -n "$_main" ] && [ -d "$_main/workspace/.west" ]; then WS="$_main/workspace"; fi
-    fi
+  _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_common" ]; then
+    case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
+    _main="$(cd "$(dirname "$_common")" 2>/dev/null && pwd || true)"
+    if [ -n "$_main" ] && [ -d "$_main/workspace/.west" ]; then WS="$_main/workspace"; fi
   fi
 fi
-# Test seam: print the resolved workspace and stop, so the resolution logic above
-# can be exercised without running preflight or a west build. Used by tests only.
-if [ -n "${ALIRO_RESOLVE_ONLY:-}" ]; then echo "$WS"; exit 0; fi
 
 NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$TREE/ports/nrf5340dk/overlays"

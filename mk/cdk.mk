@@ -765,7 +765,7 @@ dfu-serial:
 ##   Options: CDK_RTT_BUILD=<dir> (defaults to CDK_BUILD, so it follows the
 ##            image the flash targets wrote)
 monitor:
-	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  install: make tools-install\n' >&2; exit 1; }
+	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  see `make tools`\n' >&2; exit 1; }
 	@test -f $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf || { printf '  no ELF at %s/$(CDK_IMAGE)/zephyr/zephyr.elf  ·  build it first\n' '$(CDK_RTT_BUILD)' >&2; exit 1; }
 	@$(REPO_ROOT)/scripts/cdk-rtt-elf-check.sh \
 	  '$(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)'

@@ -10,8 +10,7 @@ workspace/
 # Python bytecode
 __pycache__/
 
-# Local virtualenv holding the host suites' python deps (markdown, coverage).
-# Created by `make tools-install`; the runners resolve it themselves ($PY in
+# Local virtualenv; the runners resolve it themselves ($PY in
 # tests/host/sources.sh), so it is never activated and never on PATH.
 .venv/
 

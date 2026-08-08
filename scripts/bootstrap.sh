@@ -65,8 +65,7 @@ if [ "${ALIRO_TOOLCHAIN:-}" != env ] && [ -z "${NO_TOOLCHAIN:-}" ]; then
   echo "==> NCS $NCS_VER toolchain"
   if ! command -v nrfutil >/dev/null 2>&1; then
     echo "ERROR: nrfutil not found on PATH — it is what installs the toolchain." >&2
-    echo "       run: make tools-install" >&2
-    echo "       or:  https://www.nordicsemi.com/Products/Development-tools/nrf-util" >&2
+    echo "       get it: https://www.nordicsemi.com/Products/Development-tools/nrf-util" >&2
     echo "       already have a Zephyr toolchain on PATH? ALIRO_TOOLCHAIN=env make bootstrap" >&2
     exit 1
   fi

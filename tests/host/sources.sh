@@ -176,13 +176,7 @@ INCS=(
 # those headers #error rather than guess a platform.
 DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
 
-# PY — the interpreter the python-side suites run under.
-#
-# `markdown` and `coverage` are imported by the suites, so they have to live in
-# the interpreter that runs them; a pipx venv is invisible to an import. Where
-# the system python is externally-managed (PEP 668) pip will not install them
-# there at all, so scripts/toolchain.sh puts them in a repo-local .venv and
-# every runner finds it here. Nothing is added to PATH and no shell needs
-# activating: the venv is either present in the checkout or it is not.
+# PY — the interpreter the python-side suites run under: the repo-local .venv
+# when one exists, else the system python3.
 PY="$ROOT/.venv/bin/python3"
 [ -x "$PY" ] || PY=python3

@@ -20,7 +20,6 @@
 #   scripts/check-approtect.sh              # the two config layers
 #   scripts/check-approtect.sh --device SNR # what the attached board is ACTUALLY in
 #   scripts/check-approtect.sh --self-test  # prove the gate can actually fail
-#   make verify                             # runs this as the `approtect` gate
 #
 # Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
 #
