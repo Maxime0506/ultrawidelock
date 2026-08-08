@@ -50,11 +50,12 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	 * the accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
 	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
 	 * absorbs the read before the SP0 listen goes back up. */
-	bool win = ccc_shim_rx_awaiting_final() && uwb_cirdiag_window_due();
+	bool is_final = ccc_shim_rx_awaiting_final();
+	bool win = is_final && uwb_cirdiag_window_due();
 
 	if (win) {
 		(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u,
-					  d != NULL ? d->datalength : 0u, false);
+					  d != NULL ? d->datalength : 0u, false, is_final);
 	}
 	if (g_chain_rxok != NULL) {
 		g_chain_rxok(d);
@@ -63,11 +64,12 @@ static void shim_rxok(const dwt_cb_data_t *d)
 		ccc_shim_rx_try_prepoll(d->datalength);
 	}
 	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
-	 * the POLL/Final deadlines are met first. dw3000_isr_task emits the [ALAB] line after its
-	 * IRQ drain loop. */
+	 * the POLL/Final deadlines are met first. is_final carries which reception this was for
+	 * the FINAL_ONLY latch, mirroring uwb_rxdiag.c. dw3000_isr_task emits the [ALAB] line
+	 * after its IRQ drain loop. */
 	if (!win) {
 		(void)uwb_cirdiag_capture(d != NULL ? d->status : 0u,
-					  d != NULL ? d->datalength : 0u, true);
+					  d != NULL ? d->datalength : 0u, true, is_final);
 	}
 }
 

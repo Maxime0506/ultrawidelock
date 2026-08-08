@@ -77,6 +77,8 @@ CDK_PROBE_GUARD = @if [ -z '$(CDK_PROBE)' ] && \
 CDK_BUILD          ?= $(ALIRO_BUILD_ROOT)/cdk-matter
 CDK_READER_BUILD   ?= $(ALIRO_BUILD_ROOT)/cdk-reader
 CDK_SELFTEST_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-selftest
+CDK_CIRDIAG_BUILD  ?= $(ALIRO_BUILD_ROOT)/cdk-cirdiag
+CDK_MLGATE_BUILD   ?= $(ALIRO_BUILD_ROOT)/cdk-mlgate
 # Split out only so `monitor` can be pointed at an ELF without moving what the
 # flash targets write. Same directory by default, which is the whole point.
 CDK_RTT_BUILD      ?= $(CDK_BUILD)
@@ -97,12 +99,21 @@ CDK_RTT_BUILD      ?= $(CDK_BUILD)
 override CDK_BUILD          := $(abspath $(CDK_BUILD))
 override CDK_READER_BUILD   := $(abspath $(CDK_READER_BUILD))
 override CDK_SELFTEST_BUILD := $(abspath $(CDK_SELFTEST_BUILD))
+override CDK_CIRDIAG_BUILD  := $(abspath $(CDK_CIRDIAG_BUILD))
+override CDK_MLGATE_BUILD   := $(abspath $(CDK_MLGATE_BUILD))
 override CDK_RTT_BUILD      := $(abspath $(CDK_RTT_BUILD))
 
 # PRISTINE=1 forces a from-scratch build. `-p auto` re-runs CMake when the board
 # or the app directory changes, and NOT when the -D flags do, so switching an
 # existing build dir between the reader and the Matter build needs this.
 CDK_PRISTINE := $(if $(PRISTINE),always,auto)
+
+# CIRDIAG_WINDOWS=1 re-arms the windowed-CIR dump in the `cirdiag` image. Off by
+# default because with it armed this board never transmits a Response at all
+# (measured, see the cirdiag target), and the taps it buys are worth 0.14 accuracy
+# points to the classifier the capture feeds. Same `-p auto` caveat as RELEASE:
+# switching it in an existing build dir needs PRISTINE=1.
+CDK_CIRDIAG_WINDOWS := $(if $(CIRDIAG_WINDOWS),-DCONFIG_ALIRO_CIRDIAG_CAPTURE_WINDOWS=y,)
 
 # RELEASE=1 appends the release overlay, which trades the 8 KB RTT ring for
 # 7,168 B of RAM. Semicolon because EXTRA_CONF_FILE is a CMake list and later
@@ -288,7 +299,7 @@ CDK_SIZE_REPORTS  ?= 1
 CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_SIZE_JSON)' \
                      $(if $(filter-out 0 n no off N NO OFF,$(CDK_SIZE_REPORTS)),--reports --run-prefix '$(CDK_WEST)')
 
-.PHONY: build rebuild reader selftest flash flash-erase monitor dfu release \
+.PHONY: build rebuild reader selftest cirdiag flash flash-erase monitor dfu release \
         cdk-size cdk-size-check cdk-size-baseline \
         dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-push ota-smp-list ota-window ota-deps \
         cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
@@ -347,6 +358,85 @@ selftest:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_SELFTEST_BUILD) $(CDK_APP) \
 	  -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf $(CDK_SIGN)
+
+## cirdiag: the Matter image plus an unattended CIR capture cycle  -> build/cdk-cirdiag
+##   For collecting channel-impulse traces from a real walk-up: the labelled
+##   inside/outside data the LOS/NLOS model in ai/tinyml/ has to be retrained on
+##   before its thresholds mean anything on this hardware.
+##
+##   The Matter image and not `reader`, because the capture wants a real Apple
+##   Wallet walk-up and this board only advertises Aliro once Apple Home has
+##   commissioned it. So flash it with `flash`, NEVER `flash-erase`: the erase
+##   takes the credential the walk-up needs and costs a re-commissioning.
+##
+##     make cirdiag
+##     make flash   CDK_BUILD=$(CDK_CIRDIAG_BUILD)
+##     make monitor CDK_RTT_BUILD=$(CDK_CIRDIAG_BUILD)
+##
+##   It prints `cir.cycle: n=<i> capture` and `... end` around each 20 s interval,
+##   then waits 3 s. Walk up from outside during one interval and from inside
+##   during the next; the cycle number is the label. tools/aliro_lab.py reads the
+##   [ALAB] lines in between.
+##
+##   SUMMARY ONLY by default, which is a hardware finding rather than a taste:
+##   with the windowed-CIR dump armed this board never transmits a Response at all
+##   (measured 2026-08-07, tx0 and no range across three sessions, while the plain
+##   image ranged 22-443 cm on the same board). The taps cost the LOS/NLOS
+##   classifier 0.14 accuracy points to lose -- ai/tinyml/RESULTS.md Result 7 --
+##   so the default trades them for a working radio. CIRDIAG_WINDOWS=1 restores
+##   them for anyone taking the ranging itself apart.
+##
+##   NOT A SHIPPING IMAGE. Reflash `make build` when the run is done.
+##   Options: PRISTINE=1  CIRDIAG_WINDOWS=1  CDK_CIRDIAG_BUILD=<dir>
+#   Every flag `build` passes is repeated here, deliberately and not by include:
+#   dropping $(CDK_DFU) alone silently built an image with no woz_dfu module at
+#   all, which is a different image from the one being characterised and cannot
+#   be updated over Bluetooth. If `build` gains a flag, this needs it too.
+cirdiag:
+	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
+	  -d $(CDK_CIRDIAG_BUILD) $(CDK_APP) \
+	  -- -DEXTRA_CONF_FILE="$(CDK_CONF);overlays/cirdiag.conf" \
+	     -DCONFIG_ALIRO_MATTER_BLE=y $(CDK_CIRDIAG_WINDOWS) \
+	     $(CDK_SIGN) $(CDK_DFU) $(CDK_DFU_LOG)
+	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
+	  --from-config $(CDK_CIRDIAG_BUILD)/$(CDK_IMAGE)/zephyr/.config
+
+## mlgate: DWM3001CDK image that runs the LOS/NLOS classifier in the unlock path
+##   Same application as `build`, plus woz_ml and one CIA diagnostic read per
+##   ranging block. The classifier decides a channel class per approach sample;
+##   aliro_approach widens its unlock radius while the window says obstructed.
+##
+##     make mlgate
+##     make flash   CDK_BUILD=$(CDK_MLGATE_BUILD)
+##     make monitor CDK_RTT_BUILD=$(CDK_MLGATE_BUILD)
+##
+##   NOT the capture image. `cirdiag` samples one reception in eight and does not
+##   care which, because a training set only needs a few hundred per class. This
+##   latches on the Final and nothing else, because a five-sample median window
+##   needs five independent channel calls to reach its majority of three.
+##
+##   TWO THINGS IT DOES NOT PROVE, and both want a walk-up. First, that the read
+##   fits: modules/woz_uwb/Kconfig records this board transmitting no Response at
+##   all with the summary armed on EVERY reception, and restricting it to the
+##   Final is a hypothesis about why, not a measurement. Ranges of 20-400 cm and
+##   an unlock is the evidence; tx0 is the refutation. Second, that the widening
+##   helps: nlos_widen_cm is 0 and nothing here sets it, so this image classifies
+##   and changes no decision. Read it against what you were doing first.
+##
+##   NOT A SHIPPING IMAGE. Reflash `make build` when the run is done.
+##   Options: PRISTINE=1  CDK_MLGATE_BUILD=<dir>
+#   Same repetition rule as `cirdiag`: every flag `build` passes is repeated
+#   here on purpose, because dropping one silently characterises a different
+#   image.
+mlgate:
+	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
+	  -d $(CDK_MLGATE_BUILD) $(CDK_APP) \
+	  -- -DEXTRA_CONF_FILE="$(CDK_CONF);overlays/mlgate.conf" \
+	     -DCONFIG_ALIRO_MATTER_BLE=y \
+	     $(CDK_SIGN) $(CDK_DFU) $(CDK_DFU_LOG)
+	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
+	  --from-config $(CDK_MLGATE_BUILD)/$(CDK_IMAGE)/zephyr/.config
+
 
 ## flash: flash the DWM3001CDK over its on-board J-Link OB
 ##   Options: CDK_BUILD=<dir> (default build/cdk-matter)  CDK_PROBE=<VID:PID:Serial>

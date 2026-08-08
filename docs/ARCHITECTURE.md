@@ -10,6 +10,7 @@ flowchart LR
   integration.homeassistant.src.openaliro_ha --> tools.tui.src
   modules.woz_aliro.include --> modules.woz_aliro.src
   modules.woz_aliro.src --> modules.woz_aliro.include
+  modules.woz_aliro.src --> modules.woz_ml.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
@@ -20,6 +21,7 @@ flowchart LR
   modules.woz_dfu.src --> modules.woz_dfu.include
   modules.woz_matter.src --> modules.woz_aliro.src
   modules.woz_matter.src --> modules.woz_matter.include
+  modules.woz_ml.src --> modules.woz_ml.include
   modules.woz_nfc.src --> modules.woz_nfc.include.woz_nfc
   modules.woz_uwb.src.aliro --> modules.woz_port.include
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -294,6 +296,17 @@ Walk-up latency trace: first-hit phase timestamps + the consolidated budget line
 
 **depends on** [`modules/woz_aliro/include/aliro_lab.h`](architecture/modules.woz_aliro.include/aliro_lab.h.md), [`modules/woz_aliro/include/aliro_lat.h`](architecture/modules.woz_aliro.include/aliro_lat.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md)
 
+### [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
+
+@file aliro_approach.c
+Kalman-filtered approach controller for predictive unlock. Tracks distance (cm), velocity (cm/s),
+and estimated time-to-arrival (ms) at the unlock radius. Supervises presence via median filtering
+of trusted ranges and fires predictive unlock when closing speed and ETA meet thresholds. Factory
+defaults: unlock 100 cm, relock 250 cm, dwell times 2 s and 3 s, motor delay 500 ms, margin 250
+ms, velocity floor 30 cm/s, prediction enabled.
+
+**depends on** [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md), [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md)
+
 ### [`modules/woz_aliro/src/aliro_assert_ec.c`](architecture/modules.woz_aliro.src/aliro_assert_ec.c.md)
 
 Binds the aliro_assert P-256 seam to aliro_prim's ECDSA (see aliro_assert_ec.h).
@@ -377,17 +390,6 @@ Provides a minimal BER-TLV writer (aliro_tlv_w_init/put/finish) used to assemble
 payloads, and TLV/APDU parsing helpers used to extract fields from device responses.
 
 **depends on** [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)
-
-### [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
-
-@file aliro_approach.c
-Kalman-filtered approach controller for predictive unlock. Tracks distance (cm), velocity (cm/s),
-and estimated time-to-arrival (ms) at the unlock radius. Supervises presence via median filtering
-of trusted ranges and fires predictive unlock when closing speed and ETA meet thresholds. Factory
-defaults: unlock 100 cm, relock 250 cm, dwell times 2 s and 3 s, motor delay 500 ms, margin 250
-ms, velocity floor 30 cm/s, prediction enabled.
-
-**depends on** [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
 
 ### [`modules/woz_aliro/src/aliro_hash.c`](architecture/modules.woz_aliro.src/aliro_hash.c.md)
 
@@ -600,12 +602,6 @@ pyserial adapter and privacy-safe serial-port identity helpers.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
 
-### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
-
-@file uwb_min.c — DW3110 bring-up driver (implementation).
-
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md)
-
 ### [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md)
 
 @file uwb_cirdiag.c — CIA RX-diagnostics latch + [ALAB] emitter (channel-impulse Stage 0/1).
@@ -632,7 +628,13 @@ happen BEFORE that (the shims gate it on ccc_shim_rx_awaiting_final). Doing it o
 then cost every range, so uwb_cirdiag_window_due decimates it to one Final in
 CIRDIAG_CIR_EVERY.
 
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md)
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
+
+@file uwb_min.c — DW3110 bring-up driver (implementation).
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_port/include/woz_port.h`](architecture/modules.woz_port.include/woz_port.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_seam.h`](architecture/modules.woz_uwb.src.driver/uwb_seam.h.md)
 
 ### [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md)
 
@@ -1141,6 +1143,34 @@ that SPSM.
 
 ### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
 
+### [`firmware/src/cirdiag_capture.c`](architecture/firmware.src/cirdiag_capture.c.md)
+
+@file cirdiag_capture.c — unattended CIR capture cycle for the DWM3001CDK.
+Arm the CIR dump, hold it for a window, disarm it so the ring drains to the
+console, wait, repeat. Forever, from boot.
+WHY THIS IS NOT A SHELL COMMAND. modules/woz_uwb documents the capture as
+`aliro cir dump on`, walk up, `aliro cir dump off`, which is exactly right on
+a board with a console. This one has none: RTT is output-only, uart0 belongs
+to the J-Link OB, the USB CDC console comes up only in provisioning mode
+(where the radio never starts), and firmware/prj.conf sets
+CONFIG_WOZ_UWB_SHELL=n. The single button is already the factory reset when
+held through reset, and a capture image that could erase an Apple Home
+credential on a mistimed press is worse than no capture image.
+WHAT THE OPERATOR DOES INSTEAD. Watch `make monitor`. Each cycle prints a
+`cir.cycle: n=<i>` marker at both ends of a labelled interval; everything
+between them is one capture with one label. Walk up from outside during odd
+cycles and from inside during even ones, or simply note the cycle numbers, and
+the labelling problem is solved without the board knowing anything about doors.
+TWO MODES. With CONFIG_ALIRO_CIRDIAG_CAPTURE_WINDOWS the cycle arms the
+windowed-CIR dump and drains the ring, which is the full capture and which, on
+this board, stops the responder transmitting entirely (measured: tx0, no range,
+no unlock). Without it the summary path alone runs and the markers only bracket
+intervals — one `[ALAB] ev=uwb.diag` line per reception, no accumulator read.
+That is the mode worth using: ai/tinyml/RESULTS.md Result 7 measures the whole
+tap-derived half of the feature set at 0.14 accuracy points.
+The markers deliberately do NOT carry the [ALAB] prefix, so tools/aliro_lab.py
+ignores them, the same choice uwb_cirdiag_probe() makes for its output.
+
 ### [`firmware/src/dfu_ble_zephyr.c`](architecture/firmware.src/dfu_ble_zephyr.c.md)
 
 @file
@@ -1179,6 +1209,150 @@ link error would be a worse way to learn that Thread was configured out.
 ### [`firmware/src/prov_shell.c`](architecture/firmware.src/prov_shell.c.md)
 
 ### [`firmware/src/thread_gate.c`](architecture/firmware.src/thread_gate.c.md)
+
+## `modules/woz_ml/src/`
+
+### [`modules/woz_ml/src/woz_ml_los.c`](architecture/modules.woz_ml.src/woz_ml_los.c.md)
+
+@file woz_ml_los.c — the seam: scale into the model's space, then walk the tree.
+Everything model-specific is generated (woz_ml_los_tree.h, woz_ml_los_model.h).
+What is written by hand is only the quantisation, and that is written by hand
+because it is the one place the target can silently disagree with the bench.
+
+**depends on** [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md), [`modules/woz_ml/src/woz_ml_los_scaler.h`](architecture/modules.woz_ml.src/woz_ml_los_scaler.h.md), [`modules/woz_ml/src/woz_ml_los_tree.h`](architecture/modules.woz_ml.src/woz_ml_los_tree.h.md)
+
+### [`modules/woz_ml/src/woz_ml_feat.c`](architecture/modules.woz_ml.src/woz_ml_feat.c.md)
+
+@file woz_ml_feat.c — five CIA registers and a range, turned into the model's input.
+This is the half of the classifier that was missing: woz_ml_los_classify()
+has always taken features in physical units, and until now nothing computed
+them. ai/tinyml/parse_alab.py is the definition, and it is reproduced here
+register for register rather than approximated, because the model was fitted
+through exactly this arithmetic.
+num    = F1^2 + F2^2 + F3^2
+fp_pwr = 10*log10(num / C^2)          - A
+rx_pwr = 10*log10(area * 2^17 / C^2)  - A
+where C is ipatovAccumCount and area is ipatovPower, the DW3000's 17-bit
+"channel area". The 2^17 undoes that scaling, which is the one step in the
+DW3000 formula that differs from the DW1000's and the one most likely to be
+dropped by someone porting this from a DW1000 note.
+A IS NOT A CALIBRATION AND ITS VALUE DOES NOT MATTER HERE. It is eWINE's
+PRF-64 constant, kept only so this arithmetic matches extract_features.py
+exactly. It is a constant offset applied to both powers, so it cancels out of
+pwr_diff entirely and shifts the tree's thresholds by a fixed amount that the
+training already absorbed. Changing it does not recalibrate anything; it
+invalidates the model.
+ZERO IS A FAILED READ, NOT A WEAK SIGNAL. A zeroed accumulator count or
+channel area comes back from a CIA read that did not complete, and this is
+not hypothetical: the CPER-set receptions in a real capture report
+ipatovPower = 0. Left in, the logarithm turns them into -120 dB outliers that
+dominate the mean and inflate the spread by 20 dB. parse_alab.py drops those
+receptions and so does this, by returning false.
+
+**depends on** [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md), [`modules/woz_ml/src/woz_ml_log2.h`](architecture/modules.woz_ml.src/woz_ml_log2.h.md)
+
+### [`modules/woz_ml/src/woz_ml_lin.c`](architecture/modules.woz_ml.src/woz_ml_lin.c.md)
+
+@file woz_ml_lin.c — how sure the tree is, which the tree itself cannot say.
+A single decision tree's leaf IS its class, so woz_ml_los_classify() answers
+"obstructed" and has no second quantity to offer. This supplies one: the
+distance from a linear boundary fitted on the same two features, which was
+measured to separate the receptions the tree gets right from the ones it gets
+wrong. See woz_ml.h for the measurement and ai/tinyml/RESULTS.md Result 16.
+The coefficients are generated; only the arithmetic is written by hand, and
+there is not much of it.
+
+**depends on** [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md), [`modules/woz_ml/src/woz_ml_los_lin.h`](architecture/modules.woz_ml.src/woz_ml_los_lin.h.md)
+
+### [`modules/woz_ml/src/woz_ml_range.c`](architecture/modules.woz_ml.src/woz_ml_range.c.md)
+
+@file woz_ml_range.c — free-space spreading at a measured range, without libm.
+The classifier's strongest feature is first-path power with distance taken out
+of it: an obstructed 1 m and a clear 3 m produce similar absolute power, and
+that ambiguity is the whole reason the model exists. Removing 20*log10(d)
+normalises every reception to what it would have measured at one metre, and
+what is left is attenuation the range does not explain.
+The obvious implementation calls log10f, which would cost woz_ml the property
+its README claims and `arm-none-eabi-nm -u` can check: not one undefined
+symbol, so the measured size is the whole size on every target modules/ builds
+for. woz_ml_log2.c supplies the logarithm instead, and this file is only the
+change of base and the clamp.
+ACCURACY IS NOT THE BINDING CONSTRAINT HERE, and the term that binds is not the
+logarithm. Measured on all 544 captured receptions, rounding the residual to
+steps as coarse as 2 dB moves balanced accuracy by +0.0005; the tree's
+thresholds are simply nowhere near most samples. What error there is comes
+mostly from the reader reporting range as a whole number of centimetres, worth
+~0.4 dB at the short end where the curve is steepest, against 0.017 dB from
+the table. That is why gate 3 reports the same 0.183 dB maximum whether the
+table has 8 entries or 64.
+
+**depends on** [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md), [`modules/woz_ml/src/woz_ml_log2.h`](architecture/modules.woz_ml.src/woz_ml_log2.h.md)
+
+### [`modules/woz_ml/src/woz_ml_log2.c`](architecture/modules.woz_ml.src/woz_ml_log2.c.md)
+
+@file woz_ml_log2.c — log2 of an integer from its leading bit and a small table.
+log2(v) splits exactly into an integer part and a fractional one:
+v = 2^e * (1 + m),  0 <= m < 1
+log2(v) = e + log2(1 + m)
+e is just where the leading one sits, which is one CLZ instruction on
+Cortex-M4, and m is the bits underneath it. So the only thing that needs
+approximating is log2(1 + m) over a single octave, and that is what the
+generated table holds: nine entries, linearly interpolated.
+WHY NINE ENTRIES IS ENOUGH, measured rather than assumed. Linear
+interpolation of log2(1+m) over eight segments has a worst-case error of
+h^2/8 * max|f''| = 0.0029 in log2 units, at m near zero where the curve bends
+hardest. Through this module's callers that is 0.0086 dB and 0.017 dB. The
+error that actually limits the feature is neither of those: it is the reader
+reporting range as a whole number of centimetres, worth ~0.4 dB at the short
+end, which is why table sizes from 8 to 64 entries all bottom out at the same
+0.183 dB in gate 3. Adding entries buys nothing while that term stands.
+
+**depends on** [`modules/woz_ml/src/woz_ml_log2.h`](architecture/modules.woz_ml.src/woz_ml_log2.h.md), [`modules/woz_ml/src/woz_ml_log2_table.h`](architecture/modules.woz_ml.src/woz_ml_log2_table.h.md)
+
+### [`modules/woz_ml/src/woz_ml_los_scaler.h`](architecture/modules.woz_ml.src/woz_ml_los_scaler.h.md)
+
+GENERATED by ai/tinyml/gen_model.py -- do not hand-edit.
+Regenerate with:
+ai/tinyml/.venv/bin/python ai/tinyml/gen_model.py
+
+**depends on** [`modules/woz_ml/include/woz_ml_los_features.h`](architecture/modules.woz_ml.include/woz_ml_los_features.h.md)  ·  **used by** [`modules/woz_ml/src/woz_ml_los.c`](architecture/modules.woz_ml.src/woz_ml_los.c.md)
+
+### [`modules/woz_ml/src/woz_ml_los_tree.h`](architecture/modules.woz_ml.src/woz_ml_los_tree.h.md)
+
+GENERATED by ai/tinyml/gen_model.py -- do not hand-edit.
+Regenerate with:
+ai/tinyml/.venv/bin/python ai/tinyml/gen_model.py
+
+**used by** [`modules/woz_ml/src/woz_ml_los.c`](architecture/modules.woz_ml.src/woz_ml_los.c.md)
+
+### [`modules/woz_ml/src/woz_ml_log2.h`](architecture/modules.woz_ml.src/woz_ml_log2.h.md)
+
+@file woz_ml_log2.h — base-2 logarithm of an integer, without libm.
+Internal to woz_ml and deliberately not in include/: it is not a general
+numeric utility and its accuracy is only justified for the two callers it has.
+Both of those callers want a logarithm of a positive integer and neither can
+afford log10f. Pulling in libm would cost this module the one property its
+README claims and `arm-none-eabi-nm -u` can check: not a single undefined
+symbol, so the size that was measured is the whole size on every target
+modules/ builds for.
+
+**used by** [`modules/woz_ml/src/woz_ml_feat.c`](architecture/modules.woz_ml.src/woz_ml_feat.c.md), [`modules/woz_ml/src/woz_ml_log2.c`](architecture/modules.woz_ml.src/woz_ml_log2.c.md), [`modules/woz_ml/src/woz_ml_range.c`](architecture/modules.woz_ml.src/woz_ml_range.c.md)
+
+### [`modules/woz_ml/src/woz_ml_los_lin.h`](architecture/modules.woz_ml.src/woz_ml_los_lin.h.md)
+
+GENERATED by ai/tinyml/linear.py -- do not hand-edit.
+Regenerate with:
+ai/tinyml/.venv/bin/python ai/tinyml/linear.py
+
+**used by** [`modules/woz_ml/src/woz_ml_lin.c`](architecture/modules.woz_ml.src/woz_ml_lin.c.md)
+
+### [`modules/woz_ml/src/woz_ml_log2_table.h`](architecture/modules.woz_ml.src/woz_ml_log2_table.h.md)
+
+GENERATED by ai/tinyml/gen_model.py -- do not hand-edit.
+Regenerate with:
+ai/tinyml/.venv/bin/python ai/tinyml/gen_model.py
+
+**used by** [`modules/woz_ml/src/woz_ml_log2.c`](architecture/modules.woz_ml.src/woz_ml_log2.c.md)
 
 ## `modules/woz_nfc/src/`
 
@@ -1322,7 +1496,7 @@ transport_pn532.cpp.
 
 @file fira_session.h — Range + URSK store for the CCC Pre-POLL responder.
 
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_cirdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_cirdiag.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ### [`modules/woz_uwb/src/fira/ds_twr.h`](architecture/modules.woz_uwb.src.fira/ds_twr.h.md)
 
@@ -1332,6 +1506,448 @@ transport_pn532.cpp.
 
 @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by
 fira_session.c.
+
+## `ai/tinyml/`
+
+### [`ai/tinyml/leaf_bits.py`](architecture/ai.tinyml/leaf_bits.md)
+
+Does emlearn's leaf_bits actually close the forest-vs-sklearn gap?
+
+Run from the repository root:
+    ai/tinyml/.venv/bin/python <this file>
+
+Result 5 recorded that a converted RandomForest disagrees with sklearn on ~1% of
+samples, because the generated C majority-votes where sklearn averages
+probabilities, and concluded a forest has no oracle to be certified against.
+emlearn 0.23.2's trees.py:553 switches from forest_predict_majority_func to
+forest_predict_proportions_func whenever leaf_bits != 0, and leaf_bits defaults
+to 0 for classifiers. So the divergence may be a default rather than a property.
+
+It trades one error for another: quantize_probabilities_into_byte (trees.py:26)
+puts each leaf's probabilities on 255 steps, so near-ties can still flip. Which
+error is bigger is measurable, and this measures it on both data sets that
+matter -- the 544 door captures the shipped model uses, and the 42,000-sample
+public set the bake-off ran on.
+
+**depends on** [`ai/tinyml/features_io.py`](architecture/ai.tinyml/features_io.md), [`ai/tinyml/gen_model.py`](architecture/ai.tinyml/gen_model.md)
+
+### [`ai/tinyml/codesize.py`](architecture/ai.tinyml/codesize.md)
+
+Cross-compile the chosen tree for the CDK's core and measure what it costs.
+
+Run (after extract_features.py with PORTABLE=1):
+    ai/tinyml/.venv/bin/python ai/tinyml/codesize.py
+
+Options (env vars):
+    FEATURES    input .npz (default ai/tinyml/features_dw3000.npz)
+    SEED        split seed, must match bakeoff.py (default 42)
+    TRIPLE      arm-none-eabi (default) or arm-zephyr-eabi
+    DEPTHS      comma-separated tree depths (default 4,6)
+
+bakeoff.py counts model PAYLOAD only, because that is all it can count without a
+cross compiler. This closes that gap: it compiles the generated C for the
+nRF52833's Cortex-M4F with the same optimisation the firmware uses
+(CONFIG_SIZE_OPTIMIZATIONS=y, i.e. -Os) and reports the section sizes.
+
+Two emlearn code generation methods are measured, because they trade the same
+bytes in opposite directions:
+
+    loadable  the tree is a const EmlTreesNode[] walked by eml_trees_predict().
+              Payload scales with the tree, the walker is a fixed cost, and one
+              walker serves any number of trees.
+    inline    the tree is generated as nested if/else. No node array and no
+              walker at all, so a small tree is pure .text and nothing else.
+
+Sizes come from `arm-none-eabi-size -A` on an object holding only the model and
+a three-line wrapper, so every byte reported belongs to the model. Nothing is
+linked: at link time --gc-sections can only remove, never add.
+
+**depends on** [`ai/tinyml/features_io.py`](architecture/ai.tinyml/features_io.md)
+
+### [`ai/tinyml/parse_alab.py`](architecture/ai.tinyml/parse_alab.md)
+
+Turn `make monitor` captures into the scalar feature set, one class per file.
+
+    python3 ai/tinyml/parse_alab.py <capture.log>              # inspect, write nothing
+    python3 ai/tinyml/parse_alab.py --clear a.log --blocked b.log -o door.npz
+
+    <capture.log>   RTT log from the cirdiag image (`make monitor ... | tee <file>`)
+    --clear FILE    a run with nothing between phone and reader; repeatable
+    --blocked FILE  a run with a body, door or laptop in the path; repeatable
+    -o FILE         write an .npz that bakeoff.py and gen_model.py read unchanged
+
+ONE CONDITION PER RUN, one file per run. Labelling by cycle marker inside a single run
+was tried and is a trap: it needs the operator to change condition on a 23 s clock, and
+a single missed interval silently mislabels everything after it. Capture clear until you
+are bored, stop, set up the obstruction, capture again.
+
+BUT A BLOCKED RUN IS NOT ENTIRELY BLOCKED, which is what --blocked-window is for. A
+session has to be established before anything is received at all, and establishing it
+needs enough signal, so an operator blocking the phone hard enough to matter has to
+expose it first. Those exposed receptions land in the blocked file and are physically
+clear. Measured 2026-08-07 on the first 300-sample pair: 28% of "blocked" samples fell
+inside the clear inter-quartile range while 30% sat below the clear 5th percentile --
+one label covering two populations. Cross-validated balanced accuracy was 0.6339 against
+a 0.6040 vendor-rule baseline, which reads as a weak feature set and is mostly a third of
+one class being mislabelled.
+
+So write down the wall-clock spans during which the obstruction was actually in place and
+pass them as --blocked-window. Receptions outside every window are DROPPED, never
+relabelled: outside the window the condition is unknown, and guessing there is the
+original mistake wearing a hat.
+
+The two classes are the ones modules/woz_ml/include/woz_ml.h already names,
+WOZ_ML_LOS_CLEAR (y=0) and WOZ_ML_LOS_OBSTRUCTED (y=1), matching eWINE's LOS/NLOS
+convention so a model trained here drops into the same seam.
+
+With no labelled files it prints per-interval statistics and writes nothing, which is how
+you check a capture is worth keeping before walking any further.
+
+WHY ONLY FOUR FEATURES. The other ten in extract_features.py need the 64-tap CIR window,
+and on the DWM3001CDK the image that reads the accumulator cannot range at all (see
+ai/tinyml/RESULTS.md Result 7, which also measures the cost of dropping them: 0.14
+accuracy points). These four come from `dwt_readdiagnostics` alone.
+
+THE dB CONSTANTS ARE DW1000's. A_CONST_PRF64 and the 2^17 scaling come from the eWINE
+formulas, and the DW3000's ipatovPower is a 17-bit "channel area" that is not the same
+quantity as the DW1000's CIR_PWR. That is fine here and only here: the model is retrained
+on this data, so a consistent offset moves the fitted thresholds and nothing else. Do NOT
+compare these dBm numbers against the eWINE ones.
+
+**depends on** [`ai/tinyml/features_io.py`](architecture/ai.tinyml/features_io.md)
+
+### [`ai/tinyml/features_io.py`](architecture/ai.tinyml/features_io.md)
+
+Read and write labelled feature sets, as `.npz` or as `.csv`.
+
+Both formats carry the same four arrays: `X` (n x f float64), `y` (n int labels,
+0 clear / 1 blocked), `names` (f feature names) and `frame_len` (n int, the RFRAME
+length each reception came from, kept so a set can be re-filtered without
+re-parsing the logs).
+
+CSV EXISTS BECAUSE OF THE `mal-diff` GATE, not for convenience. `security/` blocks
+any binary blob entering the tree, on the grounds that semgrep cannot parse it and
+a reviewer cannot read it, and that is the correct call. But the captures the
+shipped model is trained on are NOT regenerable from a public download the way the
+eWINE set is: their only other copy is capture logs on one laptop. So the set that
+`modules/woz_ml/` is fitted on lives in the tree as text, and stays reviewable.
+
+The `.npz` path is still the default for the eWINE-derived sets, which are large,
+regenerable, and gitignored.
+
+**exposes** `read_features`, `write_features`  ·  **used by** [`ai/tinyml/codesize.py`](architecture/ai.tinyml/codesize.md), [`ai/tinyml/gen_model.py`](architecture/ai.tinyml/gen_model.md), [`ai/tinyml/leaf_bits.py`](architecture/ai.tinyml/leaf_bits.md), [`ai/tinyml/parse_alab.py`](architecture/ai.tinyml/parse_alab.md)
+
+### [`ai/tinyml/gen_model.py`](architecture/ai.tinyml/gen_model.md)
+
+Generate the shipped LOS/NLOS tree, its scaler, and the golden vectors.
+
+Run (after extract_features.py with PORTABLE=1):
+    ai/tinyml/.venv/bin/python ai/tinyml/gen_model.py
+
+Options (env vars):
+    FEATURES    input .npz (default ai/tinyml/features_dw3000.npz)
+    SEED        split seed, must match bakeoff.py (default 42)
+    DEPTH       tree depth (default 4; see RESULTS.md for why not deeper)
+    VECTORS     how many golden vectors to emit (default 256)
+
+Writes four generated files, none of them hand-editable:
+
+    modules/woz_ml/include/woz_ml_los_features.h  feature count and order: the
+                                                  public half, safe to include
+                                                  from anywhere
+    modules/woz_ml/src/woz_ml_los_scaler.h        the float32 scaling constants,
+                                                  private because they are
+                                                  `static const` arrays and a
+                                                  public header would copy them
+                                                  into every including TU
+    modules/woz_ml/src/woz_ml_los_tree.h          emlearn `inline` C for the tree
+    tests/host/data/woz_ml_los_vectors.h          golden vectors, sklearn-labelled
+
+and refuses to write any of them unless two checks pass:
+
+  1. The generated C reproduces sklearn on all 6,300 held-out samples. Result 5
+     in RESULTS.md is why this is a hard gate for a single tree and still not one
+     for a forest -- though Result 14 corrects the reason: emlearn's leaf_bits
+     defaults to majority voting for classifiers, and leaf_bits=8 takes a forest
+     from 0.92% disagreement to 0.06%. Close, and 0.06% is not zero.
+  2. The float32 scaler the firmware runs agrees with the float64 one sklearn was
+     trained through, on every held-out sample. A feature landing on a rounding
+     boundary would otherwise classify differently on target than on the bench,
+     which is train/serve skew that no amount of accuracy reporting would catch.
+
+The golden vectors are stratified over the tree's LEAVES rather than sampled at
+random, so every decision path in the shipped model is exercised. Random sampling
+would over-cover the fat leaves and might never reach a thin one.
+
+**exposes** `emlearn_scratch`, `quantise_f64`  ·  **depends on** [`ai/tinyml/features_io.py`](architecture/ai.tinyml/features_io.md)  ·  **used by** [`ai/tinyml/leaf_bits.py`](architecture/ai.tinyml/leaf_bits.md)
+
+### [`ai/tinyml/bakeoff.py`](architecture/ai.tinyml/bakeoff.md)
+
+LOS/NLOS bake-off: emlearn decision trees vs an int8-quantised Keras MLP.
+
+Run (after extract_features.py):
+    ai/tinyml/.venv/bin/python ai/tinyml/bakeoff.py
+
+Options (env vars):
+    FEATURES    input .npz (default ai/tinyml/features.npz)
+    OUTDIR      where generated C / .tflite land (default ai/tinyml/out)
+    SEED        split + init seed (default 42)
+
+What "bytes" means here. Only the model payload is counted, because that is the part
+this script can measure exactly and architecture-independently:
+  * trees   n_nodes*8 (EmlTreesNode = int8+3*int16, 8 B aligned) + n_roots*4 + n_leaves
+  * MLP     len(tflite flatbuffer)
+  * both    + 136 B of feature scaling constants (17 features * 2 float32)
+Runtime code size (TFLM interpreter + kernels, vs emlearn's eml_trees inference) is NOT
+measured here: it needs a cross-compile for the target and no ARM toolchain is installed
+in this worktree. Literature puts TFLM's interpreter core near 2 KB before kernels and
+emlearn's tree inference in the low hundreds of bytes, which moves the comparison further
+in the trees' favour, not less.
+
+### [`ai/tinyml/extract_features.py`](architecture/ai.tinyml/extract_features.md)
+
+Extract LOS/NLOS features from the eWINE UWB data set.
+
+Run:
+    ai/tinyml/.venv/bin/python ai/tinyml/extract_features.py
+
+Options (env vars):
+    EWINE_DIR   dataset root (default ai/tinyml/data/UWB-LOS-NLOS-Data-Set-master)
+    OUT         output .npz (default ai/tinyml/features.npz)
+    WIN_PRE     CIR taps kept before the first-path index (default 15)
+    WIN_POST    CIR taps kept after it (default 140)
+    PORTABLE    1 = emit only features the DW3000/DW3110 can actually produce
+
+PORTABLE matters. This data set is DW1000, whose diagnostics include STDEV_NOISE and
+MAX_NOISE. The DW3000 `dwt_rxdiag_t` in deps/dw3000/dwt_uwb_driver/deca_device_api.h has
+no equivalent field, so stdev_noise, max_noise and the derived fp_snr cannot be computed
+on this project's hardware. Training with them would produce a model that cannot be fed
+on the target: the classic train/serve skew. PORTABLE=1 drops all three.
+
+The firmware already captures CIR: modules/woz_uwb/src/driver/uwb_cirdiag.c reads
+CIRDIAG_CIR_WIN = 64 Ipatov taps centred on the first-path index. To match that capture
+exactly, use WIN_PRE=32 WIN_POST=32.
+
+Two traps in the upstream data set, handled here:
+  * its README normalises the CIR with `item[2]`, but column 2 is FP_IDX; RXPACC is
+    column 9. Dividing by FP_IDX is wrong and this script divides by RXPACC.
+  * its reference loader `code/uwb_dataset.py` calls `df.as_matrix()`, removed from
+    pandas long ago, so it cannot run on a current environment at all.
+
+Deliberately NOT used as features, to keep the model about the channel rather than
+about this particular capture rig:
+  RANGE       the measurement outcome, and strongly site-specific
+  CH/BITRATE/PRFR   constant across the whole set (2 / 110 kbps / 64 MHz): zero information
+  FRAME_LEN, PREAM_LEN   protocol/config values that vary with the capture setup, so a
+              model can latch onto them as a site fingerprint instead of learning physics
+
+### [`ai/tinyml/linear.py`](architecture/ai.tinyml/linear.md)
+
+Does a linear boundary beat the shipped two-split tree, and can its margin be
+the graded confidence the tree cannot give?
+
+Run from the repository root:
+    ai/tinyml/.venv/bin/python ai/tinyml/linear.py
+
+WHY ASK. `modules/woz_ml/src/woz_ml_los_tree.h` ships a depth-2 tree: two
+comparisons, four leaves. Its generated `woz_ml_los_tree_predict_proba()` writes
+1.0f into one slot and 0.0f into the other, because a single tree's leaf IS the
+class. So the module can answer "obstructed" and cannot answer "how sure", and
+RESULTS.md `Next` item 6 -- wire the classifier to a decision, which has to know
+what a wrong answer costs at a door -- has no graded quantity to read. A linear
+boundary has one for free: the signed distance from it.
+
+WHAT WOULD MAKE IT SHIPPABLE, all three or none:
+
+1. It has to beat the tree on the same splits. Both are fitted on the same two
+   features, so this is a fair fight between decision-boundary shapes: two
+   axis-aligned steps against one oblique line.
+2. The margin has to be MONOTONE in correctness. A confidence that does not
+   predict correctness is a number, not a confidence, and shipping it would be
+   worse than shipping nothing.
+3. It has to stay libc-free, which `arm-none-eabi-nm -u` checks and `log10f`
+   would end. A class decision needs only `w0*x0 + w1*x1 + b > 0`, two multiplies
+   on a Cortex-M4F's FPU. The logistic PROBABILITY would need exp(), so it is
+   never computed on target: the margin is monotone in the probability, so every
+   threshold on one is a threshold on the other, and the exp is a host-side
+   convenience that no firmware has to reproduce.
+
+THE SPLIT IS THE BLOCKED CV OF variance.py, not a session hold-out. The tracked
+CSV carries no session column, so the honest 0.7729 whole-capture number in
+Result 11 cannot be reproduced from this artifact by any script here. Contiguous
+blocks stand in. Every model below meets the same folds, so the COMPARISON is
+sound even where the absolute level is optimistic.
+
+Self-contained on purpose: variance.py is being edited concurrently for a
+different experiment, and importing it would couple this result to that file's
+state mid-run. The twenty lines of loader and grouping are duplicated for that
+reason and no other.
+
+### [`ai/tinyml/range_bias.py`](architecture/ai.tinyml/range_bias.md)
+
+Does an OBSTRUCTED phone read FARTHER than an unobstructed one, phone fixed?
+
+Run from the repository root, after the two captures below:
+    ai/tinyml/.venv/bin/python ai/tinyml/range_bias.py <door.csv> <true_cm>
+    ai/tinyml/.venv/bin/python ai/tinyml/range_bias.py <hand.csv> <pocket.csv> <true_cm>
+
+    <door.csv>    one parse_alab.py --distance output holding both runs; label 0
+                  is the hand run and label 1 the pocket run, which is what
+                  --clear and --blocked mean on that command line
+    <true_cm>     tape-measured reader-to-phone distance, same for both runs
+
+THE CAPTURE, and it is the whole experiment. Everything else in this file is
+arithmetic.
+
+ 1. `make cirdiag`, then `make flash CDK_BUILD=build/cdk-cirdiag`. The build
+    directory is NOT optional: bare `make flash` flashes build/cdk-matter and
+    the capture never starts. Never `flash-erase` -- the walk-up needs the Apple
+    Home credential -- and do not touch SW2, which held through a reset is the
+    factory reset.
+ 2. PUT THE PHONE ON A TRIPOD and measure reader-to-PHONE in cm. 100 cm, because
+    aliro_approach's unlock_cm is 100 and a bias matters where it changes a
+    decision. Not below ~50 cm.
+
+    The tripod is the whole design and the first version of this experiment did
+    not have it. Holding the phone in hand for one run and pocketing it for the
+    other moves the phone 20-30 cm each way relative to the body, so a difference
+    of tens of centimetres is geometry rather than channel and nothing in the
+    capture separates them. With the phone fixed, only the SUBJECT moves, and
+    every centimetre of difference is channel. Do not touch the tripod between
+    the two runs.
+ 3. `make monitor CDK_RTT_BUILD=build/cdk-cirdiag | tee hand.log`. The firmware
+    puts the DS-TWR distance on the [ALAB] line itself as `d=<cm> dage=<ms>`, so
+    the range arrives attached to the reception it belongs to and no bench TUI
+    is involved. Captures taken before that field existed have to be parsed the
+    old way, by scraping the TUI's rendered status line, and parse_alab.py still
+    does that when `d=` is absent.
+ 4. CLEAR run: nothing between phone and reader, you stand off to the side or
+    behind the reader. ~2 minutes.
+ 5. BLOCKED run: phone untouched on the tripod, YOU stand between it and the
+    reader with your body squarely in the path, back nearly against the tripod
+    rather than midway. Same duration.
+
+    WATCH `d=` BEFORE STARTING THE CLOCK. It must sit well above the tape figure.
+    If it reads near the tape figure you are not blocking, and the capture will
+    come out flat: Result 21 threw away a run where only 5 of 39 frame-matched
+    receptions had a channel signature different from clear. Ten seconds of
+    watching catches it; nothing in the analysis can.
+
+    DO NOT MOVE THE TRIPOD BETWEEN RUNS, and if it moves, redo BOTH runs. The
+    unknown antenna constant cancels only when the phone is in the same place for
+    both, and no amount of arithmetic afterwards can separate a geometry change
+    from a channel one. Result 21 threw away a second run this way.
+ 6. `parse_alab.py --clear clear.log --blocked blocked.log --distance -o out.csv`,
+    then feed that one file here with the tape figure.
+
+THE ABSOLUTE BIAS COLUMN IS NOT TRUSTWORTHY AND THE DIFFERENCE IS. Nothing in
+this project has ever programmed the DW3000 antenna-delay registers: the
+responder's distance is a pure scale with no offset term, `d_mm = tof * 4692 /
+1000` (`ccc_shim_rx.c:631`), so every range it reports carries an unknown
+constant. `true_cm` is therefore printed for orientation only. The deciding
+number is blocked MINUS clear with the phone fixed, where that constant cancels
+exactly, which is why it is the only figure this script puts an interval on.
+
+WHICH DISTANCE TO STAND AT. 100 cm, because `aliro_approach`'s `unlock_cm` is
+100 and a bias only matters where it changes a decision. A second pair at 200 cm
+costs two more minutes and answers a different question: whether the bias grows
+with distance, which it should if it is a signal-to-noise effect and which would
+say the correction has to scale rather than be a constant. Do not go below about
+50 cm: `ccc_ds_twr_tof()` underflows near contact, and while the shipping path
+works around it by recomputing signed (`ccc_shim_rx.c:625-630`), that is not a
+regime to take a calibration measurement in.
+
+WHY STANDING STILL MATTERS. Result 13 could not test its hypothesis because the
+subject walked: 25.6 cm of movement between consecutive receptions contaminates
+every per-reception statistic. This experiment measures a BIAS at a known
+distance, so any movement goes straight into the number being measured. If you
+cannot stand still, the capture is not usable.
+
+WHAT THE ANSWER DECIDES.
+
+  bias is large and positive  an obstructed owner reads farther than they are, so
+                              the door unlocks late or not at all, and a bounded
+                              range correction is the right use of the
+                              classifier: it ADDS permission by undoing a
+                              measurement error, and it never touches the STS
+                              check that defends against distance reduction.
+  bias is near zero           there is nothing to compensate. The classifier
+                              stays unwired and this line of work stops.
+  bias is negative            an obstructed phone reads CLOSER than it is, which
+                              would be a security-relevant finding rather than a
+                              usability one, and nothing should be compensated
+                              until it is understood.
+
+The classifier's own call rate per condition is reported beside the bias, and it
+is free: it is the first check of whether the shipped tree, trained on a walking
+subject, still says "obstructed" for a pocket when the subject is standing.
+
+### [`ai/tinyml/variance.py`](architecture/ai.tinyml/variance.md)
+
+Does round-to-round variance carry obstruction information on this board?
+
+Run from the repository root:
+    ai/tinyml/.venv/bin/python ai/tinyml/variance.py
+
+Then ai/tinyml/variance_significance.py, which tests whether the best gain here
+survives a bootstrap and whether the shipped model already encodes it. Result 13
+in RESULTS.md is what these two produced.
+
+THE HYPOTHESIS UNDER TEST, from an external proposal: a torso shadow flickers
+because a standing person sways and breathes, while a door is rigid, so the
+round-to-round variance of the channel should separate body-obstruction from
+door-obstruction where the instantaneous features cannot.
+
+WHAT THIS DATA CAN AND CANNOT SAY ABOUT IT. There is no door in these captures.
+`clear` is the phone in hand facing the reader; `obstructed` is the phone behind
+the back or in a back pocket. Both classes are a body. So this cannot test
+body-versus-door directly. What it CAN test is the premise the idea rests on:
+that variance carries obstruction information at all. And the test is biased
+TOWARDS the hypothesis, because the obstructed class here is exactly the
+flickering case the proposal says variance detects. A null result is therefore
+strong evidence against; a positive result is weak evidence for, and would need
+a real door to confirm.
+
+TWO TRAPS THIS AVOIDS.
+
+1. Motion. The subject walked: distance sweeps 0.6 m to 5.8 m, with a median
+   change of 33 cm between consecutive receptions. Raw variance of received
+   power would mostly measure the walk. So the variance is taken over
+   `fp_resid`, which already has free-space spreading at the measured range
+   removed, and a distance-matched control is reported beside it.
+
+2. Window leakage. Rolling features make neighbouring rows share inputs, so a
+   random train/test split lets the test set peek at its own neighbours through
+   the window. Every split here holds out CONTIGUOUS blocks instead. The
+   difference is not cosmetic: the same features score far higher under a random
+   split, and that number would be fiction.
+
+A SECOND HYPOTHESIS, from the same proposal, is tested at the bottom: subtract a
+causal running mean of `fp_resid` from itself, so a session-wide offset cancels
+and the classifier sees only the shortfall below the reader's own recent normal.
+Result 10 already ruled out running baselines built from ABSOLUTE power, and its
+reason was mechanical rather than empirical: such a baseline anchors to the
+closest recent reception, so the shortfall mostly re-encodes distance. The
+question here is whether that reason survives being applied to `fp_resid`, which
+has range already subtracted and therefore cannot re-encode it. Read the section
+header there for what this data can and cannot say about it.
+
+### [`ai/tinyml/variance_significance.py`](architecture/ai.tinyml/variance_significance.md)
+
+Is the best variance gain real, and is the information already in the model?
+
+Run from the repository root, after ai/tinyml/variance.py:
+    ai/tinyml/.venv/bin/python ai/tinyml/variance_significance.py
+
+Two questions the headline deltas cannot answer.
+
+1. SIGNIFICANCE. +0.028 on 8 folds is one or two receptions per fold. A paired
+   bootstrap over whole blocks -- resampling the unit that was held out, not the
+   rows -- says how often the gain survives a different draw of the same data.
+
+2. REDUNDANCY. pwr_diff = rx_pwr - fp_pwr, and both are already in the model, so
+   a large solo effect size does not imply new information. If its variance is
+   predictable from the shipped pair, the model already has it.
 
 ## `integration/homeassistant/custom_components/openaliro/`
 
@@ -2843,6 +3459,15 @@ the sealed responses. The result is the same 32-byte URSK the reader derives.
 
 **depends on** [`modules/woz_aliro/include/aliro_crypto.h`](architecture/modules.woz_aliro.include/aliro_crypto.h.md), [`modules/woz_aliro/include/aliro_device_apdu.h`](architecture/modules.woz_aliro.include/aliro_device_apdu.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_device.c`](architecture/modules.woz_aliro.src/aliro_device.c.md)
 
+### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
+
+@file aliro_approach.h
+Configuration and state for approach detection and predictive unlock: unlock/relock thresholds in
+centimeters, sample-count dwell times, motor retraction time, scheduling margin, minimum closing
+speed, and a flag to enable or disable predictive ToA unlock.
+
+**used by** [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
+
 ### [`modules/woz_aliro/include/aliro_assert_ec.h`](architecture/modules.woz_aliro.include/aliro_assert_ec.h.md)
 
 *No module docstring. First commit: "assert: bind the P-256 seam to aliro_prim".*
@@ -2885,15 +3510,6 @@ and no platform dependency, so it is host-KAT verifiable against the reader's
 own builders/parsers (round-trip) and the recovered layouts.
 
 **depends on** [`modules/woz_aliro/src/aliro_apdu.h`](architecture/modules.woz_aliro.src/aliro_apdu.h.md)  ·  **used by** [`modules/woz_aliro/include/aliro_device.h`](architecture/modules.woz_aliro.include/aliro_device.h.md), [`modules/woz_aliro/src/aliro_device_apdu.c`](architecture/modules.woz_aliro.src/aliro_device_apdu.c.md)
-
-### [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md)
-
-@file aliro_approach.h
-Configuration and state for approach detection and predictive unlock: unlock/relock thresholds in
-centimeters, sample-count dwell times, motor retraction time, scheduling margin, minimum closing
-speed, and a flag to enable or disable predictive ToA unlock.
-
-**used by** [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md)
 
 ## `modules/woz_uwb/src/aliro/include/cherry/`
 
@@ -3219,6 +3835,50 @@ attach costs seconds and the round trips in between are free.
 *No module docstring. First commit: "piv: add ESP32-S3 CCID bench transport".*
 
 **used by** [`ports/esp32/components/piv_ccid/include/piv_ccid.h`](architecture/ports.esp32.components.piv_ccid.include/piv_ccid.h.md), [`ports/esp32/components/piv_ccid/include/piv_identity.h`](architecture/ports.esp32.components.piv_ccid.include/piv_identity.h.md), [`ports/esp32/components/piv_ccid/piv_apdu.c`](architecture/ports.esp32.components.piv_ccid/piv_apdu.c.md), [`ports/esp32/components/piv_ccid/piv_ccid.c`](architecture/ports.esp32.components.piv_ccid/piv_ccid.c.md)
+
+## `modules/woz_ml/include/`
+
+### [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md)
+
+@file woz_ml.h — on-device classifiers, and the seam that keeps them replaceable.
+One classifier so far: line-of-sight vs obstructed, from the DW3000's own
+receive diagnostics. It answers "is there a door between the reader and the
+phone", which the ranging distance alone cannot: an obstructed 1 m and a clear
+3 m look similar to a time-of-flight estimate and do not mean the same thing.
+WHAT THIS IS NOT. It is not wired into the ranging path, and nothing calls it
+yet. It is compiled, certified against its training-side model on every build
+of the host suite, and sized. Wiring it to a decision is a separate change
+that has to answer what a wrong answer costs.
+THE MODEL IS A DECISION TREE ON PURPOSE. Two integer comparisons; 776 B of
+flash for everything here -- feature extraction, classification, the range
+correction and the drift monitor -- 0 B of RAM, 28 B of stack. That is 1.4% of
+the shipping image's free flash. No arena, no interpreter, no dynamic
+allocation, nothing to
+fail at init, and not one undefined symbol -- `arm-none-eabi-nm -u` on the
+objects is empty, so the measured size is the whole size. It was measured
+against an int8 TFLM network and a random forest and beat both on accuracy per
+byte (ai/tinyml/RESULTS.md). It is also the only one of the three whose C can
+be proved identical to the model that was trained -- see the header of
+ai/tinyml/gen_model.py for the four gates that enforce that on every
+regeneration, and tests/host/test_woz_ml.c for the vectors that carry the
+claim into CI.
+FEED IT THE RIGHT NUMBERS. woz_ml_los_classify() takes raw features in
+physical units, in the order enum woz_ml_los_feature declares, and getting
+that array wrong cannot be detected -- every float is a legal feature value.
+So do not fill it by hand: woz_ml_los_features() below takes the five CIA
+registers and the range and fills it, reproducing ai/tinyml/parse_alab.py
+register for register, and gate 4 in ai/tinyml/gen_model.py holds it to that
+on every captured reception.
+
+**depends on** [`modules/woz_ml/include/woz_ml_los_features.h`](architecture/modules.woz_ml.include/woz_ml_los_features.h.md)  ·  **used by** [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md), [`modules/woz_ml/src/woz_ml_feat.c`](architecture/modules.woz_ml.src/woz_ml_feat.c.md), [`modules/woz_ml/src/woz_ml_lin.c`](architecture/modules.woz_ml.src/woz_ml_lin.c.md), [`modules/woz_ml/src/woz_ml_los.c`](architecture/modules.woz_ml.src/woz_ml_los.c.md), [`modules/woz_ml/src/woz_ml_range.c`](architecture/modules.woz_ml.src/woz_ml_range.c.md)
+
+### [`modules/woz_ml/include/woz_ml_los_features.h`](architecture/modules.woz_ml.include/woz_ml_los_features.h.md)
+
+GENERATED by ai/tinyml/gen_model.py -- do not hand-edit.
+Regenerate with:
+ai/tinyml/.venv/bin/python ai/tinyml/gen_model.py
+
+**used by** [`modules/woz_ml/include/woz_ml.h`](architecture/modules.woz_ml.include/woz_ml.h.md), [`modules/woz_ml/src/woz_ml_los_scaler.h`](architecture/modules.woz_ml.src/woz_ml_los_scaler.h.md)
 
 ## `modules/woz_nfc/include/woz_nfc/`
 

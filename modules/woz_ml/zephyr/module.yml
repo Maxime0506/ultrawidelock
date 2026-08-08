@@ -1,0 +1,4 @@
+name: woz_ml
+build:
+  cmake: .
+  kconfig: Kconfig

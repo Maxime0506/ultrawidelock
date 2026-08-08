@@ -7,11 +7,21 @@
 #
 # IT GATES THE SHIPPING IMAGE: SMP=1 RELEASE=1 with LTO on, which is what
 # `make release` builds and `make fota` pushes. Measured on this baseline that
-# image is at 96.23% of its flash partition (16,356 B free) and 92.50% of RAM
-# (9,836 B free), so on the image that actually ships FLASH is the binding
+# image is at 87.47% of its flash partition (54,332 B free) and 84.70% of RAM
+# (20,060 B free), so on the image that actually ships FLASH is the binding
 # constraint -- the reverse of the debug build, where the 8 KB RTT ring puts RAM
 # at 95.03% and flash at 94.69%. Gating the debug image would therefore have
 # watched the wrong region.
+#
+# Those numbers moved once, and prose all over the repository did not follow.
+# 73237fb8 (#8) dropped the Zephyr IP layer and took CONFIG_LOG_DEFAULT_LEVEL
+# from 3 to 1, which cost the shipping image 37,956 B of flash (rodata -15,008,
+# text -22,484) and 10,224 B of RAM (noinit -6,640, bss -3,062). f8fdcf4f (#11)
+# re-recorded the baseline for it. This header, CLAUDE.md, firmware/README.md,
+# docs/troubleshooting.md and docs/hardware-validation.md all kept quoting the
+# pre-#8 figures until 2026-08-06. The baseline JSON was never wrong and the
+# gate never masked anything: it has compared shipping against shipping the
+# whole time.
 #
 # LABEL-GATED, NOT AUTOMATIC, and that is deliberate rather than timid. ci.yml
 # says in its own header that firmware is absent from push/PR CI on purpose:

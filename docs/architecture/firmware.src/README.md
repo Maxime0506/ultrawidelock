@@ -7,6 +7,7 @@
 | [`firmware/src/aliro_ble_zephyr.c`](aliro_ble_zephyr.c.md) |  |
 | [`firmware/src/aliro_prov_settings.c`](aliro_prov_settings.c.md) |  |
 | [`firmware/src/case_bench.c`](case_bench.c.md) |  |
+| [`firmware/src/cirdiag_capture.c`](cirdiag_capture.c.md) | @file cirdiag_capture.c — unattended CIR capture cycle for the DWM3001CDK. |
 | [`firmware/src/dfu_ble_zephyr.c`](dfu_ble_zephyr.c.md) | @file |
 | [`firmware/src/main.c`](main.c.md) |  |
 | [`firmware/src/matter_ble_zephyr.c`](matter_ble_zephyr.c.md) | @file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP. |

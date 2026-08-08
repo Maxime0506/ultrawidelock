@@ -111,12 +111,13 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	 * accumulator can be read (see ccc_shim_rx_awaiting_final). Take the whole snapshot,
 	 * window included, here: the Final owes the block nothing, so the ~192 ms inter-block gap
 	 * absorbs the read before the SP0 listen goes back up. */
-	bool win = ccc_shim_rx_awaiting_final() && uwb_cirdiag_window_due();
+	bool is_final = ccc_shim_rx_awaiting_final();
+	bool win = is_final && uwb_cirdiag_window_due();
 	bool latched = false;
 
 	if (win) {
 		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
-					      d != NULL ? d->datalength : 0u, false);
+					      d != NULL ? d->datalength : 0u, false, is_final);
 	}
 	/* Arm the SP3 POLL window first, ahead of the Pre-POLL decode, using the pre-warmed STS. */
 	if (g_chain_rxok != NULL) {
@@ -131,11 +132,13 @@ static void shim_rxok(const dwt_cb_data_t *d)
 		g_ccc_dbg_decode = dwt_readsystimestamphi32() - s0;
 	}
 	/* Every other reception: summary only (cheap, bench-proven safe), taken after the arm so
-	 * the POLL/Final deadlines are met first. Either way the printk goes to the sysworkq —
-	 * never print on this thread. */
+	 * the POLL/Final deadlines are met first. deadline_pending stays literal true — the next
+	 * listen is already up, so the windowed read must not run — while is_final carries which
+	 * reception this was, for the FINAL_ONLY latch: a Final whose window was not due still
+	 * lands here. Either way the printk goes to the sysworkq — never print on this thread. */
 	if (!win) {
 		latched = uwb_cirdiag_capture(d != NULL ? d->status : 0u,
-					      d != NULL ? d->datalength : 0u, true);
+					      d != NULL ? d->datalength : 0u, true, is_final);
 	}
 	if (latched) {
 		k_work_submit(&g_cirdiag_work);

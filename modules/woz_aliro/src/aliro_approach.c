@@ -17,6 +17,10 @@
 
 #include <string.h>
 
+#if defined(CONFIG_WOZ_ML_LOS)
+#include "woz_ml.h"
+#endif
+
 /* Kalman tuning. Measurement noise from bench range scatter (~30 cm sigma on
  * normal blocks; the metre-scale outliers are gated, not modelled). Process
  * noise from human gait acceleration (~1.5 m/s^2). */
@@ -29,10 +33,66 @@
 #define KF_MIN_SAMPLES 6        /* accepted samples before predictions arm */
 
 /* Prediction guards: two consecutive in-window samples to fire; a predictive
- * open must convert to presence within ETA + grace (grace covers the median
- * filter's lag into the unlock band) or it aborts. */
+ * open must convert to presence before its deadline or it aborts. The deadline
+ * is RENEWED by every accepted sample that still shows the approach closing,
+ * so the grace bounds silence and stalls rather than the whole conversion.
+ * It therefore has to outlast the holes the 2026-08-07 walk measured in the
+ * accepted-sample stream -- 0.9-1.5 s of dropped rounds mid-walk -- which
+ * 900 ms did not: the deadline expired between two samples of a live approach
+ * and the bolt toggled shut with the owner at 65 cm. The cost of 1800 is that
+ * a prediction whose ranging dies outright stays open ~0.9 s longer before the
+ * tick reclaims it; the cost of 900 was relocking someone mid-arrival. */
 #define PRED_DWELL_N  2
-#define PRED_GRACE_MS 900
+#define PRED_GRACE_MS 1800
+
+/*
+ * Pocket-walk guards, all three from the 2026-08-08 00:01 walk (phone
+ * pocketed, 34% RX errors, trusted samples arriving in clumps with 1-12 s
+ * holes between them).
+ *
+ * MEDIAN_STALE_MS: window entries older than this stop voting. At 00:01:39
+ * two fresh samples at 193 and 159 cm were outvoted by 9-second-old 38-88 cm
+ * entries and the bolt opened with the owner at 1.6 m; the same staleness ran
+ * the other way on the 23:22 walk, where old far entries delayed a real
+ * arrival by two rounds. The median exists to reject metre-scale spikes
+ * within a burst, not to let one burst impersonate another.
+ *
+ * BAND_SILENCE_MS: the silence relock for a credential last seen in the
+ * (unlock, relock) DEAD BAND. The 750 ms far_silence tier is right when the
+ * last evidence was >= relock_cm -- that is a departure -- but in the band it
+ * relocked mid-approach at 00:01:40 during an ordinary 1.7 s pocket trust
+ * hole, un-opening a door it had opened 800 ms earlier. Must exceed the
+ * measured in-approach holes (0.9-2.0 s).
+ *
+ * Deliberately NOT here: a minimum fresh-voter count for the f >= approach_cm
+ * arm. Staleness can leave a lone inflated sample as the only voter that
+ * arms, but that is exactly the wlen == 1 session-start arm the ESP walk-up
+ * has always shipped (its suite pins one 200 cm sample arming the gate), and
+ * session_up() plus the departure-observation arm already bound what arming
+ * is worth. Requiring three far samples broke the shipped contract to close
+ * a hole that was never closed.
+ */
+#define MEDIAN_STALE_MS 2500
+#define BAND_SILENCE_MS 2500
+
+/*
+ * Confident-obstructed samples needed in the median window before the NLOS
+ * correction engages: a strict majority of ALIRO_APPROACH_MEDIAN_N.
+ *
+ * CHOSEN FROM THE MEASURED PER-RECEPTION RATES, not for tidiness. The classifier
+ * calls 4.7% of clear receptions obstructed and 81% of blocked ones (RESULTS.md
+ * Result 19's tripod captures). Over five samples that gives:
+ *
+ *     >= 3 of 5   false-obstructed 1 in 1,035    engages on 94.9% of blocked windows
+ *     >= 4 of 5   false-obstructed 1 in 42,588   engages on 75.8%
+ *     >= 5 of 5   false-obstructed 1 in 4.4M     engages on 34.9%
+ *
+ * A false obstructed subtracts 84.5 cm and can open the door for a phone at a
+ * true 185 cm, so the first column is a security number. The third column is the
+ * pocketed owner the correction exists for, and at 5-of-5 it abandons them two
+ * times in three. 3-of-5 is where both are acceptable.
+ */
+#define NLOS_VOTES_N ((ALIRO_APPROACH_MEDIAN_N / 2) + 1)
 
 /**
  * Reset the Kalman filter to a new state given a fresh measurement: clears rejection history,
@@ -130,6 +190,28 @@ static int32_t range_median(const int32_t *win, int n)
 	return t[n / 2];
 }
 
+/* The median over the entries still young enough to vote (MEDIAN_STALE_MS).
+ * The sample just filed is age zero and always qualifies, so the guard is
+ * unreachable in practice; it exists so an empty vote is structurally
+ * impossible rather than argued from a caller invariant. */
+static int32_t range_median_fresh(const struct aliro_approach *ap, int64_t now_ms)
+{
+	int32_t t[ALIRO_APPROACH_MEDIAN_N];
+	int n = 0;
+
+	for (int i = 0; i < ap->wlen; i++) {
+		if ((now_ms - ap->win_ms[i]) <= MEDIAN_STALE_MS) {
+			t[n++] = ap->win[i];
+		}
+	}
+	if (n == 0) {
+		int newest = (ap->wpos + ALIRO_APPROACH_MEDIAN_N - 1) % ALIRO_APPROACH_MEDIAN_N;
+
+		return ap->win[newest];
+	}
+	return range_median(t, n);
+}
+
 /**
  * Initialize an approach configuration with factory defaults: unlock at 100 cm, relock at 250 cm,
  * dwell times 2 s and 3 s, motor delay 500 ms, margin 250 ms, velocity floor 30 cm/s, predictive
@@ -144,6 +226,48 @@ void aliro_approach_defaults(struct aliro_approach_cfg *cfg)
 	cfg->motor_ms = 500;
 	cfg->margin_ms = 250;
 	cfg->vmin_cm_s = 30;
+	/*
+	 * OFF by default, and the reason is not caution about the measurement.
+	 *
+	 * The 25.5 cm antenna-delay offset is THIS BOARD's, measured on one
+	 * DWM3001CDK in one room (RESULTS.md Result 19). `modules/` is compiled by
+	 * the nRF5340 DK and both ESP32 targets as well, and none of them has ever
+	 * had that number measured. Defaulting it on would inject a 25 cm error into
+	 * every install that is not this one, in the direction that refuses to
+	 * unlock.
+	 *
+	 * It also shifts EVERY range the controller sees, so switching it on flips
+	 * behaviour the existing suite pins: fed 100 cm, a corrected controller sees
+	 * a true ~126 and correctly declines to unlock. That is the intended effect
+	 * and it is exactly why it cannot arrive by default.
+	 *
+	 * Turn it on per install, once that install's offset is known.
+	 */
+	cfg->range_correct_en = false;
+	/* Top-quartile boundary over the 399 tripod receptions; install-dependent. */
+	cfg->nlos_conf_min = 2.61f;
+	/*
+	 * Off. Result 21 established the SIGN of the obstruction effect across two
+	 * bodies and refuted its magnitude, so this file can supply the mechanism and
+	 * not the number. An install that wants a pocketed owner to unlock at the same
+	 * physical distance as a hand-held one sets it, having measured its own door.
+	 *
+	 * If you want a starting point rather than a measurement: the two sessions
+	 * bracket 80 to 127 cm at 1 m, and the smaller end is the one to try first,
+	 * because under-widening costs a step forward and over-widening costs a
+	 * stranger an open door.
+	 */
+	cfg->nlos_widen_cm = 0;
+	/*
+	 * 180 cm, and the ceiling is what picks it rather than the floor. It has
+	 * to be high enough that a credential sitting at the door cannot reach
+	 * it -- 80 cm above unlock_cm -- and strictly below relock_cm, because
+	 * ranges past relock_cm are the ones the trust gate declines to vouch
+	 * for and therefore never arrive here at all. At 250 the gate would
+	 * never arm and the lock would quietly stop opening; 180 leaves 70 cm of
+	 * margin under that cliff.
+	 */
+	cfg->approach_cm = 180;
 	/*
 	 * 750 ms, and the number is measured rather than chosen. A ranging block
 	 * is 192 ms, so this is four missed blocks -- a phone that is still there
@@ -176,6 +300,48 @@ void aliro_approach_init(struct aliro_approach *ap, const struct aliro_approach_
 	} else {
 		aliro_approach_defaults(&ap->cfg);
 	}
+	/*
+	 * Keep the trajectory gate reachable, whatever band the caller chose.
+	 *
+	 * approach_cm has to sit strictly inside (unlock_cm, relock_cm): at or
+	 * below unlock_cm it arms on arrival and gates nothing, and at or above
+	 * relock_cm it can never arm at all, because ranges that far out are the
+	 * ones the trust gate declines to vouch for and they never reach
+	 * aliro_approach_feed(). The second failure is silent and total -- the
+	 * lock simply stops auto-unlocking -- so it is worth a clamp rather than
+	 * a comment. The default band makes this a no-op; it exists for callers
+	 * that narrow unlock_cm/relock_cm and keep the default approach_cm, which
+	 * ports/esp32 is one config change away from doing.
+	 */
+	if (ap->cfg.approach_cm > 0 && (ap->cfg.approach_cm <= ap->cfg.unlock_cm ||
+					ap->cfg.approach_cm >= ap->cfg.relock_cm)) {
+		ap->cfg.approach_cm =
+			ap->cfg.unlock_cm + (ap->cfg.relock_cm - ap->cfg.unlock_cm) / 2;
+	}
+	/*
+	 * Keep the trajectory gate meaningful while the window says obstructed.
+	 *
+	 * The gate arms at approach_cm and fires at unlock_cm, and it only gates
+	 * anything because there is distance between them. A widening eats that
+	 * distance from the wrong end: at unlock_cm 100, approach_cm 180 and a
+	 * widening of 120, the effective radius becomes 220 and every sample that
+	 * arms the gate also fires it, so a credential that never approached opens
+	 * the door -- which is the exact hole 574dbb91 closed.
+	 *
+	 * Clamped rather than rejected, because the alternative is a config error
+	 * that disables a security gate silently. Negative values are clamped away
+	 * for the same reason: a negative widening would make the lock stricter only
+	 * while obstructed, which no caller can want and which this name does not
+	 * say.
+	 */
+	if (ap->cfg.nlos_widen_cm < 0) {
+		ap->cfg.nlos_widen_cm = 0;
+	}
+	if (ap->cfg.approach_cm > 0 &&
+	    ap->cfg.unlock_cm + ap->cfg.nlos_widen_cm >= ap->cfg.approach_cm) {
+		ap->cfg.nlos_widen_cm = ap->cfg.approach_cm - ap->cfg.unlock_cm - 1;
+	}
+
 	ap->locked = true;
 	ap->eta_ms = -1;
 }
@@ -189,6 +355,20 @@ static enum aliro_approach_action pred_abort(struct aliro_approach *ap)
 	ap->locked = true;
 	ap->pred_open = false;
 	ap->pred_dwell = 0;
+	/* A relocked bolt must earn a fresh approach. Without this an aborted
+	 * prediction leaves the gate armed, and the credential that just stopped
+	 * short could open the door by standing still.
+	 *
+	 * ONE exception, from the 2026-08-07 walk: when the abort catches the
+	 * estimate already inside approach_cm, the credential did not stop short
+	 * -- it arrived faster than the median could follow -- and clearing the
+	 * arm here locked the owner out at 65 cm until they retreated past
+	 * approach_cm and walked back in. Keeping the arm cannot open the door on
+	 * its own: crossing unlock_cm still takes the median plus near_dwell, and
+	 * the stand-still credential the comment above fears produces neither. */
+	if (!(ap->kf_init && ap->cfg.approach_cm > 0 && ap->d <= (float)ap->cfg.approach_cm)) {
+		ap->approach_armed = false;
+	}
 	return ALIRO_APPROACH_RELOCK_ABORT;
 }
 
@@ -199,19 +379,135 @@ static enum aliro_approach_action pred_abort(struct aliro_approach *ap)
  * Return the action code: UNLOCK_THRESHOLD (entered unlock zone), RELOCK_DEPART (exited relock
  * zone), UNLOCK_PREDICT (fired a predictive unlock), or HOLD (no action).
  */
+void aliro_approach_session_up(struct aliro_approach *ap)
+{
+	/* The RSSI power gate cannot open without the phone approaching, so a NEW
+	 * ranging session is the approach evidence approach_cm was asking for. See
+	 * the header for the capture that showed the far range never arrives. */
+	ap->approach_armed = true;
+}
+
+/**
+ * Turn a median of reported ranges into a median of true ones.
+ *
+ * Unconditional part: the reader is a fixed 25.5 cm short because nothing
+ * programs the DW3000 antenna delay. Conditional part: a body in the path adds a
+ * constant 84.5 cm, and that is undone only when a strict majority of the window
+ * were confident obstructed calls. Both constants and the arithmetic live in
+ * woz_ml so that the model they were measured beside owns them.
+ *
+ * Without CONFIG_WOZ_ML_LOS there is no classifier to ask and no module to call,
+ * so this is the identity and the controller behaves exactly as it shipped.
+ */
+/**
+ * Whether a strict majority of the median window were confident obstructed calls.
+ *
+ * A partly-filled window cannot carry a majority of five and reports clear, so
+ * early samples never widen and never get the conditional subtraction. That is
+ * the safe direction: both consumers of this are the ones that add permission.
+ *
+ * VOTES AGE OUT exactly as median entries do (MEDIAN_STALE_MS, the shared
+ * win_ms[] timestamps). Before this, an obstructed majority earned before a
+ * 1-12 s pocket trust hole kept unlock_cm widened by nlos_widen_cm all the way
+ * through it -- a permission-adding decision fed by stale evidence, the same
+ * shape as the 00:01:39 ghost grant at the top of this file, only latent
+ * because nothing ships a nonzero widening yet. The cost of ageing them: a
+ * still pocketed owner whose iOS ranging pauses past the horizon (silences of
+ * 1.6-3.07 s are on record) loses the widening until samples resume, so the
+ * resting-at-the-door case leans on the band silence tier and on ranging
+ * coming back, not on a vote nobody can refresh.
+ *
+ * Without CONFIG_WOZ_ML_LOS nothing ever writes ch_win, so this is constant
+ * false and both consumers fold away.
+ */
+static bool nlos_blocked(const struct aliro_approach *ap, int64_t now_ms)
+{
+#if defined(CONFIG_WOZ_ML_LOS)
+	int votes = 0;
+
+	for (int i = 0; i < ap->wlen; i++) {
+		if (ap->ch_win[i] && (now_ms - ap->win_ms[i]) <= MEDIAN_STALE_MS) {
+			votes++;
+		}
+	}
+	return (ap->wlen >= ALIRO_APPROACH_MEDIAN_N) && (votes >= NLOS_VOTES_N);
+#else
+	(void)ap;
+	(void)now_ms;
+	return false;
+#endif
+}
+
+/**
+ * The unlock radius in force for this sample.
+ *
+ * Widened by cfg.nlos_widen_cm while the window says obstructed, so an owner
+ * whose body is between the phone and the reader crosses the threshold at the
+ * same place a hand-held phone would. Result 21 is why this is a widening and
+ * not a correction to the range: the sign of the obstruction effect replicated
+ * across two bodies and its magnitude did not, and a widening spends only the
+ * sign.
+ *
+ * Every unlock_cm comparison in this file goes through here, deliberately. The
+ * regression 4c6083d8 fixed was two thresholds disagreeing about the same
+ * boundary, and a widening applied to the fire decision but not to the ETA or
+ * the silence rule would rebuild that dead band on purpose.
+ */
+static int32_t effective_unlock_cm(const struct aliro_approach *ap, int64_t now_ms)
+{
+	return ap->cfg.unlock_cm + (nlos_blocked(ap, now_ms) ? ap->cfg.nlos_widen_cm : 0);
+}
+
+static int32_t channel_correct(const struct aliro_approach *ap, int64_t now_ms, int32_t median_cm)
+{
+#if defined(CONFIG_WOZ_ML_LOS)
+	if (!ap->cfg.range_correct_en || median_cm < 0) {
+		return median_cm;
+	}
+
+	return (int32_t)woz_ml_los_range_true_cm((uint16_t)median_cm,
+						 nlos_blocked(ap, now_ms) ? WOZ_ML_LOS_OBSTRUCTED
+									  : WOZ_ML_LOS_CLEAR);
+#else
+	(void)ap;
+	(void)now_ms;
+	return median_cm;
+#endif
+}
+
 enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_t now_ms,
 					       int32_t cm)
 {
-	bool est_fresh = kf_update(ap, now_ms, cm);
+	return aliro_approach_feed_channel(ap, now_ms, cm, false, 0.0f);
+}
+
+enum aliro_approach_action aliro_approach_feed_channel(struct aliro_approach *ap, int64_t now_ms,
+						       int32_t cm, bool obstructed,
+						       float confidence)
+{
+	/*
+	 * Correct the estimator's input too, or the two paths disagree about where
+	 * the credential is. The presence path works off the corrected median below;
+	 * feeding the Kalman filter raw centimetres would leave the PREDICTIVE path
+	 * firing its ETA against an uncorrected distance, which is the same bug as
+	 * having no correction at all and harder to see.
+	 *
+	 * The vote used here is the window as it stood BEFORE this sample, since
+	 * this sample has not been filed yet. One sample of lag on a class decision
+	 * that already needs a majority of five is not worth a restructure to avoid.
+	 */
+	bool est_fresh = kf_update(ap, now_ms, channel_correct(ap, now_ms, cm));
 
 	/* ETA to the unlock radius, kept current for the trace accessors and
 	 * the fire decision below. Valid only with a converged filter, a real
 	 * closing speed and the credential still outside the radius. */
 	float closing = -ap->v;
 
+	const int32_t radius_pre = effective_unlock_cm(ap, now_ms);
+
 	if (ap->cfg.predict_en && est_fresh && ap->accepted >= KF_MIN_SAMPLES &&
-	    closing >= (float)ap->cfg.vmin_cm_s && ap->d > (float)ap->cfg.unlock_cm) {
-		ap->eta_ms = (int32_t)(((ap->d - (float)ap->cfg.unlock_cm) * 1000.0f) / closing);
+	    closing >= (float)ap->cfg.vmin_cm_s && ap->d > (float)radius_pre) {
+		ap->eta_ms = (int32_t)(((ap->d - (float)radius_pre) * 1000.0f) / closing);
 	} else {
 		ap->eta_ms = -1;
 		ap->pred_dwell = 0;
@@ -224,20 +520,34 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
 	ap->last_feed_ms = now_ms;
 
 	ap->win[ap->wpos] = cm;
+	ap->win_ms[ap->wpos] = now_ms;
+	ap->ch_win[ap->wpos] = obstructed && (confidence >= ap->cfg.nlos_conf_min);
 	ap->wpos = (ap->wpos + 1) % ALIRO_APPROACH_MEDIAN_N;
 	if (ap->wlen < ALIRO_APPROACH_MEDIAN_N) {
 		ap->wlen++;
 	}
-	int32_t f = range_median(ap->win, ap->wlen);
+	int32_t f = channel_correct(ap, now_ms, range_median_fresh(ap, now_ms));
 
-	if (f <= ap->cfg.unlock_cm) {
+	/*
+	 * Trajectory gate. Arm on the MEDIAN so a single spike cannot do it, and
+	 * arm before the decisions below so an approach that crosses approach_cm
+	 * and the unlock radius inside one median window still counts -- the
+	 * gate is there to reject credentials that never approached, not to add
+	 * latency to ones that did.
+	 */
+	if (ap->cfg.approach_cm > 0 && f >= ap->cfg.approach_cm) {
+		ap->approach_armed = true;
+	}
+	const bool approached = (ap->cfg.approach_cm <= 0) || ap->approach_armed;
+
+	if (f <= effective_unlock_cm(ap, now_ms)) {
 		ap->far_dwell = 0;
 		if (ap->pred_open) {
 			/* Arrived: the predictive open converts to a normal
 			 * presence unlock; departure rules take over. */
 			ap->pred_open = false;
 		}
-		if (ap->locked && ++ap->near_dwell >= ap->cfg.near_dwell) {
+		if (ap->locked && approached && ++ap->near_dwell >= ap->cfg.near_dwell) {
 			ap->locked = false;
 			return ALIRO_APPROACH_UNLOCK_THRESHOLD;
 		}
@@ -247,6 +557,7 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
 			ap->locked = true;
 			ap->pred_open = false;
 			ap->pred_dwell = 0;
+			ap->approach_armed = false;
 			return ALIRO_APPROACH_RELOCK_DEPART;
 		}
 	} else {
@@ -255,18 +566,36 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
 	}
 
 	/* Prediction path. Supervise an open first: it must keep closing and
-	 * arrive on time, or the bolt goes back. */
+	 * arrive on time, or the bolt goes back.
+	 *
+	 * Both velocity checks require a filter that KNOWS a velocity. A sample
+	 * gap past KF_STALE_MS re-bases it with v = 0 and accepted = 1, and on
+	 * the 2026-08-07 walk that made the first sample AFTER a ranging hole
+	 * read as a stall -- the owner still mid-stride, the bolt shutting
+	 * against them. Under KF_MIN_SAMPLES the velocity is not evidence of
+	 * anything; the deadline alone supervises until the filter converges. */
 	if (ap->pred_open) {
 		if (now_ms >= ap->pred_deadline_ms) {
 			return pred_abort(ap);
 		}
-		if (est_fresh && closing < (float)ap->cfg.vmin_cm_s / 2.0f) {
-			return pred_abort(ap);
+		if (est_fresh && ap->accepted >= KF_MIN_SAMPLES) {
+			if (closing < (float)ap->cfg.vmin_cm_s / 2.0f) {
+				return pred_abort(ap);
+			}
+			/* Still closing: renew the grace. The deadline exists to
+			 * catch silence and stalls, not to race the median filter
+			 * into the unlock band. */
+			ap->pred_deadline_ms = now_ms + PRED_GRACE_MS;
 		}
 		return ALIRO_APPROACH_HOLD;
 	}
 
-	if (ap->locked && ap->eta_ms >= 0 && ap->eta_ms <= ap->cfg.motor_ms + ap->cfg.margin_ms) {
+	/* The predictive path is gated too, not just the presence one. It is the
+	 * harder case to reach without an approach -- it wants a closing speed
+	 * above vmin_cm_s -- but "hard to reach" is not "cannot", and the
+	 * invariant this gate states is about every auto-unlock. */
+	if (ap->locked && approached && ap->eta_ms >= 0 &&
+	    ap->eta_ms <= ap->cfg.motor_ms + ap->cfg.margin_ms) {
 		if (++ap->pred_dwell >= PRED_DWELL_N) {
 			ap->locked = false;
 			ap->pred_open = true;
@@ -290,13 +619,32 @@ void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms,
 		return;
 	}
 	/*
-	 * Only these two, and deliberately: no median window, no dwell counter,
-	 * no filter update. An unvouched range must be able to start the
-	 * departure clock and must not be able to touch anything an unlock
-	 * decision reads.
+	 * No median window, no dwell counter, no filter update: an unvouched
+	 * range must be able to start the departure clock and must never move
+	 * the bolt.
 	 */
 	ap->last_cm = cm;
 	ap->last_feed_ms = now_ms;
+	/*
+	 * It MAY re-arm the trajectory gate, and the 23:51 walk on 2026-08-07 is
+	 * why. The trust gate declined the entire 131-83 cm retreat, so after the
+	 * relock the median held [15,30,79,102,194] -- 79 -- and the f >= approach_cm
+	 * re-arm was unreachable; the owner then stood at 0 cm for fifteen seconds
+	 * against a door that could not open. Their 473-504 cm readings WERE seen,
+	 * by this path alone.
+	 *
+	 * Why this does not hand the unlock decision unvouched data: arming is
+	 * necessary and never sufficient (the unlock still takes a vouched median
+	 * inside unlock_cm plus near_dwell), a range this far requires the session's
+	 * own STS keys to produce at all, and the credential this gate exists to
+	 * stop -- one resting NEAR the door, waiting for noise to wander the median
+	 * across the radius -- produces no >= relock_cm reading to arm with. The
+	 * residual case is a multipath-inflated reading from a resting phone, and
+	 * its exposure is bounded by what already ships: session_up() arms
+	 * unconditionally on every new BLE session, and iOS cycles the session every
+	 * minute or two anyway.
+	 */
+	ap->approach_armed = true;
 }
 
 /**
@@ -315,19 +663,73 @@ enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_
 
 	/*
 	 * Departure by silence, which is how a real walk-away ends: the far
-	 * samples stop before far_dwell can count three of them. Gated on the
-	 * LAST measurement being beyond the relock radius, so a phone resting
-	 * near the door goes quiet without the bolt moving under its owner.
-	 * See aliro_approach_cfg::far_silence_ms.
+	 * samples stop before far_dwell can count three of them.
+	 *
+	 * GATED ON unlock_cm, NOT relock_cm, and the difference is a hole this
+	 * cost 11 s of on 2026-08-07. The rule used to require the last
+	 * measurement to be beyond relock_cm, so a credential that went silent
+	 * anywhere in the 100-250 cm dead band left the bolt open indefinitely.
+	 * The capture has it exactly: last range 207 cm, session died at
+	 * 20:38:10.9, and nothing relocked until ranging RESUMED at 427 cm eleven
+	 * seconds later. 207 was under 250, so the rule declined -- correctly by
+	 * its own contract, and wrong for the owner walking away.
+	 *
+	 * unlock_cm keeps the protection the old threshold was reaching for. A
+	 * phone resting near the door is inside unlock_cm, so it still goes quiet
+	 * without the bolt moving under its owner; what changes is that a
+	 * credential which had already left the unlock radius no longer needs to
+	 * be seen crossing a second, larger one before silence counts.
 	 */
-	if (!ap->locked && ap->cfg.far_silence_ms > 0 && ap->last_feed_ms != 0 &&
-	    ap->last_cm >= ap->cfg.relock_cm &&
-	    (now_ms - ap->last_feed_ms) >= (int64_t)ap->cfg.far_silence_ms) {
+	/*
+	 * NOT while a predictive open is outstanding. That path fired the bolt in
+	 * anticipation of an arrival and gives itself ETA + PRED_GRACE_MS to see it,
+	 * the grace covering the median filter's lag into the unlock band. Widening
+	 * the silence gate to unlock_cm let 750 ms of quiet relock a prediction that
+	 * was still inside its own deadline, so a phone arriving through a gap in
+	 * ranging would get the bolt shut and reopened under its hand. While a
+	 * prediction is pending its deadline governs; once it converts to presence
+	 * or aborts, silence does.
+	 */
+	/*
+	 * The WIDENED radius, for the same reason the fire decision uses it: a
+	 * pocketed phone resting at the door reports itself past unlock_cm and would
+	 * otherwise be read as a departure the moment ranging paused. Whatever
+	 * distance counts as "at the door" for opening has to count as "at the door"
+	 * for staying open, or the widening buys an unlock and then takes it back.
+	 */
+	/*
+	 * Two silence tiers. Last seen >= relock_cm is an unambiguous departure
+	 * and keeps the fast far_silence_ms relock; last seen in the DEAD BAND is
+	 * ambiguous -- on the 2026-08-08 pocketed walk it was an owner mid-arrival
+	 * whose trust stream had a routine 1.7 s hole, and the 750 ms tier
+	 * un-opened the door in their face -- so the band waits BAND_SILENCE_MS
+	 * (or far_silence_ms if an install configured that even larger).
+	 */
+	int64_t need_ms = (int64_t)ap->cfg.far_silence_ms;
+
+	if (ap->last_cm < ap->cfg.relock_cm && need_ms < BAND_SILENCE_MS) {
+		need_ms = BAND_SILENCE_MS;
+	}
+	if (!ap->locked && !ap->pred_open && ap->cfg.far_silence_ms > 0 && ap->last_feed_ms != 0 &&
+	    ap->last_cm > effective_unlock_cm(ap, now_ms) &&
+	    (now_ms - ap->last_feed_ms) >= need_ms) {
 		ap->locked = true;
 		ap->near_dwell = 0;
 		ap->far_dwell = 0;
 		ap->pred_open = false;
 		ap->pred_dwell = 0;
+		/*
+		 * Clear the arm only when the credential was last seen genuinely FAR.
+		 * A phone that went quiet in the dead band (23:51 walk: trusted 102 cm,
+		 * then silence) is still standing at its own door, and clearing the arm
+		 * there demanded a fresh >= approach_cm median from someone one step
+		 * away -- a lockout, not a defence. The resting-phone scenario is
+		 * unaffected: it keeps producing samples, so this rule never fires on
+		 * it in the first place.
+		 */
+		if (ap->last_cm >= ap->cfg.relock_cm) {
+			ap->approach_armed = false;
+		}
 		return ALIRO_APPROACH_RELOCK_DEPART;
 	}
 	return ALIRO_APPROACH_HOLD;
@@ -352,6 +754,15 @@ enum aliro_approach_action aliro_approach_gone(struct aliro_approach *ap)
 bool aliro_approach_locked(const struct aliro_approach *ap)
 {
 	return ap->locked;
+}
+
+/**
+ * The debounced channel verdict the widening consumes, for telemetry. See the
+ * header for why it is exposed; the decision path calls nlos_blocked() directly.
+ */
+bool aliro_approach_nlos_blocked(const struct aliro_approach *ap, int64_t now_ms)
+{
+	return nlos_blocked(ap, now_ms);
 }
 
 /**

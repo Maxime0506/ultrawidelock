@@ -1,0 +1,14 @@
+# Everything here is regenerable: the data set is a public download, the venv is
+# built from requirements.txt, and out*/ plus features*.npz are script output.
+# Together they are about 1.8 GB, which is not something to carry in git.
+tinyml/data/
+tinyml/.venv/
+tinyml/out*/
+tinyml/features*.npz
+
+# NOT ignored, and deliberately: tinyml/captures-door-*.csv holds the labelled
+# walk-ups modules/woz_ml/ is trained on. Those are not a public download and
+# their only other copy is capture logs on one laptop, so the set the shipped
+# thresholds come from lives in the tree. CSV rather than .npz because the
+# mal-diff gate blocks binary blobs, and it is right to: 17 KB of text is
+# reviewable, a pickle-capable archive is not.

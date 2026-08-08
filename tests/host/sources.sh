@@ -63,6 +63,11 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_case.c"
 	"$ALIRO/src/aliro_assert.c"
 	"$ALIRO/src/aliro_approach.c"
+	"$ROOT/modules/woz_ml/src/woz_ml_los.c"
+	"$ROOT/modules/woz_ml/src/woz_ml_lin.c"
+	"$ROOT/modules/woz_ml/src/woz_ml_feat.c"
+	"$ROOT/modules/woz_ml/src/woz_ml_range.c"
+	"$ROOT/modules/woz_ml/src/woz_ml_log2.c"
 	"$ROOT/modules/woz_anchor/src/woz_door.c"
 	"$ROOT/modules/woz_anchor/src/woz_fusion.c"
 	"$ROOT/modules/woz_anchor/src/woz_report.c"
@@ -130,6 +135,7 @@ TEST_SRCS=(
 	"$HOST/test_ccc_shim_wrap.c"
 	"$HOST/test_flight_recorder.c"
 	"$HOST/fr_replay.c"
+	"$HOST/test_woz_ml.c"
 )
 
 SHIM_SRCS=(
@@ -160,6 +166,8 @@ INCS=(
 	-I"$ROOT/modules/woz_aliro/include"
 	-I"$ROOT/modules/woz_aliro/src"
 	-I"$ROOT/modules/woz_matter/include"
+	-I"$ROOT/modules/woz_ml/include"
+	-I"$ROOT/modules/woz_ml/src"
 	-I"$ROOT/modules/woz_anchor/include"
 )
 
@@ -168,7 +176,7 @@ INCS=(
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
 # WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
 # those headers #error rather than guess a platform.
-DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
+DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
 
 # PY — the interpreter the python-side suites run under.
 #

@@ -133,6 +133,119 @@ config WOZ_UWB_CIRDIAG
 	  walk-up latency while armed, so arm it only for a capture run. Default n =
 	  compiled out, and the two RX-shim call sites cost nothing.
 
+	  MEASURED on the nRF52833 at -Os: the 16-record deferred ring is 4,352 B of
+	  BSS (16 x 272 B), which is most of what this costs. On a part with about
+	  16 KB of RAM free that is a capture-image decision, not a shipping one.
+
+if WOZ_UWB_CIRDIAG
+
+config WOZ_UWB_CIRDIAG_DRAIN_PACE_MS
+	int "Sleep between records while draining the CIR ring, milliseconds"
+	default 0
+	range 0 1000
+	help
+	  0 keeps the drain a tight loop, which is right wherever the console can
+	  absorb it: the ESP32 writes to a UART with flow control and the nRF5340 DK
+	  has a real serial port.
+
+	  IT IS NOT RIGHT ON THE DWM3001CDK. That board's only console is SEGGER RTT
+	  with an 8 KB up-buffer in NO_BLOCK_SKIP mode (firmware/prj.conf explains why
+	  BLOCK_IF_FIFO_FULL is not an option there: it hangs the firmware whenever no
+	  debugger is draining). A full drain is 16 records x 64 taps = 1,024 lines,
+	  about 46 KB, written by memcpy far faster than probe-rs polls it out. Most
+	  of the capture would be silently discarded, and NO_BLOCK_SKIP discards the
+	  NEWEST writes, so what survives is the beginning of the drain and the rest
+	  simply is not there. That failure is invisible: the lines that never
+	  happened look exactly like receptions that never happened.
+
+	  ~40 ms per record keeps an 8 KB buffer ahead of the writer and costs about
+	  0.6 s for a full ring, off the ranging path either way. Set it in the
+	  capture image's overlay, not globally.
+
+config WOZ_UWB_CIRDIAG_SUMMARY_EVERY
+	int "Latch the diagnostic summary on one reception in N"
+	default 1
+	range 1 64
+	help
+	  1 latches every reception, which is what the ESP32 and the nRF5340 DK have
+	  always done and what they keep by default.
+
+	  RAISE IT ON THE DWM3001CDK. Every latch costs a dwt_readdiagnostics plus
+	  (unless SUMMARY_LEAN) three more SPI reads, on a 64 MHz single core at
+	  8 MHz SPI, inside the ~1836 us ranging arm deadline. Measured 2026-08-07:
+	  with the summary armed on every reception that board never transmitted a
+	  Response at all -- tx0, no range, no unlock -- while the plain image on the
+	  same board ranged 22-443 cm.
+
+	  Sampling costs almost nothing for what this feeds. A walk-up produces
+	  hundreds of receptions and the LOS/NLOS model needs a few hundred per class
+	  in total, so 8 still fills a training set from a handful of approaches.
+
+	  Window captures are NEVER decimated by this: they are already throttled to
+	  one Final in CIRDIAG_CIR_EVERY, and dropping one is dropping the only
+	  reception in the block that carries taps.
+
+config WOZ_UWB_CIRDIAG_SUMMARY_LEAN
+	bool "Latch only the fields the scalar feature set uses"
+	help
+	  n reads and reports everything: STS quality, STS status and the SYS_CFG
+	  mode bits alongside the Ipatov fields. Default, so existing targets are
+	  unchanged.
+
+	  y drops the three extra SPI reads per latch and narrows the chip-side CIA
+	  configuration to DW_CIA_DIAG_LOG_ALL, without the LOG_MAX double-buffer
+	  copy set. The `ev=uwb.diag` line then omits sp/sq/sqr/ss/ssr rather than
+	  reporting zeros for them, because a field that was never read must not look
+	  like a field that measured zero.
+
+	  What survives is exactly what ai/tinyml/parse_alab.py consumes:
+	  ipatovPower, ipatovF1..F3 and ipatovAccumCount give fp_pwr, rx_pwr,
+	  pwr_diff and rxpacc, which is the whole feature set after RESULTS.md
+	  Result 7. Say y with SUMMARY_EVERY on any board where the diagnostics are
+	  competing with a ranging deadline.
+
+config WOZ_UWB_CIRDIAG_SUMMARY_FINAL_ONLY
+	bool "Latch only on the reception that has no deadline behind it"
+	help
+	  n keeps SUMMARY_EVERY's blunt one-in-N over every reception, which is what
+	  a training capture wants: it does not care WHICH receptions it gets, only
+	  that it gets a few hundred per class without breaking the round.
+
+	  y latches only on the Final -- the caller says which reception that is
+	  (the capture's is_final argument, sampled from the responder state machine
+	  before the re-arm consumes it). The Pre-POLL has the POLL armed behind it
+	  and the POLL has the Final armed ~2 ms out; the Final has the whole
+	  ~192 ms inter-block gap, which is where the ~972 us read belongs.
+
+	  SAY y WHEN A CLASSIFIER CONSUMES THIS, not when a training set does. One
+	  latch per ranging block is exactly one per approach-controller sample, so a
+	  five-sample median window carries five independent channel calls. Under
+	  SUMMARY_EVERY=8 it carries at most one, and a majority-of-three vote can
+	  never be reached — the classifier would be compiled in, fed, and unable to
+	  decide anything.
+
+	  This does NOT make the read free, and it is not the same claim the every-
+	  reception measurement refuted. That run latched on POLLs too and the board
+	  stopped transmitting Responses entirely. Restricting to the Final is the
+	  hypothesis that the deadline was the problem rather than the SPI cost --
+	  and a walk-up PROVED it on 2026-08-07: one latch per block for 471 blocks,
+	  ranges 0-505 cm, six unlock/relock cycles, rdcyc 62,232 DWT cycles (972 us
+	  at 64 cyc/us, the bench figure exactly) with a worst case of 79,541
+	  (~1.24 ms), all inside the ~192 ms gap. The acceptance criteria stay
+	  written down because a regression has the same signatures: tx0 with no
+	  range means the read is back on a deadline; clean ranging with ZERO [ALAB]
+	  lines is NEITHER outcome -- it means the latch is not running at all.
+
+	  Keyed on the capture's is_final argument and nothing else. It was first
+	  keyed on deadline_pending, and the 2026-08-07 walk refuted that in exactly
+	  the third way above: the summary call site passes deadline_pending=true
+	  for every reception including the Final, so the image ranged and unlocked
+	  normally and latched nothing. The stream must also be ARMED
+	  (uwb_cirdiag_set_enabled); the classifier images do that at boot in
+	  firmware/src/main.c.
+
+endif # WOZ_UWB_CIRDIAG
+
 config WOZ_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	depends on WOZ_ALIRO

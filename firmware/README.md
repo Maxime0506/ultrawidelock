@@ -116,13 +116,28 @@ make monitor CDK_RTT_BUILD=build/cdk-reader
 | Flash | 409,988 B of 433,664 B (94.54%) | 285,664 B (65.87%) |
 | RAM | 125,012 B of 128 KB (95.38%) | 79,908 B (60.96%) |
 
-Both columns are the linker's own region report, rebuilt at this commit; the
-figures elsewhere in this file are older measurements of smaller trees and are
-labelled with what they were measuring. The Matter image has **6,060 bytes of
-RAM left**, so treat any new static allocation on it as a decision rather than a
-detail. Flash is a percentage of the 433,664 B `app` partition, not of the
-part: MCUboot and the update staging area take the rest, and the map is in
-`firmware/pm_static.yml`.
+Both columns are the linker's own region report, but they were taken **before
+73237fb8 (#8)**, which dropped the Zephyr IP layer and took
+`CONFIG_LOG_DEFAULT_LEVEL` from 3 to 1. Re-measured at `6910dfa2` the `build`
+column is **393,880 B of flash (90.83%) and 114,596 B of RAM (87.43%)**, leaving
+39,784 B and 16,476 B free. Flash is a percentage of the 433,664 B `app`
+partition, not of the part: MCUboot and the update staging area take the rest,
+and the map is in `firmware/pm_static.yml`.
+
+**Budget against the shipping image.** `SMP=1 RELEASE=1` with LTO on is what
+`make release` builds and `make fota` pushes, and it is the only configuration
+with a maintained measurement: `firmware/size-baseline.json`'s primary entry,
+re-measured by the `cdk-size` workflow on every labelled pull request.
+
+| | shipping (`SMP=1 RELEASE=1`) |
+|---|---|
+| Flash | 379,332 B of 433,664 B (87.47%), **54,332 B free** |
+| RAM | 111,012 B of 128 KB (84.70%), **20,060 B free** |
+
+A new static allocation is still a decision rather than a detail, but it is not
+the 6,060 bytes this file used to claim, and the debug image above has 16,476 B
+free rather than the 6,060 B that number was read as. Re-measure before quoting
+either image; `make cdk-size CDK_BUILD=<dir>` reproduces the linker exactly.
 
 Equivalent by hand, from the west workspace:
 
@@ -131,6 +146,64 @@ west build -p always -b decawave_dwm3001cdk -d ../build/cdk-matter ../firmware \
     -- -DEXTRA_CONF_FILE=overlay-thread.conf -DCONFIG_ALIRO_MATTER_BLE=y
 west flash -d ../build/cdk-matter
 ```
+
+### The CIR capture build
+
+`make cirdiag` is the Matter image plus an unattended channel-impulse capture
+cycle, for collecting the labelled inside/outside traces the LOS/NLOS model in
+[`ai/tinyml/`](../ai/tinyml/) has to be retrained on before its thresholds mean
+anything on this hardware.
+
+```sh
+make cirdiag
+make flash   CDK_BUILD=build/cdk-cirdiag    # NOT flash-erase
+make monitor CDK_RTT_BUILD=build/cdk-cirdiag
+```
+
+It is the Matter image and not `reader` because the capture wants a real Apple
+Wallet walk-up, and this board only advertises Aliro once Apple Home has
+commissioned it. That is also why it must be flashed with `flash` and never
+`flash-erase`: the erase takes the credential the walk-up needs.
+
+**The cycle runs itself, because this board has no console input.** The upstream
+workflow is `aliro cir dump on`, walk up, `aliro cir dump off`, and none of that
+is available here: RTT is output-only, uart0 belongs to the J-Link OB, the USB
+console exists only in provisioning mode where the radio never starts, and
+`CONFIG_WOZ_UWB_SHELL` is n. Overloading SW2 was the obvious alternative and is
+the wrong one, because SW2 held through reset is already the factory reset. So
+the image arms the dump for 20 s, disarms it so the ring drains, waits 3 s and
+repeats, bracketing each capture with
+
+```
+cir.cycle: n=7 armed
+[ALAB] t=… ev=uwb.diag …
+[ALAB] t=… ev=uwb.cir n=… i=… re=… im=…
+cir.cycle: n=7 drained recs=16
+```
+
+Walk up from outside during one cycle and from inside during the next: the cycle
+number is the label, and the board never has to know what a door is.
+`tools/aliro_lab.py --cir` reads the `[ALAB]` lines between the markers.
+
+**Two things that are not incidental.** The drain is paced at 40 ms per record
+(`CONFIG_WOZ_UWB_CIRDIAG_DRAIN_PACE_MS`) because a full ring is 16 records of 64
+taps, about 46 KB, and this board's RTT buffer is 8 KB in NO_BLOCK_SKIP mode:
+unpaced, most of the capture is discarded, newest first, and the drain looks like
+it simply stopped. And the windowed read costs walk-up latency while armed, by
+design, which is what the 3 s quiet gap between cycles is for. Reflash
+`make build` when the run is done.
+
+Measured against the plain Matter image at the same commit, same flags:
+
+| | `make build` | `make cirdiag` | cost |
+|---|---|---|---|
+| Flash | 393,880 B (90.83%) | 395,600 B (91.22%) | **+1,720 B** |
+| RAM | 114,596 B (87.43%) | 121,316 B (92.56%) | **+6,720 B** |
+| RAM free | 16,476 B | 9,756 B | |
+
+Almost all of the RAM is the 16-record CIR ring, 4,352 B of BSS, plus 1,600 B of
+capture-thread stack. It fits with under 10 KB to spare, which is fine for a
+bench image and is another reason not to ship it.
 
 ### What a full erase costs
 
@@ -250,9 +323,10 @@ reason an idle board wakes eight times a second.
 
 Stage 0 built the whole thing to find out whether it fits. It does, with room
 to spare. Read this as the question stage 0 asked, though, not as the current
-image: the room was spent. The numbers below are the reader with no console, no
-Matter and no Thread, and the build that Apple Home commissions now sits at
-95.38% of RAM (see the Build section).
+image: the room was spent, and then some of it came back. The numbers below are
+the reader with no console, no Matter and no Thread. For where the image that
+ships stands today, see "Budget against the shipping image" above: 87.47% of
+flash and 84.70% of RAM, which is not the 95.38% this paragraph used to quote.
 
 | | Used | Available | |
 |---|---|---|---|
@@ -580,7 +654,8 @@ the stock `CONFIG_CLOCK_CONTROL_NRF_K32SRC_XTAL` works.
 > one that needs no Thread network. `make build` since made the other way work:
 > a hand-written Matter node (`modules/woz_matter`) instead of CHIP, measured at
 > 409,988 B flash / 125,012 B RAM with the reader and the Thread MTD alongside
-> it (`firmware/overlay-thread.conf`). Apple Home commissions that image and
+> it (`firmware/overlay-thread.conf`) -- a pre-#8 figure, and the image has
+> since shrunk; see "Budget against the shipping image". Apple Home commissions that image and
 > mints the credential itself. The paragraph below is about **Nordic's
 > CHIP-based lock**, and about that it is still correct.
 
@@ -745,7 +820,7 @@ Against the stages in `internal/dwm3001cdk-reader-plan.md`:
 
 | Stage | Check | | Evidence |
 |---|---|---|---|
-| 0 | Fits | done | 409,988 B flash / 125,012 B RAM with Matter and Thread |
+| 0 | Fits | done | 409,988 B flash / 125,012 B RAM with Matter and Thread, as measured then; pre-#8, so not a current figure |
 | 1 | BLE advert, iPhone enumerates 0xFFF2 | done | |
 | 2 | On-target EC self-test against Oberon | **done** | `ECDH self-test: PASS (NIST CAVP P-256 CDH count 0)` at every boot |
 | 3 | DW3110 DEV_ID, live ranging | **done** | `0xdeca0302` at boot; ranging against an iPhone from 565 cm to 0 cm |

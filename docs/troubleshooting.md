@@ -79,10 +79,26 @@ blinks at 2 Hz while the update window is open, and it follows the window rather
 than the button, so it also goes out when the five minutes expire on their own.
 A dark LED means no window, not a failed transfer.
 
-**The image does not fit.** The Matter image is at 94.54% of its flash partition
-and 95.38% of RAM, with 6,060 bytes of RAM left, so a new static allocation is a
-decision rather than a detail. LTO is on by default and worth 41,084 B; `LTO=0`
-no longer fits this flash map at all and the build says so.
+**The image does not fit.** Budget against the shipping image, which is what
+`make release` builds and `make fota` pushes: `SMP=1 RELEASE=1` with LTO on is
+at 87.47% of its flash partition and 84.70% of RAM, leaving 54,332 bytes of
+flash and 20,060 bytes of RAM. That is `firmware/size-baseline.json`'s primary
+entry, which the `cdk-size` workflow re-measures and compares against. A new
+static allocation is still a decision rather than a detail. LTO is on by default
+and worth 41,084 B; `LTO=0` no longer fits this flash map at all and the build
+says so.
+
+**The headroom figure you remember is probably the pre-#8 one.** Until
+2026-08-06 this file, `CLAUDE.md`, `firmware/README.md` and
+`docs/hardware-validation.md` all quoted "6,060 bytes of RAM left". That was a
+debug `make build` measured before 73237fb8 (#8), which dropped the Zephyr IP
+layer and took `CONFIG_LOG_DEFAULT_LEVEL` from 3 to 1. On the shipping image
+that change was worth 37,956 B of flash (`rodata` -15,008, `text` -22,484) and
+10,224 B of RAM (`noinit` -6,640, `bss` -3,062); f8fdcf4f (#11) re-recorded the
+baseline and none of the prose followed. The baseline JSON has been correct
+throughout, so the gate was never masking a regression. Re-measure before
+quoting either image: the linker's region report prints at the end of every
+build.
 
 ## Build and flash (nRF5340 DK)
 

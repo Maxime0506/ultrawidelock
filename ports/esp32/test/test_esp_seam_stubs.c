@@ -104,6 +104,7 @@ static int s_chain_rxok;
  * accumulator is only readable while the radio is idle. */
 static int s_cirdiag_calls;
 static bool s_cirdiag_deadline;
+static bool s_cirdiag_is_final;
 static int s_cirdiag_chain_at_call;
 
 /* uwb_cirdiag_window_due double: the shim gates the pre-arm window capture on it, so the
@@ -115,12 +116,14 @@ bool uwb_cirdiag_window_due(void)
 	return s_window_due;
 }
 
-bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
+bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending,
+			 bool is_final)
 {
 	(void)status;
 	(void)datalength;
 	s_cirdiag_calls++;
 	s_cirdiag_deadline = deadline_pending;
+	s_cirdiag_is_final = is_final;
 	s_cirdiag_chain_at_call = s_chain_rxok;
 	return false;
 }
@@ -188,7 +191,8 @@ int main(void)
 	okc("prepoll decode ran", s_prepoll_calls == 1 && s_prepoll_len == 36);
 	/* Not the Final: the capture runs AFTER the MAC re-arms, summary only. */
 	okc("non-final: cirdiag deferred past the arm, summary only",
-	    s_cirdiag_calls == 1 && s_cirdiag_deadline && s_cirdiag_chain_at_call == 1);
+	    s_cirdiag_calls == 1 && s_cirdiag_deadline && !s_cirdiag_is_final &&
+	    s_cirdiag_chain_at_call == 1);
 
 	/* Awaiting the POLL: the RX is the POLL itself, no Pre-POLL decode. */
 	s_awaiting = true;
@@ -206,15 +210,17 @@ int main(void)
 	s_real_registered.cbRxOk(&d);
 	okc("final: cirdiag captured before the re-arm",
 	    s_cirdiag_calls == 3 && s_cirdiag_chain_at_call == chain_before);
-	okc("final: window read allowed", !s_cirdiag_deadline);
+	okc("final: window read allowed", !s_cirdiag_deadline && s_cirdiag_is_final);
 	/* Decimation: a Final whose window is not due falls back to the post-arm summary, so the
-	 * three blocks in four that skip the read keep ranging untouched. */
+	 * three blocks in four that skip the read keep ranging untouched. It must STILL be marked
+	 * final: the FINAL_ONLY latch keys on that flag, and a summary path that dropped it here
+	 * is exactly how the first mlgate walk latched zero receptions (2026-08-07). */
 	s_window_due = false;
 	int cir_before = s_cirdiag_calls;
 
 	s_real_registered.cbRxOk(&d);
-	okc("final, window not due: summary after the arm",
-	    s_cirdiag_calls == cir_before + 1 && s_cirdiag_deadline &&
+	okc("final, window not due: summary after the arm, still marked final",
+	    s_cirdiag_calls == cir_before + 1 && s_cirdiag_deadline && s_cirdiag_is_final &&
 	    s_cirdiag_chain_at_call == s_chain_rxok);
 	s_window_due = true;
 	s_final = false;

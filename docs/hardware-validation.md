@@ -50,7 +50,7 @@ this one.
 | ID | Procedure | Pass criterion | Recorded |
 |---|---|---|---|
 | CDK-1 | `make test` on the release commit | Exit 0, all host KATs pass | CI gate |
-| CDK-2 | `make dfu-key`, then `make rebuild` (pristine) | Exit 0; the image links and fits the 433,664 B `app` partition | yes: 409,988 B (94.54%), 125,012 B RAM (95.38%), 6,060 B of RAM spare |
+| CDK-2 | `make dfu-key`, then `make rebuild` (pristine) | Exit 0; the image links and fits the 433,664 B `app` partition | yes, but pre-73237fb8 (#8): 409,988 B (94.54%), 125,012 B RAM (95.38%). #8 took 37,956 B of flash and 10,224 B of RAM off the shipping image, so re-run this row rather than citing it |
 | CDK-3 | `make reader PRISTINE=1` | Exit 0; the reader-only image links and fits | yes: 285,664 B (65.87%), 79,908 B RAM (60.96%) |
 | CDK-4 | Flash a `make selftest` build, boot with no phone present | `DW3000 raw DEV_ID = 0xdeca0302` on the RTT console | yes |
 | CDK-5 | `make flash-erase` with the release image, then boot | Clean boot, `ECDH self-test: PASS`, BLE advertising starts, no faults | yes |

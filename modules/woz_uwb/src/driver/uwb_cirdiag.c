@@ -28,12 +28,14 @@
 #include "uwb_cirdiag.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <deca_device_api.h>
 
-#include "woz_log.h"  /* woz_printf — platform print, same sink as the [ALAB] trace */
-#include "woz_port.h" /* woz_uptime_us — the [ALAB] timebase */
+#include "fira_session.h" /* fira_session_last_range — the DS-TWR distance, for `d=` below */
+#include "woz_log.h"      /* woz_printf — platform print, same sink as the [ALAB] trace */
+#include "woz_port.h"     /* woz_uptime_us — the [ALAB] timebase */
 
 /** @brief SYS_CFG + STS-packet-config (CP_SPC): the mode of THIS reception (0=SP0..3=SP3).
  * Same trick as uwb_rxdiag.c's RXDIAG_CP_SPC, duplicated to keep this unit freestanding. */
@@ -85,12 +87,34 @@ static uint16_t g_sts_stat;
 static int32_t g_sts_stat_ret;
 static uint32_t g_n;
 
+/** @brief DWT cycles the last dwt_readdiagnostics() took. Latched with the rest of the
+ * snapshot and emitted as `rdcyc`; see uwb_cirdiag_capture() for why it is measured. */
+static uint32_t g_rd_cyc;
+
+/** @brief Free-running DWT cycle counter (deps/dw3000/platform/dw3000_hw.c:49). Declared
+ * here rather than pulled in through a header for the same reason CIRDIAG_SYS_CFG is
+ * open-coded above: this unit stays freestanding. */
+uint32_t dw3000_dwt_cyccnt(void);
+
 /** @brief Windowed-CIR snapshot: DWT_CIR_READ_MID packs each tap as two int16 (real, imag) in
- * one word, so g_cir doubles as an int16[2*WIN] pair array. g_cir_base is the absolute Ipatov
- * sample index of tap 0; g_cir_have gates emission (false if dump disarmed or the read failed). */
+ * one word, so g_cir doubles as an int16[2*WIN] pair array. Scratch only: the capture reads into
+ * it and appends straight to the ring, so it holds nothing between receptions. */
 static uint32_t g_cir[CIRDIAG_CIR_WIN];
-static uint16_t g_cir_base;
-static bool g_cir_have;
+
+/** @brief Summary decimation tick. Separate from g_win_tick, which counts Finals only. */
+static uint32_t g_sum_tick;
+
+/** @brief True if this reception's summary is due. Always true at the default N of 1, so
+ * every existing target keeps latching every reception. */
+static bool cirdiag_summary_due(void)
+{
+#if defined(CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_EVERY) && CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_EVERY > 1
+	return (g_sum_tick++ % (uint32_t)CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_EVERY) == 0u;
+#else
+	g_sum_tick++;
+	return true;
+#endif
+}
 
 /** @brief Absolute Ipatov sample index of tap 0 for a window centred on the latched first path,
  * clamped into the valid accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN]. */
@@ -110,12 +134,12 @@ static uint16_t cirdiag_window_base(void)
 static volatile uint32_t g_seq;
 static volatile bool g_pending;
 
-/** @brief Deferred-dump ring. flush() appends each armed reception's window here (a cheap memcpy,
- * no UART) instead of printing it on the ranging path; the taps are emitted only on disarm
+/** @brief Deferred-dump ring. The capture appends each armed reception's window here (a cheap
+ * memcpy, no UART) instead of printing it on the ranging path; the taps are emitted only on disarm
  * (cirdiag_drain), off that path, so a live walk-up still unlocks while capturing. Overwrites
  * oldest, so it holds the last RECS receptions — the near-door end of an approach (~272 B/record).
- * Single-producer (flush) / single-consumer (drain-after-disarm): the drain runs only after
- * g_dump is cleared, so in the intended "walk up, then dump off" workflow no live flush races it.
+ * Single-producer (the RX capture, gated on g_dump) / single-consumer (drain-after-disarm): the
+ * drain runs only after g_dump is cleared, so the two never overlap.
  */
 #define CIRDIAG_RING_RECS 16u
 /**
@@ -133,7 +157,9 @@ static uint32_t g_ring_head;  /* next write slot (mod RECS) */
 static uint32_t g_ring_count; /* valid records held (<= RECS) */
 
 /** @brief Emit every buffered window as `ev=uwb.cir` lines (oldest first), then empty the ring.
- * Called on dump disarm, off the ranging path. Blocking: up to RECS*WIN serial lines. */
+ * Called on dump disarm, off the ranging path. Blocking: up to RECS*WIN serial lines, and it
+ * SLEEPS between records when CONFIG_WOZ_UWB_CIRDIAG_DRAIN_PACE_MS is set, so like the rest of
+ * the disarm path this is thread context only, never an ISR. */
 static void cirdiag_drain(void)
 {
 	uint32_t start = (g_ring_head + CIRDIAG_RING_RECS - g_ring_count) % CIRDIAG_RING_RECS;
@@ -147,9 +173,40 @@ static void cirdiag_drain(void)
 				   (long long)r->t_us, (unsigned)r->n, (unsigned)(r->base + i),
 				   (int)s[2u * i], (int)s[2u * i + 1u]);
 		}
+#if defined(CONFIG_WOZ_UWB_CIRDIAG_DRAIN_PACE_MS) && CONFIG_WOZ_UWB_CIRDIAG_DRAIN_PACE_MS > 0
+		/* Let the console catch up between records. Default 0 leaves every
+		 * existing target byte-identical; the DWM3001CDK sets it because its
+		 * RTT buffer is 8 KB in NO_BLOCK_SKIP mode and this loop writes ~46 KB
+		 * faster than probe-rs drains it, discarding the newest lines with no
+		 * indication that anything was lost. See the Kconfig help. */
+		woz_sleep_ms(CONFIG_WOZ_UWB_CIRDIAG_DRAIN_PACE_MS);
+#endif
 	}
 	g_ring_count = 0;
 	g_ring_head = 0;
+}
+
+/** @brief Append one window to the ring, overwriting the oldest.
+ *
+ * Called from the capture that just read the accumulator, NOT from the deferred flush. The flush
+ * ran on a work item and read a "window valid" flag that every subsequent capture cleared,
+ * so on any target where a second frame lands inside one workqueue latency the append never fired
+ * at all and the ring stayed empty. That is every CDK round: CONFIG_WOZ_UWB_FINAL_SNAPSHOT arms a
+ * delayed SP0 RX at the Final_Data slot, so a reception follows the Final by ~1 slot. Appending
+ * here also makes the single-producer claim above true, since only this path is gated on g_dump.
+ */
+static void cirdiag_ring_append(int64_t t_us, uint32_t n, uint16_t base, const uint32_t *taps)
+{
+	struct cirdiag_rec *r = &g_ring[g_ring_head];
+
+	r->t_us = t_us;
+	r->n = n;
+	r->base = base;
+	memcpy(r->taps, taps, sizeof(r->taps));
+	g_ring_head = (g_ring_head + 1u) % CIRDIAG_RING_RECS;
+	if (g_ring_count < CIRDIAG_RING_RECS) {
+		g_ring_count++;
+	}
 }
 
 /**
@@ -210,7 +267,7 @@ bool uwb_cirdiag_dump_enabled(void)
  * fixed-size Ipatov-centred CIR window. Returns true if capture succeeded; false on first RX or if
  * already pending. Seqlock-protected; safe to call from RX callback.
  */
-bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
+bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending, bool is_final)
 {
 	if (!g_on) {
 		return false;
@@ -218,45 +275,127 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pen
 	if (!g_cia_armed) {
 		/* First reception after arming: driver init leaves cia_enable_mask 0, i.e. the
 		 * CIA_CONF diagnostic-off bit set and the IP/STS diag banks unpopulated — enable
-		 * full logging (+ the MAX double-buffer copy set, in case a session runs
-		 * double-buffered). Done here rather than in set_enabled so the console toggle is
-		 * safe before the chip is probed: this path only runs inside a live RX callback.
-		 * THIS reception was demodulated with logging still reduced, so skip it; the next
-		 * one carries a fully populated bank. Sticky until chip reset — only configciadiag
-		 * and the 16-bit antenna-delay field write CIA_CONF, so a later dwt_configure()
-		 * does not undo it (hence never re-cleared on `off`). */
+		 * logging. LEAN narrows that to LOG_ALL, dropping the LOG_MAX double-buffer copy
+		 * set: nothing the scalar feature set reads lives in it, and the chip-side cost of
+		 * populating it is on the same budget as the ranging deadline. Done here rather
+		 * than in set_enabled so the console toggle is safe before the chip is probed: this
+		 * path only runs inside a live RX callback. THIS reception was demodulated with
+		 * logging still reduced, so skip it; the next one carries a fully populated bank.
+		 * Sticky until chip reset — only configciadiag and the 16-bit antenna-delay field
+		 * write CIA_CONF, so a later dwt_configure() does not undo it (hence never
+		 * re-cleared on `off`). */
+#if defined(CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_LEAN)
+		dwt_configciadiag((uint8_t)DW_CIA_DIAG_LOG_ALL);
+#else
 		dwt_configciadiag((uint8_t)(DW_CIA_DIAG_LOG_ALL | DW_CIA_DIAG_LOG_MAX));
+#endif
 		g_cia_armed = true;
+		return false;
+	}
+	/* A window read supersedes the decimator: those are already one Final in
+	 * CIRDIAG_CIR_EVERY, and skipping one drops the only reception in the block with taps.
+	 * Everything else is a summary, and on a board where the diagnostics compete with the
+	 * arm deadline the cheapest fix is to take fewer of them. */
+#if defined(CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_FINAL_ONLY)
+	/* A classifier consumes one class per approach sample, and there is one
+	 * approach sample per ranging block, so latch on the Final alone: that puts
+	 * the ~972 us read in the ~192 ms gap instead of ~2 ms ahead of a Final.
+	 * Keyed on is_final, NOT deadline_pending -- the summary call site passes
+	 * deadline_pending=true for every reception including the Final (it runs
+	 * after the re-arm), and the first mlgate walk (2026-08-07) proved a gate
+	 * reading it latches nothing: ranging clean, zero [ALAB] lines. Checked
+	 * before the decimator so the two do not multiply into one latch in 8
+	 * blocks. */
+	if (!is_final) {
+		return false;
+	}
+#else
+	(void)is_final;
+#endif
+	if (!(g_dump && !deadline_pending) && !cirdiag_summary_due()) {
 		return false;
 	}
 	g_seq++; /* odd: writer active */
 	g_t_us = woz_uptime_us();
 	g_status = status;
 	g_len = datalength;
+	/*
+	 * Time the one SPI read that matters, in DWT cycles, and carry it out on the
+	 * [ALAB] line as `rdcyc`. Raw cycles rather than microseconds because the
+	 * conversion is a board constant this file does not own -- the boot banner
+	 * prints it ("cyccnt cal: ... cyc/us") and the host divides.
+	 *
+	 * WHY MEASURE SOMETHING A COMMENT ALREADY CALLS SAFE. uwb_rxdiag.c takes this
+	 * read AFTER arming the next window precisely so the POLL/Final deadlines are
+	 * met first, and calls it "bench-proven safe". That ordering is what makes it
+	 * safe, and it is sound. What has never had a number is the cost itself, and
+	 * the cost is what decides whether a classifier can be fed on EVERY reception
+	 * rather than one in CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_EVERY. A claim in a
+	 * comment cannot answer that; a distribution can.
+	 */
+	{
+		const uint32_t c0 = dw3000_dwt_cyccnt();
+
+		dwt_readdiagnostics(&g_diag);
+		g_rd_cyc = dw3000_dwt_cyccnt() - c0;
+	}
+#if !defined(CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_LEAN)
 	g_sp = CIRDIAG_CP_SPC(dwt_read_reg(CIRDIAG_SYS_CFG));
-	dwt_readdiagnostics(&g_diag);
 	g_sts_qual = 0;
 	g_sts_qual_ret = dwt_readstsquality(&g_sts_qual, 0);
 	g_sts_stat = 0;
 	g_sts_stat_ret = dwt_readstsstatus(&g_sts_stat, 0);
-	g_cir_have = false;
+#endif
+	g_n++;
 	if (g_dump && !deadline_pending) {
 		/* Centre a fixed window on the integer first-path index, clamped into the valid
 		 * Ipatov accumulator span [0, DWT_CIR_LEN_IP_PRF64 - WIN]. dwt_readcir forces the
 		 * ACC clocks on itself; MID mode gives int16 real/imag with headroom for the early
-		 * taps. Inside the seqlock bracket so the flush copies a consistent window.
-		 * deadline_pending false means the caller has established the radio is idle —
-		 * on the ranging path that is the Final, sampled before the shim re-arms. */
-		uint16_t base = cirdiag_window_base();
+		 * taps. deadline_pending false means the caller has established the radio is idle —
+		 * on the ranging path that is the Final, sampled before the shim re-arms.
+		 * Append here rather than from the flush: the window survives only until the next
+		 * reception, which is sooner than the work item runs (see cirdiag_ring_append). */
+		const uint16_t base = cirdiag_window_base();
 
-		g_cir_base = base;
-		g_cir_have = (dwt_readcir(g_cir, DWT_ACC_IDX_IP_M, base, CIRDIAG_CIR_WIN,
-					  DWT_CIR_READ_MID) == DWT_SUCCESS);
+		if (dwt_readcir(g_cir, DWT_ACC_IDX_IP_M, base, CIRDIAG_CIR_WIN, DWT_CIR_READ_MID) ==
+		    DWT_SUCCESS) {
+			cirdiag_ring_append(g_t_us, g_n, base, g_cir);
+		}
 	}
-	g_n++;
 	g_seq++; /* even: stable */
 	g_pending = true;
 	return true;
+}
+
+bool uwb_cirdiag_last_ipatov(struct uwb_cirdiag_ipatov *out)
+{
+	if (out == NULL || !g_on) {
+		return false;
+	}
+
+	for (int tries = 0; tries < 3; tries++) {
+		uint32_t s0 = g_seq;
+
+		if ((s0 & 1u) != 0u) {
+			continue; /* writer active */
+		}
+		out->f1 = g_diag.ipatovF1;
+		out->f2 = g_diag.ipatovF2;
+		out->f3 = g_diag.ipatovF3;
+		out->power = g_diag.ipatovPower;
+		out->accum_count = g_diag.ipatovAccumCount;
+		out->n = g_n;
+		if (g_seq != s0) {
+			continue; /* a capture landed mid-copy — retry */
+		}
+		/* n == 0 is "nothing captured yet", and the two zero checks are a
+		 * failed CIA read rather than a weak channel: both are divisors in
+		 * woz_ml_los_features(), which rejects the same condition. Checked
+		 * after the seqlock settles so the values tested are the ones
+		 * returned. */
+		return out->n != 0u && out->accum_count != 0u && out->power != 0u;
+	}
+	return false;
 }
 
 /** @brief Decimation tick: the shims call this once per Final, so it advances per ranging block. */
@@ -338,23 +477,51 @@ void uwb_cirdiag_probe(void)
 }
 
 /**
+ * Format the DS-TWR distance as ` d=<cm> dage=<ms>`, or an empty string when there is none.
+ *
+ * WHY THE KEYS ARE ABSENT RATHER THAN ZERO OR -1, which is the same rule the LEAN summary
+ * below states for its own fields: a parser cannot tell `d=0` meaning "measured zero" from
+ * `d=0` meaning "no round has completed yet", and one of those is a data point while the
+ * other is a lie. An absent key is neither.
+ *
+ * `dage` is not decoration. A DS-TWR round completes on its own cadence while diagnostics
+ * are read per reception, so most receptions carry a range from a previous round, and how
+ * stale it is decides whether the row belongs in a fitted set at all. The alternative the
+ * host used before this existed -- scraping the bench TUI's rendered status line and
+ * aligning on its reception counter -- had to drop 12 of 556 receptions that fell outside
+ * any fresh line, and could not say how stale the ones it kept were.
+ */
+static void cirdiag_range_fields(char *buf, size_t buf_len)
+{
+	int32_t cm;
+	int64_t age_ms;
+
+	buf[0] = '\0';
+	if (!fira_session_last_range(&cm, NULL, NULL, NULL, &age_ms)) {
+		return;
+	}
+	(void)snprintf(buf, buf_len, " d=%d dage=%lld", (int)cm, (long long)age_ms);
+}
+
+/**
  * Emit the pending CIR snapshot: write the summary line ([ALAB] ev=uwb.diag) with Ipatov and STS
- * peak/power/quality fields, and either defer the window to the ring buffer (if window dump is
- * enabled) or skip it. Retry up to 3 times if the seqlock detects concurrent capture. Idempotent.
+ * peak/power/quality fields. The window itself is not handled here — the capture appends it to the
+ * ring, because it does not survive to this work item. Retry up to 3 times if the seqlock detects
+ * concurrent capture. Idempotent.
  */
 void uwb_cirdiag_flush(void)
 {
 	dwt_rxdiag_t d;
 	int64_t t_us;
-	uint32_t status, n;
+	uint32_t status, n, rd_cyc;
 	unsigned sp;
-	uint16_t len, sts_stat, cir_base;
+	uint16_t len, sts_stat;
 	int16_t sts_qual;
 	int32_t sts_qual_ret, sts_stat_ret;
-	bool cir_have;
-	/* Flush is single-context per port (nRF sysworkq item / ESP32 isr task), never
-	 * re-entrant, so a static scratch window keeps 256 B off the task stack. */
-	static uint32_t cir_copy[CIRDIAG_CIR_WIN];
+	/* " d=-2147483648 dage=-9223372036854775808" is 41 including the NUL, and the
+	 * range is a centimetre count rather than either extreme; 48 is slack, not a
+	 * guess, and snprintf truncates rather than overruns if it were ever wrong. */
+	char rng[48];
 
 	if (!g_pending) {
 		return;
@@ -377,24 +544,42 @@ void uwb_cirdiag_flush(void)
 		sts_stat = g_sts_stat;
 		sts_stat_ret = g_sts_stat_ret;
 		n = g_n;
-		cir_have = g_cir_have;
-		cir_base = g_cir_base;
-		if (cir_have) {
-			memcpy(cir_copy, g_cir, sizeof(cir_copy));
-		}
+		rd_cyc = g_rd_cyc;
 		if (g_seq != s0) {
 			continue; /* a capture landed mid-copy — retry */
 		}
+		/* Read after the seqlock settles: the range is not part of the latched
+		 * snapshot, so reading it earlier would pair a retried reception with a
+		 * distance from the attempt that lost. */
+		cirdiag_range_fields(rng, sizeof(rng));
 		/* One line, all-decimal for aliro_lab.py's k=v parser. Keys: n capture#,
 		 * sp STS mode, len/st the callback frame info; ip.. Ipatov and s.. STS CIR
 		 * diagnostics — fp first-path index (Q10.6), pk peak (idx[30:21]|amp[20:0]),
 		 * pw channel power, f1..f3 first-path amplitudes, ac accumulated symbols;
 		 * sq/sqr STS quality index + verdict, ss/ssr STS status bits + verdict,
 		 * xtal remote crystal offset, cd1 CIA_DIAG_1. */
+#if defined(CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_LEAN)
+		/* LEAN: the keys for fields this build never read are ABSENT, not zero. A parser
+		 * cannot tell `sq=0` meaning "STS quality measured zero" from `sq=0` meaning "we
+		 * did not look", and one of those is a data point while the other is a lie. */
+		woz_printf("[ALAB] t=%lld ev=uwb.diag n=%u len=%u st=%u "
+			   "ipfp=%u ippk=%u ippw=%u ipf1=%u ipf2=%u ipf3=%u ipac=%u "
+			   "xtal=%d cd1=%u rdcyc=%u%s\n",
+			   (long long)t_us, (unsigned)n, (unsigned)len, (unsigned)status,
+			   (unsigned)d.ipatovFpIndex, (unsigned)d.ipatovPeak,
+			   (unsigned)d.ipatovPower, (unsigned)d.ipatovF1, (unsigned)d.ipatovF2,
+			   (unsigned)d.ipatovF3, (unsigned)d.ipatovAccumCount, (int)d.xtalOffset,
+			   (unsigned)d.ciaDiag1, (unsigned)rd_cyc, rng);
+		(void)sp;
+		(void)sts_qual;
+		(void)sts_qual_ret;
+		(void)sts_stat;
+		(void)sts_stat_ret;
+#else
 		woz_printf("[ALAB] t=%lld ev=uwb.diag n=%u sp=%u len=%u st=%u "
 			   "ipfp=%u ippk=%u ippw=%u ipf1=%u ipf2=%u ipf3=%u ipac=%u "
 			   "sfp=%u spk=%u spw=%u sf1=%u sf2=%u sf3=%u sac=%u "
-			   "sq=%d sqr=%d ss=%u ssr=%d xtal=%d cd1=%u\n",
+			   "sq=%d sqr=%d ss=%u ssr=%d xtal=%d cd1=%u rdcyc=%u%s\n",
 			   (long long)t_us, (unsigned)n, sp, (unsigned)len, (unsigned)status,
 			   (unsigned)d.ipatovFpIndex, (unsigned)d.ipatovPeak,
 			   (unsigned)d.ipatovPower, (unsigned)d.ipatovF1, (unsigned)d.ipatovF2,
@@ -403,26 +588,8 @@ void uwb_cirdiag_flush(void)
 			   (unsigned)d.stsF1, (unsigned)d.stsF2, (unsigned)d.stsF3,
 			   (unsigned)d.stsAccumCount, (int)sts_qual, (int)sts_qual_ret,
 			   (unsigned)sts_stat, (int)sts_stat_ret, (int)d.xtalOffset,
-			   (unsigned)d.ciaDiag1);
-		if (cir_have) {
-			/* Deferred dump: park the window in the ring (cheap memcpy, no UART)
-			 * instead of printing ~64 lines here — that print would stall ranging (this
-			 * runs in the ISR-service task on the ESP32). cirdiag_drain() emits them on
-			 * disarm. Overwrite-oldest keeps the last RECS receptions. Keyed to the
-			 * summary line by n; re/im are the int16 real/imag parts
-			 * (DWT_CIR_READ_MID), grouped and magnitude-computed offline by
-			 * aliro_lab.py. */
-			struct cirdiag_rec *r = &g_ring[g_ring_head];
-
-			r->t_us = t_us;
-			r->n = n;
-			r->base = cir_base;
-			memcpy(r->taps, cir_copy, sizeof(r->taps));
-			g_ring_head = (g_ring_head + 1u) % CIRDIAG_RING_RECS;
-			if (g_ring_count < CIRDIAG_RING_RECS) {
-				g_ring_count++;
-			}
-		}
+			   (unsigned)d.ciaDiag1, (unsigned)rd_cyc, rng);
+#endif
 		return;
 	}
 	/* Persistently torn — drop this snapshot; the next reception re-latches. */

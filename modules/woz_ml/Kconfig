@@ -1,0 +1,104 @@
+# On-device classifiers. Nothing here is on by default.
+
+config WOZ_ML_LOS
+	bool "Line-of-sight / obstructed classifier from DW3000 receive diagnostics"
+	help
+	  Compile the decision tree that says whether the direct path between the
+	  reader and the phone is obstructed, from the receiver's own diagnostics
+	  rather than from the ranging distance. An obstructed 1 m and a clear 3 m
+	  produce similar time-of-flight estimates and do not mean the same thing.
+
+	  MEASURED on arm-none-eabi-gcc 16.1.0 for Cortex-M4F at -Os, per section:
+
+	    woz_ml_los_classify        236 B   quantise + call, scaler folded in
+	    the tree                    74 B   2 integer comparisons
+	    range correction           120 B   20*log10(d) without libm
+	    its log2 table              36 B   .rodata, 9 x float32
+	    ----------------------------------
+	    classifier                 466 B
+	    woz_ml_los_fp_resid         16 B   only if called
+	    woz_ml_los_vendor           20 B   only if called
+	    woz_ml_los_disagrees        32 B   only if called
+
+	  There is no separate scaler in .rodata any more: at two features GCC folds
+	  lo[] and scale[] into woz_ml_los_classify as immediates, which is why that
+	  function grew from 152 B while the 32 B array disappeared.
+
+	  and 0 B of RAM: .data and .bss are both empty. There is no arena, no
+	  interpreter and no allocation, so there is nothing to fail at init and
+	  nothing to size. The only runtime cost is 28 B of stack for the quantised
+	  feature vector. 466 B is 0.9% of the shipping image's free flash.
+
+	  The model is a decision tree because that won a measured bake-off against
+	  an int8 TensorFlow Lite Micro network and a random forest, on accuracy
+	  per byte: ai/tinyml/RESULTS.md has the tables. It is also the only one of
+	  the three whose generated C can be proved identical to the model that was
+	  trained, which is why the host suite can certify it rather than merely
+	  regression-pin it. Depth 2 rather than the 4 the public set preferred:
+	  on this board's captures a deeper tree scores worse on every split that
+	  holds out a whole capture (0.7729 at depth 2, 0.7310 at 3, 0.7011 at 4).
+
+	  TWO FEATURES, AND ONE OF THEM IS NOT A RAW REGISTER. fp_resid is
+	  first-path power with free-space spreading at the measured range removed,
+	  fp_pwr + 20*log10(d / 1 m). An obstructed 1 m and a clear 3 m produce
+	  similar absolute power, which is this classifier's founding problem, and
+	  it is only a problem while the model does not know which of the two it is
+	  looking at. Worth +13.5 points over the four absolute features on the
+	  strictest split available, at two fewer features (RESULTS.md Result 11).
+	  The log is a nine-entry table and a leading-bit exponent rather than
+	  log10f, so this module still links no libc: `arm-none-eabi-nm -u` on it
+	  reports not one undefined symbol.
+
+	  EVERYTHING IT NEEDS, THE HARDWARE ALREADY PRODUCES. rx_pwr and the fp_pwr
+	  behind fp_resid come from dwt_readdiagnostics alone (ipatovPower,
+	  ipatovF1..F3, ipatovAccumCount) and the range comes from the DS-TWR round
+	  the reader already completes. The ten channel-shape features the public
+	  set offered need the 64-tap CIR window, and on the DWM3001CDK an image
+	  that reads the accumulator cannot range at all, so a seam wanting them
+	  would be an API firmware could never call (RESULTS.md Result 7).
+
+	  THE RANGE MAY LAG BY A ROUND. A DS-TWR round yields its distance when the
+	  round completes while diagnostics are read per reception, so a caller
+	  classifying every reception holds the previous round's range. That is
+	  also what the training data measured, since the captured range came from
+	  a status line printed every ~2 s, so a lagged range is the case the
+	  numbers above are about rather than an approximation of it.
+
+	  ENABLING THIS LINKS THE CLASSIFIER, NOT A DECISION. Nothing in the
+	  ranging path calls it, and the feature extractor that would turn a
+	  dwt_rxdiag_t into those four floats is unwritten.
+
+	  THE THRESHOLDS ARE THIS BOARD'S, from 556 walk-up receptions captured on
+	  a DWM3001CDK against an iPhone: 267 unobstructed over two sessions and
+	  289 with the phone shielded by the wearer's body over two geometries
+	  (held behind the back and carried in a back pocket, d = +0.06 on fp_pwr
+	  between them). Balanced accuracy 0.8505 +/- 0.0302 over 5-fold
+	  cross-validation repeated ten times on the four absolute features, and
+	  0.8800 +/- 0.0251 for the two shipped, against 0.7431 +/- 0.0359 for
+	  Decawave's own rule refit on the same data: RESULTS.md Results 9 and 11.
+	  Twelve of those receptions carry no usable range and are dropped when the
+	  residual is used, so the shipped model is fitted on 544 of the 556.
+
+	  BOTH SIDES GENERALISE, and that is measured rather than assumed. Holding
+	  out a whole capture entirely, the shipped pair scores 0.7729 against
+	  0.6381 for the four absolute features, and both clear the 0.7431 vendor
+	  floor. The unobstructed sessions are NOT identical: d = +0.69 on fp_pwr
+	  between two an hour apart, about 2.9 dB, roughly a third of the
+	  obstruction signal itself. Taking the range out of the power is what
+	  most of the +13.5 points is buying back. Session drift is still real and
+	  is why to retrain at an install rather than treat these as universal.
+
+	  WHAT THAT DOES NOT COVER. One room, one phone, one person, one day. The
+	  generation gates below are also weaker than they read: sized for the
+	  public set's 42,000 samples, they now run on 544, which leaves 82 in the
+	  held-out split. They still prove the generated C is the model that was
+	  trained; they prove it over far less ground. Recapture at any install
+	  whose geometry differs, which at 466 B is cheaper than transferring.
+
+if WOZ_ML_LOS
+
+module = WOZ_ML
+module-str = woz_ml
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # WOZ_ML_LOS

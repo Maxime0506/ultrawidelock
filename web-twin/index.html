@@ -449,11 +449,11 @@ const FW = {
   ALIRO_MOTOR_MS: 500,         // ports/esp32/apps/matter-lock/main/app_main.cpp:146
   ALIRO_PREDICT_MARGIN_MS: 250, // ports/esp32/apps/matter-lock/main/app_main.cpp:147
   ALIRO_PREDICT_VMIN_CM_S: 30, // ports/esp32/apps/matter-lock/main/app_main.cpp:148
-  KF_REJECT_MAX: 3,            // modules/woz_aliro/src/aliro_approach.c:26
-  KF_STALE_MS: 1000,           // modules/woz_aliro/src/aliro_approach.c:27
-  KF_MIN_SAMPLES: 6,           // modules/woz_aliro/src/aliro_approach.c:29
-  PRED_DWELL_N: 2,             // modules/woz_aliro/src/aliro_approach.c:34
-  PRED_GRACE_MS: 900,          // modules/woz_aliro/src/aliro_approach.c:35
+  KF_REJECT_MAX: 3,            // modules/woz_aliro/src/aliro_approach.c:30
+  KF_STALE_MS: 1000,           // modules/woz_aliro/src/aliro_approach.c:31
+  KF_MIN_SAMPLES: 6,           // modules/woz_aliro/src/aliro_approach.c:33
+  PRED_DWELL_N: 2,             // modules/woz_aliro/src/aliro_approach.c:45
+  PRED_GRACE_MS: 1800,         // modules/woz_aliro/src/aliro_approach.c:46
   CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:325
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
   SPOOF_CM: -400,              // tests/host/test_twin.c:127
@@ -593,10 +593,18 @@ class ApproachController {
         return "depart";
       }
     } else { this.nearDwell = 0; this.farDwell = 0; }            // dead band
-    /* prediction path: supervise an open, else try to fire */
+    /* prediction path: supervise an open, else try to fire. The velocity
+     * checks need a converged filter (a re-based one knows no velocity), and
+     * every sample still closing RENEWS the grace — the deadline bounds
+     * silence and stalls, not the median's crawl into the unlock band. Both
+     * from the 2026-08-07 walk, where the old fixed deadline expired between
+     * two samples of a live approach. */
     if (this.predOpen){
       if (nowMs >= this.predDeadline) return this.predAbort();
-      if (estFresh && closing < FW.ALIRO_PREDICT_VMIN_CM_S / 2) return this.predAbort();
+      if (estFresh && this.accepted >= FW.KF_MIN_SAMPLES){
+        if (closing < FW.ALIRO_PREDICT_VMIN_CM_S / 2) return this.predAbort();
+        this.predDeadline = nowMs + FW.PRED_GRACE_MS;
+      }
       return null;
     }
     if (this.locked && this.etaMs >= 0 &&

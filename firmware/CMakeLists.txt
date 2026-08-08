@@ -19,10 +19,13 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 # modules/woz_anchor is listed on the same terms: its CMakeLists is gated on
 # CONFIG_WOZ_ANCHOR, which is default n, so listing it here costs the default
 # build nothing and only makes `overlay-anchor.conf` able to turn it on.
+# modules/woz_ml likewise, gated on CONFIG_WOZ_ML_LOS: default n, so the shipping
+# image is byte-identical without it and only overlays/mlgate.conf turns it on.
 list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_aliro"
 	"${REPO_ROOT}/modules/woz_anchor"
 	"${REPO_ROOT}/modules/woz_matter"
+	"${REPO_ROOT}/modules/woz_ml"
 	"${REPO_ROOT}/modules/woz_uwb"
 	"${REPO_ROOT}/deps/dw3000")
 
@@ -83,6 +86,7 @@ target_sources_ifdef(CONFIG_WOZ_DFU_RECEIVER app PRIVATE src/dfu_ble_zephyr.c)
 # window was the first thing worth showing, not the only one, and the `reader`
 # image has no receiver and used to light nothing at all.
 target_sources_ifdef(CONFIG_ALIRO_STATUS_LED app PRIVATE src/status_led.c)
+target_sources_ifdef(CONFIG_ALIRO_CIRDIAG_CAPTURE app PRIVATE src/cirdiag_capture.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
 # Initiator (User-Device role) transport: the central mirror of
 # aliro_ble_zephyr.c, plus the platform-free advert/READ decoding it calls. That

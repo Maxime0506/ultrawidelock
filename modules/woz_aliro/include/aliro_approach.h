@@ -102,6 +102,117 @@ struct aliro_approach_cfg {
 	 * there. 0 disables and restores the sample-only behaviour.
 	 */
 	int32_t far_silence_ms;
+	/*
+	 * Trajectory gate: no auto-unlock until this credential has been SEEN at
+	 * or beyond approach_cm in the current session. 0 disables it and
+	 * restores the behaviour that shipped before it.
+	 *
+	 * WHAT IT REMOVES, deliberately. A credential that first appears already
+	 * inside the unlock radius used to open the door in about a second, on
+	 * the presence path, with no approach at all. That is the correct answer
+	 * for a phone walking up and the wrong one for a phone that was in the
+	 * house the whole time, and "do not open when we are inside" is the
+	 * problem this lock exists to solve. Both unlock paths are gated, not
+	 * just the predictive one: a walk-up satisfies this trivially, and only a
+	 * credential that materialised at the door is refused.
+	 *
+	 * WHAT IT DOES NOT DO. It is not an inside/outside test. Someone indoors
+	 * walking to the door produces exactly the same deep monotonic approach
+	 * as someone outdoors. This filters a credential that never approached --
+	 * loiter, a session re-established at the door, a phone sitting on a hall
+	 * table -- and nothing else.
+	 *
+	 * IT MUST STAY BELOW WHAT THE TRUST GATE VOUCHES FOR, and this is the
+	 * trap. Ranges beyond relock_cm are the ones range-integrity consensus
+	 * declines to vouch for, so they never reach aliro_approach_feed(); set
+	 * approach_cm at or above relock_cm and the gate can never arm, and the
+	 * lock silently stops auto-unlocking altogether. The default leaves a
+	 * 70 cm margin under relock_cm for that reason.
+	 *
+	 * Arming reads the MEDIAN, not the raw sample, so one spike cannot arm
+	 * it. And arming is deliberately not available through
+	 * aliro_approach_observe_departure(): that channel carries unvouched
+	 * ranges, which may relock a door and must never help open one.
+	 */
+	int32_t approach_cm;
+	/*
+	 * Channel-corrected ranging. 0 disables both corrections and restores the
+	 * behaviour that shipped before them; the defaults enable both.
+	 *
+	 * TWO CORRECTIONS, AND ONLY ONE OF THEM IS CONDITIONAL, which is the whole
+	 * design. RESULTS.md Result 19 measured this reader as reporting 25.5 cm
+	 * short of true, always, because nothing programs the DW3000 antenna delay.
+	 * That is calibration and it applies unconditionally. It also makes the lock
+	 * STRICTER: unlock_cm = 100 has really been firing at a true 125 cm.
+	 *
+	 * The second is that a body in the path adds a constant 84.5 cm, so an owner
+	 * with the phone on the far side of themselves reads 155 cm at a true 100
+	 * and never crosses the threshold. Undoing that ADDS permission, so it is
+	 * gated three ways: the reception must be classified obstructed, the
+	 * classifier's confidence must clear nlos_conf_min, and it must hold across
+	 * a majority of the median window (see aliro_approach_feed_channel).
+	 *
+	 * WHAT A WRONG ANSWER COSTS, stated because it is the reason for the gates.
+	 * A false obstructed subtracts 84.5 cm, so a phone genuinely at 185 cm reads
+	 * as 100 and the door opens for a walk-by. At the measured per-reception
+	 * false rate of 4.7%, a majority of five brings that to about 1 in 1,035
+	 * while still engaging on 94.9% of genuinely blocked windows.
+	 *
+	 * LEAVE THIS FALSE. Result 21 repeated Result 19's capture with a second body
+	 * and measured the obstruction offset at +127.0 cm [+109, +136] against the
+	 * original +82.0 [+62, +93] in the same frame-length slice, intervals not
+	 * overlapping. The gates above bound how often the correction engages
+	 * wrongly; they cannot bound how wrong it is when it engages rightly, and a
+	 * 47 cm spread is larger than the margin the paragraph above is defending.
+	 * The obstruction itself replicated cleanly as -10 dB of first-path power in
+	 * both sessions, so the classifier is sound and only this subtraction is not:
+	 * the supportable use is to widen unlock_cm while obstructed, which needs the
+	 * sign and not the magnitude. The antenna half would be safe on its own but
+	 * is not separately switched, because it has never had a caller that wanted
+	 * one without the other.
+	 */
+	bool range_correct_en;
+	/*
+	 * Confidence floor for the obstruction correction, in the units
+	 * woz_ml_los_confidence() returns. 2.61 is the top quartile boundary
+	 * measured over the 399 tripod receptions of Results 18 and 19, where the
+	 * linear sign is right 96% of the time against 39% in the bottom quartile.
+	 * Install-dependent: it is one room, one phone and one body.
+	 */
+	float nlos_conf_min;
+	/*
+	 * Centimetres to ADD to unlock_cm while the window says obstructed, and the
+	 * shippable half of what Results 18-21 measured. 0 disables it, which is the
+	 * default, because the right number is an install's policy and not a constant
+	 * this file can know.
+	 *
+	 * WHY THIS AND NOT range_correct_en's SUBTRACTION. Result 21 killed the
+	 * subtraction because its magnitude did not replicate across two bodies
+	 * (+82.0 against +127.0, non-overlapping intervals) while its SIGN did, along
+	 * with the -10 dB of first-path attenuation the classifier actually reads. A
+	 * widening consumes only the sign: it says "be more permissive while a body
+	 * is in the way" and leaves how much to the installer, where a subtraction
+	 * claims to know a true distance it does not know.
+	 *
+	 * IT IS NOT SAFER, AND SAYING SO WOULD BE WRONG. Widening to 220 opens for a
+	 * misclassified walk-by at 220 exactly as subtracting 120 would. Two things
+	 * are genuinely better and neither is permissiveness. First, the subtraction
+	 * fed a fabricated distance into the Kalman filter, so a wrong constant
+	 * corrupted the velocity estimate and every ETA built on it; this touches one
+	 * comparison and the estimator never sees it. Second, a policy number invites
+	 * the tuning it needs, where a measured-looking constant invites trust it has
+	 * not earned.
+	 *
+	 * The false-positive arithmetic from range_correct_en carries over unchanged,
+	 * because the gate is the same one: a 4.7% per-reception false rate through a
+	 * majority of five is about 1 in 1,035 windows, engaging on 94.9% of genuinely
+	 * blocked ones.
+	 *
+	 * Clamped at init to keep unlock_cm + nlos_widen_cm strictly below
+	 * approach_cm, or the trajectory gate would arm and fire on the same sample
+	 * and stop gating anything. See aliro_approach_cfg_default().
+	 */
+	int32_t nlos_widen_cm;
 	bool predict_en; /* arm the prediction path at all; false leaves the
 			  * presence path exactly as it shipped. Off whenever
 			  * the RSSI power gate is on: the gate withholds
@@ -124,6 +235,15 @@ struct aliro_approach {
 	/* bolt mirror + presence path */
 	bool locked;
 	int32_t win[ALIRO_APPROACH_MEDIAN_N];
+	/* Parallel to win[]: when each sample arrived. The median votes only
+	 * entries younger than MEDIAN_STALE_MS -- a pocketed walk's trust holes
+	 * run 1-12 s, and on 2026-08-08 a 9-second-old near entry manufactured
+	 * presence at 1.6 m (the 00:01:39 ghost grant). */
+	int64_t win_ms[ALIRO_APPROACH_MEDIAN_N];
+	/* Parallel to win[], same wpos/wlen: was THIS sample a confident obstructed
+	 * call? The vote is taken over the same window the median is, so the
+	 * correction costs no latency the median was not already spending. */
+	bool ch_win[ALIRO_APPROACH_MEDIAN_N];
 	int wlen, wpos;
 	int near_dwell, far_dwell;
 
@@ -141,6 +261,12 @@ struct aliro_approach {
 	int64_t pred_deadline_ms; /* arrive by this or RELOCK_ABORT */
 	int32_t eta_ms;           /* last ETA to unlock_cm; -1 = none */
 
+	/* Trajectory gate: has a median at or beyond cfg.approach_cm been seen
+	 * since the bolt was last locked? Cleared on every return to locked and
+	 * by aliro_approach_gone(), so each session must earn its own approach.
+	 * See aliro_approach_cfg::approach_cm. */
+	bool approach_armed;
+
 	/* departure-by-silence; see aliro_approach_cfg::far_silence_ms */
 	int32_t last_cm;      /* last RAW sample, not the median: the median is
 			       * there to reject spikes while tracking, and the
@@ -155,10 +281,63 @@ void aliro_approach_defaults(struct aliro_approach_cfg *cfg);
 /* cfg == NULL uses the defaults. Starts locked, idle. */
 void aliro_approach_init(struct aliro_approach *ap, const struct aliro_approach_cfg *cfg);
 
+/**
+ * Tell the controller a ranging session just came up, which counts as an approach.
+ *
+ * WHY THE SESSION IS THE EVIDENCE, and why waiting for a far UWB range was not.
+ * approach_cm asks to have seen the credential at 180 cm before any auto-unlock,
+ * to refuse a phone that was indoors all along. On this hardware that range
+ * never arrives: the BLE RSSI power gate holds ranging off until the connection
+ * crosses its open threshold, so UWB starts when the phone is ALREADY at the
+ * door. A capture on 2026-08-07 has ranging going active at 55 cm and the bolt
+ * then ignoring a phone sitting between 0 and 57 cm for fourteen seconds; it
+ * opened 21.5 s in, and only because the owner had walked out to 342 cm and come
+ * back, which is the one thing that could satisfy the gate.
+ *
+ * A phone cannot open a session without approaching -- that is what the RSSI
+ * gate measures -- so session establishment carries the same evidence the far
+ * range was standing in for, and it carries it at the moment it actually
+ * happens. The gate still refuses a credential that was already connected and
+ * idle indoors, because that session is not new.
+ *
+ * Call it when the reader arms ranging for a session. Harmless if approach_cm is
+ * 0, and it never unlocks anything by itself.
+ */
+void aliro_approach_session_up(struct aliro_approach *ap);
+
 /* One trusted range sample (task context, timestamps in ms, any monotonic
  * base). Runs both paths, returns at most one transition. */
 enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_t now_ms,
 					       int32_t cm);
+
+/**
+ * The same, plus what the channel classifier said about THIS reception.
+ *
+ * aliro_approach_feed() is this with obstructed = false and confidence = 0, so a
+ * caller with no classifier keeps the antenna-delay correction and never gets the
+ * obstruction one. Both are off entirely when cfg.range_correct_en is false.
+ *
+ * THE CORRECTION IS APPLIED TO THE MEDIAN, NOT TO THE SAMPLE, and that is not an
+ * implementation detail. Blocked receptions scattered with an interquartile
+ * spread of 38 and 47.5 cm against 7 and 11.5 for clear (RESULTS.md Result 19),
+ * so one obstructed reception is a poor estimate of anything and correcting it
+ * would move noise rather than remove bias. For a constant offset and a stable
+ * class the two are identical anyway -- median(x + c) == median(x) + c -- so the
+ * only case where it matters is a class that flips mid-window, which is exactly
+ * the case the majority vote exists to handle.
+ *
+ * @param cm          the range as the reader produced it, uncorrected.
+ * @param obstructed  woz_ml_los_classify() == WOZ_ML_LOS_OBSTRUCTED for the
+ *                    reception this range came from.
+ * @param confidence  woz_ml_los_confidence() for the same reception. Compared
+ *                    against cfg.nlos_conf_min; a sample below it votes clear
+ *                    rather than being discarded, because a low-confidence
+ *                    reading is evidence about the channel and not a missing
+ *                    measurement.
+ */
+enum aliro_approach_action aliro_approach_feed_channel(struct aliro_approach *ap, int64_t now_ms,
+						       int32_t cm, bool obstructed,
+						       float confidence);
 
 /**
  * Record a range for the DEPARTURE decision alone, trust gate or no trust gate.
@@ -176,9 +355,19 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
  * So departure may read what the radio saw, while the unlock decision keeps
  * requiring what the radio can vouch for.
  *
+ * ONE addition to that contract (2026-08-07, 23:51 walk): a >= relock_cm
+ * observation also re-arms the trajectory gate. The trust gate declines most of
+ * a retreat, so after a mid-session relock the median-based re-arm was
+ * unreachable and an owner stood fifteen seconds at 0 cm against a shut door.
+ * Arming is necessary and never sufficient -- the unlock still takes a vouched
+ * near median plus dwell -- and the resting-at-the-door credential the gate
+ * exists for produces no far reading to arm with. See the implementation
+ * comment for the full argument, including why session_up() already bounds it.
+ *
  * Ignores anything nearer than relock_cm, which is what keeps the asymmetry
- * honest: an unvouched range can cause a relock and can never prevent or delay
- * one. Feed it only FRESH ranges -- the caller's generation epoch says which --
+ * honest: an unvouched range can cause a relock, may restore permission an
+ * earlier approach had already earned, and can never by itself move the bolt.
+ * Feed it only FRESH ranges -- the caller's generation epoch says which --
  * or the silence in aliro_approach_tick() never accumulates.
  */
 void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms, int32_t cm);
@@ -197,6 +386,22 @@ bool aliro_approach_locked(const struct aliro_approach *ap);
 int32_t aliro_approach_est_cm(const struct aliro_approach *ap);   /* -1 = none */
 int32_t aliro_approach_vel_cm_s(const struct aliro_approach *ap); /* >0 = closing */
 int32_t aliro_approach_eta_ms(const struct aliro_approach *ap);   /* -1 = none */
+
+/**
+ * The debounced channel verdict: true while a strict majority of the median
+ * window were confident obstructed calls YOUNGER than the staleness horizon --
+ * votes age out with the median entries they rode in on, so a majority earned
+ * before a trust hole cannot keep the radius widened through it. This is the
+ * exact state the nlos_widen_cm widening consumes, exposed so a walk with the
+ * widening still 0 can log where a widened build WOULD have moved its
+ * threshold -- the reading an owner needs before choosing that number.
+ * Telemetry only: the decision path reads the same state internally and never
+ * through here. Constant false without CONFIG_WOZ_ML_LOS, like the widening.
+ *
+ * @param now_ms  the caller's clock, same monotonic base as the feeds; the
+ *                verdict is a function of the window AND of when it is asked.
+ */
+bool aliro_approach_nlos_blocked(const struct aliro_approach *ap, int64_t now_ms);
 
 #ifdef __cplusplus
 }

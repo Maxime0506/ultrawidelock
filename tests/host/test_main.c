@@ -87,6 +87,7 @@ int main(void)
 		{ "matter_network", test_matter_network },
 		{ "matter_case", test_matter_case },
 		{ "matter_clusters", test_matter_clusters },
+		{ "woz_ml", test_woz_ml },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	/* Sized from the table, not a literal 32: these are indexed by suite, so a

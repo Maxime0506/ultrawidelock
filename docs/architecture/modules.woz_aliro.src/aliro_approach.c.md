@@ -8,12 +8,12 @@ of trusted ranges and fires predictive unlock when closing speed and ETA meet th
 defaults: unlock 100 cm, relock 250 cm, dwell times 2 s and 3 s, motor delay 500 ms, margin 250
 ms, velocity floor 30 cm/s, prediction enabled.
 
-**depends on** [`modules/woz_aliro/include/aliro_approach.h`](../modules.woz_aliro.include/aliro_approach.h.md)
+**depends on** [`modules/woz_aliro/include/aliro_approach.h`](../modules.woz_aliro.include/aliro_approach.h.md), [`modules/woz_ml/include/woz_ml.h`](../modules.woz_ml.include/woz_ml.h.md)
 
 ## API
 
 ### `static void kf_rebase(struct aliro_approach *ap, int64_t now_ms, int32_t cm)`
-`modules/woz_aliro/src/aliro_approach.c:41`
+`modules/woz_aliro/src/aliro_approach.c:101`
 
 Reset the Kalman filter to a new state given a fresh measurement: clears rejection history,
 zeroes velocity, reinitializes covariance, and resets prediction state.
@@ -21,24 +21,34 @@ zeroes velocity, reinitializes covariance, and resets prediction state.
 **called by** `kf_update`
 
 ### `static bool kf_update(struct aliro_approach *ap, int64_t now_ms, int32_t cm)`
-`modules/woz_aliro/src/aliro_approach.c:58`
+`modules/woz_aliro/src/aliro_approach.c:118`
 
 Time update always (time really passed), measurement update only inside the
 innovation gate. Returns true when the sample updated the estimate.
 
-**called by** `aliro_approach_feed`  ·  **calls** `kf_rebase`
+**called by** `aliro_approach_feed_channel`  ·  **calls** `kf_rebase`
 
 ### `static int32_t range_median(const int32_t *win, int n)`
-`modules/woz_aliro/src/aliro_approach.c:113`
+`modules/woz_aliro/src/aliro_approach.c:173`
 
 Median of the first n samples of win (n in [1, ALIRO_APPROACH_MEDIAN_N]).
 Rejects the metre-scale spikes in the per-block UWB distance without the
 lag of a running average.
 
-**called by** `aliro_approach_feed`
+**called by** `range_median_fresh`
+
+### `static int32_t range_median_fresh(const struct aliro_approach *ap, int64_t now_ms)`
+`modules/woz_aliro/src/aliro_approach.c:197`
+
+The median over the entries still young enough to vote (MEDIAN_STALE_MS).
+The sample just filed is age zero and always qualifies, so the guard is
+unreachable in practice; it exists so an empty vote is structurally
+impossible rather than argued from a caller invariant.
+
+**called by** `aliro_approach_feed_channel`  ·  **calls** `range_median`
 
 ### `void aliro_approach_defaults(struct aliro_approach_cfg *cfg)`
-`modules/woz_aliro/src/aliro_approach.c:138`
+`modules/woz_aliro/src/aliro_approach.c:220`
 
 Initialize an approach configuration with factory defaults: unlock at 100 cm, relock at 250 cm,
 dwell times 2 s and 3 s, motor delay 500 ms, margin 250 ms, velocity floor 30 cm/s, predictive
@@ -47,7 +57,7 @@ unlock enabled.
 **called by** `aliro_approach_init`
 
 ### `void aliro_approach_init(struct aliro_approach *ap, const struct aliro_approach_cfg *cfg)`
-`modules/woz_aliro/src/aliro_approach.c:171`
+`modules/woz_aliro/src/aliro_approach.c:295`
 
 Initialize an approach controller to locked state with zero velocity and no prediction in flight.
 If cfg is NULL, load factory defaults; otherwise copy the provided configuration.
@@ -55,15 +65,15 @@ If cfg is NULL, load factory defaults; otherwise copy the provided configuration
 **called by** `aliro_approach_gone`  ·  **calls** `aliro_approach_defaults`
 
 ### `static enum aliro_approach_action pred_abort(struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:187`
+`modules/woz_aliro/src/aliro_approach.c:353`
 
 Record a predictive unlock abort and relock the door. Called when prediction is active but the
 phone has stopped approaching or moved away.
 
-**called by** `aliro_approach_feed`, `aliro_approach_tick`
+**called by** `aliro_approach_feed_channel`, `aliro_approach_tick`
 
-### `enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_t now_ms, int32_t cm)`
-`modules/woz_aliro/src/aliro_approach.c:202`
+### `void aliro_approach_session_up(struct aliro_approach *ap)`
+`modules/woz_aliro/src/aliro_approach.c:382`
 
 Update the Kalman filter state with a new range measurement, compute estimated time-to-arrival
 (ETA) at the unlock radius, track presence via a median-filter window, and supervise predictive
@@ -71,25 +81,62 @@ unlock (fire early when closing speed and ETA permit, abort if the phone stops o
 Return the action code: UNLOCK_THRESHOLD (entered unlock zone), RELOCK_DEPART (exited relock
 zone), UNLOCK_PREDICT (fired a predictive unlock), or HOLD (no action).
 
-**calls** `kf_update`, `pred_abort`, `range_median`
+### `static bool nlos_blocked(const struct aliro_approach *ap, int64_t now_ms)`
+`modules/woz_aliro/src/aliro_approach.c:423`
+
+Whether a strict majority of the median window were confident obstructed calls.
+A partly-filled window cannot carry a majority of five and reports clear, so
+early samples never widen and never get the conditional subtraction. That is
+the safe direction: both consumers of this are the ones that add permission.
+VOTES AGE OUT exactly as median entries do (MEDIAN_STALE_MS, the shared
+win_ms[] timestamps). Before this, an obstructed majority earned before a
+1-12 s pocket trust hole kept unlock_cm widened by nlos_widen_cm all the way
+through it -- a permission-adding decision fed by stale evidence, the same
+shape as the 00:01:39 ghost grant at the top of this file, only latent
+because nothing ships a nonzero widening yet. The cost of ageing them: a
+still pocketed owner whose iOS ranging pauses past the horizon (silences of
+1.6-3.07 s are on record) loses the widening until samples resume, so the
+resting-at-the-door case leans on the band silence tier and on ranging
+coming back, not on a vote nobody can refresh.
+Without CONFIG_WOZ_ML_LOS nothing ever writes ch_win, so this is constant
+false and both consumers fold away.
+
+**called by** `aliro_approach_nlos_blocked`, `channel_correct`, `effective_unlock_cm`
+
+### `static int32_t effective_unlock_cm(const struct aliro_approach *ap, int64_t now_ms)`
+`modules/woz_aliro/src/aliro_approach.c:456`
+
+The unlock radius in force for this sample.
+Widened by cfg.nlos_widen_cm while the window says obstructed, so an owner
+whose body is between the phone and the reader crosses the threshold at the
+same place a hand-held phone would. Result 21 is why this is a widening and
+not a correction to the range: the sign of the obstruction effect replicated
+across two bodies and its magnitude did not, and a widening spends only the
+sign.
+Every unlock_cm comparison in this file goes through here, deliberately. The
+regression 4c6083d8 fixed was two thresholds disagreeing about the same
+boundary, and a widening applied to the fire decision but not to the ETA or
+the silence rule would rebuild that dead band on purpose.
+
+**called by** `aliro_approach_feed_channel`, `aliro_approach_tick`  ·  **calls** `nlos_blocked`
 
 ### `void aliro_approach_observe_departure(struct aliro_approach *ap, int64_t now_ms, int32_t cm)`
-`modules/woz_aliro/src/aliro_approach.c:287`
+`modules/woz_aliro/src/aliro_approach.c:616`
 
 Supervise an active predictive unlock when no new measurement arrives this window. If the
 prediction deadline has passed, abort and relock the door. Return HOLD otherwise.
 
 ### `enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_t now_ms)`
-`modules/woz_aliro/src/aliro_approach.c:307`
+`modules/woz_aliro/src/aliro_approach.c:655`
 
 Advance the approach state machine by one tick: handle predictive unlock abort on deadline,
 departure by silence when measurements stop after the phone leaves the relock threshold, and
 return the triggered action or HOLD if no action occurred.
 
-**calls** `pred_abort`
+**calls** `effective_unlock_cm`, `pred_abort`
 
 ### `enum aliro_approach_action aliro_approach_gone(struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:340`
+`modules/woz_aliro/src/aliro_approach.c:742`
 
 Reset the approach controller to locked state while preserving its configuration. Return
 RELOCK_DEPART if the door was unlocked before the reset, otherwise HOLD.
@@ -97,24 +144,40 @@ RELOCK_DEPART if the door was unlocked before the reset, otherwise HOLD.
 **calls** `aliro_approach_init`
 
 ### `bool aliro_approach_locked(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:352`
+`modules/woz_aliro/src/aliro_approach.c:754`
 
 Return true if the door is locked, false if unlocked.
 
+### `bool aliro_approach_nlos_blocked(const struct aliro_approach *ap, int64_t now_ms)`
+`modules/woz_aliro/src/aliro_approach.c:763`
+
+The debounced channel verdict the widening consumes, for telemetry. See the
+header for why it is exposed; the decision path calls nlos_blocked() directly.
+
+**calls** `nlos_blocked`
+
 ### `int32_t aliro_approach_est_cm(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:361`
+`modules/woz_aliro/src/aliro_approach.c:772`
 
 Return the current estimated distance in centimeters. Returns -1 if the Kalman filter has not
 been initialized (no valid measurement yet); otherwise returns the rounded estimate.
 
 ### `int32_t aliro_approach_vel_cm_s(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:373`
+`modules/woz_aliro/src/aliro_approach.c:784`
 
 Return the current velocity in centimeters per second (positive = approaching, negative =
 receding). Returns 0 if the Kalman filter has not been initialized.
 
 ### `int32_t aliro_approach_eta_ms(const struct aliro_approach *ap)`
-`modules/woz_aliro/src/aliro_approach.c:387`
+`modules/woz_aliro/src/aliro_approach.c:798`
 
 Return the estimated time in milliseconds until approach completes (unlock reaches the door).
 Value is -1 if not yet computed, or the reader has already locked the door.
+
+<details><summary>Undocumented (3)</summary>
+
+- `channel_correct`
+- `aliro_approach_feed` — tested: approach
+- `aliro_approach_feed_channel` — tested: approach
+
+</details>

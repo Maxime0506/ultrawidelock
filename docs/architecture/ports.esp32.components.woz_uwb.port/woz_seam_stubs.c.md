@@ -32,21 +32,21 @@ Pre-POLL to warm the next block's STS.  Mirrors uwb_rxdiag.c:shim_rxok minus
 the tallies/cadence/event logging.
 
 ### `static void shim_rxto(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:75`
+`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:77`
 
 RX-timeout callback shim; forwards the event to g_chain_rxto if a handler is registered, otherwise no-op.
 
 ### `static void shim_rxerr(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:83`
+`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:85`
 
 RX-error callback shim; forwards the event to g_chain_rxerr if a handler is registered, otherwise no-op.
 
 ### `static void shim_txdone(const dwt_cb_data_t *d)`
-`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:91`
+`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:93`
 
 TX-done callback shim; forwards the event to g_chain_txdone if a handler is registered, otherwise no-op.
 
 ### `void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)`
-`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:99`
+`ports/esp32/components/woz_uwb/port/woz_seam_stubs.c:101`
 
 Intercept the callback registration and insert the RX-good bootstrap shim.

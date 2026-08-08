@@ -462,3 +462,16 @@ void shellfake_print(const struct shell *sh, const char *fmt, ...)
 	shellfake_out[shellfake_len++] = '\n';
 	shellfake_out[shellfake_len] = '\0';
 }
+
+/*
+ * Free-running DWT cycle counter. On target this lives in
+ * deps/dw3000/platform/dw3000_hw.c and is what uwb_cirdiag_capture() times the
+ * diagnostics read with. There is no such counter on a host, and the value is
+ * only ever printed as `rdcyc`, never compared against anything, so a constant
+ * is a truthful stub rather than a convenient one: it makes every host-measured
+ * read cost exactly zero, which is what a host read costs.
+ */
+uint32_t dw3000_dwt_cyccnt(void)
+{
+	return 0u;
+}

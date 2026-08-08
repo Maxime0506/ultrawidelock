@@ -17,6 +17,7 @@ set(WOZ_SRCS
     "${WOZ}/driver/uwb_min.c"
     "${WOZ}/driver/uwb_isr.c"
     "${WOZ}/fira/fira_session.c"
+    "${WOZ}/fira/ds_twr.c" # shared ToF estimator; ccc_shim_rx.c calls it (a3ab4ed4)
     # engine: CCC STS
     "${WOZ}/ccc/ccc_kdf.c"
     "${WOZ}/ccc/ccc_mac.c"

@@ -37,7 +37,7 @@ void test_uwb_cirdiag(void)
 	uwb_cirdiag_set_enabled(false);
 	uwb_cirdiag_dump_set_enabled(false);
 	T_OK("disarmed enabled==false", !uwb_cirdiag_enabled());
-	T_OK("disarmed capture false", !uwb_cirdiag_capture(0x1u, 12u, false));
+	T_OK("disarmed capture false", !uwb_cirdiag_capture(0x1u, 12u, false, true));
 	T_EQ("disarmed no CIA write", drvfake.configciadiag_calls, 0);
 
 	/* Probe before the chip-side CIA enable has happened: refuses, touches no accumulator.
@@ -51,9 +51,9 @@ void test_uwb_cirdiag(void)
 	 * itself; the next one latches. */
 	uwb_cirdiag_set_enabled(true);
 	T_OK("armed enabled", uwb_cirdiag_enabled());
-	T_OK("lazy-arm capture skipped", !uwb_cirdiag_capture(0x1u, 12u, false));
+	T_OK("lazy-arm capture skipped", !uwb_cirdiag_capture(0x1u, 12u, false, true));
 	T_EQ("CIA logging enabled once", drvfake.configciadiag_calls, 1);
-	T_OK("second capture latches", uwb_cirdiag_capture(0x1u, 12u, false));
+	T_OK("second capture latches", uwb_cirdiag_capture(0x1u, 12u, false, true));
 	flush_quiet(); /* covers the seqlock copy + summary emit */
 
 	/* Summary armed but dump off: no CIR read yet. */
@@ -69,7 +69,7 @@ void test_uwb_cirdiag(void)
 	T_OK("dump enabled", uwb_cirdiag_dump_enabled());
 	drvfake.diag_fp = Q(200);
 	drvfake.readcir_calls = 0;
-	(void)uwb_cirdiag_capture(0x1u, 12u, false);
+	(void)uwb_cirdiag_capture(0x1u, 12u, false, true);
 	T_EQ("window read in one call", drvfake.readcir_calls, 1);
 	T_EQ("full window width", drvfake.last_cir_num, WIN);
 	T_EQ("centred base", drvfake.first_cir_base, 200 - WIN / 2); /* 168 */
@@ -79,13 +79,13 @@ void test_uwb_cirdiag(void)
 	/* First path near 0 -> base clamps to 0. */
 	drvfake.diag_fp = Q(1);
 	drvfake.readcir_calls = 0;
-	(void)uwb_cirdiag_capture(0x1u, 12u, false);
+	(void)uwb_cirdiag_capture(0x1u, 12u, false, true);
 	T_EQ("low base clamps to 0", drvfake.first_cir_base, 0);
 
 	/* First path near the end -> base clamps to IP_LEN - WIN. */
 	drvfake.diag_fp = Q(1010);
 	drvfake.readcir_calls = 0;
-	(void)uwb_cirdiag_capture(0x1u, 12u, false);
+	(void)uwb_cirdiag_capture(0x1u, 12u, false, true);
 	T_EQ("high base clamps", drvfake.first_cir_base, IP_LEN - WIN); /* 952 */
 
 	/* Reception inside a live block (deadline_pending): a POLL or Final RX is armed behind it,
@@ -93,18 +93,35 @@ void test_uwb_cirdiag(void)
 	 * reading there lost every range of the walk-up. */
 	{
 		unsigned reads = drvfake.readcir_calls;
+		uint32_t buffered = uwb_cirdiag_ring_count();
 
 		drvfake.diag_fp = Q(200);
-		T_OK("live block still latches summary", uwb_cirdiag_capture(0x1u, 12u, true));
+		T_OK("live block still latches summary", uwb_cirdiag_capture(0x1u, 12u, true, false));
 		T_EQ("no CIR read inside a live block", drvfake.readcir_calls, reads);
 		flush_quiet();
-		T_EQ("no window buffered from a live block", uwb_cirdiag_ring_count(), 1);
+		T_EQ("no window buffered from a live block", uwb_cirdiag_ring_count(), buffered);
+	}
+
+	/* REGRESSION: a window must reach the ring from the capture that read it, not from the
+	 * deferred flush. The flush used to append, gated on a flag the NEXT capture cleared
+	 * unconditionally, so wherever a second frame lands inside one workqueue latency the append
+	 * never fired. That is every CDK round — CONFIG_WOZ_UWB_FINAL_SNAPSHOT arms a delayed SP0 RX
+	 * at the Final_Data slot, ~1 slot behind the Final — and a whole walk-up drained 0 records
+	 * while the summary lines flowed normally, which is what made it survive review. */
+	{
+		uint32_t buffered = uwb_cirdiag_ring_count();
+
+		drvfake.diag_fp = Q(200);
+		(void)uwb_cirdiag_capture(0x1u, 12u, false, true); /* the Final: window read */
+		(void)uwb_cirdiag_capture(0x1u, 12u, true, false); /* Final_Data, before any flush */
+		flush_quiet();
+		T_EQ("window survives the next reception", uwb_cirdiag_ring_count(), buffered + 1);
 	}
 
 	/* Fill past capacity: the ring keeps only the last RECS windows (overwrite oldest). */
 	for (int i = 0; i < RECS + 8; i++) {
 		drvfake.diag_fp = Q(200);
-		(void)uwb_cirdiag_capture(0x1u, 12u, false);
+		(void)uwb_cirdiag_capture(0x1u, 12u, false, true);
 		flush_quiet();
 	}
 	T_EQ("ring caps at capacity", uwb_cirdiag_ring_count(), RECS);
@@ -120,7 +137,7 @@ void test_uwb_cirdiag(void)
 	T_OK("dump disarmed", !uwb_cirdiag_dump_enabled());
 	T_OK("summary still armed", uwb_cirdiag_enabled());
 	T_EQ("ring drained empty", uwb_cirdiag_ring_count(), 0);
-	(void)uwb_cirdiag_capture(0x1u, 12u, false);
+	(void)uwb_cirdiag_capture(0x1u, 12u, false, true);
 	T_EQ("no CIR read when dump off", drvfake.readcir_calls, before);
 
 	/* Flush with nothing pending is a safe no-op. */

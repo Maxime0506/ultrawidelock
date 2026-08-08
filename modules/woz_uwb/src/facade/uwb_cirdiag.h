@@ -20,7 +20,50 @@ extern "C" {
 #include "sdkconfig.h" /* CONFIG_WOZ_UWB_CIRDIAG (Zephyr injects autoconf.h itself) */
 #endif
 
+/**
+ * @brief The Ipatov scalars of the latest latched reception, for a classifier.
+ *
+ * Field for field from dwt_rxdiag_t, and deliberately NOT struct woz_ml_cia even
+ * though the two are the same five numbers: woz_uwb is the lower layer and must
+ * not acquire a dependency on woz_ml to hand out registers it already holds. The
+ * caller copies across by name, which is checkable by eye — see
+ * firmware/src/main.c, and see woz_ml.h on why five same-typed integers are
+ * passed as a struct rather than positionally.
+ */
+struct uwb_cirdiag_ipatov {
+	uint32_t f1;          /**< dwt_rxdiag_t::ipatovF1 */
+	uint32_t f2;          /**< dwt_rxdiag_t::ipatovF2 */
+	uint32_t f3;          /**< dwt_rxdiag_t::ipatovF3 */
+	uint32_t power;       /**< dwt_rxdiag_t::ipatovPower, a 2^17-scaled area */
+	uint16_t accum_count; /**< dwt_rxdiag_t::ipatovAccumCount */
+	/**
+	 * Capture counter at the moment of the read. Monotonic, and the caller's
+	 * only way to tell a fresh reception from the same one read twice: the
+	 * latch is latest-wins with no queue, so re-reading without checking this
+	 * would feed one reception's channel to several ranging rounds and let a
+	 * single obstructed sample carry a whole median window.
+	 */
+	uint32_t n;
+};
+
 #if defined(CONFIG_WOZ_UWB_CIRDIAG)
+
+/**
+ * @brief Copy the latest latched Ipatov scalars out, under the seqlock.
+ *
+ * Task context, like uwb_cirdiag_flush(), and independent of it: the flush is
+ * one-shot on a pending latch while this one always returns the newest snapshot.
+ * A consumer that also wants the [ALAB] line gets both, and neither consumes the
+ * other's state.
+ *
+ * @param out filled only on success.
+ * @return false if the stream is disarmed, nothing has been captured yet, or the
+ *         seqlock could not settle in three tries. Also false when the CIA read
+ *         produced a zero accumulator count or channel area, which is a failed
+ *         read rather than a very weak channel — woz_ml_los_features() rejects
+ *         the same condition, and the training data drops those receptions.
+ */
+bool uwb_cirdiag_last_ipatov(struct uwb_cirdiag_ipatov *out);
 
 /** @brief Arm or disarm the summary stream. Safe any time, even before the chip is probed: the
  * chip-side CIA logging enable happens lazily on the first armed reception. */
@@ -50,16 +93,22 @@ uint32_t uwb_cirdiag_ring_count(void);
  * read. No-op unless armed.
  * @param status RX callback status word (0 if the callback data was NULL).
  * @param datalength RX frame length (0 if the callback data was NULL).
- * @param deadline_pending The responder still owes this ranging block a radio event — pass
- * ccc_shim_rx_deadline_pending() sampled after the blob's RX handler has re-armed. True on the
- * Pre-POLL (POLL RX armed) and on the POLL (Final RX armed ~2 ms out); false only on the Final,
- * which has the whole ~192 ms inter-block gap behind it. The summary read is taken either way
- * (bench-proven harmless), but the far larger windowed-CIR read happens only when this is false:
- * it costs ~260 us of SPI plus dwt_readcir's own ACC clock forcing, and an armed dump inside a
- * live block cost every range of the walk-up on the bench.
+ * @param deadline_pending Whether the radio is busy again: the windowed-CIR read (~260 us of
+ * SPI plus dwt_readcir's own ACC clock forcing) happens only when this is false, because an
+ * armed dump inside a live block cost every range of the walk-up on the bench. The summary
+ * read is taken either way (bench-proven harmless). NOTE this says nothing about WHICH
+ * reception is being serviced: the summary call site runs after the re-arm and passes true
+ * unconditionally, Final included. A gate that read it as "is this the Final" latched zero
+ * receptions across a whole walk while ranging ran clean (2026-08-07); that is what is_final
+ * is for.
+ * @param is_final The reception being serviced is the Final — sample
+ * ccc_shim_rx_awaiting_final() BEFORE chaining to the blob's RX handler, because the arm
+ * consumes the flag. Read only by CONFIG_WOZ_UWB_CIRDIAG_SUMMARY_FINAL_ONLY: one latch per
+ * ranging block, on the reception with the ~192 ms inter-block gap behind it.
  * @return true if a snapshot was latched (caller should schedule a flush).
  */
-bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending);
+bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending,
+			 bool is_final);
 
 /** @brief Emit the latched snapshot as one [ALAB] line, if any is pending. Task context only —
  * never call on the RX event path. */
@@ -127,11 +176,13 @@ static inline uint32_t uwb_cirdiag_ring_count(void)
 /**
  * Stub: capture returns false.
  */
-static inline bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending)
+static inline bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pending,
+				       bool is_final)
 {
 	(void)status;
 	(void)datalength;
 	(void)deadline_pending;
+	(void)is_final;
 	return false;
 }
 /**
@@ -152,6 +203,14 @@ static inline bool uwb_cirdiag_window_due(void)
  */
 static inline void uwb_cirdiag_probe(void)
 {
+}
+/**
+ * Stub: last_ipatov returns false and writes nothing.
+ */
+static inline bool uwb_cirdiag_last_ipatov(struct uwb_cirdiag_ipatov *out)
+{
+	(void)out;
+	return false;
 }
 
 #endif /* CONFIG_WOZ_UWB_CIRDIAG */

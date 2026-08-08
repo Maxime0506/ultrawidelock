@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**366 subsystems in 54 directories · 2439/2751 symbols documented (88%)**
+**390 subsystems in 57 directories · 2502/2857 symbols documented (87%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -12,6 +12,7 @@ flowchart LR
   integration.homeassistant.src.openaliro_ha --> tools.tui.src
   modules.woz_aliro.include --> modules.woz_aliro.src
   modules.woz_aliro.src --> modules.woz_aliro.include
+  modules.woz_aliro.src --> modules.woz_ml.include
   modules.woz_aliro.src --> modules.woz_port.include
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_aliro.src --> modules.woz_uwb.src.aliro.include.cherry
@@ -22,6 +23,7 @@ flowchart LR
   modules.woz_dfu.src --> modules.woz_dfu.include
   modules.woz_matter.src --> modules.woz_aliro.src
   modules.woz_matter.src --> modules.woz_matter.include
+  modules.woz_ml.src --> modules.woz_ml.include
   modules.woz_nfc.src --> modules.woz_nfc.include.woz_nfc
   modules.woz_uwb.src.aliro --> modules.woz_port.include
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -63,8 +65,9 @@ flowchart LR
 | [`activity/`](architecture/activity/README.md) | 1 | 2/4 (50%) |
 | [`activity/scripts/`](architecture/activity.scripts/README.md) | 5 | 0/9 (0%) |
 | [`activity/src/`](architecture/activity.src/README.md) | 2 | 2/8 (25%) |
+| [`ai/tinyml/`](architecture/ai.tinyml/README.md) | 11 | 48/75 (64%) |
 | [`anchor/src/`](architecture/anchor.src/README.md) | 3 | 20/20 (100%) |
-| [`firmware/src/`](architecture/firmware.src/README.md) | 17 | 191/204 (93%) |
+| [`firmware/src/`](architecture/firmware.src/README.md) | 18 | 193/206 (93%) |
 | [`host/presence/`](architecture/host.presence/README.md) | 5 | 36/36 (100%) |
 | [`integration/homeassistant/`](architecture/integration.homeassistant/README.md) | 1 | 5/5 (100%) |
 | [`integration/homeassistant/custom_components/openaliro/`](architecture/integration.homeassistant.custom_components.openaliro/README.md) | 8 | 31/34 (91%) |
@@ -72,7 +75,7 @@ flowchart LR
 | [`integration/homeassistant/src/openaliro_ha/`](architecture/integration.homeassistant.src.openaliro_ha/README.md) | 11 | 109/120 (90%) |
 | [`integration/homeassistant/tools/`](architecture/integration.homeassistant.tools/README.md) | 1 | 3/3 (100%) |
 | [`modules/woz_aliro/include/`](architecture/modules.woz_aliro.include/README.md) | 16 | 38/38 (100%) |
-| [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 21 | 269/269 (100%) |
+| [`modules/woz_aliro/src/`](architecture/modules.woz_aliro.src/README.md) | 21 | 273/276 (98%) |
 | [`modules/woz_aliro_ecp/src/`](architecture/modules.woz_aliro_ecp.src/README.md) | 1 | 5/5 (100%) |
 | [`modules/woz_aliro_stack/src/`](architecture/modules.woz_aliro_stack.src/README.md) | 4 | 77/77 (100%) |
 | [`modules/woz_aliro_stack/src/protocol/`](architecture/modules.woz_aliro_stack.src.protocol/README.md) | 14 | 67/67 (100%) |
@@ -83,6 +86,8 @@ flowchart LR
 | [`modules/woz_dfu/src/`](architecture/modules.woz_dfu.src/README.md) | 3 | 42/48 (87%) |
 | [`modules/woz_matter/include/`](architecture/modules.woz_matter.include/README.md) | 16 | 44/44 (100%) |
 | [`modules/woz_matter/src/`](architecture/modules.woz_matter.src/README.md) | 14 | 211/219 (96%) |
+| [`modules/woz_ml/include/`](architecture/modules.woz_ml.include/README.md) | 2 | 1/1 (100%) |
+| [`modules/woz_ml/src/`](architecture/modules.woz_ml.src/README.md) | 10 | 3/15 (20%) |
 | [`modules/woz_nfc/include/woz_nfc/`](architecture/modules.woz_nfc.include.woz_nfc/README.md) | 1 | 1/1 (100%) |
 | [`modules/woz_nfc/src/`](architecture/modules.woz_nfc.src/README.md) | 9 | 64/64 (100%) |
 | [`modules/woz_port/include/`](architecture/modules.woz_port.include/README.md) | 2 | 12/12 (100%) |
@@ -90,8 +95,8 @@ flowchart LR
 | [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/README.md) | 2 | 4/4 (100%) |
 | [`modules/woz_uwb/src/aliro/include/cherry/`](architecture/modules.woz_uwb.src.aliro.include.cherry/README.md) | 4 | 13/13 (100%) |
 | [`modules/woz_uwb/src/ccc/`](architecture/modules.woz_uwb.src.ccc/README.md) | 17 | 123/123 (100%) |
-| [`modules/woz_uwb/src/driver/`](architecture/modules.woz_uwb.src.driver/README.md) | 9 | 52/52 (100%) |
-| [`modules/woz_uwb/src/facade/`](architecture/modules.woz_uwb.src.facade/README.md) | 12 | 86/86 (100%) |
+| [`modules/woz_uwb/src/driver/`](architecture/modules.woz_uwb.src.driver/README.md) | 9 | 55/56 (98%) |
+| [`modules/woz_uwb/src/facade/`](architecture/modules.woz_uwb.src.facade/README.md) | 12 | 88/88 (100%) |
 | [`modules/woz_uwb/src/fira/`](architecture/modules.woz_uwb.src.fira/README.md) | 5 | 19/19 (100%) |
 | [`modules/woz_uwb/src/shell/`](architecture/modules.woz_uwb.src.shell/README.md) | 2 | 14/14 (100%) |
 | [`ports/esp32/apps/initiator/main/`](architecture/ports.esp32.apps.initiator.main/README.md) | 1 | 3/5 (60%) |
@@ -117,14 +122,14 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `299cb79f`.*
+*Mined from git history as of `7723d9a1`.*
 
-**Most-changed:** [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (28 commits), [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (27 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (24 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (23 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (23 commits).
+**Most-changed:** [`modules/woz_aliro/src/aliro_reader.c`](architecture/modules.woz_aliro.src/aliro_reader.c.md) (25 commits), [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (24 commits), [`scripts/verify.sh`](architecture/scripts/verify.sh.md) (24 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (22 commits), [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) (20 commits).
 
 **Change together without importing each other:**
 
 - [`modules/woz_matter/include/matter_im.h`](architecture/modules.woz_matter.include/matter_im.h.md) ↔ [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) (7 shared commits)
+- [`firmware/src/main.c`](architecture/firmware.src/main.c.md) ↔ [`modules/woz_aliro/include/aliro_approach.h`](architecture/modules.woz_aliro.include/aliro_approach.h.md) (6 shared commits)
+- [`firmware/src/main.c`](architecture/firmware.src/main.c.md) ↔ [`modules/woz_aliro/src/aliro_approach.c`](architecture/modules.woz_aliro.src/aliro_approach.c.md) (6 shared commits)
 - [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md) ↔ [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md) (6 shared commits)
 - [`modules/woz_matter/include/matter_clusters.h`](architecture/modules.woz_matter.include/matter_clusters.h.md) ↔ [`modules/woz_matter/src/matter_im.c`](architecture/modules.woz_matter.src/matter_im.c.md) (5 shared commits)
-- [`modules/woz_matter/src/matter_clusters.c`](architecture/modules.woz_matter.src/matter_clusters.c.md) ↔ [`modules/woz_matter/src/matter_im.c`](architecture/modules.woz_matter.src/matter_im.c.md) (5 shared commits)
-- [`modules/woz_uwb/src/facade/uwb_cirdiag.h`](architecture/modules.woz_uwb.src.facade/uwb_cirdiag.h.md) ↔ [`ports/esp32/apps/matter-lock/main/app_shell.cpp`](architecture/ports.esp32.apps.matter-lock.main/app_shell.cpp.md) (5 shared commits)

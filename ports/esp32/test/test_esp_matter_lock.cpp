@@ -960,6 +960,13 @@ static void section_reader_task(void)
 	mfk_wake_len = 0;
 	mfk_wake_idx = 0;
 	wake_push(1, 0, 0, 10);    /* active but untrusted: activity only */
+	/* Arms the trajectory gate (aliro_approach_cfg::approach_cm, 180 cm by
+	 * default). Without a sample this far out the controller now refuses to
+	 * unlock at all, which is the point of it: a credential that appears
+	 * already at the door never approached. 200 cm also sits in the dead
+	 * band, so it moves no dwell counter and the sequence below is otherwise
+	 * the walk-up it always was. */
+	wake_push(1, 1, 200, 10);  /* approach starts beyond the door zone */
 	wake_push(1, 1, 50, 10);   /* first trusted range: grant */
 	wake_push(1, 1, 60, 10);   /* near dwell 2 -> unlock */
 	wake_push(1, 1, 40, 10);   /* still near, already unlocked */
@@ -1001,8 +1008,10 @@ static void section_reader_task(void)
 	mfk_dls_unlock_user_null = -1;
 	mfk_wake_len = 0;
 	mfk_wake_idx = 0;
+	wake_push(1, 1, 200, 10); /* arms the trajectory gate; see run 1 */
 	wake_push(1, 1, 50, 10);
 	wake_push(1, 1, 60, 10);  /* unlock, attributed to user 1 */
+	wake_push(1, 1, 40, 10);  /* median settles near: near_dwell 2 -> unlock */
 	wake_push(0, 0, 0, 200);  /* standing still while unlocked: no relock */
 	wake_push_session_gone(); /* session end -> relock + secured */
 	mfk_task_run(task, nullptr);
@@ -1018,8 +1027,10 @@ static void section_reader_task(void)
 	mfk_dls_unlock_user_null = -1;
 	mfk_wake_len = 0;
 	mfk_wake_idx = 0;
+	wake_push(1, 1, 200, 10); /* arms the trajectory gate; see run 1 */
 	wake_push(1, 1, 50, 5);
 	wake_push(1, 1, 60, 5); /* unlock, unattributed */
+	wake_push(1, 1, 40, 5);  /* median settles near: near_dwell 2 -> unlock */
 	mfk_task_run(task, nullptr);
 	okc("unknown credential leaves the operation unattributed",
 	    mfk_dls_last_state == (int)DlLockState::kUnlocked &&
@@ -1053,8 +1064,10 @@ static void section_reader_task(void)
 	mfk_dls_set_lock_calls = 0;
 	mfk_wake_len = 0;
 	mfk_wake_idx = 0;
+	wake_push(1, 1, 200, 10); /* arms the trajectory gate; see run 1 */
 	wake_push(1, 1, 50, 10);
 	wake_push(1, 1, 60, 10); /* unlock + grant */
+	wake_push(1, 1, 40, 10);  /* median settles near: near_dwell 2 -> unlock */
 	for (int i = 0; i < 30; i++) {
 		wake_push(0, 0, 0, 200); /* 6 s of ranging silence, session still up */
 	}

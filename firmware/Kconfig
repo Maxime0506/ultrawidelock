@@ -141,6 +141,106 @@ config ALIRO_STATUS_LED_HEARTBEAT
 	  idle board back to the wake rate it had before, at the cost of the one
 	  signal that proves the firmware is still running.
 
+config ALIRO_CIRDIAG_CAPTURE
+	bool "Run the CIR capture cycle unattended, for a bench capture image"
+	depends on WOZ_UWB_CIRDIAG
+	help
+	  Arm the CIR dump, hold it for a window, disarm it so the ring drains to
+	  the console, and repeat. Forever, from boot, with no operator input.
+
+	  THIS EXISTS BECAUSE THIS BOARD HAS NO CONSOLE INPUT. modules/woz_uwb
+	  documents the capture workflow as `aliro cir dump on`, walk up, `aliro cir
+	  dump off`, and every word of that is unavailable here: RTT is output-only,
+	  uart0 belongs to the J-Link OB, the USB CDC console comes up only in
+	  provisioning mode (where the radio never starts), and CONFIG_WOZ_UWB_SHELL
+	  is n. The one button is already spoken for -- SW2 held through reset is the
+	  factory reset, and a capture image that could be made to erase an Apple
+	  Home credential by a mistimed press is not a capture image worth having.
+	  So the cycle runs itself.
+
+	  FOR A CAPTURE IMAGE ONLY. The dump costs walk-up latency while armed, by
+	  design and measured: see CONFIG_WOZ_UWB_CIRDIAG. Do not ship this.
+
+	  MEASURED against the plain Matter image at the same commit and the same
+	  flags: +1,720 B of flash and +6,720 B of RAM. Most of the RAM is
+	  CONFIG_WOZ_UWB_CIRDIAG's 4,352 B ring, which belongs to that symbol rather
+	  than this one; this adds 1,600 B of thread stack and 128 B of thread
+	  object. The capture image links at 91.22% of flash and 92.56% of RAM,
+	  leaving 9,756 B. Under 10 KB is fine for a bench image and is one more
+	  reason not to ship it.
+
+	  Flash it with `make flash`, never `make flash-erase`: the ranging this
+	  captures needs the credential the board already holds.
+
+if ALIRO_CIRDIAG_CAPTURE
+
+config ALIRO_CIRDIAG_CAPTURE_WINDOWS
+	bool "Also capture CIR windows, not just the diagnostic summary"
+	default y
+	help
+	  y arms the windowed-CIR dump each cycle and drains the ring: the full
+	  capture, 64 complex taps on every fourth Final.
+
+	  n takes the summary only -- one `[ALAB] ev=uwb.diag` line per reception,
+	  no accumulator read, no ring drain. The cycle markers still bracket each
+	  labelled interval.
+
+	  SAY n UNLESS YOU SPECIFICALLY NEED THE TAPS. Two measurements point the
+	  same way. On hardware (2026-08-07) the windowed image never transmitted a
+	  Response at all -- `tx0`, no range, no unlock, across three sessions --
+	  while the plain image on the same board ranged 22-443 cm and unlocked
+	  normally; the accumulator read is too much for this single core inside the
+	  ~1836 us arm deadline. And in ai/tinyml/RESULTS.md Result 7, dropping
+	  every tap-derived feature costs the LOS/NLOS classifier 0.14 accuracy
+	  points (0.8625 -> 0.8611) and makes it 80 B smaller, because ~76% of the
+	  discriminating power is absolute received power, which is a register
+	  scalar. The four features that matter -- fp_pwr, rx_pwr, pwr_diff,
+	  rxpacc -- all come from ipatovPower, ipatovF1..F3 and ipatovAccumCount.
+
+	  Whether the summary alone stays inside the deadline is UNVERIFIED: it
+	  still costs one dwt_readdiagnostics plus two STS reads per reception. If
+	  ranging still stalls with this n, that is the next thing to trim.
+
+config ALIRO_CIRDIAG_CAPTURE_WINDOW_MS
+	int "How long the dump stays armed per cycle, milliseconds"
+	default 20000
+	range 1000 600000
+	help
+	  The ring holds the last 16 windows and one window is taken every fourth
+	  Final, so 64 ranging blocks fill it. Blocks run about 192 ms apart, so
+	  roughly 12 s of continuous ranging saturates the ring and anything longer
+	  keeps only the most recent 16 -- the near-door end of an approach, which is
+	  the end worth having. 20 s is that with margin for a walk-up that pauses.
+
+config ALIRO_CIRDIAG_CAPTURE_IDLE_MS
+	int "Quiet gap after each drain, milliseconds"
+	default 3000
+	range 0 60000
+	help
+	  Nothing is armed during this gap, so ranging runs at full speed and the
+	  console is quiet. It is where you reposition between runs, and it is what
+	  makes the cycle markers usable as labels: everything between one
+	  `cir.cycle: armed` and its `drained` line is one capture.
+
+config ALIRO_CIRDIAG_CAPTURE_STACK
+	int "Capture thread stack, bytes"
+	default 1536
+	help
+	  The thread sleeps, toggles two flags, and calls printk from the drain.
+	  1,536 B is generous for that and small enough not to matter, but this
+	  project has faulted on two guessed stack sizes already, so measure it with
+	  CONFIG_THREAD_ANALYZER_AUTO before trusting it.
+
+config ALIRO_CIRDIAG_CAPTURE_PRIO
+	int "Capture thread priority"
+	default 12
+	help
+	  Below the Matter work queue (10), which is itself below whatever arms the
+	  DW3110 reply. The drain blocks for about 0.6 s with pacing on; nothing
+	  about that may compete with a ranging deadline.
+
+endif # ALIRO_CIRDIAG_CAPTURE
+
 config ALIRO_MATTER_CLEAR_ON_BOOT
 	bool "Erase the stored Matter fabrics at boot"
 	depends on ALIRO_MATTER_BLE

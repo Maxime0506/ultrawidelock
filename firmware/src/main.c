@@ -29,7 +29,14 @@
 #include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
 #endif
 #include "status_led.h"
+#include "uwb_cirdiag.h" /* latched Ipatov scalars, for the channel classifier */
 #include "woz_uwb_facade.h"
+
+#if defined(CONFIG_WOZ_ML_LOS)
+#include "woz_ml.h"
+#include "woz_log.h"  /* woz_printf -- the [ALAB] ev=ml classifier trace */
+#include "woz_port.h" /* woz_uptime_us -- the [ALAB] timebase */
+#endif
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR)
 #include "woz_satellite.h" /* second-anchor verdict; gates PREDICT only */
 #endif
@@ -223,6 +230,70 @@ static void factory_reset_if_requested(void)
 #endif
 
 /**
+ * Feed one trusted range, carrying this reception's channel class if there is one.
+ *
+ * WHERE THIS RUNS, because it is the only reason it is affordable. The classifier
+ * needs dwt_readdiagnostics(), measured at 972 us on this board -- 53% of the
+ * ~1836 us ranging arm deadline, which would be reckless on the RX path. It is
+ * not on the RX path. uwb_cirdiag_capture() already takes that read AFTER the
+ * shim re-arms, and this function only copies the result out in the main loop,
+ * one ranging block (~192 ms) later. The work added here is five register copies,
+ * three logarithms and two comparisons.
+ *
+ * The channel is read only when the capture counter has ADVANCED. The latch is
+ * latest-wins with no queue, so a stale snapshot re-read across several ranging
+ * rounds would let one obstructed reception carry a whole median window and
+ * defeat the majority-of-five that gates the widening.
+ *
+ * Falls back to the plain feed whenever anything is missing -- stream disarmed,
+ * nothing captured, a failed CIA read, or the classifier compiled out. A missing
+ * class must read as CLEAR rather than as obstructed: clear is the unwidened
+ * threshold, which is the behaviour that shipped.
+ */
+static enum aliro_approach_action feed_with_channel(struct aliro_approach *ap, int64_t now,
+						    int32_t cm)
+{
+#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+	static uint32_t last_diag_n;
+	struct uwb_cirdiag_ipatov ip;
+
+	if (cm >= 0 && uwb_cirdiag_last_ipatov(&ip) && ip.n != last_diag_n) {
+		const struct woz_ml_cia cia = {
+			.f1 = ip.f1,
+			.f2 = ip.f2,
+			.f3 = ip.f3,
+			.accum_count = ip.accum_count,
+			.channel_area = ip.power,
+		};
+		float feat[WOZ_ML_LOS_N_FEATURES];
+		float pwr_diff;
+
+		last_diag_n = ip.n;
+		if (woz_ml_los_features(&cia, (uint16_t)cm, feat, &pwr_diff)) {
+			const enum woz_ml_los_class cls = woz_ml_los_classify(feat);
+			const float conf = woz_ml_los_confidence(feat);
+
+			/*
+			 * One line per fresh latch, joinable to its ev=uwb.diag line by
+			 * n=. conf_c is the dB-scaled confidence in centi-units, so the
+			 * 2.61 vote gate reads as 261; dis is the tree-vs-vendor
+			 * disagreement whose RATE is the label-free drift monitor
+			 * woz_ml_los_vendor() documents. Main-loop context, one ranging
+			 * block after the reception, so this competes with no deadline.
+			 */
+			woz_printf("[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u\n",
+				   woz_uptime_us(), ip.n, cm, (unsigned)cls,
+				   (int)(conf * 100.0f),
+				   (unsigned)woz_ml_los_disagrees(feat, pwr_diff));
+			return aliro_approach_feed_channel(ap, now, cm,
+							   cls == WOZ_ML_LOS_OBSTRUCTED, conf);
+		}
+	}
+#endif
+	return aliro_approach_feed(ap, now, cm);
+}
+
+/**
  * Entry point for the DWM3001CDK reader application. Initializes provisioning and factory-reset
  * paths, starts the Aliro BLE reader and optional Matter commissioning and DFU receiver, then runs
  * the approach controller loop. Feeds the controller trusted ranges on each new latch generation
@@ -262,6 +333,18 @@ int main(void)
 		return rc;
 	}
 
+#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+	/*
+	 * The classifier is this image's consumer of the CIA latch, and nothing else
+	 * arms it: the capture-cycle thread is CONFIG_ALIRO_CIRDIAG_CAPTURE (not set
+	 * here) and the console shell is a DK-only path. Safe before the radio is
+	 * probed -- the chip-side CIA enable happens lazily inside the first armed
+	 * reception. The first mlgate walk (2026-08-07) printed zero [ALAB] lines
+	 * precisely because nothing did this.
+	 */
+	uwb_cirdiag_set_enabled(true);
+#endif
+
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 	/* After the reader, because the reader owns BLE and the advertising set;
 	 * this only attaches handlers to the 0xFFF6 transport that SYS_INIT
@@ -285,8 +368,12 @@ int main(void)
 	 * (ports/esp32/apps/matter-lock): trusted range -> approach controller -> on UNLOCK,
 	 * aliro_reader_notify_unlock(true), which sends Reader Status = Unsecured and animates
 	 * the phone. The standalone reader has to do the same or a perfectly good range never
-	 * becomes an unlock. There is no bolt on this board: the grant IS the product. */
-	struct aliro_approach approach;
+	 * becomes an unlock. There is no bolt on this board: the grant IS the product.
+	 *
+	 * Static: the struct carries two 5-entry sample windows plus the filter and
+	 * grew past trivial; the 4 KB main stack is not the place to discover that,
+	 * and in .bss the cost shows up in the measured RAM budget instead. */
+	static struct aliro_approach approach;
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR)
 	/*
 	 * Second-anchor geometry. Nothing feeds this yet -- Stage C of
@@ -320,7 +407,11 @@ int main(void)
 	}
 #endif
 
-	aliro_approach_init(&approach, NULL); /* factory defaults: unlock 100 cm, relock 250 cm */
+	/* Factory defaults: unlock 100 cm, relock 250 cm, and a trajectory gate
+	 * at 180 cm -- no auto-unlock until the credential has been seen that
+	 * far out in this session, so a phone that was already at the door when
+	 * ranging started does not open it. See aliro_approach_cfg::approach_cm. */
+	aliro_approach_init(&approach, NULL);
 
 	/* Same seam the ESP32 matter-lock uses (app_main.cpp on_uwb_range): the engine
 	 * signals, this thread decides. Both lines run before the listener can fire --
@@ -341,6 +432,9 @@ int main(void)
 	int64_t led_range_ms = 0;
 	bool present = false;
 	bool granted = false;
+	/* Rising-edge detector for the Aliro session, which is what arms the
+	 * trajectory gate. See aliro_approach_session_up(). */
+	bool session_was_up = false;
 
 	while (1) {
 		int64_t now = k_uptime_get();
@@ -374,7 +468,21 @@ int main(void)
 			       (now - led_range_ms) < ALIRO_LED_RANGE_HOLD_MS;
 
 		status_led_signal(STATUS_LED_RANGING, ranging);
-		status_led_signal(STATUS_LED_SESSION, aliro_reader_session_active());
+		const bool session_now = aliro_reader_session_active();
+
+		status_led_signal(STATUS_LED_SESSION, session_now);
+		if (session_now && !session_was_up) {
+			/*
+			 * A session cannot come up without the phone approaching: the
+			 * BLE RSSI power gate holds ranging off until the connection
+			 * crosses its open threshold. So this edge is the approach
+			 * evidence approach_cm wants, and it is the only form of it
+			 * this architecture produces -- UWB starts when the phone is
+			 * already at the door, so a 180 cm range never arrives.
+			 */
+			aliro_approach_session_up(&approach);
+		}
+		session_was_up = session_now;
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 		/* D12: an uncommissioned node cannot unlock anything, and it is
 		 * indistinguishable from a working one until someone walks up. */
@@ -389,7 +497,7 @@ int main(void)
 			last_gen = gen;
 			last_obs_gen = gen;
 			present = true;
-			act = aliro_approach_feed(&approach, now, cm);
+			act = feed_with_channel(&approach, now, cm);
 		} else {
 			/*
 			 * A fresh range the integrity consensus will not vouch
@@ -416,6 +524,25 @@ int main(void)
 			}
 			act = aliro_approach_tick(&approach, now);
 		}
+
+#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+		/*
+		 * The debounced verdict, printed on the edge only. This is the state
+		 * the widening consumes, so a walk with nlos_widen_cm still 0 shows
+		 * exactly where a widened build would have moved its threshold --
+		 * which is the reading that chooses the number.
+		 */
+		{
+			static bool was_blocked;
+			const bool blocked = aliro_approach_nlos_blocked(&approach, now);
+
+			if (blocked != was_blocked) {
+				was_blocked = blocked;
+				woz_printf("[ALAB] t=%lld ev=ml.vote blocked=%u\n",
+					   woz_uptime_us(), (unsigned)blocked);
+			}
+		}
+#endif
 
 		switch (act) {
 		case ALIRO_APPROACH_UNLOCK_PREDICT:
