@@ -4,10 +4,10 @@
 .PHONY: tools tools-install bootstrap ws-seed dfu-key
 
 ##@ Setup
-## tools: what every host CI gate needs, what this machine has, how to fill gaps
-##   Reports each tool, the gate it serves, and the version CI pins where it
-##   pins one. Installs nothing. Exits nonzero when something is missing, so
-##   `make verify` skipping a gate is never a surprise.
+## tools: what the host suites need, what this machine has, how to fill gaps
+##   Reports each tool, the suite it serves, and the pinned version where there
+##   is one. Installs nothing. Exits nonzero when something is missing, so a
+##   suite skipping quietly is never a surprise.
 tools:
 	@$(REPO_ROOT)/scripts/toolchain.sh check
 
@@ -22,11 +22,12 @@ tools-install:
 	@$(REPO_ROOT)/scripts/toolchain.sh install
 
 ## bootstrap: set this machine up for the repo  ·  the only command before build
-##   Three phases, so a fresh clone reaches `make build` without a manual step
-##   in the middle: `make tools-install` for the host gate tools and nrfutil;
-##   the NCS v3.3.0 toolchain (~2 GB, skipped when already installed); then NCS
-##   + the Nordic add-on (~6.5 GB), patched for this repo. Anything it cannot
-##   install stops the run before the big fetch, not after it.
+##   Two phases, so a fresh clone reaches `make build` without a manual step in
+##   the middle: the NCS v3.3.0 toolchain (~2 GB, skipped when already
+##   installed), then NCS + the Nordic add-on (~6.5 GB), patched for this repo.
+##   Anything it cannot install stops the run before the big fetch, not after.
+##   Needs nrfutil on PATH -- that is the one tool this target cannot do without
+##   (brew install nrfutil).
 ##   Both Zephyr ports build out of this one workspace: the DWM3001CDK needs it
 ##   for Zephyr and the NCS toolchain, the nRF5340 DK also for the add-on.
 ##   CI never runs this target — it calls scripts/bootstrap.sh directly — so no
@@ -35,14 +36,17 @@ tools-install:
 ##   a COW clone of the primary's tree costs ~0 disk, where refetching costs 6.5 GB.
 ##   Delegation is skipped once ./workspace exists, because ws-seed is a no-op then
 ##   and bootstrap's real job is re-applying THIS branch's patches.
-##   Options: NO_TOOLS=1 skip the tool phase, straight to the fetch
+##   The host-tool survey is NOT part of this. Bootstrap's job is the workspace,
+##   and being asked to install a dozen linters first is noise in front of the
+##   thing you actually ran. Run `make tools` when you want that survey.
+##   Options: WITH_TOOLS=1 run the host-tool survey first, as it used to
 ##            NO_TOOLCHAIN=1 skip the NCS toolchain phase
 ##            NO_SEED=1 in a worktree, fetch a full independent workspace anyway
 ##            (for a different NCS revision, or a primary you suspect is corrupt)
 ##            HA=1 also applies the Home Assistant data-model patches
 ##            (pair with `make nrf-build HA=1`; not hardware-validated)
 bootstrap:
-	@[ -n "$(NO_TOOLS)" ] || $(REPO_ROOT)/scripts/toolchain.sh install
+	@[ -z "$(WITH_TOOLS)" ] || $(REPO_ROOT)/scripts/toolchain.sh install
 	@if [ -z "$(NO_SEED)" ] && [ ! -d workspace/.west ] && \
 	    [ "$$(git rev-parse --git-common-dir)" != "$$(git rev-parse --git-dir)" ]; then \
 	  printf '  linked worktree with no workspace: cloning the primary (NO_SEED=1 to refetch)\n'; \
