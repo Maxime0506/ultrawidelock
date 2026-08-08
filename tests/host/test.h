@@ -99,6 +99,7 @@ void test_matter_network(void);
 void test_matter_case(void);
 void test_matter_clusters(void);
 void test_woz_ml(void);
+void test_woz_port(void);
 
 /* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
 void test_uwb_min(void);
