@@ -164,15 +164,10 @@ esp-check-env:
 
 ##@ ESP32  ·  APP=matter-lock|reader|initiator  TARGET=esp32s3|esp32c5|esp32c6
 ## esp-set-target: regenerate this build's sdkconfig from scratch for TARGET
-##   Not a prerequisite: esp-build passes IDF_TARGET itself, and each APP/TARGET
-##   pair has its own directory and sdkconfig. Use this to discard a config you
-##   have edited (esp-menuconfig, esp-presence-on) and start from the defaults.
 esp-set-target: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) set-target $(TARGET)
 
 ## esp-build: compile the app   -> build/esp32-<app>-<target>[-<variant>]
-##   Options: APP=  TARGET=  VARIANT=presence|hamqtt|piv
-##            IDF_EXPORT=  ESP_MATTER_PATH=
 esp-build: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) build
 
@@ -181,8 +176,6 @@ esp-rebuild: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) fullclean && $(IDFPY) build
 
 ## esp-flash: build + write bootloader + partition table + app
-##   Auto-selects the ESP's USB-UART port and REFUSES any SEGGER/J-Link port
-##   (VID 0x1366), so this can never touch the nRF rig. FORCE=1 stops a holder.
 esp-flash: esp-check-env
 	@$(RESOLVE_PORT); \
 	$(ENSURE_PORT_FREE); \
@@ -204,7 +197,6 @@ esp-flash-erase: esp-check-env
 	cd "$(ESP_APP_DIR)" && $(IDFPY) -p "$$port" erase-flash && $(IDFPY) -p "$$port" flash
 
 ## esp-monitor: interactive serial console (logs + shell)  ·  ctrl-] to quit
-##   Override: make esp-monitor PORT=/dev/cu.usbmodemXXXX BAUD=115200
 esp-monitor: esp-check-env
 	@$(RESOLVE_PORT); \
 	echo "  monitoring $$port @ $(BAUD)  (ctrl-] quits)"; \
@@ -233,17 +225,11 @@ esp-size: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) size
 
 ## esp-merge-bin: fuse bootloader + partition table + app into one 0x0 image
-##   What the release ships, so a user writes one file at one offset instead of
-##   three at three.
 esp-merge-bin: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) merge-bin -o openaliro-$(APP)-$(TARGET).bin
 	@printf '  merged  ·  %s/openaliro-%s-%s.bin\n' '$(ESP_BUILD)' '$(APP)' '$(TARGET)'
 
 ## esp-release: build every chip and bundle the images to publish
-##   Recursive per chip on purpose: ESP_BUILD and the sdkconfig path are fixed
-##   when this file is parsed, so one recipe cannot retarget itself, and each
-##   chip needs its own build directory anyway (set-target wipes both).
-##   Options: ESP_RELEASE_CHIPS='esp32s3 ...'  ESP_RELEASE_OUT=  ESP_RELEASE_VER=
 esp-release:
 	@for t in $(ESP_RELEASE_CHIPS); do \
 	  printf '\n  building matter-lock for %s\n' "$$t"; \
@@ -272,8 +258,6 @@ esp-env: esp-check-env
 	  '$(APP)' '$(TARGET)' '$(if $(VARIANT),$(VARIANT),(none))' '$(ESP_BUILD)' '$(IDF_EXPORT)' '$(ESP_MATTER_PATH)'
 
 ## esp-term: serial console via tio  ·  no ESP backtrace decode, but robust
-##   tio holds the port, so quit it (ctrl-t q) before make esp-flash.
-##   Override: make esp-term PORT=/dev/cu.usbmodemXXXX BAUD=115200 LOG=session.log
 esp-term:
 	@command -v tio >/dev/null 2>&1 || { printf '  tio not found  ·  install: brew install tio\n' >&2; exit 1; }
 	@$(RESOLVE_PORT); \
@@ -294,17 +278,11 @@ esp-ports:
 	ls /dev/cu.usbmodem* >/dev/null 2>&1 || echo "  (no usbmodem ports attached)"
 
 ## esp-clean: remove THIS app/target/variant's build directory
-##   `make clean` at the root removes every build there is, this one only.
 esp-clean:
 	@rm -rf "$(ESP_BUILD)" && printf '  removed %s\n' '$(ESP_BUILD)'
 
 ##@ ESP32 presence  (CONFIG_WOZ_PRESENCE · adds `presence` to the app's console)
 ## esp-presence-on: add the presence console command to this build  ·  idempotent
-##   Additive, not a mode: the shell, the logs and ranging all stay exactly as
-##   they are, and `presence` joins them. On the reader this also enables
-##   CONFIG_WOZ_ALIRO_CLONE, whose aliro-export prints the reader PRIVATE KEY on
-##   the console -- bench only, which is why it stays default n.
-##   Writes to this build's own sdkconfig, so it cannot leak into another target.
 esp-presence-on:
 	@[ -f "$(ESP_SDKCONFIG)" ] || { echo "  no sdkconfig yet — run 'make esp-build APP=$(APP)' once first" >&2; exit 1; }
 	@for k in CONFIG_WOZ_PRESENCE $(if $(filter reader,$(APP)),CONFIG_WOZ_ALIRO_CLONE); do \
@@ -318,8 +296,6 @@ esp-presence-off:
 	  "$(ESP_SDKCONFIG)" && echo "  presence OFF  ·  next: make esp-flash APP=$(APP)"
 
 ## esp-presence-flash: turn presence on, then build + flash
-##   Never erases: the device signing key and the Aliro trust store both live in
-##   NVS, and erasing regenerates the key, invalidating every enrolment.
 esp-presence-flash: esp-presence-on
 	@$(MAKE) --no-print-directory esp-flash
 
@@ -338,9 +314,6 @@ esp-piv-pin-app-flash:
 	@$(MAKE) --no-print-directory esp-app-flash APP=matter-lock VARIANT=piv
 
 ## esp-lab: capture a walk-up to a timestamped log
-##   The trace ships in every build, OFF at boot. At the matter> console:
-##   `lab on`, walk up + unlock, `lab off`, then ctrl-t q. The log holds the
-##   [ALAB] lines for whatever you score it with.
 esp-lab:
 	@command -v tio >/dev/null 2>&1 || { printf '  tio not found · install: brew install tio\n' >&2; exit 1; }
 	@$(RESOLVE_PORT); \

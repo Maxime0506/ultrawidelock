@@ -55,38 +55,23 @@ ANCHOR_PRISTINE := $(if $(PRISTINE),always,auto)
 
 ##@ Two-anchor bench  ·  anchor-to-anchor DS-TWR (stage A)
 ## anchor-build: build one anchor  -> build/anchor-<board>-<role>
-##   ROLE=initiator|responder      (default initiator)
-##   ANCHOR_BOARD=decawave_dwm3001cdk | nrf5340dk/nrf5340/cpuapp
-##   ANT_DLY=<DTU>                 lumped calibration; omit to build uncalibrated
-##   PRISTINE=1                    force a from-scratch build
-##   No signing key needed: this app carries no bootloader, so unlike `make
-##   build` it configures in a fresh clone with no `make dfu-key` first.
-##   e.g.  make anchor-build ROLE=responder ANCHOR_BOARD=nrf5340dk/nrf5340/cpuapp
 anchor-build:
 	@$(CDK_RUN) build -p $(ANCHOR_PRISTINE) -b $(ANCHOR_BOARD) \
 	  -d $(ANCHOR_BUILD) $(ANCHOR_APP) \
 	  -- $(ANCHOR_ROLE_FLAG) $(ANCHOR_ANT_FLAG)
 
 ## anchor-flash: flash the anchor built by the same ROLE/ANCHOR_BOARD pair
-##   Pin the probe when two boards are attached: enumeration order is not
-##   stable, and writing the wrong part is silent. CDK_PROBE=<VID:PID:Serial>
-##   or once per shell: export PROBE_RS_PROBE=<VID:PID:Serial>
 anchor-flash:
 	$(CDK_PROBE_GUARD)
 	@$(CDK_RUN) flash -d $(ANCHOR_BUILD) $(CDK_DEV_ID_ARG)
 
 ## anchor-monitor: RTT console for one anchor  ·  attaches with the ELF in its build dir
-##   Both boards log the same ANCHOR line format, so two of these side by side
-##   is the whole of stage C1. Pin the probe on each.
 anchor-monitor:
 	$(CDK_PROBE_GUARD)
 	@probe-rs attach --chip $(ANCHOR_CHIP) $(CDK_PROBE_ARG) \
 	  $(ANCHOR_BUILD)/anchor/zephyr/zephyr.elf
 
 ## anchor-pair: build BOTH halves of today's pair in one go
-##   CDK as responder (it computes and will own the fused verdict later), DK as
-##   initiator. Builds only -- flashing needs a probe serial per board, which
-##   only you know.
 anchor-pair:
 	@$(MAKE) anchor-build ROLE=responder ANCHOR_BOARD=decawave_dwm3001cdk
 	@$(MAKE) anchor-build ROLE=initiator ANCHOR_BOARD=nrf5340dk/nrf5340/cpuapp

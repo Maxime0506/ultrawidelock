@@ -4,8 +4,6 @@
 
 ##@ Housekeeping
 ## clean: remove every build artifact in the tree  ->  ./build and the app-local ones
-##   One rm for the shared root, plus the directories ESP-IDF writes when idf.py
-##   is called directly inside an app instead of through `make esp-build`.
 clean:
 	@# ALIRO_BUILD_ROOT is `?=` and exported (Makefile:38-39), so whatever is in
 	@# the caller's environment wins -- and this line deletes it recursively. A
@@ -28,8 +26,6 @@ clean:
 	@printf '  removed %s and the app-local build directories\n' '$(ALIRO_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + workspace
-##   A symlinked workspace (pointing at the primary) is left alone — only a real
-##   local dir is removed, never the shared source.
 ws-clean: clean
 	@if [ -d workspace ] && [ ! -L workspace ]; then rm -rf workspace && printf '  removed ./workspace\n'; \
 	else printf '  (no local workspace to remove)\n'; fi

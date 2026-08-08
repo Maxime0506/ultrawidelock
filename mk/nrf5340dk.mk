@@ -90,25 +90,6 @@ export NRF_RELEASE_VER
 
 ##@ nRF5340 DK  ·  NFC tap + approach unlock
 ## nrf-build: incremental build          -> build/nrf5340dk/merged.hex
-##   ALIRO_SOURCE=0 builds into build/nrf5340dk-blob instead, so flipping
-##   between the two implementations no longer forces a pristine rebuild.
-##   Options: CHIP=dw3720 (default dw3000)  PRETTY=1  PRISTINE=1  SELFTEST=1
-##            STRICT=1 (drop suspect ranges)
-##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
-##            ALIRO_SOURCE=0 (legacy Nordic binary fallback)
-##            ALIRO_TRACE=1 (currently blocked: vendor trace patch is absent)
-##            CIR=1 (CIA/CIR diagnostics: `aliro cir on|dump on|probe`)
-##            NFC=pn532|st25r|none (reader transport; default st25r)
-##            LTO=0 (opt OUT of link-time optimisation, which is ON by default
-##                   and worth 77,452 B. Use it when a stack trace has to name
-##                   every frame. Forces a pristine rebuild.)
-##            DFU=0 (opt OUT of MCUboot + Matter OTA, which are ON by default.
-##                   DFU=0 gives the old no-bootloader bench layout, which keeps
-##                   33,280 B of app flash and leaves external_nvs at 0x0.
-##                   NOTE the default needs `make dfu-key` first, and moves
-##                   external_nvs, which costs an already provisioned board its
-##                   reader storage.)
-##   e.g.     make nrf-build PRETTY=1 CHIP=dw3720
 nrf-build:
 	@$(NRF_ENV) $(NRF_BUILD_SH) build
 
@@ -125,12 +106,6 @@ nrf-pretty:
 	@$(NRF_ENV) PRETTY=1 $(NRF_BUILD_SH) build
 
 ## nrf-pairing-code: this image's Matter pairing code + QR  ·  run by nrf-term
-##   Read out of the build, not off the board: the payload is generated at build
-##   time and merged into the hex, so it is a property of what you built. If you
-##   flashed a different variant since, rebuild that one to see its code.
-##   The values come from CONFIG_CHIP_DEVICE_{DISCRIMINATOR,SPAKE2_PASSCODE} and
-##   are fixed in Kconfig rather than random per build, so this is a bench
-##   credential, not a per-device secret.
 nrf-pairing-code:
 	@f='$(NRF_FACTORY)'; \
 	if [ ! -f "$$f" ]; then \
@@ -160,10 +135,6 @@ nrf-flash-erase:
 	@$(NRF_ENV) $(NRF_BUILD_SH) flash-erase
 
 ## nrf-init-build: build the Aliro initiator      -> build/nrf5340dk-initiator
-##   Options: PRISTINE=1 (required after adding or changing boards/*.overlay --
-##            Zephyr caches DTC_OVERLAY_FILE, so a plain rebuild silently ignores
-##            a newly added board overlay. See commit c6912ba2.)
-##   A separate application from `make nrf-build`, which builds the door lock.
 nrf-init-build:
 	@cd '$(NRF_WS)' && $(NRF_LAUNCH) west build \
 	  -b nrf5340dk/nrf5340/cpuapp --sysbuild \
@@ -172,28 +143,12 @@ nrf-init-build:
 	  -- -DZEPHYR_EXTRA_MODULES='$(REPO_ROOT)/modules/woz_uwb;$(REPO_ROOT)/modules/woz_dw3000'
 
 ## nrf-init-flash: flash the Aliro initiator (both cores) -> build/nrf5340dk-initiator
-##   A different application from the one every other nrf- target builds: the DK
-##   standing in for an iPhone, from ports/nrf5340dk/initiator. `make nrf-flash`
-##   would put the door-lock image on the same board instead.
-##   Erase + flash, because the initiator is a sysbuild pair and the net core
-##   carries the BLE controller; an app-only write leaves whichever controller
-##   was already there. domains.yaml flashes ipc_radio first, then the app.
-##   The build itself is not driven from here yet; build it with
-##   `west build -b nrf5340dk/nrf5340/cpuapp --sysbuild -d $(NRF_INIT_BUILD) ports/nrf5340dk/initiator`.
 nrf-init-flash:
 	@[ -f '$(NRF_INIT_BUILD)/build.ninja' ] || { \
 	  printf '  no initiator build at %s  ·  build it first\n' '$(NRF_INIT_BUILD)' >&2; exit 1; }
 	@ALIRO_BUILD='$(NRF_INIT_BUILD)' $(NRF_BUILD_SH) flash-erase
 
 ## nrf-term: serial console — live logs + typeable shell (tio, 115200 8N1)
-##   Prints this image's Matter pairing code first, because that is what you came
-##   for and the console itself may have nothing to say: the Matter build has no
-##   log backend (see below), so an empty terminal is the expected result rather
-##   than a fault.
-##   Auto-detects the nRF5340DK console (VCOM1 — this firmware's console + Zephyr
-##   shell live there; VCOM0 is silent).  ctrl-t q quits.  `help` lists commands.
-##   The DWM3001CDK has no UART console; use `make monitor` (RTT) for that board.
-##   Override: make nrf-term PORT=/dev/cu.usbmodemXXXX BAUD=115200 LOG=session.log
 nrf-term: nrf-pairing-code
 	@command -v tio >/dev/null 2>&1 || { printf '  tio not found  ·  install: brew install tio\n' >&2; exit 1; }
 	@port='$(PORT)'; \
@@ -213,19 +168,6 @@ nrf-term: nrf-pairing-code
 	exec tio -b $(BAUD) $$logargs "$$port"
 
 ## nrf-release: build and bundle the DK image to publish
-##   The same folder shape every target ships, assembled by
-##   scripts/release-bundle.sh: both core hex files, the flashing script, the
-##   guide, README.txt, VERSION.txt and SHA256SUMS.txt. Build it locally to see
-##   exactly what a stranger downloads.
-##
-##   DFU IS DELIBERATELY OFF HERE, unlike `make nrf-build`, and this target says
-##   so rather than inheriting it. MCUboot needs a signing key that only this
-##   checkout holds (scripts/check-signing-key.sh refuses without one), and no
-##   release key exists for this board the way it does for the CDK. So the
-##   published DK image has no bootloader and no Matter OTA, which is what CI
-##   has always shipped by calling build-nrf5340dk.sh directly. Turning it on is
-##   a key-management decision, not a build flag.
-##   Options: NRF_RELEASE_OUT=<dir>  NRF_RELEASE_VER=<tag>
 nrf-release:
 	@# Recursive rather than a DFU=0 prefix on NRF_BUILD_SH: NRF_ENV already
 	@# carries DFU=1 by default, and a second assignment on the same command

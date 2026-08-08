@@ -5,36 +5,16 @@
 
 ##@ Setup
 ## tools: what the host suites need, what this machine has
-##   Installs nothing. Exits nonzero when a gate tool is missing, so a suite
-##   skipping quietly is never a surprise.
 tools:
 	@$(REPO_ROOT)/scripts/toolchain.sh
 
 ## bootstrap: set this machine up for the repo  ·  the only command before build
-##   Two phases, so a fresh clone reaches `make build` without a manual step in
-##   the middle: the NCS v3.3.0 toolchain (~2 GB, skipped when already
-##   installed), then NCS + the Nordic add-on (~6.5 GB), patched for this repo.
-##   Anything it cannot install stops the run before the big fetch, not after.
-##   Needs nrfutil on PATH -- that is the one tool this target cannot do without
-##   (brew install nrfutil).
-##   Both Zephyr ports build out of this one workspace: the DWM3001CDK needs it
-##   for Zephyr and the NCS toolchain, the nRF5340 DK also for the add-on.
-##   Options: NO_TOOLCHAIN=1 skip the NCS toolchain phase
-##            HA=1 also applies the Home Assistant data-model patches
-##            (pair with `make nrf-build HA=1`; not hardware-validated)
 bootstrap:
 	@$(NRF_ENV) ./scripts/bootstrap.sh
 
 ## dfu-key: generate this checkout's MCUboot signing key  ·  once per clone
-##   ECDSA P-256 into firmware/keys/, gitignored. BOTH Zephyr ports need it and
-##   both share the one key: the DWM3001CDK for every build, the nRF5340 DK for
-##   every build that keeps the default DFU=1. Without it they refuse to build
-##   rather than fall back to MCUboot's PUBLISHED demo key, which every stock
-##   MCUboot in the world already trusts (scripts/check-signing-key.sh).
-##   REFUSES TO OVERWRITE an existing key. Replacing it strands every board
-##   already carrying the old public half, and on the CDK's single slot there is
-##   no previous image to fall back to.
-##   Options: SIGN_KEY=<path> (absolute)
+#   Refuses to overwrite: replacing the key strands every board carrying the old
+#   public half. Options: SIGN_KEY=<path> (absolute)
 dfu-key:
 	@if [ -f '$(SIGN_KEY)' ]; then \
 	  printf '  key exists, keeping it  ·  %s\n' '$(SIGN_KEY)'; exit 0; \

@@ -306,22 +306,6 @@ CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_S
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
 ## build: the DWM3001CDK lock, reader + Matter over Thread  -> build/cdk-matter
-##   One nRF52833: the Aliro reader, the DW3110's ranging, a hand-written Matter
-##   node and an OpenThread MTD, in a part Nordic's own CHIP-based lock does not
-##   fit in. Apple Home commissions it over BLE and it then shows a live lock
-##   tile. Self-provisions, so it needs no USB console.
-##   What flash, flash-erase and monitor all mean unless you say otherwise.
-##   RELEASE=1 gives up the 8 KB RTT ring for 7,168 B of RAM and sets errors-only
-##   logging to save 20,568 B of flash. Debug is the default on purpose: on a
-##   release image a fault reads as a hang, because a 1 KB ring truncates the
-##   boot log and NO_BLOCK_SKIP drops the NEWEST lines.
-##   LTO is ON by default and worth 41,084 B; LTO=0 opts out when you need a
-##   stack trace to name every frame.
-##   ANCHOR=1 adds firmware/overlay-anchor.conf: two-anchor geometry gating
-##   UNLOCK_PREDICT, plus the accelerometer impact interrupt. Off by default, so
-##   the shipping image is unchanged. Prefer this to writing CDK_CONF by hand,
-##   which replaces the whole list and silently drops overlay-lto.conf.
-##   Options: PRISTINE=1  RELEASE=1  LTO=0  ANCHOR=1  CDK_BUILD=<dir>  NCS_VER=<tag>
 build:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_BUILD) $(CDK_APP) \
@@ -335,59 +319,20 @@ rebuild:
 	@$(MAKE) --no-print-directory build PRISTINE=1
 
 ## reader: the same board WITHOUT Matter        -> build/cdk-reader
-##   Aliro reader and UWB only. Needs no Thread network and no commissioner,
-##   which makes it the quickest way to a working board; the identity is typed
-##   in over USB in provisioning mode.
-##   Builds elsewhere on purpose, so flash and monitor keep meaning the Matter
-##   image: pass CDK_BUILD=$(CDK_READER_BUILD) to those to work on this one.
-##   Options: PRISTINE=1  CDK_READER_BUILD=<dir>
 reader:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_READER_BUILD) $(CDK_APP) \
 	  -- $(CDK_SIGN)
 
 ## selftest: one-shot UWB init self-test at boot  -> build/cdk-selftest
-##   The stage-3 bring-up check: uwb_selftest.c runs the full Aliro UWB start
-##   path against a dummy URSK and logs the raw DEV_ID read over SPI (expect
-##   0xDECA03xx). A wrong pin, a wrong SPI mode or an unpowered DW3110 all show
-##   up as 0x00000000 or 0xFFFFFFFF. Reader config plus the overlay, no Matter.
-##   Its RX diagnostics print continuously once the responder is listening, so
-##   do not use this image when what you need to watch is bring-up.
-##   Read it with: make monitor CDK_RTT_BUILD=$(CDK_SELFTEST_BUILD)
 selftest:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_SELFTEST_BUILD) $(CDK_APP) \
 	  -- -DEXTRA_CONF_FILE=overlays/uwb-selftest.conf $(CDK_SIGN)
 
 ## cirdiag: the Matter image plus an unattended CIR capture cycle  -> build/cdk-cirdiag
-##   For collecting channel-impulse traces from a real walk-up: the labelled
-##   inside/outside data the woz_ml LOS/NLOS model has to be retrained on
-##   before its thresholds mean anything on this hardware.
-##
-##   The Matter image and not `reader`, because the capture wants a real Apple
-##   Wallet walk-up and this board only advertises Aliro once Apple Home has
-##   commissioned it. So flash it with `flash`, NEVER `flash-erase`: the erase
-##   takes the credential the walk-up needs and costs a re-commissioning.
-##
-##     make cirdiag
-##     make flash   CDK_BUILD=$(CDK_CIRDIAG_BUILD)
-##     make monitor CDK_RTT_BUILD=$(CDK_CIRDIAG_BUILD)
-##
-##   It prints `cir.cycle: n=<i> capture` and `... end` around each 20 s interval,
-##   then waits 3 s. Walk up from outside during one interval and from inside
-##   during the next; the cycle number is the label. The [ALAB] lines in between
-##   carry the per-round record.
-##
-##   SUMMARY ONLY by default, which is a hardware finding rather than a taste:
-##   with the windowed-CIR dump armed this board never transmits a Response at all
-##   (measured 2026-08-07, tx0 and no range across three sessions, while the plain
-##   image ranged 22-443 cm on the same board). The taps cost the LOS/NLOS
-##   classifier only 0.14 accuracy points to lose, so the default trades them
-##   for a working radio. CIRDIAG_WINDOWS=1 restores
-##   them for anyone taking the ranging itself apart.
-##
-##   NOT A SHIPPING IMAGE. Reflash `make build` when the run is done.
-##   Options: PRISTINE=1  CIRDIAG_WINDOWS=1  CDK_CIRDIAG_BUILD=<dir>
+#   Flash it with `flash`, NEVER `flash-erase`: the erase takes the commissioned
+#   credential the capture walk-up needs, and costs a re-commissioning.
 #   Every flag `build` passes is repeated here, deliberately and not by include:
 #   dropping $(CDK_DFU) alone silently built an image with no woz_dfu module at
 #   all, which is a different image from the one being characterised and cannot
@@ -402,29 +347,6 @@ cirdiag:
 	  --from-config $(CDK_CIRDIAG_BUILD)/$(CDK_IMAGE)/zephyr/.config
 
 ## mlgate: DWM3001CDK image that runs the LOS/NLOS classifier in the unlock path
-##   Same application as `build`, plus woz_ml and one CIA diagnostic read per
-##   ranging block. The classifier decides a channel class per approach sample;
-##   aliro_approach widens its unlock radius while the window says obstructed.
-##
-##     make mlgate
-##     make flash   CDK_BUILD=$(CDK_MLGATE_BUILD)
-##     make monitor CDK_RTT_BUILD=$(CDK_MLGATE_BUILD)
-##
-##   NOT the capture image. `cirdiag` samples one reception in eight and does not
-##   care which, because a training set only needs a few hundred per class. This
-##   latches on the Final and nothing else, because a five-sample median window
-##   needs five independent channel calls to reach its majority of three.
-##
-##   TWO THINGS IT DOES NOT PROVE, and both want a walk-up. First, that the read
-##   fits: modules/woz_uwb/Kconfig records this board transmitting no Response at
-##   all with the summary armed on EVERY reception, and restricting it to the
-##   Final is a hypothesis about why, not a measurement. Ranges of 20-400 cm and
-##   an unlock is the evidence; tx0 is the refutation. Second, that the widening
-##   helps: nlos_widen_cm is 0 and nothing here sets it, so this image classifies
-##   and changes no decision. Read it against what you were doing first.
-##
-##   NOT A SHIPPING IMAGE. Reflash `make build` when the run is done.
-##   Options: PRISTINE=1  CDK_MLGATE_BUILD=<dir>
 #   Same repetition rule as `cirdiag`: every flag `build` passes is repeated
 #   here on purpose, because dropping one silently characterises a different
 #   image.
@@ -439,12 +361,6 @@ mlgate:
 
 
 ## flash: flash the DWM3001CDK over its on-board J-Link OB
-##   Options: CDK_BUILD=<dir> (default build/cdk-matter)  CDK_PROBE=<VID:PID:Serial>
-##   With several probes attached and CDK_PROBE unset it identifies the CDK by
-##   reading FICR INFO.PART through each candidate and pins the winner in
-##   firmware/keys/cdk-probe (delete that file to re-identify). It refuses to
-##   run only when that cannot settle it, because the enumeration order that
-##   decides "probe 0" moves between sessions.
 flash:
 	$(CDK_PROBE_GUARD)
 	@# `flash` does not rebuild, and a stale hex flashes without a word. On
@@ -473,65 +389,17 @@ flash:
 	fi
 
 ## flash-erase: full chip erase + flash the DWM3001CDK
-##   Costs everything the board learned at runtime: the Matter fabrics, the
-##   reader identity and its trust anchors, so Apple Home has to commission it
-##   again. It also destroys OpenThread's SRP client key. That used to be the
-##   expensive part -- the next boot asked for the same name under a new key and
-##   the border router refused it for up to 14 days -- and f7d3160 ended it by
-##   giving the host name a suffix that dies with the key, so an erased board
-##   now registers a name nobody owns.
-##   To clear only what a controller can see, hold SW2 through reset instead
-##   (ALIRO_FACTORY_RESET_BUTTON): same effect on fabrics and anchors, and it
-##   keeps the Thread settings, so the board comes back on the name it had.
-##   Options: CDK_BUILD=<dir> (default build/cdk-matter)  CDK_PROBE=<VID:PID:Serial>
 flash-erase:
 	$(CDK_PROBE_GUARD)
 	@$(CDK_RUN) flash --erase $(CDK_DEV_ID_ARG) -d $(CDK_BUILD)
 
 ## dfu: update the board over Bluetooth  ·  no cable, no probe
-##   Builds the current tree, works out the difference from what the board is
-##   already running, signs it, and pushes it. One command, start to finish.
-##
-##   Press SW2 on the board when it asks. That press is the whole authorization
-##   model: the patch is signed and MCUboot re-verifies the RESULT before
-##   booting it, so no peer can install code either way -- what a closed window
-##   prevents is a stranger in radio range spending your flash's erase cycles
-##   and rebooting your lock. The window lasts five minutes.
-##
-##   Two full slots want 844 KB of a 512 KB part, so what travels is a DELTA:
-##   about 7.6 KB between adjacent builds, against a 32 KB budget (the 40 KB
-##   patch_staging partition less its two control pages). The board reboots into
-##   MCUboot, which applies it in roughly 20-30 seconds.
-##
-##   Needs to know what the board is running, which it reads from
-##   $(CDK_DEPLOYED) -- written by `make flash` and by a successful `make dfu`.
-##   If that is missing or stale the board REFUSES the patch rather than
-##   mis-applying it, so the cost is a wasted transfer.
-##   Options: CDK_BUILD=<dir>  CDK_DEPLOYED=<hex>  OTA_NAME=<advertised name>
 dfu:
 	@$(MAKE) --no-print-directory build
 	@$(MAKE) --no-print-directory ota-patch
 	@$(MAKE) --no-print-directory ota-push
 
 ## fota: make the file an iPhone can install, and say how  ·  needs SMP=1
-##   Builds the tree, diffs it against what the board is running, signs the
-##   delta, and dresses it as an MCUboot image so a phone's file picker will
-##   accept it. Leaves ONE file to move to the phone and prints the steps.
-##
-##   The wrapper is why this is a separate target from `dfu`. nRF Device
-##   Manager PARSES a file before offering to upload it, and a bare .wdfu has
-##   no magic it recognises, so the phone refuses it at the picker. The wrapped
-##   file is a genuinely well-formed image -- real sizes, a real SHA-256 -- it
-##   is simply not bootable, and nothing ever asks it to be. The board spots
-##   the wrapper by its magic and steps over it.
-##
-##   SETS SMP=1 RELEASE=1 ITSELF, and builds in its own directory. Those are
-##   not preferences here: a board without SMP does not speak mcumgr at all, so
-##   a patch built without it would take the phone's own transport away, and
-##   RELEASE is what leaves the RAM to run it (2,412 B free without, 9,516 B
-##   with). Inheriting a bare `make`'s defaults would quietly build the wrong
-##   image and diff the board against it, so this target does not inherit them.
-##   Options: CDK_FOTA_BUILD=<dir>  CDK_DEPLOYED=<hex>  FOTA_VERSION=<x.y.z>
 FOTA_VERSION   ?= 1.0.0
 CDK_FOTA_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-smp-img
 CDK_FOTA_BUILD := $(abspath $(CDK_FOTA_BUILD))
@@ -572,10 +440,6 @@ fota-build:
 	@printf '  anyone in radio range could reboot the lock in a loop.\n\n'
 
 ## fota-done: after a phone push, confirm it landed and record what the board runs
-##   ASKS THE BOARD rather than assuming. It reads the image list over BLE and
-##   compares the hash against the image the last `make fota` built; the record
-##   moves only if they match, so a failed or half-finished update leaves the
-##   old base in place instead of poisoning the next delta.
 fota-done:
 	@$(MAKE) --no-print-directory fota-confirm \
 	  SMP=1 RELEASE=1 CDK_BUILD='$(CDK_FOTA_BUILD)'
@@ -590,7 +454,6 @@ fota-confirm: $(CDK_OTA_PY)
 	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
 
 ## ota-patch: build a signed delta from the deployed image to the built one
-##   Leaves it at $(CDK_PATCH). Useful on its own when the board is elsewhere.
 ota-patch: $(CDK_OTA_PY)
 	@if [ ! -f '$(CDK_DEPLOYED)' ]; then \
 	  printf '  no record of what the board is running  ·  %s\n' '$(CDK_DEPLOYED)' >&2; \
@@ -603,8 +466,6 @@ ota-patch: $(CDK_OTA_PY)
 	  --build-dir '$(CDK_BUILD)' --key '$(CDK_KEY)' --out '$(CDK_PATCH)'
 
 ## ota-push: send an already-built patch over Bluetooth
-##   Waits for you to press SW2, then transfers. On success it records the new
-##   image as deployed, so the next `make dfu` diffs from the right place.
 ota-push: $(CDK_OTA_PY)
 	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make ota-patch`\n' '$(CDK_PATCH)' >&2; exit 1; }
 	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_push.py '$(CDK_PATCH)' \
@@ -614,11 +475,6 @@ ota-push: $(CDK_OTA_PY)
 	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
 
 ## ota-smp: push the patch over mcumgr instead, exactly as a phone would
-##
-##   Needs a board built with SMP=1. Sends the same bytes as nRF Device Manager,
-##   so it answers the one question the phone cannot: whether a failure is in
-##   the firmware or in the app. `make ota-smp-list` just reads the image list,
-##   which is the cheapest proof that group 1 is answering at all.
 #
 # SETS ITS OWN CONFIGURATION, like `fota` and for the same reason: this target
 # is definitionally the mcumgr path, and a board without SMP does not speak it
@@ -642,13 +498,6 @@ ota-smp-list: $(CDK_OTA_PY)
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 
 ## ota-window: open the update window over SWD instead of pressing SW2
-##   BENCH ONLY, and it needs the probe the whole point of this is to avoid. It
-##   exists because an automated test cannot press a button: it writes the
-##   window flag straight into RAM. The symbol is LTO-renamed, so it is looked
-##   up in the ELF rather than hardcoded.
-##   POINT CDK_BUILD AT THE IMAGE THE BOARD IS RUNNING, not the one being
-##   pushed. The address comes out of that ELF, and writing it into the wrong
-##   RAM location does nothing visible -- the push simply keeps waiting.
 ota-window:
 	@elf='$(CDK_DEPLOYED_ELF)'; \
 	[ -f "$$elf" ] || elf='$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf'; \
@@ -659,21 +508,6 @@ ota-window:
 	probe-rs write --chip $(CDK_CHIP) $(CDK_PROBE_ARG) b8 "0x$$addr" 1
 
 ## release: build and bundle the image to publish  ·  needs RELEASE_KEY=<path>
-##   One command, start to finish: a pristine SMP+RELEASE build signed with the
-##   OFFLINE release key, assembled into a folder with the flashing script, the
-##   guide and a SHA256SUMS.txt, ready to attach to a GitHub release.
-##
-##   RELEASE_KEY IS NOT OPTIONAL AND HAS NO DEFAULT. It must not be this
-##   checkout's dev key either, and the target refuses if it is. MCUboot embeds
-##   the public half permanently, so this key decides what every board a
-##   stranger flashes from the release will accept over the air, forever. It
-##   belongs wherever your other production secrets live, offline, and never in
-##   a CI secret store.
-##
-##   SMP=1 RELEASE=1 are set here rather than inherited, like `fota`: without
-##   SMP a published board cannot be updated from a phone at all, and RELEASE is
-##   what leaves the RAM to run it.
-##   Options: RELEASE_KEY=<path>  CDK_RELEASE_BUILD=<dir>  CDK_RELEASE_OUT=<dir>
 CDK_RELEASE_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-release
 CDK_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-dwm3001cdk
 CDK_RELEASE_BUILD := $(abspath $(CDK_RELEASE_BUILD))
@@ -731,12 +565,6 @@ $(CDK_OTA_PY):
 	@printf '  ready  ·  detools, cryptography, bleak\n'
 
 ## dfu-serial: the old serial-recovery upload  ·  kept, but it does not work
-##   Uploads a whole image down the J-Link OB's VCOM. One transfer succeeded on
-##   2026-08-02 and it has never reproduced: MCUboot enters its listening window
-##   with a full four seconds available and still does not answer mcumgr.
-##   scripts/cdk-dfu.sh records everything ruled out. `make dfu` is the path
-##   that works.
-##   Options: DFU_PORT=/dev/cu.usbmodemXXXX  DFU_BAUD=115200  CDK_BUILD=<dir>
 dfu-serial:
 	@port='$(DFU_PORT)'; \
 	if [ -z "$$port" ]; then port=$$(ls /dev/cu.usbmodem* 2>/dev/null | head -n1); fi; \
@@ -747,23 +575,6 @@ dfu-serial:
 	$(REPO_ROOT)/scripts/cdk-dfu.sh "$$port" '$(DFU_BAUD)' '$(CDK_SIGNED)' '$(CDK_CHIP)'
 
 ## monitor: stream the DWM3001CDK's console over RTT  ·  Ctrl-C to stop
-##   This board has no UART console (CONFIG_UART_CONSOLE=n), so `make nrf-term`
-##   does not reach it and RTT is the only log there is. probe-rs re-reads
-##   _SEGGER_RTT out of the ELF on every attach, so a rebuild that moves the
-##   control block needs no change here -- but the ELF must be the one you
-##   FLASHED. Attach with an ELF you only built and probe-rs reads a stale
-##   address and prints nothing, which looks exactly like a dead board.
-##   That one is now refused rather than documented: the _SEGGER_RTT address
-##   here is checked against the ELF `make flash` recorded. A check that cannot
-##   be made (nothing flashed yet, no toolchain nm) warns and continues.
-##   READ THE FIRST BLOCK WITH SUSPICION. The RTT ring lives in its own section
-##   at the bottom of RAM and is NOT cleared by a reset, so everything printed
-##   before the "*** Booting nRF Connect SDK ***" line is the PREVIOUS run --
-##   old firmware, old bug. That has twice been mistaken for the current one.
-##   The J-Link tools are not an alternative: JLinkRTTLogger cannot find this
-##   control block, with -RTTAddress or with an all-of-RAM -RTTSearchRanges.
-##   Options: CDK_RTT_BUILD=<dir> (defaults to CDK_BUILD, so it follows the
-##            image the flash targets wrote)
 monitor:
 	@command -v probe-rs >/dev/null 2>&1 || { printf '  probe-rs not found  ·  see `make tools`\n' >&2; exit 1; }
 	@test -f $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf || { printf '  no ELF at %s/$(CDK_IMAGE)/zephyr/zephyr.elf  ·  build it first\n' '$(CDK_RTT_BUILD)' >&2; exit 1; }
@@ -777,14 +588,6 @@ monitor:
 	  $(CDK_RTT_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf
 
 ## cdk-size: what the image costs and how much room is left  ·  measures only
-##   Reads an ALREADY-BUILT tree and never builds one: `make build` first. Region
-##   sizes come from the linker's own memory configuration and the partition map,
-##   not from the datasheet, so a pm_static.yml change moves these numbers instead
-##   of silently invalidating them.
-##   Reports FREE BYTES, which is the figure that matters here. At ~95% of 128 KB
-##   a 644 B regression moves the percentage by half a point and reads as noise.
-##   Writes JSON for the gate and a table for you. Reports only: it cannot fail.
-##   Options: CDK_BUILD=<dir>  CDK_SIZE_JSON=<path>  CDK_SIZE_REPORTS=0
 cdk-size:
 	@test -f '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' || { \
 	  printf '  no ELF at %s/%s/zephyr/zephyr.elf  ·  run `make build` first\n' \
@@ -798,18 +601,6 @@ cdk-size:
 	@printf '  report  ·  %s\n\n' '$(CDK_SIZE_JSON)'
 
 ## cdk-size-check: fail if the image lost headroom against the recorded baseline
-##   Measures, then compares against firmware/size-baseline.json. Fails on the
-##   free-bytes floor, and on growth past the cap unless CDK_SIZE_ALLOW_GROWTH=1.
-##   WHAT CI GATES IS THE SHIPPING IMAGE, the one `make release` builds and
-##   `make fota` pushes:
-##       make cdk-size-check SMP=1 RELEASE=1 CDK_BUILD=build/cdk-shipping
-##   That image is at 96.23% of its flash partition and 92.50% of RAM, so FLASH
-##   is its binding region -- the reverse of the debug build, where the 8 KB RTT
-##   ring puts RAM at 95.03%. Both are recorded; each is compared only to itself.
-##   REFUSES TO COMPARE across a different toolchain, overlay set or LTO setting
-##   rather than reporting a delta that is really a configuration change: LTO
-##   alone is worth 41,084 B here and would swamp any real signal.
-##   Options: CDK_BUILD=<dir>  CDK_SIZE_BASELINE=<path>  CDK_SIZE_ALLOW_GROWTH=1
 cdk-size-check:
 	@# Suppressed for the measure step: the comparison table below carries the
 	@# same numbers with the baseline beside them, and two tables in one step
@@ -820,9 +611,6 @@ cdk-size-check:
 	  $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
 
 ## cdk-size-baseline: record the current tree as the baseline to compare against
-##   Rewrites firmware/size-baseline.json from the build in $(CDK_BUILD), keeping
-##   whatever floor and cap the old record carried. Review the diff: it is the
-##   only account of what moved and why, which is the point of committing it.
 cdk-size-baseline: cdk-size
 	@python3 $(REPO_ROOT)/scripts/cdk-size-baseline.py \
 	  --from '$(CDK_SIZE_JSON)' --out '$(CDK_SIZE_BASELINE)'
