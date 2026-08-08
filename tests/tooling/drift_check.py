@@ -17,10 +17,11 @@ prose, or pattern-matches a comment. Move a definition, reflow a file, or add a
 hundred lines above it and this still reads the same values. It breaks only when
 a value genuinely disagrees, which is the whole point of keeping it.
 
-Three checks:
+Four checks:
   1. Kconfig default vs C fallback, per symbol.
   2. The same symbol defined in several Kconfigs, with different defaults.
   3. The same symbol given several different C fallbacks.
+  4. The Matter manual pairing code, across its two spellings.
 
 Exit 0 when every constant agrees with itself, 1 otherwise.
 """
@@ -51,6 +52,24 @@ BLOCK_END = re.compile(r"^\s*(?:config|menuconfig|choice|endchoice|menu|endmenu|
 # be parenthesised, which is style rather than meaning, so it is unwrapped.
 IFNDEF = re.compile(r"^\s*#\s*ifndef\s+CONFIG_([A-Z0-9_]+)\s*$")
 DEFINE = re.compile(r"^\s*#\s*define\s+CONFIG_([A-Z0-9_]+)\s+(.+?)\s*$")
+
+# The Matter manual pairing code is one constant with two spellings: eleven bare
+# digits, as the Matter SDK hands it back, and the 4-3-4 grouping a human types
+# into a phone. The release bundle prints one form and the firmware answers with
+# the other, so a change to either side is silent right up until somebody cannot
+# commission a board.
+#
+# Both sides are found by NAME -- the `--setup-code` flag on the build side, the
+# GetManualPairingCode API on the source side -- and never by scanning for
+# digits, because an eleven-digit run also matches half the KAT vectors in the
+# tree. A value that is neither spelling is not a pairing code and is ignored,
+# which is what keeps the flag's own usage text out of this.
+CODE = r"(\d{11}|\d{4}-\d{3}-\d{4})"
+SETUP_FLAG = re.compile(r"--setup-code[ =]+['\"]?" + CODE + r"['\"]?")
+PAIRING_LIT = re.compile(r'"' + CODE + r'"')
+PAIRING_API = "ManualPairingCode"
+# Where a release is assembled. Not part of ROOTS, which is first-party source.
+BUILD_TREES = ("mk", "scripts")
 
 
 def walk(exts):
@@ -117,6 +136,43 @@ def c_fallbacks():
     return out
 
 
+def setup_codes():
+    """{digits: [files]} for the Matter pairing code, dashes normalised away.
+
+    Two sources, each anchored on a name rather than a position: any
+    `--setup-code <literal>` handed to the release bundler, and any pairing-code
+    literal in a file that talks to GetManualPairingCode. A `--setup-code` whose
+    value is a shell variable is the build passing a code it computed, not a
+    second copy of the constant, so it never matches.
+    """
+    out = {}
+
+    def add(code, path):
+        out.setdefault(code.replace("-", ""), []).append(path)
+
+    paths = ["Makefile"]
+    for tree in BUILD_TREES:
+        for dirpath, _dirnames, filenames in os.walk(tree):
+            paths += [os.path.join(dirpath, fn) for fn in filenames]
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                m = SETUP_FLAG.search(line)
+                if m:
+                    add(m.group(1), path)
+
+    for path in walk((".c", ".h", ".cc", ".cpp")):
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        if PAIRING_API not in text:
+            continue
+        for m in PAIRING_LIT.finditer(text):
+            add(m.group(1), path)
+    return out
+
+
 def ok(msg):
     """One passing check, in the row format scripts/test-runner.sh counts."""
     print(f"  ok   {msg}")
@@ -162,11 +218,24 @@ def main():
             )
             bad += 1
 
+    # 4. The Matter manual pairing code. One number, two spellings, and the
+    #    only symptom of a disagreement is a code that will not commission.
+    codes = setup_codes()
+    sites = sorted({p for files in codes.values() for p in files})
+    if len(codes) > 1:
+        where = "; ".join(
+            f"{c} in {', '.join(sorted(set(f)))}" for c, f in sorted(codes.items())
+        )
+        fail(f"Matter setup code: spellings disagree — {where}")
+        bad += 1
+    elif len(sites) > 1:
+        ok(f"Matter setup code = {next(iter(codes))}  ({len(sites)} sites agree)")
+
     # Symbols with only one spelling cannot drift, but the count is worth
     # printing: a sudden drop means the parser stopped seeing definitions.
     print(
         f"\n  scanned {len(kc)} Kconfig default(s), {len(cf)} C fallback(s), "
-        f"{len(set(kc) & set(cf))} paired"
+        f"{len(set(kc) & set(cf))} paired; {len(sites)} setup-code site(s)"
     )
     if bad:
         print(f"  RESULT: FAIL — {bad} constant(s) disagree with themselves")
