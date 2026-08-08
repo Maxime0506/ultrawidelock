@@ -3,7 +3,7 @@
  *
  * This is the half of the classifier that was missing: woz_ml_los_classify()
  * has always taken features in physical units, and until now nothing computed
- * them. ai/tinyml/parse_alab.py is the definition, and it is reproduced here
+ * them. parse_alab.py (tinyml repo) is the definition, and it is reproduced here
  * register for register rather than approximated, because the model was fitted
  * through exactly this arithmetic.
  *

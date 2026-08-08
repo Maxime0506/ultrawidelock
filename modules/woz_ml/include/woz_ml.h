@@ -19,19 +19,18 @@
  * fail at init, and not one undefined symbol -- `arm-none-eabi-nm -u` on the
  * objects is empty, so the measured size is the whole size. It was measured
  * against an int8 TFLM network and a random forest and beat both on accuracy per
- * byte (ai/tinyml/RESULTS.md). It is also the only one of the three whose C can
- * be proved identical to the model that was trained -- see the header of
- * ai/tinyml/gen_model.py for the four gates that enforce that on every
- * regeneration, and tests/host/test_woz_ml.c for the vectors that carry the
- * claim into CI.
+ * byte. It is also the only one of the three whose C can be proved identical to
+ * the model that was trained -- gen_model.py (tinyml repo) enforces four gates
+ * on every regeneration, and tests/host/test_woz_ml.c carries the claim into
+ * CI.
  *
  * FEED IT THE RIGHT NUMBERS. woz_ml_los_classify() takes raw features in
  * physical units, in the order enum woz_ml_los_feature declares, and getting
  * that array wrong cannot be detected -- every float is a legal feature value.
  * So do not fill it by hand: woz_ml_los_features() below takes the five CIA
- * registers and the range and fills it, reproducing ai/tinyml/parse_alab.py
- * register for register, and gate 4 in ai/tinyml/gen_model.py holds it to that
- * on every captured reception.
+ * registers and the range and fills it, reproducing parse_alab.py register for
+ * register, and gate 4 in gen_model.py holds it to that on every captured
+ * reception.
  */
 #ifndef WOZ_ML_H
 #define WOZ_ML_H

@@ -4,7 +4,7 @@
  * This is not a regression pin. `woz_ml_los_vec_expect` is what scikit-learn
  * itself answered for each vector, so a pass means the C on the target agrees
  * with the model that was trained, not merely with its own past behaviour.
- * ai/tinyml/gen_model.py refuses to emit the model unless that agreement is
+ * gen_model.py (tinyml repo) refuses to emit the model unless that agreement is
  * exact over all 6,300 held-out samples; these vectors carry the claim into CI,
  * stratified so every one of the pruned tree's leaves is reached.
  *
@@ -13,8 +13,7 @@
  * with leaf_bits=8, which selects soft voting instead of majority voting. 0.06%
  * is still not the exact agreement this file demands, so a forest still has no
  * oracle -- but it misses by 4 samples in 6,300 rather than 58, and the cause is
- * 8-bit leaf quantisation rather than the architecture. See ai/tinyml/RESULTS.md
- * Result 5 for the original measurement and Result 14 for the correction.
+ * 8-bit leaf quantisation rather than the architecture.
  */
 
 #include <math.h>
@@ -176,7 +175,7 @@ void test_woz_ml(void)
 	t_group("woz_ml: feature extraction from CIA registers");
 
 	/* One synthetic reception at realistic magnitudes. The expected values are
-	 * what ai/tinyml/parse_alab.py's float64 formulas give for these registers:
+	 * what parse_alab.py's float64 formulas give for these registers:
 	 *
 	 *   num    = 11000^2 + 9000^2 + 7000^2 = 251,000,000
 	 *   fp_pwr = 10*log10(251e6 / 48^2)      - 121.74 = -71.3681 dB

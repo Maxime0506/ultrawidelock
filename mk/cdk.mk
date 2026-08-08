@@ -361,7 +361,7 @@ selftest:
 
 ## cirdiag: the Matter image plus an unattended CIR capture cycle  -> build/cdk-cirdiag
 ##   For collecting channel-impulse traces from a real walk-up: the labelled
-##   inside/outside data the LOS/NLOS model in ai/tinyml/ has to be retrained on
+##   inside/outside data the woz_ml LOS/NLOS model has to be retrained on
 ##   before its thresholds mean anything on this hardware.
 ##
 ##   The Matter image and not `reader`, because the capture wants a real Apple
@@ -382,8 +382,8 @@ selftest:
 ##   with the windowed-CIR dump armed this board never transmits a Response at all
 ##   (measured 2026-08-07, tx0 and no range across three sessions, while the plain
 ##   image ranged 22-443 cm on the same board). The taps cost the LOS/NLOS
-##   classifier 0.14 accuracy points to lose -- ai/tinyml/RESULTS.md Result 7 --
-##   so the default trades them for a working radio. CIRDIAG_WINDOWS=1 restores
+##   classifier only 0.14 accuracy points to lose, so the default trades them
+##   for a working radio. CIRDIAG_WINDOWS=1 restores
 ##   them for anyone taking the ranging itself apart.
 ##
 ##   NOT A SHIPPING IMAGE. Reflash `make build` when the run is done.

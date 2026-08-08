@@ -198,10 +198,10 @@ config WOZ_UWB_CIRDIAG_SUMMARY_LEAN
 	  reporting zeros for them, because a field that was never read must not look
 	  like a field that measured zero.
 
-	  What survives is exactly what ai/tinyml/parse_alab.py consumes:
+	  What survives is exactly what the model training consumes:
 	  ipatovPower, ipatovF1..F3 and ipatovAccumCount give fp_pwr, rx_pwr,
-	  pwr_diff and rxpacc, which is the whole feature set after RESULTS.md
-	  Result 7. Say y with SUMMARY_EVERY on any board where the diagnostics are
+	  pwr_diff and rxpacc, which is the whole feature set.
+	  Say y with SUMMARY_EVERY on any board where the diagnostics are
 	  competing with a ranging deadline.
 
 config WOZ_UWB_CIRDIAG_SUMMARY_FINAL_ONLY

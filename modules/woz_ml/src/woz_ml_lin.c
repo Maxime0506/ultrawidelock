@@ -5,7 +5,7 @@
  * "obstructed" and has no second quantity to offer. This supplies one: the
  * distance from a linear boundary fitted on the same two features, which was
  * measured to separate the receptions the tree gets right from the ones it gets
- * wrong. See woz_ml.h for the measurement and ai/tinyml/RESULTS.md Result 16.
+ * wrong. See woz_ml.h for the measurement.
  *
  * The coefficients are generated; only the arithmetic is written by hand, and
  * there is not much of it.

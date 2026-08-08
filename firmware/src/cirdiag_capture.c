@@ -24,8 +24,8 @@
  * this board, stops the responder transmitting entirely (measured: tx0, no range,
  * no unlock). Without it the summary path alone runs and the markers only bracket
  * intervals — one `[ALAB] ev=uwb.diag` line per reception, no accumulator read.
- * That is the mode worth using: ai/tinyml/RESULTS.md Result 7 measures the whole
- * tap-derived half of the feature set at 0.14 accuracy points.
+ * That is the mode worth using: the whole tap-derived half of the feature set
+ * is worth only 0.14 accuracy points.
  *
  * The markers deliberately do NOT carry the [ALAB] prefix, so
  * ignores them, the same choice uwb_cirdiag_probe() makes for its output.

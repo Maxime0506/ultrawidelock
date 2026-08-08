@@ -61,8 +61,8 @@ btsnoop_hci.log
 *.frc
 walkup-*.log
 session.log
-# `make monitor | tee` during an ai/tinyml/range_bias.py capture, per the
-# procedure in that file's header. Only the parsed CSV is tracked.
+# `make monitor | tee` during a range_bias.py capture (tinyml repo). Only the
+# parsed CSV is tracked.
 clear*.log
 blocked*.log
 

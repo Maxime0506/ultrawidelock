@@ -187,8 +187,8 @@ config ALIRO_CIRDIAG_CAPTURE_WINDOWS
 	  Response at all -- `tx0`, no range, no unlock, across three sessions --
 	  while the plain image on the same board ranged 22-443 cm and unlocked
 	  normally; the accumulator read is too much for this single core inside the
-	  ~1836 us arm deadline. And in ai/tinyml/RESULTS.md Result 7, dropping
-	  every tap-derived feature costs the LOS/NLOS classifier 0.14 accuracy
+	  ~1836 us arm deadline. And dropping every tap-derived feature costs
+	  the LOS/NLOS classifier only 0.14 accuracy
 	  points (0.8625 -> 0.8611) and makes it 80 B smaller, because ~76% of the
 	  discriminating power is absolute received power, which is a register
 	  scalar. The four features that matter -- fp_pwr, rx_pwr, pwr_diff,

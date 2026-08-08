@@ -17,7 +17,7 @@
  * so this is part of the model, not a preprocessing convenience. The constants
  * come from the training split's per-feature minimum and range.
  *
- * float32, not double. ai/tinyml/gen_model.py refuses to emit a model unless
+ * float32, not double. gen_model.py (tinyml repo) refuses to emit a model unless
  * the float32 result classifies identically to the float64 one sklearn trained
  * through, on all 6,300 held-out samples. At the last regeneration 58 of 88,200
  * quantised values landed one LSB apart between the two, and none of them

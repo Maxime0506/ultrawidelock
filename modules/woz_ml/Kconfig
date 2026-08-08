@@ -31,7 +31,7 @@ config WOZ_ML_LOS
 
 	  The model is a decision tree because that won a measured bake-off against
 	  an int8 TensorFlow Lite Micro network and a random forest, on accuracy
-	  per byte: ai/tinyml/RESULTS.md has the tables. It is also the only one of
+	  per byte. It is also the only one of
 	  the three whose generated C can be proved identical to the model that was
 	  trained, which is why the host suite can certify it rather than merely
 	  regression-pin it. Depth 2 rather than the 4 the public set preferred:

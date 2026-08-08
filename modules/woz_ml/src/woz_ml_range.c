@@ -28,7 +28,7 @@
 
 /* Below this the correction diverges, and the reader does report 0 cm. Above it
  * the curve is flat enough that the clamp costs nothing a walk-up would notice.
- * Both bounds are mirrored in ai/tinyml/parse_alab.py, which is what the model
+ * Both bounds are mirrored in parse_alab.py (tinyml repo), which is what the model
  * was trained through. */
 #define MIN_RANGE_CM 10u
 #define MAX_RANGE_CM 2000u
