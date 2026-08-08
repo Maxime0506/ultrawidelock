@@ -13,6 +13,11 @@
 #                          k_msleep, SYS_INIT, K_WORK_*, K_SEM_*, flash_area_*,
 #                          sys_reboot — platform code goes through woz_port
 #
+# and one shape is banned in the port trees, which is the same rule read from
+# the other side: a port names exactly one OS (check_port_os). modules/ names
+# none, ports/zephyr + firmware + anchor + ports/nrf5340dk name Zephyr,
+# ports/esp32 names ESP-IDF. A file naming the wrong one is in the wrong tree.
+#
 #   tests/tooling/port_purity_check.sh              # scan the tracked sources
 #   tests/tooling/port_purity_check.sh --self-test  # prove the gate can fail
 #   make check / make purity                        # runs it as the `purity` suite
@@ -81,8 +86,13 @@ fi
 
 cd "$(dirname "$0")/../.."
 
-# One definition each, used by the scan AND the self-test.
-INCLUDE_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](zephyr/|freertos/|esp_)'
+# One definition each, used by the scan AND the self-test. The include shape is
+# written once and specialised per OS, so the modules/ ban and the per-port ban
+# can never drift apart on what an include looks like.
+INC_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<]'
+ZEPHYR_INC_RE="${INC_RE}zephyr/"
+ESP_INC_RE="${INC_RE}(freertos/|esp_)"
+INCLUDE_RE="${INC_RE}(zephyr/|freertos/|esp_)"
 KERNEL_RE='(^|[^_[:alnum:]])(k_(work|sem|thread|timer|fifo|msleep|sleep|usleep|busy_wait|yield)|sys_reboot|flash_area_|SYS_INIT|K_(WORK|SEM|THREAD|TIMER|FIFO|MUTEX))'
 
 # Prose naming a kernel symbol is not a call. Same filter as the seam gate:
@@ -205,6 +215,62 @@ scan() {
 		"$G" "$((${#PERMANENT_DIRS[@]} + ${#PERMANENT_FILES[@]}))" \
 		"${#PERMANENT_DIRS[@]}" "${#PERMANENT_FILES[@]}" "${#RATCHET[@]}" "$Z"
 	return 0
+}
+
+# ---- port trees keep to their own OS -----------------------------------------
+#
+# The other half of the one-source rule, and the half only reachable now that
+# every port has a home: modules/ names no OS, and a port tree names exactly
+# one. A Zephyr call in ports/esp32 (or an esp_/FreeRTOS call in ports/zephyr,
+# firmware/, anchor/, ports/nrf5340dk/) is a file that landed in the wrong tree
+# — it either belongs in the sibling port, or it is shared code that should sit
+# in modules/ behind woz_port. Both readings mean the tree, not the file, is
+# wrong, and neither is caught by the modules/ scan above.
+#
+# tests/ is deliberately absent: the host suites include fake <zephyr/*>
+# headers on purpose, and their honesty is enforced by compiling, not by this.
+ZEPHYR_TREES=(firmware anchor ports/zephyr ports/nrf5340dk)
+ESP_TREES=(ports/esp32)
+
+tree_sources() { # <dir>... -> the tracked C/C++ sources under them
+	local d args=()
+	for d in "$@"; do
+		args+=("$d/*.c" "$d/*.h" "$d/*.cpp" "$d/*.hpp")
+	done
+	git ls-files "${args[@]}"
+}
+
+os_findings() { # <banned-re> <dir>... -> file:line:text per offence
+	local re="$1" f
+	shift
+	while IFS= read -r f; do
+		grep -nE "$re" "$f" | sed "s|^|$f:|" || true
+	done < <(tree_sources "$@")
+}
+
+check_port_os() {
+	local fails=0 n line
+	n=$(tree_sources "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}" | wc -l | tr -d ' ')
+
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		printf '%s  esp/freertos include in a Zephyr tree: %s%s\n' "$R" "$line" "$Z" >&2
+		fails=$((fails + 1))
+	done < <(os_findings "$ESP_INC_RE" "${ZEPHYR_TREES[@]}")
+
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		printf '%s  zephyr include in the ESP-IDF tree: %s%s\n' "$R" "$line" "$Z" >&2
+		fails=$((fails + 1))
+	done < <(os_findings "$ZEPHYR_INC_RE" "${ESP_TREES[@]}")
+
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d cross-OS include(s) in a port tree%s\n' "$R" "$fails" "$Z" >&2
+		printf '  Move the file to the port whose OS it names, or into modules/\n' >&2
+		printf '  behind woz_port if both ports need it.\n' >&2
+		return 1
+	fi
+	printf '%s  ok   port trees: %d source(s), each naming only its own OS%s\n' "$G" "$n" "$Z"
 }
 
 # ---- build-file path literals -----------------------------------------------
@@ -532,6 +598,43 @@ self_test() {
 	fi
 	[ "$fails" -ne 0 ] || printf '%s  self-test: comment filter drops prose, keeps code%s\n' "$G" "$Z"
 
+	# Per-OS halves: each must fire on the other OS and stay quiet on its own,
+	# or check_port_os would ban a port tree from the platform it is written for.
+	local zline='#include <zephyr/kernel.h>' eline='#include "freertos/task.h"'
+	printf '%s\n' "$zline" | grep -qE "$ZEPHYR_INC_RE" ||
+		{ printf '%s  self-test FAILED: zephyr half missed its own include%s\n' "$R" "$Z" >&2
+			fails=$((fails + 1)); }
+	printf '%s\n' "$eline" | grep -qE "$ESP_INC_RE" ||
+		{ printf '%s  self-test FAILED: esp half missed its own include%s\n' "$R" "$Z" >&2
+			fails=$((fails + 1)); }
+	if printf '%s\n' "$zline" | grep -qE "$ESP_INC_RE"; then
+		printf '%s  self-test FAILED: esp half fired on a zephyr include%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if printf '%s\n' "$eline" | grep -qE "$ZEPHYR_INC_RE"; then
+		printf '%s  self-test FAILED: zephyr half fired on an esp include%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	# The tree lists must be disjoint, and must not reach into modules/ or
+	# tests/ — a tree in both lists could name neither OS and pass.
+	local zt et
+	for zt in "${ZEPHYR_TREES[@]}"; do
+		for et in "${ESP_TREES[@]}"; do
+			case "$zt" in "$et" | "$et"/*) ;; *) continue ;; esac
+			printf '%s  self-test FAILED: %s is in both OS tree lists%s\n' "$R" "$zt" "$Z" >&2
+			fails=$((fails + 1))
+		done
+	done
+	for zt in "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}"; do
+		case "$zt" in
+		modules | modules/* | tests | tests/*)
+			printf '%s  self-test FAILED: %s is not a port tree%s\n' "$R" "$zt" "$Z" >&2
+			fails=$((fails + 1))
+			;;
+		esac
+	done
+	[ "$fails" -ne 0 ] || printf '%s  self-test: per-OS halves and tree lists are exact%s\n' "$G" "$Z"
+
 	# Exemption exactness: a prefix that swallowed a portable file would silence
 	# the gate without anyone noticing.
 	local f
@@ -681,6 +784,7 @@ case "${1-}" in
 "")
 	rc=0
 	scan || rc=1
+	check_port_os || rc=1
 	check_manifests || rc=1
 	check_build_paths || rc=1
 	check_patch_symbols || rc=1

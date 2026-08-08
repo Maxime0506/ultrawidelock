@@ -6,7 +6,7 @@
 #   shared     ports/esp32/test/run.sh          reader/stepup/crypto/... stages
 #   drift      tests/tooling/drift_check.py     Kconfig vs C constants
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
-#   purity     tests/tooling/port_purity_check.sh  no platform code in modules/
+#   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
 #
 # Default: suites run in parallel, failures replayed when done. SERIAL=1 streams
 # full output one suite at a time. SUITES="firmware shared" scopes. Exit is

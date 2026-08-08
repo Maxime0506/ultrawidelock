@@ -32,7 +32,7 @@ drift:
 seam:
 	@$(REPO_ROOT)/tests/tooling/uwb_seam_check.sh
 
-## purity: no platform includes or kernel calls in modules/ outside woz_port
+## purity: modules/ names no OS, each port tree names only its own
 purity:
 	@$(REPO_ROOT)/tests/tooling/port_purity_check.sh
 
