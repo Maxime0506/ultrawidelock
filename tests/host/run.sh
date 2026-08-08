@@ -52,6 +52,7 @@ HOSTD="$ROOT/tests/host"
 	"$HOSTD/test_uwb_cirdiag.c" \
 	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
+	"$ROOT/modules/woz_port/src/osal_host.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
 	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" \

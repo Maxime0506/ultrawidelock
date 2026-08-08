@@ -1,26 +1,25 @@
 /**
  * @file test_uwb_rxdiag.c — RX/TX diagnostic tallies + heartbeat (uwb_rxdiag.c)
- * on the drvfake radio and the logfake k_work surface. The suite calls the
- * uwb_seam.h entry points this file implements and fires the
- * heartbeat work item by hand; printk output is diverted to /dev/null while a
- * heartbeat renders. Fake-only: the tallies and chains are proven, the timing
- * (2 s cadence, real ISR context) is not.
+ * on the drvfake radio and the host OSAL's virtual clock. The suite calls the
+ * uwb_seam.h entry points this file implements and fires the heartbeat by
+ * advancing the clock; printk output is diverted to /dev/null while a
+ * heartbeat renders. Fake-only: the tallies, chains and arming are proven,
+ * the real ISR context is not.
  */
 #include <fcntl.h>
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
 
-#include <zephyr/kernel.h>
-
 #include "drvfake.h"
 #include "test.h"
 #include "uwb_rxdiag.h"
+#include "woz_osal.h"
 
-/* Seam entry points + SYS_INIT hook (see uwb_seam.h / uwb_rxdiag.c / logfake init.h). */
+/* Seam entry points + the init hook (see uwb_seam.h / uwb_rxdiag.c). */
 void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks);
 int32_t woz_uwb_configure_phy(dwt_config_t *config);
-extern int (*const logfake_sys_init_rxdiag_init)(void);
+extern int (*const woz_init_rxdiag_init)(void);
 
 /* The MAC-side callbacks our shims must chain into. */
 static unsigned chain_rxok, chain_rxto, chain_rxerr, chain_txdone;
@@ -45,24 +44,34 @@ static void b_txdone(const dwt_cb_data_t *d)
 	chain_txdone++;
 }
 
-/** Fire the last-scheduled work item with stdout parked on /dev/null. */
-static void fire_quiet(void)
+/** Advance the virtual clock with stdout parked on /dev/null. */
+static unsigned advance_quiet(int64_t ms)
 {
 	int saved = dup(1);
 	int devnull = open("/dev/null", O_WRONLY);
+	unsigned ran;
 
 	fflush(stdout);
 	dup2(devnull, 1);
-	workfake.last->work.handler(&workfake.last->work);
+	ran = woz_osal_host_advance_ms(ms);
 	fflush(stdout);
 	dup2(saved, 1);
 	close(saved);
 	close(devnull);
+	return ran;
 }
 
 void test_uwb_rxdiag(void)
 {
 	uint32_t ok, err, to, tx, lerr, lok;
+
+	t_group("boot init binds the work items and arms the heartbeat");
+	drvfake_reset();
+	woz_osal_host_reset();
+	T_EQ("init rc", woz_init_rxdiag_init(), 0);
+	T_OK("stream defaulted on (pretty shell off)", uwb_rxdiag_stream_get());
+	T_EQ("not due before 2s", (long)woz_osal_host_advance_ms(1999), 0L);
+	T_EQ("armed at 2s", (long)advance_quiet(1), 1L);
 
 	t_group("callback interception");
 	drvfake_reset();
@@ -154,26 +163,18 @@ void test_uwb_rxdiag(void)
 	T_EQ("real configure hit", (long)drvfake.configure_calls, 1L);
 	T_EQ("NULL configure chained", woz_uwb_configure_phy(NULL), 0);
 
-	t_group("stream toggles drive the work item");
-	workfake.last = NULL;
-	uwb_rxdiag_stream_set(true);
-	T_OK("stream on", uwb_rxdiag_stream_get());
-	T_OK("heartbeat armed now", workfake.last != NULL && workfake.last_delay == 0);
+	t_group("stream toggles drive the heartbeat");
 	uwb_rxdiag_stream_set(false);
 	T_OK("stream off", !uwb_rxdiag_stream_get());
-	T_EQ("heartbeat cancelled", (long)workfake.cancel_calls, 1L);
+	T_EQ("cancelled: nothing fires", (long)woz_osal_host_advance_ms(5000), 0L);
+	uwb_rxdiag_stream_set(true);
+	T_OK("stream on", uwb_rxdiag_stream_get());
+	T_EQ("armed immediately", (long)advance_quiet(0), 1L);
+	T_EQ("re-armed at the 2s cadence", (long)advance_quiet(2000), 1L);
 	uwb_rxdiag_rng_set(true);
 	T_OK("rng stream on", uwb_rxdiag_rng_get());
 	uwb_rxdiag_rng_set(false);
 	T_OK("rng stream off", !uwb_rxdiag_rng_get());
-
-	t_group("boot init arms the heartbeat (pretty shell off)");
-	unsigned resched0 = workfake.reschedule_calls;
-
-	T_EQ("init rc", logfake_sys_init_rxdiag_init(), 0);
-	T_OK("armed at 2s", workfake.reschedule_calls == resched0 + 1 &&
-				    workfake.last_delay == 2000);
-	T_OK("stream defaulted on", uwb_rxdiag_stream_get());
 
 	t_group("heartbeat: active, fresh + stale + idle branches");
 	/* Spread RX detections across two real-time cadence bins (2 ms apart) so
@@ -198,18 +199,16 @@ void test_uwb_rxdiag(void)
 	drvfake.fira_age_ms = 400; /* fresh */
 	drvfake.ccc_active = true;
 	cbs.cbRxOk(&d); /* new good frame since last beat -> active */
-	fire_quiet();
-	T_OK("re-armed while streaming", workfake.last_delay == 2000);
+	T_EQ("active beat fires", (long)advance_quiet(2000), 1L);
 	drvfake.fira_age_ms = 5000; /* stale range branch */
 	cbs.cbRxOk(&d);
-	fire_quiet();
+	(void)advance_quiet(2000);
 	drvfake.fira_have = false; /* no-range branch */
 	cbs.cbRxOk(&d);
-	fire_quiet();
-	fire_quiet(); /* nothing new: idle announced once */
-	fire_quiet(); /* still idle: quiet path */
+	(void)advance_quiet(2000);
+	(void)advance_quiet(2000); /* nothing new: idle announced once */
+	(void)advance_quiet(2000); /* still idle: quiet path */
 	uwb_rxdiag_stream_set(false);
-	fire_quiet(); /* not streaming: no re-arm */
-	T_EQ("no re-arm when stopped", (long)workfake.cancel_calls, 2L);
+	T_EQ("no re-arm when stopped", (long)woz_osal_host_advance_ms(4000), 0L);
 	T_OK("heartbeat survived all branches", 1);
 }

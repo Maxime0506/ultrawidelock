@@ -1,31 +1,30 @@
 /**
  * @file test_uwb_selftest.c — the Kconfig-gated boot self-test (uwb_selftest.c)
- * against a fake facade. Pins the arm-at-init scheduling and the canned Aliro
- * ranging config the worker hands to woz_uwb_start_aliro — the facade itself
- * is a recording double, so no ranging path runs.
+ * against a fake facade and the host OSAL's virtual clock. Pins the
+ * arm-at-init delay and the canned Aliro ranging config the worker hands to
+ * woz_uwb_start_aliro — the facade itself is a recording double, so no
+ * ranging path runs.
  */
 #include <string.h>
 
-#include <zephyr/kernel.h>
-
 #include "drvfake.h"
 #include "test.h"
+#include "woz_osal.h"
 
-extern int (*const logfake_sys_init_uwb_selftest_init)(void);
+extern int (*const woz_init_uwb_selftest_init)(void);
 
 void test_uwb_selftest(void)
 {
 	t_group("boot arm");
 	drvfake_reset();
-	workfake.last = NULL;
-	T_EQ("init rc", logfake_sys_init_uwb_selftest_init(), 0);
-	T_OK("work scheduled", workfake.last != NULL);
-	T_EQ("fires after the Kconfig delay", (long)workfake.last_delay,
-	     (long)CONFIG_WOZ_UWB_SELFTEST_DELAY_MS);
+	woz_osal_host_reset();
+	T_EQ("init rc", woz_init_uwb_selftest_init(), 0);
 	T_EQ("nothing started yet", (long)drvfake.start_aliro_calls, 0L);
+	T_EQ("quiet until the Kconfig delay",
+	     (long)woz_osal_host_advance_ms(CONFIG_WOZ_UWB_SELFTEST_DELAY_MS - 1), 0L);
+	T_EQ("fires after the Kconfig delay", (long)woz_osal_host_advance_ms(1), 1L);
 
 	t_group("worker: canned config reaches the facade");
-	workfake.last->work.handler(&workfake.last->work);
 	T_EQ("wrap log budget reset first", (long)drvfake.wrap_log_reset_calls, 1L);
 	T_EQ("start_aliro called", (long)drvfake.start_aliro_calls, 1L);
 	T_EQ("session id", (long)drvfake.last_aliro_cfg.session_id, (long)0x02b02fd4u);
@@ -44,6 +43,8 @@ void test_uwb_selftest(void)
 
 	t_group("worker: failure path only logs");
 	drvfake.start_aliro_ret = -5;
-	workfake.last->work.handler(&workfake.last->work);
+	T_EQ("re-arm rc", woz_init_uwb_selftest_init(), 0);
+	T_EQ("worker fires again", (long)woz_osal_host_advance_ms(CONFIG_WOZ_UWB_SELFTEST_DELAY_MS),
+	     1L);
 	T_EQ("second run still calls through", (long)drvfake.start_aliro_calls, 2L);
 }

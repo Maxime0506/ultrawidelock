@@ -74,8 +74,6 @@ PERMANENT_RE=${PERMANENT_RE//$'\n'/}
 
 # The ratchet: still-impure files and the tranche that retires each.
 RATCHET=(
-	modules/woz_uwb/src/driver/uwb_rxdiag.c        # T2a: convert to woz_osal
-	modules/woz_uwb/src/driver/uwb_selftest.c      # T2a: convert to woz_osal
 	modules/woz_nfc/src/transport_pn532.cpp        # T2b: convert to woz_osal
 	modules/woz_nfc/src/transport_none.cpp         # T2b: woz_log instead of zephyr log
 	modules/woz_nfc/src/pn532_bus_spi.c            # T2b sem/sleep; T4 move (Zephyr SPI driver)

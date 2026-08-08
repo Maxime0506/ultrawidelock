@@ -392,44 +392,6 @@ int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *cfg)
 	return drvfake.start_aliro_ret;
 }
 
-/* ── k_work fakes (declared in logfake <zephyr/kernel.h>) ──────────────────── */
-struct workfake_state workfake;
-
-int k_work_reschedule(struct k_work_delayable *dwork, k_timeout_t delay)
-{
-	workfake.reschedule_calls++;
-	workfake.last = dwork;
-	workfake.last_delay = delay;
-	return 0;
-}
-
-int k_work_schedule(struct k_work_delayable *dwork, k_timeout_t delay)
-{
-	workfake.schedule_calls++;
-	workfake.last = dwork;
-	workfake.last_delay = delay;
-	return 0;
-}
-
-int k_work_cancel_delayable(struct k_work_delayable *dwork)
-{
-	(void)dwork;
-	workfake.cancel_calls++;
-	return 0;
-}
-
-void k_work_init_delayable(struct k_work_delayable *dwork, k_work_handler_t handler)
-{
-	dwork->work.handler = handler;
-}
-
-int k_work_submit(struct k_work *work)
-{
-	workfake.submit_calls++;
-	workfake.last_submit = work;
-	return 0;
-}
-
 /* ── shell fake (zephyr/shell/shell.h capture sink) ────────────────────────── */
 char shellfake_out[8192];
 unsigned long shellfake_len;

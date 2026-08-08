@@ -133,7 +133,11 @@ typedef uint8_t woz_thread_stack_t;
 #define WOZ_THREAD_STACK_DEFINE(name, size) static uint8_t name[(size)]
 #define WOZ_THREAD_STACK_SIZEOF(name)       sizeof(name)
 
+/* Registers for woz_osal_init_all() AND exposes the (usually static) init
+ * function as a linkable pointer, so a suite can invoke one hook by itself at
+ * a controlled point -- the same reach logfake's SYS_INIT fake used to give. */
 #define WOZ_INIT_APPLICATION(fn)                                     \
+	int (*const woz_init_##fn)(void) = (fn);                    \
 	__attribute__((constructor)) static void woz_reg_##fn(void) \
 	{                                                            \
 		woz_osal_init_register(fn);                          \
