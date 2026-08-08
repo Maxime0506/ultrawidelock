@@ -2,10 +2,9 @@
  *
  * Proves that walking every attribute of an arbitrary message up to MSG_MAX
  * bytes, and decoding each attribute at all four widths, never reads or writes
- * out of bounds — for ALL inputs in that range, not just sampled ones. This is
- * the exhaustive counterpart to fuzz_aliro_uwb_msg.c; the fix at
- * aliro_uwb_msg_parser.c:24 (the lone-trailing-byte over-read) is what makes it
- * pass. */
+ * out of bounds — for ALL inputs in that range, not just sampled ones. The fix
+ * at aliro_uwb_msg_parser.c:24 (the lone-trailing-byte over-read) is what makes
+ * it pass. */
 #include <stddef.h>
 #include <stdint.h>
 

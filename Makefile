@@ -31,7 +31,7 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 #   build/cdk-matter/  cdk-reader/  cdk-selftest/
 #   build/nrf5340dk/   nrf5340dk-blob/
 #   build/esp32-<app>-<target>[-<variant>]/
-#   build/host/        host_test* coverage/ fuzz/ cbmc/
+#   build/host/        host_test* coverage/ cbmc/
 #   build/_sig/        build signatures
 #
 # site/ is NOT here: it is publishable output, not an intermediate.

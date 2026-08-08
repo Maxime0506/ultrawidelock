@@ -2,8 +2,8 @@
 #
 # Bounded model-check the wire parsers with CBMC: prove memory safety (no
 # out-of-bounds access, no bad pointer, no overflowing conversion) for ALL
-# inputs up to each harness bound — the exhaustive counterpart to the fuzz
-# corpus replay. Reuses the host seam's include/define lists (sources.sh).
+# inputs up to each harness bound. Reuses the host seam's include/define lists
+# (sources.sh).
 #
 # Env: CBMC=… (default cbmc). Args: harness names to restrict the run.
 set -euo pipefail

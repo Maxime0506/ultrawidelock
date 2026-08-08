@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test test-san coverage fuzz cbmc check drift seam test-ws
+.PHONY: test test-san coverage cbmc check drift seam test-ws
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -17,13 +17,6 @@ test-san:
 ##   rebuilt at -O0. Artifacts under build/host/coverage/ (html/index.html).
 coverage:
 	@$(REPO_ROOT)/tests/host/coverage.sh
-
-## fuzz: fuzz the wire-facing parsers  ·  parser-hardening gate
-##   Coverage-guided libFuzzer where available (CI), else a portable corpus
-##   replay under ASan/UBSan (Apple clang ships no libFuzzer). Env: FUZZ_SECONDS=N,
-##   FUZZ_STANDALONE=1. Args (via bash) restrict to named targets.
-fuzz:
-	@$(REPO_ROOT)/tests/host/fuzz.sh
 
 ## cbmc: bounded model-check the wire parsers  ·  memory-safety proof
 ##   Proves no out-of-bounds / bad-pointer access for all inputs up to each

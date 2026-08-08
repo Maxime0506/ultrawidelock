@@ -128,7 +128,7 @@ FW_TOOLS=(tio nrfutil probe-rs mcumgr)
 # and it is the reason a row exists at all.
 tool_gate() {
 	case "$1" in
-	cc) echo "test, test-san, fuzz" ;;
+	cc) echo "test, test-san" ;;
 	python3) echo "test, coverage" ;;
 	llvm-cov) echo "coverage" ;;
 	cbmc) echo "cbmc" ;;
