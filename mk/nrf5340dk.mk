@@ -62,6 +62,22 @@ NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
 NRF_BUILD_DIR := $(ALIRO_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ALIRO_SOURCE)),-blob)
 NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data.txt
 
+# The Aliro initiator is a second application on the same board, so it gets its
+# own build directory rather than sharing the door lock's.
+NRF_INIT_BUILD := $(ALIRO_BUILD_ROOT)/nrf5340dk-initiator
+
+# The initiator is a plain Zephyr app, so it is built with west directly rather
+# than through scripts/build-nrf5340dk.sh, whose do_build resolves door-lock
+# overlays, UWB chip variants and DFU flags that this application has none of.
+#
+# The cost of not using the script is that this does NOT reproduce its workspace
+# resolution, which auto-seeds a per-worktree copy when ./workspace is absent
+# (see its header, and `make ws-seed`). A worktree that has never built anything
+# has no ./workspace and this target will fail; run `make bootstrap` or
+# `make ws-seed` first. Everything else the script does is door-lock specific.
+NRF_WS     := $(REPO_ROOT)/workspace
+NRF_LAUNCH := nrfutil sdk-manager toolchain launch --ncs-version $(NCS_VER) --
+
 NRF_RELEASE_OUT ?= $(ALIRO_BUILD_ROOT)/release/openaliro-nrf5340dk
 NRF_RELEASE_OUT := $(abspath $(NRF_RELEASE_OUT))
 NRF_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.nrf-stage
@@ -71,7 +87,7 @@ NRF_RELEASE_VER ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 
 # time, where an apostrophe in it would end the quoting.
 export NRF_RELEASE_VER
 
-.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-term nrf-pairing-code nrf-release term
+.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-init-build nrf-init-flash nrf-term nrf-pairing-code nrf-release term
 
 ##@ nRF5340 DK  ·  NFC tap + approach unlock
 ## nrf-build: incremental build          -> build/nrf5340dk/merged.hex
@@ -143,6 +159,32 @@ nrf-flash:
 ## nrf-flash-erase: full erase + flash  ·  needed after a net-core change
 nrf-flash-erase:
 	@$(NRF_ENV) $(NRF_BUILD_SH) flash-erase
+
+## nrf-init-build: build the Aliro initiator      -> build/nrf5340dk-initiator
+##   Options: PRISTINE=1 (required after adding or changing boards/*.overlay --
+##            Zephyr caches DTC_OVERLAY_FILE, so a plain rebuild silently ignores
+##            a newly added board overlay. See commit c6912ba2.)
+##   A separate application from `make nrf-build`, which builds the door lock.
+nrf-init-build:
+	@cd '$(NRF_WS)' && $(NRF_LAUNCH) west build \
+	  -b nrf5340dk/nrf5340/cpuapp --sysbuild \
+	  $(if $(PRISTINE),-p always) \
+	  -d '$(NRF_INIT_BUILD)' '$(REPO_ROOT)/ports/nrf5340dk/initiator' \
+	  -- -DZEPHYR_EXTRA_MODULES='$(REPO_ROOT)/modules/woz_uwb;$(REPO_ROOT)/deps/dw3000'
+
+## nrf-init-flash: flash the Aliro initiator (both cores) -> build/nrf5340dk-initiator
+##   A different application from the one every other nrf- target builds: the DK
+##   standing in for an iPhone, from ports/nrf5340dk/initiator. `make nrf-flash`
+##   would put the door-lock image on the same board instead.
+##   Erase + flash, because the initiator is a sysbuild pair and the net core
+##   carries the BLE controller; an app-only write leaves whichever controller
+##   was already there. domains.yaml flashes ipc_radio first, then the app.
+##   The build itself is not driven from here yet; build it with
+##   `west build -b nrf5340dk/nrf5340/cpuapp --sysbuild -d $(NRF_INIT_BUILD) ports/nrf5340dk/initiator`.
+nrf-init-flash:
+	@[ -f '$(NRF_INIT_BUILD)/build.ninja' ] || { \
+	  printf '  no initiator build at %s  ·  build it first\n' '$(NRF_INIT_BUILD)' >&2; exit 1; }
+	@ALIRO_BUILD='$(NRF_INIT_BUILD)' $(NRF_BUILD_SH) flash-erase
 
 ## nrf-term: serial console — live logs + typeable shell (tio, 115200 8N1)
 ##   Prints this image's Matter pairing code first, because that is what you came

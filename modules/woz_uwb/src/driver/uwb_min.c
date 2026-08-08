@@ -51,7 +51,15 @@ static int uwb_probe_ensure(void)
 		 * reads valid, so the chip is definitely awake when dwt_probe runs. The logged
 		 * value also diagnoses a genuine comms failure: 0x00000000 = MISO low / unpowered /
 		 * held in reset (check the EVB power jumper); 0xFFFFFFFF = MISO floating / no chip;
-		 * other non-DECA = wrong SPI pins/mode. */
+		 * other non-DECA = wrong SPI pins/mode.
+		 *
+		 * One more signature, because it looks like none of the above and cost a bench
+		 * session to name: a value that reconstructs to the real DEV_ID under a one-bit
+		 * right shift, carrying each byte's LSB into the next byte's MSB. On nRF5340 that
+		 * is 0x6fe50101, and it means SPIM4 sampled MISO a clock early because HFCLKCTRL
+		 * is DIV_2. SPIM4's sample point is derived from HFCLK, so the fix is the clock
+		 * divider, not the SPI config -- the pins, mode, frequency and RXDELAY all read
+		 * correct while this happens. See the initiator app's hfclk_div_fixup(). */
 		uint32_t raw_devid = 0u;
 
 		for (int i = 0; i < 5; i++) {

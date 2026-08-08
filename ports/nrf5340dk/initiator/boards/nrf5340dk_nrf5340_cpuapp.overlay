@@ -1,0 +1,67 @@
+/*
+ * DWM3000EVB on the nRF5340 DK Arduino header, for the Aliro initiator.
+ *
+ * The pinout is copied verbatim from ports/nrf5340dk/overlays/dw3000-nfc.overlay,
+ * which is the wiring proven on this bench (HV-3, 2026-08-06: raw DEV_ID reads
+ * 0xdeca0302 and woz_uwb_start_aliro() reaches ACTIVE). Only the DW3000 half is
+ * here. That file also retargets SPIM1 for an NFC12A1 shield and patches a
+ * nucleo_nfc@0 node that exists only in the door-lock app's devicetree, so it
+ * cannot be reused as-is: an initiator has no NFC frontend and referencing that
+ * node would fail to build.
+ *
+ * This lands as boards/<board>.overlay rather than an -DEXTRA_DTC_OVERLAY_FILE
+ * argument so the shield travels with the application, the way on_target_ec's
+ * config does. There is no second supported wiring to select between.
+ *
+ * DW3000 (DWM3000EVB) on SPIM4: SCK P1.15, MOSI P1.13, MISO P1.14, CS P1.12,
+ *   RSTn P1.09, IRQ P1.10, WAKEUP P1.11 (Arduino header, seated shield).
+ */
+
+&pinctrl {
+	spi4_default: spi4_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK,  1, 15)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 13)>,
+				<NRF_PSEL(SPIM_MISO, 1, 14)>;
+		};
+	};
+
+	spi4_sleep: spi4_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK,  1, 15)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 13)>,
+				<NRF_PSEL(SPIM_MISO, 1, 14)>;
+			low-power-enable;
+		};
+	};
+};
+
+&spi4 {
+	status = "okay";
+	pinctrl-0 = <&spi4_default>;
+	pinctrl-1 = <&spi4_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+
+	dw3000: dw3000@0 {
+		compatible = "decawave,dw3000";
+		reg = <0>;
+		/* 8 MHz, the same proven value as the door lock's overlay.
+		 *
+		 * This property does NOT set the probe speed, which is worth knowing
+		 * before tuning it: deps/dw3000/platform/dw3000_spi.c:47-49 keeps two
+		 * configs, hard-codes the slow one at 2 MHz, and starts on it. The
+		 * devicetree value only lands after dw3000_spi_speed_fast(). Dropping
+		 * this to 2 MHz to chase a bad probe read therefore changes nothing
+		 * about the probe and only slows the ranging path -- measured here, the
+		 * bad read was byte-for-byte identical at both speeds. */
+		spi-max-frequency = <8000000>;
+		reset-gpios  = <&gpio1  9 GPIO_ACTIVE_LOW>;
+		irq-gpios    = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+		wakeup-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&gpio1 {
+	status = "okay";
+};

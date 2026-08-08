@@ -245,11 +245,13 @@ static ssize_t dfu_gatt_write(struct bt_conn *conn, const struct bt_gatt_attr *a
  * looks at it once the application is up, and a runtime press cannot be
  * confused for either of those.
  *
- * The intended trigger is Apple Home's "Turn On Pairing Mode", which sends
+ * The primary trigger is Apple Home's "Turn On Pairing Mode", which sends
  * AdministratorCommissioning::OpenCommissioningWindow (cluster 0x003C).
- * modules/woz_matter does not implement that cluster yet, so the button stands
- * in. When the cluster lands it calls woz_dfu_window_open() too and this stays
- * as the local override.
+ * modules/woz_matter implements it (matter_clusters.c, MATTER_CMD_ADMIN_OPEN_WINDOW)
+ * and admin_arm() opens this window alongside the commissioning one, for the same
+ * timeout (matter_commission.c). So pairing mode and update mode are one gesture
+ * on this board, by design. SW2 remains the local override for a bench with no
+ * controller in reach.
  */
 static const struct gpio_dt_spec s_button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 static struct gpio_callback s_button_cb;

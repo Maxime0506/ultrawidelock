@@ -129,7 +129,7 @@ commissioner. A peer that writes C1 has identified itself as one.
 **called by** `c1_write`  ·  **calls** `reset_link`
 
 ### `static void on_disconnected(struct bt_conn *conn, uint8_t reason)`
-`firmware/src/matter_ble_zephyr.c:564`
+`firmware/src/matter_ble_zephyr.c:573`
 
 BLE disconnection callback. Clears the connection reference, marks any active session as
 inactive, and resets the link state (reassembly buffer, TX flags).
@@ -137,19 +137,19 @@ inactive, and resets the link state (reassembly buffer, TX flags).
 **calls** `reset_link`
 
 ### `void matter_ble_set_discriminator(uint16_t discriminator)`
-`firmware/src/matter_ble_zephyr.c:601`
+`firmware/src/matter_ble_zephyr.c:610`
 
 Override the advertised discriminator; 0 restores the built-in one.
 
 ### `uint16_t matter_ble_discriminator(void)`
-`firmware/src/matter_ble_zephyr.c:606`
+`firmware/src/matter_ble_zephyr.c:615`
 
 The discriminator currently advertised.
 
 **called by** `matter_ble_commissionable_svc_data`
 
 ### `int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)`
-`firmware/src/matter_ble_zephyr.c:612`
+`firmware/src/matter_ble_zephyr.c:621`
 
 Build the commissionable-node service data element.
 This does NOT start advertising, deliberately. The reader owns the single
@@ -170,7 +170,7 @@ outlive the advertisement -- bt_data holds the pointer, not a copy.
 **calls** `matter_ble_discriminator`
 
 ### `static int matter_ble_init(void)`
-`firmware/src/matter_ble_zephyr.c:656`
+`firmware/src/matter_ble_zephyr.c:665`
 
 Started by SYS_INIT rather than by the application, because
 BT_GATT_SERVICE_DEFINE registers the 0xFFF6 service unconditionally: the C1

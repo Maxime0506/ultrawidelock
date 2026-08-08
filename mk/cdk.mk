@@ -357,6 +357,22 @@ selftest:
 ##   decides "probe 0" moves between sessions.
 flash:
 	$(CDK_PROBE_GUARD)
+	@# `flash` does not rebuild, and a stale hex flashes without a word. On
+	@# 2026-08-07 that wrote a 00:35-era image at 21:05 as "the fix committed
+	@# at 21:04" -- the board then reproduced the fixed bug for two hours and
+	@# every log read as the fix having failed. Say the ages out loud; the
+	@# flash still runs, because flashing an old build on purpose is
+	@# legitimate and this cannot tell intent from accident.
+	@if [ -f '$(CDK_SIGNED_HEX)' ]; then \
+	  hex_t=$$(stat -f %m '$(CDK_SIGNED_HEX)' 2>/dev/null || stat -c %Y '$(CDK_SIGNED_HEX)'); \
+	  head_t=$$(git -C '$(REPO_ROOT)' log -1 --format=%ct 2>/dev/null || echo 0); \
+	  if [ "$$hex_t" -lt "$$head_t" ]; then \
+	    printf '\n  *** the image being flashed is OLDER than your last commit ***\n'; \
+	    printf '      built:  %s\n' "$$(date -r $$hex_t '+%F %T' 2>/dev/null || date -d @$$hex_t '+%F %T')"; \
+	    printf '      HEAD:   %s\n' "$$(date -r $$head_t '+%F %T' 2>/dev/null || date -d @$$head_t '+%F %T')"; \
+	    printf '      run `make build` first if you meant to flash what you just committed.\n\n'; \
+	  fi; \
+	fi
 	@$(CDK_RUN) flash $(CDK_DEV_ID_ARG) -d $(CDK_BUILD)
 	@# Record what the board now runs, so `make dfu` can diff against it. A
 	@# delta needs the exact bytes that are on the part, and once the probe is

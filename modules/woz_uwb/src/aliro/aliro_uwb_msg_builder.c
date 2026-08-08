@@ -2,8 +2,22 @@
 
 #include "aliro_uwb_msg_builder.h"
 
+#include "aliro_uwb_msg.h" /* the aliro_uwb_msg_free declaration */
 #include "woz_alloc.h"
 #include <string.h>
+
+/**
+ * @brief Releases a message allocated by this layer's message builders.
+ *
+ * Here rather than in aliro_uwb_msg.c so that allocating and freeing a message
+ * are one translation unit. A caller that only builds messages, which is what
+ * the device-side codec in aliro_device_uwb.c is, would otherwise have to link
+ * the reader's whole M2/M4 handler and session lifecycle to get this one line.
+ */
+void aliro_uwb_msg_free(struct aliro_uwb_message *message)
+{
+	qfree(message);
+}
 
 /**
  * @brief Allocate a message with room for the given payload length plus header.

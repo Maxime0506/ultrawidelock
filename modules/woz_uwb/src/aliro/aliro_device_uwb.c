@@ -141,7 +141,22 @@ void aliro_dev_uwb_select_m2(const struct aliro_dev_uwb_m1 *m1, struct aliro_dev
 	memset(out, 0, sizeof(*out));
 	out->config_id = m1->config_count ? m1->config_ids[0] : 0x0001u;
 	out->pulse_shape_combo = m1->combo_count ? m1->pulse_shape_combos[0] : 0x00u;
-	out->channel_bitmask = m1->channel_bitmask ? m1->channel_bitmask : 0x01u;
+	/* M1 offers a SET of channels; M2 must name exactly ONE. Echoing the offer
+	 * back is rejected outright -- a real reader answers "unsupported channel
+	 * bitmask 0x03" and drops the setup with no message to the device, which is
+	 * how this was found on hardware rather than here.
+	 *
+	 * Prefer channel 9: it is what the Aliro/CCC readers in this tree configure
+	 * (ull_setchannel ch=9) and what the DW3110 on the bench comes up on, so
+	 * picking it avoids a channel switch the reader would otherwise have to make
+	 * against itself. Fall back to 5 when that is all that is offered, and to 9
+	 * when a reader offers nothing legible. */
+	if ((m1->channel_bitmask & ALIRO_CHANNEL_BITMASK_CH5) &&
+	    !(m1->channel_bitmask & ALIRO_CHANNEL_BITMASK_CH9)) {
+		out->channel_bitmask = ALIRO_CHANNEL_BITMASK_CH5;
+	} else {
+		out->channel_bitmask = ALIRO_CHANNEL_BITMASK_CH9;
+	}
 	out->ran_multiplier = 4u;
 	out->slot_bitmask = 0x01u;
 	out->sync_code_index_bitmask = 0x00000005u;

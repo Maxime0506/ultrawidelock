@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `anchor/src/anchor_twr.h`
 
-*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
-
 **used by** [`anchor/src/anchor_twr.c`](anchor_twr.c.md), [`anchor/src/main.c`](main.c.md)
 
 ## API

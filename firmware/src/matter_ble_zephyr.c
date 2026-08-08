@@ -549,7 +549,16 @@ static bool claim_conn(struct bt_conn *conn)
 		return true;
 	}
 	if (s_conn != NULL) {
-		return false; /* already commissioning someone else */
+		/*
+		 * ERR, not INF: this is the only path that turns a commissioner
+		 * away, and it did so silently. The peer sees a bare GATT write
+		 * failure with nothing on the board to explain it, which is
+		 * indistinguishable from the write never arriving -- and the two
+		 * have opposite fixes. Bench builds lower the module level to see
+		 * the INF lines; this one has to survive a shipping build.
+		 */
+		LOG_ERR("C1 write refused: commissioning link held by another peer");
+		return false;
 	}
 	s_conn = bt_conn_ref(conn);
 	reset_link();

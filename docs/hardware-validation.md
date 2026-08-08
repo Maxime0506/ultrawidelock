@@ -102,16 +102,37 @@ walked up afterwards. The negative is read off flash rather than off the door.
 
 ### Checklist
 
-| ID | Procedure | Pass criterion |
-|---|---|---|
-| HV-1 | `make test` on the release commit | Exit 0, all host KATs pass |
-| HV-2 | `make rebuild` (pristine) | Exit 0, image links and fits flash |
-| HV-3 | Flash a `make selftest` build, boot with no phone present | Boot self-test reports pass on the console |
-| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, `Aliro source stack enabled` appears with no errors, BLE advertising starts |
-| HV-5 | Tap the phone on the NFC reader (Express Mode, screen off) | Lock actuates to unlocked; console logs the granted access |
-| HV-6 | Relock, then approach from well outside ranging distance, phone pocketed | Lock unlocks on approach with no phone interaction |
-| HV-7 | Walk away from the lock | Lock relocks after passing the hysteresis margin, and does not oscillate at the boundary |
-| HV-8 | Power-cycle the DK, wait for boot, repeat HV-5 and HV-6 | Both unlock paths work without re-provisioning the key |
+The Recorded column is what this repository has already seen on this board. It is
+not a substitute for running the row: a release records the result you got, not
+this one. Rows recorded on 2026-08-06 were run with `ALIRO_SOURCE=1 NFC=none`, so
+they cover the in-tree stack and say nothing about the NFC tap path.
+
+| ID | Procedure | Pass criterion | Recorded |
+|---|---|---|---|
+| HV-1 | `make test` on the release commit | Exit 0, all host KATs pass | CI gate |
+| HV-2 | `make rebuild` (pristine) | Exit 0, image links and fits flash | yes: `make nrf-build ALIRO_SOURCE=1 NFC=none` went pristine, exit 0 in 11m44s. App core 807,516 B of 978,432 B (82.53%), 355,936 B RAM (79.00%); net core 175,968 B flash, 57,468 B of 64 KB RAM (87.69%) |
+| HV-3 | Flash a `make selftest` build, boot with no phone present | Boot self-test reports pass on the console | yes: `DW3000 raw DEV_ID = 0xdeca0302`, `woz_uwb_start_aliro() = 0 (reached ACTIVE)`, and `SP0 RX up (ch=9 code=9 plen64 sts=off)`. DWM3000EVB on the Arduino header |
+| HV-4 | Flash the release image (`make flash-erase` for a first flash), boot | Clean boot, `Aliro source stack enabled` appears with no errors, BLE advertising starts | partial: `Aliro source stack enabled` and `CHIPoBLE advertising started` both appear, but the boot is not error-free. See the note below |
+| HV-5 | Tap the phone on the NFC reader (Express Mode, screen off) | Lock actuates to unlocked; console logs the granted access | no recorded result; run it. The 2026-08-06 image was built `NFC=none` and cannot pass this row |
+| HV-6 | Relock, then approach from well outside ranging distance, phone pocketed | Lock unlocks on approach with no phone interaction | no recorded result; run it |
+| HV-7 | Walk away from the lock | Lock relocks after passing the hysteresis margin, and does not oscillate at the boundary | no recorded result; run it |
+| HV-8 | Power-cycle the DK, wait for boot, repeat HV-5 and HV-6 | Both unlock paths work without re-provisioning the key | no recorded result; run it |
+
+### HV-4: the errors that are expected
+
+HV-4 says "with no errors", and a passing boot still prints seven error lines.
+Both groups are benign, and knowing that is the difference between a five-minute
+check and an evening:
+
+- `[DIS]Failed to remove advertised services: 3`, `[DIS]Failed to advertise
+  commissionable node: 3` and `[DIS]Failed to finalize service update: 3`, twice
+  each at t=0.046 s. This is DNS-SD before OpenThread has an interface.
+  Commissioning runs over CHIPoBLE, which comes up cleanly at t=0.117 s.
+- `bt_adv: No valid legacy adv to stop`, once. The Aliro advertiser stopping an
+  advertisement that was never started.
+
+Anything else at `<err>` level is not covered by this note and should be treated
+as a failure.
 
 ## ESP32-S3
 

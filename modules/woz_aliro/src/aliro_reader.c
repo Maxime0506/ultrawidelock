@@ -21,6 +21,7 @@
  * Phase 3.4): NVS if present, else a clearly-marked dev identity so the
  * transaction is drivable at bench before Phase-4 Matter provisioning lands.
  */
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -2224,6 +2225,30 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	 */
 	aliro_reader_refresh_adv();
 	LOG_INF("Matter-provisioned reader identity stored");
+	return 0;
+}
+
+// Read back the public half of the stored identity. See aliro_reader.h for why this exists and
+// why verif_pub is derived rather than stored. No lock: s_id is written at boot and by the
+// provisioning paths, which are the same single caller this shares a thread with, and s_trust --
+// the thing s_prov_lock guards -- is not touched here.
+int aliro_reader_identity_public(uint8_t reader_id[ALIRO_READER_ID_LEN],
+				 uint8_t verif_pub[ALIRO_P256_POINT], uint8_t grk[ALIRO_GRK_LEN])
+{
+	load_provisioning();
+
+	/* The dev identity is a build-time placeholder every unit shares.
+	 * Reporting it as this reader's configuration would tell a controller a
+	 * provisioning had happened, and the null it replaces is true. */
+	if (s_id.is_dev) {
+		return -ENOENT;
+	}
+	if (aliro_ec_p256_pub_from_priv(s_id.sign_priv, verif_pub) != 0) {
+		LOG_ERR("cannot derive the verification key from the stored signing key");
+		return -EIO;
+	}
+	memcpy(reader_id, s_id.reader_id, ALIRO_READER_ID_LEN);
+	memcpy(grk, s_id.grk, ALIRO_GRK_LEN);
 	return 0;
 }
 

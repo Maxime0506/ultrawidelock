@@ -54,6 +54,7 @@ void test_ccc_mac(void);
 void test_ccc_sts(void);
 void test_ccc_shim(void);
 void test_ccc_session(void);
+void test_prepoll_schedule(void);
 void test_aliro_builder(void);
 void test_aliro_parser(void);
 void test_aliro_adapter(void);

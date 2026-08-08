@@ -3,6 +3,7 @@
 
 | subsystem | about |
 |---|---|
+| [`firmware/src/aliro_ble_central_zephyr.c`](aliro_ble_central_zephyr.c.md) | Zephyr central/client backend for the Aliro initiator: the mirror of |
 | [`firmware/src/aliro_ble_zephyr.c`](aliro_ble_zephyr.c.md) |  |
 | [`firmware/src/aliro_prov_settings.c`](aliro_prov_settings.c.md) |  |
 | [`firmware/src/case_bench.c`](case_bench.c.md) |  |

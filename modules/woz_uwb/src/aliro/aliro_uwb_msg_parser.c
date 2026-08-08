@@ -2,9 +2,50 @@
 
 #include "aliro_uwb_msg_parser.h"
 
+#include "aliro_uwb_msg.h" /* declares the three header accessors defined below */
 #include "woz_log.h"
 
 LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
+
+/* ---- Header accessors ----------------------------------------------------
+ *
+ * Here, not in aliro_uwb_msg.c, so that reading a message header does not pull
+ * in the reader's M2/M4 handlers and session lifecycle. The device-side codec
+ * (aliro_device_uwb.c) reads headers and builds messages and does neither of
+ * those things.
+ */
+
+/**
+ * @brief Extracts the protocol type from byte 0 of an Aliro message header.
+ * @param bytes Pointer to the start of the raw message bytes.
+ * @return The protocol type byte.
+ */
+uint8_t aliro_uwb_msg_protocol_header(const uint8_t *bytes)
+{
+	return bytes[0];
+}
+
+/**
+ * @brief Extracts the message type ID from byte 1 of an Aliro message header, used to dispatch
+ * M1-M4 setup and ranging messages during parsing.
+ * @param bytes Pointer to the start of the raw message bytes.
+ * @return The message ID byte.
+ */
+uint8_t aliro_uwb_msg_message_id(const uint8_t *bytes)
+{
+	return bytes[1];
+}
+
+/**
+ * @brief Extracts the payload length from bytes 2-3 of an Aliro message header as a 16-bit
+ * big-endian integer.
+ * @param bytes Pointer to the start of the raw message bytes.
+ * @return The payload length in bytes.
+ */
+uint16_t aliro_uwb_msg_payload_length(const uint8_t *bytes)
+{
+	return (uint16_t)((bytes[2] << 8) | bytes[3]);
+}
 
 /**
  * @brief Parses the next TLV attribute from the message payload; returns NULL if offset

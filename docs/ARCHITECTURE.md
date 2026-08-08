@@ -72,11 +72,23 @@ host loopback can drive the real reader codec end to end.
 
 **depends on** [`modules/woz_uwb/src/aliro/aliro_device_uwb.h`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md)
 
+### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md)
+
+@file aliro_uwb_msg_builder.c — big-endian TLV message builder.
+
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
+
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
 
 @file aliro_uwb_session.c — per-session lifecycle and state machine.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
+
+### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md)
+
+@file aliro_uwb_msg_parser.c — TLV attribute parser and big-endian reads.
+
+**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md)
 
@@ -84,23 +96,11 @@ host loopback can drive the real reader codec end to end.
 
 **depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
 
-### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md)
-
-@file aliro_uwb_msg_builder.c — big-endian TLV message builder.
-
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
-
-### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md)
-
-@file aliro_uwb_msg_parser.c — TLV attribute parser and big-endian reads.
-
-**depends on** [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md)
-
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md)
 
 @file aliro_uwb_msg.h — message framing accessors, dispatch and builders.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_device_uwb.c`](architecture/modules.woz_uwb.src.aliro/aliro_device_uwb.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md)
 
@@ -1129,6 +1129,14 @@ deadline there is ~1836 us -- but the 250 ms reader loop is fine.
 
 **used by** [`firmware/src/main.c`](architecture/firmware.src/main.c.md), [`firmware/src/matter_commission.c`](architecture/firmware.src/matter_commission.c.md), [`firmware/src/status_led.c`](architecture/firmware.src/status_led.c.md)
 
+### [`firmware/src/aliro_ble_central_zephyr.c`](architecture/firmware.src/aliro_ble_central_zephyr.c.md)
+
+Zephyr central/client backend for the Aliro initiator: the mirror of
+aliro_ble_zephyr.c. That file advertises 0xFFF2, serves the characteristics and
+runs a CoC server; this one scans for 0xFFF2, connects, discovers, reads the
+reader's SPSM/versions, writes the selected version and opens a CoC client to
+that SPSM.
+
 ### [`firmware/src/aliro_prov_settings.c`](architecture/firmware.src/aliro_prov_settings.c.md)
 
 ### [`firmware/src/case_bench.c`](architecture/firmware.src/case_bench.c.md)
@@ -1308,8 +1316,6 @@ transport_pn532.cpp.
 
 ### [`modules/woz_uwb/src/fira/ds_twr.c`](architecture/modules.woz_uwb.src.fira/ds_twr.c.md)
 
-*No module docstring. First commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers".*
-
 **depends on** [`modules/woz_uwb/src/fira/ds_twr.h`](architecture/modules.woz_uwb.src.fira/ds_twr.h.md)
 
 ### [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
@@ -1319,8 +1325,6 @@ transport_pn532.cpp.
 **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
 ### [`modules/woz_uwb/src/fira/ds_twr.h`](architecture/modules.woz_uwb.src.fira/ds_twr.h.md)
-
-*No module docstring. First commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers".*
 
 **used by** [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/fira/ds_twr.c`](architecture/modules.woz_uwb.src.fira/ds_twr.c.md)
 
@@ -1503,37 +1507,25 @@ Minimal strict BER/DER-TLV reader for Aliro APDU payloads.
 
 ### [`modules/woz_anchor/src/woz_satellite.c`](architecture/modules.woz_anchor.src/woz_satellite.c.md)
 
-*No module docstring. First commit: "firmware: gate UNLOCK_PREDICT on the second anchor's verdict".*
-
 **depends on** [`modules/woz_anchor/include/woz_satellite.h`](architecture/modules.woz_anchor.include/woz_satellite.h.md)
 
 ### [`modules/woz_anchor/src/woz_slam_lis2dh12.c`](architecture/modules.woz_anchor.src/woz_slam_lis2dh12.c.md)
-
-*No module docstring. First commit: "woz_anchor: LIS2DH12 impact and tamper without a sensor thread".*
 
 **depends on** [`modules/woz_anchor/include/woz_slam_hw.h`](architecture/modules.woz_anchor.include/woz_slam_hw.h.md), [`modules/woz_port/include/woz_log.h`](architecture/modules.woz_port.include/woz_log.h.md)
 
 ### [`modules/woz_anchor/src/woz_door.c`](architecture/modules.woz_anchor.src/woz_door.c.md)
 
-*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
-
 **depends on** [`modules/woz_anchor/include/woz_door.h`](architecture/modules.woz_anchor.include/woz_door.h.md)
 
 ### [`modules/woz_anchor/src/woz_fusion.c`](architecture/modules.woz_anchor.src/woz_fusion.c.md)
-
-*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
 
 **depends on** [`modules/woz_anchor/include/woz_fusion.h`](architecture/modules.woz_anchor.include/woz_fusion.h.md)
 
 ### [`modules/woz_anchor/src/woz_report.c`](architecture/modules.woz_anchor.src/woz_report.c.md)
 
-*No module docstring. First commit: "woz_anchor: ARP1 range-report line codec and its host consumer".*
-
 **depends on** [`modules/woz_anchor/include/woz_report.h`](architecture/modules.woz_anchor.include/woz_report.h.md)
 
 ### [`modules/woz_anchor/src/woz_slam.c`](architecture/modules.woz_anchor.src/woz_slam.c.md)
-
-*No module docstring. First commit: "woz_anchor: LIS2DH12 impact and tamper without a sensor thread".*
 
 **depends on** [`modules/woz_anchor/include/woz_slam.h`](architecture/modules.woz_anchor.include/woz_slam.h.md)
 
@@ -1649,6 +1641,52 @@ The demo responder lifecycle + interactive console live in app_shell.c.
 
 **used by** [`ports/esp32/apps/reader/main/app_shell.c`](architecture/ports.esp32.apps.reader.main/app_shell.c.md), [`ports/esp32/apps/reader/main/main.c`](architecture/ports.esp32.apps.reader.main/main.c.md)
 
+## `ports/nrf5340dk/initiator/src/`
+
+### [`ports/nrf5340dk/initiator/src/ranging.c`](architecture/ports.nrf5340dk.initiator.src/ranging.c.md)
+
+Device-side UWB ranging-setup driver: opens the reader's BleSK-sealed SDUs and
+answers them, walking AP-Completed -> Initiate-Ranging-Session -> M1 -> M2 ->
+M3 -> M4 until the reader starts its responder.
+
+**depends on** [`ports/nrf5340dk/initiator/src/prepoll_tx.h`](architecture/ports.nrf5340dk.initiator.src/prepoll_tx.h.md), [`ports/nrf5340dk/initiator/src/ranging.h`](architecture/ports.nrf5340dk.initiator.src/ranging.h.md)
+
+### [`ports/nrf5340dk/initiator/src/main.c`](architecture/ports.nrf5340dk.initiator.src/main.c.md)
+
+nRF5340 DK application entry for the Aliro initiator, the User-Device role that
+stands in for an iPhone on the bench. Starts the Zephyr BLE central, which
+scans for the reader's 0xFFF2 advert, connects, reads the reader's SPSM,
+supported versions and features, writes the version it selects, and opens the
+L2CAP channel. It then runs the Access Protocol over that channel: every
+inbound AUTH0/AUTH1/EXCHANGE command is fed to the device state machine and the
+sealed response is framed straight back, ending in the same 32-byte URSK the
+reader derives. Credentials are the compiled-in bench pair below, which works
+only against a reader running its dev identity with an empty trust store.
+
+**depends on** [`ports/nrf5340dk/initiator/src/ranging.h`](architecture/ports.nrf5340dk.initiator.src/ranging.h.md)
+
+### [`ports/nrf5340dk/initiator/src/prepoll_tx.c`](architecture/ports.nrf5340dk.initiator.src/prepoll_tx.c.md)
+
+Device-side CCC Pre-POLL transmitter. See prepoll_tx.h for scope.
+
+**depends on** [`ports/nrf5340dk/initiator/src/prepoll_tx.h`](architecture/ports.nrf5340dk.initiator.src/prepoll_tx.h.md)
+
+### [`ports/nrf5340dk/initiator/src/prepoll_tx.h`](architecture/ports.nrf5340dk.initiator.src/prepoll_tx.h.md)
+
+Device-side CCC Pre-POLL transmitter: turns the URSK this board just agreed
+over BLE into the SP0 data frame that opens a ranging block, and puts it on
+the air on the session's channel.
+
+**used by** [`ports/nrf5340dk/initiator/src/prepoll_tx.c`](architecture/ports.nrf5340dk.initiator.src/prepoll_tx.c.md), [`ports/nrf5340dk/initiator/src/ranging.c`](architecture/ports.nrf5340dk.initiator.src/ranging.c.md)
+
+### [`ports/nrf5340dk/initiator/src/ranging.h`](architecture/ports.nrf5340dk.initiator.src/ranging.h.md)
+
+Device-side UWB ranging-setup driver for the initiator: consumes the reader's
+BleSK-sealed post-auth SDUs and answers them, walking AP-Completed ->
+Initiate-Ranging-Session -> M1 -> M2 -> M3 -> M4.
+
+**used by** [`ports/nrf5340dk/initiator/src/main.c`](architecture/ports.nrf5340dk.initiator.src/main.c.md), [`ports/nrf5340dk/initiator/src/ranging.c`](architecture/ports.nrf5340dk.initiator.src/ranging.c.md)
+
 ## `activity/src/`
 
 ### [`activity/src/discord-boot.ts`](architecture/activity.src/discord-boot.ts.md)
@@ -1681,19 +1719,13 @@ another person chose. Nothing in this file ever reaches innerHTML.
 
 ### [`anchor/src/anchor_twr.c`](architecture/anchor.src/anchor_twr.c.md)
 
-*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
-
 **depends on** [`anchor/src/anchor_twr.h`](architecture/anchor.src/anchor_twr.h.md)
 
 ### [`anchor/src/main.c`](architecture/anchor.src/main.c.md)
 
-*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
-
 **depends on** [`anchor/src/anchor_twr.h`](architecture/anchor.src/anchor_twr.h.md)
 
 ### [`anchor/src/anchor_twr.h`](architecture/anchor.src/anchor_twr.h.md)
-
-*No module docstring. First commit: "anchor: two-anchor DS-TWR bench link (stage A)".*
 
 **used by** [`anchor/src/anchor_twr.c`](architecture/anchor.src/anchor_twr.c.md), [`anchor/src/main.c`](architecture/anchor.src/main.c.md)
 
@@ -3257,13 +3289,9 @@ pure integer logic and host-tested. This file is the part that cannot be.
 
 ### [`modules/woz_anchor/include/woz_door.h`](architecture/modules.woz_anchor.include/woz_door.h.md)
 
-*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
-
 **used by** [`modules/woz_anchor/src/woz_door.c`](architecture/modules.woz_anchor.src/woz_door.c.md)
 
 ### [`modules/woz_anchor/include/woz_fusion.h`](architecture/modules.woz_anchor.include/woz_fusion.h.md)
-
-*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
 
 **used by** [`modules/woz_anchor/include/woz_satellite.h`](architecture/modules.woz_anchor.include/woz_satellite.h.md), [`modules/woz_anchor/src/woz_fusion.c`](architecture/modules.woz_anchor.src/woz_fusion.c.md)
 
@@ -3537,6 +3565,63 @@ Goes over the DK's on-board J-Link. See FLASH.md for setup and first run.
 Usage:  bash flash.sh [JLINK_SERIAL_NUMBER]
 
 ## `scripts/`
+
+### [`scripts/aliro-enroll.py`](architecture/scripts/aliro-enroll.md)
+
+Enrol the nRF5340DK initiator into a reader's home, the way Apple Home enrols an iPhone.
+
+Usage:
+  # headless, no pairing window, no phone: act as an admin that already
+  # commissioned this reader (the HITL path -- see --fabric below: the
+  # 2026-08-07 identity in ~/.aliro-chip-tool is chip-tool's DEFAULT
+  # fabric, which is alpha, not this script's beta default)
+  scripts/aliro-enroll.py --node-id 0x1234 --storage ~/.aliro-chip-tool --fabric alpha
+
+  # first run, BLE route -- the one that works against this reader today
+  scripts/aliro-enroll.py --node-id 0x1234 --pairing-code <11 digits>       --dataset <hex from `make monitor`>
+
+  # later runs, already joined, default chip-tool storage
+  scripts/aliro-enroll.py --node-id 0x1234
+
+Options:
+  --node-id        node id to address the reader by. Required.
+  --pairing-code   Apple Home "Turn On Pairing Mode" code. Omit once joined.
+  --dataset        active Thread dataset hex. Its presence selects the BLE route
+                   instead of IP. Needed because PASE does not run over IP on
+                   this reader -- see the comment at step 1. `make monitor`
+                   prints it when a window opens.
+  --discriminator  LONG 12-bit discriminator. Optional. With it, chip-tool goes
+                   straight to BLE and never browses; without it, it browses,
+                   finds the IP service first, and burns ~10 s on a PASE that
+                   cannot succeed here. Prefer passing it.
+  --endpoint       door lock endpoint (default 1)
+  --fabric         chip-tool fabric name (default beta, so alpha stays free)
+  --out            header to write (default ports/nrf5340dk/initiator/src/bench_identity.h)
+  --cred-type      7 evictable / 8 non-evictable endpoint key (default 8)
+  --chip-tool      path to the chip-tool binary
+  --fresh-storage  run against a private chip-tool KVS, so nothing an earlier
+                   attempt persisted can affect this one
+  --dry-run        print the chip-tool commands without running them
+
+What it does, in the order it does it:
+  1. joins the reader's fabric as a SECOND admin, leaving Apple Home's admin intact
+  2. reads the four Aliro attributes that make up the reader's public identity
+  3. generates a P-256 credential for the initiator and posts the public half
+     with SetCredential, which is what puts it in the reader's trust store
+  4. writes a C header the initiator compiles in
+
+The reader is not modified: no firmware change, no shell command, no re-flash. Its
+Apple Home fabric, Home tile and walk-up unlock all keep working. Multi-fabric is
+ordinary Matter behaviour and the reader treats this admin like any other.
+
+Why a controller is needed at all: a credential enters the trust store only
+through Matter SetCredential (firmware/src/matter_commission.c:1966). A phone
+never provisions itself -- the home's admin does it on the phone's behalf -- so
+standing in for a phone means standing in for the admin too.
+
+The generated header carries the reader's public identity and the initiator's
+PRIVATE credential key. It is written outside version control on purpose. Do not
+commit it, paste it, or put it in a doc.
 
 ### [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md)
 
@@ -3986,6 +4071,50 @@ next to its source, so regenerate after editing a FLASH.md:
     python3 scripts/flash_html.py release/*/FLASH.md
 
 Output is deterministic (no timestamps): it only changes when the source does.
+
+### [`scripts/hitl-run.sh`](architecture/scripts/hitl-run.sh.md)
+
+hitl-run.sh — one unattended pass of the DK-as-iPhone loop: enrol the
+initiator against the live reader, build it, flash it, and judge the result
+off what both boards actually say.
+Usage:
+scripts/hitl-run.sh                       # the whole loop
+scripts/hitl-run.sh --skip-enrol          # reuse src/bench_identity.h as-is
+scripts/hitl-run.sh --skip-enrol --skip-build --skip-flash
+# judge the boards as they run now
+TIMEOUT=180 scripts/hitl-run.sh           # give the verdict window longer
+PORT=/dev/cu.usbmodemXXXX scripts/hitl-run.sh   # name the DK console port
+Options:
+--skip-enrol   keep the existing bench_identity.h. Without this flag a run
+MINTS A FRESH CREDENTIAL, which unbinds any DK image built
+against the previous header -- that is why --skip-build and
+--skip-flash are refused unless enrolment is skipped too:
+a fresh credential with a stale board can never pass.
+--skip-build   do not rebuild the initiator
+--skip-flash   do not touch the DK (implies the image on it is current)
+--no-reader    judge from the DK console alone, without the reader's RTT
+Environment: NODE (0x1234), STORAGE (~/.aliro-chip-tool), FABRIC (alpha),
+TIMEOUT (verdict window seconds, 120), PORT (DK console)
+Exit: 0 PASS · 1 FAIL (verdict window closed without the markers, or a fail
+marker appeared) · 2 a stage refused to run (reason on stderr)
+What PASS means, and why these markers:
+DK console  "=== ESTABLISHED: URSK agreed with the reader ===" -- the whole
+BLE Access Protocol succeeded against the enrolled identity.
+DK console  "Pre-POLL #" -- M1..M3 negotiated AND the transmitter armed; a
+repeating needle on purpose, the 5 Hz cadence outlives the
+serial capture's occasional byte drops where a one-shot
+banner did not.
+reader RTT  "PREPOLL OK" -- the reader DECRYPTED a Pre-POLL whose CCM* MIC
+is keyed by mUPSK1 from the URSK (ccc_shim_rx.c), so the key the
+protocol produced is the same key on both ends, on air. This is
+the one marker a BLE-only fake cannot produce, which is why the
+reader watch is on by default and --no-reader is the opt-out.
+The reader is watched over its J-Link (firmware/keys/cdk-probe) against the
+ELF recorded at deploy time (build/cdk-deployed/zephyr.elf) -- the build tree
+holds the image being built NEXT, not the one running, per mk/cdk.mk.
+Artifacts land in build/hitl-run/<timestamp>/: enrol.log, dk-serial.log,
+cdk-rtt.log, verdict.txt. The serial capture starts BEFORE the flash so the
+boot banner and a fast session are never missed.
 
 ### [`scripts/presence_runtime.py`](architecture/scripts/presence_runtime.md)
 
@@ -4457,6 +4586,10 @@ the frame and POSTs it back here, so the result lands in stdout rather than in
 a screenshot we have to squint at.
 
 Usage: csp_probe.py [dir-to-serve]      (default: the directory holding this file)
+
+### [`web-twin/twin.js`](architecture/web-twin/twin.js.md)
+
+*No module docstring. First commit: "twin: compile the firmware to WASM (web-twin/twin.js)".*
 
 ### [`web-twin/twin_glue.c`](architecture/web-twin/twin_glue.c.md)
 

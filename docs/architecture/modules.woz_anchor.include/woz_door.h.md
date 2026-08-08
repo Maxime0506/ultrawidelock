@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `modules/woz_anchor/include/woz_door.h`
 
-*No module docstring. First commit: "woz_anchor: door geometry and two-anchor fusion, host-tested".*
-
 **used by** [`modules/woz_anchor/src/woz_door.c`](../modules.woz_anchor.src/woz_door.c.md)
 
 ## API

@@ -53,6 +53,19 @@ enum aliro_uwb_ranging_service_attribute {
 	ALIRO_UWB_RANGING_SERVICE_ATTR_MAX = 0x12,
 };
 
+/* Values of the channel bitmask attribute (id 0x03).
+ *
+ * In M1 the reader offers a SET, so both bits may be present. In M2 the device
+ * must name exactly ONE: a reader compares the byte against these two values and
+ * rejects anything else with "unsupported channel bitmask" (aliro_uwb_msg.c,
+ * parse_channel_bitmask), then drops the setup without telling the device.
+ *
+ * Shared here rather than kept private to aliro_uwb_msg.c because the side
+ * SELECTING a channel and the side VALIDATING that selection must not disagree
+ * about which bit means what. */
+#define ALIRO_CHANNEL_BITMASK_CH5 0x01
+#define ALIRO_CHANNEL_BITMASK_CH9 0x02
+
 /** Status attribute values (suspend/resume responses). */
 #define ALIRO_UWB_RANGING_SERVICE_STATUS_ACCEPT  0
 #define ALIRO_UWB_RANGING_SERVICE_STATUS_REJECT  1
@@ -96,10 +109,11 @@ enum aliro_uwb_message_notification_ranging_attribute {
 };
 
 /* Fixed per-attribute value lengths (octets). */
-#define ALIRO_UWB_RANGING_SERVICE_ATTR_CONFIGURATION_IDENTIFIER_LENGTH      2
-#define ALIRO_UWB_RANGING_SERVICE_ATTR_PULSE_SHAPE_COMBO_LENGTH             1
-#define ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER_LENGTH            4
-#define ALIRO_UWB_RANGING_SERVICE_ATTR_CHANNEL_BITMASK_LENGTH               1
+#define ALIRO_UWB_RANGING_SERVICE_ATTR_CONFIGURATION_IDENTIFIER_LENGTH 2
+#define ALIRO_UWB_RANGING_SERVICE_ATTR_PULSE_SHAPE_COMBO_LENGTH        1
+#define ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER_LENGTH       4
+#define ALIRO_UWB_RANGING_SERVICE_ATTR_CHANNEL_BITMASK_LENGTH          1
+
 #define ALIRO_UWB_RANGING_SERVICE_ATTR_RAN_MULTIPLIER_LENGTH                1
 #define ALIRO_UWB_RANGING_SERVICE_ATTR_SLOT_BITMASK_LENGTH                  1
 #define ALIRO_UWB_RANGING_SERVICE_ATTR_SYNC_CODE_INDEX_BITMASK_LENGTH       4

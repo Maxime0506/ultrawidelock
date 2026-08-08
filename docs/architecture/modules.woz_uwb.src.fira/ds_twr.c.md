@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `modules/woz_uwb/src/fira/ds_twr.c`
 
-*No module docstring. First commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers".*
-
 **depends on** [`modules/woz_uwb/src/fira/ds_twr.h`](ds_twr.h.md)  ·  **discussed in** [`anchor/README.md`](../../../anchor/README.md)
 
 ## API

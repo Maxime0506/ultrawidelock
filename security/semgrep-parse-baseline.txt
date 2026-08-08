@@ -70,6 +70,12 @@ firmware/src/dfu_ble_zephyr.c
 firmware/src/matter_commission.c
 firmware/src/status_led.c
 
+# The DK initiator's Pre-POLL transmitter: `static K_WORK_DELAYABLE_DEFINE(...)` at
+# prepoll_tx.c:58, the same construct as the block above, joined with the ranging
+# bring-up work. Same compensating-control gap too: ports/ is outside
+# tests/host/sources.sh, so CodeQL's weekly run is the fallback for this file.
+ports/nrf5340dk/initiator/src/prepoll_tx.c
+
 # Bisected, for whoever tries to fix these rather than baseline them:
 # dfu_ble_zephyr.c:235, status_led.c:41, dfu_receiver.c:81 and :85. It is not the Zephyr
 # macro that breaks the parse. Any `static SOME_MACRO(a, b);` at file scope does, because

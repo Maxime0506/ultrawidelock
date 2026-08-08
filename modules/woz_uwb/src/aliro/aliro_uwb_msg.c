@@ -20,9 +20,9 @@ LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
 /* Number of slots per round the reader always offers in M3. */
 #define ALIRO_SLOTS_PER_ROUND_DEFAULT 12
 
-/* Channel bitmask values carried in the channel attribute. */
-#define ALIRO_CHANNEL_BITMASK_CH5 0x01
-#define ALIRO_CHANNEL_BITMASK_CH9 0x02
+/* ALIRO_CHANNEL_BITMASK_CH5/CH9 come from aliro_uwb_msg_spec.h, so the device
+ * side selecting a channel and the reader validating that selection cannot
+ * disagree about which bit means what. */
 
 /* Hopping-capability bit layout used while selecting a hopping config. */
 #define HOP_CCC_TO_FIRA(v)           ((v) >> 3)
@@ -58,13 +58,10 @@ LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
 	((1 << ALIRO_UWB_RANGING_SERVICE_ATTR_STS_INDEX0) |                                        \
 	 (1 << ALIRO_UWB_RANGING_SERVICE_ATTR_UWB_TIME0))
 
-/**
- * @brief Releases a message allocated by this layer's message builders.
- */
-void aliro_uwb_msg_free(struct aliro_uwb_message *message)
-{
-	qfree(message);
-}
+/* aliro_uwb_msg_free lives in aliro_uwb_msg_builder.c, next to the qmalloc that
+ * pairs with it. It was here, which forced anything that only BUILDS messages to
+ * link this whole file and with it the reader's M2/M4 handlers and session
+ * lifecycle. The device-side codec (aliro_device_uwb.c) is exactly that caller. */
 
 /* ---- Builders ------------------------------------------------------------ */
 
@@ -298,39 +295,10 @@ struct aliro_uwb_message *aliro_uwb_msg_build_general_error(struct aliro_uwb_ses
 	return builder.message;
 }
 
-/* ---- Header accessors ---------------------------------------------------- */
-
-/**
- * @brief Extracts the protocol type from byte 0 of an Aliro message header.
- * @param bytes Pointer to the start of the raw message bytes.
- * @return The protocol type byte.
- */
-uint8_t aliro_uwb_msg_protocol_header(const uint8_t *bytes)
-{
-	return bytes[0];
-}
-
-/**
- * @brief Extracts the message type ID from byte 1 of an Aliro message header, used to dispatch
- * M1-M4 setup and ranging messages during parsing.
- * @param bytes Pointer to the start of the raw message bytes.
- * @return The message ID byte.
- */
-uint8_t aliro_uwb_msg_message_id(const uint8_t *bytes)
-{
-	return bytes[1];
-}
-
-/**
- * @brief Extracts the payload length from bytes 2-3 of an Aliro message header as a 16-bit
- * big-endian integer.
- * @param bytes Pointer to the start of the raw message bytes.
- * @return The payload length in bytes.
- */
-uint16_t aliro_uwb_msg_payload_length(const uint8_t *bytes)
-{
-	return (uint16_t)((bytes[2] << 8) | bytes[3]);
-}
+/* The three header accessors live in aliro_uwb_msg_parser.c, with the rest of the
+ * code that reads raw message bytes. Same reason as aliro_uwb_msg_free above:
+ * they are framing, not session logic, and leaving them here made every reader
+ * of a message header link this file's M2/M4 handlers to get three byte reads. */
 
 /* ---- Attribute parsers (fold values into ccc_aliro_config) --------------- */
 

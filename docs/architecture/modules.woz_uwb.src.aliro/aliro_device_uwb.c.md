@@ -32,12 +32,12 @@ shape and channel, and default the remaining fields to values the reader
 accepts. A real device would consult its own capabilities here.
 
 ### `struct aliro_uwb_message *aliro_dev_uwb_build_m2(const struct aliro_dev_uwb_m2_params *p)`
-`modules/woz_uwb/src/aliro/aliro_device_uwb.c:151`
+`modules/woz_uwb/src/aliro/aliro_device_uwb.c:166`
 
 Build an M2 / M4 message. Returns a heap-allocated message (free with
 aliro_uwb_msg_free), or NULL on allocation/encode failure.
 
 ### `struct aliro_uwb_message *aliro_dev_uwb_build_m4(const struct aliro_dev_uwb_m4_params *p)`
-`modules/woz_uwb/src/aliro/aliro_device_uwb.c:197`
+`modules/woz_uwb/src/aliro/aliro_device_uwb.c:212`
 
 Build an M4 UWB message from STS index, UWB time, hop mode key, and sync code index.

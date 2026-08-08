@@ -3,8 +3,8 @@
 
 | subsystem | about |
 |---|---|
-| [`modules/woz_uwb/src/fira/ds_twr.c`](ds_twr.c.md) | *first commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers"* |
-| [`modules/woz_uwb/src/fira/ds_twr.h`](ds_twr.h.md) | *first commit: "woz_uwb: one signed DS-TWR estimator, shared by both callers"* |
+| [`modules/woz_uwb/src/fira/ds_twr.c`](ds_twr.c.md) |  |
+| [`modules/woz_uwb/src/fira/ds_twr.h`](ds_twr.h.md) |  |
 | [`modules/woz_uwb/src/fira/fira_device_config.h`](fira_device_config.h.md) | @file fira_device_config.h — FiRa DS-TWR device/session parameter bag consumed by |
 | [`modules/woz_uwb/src/fira/fira_session.c`](fira_session.c.md) | @file fira_session.c — Range + URSK store for the CCC Pre-POLL responder. |
 | [`modules/woz_uwb/src/fira/fira_session.h`](fira_session.h.md) | @file fira_session.h — Range + URSK store for the CCC Pre-POLL responder. |

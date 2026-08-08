@@ -1156,6 +1156,8 @@ static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t 
 
 #define TAG_ADDROOT_CERT 0u
 
+#define TAG_REMOVE_FABRIC_INDEX 0u
+
 /* Response field tags, same source. */
 #define TAG_RESP_ELEMENTS  0u
 #define TAG_RESP_SIGNATURE 1u
@@ -1455,6 +1457,25 @@ static uint8_t network_command(struct matter_device_info *info, const struct mat
 		info->thread_dataset_len = v_len;
 		info->have_thread_xpanid =
 			dataset_xpanid(info->thread_dataset, v_len, info->thread_xpanid);
+		/*
+		 * A SECOND administrator sends the dataset of the network this
+		 * node is already on, and restarting the stack for that is not
+		 * free: it detaches, spends tens of seconds re-attaching, and
+		 * takes the BLE commissioning link down with it while the
+		 * commissioner sits waiting for a ConnectNetwork reply that
+		 * cannot come. Measured 2026-08-07 -- "Thread still detached
+		 * after 20000 ms" on this side, a BTP ack timeout on the other,
+		 * and the fabric added but the commissioning never completed.
+		 *
+		 * The first administrator never meets this: a node being
+		 * commissioned for the first time is not attached, so the
+		 * restart is the thing that puts it on the network.
+		 */
+		if (info->have_thread_xpanid && matter_thread_attached_to(info->thread_xpanid)) {
+			info->thread_started = true;
+			info->last_network_status = MATTER_NC_STATUS_SUCCESS;
+			return MATTER_IM_STATUS_SUCCESS;
+		}
 		/*
 		 * Start attaching HERE rather than at ConnectNetwork. The
 		 * commissioner sends ArmFailSafe in between and a Thread attach
@@ -1792,6 +1813,72 @@ static uint8_t opcred_command(struct matter_device_info *info, const struct matt
 		/* SUCCESS means "a NOCResponse follows", not "the NOC was
 		 * accepted"; last_noc_status carries the verdict. */
 		return MATTER_IM_STATUS_SUCCESS;
+
+	case MATTER_CMD_OC_REMOVE_FABRIC: {
+		size_t i;
+
+		/*
+		 * NOT gated on the fail-safe, unlike the additions above: a
+		 * removal is administration, not commissioning, and the
+		 * controllers that send it -- chip-tool's remove-fabric, a hub
+		 * cleaning up after itself -- arm no fail-safe first. A full
+		 * table whose orphaned owners can never be removed leaves a
+		 * factory wipe as the only way to commission again.
+		 *
+		 * Removal does NOT touch the Aliro trust store. An anchor is
+		 * named by credential index and the fabric that installed it is
+		 * not recorded (see aliro_reader_provision_add_trust), so
+		 * revoking "this fabric's" anchors here would be a guess --
+		 * and the anchor a walk-up depends on may outlive the
+		 * commissioning fabric that posted it on purpose.
+		 */
+		if (!field_u64(inv, TAG_REMOVE_FABRIC_INDEX, &v)) {
+			return MATTER_IM_STATUS_INVALID_COMMAND;
+		}
+		/* An index this table cannot hold and an index it merely does
+		 * not hold answer the same way: through the NOCResponse, which
+		 * is where a commissioner looks for the verdict. */
+		info->last_noc_status = MATTER_NOC_STATUS_INVALID_FABRIC_INDEX;
+		for (i = 0u;
+		     v >= 1u && v <= MATTER_SUPPORTED_FABRICS && i < MATTER_SUPPORTED_FABRICS;
+		     i++) {
+			struct matter_fabric *f = &info->fabrics[i];
+
+			if (f->index != (uint8_t)v) {
+				continue;
+			}
+			/* The ICAC area is shared and owned by index; freeing
+			 * the owner frees the area, or the next fabric to send
+			 * an intermediate inherits 400 B of someone else's
+			 * certificate. */
+			if (info->icac.owner_index == f->index) {
+				info->icac.len = 0u;
+				info->icac.owner_index = 0u;
+			}
+			/*
+			 * Withdraw the SRP record BEFORE the slot is wiped --
+			 * the instance name derives from the root key and
+			 * fabric id about to be erased. Left registered, the
+			 * border router keeps resolving this fabric to a live
+			 * address whose node answers Sigma1 with "destination
+			 * matches NO fabric" until the lease expires.
+			 */
+			{
+				char iname[MATTER_INSTANCE_NAME_LEN];
+
+				if (matter_fabric_instance_name(f, iname, sizeof(iname)) ==
+				    MATTER_OK) {
+					(void)matter_thread_unadvertise(iname);
+				}
+			}
+			memset(f, 0, sizeof(*f));
+			info->last_noc_status = MATTER_NOC_STATUS_OK;
+			info->last_noc_index = (uint8_t)v;
+			break;
+		}
+		*response_command = MATTER_CMD_OC_NOC_RESPONSE;
+		return MATTER_IM_STATUS_SUCCESS;
+	}
 
 	default:
 		return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;

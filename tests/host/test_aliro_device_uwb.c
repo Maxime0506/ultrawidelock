@@ -160,6 +160,39 @@ void test_aliro_device_uwb(void)
 	}
 	aliro_uwb_msg_free(m2);
 
+	t_group("multi-channel M1: M2 must name ONE channel, not echo the offer");
+	/* The fixture reader above offers channel 0x01 only, so echoing M1's bitmask
+	 * back happened to be legal and this whole file passed while the device was
+	 * wrong. A real DWM3001CDK offers 0x03 (both channels) and answers an echoed
+	 * 0x03 with "unsupported channel bitmask 0x03", then drops the setup silently
+	 * -- no message reaches the device, so the initiator sees only a stall. That
+	 * cost a hardware session to find. Assert the rule directly. */
+	{
+		struct aliro_dev_uwb_m1 both = m1;
+		struct aliro_dev_uwb_m2_params sel;
+
+		both.channel_bitmask = ALIRO_CHANNEL_BITMASK_CH5 | ALIRO_CHANNEL_BITMASK_CH9;
+		aliro_dev_uwb_select_m2(&both, &sel);
+		T_EQ("m2.ch.one_of_two", sel.channel_bitmask, ALIRO_CHANNEL_BITMASK_CH9);
+
+		both.channel_bitmask = ALIRO_CHANNEL_BITMASK_CH5;
+		aliro_dev_uwb_select_m2(&both, &sel);
+		T_EQ("m2.ch.only_ch5", sel.channel_bitmask, ALIRO_CHANNEL_BITMASK_CH5);
+
+		both.channel_bitmask = ALIRO_CHANNEL_BITMASK_CH9;
+		aliro_dev_uwb_select_m2(&both, &sel);
+		T_EQ("m2.ch.only_ch9", sel.channel_bitmask, ALIRO_CHANNEL_BITMASK_CH9);
+
+		/* Whatever a reader offers, the answer must be exactly one bit. */
+		for (uint8_t offer = 0; offer <= 0x03u; offer++) {
+			both.channel_bitmask = offer;
+			aliro_dev_uwb_select_m2(&both, &sel);
+			T_OK("m2.ch.single_bit",
+			     sel.channel_bitmask != 0 &&
+				     (sel.channel_bitmask & (sel.channel_bitmask - 1u)) == 0);
+		}
+	}
+
 	t_group("parse rejects malformed input");
 	struct aliro_dev_uwb_m1 bad1;
 	uint8_t tiny[3] = {0x01u, 0x00u, 0x00u};

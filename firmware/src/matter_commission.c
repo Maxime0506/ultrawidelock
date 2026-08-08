@@ -539,6 +539,9 @@ static void admin_close(void)
 	s_admin_vendor = 0u;
 	matter_ble_set_discriminator(0u);
 	aliro_ble_readvertise();
+	/* Withdraw the DNS-SD invitation with the same gesture that stops the BLE
+	 * one. Left up, it advertises a window this node will now refuse. */
+	(void)matter_thread_unadvertise_commissionable();
 	LOG_INF("commissioning window closed; factory setup code back in force");
 }
 
@@ -563,6 +566,20 @@ static void admin_arm(uint16_t timeout_s, uint8_t kind)
 	s_admin_window = kind;
 	(void)k_work_reschedule(&s_admin_timer, K_SECONDS(timeout_s));
 	aliro_ble_readvertise();
+	/*
+	 * The BLE advert above is what Apple Home looks for. Every other
+	 * controller browses DNS-SD for "_matterc._udp,_S<short-discriminator>"
+	 * and gives up when nothing answers -- which is why a second
+	 * administrator could not be added from anything but an Apple device
+	 * until this line existed. Same discriminator as the BLE advert, because
+	 * a controller that finds one and falls back to the other matches on it.
+	 */
+	(void)matter_thread_advertise_commissionable(matter_ble_discriminator(),
+						     MATTER_OPERATIONAL_PORT);
+	/* Bench builds only, and deliberately here: the dataset is wanted exactly
+	 * when a window is open, and tying the disclosure to that keeps it to a
+	 * gesture the owner just made rather than every boot. */
+	matter_thread_dump_active_dataset();
 #if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
 	/* The same gesture opens the update window. This is what the SW2 press
 	 * stands in for: an owner who can re-pair the lock is the owner who may
@@ -680,6 +697,17 @@ static const struct matter_admin_hooks k_admin_hooks = {
 	.admin_vendor = admin_vendor,
 };
 
+/**
+ * True while a message that arrived over Thread is being answered on the PASE
+ * exchange rather than a CASE one.
+ *
+ * Declared up here, away from the s_thread_reply block it belongs with, because
+ * begin_session() below needs it to choose MRP and C requires the declaration
+ * first. See send_framed() for what it selects and why s_thread_reply alone
+ * could not answer both questions.
+ */
+static bool s_thread_pase;
+
 /** Fresh randomness for one commissioning attempt. */
 static int begin_session(void)
 {
@@ -723,9 +751,19 @@ static int begin_session(void)
 		session_id = 1u;
 	}
 
-	/* false: this exchange runs over BTP, which is already reliable, so MRP
-	 * is off. Matter gates that on the transport -- SecureSession.h:161. */
-	matter_exchange_init(&s_exchange, counter_seed, false);
+	/*
+	 * MRP is a property of the transport, not a preference
+	 * (matter_exchange.h:233). Off for BTP, which is already reliable;
+	 * REQUIRED over UDP, which is not. This read false unconditionally while
+	 * PASE only ever ran over BLE, and hardcoding it would now be a silent
+	 * half-fix: the handshake would answer once, never acknowledge anything,
+	 * and a commissioner retransmitting on its 382 ms timer would get a
+	 * duplicate reply per retry until it gave up.
+	 *
+	 * s_thread_pase is set by the only caller before it reaches on_message(),
+	 * so it names the transport this session is being built for.
+	 */
+	matter_exchange_init(&s_exchange, counter_seed, s_thread_pase);
 	rc = matter_pase_responder_init(&s_pase, &s_verifier, session_id, responder_random,
 					y_entropy);
 	if (rc != MATTER_OK) {
@@ -845,6 +883,20 @@ static uint8_t *s_thread_reply;
 static size_t s_thread_reply_cap;
 static size_t s_thread_reply_len;
 
+/*
+ * s_thread_pase (declared above begin_session, which needs it too) is the
+ * second half of this seam. s_thread_reply alone used to answer two questions
+ * at once -- where the bytes go, and which exchange frames them -- because the
+ * two always agreed: Thread meant CASE, BLE meant PASE. PASE over IP breaks
+ * that pairing. Without the flag, a PASE reply would be framed on a CASE
+ * exchange that has no session, and the commissioner would get a correctly
+ * staged datagram it cannot parse.
+ */
+
+/* Defined below; the Thread datagram path hands PASE to the same handler BLE
+ * uses, rather than growing a second copy of the state machine. */
+static void on_message(const uint8_t *msg, size_t len);
+
 /**
  * Frame and send a Matter message with the specified opcode and payload. Over BLE, send via
  * matter_ble_send; over Thread, stage the framed bytes in s_thread_reply. Log errors if framing
@@ -852,7 +904,8 @@ static size_t s_thread_reply_len;
  */
 static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
 {
-	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
+	struct matter_exchange *x =
+		(s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange;
 	size_t framed = 0u;
 	int rc;
 
@@ -967,7 +1020,8 @@ static void fab_store_work_fn(struct k_work *w)
  */
 static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
 {
-	struct matter_exchange *x = (s_thread_reply != NULL) ? &s_case_x[s_case_cur] : &s_exchange;
+	struct matter_exchange *x =
+		(s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange;
 	size_t framed = 0u;
 	int rc;
 
@@ -1182,6 +1236,23 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		 * The system work queue has 6,144 B against a measured 3,872 B
 		 * peak, and that peak belongs to the Aliro unlock path, which
 		 * never runs while a commissioner is finishing.
+		 */
+		(void)k_work_schedule(&s_fab_store_work, K_NO_WAIT);
+	}
+	if (inv.cluster == MATTER_CLUSTER_OPERATIONAL_CREDENTIALS &&
+	    inv.command == MATTER_CMD_OC_REMOVE_FABRIC &&
+	    s_info.last_noc_status == MATTER_NOC_STATUS_OK) {
+		/*
+		 * Same stack constraint as above, so the same deferral -- which
+		 * means the NOCResponse says OK before flash agrees. That is
+		 * the shape test_aliro_reader's revocation sweep forbids for
+		 * trust anchors, accepted here because this path CANNOT write
+		 * synchronously (the overflow above was measured, not feared)
+		 * and the failure mode is bounded: the store retries three
+		 * times, and a fabric that outlives its removal by one reboot
+		 * is re-removable, not resurrected as an authority the
+		 * controller believes gone -- its operator already discarded
+		 * its own keys.
 		 */
 		(void)k_work_schedule(&s_fab_store_work, K_NO_WAIT);
 	}
@@ -2836,6 +2907,27 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 		 * and both keep talking.
 		 */
 		if (slot >= MATTER_CASE_SESSIONS) {
+			/*
+			 * The session PASE just built is not in that table -- it
+			 * lives on s_exchange, because PASE and CASE promote
+			 * different exchanges. Everything a commissioner does
+			 * after PASE (AddNOC, the fail-safe, CommissioningComplete)
+			 * arrives encrypted under it, so leaving this out would
+			 * make PASE over IP succeed and then strand the
+			 * commissioner one message later with "not ours".
+			 */
+			if (s_exchange.secure && s_exchange.local_session_id == mh.session_id) {
+				s_thread_reply = reply;
+				s_thread_reply_cap = cap;
+				s_thread_reply_len = 0u;
+				s_thread_pase = true;
+
+				on_message(msg, len);
+
+				s_thread_pase = false;
+				s_thread_reply = NULL;
+				return s_thread_reply_len;
+			}
 			LOG_WRN("  encrypted for session 0x%04x, which is not ours",
 				(unsigned int)mh.session_id);
 			return 0u;
@@ -2889,6 +2981,49 @@ size_t matter_thread_on_datagram(const uint8_t *msg, size_t len, uint8_t *reply,
 		mh.security_flags, (unsigned int)mh.message_counter, ph.exchange_flags);
 	LOG_DBG("  in hdr: source node 0x%08x%08x", (unsigned int)(mh.source_node_id >> 32),
 		(unsigned int)mh.source_node_id);
+
+	/*
+	 * PASE over IP. Every one of these used to fall through to the drop
+	 * below, which is why a controller could resolve this node over DNS-SD,
+	 * match the discriminator, open the exchange -- and then time out
+	 * "waiting for message type 33", the PBKDFParamResponse this node had
+	 * decided not to send. Commissioning ran over BLE or not at all.
+	 *
+	 * Only the three the responder can receive. The even opcodes above them
+	 * (0x21, 0x23) are its OWN replies, and accepting one would mean taking
+	 * dictation from a peer about a message this node is supposed to author.
+	 *
+	 * The handler is the one BLE already uses, unchanged: matter_pase_*() and
+	 * the exchange layer never knew which transport they were on, and the
+	 * only thing that did -- where the reply goes -- is what s_thread_pase
+	 * carries. A second copy of the state machine here would be a second
+	 * place for the promote-to-secure step to drift.
+	 */
+	if (ph.protocol_id == MATTER_PROTOCOL_SECURE_CHANNEL &&
+	    (ph.opcode == MATTER_PASE_OP_PBKDF_REQ || ph.opcode == MATTER_PASE_OP_PAKE1 ||
+	     ph.opcode == MATTER_PASE_OP_PAKE3)) {
+		/*
+		 * PBKDFParamRequest is by definition the first message of a new
+		 * PASE, so whatever the last commissioner left on s_exchange is
+		 * finished with. Over BLE the disconnect says this; over IP
+		 * there is no disconnect to say it, and without the flag the
+		 * second commissioning attempt would be answered on a promoted
+		 * exchange that rejects an unsecured message.
+		 */
+		if (ph.opcode == MATTER_PASE_OP_PBKDF_REQ) {
+			s_stale = true;
+		}
+		s_thread_reply = reply;
+		s_thread_reply_cap = cap;
+		s_thread_reply_len = 0u;
+		s_thread_pase = true;
+
+		on_message(msg, len);
+
+		s_thread_pase = false;
+		s_thread_reply = NULL;
+		return s_thread_reply_len;
+	}
 
 	if (ph.protocol_id != MATTER_PROTOCOL_SECURE_CHANNEL ||
 	    (ph.opcode != MATTER_OP_CASE_SIGMA1 && ph.opcode != MATTER_OP_CASE_SIGMA3)) {
@@ -3033,7 +3168,21 @@ static void on_message(const uint8_t *msg, size_t len)
 
 		if (matter_exchange_standalone_ack(&s_exchange, s_out, sizeof(s_out), &framed) ==
 		    MATTER_OK) {
-			(void)matter_ble_send(s_out, framed);
+			/* Same split send_framed() makes. A retransmitted PASE
+			 * message over IP has to be re-acknowledged over IP; a
+			 * bare matter_ble_send() here would answer a link that
+			 * is not the one the duplicate arrived on. */
+			if (s_thread_reply != NULL) {
+				if (framed <= s_thread_reply_cap) {
+					memcpy(s_thread_reply, s_out, framed);
+					s_thread_reply_len = framed;
+				} else {
+					LOG_ERR("ack needs %u B, have %u", (unsigned int)framed,
+						(unsigned int)s_thread_reply_cap);
+				}
+			} else {
+				(void)matter_ble_send(s_out, framed);
+			}
 		}
 		return;
 	}
@@ -3171,6 +3320,49 @@ int matter_commission_init(void)
 		aliro_sha256_update(&h, (const uint8_t *)id, sizeof(id));
 		aliro_sha256_final(&h, digest);
 		memcpy(s_info.aliro_group_sub_id, digest, MATTER_ALIRO_GROUP_ID_LEN);
+	}
+
+	/*
+	 * Recover what SetAliroReaderConfig put here, from the store it also
+	 * wrote to.
+	 *
+	 * These three fields live only in RAM: the command fills them and the
+	 * reader's own NVS keeps the identity, so after a reboot the Aliro layer
+	 * reported "provisioned reader identity loaded" while every Matter read
+	 * of AliroReaderVerificationKey answered null. A controller cannot tell
+	 * that apart from a reader nobody has provisioned, and the null is what
+	 * an ecosystem uses to decide whether to provision one -- so the answer
+	 * was not merely unhelpful, it was wrong.
+	 *
+	 * Recovered rather than persisted a second time. Two copies of an
+	 * identity are two things that can disagree, and the one the reader
+	 * actually authenticates with has to win.
+	 *
+	 * group_sub_id above is deliberately NOT overwritten: it is derived from
+	 * FICR DEVICEID, is the same value that went into the stored reader_id,
+	 * and is available whether or not anything was ever provisioned.
+	 */
+	{
+		uint8_t reader_id[32];
+		uint8_t verif_pub[65];
+		uint8_t grk[MATTER_ALIRO_GROUP_ID_LEN];
+		int rc = aliro_reader_identity_public(reader_id, verif_pub, grk);
+
+		if (rc == 0) {
+			memcpy(s_info.aliro_verification_key, verif_pub, sizeof(verif_pub));
+			memcpy(s_info.aliro_group_id, reader_id, MATTER_ALIRO_GROUP_ID_LEN);
+			memcpy(s_info.aliro_group_resolving_key, grk, sizeof(grk));
+			s_info.have_aliro_group_resolving_key = true;
+			s_info.have_aliro_reader_config = true;
+			LOG_INF("Aliro reader configuration restored; attributes readable");
+		} else if (rc != -ENOENT) {
+			/* -ENOENT is the dev identity and is not news. Anything
+			 * else means a stored identity exists and could not be
+			 * read back, which leaves the attributes lying. */
+			LOG_ERR("stored Aliro identity unreadable (%d); attributes stay null", rc);
+		}
+		memset(reader_id, 0, sizeof(reader_id));
+		memset(grk, 0, sizeof(grk));
 	}
 
 	s_info.aliro_reader_config_cb = on_aliro_reader_config;

@@ -66,19 +66,19 @@ frame through woz_dfu_rx_frame, and notifies the client of any response. Returns
 bytes consumed on success.
 
 ### `static void button_work_fn(struct k_work *work)`
-`firmware/src/dfu_ble_zephyr.c:261`
+`firmware/src/dfu_ble_zephyr.c:263`
 
 Work item handler for the DFU button press. Opens a DFU window for the duration specified by
 CONFIG_WOZ_DFU_WINDOW_MS.
 
 ### `static void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)`
-`firmware/src/dfu_ble_zephyr.c:272`
+`firmware/src/dfu_ble_zephyr.c:274`
 
 GPIO interrupt handler for the DFU button. Submits the button work item to be processed off the
 ISR, since opening the DFU window logs and touches a work queue.
 
 ### `int dfu_ble_start(void)`
-`firmware/src/dfu_ble_zephyr.c:288`
+`firmware/src/dfu_ble_zephyr.c:290`
 
 Initialize the DFU update channel. Registers the L2CAP server, configures the optional button for
 software window control if available, and logs readiness or warnings if the button is not ready.

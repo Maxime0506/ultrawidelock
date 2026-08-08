@@ -109,6 +109,13 @@ static uint8_t g_warm_sts_v[CCC_STS_V_LEN];
 /** @brief Verbose Pre-POLL trace budget; file-scope so a session start can reset it (below), else
  * the cap latches after the first ranging attempt and later sessions log nothing. */
 static uint32_t g_pp_logged;
+/* The once-per-session INF line below. Separate from g_pp_logged because that
+ * budget belongs to the DIAGK trace, which pretty-shell builds compile to
+ * nothing -- and it was exactly a pretty build where "did a Pre-POLL ever
+ * verify" had no observable answer at all (2026-08-08, the HITL loop's
+ * verdict). One INF line per session is the smallest thing a shipping image
+ * can say. */
+static bool g_pp_inf_said;
 
 /** @brief Response_0 STS (Poll_STS_Index+1): same-round dURSK plus index+1 STS-V, pre-derived in
  * the idle so the TX path runs no KDF. */
@@ -255,6 +262,7 @@ void ccc_shim_rx_log_reset(void)
 	g_warm_valid = false;
 	g_uad_cached = false;
 	g_pp_logged = 0u; /* re-open the Pre-POLL trace for this session */
+	g_pp_inf_said = false;
 	g_pp_pending = false;
 	g_await_final = false;
 	g_poll_ip_for_final = 0u;
@@ -466,6 +474,17 @@ static void prepoll_decode(const uint8_t *frame, uint16_t datalength)
 			g_warm_index = widx;
 			g_warm_valid = true;
 		}
+	}
+	if (!g_pp_inf_said) {
+		g_pp_inf_said = true;
+		/* The CCM* MIC above is keyed by mUPSK1 from the URSK, so this line
+		 * is the on-air proof the BLE transcript cannot fake. Through the
+		 * facade printer and NOT LOG_INF: this file only registers a log
+		 * module under pretty shell, and not through DIAGK's gate: pretty
+		 * builds compile that to nothing, which is how this event came to
+		 * have no observable at all on 2026-08-08. */
+		woz_printf("I: Pre-POLL accepted: URSK proven on air (sts0 %08x)\n",
+			   (unsigned)ccc_shim_sts_index0());
 	}
 	if (lg) {
 		DIAGK("PREPOLL OK poll_sts_index=%08x cs=%u sts0=%08x\n",

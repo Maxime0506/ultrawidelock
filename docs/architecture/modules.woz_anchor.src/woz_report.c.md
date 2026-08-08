@@ -1,8 +1,6 @@
 <!-- generated documentation — edit the source, not this file -->
 # `modules/woz_anchor/src/woz_report.c`
 
-*No module docstring. First commit: "woz_anchor: ARP1 range-report line codec and its host consumer".*
-
 **depends on** [`modules/woz_anchor/include/woz_report.h`](../modules.woz_anchor.include/woz_report.h.md)
 
 ## API

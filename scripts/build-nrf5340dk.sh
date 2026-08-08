@@ -553,6 +553,13 @@ case "${1:-build}" in
   rebuild)      PRISTINE=1; do_build ;;
   flash)        require_built; hdr "flash";         resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
   flash-erase)  require_built; hdr "flash (erase)"; resolve_snr; ( cd "$WS" && launch west flash --erase -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
+  # An nRF53 with an erased UICR engages APPROTECT on the next POWER CYCLE, not
+  # the next reset -- so a board that flashed fine all day refuses the first
+  # flash after a recable with "must be recovered". This recovers and flashes in
+  # one motion. MASS-ERASES BOTH CORES: fine for the stateless initiator, but on
+  # the door-lock app it costs external_nvs -- the provisioned reader storage --
+  # so it is its own verb rather than a fallback inside flash-erase.
+  flash-recover) require_built; hdr "flash (recover)"; resolve_snr; ( cd "$WS" && launch west flash --recover -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
   build-flash)  do_build; hdr "flash";              resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ); warn_if_locked ;;
   *) echo "usage: [UWB_CHIP=dw3000|dw3720] [PRISTINE=1] $0 {build|rebuild|flash|flash-erase|build-flash}"; exit 2 ;;
 esac

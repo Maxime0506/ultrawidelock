@@ -43,6 +43,28 @@ extern "C" {
 int matter_thread_start(const uint8_t *dataset, size_t len);
 
 /**
+ * Whether this node is ALREADY attached to the network @p xpanid names.
+ *
+ * Exists for one caller: AddOrUpdateThreadNetwork, which a second administrator
+ * sends with the dataset of the network this node is already on. Restarting the
+ * stack in that case is not a no-op -- it detaches, costs tens of seconds of
+ * re-attach, and takes the BLE commissioning link down with it while the
+ * commissioner waits. Answering "already there" lets that restart be skipped.
+ *
+ * Deliberately asks about the network rather than just "are you attached": a
+ * commissioner is entitled to move this node to a DIFFERENT Thread network, and
+ * that case must still restart the stack.
+ *
+ * @param xpanid the Extended PAN ID to compare against, @ref
+ *        MATTER_THREAD_XPANID_LEN bytes.
+ * @return true only if the node is attached (child, router or leader) AND the
+ *         network it is attached to has that Extended PAN ID. False on any
+ *         doubt, so the caller falls back to restarting, which is always
+ *         correct if slower.
+ */
+bool matter_thread_attached_to(const uint8_t *xpanid);
+
+/**
  * Wait, bounded, for the node to attach.
  *
  * @param timeout_ms give up after this long. The caller is answering a
@@ -95,6 +117,69 @@ int matter_thread_wait_attached(uint32_t timeout_ms);
  *         answer arrives later and asynchronously -- or MATTER_E_STATE.
  */
 int matter_thread_advertise(const char *instance_name, uint16_t port);
+
+/**
+ * Withdraw one operational service, the counterpart of matter_thread_advertise().
+ *
+ * Needed by exactly one caller: RemoveFabric. A removed fabric's record
+ * otherwise stays on the border router until its lease expires, and a
+ * commissioner that resolves it finds a node that answers Sigma1 with
+ * "destination matches NO fabric" -- a live address vouching for a dead
+ * authority, measured costing 45 s of resolve-then-timeout per attempt on
+ * 2026-08-07.
+ *
+ * @param instance_name the name advertise was called with. Unknown names return
+ *        MATTER_OK: the record this exists to withdraw is already not there.
+ */
+int matter_thread_unadvertise(const char *instance_name);
+
+/**
+ * Publish the COMMISSIONABLE service, "_matterc._udp", while a window is open.
+ *
+ * The operational service above says "this node exists on your fabric". This one
+ * says "this node will accept a NEW administrator right now", and they are
+ * separate registrations because they are true at different times.
+ *
+ * Apple Home never needs it: it commissions over BLE, which this node has always
+ * advertised. Every other controller browses DNS-SD for
+ * "_matterc._udp,_S<short-discriminator>" and gives up when nothing answers,
+ * which is what made a second administrator impossible to add from anything but
+ * an Apple device.
+ *
+ * @param discriminator the 12-bit value the window was opened with -- the one
+ *        the commissioner CHOSE, not the compile-time default, since that is
+ *        what it is browsing for.
+ * @param port where PASE will be accepted; the operational port is correct.
+ * @return MATTER_OK once the registration is under way, or MATTER_E_STATE.
+ */
+int matter_thread_advertise_commissionable(uint16_t discriminator, uint16_t port);
+
+/**
+ * Withdraw the commissionable service.
+ *
+ * Leaving it up after the window closes advertises an invitation the node will
+ * refuse, so a controller that browses gets a PASE failure rather than an empty
+ * result -- the difference between "not offered" and "offered and broken".
+ *
+ * Safe to call when nothing is registered.
+ */
+int matter_thread_unadvertise_commissionable(void);
+
+/**
+ * Print the active operational dataset as hex. BENCH ONLY, and a no-op unless
+ * CONFIG_ALIRO_THREAD_DATASET_DUMP.
+ *
+ * THIS DISCLOSES THE THREAD NETWORK KEY. It exists for one job: commissioning a
+ * second Matter administrator over BLE, which is the only transport PASE runs on
+ * here, and whose chip-tool command takes a dataset argument. The only safe
+ * value is the dataset already in force, so the node has to say which that is.
+ *
+ * Called when a commissioning window opens, not at boot and not at attach. At
+ * boot the node may not be attached yet; at attach is worse than useless,
+ * because matter_thread_wait_attached() only runs during INITIAL commissioning
+ * and never on a reboot of a node that is already on a fabric.
+ */
+void matter_thread_dump_active_dataset(void);
 
 /**
  * Where a subscriber can be reached, kept opaque on purpose.

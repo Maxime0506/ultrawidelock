@@ -16,7 +16,7 @@ attach costs seconds and the round trips in between are free.
 ## API
 
 ### `struct matter_thread_peer`
-`modules/woz_matter/include/matter_thread.h:105`
+`modules/woz_matter/include/matter_thread.h:190`
 
 Where a subscriber can be reached, kept opaque on purpose.
 A raw IPv6 address and port rather than an OpenThread type: this header is

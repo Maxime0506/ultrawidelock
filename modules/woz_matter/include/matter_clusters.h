@@ -490,6 +490,7 @@ struct matter_user {
 #define MATTER_CMD_OC_CSR_RESPONSE                 0x0005u
 #define MATTER_CMD_OC_ADD_NOC                      0x0006u
 #define MATTER_CMD_OC_NOC_RESPONSE                 0x0008u
+#define MATTER_CMD_OC_REMOVE_FABRIC                0x000Au
 #define MATTER_CMD_OC_ADD_TRUSTED_ROOT_CERTIFICATE 0x000Bu
 
 /* OperationalCredentials attributes (MTRClusterConstants.h:1988-1989). */
@@ -503,14 +504,23 @@ struct matter_user {
 /**
  * How many fabrics this node can hold at once.
  *
- * Two, which is not a round number -- it is what a single Apple Home needs.
- * The phone and the home hub commission the device onto SEPARATE fabrics, each
- * with its own trusted root and its own operational key, and a node that
- * advertises one answers the second AddNOC with TABLE_FULL and is never
- * adopted. The spec's floor is five; there is a struct matter_fabric of RAM
- * behind every entry and this part has 128 KB in total.
+ * Two was what a single Apple Home needs: the phone and the home hub commission
+ * the device onto SEPARATE fabrics, each with its own trusted root and its own
+ * operational key, and a node that advertises one answers the second AddNOC
+ * with TABLE_FULL and is never adopted.
+ *
+ * Three, because two means Apple Home fills the table and NO other ecosystem
+ * can ever be added. Measured on hardware: a controller got through ten
+ * commissioning stages -- attestation, DAC chain, CSR, NOC generation -- and
+ * was refused at AddTrustedRootCertificate with RESOURCE_EXHAUSTED, which is
+ * the correct answer to a full table and a useless one to be stuck at.
+ *
+ * The spec's floor is five. Each entry is 488 B of RAM (sizeof(struct
+ * matter_fabric), measured, not estimated) and this part has 128 KB in total,
+ * so the number is a budget decision rather than a protocol one. Raising it
+ * again costs 488 B of RAM and 488 B of the 8 KB settings partition.
  */
-#define MATTER_SUPPORTED_FABRICS 2u
+#define MATTER_SUPPORTED_FABRICS 3u
 
 /*
  * NodeOperationalCertStatusEnum, the verdicts this node actually returns
@@ -519,11 +529,12 @@ struct matter_user {
  * has to be told which of its inputs was rejected, and a bare FAILURE cannot
  * say.
  */
-#define MATTER_NOC_STATUS_OK                 0u
-#define MATTER_NOC_STATUS_INVALID_PUBLIC_KEY 1u
-#define MATTER_NOC_STATUS_INVALID_NOC        3u
-#define MATTER_NOC_STATUS_MISSING_CSR        4u
-#define MATTER_NOC_STATUS_TABLE_FULL         5u
+#define MATTER_NOC_STATUS_OK                   0u
+#define MATTER_NOC_STATUS_INVALID_PUBLIC_KEY   1u
+#define MATTER_NOC_STATUS_INVALID_NOC          3u
+#define MATTER_NOC_STATUS_MISSING_CSR          4u
+#define MATTER_NOC_STATUS_TABLE_FULL           5u
+#define MATTER_NOC_STATUS_INVALID_FABRIC_INDEX 11u
 
 /** Every Matter node's root endpoint is 0. */
 #define MATTER_ENDPOINT_ROOT 0u

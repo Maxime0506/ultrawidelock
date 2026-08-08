@@ -432,3 +432,40 @@ module-str = matter_ble
 source "subsys/logging/Kconfig.template.log_config"
 
 endif # ALIRO_MATTER_BLE
+
+config ALIRO_BLE_CENTRAL
+	bool "Aliro initiator BLE central transport (User-Device role)"
+	depends on BT
+	select BT_CENTRAL
+	select BT_OBSERVER
+	select BT_GATT_CLIENT
+	select BT_L2CAP_DYNAMIC_CHANNEL
+	default n
+	help
+	  The device half of Aliro, the role a phone plays, so a reader can be
+	  exercised on the bench with no iPhone in the loop. Scans for the reader's
+	  0xFFF2 advert, connects, reads the reader-SPSM characteristic, writes the
+	  selected version and opens an L2CAP CoC client to the PSM that READ
+	  returned. Zephyr mirror of the NimBLE backend in
+	  ports/esp32/components/aliro_ble_central, behind the same
+	  aliro_ble_central.h, so only the transport differs between the two ports.
+	  A reader image does not want this. It exists so the initiator can be built
+	  for a board carrying a DW3110, which the ESP32-S3 is not.
+	  See firmware/src/aliro_ble_central_zephyr.c.
+
+config ALIRO_THREAD_DATASET_DUMP
+	bool "Print the active Thread operational dataset at attach (BENCH ONLY)"
+	depends on OPENTHREAD
+	default n
+	help
+	  Logs the active operational dataset as hex the moment Thread attaches,
+	  in the raw TLV form `chip-tool pairing ble-thread` takes.
+
+	  THIS PRINTS THE THREAD NETWORK KEY IN THE CLEAR. Whoever reads that log
+	  can join the network. It exists for one bench job: commissioning a second
+	  Matter administrator over BLE, which needs a dataset argument, and the
+	  only safe dataset to pass is the one the node is already on -- anything
+	  else moves the node to a different network and takes it out of its home.
+
+	  Default n and it must stay that way in anything that ships. There is no
+	  runtime gate: a build either discloses the key on every attach or cannot.

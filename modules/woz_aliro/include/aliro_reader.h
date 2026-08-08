@@ -215,6 +215,27 @@ int aliro_reader_provision_remove_type(uint8_t cred_type);
  *  persisted). */
 int aliro_reader_provision_remove_user(uint16_t user_index);
 
+/** Read back the PUBLIC half of the stored identity: what a controller is
+ *  entitled to see, and only that.
+ *
+ *  The Matter layer holds these three in RAM, written by SetAliroReaderConfig
+ *  and lost on reboot, so a provisioned reader answered a controller's read of
+ *  AliroReaderVerificationKey with null -- reporting itself unprovisioned while
+ *  happily authenticating phones from this very store. This is how it recovers
+ *  them, rather than a second copy in a second place that can disagree.
+ *
+ *  verif_pub is DERIVED (verificationKey = pub(signingKey)) rather than stored:
+ *  the private half stays inside this module, which is the reason this is an
+ *  accessor and not a struct the caller fills in.
+ *
+ *  @param reader_id  groupIdentifier(16) || groupSubIdentifier(16)
+ *  @param verif_pub  uncompressed P-256 point, 65 bytes
+ *  @param grk        groupResolvingKey(16); all-zero when none was provisioned
+ *  @return 0 when a provisioned identity was read back, -ENOENT while the
+ *          reader is still on its dev identity (nothing a controller should be
+ *          shown), or -EIO if the public key could not be derived. */
+int aliro_reader_identity_public(uint8_t reader_id[32], uint8_t verif_pub[65], uint8_t grk[16]);
+
 /** Revert to the dev identity + empty trust store (Matter ClearAliroReaderConfig)
  *  and persist. Returns 0 on success, negative on an NVS error. */
 int aliro_reader_provision_clear(void);

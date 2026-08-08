@@ -84,6 +84,11 @@ target_sources_ifdef(CONFIG_WOZ_DFU_RECEIVER app PRIVATE src/dfu_ble_zephyr.c)
 # image has no receiver and used to light nothing at all.
 target_sources_ifdef(CONFIG_ALIRO_STATUS_LED app PRIVATE src/status_led.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
+# Initiator (User-Device role) transport: the central mirror of
+# aliro_ble_zephyr.c, plus the platform-free advert/READ decoding it calls. That
+# decoder is the same translation unit the ESP32 port and the host suite compile.
+target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE src/aliro_ble_central_zephyr.c
+                                                          ${ALIRO}/src/aliro_ble_central.c)
 target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_ble_zephyr.c
                                                           src/matter_commission.c
                                                           src/matter_fab_settings.c

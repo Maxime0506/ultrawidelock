@@ -42,6 +42,7 @@ int main(void)
 		{ "ccc_sts", test_ccc_sts },
 		{ "ccc_shim", test_ccc_shim },
 		{ "ccc_session", test_ccc_session },
+		{ "prepoll_schedule", test_prepoll_schedule },
 		{ "aliro_builder", test_aliro_builder },
 		{ "aliro_parser", test_aliro_parser },
 		{ "aliro_adapter", test_aliro_adapter },

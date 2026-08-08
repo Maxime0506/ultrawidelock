@@ -22,8 +22,16 @@ LOG_MODULE_REGISTER(matter_fab, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define FAB_TREE  "mfab"
 #define KEY_VER   FAB_TREE "/ver"
-#define KEY_FAB0  FAB_TREE "/f0"
-#define KEY_FAB1  FAB_TREE "/f1"
+/*
+ * Per-fabric keys are BUILT from the index, never listed. The load path already
+ * did this; the store and erase paths kept a hand-written KEY_FAB0/KEY_FAB1
+ * pair, which is why growing the table needed a BUILD_ASSERT to stop someone
+ * adding a slot the store path would silently never write -- a fabric that
+ * lives until the next reboot and then is not there.
+ */
+#define KEY_FAB_TMPL FAB_TREE "/f0"
+/* Index of the digit in the template above, so it is derived, not counted. */
+#define KEY_FAB_DIGIT (sizeof(KEY_FAB_TMPL) - 2u)
 #define KEY_TD    FAB_TREE "/td"
 #define KEY_XP    FAB_TREE "/xp"
 #define KEY_ICAC  FAB_TREE "/ic"
@@ -60,8 +68,33 @@ LOG_MODULE_REGISTER(matter_fab, CONFIG_LOG_DEFAULT_LEVEL);
  */
 #define FAB_VERSION 1u
 
-BUILD_ASSERT(MATTER_SUPPORTED_FABRICS == 2u,
-	     "one settings key per fabric; add a key when the table grows");
+BUILD_ASSERT(MATTER_SUPPORTED_FABRICS < 10u,
+	     "the per-fabric settings key carries a single digit");
+
+/**
+ * Render every fabric index as "1/2/0", for one log line.
+ *
+ * Written out rather than printed as two arguments, because the two call sites
+ * named fabrics[0] and fabrics[1] positionally and would have gone on reporting
+ * exactly two however many the table holds -- a third fabric stored and
+ * restored perfectly, with nothing in the log to say so.
+ *
+ * @param out at least MATTER_SUPPORTED_FABRICS * 2 bytes.
+ */
+static void fab_slots_str(const struct matter_device_info *info, char *out, size_t cap)
+{
+	size_t n = 0u;
+
+	for (uint8_t i = 0u; i < MATTER_SUPPORTED_FABRICS && n + 2u < cap; i++) {
+		if (i != 0u) {
+			out[n++] = '/';
+		}
+		/* Indices are 1..MATTER_SUPPORTED_FABRICS or 0 for empty, so a
+		 * single digit covers every value the assert above permits. */
+		out[n++] = (char)('0' + (info->fabrics[i].index % 10u));
+	}
+	out[n] = '\0';
+}
 
 /* Where a load puts what it finds. Set for the duration of matter_fab_load(). */
 static struct matter_device_info *s_target;
@@ -217,13 +250,18 @@ int matter_fab_store(const struct matter_device_info *info)
 		return rc;
 	}
 
-	rc = settings_save_one(KEY_FAB0, &info->fabrics[0], sizeof(info->fabrics[0]));
-	if (rc == 0) {
-		rc = settings_save_one(KEY_FAB1, &info->fabrics[1], sizeof(info->fabrics[1]));
-	}
-	if (rc != 0) {
-		LOG_ERR("cannot store a fabric (%d)", rc);
-		return rc;
+	for (uint8_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		char key[] = KEY_FAB_TMPL;
+
+		key[KEY_FAB_DIGIT] = (char)('0' + i);
+		rc = settings_save_one(key, &info->fabrics[i], sizeof(info->fabrics[i]));
+		if (rc != 0) {
+			/* Which one. "cannot store a fabric (-28)" named the
+			 * error and not the slot, and on a full partition the
+			 * slot is the whole diagnosis. */
+			LOG_ERR("cannot store fabric %u (%d)", (unsigned int)i, rc);
+			return rc;
+		}
 	}
 
 	if (info->thread_dataset_len != 0u) {
@@ -278,9 +316,13 @@ int matter_fab_store(const struct matter_device_info *info)
 		return rc;
 	}
 
-	LOG_INF("operational identity stored (fabric %u/%u, dataset %u B)",
-		(unsigned int)info->fabrics[0].index, (unsigned int)info->fabrics[1].index,
-		(unsigned int)info->thread_dataset_len);
+	{
+		char slots[MATTER_SUPPORTED_FABRICS * 2u];
+
+		fab_slots_str(info, slots, sizeof(slots));
+		LOG_INF("operational identity stored (fabric %s, dataset %u B)", slots,
+			(unsigned int)info->thread_dataset_len);
+	}
 	return 0;
 }
 
@@ -350,9 +392,13 @@ int matter_fab_load(struct matter_device_info *info)
 	 */
 	info->commissioning_complete = true;
 
-	LOG_INF("operational identity restored (fabric %u/%u, dataset %u B)",
-		(unsigned int)info->fabrics[0].index, (unsigned int)info->fabrics[1].index,
-		(unsigned int)info->thread_dataset_len);
+	{
+		char slots[MATTER_SUPPORTED_FABRICS * 2u];
+
+		fab_slots_str(info, slots, sizeof(slots));
+		LOG_INF("operational identity restored (fabric %s, dataset %u B)", slots,
+			(unsigned int)info->thread_dataset_len);
+	}
 	return 0;
 }
 
@@ -360,8 +406,8 @@ int matter_fab_erase(void)
 {
 	/* KEY_OK first: if the erase is interrupted part way, what is left
 	 * behind is already uncommitted rather than a plausible half-record. */
-	static const char *const keys[] = { KEY_OK, KEY_VER,   KEY_FAB0, KEY_FAB1,
-					    KEY_TD, KEY_XP,    KEY_ICLEN, KEY_ICAC };
+	static const char *const keys[] = { KEY_OK, KEY_VER,   KEY_TD,
+					    KEY_XP, KEY_ICLEN, KEY_ICAC };
 	int first_err = 0;
 
 	/*
@@ -378,6 +424,21 @@ int matter_fab_erase(void)
 			first_err = rc;
 		}
 		LOG_WRN("erase %s -> rc=%d", keys[i], rc);
+	}
+	/*
+	 * After KEY_OK, so an interrupted erase never leaves fabrics behind a
+	 * commit record that still says they are whole.
+	 */
+	for (uint8_t i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		char key[] = KEY_FAB_TMPL;
+		int rc;
+
+		key[KEY_FAB_DIGIT] = (char)('0' + i);
+		rc = settings_delete(key);
+		if (rc != 0 && first_err == 0) {
+			first_err = rc;
+		}
+		LOG_WRN("erase %s -> rc=%d", key, rc);
 	}
 	if (first_err != 0) {
 		LOG_ERR("operational identity NOT fully erased (first rc=%d)", first_err);

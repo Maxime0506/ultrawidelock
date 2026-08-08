@@ -274,6 +274,25 @@ static uint8_t run_command(struct matter_im_server *srv, uint32_t cluster, uint3
 	return srv->command(srv->ctx, &inv, response_command != NULL ? response_command : &rc);
 }
 
+/* Same, on the root endpoint. NetworkCommissioning lives there, not on the lock,
+ * and a mismatch answers UNSUPPORTED_CLUSTER rather than anything about fields. */
+static uint8_t run_root_command(struct matter_im_server *srv, uint32_t cluster, uint32_t cmd,
+				const uint8_t *fields, size_t fields_len,
+				uint32_t *response_command)
+{
+	struct matter_im_invoke inv;
+	uint32_t rc = 0u;
+
+	memset(&inv, 0, sizeof(inv));
+	inv.endpoint = MATTER_ENDPOINT_ROOT;
+	inv.cluster = cluster;
+	inv.command = cmd;
+	inv.fields = fields;
+	inv.fields_len = fields_len;
+	inv.has_fields = fields != NULL;
+	return srv->command(srv->ctx, &inv, response_command != NULL ? response_command : &rc);
+}
+
 /* ---- suite --------------------------------------------------------------- */
 
 void test_matter_clusters(void)
@@ -313,8 +332,7 @@ void test_matter_clusters(void)
 		     memcmp(s_cfg_verification, verification, sizeof(verification)) == 0);
 		T_OK("group id forwarded verbatim",
 		     memcmp(s_cfg_group_id, group_id, sizeof(group_id)) == 0);
-		T_OK("resolving key forwarded verbatim",
-		     memcmp(s_cfg_grk, grk, sizeof(grk)) == 0);
+		T_OK("resolving key forwarded verbatim", memcmp(s_cfg_grk, grk, sizeof(grk)) == 0);
 
 		/* The signing key is the one field NOT mirrored into device state:
 		 * it goes to the store and nowhere else. */
@@ -434,9 +452,9 @@ void test_matter_clusters(void)
 
 	t_group("SetCredential installs the three Aliro credential types");
 	{
-		const uint8_t types[3] = { MATTER_DL_CRED_ALIRO_ISSUER_KEY,
-					   MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT,
-					   MATTER_DL_CRED_ALIRO_ENDPOINT_KEY };
+		const uint8_t types[3] = {MATTER_DL_CRED_ALIRO_ISSUER_KEY,
+					  MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT,
+					  MATTER_DL_CRED_ALIRO_ENDPOINT_KEY};
 		size_t i;
 
 		for (i = 0u; i < 3u; i++) {
@@ -1030,8 +1048,8 @@ void test_matter_clusters(void)
 		matter_clusters_init(&srv, &info);
 
 		T_EQ("a null device cannot resume", matter_clusters_resume(NULL), MATTER_E_STATE);
-		T_EQ("no stored dataset means nothing to resume",
-		     matter_clusters_resume(&info), MATTER_E_STATE);
+		T_EQ("no stored dataset means nothing to resume", matter_clusters_resume(&info),
+		     MATTER_E_STATE);
 		T_OK("and Thread was never started", !info.thread_started);
 
 		/* A dataset that the stack accepts. */
@@ -1042,8 +1060,7 @@ void test_matter_clusters(void)
 		T_OK("and records that it did", info.thread_started);
 		T_EQ("the stack was started once", g_thread_start_calls, 1);
 		T_EQ("with the stored dataset", (long)g_thread_last_len, 16L);
-		T_OK("verbatim",
-		     memcmp(g_thread_last_dataset, info.thread_dataset, 16u) == 0);
+		T_OK("verbatim", memcmp(g_thread_last_dataset, info.thread_dataset, 16u) == 0);
 
 		/* A stack that refuses the dataset must not leave the node believing
 		 * it is on the network. */
@@ -1054,5 +1071,199 @@ void test_matter_clusters(void)
 		     MATTER_E_STATE);
 		T_OK("and Thread is not claimed to be up", !info.thread_started);
 		g_thread_start_fail = 0;
+	}
+
+	t_group("a second admin does not knock this node off Thread");
+	{
+		/*
+		 * The failure this pins, measured on hardware 2026-08-07: a
+		 * second administrator sends AddOrUpdateThreadNetwork carrying
+		 * the dataset of the network the node is ALREADY on. Restarting
+		 * the stack detached it for 20+ s, the BLE commissioning link
+		 * timed out during the silence, and commissioning died after
+		 * AddNOC had already succeeded.
+		 */
+		static const uint8_t k_xpanid[MATTER_THREAD_XPANID_LEN] = {
+			0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04,
+		};
+		/* Ext PAN ID TLV (type 0x02, len 8) plus a Channel TLV, so the
+		 * id really is being parsed out rather than read off the front. */
+		uint8_t ds[] = {0x00, 0x03, 0x00, 0x00, 0x19, 0x02, 0x08, 0, 0, 0, 0, 0, 0, 0, 0};
+		uint8_t fields[64];
+		size_t flen = 0u;
+		struct matter_tlv_writer w;
+
+		memcpy(&ds[7], k_xpanid, sizeof(k_xpanid));
+		matter_tlv_writer_init(&w, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(0u), ds, sizeof(ds));
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_writer_finish(&w, &flen);
+
+		/* Already attached to exactly this network: no restart. */
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		info.failsafe_armed = true;
+		test_matter_thread_stub_reset();
+		g_thread_attached_to = 1;
+		T_EQ("the dataset is accepted",
+		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("the stack is NOT restarted", g_thread_start_calls, 0);
+		T_OK("but the node counts as on the network", info.thread_started);
+		T_EQ("and it asked about a network", g_thread_attached_to_calls, 1);
+		T_OK("the one the commissioner named, not a stored one",
+		     memcmp(g_thread_attached_to_xpanid, k_xpanid, sizeof(k_xpanid)) == 0);
+		T_OK("the dataset is still remembered",
+		     info.thread_dataset_len == sizeof(ds) &&
+			     memcmp(info.thread_dataset, ds, sizeof(ds)) == 0);
+
+		/*
+		 * A commissioner moving this node to a DIFFERENT network must
+		 * still restart the stack. Skipping that would strand the node
+		 * on its old network while telling the commissioner it complied,
+		 * which is worse than the slow path this guard avoids.
+		 */
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		info.failsafe_armed = true;
+		test_matter_thread_stub_reset();
+		g_thread_attached_to = 0;
+		T_EQ("a different network is accepted too",
+		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and the stack IS restarted", g_thread_start_calls, 1);
+		T_OK("with the commissioner's dataset verbatim",
+		     g_thread_last_len == sizeof(ds) &&
+			     memcmp(g_thread_last_dataset, ds, sizeof(ds)) == 0);
+
+		/*
+		 * A dataset with no Extended PAN ID cannot be compared against
+		 * anything, so the guard must not fire on it: unknown falls back
+		 * to the restart, which is always correct if slower.
+		 */
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		info.failsafe_armed = true;
+		test_matter_thread_stub_reset();
+		g_thread_attached_to = 1; /* would skip, if it were ever asked */
+		matter_tlv_writer_init(&w, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(0u), ds, 5u); /* channel only */
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_writer_finish(&w, &flen);
+		T_EQ("a dataset without an ext PAN id is still accepted",
+		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("the guard is never consulted", g_thread_attached_to_calls, 0);
+		T_EQ("and the stack is restarted", g_thread_start_calls, 1);
+	}
+
+	t_group("RemoveFabric frees the slot it names and only that slot");
+	{
+		/*
+		 * The failure this pins, measured on hardware 2026-08-07: two
+		 * commissioning attempts died mid-flight and left their fabrics
+		 * behind, the table filled, and the next AddTrustedRootCertificate
+		 * answered RESOURCE_EXHAUSTED with no way to make room short of a
+		 * factory wipe. RemoveFabric is that way.
+		 */
+		uint8_t fields[16];
+		size_t flen = 0u;
+		uint32_t resp = 0u;
+		struct matter_tlv_writer w;
+		char expect_name[MATTER_INSTANCE_NAME_LEN];
+		size_t i;
+
+		reset_doubles();
+		fill_info(&info);
+		matter_clusters_init(&srv, &info);
+		test_matter_thread_stub_reset();
+		for (i = 0u; i < 3u; i++) {
+			info.fabrics[i].index = (uint8_t)(i + 1u);
+			info.fabrics[i].have_root = true;
+			info.fabrics[i].fabric_id = 0x1000u + i;
+			info.fabrics[i].node_id = 0x2000u + i;
+			info.fabrics[i].noc_len = 1u;
+			/* An uncompressed-point root, or the compressed-fabric
+			 * derivation behind the instance name refuses it. */
+			pattern(info.fabrics[i].root_public_key,
+				sizeof(info.fabrics[i].root_public_key), (uint8_t)(0x40u + i));
+			info.fabrics[i].root_public_key[0] = 0x04u;
+		}
+		/* Slot 2 owns the shared intermediate-certificate area. */
+		info.icac.owner_index = 2u;
+		info.icac.len = 100u;
+		/* Computed BEFORE the removal wipes the inputs it derives from. */
+		T_EQ("instance name derivable",
+		     matter_fabric_instance_name(&info.fabrics[1], expect_name,
+						 sizeof(expect_name)),
+		     MATTER_OK);
+
+		matter_tlv_writer_init(&w, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(0u), 2u);
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_writer_finish(&w, &flen);
+
+		/* No fail-safe armed on purpose: removal is administration, not
+		 * commissioning, and chip-tool's remove-fabric arms none. */
+		T_EQ("the command runs without a fail-safe",
+		     run_root_command(&srv, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+				      MATTER_CMD_OC_REMOVE_FABRIC, fields, flen, &resp),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("answered with NOCResponse", (long)resp, (long)MATTER_CMD_OC_NOC_RESPONSE);
+		T_EQ("status OK", info.last_noc_status, MATTER_NOC_STATUS_OK);
+		T_EQ("naming the removed index", info.last_noc_index, 2u);
+		T_EQ("the slot is empty", info.fabrics[1].index, 0u);
+		T_OK("and holds nothing else", !info.fabrics[1].have_root &&
+		     info.fabrics[1].noc_len == 0u);
+		T_EQ("its neighbours are untouched", info.fabrics[0].index, 1u);
+		T_EQ("both of them", info.fabrics[2].index, 3u);
+		T_EQ("the ICAC area it owned is freed", (long)info.icac.len, 0L);
+		T_EQ("and disowned", info.icac.owner_index, 0u);
+		T_EQ("its SRP record is withdrawn", g_thread_unadvertise_calls, 1);
+		T_OK("by the removed fabric's own instance name",
+		     strcmp(g_thread_last_unadvertised, expect_name) == 0);
+
+		/* The index just removed no longer exists: the verdict arrives
+		 * in the NOCResponse, not as a bare IM status. */
+		resp = 0u;
+		T_EQ("removing it again still answers",
+		     run_root_command(&srv, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+				      MATTER_CMD_OC_REMOVE_FABRIC, fields, flen, &resp),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("with NOCResponse", (long)resp, (long)MATTER_CMD_OC_NOC_RESPONSE);
+		T_EQ("saying the index is invalid", info.last_noc_status,
+		     MATTER_NOC_STATUS_INVALID_FABRIC_INDEX);
+		T_EQ("and the survivors still stand", info.fabrics[0].index, 1u);
+
+		/* Index 0 is what EMPTY slots hold; asking to remove it must not
+		 * match one of them. */
+		matter_tlv_writer_init(&w, fields, sizeof(fields));
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(0u), 0u);
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_writer_finish(&w, &flen);
+		T_EQ("index 0 answers",
+		     run_root_command(&srv, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+				      MATTER_CMD_OC_REMOVE_FABRIC, fields, flen, NULL),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("as invalid, not as a match on an empty slot", info.last_noc_status,
+		     MATTER_NOC_STATUS_INVALID_FABRIC_INDEX);
+		T_EQ("and no removal ever withdrew a record it did not remove",
+		     g_thread_unadvertise_calls, 1);
+
+		/* A command with no FabricIndex at all is malformed. */
+		T_EQ("a missing index is INVALID_COMMAND",
+		     run_root_command(&srv, MATTER_CLUSTER_OPERATIONAL_CREDENTIALS,
+				      MATTER_CMD_OC_REMOVE_FABRIC, NULL, 0u, NULL),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
 	}
 }

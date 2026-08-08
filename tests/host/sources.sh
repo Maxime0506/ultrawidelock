@@ -100,6 +100,7 @@ TEST_SRCS=(
 	"$HOST/test_ccc_sts.c"
 	"$HOST/test_ccc_shim.c"
 	"$HOST/test_ccc_session.c"
+	"$HOST/test_prepoll_schedule.c"
 	"$HOST/test_aliro_builder.c"
 	"$HOST/test_aliro_parser.c"
 	"$HOST/test_aliro_adapter.c"

@@ -3,6 +3,7 @@
 
 | subsystem | about |
 |---|---|
+| [`scripts/aliro-enroll.py`](aliro-enroll.md) | Enrol the nRF5340DK initiator into a reader's home, the way Apple Home enrols an iPhone. |
 | [`scripts/bootstrap.sh`](bootstrap.sh.md) | bootstrap.sh — build a self-contained west workspace, PRISTINE from upstream. |
 | [`scripts/build-nrf5340dk.sh`](build-nrf5340dk.sh.md) | build-nrf5340dk.sh {build\|rebuild\|flash\|flash-erase\|build-flash} — build the |
 | [`scripts/cdk-dfu.sh`](cdk-dfu.sh.md) | cdk-dfu.sh — push a signed image to the DWM3001CDK over MCUboot serial recovery. |
@@ -22,6 +23,7 @@
 | [`scripts/docs-sync.sh`](docs-sync.sh.md) | docs-sync.sh — put the generated artifacts back in step after a merge. |
 | [`scripts/docs.sh`](docs.sh.md) | docs.sh — build the documentation site into site/. |
 | [`scripts/flash_html.py`](flash_html.md) | Render a release FLASH.md into a self-contained FLASH.html. |
+| [`scripts/hitl-run.sh`](hitl-run.sh.md) | hitl-run.sh — one unattended pass of the DK-as-iPhone loop: enrol the |
 | [`scripts/presence_runtime.py`](presence_runtime.md) | Build the minimal, deterministic presence runtime transfer archive. |
 | [`scripts/release-bundle.sh`](release-bundle.sh.md) | release-bundle.sh — assemble one publishable firmware bundle. |
 | [`scripts/release-notes.sh`](release-notes.sh.md) | release-notes.sh — render the GitHub release body from release/NOTES.md.in. |

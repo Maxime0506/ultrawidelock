@@ -3,12 +3,21 @@
 
 @file aliro_uwb_msg_builder.c — big-endian TLV message builder.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](../modules.woz_uwb.src.facade/woz_alloc.h.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](../modules.woz_uwb.src.facade/woz_alloc.h.md)
 
 ## API
 
+### `void aliro_uwb_msg_free(struct aliro_uwb_message *message)`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:17`
+
+@brief Releases a message allocated by this layer's message builders.
+Here rather than in aliro_uwb_msg.c so that allocating and freeing a message
+are one translation unit. A caller that only builds messages, which is what
+the device-side codec in aliro_device_uwb.c is, would otherwise have to link
+the reader's whole M2/M4 handler and session lifecycle to get this one line.
+
 ### `bool aliro_uwb_msg_builder_init(struct aliro_uwb_msg_builder *builder, uint16_t payload_len)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:14`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:28`
 
 @brief Allocate a message with room for the given payload length plus header.
 @param builder Message builder to initialize.
@@ -16,7 +25,7 @@
 @return true on successful allocation, false if allocation failed.
 
 ### `void aliro_uwb_msg_builder_header(struct aliro_uwb_msg_builder *builder, uint8_t protocol, uint8_t id, uint16_t payload_length)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:34`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:48`
 
 @brief Append the 4-byte header (protocol, id, big-endian payload length).
 @param builder Message builder to append the header to.
@@ -25,7 +34,7 @@
 @param payload_length Payload length, written big-endian.
 
 ### `static bool add_attribute(struct aliro_uwb_msg_builder *builder, uint8_t id, uint8_t length, const uint8_t *value)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:53`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:67`
 
 @brief Append id + length + raw value bytes, refusing to overrun the allocation.
 @param builder Message builder to append the attribute to.
@@ -37,7 +46,7 @@
 **called by** `aliro_uwb_msg_builder_add_bytes`, `aliro_uwb_msg_builder_add_u16`, `aliro_uwb_msg_builder_add_u16_array`, `aliro_uwb_msg_builder_add_u32`, `aliro_uwb_msg_builder_add_u64`, `aliro_uwb_msg_builder_add_u8`
 
 ### `bool aliro_uwb_msg_builder_add_u8(struct aliro_uwb_msg_builder *builder, uint8_t id, uint8_t value)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:78`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:92`
 
 @brief Append a 1-byte-value attribute.
 @param builder Message builder to append the attribute to.
@@ -48,7 +57,7 @@
 **calls** `add_attribute`
 
 ### `bool aliro_uwb_msg_builder_add_u16(struct aliro_uwb_msg_builder *builder, uint8_t id, uint16_t value)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:90`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:104`
 
 @brief Append a 2-byte big-endian attribute.
 @param builder Message builder to append the attribute to.
@@ -59,7 +68,7 @@
 **calls** `add_attribute`
 
 ### `bool aliro_uwb_msg_builder_add_u32(struct aliro_uwb_msg_builder *builder, uint8_t id, uint32_t value)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:105`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:119`
 
 @brief Append a 4-byte big-endian attribute.
 @param builder Message builder to append the attribute to.
@@ -70,7 +79,7 @@
 **calls** `add_attribute`
 
 ### `bool aliro_uwb_msg_builder_add_u64(struct aliro_uwb_msg_builder *builder, uint8_t id, uint64_t value)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:125`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:139`
 
 @brief Append a 8-byte big-endian attribute.
 @param builder Message builder to append the attribute to.
@@ -81,7 +90,7 @@
 **calls** `add_attribute`
 
 ### `bool aliro_uwb_msg_builder_add_u16_array(struct aliro_uwb_msg_builder *builder, uint8_t id, size_t count, const uint16_t *values)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:146`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:160`
 
 @brief Append an attribute whose value is count big-endian 16-bit words.
 @param builder Message builder to append the attribute to.
@@ -94,7 +103,7 @@ would overrun the builder's capacity.
 **calls** `add_attribute`
 
 ### `bool aliro_uwb_msg_builder_add_bytes(struct aliro_uwb_msg_builder *builder, uint8_t id, size_t count, const uint8_t *values)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:167`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:181`
 
 @brief Append an attribute whose value is count raw bytes.
 

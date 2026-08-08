@@ -117,6 +117,38 @@ int matter_thread_start(const uint8_t *dataset, size_t len)
 }
 
 /**
+ * Whether this node is already attached to the network @p xpanid names.
+ * See matter_thread.h for why this exists.
+ */
+bool matter_thread_attached_to(const uint8_t *xpanid)
+{
+	otInstance *ot = openthread_get_default_instance();
+	const otExtendedPanId *active;
+	otDeviceRole role;
+	bool same;
+
+	if (ot == NULL || xpanid == NULL) {
+		return false;
+	}
+
+	openthread_mutex_lock();
+	role = otThreadGetDeviceRole(ot);
+	active = otThreadGetExtendedPanId(ot);
+	/* Compared under the lock: the pointer is into OpenThread's own state. */
+	same = (active != NULL) && memcmp(active->m8, xpanid, MATTER_THREAD_XPANID_LEN) == 0;
+	openthread_mutex_unlock();
+
+	/* DETACHED and DISABLED both mean "not on it", whatever the stored id
+	 * says; only the three attached roles count. */
+	if (!same || (role != OT_DEVICE_ROLE_CHILD && role != OT_DEVICE_ROLE_ROUTER &&
+		      role != OT_DEVICE_ROLE_LEADER)) {
+		return false;
+	}
+	LOG_INF("already attached to the commissioner's Thread network; not restarting");
+	return true;
+}
+
+/**
  * Is this an address something off the Thread mesh could route to?
  *
  * NOT a test for "is it global". A border router's off-mesh-routable prefix is
@@ -181,6 +213,67 @@ static void log_addresses(otInstance *ot)
 			"prefix this node can autoconfigure from");
 	}
 }
+
+#if defined(CONFIG_ALIRO_THREAD_DATASET_DUMP)
+/*
+ * The active dataset as hex, for `chip-tool pairing ble-thread`.
+ *
+ * WHY THIS IS HERE AT ALL. Commissioning a second Matter administrator onto
+ * this node cannot happen over IP: the Thread receive path in
+ * matter_commission.c answers CASE Sigma1/Sigma3 and drops everything else, so
+ * PBKDFParamRequest never reaches the PASE responder and a controller that
+ * found us over DNS-SD times out having sent five of them. BLE is the only
+ * transport PASE runs on here, and chip-tool's BLE path insists on a dataset
+ * argument. Passing anything other than the dataset already in force would move
+ * the node to a different Thread network and take it out of its home, so the
+ * node has to say which one that is.
+ *
+ * Printed in 32-byte lines because a full dataset is ~110 bytes and one log
+ * message cannot carry 220 hex characters. Bare lines between the markers, no
+ * prefix, so they concatenate without editing.
+ */
+void matter_thread_dump_active_dataset(void)
+{
+	otInstance *ot = openthread_get_default_instance();
+	otOperationalDatasetTlvs tlvs;
+	char line[65];
+	otError err;
+
+	if (ot == NULL) {
+		return;
+	}
+
+	openthread_mutex_lock();
+	err = otDatasetGetActiveTlvs(ot, &tlvs);
+	openthread_mutex_unlock();
+
+	if (err != OT_ERROR_NONE) {
+		LOG_ERR("no active dataset to dump (%d)", err);
+		return;
+	}
+
+	LOG_ERR("---- BEGIN THREAD DATASET (hex, %u B) -- CONTAINS THE NETWORK KEY ----",
+		(unsigned int)tlvs.mLength);
+	for (uint16_t off = 0u; off < tlvs.mLength; off += 32u) {
+		uint16_t n = MIN((uint16_t)32u, (uint16_t)(tlvs.mLength - off));
+		uint16_t i;
+
+		for (i = 0u; i < n; i++) {
+			(void)snprintf(&line[i * 2u], 3u, "%02x", tlvs.mTlvs[off + i]);
+		}
+		line[n * 2u] = '\0';
+		LOG_ERR("%s", line);
+	}
+	LOG_ERR("---- END THREAD DATASET ----");
+	LOG_ERR("join those lines; pass as hex:<joined> to chip-tool pairing ble-thread");
+}
+#else /* !CONFIG_ALIRO_THREAD_DATASET_DUMP */
+
+void matter_thread_dump_active_dataset(void)
+{
+}
+
+#endif /* CONFIG_ALIRO_THREAD_DATASET_DUMP */
 
 int matter_thread_wait_attached(uint32_t timeout_ms)
 {
@@ -270,6 +363,17 @@ static struct srp_reg s_regs[MATTER_SUPPORTED_FABRICS];
 
 /** The SRP host is registered once, whatever number of services hang off it. */
 static bool s_host_ready;
+
+/**
+ * Whether the commissionable service is registered.
+ *
+ * Declared up here with the host flag rather than beside the code that sets it,
+ * because the two places that tear SRP down -- matter_thread_advertise_reset()
+ * and the mid-retraction clear in srp_host_register() -- both drop this service
+ * along with everything else and have to say so. A flag left true after its
+ * service was removed makes the NEXT commissioning window silently invisible.
+ */
+static bool s_comm_used;
 
 /**
  * Settings callback to read a 32-bit host ID from persistent storage. Reads exactly
@@ -626,13 +730,80 @@ void matter_thread_advertise_reset(void)
 	}
 	memset(s_regs, 0, sizeof(s_regs));
 	s_host_ready = false;
+	/* The commissionable service hung off that host too. */
+	s_comm_used = false;
 	LOG_INF("SRP registrations released");
+}
+
+/*
+ * The host name, built outside the OpenThread lock because srp_host_id() reaches
+ * into the settings backend and that is not somewhere to go holding it.
+ *
+ * The host name only has to be unique on the SRP server, and the EUI-64 already
+ * is -- across boards. The suffix is what makes it unique across this board's
+ * own erases; see SRP_HOST_ID_KEY.
+ */
+static void srp_host_name_build(otInstance *ot)
+{
+	otExtAddress eui;
+
+	otPlatRadioGetIeeeEui64(ot, eui.m8);
+	(void)snprintf(s_host_name, sizeof(s_host_name), "%02X%02X%02X%02X%02X%02X%02X%02X-%08X",
+		       eui.m8[0], eui.m8[1], eui.m8[2], eui.m8[3], eui.m8[4], eui.m8[5], eui.m8[6],
+		       eui.m8[7], (unsigned int)srp_host_id());
+}
+
+/*
+ * The HOST is registered once; every service hangs off it, operational and
+ * commissionable alike, and whichever registers first brings it up for the
+ * other. Caller holds the OpenThread lock and has already built s_host_name.
+ *
+ * Calling otSrpClientSetHostName() again once the client is running returns
+ * OT_ERROR_INVALID_STATE (13) and takes the whole registration down with it --
+ * which is what refused the second fabric after its AddNOC was accepted, leaving
+ * the new administrator a fabric it could not resolve.
+ */
+static otError srp_host_register(otInstance *ot)
+{
+	otError err;
+
+	if (s_host_ready) {
+		return OT_ERROR_NONE;
+	}
+	otSrpClientSetCallback(ot, srp_cb, NULL);
+	/* Before the first registration: it is sent WITH the update, so setting
+	 * it afterwards would leave the default in force until something else
+	 * refreshed the lease. */
+	otSrpClientSetKeyLeaseInterval(ot, SRP_KEY_LEASE_S);
+	err = otSrpClientSetHostName(ot, s_host_name);
+	if (err == OT_ERROR_INVALID_STATE) {
+		/*
+		 * The only way here is a retraction still in flight from
+		 * matter_thread_advertise_reset(): the host sits in
+		 * STATE_REMOVING and the name cannot be set until the server
+		 * answers. The next fabric must not wait on that -- an
+		 * unresolvable node is a failed pairing -- so give up the server
+		 * round-trip and take the local clear, which is exactly the
+		 * behaviour that shipped before the retraction existed.
+		 */
+		LOG_WRN("host name refused mid-retraction; clearing and retrying");
+		otSrpClientClearHostAndServices(ot);
+		/* That drops every service, the commissionable one included. */
+		s_comm_used = false;
+		err = otSrpClientSetHostName(ot, s_host_name);
+	}
+	if (err == OT_ERROR_NONE) {
+		err = otSrpClientEnableAutoHostAddress(ot);
+	}
+	if (err == OT_ERROR_NONE) {
+		s_host_ready = true;
+	}
+	return err;
 }
 
 int matter_thread_advertise(const char *instance_name, uint16_t port)
 {
 	otInstance *ot = openthread_get_default_instance();
-	otExtAddress eui;
 	otSockAddr bind_addr;
 	struct srp_reg *reg = NULL;
 	size_t i;
@@ -667,13 +838,7 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	}
 	(void)snprintf(reg->instance_name, sizeof(reg->instance_name), "%s", instance_name);
 
-	/* The host name only has to be unique on the SRP server, and the EUI-64
-	 * already is -- across boards. The suffix is what makes it unique across
-	 * this board's own erases; see SRP_HOST_ID_KEY. */
-	otPlatRadioGetIeeeEui64(ot, eui.m8);
-	(void)snprintf(s_host_name, sizeof(s_host_name), "%02X%02X%02X%02X%02X%02X%02X%02X-%08X",
-		       eui.m8[0], eui.m8[1], eui.m8[2], eui.m8[3], eui.m8[4], eui.m8[5], eui.m8[6],
-		       eui.m8[7], (unsigned int)srp_host_id());
+	srp_host_name_build(ot);
 
 	/*
 	 * SII and SAI are the peer's retransmission timers, in milliseconds.
@@ -745,36 +910,7 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	 * it -- which is what refused the second fabric after its AddNOC was
 	 * accepted, leaving the new administrator a fabric it could not resolve.
 	 */
-	err = OT_ERROR_NONE;
-	if (!s_host_ready) {
-		otSrpClientSetCallback(ot, srp_cb, NULL);
-		/* Before the first registration: it is sent WITH the update, so
-		 * setting it afterwards would leave the default in force until
-		 * something else refreshed the lease. */
-		otSrpClientSetKeyLeaseInterval(ot, SRP_KEY_LEASE_S);
-		err = otSrpClientSetHostName(ot, s_host_name);
-		if (err == OT_ERROR_INVALID_STATE) {
-			/*
-			 * The only way here is a retraction still in flight from
-			 * matter_thread_advertise_reset(): the host sits in
-			 * STATE_REMOVING and the name cannot be set until the
-			 * server answers. The next fabric must not wait on that
-			 * -- an unresolvable node is a failed pairing -- so give
-			 * up the server round-trip and take the local clear,
-			 * which is exactly the behaviour that shipped before the
-			 * retraction existed.
-			 */
-			LOG_WRN("host name refused mid-retraction; clearing and retrying");
-			otSrpClientClearHostAndServices(ot);
-			err = otSrpClientSetHostName(ot, s_host_name);
-		}
-		if (err == OT_ERROR_NONE) {
-			err = otSrpClientEnableAutoHostAddress(ot);
-		}
-		if (err == OT_ERROR_NONE) {
-			s_host_ready = true;
-		}
-	}
+	err = srp_host_register(ot);
 	if (err == OT_ERROR_NONE) {
 		err = otSrpClientAddService(ot, &reg->service);
 	}
@@ -806,6 +942,206 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 	return MATTER_OK;
 }
 
+/*
+ * The commissionable registration, one at a time because only one window is ever
+ * open. Same lifetime rule as the operational one: OpenThread links these into a
+ * list and does not copy the strings, so every buffer here is static.
+ */
+static char s_comm_service_type[] = "_matterc._udp";
+static char s_comm_instance[17]; /* 16 hex of a random 64-bit id + NUL */
+static char s_comm_sub_short[5]; /* "_S" + up to 2 digits + NUL */
+static char s_comm_sub_long[7];  /* "_L" + up to 4 digits + NUL */
+static const char *s_comm_sub_labels[3];
+static char s_comm_txt_d[5];   /* long discriminator, decimal */
+static char s_comm_txt_cm[2];  /* commissioning mode */
+static char s_comm_txt_vp[12]; /* "<vendor>+<product>", both decimal */
+static otDnsTxtEntry s_comm_txt[5];
+static otSrpClientService s_comm_service;
+
+int matter_thread_advertise_commissionable(uint16_t discriminator, uint16_t port)
+{
+	otInstance *ot = openthread_get_default_instance();
+	uint8_t rnd[8];
+	otError err;
+
+	if (ot == NULL) {
+		return MATTER_E_STATE;
+	}
+	if (s_comm_used) {
+		/* One window at a time, and the discriminator is fixed for its
+		 * duration. Re-registering the same name would be a no-op that
+		 * costs an SRP update, so say nothing happened. */
+		return MATTER_OK;
+	}
+
+	/*
+	 * A fresh 64-bit instance name per window, per the spec's commissionable
+	 * instance naming. It deliberately does NOT encode the fabric or the node
+	 * id the way the operational name does: this service is offered to a
+	 * controller that has no relationship with this node yet, and a stable
+	 * name would let anyone browsing correlate windows across time.
+	 */
+	if (psa_generate_random(rnd, sizeof(rnd)) != PSA_SUCCESS) {
+		LOG_ERR("no RNG for the commissionable instance name");
+		return MATTER_E_STATE;
+	}
+	(void)snprintf(s_comm_instance, sizeof(s_comm_instance), "%02X%02X%02X%02X%02X%02X%02X%02X",
+		       rnd[0], rnd[1], rnd[2], rnd[3], rnd[4], rnd[5], rnd[6], rnd[7]);
+
+	/*
+	 * Both subtypes, because controllers do not agree on which to browse.
+	 * chip-tool asks for "_matterc._udp,_S<short>" where short is the TOP
+	 * FOUR BITS of the 12-bit discriminator; others browse the long form.
+	 * Publishing one and not the other is indistinguishable from being
+	 * offline to whichever half asks the other way.
+	 */
+	(void)snprintf(s_comm_sub_short, sizeof(s_comm_sub_short), "_S%u",
+		       (unsigned int)((discriminator >> 8) & 0x0Fu));
+	(void)snprintf(s_comm_sub_long, sizeof(s_comm_sub_long), "_L%u",
+		       (unsigned int)(discriminator & 0x0FFFu));
+	s_comm_sub_labels[0] = s_comm_sub_short;
+	s_comm_sub_labels[1] = s_comm_sub_long;
+	s_comm_sub_labels[2] = NULL;
+
+	/*
+	 * D is the long discriminator, and it must agree with the BLE advert --
+	 * a controller that finds this over DNS-SD and then falls back to BLE
+	 * matches on the same value. CM=2 says the window was opened by a
+	 * commissioner with its own verifier (enhanced), which is exactly the
+	 * kind admin_arm() reports as kind 1.
+	 */
+	(void)snprintf(s_comm_txt_d, sizeof(s_comm_txt_d), "%u",
+		       (unsigned int)(discriminator & 0x0FFFu));
+	(void)snprintf(s_comm_txt_cm, sizeof(s_comm_txt_cm), "2");
+	(void)snprintf(s_comm_txt_vp, sizeof(s_comm_txt_vp), "%u+%u",
+		       (unsigned int)CONFIG_ALIRO_MATTER_VENDOR_ID,
+		       (unsigned int)CONFIG_ALIRO_MATTER_PRODUCT_ID);
+	s_comm_txt[0].mKey = "D";
+	s_comm_txt[0].mValue = (const uint8_t *)s_comm_txt_d;
+	s_comm_txt[0].mValueLength = (uint16_t)strlen(s_comm_txt_d);
+	s_comm_txt[1].mKey = "CM";
+	s_comm_txt[1].mValue = (const uint8_t *)s_comm_txt_cm;
+	s_comm_txt[1].mValueLength = (uint16_t)strlen(s_comm_txt_cm);
+	s_comm_txt[2].mKey = "VP";
+	s_comm_txt[2].mValue = (const uint8_t *)s_comm_txt_vp;
+	s_comm_txt[2].mValueLength = (uint16_t)strlen(s_comm_txt_vp);
+	/*
+	 * SII and SAI are not optional here in practice, whatever the spec says.
+	 * This node is a sleepy end device polling its parent every 3,000 ms; a
+	 * commissioner left on the 500 ms default retransmits PBKDFParamRequest
+	 * four times inside 3.7 s and declares the peer gone before the radio has
+	 * woken once. Announcing the poll period is what makes PASE survivable,
+	 * which is the same reason the operational service carries them.
+	 */
+	s_comm_txt[3].mKey = "SII";
+	s_comm_txt[3].mValue = (const uint8_t *)s_txt_sii;
+	s_comm_txt[3].mValueLength = (uint16_t)strlen(s_txt_sii);
+	s_comm_txt[4].mKey = "SAI";
+	s_comm_txt[4].mValue = (const uint8_t *)s_txt_sai;
+	s_comm_txt[4].mValueLength = (uint16_t)strlen(s_txt_sai);
+
+	memset(&s_comm_service, 0, sizeof(s_comm_service));
+	s_comm_service.mName = s_comm_service_type;
+	s_comm_service.mInstanceName = s_comm_instance;
+	s_comm_service.mSubTypeLabels = s_comm_sub_labels;
+	s_comm_service.mPort = port;
+	s_comm_service.mTxtEntries = s_comm_txt;
+	s_comm_service.mNumTxtEntries = 5u;
+
+	srp_host_name_build(ot);
+
+	openthread_mutex_lock();
+	err = srp_host_register(ot);
+	if (err == OT_ERROR_NONE) {
+		err = otSrpClientAddService(ot, &s_comm_service);
+	}
+	openthread_mutex_unlock();
+
+	if (err != OT_ERROR_NONE) {
+		LOG_ERR("commissionable SRP registration refused (%d)", err);
+		return MATTER_E_STATE;
+	}
+	s_comm_used = true;
+	LOG_INF("SRP: %s.%s/%s._matterc._udp port %u (D=%s)", s_comm_instance, s_comm_sub_short,
+		s_comm_sub_long, port, s_comm_txt_d);
+	return MATTER_OK;
+}
+
+int matter_thread_unadvertise(const char *instance_name)
+{
+	otInstance *ot = openthread_get_default_instance();
+	struct srp_reg *reg = NULL;
+	otError err;
+	size_t i;
+
+	if (instance_name == NULL) {
+		return MATTER_E_INVAL;
+	}
+	for (i = 0u; i < MATTER_SUPPORTED_FABRICS; i++) {
+		if (s_regs[i].used && strcmp(s_regs[i].instance_name, instance_name) == 0) {
+			reg = &s_regs[i];
+			break;
+		}
+	}
+	/* Already not there is the state being asked for. */
+	if (reg == NULL) {
+		return MATTER_OK;
+	}
+	if (ot == NULL) {
+		return MATTER_E_STATE;
+	}
+
+	openthread_mutex_lock();
+	err = otSrpClientRemoveService(ot, &reg->service);
+	openthread_mutex_unlock();
+
+	/*
+	 * Released whatever the client said, for the same reason
+	 * matter_thread_unadvertise_commissionable() gives below: a failed
+	 * removal costs a name on the border router until its lease runs out,
+	 * but a slot held hostage to it would refuse the NEXT fabric's
+	 * registration for the life of the boot.
+	 */
+	reg->used = false;
+	if (err != OT_ERROR_NONE) {
+		LOG_WRN("SRP removal of %s refused (%d); slot released anyway", instance_name, err);
+		return MATTER_E_STATE;
+	}
+	LOG_INF("SRP: operational service %s withdrawn", instance_name);
+	return MATTER_OK;
+}
+
+int matter_thread_unadvertise_commissionable(void)
+{
+	otInstance *ot = openthread_get_default_instance();
+	otError err;
+
+	if (!s_comm_used) {
+		return MATTER_OK;
+	}
+	if (ot == NULL) {
+		return MATTER_E_STATE;
+	}
+
+	openthread_mutex_lock();
+	err = otSrpClientRemoveService(ot, &s_comm_service);
+	openthread_mutex_unlock();
+
+	/*
+	 * The slot is released whatever the client said. A removal that failed
+	 * leaves a name on the border router until its lease expires, which is
+	 * untidy; refusing to ever register again because of it would be worse,
+	 * since the next window would then be invisible for the life of the boot.
+	 */
+	s_comm_used = false;
+	if (err != OT_ERROR_NONE) {
+		LOG_WRN("commissionable SRP removal refused (%d); slot released anyway", err);
+		return MATTER_E_STATE;
+	}
+	LOG_INF("SRP: commissionable service withdrawn");
+	return MATTER_OK;
+}
+
 #else /* !CONFIG_OPENTHREAD */
 
 /**
@@ -821,6 +1157,42 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 }
 
 /**
+ * Publish the commissionable service. Returns MATTER_E_STATE; Thread is not built into this image.
+ */
+int matter_thread_advertise_commissionable(uint16_t discriminator, uint16_t port)
+{
+	ARG_UNUSED(discriminator);
+	ARG_UNUSED(port);
+
+	return MATTER_E_STATE;
+}
+
+/**
+ * Withdraw one operational service. Returns MATTER_OK; nothing was ever registered.
+ */
+int matter_thread_unadvertise(const char *instance_name)
+{
+	ARG_UNUSED(instance_name);
+
+	return MATTER_OK;
+}
+
+/**
+ * Withdraw the commissionable service. Returns MATTER_OK; nothing was ever registered.
+ */
+int matter_thread_unadvertise_commissionable(void)
+{
+	return MATTER_OK;
+}
+
+/**
+ * Print the active dataset. No-op; Thread is not built into this image.
+ */
+void matter_thread_dump_active_dataset(void)
+{
+}
+
+/**
  * Start Thread with the provided operational dataset. Returns MATTER_E_STATE; Thread is not built
  * into this image.
  */
@@ -831,6 +1203,17 @@ int matter_thread_start(const uint8_t *dataset, size_t len)
 
 	LOG_WRN("Thread dataset received, but this image has no Thread stack");
 	return MATTER_E_STATE;
+}
+
+/**
+ * Is this node already on that network? Always false; there is no Thread stack in this image, so
+ * it is on no network at all.
+ */
+bool matter_thread_attached_to(const uint8_t *xpanid)
+{
+	ARG_UNUSED(xpanid);
+
+	return false;
 }
 
 /**
