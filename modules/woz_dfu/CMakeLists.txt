@@ -92,8 +92,12 @@ if(CONFIG_WOZ_DFU_RECEIVER)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_receiver.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
     ${WOZ_PORT}/src/flash_zephyr.c
-    ${WOZ_PORT}/src/osal_zephyr.c
     ${woz_dfu_pubkey_c})
+  # The woz_osal.h backend this receiver also needs is NOT built here: one
+  # image, one definition, and ports/zephyr owns it for every Zephyr image
+  # (CONFIG_WOZ_DFU_RECEIVER is in that library's gate). flash_zephyr.c stays
+  # because the applier half needs it inside MCUboot, where ports/zephyr is
+  # not on the module path.
   zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${WOZ_PORT}/include)

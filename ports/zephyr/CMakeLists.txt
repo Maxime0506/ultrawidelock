@@ -20,9 +20,21 @@ if(CONFIG_DW3000
    OR CONFIG_WOZ_UWB_SHELL
    OR (CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
    OR CONFIG_WOZ_DFU_SMP_IMG
-   OR CONFIG_WOZ_ANCHOR_SLAM)
+   OR CONFIG_WOZ_ANCHOR_SLAM
+   OR CONFIG_WOZ_DFU_RECEIVER)
 
 zephyr_library_named(woz_zephyr_port)
+
+# Zephyr backend of woz_osal.h, for every image on this OS. It lives here and
+# nowhere else: modules/ calls the contract (uwb_rxdiag.c, uwb_selftest.c,
+# dfu_receiver.c) and this tier is the one thing all four Zephyr images carry
+# on ZEPHYR_EXTRA_MODULES. It used to ride modules/woz_dfu, which meant an
+# image without the DFU module -- the nRF5340DK door lock -- linked the callers
+# with nothing behind them. MCUboot is the exception and needs no backend: the
+# applier is synchronous and takes only woz_flash.
+zephyr_library_sources(../../modules/woz_port/src/osal_zephyr.c)
+zephyr_library_include_directories(
+	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
 
 # Zephyr GPIO/SPI/trace backend of the dw3000_hw.h + dw3000_spi.h contract
 # (ESP-IDF backend: ports/esp32/components/woz_uwb/port/dw3000_{hw,spi}.c).
