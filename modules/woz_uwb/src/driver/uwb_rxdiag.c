@@ -51,10 +51,19 @@ static uint32_t g_ev_logged;
 static uint32_t g_cad[CAD_BINS];
 static uint32_t g_cad_n;
 
-/** @brief Bin one RX detection's phase within the 192 ms block grid. */
+/** @brief Bin one RX detection's phase within the 192 ms block grid. Gated on the same
+ * runtime flag as the DIAGK that prints the histogram: with diag off (the CDK default)
+ * the 64-bit modulo would run on every RX event ahead of the re-arm for a consumer that
+ * never fires. The histogram therefore covers only diag-enabled time, which is also the
+ * only time it can be read. */
 static void cad_mark(void)
 {
-	uint32_t phase = (uint32_t)((uint64_t)qrtc_get_us() % CAD_BLOCK_US);
+	uint32_t phase;
+
+	if (!woz_uwb_diag_on) {
+		return;
+	}
+	phase = (uint32_t)((uint64_t)qrtc_get_us() % CAD_BLOCK_US);
 	g_cad[phase / CAD_BIN_US]++;
 	g_cad_n++;
 }
