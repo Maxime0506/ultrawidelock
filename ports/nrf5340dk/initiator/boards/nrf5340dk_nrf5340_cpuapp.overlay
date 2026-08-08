@@ -49,7 +49,7 @@
 		/* 8 MHz, the same proven value as the door lock's overlay.
 		 *
 		 * This property does NOT set the probe speed, which is worth knowing
-		 * before tuning it: modules/woz_dw3000/platform/dw3000_spi.c:47-49 keeps two
+		 * before tuning it: ports/zephyr/dw3000/dw3000_spi.c:47-49 keeps two
 		 * configs, hard-codes the slow one at 2 MHz, and starts on it. The
 		 * devicetree value only lands after dw3000_spi_speed_fast(). Dropping
 		 * this to 2 MHz to chase a bad probe read therefore changes nothing

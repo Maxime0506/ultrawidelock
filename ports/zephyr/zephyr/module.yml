@@ -1,0 +1,4 @@
+name: woz_zephyr_port
+build:
+  cmake: .
+  kconfig: Kconfig

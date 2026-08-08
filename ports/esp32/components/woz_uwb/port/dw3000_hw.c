@@ -1,5 +1,5 @@
 /* ESP-IDF GPIO/IRQ backend for the DW3000 decadriver — implements dw3000_hw.h.
- * Replaces the Zephyr modules/woz_dw3000/platform/dw3000_hw.c (not compiled here).
+ * Replaces the Zephyr ports/zephyr/dw3000/dw3000_hw.c (not compiled here).
  *
  * IRQ mirrors the Zephyr design: the GPIO ISR wakes a dedicated high-priority
  * task that calls dwt_isr() while the IRQ line stays high — dwt_isr does SPI,

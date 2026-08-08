@@ -427,7 +427,7 @@ void shellfake_print(const struct shell *sh, const char *fmt, ...)
 
 /*
  * Free-running DWT cycle counter. On target this lives in
- * modules/woz_dw3000/platform/dw3000_hw.c and is what uwb_cirdiag_capture() times the
+ * ports/zephyr/dw3000/dw3000_hw.c and is what uwb_cirdiag_capture() times the
  * diagnostics read with. There is no such counter on a host, and the value is
  * only ever printed as `rdcyc`, never compared against anything, so a constant
  * is a truthful stub rather than a convenient one: it makes every host-measured

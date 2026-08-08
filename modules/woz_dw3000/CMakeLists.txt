@@ -4,11 +4,11 @@ if(CONFIG_DW3000)
 
 zephyr_library()
 
+# OS-neutral glue only; the Zephyr dw3000_hw/dw3000_spi backends live in
+# ports/zephyr/dw3000/ (module woz_zephyr_port), the ESP-IDF ones in
+# ports/esp32/components/woz_uwb/port/. platform/ keeps the contract headers.
 zephyr_library_sources(
     platform/deca_port.c
-    platform/dw3000_hw.c
-    platform/dw3000_spi.c
-    platform/dw3000_spi_trace.c
     platform/deca_compat.c
     dwt_uwb_driver/deca_interface.c
     dwt_uwb_driver/deca_rsl.c

@@ -45,6 +45,16 @@
 # conversion and shrinking this list are the same commit, so the list can only
 # go down. When RATCHET is empty, modules/ is one-source and this header's
 # permanent list is the whole story.
+#
+# TWO MORE PERMANENT CHECKS ride in this gate because no Zephyr/ESP build runs
+# on this machine — a path or symbol a build file hardcodes is otherwise proven
+# only on hardware CI, after the tree already moved:
+#
+#   build-file paths   every path literal a CMakeLists or a -DZEPHYR_EXTRA_MODULES
+#                      list names must exist in the tree (check_build_paths)
+#   patch symbols      every woz identifier a ports/nrf5340dk/patches/*.patch
+#                      grafts into the Nordic add-on must still be defined in
+#                      modules/ or ports/ (check_patch_symbols)
 
 set -euo pipefail
 
@@ -81,9 +91,6 @@ PERMANENT_RE=${PERMANENT_RE//$'\n'/}
 RATCHET=(
 	modules/woz_nfc/src/pn532_bus_spi.c            # T4 move: Zephyr SPI driver -> ports/zephyr
 	modules/woz_dfu/src/dfu_smp_img.c              # T4 move: mcumgr/SMP glue -> ports/zephyr
-	modules/woz_dw3000/platform/dw3000_hw.c        # T4a move: Zephyr GPIO backend -> ports/zephyr
-	modules/woz_dw3000/platform/dw3000_spi.c       # T4a move: Zephyr SPI backend -> ports/zephyr
-	modules/woz_dw3000/platform/dw3000_spi_trace.c # T4a move -> ports/zephyr
 	modules/woz_uwb/src/facade/woz_logfmt.c        # T4 move: Zephyr log backend -> ports/zephyr
 	modules/woz_uwb/src/facade/woz_logquiet.c      # T4 move: Zephyr log_ctrl -> ports/zephyr
 	modules/woz_uwb/src/facade/woz_uwb_facade.c    # T4: split the SYS_INIT hfclk boost out
@@ -152,6 +159,166 @@ scan() {
 	printf '%s  ok   modules/ is platform-pure outside woz_port and the exempt adapters%s\n' "$G" "$Z"
 	printf '%s  ok   conversion ratchet: %d file(s) remain, none stale%s\n' "$G" "${#RATCHET[@]}" "$Z"
 	return 0
+}
+
+# ---- build-file path literals -----------------------------------------------
+#
+# Resolved path candidates of one CMake file, one per line. Variables expand
+# from the file's own single-line set() lines plus REPO_ROOT and
+# CMAKE_CURRENT_{SOURCE,LIST}_DIR; a word still carrying ${...} or $ENV{...}
+# after that is outside this gate's reach and is skipped, as are comments and
+# if(EXISTS ...) probes (existence there is the condition, not a promise).
+# Two shapes survive: anything a resolved variable anchored ("./..."), and a
+# bare relative file with a source-ish extension (src/main.c, platform/x.c).
+cmake_path_list() {
+	local d
+	d=$(dirname "$1")
+	case $d in /*) ;; *) d="./$d" ;; esac
+	awk -v dir="$d" '
+	function expand(s,  k, hit) {
+		gsub(/\$\{REPO_ROOT\}/, ".", s)
+		gsub(/\$\{CMAKE_CURRENT_SOURCE_DIR\}/, dir, s)
+		gsub(/\$\{CMAKE_CURRENT_LIST_DIR\}/, dir, s)
+		do {
+			hit = 0
+			for (k in v)
+				if (index(s, "${" k "}")) { gsub("\\$\\{" k "\\}", v[k], s); hit = 1 }
+		} while (hit)
+		return s
+	}
+	{
+		sub(/#.*/, "")
+		if ($0 ~ /EXISTS/) next
+		# message() strings are prose for humans, not path promises; skip the
+		# whole call, tracking parens so multi-line FATAL_ERROR blocks vanish.
+		if (inmsg) {
+			inmsg += gsub(/\(/, "(") - gsub(/\)/, ")")
+			if (inmsg < 0) inmsg = 0
+			next
+		}
+		if (match($0, /message[ \t]*\(/)) {
+			rest = substr($0, RSTART)
+			inmsg = gsub(/\(/, "(", rest) - gsub(/\)/, ")", rest)
+			if (inmsg < 0) inmsg = 0
+			$0 = substr($0, 1, RSTART - 1)
+		}
+		if (match($0, /set\([A-Za-z_][A-Za-z0-9_]*[ \t]+[^)]+\)/)) {
+			s = substr($0, RSTART + 4, RLENGTH - 5)
+			name = s; sub(/[ \t].*/, "", name)
+			val = s; sub(/^[^ \t]+[ \t]+/, "", val); gsub(/"/, "", val)
+			v[name] = expand(val)
+		}
+		n = split($0, w, /[ \t()"]+/)
+		for (i = 1; i <= n; i++) {
+			p = expand(w[i])
+			if (p ~ /[{}]/ || p !~ /\//) continue
+			if (p ~ /^(\.\/|\/)/) { print p; continue }
+			if (p ~ /^[A-Za-z0-9_][A-Za-z0-9_.-]*(\/[A-Za-z0-9_.-]+)+\.(c|cc|cpp|h|hpp|conf|overlay|yml|cmake)$/)
+				print dir "/" p
+		}
+	}' "$1"
+}
+
+# Every -DZEPHYR_EXTRA_MODULES / -DEXTRA_ZEPHYR_MODULES entry the build
+# recipes pass, repo-relative. Covers scripts/build-nrf5340dk.sh and mk/*.mk,
+# notably mk/cdk.mk injecting woz_dfu at the sysbuild level.
+module_list_paths() {
+	grep -hoE -- '-D(ZEPHYR_EXTRA_MODULES|EXTRA_ZEPHYR_MODULES)=[^[:space:]]+' \
+		scripts/build-nrf5340dk.sh mk/*.mk \
+		| sed -e 's/^-D[A-Z_]*=//' -e "s/[\"']//g" \
+		| tr ';' '\n' \
+		| sed -e 's|^\$TREE|.|' -e 's|^\$(REPO_ROOT)|.|' -e 's|^\${REPO_ROOT}|.|'
+}
+
+# The build files whose hardcoded paths this gate resolves.
+BUILD_FILES=(
+	firmware/CMakeLists.txt
+	anchor/CMakeLists.txt
+	ports/nrf5340dk/initiator/CMakeLists.txt
+	ports/nrf5340dk/on_target_ec/CMakeLists.txt
+	ports/zephyr/CMakeLists.txt
+	modules/*/CMakeLists.txt
+	ports/esp32/components/*/CMakeLists.txt
+)
+
+check_build_paths() {
+	local fails=0 n=0 f p
+	for f in "${BUILD_FILES[@]}"; do
+		while IFS= read -r p; do
+			n=$((n + 1))
+			if [ ! -e "$p" ]; then
+				printf '%s  missing path: %s (named by %s)%s\n' "$R" "$p" "$f" "$Z" >&2
+				fails=$((fails + 1))
+			fi
+		done < <(cmake_path_list "$f")
+	done
+	while IFS= read -r p; do
+		n=$((n + 1))
+		if [ ! -d "$p" ]; then
+			printf '%s  missing module dir: %s (-D*ZEPHYR*_MODULES in scripts/ or mk/)%s\n' \
+				"$R" "$p" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done < <(module_list_paths)
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d dangling build-file path(s) — the Zephyr/ESP builds cannot prove them here%s\n' \
+			"$R" "$fails" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   build-file paths: %d literal(s) resolve in the tree%s\n' "$G" "$n" "$Z"
+}
+
+# ---- patch-symbol tripwire ---------------------------------------------------
+#
+# Identifier shapes a Nordic-add-on patch grafts in. A rename in modules/ or
+# ports/ leaves the patch applying cleanly and breaks only at add-on build
+# time, on hardware CI. Fail here instead.
+PATCH_SYM_RE='woz_[a-z0-9_]+|WozNfc::[A-Za-z]+|CONFIG_WOZ_[A-Z0-9_]+'
+# Names a patch itself coins rather than references (never defined in-tree).
+PATCH_LOCAL_RE='^woz_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
+
+patch_syms() { # <patch> -> unique woz identifiers on its + lines
+	grep -E '^\+' "$1" | grep -oE "$PATCH_SYM_RE" | LC_ALL=C sort -u
+}
+
+patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
+	local m hits
+	case "$1" in
+	WozNfc::*)
+		# In-tree the methods live inside `namespace WozNfc { ... }`, so the
+		# qualified spelling never appears; require one file naming both.
+		m="${1#WozNfc::}"
+		hits=$(git grep -lF 'WozNfc' -- modules ports ':!ports/nrf5340dk/patches' 2>/dev/null) || return 1
+		[ -n "$hits" ] || return 1
+		# shellcheck disable=SC2086 # tracked paths, no whitespace
+		grep -qlE "(^|[^[:alnum:]_])${m}([^[:alnum:]_]|\$)" $hits
+		;;
+	*)
+		git grep -qF "$1" -- modules ports ':!ports/nrf5340dk/patches' 2>/dev/null
+		;;
+	esac
+}
+
+check_patch_symbols() {
+	local fails=0 n=0 p sym
+	for p in ports/nrf5340dk/patches/*.patch; do
+		while IFS= read -r sym; do
+			[ -n "$sym" ] || continue
+			[[ $sym =~ $PATCH_LOCAL_RE ]] && continue
+			n=$((n + 1))
+			if ! patch_sym_defined "$sym"; then
+				printf '%s  dangling patch symbol: %s (grafted by %s)%s\n' \
+					"$R" "$sym" "$p" "$Z" >&2
+				fails=$((fails + 1))
+			fi
+		done < <(patch_syms "$p")
+	done
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d patch symbol(s) no longer defined in modules/ or ports/%s\n' \
+			"$R" "$fails" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   add-on patches: %d woz symbol(s) still defined in the tree%s\n' "$G" "$n" "$Z"
 }
 
 # ---- self-test --------------------------------------------------------------
@@ -231,6 +398,73 @@ self_test() {
 	done
 	[ "$fails" -ne 0 ] || printf '%s  self-test: exemptions cover only the declared adapters%s\n' "$G" "$Z"
 
+	# Path extractor: resolves set() variables and REPO_ROOT, joins relative
+	# sources, and stays quiet on comments, EXISTS probes, unresolved ${...}
+	# and prose like "and/or".
+	local fixdir out
+	fixdir=$(mktemp -d -t purity-selftest.XXXXXX)
+	mkdir "$fixdir/src" # the set() value itself is emitted and must resolve
+	cat >"$fixdir/fix.cmake" <<-'EOF'
+		set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+		target_sources(app PRIVATE ${SRC}/nope.c src/also.c ${REPO_ROOT}/modules/ghost/gone.c)
+		# comment/only.c
+		if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/maybe/absent.h")
+		zephyr_include_directories(${UNDEFINED_VAR}/x and/or)
+	EOF
+	out=$(cmake_path_list "$fixdir/fix.cmake")
+	local want
+	for want in "$fixdir/src/nope.c" "$fixdir/src/also.c" "./modules/ghost/gone.c"; do
+		if ! printf '%s\n' "$out" | grep -qxF "$want"; then
+			printf '%s  self-test FAILED: path extractor missed: %s%s\n' "$R" "$want" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	local nowant
+	for nowant in only.c absent.h UNDEFINED_VAR and/or; do
+		if printf '%s\n' "$out" | grep -qF "$nowant"; then
+			printf '%s  self-test FAILED: path extractor emitted: %s%s\n' "$R" "$nowant" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	# ...and the scan half must flag every emitted-but-absent path.
+	local missing=0 pth
+	while IFS= read -r pth; do
+		[ -e "$pth" ] || missing=$((missing + 1))
+	done <<<"$out"
+	if [ "$missing" -ne 3 ]; then
+		printf '%s  self-test FAILED: expected 3 missing fixture paths, saw %d%s\n' \
+			"$R" "$missing" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	[ "$fails" -ne 0 ] || printf '%s  self-test: path extractor resolves, joins and filters correctly%s\n' "$G" "$Z"
+
+	# Patch tripwire: + lines only, all three identifier shapes, and the
+	# resolver must fail on an invented symbol while passing real ones.
+	cat >"$fixdir/fix.patch" <<-'EOF'
+		--- a/x.cpp
+		+++ b/x.cpp
+		+	woz_phantom_symbol_xyz();
+		+	WozNfc::Init();
+		+	if (CONFIG_WOZ_ALIRO) {}
+		-	woz_minus_line_only();
+	EOF
+	if [ "$(patch_syms "$fixdir/fix.patch")" != "$(printf 'CONFIG_WOZ_ALIRO\nWozNfc::Init\nwoz_phantom_symbol_xyz')" ]; then
+		printf '%s  self-test FAILED: patch_syms extraction wrong for the fixture%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if patch_sym_defined woz_phantom_symbol_xyz; then
+		printf '%s  self-test FAILED: tripwire resolved an invented symbol%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	for pth in CONFIG_WOZ_ALIRO WozNfc::Init; do
+		if ! patch_sym_defined "$pth"; then
+			printf '%s  self-test FAILED: tripwire lost a real symbol: %s%s\n' "$R" "$pth" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
+	[ "$fails" -ne 0 ] || printf '%s  self-test: patch tripwire fires on invented symbols only%s\n' "$G" "$Z"
+	rm -rf "$fixdir"
+
 	if [ "$fails" -ne 0 ]; then
 		printf '%scheck-purity: the gate itself is broken%s\n' "$R" "$Z" >&2
 		return 2
@@ -243,7 +477,11 @@ case "${1-}" in
 	self_test
 	;;
 "")
-	scan
+	rc=0
+	scan || rc=1
+	check_build_paths || rc=1
+	check_patch_symbols || rc=1
+	exit "$rc"
 	;;
 *)
 	printf 'usage: %s [--self-test]\n' "$0" >&2

@@ -1,0 +1,4 @@
+# ports/zephyr — woz_zephyr_port. No symbols of its own: every backend here is
+# gated on the owning feature's symbol (CONFIG_DW3000, ...), defined where the
+# portable half lives. An option moves into this file only when nothing outside
+# ports/zephyr references it.

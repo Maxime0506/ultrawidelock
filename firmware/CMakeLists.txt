@@ -27,7 +27,8 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_matter"
 	"${REPO_ROOT}/modules/woz_ml"
 	"${REPO_ROOT}/modules/woz_uwb"
-	"${REPO_ROOT}/modules/woz_dw3000")
+	"${REPO_ROOT}/modules/woz_dw3000"
+	"${REPO_ROOT}/ports/zephyr")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(aliro_reader_dwm3001cdk)
