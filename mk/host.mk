@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test test-san coverage cbmc check drift seam
+.PHONY: test test-san coverage cbmc check drift seam purity
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -31,5 +31,9 @@ drift:
 ## seam: no call reaches the radio past the CCC STS seam
 seam:
 	@$(REPO_ROOT)/tests/tooling/uwb_seam_check.sh
+
+## purity: no platform includes or kernel calls in modules/ outside woz_port
+purity:
+	@$(REPO_ROOT)/tests/tooling/port_purity_check.sh
 
 

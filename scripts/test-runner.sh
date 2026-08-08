@@ -6,6 +6,7 @@
 #   shared     ports/esp32/test/run.sh          reader/stepup/crypto/... stages
 #   drift      tests/tooling/drift_check.py     Kconfig vs C constants
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
+#   purity     tests/tooling/port_purity_check.sh  no platform code in modules/
 #
 # Default: suites run in parallel, failures replayed when done. SERIAL=1 streams
 # full output one suite at a time. SUITES="firmware shared" scopes. Exit is
@@ -21,6 +22,7 @@ suite_cmd() {
 	shared) echo "bash ports/esp32/test/run.sh" ;;
 	drift) echo "python3 tests/tooling/drift_check.py" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
+	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
 	esac
 }
 
@@ -30,6 +32,7 @@ suite_label() {
 	shared) echo "shared core (C host)" ;;
 	drift) echo "constant drift" ;;
 	seam) echo "uwb seam" ;;
+	purity) echo "port purity" ;;
 	esac
 }
 
@@ -73,7 +76,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared drift seam}"
+SEL="${SUITES:-firmware shared drift seam purity}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do
