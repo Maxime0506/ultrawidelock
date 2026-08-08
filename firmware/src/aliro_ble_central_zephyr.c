@@ -4,9 +4,6 @@
 // reader's SPSM/versions, writes the selected version and opens a CoC client to
 // that SPSM.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Zephyr backend behind the shared aliro_ble_central.h, the counterpart of the
  * NimBLE one in ports/esp32/components/aliro_ble_central. The decoding it feeds
  * on (advert, READ payload, BleSK salt) is platform-free and lives in

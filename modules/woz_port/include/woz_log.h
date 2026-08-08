@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * woz_log.h - logging contract for the UWB engine.
  *
  * Zephyr's LOG_* spellings are kept so the call sites need only swap an

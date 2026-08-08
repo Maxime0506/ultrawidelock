@@ -220,7 +220,7 @@ static int cmd_frec(const struct shell *sh, size_t argc, char **argv)
 		} else if (strcmp(argv[1], "off") == 0) {
 			fr_set_enabled(false);
 		} else if (strcmp(argv[1], "dump") == 0) {
-			fr_dump(); /* hex `[FREC]` lines for tools/flight_recorder.py */
+			fr_dump(); /* hex `[FREC]` lines for the trace decoder */
 			return 0;
 		} else if (strcmp(argv[1], "clear") == 0) {
 			fr_clear();

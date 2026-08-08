@@ -170,7 +170,7 @@ nrf-init-build:
 	  -b nrf5340dk/nrf5340/cpuapp --sysbuild \
 	  $(if $(PRISTINE),-p always) \
 	  -d '$(NRF_INIT_BUILD)' '$(REPO_ROOT)/ports/nrf5340dk/initiator' \
-	  -- -DZEPHYR_EXTRA_MODULES='$(REPO_ROOT)/modules/woz_uwb;$(REPO_ROOT)/deps/dw3000'
+	  -- -DZEPHYR_EXTRA_MODULES='$(REPO_ROOT)/modules/woz_uwb;$(REPO_ROOT)/modules/woz_dw3000'
 
 ## nrf-init-flash: flash the Aliro initiator (both cores) -> build/nrf5340dk-initiator
 ##   A different application from the one every other nrf- target builds: the DK

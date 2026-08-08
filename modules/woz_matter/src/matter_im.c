@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * See matter_im.h. Tag numbers are transcribed from
  * workspace/modules/lib/matter/src/app/MessageDef/, cited at each use, because
  * they are the one thing here that cannot be derived or sanity-checked at

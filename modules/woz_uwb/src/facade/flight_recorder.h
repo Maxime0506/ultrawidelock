@@ -5,9 +5,6 @@
  * fixed-size ring buffer; provides reader and writer interfaces for host tools.
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * flight_recorder — record a live UWB walk-up on the device, replay it into the
  * host build deterministically.
  *
@@ -28,7 +25,7 @@
  *
  * The trace is a flat little-endian record stream (fr_write_* / fr_read_next),
  * allocation-free over a caller-owned buffer so the device recorder writes it
- * into a static RAM ring with no heap on the walk-up path. tools/flight_recorder.py
+ * into a static RAM ring with no heap on the walk-up path.
  * carries it off the device (hex-encoded `[FREC]` serial lines -> .frc file) and
  * extracts the frames into a fuzz corpus. The replay engine lives host-side
  * (tests/host/fr_replay.c) because it drives the DW3000 shim doubles.

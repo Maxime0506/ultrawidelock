@@ -4,9 +4,6 @@
  * little-endian integers and truncation handling; read/write operations with overflow detection.
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * flight_recorder — trace (de)serialisation + the on-device capture path.
  * See flight_recorder.h for the format rationale. The writer/reader half is
  * portable and pointer-free so the same code builds in the firmware, the host

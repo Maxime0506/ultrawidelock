@@ -2,7 +2,7 @@
 # The CCC STS substitution rides src/driver/uwb_seam.h: every caller reaches the
 # radio through woz_uwb_arm_rx(), which programs the CCC key/IV on every RX-arm,
 # and its three siblings. scripts/check-uwb-seam.sh keeps the seam intact.
-# The DS-TWR responder runs on deps/dw3000.
+# The DS-TWR responder runs on modules/woz_dw3000.
 # Contributes nothing unless CONFIG_WOZ_UWB=y (stock build byte-identical).
 
 if(CONFIG_WOZ_UWB)
@@ -18,7 +18,7 @@ if(CONFIG_WOZ_UWB)
     ${SRC}/fira/ds_twr.c)
 
   if(CONFIG_WOZ_UWB_RESPONDER)
-    # The responder runs entirely on deps/dw3000 in ccc_shim_rx.c
+    # The responder runs entirely on modules/woz_dw3000 in ccc_shim_rx.c
     # (ccc_prepoll_listen). The codec uses only qmalloc/qcalloc/qfree + qrtc_get_us,
     # provided as thin Zephyr wrappers by src/facade/woz_alloc.h.
     zephyr_library_sources(
@@ -40,7 +40,7 @@ if(CONFIG_WOZ_UWB)
         ${SRC}/driver/uwb_rxdiag.c)
 
       # AES-ECB crypto seam (ccc_kdf.h): PSA on nRF (default), mbedTLS for SoCs
-      # without a PSA provider (e.g. ESP32-S3). See docs/porting.md.
+      # without a PSA provider (e.g. ESP32-S3).
       if(CONFIG_WOZ_CRYPTO_MBEDTLS)
         zephyr_library_sources(${SRC}/ccc/ccc_crypto_mbedtls.c)
         # Put mbedTLS headers (<mbedtls/aes.h>) on this library's include path.

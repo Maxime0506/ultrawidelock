@@ -16,7 +16,7 @@ claim covers.
 | `flash.sh` | flashes the image for whichever of the three chips you name |
 | `manifest.json` | the chip list the browser flasher reads |
 | `README.txt` | the short version of this guide, in plain text |
-| `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
+| `FLASH.md` | this guide |
 | `VERSION.txt` | release tag, commit, and build date |
 | `SHA256SUMS.txt` | checksums for every file above |
 

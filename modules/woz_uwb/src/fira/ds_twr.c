@@ -1,8 +1,5 @@
 /**
  * @file ds_twr.c — the double-sided two-way ranging estimator (implementation).
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "ds_twr.h"

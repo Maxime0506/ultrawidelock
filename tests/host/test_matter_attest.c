@@ -11,9 +11,6 @@
  * challenge is appended and then removed again, and whether the TLV tags ascend
  * the way the peer's deconstructor demands.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <string.h>
 
 #include "matter_attest.h"

@@ -1,9 +1,6 @@
 /**
  * @file spakefake.h — arming the recorded SPAKE2+ exchange. See spakefake.c.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #pragma once
 
 #include <stdint.h>

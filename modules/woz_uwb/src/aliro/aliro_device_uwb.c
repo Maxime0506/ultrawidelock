@@ -5,9 +5,6 @@
 // host loopback can drive the real reader codec end to end.
 /** @file aliro_device_uwb.c — device-side UWB ranging-service setup codec.
  *  See aliro_device_uwb.h.
- *
- *  Copyright (c) 2026 asxeem
- *  SPDX-License-Identifier: ISC
  */
 #include "aliro_device_uwb.h"
 

@@ -26,11 +26,7 @@
  * independently computed cB, Ke and session keys.
  *
  * What this deliberately does NOT prove is that oberon computes what the script
- * computed. Only hardware answers that; see the on-target selftest in
- * internal/cdk-matter-plan.md stage 2.
- */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+ * computed. Only hardware answers that; see the on-target selftest.
  */
 #include <stddef.h>
 #include <stdint.h>

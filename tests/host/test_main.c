@@ -57,7 +57,6 @@ int main(void)
 		{ "facade", test_facade },
 		{ "prepoll_gate", test_prepoll_gate },
 		{ "prepoll_round", test_prepoll_round },
-		{ "twin", test_twin },
 		{ "rssi_gate", test_rssi_gate },
 		{ "woz_door", test_woz_door },
 		{ "woz_fusion", test_woz_fusion },

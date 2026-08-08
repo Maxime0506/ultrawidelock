@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host KAT for the reader provisioning core (aliro_prov.c): the dev identity,
  * blob (de)serialisation round-trip + malformed-blob rejection, and the trust
  * store (check / add / dedup / full / bad-point). Pure host build; the NVS

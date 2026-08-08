@@ -27,7 +27,7 @@
  * That is the mode worth using: ai/tinyml/RESULTS.md Result 7 measures the whole
  * tap-derived half of the feature set at 0.14 accuracy points.
  *
- * The markers deliberately do NOT carry the [ALAB] prefix, so tools/aliro_lab.py
+ * The markers deliberately do NOT carry the [ALAB] prefix, so
  * ignores them, the same choice uwb_cirdiag_probe() makes for its output.
  */
 

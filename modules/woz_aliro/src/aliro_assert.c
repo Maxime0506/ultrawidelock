@@ -2,10 +2,6 @@
 // dongle's "credential present within N cm for this nonce" statement and verifies
 // an ECDSA-P256 frame against a challenge nonce, enrolled credential and distance
 // threshold. Portable C11; no UWB/BLE/platform dependencies.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <string.h>
 
 #include "aliro_assert.h"

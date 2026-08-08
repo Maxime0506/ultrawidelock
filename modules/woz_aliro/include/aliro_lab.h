@@ -1,13 +1,10 @@
 // Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
-// parsed by tools/aliro_lab.py into a scored walk-up report. Ships in every Aliro
+// parsed into a scored walk-up report. Ships in every Aliro
 // build (CONFIG_WOZ_ALIRO_LAB defaults y, like the sibling uwbdiag trace) but is
 // OFF at boot and toggled at runtime by the `lab on`/`lab off` console command, so
 // any firmware profiles on demand with no reflash. Set CONFIG_WOZ_ALIRO_LAB=n to
 // strip it from a hardened production image.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_lab — one line per event, `[ALAB] t=<us> ev=<name>[ <key>=<val>]`, with
  * t from woz_uptime_us(). Emit only from the BLE-host or Matter task — never
  * from the UWB RX/ISR path. UWB-side phase boundaries are latched by

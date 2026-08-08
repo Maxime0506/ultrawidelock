@@ -11,9 +11,6 @@
  * rather than disappearing: matter_clusters.c calls it unconditionally, and a
  * link error would be a worse way to learn that Thread was configured out.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include "matter_thread.h"
 
 /* For MATTER_INSTANCE_NAME_LEN: the SRP instance name is sized by the thing
@@ -415,8 +412,8 @@ static uint32_t srp_host_id(void)
 		 * PSA's, not otRandomNonCryptoGetUint32(): this runs on the
 		 * Matter work queue without the OpenThread lock held. A CSPRNG
 		 * for a name that gets published in the clear is not strictly
-		 * required, but security/semgrep-openaliro.yml refuses to let
-		 * this codebase have two classes of random source, and a value
+		 * required, but this codebase does not want two classes of
+		 * random source, and a value
 		 * drawn once per lifetime cannot be the wrong place to pay.
 		 */
 		do {

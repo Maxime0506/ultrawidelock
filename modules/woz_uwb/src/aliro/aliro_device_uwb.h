@@ -11,8 +11,6 @@
  *  so it is host-testable against the reader's own codec (loopback) and against
  *  the M2/M4 attribute sets the reader is proven to accept.
  *
- *  Copyright (c) 2026 asxeem
- *  SPDX-License-Identifier: ISC
  *  Provenance: clean-room; mirrors aliro_uwb_msg.c.
  */
 #pragma once

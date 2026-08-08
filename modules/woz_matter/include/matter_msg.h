@@ -12,10 +12,8 @@
  *
  * All little-endian.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 1, subtasks 3 and 4 of internal/cdk-matter-plan.md. They are one file
+/*
+ * They are one file
  * because they are one wire format read back to back; splitting them would put
  * a seam where the spec has none.
  *

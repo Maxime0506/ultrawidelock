@@ -1,9 +1,7 @@
 /**
  * @file matter_pase.c — PASE message codec over Matter TLV.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * The first real consumer of matter_tlv.c, which is worth saying because it is
  * also the first thing that would expose a bug in it.
  *

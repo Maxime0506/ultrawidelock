@@ -11,7 +11,7 @@ opens as you walk up or on a tap.
 | `flash.sh` | flashes both cores over the DK's on-board J-Link |
 | `SETUP-QR.png` | the commissioning QR code: scan it straight from this folder |
 | `README.txt` | the short version of this guide, in plain text |
-| `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
+| `FLASH.md` | this guide |
 | `VERSION.txt` | release tag, commit, build date, and the setup code |
 | `SHA256SUMS.txt` | checksums for every file above |
 

@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fr_replay — host-side replay of a flight-recorder trace.
  *
  * Feeds a recorded walk-up's inputs (session config + the ordered per-frame

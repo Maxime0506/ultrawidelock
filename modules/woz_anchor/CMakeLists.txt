@@ -2,7 +2,7 @@
 #
 # Contributes nothing unless CONFIG_WOZ_ANCHOR=y, and nothing sets that yet: the
 # logic is finished and host-tested ahead of the hardware, so every existing
-# image stays byte-identical. Stage E of internal/two-anchor-plan.md is what
+# image stays byte-identical. Wiring up the satellite transport is what
 # turns it on, and that step owes a RAM budget against the CDK Matter image.
 #
 # Pure integer arithmetic over caller-owned structs. No allocation, no threads,

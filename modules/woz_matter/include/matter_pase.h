@@ -17,10 +17,8 @@
  * (nrfxlib/crypto/nrf_oberon/include/ocrypto_spake2p_p256.h), which already
  * ships in every image here.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 2 of internal/cdk-matter-plan.md, item 5. Two sources again -- unlike
+/*
+ * item 5. Two sources again -- unlike
  * BTP, CircuitMatter does implement PASE:
  *   - CHIP, workspace/modules/lib/matter/src/protocols/secure_channel/
  *     PASESession.cpp: the five tag enums at :60-95, the response encoder at

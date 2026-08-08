@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * See test_matter_thread_stub.h.
  */
 #include "test_matter_thread_stub.h"

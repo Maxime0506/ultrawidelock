@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * See matter_fabric.h.
  */
 #include "matter_fabric.h"

@@ -3,9 +3,6 @@
 // Also implements the trust-store membership check and add-with-dedup operations used to decide
 // whether a presented credential public key is trusted.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_prov (portable core) — dev identity, blob (de)serialisation, and the
  * trust-store logic. No ESP-IDF or crypto dependency, so it compiles identically
  * on host and target and is host-KAT'd (test/test_aliro_prov.c). The NVS-backed

@@ -6,10 +6,8 @@
  * and a 5-bit element type, then 0-8 tag octets, then the value, all
  * little-endian. The two share a name and nothing else, so they stay separate.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 1 of internal/cdk-matter-plan.md. Everything Apple Home sends after
+/*
+ * Everything Apple Home sends after
  * commissioning -- SetAliroReaderConfig included -- arrives as Matter TLV, and
  * nothing in this repo could read a byte of it before this file.
  *

@@ -17,10 +17,8 @@
  *   KcA|KcB  HKDF(Ka, "ConfirmationKeys")
  *   cA, cB   HMAC(KcA, pB) and HMAC(KcB, pA)
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 2 of internal/cdk-matter-plan.md, the second half of item 5.
+/*
+ * the second half of item 5.
  *
  * Cross-checked against two implementations:
  *   - CHIP, workspace/modules/lib/matter/src/: the context string at

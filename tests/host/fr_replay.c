@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fr_replay — see fr_replay.h. Drives the real listener through the DW3000 shim.
  */
 #include "fr_replay.h"

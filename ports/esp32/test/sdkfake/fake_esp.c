@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fake_esp — recording doubles for the esp_console / linenoise / app-desc /
  * log-level surface the bench-console sources use on the host.
  */

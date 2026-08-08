@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the bolt-state indicator policy (lock_led.c): which colour
  * the WS2812 shows for each lock state. The driver half (led_strip/RMT on
  * board-specific GPIO selection in app_driver.cpp) is target-only and not linked here.

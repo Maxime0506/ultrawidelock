@@ -1,6 +1,0 @@
-[00:00:00.001] <inf> woz_uwb: boot banner noise
-[00:00:01.002] <inf> woz_uwb: rng  blk=7   d=1234mm  tof=567
-[00:00:01.003] <inf> woz_uwb: DIST tof=567 d=1234mm
-[00:00:02.004] <inf> woz_uwb: ACCESS GRANTED
-[00:00:03.005] <inf> woz_uwb: ACCESS DENIED
-[00:00:04.006] <inf> woz_uwb: rng blk=x d=1mm tof=2

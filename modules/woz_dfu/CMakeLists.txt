@@ -13,7 +13,7 @@
 if(CONFIG_WOZ_DFU_APPLIER)
 
   get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-  set(DETOOLS ${REPO_ROOT}/deps/detools/c)
+  set(DETOOLS ${REPO_ROOT}/modules/woz_dfu/src/detools)
 
   zephyr_library_named(woz_dfu)
   zephyr_library_sources(

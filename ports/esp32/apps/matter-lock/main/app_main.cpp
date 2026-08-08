@@ -445,8 +445,7 @@ static void start_aliro_reader_once(void)
 
 /* SNTP feeds ONLY the Aliro advertisement's dynamic-tag expiry (aliro_ble.c);
  * nothing credential- or Matter-facing consumes it here, so a spoofed server
- * can at worst break approach-unlock (docs/protocol-notes.md, "Deferred:
- * network time"). Fail-open: until the first sync the advert carries the
+ * can at worst break approach-unlock. Fail-open: until the first sync the advert carries the
  * spec's "expiry unavailable" form, which phones still resolve. */
 static void sntp_synced_cb(struct timeval *tv)
 {

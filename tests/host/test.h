@@ -69,7 +69,6 @@ void test_fira(void);
 void test_facade(void);
 void test_prepoll_gate(void);
 void test_prepoll_round(void);
-void test_twin(void);
 void test_rssi_gate(void);
 void test_flight_recorder(void);
 void test_approach(void);

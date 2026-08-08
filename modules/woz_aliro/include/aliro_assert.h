@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_assert — the presence-assertion protocol for the non-door primitive.
  *
  * A presence dongle answers a challenge with a signed statement: "a provisioned

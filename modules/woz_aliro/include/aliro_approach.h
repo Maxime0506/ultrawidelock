@@ -5,9 +5,6 @@
  * speed, and a flag to enable or disable predictive ToA unlock.
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_approach — predictive approach controller ("negative latency").
  *
  * Turns the per-block trusted UWB range stream into bolt decisions. Two paths

@@ -4,9 +4,6 @@
  * Everything here is Zephyr-side glue. The protocol lives in
  * modules/woz_matter, which knows nothing about BLE.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #pragma once
 
 #include <stddef.h>

@@ -2,9 +2,6 @@
 // BleSK-sealed post-auth SDUs and answers them, walking AP-Completed ->
 // Initiate-Ranging-Session -> M1 -> M2 -> M3 -> M4.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * The device mirror of modules/woz_aliro/src/aliro_ranging.c, which is
  * reader-only. Everything below the transport is existing code: the BleSK
  * channel is aliro_device.c's sc_ble and the M1-M4 codec is
@@ -17,8 +14,7 @@
  * SCOPE, stated plainly: this reaches the end of ranging SETUP and then hands
  * off to prepoll_tx.c, which sends the Pre-POLL that opens each ranging block.
  * The four frames after it -- POLL, RESPONSE, Final, Final_Data -- do not exist
- * on this board, so no distance is ever measured. See
- * internal/aliro-1a-proven.md.
+ * on this board, so no distance is ever measured.
  */
 #pragma once
 

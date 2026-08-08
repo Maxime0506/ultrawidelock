@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * matterfake.cc — recording-double implementations behind matterfake.h.
  * Everything is synchronous and in-RAM; see the header's honesty note.
  */

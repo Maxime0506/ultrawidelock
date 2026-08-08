@@ -58,7 +58,7 @@ enum { DWT_SUCCESS = 0, DWT_ERROR = -1 };
 #define DWT_PDOA_M0     0x0
 #define DWT_ENABLE_INT  1
 
-/* uwb_min.c surface (values mirror deps/dw3000/dwt_uwb_driver/deca_device_api.h) */
+/* uwb_min.c surface (values mirror modules/woz_dw3000/dwt_uwb_driver/deca_device_api.h) */
 #define DWT_DW_INIT         0x0
 #define DWT_CONFIG          0x0001
 #define DWT_RUNSAR          0x0002
@@ -167,7 +167,7 @@ uint16_t dwt_getframelength(uint8_t *rng);
 int dwt_readstsquality(int16_t *rxStsQualityIndex, int stsSegment);
 
 /* ── CIA/CIR diagnostics surface for uwb_cirdiag.c ───────────────────────────
- * Types/constants mirror deps/dw3000/dwt_uwb_driver/deca_device_api.h; the
+ * Types/constants mirror modules/woz_dw3000/dwt_uwb_driver/deca_device_api.h; the
  * doubles in drvfake.c are link-only (no theatre test arms the CIR readout). */
 typedef enum {
 	DWT_ACC_IDX_IP_M = 0,

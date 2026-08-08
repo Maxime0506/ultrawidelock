@@ -15,9 +15,6 @@
  * reader would fail later, somewhere else, for a reason nobody would connect back to
  * commissioning. So each length is wrong by exactly one byte in its own case.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 
 #include "test.h"
 #include "test_matter_thread_stub.h"

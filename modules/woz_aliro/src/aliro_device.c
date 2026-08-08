@@ -8,9 +8,6 @@
 // standard-path derivation factored EC-free so host tests can drive it with a
 // supplied shared secret.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Aliro initiator (User-Device) session layer. See aliro_device.h. Mirrors the
  * reader flow in aliro_reader.c: the reader builds AUTH0/AUTH1/EXCHANGE commands
  * and verifies the device; here the device parses them and proves itself, running

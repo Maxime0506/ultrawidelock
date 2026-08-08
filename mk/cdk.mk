@@ -163,7 +163,7 @@ CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP)
 # Which private key signs the image is the whole answer to "what will this lock
 # boot", so it is never left to MCUboot's default -- that default is a key
 # published in MCUboot's own repository. firmware/sysbuild.cmake refuses to
-# build with any of the seven, and firmware/keys/README.md has the rest.
+# build with any of the seven.
 #
 # SIGN_KEY (top-level Makefile) is the checkout-wide default, shared with the
 # nRF5340 DK, which signs with the same key for the same reason. CDK_KEY is kept
@@ -309,7 +309,7 @@ CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_S
 ##   One nRF52833: the Aliro reader, the DW3110's ranging, a hand-written Matter
 ##   node and an OpenThread MTD, in a part Nordic's own CHIP-based lock does not
 ##   fit in. Apple Home commissions it over BLE and it then shows a live lock
-##   tile (firmware/README.md). Self-provisions, so it needs no USB console.
+##   tile. Self-provisions, so it needs no USB console.
 ##   What flash, flash-erase and monitor all mean unless you say otherwise.
 ##   RELEASE=1 gives up the 8 KB RTT ring for 7,168 B of RAM and sets errors-only
 ##   logging to save 20,568 B of flash. Debug is the default on purpose: on a
@@ -337,7 +337,7 @@ rebuild:
 ## reader: the same board WITHOUT Matter        -> build/cdk-reader
 ##   Aliro reader and UWB only. Needs no Thread network and no commissioner,
 ##   which makes it the quickest way to a working board; the identity is typed
-##   in over USB in provisioning mode (firmware/README.md).
+##   in over USB in provisioning mode.
 ##   Builds elsewhere on purpose, so flash and monitor keep meaning the Matter
 ##   image: pass CDK_BUILD=$(CDK_READER_BUILD) to those to work on this one.
 ##   Options: PRISTINE=1  CDK_READER_BUILD=<dir>
@@ -375,8 +375,8 @@ selftest:
 ##
 ##   It prints `cir.cycle: n=<i> capture` and `... end` around each 20 s interval,
 ##   then waits 3 s. Walk up from outside during one interval and from inside
-##   during the next; the cycle number is the label. tools/aliro_lab.py reads the
-##   [ALAB] lines in between.
+##   during the next; the cycle number is the label. The [ALAB] lines in between
+##   carry the per-round record.
 ##
 ##   SUMMARY ONLY by default, which is a hardware finding rather than a taste:
 ##   with the windowed-CIR dump armed this board never transmits a Response at all
@@ -668,7 +668,7 @@ ota-window:
 ##   the public half permanently, so this key decides what every board a
 ##   stranger flashes from the release will accept over the air, forever. It
 ##   belongs wherever your other production secrets live, offline, and never in
-##   a CI secret store -- see firmware/keys/README.md.
+##   a CI secret store.
 ##
 ##   SMP=1 RELEASE=1 are set here rather than inherited, like `fota`: without
 ##   SMP a published board cannot be updated from a phone at all, and RELEASE is

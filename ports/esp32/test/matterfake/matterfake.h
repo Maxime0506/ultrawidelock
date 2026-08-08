@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * matterfake — host-side fakes of the CHIP / esp-matter surface the
  * matter-lock app glue compiles against, so those production sources build
  * unmodified with plain c++ and their branch logic can be unit-tested.

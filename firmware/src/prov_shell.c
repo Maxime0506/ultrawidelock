@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * DWM3001CDK provisioning console.
  *
  * This board cannot be commissioned into Apple Home on its own (no Matter image
@@ -51,7 +48,7 @@ static bool all_zero(const uint8_t *p, size_t len)
 }
 
 /* The three ways a syntactically valid blob is still useless, named rather than
- * left for the walk-up to discover. Same three tools/aliro_blob.py reports on a
+ * left for the walk-up to discover. Same three reports on a
  * flash dump, checked again here because a hex string can arrive by any route.
  * Returns a reason, or NULL when the blob will actually unlock. */
 static const char *dead_blob_reason(const struct aliro_reader_identity *id,

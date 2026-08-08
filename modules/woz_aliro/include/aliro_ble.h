@@ -4,13 +4,10 @@
 // payload without touching NimBLE), then register the GATT service returned by
 // aliro_ble_service_def with the host's combined service table.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_ble — Aliro BLE transport (NimBLE) for the ESP32-S3 port.
  * Advertises the Aliro GATT service, negotiates the BLE-UWB protocol version,
  * and carries the Aliro transaction over an L2CAP CoC. Independent
- * reimplementation; see SPEC.md for the wire protocol and provenance.
+ * reimplementation.
  */
 #pragma once
 #include <stddef.h>

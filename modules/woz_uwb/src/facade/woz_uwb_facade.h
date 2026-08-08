@@ -1,8 +1,6 @@
 // Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
 // engine is bound and unbound via internal ursk and stop calls.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * C shim bridging the add-on UWB impl to the Woz FiRa/CCC engine.
  */
 #pragma once

@@ -1,8 +1,4 @@
 // Device-side CCC Pre-POLL transmitter. See prepoll_tx.h for scope.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include "prepoll_tx.h"
 
 #include <errno.h>

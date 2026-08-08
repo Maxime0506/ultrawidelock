@@ -5,9 +5,6 @@
  * behaviour that varies with Kconfig on the targets this has to run on, and the
  * failure mode is a silently malformed line rather than a build error. Decimal
  * conversion here is 30 lines and cannot be configured away.
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "woz_report.h"

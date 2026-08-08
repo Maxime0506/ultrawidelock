@@ -1,7 +1,7 @@
 // Presence dongle commands (CONFIG_WOZ_PRESENCE): fresh, challenge-driven signed
 // statements from a new trusted Aliro authentication and later UWB range, turning
 // proximity of a provisioned iPhone into a factor any tool can check. See
-// tools/presence_verify.py and tools/presence_git.py for the other end.
+// and for the other end.
 //
 // These are console commands rather than a private binary channel, so the shell
 // stays available on the same board: provisioning (aliro-import) and presence both
@@ -12,10 +12,6 @@
 //   presence credential          -> PRESENCE-CRED <8 bytes hex>   (pinned human)
 //   presence prove <nonce-hex>   -> PRESENCE-P256 <115 bytes hex> (fresh proof)
 //   anything rejected            -> PRESENCE-ERR <reason>
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #pragma once
 
 #include <stdbool.h>

@@ -8,9 +8,6 @@
 // transport calls sits in ports/esp32, so a Zephyr bt_gap_*/bt_l2cap_* backend
 // can be written behind this same header.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Provenance: clean-room. Every byte layout here is the inverse of our own
  * reader's emitters in ports/esp32/components/aliro_ble/aliro_ble.c
  * (build_aliro_svc_data, build_read_payload).

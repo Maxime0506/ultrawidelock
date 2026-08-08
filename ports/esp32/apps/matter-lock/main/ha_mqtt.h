@@ -1,13 +1,9 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * ha_mqtt — native Home Assistant MQTT publishing for the ESP32 Matter lock.
  *
- * Publishes UWB distance and Aliro access verdicts on exactly the topics and
- * payloads the Python bridge agent uses (integration/homeassistant/src/
- * openaliro_ha/mqtt.py), so an existing Home Assistant install picks this board
- * up through MQTT Discovery with no host-side agent running:
+ * Publishes UWB distance and Aliro access verdicts on the topics and payloads
+ * Home Assistant's MQTT Discovery expects, so an existing install picks this
+ * board up with no host-side agent running:
  *
  *   homeassistant/sensor/<node>/distance/config   retained, QoS 1
  *   homeassistant/event/<node>/access/config      retained, QoS 1

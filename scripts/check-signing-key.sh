@@ -69,16 +69,14 @@ check_key() {
 	# pedantic one.
 	if [ -z "$path" ]; then
 		refuse "No MCUboot signing key is configured, so this build would fall back to MCUboot's PUBLIC demo key. Refusing to build." \
-			"Fix: make dfu-key" \
-			"See firmware/keys/README.md."
+			"Fix: make dfu-key"
 		return 1
 	fi
 
 	if printf '%s\n' "$DEMO_KEYS" | grep -qxF -- "$name"; then
 		refuse "That is MCUboot's published demo key, which is not a signing key. Refusing to build." \
 			"key: $path" \
-			"Fix: make dfu-key" \
-			"See firmware/keys/README.md."
+			"Fix: make dfu-key"
 		return 1
 	fi
 
@@ -90,7 +88,7 @@ check_key() {
 	*)
 		refuse "The signing key path must be ABSOLUTE. A relative one resolves inside the MCUboot repository and silently becomes the demo key. Refusing to build." \
 			"key: $path" \
-			"See firmware/keys/README.md."
+			"Fix: make dfu-key"
 		return 1
 		;;
 	esac
@@ -98,8 +96,7 @@ check_key() {
 	if [ ! -f "$path" ]; then
 		refuse "The configured MCUboot signing key does not exist. Refusing to build." \
 			"key: $path" \
-			"Fix: make dfu-key" \
-			"See firmware/keys/README.md."
+			"Fix: make dfu-key"
 		return 1
 	fi
 

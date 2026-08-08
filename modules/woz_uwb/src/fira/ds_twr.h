@@ -1,9 +1,6 @@
 /**
  * @file ds_twr.h — the double-sided two-way ranging estimator, one definition.
  *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Lives at the base CONFIG_WOZ_UWB tier rather than in the CCC MAC because two
  * unrelated callers need it: the Aliro responder, which ranges a phone, and the
  * anchor-to-anchor bench link, which ranges another board and has no CCC engine

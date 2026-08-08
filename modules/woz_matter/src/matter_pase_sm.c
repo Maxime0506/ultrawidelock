@@ -1,9 +1,6 @@
 /**
  * @file matter_pase_sm.c — PASE responder state machine. See matter_pase_sm.h.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include "matter_pase_sm.h"
 
 #include <string.h>

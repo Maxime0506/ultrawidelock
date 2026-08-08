@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * What the fake signer in test_matter_attest_stub.c recorded. See that file for
  * why it is a fake.
  */

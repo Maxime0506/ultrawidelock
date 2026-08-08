@@ -9,7 +9,7 @@
  *      listener and assert it re-derives the identical radio-action outputs AND
  *      the same 234 cm range. Divergence would mean the trace lost information
  *      or replay dispatch drifted from device dispatch. The dump→hex→parse path
- *      (the serial transport tools/flight_recorder.py consumes) is exercised too.
+ *      (the serial transport
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -383,7 +383,7 @@ static void test_record_replay(void)
 	T_EQ("record.range", rec_range, 234);
 
 	/* One-shot golden export: `FR_WRITE_SAMPLE=path ./build/host_test` writes
-	 * the finalised trace so tools/flight_recorder.py can be tested against a
+	 * the finalised trace so can be tested against a
 	 * real C-produced trace (cross-format check). No effect under `make test`. */
 	{
 		const char *sp = getenv("FR_WRITE_SAMPLE");
@@ -450,7 +450,7 @@ static int hexval(char ch)
 }
 
 /* Reconstruct the binary trace from the `[FREC]` hex lines a real capture logs,
- * exactly as tools/flight_recorder.py does, and confirm it parses to an END. */
+ * exactly as does, and confirm it parses to an END. */
 static void test_dump_transport(void)
 {
 	const uint8_t *ring = NULL;

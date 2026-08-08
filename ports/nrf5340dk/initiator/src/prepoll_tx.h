@@ -2,9 +2,6 @@
 // over BLE into the SP0 data frame that opens a ranging block, and puts it on
 // the air on the session's channel.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * The first piece of the UWB *initiator* role. The reader half already exists
  * and is the mirror of this: modules/woz_uwb/src/ccc/ccc_shim_rx.c decodes a
  * Pre-POLL in prepoll_decode(), which is the function this file is written to

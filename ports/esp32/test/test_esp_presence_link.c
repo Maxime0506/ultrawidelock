@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ESP32 presence console seam. The reader and UWB fakes make
  * the freshness checkpoints explicit; the real assertion codec and hash prove
  * that only a new trusted auth + range reaches the signing callback.

@@ -1,9 +1,6 @@
 // Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
 // seal/open framing shared by the reader and device sides of an Aliro session.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_crypto — the credential-auth cryptography for the Aliro reader: the
  * P-256 / AES-256-GCM / SHA-256 suite and the key-derivation schedule that
  * turns a passed credential authentication into the 32-byte URSK (the UWB

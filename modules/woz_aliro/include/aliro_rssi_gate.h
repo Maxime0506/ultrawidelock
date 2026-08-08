@@ -3,10 +3,6 @@
 // smoothing, open/close hysteresis with a close hold-off, optional rise-rate fast
 // open for fast approaches) so it host-tests without a radio; the reader feeds it
 // connection RSSI samples and defers Reader-Status-AP-Completed until it opens.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,8 +12,8 @@ extern "C" {
 #endif
 
 /* Tuning knobs. Kconfig supplies the build defaults (ALIRO_RSSI_GATE_CFG_DEFAULT).
- * The thresholds come from a measured curve on one rig (docs/power-profile.md);
- * they are per-room and per-handset, so re-run the calibration for a new one. */
+ * The thresholds come from a measured curve on one rig; they are per-room and
+ * per-handset, so re-run the calibration for a new one. */
 struct aliro_rssi_gate_cfg {
 	int16_t open_dbm;         /* smoothed RSSI at/above this -> open */
 	int16_t close_dbm;        /* smoothed RSSI at/below this (sustained) -> close */

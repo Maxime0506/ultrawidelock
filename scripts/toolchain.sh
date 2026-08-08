@@ -1,33 +1,24 @@
 #!/usr/bin/env bash
 #
-# toolchain.sh — what the CI gates need, whether this host has it, how to get it.
+# toolchain.sh — what the host suites need, whether this host has it, how to get it.
 #
-# `make verify` runs eighteen CI gates and skips loudly when a gate's tool is
-# absent. Skipping loudly is honest, but it leaves the reader to work out what
-# to install, from where, and at which version. That is this script: one
-# manifest, two modes.
+# The host suites skip loudly when a tool is absent. Skipping loudly is honest,
+# but it leaves the reader to work out what to install, from where, and at which
+# version. That is this script: one manifest, two modes.
 #
-#   scripts/toolchain.sh            report every tool, its gate, and its status
+#   scripts/toolchain.sh            report every tool, its suite, and its status
 #   scripts/toolchain.sh install    install the missing ones, after confirming
 #
 # Nothing is installed without being printed first and agreed to. `install`
 # shows the exact command list and waits for a y; -y answers it in advance for
 # unattended use.
 #
-# Versions matter for four of these. clang-format and clang-tidy change their
-# output between releases, so a host one version off the CI pin fails a gate
-# that CI passes (or worse, the reverse). Those rows carry the pin CI uses and
-# say so when the host disagrees.
+# Versions matter for some of these, whose output changes between releases.
+# Those rows carry a pin and say so when the host disagrees.
 #
-# Out of scope, same boundary as verify.sh: the firmware toolchains. NCS (~6.5
-# GB, `make bootstrap`) and ESP-IDF are per-target installs with their own
-# documented procedures — see docs/set-up.md. This covers the host gates only.
-#
-# Adding a gate to verify.sh without adding its tool here is caught: `check`
-# reads verify.sh's own gate_need + gate_need_py tables and fails on any name it
-# cannot explain, and fails again if either table stops parsing. What it does
-# NOT catch is a row here that no gate needs any more, and none of it runs in
-# CI — only when someone runs `make tools`.
+# Out of scope: the firmware toolchains. NCS (~6.5 GB, `make bootstrap`) and
+# ESP-IDF are per-target installs with their own procedures. This covers the
+# host suites only.
 #
 # Env:
 #   ASSUME_YES=1   same as `install -y`
@@ -50,7 +41,7 @@ for arg in "$@"; do
 	check | install) MODE="$arg" ;;
 	-y | --yes) ASSUME_YES=1 ;;
 	-h | --help)
-		sed -n '3,31p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
 		exit 0
 		;;
 	*)
@@ -60,7 +51,7 @@ for arg in "$@"; do
 	esac
 done
 
-# ---- glyphs + colour (same vocabulary as scripts/verify.sh) ----------------
+# ---- glyphs + colour --------------------------------------------------------
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
 	BOLD=$'\033[1m' DIM=$'\033[2m' CYAN=$'\033[36m' GRN=$'\033[32m'
 	RED=$'\033[31m' YEL=$'\033[33m' RESET=$'\033[0m'
@@ -113,14 +104,12 @@ pipx_or_pip() { # $1 = pip spec, e.g. clang-format==22.1.8
 
 # ---- manifest --------------------------------------------------------------
 # One row per tool. bash-3.2 case functions rather than associative arrays:
-# macOS ships bash 3.2, and verify.sh already sets this precedent.
+# macOS ships bash 3.2.
 #
-# Ordered as verify.sh's gate table is, then the two python imports that no gate
-# checks for but CI installs — see tool_gate("markdown") for why they are here.
+# Ordered as the host suites run, then the two python imports no suite checks
+# for — see tool_gate("markdown") for why they are here.
 TOOLS=(
-	cc python3 shellcheck actionlint clang-format clang-tidy
-	node doxygen dot llvm-cov zizmor reuse cbmc emcc markdown coverage bun
-	gitleaks semgrep osv-scanner pip-audit retire
+	cc python3 llvm-cov cbmc markdown coverage
 )
 
 # Bench tools, not gates. nrfutil installs the NCS toolchain, tio owns live
@@ -131,44 +120,22 @@ TOOLS=(
 # still need" is the question this script answers.
 #
 # It is kept in its own list because it must NEVER set the exit status. Someone
-# who only runs the host suites has every tool they need without it, and
-# `make tools && make verify` has to keep meaning what it says for them. The
+# who only runs the host suites has every tool they need without it. The
 # row is reported, and `install` offers it; nothing here fails without it.
 FW_TOOLS=(tio nrfutil probe-rs mcumgr)
 
-# Which gate stops working without it. This is the "why do I need this" column,
+# Which suite stops working without it. This is the "why do I need this" column,
 # and it is the reason a row exists at all.
 tool_gate() {
 	case "$1" in
 	cc) echo "test, test-san, fuzz" ;;
-	python3) echo "test-web, coverage, licenses" ;;
-	shellcheck) echo "shellcheck" ;;
-	actionlint) echo "actionlint" ;;
-	clang-format) echo "format" ;;
-	clang-tidy) echo "clang-tidy" ;;
-	node) echo "twin-wasm" ;;
-	doxygen) echo "docs" ;;
-	dot) echo "docs (graphviz)" ;;
+	python3) echo "test, coverage" ;;
 	llvm-cov) echo "coverage" ;;
-	zizmor) echo "zizmor" ;;
-	reuse) echo "licenses" ;;
 	cbmc) echo "cbmc" ;;
-	emcc) echo "twin-wasm rebuild" ;;
-	# No pin here even though release.yml pins one. That pin exists so the
-	# published executable is reproducible; package.json asks only for >=1.3.0,
-	# and nagging a contributor over a patch release would be noise.
-	bun) echo "test-tui, make openaliro" ;;
-	# No gate names these two, which is exactly the trap. CI installs both, and
-	# without them the suites that use them skip: test_flash_html stops checking
-	# regen drift, and coverage.sh reports no python rows. The gate goes green
-	# on a weaker measurement than CI made.
+	# No suite names these two, which is exactly the trap. Without them
+	# coverage.sh reports no python rows — a weaker measurement, still green.
 	markdown) echo "test, coverage (silently weaker)" ;;
 	coverage) echo "coverage (python rows)" ;;
-	gitleaks) echo "secrets" ;;
-	semgrep) echo "semgrep" ;;
-	osv-scanner) echo "deps" ;;
-	pip-audit) echo "deps (the python half)" ;;
-	retire) echo "web (retire check)" ;;
 	tio) echo "TUI live serial / make term" ;;
 	nrfutil) echo "make bootstrap / build / flash" ;;
 	probe-rs) echo "make cdk-rtt (CDK console)" ;;
@@ -176,81 +143,23 @@ tool_gate() {
 	esac
 }
 
-# The version CI pins, where it pins one. Empty = CI takes what the runner has,
-# so any version is fine here too.
-#
-# Read out of the workflow, never restated. A pin written down twice is a pin
-# that goes stale in one of the two places, and this file would be the copy
-# nobody remembers to bump — the bump lands in .github/workflows/ because that
-# is what CI reads. So this reads the same line CI does.
-WF=".github/workflows"
-# Every pin now lives in one place: the `env:` block at the top of ci.yml, which
-# is the workflow that installs them. Before the CI consolidation these were
-# scattered across seven workflow files and each tool needed its own sed for the
-# shape that file happened to use (inline `pip install x==`, an env var, a
-# release URL). One naming convention replaces all of that.
-#
-# The principle is unchanged and is the reason this reads a workflow at all: the
-# pin lives in .github/workflows/ because that is what CI reads, and this looks
-# at the same line rather than keeping a second copy that goes stale.
-CI_WF="$WF/ci.yml"
-
-# Read `<NAME>: <version>` out of that env block. Quotes are optional so a value
-# YAML would otherwise read as a number (markdown's "3.8") can be written as a
-# string without breaking the lookup.
-wf_pin() { # <ENV_VAR_NAME>
-	sed -n "s/^[[:space:]]*$1:[[:space:]]*[\"']\{0,1\}\([0-9][0-9.]*\).*/\1/p" \
-		"$CI_WF" | head -1
-}
-
-# Extract the pinned version string for a tool. Returns the version, or the empty
-# string when the tool is unrecognised or the lookup stopped matching.
+# The pinned host-tool versions. Empty = any version is fine.
 tool_pin() {
 	case "$1" in
-	clang-format) wf_pin CLANG_FORMAT_VERSION ;;
-	clang-tidy) wf_pin CLANG_TIDY_VERSION ;;
-	zizmor) wf_pin ZIZMOR_VERSION ;;
-	reuse) wf_pin REUSE_VERSION ;;
-	actionlint) wf_pin ACTIONLINT_VERSION ;;
-	emcc) wf_pin EMSDK_VERSION ;;
-	markdown) wf_pin MARKDOWN_VERSION ;;
-	gitleaks) wf_pin GITLEAKS_VERSION ;;
-	semgrep) wf_pin SEMGREP_VERSION ;;
-	osv-scanner) wf_pin OSV_VERSION ;;
-	pip-audit) wf_pin PIP_AUDIT_VERSION ;;
-	retire) wf_pin RETIRE_VERSION ;;
+	markdown) echo "3.8" ;;
 	*) echo "" ;;
 	esac
 }
 
-# The tools whose pin MUST resolve. If one of these comes back empty the
-# workflow was reworded and the lookup above stopped working — which would
-# otherwise degrade silently into "no pin, any version is fine".
-PINNED="clang-format clang-tidy zizmor reuse actionlint emcc markdown gitleaks semgrep osv-scanner pip-audit retire"
-
-# actionlint's Linux install is CI's own: a release tarball checked against a
-# sha256. Both come out of the workflow for the same reason the pins do. ci.yml
-# builds the URL from ACTIONLINT_VERSION rather than writing it out, so this
-# rebuilds it the same way instead of grepping for a literal.
-actionlint_url() {
-	local v
-	v="$(tool_pin actionlint)"
-	[ -n "$v" ] || return 0
-	printf 'https://github.com/rhysd/actionlint/releases/download/v%s/actionlint_%s_linux_amd64.tar.gz' "$v" "$v"
-}
-# The matching sha256, by name. Not `grep -oE '[0-9a-f]{64}'` any more: ci.yml
-# carries three 64-hex checksums (actionlint, gitleaks, osv-scanner) and a
-# first-match grep would silently return whichever sits highest in the file.
-actionlint_sha() {
-	sed -n 's/^[[:space:]]*ACTIONLINT_SHA256:[[:space:]]*\([0-9a-f]\{64\}\).*/\1/p' \
-		"$CI_WF" | head -1
-}
+# The tools whose pin MUST resolve. If one of these comes back empty the table
+# above lost a row, which would otherwise degrade silently into "no pin, any
+# version is fine".
+PINNED="markdown"
 
 # Present on this host? Echoes the version (or a bare "installed") and returns
-# 0; returns 1 when absent. Three rows are not a plain `command -v`:
+# 0; returns 1 when absent. Two rows are not a plain `command -v`:
 #   llvm-cov  macOS keeps it inside the Xcode SDK, reachable only via xcrun —
 #             which is how tests/host/coverage.sh calls it.
-#   emcc      twin-wasm.sh sources ~/emsdk/emsdk_env.sh when emcc is off PATH.
 #   markdown  a python import, not a binary.
 tool_probe() {
 	local v
@@ -272,28 +181,6 @@ tool_probe() {
 			return 1
 		fi
 		echo "$v"
-		;;
-	emcc)
-		if command -v emcc >/dev/null 2>&1; then
-			emcc --version 2>&1 | head -1
-		elif [ -f "$HOME/emsdk/emsdk_env.sh" ]; then
-			echo "emsdk present (\$HOME/emsdk)"
-		else
-			return 1
-		fi
-		;;
-	shellcheck)
-		# --version is a four-line banner; only the third line is the version.
-		command -v shellcheck >/dev/null 2>&1 || return 1
-		shellcheck --version 2>&1 | sed -n 's/^version: /ShellCheck /p'
-		;;
-	clang-tidy)
-		# Its first line is "LLVM (http://llvm.org/):"; the version is on the
-		# second. Taking head -1 here leaves nothing for the pin compare to
-		# read, which silently turns off the check on the one tool whose
-		# version most often disagrees with CI.
-		command -v clang-tidy >/dev/null 2>&1 || return 1
-		clang-tidy --version 2>&1 | sed -n 's/.*LLVM version /clang-tidy /p' | head -1
 		;;
 	mcumgr)
 		# A cobra CLI with no --version flag: it is a SUBCOMMAND. The generic
@@ -344,46 +231,6 @@ tool_install() {
 		*) echo "" ;;
 		esac
 		;;
-	shellcheck)
-		case "$PM" in
-		brew) echo "brew install shellcheck" ;;
-		apt) echo "${SUDO}apt-get install -y shellcheck" ;;
-		dnf) echo "${SUDO}dnf install -y ShellCheck" ;;
-		pacman) echo "${SUDO}pacman -S --needed shellcheck" ;;
-		zypper) echo "${SUDO}zypper install -y ShellCheck" ;;
-		*) echo "" ;;
-		esac
-		;;
-	node)
-		case "$PM" in
-		brew) echo "brew install node" ;;
-		apt) echo "${SUDO}apt-get install -y nodejs" ;;
-		dnf) echo "${SUDO}dnf install -y nodejs" ;;
-		pacman) echo "${SUDO}pacman -S --needed nodejs" ;;
-		zypper) echo "${SUDO}zypper install -y nodejs" ;;
-		*) echo "" ;;
-		esac
-		;;
-	doxygen)
-		case "$PM" in
-		brew) echo "brew install doxygen" ;;
-		apt) echo "${SUDO}apt-get install -y doxygen" ;;
-		dnf) echo "${SUDO}dnf install -y doxygen" ;;
-		pacman) echo "${SUDO}pacman -S --needed doxygen" ;;
-		zypper) echo "${SUDO}zypper install -y doxygen" ;;
-		*) echo "" ;;
-		esac
-		;;
-	dot)
-		case "$PM" in
-		brew) echo "brew install graphviz" ;;
-		apt) echo "${SUDO}apt-get install -y graphviz" ;;
-		dnf) echo "${SUDO}dnf install -y graphviz" ;;
-		pacman) echo "${SUDO}pacman -S --needed graphviz" ;;
-		zypper) echo "${SUDO}zypper install -y graphviz" ;;
-		*) echo "" ;;
-		esac
-		;;
 	llvm-cov)
 		# macOS reaches llvm-cov/llvm-profdata through xcrun, so the install is
 		# the Command Line Tools, not a package.
@@ -406,54 +253,6 @@ tool_install() {
 		*) echo "" ;; # no first-party package elsewhere; see tool_note
 		esac
 		;;
-	# Security scanners shipped as Go binaries. Homebrew has both; elsewhere the
-	# release download is left to the reader rather than emitted as a curl into a
-	# shell — security/semgrep-malicious.yml blocks that pattern in this tree, and
-	# a toolchain script that told you to pipe a download into bash would be the
-	# first thing the gate should catch.
-	gitleaks)
-		case "$PM" in
-		brew) echo "brew install gitleaks" ;;
-		apt | dnf | pacman | zypper) echo "" ;; # see tool_note
-		*) echo "" ;;
-		esac
-		;;
-	osv-scanner)
-		case "$PM" in
-		brew) echo "brew install osv-scanner" ;;
-		*) echo "" ;; # see tool_note
-		esac
-		;;
-	# Pinned python tools. Same spec on every OS, which is the point: this is
-	# the one route that reproduces the CI version exactly.
-	clang-format) pipx_or_pip "clang-format==$(tool_pin clang-format)" ;;
-	clang-tidy) pipx_or_pip "clang-tidy==$(tool_pin clang-tidy)" ;;
-	zizmor) pipx_or_pip "zizmor==$(tool_pin zizmor)" ;;
-	reuse) pipx_or_pip "reuse[charset-normalizer]==$(tool_pin reuse)" ;;
-	semgrep) pipx_or_pip "semgrep==$(tool_pin semgrep)" ;;
-	# npm-global, the same route ci.yml uses. No pipx equivalent: retire.js is a node
-	# package and its advisory repo is fetched at run time.
-	retire) echo "npm i -g --ignore-scripts 'retire@$(tool_pin retire)'" ;;
-	pip-audit) pipx_or_pip "pip-audit==$(tool_pin pip-audit)" ;;
-	actionlint)
-		# Homebrew has it; elsewhere CI's own route is a checksum-pinned release
-		# tarball. That checksum covers linux_amd64 only, so it is the only arch
-		# offered here — inventing one for another arch would defeat the check.
-		if [ "$PM" = brew ]; then
-			echo "brew install actionlint"
-		elif [ "$OS" = Linux ] && [ "$ARCH" = x86_64 ] && [ -n "$(actionlint_sha)" ]; then
-			printf 'mkdir -p "$HOME/.local/bin" && curl -fsSLo /tmp/actionlint.tgz %s && echo "%s  /tmp/actionlint.tgz" | sha256sum -c - && tar -xzf /tmp/actionlint.tgz -C "$HOME/.local/bin" actionlint' \
-				"$(actionlint_url)" "$(actionlint_sha)"
-		else
-			echo ""
-		fi
-		;;
-	emcc)
-		# Clone only when there is no emsdk yet: this command is also the repin
-		# route, and a clone into an existing directory just fails.
-		printf '{ [ -d "$HOME/emsdk" ] || git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"; } && "$HOME/emsdk/emsdk" install %s && "$HOME/emsdk/emsdk" activate %s' \
-			"$(tool_pin emcc)" "$(tool_pin emcc)"
-		;;
 	# Imported by the suites themselves, so these go into python3's own
 	# environment, not an isolated pipx venv: a pipx venv is invisible to
 	# `import markdown` in a test, which is the whole point of installing them.
@@ -468,16 +267,6 @@ tool_install() {
 	# nothing lands outside the checkout.
 	markdown | coverage)
 		echo "python3 -m venv .venv && .venv/bin/pip install --quiet --upgrade pip 'markdown==$(tool_pin markdown)' coverage"
-		;;
-	# Homebrew only, on purpose. Bun's own route is `curl https://bun.sh/install
-	# | bash`, and this file is not going to hand anyone a pipe-to-shell. Every
-	# other host gets the pointer, which is the same link `make openaliro`
-	# prints when it finds no bun.
-	bun)
-		case "$PM" in
-		brew) echo "brew install oven-sh/bun/bun" ;;
-		*) echo "" ;;
-		esac
 		;;
 	tio)
 		case "$PM" in
@@ -529,9 +318,6 @@ tool_install() {
 tool_note() {
 	case "$1" in
 	cbmc) echo "no package for this host — releases: https://github.com/diffblue/cbmc/releases" ;;
-	actionlint) echo "no checksum-pinned build for ${OS}/${ARCH} — releases: https://github.com/rhysd/actionlint/releases/tag/v$(tool_pin actionlint)" ;;
-	gitleaks) echo "no distro package — releases: https://github.com/gitleaks/gitleaks/releases/tag/v$(tool_pin gitleaks)" ;;
-	osv-scanner) echo "no distro package — releases: https://github.com/google/osv-scanner/releases/tag/v$(tool_pin osv-scanner)" ;;
 	nrfutil) echo "firmware only — https://www.nordicsemi.com/Products/Development-tools/nrf-util" ;;
 	probe-rs) echo "bench only — https://probe.rs/docs/getting-started/installation/" ;;
 	mcumgr) echo "bench only — needs a go toolchain: https://github.com/apache/mynewt-mcumgr-cli" ;;
@@ -580,22 +366,21 @@ if [ -r "$ROOT/scripts/verify.sh" ]; then
 	done
 fi
 
-# Second half of the same idea: a pin that no longer resolves. The lookup keys
-# off wording in the workflow ("pip install zizmor=="), so rewording the step
-# breaks it — and an empty pin reads as "CI pins nothing", which is a lie that
-# costs someone a red CI on a version they were never told about.
+# Second half of the same idea: a pin that no longer resolves. An empty pin
+# reads as "nothing is pinned", which is a lie that costs someone a failure on
+# a version they were never told about.
 stale_pins=""
 for t in $PINNED; do
 	[ -n "$(tool_pin "$t")" ] || stale_pins="${stale_pins:+$stale_pins }$t"
 done
 
 # ---- report ----------------------------------------------------------------
-printf '\n  %s%sopenaliro toolchain%s  %s%s  the host tools every CI gate needs%s\n\n' \
+printf '\n  %s%sopenaliro toolchain%s  %s%s  the host tools the suites need%s\n\n' \
 	"$BOLD" "$CYAN" "$RESET" "$DIM" "$DOT" "$RESET"
 printf '  %shost: %s %s  %s  package manager: %s%s\n\n' \
 	"$DIM" "$OS" "$ARCH" "$DOT" "${PM:-none detected}" "$RESET"
 
-printf '  %s%-14s %-33s %s%s\n' "$BOLD" "Tool" "Gate" "Status" "$RESET"
+printf '  %s%-14s %-33s %s%s\n' "$BOLD" "Tool" "Suite" "Status" "$RESET"
 printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
 
 NEEDED=()
@@ -610,7 +395,7 @@ for t in "${TOOLS[@]}"; do
 			# land here, so none of these is a harmless minor-version drift.
 			nold=$((nold + 1))
 			NEEDED+=("$t")
-			printf '  %s%s%s %-12s %s%-33s%s%s (CI pins %s)%s\n' \
+			printf '  %s%s%s %-12s %s%-33s%s%s (pinned %s)%s\n' \
 				"$YEL" "$TIL" "$RESET" "$t" "$DIM" "$(tool_gate "$t")" "$YEL" "$have" "$pin" "$RESET"
 		else
 			nok=$((nok + 1))
@@ -622,11 +407,11 @@ for t in "${TOOLS[@]}"; do
 		NEEDED+=("$t")
 		printf '  %s%s%s %-12s %s%-33s%sMISSING%s%s\n' \
 			"$RED" "$CRS" "$RESET" "$t" "$DIM" "$(tool_gate "$t")" "$RED" \
-			"${pin:+ (CI pins $pin)}" "$RESET"
+			"${pin:+ (pinned $pin)}" "$RESET"
 	fi
 done
 printf '  %s%s%s\n' "$DIM" "$HR" "$RESET"
-printf '  %s%d tools %s %d present %s %d missing %s %d off the CI pin%s\n\n' \
+printf '  %s%d tools %s %d present %s %d missing %s %d off the pin%s\n\n' \
 	"$DIM" "${#TOOLS[@]}" "$DOT" "$nok" "$DOT" "$nmiss" "$DOT" "$nold" "$RESET"
 
 # Bench rows, below the line and outside every count above. A missing one is a
@@ -647,9 +432,9 @@ done
 printf '\n'
 
 if [ "$nold" -gt 0 ]; then
-	printf '  %s%s A version off the CI pin can disagree with CI in either direction —%s\n' \
+	printf '  %s%s A version off the pin can behave differently in either direction.%s\n' \
 		"$YEL" "$TIL" "$RESET"
-	printf '  %s  clang-format and clang-tidy especially. Re-run with `install` to repin.%s\n\n' \
+	printf '  %s  Re-run with `install` to repin.%s\n\n' \
 		"$YEL" "$RESET"
 fi
 
@@ -668,9 +453,9 @@ if [ -n "$unparsed" ]; then
 fi
 
 if [ -n "$stale_pins" ]; then
-	printf '  %s%s the CI pin for %s no longer parses out of %s/%s\n' \
-		"$RED" "$CRS" "$stale_pins" "$WF" "$RESET"
-	printf '  %sFix the lookup in tool_pin() — an unresolved pin silently stops checking.%s\n\n' \
+	printf '  %s%s no pinned version for %s%s\n' \
+		"$RED" "$CRS" "$stale_pins" "$RESET"
+	printf '  %sAdd it to tool_pin() — an unresolved pin silently stops checking.%s\n\n' \
 		"$DIM" "$RESET"
 fi
 

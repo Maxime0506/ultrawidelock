@@ -20,10 +20,8 @@
  * and looks for a match. That is what makes an unsolicited Sigma1 unable to
  * enumerate a node's fabrics: get the key wrong and you learn nothing.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 8 of internal/cdk-matter-plan.md.
  *
  * Derivations transcribed from workspace/modules/lib/matter/src:
  * protocols/secure_channel/CASEDestinationId.cpp for the destination

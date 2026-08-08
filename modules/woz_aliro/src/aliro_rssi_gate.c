@@ -3,10 +3,6 @@
 // rise-rate fast open so a fast approach is not penalized by the smoothing lag.
 // Pure logic — no radio, clock, or logging dependencies — so the host suite can
 // drive it with synthetic approach traces.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <string.h>
 
 #include "aliro_rssi_gate.h"

@@ -11,10 +11,8 @@
  * attach can begin at the first of those rather than the last -- a Thread
  * attach costs seconds and the round trips in between are free.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 7 of internal/cdk-matter-plan.md.
  */
 #pragma once
 

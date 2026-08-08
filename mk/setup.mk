@@ -17,7 +17,7 @@ tools:
 ##   `-y` or ASSUME_YES=1 answers in advance. Also fetches nrfutil, which is
 ##   reported but never required: it belongs to the firmware builds, not to any
 ##   gate, so its absence never fails this target. The firmware toolchains
-##   themselves are separate: `make bootstrap` (NCS) and ESP-IDF, see docs/set-up.md.
+##   themselves are separate: `make bootstrap` (NCS) and ESP-IDF.
 tools-install:
 	@$(REPO_ROOT)/scripts/toolchain.sh install
 
@@ -64,7 +64,7 @@ ws-seed:
 ##   MCUboot in the world already trusts (scripts/check-signing-key.sh).
 ##   REFUSES TO OVERWRITE an existing key. Replacing it strands every board
 ##   already carrying the old public half, and on the CDK's single slot there is
-##   no previous image to fall back to. firmware/keys/README.md has the rotation.
+##   no previous image to fall back to.
 ##   Options: SIGN_KEY=<path> (absolute)
 dfu-key:
 	@if [ -f '$(SIGN_KEY)' ]; then \

@@ -1,6 +1,0 @@
-<!-- generated documentation — edit the source, not this file -->
-# `modules/woz_uwb/src/ccc/ccc_sts.h`
-
-@file ccc_sts.h — load a CCC ranging PPDU's STS key + IV into the DW3000 STS engine.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](ccc_sts.c.md)

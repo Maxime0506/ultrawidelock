@@ -2,10 +2,7 @@
  * @file woz_door.h — door swing angle from a frame-to-leaf distance, and the
  *       closed/ajar/open state machine over it.
  *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage B of internal/two-anchor-plan.md. One anchor on the door frame, one on
+ * One anchor on the door frame, one on
  * the leaf; the UWB distance between them is a function of the swing angle by
  * the law of cosines about the hinge:
  *

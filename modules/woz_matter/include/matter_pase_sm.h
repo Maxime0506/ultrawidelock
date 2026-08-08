@@ -20,10 +20,8 @@
  * so the host suite runs the real state machine against a recorded exchange
  * rather than against whatever entropy it happened to get.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 3 of internal/cdk-matter-plan.md.
  *
  * Cross-checked against two implementations, as with every layer below it:
  *   - CHIP, workspace/modules/lib/matter/src/protocols/secure_channel/

@@ -5,9 +5,6 @@
 // and no platform dependency, so it is host-KAT verifiable against the reader's
 // own builders/parsers (round-trip) and the recovered layouts.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_device_apdu — the initiator half of the credential-auth wire codec.
  * Compiled only by the device build + host tests; the reader firmware never
  * links it, so the reader image is unchanged.

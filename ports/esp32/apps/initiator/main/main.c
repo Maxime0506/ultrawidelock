@@ -8,9 +8,6 @@
 // derives. Credentials are the compiled-in bench pair below, which works only
 // against a reader running its dev identity with an empty trust store.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Aliro initiator (User-Device role) — Stage 1a: BLE transport + Access Protocol.
  *
  * The transport half (scan/connect/discover/READ/WRITE/CoC) lives in the

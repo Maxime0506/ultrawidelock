@@ -5,9 +5,6 @@
  * No sensor device, no trigger thread, no work queue. woz_slam.h records the
  * measured reason; the short version is that both of Zephyr's lis2dh trigger
  * modes cost more RAM than the CDK Matter image has to spare.
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "woz_slam_hw.h"

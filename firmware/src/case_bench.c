@@ -1,9 +1,7 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * Stage 0a: what a Matter CASE responder costs on this part.
  *
- * Every RAM figure in internal/cdk-matter-plan.md is an estimate except the
+ * Every RAM figure for this port is an estimate except the
  * ones under the reader, and the single number the plan turns on -- the peak of
  * the Matter thread -- cannot be measured by `kernel thread stacks`, because
  * that reads threads which already exist and this one does not yet. Written

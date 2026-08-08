@@ -46,7 +46,7 @@ HOSTD="$ROOT/tests/host"
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$SRC/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
@@ -182,7 +182,7 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
 	-I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$ROOT/deps/dw3000/platform" \
+	-I"$SRC/driver" -I"$ROOT/modules/woz_dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" \
 	-o "$OUT/host_test_seam"
 "$OUT/host_test_seam"
@@ -243,33 +243,3 @@ done
 	"$OUT/stk_aliro_hash.o" "$OUT/stk_aliro_prim_host.o" \
 	-o "$OUT/host_test_stack"
 "$OUT/host_test_stack"
-
-# Host-side tooling tests (pure-stdlib Python; no toolchain involved).
-# test_flash_html needs the python-markdown package and skips cleanly without.
-# Each suite is folded to one summary row matching the side binaries above;
-# the full unittest log is replayed on failure.
-py_suite() { # <name> <script> <note>
-	local out ran skipped note
-	if ! out="$("$PY" "$2" 2>&1)"; then
-		printf '%s\n' "$out"
-		printf '  %s: FAIL\n' "$1"
-		exit 1
-	fi
-	ran="$(printf '%s' "$out" | sed -n 's/^Ran \([0-9]*\) tests*.*/\1/p')"
-	skipped="$(printf '%s' "$out" | sed -n 's/.*skipped=\([0-9]*\).*/\1/p')"
-	skipped="${skipped:-0}"
-	note="$3"
-	[ "$skipped" -gt 0 ] && note="$note, $skipped skipped"
-	printf '  %s: PASS (%d checks — %s)\n' "$1" "$((ran - skipped))" "$note"
-}
-py_suite aliro-lab "$ROOT/tests/host/test_aliro_lab.py" "python, log-report tooling"
-py_suite power-profile "$ROOT/tests/host/test_power_profile.py" "python, power/calibration reduction"
-py_suite flight-recorder "$ROOT/tests/host/test_flight_recorder.py" "python, trace/replay tooling"
-py_suite gait "$ROOT/tests/host/test_aliro_gait.py" "python, gait feature probe"
-py_suite mqtt-bridge "$ROOT/tests/host/test_mqtt_bridge.py" "python, fake paho/serial"
-py_suite presence-verify "$ROOT/tests/host/test_presence_verify.py" "python, real P-256 via openssl"
-py_suite presence-git "$ROOT/tests/host/test_presence_git.py" "python, throwaway git repos"
-py_suite presence-service "$ROOT/tests/host/test_presence_service.py" "python, Unix socket + fake serial"
-py_suite presence-runtime "$ROOT/tests/host/test_presence_runtime.py" "python, deterministic transfer archive"
-py_suite piv-pin "$ROOT/tests/host/test_piv_pin.py" "python, PIN policy and status handling"
-py_suite flash-html "$ROOT/tests/host/test_flash_html.py" "python, needs markdown pkg"

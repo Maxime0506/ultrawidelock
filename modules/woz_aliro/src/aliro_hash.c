@@ -1,9 +1,6 @@
 // Self-contained SHA-256, HMAC-SHA256, HKDF, and ANSI-X9.63 KDF implementation for the ESP32-IDF
 // Aliro crypto port, with no external crypto library dependency.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Portable SHA-256 + HMAC/HKDF/X9.63-KDF. See aliro_hash.h.
  */
 #include "aliro_hash.h"

@@ -1,5 +1,4 @@
-# mk/anchor.mk — the two-anchor DS-TWR bench link (stage A of
-# internal/two-anchor-plan.md).
+# mk/anchor.mk — the two-anchor DS-TWR bench link.
 #
 # One application, two roles, two boards. Neither target touches the lock: this
 # is a separate app directory with its own build directories, so nothing here

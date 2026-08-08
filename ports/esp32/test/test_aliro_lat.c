@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the walk-up latency trace (aliro_lat): one-shot mark
  * semantics, begin() reset, phase bounds, and the compiled-out no-op contract
  * when CONFIG_ALIRO_LAT_TRACE is off. One test source, built both ways by

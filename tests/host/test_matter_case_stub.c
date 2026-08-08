@@ -7,9 +7,6 @@
  * reaches the salt. The signature itself is verified against the only judge
  * that matters, a real commissioner.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include "test_matter_case_stub.h"
 
 #include <string.h>

@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for firmware/src/matter_fab_settings.c — the FIRST host
  * coverage any file under firmware has had.
  *

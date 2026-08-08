@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_prov (Zephyr settings backend) — the DWM3001CDK twin of the ESP32
  * port's aliro_prov_nvs.c. The portable serialisation, dev fallback and trust
  * logic all live in aliro_prov.c (host-KAT'd); this file only moves that one

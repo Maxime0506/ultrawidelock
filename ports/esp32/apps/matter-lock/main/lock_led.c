@@ -2,10 +2,6 @@
 // status pixel.
 // Locked always extinguishes the indicator; unlocked shows blue during active UWB/Aliro engagement
 // and a different colour otherwise, per lock_led_color.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include "lock_led.h"
 
 struct lock_led_rgb lock_led_color(bool locked, bool aliro)

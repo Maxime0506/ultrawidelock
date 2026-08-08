@@ -15,9 +15,6 @@
  * day it was written, including its mistakes; decoding asserts the properties
  * that actually matter, and says which one broke.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <stdio.h>
 #include <string.h>
 

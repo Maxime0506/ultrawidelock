@@ -1,8 +1,5 @@
 /**
  * @file woz_satellite.c — freshness gate around a second anchor's report.
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "woz_satellite.h"

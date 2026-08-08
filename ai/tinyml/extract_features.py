@@ -12,7 +12,7 @@ Options (env vars):
     PORTABLE    1 = emit only features the DW3000/DW3110 can actually produce
 
 PORTABLE matters. This data set is DW1000, whose diagnostics include STDEV_NOISE and
-MAX_NOISE. The DW3000 `dwt_rxdiag_t` in deps/dw3000/dwt_uwb_driver/deca_device_api.h has
+MAX_NOISE. The DW3000 `dwt_rxdiag_t` in modules/woz_dw3000/dwt_uwb_driver/deca_device_api.h has
 no equivalent field, so stdev_noise, max_noise and the derived fp_snr cannot be computed
 on this project's hardware. Training with them would produce a model that cannot be fed
 on the target: the classic train/serve skew. PORTABLE=1 drops all three.

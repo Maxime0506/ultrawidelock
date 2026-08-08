@@ -1,8 +1,5 @@
 /**
  * @file woz_slam.c — impact and tamper classification (implementation).
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "woz_slam.h"

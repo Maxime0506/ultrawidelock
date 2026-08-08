@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * On-target entry for the Aliro device (initiator) EC self-test. Initialises the
  * PSA backend, runs the same suite as the host test (ports/esp32/test/
  * test_aliro_device.c) but against the real P-256 curve, prints the verdict, then

@@ -184,8 +184,8 @@ float woz_ml_los_fp_resid(float fp_pwr_db, uint16_t dist_cm);
  * WHY THIS ONLY EVER ADDS PERMISSION, which is the property that makes it safe to
  * apply to a lock. Obstruction inflates range and never shrinks it, so undoing it
  * cannot manufacture proximity the radio did not see. The check that defends
- * against a deliberate distance-reduction attack is STS quality, layer 2 in
- * docs/range-integrity.md, and nothing here touches it.
+ * against a deliberate distance-reduction attack is STS quality, and nothing
+ * here touches it.
  *
  * FEED IT A FILTERED RANGE, NOT ONE RECEPTION. The obstructed captures had
  * interquartile spreads of 38 and 47.5 cm against 7 and 11.5 for clear, so a

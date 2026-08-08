@@ -13,8 +13,10 @@
 # attributes their lines when an instrumented TU instantiates them, and the
 # rest fall through to the 0% table. Non-C surfaces (python, web pages, the
 # nRF add-on patches, shell tooling) are listed in a block of their own.
-# Excluded entirely: deps/ + workspace/ (fetched upstream) and */test/
-# harnesses.
+# Excluded entirely: the vendored trees (modules/woz_dw3000 = the Qorvo
+# decadriver, modules/woz_dfu/src/detools) plus workspace/ and */test/
+# harnesses. Coverage is a measure of OUR code, so third-party sources are not
+# in the denominator.
 #
 # CI (ci.yml, via the coverage gate) enforces the line floor on summary.json, which spans the
 # instrumented files only; the terminal table's closing "all our code" total
@@ -180,7 +182,7 @@ cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_C
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$SRC/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
@@ -252,13 +254,13 @@ cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
 	-DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
 	-I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
-	-I"$ROOT/deps/dw3000/platform" -I"$ROOT/deps/dw3000/dwt_uwb_driver" \
+	-I"$ROOT/modules/woz_dw3000/platform" -I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
 	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
-cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/driver" -I"$SRC/facade" \
+cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 -I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/driver" -I"$SRC/facade" \
 	"$ET/test_esp_seam_stubs.c" \
 	"$ECOMP/woz_uwb/port/woz_seam_stubs.c" -o "$OUT/cov_esp_seam"
 run_suite esp_seam "$OUT/cov_esp_seam"
@@ -338,7 +340,7 @@ run_suite nfc "$OUT/cov_nfc"
 # mapping for it; this one carries the inline bodies, which is why it has to
 # stay a translation unit of its own. Mirrors run.sh stage 7.
 cov_cc -I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$ROOT/deps/dw3000/platform" \
+	-I"$SRC/driver" -I"$ROOT/modules/woz_dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" -o "$OUT/cov_seam"
 run_suite seam "$OUT/cov_seam"
 
@@ -402,7 +404,8 @@ done
 HDR_SRCS=()
 while IFS= read -r h; do
 	HDR_SRCS+=("$ROOT/$h")
-done < <(cd "$ROOT" && find modules ports -name '*.h' ! -path '*/test/*' | LC_ALL=C sort)
+done < <(cd "$ROOT" && find modules ports -name '*.h' ! -path '*/test/*' \
+	! -path 'modules/woz_dw3000/*' ! -path 'modules/woz_dfu/src/detools/*' | LC_ALL=C sort)
 
 # Browsable HTML, restricted to the units under test.
 llvm_tool llvm-cov show "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
@@ -433,8 +436,10 @@ while IFS= read -r rel; do
 	printf '%s\t%s\n' "$rel" "$tag" >>"$UNBUILT_TSV"
 done < <(cd "$ROOT" && {
 	find modules ports \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
-		! -path '*/test/*' ! -path '*/managed_components/*'
+		! -path '*/test/*' ! -path '*/managed_components/*' \
+		! -path 'modules/woz_dw3000/*' ! -path 'modules/woz_dfu/src/detools/*'
 	find modules ports -name '*.h' ! -path '*/test/*' \
+		! -path 'modules/woz_dw3000/*' ! -path 'modules/woz_dfu/src/detools/*' \
 		-exec grep -l 'static inline' {} +
 } | LC_ALL=C sort)
 
@@ -444,83 +449,16 @@ SURFACES_TSV="$OUT/surfaces.tsv"
 surf() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$SURFACES_TSV"; }
 loc() { wc -l <"$ROOT/$1" | tr -d ' '; }
 
-# Python line coverage via coverage.py when installed (pip install coverage);
-# without it the rows stay honest: "lines unmeasured". The suites re-run here
-# under measurement — cheap, and their pass/fail already gated in run.sh.
-PYCOV_JSON="$OUT/pycov.json"
-rm -f "$OUT/pycov" "$PYCOV_JSON"
-if "$PY" -m coverage --version >/dev/null 2>&1; then
-	PY_INCLUDE="$ROOT/tools/aliro_lab.py"
-	PY_INCLUDE+=",$ROOT/tools/power_profile.py"
-	PY_INCLUDE+=",$ROOT/integration/homeassistant/aliro_mqtt_bridge.py"
-	PY_INCLUDE+=",$ROOT/scripts/flash_html.py"
-	PY_INCLUDE+=",$ROOT/integration/homeassistant/src/openaliro_ha/*.py"
-	for t in test_aliro_lab test_power_profile test_mqtt_bridge test_flash_html; do
-		COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage run -a \
-			--include="$PY_INCLUDE" \
-			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
-	done
-	# The agent suites gate themselves on HA=1 so productization work stays out
-	# of the default test path; measuring them still needs the variable set, or
-	# every case skips and the rows read 0%.
-	for t in test_ha_parser test_ha_config test_ha_mqtt test_ha_cli \
-		test_ha_compatibility test_ha_serial_session test_ha_serial_transport \
-		test_ha_agent test_ha_stage0; do
-		COVERAGE_FILE="$OUT/pycov" HA=1 "$PY" -m coverage run -a \
-			--include="$PY_INCLUDE" \
-			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
-	done
-	COVERAGE_FILE="$OUT/pycov" "$PY" -m coverage json -q -o "$PYCOV_JSON"
-fi
-
-pypct() { # <repo-relative .py> -> "NN.N" (empty when unmeasured)
-	[ -f "$PYCOV_JSON" ] || return 0
-	"$PY" - "$ROOT/$1" "$PYCOV_JSON" <<-'EOF'
-	import json, os, sys
-	target = os.path.realpath(sys.argv[1])
-	for name, info in json.load(open(sys.argv[2]))["files"].items():
-	    if os.path.realpath(name) == target:
-	        print("%.1f" % info["summary"]["percent_covered"])
-	EOF
-}
-
-pyrow() { # <repo-relative .py> <test file>: surf row with measured %
-	local pct status
-	pct="$(pypct "$1")"
-	status="tested by tests/host/$2"
-	if [ -n "$pct" ]; then
-		status+=" — ${pct}% lines"
-	else
-		status+=" — lines unmeasured (pip install coverage)"
-	fi
-	surf "$1" "$(loc "$1")" "$status"
-}
-
-pyrow "tools/aliro_lab.py" "test_aliro_lab.py"
-pyrow "tools/power_profile.py" "test_power_profile.py"
-pyrow "integration/homeassistant/aliro_mqtt_bridge.py" "test_mqtt_bridge.py"
-pyrow "scripts/flash_html.py" "test_flash_html.py"
-for agent_module in parser models config mqtt serial_transport serial_session \
-	compatibility agent cli; do
-	pyrow "integration/homeassistant/src/openaliro_ha/$agent_module.py" "test_ha_*.py"
-done
-surf "web-twin/index.html" "$(loc web-twin/index.html)" \
-	"constants drift-gated in CI; JS logic untested"
-surf "web-flasher/index.html" "$(loc web-flasher/index.html)" "no tests"
 npatch="$(find "$ROOT/ports/nrf5340dk/patches" -name '*.patch' | wc -l | tr -d ' ')"
 nadded="$(find "$ROOT/ports/nrf5340dk/patches" -name '*.patch' -exec cat {} + |
 	grep -c '^+[^+]')"
 surf "ports/nrf5340dk/patches/ ($npatch patches)" "$nadded" \
 	"our code inside the Nordic add-on — target-only"
-ndocs="$(find "$ROOT/tools" -name 'docs_*.py' | wc -l | tr -d ' ')"
-ndocsl="$(find "$ROOT/tools" -name 'docs_*.py' -exec cat {} + | wc -l | tr -d ' ')"
-surf "tools/docs_*.py ($ndocs files)" "$ndocsl" \
-	"docs pipeline — exercised by make docs, no unit tests"
 nsh="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' | wc -l | tr -d ' ')"
 nshl="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' -exec cat {} + |
 	wc -l | tr -d ' ')"
 surf "scripts/ + release/ shell ($nsh scripts)" "$nshl" \
-	"shellcheck-gated; tests/tooling covers ws-seed + patch drift"
+	"tests/tooling covers ws-seed + patch drift"
 
 "$PY" "$ROOT/tests/host/coverage_report.py" \
 	"$OUT/summary.json" "$OUT/html/index.html" "$UNBUILT_TSV" "$SURFACES_TSV"

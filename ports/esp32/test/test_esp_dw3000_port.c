@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ESP-IDF DW3000 backend (components/woz_uwb/port/
  * dw3000_hw.c + dw3000_spi.c) against the sdkfake GPIO/SPI recording doubles.
  * "Theatre" suite: no bus and no chip exist, so passing proves the transaction

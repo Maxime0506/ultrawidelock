@@ -3,9 +3,6 @@
 // Access Document verification of spec 7.4. Reference-completeness codec + verifier; the verdict is
 // logged and stored, never gates the unlock (the provisioned trust store remains the sole gate).
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_stepup — the Aliro §8.4 step-up phase: the ISO 18013-5 (mdoc) document
  * exchange the Reader MAY run in the standard phase to obtain an Access or
  * Revocation Document. Three concerns, split across two translation units so the

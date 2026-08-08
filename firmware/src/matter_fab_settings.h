@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * matter_fab_settings — the operational identity, across a reboot.
  *
  * woz_matter carries no storage seam on purpose (it is host-tested and has no

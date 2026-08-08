@@ -39,8 +39,8 @@ static bool same(const struct woz_range_report *a, const struct woz_range_report
 
 /*
  * Pin the CRC against the published check value rather than against our own
- * output. tools/anchor_c2.py reimplements this in Python, and the two only
- * interoperate for as long as they agree; anchoring both to the standard's
+ * output. Any decoder on the other end only interoperates for as long as the
+ * two agree; anchoring both to the standard's
  * "123456789" -> 0x29B1 is what makes that agreement checkable instead of
  * assumed. If this fails, every C2 line is being dropped as corrupt.
  */

@@ -9,9 +9,6 @@
  * The signature itself is verified against OpenSSL in
  * tests/host/test_matter_attest.py, which is the only place it can be.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <string.h>
 
 #include "matter_attest.h"

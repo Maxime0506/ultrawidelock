@@ -10,10 +10,8 @@
  *   aad    the message header exactly as it appears on the wire
  *   keys   HKDF-SHA256(secret, salt, "SessionKeys") -> i2r | r2i | challenge
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 1, subtask 2 (second half) of internal/cdk-matter-plan.md. The replay
+/*
+ * The replay
  * window that subtask also lists lives in matter_mrp.c, with the duplicate
  * suppression it belongs to.
  *

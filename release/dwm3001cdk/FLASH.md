@@ -12,7 +12,7 @@ is nothing to wire and nothing to solder.
 | `flash.sh` | writes it to the board over the on-board debugger |
 | `VERSION.txt` | build details, **and your setup code** |
 | `README.txt` | the short version of this guide, in plain text |
-| `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
+| `FLASH.md` | this guide |
 | `SHA256SUMS.txt` | checksums for every file above |
 
 ## What you need

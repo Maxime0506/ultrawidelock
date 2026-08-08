@@ -2,9 +2,6 @@
 // answers them, walking AP-Completed -> Initiate-Ranging-Session -> M1 -> M2 ->
 // M3 -> M4 until the reader starts its responder.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * See ranging.h for scope. Summary: this ends at the end of ranging setup.
  */
 #include "ranging.h"

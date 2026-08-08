@@ -1,4 +1,4 @@
-# Anchor-to-anchor DS-TWR bench app. See internal/two-anchor-plan.md, stage A.
+# Anchor-to-anchor DS-TWR bench app.
 
 mainmenu "openaliro anchor"
 
@@ -95,8 +95,6 @@ config ANCHOR_ANT_DLY_DTU
 	  correction applied to the one-way time-of-flight instead, and there is
 	  no reason for the two to be the same number. Trust a calibration against
 	  a tape measure over any figure quoted here, including this one.
-
-	  Calibration procedure is in internal/two-anchor-plan.md (stage A).
 
 config ANCHOR_MEDIAN_N
 	int "Median window for the published range (samples, must be odd)"

@@ -1,9 +1,7 @@
 /**
  * @file matter_msg.c — Matter message and protocol header codec.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * Both decoders compute the full header length BEFORE reading any optional
  * field, so a truncated datagram is refused by one comparison rather than
  * discovered halfway through a parse. That ordering is the whole safety story

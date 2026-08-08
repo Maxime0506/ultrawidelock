@@ -3,9 +3,6 @@
 // field walk. No crypto and no allocation; every parsed field is a slice of the caller's buffer.
 // This is the wire-facing attack surface and is fuzzed on its own (tests/host/fuzz/fuzz_stepup.c).
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Provenance: original. CBOR per RFC 8949 (definite lengths only, indefinite
  * rejected); the Aliro remapped-key layout from the v1.0 spec (§7.2 Table 7-1/
  * 7-2, §8.4.2 Table 8-22) and the §14.6 worked example. The code is original.

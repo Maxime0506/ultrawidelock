@@ -5,9 +5,6 @@
  * diagnostics.
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_lat — walk-up latency trace. One timestamp per phase boundary of the
  * BLE connect -> credential auth -> UWB ranging -> bolt pipeline, stamped at
  * first occurrence and printed as a single consolidated budget line so a bench

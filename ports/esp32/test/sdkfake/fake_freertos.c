@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fake_freertos — synchronous recording doubles for the few FreeRTOS calls the
  * ESP32 port sources make. Tasks are recorded, never scheduled; a test pumps a
  * recorded task function itself and uses the take/receive hooks to break out of

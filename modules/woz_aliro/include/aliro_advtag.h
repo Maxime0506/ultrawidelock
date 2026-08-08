@@ -1,9 +1,6 @@
 // Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1): the 7-byte
 // GroupResolvingKey-resolvable tag the phone recomputes to identify a reader of interest.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_advtag — pure Dynamic Tag derivation, platform-free so the host suite
  * can pin it against the spec's section 20 worked examples. The BLE transport
  * (aliro_ble.c) calls this with the live expiry on every (re)advertise.

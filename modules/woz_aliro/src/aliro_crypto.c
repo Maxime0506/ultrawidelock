@@ -4,9 +4,6 @@
 // session keys / URSK / BLE ranging keys), per-direction AES-256-GCM secure channels with monotonic
 // message counters, and the seal/open framing used to carry engine plaintext over the wire.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_crypto — credential-auth key schedule. See aliro_crypto.h.
  *
  * The KDF chain (ECDH/Kpersistent -> 160-byte block -> URSK + secure-channel

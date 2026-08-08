@@ -37,12 +37,6 @@ IDF_EXPORT      ?= $(HOME)/esp/esp-idf/export.sh
 ESP_MATTER_PATH ?= $(HOME)/esp/esp-matter
 # make esp-flash FORCE=1 stops whatever holds the UART (a monitor/tio) first.
 FORCE ?=
-# presence-clone / presence-enroll arguments.
-SRC  ?=
-NAME ?=
-
-PRESENCE := $(REPO_ROOT)/tools/presence_git.py
-
 # Only matter-lock needs esp-matter; sourcing it for the others would demand an
 # install they do not use. Both exports are noisy on success, so their output is
 # dropped; failures still show because the idf.py call after them fails loudly.
@@ -144,9 +138,7 @@ else
 ESP_CHECK_MATTER :=
 endif
 
-# Publishing. Every chip the browser flasher's manifest lists, because the two
-# have to agree: a manifest offering a chip the release does not carry is a
-# download that 404s inside somebody's browser.
+# Publishing.
 ESP_RELEASE_CHIPS ?= esp32s3 esp32c5 esp32c6
 ESP_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-esp32-matter-lock
 ESP_RELEASE_OUT   := $(abspath $(ESP_RELEASE_OUT))
@@ -164,8 +156,7 @@ export ESP_RELEASE_VER
         esp-merge-bin esp-release \
         esp-menuconfig esp-size esp-flash esp-app-flash esp-flash-erase \
         esp-monitor esp-go esp-run esp-term esp-lab esp-ports esp-clean esp-env \
-        esp-presence-on esp-presence-off esp-presence-flash esp-presence-clone \
-        esp-presence-probe esp-presence-enroll esp-presence-sign esp-help
+        esp-presence-on esp-presence-off esp-presence-flash esp-help
 
 esp-check-env:
 	$(ESP_CHECK_ENV)
@@ -242,8 +233,8 @@ esp-size: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) size
 
 ## esp-merge-bin: fuse bootloader + partition table + app into one 0x0 image
-##   What the release and the browser flasher both ship, so a user writes one
-##   file at one offset instead of three at three.
+##   What the release ships, so a user writes one file at one offset instead of
+##   three at three.
 esp-merge-bin: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) merge-bin -o openaliro-$(APP)-$(TARGET).bin
 	@printf '  merged  ·  %s/openaliro-%s-%s.bin\n' '$(ESP_BUILD)' '$(APP)' '$(TARGET)'
@@ -260,28 +251,19 @@ esp-release:
 	  $(MAKE) --no-print-directory esp-merge-bin APP=matter-lock TARGET="$$t" || exit 1; \
 	done
 	@mkdir -p '$(ESP_RELEASE_STAGE)'
-	@# The browser flasher reads the version out of the manifest. Edited as JSON
-	@# rather than by sed: a tag is not pattern-safe text, and in a sed
-	@# replacement an & means the whole match, so a tag containing one would
-	@# quietly corrupt the file the flasher trusts.
-	@python3 -c 'import json,os,sys; m=json.load(open(sys.argv[1])); m["version"]=os.environ["ESP_RELEASE_VER"]; json.dump(m,open(sys.argv[2],"w"),indent=2)' \
-	  $(REPO_ROOT)/web-flasher/manifest.json '$(ESP_RELEASE_STAGE)/manifest.json'
 	@# The setup code is the same on every board flashed from this release: the
 	@# app builds with CHIP's test parameters and no factory-data provider, so
-	@# the passcode is a constant. Derived from web-flasher/check_codes.py rather
-	@# than written out here, because that file is gated against upstream drift
-	@# and a second copy of the number would not be.
+	@# the passcode is a constant.
 	@bins=; for t in $(ESP_RELEASE_CHIPS); do \
 	    bins="$$bins $(ALIRO_BUILD_ROOT)/esp32-matter-lock-$$t/openaliro-matter-lock-$$t.bin"; \
 	  done; \
-	  code=$$(cd $(REPO_ROOT)/web-flasher && python3 -c 'import check_codes; print(check_codes.manual_code())' 2>/dev/null); \
 	  $(REPO_ROOT)/scripts/release-bundle.sh \
 	    --target esp32-matter-lock --out '$(ESP_RELEASE_OUT)' \
 	    --version "$$ESP_RELEASE_VER" \
 	    --board 'ESP32-S3, ESP32-C5 or ESP32-C6 + DWM3000EVB' \
-	    $${code:+--setup-code "$$code"} \
+	    --setup-code '3497-011-2332' \
 	    --commission-note 'Type this into Apple Home. The same code, and a QR to scan instead, print on the serial console at 115200 baud.' \
-	    $$bins '$(ESP_RELEASE_STAGE)/manifest.json'
+	    $$bins
 
 ## esp-env: sanity-check the toolchain — prints idf.py's version and the paths
 esp-env: esp-check-env
@@ -341,42 +323,6 @@ esp-presence-off:
 esp-presence-flash: esp-presence-on
 	@$(MAKE) --no-print-directory esp-flash
 
-## esp-presence-clone: copy a provisioned reader identity onto the dongle  ·  SRC=/dev/cu...
-##   The phone's Wallet credential was issued against ONE reader identity, so the
-##   dongle has to present that same identity rather than be enrolled separately.
-##   SRC is the provisioned board (it needs aliro-export, i.e. its own presence-on).
-esp-presence-clone:
-	@[ -n "$(SRC)" ] || { echo "  set SRC=  ·  the provisioned board's port (see: make esp-ports)" >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	[ "$$port" != "$(SRC)" ] || { echo "  SRC and the dongle resolved to the same port ($$port)" >&2; \
-	  echo "  pass PORT= as well to say which is the dongle" >&2; exit 1; }; \
-	echo "  cloning $(SRC) -> $$port"; \
-	cd $(REPO_ROOT) && python3 $(PRESENCE) clone --source "$(SRC)" --port "$$port"
-
-## esp-presence-probe: bring-up check  ·  does the board sign a frame we accept?
-##   Starts a fresh Aliro authentication + UWB round and succeeds only when the
-##   pinned credential proves present inside the configured distance.
-esp-presence-probe:
-	@$(RESOLVE_PORT); \
-	echo "  probing $$port"; \
-	python3 $(PRESENCE) probe --port "$$port" --max-cm $(MAXCM)
-
-## esp-presence-enroll: record this board's public key as trusted  ·  NAME=desk-lock
-##   Appends to .presence/enrolled at the repo root, which is committed so the
-##   trust set is reviewable in history.
-esp-presence-enroll:
-	@[ -n "$(NAME)" ] || { echo "  set NAME=  ·  e.g. make esp-presence-enroll NAME=desk-lock" >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	cd $(REPO_ROOT) && python3 $(PRESENCE) enroll --port "$$port" --name "$(NAME)"
-
-## esp-presence-sign: create a presence-signed annotated tag  ·  TAG=presence/1.2.0
-##   Wake the phone and hold it near the board first; this refuses to tag
-##   unless presence actually verifies.
-esp-presence-sign:
-	@[ -n "$(TAG)" ] || { echo "  set TAG=  ·  e.g. make esp-presence-sign TAG=presence/1.2.0" >&2; exit 1; }
-	@$(RESOLVE_PORT); \
-	cd $(REPO_ROOT) && python3 $(PRESENCE) sign --tag "$(TAG)" --port "$$port" --max-cm $(MAXCM)
-
 # ---- matter-lock only --------------------------------------------------------
 # Recovery build with normal PIV PIN enforcement, and the walk-up profiler.
 # Both are reached through VARIANT=piv / the lab target rather than a second
@@ -391,19 +337,17 @@ esp-piv-pin-build:
 esp-piv-pin-app-flash:
 	@$(MAKE) --no-print-directory esp-app-flash APP=matter-lock VARIANT=piv
 
-## esp-lab: capture a walk-up to a timestamped log, then auto-score it
+## esp-lab: capture a walk-up to a timestamped log
 ##   The trace ships in every build, OFF at boot. At the matter> console:
-##   `lab on`, walk up + unlock, `lab off`, then ctrl-t q.
+##   `lab on`, walk up + unlock, `lab off`, then ctrl-t q. The log holds the
+##   [ALAB] lines for whatever you score it with.
 esp-lab:
 	@command -v tio >/dev/null 2>&1 || { printf '  tio not found · install: brew install tio\n' >&2; exit 1; }
-	@command -v python3 >/dev/null 2>&1 || { printf '  python3 not found\n' >&2; exit 1; }
 	@$(RESOLVE_PORT); \
 	log="walkup-$$(date +%Y%m%d-%H%M%S).log"; \
 	printf '  %s @ %s · at the console: `lab on`, walk up, `lab off`, then ctrl-t q\n' "$$port" '$(BAUD)'; \
 	tio -b $(BAUD) -L --log-file "$$log" "$$port" || true; \
-	printf '\n  scoring %s\n' "$$log"; \
-	python3 $(REPO_ROOT)/tools/aliro_lab.py "$$log" "$$log.html" || true; \
-	{ command -v open >/dev/null 2>&1 && [ -f "$$log.html" ] && open "$$log.html"; } || true
+	printf '\n  captured %s\n' "$$log"
 
 # Help shown by the app-directory forwarders, so `cd apps/reader && make` still
 # prints something useful. Lists this file's ESP rows only.

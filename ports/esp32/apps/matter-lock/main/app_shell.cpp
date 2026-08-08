@@ -1,8 +1,5 @@
 // ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * app_shell — see app_shell.h.
  */
 #include <cstring>
@@ -435,7 +432,7 @@ static int cmd_log(int argc, char **argv)
 #ifdef CONFIG_WOZ_ALIRO_LAB
 /* Aliro Lab transaction trace: OFF at boot (the [ALAB] lines are blocking UART
  * writes on the protocol path, so they cost walk-up latency while on). `lab on`
- * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log.
+ * before a walk-up, `lab off` after;
  * `lab cir on|off` additionally arms the windowed-CIR tap dump (channel-impulse
  * Stage 1): the taps buffer to RAM while armed and print in a burst on `lab cir
  * off`, off the ranging path, so the walk-up still unlocks while capturing. */
@@ -481,7 +478,7 @@ static int cmd_lab(int argc, char **argv)
 /* Flight recorder: record a live walk-up into a RAM ring for host replay. OFF at
  * boot (it reads extra DW3000 registers while armed, costing walk-up latency).
  * `fr on` before a walk-up, `fr off` after, `fr dump` to emit the `[FREC]` hex
- * that tools/flight_recorder.py turns into a .frc trace + fuzz corpus. */
+ * thatfrc trace + fuzz corpus. */
 static int cmd_frec(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {

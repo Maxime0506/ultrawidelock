@@ -2,9 +2,6 @@
 // identity and trust store built by aliro_prov.c.
 // Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_prov (NVS backend) — target-only load/store of the provisioning blob.
  * The portable serialisation + dev fallback + trust logic is in aliro_prov.c
  * (host-KAT'd); this file only moves that blob in and out of NVS. Not compiled

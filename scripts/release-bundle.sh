@@ -15,8 +15,8 @@
 #   --setup-code <code>      Matter setup code, when the build knows it
 #   --commission-note <text> the line printed under it, or instead of it
 #
-# Writes the firmware given as positional arguments, plus flash.sh, FLASH.md,
-# FLASH.html and README.txt from release/<slug>/, plus a generated VERSION.txt
+# Writes the firmware given as positional arguments, plus flash.sh, FLASH.md
+# and README.txt from release/<slug>/, plus a generated VERSION.txt
 # and SHA256SUMS.txt. Every bundle gets all of them: this is the one place that
 # decides what a release zip contains, so the three targets cannot drift.
 #
@@ -61,7 +61,7 @@ fi
 SRC="$ROOT/release/$TARGET"
 [ -d "$SRC" ] || die "no such target: $TARGET" "expected $SRC"
 
-for f in FLASH.md FLASH.html flash.sh README.txt; do
+for f in FLASH.md flash.sh README.txt; do
 	[ -f "$SRC/$f" ] || die "release/$TARGET/$f is missing" \
 		"every target ships the same file set; add it rather than skipping it"
 done
@@ -91,7 +91,7 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 for f in "$@"; do cp "$f" "$OUT/"; done
-cp "$SRC/FLASH.md" "$SRC/FLASH.html" "$SRC/flash.sh" "$OUT/"
+cp "$SRC/FLASH.md" "$SRC/flash.sh" "$OUT/"
 chmod +x "$OUT/flash.sh"
 
 # ---- VERSION.txt -------------------------------------------------------------

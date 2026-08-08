@@ -8,8 +8,8 @@ and the lock opens as you walk up or on a tap.
 START HERE
 ──────────────────────────────────────────────────────────────────────────────
 
-  Open FLASH.html in a web browser. That is the full guide, laid out and much
-  easier to follow than this file. FLASH.md is the same text in Markdown.
+  Open FLASH.md in any text editor or on GitHub. That is the full guide, much
+  easier to follow than this file.
 
   Read it before you flash: this target needs three boards wired together, and
   the DWM3000EVB's power-select jumper has to be right before anything works.
@@ -21,7 +21,7 @@ THE SHORT VERSION
   1.  Install the SEGGER J-Link software, then nRF Util, then run:
         nrfutil install device
   2.  Seat the DWM3000EVB on the DK's Arduino header, and wire the
-      X-NUCLEO-NFC12A1 per the table in FLASH.html.
+      X-NUCLEO-NFC12A1 per the table in FLASH.md.
   3.  Plug in the USB cable and run:  bash flash.sh
   4.  Scan SETUP-QR.png with the Home app, straight from this folder. The
       same QR code and setup code are also printed on the DK's serial console
@@ -38,8 +38,7 @@ WHAT IS IN HERE
   merged_CPUNET.hex    network core: the radio controller
   flash.sh             flashes both cores over the DK's on-board J-Link
   SETUP-QR.png         the commissioning QR code, scannable from here
-  FLASH.html           the full guide, styled for a browser     <-- start here
-  FLASH.md             the same guide, in Markdown
+  FLASH.md             the full guide                           <-- start here
   README.txt           this file
   VERSION.txt          what this build is
   SHA256SUMS.txt       checksums for every file above

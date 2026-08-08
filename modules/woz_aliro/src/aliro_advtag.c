@@ -1,9 +1,6 @@
 // Aliro BLE advertisement Dynamic Tag derivation (Aliro 1.0 section 11.3.1), shared by the
 // BLE transport (live advertising) and the host KAT suite (spec section 20 worked examples).
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * plaintextData = Pad_Bytes(6 x 00) || AdvA || Dynamic Tag Expiry Timestamp,
  * all MSB-first; the tag is the 7 most significant bytes of
  * AES-128-ECB(GRK, plaintextData). KAT'd in ports/esp32/test against the three

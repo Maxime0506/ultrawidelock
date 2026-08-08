@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_prim — the AEAD + elliptic-curve + RNG primitive interface used by the
  * Aliro credential-auth composition (aliro_crypto.c). Two backends implement it:
  *   - aliro_prim_psa.c   on the ESP32 target (mbedTLS-PSA)

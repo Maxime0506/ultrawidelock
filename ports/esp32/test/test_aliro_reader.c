@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the Aliro reader engine (aliro_reader.c): the AUTH0 -> AUTH1 ->
  * EXCHANGE -> AP-Completed transaction, driven end-to-end by a scripted phone.
  *

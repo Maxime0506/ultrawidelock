@@ -1,9 +1,7 @@
 /**
  * @file matter_status.h — return codes shared by every woz_matter layer.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * One code space for the whole node, so a value returned by the TLV codec and
  * one returned by the message layer never mean different things. MATTER_END is
  * positive on purpose: running out of elements is an outcome, not a failure,

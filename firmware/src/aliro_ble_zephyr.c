@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_ble — Zephyr/NCS backend for the Aliro BLE transport seam
  * (modules/woz_aliro/include/aliro_ble.h), for the DWM3001CDK standalone
  * reader. The byte contract is the one the ESP32-S3 NimBLE backend already

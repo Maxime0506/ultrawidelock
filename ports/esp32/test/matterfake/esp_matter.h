@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * matterfake esp_matter.h — the slice of the esp-matter data-model API the
  * matter-lock app uses, as recording doubles (matterfake.cc). See matterfake.h.
  */

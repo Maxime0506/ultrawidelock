@@ -1,9 +1,7 @@
 /**
  * @file matter_mrp.c — MRP backoff schedule, retransmit state, replay window.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * Two things here are easy to get subtly wrong and are therefore spelled out.
  *
  * TIME IS MODULAR. Deadlines are absolute uint32 milliseconds and the clock

@@ -1,8 +1,7 @@
 # Hand-written minimal Matter node. Distinct from the Nordic/CHIP Matter stack
 # used by ports/nrf5340dk and from esp-matter in ports/esp32: this is the
-# from-scratch implementation that internal/cdk-matter-plan.md justifies, and it
-# exists because neither of those fits a 516 KB / 128 KB part alongside the
-# reader.
+# from-scratch implementation, and it exists because neither of those fits a
+# 516 KB / 128 KB part alongside the reader.
 
 config WOZ_MATTER
 	bool "Hand-written minimal Matter node"

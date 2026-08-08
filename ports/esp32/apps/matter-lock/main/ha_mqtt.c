@@ -1,9 +1,5 @@
 // Native Home Assistant MQTT publisher for the ESP32 Matter lock — see ha_mqtt.h
-// for the wire contract this holds with integration/homeassistant.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
+// for the wire contract it holds with the broker.
 #include <sdkconfig.h> // CONFIG_ENABLE_HA_MQTT — nothing else here pulls it in
 
 #include "ha_mqtt.h"
@@ -51,9 +47,7 @@ static const char *TAG = "ha_mqtt";
 #define HA_MQTT_MODEL CONFIG_IDF_TARGET " Aliro lock"
 #endif
 
-/* Distance rate limit, mirroring _DistanceThrottle in the agent
- * (integration/homeassistant/src/openaliro_ha/agent.py: DISTANCE_MIN_INTERVAL_S,
- * DISTANCE_SIGNIFICANT_CHANGE_MM). The approach controller conditions one sample
+/* Distance rate limit. The approach controller conditions one sample
  * per ranging block, roughly every 192 ms — about 5 Hz for as long as a phone is
  * in range, which is far more than Home Assistant records and enough to make a
  * walk-up a visible burst on a shared broker. Publish at most once a second, but
@@ -227,7 +221,7 @@ static void build_topics(void)
 /* ---- discovery ---------------------------------------------------------- */
 
 /* Both payloads are field-for-field the ones discovery_payloads() emits in
- * integration/homeassistant/src/openaliro_ha/mqtt.py, in the same key order, so
+ *, in the same key order, so
  * a Home Assistant install already carrying the agent's device sees no change
  * beyond the model. The node name is validated above, so no field needs JSON
  * escaping. */

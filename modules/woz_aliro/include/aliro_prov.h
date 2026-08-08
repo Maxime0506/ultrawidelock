@@ -4,9 +4,6 @@
 // aliro_trust_store, the set of trusted credential public keys against which a presented
 // credential is authenticated.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_prov — the reader provisioning seam (Phase 3.4): the reader's own
  * identity (a stable reader identifier + P-256 signing key) and the trust store
  * of credential public keys it authenticates presented credentials against.

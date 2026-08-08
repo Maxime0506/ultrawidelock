@@ -4,9 +4,7 @@
  * Control byte = tag control (top 3 bits) | element type (bottom 5). Then the
  * tag octets, then the value. Everything multi-octet is little-endian.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * Two decisions worth stating, because both are about the 528 B of headroom the
  * thread analyzer measured on this part's system work queue:
  *

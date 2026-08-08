@@ -91,7 +91,7 @@ static uint32_t g_n;
  * snapshot and emitted as `rdcyc`; see uwb_cirdiag_capture() for why it is measured. */
 static uint32_t g_rd_cyc;
 
-/** @brief Free-running DWT cycle counter (deps/dw3000/platform/dw3000_hw.c:49). Declared
+/** @brief Free-running DWT cycle counter (modules/woz_dw3000/platform/dw3000_hw.c:49). Declared
  * here rather than pulled in through a header for the same reason CIRDIAG_SYS_CFG is
  * open-coded above: this unit stays freestanding. */
 uint32_t dw3000_dwt_cyccnt(void);

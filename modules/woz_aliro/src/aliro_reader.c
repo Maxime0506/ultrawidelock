@@ -5,9 +5,6 @@
 // standalone and Matter-attached BLE transports, plus provisioning and diagnostic APIs used by
 // Matter commissioning and the bench console.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_reader — the Aliro reader credential-auth transaction (Phase 3.2/3.3) on
  * top of the aliro_ble L2CAP transport. Drives AUTH0 -> AUTH1 -> EXCHANGE, runs
  * the ECDH + key schedule (aliro_crypto) to derive the URSK, then hands the URSK

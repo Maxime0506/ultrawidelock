@@ -20,8 +20,8 @@ config WOZ_ALIRO_LAB
 	depends on ALIRO_LAT_TRACE
 	help
 	  Compile in the structured "[ALAB] t=<us> ev=..." trace at transaction
-	  phase boundaries so tools/aliro_lab.py can turn a captured serial log
-	  into a scored walk-up report (phase waterfall, approach curve, checks).
+	  phase boundaries, so a captured serial log can be turned into a scored
+	  walk-up report (phase waterfall, approach curve, checks).
 	  Like the sibling `uwbdiag` trace, it ships in every Aliro build but
 	  stays OFF at boot — the `lab on`/`lab off` console command toggles it
 	  at runtime, off the UWB hot path. Its per-phase lines come from the
@@ -50,9 +50,9 @@ config WOZ_RSSI_GATE_OPEN_DBM
 	help
 	  Smoothed connection RSSI at or above this opens the gate (allows UWB).
 
-	  Set from a measured 274-sample curve (see docs/power-profile.md), not
-	  from separation alone. Ranging needs about 1.5 s from AP-Completed to
-	  its first trusted range, so the gate has to open roughly 2 m out or the
+	  Set from a measured 274-sample curve, not from separation alone. Ranging
+	  needs about 1.5 s from AP-Completed to its first trusted range, so the
+	  gate has to open roughly 2 m out or the
 	  radio is still warming up when the phone reaches the door. On the bench
 	  rig -55 lands in the 2.0-2.5 m band; -50 separates near from far better
 	  on paper but opens under 1 m, which arrives too late to be useful.
@@ -160,7 +160,7 @@ config WOZ_UWB_CIRDIAG
 	  first-path index, F1..F3, power, peak, STS quality, crystal offset) and
 	  emit it as one "[ALAB] ev=uwb.diag" line from task context, plus an
 	  independently-armed 64-tap Ipatov window around the first path
-	  ("[ALAB] ev=uwb.cir"). tools/aliro_lab.py --cir consumes both.
+	  ("[ALAB] ev=uwb.cir").
 	  The summary rides the `lab on` gate; `lab cir on` arms the taps and
 	  `lab cir probe` runs a one-shot accumulator read diagnostic.
 	  The window read is only valid while the receiver is idle, so it is taken
@@ -175,8 +175,8 @@ config WOZ_FLIGHT_RECORDER
 	  Record the DS-TWR responder's inputs (session config + every received
 	  frame and its DW3000 register snapshot, in dispatch order) into a RAM ring,
 	  dumped over the console with `fr dump` as hex "[FREC]" lines.
-	  tools/flight_recorder.py turns the capture into a .frc trace the host build
-	  replays deterministically (tests/host/fr_replay.c) and into a fuzz corpus.
+	  The capture converts to a .frc trace the host build replays
+	  deterministically (tests/host/fr_replay.c) and into a fuzz corpus.
 	  OFF at boot; `fr on` before a walk-up, `fr off` after. Like the `lab` /
 	  `uwbdiag` traces it reads extra registers while armed, so it costs walk-up
 	  latency — arm it only for a capture run. Set n to strip it entirely.
@@ -237,7 +237,7 @@ config WOZ_PRESENCE
 
 	  Each check costs a phone wake plus roughly 3.5 s to a trusted range, so this
 	  suits rare deliberate actions (signing a release tag), not anything
-	  frequent or ambient. OFF by default. Host side: tools/presence_git.py.
+	  frequent or ambient. OFF by default.
 
 config WOZ_PRESENCE_TIMEOUT_MS
 	int "Fresh presence proof timeout (ms)"

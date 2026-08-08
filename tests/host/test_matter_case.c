@@ -13,9 +13,6 @@
  * input at a time and requiring the answer to move. Weaker than a golden value
  * and stated as such; the real check is a phone, and a phone has now sent one.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <stdbool.h>
 #include <string.h>
 

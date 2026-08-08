@@ -1,9 +1,7 @@
 /**
  * @file matter_crypto.c — AES-128-CCM, the Matter nonce, and the key schedule.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * The CCM here is written out rather than reusing ccc_sp0_encrypt() from the
  * CCC ladder, which is a complete AES-CCM* already. That one is welded to the
  * 802.15.4 SP0 profile: an 8-byte tag, a nonce it builds internally from a

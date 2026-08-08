@@ -7,9 +7,6 @@
  * attaches. On a bench that means standing next to a border router and turning
  * it off at the right moment; here it is one assignment.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #ifndef WOZ_TEST_MATTER_THREAD_STUB_H
 #define WOZ_TEST_MATTER_THREAD_STUB_H
 

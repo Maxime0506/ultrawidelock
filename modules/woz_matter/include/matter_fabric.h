@@ -20,10 +20,8 @@
  * key -- which, for the NOC, is the root it was told to trust one command
  * earlier and has no independent reason to believe.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 6 of internal/cdk-matter-plan.md.
  *
  * Certificate element tags from workspace/modules/lib/matter/src/credentials/
  * CHIPCert.h:68-78; distinguished-name attribute tags from

@@ -21,10 +21,8 @@
  * state, not scheduling; retransmission is matter_mrp.h's, driven by whoever
  * owns a clock.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 3 of internal/cdk-matter-plan.md.
  *
  * Cross-checked against two implementations:
  *   - CHIP, workspace/modules/lib/matter/src/: the unsecured-session rules in

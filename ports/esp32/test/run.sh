@@ -8,7 +8,7 @@
 #                        the ESP-IDF env; skips cleanly without it).
 #
 # On-target functional tests (Unity on the DW3000 SPI/IRQ path) are deferred:
-# they need the DWM3000EVB wired up. See ../../../docs/esp32-bringup.md.
+# they need the DWM3000EVB wired up.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
@@ -280,8 +280,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \
-   -I "$HERE/../../../deps/dw3000/platform" \
-   -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/woz_dw3000/platform" \
+   -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
    "$HERE/../components/woz_uwb/port/dw3000_hw.c" \
    "$HERE/../components/woz_uwb/port/dw3000_spi.c" \
@@ -298,8 +298,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \
-   -I "$HERE/../../../deps/dw3000/platform" \
-   -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/woz_dw3000/platform" \
+   -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
    "$HERE/../components/woz_uwb/port/dw3000_hw.c" \
    "$HERE/../components/woz_uwb/port/dw3000_spi.c" \
@@ -311,7 +311,7 @@ echo
 echo "== host: seam RX-callback shim chaining =="
 SBIN2="$(mktemp -t esp_seam_stubs.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
-   -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
    -I "$HERE/../../../modules/woz_uwb/src/ccc" \
    -I "$HERE/../../../modules/woz_uwb/src/driver" \
    -I "$HERE/../../../modules/woz_uwb/src/facade" \

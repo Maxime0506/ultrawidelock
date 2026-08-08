@@ -1,9 +1,6 @@
 // Aliro M1-M4 ranging-setup interface: negotiates UWB ranging parameters with the device and
 // produces the BLE ranging-control secure channel used to carry the M1-M4 exchange.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_ranging — the post-auth Aliro UWB ranging-setup (M1-M4) on ESP32. Thin
  * glue that drives the engine's reader adapter/session (modules/woz_uwb aliro_uwb_
  * adapter + session): on a completed credential-auth it creates a session bound to

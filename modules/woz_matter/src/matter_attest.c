@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * See matter_attest.h, including what these credentials are and are not.
  *
  * The DER here is written BACKWARDS, from the last byte to the first. DER

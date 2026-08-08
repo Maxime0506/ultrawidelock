@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host tests for the device-side BLE transport decoders (aliro_ble_central.c):
  * the 0xFFF2 advert, the reader-SPSM READ payload, and the BleSK salt built from
  * the version list that READ carries.

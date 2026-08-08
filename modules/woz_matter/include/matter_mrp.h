@@ -17,10 +17,8 @@
  * accidentally arm one on k_sys_work_q, which was measured at 3,568 of 4,096
  * bytes with the reader running.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 1, subtask 5 of internal/cdk-matter-plan.md.
  *
  * Constants cross-checked against two implementations, as with matter_msg.h:
  *   - CHIP, workspace/modules/lib/matter/src/: GetBackoff() in

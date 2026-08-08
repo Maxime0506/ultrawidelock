@@ -1,8 +1,5 @@
 /**
  * @file anchor_twr.c — anchor-to-anchor DS-TWR, both roles (implementation).
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "anchor_twr.h"
@@ -70,7 +67,7 @@ LOG_MODULE_REGISTER(anchor_twr, LOG_LEVEL_INF);
 #define FP_INDEX_FRAC_BITS 6u
 #define FP_INDEX_FRAC_MASK 63u
 
-/* Plausibility band, layer 1 of the engine's range integrity (docs/range-integrity.md).
+/* Plausibility band, layer 1 of the engine's range integrity.
  * Below -30 cm is physically impossible; above 30 m is outside any proximity
  * envelope and, on this bench link, means a timestamp came from the wrong round. */
 #define ANCHOR_MIN_MM (-300)
@@ -378,7 +375,7 @@ static uint32_t reply_hi32(uint64_t ref_dtu)
  * The RMARKER the chip will produce is (dx << 8) plus whatever the TX antenna
  * delay register holds, so it is knowable BEFORE the frame goes out -- which is
  * what lets the initiator put t5 inside the FINAL it is about to send. Nothing
- * in this repo ever programs that register (deps/dw3000's only writers are in
+ * in this repo ever programs that register (modules/woz_dw3000's only writers are in
  * the MCPS init path this stack does not use), so the offset is a constant, and
  * a constant is exactly what ANCHOR_ANT_DLY_DTU absorbs. The residual is
  * measured rather than assumed: every delayed TX compares the prediction with

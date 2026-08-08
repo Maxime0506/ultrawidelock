@@ -4,9 +4,9 @@
 # rows, a per-suite summary table, and suite timings. The suites themselves are
 # unchanged — this only orchestrates and renders their existing output:
 #
-#   firmware (C host)      tests/host/run.sh        the KAT suite + the lab python suite
+#   firmware (C host)      tests/host/run.sh        the KAT suite
 #   shared core (C host)   ports/esp32/test/run.sh  reader/stepup/crypto/... stages
-#   web twin               scripts/twin-suite.sh    constant-drift gate + WASM selftest
+#   drift                  tests/tooling/drift_check.py  Kconfig vs C constants
 #
 # Default: suites run in parallel, output replayed in order when done.
 # SERIAL=1 streams them live, one at a time. SUITES="firmware shared" scopes.
@@ -59,7 +59,7 @@ boxed() { # <plain-row-content already W_IN wide, may hold ANSI>
 banner() {
 	printf '\n  %s%s%s%s%s\n' "$CYAN$BOLD" "$TL" "$(hr "$HZ" "$W_IN")" "$TR" "$RESET"
 	boxed "$BOLD$(center "OPENALIRO  $DOT  host-side test suites")"
-	boxed "$DIM$(center "firmware KATs (C)   $DOT   shared core (C)   $DOT   web twin")"
+	boxed "$DIM$(center "firmware KATs (C)   $DOT   shared core (C)   $DOT   drift")"
 	printf '  %s%s%s%s%s\n\n' "$CYAN$BOLD" "$BL" "$(hr "$HZ" "$W_IN")" "$BR" "$RESET"
 }
 
@@ -68,7 +68,7 @@ suite_cmd() {
 	case "$1" in
 	firmware) echo "bash tests/host/run.sh" ;;
 	shared) echo "bash ports/esp32/test/run.sh" ;;
-	webtwin) echo "bash scripts/twin-suite.sh" ;;
+	drift) echo "python3 tests/tooling/drift_check.py" ;;
 	esac
 }
 
@@ -77,7 +77,7 @@ suite_label() {
 	case "$1" in
 	firmware) echo "firmware (C host)" ;;
 	shared) echo "shared core (C host)" ;;
-	webtwin) echo "web twin" ;;
+	drift) echo "constant drift" ;;
 	esac
 }
 
@@ -148,7 +148,7 @@ run_suite() { # <suite> <outfile> <metafile>
 # ---- run ------------------------------------------------------------------
 banner
 
-SEL="${SUITES:-firmware shared webtwin}"
+SEL="${SUITES:-firmware shared drift}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do

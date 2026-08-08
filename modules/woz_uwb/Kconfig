@@ -13,7 +13,7 @@ config WOZ_UWB_RESPONDER
 	depends on WOZ_UWB
 	help
 	  DS-TWR responder that produces a distance in cm. Runs on the ISC
-	  deps/dw3000 driver via ccc_shim_rx.c.
+	  modules/woz_dw3000 driver via ccc_shim_rx.c.
 
 config WOZ_UWB_SHELL
 	bool "`aliro` UWB console commands"
@@ -43,7 +43,7 @@ choice
 	help
 	  Selects which file defines crypto_aes_ecb_encrypt() (ccc_kdf.h) — the one
 	  AES-128/256 ECB primitive the whole CCC key ladder and AES-CCM* build on.
-	  This is the only per-platform crypto seam; see docs/porting.md.
+	  This is the only per-platform crypto seam.
 
 config WOZ_CRYPTO_PSA
 	bool "PSA Crypto (nRF/NCS default)"
@@ -125,7 +125,7 @@ config WOZ_UWB_CIRDIAG
 	  first-path index, F1..F3, power, peak, STS quality, crystal offset) and
 	  emit it as one "[ALAB] ev=uwb.diag" line from task context, plus an
 	  independently-armed 64-tap Ipatov window around the first path
-	  ("[ALAB] ev=uwb.cir"). tools/aliro_lab.py --cir consumes both.
+	  ("[ALAB] ev=uwb.cir").
 	  OFF at boot; `aliro cir on` arms the summary, `aliro cir dump on` the
 	  taps, and `aliro cir probe` runs a one-shot accumulator read diagnostic.
 	  The window read is only valid while the receiver is idle, so it is taken
@@ -252,9 +252,9 @@ config WOZ_FLIGHT_RECORDER
 	help
 	  Record the DS-TWR responder's inputs (session config + every received
 	  frame and its DW3000 register snapshot, in dispatch order) into a RAM ring,
-	  dumped over the console with `fr dump` as hex `[FREC]` lines. tools/
-	  flight_recorder.py turns the capture into a .frc trace that the host build
-	  replays deterministically (tests/host/fr_replay.c) and into a fuzz corpus.
+	  dumped over the console with `fr dump` as hex `[FREC]` lines. The capture
+	  converts to a .frc trace that the host build replays deterministically
+	  (tests/host/fr_replay.c) and into a fuzz corpus.
 	  OFF at boot; `fr on` before a walk-up, `fr off` after. Like the `lab`/
 	  `uwbdiag` traces the capture reads extra registers while armed, so it costs
 	  walk-up latency — arm it only for a capture run. Default n = compiled out,

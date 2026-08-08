@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * woz_util.h - container and compare macros.
  *
  * Pure code, same rationale as woz_bytes.h: none of this is platform-specific,

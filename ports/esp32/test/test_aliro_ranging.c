@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ranging-setup glue (aliro_ranging.c): the post-auth layer
  * that arms, feeds and tears down the engine's M1-M4 ranging session and
  * BleSK-seals its outbound SDUs.

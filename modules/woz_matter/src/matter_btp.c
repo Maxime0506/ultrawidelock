@@ -1,9 +1,7 @@
 /**
  * @file matter_btp.c — BTP handshake codec, fragmenter and reassembler.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * The reassembler is where a peer gets to drive this node's memory, so two
  * things are settled before any copying happens: the declared total length is
  * checked against the caller's buffer at the Start fragment, and every

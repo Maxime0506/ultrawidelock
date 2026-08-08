@@ -12,7 +12,7 @@ door opens as you walk up to it, phone in your pocket. No app to install.
 ## Flash it
 
 1. Download the zip for your board and unzip it.
-2. Open **FLASH.html** inside. That is the whole guide: tools, wiring, flashing
+2. Open **FLASH.md** inside. That is the whole guide: tools, wiring, flashing
    and Apple Home setup, with a `README.txt` beside it for the short version.
 3. Run `bash flash.sh`.
 
@@ -44,7 +44,7 @@ Two things worth knowing before you download:
 - **The DWM3001CDK image is signed, and its bootloader only accepts firmware
   signed by the same key**, so builds you make yourself will not install over
   the air onto a board flashed from this release. Reflash it once over USB to
-  own it yourself; your Apple Home pairing survives. `FLASH.html` has the four
+  own it yourself; your Apple Home pairing survives. `FLASH.md` has the four
   commands.
 - **Debug access is left open on purpose** on every board here. Anyone holding
   one can read its memory, including the lock's private key.

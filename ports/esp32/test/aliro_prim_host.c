@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host double for the aliro_prim backend so the key-schedule and secure-channel
  * code can be tested off-target. Provides a compact reference AES-256-GCM (the
  * real target backend is aliro_prim_psa.c / mbedTLS-PSA). The GCM here is

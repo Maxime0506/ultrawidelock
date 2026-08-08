@@ -3,8 +3,6 @@
  * Byte-order utilities: read/write 16-bit and 32-bit integers in little-endian or big-endian order.
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * woz_bytes.h - endian-neutral byte load/store helpers.
  *
  * Pure code: no OS, no allocation, no platform calls. It lives here rather than

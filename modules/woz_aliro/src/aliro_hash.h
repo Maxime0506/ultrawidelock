@@ -2,9 +2,6 @@
 // Declares struct aliro_sha256, the incremental hash context used across init/update/finish
 // calls.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_hash — portable SHA-256 and its KDF constructions (HMAC-SHA256,
  * HKDF-SHA256, ANSI-X9.63 KDF). Pure C11, no platform dependency, so the exact
  * same object is compiled on the ESP32 target and in the host known-answer

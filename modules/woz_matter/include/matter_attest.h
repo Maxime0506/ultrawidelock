@@ -21,10 +21,8 @@
  * a DAC issued under a real PAI, and its private key must not live in flash
  * next to the certificate.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 5 of internal/cdk-matter-plan.md.
  *
  * Structures transcribed from workspace/modules/lib/matter/src, cited at each
  * use: credentials/DeviceAttestationConstructor.cpp for the two TLV payloads,

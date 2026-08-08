@@ -3,9 +3,6 @@
 // Provides a minimal BER-TLV writer (aliro_tlv_w_init/put/finish) used to assemble command
 // payloads, and TLV/APDU parsing helpers used to extract fields from device responses.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Aliro credential-auth wire codec. See aliro_apdu.h.
  */
 #include "aliro_apdu.h"

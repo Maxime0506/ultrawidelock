@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * See matter_clusters.h.
  *
  * status() and value() dispatch over the same paths and are kept as two

@@ -1,9 +1,7 @@
 /**
  * @file matter_spake2p.c — PBKDF2, the SPAKE2+ transcript and confirmations.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * No elliptic curve arithmetic in this file. The four operations SPAKE2+ needs
  * come from nrf_oberon, which is already linked; the seam is declared in
  * matter_spake2p.h and the host suite pins it against oberon's own header.

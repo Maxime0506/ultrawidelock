@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ESP32 BLE transport (aliro_ble.c) against the sdkfake/
  * NimBLE recording doubles. "Theatre" suite: the NimBLE host, controller and
  * radio are all fakes, so passing proves the unit's wire-payload assembly and

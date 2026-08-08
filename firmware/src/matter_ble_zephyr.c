@@ -11,10 +11,8 @@
  * service, one write characteristic, one indicate characteristic,
  * connection-scoped state -- and is proven against live iPhones.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 2 of internal/cdk-matter-plan.md, second half.
+/*
+ * second half.
  *
  * UUIDs and the advertisement layout are from CHIP, not from memory:
  *   - service 0xFFF6, and the two 128-bit characteristics, at

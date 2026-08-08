@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Control surface for the fake settings backend. Tests include this; the code
  * under test only ever sees <zephyr/settings/settings.h>.
  */

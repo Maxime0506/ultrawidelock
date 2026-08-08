@@ -1,4 +1,4 @@
-# Two-anchor geometry and fusion. See internal/two-anchor-plan.md, stages B and E.
+# Two-anchor geometry and fusion.
 
 config WOZ_ANCHOR
 	bool "Two-anchor door geometry and inside/outside fusion"

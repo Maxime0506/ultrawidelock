@@ -1,7 +1,4 @@
 /** @file test_matter_case_stub.h — see test_matter_case_stub.c. */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #ifndef WOZ_TEST_MATTER_CASE_STUB_H
 #define WOZ_TEST_MATTER_CASE_STUB_H
 

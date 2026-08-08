@@ -1,6 +1,4 @@
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
+/*
  * Stage 0 contention gate for putting Matter on this board.
  *
  * The question this answers is not "does Thread build" -- it does -- but whether

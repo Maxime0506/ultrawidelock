@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * app_shell — interactive console for the ESP32 Matter door-lock app.
  *
  * Replaces the CHIP shell (chip::Shell::Engine::RunMainLoop), which is a raw

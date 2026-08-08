@@ -1,9 +1,6 @@
 /**
  * @file anchor_twr.h — anchor-to-anchor DS-TWR, both roles.
  *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * A three-message double-sided two-way ranging round between two boards this
  * project owns both ends of. No CCC, no Aliro, no credential, no phone: the
  * whole thing runs at the CONFIG_WOZ_UWB tier, where uwb_seam.h inlines to the

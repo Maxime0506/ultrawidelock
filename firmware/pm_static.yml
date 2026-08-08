@@ -33,7 +33,7 @@
 # ---------------------------------------------------------------------------
 #
 # WHY MCUBOOT GREW FROM 32,768 B, AND WHY THE APP GAVE UP 40,960 B TO A PATCH.
-# Both are the BLE OTA path (internal/cdk-ble-ota-plan.md). This board cannot
+# Both are the BLE OTA path. This board cannot
 # do a conventional over-the-air update and the arithmetic is not close: two
 # full slots want 844 KB of a 512 KB part, and an LZMA-compressed secondary
 # still wants ~646 KB. There is no external flash to stage into either -- no

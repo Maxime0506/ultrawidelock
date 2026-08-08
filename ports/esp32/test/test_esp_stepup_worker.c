@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ESP32 step-up worker (aliro_stepup_worker.c) against the
  * sdkfake FreeRTOS doubles. "Theatre" suite: the queue/task are synchronous
  * fakes pumped from the test (the worker's forever-loop is exited via a

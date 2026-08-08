@@ -1,8 +1,6 @@
 // Memory allocation and timing facade: qmalloc, qcalloc, qfree wrap the platform heap;
 // qrtc_get_us returns monotonic microseconds since boot.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * woz_alloc.h - thin heap + monotonic-clock wrappers over woz_port.h.
  */
 #ifndef WOZ_ALLOC_H

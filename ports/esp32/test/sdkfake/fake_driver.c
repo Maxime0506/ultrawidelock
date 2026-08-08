@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fake_driver — recording doubles of the ESP-IDF GPIO and SPI-master APIs for
  * the dw3000_hw/dw3000_spi host suite. GPIO writes land in plain arrays; SPI
  * transactions are copied out whole so the test can assert the exact framing

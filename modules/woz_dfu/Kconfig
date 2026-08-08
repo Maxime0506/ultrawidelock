@@ -4,7 +4,7 @@
 # not close. Two full slots want 844 KB of a 512 KB part; an LZMA-compressed
 # secondary still wants ~646 KB; and there is no external flash to stage into.
 # What fits is a delta -- 10,906 B measured between two adjacent builds of this
-# image. See internal/cdk-ble-ota-plan.md.
+# image.
 #
 # The two symbols below are deliberately separate and are never both set on one
 # image. The applier goes in the BOOTLOADER, because an application cannot

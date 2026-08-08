@@ -1,8 +1,5 @@
 // ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, aliro-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * app_shell — see app_shell.h. Interactive console + demo responder lifecycle.
  */
 #include <string.h>
@@ -211,7 +208,7 @@ static int cmd_uwbdiag(int argc, char **argv)
 }
 
 // Shell command handler: toggles the [ALAB] transaction/power trace consumed by
-// tools/aliro_lab.py and tools/power_profile.py (rssi, gate.hold/open/close, phase
+// and (rssi, gate.hold/open/close, phase
 // boundaries). Compiled in by default (CONFIG_WOZ_ALIRO_LAB) but off at boot so it
 // costs nothing until asked for. With no argument, prints the current state.
 // Always returns 0.

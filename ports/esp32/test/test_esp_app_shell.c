@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the reader bench console (apps/reader/main/app_shell.c) and
  * its entry point (main.c) against the sdkfake esp_console/linenoise/FreeRTOS
  * doubles. "Theatre" suite: the REPL never runs and the facade/reader calls

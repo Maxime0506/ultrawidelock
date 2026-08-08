@@ -1,7 +1,7 @@
 /** @file uwb_cirdiag.h — Per-reception CIA first-path/STS diagnostics stream (channel-impulse
  * Stage 0). The RX callback latches the DW3000's CIA diagnostic bank (Ipatov/STS first-path
  * index, F1..F3, power, peak, STS quality, xtal offset); task context emits it as one
- * "[ALAB] t=<us> ev=uwb.diag ..." line for tools/aliro_lab.py. OFF at boot; armed at runtime
+ * "[ALAB] t=<us> ev=uwb.diag ..." line. OFF at boot; armed at runtime
  * (nRF `aliro cir on`, ESP32 rides the `lab on` gate). */
 
 #ifndef WOZ_UWB_CIRDIAG_H_
@@ -125,7 +125,7 @@ bool uwb_cirdiag_window_due(void);
  * non-physical taps. Reads the same 8-tap burst at three distinct accumulator offsets, then
  * repeats the first, then repeats it once more in DWT_CIR_READ_FULL so the raw 24-bit words are
  * visible before MID's sign-extend/shift/saturate. Emits plain `cir.probe:` lines (deliberately
- * NOT the [ALAB] prefix, so tools/aliro_lab.py ignores them).
+ * NOT the [ALAB] prefix, so
  *
  * Reads as: passes 0..2 identical means the sample offset is being ignored; pass 0 differing from
  * pass 3 at the same offset means the read is racing something else on the bus; clk without the

@@ -6,9 +6,6 @@
 // silicon that will ship, and it caught a PSA import failure that no host run
 // could see. Crypto only: no BLE, no UWB, no iPhone.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * nRF5340 entry for the Aliro device (initiator) EC self-test. Initialises the
  * PSA backend (nrf_security/CryptoCell), runs the same suite as the host test
  * (ports/esp32/test/test_aliro_device.c) against the real P-256 curve, and

@@ -1,9 +1,6 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Anchor-to-anchor UWB ranging: stage A of the two-anchor plan
- * (internal/two-anchor-plan.md).
+ *.
  *
  * One application, two roles, two boards. The role is CONFIG_ANCHOR_ROLE_*, the
  * board is the overlay in boards/. Nothing here is Aliro-aware: this builds at

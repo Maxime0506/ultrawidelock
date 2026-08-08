@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host tests for the Aliro initiator (device) side: aliro_device_apdu (inverse
  * wire codec) + aliro_device (AP secure channel, cryptogram sealer, standard-path
  * key schedule). Everything here is EC-free and CI-gating; the full ECDH+ECDSA

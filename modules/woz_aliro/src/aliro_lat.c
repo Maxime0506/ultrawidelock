@@ -1,8 +1,5 @@
 // Walk-up latency trace: first-hit phase timestamps + the consolidated budget line.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_lat — see aliro_lat.h. Marks come from three tasks (BLE host, UWB RX,
  * reader/unlock); each phase is written once per walk-up and only read by the
  * report after the bolt is driven, so plain stores are sufficient for a

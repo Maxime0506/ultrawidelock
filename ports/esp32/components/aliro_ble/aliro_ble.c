@@ -6,15 +6,12 @@
 // and exposes send/receive plus reader-status notification helpers to the rest of the Aliro
 // reader.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_ble: NimBLE bring-up, Aliro GATT service (0xFFF2) with the
  * SPSM/protocol-version READ and the device-version WRITE, advertising, and the
  * L2CAP CoC server on the published SPSM that carries the Aliro transaction.
  * Inbound SDUs are dispatched to cb.on_data; replies go via aliro_ble_send().
  * The credential-auth and M1-M4 exchanges ride on exactly those two calls.
- * See SPEC.md.
+ *
  */
 #include <string.h>
 #include <time.h>

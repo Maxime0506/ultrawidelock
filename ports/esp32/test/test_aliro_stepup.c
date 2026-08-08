@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host known-answer test for the Aliro step-up (Access Document) codec + §7.4
  * verifier. Pure host build (no ESP-IDF, no hardware), compiled from the same
  * aliro_stepup/aliro_stepup_parse/aliro_crypto/aliro_hash sources as the target,

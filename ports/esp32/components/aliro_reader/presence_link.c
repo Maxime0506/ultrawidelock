@@ -6,10 +6,6 @@
 // board can be provisioned (aliro-import) and queried for presence without
 // reflashing between modes, and so a stray log line is just another line instead of
 // a corrupted frame.
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <stdio.h>
 #include <string.h>
 

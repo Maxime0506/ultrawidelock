@@ -15,9 +15,6 @@
  * that read distinguished-name attributes without checking which one it was
  * looking at would report a node id for the root, and this catches that.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <string.h>
 
 #include "matter_clusters.h"

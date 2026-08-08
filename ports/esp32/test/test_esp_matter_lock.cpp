@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ESP32 matter-lock app glue (app_driver / app_main /
  * app_shell / door_lock_manager / door_lock_callbacks / aliro_reader_delegate)
  * against the matterfake/ CHIP + esp-matter recording doubles. "Theatre"

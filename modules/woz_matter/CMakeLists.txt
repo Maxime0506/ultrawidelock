@@ -1,6 +1,6 @@
 # Hand-written minimal Matter node as a Zephyr module.
 # Contributes nothing unless CONFIG_WOZ_MATTER=y (every existing build stays
-# byte-identical). See internal/cdk-matter-plan.md for why this exists at all:
+# byte-identical). Why this exists at all:
 # CHIP does not fit the nRF52833 and rs-matter cannot supply a Door Lock
 # cluster, so the DWM3001CDK can only self-provision from Apple Home if the
 # node is written by hand.

@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * sdkfake — shared plumbing for the host-side ESP-IDF/NimBLE fakes under this
  * directory. These headers let the target-only ESP32 sources compile with plain
  * cc so their branch logic can be unit-tested; every SDK entry point is a

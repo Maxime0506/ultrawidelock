@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fake_nimble — recording doubles of the NimBLE host slice aliro_ble.c uses.
  * Every entry point records its arguments (advert fields get a deep copy) and
  * returns a test-settable rc. Callouts and posted events are captured so the

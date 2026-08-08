@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Fake <zephyr/settings/settings.h> for the host suite.
  *
  * Signatures match Zephyr's exactly so the port's settings sources compile

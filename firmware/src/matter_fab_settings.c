@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * matter_fab_settings — see the header for why the port owns this.
  *
  * ONE KEY PER FIELD, not one blob for the lot. A single record would be about

@@ -15,8 +15,8 @@ menu "Example Configuration"
         select WOZ_ALIRO_ACCESS_LISTENER
         help
             Publish UWB distance and Aliro access verdicts straight to a TLS
-            MQTT broker, on the same topics the Python bridge agent uses
-            (integration/homeassistant), so Home Assistant builds the device
+            MQTT broker, on the topics MQTT Discovery expects, so Home
+            Assistant builds the device
             through MQTT Discovery with no host-side agent running. Lock
             control stays on Matter; this carries only what Matter does not
             expose.

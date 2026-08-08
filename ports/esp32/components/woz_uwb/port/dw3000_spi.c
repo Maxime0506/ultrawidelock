@@ -1,5 +1,5 @@
 /* ESP-IDF SPI backend for the DW3000 decadriver — implements dw3000_spi.h.
- * Replaces the Zephyr deps/dw3000/platform/dw3000_spi.c (not compiled here).
+ * Replaces the Zephyr modules/woz_dw3000/platform/dw3000_spi.c (not compiled here).
  *
  * CS is a plain GPIO (spics_io_num = -1), matching the Zephyr cs-gpios model, so
  * the wakeup path can hold CS low ~500us. Each DW3000 command is one CS-low

@@ -1,6 +1,5 @@
 /* DW3000-family wiring per ESP32 target, SPI2/FSPI. Source of truth for the
- * wiring table in docs/esp32-bringup.md. Change to match how the UWB module is
- * wired to your board. */
+ * wiring table. Change to match how the UWB module is wired to your board. */
 #ifndef WOZ_ESP_BOARD_PINS_H
 #define WOZ_ESP_BOARD_PINS_H
 

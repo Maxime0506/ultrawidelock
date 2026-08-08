@@ -1,8 +1,5 @@
 /**
  * @file woz_fusion.c — two-anchor side-of-door fusion (implementation).
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "woz_fusion.h"

@@ -14,8 +14,8 @@ FREE BYTES, NOT PERCENTAGES. At 97% of 128 KB a 644 B regression moves the
 percentage by half a point and reads as noise; "3,891 B free" does not.
 
 NO TOOLCHAIN REQUIRED for the headline numbers. The ELF is parsed here rather
-than shelled out to arm-none-eabi-size/nm, for the reason scripts/security-fw.sh
-gives about objcopy: those binaries live inside the NCS toolchain, so requiring
+than shelled out to arm-none-eabi-size/nm, for the same reason objcopy is
+avoided: those binaries live inside the NCS toolchain, so requiring
 them turns "the gate ran" into "the gate ran if you had bootstrapped". Zephyr's
 own ram_report/rom_report DO need the toolchain and are folded in when they are
 available (--reports), as a cross-check rather than as the only source.
@@ -553,8 +553,7 @@ def build_report(args):
         "commit": git_commit(args.repo_root),
         # RELATIVE, and never the absolute path. This report is committed as
         # firmware/size-baseline.json, and an absolute build path names the
-        # machine and the user that produced it -- the same leak
-        # scripts/security-fw.sh blocks outright when it finds one in an image.
+        # machine and the user that produced it.
         # It is also the reason the numbers are not reproducible by anyone else.
         "build_dir": relative_to_root(build, args.repo_root),
         "config": collect_config(build, image),

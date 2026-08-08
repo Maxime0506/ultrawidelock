@@ -2,10 +2,7 @@
  * @file woz_fusion.h — two-anchor fusion: which side of the door, and whether
  *       the two distances are geometrically possible at all.
  *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage E of internal/two-anchor-plan.md. Two anchors a known distance apart
+ * Two anchors a known distance apart
  * each measure a distance to the same phone. Two independent things fall out:
  *
  * 1. WHICH SIDE. The set of points equidistant from both anchors is the
@@ -34,7 +31,7 @@
  * reduction, and what defends it is time-of-flight plus STS, not this.
  *
  * So this is a geometric consistency check layered ON TOP of the existing
- * per-link integrity consensus (docs/range-integrity.md), never instead of it.
+ * per-link integrity consensus, never instead of it.
  * Feed it only distances that already passed their own link's gate; a
  * consistency check over untrusted numbers is worse than none, because it
  * looks like evidence.
@@ -115,8 +112,7 @@ struct woz_fusion_verdict woz_fusion_eval(const struct woz_fusion_cfg *cfg, int3
  * This gates prediction ONLY. The threshold unlock, which means someone is
  * actually standing at the door, is never gated on geometry: a mis-tuned floor
  * that refuses to open a door locks a human out of their house, and that
- * asymmetry is the same one docs/range-integrity.md already argues for the
- * per-link STS gate.
+ * asymmetry is the same one that argues for the per-link STS gate.
  */
 bool woz_fusion_may_predict(const struct woz_fusion_verdict *v);
 

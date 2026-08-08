@@ -1,9 +1,6 @@
 /**
  * @file matter_commission.h — start answering commissioning attempts.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #pragma once
 
 #include <stdbool.h>

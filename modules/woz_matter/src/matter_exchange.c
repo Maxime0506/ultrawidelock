@@ -1,9 +1,6 @@
 /**
  * @file matter_exchange.c — the unsecured exchange. See matter_exchange.h.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include "matter_exchange.h"
 
 #include <string.h>

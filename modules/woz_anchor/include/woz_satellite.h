@@ -15,7 +15,7 @@
  *    that has gone quiet must degrade to exactly today's behaviour, never to a
  *    door that will not open. The tree already argues this for the range gate:
  *    "A mis-tuned floor that refuses to open a door locks a human out of their
- *    house" (docs/range-integrity.md:50-53).
+ *    house".
  * 3. Only a POSITIVE outside verdict, or a failed triangle test, withholds. Both
  *    are real evidence; absence is not. An unconfigured baseline counts as
  *    absence rather than as a failed test, so a misconfigured board degrades to

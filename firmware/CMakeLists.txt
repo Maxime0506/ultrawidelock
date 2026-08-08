@@ -5,7 +5,7 @@
 # one nRF52833 image and see what it weighs against the 480 KB the single-image
 # partition layout gives us.
 #
-# woz_uwb and deps/dw3000 come in as Zephyr modules because they carry their own
+# woz_uwb and modules/woz_dw3000 come in as Zephyr modules because they carry their own
 # Kconfig gating. modules/woz_aliro's reader core is listed
 # directly here, the way ports/nrf5340dk/on_target_ec does, so the nRF5340 build
 # that consumes that module through CONFIG_WOZ_ALIRO_STACK stays untouched.
@@ -27,7 +27,7 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_matter"
 	"${REPO_ROOT}/modules/woz_ml"
 	"${REPO_ROOT}/modules/woz_uwb"
-	"${REPO_ROOT}/deps/dw3000")
+	"${REPO_ROOT}/modules/woz_dw3000")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(aliro_reader_dwm3001cdk)

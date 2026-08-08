@@ -1,16 +1,16 @@
 # Woz UWB (Aliro DS-TWR responder) engine as an ESP-IDF component.
-# Additive: reuses modules/woz_uwb/src + deps/dw3000 from the repo unchanged.
+# Additive: reuses modules/woz_uwb/src + modules/woz_dw3000 from the repo unchanged.
 # The engine is platform-neutral: it takes its OS surface from woz_port.h and
 # its logging from woz_log.h (modules/woz_port/include), which select the ESP-IDF
 # backend on ESP_PLATFORM. No Zephyr compat layer is involved. The DW3000
 # platform SPI/GPIO layer is the ESP-IDF backend in port/.
-# Source set mirrors modules/woz_uwb/CMakeLists.txt + deps/dw3000/CMakeLists.txt
+# Source set mirrors modules/woz_uwb/CMakeLists.txt + modules/woz_dw3000/CMakeLists.txt
 # for CONFIG_WOZ_UWB + RESPONDER + ALIRO + CRYPTO_MBEDTLS (no PRETTY/SHELL/SELFTEST).
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
 set(WOZ "${REPO_ROOT}/modules/woz_uwb/src")
 set(WOZ_PORT "${REPO_ROOT}/modules/woz_port/include")
-set(DW  "${REPO_ROOT}/deps/dw3000")
+set(DW  "${REPO_ROOT}/modules/woz_dw3000")
 
 set(WOZ_SRCS
     # engine: driver + fira
@@ -35,7 +35,7 @@ set(WOZ_SRCS
     "${WOZ}/aliro/aliro_uwb_msg_parser.c"
     "${WOZ}/aliro/aliro_uwb_session.c"
     "${WOZ}/ccc/cherry_ccc_shim.c"
-    # vendor decadriver (deps/dw3000/CMakeLists.txt canonical set)
+    # vendor decadriver (modules/woz_dw3000/CMakeLists.txt canonical set)
     "${DW}/platform/deca_port.c"
     "${DW}/platform/deca_compat.c"
     "${DW}/dwt_uwb_driver/deca_interface.c"

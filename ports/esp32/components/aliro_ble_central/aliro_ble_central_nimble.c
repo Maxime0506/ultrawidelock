@@ -4,9 +4,6 @@
 // discovers, reads the reader's SPSM/versions, writes the selected version and
 // opens a CoC client to that SPSM.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * ESP32-only backend behind the shared aliro_ble_central.h. The decoding it
  * feeds on (advert, READ payload, BleSK salt) is platform-free and lives in
  * modules/woz_aliro/src/aliro_ble_central.c, host-tested separately; everything

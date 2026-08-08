@@ -2,9 +2,6 @@
 // TLV writer and parses the AUTH0/AUTH1 response APDUs exchanged during the reader-device
 // handshake.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_apdu — the Aliro credential-auth wire codec: single-byte-tag BER-TLV
  * plus the AUTH0/AUTH1 command builders, the ECDSA authentication-data
  * transcript, the AUTH0/AUTH1 response parsers, the EXCHANGE command, and the

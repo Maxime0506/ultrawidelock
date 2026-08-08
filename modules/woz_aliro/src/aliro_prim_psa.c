@@ -4,9 +4,6 @@
 // and secure-channel code in aliro_crypto.c; callers must call aliro_prim_init before using any
 // other function in this file.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_prim backend for the ESP32 target: AES-256-GCM, P-256 ECDH/ECDSA, and
  * the CSPRNG, all on mbedTLS-PSA. Compiled only in the ESP-IDF build; the host
  * test build supplies its own double. See aliro_prim.h.

@@ -1,11 +1,11 @@
-# Anchor-to-anchor DS-TWR bench app (stage A of internal/two-anchor-plan.md).
+# Anchor-to-anchor DS-TWR bench app.
 #
 # Deliberately NOT a sysbuild application with a bootloader. firmware/ carries
 # MCUboot and therefore needs `make dfu-key` before it will configure; this is a
 # bench tool that gets flashed over SWD and never updated over the air, so
 # giving it a signing key would add a setup step and buy nothing.
 #
-# Only two modules: woz_uwb for the CONFIG_WOZ_UWB tier and deps/dw3000 under
+# Only two modules: woz_uwb for the CONFIG_WOZ_UWB tier and modules/woz_dw3000 under
 # it. woz_aliro and woz_matter are absent because nothing here is Aliro-aware --
 # that is the point of building at this tier.
 cmake_minimum_required(VERSION 3.20.0)
@@ -14,7 +14,7 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_uwb"
-	"${REPO_ROOT}/deps/dw3000")
+	"${REPO_ROOT}/modules/woz_dw3000")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(openaliro_anchor)

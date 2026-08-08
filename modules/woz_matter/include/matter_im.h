@@ -15,10 +15,8 @@
  * is matter_clusters.h's, reached through @ref matter_im_server, so the wire
  * format can be tested without a device and the device without a wire.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
+/*
  *
- * Stage 4 of internal/cdk-matter-plan.md.
  *
  * Every constant here is transcribed from the SDK in
  * workspace/modules/lib/matter/src, cited at its use. The message shapes come

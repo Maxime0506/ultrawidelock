@@ -11,10 +11,8 @@
  * SPAKE2+ verifier out of configuration, drawing real randomness, and deciding
  * what happens when a commissioner disappears halfway through.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 3 of internal/cdk-matter-plan.md, the part that makes the rest reachable.
+/*
+ * the part that makes the rest reachable.
  *
  * The device holds a verifier, never the passcode -- see matter_pase_sm.h. The
  * default in Kconfig is CHIP's own published test verifier for passcode

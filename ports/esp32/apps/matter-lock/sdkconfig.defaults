@@ -122,7 +122,7 @@ CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM=y
 
 # RSSI power-gate thresholds, measured rather than guessed: 274 paired
 # range/RSSI samples on the bench rig, reduced with
-# `power_profile.py <log> --calibrate`. See docs/power-profile.md for the curve
+# `power_profile.py <log> --calibrate`.for the curve
 # and for why -55 beats the better-separating -50. Per-room and per-handset;
 # re-run the calibration for a different rig.
 #

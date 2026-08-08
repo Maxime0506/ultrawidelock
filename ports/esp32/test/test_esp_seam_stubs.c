@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for this port's half of uwb_seam.h (components/woz_uwb/port/
  * woz_seam_stubs.c). "Theatre" suite: dwt_setcallbacks, dwt_configure and the
  * ccc_shim_rx_* entry points are recording doubles here, so passing proves the

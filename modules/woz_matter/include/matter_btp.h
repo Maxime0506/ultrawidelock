@@ -12,10 +12,8 @@
  *
  * Little-endian, like the rest of Matter.
  */
-/* Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
- * Stage 2 of internal/cdk-matter-plan.md, first half.
+/*
+ * first half.
  *
  * ONE SOURCE, NOT TWO. Every other file in this module was cross-checked
  * against CHIP and CircuitMatter. CircuitMatter has no BLE at all -- it is an

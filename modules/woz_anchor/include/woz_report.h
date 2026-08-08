@@ -1,7 +1,7 @@
 /**
  * @file woz_report.h — one range report, as a line of ASCII.
  *
- * Stage C2 of internal/two-anchor-plan.md. The satellite already has a console
+ * The satellite already has a console
  * the door node does not, so the cheapest possible two-anchor data stream is
  * one line per accepted round, read by a host script. No transport firmware, no
  * mesh, no sockets: a cable and a grep.
@@ -82,7 +82,7 @@ int woz_report_format(const struct woz_range_report *r, char *out, size_t cap);
  *
  * Rejects rather than reinterprets: an unknown magic is refused outright, the
  * way the range-integrity rules refuse a v2 frame instead of guessing at it
- * (docs/range-integrity.md:58-59). A future ARP2 will not be silently read as
+ *. A future ARP2 will not be silently read as
  * an ARP1 with extra fields.
  *
  * @param line Line contents; a trailing '\n' or "\r\n" is optional.

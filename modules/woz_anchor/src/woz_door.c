@@ -1,8 +1,5 @@
 /**
  * @file woz_door.c — door swing angle and state machine (implementation).
- *
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  */
 
 #include "woz_door.h"

@@ -4,8 +4,6 @@
  * for host tests, and wraps mutexes (no-op on single-threaded host).
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * woz_port.h - the platform contract for the UWB engine and the Aliro reader.
  *
  * This header IS the port specification. Everything the ranging engine needs

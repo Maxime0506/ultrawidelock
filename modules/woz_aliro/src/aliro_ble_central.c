@@ -6,9 +6,6 @@
 // allocation, so it builds on the host and is checked byte for byte against the
 // reader's own emitters.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Platform-free half of the device-side BLE transport: decoding what our reader
  * publishes (the 0xFFF2 advert, the reader-SPSM READ payload) and assembling the
  * BleSK salt from it. No BLE stack calls, so it compiles on the host and is

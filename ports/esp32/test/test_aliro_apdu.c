@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host KAT for the Aliro wire codec (aliro_apdu): AUTH0/AUTH1 command bytes, the
  * ECDSA transcript, EXCHANGE 0x98 trigger, the L2CAP envelope, and response
  * parsing. Verifies the exact recovered tag/length structure; full-command bytes

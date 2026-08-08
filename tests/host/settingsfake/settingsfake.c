@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * In-RAM stand-in for Zephyr's settings subsystem.
  *
  * Deliberately NOT a simulation of NVS. It reproduces the two behaviours the

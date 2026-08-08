@@ -8,8 +8,8 @@ you walk up, phone in your pocket. No NFC tap on these boards.
 START HERE
 ──────────────────────────────────────────────────────────────────────────────
 
-  Open FLASH.html in a web browser. That is the full guide, laid out and much
-  easier to follow than this file. FLASH.md is the same text in Markdown.
+  Open FLASH.md in any text editor or on GitHub. That is the full guide, much
+  easier to follow than this file.
 
   Read it before you flash: the UWB radio is hand-wired over SPI, eleven
   connections, and the DWM3000EVB's power-select jumper has to be right before
@@ -31,7 +31,7 @@ THE SHORT VERSION, WITH TOOLS
 ──────────────────────────────────────────────────────────────────────────────
 
   1.  Install Python 3, then:  pip install esptool
-  2.  Wire the DWM3000EVB per the pin table in FLASH.html. Power it from 3V3,
+  2.  Wire the DWM3000EVB per the pin table in FLASH.md. Power it from 3V3,
       never 5 V.
   3.  Plug in a USB data cable and run:  bash flash.sh
       It asks which chip you have, or take it as an argument:
@@ -56,8 +56,7 @@ WHAT IS IN HERE
   openaliro-matter-lock-esp32c6.bin   merged C6 image
   manifest.json                       chip list for the browser flasher
   flash.sh                            flashes the image for your chip
-  FLASH.html                          the full guide, styled     <-- start here
-  FLASH.md                            the same guide, in Markdown
+  FLASH.md                            the full guide            <-- start here
   README.txt                          this file
   VERSION.txt                         what this build is
   SHA256SUMS.txt                      checksums for every file above
@@ -65,7 +64,7 @@ WHAT IS IN HERE
   Each .bin is a complete image: bootloader, partition table and application in
   one file, written at offset 0. There is nothing else to flash.
 
-  How far each chip is proven differs, and FLASH.html says exactly what each
+  How far each chip is proven differs, and FLASH.md says exactly what each
   claim covers. In short: the S3 is the hardware-validated target, the C6 has
   its UWB radio validated but not the full Matter walk-up, and the C5 is
   release-built with no hardware validation recorded.

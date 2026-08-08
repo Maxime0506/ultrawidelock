@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * DWM3001CDK standalone Aliro reader.
  *
  * One board: the nRF52833 runs the BLE peripheral and the Aliro reader engine,
@@ -376,8 +373,8 @@ int main(void)
 	static struct aliro_approach approach;
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR)
 	/*
-	 * Second-anchor geometry. Nothing feeds this yet -- Stage C of
-	 * internal/two-anchor-plan.md owns the transport -- and that is a working
+	 * Second-anchor geometry. Nothing feeds this yet -- the satellite
+	 * transport is not wired up -- and that is a working
 	 * state rather than a gap: with no report the verdict is UNKNOWN, UNKNOWN
 	 * permits prediction, and the door behaves exactly as it does today.
 	 */
@@ -554,7 +551,7 @@ int main(void)
 			 * door. THRESHOLD means the phone is measurably standing
 			 * there, and a geometry bug -- or a satellite with a flat
 			 * battery -- must never be able to lock someone out of
-			 * their house (docs/range-integrity.md:50-53).
+			 * their house.
 			 *
 			 * approach.last_cm rather than `cm`: PREDICT can be raised
 			 * from the tick branch, where `cm` was never filled in and

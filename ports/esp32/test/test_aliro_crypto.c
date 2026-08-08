@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host known-answer test for aliro_crypto's portable SHA-256/KDF core (the
  * interop-critical key-schedule primitives) plus the URSK block extraction.
  * Pure host build, no ESP-IDF or hardware. The KDF core is compiled from the

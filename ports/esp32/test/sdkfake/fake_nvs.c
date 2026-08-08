@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * fake_nvs — in-RAM double of the ESP-IDF NVS blob API, one namespace ("*"),
  * one key, with per-call failure injection. Backs the aliro_prov_nvs.c and
  * aliro_ble.c host suites.

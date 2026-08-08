@@ -7,8 +7,8 @@ opens as you walk up to it, phone in your pocket. There is no app to install.
 START HERE
 ──────────────────────────────────────────────────────────────────────────────
 
-  Open FLASH.html in a web browser. That is the full guide, laid out and much
-  easier to follow than this file. FLASH.md is the same text in Markdown.
+  Open FLASH.md in any text editor or on GitHub. That is the full guide, much
+  easier to follow than this file.
 
 
 THE SHORT VERSION
@@ -30,8 +30,7 @@ WHAT IS IN HERE
 
   merged.hex        the firmware: bootloader, Aliro reader, Matter node, UWB
   flash.sh          writes it to the board over the on-board debugger
-  FLASH.html        the full guide, styled for a browser        <-- start here
-  FLASH.md          the same guide, in Markdown
+  FLASH.md          the full guide                              <-- start here
   README.txt        this file
   VERSION.txt       what this build is, and your setup code
   SHA256SUMS.txt    checksums for every file above
@@ -66,7 +65,7 @@ BEFORE YOU TRUST IT WITH ANYTHING
        its memory, including the lock's private key.
     ·  Whoever published this release holds the key that signs its updates.
 
-  FLASH.html explains all three, and how to take the board over yourself with
+  FLASH.md explains all three, and how to take the board over yourself with
   one USB reflash. Do not secure anything valuable with this.
 
 

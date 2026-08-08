@@ -2,10 +2,6 @@
 // wire frame: aliro_assert_verify_p256 must never read out of bounds or crash on
 // a short/oversized/garbage frame — every malformed input returns a clean
 // negative verdict. Built under ASan/UBSan (see fuzz.sh).
-/*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- */
 #include <stddef.h>
 #include <stdint.h>
 

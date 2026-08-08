@@ -7,9 +7,6 @@
  * ms, velocity floor 30 cm/s, prediction enabled.
  */
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_approach — predictive approach controller. See aliro_approach.h for
  * the model; this file holds the estimator tuning.
  */

@@ -1,9 +1,6 @@
 // Lock status LED color mapping: derives the RGB color for the lock indicator from the
 // current locked and Aliro-ranging state.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Bolt-state indicator policy: what colour the LED shows for a given lock
  * state. Kept free of ESP dependencies so it can be exercised on the host;
  * the driver that pushes this onto the WS2812 lives in app_driver.cpp.

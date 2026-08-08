@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_assert_ec — binds the aliro_assert P-256 seam to aliro_prim.
  *
  * aliro_assert.c stays free of any crypto backend so it can remain portable

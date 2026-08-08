@@ -2,8 +2,6 @@
 // responder start/stop and range query, and manages platform dependencies (HFCLK boost, SPI init,
 // callbacks).
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
  * C shim over fira_session + ccc_shim (see woz_uwb_facade.h).
  */
 #include "woz_uwb_facade.h"
@@ -44,7 +42,7 @@ SYS_INIT(woz_hfclk_boost, PRE_KERNEL_1, 0);
  *
  * nRF5340-specific platform seam: the app core boots with HFCLK divided to
  * 64 MHz. Other SoCs (e.g. ESP32-S3) clock their SPI controller independently,
- * so this compiles to a no-op there. See docs/porting.md.
+ * so this compiles to a no-op there.
  */
 static void woz_hfclk_ensure_128mhz(void)
 {
@@ -106,7 +104,7 @@ int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)
 	/* Fresh per-session log budget so a live Wallet session re-logs its own RX-arms. */
 	ccc_shim_rx_log_reset();
 
-	/* Stand up the permanent SP0 receiver on deps/dw3000, driving the DS-TWR exchange. */
+	/* Stand up the permanent SP0 receiver on modules/woz_dw3000, driving the DS-TWR exchange. */
 	return ccc_prepoll_listen(c->channel, c->sync_code_index);
 }
 

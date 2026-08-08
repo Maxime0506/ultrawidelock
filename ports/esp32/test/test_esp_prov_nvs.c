@@ -1,7 +1,4 @@
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Host test for the ESP32 NVS provisioning backend (aliro_prov_nvs.c) against
  * the in-RAM NVS fake (sdkfake/fake_nvs.c). "Theatre" suite: no flash is
  * involved, so passing proves the load/store branch logic and the blob's

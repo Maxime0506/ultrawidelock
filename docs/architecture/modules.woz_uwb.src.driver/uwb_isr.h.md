@@ -1,6 +1,0 @@
-<!-- generated documentation — edit the source, not this file -->
-# `modules/woz_uwb/src/driver/uwb_isr.h`
-
-@file uwb_isr.h — DW3000 interrupt-callback registration (public surface).
-
-**used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](uwb_isr.c.md)

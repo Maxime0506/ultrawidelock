@@ -4,9 +4,6 @@
 // schedule (ECDH, the two ECDSA transcripts, the §8.3.1.13 salt), and produces
 // the sealed responses. The result is the same 32-byte URSK the reader derives.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * aliro_device — the initiator half of the Aliro Access Protocol. Reuses the
  * direction-symmetric crypto (aliro_crypto.c) and EC primitives (aliro_prim.h);
  * the only genuinely new logic is the inverse codec (aliro_device_apdu) and the

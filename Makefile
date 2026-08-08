@@ -70,8 +70,8 @@ PRISTINE ?=
 SELFTEST ?=
 STRICT   ?=
 # HA=1 opts into the Home Assistant variant. It must be set on BOTH bootstrap
-# (applies the data-model patches) and build (layers woz-ha.conf); see
-# integration/homeassistant/README.md. Not hardware-validated.
+# (applies the data-model patches) and build (layers woz-ha.conf).
+# Not hardware-validated.
 HA            ?=
 ALIRO_SOURCE  ?=
 ALIRO_TRACE   ?=
@@ -84,14 +84,6 @@ PORT     ?=
 BAUD     ?= 115200
 LOG      ?=
 
-# Which security gates `make security` runs. Empty means all eight.
-GATES    ?=
-
-# Presence-signed tags (make presence-verify TAG=presence/1.2.0). MAXCM is the
-# distance threshold in cm; 40 matches tools/presence_verify.py's default.
-TAG      ?=
-MAXCM    ?= 40
-PRESENCE_RUNTIME_OUT ?= $(ALIRO_BUILD_ROOT)/presence-runtime.tar.gz
 
 # ---- the ports, in the order `make help` should introduce them ---------------
 include $(REPO_ROOT)/mk/cdk.mk
@@ -102,5 +94,4 @@ include $(REPO_ROOT)/mk/esp32.mk
 include $(REPO_ROOT)/mk/anchor.mk
 include $(REPO_ROOT)/mk/setup.mk
 include $(REPO_ROOT)/mk/host.mk
-include $(REPO_ROOT)/mk/docs.mk
 include $(REPO_ROOT)/mk/extras.mk

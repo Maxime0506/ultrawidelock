@@ -1,6 +1,5 @@
-/* SPDX-License-Identifier: ISC */
 /*
- * ct_main.c — the constant-time harness. Driven by scripts/security-ct.sh.
+ * ct_main.c — the constant-time harness.
  *
  * WHAT THIS TESTS, AND WHAT IT DOES NOT
  *

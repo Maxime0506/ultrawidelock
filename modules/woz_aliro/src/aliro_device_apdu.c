@@ -5,9 +5,6 @@
 // caller-owned buffers with no allocation, so it round-trips against the reader's
 // own builders and parsers in aliro_apdu.c under the host tests.
 /*
- * Copyright (c) 2026 asxeem
- * SPDX-License-Identifier: ISC
- *
  * Device-side Aliro Access-Protocol wire codec. See aliro_device_apdu.h.
  */
 #include "aliro_device_apdu.h"
