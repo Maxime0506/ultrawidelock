@@ -34,8 +34,7 @@ extern "C" {
 #include "protocol/ble_message.h"
 #include "protocol/nfc_auth.h"
 #include "protocol/nfc_select.h"
-#include "protocol/nfc_step_up.h"
-#include "protocol/access_document.h"
+#include "aliro_stepup.h"
 }
 
 using namespace Aliro;
@@ -1437,7 +1436,12 @@ static size_t decode_hex(const char *hex, uint8_t *out, size_t cap)
 
 static uint8_t document_bytes[1024];
 static size_t document_length;
-static struct woz_aliro_access_document parsed_document;
+static struct aliro_stepup_doc parsed_document;
+/* Views the suite pulls out of the parsed fixture: the device key the document
+ * binds and the valueDigest of its element2 item. */
+static const uint8_t *parsed_device_public_key;
+static const uint8_t *parsed_expected_digest;
+static const uint8_t kZeroDigest[32] = {};
 
 /**
  * Build the step-up response that carries @p document: the DO53 and
@@ -1460,11 +1464,11 @@ static size_t build_step_up_response(uint8_t *out, size_t cap, const uint8_t *do
 	if (sealed == 0U) {
 		return 0;
 	}
-	if (woz_aliro_wrap_session_data(ciphertext, sealed, sessionData, sizeof(sessionData),
-					&sessionDataLength) != 0) {
+	if (aliro_stepup_wrap_sessiondata_raw(ciphertext, sealed, sessionData, sizeof(sessionData),
+					      &sessionDataLength) != 0) {
 		return 0;
 	}
-	if (woz_aliro_wrap_do53(sessionData, sessionDataLength, out, cap - 2, &wrapped) != 0) {
+	if (aliro_stepup_wrap_do53(sessionData, sessionDataLength, out, cap - 2, &wrapped) != 0) {
 		return 0;
 	}
 	out[wrapped++] = 0x90;
@@ -1487,10 +1491,16 @@ static void test_access_document(void)
 	 * digest the validator will demand and use the device key the document
 	 * actually binds. Neither can be invented from outside. */
 	T_EQ("fixture parses",
-	     woz_aliro_parse_access_document(document_bytes, document_length,
-					     reinterpret_cast<const uint8_t *>("element2"), 8,
-					     &parsed_document),
-	     0);
+	     aliro_stepup_parse_response(document_bytes, document_length, &parsed_document), 0);
+	parsed_device_public_key = parsed_document.device_key;
+	parsed_expected_digest = kZeroDigest;
+	for (size_t i = 0; i < parsed_document.n_digests; i++) {
+		if (parsed_document.n_items != 0 &&
+		    parsed_document.digests[i].id == parsed_document.items[0].digest_id) {
+			parsed_expected_digest = parsed_document.digests[i].hash;
+			break;
+		}
+	}
 
 	/* Drive an NFC session to the point where the document is expected. */
 	nfc_to_auth0(false);
@@ -1505,7 +1515,7 @@ static void test_access_document(void)
 	/* The AUTH1 response must present the SAME device key the document
 	 * binds, or the validator refuses it -- which is exactly the check
 	 * that stops a document being replayed against another credential. */
-	feed_nfc(body, build_auth1_response_for(body, parsed_document.device_public_key, 0x0001));
+	feed_nfc(body, build_auth1_response_for(body, parsed_device_public_key, 0x0001));
 	T_EQ("an envelope went out", (long)stackfake.send_count, 4L);
 
 	/* The document comes back wrapped, is validated, and access is granted
@@ -1522,7 +1532,7 @@ static void test_access_document(void)
 	{
 		uint8_t wrong[32];
 
-		std::memcpy(wrong, parsed_document.expected_digest, sizeof(wrong));
+		std::memcpy(wrong, parsed_expected_digest, sizeof(wrong));
 		wrong[0] ^= 0xffu;
 		nfc_to_auth0(false);
 		stackfake.want_access_document = true;
@@ -1577,7 +1587,7 @@ static void test_access_document(void)
 	std::memcpy(stackfake.element_identifier, "element2", 8);
 	length = build_auth0_response(body, false);
 	feed_nfc(body, length);
-	feed_nfc(body, build_auth1_response_for(body, parsed_document.device_public_key, 0x0001));
+	feed_nfc(body, build_auth1_response_for(body, parsed_device_public_key, 0x0001));
 	stackfake.verify_ret = ALIRO_INVALID_SIGNATURE;
 	length = build_step_up_response(frame, sizeof(frame), document_bytes, document_length);
 	feed_nfc(frame, length);
@@ -1591,7 +1601,7 @@ static void test_access_document(void)
 	std::memcpy(stackfake.element_identifier, "element2", 8);
 	length = build_auth0_response(body, false);
 	feed_nfc(body, length);
-	feed_nfc(body, build_auth1_response_for(body, parsed_document.device_public_key, 0x0001));
+	feed_nfc(body, build_auth1_response_for(body, parsed_device_public_key, 0x0001));
 	stackfake.validity_known = true;
 	stackfake.validity_answer = false;
 	length = build_step_up_response(frame, sizeof(frame), document_bytes, document_length);

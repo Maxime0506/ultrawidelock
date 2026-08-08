@@ -5,7 +5,7 @@
  */
 #include "nfc_auth.h"
 
-#include "tlv.h"
+#include "aliro_tlv.h"
 
 #include <stdbool.h>
 #include <string.h>

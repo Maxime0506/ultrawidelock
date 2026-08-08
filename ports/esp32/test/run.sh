@@ -89,7 +89,8 @@ SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_stepup.c" \
-   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
+   "$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
    "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
    "$HERE/aliro_prim_host.c" -o "$SBIN"
 "$SBIN"
@@ -214,7 +215,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 \
    -I "$SDKFAKE" -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_esp_stepup_worker.c" \
    "$HERE/../components/aliro_reader/aliro_stepup_worker.c" \
-   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
+   "$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
    "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
    "$HERE/aliro_prim_host.c" \
    "$SDKFAKE/fake_freertos.c" -o "$WBIN"

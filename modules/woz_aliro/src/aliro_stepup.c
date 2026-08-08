@@ -1,7 +1,8 @@
-// Aliro step-up phase codec + verifier: derives the StepUpSK SessionData keys, builds the mdoc
-// DeviceRequest and its ENVELOPE/GET RESPONSE APDUs, seals/opens SessionData over the aliro_secchan
-// AES-256-GCM channel, and runs the six-step Access Document verification of spec 7.4. The ES256
-// primitive is injected (verify ctx) so this unit carries no elliptic-curve dependency.
+// Aliro step-up phase crypto + verifier: derives the StepUpSK SessionData keys, seals/opens
+// SessionData over the aliro_secchan AES-256-GCM channel (envelope codec factored onto the raw
+// wrap/unwrap in aliro_stepup_wire.c), builds the simple ENVELOPE/GET RESPONSE APDUs, and runs
+// the six-step Access Document verification of spec 7.4. The ES256 primitive is injected
+// (verify ctx) so this unit carries no elliptic-curve dependency.
 /*
  * Wire structures from the Aliro v1.0 spec (§7.4, §8.4, §14.6) and ISO 18013-5
  * (SessionData, COSE_Sign1 Sig_structure). The crypto goes through aliro_hash
@@ -12,6 +13,7 @@
 #include <string.h>
 
 #include "aliro_crypto.h"
+#include "aliro_cw.h"
 #include "aliro_hash.h"
 #include "aliro_stepup.h"
 
@@ -47,174 +49,12 @@ void aliro_stepup_channel_init(struct aliro_secchan *sc,
 	aliro_secchan_init(sc, sk_reader, sk_device);
 }
 
-/* ---- tiny CBOR writer (definite lengths) --------------------------------- */
-
-/**
- * CBOR writer: tracks output buffer pointer, end, and error state for incremental encoding of
- * BER-TLV and CBOR primitives.
- */
-struct cw {
-	uint8_t *p;
-	uint8_t *end;
-	int err;
-};
-
-/**
- * Append n bytes from buffer b to the CBOR writer; set error flag and return early if no space
- * remains or writer is already in error state.
- */
-static void cw_raw(struct cw *w, const void *b, size_t n)
-{
-	if (w->err || (size_t)(w->end - w->p) < n) {
-		w->err = 1;
-		return;
-	}
-	memcpy(w->p, b, n);
-	w->p += n;
-}
-
-/**
- * Encode a CBOR major type and argument into the writer as 1, 2, 3, or 5 bytes depending on
- * argument magnitude.
- */
-static void cw_type(struct cw *w, uint8_t major, uint64_t arg)
-{
-	uint8_t h[9];
-	size_t n;
-
-	if (arg < 24u) {
-		h[0] = (uint8_t)(major | arg);
-		n = 1;
-	} else if (arg < 256u) {
-		h[0] = (uint8_t)(major | 24u);
-		h[1] = (uint8_t)arg;
-		n = 2;
-	} else if (arg < 65536u) {
-		h[0] = (uint8_t)(major | 25u);
-		h[1] = (uint8_t)(arg >> 8);
-		h[2] = (uint8_t)arg;
-		n = 3;
-	} else {
-		h[0] = (uint8_t)(major | 26u);
-		h[1] = (uint8_t)(arg >> 24);
-		h[2] = (uint8_t)(arg >> 16);
-		h[3] = (uint8_t)(arg >> 8);
-		h[4] = (uint8_t)arg;
-		n = 5;
-	}
-	cw_raw(w, h, n);
-}
-
-/**
- * Encode a CBOR map header with n key-value pairs.
- */
-static void cw_map(struct cw *w, uint64_t n)
-{
-	cw_type(w, 0xa0u, n);
-}
-/**
- * Encode a CBOR array header with n elements.
- */
-static void cw_arr(struct cw *w, uint64_t n)
-{
-	cw_type(w, 0x80u, n);
-}
-/**
- * Encode a CBOR text string header and payload.
- */
-static void cw_tstr(struct cw *w, const char *s)
-{
-	size_t n = strlen(s);
-
-	cw_type(w, 0x60u, n);
-	cw_raw(w, s, n);
-}
-/**
- * Encode a CBOR byte string header and payload.
- */
-static void cw_bstr(struct cw *w, const uint8_t *b, size_t n)
-{
-	cw_type(w, 0x40u, n);
-	cw_raw(w, b, n);
-}
-/**
- * Encode a CBOR semantic tag number.
- */
-static void cw_tag(struct cw *w, uint64_t t)
-{
-	cw_type(w, 0xc0u, t);
-}
-/**
- * Append a CBOR boolean (0xf5 for true, 0xf4 for false) to the writer.
- */
-static void cw_bool(struct cw *w, int v)
-{
-	uint8_t b = v ? 0xf5u : 0xf4u;
-
-	cw_raw(w, &b, 1);
-}
-
-/* ---- DeviceRequest (Table 8-21) ------------------------------------------ */
-
-static const char *const k_default_elems[] = {"element2", "element4"};
-
-/**
- * Build a CBOR-encoded Step-Up deviceRequest with itemsRequest containing requested element names
- * (or default AccessCode, AccessLevel if none given) and docType "aliro-a"; return 0 on success or
- * -1 on buffer overflow.
- */
-int aliro_stepup_build_device_request(const char *const *elems, size_t n_elems, uint8_t *out,
-				      size_t cap, size_t *out_len)
-{
-	if (elems == NULL || n_elems == 0) {
-		elems = k_default_elems;
-		n_elems = 2;
-	}
-
-	/* itemsRequest = { "1": { "aliro-a": { <elem>: true, ... } }, "5": "aliro-a" } */
-	uint8_t items[128];
-	struct cw iw = {items, items + sizeof(items), 0};
-
-	cw_map(&iw, 2);
-	cw_tstr(&iw, "1"); /* nameSpaces */
-	cw_map(&iw, 1);
-	cw_tstr(&iw, ALIRO_STEPUP_DOCTYPE_ACCESS); /* namespace "aliro-a" */
-	cw_map(&iw, n_elems);
-	for (size_t i = 0; i < n_elems; i++) {
-		cw_tstr(&iw, elems[i]);
-		cw_bool(&iw, 1); /* intent to retain */
-	}
-	cw_tstr(&iw, "5"); /* docType */
-	cw_tstr(&iw, ALIRO_STEPUP_DOCTYPE_ACCESS);
-	if (iw.err) {
-		return -1;
-	}
-	size_t items_len = (size_t)(iw.p - items);
-
-	/* DeviceRequest = { "1": "1.0", "2": [ { "1": 24(bstr(itemsRequest)) } ] } */
-	struct cw w = {out, out + cap, 0};
-
-	cw_map(&w, 2);
-	cw_tstr(&w, "1");
-	cw_tstr(&w, "1.0");
-	cw_tstr(&w, "2");
-	cw_arr(&w, 1);
-	cw_map(&w, 1);
-	cw_tstr(&w, "1");
-	cw_tag(&w, 24);
-	cw_bstr(&w, items, items_len);
-	if (w.err) {
-		return -1;
-	}
-	*out_len = (size_t)(w.p - out);
-	return 0;
-}
-
 /* ---- SessionData {"data": bstr} over the StepUpSK channel (§8.4.3) -------- */
 
 /**
  * Seal a plaintext Step-Up response into a CBOR map with key "data" containing BER-TLV CBOR byte
- * string; return 0 on success or -1 on encryption or buffer errors.
+ * string; return 0 on success or -1 on encryption or buffer errors. The envelope encoding is the
+ * raw wrap in aliro_stepup_wire.c.
  */
 int aliro_stepup_seal_sessiondata(struct aliro_secchan *sc, const uint8_t *plain, size_t plain_len,
 				  uint8_t *out, size_t cap, size_t *out_len)
@@ -227,59 +67,35 @@ int aliro_stepup_seal_sessiondata(struct aliro_secchan *sc, const uint8_t *plain
 	if (aliro_secchan_seal(sc, NULL, 0, plain, plain_len, blob, blob + plain_len) != 0) {
 		return -1;
 	}
-	struct cw w = {out, out + cap, 0};
-
-	cw_map(&w, 1);
-	cw_tstr(&w, "data");
-	cw_bstr(&w, blob, plain_len + ALIRO_GCM_TAG_LEN);
-	if (w.err) {
+	if (aliro_stepup_wrap_sessiondata_raw(blob, plain_len + ALIRO_GCM_TAG_LEN, out, cap,
+					      out_len) != 0) {
 		return -1;
 	}
-	*out_len = (size_t)(w.p - out);
 	return 0;
 }
 
 /**
  * Decrypt a CBOR-wrapped sessionData blob (tag 0xa1, key "data", BER-TLV CBOR bstr) using the
  * security channel; return 0 and write plaintext length to *out_len on success, or -1 if format is
- * invalid, authentication fails, or output capacity is exceeded.
+ * invalid, authentication fails, or output capacity is exceeded. The envelope decoding is the raw
+ * unwrap in aliro_stepup_wire.c (strict: trailing bytes after the blob are rejected).
  */
 int aliro_stepup_open_sessiondata(struct aliro_secchan *sc, const uint8_t *sd, size_t sd_len,
 				  uint8_t *out, size_t cap, size_t *out_len)
 {
-	/* { "data": bstr }: a1 64 "data" <bstr-hdr> <blob> */
-	if (sd_len < 8u || sd[0] != 0xa1u || sd[1] != 0x64u || memcmp(sd + 2, "data", 4) != 0) {
-		return -1;
-	}
-	size_t i = 6;
-	uint8_t ib = sd[i++];
-	uint64_t blob_len;
+	const uint8_t *blob;
+	size_t blob_len;
 
-	if (ib >= 0x40u && ib <= 0x57u) {
-		blob_len = ib - 0x40u;
-	} else if (ib == 0x58u) {
-		if (i >= sd_len) {
-			return -1;
-		}
-		blob_len = sd[i++];
-	} else if (ib == 0x59u) {
-		if (i + 2 > sd_len) {
-			return -1;
-		}
-		blob_len = ((uint64_t)sd[i] << 8) | sd[i + 1];
-		i += 2;
-	} else {
+	if (aliro_stepup_unwrap_sessiondata_raw(sd, sd_len, &blob, &blob_len) != 0 ||
+	    blob_len < ALIRO_GCM_TAG_LEN) {
 		return -1;
 	}
-	if (blob_len < ALIRO_GCM_TAG_LEN || i + blob_len > sd_len) {
-		return -1;
-	}
-	size_t ct_len = (size_t)blob_len - ALIRO_GCM_TAG_LEN;
+	size_t ct_len = blob_len - ALIRO_GCM_TAG_LEN;
 
 	if (ct_len > cap) {
 		return -1;
 	}
-	if (aliro_secchan_open(sc, NULL, 0, sd + i, ct_len, sd + i + ct_len, out) != 0) {
+	if (aliro_secchan_open(sc, NULL, 0, blob, ct_len, blob + ct_len, out) != 0) {
 		return -1;
 	}
 	*out_len = ct_len;

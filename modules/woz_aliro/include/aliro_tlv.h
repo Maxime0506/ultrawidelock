@@ -1,4 +1,5 @@
-/* Minimal strict BER/DER-TLV reader for Aliro APDU payloads. */
+/* Minimal strict BER/DER-TLV reader for Aliro APDU payloads. Promoted from
+ * woz_aliro_stack (protocol/tlv.h) as the one TLV codec both stacks share. */
 #pragma once
 
 #include <stddef.h>

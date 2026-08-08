@@ -6,11 +6,11 @@
  * transport and application layer.
  */
 #include "protocol/nfc_auth.h"
-#include "protocol/access_document.h"
 #include "protocol/ble_message.h"
 #include "protocol/ble_timeout.h"
 #include "protocol/nfc_select.h"
-#include "protocol/nfc_step_up.h"
+
+#include "aliro_stepup.h"
 
 #include <aliro/aliro.h>
 #include <aliro/interface.h>
@@ -1246,11 +1246,11 @@ AliroError HandleExchangeResponse(SessionContext &session, Data data)
 AliroError SendNextEnvelope(SessionContext &session)
 {
 	size_t commandLength = 0;
-	if (woz_aliro_build_envelope_command(
+	if (aliro_stepup_build_envelope_ex(
 		    session.mExchangeBuffer.data(), session.mExchangeLength,
 		    &session.mExchangeOffset, session.mMaxCommandData, session.mMaxResponseData,
 		    session.mUseExtendedApdus, session.mTxBuffer.data(), session.mTxBuffer.size(),
-		    &commandLength, &session.mLastEnvelope) != WOZ_ALIRO_STEP_UP_OK) {
+		    &commandLength, &session.mLastEnvelope) != ALIRO_STEPUP_OK) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -1276,8 +1276,8 @@ AliroError SendNextEnvelope(SessionContext &session)
 AliroError SendGetResponse(SessionContext &session, size_t expectedLength)
 {
 	size_t commandLength = 0;
-	if (woz_aliro_build_get_response_command(expectedLength, session.mTxBuffer.data(),
-						 session.mTxBuffer.size(), &commandLength) != 0) {
+	if (aliro_stepup_build_get_response_ex(expectedLength, session.mTxBuffer.data(),
+					       session.mTxBuffer.size(), &commandLength) != 0) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 	session.mState = SessionState::AwaitingStepUpResponse;
@@ -1319,10 +1319,10 @@ AliroError StartStepUpExchange(SessionContext &session)
 	session.mReaderCounter = kInitialCounter;
 	session.mDeviceCounter = kInitialCounter;
 	size_t requestLength = 0;
-	if (woz_aliro_build_device_request(session.mRequestedElement.data(),
-					   session.mRequestedElementLength, session.mIntentToStore,
-					   session.mPlaintextBuffer.data(),
-					   session.mPlaintextBuffer.size(), &requestLength) != 0) {
+	if (aliro_stepup_build_device_request_ex(
+		    session.mRequestedElement.data(), session.mRequestedElementLength,
+		    session.mIntentToStore, session.mPlaintextBuffer.data(),
+		    session.mPlaintextBuffer.size(), &requestLength) != 0) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -1363,12 +1363,14 @@ AliroError StartStepUpExchange(SessionContext &session)
 #endif
 
 	size_t sessionDataLength = 0;
-	if (woz_aliro_wrap_session_data(session.mSessionDataBuffer.data(),
-					requestLength + tag.size(), session.mPlaintextBuffer.data(),
-					session.mPlaintextBuffer.size(), &sessionDataLength) != 0 ||
-	    woz_aliro_wrap_do53(session.mPlaintextBuffer.data(), sessionDataLength,
-				session.mExchangeBuffer.data(), session.mExchangeBuffer.size(),
-				&session.mExchangeLength) != 0) {
+	if (aliro_stepup_wrap_sessiondata_raw(session.mSessionDataBuffer.data(),
+					      requestLength + tag.size(),
+					      session.mPlaintextBuffer.data(),
+					      session.mPlaintextBuffer.size(),
+					      &sessionDataLength) != 0 ||
+	    aliro_stepup_wrap_do53(session.mPlaintextBuffer.data(), sessionDataLength,
+				   session.mExchangeBuffer.data(), session.mExchangeBuffer.size(),
+				   &session.mExchangeLength) != 0) {
 		return ALIRO_NO_MEMORY;
 	}
 	session.mExchangeOffset = 0;
@@ -1398,6 +1400,111 @@ size_t EncodeBstrHead(size_t length, uint8_t *output)
 }
 
 /**
+ * The Access-Document field shape this session layer consumes, mapped from the shared
+ * aliro_stepup_parse.c decode. All pointers are slices into the parse scratch / response buffer.
+ */
+struct AccessDocumentView {
+	const uint8_t *device_public_key; /* 65-byte uncompressed point */
+	const uint8_t *data_element;      /* raw encoded elementValue item */
+	size_t data_element_length;
+	const uint8_t *issuer_signed_item; /* 24(bstr(IssuerSignedItem)) bytes */
+	size_t issuer_signed_item_length;
+	const uint8_t *expected_digest; /* 32-byte valueDigest for the item */
+	const uint8_t *cose_protected;
+	size_t cose_protected_length;
+	const uint8_t *cose_payload;
+	size_t cose_payload_length;
+	const uint8_t *cose_signature; /* 64-byte r||s */
+	const uint8_t *issuer_kid;     /* nullptr when absent */
+	size_t issuer_kid_length;
+	const uint8_t *issuer_certificate; /* nullptr when absent */
+	size_t issuer_certificate_length;
+	const uint8_t *signed_timestamp; /* 20-char tdate slices */
+	const uint8_t *valid_from;
+	const uint8_t *valid_until;
+	bool time_verification_required;
+	bool has_validity_iteration;
+	uint64_t validity_iteration;
+};
+
+/**
+ * Map a parsed DeviceResponse onto the fields this layer consumes, re-imposing the structural
+ * requirements the former dedicated parser enforced: version 1.0, status 0, docType/MSO docType
+ * "aliro-a", SHA-256 digests, ES256 protected header, a kid of at most 8 bytes and/or an x5chain
+ * end-entity certificate, an EC2/P-256 deviceKey, the requested element with its valueDigest, and
+ * complete validity timestamps. Returns 0 on success, -1 on any missing or mismatched field.
+ */
+int MapAccessDocument(const struct aliro_stepup_doc &doc, const uint8_t *requested,
+		      size_t requestedLength, AccessDocumentView &out)
+{
+	if (!doc.have_document || doc.status != 0 ||
+	    std::strcmp(doc.version, "1.0") != 0 ||
+	    std::strcmp(doc.doc_type, ALIRO_STEPUP_DOCTYPE_ACCESS) != 0 ||
+	    std::strcmp(doc.mso_doc_type, ALIRO_STEPUP_DOCTYPE_ACCESS) != 0 ||
+	    std::strcmp(doc.name_space, ALIRO_STEPUP_DOCTYPE_ACCESS) != 0 ||
+	    std::strcmp(doc.digest_alg, "SHA-256") != 0) {
+		return -1;
+	}
+	const struct aliro_stepup_item *item = nullptr;
+	for (size_t i = 0; i < doc.n_items; ++i) {
+		if (std::strlen(doc.items[i].elem_id) == requestedLength &&
+		    std::memcmp(doc.items[i].elem_id, requested, requestedLength) == 0) {
+			item = &doc.items[i];
+			break;
+		}
+	}
+	if (item == nullptr || item->value == nullptr) {
+		return -1;
+	}
+	const struct aliro_stepup_digest *digest = nullptr;
+	for (size_t i = 0; i < doc.n_digests; ++i) {
+		if (doc.digests[i].id == item->digest_id) {
+			digest = &doc.digests[i];
+			break;
+		}
+	}
+	if (digest == nullptr || doc.protected_hdr == nullptr || doc.payload == nullptr ||
+	    doc.signature == nullptr || !doc.have_cose_alg || doc.cose_alg != -7) {
+		return -1;
+	}
+	if (doc.kid != nullptr && (doc.kid_len == 0 || doc.kid_len > 8)) {
+		return -1;
+	}
+	if (doc.x5chain != nullptr && doc.x5_cert == nullptr) {
+		return -1;
+	}
+	if (doc.kid == nullptr && doc.x5_cert == nullptr) {
+		return -1;
+	}
+	if (!doc.have_device_key || doc.signed_raw == nullptr || doc.valid_from_raw == nullptr ||
+	    doc.valid_until_raw == nullptr || !doc.have_time_verification_required) {
+		return -1;
+	}
+	out.device_public_key = doc.device_key;
+	out.data_element = item->value;
+	out.data_element_length = item->value_len;
+	out.issuer_signed_item = item->tagged;
+	out.issuer_signed_item_length = item->tagged_len;
+	out.expected_digest = digest->hash;
+	out.cose_protected = doc.protected_hdr;
+	out.cose_protected_length = doc.protected_len;
+	out.cose_payload = doc.payload;
+	out.cose_payload_length = doc.payload_len;
+	out.cose_signature = doc.signature;
+	out.issuer_kid = doc.kid;
+	out.issuer_kid_length = doc.kid_len;
+	out.issuer_certificate = doc.x5_cert;
+	out.issuer_certificate_length = doc.x5_cert_len;
+	out.signed_timestamp = doc.signed_raw;
+	out.valid_from = doc.valid_from_raw;
+	out.valid_until = doc.valid_until_raw;
+	out.time_verification_required = doc.time_verification_required != 0;
+	out.has_validity_iteration = doc.have_iteration != 0;
+	out.validity_iteration = doc.iteration;
+	return 0;
+}
+
+/**
  * Parses and validates an access document: verifies the issuer-signed item digest, validates the
  * issuer certificate or key ID, checks the document's validity period, ensures the device public
  * key matches, constructs a COSE Sig_structure, verifies the signature, and invokes the access
@@ -1416,10 +1523,17 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 				"ALIRO_TRACE SOURCE ACCESS_DOCUMENT_PLAINTEXT");
 	}
 #endif
-	woz_aliro_access_document parsed;
-	const int parseStatus = woz_aliro_parse_access_document(
-		deviceResponse, deviceResponseLength, session.mRequestedElement.data(),
-		session.mRequestedElementLength, &parsed);
+	/* Parse scratch: the full DeviceResponse decode is a few KiB of slices and
+	 * digests, too large for the protocol worker stack. All session APDU
+	 * processing runs on one context, so a single static scratch is safe. */
+	static struct aliro_stepup_doc stepUpDoc;
+	AccessDocumentView parsed;
+	int parseStatus = aliro_stepup_parse_response(deviceResponse, deviceResponseLength,
+						      &stepUpDoc);
+	if (parseStatus == 0) {
+		parseStatus = MapAccessDocument(stepUpDoc, session.mRequestedElement.data(),
+						session.mRequestedElementLength, parsed);
+	}
 #ifdef CONFIG_WOZ_ALIRO_TRACE
 	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_PARSE status=%d", parseStatus);
 #endif
@@ -1579,14 +1693,14 @@ AliroError FinishStepUpResponse(SessionContext &session)
 #endif
 	const uint8_t *sessionData = nullptr;
 	size_t sessionDataLength = 0;
-	if (woz_aliro_unwrap_do53(session.mExchangeBuffer.data(), session.mResponseLength,
-				  &sessionData, &sessionDataLength) != 0) {
+	if (aliro_stepup_unwrap_do53(session.mExchangeBuffer.data(), session.mResponseLength,
+				     &sessionData, &sessionDataLength) != 0) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 	const uint8_t *ciphertext = nullptr;
 	size_t ciphertextLength = 0;
-	if (woz_aliro_unwrap_session_data(sessionData, sessionDataLength, &ciphertext,
-					  &ciphertextLength) != 0 ||
+	if (aliro_stepup_unwrap_sessiondata_raw(sessionData, sessionDataLength, &ciphertext,
+						&ciphertextLength) != 0 ||
 	    ciphertextLength < CryptoTypes::kAuthenticationTagLength) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
@@ -1637,13 +1751,13 @@ AliroError CollectStepUpResponse(SessionContext &session, Data data)
 	LOG_HEXDUMP_INF(data.mData, data.mLength, "ALIRO_TRACE STEP_UP_APDU_RX bytes:");
 #endif
 	size_t nextLength = 0;
-	const int result = woz_aliro_collect_response(
+	const int result = aliro_stepup_collect_response(
 		data.mData, data.mLength, session.mExchangeBuffer.data(),
 		session.mExchangeBuffer.size(), &session.mResponseLength, &nextLength);
-	if (result == WOZ_ALIRO_STEP_UP_MORE_RESPONSE) {
+	if (result == ALIRO_STEPUP_MORE_RESPONSE) {
 		return SendGetResponse(session, nextLength);
 	}
-	if (result != WOZ_ALIRO_STEP_UP_OK) {
+	if (result != ALIRO_STEPUP_OK) {
 		return ALIRO_APDU_STATUS_INVALID;
 	}
 	AliroError error = FinishStepUpResponse(session);

@@ -2,9 +2,8 @@
 
 #include "nfc_select.h"
 #include "nfc_auth.h"
-#include "nfc_step_up.h"
-#include "access_document.h"
-#include "tlv.h"
+#include "aliro_stepup.h"
+#include "aliro_tlv.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -204,9 +203,9 @@ void test_aliro_nfc(void)
 	uint8_t device_request[256];
 	size_t device_request_length = 0;
 	T_EQ("build step-up DeviceRequest",
-	     woz_aliro_build_device_request((const uint8_t *)"element2", 8, true,
-					    device_request, sizeof(device_request),
-					    &device_request_length), WOZ_ALIRO_STEP_UP_OK);
+	     aliro_stepup_build_device_request_ex((const uint8_t *)"element2", 8, true,
+						  device_request, sizeof(device_request),
+						  &device_request_length), ALIRO_STEPUP_OK);
 	uint8_t expected_request[128];
 	const size_t expected_request_length = decode_hex(
 		"a2613163312e30613281a16131d8185821a26131a167616c69726f2d61a168656c656d656e7432f5613567616c69726f2d61",
@@ -217,20 +216,20 @@ void test_aliro_nfc(void)
 
 	uint8_t session_data[300];
 	size_t session_data_length = 0;
-	T_EQ("wrap SessionData", woz_aliro_wrap_session_data(device_request,
+	T_EQ("wrap SessionData", aliro_stepup_wrap_sessiondata_raw(device_request,
 		device_request_length, session_data, sizeof(session_data), &session_data_length), 0);
 	const uint8_t *unwrapped = NULL;
 	size_t unwrapped_length = 0;
-	T_EQ("unwrap SessionData", woz_aliro_unwrap_session_data(session_data,
+	T_EQ("unwrap SessionData", aliro_stepup_unwrap_sessiondata_raw(session_data,
 		session_data_length, &unwrapped, &unwrapped_length), 0);
 	T_EQ("SessionData payload length", unwrapped_length, device_request_length);
 	T_OK("SessionData round trip", memcmp(unwrapped, device_request, device_request_length) == 0);
 
 	uint8_t do53[320];
 	size_t do53_length = 0;
-	T_EQ("wrap DO53", woz_aliro_wrap_do53(session_data, session_data_length,
+	T_EQ("wrap DO53", aliro_stepup_wrap_do53(session_data, session_data_length,
 		do53, sizeof(do53), &do53_length), 0);
-	T_EQ("unwrap DO53", woz_aliro_unwrap_do53(do53, do53_length,
+	T_EQ("unwrap DO53", aliro_stepup_unwrap_do53(do53, do53_length,
 		&unwrapped, &unwrapped_length), 0);
 	T_EQ("DO53 payload length", unwrapped_length, session_data_length);
 
@@ -239,13 +238,13 @@ void test_aliro_nfc(void)
 	size_t envelope_length = 0;
 	size_t envelope_offset = 0;
 	bool last = true;
-	T_EQ("build chained ENVELOPE", woz_aliro_build_envelope_command(
+	T_EQ("build chained ENVELOPE", aliro_stepup_build_envelope_ex(
 		do53, do53_length, &envelope_offset, 32, 256, false, envelope,
 		sizeof(envelope), &envelope_length, &last), 0);
 	T_OK("first ENVELOPE is chained", !last && envelope[0] == 0x10 && envelope[1] == 0xc3);
 	T_EQ("chained ENVELOPE has no Le", envelope_length, 5 + 32);
 	while (!last) {
-		T_EQ("build next ENVELOPE", woz_aliro_build_envelope_command(
+		T_EQ("build next ENVELOPE", aliro_stepup_build_envelope_ex(
 			do53, do53_length, &envelope_offset, 32, 256, false, envelope,
 			sizeof(envelope), &envelope_length, &last), 0);
 	}
@@ -260,7 +259,7 @@ void test_aliro_nfc(void)
 		0x53, 0x03, 0x01, 0x02, 0x03, 0xf0,
 	};
 	envelope_offset = 0;
-	T_EQ("build short ENVELOPE with extended support", woz_aliro_build_envelope_command(
+	T_EQ("build short ENVELOPE with extended support", aliro_stepup_build_envelope_ex(
 		small_do53, sizeof(small_do53), &envelope_offset, 240, 240, true,
 		envelope, sizeof(envelope), &envelope_length, &last), 0);
 	T_OK("supported extended ENVELOPE stays short",
@@ -271,21 +270,21 @@ void test_aliro_nfc(void)
 	uint8_t collected[16];
 	size_t collected_length = 0, next_length = 0;
 	const uint8_t first_response[] = { 1, 2, 3, 0x61, 0x04 };
-	T_EQ("collect 61xx response", woz_aliro_collect_response(first_response,
+	T_EQ("collect 61xx response", aliro_stepup_collect_response(first_response,
 		sizeof(first_response), collected, sizeof(collected), &collected_length,
-		&next_length), WOZ_ALIRO_STEP_UP_MORE_RESPONSE);
+		&next_length), ALIRO_STEPUP_MORE_RESPONSE);
 	T_EQ("61xx suggested length", next_length, 4);
 	uint8_t get_response[8];
 	size_t get_response_length = 0;
-	T_EQ("build GET RESPONSE", woz_aliro_build_get_response_command(next_length,
+	T_EQ("build GET RESPONSE", aliro_stepup_build_get_response_ex(next_length,
 		get_response, sizeof(get_response), &get_response_length), 0);
 	static const uint8_t expected_get_response[] = { 0, 0xc0, 0, 0, 4 };
 	T_OK("GET RESPONSE bytes", get_response_length == sizeof(expected_get_response) &&
 		memcmp(get_response, expected_get_response, sizeof(expected_get_response)) == 0);
 	const uint8_t final_response[] = { 4, 5, 0x90, 0x00 };
-	T_EQ("collect final response", woz_aliro_collect_response(final_response,
+	T_EQ("collect final response", aliro_stepup_collect_response(final_response,
 		sizeof(final_response), collected, sizeof(collected), &collected_length,
-		&next_length), WOZ_ALIRO_STEP_UP_OK);
+		&next_length), ALIRO_STEPUP_OK);
 	T_EQ("collected response length", collected_length, 5);
 
 	/* Published plaintext DeviceResponse: pin compact aliases and the views
@@ -294,18 +293,22 @@ void test_aliro_nfc(void)
 	const size_t device_response_length = decode_hex(
 		"a3613163312e30613281a26131a26131a167616c69726f2d6181d8185838a4613101613258200aa260c85ca2f6eca90016720a1d7c7c160baf9cfa1a5aa4156331b71863b426613368656c656d656e74326134a1000161328443a10126a104478ea23b8fe54e51590133d81859012ea7613163312e306132675348412d3235366133a167616c69726f2d61a3005820b193e9b1fd40d43aee51f794fb2754f537a12104b743f53ede26d4a74ef604660158202f6f396adb893a91242c60f3b3a32237c90f543cbbed2bf10398ac228955b7e902582095feb0333d71a311b94921230db1bcd094629c01d0fe5e1f2ab6d888b8997ca36134a16134a40102200121582096313d6c63e24e3372742bfdb1a33ba2c897dcd68ab8c753e4fbd48dca6b7f9a2258201fb3269edd418857de1b39a4e4a44b92fa484caa722c228288f01d0c03a2c3d6613567616c69726f2d616136a36131c074323032342d30362d30315431333a33303a30325a6132c074323032342d30362d30315431333a33303a30325a6133c074323032352d30362d30315431333a33303a30325a6137f5584007df311fce5e28c83b5b88e6402fae24250c778eec0c58e06283a7d6ab7037e791307aadb8571b1229e18c49932de464a4dc4f639ad186eb8742099b56a15d17613567616c69726f2d61613300",
 		device_response, sizeof(device_response));
-	struct woz_aliro_access_document access_document;
-	T_EQ("parse published Access Document", woz_aliro_parse_access_document(
-		device_response, device_response_length, (const uint8_t *)"element2", 8,
-		&access_document), 0);
-	T_EQ("Access Document digest ID", access_document.digest_id, 1);
-	T_OK("Access Document device key", access_document.device_public_key[0] == 4 &&
-		access_document.device_public_key[1] == 0x96 && access_document.device_public_key[64] == 0xd6);
-	T_OK("Access Document kid", access_document.issuer_kid_length == 7 &&
-		access_document.issuer_kid[0] == 0x8e);
-	T_OK("Access Document signed time", memcmp(access_document.signed_timestamp,
-		"2024-06-01T13:30:02Z", 20) == 0);
-	T_OK("Access Document requires time", access_document.time_verification_required);
+	static struct aliro_stepup_doc access_document;
+	T_EQ("parse published Access Document", aliro_stepup_parse_response(
+		device_response, device_response_length, &access_document), 0);
+	T_OK("Access Document digest ID", access_document.n_items == 1 &&
+		strcmp(access_document.items[0].elem_id, "element2") == 0 &&
+		access_document.items[0].digest_id == 1 &&
+		access_document.items[0].value != NULL);
+	T_OK("Access Document device key", access_document.have_device_key &&
+		access_document.device_key[0] == 4 &&
+		access_document.device_key[1] == 0x96 && access_document.device_key[64] == 0xd6);
+	T_OK("Access Document kid", access_document.kid_len == 7 &&
+		access_document.kid[0] == 0x8e);
+	T_OK("Access Document signed time", access_document.signed_raw != NULL &&
+		memcmp(access_document.signed_raw, "2024-06-01T13:30:02Z", 20) == 0);
+	T_OK("Access Document requires time", access_document.have_time_verification_required &&
+		access_document.time_verification_required);
 
 	/* Table 7-1 assigns compact key "1" to deviceKey inside deviceKeyInfo.
 	 * Keep accepting the older published fixture's "4", but pin the current
@@ -321,9 +324,9 @@ void test_aliro_nfc(void)
 		}
 	}
 	T_OK("Access Document deviceKey alias fixture", updated_device_key_alias);
-	T_EQ("parse standard deviceKey alias", woz_aliro_parse_access_document(
-		device_response, device_response_length, (const uint8_t *)"element2", 8,
-		&access_document), 0);
+	T_OK("parse standard deviceKey alias", aliro_stepup_parse_response(
+		device_response, device_response_length, &access_document) == 0 &&
+		access_document.have_device_key && access_document.device_key[1] == 0x96);
 
 	/* SELECT corners: the step-up AID and proprietary-information policing. */
 	uint8_t step_up_select[WOZ_ALIRO_SELECT_COMMAND_SIZE];

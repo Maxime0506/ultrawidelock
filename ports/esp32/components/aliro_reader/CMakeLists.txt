@@ -20,7 +20,9 @@ idf_component_register(
 		# from aliro_reader.c under CONFIG_WOZ_ALIRO_STEPUP (default n); the ESP
 		# worker's whole body is gated, so it is empty with the option off.
 		"${ALIRO}/src/aliro_stepup.c"
+		"${ALIRO}/src/aliro_stepup_wire.c"
 		"${ALIRO}/src/aliro_stepup_parse.c"
+		"${ALIRO}/src/aliro_tlv.c"
 		# Presence-assertion codec (non-door primitive): pure functions, always
 		# compiled; only the presence dongle app (CONFIG_WOZ_PRESENCE) calls them.
 		# aliro_assert.c is backend-free by design; aliro_assert_ec.c is the

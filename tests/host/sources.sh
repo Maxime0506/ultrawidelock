@@ -17,11 +17,13 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_aliro_stack/src/advertising_core.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/ble_message.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/ble_timeout.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/tlv.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_select.c"
 	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_auth.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_step_up.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/access_document.c"
+	# Shared step-up wire codecs (one source; woz_aliro_stack compiles the same
+	# files on target). Crypto-free, so no aliro_crypto/prim backend needed here.
+	"$ALIRO/src/aliro_tlv.c"
+	"$ALIRO/src/aliro_stepup_wire.c"
+	"$ALIRO/src/aliro_stepup_parse.c"
 	"$ROOT/modules/woz_nfc/src/pn532.c"
 	"$ROOT/modules/woz_nfc/src/pn532_apdu.c"
 	"$SRC/ccc/ccc_kdf.c"

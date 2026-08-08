@@ -1,9 +1,10 @@
 /**
- * @file tlv.c
+ * @file aliro_tlv.c
  * BER-TLV parser and encoder for Aliro protocol: parse TLVs with definite length and advance
- * offset, compute encoded sizes, and write new TLVs.
+ * offset, compute encoded sizes, and write new TLVs. Promoted verbatim from
+ * woz_aliro_stack (protocol/tlv.c); full BER incl. multi-byte and high-tag-number tags.
  */
-#include "tlv.h"
+#include "aliro_tlv.h"
 
 #include <string.h>
 

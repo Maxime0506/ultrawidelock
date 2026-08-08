@@ -1,7 +1,7 @@
 /**
  * @file matter_tlv.h — Matter TLV codec (Matter Core spec, Appendix A).
  *
- * This is NOT the BER/DER-TLV in modules/woz_aliro_stack/src/protocol/tlv.h.
+ * This is NOT the BER/DER-TLV in modules/woz_aliro/include/aliro_tlv.h.
  * Matter uses its own encoding: one control byte carrying a 3-bit tag control
  * and a 5-bit element type, then 0-8 tag octets, then the value, all
  * little-endian. The two share a name and nothing else, so they stay separate.

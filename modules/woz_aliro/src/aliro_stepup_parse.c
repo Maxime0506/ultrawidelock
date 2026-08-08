@@ -1,7 +1,9 @@
 // DeviceResponse structural decoder for the Aliro step-up phase: a minimal, bounds-checked,
 // depth-limited CBOR reader (definite-length core-deterministic only) plus the Table 8-22/7-1/7-2
 // field walk. No crypto and no allocation; every parsed field is a slice of the caller's buffer.
-// This is the wire-facing attack surface.
+// This is the wire-facing attack surface. The extract_* helpers (deviceKey, x5chain end-entity
+// cert, COSE alg, version) run on cursor copies and only ever ADD fields; they never change what
+// the parser accepts.
 /*
  * CBOR per RFC 8949 (definite lengths only, indefinite rejected); the Aliro
  * remapped-key layout from the v1.0 spec (§7.2 Table 7-1/7-2, §8.4.2 Table 8-22)
@@ -296,6 +298,94 @@ static int tdate_epoch(const uint8_t *s, size_t n, int64_t *epoch)
 /* ---- MobileSecurityObject (Table 7-1) ------------------------------------ */
 
 /**
+ * Best-effort COSE_Key -> uncompressed P-256 point extraction: EC2 (kty 1 = 2), P-256 (crv -1 = 1),
+ * 32-byte x (-2) and y (-3). Works on a cursor copy and only ever sets fields; it never affects
+ * what the parser accepts.
+ */
+static void extract_cose_key(struct cbor c, struct aliro_stepup_doc *doc)
+{
+	uint64_t n;
+	const uint8_t *x = NULL, *y = NULL;
+	size_t xl = 0, yl = 0;
+	int64_t kty = 0, crv = 0;
+	int have_kty = 0, have_crv = 0;
+
+	if (cb_map(&c, &n) != 0) {
+		return;
+	}
+	for (uint64_t i = 0; i < n; i++) {
+		int64_t label;
+
+		if (cb_int_key(&c, &label) != 0) {
+			return;
+		}
+		if (label == 1) {
+			if (cb_int_key(&c, &kty) != 0) {
+				return;
+			}
+			have_kty = 1;
+		} else if (label == -1) {
+			if (cb_int_key(&c, &crv) != 0) {
+				return;
+			}
+			have_crv = 1;
+		} else if (label == -2) {
+			if (cb_bstr(&c, &x, &xl) != 0) {
+				return;
+			}
+		} else if (label == -3) {
+			if (cb_bstr(&c, &y, &yl) != 0) {
+				return;
+			}
+		} else if (cb_skip(&c) != 0) {
+			return;
+		}
+	}
+	if (have_kty && kty == 2 && have_crv && crv == 1 && xl == 32u && yl == 32u) {
+		doc->device_key[0] = 0x04u;
+		memcpy(doc->device_key + 1, x, 32);
+		memcpy(doc->device_key + 33, y, 32);
+		doc->have_device_key = 1;
+	}
+}
+
+/**
+ * Best-effort deviceKeyInfo ("4") walk: deviceKey sits at compact key "1" (Table 7-1), with the
+ * older published fixture alias "4" accepted when "1" is absent. Cursor copy; never affects
+ * acceptance.
+ */
+static void extract_device_key_info(struct cbor c, struct aliro_stepup_doc *doc)
+{
+	uint64_t n;
+	struct cbor legacy = {NULL, NULL};
+
+	if (cb_map(&c, &n) != 0) {
+		return;
+	}
+	for (uint64_t i = 0; i < n; i++) {
+		const uint8_t *k;
+		size_t kl;
+
+		if (cb_tstr(&c, &k, &kl) != 0) {
+			return;
+		}
+		if (key_is(k, kl, '1')) { /* deviceKey */
+			extract_cose_key(c, doc);
+			return;
+		}
+		if (key_is(k, kl, '4') && legacy.p == NULL) { /* legacy alias */
+			legacy = c;
+		}
+		if (cb_skip(&c) != 0) {
+			return;
+		}
+	}
+	if (legacy.p != NULL) {
+		extract_cose_key(legacy, doc);
+	}
+}
+
+/**
  * Parse the mdoc validity object: extracts validityIteration (key "5") and
  * signed/validFrom/validUntil times (keys "1"/"2"/"3", each tagged with epoch 0). Returns 0 on
  * success, -1 on parse error. Sets have_* flags and epoch values in the output struct for each
@@ -332,16 +422,20 @@ static int parse_validity(struct cbor *c, struct aliro_stepup_doc *doc)
 				return -1;
 			}
 			int ok = tdate_epoch(s, sl, &ep) == 0;
+			const uint8_t *raw = (sl == 20u) ? s : NULL;
 
 			if (k[0] == '1') {
 				doc->have_signed = ok;
 				doc->signed_epoch = ep;
+				doc->signed_raw = raw;
 			} else if (k[0] == '2') {
 				doc->have_valid_from = ok;
 				doc->valid_from_epoch = ep;
+				doc->valid_from_raw = raw;
 			} else {
 				doc->have_valid_until = ok;
 				doc->valid_until_epoch = ep;
+				doc->valid_until_raw = raw;
 			}
 			continue;
 		}
@@ -437,7 +531,15 @@ static int parse_mso(const uint8_t *mso, size_t mso_len, struct aliro_stepup_doc
 			if (cb_bool(&c, &doc->time_verification_required) != 0) {
 				return -1;
 			}
-		} else if (cb_skip(&c) != 0) { /* "1" version, "4" deviceKeyInfo, unknown */
+			doc->have_time_verification_required = 1;
+		} else if (key_is(k, kl, '4')) { /* deviceKeyInfo */
+			struct cbor dk = c;
+
+			if (cb_skip(&c) != 0) {
+				return -1;
+			}
+			extract_device_key_info(dk, doc);
+		} else if (cb_skip(&c) != 0) { /* "1" version, unknown */
 			return -1;
 		}
 	}
@@ -460,6 +562,36 @@ static int parse_issuer_auth(struct cbor *c, struct aliro_stepup_doc *doc)
 	}
 	if (cb_bstr(c, &doc->protected_hdr, &doc->protected_len) != 0) {
 		return -1;
+	}
+
+	/* Best-effort protected-header decode: record COSE alg (label 1, -7 = ES256)
+	 * when the content is a map with an integer at that label. Never affects
+	 * acceptance. */
+	{
+		struct cbor ph = {doc->protected_hdr, doc->protected_hdr + doc->protected_len};
+		uint64_t np;
+
+		if (cb_map(&ph, &np) == 0) {
+			for (uint64_t i = 0; i < np; i++) {
+				struct cbor key = ph;
+				int64_t label, v;
+				int is_int = cb_int_key(&key, &label) == 0;
+
+				if (cb_skip(&ph) != 0) {
+					break;
+				}
+				if (is_int && label == 1) {
+					if (cb_int_key(&ph, &v) == 0) {
+						doc->cose_alg = v;
+						doc->have_cose_alg = 1;
+					}
+					break;
+				}
+				if (cb_skip(&ph) != 0) {
+					break;
+				}
+			}
+		}
 	}
 
 	uint64_t nu;
@@ -485,6 +617,23 @@ static int parse_issuer_auth(struct cbor *c, struct aliro_stepup_doc *doc)
 			}
 			doc->x5chain = start;
 			doc->x5chain_len = (size_t)(c->p - start);
+
+			/* Best-effort: the end-entity certificate is the single bstr
+			 * or the first element of the array. Never affects
+			 * acceptance. */
+			struct cbor xc = {start, c->p};
+			uint8_t mt;
+			uint64_t arg;
+
+			if (cb_head(&xc, &mt, &arg) == 0) {
+				if (mt == 4 && arg >= 1u && cb_head(&xc, &mt, &arg) != 0) {
+					mt = 0xffu;
+				}
+				if (mt == 2 && arg > 0u && arg <= (uint64_t)(xc.end - xc.p)) {
+					doc->x5_cert = xc.p;
+					doc->x5_cert_len = (size_t)arg;
+				}
+			}
 		} else if (cb_skip(c) != 0) {
 			return -1;
 		}
@@ -563,7 +712,15 @@ static int parse_one_item(struct cbor *c, struct aliro_stepup_item *it)
 				return -1;
 			}
 			str_copy(it->elem_id, sizeof(it->elem_id), s, sl);
-		} else if (cb_skip(&ic) != 0) { /* "2" random, "4" elementValue */
+		} else if (key_is(k, kl, '4')) { /* elementValue: keep the raw item */
+			const uint8_t *vstart = ic.p;
+
+			if (cb_skip(&ic) != 0) {
+				return -1;
+			}
+			it->value = vstart;
+			it->value_len = (size_t)(ic.p - vstart);
+		} else if (cb_skip(&ic) != 0) { /* "2" random, unknown */
 			return -1;
 		}
 	}
@@ -725,7 +882,18 @@ int aliro_stepup_parse_response(const uint8_t *buf, size_t len, struct aliro_ste
 				return -1;
 			}
 			doc->status = (int)st;
-		} else if (cb_skip(&c) != 0) { /* "1" version, unknown */
+		} else if (key_is(k, kl, '1')) { /* version: recorded, "" if not text */
+			struct cbor vc = c;
+			const uint8_t *s;
+			size_t sl;
+
+			if (cb_skip(&c) != 0) {
+				return -1;
+			}
+			if (cb_tstr(&vc, &s, &sl) == 0) {
+				str_copy(doc->version, sizeof(doc->version), s, sl);
+			}
+		} else if (cb_skip(&c) != 0) { /* unknown */
 			return -1;
 		}
 	}

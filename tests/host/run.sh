@@ -209,12 +209,22 @@ STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
 STK_OBJS=()
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_stack.o"
-for stk_src in advertising_core protocol/ble_message protocol/ble_timeout protocol/tlv \
-	protocol/nfc_select protocol/nfc_auth protocol/nfc_step_up protocol/access_document; do
+for stk_src in advertising_core protocol/ble_message protocol/ble_timeout \
+	protocol/nfc_select protocol/nfc_auth; do
 	stk_obj="$OUT/stk_$(basename "$stk_src").o"
 	# shellcheck disable=SC2086
 	"${CC:-cc}" -std=c11 -O1 -w $san_flags "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" \
-		-c "$STK/$stk_src.c" -o "$stk_obj"
+		-I"$ROOT/modules/woz_aliro/include" -c "$STK/$stk_src.c" -o "$stk_obj"
+	STK_OBJS+=("$stk_obj")
+done
+# The step-up wire codecs + DeviceResponse parser are the shared woz_aliro
+# sources (one source of protocol truth; session.cpp calls them directly).
+for aliro_src in aliro_tlv aliro_stepup_wire aliro_stepup_parse; do
+	stk_obj="$OUT/stk_$aliro_src.o"
+	# shellcheck disable=SC2086
+	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
+		-I"$ROOT/modules/woz_aliro/src" \
+		-c "$ROOT/modules/woz_aliro/src/$aliro_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
 # The symmetric crypto is REAL: aliro_hash.c (SHA-256/HMAC/HKDF, pinned by

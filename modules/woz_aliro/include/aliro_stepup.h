@@ -5,17 +5,24 @@
 /*
  * aliro_stepup — the Aliro §8.4 step-up phase: the ISO 18013-5 (mdoc) document
  * exchange the Reader MAY run in the standard phase to obtain an Access or
- * Revocation Document. Three concerns, split across two translation units so the
- * wire-facing decoder carries no crypto dependency:
+ * Revocation Document. Split across three translation units so the wire-facing
+ * decoder and codecs carry no crypto dependency:
  *
  *   aliro_stepup_parse.c  pure CBOR decode + DeviceResponse structural parse
  *                         (Table 7-1/7-2/8-22). No crypto, no allocation; every
  *                         field is a bounds-checked slice of the caller's buffer.
- *   aliro_stepup.c        the DeviceRequest builder, the ENVELOPE / GET RESPONSE
- *                         APDU codec, the SessionData seal/open (reusing the
- *                         aliro_secchan AES-256-GCM channel under StepUpSK), and
- *                         the §7.4 verifier (digest recompute + validity + the
- *                         issuer-signature check via an injected ES256 verify).
+ *   aliro_stepup_wire.c   the DeviceRequest builders, the raw (unencrypted)
+ *                         SessionData wrap/unwrap, the DO'53 wrapper, the
+ *                         fragmenting ENVELOPE / GET RESPONSE APDU builders and
+ *                         the 61xx response reassembly. No crypto; transports
+ *                         that encrypt through their own backend link only this
+ *                         and the parser.
+ *   aliro_stepup.c        the SessionData seal/open (reusing the aliro_secchan
+ *                         AES-256-GCM channel under StepUpSK, factored over the
+ *                         raw wrap/unwrap), the simple ENVELOPE / GET RESPONSE
+ *                         codec, and the §7.4 verifier (digest recompute +
+ *                         validity + the issuer-signature check via an injected
+ *                         ES256 verify).
  *
  * The ES256 primitive is passed in (aliro_stepup_verify_ctx.ecdsa_verify) so this
  * module carries no elliptic-curve dependency: the target wires the PSA-backed
@@ -23,6 +30,7 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -35,6 +43,17 @@ extern "C" {
 /* ---- document types (§7.7) ---- */
 #define ALIRO_STEPUP_DOCTYPE_ACCESS     "aliro-a"
 #define ALIRO_STEPUP_DOCTYPE_REVOCATION "aliro-r"
+
+/* Result codes of the aliro_stepup_wire.c codecs (the seal/open/verify entry
+ * points below keep their historic 0/-1 contract). */
+enum aliro_stepup_result {
+	ALIRO_STEPUP_OK = 0,
+	ALIRO_STEPUP_MORE_RESPONSE = 1,
+	ALIRO_STEPUP_INVALID_ARGUMENT = -1,
+	ALIRO_STEPUP_BUFFER_TOO_SMALL = -2,
+	ALIRO_STEPUP_INVALID_DATA = -3,
+	ALIRO_STEPUP_STATUS_ERROR = -4,
+};
 
 /* ---- StepUpSK-derived session keys (§8.4.3): HKDF-SHA256(empty salt, IKM =
  * StepUpSK, info = "SKReader"/"SKDevice", L = 32). StepUpSK is block[64..95]. */
@@ -56,6 +75,48 @@ void aliro_stepup_channel_init(struct aliro_secchan *sc,
  * (the §14.6 example request). Returns 0 and sets *out_len, or -1 on overflow. */
 int aliro_stepup_build_device_request(const char *const *elems, size_t n_elems, uint8_t *out,
 				      size_t cap, size_t *out_len);
+
+/* Single-element DeviceRequest with the element identifier as a raw text slice
+ * and the caller's intent-to-retain flag (same wire shape as above). Returns an
+ * aliro_stepup_result. */
+int aliro_stepup_build_device_request_ex(const uint8_t *element_identifier,
+					 size_t element_identifier_length, bool intent_to_store,
+					 uint8_t *output, size_t output_capacity,
+					 size_t *output_length);
+
+/* ---- raw SessionData / DO'53 / chaining codecs (aliro_stepup_wire.c) ----
+ * The {"data": bstr} envelope WITHOUT the AES-256-GCM channel, for stacks that
+ * encrypt through their own backend. The seal/open pair below factor over
+ * these. All return aliro_stepup_result; unwrapped pointers are slices into
+ * the caller's buffer. */
+int aliro_stepup_wrap_sessiondata_raw(const uint8_t *ciphertext, size_t ciphertext_length,
+				      uint8_t *output, size_t output_capacity,
+				      size_t *output_length);
+int aliro_stepup_unwrap_sessiondata_raw(const uint8_t *session_data, size_t session_data_length,
+					const uint8_t **ciphertext, size_t *ciphertext_length);
+
+/* Encode/decode the NFC Device Engagement DO'53 wrapper. */
+int aliro_stepup_wrap_do53(const uint8_t *message, size_t message_length, uint8_t *output,
+			   size_t output_capacity, size_t *output_length);
+int aliro_stepup_unwrap_do53(const uint8_t *encoded, size_t encoded_length, const uint8_t **message,
+			     size_t *message_length);
+
+/* Build one ENVELOPE command fragment (short or extended APDU); offset is
+ * advanced by the emitted fragment, *last_fragment set on the final one. */
+int aliro_stepup_build_envelope_ex(const uint8_t *encoded_do53, size_t encoded_length,
+				   size_t *offset, size_t max_command_data,
+				   size_t max_response_data, bool extended_supported,
+				   uint8_t *output, size_t output_capacity, size_t *output_length,
+				   bool *last_fragment);
+
+/* GET RESPONSE for 1..65536 expected bytes (extended APDU above 256). */
+int aliro_stepup_build_get_response_ex(size_t expected_length, uint8_t *output,
+				       size_t output_capacity, size_t *output_length);
+
+/* Append response data and interpret 9000 / 61xx. sw2==0 means 256 bytes. */
+int aliro_stepup_collect_response(const uint8_t *response, size_t response_length,
+				  uint8_t *collected, size_t collected_capacity,
+				  size_t *collected_length, size_t *next_length);
 
 /* Seal a DeviceRequest into a SessionData message {"data": bstr(ct||tag)} and
  * advance the channel. Returns 0 and sets *out_len, or -1. */
@@ -94,7 +155,8 @@ struct aliro_stepup_digest {
 
 /**
  * Single disclosed IssuerSignedItem from a Step-up document: digest_id (which digest to check
- * against), tagged (24(bstr(IssuerSignedItem)) bytes for hashing), elem_id (element name).
+ * against), tagged (24(bstr(IssuerSignedItem)) bytes for hashing), elem_id (element name),
+ * value (raw encoded elementValue "4" CBOR item, or NULL when absent).
  */
 struct aliro_stepup_item {
 	uint64_t digest_id;
@@ -102,6 +164,8 @@ struct aliro_stepup_item {
 		*tagged; /* the 24(bstr(IssuerSignedItem)) bytes, hashed for the digest check */
 	size_t tagged_len;
 	char elem_id[ALIRO_STEPUP_ID_MAX];
+	const uint8_t *value; /* raw encoded elementValue item, or NULL */
+	size_t value_len;
 };
 
 /**
@@ -116,16 +180,21 @@ struct aliro_stepup_doc {
 	int have_document; /* 0 = DeviceResponse carried no documents (device declined) */
 	int status;        /* DeviceResponse "3" */
 
+	char version[ALIRO_STEPUP_ID_MAX];    /* DeviceResponse "1" ("1.0"), "" if not text */
 	char doc_type[ALIRO_STEPUP_ID_MAX];   /* Documents[].docType ("5") */
 	char name_space[ALIRO_STEPUP_ID_MAX]; /* the single issuerSigned namespace */
 
 	/* IssuerAuth COSE_Sign1 [protected, unprotected, payload, signature]. */
 	const uint8_t *protected_hdr; /* content of the protected bstr */
 	size_t protected_len;
+	int have_cose_alg;  /* protected header decoded as {1: alg} */
+	int64_t cose_alg;   /* COSE alg label 1 (-7 = ES256) */
 	const uint8_t *kid; /* unprotected label 4, or NULL */
 	size_t kid_len;
 	const uint8_t *x5chain; /* unprotected label 33, or NULL (raw item bytes) */
 	size_t x5chain_len;
+	const uint8_t *x5_cert; /* first certificate bstr payload of x5chain, or NULL */
+	size_t x5_cert_len;
 	const uint8_t *payload; /* content of the payload bstr = 24(bstr(MSO)) */
 	size_t payload_len;
 	const uint8_t *signature; /* 64-byte r||s */
@@ -136,11 +205,20 @@ struct aliro_stepup_doc {
 	struct aliro_stepup_digest digests[ALIRO_STEPUP_MAX_DIGESTS];
 	size_t n_digests;
 
-	/* validityInfo tdates as parsed epoch seconds (UTC). */
+	/* deviceKeyInfo ("4") deviceKey as an uncompressed P-256 point, when the
+	 * COSE_Key is EC2/P-256 with 32-byte x and y (compact key "1", with the
+	 * older published fixture alias "4" also accepted). */
+	int have_device_key;
+	uint8_t device_key[65]; /* 0x04 || X || Y */
+
+	/* validityInfo tdates as parsed epoch seconds (UTC), plus the raw 20-char
+	 * "YYYY-MM-DDTHH:MM:SSZ" slices (NULL unless the tdate text is 20 chars). */
 	int have_signed, have_valid_from, have_valid_until;
 	int64_t signed_epoch, valid_from_epoch, valid_until_epoch;
+	const uint8_t *signed_raw, *valid_from_raw, *valid_until_raw;
 	int have_iteration;
 	uint64_t iteration;
+	int have_time_verification_required; /* MSO "7" present */
 	int time_verification_required;
 
 	/* disclosed IssuerSignedItems. */

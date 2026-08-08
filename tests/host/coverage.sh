@@ -90,7 +90,8 @@ run_suite apdu "$OUT/cov_apdu"
 
 cov_cc -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ET/test_aliro_stepup.c" \
-	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
+	"$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
 	"$ET/aliro_prim_host.c" -o "$OUT/cov_stepup"
 run_suite stepup "$OUT/cov_stepup"
@@ -230,7 +231,8 @@ run_suite esp_nvs "$OUT/cov_esp_nvs"
 cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 \
 	-I"$SDKFAKE" -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ET/test_esp_stepup_worker.c" "$ECOMP/aliro_reader/aliro_stepup_worker.c" \
-	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
+	"$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
 	"$ET/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
@@ -358,10 +360,18 @@ STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
 	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src")
 STK_OBJS=()
 cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_stack_cov.o"
-for stk_src in advertising_core protocol/ble_message protocol/ble_timeout protocol/tlv \
-	protocol/nfc_select protocol/nfc_auth protocol/nfc_step_up protocol/access_document; do
+for stk_src in advertising_core protocol/ble_message protocol/ble_timeout \
+	protocol/nfc_select protocol/nfc_auth; do
 	stk_obj="$OUT/stk_$(basename "$stk_src")_cov.o"
-	cov_cc "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" -c "$STK/$stk_src.c" -o "$stk_obj"
+	cov_cc "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" \
+		-I"$ROOT/modules/woz_aliro/include" -c "$STK/$stk_src.c" -o "$stk_obj"
+	STK_OBJS+=("$stk_obj")
+done
+# Shared step-up wire codecs + parser (mirrors run.sh stage 8).
+for aliro_src in aliro_tlv aliro_stepup_wire aliro_stepup_parse; do
+	stk_obj="$OUT/stk_${aliro_src}_cov.o"
+	cov_cc -I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src" \
+		-c "$ROOT/modules/woz_aliro/src/$aliro_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
 # Real symmetric crypto; see run.sh stage 8 for what is real and what is not.
