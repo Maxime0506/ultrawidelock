@@ -14,7 +14,11 @@ function(woz_role_sources listfile out_var)
 	# root is always four components above the manifest itself. Deriving it
 	# here keeps the function state-free: safe to include() from any scope.
 	get_filename_component(_root "${listfile}/../../../.." ABSOLUTE)
-	file(STRINGS "${listfile}" _lines)
+	# ENCODING is not optional: without it file(STRINGS) scans for ASCII runs
+	# and every non-ASCII byte ends one. A comment carrying an em-dash would
+	# then split in two, and the tail — no longer starting with # — would
+	# survive the strip below and be handed to target_sources as a path.
+	file(STRINGS "${listfile}" _lines ENCODING UTF-8)
 	set(_srcs)
 	foreach(_line IN LISTS _lines)
 		string(REGEX REPLACE "#.*$" "" _line "${_line}")
