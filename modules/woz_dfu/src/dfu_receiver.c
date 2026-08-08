@@ -20,33 +20,29 @@
  * forged header can only destroy the installed image, never install code.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/storage/flash_map.h>
-#include <zephyr/sys/byteorder.h>
-#include <zephyr/sys/crc.h>
-#include <zephyr/sys/reboot.h>
-#include <zephyr/sys/util.h>
-
 #include <psa/crypto.h>
 #include <errno.h>
 #include <string.h>
 
-#include <pm_config.h>
-
+#include "dfu_crc.h"
+#include "woz_bytes.h"
 #include "woz_dfu.h"
 #include "woz_dfu_rx.h"
+#include "woz_flash.h"
+#include "woz_log.h"
+#include "woz_osal.h"
 
-#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(woz_dfu, CONFIG_WOZ_DFU_LOG_LEVEL);
+
+#ifndef MIN
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
 
 /** Generated at build time from the MCUboot signing key. 0x04 || X || Y. */
 extern const uint8_t woz_dfu_pubkey[65];
 
 /** Bytes of preamble ahead of the patch: the header and its signature. */
 #define HEAD_LEN (WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN)
-
-/** Room for patch bytes, after the header page and the step-log page. */
-#define PATCH_MAX (PM_PATCH_STAGING_SIZE - WOZ_DFU_PATCH_OFFSET)
 
 /** Flash write staging. Multiple of the 4-byte write block. */
 #define WBUF_SZ 64
@@ -56,31 +52,45 @@ static struct {
 	uint32_t total; /**< wire bytes the host promised */
 	uint32_t got;   /**< wire bytes consumed so far */
 	uint32_t patch_crc;
-	off_t wpos; /**< next staging offset for patch data */
+	uint32_t wpos; /**< next staging offset for patch data */
 	uint8_t head[HEAD_LEN];
 	uint8_t wbuf[WBUF_SZ];
 	size_t wlen;
 } s_rx;
 
-static const struct flash_area *s_fa;
+static const struct woz_flash_area *s_fa;
 
 /* Replying before rebooting is the whole reason this is deferred: a reboot
  * inside the frame handler drops the acknowledgement the host is waiting for,
  * and the host cannot then tell success from a dead board. */
-static void reboot_fn(struct k_work *work)
+static void reboot_fn(struct woz_dwork *dwork)
 {
-	ARG_UNUSED(work);
+	(void)dwork;
 	LOG_INF("update staged, restarting into the bootloader");
-	sys_reboot(SYS_REBOOT_COLD);
+	woz_reboot();
 }
-static K_WORK_DELAYABLE_DEFINE(s_reboot, reboot_fn);
+static struct woz_dwork s_reboot;
 
 /* ---- window --------------------------------------------------------------- */
 
-static void window_expire(struct k_work *work);
-static K_WORK_DELAYABLE_DEFINE(s_window, window_expire);
+static void window_expire(struct woz_dwork *dwork);
+static struct woz_dwork s_window;
 static bool s_open;
 static woz_dfu_window_cb s_window_cb;
+
+/* Both delayable items are bound on the first window call, which every route
+ * into the receiver goes through -- frames and SMP uploads are refused while
+ * the window has never opened. */
+static void works_bind(void)
+{
+	static bool bound;
+
+	if (!bound) {
+		woz_dwork_init(&s_reboot, reboot_fn);
+		woz_dwork_init(&s_window, window_expire);
+		bound = true;
+	}
+}
 
 /**
  * Register a callback to be invoked when the update window opens or closes.
@@ -103,9 +113,9 @@ static void window_notify(bool open)
  * Mark the update window closed, reset RX state, and notify all listeners (typically the UI) that
  * the window is no longer open.
  */
-static void window_expire(struct k_work *work)
+static void window_expire(struct woz_dwork *dwork)
 {
-	ARG_UNUSED(work);
+	(void)dwork;
 	LOG_INF("update window closed");
 	s_open = false;
 	woz_dfu_rx_reset();
@@ -118,8 +128,9 @@ static void window_expire(struct k_work *work)
  */
 void woz_dfu_window_open(uint32_t duration_ms)
 {
+	works_bind();
 	s_open = true;
-	(void)k_work_reschedule(&s_window, K_MSEC(duration_ms));
+	(void)woz_dwork_reschedule(&s_window, (int32_t)duration_ms);
 	LOG_INF("update window open for %u ms", (unsigned)duration_ms);
 	window_notify(true);
 }
@@ -130,7 +141,8 @@ void woz_dfu_window_open(uint32_t duration_ms)
  */
 void woz_dfu_window_close(void)
 {
-	(void)k_work_cancel_delayable(&s_window);
+	works_bind();
+	(void)woz_dwork_cancel(&s_window);
 	s_open = false;
 	woz_dfu_rx_reset();
 	window_notify(false);
@@ -155,7 +167,13 @@ static int staging_open(void)
 	if (s_fa != NULL) {
 		return 0;
 	}
-	return flash_area_open(PM_PATCH_STAGING_ID, &s_fa);
+	return woz_flash_open(WOZ_FLASH_AREA_STAGING, &s_fa);
+}
+
+/** Room for patch bytes, after the header page and the step-log page. */
+static uint32_t patch_max(void)
+{
+	return (uint32_t)woz_flash_size(s_fa) - WOZ_DFU_PATCH_OFFSET;
 }
 
 /**
@@ -175,11 +193,11 @@ static int wbuf_flush(bool final)
 	if (n == 0U) {
 		return 0;
 	}
-	if (flash_area_write(s_fa, s_rx.wpos, s_rx.wbuf, n) != 0) {
+	if (woz_flash_write(s_fa, s_rx.wpos, s_rx.wbuf, n) != 0) {
 		return -1;
 	}
 
-	s_rx.wpos += (off_t)n;
+	s_rx.wpos += (uint32_t)n;
 	s_rx.wlen -= n;
 	if (s_rx.wlen > 0U) {
 		memmove(s_rx.wbuf, s_rx.wbuf + n, s_rx.wlen);
@@ -193,7 +211,7 @@ static int wbuf_flush(bool final)
  */
 static int patch_write(const uint8_t *data, size_t len)
 {
-	s_rx.patch_crc = crc32_ieee_update(s_rx.patch_crc, data, len);
+	s_rx.patch_crc = woz_crc32_update(s_rx.patch_crc, data, len);
 
 	while (len > 0U) {
 		size_t n = MIN(len, WBUF_SZ - s_rx.wlen);
@@ -288,23 +306,23 @@ static size_t reply_err(uint8_t *rsp, enum woz_dfu_err code)
  */
 static enum woz_dfu_err begin_at(uint32_t total)
 {
-	if (total <= HEAD_LEN || (total - HEAD_LEN) > PATCH_MAX) {
-		return WOZ_DFU_ERR_SIZE;
-	}
 	if (staging_open() != 0) {
 		return WOZ_DFU_ERR_FLASH;
+	}
+	if (total <= HEAD_LEN || (total - HEAD_LEN) > patch_max()) {
+		return WOZ_DFU_ERR_SIZE;
 	}
 
 	/* Erase everything, including the step log: a stale one would make the
 	 * bootloader believe steps of THIS patch were already applied. */
-	if (flash_area_erase(s_fa, 0, PM_PATCH_STAGING_SIZE) != 0) {
+	if (woz_flash_erase(s_fa, 0, woz_flash_size(s_fa)) != 0) {
 		return WOZ_DFU_ERR_FLASH;
 	}
 
 	woz_dfu_rx_reset();
 	s_rx.active = true;
 	s_rx.total = total;
-	s_rx.wpos = (off_t)WOZ_DFU_PATCH_OFFSET;
+	s_rx.wpos = WOZ_DFU_PATCH_OFFSET;
 	LOG_INF("update begun, %u B", (unsigned)total);
 	return WOZ_DFU_ERR_OK;
 }
@@ -359,7 +377,7 @@ static enum woz_dfu_err commit_now(bool reboot)
 	memcpy(&hdr, s_rx.head, sizeof(hdr));
 
 	if (hdr.magic != WOZ_DFU_MAGIC || hdr.abi_version != WOZ_DFU_ABI_VERSION ||
-	    hdr.hdr_crc32 != crc32_ieee(s_rx.head, WOZ_DFU_HDR_CRC_LEN) ||
+	    hdr.hdr_crc32 != woz_crc32(s_rx.head, WOZ_DFU_HDR_CRC_LEN) ||
 	    hdr.patch_len != (s_rx.total - HEAD_LEN) || hdr.patch_crc32 != s_rx.patch_crc) {
 		LOG_WRN("rejected: staged bytes do not match the header");
 		return WOZ_DFU_ERR_INTEGRITY;
@@ -368,13 +386,13 @@ static enum woz_dfu_err commit_now(bool reboot)
 	/* The header goes in LAST. Until this write lands there is no magic in
 	 * the staging partition and the bootloader has nothing to act on, so an
 	 * interrupted transfer is indistinguishable from no transfer. */
-	if (flash_area_write(s_fa, (off_t)WOZ_DFU_HDR_OFFSET, s_rx.head, WOZ_DFU_HDR_LEN) != 0) {
+	if (woz_flash_write(s_fa, WOZ_DFU_HDR_OFFSET, s_rx.head, WOZ_DFU_HDR_LEN) != 0) {
 		return WOZ_DFU_ERR_FLASH;
 	}
 
 	s_rx.active = false;
 	if (reboot) {
-		(void)k_work_schedule(&s_reboot, K_MSEC(500));
+		(void)woz_dwork_schedule(&s_reboot, 500);
 	}
 	return WOZ_DFU_ERR_OK;
 }
@@ -427,7 +445,7 @@ int woz_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, size_t *rsp
 		break;
 	case WOZ_DFU_OP_ABORT:
 		if (s_fa != NULL) {
-			(void)flash_area_erase(s_fa, 0, PM_PATCH_STAGING_SIZE);
+			(void)woz_flash_erase(s_fa, 0, woz_flash_size(s_fa));
 		}
 		woz_dfu_rx_reset();
 		*rsp_len = reply_ok(rsp);
@@ -562,7 +580,7 @@ bool woz_dfu_rx_staged(void)
 	if (staging_open() != 0) {
 		return false;
 	}
-	if (flash_area_read(s_fa, (off_t)WOZ_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0) {
+	if (woz_flash_read(s_fa, WOZ_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0) {
 		return false;
 	}
 	return hdr.magic == WOZ_DFU_MAGIC && hdr.abi_version == WOZ_DFU_ABI_VERSION;

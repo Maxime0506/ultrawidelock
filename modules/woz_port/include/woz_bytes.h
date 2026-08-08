@@ -5,9 +5,10 @@
 /*
  * woz_bytes.h - endian-neutral byte load/store helpers.
  *
- * Pure code: no OS, no allocation, no platform calls. It lives here rather than
- * behind a <zephyr/sys/byteorder.h> compat header because nothing about it is
- * platform-specific, so every port was re-supplying the same eight inlines.
+ * Pure code: no OS, no allocation, no platform calls. It lives in woz_port
+ * rather than behind a <zephyr/sys/byteorder.h> compat header because nothing
+ * about it is platform-specific, so every port was re-supplying the same
+ * eight inlines.
  *
  * The Zephyr spellings (sys_get_le32 etc.) are kept deliberately: on Zephyr we
  * defer to the real header, so the names have to match, and keeping them means

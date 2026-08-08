@@ -27,8 +27,9 @@
 #include <zephyr/mgmt/mcumgr/mgmt/callbacks.h>
 #include <zephyr/mgmt/mcumgr/mgmt/mgmt.h>
 #include <zephyr/mgmt/mcumgr/smp/smp.h>
-#include <zephyr/sys/crc.h>
 #include <zephyr/sys/util.h>
+
+#include "dfu_crc.h"
 
 #include "woz_dfu.h"
 #include "woz_dfu_rx.h"
@@ -344,11 +345,11 @@ static void build_upload_wire(void)
 	hdr.abi_version = WOZ_DFU_ABI_VERSION;
 	hdr.patch_len = sizeof(upload_patch);
 	hdr.to_len = 0;
-	hdr.patch_crc32 = crc32_ieee(upload_patch, sizeof(upload_patch));
+	hdr.patch_crc32 = woz_crc32(upload_patch, sizeof(upload_patch));
 	hdr.from_crc32 = 0;
 	hdr.from_len = 0;
 	memcpy(upload_head, &hdr, sizeof(hdr));
-	hdr.hdr_crc32 = crc32_ieee(upload_head, WOZ_DFU_HDR_CRC_LEN);
+	hdr.hdr_crc32 = woz_crc32(upload_head, WOZ_DFU_HDR_CRC_LEN);
 	memcpy(upload_head, &hdr, sizeof(hdr));
 	memset(upload_head + WOZ_DFU_HDR_LEN, 0xa5, WOZ_DFU_SIG_LEN);
 

@@ -18,24 +18,26 @@
  * what makes that survivable.
  */
 
-#include <zephyr/init.h>
-#include <zephyr/kernel.h>
-#include <zephyr/storage/flash_map.h>
-#include <zephyr/sys/crc.h>
-#include <zephyr/sys/util.h>
-
 #include <string.h>
 
-#include <pm_config.h>
-
+#include "dfu_crc.h"
 #include "woz_dfu.h"
+#include "woz_flash.h"
+#include "woz_osal.h"
 #include "detools.h"
 
 #if defined(CONFIG_WOZ_DFU_APPLIER_LOG)
-#include <zephyr/sys/printk.h>
+#include "woz_log.h" /* printk on every platform */
 #define DFU_LOG(...) printk("WDFU " __VA_ARGS__)
 #else
 #define DFU_LOG(...) ((void)0)
+#endif
+
+#ifndef MIN
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+#ifndef ROUND_UP
+#define ROUND_UP(x, align) ((((x) + (align) - 1) / (align)) * (align))
 #endif
 
 /**
@@ -46,29 +48,23 @@
  * only the payload would leave the old signature in front of new code and
  * MCUboot would refuse to boot it.
  */
-#define PRIMARY_ID PM_MCUBOOT_PRIMARY_ID
-#define STAGING_ID PM_PATCH_STAGING_ID
-
-/** Largest patch the staging partition can hold after the two control pages. */
-#define PATCH_MAX (PM_PATCH_STAGING_SIZE - WOZ_DFU_PATCH_OFFSET)
-
 /** Most steps the one-page step log can record, one word each. */
 #define STEP_MAX (WOZ_DFU_PAGE_SIZE / sizeof(uint32_t))
 
 /* The host builds this header with struct.pack and this side reads it with a
- * flash_area_read straight into the struct, so the two agree on the layout or
+ * flash read straight into the struct, so the two agree on the layout or
  * nothing works. Caught here rather than on the bench. */
-BUILD_ASSERT(sizeof(struct woz_dfu_hdr) == WOZ_DFU_HDR_LEN,
-	     "woz_dfu_hdr changed size; scripts/woz_patch.py must change with it");
-BUILD_ASSERT(WOZ_DFU_HDR_CRC_LEN == WOZ_DFU_HDR_LEN - sizeof(uint32_t),
-	     "the header CRC must cover everything except itself");
+_Static_assert(sizeof(struct woz_dfu_hdr) == WOZ_DFU_HDR_LEN,
+	       "woz_dfu_hdr changed size; scripts/woz_patch.py must change with it");
+_Static_assert(WOZ_DFU_HDR_CRC_LEN == WOZ_DFU_HDR_LEN - sizeof(uint32_t),
+	       "the header CRC must cover everything except itself");
 
 /**
  * Context passed to detools patch applier callbacks holding the primary and staging flash areas.
  */
 struct apply_ctx {
-	const struct flash_area *primary;
-	const struct flash_area *staging;
+	const struct woz_flash_area *primary;
+	const struct woz_flash_area *staging;
 };
 
 /* Static, not automatic: this runs on the main thread's stack and the patcher
@@ -103,8 +99,8 @@ static uint8_t s_chunk[CONFIG_WOZ_DFU_APPLIER_CHUNK];
 #define WBUF_SZ 128
 
 static struct {
-	off_t addr; /**< primary-slot offset that buf[0] belongs at */
-	size_t len; /**< bytes currently held */
+	uint32_t addr; /**< primary-slot offset that buf[0] belongs at */
+	size_t len;    /**< bytes currently held */
 	uint8_t buf[WBUF_SZ];
 } s_w;
 
@@ -116,13 +112,13 @@ static int wbuf_flush_words(struct apply_ctx *c)
 	if (whole == 0U) {
 		return 0;
 	}
-	if (flash_area_write(c->primary, s_w.addr, s_w.buf, whole) != 0) {
+	if (woz_flash_write(c->primary, s_w.addr, s_w.buf, whole) != 0) {
 		DFU_LOG("w %u+%u failed\n", (unsigned)s_w.addr, (unsigned)whole);
 		return -1;
 	}
 
 	s_w.len -= whole;
-	s_w.addr += (off_t)whole;
+	s_w.addr += (uint32_t)whole;
 	if (s_w.len > 0U) {
 		memmove(s_w.buf, s_w.buf + whole, s_w.len);
 	}
@@ -142,12 +138,12 @@ static int wbuf_flush_all(struct apply_ctx *c)
 	while (s_w.len & 3U) {
 		s_w.buf[s_w.len++] = 0xff;
 	}
-	if (flash_area_write(c->primary, s_w.addr, s_w.buf, s_w.len) != 0) {
+	if (woz_flash_write(c->primary, s_w.addr, s_w.buf, s_w.len) != 0) {
 		DFU_LOG("wt %u+%u failed\n", (unsigned)s_w.addr, (unsigned)s_w.len);
 		return -1;
 	}
 
-	s_w.addr += (off_t)s_w.len;
+	s_w.addr += (uint32_t)s_w.len;
 	s_w.len = 0U;
 	return 0;
 }
@@ -161,13 +157,13 @@ static int mem_write(void *arg_p, uintptr_t dst, void *src_p, size_t size)
 	struct apply_ctx *c = arg_p;
 	const uint8_t *src = src_p;
 
-	if (s_w.len > 0U && (off_t)dst != s_w.addr + (off_t)s_w.len) {
+	if (s_w.len > 0U && (uint32_t)dst != s_w.addr + (uint32_t)s_w.len) {
 		if (wbuf_flush_all(c) != 0) {
 			return -1;
 		}
 	}
 	if (s_w.len == 0U) {
-		s_w.addr = (off_t)dst;
+		s_w.addr = (uint32_t)dst;
 	}
 
 	while (size > 0U) {
@@ -198,7 +194,7 @@ static int mem_read(void *arg_p, void *dst_p, uintptr_t src, size_t size)
 	if (wbuf_flush_all(c) != 0) {
 		return -1;
 	}
-	if (flash_area_read(c->primary, (off_t)src, dst_p, size) != 0) {
+	if (woz_flash_read(c->primary, (uint32_t)src, dst_p, size) != 0) {
 		DFU_LOG("r %u+%u failed\n", (unsigned)src, (unsigned)size);
 		return -1;
 	}
@@ -239,12 +235,12 @@ static int mem_erase(void *arg_p, uintptr_t addr, size_t size)
 	}
 
 	rounded = ROUND_UP(size, WOZ_DFU_PAGE_SIZE);
-	if (addr + rounded > (uintptr_t)c->primary->fa_size) {
+	if (addr + rounded > woz_flash_size(c->primary)) {
 		DFU_LOG("e %u+%u past slot\n", (unsigned)addr, (unsigned)rounded);
 		return -1;
 	}
 
-	if (flash_area_erase(c->primary, (off_t)addr, rounded) != 0) {
+	if (woz_flash_erase(c->primary, (uint32_t)addr, rounded) != 0) {
 		DFU_LOG("e %u+%u failed\n", (unsigned)addr, (unsigned)rounded);
 		return -1;
 	}
@@ -283,7 +279,7 @@ static int step_set(void *arg_p, int step)
 	 * points here.
 	 */
 	if (step == 0) {
-		if (flash_area_erase(c->staging, (off_t)WOZ_DFU_STEP_OFFSET, WOZ_DFU_PAGE_SIZE) !=
+		if (woz_flash_erase(c->staging, WOZ_DFU_STEP_OFFSET, WOZ_DFU_PAGE_SIZE) !=
 		    0) {
 			DFU_LOG("step clear failed\n");
 			return -1;
@@ -296,9 +292,9 @@ static int step_set(void *arg_p, int step)
 		return -1;
 	}
 
-	return flash_area_write(c->staging,
-				(off_t)WOZ_DFU_STEP_OFFSET +
-					((off_t)step - 1) * (off_t)sizeof(value),
+	return woz_flash_write(c->staging,
+				WOZ_DFU_STEP_OFFSET +
+					((uint32_t)step - 1u) * (uint32_t)sizeof(value),
 				&value, sizeof(value)) == 0
 		       ? 0
 		       : -1;
@@ -315,8 +311,8 @@ static int step_get(void *arg_p, int *step_p)
 	size_t i;
 
 	for (i = 0; i < STEP_MAX; i++) {
-		if (flash_area_read(c->staging,
-				    (off_t)WOZ_DFU_STEP_OFFSET + (off_t)i * (off_t)sizeof(value),
+		if (woz_flash_read(c->staging,
+				    WOZ_DFU_STEP_OFFSET + (uint32_t)(i * sizeof(value)),
 				    &value, sizeof(value)) != 0) {
 			return -1;
 		}
@@ -338,18 +334,18 @@ static int step_get(void *arg_p, int *step_p)
  * Python's zlib.crc32(data, previous) does, which is what lets the host compute
  * the same value without either side reimplementing the other's polynomial.
  */
-static int area_crc32(const struct flash_area *fa, off_t off, size_t len, uint32_t *out)
+static int area_crc32(const struct woz_flash_area *fa, uint32_t off, size_t len, uint32_t *out)
 {
 	uint32_t crc = 0;
 
 	while (len > 0U) {
 		size_t n = MIN(sizeof(s_chunk), len);
 
-		if (flash_area_read(fa, off, s_chunk, n) != 0) {
+		if (woz_flash_read(fa, off, s_chunk, n) != 0) {
 			return -1;
 		}
-		crc = crc32_ieee_update(crc, s_chunk, n);
-		off += (off_t)n;
+		crc = woz_crc32_update(crc, s_chunk, n);
+		off += (uint32_t)n;
 		len -= n;
 	}
 
@@ -360,7 +356,7 @@ static int area_crc32(const struct flash_area *fa, off_t off, size_t len, uint32
 /** Erase the whole staging partition, consuming the update. */
 static void staging_consume(struct apply_ctx *c)
 {
-	(void)flash_area_erase(c->staging, 0, PM_PATCH_STAGING_SIZE);
+	(void)woz_flash_erase(c->staging, 0, woz_flash_size(c->staging));
 }
 
 /* ---- the apply ----------------------------------------------------------- */
@@ -372,7 +368,7 @@ static void staging_consume(struct apply_ctx *c)
 static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
 {
 	size_t left = hdr->patch_len;
-	off_t off = (off_t)WOZ_DFU_PATCH_OFFSET;
+	uint32_t off = WOZ_DFU_PATCH_OFFSET;
 	int res;
 
 	s_w.len = 0U;
@@ -387,7 +383,7 @@ static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
 	while (left > 0U) {
 		size_t n = MIN(sizeof(s_chunk), left);
 
-		if (flash_area_read(c->staging, off, s_chunk, n) != 0) {
+		if (woz_flash_read(c->staging, off, s_chunk, n) != 0) {
 			return -1;
 		}
 
@@ -396,7 +392,7 @@ static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
 			return res;
 		}
 
-		off += (off_t)n;
+		off += (uint32_t)n;
 		left -= n;
 	}
 
@@ -422,30 +418,30 @@ static int woz_dfu_apply(void)
 	int completed = 0;
 	int res;
 
-	if (flash_area_open(STAGING_ID, &s_ctx.staging) != 0) {
+	if (woz_flash_open(WOZ_FLASH_AREA_STAGING, &s_ctx.staging) != 0) {
 		return 0;
 	}
 
 	/* The normal-boot fast path: no header, nothing staged, one read. */
-	if (flash_area_read(s_ctx.staging, (off_t)WOZ_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0 ||
+	if (woz_flash_read(s_ctx.staging, WOZ_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0 ||
 	    hdr.magic != WOZ_DFU_MAGIC) {
-		flash_area_close(s_ctx.staging);
+		woz_flash_close(s_ctx.staging);
 		return 0;
 	}
 
 	DFU_LOG("staged: len=%u to=%u\n", (unsigned)hdr.patch_len, (unsigned)hdr.to_len);
 
 	if (hdr.abi_version != WOZ_DFU_ABI_VERSION || hdr.patch_len == 0U ||
-	    hdr.patch_len > PATCH_MAX ||
-	    hdr.hdr_crc32 != crc32_ieee((const uint8_t *)&hdr, WOZ_DFU_HDR_CRC_LEN)) {
+	    hdr.patch_len > woz_flash_size(s_ctx.staging) - WOZ_DFU_PATCH_OFFSET ||
+	    hdr.hdr_crc32 != woz_crc32((const uint8_t *)&hdr, WOZ_DFU_HDR_CRC_LEN)) {
 		DFU_LOG("header rejected\n");
 		staging_consume(&s_ctx);
-		flash_area_close(s_ctx.staging);
+		woz_flash_close(s_ctx.staging);
 		return 0;
 	}
 
-	if (flash_area_open(PRIMARY_ID, &s_ctx.primary) != 0) {
-		flash_area_close(s_ctx.staging);
+	if (woz_flash_open(WOZ_FLASH_AREA_PRIMARY, &s_ctx.primary) != 0) {
+		woz_flash_close(s_ctx.staging);
 		return 0;
 	}
 
@@ -462,8 +458,8 @@ static int woz_dfu_apply(void)
 	 * between the last step and the erase below cannot re-apply it.
 	 */
 	if (completed == 0) {
-		if (hdr.from_len > (uint32_t)s_ctx.primary->fa_size ||
-		    area_crc32(s_ctx.staging, (off_t)WOZ_DFU_PATCH_OFFSET, hdr.patch_len, &crc) !=
+		if (hdr.from_len > (uint32_t)woz_flash_size(s_ctx.primary) ||
+		    area_crc32(s_ctx.staging, WOZ_DFU_PATCH_OFFSET, hdr.patch_len, &crc) !=
 			    0 ||
 		    crc != hdr.patch_crc32) {
 			DFU_LOG("patch crc bad\n");
@@ -493,9 +489,9 @@ static int woz_dfu_apply(void)
 	staging_consume(&s_ctx);
 
 done:
-	flash_area_close(s_ctx.primary);
-	flash_area_close(s_ctx.staging);
+	woz_flash_close(s_ctx.primary);
+	woz_flash_close(s_ctx.staging);
 	return 0;
 }
 
-SYS_INIT(woz_dfu_apply, APPLICATION, 0);
+WOZ_INIT_APPLICATION_PRIO(woz_dfu_apply, 0);

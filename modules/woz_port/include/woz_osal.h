@@ -60,8 +60,11 @@ typedef k_thread_stack_t woz_thread_stack_t;
 #define WOZ_THREAD_STACK_DEFINE(name, size) K_THREAD_STACK_DEFINE(name, size)
 #define WOZ_THREAD_STACK_SIZEOF(name)       K_THREAD_STACK_SIZEOF(name)
 
-/* Application-level init hook; the fn is int (*)(void), 0 on success. */
+/* Application-level init hooks; the fn is int (*)(void), 0 on success. The
+ * _PRIO form exists for the one caller (the DFU applier inside MCUboot) whose
+ * position inside the APPLICATION level is load-bearing. */
 #define WOZ_INIT_APPLICATION(fn) SYS_INIT(fn, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY)
+#define WOZ_INIT_APPLICATION_PRIO(fn, prio) SYS_INIT(fn, APPLICATION, prio)
 static inline int woz_osal_init_all(void)
 {
 	return 0; /* SYS_INIT already ran everything */
@@ -101,6 +104,7 @@ typedef StackType_t woz_thread_stack_t;
 	{                                                            \
 		woz_osal_init_register(fn);                          \
 	}
+#define WOZ_INIT_APPLICATION_PRIO(fn, prio) WOZ_INIT_APPLICATION(fn)
 void woz_osal_init_register(int (*fn)(void));
 int woz_osal_init_all(void); /* app_main calls this once, after the OS is up */
 
@@ -142,6 +146,7 @@ typedef uint8_t woz_thread_stack_t;
 	{                                                            \
 		woz_osal_init_register(fn);                          \
 	}
+#define WOZ_INIT_APPLICATION_PRIO(fn, prio) WOZ_INIT_APPLICATION(fn)
 void woz_osal_init_register(int (*fn)(void));
 int woz_osal_init_all(void);
 

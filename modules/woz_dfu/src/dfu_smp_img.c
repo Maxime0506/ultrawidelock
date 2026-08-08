@@ -15,7 +15,6 @@
  */
 
 #include <zephyr/kernel.h>
-#include <zephyr/storage/flash_map.h>
 #include <zephyr/sys/util.h>
 
 #include <zcbor_common.h>
@@ -41,6 +40,7 @@
 
 #include "woz_dfu.h"
 #include "woz_dfu_rx.h"
+#include "woz_flash.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(woz_dfu, CONFIG_WOZ_DFU_LOG_LEVEL);
@@ -322,7 +322,7 @@ static int upload_write(struct smp_streamer *ctxt)
  */
 static int erase_write(struct smp_streamer *ctxt)
 {
-	const struct flash_area *fa;
+	const struct woz_flash_area *fa;
 	int rc;
 
 	ARG_UNUSED(ctxt);
@@ -330,11 +330,11 @@ static int erase_write(struct smp_streamer *ctxt)
 	if (!woz_dfu_window_is_open()) {
 		return MGMT_ERR_EACCESSDENIED;
 	}
-	if (flash_area_open(PM_PATCH_STAGING_ID, &fa) != 0) {
+	if (woz_flash_open(WOZ_FLASH_AREA_STAGING, &fa) != 0) {
 		return MGMT_ERR_EUNKNOWN;
 	}
-	rc = flash_area_erase(fa, 0, PM_PATCH_STAGING_SIZE);
-	flash_area_close(fa);
+	rc = woz_flash_erase(fa, 0, woz_flash_size(fa));
+	woz_flash_close(fa);
 
 	woz_dfu_rx_reset();
 

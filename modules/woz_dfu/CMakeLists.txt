@@ -10,19 +10,25 @@
 # The Kconfig gate above is therefore the only thing keeping this out of the
 # application image.
 
+get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(WOZ_PORT ${REPO_ROOT}/modules/woz_port)
+
 if(CONFIG_WOZ_DFU_APPLIER)
 
-  get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
   set(DETOOLS ${REPO_ROOT}/modules/woz_dfu/src/detools)
 
   zephyr_library_named(woz_dfu)
   zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_applier.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
+    ${WOZ_PORT}/src/flash_zephyr.c
     ${DETOOLS}/detools.c
     ${DETOOLS}/heatshrink/heatshrink_decoder.c)
 
   zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${WOZ_PORT}/include
     ${DETOOLS}
     ${DETOOLS}/heatshrink)
 
@@ -84,7 +90,13 @@ if(CONFIG_WOZ_DFU_RECEIVER)
   zephyr_library_named(woz_dfu)
   zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_receiver.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
+    ${WOZ_PORT}/src/flash_zephyr.c
+    ${WOZ_PORT}/src/osal_zephyr.c
     ${woz_dfu_pubkey_c})
+  zephyr_library_include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${WOZ_PORT}/include)
 
   # Optional second front door onto the same receiver: the SMP image group, for
   # clients that only speak mcumgr. See the Kconfig help for why Zephyr's own

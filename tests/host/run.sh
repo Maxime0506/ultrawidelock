@@ -110,23 +110,25 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 	-o "$ROOT/build/host_test_cdk"
 "$ROOT/build/host_test_cdk"
 
-# 5) Delta update, both halves, over RAM flash partitions that enforce the nRF
-#    driver's word and page alignment rules (dfufake/), the recording PSA
-#    (psafake/) and a scripted detools. Its own binary because dfufake's
-#    <zephyr/storage/flash_map.h> and <pm_config.h> exist nowhere else, and
-#    because the SMP half needs the zcbor/mcumgr doubles in smpfake/.
-#    CONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR is on here so the explicit "rc" key
-#    a legacy client expects is compiled and checked.
+# 5) Delta update, both halves, over the woz_flash host backend (RAM
+#    partitions that enforce the nRF driver's word and page alignment rules),
+#    the host OSAL's virtual clock, the recording PSA (psafake/) and a scripted
+#    detools (dfufake/). Its own binary because the SMP half needs the
+#    zcbor/mcumgr doubles in smpfake/. CONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR is
+#    on here so the explicit "rc" key a legacy client expects is compiled and
+#    checked.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
-	-DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
+	-DWOZ_PORT_HOST -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
 	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
 	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
-	-I"$HOSTD/psafake" \
+	-I"$HOSTD/psafake" -I"$ROOT/modules/woz_port/include" \
 	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
+	"$ROOT/modules/woz_port/src/osal_host.c" "$ROOT/modules/woz_port/src/flash_host.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_crc.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c" \

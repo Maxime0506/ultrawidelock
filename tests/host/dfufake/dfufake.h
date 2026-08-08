@@ -1,13 +1,13 @@
-/* dfufake — test-side control/inspection API for the fake Zephyr flash-map,
- * CRC, reboot and detools surfaces that modules/woz_dfu builds against.
+/* dfufake — test-side control/inspection API for the DFU suites.
  *
- * The flash is real where the code under test depends on it: RAM-backed
- * partitions, erase writes 0xff, and BOTH nRF alignment rules enforced (word
- * writes, page erases) -- the entire reason the applier's write combiner and
- * erase ROUND_UP exist, so a fake accepting anything would hide that bug.
- * CRC-32 is the real IEEE polynomial. detools is NOT real (a scripted double
- * driving the applier's five callbacks -- never the patch format), and PSA is
- * a knob (tests/host/psafake/psafake.h).
+ * The flash is the real host backend of woz_flash.h (modules/woz_port/src/
+ * flash_host.c): RAM partitions, erase writes 0xff, BOTH nRF alignment rules
+ * enforced (word writes, page erases) -- the entire reason the applier's
+ * write combiner and erase ROUND_UP exist, so a fake accepting anything would
+ * hide that bug. The aliases below keep the suites' spelling. What stays fake
+ * here: detools (a scripted double driving the applier's five callbacks --
+ * never the patch format) and the running image the SMP group reads. PSA is a
+ * knob (tests/host/psafake/psafake.h).
  */
 #ifndef WOZ_DFUFAKE_H
 #define WOZ_DFUFAKE_H
@@ -15,53 +15,24 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/types.h>
 
-/* Partition geometry, matching firmware/pm_static.yml so the size limits the
- * code checks against are the ones it will meet on the board. */
-#define DFUFAKE_STAGING_ID   3
-#define DFUFAKE_STAGING_SIZE 0xa000u  /* 40,960 B */
-#define DFUFAKE_PRIMARY_ID   1
-#define DFUFAKE_PRIMARY_SIZE 0x6a000u /* 434,176 B */
+#include "woz_flash.h"
 
-#define DFUFAKE_WRITE_BLOCK 4u
-#define DFUFAKE_PAGE_SIZE   4096u
+/* Geometry, via the woz_flash host backend (matches firmware/pm_static.yml). */
+#define DFUFAKE_STAGING_SIZE WOZ_FLASH_HOST_STAGING_SIZE
+#define DFUFAKE_PRIMARY_SIZE WOZ_FLASH_HOST_PRIMARY_SIZE
+#define DFUFAKE_WRITE_BLOCK  WOZ_FLASH_HOST_WRITE_BLOCK
+#define DFUFAKE_PAGE_SIZE    WOZ_FLASH_HOST_PAGE_SIZE
 
-/**
- * One RAM-backed flash partition plus the failure knobs a suite injects into
- * it. Every `*_fail_in` counts calls down: -1 never fails, 0 fails this call
- * and every call after it, N > 0 lets N calls through and then fails.
- */
-struct dfufake_area {
-	int id;
-	uint8_t *buf;
-	size_t size;
-	bool registered;
-
-	/* knobs */
-	bool fail_open;
-	int write_fail_in;
-	int erase_fail_in;
-	int read_fail_in;
-
-	/* recorded */
-	unsigned open_calls, close_calls, write_calls, erase_calls, read_calls;
-	off_t last_write_off;
-	size_t last_write_len;
-	off_t last_erase_off;
-	size_t last_erase_len;
-};
+/* The two partitions, with their knobs and recorders (see woz_flash.h). */
+#define dfufake_staging (*woz_flash_host_area(WOZ_FLASH_AREA_STAGING))
+#define dfufake_primary (*woz_flash_host_area(WOZ_FLASH_AREA_PRIMARY))
 
 /**
- * Everything the suites drive or inspect that is not per-area: the reboot
- * recorder and the scripted detools double.
+ * Everything the suites drive or inspect that is not flash: the scripted
+ * detools double. (The reboot recorder is woz_flash_host_reboots().)
  */
 struct dfufake_state {
-	/* sys_reboot() recorder — the receiver must reply before it reboots,
-	 * so a suite checks the reply bytes and then that this fired. */
-	unsigned reboot_calls;
-	int last_reboot_type;
-
 	/* detools double: statuses returned by each entry point. */
 	int detools_init_ret;
 	int detools_process_ret;
@@ -72,8 +43,6 @@ struct dfufake_state {
 };
 
 extern struct dfufake_state dfufake;
-extern struct dfufake_area dfufake_staging;
-extern struct dfufake_area dfufake_primary;
 
 /**
  * The bytes dfu_smp_img.c reads as the RUNNING image. On target that is the
@@ -83,14 +52,15 @@ extern struct dfufake_area dfufake_primary;
  */
 extern uint8_t dfufake_running_image[];
 
-/** @brief Zero every recording, restore every knob, erase both partitions. */
+/** @brief Zero every recording, restore every knob, erase both partitions,
+ * drop queued OSAL work. */
 void dfufake_reset(void);
 
-/** @brief Fill @p area with 0xff without going through flash_area_erase(). */
-void dfufake_blank(struct dfufake_area *area);
+/** @brief Fill @p area with 0xff without going through woz_flash_erase(). */
+void dfufake_blank(struct woz_flash_host_area *area);
 
 /** @brief Byte at @p off of @p area, for assertions about what landed. */
-uint8_t dfufake_peek(const struct dfufake_area *area, size_t off);
+uint8_t dfufake_peek(const struct woz_flash_host_area *area, size_t off);
 
 /* ---- the scripted detools double ------------------------------------------
  *

@@ -34,9 +34,10 @@
 #                                    it includes aliro/ + reader_storage headers
 #   woz_aliro_ecp/src/nfc_prop_ecp.cpp   same: grafts into the add-on's
 #                                    subsys/nfc_prop, add-on headers included
-#   woz_uwb/src/facade/{woz_bytes,woz_util}.h  portable shims that defer to the
-#                                    Zephyr header under #ifdef __ZEPHYR__ and
-#                                    carry their own fallback otherwise
+#   woz_uwb/src/facade/woz_util.h    portable shim that defers to the Zephyr
+#                                    header under #ifdef __ZEPHYR__ and carries
+#                                    its own fallback otherwise (woz_bytes.h,
+#                                    its sibling, now lives in woz_port)
 #
 # THE RATCHET. Every other exemption is a file still waiting on its unification
 # tranche, listed in RATCHET below with the tranche that retires it. A ratchet
@@ -73,15 +74,12 @@ PERMANENT_RE='^(modules/woz_port/
 |modules/woz_aliro_stack/src/session\.cpp
 |modules/woz_nfc/src/transport_pn532\.cpp
 |modules/woz_aliro_ecp/src/nfc_prop_ecp\.cpp
-|modules/woz_uwb/src/facade/woz_bytes\.h
 |modules/woz_uwb/src/facade/woz_util\.h)'
 PERMANENT_RE=${PERMANENT_RE//$'\n'/}
 
 # The ratchet: still-impure files and the tranche that retires each.
 RATCHET=(
 	modules/woz_nfc/src/pn532_bus_spi.c            # T4 move: Zephyr SPI driver -> ports/zephyr
-	modules/woz_dfu/src/dfu_receiver.c             # T2c: convert to woz_osal + woz_flash
-	modules/woz_dfu/src/dfu_applier.c              # T2c: convert to woz_flash
 	modules/woz_dfu/src/dfu_smp_img.c              # T4 move: mcumgr/SMP glue -> ports/zephyr
 	modules/woz_dw3000/platform/dw3000_hw.c        # T4a move: Zephyr GPIO backend -> ports/zephyr
 	modules/woz_dw3000/platform/dw3000_spi.c       # T4a move: Zephyr SPI backend -> ports/zephyr
