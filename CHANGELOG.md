@@ -55,6 +55,15 @@ the API and behavior may change in minor releases.
   user index each anchor was installed under, which is what makes revocation by
   name possible. v1-v3 blobs still parse; their anchors carry no binding, so
   re-install a key from the controller to make it revocable.
+- The CCC ranging hot path stopped paying for work it discarded: the STS-key
+  skip-cache is now compiled into the DWM3001CDK as well as ESP32 (previously
+  every round rewrote all four STS_KEY registers over SPI), cadence-histogram
+  collection is gated on the same diagnostics flag as its only reader, and the
+  per-Final_Data dUDSK derivation gained the one-deep cache the dURSK path
+  already had. Redundant register writes and KDF runs leave the per-round path;
+  no latency figure is claimed. The nRF5340 DK deliberately keeps the cache
+  off: its Nordic MAC path overrides STS_KEY per frame with no invalidation
+  hook, and a cache hit there would skip a write the registers needed.
 
 ### Fixed
 
