@@ -2,7 +2,7 @@
  * @file test_nfc_transport.cpp — the woz_nfc transport seam on host.
  *
  * Files under test:
- *   modules/woz_nfc/src/pn532_bus_spi.c    Zephyr SPI/GPIO glue
+ *   ports/zephyr/nfc/pn532_bus_spi.c    Zephyr SPI/GPIO glue
  *   modules/woz_nfc/src/transport_pn532.cpp  the PN532 reader backend
  *   modules/woz_nfc/src/transport_none.cpp   the no-reader backend
  *

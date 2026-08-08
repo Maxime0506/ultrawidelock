@@ -1,5 +1,5 @@
 /* smpfake — test-side control/inspection API for the fake zcbor and mcumgr
- * surfaces that modules/woz_dfu/src/dfu_smp_img.c builds against.
+ * surfaces that ports/zephyr/dfu/dfu_smp_img.c builds against.
  *
  * THE ENCODER RECORDS, IT DOES NOT SERIALISE. dfu_smp_img.c is an adapter:
  * everything it decides is WHICH keys and values it emits, in WHAT order, and

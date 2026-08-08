@@ -2,17 +2,31 @@
 # Mirror of ports/esp32/components/*, which implements the same contracts on
 # ESP-IDF; modules/ stays the single portable source tree. Contract headers
 # stay with their modules (dw3000_hw.h / dw3000_spi.h in
-# modules/woz_dw3000/platform) — this tree carries only Zephyr .c backends.
+# modules/woz_dw3000/platform, pn532_bus.h in modules/woz_nfc/src); this tree
+# carries the Zephyr .c backends plus the app-target glue below.
 # Contributes nothing unless a consuming CONFIG is y: an image that selects no
 # feature below gets zero bytes from this module.
 
-if(CONFIG_DW3000)
+# aliro_shell.h is the one header living here (the `aliro` console's seam to
+# the application); published wherever modules/woz_uwb used to publish its
+# shell dir, because the add-on factory-reset patch includes it.
+if(CONFIG_WOZ_UWB)
+	zephyr_include_directories(shell)
+endif()
+
+# ---- woz_zephyr_port library: backends of module library contracts ----------
+if(CONFIG_DW3000
+   OR CONFIG_WOZ_PRETTY_SHELL
+   OR CONFIG_WOZ_UWB_SHELL
+   OR (CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
+   OR CONFIG_WOZ_DFU_SMP_IMG
+   OR CONFIG_WOZ_ANCHOR_SLAM)
 
 zephyr_library_named(woz_zephyr_port)
 
 # Zephyr GPIO/SPI/trace backend of the dw3000_hw.h + dw3000_spi.h contract
 # (ESP-IDF backend: ports/esp32/components/woz_uwb/port/dw3000_{hw,spi}.c).
-zephyr_library_sources(
+zephyr_library_sources_ifdef(CONFIG_DW3000
 	dw3000/dw3000_hw.c
 	dw3000/dw3000_spi.c
 	dw3000/dw3000_spi_trace.c)
@@ -24,4 +38,103 @@ zephyr_library_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/platform
 	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/dwt_uwb_driver)
 
+# PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log line
+# (woz_logfmt), plus runtime-mute of benign upstream Matter/BLE error spam
+# (woz_logquiet). Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT, set in
+# ports/nrf5340dk/overlays/woz-pretty.conf, active only under PRETTY=1.
+zephyr_library_sources_ifdef(CONFIG_WOZ_PRETTY_SHELL
+	log/woz_logfmt.c
+	log/woz_logquiet.c)
+
+# `aliro` UART console (status/rx/range/chip/selftest/log/version). Needs the
+# shell subsystem, which an NCS/Matter dependency force-selects. Engine headers
+# (ccc_shim.h, fira_session.h, ...) come from modules/woz_uwb's global include
+# dirs, alive whenever CONFIG_WOZ_UWB is.
+if(CONFIG_WOZ_UWB_SHELL)
+	zephyr_library_sources(shell/aliro_shell.c)
+	# Short commit SHA of THIS repo, baked in for `aliro version`. Captured at
+	# CMake configure time (git -C works from a worktree too); refreshed on a
+	# pristine/reconfigure build, so a stale-but-clean incremental keeps the
+	# prior value. "unknown" if git is unavailable (e.g. a source export).
+	execute_process(
+		COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse --short HEAD
+		OUTPUT_VARIABLE WOZ_GIT_SHA
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET)
+	if(NOT WOZ_GIT_SHA)
+		set(WOZ_GIT_SHA "unknown")
+	endif()
+	set_source_files_properties(shell/aliro_shell.c PROPERTIES
+		COMPILE_DEFINITIONS "WOZ_GIT_SHA=\"${WOZ_GIT_SHA}\"")
+endif()
+
+# nRF5340 app-core HFCLK boost, split out of woz_uwb_facade.c (which keeps the
+# portable woz_hfclk_ensure_128mhz() seam). Compiled exactly when the facade
+# is (CONFIG_WOZ_ALIRO) on the SoC it exists for.
+if(CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
+	zephyr_library_sources(uwb/woz_hfclk_boost.c)
+endif()
+
+# Optional second front door onto the woz_dfu receiver: the SMP image group,
+# for clients that only speak mcumgr. Rides the receiver's library contract
+# (woz_dfu.h / woz_dfu_rx.h / woz_flash.h).
+if(CONFIG_WOZ_DFU_SMP_IMG)
+	zephyr_library_sources(dfu/dfu_smp_img.c)
+	zephyr_library_include_directories(
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dfu/include
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dfu/src
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
+endif()
+
+# LIS2DH12 wake-on-motion backend of woz_slam_hw.h: writes an I2C part's
+# registers and attaches a GPIO callback, so it needs a board whose devicetree
+# has an accel0 — which is why CONFIG_WOZ_ANCHOR_SLAM is a separate symbol
+# from CONFIG_WOZ_ANCHOR (the geometry links anywhere, this does not).
+if(CONFIG_WOZ_ANCHOR_SLAM)
+	zephyr_library_sources(drivers/woz_slam_lis2dh12.c)
+	zephyr_library_include_directories(
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_anchor/include
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
+endif()
+
+endif()
+
+# ---- app-target glue --------------------------------------------------------
+# Compiled straight into the application target, the same mechanism
+# modules/woz_nfc uses for its transports: these files include app-owned
+# headers (matter_commission.h) or need the app/add-on include paths, so they
+# ride the app's compile context rather than the library's. The ALIRO_* /
+# WOZ_DFU_RECEIVER gates are defined by the consuming app's Kconfig and simply
+# do not exist elsewhere, so every other image gets nothing.
+
+# Zephyr SPI backend of the PN532 bus contract (pn532_bus.h stays with the
+# portable pn532 core in modules/woz_nfc/src).
+if(CONFIG_WOZ_NFC_TRANSPORT_PN532)
+	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nfc/pn532_bus_spi.c)
+	target_include_directories(app PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_nfc/src)
+endif()
+
+# The 0xFFF6 Matter commissioning transport + Thread/fabric ports + the fabric
+# table store. matter_commission.c stays in firmware/src (it is the app's
+# policy half); its headers here reach it via firmware/CMakeLists.txt's app
+# include dirs.
+if(CONFIG_ALIRO_MATTER_BLE)
+	target_sources(app PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/matter/matter_ble_zephyr.c
+		${CMAKE_CURRENT_SOURCE_DIR}/matter/matter_thread_port.c
+		${CMAKE_CURRENT_SOURCE_DIR}/store/matter_fab_settings.c)
+endif()
+
+# Initiator (User-Device role) BLE central transport, the mirror of
+# ble/aliro_ble_zephyr.c. ports/nrf5340dk/initiator lists this file by path
+# instead: it carries no Kconfig of its own to define this gate.
+if(CONFIG_ALIRO_BLE_CENTRAL)
+	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble/aliro_ble_central_zephyr.c)
+endif()
+
+# BLE transport of the delta-update receiver (woz_dfu supplies woz_dfu_rx.h
+# globally while CONFIG_WOZ_DFU_RECEIVER=y).
+if(CONFIG_WOZ_DFU_RECEIVER)
+	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/dfu/dfu_ble_zephyr.c)
 endif()

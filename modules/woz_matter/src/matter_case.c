@@ -346,7 +346,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	 * (firmware/overlay-thread.conf), so the spec-default 500 ms is
 	 * honest; it was 3000 while the node was a sleepy end device, and the
 	 * value must follow the link mode. The SRP TXT record in
-	 * firmware/src/matter_thread_port.c advertises the same pair.
+	 * ports/zephyr/matter/matter_thread_port.c advertises the same pair.
 	 *
 	 * MaxPathsPerInvoke is 1 because matter_im_invoke_request_decode()
 	 * genuinely refuses a batch. Saying nothing lets a commissioner batch

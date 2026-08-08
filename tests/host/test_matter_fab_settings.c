@@ -1,5 +1,5 @@
 /*
- * Host test for firmware/src/matter_fab_settings.c — the FIRST host
+ * Host test for ports/zephyr/store/matter_fab_settings.c — the FIRST host
  * coverage any file under firmware has had.
  *
  * That gap is why this exists. Every defect this port has hit on hardware lived

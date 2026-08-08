@@ -87,24 +87,20 @@ PERMANENT_RE='^(modules/woz_port/
 |modules/woz_uwb/src/facade/woz_util\.h)'
 PERMANENT_RE=${PERMANENT_RE//$'\n'/}
 
-# The ratchet: still-impure files and the tranche that retires each.
-RATCHET=(
-	modules/woz_nfc/src/pn532_bus_spi.c            # T4 move: Zephyr SPI driver -> ports/zephyr
-	modules/woz_dfu/src/dfu_smp_img.c              # T4 move: mcumgr/SMP glue -> ports/zephyr
-	modules/woz_uwb/src/facade/woz_logfmt.c        # T4 move: Zephyr log backend -> ports/zephyr
-	modules/woz_uwb/src/facade/woz_logquiet.c      # T4 move: Zephyr log_ctrl -> ports/zephyr
-	modules/woz_uwb/src/facade/woz_uwb_facade.c    # T4: split the SYS_INIT hfclk boost out
-	modules/woz_uwb/src/shell/aliro_shell.c        # T4 move: Zephyr shell -> ports/zephyr
-	modules/woz_anchor/src/woz_slam_lis2dh12.c     # T4 move: Zephyr I2C driver -> ports/zephyr
-)
+# The ratchet: still-impure files and the tranche that retires each. EMPTY
+# since T4: modules/ is one-source and the permanent list above is the whole
+# story. Stays declared so a regression has somewhere honest to land — with a
+# tranche tag and a reason — and so the ok-line keeps reporting the count.
+RATCHET=()
 
 scan_paths() {
 	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp'
 }
 
 in_ratchet() {
+	# ${arr[@]+...}: bash 3.2 + set -u treats an empty array expansion as unbound.
 	local f needle="$1"
-	for f in "${RATCHET[@]}"; do
+	for f in ${RATCHET[@]+"${RATCHET[@]}"}; do
 		[ "$f" = "$needle" ] && return 0
 	done
 	return 1
@@ -138,7 +134,7 @@ scan() {
 
 	# A ratchet entry that no longer trips the ban is finished work that forgot
 	# to shrink the list — or a moved file leaving a hole. Either way: fail.
-	for f in "${RATCHET[@]}"; do
+	for f in ${RATCHET[@]+"${RATCHET[@]}"}; do
 		if [ ! -f "$f" ] || [ -z "$(file_hits "$f")" ]; then
 			printf '%s  stale ratchet entry: %s%s\n' "$R" "$f" "$Z" >&2
 			stale=$((stale + 1))

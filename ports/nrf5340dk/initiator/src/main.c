@@ -11,7 +11,7 @@
  * Port of ports/esp32/apps/initiator/main/main.c -- the same program on two
  * stacks, differing only in logging macros and entry point (aliro_ble_central.h
  * absorbs NimBLE-vs-Zephyr); keep them in step. The transport half lives in
- * firmware/src/aliro_ble_central_zephyr.c, the protocol half in woz_aliro's
+ * ports/zephyr/ble/aliro_ble_central_zephyr.c, the protocol half in woz_aliro's
  * aliro_device; this file is only the glue. UWB is NOT yet wired: ESTABLISHED
  * means the boards agreed a URSK, ranging on it needs the DWM3000EVB driver.
  */

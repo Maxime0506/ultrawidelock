@@ -56,14 +56,16 @@ if(CONFIG_NRF_APPROTECT_LOCK OR CONFIG_NRF_SECURE_APPROTECT_LOCK)
 endif()
 
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
+set(PORTZ "${REPO_ROOT}/ports/zephyr")
 
 target_sources(app PRIVATE
 	src/main.c
-	# Platform seams the reader engine links against. Stage 0 fills them with
-	# the smallest thing that keeps the call graph honest; the real Zephyr BLE
-	# transport is stage 4 and the settings-backed store is stage 1.
-	src/aliro_ble_zephyr.c
-	src/aliro_prov_settings.c
+	# Platform seams the reader engine links against, re-homed to ports/zephyr
+	# with the rest of the Zephyr glue. Listed by path rather than compiled by
+	# the woz_zephyr_port module because they are unconditional app glue with
+	# no Kconfig gate to ride — this app IS the gate.
+	${PORTZ}/ble/aliro_ble_zephyr.c
+	${PORTZ}/store/aliro_prov_settings.c
 	# Reader engine.
 	${ALIRO}/src/aliro_reader.c
 	${ALIRO}/src/aliro_ranging.c
@@ -82,22 +84,23 @@ target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
 # Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
-target_sources_ifdef(CONFIG_WOZ_DFU_RECEIVER app PRIVATE src/dfu_ble_zephyr.c)
+# The DFU receiver's BLE transport (ports/zephyr/dfu/dfu_ble_zephyr.c) and the
+# rest of the gated Zephyr glue compile via the woz_zephyr_port module under
+# the same CONFIG symbols.
 # The board's only output. NOT gated on the DFU receiver any more: the update
 # window was the first thing worth showing, not the only one, and the `reader`
 # image has no receiver and used to light nothing at all.
 target_sources_ifdef(CONFIG_ALIRO_STATUS_LED app PRIVATE src/status_led.c)
 target_sources_ifdef(CONFIG_ALIRO_CIRDIAG_CAPTURE app PRIVATE src/cirdiag_capture.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
-# Initiator (User-Device role) transport: the central mirror of
-# aliro_ble_zephyr.c, plus the platform-free advert/READ decoding it calls. That
-# decoder is the same translation unit the ESP32 port and the host suite compile.
-target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE src/aliro_ble_central_zephyr.c
-                                                          ${ALIRO}/src/aliro_ble_central.c)
-target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_ble_zephyr.c
-                                                          src/matter_commission.c
-                                                          src/matter_fab_settings.c
-                                                          src/matter_thread_port.c)
+# Initiator (User-Device role) transport: woz_zephyr_port compiles the central
+# mirror of aliro_ble_zephyr.c under this gate; the platform-free advert/READ
+# decoder it calls is the same translation unit the ESP32 port and the host
+# suite compile.
+target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ALIRO}/src/aliro_ble_central.c)
+# The commissioning policy half; its transport, Thread/fabric ports and fabric
+# table store live in ports/zephyr/{matter,store} under the same gate.
+target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_commission.c)
 
 # CONFIG_MBEDTLS_MEMORY_DEBUG=y is a NO-OP in this build and sets no define.
 # nrf_security only wires that symbol through configs/legacy_crypto_config.h.template
@@ -113,4 +116,9 @@ target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_ble_zephyr.c
 if(CONFIG_ALIRO_HEAP_PROBE)
 	zephyr_compile_definitions(MBEDTLS_MEMORY_DEBUG)
 endif()
-target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src)
+# src for matter_commission.h (included by the re-homed aliro_ble_zephyr.c);
+# ${PORTZ}/{matter,store} for the re-homed matter_ble_zephyr.h and
+# matter_fab_settings.h, which main.c and matter_commission.c include
+# regardless of CONFIG_ALIRO_MATTER_BLE.
+target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src src
+	${PORTZ}/matter ${PORTZ}/store)

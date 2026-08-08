@@ -19,12 +19,13 @@ set(CCC "${REPO_ROOT}/modules/woz_uwb/src/ccc")
 
 target_sources(app PRIVATE
 	src/main.c
-	# BLE transport. The Zephyr backend lives with the reader's own backend in
-	# firmware/src so the two central/peripheral mirrors stay side by side; it
-	# depends on no symbol from firmware/Kconfig, which is what makes it linkable
-	# from here. aliro_ble_central.c is the platform-free decoder half, the same
-	# translation unit the ESP32 port and the host suite compile.
-	${REPO_ROOT}/firmware/src/aliro_ble_central_zephyr.c
+	# BLE transport. The Zephyr backend lives with the reader's peripheral
+	# mirror in ports/zephyr/ble so the two central/peripheral halves stay side
+	# by side; it depends on no symbol from firmware/Kconfig, which is what
+	# makes it linkable from here. aliro_ble_central.c is the platform-free
+	# decoder half, the same translation unit the ESP32 port and the host suite
+	# compile.
+	${REPO_ROOT}/ports/zephyr/ble/aliro_ble_central_zephyr.c
 	${ALIRO}/src/aliro_ble_central.c
 	# Access Protocol, device side.
 	${ALIRO}/src/aliro_device.c

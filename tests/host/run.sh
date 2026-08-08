@@ -45,7 +45,7 @@ HOSTD="$ROOT/tests/host"
 	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$SRC/shell" \
+	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
@@ -55,7 +55,7 @@ HOSTD="$ROOT/tests/host"
 	"$ROOT/modules/woz_port/src/osal_host.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
-	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" \
+	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/aliro_shell.c" \
 	-o "$OUT/host_test_drv"
 WOZ_TEST_QUIET=1 "$OUT/host_test_drv"
 
@@ -103,10 +103,10 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra $san_flags \
 	-DCONFIG_LOG_DEFAULT_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
-	-I"$ROOT/modules/woz_matter/include" -I"$ROOT/firmware/src" \
+	-I"$ROOT/modules/woz_matter/include" -I"$ROOT/ports/zephyr/store" \
 	"$HOSTD/test.c" "$HOSTD/test_matter_fab_settings.c" \
 	"$HOSTD/settingsfake/settingsfake.c" \
-	"$ROOT/firmware/src/matter_fab_settings.c" \
+	"$ROOT/ports/zephyr/store/matter_fab_settings.c" \
 	-o "$ROOT/build/host_test_cdk"
 "$ROOT/build/host_test_cdk"
 
@@ -131,7 +131,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 	"$ROOT/modules/woz_dfu/src/dfu_crc.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c" \
+	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c" \
 	-o "$OUT/host_test_dfu"
 "$OUT/host_test_dfu"
 
@@ -158,7 +158,7 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
 	-c "$ROOT/modules/woz_nfc/src/pn532_apdu.c" -o "$OUT/pn532_apdu_nfc.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
-	-c "$ROOT/modules/woz_nfc/src/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi.o"
+	-c "$ROOT/ports/zephyr/nfc/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
 	-c "$ROOT/modules/woz_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532.o"

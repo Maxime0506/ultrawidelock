@@ -320,7 +320,7 @@ config ALIRO_SRP_DIAG
 	  otSrpClientIsRunning(), the chosen server address and the host state
 	  on each OT_CHANGED_THREAD_NETDATA. Running means the fault is after
 	  server selection; not running once network data has settled means this
-	  node is never offered a server -- see firmware/src/matter_thread_port.c.
+	  node is never offered a server -- see ports/zephyr/matter/matter_thread_port.c.
 
 config ALIRO_CASE_BENCH
 	bool "Stage 0a: measure what a Matter CASE responder costs"
@@ -548,7 +548,7 @@ config ALIRO_BLE_CENTRAL
 	  aliro_ble_central.h, so only the transport differs between the two ports.
 	  A reader image does not want this. It exists so the initiator can be built
 	  for a board carrying a DW3110, which the ESP32-S3 is not.
-	  See firmware/src/aliro_ble_central_zephyr.c.
+	  See ports/zephyr/ble/aliro_ble_central_zephyr.c.
 
 config ALIRO_THREAD_DATASET_DUMP
 	bool "Print the active Thread operational dataset at attach (BENCH ONLY)"

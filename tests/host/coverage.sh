@@ -150,7 +150,7 @@ SIDE_UNIT_SRCS=(
 	"$SRC/driver/uwb_rxdiag.c"
 	"$SRC/driver/uwb_cirdiag.c"
 	"$SRC/driver/uwb_selftest.c"
-	"$SRC/shell/aliro_shell.c"
+	"$ROOT/ports/zephyr/shell/aliro_shell.c"
 	"$SRC/ccc/ccc_crypto_psa.c"
 	"$SRC/ccc/ccc_crypto_mbedtls.c"
 	"$ALIRO/src/aliro_prim_psa.c"
@@ -171,8 +171,8 @@ SIDE_UNIT_SRCS=(
 	"$EAPPS/matter-lock/main/lock/aliro_reader_delegate.cpp"
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c"
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c"
-	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c"
-	"$ROOT/modules/woz_nfc/src/pn532_bus_spi.c"
+	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c"
+	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c"
 	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp"
 	"$ROOT/modules/woz_nfc/src/transport_none.cpp"
 	"$ROOT/modules/woz_aliro_stack/src/aliro_stack.cpp"
@@ -182,7 +182,7 @@ SIDE_UNIT_SRCS=(
 cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$SRC/shell" \
+	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/platform" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
@@ -191,7 +191,7 @@ cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_C
 	"$HOSTD/shim/drvfake.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
-	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" -o "$OUT/cov_drv"
+	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/aliro_shell.c" -o "$OUT/cov_drv"
 WOZ_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
 	>>"$OUT/run.log" 2>&1 || true
 OBJS+=(-object "$OUT/cov_drv")
@@ -302,7 +302,7 @@ cov_cc -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_smp_img.c" -o "$OUT/cov_dfu"
+	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c" -o "$OUT/cov_dfu"
 run_suite dfu "$OUT/cov_dfu"
 
 # C++ suite: the woz_nfc transport seam over nfcfake, with the REAL pn532.c and
@@ -324,7 +324,7 @@ cov_cc -c -I"$ROOT/modules/woz_nfc/src" "$ROOT/modules/woz_nfc/src/pn532.c" \
 cov_cc -c -I"$ROOT/modules/woz_nfc/src" "$ROOT/modules/woz_nfc/src/pn532_apdu.c" \
 	-o "$OUT/pn532_apdu_nfc_cov.o"
 cov_cc -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
-	"$ROOT/modules/woz_nfc/src/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi_cov.o"
+	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi_cov.o"
 cov_cxx -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
 	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532_cov.o"
 cov_cxx -c -DWozNfc=WozNfcNone "${NFC_DEF[@]}" "${NFC_INC[@]}" \

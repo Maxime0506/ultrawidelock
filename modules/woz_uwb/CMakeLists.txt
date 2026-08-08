@@ -51,34 +51,10 @@ if(CONFIG_WOZ_UWB)
         zephyr_library_sources(${SRC}/ccc/ccc_crypto_psa.c)
       endif()
 
-      # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log
-      # line. Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT (set in
-      # ports/nrf5340dk/overlays/woz-pretty.conf, active only under PRETTY=1).
-      if(CONFIG_WOZ_PRETTY_SHELL)
-        zephyr_library_sources(${SRC}/facade/woz_logfmt.c)
-        # Runtime-mute benign upstream Matter/BLE error spam (reversible).
-        zephyr_library_sources(${SRC}/facade/woz_logquiet.c)
-      endif()
-
-      # `aliro` UART console (status/rx/range/chip/selftest/log/version). Needs
-      # the shell subsystem, which an NCS/Matter dependency force-selects.
-      if(CONFIG_WOZ_UWB_SHELL)
-        zephyr_library_sources(${SRC}/shell/aliro_shell.c)
-        # Short commit SHA of THIS repo, baked in for `aliro version`. Captured
-        # at CMake configure time (git -C works from a worktree too); refreshed
-        # on a pristine/reconfigure build, so a stale-but-clean incremental keeps
-        # the prior value. "unknown" if git is unavailable (e.g. a source export).
-        execute_process(
-          COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse --short HEAD
-          OUTPUT_VARIABLE WOZ_GIT_SHA
-          OUTPUT_STRIP_TRAILING_WHITESPACE
-          ERROR_QUIET)
-        if(NOT WOZ_GIT_SHA)
-          set(WOZ_GIT_SHA "unknown")
-        endif()
-        set_source_files_properties(${SRC}/shell/aliro_shell.c PROPERTIES
-          COMPILE_DEFINITIONS "WOZ_GIT_SHA=\"${WOZ_GIT_SHA}\"")
-      endif()
+      # The PRETTY log backend (woz_logfmt/woz_logquiet, CONFIG_WOZ_PRETTY_SHELL)
+      # and the `aliro` console (aliro_shell, CONFIG_WOZ_UWB_SHELL) are Zephyr
+      # glue and compile from ports/zephyr (woz_zephyr_port) under the same
+      # gates; their Kconfig symbols stay in this module's Kconfig.
 
       # Aliro UWB ranging-setup adapter: composes the M1-M4 handshake the add-on's
       # aliro_stack drives via the facade, over the cherry_ccc_* seam that
@@ -116,10 +92,11 @@ if(CONFIG_WOZ_UWB)
   endif()
 
   # All layer subfolders on the include path so the flat #include "sibling.h"
-  # style resolves across layers (headers moved into src/{driver,fira,ccc,facade,shell}).
-  # The platform contract (woz_port.h / woz_log.h) lives in modules/woz_port.
+  # style resolves across layers (headers moved into src/{driver,fira,ccc,facade}).
+  # The platform contract (woz_port.h / woz_log.h) lives in modules/woz_port;
+  # the shell seam header (aliro_shell.h) moved to ports/zephyr/shell.
   zephyr_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../woz_port/include
-    ${SRC}/driver ${SRC}/fira ${SRC}/ccc ${SRC}/facade ${SRC}/shell)
+    ${SRC}/driver ${SRC}/fira ${SRC}/ccc ${SRC}/facade)
 
 endif()

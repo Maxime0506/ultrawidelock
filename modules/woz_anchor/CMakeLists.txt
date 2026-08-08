@@ -18,12 +18,9 @@ if(CONFIG_WOZ_ANCHOR)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_report.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_satellite.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_slam.c)
-  # The only file here that is not portable integer logic: it writes an I2C
-  # part's registers and attaches a GPIO callback, so it needs a board whose
-  # devicetree has an accel0. Separate symbol from CONFIG_WOZ_ANCHOR for that
-  # reason -- the geometry links anywhere, this does not.
-  zephyr_library_sources_ifdef(CONFIG_WOZ_ANCHOR_SLAM
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_slam_lis2dh12.c)
+  # The LIS2DH12 backend of woz_slam_hw.h (CONFIG_WOZ_ANCHOR_SLAM) is the one
+  # file that was not portable integer logic; it compiles from ports/zephyr
+  # (woz_zephyr_port) under that same gate.
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 endif()

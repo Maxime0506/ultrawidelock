@@ -8,11 +8,12 @@ if(CONFIG_WOZ_NFC)
   if(CONFIG_WOZ_NFC_TRANSPORT_RFAL)
     target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/transport_rfal.cpp)
   elseif(CONFIG_WOZ_NFC_TRANSPORT_PN532)
+    # The Zephyr SPI backend of pn532_bus.h (pn532_bus_spi.c) compiles from
+    # ports/zephyr (woz_zephyr_port) under this same gate.
     target_sources(app PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/src/transport_pn532.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/src/pn532.c
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/pn532_apdu.c
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/pn532_bus_spi.c)
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/pn532_apdu.c)
   elseif(CONFIG_WOZ_NFC_TRANSPORT_NONE)
     target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/transport_none.cpp)
   endif()

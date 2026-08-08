@@ -11,32 +11,6 @@
 #include "ccc_shim.h"
 #include "flight_recorder.h" /* fr_capture_config — walk-up record/replay (gated) */
 
-#if defined(CONFIG_SOC_NRF5340_CPUAPP)
-#include <hal/nrf_clock.h>
-#include <zephyr/init.h>
-
-/**
- * @brief Raise the app-core HFCLK to 128 MHz before any driver initialises.
- *
- * The app core boots with HFCLK divided to 64 MHz. What matters here is the
- * timing of the boost, not the boost itself: this used to run lazily on the
- * first ranging call, changing the core clock domain underneath an already
- * configured and actively used SPIM4. Doing it at PRE_KERNEL_1 means every
- * driver is configured once, against a clock that then never moves.
- *
- * Note what this is NOT for. spi_nrfx_spim only consults the divider to cap
- * max_freq, and only when the requested rate exceeds 16 MHz (spi_nrfx_spim.c:182).
- * The DW3000 is at 8 MHz, so that clause never fires and the divider has no
- * bearing on the SPI bus rate either way.
- */
-static int woz_hfclk_boost(void)
-{
-	nrf_clock_hfclk_div_set(NRF_CLOCK, NRF_CLOCK_HFCLK_DIV_1);
-	return 0;
-}
-SYS_INIT(woz_hfclk_boost, PRE_KERNEL_1, 0);
-#endif
-
 /**
  * @brief One-shot boost of the app-core HFCLK to 128 MHz for the DW3000 SPI bus.
  *
@@ -46,9 +20,10 @@ SYS_INIT(woz_hfclk_boost, PRE_KERNEL_1, 0);
  */
 static void woz_hfclk_ensure_128mhz(void)
 {
-	/* No-op by design: the boost now happens in woz_hfclk_boost() at
-	 * PRE_KERNEL_1, before the SPI driver is ever configured. Kept as a seam so
-	 * the call sites and the non-nRF5340 ports build unchanged. */
+	/* No-op by design: the boost happens in woz_hfclk_boost()
+	 * (ports/zephyr/uwb/woz_hfclk_boost.c) at PRE_KERNEL_1, before the SPI
+	 * driver is ever configured. Kept as a seam so the call sites and the
+	 * non-nRF5340 ports build unchanged. */
 }
 
 /**
