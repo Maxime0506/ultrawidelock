@@ -23,7 +23,7 @@ index 7731eb0..53dd5eb 100644
 +
 +#ifdef CONFIG_WOZ_ALIRO
 +#include <cherry/cherry_ccc.h>
-+#include "woz_uwb_facade.h"
++#include <openaliro/uwb.h>
 +#endif // CONFIG_WOZ_ALIRO
 +
 +LOG_MODULE_REGISTER(woz_uwb_impl, LOG_LEVEL_INF);

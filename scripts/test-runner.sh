@@ -4,6 +4,7 @@
 #
 #   firmware   tests/host/run.sh                the KAT suite
 #   shared     tests/shared/run.sh              portable core + ESP port stages
+#   sdk        tests/sdk/run.sh                 installed C package consumer
 #   drift      tests/tooling/drift_check.py     Kconfig vs C constants
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
@@ -20,6 +21,7 @@ suite_cmd() {
 	case "$1" in
 	firmware) echo "bash tests/host/run.sh" ;;
 	shared) echo "bash tests/shared/run.sh" ;;
+	sdk) echo "bash tests/sdk/run.sh" ;;
 	drift) echo "python3 tests/tooling/drift_check.py" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
@@ -30,6 +32,7 @@ suite_label() {
 	case "$1" in
 	firmware) echo "firmware (C host)" ;;
 	shared) echo "shared core (C host)" ;;
+	sdk) echo "SDK package (CMake)" ;;
 	drift) echo "constant drift" ;;
 	seam) echo "uwb seam" ;;
 	purity) echo "port purity" ;;
@@ -76,7 +79,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared drift seam purity}"
+SEL="${SUITES:-firmware shared sdk drift seam purity}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do

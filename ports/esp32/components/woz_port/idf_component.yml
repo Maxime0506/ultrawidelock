@@ -1,0 +1,3 @@
+description: ESP-IDF backend for the OpenAliro platform contract
+dependencies:
+  idf: ">=5.5"

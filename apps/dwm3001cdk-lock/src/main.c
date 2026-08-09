@@ -20,14 +20,14 @@
 
 #include "aliro_approach.h"
 #include "aliro_prov.h" /* aliro_prov_erase, for the factory-reset button */
-#include "aliro_reader.h"
+#include <openaliro/reader.h>
+#include <openaliro/uwb.h>
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 #include "matter_commission.h"
 #include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
 #endif
 #include "status_led.h"
 #include "uwb_cirdiag.h" /* latched Ipatov scalars, for the channel classifier */
-#include "woz_uwb_facade.h"
 
 #if defined(CONFIG_WOZ_ML_LOS)
 #include "woz_ml.h"

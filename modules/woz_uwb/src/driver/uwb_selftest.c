@@ -1,6 +1,6 @@
 /** @file uwb_selftest.c — Kconfig-gated one-shot UWB init self-test (no iPhone). */
 
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 #include "ccc_shim.h"
 #include "woz_log.h"
 #include "woz_osal.h"

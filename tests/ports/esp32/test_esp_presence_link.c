@@ -12,10 +12,10 @@
 #include "aliro_assert.h"
 #include "aliro_assert_ec.h"
 #include "aliro_prim.h"
-#include "aliro_reader.h"
+#include <openaliro/reader.h>
 #include "nvs.h"
 #include "presence_link.h"
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 
 static int fails;
 

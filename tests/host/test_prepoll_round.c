@@ -13,7 +13,7 @@
 #include "ccc_mac.h"
 #include "ccc_shim.h"
 #include "fira_session.h"
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 #include "test.h"
 
 /* The CCC STS substitution seam entry point (uwb_seam.h). */

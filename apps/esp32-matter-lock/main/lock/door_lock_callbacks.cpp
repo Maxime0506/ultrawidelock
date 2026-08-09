@@ -14,7 +14,7 @@
 #include <lib/core/DataModelTypes.h>
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_prov.h>   // ALIRO_CRED_INDEX_NONE, for the index this hook is not given
-#include <aliro_reader.h> // reader-side provisioning trust store (aliro_prov)
+#include <openaliro/reader.h> // reader-side provisioning trust store (aliro_prov)
 #endif
 
 static const char *TAG = "doorlock_callback";

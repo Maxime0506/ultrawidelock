@@ -11,8 +11,8 @@
 
 #include "nvs.h"
 
-#include "woz_uwb_facade.h"
-#include "aliro_reader.h"
+#include <openaliro/uwb.h>
+#include <openaliro/reader.h>
 #include "aliro_assert.h"
 #include "aliro_assert_ec.h"
 #include "aliro_prim.h"

@@ -78,6 +78,7 @@
 #   private headers    production modules, apps and ports never include a
 #                      different module's private header; tests may white-box
 #                      the implementation they compile
+#   HAL contract       openaliro/woz_hal.h names exactly the five approved seams
 
 set -euo pipefail
 
@@ -145,8 +146,16 @@ PERMANENT_RE=$(permanent_re)
 # tranche tag and a reason — and so the ok-line keeps reporting the count.
 RATCHET=()
 
+repo_files() { # tracked + untracked files that exist in this working tree
+	local f
+	git ls-files --cached --others --exclude-standard -- "$@" |
+		while IFS= read -r f; do
+			[ ! -f "$f" ] || printf '%s\n' "$f"
+		done | LC_ALL=C sort -u
+}
+
 scan_paths() {
-	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp'
+	repo_files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp'
 }
 
 in_ratchet() {
@@ -251,7 +260,7 @@ tree_sources() { # <dir>... -> the tracked C/C++ sources under them
 	for d in "$@"; do
 		args+=("$d/*.c" "$d/*.h" "$d/*.cpp" "$d/*.hpp")
 	done
-	git ls-files "${args[@]}"
+	repo_files "${args[@]}"
 }
 
 os_findings() { # <banned-re> <dir>... -> file:line:text per offence
@@ -412,7 +421,9 @@ cmake_public_include_list() {
 	}' "$1"
 }
 
-cmake_files() { git ls-files '**/CMakeLists.txt'; }
+cmake_files() {
+	repo_files CMakeLists.txt '**/CMakeLists.txt'
+}
 
 check_public_includes() {
 	local fails=0 n=0 f p canon repo
@@ -444,14 +455,14 @@ check_public_includes() {
 # Owned private headers only. The vendored trees are dependencies with their
 # own layout and do not define this repository's module boundary.
 private_headers() {
-	git ls-files 'modules/woz_*/src/*.h' 'modules/woz_*/src/**/*.h' \
+	repo_files 'modules/woz_*/src/*.h' 'modules/woz_*/src/**/*.h' \
 		| grep -vE '^modules/woz_dfu/src/detools/'
 }
 
 # Production C/C++ files. Tests may include private headers to white-box the
 # implementation units they compile; app and port code may not.
 boundary_sources() {
-	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp' \
+	repo_files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp' \
 		'apps/*.c' 'apps/*.h' 'apps/*.cpp' 'apps/*.hpp' \
 		'examples/*.c' 'examples/*.h' 'examples/*.cpp' 'examples/*.hpp' \
 		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'ports/*.hpp' \
@@ -530,6 +541,7 @@ module_list_paths() {
 
 # The build files whose hardcoded paths this gate resolves.
 BUILD_FILES=(
+	CMakeLists.txt
 	apps/dwm3001cdk-lock/CMakeLists.txt
 	apps/esp32-matter-lock/CMakeLists.txt
 	examples/zephyr/anchor/CMakeLists.txt
@@ -575,6 +587,7 @@ check_build_paths() {
 # ports/ leaves the patch applying cleanly and breaks only at add-on build
 # time, on hardware CI. Fail here instead.
 PATCH_SYM_RE='woz_[a-z0-9_]+|WozNfc::[A-Za-z]+|CONFIG_WOZ_[A-Z0-9_]+'
+PATCH_HEADER_RE='openaliro/[a-z0-9_]+[.]h'
 # Names a patch itself coins rather than references (never defined in-tree).
 PATCH_LOCAL_RE='^woz_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
 
@@ -582,26 +595,50 @@ patch_syms() { # <patch> -> unique woz identifiers on its + lines
 	grep -E '^\+' "$1" | grep -oE "$PATCH_SYM_RE" | LC_ALL=C sort -u
 }
 
+patch_headers() { # <patch> -> unique public SDK headers on its + lines
+	grep -E '^\+' "$1" | grep -oE "$PATCH_HEADER_RE" | LC_ALL=C sort -u
+}
+
+patch_definition_files() {
+	repo_files 'modules/*' 'ports/*' |
+		grep -vE '^(modules/woz_dw3000/dwt_uwb_driver/|modules/woz_dfu/src/detools/)'
+}
+
 patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
-	local m hits
+	local f m hits=''
 	case "$1" in
 	WozNfc::*)
 		# In-tree the methods live inside `namespace WozNfc { ... }`, so the
 		# qualified spelling never appears; require one file naming both.
 		m="${1#WozNfc::}"
-		hits=$(git grep -lF 'WozNfc' -- modules ports ':!integrations/nrfconnect-door-lock/patches' 2>/dev/null) || return 1
+		while IFS= read -r f; do
+			grep -qF 'WozNfc' "$f" && hits="$hits $f"
+		done < <(patch_definition_files)
 		[ -n "$hits" ] || return 1
 		# shellcheck disable=SC2086 # tracked paths, no whitespace
 		grep -qlE "(^|[^[:alnum:]_])${m}([^[:alnum:]_]|\$)" $hits
 		;;
 	*)
-		git grep -qF "$1" -- modules ports ':!integrations/nrfconnect-door-lock/patches' 2>/dev/null
+		while IFS= read -r f; do
+			grep -qF "$1" "$f" && return 0
+		done < <(patch_definition_files)
+		return 1
 		;;
 	esac
 }
 
+patch_header_defined() { # <openaliro/header.h>
+	local f
+	while IFS= read -r f; do
+		case "$f" in
+		include/"$1" | */include/"$1") return 0 ;;
+		esac
+	done < <(repo_files 'include/openaliro/*.h' 'modules/*/include/openaliro/*.h')
+	return 1
+}
+
 check_patch_symbols() {
-	local fails=0 n=0 p sym
+	local fails=0 headers=0 n=0 p sym
 	for p in integrations/nrfconnect-door-lock/patches/*.patch; do
 		while IFS= read -r sym; do
 			[ -n "$sym" ] || continue
@@ -613,13 +650,23 @@ check_patch_symbols() {
 				fails=$((fails + 1))
 			fi
 		done < <(patch_syms "$p")
+		while IFS= read -r sym; do
+			[ -n "$sym" ] || continue
+			headers=$((headers + 1))
+			if ! patch_header_defined "$sym"; then
+				printf '%s  dangling patch header: %s (grafted by %s)%s\n' \
+					"$R" "$sym" "$p" "$Z" >&2
+				fails=$((fails + 1))
+			fi
+		done < <(patch_headers "$p")
 	done
 	if [ "$fails" -gt 0 ]; then
-		printf '%scheck-purity: %d patch symbol(s) no longer defined in modules/ or ports/%s\n' \
+		printf '%scheck-purity: %d patch contract reference(s) no longer defined%s\n' \
 			"$R" "$fails" "$Z" >&2
 		return 1
 	fi
-	printf '%s  ok   add-on patches: %d woz symbol(s) still defined in the tree%s\n' "$G" "$n" "$Z"
+	printf '%s  ok   add-on patches: %d woz symbol(s), %d SDK header(s) still defined%s\n' \
+		"$G" "$n" "$headers" "$Z"
 }
 
 # ---- role manifests ----------------------------------------------------------
@@ -653,7 +700,7 @@ NOT_MANIFESTED=(
 	modules/woz_uwb/src/driver/uwb_selftest.c
 )
 
-manifest_files() { git ls-files 'modules/*/roles/*.list'; }
+manifest_files() { repo_files 'modules/*/roles/*.list'; }
 
 # One manifest -> its repo-relative paths, comments and blank lines dropped.
 # The same three rules cmake/woz_roles.cmake and tests/host/sources.sh apply.
@@ -702,7 +749,7 @@ check_manifests() {
 		printf '%s\n' "$allow" | grep -qxF "$src" && continue
 		printf '%s  unmanifested shared source: %s%s\n' "$R" "$src" "$Z" >&2
 		fails=$((fails + 1))
-	done < <(git ls-files "${MANIFEST_ROOTS[@]/%//*.c}")
+	done < <(repo_files "${MANIFEST_ROOTS[@]/%//*.c}")
 
 	for src in "${NOT_MANIFESTED[@]}"; do
 		if [ ! -f "$src" ] || printf '%s\n' "$manifested" | grep -qxF "$src"; then
@@ -720,6 +767,38 @@ check_manifests() {
 	fi
 	printf '%s  ok   role coverage: every shared source is in a role, %d allowlisted%s\n' \
 		"$G" "${#NOT_MANIFESTED[@]}" "$Z"
+}
+
+# The installed HAL umbrella is deliberately small. Adding a sixth seam or
+# dropping one of these five is an architecture change, not a header cleanup.
+HAL_CONTRACT=modules/woz_port/include/openaliro/woz_hal.h
+HAL_CONTRACT_HEADERS=(
+	aliro_ble.h
+	aliro_ble_central.h
+	aliro_prov.h
+	dw3000_hw.h
+	dw3000_spi.h
+)
+
+hal_contract_headers() {
+	sed -nE 's/^[[:space:]]*#[[:space:]]*include[[:space:]]*"([^"]+)".*/\1/p' "$1" |
+		LC_ALL=C sort
+}
+
+hal_contract_matches() {
+	local header="$1" got expected
+	got=$(hal_contract_headers "$header")
+	expected=$(printf '%s\n' "${HAL_CONTRACT_HEADERS[@]}" | LC_ALL=C sort)
+	[ "$got" = "$expected" ]
+}
+
+check_hal_contract() {
+	if [ ! -f "$HAL_CONTRACT" ] || ! hal_contract_matches "$HAL_CONTRACT"; then
+		printf '%scheck-purity: openaliro/woz_hal.h must include exactly the five approved seam headers%s\n' \
+			"$R" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   HAL contract: exactly five chipset seams%s\n' "$G" "$Z"
 }
 
 # ---- self-test --------------------------------------------------------------
@@ -745,7 +824,7 @@ self_test() {
 		'	woz_work_submit(&ctx.work);'
 		'	woz_sem_take(&s, 50);'
 		'#include "woz_port.h"'
-		'#include <aliro_reader.h>'
+		'#include <openaliro/reader.h>'
 		'	int task_sem = mask_semantics(x);'
 		'	stack_free(p);'
 		'#define ESP_NOTE 1 /* not an include */'
@@ -770,6 +849,33 @@ self_test() {
 		fi
 	done
 	[ "$fails" -ne 0 ] || printf '%s  self-test: quiet on all %d legitimate shapes%s\n' "$G" "$quiet" "$Z"
+
+	# HAL exactness: both a missing seam and an invented sixth seam must fail,
+	# while the approved five pass independently of include order.
+	local halfix
+	halfix=$(mktemp -t purity-hal.XXXXXX)
+	printf '%s\n' '#include "aliro_ble.h"' '#include "aliro_ble_central.h"' \
+		'#include "aliro_prov.h"' '#include "dw3000_hw.h"' >"$halfix"
+	if hal_contract_matches "$halfix"; then
+		printf '%s  self-test FAILED: HAL contract accepted a missing seam%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	printf '%s\n' '#include "dw3000_spi.h"' '#include "aliro_ble.h"' \
+		'#include "aliro_ble_central.h"' '#include "aliro_prov.h"' \
+		'#include "dw3000_hw.h"' '#include "invented_bus.h"' >"$halfix"
+	if hal_contract_matches "$halfix"; then
+		printf '%s  self-test FAILED: HAL contract accepted an extra seam%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	printf '%s\n' '#include "dw3000_spi.h"' '#include "aliro_ble.h"' \
+		'#include "aliro_ble_central.h"' '#include "aliro_prov.h"' \
+		'#include "dw3000_hw.h"' >"$halfix"
+	if ! hal_contract_matches "$halfix"; then
+		printf '%s  self-test FAILED: HAL contract rejected the approved seams%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	rm -f "$halfix"
+	[ "$fails" -ne 0 ] || printf '%s  self-test: HAL contract rejects missing and extra seams%s\n' "$G" "$Z"
 
 	# Comment filter: drops prose, keeps code with a trailing comment.
 	local drop=('12: * uses k_work_reschedule under the hood' '7://	k_msleep(5);')
@@ -953,14 +1059,16 @@ self_test() {
 	fi
 	[ "$fails" -ne 0 ] || printf '%s  self-test: private header ownership distinguishes API, implementation and consumers%s\n' "$G" "$Z"
 
-	# Patch tripwire: + lines only, all three identifier shapes, and the
-	# resolver must fail on an invented symbol while passing real ones.
+	# Patch tripwire: + lines only, all identifier and SDK-header shapes, and
+	# the resolver must fail on invented contracts while passing real ones.
 	cat >"$fixdir/fix.patch" <<-'EOF'
 		--- a/x.cpp
 		+++ b/x.cpp
 		+	woz_phantom_symbol_xyz();
 		+	WozNfc::Init();
 		+	if (CONFIG_WOZ_ALIRO) {}
+		+#include <openaliro/uwb.h>
+		+#include <openaliro/phantom.h>
 		-	woz_minus_line_only();
 	EOF
 	if [ "$(patch_syms "$fixdir/fix.patch")" != "$(printf 'CONFIG_WOZ_ALIRO\nWozNfc::Init\nwoz_phantom_symbol_xyz')" ]; then
@@ -971,13 +1079,22 @@ self_test() {
 		printf '%s  self-test FAILED: tripwire resolved an invented symbol%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
+	if [ "$(patch_headers "$fixdir/fix.patch")" != "$(printf 'openaliro/phantom.h\nopenaliro/uwb.h')" ]; then
+		printf '%s  self-test FAILED: patch header extraction is incomplete%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if patch_header_defined openaliro/phantom.h || ! patch_header_defined openaliro/uwb.h; then
+		printf '%s  self-test FAILED: patch header tripwire accepted a phantom or lost UWB%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
 	for pth in CONFIG_WOZ_ALIRO WozNfc::Init; do
 		if ! patch_sym_defined "$pth"; then
 			printf '%s  self-test FAILED: tripwire lost a real symbol: %s%s\n' "$R" "$pth" "$Z" >&2
 			fails=$((fails + 1))
 		fi
 	done
-	[ "$fails" -ne 0 ] || printf '%s  self-test: patch tripwire fires on invented symbols only%s\n' "$G" "$Z"
+	[ "$fails" -ne 0 ] || printf '%s  self-test: patch tripwire fires on invented symbols and headers only%s\n' "$G" "$Z"
 
 	# Manifest parser: comments (whole-line and trailing), blank lines and
 	# stray whitespace vanish; nothing else does. Must agree with
@@ -1024,6 +1141,7 @@ case "${1-}" in
 	check_public_includes || rc=1
 	check_private_headers || rc=1
 	check_manifests || rc=1
+	check_hal_contract || rc=1
 	check_build_paths || rc=1
 	check_patch_symbols || rc=1
 	exit "$rc"

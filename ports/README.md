@@ -14,3 +14,6 @@ return control to the shared implementation.
 
 The host OSAL backend is under `tests/host/port/` because it also serves as the
 test fake.
+
+Use [`PORTING.md`](../PORTING.md) for the exact five-seam chipset contract and
+the supported-framework integration flow.

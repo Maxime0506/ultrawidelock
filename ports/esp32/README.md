@@ -5,6 +5,7 @@ modules to ESP-IDF, NimBLE, NVS, USB, and DW3000 hardware services.
 
 Applications add `ports/esp32/components/` to `EXTRA_COMPONENT_DIRS`. ESP-IDF
 then builds only the components named by another component's dependency list.
+Each component carries local Component Manager metadata in `idf_component.yml`.
 
 Key component groups are:
 

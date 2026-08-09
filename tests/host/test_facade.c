@@ -5,7 +5,7 @@
 #include "aliro_kdf.h" /* ALIRO_URSK_LEN */
 #include "ccc_shim.h"
 #include "fira_session.h"
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 #include "test.h"
 
 static int s_facade_listener_hits;

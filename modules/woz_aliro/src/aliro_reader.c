@@ -35,7 +35,7 @@
 #include "aliro_prim.h"
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
-#include "aliro_reader.h"
+#include <openaliro/reader.h>
 #include "aliro_rssi_gate.h"
 #if defined(CONFIG_WOZ_ALIRO_STEPUP)
 #include "aliro_stepup.h"

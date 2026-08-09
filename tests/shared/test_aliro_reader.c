@@ -34,7 +34,7 @@
 #include "aliro_prim.h"
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
-#include "aliro_reader.h"
+#include <openaliro/reader.h>
 #include "woz_port.h" /* woz_uptime_ms: the clock the status tick's deadline uses */
 
 /* Failure injection into the prim double (aliro_prim_host.c). Every hook
