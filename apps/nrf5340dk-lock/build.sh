@@ -56,6 +56,8 @@ NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$APP_DIR/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
 APP="$ADDON/applications/matter-aliro-door-lock-app"
+PATCH_DIR="$TREE/integrations/nrfconnect-door-lock/patches"
+PATCH_STATE="$WS/.openaliro-patches.sha256"
 # One build root for the whole repo (Makefile exports ALIRO_BUILD_ROOT); every
 # producer derives its own subdirectory under it, so `make clean` is one rm.
 # ALIRO_SOURCE picks the subdirectory rather than reconfiguring one shared dir:
@@ -156,6 +158,14 @@ preflight() {
   done
   [ -z "$unpatched" ] \
     || die "integration patches missing on:$unpatched" "run: make bootstrap"
+
+  local expected_patch_state actual_patch_state=""
+  expected_patch_state="$("$TREE/scripts/integration-patch-id.py" \
+    "$PATCH_DIR" "${HA:-0}")"
+  [ ! -f "$PATCH_STATE" ] || actual_patch_state="$(sed -n '1p' "$PATCH_STATE")"
+  [ "$actual_patch_state" = "$expected_patch_state" ] \
+    || die "integration patch set changed or HA mode differs" \
+           "run: make bootstrap$( [ "${HA:-0}" = 1 ] && printf ' HA=1' )"
   ok "integration patches applied"
 
   local f missing=""

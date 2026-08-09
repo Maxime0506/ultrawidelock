@@ -28,9 +28,9 @@ cbmc:
 check:
 	@$(REPO_ROOT)/scripts/test-runner.sh
 
-## drift: one constant, one number  ·  Kconfig and C must agree
+## drift: constants and integration patch-state identity stay exact
 drift:
-	@python3 $(REPO_ROOT)/tests/tooling/drift_check.py
+	@$(REPO_ROOT)/tests/tooling/drift_suite.sh
 
 ## seam: no call reaches the radio past the CCC STS seam
 seam:
@@ -39,4 +39,3 @@ seam:
 ## purity: modules/ names no OS, each port tree names only its own
 purity:
 	@$(REPO_ROOT)/tests/tooling/port_purity_check.sh
-

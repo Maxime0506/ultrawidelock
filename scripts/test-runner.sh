@@ -5,7 +5,7 @@
 #   firmware   tests/host/run.sh                the KAT suite
 #   shared     tests/shared/run.sh              portable core + ESP port stages
 #   sdk        tests/sdk/run.sh                 installed C package consumer
-#   drift      tests/tooling/drift_check.py     Kconfig vs C constants
+#   drift      drift_check.py + patch ID self-test
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
 #
@@ -22,7 +22,7 @@ suite_cmd() {
 	firmware) echo "bash tests/host/run.sh" ;;
 	shared) echo "bash tests/shared/run.sh" ;;
 	sdk) echo "bash tests/sdk/run.sh" ;;
-	drift) echo "python3 tests/tooling/drift_check.py" ;;
+	drift) echo "bash tests/tooling/drift_suite.sh" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
 	esac
