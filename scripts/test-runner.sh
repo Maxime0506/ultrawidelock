@@ -7,6 +7,7 @@
 #   drift      tests/tooling/drift_check.py     Kconfig vs C constants
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
+#   freertos   tests/ports/freertos-nrf52833/run.sh  standalone RTOS contract
 #
 # Default: suites run in parallel, failures replayed when done. SERIAL=1 streams
 # full output one suite at a time. SUITES="firmware shared" scopes. Exit is
@@ -23,6 +24,7 @@ suite_cmd() {
 	drift) echo "python3 tests/tooling/drift_check.py" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
+	freertos) echo "bash tests/ports/freertos-nrf52833/run.sh" ;;
 	esac
 }
 
@@ -33,6 +35,7 @@ suite_label() {
 	drift) echo "constant drift" ;;
 	seam) echo "uwb seam" ;;
 	purity) echo "port purity" ;;
+	freertos) echo "FreeRTOS port" ;;
 	esac
 }
 
@@ -76,7 +79,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared drift seam purity}"
+SEL="${SUITES:-firmware shared drift seam purity freertos}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do

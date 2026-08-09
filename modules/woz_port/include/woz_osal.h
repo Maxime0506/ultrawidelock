@@ -15,11 +15,11 @@
  * converted module runs behind that deferral.
  *
  * Backends: Zephyr maps 1:1 onto k_work/k_sem/k_thread (osal_zephyr.c holds
- * the handler trampolines). ESP-IDF runs one dispatch task over a FreeRTOS
- * queue plus a deadline list (osal_esp.c). The host backend IS the test
- * double: a FIFO and a virtual clock the suite steps by hand (osal_host.c),
- * so converted modules keep deterministic host tests without a faked
- * <zephyr/kernel.h>.
+ * the handler trampolines). ESP-IDF and standalone FreeRTOS each run one
+ * dispatch task over a FreeRTOS queue plus a deadline list. The host backend
+ * IS the test double: a FIFO and a virtual clock the suite steps by hand
+ * (osal_host.c), so converted modules keep deterministic host tests without a
+ * faked <zephyr/kernel.h>.
  */
 #ifndef WOZ_OSAL_H
 #define WOZ_OSAL_H
@@ -108,6 +108,59 @@ typedef StackType_t woz_thread_stack_t;
 void woz_osal_init_register(int (*fn)(void));
 int woz_osal_init_all(void); /* app_main calls this once, after the OS is up */
 
+#elif defined(WOZ_PORT_FREERTOS)
+
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include "task.h"
+
+#if configSUPPORT_STATIC_ALLOCATION != 1
+#error "WOZ_PORT_FREERTOS requires configSUPPORT_STATIC_ALLOCATION=1"
+#endif
+#if configSUPPORT_DYNAMIC_ALLOCATION != 1
+#error "WOZ_PORT_FREERTOS requires configSUPPORT_DYNAMIC_ALLOCATION=1 for woz_malloc"
+#endif
+#if configUSE_MUTEXES != 1 || configUSE_COUNTING_SEMAPHORES != 1
+#error "WOZ_PORT_FREERTOS requires mutexes and counting semaphores"
+#endif
+#if configMAX_PRIORITIES < 4
+#error "WOZ_PORT_FREERTOS requires at least four task priorities"
+#endif
+
+struct woz_work {
+	woz_work_fn fn;
+	struct woz_work *next;
+	volatile int pending;
+};
+struct woz_dwork {
+	woz_dwork_fn fn;
+	struct woz_dwork *next;
+	int64_t deadline_us;
+	volatile int pending;
+};
+typedef struct {
+	StaticSemaphore_t buf;
+	SemaphoreHandle_t h;
+} woz_sem_t;
+typedef struct {
+	StaticTask_t tcb;
+	TaskHandle_t handle;
+} woz_thread_t;
+typedef StackType_t woz_thread_stack_t;
+#define WOZ_THREAD_STACK_DEFINE(name, size)                                                   \
+	static StackType_t name[((size) + sizeof(StackType_t) - 1) / sizeof(StackType_t)]
+#define WOZ_THREAD_STACK_SIZEOF(name) sizeof(name)
+
+/* The selected startup must execute the C runtime init array before main. */
+#define WOZ_INIT_APPLICATION(fn)                                     \
+	__attribute__((constructor)) static void woz_reg_##fn(void) \
+	{                                                            \
+		woz_osal_init_register(fn);                          \
+	}
+#define WOZ_INIT_APPLICATION_PRIO(fn, prio) WOZ_INIT_APPLICATION(fn)
+void woz_osal_init_register(int (*fn)(void));
+int woz_osal_init_all(void);
+
 #elif defined(WOZ_PORT_HOST)
 
 struct woz_work {
@@ -174,7 +227,7 @@ unsigned woz_osal_host_advance_ms(int64_t ms);
 int64_t woz_osal_host_now_ms(void);
 
 #else
-#error "woz_osal.h: no platform backend. Define WOZ_PORT_HOST, or build under Zephyr/ESP-IDF."
+#error "woz_osal.h: no platform backend. Define WOZ_PORT_HOST/WOZ_PORT_FREERTOS, or build under Zephyr/ESP-IDF."
 #endif
 
 /* ---- the contract, identical on every backend --------------------------- */

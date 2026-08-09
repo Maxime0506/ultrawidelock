@@ -1,0 +1,39 @@
+schema: 1
+
+# Board, UWB, and FreeRTOS source base supplied as a local vendor artifact.
+qorvo_dw3_qm33_sdk:
+  version: 1.1.1
+  artifact: DW3_QM33_SDK_1.1.1.zip
+  sha256: ec804092158babe4849d224b05528e7cbf3cfe92a05767df0e8274081341ec9e
+
+# Keep Thread behavior identical to the NCS v3.3.0 Zephyr oracle while the
+# scheduler and platform drivers move to FreeRTOS.
+openthread:
+  repository: https://github.com/nrfconnect/sdk-openthread
+  revision: 0e26667136c2c49d42c96b8104ec2e90e8d55e4d
+  upstream_revision: c6eaeda5a1c1c5dbb24dce7e027340cb8893a77b
+
+# Shipping-radio candidate. MPSL and SoftDevice Controller are linkable,
+# RTOS-agnostic libraries; nrf_802154 supplies an nRF52833 service-layer binary
+# and source-buildable core with a documented non-NCS integration path.
+nrfxlib:
+  repository: https://github.com/nrfconnect/sdk-nrfxlib
+  revision: cfb98f4bcd4efe00df0c741e137b42f307680402
+  mpsl_sdc_binary_revision: 27037d53048dfe99a9f29aadde5b6ae2746cac75
+
+# The SDC command API is opcode-specific. Rework this pinned dispatcher to
+# remove its Zephyr type dependencies; do not hand-maintain a partial opcode set.
+ncs_sdk_nrf:
+  repository: https://github.com/nrfconnect/sdk-nrf
+  revision: ba167d9f3db4abbdc9b67887ca3ea66c64f2d956
+  source: subsys/bluetooth/controller/hci_internal.c
+
+hal_nordic:
+  repository: https://github.com/zephyrproject-rtos/hal_nordic
+  revision: 1acb428a205bad58f3dfd4e38f2d1663bb784ba1
+
+# Zephyr-free BLE host selected for peripheral GATT and credit-based L2CAP.
+nimble:
+  repository: https://github.com/apache/mynewt-nimble
+  version: 1.10.0
+  revision: a7a156f28954819e158b62dd613008f22f9cf73b

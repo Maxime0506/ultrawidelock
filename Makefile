@@ -87,6 +87,7 @@ LOG      ?=
 
 # ---- the ports, in the order `make help` should introduce them ---------------
 include $(REPO_ROOT)/mk/cdk.mk
+include $(REPO_ROOT)/mk/freertos-nrf52833.mk
 include $(REPO_ROOT)/mk/nrf5340dk.mk
 include $(REPO_ROOT)/mk/esp32.mk
 # After the ports: it reuses cdk.mk's west launcher and probe guard, and it is a

@@ -1,0 +1,9 @@
+#ifndef TEST_NIMBLE_BLE_H
+#define TEST_NIMBLE_BLE_H
+
+#define BLE_ERR_SUCCESS           0x00
+#define BLE_ERR_MEM_CAPACITY      0x07
+#define BLE_ERR_UNSUPPORTED       0x11
+#define BLE_ERR_INV_HCI_CMD_PARMS 0x12
+
+#endif /* TEST_NIMBLE_BLE_H */

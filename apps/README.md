@@ -1,13 +1,15 @@
 # Applications
 
-`apps/` contains complete OpenAliro lock implementations. Each directory owns
-the product-specific configuration, wiring, entry point, and build overlays.
+`apps/` contains OpenAliro lock implementations and active product ports. Each
+directory owns the product-specific configuration, wiring, entry point, and
+build overlays.
 Portable protocol code remains in `modules/`, while OS and chipset glue remains
 in `ports/`.
 
 | Application | Primary build command | Output root |
 |---|---|---|
 | [`dwm3001cdk-lock/`](dwm3001cdk-lock/) | `make build` | `build/cdk-matter/` |
+| [`dwm3001cdk-lock-freertos/`](dwm3001cdk-lock-freertos/) | `make freertos-port-test` (foundation only) | `build/freertos-nrf52833-host/` |
 | [`nrf5340dk-lock/`](nrf5340dk-lock/) | `make nrf-build` | `build/nrf5340dk/` |
 | [`esp32-matter-lock/`](esp32-matter-lock/) | `make esp-build APP=matter-lock TARGET=esp32s3` | `build/esp32-matter-lock-esp32s3/` |
 

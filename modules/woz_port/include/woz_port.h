@@ -135,6 +135,80 @@ static inline void woz_mutex_unlock(woz_mutex_t *m)
 	xSemaphoreGive(m->h);
 }
 
+#elif defined(WOZ_PORT_FREERTOS)
+
+#include <string.h>
+
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include "task.h"
+
+#include "woz_freertos_platform.h"
+
+static inline void *woz_malloc(size_t size)
+{
+	return pvPortMalloc(size);
+}
+static inline void *woz_calloc(size_t n, size_t size)
+{
+	void *ptr;
+
+	if (size != 0 && n > SIZE_MAX / size) {
+		return NULL;
+	}
+	ptr = pvPortMalloc(n * size);
+	if (ptr != NULL) {
+		memset(ptr, 0, n * size);
+	}
+	return ptr;
+}
+static inline void woz_free(void *ptr)
+{
+	vPortFree(ptr);
+}
+static inline int64_t woz_uptime_us(void)
+{
+	return woz_freertos_uptime_us();
+}
+static inline int64_t woz_uptime_ms(void)
+{
+	return woz_freertos_uptime_us() / 1000;
+}
+static inline void woz_sleep_ms(int32_t ms)
+{
+	if (ms > 0) {
+		TickType_t ticks = pdMS_TO_TICKS((uint32_t)ms);
+
+		vTaskDelay(ticks == 0 ? 1 : ticks);
+	}
+}
+static inline void woz_sleep_us(int64_t us)
+{
+	if (us > 0) {
+		woz_freertos_busy_wait_us((uint64_t)us);
+	}
+}
+static inline uint32_t woz_cycle_get_32(void)
+{
+	return woz_freertos_cycle_get_32();
+}
+typedef struct {
+	StaticSemaphore_t buf;
+	SemaphoreHandle_t h;
+} woz_mutex_t;
+static inline void woz_mutex_init(woz_mutex_t *m)
+{
+	m->h = xSemaphoreCreateMutexStatic(&m->buf);
+}
+static inline void woz_mutex_lock(woz_mutex_t *m)
+{
+	(void)xSemaphoreTake(m->h, portMAX_DELAY);
+}
+static inline void woz_mutex_unlock(woz_mutex_t *m)
+{
+	(void)xSemaphoreGive(m->h);
+}
+
 #elif defined(WOZ_PORT_HOST)
 
 #include <stdlib.h>
@@ -240,7 +314,7 @@ static inline void woz_mutex_unlock(woz_mutex_t *m)
 }
 
 #else
-#error "woz_port.h: no platform backend. Define WOZ_PORT_HOST, or build under Zephyr/ESP-IDF."
+#error "woz_port.h: no platform backend. Define WOZ_PORT_HOST/WOZ_PORT_FREERTOS, or build under Zephyr/ESP-IDF."
 #endif
 
 #endif /* WOZ_PORT_H */

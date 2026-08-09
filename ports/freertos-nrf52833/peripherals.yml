@@ -1,0 +1,31 @@
+schema: 1
+
+# Frozen nRF52833 ownership for the shipping MPSL configuration. The Qorvo
+# archive's weak vector stubs allow the port to provide these handlers.
+interrupts:
+  RADIO: { priority: 0, owner: mpsl }
+  RTC0: { priority: 0, owner: mpsl }
+  TIMER0: { priority: 0, owner: mpsl }
+  SWI0_EGU0: { priority: 1, owner: nrf_802154 }
+  SWI5_EGU5: { priority: 4, owner: mpsl_low_priority }
+  RTC1: { priority: 15, owner: freertos_tick }
+  RTC2: { priority: 1, owner: nrf_802154_low_power_timer }
+
+peripherals:
+  RTC0: mpsl
+  RTC1: freertos_tick
+  RTC2: nrf_802154_low_power_timer
+  TIMER0: mpsl
+  TIMER1: nrf_802154_high_precision_timer
+  EGU0: nrf_802154
+  EGU5: mpsl_low_priority
+  RADIO: mpsl
+  CLOCK: mpsl
+  TEMP: mpsl
+
+handoffs:
+  - Remove Qorvo app_timer from RTC2; delayable work is owned by the FreeRTOS OSAL.
+  - Route SWI5_EGU5 to woz_freertos_mpsl_wake_from_isr.
+  - Route the SDC callback to woz_freertos_nimble_sdc_wake.
+  - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
+  - Verify every PPI channel against MPSL and nRF 802.15.4 masks at target compile time.
