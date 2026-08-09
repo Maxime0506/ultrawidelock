@@ -1,6 +1,6 @@
 /*
  * Host unit test for the engine's pure port headers
- * (modules/woz_uwb/src/facade/{woz_bytes,woz_util}.h).
+ * (modules/woz_port/include/woz_bytes.h and modules/woz_uwb/include/woz_util.h).
  *
  * These two carry no OS dependency at all, so they compile and run on the host
  * with no backend selected. They back the shared engine's endian load/store and

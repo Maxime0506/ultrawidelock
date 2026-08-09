@@ -2,7 +2,6 @@
 
 #include "aliro_uwb_msg_builder.h"
 
-#include "aliro_uwb_msg.h" /* the aliro_uwb_msg_free declaration */
 #include "woz_alloc.h"
 #include <string.h>
 
@@ -17,6 +16,11 @@
 void aliro_uwb_msg_free(struct aliro_uwb_message *message)
 {
 	qfree(message);
+}
+
+void aliro_uwb_session_message_free(struct aliro_uwb_message *message)
+{
+	aliro_uwb_msg_free(message);
 }
 
 /**

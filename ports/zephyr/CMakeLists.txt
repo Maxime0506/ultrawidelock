@@ -2,7 +2,7 @@
 # Mirror of ports/esp32/components/*, which implements the same contracts on
 # ESP-IDF; modules/ stays the single portable source tree. Contract headers
 # stay with their modules (dw3000_hw.h / dw3000_spi.h in
-# modules/woz_dw3000/platform, pn532_bus.h in modules/woz_nfc/src); this tree
+# modules/woz_dw3000/include, pn532_bus.h in modules/woz_nfc/include); this tree
 # carries the Zephyr .c backends plus the app-target glue below.
 # Contributes nothing unless a consuming CONFIG is y: an image that selects no
 # feature below gets zero bytes from this module.
@@ -47,7 +47,7 @@ zephyr_library_sources_ifdef(CONFIG_DW3000
 # via zephyr_include_directories, listed here so this library does not depend
 # on that module's processing order.
 zephyr_library_include_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/platform
+	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/include
 	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/dwt_uwb_driver)
 
 # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log line
@@ -119,12 +119,11 @@ endif()
 # WOZ_DFU_RECEIVER gates are defined by the consuming app's Kconfig and simply
 # do not exist elsewhere, so every other image gets nothing.
 
-# Zephyr SPI backend of the PN532 bus contract (pn532_bus.h stays with the
-# portable pn532 core in modules/woz_nfc/src).
+# Zephyr SPI backend of the PN532 bus contract.
 if(CONFIG_WOZ_NFC_TRANSPORT_PN532)
 	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nfc/pn532_bus_spi.c)
 	target_include_directories(app PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_nfc/src)
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_nfc/include)
 endif()
 
 # The 0xFFF6 Matter commissioning transport + Thread/fabric ports + the fabric

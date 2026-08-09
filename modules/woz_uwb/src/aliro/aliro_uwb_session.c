@@ -275,15 +275,6 @@ void aliro_uwb_session_destroy(struct aliro_uwb_session *session)
 }
 
 /**
- * @brief Free a session message, delegating to the message-specific free function.
- * @param message Message to free.
- */
-void aliro_uwb_session_message_free(struct aliro_uwb_message *message)
-{
-	aliro_uwb_msg_free(message);
-}
-
-/**
  * @brief Free a session event, releasing its wrapped CCC event if present.
  */
 void aliro_uwb_session_event_free(struct aliro_uwb_session_event *event)

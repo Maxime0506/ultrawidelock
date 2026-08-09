@@ -166,7 +166,9 @@ INCS=(
 	-I"$HOST/logfake"
 	-I"$ROOT/modules/woz_aliro_stack/src"
 	-I"$ROOT/modules/woz_aliro_stack/src/protocol"
+	-I"$ROOT/modules/woz_nfc/include"
 	-I"$ROOT/modules/woz_nfc/src"
+	-I"$ROOT/modules/woz_uwb/include"
 	-I"$SRC/ccc"
 	-I"$SRC/driver"
 	-I"$SRC/aliro"
@@ -182,6 +184,7 @@ INCS=(
 	-I"$ROOT/modules/woz_ml/include"
 	-I"$ROOT/modules/woz_ml/src"
 	-I"$ROOT/modules/woz_anchor/include"
+	-I"$ROOT/modules/woz_dw3000/include"
 )
 
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.

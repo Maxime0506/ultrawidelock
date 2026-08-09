@@ -17,9 +17,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "aliro_uwb_msg_spec.h"
+#include <aliro_uwb_adapter/aliro_uwb_session.h>
 
-struct aliro_uwb_message; /* defined by the UWB session headers; opaque here */
+#include "aliro_uwb_msg_spec.h"
 
 #define ALIRO_DEV_UWB_MAX_CONFIGS 8
 #define ALIRO_DEV_UWB_MAX_COMBOS  8
@@ -76,6 +76,6 @@ void aliro_dev_uwb_select_m2(const struct aliro_dev_uwb_m1 *m1,
 			     struct aliro_dev_uwb_m2_params *out);
 
 /** Build an M2 / M4 message. Returns a heap-allocated message (free with
- *  aliro_uwb_msg_free), or NULL on allocation/encode failure. */
+ *  aliro_uwb_session_message_free), or NULL on allocation/encode failure. */
 struct aliro_uwb_message *aliro_dev_uwb_build_m2(const struct aliro_dev_uwb_m2_params *p);
 struct aliro_uwb_message *aliro_dev_uwb_build_m4(const struct aliro_dev_uwb_m4_params *p);

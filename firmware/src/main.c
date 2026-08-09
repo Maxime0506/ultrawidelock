@@ -75,7 +75,7 @@ static void heap_peak_log(const char *when)
  * it for exactly that reason (bench-correlated late RESPONSE arms). What shell this
  * board has exists only in provisioning mode, where the radios never start, so
  * `uwbdiag off` can never be typed at a walk-up; force it off here before any
- * ranging starts. See modules/woz_uwb/src/facade/woz_diag.h. */
+ * ranging starts. See modules/woz_uwb/include/woz_diag.h. */
 extern volatile int woz_uwb_diag_on;
 
 /* Reader status housekeeping: the engine expects a periodic tick to age out a

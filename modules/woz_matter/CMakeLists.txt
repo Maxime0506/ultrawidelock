@@ -38,9 +38,6 @@ if(CONFIG_WOZ_MATTER)
   # not new code. It is still a real dependency, which CONFIG_WOZ_MATTER records
   # with `depends on WOZ_ALIRO`.
   #
-  # The host suite never caught this: tests/host/sources.sh puts
-  # modules/woz_aliro/src on the include path for its own reasons, so
-  # matter_crypto.c compiled there and only failed on the first Zephyr build.
-  zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../woz_aliro/src)
+  zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../woz_aliro/include)
 
 endif(CONFIG_WOZ_MATTER)

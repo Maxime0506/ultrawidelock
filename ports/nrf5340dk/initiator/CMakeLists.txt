@@ -14,6 +14,7 @@ project(aliro_initiator_nrf5340dk)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
+set(UWB_INC "${REPO_ROOT}/modules/woz_uwb/include")
 set(UWB "${REPO_ROOT}/modules/woz_uwb/src/aliro")
 set(CCC "${REPO_ROOT}/modules/woz_uwb/src/ccc")
 
@@ -69,13 +70,13 @@ target_sources(app PRIVATE
 	${UWB_CCC_KEYS_SRCS}
 	${UWB_CRYPTO_SRCS}
 )
-# src/ is on the path, not just include/: main.c needs aliro_apdu.h for the
-# 4-byte L2CAP envelope, same reason the ESP-IDF component makes it public.
+# The app target also compiles selected module sources, so their private
+# sibling headers remain on this target's private include path.
 target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
 	# The UWB codec's own headers, the adapter/cherry headers its message struct
 	# is declared in, and the two platform facades it compiles against
 	# (qmalloc -> k_malloc, LOG_MODULE_DECLARE).
-	${UWB} ${UWB}/include
+	${UWB_INC} ${UWB}
 	${REPO_ROOT}/modules/woz_uwb/src/facade
 	${REPO_ROOT}/modules/woz_port/include
 	# The CCC key schedule and MAC headers, plus src/driver for uwb_seam.h

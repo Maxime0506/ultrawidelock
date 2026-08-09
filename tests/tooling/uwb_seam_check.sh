@@ -3,7 +3,7 @@
 # uwb_seam_check.sh — keep the CCC STS seam impossible to bypass.
 #
 # WHAT IS BEING PREVENTED. Four decadriver entry points carry engine behaviour
-# that a caller must not skip (modules/woz_uwb/src/driver/uwb_seam.h):
+# that a caller must not skip (modules/woz_uwb/include/uwb_seam.h):
 #
 #   dwt_rxenable         arming RX must first program the CCC STS for the slot
 #   dwt_configurestsiv   loading an STS-IV must substitute the CCC STS-V
@@ -65,7 +65,7 @@ seam_call_re() { printf '(^|[^_[:alnum:]])(%s)[[:space:]]*\\(' "$SEAM_SYMBOLS"; 
 COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 
 # The files allowed to call the raw entry points. See the header for why each.
-EXEMPT_RE='^(modules/woz_uwb/src/driver/uwb_seam\.h
+EXEMPT_RE='^(modules/woz_uwb/include/uwb_seam\.h
 |modules/woz_uwb/src/ccc/ccc_shim_rx\.c
 |modules/woz_uwb/src/ccc/ccc_shim_wrap\.c
 |modules/woz_uwb/src/ccc/ccc_sts\.c
@@ -119,7 +119,7 @@ scan() {
 check_helpers() {
 	local missing=0 h
 	for h in woz_uwb_arm_rx woz_uwb_set_sts_iv woz_uwb_set_callbacks woz_uwb_configure_phy; do
-		if ! grep -q "$h" modules/woz_uwb/src/driver/uwb_seam.h 2>/dev/null; then
+		if ! grep -q "$h" modules/woz_uwb/include/uwb_seam.h 2>/dev/null; then
 			printf '%s  uwb_seam.h does not declare %s%s\n' "$R" "$h" "$Z" >&2
 			missing=$((missing + 1))
 		fi

@@ -2,8 +2,7 @@
 
 #pragma once
 
-#include <cherry/cherry.h>
-#include <cherry/cherry_ccc.h>
+#include <aliro_uwb_adapter/aliro_uwb_adapter.h>
 
 #include <stdbool.h>
 #include <stddef.h>

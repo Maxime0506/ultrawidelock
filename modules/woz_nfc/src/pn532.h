@@ -11,23 +11,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <woz_nfc/pn532_bus.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* Return codes (negative; 0 is success). */
-#define PN532_OK          0
-#define PN532_ERR_IO      (-1) /* bus read/write failed */
-#define PN532_ERR_TIMEOUT (-2) /* chip never became ready */
-#define PN532_ERR_FRAME   (-3) /* malformed frame, bad checksum, or NACK */
-#define PN532_ERR_APP     (-4) /* chip sent an application-level error frame (TFI 0x7F) */
-#define PN532_ERR_STATUS  (-5) /* command completed with nonzero status (see last_status) */
-#define PN532_ERR_SPACE   (-6) /* caller buffer too small */
-
-/* Largest InDataExchange response host frame: preamble/start (3) + extended
- * length fields (5) + TFI/response-code/status/DataIn (1 + 1 + 1 + 262) +
- * DCS/postamble (2). */
-#define PN532_FRAME_BUF_SIZE 275
 
 /* Bytes to read for an ACK frame (fixed 00 00 FF 00 FF 00 = 6, +2 slack for the
  * optional preamble alignment on SPI). The ACK read is kept tight on purpose: it
@@ -67,22 +55,6 @@ enum pn532_frame_error {
 /* CIU register addresses used for raw (CRC-less) transmission. */
 #define PN532_REG_CIU_TX_MODE 0x6302
 #define PN532_REG_CIU_RX_MODE 0x6303
-
-/**
- * Bus interface for PN532: write (full host frame), wait_ready (poll for chip ready), read (frame
- * bytes, bus prefix stripped). Each returns 0 on success.
- */
-struct pn532_bus_ops {
-	/* Write one complete host frame. Returns 0 on success. */
-	int (*write)(void *ctx, const uint8_t *buf, size_t len);
-	/* Block until the chip has a frame ready to read, up to timeout_ms.
-	 * Returns 0 when ready, PN532_ERR_TIMEOUT or PN532_ERR_IO otherwise. */
-	int (*wait_ready)(void *ctx, int timeout_ms);
-	/* Read the pending frame into buf (frame bytes only — any bus-level
-	 * ready prefix already stripped). Reads at most cap bytes; short frames
-	 * are fine. Returns 0 on success. */
-	int (*read)(void *ctx, uint8_t *buf, size_t cap);
-};
 
 /**
  * PN532 NFC reader state: bus ops (read/write/wait_ready callbacks), timeouts (ack_ms,

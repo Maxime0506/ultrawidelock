@@ -1,176 +1,16 @@
 #!/usr/bin/env bash
 #
-# Test entry point for the ESP32 port. Three layers, all hardware-free:
-#   - test_port_headers: fast host unit test of the pure port headers.
-#   - test_aliro_crypto: host KAT of the Aliro key-schedule core (SHA-256/KDF),
-#                        compiled from the same source as the target.
-#   - verify_port.sh:    on-target build + CCC STS seam + exclusion guard (needs
-#                        the ESP-IDF env; skips cleanly without it).
+# Host tests for ESP-owned glue, followed by the target build and link guard.
 #
 # On-target functional tests (Unity on the DW3000 SPI/IRQ path) are deferred:
 # they need the DWM3000EVB wired up.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-# Port-neutral test bodies live in tests/shared: the fake-EC/GCM prim double
-# and the device self-test are compiled here AND by an nRF Zephyr app
-# (ports/nrf5340dk/on_target_ec), so neither belongs under ports/esp32.
 SHARED="$HERE/../../../tests/shared"
-
-echo "== host: port headers unit test =="
-BIN="$(mktemp -t woz_port_headers.XXXXXX)"
-trap 'rm -f "$BIN" "${CBIN:-}"' EXIT
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$HERE/../../../modules/woz_port/include" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
-   "$HERE/test_port_headers.c" -o "$BIN"
-"$BIN"
-
-echo
-echo "== host: aliro_crypto key-schedule KAT =="
-# The Aliro core is shared with the nRF build; it lives in modules/woz_aliro.
 ALIRO="$HERE/../../../modules/woz_aliro"
-CBIN="$(mktemp -t aliro_crypto_kat.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_crypto.c" \
-   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_advtag.c" \
-   "$SHARED/aliro_prim_host.c" -o "$CBIN"
-"$CBIN"
-
-echo
-echo "== host: aliro_assert_ec P-256 binder =="
-# aliro_assert.c is backend-free, so its P-256 path is covered in the main host
-# suite against a local double. This is the shim to aliro_prim, which only has
-# meaning where a prim implementation exists -- here, over the fake curve.
-ECBIN="$(mktemp -t aliro_assert_ec.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_assert_ec.c" \
-   "$ALIRO/src/aliro_assert.c" "$ALIRO/src/aliro_assert_ec.c" "$ALIRO/src/aliro_hash.c" \
-   "$SHARED/aliro_prim_host.c" -o "$ECBIN"
-"$ECBIN"
-
-echo
-echo "== host: aliro_apdu wire-codec KAT =="
-ABIN="$(mktemp -t aliro_apdu_kat.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_apdu.c" "$ALIRO/src/aliro_apdu.c" -o "$ABIN"
-"$ABIN"
-rm -f "$ABIN"
-
-echo
-echo "== host: aliro_device initiator codec + crypto KAT =="
-DBIN="$(mktemp -t aliro_device.XXXXXX)"
-# ALIRO_DEVICE_HAVE_EC: run the full standard-path loopback against the fake-EC
-# host double in aliro_prim_host.c (symmetric ECDH + round-tripping ECDSA), not
-# only the EC-free anchors. On target the real aliro_prim_psa curve is linked.
-cc -std=c11 -O1 -Wall -Wextra -DALIRO_DEVICE_HAVE_EC \
-   -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$SHARED/test_aliro_device.c" \
-   "$ALIRO/src/aliro_device.c" "$ALIRO/src/aliro_device_apdu.c" \
-   "$ALIRO/src/aliro_apdu.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
-   "$SHARED/aliro_prim_host.c" -o "$DBIN"
-"$DBIN"
-rm -f "$DBIN"
-
-echo
-echo "== host: aliro_ble_central device-transport decoders =="
-# The device/initiator side of BLE discovery: the 0xFFF2 advert, the reader-SPSM
-# READ payload, and the BleSK salt assembled from the version list that READ
-# carries. Pure byte work, no BLE stack — the NimBLE backend that calls it is
-# ESP32-only and covered by verify_port.sh.
-BCBIN="$(mktemp -t aliro_ble_central.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$ALIRO/include" \
-   "$HERE/test_aliro_ble_central.c" "$ALIRO/src/aliro_ble_central.c" -o "$BCBIN"
-"$BCBIN"
-rm -f "$BCBIN"
-
-echo
-echo "== host: aliro_stepup Access-Document codec + §7.4 verifier KAT =="
-SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_stepup.c" \
-   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
-   "$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
-   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
-   "$SHARED/aliro_prim_host.c" -o "$SBIN"
-"$SBIN"
-rm -f "$SBIN"
-
-echo
-echo "== host: aliro_prov identity/trust KAT =="
-PBIN="$(mktemp -t aliro_prov_kat.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_prov.c" "$ALIRO/src/aliro_prov.c" -o "$PBIN"
-"$PBIN"
-rm -f "$PBIN"
-
-echo
-echo "== host: aliro_lat walk-up trace (gate on + gate off) =="
-# _POSIX_C_SOURCE: woz_port.h's host woz_uptime_us needs clock_gettime /
-# CLOCK_MONOTONIC, which strict -std=c11 hides on glibc (macOS exposes them
-# regardless). A -D lands before every include, so ordering is safe.
 WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
-TBIN="$(mktemp -t aliro_lat.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L \
-   -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
-   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
-   "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
-"$TBIN"
-cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L \
-   -DWOZ_PORT_HOST \
-   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
-   "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
-"$TBIN"
-rm -f "$TBIN"
+UWB_INC="$HERE/../../../modules/woz_uwb/include"
 
-echo
-echo "== host: aliro_reader engine walk-up (scripted phone) =="
-# The reader engine end-to-end: a scripted phone drives AUTH0/AUTH1/EXCHANGE/
-# AP-Completed against the real state machine + codec + key schedule, with the
-# BLE transport, ranging adapter and NVS backend as recording doubles and the
-# fake-EC prim double standing in for the curve (see aliro_prim_host.c).
-# -Wno-unused-variable/-function: the host LOG no-ops orphan the unit's rc/
-# diagnostic locals; the test file itself stays warning-clean.
-RBIN="$(mktemp -t aliro_reader.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -Wno-unused-variable -Wno-unused-function \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
-   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
-   "$HERE/test_aliro_reader.c" \
-   "$ALIRO/src/aliro_reader.c" "$ALIRO/src/aliro_apdu.c" \
-   "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
-   "$ALIRO/src/aliro_prov.c" \
-   "$SHARED/aliro_prim_host.c" -o "$RBIN"
-"$RBIN"
-rm -f "$RBIN"
-
-echo
-echo "== host: aliro_ranging M1-M4 session glue =="
-# The ranging-setup glue against recording doubles of the engine (cherry/
-# adapter/session), the BLE transport and the woz_uwb facade; the BleSK
-# sealing in the transmit callback is real crypto, opened by the test with
-# the mirrored device-direction GCM.
-UWB_SRC="$HERE/../../../modules/woz_uwb/src"
-GBIN="$(mktemp -t aliro_ranging.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
-   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
-   -I "$UWB_SRC/facade" -I "$UWB_SRC/aliro/include" \
-   "$HERE/test_aliro_ranging.c" \
-   "$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
-   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_lat.c" \
-   "$SHARED/aliro_prim_host.c" -o "$GBIN"
-"$GBIN"
-rm -f "$GBIN"
-
-echo
 echo "== host: bolt-state LED policy =="
 MATTER_MAIN="$HERE/../apps/matter-lock/main"
 LBIN="$(mktemp -t lock_led.XXXXXX)"
@@ -216,7 +56,7 @@ echo "== host: aliro_stepup worker vs FreeRTOS fakes =="
 # underneath is the real shared-core code on the stepup_vectors.h KATs.
 WBIN="$(mktemp -t esp_stepup_worker.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 \
-   -I "$SDKFAKE" -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
+   -I "$SDKFAKE" -I "$HERE" -I "$SHARED" -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_esp_stepup_worker.c" \
    "$HERE/../components/aliro_reader/aliro_stepup_worker.c" \
    "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
@@ -238,7 +78,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    -DCONFIG_WOZ_PRESENCE_TIMEOUT_MS=1 -DCONFIG_WOZ_PRESENCE_MAX_CM=40 \
    -I "$SDKFAKE" -I "$HERE/../components/aliro_reader" \
    -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   -I "$UWB_INC" \
    "$HERE/test_esp_presence_link.c" \
    "$HERE/../components/aliro_reader/presence_link.c" \
    "$ALIRO/src/aliro_assert.c" "$ALIRO/src/aliro_hash.c" \
@@ -266,7 +106,7 @@ CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
    -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
    -I "$SDKFAKE" -I "$HERE/../apps/reader/main" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   -I "$UWB_INC" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
    "$HERE/test_esp_app_shell.c" \
    "$HERE/../apps/reader/main/app_shell.c" \
@@ -285,8 +125,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=2 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
-   -I "$HERE/../../../modules/woz_dw3000/platform" \
+   -I "$UWB_INC" \
+   -I "$HERE/../../../modules/woz_dw3000/include" \
    -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
    "$HERE/../components/woz_uwb/port/dw3000_hw.c" \
@@ -303,8 +143,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
    -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
-   -I "$HERE/../../../modules/woz_dw3000/platform" \
+   -I "$UWB_INC" \
+   -I "$HERE/../../../modules/woz_dw3000/include" \
    -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
    "$HERE/../components/woz_uwb/port/dw3000_hw.c" \
@@ -318,9 +158,7 @@ echo "== host: seam RX-callback shim chaining =="
 SBIN2="$(mktemp -t esp_seam_stubs.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
-   -I "$HERE/../../../modules/woz_uwb/src/ccc" \
-   -I "$HERE/../../../modules/woz_uwb/src/driver" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   -I "$UWB_INC" \
    "$HERE/test_esp_seam_stubs.c" \
    "$HERE/../components/woz_uwb/port/woz_seam_stubs.c" -o "$SBIN2"
 "$SBIN2"
@@ -343,7 +181,7 @@ ${CXX:-c++} -std=c++17 -O1 -w \
    -DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
-   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   -I "$UWB_INC" \
    "$HERE/test_esp_matter_lock.cpp" \
    "$LOCKD/app_driver.cpp" "$LOCKD/app_main.cpp" "$LOCKD/app_shell.cpp" \
    "$LOCKD/lock/door_lock_manager.cpp" "$LOCKD/lock/door_lock_callbacks.cpp" \

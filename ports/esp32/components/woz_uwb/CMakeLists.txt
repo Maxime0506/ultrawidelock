@@ -11,6 +11,7 @@
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
 set(WOZ "${REPO_ROOT}/modules/woz_uwb/src")
+set(WOZ_INC "${REPO_ROOT}/modules/woz_uwb/include")
 set(WOZ_PORT "${REPO_ROOT}/modules/woz_port/include")
 set(DW  "${REPO_ROOT}/modules/woz_dw3000")
 set(UWBROLES "${REPO_ROOT}/modules/woz_uwb/roles")
@@ -69,13 +70,12 @@ idf_component_register(
     SRCS ${WOZ_SRCS}
     INCLUDE_DIRS
         "${WOZ_PORT}"          # woz_port.h / woz_log.h — the platform contract
-        "${WOZ}/facade"        # woz_uwb_facade.h — public API for the app
-        "${WOZ}/aliro/include" # aliro_uwb_adapter/ + cherry/ — reader ranging-setup API
+        "${WOZ_INC}"           # facade, seams, diagnostics and ranging-setup API
     PRIV_INCLUDE_DIRS
         "port"                 # board_pins.h
         "${WOZ}/driver" "${WOZ}/fira" "${WOZ}/ccc" "${WOZ}/facade" "${WOZ}/shell"
-        "${WOZ}/aliro" "${WOZ}/aliro/include"
-        "${DW}/platform"
+		"${WOZ}/aliro"
+		"${DW}/include"
         "${DW}/dwt_uwb_driver"
         "${DW}/dwt_uwb_driver/lib/qmath/include"
     REQUIRES
@@ -105,7 +105,7 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
     CONFIG_DW3000_CHIP_DW3000=1
 )
 
-# The CCC STS seam is modules/woz_uwb/src/driver/uwb_seam.h: every caller reaches
+# The CCC STS seam is modules/woz_uwb/include/uwb_seam.h: every caller reaches
 # the radio through woz_uwb_arm_rx / _set_sts_iv / _set_callbacks / _configure_phy,
 # so there is no link-time interposition to declare here. ccc_shim_rx.c and
 # ccc_shim_wrap.c supply the first two; port/woz_seam_stubs.c supplies the last

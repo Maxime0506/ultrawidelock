@@ -1,7 +1,7 @@
 /**
  * @file test_uwb_seam.c — the decadriver seam's engine-less tier.
  *
- * File under test: modules/woz_uwb/src/driver/uwb_seam.h, compiled WITHOUT
+ * File under test: modules/woz_uwb/include/uwb_seam.h, compiled WITHOUT
  * CONFIG_WOZ_ALIRO -- the inline-to-decadriver half that no other build
  * compiles. Its own binary because one header compiled two ways in one binary
  * breaks coverage merging. It proves only that each helper forwards to the

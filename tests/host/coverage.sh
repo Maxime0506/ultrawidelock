@@ -3,7 +3,7 @@
 # Line coverage for our own (asxeem) host-testable code, via clang source-based
 # coverage. Instruments every host suite in the repo — the woz_uwb KAT suite
 # (same sources as run.sh, see sources.sh) and the shared-core suites mirrored
-# from ports/esp32/test/run.sh — merges their profiles into one report.
+# from tests/shared/run.sh and merges their profiles into one report.
 #
 # Sources that never enter a host build are not hidden: this script discovers
 # them (find over modules/ + ports/, no hand-list to go stale) and the report
@@ -52,7 +52,7 @@ cov_cc "${DEFS[@]}" "${INCS[@]}" \
 	"${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" -lm -o "$BIN"
 LLVM_PROFILE_FILE="$OUT/host.profraw" "$BIN" >"$OUT/run.log" 2>&1 || true
 
-# --- suite 2..n: shared-core host KATs (mirror of ports/esp32/test/run.sh) --
+# --- suite 2..n: portable core host KATs (mirror of tests/shared/run.sh) ----
 ET="$ROOT/ports/esp32/test"
 SHARED="$ROOT/tests/shared"
 ALIRO="$ROOT/modules/woz_aliro"
@@ -80,17 +80,17 @@ run_suite() { # <name> <bin>: run one instrumented suite into its own profile
 }
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$ET/test_aliro_crypto.c" \
+	"$SHARED/test_aliro_crypto.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_advtag.c" \
 	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_crypto"
 run_suite crypto "$OUT/cov_crypto"
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$ET/test_aliro_apdu.c" "$ALIRO/src/aliro_apdu.c" -o "$OUT/cov_apdu"
+	"$SHARED/test_aliro_apdu.c" "$ALIRO/src/aliro_apdu.c" -o "$OUT/cov_apdu"
 run_suite apdu "$OUT/cov_apdu"
 
-cov_cc -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$ET/test_aliro_stepup.c" \
+cov_cc -I"$SHARED" -I"$ALIRO/include" -I"$ALIRO/src" \
+	"$SHARED/test_aliro_stepup.c" \
 	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
 	"$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
 	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
@@ -98,14 +98,14 @@ cov_cc -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
 run_suite stepup "$OUT/cov_stepup"
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$ET/test_aliro_prov.c" "$ALIRO/src/aliro_prov.c" -o "$OUT/cov_prov"
+	"$SHARED/test_aliro_prov.c" "$ALIRO/src/aliro_prov.c" -o "$OUT/cov_prov"
 run_suite prov "$OUT/cov_prov"
 
 # Only the trace-on lat build is instrumented: the gate-off variant maps the
 # same lines differently and the two profiles would not merge cleanly.
 cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
-	"$ET/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$OUT/cov_lat"
+	"$SHARED/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$OUT/cov_lat"
 run_suite lat "$OUT/cov_lat"
 
 cov_cc -I"$LOCK_MAIN" \
@@ -114,7 +114,7 @@ run_suite led "$OUT/cov_led"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/woz_port/include" \
-	"$ET/test_aliro_reader.c" \
+	"$SHARED/test_aliro_reader.c" \
 	"$ALIRO/src/aliro_reader.c" "$ALIRO/src/aliro_apdu.c" \
 	"$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
 	"$ALIRO/src/aliro_prov.c" \
@@ -123,8 +123,8 @@ run_suite reader "$OUT/cov_reader"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/woz_port/include" \
-	-I"$ROOT/modules/woz_uwb/src/facade" -I"$ROOT/modules/woz_uwb/src/aliro/include" \
-	"$ET/test_aliro_ranging.c" \
+	-I"$ROOT/modules/woz_uwb/include" \
+	"$SHARED/test_aliro_ranging.c" \
 	"$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
 	"$ALIRO/src/aliro_hash.c" \
 	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_ranging"
@@ -132,8 +132,8 @@ run_suite ranging "$OUT/cov_ranging"
 
 # Header-inline logic (woz_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.
-cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/src/facade" \
-	"$ET/test_port_headers.c" -o "$OUT/cov_hdrs"
+cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/include" \
+	"$SHARED/test_port_headers.c" -o "$OUT/cov_hdrs"
 run_suite hdrs "$OUT/cov_hdrs"
 
 # --- target-only sources on recording doubles (mirrors of the run.sh side
@@ -183,13 +183,15 @@ SIDE_UNIT_SRCS=(
 cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
+	-I"$ROOT/modules/woz_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/platform" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
 	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
+	"$ROOT/tests/host/port/osal_host.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
 	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/aliro_shell.c" -o "$OUT/cov_drv"
@@ -197,7 +199,7 @@ WOZ_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
 	>>"$OUT/run.log" 2>&1 || true
 OBJS+=(-object "$OUT/cov_drv")
 
-psa_flags=(-I"$HOSTD/psafake" -I"$SRC/ccc")
+psa_flags=(-I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include" -I"$SRC/ccc")
 cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
 	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_cov.o"
 cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_mbedtls_ecb \
@@ -230,7 +232,7 @@ cov_cc -I"$SDKFAKE" -I"$ALIRO/include" \
 run_suite esp_nvs "$OUT/cov_esp_nvs"
 
 cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 \
-	-I"$SDKFAKE" -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
+	-I"$SDKFAKE" -I"$ET" -I"$SHARED" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ET/test_esp_stepup_worker.c" "$ECOMP/aliro_reader/aliro_stepup_worker.c" \
 	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
 	"$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
@@ -242,7 +244,7 @@ run_suite esp_worker "$OUT/cov_esp_worker"
 # clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
-	-I"$SDKFAKE" -I"$EAPPS/reader/main" -I"$SRC/facade" \
+	-I"$SDKFAKE" -I"$EAPPS/reader/main" -I"$ROOT/modules/woz_uwb/include" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
 	"$ET/test_esp_app_shell.c" "$EAPPS/reader/main/app_shell.c" \
 	"$EAPPS/reader/main/main.c" \
@@ -256,14 +258,15 @@ cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_IDF_TARGET_ESP32C6=1 \
 	-DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
 	-DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
-	-I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$SRC/facade" \
-	-I"$ROOT/modules/woz_dw3000/platform" -I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
+	-I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$ROOT/modules/woz_uwb/include" \
+	-I"$ROOT/modules/woz_dw3000/include" -I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
 	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
-cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 -I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" -I"$SRC/ccc" -I"$SRC/driver" -I"$SRC/facade" \
+cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+	-I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" -I"$ROOT/modules/woz_uwb/include" \
 	"$ET/test_esp_seam_stubs.c" \
 	"$ECOMP/woz_uwb/port/woz_seam_stubs.c" -o "$OUT/cov_esp_seam"
 run_suite esp_seam "$OUT/cov_esp_seam"
@@ -281,7 +284,8 @@ cov_cc -I"$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$OUT/aliro_approa
 	-DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
 	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
-	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" -I"$SRC/facade" \
+	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/woz_uwb/include" \
 	"$ET/test_esp_matter_lock.cpp" \
 	"$MLOCK/app_driver.cpp" "$MLOCK/app_main.cpp" "$MLOCK/app_shell.cpp" \
 	"$MLOCK/lock/door_lock_manager.cpp" "$MLOCK/lock/door_lock_callbacks.cpp" \
@@ -320,9 +324,11 @@ cov_cxx() {
 		-fprofile-instr-generate -fcoverage-mapping "$@"
 }
 cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc_cov.o"
-cov_cc -c -I"$ROOT/modules/woz_nfc/src" "$ROOT/modules/woz_nfc/src/pn532.c" \
+cov_cc -c -I"$ROOT/modules/woz_nfc/include" -I"$ROOT/modules/woz_nfc/src" \
+	"$ROOT/modules/woz_nfc/src/pn532.c" \
 	-o "$OUT/pn532_nfc_cov.o"
-cov_cc -c -I"$ROOT/modules/woz_nfc/src" "$ROOT/modules/woz_nfc/src/pn532_apdu.c" \
+cov_cc -c -I"$ROOT/modules/woz_nfc/include" -I"$ROOT/modules/woz_nfc/src" \
+	"$ROOT/modules/woz_nfc/src/pn532_apdu.c" \
 	-o "$OUT/pn532_apdu_nfc_cov.o"
 cov_cc -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
 	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi_cov.o"
@@ -343,7 +349,8 @@ run_suite nfc "$OUT/cov_nfc"
 # mapping for it; this one carries the inline bodies, which is why it has to
 # stay a translation unit of its own. Mirrors run.sh stage 7.
 cov_cc -I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$ROOT/modules/woz_dw3000/platform" \
+	-I"$ROOT/modules/woz_uwb/include" -I"$SRC/driver" \
+	-I"$ROOT/modules/woz_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" -o "$OUT/cov_seam"
 run_suite seam "$OUT/cov_seam"
 

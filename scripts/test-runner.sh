@@ -3,7 +3,7 @@
 # test-runner.sh — run every host-side suite, print failures and a summary.
 #
 #   firmware   tests/host/run.sh                the KAT suite
-#   shared     ports/esp32/test/run.sh          reader/stepup/crypto/... stages
+#   shared     tests/shared/run.sh              portable core + ESP port stages
 #   drift      tests/tooling/drift_check.py     Kconfig vs C constants
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
@@ -19,7 +19,7 @@ cd "$ROOT"
 suite_cmd() {
 	case "$1" in
 	firmware) echo "bash tests/host/run.sh" ;;
-	shared) echo "bash ports/esp32/test/run.sh" ;;
+	shared) echo "bash tests/shared/run.sh" ;;
 	drift) echo "python3 tests/tooling/drift_check.py" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;

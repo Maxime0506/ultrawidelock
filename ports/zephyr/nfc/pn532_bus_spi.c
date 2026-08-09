@@ -20,7 +20,7 @@
  * frame ready), in which case a GPIO edge wakes the waiting thread.
  */
 
-#include "pn532_bus.h"
+#include <woz_nfc/pn532_bus.h>
 
 #include <string.h>
 

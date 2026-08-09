@@ -1,4 +1,4 @@
-/* This port's half of modules/woz_uwb/src/driver/uwb_seam.h.
+/* This port's half of modules/woz_uwb/include/uwb_seam.h.
  *
  * The Nordic build routes DW3000 RX events through uwb_rxdiag.c's
  * woz_uwb_set_callbacks -> shim_rxok, which (after the MAC's own

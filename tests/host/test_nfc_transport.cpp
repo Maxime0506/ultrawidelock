@@ -31,7 +31,7 @@ extern "C" {
 
 extern "C" {
 #include "pn532.h"
-#include "pn532_bus.h"
+#include <woz_nfc/pn532_bus.h>
 }
 
 /** The same five entry points, renamed at compile time on the other backend. */

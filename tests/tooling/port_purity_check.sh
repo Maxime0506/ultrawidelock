@@ -39,7 +39,7 @@
 #                                    it includes aliro/ + reader_storage headers
 #   woz_aliro_ecp/src/nfc_prop_ecp.cpp   same: grafts into the add-on's
 #                                    subsys/nfc_prop, add-on headers included
-#   woz_uwb/src/facade/woz_util.h    portable shim that defers to the Zephyr
+#   woz_uwb/include/woz_util.h    portable shim that defers to the Zephyr
 #                                    header under #ifdef __ZEPHYR__ and carries
 #                                    its own fallback otherwise (woz_bytes.h,
 #                                    its sibling, now lives in woz_port)
@@ -74,6 +74,10 @@
 #                      both would compile it twice), and every shared source
 #                      under MANIFEST_ROOTS is in a role or in the
 #                      NOT_MANIFESTED allowlist below with its reason.
+#   public includes    no propagated CMake include path reaches modules/*/src
+#   private headers    production modules, apps and ports never include a
+#                      different module's private header; tests may white-box
+#                      the implementation they compile
 
 set -euo pipefail
 
@@ -124,7 +128,7 @@ PERMANENT_FILES=(
 	modules/woz_aliro_stack/src/session.cpp
 	modules/woz_nfc/src/transport_pn532.cpp
 	modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp
-	modules/woz_uwb/src/facade/woz_util.h
+	modules/woz_uwb/include/woz_util.h
 )
 
 permanent_re() { # the two lists as one anchored alternation, dots literal
@@ -339,6 +343,178 @@ cmake_path_list() {
 				print dir "/" p
 		}
 	}' "$1"
+}
+
+# Propagated include directories from one CMake file. Only the public forms are
+# emitted: Zephyr's global helper, PUBLIC/INTERFACE target scopes, and ESP-IDF
+# INCLUDE_DIRS before PRIV_INCLUDE_DIRS. Variables resolve like cmake_path_list.
+cmake_public_include_list() {
+	local d
+	d=$(dirname "$1")
+	case $d in /*) ;; *) d="./$d" ;; esac
+	awk -v dir="$d" '
+	function expand(s,  k, hit) {
+		gsub(/\$\{REPO_ROOT\}/, ".", s)
+		gsub(/\$\{CMAKE_CURRENT_SOURCE_DIR\}/, dir, s)
+		gsub(/\$\{CMAKE_CURRENT_LIST_DIR\}/, dir, s)
+		do {
+			hit = 0
+			for (k in v)
+				if (index(s, "${" k "}")) { gsub("\\$\\{" k "\\}", v[k], s); hit = 1 }
+		} while (hit)
+		return s
+	}
+	function emit(s, p) {
+		p = expand(s)
+		if (p == "" || p ~ /[{}]/) return
+		if (p !~ /^(\.\/|\/)/) p = dir "/" p
+		print p
+	}
+	{
+		line = $0
+		sub(/#.*/, "", line)
+		if (cmd == "" && match(line, /set\([A-Za-z_][A-Za-z0-9_]*[ \t]+[^)]+\)/)) {
+			s = substr(line, RSTART + 4, RLENGTH - 5)
+			name = s; sub(/[ \t].*/, "", name)
+			val = s; sub(/^[^ \t]+[ \t]+/, "", val); gsub(/"/, "", val)
+			v[name] = expand(val)
+		}
+		paren = line
+		opens = gsub(/\(/, "(", paren)
+		closes = gsub(/\)/, ")", paren)
+		n = split(line, w, /[ \t()"]+/)
+		for (i = 1; i <= n; i++) {
+			t = w[i]
+			if (t == "") continue
+			if (cmd == "") {
+				if (t == "zephyr_include_directories") { cmd = "zephyr"; pub = 1; continue }
+				if (t == "target_include_directories") { cmd = "target"; pub = 0; continue }
+				if (t == "idf_component_register") { cmd = "idf"; pub = 0; continue }
+				continue
+			}
+			if (cmd == "target") {
+				if (t == "PUBLIC" || t == "INTERFACE") { pub = 1; continue }
+				if (t == "PRIVATE") { pub = 0; continue }
+				if (t == "SYSTEM" || t == "BEFORE" || t == "AFTER") continue
+			} else if (cmd == "idf") {
+				if (t == "INCLUDE_DIRS") { pub = 1; continue }
+				if (t ~ /^(SRCS|SRC_DIRS|EXCLUDE_SRCS|PRIV_INCLUDE_DIRS|REQUIRES|PRIV_REQUIRES|LDFRAGMENTS|EMBED_FILES|EMBED_TXTFILES|WHOLE_ARCHIVE)$/) {
+					pub = 0
+					continue
+				}
+			}
+			if (pub) emit(t)
+		}
+		if (cmd != "") {
+			depth += opens - closes
+			if (depth <= 0) { cmd = ""; pub = 0; depth = 0 }
+		}
+	}' "$1"
+}
+
+cmake_files() { git ls-files '**/CMakeLists.txt'; }
+
+check_public_includes() {
+	local fails=0 n=0 f p canon repo
+	repo=$(pwd -P)
+	while IFS= read -r f; do
+		while IFS= read -r p; do
+			[ -n "$p" ] || continue
+			n=$((n + 1))
+			canon="$p"
+			[ ! -d "$p" ] || canon=$(cd "$p" && pwd -P)
+			case "$canon" in
+			"$repo"/modules/woz_*/src | "$repo"/modules/woz_*/src/*)
+				printf '%s  private include path is public: %s (named by %s)%s\n' \
+					"$R" "$p" "$f" "$Z" >&2
+				fails=$((fails + 1))
+				;;
+			esac
+		done < <(cmake_public_include_list "$f")
+	done < <(cmake_files)
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d modules/*/src include path(s) propagate to consumers%s\n' \
+			"$R" "$fails" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   public includes: %d propagated path(s), none enters modules/*/src%s\n' \
+		"$G" "$n" "$Z"
+}
+
+# Owned private headers only. The vendored trees are dependencies with their
+# own layout and do not define this repository's module boundary.
+private_headers() {
+	git ls-files 'modules/woz_*/src/*.h' 'modules/woz_*/src/**/*.h' \
+		| grep -vE '^modules/woz_dfu/src/detools/'
+}
+
+# Production C/C++ files. Tests may include private headers to white-box the
+# implementation units they compile; app and port code may not.
+boundary_sources() {
+	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp' \
+		'firmware/*.c' 'firmware/*.h' 'firmware/*.cpp' 'firmware/*.hpp' \
+		'anchor/*.c' 'anchor/*.h' 'anchor/*.cpp' 'anchor/*.hpp' \
+		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'ports/*.hpp' \
+		| grep -vE '^(modules/woz_dw3000/dwt_uwb_driver/|modules/woz_dfu/src/detools/|ports/esp32/test/)'
+}
+
+# Print the private header an include crosses into, or print nothing. A module's
+# own implementation may use its own src headers. Its public headers may not.
+private_header_target() { # <source> <include-token> <private-header>...
+	local src="$1" inc="$2" src_owner='' public_header=0 own=0 candidate=''
+	local h owner rel matched
+	shift 2
+	case "$src" in
+	modules/woz_*/*)
+		src_owner=${src#modules/}
+		src_owner=${src_owner%%/*}
+		case "$src" in modules/"$src_owner"/include/*) public_header=1 ;; esac
+		;;
+	esac
+	for h in "$@"; do
+		owner=${h#modules/}
+		owner=${owner%%/*}
+		rel=${h#modules/$owner/src/}
+		matched=0
+		case "$inc" in
+		*/*)
+			case "$inc" in "$rel" | src/"$rel" | */src/"$rel") matched=1 ;; esac
+			;;
+		*) [ "$inc" != "${h##*/}" ] || matched=1 ;;
+		esac
+		[ "$matched" -eq 1 ] || continue
+		if [ "$owner" = "$src_owner" ] && [ "$public_header" -eq 0 ]; then
+			own=1
+		else
+			[ -n "$candidate" ] || candidate="$h"
+		fi
+	done
+	[ "$own" -eq 0 ] || return 1
+	[ -n "$candidate" ] || return 1
+	printf '%s\n' "$candidate"
+}
+
+check_private_headers() {
+	local private=() h f hit inc target fails=0 n=0
+	while IFS= read -r h; do private+=("$h"); done < <(private_headers)
+	while IFS= read -r f; do
+		while IFS= read -r hit; do
+			[ -n "$hit" ] || continue
+			n=$((n + 1))
+			inc=$(printf '%s\n' "$hit" | sed -E 's/^[0-9]+:[[:space:]]*#[[:space:]]*include[[:space:]]*[<"]([^>"]+)[>"].*/\1/')
+			target=$(private_header_target "$f" "$inc" "${private[@]}") || continue
+			printf '%s  private header include: %s:%s -> %s%s\n' \
+				"$R" "$f" "${hit%%:*}" "$target" "$Z" >&2
+			fails=$((fails + 1))
+		done < <(grep -nE "${INC_RE}[^>\"]+[>\"]" "$f" || true)
+	done < <(boundary_sources)
+	if [ "$fails" -gt 0 ]; then
+		printf '%scheck-purity: %d production include(s) cross a module private boundary%s\n' \
+			"$R" "$fails" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   private headers: %d production include(s) stay within module boundaries%s\n' \
+		"$G" "$n" "$Z"
 }
 
 # Every -DZEPHYR_EXTRA_MODULES / -DEXTRA_ZEPHYR_MODULES entry the build
@@ -649,7 +825,7 @@ self_test() {
 	# the gate without anyone noticing.
 	local f
 	for f in modules/woz_matter/src/matter_tlv.c modules/woz_aliro/src/aliro_reader.c \
-		modules/woz_uwb/src/ccc/ccc_shim.c modules/woz_dw3000/platform/deca_port.c; do
+		modules/woz_uwb/src/ccc/ccc_shim.c modules/woz_dw3000/src/deca_port.c; do
 		if [[ $f =~ $PERMANENT_RE ]] || in_ratchet "$f"; then
 			printf '%s  self-test FAILED: %s is exempt, but it must stay pure%s\n' \
 				"$R" "$f" "$Z" >&2
@@ -727,6 +903,54 @@ self_test() {
 	fi
 	[ "$fails" -ne 0 ] || printf '%s  self-test: path extractor resolves, joins and filters correctly%s\n' "$G" "$Z"
 
+	# Public include parser: all three propagated CMake forms fire, while their
+	# private counterparts stay quiet.
+	cat >"$fixdir/public.cmake" <<-'EOF'
+		set(PUB ${REPO_ROOT}/modules/public/src)
+		zephyr_include_directories(${PUB})
+		zephyr_library_include_directories(${REPO_ROOT}/modules/library_private/src)
+		target_include_directories(app PUBLIC ${REPO_ROOT}/modules/target/src
+			PRIVATE ${REPO_ROOT}/modules/target_private/src)
+		idf_component_register(
+			SRCS x.c
+			INCLUDE_DIRS ${REPO_ROOT}/modules/idf/src
+			PRIV_INCLUDE_DIRS ${REPO_ROOT}/modules/idf_private/src)
+	EOF
+	out=$(cmake_public_include_list "$fixdir/public.cmake")
+	if [ "$out" != "$(printf './modules/public/src\n./modules/target/src\n./modules/idf/src')" ]; then
+		printf '%s  self-test FAILED: public include parser lost scope%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	[ "$fails" -ne 0 ] || printf '%s  self-test: public include scopes expose API paths only%s\n' "$G" "$Z"
+
+	# Private-header matcher: an external source and a module API header must
+	# trip, while a module implementation may include its own private sibling.
+	local private_fix=(modules/woz_alpha/src/secret.h modules/woz_alpha/src/protocol/wire.h)
+	if [ "$(private_header_target modules/woz_beta/src/use.c secret.h "${private_fix[@]}")" != \
+		"modules/woz_alpha/src/secret.h" ]; then
+		printf '%s  self-test FAILED: private header matcher missed a cross-module include%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if [ "$(private_header_target ports/zephyr/use.c protocol/wire.h "${private_fix[@]}")" != \
+		"modules/woz_alpha/src/protocol/wire.h" ]; then
+		printf '%s  self-test FAILED: private header matcher missed a qualified include%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if [ "$(private_header_target modules/woz_alpha/include/api.h secret.h "${private_fix[@]}")" != \
+		"modules/woz_alpha/src/secret.h" ]; then
+		printf '%s  self-test FAILED: private header matcher missed a public-header leak%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if private_header_target modules/woz_alpha/src/impl.c secret.h "${private_fix[@]}" >/dev/null; then
+		printf '%s  self-test FAILED: private header matcher rejected an owned sibling%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	[ "$fails" -ne 0 ] || printf '%s  self-test: private header ownership distinguishes API, implementation and consumers%s\n' "$G" "$Z"
+
 	# Patch tripwire: + lines only, all three identifier shapes, and the
 	# resolver must fail on an invented symbol while passing real ones.
 	cat >"$fixdir/fix.patch" <<-'EOF'
@@ -795,6 +1019,8 @@ case "${1-}" in
 	rc=0
 	scan || rc=1
 	check_port_os || rc=1
+	check_public_includes || rc=1
+	check_private_headers || rc=1
 	check_manifests || rc=1
 	check_build_paths || rc=1
 	check_patch_symbols || rc=1

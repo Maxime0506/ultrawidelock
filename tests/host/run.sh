@@ -45,8 +45,9 @@ HOSTD="$ROOT/tests/host"
 	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
+	-I"$ROOT/modules/woz_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/platform" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
@@ -62,7 +63,8 @@ WOZ_TEST_QUIET=1 "$OUT/host_test_drv"
 # 2) PSA/mbedTLS crypto seams over recording fakes (psafake/). The two backend
 #    files define the same crypto_aes_ecb_encrypt symbol as aes_ref.c, so each
 #    is compiled alone with a -D rename (a compile flag, not a source edit).
-psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
+psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include"
+	-I"$SRC/ccc")
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags -c \
 	-Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
@@ -151,10 +153,12 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/src" \
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/include" \
+	-I"$ROOT/modules/woz_nfc/src" \
 	-c "$ROOT/modules/woz_nfc/src/pn532.c" -o "$OUT/pn532_nfc.o"
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/src" \
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/include" \
+	-I"$ROOT/modules/woz_nfc/src" \
 	-c "$ROOT/modules/woz_nfc/src/pn532_apdu.c" -o "$OUT/pn532_apdu_nfc.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
@@ -186,7 +190,8 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
 	-I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
-	-I"$SRC/driver" -I"$ROOT/modules/woz_dw3000/platform" \
+	-I"$ROOT/modules/woz_uwb/include" -I"$SRC/driver" \
+	-I"$ROOT/modules/woz_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" \
 	-o "$OUT/host_test_seam"
 "$OUT/host_test_seam"

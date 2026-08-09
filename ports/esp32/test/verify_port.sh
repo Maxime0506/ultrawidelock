@@ -80,7 +80,7 @@ check "app binary"       "[ -f '$BUILD/woz_uwb_esp32s3.bin' ]"
 check "app elf"          "[ -f '$BUILD/woz_uwb_esp32s3.elf' ]"
 check "partition table"  "[ -f '$BUILD/partition_table/partition-table.bin' ]"
 
-echo "2. CCC STS seam (modules/woz_uwb/src/driver/uwb_seam.h)"
+echo "2. CCC STS seam (modules/woz_uwb/include/uwb_seam.h)"
 # Each helper must be defined (T) in some object, else the seam has no engine
 # behind it and the CCC STS is never programmed.
 seamdef() { find "$BUILD" -name '*.obj' -exec nm {} \; 2>/dev/null | grep -qE " T $1$"; }

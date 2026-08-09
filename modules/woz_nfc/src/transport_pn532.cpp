@@ -20,7 +20,7 @@
 
 #include "pn532.h"
 #include "pn532_apdu.h"
-#include "pn532_bus.h"
+#include <woz_nfc/pn532_bus.h>
 
 #include <aliro/aliro.h>
 #include <aliro/connection_handle.h>

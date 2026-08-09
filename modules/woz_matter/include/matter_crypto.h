@@ -52,7 +52,7 @@ extern "C" {
  * ccc_crypto_mbedtls.c on target (the CONFIG_WOZ_CRYPTO_* choice in
  * modules/woz_uwb/Kconfig), and tests/host/aes_ref.c -- a real FIPS-197 AES --
  * on the host. Declared here rather than pulled in from
- * modules/woz_uwb/src/ccc/ccc_kdf.h so this module does not depend on the UWB
+ * modules/woz_uwb/include/ccc_kdf.h so this module does not depend on the UWB
  * module's private headers; tests/host/test_matter_crypto.c includes both, so a
  * compiler sees the two declarations together and rejects any drift.
  *

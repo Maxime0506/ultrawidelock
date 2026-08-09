@@ -5,5 +5,5 @@
 modules/woz_dw3000/dwt_uwb_driver/deca_interface.c
 modules/woz_dw3000/dwt_uwb_driver/deca_rsl.c
 modules/woz_dw3000/dwt_uwb_driver/lib/qmath/src/qmath.c
-modules/woz_dw3000/platform/deca_compat.c
-modules/woz_dw3000/platform/deca_port.c
+modules/woz_dw3000/src/deca_compat.c
+modules/woz_dw3000/src/deca_port.c

@@ -1,5 +1,5 @@
 # Woz UWB engine as a Zephyr module for the Nordic door-lock add-on.
-# The CCC STS substitution rides src/driver/uwb_seam.h: every caller reaches the
+# The CCC STS substitution rides include/uwb_seam.h: every caller reaches the
 # radio through woz_uwb_arm_rx(), which programs the CCC key/IV on every RX-arm,
 # and its three siblings. tests/tooling/uwb_seam_check.sh keeps the seam intact.
 # The DS-TWR responder runs on modules/woz_dw3000.
@@ -74,15 +74,11 @@ if(CONFIG_WOZ_UWB)
       # Aliro UWB ranging-setup adapter: composes the M1-M4 handshake the add-on's
       # aliro_stack drives via the facade, over the cherry_ccc_* seam that
       # cherry_ccc_shim.c implements on our MAC (fira_session.c + ccc_shim).
-      set(_aliro ${SRC}/aliro)
       woz_role_sources(${ROLES}/aliro_adapter.list UWB_ALIRO_ADAPTER_SRCS)
       woz_role_sources(${ROLES}/aliro_codec.list UWB_ALIRO_CODEC_SRCS)
       zephyr_library_sources(
         ${UWB_ALIRO_ADAPTER_SRCS}
         ${UWB_ALIRO_CODEC_SRCS})
-      zephyr_include_directories(
-        ${_aliro}/include
-        ${_aliro})
       # Diagnostic: one-shot boot self-test of the UWB init path (gated, default
       # n). Single-consumer literal (allowlisted as NOT_MANIFESTED in
       # tests/tooling/port_purity_check.sh); no other port builds it.
@@ -108,12 +104,14 @@ if(CONFIG_WOZ_UWB)
     # surface the codec uses. deca_device_api.h comes from the dw3000 module.
   endif()
 
-  # All layer subfolders on the include path so the flat #include "sibling.h"
-  # style resolves across layers (headers moved into src/{driver,fira,ccc,facade}).
+  # Public contracts are global; private layer folders stay on this library.
+  # The flat #include "sibling.h" style still resolves across private layers.
   # The platform contract (woz_port.h / woz_log.h) lives in modules/woz_port;
   # the shell seam header (aliro_shell.h) moved to ports/zephyr/shell.
   zephyr_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../woz_port/include
-    ${SRC}/driver ${SRC}/fira ${SRC}/ccc ${SRC}/facade)
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  zephyr_library_include_directories(
+    ${SRC}/driver ${SRC}/fira ${SRC}/ccc ${SRC}/facade ${SRC}/aliro)
 
 endif()

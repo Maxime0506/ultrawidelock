@@ -14,7 +14,6 @@
 #include "aliro_ble_central.h"
 #include "aliro_device.h"
 #include "aliro_device_uwb.h"
-#include "aliro_uwb_msg.h"
 #include "aliro_uwb_msg_spec.h"
 #include "prepoll_tx.h"
 
@@ -102,7 +101,7 @@ static int send_message(struct aliro_uwb_message *msg, const char *what)
 		return -1;
 	}
 	rc = send_plain(msg->data, msg->len);
-	aliro_uwb_msg_free(msg);
+	aliro_uwb_session_message_free(msg);
 	if (rc == 0) {
 		LOG_INF("-> %s sent", what);
 	}
