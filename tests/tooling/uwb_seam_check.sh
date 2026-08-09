@@ -35,7 +35,7 @@
 #   ccc_sts.c                  the register-level key/IV packer itself, with no
 #                              production caller (host suites only)
 #   modules/woz_dw3000/**      the vendor decadriver: it defines these
-#   tests/**, ports/esp32/test/**, docs/**   host doubles and prose
+#   tests/**, docs/**            host doubles and prose
 #
 # Adding a file here is a decision to trust it forever. Prefer calling the seam.
 
@@ -71,7 +71,6 @@ EXEMPT_RE='^(modules/woz_uwb/include/uwb_seam\.h
 |modules/woz_uwb/src/ccc/ccc_sts\.c
 |modules/woz_uwb/src/driver/uwb_rxdiag\.c
 |ports/esp32/components/woz_uwb/port/woz_seam_stubs\.c
-|ports/esp32/test/
 |modules/woz_dw3000/
 |tests/)'
 EXEMPT_RE=${EXEMPT_RE//$'\n'/}
@@ -80,8 +79,8 @@ EXEMPT_RE=${EXEMPT_RE//$'\n'/}
 # excluded above rather than here so the exemption list reads as one thing.
 scan_paths() {
 	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' \
-		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'firmware/*.c' 'firmware/*.h' \
-		'anchor/*.c' 'anchor/*.h'
+		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'apps/*.c' 'apps/*.h' 'apps/*.cpp' \
+		'examples/*.c' 'examples/*.h' 'examples/*.cpp'
 }
 
 # ---- scan -------------------------------------------------------------------

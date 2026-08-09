@@ -15,7 +15,7 @@ HOST="$ROOT/tests/host"
 
 # unit_srcs_from_role — append one role manifest (modules/<mod>/roles/<n>.list)
 # to UNIT_SRCS. Same lists cmake/woz_roles.cmake reads, so the host suite and
-# the firmware/ESP builds cannot disagree about which files a role contains.
+# the apps/dwm3001cdk-lock/ESP builds cannot disagree about which files a role contains.
 # Redirected (not piped) so the appends land in this shell under bash 3.2.
 unit_srcs_from_role() {
 	local _line

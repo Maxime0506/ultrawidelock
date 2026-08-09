@@ -53,10 +53,10 @@ cov_cc "${DEFS[@]}" "${INCS[@]}" \
 LLVM_PROFILE_FILE="$OUT/host.profraw" "$BIN" >"$OUT/run.log" 2>&1 || true
 
 # --- suite 2..n: portable core host KATs (mirror of tests/shared/run.sh) ----
-ET="$ROOT/ports/esp32/test"
+ET="$ROOT/tests/ports/esp32"
 SHARED="$ROOT/tests/shared"
 ALIRO="$ROOT/modules/woz_aliro"
-LOCK_MAIN="$ROOT/ports/esp32/apps/matter-lock/main"
+LOCK_MAIN="$ROOT/apps/esp32-matter-lock/main"
 
 # Units those suites exercise; joins UNIT_SRCS in the coverage denominator.
 CORE_UNIT_SRCS=(
@@ -137,12 +137,12 @@ cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/include" \
 run_suite hdrs "$OUT/cov_hdrs"
 
 # --- target-only sources on recording doubles (mirrors of the run.sh side
-# binaries and the ports/esp32/test sdkfake stages). These measure branch
+# binaries and the tests/ports/esp32 sdkfake stages). These measure branch
 # logic against fakes — never hardware, radio, or crypto truth.
 SRC="$ROOT/modules/woz_uwb/src"
 HOSTD="$ROOT/tests/host"
 ECOMP="$ROOT/ports/esp32/components"
-EAPPS="$ROOT/ports/esp32/apps"
+EREADER="$ROOT/examples/esp32/reader/main"
 SDKFAKE="$ET/sdkfake"
 
 SIDE_UNIT_SRCS=(
@@ -162,14 +162,14 @@ SIDE_UNIT_SRCS=(
 	"$ECOMP/woz_uwb/port/dw3000_hw.c"
 	"$ECOMP/woz_uwb/port/dw3000_spi.c"
 	"$ECOMP/woz_uwb/port/woz_seam_stubs.c"
-	"$EAPPS/reader/main/app_shell.c"
-	"$EAPPS/reader/main/main.c"
-	"$EAPPS/matter-lock/main/app_driver.cpp"
-	"$EAPPS/matter-lock/main/app_main.cpp"
-	"$EAPPS/matter-lock/main/app_shell.cpp"
-	"$EAPPS/matter-lock/main/lock/door_lock_manager.cpp"
-	"$EAPPS/matter-lock/main/lock/door_lock_callbacks.cpp"
-	"$EAPPS/matter-lock/main/lock/aliro_reader_delegate.cpp"
+	"$EREADER/app_shell.c"
+	"$EREADER/main.c"
+	"$LOCK_MAIN/app_driver.cpp"
+	"$LOCK_MAIN/app_main.cpp"
+	"$LOCK_MAIN/app_shell.cpp"
+	"$LOCK_MAIN/lock/door_lock_manager.cpp"
+	"$LOCK_MAIN/lock/door_lock_callbacks.cpp"
+	"$LOCK_MAIN/lock/aliro_reader_delegate.cpp"
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c"
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c"
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c"
@@ -244,10 +244,10 @@ run_suite esp_worker "$OUT/cov_esp_worker"
 # clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
-	-I"$SDKFAKE" -I"$EAPPS/reader/main" -I"$ROOT/modules/woz_uwb/include" \
+	-I"$SDKFAKE" -I"$EREADER" -I"$ROOT/modules/woz_uwb/include" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
-	"$ET/test_esp_app_shell.c" "$EAPPS/reader/main/app_shell.c" \
-	"$EAPPS/reader/main/main.c" \
+	"$ET/test_esp_app_shell.c" "$EREADER/app_shell.c" \
+	"$EREADER/main.c" \
 	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
 run_suite esp_shell "$OUT/cov_esp_shell"
 
@@ -273,7 +273,7 @@ run_suite esp_seam "$OUT/cov_esp_seam"
 
 # C++ suite: the six matter-lock app sources on the matterfake CHIP/esp-matter
 # doubles (mirror of the run.sh matter-lock stage; lock_led.c is C, own object).
-MLOCK="$EAPPS/matter-lock/main"
+MLOCK="$LOCK_MAIN"
 MFAKE="$ET/matterfake"
 cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
 # app_main.cpp's reader task drives the shared aliro_approach controller (C);
@@ -470,15 +470,15 @@ SURFACES_TSV="$OUT/surfaces.tsv"
 surf() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$SURFACES_TSV"; }
 loc() { wc -l <"$ROOT/$1" | tr -d ' '; }
 
-npatch="$(find "$ROOT/ports/nrf5340dk/patches" -name '*.patch' | wc -l | tr -d ' ')"
-nadded="$(find "$ROOT/ports/nrf5340dk/patches" -name '*.patch' -exec cat {} + |
+npatch="$(find "$ROOT/integrations/nrfconnect-door-lock/patches" -name '*.patch' | wc -l | tr -d ' ')"
+nadded="$(find "$ROOT/integrations/nrfconnect-door-lock/patches" -name '*.patch' -exec cat {} + |
 	grep -c '^+[^+]')"
-surf "ports/nrf5340dk/patches/ ($npatch patches)" "$nadded" \
+surf "integrations/nrfconnect-door-lock/patches/ ($npatch patches)" "$nadded" \
 	"our code inside the Nordic add-on — target-only"
-nsh="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' | wc -l | tr -d ' ')"
-nshl="$(cd "$ROOT" && find scripts release tests/tooling -name '*.sh' -exec cat {} + |
+nsh="$(cd "$ROOT" && find scripts release tests/tooling apps/nrf5340dk-lock -name '*.sh' | wc -l | tr -d ' ')"
+nshl="$(cd "$ROOT" && find scripts release tests/tooling apps/nrf5340dk-lock -name '*.sh' -exec cat {} + |
 	wc -l | tr -d ' ')"
-surf "scripts/ + release/ shell ($nsh scripts)" "$nshl" \
+surf "build + tooling shell ($nsh scripts)" "$nshl" \
 	"tests/tooling covers patch drift"
 
 "$PY" "$ROOT/tests/host/coverage_report.py" \

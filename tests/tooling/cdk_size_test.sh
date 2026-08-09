@@ -368,11 +368,11 @@ else
 fi
 
 # The committed baseline itself, if it is there: no absolute home paths, ever.
-if [ -f firmware/size-baseline.json ]; then
-	if grep -qE '/(Users|home)/[A-Za-z0-9._-]+|[A-Za-z]:\\\\Users' firmware/size-baseline.json; then
-		bad "firmware/size-baseline.json contains an absolute home path"
+if [ -f apps/dwm3001cdk-lock/size-baseline.json ]; then
+	if grep -qE '/(Users|home)/[A-Za-z0-9._-]+|[A-Za-z]:\\\\Users' apps/dwm3001cdk-lock/size-baseline.json; then
+		bad "apps/dwm3001cdk-lock/size-baseline.json contains an absolute home path"
 	else
-		ok "firmware/size-baseline.json carries no build-host path"
+		ok "apps/dwm3001cdk-lock/size-baseline.json carries no build-host path"
 	fi
 fi
 

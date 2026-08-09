@@ -5,7 +5,7 @@
  * UNMODIFIED against it -- the point of a fake here is to test the real source,
  * not a host-shaped copy of it. Backed by settingsfake.c, which is an in-RAM
  * key/value store with per-call failure injection, mirroring the pattern
- * ports/esp32/test/sdkfake/fake_nvs.c already uses for the ESP port.
+ * tests/ports/esp32/sdkfake/fake_nvs.c already uses for the ESP port.
  */
 #ifndef SETTINGSFAKE_ZEPHYR_SETTINGS_H
 #define SETTINGSFAKE_ZEPHYR_SETTINGS_H

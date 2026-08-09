@@ -678,7 +678,7 @@ static void test_ranging_channel_after_auth1(struct aliro_device *dev,
 #endif
 
 /* The full self-test body, callable from the host main() below and from the
- * on-target app_main() (ports/esp32/test/on_target_ec), which runs the same
+ * on-target app_main() (tests/on_target/esp32/aliro-device-ec), which runs the same
  * suite against the real PSA P-256 backend instead of the host fake curve. */
 int aliro_device_selftest(void)
 {

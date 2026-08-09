@@ -13,10 +13,10 @@
 #                          k_msleep, SYS_INIT, K_WORK_*, K_SEM_*, flash_area_*,
 #                          sys_reboot — platform code goes through woz_port
 #
-# and one shape is banned in the port trees, which is the same rule read from
-# the other side: a port names exactly one OS (check_port_os). modules/ names
-# none, ports/zephyr + firmware + anchor + ports/nrf5340dk name Zephyr,
-# ports/esp32 names ESP-IDF. A file naming the wrong one is in the wrong tree.
+# and one shape is banned in platform-owned trees, which is the same rule read
+# from the other side: each names exactly one OS (check_port_os). modules/ names
+# none, each app/example plus ports/zephyr names Zephyr, while the ESP32 app,
+# examples and port name ESP-IDF. A file naming the wrong one is in the wrong tree.
 #
 #   tests/tooling/port_purity_check.sh              # scan the tracked sources
 #   tests/tooling/port_purity_check.sh --self-test  # prove the gate can fail
@@ -63,7 +63,7 @@
 #
 #   build-file paths   every path literal a CMakeLists or a -DZEPHYR_EXTRA_MODULES
 #                      list names must exist in the tree (check_build_paths)
-#   patch symbols      every woz identifier a ports/nrf5340dk/patches/*.patch
+#   patch symbols      every woz identifier a integrations/nrfconnect-door-lock/patches/*.patch
 #                      grafts into the Nordic add-on must still be defined in
 #                      modules/ or ports/ (check_patch_symbols)
 #   role manifests     modules/*/roles/*.list is the ONE place a shared source is
@@ -231,20 +231,20 @@ scan() {
 	return 0
 }
 
-# ---- port trees keep to their own OS -----------------------------------------
+# ---- platform trees keep to their own OS -------------------------------------
 #
 # The other half of the one-source rule, and the half only reachable now that
 # every port has a home: modules/ names no OS, and a port tree names exactly
 # one. A Zephyr call in ports/esp32 (or an esp_/FreeRTOS call in ports/zephyr,
-# firmware/, anchor/, ports/nrf5340dk/) is a file that landed in the wrong tree
+# apps/dwm3001cdk-lock/ or examples/zephyr/) is a file that landed in the wrong tree
 # — it either belongs in the sibling port, or it is shared code that should sit
 # in modules/ behind woz_port. Both readings mean the tree, not the file, is
 # wrong, and neither is caught by the modules/ scan above.
 #
 # tests/ is deliberately absent: the host suites include fake <zephyr/*>
 # headers on purpose, and their honesty is enforced by compiling, not by this.
-ZEPHYR_TREES=(firmware anchor ports/zephyr ports/nrf5340dk)
-ESP_TREES=(ports/esp32)
+ZEPHYR_TREES=(apps/dwm3001cdk-lock apps/nrf5340dk-lock examples/zephyr ports/zephyr)
+ESP_TREES=(apps/esp32-matter-lock examples/esp32 ports/esp32)
 
 tree_sources() { # <dir>... -> the tracked C/C++ sources under them
 	local d args=()
@@ -279,12 +279,12 @@ check_port_os() {
 	done < <(os_findings "$ZEPHYR_INC_RE" "${ESP_TREES[@]}")
 
 	if [ "$fails" -gt 0 ]; then
-		printf '%scheck-purity: %d cross-OS include(s) in a port tree%s\n' "$R" "$fails" "$Z" >&2
+		printf '%scheck-purity: %d cross-OS include(s) in a platform tree%s\n' "$R" "$fails" "$Z" >&2
 		printf '  Move the file to the port whose OS it names, or into modules/\n' >&2
 		printf '  behind woz_port if both ports need it.\n' >&2
 		return 1
 	fi
-	printf '%s  ok   port trees: %d source(s), each naming only its own OS%s\n' "$G" "$n" "$Z"
+	printf '%s  ok   platform trees: %d source(s), each naming only its own OS%s\n' "$G" "$n" "$Z"
 }
 
 # ---- build-file path literals -----------------------------------------------
@@ -452,10 +452,10 @@ private_headers() {
 # implementation units they compile; app and port code may not.
 boundary_sources() {
 	git ls-files 'modules/*.c' 'modules/*.h' 'modules/*.cpp' 'modules/*.hpp' \
-		'firmware/*.c' 'firmware/*.h' 'firmware/*.cpp' 'firmware/*.hpp' \
-		'anchor/*.c' 'anchor/*.h' 'anchor/*.cpp' 'anchor/*.hpp' \
+		'apps/*.c' 'apps/*.h' 'apps/*.cpp' 'apps/*.hpp' \
+		'examples/*.c' 'examples/*.h' 'examples/*.cpp' 'examples/*.hpp' \
 		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'ports/*.hpp' \
-		| grep -vE '^(modules/woz_dw3000/dwt_uwb_driver/|modules/woz_dfu/src/detools/|ports/esp32/test/)'
+		| grep -vE '^(modules/woz_dw3000/dwt_uwb_driver/|modules/woz_dfu/src/detools/)'
 }
 
 # Print the private header an include crosses into, or print nothing. A module's
@@ -518,11 +518,11 @@ check_private_headers() {
 }
 
 # Every -DZEPHYR_EXTRA_MODULES / -DEXTRA_ZEPHYR_MODULES entry the build
-# recipes pass, repo-relative. Covers scripts/build-nrf5340dk.sh and mk/*.mk,
+# recipes pass, repo-relative. Covers the nRF5340DK lock build and mk/*.mk,
 # notably mk/cdk.mk injecting woz_dfu at the sysbuild level.
 module_list_paths() {
 	grep -hoE -- '-D(ZEPHYR_EXTRA_MODULES|EXTRA_ZEPHYR_MODULES)=[^[:space:]]+' \
-		scripts/build-nrf5340dk.sh mk/*.mk \
+		apps/nrf5340dk-lock/build.sh mk/*.mk \
 		| sed -e 's/^-D[A-Z_]*=//' -e "s/[\"']//g" \
 		| tr ';' '\n' \
 		| sed -e 's|^\$TREE|.|' -e 's|^\$(REPO_ROOT)|.|' -e 's|^\${REPO_ROOT}|.|'
@@ -530,14 +530,16 @@ module_list_paths() {
 
 # The build files whose hardcoded paths this gate resolves.
 BUILD_FILES=(
-	firmware/CMakeLists.txt
-	anchor/CMakeLists.txt
-	ports/nrf5340dk/initiator/CMakeLists.txt
-	ports/nrf5340dk/on_target_ec/CMakeLists.txt
+	apps/dwm3001cdk-lock/CMakeLists.txt
+	apps/esp32-matter-lock/CMakeLists.txt
+	examples/zephyr/anchor/CMakeLists.txt
+	examples/zephyr/nrf5340dk-initiator/CMakeLists.txt
+	examples/esp32/*/CMakeLists.txt
+	tests/on_target/zephyr/nrf5340dk-aliro-device-ec/CMakeLists.txt
 	ports/zephyr/CMakeLists.txt
 	modules/*/CMakeLists.txt
 	ports/esp32/components/*/CMakeLists.txt
-	ports/esp32/test/on_target_ec/main/CMakeLists.txt
+	tests/on_target/esp32/aliro-device-ec/main/CMakeLists.txt
 )
 
 check_build_paths() {
@@ -587,20 +589,20 @@ patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
 		# In-tree the methods live inside `namespace WozNfc { ... }`, so the
 		# qualified spelling never appears; require one file naming both.
 		m="${1#WozNfc::}"
-		hits=$(git grep -lF 'WozNfc' -- modules ports ':!ports/nrf5340dk/patches' 2>/dev/null) || return 1
+		hits=$(git grep -lF 'WozNfc' -- modules ports ':!integrations/nrfconnect-door-lock/patches' 2>/dev/null) || return 1
 		[ -n "$hits" ] || return 1
 		# shellcheck disable=SC2086 # tracked paths, no whitespace
 		grep -qlE "(^|[^[:alnum:]_])${m}([^[:alnum:]_]|\$)" $hits
 		;;
 	*)
-		git grep -qF "$1" -- modules ports ':!ports/nrf5340dk/patches' 2>/dev/null
+		git grep -qF "$1" -- modules ports ':!integrations/nrfconnect-door-lock/patches' 2>/dev/null
 		;;
 	esac
 }
 
 check_patch_symbols() {
 	local fails=0 n=0 p sym
-	for p in ports/nrf5340dk/patches/*.patch; do
+	for p in integrations/nrfconnect-door-lock/patches/*.patch; do
 		while IFS= read -r sym; do
 			[ -n "$sym" ] || continue
 			[[ $sym =~ $PATCH_LOCAL_RE ]] && continue
@@ -785,7 +787,7 @@ self_test() {
 	[ "$fails" -ne 0 ] || printf '%s  self-test: comment filter drops prose, keeps code%s\n' "$G" "$Z"
 
 	# Per-OS halves: each must fire on the other OS and stay quiet on its own,
-	# or check_port_os would ban a port tree from the platform it is written for.
+	# or check_port_os would ban a tree from the platform it is written for.
 	local zline='#include <zephyr/kernel.h>' eline='#include "freertos/task.h"'
 	printf '%s\n' "$zline" | grep -qE "$ZEPHYR_INC_RE" ||
 		{ printf '%s  self-test FAILED: zephyr half missed its own include%s\n' "$R" "$Z" >&2
@@ -814,7 +816,7 @@ self_test() {
 	for zt in "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}"; do
 		case "$zt" in
 		modules | modules/* | tests | tests/*)
-			printf '%s  self-test FAILED: %s is not a port tree%s\n' "$R" "$zt" "$Z" >&2
+			printf '%s  self-test FAILED: %s is not a platform tree%s\n' "$R" "$zt" "$Z" >&2
 			fails=$((fails + 1))
 			;;
 		esac

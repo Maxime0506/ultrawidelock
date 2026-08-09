@@ -47,11 +47,11 @@ Nordic Semiconductor code
 Scope:
 
   modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp
-  ports/nrf5340dk/patches/custom_impl-uwb.patch
+  integrations/nrfconnect-door-lock/patches/custom_impl-uwb.patch
 
 License: LicenseRef-Nordic-5-Clause
 
-Other files in ports/nrf5340dk/patches/ modify Nordic or Zephyr upstream code.
+Other files in integrations/nrfconnect-door-lock/patches/ modify Nordic or Zephyr upstream code.
 The resulting patched files retain the upstream license identified in their
 source headers.
 
@@ -99,17 +99,17 @@ Matter lock application
 
 The following files retain their Public Domain or CC0 option and disclaimer:
 
-  ports/esp32/apps/matter-lock/main/app_driver.cpp
-  ports/esp32/apps/matter-lock/main/app_main.cpp
-  ports/esp32/apps/matter-lock/main/app_priv.h
-  ports/esp32/apps/matter-lock/main/lock/door_lock_callbacks.cpp
-  ports/esp32/apps/matter-lock/main/lock/door_lock_manager.cpp
-  ports/esp32/apps/matter-lock/main/lock/door_lock_manager.h
+  apps/esp32-matter-lock/main/app_driver.cpp
+  apps/esp32-matter-lock/main/app_main.cpp
+  apps/esp32-matter-lock/main/app_priv.h
+  apps/esp32-matter-lock/main/lock/door_lock_callbacks.cpp
+  apps/esp32-matter-lock/main/lock/door_lock_manager.cpp
+  apps/esp32-matter-lock/main/lock/door_lock_manager.h
 
 The following files are distributed under Apache-2.0:
 
-  ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.cpp
-  ports/esp32/apps/matter-lock/main/lock/aliro_reader_delegate.h
+  apps/esp32-matter-lock/main/lock/aliro_reader_delegate.cpp
+  apps/esp32-matter-lock/main/lock/aliro_reader_delegate.h
 
 Apache License 2.0 files
 ------------------------

@@ -1,0 +1,62 @@
+/*
+ * nRF5340 DK + seated DWM3000EVB anchor — board overlay.
+ *
+ * SPIM4 on the Arduino header, side-band GPIOs per the seated shield. The pin
+ * map is the one apps/nrf5340dk-lock/overlays/dw3000-nfc.overlay already proves on
+ * this hardware:
+ *   SCK P1.15 - MOSI P1.13 - MISO P1.14 - CS P1.12
+ *   RSTn P1.09 - IRQ P1.10 - WAKEUP P1.11
+ *
+ * The NFC half of that overlay is deliberately absent: this app has no reader,
+ * so SPIM1 and the NFC12A1 ribbon are not wired here and the DK's own defaults
+ * for those pins stand.
+ *
+ * NO NET-CORE IMAGE IS NEEDED. The DK's Matter build carries one because Thread
+ * lives on the net core; this app has no radio but the DW3000, which hangs off
+ * the app core's SPIM4. That is what makes a standalone DK anchor a plain
+ * single-image Zephyr build rather than a port of the add-on.
+ */
+
+&pinctrl {
+	spi4_default: spi4_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK,  1, 15)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 13)>,
+				<NRF_PSEL(SPIM_MISO, 1, 14)>;
+		};
+	};
+
+	spi4_sleep: spi4_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK,  1, 15)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 13)>,
+				<NRF_PSEL(SPIM_MISO, 1, 14)>;
+			low-power-enable;
+		};
+	};
+};
+
+&spi4 {
+	status = "okay";
+	pinctrl-0 = <&spi4_default>;
+	pinctrl-1 = <&spi4_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+
+	dw3000: dw3000@0 {
+		compatible = "decawave,dw3000";
+		reg = <0>;
+		/* 8 MHz, not 32: the app core runs at 65 MHz here, so SPIM4's
+		 * 32 MHz mode is not reliable. 8 MHz is the proven seated-shield
+		 * speed and matches the CDK, which keeps the two boards' SPI
+		 * timing out of any bring-up difference. */
+		spi-max-frequency = <8000000>;
+		reset-gpios  = <&gpio1  9 GPIO_ACTIVE_LOW>;
+		irq-gpios    = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+		wakeup-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&gpio1 {
+	status = "okay";
+};

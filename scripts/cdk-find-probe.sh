@@ -15,7 +15,7 @@
 # against an nRF5340 DK). So with several probes attached, read that word
 # through each candidate and the CDK identifies itself.
 #
-# The winning triple is cached in <cache-file> (under firmware/keys/, which is
+# The winning triple is cached in <cache-file> (under apps/dwm3001cdk-lock/keys/, which is
 # deny-all gitignored -- a probe serial is machine-local state and must never be
 # committed). While the cached serial is attached it is trusted without touching
 # any probe, so the identification cost is paid once per bench, not per flash.

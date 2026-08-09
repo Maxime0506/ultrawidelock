@@ -61,7 +61,7 @@ struct rep {
 };
 
 /**
- * What firmware/src/matter_commission.c gives the encoder.
+ * What apps/dwm3001cdk-lock/src/matter_commission.c gives the encoder.
  *
  * Duplicated rather than shared because the module must not depend on a port.
  * If the two drift apart the assertion below stops meaning anything, so they

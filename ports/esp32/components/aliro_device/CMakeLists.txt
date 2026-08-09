@@ -1,7 +1,7 @@
 # Aliro device/initiator session layer as an ESP-IDF component — the mirror of
 # the aliro_reader component. Sources come from the role manifests in
-# modules/woz_aliro/roles/ (the same lists ports/nrf5340dk/{initiator,
-# on_target_ec} read); nothing here is ESP32-specific.
+# modules/woz_aliro/roles/ (the same lists the Zephyr initiator and on-target
+# test read); nothing here is ESP32-specific.
 #
 # The apdu role is ALSO compiled by the aliro_reader component, so an app must
 # not REQUIRE both this and aliro_reader — it would link the symbol twice.

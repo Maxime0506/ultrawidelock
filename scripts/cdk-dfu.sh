@@ -82,7 +82,7 @@ else
 	if [ ! -s "$HIT" ]; then
 		rm -f "$HIT"
 		echo "  MCUboot never answered across $PROBES probes spanning an SWD reset." >&2
-		echo "  Widen CONFIG_BOOT_SERIAL_WAIT_FOR_DFU_TIMEOUT in firmware/sysbuild/mcuboot.conf," >&2
+		echo "  Widen CONFIG_BOOT_SERIAL_WAIT_FOR_DFU_TIMEOUT in apps/dwm3001cdk-lock/sysbuild/mcuboot.conf," >&2
 		echo "  then \`make build && make flash\`." >&2
 		exit 1
 	fi

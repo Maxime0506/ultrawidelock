@@ -1,13 +1,13 @@
 # mk/esp32.mk — the ESP32 ports: matter-lock, reader, initiator.
 #
 # One implementation for all three apps, selected by APP=. The app Makefiles
-# under ports/esp32/apps/*/ are thin forwarders into this file, so every command
+# under apps/ and examples/esp32/ are thin forwarders into this file, so every command
 # their READMEs document keeps working and the serial-port guard below exists in
 # exactly one place.
 #
 #   make esp-build APP=matter-lock TARGET=esp32s3
 #   make esp-flash APP=reader
-#   cd ports/esp32/apps/reader && make flash      # same thing, via the forwarder
+#   cd examples/esp32/reader && make flash       # same thing, via the forwarder
 #
 # No ESP-IDF or esp-matter version is pinned anywhere in the repo; the paths
 # below are the only thing this file fixes, and both are overridable.
@@ -24,7 +24,11 @@ TARGET  ?= esp32s3
 #   piv       PIN-enforced PIV recovery build       (matter-lock)
 VARIANT ?=
 
-ESP_APP_DIR := $(REPO_ROOT)/ports/esp32/apps/$(APP)
+ifeq ($(APP),matter-lock)
+ESP_APP_DIR := $(REPO_ROOT)/apps/esp32-matter-lock
+else
+ESP_APP_DIR := $(REPO_ROOT)/examples/esp32/$(APP)
+endif
 ESP_BUILD   := $(ALIRO_BUILD_ROOT)/esp32-$(APP)-$(TARGET)$(if $(VARIANT),-$(VARIANT))
 # The generated config belongs to the build, not to the checkout. Keyed by
 # APP+TARGET+VARIANT along with the tree, so building the C6 can no longer

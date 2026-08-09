@@ -134,4 +134,4 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$GBIN"
 
 # The remaining host suites exercise ESP-owned sources against ESP fakes.
-bash "$ROOT/ports/esp32/test/run.sh"
+bash "$ROOT/tests/ports/esp32/run.sh"

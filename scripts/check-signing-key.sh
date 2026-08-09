@@ -20,8 +20,8 @@
 # Exit 0 clean, 1 on a finding, 2 if the gate could not do its job.
 #
 # Both Zephyr ports call this, which is why it is a file rather than a paragraph
-# repeated in each: firmware/sysbuild.cmake for the DWM3001CDK, and
-# scripts/build-nrf5340dk.sh for the nRF5340 DK. One list, one set of refusals,
+# repeated in each: apps/dwm3001cdk-lock/sysbuild.cmake for the DWM3001CDK, and
+# apps/nrf5340dk-lock/build.sh for the nRF5340 DK. One list, one set of refusals,
 # one place to edit when upstream adds an eighth demo key. The DK additionally
 # reads the key back out of the built mcuboot .config, because a flag we passed
 # is not the same fact as a flag the build honoured.
@@ -141,7 +141,7 @@ self_test() {
 	for case_name in empty relative missing; do
 		case "$case_name" in
 		empty) arg='' ;;
-		relative) arg='firmware/keys/mcuboot_ec_p256.pem' ;;
+		relative) arg='apps/dwm3001cdk-lock/keys/mcuboot_ec_p256.pem' ;;
 		missing) arg="$tmp/not-generated-yet.pem" ;;
 		esac
 		if check_key "$arg" 2>/dev/null; then

@@ -6,7 +6,7 @@ config WOZ_NFC
 	help
 	  Compile the WozNfc transport seam into the application. The add-on's
 	  NFC call sites are patched
-	  (ports/nrf5340dk/patches/nfc-transport-seam.patch)
+	  (integrations/nrfconnect-door-lock/patches/nfc-transport-seam.patch)
 	  to go through this seam, so exactly one backend below must be selected
 	  in any application build that links those call sites.
 
@@ -29,7 +29,7 @@ config WOZ_NFC_TRANSPORT_PN532
 	depends on SPI
 	help
 	  In-tree PN532 reader transport. Needs a devicetree node compatible
-	  "nxp,pn532-spi" (see ports/nrf5340dk/overlays/pn532.overlay, which
+	  "nxp,pn532-spi" (see apps/nrf5340dk-lock/overlays/pn532.overlay, which
 	  reuses the spi1 bus the ST25R shield would occupy). Emits Apple ECP frames
 	  while polling so an iPhone auto-presents its Aliro pass, mirroring the
 	  woz_aliro_ecp module on the RFAL path.

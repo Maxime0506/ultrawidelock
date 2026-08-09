@@ -4,7 +4,7 @@
 #
 # Registered even though no ESP image calls the OSAL today: uwb_rxdiag and
 # uwb_selftest are the callers and both are deliberately excluded from this
-# port (ports/esp32/test/verify_port.sh asserts they stay out). Before this
+# port (tests/ports/esp32/verify_port.sh asserts they stay out). Before this
 # component existed the backend was compiled by nothing at all, so it could rot
 # unnoticed. Building it here costs an image nothing, because the linker drops
 # what nobody calls.

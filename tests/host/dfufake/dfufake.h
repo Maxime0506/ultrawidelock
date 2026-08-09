@@ -18,7 +18,7 @@
 
 #include "woz_flash.h"
 
-/* Geometry, via the woz_flash host backend (matches firmware/pm_static.yml). */
+/* Geometry, via the woz_flash host backend (matches apps/dwm3001cdk-lock/pm_static.yml). */
 #define DFUFAKE_STAGING_SIZE WOZ_FLASH_HOST_STAGING_SIZE
 #define DFUFAKE_PRIMARY_SIZE WOZ_FLASH_HOST_PRIMARY_SIZE
 #define DFUFAKE_WRITE_BLOCK  WOZ_FLASH_HOST_WRITE_BLOCK

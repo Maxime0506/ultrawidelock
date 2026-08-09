@@ -1,5 +1,5 @@
 # Hand-written minimal Matter node. Distinct from the Nordic/CHIP Matter stack
-# used by ports/nrf5340dk and from esp-matter in ports/esp32: this is the
+# used by the Nordic door-lock integration and the ESP32 Matter app: this is the
 # from-scratch implementation, and it exists because neither of those fits a
 # 516 KB / 128 KB part alongside the reader.
 

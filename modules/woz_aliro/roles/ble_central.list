@@ -1,5 +1,5 @@
 # woz_aliro role: platform-free central-side advert/READ decoder.
-# Consumers: firmware/ (CONFIG_ALIRO_BLE_CENTRAL), ports/nrf5340dk/initiator,
+# Consumers: apps/dwm3001cdk-lock/ (CONFIG_ALIRO_BLE_CENTRAL), examples/zephyr/nrf5340dk-initiator,
 # ports/esp32/components/aliro_ble_central.
 # One repo-root-relative path per line, sorted; add HERE and nowhere else.
 modules/woz_aliro/src/aliro_ble_central.c

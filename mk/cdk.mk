@@ -6,14 +6,14 @@
 # directory, so no target can flash one image and then decode RTT against
 # another's ELF.
 #
-# The app is firmware/ at the top of the tree, not a subdirectory of ports/:
-# it is the product, and the other two boards are ports of it.
+# The app lives under apps/ rather than ports/: it is a product, not an OS
+# backend.
 
 # Sysbuild names each image after the application directory, so the per-image
-# artifacts live under <build>/firmware. Named once here because three targets
+# artifacts live under <build>/dwm3001cdk-lock. Named once here because three targets
 # reach into it and a wrong guess fails as "no ELF", which reads like a dead board.
-CDK_IMAGE := firmware
-CDK_APP   := $(REPO_ROOT)/firmware
+CDK_IMAGE := dwm3001cdk-lock
+CDK_APP   := $(REPO_ROOT)/apps/dwm3001cdk-lock
 CDK_BOARD := decawave_dwm3001cdk
 CDK_CHIP  := nRF52833_xxAA
 
@@ -38,15 +38,15 @@ CDK_PROBE ?= $(PROBE_RS_PROBE)
 # silicon instead of refusing: scripts/cdk-find-probe.sh reads FICR INFO.PART
 # through each candidate (0x00052833 = nRF52833 = this board) and pins the
 # winner's triple in the cache below, so the identification runs once per
-# bench, not per flash. The cache lives under firmware/keys/ because that
-# directory is deny-all gitignored and a probe serial is machine-local state
-# that must never be committed. Delete the file to re-identify.
+# bench, not per flash. New caches live beside the app's ignored key; an old
+# root-level cache remains readable so this move does not lose the probe choice.
+# Delete the file to re-identify.
 #
 # Resolution happens at PARSE time, gated to the goals that touch a probe --
 # it cannot happen inside a recipe, because this make expands every recipe
 # line before the first one runs, so a cache written by line 1 is invisible
 # to line 2 (measured on the macOS GNU make this repo is driven by).
-CDK_PROBE_CACHE ?= $(REPO_ROOT)/firmware/keys/cdk-probe
+CDK_PROBE_CACHE ?= $(if $(wildcard $(LEGACY_CDK_KEY_DIR)/cdk-probe),$(LEGACY_CDK_KEY_DIR)/cdk-probe,$(CDK_KEY_DIR)/cdk-probe)
 CDK_PROBE_GOALS := flash flash-erase monitor ota-window
 ifeq ($(strip $(CDK_PROBE)),)
 ifneq ($(filter $(CDK_PROBE_GOALS),$(MAKECMDGOALS)),)
@@ -135,19 +135,19 @@ CDK_CIRDIAG_WINDOWS := $(if $(CIRDIAG_WINDOWS),-DCONFIG_ALIRO_CIRDIAG_CAPTURE_WI
 # for exactly the timing bugs LTO could cause. RELEASE stays what it already
 # claims to be: primarily a RAM lever (7,168 B from the RTT ring) plus a flash
 # lever (20,568 B from errors-only logging), not a codegen one.
-# Worth 41,084 B of flash. See firmware/overlay-lto.conf.
+# Worth 41,084 B of flash. See apps/dwm3001cdk-lock/overlay-lto.conf.
 #
 # SMP=1 adds mcumgr over Bluetooth, which is what nRF Device Manager and nRF
 # Connect for iOS speak. After errors-only logging and standalone OpenThread,
 # debug+SMP leaves 12,764 B free, so RELEASE=1 is no longer required to fit.
-# RELEASE=1 remains the shipping configuration. See firmware/overlay-smp.conf
+# RELEASE=1 remains the shipping configuration. See apps/dwm3001cdk-lock/overlay-smp.conf
 # for the measurements and the security note about the unpaired write endpoint.
 # Ordered after overlay-release.conf so nothing it sets can be undone by it.
 # OTLOG=1 turns OpenThread's own logging on, which is off by construction
 # everywhere else: the level Kconfig depends on OPENTHREAD_DEBUG, so with debug
 # off it falls through to 0 and the stack is silent no matter what
 # CONFIG_LOG_DEFAULT_LEVEL says. Diagnosis only, never shipped, and it may not
-# fit -- see firmware/overlay-otlog.conf. Last in the list so nothing undoes it.
+# fit -- see apps/dwm3001cdk-lock/overlay-otlog.conf. Last in the list so nothing undoes it.
 #
 # The LTO default is resolved HERE rather than assigned with `LTO ?= 1`, because
 # make variables are global across the includes: `?=` would decide the other
@@ -162,7 +162,7 @@ CDK_CONF := overlay-thread.conf$(if $(RELEASE),;overlay-release.conf)$(if $(SMP)
 # ---- image signing -----------------------------------------------------------
 # Which private key signs the image is the whole answer to "what will this lock
 # boot", so it is never left to MCUboot's default -- that default is a key
-# published in MCUboot's own repository. firmware/sysbuild.cmake refuses to
+# published in MCUboot's own repository. apps/dwm3001cdk-lock/sysbuild.cmake refuses to
 # build with any of the seven.
 #
 # SIGN_KEY (top-level Makefile) is the checkout-wide default, shared with the
@@ -193,7 +193,7 @@ CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
 # application, because the bootloader has no radio.
 #
 # So EXTRA_ZEPHYR_MODULES is set at the SYSBUILD level and not in
-# firmware/CMakeLists.txt, whose ZEPHYR_EXTRA_MODULES list is read only by the
+# apps/dwm3001cdk-lock/CMakeLists.txt, whose ZEPHYR_EXTRA_MODULES list is read only by the
 # application image -- the bootloader would never see the module at all. What
 # carries it across is that sysbuild copies every one of its own cache variables
 # into each image's cache file (sysbuild_extensions.cmake:133-147), which is the
@@ -213,7 +213,7 @@ CDK_DFU  := -DEXTRA_ZEPHYR_MODULES='$(REPO_ROOT)/modules/woz_dfu' \
 # DFU_LOG=1 makes the bootloader narrate what it does with a staged patch.
 #
 # Not on by default and not a size trim: MCUboot here has no LOG, no PRINTK and
-# no RTT at all (firmware/sysbuild/mcuboot.conf costs each one), and this turns
+# no RTT at all (apps/dwm3001cdk-lock/sysbuild/mcuboot.conf costs each one), and this turns
 # three of them back on. Worth it exactly when the difference between "declined
 # the patch" and "applied it and produced an image that fails validation" has to
 # be visible, because from the outside those look identical -- both leave an
@@ -267,7 +267,7 @@ CDK_OTA_PY   := $(CDK_OTA_VENV)/bin/python
 CDK_DEPLOYED_ELF := $(dir $(CDK_DEPLOYED))zephyr.elf
 
 # ALIRO_TOOLCHAIN=env skips the nrfutil wrapper and runs west straight off PATH.
-# scripts/build-nrf5340dk.sh carries the same escape hatch for the same reason:
+# apps/nrf5340dk-lock/build.sh carries the same escape hatch for the same reason:
 # inside the NCS toolchain container CI uses, nrfutil's toolchain index is not
 # reachable, so the wrapper cannot resolve a toolchain that is already there.
 # firmware-builds.yml's dwm3001cdk job depends on this.
@@ -294,7 +294,7 @@ CDK_RUN = cd $(REPO_ROOT)/workspace && $(CDK_WEST)
 # than merely measure. Everything else comes straight out of the ELF and needs
 # no toolchain at all, which is why a report is still possible without them.
 CDK_SIZE_JSON     ?= $(CDK_BUILD)/size-report.json
-CDK_SIZE_BASELINE ?= $(REPO_ROOT)/firmware/size-baseline.json
+CDK_SIZE_BASELINE ?= $(REPO_ROOT)/apps/dwm3001cdk-lock/size-baseline.json
 CDK_SIZE_REPORTS  ?= 1
 CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_SIZE_JSON)' \
                      $(if $(filter-out 0 n no off N NO OFF,$(CDK_SIZE_REPORTS)),--reports --run-prefix '$(CDK_WEST)')

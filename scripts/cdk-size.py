@@ -552,7 +552,7 @@ def build_report(args):
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commit": git_commit(args.repo_root),
         # RELATIVE, and never the absolute path. This report is committed as
-        # firmware/size-baseline.json, and an absolute build path names the
+        # apps/dwm3001cdk-lock/size-baseline.json, and an absolute build path names the
         # machine and the user that produced it.
         # It is also the reason the numbers are not reproducible by anyone else.
         "build_dir": relative_to_root(build, args.repo_root),

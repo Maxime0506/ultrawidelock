@@ -11,7 +11,7 @@ firmware.
     scripts/woz_smp.py build/cdk.woz          push a patch
     scripts/woz_smp.py --list                 read the image list and stop
 
-Requires the board to be built with SMP=1 (firmware/overlay-smp.conf).
+Requires the board to be built with SMP=1 (apps/dwm3001cdk-lock/overlay-smp.conf).
 
 CBOR IS HAND-ROLLED HERE, deliberately. The maps mcumgr exchanges are half a
 dozen keys of ints and byte strings, and vendoring a CBOR library into the OTA

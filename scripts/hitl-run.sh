@@ -39,7 +39,7 @@
 #               the one marker a BLE-only fake cannot produce, which is why the
 #               reader watch is on by default and --no-reader is the opt-out.
 #
-# The reader is watched over its J-Link (firmware/keys/cdk-probe) against the
+# The reader is watched over its J-Link (apps/dwm3001cdk-lock/keys/cdk-probe) against the
 # ELF recorded at deploy time (build/cdk-deployed/zephyr.elf) -- the build tree
 # holds the image being built NEXT, not the one running, per mk/cdk.mk.
 #
@@ -110,7 +110,7 @@ fi
 [ -n "$PORT" ] && [ -e "$PORT" ] || die "no DK console port found; pass PORT=/dev/cu.usbmodemXXXX"
 
 READER_WATCH=0
-CDK_PROBE_FILE="$REPO_ROOT/firmware/keys/cdk-probe"
+CDK_PROBE_FILE="$REPO_ROOT/apps/dwm3001cdk-lock/keys/cdk-probe"
 CDK_ELF="$REPO_ROOT/build/cdk-deployed/zephyr.elf"
 if [ "$NO_READER" = 0 ]; then
 	if [ -f "$CDK_PROBE_FILE" ] && [ -f "$CDK_ELF" ] && command -v probe-rs >/dev/null 2>&1; then
@@ -137,7 +137,7 @@ if [ "$SKIP_ENROL" = 0 ]; then
 	printf '   credential posted; header written\n'
 else
 	printf '1. enrolment skipped; using the existing bench_identity.h\n'
-	[ -f "$REPO_ROOT/ports/nrf5340dk/initiator/src/bench_identity.h" ] ||
+	[ -f "$REPO_ROOT/examples/zephyr/nrf5340dk-initiator/src/bench_identity.h" ] ||
 		die "--skip-enrol but no bench_identity.h exists; run once without it"
 fi
 
@@ -214,7 +214,7 @@ if [ "$SKIP_FLASH" = 0 ]; then
 		if grep -q "must be recovered" "$ART/flash.log"; then
 			printf '   APPROTECT engaged (power-cycled since last flash); recovering the DK\n'
 			if ! ALIRO_BUILD="$REPO_ROOT/build/nrf5340dk-initiator" \
-				"$REPO_ROOT/scripts/build-nrf5340dk.sh" flash-recover \
+				"$REPO_ROOT/apps/nrf5340dk-lock/build.sh" flash-recover \
 				>>"$ART/flash.log" 2>&1; then
 				tail -10 "$ART/flash.log" >&2
 				die "DK recover-flash failed too (full log: $ART/flash.log)"

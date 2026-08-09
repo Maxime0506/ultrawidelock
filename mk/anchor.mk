@@ -9,7 +9,7 @@
 # debug probes on one machine, which is exactly the case that makefile measured
 # enumerating in a different order twenty minutes apart.
 
-ANCHOR_APP   := $(REPO_ROOT)/anchor
+ANCHOR_APP   := $(REPO_ROOT)/examples/zephyr/anchor
 ANCHOR_BOARD ?= decawave_dwm3001cdk
 
 # ROLE=initiator|responder. Defaults to initiator because the door node is the
@@ -45,7 +45,7 @@ endif
 override ANCHOR_BUILD := $(abspath $(ANCHOR_BUILD))
 
 # ANT_DLY: the lumped per-PAIR antenna-delay constant, in DTU. Empty leaves the
-# Kconfig default of 0, which means uncalibrated. See anchor/Kconfig for why it
+# Kconfig default of 0, which means uncalibrated. See examples/zephyr/anchor/Kconfig for why it
 # is one number rather than two registers, and the plan for how to solve it.
 ANCHOR_ANT_FLAG := $(if $(ANT_DLY),-DCONFIG_ANCHOR_ANT_DLY_DTU=$(ANT_DLY))
 

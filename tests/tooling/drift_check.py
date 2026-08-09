@@ -32,11 +32,11 @@ import sys
 # Only these trees hold first-party constants. Vendored code keeps its own, and
 # policing a third party's defaults would make this gate fail on their next drop
 # rather than on our mistake.
-ROOTS = ("modules", "ports", "firmware", "anchor")
+ROOTS = ("modules", "ports", "apps", "examples", "tests/ports/esp32")
 SKIP = (
     "modules/woz_dw3000/",          # Qorvo decadriver, verbatim
     "modules/woz_dfu/src/detools/", # detools + heatshrink, verbatim
-    "ports/nrf5340dk/patches/",     # diffs against the Nordic add-on
+    "integrations/nrfconnect-door-lock/patches/",     # diffs against the Nordic add-on
     "workspace/",
     "build/",
 )

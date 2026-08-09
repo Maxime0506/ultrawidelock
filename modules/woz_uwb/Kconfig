@@ -88,7 +88,7 @@ config WOZ_PRETTY_SHELL
 	  ccc_shim_rx.c / uwb_rxdiag.c compile to no-ops (DIAGK, see woz_diag.h),
 	  one clean per-block ranging line is emitted instead, and the app re-emits
 	  the commissioning QR URL through its own logger so Matter can drop to WRN.
-	  Pairs with ports/nrf5340dk/overlays/woz-pretty.conf, which carries the
+	  Pairs with apps/nrf5340dk-lock/overlays/woz-pretty.conf, which carries the
 	  matching log-level cuts. Default n = today's verbose output, byte-for-byte.
 	  Reverse by dropping the PRETTY=1 build switch (flag returns to n).
 
@@ -149,7 +149,7 @@ config WOZ_UWB_CIRDIAG_DRAIN_PACE_MS
 	  has a real serial port.
 
 	  IT IS NOT RIGHT ON THE DWM3001CDK. That board's only console is SEGGER RTT
-	  with an 8 KB up-buffer in NO_BLOCK_SKIP mode (firmware/prj.conf explains why
+	  with an 8 KB up-buffer in NO_BLOCK_SKIP mode (apps/dwm3001cdk-lock/prj.conf explains why
 	  BLOCK_IF_FIFO_FULL is not an option there: it hangs the firmware whenever no
 	  debugger is draining). A full drain is 16 records x 64 taps = 1,024 lines,
 	  about 46 KB, written by memcpy far faster than probe-rs polls it out. Most
@@ -242,7 +242,7 @@ config WOZ_UWB_CIRDIAG_SUMMARY_FINAL_ONLY
 	  for every reception including the Final, so the image ranged and unlocked
 	  normally and latched nothing. The stream must also be ARMED
 	  (uwb_cirdiag_set_enabled); the classifier images do that at boot in
-	  firmware/src/main.c.
+	  apps/dwm3001cdk-lock/src/main.c.
 
 endif # WOZ_UWB_CIRDIAG
 

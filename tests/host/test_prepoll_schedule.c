@@ -6,7 +6,7 @@
  * schedule the initiator computes is load-bearing for the reader in a way the
  * reader itself cannot check, and its properties are worth pinning here.
  *
- * ports/nrf5340dk/initiator/src/prepoll_tx.c is not host-buildable -- it is
+ * examples/zephyr/nrf5340dk-initiator/src/prepoll_tx.c is not host-buildable -- it is
  * Zephyr work queues and dwt_* calls -- so this exercises the library calls it
  * makes, with the M3 parameters the bench reader actually sends, rather than
  * the file. The frame construction those indices go into is already covered

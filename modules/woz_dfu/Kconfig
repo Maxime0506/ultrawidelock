@@ -23,7 +23,7 @@ config WOZ_DFU_APPLIER
 	  patcher that can never safely run.
 
 	  MEASURED at 3,176 B of bootloader flash (29,380 -> 32,556 B), which is
-	  why firmware/pm_static.yml gives MCUboot 0xA000 rather than the 0x8000
+	  why apps/dwm3001cdk-lock/pm_static.yml gives MCUboot 0xA000 rather than the 0x8000
 	  it needed before: 0x8000 would have left 212 B free.
 
 	  Nothing happens at boot unless a valid header is found in the
@@ -36,7 +36,7 @@ config WOZ_DFU_APPLIER_LOG
 	depends on PRINTK
 	help
 	  Bench only. MCUboot on this board is built with CONFIG_PRINTK=n and no
-	  LOG (firmware/sysbuild/mcuboot.conf explains what that is worth), so
+	  LOG (apps/dwm3001cdk-lock/sysbuild/mcuboot.conf explains what that is worth), so
 	  turning this on also means turning those back on and finding the flash
 	  for them.
 

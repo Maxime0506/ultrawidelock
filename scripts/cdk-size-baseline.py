@@ -2,7 +2,7 @@
 """cdk-size-baseline.py — turn a size report into the committed baseline.
 
     scripts/cdk-size-baseline.py --from build/cdk-matter/size-report.json \
-                                 --out firmware/size-baseline.json
+                                 --out apps/dwm3001cdk-lock/size-baseline.json
     make cdk-size-baseline
 
 Two things happen here and both matter.

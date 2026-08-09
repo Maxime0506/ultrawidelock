@@ -28,7 +28,7 @@ Options:
                    cannot succeed here. Prefer passing it.
   --endpoint       door lock endpoint (default 1)
   --fabric         chip-tool fabric name (default beta, so alpha stays free)
-  --out            header to write (default ports/nrf5340dk/initiator/src/bench_identity.h)
+  --out            header to write (default examples/zephyr/nrf5340dk-initiator/src/bench_identity.h)
   --cred-type      7 evictable / 8 non-evictable endpoint key (default 8)
   --chip-tool      path to the chip-tool binary
   --fresh-storage  run against a private chip-tool KVS, so nothing an earlier
@@ -47,7 +47,7 @@ Apple Home fabric, Home tile and walk-up unlock all keep working. Multi-fabric i
 ordinary Matter behaviour and the reader treats this admin like any other.
 
 Why a controller is needed at all: a credential enters the trust store only
-through Matter SetCredential (firmware/src/matter_commission.c:1966). A phone
+through Matter SetCredential (apps/dwm3001cdk-lock/src/matter_commission.c:1966). A phone
 never provisions itself -- the home's admin does it on the phone's behalf -- so
 standing in for a phone means standing in for the admin too.
 
@@ -66,7 +66,7 @@ import sys
 from cryptography.hazmat.primitives.asymmetric import ec
 
 # reader_id is group_id || group_sub_id, 16 bytes each, assembled exactly this way
-# by the reader itself (firmware/src/matter_commission.c:1991).
+# by the reader itself (apps/dwm3001cdk-lock/src/matter_commission.c:1991).
 ATTR_VERIFICATION_KEY = "aliro-reader-verification-key"
 ATTR_GROUP_ID = "aliro-reader-group-identifier"
 ATTR_GROUP_SUB_ID = "aliro-reader-group-sub-identifier"
@@ -75,7 +75,7 @@ ATTR_GRK = "aliro-group-resolving-key"
 DEFAULT_CHIP_TOOL = os.path.expanduser(
     "~/esp/esp-matter/connectedhomeip/connectedhomeip/out/host/chip-tool"
 )
-DEFAULT_OUT = "ports/nrf5340dk/initiator/src/bench_identity.h"
+DEFAULT_OUT = "examples/zephyr/nrf5340dk-initiator/src/bench_identity.h"
 
 # SetCredential argument slots, per `chip-tool doorlock set-credential` usage:
 #   OperationType Credential CredentialData UserIndex UserStatus UserType dest endpoint
@@ -325,7 +325,7 @@ def main():
     # Type 6 (issuer key) is the trap: the reader ACCEPTS it, reports a trust
     # anchor, and then rejects every device one step after "device signature OK",
     # because an issuer key identifies the home and no device ever presents it
-    # (firmware/src/matter_commission.c:1940-1957, measured across three pairings).
+    # (apps/dwm3001cdk-lock/src/matter_commission.c:1940-1957, measured across three pairings).
     # Only the two endpoint types, 7 and 8, become anchors.
     print("3. minting the initiator credential and posting it with SetCredential")
     key = ec.generate_private_key(ec.SECP256R1())
