@@ -27,7 +27,7 @@ extern "C" {
  * though the two are the same five numbers: woz_uwb is the lower layer and must
  * not acquire a dependency on woz_ml to hand out registers it already holds. The
  * caller copies across by name, which is checkable by eye — see
- * firmware/src/main.c, and see woz_ml.h on why five same-typed integers are
+ * apps/dwm3001cdk-lock/src/main.c, and see woz_ml.h on why five same-typed integers are
  * passed as a struct rather than positionally.
  */
 struct uwb_cirdiag_ipatov {

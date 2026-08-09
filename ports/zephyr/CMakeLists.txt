@@ -53,7 +53,7 @@ zephyr_library_include_directories(
 # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log line
 # (woz_logfmt), plus runtime-mute of benign upstream Matter/BLE error spam
 # (woz_logquiet). Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT, set in
-# ports/nrf5340dk/overlays/woz-pretty.conf, active only under PRETTY=1.
+# apps/nrf5340dk-lock/overlays/woz-pretty.conf, active only under PRETTY=1.
 zephyr_library_sources_ifdef(CONFIG_WOZ_PRETTY_SHELL
 	log/woz_logfmt.c
 	log/woz_logquiet.c)
@@ -127,8 +127,8 @@ if(CONFIG_WOZ_NFC_TRANSPORT_PN532)
 endif()
 
 # The 0xFFF6 Matter commissioning transport + Thread/fabric ports + the fabric
-# table store. matter_commission.c stays in firmware/src (it is the app's
-# policy half); its headers here reach it via firmware/CMakeLists.txt's app
+# table store. matter_commission.c stays in apps/dwm3001cdk-lock/src (it is the app's
+# policy half); its headers here reach it via apps/dwm3001cdk-lock/CMakeLists.txt's app
 # include dirs.
 if(CONFIG_ALIRO_MATTER_BLE)
 	target_sources(app PRIVATE
@@ -138,7 +138,7 @@ if(CONFIG_ALIRO_MATTER_BLE)
 endif()
 
 # Initiator (User-Device role) BLE central transport, the mirror of
-# ble/aliro_ble_zephyr.c. ports/nrf5340dk/initiator lists this file by path
+# ble/aliro_ble_zephyr.c. examples/zephyr/nrf5340dk-initiator lists this file by path
 # instead: it carries no Kconfig of its own to define this gate.
 if(CONFIG_ALIRO_BLE_CENTRAL)
 	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble/aliro_ble_central_zephyr.c)

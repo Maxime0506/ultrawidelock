@@ -7,7 +7,7 @@
 /*
  * aliro_ranging — see aliro_ranging.h. Drives the engine reader adapter/session
  * for the post-auth M1-M4 ranging-setup exchange. The call contract mirrors the
- * reference reader (ports/nrf5340dk/patches/custom_impl-uwb.patch).
+ * reference reader (integrations/nrfconnect-door-lock/patches/custom_impl-uwb.patch).
  */
 #include <stdbool.h>
 #include <stddef.h>

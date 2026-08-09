@@ -38,7 +38,7 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 ALIRO_BUILD_ROOT ?= $(REPO_ROOT)/build
 export ALIRO_BUILD_ROOT
 
-# NCS version for both Zephyr ports. Matches scripts/build-nrf5340dk.sh.
+# NCS version for both Zephyr ports. Matches apps/nrf5340dk-lock/build.sh.
 NCS_VER ?= v3.3.0
 
 # ---- the MCUboot image-signing key ------------------------------------------
@@ -49,15 +49,15 @@ NCS_VER ?= v3.3.0
 # gitignored, so a fresh clone or a new worktree fails at configure until it has
 # one.
 #
-# It stays under firmware/ rather than moving somewhere board-neutral because
-# moving the path is a key rotation for every existing checkout: `make dfu-key`
-# would find nothing at the new location and mint a second key, and boards
-# already carrying the first one would then reject anything signed with it.
+# Fresh checkouts keep it with the DWM3001CDK app. Existing checkouts retain the
+# old ignored path below, so this migration cannot silently mint a second key.
 #
 # The path MUST be absolute; scripts/check-signing-key.sh explains why a
 # relative one silently becomes MCUboot's published demo key. Exported so the
 # port scripts read it rather than each keeping its own default.
-SIGN_KEY ?= $(REPO_ROOT)/firmware/keys/mcuboot_ec_p256.pem
+LEGACY_CDK_KEY_DIR := $(REPO_ROOT)/firmware/keys
+CDK_KEY_DIR        := $(REPO_ROOT)/apps/dwm3001cdk-lock/keys
+SIGN_KEY ?= $(if $(wildcard $(LEGACY_CDK_KEY_DIR)/mcuboot_ec_p256.pem),$(LEGACY_CDK_KEY_DIR)/mcuboot_ec_p256.pem,$(CDK_KEY_DIR)/mcuboot_ec_p256.pem)
 export SIGN_KEY
 
 # ---- options forwarded to the firmware builds -------------------------------

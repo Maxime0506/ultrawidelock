@@ -1,6 +1,6 @@
 # Aliro reader engine as an ESP-IDF component.
 # The transaction driver, wire codec, trust store and ranging glue come from
-# the role manifests in modules/woz_aliro/roles/ — the same lists firmware/
+# the role manifests in modules/woz_aliro/roles/; the same lists apps/dwm3001cdk-lock/
 # and the host suite read. Only aliro_prov_nvs.c is ESP32-specific (NVS-backed
 # blob store); its Zephyr counterpart will be a settings/nvs twin.
 

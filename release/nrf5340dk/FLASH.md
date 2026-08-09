@@ -59,7 +59,7 @@ You also need a serial terminal: `screen` (built into macOS and most Linux), `mi
 
 1. Seat the DWM3000EVB on the DK's Arduino header, flat, every pin socketed.
 2. Wire the NFC12A1's SPI signals (see its silk screen) to these DK pins, from the
-   build's source of truth `ports/nrf5340dk/overlays/dw3000-nfc.overlay`:
+   build's source of truth `apps/nrf5340dk-lock/overlays/dw3000-nfc.overlay`:
 
 | Signal | nRF5340 DK pin |
 |---|---|

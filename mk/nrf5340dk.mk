@@ -1,7 +1,7 @@
 # mk/nrf5340dk.mk — the nRF5340 DK port: NFC tap + approach unlock.
 #
 # The board this project was brought up on and the only one with NFC. Thin front
-# door over scripts/build-nrf5340dk.sh, which holds the real logic: preflight,
+# door over apps/nrf5340dk-lock/build.sh, which holds the real logic: preflight,
 # pristine-vs-incremental signature detection, chip resolution.
 #
 # Every target here is nrf-prefixed. Bare build/flash/monitor mean the
@@ -52,12 +52,12 @@ NRF_ENV := $(strip \
   $(if $(NRF_DFU),DFU=1) \
   $(if $(CIR),CIR=$(CIR)))
 
-NRF_BUILD_SH := $(REPO_ROOT)/scripts/build-nrf5340dk.sh
+NRF_BUILD_SH := $(REPO_ROOT)/apps/nrf5340dk-lock/build.sh
 
 # Where the Matter onboarding payload lands. Generated at BUILD time
 # (CONFIG_CHIP_FACTORY_DATA_GENERATE_ONBOARDING_CODES) and merged into the image
 # (CONFIG_CHIP_FACTORY_DATA_MERGE_WITH_FIRMWARE), so it describes the hex that was
-# built here, not whatever is on the board. Mirrors build-nrf5340dk.sh's own
+# built here, not whatever is on the board. Mirrors the lock app's build.sh
 # ALIRO_SOURCE split so the code shown belongs to the variant you built.
 NRF_BUILD_DIR := $(ALIRO_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ALIRO_SOURCE)),-blob)
 NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data.txt
@@ -67,7 +67,7 @@ NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data
 NRF_INIT_BUILD := $(ALIRO_BUILD_ROOT)/nrf5340dk-initiator
 
 # The initiator is a plain Zephyr app, so it is built with west directly rather
-# than through scripts/build-nrf5340dk.sh, whose do_build resolves door-lock
+# than through the lock app's build.sh, whose do_build resolves door-lock
 # overlays, UWB chip variants and DFU flags that this application has none of.
 #
 # The cost of not using the script is that this does NOT reproduce its workspace
@@ -139,7 +139,7 @@ nrf-init-build:
 	@cd '$(NRF_WS)' && $(NRF_LAUNCH) west build \
 	  -b nrf5340dk/nrf5340/cpuapp --sysbuild \
 	  $(if $(PRISTINE),-p always) \
-	  -d '$(NRF_INIT_BUILD)' '$(REPO_ROOT)/ports/nrf5340dk/initiator' \
+	  -d '$(NRF_INIT_BUILD)' '$(REPO_ROOT)/examples/zephyr/nrf5340dk-initiator' \
 	  -- -DZEPHYR_EXTRA_MODULES='$(REPO_ROOT)/modules/woz_uwb;$(REPO_ROOT)/modules/woz_dw3000;$(REPO_ROOT)/ports/zephyr'
 
 ## nrf-init-flash: flash the Aliro initiator (both cores) -> build/nrf5340dk-initiator

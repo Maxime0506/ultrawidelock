@@ -1,6 +1,6 @@
 /* dfufake: <pm_config.h>, the partition manager's generated geometry.
  *
- * The sizes are firmware/pm_static.yml's real ones, so PATCH_MAX and the
+ * The sizes are apps/dwm3001cdk-lock/pm_static.yml's real ones, so PATCH_MAX and the
  * "past slot" bound the code checks against are the numbers it will meet on a
  * DWM3001CDK rather than convenient round ones. The IDs are arbitrary but
  * distinct: nothing reads them except flash_area_open(), which looks them up. */

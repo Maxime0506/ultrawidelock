@@ -1,5 +1,5 @@
 # woz_aliro role: reader engine — transaction driver, UWB ranging glue, latency
-# probe. Consumers: firmware/, ports/esp32/components/aliro_reader.
+# probe. Consumers: apps/dwm3001cdk-lock/, ports/esp32/components/aliro_reader.
 # One repo-root-relative path per line, sorted; add HERE and nowhere else.
 modules/woz_aliro/src/aliro_lat.c
 modules/woz_aliro/src/aliro_ranging.c

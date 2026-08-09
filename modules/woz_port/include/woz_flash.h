@@ -45,7 +45,7 @@ void woz_reboot(void);
 
 /* ---- suite controls (host backend only) ---------------------------------
  *
- * Geometry matches firmware/pm_static.yml so size-limit checks in the code
+ * Geometry matches apps/dwm3001cdk-lock/pm_static.yml so size-limit checks in the code
  * under test are the ones it will meet on the board.
  */
 #define WOZ_FLASH_HOST_WRITE_BLOCK  4u

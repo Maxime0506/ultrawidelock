@@ -9,7 +9,7 @@
 # project that is not "lose the firmware" -- it is:
 #
 #   * settings_storage (0x7e000) gone, so the Matter fabrics and trust anchors go
-#   * the reader private key gone (firmware/src/prov_shell.c), and
+#   * the reader private key gone (apps/dwm3001cdk-lock/src/prov_shell.c), and
 #     EVERY iPhone key already provisioned against this board dies with it
 #
 # A board that has done this is not bricked, but every future debug session

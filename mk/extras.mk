@@ -21,8 +21,9 @@ clean:
 	rm -rf "$$root"
 	@# The variable is quoted but the globs are not, which is the point: quoting
 	@# the whole word would stop `*` expanding.
-	@rm -rf "$(REPO_ROOT)"/ports/esp32/apps/*/build "$(REPO_ROOT)"/ports/esp32/apps/*/build-piv \
-	        "$(REPO_ROOT)"/ports/esp32/test/on_target_ec/build "$(REPO_ROOT)"/ports/nrf5340dk/on_target_ec/build
+	@rm -rf "$(REPO_ROOT)"/apps/esp32-matter-lock/build "$(REPO_ROOT)"/apps/esp32-matter-lock/build-piv \
+	        "$(REPO_ROOT)"/examples/esp32/*/build "$(REPO_ROOT)"/examples/esp32/*/build-piv \
+	        "$(REPO_ROOT)"/tests/on_target/esp32/aliro-device-ec/build "$(REPO_ROOT)"/tests/on_target/zephyr/nrf5340dk-aliro-device-ec/build
 	@printf '  removed %s and the app-local build directories\n' '$(ALIRO_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + workspace

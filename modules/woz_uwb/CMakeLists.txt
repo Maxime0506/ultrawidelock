@@ -11,7 +11,7 @@ if(CONFIG_WOZ_UWB)
   set(ROLES ${CMAKE_CURRENT_SOURCE_DIR}/roles)
 
   # Every shared source below comes from a role manifest in roles/ — the same
-  # lists ports/esp32/components/woz_uwb, ports/nrf5340dk/initiator and
+  # lists ports/esp32/components/woz_uwb, examples/zephyr/nrf5340dk-initiator and
   # tests/host/sources.sh read. The Kconfig tiers stay here; only the membership
   # of each tier moved into the manifests.
   include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/woz_roles.cmake)
@@ -20,7 +20,7 @@ if(CONFIG_WOZ_UWB)
 
   zephyr_library_named(woz_uwb)
   # ds_twr.c sits at the BASE tier, not under the responder, because the
-  # anchor-to-anchor app (anchor/) ranges another board with no CCC engine in
+  # anchor-to-anchor example ranges another board with no CCC engine in
   # its image and needs the same estimator the Aliro responder uses.
   zephyr_library_sources(
     ${UWB_BASE_DRIVER_SRCS}

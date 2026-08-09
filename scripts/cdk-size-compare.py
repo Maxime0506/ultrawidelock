@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """cdk-size-compare.py — head against the recorded baseline, as a gate.
 
-    scripts/cdk-size-compare.py --baseline firmware/size-baseline.json \
+    scripts/cdk-size-compare.py --baseline apps/dwm3001cdk-lock/size-baseline.json \
                                 --current build/cdk-matter/size-report.json
     make cdk-size-check
 
@@ -313,7 +313,7 @@ def main():
                 "      and not a regression. Record CI's own numbers once:\n"
                 "        Actions -> cdk-size -> Run workflow -> refresh_baseline\n"
                 "      then download the cdk-size-baseline artifact it uploads, commit it over\n"
-                "      firmware/size-baseline.json, and every run after that compares.\n"
+                "      apps/dwm3001cdk-lock/size-baseline.json, and every run after that compares.\n"
             )
         sys.stderr.write("\n")
     else:

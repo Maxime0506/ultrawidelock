@@ -96,7 +96,7 @@ MCUBOOT_TLV_INFO_LEN = 4
 MCUBOOT_TLV_HDR_LEN = 4
 
 # Where the application slot starts, for the zip manifest's load_address. Read
-# from firmware/pm_static.yml rather than derived: it is documentation for a
+# from apps/dwm3001cdk-lock/pm_static.yml rather than derived: it is documentation for a
 # human reading the archive, not something the board acts on.
 MCUBOOT_PRIMARY_ADDR = 0xA000
 
@@ -141,7 +141,7 @@ def partition(build_dir, name):
 
     Parsed rather than hardcoded because the whole update path is invalid if
     the host and the board disagree about how big the slot is, and
-    firmware/pm_static.yml is allowed to change.
+    apps/dwm3001cdk-lock/pm_static.yml is allowed to change.
     """
     path = Path(build_dir) / "partitions.yml"
     if not path.is_file():
@@ -285,7 +285,7 @@ def build(args):
             f"patch is {len(patch)} B but patch_staging holds {patch_capacity} B "
             f"({staging_size} B less the two control pages).\n"
             f"  The two images differ too much for one delta. Either grow "
-            f"patch_staging in firmware/pm_static.yml, which moves the flash map "
+            f"patch_staging in apps/dwm3001cdk-lock/pm_static.yml, which moves the flash map "
             f"and so cannot be done over the air, or ship the intermediate build."
         )
 
@@ -484,7 +484,7 @@ def main():
     b.add_argument("--to", dest="to_image", required=True,
                    help="the signed image it should be running after")
     b.add_argument("--out", required=True)
-    b.add_argument("--key", default="firmware/keys/mcuboot_ec_p256.pem",
+    b.add_argument("--key", default="apps/dwm3001cdk-lock/keys/mcuboot_ec_p256.pem",
                    help="signs the header; same key MCUboot verifies images with")
     b.add_argument("--build-dir",
                    help="read the slot and staging sizes from its partitions.yml")

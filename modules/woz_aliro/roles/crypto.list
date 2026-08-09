@@ -1,5 +1,5 @@
 # woz_aliro role: key schedule + PSA P-256 primitive backend.
-# Consumers: firmware/, ports/nrf5340dk/{initiator,on_target_ec},
+# Consumers: the reader app, the Zephyr initiator and on-target test,
 # ports/esp32/components/aliro_crypto. Repo-root-relative, one path per line,
 # sorted. To compile a file everywhere this role goes, add it HERE and nowhere else.
 modules/woz_aliro/src/aliro_crypto.c

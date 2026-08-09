@@ -1,5 +1,5 @@
 # woz_aliro role: APDU codec + 4-byte L2CAP envelope, shared by BOTH ends of
-# the Access Protocol. Consumers: firmware/, ports/nrf5340dk/{initiator,
-# on_target_ec}, ports/esp32/components/{aliro_reader,aliro_device}.
+# the Access Protocol. Consumers: the reader app, the Zephyr initiator and
+# on-target test, and ports/esp32/components/{aliro_reader,aliro_device}.
 # One repo-root-relative path per line, sorted; add HERE and nowhere else.
 modules/woz_aliro/src/aliro_apdu.c

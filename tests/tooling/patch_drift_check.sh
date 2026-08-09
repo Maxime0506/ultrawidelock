@@ -12,7 +12,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-P="$ROOT/ports/nrf5340dk/patches"
+P="$ROOT/integrations/nrfconnect-door-lock/patches"
 
 # The add-on pin lives in bootstrap.sh (the applier); west.yml documents the same
 # pin. The two drifting apart is itself a failure.
@@ -43,7 +43,7 @@ covered="$(printf '%s\n' "${ADDON_PATCHES[@]}" "${NRF_PATCHES[@]}" "${MATTER_PAT
   | sed 's|.*/||' | sort)"
 ondisk="$(cd "$P" && printf '%s\n' *.patch | sort)"
 [ "$covered" = "$ondisk" ] || {
-  echo "ERROR: ports/nrf5340dk/patches/ and this script's lists disagree" >&2
+  echo "ERROR: integrations/nrfconnect-door-lock/patches/ and this script's lists disagree" >&2
   echo "       (< = listed but absent, > = present but unchecked)" >&2
   diff <(printf '%s\n' "$covered") <(printf '%s\n' "$ondisk") >&2 || true
   exit 1
