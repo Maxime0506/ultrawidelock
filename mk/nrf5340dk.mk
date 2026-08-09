@@ -86,7 +86,7 @@ NRF_RELEASE_VER ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 
 # time, where an apostrophe in it would end the quoting.
 export NRF_RELEASE_VER
 
-.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-init-build nrf-init-flash nrf-term nrf-pairing-code nrf-release term
+.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-init-build nrf-init-flash nrf-term nrf-pairing-code nrf-release hitl term
 
 ##@ nRF5340 DK  ·  NFC tap + approach unlock
 ## nrf-build: incremental build          -> build/nrf5340dk/merged.hex
@@ -147,6 +147,10 @@ nrf-init-flash:
 	@[ -f '$(NRF_INIT_BUILD)/build.ninja' ] || { \
 	  printf '  no initiator build at %s  ·  build it first\n' '$(NRF_INIT_BUILD)' >&2; exit 1; }
 	@ALIRO_BUILD='$(NRF_INIT_BUILD)' $(NRF_BUILD_SH) flash-erase
+
+## hitl: enrol, build, flash and judge the initiator against a live reader
+hitl:
+	@$(REPO_ROOT)/scripts/hitl-run.sh $(HITL_ARGS)
 
 ## nrf-term: serial console — live logs + typeable shell (tio, 115200 8N1)
 nrf-term: nrf-pairing-code

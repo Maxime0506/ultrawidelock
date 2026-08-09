@@ -40,6 +40,10 @@ Canonical declarations live in the owning module's `include/openaliro/`
 directory. All production and test code uses the namespaced form. The SDK gate
 rejects reintroducing the removed flat role-header names.
 
+`VERSION` is the SDK version source. While the SDK is pre-1.0, the generated
+CMake package accepts only the same minor series. After changing it, prove both
+source-tree and installed consumption with `make sdk-check`.
+
 Do not create a chipset-named top-level port when the chipset still uses a
 supported framework. Extend the relevant framework port and keep board policy
 in the application. A new operating system is a separate effort because it must
@@ -71,5 +75,6 @@ make check
 
 Target builds are `make build`, `make nrf-build`, `make anchor-pair`,
 `make nrf-init-build`, and `make esp-build`. ESP port integration also has
-`bash tests/ports/esp32/verify_port.sh`. Hardware tests remain separate from
-host and compile checks.
+`bash tests/ports/esp32/verify_port.sh`. `make hitl` runs the attached-reader
+and nRF5340 DK end-to-end flow. Hardware tests remain separate from host and
+compile checks.

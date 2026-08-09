@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(OpenAliro LANGUAGES C)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" OPENALIRO_VERSION LIMIT_COUNT 1)
+if(NOT OPENALIRO_VERSION MATCHES "^[0-9]+[.][0-9]+[.][0-9]+$")
+	message(FATAL_ERROR "VERSION must contain one semantic version: major.minor.patch")
+endif()
+
+project(OpenAliro VERSION "${OPENALIRO_VERSION}" LANGUAGES C)
 
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
@@ -80,5 +85,11 @@ configure_package_config_file(
 	cmake/OpenAliroConfig.cmake.in
 	"${CMAKE_CURRENT_BINARY_DIR}/OpenAliroConfig.cmake"
 	INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/OpenAliro")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OpenAliroConfig.cmake"
+write_basic_package_version_file(
+	"${CMAKE_CURRENT_BINARY_DIR}/OpenAliroConfigVersion.cmake"
+	VERSION "${PROJECT_VERSION}"
+	COMPATIBILITY SameMinorVersion)
+install(FILES
+	"${CMAKE_CURRENT_BINARY_DIR}/OpenAliroConfig.cmake"
+	"${CMAKE_CURRENT_BINARY_DIR}/OpenAliroConfigVersion.cmake"
 	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/OpenAliro")

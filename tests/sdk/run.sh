@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the plain-CMake SDK and build a consumer outside its source tree.
+# Build the plain-CMake SDK through its source and installed interfaces.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -60,6 +60,15 @@ CMAKE_BIN="$(find_cmake)" || {
 	exit 1
 }
 
+SDK_VERSION="$(sed -n '1p' "$ROOT/VERSION")"
+if ! printf '%s\n' "$SDK_VERSION" | grep -Eq '^[0-9]+[.][0-9]+[.][0-9]+$'; then
+	echo "sdk package: FAIL (VERSION is not major.minor.patch)" >&2
+	exit 1
+fi
+SDK_SERIES="${SDK_VERSION%.*}"
+SDK_NEXT_MINOR="$(printf '%s\n' "$SDK_VERSION" |
+	awk -F. '{ printf "%d.%d", $1, $2 + 1 }')"
+
 TMP="$(mktemp -d -t openaliro-sdk.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -82,8 +91,24 @@ installed_headers=$(find "$TMP/install/include/openaliro" -type f -name '*.h' \
 
 "$CMAKE_BIN" -G "Unix Makefiles" -S "$ROOT/examples/cmake/consumer" -B "$TMP/consumer" \
 	-DCMAKE_BUILD_TYPE=Release \
+	-DOPENALIRO_REQUIRED_VERSION="$SDK_SERIES" \
 	-DCMAKE_PREFIX_PATH="$TMP/install" >/dev/null
 MAKEFLAGS= MFLAGS= "$CMAKE_BIN" --build "$TMP/consumer" >/dev/null
 "$TMP/consumer/openaliro_consumer"
 
-printf 'sdk package: PASS (7 checks)\n'
+if "$CMAKE_BIN" -G "Unix Makefiles" -S "$ROOT/examples/cmake/consumer" \
+	-B "$TMP/incompatible" \
+	-DOPENALIRO_REQUIRED_VERSION="$SDK_NEXT_MINOR" \
+	-DCMAKE_PREFIX_PATH="$TMP/install" >/dev/null 2>&1; then
+	echo "sdk package: FAIL (next minor version was accepted)" >&2
+	exit 1
+fi
+
+"$CMAKE_BIN" -G "Unix Makefiles" -S "$ROOT/examples/cmake/consumer" \
+	-B "$TMP/source-consumer" \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DOPENALIRO_SOURCE_DIR="$ROOT" >/dev/null
+MAKEFLAGS= MFLAGS= "$CMAKE_BIN" --build "$TMP/source-consumer" >/dev/null
+"$TMP/source-consumer/openaliro_consumer"
+
+printf 'sdk package: PASS (10 checks)\n'

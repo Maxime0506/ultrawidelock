@@ -13,4 +13,5 @@ operations, and release workflows.
 | Release and validation | `release-bundle.sh`, `hitl-run.sh`, `test-runner.sh` |
 
 Prefer a documented Make target when one exists. Run `make help` to see the
-supported interface and required variables.
+supported interface and required variables. Use `make hitl` for `hitl-run.sh`;
+pass its optional flags through `HITL_ARGS`.

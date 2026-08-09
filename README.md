@@ -37,6 +37,9 @@ cmake --install build/sdk
 The exported targets are `OpenAliro::headers` and `OpenAliro::tlv`. A complete
 package-consumer example is under
 [`examples/cmake/consumer/`](examples/cmake/consumer/).
+The SDK version comes from the root `VERSION` file. Plain-CMake consumers may
+request a compatible series or add this repository with `add_subdirectory`;
+`make sdk-check` verifies both paths.
 
 ## Applications
 
@@ -67,6 +70,16 @@ esp-matter:
 ```sh
 make esp-build APP=matter-lock TARGET=esp32s3
 ```
+
+With the reader and nRF5340 DK initiator attached, the unattended end-to-end
+bench flow is:
+
+```sh
+make hitl
+```
+
+Pass script options through `HITL_ARGS`, for example
+`make hitl HITL_ARGS=--skip-enrol`.
 
 ## Repository layout
 
