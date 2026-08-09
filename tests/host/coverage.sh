@@ -297,14 +297,16 @@ run_suite esp_matter "$OUT/cov_esp_matter"
 # Delta update, both halves plus the SMP front door, on the RAM flash of
 # dfufake/ (which enforces the nRF word/page alignment rules), psafake's
 # recording PSA and a scripted detools. Mirrors run.sh stage 5.
-cov_cc -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
+cov_cc -DWOZ_PORT_HOST -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
 	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
 	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
-	-I"$HOSTD/psafake" \
+	-I"$HOSTD/psafake" -I"$ROOT/modules/woz_port/include" \
 	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
+	"$ROOT/tests/host/port/osal_host.c" "$ROOT/tests/host/port/flash_host.c" \
+	"$ROOT/modules/woz_dfu/src/dfu_crc.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c" -o "$OUT/cov_dfu"
@@ -316,9 +318,10 @@ run_suite dfu "$OUT/cov_dfu"
 # run.sh stage 6.
 NFC_DEF=(-DCONFIG_WOZ_NFC_LOG_LEVEL=3 -DCONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE=2048
 	-DCONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS=200
-	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000)
+	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
+	-DWOZ_PORT_HOST)
 NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
-	-I"$ROOT/modules/woz_nfc/src")
+	-I"$ROOT/modules/woz_nfc/src" -I"$ROOT/modules/woz_port/include")
 cov_cxx() {
 	"${CXX:-c++}" -std=c++17 -O0 -g -w \
 		-fprofile-instr-generate -fcoverage-mapping "$@"

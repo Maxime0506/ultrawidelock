@@ -14,9 +14,6 @@ class ConnectionHandle
       public:
 	static ConnectionHandle Nfc() { return ConnectionHandle(kNfc); }
 
-	bool IsNfc() const { return mKind == kNfc; }
-	bool IsBle() const { return mKind == kBle; }
-
 	bool operator==(const ConnectionHandle &other) const { return mKind == other.mKind; }
 
       private:
