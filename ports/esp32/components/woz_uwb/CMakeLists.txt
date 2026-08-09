@@ -79,6 +79,11 @@ idf_component_register(
         "${DW}/dwt_uwb_driver"
         "${DW}/dwt_uwb_driver/lib/qmath/include"
     REQUIRES
+        # woz_port carries the ESP-IDF backend of the contract this engine is
+        # written against. Named here rather than left to the WOZ_PORT include
+        # path above: ESP-IDF only builds a component something requires, so
+        # without this the backend is discovered and then silently skipped.
+        woz_port
         driver esp_timer mbedtls
 )
 

@@ -1,6 +1,6 @@
 /* dfufake — the scripted detools double and the running-image buffer. The
  * flash and reboot halves this file used to carry are the woz_flash host
- * backend now (modules/woz_port/src/flash_host.c); see dfufake.h.
+ * backend now (tests/host/port/flash_host.c); see dfufake.h.
  */
 
 #include "dfufake.h"

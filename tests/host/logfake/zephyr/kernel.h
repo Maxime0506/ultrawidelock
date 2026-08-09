@@ -59,7 +59,7 @@ void k_timer_start(struct k_timer *timer, k_timeout_t duration, k_timeout_t peri
 #endif
 
 /* No k_work surface here, deliberately. Deferred work in shared code goes
- * through woz_osal.h, whose host backend (modules/woz_port/src/osal_host.c) IS
+ * through woz_osal.h, whose host backend (tests/host/port/osal_host.c) IS
  * the fake — one work queue and one virtual clock for every host binary,
  * instead of a recording double per fake tree. A file that still needs
  * <zephyr/kernel.h>'s work API is port glue and belongs under ports/. */

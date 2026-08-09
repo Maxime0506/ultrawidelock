@@ -12,6 +12,11 @@
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(WOZ_PORT ${REPO_ROOT}/modules/woz_port)
+# The Zephyr flash backend lives with the other Zephyr backends, in the port
+# tree. It is pulled in BY PATH rather than by depending on that module,
+# because the applier half below is built into MCUboot, and ports/zephyr is
+# not on the bootloader's module path.
+set(WOZ_PORT_ZEPHYR ${REPO_ROOT}/ports/zephyr/osal)
 
 if(CONFIG_WOZ_DFU_APPLIER)
 
@@ -21,7 +26,7 @@ if(CONFIG_WOZ_DFU_APPLIER)
   zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_applier.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
-    ${WOZ_PORT}/src/flash_zephyr.c
+    ${WOZ_PORT_ZEPHYR}/flash_zephyr.c
     ${DETOOLS}/detools.c
     ${DETOOLS}/heatshrink/heatshrink_decoder.c)
 
@@ -91,13 +96,12 @@ if(CONFIG_WOZ_DFU_RECEIVER)
   zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_receiver.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
-    ${WOZ_PORT}/src/flash_zephyr.c
+    ${WOZ_PORT_ZEPHYR}/flash_zephyr.c
     ${woz_dfu_pubkey_c})
   # The woz_osal.h backend this receiver also needs is NOT built here: one
   # image, one definition, and ports/zephyr owns it for every Zephyr image
-  # (CONFIG_WOZ_DFU_RECEIVER is in that library's gate). flash_zephyr.c stays
-  # because the applier half needs it inside MCUboot, where ports/zephyr is
-  # not on the module path.
+  # (CONFIG_WOZ_DFU_RECEIVER is in that library's gate). The flash backend is
+  # named by path above instead, for the reason given at WOZ_PORT_ZEPHYR.
   zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${WOZ_PORT}/include)

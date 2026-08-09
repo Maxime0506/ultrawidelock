@@ -32,7 +32,7 @@ zephyr_library_named(woz_zephyr_port)
 # image without the DFU module -- the nRF5340DK door lock -- linked the callers
 # with nothing behind them. MCUboot is the exception and needs no backend: the
 # applier is synchronous and takes only woz_flash.
-zephyr_library_sources(../../modules/woz_port/src/osal_zephyr.c)
+zephyr_library_sources(osal/osal_zephyr.c)
 zephyr_library_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
 

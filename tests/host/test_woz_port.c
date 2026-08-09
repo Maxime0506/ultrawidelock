@@ -1,7 +1,7 @@
 /**
  * @file test_woz_port.c — the OSAL and flash contracts, on the host backend.
  *
- * Files under test: modules/woz_port/src/osal_host.c and flash_host.c — the
+ * Files under test: tests/host/port/osal_host.c and flash_host.c — the
  * backend every converted module's host suite runs on, so its semantics ARE
  * the portability contract: schedule is a no-op while pending, reschedule
  * restarts the delay, a timed sem take walks the virtual clock, flash refuses

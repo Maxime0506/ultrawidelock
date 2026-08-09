@@ -154,8 +154,8 @@ SHIM_SRCS=(
 	"$HOST/logfake/logfake.c"
 	"$HOST/spakefake/spakefake.c"
 	# The host OSAL/flash backends double as the test fakes (woz_osal.h).
-	"$ROOT/modules/woz_port/src/osal_host.c"
-	"$ROOT/modules/woz_port/src/flash_host.c"
+	"$ROOT/tests/host/port/osal_host.c"
+	"$ROOT/tests/host/port/flash_host.c"
 )
 
 # Include search path: shim first so <zephyr/...> resolves to the stubs;

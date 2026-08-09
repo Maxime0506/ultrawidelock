@@ -1,6 +1,6 @@
 /* dfufake — test-side control/inspection API for the DFU suites.
  *
- * The flash is the real host backend of woz_flash.h (modules/woz_port/src/
+ * The flash is the real host backend of woz_flash.h (tests/host/port/
  * flash_host.c): RAM partitions, erase writes 0xff, BOTH nRF alignment rules
  * enforced (word writes, page erases) -- the entire reason the applier's
  * write combiner and erase ROUND_UP exist, so a fake accepting anything would

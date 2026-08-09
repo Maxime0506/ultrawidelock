@@ -105,11 +105,21 @@ COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 # them and the staleness check re-proves each one is still needed, so the list
 # cannot outlive its reasons.
 PERMANENT_DIRS=(
-	modules/woz_port                    # the contract itself
 	modules/woz_dw3000/dwt_uwb_driver   # vendored Qorvo decadriver
 	modules/woz_dfu/src/detools         # vendored delta-patch engine
 )
 PERMANENT_FILES=(
+	# The contract itself: these four headers name every platform on purpose,
+	# because selecting the backend is what they are for. Listed one by one
+	# rather than exempting modules/woz_port wholesale, so that a .c file
+	# appearing beside them fails the gate instead of inheriting a blanket
+	# pass. Every backend lives in a port tree now (ports/zephyr/osal,
+	# ports/esp32/components/woz_port, tests/host/port). woz_flash.h is
+	# deliberately absent: it is pure, and the ratchet says so if that changes.
+	modules/woz_port/include/woz_bytes.h
+	modules/woz_port/include/woz_log.h
+	modules/woz_port/include/woz_osal.h
+	modules/woz_port/include/woz_port.h
 	modules/woz_aliro_stack/src/aliro_stack.cpp
 	modules/woz_aliro_stack/src/session.cpp
 	modules/woz_nfc/src/transport_pn532.cpp

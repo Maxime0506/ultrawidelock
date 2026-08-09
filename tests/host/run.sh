@@ -52,7 +52,7 @@ HOSTD="$ROOT/tests/host"
 	"$HOSTD/test_uwb_cirdiag.c" \
 	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
-	"$ROOT/modules/woz_port/src/osal_host.c" \
+	"$ROOT/tests/host/port/osal_host.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
 	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/aliro_shell.c" \
@@ -127,7 +127,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
-	"$ROOT/modules/woz_port/src/osal_host.c" "$ROOT/modules/woz_port/src/flash_host.c" \
+	"$ROOT/tests/host/port/osal_host.c" "$ROOT/tests/host/port/flash_host.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_crc.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
 	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
