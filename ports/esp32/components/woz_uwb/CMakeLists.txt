@@ -73,7 +73,7 @@ idf_component_register(
         "${WOZ_INC}"           # facade, seams, diagnostics and ranging-setup API
     PRIV_INCLUDE_DIRS
         "port"                 # board_pins.h
-        "${WOZ}/driver" "${WOZ}/fira" "${WOZ}/ccc" "${WOZ}/facade" "${WOZ}/shell"
+        "${WOZ}/driver" "${WOZ}/fira" "${WOZ}/ccc" "${WOZ}/facade"
 		"${WOZ}/aliro"
 		"${DW}/include"
         "${DW}/dwt_uwb_driver"
