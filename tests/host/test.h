@@ -76,6 +76,8 @@ void test_woz_door(void);
 void test_woz_fusion(void);
 void test_woz_report(void);
 void test_woz_satellite(void);
+void test_woz_side(void);
+void test_woz_side_replay(void);
 void test_woz_slam(void);
 void test_woz_logfmt(void);
 void test_trace(void);

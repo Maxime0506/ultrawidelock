@@ -61,6 +61,8 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_anchor/src/woz_fusion.c"
 	"$ROOT/modules/woz_anchor/src/woz_report.c"
 	"$ROOT/modules/woz_anchor/src/woz_satellite.c"
+	"$ROOT/modules/woz_anchor/src/woz_side.c"
+	"$ROOT/modules/woz_anchor/src/woz_side_log.c"
 	"$ROOT/modules/woz_anchor/src/woz_slam.c"
 )
 
@@ -137,6 +139,8 @@ TEST_SRCS=(
 	"$HOST/test_woz_fusion.c"
 	"$HOST/test_woz_report.c"
 	"$HOST/test_woz_satellite.c"
+	"$HOST/test_woz_side.c"
+	"$HOST/test_woz_side_replay.c"
 	"$HOST/test_woz_slam.c"
 	"$HOST/test_woz_logfmt.c"
 	"$HOST/test_trace.c"

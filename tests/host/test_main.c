@@ -62,6 +62,8 @@ int main(void)
 		{ "woz_fusion", test_woz_fusion },
 		{ "woz_report", test_woz_report },
 		{ "woz_satellite", test_woz_satellite },
+		{ "woz_side", test_woz_side },
+		{ "woz_side_replay", test_woz_side_replay },
 		{ "woz_slam", test_woz_slam },
 		{ "approach", test_approach },
 		{ "logfmt", test_woz_logfmt },

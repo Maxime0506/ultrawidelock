@@ -17,12 +17,33 @@ config WOZ_ANCHOR
 	  DWM3001CDK Matter image has roughly 6 KB free and a new static
 	  allocation there is a decision rather than a detail.
 
+	  Also carries woz_side.h: the fail-closed INSIDE/OUTSIDE/THRESHOLD/
+	  UNKNOWN gate for passive approach unlock. That gate is separate from
+	  woz_fusion_may_predict() and must be selected explicitly via
+	  CONFIG_WOZ_SIDE_GATE before it can suppress a passive unlock.
+
 	  Both halves carry a MOUNTING requirement that no code can substitute
 	  for: the two anchors must sit equidistant from the hinge (woz_door),
 	  and symmetrically about the door plane (woz_fusion). Read those headers
 	  before drilling anything.
 
 if WOZ_ANCHOR
+
+config WOZ_SIDE_GATE
+	bool "Fail-closed side gate for passive approach unlock"
+	default n
+	help
+	  When y, UNLOCK_PREDICT and UNLOCK_THRESHOLD from aliro_approach are
+	  released only if woz_side_may_passive_unlock() is true: side must be
+	  confident OUTSIDE with fresh evidence, quorum, and no contradiction.
+
+	  UNKNOWN, INSIDE, THRESHOLD, stale, replayed, multi-phone, and
+	  degraded evidence all suppress passive unlock. NFC Express Mode,
+	  Apple Home commands, and mechanical operation are not gated here.
+
+	  Default n preserves today's behaviour. Turning this on without
+	  commissioned BLE witnesses will refuse every passive unlock -- that
+	  is intentional fail-closed behaviour, not a regression.
 
 config WOZ_ANCHOR_BASELINE_MM
 	int "Distance between the two anchors, millimetres"

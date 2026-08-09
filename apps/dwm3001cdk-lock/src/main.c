@@ -37,6 +37,14 @@
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR)
 #include "woz_satellite.h" /* second-anchor verdict; gates PREDICT only */
 #endif
+#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+#include "woz_side.h" /* fail-closed OUTSIDE-only passive unlock gate */
+#include "woz_side_log.h"
+#if defined(CONFIG_WOZ_ALIRO_LAB)
+#include "woz_log.h"
+#include "woz_port.h"
+#endif
+#endif
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
 #include "woz_slam.h"
 #include "woz_slam_hw.h"
@@ -388,6 +396,39 @@ int main(void)
 	woz_satellite_init(&satellite, &fusion_cfg, CONFIG_WOZ_ANCHOR_STALE_MS,
 			   IS_ENABLED(CONFIG_WOZ_ANCHOR_SELF_INSIDE));
 #endif
+#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+	/*
+	 * Fail-closed side gate. Until BLE witnesses feed features, every
+	 * evaluate produces UNKNOWN / quorum-fail and passive unlock is
+	 * withheld. That is intentional: CONFIG_WOZ_SIDE_GATE=y without a
+	 * working localization subsystem must not silently fall back to
+	 * single-range unlock. NFC Express Mode and Home commands are not
+	 * routed through this switch.
+	 */
+	static struct woz_side_filter side_filt;
+	static struct woz_side_decision side_dec;
+	static struct woz_side_cfg side_cfg;
+
+	woz_side_defaults(&side_cfg);
+	woz_side_filter_init(&side_filt, &side_cfg);
+	{
+		/* Boot: no witnesses yet => UNKNOWN + quorum fail (fail-closed). */
+		struct woz_side_features absent;
+
+		memset(&absent, 0, sizeof(absent));
+		absent.now_ms = k_uptime_get();
+		absent.uwb_range_mm = -1;
+		absent.uwb_vel_mm_s = INT32_MIN;
+		absent.ble_rssi_inside_dbm = INT16_MIN;
+		absent.ble_rssi_outside_dbm = INT16_MIN;
+		absent.ble_rssi_threshold_dbm = INT16_MIN;
+		absent.uwb_peer_mm = -1;
+		absent.classifier_ver = side_cfg.classifier_ver;
+		absent.calibration_ver = side_cfg.calibration_ver;
+		absent.flags = WOZ_SIDE_F_QUORUM_FAIL;
+		side_dec = woz_side_filter_feed(&side_filt, &absent);
+	}
+#endif
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
 	static struct woz_slam_state slam;
 	const struct woz_slam_cfg slam_cfg = {
@@ -543,21 +584,11 @@ int main(void)
 
 		switch (act) {
 		case ALIRO_APPROACH_UNLOCK_PREDICT:
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR)
+#if IS_ENABLED(CONFIG_WOZ_ANCHOR) && !IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
 			/*
-			 * Two-anchor geometry gates PREDICTION and nothing else.
-			 * Prediction is the speculative, early, convenient path;
-			 * suppressing it costs a person half a second at their own
-			 * door. THRESHOLD means the phone is measurably standing
-			 * there, and a geometry bug -- or a satellite with a flat
-			 * battery -- must never be able to lock someone out of
-			 * their house.
-			 *
-			 * approach.last_cm rather than `cm`: PREDICT can be raised
-			 * from the tick branch, where `cm` was never filled in and
-			 * is still zero. Feeding a zero here would read as "phone
-			 * at the door" and pass every geometry test for the wrong
-			 * reason.
+			 * Legacy two-anchor helper: gates PREDICTION only and
+			 * fail-opens on UNKNOWN. Retained when WOZ_SIDE_GATE is
+			 * off so existing ANCHOR=1 behaviour stays unchanged.
 			 */
 			if (!woz_satellite_may_predict(&satellite, approach.last_cm * 10, now)) {
 				LOG_INF("predict withheld: second anchor puts the phone outside");
@@ -566,6 +597,25 @@ int main(void)
 #endif
 			/* fall through */
 		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+			/*
+			 * Safety gate for ALL passive approach unlocks. Requires
+			 * confident OUTSIDE. UNKNOWN/INSIDE/THRESHOLD/stale/
+			 * quorum-fail suppress the grant. Intentional paths
+			 * (NFC Express, Home, mechanical) do not enter here.
+			 */
+			if (!woz_side_may_passive_unlock(&side_dec, &side_cfg)) {
+				LOG_INF("passive unlock withheld: side=%u conf=%u flags=0x%02x",
+					(unsigned)side_dec.side, side_dec.confidence,
+					side_dec.flags);
+#if defined(CONFIG_WOZ_ALIRO_LAB)
+				woz_printf("[ALAB] t=%lld ev=side.deny side=%u conf=%u flags=%u\n",
+					   woz_uptime_us(), (unsigned)side_dec.side,
+					   side_dec.confidence, side_dec.flags);
+#endif
+				break;
+			}
+#endif
 			aliro_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			status_led_signal(STATUS_LED_UNLOCKED, true);
 			granted = true;
