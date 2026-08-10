@@ -47,6 +47,21 @@ void woz_side_defaults(struct woz_side_cfg *cfg)
 	 */
 	cfg->evidence_fresh_ms = 4500;
 	/*
+	 * MEASURED 2026-08-11, symmetric witnesses ~1.5 m either side of the
+	 * plane: 49% of windows landed in the dead band, because the unlock is
+	 * decided at ~100 cm from the lock and that is where the two anchors are
+	 * equidistant. OUTSIDE could only be committed while approaching, and
+	 * nothing near the door could refresh committed_ms, so the grant
+	 * survived or expired purely on walking speed -- 37 refusals, 16 of them
+	 * EVIDENCE_STALE, against 2 grants on the same walk.
+	 *
+	 * 8 s covers a normal walk-up from the last confident OUTSIDE to the
+	 * door. It is cancelled the instant an INSIDE is committed (see the hold
+	 * test), which is the event that actually matters, and INSIDE_CONTRADICT
+	 * already suppresses a lone INSIDE spike from flipping a real OUTSIDE.
+	 */
+	cfg->outside_hold_ms = 8000;
+	/*
 	 * The confidence at exactly rssi_outside_margin_db, so the margin is the
 	 * ONE knob that sets how far outside is far enough. It used to be 70,
 	 * which sounds like an independent sanity floor and is not: confidence is
@@ -408,9 +423,27 @@ struct woz_side_decision woz_side_filter_feed(struct woz_side_filter *f,
 
 	if (d.side != WOZ_SIDE_LABEL_UNKNOWN &&
 	    (feat->now_ms - f->committed_ms) > (int64_t)f->cfg.evidence_fresh_ms) {
-		d.side = WOZ_SIDE_LABEL_UNKNOWN;
-		d.flags |= WOZ_SIDE_F_EVIDENCE_STALE;
-		d.confidence = 0;
+		/*
+		 * Hold a recent OUTSIDE across the dead band at the door plane.
+		 * Deliberately OUTSIDE-only and strictly bounded: the credential
+		 * must have been committed OUTSIDE inside outside_hold_ms, and no
+		 * INSIDE may have been committed since. The moment inside wins,
+		 * last_inside_ms overtakes last_outside_ms and this stops --
+		 * which is the whole point, because "has it gone in" is the
+		 * question, not "how long since the last good sample".
+		 */
+		const bool hold_outside =
+			f->cfg.outside_hold_ms != 0 &&
+			d.side == WOZ_SIDE_LABEL_OUTSIDE &&
+			f->last_outside_ms > f->last_inside_ms &&
+			(feat->now_ms - f->last_outside_ms) <=
+				(int64_t)f->cfg.outside_hold_ms;
+
+		if (!hold_outside) {
+			d.side = WOZ_SIDE_LABEL_UNKNOWN;
+			d.flags |= WOZ_SIDE_F_EVIDENCE_STALE;
+			d.confidence = 0;
+		}
 	}
 
 	return d;

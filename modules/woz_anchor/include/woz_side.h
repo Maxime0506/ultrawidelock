@@ -103,6 +103,14 @@ struct woz_side_cfg {
 	uint8_t agree_windows;          /**< consecutive agreeing windows to commit */
 	uint16_t dwell_ms;              /**< minimum dwell in a motion state */
 	uint16_t evidence_fresh_ms;     /**< max age of evidence for a decision */
+	/**
+	 * How long a committed OUTSIDE stays usable across the dead band, when
+	 * no INSIDE has been committed since. Two symmetric witnesses are by
+	 * construction equidistant AT the door plane, which is exactly where the
+	 * approach controller asks to unlock -- so the gate must decide while the
+	 * credential is still walking up and then survive the crossing. 0 = off.
+	 */
+	uint16_t outside_hold_ms;
 	uint8_t confidence_min;         /**< 0..100; passive unlock floor */
 	uint8_t classifier_ver;
 	uint8_t calibration_ver;
