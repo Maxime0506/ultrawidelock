@@ -21,8 +21,9 @@ nrfxlib:
   revision: cfb98f4bcd4efe00df0c741e137b42f307680402
   mpsl_sdc_binary_revision: 27037d53048dfe99a9f29aadde5b6ae2746cac75
 
-# The SDC command API is opcode-specific. Rework this pinned dispatcher to
-# remove its Zephyr type dependencies; do not hand-maintain a partial opcode set.
+# The SDC command API is opcode-specific, so this dispatcher is compiled from
+# the vendor tree unmodified against ble/hci_compat rather than being patched or
+# partially reimplemented. make freertos-hci-dispatcher-check builds and runs it.
 ncs_sdk_nrf:
   repository: https://github.com/nrfconnect/sdk-nrf
   revision: ba167d9f3db4abbdc9b67887ca3ea66c64f2d956

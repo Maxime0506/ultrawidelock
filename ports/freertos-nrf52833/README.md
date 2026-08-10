@@ -26,6 +26,14 @@ The implemented foundation now includes:
   controller from a static eight-byte-aligned pool, and publishes the HCI
   transport contract. Every stage failure returns its own negative
   `woz_freertos_radio_stage` instead of continuing.
+- `ble/hci_compat/` lets the pinned `hci_internal.c` opcode dispatcher compile
+  byte for byte out of the vendor tree. It supplies the Bluetooth Core packet
+  layouts, status codes, and OpCode Group Field split the dispatcher expects
+  under Zephyr names, plus `woz_freertos_hci_config.h`, whose Kconfig symbols
+  must mirror the controller features the sequencer links. Nothing Zephyr is
+  compiled or linked, and the vendor file is never patched, so re-pinning it is
+  a plain re-fetch. `ble/hci_dispatcher_freertos.c` adapts it to the port's
+  radio contract.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
@@ -84,13 +92,25 @@ still requires all of the following on the DWM3001CDK:
    the DW3110 response-arm path.
 5. Reproducible licensing, source acquisition, and an ARM GCC build.
 
-MPSL and the SoftDevice Controller are now started by
-`woz_freertos_radio_start()`, which takes the opcode dispatcher as its only
-argument. The board layer still has to adapt the pinned `hci_internal.c`
-dispatcher away from Zephyr types and supply it, and route RADIO, RTC0, TIMER0,
-POWER_CLOCK, and SWI5_EGU5 to the `woz_freertos_radio_*_isr()` entry points.
-The transport intentionally rejects ISO packets because the product requires
-BLE GATT and L2CAP CoC, not LE Audio.
+MPSL and the SoftDevice Controller are started by `woz_freertos_radio_start()`,
+which takes the opcode dispatcher pair. Pass
+`woz_freertos_radio_sdc_dispatcher()` for the pinned Nordic dispatcher. The
+board layer's remaining radio duty is routing RADIO, RTC0, TIMER0, POWER_CLOCK,
+and SWI5_EGU5 to the `woz_freertos_radio_*_isr()` entry points. The transport
+intentionally rejects ISO packets because the product requires BLE GATT and
+L2CAP CoC, not LE Audio.
+
+Reception must go through the dispatcher's `msg_get` and never through
+`sdc_hci_get` directly. The controller's command API is opcode-specific, so the
+dispatcher answers most commands itself and stages the resulting Command
+Complete or Command Status in its own buffer; a read path that skipped it would
+lose every command response.
+
+Verify and exercise the dispatcher against an NCS workspace with:
+
+```sh
+make freertos-hci-dispatcher-check NCS_WORKSPACE=<path-to-ncs-workspace>
+```
 
 The controller pool is 4096 bytes. The pinned `SDC_MEM_*` macros put the
 shipping configuration at 3078 bytes, and `woz_freertos_radio_start()` fails

@@ -2,9 +2,9 @@
  * Startup order for the shared nRF52833 radio: MPSL first, then the
  * SoftDevice Controller, then the NimBLE HCI transport contract.
  *
- * The board owns the vector table and the ported HCI opcode dispatcher; this
- * sequencer owns the order, the interrupt priorities frozen in
- * peripherals.yml, and the static controller memory pool.
+ * The board owns the vector table; this sequencer owns the order, the
+ * interrupt priorities frozen in peripherals.yml, and the static controller
+ * memory pool.
  */
 #ifndef WOZ_FREERTOS_RADIO_H
 #define WOZ_FREERTOS_RADIO_H
@@ -24,17 +24,34 @@ enum woz_freertos_radio_stage {
 	WOZ_FREERTOS_RADIO_STAGE_TRANSPORT,
 };
 
+/*
+ * The controller's command API is opcode-specific, so an HCI command has to be
+ * decoded before it reaches the controller and the resulting Command Complete
+ * or Command Status has to be read back out of the decoder. Both halves belong
+ * to one dispatcher: msg_get must drain the event the dispatcher generated for
+ * the last command before it asks the controller for anything new.
+ */
+struct woz_freertos_radio_dispatcher {
+	/** Consume one HCI command packet. Returns a negative nrf_errno on failure. */
+	int32_t (*cmd_put)(uint8_t *packet);
+	/** Retrieve one HCI event or data packet, and its SDC message type. */
+	int32_t (*msg_get)(uint8_t *packet, uint8_t *type);
+};
+
+/**
+ * The pinned Nordic opcode dispatcher, implemented in
+ * ble/hci_dispatcher_freertos.c. Never NULL.
+ */
+const struct woz_freertos_radio_dispatcher *woz_freertos_radio_sdc_dispatcher(void);
+
 /**
  * Bring up MPSL and the SoftDevice Controller, then publish the HCI transport
  * contract used by NimBLE.
  *
- * @param cmd_put Ported SoftDevice Controller opcode dispatcher. It consumes
- *                one HCI command packet and returns a negative nrf_errno.
- *
  * Returns zero on success, or the negative @ref woz_freertos_radio_stage that
  * failed. Call it once, from a task, before ble_transport_init().
  */
-int woz_freertos_radio_start(int32_t (*cmd_put)(uint8_t *packet));
+int woz_freertos_radio_start(const struct woz_freertos_radio_dispatcher *dispatcher);
 
 /** True after the controller is enabled and the transport contract is published. */
 bool woz_freertos_radio_ready(void);

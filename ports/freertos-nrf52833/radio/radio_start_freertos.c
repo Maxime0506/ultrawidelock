@@ -138,14 +138,13 @@ static void transport_fault(enum woz_freertos_nimble_sdc_fault fault, int32_t de
 	woz_freertos_fatal("hci transport");
 }
 
+/*
+ * ACL data has no opcode to decode, so it bypasses the dispatcher and goes
+ * straight to the controller.
+ */
 static int32_t sdc_data_put(const uint8_t *packet)
 {
 	return sdc_hci_data_put(packet);
-}
-
-static int32_t sdc_msg_get(uint8_t *packet, uint8_t *type)
-{
-	return sdc_hci_get(packet, type);
 }
 
 /* Only what a peripheral GATT plus L2CAP CoC product needs is linked in. */
@@ -223,7 +222,7 @@ static void enable_interrupts(void)
 	NVIC_EnableIRQ(SWI5_EGU5_IRQn);
 }
 
-int woz_freertos_radio_start(int32_t (*cmd_put)(uint8_t *packet))
+int woz_freertos_radio_start(const struct woz_freertos_radio_dispatcher *dispatcher)
 {
 	static const mpsl_clock_lfclk_cfg_t clock_cfg = {
 		.source = MPSL_CLOCK_LF_SRC_XTAL,
@@ -238,7 +237,8 @@ int woz_freertos_radio_start(int32_t (*cmd_put)(uint8_t *packet))
 	struct woz_freertos_nimble_sdc_ops ops;
 	int32_t rc;
 
-	if (cmd_put == NULL) {
+	if (dispatcher == NULL || dispatcher->cmd_put == NULL ||
+	    dispatcher->msg_get == NULL) {
 		return -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT;
 	}
 	if (s_ready) {
@@ -279,9 +279,9 @@ int woz_freertos_radio_start(int32_t (*cmd_put)(uint8_t *packet))
 		return -WOZ_FREERTOS_RADIO_STAGE_SDC_ENABLE;
 	}
 
-	ops.cmd_put = cmd_put;
+	ops.cmd_put = dispatcher->cmd_put;
 	ops.data_put = sdc_data_put;
-	ops.msg_get = sdc_msg_get;
+	ops.msg_get = dispatcher->msg_get;
 	ops.fault = transport_fault;
 	ops.no_data_error = -NRF_EAGAIN;
 	if (woz_freertos_nimble_sdc_configure(&ops) != 0) {

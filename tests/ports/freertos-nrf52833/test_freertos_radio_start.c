@@ -118,6 +118,7 @@ static void pump_task(void (*entry)(void *), void *arg)
 
 static unsigned g_cmd_put_calls;
 static const uint8_t *g_cmd_put_packet;
+static unsigned g_msg_get_calls;
 
 static int32_t test_cmd_put(uint8_t *packet)
 {
@@ -125,6 +126,26 @@ static int32_t test_cmd_put(uint8_t *packet)
 	g_cmd_put_packet = packet;
 	return 0;
 }
+
+/*
+ * The real dispatcher answers most commands itself and hands the resulting
+ * event back here before it ever asks the controller, so the sequencer must
+ * route reception through this and never through sdc_hci_get directly.
+ */
+static int32_t test_msg_get(uint8_t *packet, uint8_t *type)
+{
+	g_msg_get_calls++;
+	return sdc_hci_get(packet, type);
+}
+
+static const struct woz_freertos_radio_dispatcher test_dispatcher = {
+	.cmd_put = test_cmd_put,
+	.msg_get = test_msg_get,
+};
+
+static const struct woz_freertos_radio_dispatcher half_dispatcher = {
+	.cmd_put = test_cmd_put,
+};
 
 static void scenario_success(void)
 {
@@ -139,9 +160,13 @@ static void scenario_success(void)
 	CHECK("radio start rejects a missing opcode dispatcher",
 	      woz_freertos_radio_start(NULL) == -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT &&
 		      fake_mpsl_init_calls == 0 && !woz_freertos_radio_ready());
+	CHECK("radio start rejects a dispatcher that cannot return events",
+	      woz_freertos_radio_start(&half_dispatcher) ==
+			      -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT &&
+		      fake_mpsl_init_calls == 0 && !woz_freertos_radio_ready());
 
 	CHECK("radio start brings up MPSL, the controller, and the transport",
-	      woz_freertos_radio_start(test_cmd_put) == 0 && woz_freertos_radio_ready());
+	      woz_freertos_radio_start(&test_dispatcher) == 0 && woz_freertos_radio_ready());
 	mpsl_entry = fake_task_entry;
 	mpsl_arg = fake_task_arg;
 
@@ -233,10 +258,11 @@ static void scenario_success(void)
 	CHECK("an idle controller reports no data without faulting",
 	      fake_sdc_get_result == -NRF_EAGAIN);
 	pump_task(hci_entry, hci_arg);
-	CHECK("the receive path drains the controller through sdc_hci_get",
-	      fake_sdc_get_calls >= 1 && g_fatal_calls == 0);
+	CHECK("the receive path drains the controller through the dispatcher",
+	      g_msg_get_calls >= 1 && fake_sdc_get_calls == g_msg_get_calls &&
+		      g_fatal_calls == 0);
 
-	CHECK("radio start is idempotent", woz_freertos_radio_start(test_cmd_put) == 0 &&
+	CHECK("radio start is idempotent", woz_freertos_radio_start(&test_dispatcher) == 0 &&
 					   fake_mpsl_init_calls == 1 && fake_sdc_enable_calls == 1);
 }
 
@@ -273,7 +299,8 @@ static void scenario_stage_failure(int stage)
 	}
 
 	CHECK("a failed startup stage is reported and leaves the radio unready",
-	      woz_freertos_radio_start(test_cmd_put) == expected && !woz_freertos_radio_ready() &&
+	      woz_freertos_radio_start(&test_dispatcher) == expected &&
+		      !woz_freertos_radio_ready() &&
 		      woz_freertos_radio_memory_used() == 0);
 
 	if (stage == WOZ_FREERTOS_RADIO_STAGE_MPSL_INIT) {
