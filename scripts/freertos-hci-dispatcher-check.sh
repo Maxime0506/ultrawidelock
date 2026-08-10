@@ -99,4 +99,4 @@ printf '  ok   the configured command surface is %s controller entry points\n' "
 	-o "$bin"
 
 "$bin"
-printf 'RESULT: PINNED OPCODE DISPATCHER PORTED; NimBLE host init remains\n'
+printf 'RESULT: PINNED OPCODE DISPATCHER PORTED; NimBLE syscfg and board proof remain\n'

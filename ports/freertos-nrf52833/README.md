@@ -26,6 +26,12 @@ The implemented foundation now includes:
   controller from a static eight-byte-aligned pool, and publishes the HCI
   transport contract. Every stage failure returns its own negative
   `woz_freertos_radio_stage` instead of continuing.
+- `ble/nimble_host_freertos.c` starts the whole BLE stack:
+  `woz_freertos_nimble_host_start()` brings up the radio, runs
+  `nimble_port_init()`, registers the host's sync and reset callbacks, creates
+  the host task on a static stack, and schedules host/controller
+  synchronization. It returns before the link is usable; wait for
+  `woz_freertos_nimble_host_synced()` before advertising.
 - `ble/hci_compat/` lets the pinned `hci_internal.c` opcode dispatcher compile
   byte for byte out of the vendor tree. It supplies the Bluetooth Core packet
   layouts, status codes, and OpCode Group Field split the dispatcher expects
@@ -44,10 +50,26 @@ The implemented foundation now includes:
 - `make freertos-port-test` compiles and runs this production backend against a
   recording FreeRTOS test double.
 
-All kernel objects are statically allocated. The dispatch task defaults to a
+Every kernel object this port owns is statically allocated, but the build is
+not heap-free. Apache NimBLE's FreeRTOS porting layer creates its own objects
+with the dynamic APIs: one 32-entry event queue, the host, HCI, and GAP
+preemption mutexes, the HCI acknowledgement semaphore, and one software timer
+per callout. Patching the vendor tree is not an option, so the board build must
+set `configSUPPORT_DYNAMIC_ALLOCATION=1` and `configUSE_TIMERS=1` and provide a
+heap. Those allocations all happen once inside `nimble_port_init()` and are
+never freed, so the heap is a fixed startup cost, not a source of runtime
+fragmentation. `make freertos-ble-source-check` asserts the allocation sites so
+a NimBLE bump that adds more has to be re-costed. The exact heap size is a
+first-link measurement and is not yet established.
+
+The dispatch task defaults to a
 4096-byte stack and priority `tskIDLE_PRIORITY + 2`; the eventual board build
 may override `WOZ_FREERTOS_OSAL_STACK_BYTES`,
-`WOZ_FREERTOS_OSAL_QUEUE_DEPTH`, and `WOZ_FREERTOS_OSAL_TASK_PRIORITY`.
+`WOZ_FREERTOS_OSAL_QUEUE_DEPTH`, and `WOZ_FREERTOS_OSAL_TASK_PRIORITY`. The
+NimBLE host task defaults to a 4096-byte stack at `tskIDLE_PRIORITY + 1`,
+below the HCI receive pump, and is overridden with
+`WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES` and
+`WOZ_FREERTOS_NIMBLE_HOST_TASK_PRIORITY`.
 
 ## Platform architecture
 

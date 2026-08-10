@@ -26,6 +26,8 @@ typedef uint32_t StackType_t;
 #define configUSE_RECURSIVE_MUTEXES        1
 #define configUSE_COUNTING_SEMAPHORES      1
 #define configUSE_TASK_NOTIFICATIONS        1
+/* NimBLE callouts are FreeRTOS software timers. */
+#define configUSE_TIMERS                   1
 #define configMAX_PRIORITIES               8
 #define configASSERT(condition)             assert(condition)
 

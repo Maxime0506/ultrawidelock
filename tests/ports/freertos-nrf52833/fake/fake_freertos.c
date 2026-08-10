@@ -12,6 +12,7 @@ unsigned fake_free_calls;
 unsigned fake_delay_calls;
 TickType_t fake_delay_ticks;
 unsigned fake_task_count;
+unsigned fake_task_create_failures;
 void (*fake_task_entry)(void *);
 void *fake_task_arg;
 UBaseType_t fake_task_priority;
@@ -33,6 +34,7 @@ void fake_freertos_reset(void)
 	fake_delay_calls = 0;
 	fake_delay_ticks = 0;
 	fake_task_count = 0;
+	fake_task_create_failures = 0;
 	fake_task_entry = NULL;
 	fake_task_arg = NULL;
 	fake_task_priority = 0;
@@ -72,6 +74,10 @@ TaskHandle_t xTaskCreateStatic(void (*entry)(void *), const char *name, uint32_t
 {
 	(void)name;
 	if (entry == NULL || stack == NULL || task_storage == NULL) {
+		return NULL;
+	}
+	if (fake_task_create_failures > 0) {
+		fake_task_create_failures--;
 		return NULL;
 	}
 	task_storage->created = 1;
