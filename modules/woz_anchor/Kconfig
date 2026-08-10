@@ -45,16 +45,40 @@ config WOZ_SIDE_GATE
 	  commissioned BLE witnesses will refuse every passive unlock -- that
 	  is intentional fail-closed behaviour, not a regression.
 
+config WOZ_SIDE_PEER_EMIT
+	bool "Bench: log the Aliro peer address at L2CAP CoC open"
+	depends on WOZ_SIDE_GATE
+	default n
+	help
+	  Logs `SIDE peer=<AdvA> type=<public|random>` when the Aliro L2CAP CoC
+	  opens and `SIDE peer=clear` when it closes, so bench tooling can push
+	  the phone's current address to the BLE witnesses as an advertising
+	  filter. Without it a witness summarises every advertiser in the room.
+
+	  That address is personal data. A resolvable private address identifies
+	  whoever is standing at the door for as long as it lasts, so this is
+	  default n and must stay off in a shipped image. It is a bench aid, not
+	  a product feature: the witnesses need a way to learn which advertiser
+	  is the credential, and this is the temporary one.
+
 config WOZ_SIDE_FEED_RTT
-	bool "Lab: ingest SF1 witness summaries over SEGGER RTT down-buffer"
+	bool "Bench: ingest SF1 witness summaries over SEGGER RTT down-buffer"
 	depends on WOZ_SIDE_GATE
 	depends on USE_SEGGER_RTT
-	default y
+	default n
 	help
 	  Parses ASCII lines:
 	    SF1 in=<dbm> out=<dbm> th=<dbm> ni=<n> no=<n> nt=<n>
-	  from RTT down-buffer 0 into woz_side_filter_feed(). Lab/HITL only —
-	  production witness transport is UART/Matter later.
+	  from RTT down-buffer 0 into woz_side_filter_feed().
+
+	  Bench only: it needs a debug probe holding the RTT connection, so it is
+	  not a path a deployed lock can use. It used to default y, which meant
+	  selecting the gate silently selected a J-Link dependency. Default n now,
+	  and the SIDE overlay turns it on explicitly.
+
+	  This is currently the ONLY transport into the gate. Until a witness
+	  link over UART or Matter exists, WOZ_SIDE_GATE without this option
+	  refuses every passive unlock, exactly as its own help warns.
 
 config WOZ_ANCHOR_BASELINE_MM
 	int "Distance between the two anchors, millimetres"
