@@ -103,4 +103,43 @@ if ! rg -Fq 'xQueueCreate(32, sizeof(struct ble_npl_eventq *))' "$npl_h"; then
 fi
 printf '  ok   NPL heap use is the known event queue, mutexes, semaphore, and timers\n'
 
+# ble/nimble_syscfg only states the settings that must differ and chains to
+# upstream for the rest, so each override is only meaningful while upstream
+# still defaults the other way. Check the defaults this port contradicts.
+syscfg="$nimble/porting/nimble/include/syscfg/syscfg.h"
+upstream_default() { # <name> -> upstream's default value
+	awk -v n="MYNEWT_VAL_$1" '
+		$0 == "#ifndef " n { getline; sub(/^#define +[A-Z_0-9]+ +/, ""); print; exit }
+	' "$syscfg"
+}
+check_default() { # <name> <expected>
+	local actual
+	actual=$(upstream_default "$1")
+	if [ "$actual" != "$2" ]; then
+		printf 'ble-source-check: upstream default for %s is %s, port assumes %s\n' \
+			"$1" "$actual" "$2" >&2
+		exit 2
+	fi
+}
+check_default BLE_ROLE_CENTRAL '(1)'
+check_default BLE_ROLE_OBSERVER '(1)'
+check_default BLE_L2CAP_COC_MAX_NUM '(0)'
+check_default BLE_SM_SC '(0)'
+check_default BLE_SM_LEGACY '(1)'
+check_default BLE_SM_BONDING '(0)'
+check_default BLE_MAX_CONNECTIONS '(1)'
+check_default BLE_EXT_ADV '(0)'
+printf '  ok   every port override still contradicts the upstream default\n'
+
+# The transport copies a whole HCI event into one fixed pool block, and the
+# port refuses anything longer at runtime. 70 bytes is exactly the Command
+# Complete for Read Local Supported Commands, which is the largest event a
+# legacy-only peripheral can receive.
+check_default BLE_TRANSPORT_EVT_SIZE '(70)'
+if ! rg -Fq 'BLE_TRANSPORT_EVT_SIZE: 257' "$nimble/nimble/transport/syscfg.yml"; then
+	printf 'ble-source-check: extended advertising no longer resizes the event pool\n' >&2
+	exit 2
+fi
+printf '  ok   the event pool block still bounds the largest legacy event\n'
+
 printf 'RESULT: PINNED BLE HOST ACCEPTED; board proof remains\n'

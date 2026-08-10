@@ -16,6 +16,7 @@
 
 #include <nimble/ble.h>
 #include <nimble/transport.h>
+#include <syscfg/syscfg.h>
 #include <openthread/tasklet.h>
 #include <platform/nrf_802154_irq.h>
 #include <platform/nrf_802154_random.h>
@@ -598,6 +599,41 @@ static void test_nimble_sdc_transport(void)
 	CHECK("unexpected controller packet types reach the platform fault policy",
 	      g_sdc_fault_calls == 1 && g_sdc_last_fault == WOZ_NIMBLE_SDC_FAULT_PACKET &&
 		      g_sdc_last_fault_detail == TEST_SDC_TYPE_ISO);
+
+	/*
+	 * The event pool block carries no length, so an event longer than one
+	 * must be refused before the copy rather than detected afterwards. This
+	 * build's controller cannot emit one, which is exactly why the guard has
+	 * to be tested with a synthetic packet.
+	 */
+	{
+		uint8_t oversized[MYNEWT_VAL(BLE_TRANSPORT_EVT_SIZE) + 4];
+		unsigned faults = g_sdc_fault_calls;
+		unsigned events = fake_nimble_host_event_calls;
+		size_t params = sizeof(oversized) - 2u;
+
+		memset(oversized, 0xa5, sizeof(oversized));
+		oversized[0] = 0x0e;
+		oversized[1] = (uint8_t)params;
+		queue_sdc_packet(TEST_SDC_TYPE_EVT, oversized, sizeof(oversized));
+		pump_nimble_sdc(entry, arg);
+		CHECK("an event larger than the NimBLE pool block is refused, not copied",
+		      g_sdc_fault_calls == faults + 1 &&
+			      g_sdc_last_fault == WOZ_NIMBLE_SDC_FAULT_PACKET &&
+			      g_sdc_last_fault_detail == (int32_t)sizeof(oversized) &&
+			      fake_nimble_host_event_calls == events);
+	}
+
+	/*
+	 * The port's syscfg header has to win over upstream's defaults, and each
+	 * of these disagrees with the upstream default on purpose. Reading them
+	 * here proves the include order is right in every build that compiles
+	 * the transport, not just on the target.
+	 */
+	CHECK("the port's NimBLE configuration overrides the upstream defaults",
+	      MYNEWT_VAL(BLE_ROLE_CENTRAL) == 0 && MYNEWT_VAL(BLE_ROLE_OBSERVER) == 0 &&
+		      MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM) == 1 && MYNEWT_VAL(BLE_SM_SC) == 1 &&
+		      MYNEWT_VAL(BLE_SM_LEGACY) == 0);
 
 	notifications = fake_task_notify_calls;
 	woz_freertos_nimble_sdc_wake();

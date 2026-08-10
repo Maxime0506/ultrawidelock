@@ -15,6 +15,8 @@ mkdir -p "$OUT"
 	-DWOZ_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
+	-I"$HERE/fake/nimble_upstream" \
 	-I"$ROOT/modules/woz_port/include" \
 	"$HERE/test_freertos_port.c" \
 	"$HERE/fake/fake_freertos.c" \
@@ -35,6 +37,8 @@ mkdir -p "$OUT"
 	-DWOZ_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
+	-I"$HERE/fake/nimble_upstream" \
 	-I"$ROOT/modules/woz_port/include" \
 	"$HERE/test_freertos_radio_start.c" \
 	"$HERE/fake/fake_freertos.c" \
@@ -52,6 +56,8 @@ mkdir -p "$OUT"
 	-DWOZ_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
+	-I"$HERE/fake/nimble_upstream" \
 	-I"$ROOT/modules/woz_port/include" \
 	"$HERE/test_nimble_host_start.c" \
 	"$HERE/fake/fake_freertos.c" \

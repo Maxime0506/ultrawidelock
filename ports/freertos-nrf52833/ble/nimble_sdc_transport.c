@@ -12,6 +12,7 @@
 #include <nimble/ble.h>
 #include <nimble/transport.h>
 #include <os/os_mbuf.h>
+#include <syscfg/syscfg.h>
 
 #if configSUPPORT_STATIC_ALLOCATION != 1
 #error "The NimBLE/SDC transport requires configSUPPORT_STATIC_ALLOCATION=1"
@@ -106,9 +107,24 @@ static bool event_is_discardable(void)
 static enum process_result deliver_event(size_t size)
 {
 	bool discardable = event_is_discardable();
-	void *event = ble_transport_alloc_evt(discardable ? 1 : 0);
+	void *event;
 	int rc;
 
+	/*
+	 * The event pool hands out fixed BLE_TRANSPORT_EVT_SIZE blocks with no
+	 * length attached, so nothing downstream can catch a copy that is too
+	 * long. The configured size fits every event this build's controller can
+	 * emit, the largest being the 70-byte Command Complete for Read Local
+	 * Supported Commands, but that is a property of the linked feature set
+	 * rather than of this function. Check it rather than trust it.
+	 */
+	if (size > MYNEWT_VAL(BLE_TRANSPORT_EVT_SIZE)) {
+		s_rx_type = SDC_HCI_MSG_TYPE_NONE;
+		report_fault(WOZ_NIMBLE_SDC_FAULT_PACKET, (int32_t)size);
+		return PROCESS_PROGRESS;
+	}
+
+	event = ble_transport_alloc_evt(discardable ? 1 : 0);
 	if (event == NULL) {
 		if (discardable) {
 			s_rx_type = SDC_HCI_MSG_TYPE_NONE;

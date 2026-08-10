@@ -32,6 +32,13 @@ The implemented foundation now includes:
   the host task on a static stack, and schedules host/controller
   synchronization. It returns before the link is usable; wait for
   `woz_freertos_nimble_host_synced()` before advertising.
+- `ble/nimble_syscfg/syscfg/syscfg.h` is this product's NimBLE configuration.
+  It states only the settings that must differ from upstream and reaches the
+  rest with `#include_next`, so the vendor tree is neither copied nor patched;
+  put this directory ahead of upstream's on the include path. Every role it
+  sets has to agree with the controller features `radio_start_freertos.c`
+  links, and `make freertos-ble-source-check` fails if an upstream default ever
+  stops contradicting an override.
 - `ble/hci_compat/` lets the pinned `hci_internal.c` opcode dispatcher compile
   byte for byte out of the vendor tree. It supplies the Bluetooth Core packet
   layouts, status codes, and OpCode Group Field split the dispatcher expects
@@ -121,6 +128,22 @@ board layer's remaining radio duty is routing RADIO, RTC0, TIMER0, POWER_CLOCK,
 and SWI5_EGU5 to the `woz_freertos_radio_*_isr()` entry points. The transport
 intentionally rejects ISO packets because the product requires BLE GATT and
 L2CAP CoC, not LE Audio.
+
+The BLE configuration is peripheral-only on purpose: no central, no observer,
+no extended advertising, one connection, one credit-based L2CAP channel, and
+LE Secure Connections with the legacy pairing fallback compiled out. Bonding
+stays off until the port has a settings backend to persist keys into. Privacy
+has no build-time switch, so product code must pass only
+`BLE_OWN_ADDR_PUBLIC` or `BLE_OWN_ADDR_RANDOM`; the controller does not link
+`sdc_support_le_privacy` and has no resolving list, so requesting an
+`BLE_OWN_ADDR_RPA_*` type fails at runtime rather than at build time.
+
+The transport copies each HCI event into one fixed `BLE_TRANSPORT_EVT_SIZE`
+pool block. Upstream's 70-byte default is exactly the Command Complete for Read
+Local Supported Commands, the largest event a legacy-only peripheral receives,
+so it is correct here but has no margin. The transport refuses a longer event
+instead of copying it, because that bound is a property of the linked feature
+set rather than of the copy.
 
 Reception must go through the dispatcher's `msg_get` and never through
 `sdc_hci_get` directly. The controller's command API is opcode-specific, so the
