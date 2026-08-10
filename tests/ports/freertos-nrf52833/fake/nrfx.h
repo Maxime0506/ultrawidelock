@@ -5,6 +5,13 @@
 
 typedef int32_t IRQn_Type;
 
+/* nRF52833 vector numbers used by the frozen peripherals.yml ownership map. */
+#define POWER_CLOCK_IRQn ((IRQn_Type)0)
+#define RADIO_IRQn       ((IRQn_Type)1)
+#define TIMER0_IRQn      ((IRQn_Type)8)
+#define RTC0_IRQn        ((IRQn_Type)11)
+#define SWI5_EGU5_IRQn   ((IRQn_Type)25)
+
 void fake_nvic_disable_irq(IRQn_Type irq);
 void fake_nvic_enable_irq(IRQn_Type irq);
 void fake_nvic_set_pending_irq(IRQn_Type irq);

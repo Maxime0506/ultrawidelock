@@ -18,6 +18,14 @@ The implemented foundation now includes:
   task/ISR wake contract for the SoftDevice Controller HCI boundary.
 - `radio/mpsl_freertos.c` owns the highest-priority static MPSL worker and the
   recursive lock shared by BLE, 802.15.4, and MPSL low-priority processing.
+- `radio/radio_start_freertos.c` sequences the shared radio: it claims the
+  frozen interrupt priorities, initializes MPSL from the board crystal, starts
+  the worker on `mpsl_low_priority_process`, links only the peripheral
+  GATT/CoC controller features, configures one peripheral link with 251-byte
+  Link Layer packets, registers the hardware entropy source, enables the
+  controller from a static eight-byte-aligned pool, and publishes the HCI
+  transport contract. Every stage failure returns its own negative
+  `woz_freertos_radio_stage` instead of continuing.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
@@ -76,11 +84,19 @@ still requires all of the following on the DWM3001CDK:
    the DW3110 response-arm path.
 5. Reproducible licensing, source acquisition, and an ARM GCC build.
 
-The NimBLE transport is executable, but the board layer still has to adapt the
-pinned `hci_internal.c` opcode dispatcher away from Zephyr types, initialize
-MPSL/SDC, and connect its low-priority signal to
-`woz_freertos_nimble_sdc_wake_from_isr()`. The transport intentionally rejects
-ISO packets because the product requires BLE GATT and L2CAP CoC, not LE Audio.
+MPSL and the SoftDevice Controller are now started by
+`woz_freertos_radio_start()`, which takes the opcode dispatcher as its only
+argument. The board layer still has to adapt the pinned `hci_internal.c`
+dispatcher away from Zephyr types and supply it, and route RADIO, RTC0, TIMER0,
+POWER_CLOCK, and SWI5_EGU5 to the `woz_freertos_radio_*_isr()` entry points.
+The transport intentionally rejects ISO packets because the product requires
+BLE GATT and L2CAP CoC, not LE Audio.
+
+The controller pool is 4096 bytes. The pinned `SDC_MEM_*` macros put the
+shipping configuration at 3078 bytes, and `woz_freertos_radio_start()` fails
+with `WOZ_FREERTOS_RADIO_STAGE_SDC_MEMORY` rather than overrunning the pool if
+a controller update ever needs more. Override `WOZ_FREERTOS_SDC_MEM_BYTES` to
+resize it.
 
 The shipping resource map keeps Qorvo's RTC1 FreeRTOS tick, assigns RTC0 and
 TIMER0 to MPSL, and assigns RTC2, TIMER1, and EGU0 to nRF 802.15.4. Qorvo's

@@ -25,7 +25,7 @@ peripherals:
 
 handoffs:
   - Remove Qorvo app_timer from RTC2; delayable work is owned by the FreeRTOS OSAL.
-  - Route SWI5_EGU5 to woz_freertos_mpsl_wake_from_isr.
-  - Route the SDC callback to woz_freertos_nimble_sdc_wake.
+  - Route the board vectors for RADIO, RTC0, TIMER0, POWER_CLOCK, and SWI5_EGU5
+    to the woz_freertos_radio_*_isr entry points; the port owns the rest.
   - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
   - Verify every PPI channel against MPSL and nRF 802.15.4 masks at target compile time.

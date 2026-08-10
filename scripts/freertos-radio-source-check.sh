@@ -86,6 +86,29 @@ if ! rg -Fq 'SDC_HCI_MSG_TYPE_DATA = 0x02' \
 	exit 2
 fi
 
+# The startup sequencer in radio/radio_start_freertos.c calls these directly,
+# and the host test doubles reproduce these exact signatures.
+for symbol in sdc_init sdc_cfg_set sdc_enable sdc_support_helper \
+	sdc_support_adv sdc_support_peripheral sdc_support_dle_peripheral \
+	sdc_support_le_2m_phy sdc_support_phy_update_peripheral; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$nrfxlib/softdevice_controller/include/sdc.h"; then
+		printf 'radio-source-check: SoftDevice Controller API is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+if ! rg -Fq 'sdc_rand_source_register' "$nrfxlib/softdevice_controller/include/sdc_soc.h" || \
+	! rg -Fq '#define NRF_EAGAIN' "$nrfxlib/softdevice_controller/include/nrf_errno.h"; then
+	printf 'radio-source-check: SoftDevice Controller entropy or errno contract changed\n' >&2
+	exit 2
+fi
+if ! rg -q '[[:space:]]mpsl_init\(' "$nrfxlib/mpsl/include/mpsl.h" || \
+	! rg -q '[[:space:]]mpsl_low_priority_process\(' "$nrfxlib/mpsl/include/mpsl.h" || \
+	! rg -Fq 'MPSL_CLOCK_LF_SRC_XTAL' "$nrfxlib/mpsl/include/mpsl_clock.h"; then
+	printf 'radio-source-check: MPSL init or clock contract changed\n' >&2
+	exit 2
+fi
+printf '  ok   MPSL init and SoftDevice Controller startup APIs match the port\n'
+
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then
 	printf 'radio-source-check: MPSL no longer documents RTOS-independent integration\n' >&2
