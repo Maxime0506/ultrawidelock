@@ -57,26 +57,33 @@ Placement:
 2. Inside: protected face, mirrored
 3. Threshold: lintel / frame, in the plane
 
-## Pi capture
+## Feeding the lock
+
+The lock ingests one line per witness window on RTT down-buffer 0:
+
 ```
-python3 tools/side-capture/collect.py --label outside_approaching --uart /dev/ttyUSB0
-python3 tools/side-capture/collect.py --replay captures/*.jsonl --baseline
+SF1 in=<dbm> out=<dbm> th=<dbm> ni=<n> no=<n> nt=<n>
 ```
 
-## Aliro-triggered ADDR filter (UART bridge)
-1. Flash witnesses with ADDR support; flash CDK with `SIDE peer=` emit.
-2. On Pi: CDK console + three dongles (powered hub).
-3. Terminal A: `python3 aliro_bridge.py --lock /dev/ttyACM3`
-4. Terminal B: `python3 watch_trio.py --label outside_approaching --out captures/run.jsonl`
-5. Approach with a paired iPhone until Aliro connects — bridge pushes `ADDR` to witnesses.
-6. Confirm `WR1` lines include `addr=…` and re-run `--baseline`.
+`in`/`out`/`th` are the mean RSSI each witness heard over its window and
+`ni`/`no`/`nt` the packet counts. Build the lock with `SIDE=1` so
+`CONFIG_WOZ_SIDE_FEED_RTT` and `CONFIG_WOZ_SIDE_PEER_EMIT` are on, then drive
+the buffer with any host that can hold an RTT connection.
 
-## Secondary UWB (experimental)
-```
-make secondary-uwb-build
-```
-Not required for the side gate. Do not treat multi-anchor iPhone UWB as available
-until demonstrated.
+This is a bench path, not a product one: it needs a debug probe attached for
+the life of the session. A witness link over UART or Matter is the work that
+replaces it.
+
+## Telling the witnesses which advertiser is the credential
+
+With `CONFIG_WOZ_SIDE_PEER_EMIT=y` the lock logs `SIDE peer=<AdvA> type=…` when
+the Aliro L2CAP channel opens and `SIDE peer=clear` when it closes. Forward that
+address to each witness as an `ADDR` command and they will summarise one phone
+instead of every advertiser in the room.
+
+That address is personal data, which is why the option is default n and why
+captured runs are not committed (see `.gitignore`). Do not enable it in a
+shipped image.
 
 ## Matter control plane
 Not implemented in this slice. Control/summaries will use a vendor cluster;

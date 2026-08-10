@@ -93,7 +93,6 @@ include $(REPO_ROOT)/mk/esp32.mk
 # bench tool rather than a target anyone flashes a lock with.
 include $(REPO_ROOT)/mk/anchor.mk
 include $(REPO_ROOT)/mk/witness.mk
-include $(REPO_ROOT)/mk/secondary_uwb.mk
 include $(REPO_ROOT)/mk/setup.mk
 include $(REPO_ROOT)/mk/host.mk
 include $(REPO_ROOT)/mk/extras.mk
