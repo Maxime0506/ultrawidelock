@@ -40,6 +40,7 @@
 #if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
 #include "woz_side.h" /* fail-closed OUTSIDE-only passive unlock gate */
 #include "woz_side_log.h"
+#include "side_feed.h"
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 #include "woz_log.h"
 #include "woz_port.h"
@@ -90,6 +91,23 @@ extern volatile int woz_uwb_diag_on;
  * stalled transaction and to drive the ranging power gate's decay. 250 ms is
  * the cadence the ESP32 port runs. */
 #define ALIRO_TICK_MS 250
+
+#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+/* Liveness watchdog on the witness feed, which is NOT the same question as
+ * woz_side_cfg::evidence_fresh_ms. That one asks "how old is the committed
+ * decision at the moment a feed arrives"; this one asks "is anything still
+ * feeding us at all". Sizing them the same breaks the gate: witnesses summarise
+ * over WITNESS_WINDOW_MS (2000), so SF1 lands about every 2 s and a 1500 ms
+ * watchdog would expire between every pair of feeds and hold the gate shut
+ * forever. 5 s survives one dropped window plus margin, and still shuts the
+ * gate within seconds of a witness link dying. Must stay above 2x the feed
+ * period: shorten it if WITNESS_WINDOW_MS is ever cut. */
+#define SIDE_FEED_WATCHDOG_MS 5000
+
+/* A vetoed unlock is re-offered on every trusted range, so the deny line needs
+ * a floor or it buries everything else on the console during a walk-up. */
+#define SIDE_DENY_LOG_MS 1000
+#endif
 
 /* How long the ranging LED holds after the last range landed. Four ticks: long
  * enough that no rate iOS ranges at can make it stutter, short enough that a
@@ -398,16 +416,20 @@ int main(void)
 #endif
 #if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
 	/*
-	 * Fail-closed side gate. Until BLE witnesses feed features, every
-	 * evaluate produces UNKNOWN / quorum-fail and passive unlock is
-	 * withheld. That is intentional: CONFIG_WOZ_SIDE_GATE=y without a
-	 * working localization subsystem must not silently fall back to
-	 * single-range unlock. NFC Express Mode and Home commands are not
-	 * routed through this switch.
+	 * Fail-closed side gate. BLE witness summaries arrive as SF1 lines on
+	 * RTT down (lab) via side_feed_*; without them every evaluate stays
+	 * UNKNOWN / quorum-fail and passive unlock is withheld. NFC Express
+	 * Mode and Home commands are not routed through this switch.
 	 */
 	static struct woz_side_filter side_filt;
 	static struct woz_side_decision side_dec;
 	static struct woz_side_cfg side_cfg;
+	/* When the last feed landed. side_dec is a snapshot, and the filter can
+	 * only age it while it is being fed -- so a feed that stops right after
+	 * committing OUTSIDE would leave the grant live forever. Observed: a lab
+	 * injector was killed and the lock still opened on the next walk-up. */
+	int64_t side_feed_ms = 0;
+	int64_t side_deny_log_ms = 0;
 
 	woz_side_defaults(&side_cfg);
 	woz_side_filter_init(&side_filt, &side_cfg);
@@ -481,6 +503,74 @@ int main(void)
 		enum aliro_approach_action act;
 
 		aliro_reader_status_tick(now);
+#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+		{
+			struct woz_side_features feat;
+
+			side_feed_rtt_poll();
+			if (side_feed_take(&feat)) {
+				feat.now_ms = now;
+				if (feat.obs_session_id == 0) {
+					feat.obs_session_id = 1;
+				}
+				feat.classifier_ver = side_cfg.classifier_ver;
+				feat.calibration_ver = side_cfg.calibration_ver;
+				side_dec = woz_side_filter_feed(&side_filt, &feat);
+				side_feed_ms = now;
+				LOG_INF("side feed: side=%u conf=%u flags=0x%02x oi_pkts=%u/%u",
+					(unsigned)side_dec.side, side_dec.confidence,
+					side_dec.flags, feat.ble_pkts_inside,
+					feat.ble_pkts_outside);
+			}
+
+			/* Age the snapshot on the loop clock, not on the arrival of
+			 * the next feed. A witness link that dies must close the
+			 * gate, not freeze it open at whatever it last said. */
+			if (side_dec.side != WOZ_SIDE_LABEL_UNKNOWN &&
+			    (now - side_feed_ms) > (int64_t)SIDE_FEED_WATCHDOG_MS) {
+				LOG_WRN("side evidence stale (%lld ms); closing gate",
+					(long long)(now - side_feed_ms));
+				side_dec.side = WOZ_SIDE_LABEL_UNKNOWN;
+				side_dec.confidence = 0;
+				side_dec.flags |= WOZ_SIDE_F_EVIDENCE_STALE;
+			}
+
+			/*
+			 * REVOKE. The gate above only guards the moment of the
+			 * grant; nothing withdrew one already given. That leaves
+			 * the "walk in and stay" case with no way back to Secured:
+			 * iOS stops ranging once the phone is still, and the
+			 * departure path deliberately refuses to relock from a
+			 * last measurement INSIDE the radius (aliro_approach.c,
+			 * far_silence_ms) so it cannot throw the bolt at a
+			 * stationary owner. MEASURED 2026-08-11: grant, then
+			 * "UWB session IDLE" at ~112 cm, then nothing -- the door
+			 * stayed open with the phone demonstrably indoors.
+			 *
+			 * Committed INSIDE is the one signal that says the person
+			 * is through the door, and it is independent of ranging.
+			 * No confidence floor: revoking is the safe direction, so
+			 * evidence too weak to open on is still good enough to
+			 * close on. UNKNOWN deliberately does NOT revoke -- losing
+			 * sight of a phone is not evidence it went inside, and
+			 * relocking on it would fire while the owner stands at an
+			 * open door. A peer that actually leaves relocks through
+			 * the session-ended path below.
+			 */
+			if (granted && side_dec.side == WOZ_SIDE_LABEL_INSIDE) {
+				LOG_INF("passive unlock revoked: side=INSIDE conf=%u",
+					side_dec.confidence);
+				aliro_reader_notify_unlock(false);
+				status_led_signal(STATUS_LED_UNLOCKED, false);
+				granted = false;
+				/* Same state repair as a refusal: the controller still
+				 * believes the bolt it opened is open. Without this it
+				 * never offers again until a departure past relock_cm,
+				 * which is the very thing that is not coming. */
+				aliro_approach_veto(&approach);
+			}
+		}
+#endif
 
 		/*
 		 * D11: what the phone is doing. The loop wakes on the latch
@@ -605,9 +695,23 @@ int main(void)
 			 * (NFC Express, Home, mechanical) do not enter here.
 			 */
 			if (!woz_side_may_passive_unlock(&side_dec, &side_cfg)) {
-				LOG_INF("passive unlock withheld: side=%u conf=%u flags=0x%02x",
-					(unsigned)side_dec.side, side_dec.confidence,
-					side_dec.flags);
+				/*
+				 * Hand the unlock back. Both approach unlock paths
+				 * clear their own `locked` before returning, so
+				 * without this the controller thinks the bolt is
+				 * open and never offers again -- one refusal, made
+				 * before the witnesses had time to commit a side,
+				 * killed auto-unlock for the whole approach.
+				 */
+				aliro_approach_veto(&approach);
+				/* Retried on every trusted range now, so rate-limit
+				 * the line or it buries the RTT console. */
+				if ((now - side_deny_log_ms) >= SIDE_DENY_LOG_MS) {
+					side_deny_log_ms = now;
+					LOG_INF("passive unlock withheld: side=%u conf=%u flags=0x%02x",
+						(unsigned)side_dec.side, side_dec.confidence,
+						side_dec.flags);
+				}
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 				woz_printf("[ALAB] t=%lld ev=side.deny side=%u conf=%u flags=%u\n",
 					   woz_uptime_us(), (unsigned)side_dec.side,

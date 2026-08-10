@@ -22,8 +22,46 @@ void woz_side_defaults(struct woz_side_cfg *cfg)
 		(uint8_t)(WOZ_SIDE_ANCHOR_BLE_INSIDE | WOZ_SIDE_ANCHOR_BLE_OUTSIDE);
 	cfg->agree_windows = 3;
 	cfg->dwell_ms = 400;
-	cfg->evidence_fresh_ms = 1500;
-	cfg->confidence_min = 70;
+	/*
+	 * Must exceed the interval at which features actually arrive, or the
+	 * decision is stale before the next one lands and the gate can only ever
+	 * pass in the single instant it commits.
+	 *
+	 * MEASURED 2026-08-11, first working walk-up: BLE witnesses summarise
+	 * over WITNESS_WINDOW_MS (2000), so SF1 arrives about every 2 s. At 1500
+	 * every window that did not itself re-commit came back
+	 * WOZ_SIDE_F_EVIDENCE_STALE (0x40) -- five refusals in a row on the
+	 * approach, and the grant landed only because one window happened to
+	 * re-commit while the phone was still inside the unlock radius.
+	 *
+	 * 4500 covers two feed periods plus margin, so a single dropped window
+	 * does not close the gate. It is deliberately below the caller-side feed
+	 * watchdog (SIDE_FEED_WATCHDOG_MS, 5000): a feed that is merely late is
+	 * this check's business, one that has stopped is the watchdog's.
+	 *
+	 * This does not widen the real responsiveness/security tradeoff, which is
+	 * dominated by agree_windows x the feed period (about 6 s) -- a committed
+	 * side already cannot flip faster than that. Shortening the witness
+	 * window would be the better fix, but the filtered packet count is 3-8
+	 * per 2 s against min_pkts_per_anchor, so halving it starves the quorum.
+	 */
+	cfg->evidence_fresh_ms = 4500;
+	/*
+	 * The confidence at exactly rssi_outside_margin_db, so the margin is the
+	 * ONE knob that sets how far outside is far enough. It used to be 70,
+	 * which sounds like an independent sanity floor and is not: confidence is
+	 * 60 + (|oi| - margin) * 4, so 70 silently demanded 2.5 dB beyond the
+	 * margin and turned a declared 6 dB threshold into a real 9 dB one.
+	 *
+	 * MEASURED 2026-08-11: windows classified OUTSIDE with no fault flags at
+	 * all were refused -- "withheld: side=2 conf=60 flags=0x00" -- while the
+	 * documented margin said they should pass. Two thresholds multiplying is
+	 * how a gate ends up rejecting evidence its own configuration calls good.
+	 *
+	 * Tighten by raising rssi_outside_margin_db, which says what it means in
+	 * dB. Do not re-raise this: it would reintroduce the same hidden offset.
+	 */
+	cfg->confidence_min = 60;
 	cfg->classifier_ver = 1;
 	cfg->calibration_ver = 1;
 }
@@ -280,22 +318,45 @@ struct woz_side_decision woz_side_filter_feed(struct woz_side_filter *f,
 	f->flags = flags;
 	f->contrib_mask = raw.contrib_mask;
 
-	if (raw.side == f->cand && raw.side != WOZ_SIDE_LABEL_UNKNOWN) {
-		if (f->cand_n < 255) {
-			f->cand_n++;
+	/*
+	 * A window that simply did not hear enough packets is MISSING DATA, not
+	 * evidence against the candidate. classify_raw reports that as UNKNOWN
+	 * with confidence 0 and no fault flag set -- distinguishable from the
+	 * dead band (THRESHOLD, confidence 40) and from a real fault (flagged
+	 * above). Collapsing the two is what made agree_windows unreachable:
+	 *
+	 * MEASURED 2026-08-11: 35% of windows fell below min_pkts_per_anchor on
+	 * one anchor or the other, and each one reset cand_n to 0, so three
+	 * CONSECUTIVE agreeing windows almost never happened. The gate refused
+	 * fifteen approaches in a row with side=0 while individual windows were
+	 * reporting confidence 88 and 100.
+	 *
+	 * Holding the candidate across a data gap cannot make the decision stale:
+	 * committed_ms is untouched here, so evidence_fresh_ms still ages it, and
+	 * the caller's feed watchdog still closes the gate if the feed dies.
+	 */
+	const bool evidence_gap = (raw.side == WOZ_SIDE_LABEL_UNKNOWN) &&
+				  raw.confidence == 0 && flags == 0;
+
+	if (!evidence_gap) {
+		if (raw.side == f->cand && raw.side != WOZ_SIDE_LABEL_UNKNOWN) {
+			if (f->cand_n < 255) {
+				f->cand_n++;
+			}
+		} else {
+			f->cand = raw.side;
+			f->cand_n = (raw.side == WOZ_SIDE_LABEL_UNKNOWN) ? 0 : 1;
+			f->cand_since_ms = feat->now_ms;
 		}
-	} else {
-		f->cand = raw.side;
-		f->cand_n = (raw.side == WOZ_SIDE_LABEL_UNKNOWN) ? 0 : 1;
-		f->cand_since_ms = feat->now_ms;
+		f->confidence = raw.confidence;
 	}
-	f->confidence = raw.confidence;
 
 	if (raw.side != WOZ_SIDE_LABEL_UNKNOWN && f->cand_n >= f->cfg.agree_windows &&
 	    (feat->now_ms - f->cand_since_ms) >= (int64_t)f->cfg.dwell_ms &&
 	    woz_side_transition_ok(f->committed, raw.side)) {
 		f->committed = raw.side;
 		f->committed_ms = feat->now_ms;
+		f->committed_conf = raw.confidence;
 		if (raw.side == WOZ_SIDE_LABEL_OUTSIDE) {
 			f->last_outside_ms = feat->now_ms;
 		} else if (raw.side == WOZ_SIDE_LABEL_INSIDE) {
@@ -307,6 +368,7 @@ struct woz_side_decision woz_side_filter_feed(struct woz_side_filter *f,
 		    (feat->now_ms - f->committed_ms) > (int64_t)f->cfg.evidence_fresh_ms) {
 			f->committed = WOZ_SIDE_LABEL_UNKNOWN;
 			f->confidence = 0;
+			f->committed_conf = 0;
 		}
 	}
 
@@ -321,7 +383,21 @@ struct woz_side_decision woz_side_filter_feed(struct woz_side_filter *f,
 
 	d.side = f->committed;
 	d.motion = f->motion;
-	d.confidence = f->confidence;
+	/*
+	 * Report the confidence OF THE SIDE BEING REPORTED. d.side is the
+	 * committed label, so pairing it with the last window's confidence
+	 * describes two different moments, and woz_side_may_passive_unlock
+	 * tests them as if they were one.
+	 *
+	 * MEASURED 2026-08-11: "withheld: side=2 conf=40 flags=0x00" -- the gate
+	 * had committed OUTSIDE, and refused it because a later window happened
+	 * to land in the dead band, whose confidence is 40. Freshness still
+	 * bounds how long a commit stays usable (evidence_fresh_ms below, plus
+	 * the caller's feed watchdog); that is the right tool for "too old", not
+	 * an unrelated sample's score.
+	 */
+	d.confidence = (f->committed != WOZ_SIDE_LABEL_UNKNOWN) ? f->committed_conf
+								: f->confidence;
 	d.contrib_mask = f->contrib_mask;
 	d.flags = f->flags;
 	d.classifier_ver = f->cfg.classifier_ver;

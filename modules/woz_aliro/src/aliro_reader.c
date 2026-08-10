@@ -146,8 +146,22 @@ static bool s_kp_dirty;
 /* A Secured (relock) Reader-Status-Changed that could not be delivered because the
  * peer had already disconnected. The phone is left showing this door unlocked, so
  * the next established session replays it. Host-task only, like every other touch
- * point on the session table. */
-static bool s_secured_undelivered;
+ * point on the session table.
+ *
+ * TRUE AT BOOT, deliberately. This flag is the only thing that can correct a
+ * stranded Wallet, and it used to live in RAM alone -- so a reboot between the
+ * undeliverable Secured and the next session destroyed the correction and left
+ * the phone permanently showing this door open. That is not recoverable from the
+ * lock side: iOS will not run an approach unlock on a door it believes is already
+ * unlocked, so it stops opening Aliro sessions, so the replay can never fire.
+ * MEASURED: a grant whose relock could not be delivered, followed by a firmware
+ * flash, and no phone opened a session against this reader again.
+ *
+ * A reboot always comes up Secured and cannot know what the Wallet believes, so
+ * assuming "possibly stale" is both the safe default and free: the replay is
+ * Secured-only, armed rather than sent, and any grant inside the hold window
+ * cancels it (reader_status_send). A normal walk-up never sees it. */
+static bool s_secured_undelivered = true;
 /* How long the stale-Wallet Secured waits for a grant to supersede it. Sized off
  * the slowest walk-up on record (bolt+3566 ms with AP-Completed near 1250 ms, so
  * ~2.3 s of headroom needed) rather than the fast path's 1206 ms. Overshooting is

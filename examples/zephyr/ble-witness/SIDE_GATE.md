@@ -63,6 +63,14 @@ python3 tools/side-capture/collect.py --label outside_approaching --uart /dev/tt
 python3 tools/side-capture/collect.py --replay captures/*.jsonl --baseline
 ```
 
+## Aliro-triggered ADDR filter (UART bridge)
+1. Flash witnesses with ADDR support; flash CDK with `SIDE peer=` emit.
+2. On Pi: CDK console + three dongles (powered hub).
+3. Terminal A: `python3 aliro_bridge.py --lock /dev/ttyACM3`
+4. Terminal B: `python3 watch_trio.py --label outside_approaching --out captures/run.jsonl`
+5. Approach with a paired iPhone until Aliro connects — bridge pushes `ADDR` to witnesses.
+6. Confirm `WR1` lines include `addr=…` and re-run `--baseline`.
+
 ## Secondary UWB (experimental)
 ```
 make secondary-uwb-build

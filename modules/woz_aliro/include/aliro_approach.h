@@ -367,6 +367,23 @@ enum aliro_approach_action aliro_approach_tick(struct aliro_approach *ap, int64_
  * approach; returns RELOCK_DEPART if the bolt was open, else HOLD. */
 enum aliro_approach_action aliro_approach_gone(struct aliro_approach *ap);
 
+/*
+ * The caller REFUSED the UNLOCK this controller just returned -- an outside
+ * policy (the side gate) would not grant it. Hand the decision back.
+ *
+ * Both unlock paths clear ap->locked BEFORE returning their action, so without
+ * this the controller believes the bolt is open while it is not. Every later
+ * unlock test is guarded on ap->locked, so a single refusal disables auto-unlock
+ * for the rest of the approach -- the door stays shut even after the refusing
+ * policy changes its mind, until a full departure past relock_cm relocks it.
+ * Observed: the side gate committed OUTSIDE at confidence 100 for ten straight
+ * windows and no unlock was ever re-offered.
+ *
+ * Safe to call unconditionally after any action; it does nothing if the
+ * controller already considers the bolt locked.
+ */
+void aliro_approach_veto(struct aliro_approach *ap);
+
 /* Trace accessors (for the ALAB walk-up report / twin overlays). */
 bool aliro_approach_locked(const struct aliro_approach *ap);
 int32_t aliro_approach_est_cm(const struct aliro_approach *ap);   /* -1 = none */

@@ -17,6 +17,10 @@ Updated: 2026-08-10
 | Pi collector | `tools/side-capture/collect.py` |
 | Secondary UWB | Scaffold only — **not proven** |
 | Matter witness control plane | **Not implemented yet** (UART path first) |
+| Aliro `SIDE peer=` on CoC open | Implemented (`aliro_ble_zephyr.c`) |
+| Witness `ADDR` AdvA filter | Implemented + DFU zips in `build/witness-dfu/` |
+| Pi `aliro_bridge.py` | Implemented — CDK serial → ADDR on dongles |
+
 
 Legacy `woz_fusion_may_predict` (fail-open, OUTSIDE withholds) is untouched when `SIDE` is off.
 
@@ -58,10 +62,58 @@ Baseline (`build/cdk-matter`, overlays `overlay-thread.conf;overlay-lto.conf`):
 
 ## Next hardware loop
 
-1. Flash three witnesses (`inside` / `outside` / `threshold`)
-2. Capture labelled walks with `tools/side-capture/collect.py`
-3. Run `--baseline`, then wire compact summaries into the lock’s `woz_side_filter_feed`
-4. Only then enable `SIDE=1` on the door node for approach tests
+1. ~~Flash ADDR-capable witnesses + CDK with `SIDE peer=` emit~~ **done**
+2. ~~`side_hitl.py` ADDR path~~ **PASS**
+3. ~~Outside/inside static pose capture~~ **PASS** (`omi` +8.4 / −17.9); gate replay PASS
+4. ~~`SIDE=1` + SF1 RTT feed~~ **PASS on hardware** — `side_hitl.py` holds the
+   probe with `JLinkExe` and reads/writes the RTT telnet server (19021), so one
+   connection carries `SIDE peer=` out and SF1 in. Injected SF1 drives the real
+   `woz_side_filter_feed`: outside-favouring → `side=2 conf=100` after 3 windows,
+   inside → not OUTSIDE, dead band → `side=3`, `ni/no<3` → `side=0 conf=0`.
+5. ~~Live walk with the three witnesses feeding SF1~~ **PASS at the door.**
+   Outside: `side feed: side=2 conf=100`, `omi` +6..+34 (29 windows). Inside:
+   `side=1 conf=100`, `omi` −6..−33 (15 windows). No misclassification. Two
+   deployment traps found: a dongle's role is firmware not position (fixed with
+   `--role-map`), and the first approach cannot commit in time because the
+   witnesses only learn the phone's rotating address at CoC open — the second
+   approach inside `--addr-hold-s` grants.
+6. **WORKING 2026-08-11.** Passive UWB approach unlock fires through the
+   fail-closed side gate on real hardware, with a clean `Secured/relock`
+   afterwards. Five firmware bugs had to be fixed to get there, none of them
+   in the classifier and none found by walking:
+   - `aliro_approach.c:547/597` cleared `ap->locked` BEFORE returning the
+     unlock action, so a gate refusal desynchronised the controller and the
+     unlock was never re-offered. Added `aliro_approach_veto()`.
+   - `main.c` held `side_dec` as a snapshot the filter could only age while
+     being fed: a dead feed froze a committed OUTSIDE open forever
+     (fail-OPEN, observed live). Added `SIDE_FEED_WATCHDOG_MS` (5000).
+   - `s_secured_undelivered` was RAM-only, so a reboot destroyed the one
+     thing that could correct a Wallet stranded showing the door open. Now
+     true at boot.
+   - `confidence_min = 70` against `60 + (|oi| - margin) * 4` silently turned
+     a declared 6 dB margin into a real 9 dB one. Now 60, so
+     `rssi_outside_margin_db` is the single knob.
+   - `woz_side.c` reset `cand_n` on ANY UNKNOWN, including the UNKNOWN that
+     just means "too few packets this window". 35% of windows fell below
+     `min_pkts_per_anchor`, so three CONSECUTIVE agreeing windows was near
+     unreachable. Data gaps now hold the candidate; faults still reset it.
+   Also `evidence_fresh_ms` 1500 -> 4500, which must exceed the ~2 s SF1
+   cadence or every non-committing window reads EVIDENCE_STALE.
+7. Geometry: inside witness moved ~3 m in, heights matched, threshold dongle
+   dropped (quorum is INSIDE|OUTSIDE only). `omi` mean went ~0 -> +6.2 dB.
+   Still marginal: a later run measured +3.6 mean, 31% of windows over +6.
+   More separation is the remaining physical lever.
+8. **Bisected 2026-08-10:** with `side_hitl.py --force-sf1 outside` holding the
+   gate open (`side=2 conf=100 flags=0x00`), the Wallet animates and the lock
+   unlocks on approach. So ranging, the approach controller and the grant path
+   are healthy on the SIDE build — no regression. The only blocker is witness
+   evidence: geometry, and the ~6 s (`agree_windows` x `WITNESS_WINDOW_MS`)
+   needed before a side commits.
+7. `SIDE peer=` is emitted once, at CoC open. A tool attached mid-session never
+   arms ADDR and the lock sits on boot-state `flags=0x80` QUORUM_FAIL. Start
+   the capture before the phone connects, or re-emit the peer periodically.
+8. Production witness→lock transport (UART/Matter) without stealing J-Link
+7. Investigate short Aliro session (UWB IDLE → DEINIT) if unlock does not range
 
 ## Key paths
 

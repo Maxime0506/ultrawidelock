@@ -13,6 +13,7 @@
  *   - attach mode, which only exists so the ESP32 reader can share a host with
  *     esp-matter. Nothing shares this host, so it stays -ENOTSUP.
  */
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
@@ -27,6 +28,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net_buf.h>
+#include <zephyr/sys/printk.h>
 
 #include "aliro_advtag.h"
 #include "aliro_ble.h"
@@ -125,11 +127,41 @@ static int coc_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 }
 
 /**
+ * Emit a Pi-scrapable SIDE line with the peer AdvA/RPA at Aliro CoC open.
+ * Format is fixed for tools/side-capture/aliro_bridge.py.
+ */
+static void side_emit_peer(struct bt_conn *conn)
+{
+	struct bt_conn_info info;
+	const bt_addr_le_t *peer;
+	const char *type = "unknown";
+
+	if (conn == NULL || bt_conn_get_info(conn, &info) != 0) {
+		printk("SIDE peer=clear\n");
+		return;
+	}
+	/* Prefer the address used at connection setup — closer to live AdvA. */
+	peer = info.le.remote != NULL ? info.le.remote : info.le.dst;
+	if (peer == NULL) {
+		printk("SIDE peer=clear\n");
+		return;
+	}
+	if (peer->type == BT_ADDR_LE_PUBLIC) {
+		type = "public";
+	} else if (peer->type == BT_ADDR_LE_RANDOM) {
+		type = "random";
+	}
+	printk("SIDE peer=%02X:%02X:%02X:%02X:%02X:%02X type=%s\n", peer->a.val[5], peer->a.val[4],
+	       peer->a.val[3], peer->a.val[2], peer->a.val[1], peer->a.val[0], type);
+}
+
+/**
  * Handle L2CAP CoC connection establishment by notifying the Aliro engine and logging the event.
  */
 static void coc_connected(struct bt_l2cap_chan *chan)
 {
 	LOG_INF("L2CAP CoC open (SPSM 0x%04x)", (unsigned)ALIRO_L2CAP_SPSM);
+	side_emit_peer(chan->conn);
 	if (s_cb.on_connected != NULL) {
 		s_cb.on_connected(conn_to_handle(chan->conn));
 	}
@@ -145,6 +177,7 @@ static void coc_disconnected(struct bt_l2cap_chan *chan)
 
 	s_coc.in_use = false;
 	s_coc.conn = NULL;
+	printk("SIDE peer=clear\n");
 	LOG_INF("L2CAP CoC closed");
 	if (s_cb.on_disconnected != NULL) {
 		s_cb.on_disconnected(handle);

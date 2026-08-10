@@ -140,6 +140,11 @@ struct woz_side_filter {
 	enum woz_side_motion motion;
 	uint8_t cand_n;
 	uint8_t confidence;
+	/* Confidence of the window that COMMITTED the current side, not of
+	 * whatever arrived last. The decision reports `committed` for its side,
+	 * so reporting an unrelated later sample's confidence beside it describes
+	 * two different moments -- and the caller checks them together. */
+	uint8_t committed_conf;
 	uint8_t contrib_mask;
 	uint8_t flags;
 	uint32_t obs_session_id;

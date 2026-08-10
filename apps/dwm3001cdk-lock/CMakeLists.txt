@@ -87,7 +87,7 @@ target_sources(app PRIVATE
 	${ALIRO_DYNTAG_SRCS}
 )
 # Provisioning console (USB CDC-ACM, provisioning mode only).
-target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
+target_sources_ifdef(CONFIG_WOZ_SIDE_GATE app PRIVATE src/side_feed.c)
 # Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)

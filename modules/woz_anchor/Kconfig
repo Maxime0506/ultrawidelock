@@ -45,6 +45,17 @@ config WOZ_SIDE_GATE
 	  commissioned BLE witnesses will refuse every passive unlock -- that
 	  is intentional fail-closed behaviour, not a regression.
 
+config WOZ_SIDE_FEED_RTT
+	bool "Lab: ingest SF1 witness summaries over SEGGER RTT down-buffer"
+	depends on WOZ_SIDE_GATE
+	depends on USE_SEGGER_RTT
+	default y
+	help
+	  Parses ASCII lines:
+	    SF1 in=<dbm> out=<dbm> th=<dbm> ni=<n> no=<n> nt=<n>
+	  from RTT down-buffer 0 into woz_side_filter_feed(). Lab/HITL only —
+	  production witness transport is UART/Matter later.
+
 config WOZ_ANCHOR_BASELINE_MM
 	int "Distance between the two anchors, millimetres"
 	default 1200

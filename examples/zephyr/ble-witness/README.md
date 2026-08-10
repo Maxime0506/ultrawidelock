@@ -15,5 +15,8 @@
 # UART lines look like:
 #   WR1 role=outside obs=3 filt=0000 n=12 mean=-61 min=-70 max=-52 var=18
 #
+# LED: solid green = app running; blink ~2 Hz = ADDR filter set.
+# On PCA10059 drives LD2 (led0) and the center RGB green (led1_green).
+#
 # The witness never commands an unlock. Correlate on obs + packet timing on the
 # Raspberry Pi; the DWM3001CDK remains authoritative.
