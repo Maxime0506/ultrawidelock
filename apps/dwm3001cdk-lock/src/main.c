@@ -557,8 +557,21 @@ int main(void)
 			 * open door. A peer that actually leaves relocks through
 			 * the session-ended path below.
 			 */
-			if (granted && side_dec.side == WOZ_SIDE_LABEL_INSIDE) {
-				LOG_INF("passive unlock revoked: side=INSIDE conf=%u",
+			/*
+			 * INSIDE_CONTRADICT counts as well as a committed
+			 * INSIDE. It is set the moment one window favours
+			 * inside while OUTSIDE is committed -- which is this
+			 * case, one window into the walk-in, about 6 s before
+			 * INSIDE could commit. Waiting for the commit means
+			 * holding the door open across the whole crossing.
+			 */
+			const bool went_inside =
+				side_dec.side == WOZ_SIDE_LABEL_INSIDE ||
+				(side_dec.flags & WOZ_SIDE_F_INSIDE_CONTRADICT) != 0;
+
+			if (granted && went_inside) {
+				LOG_INF("passive unlock revoked: side=%u flags=0x%02x conf=%u",
+					(unsigned)side_dec.side, side_dec.flags,
 					side_dec.confidence);
 				aliro_reader_notify_unlock(false);
 				status_led_signal(STATUS_LED_UNLOCKED, false);

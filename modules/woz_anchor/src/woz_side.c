@@ -320,12 +320,29 @@ struct woz_side_decision woz_side_filter_feed(struct woz_side_filter *f,
 		raw.confidence = 0;
 	}
 
-	if (raw.side == WOZ_SIDE_LABEL_INSIDE &&
-	    f->committed == WOZ_SIDE_LABEL_OUTSIDE &&
-	    !woz_side_transition_ok(f->committed, raw.side)) {
-		flags |= WOZ_SIDE_F_INSIDE_CONTRADICT;
-		raw.side = WOZ_SIDE_LABEL_UNKNOWN;
-		raw.confidence = 0;
+	/*
+	 * Evidence that the credential is INSIDE is never discarded, even when it
+	 * contradicts a committed OUTSIDE. This used to erase the window outright.
+	 * That made the one transition that actually matters -- walking through
+	 * the door -- unrepresentable: while committed OUTSIDE, every inside
+	 * window became UNKNOWN, so INSIDE could never accumulate, could never
+	 * commit, and last_inside_ms could never advance. MEASURED 2026-08-11:
+	 * `passive unlock revoked` fired ZERO times across every hardware run,
+	 * including runs that ended with the phone demonstrably indoors and the
+	 * door still open.
+	 *
+	 * Stamping last_inside_ms here, before any suppression, is deliberately
+	 * asymmetric: one inside-favouring window is enough to cancel the OUTSIDE
+	 * hold, because closing the gate on weak evidence is the safe error.
+	 * last_outside_ms is still only stamped on a full commit -- opening on one
+	 * window is the dangerous error, and it stays behind agree_windows.
+	 */
+	if (raw.side == WOZ_SIDE_LABEL_INSIDE) {
+		f->last_inside_ms = feat->now_ms;
+		if (f->committed == WOZ_SIDE_LABEL_OUTSIDE &&
+		    !woz_side_transition_ok(f->committed, raw.side)) {
+			flags |= WOZ_SIDE_F_INSIDE_CONTRADICT;
+		}
 	}
 
 	f->obs_session_id = feat->obs_session_id;
@@ -366,9 +383,25 @@ struct woz_side_decision woz_side_filter_feed(struct woz_side_filter *f,
 		f->confidence = raw.confidence;
 	}
 
+	/*
+	 * Sustained agreement IS the transition evidence. The commit used to also
+	 * require woz_side_transition_ok(), i.e. an observed THRESHOLD commit
+	 * between INSIDE and OUTSIDE. That is not observable at walking speed: the
+	 * dead band is about a metre wide, crossed in under 2 s, so a single
+	 * witness window straddles it and never yields the three consecutive
+	 * THRESHOLD windows the rule demanded. The gate could therefore latch a
+	 * side and never legitimately leave it -- which is both halves of the
+	 * problem, a grant that survives going indoors and a gate that will not
+	 * re-arm on coming back out.
+	 *
+	 * What the rule was protecting against -- one RSSI spike flipping the
+	 * side -- is already covered by agree_windows (3) plus dwell_ms, and by
+	 * the explicit lone-spike guard below. transition_ok now feeds the
+	 * INSIDE_CONTRADICT flag only, so the contradiction is still reported to
+	 * the caller instead of silently changing the verdict.
+	 */
 	if (raw.side != WOZ_SIDE_LABEL_UNKNOWN && f->cand_n >= f->cfg.agree_windows &&
-	    (feat->now_ms - f->cand_since_ms) >= (int64_t)f->cfg.dwell_ms &&
-	    woz_side_transition_ok(f->committed, raw.side)) {
+	    (feat->now_ms - f->cand_since_ms) >= (int64_t)f->cfg.dwell_ms) {
 		f->committed = raw.side;
 		f->committed_ms = feat->now_ms;
 		f->committed_conf = raw.confidence;

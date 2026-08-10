@@ -174,6 +174,152 @@ static void test_outside_approach_unlock(void)
 	T_OK("outside.unlock", woz_side_may_passive_unlock(&d, &cfg));
 }
 
+static void feat_outside(struct woz_side_features *f)
+{
+	f->ble_rssi_inside_dbm = -70;
+	f->ble_rssi_outside_dbm = -55;
+	f->ble_pkts_inside = 8;
+	f->ble_pkts_outside = 8;
+}
+
+static void feat_inside(struct woz_side_features *f)
+{
+	f->ble_rssi_inside_dbm = -55;
+	f->ble_rssi_outside_dbm = -70;
+	f->ble_pkts_inside = 8;
+	f->ble_pkts_outside = 8;
+}
+
+static void feat_dead_band(struct woz_side_features *f)
+{
+	f->ble_rssi_inside_dbm = -62;
+	f->ble_rssi_outside_dbm = -60;
+	f->ble_pkts_inside = 8;
+	f->ble_pkts_outside = 8;
+}
+
+/** Heard, but under min_pkts_per_anchor: missing data, not evidence. */
+static void feat_gap(struct woz_side_features *f)
+{
+	f->ble_pkts_inside = 1;
+	f->ble_pkts_outside = 1;
+}
+
+static struct woz_side_decision feed_at(struct woz_side_filter *filt,
+				        struct woz_side_features *f, uint32_t *seq,
+				        int64_t now_ms)
+{
+	f->seq = ++(*seq);
+	f->now_ms = now_ms;
+	return woz_side_filter_feed(filt, f);
+}
+
+/*
+ * Walking through the door, in both directions. This is the case the gate got
+ * wrong on hardware: it could latch a side and never legitimately leave it, so
+ * a grant survived the walk-in and the gate would not re-arm on the way back.
+ */
+static void test_door_crossing(void)
+{
+	struct woz_side_filter filt;
+	struct woz_side_cfg cfg;
+	struct woz_side_features f = base_feat();
+	struct woz_side_decision d;
+	uint32_t seq = 0;
+	int64_t t = 10000;
+
+	t_group("side: door crossing commits and re-arms");
+	woz_side_defaults(&cfg);
+	cfg.agree_windows = 3;
+	cfg.dwell_ms = 200;
+	woz_side_filter_init(&filt, &cfg);
+
+	feat_outside(&f);
+	for (int i = 0; i < 4; i++) {
+		d = feed_at(&filt, &f, &seq, t += 200);
+	}
+	T_EQ("cross.outside_first", d.side, WOZ_SIDE_LABEL_OUTSIDE);
+
+	/* One inside window: too little to commit, enough to report. */
+	feat_inside(&f);
+	d = feed_at(&filt, &f, &seq, t += 200);
+	T_OK("cross.contradict_reported",
+	     (d.flags & WOZ_SIDE_F_INSIDE_CONTRADICT) != 0);
+	T_EQ("cross.one_window_no_flip", d.side, WOZ_SIDE_LABEL_OUTSIDE);
+
+	/* Sustained inside must commit, with no observed THRESHOLD in between. */
+	for (int i = 0; i < 3; i++) {
+		d = feed_at(&filt, &f, &seq, t += 200);
+	}
+	T_EQ("cross.walk_in_commits", d.side, WOZ_SIDE_LABEL_INSIDE);
+	T_OK("cross.inside_no_unlock", !woz_side_may_passive_unlock(&d, &cfg));
+
+	/* And back out again: the gate must re-arm. */
+	feat_outside(&f);
+	d = feed_at(&filt, &f, &seq, t += 200);
+	T_EQ("cross.one_window_no_rearm", d.side, WOZ_SIDE_LABEL_INSIDE);
+	for (int i = 0; i < 3; i++) {
+		d = feed_at(&filt, &f, &seq, t += 200);
+	}
+	T_EQ("cross.walk_out_commits", d.side, WOZ_SIDE_LABEL_OUTSIDE);
+	T_OK("cross.outside_unlocks", woz_side_may_passive_unlock(&d, &cfg));
+}
+
+/*
+ * outside_hold_ms carries a committed OUTSIDE across the dead band at the door
+ * plane, and one inside-favouring window cancels it.
+ */
+static void test_outside_hold(void)
+{
+	struct woz_side_filter filt;
+	struct woz_side_cfg cfg;
+	struct woz_side_features f = base_feat();
+	struct woz_side_decision d;
+	uint32_t seq = 0;
+	int64_t t = 10000;
+
+	t_group("side: outside hold across the dead band");
+	woz_side_defaults(&cfg);
+	cfg.agree_windows = 3;
+	cfg.dwell_ms = 200;
+	T_OK("hold.enabled", cfg.outside_hold_ms > cfg.evidence_fresh_ms);
+	woz_side_filter_init(&filt, &cfg);
+
+	feat_outside(&f);
+	for (int i = 0; i < 4; i++) {
+		d = feed_at(&filt, &f, &seq, t += 200);
+	}
+	T_EQ("hold.committed", d.side, WOZ_SIDE_LABEL_OUTSIDE);
+
+	/* Evidence gaps while walking up: no commit refresh, no clear yet. */
+	feat_gap(&f);
+	d = feed_at(&filt, &f, &seq, t + 2000);
+
+	/* Dead band, past evidence_fresh_ms: the hold keeps OUTSIDE usable. */
+	feat_dead_band(&f);
+	d = feed_at(&filt, &f, &seq, t + (int64_t)cfg.evidence_fresh_ms + 500);
+	T_EQ("hold.survives_dead_band", d.side, WOZ_SIDE_LABEL_OUTSIDE);
+
+	/* Same walk, but one inside window on the way: the hold must end. */
+	woz_side_filter_init(&filt, &cfg);
+	seq = 0;
+	t = 10000;
+	feat_outside(&f);
+	for (int i = 0; i < 4; i++) {
+		d = feed_at(&filt, &f, &seq, t += 200);
+	}
+	T_EQ("hold.committed2", d.side, WOZ_SIDE_LABEL_OUTSIDE);
+
+	feat_inside(&f);
+	d = feed_at(&filt, &f, &seq, t + 1000);
+
+	feat_dead_band(&f);
+	d = feed_at(&filt, &f, &seq, t + (int64_t)cfg.evidence_fresh_ms + 500);
+	T_EQ("hold.cancelled_by_inside", d.side, WOZ_SIDE_LABEL_UNKNOWN);
+	T_OK("hold.cancelled_stale", (d.flags & WOZ_SIDE_F_EVIDENCE_STALE) != 0);
+	T_OK("hold.cancelled_no_unlock", !woz_side_may_passive_unlock(&d, &cfg));
+}
+
 static void test_transition_rules(void)
 {
 	t_group("side: transition plausibility");
@@ -218,6 +364,8 @@ void test_woz_side(void)
 	test_policy_fail_closed();
 	test_temporal_no_spike_flip();
 	test_outside_approach_unlock();
+	test_door_crossing();
+	test_outside_hold();
 	test_transition_rules();
 	test_log_roundtrip();
 }
