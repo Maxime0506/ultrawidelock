@@ -47,6 +47,7 @@ void fake_freertos_reset(void)
 	fake_recursive_take_calls = 0;
 	fake_recursive_give_calls = 0;
 	fake_current_task = NULL;
+	fake_semaphore_isr_gives = 0;
 }
 
 void *pvPortMalloc(size_t size)
@@ -149,6 +150,21 @@ BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t sem, TickType_t ticks)
 BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t sem)
 {
 	fake_recursive_give_calls++;
+	return xSemaphoreGive(sem);
+}
+
+unsigned fake_semaphore_isr_gives;
+
+BaseType_t xSemaphoreGiveFromISR(SemaphoreHandle_t sem, BaseType_t *wake)
+{
+	fake_semaphore_isr_gives++;
+	/*
+	 * Reports a waiter released, which is the case worth modelling: the
+	 * caller must then yield, or the woken task waits out the tick.
+	 */
+	if (wake != NULL) {
+		*wake = pdTRUE;
+	}
 	return xSemaphoreGive(sem);
 }
 

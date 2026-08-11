@@ -62,8 +62,19 @@ uint32_t fake_nvic_get_priority(IRQn_Type irq)
 	return fake_nrf_irq_priority[irq_index(irq)];
 }
 
+static uint32_t s_ipsr;
 static uint32_t s_primask;
 static unsigned s_primask_disable_calls;
+
+uint32_t fake_ipsr_get(void)
+{
+	return s_ipsr;
+}
+
+void fake_ipsr_set(uint32_t value)
+{
+	s_ipsr = value;
+}
 
 uint32_t fake_primask_get(void)
 {
@@ -88,6 +99,7 @@ unsigned fake_primask_disable_count(void)
 
 void fake_primask_reset(void)
 {
+	s_ipsr = 0;
 	s_primask = 0;
 	s_primask_disable_calls = 0;
 }

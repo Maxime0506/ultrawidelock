@@ -9,6 +9,7 @@ SemaphoreHandle_t xSemaphoreCreateCountingStatic(UBaseType_t limit, UBaseType_t 
 						 StaticSemaphore_t *storage);
 BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t ticks);
 BaseType_t xSemaphoreGive(SemaphoreHandle_t sem);
+BaseType_t xSemaphoreGiveFromISR(SemaphoreHandle_t sem, BaseType_t *wake);
 BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t sem, TickType_t ticks);
 BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t sem);
 

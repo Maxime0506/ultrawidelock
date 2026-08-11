@@ -30,6 +30,16 @@ uint32_t fake_nvic_get_priority(IRQn_Type irq);
 #define NVIC_GetPriority(irq)         fake_nvic_get_priority(irq)
 
 /*
+ * IPSR. Zero is thread mode; anything else is an active exception. The model
+ * lets a test stand in either context, which is the whole question the
+ * OpenThread kernel shim asks before it signals a semaphore.
+ */
+uint32_t fake_ipsr_get(void);
+void fake_ipsr_set(uint32_t value);
+
+#define __get_IPSR() fake_ipsr_get()
+
+/*
  * PRIMASK. The hardware-task state machine has to exclude every other context,
  * not just this driver's vector, so the model records the depth as well as the
  * bit: a test can then prove the mask is left exactly as it was found.

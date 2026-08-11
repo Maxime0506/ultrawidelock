@@ -27,4 +27,6 @@ extern unsigned fake_recursive_give_calls;
 
 void fake_freertos_reset(void);
 
+extern unsigned fake_semaphore_isr_gives;
+
 #endif /* TEST_FAKE_FREERTOS_CONTROL_H */

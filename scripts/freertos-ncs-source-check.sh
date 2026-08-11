@@ -27,6 +27,9 @@ gen="$out/stub_sdc_hci_cmd_generated.c"
 bin="$out/freertos_hci_dispatcher_test"
 hp_bin="$out/freertos_hp_timer_test"
 hp_timer="$workspace/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
+ot_radio="$workspace/nrf/modules/openthread/platform/radio_nrf5.c"
+ot_compat="$root/ports/freertos-nrf52833/thread/ot_compat"
+ot_stubs="$root/tests/ports/freertos-nrf52833/fake/ot_radio"
 
 expected=$(awk '
 	$0 == "ncs_sdk_nrf:" { active = 1; next }
@@ -50,7 +53,7 @@ if grep -q 'zephyr/' "$controller/hci_internal.c" && \
 fi
 
 CC=${CC:-cc}
-inc=(-I "$compat" -I "$stubs" -I "$sdc_include" -I "$controller")
+inc=(-I "$compat" -I "$root/ports/freertos-nrf52833/include" -I "$stubs" -I "$sdc_include" -I "$controller")
 cfg=(-include "$compat/woz_freertos_hci_config.h")
 
 # The dispatcher is compiled with the port's warnings, unmodified and unpatched.
@@ -124,5 +127,51 @@ fi
 	-o "$hp_bin"
 printf '  ok   the pinned high-precision timer platform compiles unmodified\n'
 "$hp_bin"
+
+# The OpenThread radio platform is the whole otPlatRadio implementation, and
+# its Zephyr surface is small enough to shim rather than reimplement: one
+# semaphore, one intrusive queue, atomics, byte order, logging and assertions.
+# Compiling it here is what proves that surface has not grown.
+if [ ! -f "$ot_radio" ]; then
+	printf 'ncs-source-check: the OpenThread radio platform is missing\n' >&2
+	exit 2
+fi
+for header in zephyr/logging/log.h zephyr/kernel.h zephyr/device.h zephyr/sys/__assert.h \
+	zephyr/sys/byteorder.h; do
+	if ! rg -Fq "#include <$header>" "$ot_radio"; then
+		printf 'ncs-source-check: the radio platform no longer includes %s\n' "$header" >&2
+		exit 2
+	fi
+done
+if [ "$(rg -c '#include <zephyr/' "$ot_radio")" -ne 5 ]; then
+	printf 'ncs-source-check: the radio platform gained a Zephyr include the shim does not cover\n' >&2
+	exit 2
+fi
+# The shimmed <openthread.h> is empty on purpose. If the platform ever names
+# something from Zephyr's OpenThread integration, the shim has to grow with it.
+if rg -so 'openthread_[a-z0-9_]+' "$ot_radio" | sort -u |
+	rg -sv '^openthread_(802154_callbacks|handle_received_frame|platform_radio_set_eui64|nrf_802154_.*)$' |
+	rg -q .; then
+	printf 'ncs-source-check: the radio platform now calls into Zephyr OpenThread integration\n' >&2
+	exit 2
+fi
+# -Wno-unused-parameter: three OpenThread callbacks take an instance the Nordic
+# platform does not need. The Zephyr build does not enable -Wextra at all.
+"$CC" -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -fsyntax-only \
+	-include "$ot_compat/woz_freertos_ot_config.h" \
+	-I "$ot_compat" \
+	-I "$root/ports/freertos-nrf52833/include" \
+	-I "$ot_stubs" \
+	-I "$root/tests/ports/freertos-nrf52833/fake" \
+	-I "$workspace/modules/lib/openthread/include" \
+	-I "$workspace/modules/lib/openthread/examples/platforms" \
+	-I "$workspace/nrfxlib/nrf_802154/driver/include" \
+	-I "$workspace/nrfxlib/nrf_802154/common/include" \
+	-I "$nrfxlib_802154_include" \
+	-I "$workspace/nrfxlib/nrf_802154/driver/src" \
+	-I "$workspace/nrf/modules/openthread/platform" \
+	-DNRF52833_XXAA \
+	"$ot_radio"
+printf '  ok   the pinned OpenThread radio platform compiles against the port shim\n'
 
 printf 'RESULT: PINNED NCS SOURCES BUILD AND RUN; board proof remains\n'

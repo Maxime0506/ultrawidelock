@@ -74,6 +74,17 @@ The implemented foundation now includes:
   vendor tree unmodified. Unlike the low-power timer it depends on nothing but
   nrfx and the Nordic HAL, so it needs no compatibility layer and is used rather
   than reimplemented.
+- `thread/ot_compat/` and `thread/ot_kernel_freertos.c` carry Nordic's own
+  OpenThread radio platform, `radio_nrf5.c`, which is the whole otPlatRadio
+  implementation. It is pinned and compiled unmodified rather than rewritten:
+  its Zephyr surface is one semaphore, one intrusive queue, an atomic bit
+  array, four byte-order helpers, the logging macros and the assertions, and
+  every one of those is implemented here over FreeRTOS. The semaphore picks its
+  FreeRTOS entry point by reading IPSR, because the 802.15.4 driver callouts
+  signal it from an interrupt; the queue and the atomics mask interrupts for
+  the same reason. `woz_freertos_ot_config.h` states the Kconfig selection this
+  product resolves to, and `make freertos-ncs-source-check` fails if the
+  vendor file ever reaches past what the shim covers.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
