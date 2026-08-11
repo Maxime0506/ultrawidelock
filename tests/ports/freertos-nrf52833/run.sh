@@ -14,6 +14,7 @@ LPTIMER_BIN="$OUT/freertos_802154_lptimer_test"
 OT_KERNEL_BIN="$OUT/freertos_ot_kernel_test"
 OT_RADIO_BIN="$OUT/freertos_ot_radio_test"
 OT_ALARM_BIN="$OUT/freertos_ot_alarm_test"
+OT_MISC_BIN="$OUT/freertos_ot_misc_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -140,3 +141,15 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/thread/ot_alarm_freertos.c" \
 	-o "$OT_ALARM_BIN"
 "$OT_ALARM_BIN"
+
+# OpenThread's entropy, reset, and assertion platform.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_ot_misc.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_power.c" \
+	"$ROOT/ports/freertos-nrf52833/thread/ot_misc_freertos.c" \
+	-o "$OT_MISC_BIN"
+"$OT_MISC_BIN"

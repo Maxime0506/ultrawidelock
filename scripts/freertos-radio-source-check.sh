@@ -226,6 +226,39 @@ if ! rg -Fq '#define OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE 0' \
 fi
 printf '  ok   OpenThread alarm contract matches the port, microsecond timer still off\n'
 
+# thread/ot_misc_freertos.c implements these, and returns error codes by value
+# through a reproduced header, so the values are checked against the real one.
+ot_misc="$workspace/modules/lib/openthread/include/openthread/platform/misc.h"
+require_file "$ot_misc" 'OpenThread reset and assertion contract'
+for symbol in otPlatReset otPlatResetToBootloader otPlatGetResetReason otPlatAssertFail; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$ot_misc"; then
+		printf 'radio-source-check: OpenThread misc contract is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+if ! rg -q '[[:space:]]otPlatEntropyGet\(' \
+	"$workspace/modules/lib/openthread/include/openthread/platform/entropy.h"; then
+	printf 'radio-source-check: OpenThread entropy contract is missing\n' >&2
+	exit 2
+fi
+ot_error="$workspace/modules/lib/openthread/include/openthread/error.h"
+for pair in 'OT_ERROR_NONE = 0' 'OT_ERROR_FAILED = 1' 'OT_ERROR_INVALID_ARGS = 7' \
+	'OT_ERROR_NOT_CAPABLE = 27' ; do
+	if ! rg -Fq "$pair" "$ot_error"; then
+		printf 'radio-source-check: OpenThread error value moved: %s\n' "$pair" >&2
+		exit 2
+	fi
+done
+for pair in 'OT_PLAT_RESET_REASON_POWER_ON = 0' 'OT_PLAT_RESET_REASON_EXTERNAL = 1' \
+	'OT_PLAT_RESET_REASON_SOFTWARE = 2' 'OT_PLAT_RESET_REASON_FAULT    = 3' \
+	'OT_PLAT_RESET_REASON_OTHER    = 6' 'OT_PLAT_RESET_REASON_WATCHDOG = 8'; do
+	if ! rg -Fq "$pair" "$ot_misc"; then
+		printf 'radio-source-check: OpenThread reset reason moved: %s\n' "$pair" >&2
+		exit 2
+	fi
+done
+printf '  ok   OpenThread entropy, reset and error contracts match the port\n'
+
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then
 	printf 'radio-source-check: MPSL no longer documents RTOS-independent integration\n' >&2

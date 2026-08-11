@@ -104,6 +104,13 @@ The implemented foundation now includes:
   `OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE`, which this product leaves at
   upstream's default of zero, and `make freertos-radio-source-check` fails if
   that default ever changes.
+- `thread/ot_misc_freertos.c` is entropy, reset, and assertions. The reset
+  reason is latched at the first call and RESETREAS cleared, because that
+  register accumulates bits across resets and a reader that leaves it alone
+  keeps reporting the first reason the part ever had; where several bits are
+  set, the most specific one is reported. Resetting into the bootloader is
+  refused rather than turned into an ordinary reboot, because the DFU backend
+  has not defined a boot-mode signal yet.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.

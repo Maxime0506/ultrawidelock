@@ -39,6 +39,12 @@ void fake_ipsr_set(uint32_t value);
 
 #define __get_IPSR() fake_ipsr_get()
 
+/* System reset, recorded rather than performed. */
+unsigned fake_system_reset_count(void);
+void fake_system_reset(void);
+
+#define NVIC_SystemReset() fake_system_reset()
+
 /*
  * PRIMASK. The hardware-task state machine has to exclude every other context,
  * not just this driver's vector, so the model records the depth as well as the
