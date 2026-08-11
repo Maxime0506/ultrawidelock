@@ -66,6 +66,11 @@ The implemented foundation now includes:
   wrap. The hardware-task binding needs PPI channels this port has not
   allocated, so it returns the contract's own "no resources" rather than
   accepting work it cannot deliver.
+- The high-precision timer platform on TIMER1 is Nordic's own
+  `nrf_802154_hp_timer.c`, pinned in `platform.lock.yml` and compiled from the
+  vendor tree unmodified. Unlike the low-power timer it depends on nothing but
+  nrfx and the Nordic HAL, so it needs no compatibility layer and is used rather
+  than reimplemented.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
@@ -170,10 +175,10 @@ dispatcher answers most commands itself and stages the resulting Command
 Complete or Command Status in its own buffer; a read path that skipped it would
 lose every command response.
 
-Verify and exercise the dispatcher against an NCS workspace with:
+Build and run the pinned NCS sources against an NCS workspace with:
 
 ```sh
-make freertos-hci-dispatcher-check NCS_WORKSPACE=<path-to-ncs-workspace>
+make freertos-ncs-source-check NCS_WORKSPACE=<path-to-ncs-workspace>
 ```
 
 The controller pool is 4096 bytes. The pinned `SDC_MEM_*` macros put the

@@ -3,7 +3,7 @@
 # maintained upstream OpenThread and Nordic radio integration. The host port
 # test compiles the production OSAL and OpenThread runtime implementations.
 
-.PHONY: freertos-port-test freertos-platform-check freertos-radio-source-check freertos-ble-source-check freertos-hci-dispatcher-check freertos-build
+.PHONY: freertos-port-test freertos-platform-check freertos-radio-source-check freertos-ble-source-check freertos-ncs-source-check freertos-build
 
 ##@ DWM3001CDK FreeRTOS  ·  custom radio port in progress
 ## freertos-port-test: compile and run the standalone FreeRTOS port contract on the host
@@ -34,13 +34,13 @@ freertos-ble-source-check:
 	fi
 	@$(REPO_ROOT)/scripts/freertos-ble-source-check.sh "$(NIMBLE_SOURCE)"
 
-## freertos-hci-dispatcher-check: build and run the pinned HCI opcode dispatcher Zephyr-free
-freertos-hci-dispatcher-check:
+## freertos-ncs-source-check: build and run the pinned NCS sources (HCI dispatcher, high-precision timer)
+freertos-ncs-source-check:
 	@if [ -z "$(NCS_WORKSPACE)" ]; then \
 		printf '  Set NCS_WORKSPACE=<path-to-ncs-workspace>.\n' >&2; \
 		exit 2; \
 	fi
-	@$(REPO_ROOT)/scripts/freertos-hci-dispatcher-check.sh "$(NCS_WORKSPACE)"
+	@$(REPO_ROOT)/scripts/freertos-ncs-source-check.sh "$(NCS_WORKSPACE)"
 
 ## freertos-build: gated until the custom target build graph is assembled
 freertos-build:

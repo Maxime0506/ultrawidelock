@@ -21,13 +21,17 @@ nrfxlib:
   revision: cfb98f4bcd4efe00df0c741e137b42f307680402
   mpsl_sdc_binary_revision: 27037d53048dfe99a9f29aadde5b6ae2746cac75
 
-# The SDC command API is opcode-specific, so this dispatcher is compiled from
-# the vendor tree unmodified against ble/hci_compat rather than being patched or
-# partially reimplemented. make freertos-hci-dispatcher-check builds and runs it.
+# Both files are compiled from the vendor tree unmodified rather than patched or
+# reimplemented. The SDC command API is opcode-specific, so the dispatcher is
+# built against ble/hci_compat; make freertos-ncs-source-check builds and
+# runs it. The high-precision timer platform already depends on nothing but nrfx
+# and the Nordic HAL, so it needs no compatibility layer at all.
 ncs_sdk_nrf:
   repository: https://github.com/nrfconnect/sdk-nrf
   revision: ba167d9f3db4abbdc9b67887ca3ea66c64f2d956
-  source: subsys/bluetooth/controller/hci_internal.c
+  sources:
+    - subsys/bluetooth/controller/hci_internal.c
+    - modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c
 
 hal_nordic:
   repository: https://github.com/zephyrproject-rtos/hal_nordic

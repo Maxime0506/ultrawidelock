@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Compile the pinned NCS HCI opcode dispatcher for this port and run it.
+# Compile the pinned NCS sources this port uses, and run them.
 #
-# The dispatcher is vendor source: it is built straight out of the workspace,
-# byte for byte, with no patch step. Everything it needs from Zephyr is
-# supplied by ports/freertos-nrf52833/ble/hci_compat, so this script is the
-# proof that the port can reach the SoftDevice Controller's opcode-specific
-# command API without linking Zephyr.
+# Both are vendor source built straight out of the workspace, byte for byte,
+# with no patch step. The HCI opcode dispatcher gets everything it needs from
+# Zephyr through ports/freertos-nrf52833/ble/hci_compat, so this is the proof
+# that the port reaches the SoftDevice Controller's opcode-specific command API
+# without linking Zephyr. The high-precision timer platform needs no
+# compatibility layer at all, which is why it is used rather than reimplemented.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
@@ -18,11 +19,14 @@ workspace=$1
 lock="$root/ports/freertos-nrf52833/platform.lock.yml"
 controller="$workspace/nrf/subsys/bluetooth/controller"
 sdc_include="$workspace/nrfxlib/softdevice_controller/include"
+nrfxlib_802154_include="$workspace/nrfxlib/nrf_802154/sl/include"
 compat="$root/ports/freertos-nrf52833/ble/hci_compat"
 stubs="$root/tests/ports/freertos-nrf52833/fake/dispatcher"
 out="${ALIRO_BUILD_ROOT:-$root/build}/freertos-nrf52833-host"
 gen="$out/stub_sdc_hci_cmd_generated.c"
 bin="$out/freertos_hci_dispatcher_test"
+hp_bin="$out/freertos_hp_timer_test"
+hp_timer="$workspace/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
 
 expected=$(awk '
 	$0 == "ncs_sdk_nrf:" { active = 1; next }
@@ -31,7 +35,7 @@ expected=$(awk '
 ' "$lock")
 actual=$(git -C "$workspace/nrf" rev-parse HEAD 2>/dev/null || true)
 if [ "$actual" != "$expected" ]; then
-	printf 'hci-dispatcher-check: sdk-nrf revision does not match platform.lock.yml\n' >&2
+	printf 'ncs-source-check: sdk-nrf revision does not match platform.lock.yml\n' >&2
 	exit 2
 fi
 printf '  ok   sdk-nrf revision matches platform.lock.yml\n'
@@ -41,7 +45,7 @@ mkdir -p "$out"
 # Nothing here rewrites the vendor file, so a re-pin is a plain re-fetch.
 if grep -q 'zephyr/' "$controller/hci_internal.c" && \
 	[ "$(grep -c '#include <zephyr/' "$controller/hci_internal.c")" -ne 3 ]; then
-	printf 'hci-dispatcher-check: the dispatcher gained a Zephyr include the compat layer does not cover\n' >&2
+	printf 'ncs-source-check: the dispatcher gained a Zephyr include the compat layer does not cover\n' >&2
 	exit 2
 fi
 
@@ -77,7 +81,7 @@ nm -u "$out/hci_internal.o" |
 			collecting { line = line $0; if (/;/) { print line; exit } }
 		' "$sdc_include"/sdc_hci_cmd_*.h "$sdc_include/sdc_hci_vs.h")
 		if [ -z "$decl" ]; then
-			printf 'hci-dispatcher-check: no prototype for %s\n' "$symbol" >&2
+			printf 'ncs-source-check: no prototype for %s\n' "$symbol" >&2
 			exit 2
 		fi
 		printf '%s { return woz_stub_record("%s"); }\n' "${decl%;}" "$symbol"
@@ -99,4 +103,26 @@ printf '  ok   the configured command surface is %s controller entry points\n' "
 	-o "$bin"
 
 "$bin"
-printf 'RESULT: PINNED OPCODE DISPATCHER PORTED; board proof remains\n'
+
+# The high-precision timer platform is vendor source with no Zephyr dependency
+# at all, so it is compiled as-is against the port's frozen TIMER1 assignment.
+if [ ! -f "$hp_timer" ]; then
+	printf 'ncs-source-check: high-precision timer platform is missing\n' >&2
+	exit 2
+fi
+if rg -q '#include <zephyr/' "$hp_timer"; then
+	printf 'ncs-source-check: the high-precision timer platform gained a Zephyr include\n' >&2
+	exit 2
+fi
+"$CC" -std=c11 -O1 -Wall -Wextra -Werror \
+	-I "$stubs" \
+	-I "$root/tests/ports/freertos-nrf52833/fake" \
+	-I "$nrfxlib_802154_include" \
+	"$root/tests/ports/freertos-nrf52833/test_802154_hp_timer.c" \
+	"$root/tests/ports/freertos-nrf52833/fake/fake_timer.c" \
+	"$hp_timer" \
+	-o "$hp_bin"
+printf '  ok   the pinned high-precision timer platform compiles unmodified\n'
+"$hp_bin"
+
+printf 'RESULT: PINNED NCS SOURCES BUILD AND RUN; board proof remains\n'

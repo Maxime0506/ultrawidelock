@@ -9,6 +9,11 @@
 #ifndef WOZ_DISPATCHER_NRFX_H
 #define WOZ_DISPATCHER_NRFX_H
 
+/* The real nrfx.h reaches these transitively, and vendor sources rely on it. */
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #define __PACKED   __attribute__((packed))
 #define __ALIGN(n) __attribute__((aligned(n)))
 
