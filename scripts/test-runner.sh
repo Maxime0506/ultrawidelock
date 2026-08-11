@@ -12,6 +12,8 @@
 # Default: suites run in parallel, failures replayed when done. SERIAL=1 streams
 # full output one suite at a time. SUITES="firmware shared" scopes. Exit is
 # nonzero if any suite fails.
+#
+#   scripts/test-runner.sh --self-test   # prove the counter counts each check once
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -41,10 +43,15 @@ suite_label() {
 
 # passed/failed counts from a suite's captured output. Harnesses differ, so
 # count the universal per-check rows plus each harness's own totals line.
+#
+# A harness that prints both -- a row per check AND a "PASS (N checks)" line --
+# must be counted once, not twice. The totals line is therefore only believed
+# when the binary that printed it emitted no rows of its own, which is tracked
+# by resetting the row count at each totals line.
 suite_counts() { # <outfile> -> "passed failed"
 	awk '
-		/^[[:space:]]+ok[[:space:]]/    { p++ }
-		/^[[:space:]]+FAIL[[:space:]]/  { f++ }
+		/^[[:space:]]+ok[[:space:]]/    { p++; rows++ }
+		/^[[:space:]]+FAIL[[:space:]]/  { f++; rows++ }
 		/^Ran [0-9]+ tests?/            { p += $2 }
 		/skipped=[0-9]+/ {
 			if (match($0, /skipped=[0-9]+/)) {
@@ -52,15 +59,67 @@ suite_counts() { # <outfile> -> "passed failed"
 			}
 		}
 		/TOTAL[[:space:]]+[0-9]+[[:space:]]+✓/ { p += $2 }
-		/: PASS \([0-9]+ checks/ {
-			if (match($0, /\([0-9]+ checks/)) {
+		/: (PASS|FAIL) \([0-9]+ checks/ {
+			if (rows == 0 && match($0, /\([0-9]+ checks/)) {
 				p += substr($0, RSTART + 1, RLENGTH - 8)
 			}
+			rows = 0
 		}
 		/constants? verified/           { p += $1 }
 		END { printf "%d %d", p + 0, f + 0 }
 	' "$1"
 }
+
+# ---- self-test --------------------------------------------------------------
+# The counter reads several harness dialects, and the way it gets those wrong is
+# by counting one check twice. That is invisible in a green run -- the totals
+# just drift upward -- so the shapes are pinned here.
+self_test() {
+	local tmp fails=0 got want name
+	tmp="$(mktemp)"
+	trap 'rm -f "$tmp"' RETURN
+
+	expect() { # <name> <want-passed> <want-failed>
+		name="$1"; want="$2 $3"
+		got="$(suite_counts "$tmp")"
+		if [ "$got" != "$want" ]; then
+			printf '  self-test FAILED: %s counted "%s", expected "%s"\n' \
+				"$name" "$got" "$want" >&2
+			fails=$((fails + 1))
+		fi
+	}
+
+	# Rows plus a totals line: the harness most of this repo uses. The totals
+	# line restates the rows and must not be added to them.
+	printf '  ok   one\n  ok   two\nRESULT: PASS (2 checks)\n' >"$tmp"
+	expect "rows with a totals line" 2 0
+
+	# A totals line with no rows behind it is the only count available.
+	printf 'RESULT: PASS (7 checks)\n' >"$tmp"
+	expect "a totals line alone" 7 0
+
+	# Both dialects in one stream, which is what the FreeRTOS suite emits.
+	printf '  ok   a\nRESULT: PASS (1 checks)\nRESULT: PASS (5 checks)\n' >"$tmp"
+	expect "rows then a bare totals line" 6 0
+
+	# Failures count as failures and still stop the totals line double-counting.
+	printf '  ok   a\n  FAIL b\nRESULT: FAIL (2 checks)\n' >"$tmp"
+	expect "a failing harness" 1 1
+
+	# Forked scenarios report parts and a scenario count, never a check total.
+	printf '  ok   a\n  ok   b\nRESULT-PART: 2 checks\nRESULT: PASS (1 scenarios)\n' >"$tmp"
+	expect "forked scenarios" 2 0
+
+	if [ "$fails" -ne 0 ]; then
+		return 1
+	fi
+	printf '  self-test: the counter counts each check exactly once\n'
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+	self_test
+	exit $?
+fi
 
 run_suite() { # <suite> <outfile> <metafile>
 	local s="$1" out="$2" meta="$3" cmd t0 t1 rc=0
