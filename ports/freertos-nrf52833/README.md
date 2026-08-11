@@ -7,7 +7,8 @@ Nordic, Qorvo, or FreeRTOS headers directly.
 The implemented foundation now includes:
 
 - `include/woz_freertos_platform.h` defines the BSP-owned clock, cycle-counter,
-  busy-wait, and logging hooks.
+  busy-wait, flash, and logging hooks. Flash is BSP-owned because MPSL has to
+  arbitrate the NVMC stall against radio timeslots.
 - `osal/osal_freertos.c` implements deferred work, delayable work, semaphores,
   init hooks, and static-stack threads using only FreeRTOS APIs.
 - `thread/openthread_freertos.c` owns one upstream OpenThread instance on a
@@ -111,6 +112,19 @@ The implemented foundation now includes:
   set, the most specific one is reported. Resetting into the bootloader is
   refused rather than turned into an ordinary reboot, because the DFU backend
   has not defined a boot-mode signal yet.
+- `storage/kv_flash_freertos.c` is the persistent key-value store the reader's
+  provisioning blob and OpenThread's settings both need. It is an append-only
+  log over two flash pages, so a value is replaced by appending a newer record
+  rather than by rewriting an older one; the newest record for a key wins, and
+  compaction copies the live set to the other page and erases the first. Every
+  order in it is chosen against a power loss: a record's state word is written
+  after its payload, so a torn record is never mistaken for a complete one, and
+  a compaction target's page header is written after its records, so an
+  interrupted compaction loses the work and not the data. The store occupies
+  the same two pages the Zephyr oracle reserves at `0x7e000`, but its record
+  format is its own and is not Zephyr NVS: a board reflashed from the Zephyr
+  build finds no valid page, reformats, and loses whatever the Zephyr settings
+  partition held.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
