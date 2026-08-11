@@ -165,10 +165,16 @@ for symbol in nrf_802154_platform_sl_lp_timer_init nrf_802154_platform_sl_lp_tim
 		exit 2
 	fi
 done
-# The refusal the port returns for the unwired hardware-task binding has to
-# stay a value the contract actually defines.
-for macro in NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES \
-	NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE; do
+# Every answer the port gives has to stay a value the contract defines, and the
+# hardware task has to keep taking its channel from the caller: the 802.15.4
+# driver core owns the PPI allocation, so the port never picks a channel and
+# cannot collide with MPSL.
+for macro in NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS \
+	NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE \
+	NRF_802154_SL_LPTIMER_PLATFORM_TOO_DISTANT \
+	NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES \
+	NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE \
+	NRF_802154_SL_HW_TASK_PPI_INVALID; do
 	if ! rg -Fq "$macro" "$lptimer"; then
 		printf 'radio-source-check: 802.15.4 low-power timer result code is missing: %s\n' \
 			"$macro" >&2
@@ -176,6 +182,28 @@ for macro in NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES \
 	fi
 done
 printf '  ok   nRF 802.15.4 low-power timer contract matches the RTC2 platform\n'
+
+# The timestamper platform is a cross-domain abstraction for the parts that
+# have one, and nRF52833 does not: the service layer binary for this part asks
+# for none of it. Implementing it here would be writing code nothing calls, so
+# the claim is checked rather than assumed.
+sl_lib="$nrfxlib/nrf_802154/sl/sl/lib/nrf52833/soft-float/libnrf-802154-sl.a"
+require_file "$sl_lib" 'nRF52833 802.15.4 service layer library'
+if nm -u "$sl_lib" 2>/dev/null | rg -q 'nrf_802154_platform_timestamper'; then
+	printf 'radio-source-check: the nRF52833 service layer now needs the timestamper platform\n' >&2
+	exit 2
+fi
+# The same library is what names the platform this port has to satisfy, so an
+# entry point appearing there that nothing implements has to be caught here.
+for symbol in nrf_802154_platform_sl_lptimer_hw_task_prepare \
+	nrf_802154_platform_sl_lptimer_hw_task_cleanup \
+	nrf_802154_platform_sl_lptimer_hw_task_update_ppi; do
+	if ! nm -u "$sl_lib" 2>/dev/null | rg -q "[[:space:]]${symbol}\$"; then
+		printf 'radio-source-check: the service layer no longer calls: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+printf '  ok   the nRF52833 service layer calls the hardware task and no timestamper\n'
 
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then

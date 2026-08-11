@@ -60,12 +60,15 @@ The implemented foundation now includes:
   counts 24 bits, so the counter is extended with an overflow count; reads mask
   the timer interrupt briefly, because the counter and the count are written by
   two contexts and no ordering of those writes is safe to read lock-free.
-  Compare channel 0 carries the scheduled timer and channel 1 the timestamper
-  synchronization event. A deadline already past, or too near for the compare
-  write to be seen, pends the interrupt instead of waiting out a 512 second
-  wrap. The hardware-task binding needs PPI channels this port has not
-  allocated, so it returns the contract's own "no resources" rather than
-  accepting work it cannot deliver.
+  Compare channel 0 carries the scheduled timer, channel 1 the timestamper
+  synchronization event, and channel 2 the hardware task. A deadline already
+  past, or too near for the compare write to be seen, pends the interrupt
+  instead of waiting out a 512 second wrap. The hardware task is armed with its
+  event enabled and its interrupt off, because PPI carries it to another
+  peripheral with no CPU involvement; the channel it publishes to is allocated
+  by the 802.15.4 driver core and passed in, so this port never picks one and
+  cannot collide with MPSL. Unlike most nRF peripherals the RTC raises no event
+  at all until EVTEN says so, so every channel is armed with both bits.
 - The high-precision timer platform on TIMER1 is Nordic's own
   `nrf_802154_hp_timer.c`, pinned in `platform.lock.yml` and compiled from the
   vendor tree unmodified. Unlike the low-power timer it depends on nothing but

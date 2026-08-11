@@ -30,3 +30,6 @@ handoffs:
     nrf_802154_lptimer_freertos_irq_handler; the port owns the rest.
   - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
   - Verify every PPI channel against MPSL and nRF 802.15.4 masks at target compile time.
+    The low-power timer hardware task does not need an entry here: the 802.15.4
+    driver core allocates that channel from its own mask and hands it to the
+    platform.

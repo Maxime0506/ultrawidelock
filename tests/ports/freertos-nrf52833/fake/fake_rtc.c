@@ -4,9 +4,12 @@
 
 fake_rtc_t fake_rtc2;
 
+static uint32_t s_advance_on_cc_set;
+
 void fake_rtc_reset(void)
 {
 	memset(&fake_rtc2, 0, sizeof(fake_rtc2));
+	s_advance_on_cc_set = 0;
 }
 
 nrf_rtc_event_t nrf_rtc_compare_event_get(uint8_t index)
@@ -19,9 +22,21 @@ static uint32_t event_channel(nrf_rtc_event_t event)
 	return ((uint32_t)event - (uint32_t)NRF_RTC_EVENT_COMPARE_0) / 4u;
 }
 
+void fake_rtc_advance_on_next_cc_set(uint32_t ticks)
+{
+	s_advance_on_cc_set = ticks;
+}
+
 void nrf_rtc_cc_set(NRF_RTC_Type *p_reg, uint32_t ch, uint32_t cc_val)
 {
+	uint32_t pending = s_advance_on_cc_set;
+
 	p_reg->cc[ch] = cc_val & NRF_RTC_COUNTER_MAX;
+
+	if (pending != 0u) {
+		s_advance_on_cc_set = 0;
+		fake_rtc_advance(pending);
+	}
 }
 
 uint32_t nrf_rtc_cc_get(const NRF_RTC_Type *p_reg, uint32_t ch)
@@ -42,6 +57,16 @@ void nrf_rtc_int_disable(NRF_RTC_Type *p_reg, uint32_t mask)
 uint32_t nrf_rtc_int_enable_check(const NRF_RTC_Type *p_reg, uint32_t mask)
 {
 	return p_reg->int_mask & mask;
+}
+
+void nrf_rtc_event_enable(NRF_RTC_Type *p_reg, uint32_t mask)
+{
+	p_reg->evt_mask |= mask;
+}
+
+void nrf_rtc_event_disable(NRF_RTC_Type *p_reg, uint32_t mask)
+{
+	p_reg->evt_mask &= ~mask;
 }
 
 bool nrf_rtc_event_check(const NRF_RTC_Type *p_reg, nrf_rtc_event_t event)
@@ -110,11 +135,13 @@ void fake_rtc_advance(uint32_t ticks)
 
 	for (i = 0; i < ticks; i++) {
 		fake_rtc2.counter = (fake_rtc2.counter + 1u) & NRF_RTC_COUNTER_MAX;
-		if (fake_rtc2.counter == 0u) {
+		if (fake_rtc2.counter == 0u &&
+		    (fake_rtc2.evt_mask & NRF_RTC_INT_OVERFLOW_MASK) != 0u) {
 			fake_rtc2.event_overflow = true;
 		}
 		for (ch = 0; ch < NRF_RTC_CHANNEL_COUNT; ch++) {
-			if (fake_rtc2.counter == fake_rtc2.cc[ch]) {
+			if (fake_rtc2.counter == fake_rtc2.cc[ch] &&
+			    (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(ch)) != 0u) {
 				fake_rtc2.event_compare[ch] = true;
 			}
 		}

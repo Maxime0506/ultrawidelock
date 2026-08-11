@@ -11,9 +11,17 @@
 
 #include "fake_nrf.h"
 
+#include <hal/nrf_ppi.h>
 #include <hal/nrf_rtc.h>
 #include <nrfx.h>
 #include <platform/nrf_802154_platform_sl_lptimer.h>
+
+/*
+ * Two channels out of the 802.15.4 driver core's own PPI allocation. The
+ * numbers only have to be distinct: this platform never picks them.
+ */
+#define HW_TASK_PPI 12u
+#define HW_TASK_PPI_ALT 13u
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -78,6 +86,8 @@ static void reset_all(void)
 {
 	fake_rtc_reset();
 	fake_nrf_reset();
+	fake_ppi_reset();
+	fake_primask_reset();
 	g_handler_calls = 0;
 	g_handler_now = 0;
 	g_sync_calls = 0;
@@ -228,18 +238,108 @@ int main(void)
 		      (uint32_t)(uintptr_t)&fake_rtc2 + (uint32_t)NRF_RTC_EVENT_COMPARE_1);
 
 	/*
-	 * The hardware-task binding needs PPI channels this port has not
-	 * allocated. The contract has an answer for that, and refusing is what
-	 * makes the service layer fall back instead of waiting for a trigger
-	 * that never arrives.
+	 * The hardware task. The 802.15.4 driver core owns the PPI channel and
+	 * hands it in, so what this platform is responsible for is the compare
+	 * itself, the event endpoint, and refusing every request the contract
+	 * says it must refuse.
 	 */
-	CHECK("the unwired hardware task reports no resources rather than accepting",
-	      nrf_802154_platform_sl_lptimer_hw_task_prepare(1000, 3) ==
-			      NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES &&
-		      nrf_802154_platform_sl_lptimer_hw_task_update_ppi(3) ==
+	CHECK("a hardware task cannot be cleaned up or re-pointed before it exists",
+	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
 			      NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE &&
-		      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
+		      nrf_802154_platform_sl_lptimer_hw_task_update_ppi(HW_TASK_PPI) ==
 			      NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE);
+
+	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
+	CHECK("a target beyond half a wrap is refused as too distant",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(now + (1uLL << 23) + 1, HW_TASK_PPI) ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_TOO_DISTANT);
+	CHECK("a target already reached is refused as too late",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(now, HW_TASK_PPI) ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE);
+	CHECK("a refused preparation leaves the channel and the endpoint untouched",
+	      fake_ppi.event_endpoint[HW_TASK_PPI] == 0 &&
+		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) == 0);
+
+	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
+	CHECK("a reachable target is accepted",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(now + 100, HW_TASK_PPI) ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS);
+	CHECK("the compare is armed on the channel reserved for the hardware task",
+	      fake_rtc2.cc[2] == (uint32_t)((now + 100) & 0xffffffu) &&
+		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) != 0);
+	CHECK("the hardware task raises no interrupt, because PPI carries it",
+	      (fake_rtc2.int_mask & NRF_RTC_INT_COMPARE2_MASK) == 0);
+	CHECK("the compare event is published to the channel the caller allocated",
+	      fake_ppi.event_endpoint[HW_TASK_PPI] ==
+		      (uint32_t)(uintptr_t)&fake_rtc2 + (uint32_t)NRF_RTC_EVENT_COMPARE_2);
+	CHECK("the mask is left exactly as it was found",
+	      fake_primask_get() == 0 && fake_primask_disable_count() > 0);
+
+	/*
+	 * The counter does not stop while the compare is being written, so a
+	 * target can go past between the check and the write. The software timer
+	 * pends its interrupt; the hardware task has no interrupt to pend, so it
+	 * has to unwind and say so.
+	 */
+	CHECK("a second preparation is refused while the one set of peripherals is busy",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(
+		      nrf_802154_platform_sl_lptimer_current_lpticks_get() + 100, HW_TASK_PPI) ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES);
+
+	CHECK("re-pointing a pending task moves the event to the new channel",
+	      nrf_802154_platform_sl_lptimer_hw_task_update_ppi(HW_TASK_PPI_ALT) ==
+			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
+		      fake_ppi.event_endpoint[HW_TASK_PPI_ALT] ==
+			      (uint32_t)(uintptr_t)&fake_rtc2 + (uint32_t)NRF_RTC_EVENT_COMPARE_2);
+
+	before = g_handler_calls;
+	run_ticks(200);
+	CHECK("the hardware task fires without waking the timer handler",
+	      fake_rtc2.event_compare[2] && g_handler_calls == before);
+	CHECK("re-pointing after the compare has passed reports it as too late",
+	      nrf_802154_platform_sl_lptimer_hw_task_update_ppi(HW_TASK_PPI) ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE);
+
+	CHECK("cleanup disarms the compare and takes the endpoint back down",
+	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
+			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
+		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) == 0 &&
+		      !fake_rtc2.event_compare[2] && fake_ppi.event_endpoint[HW_TASK_PPI] == 0);
+	CHECK("cleanup a second time is refused rather than repeated",
+	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE);
+
+	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
+	fake_rtc_advance_on_next_cc_set(20);
+	CHECK("a target overtaken while the compare is written is not left to a wrap",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(now + 10, HW_TASK_PPI) ==
+		      NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE);
+	CHECK("the overtaken binding is unwound, not left armed",
+	      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) == 0 &&
+		      fake_ppi.event_endpoint[HW_TASK_PPI] == 0);
+	CHECK("an unwound binding leaves the platform free to prepare again",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(
+		      nrf_802154_platform_sl_lptimer_current_lpticks_get() + 100, HW_TASK_PPI) ==
+			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
+		      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
+			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS);
+
+	/*
+	 * The service layer may prepare a binding before it knows which channel
+	 * it will use. The compare still has to be armed, so that the later
+	 * update has something to point at.
+	 */
+	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
+	CHECK("a task prepared without a channel still arms its compare",
+	      nrf_802154_platform_sl_lptimer_hw_task_prepare(
+		      now + 100, NRF_802154_SL_HW_TASK_PPI_INVALID) ==
+			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
+		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) != 0);
+	CHECK("cleaning up a task that never had a channel touches no endpoint",
+	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
+			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
+		      fake_ppi.event_endpoint[HW_TASK_PPI] == 0 &&
+		      fake_ppi.event_endpoint[HW_TASK_PPI_ALT] == 0);
 
 	nrf_802154_platform_sl_lp_timer_deinit();
 	CHECK("deinit stops the counter and releases the vector",

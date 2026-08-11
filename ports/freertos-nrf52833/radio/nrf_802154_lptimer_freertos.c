@@ -6,16 +6,21 @@
  * linked, because it claims the same peripheral.
  *
  * The service layer works in 64-bit "lpticks" while RTC2 counts 24 bits at
- * 32768 Hz, so the counter is extended here with an overflow count. Two of the
- * four compare channels are used: channel 0 for the scheduled timer and
- * channel 1 for the timestamper synchronization event. Channel 2 is reserved
- * for the hardware-task binding, which is not wired yet.
+ * 32768 Hz, so the counter is extended here with an overflow count. Three of
+ * the four compare channels are used: channel 0 for the scheduled timer,
+ * channel 1 for the timestamper synchronization event, and channel 2 for the
+ * hardware-task binding.
+ *
+ * Unlike most nRF peripherals the RTC only produces an event when its EVTEN
+ * bit is set, so every channel this driver arms enables the event as well as
+ * the interrupt.
  */
 #include <platform/nrf_802154_platform_sl_lptimer.h>
 
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <hal/nrf_ppi.h>
 #include <hal/nrf_rtc.h>
 #include <nrfx.h>
 
@@ -27,6 +32,10 @@
 
 #define LPTIMER_CHANNEL_TIMER 0u
 #define LPTIMER_CHANNEL_SYNC 1u
+#define LPTIMER_CHANNEL_HW_TASK 2u
+
+/* INTEN and EVTEN share bit positions, one bit per compare channel. */
+#define LPTIMER_CHANNEL_MASK(ch) (1uL << (16u + (ch)))
 
 /* The RTC counter is 24 bits and its LFCLK is exactly 32768 Hz. */
 #define LPTIMER_COUNTER_BITS 24u
@@ -143,6 +152,27 @@ uint32_t nrf_802154_platform_sl_lptimer_granularity_get(void)
 }
 
 /*
+ * Arms one compare channel at a raw counter value. The event is enabled for
+ * every channel; the interrupt only for the ones this driver services, since
+ * the hardware task is delivered by PPI and must not wake the CPU.
+ */
+static void compare_arm(uint32_t channel, uint32_t cc, bool enable_irq)
+{
+	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get((uint8_t)channel));
+	nrf_rtc_cc_set(LPTIMER_RTC, channel, cc);
+	if (enable_irq) {
+		nrf_rtc_int_enable(LPTIMER_RTC, LPTIMER_CHANNEL_MASK(channel));
+	}
+	nrf_rtc_event_enable(LPTIMER_RTC, LPTIMER_CHANNEL_MASK(channel));
+}
+
+static void compare_disarm(uint32_t channel)
+{
+	nrf_rtc_int_disable(LPTIMER_RTC, LPTIMER_CHANNEL_MASK(channel));
+	nrf_rtc_event_disable(LPTIMER_RTC, LPTIMER_CHANNEL_MASK(channel));
+}
+
+/*
  * Programs one compare channel toward an absolute target. Returns false when
  * the target is already reached, in which case the caller fires immediately
  * rather than waiting a full wrap for the counter to come back round.
@@ -160,11 +190,7 @@ static bool compare_program(uint32_t channel, uint64_t target_lpticks)
 	distance = target_lpticks - now;
 	deadline = (distance > LPTIMER_MAX_HORIZON) ? (now + LPTIMER_MAX_HORIZON) : target_lpticks;
 
-	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get((uint8_t)channel));
-	nrf_rtc_cc_set(LPTIMER_RTC, channel, (uint32_t)(deadline & LPTIMER_COUNTER_MASK));
-	nrf_rtc_int_enable(LPTIMER_RTC, channel == LPTIMER_CHANNEL_TIMER
-					       ? NRF_RTC_INT_COMPARE0_MASK
-					       : NRF_RTC_INT_COMPARE1_MASK);
+	compare_arm(channel, (uint32_t)(deadline & LPTIMER_COUNTER_MASK), true);
 
 	/*
 	 * The counter kept running while the compare was written, so re-check
@@ -201,7 +227,7 @@ void nrf_802154_platform_sl_lptimer_schedule_at(uint64_t fire_lpticks)
 void nrf_802154_platform_sl_lptimer_disable(void)
 {
 	s_timer_armed = false;
-	nrf_rtc_int_disable(LPTIMER_RTC, NRF_RTC_INT_COMPARE0_MASK);
+	compare_disarm(LPTIMER_CHANNEL_TIMER);
 	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get(LPTIMER_CHANNEL_TIMER));
 }
 
@@ -268,13 +294,13 @@ void nrf_802154_platform_sl_lptimer_sync_schedule_at(uint64_t fire_lpticks)
 	 * synchronization point that will never arrive.
 	 */
 	s_sync_armed = false;
-	nrf_rtc_int_disable(LPTIMER_RTC, NRF_RTC_INT_COMPARE1_MASK);
+	compare_disarm(LPTIMER_CHANNEL_SYNC);
 }
 
 void nrf_802154_platform_sl_lptimer_sync_abort(void)
 {
 	s_sync_armed = false;
-	nrf_rtc_int_disable(LPTIMER_RTC, NRF_RTC_INT_COMPARE1_MASK);
+	compare_disarm(LPTIMER_CHANNEL_SYNC);
 	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get(LPTIMER_CHANNEL_SYNC));
 }
 
@@ -291,29 +317,179 @@ uint64_t nrf_802154_platform_sl_lptimer_sync_lpticks_get(void)
 
 /*
  * The hardware-task binding routes a compare event straight to another
- * peripheral's task over PPI, which this port has not allocated channels for
- * yet. Reporting that there are no resources is the contract's own answer for
- * exactly this case, and the service layer falls back to software triggering,
- * so it is refused here rather than silently accepted and never delivered.
+ * peripheral's task over PPI, with no CPU involvement, so the compare is armed
+ * with its event enabled but its interrupt left off. The channel itself is
+ * allocated and enabled by the 802.15.4 driver core and handed in here, so all
+ * this side owns is the event endpoint.
+ *
+ * The state machine is the contract's, not this port's: the service layer
+ * prepares a binding, may re-point it at a different channel, and then cleans
+ * it up, and each of those is only legal from one state. There is a single set
+ * of peripherals, so a second preparation is refused rather than queued.
  */
+enum hw_task_state {
+	HW_TASK_IDLE = 0,
+	HW_TASK_SETTING_UP,
+	HW_TASK_READY,
+	HW_TASK_UPDATING,
+	HW_TASK_CLEANING,
+};
+
+static enum hw_task_state s_hw_task_state;
+static uint32_t s_hw_task_ppi = NRF_802154_SL_HW_TASK_PPI_INVALID;
+static uint64_t s_hw_task_fire_lpticks;
+
+/*
+ * Compare-and-set against every other context. The callers run at different
+ * interrupt priorities, so masking this driver's own vector is not enough and
+ * PRIMASK is held for the two instructions the swap takes.
+ */
+static bool hw_task_state_set(enum hw_task_state expected, enum hw_task_state next)
+{
+	uint32_t primask = __get_PRIMASK();
+	bool swapped;
+
+	__disable_irq();
+	swapped = (s_hw_task_state == expected);
+	if (swapped) {
+		s_hw_task_state = next;
+	}
+	__set_PRIMASK(primask);
+
+	return swapped;
+}
+
+static void hw_task_ppi_attach(uint32_t ppi_channel)
+{
+	if (ppi_channel == NRF_802154_SL_HW_TASK_PPI_INVALID) {
+		return;
+	}
+	nrf_ppi_event_endpoint_setup(
+		NRF_PPI, (nrf_ppi_channel_t)ppi_channel,
+		nrf_rtc_event_address_get(LPTIMER_RTC,
+					  nrf_rtc_compare_event_get(LPTIMER_CHANNEL_HW_TASK)));
+}
+
+static void hw_task_ppi_detach(void)
+{
+	if (s_hw_task_ppi != NRF_802154_SL_HW_TASK_PPI_INVALID) {
+		nrf_ppi_event_endpoint_setup(NRF_PPI, (nrf_ppi_channel_t)s_hw_task_ppi, 0);
+		s_hw_task_ppi = NRF_802154_SL_HW_TASK_PPI_INVALID;
+	}
+}
+
+static void hw_task_abort(void)
+{
+	compare_disarm(LPTIMER_CHANNEL_HW_TASK);
+	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get(LPTIMER_CHANNEL_HW_TASK));
+	hw_task_ppi_detach();
+}
+
 nrf_802154_sl_lptimer_platform_result_t nrf_802154_platform_sl_lptimer_hw_task_prepare(
 	uint64_t fire_lpticks, uint32_t ppi_channel)
 {
-	(void)fire_lpticks;
-	(void)ppi_channel;
-	return NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES;
+	uint32_t primask;
+	uint64_t now;
+
+	if (!hw_task_state_set(HW_TASK_IDLE, HW_TASK_SETTING_UP)) {
+		/* The one set of peripherals this platform has is already in use. */
+		return NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES;
+	}
+
+	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
+
+	/*
+	 * Past half a wrap the compare value stops being distinguishable from one
+	 * already behind the counter. A software timer can hop toward a distant
+	 * target, but a hardware task fires once and cannot, so it is refused.
+	 */
+	if (fire_lpticks > now && (fire_lpticks - now) > LPTIMER_MAX_HORIZON) {
+		(void)hw_task_state_set(HW_TASK_SETTING_UP, HW_TASK_IDLE);
+		return NRF_802154_SL_LPTIMER_PLATFORM_TOO_DISTANT;
+	}
+
+	primask = __get_PRIMASK();
+	__disable_irq();
+
+	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
+	if (fire_lpticks <= now + LPTIMER_MIN_COMPARE_DISTANCE) {
+		__set_PRIMASK(primask);
+		(void)hw_task_state_set(HW_TASK_SETTING_UP, HW_TASK_IDLE);
+		return NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE;
+	}
+
+	compare_arm(LPTIMER_CHANNEL_HW_TASK, (uint32_t)(fire_lpticks & LPTIMER_COUNTER_MASK),
+		    false);
+	hw_task_ppi_attach(ppi_channel);
+	s_hw_task_ppi = ppi_channel;
+	s_hw_task_fire_lpticks = fire_lpticks;
+
+	/*
+	 * The counter kept running while the compare was written. A match missed
+	 * by a tick would not come round again for a full wrap, and unlike the
+	 * software timer there is no interrupt here to notice, so the binding is
+	 * torn back down instead.
+	 */
+	if (fire_lpticks <= nrf_802154_platform_sl_lptimer_current_lpticks_get()) {
+		hw_task_abort();
+		__set_PRIMASK(primask);
+		(void)hw_task_state_set(HW_TASK_SETTING_UP, HW_TASK_IDLE);
+		return NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE;
+	}
+
+	__set_PRIMASK(primask);
+
+	(void)hw_task_state_set(HW_TASK_SETTING_UP, HW_TASK_READY);
+	return NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS;
 }
 
 nrf_802154_sl_lptimer_platform_result_t nrf_802154_platform_sl_lptimer_hw_task_cleanup(void)
 {
-	return NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE;
+	if (!hw_task_state_set(HW_TASK_READY, HW_TASK_CLEANING)) {
+		return NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE;
+	}
+
+	hw_task_abort();
+
+	(void)hw_task_state_set(HW_TASK_CLEANING, HW_TASK_IDLE);
+	return NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS;
 }
 
 nrf_802154_sl_lptimer_platform_result_t nrf_802154_platform_sl_lptimer_hw_task_update_ppi(
 	uint32_t ppi_channel)
 {
-	(void)ppi_channel;
-	return NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE;
+	uint32_t primask;
+	bool fired;
+
+	if (!hw_task_state_set(HW_TASK_READY, HW_TASK_UPDATING)) {
+		return NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE;
+	}
+
+	primask = __get_PRIMASK();
+	__disable_irq();
+
+	/* The channel being replaced belongs to the caller again once it is
+	 * dropped, so the stale endpoint is taken down before the new one goes
+	 * up rather than left pointing at this compare.
+	 */
+	hw_task_ppi_detach();
+	hw_task_ppi_attach(ppi_channel);
+	s_hw_task_ppi = ppi_channel;
+
+	/*
+	 * The compare may have matched before the new channel was attached, in
+	 * which case the task it should have triggered never ran. Report that
+	 * rather than leave the caller waiting on an event that already went by.
+	 */
+	fired = nrf_rtc_event_check(LPTIMER_RTC,
+				    nrf_rtc_compare_event_get(LPTIMER_CHANNEL_HW_TASK)) ||
+		(nrf_802154_platform_sl_lptimer_current_lpticks_get() >= s_hw_task_fire_lpticks);
+
+	__set_PRIMASK(primask);
+
+	(void)hw_task_state_set(HW_TASK_UPDATING, HW_TASK_READY);
+	return fired ? NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE
+		     : NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS;
 }
 
 void nrf_802154_platform_sl_lp_timer_init(void)
@@ -328,15 +504,23 @@ void nrf_802154_platform_sl_lp_timer_init(void)
 	s_timer_armed = false;
 	s_sync_armed = false;
 	s_critical_section_depth = 0;
+	s_hw_task_state = HW_TASK_IDLE;
+	s_hw_task_ppi = NRF_802154_SL_HW_TASK_PPI_INVALID;
+	s_hw_task_fire_lpticks = 0;
 
 	/* Prescaler zero keeps the full 32768 Hz resolution. */
 	nrf_rtc_prescaler_set(LPTIMER_RTC, 0);
 	nrf_rtc_event_clear(LPTIMER_RTC, NRF_RTC_EVENT_OVERFLOW);
 	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get(LPTIMER_CHANNEL_TIMER));
 	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get(LPTIMER_CHANNEL_SYNC));
+	nrf_rtc_event_clear(LPTIMER_RTC, nrf_rtc_compare_event_get(LPTIMER_CHANNEL_HW_TASK));
 
-	/* The overflow interrupt is what keeps the 64-bit extension honest. */
+	/*
+	 * The overflow interrupt is what keeps the 64-bit extension honest, and
+	 * the RTC only raises the event at all once EVTEN says so.
+	 */
 	nrf_rtc_int_enable(LPTIMER_RTC, NRF_RTC_INT_OVERFLOW_MASK);
+	nrf_rtc_event_enable(LPTIMER_RTC, NRF_RTC_INT_OVERFLOW_MASK);
 
 	NVIC_SetPriority(LPTIMER_IRQN, LPTIMER_IRQ_PRIORITY);
 	NVIC_ClearPendingIRQ(LPTIMER_IRQN);
@@ -354,8 +538,12 @@ void nrf_802154_platform_sl_lp_timer_deinit(void)
 		return;
 	}
 	NVIC_DisableIRQ(LPTIMER_IRQN);
+	hw_task_abort();
+	s_hw_task_state = HW_TASK_IDLE;
 	nrf_rtc_int_disable(LPTIMER_RTC, NRF_RTC_INT_OVERFLOW_MASK | NRF_RTC_INT_COMPARE0_MASK |
 						NRF_RTC_INT_COMPARE1_MASK);
+	nrf_rtc_event_disable(LPTIMER_RTC, NRF_RTC_INT_OVERFLOW_MASK | NRF_RTC_INT_COMPARE0_MASK |
+						   NRF_RTC_INT_COMPARE1_MASK);
 	nrf_rtc_task_trigger(LPTIMER_RTC, NRF_RTC_TASK_STOP);
 	s_timer_armed = false;
 	s_sync_armed = false;
@@ -378,7 +566,7 @@ void nrf_802154_lptimer_freertos_irq_handler(void)
 				    nrf_rtc_compare_event_get(LPTIMER_CHANNEL_SYNC));
 		if (s_sync_armed) {
 			s_sync_armed = false;
-			nrf_rtc_int_disable(LPTIMER_RTC, NRF_RTC_INT_COMPARE1_MASK);
+			compare_disarm(LPTIMER_CHANNEL_SYNC);
 			nrf_802154_sl_timestamper_synchronized();
 		}
 	}
@@ -404,6 +592,6 @@ void nrf_802154_lptimer_freertos_irq_handler(void)
 	}
 
 	s_timer_armed = false;
-	nrf_rtc_int_disable(LPTIMER_RTC, NRF_RTC_INT_COMPARE0_MASK);
+	compare_disarm(LPTIMER_CHANNEL_TIMER);
 	nrf_802154_sl_timer_handler(nrf_802154_platform_sl_lptimer_current_lpticks_get());
 }

@@ -97,6 +97,7 @@ mkdir -p "$OUT"
 	"$HERE/test_802154_lptimer.c" \
 	"$HERE/fake/fake_nrf.c" \
 	"$HERE/fake/fake_rtc.c" \
+	"$HERE/fake/fake_ppi.c" \
 	"$ROOT/ports/freertos-nrf52833/radio/nrf_802154_lptimer_freertos.c" \
 	-o "$LPTIMER_BIN"
 "$LPTIMER_BIN"

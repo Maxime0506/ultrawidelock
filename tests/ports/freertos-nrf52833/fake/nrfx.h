@@ -29,4 +29,19 @@ uint32_t fake_nvic_get_priority(IRQn_Type irq);
 #define NVIC_SetPriority(irq, priority) fake_nvic_set_priority((irq), (priority))
 #define NVIC_GetPriority(irq)         fake_nvic_get_priority(irq)
 
+/*
+ * PRIMASK. The hardware-task state machine has to exclude every other context,
+ * not just this driver's vector, so the model records the depth as well as the
+ * bit: a test can then prove the mask is left exactly as it was found.
+ */
+uint32_t fake_primask_get(void);
+void fake_primask_set(uint32_t value);
+void fake_primask_disable_irq(void);
+unsigned fake_primask_disable_count(void);
+void fake_primask_reset(void);
+
+#define __get_PRIMASK()    fake_primask_get()
+#define __set_PRIMASK(v)   fake_primask_set(v)
+#define __disable_irq()    fake_primask_disable_irq()
+
 #endif /* TEST_NRFX_H */
