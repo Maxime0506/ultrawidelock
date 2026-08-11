@@ -109,6 +109,33 @@ if ! rg -q '[[:space:]]mpsl_init\(' "$nrfxlib/mpsl/include/mpsl.h" || \
 fi
 printf '  ok   MPSL init and SoftDevice Controller startup APIs match the port\n'
 
+# board/temperature_freertos.c reads the die temperature through MPSL rather
+# than the TEMP peripheral, because MPSL owns TEMP and takes its own readings to
+# calibrate the low-frequency clock. Nothing in this repository can confirm that
+# API exists, so it is asserted here against the pinned tree.
+if ! rg -q '[[:space:]]mpsl_temperature_get\(' "$nrfxlib/mpsl/include/mpsl_temp.h"; then
+	printf 'radio-source-check: MPSL temperature API is missing or moved\n' >&2
+	exit 2
+fi
+printf '  ok   MPSL supplies the die temperature the board hook reads\n'
+
+# board/entropy_freertos.c drives the RNG through the Nordic HAL. These are the
+# exact entry points it calls; a HAL bump that renames one has to be seen here
+# rather than at the first target link.
+for symbol in nrf_rng_task_trigger nrf_rng_event_clear nrf_rng_event_check \
+	nrf_rng_int_enable nrf_rng_error_correction_enable nrf_rng_random_value_get; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$hal_nordic/nrfx/hal/nrf_rng.h"; then
+		printf 'radio-source-check: Nordic RNG HAL entry point is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+if ! rg -Fq 'NRF_RNG_INT_VALRDY_MASK' "$hal_nordic/nrfx/hal/nrf_rng.h" || \
+	! rg -Fq 'NRF_RNG_EVENT_VALRDY' "$hal_nordic/nrfx/hal/nrf_rng.h"; then
+	printf 'radio-source-check: Nordic RNG HAL event or interrupt mask changed\n' >&2
+	exit 2
+fi
+printf '  ok   Nordic RNG HAL matches the board entropy pool\n'
+
 # radio/nrf_802154_clock_freertos.c deliberately avoids the older
 # mpsl_clock_hfclk_request/release/is_running trio, which the pinned MPSL marks
 # deprecated and slates for removal. Check that the replacements exist and that

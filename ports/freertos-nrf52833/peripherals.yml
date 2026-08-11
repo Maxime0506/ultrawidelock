@@ -8,6 +8,7 @@ interrupts:
   TIMER0: { priority: 0, owner: mpsl }
   SWI0_EGU0: { priority: 1, owner: nrf_802154 }
   SWI5_EGU5: { priority: 4, owner: mpsl_low_priority }
+  RNG: { priority: 6, owner: board_entropy }
   RTC1: { priority: 15, owner: freertos_tick }
   RTC2: { priority: 1, owner: nrf_802154_low_power_timer }
 
@@ -21,6 +22,7 @@ peripherals:
   EGU5: mpsl_low_priority
   RADIO: mpsl
   CLOCK: mpsl
+  RNG: board_entropy
   TEMP: mpsl
 
 handoffs:
@@ -29,6 +31,14 @@ handoffs:
     to the woz_freertos_radio_*_isr entry points, and RTC2 to
     nrf_802154_lptimer_freertos_irq_handler; the port owns the rest.
   - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
+  - Route the board's RNG vector to woz_freertos_rng_isr. The handler only fills
+    this port's entropy pool and calls nothing, so it carries no FreeRTOS
+    priority constraint; it sits below MPSL and the 802.15.4 driver so a refill
+    can never delay a radio event.
+  - TEMP stays MPSL's. MPSL takes its own readings to calibrate the low-frequency
+    clock and the peripheral answers one measurement at a time, so a second
+    reader driving TASKS_START would corrupt the radio timebase. Die temperature
+    comes from mpsl_temperature_get instead.
   - Verify every PPI channel against MPSL and nRF 802.15.4 masks at target compile time.
     The low-power timer hardware task does not need an entry here: the 802.15.4
     driver core allocates that channel from its own mask and hands it to the

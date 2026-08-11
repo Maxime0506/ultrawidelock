@@ -161,6 +161,25 @@ The implemented foundation now includes:
   is not guaranteed to expose a prescaler read. A counter that never advances is
   fatal on first use rather than an unbounded spin: a lock that hangs during
   driver bring-up looks like dead hardware.
+- `board/entropy_freertos.c` is the hardware entropy source on RNG, and it keeps
+  a pool rather than polling bare. The SoftDevice Controller registers it as its
+  randomness source and the 802.15.4 driver seeds itself from it, and neither
+  states which context it will ask from; the RNG with bias correction takes on
+  the order of a hundred microseconds per byte, so a caller blocking for that at
+  a radio interrupt priority would overrun a radio event. Filling from the RNG's
+  own vector makes the ordinary request a copy. Bias correction is on, which
+  costs throughput and buys uniformly distributed bits: the reader's key
+  material comes from here. A caller that outruns the pool polls the peripheral
+  directly with only the RNG vector masked, so the handler cannot take the byte
+  it is waiting for while the radio keeps running. The generator stops once the
+  pool is full and starts again when it drains, and a byte already in flight as
+  it stops is dropped rather than written over the oldest entry.
+- `board/temperature_freertos.c` reads the die temperature from MPSL, not from
+  TEMP. MPSL owns that peripheral and takes its own readings to calibrate the
+  low-frequency clock, and TEMP answers one measurement at a time, so a second
+  reader driving `TASKS_START` underneath it would corrupt the timebase the
+  whole radio rests on. MPSL reports quarter degrees; the 802.15.4 driver, the
+  only consumer, wants whole ones.
 - `board/fault_freertos.c` resets rather than halts, because this is a door
   lock: a board spinning in a fault has stopped answering, while one that
   reboots comes back and can be opened. Define `WOZ_FREERTOS_FATAL_HALT` for

@@ -18,6 +18,7 @@ OT_MISC_BIN="$OUT/freertos_ot_misc_test"
 KV_BIN="$OUT/freertos_kv_flash_test"
 PROV_BIN="$OUT/freertos_prov_kv_test"
 BOARD_TIME_BIN="$OUT/freertos_board_time_test"
+BOARD_ENTROPY_BIN="$OUT/freertos_board_entropy_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -199,3 +200,19 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/board/fault_freertos.c" \
 	-o "$BOARD_TIME_BIN"
 "$BOARD_TIME_BIN"
+
+# The board's entropy pool and die-temperature hook. Each scenario forks: the
+# pool is static, and resetting the peripheral model under it would leave the
+# port believing it had started a generator that is now stopped.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_board_entropy.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_rng.c" \
+	"$HERE/fake/fake_mpsl_temp.c" \
+	"$ROOT/ports/freertos-nrf52833/board/entropy_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/board/temperature_freertos.c" \
+	-o "$BOARD_ENTROPY_BIN"
+"$BOARD_ENTROPY_BIN"
