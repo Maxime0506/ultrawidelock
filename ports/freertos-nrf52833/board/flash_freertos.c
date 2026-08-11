@@ -1,25 +1,29 @@
 /*
- * Internal flash on NVMC.
+ * Internal flash on NVMC, arbitrated against the radio with MPSL timeslots.
  *
- * Two halves, and only one of them is here. The NVMC half is this part's own
- * rules: a write may only clear bits, writes are word-aligned and a whole
- * number of words, an erase covers a whole page, and the controller has to be
- * put into write or erase mode and back to read mode around each operation.
- * That half is below and is complete.
+ * Programming this flash stalls the CPU. A word write is tens of microseconds
+ * and a page erase is 89.7 ms, which is longer than MPSL will ever hand out in
+ * one piece, so an operation issued while the radio is scheduled would overrun
+ * a radio event. With the radio down there is nothing to arbitrate and the work
+ * is done directly; with it up the work is cut into pieces and each piece runs
+ * inside a timeslot.
  *
- * The other half is arbitration against the radio. Programming this flash
- * stalls the CPU, and a page erase stalls it for far longer than any radio
- * event can wait, so a write issued while MPSL has the radio scheduled will
- * overrun that event. The Zephyr oracle solves it by taking an MPSL timeslot
- * per operation, from a session the flash driver opens for itself. This port
- * does not have that binding yet, so window_begin refuses rather than
- * proceeding: a provisioning write that fails loudly is recoverable, and one
- * that silently corrupts a radio event is a lock that drops its connection
- * under load and cannot be diagnosed from the outside.
+ * A write fills as much of its slot as it measures room for. An erase uses the
+ * controller's partial-erase mode, which lets a page be erased in fixed slices
+ * with the CPU free between them: 89.7 ms of erasing in 3 ms pieces, thirty of
+ * them, rather than one stall that would drop a BLE connection.
  *
- * Writes are confined to a window that excludes the application image by
- * default. A store with an offset bug can then lose its own data but cannot
- * erase the firmware out from under a door lock.
+ * Two things differ from Nordic's own Zephyr driver, deliberately. It gives a
+ * kernel semaphore from inside the timeslot callback; this port does not,
+ * because that callback runs at interrupt priority zero and FreeRTOS forbids
+ * its API above configMAX_SYSCALL_INTERRUPT_PRIORITY. The callback here touches
+ * only NVMC and a flag, and the calling task polls that flag. Flash operations
+ * are rare and already tens of milliseconds, so a one-tick poll costs nothing
+ * and removes the question rather than reasoning about it.
+ *
+ * Writes and erases are confined to a window that excludes the application
+ * image. A store with an offset bug can then lose its own data but cannot erase
+ * the firmware out from under a door lock.
  */
 #include <stdbool.h>
 #include <stddef.h>
@@ -27,7 +31,12 @@
 #include <string.h>
 
 #include <hal/nrf_nvmc.h>
+#include <hal/nrf_timer.h>
+#include <mpsl_timeslot.h>
 #include <nrfx.h>
+
+#include <FreeRTOS.h>
+#include <task.h>
 
 #include <woz_freertos_platform.h>
 #include <woz_freertos_radio.h>
@@ -40,8 +49,7 @@
 
 /*
  * What may be written or erased. The default is the two pages the key-value
- * store owns; a board that adds a DFU slot widens it deliberately rather than
- * by accident.
+ * store owns; a board that adds a DFU slot widens it deliberately.
  */
 #ifndef WOZ_FREERTOS_FLASH_WRITABLE_BASE
 #define WOZ_FREERTOS_FLASH_WRITABLE_BASE 0x0007e000u
@@ -49,6 +57,63 @@
 #ifndef WOZ_FREERTOS_FLASH_WRITABLE_LIMIT
 #define WOZ_FREERTOS_FLASH_WRITABLE_LIMIT 0x00080000u
 #endif
+
+/*
+ * A page erase takes 89.7 ms on this part, from the SoC's own timing. Partial
+ * erase splits that into slices; thirty 3 ms slices cover it with the CPU free
+ * in between. Three milliseconds is Nordic's own default and is above the two
+ * the controller requires.
+ */
+#define FLASH_PAGE_ERASE_TOTAL_US 89700u
+#define FLASH_PARTIAL_ERASE_MS 3u
+#define FLASH_PARTIAL_ERASE_US (FLASH_PARTIAL_ERASE_MS * 1000u)
+#define FLASH_PARTIAL_ERASE_SLICES                                                                 \
+	((FLASH_PAGE_ERASE_TOTAL_US + FLASH_PARTIAL_ERASE_US - 1u) / FLASH_PARTIAL_ERASE_US)
+
+/* How much of a timeslot a write may use, matching Nordic's own driver. */
+#define FLASH_SLOT_WRITE_US 7500u
+
+/*
+ * Slack on top of the work itself. The slot has to cover entry, the callback,
+ * and the request for the next one, not just the programming.
+ */
+#define FLASH_SLOT_SLACK_US 1000u
+
+/*
+ * How long a whole operation may take before the caller gives up. Generous on
+ * purpose: under a busy radio a two-page erase is sixty slices, each waiting
+ * its turn, and failing early would report an I/O error for an operation that
+ * was merely slow.
+ */
+#ifndef WOZ_FREERTOS_FLASH_TIMEOUT_MS
+#define WOZ_FREERTOS_FLASH_TIMEOUT_MS 10000u
+#endif
+
+/* One session's worth of MPSL context, aligned as the API requires. */
+static uint32_t s_timeslot_context[(MPSL_TIMESLOT_CONTEXT_SIZE + 3u) / 4u];
+static bool s_sessions_configured;
+
+static mpsl_timeslot_session_id_t s_session;
+static mpsl_timeslot_request_t s_request;
+static mpsl_timeslot_signal_return_param_t s_return;
+
+/*
+ * The operation in flight. Written by the calling task before the first
+ * request and then only by the timeslot callback, which is why it is volatile:
+ * the task polls s_done and reads s_failed without any lock, and the two
+ * contexts never run at the same time because the task does nothing but wait.
+ */
+struct flash_op {
+	bool erase;
+	uint32_t offset;
+	const uint8_t *data;
+	size_t remaining;
+	unsigned slices;
+};
+
+static volatile struct flash_op s_op;
+static volatile bool s_done;
+static volatile bool s_failed;
 
 /*
  * The address a flash offset maps to. On the part they are the same, because
@@ -79,36 +144,223 @@ static bool in_writable_window(uint32_t offset, size_t length)
 	return length <= WOZ_FREERTOS_FLASH_WRITABLE_LIMIT - offset;
 }
 
-/*
- * Claim the flash controller against radio activity.
- *
- * With the radio down there is nothing to arbitrate and the operation may
- * proceed. With it up this needs an MPSL timeslot long enough for the
- * operation, taken from a session opened for the purpose, and that binding is
- * not written yet. Refusing is the honest failure: the caller reports an I/O
- * error and retries later, which is recoverable, whereas proceeding would
- * overrun whatever radio event MPSL had scheduled.
- */
-static int window_begin(void)
-{
-	if (!woz_freertos_radio_ready()) {
-		return 0;
-	}
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
-			 "refused: flash needs an MPSL timeslot while the radio is up");
-	return -1;
-}
-
-static void window_end(void)
-{
-}
-
 /* Spin until the controller has finished. NVMC stalls the CPU regardless. */
 static void wait_ready(void)
 {
 	while (!nrf_nvmc_ready_check(NRF_NVMC)) {
 		/* Spin. */
 	}
+}
+
+/*
+ * Microseconds since this timeslot began. MPSL resets TIMER0 at the start
+ * signal and documents it as readable inside the slot, which is how the work
+ * knows when to stop without assuming a per-word programming time.
+ */
+static uint32_t slot_elapsed_us(void)
+{
+	nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_CAPTURE0);
+	return nrf_timer_cc_get(NRF_TIMER0, NRF_TIMER_CC_CHANNEL0);
+}
+
+/* Program one word of the pending write. */
+static void write_one_word(void)
+{
+	uint32_t word;
+
+	/*
+	 * Assembled rather than dereferenced. The caller is not required to
+	 * align its buffer, and casting a byte pointer to uint32_t would break
+	 * strict aliasing and rely on the core tolerating an unaligned load;
+	 * this core tolerates one for a plain LDR but not for the
+	 * multiple-register forms a compiler is free to emit here.
+	 */
+	memcpy(&word, (const void *)&s_op.data[0], sizeof(word));
+	nrf_nvmc_word_write(s_op.offset, word);
+	wait_ready();
+
+	s_op.offset += WOZ_FREERTOS_FLASH_WRITE_ALIGN;
+	s_op.data += WOZ_FREERTOS_FLASH_WRITE_ALIGN;
+	s_op.remaining -= WOZ_FREERTOS_FLASH_WRITE_ALIGN;
+}
+
+/* Issue one partial erase slice on the page the operation is standing on. */
+static void erase_one_slice(void)
+{
+	nrf_nvmc_page_partial_erase_start(NRF_NVMC, s_op.offset);
+	wait_ready();
+
+	s_op.slices++;
+	if (s_op.slices >= FLASH_PARTIAL_ERASE_SLICES) {
+		s_op.slices = 0;
+		s_op.offset += WOZ_FREERTOS_FLASH_PAGE_SIZE;
+		s_op.remaining -= WOZ_FREERTOS_FLASH_PAGE_SIZE;
+	}
+}
+
+/*
+ * Do as much of the operation as fits, and report whether it is finished.
+ *
+ * bounded says whether there is a deadline: inside a timeslot there is, and a
+ * write stops once another word would not fit. With the radio down there is
+ * none and the whole operation runs in one pass.
+ */
+static bool op_step(bool bounded)
+{
+	if (s_op.erase) {
+		nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_PARTIAL_ERASE);
+		do {
+			erase_one_slice();
+		} while (s_op.remaining > 0u && !bounded);
+	} else {
+		nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_WRITE);
+		while (s_op.remaining > 0u) {
+			write_one_word();
+			if (bounded) {
+				/*
+				 * Stop when another word of the same cost would
+				 * not fit. Measuring beats assuming a
+				 * programming time this file cannot verify.
+				 */
+				uint32_t now = slot_elapsed_us();
+				uint32_t per_word = now / (s_op.slices + 1u);
+
+				s_op.slices++;
+				if (now + per_word >= FLASH_SLOT_WRITE_US) {
+					break;
+				}
+			}
+		}
+	}
+
+	nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_READONLY);
+	wait_ready();
+	return s_op.remaining == 0u;
+}
+
+/*
+ * Runs at interrupt priority zero. It must not call FreeRTOS, must not block
+ * beyond the slot it was given, and must return a pointer that outlives it,
+ * which is why the return parameter is static.
+ */
+static mpsl_timeslot_signal_return_param_t *timeslot_callback(mpsl_timeslot_session_id_t session_id,
+							      uint32_t signal)
+{
+	(void)session_id;
+
+	switch (signal) {
+	case MPSL_TIMESLOT_SIGNAL_START:
+		if (op_step(true)) {
+			s_return.callback_action = MPSL_TIMESLOT_SIGNAL_ACTION_END;
+		} else {
+			s_return.callback_action = MPSL_TIMESLOT_SIGNAL_ACTION_REQUEST;
+			s_return.params.request.p_next = &s_request;
+		}
+		return &s_return;
+
+	case MPSL_TIMESLOT_SIGNAL_SESSION_IDLE:
+		/* Every request is done, so the operation is done. */
+		s_done = true;
+		return NULL;
+
+	case MPSL_TIMESLOT_SIGNAL_SESSION_CLOSED:
+		return NULL;
+
+	case MPSL_TIMESLOT_SIGNAL_BLOCKED:
+	case MPSL_TIMESLOT_SIGNAL_CANCELLED:
+		/*
+		 * The radio took the slot. Ask again rather than failing: the
+		 * work is half done and abandoning it here would leave a
+		 * partially erased page, which reads as neither old nor new.
+		 */
+		if (mpsl_timeslot_request(s_session, &s_request) != 0) {
+			s_failed = true;
+			s_done = true;
+		}
+		return NULL;
+
+	default:
+		s_failed = true;
+		s_done = true;
+		return NULL;
+	}
+}
+
+static int run_under_timeslot(uint32_t slot_us)
+{
+	TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(WOZ_FREERTOS_FLASH_TIMEOUT_MS);
+	int rc = 0;
+
+	if (!s_sessions_configured) {
+		if (mpsl_timeslot_session_count_set(s_timeslot_context, 1) != 0) {
+			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+					 "no MPSL timeslot session available");
+			return -1;
+		}
+		s_sessions_configured = true;
+	}
+
+	if (mpsl_timeslot_session_open(timeslot_callback, &s_session) != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG, "timeslot session open failed");
+		return -1;
+	}
+
+	s_request.request_type = MPSL_TIMESLOT_REQ_TYPE_EARLIEST;
+	s_request.params.earliest.hfclk = MPSL_TIMESLOT_HFCLK_CFG_NO_GUARANTEE;
+	s_request.params.earliest.priority = MPSL_TIMESLOT_PRIORITY_NORMAL;
+	s_request.params.earliest.length_us = slot_us + FLASH_SLOT_SLACK_US;
+	s_request.params.earliest.timeout_us = MPSL_TIMESLOT_EARLIEST_TIMEOUT_MAX_US;
+
+	s_done = false;
+	s_failed = false;
+
+	if (mpsl_timeslot_request(s_session, &s_request) != 0) {
+		mpsl_timeslot_session_close(s_session);
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG, "timeslot request failed");
+		return -1;
+	}
+
+	/*
+	 * Poll rather than block on a semaphore. The callback that finishes the
+	 * operation runs at interrupt priority zero, where FreeRTOS API calls
+	 * are not permitted, so it cannot wake anything.
+	 */
+	while (!s_done) {
+		if ((int32_t)(xTaskGetTickCount() - deadline) >= 0) {
+			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+					 "timed out waiting for a timeslot");
+			rc = -1;
+			break;
+		}
+		vTaskDelay(1);
+	}
+
+	/* Closing cancels anything still pending. */
+	mpsl_timeslot_session_close(s_session);
+
+	if (rc == 0 && s_failed) {
+		rc = -1;
+	}
+	return rc;
+}
+
+/* Run the pending operation, arbitrated if the radio is up. */
+static int run_op(uint32_t slot_us)
+{
+	if (!woz_freertos_radio_ready()) {
+		(void)op_step(false);
+		return 0;
+	}
+	if (__get_IPSR() != 0u) {
+		/*
+		 * The wait needs a task to yield from, and a flash operation at
+		 * interrupt priority would stall the radio anyway.
+		 */
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+				 "refused: flash from an interrupt while the radio is up");
+		return -1;
+	}
+	return run_under_timeslot(slot_us);
 }
 
 int woz_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
@@ -126,10 +378,6 @@ int woz_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
 
 int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 {
-	const uint8_t *in = data;
-	size_t written;
-	int rc;
-
 	if (data == NULL && length != 0u) {
 		return -1;
 	}
@@ -144,39 +392,16 @@ int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 		return 0;
 	}
 
-	rc = window_begin();
-	if (rc != 0) {
-		return rc;
-	}
-
-	nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_WRITE);
-	for (written = 0; written < length; written += WOZ_FREERTOS_FLASH_WRITE_ALIGN) {
-		uint32_t word;
-
-		/*
-		 * Assembled rather than dereferenced. The caller is not
-		 * required to align its buffer, and casting a byte pointer to
-		 * uint32_t would break strict aliasing and rely on the core
-		 * tolerating an unaligned load; this core tolerates one for a
-		 * plain LDR but not for the multiple-register forms a compiler
-		 * is free to emit here. The copy costs nothing once aligned.
-		 */
-		memcpy(&word, &in[written], sizeof(word));
-		nrf_nvmc_word_write(offset + (uint32_t)written, word);
-		wait_ready();
-	}
-	nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_READONLY);
-	wait_ready();
-
-	window_end();
-	return 0;
+	s_op.erase = false;
+	s_op.offset = offset;
+	s_op.data = data;
+	s_op.remaining = length;
+	s_op.slices = 0;
+	return run_op(FLASH_SLOT_WRITE_US);
 }
 
 int woz_freertos_flash_erase(uint32_t offset, size_t length)
 {
-	size_t erased;
-	int rc;
-
 	if (!in_device(offset, length) || !in_writable_window(offset, length)) {
 		return -1;
 	}
@@ -188,19 +413,17 @@ int woz_freertos_flash_erase(uint32_t offset, size_t length)
 		return 0;
 	}
 
-	rc = window_begin();
-	if (rc != 0) {
-		return rc;
-	}
+	s_op.erase = true;
+	s_op.offset = offset;
+	s_op.data = NULL;
+	s_op.remaining = length;
+	s_op.slices = 0;
 
-	nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_ERASE);
-	for (erased = 0; erased < length; erased += WOZ_FREERTOS_FLASH_PAGE_SIZE) {
-		nrf_nvmc_page_erase_start(NRF_NVMC, offset + (uint32_t)erased);
-		wait_ready();
-	}
-	nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_READONLY);
-	wait_ready();
-
-	window_end();
-	return 0;
+	/*
+	 * Partial erase needs its slice length programmed once. The controller
+	 * keeps it, but setting it per operation costs nothing and means a
+	 * board that never calls anything else still gets the right value.
+	 */
+	nrf_nvmc_partial_erase_duration_set(NRF_NVMC, FLASH_PARTIAL_ERASE_MS);
+	return run_op(FLASH_PARTIAL_ERASE_US);
 }

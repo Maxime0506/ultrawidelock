@@ -180,24 +180,32 @@ The implemented foundation now includes:
   reader driving `TASKS_START` underneath it would corrupt the timebase the
   whole radio rests on. MPSL reports quarter degrees; the 802.15.4 driver, the
   only consumer, wants whole ones.
-- `board/flash_freertos.c` is internal flash on NVMC, and it is half done on
-  purpose. The NVMC half is complete: a write may only clear bits, writes are
-  word-aligned and a whole number of words, an erase covers a whole page, and
-  the controller is put into write or erase mode and back to read mode around
-  each operation, because a controller left in write mode turns any later stray
-  store into a flash program. Writes and erases are confined to a window that
-  excludes the application image by default, so a store with an offset bug can
-  lose its own data but cannot erase the firmware out from under a door lock; a
-  board that adds a DFU slot widens `WOZ_FREERTOS_FLASH_WRITABLE_BASE` and
-  `_LIMIT` deliberately. Reads need no window and no controller, since program
-  flash is memory-mapped. **The radio-arbitration half is not written.**
-  Programming this flash stalls the CPU, and a page erase stalls it far longer
-  than any radio event can wait, so an operation issued while MPSL has the radio
-  scheduled will overrun that event; the Zephyr oracle takes an MPSL timeslot
-  per operation from a session its flash driver opens for itself. Until that
-  binding exists here, a write or erase attempted while the radio is up is
-  refused and logged rather than performed. A provisioning write that fails
-  loudly is recoverable; a corrupted radio event on a shipping lock is not.
+- `board/flash_freertos.c` is internal flash on NVMC, arbitrated against the
+  radio with MPSL timeslots. Programming this flash stalls the CPU: a word write
+  is tens of microseconds and a page erase is 89.7 ms, which is longer than MPSL
+  will ever grant in one piece, so an operation issued while the radio is
+  scheduled would overrun a radio event. With the radio down there is nothing to
+  arbitrate and the work runs directly; with it up it is cut into pieces and
+  each piece runs inside a timeslot. A write fills as much of its slot as it
+  measures room for, using the TIMER0 that MPSL resets at the start of every
+  slot, which beats assuming a programming time this port cannot verify. An
+  erase uses the controller's partial-erase mode: 89.7 ms of erasing in thirty
+  3 ms slices with the CPU free between them, rather than one stall that would
+  drop a BLE connection. A blocked or cancelled request is retried rather than
+  failed, because abandoning the work would leave a partially erased page that
+  reads as neither the old contents nor the new. Two things differ from Nordic's
+  own Zephyr driver deliberately: that driver gives a kernel semaphore from
+  inside the timeslot callback, which this port does not, because the callback
+  runs at interrupt priority zero and FreeRTOS forbids its API above
+  `configMAX_SYSCALL_INTERRUPT_PRIORITY`; the callback here touches only NVMC
+  and a flag, and the calling task polls it. The controller's mode is set and
+  restored around every operation, since one left in write mode turns any later
+  stray store into a flash program. Writes and erases are confined to a window
+  that excludes the application image, so a store with an offset bug can lose
+  its own data but cannot erase the firmware out from under a door lock; a board
+  that adds a DFU slot widens `WOZ_FREERTOS_FLASH_WRITABLE_BASE` and `_LIMIT`
+  deliberately. Reads need neither the window nor the controller, since program
+  flash is memory-mapped.
 - `board/log_rtt_freertos.c` is the log sink, as a SEGGER RTT up-buffer. RTT and
   not the UART, and that is the board's decision rather than a preference:
   `uart0` is the J-Link OB's virtual COM port and MCUboot's serial recovery

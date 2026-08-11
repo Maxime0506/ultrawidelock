@@ -21,6 +21,7 @@ typedef enum {
 	NRF_NVMC_MODE_READONLY = 0,
 	NRF_NVMC_MODE_WRITE = 1,
 	NRF_NVMC_MODE_ERASE = 2,
+	NRF_NVMC_MODE_PARTIAL_ERASE = 3,
 } nrf_nvmc_mode_t;
 
 typedef struct {
@@ -28,6 +29,8 @@ typedef struct {
 	bool ready;
 	unsigned word_writes;
 	unsigned page_erases;
+	unsigned partial_slices;
+	uint32_t partial_duration_ms;
 	unsigned mode_changes;
 	/* Operations the controller would have refused, or that break a rule. */
 	unsigned violations;
@@ -45,6 +48,16 @@ void nrf_nvmc_mode_set(NRF_NVMC_Type *p_reg, nrf_nvmc_mode_t mode);
 bool nrf_nvmc_ready_check(const NRF_NVMC_Type *p_reg);
 void nrf_nvmc_word_write(uint32_t address, uint32_t value);
 void nrf_nvmc_page_erase_start(NRF_NVMC_Type *p_reg, uint32_t address);
+/*
+ * Partial erase. A page is only actually erased once enough slices have run to
+ * cover the part's 89.7 ms erase time; until then it still reads as it was,
+ * which is what makes an interrupted erase visible to a test.
+ */
+void nrf_nvmc_partial_erase_duration_set(NRF_NVMC_Type *p_reg, uint32_t duration_ms);
+uint32_t nrf_nvmc_partial_erase_duration_get(const NRF_NVMC_Type *p_reg);
+void nrf_nvmc_page_partial_erase_start(NRF_NVMC_Type *p_reg, uint32_t address);
+/* Slices the model still wants before the page at this address comes up erased. */
+unsigned fake_nvmc_slices_remaining(uint32_t address);
 
 /* Test control. */
 void fake_nvmc_reset(void);

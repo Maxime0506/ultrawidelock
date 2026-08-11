@@ -20,5 +20,6 @@ uint32_t ulTaskNotifyTake(BaseType_t clear_count_on_exit, TickType_t ticks);
 TickType_t xTaskGetTickCount(void);
 TickType_t xTaskGetTickCountFromISR(void);
 void fake_task_set_tick_count(TickType_t ticks);
+void fake_task_advance_tick_count(TickType_t ticks);
 
 #endif /* TEST_FREERTOS_TASK_H */

@@ -241,6 +241,10 @@ mkdir -p "$OUT"
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_flash.c" \
 	"$HERE/fake/fake_nvmc.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_timer0.c" \
+	"$HERE/fake/fake_timeslot.c" \
+	"$HERE/fake/fake_freertos.c" \
 	"$ROOT/ports/freertos-nrf52833/board/flash_freertos.c" \
 	-o "$BOARD_FLASH_BIN"
 "$BOARD_FLASH_BIN"

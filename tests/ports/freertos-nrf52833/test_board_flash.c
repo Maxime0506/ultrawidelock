@@ -17,6 +17,11 @@
 #include <string.h>
 
 #include <hal/nrf_nvmc.h>
+#include <hal/nrf_timer.h>
+#include <mpsl_timeslot.h>
+
+#include <FreeRTOS.h>
+#include <task.h>
 
 #include <woz_freertos_platform.h>
 
@@ -61,6 +66,9 @@ bool woz_freertos_radio_ready(void)
 static void reset_all(void)
 {
 	fake_nvmc_reset();
+	fake_timer_reset();
+	fake_timeslot_reset();
+	fake_task_set_tick_count(0);
 	g_radio_ready = false;
 	g_error_logs = 0;
 }
@@ -200,39 +208,170 @@ static void test_erase_rejections(void)
 
 /*
  * Programming this flash stalls the CPU for far longer than a radio event can
- * wait, so a write issued while the radio is up needs an MPSL timeslot. That
- * binding is not written, and what matters is that its absence refuses rather
- * than proceeding: a failed provisioning write is recoverable, a corrupted
- * radio event on a shipping lock is not.
+ * wait, so with the radio up the work is cut into pieces and each piece runs
+ * inside an MPSL timeslot.
  */
-static void test_radio_arbitration(void)
+static void test_write_under_timeslot(void)
+{
+	/*
+	 * Big enough to outlast one slot on purpose: 512 words at the model's
+	 * 50 us a word is 25.6 ms, and a write slot is 7.5 ms.
+	 */
+	static uint8_t data[2048];
+	static uint8_t out[2048];
+	unsigned i;
+
+	reset_all();
+	for (i = 0; i < sizeof(data); i++) {
+		data[i] = (uint8_t)i;
+	}
+	g_radio_ready = true;
+
+	CHECK("a write under a live radio succeeds",
+	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) == 0);
+	CHECK("the write landed", memcmp(&fake_nvmc_flash[KV_BASE], data, sizeof(data)) == 0);
+	CHECK("the write read back", woz_freertos_flash_read(KV_BASE, out, sizeof(out)) == 0 &&
+					    memcmp(out, data, sizeof(data)) == 0);
+	CHECK("the write went through a timeslot", fake_timeslot_grants > 0u);
+	CHECK("the write broke no controller rule", fake_nvmc.violations == 0u);
+	CHECK("the session was opened once", fake_timeslot_opens == 1u);
+	CHECK("the session was closed again", fake_timeslot_closes == 1u);
+	CHECK("the controller is left read-only", fake_nvmc.mode == NRF_NVMC_MODE_READONLY);
+
+	/*
+	 * The request has to be one MPSL will accept: earliest, and inside the
+	 * hundred milliseconds it will ever grant in one piece.
+	 */
+	CHECK("the request asked for the earliest slot",
+	      fake_timeslot_last_request_type == MPSL_TIMESLOT_REQ_TYPE_EARLIEST);
+	CHECK("the request fits what MPSL will grant",
+	      fake_timeslot_last_length_us <= MPSL_TIMESLOT_LENGTH_MAX_US);
+	CHECK("the request did not demand the crystal",
+	      fake_timeslot_last_hfclk == MPSL_TIMESLOT_HFCLK_CFG_NO_GUARANTEE);
+	CHECK("no request was malformed", fake_timeslot_violations == 0u);
+
+	/*
+	 * The point of measuring the slot clock: 128 words cannot fit in one
+	 * 7500 us slot at the model's 50 us a word, so the work has to have
+	 * asked for more than one.
+	 */
+	CHECK("a write too long for one slot took several", fake_timeslot_grants >= 4u);
+}
+
+/* A page erase is 89.7 ms, which MPSL will never grant in one piece. */
+static void test_erase_under_timeslot(void)
+{
+	uint8_t out[4];
+
+	reset_all();
+	memset(&fake_nvmc_flash[KV_BASE], 0x00, PAGE);
+	g_radio_ready = true;
+
+	CHECK("an erase under a live radio succeeds", woz_freertos_flash_erase(KV_BASE, PAGE) == 0);
+	CHECK("the erase completed", woz_freertos_flash_read(KV_BASE, out, sizeof(out)) == 0 &&
+					    out[0] == 0xffu && out[3] == 0xffu);
+	CHECK("the erase was sliced", fake_nvmc.partial_slices > 1u);
+	CHECK("the erase used partial erase, not a blocking one",
+	      fake_nvmc.page_erases == 1u && fake_nvmc.partial_slices >= 30u);
+	CHECK("each slice had its own timeslot", fake_timeslot_grants == fake_nvmc.partial_slices);
+	CHECK("the slice length was programmed",
+	      nrf_nvmc_partial_erase_duration_get(NRF_NVMC) >= 2u);
+	CHECK("no slice exceeded what MPSL will grant",
+	      fake_timeslot_last_length_us <= MPSL_TIMESLOT_LENGTH_MAX_US);
+	CHECK("the erase broke no controller rule", fake_nvmc.violations == 0u);
+}
+
+/*
+ * The radio can take a slot away. Abandoning the work there would leave a
+ * partially erased page, which reads as neither the old contents nor the new,
+ * so a blocked request has to be retried rather than failed.
+ */
+static void test_blocked_requests_are_retried(void)
+{
+	static const uint8_t data[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+	reset_all();
+	g_radio_ready = true;
+	fake_timeslot_blocks_before_grant = 3;
+
+	CHECK("a write survives the radio taking the slot",
+	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) == 0);
+	CHECK("the write still landed",
+	      memcmp(&fake_nvmc_flash[KV_BASE], data, sizeof(data)) == 0);
+	CHECK("the blocked requests were retried", fake_timeslot_requests > 1u);
+	CHECK("nothing was programmed outside a slot", fake_nvmc.violations == 0u);
+}
+
+/* A radio that never yields must end as a timeout, not a hang. */
+static void test_timeslot_never_granted(void)
 {
 	static const uint8_t data[4] = { 1, 2, 3, 4 };
 
 	reset_all();
 	g_radio_ready = true;
+	fake_timeslot_never_grants = true;
 
-	CHECK("a write while the radio is up is refused",
+	CHECK("a write that never gets a slot fails",
 	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) != 0);
-	CHECK("an erase while the radio is up is refused",
-	      woz_freertos_flash_erase(KV_BASE, PAGE) != 0);
-	CHECK("a refused operation never reached the controller",
-	      fake_nvmc.word_writes == 0u && fake_nvmc.page_erases == 0u);
-	CHECK("a refused operation never changed the mode", fake_nvmc.mode_changes == 0u);
-	CHECK("a refusal is logged as an error", g_error_logs >= 2u);
+	CHECK("a timeout is logged as an error", g_error_logs > 0u);
+	/*
+	 * Within its budget, not merely eventually. The tick here costs no real
+	 * time, so a timeout that fired after the counter wrapped would look
+	 * identical to one that respected its deadline; on the board that is the
+	 * difference between ten seconds and twenty-five days.
+	 */
+	CHECK("the timeout fired inside its budget", xTaskGetTickCount() <= 11000u);
+	CHECK("nothing was programmed", fake_nvmc.word_writes == 0u);
+	CHECK("the session was still closed", fake_timeslot_closes == 1u);
+	CHECK("the flash was left untouched", fake_nvmc_flash[KV_BASE] == 0xffu);
+}
 
-	/* Reads are unaffected: they do not touch the controller. */
+/* The MPSL calls that can fail have to be reported, not ignored. */
+static void test_session_failures(void)
+{
+	static const uint8_t data[4] = { 1, 2, 3, 4 };
+
+	reset_all();
+	g_radio_ready = true;
+	fake_timeslot_open_fails = true;
+	CHECK("a session that will not open fails the write",
+	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) != 0);
+	CHECK("nothing was programmed without a session", fake_nvmc.word_writes == 0u);
+
+	reset_all();
+	g_radio_ready = true;
+	fake_timeslot_request_fails = true;
+	CHECK("a request that will not be accepted fails the write",
+	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) != 0);
+	CHECK("a refused request still closes the session", fake_timeslot_closes == 1u);
+	CHECK("nothing was programmed without a slot", fake_nvmc.word_writes == 0u);
+}
+
+/* With the radio down there is nothing to arbitrate. */
+static void test_no_radio_no_timeslot(void)
+{
+	static const uint8_t data[4] = { 1, 2, 3, 4 };
+
+	reset_all();
+	CHECK("a write with the radio down succeeds",
+	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) == 0);
+	CHECK("no timeslot was taken", fake_timeslot_grants == 0u && fake_timeslot_opens == 0u);
+
+	reset_all();
+	CHECK("an erase with the radio down succeeds",
+	      woz_freertos_flash_erase(KV_BASE, PAGE) == 0);
+	CHECK("the erase still ran every slice", fake_nvmc.partial_slices >= 30u);
+	CHECK("no timeslot was taken for the erase", fake_timeslot_opens == 0u);
+
+	/* Reads never touch the controller, radio or no radio. */
 	{
 		uint8_t out[4];
 
+		g_radio_ready = true;
 		CHECK("a read while the radio is up still succeeds",
 		      woz_freertos_flash_read(KV_BASE, out, sizeof(out)) == 0);
+		CHECK("a read took no timeslot", fake_timeslot_opens == 0u);
 	}
-
-	/* With the radio down there is nothing to arbitrate. */
-	g_radio_ready = false;
-	CHECK("a write with the radio down succeeds",
-	      woz_freertos_flash_write(KV_BASE, data, sizeof(data)) == 0);
 }
 
 int main(void)
@@ -242,7 +381,12 @@ int main(void)
 	test_write_rejections();
 	test_erase();
 	test_erase_rejections();
-	test_radio_arbitration();
+	test_write_under_timeslot();
+	test_erase_under_timeslot();
+	test_blocked_requests_are_retried();
+	test_timeslot_never_granted();
+	test_session_failures();
+	test_no_radio_no_timeslot();
 
 	printf("RESULT: %s (%u checks)\n", g_failures == 0 ? "PASS" : "FAIL", g_checks);
 	return g_failures == 0 ? 0 : 1;

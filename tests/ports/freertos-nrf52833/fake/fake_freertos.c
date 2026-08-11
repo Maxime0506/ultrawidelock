@@ -67,6 +67,12 @@ void vTaskDelay(TickType_t ticks)
 	fake_delay_calls++;
 	fake_delay_ticks += ticks;
 	fake_uptime_us += (int64_t)ticks * portTICK_PERIOD_MS * 1000;
+	/*
+	 * The tick count moves with the delay. Without that a caller polling a
+	 * deadline would spin forever here while passing on hardware, which is
+	 * the wrong way round for a timeout to be tested.
+	 */
+	fake_task_advance_tick_count(ticks);
 }
 
 TaskHandle_t xTaskCreateStatic(void (*entry)(void *), const char *name, uint32_t stack_depth,
@@ -282,4 +288,9 @@ TickType_t xTaskGetTickCountFromISR(void)
 void fake_task_set_tick_count(TickType_t ticks)
 {
 	s_tick_count = ticks;
+}
+
+void fake_task_advance_tick_count(TickType_t ticks)
+{
+	s_tick_count += ticks;
 }
