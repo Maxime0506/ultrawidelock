@@ -3,6 +3,10 @@
 #include <string.h>
 
 fake_rtc_t fake_rtc2;
+fake_rtc_t fake_rtc1;
+
+uint32_t fake_rtc1_auto_advance;
+unsigned fake_rtc1_reads;
 
 static uint32_t s_advance_on_cc_set;
 
@@ -10,6 +14,13 @@ void fake_rtc_reset(void)
 {
 	memset(&fake_rtc2, 0, sizeof(fake_rtc2));
 	s_advance_on_cc_set = 0;
+}
+
+void fake_rtc1_reset(void)
+{
+	memset(&fake_rtc1, 0, sizeof(fake_rtc1));
+	fake_rtc1_auto_advance = 0;
+	fake_rtc1_reads = 0;
 }
 
 nrf_rtc_event_t nrf_rtc_compare_event_get(uint8_t index)
@@ -88,6 +99,18 @@ void nrf_rtc_event_clear(NRF_RTC_Type *p_reg, nrf_rtc_event_t event)
 
 uint32_t nrf_rtc_counter_get(const NRF_RTC_Type *p_reg)
 {
+	/*
+	 * RTC1 free-runs, so the model advances it on every read rather than
+	 * making the test drive it. Without that a busy wait would spin forever
+	 * here and pass on hardware, which is the wrong way round: a wait that
+	 * cannot terminate has to be visible in the test, and a zero rate
+	 * reproduces exactly the stopped clock the port checks for.
+	 */
+	if (p_reg == &fake_rtc1) {
+		fake_rtc1_reads++;
+		fake_rtc1.counter =
+			(fake_rtc1.counter + fake_rtc1_auto_advance) & NRF_RTC_COUNTER_MAX;
+	}
 	return p_reg->counter;
 }
 

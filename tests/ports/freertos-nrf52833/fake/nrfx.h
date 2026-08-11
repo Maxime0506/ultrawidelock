@@ -42,6 +42,8 @@ void fake_ipsr_set(uint32_t value);
 /* System reset, recorded rather than performed. */
 unsigned fake_system_reset_count(void);
 void fake_system_reset(void);
+/* Set to leave a fatal path the way the hardware would: by never returning. */
+extern void (*fake_system_reset_hook)(void);
 
 #define NVIC_SystemReset() fake_system_reset()
 
@@ -55,6 +57,12 @@ void fake_primask_set(uint32_t value);
 void fake_primask_disable_irq(void);
 unsigned fake_primask_disable_count(void);
 void fake_primask_reset(void);
+
+/* Data synchronization barrier, counted so the reset path can be checked for it. */
+void fake_dsb(void);
+unsigned fake_dsb_count(void);
+
+#define __DSB() fake_dsb()
 
 #define __get_PRIMASK()    fake_primask_get()
 #define __set_PRIMASK(v)   fake_primask_set(v)

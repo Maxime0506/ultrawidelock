@@ -37,6 +37,18 @@ typedef struct {
 extern fake_rtc_t fake_rtc2;
 #define NRF_RTC2 (&fake_rtc2)
 
+/*
+ * RTC1 carries the FreeRTOS tick, and the board's time hooks only ever read its
+ * counter. It free-runs on hardware, so the model advances it by
+ * fake_rtc1_auto_advance on every read; setting that to zero is a stopped
+ * clock, which is the case the port has to notice rather than spin on.
+ */
+extern fake_rtc_t fake_rtc1;
+#define NRF_RTC1 (&fake_rtc1)
+extern uint32_t fake_rtc1_auto_advance;
+extern unsigned fake_rtc1_reads;
+void fake_rtc1_reset(void);
+
 typedef fake_rtc_t NRF_RTC_Type;
 
 typedef enum {

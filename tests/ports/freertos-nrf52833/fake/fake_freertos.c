@@ -261,3 +261,25 @@ BaseType_t xQueueReceive(QueueHandle_t queue, void *item, TickType_t ticks)
 	}
 	return pdFALSE;
 }
+
+/*
+ * The tick count. The board's uptime hook extends it past 32 bits, and the only
+ * way to reach that extension in a bounded run is to place the count just short
+ * of the wrap, so the model lets a test set it outright.
+ */
+static TickType_t s_tick_count;
+
+TickType_t xTaskGetTickCount(void)
+{
+	return s_tick_count;
+}
+
+TickType_t xTaskGetTickCountFromISR(void)
+{
+	return s_tick_count;
+}
+
+void fake_task_set_tick_count(TickType_t ticks)
+{
+	s_tick_count = ticks;
+}

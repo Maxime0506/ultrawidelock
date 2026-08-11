@@ -141,6 +141,31 @@ The implemented foundation now includes:
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
+- `board/time_freertos.c` supplies the three time hooks, from two sources on
+  purpose. `woz_freertos_uptime_us` must never step backwards over the life of
+  the product, so it is the FreeRTOS tick count extended past its 32-bit wrap,
+  which gives it no horizon at all. `woz_freertos_cycle_get_32` and
+  `woz_freertos_busy_wait_us` need resolution finer than a tick, so they read
+  RTC1's counter directly; that is safe because an RTC counter free-runs once
+  started and nothing here writes a register. The counter is 24 bits and the
+  cycle hook reports 32, so a wrap between two nearby reads is carried in
+  software, which is what a latency probe straddling the wrap would otherwise
+  get wrong by 16 million counts. The Zephyr oracle's `k_cycle_get_32()` on this
+  part is the same 32768 Hz RTC, so the DW3110 response-arm probe measures
+  against the same 30.5 us resolution here as it does there. A busy wait rounds
+  the request up to whole ticks and then adds one more, because the counter may
+  be a hair from advancing when the spin starts and the DW3000 driver asks for
+  waits as short as 20 us; coming back early violates a part's timing and fails
+  intermittently on a bench. The RTC1 prescaler is stated as
+  `WOZ_FREERTOS_BOARD_RTC_HZ` rather than probed, because the pinned Nordic HAL
+  is not guaranteed to expose a prescaler read. A counter that never advances is
+  fatal on first use rather than an unbounded spin: a lock that hangs during
+  driver bring-up looks like dead hardware.
+- `board/fault_freertos.c` resets rather than halts, because this is a door
+  lock: a board spinning in a fault has stopped answering, while one that
+  reboots comes back and can be opened. Define `WOZ_FREERTOS_FATAL_HALT` for
+  bench builds to stop instead. The reset shows up in RESETREAS as SOFTWARE,
+  which `otPlatGetResetReason` then reports.
 - `peripherals.yml` freezes RTC, TIMER, EGU, vector, and clock ownership before
   the first target link.
 - `platform.lock.yml` pins the Qorvo base and the exact OpenThread, nrfxlib,

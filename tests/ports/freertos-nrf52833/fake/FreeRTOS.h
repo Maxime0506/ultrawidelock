@@ -17,6 +17,8 @@ typedef uint32_t StackType_t;
 
 #define portMAX_DELAY      UINT32_MAX
 #define portTICK_PERIOD_MS 1u
+/* A 1 kHz tick, matching portTICK_PERIOD_MS above. */
+#define configTICK_RATE_HZ 1000u
 #define pdMS_TO_TICKS(ms)  ((TickType_t)(ms))
 #define tskIDLE_PRIORITY   0u
 

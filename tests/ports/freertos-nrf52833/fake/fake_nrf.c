@@ -69,9 +69,32 @@ unsigned fake_system_reset_count(void)
 	return s_system_resets;
 }
 
+void (*fake_system_reset_hook)(void);
+
 void fake_system_reset(void)
 {
 	s_system_resets++;
+	/*
+	 * On hardware the core never comes back from here. A test that wants to
+	 * drive a fatal path to its end sets this hook and leaves by it;
+	 * without one the model just counts, which is what the reset-reason
+	 * tests need.
+	 */
+	if (fake_system_reset_hook != NULL) {
+		fake_system_reset_hook();
+	}
+}
+
+static unsigned s_dsb_calls;
+
+void fake_dsb(void)
+{
+	s_dsb_calls++;
+}
+
+unsigned fake_dsb_count(void)
+{
+	return s_dsb_calls;
 }
 
 static uint32_t s_ipsr;

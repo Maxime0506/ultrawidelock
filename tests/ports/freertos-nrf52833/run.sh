@@ -17,6 +17,7 @@ OT_ALARM_BIN="$OUT/freertos_ot_alarm_test"
 OT_MISC_BIN="$OUT/freertos_ot_misc_test"
 KV_BIN="$OUT/freertos_kv_flash_test"
 PROV_BIN="$OUT/freertos_prov_kv_test"
+BOARD_TIME_BIN="$OUT/freertos_board_time_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -184,3 +185,17 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
 	-o "$PROV_BIN"
 "$PROV_BIN"
+
+# The board's time and fault hooks, against a free-running RTC model.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_board_time.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_rtc.c" \
+	"$ROOT/ports/freertos-nrf52833/board/time_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/board/fault_freertos.c" \
+	-o "$BOARD_TIME_BIN"
+"$BOARD_TIME_BIN"
