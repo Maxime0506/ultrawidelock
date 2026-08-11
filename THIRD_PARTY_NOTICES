@@ -149,6 +149,14 @@ The Qorvo DW3_QM33_SDK archive that supplies the board and UWB base for this
 port is a separate vendor artifact, also pinned in that lock file and also not
 vendored here. Its terms are the Qorvo ones stated above.
 
+Not a pinned component, but stated here because the name appears in the source:
+ports/freertos-nrf52833/board/log_rtt_freertos.c implements a SEGGER RTT
+control block from the published format. No SEGGER code is copied, compiled, or
+linked, and SEGGER's own RTT implementation is licensed for use with SEGGER
+products only, which is why it is not used. The identifier string it writes is
+the one a J-Link scans for; SEGGER and J-Link are trademarks of SEGGER
+Microcontroller GmbH, used here only to name the interface.
+
 Matter lock application
 -----------------------
 

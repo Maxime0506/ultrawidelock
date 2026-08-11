@@ -180,6 +180,27 @@ The implemented foundation now includes:
   reader driving `TASKS_START` underneath it would corrupt the timebase the
   whole radio rests on. MPSL reports quarter degrees; the 802.15.4 driver, the
   only consumer, wants whole ones.
+- `board/log_rtt_freertos.c` is the log sink, as a SEGGER RTT up-buffer. RTT and
+  not the UART, and that is the board's decision rather than a preference:
+  `uart0` is the J-Link OB's virtual COM port and MCUboot's serial recovery
+  rides it, so an application console there would collide with the DFU path.
+  The Zephyr oracle makes the same choice for the same reason. The control block
+  is written here against the published RTT layout rather than by linking
+  SEGGER's implementation, which is licensed for use with SEGGER's own products;
+  nothing is vendored and no third-party source is compiled, and a J-Link finds
+  this by scanning RAM for the identifier exactly as it finds SEGGER's. The
+  buffer is in no-block-skip mode, which is the only safe choice: a blocking
+  sink would stall its caller, and at 115200 baud an 80-character line is about
+  7 ms against a 1.836 ms DW3110 response-arm deadline. A line that does not fit
+  is dropped whole, because a partial line would splice with the next writer's
+  and a log that invents lines is worse than one that admits it lost some. The
+  write offset never reaches the read offset, since equal offsets are how a host
+  is told the buffer is empty. With no debugger attached the host never advances
+  the read offset, the buffer fills once, and every later write costs a bounds
+  check. A write masks interrupts for the length of the copy, roughly a
+  microsecond per hundred bytes at 64 MHz, so this hook must not be called from
+  the radio's priority-zero handlers. The struct offsets are a wire format and
+  are pinned by static assert on a 32-bit target.
 - `board/fault_freertos.c` resets rather than halts, because this is a door
   lock: a board spinning in a fault has stopped answering, while one that
   reboots comes back and can be opened. Define `WOZ_FREERTOS_FATAL_HALT` for
