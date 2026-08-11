@@ -20,6 +20,7 @@ PROV_BIN="$OUT/freertos_prov_kv_test"
 BOARD_TIME_BIN="$OUT/freertos_board_time_test"
 BOARD_ENTROPY_BIN="$OUT/freertos_board_entropy_test"
 BOARD_LOG_BIN="$OUT/freertos_board_log_test"
+BOARD_FLASH_BIN="$OUT/freertos_board_flash_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -229,3 +230,17 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/board/log_rtt_freertos.c" \
 	-o "$BOARD_LOG_BIN"
 "$BOARD_LOG_BIN"
+
+# The board's NVMC flash hooks. Reads are memory-mapped on the part, so the
+# model's array stands in for that mapping; writes and erases go through the
+# controller model, which enforces its modes and its only-clear-bits rule.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	"-DWOZ_FREERTOS_FLASH_MAPPED(offset)=((const void *)&fake_nvmc_flash[(offset)])" \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_board_flash.c" \
+	"$HERE/fake/fake_nvmc.c" \
+	"$ROOT/ports/freertos-nrf52833/board/flash_freertos.c" \
+	-o "$BOARD_FLASH_BIN"
+"$BOARD_FLASH_BIN"

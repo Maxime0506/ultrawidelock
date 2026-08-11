@@ -136,6 +136,23 @@ if ! rg -Fq 'NRF_RNG_INT_VALRDY_MASK' "$hal_nordic/nrfx/hal/nrf_rng.h" || \
 fi
 printf '  ok   Nordic RNG HAL matches the board entropy pool\n'
 
+# board/flash_freertos.c drives NVMC through the Nordic HAL. Same reasoning as
+# the RNG above: these are the exact entry points it calls.
+for symbol in nrf_nvmc_mode_set nrf_nvmc_ready_check nrf_nvmc_word_write \
+	nrf_nvmc_page_erase_start; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$hal_nordic/nrfx/hal/nrf_nvmc.h"; then
+		printf 'radio-source-check: Nordic NVMC HAL entry point is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+for symbol in NRF_NVMC_MODE_READONLY NRF_NVMC_MODE_WRITE NRF_NVMC_MODE_ERASE; do
+	if ! rg -Fq "$symbol" "$hal_nordic/nrfx/hal/nrf_nvmc.h"; then
+		printf 'radio-source-check: Nordic NVMC mode is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+printf '  ok   Nordic NVMC HAL matches the board flash hooks\n'
+
 # radio/nrf_802154_clock_freertos.c deliberately avoids the older
 # mpsl_clock_hfclk_request/release/is_running trio, which the pinned MPSL marks
 # deprecated and slates for removal. Check that the replacements exist and that

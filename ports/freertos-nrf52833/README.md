@@ -180,6 +180,24 @@ The implemented foundation now includes:
   reader driving `TASKS_START` underneath it would corrupt the timebase the
   whole radio rests on. MPSL reports quarter degrees; the 802.15.4 driver, the
   only consumer, wants whole ones.
+- `board/flash_freertos.c` is internal flash on NVMC, and it is half done on
+  purpose. The NVMC half is complete: a write may only clear bits, writes are
+  word-aligned and a whole number of words, an erase covers a whole page, and
+  the controller is put into write or erase mode and back to read mode around
+  each operation, because a controller left in write mode turns any later stray
+  store into a flash program. Writes and erases are confined to a window that
+  excludes the application image by default, so a store with an offset bug can
+  lose its own data but cannot erase the firmware out from under a door lock; a
+  board that adds a DFU slot widens `WOZ_FREERTOS_FLASH_WRITABLE_BASE` and
+  `_LIMIT` deliberately. Reads need no window and no controller, since program
+  flash is memory-mapped. **The radio-arbitration half is not written.**
+  Programming this flash stalls the CPU, and a page erase stalls it far longer
+  than any radio event can wait, so an operation issued while MPSL has the radio
+  scheduled will overrun that event; the Zephyr oracle takes an MPSL timeslot
+  per operation from a session its flash driver opens for itself. Until that
+  binding exists here, a write or erase attempted while the radio is up is
+  refused and logged rather than performed. A provisioning write that fails
+  loudly is recoverable; a corrupted radio event on a shipping lock is not.
 - `board/log_rtt_freertos.c` is the log sink, as a SEGGER RTT up-buffer. RTT and
   not the UART, and that is the board's decision rather than a preference:
   `uart0` is the J-Link OB's virtual COM port and MCUboot's serial recovery
