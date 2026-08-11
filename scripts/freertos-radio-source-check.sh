@@ -205,6 +205,27 @@ for symbol in nrf_802154_platform_sl_lptimer_hw_task_prepare \
 done
 printf '  ok   the nRF52833 service layer calls the hardware task and no timestamper\n'
 
+# thread/ot_alarm_freertos.c implements this contract; the host test builds
+# against a reproduced header, so the names are checked against the real one.
+ot_alarm="$workspace/modules/lib/openthread/include/openthread/platform/alarm-milli.h"
+require_file "$ot_alarm" 'OpenThread millisecond alarm contract'
+for symbol in otPlatAlarmMilliStartAt otPlatAlarmMilliStop otPlatAlarmMilliGetNow \
+	otPlatAlarmMilliFired; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$ot_alarm"; then
+		printf 'radio-source-check: OpenThread alarm contract is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+# The microsecond alarm is deliberately not implemented. It only exists when
+# OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE is set, and this product leaves
+# it at upstream's default of 0: a receiver-on MED with no CSL and no time sync.
+if ! rg -Fq '#define OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE 0' \
+	"$workspace/modules/lib/openthread/src/core/config/platform.h"; then
+	printf 'radio-source-check: the OpenThread microsecond timer is no longer off by default\n' >&2
+	exit 2
+fi
+printf '  ok   OpenThread alarm contract matches the port, microsecond timer still off\n'
+
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then
 	printf 'radio-source-check: MPSL no longer documents RTOS-independent integration\n' >&2

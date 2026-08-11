@@ -53,6 +53,12 @@ bool woz_freertos_openthread_radio_started(void)
  */
 void woz_freertos_openthread_process_drivers(otInstance *instance)
 {
+	/*
+	 * The alarm needs no start of its own: it is armed by the stack, and a
+	 * pass before anything armed it has nothing to deliver.
+	 */
+	woz_freertos_openthread_alarm_process(instance);
+
 	if (!s_started) {
 		return;
 	}

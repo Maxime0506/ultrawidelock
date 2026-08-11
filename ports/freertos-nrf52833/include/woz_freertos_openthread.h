@@ -50,4 +50,11 @@ int woz_freertos_openthread_radio_start(void);
 /** Whether the radio platform has been started. */
 bool woz_freertos_openthread_radio_started(void);
 
+/**
+ * Deliver an expired OpenThread alarm. Called from the drain above, on the
+ * OpenThread task with the API lock held, so the stack may re-arm the alarm
+ * from inside its own callback.
+ */
+void woz_freertos_openthread_alarm_process(otInstance *instance);
+
 #endif /* WOZ_FREERTOS_OPENTHREAD_H */

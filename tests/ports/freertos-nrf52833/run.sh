@@ -13,6 +13,7 @@ CLOCK_BIN="$OUT/freertos_802154_clock_test"
 LPTIMER_BIN="$OUT/freertos_802154_lptimer_test"
 OT_KERNEL_BIN="$OUT/freertos_ot_kernel_test"
 OT_RADIO_BIN="$OUT/freertos_ot_radio_test"
+OT_ALARM_BIN="$OUT/freertos_ot_alarm_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -128,3 +129,14 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/thread/ot_radio_freertos.c" \
 	-o "$OT_RADIO_BIN"
 "$OT_RADIO_BIN"
+
+# OpenThread's millisecond alarm on the port's delayable work.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/modules/woz_port/include" \
+	"$HERE/test_ot_alarm.c" \
+	"$ROOT/ports/freertos-nrf52833/thread/ot_alarm_freertos.c" \
+	-o "$OT_ALARM_BIN"
+"$OT_ALARM_BIN"

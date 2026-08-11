@@ -58,6 +58,15 @@ void woz_freertos_openthread_wake_from_isr(void)
 	g_wake_isr_calls++;
 }
 
+/* The alarm's half of the drain, recorded. */
+static unsigned g_alarm_process_calls;
+
+void woz_freertos_openthread_alarm_process(otInstance *instance)
+{
+	(void)instance;
+	g_alarm_process_calls++;
+}
+
 void otSysEventSignalPending(void);
 
 int main(void)
@@ -76,6 +85,8 @@ int main(void)
 	woz_freertos_openthread_process_drivers(instance);
 	CHECK("draining before the radio starts does not reach the platform",
 	      g_process_calls == 0);
+	CHECK("but does still deliver an alarm, which needs no start of its own",
+	      g_alarm_process_calls == 1);
 	CHECK("and the radio does not claim to be started",
 	      !woz_freertos_openthread_radio_started());
 

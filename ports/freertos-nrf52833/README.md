@@ -94,6 +94,16 @@ The implemented foundation now includes:
   refuses to reach the platform before it is up; and `otSysEventSignalPending()`
   becomes a FreeRTOS notification, through the interrupt path when IPSR says a
   driver callout is signalling.
+- `thread/ot_alarm_freertos.c` is OpenThread's millisecond alarm, carried by the
+  port's delayable work rather than a second timer service: the callback only
+  records the expiry and wakes the OpenThread task, and the stack's own
+  callback runs from that task under the API lock. A deadline already past is
+  recorded rather than scheduled, and the flag is cleared before the callback so
+  a re-arm from inside it is not swallowed. The microsecond alarm is absent on
+  purpose: it exists only under
+  `OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE`, which this product leaves at
+  upstream's default of zero, and `make freertos-radio-source-check` fails if
+  that default ever changes.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
