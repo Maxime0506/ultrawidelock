@@ -9,6 +9,7 @@ OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host"
 BIN="$OUT/freertos_port_test"
 RADIO_BIN="$OUT/freertos_radio_start_test"
 HOST_BIN="$OUT/freertos_nimble_host_test"
+CLOCK_BIN="$OUT/freertos_802154_clock_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -72,3 +73,16 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/radio/radio_start_freertos.c" \
 	-o "$HOST_BIN"
 "$HOST_BIN"
+
+# The 802.15.4 clock platform only depends on the MPSL clock double.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/modules/woz_port/include" \
+	"$HERE/test_802154_clock.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_sdc.c" \
+	"$ROOT/ports/freertos-nrf52833/radio/nrf_802154_clock_freertos.c" \
+	-o "$CLOCK_BIN"
+"$CLOCK_BIN"

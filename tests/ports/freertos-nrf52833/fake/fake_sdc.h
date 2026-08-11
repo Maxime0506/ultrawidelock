@@ -23,6 +23,15 @@ extern IRQn_Type fake_mpsl_low_prio_irq;
 extern mpsl_assert_handler_t fake_mpsl_assert_handler;
 extern int32_t fake_mpsl_init_result;
 extern unsigned fake_mpsl_low_priority_process_calls;
+extern unsigned fake_mpsl_hfclk_request_calls;
+extern unsigned fake_mpsl_hfclk_release_calls;
+extern mpsl_clock_hfclk_src_t fake_mpsl_hfclk_src;
+extern mpsl_clock_hfclk_request_callback_t fake_mpsl_hfclk_callback;
+extern int32_t fake_mpsl_hfclk_request_result;
+extern int32_t fake_mpsl_hfclk_release_result;
+extern int32_t fake_mpsl_hfclk_is_running_result;
+extern uint32_t fake_mpsl_hfclk_running;
+
 extern unsigned fake_mpsl_radio_isr_calls;
 extern unsigned fake_mpsl_rtc0_isr_calls;
 extern unsigned fake_mpsl_timer0_isr_calls;

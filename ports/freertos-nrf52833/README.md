@@ -47,6 +47,14 @@ The implemented foundation now includes:
   compiled or linked, and the vendor file is never patched, so re-pinning it is
   a plain re-fetch. `ble/hci_dispatcher_freertos.c` adapts it to the port's
   radio contract.
+- `radio/nrf_802154_clock_freertos.c` implements the 802.15.4 clock platform on
+  top of MPSL, which owns the CLOCK peripheral. It uses the source-selecting
+  MPSL API because the pinned MPSL deprecates the older one. The low-frequency
+  clock is already running by the time anything calls it, since `mpsl_init()`
+  waits for the crystal, and stopping it is refused because it carries the
+  FreeRTOS tick. With the MPSL-arbitrated service-layer binary only `init` and
+  `deinit` are actually reached; the rest is the header's contract and is what
+  the open-source scheduler variant would call.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.

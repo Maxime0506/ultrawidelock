@@ -109,6 +109,37 @@ if ! rg -q '[[:space:]]mpsl_init\(' "$nrfxlib/mpsl/include/mpsl.h" || \
 fi
 printf '  ok   MPSL init and SoftDevice Controller startup APIs match the port\n'
 
+# radio/nrf_802154_clock_freertos.c deliberately avoids the older
+# mpsl_clock_hfclk_request/release/is_running trio, which the pinned MPSL marks
+# deprecated and slates for removal. Check that the replacements exist and that
+# the old ones are still the deprecated spelling, so a version bump that
+# reverses either decision is reported.
+for symbol in mpsl_clock_hfclk_src_request mpsl_clock_hfclk_src_release \
+	mpsl_clock_hfclk_src_is_running; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$nrfxlib/mpsl/include/mpsl_clock.h"; then
+		printf 'radio-source-check: MPSL clock source API is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+if ! rg -Fq 'MPSL_CLOCK_HF_SRC_XO' "$nrfxlib/mpsl/include/mpsl_clock.h" || \
+	! rg -Fq 'MPSL_CLOCK_EVT_HFCLK_STARTED' "$nrfxlib/mpsl/include/mpsl_clock.h"; then
+	printf 'radio-source-check: MPSL high-frequency clock source or event enum changed\n' >&2
+	exit 2
+fi
+# The 802.15.4 clock contract the port implements.
+for symbol in nrf_802154_clock_init nrf_802154_clock_deinit nrf_802154_clock_hfclk_start \
+	nrf_802154_clock_hfclk_stop nrf_802154_clock_hfclk_is_running \
+	nrf_802154_clock_lfclk_start nrf_802154_clock_lfclk_stop \
+	nrf_802154_clock_lfclk_is_running nrf_802154_clock_hfclk_ready \
+	nrf_802154_clock_lfclk_ready; do
+	if ! rg -q "[[:space:]]${symbol}\(" \
+		"$nrfxlib/nrf_802154/sl/include/platform/nrf_802154_clock.h"; then
+		printf 'radio-source-check: nRF 802.15.4 clock contract is missing: %s\n' "$symbol" >&2
+		exit 2
+	fi
+done
+printf '  ok   nRF 802.15.4 clock contract and MPSL clock source API match the port\n'
+
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then
 	printf 'radio-source-check: MPSL no longer documents RTOS-independent integration\n' >&2

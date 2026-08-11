@@ -6,6 +6,14 @@
 #include <sdc_hci.h>
 
 unsigned fake_mpsl_init_calls;
+unsigned fake_mpsl_hfclk_request_calls;
+unsigned fake_mpsl_hfclk_release_calls;
+mpsl_clock_hfclk_src_t fake_mpsl_hfclk_src;
+mpsl_clock_hfclk_request_callback_t fake_mpsl_hfclk_callback;
+int32_t fake_mpsl_hfclk_request_result;
+int32_t fake_mpsl_hfclk_release_result;
+int32_t fake_mpsl_hfclk_is_running_result;
+uint32_t fake_mpsl_hfclk_running;
 mpsl_clock_lfclk_cfg_t fake_mpsl_clock_cfg;
 IRQn_Type fake_mpsl_low_prio_irq;
 mpsl_assert_handler_t fake_mpsl_assert_handler;
@@ -47,6 +55,14 @@ uint8_t fake_sdc_get_type;
 void fake_sdc_reset(void)
 {
 	fake_mpsl_init_calls = 0;
+	fake_mpsl_hfclk_request_calls = 0;
+	fake_mpsl_hfclk_release_calls = 0;
+	fake_mpsl_hfclk_src = MPSL_CLOCK_HF_SRC_MAX;
+	fake_mpsl_hfclk_callback = NULL;
+	fake_mpsl_hfclk_request_result = 0;
+	fake_mpsl_hfclk_release_result = 0;
+	fake_mpsl_hfclk_is_running_result = 0;
+	fake_mpsl_hfclk_running = 0;
 	memset(&fake_mpsl_clock_cfg, 0, sizeof(fake_mpsl_clock_cfg));
 	fake_mpsl_low_prio_irq = 0;
 	fake_mpsl_assert_handler = NULL;
@@ -222,4 +238,29 @@ int32_t sdc_hci_get(uint8_t *p_packet_out, uint8_t *p_msg_type_out)
 		*p_msg_type_out = fake_sdc_get_type;
 	}
 	return fake_sdc_get_result;
+}
+
+int32_t mpsl_clock_hfclk_src_request(mpsl_clock_hfclk_src_t src,
+				     mpsl_clock_hfclk_request_callback_t hfclk_started_callback)
+{
+	fake_mpsl_hfclk_request_calls++;
+	fake_mpsl_hfclk_src = src;
+	fake_mpsl_hfclk_callback = hfclk_started_callback;
+	return fake_mpsl_hfclk_request_result;
+}
+
+int32_t mpsl_clock_hfclk_src_release(mpsl_clock_hfclk_src_t src)
+{
+	fake_mpsl_hfclk_release_calls++;
+	fake_mpsl_hfclk_src = src;
+	return fake_mpsl_hfclk_release_result;
+}
+
+int32_t mpsl_clock_hfclk_src_is_running(mpsl_clock_hfclk_src_t src, uint32_t *p_is_running)
+{
+	(void)src;
+	if (p_is_running != NULL) {
+		*p_is_running = fake_mpsl_hfclk_running;
+	}
+	return fake_mpsl_hfclk_is_running_result;
 }

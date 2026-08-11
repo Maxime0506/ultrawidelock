@@ -23,4 +23,23 @@ typedef struct {
 	bool skip_wait_lfclk_started;
 } mpsl_clock_lfclk_cfg_t;
 
+typedef enum {
+	MPSL_CLOCK_HF_SRC_XO = 0,
+	MPSL_CLOCK_HF_SRC_MAX = 2,
+} mpsl_clock_hfclk_src_t;
+
+typedef enum {
+	MPSL_CLOCK_EVT_HFCLK_STARTED = 0,
+	MPSL_CLOCK_EVT_HFCLK24M_STARTED = 1,
+	MPSL_CLOCK_EVT_XO_TUNED = 2,
+	MPSL_CLOCK_EVT_MAX = 3,
+} mpsl_clock_evt_type_t;
+
+typedef void (*mpsl_clock_hfclk_request_callback_t)(mpsl_clock_evt_type_t evt_type);
+
+int32_t mpsl_clock_hfclk_src_request(mpsl_clock_hfclk_src_t src,
+				     mpsl_clock_hfclk_request_callback_t hfclk_started_callback);
+int32_t mpsl_clock_hfclk_src_release(mpsl_clock_hfclk_src_t src);
+int32_t mpsl_clock_hfclk_src_is_running(mpsl_clock_hfclk_src_t src, uint32_t *p_is_running);
+
 #endif /* TEST_MPSL_CLOCK_H */
