@@ -11,6 +11,7 @@ typedef int32_t IRQn_Type;
 #define TIMER0_IRQn      ((IRQn_Type)8)
 #define RTC0_IRQn        ((IRQn_Type)11)
 #define SWI5_EGU5_IRQn   ((IRQn_Type)25)
+#define RTC2_IRQn        ((IRQn_Type)36)
 
 void fake_nvic_disable_irq(IRQn_Type irq);
 void fake_nvic_enable_irq(IRQn_Type irq);

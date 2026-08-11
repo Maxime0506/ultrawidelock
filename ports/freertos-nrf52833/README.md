@@ -55,6 +55,17 @@ The implemented foundation now includes:
   FreeRTOS tick. With the MPSL-arbitrated service-layer binary only `init` and
   `deinit` are actually reached; the rest is the header's contract and is what
   the open-source scheduler variant would call.
+- `radio/nrf_802154_lptimer_freertos.c` implements the service layer's
+  low-power timer on RTC2. The service layer works in 64-bit ticks while RTC2
+  counts 24 bits, so the counter is extended with an overflow count; reads mask
+  the timer interrupt briefly, because the counter and the count are written by
+  two contexts and no ordering of those writes is safe to read lock-free.
+  Compare channel 0 carries the scheduled timer and channel 1 the timestamper
+  synchronization event. A deadline already past, or too near for the compare
+  write to be seen, pends the interrupt instead of waiting out a 512 second
+  wrap. The hardware-task binding needs PPI channels this port has not
+  allocated, so it returns the contract's own "no resources" rather than
+  accepting work it cannot deliver.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.

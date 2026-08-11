@@ -140,6 +140,43 @@ for symbol in nrf_802154_clock_init nrf_802154_clock_deinit nrf_802154_clock_hfc
 done
 printf '  ok   nRF 802.15.4 clock contract and MPSL clock source API match the port\n'
 
+# radio/nrf_802154_lptimer_freertos.c implements this contract on RTC2.
+lptimer="$nrfxlib/nrf_802154/sl/include/platform/nrf_802154_platform_sl_lptimer.h"
+for symbol in nrf_802154_platform_sl_lp_timer_init nrf_802154_platform_sl_lp_timer_deinit \
+	nrf_802154_platform_sl_lptimer_current_lpticks_get \
+	nrf_802154_platform_sl_lptimer_us_to_lpticks_convert \
+	nrf_802154_platform_sl_lptimer_lpticks_to_us_convert \
+	nrf_802154_platform_sl_lptimer_schedule_at nrf_802154_platform_sl_lptimer_disable \
+	nrf_802154_platform_sl_lptimer_critical_section_enter \
+	nrf_802154_platform_sl_lptimer_critical_section_exit \
+	nrf_802154_platform_sl_lptimer_hw_task_prepare \
+	nrf_802154_platform_sl_lptimer_hw_task_cleanup \
+	nrf_802154_platform_sl_lptimer_hw_task_update_ppi \
+	nrf_802154_platform_sl_lptimer_sync_schedule_now \
+	nrf_802154_platform_sl_lptimer_sync_schedule_at \
+	nrf_802154_platform_sl_lptimer_sync_abort \
+	nrf_802154_platform_sl_lptimer_sync_event_get \
+	nrf_802154_platform_sl_lptimer_sync_lpticks_get \
+	nrf_802154_platform_sl_lptimer_granularity_get \
+	nrf_802154_sl_timer_handler nrf_802154_sl_timestamper_synchronized; do
+	if ! rg -q "[[:space:]]${symbol}\(" "$lptimer"; then
+		printf 'radio-source-check: 802.15.4 low-power timer contract is missing: %s\n' \
+			"$symbol" >&2
+		exit 2
+	fi
+done
+# The refusal the port returns for the unwired hardware-task binding has to
+# stay a value the contract actually defines.
+for macro in NRF_802154_SL_LPTIMER_PLATFORM_NO_RESOURCES \
+	NRF_802154_SL_LPTIMER_PLATFORM_WRONG_STATE; do
+	if ! rg -Fq "$macro" "$lptimer"; then
+		printf 'radio-source-check: 802.15.4 low-power timer result code is missing: %s\n' \
+			"$macro" >&2
+		exit 2
+	fi
+done
+printf '  ok   nRF 802.15.4 low-power timer contract matches the RTC2 platform\n'
+
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then
 	printf 'radio-source-check: MPSL no longer documents RTOS-independent integration\n' >&2

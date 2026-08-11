@@ -10,6 +10,7 @@ BIN="$OUT/freertos_port_test"
 RADIO_BIN="$OUT/freertos_radio_start_test"
 HOST_BIN="$OUT/freertos_nimble_host_test"
 CLOCK_BIN="$OUT/freertos_802154_clock_test"
+LPTIMER_BIN="$OUT/freertos_802154_lptimer_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -86,3 +87,16 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/radio/nrf_802154_clock_freertos.c" \
 	-o "$CLOCK_BIN"
 "$CLOCK_BIN"
+
+# The RTC2 low-power timer runs against a register-level RTC model.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/modules/woz_port/include" \
+	"$HERE/test_802154_lptimer.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_rtc.c" \
+	"$ROOT/ports/freertos-nrf52833/radio/nrf_802154_lptimer_freertos.c" \
+	-o "$LPTIMER_BIN"
+"$LPTIMER_BIN"

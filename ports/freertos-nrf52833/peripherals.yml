@@ -26,6 +26,7 @@ peripherals:
 handoffs:
   - Remove Qorvo app_timer from RTC2; delayable work is owned by the FreeRTOS OSAL.
   - Route the board vectors for RADIO, RTC0, TIMER0, POWER_CLOCK, and SWI5_EGU5
-    to the woz_freertos_radio_*_isr entry points; the port owns the rest.
+    to the woz_freertos_radio_*_isr entry points, and RTC2 to
+    nrf_802154_lptimer_freertos_irq_handler; the port owns the rest.
   - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
   - Verify every PPI channel against MPSL and nRF 802.15.4 masks at target compile time.
