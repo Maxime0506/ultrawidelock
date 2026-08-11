@@ -12,6 +12,7 @@ HOST_BIN="$OUT/freertos_nimble_host_test"
 CLOCK_BIN="$OUT/freertos_802154_clock_test"
 LPTIMER_BIN="$OUT/freertos_802154_lptimer_test"
 OT_KERNEL_BIN="$OUT/freertos_ot_kernel_test"
+OT_RADIO_BIN="$OUT/freertos_ot_radio_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -115,3 +116,15 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/thread/ot_kernel_freertos.c" \
 	-o "$OT_KERNEL_BIN"
 "$OT_KERNEL_BIN"
+
+# Starting and servicing the pinned OpenThread radio platform.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_ot_radio.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$ROOT/ports/freertos-nrf52833/thread/ot_radio_freertos.c" \
+	-o "$OT_RADIO_BIN"
+"$OT_RADIO_BIN"

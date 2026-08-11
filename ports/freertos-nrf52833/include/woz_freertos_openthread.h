@@ -9,6 +9,8 @@
 #ifndef WOZ_FREERTOS_OPENTHREAD_H
 #define WOZ_FREERTOS_OPENTHREAD_H
 
+#include <stdbool.h>
+
 typedef struct otInstance otInstance;
 
 /** Start the single static OpenThread task. Returns zero on success. */
@@ -34,5 +36,18 @@ void woz_freertos_openthread_wake_from_isr(void);
  * OpenThread API lock held, so callbacks may safely re-enter the public API.
  */
 void woz_freertos_openthread_process_drivers(otInstance *instance);
+
+/**
+ * Bring the 802.15.4 radio platform up. Returns zero on success.
+ *
+ * The driver arbitrates the radio through MPSL, so this must follow
+ * woz_freertos_radio_start(), and it must precede
+ * woz_freertos_openthread_start() because the task drains the platform on
+ * every pass.
+ */
+int woz_freertos_openthread_radio_start(void);
+
+/** Whether the radio platform has been started. */
+bool woz_freertos_openthread_radio_started(void);
 
 #endif /* WOZ_FREERTOS_OPENTHREAD_H */

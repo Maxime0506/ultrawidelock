@@ -85,6 +85,15 @@ The implemented foundation now includes:
   the same reason. `woz_freertos_ot_config.h` states the Kconfig selection this
   product resolves to, and `make freertos-ncs-source-check` fails if the
   vendor file ever reaches past what the shim covers.
+- `thread/ot_radio_freertos.c` makes the three joins Zephyr would otherwise
+  make: `woz_freertos_openthread_radio_start()` brings the platform up, which
+  must follow `woz_freertos_radio_start()` because the 802.15.4 driver
+  arbitrates the radio through MPSL and must precede
+  `woz_freertos_openthread_start()` because the task drains the platform on
+  every pass; `woz_freertos_openthread_process_drivers()` is that drain, and
+  refuses to reach the platform before it is up; and `otSysEventSignalPending()`
+  becomes a FreeRTOS notification, through the interrupt path when IPSR says a
+  driver callout is signalling.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
