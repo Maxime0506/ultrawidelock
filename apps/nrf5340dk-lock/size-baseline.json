@@ -8,7 +8,7 @@
       "config": {
         "board": "nrf5340dk/nrf5340/cpuapp",
         "image": "matter-aliro-door-lock-app",
-        "extra_conf_file": "/Users/deadcafe/reverse/openaliro/apps/nrf5340dk-lock/overlays/woz-aliro.conf;/Users/deadcafe/reverse/openaliro/apps/nrf5340dk-lock/overlays/st25r.conf;/Users/deadcafe/reverse/openaliro/apps/nrf5340dk-lock/overlays/dfu.conf;/Users/deadcafe/reverse/openaliro/apps/nrf5340dk-lock/overlays/lto.conf",
+        "extra_conf_file": "/Users/deadcafe/reverse/ultrawidelock/apps/nrf5340dk-lock/overlays/woz-aliro.conf;/Users/deadcafe/reverse/ultrawidelock/apps/nrf5340dk-lock/overlays/st25r.conf;/Users/deadcafe/reverse/ultrawidelock/apps/nrf5340dk-lock/overlays/dfu.conf;/Users/deadcafe/reverse/ultrawidelock/apps/nrf5340dk-lock/overlays/lto.conf",
         "kconfig": {
           "CONFIG_INIT_STACKS": "y",
           "CONFIG_LOG": "y",

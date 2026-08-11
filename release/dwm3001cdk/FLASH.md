@@ -1,4 +1,4 @@
-# openaliro on the DWM3001CDK: flash guide
+# ultrawidelock on the DWM3001CDK: flash guide
 
 An Aliro lock on one board. Your iPhone carries the key in Wallet, and the lock
 opens as you walk up to it, phone in your pocket. No app to install.
@@ -104,8 +104,8 @@ bootloader and the signing key together, so from then on your builds install and
 this release's no longer apply:
 
 ```bash
-git clone https://github.com/openaliro/openaliro.git
-cd openaliro
+git clone https://github.com/ultrawidelock/ultrawidelock.git
+cd ultrawidelock
 make dfu-key      # your own signing key, once
 make bootstrap    # toolchain and SDK, once, takes a while
 make build
@@ -132,7 +132,7 @@ signature is what proves origin, and anyone can check it without trusting the
 release page or whoever handed them the zip:
 
 ```bash
-gh attestation verify merged.hex --repo openaliro/openaliro
+gh attestation verify merged.hex --repo ultrawidelock/ultrawidelock
 ```
 
 It prints the repository, the commit and the workflow run that produced the
@@ -143,7 +143,7 @@ either way.
 You can check the zip itself the same way, before unzipping it:
 
 ```bash
-gh attestation verify openaliro-dwm3001cdk.zip --repo openaliro/openaliro
+gh attestation verify ultrawidelock-dwm3001cdk.zip --repo ultrawidelock/ultrawidelock
 ```
 
 ## Read this before you trust it with anything
@@ -181,4 +181,4 @@ Do not secure anything valuable with this.
 | You want to start over | Hold **SW2** and tap **RESET**. That clears the pairing so you can add it again. |
 
 More detail, and the build-it-yourself route, at
-<https://github.com/openaliro/openaliro>.
+<https://github.com/ultrawidelock/ultrawidelock>.

@@ -1,6 +1,6 @@
 # Zephyr port
 
-This directory is the Zephyr backend for OpenAliro. `zephyr/module.yml` exposes
+This directory is the Zephyr backend for UltraWideLock. `zephyr/module.yml` exposes
 the directory as one Zephyr module, with `CMakeLists.txt` and `Kconfig` selecting
 the required backend sources.
 

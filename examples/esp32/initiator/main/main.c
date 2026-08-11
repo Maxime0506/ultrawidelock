@@ -30,7 +30,7 @@
 #include "aliro_apdu.h" /* 4-byte envelope: frame/unframe + PROTO/OP constants */
 #include "aliro_ble_central.h"
 #include "aliro_crypto.h" /* aliro_crypto_init: brings up the PSA backend */
-#include <openaliro/device.h>
+#include <ultrawidelock/device.h>
 
 static const char *TAG = "initiator";
 

@@ -37,7 +37,7 @@
  * Strings this node reports about itself. Build-time, not per-device: this port
  * has no factory data partition and no per-board serial to read out of one.
  */
-#define MATTER_VENDOR_NAME   "openaliro"
+#define MATTER_VENDOR_NAME   "ultrawidelock"
 #define MATTER_PRODUCT_NAME  "DWM3001CDK Aliro Reader"
 #define MATTER_SERIAL_NUMBER "DWM3001CDK-0001"
 

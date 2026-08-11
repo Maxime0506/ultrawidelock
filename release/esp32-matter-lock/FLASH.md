@@ -1,4 +1,4 @@
-# openaliro on ESP32-S3/C5/C6: flash guide
+# ultrawidelock on ESP32-S3/C5/C6: flash guide
 
 The complete Aliro Matter lock on a single ESP32-S3, ESP32-C5 or ESP32-C6: it
 commissions into Apple Home over Wi-Fi, your iPhone carries the key in Wallet,
@@ -10,9 +10,9 @@ claim covers.
 
 | File | What it is |
 |---|---|
-| `openaliro-matter-lock-esp32s3.bin` | merged S3 image (bootloader + partitions + app), flashed at 0x0 |
-| `openaliro-matter-lock-esp32c5.bin` | merged C5 image, release-built but not hardware-validated |
-| `openaliro-matter-lock-esp32c6.bin` | merged C6 image; UWB validated on this chip, full Matter walk-up not yet |
+| `ultrawidelock-matter-lock-esp32s3.bin` | merged S3 image (bootloader + partitions + app), flashed at 0x0 |
+| `ultrawidelock-matter-lock-esp32c5.bin` | merged C5 image, release-built but not hardware-validated |
+| `ultrawidelock-matter-lock-esp32c6.bin` | merged C6 image; UWB validated on this chip, full Matter walk-up not yet |
 | `flash.sh` | flashes the image for whichever of the three chips you name |
 | `manifest.json` | the chip list the browser flasher reads |
 | `README.txt` | the short version of this guide, in plain text |
@@ -69,13 +69,13 @@ The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision alr
 
 The C6 image can also drive the DW radio inside a BU04 module over direct SPI,
 which is how C6 was validated. That wiring differs from the table above; see the
-[bring-up checklist](https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md)
+[bring-up checklist](https://github.com/ultrawidelock/ultrawidelock/blob/main/docs/esp32-bringup.md)
 for the BU04 pad map and the `ST_NRST` requirement.
 
 ## 4. Flash
 
 Fastest for either chip: open the
-[browser flasher](https://openaliro.github.io/openaliro/flash/) in Chrome or Edge,
+[browser flasher](https://ultrawidelock.github.io/ultrawidelock/flash/) in Chrome or Edge,
 select the board, and choose **Install**. The page and manifest are dry-checked,
 but the repository does not yet record a successful real WebSerial flash.
 
@@ -100,9 +100,9 @@ really came from us" below.
 Manual equivalents:
 
 ```bash
-esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
-esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c5.bin
-esptool.py --chip esp32c6 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32c6.bin
+esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 ultrawidelock-matter-lock-esp32s3.bin
+esptool.py --chip esp32c5 --baud 460800 write_flash 0x0 ultrawidelock-matter-lock-esp32c5.bin
+esptool.py --chip esp32c6 --baud 460800 write_flash 0x0 ultrawidelock-matter-lock-esp32c6.bin
 ```
 
 Reflashing wipes any previous commissioning.
@@ -143,9 +143,9 @@ The `matter>` console also has `status`, `range`, `lock`/`unlock`, and `factoryr
 | No key in Wallet | Wait a few minutes; needs iOS 26+ and a UWB iPhone |
 
 More depth: the
-[bring-up checklist](https://github.com/openaliro/openaliro/blob/main/docs/esp32-bringup.md)
+[bring-up checklist](https://github.com/ultrawidelock/ultrawidelock/blob/main/docs/esp32-bringup.md)
 and
-[forty-odd known traps](https://github.com/openaliro/openaliro/blob/main/docs/esp32-gotchas.md).
+[forty-odd known traps](https://github.com/ultrawidelock/ultrawidelock/blob/main/docs/esp32-gotchas.md).
 
 ## Check it really came from us
 
@@ -159,7 +159,7 @@ signature is what proves origin, and anyone can check it without trusting the
 release page or whoever handed them the zip:
 
 ```bash
-gh attestation verify openaliro-matter-lock-esp32s3.bin --repo openaliro/openaliro
+gh attestation verify ultrawidelock-matter-lock-esp32s3.bin --repo ultrawidelock/ultrawidelock
 ```
 
 It prints the repository, the commit and the workflow run that produced the
@@ -170,7 +170,7 @@ is installed, and says so either way.
 You can check the zip itself the same way, before unzipping it:
 
 ```bash
-gh attestation verify openaliro-esp32-matter-lock.zip --repo openaliro/openaliro
+gh attestation verify ultrawidelock-esp32-matter-lock.zip --repo ultrawidelock/ultrawidelock
 ```
 
 ## Notes

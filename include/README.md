@@ -1,18 +1,18 @@
 # Installed C API
 
-`include/openaliro/openaliro.h` is the all-in-one package umbrella. The real
+`include/ultrawidelock/ultrawidelock.h` is the all-in-one package umbrella. The real
 role declarations stay with their portable implementation owners:
 
 | Include | Canonical source |
 |---|---|
-| `<openaliro/reader.h>` | `modules/woz_aliro/include/openaliro/reader.h` |
-| `<openaliro/device.h>` | `modules/woz_aliro/include/openaliro/device.h` |
-| `<openaliro/tlv.h>` | `modules/woz_aliro/include/openaliro/tlv.h` |
-| `<openaliro/uwb.h>` | `modules/woz_uwb/include/openaliro/uwb.h` |
-| `<openaliro/woz_hal.h>` | `modules/woz_port/include/openaliro/woz_hal.h` |
+| `<ultrawidelock/reader.h>` | `modules/woz_aliro/include/ultrawidelock/reader.h` |
+| `<ultrawidelock/device.h>` | `modules/woz_aliro/include/ultrawidelock/device.h` |
+| `<ultrawidelock/tlv.h>` | `modules/woz_aliro/include/ultrawidelock/tlv.h` |
+| `<ultrawidelock/uwb.h>` | `modules/woz_uwb/include/ultrawidelock/uwb.h` |
+| `<ultrawidelock/woz_hal.h>` | `modules/woz_port/include/ultrawidelock/woz_hal.h` |
 
 This keeps module ownership intact while giving source builds and installed
-packages the same `<openaliro/...>` include spelling. The former flat role
+packages the same `<ultrawidelock/...>` include spelling. The former flat role
 headers were removed, and the SDK test rejects their reintroduction.
 
 The package installs these entry points plus only the lower-level headers they

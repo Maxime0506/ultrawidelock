@@ -1,4 +1,4 @@
-openaliro @VERSION@   ·   DWM3001CDK
+ultrawidelock @VERSION@   ·   DWM3001CDK
 
 An Aliro lock on one board. Your iPhone carries the key in Wallet, and the lock
 opens as you walk up to it, phone in your pocket. There is no app to install.
@@ -43,10 +43,10 @@ CHECK IT REALLY CAME FROM US
   built it: anyone who could alter the firmware could alter the checksums in
   the same motion.
 
-  This release is signed. To prove these bytes came out of openaliro's CI,
+  This release is signed. To prove these bytes came out of ultrawidelock's CI,
   run this against the zip you downloaded:
 
-    gh attestation verify openaliro-dwm3001cdk.zip --repo openaliro/openaliro
+    gh attestation verify ultrawidelock-dwm3001cdk.zip --repo ultrawidelock/ultrawidelock
 
   It checks a Sigstore signature created while the release was being built,
   and prints the commit and workflow that produced it. It needs the GitHub CLI
@@ -69,4 +69,4 @@ BEFORE YOU TRUST IT WITH ANYTHING
   one USB reflash. Do not secure anything valuable with this.
 
 
-                        https://github.com/openaliro/openaliro
+                        https://github.com/ultrawidelock/ultrawidelock

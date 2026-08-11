@@ -309,7 +309,7 @@ static void test_stack_identity(void)
 	t_group("aliro stack identity");
 
 	T_EQ("init succeeds", stack().Init().ToInt(), (int)ALIRO_NO_ERROR);
-	T_OK("library version", std::strcmp(AliroStack::GetLibraryVersion(), "openaliro/0.2") == 0);
+	T_OK("library version", std::strcmp(AliroStack::GetLibraryVersion(), "ultrawidelock/0.2") == 0);
 
 	versions = stack().GetExpeditedStandardProtocolVersions(count);
 	T_EQ("one expedited version", (long)count, 1L);

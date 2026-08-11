@@ -173,7 +173,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("patch", help="a .wdfu built by scripts/woz_patch.py")
-    p.add_argument("--name", default="openaliro", help="advertised name to look for")
+    p.add_argument("--name", default="ultrawidelock", help="advertised name to look for")
     p.add_argument("--chunk", type=int, default=180,
                    help="bytes of patch per frame, capped by the negotiated MTU")
     p.add_argument("--scan-timeout", type=float, default=15.0)

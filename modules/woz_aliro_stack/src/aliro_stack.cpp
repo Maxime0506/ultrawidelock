@@ -244,7 +244,7 @@ AliroError AliroStack::Init()
  */
 const char *AliroStack::GetLibraryVersion()
 {
-	return "openaliro/0.2";
+	return "ultrawidelock/0.2";
 }
 
 /**

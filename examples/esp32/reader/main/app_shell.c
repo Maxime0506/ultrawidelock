@@ -12,9 +12,9 @@
 #include "esp_app_desc.h"
 #include "esp_idf_version.h"
 
-#include <openaliro/uwb.h>
+#include <ultrawidelock/uwb.h>
 #include "woz_diag.h" /* woz_uwb_diag_on — the raw per-frame UWB trace gate */
-#include <openaliro/reader.h>
+#include <ultrawidelock/reader.h>
 #include "aliro_lab.h" /* aliro_lab_set_enabled — the [ALAB] trace runtime gate */
 #include "app_shell.h"
 #if defined(CONFIG_WOZ_PRESENCE)

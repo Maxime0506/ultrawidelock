@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 #include "deca_device_api.h"
-#include <openaliro/uwb.h>
+#include <ultrawidelock/uwb.h>
 
 #define DRVFAKE_STATUS_SEQ_MAX 8
 

@@ -1,4 +1,4 @@
-# Porting OpenAliro
+# Porting UltraWideLock
 
 This guide is the shortest path to a new board or chipset. It assumes the board
 uses Zephyr or ESP-IDF. A new operating system also needs the contracts listed
@@ -22,24 +22,24 @@ selection belong in the application. Portable protocol decisions belong in
 Application code includes only the stable role API it consumes:
 
 ```c
-#include <openaliro/reader.h>
-#include <openaliro/uwb.h>
+#include <ultrawidelock/reader.h>
+#include <ultrawidelock/uwb.h>
 ```
 
-An initiator uses `<openaliro/device.h>`. A host tool that only handles protocol
-data uses `<openaliro/tlv.h>`. The all-in-one `<openaliro/openaliro.h>` is an
+An initiator uses `<ultrawidelock/device.h>`. A host tool that only handles protocol
+data uses `<ultrawidelock/tlv.h>`. The all-in-one `<ultrawidelock/ultrawidelock.h>` is an
 installed-package convenience and should not be used to pull unused firmware
 roles into a target build.
 
 Port implementations include the complete chipset contract:
 
 ```c
-#include <openaliro/woz_hal.h>
+#include <ultrawidelock/woz_hal.h>
 ```
 
-In framework builds the role headers are available in the same `openaliro/`
+In framework builds the role headers are available in the same `ultrawidelock/`
 namespace. Their canonical declarations live under the owning module's
-`include/openaliro/` directory. Use that spelling in applications, modules,
+`include/ultrawidelock/` directory. Use that spelling in applications, modules,
 ports, and tests; the removed flat role-header names are rejected by the SDK
 gate.
 
@@ -73,7 +73,7 @@ smallest known-good module set for each role.
 ESP-IDF applications add the component root once:
 
 ```cmake
-set(EXTRA_COMPONENT_DIRS "${OPENALIRO_ROOT}/ports/esp32/components")
+set(EXTRA_COMPONENT_DIRS "${ULTRAWIDELOCK_ROOT}/ports/esp32/components")
 ```
 
 Then name the role in the consuming component's `REQUIRES` or `PRIV_REQUIRES`.

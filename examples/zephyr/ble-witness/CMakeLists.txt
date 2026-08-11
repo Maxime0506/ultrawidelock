@@ -7,6 +7,6 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/ports/zephyr")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(openaliro_ble_witness)
+project(ultrawidelock_ble_witness)
 
 target_sources(app PRIVATE src/main.c)

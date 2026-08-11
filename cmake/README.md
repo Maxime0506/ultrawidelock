@@ -7,8 +7,8 @@ It is not an application and does not contain generated build output.
 source lists to Zephyr and ESP-IDF builds. This keeps source membership in one
 place while allowing each framework to create its own targets.
 
-`OpenAliroConfig.cmake.in` defines the installed plain-CMake package consumed
-through `find_package(OpenAliro CONFIG REQUIRED)`. Its exported targets are
+`UltraWideLockConfig.cmake.in` defines the installed plain-CMake package consumed
+through `find_package(UltraWideLock CONFIG REQUIRED)`. Its exported targets are
 defined by the top-level `CMakeLists.txt`.
 
 Application entry points remain in their application directories. User-facing

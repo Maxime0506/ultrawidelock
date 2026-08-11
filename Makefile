@@ -1,4 +1,4 @@
-# Makefile — single command entry point for the OpenAliro firmware.
+# Makefile — single command entry point for the UltraWideLock firmware.
 #
 # A dispatcher, not an implementation: shared variables, the per-port includes
 # below, and the `help` renderer. Every recipe lives in mk/<port>.mk, grouped by

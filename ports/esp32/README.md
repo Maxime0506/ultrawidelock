@@ -1,6 +1,6 @@
 # ESP32 port
 
-This directory contains ESP-IDF components that connect OpenAliro's portable
+This directory contains ESP-IDF components that connect UltraWideLock's portable
 modules to ESP-IDF, NimBLE, NVS, USB, and DW3000 hardware services.
 
 Applications add `ports/esp32/components/` to `EXTRA_COMPONENT_DIRS`. ESP-IDF

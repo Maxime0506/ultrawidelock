@@ -24,7 +24,7 @@ PIN="a5ad7fde1041d81690710a949c98eda1985fee0b"     # ncs-door-lock-and-access-co
 ADDON_URL="https://github.com/nrfconnect/ncs-door-lock-and-access-control"
 ADDON="$WS/ncs-door-lock-and-access-control"
 P="$TREE/integrations/nrfconnect-door-lock/patches"
-PATCH_STATE="$WS/.openaliro-patches.sha256"
+PATCH_STATE="$WS/.ultrawidelock-patches.sha256"
 
 # Launch the nRF Util SDK manager toolchain with the configured NCS version, passing through all remaining arguments.
 # ALIRO_TOOLCHAIN=env skips that wrapper and runs the command directly — for

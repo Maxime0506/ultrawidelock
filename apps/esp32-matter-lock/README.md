@@ -1,6 +1,6 @@
 # ESP32 Matter lock
 
-This application combines the OpenAliro reader with an esp-matter door lock.
+This application combines the UltraWideLock reader with an esp-matter door lock.
 It supports ESP32-S3, ESP32-C5, and ESP32-C6 boards connected to a DWM3000EVB.
 
 ## Build

@@ -369,7 +369,7 @@ int fr_read_next(fr_reader_t *r, struct fr_record *out)
 
 #include <deca_device_api.h>
 
-#include <openaliro/uwb.h> /* struct woz_uwb_aliro_cfg */
+#include <ultrawidelock/uwb.h> /* struct woz_uwb_aliro_cfg */
 #include "woz_log.h"        /* woz_printf */
 
 #ifndef CONFIG_WOZ_FLIGHT_RECORDER_BYTES

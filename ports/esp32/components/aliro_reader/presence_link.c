@@ -11,8 +11,8 @@
 
 #include "nvs.h"
 
-#include <openaliro/uwb.h>
-#include <openaliro/reader.h>
+#include <ultrawidelock/uwb.h>
+#include <ultrawidelock/reader.h>
 #include "aliro_assert.h"
 #include "aliro_assert_ec.h"
 #include "aliro_prim.h"

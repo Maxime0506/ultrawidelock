@@ -11,7 +11,7 @@
 
 #include "ccc_shim.h"
 #include "fira_session.h"
-#include <openaliro/uwb.h>
+#include <ultrawidelock/uwb.h>
 
 #include <dw3000_hw.h>
 #include <dw3000_spi.h>

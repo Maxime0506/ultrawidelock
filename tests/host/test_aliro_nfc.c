@@ -3,7 +3,7 @@
 #include "nfc_select.h"
 #include "nfc_auth.h"
 #include "aliro_stepup.h"
-#include <openaliro/tlv.h>
+#include <ultrawidelock/tlv.h>
 
 #include <stdint.h>
 #include <string.h>

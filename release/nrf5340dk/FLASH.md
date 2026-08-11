@@ -1,6 +1,6 @@
-# openaliro on the nRF5340 DK: flash guide
+# ultrawidelock on the nRF5340 DK: flash guide
 
-The openaliro target that taps: an Aliro lock with NFC tap and UWB approach unlock. It
+The ultrawidelock target that taps: an Aliro lock with NFC tap and UWB approach unlock. It
 joins Apple Home over Thread, your iPhone carries the key in Wallet, and the lock
 opens as you walk up or on a tap.
 
@@ -132,7 +132,7 @@ The boot log prints the Matter onboarding QR code URL and manual pairing code; R
 | No key in Wallet | Wait a few minutes; needs iOS 26+ and a UWB iPhone |
 
 More depth, wiring checks, and a radio self-test:
-<https://github.com/openaliro/openaliro/blob/main/docs/troubleshooting.md>
+<https://github.com/ultrawidelock/ultrawidelock/blob/main/docs/troubleshooting.md>
 
 ## Check it really came from us
 
@@ -146,8 +146,8 @@ signature is what proves origin, and anyone can check it without trusting the
 release page or whoever handed them the zip:
 
 ```bash
-gh attestation verify merged.hex --repo openaliro/openaliro
-gh attestation verify merged_CPUNET.hex --repo openaliro/openaliro
+gh attestation verify merged.hex --repo ultrawidelock/ultrawidelock
+gh attestation verify merged_CPUNET.hex --repo ultrawidelock/ultrawidelock
 ```
 
 It prints the repository, the commit and the workflow run that produced each
@@ -158,7 +158,7 @@ so either way.
 You can check the zip itself the same way, before unzipping it:
 
 ```bash
-gh attestation verify openaliro-nrf5340dk.zip --repo openaliro/openaliro
+gh attestation verify ultrawidelock-nrf5340dk.zip --repo ultrawidelock/ultrawidelock
 ```
 
 ## Notes

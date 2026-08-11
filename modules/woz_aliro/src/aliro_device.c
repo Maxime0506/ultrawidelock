@@ -13,7 +13,7 @@
  * and verifies the device; here the device parses them and proves itself, running
  * the same §8.3.1.13 key schedule to the same URSK.
  */
-#include <openaliro/device.h>
+#include <ultrawidelock/device.h>
 
 #include <string.h>
 

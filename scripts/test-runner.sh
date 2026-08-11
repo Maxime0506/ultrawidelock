@@ -152,7 +152,7 @@ for s in $SEL; do
 done
 trap 'rm -f "${OUTS[@]}" "${METAS[@]}"' EXIT
 
-printf '\n  openaliro · host-side test suites\n'
+printf '\n  ultrawidelock · host-side test suites\n'
 if [[ "${SERIAL:-0}" == "1" ]]; then
 	for i in $(seq 0 $((n - 1))); do
 		run_suite "${NAMES[i]}" "${OUTS[i]}" "${METAS[i]}"

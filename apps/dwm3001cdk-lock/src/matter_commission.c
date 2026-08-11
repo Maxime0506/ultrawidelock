@@ -37,7 +37,7 @@
 #include "woz_dfu_rx.h" /* the same gesture opens the update window */
 #endif
 #include "aliro_prov.h" /* ALIRO_TRUST_MAX, to hold the reported cap to the real one */
-#include <openaliro/reader.h> /* aliro_reader_provision_identity, for SetAliroReaderConfig */
+#include <ultrawidelock/reader.h> /* aliro_reader_provision_identity, for SetAliroReaderConfig */
 #include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
 #include "matter_attest.h"

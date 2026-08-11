@@ -1,6 +1,6 @@
-# OpenAliro
+# UltraWideLock
 
-OpenAliro is portable firmware for Aliro NFC and UWB smart locks. The protocol
+UltraWideLock is portable firmware for Aliro NFC and UWB smart locks. The protocol
 implementation lives in `modules/`; supported operating systems and chipsets
 are connected through thin backends in `ports/`.
 
@@ -12,15 +12,15 @@ for reader, initiator, and anchor roles.
 Application code includes only its role. A reader uses:
 
 ```c
-#include <openaliro/reader.h>
-#include <openaliro/uwb.h>
+#include <ultrawidelock/reader.h>
+#include <ultrawidelock/uwb.h>
 ```
 
-Initiators use `<openaliro/device.h>`, and codec-only consumers use
-`<openaliro/tlv.h>`. Installed plain-CMake consumers may use the all-in-one
-`<openaliro/openaliro.h>` when they intentionally want every declaration.
+Initiators use `<ultrawidelock/device.h>`, and codec-only consumers use
+`<ultrawidelock/tlv.h>`. Installed plain-CMake consumers may use the all-in-one
+`<ultrawidelock/ultrawidelock.h>` when they intentionally want every declaration.
 
-Port implementations use `<openaliro/woz_hal.h>`, which names the five chipset
+Port implementations use `<ultrawidelock/woz_hal.h>`, which names the five chipset
 seams for DW3000 GPIO/IRQ, DW3000 SPI, reader BLE, central BLE, and credential
 storage. See [`PORTING.md`](PORTING.md) for the shortest board and chipset
 workflow.
@@ -34,7 +34,7 @@ cmake --build build/sdk
 cmake --install build/sdk
 ```
 
-The exported targets are `OpenAliro::headers` and `OpenAliro::tlv`. A complete
+The exported targets are `UltraWideLock::headers` and `UltraWideLock::tlv`. A complete
 package-consumer example is under
 [`examples/cmake/consumer/`](examples/cmake/consumer/).
 The SDK version comes from the root `VERSION` file. Plain-CMake consumers may
@@ -98,7 +98,7 @@ Pass script options through `HITL_ARGS`, for example
 | [`release/`](release/) | Templates and scripts included in release bundles |
 
 Canonical SDK headers are under each owner's
-`modules/<name>/include/openaliro/` directory. Other module contracts remain
+`modules/<name>/include/ultrawidelock/` directory. Other module contracts remain
 under `modules/<name>/include/`. Private headers and implementation details
 remain under `modules/<name>/src/`.
 

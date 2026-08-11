@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# flash.sh — program the openaliro DWM3001CDK firmware over its on-board J-Link.
+# flash.sh — program the ultrawidelock DWM3001CDK firmware over its on-board J-Link.
 #
 # See FLASH.md for the full walkthrough.
 #
@@ -56,19 +56,19 @@ fi
 
 # The provenance question, which checksums cannot answer. Every file published
 # with this release is signed by the workflow that built it, and the GitHub CLI
-# checks that signature against openaliro's CI identity.
+# checks that signature against ultrawidelock's CI identity.
 #
 # NOT fatal, on purpose: a failure here is indistinguishable from being offline,
 # unauthenticated or behind a proxy, and refusing to flash for those would be
 # wrong. It is printed loudly instead, with the command to run deliberately.
 if command -v gh >/dev/null 2>&1; then
-  if gh attestation verify merged.hex --repo openaliro/openaliro >/dev/null 2>&1; then
-    echo "==> provenance OK: merged.hex was built by openaliro's CI"
+  if gh attestation verify merged.hex --repo ultrawidelock/ultrawidelock >/dev/null 2>&1; then
+    echo "==> provenance OK: merged.hex was built by ultrawidelock's CI"
   else
     echo
     echo "  NOTE: could not confirm where merged.hex came from. That is expected offline."
     echo "  To check it deliberately:"
-    echo "    gh attestation verify merged.hex --repo openaliro/openaliro"
+    echo "    gh attestation verify merged.hex --repo ultrawidelock/ultrawidelock"
     echo
   fi
 else

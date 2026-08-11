@@ -17,7 +17,7 @@
 
 #include "aliro_apdu.h"
 #include "aliro_crypto.h"
-#include <openaliro/device.h>
+#include <ultrawidelock/device.h>
 #include "aliro_device_apdu.h"
 #include "aliro_prim.h"
 

@@ -1,6 +1,6 @@
 # Portable modules
 
-`modules/` is the shared implementation of OpenAliro. The purity gate keeps the
+`modules/` is the shared implementation of UltraWideLock. The purity gate keeps the
 portable source free of OS dependencies and ratchets a small explicit set of
 legacy adapters. Backends for platform contracts live in `ports/`.
 
@@ -28,5 +28,5 @@ legacy adapters. Backends for platform contracts live in `ports/`.
 
 `modules/woz_port/include/` is headers-only. Every implementation of those
 contracts belongs in a port tree or the host test backend. Its
-`include/openaliro/woz_hal.h` names the five chipset seams. Each module owns its
-canonical SDK headers under its own `include/openaliro/` directory.
+`include/ultrawidelock/woz_hal.h` names the five chipset seams. Each module owns its
+canonical SDK headers under its own `include/ultrawidelock/` directory.

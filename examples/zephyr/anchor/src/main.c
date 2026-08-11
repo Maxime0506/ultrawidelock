@@ -72,7 +72,7 @@ int main(void)
 	int rc;
 
 	/* ASCII only: RTT is a byte stream and a UTF-8 dash renders as mojibake. */
-	LOG_INF("openaliro anchor: %s role",
+	LOG_INF("ultrawidelock anchor: %s role",
 		IS_ENABLED(CONFIG_ANCHOR_ROLE_INITIATOR) ? "INITIATOR" : "RESPONDER");
 
 	rc = anchor_twr_init();

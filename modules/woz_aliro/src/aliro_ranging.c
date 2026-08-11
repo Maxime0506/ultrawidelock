@@ -20,7 +20,7 @@
 #include "aliro_crypto.h"
 #include "aliro_lab.h"
 #include "aliro_lat.h"
-#include <openaliro/uwb.h>
+#include <ultrawidelock/uwb.h>
 
 #include "cherry/cherry.h"
 #include "cherry/cherry_ccc.h"

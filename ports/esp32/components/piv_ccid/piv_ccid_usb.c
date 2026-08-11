@@ -101,7 +101,7 @@ static const uint8_t s_configuration_descriptor[] = {
 static char s_serial_string[13];
 static const char *s_string_descriptors[] = {
 	(char[]){0x09, 0x04},
-	"OpenAliro",
+	"UltraWideLock",
 	"Presence PIV Token (VM Bench)",
 	s_serial_string,
 	"PIV CCID",

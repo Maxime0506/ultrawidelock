@@ -371,7 +371,7 @@ def wrap(args):
     # you can do by eye between a filename and a line of output.
     from_sha = image_sha(args.from_image)
     to_sha = image_sha(args.to_image)
-    stem = f"openaliro-{from_sha[:8].hex()}-to-{to_sha[:8].hex()}"
+    stem = f"ultrawidelock-{from_sha[:8].hex()}-to-{to_sha[:8].hex()}"
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -387,7 +387,7 @@ def wrap(args):
     manifest = {
         "format-version": 1,
         "time": int(time.time()),
-        "name": "openaliro delta update",
+        "name": "ultrawidelock delta update",
         "files": [
             {
                 "type": "application",

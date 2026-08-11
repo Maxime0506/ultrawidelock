@@ -1,5 +1,5 @@
 /*
- * OpenAliro hardware adaptation contract.
+ * UltraWideLock hardware adaptation contract.
  *
  * A reader port provides the DW3000 GPIO/IRQ, DW3000 SPI, BLE peripheral,
  * and credential-store functions declared below. An initiator port provides

@@ -144,7 +144,7 @@ endif
 
 # Publishing.
 ESP_RELEASE_CHIPS ?= esp32s3 esp32c5 esp32c6
-ESP_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-esp32-matter-lock
+ESP_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/ultrawidelock-esp32-matter-lock
 ESP_RELEASE_OUT   := $(abspath $(ESP_RELEASE_OUT))
 ESP_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.esp-stage
 ESP_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
@@ -262,8 +262,8 @@ esp-size-baseline: esp-size-report
 
 ## esp-merge-bin: fuse bootloader + partition table + app into one 0x0 image
 esp-merge-bin: esp-check-env
-	@cd "$(ESP_APP_DIR)" && $(IDFPY) merge-bin -o openaliro-$(APP)-$(TARGET).bin
-	@printf '  merged  ·  %s/openaliro-%s-%s.bin\n' '$(ESP_BUILD)' '$(APP)' '$(TARGET)'
+	@cd "$(ESP_APP_DIR)" && $(IDFPY) merge-bin -o ultrawidelock-$(APP)-$(TARGET).bin
+	@printf '  merged  ·  %s/ultrawidelock-%s-%s.bin\n' '$(ESP_BUILD)' '$(APP)' '$(TARGET)'
 
 ## esp-release: build every chip and bundle the images to publish
 esp-release:
@@ -277,7 +277,7 @@ esp-release:
 	@# app builds with CHIP's test parameters and no factory-data provider, so
 	@# the passcode is a constant.
 	@bins=; for t in $(ESP_RELEASE_CHIPS); do \
-	    bins="$$bins $(ALIRO_BUILD_ROOT)/esp32-matter-lock-$$t/openaliro-matter-lock-$$t.bin"; \
+	    bins="$$bins $(ALIRO_BUILD_ROOT)/esp32-matter-lock-$$t/ultrawidelock-matter-lock-$$t.bin"; \
 	  done; \
 	  $(REPO_ROOT)/scripts/release-bundle.sh \
 	    --target esp32-matter-lock --out '$(ESP_RELEASE_OUT)' \
@@ -364,7 +364,7 @@ esp-help:
 	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
 	  b=$$(printf '\033[1m'); c=$$(printf '\033[36m'); y=$$(printf '\033[1;33m'); d=$$(printf '\033[2m'); r=$$(printf '\033[0m'); \
 	else b=; c=; y=; d=; r=; fi; \
-	printf '\n  %sOpenAliro ESP32%s  %s·  APP=%s TARGET=%s · run from the repo root as make esp-<target>%s\n' \
+	printf '\n  %sUltraWideLock ESP32%s  %s·  APP=%s TARGET=%s · run from the repo root as make esp-<target>%s\n' \
 	  "$$b" "$$r" "$$d" '$(APP)' '$(TARGET)' "$$r"; \
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ ESP32/ { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
