@@ -1,8 +1,12 @@
 # mk/extras.mk — housekeeping. Included last, so `make help` ends here.
 
-.PHONY: clean ws-clean help
+.PHONY: clean ws-clean help fw-check
 
 ##@ Housekeeping
+## fw-check: compile-gate the Zephyr images  ·  CDK lock + all three witness roles
+fw-check:
+	@$(MAKE) --no-print-directory build
+	@$(MAKE) --no-print-directory witness-trio
 ## clean: remove every build artifact in the tree  ->  ./build and the app-local ones
 clean:
 	@# ALIRO_BUILD_ROOT is `?=` and exported (Makefile:38-39), so whatever is in

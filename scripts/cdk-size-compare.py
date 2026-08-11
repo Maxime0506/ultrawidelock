@@ -318,11 +318,21 @@ def main():
         sys.stderr.write("\n")
     else:
         gate = base.get("gate", {})
-        for name in ("RAM", "FLASH"):
+        # Gate whatever regions the baseline names. A Zephyr baseline names
+        # ram/flash; an ESP-IDF one names the internal SRAM segments it chose
+        # to gate (cdk-size-baseline.py). No gate at all falls back to the
+        # historical RAM/FLASH pair.
+        wanted = sorted(
+            {k[: -len("_free_floor")] for k in gate if k.endswith("_free_floor")}
+            | {k[: -len("_delta_cap")] for k in gate if k.endswith("_delta_cap")}
+        ) or ["ram", "flash"]
+        by_lower = {k.lower(): k for k in base.get("regions", {})}
+        for low in wanted:
+            name = by_lower.get(low, low.upper())
             row, f = gate_region(
                 name, base, cur,
-                gate.get(f"{name.lower()}_free_floor"),
-                gate.get(f"{name.lower()}_delta_cap"),
+                gate.get(f"{low}_free_floor"),
+                gate.get(f"{low}_delta_cap"),
                 args.allow_growth,
             )
             if row:

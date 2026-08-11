@@ -156,6 +156,7 @@ ESP_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirt
 # a bench `git describe` fills it, and both then reach the shell the same way.
 export ESP_RELEASE_VER
 
+.PHONY: esp-size-report esp-size-check esp-size-baseline
 .PHONY: esp-check-env esp-set-target esp-build esp-rebuild esp-reconfigure \
         esp-merge-bin esp-release \
         esp-menuconfig esp-size esp-flash esp-app-flash esp-flash-erase \
@@ -227,6 +228,37 @@ esp-reconfigure: esp-check-env
 ## esp-size: binary size + partition headroom
 esp-size: esp-check-env
 	@cd "$(ESP_APP_DIR)" && $(IDFPY) size
+
+# The record-and-gate pair, same tool and schema as the CDK. Unlike esp-size
+# this needs NO IDF environment: the ELF and its GNU ld map are already in the
+# build tree, and scripts/cdk-size.py takes them via --elf/--map because an
+# ESP-IDF tree is not sysbuild-shaped. The baseline is per-app and per-target:
+# an S3 and a C6 image are different builds with different budgets.
+ESP_SIZE_JSON     ?= $(ESP_BUILD)/size-report.json
+ESP_SIZE_BASELINE ?= $(ESP_APP_DIR)/size-baseline-$(TARGET)$(if $(VARIANT),-$(VARIANT)).json
+
+## esp-size-report: the machine-readable size record  ·  measures only, no IDF env
+esp-size-report:
+	@elf=$$(ls '$(ESP_BUILD)'/*.elf 2>/dev/null | head -n1); \
+	test -n "$$elf" || { \
+	  printf '  no ELF under %s  ·  run `make esp-build` first\n' '$(ESP_BUILD)' >&2; exit 2; }; \
+	python3 $(REPO_ROOT)/scripts/cdk-size.py \
+	  --build '$(ESP_BUILD)' --image "$$(basename $${elf%.elf})" \
+	  --elf "$$elf" --json '$(ESP_SIZE_JSON)' \
+	  $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
+	@printf '  report  ·  %s\n\n' '$(ESP_SIZE_JSON)'
+
+## esp-size-check: fail if the image lost headroom against the recorded baseline
+esp-size-check:
+	@$(MAKE) --no-print-directory esp-size-report GITHUB_STEP_SUMMARY=
+	@python3 $(REPO_ROOT)/scripts/cdk-size-compare.py \
+	  --baseline '$(ESP_SIZE_BASELINE)' --current '$(ESP_SIZE_JSON)' \
+	  $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
+
+## esp-size-baseline: record the current tree as the baseline to compare against
+esp-size-baseline: esp-size-report
+	@python3 $(REPO_ROOT)/scripts/cdk-size-baseline.py \
+	  --from '$(ESP_SIZE_JSON)' --out '$(ESP_SIZE_BASELINE)'
 
 ## esp-merge-bin: fuse bootloader + partition table + app into one 0x0 image
 esp-merge-bin: esp-check-env

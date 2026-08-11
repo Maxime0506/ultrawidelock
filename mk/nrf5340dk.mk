@@ -86,7 +86,8 @@ NRF_RELEASE_VER ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 
 # time, where an apostrophe in it would end the quoting.
 export NRF_RELEASE_VER
 
-.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-init-build nrf-init-flash nrf-term nrf-pairing-code nrf-release hitl term
+.PHONY: nrf-build nrf-rebuild nrf-pretty nrf-selftest nrf-flash nrf-flash-erase nrf-init-build nrf-init-flash nrf-term nrf-pairing-code nrf-release hitl term \
+        nrf-size nrf-size-check nrf-size-baseline
 
 ##@ nRF5340 DK  ·  NFC tap + approach unlock
 ## nrf-build: incremental build          -> build/nrf5340dk/merged.hex
@@ -133,6 +134,36 @@ nrf-flash:
 ## nrf-flash-erase: full erase + flash  ·  needed after a net-core change
 nrf-flash-erase:
 	@$(NRF_ENV) $(NRF_BUILD_SH) flash-erase
+
+# Same measurement tool as the CDK (scripts/cdk-size.py): this build tree is
+# sysbuild-shaped, so only the image name and the baseline location differ.
+# Reports (ram_report/rom_report) are left off: they relink through west and
+# this target must stay a measure, not a build.
+NRF_IMAGE         := matter-aliro-door-lock-app
+NRF_SIZE_JSON     ?= $(NRF_BUILD_DIR)/size-report.json
+NRF_SIZE_BASELINE ?= $(REPO_ROOT)/apps/nrf5340dk-lock/size-baseline.json
+
+## nrf-size: what the nRF5340 image costs and how much room is left  ·  measures only
+nrf-size:
+	@test -f '$(NRF_BUILD_DIR)/$(NRF_IMAGE)/zephyr/zephyr.elf' || { \
+	  printf '  no ELF at %s/%s/zephyr/zephyr.elf  ·  run `make nrf-build` first\n' \
+	    '$(NRF_BUILD_DIR)' '$(NRF_IMAGE)' >&2; exit 2; }
+	@python3 $(REPO_ROOT)/scripts/cdk-size.py \
+	  --build '$(NRF_BUILD_DIR)' --image $(NRF_IMAGE) --json '$(NRF_SIZE_JSON)' \
+	  $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
+	@printf '  report  ·  %s\n\n' '$(NRF_SIZE_JSON)'
+
+## nrf-size-check: fail if the image lost headroom against the recorded baseline
+nrf-size-check:
+	@$(MAKE) --no-print-directory nrf-size GITHUB_STEP_SUMMARY=
+	@python3 $(REPO_ROOT)/scripts/cdk-size-compare.py \
+	  --baseline '$(NRF_SIZE_BASELINE)' --current '$(NRF_SIZE_JSON)' \
+	  $(if $(GITHUB_STEP_SUMMARY),--summary '$(GITHUB_STEP_SUMMARY)')
+
+## nrf-size-baseline: record the current tree as the baseline to compare against
+nrf-size-baseline: nrf-size
+	@python3 $(REPO_ROOT)/scripts/cdk-size-baseline.py \
+	  --from '$(NRF_SIZE_JSON)' --out '$(NRF_SIZE_BASELINE)'
 
 ## nrf-init-build: build the Aliro initiator      -> build/nrf5340dk-initiator
 nrf-init-build:

@@ -488,7 +488,12 @@ def build_report(args):
     build = os.path.abspath(args.build)
     image = args.image
     imgdir = os.path.join(build, image, "zephyr")
-    elf_path = os.path.join(imgdir, "zephyr.elf")
+    elf_path = os.path.abspath(args.elf) if args.elf else os.path.join(imgdir, "zephyr.elf")
+    map_path = (
+        os.path.abspath(args.map) if args.map
+        else os.path.splitext(elf_path)[0] + ".map" if args.elf
+        else os.path.join(imgdir, "zephyr.map")
+    )
 
     if not os.path.isfile(elf_path):
         sys.stderr.write(
@@ -500,10 +505,10 @@ def build_report(args):
         return None
 
     elf = Elf(elf_path)
-    regions = read_memory_config(os.path.join(imgdir, "zephyr.map"))
+    regions = read_memory_config(map_path)
     if not regions:
         sys.stderr.write(
-            f"\n  no Memory Configuration block in {imgdir}/zephyr.map\n"
+            f"\n  no Memory Configuration block in {map_path}\n"
             "      Region capacities are read from the linker rather than hardcoded, so\n"
             "      without the map there is no denominator and no free-bytes figure.\n\n"
         )
@@ -694,6 +699,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--build", required=True, help="sysbuild build directory")
     ap.add_argument("--image", default="firmware", help="sysbuild image name")
+    ap.add_argument("--elf", help="ELF path when the tree is not sysbuild-shaped "
+                    "(default <build>/<image>/zephyr/zephyr.elf)")
+    ap.add_argument("--map", help="linker map path (default beside the ELF)")
     ap.add_argument("--json", help="write the report here (default: stdout)")
     ap.add_argument("--summary", help="append a markdown table here ($GITHUB_STEP_SUMMARY)")
     ap.add_argument("--quiet", action="store_true", help="no human table")
