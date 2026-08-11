@@ -58,6 +58,10 @@ Other files in integrations/nrfconnect-door-lock/patches/ modify Nordic or Zephy
 The resulting patched files retain the upstream license identified in their
 source headers.
 
+The same license covers the Nordic sources and libraries the FreeRTOS port
+compiles and links but does not vendor. They are listed under "FreeRTOS port
+pinned sources" below.
+
 LicenseID: LicenseRef-Nordic-5-Clause
 
 Copyright (c) 2018, Nordic Semiconductor ASA
@@ -97,6 +101,54 @@ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+FreeRTOS port pinned sources
+---------------------------
+
+Scope:
+
+  ports/freertos-nrf52833/platform.lock.yml
+
+Nothing under ports/freertos-nrf52833/ vendors third-party code. That lock file
+pins the repositories and revisions the port compiles and links against; the
+sources are fetched into a workspace outside this repository, so no glob here
+matches a file in the tree. The list below maps each pinned component to its
+license so an audit of a built image has one place to start.
+
+  Apache NimBLE (apache/mynewt-nimble)
+    the BLE host, its FreeRTOS porting layer, and its syscfg defaults
+    License: Apache-2.0, in the Apache License 2.0 section below
+
+  Nordic MPSL and SoftDevice Controller (nrfconnect/sdk-nrfxlib)
+    linked as binary libraries, with their headers compiled
+    License: LicenseRef-Nordic-5-Clause, in the Nordic section above
+
+  Nordic nRF 802.15.4 service layer (nrfconnect/sdk-nrfxlib)
+    libnrf-802154-sl.a and the platform headers this port implements
+    License: LicenseRef-Nordic-5-Clause, in the Nordic section above
+
+  Nordic sources compiled unmodified from nrfconnect/sdk-nrf
+    subsys/bluetooth/controller/hci_internal.c
+    modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c
+    modules/openthread/platform/radio_nrf5.c
+    License: LicenseRef-Nordic-5-Clause, in the Nordic section above
+
+  nrfx and the nRF 802.15.4 driver (zephyrproject-rtos/hal_nordic,
+  nrfconnect/sdk-nrfxlib)
+    the peripheral HAL and the 802.15.4 driver core
+    License: BSD-3-Clause, in the BSD 3-Clause section below
+
+  OpenThread (nrfconnect/sdk-openthread)
+    the Thread stack
+    License: BSD-3-Clause, in the BSD 3-Clause section below
+
+The Nordic license permits binary redistribution only as embedded in a Nordic
+Semiconductor integrated circuit, so an image built from this port carries that
+hardware restriction in addition to the Qorvo one stated above.
+
+The Qorvo DW3_QM33_SDK archive that supplies the board and UWB base for this
+port is a separate vendor artifact, also pinned in that lock file and also not
+vendored here. Its terms are the Qorvo ones stated above.
+
 Matter lock application
 -----------------------
 
@@ -116,6 +168,9 @@ The following files are distributed under Apache-2.0:
 
 Apache License 2.0 files
 ------------------------
+
+Apache-2.0 also covers Apache NimBLE, which the FreeRTOS port links but does
+not vendor; see "FreeRTOS port pinned sources" above.
 
 In addition to the Matter files listed above, Apache-2.0 applies to:
 
@@ -325,3 +380,38 @@ In addition to the Matter files listed above, Apache-2.0 applies to:
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+BSD 3-Clause files
+------------------
+
+BSD-3-Clause covers nrfx, the nRF 802.15.4 driver, and OpenThread, which the
+FreeRTOS port compiles but does not vendor; see "FreeRTOS port pinned sources"
+above. The license text below is identical in all three, and is reproduced from
+the OpenThread LICENSE file at the pinned revision.
+
+Copyright (c) 2016, The OpenThread Authors.
+Copyright (c) 2018, Nordic Semiconductor ASA.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the
+   names of its contributors may be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
