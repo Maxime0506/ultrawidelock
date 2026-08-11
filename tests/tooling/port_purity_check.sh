@@ -78,7 +78,7 @@
 #   private headers    production modules, apps and ports never include a
 #                      different module's private header; tests may white-box
 #                      the implementation they compile
-#   HAL contract       openaliro/woz_hal.h names exactly the five approved seams
+#   HAL contract       ultrawidelock/woz_hal.h names exactly the five approved seams
 
 set -euo pipefail
 
@@ -587,7 +587,7 @@ check_build_paths() {
 # ports/ leaves the patch applying cleanly and breaks only at add-on build
 # time, on hardware CI. Fail here instead.
 PATCH_SYM_RE='woz_[a-z0-9_]+|WozNfc::[A-Za-z]+|CONFIG_WOZ_[A-Z0-9_]+'
-PATCH_HEADER_RE='openaliro/[a-z0-9_]+[.]h'
+PATCH_HEADER_RE='ultrawidelock/[a-z0-9_]+[.]h'
 # Names a patch itself coins rather than references (never defined in-tree).
 PATCH_LOCAL_RE='^woz_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
 
@@ -627,13 +627,13 @@ patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
 	esac
 }
 
-patch_header_defined() { # <openaliro/header.h>
+patch_header_defined() { # <ultrawidelock/header.h>
 	local f
 	while IFS= read -r f; do
 		case "$f" in
 		include/"$1" | */include/"$1") return 0 ;;
 		esac
-	done < <(repo_files 'include/openaliro/*.h' 'modules/*/include/openaliro/*.h')
+	done < <(repo_files 'include/ultrawidelock/*.h' 'modules/*/include/ultrawidelock/*.h')
 	return 1
 }
 
@@ -771,7 +771,7 @@ check_manifests() {
 
 # The installed HAL umbrella is deliberately small. Adding a sixth seam or
 # dropping one of these five is an architecture change, not a header cleanup.
-HAL_CONTRACT=modules/woz_port/include/openaliro/woz_hal.h
+HAL_CONTRACT=modules/woz_port/include/ultrawidelock/woz_hal.h
 HAL_CONTRACT_HEADERS=(
 	aliro_ble.h
 	aliro_ble_central.h
@@ -794,7 +794,7 @@ hal_contract_matches() {
 
 check_hal_contract() {
 	if [ ! -f "$HAL_CONTRACT" ] || ! hal_contract_matches "$HAL_CONTRACT"; then
-		printf '%scheck-purity: openaliro/woz_hal.h must include exactly the five approved seam headers%s\n' \
+		printf '%scheck-purity: ultrawidelock/woz_hal.h must include exactly the five approved seam headers%s\n' \
 			"$R" "$Z" >&2
 		return 1
 	fi
@@ -824,7 +824,7 @@ self_test() {
 		'	woz_work_submit(&ctx.work);'
 		'	woz_sem_take(&s, 50);'
 		'#include "woz_port.h"'
-		'#include <openaliro/reader.h>'
+		'#include <ultrawidelock/reader.h>'
 		'	int task_sem = mask_semantics(x);'
 		'	stack_free(p);'
 		'#define ESP_NOTE 1 /* not an include */'
@@ -1067,8 +1067,8 @@ self_test() {
 		+	woz_phantom_symbol_xyz();
 		+	WozNfc::Init();
 		+	if (CONFIG_WOZ_ALIRO) {}
-		+#include <openaliro/uwb.h>
-		+#include <openaliro/phantom.h>
+		+#include <ultrawidelock/uwb.h>
+		+#include <ultrawidelock/phantom.h>
 		-	woz_minus_line_only();
 	EOF
 	if [ "$(patch_syms "$fixdir/fix.patch")" != "$(printf 'CONFIG_WOZ_ALIRO\nWozNfc::Init\nwoz_phantom_symbol_xyz')" ]; then
@@ -1079,11 +1079,11 @@ self_test() {
 		printf '%s  self-test FAILED: tripwire resolved an invented symbol%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	if [ "$(patch_headers "$fixdir/fix.patch")" != "$(printf 'openaliro/phantom.h\nopenaliro/uwb.h')" ]; then
+	if [ "$(patch_headers "$fixdir/fix.patch")" != "$(printf 'ultrawidelock/phantom.h\nultrawidelock/uwb.h')" ]; then
 		printf '%s  self-test FAILED: patch header extraction is incomplete%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	if patch_header_defined openaliro/phantom.h || ! patch_header_defined openaliro/uwb.h; then
+	if patch_header_defined ultrawidelock/phantom.h || ! patch_header_defined ultrawidelock/uwb.h; then
 		printf '%s  self-test FAILED: patch header tripwire accepted a phantom or lost UWB%s\n' \
 			"$R" "$Z" >&2
 		fails=$((fails + 1))

@@ -403,7 +403,7 @@ dfu:
 FOTA_VERSION   ?= 1.0.0
 CDK_FOTA_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-smp-img
 CDK_FOTA_BUILD := $(abspath $(CDK_FOTA_BUILD))
-CDK_FOTA       := $(CDK_BUILD)/openaliro-fota.bin
+CDK_FOTA       := $(CDK_BUILD)/ultrawidelock-fota.bin
 
 fota:
 	@$(MAKE) --no-print-directory fota-build \
@@ -416,15 +416,15 @@ fota-build:
 	  --version '$(FOTA_VERSION)' --out-dir '$(CDK_BUILD)' \
 	  --from-image '$(CDK_DEPLOYED)' --to-image '$(CDK_SIGNED_HEX)'
 	@printf '\n  ---- put this on the phone ----------------------------------\n\n'
-	@ls -t '$(CDK_BUILD)'/openaliro-*.zip '$(CDK_BUILD)'/openaliro-*.bin 2>/dev/null | head -2 | sed 's/^/  /'
-	@printf '\n  The name carries both hashes: openaliro-<applies to>-to-<produces>.\n'
+	@ls -t '$(CDK_BUILD)'/ultrawidelock-*.zip '$(CDK_BUILD)'/ultrawidelock-*.bin 2>/dev/null | head -2 | sed 's/^/  /'
+	@printf '\n  The name carries both hashes: ultrawidelock-<applies to>-to-<produces>.\n'
 	@printf '  `make ota-smp-list` prints what the board is running -- the first\n'
 	@printf '  half of the name must match it, or the board will refuse the patch.\n'
 	@printf '  DELETE OLD COPIES ON THE PHONE. A stale file that still looks\n'
 	@printf '  plausible is the one failure this whole path cannot catch for you.\n\n'
 	@printf '  1. AirDrop either file to the phone, or drop it in Files\n'
 	@printf '  2. Press SW2 on the board  (or Apple Home -> Turn On Pairing Mode)\n'
-	@printf '  3. nRF Device Manager -> connect to "openaliro"\n'
+	@printf '  3. nRF Device Manager -> connect to "ultrawidelock"\n'
 	@printf '  4. Images tab -> SELECT FILE -> that file -> UPLOAD\n'
 	@printf '  5. Device tab -> Reset,  then wait ~30 s\n\n'
 	@printf '  Use the Images tab, NOT the guided firmware-upgrade wizard: that\n'
@@ -509,7 +509,7 @@ ota-window:
 
 ## release: build and bundle the image to publish  ·  needs RELEASE_KEY=<path>
 CDK_RELEASE_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-release
-CDK_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/openaliro-dwm3001cdk
+CDK_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/ultrawidelock-dwm3001cdk
 CDK_RELEASE_BUILD := $(abspath $(CDK_RELEASE_BUILD))
 CDK_RELEASE_OUT   := $(abspath $(CDK_RELEASE_OUT))
 CDK_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
@@ -524,7 +524,7 @@ release:
 	  printf '  The release image is signed with your OFFLINE key, and there is no default:\n' >&2; \
 	  printf '  MCUboot embeds its public half permanently, so this decides what every board\n' >&2; \
 	  printf '  flashed from this release will ever accept over the air.\n\n' >&2; \
-	  printf '    make release RELEASE_KEY=/path/to/openaliro-release.pem\n\n' >&2; \
+	  printf '    make release RELEASE_KEY=/path/to/ultrawidelock-release.pem\n\n' >&2; \
 	  printf '  No key yet?  openssl ecparam -name prime256v1 -genkey -noout -out <path>\n' >&2; \
 	  printf '  Then back it up. Losing it means no released board can be updated again.\n' >&2; \
 	  exit 1; \
@@ -553,7 +553,7 @@ release:
 	    --commission-note 'Type this into Apple Home. There is no QR label on this board.' \
 	    '$(CDK_RELEASE_BUILD)/merged.hex'
 	@printf '  Zip it and attach it to the release:\n'
-	@printf '    (cd %s && zip -qr ../openaliro-dwm3001cdk.zip openaliro-dwm3001cdk)\n\n' '$(dir $(CDK_RELEASE_OUT))'
+	@printf '    (cd %s && zip -qr ../ultrawidelock-dwm3001cdk.zip ultrawidelock-dwm3001cdk)\n\n' '$(dir $(CDK_RELEASE_OUT))'
 
 ## ota-deps: create the host virtualenv the update tooling runs in
 ota-deps: $(CDK_OTA_PY)

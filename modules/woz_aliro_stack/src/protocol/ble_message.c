@@ -5,7 +5,7 @@
  */
 #include "ble_message.h"
 
-#include <openaliro/tlv.h>
+#include <ultrawidelock/tlv.h>
 
 #include <string.h>
 

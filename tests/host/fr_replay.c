@@ -9,7 +9,7 @@
 
 #include "ccc_shim.h"        /* ccc_shim_rx_try_prepoll */
 #include "fira_session.h"    /* fira_session_last_range */
-#include <openaliro/uwb.h>  /* woz_uwb_start_aliro / woz_uwb_stop */
+#include <ultrawidelock/uwb.h>  /* woz_uwb_start_aliro / woz_uwb_stop */
 
 /* Load the DW3000 register snapshot this event carries into the shim doubles, so
  * the entry point reads exactly what the device saw. */

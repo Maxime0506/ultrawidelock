@@ -77,7 +77,7 @@ NRF_INIT_BUILD := $(ALIRO_BUILD_ROOT)/nrf5340dk-initiator
 NRF_WS     := $(REPO_ROOT)/workspace
 NRF_LAUNCH := nrfutil sdk-manager toolchain launch --ncs-version $(NCS_VER) --
 
-NRF_RELEASE_OUT ?= $(ALIRO_BUILD_ROOT)/release/openaliro-nrf5340dk
+NRF_RELEASE_OUT ?= $(ALIRO_BUILD_ROOT)/release/ultrawidelock-nrf5340dk
 NRF_RELEASE_OUT := $(abspath $(NRF_RELEASE_OUT))
 NRF_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.nrf-stage
 NRF_RELEASE_VER ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)

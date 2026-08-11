@@ -1,6 +1,6 @@
 # Anchor-to-anchor DS-TWR bench app.
 
-mainmenu "openaliro anchor"
+mainmenu "ultrawidelock anchor"
 
 choice
 	prompt "Anchor role"

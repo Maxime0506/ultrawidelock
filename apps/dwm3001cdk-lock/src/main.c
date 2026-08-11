@@ -20,8 +20,8 @@
 
 #include "aliro_approach.h"
 #include "aliro_prov.h" /* aliro_prov_erase, for the factory-reset button */
-#include <openaliro/reader.h>
-#include <openaliro/uwb.h>
+#include <ultrawidelock/reader.h>
+#include <ultrawidelock/uwb.h>
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 #include "matter_commission.h"
 #include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
@@ -263,7 +263,7 @@ int main(void)
 
 	/* ASCII only: the console is a byte stream, and a UTF-8 dash renders as
 	 * mojibake in RTT Viewer. */
-	LOG_INF("openaliro reader: DWM3001CDK (nRF52833 + DW3110)");
+	LOG_INF("ultrawidelock reader: DWM3001CDK (nRF52833 + DW3110)");
 
 #if IS_ENABLED(CONFIG_ALIRO_PROV_CONSOLE)
 	if (provisioning_requested()) {

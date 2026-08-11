@@ -57,7 +57,7 @@ OV="$APP_DIR/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
 APP="$ADDON/applications/matter-aliro-door-lock-app"
 PATCH_DIR="$TREE/integrations/nrfconnect-door-lock/patches"
-PATCH_STATE="$WS/.openaliro-patches.sha256"
+PATCH_STATE="$WS/.ultrawidelock-patches.sha256"
 # One build root for the whole repo (Makefile exports ALIRO_BUILD_ROOT); every
 # producer derives its own subdirectory under it, so `make clean` is one rm.
 # ALIRO_SOURCE picks the subdirectory rather than reconfiguring one shared dir:

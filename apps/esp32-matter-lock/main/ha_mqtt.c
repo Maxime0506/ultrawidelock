@@ -35,7 +35,7 @@ static const char *TAG = "ha_mqtt";
 #define HA_DEFAULT_PORT  8883
 
 /* The Home Assistant device model, "<target> Aliro lock". The agent publishes
- * the nRF5340 form of the same string (openaliro_ha.mqtt.DEFAULT_MODEL); the
+ * the nRF5340 form of the same string (ultrawidelock_ha.mqtt.DEFAULT_MODEL); the
  * shape is the contract, the target is what tells two boards apart in HA. */
 #if CONFIG_IDF_TARGET_ESP32S3
 #define HA_MQTT_MODEL "ESP32-S3 Aliro lock"
@@ -227,7 +227,7 @@ static void build_topics(void)
  * escaping. */
 #define HA_DEVICE_BLOCK_FMT                                                                        \
 	"\"device\": {\"identifiers\": [\"%s\"], \"name\": \"%s\", "                               \
-	"\"manufacturer\": \"openaliro\", \"model\": \"" HA_MQTT_MODEL "\"}}"
+	"\"manufacturer\": \"ultrawidelock\", \"model\": \"" HA_MQTT_MODEL "\"}}"
 
 /**
  * Build a Home Assistant MQTT Discovery payload for the Distance sensor entity in millimeters.

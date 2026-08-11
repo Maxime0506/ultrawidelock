@@ -17,8 +17,8 @@
 #include <setup_payload/OnboardingCodesUtil.h>
 
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
-#include <openaliro/reader.h>
-#include <openaliro/uwb.h>
+#include <ultrawidelock/reader.h>
+#include <ultrawidelock/uwb.h>
 #include <woz_diag.h> // woz_uwb_diag_on — the raw per-frame UWB trace gate
 #ifdef CONFIG_WOZ_ALIRO_LAB
 #include <aliro_lab.h>   // aliro_lab_set_enabled — the transaction-trace runtime gate

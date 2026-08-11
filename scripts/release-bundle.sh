@@ -96,7 +96,7 @@ chmod +x "$OUT/flash.sh"
 
 # ---- VERSION.txt -------------------------------------------------------------
 {
-	printf 'openaliro %s\n' "$VERSION"
+	printf 'ultrawidelock %s\n' "$VERSION"
 	printf 'commit     %s\n' "$COMMIT"
 	printf 'built      %s\n' "$BUILT"
 	[ -n "$BOARD" ] && printf 'board      %s\n' "$BOARD"

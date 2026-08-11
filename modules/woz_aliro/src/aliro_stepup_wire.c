@@ -16,7 +16,7 @@
 
 #include "aliro_cw.h"
 #include "aliro_stepup.h"
-#include <openaliro/tlv.h>
+#include <ultrawidelock/tlv.h>
 
 /* ---- DeviceRequest (Table 8-21) ------------------------------------------ */
 

@@ -560,9 +560,9 @@ static const struct piv_apdu_backend s_backend = {
 
 esp_err_t piv_identity_init(void)
 {
-	static const char auth_name[] = "CN=OpenAliro Presence PIV";
+	static const char auth_name[] = "CN=UltraWideLock Presence PIV";
 	static const char key_management_name[] =
-		"CN=OpenAliro Presence PIV Key Management";
+		"CN=UltraWideLock Presence PIV Key Management";
 	int auth_loaded;
 	int key_management_loaded;
 

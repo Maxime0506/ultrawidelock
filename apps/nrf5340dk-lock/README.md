@@ -1,11 +1,11 @@
 # nRF5340 DK lock
 
-This application is the nRF5340 DK implementation of OpenAliro. It combines
+This application is the nRF5340 DK implementation of UltraWideLock. It combines
 UWB approach unlock, NFC tap, and Matter over Thread using the Nordic door-lock
 and access-control application as its product shell.
 
 The upstream application is fetched into the ignored `workspace/` directory.
-This tracked directory owns the OpenAliro build launcher and product overlays;
+This tracked directory owns the UltraWideLock build launcher and product overlays;
 the patches applied to upstream live in
 [`integrations/nrfconnect-door-lock/`](../../integrations/nrfconnect-door-lock/).
 

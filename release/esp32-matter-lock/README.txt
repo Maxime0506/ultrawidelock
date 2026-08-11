@@ -1,4 +1,4 @@
-openaliro @VERSION@   ·   ESP32-S3 / C5 / C6
+ultrawidelock @VERSION@   ·   ESP32-S3 / C5 / C6
 
 The complete Aliro Matter lock on a single ESP32. It commissions into Apple
 Home over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as
@@ -21,7 +21,7 @@ THE EASY WAY: FLASH FROM YOUR BROWSER
 
   You do not need this zip, or any tools at all, to flash the board. Open
 
-    https://openaliro.github.io/openaliro/flash/
+    https://ultrawidelock.github.io/ultrawidelock/flash/
 
   in Chrome or Edge, plug the board in, and pick it. That page serves the same
   images published with this release, for all three chips.
@@ -51,9 +51,9 @@ THE SHORT VERSION, WITH TOOLS
 WHAT IS IN HERE
 ──────────────────────────────────────────────────────────────────────────────
 
-  openaliro-matter-lock-esp32s3.bin   merged S3 image, flashed at 0x0
-  openaliro-matter-lock-esp32c5.bin   merged C5 image
-  openaliro-matter-lock-esp32c6.bin   merged C6 image
+  ultrawidelock-matter-lock-esp32s3.bin   merged S3 image, flashed at 0x0
+  ultrawidelock-matter-lock-esp32c5.bin   merged C5 image
+  ultrawidelock-matter-lock-esp32c6.bin   merged C6 image
   manifest.json                       chip list for the browser flasher
   flash.sh                            flashes the image for your chip
   FLASH.md                            the full guide            <-- start here
@@ -77,10 +77,10 @@ CHECK IT REALLY CAME FROM US
   built it: anyone who could alter the firmware could alter the checksums in
   the same motion.
 
-  This release is signed. To prove these bytes came out of openaliro's CI,
+  This release is signed. To prove these bytes came out of ultrawidelock's CI,
   run this against the zip you downloaded:
 
-    gh attestation verify openaliro-esp32-matter-lock.zip --repo openaliro/openaliro
+    gh attestation verify ultrawidelock-esp32-matter-lock.zip --repo ultrawidelock/ultrawidelock
 
   It checks a Sigstore signature created while the release was being built,
   and prints the commit and workflow that produced it. It needs the GitHub CLI
@@ -103,4 +103,4 @@ BEFORE YOU TRUST IT WITH ANYTHING
   Do not secure anything valuable with this.
 
 
-                        https://github.com/openaliro/openaliro
+                        https://github.com/ultrawidelock/ultrawidelock

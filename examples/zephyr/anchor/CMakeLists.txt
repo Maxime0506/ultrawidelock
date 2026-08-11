@@ -18,7 +18,7 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/ports/zephyr")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(openaliro_anchor)
+project(ultrawidelock_anchor)
 
 # Same guard apps/dwm3001cdk-lock/CMakeLists.txt carries, for the same reason: recovering
 # debug access on either board costs a mass erase, and on the CDK that takes

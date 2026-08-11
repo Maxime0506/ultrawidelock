@@ -33,7 +33,7 @@ LOG_MODULE_REGISTER(thread_gate, LOG_LEVEL_INF);
  * NetworkCommissioning cluster instead. */
 #define GATE_CHANNEL   15
 #define GATE_PANID     0xf00d
-#define GATE_NET_NAME  "openaliro-gate"
+#define GATE_NET_NAME  "ultrawidelock-gate"
 
 static const uint8_t gate_network_key[OT_NETWORK_KEY_SIZE] = {
 	0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,

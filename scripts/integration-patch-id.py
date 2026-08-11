@@ -12,7 +12,7 @@ def patch_id(patch_dir: Path, ha_mode: str) -> str:
     if not patches:
         raise ValueError(f"no patch files in {patch_dir}")
 
-    digest = hashlib.sha256(b"openaliro-integration-patches-v1\0")
+    digest = hashlib.sha256(b"ultrawidelock-integration-patches-v1\0")
     digest.update(f"ha={ha_mode}\0".encode())
     for patch in patches:
         name = patch.name.encode()
@@ -25,7 +25,7 @@ def patch_id(patch_dir: Path, ha_mode: str) -> str:
 
 
 def self_test() -> None:
-    with tempfile.TemporaryDirectory(prefix="openaliro-patch-id-") as work:
+    with tempfile.TemporaryDirectory(prefix="ultrawidelock-patch-id-") as work:
         root = Path(work)
         (root / "b.patch").write_text("second\n", encoding="utf-8")
         (root / "a.patch").write_text("first\n", encoding="utf-8")

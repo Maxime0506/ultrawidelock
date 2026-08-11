@@ -34,7 +34,7 @@ SMP_CHR_UUID = "da2e7828-fbce-4e01-ae9e-261174997c48"
 # and Matter services register are not in the advertising data that CoreBluetooth
 # reports. So the name is the primary match and the UUIDs are a fallback for a
 # board configured to advertise them.
-SCAN_NAME = "openaliro"
+SCAN_NAME = "ultrawidelock"
 SCAN_UUIDS = ("0000fff2-0000-1000-8000-00805f9b34fb", "0000fff6-0000-1000-8000-00805f9b34fb")
 
 OP_READ_REQ, OP_READ_RSP, OP_WRITE_REQ, OP_WRITE_RSP = 0, 1, 2, 3

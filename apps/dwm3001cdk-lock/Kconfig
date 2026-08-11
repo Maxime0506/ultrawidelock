@@ -31,10 +31,10 @@ config USB_CDC_ACM
 	default y
 
 config USB_DEVICE_MANUFACTURER
-	default "openaliro"
+	default "ultrawidelock"
 
 config USB_DEVICE_PRODUCT
-	default "openaliro reader (provisioning)"
+	default "ultrawidelock reader (provisioning)"
 
 config SHELL
 	default y

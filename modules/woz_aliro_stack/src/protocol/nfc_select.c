@@ -8,7 +8,7 @@
  */
 #include "nfc_select.h"
 
-#include <openaliro/tlv.h>
+#include <ultrawidelock/tlv.h>
 
 #include <stdbool.h>
 #include <string.h>

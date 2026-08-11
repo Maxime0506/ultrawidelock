@@ -1,7 +1,7 @@
 # Examples
 
 `examples/` contains independently buildable firmware that demonstrates a
-specific OpenAliro role or bench setup. Examples consume the same `modules/`
+specific UltraWideLock role or bench setup. Examples consume the same `modules/`
 and `ports/` implementations as the lock products, but they are not complete
 lock products themselves.
 

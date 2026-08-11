@@ -2,7 +2,7 @@
 ## component rather than on one app so every app that pulls piv_ccid resolves
 ## it; CMakeLists.txt requires these only on esp32s3, and the rule below scopes
 ## the download to match. Version tracks apps/esp32-matter-lock/main/idf_component.yml.
-description: Optional USB PIV CCID transport for OpenAliro
+description: Optional USB PIV CCID transport for UltraWideLock
 dependencies:
   idf: ">=5.5"
   espressif/esp_tinyusb:

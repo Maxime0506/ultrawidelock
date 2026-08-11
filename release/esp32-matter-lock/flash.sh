@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# flash.sh — write the openaliro ESP32 Matter lock to a board with esptool.
+# flash.sh — write the ultrawidelock ESP32 Matter lock to a board with esptool.
 #
 # One merged image (bootloader, partition table and app) at offset 0x0. See
 # FLASH.md for wiring and first run.
@@ -39,14 +39,14 @@ done
 
 # ---- which chip --------------------------------------------------------------
 CHIPS=""
-for f in openaliro-matter-lock-*.bin; do
+for f in ultrawidelock-matter-lock-*.bin; do
   [ -f "$f" ] || continue
-  f="${f#openaliro-matter-lock-}"
+  f="${f#ultrawidelock-matter-lock-}"
   CHIPS="$CHIPS ${f%.bin}"
 done
 CHIPS="${CHIPS# }"
 [ -n "$CHIPS" ] || {
-  echo "ERROR: no openaliro-matter-lock-*.bin found next to this script."
+  echo "ERROR: no ultrawidelock-matter-lock-*.bin found next to this script."
   echo "  Run this from inside the unzipped bundle."
   exit 1
 }
@@ -87,7 +87,7 @@ if [ -z "$CHIP" ]; then
   fi
 fi
 
-BIN="openaliro-matter-lock-$CHIP.bin"
+BIN="ultrawidelock-matter-lock-$CHIP.bin"
 [ -f "$BIN" ] || {
   echo "ERROR: no image for '$CHIP' in this bundle."
   echo "  available: $CHIPS"
@@ -135,19 +135,19 @@ fi
 
 # The provenance question, which checksums cannot answer. Every file published
 # with this release is signed by the workflow that built it, and the GitHub CLI
-# checks that signature against openaliro's CI identity.
+# checks that signature against ultrawidelock's CI identity.
 #
 # NOT fatal, on purpose: a failure here is indistinguishable from being offline,
 # unauthenticated or behind a proxy, and refusing to flash for those would be
 # wrong. It is printed loudly instead, with the command to run deliberately.
 if command -v gh >/dev/null 2>&1; then
-  if gh attestation verify "$BIN" --repo openaliro/openaliro >/dev/null 2>&1; then
-    echo "==> provenance OK: $BIN was built by openaliro's CI"
+  if gh attestation verify "$BIN" --repo ultrawidelock/ultrawidelock >/dev/null 2>&1; then
+    echo "==> provenance OK: $BIN was built by ultrawidelock's CI"
   else
     echo
     echo "  NOTE: could not confirm where $BIN came from. That is expected offline."
     echo "  To check it deliberately:"
-    echo "    gh attestation verify $BIN --repo openaliro/openaliro"
+    echo "    gh attestation verify $BIN --repo ultrawidelock/ultrawidelock"
     echo
   fi
 else

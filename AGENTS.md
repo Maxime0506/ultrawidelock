@@ -1,6 +1,6 @@
-# OpenAliro agent guide
+# UltraWideLock agent guide
 
-OpenAliro is an embedded C SDK and a set of complete smart-lock applications.
+UltraWideLock is an embedded C SDK and a set of complete smart-lock applications.
 Portable behavior lives in `modules/`. Framework and hardware translation lives
 in `ports/`. Applications select both without copying their implementation.
 
@@ -31,14 +31,14 @@ generated or vendored bulk, not prose.
 5. Add shared sources to one role manifest. Do not duplicate source lists in a
    consuming build file.
 
-The application-facing C headers are `<openaliro/reader.h>`,
-`<openaliro/device.h>`, `<openaliro/uwb.h>`, and `<openaliro/tlv.h>`. The
-all-in-one `<openaliro/openaliro.h>` is for package consumers that intentionally
-want every declaration. The chipset contract is `<openaliro/woz_hal.h>`. The
+The application-facing C headers are `<ultrawidelock/reader.h>`,
+`<ultrawidelock/device.h>`, `<ultrawidelock/uwb.h>`, and `<ultrawidelock/tlv.h>`. The
+all-in-one `<ultrawidelock/ultrawidelock.h>` is for package consumers that intentionally
+want every declaration. The chipset contract is `<ultrawidelock/woz_hal.h>`. The
 HAL names five seams: DW3000 GPIO/IRQ, DW3000 SPI, BLE GATT/L2CAP, BLE central,
 and credential storage.
 
-Canonical declarations live in the owning module's `include/openaliro/`
+Canonical declarations live in the owning module's `include/ultrawidelock/`
 directory. All production and test code uses the namespaced form. The SDK gate
 rejects reintroducing the removed flat role-header names.
 

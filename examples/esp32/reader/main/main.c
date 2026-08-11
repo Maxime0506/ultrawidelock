@@ -12,8 +12,8 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 
-#include <openaliro/reader.h>
-#include <openaliro/uwb.h>
+#include <ultrawidelock/reader.h>
+#include <ultrawidelock/uwb.h>
 #include "woz_port.h" /* woz_uptime_ms for the reader status tick */
 #include "app_shell.h"
 #if defined(CONFIG_WOZ_PRESENCE)

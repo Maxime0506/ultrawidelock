@@ -4,7 +4,7 @@
  * offset, compute encoded sizes, and write new TLVs. Promoted verbatim from
  * woz_aliro_stack (protocol/tlv.c); full BER incl. multi-byte and high-tag-number tags.
  */
-#include <openaliro/tlv.h>
+#include <ultrawidelock/tlv.h>
 
 #include <string.h>
 

@@ -19,7 +19,7 @@
 
 #include "app_shell.h"
 #include "woz_diag.h"
-#include <openaliro/uwb.h>
+#include <ultrawidelock/uwb.h>
 
 static int fails;
 

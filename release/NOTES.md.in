@@ -5,9 +5,9 @@ door opens as you walk up to it, phone in your pocket. No app to install.
 
 | Download | Hardware | What it does |
 |---|---|---|
-| **openaliro-dwm3001cdk.zip** | one DWM3001CDK, nothing to wire | walk-up unlock, Apple Home over Thread, updates over Bluetooth |
-| **openaliro-esp32-matter-lock.zip** | ESP32-S3, C5 or C6 + DWM3000EVB | walk-up unlock, Apple Home over Wi-Fi |
-| **openaliro-nrf5340dk.zip** | nRF5340 DK + DWM3000EVB + NFC12A1 | walk-up unlock **and NFC tap**, Apple Home over Thread |
+| **ultrawidelock-dwm3001cdk.zip** | one DWM3001CDK, nothing to wire | walk-up unlock, Apple Home over Thread, updates over Bluetooth |
+| **ultrawidelock-esp32-matter-lock.zip** | ESP32-S3, C5 or C6 + DWM3000EVB | walk-up unlock, Apple Home over Wi-Fi |
+| **ultrawidelock-nrf5340dk.zip** | nRF5340 DK + DWM3000EVB + NFC12A1 | walk-up unlock **and NFC tap**, Apple Home over Thread |
 
 ## Flash it
 
@@ -27,7 +27,7 @@ Each file here is signed at build time by the workflow that built it, so you can
 prove where it came from without trusting this page:
 
 ```
-gh attestation verify openaliro-dwm3001cdk.zip --repo @REPO@
+gh attestation verify ultrawidelock-dwm3001cdk.zip --repo @REPO@
 ```
 
 That works on any file published here, including the ones inside the zips, and

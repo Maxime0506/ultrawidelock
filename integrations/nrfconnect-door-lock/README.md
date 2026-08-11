@@ -1,7 +1,7 @@
 # Nordic door-lock integration
 
 This integration adapts Nordic's door-lock and access-control application for
-the nRF5340 DK OpenAliro lock. The upstream repository is pinned and fetched by
+the nRF5340 DK UltraWideLock lock. The upstream repository is pinned and fetched by
 `make bootstrap`; it is not copied into this repository.
 
 `patches/` contains the tracked changes applied to the upstream application,

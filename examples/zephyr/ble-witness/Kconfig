@@ -1,6 +1,6 @@
 # BLE witness role selection.
 
-mainmenu "openaliro BLE witness"
+mainmenu "ultrawidelock BLE witness"
 
 choice WITNESS_ROLE
 	prompt "Witness placement role"
