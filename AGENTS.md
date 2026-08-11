@@ -15,7 +15,9 @@ in `ports/`. Applications select both without copying their implementation.
 
 Run `make help` for supported build and hardware commands. Search with `rg` or
 `rg --files`; role manifests under `modules/*/roles/` are the source of truth
-for shared source membership.
+for shared source membership. Grep `apps/*/size-baseline*.json` and
+`modules/woz_dw3000/dwt_uwb_driver/` rather than reading them whole; they are
+generated or vendored bulk, not prose.
 
 ## Architecture contract
 
