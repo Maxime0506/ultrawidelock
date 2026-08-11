@@ -1,9 +1,5 @@
-# DWM3001CDK standalone Aliro reader — stage 0 skeleton.
-#
-# Purpose of this stage is a NUMBER, not a feature: link the real reader engine,
-# the real CCC/FiRa responder, the real DW3110 driver and a real BLE stack into
-# one nRF52833 image and see what it weighs against the 480 KB the single-image
-# partition layout gives us.
+# DWM3001CDK standalone Aliro lock: the reader engine, the CCC/FiRa responder,
+# the DW3110 driver and the BLE stack in one nRF52833 image.
 #
 # woz_uwb and modules/woz_dw3000 come in as Zephyr modules because they carry their own
 # Kconfig gating. modules/woz_aliro's reader core is listed
