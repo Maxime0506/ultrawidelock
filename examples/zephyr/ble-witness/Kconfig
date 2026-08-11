@@ -1,0 +1,20 @@
+# BLE witness role selection.
+
+mainmenu "openaliro BLE witness"
+
+choice WITNESS_ROLE
+	prompt "Witness placement role"
+	default WITNESS_ROLE_INSIDE
+
+config WITNESS_ROLE_INSIDE
+	bool "Inside the door"
+
+config WITNESS_ROLE_OUTSIDE
+	bool "Outside the door"
+
+config WITNESS_ROLE_THRESHOLD
+	bool "Threshold / lintel / door frame"
+
+endchoice
+
+source "Kconfig.zephyr"

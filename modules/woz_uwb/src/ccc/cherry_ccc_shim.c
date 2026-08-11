@@ -11,7 +11,7 @@
 #include "woz_log.h"
 #include "woz_util.h"
 
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 #include "aliro_round_config.h" /* ALIRO_NUM_RESPONDERS — EXPERIMENT-2RESP */
 
 LOG_MODULE_REGISTER(woz_ccc_shim, LOG_LEVEL_INF);

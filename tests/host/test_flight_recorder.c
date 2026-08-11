@@ -24,7 +24,7 @@
 #include "fira_session.h"
 #include "flight_recorder.h"
 #include "fr_replay.h"
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 #include "test.h"
 
 extern int32_t woz_uwb_arm_rx(int32_t mode);

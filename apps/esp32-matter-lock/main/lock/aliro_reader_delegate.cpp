@@ -33,7 +33,7 @@
 
 // Bridge into the reader component's NVS-backed provisioning store (aliro_prov).
 // The header carries its own extern "C" guard.
-#include <aliro_reader.h>
+#include <openaliro/reader.h>
 
 using namespace chip;
 using namespace chip::app::Clusters::DoorLock;

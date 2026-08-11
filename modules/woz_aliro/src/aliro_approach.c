@@ -746,6 +746,32 @@ enum aliro_approach_action aliro_approach_gone(struct aliro_approach *ap)
 }
 
 /**
+ * Undo the unlock transition the caller refused. See the header for why the
+ * absence of this silently disabled auto-unlock after the first refusal.
+ */
+void aliro_approach_veto(struct aliro_approach *ap)
+{
+	if (ap == NULL || ap->locked) {
+		return;
+	}
+	ap->locked = true;
+	ap->pred_open = false;
+	ap->pred_dwell = 0;
+	ap->eta_ms = -1;
+	/*
+	 * near_dwell is deliberately NOT reset. The approach already satisfied
+	 * it -- that is why an unlock was offered -- and the credential is still
+	 * inside the radius. Clearing it would make the refusing policy pay the
+	 * dwell again on every retry, which on a 3-sample dwell means the phone
+	 * has usually walked through the door before the retry lands.
+	 *
+	 * approach_armed is likewise left alone: the trajectory gate's question
+	 * ("did this credential ever approach from outside?") was answered, and
+	 * a refusal by a different policy is not evidence against it.
+	 */
+}
+
+/**
  * Return true if the door is locked, false if unlocked.
  */
 bool aliro_approach_locked(const struct aliro_approach *ap)

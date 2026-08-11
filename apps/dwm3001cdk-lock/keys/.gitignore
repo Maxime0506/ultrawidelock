@@ -13,3 +13,4 @@
 *
 !.gitignore
 !README.md
+*.pem

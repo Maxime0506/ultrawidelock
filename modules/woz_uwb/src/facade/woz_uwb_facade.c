@@ -4,7 +4,7 @@
 /*
  * C shim over fira_session + ccc_shim (see woz_uwb_facade.h).
  */
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 #include <errno.h>
 #include "aliro_kdf.h"
 #include "fira_session.h"

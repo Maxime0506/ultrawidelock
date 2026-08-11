@@ -44,7 +44,7 @@
 #include "cherry/cherry_ccc.h"
 #include "aliro_uwb_adapter/aliro_uwb_adapter.h"
 #include "aliro_uwb_adapter/aliro_uwb_session.h"
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 
 /* Failure injection into the prim double (aliro_prim_host.c); default off,
  * self-disarming after firing. */

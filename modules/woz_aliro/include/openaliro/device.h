@@ -1,10 +1,10 @@
 // Aliro initiator (User-Device) session layer: the device-side counterpart of
-// aliro_reader.c. Drives the credential-auth handshake from the phone/fob role —
+// aliro_reader.c. Drives the credential-auth handshake from the phone/fob role:
 // parses the reader's AUTH0/AUTH1/EXCHANGE commands, runs the mirror-image key
 // schedule (ECDH, the two ECDSA transcripts, the §8.3.1.13 salt), and produces
 // the sealed responses. The result is the same 32-byte URSK the reader derives.
 /*
- * aliro_device — the initiator half of the Aliro Access Protocol. Reuses the
+ * aliro_device: the initiator half of the Aliro Access Protocol. Reuses the
  * direction-symmetric crypto (aliro_crypto.c) and EC primitives (aliro_prim.h);
  * the only genuinely new logic is the inverse codec (aliro_device_apdu) and the
  * device view of the two AES-256-GCM channels (opposite seal/open direction to
@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 /* Device view of an Aliro AES-256-GCM channel. The reader's aliro_secchan seals
- * on direction 0 and opens on direction 1; the device is the mirror — it OPENS
+ * on direction 0 and opens on direction 1; the device is the mirror: it OPENS
  * reader->device traffic (direction 0, key s0) and SEALS device->reader traffic
  * (direction 1, key s1). Both per-direction counters start at 1 (§8.3.1.13). */
 struct aliro_dev_secchan {
@@ -48,7 +48,7 @@ int aliro_dev_secchan_seal(struct aliro_dev_secchan *sc, const uint8_t *pt, size
 /* ---- device BleSK ranging channel (mirror of the reader's sc_ble) ----
  *
  * The UWB ranging-setup traffic (Reader-Status AP-Completed, Initiate-Ranging,
- * M1-M4, notifications) rides one BleSK-keyed AES-256-GCM channel — the same
+ * M1-M4, notifications) rides one BleSK-keyed AES-256-GCM channel, using the same
  * construction as the AP channel above, but each SDU carries a 4-byte
  * [proto][id][len_be16] header that is authenticated as GCM AAD and whose wire
  * length field is payload+16 (the reader's aliro_msg_seal/open framing). We

@@ -1,5 +1,5 @@
 /*
- * aliro_reader — Aliro reader session/transaction layer. Owns the per-connection
+ * aliro_reader: Aliro reader session/transaction layer. Owns the per-connection
  * Aliro transaction on top of the aliro_ble transport: session lifecycle, the
  * credential-auth exchange (AUTH0/AUTH1/EXCHANGE), the reader identity and
  * credential trust gate, the M1-M4 ranging setup, and the handoff of the derived
@@ -60,7 +60,7 @@ void aliro_reader_set_lock_state_listener(void (*cb)(bool unlocked));
 /* Feed one BLE connection-RSSI sample (dBm) into the session's ranging power gate
  * (CONFIG_WOZ_RSSI_GATE; absent without it). The transport polls the controller
  * every CONFIG_WOZ_RSSI_GATE_POLL_MS while its CoC is up and calls this from the
- * BLE-host task. The gate holds AP-Completed — and with it the whole UWB radio —
+ * BLE-host task. The gate holds AP-Completed, and with it the whole UWB radio,
  * until the phone is inside the open threshold, and tears ranging down again on a
  * sustained fade below the close threshold. */
 void aliro_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm);
@@ -93,8 +93,8 @@ bool aliro_reader_session_active(void);
  * credential has authenticated and passed the trust gate (including the
  * expedited-fast path and the dev-identity accept), false when one was presented
  * and rejected. This is the same decision the nRF5340's vendor application prints
- * as ACCESS GRANTED / ACCESS DENIED, and it is deliberately credential-independent
- * — the listener gets a verdict and nothing else, so an observer of it can never
+ * as ACCESS GRANTED / ACCESS DENIED, and it is deliberately credential-independent.
+ * The listener gets a verdict and nothing else, so an observer of it can never
  * leak a credential identifier.
  *
  * Called from the BLE-host task inside the transaction, alongside the software

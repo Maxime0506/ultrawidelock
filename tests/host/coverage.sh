@@ -133,6 +133,7 @@ run_suite ranging "$OUT/cov_ranging"
 # Header-inline logic (woz_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.
 cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/include" \
+	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_dw3000/include" \
 	"$SHARED/test_port_headers.c" -o "$OUT/cov_hdrs"
 run_suite hdrs "$OUT/cov_hdrs"
 

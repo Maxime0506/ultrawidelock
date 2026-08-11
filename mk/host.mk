@@ -1,12 +1,16 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test test-san coverage cbmc check drift seam purity
+.PHONY: test sdk-check test-san coverage cbmc check drift seam purity
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
 test:
 	@$(REPO_ROOT)/tests/host/run.sh
+
+## sdk-check: install the CMake package and build an external C consumer
+sdk-check:
+	@$(REPO_ROOT)/tests/sdk/run.sh
 
 ## test-san: host suite rebuilt under ASan + UBSan  ·  memory-bug gate
 test-san:
@@ -24,9 +28,9 @@ cbmc:
 check:
 	@$(REPO_ROOT)/scripts/test-runner.sh
 
-## drift: one constant, one number  ·  Kconfig and C must agree
+## drift: constants and integration patch-state identity stay exact
 drift:
-	@python3 $(REPO_ROOT)/tests/tooling/drift_check.py
+	@$(REPO_ROOT)/tests/tooling/drift_suite.sh
 
 ## seam: no call reaches the radio past the CCC STS seam
 seam:
@@ -35,5 +39,3 @@ seam:
 ## purity: modules/ names no OS, each port tree names only its own
 purity:
 	@$(REPO_ROOT)/tests/tooling/port_purity_check.sh
-
-

@@ -72,6 +72,7 @@ woz_role_sources("${ALIRO}/roles/ble_central.list" ALIRO_BLE_CENTRAL_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
+	src/ml_feed.c
 	# Platform seams the reader engine links against, re-homed to ports/zephyr
 	# with the rest of the Zephyr glue. Listed by path rather than compiled by
 	# the woz_zephyr_port module because they are unconditional app glue with
@@ -87,7 +88,7 @@ target_sources(app PRIVATE
 	${ALIRO_DYNTAG_SRCS}
 )
 # Provisioning console (USB CDC-ACM, provisioning mode only).
-target_sources_ifdef(CONFIG_ALIRO_PROV_CONSOLE app PRIVATE src/prov_shell.c)
+target_sources_ifdef(CONFIG_WOZ_SIDE_GATE app PRIVATE src/side_feed.c)
 # Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)

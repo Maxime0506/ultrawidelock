@@ -1,0 +1,3 @@
+description: Aliro reader session engine and credential-store backend
+dependencies:
+  idf: ">=5.5"

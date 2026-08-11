@@ -24,6 +24,7 @@ PIN="a5ad7fde1041d81690710a949c98eda1985fee0b"     # ncs-door-lock-and-access-co
 ADDON_URL="https://github.com/nrfconnect/ncs-door-lock-and-access-control"
 ADDON="$WS/ncs-door-lock-and-access-control"
 P="$TREE/integrations/nrfconnect-door-lock/patches"
+PATCH_STATE="$WS/.openaliro-patches.sha256"
 
 # Launch the nRF Util SDK manager toolchain with the configured NCS version, passing through all remaining arguments.
 # ALIRO_TOOLCHAIN=env skips that wrapper and runs the command directly — for
@@ -177,6 +178,11 @@ fi
 apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/aliro-shell-factoryreset.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" "$P/approach-direction-cluster.patch" "$P/nfc-transport-seam.patch" ${ha_patches[@]+"${ha_patches[@]}"}
 apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
+
+# A dirty repository proves that some patch exists, not that it is today's
+# patch set. Record the exact patch contents and optional HA mode so build.sh
+# rejects a workspace left behind by an older checkout.
+"$TREE/scripts/integration-patch-id.py" "$P" "${HA:-0}" >"$PATCH_STATE"
 
 # Calculate number of patches applied to $ADDON (always 11 base patches plus the HA patches if HA=1)
 addon_patch_count=$((11 + ${#ha_patches[@]}))

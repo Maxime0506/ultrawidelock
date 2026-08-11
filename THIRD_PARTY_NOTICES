@@ -27,7 +27,10 @@ License text:
   modules/woz_dw3000/dwt_uwb_driver/LICENSES/LicenseRef-QORVO-2.txt
 
 This license restricts use to Qorvo integrated circuits and includes other
-conditions stated in the component-local license text.
+conditions stated in the component-local license text. The ISC-licensed
+integration code links against this driver but does not change its terms: any
+binary that includes the driver may only be used with a Qorvo integrated
+circuit or a module containing one.
 
 detools
 -------

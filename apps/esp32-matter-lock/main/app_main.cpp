@@ -41,13 +41,13 @@
 #include <iot_button.h> // BUTTON_LONG_PRESS_START — the commissioning-window recovery press
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
-#include <aliro_reader.h>
+#include <openaliro/reader.h>
 #include <aliro_approach.h>
 #include <aliro_ble.h> // aliro_ble_time_updated()
 #include <aliro_lab.h>
 #include <aliro_lat.h>
 #include <esp_netif_sntp.h>
-#include <woz_uwb_facade.h>
+#include <openaliro/uwb.h>
 #ifdef CONFIG_WOZ_PRESENCE
 #include <presence_link.h>
 #endif

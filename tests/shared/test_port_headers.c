@@ -1,11 +1,13 @@
 /*
  * Host unit test for the engine's pure port headers
- * (modules/woz_port/include/woz_bytes.h and modules/woz_uwb/include/woz_util.h).
+ * (modules/woz_port/include/woz_bytes.h, openaliro/woz_hal.h and
+ * modules/woz_uwb/include/woz_util.h).
  *
- * These two carry no OS dependency at all, so they compile and run on the host
- * with no backend selected. They back the shared engine's endian load/store and
- * container/compare macros, so a silent edit here would corrupt the codec
- * on-silicon with no build error. This pins their behavior. woz_port.h is also
+ * These headers carry no OS dependency at all, so they compile and run on the
+ * host with no backend selected. The byte and utility headers back the shared
+ * engine's endian load/store and container/compare macros, so a silent edit
+ * here would corrupt the codec on-silicon with no build error. This pins their
+ * behavior. woz_port.h is also
  * exercised here through its WOZ_PORT_HOST backend (the same branch every host
  * suite runs on); the Zephyr/ESP-IDF backends only prove out on target — see
  * verify_port.sh for the on-target build/link guard.
@@ -20,6 +22,7 @@
 #include <string.h>
 
 #include "woz_port.h"
+#include <openaliro/woz_hal.h>
 #include "woz_util.h"
 #include "woz_bytes.h"
 

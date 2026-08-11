@@ -12,7 +12,7 @@
 #include <zephyr/logging/log.h>
 
 #include "aliro_ble_central.h"
-#include "aliro_device.h"
+#include <openaliro/device.h>
 #include "aliro_device_uwb.h"
 #include "aliro_uwb_msg_spec.h"
 #include "prepoll_tx.h"

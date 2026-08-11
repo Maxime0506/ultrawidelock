@@ -27,4 +27,6 @@ legacy adapters. Backends for platform contracts live in `ports/`.
   backend.
 
 `modules/woz_port/include/` is headers-only. Every implementation of those
-contracts belongs in a port tree or the host test backend.
+contracts belongs in a port tree or the host test backend. Its
+`include/openaliro/woz_hal.h` names the five chipset seams. Each module owns its
+canonical SDK headers under its own `include/openaliro/` directory.

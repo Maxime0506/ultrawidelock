@@ -109,7 +109,21 @@ def main():
 
     key = args.name or config_key(report.get("config"))
 
-    gate = dict(DEFAULT_GATE)
+    # A Zephyr report names RAM and FLASH and takes the tuned defaults above.
+    # An ESP-IDF report names linker segments (dram0_0_seg, iram0_0_seg, flash
+    # cache windows); there the internal SRAM segments get the RAM-style
+    # defaults and the multi-megabyte flash windows are left ungated -- flash
+    # headroom on those parts is a partition-table question (`make esp-size`),
+    # not a linker-region one.
+    regions = report.get("regions", {})
+    if not regions or any(r.upper() in ("RAM", "FLASH") for r in regions):
+        gate = dict(DEFAULT_GATE)
+    else:
+        gate = {}
+        for rname, reg in regions.items():
+            if reg.get("size", 0) <= 4 * 1024 * 1024 and reg.get("used", 0) >= 4096:
+                gate[f"{rname.lower()}_free_floor"] = DEFAULT_GATE["ram_free_floor"]
+                gate[f"{rname.lower()}_delta_cap"] = DEFAULT_GATE["ram_delta_cap"]
     gate.update(doc["baselines"].get(key, {}).get("gate", {}))
     for field in DEFAULT_GATE:
         override = getattr(args, field, None)
@@ -144,15 +158,22 @@ def main():
     others = sorted(k for k in doc["baselines"] if k != key)
     if others:
         sys.stderr.write(f"      also recorded  {', '.join(others)}\n")
-    for name in ("RAM", "FLASH"):
+    gated = sorted({k[: -len("_free_floor")] for k in gate if k.endswith("_free_floor")})
+    by_lower = {k.lower(): k for k in regions}
+    for low in gated:
+        name = by_lower.get(low, low.upper())
         r = regions.get(name)
         if r:
             sys.stderr.write(
-                f"      {name:<6} {r['used']:>9,} used   {r['free']:>8,} free   {r['pct']}%\n"
+                f"      {name:<12} {r['used']:>9,} used   {r['free']:>8,} free   {r['pct']}%\n"
             )
     sys.stderr.write(
-        f"      floor  RAM {gate['ram_free_floor']:,} B free, FLASH {gate['flash_free_floor']:,} B free\n"
-        f"      cap    RAM +{gate['ram_delta_cap']:,} B, FLASH +{gate['flash_delta_cap']:,} B\n\n"
+        "      floor  " + ", ".join(
+            f"{by_lower.get(low, low.upper())} {gate[f'{low}_free_floor']:,} B free"
+            for low in gated) + "\n"
+        + "      cap    " + ", ".join(
+            f"{by_lower.get(low, low.upper())} +{gate[f'{low}_delta_cap']:,} B"
+            for low in gated if f"{low}_delta_cap" in gate) + "\n\n"
     )
     return 0
 

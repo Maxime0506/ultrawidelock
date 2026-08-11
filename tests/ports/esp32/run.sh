@@ -108,7 +108,7 @@ CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
    -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
-   -I "$SDKFAKE" -I "$READER_MAIN" \
+	-I "$SDKFAKE" -I "$READER_MAIN" \
    -I "$UWB_INC" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
    "$HERE/test_esp_app_shell.c" \

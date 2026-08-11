@@ -3,7 +3,7 @@
 #include "ble_message.h"
 #include "ble_timeout.h"
 #include "nfc_select.h"
-#include "aliro_tlv.h"
+#include <openaliro/tlv.h>
 
 #include <stdint.h>
 #include <string.h>

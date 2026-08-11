@@ -1,10 +1,12 @@
 ## Managed dependency for the CCID transport's native-USB path. Declared on the
 ## component rather than on one app so every app that pulls piv_ccid resolves
 ## it; CMakeLists.txt requires these only on esp32s3, and the rule below scopes
-## the download to match. Version tracks apps/matter-lock/main/idf_component.yml.
+## the download to match. Version tracks apps/esp32-matter-lock/main/idf_component.yml.
+description: Optional USB PIV CCID transport for OpenAliro
 dependencies:
+  idf: ">=5.5"
   espressif/esp_tinyusb:
-    # Exact, matching apps/matter-lock/main/idf_component.yml, and read out of that app's
+    # Exact, matching apps/esp32-matter-lock/main/idf_component.yml, and read out of that app's
     # dependencies.lock rather than picked. A range here would let the two manifests resolve to
     # different builds of the same component.
     version: "2.2.1" # was ^2.2.1

@@ -17,6 +17,8 @@ if(CONFIG_WOZ_ANCHOR)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_fusion.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_report.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_satellite.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_side.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_side_log.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/woz_slam.c)
   # The LIS2DH12 backend of woz_slam_hw.h (CONFIG_WOZ_ANCHOR_SLAM) is the one
   # file that was not portable integer logic; it compiles from ports/zephyr

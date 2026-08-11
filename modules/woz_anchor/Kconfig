@@ -17,12 +17,68 @@ config WOZ_ANCHOR
 	  DWM3001CDK Matter image has roughly 6 KB free and a new static
 	  allocation there is a decision rather than a detail.
 
+	  Also carries woz_side.h: the fail-closed INSIDE/OUTSIDE/THRESHOLD/
+	  UNKNOWN gate for passive approach unlock. That gate is separate from
+	  woz_fusion_may_predict() and must be selected explicitly via
+	  CONFIG_WOZ_SIDE_GATE before it can suppress a passive unlock.
+
 	  Both halves carry a MOUNTING requirement that no code can substitute
 	  for: the two anchors must sit equidistant from the hinge (woz_door),
 	  and symmetrically about the door plane (woz_fusion). Read those headers
 	  before drilling anything.
 
 if WOZ_ANCHOR
+
+config WOZ_SIDE_GATE
+	bool "Fail-closed side gate for passive approach unlock"
+	default n
+	help
+	  When y, UNLOCK_PREDICT and UNLOCK_THRESHOLD from aliro_approach are
+	  released only if woz_side_may_passive_unlock() is true: side must be
+	  confident OUTSIDE with fresh evidence, quorum, and no contradiction.
+
+	  UNKNOWN, INSIDE, THRESHOLD, stale, replayed, multi-phone, and
+	  degraded evidence all suppress passive unlock. NFC Express Mode,
+	  Apple Home commands, and mechanical operation are not gated here.
+
+	  Default n preserves today's behaviour. Turning this on without
+	  commissioned BLE witnesses will refuse every passive unlock -- that
+	  is intentional fail-closed behaviour, not a regression.
+
+config WOZ_SIDE_PEER_EMIT
+	bool "Bench: log the Aliro peer address at L2CAP CoC open"
+	depends on WOZ_SIDE_GATE
+	default n
+	help
+	  Logs `SIDE peer=<AdvA> type=<public|random>` when the Aliro L2CAP CoC
+	  opens and `SIDE peer=clear` when it closes, so bench tooling can push
+	  the phone's current address to the BLE witnesses as an advertising
+	  filter. Without it a witness summarises every advertiser in the room.
+
+	  That address is personal data. A resolvable private address identifies
+	  whoever is standing at the door for as long as it lasts, so this is
+	  default n and must stay off in a shipped image. It is a bench aid, not
+	  a product feature: the witnesses need a way to learn which advertiser
+	  is the credential, and this is the temporary one.
+
+config WOZ_SIDE_FEED_RTT
+	bool "Bench: ingest SF1 witness summaries over SEGGER RTT down-buffer"
+	depends on WOZ_SIDE_GATE
+	depends on USE_SEGGER_RTT
+	default n
+	help
+	  Parses ASCII lines:
+	    SF1 in=<dbm> out=<dbm> th=<dbm> ni=<n> no=<n> nt=<n>
+	  from RTT down-buffer 0 into woz_side_filter_feed().
+
+	  Bench only: it needs a debug probe holding the RTT connection, so it is
+	  not a path a deployed lock can use. It used to default y, which meant
+	  selecting the gate silently selected a J-Link dependency. Default n now,
+	  and the SIDE overlay turns it on explicitly.
+
+	  This is currently the ONLY transport into the gate. Until a witness
+	  link over UART or Matter exists, WOZ_SIDE_GATE without this option
+	  refuses every passive unlock, exactly as its own help warns.
 
 config WOZ_ANCHOR_BASELINE_MM
 	int "Distance between the two anchors, millimetres"

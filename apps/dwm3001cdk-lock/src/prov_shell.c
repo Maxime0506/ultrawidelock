@@ -22,7 +22,7 @@
 #include <zephyr/sys/util.h>
 
 #include "aliro_prov.h"
-#include "aliro_reader.h"
+#include <openaliro/reader.h>
 
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>

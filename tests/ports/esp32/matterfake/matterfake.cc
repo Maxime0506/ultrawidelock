@@ -28,9 +28,9 @@
 #include "aliro_lab.h"
 #include "uwb_cirdiag.h"
 #include "aliro_lat.h"
-#include "aliro_reader.h"
+#include <openaliro/reader.h>
 #include "woz_diag.h"
-#include "woz_uwb_facade.h"
+#include <openaliro/uwb.h>
 
 /* ---- DoorLockServer ------------------------------------------------------- */
 int mfk_dls_init_server_calls;

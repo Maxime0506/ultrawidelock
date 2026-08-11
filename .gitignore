@@ -76,3 +76,12 @@ examples/zephyr/nrf5340dk-initiator/src/bench_identity.h
 
 # Firecrawl
 .firecrawl/
+
+# HITL capture data: contains phone BLE addresses.
+captures/
+
+# Editor workspace
+.cursor/
+
+# graphify knowledge graph: generated, machine-local
+graphify-out/
