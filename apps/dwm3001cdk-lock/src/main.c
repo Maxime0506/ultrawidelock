@@ -26,14 +26,9 @@
 #include "matter_commission.h"
 #include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
 #endif
+#include "ml_feed.h" /* channel-classifier glue; plain feed when ML is off */
 #include "status_led.h"
 #include "uwb_cirdiag.h" /* latched Ipatov scalars, for the channel classifier */
-
-#if defined(CONFIG_WOZ_ML_LOS)
-#include "woz_ml.h"
-#include "woz_log.h"  /* woz_printf -- the [ALAB] ev=ml classifier trace */
-#include "woz_port.h" /* woz_uptime_us -- the [ALAB] timebase */
-#endif
 #if IS_ENABLED(CONFIG_WOZ_ANCHOR)
 #include "woz_satellite.h" /* second-anchor verdict; gates PREDICT only */
 #endif
@@ -251,70 +246,6 @@ static void factory_reset_if_requested(void)
 	LOG_WRN("factory reset done; commissionable on the next boot");
 }
 #endif
-
-/**
- * Feed one trusted range, carrying this reception's channel class if there is one.
- *
- * WHERE THIS RUNS, because it is the only reason it is affordable. The classifier
- * needs dwt_readdiagnostics(), measured at 972 us on this board -- 53% of the
- * ~1836 us ranging arm deadline, which would be reckless on the RX path. It is
- * not on the RX path. uwb_cirdiag_capture() already takes that read AFTER the
- * shim re-arms, and this function only copies the result out in the main loop,
- * one ranging block (~192 ms) later. The work added here is five register copies,
- * three logarithms and two comparisons.
- *
- * The channel is read only when the capture counter has ADVANCED. The latch is
- * latest-wins with no queue, so a stale snapshot re-read across several ranging
- * rounds would let one obstructed reception carry a whole median window and
- * defeat the majority-of-five that gates the widening.
- *
- * Falls back to the plain feed whenever anything is missing -- stream disarmed,
- * nothing captured, a failed CIA read, or the classifier compiled out. A missing
- * class must read as CLEAR rather than as obstructed: clear is the unwidened
- * threshold, which is the behaviour that shipped.
- */
-static enum aliro_approach_action feed_with_channel(struct aliro_approach *ap, int64_t now,
-						    int32_t cm)
-{
-#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
-	static uint32_t last_diag_n;
-	struct uwb_cirdiag_ipatov ip;
-
-	if (cm >= 0 && uwb_cirdiag_last_ipatov(&ip) && ip.n != last_diag_n) {
-		const struct woz_ml_cia cia = {
-			.f1 = ip.f1,
-			.f2 = ip.f2,
-			.f3 = ip.f3,
-			.accum_count = ip.accum_count,
-			.channel_area = ip.power,
-		};
-		float feat[WOZ_ML_LOS_N_FEATURES];
-		float pwr_diff;
-
-		last_diag_n = ip.n;
-		if (woz_ml_los_features(&cia, (uint16_t)cm, feat, &pwr_diff)) {
-			const enum woz_ml_los_class cls = woz_ml_los_classify(feat);
-			const float conf = woz_ml_los_confidence(feat);
-
-			/*
-			 * One line per fresh latch, joinable to its ev=uwb.diag line by
-			 * n=. conf_c is the dB-scaled confidence in centi-units, so the
-			 * 2.61 vote gate reads as 261; dis is the tree-vs-vendor
-			 * disagreement whose RATE is the label-free drift monitor
-			 * woz_ml_los_vendor() documents. Main-loop context, one ranging
-			 * block after the reception, so this competes with no deadline.
-			 */
-			woz_printf("[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u\n",
-				   woz_uptime_us(), ip.n, cm, (unsigned)cls,
-				   (int)(conf * 100.0f),
-				   (unsigned)woz_ml_los_disagrees(feat, pwr_diff));
-			return aliro_approach_feed_channel(ap, now, cm,
-							   cls == WOZ_ML_LOS_OBSTRUCTED, conf);
-		}
-	}
-#endif
-	return aliro_approach_feed(ap, now, cm);
-}
 
 /**
  * Entry point for the DWM3001CDK reader application. Initializes provisioning and factory-reset
@@ -638,7 +569,7 @@ int main(void)
 			last_gen = gen;
 			last_obs_gen = gen;
 			present = true;
-			act = feed_with_channel(&approach, now, cm);
+			act = ml_feed_range(&approach, now, cm);
 		} else {
 			/*
 			 * A fresh range the integrity consensus will not vouch
@@ -666,24 +597,7 @@ int main(void)
 			act = aliro_approach_tick(&approach, now);
 		}
 
-#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
-		/*
-		 * The debounced verdict, printed on the edge only. This is the state
-		 * the widening consumes, so a walk with nlos_widen_cm still 0 shows
-		 * exactly where a widened build would have moved its threshold --
-		 * which is the reading that chooses the number.
-		 */
-		{
-			static bool was_blocked;
-			const bool blocked = aliro_approach_nlos_blocked(&approach, now);
-
-			if (blocked != was_blocked) {
-				was_blocked = blocked;
-				woz_printf("[ALAB] t=%lld ev=ml.vote blocked=%u\n",
-					   woz_uptime_us(), (unsigned)blocked);
-			}
-		}
-#endif
+		ml_feed_vote_trace(&approach, now);
 
 		switch (act) {
 		case ALIRO_APPROACH_UNLOCK_PREDICT:

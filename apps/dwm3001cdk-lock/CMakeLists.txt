@@ -72,6 +72,7 @@ woz_role_sources("${ALIRO}/roles/ble_central.list" ALIRO_BLE_CENTRAL_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
+	src/ml_feed.c
 	# Platform seams the reader engine links against, re-homed to ports/zephyr
 	# with the rest of the Zephyr glue. Listed by path rather than compiled by
 	# the woz_zephyr_port module because they are unconditional app glue with
