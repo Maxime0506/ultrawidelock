@@ -1,8 +1,8 @@
 # Applications
 
-`apps/` contains UltraWideLock lock implementations and active product ports.
-Each directory owns the product-specific configuration, wiring, entry point, and
-build overlays.
+`apps/` contains the UltraWideLock products and the product ports being brought
+up alongside them. Each directory owns the product-specific configuration,
+wiring, entry point, and build overlays.
 Portable protocol code remains in `modules/`, while OS and chipset glue remains
 in `ports/`.
 
