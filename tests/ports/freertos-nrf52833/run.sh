@@ -16,6 +16,7 @@ OT_RADIO_BIN="$OUT/freertos_ot_radio_test"
 OT_ALARM_BIN="$OUT/freertos_ot_alarm_test"
 OT_MISC_BIN="$OUT/freertos_ot_misc_test"
 KV_BIN="$OUT/freertos_kv_flash_test"
+PROV_BIN="$OUT/freertos_prov_kv_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -167,3 +168,19 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
 	-o "$KV_BIN"
 "$KV_BIN"
+
+# The Aliro provisioning backend, over the real store rather than a stub: the
+# property under test is that a provisioned identity survives a reset, and only
+# the real store can be wrong about that.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/modules/woz_aliro/include" \
+	"$HERE/test_prov_kv.c" \
+	"$HERE/fake/fake_flash.c" \
+	"$ROOT/modules/woz_aliro/src/aliro_prov.c" \
+	"$ROOT/ports/freertos-nrf52833/storage/aliro_prov_kv.c" \
+	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
+	-o "$PROV_BIN"
+"$PROV_BIN"

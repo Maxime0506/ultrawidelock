@@ -125,6 +125,19 @@ The implemented foundation now includes:
   format is its own and is not Zephyr NVS: a board reflashed from the Zephyr
   build finds no valid page, reformats, and loses whatever the Zephyr settings
   partition held.
+- `storage/aliro_prov_kv.c` is the reader's provisioning backend, the standalone
+  twin of the Zephyr port's `aliro_prov_settings.c`. The serialisation, the dev
+  fallback and the trust logic are the portable `aliro_prov.c`; this file only
+  moves that one blob under `WOZ_KV_KEY_ALIRO_PROV`. Every failure still leaves
+  a usable dev identity, because a reader that will not boot is worse than one
+  that boots unprovisioned, and a stored record longer than this firmware can
+  write is refused rather than parsed. A factory reset deletes that one key
+  instead of the store: OpenThread's SRP client key shares these pages, the SRP
+  host name is the factory EUI-64, and asking for that name with a new key is
+  refused until the old lease expires, up to 14 days attached to Thread but
+  unreachable on it. A static assert holds `ALIRO_PROV_BLOB_MAX` (700 bytes at
+  `ALIRO_TRUST_MAX` 6) inside one record, so raising the anchor limit fails the
+  build rather than the first provisioning write.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
