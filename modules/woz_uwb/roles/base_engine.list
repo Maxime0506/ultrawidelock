@@ -1,5 +1,0 @@
-# woz_uwb tier: base ranging estimator (CONFIG_WOZ_UWB) — radio-free, so the
-# host KAT suite compiles it too; base tier (not responder) because the anchor
-# ranges with no CCC engine. Consumers: modules/woz_uwb/CMakeLists.txt,
-# ports/esp32/components/woz_uwb, tests/host/sources.sh. Sorted; add HERE only.
-modules/woz_uwb/src/fira/ds_twr.c

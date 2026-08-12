@@ -17,17 +17,17 @@ check_declarations() {
 check_declarations modules/woz_aliro/include/ultrawidelock/reader.h
 check_declarations modules/woz_aliro/include/ultrawidelock/device.h
 check_declarations modules/woz_aliro/include/ultrawidelock/tlv.h
-check_declarations modules/woz_uwb/include/ultrawidelock/uwb.h
+check_declarations modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h
 
 for legacy in modules/woz_aliro/include/aliro_reader.h \
 	modules/woz_aliro/include/aliro_device.h modules/woz_aliro/include/aliro_tlv.h \
-	modules/woz_uwb/include/woz_uwb_facade.h modules/woz_port/include/woz_hal.h; do
+	modules/ultrawidelock_uwb/include/ultrawidelock_uwb_facade.h modules/woz_port/include/woz_hal.h; do
 	[ ! -e "$ROOT/$legacy" ] || {
 		echo "sdk API: FAIL (legacy API header returned: $legacy)" >&2
 		exit 1
 	}
 done
-if git grep -nE '#include [<"](aliro_reader|aliro_device|aliro_tlv|woz_uwb_facade|woz_hal)[.]h[>"]' \
+if git grep -nE '#include [<"](aliro_reader|aliro_device|aliro_tlv|ultrawidelock_uwb_facade|woz_hal)[.]h[>"]' \
 	-- apps examples integrations modules ports tests/host tests/ports tests/shared tests/tooling \
 	>/dev/null; then
 	echo "sdk API: FAIL (legacy API include returned)" >&2

@@ -1,4 +1,0 @@
-name: woz_uwb
-build:
-  cmake: .
-  kconfig: Kconfig

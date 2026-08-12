@@ -121,13 +121,13 @@ bool aliro_reader_presence_authenticated_after(uint32_t checkpoint,
 	return true;
 }
 
-uint32_t woz_uwb_range_generation(void)
+uint32_t ultrawidelock_uwb_range_generation(void)
 {
 	return range_generation;
 }
 
-bool woz_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
-					    struct woz_uwb_range_integrity *ig_out)
+bool ultrawidelock_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
+					    struct ultrawidelock_uwb_range_integrity *ig_out)
 {
 	ig_out->sts_ok = false;
 	ig_out->sts_quality = 0;

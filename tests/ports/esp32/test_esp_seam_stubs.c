@@ -1,6 +1,6 @@
 /*
- * Host test for this port's half of uwb_seam.h (components/woz_uwb/port/
- * woz_seam_stubs.c). "Theatre" suite: dwt_setcallbacks, dwt_configure and the
+ * Host test for this port's half of uwb_seam.h (components/ultrawidelock_uwb/port/
+ * ultrawidelock_seam_stubs.c). "Theatre" suite: dwt_setcallbacks, dwt_configure and the
  * ccc_shim_rx_* entry points are recording doubles here, so passing proves the
  * shim's interception + chaining logic (save the MAC's callbacks, install the
  * shims, feed the STS tracker, gate the Pre-POLL decode on awaiting-poll) —
@@ -27,8 +27,8 @@ static void okc(const char *name, int cond)
 }
 
 /* ---- the seam entry points + ccc_shim doubles ----------------------------- */
-void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks);
-int32_t woz_uwb_configure_phy(dwt_config_t *config);
+void ultrawidelock_uwb_set_callbacks(dwt_callbacks_s *callbacks);
+int32_t ultrawidelock_uwb_configure_phy(dwt_config_t *config);
 extern uint32_t g_ccc_dbg_decode;
 
 static dwt_callbacks_s s_real_registered;
@@ -94,7 +94,7 @@ void ccc_shim_rx_try_prepoll(uint16_t datalength)
 static int s_chain_rxok;
 
 /* uwb_cirdiag_capture double: shim_rxok latches the CIA diag through it; the
- * real latch lives in the woz_uwb driver, out of this wrap-seam suite. Records
+ * real latch lives in the ultrawidelock_uwb driver, out of this wrap-seam suite. Records
  * deadline_pending, the flag that keeps the windowed-CIR read out of a live
  * ranging block, plus the chain count at call time — on the Final the
  * capture must run BEFORE the MAC re-arms the receiver, because the
@@ -164,7 +164,7 @@ int main(void)
 	cbs.cbRxErr = chain_rxerr;
 	cbs.cbTxDone = chain_txdone;
 
-	woz_uwb_set_callbacks(&cbs);
+	ultrawidelock_uwb_set_callbacks(&cbs);
 	okc("real registration chained", s_real_setcb_calls == 1);
 	okc("all four callbacks replaced by shims",
 	    s_real_registered.cbRxOk != NULL && s_real_registered.cbRxOk != chain_rxok &&
@@ -250,7 +250,7 @@ int main(void)
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.chan = 9;
-	okc("phy configure passthrough", woz_uwb_configure_phy(&cfg) == 0 &&
+	okc("phy configure passthrough", ultrawidelock_uwb_configure_phy(&cfg) == 0 &&
 					 s_configure_calls == 1 && s_last_cfg.chan == 9);
 
 	okc("diag decode counter defined (stays 0)", g_ccc_dbg_decode == 0);
@@ -260,19 +260,19 @@ int main(void)
 	/* Individual NULL members stay NULL (no shim installed over nothing). */
 	memset(&cbs, 0, sizeof(cbs));
 	cbs.cbRxOk = chain_rxok;
-	woz_uwb_set_callbacks(&cbs);
+	ultrawidelock_uwb_set_callbacks(&cbs);
 	okc("only rxok shimmed",
 	    s_real_registered.cbRxOk != NULL && s_real_registered.cbRxTo == NULL &&
 	    s_real_registered.cbRxErr == NULL && s_real_registered.cbTxDone == NULL);
 
 	/* All-NULL callbacks: shims must not fire the stale chain pointers. */
 	memset(&cbs, 0, sizeof(cbs));
-	woz_uwb_set_callbacks(&cbs);
+	ultrawidelock_uwb_set_callbacks(&cbs);
 	okc("all-NULL registration passes through",
 	    s_real_registered.cbRxOk == NULL && s_real_registered.cbTxDone == NULL);
 
 	/* NULL table forwards untouched. */
-	woz_uwb_set_callbacks(NULL);
+	ultrawidelock_uwb_set_callbacks(NULL);
 	okc("NULL table forwarded", s_real_setcb_calls == 4);
 
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");

@@ -152,7 +152,7 @@ config WOZ_APPROACH_PREDICT
 
 	  Pick per lock: the gate for battery power, this for latency.
 
-config WOZ_UWB_CIRDIAG
+config ULTRAWIDELOCK_UWB_CIRDIAG
 	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"
 	default n
 	help

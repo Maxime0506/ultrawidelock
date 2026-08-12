@@ -6,8 +6,8 @@
 
 #include "test.h"
 
-/* The modules' per-frame UWB diag gate (woz_diag.h); on for host builds. */
-extern volatile int woz_uwb_diag_on;
+/* The modules' per-frame UWB diag gate (ultrawidelock_diag.h); on for host builds. */
+extern volatile int ultrawidelock_uwb_diag_on;
 
 struct suite {
 	const char *name;
@@ -29,7 +29,7 @@ int main(void)
 	 * the UWB diag firehose. Unset (coverage, a manual run, debugging a
 	 * suite), the diag default is untouched. */
 	if (getenv("WOZ_TEST_QUIET") != NULL) {
-		woz_uwb_diag_on = 0;
+		ultrawidelock_uwb_diag_on = 0;
 	}
 
 	static const struct suite suites[] = {
@@ -43,15 +43,15 @@ int main(void)
 		{ "ccc_shim", test_ccc_shim },
 		{ "ccc_session", test_ccc_session },
 		{ "prepoll_schedule", test_prepoll_schedule },
-		{ "aliro_builder", test_aliro_builder },
-		{ "aliro_parser", test_aliro_parser },
-		{ "aliro_adapter", test_aliro_adapter },
-		{ "aliro_msg", test_aliro_msg },
-		{ "aliro_session", test_aliro_session },
+		{ "ultrawidelock_uwb_msg_builder", test_ultrawidelock_uwb_msg_builder },
+		{ "ultrawidelock_uwb_msg_parser", test_ultrawidelock_uwb_msg_parser },
+		{ "ultrawidelock_uwb_adapter", test_ultrawidelock_uwb_adapter },
+		{ "ultrawidelock_uwb_msg", test_ultrawidelock_uwb_msg },
+		{ "ultrawidelock_uwb_session", test_ultrawidelock_uwb_session },
 		{ "aliro_prov", test_aliro_prov },
 		{ "aliro_hash", test_aliro_hash },
 		{ "aliro_assert", test_aliro_assert },
-		{ "aliro_device_uwb", test_aliro_device_uwb },
+		{ "ultrawidelock_device_uwb", test_ultrawidelock_device_uwb },
 		{ "cherry", test_cherry },
 		{ "fira", test_fira },
 		{ "facade", test_facade },

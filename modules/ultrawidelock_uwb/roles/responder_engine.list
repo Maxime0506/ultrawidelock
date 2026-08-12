@@ -1,0 +1,5 @@
+# ultrawidelock_uwb tier: responder session state machine (CONFIG_ULTRAWIDELOCK_UWB_RESPONDER) —
+# radio-free, host-compiled. Consumers: modules/ultrawidelock_uwb/CMakeLists.txt,
+# ports/esp32/components/ultrawidelock_uwb, tests/host/sources.sh.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/ultrawidelock_uwb/src/fira/fira_session.c

@@ -1,4 +1,4 @@
-/* nRF5340 app-core HFCLK boost, split out of woz_uwb_facade.c so the facade
+/* nRF5340 app-core HFCLK boost, split out of ultrawidelock_uwb_facade.c so the facade
  * carries no Zephyr include. The facade's woz_hfclk_ensure_128mhz() stays a
  * portable no-op seam; this file is the platform half behind it. */
 #if defined(CONFIG_SOC_NRF5340_CPUAPP)

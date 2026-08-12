@@ -132,7 +132,7 @@ static void notify_wallet(bool present)
 // state and has no ABSENT path it could accidentally sign.
 static void fill_assert(struct aliro_assert *a, const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
 			const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm,
-			const struct woz_uwb_range_integrity *ig)
+			const struct ultrawidelock_uwb_range_integrity *ig)
 {
 	memset(a, 0, sizeof(*a));
 	memcpy(a->nonce, nonce, ALIRO_ASSERT_NONCE_LEN);
@@ -211,7 +211,7 @@ static int parse_hex(const char *s, uint8_t *out, size_t n)
 // rather than only to one paired host.
 static int answer_p256(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN],
 		       const uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN], int32_t cm,
-		       const struct woz_uwb_range_integrity *ig)
+		       const struct ultrawidelock_uwb_range_integrity *ig)
 {
 	struct aliro_assert a;
 	uint8_t wire[ALIRO_ASSERT_WIRE_P256];
@@ -235,7 +235,7 @@ static bool before_deadline(int64_t deadline_ms)
 }
 
 static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
-			 int32_t *distance_cm, struct woz_uwb_range_integrity *integrity,
+			 int32_t *distance_cm, struct ultrawidelock_uwb_range_integrity *integrity,
 			 bool report)
 {
 	uint8_t expected_pub[ALIRO_ASSERT_PUB_LEN];
@@ -276,7 +276,7 @@ static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
 	/* Snapshot after reset completion. A range that races into this tiny gap is
 	 * conservatively discarded; that can cost one extra poll, never admit an
 	 * old measurement. */
-	range_checkpoint = woz_uwb_range_generation();
+	range_checkpoint = ultrawidelock_uwb_range_generation();
 
 	while (before_deadline(deadline_ms)) {
 		if (aliro_reader_presence_authenticated_after(auth_checkpoint, actual_pub)) {
@@ -289,9 +289,9 @@ static int acquire_fresh(uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN],
 			}
 
 			int32_t cm = -1;
-			struct woz_uwb_range_integrity ig;
+			struct ultrawidelock_uwb_range_integrity ig;
 
-			if (woz_uwb_trusted_range_after_checked_cm(&cm, range_checkpoint, &ig)) {
+			if (ultrawidelock_uwb_trusted_range_after_checked_cm(&cm, range_checkpoint, &ig)) {
 				/* Integrity before distance, deliberately. A block whose STS
 				 * did not correlate has not measured anything, so asking
 				 * whether its number is inside the threshold is asking the
@@ -334,7 +334,7 @@ static int prove(const uint8_t nonce[ALIRO_ASSERT_NONCE_LEN])
 {
 	uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
 	int32_t distance_cm;
-	struct woz_uwb_range_integrity ig;
+	struct ultrawidelock_uwb_range_integrity ig;
 	int rc;
 
 	woz_mutex_lock(&s_proof_lock);
@@ -353,7 +353,7 @@ int presence_link_require_fresh(void)
 {
 	uint8_t cred_id[ALIRO_ASSERT_CREDID_LEN];
 	int32_t distance_cm;
-	struct woz_uwb_range_integrity ig;
+	struct ultrawidelock_uwb_range_integrity ig;
 	int rc;
 
 	if (!s_initialized) {

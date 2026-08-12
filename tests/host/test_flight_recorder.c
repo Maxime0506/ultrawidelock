@@ -17,7 +17,7 @@
 
 #include <deca_device_api.h>
 
-#include "aliro_kdf.h" /* ALIRO_URSK_LEN */
+#include "cred_kdf.h" /* ULTRAWIDELOCK_URSK_LEN */
 #include "ccc_kdf.h"
 #include "ccc_mac.h"
 #include "ccc_shim.h"
@@ -27,7 +27,7 @@
 #include <ultrawidelock/uwb.h>
 #include "test.h"
 
-extern int32_t woz_uwb_arm_rx(int32_t mode);
+extern int32_t ultrawidelock_uwb_arm_rx(int32_t mode);
 
 /* ── the recorded DS-TWR scenario (mirrors test_prepoll_round) ───────────── */
 
@@ -37,7 +37,7 @@ extern int32_t woz_uwb_arm_rx(int32_t mode);
 #define RND_STRIDE 96u
 #define RND_BLOCK  7u
 
-static uint8_t g_ursk[ALIRO_URSK_LEN];
+static uint8_t g_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t g_mupsk1[CCC_MUPSK1_LEN];
 static uint8_t g_ks[CCC_KEYSOURCE_LEN];
 static uint8_t g_dest[CCC_DEST_SHORT_ADDR_LEN];
@@ -162,7 +162,7 @@ static size_t record_round(const uint8_t **trace, int32_t *range_cm_out)
 	uint8_t mupsk2[CCC_MUPSK2_LEN], uad[CCC_UAD_LEN];
 	const uint32_t widx = RND_IDX1 + 2u * RND_STRIDE;
 	uint32_t fc = 100u;
-	struct woz_uwb_aliro_cfg c;
+	struct ultrawidelock_uwb_aliro_cfg c;
 	int32_t cm = -1;
 
 	for (size_t i = 0; i < sizeof(g_ursk); i++) {
@@ -191,7 +191,7 @@ static size_t record_round(const uint8_t **trace, int32_t *range_cm_out)
 	fr_set_enabled(true); /* META */
 
 	woz_host_rx_reset();
-	T_EQ("rec.start", woz_uwb_start_aliro(&c), 0); /* CONFIG */
+	T_EQ("rec.start", ultrawidelock_uwb_start_aliro(&c), 0); /* CONFIG */
 
 	/* Bootstrap: two Pre-POLL decodes learn index + stride. */
 	len = mk_prepoll(frame, fc++, RND_IDX1);
@@ -522,7 +522,7 @@ void test_flight_recorder(void)
 	test_writer_overflow();
 	test_record_replay();
 	test_dump_transport();
-	(void)woz_uwb_arm_rx; /* silence unused extern if the round omits it */
+	(void)ultrawidelock_uwb_arm_rx; /* silence unused extern if the round omits it */
 
-	woz_uwb_stop();
+	ultrawidelock_uwb_stop();
 }

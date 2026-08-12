@@ -29,7 +29,7 @@ config ANCHOR_REPLY_DELAY_US
 	  programmed instant already past when it looked.
 
 	  3000 is not arbitrary. The engine's own arm-deadline history
-	  (modules/woz_uwb/src/ccc/ccc_shim_rx.c, CCC_RX_POLL_LEAD) records that a
+	  (modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx.c, CCC_RX_POLL_LEAD) records that a
 	  +1676 us deadline did NOT clear a settled dispatch latency of
 	  1433-1616 us, and that moving it to +1836 us turned 60-240 us of margin
 	  into 220-400 us. 3000 us leaves roughly 1.2 ms over the worst dispatch

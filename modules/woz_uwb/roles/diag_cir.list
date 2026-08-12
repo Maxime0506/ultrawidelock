@@ -1,5 +1,0 @@
-# woz_uwb tier: CIA/CIR diagnostics (CONFIG_WOZ_UWB_CIRDIAG, default n) —
-# per-reception first-path summary + windowed CIR tap dump.
-# Consumers: modules/woz_uwb/CMakeLists.txt, ports/esp32/components/woz_uwb.
-# One repo-root-relative path per line, sorted; add HERE and nowhere else.
-modules/woz_uwb/src/driver/uwb_cirdiag.c

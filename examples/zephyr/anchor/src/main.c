@@ -4,7 +4,7 @@
  *
  * One application, two roles, two boards. The role is CONFIG_ANCHOR_ROLE_*, the
  * board is the overlay in boards/. Nothing here is Aliro-aware: this builds at
- * the CONFIG_WOZ_UWB tier, where uwb_seam.h inlines straight to the decadriver
+ * the CONFIG_ULTRAWIDELOCK_UWB tier, where uwb_seam.h inlines straight to the decadriver
  * and there is no credential, no STS engine and no phone in the loop. That is
  * the whole reason stage A is cheap, and it is why moving the satellite to a
  * second DWM3001CDK later is a board string rather than a port.
@@ -22,10 +22,11 @@
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
 /*
- * There is deliberately no `woz_uwb_diag_on = 0` here, unlike apps/dwm3001cdk-lock/src/main.c.
+ * There is deliberately no `ultrawidelock_uwb_diag_on = 0` here, unlike
+ * apps/dwm3001cdk-lock/src/main.c.
  *
  * That flag and every DIAGK call site live in ccc_shim_rx.c and uwb_rxdiag.c,
- * which woz_uwb compiles only at the CONFIG_WOZ_ALIRO tier. This app is below
+ * which ultrawidelock_uwb compiles only at the CONFIG_WOZ_ALIRO tier. This app is below
  * it, so the per-frame trace is not merely switched off, it does not exist --
  * the symbol is undefined and referencing it fails the link. The rule the lock
  * has to enforce at runtime is enforced here by the build.

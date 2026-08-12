@@ -1,0 +1,287 @@
+# Woz UWB engine for the Nordic door-lock add-on (NCS v3.3.0).
+# Options: ULTRAWIDELOCK_UWB / ULTRAWIDELOCK_UWB_RESPONDER / WOZ_ALIRO.
+
+config ULTRAWIDELOCK_UWB
+	bool "Woz UWB (DW3000) bring-up"
+	select SPI
+	select GPIO
+	help
+	  Compile the minimal DW3110 (DWM3000EVB) bring-up driver (uwb_min.c).
+
+config ULTRAWIDELOCK_UWB_RESPONDER
+	bool "Woz DS-TWR responder"
+	depends on ULTRAWIDELOCK_UWB
+	help
+	  DS-TWR responder that produces a distance in cm. Runs on the ISC
+	  modules/ultrawidelock_dw3000 driver via ccc_shim_rx.c.
+
+config ULTRAWIDELOCK_UWB_SHELL
+	bool "`aliro` UWB console commands"
+	depends on ULTRAWIDELOCK_UWB && SHELL
+	default y
+	help
+	  Registers the `aliro` command tree (status, rx, range, chip, selftest,
+	  log, frames, cir, version, factoryreset). Default y, so every build that
+	  already enables SHELL is unchanged.
+
+	  The DWM3001CDK turns this off. Its shell exists only in provisioning
+	  mode, where the radios are deliberately never started, and these
+	  commands would drive a driver that has not been brought up.
+
+config WOZ_ALIRO
+	bool "Woz Aliro/CCC credential-bound STS engine"
+	depends on ULTRAWIDELOCK_UWB_RESPONDER
+	help
+	  CCC credential-bound STS substitution (ccc_shim + uwb_seam.h). Consumes an
+	  externally supplied URSK (the add-on hands us the plaintext URSK in
+	  UltraWideBandImpl::_ConfigureRangingSession).
+
+choice
+	prompt "AES-ECB backend for the CCC key ladder"
+	default WOZ_CRYPTO_PSA
+	depends on WOZ_ALIRO
+	help
+	  Selects which file defines crypto_aes_ecb_encrypt() (ccc_kdf.h) — the one
+	  AES-128/256 ECB primitive the whole CCC key ladder and AES-CCM* build on.
+	  This is the only per-platform crypto seam.
+
+config WOZ_CRYPTO_PSA
+	bool "PSA Crypto (nRF/NCS default)"
+	help
+	  ccc_crypto_psa.c over the PSA Crypto API (nrf_security / CryptoCell on nRF).
+	  Default: the nRF build is byte-identical to before this option existed.
+
+config WOZ_CRYPTO_MBEDTLS
+	bool "mbedTLS AES (ESP32-S3 / generic Zephyr)"
+	select MBEDTLS
+	help
+	  ccc_crypto_mbedtls.c over mbedtls_aes_crypt_ecb — no PSA dependency, for
+	  SoCs without nrf_security's PSA backend (e.g. ESP32-S3, which has
+	  hardware-accelerated AES via mbedTLS). See ports/esp32-idf/.
+endchoice
+
+config ULTRAWIDELOCK_UWB_SELFTEST
+	bool "One-shot UWB init self-test after boot (diagnostic; no iPhone)"
+	depends on WOZ_ALIRO
+	help
+	  Fire ultrawidelock_uwb_start_aliro() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
+	  with a canned ranging config, to capture the DW3000 bring-up + Pre-POLL listen
+	  DIAG over RTT WITHOUT commissioning + a live Wallet Aliro UWB solicitation. This
+	  isolates the HW/radio init from the Aliro credential path. Diagnostic only —
+	  never enable in a shipping image.
+
+config ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS
+	int "UWB self-test delay after boot (ms)"
+	depends on ULTRAWIDELOCK_UWB_SELFTEST
+	default 15000
+	help
+	  Delay before the one-shot ultrawidelock_uwb_start_aliro(). Keep generous so Thread has
+	  rejoined on an already-commissioned device before the deferred 128 MHz
+	  HFCLK boost that the first UWB entry performs.
+
+config WOZ_PRETTY_SHELL
+	bool "Clean/curated UART log output (suppress bring-up diagnostics)"
+	depends on WOZ_ALIRO
+	help
+	  Collapse the verbose bring-up console into a curated timeline (tap ->
+	  auth -> ranging -> unlock). When set, the per-frame RX diagnostics in
+	  ccc_shim_rx.c / uwb_rxdiag.c compile to no-ops (DIAGK, see ultrawidelock_diag.h),
+	  one clean per-block ranging line is emitted instead, and the app re-emits
+	  the commissioning QR URL through its own logger so Matter can drop to WRN.
+	  Pairs with apps/nrf5340dk-lock/overlays/woz-pretty.conf, which carries the
+	  matching log-level cuts. Default n = today's verbose output, byte-for-byte.
+	  Reverse by dropping the PRETTY=1 build switch (flag returns to n).
+
+config WOZ_RANGE_GATE_STRICT
+	bool "Range gate: enforce STS quality (drop suspect blocks)"
+	depends on WOZ_ALIRO
+	help
+	  Enforce the layer-2 STS-quality check: a block whose STS correlated poorly
+	  is dropped rather than fed to the unlock seam. Default n = shadow mode: the
+	  verdict is logged (GATE line) but every block still latches, so a mis-tuned
+	  threshold cannot block a real unlock. Enable only after sizing
+	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
+	  (consensus) are always active in fira_session.c regardless of this option.
+
+config ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT
+	bool "Responder ToF: use the same-round Final-capture timestamp snapshot"
+	depends on WOZ_ALIRO
+	help
+	  When Final_Data is decoded, compute the DS-TWR reply/round intervals from
+	  the snapshot latched at Final RX (ccc_shim_rx.c, g_final_reply1/round2)
+	  instead of the live t2/t3/t6 globals. On a single-core SoC where BLE shares
+	  the core with the ranging callbacks (e.g. the DWM3001CDK's nRF52833), the
+	  next round's POLL/Response can overwrite the live timestamps before
+	  Final_Data is processed, yielding km-scale garbage distances. The snapshot
+	  path is timing-independent. ESP32 always uses it (its dispatch is likewise
+	  jittery); enable this on any single-core Zephyr reader. Default n keeps the
+	  dual-core nRF5340's live-recompute path unchanged.
+
+config ULTRAWIDELOCK_UWB_CIRDIAG
+	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"
+	depends on WOZ_ALIRO
+	help
+	  Latch the DW3000's CIA diagnostic bank on each reception (Ipatov/STS
+	  first-path index, F1..F3, power, peak, STS quality, crystal offset) and
+	  emit it as one "[ALAB] ev=uwb.diag" line from task context, plus an
+	  independently-armed 64-tap Ipatov window around the first path
+	  ("[ALAB] ev=uwb.cir").
+	  OFF at boot; `aliro cir on` arms the summary, `aliro cir dump on` the
+	  taps, and `aliro cir probe` runs a one-shot accumulator read diagnostic.
+	  The window read is only valid while the receiver is idle, so it is taken
+	  before the RX shim re-arms and only on one Final in four; even so it costs
+	  walk-up latency while armed, so arm it only for a capture run. Default n =
+	  compiled out, and the two RX-shim call sites cost nothing.
+
+	  MEASURED on the nRF52833 at -Os: the 16-record deferred ring is 4,352 B of
+	  BSS (16 x 272 B), which is most of what this costs. On a part with about
+	  16 KB of RAM free that is a capture-image decision, not a shipping one.
+
+if ULTRAWIDELOCK_UWB_CIRDIAG
+
+config ULTRAWIDELOCK_UWB_CIRDIAG_DRAIN_PACE_MS
+	int "Sleep between records while draining the CIR ring, milliseconds"
+	default 0
+	range 0 1000
+	help
+	  0 keeps the drain a tight loop, which is right wherever the console can
+	  absorb it: the ESP32 writes to a UART with flow control and the nRF5340 DK
+	  has a real serial port.
+
+	  IT IS NOT RIGHT ON THE DWM3001CDK. That board's only console is SEGGER RTT
+	  with an 8 KB up-buffer in NO_BLOCK_SKIP mode (apps/dwm3001cdk-lock/prj.conf explains why
+	  BLOCK_IF_FIFO_FULL is not an option there: it hangs the firmware whenever no
+	  debugger is draining). A full drain is 16 records x 64 taps = 1,024 lines,
+	  about 46 KB, written by memcpy far faster than probe-rs polls it out. Most
+	  of the capture would be silently discarded, and NO_BLOCK_SKIP discards the
+	  NEWEST writes, so what survives is the beginning of the drain and the rest
+	  simply is not there. That failure is invisible: the lines that never
+	  happened look exactly like receptions that never happened.
+
+	  ~40 ms per record keeps an 8 KB buffer ahead of the writer and costs about
+	  0.6 s for a full ring, off the ranging path either way. Set it in the
+	  capture image's overlay, not globally.
+
+config ULTRAWIDELOCK_UWB_CIRDIAG_SUMMARY_EVERY
+	int "Latch the diagnostic summary on one reception in N"
+	default 1
+	range 1 64
+	help
+	  1 latches every reception, which is what the ESP32 and the nRF5340 DK have
+	  always done and what they keep by default.
+
+	  RAISE IT ON THE DWM3001CDK. Every latch costs a dwt_readdiagnostics plus
+	  (unless SUMMARY_LEAN) three more SPI reads, on a 64 MHz single core at
+	  8 MHz SPI, inside the ~1836 us ranging arm deadline. Measured 2026-08-07:
+	  with the summary armed on every reception that board never transmitted a
+	  Response at all -- tx0, no range, no unlock -- while the plain image on the
+	  same board ranged 22-443 cm.
+
+	  Sampling costs almost nothing for what this feeds. A walk-up produces
+	  hundreds of receptions and the LOS/NLOS model needs a few hundred per class
+	  in total, so 8 still fills a training set from a handful of approaches.
+
+	  Window captures are NEVER decimated by this: they are already throttled to
+	  one Final in CIRDIAG_CIR_EVERY, and dropping one is dropping the only
+	  reception in the block that carries taps.
+
+config ULTRAWIDELOCK_UWB_CIRDIAG_SUMMARY_LEAN
+	bool "Latch only the fields the scalar feature set uses"
+	help
+	  n reads and reports everything: STS quality, STS status and the SYS_CFG
+	  mode bits alongside the Ipatov fields. Default, so existing targets are
+	  unchanged.
+
+	  y drops the three extra SPI reads per latch and narrows the chip-side CIA
+	  configuration to DW_CIA_DIAG_LOG_ALL, without the LOG_MAX double-buffer
+	  copy set. The `ev=uwb.diag` line then omits sp/sq/sqr/ss/ssr rather than
+	  reporting zeros for them, because a field that was never read must not look
+	  like a field that measured zero.
+
+	  What survives is exactly what the model training consumes:
+	  ipatovPower, ipatovF1..F3 and ipatovAccumCount give fp_pwr, rx_pwr,
+	  pwr_diff and rxpacc, which is the whole feature set.
+	  Say y with SUMMARY_EVERY on any board where the diagnostics are
+	  competing with a ranging deadline.
+
+config ULTRAWIDELOCK_UWB_CIRDIAG_SUMMARY_FINAL_ONLY
+	bool "Latch only on the reception that has no deadline behind it"
+	help
+	  n keeps SUMMARY_EVERY's blunt one-in-N over every reception, which is what
+	  a training capture wants: it does not care WHICH receptions it gets, only
+	  that it gets a few hundred per class without breaking the round.
+
+	  y latches only on the Final -- the caller says which reception that is
+	  (the capture's is_final argument, sampled from the responder state machine
+	  before the re-arm consumes it). The Pre-POLL has the POLL armed behind it
+	  and the POLL has the Final armed ~2 ms out; the Final has the whole
+	  ~192 ms inter-block gap, which is where the ~972 us read belongs.
+
+	  SAY y WHEN A CLASSIFIER CONSUMES THIS, not when a training set does. One
+	  latch per ranging block is exactly one per approach-controller sample, so a
+	  five-sample median window carries five independent channel calls. Under
+	  SUMMARY_EVERY=8 it carries at most one, and a majority-of-three vote can
+	  never be reached — the classifier would be compiled in, fed, and unable to
+	  decide anything.
+
+	  This does NOT make the read free, and it is not the same claim the every-
+	  reception measurement refuted. That run latched on POLLs too and the board
+	  stopped transmitting Responses entirely. Restricting to the Final is the
+	  hypothesis that the deadline was the problem rather than the SPI cost --
+	  and a walk-up PROVED it on 2026-08-07: one latch per block for 471 blocks,
+	  ranges 0-505 cm, six unlock/relock cycles, rdcyc 62,232 DWT cycles (972 us
+	  at 64 cyc/us, the bench figure exactly) with a worst case of 79,541
+	  (~1.24 ms), all inside the ~192 ms gap. The acceptance criteria stay
+	  written down because a regression has the same signatures: tx0 with no
+	  range means the read is back on a deadline; clean ranging with ZERO [ALAB]
+	  lines is NEITHER outcome -- it means the latch is not running at all.
+
+	  Keyed on the capture's is_final argument and nothing else. It was first
+	  keyed on deadline_pending, and the 2026-08-07 walk refuted that in exactly
+	  the third way above: the summary call site passes deadline_pending=true
+	  for every reception including the Final, so the image ranged and unlocked
+	  normally and latched nothing. The stream must also be ARMED
+	  (uwb_cirdiag_set_enabled); the classifier images do that at boot in
+	  apps/dwm3001cdk-lock/src/main.c.
+
+endif # ULTRAWIDELOCK_UWB_CIRDIAG
+
+config WOZ_FLIGHT_RECORDER
+	bool "Flight recorder: record a live walk-up for host replay"
+	depends on WOZ_ALIRO
+	help
+	  Record the DS-TWR responder's inputs (session config + every received
+	  frame and its DW3000 register snapshot, in dispatch order) into a RAM ring,
+	  dumped over the console with `fr dump` as hex `[FREC]` lines. The capture
+	  converts to a .frc trace that the host build replays deterministically
+	  (tests/host/fr_replay.c).
+	  OFF at boot; `fr on` before a walk-up, `fr off` after. Like the `lab`/
+	  `uwbdiag` traces the capture reads extra registers while armed, so it costs
+	  walk-up latency — arm it only for a capture run. Default n = compiled out,
+	  the recorder call sites in ccc_shim_rx.c cost nothing.
+
+config WOZ_FLIGHT_RECORDER_BYTES
+	int "Flight recorder RAM ring size (bytes)"
+	depends on WOZ_FLIGHT_RECORDER
+	default 16384
+	help
+	  Capacity of the static capture ring. One walk-up is a few dozen events at
+	  ~40-170 bytes each; 16 KiB holds a full session with headroom. When the ring
+	  fills, capture stops and the END record is flagged truncated (the replayable
+	  prefix is preserved).
+
+config WOZ_E2E_TRACE
+	bool "End-to-end [ULTRAWIDELOCK_TRACE] lines from the DW3000 interrupt callbacks"
+	depends on ULTRAWIDELOCK_UWB
+	help
+	  Turn the ULTRAWIDELOCK_TRACE() macro in src/facade/trace.h into a real LOG_INF, so
+	  the four DW3000 callbacks in src/driver/uwb_isr.c each emit one
+	  "[ULTRAWIDELOCK_TRACE] src=lock stage=..." line: rx.ok (with the first 8 frame
+	  bytes), rx.to, rx.err and tx.done. Meant for bench bring-up, when what you
+	  need is proof of which callback fired and in what order.
+
+	  Do NOT enable it for a walk-up. All four sites are in interrupt context
+	  and three of them sit immediately in front of ultrawidelock_uwb_arm_rx(), so the log
+	  is charged against the ~1836 us re-arm deadline and ranging will fail.
+	  Default n = the macro stays an if(0) no-op that still type-checks its
+	  arguments, so the call sites cost nothing.

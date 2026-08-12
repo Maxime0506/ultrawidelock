@@ -3,7 +3,7 @@
 # uwb_engine_scope_check.sh — keep the DW3000 engine's file set closed.
 #
 # WHAT IS BEING PREVENTED. The public UWB contract is the six functions in
-# modules/woz_uwb/include/ultrawidelock/uwb.h; everything that names the Qorvo
+# modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h; everything that names the Qorvo
 # radio API (dwt_* calls and types, deca_*.h headers) is the DW3000 engine
 # backend behind that contract, and it is a closed set of files. A dwt_ call or
 # deca include added anywhere else quietly re-couples the chip-agnostic zone —
@@ -23,12 +23,12 @@
 #   modules/ultrawidelock_dw3000/**            the vendored driver and its integration
 #   uwb_seam.h                       the engine's own call discipline (dwt-typed
 #                                    by design; see uwb_seam_check.sh)
-#   modules/woz_uwb/src/driver/**    radio init, ISR, RX/CIR diagnostics
+#   modules/ultrawidelock_uwb/src/driver/**    radio init, ISR, RX/CIR diagnostics
 #   ccc_shim_rx.c ccc_shim_wrap.c    the CCC STS shims that program the radio
 #   ccc_sts.c                        the register-level key/IV packer
 #   facade/flight_recorder.c         reads radio timestamps into the flight log
 #   ports/zephyr/dw3000/**           the wiring seams' Zephyr backend
-#   ports/esp32/components/woz_uwb/port/**  the same two seams plus stubs, ESP32
+#   ports/esp32/components/ultrawidelock_uwb/port/**  the same two seams plus stubs, ESP32
 #   ports/freertos-nrf52833/uwb/**   the same again, standalone FreeRTOS: the
 #                                    DW3110 SPI and reset/IRQ/wake backends,
 #                                    which call dwt_isr and dwt_checkidlerc as
@@ -71,14 +71,14 @@ strip_trailing_comments() { sed -E 's|//.*$||; s|/\*.*$||'; }
 
 # The DW3000 engine file set. See the header for why each entry is not a hole.
 ENGINE_RE='^(modules/ultrawidelock_dw3000/
-|modules/woz_uwb/include/uwb_seam\.h
-|modules/woz_uwb/src/driver/
-|modules/woz_uwb/src/ccc/ccc_shim_rx\.c
-|modules/woz_uwb/src/ccc/ccc_shim_wrap\.c
-|modules/woz_uwb/src/ccc/ccc_sts\.c
-|modules/woz_uwb/src/facade/flight_recorder\.c
+|modules/ultrawidelock_uwb/include/uwb_seam\.h
+|modules/ultrawidelock_uwb/src/driver/
+|modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx\.c
+|modules/ultrawidelock_uwb/src/ccc/ccc_shim_wrap\.c
+|modules/ultrawidelock_uwb/src/ccc/ccc_sts\.c
+|modules/ultrawidelock_uwb/src/facade/flight_recorder\.c
 |ports/zephyr/dw3000/
-|ports/esp32/components/woz_uwb/port/
+|ports/esp32/components/ultrawidelock_uwb/port/
 |ports/freertos-nrf52833/uwb/
 |examples/zephyr/anchor/
 |examples/zephyr/nrf5340dk-initiator/
@@ -121,9 +121,9 @@ scan() {
 # A moved or renamed engine would otherwise leave the gate scanning nothing.
 check_zone() {
 	local missing=0 f
-	for f in modules/woz_uwb/src/driver/uwb_min.c \
-		modules/woz_uwb/src/ccc/ccc_shim_rx.c \
-		modules/woz_uwb/include/ultrawidelock/uwb.h; do
+	for f in modules/ultrawidelock_uwb/src/driver/uwb_min.c \
+		modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx.c \
+		modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h; do
 		if [ ! -f "$f" ]; then
 			printf '%s  engine landmark missing: %s (update ENGINE_RE and this list)%s\n' \
 				"$R" "$f" "$Z" >&2
@@ -149,7 +149,7 @@ self_test() {
 	local should_not=(
 		'	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;'
 		'	my_dwt_helper(mode);'
-		'	woz_uwb_configure_phy(&cfg);'
+		'	ultrawidelock_uwb_configure_phy(&cfg);'
 		'	uint32_t f1;'
 	)
 
@@ -195,10 +195,10 @@ self_test() {
 
 	# The engine set must not quietly grow to cover the chip-agnostic zone.
 	local f
-	for f in modules/woz_uwb/src/fira/fira_session.c \
-		modules/woz_uwb/src/facade/woz_uwb_facade.c \
-		modules/woz_uwb/src/ccc/ccc_shim.c \
-		modules/woz_uwb/src/ccc/ccc_kdf.c \
+	for f in modules/ultrawidelock_uwb/src/fira/fira_session.c \
+		modules/ultrawidelock_uwb/src/facade/ultrawidelock_uwb_facade.c \
+		modules/ultrawidelock_uwb/src/ccc/ccc_shim.c \
+		modules/ultrawidelock_uwb/src/ccc/ccc_kdf.c \
 		apps/nrf5340dk-lock/build.sh; do
 		if [[ $f =~ $ENGINE_RE ]]; then
 			printf '%s  self-test FAILED: %s is exempt, but it is chip-agnostic%s\n' \

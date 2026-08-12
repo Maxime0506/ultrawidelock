@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 SHARED="$HERE/../../../tests/shared"
 ALIRO="$HERE/../../../modules/woz_aliro"
 WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
-UWB_INC="$HERE/../../../modules/woz_uwb/include"
+UWB_INC="$HERE/../../../modules/ultrawidelock_uwb/include"
 ESP_COMPONENTS="$REPO_ROOT/ports/esp32/components"
 READER_MAIN="$REPO_ROOT/examples/esp32/reader/main"
 
@@ -129,17 +129,17 @@ rm -f "$CSBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (S3 dual-core) =="
 DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_IDF_TARGET_ESP32S3=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=2 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
-   -I "$SDKFAKE" -I "$ESP_COMPONENTS/woz_uwb/port" \
+   -I "$SDKFAKE" -I "$ESP_COMPONENTS/ultrawidelock_uwb/port" \
    -I "$UWB_INC" \
    -I "$HERE/../../../modules/ultrawidelock_dw3000/include" \
    -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
-   "$ESP_COMPONENTS/woz_uwb/port/dw3000_hw.c" \
-   "$ESP_COMPONENTS/woz_uwb/port/dw3000_spi.c" \
+   "$ESP_COMPONENTS/ultrawidelock_uwb/port/dw3000_hw.c" \
+   "$ESP_COMPONENTS/ultrawidelock_uwb/port/dw3000_spi.c" \
    "$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$DBIN"
 "$DBIN"
 rm -f "$DBIN"
@@ -147,17 +147,17 @@ rm -f "$DBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (C6 single-core) =="
 DBIN="$(mktemp -t esp_dw3000_port_c6.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_IDF_TARGET_ESP32C6=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
-   -I "$SDKFAKE" -I "$ESP_COMPONENTS/woz_uwb/port" \
+   -I "$SDKFAKE" -I "$ESP_COMPONENTS/ultrawidelock_uwb/port" \
    -I "$UWB_INC" \
    -I "$HERE/../../../modules/ultrawidelock_dw3000/include" \
    -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
-   "$ESP_COMPONENTS/woz_uwb/port/dw3000_hw.c" \
-   "$ESP_COMPONENTS/woz_uwb/port/dw3000_spi.c" \
+   "$ESP_COMPONENTS/ultrawidelock_uwb/port/dw3000_hw.c" \
+   "$ESP_COMPONENTS/ultrawidelock_uwb/port/dw3000_spi.c" \
    "$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$DBIN"
 "$DBIN"
 rm -f "$DBIN"
@@ -165,11 +165,11 @@ rm -f "$DBIN"
 echo
 echo "== host: seam RX-callback shim chaining =="
 SBIN2="$(mktemp -t esp_seam_stubs.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    -I "$UWB_INC" \
    "$HERE/test_esp_seam_stubs.c" \
-   "$ESP_COMPONENTS/woz_uwb/port/woz_seam_stubs.c" -o "$SBIN2"
+   "$ESP_COMPONENTS/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c" -o "$SBIN2"
 "$SBIN2"
 rm -f "$SBIN2"
 
@@ -186,7 +186,7 @@ MBIN="$(mktemp -t esp_matter_lock.XXXXXX)"
 cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
 cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
-   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
    -DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \

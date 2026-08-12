@@ -51,7 +51,7 @@
 
 #include "esp_log.h"
 #include "aliro_lat.h"
-#include "woz_diag.h"
+#include "ultrawidelock_diag.h"
 #include "uwb_cirdiag.h"
 
 #include "app_priv.h"
@@ -1197,8 +1197,8 @@ static void section_shell(void)
 	okc("aliro usage on missing arg", run_cmd("aliro", 1) == 0);
 	okc("aliro usage on unknown arg", run_cmd("aliro", 2, "bogus") == 0);
 
-	okc("uwbdiag on", run_cmd("uwbdiag", 2, "on") == 0 && woz_uwb_diag_on == 1);
-	okc("uwbdiag off", run_cmd("uwbdiag", 2, "off") == 0 && woz_uwb_diag_on == 0);
+	okc("uwbdiag on", run_cmd("uwbdiag", 2, "on") == 0 && ultrawidelock_uwb_diag_on == 1);
+	okc("uwbdiag off", run_cmd("uwbdiag", 2, "off") == 0 && ultrawidelock_uwb_diag_on == 0);
 	okc("uwbdiag bare prints state", run_cmd("uwbdiag", 1) == 0);
 	okc("uwbdiag usage on bad arg", run_cmd("uwbdiag", 2, "maybe") == 0);
 

@@ -29,7 +29,7 @@
 #include "uwb_cirdiag.h"
 #include "aliro_lat.h"
 #include <ultrawidelock/reader.h>
-#include "woz_diag.h"
+#include "ultrawidelock_diag.h"
 #include <ultrawidelock/uwb.h>
 
 /* ---- DoorLockServer ------------------------------------------------------- */
@@ -1139,7 +1139,7 @@ bool aliro_lab_enabled(void)
 }
 
 /* uwb_cirdiag doubles: app_shell's `lab`/`lab cir` command drives these; the
- * real latch/stream lives in the woz_uwb driver, out of the matter-lock suite. */
+ * real latch/stream lives in the ultrawidelock_uwb driver, out of the matter-lock suite. */
 static int mfk_cir_on;
 static int mfk_cir_dump_on;
 
@@ -1204,7 +1204,7 @@ void aliro_lat_report(void)
 	mfk_lat_reports++;
 }
 
-bool woz_uwb_last_range_cm(int32_t *cm_out)
+bool ultrawidelock_uwb_last_range_cm(int32_t *cm_out)
 {
 	if (!mfk_last_have) {
 		return false;
@@ -1213,7 +1213,7 @@ bool woz_uwb_last_range_cm(int32_t *cm_out)
 	return true;
 }
 
-bool woz_uwb_trusted_range_cm(int32_t *cm_out)
+bool ultrawidelock_uwb_trusted_range_cm(int32_t *cm_out)
 {
 	if (!mfk_trusted_have) {
 		return false;
@@ -1222,12 +1222,12 @@ bool woz_uwb_trusted_range_cm(int32_t *cm_out)
 	return true;
 }
 
-void woz_uwb_set_range_listener(void (*cb)(void))
+void ultrawidelock_uwb_set_range_listener(void (*cb)(void))
 {
 	mfk_range_listener = cb;
 }
 
-volatile int woz_uwb_diag_on = WOZ_UWB_DIAG_DEFAULT;
+volatile int ultrawidelock_uwb_diag_on = ULTRAWIDELOCK_UWB_DIAG_DEFAULT;
 
 } /* extern "C" */
 

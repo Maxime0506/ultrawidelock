@@ -3,7 +3,7 @@
  *
  * A three-message double-sided two-way ranging round between two boards this
  * project owns both ends of. No CCC, no Aliro, no credential, no phone: the
- * whole thing runs at the CONFIG_WOZ_UWB tier, where uwb_seam.h inlines to the
+ * whole thing runs at the CONFIG_ULTRAWIDELOCK_UWB tier, where uwb_seam.h inlines to the
  * bare decadriver and there is no STS engine to bind.
  *
  *   initiator                     responder

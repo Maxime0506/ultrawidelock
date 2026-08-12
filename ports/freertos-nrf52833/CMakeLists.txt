@@ -408,8 +408,8 @@ target_include_directories(woz_aliro PUBLIC
   "${WOZ_MODULES_DIR}/woz_aliro/include"
 )
 # woz_radio for the NimBLE host and its hooks, woz_storage for the provisioning
-# backend the identity is read through, woz_uwb for the ranging contract.
-target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage woz_uwb)
+# backend the identity is read through, ultrawidelock_uwb for the ranging contract.
+target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage ultrawidelock_uwb)
 
 # ----------------------------------------------------------------------------
 # 802.15.4 layer: Nordic's radio driver, its service-layer binary, and the
@@ -626,7 +626,7 @@ set_source_files_properties(
   "-include;${WOZ_PORT_DIR}/thread/ot_compat/woz_freertos_ot_config.h;-Wno-unused-parameter")
 
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread woz_aliro)
+target_link_libraries(woz_freertos_port INTERFACE woz_storage ultrawidelock_uwb woz_thread woz_aliro)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
@@ -654,7 +654,7 @@ target_compile_options(woz_aliro PRIVATE
 )
 
 foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls
-                    woz_storage woz_uwb woz_aliro)
+                    woz_storage ultrawidelock_uwb woz_aliro)
   target_compile_options(${_woz_target} PRIVATE
     -ffunction-sections
     -fdata-sections

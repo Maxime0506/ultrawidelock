@@ -2,7 +2,7 @@
  * @file test_uwb_selftest.c — the Kconfig-gated boot self-test (uwb_selftest.c)
  * against a fake facade and the host OSAL's virtual clock. Pins the
  * arm-at-init delay and the canned Aliro ranging config the worker hands to
- * woz_uwb_start_aliro — the facade itself is a recording double, so no
+ * ultrawidelock_uwb_start_aliro — the facade itself is a recording double, so no
  * ranging path runs.
  */
 #include <string.h>
@@ -21,7 +21,7 @@ void test_uwb_selftest(void)
 	T_EQ("init rc", woz_init_uwb_selftest_init(), 0);
 	T_EQ("nothing started yet", (long)drvfake.start_aliro_calls, 0L);
 	T_EQ("quiet until the Kconfig delay",
-	     (long)woz_osal_host_advance_ms(CONFIG_WOZ_UWB_SELFTEST_DELAY_MS - 1), 0L);
+	     (long)woz_osal_host_advance_ms(CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS - 1), 0L);
 	T_EQ("fires after the Kconfig delay", (long)woz_osal_host_advance_ms(1), 1L);
 
 	t_group("worker: canned config reaches the facade");
@@ -44,7 +44,7 @@ void test_uwb_selftest(void)
 	t_group("worker: failure path only logs");
 	drvfake.start_aliro_ret = -5;
 	T_EQ("re-arm rc", woz_init_uwb_selftest_init(), 0);
-	T_EQ("worker fires again", (long)woz_osal_host_advance_ms(CONFIG_WOZ_UWB_SELFTEST_DELAY_MS),
-	     1L);
+	T_EQ("worker fires again",
+	     (long)woz_osal_host_advance_ms(CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS), 1L);
 	T_EQ("second run still calls through", (long)drvfake.start_aliro_calls, 2L);
 }

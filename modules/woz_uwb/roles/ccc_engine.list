@@ -1,9 +1,0 @@
-# woz_uwb tier: reader-side CCC STS engine + facade (CONFIG_WOZ_ALIRO) — STS
-# generation, RX-arm shim, public facade; host-compiled against the RX stubs.
-# Consumers: modules/woz_uwb/CMakeLists.txt, ports/esp32/components/woz_uwb,
-# tests/host/sources.sh. One repo-root-relative path per line, sorted; add HERE only.
-modules/woz_uwb/src/ccc/ccc_shim.c
-modules/woz_uwb/src/ccc/ccc_shim_rx.c
-modules/woz_uwb/src/ccc/ccc_shim_wrap.c
-modules/woz_uwb/src/ccc/ccc_sts.c
-modules/woz_uwb/src/facade/woz_uwb_facade.c

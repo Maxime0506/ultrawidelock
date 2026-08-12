@@ -1,7 +1,0 @@
-# woz_uwb tier: CCC key schedule + MAC + session config — role-neutral (neither
-# end knows which side it is on), so the initiator links the same TUs the reader
-# does. Consumers: modules/woz_uwb/CMakeLists.txt (CONFIG_WOZ_ALIRO), ports/esp32/
-# components/woz_uwb, examples/zephyr/nrf5340dk-initiator, tests/host/sources.sh. Add HERE only.
-modules/woz_uwb/src/ccc/ccc_kdf.c
-modules/woz_uwb/src/ccc/ccc_mac.c
-modules/woz_uwb/src/ccc/ccc_session.c

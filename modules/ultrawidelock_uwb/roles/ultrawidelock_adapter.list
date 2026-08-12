@@ -1,0 +1,8 @@
+# ultrawidelock_uwb tier: reader-side Aliro ranging-setup adapter (CONFIG_WOZ_ALIRO) —
+# composes the M1-M4 handshake over the cherry_ccc_* seam on our MAC.
+# Consumers: modules/ultrawidelock_uwb/CMakeLists.txt, ports/esp32/components/ultrawidelock_uwb,
+# tests/host/sources.sh. One repo-root-relative path per line, sorted; add HERE only.
+modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_adapter.c
+modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_msg.c
+modules/ultrawidelock_uwb/src/cred/ultrawidelock_uwb_session.c
+modules/ultrawidelock_uwb/src/ccc/cherry_ccc_shim.c

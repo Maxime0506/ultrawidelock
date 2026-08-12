@@ -57,7 +57,7 @@ static K_WORK_DELAYABLE_DEFINE(s_work, prepoll_tx_work);
  * Apply the SP0 PHY the reader listens on.
  *
  * Every field here is the reader's own prepoll_apply_phy() in
- * modules/woz_uwb/src/ccc/ccc_shim_rx.c, and it has to stay that way: a Pre-POLL
+ * modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx.c, and it has to stay that way: a Pre-POLL
  * sent on a different preamble length, SFD type or data rate is not a frame the
  * reader can hear at all, and the failure looks exactly like a bad key.
  *
@@ -94,7 +94,7 @@ static int prepoll_tx_apply_phy(uint8_t channel, uint8_t preamble_code)
 	 * and force TRX off first, because dwt_configure on a live transceiver is
 	 * not defined to be safe. */
 	dwt_forcetrxoff();
-	if (woz_uwb_configure_phy(&cfg) != DWT_SUCCESS) {
+	if (ultrawidelock_uwb_configure_phy(&cfg) != DWT_SUCCESS) {
 		LOG_ERR("dwt_configure failed (ch=%u code=%u)", channel, preamble_code);
 		return -EIO;
 	}

@@ -11,8 +11,8 @@
  * real PSA/mbedTLS behaviour is out of scope.
  *
  * Files under test:
- *   modules/woz_uwb/src/ccc/ccc_crypto_psa.c      (as woz_test_psa_ecb)
- *   modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c  (as woz_test_mbedtls_ecb)
+ *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_psa.c      (as woz_test_psa_ecb)
+ *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_mbedtls.c  (as woz_test_mbedtls_ecb)
  *   modules/woz_aliro/src/aliro_prim_psa.c
  */
 #include <errno.h>

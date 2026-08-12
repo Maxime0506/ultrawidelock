@@ -17,8 +17,8 @@
 #include "woz_osal.h"
 
 /* Seam entry points + the init hook (see uwb_seam.h / uwb_rxdiag.c). */
-void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks);
-int32_t woz_uwb_configure_phy(dwt_config_t *config);
+void ultrawidelock_uwb_set_callbacks(dwt_callbacks_s *callbacks);
+int32_t ultrawidelock_uwb_configure_phy(dwt_config_t *config);
 extern int (*const woz_init_rxdiag_init)(void);
 
 /* The MAC-side callbacks our shims must chain into. */
@@ -75,7 +75,7 @@ void test_uwb_rxdiag(void)
 
 	t_group("callback interception");
 	drvfake_reset();
-	woz_uwb_set_callbacks(NULL);
+	ultrawidelock_uwb_set_callbacks(NULL);
 	T_EQ("NULL table forwarded", (long)drvfake.setcallbacks_calls, 1L);
 
 	dwt_callbacks_s cbs = {0};
@@ -84,7 +84,7 @@ void test_uwb_rxdiag(void)
 	cbs.cbRxTo = b_rxto;
 	cbs.cbRxErr = b_rxerr;
 	cbs.cbTxDone = b_txdone;
-	woz_uwb_set_callbacks(&cbs);
+	ultrawidelock_uwb_set_callbacks(&cbs);
 	T_OK("rx-ok shimmed", cbs.cbRxOk != NULL && cbs.cbRxOk != b_rxok);
 	T_OK("rx-to shimmed", cbs.cbRxTo != NULL && cbs.cbRxTo != b_rxto);
 	T_OK("rx-err shimmed", cbs.cbRxErr != NULL && cbs.cbRxErr != b_rxerr);
@@ -140,7 +140,7 @@ void test_uwb_rxdiag(void)
 	t_group("NULL handlers stay NULL");
 	dwt_callbacks_s none = {0};
 
-	woz_uwb_set_callbacks(&none);
+	ultrawidelock_uwb_set_callbacks(&none);
 	T_OK("all shims elided", none.cbRxOk == NULL && none.cbRxTo == NULL &&
 				  none.cbRxErr == NULL && none.cbTxDone == NULL);
 
@@ -152,16 +152,16 @@ void test_uwb_rxdiag(void)
 	cbs2.cbRxTo = b_rxto;
 	cbs2.cbRxErr = b_rxerr;
 	cbs2.cbTxDone = b_txdone;
-	woz_uwb_set_callbacks(&cbs2);
+	ultrawidelock_uwb_set_callbacks(&cbs2);
 	cbs = cbs2; /* the shimmed table the rest of the suite drives */
 
 	t_group("config wraps pass through");
 	dwt_config_t cfg = {0};
 
 	cfg.chan = 5;
-	T_EQ("configure chained", woz_uwb_configure_phy(&cfg), 0);
+	T_EQ("configure chained", ultrawidelock_uwb_configure_phy(&cfg), 0);
 	T_EQ("real configure hit", (long)drvfake.configure_calls, 1L);
-	T_EQ("NULL configure chained", woz_uwb_configure_phy(NULL), 0);
+	T_EQ("NULL configure chained", ultrawidelock_uwb_configure_phy(NULL), 0);
 
 	t_group("stream toggles drive the heartbeat");
 	uwb_rxdiag_stream_set(false);

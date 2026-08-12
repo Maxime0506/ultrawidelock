@@ -13,16 +13,16 @@
 
 #include "aliro_ble_central.h"
 #include <ultrawidelock/device.h>
-#include "aliro_device_uwb.h"
-#include "aliro_uwb_msg_spec.h"
+#include "ultrawidelock_device_uwb.h"
+#include "ultrawidelock_uwb_msg_spec.h"
 #include "prepoll_tx.h"
 
-/* aliro_uwb_msg_parser.c does LOG_MODULE_DECLARE(woz_aliro_uwb) and the module's
- * own registration lives in aliro_uwb_adapter.c, which is reader-side and not
+/* ultrawidelock_uwb_msg_parser.c does LOG_MODULE_DECLARE(woz_ultrawidelock_uwb) and the module's
+ * own registration lives in ultrawidelock_uwb_adapter.c, which is reader-side and not
  * linked here. Someone in this image has to own the symbol, so it is this file.
  * If the adapter is ever linked into the initiator as well, this becomes a
  * duplicate registration and the linker says so, which is the failure we want. */
-LOG_MODULE_REGISTER(woz_aliro_uwb, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
 
 /* The largest post-auth SDU either side sends. M1 is the big one: a config-id
  * list, a pulse-shape-combo list, a channel bitmask and a session id, all TLV.
@@ -92,7 +92,7 @@ static int send_plain(const uint8_t *plain, size_t plain_len)
 }
 
 /** Send a built M2/M4 and free it, whatever the outcome. */
-static int send_message(struct aliro_uwb_message *msg, const char *what)
+static int send_message(struct ultrawidelock_uwb_message *msg, const char *what)
 {
 	int rc;
 
@@ -101,7 +101,7 @@ static int send_message(struct aliro_uwb_message *msg, const char *what)
 		return -1;
 	}
 	rc = send_plain(msg->data, msg->len);
-	aliro_uwb_session_message_free(msg);
+	ultrawidelock_uwb_session_message_free(msg);
 	if (rc == 0) {
 		LOG_INF("-> %s sent", what);
 	}
@@ -112,19 +112,19 @@ static int send_message(struct aliro_uwb_message *msg, const char *what)
  * Ask the reader to begin ranging setup.
  *
  * Notification / Ranging / Initiate-Ranging, a zero-length attribute. The reader
- * routes this to aliro_uwb_session_init_setup(), which is the ONLY thing that
- * makes it emit M1 (aliro_uwb_msg.c, parse_ranging_notification -> the
- * INIT_RANGING case, and aliro_uwb_session.c's init_setup). Nothing else starts
+ * routes this to ultrawidelock_uwb_session_init_setup(), which is the ONLY thing that
+ * makes it emit M1 (ultrawidelock_uwb_msg.c, parse_ranging_notification -> the
+ * INIT_RANGING case, and ultrawidelock_uwb_session.c's init_setup). Nothing else starts
  * the exchange, exactly as Initiate-Access-Protocol is what starts AUTH0.
  */
 static int send_initiate_ranging(void)
 {
 	static const uint8_t k_initiate_ranging[] = {
-		ALIRO_UWB_PROTOCOL_TYPE_NOTIFICATION,
-		ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING,
+		ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_NOTIFICATION,
+		ULTRAWIDELOCK_UWB_MESSAGE_NOTIFICATION_RANGING,
 		0x00,
 		0x02, /* payload length */
-		ALIRO_UWB_MESSAGE_NOTIFICATION_RANGING_ATTR_INIT_RANGING,
+		ULTRAWIDELOCK_UWB_MESSAGE_NOTIFICATION_RANGING_ATTR_INIT_RANGING,
 		0x00, /* attribute length: the reader reads the id and ignores the value */
 	};
 
@@ -159,7 +159,7 @@ static void on_m1(const uint8_t *plain, size_t plain_len)
 	s_ran_multiplier = p.ran_multiplier;
 	/* M2 names exactly one channel, so the bitmask has exactly one bit and this
 	 * is a decode, not a preference. */
-	s_channel = (p.channel_bitmask & ALIRO_CHANNEL_BITMASK_CH9) ? 9u : 5u;
+	s_channel = (p.channel_bitmask & ULTRAWIDELOCK_CHANNEL_BITMASK_CH9) ? 9u : 5u;
 
 	if (send_message(aliro_dev_uwb_build_m2(&p), "M2") == 0) {
 		s_step = RANGING_M2_SENT;
@@ -185,7 +185,7 @@ static void on_m1(const uint8_t *plain, size_t plain_len)
  * because the reader's Pre-POLL listener is a continuous self-rearming RX
  * rather than a scheduled window. It starts to matter at the POLL.
  *
- * These are also the constants tests/host/test_aliro_device_uwb.c:124-134
+ * These are also the constants tests/host/test_ultrawidelock_device_uwb.c:124-134
  * drives the real reader session with, where they take it to state RANGING.
  */
 static void on_m3(const uint8_t *plain, size_t plain_len)
@@ -287,8 +287,8 @@ int initiator_ranging_on_sdu(uint16_t conn, const uint8_t *wire, size_t wire_len
 	id = plain[1];
 
 	switch (proto) {
-	case ALIRO_UWB_PROTOCOL_TYPE_NOTIFICATION:
-		if (id == ALIRO_UWB_MESSAGE_NOTIFICATION_READER_STATUS_AP) {
+	case ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_NOTIFICATION:
+		if (id == ULTRAWIDELOCK_UWB_MESSAGE_NOTIFICATION_READER_STATUS_AP) {
 			/* Reader-Status Access-Protocol-Completed. The reader will not
 			 * range until the device asks, and the device must not ask
 			 * before this arrives. */
@@ -303,12 +303,12 @@ int initiator_ranging_on_sdu(uint16_t conn, const uint8_t *wire, size_t wire_len
 		}
 		return 0;
 
-	case ALIRO_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE:
+	case ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE:
 		switch (id) {
-		case ALIRO_UWB_MESSAGE_SETUP_M1:
+		case ULTRAWIDELOCK_UWB_MESSAGE_SETUP_M1:
 			on_m1(plain, plain_len);
 			return 0;
-		case ALIRO_UWB_MESSAGE_SETUP_M3:
+		case ULTRAWIDELOCK_UWB_MESSAGE_SETUP_M3:
 			on_m3(plain, plain_len);
 			return 0;
 		default:

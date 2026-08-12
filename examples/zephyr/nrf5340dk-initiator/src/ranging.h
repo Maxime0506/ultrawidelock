@@ -5,7 +5,7 @@
  * The device mirror of modules/woz_aliro/src/aliro_ranging.c, which is
  * reader-only. Everything below the transport is existing code: the BleSK
  * channel is aliro_device.c's sc_ble and the M1-M4 codec is
- * modules/woz_uwb/src/aliro/aliro_device_uwb.c. This file is the glue that was
+ * modules/ultrawidelock_uwb/src/cred/ultrawidelock_device_uwb.c. This file is the glue that was
  * missing, and it lives in the application rather than in modules/ because the
  * radio half is only one frame deep: a device "ranging session" here is a BLE
  * conversation plus a Pre-POLL, and calling it aliro_device_ranging in modules/

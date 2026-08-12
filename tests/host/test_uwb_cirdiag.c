@@ -105,9 +105,10 @@ void test_uwb_cirdiag(void)
 	/* REGRESSION: a window must reach the ring from the capture that read it, not from the
 	 * deferred flush. The flush used to append, gated on a flag the NEXT capture cleared
 	 * unconditionally, so wherever a second frame lands inside one workqueue latency the append
-	 * never fired. That is every CDK round — CONFIG_WOZ_UWB_FINAL_SNAPSHOT arms a delayed SP0 RX
-	 * at the Final_Data slot, ~1 slot behind the Final — and a whole walk-up drained 0 records
-	 * while the summary lines flowed normally, which is what made it survive review. */
+	 * never fired. That is every CDK round — CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT arms a
+	 * delayed SP0 RX at the Final_Data slot, ~1 slot behind the Final — and a whole walk-up
+	 * drained 0 records while the summary lines flowed normally, which is what made it survive
+	 * review. */
 	{
 		uint32_t buffered = uwb_cirdiag_ring_count();
 

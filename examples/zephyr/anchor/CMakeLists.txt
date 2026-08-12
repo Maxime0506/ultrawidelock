@@ -5,7 +5,7 @@
 # bench tool that gets flashed over SWD and never updated over the air, so
 # giving it a signing key would add a setup step and buy nothing.
 #
-# Only two modules: woz_uwb for the CONFIG_WOZ_UWB tier and modules/ultrawidelock_dw3000 under
+# Only two modules: ultrawidelock_uwb for the CONFIG_ULTRAWIDELOCK_UWB tier and modules/ultrawidelock_dw3000 under
 # it. woz_aliro and ultrawidelock_matter are absent because nothing here is Aliro-aware --
 # that is the point of building at this tier.
 cmake_minimum_required(VERSION 3.20.0)
@@ -13,7 +13,7 @@ cmake_minimum_required(VERSION 3.20.0)
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 
 list(APPEND ZEPHYR_EXTRA_MODULES
-	"${REPO_ROOT}/modules/woz_uwb"
+	"${REPO_ROOT}/modules/ultrawidelock_uwb"
 	"${REPO_ROOT}/modules/ultrawidelock_dw3000"
 	"${REPO_ROOT}/ports/zephyr")
 
@@ -33,7 +33,7 @@ if(CONFIG_NRF_APPROTECT_LOCK OR CONFIG_NRF_SECURE_APPROTECT_LOCK)
 endif()
 
 # Two files, and nothing borrowed from the CCC tree. An earlier version of this
-# compiled modules/woz_uwb/src/ccc/ccc_mac.c in to reuse ccc_ds_twr_tof(); that
+# compiled modules/ultrawidelock_uwb/src/ccc/ccc_mac.c in to reuse ccc_ds_twr_tof(); that
 # helper accumulates its numerator unsigned and returns garbage below about a
 # metre, so anchor_twr.c computes the same formula signed instead. See the
 # comment at that computation for why this is the tree's own precedent rather

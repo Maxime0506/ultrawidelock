@@ -27,7 +27,7 @@
 #include <ultrawidelock/device.h>
 #include "ranging.h" /* the post-auth BleSK ranging-setup driver */
 
-#if defined(CONFIG_WOZ_UWB)
+#if defined(CONFIG_ULTRAWIDELOCK_UWB)
 #include "uwb_min.h"
 #if defined(CONFIG_SOC_SERIES_NRF53)
 #include <hal/nrf_clock.h>
@@ -327,7 +327,7 @@ static void on_closed(uint16_t conn_handle)
 	}
 }
 
-#if defined(CONFIG_WOZ_UWB)
+#if defined(CONFIG_ULTRAWIDELOCK_UWB)
 /**
  * Bring up the DWM3000EVB and report its DEV_ID.
  *

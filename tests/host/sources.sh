@@ -8,7 +8,7 @@
 # SHIM_SRCS  — non-inline shim definitions (STS register no-ops, RX stubs).
 # See coverage.sh for what is deliberately excluded and why.
 
-SRC="$ROOT/modules/woz_uwb/src"
+SRC="$ROOT/modules/ultrawidelock_uwb/src"
 ALIRO="$ROOT/modules/woz_aliro"
 SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
@@ -74,19 +74,19 @@ unit_srcs_from_role "$ALIRO/roles/wire_codecs.list"
 unit_srcs_from_role "$ALIRO/roles/hash.list"
 unit_srcs_from_role "$ALIRO/roles/reader_policy.list"
 
-# woz_uwb roles. Everything radio-free: the CCC key schedule and STS engine, the
+# ultrawidelock_uwb roles. Everything radio-free: the CCC key schedule and STS engine, the
 # M1-M4 codec on BOTH ends (aliro_device = initiator side, tested against the
 # real reader codec), the ranging estimator and responder state machine, and the
 # flight recorder's replay half. base_driver/responder_driver need a DW3000 and
 # are absent by design.
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/ccc_keys.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/ccc_engine.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/aliro_adapter.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/aliro_codec.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/aliro_device.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/base_engine.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/responder_engine.list"
-unit_srcs_from_role "$ROOT/modules/woz_uwb/roles/flight_recorder.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/ccc_keys.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/ccc_engine.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/ultrawidelock_adapter.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/ultrawidelock_codec.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/ultrawidelock_device.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/base_engine.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/responder_engine.list"
+unit_srcs_from_role "$ROOT/modules/ultrawidelock_uwb/roles/flight_recorder.list"
 
 TEST_SRCS=(
 	"$HOST/aes_ref.c"
@@ -119,15 +119,15 @@ TEST_SRCS=(
 	"$HOST/test_ccc_shim.c"
 	"$HOST/test_ccc_session.c"
 	"$HOST/test_prepoll_schedule.c"
-	"$HOST/test_aliro_builder.c"
-	"$HOST/test_aliro_parser.c"
-	"$HOST/test_aliro_adapter.c"
-	"$HOST/test_aliro_msg.c"
-	"$HOST/test_aliro_session.c"
+	"$HOST/test_ultrawidelock_uwb_msg_builder.c"
+	"$HOST/test_ultrawidelock_uwb_msg_parser.c"
+	"$HOST/test_ultrawidelock_uwb_adapter.c"
+	"$HOST/test_ultrawidelock_uwb_msg.c"
+	"$HOST/test_ultrawidelock_uwb_session.c"
 	"$HOST/test_aliro_prov.c"
 	"$HOST/test_aliro_hash.c"
 	"$HOST/test_aliro_assert.c"
-	"$HOST/test_aliro_device_uwb.c"
+	"$HOST/test_ultrawidelock_device_uwb.c"
 	"$HOST/test_cherry.c"
 	"$HOST/test_fira.c"
 	"$HOST/test_facade.c"
@@ -172,11 +172,11 @@ INCS=(
 	-I"$ROOT/modules/woz_aliro_stack/src/protocol"
 	-I"$ROOT/modules/ultrawidelock_nfc/include"
 	-I"$ROOT/modules/ultrawidelock_nfc/src"
-	-I"$ROOT/modules/woz_uwb/include"
+	-I"$ROOT/modules/ultrawidelock_uwb/include"
 	-I"$SRC/ccc"
 	-I"$SRC/driver"
-	-I"$SRC/aliro"
-	-I"$SRC/aliro/include"
+	-I"$SRC/cred"
+	-I"$SRC/cred/include"
 	-I"$SRC/fira"
 	-I"$SRC/facade"
 	-I"$ROOT/ports/zephyr/shell"

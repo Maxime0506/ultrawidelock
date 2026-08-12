@@ -14,11 +14,11 @@ project(aliro_initiator_nrf5340dk)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
-set(UWB_INC "${REPO_ROOT}/modules/woz_uwb/include")
-set(UWB "${REPO_ROOT}/modules/woz_uwb/src/aliro")
-set(CCC "${REPO_ROOT}/modules/woz_uwb/src/ccc")
+set(UWB_INC "${REPO_ROOT}/modules/ultrawidelock_uwb/include")
+set(UWB "${REPO_ROOT}/modules/ultrawidelock_uwb/src/cred")
+set(CCC "${REPO_ROOT}/modules/ultrawidelock_uwb/src/ccc")
 
-# Shared sources by role manifest (modules/{woz_aliro,woz_uwb}/roles/*.list) —
+# Shared sources by role manifest (modules/{woz_aliro,ultrawidelock_uwb}/roles/*.list) —
 # the same lists the ESP32 components and the host suite read.
 include("${REPO_ROOT}/cmake/woz_roles.cmake")
 woz_role_sources("${ALIRO}/roles/ble_central.list" ALIRO_BLE_CENTRAL_SRCS)
@@ -26,9 +26,9 @@ woz_role_sources("${ALIRO}/roles/device.list" ALIRO_DEVICE_SRCS)
 woz_role_sources("${ALIRO}/roles/apdu.list" ALIRO_APDU_SRCS)
 woz_role_sources("${ALIRO}/roles/crypto.list" ALIRO_CRYPTO_SRCS)
 woz_role_sources("${ALIRO}/roles/hash.list" ALIRO_HASH_SRCS)
-set(UWBROLES "${REPO_ROOT}/modules/woz_uwb/roles")
-woz_role_sources("${UWBROLES}/aliro_device.list" UWB_DEVICE_SRCS)
-woz_role_sources("${UWBROLES}/aliro_codec.list" UWB_CODEC_SRCS)
+set(UWBROLES "${REPO_ROOT}/modules/ultrawidelock_uwb/roles")
+woz_role_sources("${UWBROLES}/ultrawidelock_device.list" UWB_DEVICE_SRCS)
+woz_role_sources("${UWBROLES}/ultrawidelock_codec.list" UWB_CODEC_SRCS)
 woz_role_sources("${UWBROLES}/ccc_keys.list" UWB_CCC_KEYS_SRCS)
 woz_role_sources("${UWBROLES}/crypto_psa.list" UWB_CRYPTO_SRCS)
 
@@ -48,18 +48,18 @@ target_sources(app PRIVATE
 	${ALIRO_APDU_SRCS}
 	${ALIRO_CRYPTO_SRCS}
 	${ALIRO_HASH_SRCS}
-	# UWB ranging SETUP, device side. Roles, not the woz_uwb Zephyr module:
-	# that module's CMakeLists gates everything on CONFIG_WOZ_UWB_RESPONDER and
+	# UWB ranging SETUP, device side. Roles, not the ultrawidelock_uwb Zephyr module:
+	# that module's CMakeLists gates everything on CONFIG_ULTRAWIDELOCK_UWB_RESPONDER and
 	# builds the reader's session, adapter and CCC engine, none of which a device
-	# uses. aliro_device (aliro_device_uwb.c) is the M1/M3 parser and M2/M4
-	# builder, host-tested by tests/host/test_aliro_device_uwb.c against the real
+	# uses. aliro_device (ultrawidelock_device_uwb.c) is the M1/M3 parser and M2/M4
+	# builder, host-tested by tests/host/test_ultrawidelock_device_uwb.c against the real
 	# reader codec; aliro_codec is the TLV builder and parser it is written on.
 	# No radio here.
 	src/ranging.c
 	${UWB_DEVICE_SRCS}
 	${UWB_CODEC_SRCS}
-	# UWB initiator role, radio side. Again not the woz_uwb module: its CCC
-	# block is gated on CONFIG_WOZ_ALIRO, which `depends on WOZ_UWB_RESPONDER`
+	# UWB initiator role, radio side. Again not the ultrawidelock_uwb module: its CCC
+	# block is gated on CONFIG_WOZ_ALIRO, which `depends on ULTRAWIDELOCK_UWB_RESPONDER`
 	# and would drag in the reader's session, adapter and RX engine. The CCC
 	# key schedule and MAC (role ccc_keys) are role-neutral -- nothing in
 	# ccc_kdf.c or ccc_mac.c knows which end it is on -- so the initiator links
@@ -77,14 +77,14 @@ target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
 	# is declared in, and the two platform facades it compiles against
 	# (qmalloc -> k_malloc, LOG_MODULE_DECLARE).
 	${UWB_INC} ${UWB}
-	${REPO_ROOT}/modules/woz_uwb/src/facade
+	${REPO_ROOT}/modules/ultrawidelock_uwb/src/facade
 	${REPO_ROOT}/modules/woz_port/include
 	# The CCC key schedule and MAC headers, plus src/driver for uwb_seam.h
-	# (woz_uwb_configure_phy). CONFIG_WOZ_UWB already puts src/driver on the
+	# (ultrawidelock_uwb_configure_phy). CONFIG_ULTRAWIDELOCK_UWB already puts src/driver on the
 	# path for the module's own library, but this app's sources are compiled
 	# into `app`, which does not inherit it.
 	${CCC}
-	${REPO_ROOT}/modules/woz_uwb/src/driver)
+	${REPO_ROOT}/modules/ultrawidelock_uwb/src/driver)
 
 # Enrolled or not, decided here rather than with __has_include in main.c.
 # semgrep cannot parse __has_include, and a file it cannot parse is one that

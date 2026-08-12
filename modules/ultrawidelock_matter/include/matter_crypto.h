@@ -50,9 +50,9 @@ extern "C" {
  *
  * Defined by exactly one backend per build: ccc_crypto_psa.c or
  * ccc_crypto_mbedtls.c on target (the CONFIG_WOZ_CRYPTO_* choice in
- * modules/woz_uwb/Kconfig), and tests/host/aes_ref.c -- a real FIPS-197 AES --
+ * modules/ultrawidelock_uwb/Kconfig), and tests/host/aes_ref.c -- a real FIPS-197 AES --
  * on the host. Declared here rather than pulled in from
- * modules/woz_uwb/include/ccc_kdf.h so this module does not depend on the UWB
+ * modules/ultrawidelock_uwb/include/ccc_kdf.h so this module does not depend on the UWB
  * module's private headers; tests/host/test_matter_crypto.c includes both, so a
  * compiler sees the two declarations together and rejects any drift.
  *

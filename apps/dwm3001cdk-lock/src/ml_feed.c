@@ -37,7 +37,7 @@
 enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
 					 int32_t cm)
 {
-#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 	static uint32_t last_diag_n;
 	struct uwb_cirdiag_ipatov ip;
 
@@ -85,7 +85,7 @@ enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
  */
 void ml_feed_vote_trace(struct aliro_approach *ap, int64_t now)
 {
-#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 	static bool was_blocked;
 	const bool blocked = aliro_approach_nlos_blocked(ap, now);
 

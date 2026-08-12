@@ -795,7 +795,7 @@ extern unsigned mfk_stack_hwm; /* words free reported by uxTaskGetStackHighWater
  * script longjmps back into the test (the production task loops forever). */
 struct mfk_wake_step {
 	uint32_t wake;      /* ulTaskNotifyTake return */
-	int trusted;        /* woz_uwb_trusted_range_cm returns this */
+	int trusted;        /* ultrawidelock_uwb_trusted_range_cm returns this */
 	int32_t cm;         /* ... with this distance */
 	int64_t advance_ms; /* esp_timer clock advance applied at the wake */
 	int session;        /* aliro_reader_session_active() from this wake on */

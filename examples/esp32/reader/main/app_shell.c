@@ -13,7 +13,7 @@
 #include "esp_idf_version.h"
 
 #include <ultrawidelock/uwb.h>
-#include "woz_diag.h" /* woz_uwb_diag_on — the raw per-frame UWB trace gate */
+#include "ultrawidelock_diag.h" /* ultrawidelock_uwb_diag_on — the raw per-frame UWB trace gate */
 #include <ultrawidelock/reader.h>
 #include "aliro_lab.h" /* aliro_lab_set_enabled — the [ALAB] trace runtime gate */
 #include "app_shell.h"
@@ -58,7 +58,7 @@ static const uint8_t demo_ursk[32] = {
 };
 
 // Demo Aliro UWB responder configuration used by the shell's aliro-start command.
-static const struct woz_uwb_aliro_cfg demo_cfg = {
+static const struct ultrawidelock_uwb_aliro_cfg demo_cfg = {
 	.session_id = 0x02b02fd4u,
 	.channel = 9u,
 	.sync_code_index = 9u,
@@ -91,7 +91,7 @@ int app_responder_start(void)
 	if (s_up) {
 		rc = 1; /* already running */
 	} else {
-		rc = woz_uwb_start_aliro(&demo_cfg);
+		rc = ultrawidelock_uwb_start_aliro(&demo_cfg);
 		if (rc == 0) {
 			s_up = true;
 		}
@@ -105,7 +105,7 @@ void app_responder_stop(void)
 	lock_init();
 	xSemaphoreTake(s_lock, portMAX_DELAY);
 	if (s_up) {
-		woz_uwb_stop();
+		ultrawidelock_uwb_stop();
 		s_up = false;
 	}
 	xSemaphoreGive(s_lock);
@@ -129,12 +129,12 @@ static int cmd_status(int argc, char **argv)
 	int32_t cm;
 	bool up = app_responder_up();
 	printf("responder : %s%s%s\n", col(up ? C_OK : C_BAD), up ? "up" : "down", col(C_RST));
-	if (woz_uwb_last_range_cm(&cm)) {
+	if (ultrawidelock_uwb_last_range_cm(&cm)) {
 		printf("last range: %d cm\n", (int)cm);
 	} else {
 		printf("last range: none\n");
 	}
-	if (woz_uwb_trusted_range_cm(&cm)) {
+	if (ultrawidelock_uwb_trusted_range_cm(&cm)) {
 		printf("trusted   : %d cm\n", (int)cm);
 	} else {
 		printf("trusted   : none\n");
@@ -142,13 +142,13 @@ static int cmd_status(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: prints the last measured UWB range in cm via woz_uwb_last_range_cm, or "no range yet" if none is available. Always returns 0.
+// Shell command handler: prints the last measured UWB range in cm via ultrawidelock_uwb_last_range_cm, or "no range yet" if none is available. Always returns 0.
 static int cmd_range(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
 	int32_t cm;
-	if (woz_uwb_last_range_cm(&cm)) {
+	if (ultrawidelock_uwb_last_range_cm(&cm)) {
 		printf("range: %d cm\n", (int)cm);
 	} else {
 		printf("no range yet\n");
@@ -196,14 +196,14 @@ static int cmd_aliro_prov(int argc, char **argv)
 static int cmd_uwbdiag(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
-		woz_uwb_diag_on = 1;
+		ultrawidelock_uwb_diag_on = 1;
 	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
-		woz_uwb_diag_on = 0;
+		ultrawidelock_uwb_diag_on = 0;
 	} else if (argc != 1) {
 		printf("usage: uwbdiag [on|off]\n");
 		return 0;
 	}
-	printf("uwb per-frame trace: %s\n", woz_uwb_diag_on ? "on" : "off");
+	printf("uwb per-frame trace: %s\n", ultrawidelock_uwb_diag_on ? "on" : "off");
 	return 0;
 }
 

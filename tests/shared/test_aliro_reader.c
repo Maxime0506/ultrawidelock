@@ -218,7 +218,7 @@ static void tx_reset(void)
 
 static int s_rng_inits, s_rng_starts, s_rng_stops, s_rng_feeds;
 static uint32_t s_rng_sid;
-static uint8_t s_rng_ursk[ALIRO_URSK_LEN];
+static uint8_t s_rng_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t s_rng_feed_buf[64];
 static size_t s_rng_feed_len;
 
@@ -245,7 +245,7 @@ int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t
 		return -1;
 	}
 	s_rng_sid = session_id;
-	memcpy(s_rng_ursk, ursk, ALIRO_URSK_LEN);
+	memcpy(s_rng_ursk, ursk, ULTRAWIDELOCK_URSK_LEN);
 	s_rng_starts++;
 	return 0;
 }
@@ -339,7 +339,7 @@ struct ph {
 	/* independently derived schedule */
 	uint8_t z[32];
 	uint8_t block[ALIRO_KEY_BLOCK_LEN];
-	uint8_t ursk[ALIRO_URSK_LEN];
+	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
 	uint8_t kp[ALIRO_KPERSISTENT_LEN];
 
 	/* AP secure channel, phone's view: r2p = reader-seal direction (0),
@@ -908,7 +908,7 @@ int main(void)
 	okc("t0.exchange", ph_exchange_resp(&p, 1) == 0);
 	okc("t0.ap_completed", ph_take_ap_completed(&p) == 0);
 	okc("t0.ranging_armed", s_rng_starts == 1);
-	okc("t0.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
+	okc("t0.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
 	okc("t0.sid_from_txid", s_rng_sid == ph_sid(&p));
 	okc("t0.auth_cred_recorded", aliro_reader_authenticated_credential(out65) &&
 					     memcmp(out65, p.cred_pub, 65) == 0);
@@ -941,7 +941,7 @@ int main(void)
 	/* The approach controller's presence signal: true only once a session has
 	 * reached the established phase, and false again the moment it tears down. */
 	okc("a.session_active", aliro_reader_session_active());
-	okc("a.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
+	okc("a.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
 
 	/* established: a device ranging SDU rides the BleSK channel to the engine */
 	{
@@ -1119,7 +1119,7 @@ int main(void)
 	aliro_reader_status_tick(woz_uptime_ms() + 10000);
 	okc("b.replay_disarmed_after_firing", tx_pending() == 0);
 
-	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ALIRO_URSK_LEN) == 0);
+	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
 	/* A transport may report disconnect before aliro_ble_disconnect returns.
 	 * The waiter must already be armed or this checkpoint would be lost. */
 	s_disconnect_inline = true;

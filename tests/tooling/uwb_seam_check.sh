@@ -3,7 +3,7 @@
 # uwb_seam_check.sh — keep the CCC STS seam impossible to bypass.
 #
 # WHAT IS BEING PREVENTED. Four decadriver entry points carry engine behaviour
-# that a caller must not skip (modules/woz_uwb/include/uwb_seam.h):
+# that a caller must not skip (modules/ultrawidelock_uwb/include/uwb_seam.h):
 #
 #   dwt_rxenable         arming RX must first program the CCC STS for the slot
 #   dwt_configurestsiv   loading an STS-IV must substitute the CCC STS-V
@@ -27,11 +27,11 @@
 #
 #   uwb_seam.h                 declares the helpers; the non-engine tier inlines
 #                              straight to the driver, which IS the fallback
-#   ccc_shim_rx.c              implements woz_uwb_arm_rx. Its own self-rearm
-#   ccc_shim_wrap.c            implements woz_uwb_set_sts_iv          sites have
+#   ccc_shim_rx.c              implements ultrawidelock_uwb_arm_rx. Its own self-rearm
+#   ccc_shim_wrap.c            implements ultrawidelock_uwb_set_sts_iv          sites have
 #   uwb_rxdiag.c               implements the other two               already
-#   port/woz_seam_stubs.c      the ESP32 half of the same two         programmed
-#   uwb/woz_seam_stubs.c       the FreeRTOS half of the same two      the STS
+#   port/ultrawidelock_seam_stubs.c      the ESP32 half of the same two         programmed
+#   uwb/ultrawidelock_seam_stubs.c       the FreeRTOS half of the same two      the STS
 #                              (both ports omit uwb_rxdiag.c, whose
 #                              heartbeat is Zephyr work items, and so
 #                              must re-create the Pre-POLL warm chain)
@@ -68,13 +68,13 @@ seam_call_re() { printf '(^|[^_[:alnum:]])(%s)[[:space:]]*\\(' "$SEAM_SYMBOLS"; 
 COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 
 # The files allowed to call the raw entry points. See the header for why each.
-EXEMPT_RE='^(modules/woz_uwb/include/uwb_seam\.h
-|modules/woz_uwb/src/ccc/ccc_shim_rx\.c
-|modules/woz_uwb/src/ccc/ccc_shim_wrap\.c
-|modules/woz_uwb/src/ccc/ccc_sts\.c
-|modules/woz_uwb/src/driver/uwb_rxdiag\.c
-|ports/esp32/components/woz_uwb/port/woz_seam_stubs\.c
-|ports/freertos-nrf52833/uwb/woz_seam_stubs\.c
+EXEMPT_RE='^(modules/ultrawidelock_uwb/include/uwb_seam\.h
+|modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx\.c
+|modules/ultrawidelock_uwb/src/ccc/ccc_shim_wrap\.c
+|modules/ultrawidelock_uwb/src/ccc/ccc_sts\.c
+|modules/ultrawidelock_uwb/src/driver/uwb_rxdiag\.c
+|ports/esp32/components/ultrawidelock_uwb/port/ultrawidelock_seam_stubs\.c
+|ports/freertos-nrf52833/uwb/ultrawidelock_seam_stubs\.c
 |modules/ultrawidelock_dw3000/
 |tests/)'
 EXEMPT_RE=${EXEMPT_RE//$'\n'/}
@@ -109,7 +109,7 @@ scan() {
 	if [ "$findings" -gt 0 ]; then
 		printf '%scheck-uwb-seam: %d call(s) reach past uwb_seam.h%s\n' \
 			"$R" "$findings" "$Z" >&2
-		printf '  Call woz_uwb_arm_rx / _set_sts_iv / _set_callbacks / _configure_phy\n' >&2
+		printf '  Call ultrawidelock_uwb_arm_rx / _set_sts_iv / _set_callbacks / _configure_phy\n' >&2
 		printf '  instead, or add the file to EXEMPT_RE with a reason in the header.\n' >&2
 		return 1
 	fi
@@ -121,8 +121,8 @@ scan() {
 # that left the callers behind would otherwise pass by finding nothing.
 check_helpers() {
 	local missing=0 h
-	for h in woz_uwb_arm_rx woz_uwb_set_sts_iv woz_uwb_set_callbacks woz_uwb_configure_phy; do
-		if ! grep -q "$h" modules/woz_uwb/include/uwb_seam.h 2>/dev/null; then
+	for h in ultrawidelock_uwb_arm_rx ultrawidelock_uwb_set_sts_iv ultrawidelock_uwb_set_callbacks ultrawidelock_uwb_configure_phy; do
+		if ! grep -q "$h" modules/ultrawidelock_uwb/include/uwb_seam.h 2>/dev/null; then
 			printf '%s  uwb_seam.h does not declare %s%s\n' "$R" "$h" "$Z" >&2
 			missing=$((missing + 1))
 		fi
@@ -149,8 +149,8 @@ self_test() {
 	)
 	local should_not[0]=
 	should_not=(
-		'	woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE);'
-		'	woz_uwb_configure_phy(&cfg);'
+		'	ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE);'
+		'	ultrawidelock_uwb_configure_phy(&cfg);'
 		' * dwt_rxenable refused the delayed RX (ARM FAIL not-late)'
 		'#define RXDIAG_CFG_LOG 8'
 		'	my_dwt_rxenable(mode);'
@@ -184,7 +184,7 @@ self_test() {
 	# The comment filter runs on `grep -n` output, so it must drop a doc line and
 	# keep a line of code that happens to carry a trailing comment.
 	local drop=('15:	 * a later dwt_configure() re-runs it' '9://	dwt_rxenable(mode);')
-	local keep='20:	woz_uwb_arm_rx(m); /* not dwt_rxenable(m) */'
+	local keep='20:	ultrawidelock_uwb_arm_rx(m); /* not dwt_rxenable(m) */'
 	for line in "${drop[@]}"; do
 		if ! printf '%s\n' "$line" | grep -qE "$COMMENT_LINE_RE"; then
 			printf '%s  self-test FAILED: comment filter kept: %s%s\n' "$R" "$line" "$Z" >&2
@@ -201,7 +201,7 @@ self_test() {
 	# The exemption list is only safe if it is exact. A prefix that swallowed a
 	# whole directory would silence the gate without anyone noticing.
 	local f
-	for f in modules/woz_uwb/src/driver/uwb_min.c modules/woz_uwb/src/driver/uwb_isr.c; do
+	for f in modules/ultrawidelock_uwb/src/driver/uwb_min.c modules/ultrawidelock_uwb/src/driver/uwb_isr.c; do
 		if [[ $f =~ $EXEMPT_RE ]]; then
 			printf '%s  self-test FAILED: %s is exempt, but it is a caller%s\n' \
 				"$R" "$f" "$Z" >&2

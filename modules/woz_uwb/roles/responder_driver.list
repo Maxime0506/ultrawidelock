@@ -1,5 +1,0 @@
-# woz_uwb tier: responder ISR half (CONFIG_WOZ_UWB_RESPONDER) — hardware-bound,
-# not host-compiled. Consumers: modules/woz_uwb/CMakeLists.txt,
-# ports/esp32/components/woz_uwb.
-# One repo-root-relative path per line, sorted; add HERE and nowhere else.
-modules/woz_uwb/src/driver/uwb_isr.c

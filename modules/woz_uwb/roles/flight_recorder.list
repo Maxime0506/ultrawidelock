@@ -1,5 +1,0 @@
-# woz_uwb tier: flight recorder (CONFIG_WOZ_FLIGHT_RECORDER, default n) — RAM
-# ring capture of a live walk-up for host replay; host-compiled for the replay
-# side. Consumers: modules/woz_uwb/CMakeLists.txt, ports/esp32/components/
-# woz_uwb, tests/host/sources.sh. Sorted; add HERE and nowhere else.
-modules/woz_uwb/src/facade/flight_recorder.c

@@ -1,8 +1,0 @@
-# woz_uwb tier: reader-side Aliro ranging-setup adapter (CONFIG_WOZ_ALIRO) —
-# composes the M1-M4 handshake over the cherry_ccc_* seam on our MAC.
-# Consumers: modules/woz_uwb/CMakeLists.txt, ports/esp32/components/woz_uwb,
-# tests/host/sources.sh. One repo-root-relative path per line, sorted; add HERE only.
-modules/woz_uwb/src/aliro/aliro_uwb_adapter.c
-modules/woz_uwb/src/aliro/aliro_uwb_msg.c
-modules/woz_uwb/src/aliro/aliro_uwb_session.c
-modules/woz_uwb/src/ccc/cherry_ccc_shim.c

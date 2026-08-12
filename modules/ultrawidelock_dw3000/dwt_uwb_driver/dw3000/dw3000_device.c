@@ -27,7 +27,7 @@
 #include <stdbool.h>
 
 #include "woz_log.h"           /* DIAG: RF-arm trace (temporary) */
-#include "woz_util.h"          /* IS_ENABLED — gate the DIAG printk under PRETTY */
+#include "ultrawidelock_util.h"          /* IS_ENABLED — gate the DIAG printk under PRETTY */
 
 #define OPTSPEED __attribute__((optimize("O3")))
 

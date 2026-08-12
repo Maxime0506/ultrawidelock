@@ -1,6 +1,6 @@
 /* Host recording doubles for the DRIVER-BINARY suites (uwb_min / uwb_isr /
  * uwb_rxdiag / uwb_selftest / aliro_shell). This binary compiles the real
- * modules/woz_uwb/src/driver + shell sources, so it cannot link dw_rx_stub.c
+ * modules/ultrawidelock_uwb/src/driver + shell sources, so it cannot link dw_rx_stub.c
  * (that stub defines uwb_min_radio_init etc. as fakes). drvfake.c is its
  * replacement: every dwt_* / dw3000_* / ccc_shim_* / fira_session_* symbol the
  * driver sources reach is a recording double with knobs declared here.
@@ -97,9 +97,9 @@ struct drvfake_state {
 	bool fira_trusted;
 	const uint8_t *fira_ursk;
 
-	/* ── woz_uwb_facade fake (uwb_selftest boot path) ── */
+	/* ── ultrawidelock_uwb_facade fake (uwb_selftest boot path) ── */
 	unsigned start_aliro_calls;
-	struct woz_uwb_aliro_cfg last_aliro_cfg;
+	struct ultrawidelock_uwb_aliro_cfg last_aliro_cfg;
 	uint8_t last_aliro_ursk[32]; /* copied: cfg->ursk is a pointer */
 	int start_aliro_ret;
 };

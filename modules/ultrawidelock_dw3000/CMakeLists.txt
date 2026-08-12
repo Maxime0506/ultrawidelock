@@ -6,9 +6,9 @@ zephyr_library()
 
 # OS-neutral glue only; the Zephyr dw3000_hw/dw3000_spi backends live in
 # ports/zephyr/dw3000/ (module woz_zephyr_port), the ESP-IDF ones in
-# ports/esp32/components/woz_uwb/port/. include/ keeps the contract headers.
+# ports/esp32/components/ultrawidelock_uwb/port/. include/ keeps the contract headers.
 # The source set is roles/core.list + roles/chip_dw3000.list — the same lists
-# ports/esp32/components/woz_uwb reads, so the two ports cannot drift.
+# ports/esp32/components/ultrawidelock_uwb reads, so the two ports cannot drift.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/woz_roles.cmake)
 woz_role_sources(${CMAKE_CURRENT_SOURCE_DIR}/roles/core.list DW_CORE_SRCS)
 woz_role_sources(${CMAKE_CURRENT_SOURCE_DIR}/roles/chip_dw3000.list DW_CHIP_SRCS)

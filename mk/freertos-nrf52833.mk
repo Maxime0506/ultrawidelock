@@ -107,4 +107,4 @@ freertos-build:
 	@# the flash figure above is silent about it. Printed on every build rather
 	@# than kept as a target someone remembers to run, because this port has
 	@# already had a check rot in exactly that position.
-	@cmake --build $(FREERTOS_BUILD_DIR) --target woz_uwb_reach
+	@cmake --build $(FREERTOS_BUILD_DIR) --target ultrawidelock_uwb_reach

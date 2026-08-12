@@ -15,7 +15,7 @@
 
 #include "ds_twr.h"   /* ds_twr_tof_signed(): the shared estimator */
 #include "uwb_min.h"  /* uwb_min_radio_init() */
-#include "uwb_seam.h" /* woz_uwb_arm_rx / woz_uwb_configure_phy */
+#include "uwb_seam.h" /* ultrawidelock_uwb_arm_rx / ultrawidelock_uwb_configure_phy */
 #include "woz_log.h"
 #include "woz_port.h"
 
@@ -478,7 +478,7 @@ int anchor_twr_init(void)
 	}
 
 	dwt_forcetrxoff();
-	if (woz_uwb_configure_phy((dwt_config_t *)&g_anchor_cfg) != DWT_SUCCESS) {
+	if (ultrawidelock_uwb_configure_phy((dwt_config_t *)&g_anchor_cfg) != DWT_SUCCESS) {
 		LOG_ERR("anchor PHY configure failed");
 		return -EIO;
 	}
@@ -489,7 +489,7 @@ int anchor_twr_init(void)
 	 * value that looks like a measurement. The CIA only logs its diagnostics
 	 * when asked to. LOG_ALL and not LOG_ALL|LOG_MAX: the MAX bit adds a
 	 * double-buffer copy that only the peak-amplitude fields need, and nothing
-	 * here reads those. Same choice modules/woz_uwb/src/driver/uwb_cirdiag.c
+	 * here reads those. Same choice modules/ultrawidelock_uwb/src/driver/uwb_cirdiag.c
 	 * makes in its lean mode. */
 	dwt_configciadiag((uint8_t)DW_CIA_DIAG_LOG_ALL);
 
@@ -519,7 +519,7 @@ int anchor_twr_initiator_round(uint32_t seq)
 		return rc;
 	}
 
-	if (woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
+	if (ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
 		return -EIO;
 	}
 	rc = rx_expect(MSG_RESP, &t4, REPLY_CEIL_MS);
@@ -571,7 +571,7 @@ int anchor_twr_responder_round(int32_t *mm_out, uint32_t *seq_out)
 	 * a chip timeout here would drop the receiver mid-round. Restored to the
 	 * reply-leg window below, before the first leg that needs one. */
 	dwt_setrxtimeout(RX_WINDOW_NONE);
-	if (woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
+	if (ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
 		return -EIO;
 	}
 	rc = rx_expect(MSG_POLL, &t2, POLL_CEIL_MS);
@@ -607,7 +607,7 @@ int anchor_twr_responder_round(int32_t *mm_out, uint32_t *seq_out)
 	{
 		uint64_t t3 = tx_ts();
 
-		if (woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
+		if (ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
 			return -EIO;
 		}
 		rc = rx_expect(MSG_FINAL, &t6, REPLY_CEIL_MS);

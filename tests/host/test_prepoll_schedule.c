@@ -74,7 +74,7 @@ void test_prepoll_schedule(void)
 	T_EQ("slot.resp0", ccc_slot_sts_index(&p, 0u, 0u, CCC_SLOT_RESPONSE, 0u),
 	     M4_STS_INDEX0 + 2u);
 	/* Final sits one slot past the last responder: POLL + N + 1, which is what
-	 * ALIRO_FINAL_SLOT_OFFSET encodes on the reader side. */
+	 * ULTRAWIDELOCK_FINAL_SLOT_OFFSET encodes on the reader side. */
 	T_EQ("slot.final", ccc_slot_sts_index(&p, 0u, 0u, CCC_SLOT_FINAL, 0u),
 	     M4_STS_INDEX0 + M3_RESPONDERS + 2u);
 	T_EQ("slot.final_data", ccc_slot_sts_index(&p, 0u, 0u, CCC_SLOT_FINAL_DATA, 0u),

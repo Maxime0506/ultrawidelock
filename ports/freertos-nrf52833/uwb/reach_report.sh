@@ -2,13 +2,13 @@
 #
 # reach_report.sh — print what the UWB layer costs when it is reached.
 #
-# Called by the woz_uwb_reach target in uwb.cmake, which links the three ELFs
+# Called by the ultrawidelock_uwb_reach target in uwb.cmake, which links the three ELFs
 # this reads. See that file for why three links and what each one's roots mean.
 #
 #   reach_report.sh <size-tool> <baseline.elf> <facade.elf> <responder.elf> <responder.map>
 #
 # Two numbers matter and both are printed. The reachable total is what the layer
-# adds to an image that calls it. The libwoz_uwb.a line under it is the part
+# adds to an image that calls it. The libultrawidelock_uwb.a line under it is the part
 # that is genuinely this port's to answer for: the rest is Mbed TLS, kernel and
 # libgcc objects an image running BLE already links, so they are counted in the
 # total and are not a marginal cost. Planning against the total overstates the
@@ -92,5 +92,5 @@ awk '
 	}
 ' "$MAP" | sort -rn
 
-printf '\n    The libwoz_uwb.a line is the marginal cost of this layer. The rest is\n'
+printf '\n    The libultrawidelock_uwb.a line is the marginal cost of this layer. The rest is\n'
 printf '    counted above but is already in any image that runs BLE.\n\n'

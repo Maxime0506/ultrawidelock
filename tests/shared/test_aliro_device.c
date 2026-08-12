@@ -606,7 +606,7 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
  * hand-builds a block): the keys are the ones the READER derived from ITS block,
  * and the counters stay in lockstep across the real SDU order. Payload bodies are
  * opaque here on purpose — M1-M4 content is proven against the live reader engine
- * in tests/host/test_aliro_device_uwb.c; what is under test is the channel. */
+ * in tests/host/test_ultrawidelock_device_uwb.c; what is under test is the channel. */
 static void test_ranging_channel_after_auth1(struct aliro_device *dev,
 					     const uint8_t block[ALIRO_KEY_BLOCK_LEN])
 {

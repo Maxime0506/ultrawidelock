@@ -3,7 +3,7 @@
 # shared source is assigned to a role; every build system (Zephyr modules and
 # apps, ESP-IDF components, tests/host/sources.sh) reads them instead of
 # carrying its own copy. tests/tooling/port_purity_check.sh enforces that every
-# manifest path exists and every shared woz_aliro/woz_uwb source is manifested.
+# manifest path exists and every shared woz_aliro/ultrawidelock_uwb source is manifested.
 #
 # Include by absolute path (plain CMake, works before idf_component_register):
 #   include("${REPO_ROOT}/cmake/woz_roles.cmake")

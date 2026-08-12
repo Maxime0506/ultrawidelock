@@ -12,7 +12,7 @@ Zephyr, NCS, or ESP-IDF names.
 | `woz_port` | OS, flash, logging, allocation, and byte-order contracts |
 | `woz_aliro` | Aliro APDU, crypto, provisioning, reader, and approach logic |
 | `woz_aliro_stack` | Adapter that links the portable Aliro stack into the Nordic application |
-| `woz_uwb` | Aliro and FiRa UWB messages, sessions, ranging, and diagnostics |
+| `ultrawidelock_uwb` | Aliro and FiRa UWB messages, sessions, ranging, and diagnostics |
 | `ultrawidelock_dw3000` | DW3000-family driver source sets and portable driver seams |
 | `ultrawidelock_nfc` | NFC transport abstraction, PN532 transport, and the RFAL-path ECP emitter |
 | `ultrawidelock_matter` | Minimal Matter transport, session, and cluster implementation |

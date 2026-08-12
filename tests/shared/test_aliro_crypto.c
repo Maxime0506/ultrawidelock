@@ -153,7 +153,7 @@ int main(void)
 	}
 
 	/* URSK extraction: block[128..159]. */
-	uint8_t block[ALIRO_KEY_BLOCK_LEN], ursk[ALIRO_URSK_LEN];
+	uint8_t block[ALIRO_KEY_BLOCK_LEN], ursk[ULTRAWIDELOCK_URSK_LEN];
 
 	for (size_t i = 0; i < sizeof(block); i++) {
 		block[i] = (uint8_t)i;

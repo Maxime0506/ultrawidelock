@@ -19,7 +19,7 @@
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
-#include <woz_diag.h> // woz_uwb_diag_on — the raw per-frame UWB trace gate
+#include <ultrawidelock_diag.h> // ultrawidelock_uwb_diag_on — the raw per-frame UWB trace gate
 #ifdef CONFIG_WOZ_ALIRO_LAB
 #include <aliro_lab.h>   // aliro_lab_set_enabled — the transaction-trace runtime gate
 #include <uwb_cirdiag.h> // uwb_cirdiag_set_enabled — per-reception CIA diag stream, rides `lab`
@@ -114,12 +114,12 @@ static int cmd_status(int argc, char **argv)
 
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 	int32_t cm;
-	if (woz_uwb_last_range_cm(&cm)) {
+	if (ultrawidelock_uwb_last_range_cm(&cm)) {
 		printf("last range: %d cm\n", (int)cm);
 	} else {
 		printf("last range: none\n");
 	}
-	if (woz_uwb_trusted_range_cm(&cm)) {
+	if (ultrawidelock_uwb_trusted_range_cm(&cm)) {
 		printf("trusted   : %d cm\n", (int)cm);
 	} else {
 		printf("trusted   : none\n");
@@ -145,7 +145,7 @@ static int cmd_range(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 	int32_t cm;
-	if (woz_uwb_last_range_cm(&cm)) {
+	if (ultrawidelock_uwb_last_range_cm(&cm)) {
 		printf("range: %d cm\n", (int)cm);
 	} else {
 		printf("no range yet\n");
@@ -275,14 +275,14 @@ static int cmd_aliro(int argc, char **argv)
 static int cmd_uwbdiag(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
-		woz_uwb_diag_on = 1;
+		ultrawidelock_uwb_diag_on = 1;
 	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
-		woz_uwb_diag_on = 0;
+		ultrawidelock_uwb_diag_on = 0;
 	} else if (argc != 1) {
 		printf("usage: uwbdiag [on|off]\n");
 		return 0;
 	}
-	printf("uwb per-frame trace: %s\n", woz_uwb_diag_on ? "on" : "off");
+	printf("uwb per-frame trace: %s\n", ultrawidelock_uwb_diag_on ? "on" : "off");
 	return 0;
 }
 #endif /* CONFIG_ENABLE_ALIRO_BLE_UWB */
@@ -400,7 +400,7 @@ static int cmd_factoryreset(int argc, char **argv)
 /* Runtime log knob: the boot default is WARN (blocking UART writes in the
  * protocol callbacks cost walk-up latency), so bench diagnostics need a way
  * back up without a reflash. The compile-time ceiling is DEBUG
- * (CONFIG_LOG_MAXIMUM_LEVEL); note the shared woz_aliro/woz_uwb sources log
+ * (CONFIG_LOG_MAXIMUM_LEVEL); note the shared woz_aliro/ultrawidelock_uwb sources log
  * under their module tags (aliro_reader, aliro_ranging, ...). */
 static int cmd_log(int argc, char **argv)
 {
@@ -438,7 +438,7 @@ static int cmd_log(int argc, char **argv)
  * off`, off the ranging path, so the walk-up still unlocks while capturing. */
 static int cmd_lab(int argc, char **argv)
 {
-#ifdef CONFIG_WOZ_UWB_CIRDIAG
+#ifdef CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG
 	if (argc == 3 && strcmp(argv[1], "cir") == 0) {
 		if (strcmp(argv[2], "probe") == 0) {
 			uwb_cirdiag_probe();
@@ -458,7 +458,7 @@ static int cmd_lab(int argc, char **argv)
 		       cir_on ? "  (taps print on: lab cir off)" : "");
 		return 0;
 	}
-#endif /* CONFIG_WOZ_UWB_CIRDIAG */
+#endif /* CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG */
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
 		aliro_lab_set_enabled(true);
 		uwb_cirdiag_set_enabled(true); /* per-reception ev=uwb.diag lines ride the gate */

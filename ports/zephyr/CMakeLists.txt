@@ -8,16 +8,16 @@
 # feature below gets zero bytes from this module.
 
 # aliro_shell.h is the one header living here (the `aliro` console's seam to
-# the application); published wherever modules/woz_uwb used to publish its
+# the application); published wherever modules/ultrawidelock_uwb used to publish its
 # shell dir, because the add-on factory-reset patch includes it.
-if(CONFIG_WOZ_UWB)
+if(CONFIG_ULTRAWIDELOCK_UWB)
 	zephyr_include_directories(shell)
 endif()
 
 # ---- woz_zephyr_port library: backends of module library contracts ----------
 if(CONFIG_DW3000
    OR CONFIG_WOZ_PRETTY_SHELL
-   OR CONFIG_WOZ_UWB_SHELL
+   OR CONFIG_ULTRAWIDELOCK_UWB_SHELL
    OR (CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
    OR CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG
    OR CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM
@@ -37,7 +37,7 @@ zephyr_library_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
 
 # Zephyr GPIO/SPI/trace backend of the dw3000_hw.h + dw3000_spi.h contract
-# (ESP-IDF backend: ports/esp32/components/woz_uwb/port/dw3000_{hw,spi}.c).
+# (ESP-IDF backend: ports/esp32/components/ultrawidelock_uwb/port/dw3000_{hw,spi}.c).
 zephyr_library_sources_ifdef(CONFIG_DW3000
 	dw3000/dw3000_hw.c
 	dw3000/dw3000_spi.c
@@ -60,9 +60,9 @@ zephyr_library_sources_ifdef(CONFIG_WOZ_PRETTY_SHELL
 
 # `aliro` UART console (status/rx/range/chip/selftest/log/version). Needs the
 # shell subsystem, which an NCS/Matter dependency force-selects. Engine headers
-# (ccc_shim.h, fira_session.h, ...) come from modules/woz_uwb's global include
-# dirs, alive whenever CONFIG_WOZ_UWB is.
-if(CONFIG_WOZ_UWB_SHELL)
+# (ccc_shim.h, fira_session.h, ...) come from modules/ultrawidelock_uwb's global include
+# dirs, alive whenever CONFIG_ULTRAWIDELOCK_UWB is.
+if(CONFIG_ULTRAWIDELOCK_UWB_SHELL)
 	zephyr_library_sources(shell/aliro_shell.c)
 	# Short commit SHA of THIS repo, baked in for `aliro version`. Captured at
 	# CMake configure time (git -C works from a worktree too); refreshed on a
@@ -80,7 +80,7 @@ if(CONFIG_WOZ_UWB_SHELL)
 		COMPILE_DEFINITIONS "WOZ_GIT_SHA=\"${WOZ_GIT_SHA}\"")
 endif()
 
-# nRF5340 app-core HFCLK boost, split out of woz_uwb_facade.c (which keeps the
+# nRF5340 app-core HFCLK boost, split out of ultrawidelock_uwb_facade.c (which keeps the
 # portable woz_hfclk_ensure_128mhz() seam). Compiled exactly when the facade
 # is (CONFIG_WOZ_ALIRO) on the SoC it exists for.
 if(CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)

@@ -42,8 +42,8 @@
 
 #include "cherry/cherry.h"
 #include "cherry/cherry_ccc.h"
-#include "aliro_uwb_adapter/aliro_uwb_adapter.h"
-#include "aliro_uwb_adapter/aliro_uwb_session.h"
+#include "ultrawidelock_uwb_adapter/ultrawidelock_uwb_adapter.h"
+#include "ultrawidelock_uwb_adapter/ultrawidelock_uwb_session.h"
 #include <ultrawidelock/uwb.h>
 
 /* Failure injection into the prim double (aliro_prim_host.c); default off,
@@ -98,12 +98,12 @@ static struct cherry *s_adapter_cherry;
 static struct cherry_ccc_capabilities s_caps; /* value copy; items copied below */
 static uint16_t s_caps_proto0, s_caps_uwb0;
 static uint8_t s_caps_pulse0;
-static struct aliro_uwb_adapter_reader_config s_rcfg;
+static struct ultrawidelock_uwb_adapter_reader_config s_rcfg;
 
-struct aliro_uwb_adapter *
-aliro_uwb_adapter_create_reader(struct cherry *cherry_ctx,
+struct ultrawidelock_uwb_adapter *
+ultrawidelock_uwb_adapter_create_reader(struct cherry *cherry_ctx,
 				struct cherry_core_event_device_capabilities *caps,
-				struct aliro_uwb_adapter_reader_config *config)
+				struct ultrawidelock_uwb_adapter_reader_config *config)
 {
 	s_adapter_creates++;
 	if (s_adapter_create_fail) {
@@ -128,7 +128,7 @@ aliro_uwb_adapter_create_reader(struct cherry *cherry_ctx,
 	if (config != NULL) {
 		s_rcfg = *config;
 	}
-	return (struct aliro_uwb_adapter *)&s_adapter_dummy;
+	return (struct ultrawidelock_uwb_adapter *)&s_adapter_dummy;
 }
 
 /* ---- session double ------------------------------------------------------ */
@@ -137,19 +137,19 @@ static int s_sess_dummy;
 static int s_sess_creates, s_sess_destroys;
 static bool s_sess_create_fail;    /* one-shot */
 static bool s_sess_set_ursk_fail;  /* one-shot */
-static struct aliro_uwb_adapter *s_sess_adapter;
+static struct ultrawidelock_uwb_adapter *s_sess_adapter;
 static uint32_t s_sess_sid;
-static aliro_uwb_session_cb_t s_ev_cb;
-static aliro_uwb_adapter_transmit_message_t s_tx_cb;
+static ultrawidelock_uwb_session_cb_t s_ev_cb;
+static ultrawidelock_uwb_adapter_transmit_message_t s_tx_cb;
 static void *s_sess_user;
-static uint8_t s_sess_ursk[ALIRO_URSK_LEN];
+static uint8_t s_sess_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint16_t s_sess_ver;
 
-struct aliro_uwb_session *aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx,
-						   uint32_t session_id,
-						   aliro_uwb_session_cb_t callback,
-						   aliro_uwb_adapter_transmit_message_t transmit,
-						   void *user_data)
+struct ultrawidelock_uwb_session *
+ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *aliro_ctx, uint32_t session_id,
+				 ultrawidelock_uwb_session_cb_t callback,
+				 ultrawidelock_uwb_adapter_transmit_message_t transmit,
+				 void *user_data)
 {
 	s_sess_creates++;
 	if (s_sess_create_fail) {
@@ -161,47 +161,49 @@ struct aliro_uwb_session *aliro_uwb_session_create(struct aliro_uwb_adapter *ali
 	s_ev_cb = callback;
 	s_tx_cb = transmit;
 	s_sess_user = user_data;
-	return (struct aliro_uwb_session *)&s_sess_dummy;
+	return (struct ultrawidelock_uwb_session *)&s_sess_dummy;
 }
 
-void aliro_uwb_session_destroy(struct aliro_uwb_session *session)
+void ultrawidelock_uwb_session_destroy(struct ultrawidelock_uwb_session *session)
 {
-	if (session == (struct aliro_uwb_session *)&s_sess_dummy) {
+	if (session == (struct ultrawidelock_uwb_session *)&s_sess_dummy) {
 		s_sess_destroys++;
 	}
 }
 
-enum aliro_uwb_err aliro_uwb_session_set_ursk(struct aliro_uwb_session *session,
-					      const uint8_t *ursk)
+enum ultrawidelock_uwb_err
+ultrawidelock_uwb_session_set_ursk(struct ultrawidelock_uwb_session *session, const uint8_t *ursk)
 {
 	(void)session;
 	if (s_sess_set_ursk_fail) {
 		s_sess_set_ursk_fail = false;
-		return ALIRO_UWB_ERR_INTERNAL;
+		return ULTRAWIDELOCK_UWB_ERR_INTERNAL;
 	}
-	memcpy(s_sess_ursk, ursk, ALIRO_URSK_LEN);
-	return ALIRO_UWB_ERR_NONE;
+	memcpy(s_sess_ursk, ursk, ULTRAWIDELOCK_URSK_LEN);
+	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
-enum aliro_uwb_err aliro_uwb_session_set_protocol_version(struct aliro_uwb_session *session,
-							  uint16_t selected_protocol_version)
+enum ultrawidelock_uwb_err
+ultrawidelock_uwb_session_set_protocol_version(struct ultrawidelock_uwb_session *session,
+					       uint16_t selected_protocol_version)
 {
 	(void)session;
 	s_sess_ver = selected_protocol_version;
-	return ALIRO_UWB_ERR_NONE;
+	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
 static int s_handles;
-static struct aliro_uwb_session *s_handle_sess;
+static struct ultrawidelock_uwb_session *s_handle_sess;
 static uint8_t s_handle_buf[256];
 static size_t s_handle_len;
-static enum aliro_uwb_err s_handle_rc;  /* one-shot, resets to NONE */
+static enum ultrawidelock_uwb_err s_handle_rc;  /* one-shot, resets to NONE */
 static bool s_handle_fire_deinit;       /* one-shot: emit DEINIT before returning */
 
 static void ev_status(enum cherry_ccc_session_state st, uint16_t conn);
 
-enum aliro_uwb_err aliro_uwb_session_message_handle(struct aliro_uwb_session *session,
-						    struct aliro_uwb_message *message)
+enum ultrawidelock_uwb_err
+ultrawidelock_uwb_session_message_handle(struct ultrawidelock_uwb_session *session,
+					 struct ultrawidelock_uwb_message *message)
 {
 	s_handles++;
 	s_handle_sess = session;
@@ -213,15 +215,15 @@ enum aliro_uwb_err aliro_uwb_session_message_handle(struct aliro_uwb_session *se
 		ev_status(CHERRY_CCC_SESSION_STATE_DEINIT,
 			  (uint16_t)(uintptr_t)s_sess_user);
 	}
-	enum aliro_uwb_err rc = s_handle_rc;
+	enum ultrawidelock_uwb_err rc = s_handle_rc;
 
-	s_handle_rc = ALIRO_UWB_ERR_NONE;
+	s_handle_rc = ULTRAWIDELOCK_UWB_ERR_NONE;
 	return rc;
 }
 
 static int s_msg_frees, s_msg_frees_null;
 
-void aliro_uwb_session_message_free(struct aliro_uwb_message *message)
+void ultrawidelock_uwb_session_message_free(struct ultrawidelock_uwb_message *message)
 {
 	if (message == NULL) {
 		s_msg_frees_null++;
@@ -232,31 +234,31 @@ void aliro_uwb_session_message_free(struct aliro_uwb_message *message)
 
 static int s_ev_frees;
 
-void aliro_uwb_session_event_free(struct aliro_uwb_session_event *event)
+void ultrawidelock_uwb_session_event_free(struct ultrawidelock_uwb_session_event *event)
 {
 	(void)event;
 	s_ev_frees++;
 }
 
-/* ---- woz_uwb facade double ----------------------------------------------- */
+/* ---- ultrawidelock_uwb facade double ----------------------------------------------- */
 
 static int s_uwb_starts, s_uwb_stops, s_uwb_prewarms;
 static int s_uwb_start_rc;
-static struct woz_uwb_aliro_cfg s_uwb_cfg;
-static uint8_t s_uwb_ursk[ALIRO_URSK_LEN];
+static struct ultrawidelock_uwb_aliro_cfg s_uwb_cfg;
+static uint8_t s_uwb_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t s_pw_ch, s_pw_sync;
 
-int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *cfg)
+int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *cfg)
 {
 	s_uwb_starts++;
 	s_uwb_cfg = *cfg;
 	if (cfg->ursk != NULL) {
-		memcpy(s_uwb_ursk, cfg->ursk, ALIRO_URSK_LEN);
+		memcpy(s_uwb_ursk, cfg->ursk, ULTRAWIDELOCK_URSK_LEN);
 	}
 	return s_uwb_start_rc;
 }
 
-int woz_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)
+int ultrawidelock_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)
 {
 	s_uwb_prewarms++;
 	s_pw_ch = channel;
@@ -264,7 +266,7 @@ int woz_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)
 	return 0;
 }
 
-void woz_uwb_stop(void)
+void ultrawidelock_uwb_stop(void)
 {
 	s_uwb_stops++;
 }
@@ -334,8 +336,8 @@ static int open_ble(const uint8_t *w, size_t wl, uint8_t *plain, size_t *plen)
  * ([proto][id][len_be16][payload]), as the adapter would. */
 static void tx_push(const uint8_t *plain, size_t n, uint16_t conn)
 {
-	uint8_t storage[sizeof(struct aliro_uwb_message) + 64] __attribute__((aligned(8)));
-	struct aliro_uwb_message *m = (struct aliro_uwb_message *)storage;
+	uint8_t storage[sizeof(struct ultrawidelock_uwb_message) + 64] __attribute__((aligned(8)));
+	struct ultrawidelock_uwb_message *m = (struct ultrawidelock_uwb_message *)storage;
 
 	m->len = n;
 	memcpy(m->data, plain, n);
@@ -349,9 +351,9 @@ static void ev_status(enum cherry_ccc_session_state st, uint16_t conn)
 		.session_state = st,
 		.reason_code = CHERRY_CCC_STATE_CHANGE_REASON_MGMT_CMD,
 	};
-	struct aliro_uwb_session_event ev = {
+	struct ultrawidelock_uwb_session_event ev = {
 		.session = NULL,
-		.type = ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_STATUS,
+		.type = ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_STATUS,
 		.cherry_event = NULL,
 	};
 
@@ -359,9 +361,9 @@ static void ev_status(enum cherry_ccc_session_state st, uint16_t conn)
 	s_ev_cb(&ev, (void *)(uintptr_t)conn);
 }
 
-static void ev_typed(enum aliro_uwb_session_event_type type, uint16_t conn)
+static void ev_typed(enum ultrawidelock_uwb_session_event_type type, uint16_t conn)
 {
-	struct aliro_uwb_session_event ev = {
+	struct ultrawidelock_uwb_session_event ev = {
 		.session = NULL,
 		.type = type,
 		.cherry_event = NULL,
@@ -375,8 +377,8 @@ static void ev_typed(enum aliro_uwb_session_event_type type, uint16_t conn)
 
 int main(void)
 {
-	static const uint8_t zursk[ALIRO_URSK_LEN];
-	uint8_t ursk[ALIRO_URSK_LEN];
+	static const uint8_t zursk[ULTRAWIDELOCK_URSK_LEN];
+	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
 	struct aliro_secchan sc;
 	uint8_t irs[8] = {0x02, 0x01, 0x00, 0x04, 0xde, 0xad, 0xbe, 0xef};
 	uint8_t plain[64];
@@ -415,9 +417,9 @@ int main(void)
 		    s_caps.minimum_ran_multiplier == 1u && !s_caps.qorvo_vendor_feature_1_supported);
 	okc("i.reader_cfg",
 	    s_rcfg.min_ran_multiplier == 1u && s_rcfg.preferred_hopping_configs.count == 2u &&
-		    s_rcfg.preferred_hopping_configs.configs[0] == ALIRO_HOPPING_CONFIG_DISABLED &&
+		    s_rcfg.preferred_hopping_configs.configs[0] == ULTRAWIDELOCK_HOPPING_CONFIG_DISABLED &&
 		    s_rcfg.preferred_hopping_configs.configs[1] ==
-			    ALIRO_HOPPING_CONFIG_CONTINUOUS_DEFAULT &&
+			    ULTRAWIDELOCK_HOPPING_CONFIG_CONTINUOUS_DEFAULT &&
 		    s_rcfg.mac_mode == 0u);
 	okc("i.probe",
 	    s_uwb_starts == 1 && s_uwb_cfg.session_id == 0u && s_uwb_cfg.channel == 9u &&
@@ -445,7 +447,7 @@ int main(void)
 	okc("s.ok.radio_freed", s_uwb_stops == before + 1);
 	okc("s.ok.prewarm", s_uwb_prewarms >= 1 && s_pw_ch == 9u && s_pw_sync == 9u);
 	okc("s.ok.args",
-	    s_sess_adapter == (struct aliro_uwb_adapter *)&s_adapter_dummy &&
+	    s_sess_adapter == (struct ultrawidelock_uwb_adapter *)&s_adapter_dummy &&
 		    s_sess_sid == 0x11223344u && s_ev_cb != NULL && s_tx_cb != NULL &&
 		    s_sess_user == (void *)(uintptr_t)7);
 	okc("s.ok.ursk", memcmp(s_sess_ursk, ursk, sizeof(ursk)) == 0);
@@ -462,7 +464,7 @@ int main(void)
 	}
 	okc("f.ok", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
 	okc("f.ok.msg",
-	    s_handles == 1 && s_handle_sess == (struct aliro_uwb_session *)&s_sess_dummy &&
+	    s_handles == 1 && s_handle_sess == (struct ultrawidelock_uwb_session *)&s_sess_dummy &&
 		    s_handle_len == sizeof(irs) && memcmp(s_handle_buf, irs, sizeof(irs)) == 0);
 	/* Latency phases are stamped from each SDU's [proto][id], not from the
 	 * order SDUs arrive in. The bench showed why: the phone sends a proto-2
@@ -507,7 +509,7 @@ int main(void)
 	}
 
 	printf("F: feed (engine errors)\n");
-	s_handle_rc = ALIRO_UWB_ERR_MESSAGE_STATE;
+	s_handle_rc = ULTRAWIDELOCK_UWB_ERR_MESSAGE_STATE;
 	okc("f.engine_reject", aliro_ranging_feed(7, irs, sizeof(irs)) == -1);
 	okc("f.engine_reject.session_kept", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
 
@@ -547,9 +549,9 @@ int main(void)
 	ev_status(CHERRY_CCC_SESSION_STATE_ACTIVE, 7);
 	ev_status(CHERRY_CCC_SESSION_STATE_IDLE, 7);
 	ev_status(CHERRY_CCC_SESSION_STATE_INIT, 7); /* default arm */
-	ev_typed(ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_STATUS, 7); /* NULL status payload */
-	ev_typed(ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_ERROR, 7);
-	ev_typed(ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_CONTROLLER_REPORT, 7);
+	ev_typed(ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_STATUS, 7); /* NULL status payload */
+	ev_typed(ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_ERROR, 7);
+	ev_typed(ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_CONTROLLER_REPORT, 7);
 	okc("e.freed", s_ev_frees == before + 6);
 	ev_status(CHERRY_CCC_SESSION_STATE_DEINIT, 8); /* wrong conn: session kept */
 	okc("e.deinit_wrong_conn", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
@@ -558,7 +560,7 @@ int main(void)
 
 	okc("e.restart", aliro_ranging_start(9, 0x55667788u, ursk, &sc) == 0);
 	s_handle_fire_deinit = true;
-	s_handle_rc = ALIRO_UWB_ERR_INTERNAL;
+	s_handle_rc = ULTRAWIDELOCK_UWB_ERR_INTERNAL;
 	okc("e.deinit_mid_handle", aliro_ranging_feed(9, irs, sizeof(irs)) == -1);
 	okc("e.deinit_mid_handle.cleared", aliro_ranging_feed(9, irs, sizeof(irs)) == -1);
 

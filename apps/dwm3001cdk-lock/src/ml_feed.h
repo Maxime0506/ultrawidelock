@@ -2,7 +2,7 @@
  * @file ml_feed.h — the channel-classifier glue between the CIA latch and the
  * approach controller.
  *
- * Main-loop only. When CONFIG_ULTRAWIDELOCK_ML_LOS + CONFIG_WOZ_UWB_CIRDIAG are on, a
+ * Main-loop only. When CONFIG_ULTRAWIDELOCK_ML_LOS + CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG are on, a
  * trusted range is fed together with this reception's LOS/NLOS class; in every
  * other configuration both calls collapse to the plain feed and a no-op.
  */

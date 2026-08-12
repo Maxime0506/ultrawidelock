@@ -16,7 +16,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
-# The bench project still produces the woz_uwb_esp32s3.* artifacts checked below.
+# The bench project still produces the ultrawidelock_uwb_esp32s3.* artifacts checked below.
 PROJ="$REPO_ROOT/examples/esp32/reader"
 # NOT the app's own default build directory. `idf.py build` there picks up the
 # project's sdkconfig, which is untracked working state -- `make presence-on`
@@ -75,23 +75,23 @@ if grep -q '^CONFIG_WOZ_PRESENCE=y' "$BUILD/sdkconfig"; then
 fi
 
 echo "1. build artifacts"
-check "app binary"       "[ -f '$BUILD/woz_uwb_esp32s3.bin' ]"
-check "app elf"          "[ -f '$BUILD/woz_uwb_esp32s3.elf' ]"
+check "app binary"       "[ -f '$BUILD/ultrawidelock_uwb_esp32s3.bin' ]"
+check "app elf"          "[ -f '$BUILD/ultrawidelock_uwb_esp32s3.elf' ]"
 check "partition table"  "[ -f '$BUILD/partition_table/partition-table.bin' ]"
 
-echo "2. CCC STS seam (modules/woz_uwb/include/uwb_seam.h)"
+echo "2. CCC STS seam (modules/ultrawidelock_uwb/include/uwb_seam.h)"
 # Each helper must be defined (T) in some object, else the seam has no engine
 # behind it and the CCC STS is never programmed.
 seamdef() { find "$BUILD" -name '*.obj' -exec nm {} \; 2>/dev/null | grep -qE " T $1$"; }
-check "def woz_uwb_arm_rx"        "seamdef woz_uwb_arm_rx"
-check "def woz_uwb_set_sts_iv"    "seamdef woz_uwb_set_sts_iv"
-check "def woz_uwb_set_callbacks" "seamdef woz_uwb_set_callbacks"
-check "def woz_uwb_configure_phy" "seamdef woz_uwb_configure_phy"
+check "def ultrawidelock_uwb_arm_rx"        "seamdef ultrawidelock_uwb_arm_rx"
+check "def ultrawidelock_uwb_set_sts_iv"    "seamdef ultrawidelock_uwb_set_sts_iv"
+check "def ultrawidelock_uwb_set_callbacks" "seamdef ultrawidelock_uwb_set_callbacks"
+check "def ultrawidelock_uwb_configure_phy" "seamdef ultrawidelock_uwb_configure_phy"
 # The caller must reach the radio THROUGH the seam. A regression here is silent
 # on the bench: ranging still runs, the STS is just never substituted.
 UWBMIN="$(find "$BUILD" -name 'uwb_min.c.obj' | head -1)"
 check "uwb_min goes through the seam" \
-	"[ -n '$UWBMIN' ] && nm '$UWBMIN' | grep -qE ' U woz_uwb_arm_rx$'"
+	"[ -n '$UWBMIN' ] && nm '$UWBMIN' | grep -qE ' U ultrawidelock_uwb_arm_rx$'"
 check "uwb_min does not call dwt_rxenable directly" \
 	"[ -n '$UWBMIN' ] && ! nm '$UWBMIN' | grep -qE ' U dwt_rxenable$'"
 
@@ -114,8 +114,8 @@ if ( cd "$PROJ" && idf.py -B "$PBUILD" \
 	# Linking is not enough: --gc-sections has eliminated these before, which is
 	# why the symbols are named individually rather than trusting the config.
 	PNM="${WOZ_NM:-xtensa-esp32s3-elf-nm}"
-	psym() { "$PNM" "$PBUILD/woz_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
-	dsym() { "$PNM" "$BUILD/woz_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
+	psym() { "$PNM" "$PBUILD/ultrawidelock_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
+	dsym() { "$PNM" "$BUILD/ultrawidelock_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
 	if command -v "$PNM" >/dev/null 2>&1; then
 		check "presence_link_init survives gc"      "psym presence_link_init"
 		check "presence_link_cmd survives gc"       "psym presence_link_cmd"
@@ -140,7 +140,7 @@ fi
 echo "5. app fits partition"
 # check_sizes.py runs at build time and fails the build on overflow; re-assert
 # the app binary is smaller than the 4 MB factory partition as a direct signal.
-SZ=$(stat -f%z "$BUILD/woz_uwb_esp32s3.bin" 2>/dev/null || stat -c%s "$BUILD/woz_uwb_esp32s3.bin")
+SZ=$(stat -f%z "$BUILD/ultrawidelock_uwb_esp32s3.bin" 2>/dev/null || stat -c%s "$BUILD/ultrawidelock_uwb_esp32s3.bin")
 check "app < 4 MB factory ($SZ B)" "[ '$SZ' -lt 4194304 ]"
 
 echo

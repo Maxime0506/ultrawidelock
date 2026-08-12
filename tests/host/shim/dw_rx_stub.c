@@ -64,12 +64,12 @@ void dwt_configurestsmode(uint8_t stsMode)
 
 /* Seam helpers uwb_rxdiag.c defines on target; the main binary links the
  * engine without the driver, so they are stubbed here instead. */
-void woz_uwb_set_callbacks(dwt_callbacks_s *callbacks)
+void ultrawidelock_uwb_set_callbacks(dwt_callbacks_s *callbacks)
 {
 	dwt_setcallbacks(callbacks);
 }
 
-int32_t woz_uwb_configure_phy(dwt_config_t *config)
+int32_t ultrawidelock_uwb_configure_phy(dwt_config_t *config)
 {
 	return dwt_configure(config);
 }
@@ -172,7 +172,7 @@ int dwt_readstsquality(int16_t *rxStsQualityIndex, int stsSegment)
 	return woz_host_rx.stsq_ret;
 }
 
-/* ── modules/woz_uwb/src/driver externs the listener links against ─────────── */
+/* ── modules/ultrawidelock_uwb/src/driver externs the listener links against ─────────── */
 
 int uwb_min_radio_init(void)
 {

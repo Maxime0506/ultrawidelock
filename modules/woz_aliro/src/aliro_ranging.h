@@ -2,12 +2,12 @@
 // produces the BLE ranging-control secure channel used to carry the M1-M4 exchange.
 /*
  * aliro_ranging — the post-auth Aliro UWB ranging-setup (M1-M4) on ESP32. Thin
- * glue that drives the engine's reader adapter/session (modules/woz_uwb aliro_uwb_
- * adapter + session): on a completed credential-auth it creates a session bound to
- * the derived URSK, emits M1 over the BLE L2CAP channel, feeds inbound M2/M4 back
- * to the engine, and lets the engine negotiate the ranging parameters and start
- * the DW3000 responder itself (via cherry_ccc_shim -> woz_uwb_start_aliro). This
- * replaces the earlier canned-parameter handoff.
+ * glue that drives the engine's reader adapter/session (modules/ultrawidelock_uwb
+ * ultrawidelock_uwb_ adapter + session): on a completed credential-auth it creates a session bound
+ * to the derived URSK, emits M1 over the BLE L2CAP channel, feeds inbound M2/M4 back to the engine,
+ * and lets the engine negotiate the ranging parameters and start the DW3000 responder itself (via
+ * cherry_ccc_shim -> ultrawidelock_uwb_start_aliro). This replaces the earlier canned-parameter
+ * handoff.
  *
  * The DW3000 is single-session, so exactly one ranging session runs at a time.
  * The whole lifecycle stays on the BLE-host task (create/feed/teardown + the

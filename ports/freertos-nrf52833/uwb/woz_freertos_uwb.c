@@ -37,7 +37,7 @@ static bool s_ready;
 
 int woz_freertos_uwb_start(void)
 {
-	int rc = woz_uwb_prewarm(UWB_PREWARM_CHANNEL, UWB_PREWARM_SYNC_CODE);
+	int rc = ultrawidelock_uwb_prewarm(UWB_PREWARM_CHANNEL, UWB_PREWARM_SYNC_CODE);
 
 	if (rc != 0) {
 		/*

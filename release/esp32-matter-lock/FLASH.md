@@ -58,7 +58,7 @@ may need that vendor's driver on Windows and older macOS.
 > fault. It cost days on the bench once.
 
 Power the EVB from **3V3**, not 5 V (the DW3000 is a 3.3 V part), share ground, and
-wire per the build's source of truth `ports/esp32/components/woz_uwb/port/board_pins.h`:
+wire per the build's source of truth `ports/esp32/components/ultrawidelock_uwb/port/board_pins.h`:
 
 | DWM3000EVB (Arduino pin) | Signal | ESP32-S3 | ESP32-C5 | ESP32-C6 |
 |---|---|---|---|---|

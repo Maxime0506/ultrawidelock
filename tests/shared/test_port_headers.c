@@ -1,7 +1,7 @@
 /*
  * Host unit test for the engine's pure port headers
  * (modules/woz_port/include/woz_bytes.h, ultrawidelock/woz_hal.h and
- * modules/woz_uwb/include/woz_util.h).
+ * modules/ultrawidelock_uwb/include/ultrawidelock_util.h).
  *
  * These headers carry no OS dependency at all, so they compile and run on the
  * host with no backend selected. The byte and utility headers back the shared
@@ -23,7 +23,7 @@
 
 #include "woz_port.h"
 #include <ultrawidelock/woz_hal.h>
-#include "woz_util.h"
+#include "ultrawidelock_util.h"
 #include "woz_bytes.h"
 
 static int failures;

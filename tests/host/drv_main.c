@@ -12,13 +12,13 @@
 
 #include "test.h"
 
-extern volatile int woz_uwb_diag_on;
+extern volatile int ultrawidelock_uwb_diag_on;
 
 int main(void)
 {
 	/* Match run.sh's quiet convention: keep DIAGK off under `make test`. */
 	if (getenv("WOZ_TEST_QUIET") != NULL) {
-		woz_uwb_diag_on = 0;
+		ultrawidelock_uwb_diag_on = 0;
 	}
 
 	test_uwb_min();

@@ -1,5 +1,0 @@
-# woz_uwb tier: AES-ECB seam behind ccc_kdf.h, mbedTLS backend (SoCs without a
-# PSA provider, e.g. ESP32). Consumers: modules/woz_uwb/CMakeLists.txt
-# (CONFIG_WOZ_CRYPTO_MBEDTLS), ports/esp32/components/woz_uwb.
-# One repo-root-relative path per line, sorted; add HERE and nowhere else.
-modules/woz_uwb/src/ccc/ccc_crypto_mbedtls.c

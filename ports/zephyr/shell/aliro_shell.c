@@ -235,7 +235,7 @@ static int cmd_frec(const struct shell *sh, size_t argc, char **argv)
 }
 #endif /* CONFIG_WOZ_FLIGHT_RECORDER */
 
-#if defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 /**
  * @brief Control the per-reception CIA diagnostics stream ([ALAB] uwb.diag) and, via the `dump`
  * sub-form, the windowed-CIR tap dump ([ALAB] uwb.cir).
@@ -286,7 +286,7 @@ static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
 		    on ? C_GRN "● on" C_RST : C_DIM "○ off" C_RST);
 	return 0;
 }
-#endif /* CONFIG_WOZ_UWB_CIRDIAG */
+#endif /* CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG */
 
 /* Registered by the application at startup; see aliro_shell.h for why the call
  * is inverted instead of made directly. NULL until then, and on any build that
@@ -449,7 +449,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(chip, NULL, "Read the DW3110 DEV_ID over SPI.", cmd_chip),
 	SHELL_CMD(selftest, NULL, "Run the radio TX/RX self-test.", cmd_selftest),
 	SHELL_CMD(log, NULL, "Ranging heartbeat: `log on` | `log off`.", cmd_log),
-#if defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 	SHELL_CMD(cir, NULL,
 		  "CIA diag stream + windowed CIR: `cir on|off` | `cir dump on|off` | `cir probe`.",
 		  cmd_cir),

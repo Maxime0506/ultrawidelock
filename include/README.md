@@ -8,7 +8,7 @@ role declarations stay with their portable implementation owners:
 | `<ultrawidelock/reader.h>` | `modules/woz_aliro/include/ultrawidelock/reader.h` |
 | `<ultrawidelock/device.h>` | `modules/woz_aliro/include/ultrawidelock/device.h` |
 | `<ultrawidelock/tlv.h>` | `modules/woz_aliro/include/ultrawidelock/tlv.h` |
-| `<ultrawidelock/uwb.h>` | `modules/woz_uwb/include/ultrawidelock/uwb.h` |
+| `<ultrawidelock/uwb.h>` | `modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h` |
 | `<ultrawidelock/woz_hal.h>` | `modules/woz_port/include/ultrawidelock/woz_hal.h` |
 
 This keeps module ownership intact while giving source builds and installed

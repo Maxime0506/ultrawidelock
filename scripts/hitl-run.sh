@@ -177,7 +177,7 @@ if [ "$READER_WATCH" = 1 ]; then
 	# run time because LTO moves it between builds. Left on afterwards: it
 	# reverts at the reader's next reboot and costs only trace lines.
 	DIAG_ADDR=$( { nm "$CDK_ELF" 2>/dev/null || arm-none-eabi-nm "$CDK_ELF" 2>/dev/null; } |
-		awk '/ woz_uwb_diag_on$/{print $1}')
+		awk '/ ultrawidelock_uwb_diag_on$/{print $1}')
 	if [ -n "$DIAG_ADDR" ]; then
 		probe-rs write --chip "${CDK_CHIP:-nRF52833_xxAA}" \
 			--probe "$(cat "$CDK_PROBE_FILE")" b8 "0x$DIAG_ADDR" 1 \

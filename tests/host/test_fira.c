@@ -1,7 +1,7 @@
 /** @file test_fira.c — range + URSK store (fira_session). */
 #include <string.h>
 
-#include "aliro_kdf.h" /* ALIRO_URSK_LEN */
+#include "cred_kdf.h" /* ULTRAWIDELOCK_URSK_LEN */
 #include "fira_session.h"
 #include "test.h"
 
@@ -14,7 +14,7 @@ static void range_listener(void)
 
 void test_fira(void)
 {
-	uint8_t ursk[ALIRO_URSK_LEN];
+	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
 	int32_t cm = -1;
 	uint32_t block = 0;
 	int64_t age = -1;

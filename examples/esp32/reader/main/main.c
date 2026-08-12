@@ -27,7 +27,7 @@ static const char *TAG = "woz_esp32";
 // Silences the CCC shim's per-frame STS trace (WARN level only) because logging
 // on the delayed-TX reply path can blow the reply window; other subsystems keep
 // their normal log level. app_responder_start() performs the full DW3000
-// bring-up chain (woz_uwb_start_aliro -> ccc_prepoll_listen ->
+// bring-up chain (ultrawidelock_uwb_start_aliro -> ccc_prepoll_listen ->
 // uwb_min_radio_init). aliro_reader_start() brings up the BLE transport and
 // session/transaction layer independently of the demo responder; the
 // URSK-driven UWB start happens inside the reader once the Phase-3 handshake is
@@ -42,7 +42,7 @@ void app_main(void)
 	esp_log_level_set("ccc_shim", ESP_LOG_WARN);
 
 	/* app_responder_start() drives the full DW3000 bring-up internally
-	 * (woz_uwb_start_aliro -> ccc_prepoll_listen -> uwb_min_radio_init). */
+	 * (ultrawidelock_uwb_start_aliro -> ccc_prepoll_listen -> uwb_min_radio_init). */
 	int rc = app_responder_start();
 	ESP_LOGI(TAG, "app_responder_start() = %d %s", rc,
 		 rc == 0 ? "(DW3000 up, responder listening)"
@@ -77,7 +77,7 @@ void app_main(void)
 		 * grants in this app, so only presence can ever arm one. */
 		aliro_reader_status_tick(woz_uptime_ms());
 
-		if (woz_uwb_last_range_cm(&cm)) {
+		if (ultrawidelock_uwb_last_range_cm(&cm)) {
 			ESP_LOGI(TAG, "range: %d cm", (int)cm);
 		}
 		vTaskDelay(pdMS_TO_TICKS(500));

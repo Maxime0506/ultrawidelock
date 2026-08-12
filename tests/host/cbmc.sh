@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 CBMC="${CBMC:-cbmc}"
 CB="$ROOT/tests/host/cbmc"
-SRCD="$ROOT/modules/woz_uwb/src"
+SRCD="$ROOT/modules/ultrawidelock_uwb/src"
 APDU_SRC="$ROOT/modules/woz_aliro/src"
 EXTRA_INCS=(-I"$APDU_SRC")
 
@@ -27,13 +27,13 @@ COMMON=(
 	--drop-unused-functions
 )
 
-targets=(aliro_uwb_msg ccc_mac aliro_apdu)
+targets=(ultrawidelock_uwb_msg ccc_mac aliro_apdu)
 [ "$#" -gt 0 ] && targets=("$@")
 
 # harness -> parser source under proof.
 harness_src() {
 	case "$1" in
-	aliro_uwb_msg) echo "$SRCD/aliro/aliro_uwb_msg_parser.c" ;;
+	ultrawidelock_uwb_msg) echo "$SRCD/cred/ultrawidelock_uwb_msg_parser.c" ;;
 	ccc_mac) echo "$SRCD/ccc/ccc_mac.c" ;;
 	aliro_apdu) echo "$APDU_SRC/aliro_apdu.c" ;;
 	*) return 1 ;;
@@ -44,7 +44,7 @@ harness_src() {
 # proves completeness (read_be reads <= 8 bytes; TLV walks advance >= 2 bytes).
 harness_unwind() {
 	case "$1" in
-	aliro_uwb_msg) echo 12 ;;
+	ultrawidelock_uwb_msg) echo 12 ;;
 	ccc_mac) echo 12 ;;
 	aliro_apdu) echo 28 ;;
 	*) return 1 ;;

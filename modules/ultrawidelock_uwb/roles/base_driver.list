@@ -1,0 +1,5 @@
+# ultrawidelock_uwb tier: base radio driver (CONFIG_ULTRAWIDELOCK_UWB) — needs a DW3000 behind it,
+# so the host suite does not compile it. Consumers: modules/ultrawidelock_uwb/CMakeLists.txt,
+# ports/esp32/components/ultrawidelock_uwb.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/ultrawidelock_uwb/src/driver/uwb_min.c

@@ -39,7 +39,7 @@
 #                                    it includes aliro/ + reader_storage headers
 #   ultrawidelock_nfc/src/nfc_prop_ecp.cpp     same: grafts into the add-on's
 #                                    subsys/nfc_prop, add-on headers included
-#   woz_uwb/include/woz_util.h    portable shim that defers to the Zephyr
+#   ultrawidelock_uwb/include/ultrawidelock_util.h    portable shim that defers to the Zephyr
 #                                    header under #ifdef __ZEPHYR__ and carries
 #                                    its own fallback otherwise (woz_bytes.h,
 #                                    its sibling, now lives in woz_port)
@@ -130,7 +130,7 @@ PERMANENT_FILES=(
 	modules/woz_aliro_stack/src/session.cpp
 	modules/ultrawidelock_nfc/src/transport_pn532.cpp
 	modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp
-	modules/woz_uwb/include/woz_util.h
+	modules/ultrawidelock_uwb/include/ultrawidelock_util.h
 )
 
 permanent_re() { # the two lists as one anchored alternation, dots literal
@@ -708,7 +708,7 @@ check_patch_symbols() {
 # would be a second copy of a list that exists once.
 MANIFEST_ROOTS=(
 	modules/woz_aliro/src
-	modules/woz_uwb/src
+	modules/ultrawidelock_uwb/src
 )
 
 # Shared sources deliberately left out of every role, with the reason. Same
@@ -722,12 +722,12 @@ MANIFEST_ROOTS=(
 #                       crypto dependency, so it cannot join wire_codecs
 #   uwb_rxdiag.c        Zephyr-module only: the ESP port omits it and stubs the
 #                       two decadriver seams it would otherwise supply
-#   uwb_selftest.c      Zephyr-module only, CONFIG_WOZ_UWB_SELFTEST, default n
+#   uwb_selftest.c      Zephyr-module only, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST, default n
 NOT_MANIFESTED=(
 	modules/woz_aliro/src/aliro_assert_ec.c
 	modules/woz_aliro/src/aliro_stepup.c
-	modules/woz_uwb/src/driver/uwb_rxdiag.c
-	modules/woz_uwb/src/driver/uwb_selftest.c
+	modules/ultrawidelock_uwb/src/driver/uwb_rxdiag.c
+	modules/ultrawidelock_uwb/src/driver/uwb_selftest.c
 )
 
 manifest_files() { repo_files 'modules/*/roles/*.list'; }
@@ -984,7 +984,7 @@ self_test() {
 	# the gate without anyone noticing.
 	local f
 	for f in modules/ultrawidelock_matter/src/matter_tlv.c modules/woz_aliro/src/aliro_reader.c \
-		modules/woz_uwb/src/ccc/ccc_shim.c modules/ultrawidelock_dw3000/src/deca_port.c; do
+		modules/ultrawidelock_uwb/src/ccc/ccc_shim.c modules/ultrawidelock_dw3000/src/deca_port.c; do
 		if [[ $f =~ $PERMANENT_RE ]] || in_ratchet "$f"; then
 			printf '%s  self-test FAILED: %s is exempt, but it must stay pure%s\n' \
 				"$R" "$f" "$Z" >&2
@@ -1182,7 +1182,7 @@ self_test() {
 		fails=$((fails + 1))
 	fi
 	# The allowlist is exact: a file that IS in a role must not be swallowed.
-	for f in modules/woz_aliro/src/aliro_tlv.c modules/woz_uwb/src/ccc/ccc_kdf.c; do
+	for f in modules/woz_aliro/src/aliro_tlv.c modules/ultrawidelock_uwb/src/ccc/ccc_kdf.c; do
 		if printf '%s\n' "${NOT_MANIFESTED[@]}" | grep -qxF "$f"; then
 			printf '%s  self-test FAILED: %s is allowlisted but lives in a role%s\n' \
 				"$R" "$f" "$Z" >&2

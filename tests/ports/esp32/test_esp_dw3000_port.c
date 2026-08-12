@@ -1,5 +1,5 @@
 /*
- * Host test for the ESP-IDF DW3000 backend (components/woz_uwb/port/
+ * Host test for the ESP-IDF DW3000 backend (components/ultrawidelock_uwb/port/
  * dw3000_hw.c + dw3000_spi.c) against the sdkfake GPIO/SPI recording doubles.
  * "Theatre" suite: no bus and no chip exist, so passing proves the transaction
  * framing (header/body/crc layout, 64-byte chunking inside one CS window, RX
@@ -32,7 +32,7 @@ extern volatile uint32_t g_dw_cyc_per_us;
 #endif
 
 /* uwb_cirdiag_flush double: dw3000_hw's ISR task calls it after draining IRQs;
- * the real emitter lives in the woz_uwb driver, out of this port suite. */
+ * the real emitter lives in the ultrawidelock_uwb driver, out of this port suite. */
 void uwb_cirdiag_flush(void)
 {
 }

@@ -26,7 +26,7 @@ index 7731eb0..53dd5eb 100644
 +#include <ultrawidelock/uwb.h>
 +#endif // CONFIG_WOZ_ALIRO
 +
-+LOG_MODULE_REGISTER(woz_uwb_impl, LOG_LEVEL_INF);
++LOG_MODULE_REGISTER(ultrawidelock_uwb_impl, LOG_LEVEL_INF);
  
  namespace Aliro::Uwb {
  
@@ -40,17 +40,17 @@ index 7731eb0..53dd5eb 100644
 +/** @brief Largest incoming Aliro ranging-service message we accept (stack-framed). */
 +constexpr size_t kMaxBleMessage{ 256 };
 +
-+/** @brief Map an aliro_uwb_err to a negative errno (0 on success). */
-+int ConvertErr(aliro_uwb_err err)
++/** @brief Map an ultrawidelock_uwb_err to a negative errno (0 on success). */
++int ConvertErr(ultrawidelock_uwb_err err)
  {
 -	return -ENOSYS;
 +	switch (err) {
-+	case ALIRO_UWB_ERR_NONE:
++	case ULTRAWIDELOCK_UWB_ERR_NONE:
 +		return 0;
-+	case ALIRO_UWB_ERR_INVALID_PARAMETER:
-+	case ALIRO_UWB_ERR_MSG_MALFORMED:
++	case ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER:
++	case ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED:
 +		return -EINVAL;
-+	case ALIRO_UWB_ERR_UWBS_TIMEOUT:
++	case ULTRAWIDELOCK_UWB_ERR_UWBS_TIMEOUT:
 +		return -ETIMEDOUT;
 +	default:
 +		return -EIO;
@@ -95,7 +95,7 @@ index 7731eb0..53dd5eb 100644
 +
 +	/* Synthesize the DW3110's Aliro/CCC capabilities (channels 5+9, all slot
 +	 * durations, SYNC codes 9..12, default+continuous+no hopping, RAN>=1,
-+	 * protocol 1.0, UWB config 0, pulse shape 0). aliro_uwb_adapter_create_reader
++	 * protocol 1.0, UWB config 0, pulse shape 0). ultrawidelock_uwb_adapter_create_reader
 +	 * deep-copies these, so the locals need not outlive this call. */
 +	static uint16_t proto[] = { 0x0100 };
 +	static uint16_t uwbConfigs[] = { 0x0000 };
@@ -119,9 +119,9 @@ index 7731eb0..53dd5eb 100644
 +	caps.status_err = CHERRY_ERR_NONE;
 +	caps.ccc_capabilities = &ccc;
 +
-+	mAliroCtx = aliro_uwb_adapter_create_reader(mCtx, &caps, &mReaderConfig);
++	mAliroCtx = ultrawidelock_uwb_adapter_create_reader(mCtx, &caps, &mReaderConfig);
 +	if (!mAliroCtx) {
-+		LOG_ERR("aliro_uwb_adapter_create_reader failed");
++		LOG_ERR("ultrawidelock_uwb_adapter_create_reader failed");
 +		cherry_destroy_sync(mCtx);
 +		mCtx = nullptr;
 +		return -EIO;
@@ -140,13 +140,13 @@ index 7731eb0..53dd5eb 100644
 +	k_work_cancel_delayable(&mPollWork);
 +	mRanging = false;
 +	if (mSession) {
-+		aliro_uwb_session_destroy(mSession);
++		ultrawidelock_uwb_session_destroy(mSession);
 +		mSession = nullptr;
 +	}
 +	mHandle.reset();
-+	woz_uwb_stop();
++	ultrawidelock_uwb_stop();
 +	if (mAliroCtx) {
-+		aliro_uwb_adapter_destroy(mAliroCtx);
++		ultrawidelock_uwb_adapter_destroy(mAliroCtx);
 +		mAliroCtx = nullptr;
 +	}
 +	if (mCtx) {
@@ -178,13 +178,13 @@ index 7731eb0..53dd5eb 100644
 +		LOG_ERR("BLE message too long: %zu", length);
 +		return -EMSGSIZE;
 +	}
-+	/* aliro_uwb_session_message_handle does not retain the message, so a stack
-+	 * frame (aliro_uwb_message has a flexible data[] member) avoids the heap. */
-+	alignas(aliro_uwb_message) uint8_t storage[sizeof(aliro_uwb_message) + kMaxBleMessage];
-+	auto *message = reinterpret_cast<aliro_uwb_message *>(storage);
++	/* ultrawidelock_uwb_session_message_handle does not retain the message, so a stack
++	 * frame (ultrawidelock_uwb_message has a flexible data[] member) avoids the heap. */
++	alignas(ultrawidelock_uwb_message) uint8_t storage[sizeof(ultrawidelock_uwb_message) + kMaxBleMessage];
++	auto *message = reinterpret_cast<ultrawidelock_uwb_message *>(storage);
 +	message->len = length;
 +	memcpy(message->data, data, length);
-+	return ConvertErr(aliro_uwb_session_message_handle(mSession, message));
++	return ConvertErr(ultrawidelock_uwb_session_message_handle(mSession, message));
 +#else
  	return -ENOSYS;
 +#endif // CONFIG_WOZ_ALIRO
@@ -207,18 +207,18 @@ index 7731eb0..53dd5eb 100644
 +		return -EBUSY;
 +	}
 +
-+	aliro_uwb_session *session =
-+		aliro_uwb_session_create(mAliroCtx, sessionId, &SessionHandlerCallback, &TransmitBleMessage, this);
++	ultrawidelock_uwb_session *session =
++		ultrawidelock_uwb_session_create(mAliroCtx, sessionId, &SessionHandlerCallback, &TransmitBleMessage, this);
 +	if (!session) {
 +		return -ENOMEM;
 +	}
 +
-+	int rc = ConvertErr(aliro_uwb_session_set_ursk(session, ursk.data()));
++	int rc = ConvertErr(ultrawidelock_uwb_session_set_ursk(session, ursk.data()));
 +	if (rc == 0) {
-+		rc = ConvertErr(aliro_uwb_session_set_protocol_version(session, protocolVersion));
++		rc = ConvertErr(ultrawidelock_uwb_session_set_protocol_version(session, protocolVersion));
 +	}
 +	if (rc != 0) {
-+		aliro_uwb_session_destroy(session);
++		ultrawidelock_uwb_session_destroy(session);
 +		return rc;
 +	}
 +
@@ -240,7 +240,7 @@ index 7731eb0..53dd5eb 100644
 +	}
 +	/* Builds M1 and transmits it via TransmitBleMessage; M1-M4 then flow through
 +	 * _HandleBleMessage until the adapter starts the session (cherry_ccc_shim). */
-+	return ConvertErr(aliro_uwb_session_init_setup(mSession));
++	return ConvertErr(ultrawidelock_uwb_session_init_setup(mSession));
 +#else
  	return -ENOSYS;
 +#endif // CONFIG_WOZ_ALIRO
@@ -255,11 +255,11 @@ index 7731eb0..53dd5eb 100644
 +		k_work_cancel_delayable(&mPollWork);
 +		mRanging = false;
 +		if (mSession) {
-+			aliro_uwb_session_destroy(mSession);
++			ultrawidelock_uwb_session_destroy(mSession);
 +			mSession = nullptr;
 +		}
 +		mHandle.reset();
-+		woz_uwb_stop();
++		ultrawidelock_uwb_stop();
 +	}
 +#endif // CONFIG_WOZ_ALIRO
 +	return 0;
@@ -273,7 +273,7 @@ index 7731eb0..53dd5eb 100644
 +	if (!mSession || !mHandle || !(*mHandle == sessionContextData)) {
 +		return -ENOENT;
 +	}
-+	return ConvertErr(aliro_uwb_session_suspend(mSession));
++	return ConvertErr(ultrawidelock_uwb_session_suspend(mSession));
 +#else
 +	return 0;
 +#endif // CONFIG_WOZ_ALIRO
@@ -287,7 +287,7 @@ index 7731eb0..53dd5eb 100644
 +	if (!mSession || !mHandle || !(*mHandle == sessionContextData)) {
 +		return -ENOENT;
 +	}
-+	return ConvertErr(aliro_uwb_session_resume(mSession));
++	return ConvertErr(ultrawidelock_uwb_session_resume(mSession));
 +#else
 +	return 0;
 +#endif // CONFIG_WOZ_ALIRO
@@ -297,7 +297,7 @@ index 7731eb0..53dd5eb 100644
 +{
 +#ifdef CONFIG_WOZ_ALIRO
 +	int32_t cm = 0;
-+	if (woz_uwb_trusted_range_cm(&cm) && mCallbacks.mRangingData) {
++	if (ultrawidelock_uwb_trusted_range_cm(&cm) && mCallbacks.mRangingData) {
 +		if (cm < 0) {
 +			cm = 0;
 +		}
@@ -310,7 +310,7 @@ index 7731eb0..53dd5eb 100644
 +
 +#ifdef CONFIG_WOZ_ALIRO
 +
-+void UltraWideBandImpl::TransmitBleMessage(aliro_uwb_message *message, aliro_uwb_session *uwbSessionCtx, void *userData,
++void UltraWideBandImpl::TransmitBleMessage(ultrawidelock_uwb_message *message, ultrawidelock_uwb_session *uwbSessionCtx, void *userData,
 +					   [[maybe_unused]] bool timeout)
 +{
 +	auto *self = static_cast<UltraWideBandImpl *>(userData);
@@ -318,17 +318,17 @@ index 7731eb0..53dd5eb 100644
 +		self->mCallbacks.mBleMessageTransmit(*self->mHandle, message->data, message->len);
 +	}
 +	/* Consume the adapter-built message. */
-+	aliro_uwb_session_message_free(message);
++	ultrawidelock_uwb_session_message_free(message);
  }
  
-+void UltraWideBandImpl::SessionHandlerCallback(aliro_uwb_session_event *event, void *userData)
++void UltraWideBandImpl::SessionHandlerCallback(ultrawidelock_uwb_session_event *event, void *userData)
 +{
 +	auto *self = static_cast<UltraWideBandImpl *>(userData);
 +	if (!event || !self) {
 +		return;
 +	}
 +
-+	if (event->type == ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_STATUS && self->mHandle) {
++	if (event->type == ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_STATUS && self->mHandle) {
 +		const enum cherry_ccc_session_state st = event->data.status->session_state;
 +		if (st == CHERRY_CCC_SESSION_STATE_ACTIVE) {
 +			self->mRanging = true;
@@ -339,11 +339,11 @@ index 7731eb0..53dd5eb 100644
 +		if (self->mCallbacks.mRangingSessionStateChanged) {
 +			self->mCallbacks.mRangingSessionStateChanged(*self->mHandle, MapState(st));
 +		}
-+	} else if (event->type == ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_ERROR) {
++	} else if (event->type == ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_ERROR) {
 +		LOG_INF("Aliro session error: 0x%x", static_cast<unsigned int>(event->data.error->status_err));
 +	}
 +
-+	aliro_uwb_session_event_free(event);
++	ultrawidelock_uwb_session_event_free(event);
 +}
 +
 +void UltraWideBandImpl::PollWorkHandler(k_work *work)
@@ -369,9 +369,9 @@ index 0688558..111fbe3 100644
   * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 + *
 + * Woz UltraWideBandImpl: drives a live Apple Wallet Aliro UWB ranging session
-+ * on the lock-native FiRa MAC (DW3110) via the vendored Qorvo aliro_uwb_adapter.
++ * on the lock-native FiRa MAC (DW3110) via the vendored Qorvo ultrawidelock_uwb_adapter.
 + * The adapter runs the M1-M4 ranging-setup handshake; its cherry_ccc_* seam is
-+ * implemented by the woz_uwb module's cherry_ccc_shim.c over fira_session +
++ * implemented by the ultrawidelock_uwb module's cherry_ccc_shim.c over fira_session +
 + * ccc_shim. Distance is polled from the FiRa engine and pushed up as BE16 cm.
   */
  
@@ -380,8 +380,8 @@ index 0688558..111fbe3 100644
  #include "uwb.h"
  
 +#ifdef CONFIG_WOZ_ALIRO
-+#include <aliro_uwb_adapter/aliro_uwb_adapter.h>
-+#include <aliro_uwb_adapter/aliro_uwb_session.h>
++#include <ultrawidelock_uwb_adapter/ultrawidelock_uwb_adapter.h>
++#include <ultrawidelock_uwb_adapter/ultrawidelock_uwb_session.h>
 +#include <cherry/cherry.h>
 +#endif // CONFIG_WOZ_ALIRO
 +
@@ -432,11 +432,11 @@ index 0688558..111fbe3 100644
 +	void ReportRange(SessionContextHandle handle);
 +
 +#ifdef CONFIG_WOZ_ALIRO
-+	/** @brief Adapter -> BLE transmit trampoline (aliro_uwb_adapter_transmit_message_t). */
-+	static void TransmitBleMessage(aliro_uwb_message *message, aliro_uwb_session *uwbSessionCtx, void *userData,
++	/** @brief Adapter -> BLE transmit trampoline (ultrawidelock_uwb_adapter_transmit_message_t). */
++	static void TransmitBleMessage(ultrawidelock_uwb_message *message, ultrawidelock_uwb_session *uwbSessionCtx, void *userData,
 +				       bool timeout);
-+	/** @brief Adapter session-event trampoline (aliro_uwb_session_cb_t). */
-+	static void SessionHandlerCallback(aliro_uwb_session_event *event, void *userData);
++	/** @brief Adapter session-event trampoline (ultrawidelock_uwb_session_cb_t). */
++	static void SessionHandlerCallback(ultrawidelock_uwb_session_event *event, void *userData);
 +	/** @brief Periodic range poll while a session is active. */
 +	static void PollWorkHandler(k_work *work);
 +#endif // CONFIG_WOZ_ALIRO
@@ -446,19 +446,19 @@ index 0688558..111fbe3 100644
 +
 +#ifdef CONFIG_WOZ_ALIRO
 +	cherry *mCtx{ nullptr };
-+	aliro_uwb_adapter *mAliroCtx{ nullptr };
++	ultrawidelock_uwb_adapter *mAliroCtx{ nullptr };
 +	/* One physical DW3110 ranges a single session at a time; the walk-up demo
 +	 * needs exactly one. A second ConfigureRangingSession returns -EBUSY. */
-+	aliro_uwb_session *mSession{ nullptr };
++	ultrawidelock_uwb_session *mSession{ nullptr };
 +	std::optional<SessionContextHandle> mHandle{};
 +	bool mRanging{ false };
 +	k_work_delayable mPollWork{};
 +	std::array<uint8_t, 2> mDistanceCm{};
 +
-+	aliro_uwb_adapter_reader_config mReaderConfig{
++	ultrawidelock_uwb_adapter_reader_config mReaderConfig{
 +		.min_ran_multiplier = 1,
-+		.preferred_hopping_configs = { .configs = { ALIRO_HOPPING_CONFIG_DISABLED,
-+							    ALIRO_HOPPING_CONFIG_CONTINUOUS_DEFAULT },
++		.preferred_hopping_configs = { .configs = { ULTRAWIDELOCK_HOPPING_CONFIG_DISABLED,
++							    ULTRAWIDELOCK_HOPPING_CONFIG_CONTINUOUS_DEFAULT },
 +					       .count = 2 },
 +		.mac_mode = 0, /* 1 ranging round, offset 0 (single antenna). */
 +		.r1_antennas = { 0, 0 },

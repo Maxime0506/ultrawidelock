@@ -79,8 +79,8 @@ static void heap_peak_log(const char *when)
  * it for exactly that reason (bench-correlated late RESPONSE arms). What shell this
  * board has exists only in provisioning mode, where the radios never start, so
  * `uwbdiag off` can never be typed at a walk-up; force it off here before any
- * ranging starts. See modules/woz_uwb/include/woz_diag.h. */
-extern volatile int woz_uwb_diag_on;
+ * ranging starts. See modules/ultrawidelock_uwb/include/ultrawidelock_diag.h. */
+extern volatile int ultrawidelock_uwb_diag_on;
 
 /* Reader status housekeeping: the engine expects a periodic tick to age out a
  * stalled transaction and to drive the ranging power gate's decay. 250 ms is
@@ -259,7 +259,7 @@ int main(void)
 {
 	/* Off before the radio comes up: keeps the ranging callbacks print-free so the
 	 * delayed RESPONSE/FINAL TX can hit its microsecond turnaround. */
-	woz_uwb_diag_on = 0;
+	ultrawidelock_uwb_diag_on = 0;
 
 	/* ASCII only: the console is a byte stream, and a UTF-8 dash renders as
 	 * mojibake in RTT Viewer. */
@@ -287,7 +287,7 @@ int main(void)
 		return rc;
 	}
 
-#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 	/*
 	 * The classifier is this image's consumer of the CIA latch, and nothing else
 	 * arms it: the capture-cycle thread is CONFIG_ALIRO_CIRDIAG_CAPTURE (not set
@@ -409,9 +409,9 @@ int main(void)
 	 * the semaphore has to exist before anything is allowed to give it, and the
 	 * controller has to be initialised before a signal can reach it. */
 	k_sem_init(&s_range_sig, 0, 1);
-	woz_uwb_set_range_listener(on_range_latched);
+	ultrawidelock_uwb_set_range_listener(on_range_latched);
 
-	uint32_t last_gen = woz_uwb_range_generation();
+	uint32_t last_gen = ultrawidelock_uwb_range_generation();
 	/* The last range OBSERVED for departure, trusted or not; see the loop. */
 	uint32_t last_obs_gen = last_gen;
 	/* A third epoch, for the activity LED alone. The two above are consumed
@@ -429,7 +429,7 @@ int main(void)
 
 	while (1) {
 		int64_t now = k_uptime_get();
-		uint32_t gen = woz_uwb_range_generation();
+		uint32_t gen = ultrawidelock_uwb_range_generation();
 		int32_t cm = 0;
 		enum aliro_approach_action act;
 
@@ -565,7 +565,7 @@ int main(void)
 		 * advances only on an accepted latch), mirroring the ESP lock's per-wake feed. A
 		 * stale latch -- iOS stops ranging once the phone holds still -- keeps the old
 		 * generation, so it drives a tick, not a fresh approach sample. */
-		if (gen != last_gen && woz_uwb_trusted_range_cm(&cm)) {
+		if (gen != last_gen && ultrawidelock_uwb_trusted_range_cm(&cm)) {
 			last_gen = gen;
 			last_obs_gen = gen;
 			present = true;
@@ -590,7 +590,7 @@ int main(void)
 				int32_t raw = 0;
 
 				last_obs_gen = gen;
-				if (woz_uwb_last_range_cm(&raw)) {
+				if (ultrawidelock_uwb_last_range_cm(&raw)) {
 					aliro_approach_observe_departure(&approach, now, raw);
 				}
 			}
@@ -676,7 +676,7 @@ int main(void)
 			 *
 			 * last_cm is what the controller was actually FED, which is
 			 * not what the status line prints. main.c feeds only a range
-			 * woz_uwb_trusted_range_cm() vouches for; the trace prints
+			 * ultrawidelock_uwb_trusted_range_cm() vouches for; the trace prints
 			 * the raw latch either way, so a walk-away can show 390 cm
 			 * on screen while the controller last saw 199 cm. Printing
 			 * both the value and its age says which of the two gates

@@ -29,7 +29,7 @@ void drvfake_reset(void)
 }
 
 /* ── per-frame diag gate (defined by ccc_shim_rx.c on the main binary) ─────── */
-volatile int woz_uwb_diag_on = 1;
+volatile int ultrawidelock_uwb_diag_on = 1;
 
 /* ── decadriver doubles ────────────────────────────────────────────────────── */
 const struct dwt_probe_s dw3000_probe_interf = {0};
@@ -260,12 +260,12 @@ uint32_t dwt_readsystimestamphi32(void)
  * this binary and supplies the callback + PHY halves itself; the CCC halves come
  * from ccc_shim_{rx,wrap}.c, which this suite deliberately excludes. Forward
  * those to the plain doubles so the calls are still counted. */
-int32_t woz_uwb_arm_rx(int32_t mode)
+int32_t ultrawidelock_uwb_arm_rx(int32_t mode)
 {
 	return dwt_rxenable(mode);
 }
 
-void woz_uwb_set_sts_iv(dwt_sts_cp_iv_t *iv)
+void ultrawidelock_uwb_set_sts_iv(dwt_sts_cp_iv_t *iv)
 {
 	dwt_configurestsiv(iv);
 }
@@ -379,8 +379,8 @@ const uint8_t *fira_session_get_ursk(void)
 	return drvfake.fira_ursk;
 }
 
-/* ── woz_uwb_facade fake (uwb_selftest boot path) ──────────────────────────── */
-int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *cfg)
+/* ── ultrawidelock_uwb_facade fake (uwb_selftest boot path) ──────────────────────────── */
+int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *cfg)
 {
 	drvfake.start_aliro_calls++;
 	if (cfg != NULL) {

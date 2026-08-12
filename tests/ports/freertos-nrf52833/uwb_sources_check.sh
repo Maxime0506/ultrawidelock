@@ -29,7 +29,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-CMAKE_FRAGMENT="${WOZ_UWB_CMAKE:-$ROOT/ports/freertos-nrf52833/uwb/uwb.cmake}"
+CMAKE_FRAGMENT="${ULTRAWIDELOCK_UWB_CMAKE:-$ROOT/ports/freertos-nrf52833/uwb/uwb.cmake}"
 
 checks=0
 failures=0
@@ -67,7 +67,7 @@ self_test() {
 			survived=$((survived + 1))
 			return
 		fi
-		if WOZ_UWB_CMAKE="$frag" "$0" >"$tmp/out" 2>&1; then
+		if ULTRAWIDELOCK_UWB_CMAKE="$frag" "$0" >"$tmp/out" 2>&1; then
 			printf '  FAIL survives the check: %s\n' "$desc"
 			survived=$((survived + 1))
 		else
@@ -82,15 +82,15 @@ self_test() {
 	mutate "the hardware backend dropped from the set" \
 		'/dw3000_hw_freertos.c/d'
 	mutate "an include directory that does not exist" \
-		's|modules/woz_uwb/src/facade|modules/woz_uwb/src/facade_gone|'
+		's|modules/ultrawidelock_uwb/src/facade|modules/ultrawidelock_uwb/src/facade_gone|'
 	mutate "the mbedTLS crypto backend copied over from the ESP-IDF port" \
 		's|crypto_psa.list|crypto_mbedtls.list|'
 	mutate "the mbedTLS define left selected beside the PSA one" \
 		's|CONFIG_WOZ_CRYPTO_PSA=1|CONFIG_WOZ_CRYPTO_PSA=1 CONFIG_WOZ_CRYPTO_MBEDTLS=1|'
 	mutate "the Final-capture snapshot dropped as if it were a diagnostic" \
-		'/CONFIG_WOZ_UWB_FINAL_SNAPSHOT=1/d'
+		'/CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT=1/d'
 	mutate "the engine built as something other than a responder" \
-		's|CONFIG_WOZ_UWB_RESPONDER=1|CONFIG_WOZ_UWB_INITIATOR=1|'
+		's|CONFIG_ULTRAWIDELOCK_UWB_RESPONDER=1|CONFIG_ULTRAWIDELOCK_UWB_INITIATOR=1|'
 	mutate "the DW3720 device layer selected instead of the DW3000" \
 		's|CONFIG_DW3000_CHIP_DW3000=1|CONFIG_DW3000_CHIP_DW3720=1|'
 	mutate "the Zephyr backend dragged in beside this port's own" \
@@ -98,7 +98,7 @@ self_test() {
 	mutate "the engine linked without the crypto library its STS seam needs" \
 		's|woz_kernel woz_board woz_mbedtls|woz_kernel woz_board|'
 	mutate "the STS seam left to the Zephyr file this port does not compile" \
-		'/woz_seam_stubs.c/d'
+		'/ultrawidelock_seam_stubs.c/d'
 
 	printf 'uwb-sources-self-test: %s (%d mutations)\n' \
 		"$([ "$survived" -eq 0 ] && echo PASS || echo FAIL)" "$mutants"
@@ -124,7 +124,7 @@ set(WOZ_PORT_DIR "$ROOT/ports/freertos-nrf52833")
 # keyed on the target name: the fragment also declares a link-proof executable,
 # and folding its sources or its --whole-archive link flags into the library's
 # would make every check below answer a question about the wrong target.
-set(WOZ_LIB woz_uwb)
+set(WOZ_LIB ultrawidelock_uwb)
 macro(add_library _name)
   if("\${_name}" STREQUAL "\${WOZ_LIB}")
     set(WOZ_SOURCES \${ARGN})
@@ -187,7 +187,7 @@ fi
 incs=$(ask WOZ_INCLUDES)
 defs=$(ask WOZ_DEFINES)
 libs=$(ask WOZ_LIBRARIES)
-lists=$(ask WOZ_UWB_ROLE_LISTS)
+lists=$(ask ULTRAWIDELOCK_UWB_ROLE_LISTS)
 
 # ---- checks -----------------------------------------------------------------
 
@@ -251,7 +251,7 @@ check "the port's own hardware backend is in the source set" "$r"
 # unmodified, the Pre-POLL is never decoded to warm the next block's STS, and
 # the responder hears every Pre-POLL and answers none of them.
 case "$srcs" in
-*/freertos-nrf52833/uwb/woz_seam_stubs.c*) r=0 ;;
+*/freertos-nrf52833/uwb/ultrawidelock_seam_stubs.c*) r=0 ;;
 *) r=1 ;;
 esac
 check "the port supplies its half of the STS seam" "$r"
@@ -287,7 +287,7 @@ esac
 check "the mbedTLS variant is not selected beside it" "$r"
 
 case "$srcs" in
-*modules/woz_uwb/src/ccc/ccc_crypto_psa.c*) r=0 ;;
+*modules/ultrawidelock_uwb/src/ccc/ccc_crypto_psa.c*) r=0 ;;
 *) r=1 ;;
 esac
 check "the PSA crypto source is the one in the set" "$r"
@@ -299,13 +299,13 @@ esac
 check "the engine links the crypto library its STS seam reaches through" "$r"
 
 case "$defs" in
-*CONFIG_WOZ_UWB_FINAL_SNAPSHOT=1*) r=0 ;;
+*CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT=1*) r=0 ;;
 *) r=1 ;;
 esac
 check "the Final-capture snapshot is on, as this single-core part requires" "$r"
 
 case "$defs" in
-*CONFIG_WOZ_UWB_RESPONDER=1*) r=0 ;;
+*CONFIG_ULTRAWIDELOCK_UWB_RESPONDER=1*) r=0 ;;
 *) r=1 ;;
 esac
 check "the engine is built as a responder" "$r"
@@ -317,7 +317,7 @@ esac
 check "the DW3000 device layer is selected, not the DW3720 twin" "$r"
 
 # The snapshot is compiled in, so the code it guards has to still be there.
-if grep -q 'CONFIG_WOZ_UWB_FINAL_SNAPSHOT' "$ROOT/modules/woz_uwb/src/ccc/ccc_shim_rx.c"; then
+if grep -q 'CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT' "$ROOT/modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx.c"; then
 	r=0
 else
 	r=1

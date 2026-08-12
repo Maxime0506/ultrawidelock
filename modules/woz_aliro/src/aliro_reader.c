@@ -276,7 +276,7 @@ static struct aliro_session {
 	uint8_t z[32];
 	struct aliro_secchan sc;     /* AP secure channel (ExpeditedSK) */
 	struct aliro_secchan sc_ble; /* ranging channel (BleSKReader/Device), §11.8 */
-	uint8_t ursk[ALIRO_URSK_LEN];
+	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
 
 	/* The phone's 0xA5 proprietary-info TLV (tag+len+value), captured from its
 	 * op-0x05 Initiate-Access-Protocol message; the trailing field of the
@@ -536,7 +536,7 @@ static void send_exchange(struct aliro_session *s)
 	/* end of the auth segment on both paths (the fast path has no AUTH1) */
 	aliro_lat_mark(ALIRO_LAT_AUTH1_DONE);
 	LOG_INF("[conn %u] URSK derived; EXCHANGE sent, awaiting response", s->conn_handle);
-	LOG_HEXDUMP_DBG(s->ursk, ALIRO_URSK_LEN, "");
+	LOG_HEXDUMP_DBG(s->ursk, ULTRAWIDELOCK_URSK_LEN, "");
 }
 
 /* Expedited-fast trial (§8.3.1.10-.12): the cryptogram proves the phone holds a

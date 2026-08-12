@@ -24,8 +24,8 @@
 
 #include "cherry/cherry.h"
 #include "cherry/cherry_ccc.h"
-#include "aliro_uwb_adapter/aliro_uwb_adapter.h"
-#include "aliro_uwb_adapter/aliro_uwb_session.h"
+#include "ultrawidelock_uwb_adapter/ultrawidelock_uwb_adapter.h"
+#include "ultrawidelock_uwb_adapter/ultrawidelock_uwb_session.h"
 
 #include "aliro_ranging.h"
 
@@ -37,12 +37,12 @@ LOG_MODULE_REGISTER(aliro_ranging, CONFIG_WOZ_ALIRO_LOG_LEVEL);
 
 /* Reader-side selection preferences. BORROWED for the adapter's lifetime (the
  * adapter stores the pointer, not a copy), so this must have static storage. */
-static struct aliro_uwb_adapter_reader_config s_reader_cfg = {
+static struct ultrawidelock_uwb_adapter_reader_config s_reader_cfg = {
 	.min_ran_multiplier = 1u,
 	.preferred_hopping_configs =
 		{
-			.configs = {ALIRO_HOPPING_CONFIG_DISABLED,
-				    ALIRO_HOPPING_CONFIG_CONTINUOUS_DEFAULT},
+			.configs = {ULTRAWIDELOCK_HOPPING_CONFIG_DISABLED,
+				    ULTRAWIDELOCK_HOPPING_CONFIG_CONTINUOUS_DEFAULT},
 			.count = 2u,
 		},
 	.mac_mode = 0u, /* 1 ranging round, offset 0, single antenna */
@@ -53,12 +53,12 @@ static struct aliro_uwb_adapter_reader_config s_reader_cfg = {
 // Process-wide handle to the active Cherry CCC context, or NULL if ranging has not been set up.
 static struct cherry *s_cherry;
 // Process-wide handle to the active Aliro UWB adapter, or NULL if ranging has not been set up.
-static struct aliro_uwb_adapter *s_adapter;
+static struct ultrawidelock_uwb_adapter *s_adapter;
 
 /* The single active ranging session (the DW3000 is single-session). Owned and
  * mutated only on the BLE-host task. s_sess is cleared when the engine frees the
  * session (a DEINIT status event) or when we tear it down. */
-static struct aliro_uwb_session *s_sess;
+static struct ultrawidelock_uwb_session *s_sess;
 static uint16_t s_sess_conn;
 static bool s_sess_active;
 
@@ -67,7 +67,7 @@ static bool s_sess_active;
 static struct aliro_secchan *s_sc_ble;
 
 /* Ranging-SDU identity, as [proto][id] on the wire. Mirrors the engine's
- * aliro_uwb_msg_spec.h, which is private to woz_uwb; test_aliro_ranging.c
+ * ultrawidelock_uwb_msg_spec.h, which is private to ultrawidelock_uwb; test_aliro_ranging.c
  * asserts these still agree with the frames the engine builds. */
 #define RSDU_PROTO_RANGING      0x01u
 #define RSDU_PROTO_NOTIFICATION 0x02u
@@ -112,8 +112,8 @@ static void lat_mark_sdu(uint8_t proto, uint8_t id)
 /* Send an adapter-built message verbatim over the peer's L2CAP channel. The
  * bytes already carry the 4-byte Aliro header; hand them straight to the BLE
  * send. We own the message and MUST free it (even if we don't send). */
-static void uwb_tx_cb(struct aliro_uwb_message *message, struct aliro_uwb_session *session,
-		      void *user_data, bool timeout)
+static void uwb_tx_cb(struct ultrawidelock_uwb_message *message,
+		      struct ultrawidelock_uwb_session *session, void *user_data, bool timeout)
 {
 	(void)session;
 	(void)timeout;
@@ -140,17 +140,17 @@ static void uwb_tx_cb(struct aliro_uwb_message *message, struct aliro_uwb_sessio
 				(unsigned)message->len);
 		}
 	}
-	aliro_uwb_session_message_free(message);
+	ultrawidelock_uwb_session_message_free(message);
 }
 
 /* Session notifications. On DEINIT the engine frees the session right after this
  * returns, so never touch event->session here; identify via user_data. Every
  * event must be freed. */
-static void uwb_ev_cb(struct aliro_uwb_session_event *event, void *user_data)
+static void uwb_ev_cb(struct ultrawidelock_uwb_session_event *event, void *user_data)
 {
 	uint16_t conn = (uint16_t)(uintptr_t)user_data;
 
-	if (event->type == ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_STATUS &&
+	if (event->type == ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_STATUS &&
 	    event->data.status != NULL) {
 		switch (event->data.status->session_state) {
 		case CHERRY_CCC_SESSION_STATE_ACTIVE:
@@ -172,10 +172,10 @@ static void uwb_ev_cb(struct aliro_uwb_session_event *event, void *user_data)
 		default:
 			break;
 		}
-	} else if (event->type == ALIRO_UWB_SESSION_EVENT_TYPE_SESSION_ERROR) {
+	} else if (event->type == ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_ERROR) {
 		LOG_WRN("[conn %u] UWB session ERROR", conn);
 	}
-	aliro_uwb_session_event_free(event);
+	ultrawidelock_uwb_session_event_free(event);
 }
 
 /* ---- public API ---- */
@@ -217,9 +217,9 @@ int aliro_ranging_init(void)
 		.radar_capabilities = NULL,
 	};
 
-	s_adapter = aliro_uwb_adapter_create_reader(s_cherry, &caps, &s_reader_cfg);
+	s_adapter = ultrawidelock_uwb_adapter_create_reader(s_cherry, &caps, &s_reader_cfg);
 	if (s_adapter == NULL) {
-		LOG_ERR("aliro_uwb_adapter_create_reader failed");
+		LOG_ERR("ultrawidelock_uwb_adapter_create_reader failed");
 		cherry_destroy_sync(s_cherry);
 		s_cherry = NULL;
 		return -1;
@@ -228,24 +228,24 @@ int aliro_ranging_init(void)
 
 	/* Prove + initialise the DW3000 here, in the clean reader-startup task, so the
 	 * heavy dwt_probe/dwt_initialise never runs from the BLE-host callback at M4.
-	 * That callback path (aliro_ranging_feed -> engine -> woz_uwb_start_aliro) has a
+	 * That callback path (aliro_ranging_feed -> engine -> ultrawidelock_uwb_start_aliro) has a
 	 * shallow stack and no prior bring-up, and dwt_probe failed there (-1). A one-shot
 	 * start+stop with a throwaway URSK leaves the radio probed (uwb_min's g_radio_ready
 	 * latches); the real session at M4 then re-uses it — ccc_prepoll_listen skips the
 	 * probe and only re-applies the negotiated channel. Non-fatal: if the radio is
 	 * absent, auth still runs and M4 will surface the failure. */
-	static const uint8_t k_probe_ursk[ALIRO_URSK_LEN] = {0};
-	// Aliro UWB Kconfig-equivalent probe configuration used to bring up the woz_uwb layer on
+	static const uint8_t k_probe_ursk[ULTRAWIDELOCK_URSK_LEN] = {0};
+	// Aliro UWB Kconfig-equivalent probe configuration used to bring up the ultrawidelock_uwb layer on
 	// this port.
-	const struct woz_uwb_aliro_cfg probe_cfg = {
+	const struct ultrawidelock_uwb_aliro_cfg probe_cfg = {
 		.session_id = 0u,
 		.channel = 9u,
 		.sync_code_index = 9u,
 		.slot_per_round = 1u,
 		.ursk = k_probe_ursk,
 	};
-	if (woz_uwb_start_aliro(&probe_cfg) == 0) {
-		woz_uwb_stop(); /* release RX; the radio stays probed */
+	if (ultrawidelock_uwb_start_aliro(&probe_cfg) == 0) {
+		ultrawidelock_uwb_stop(); /* release RX; the radio stays probed */
 		LOG_INF("DW3000 radio probed at init (M4 will reuse it)");
 	} else {
 		LOG_WRN("DW3000 probe at init failed; M4 handoff may not range");
@@ -269,7 +269,7 @@ int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t
 
 	/* Release the demo responder so the radio is free for the negotiated
 	 * session (the engine re-starts it with M1-M4 params at M4). */
-	woz_uwb_stop();
+	ultrawidelock_uwb_stop();
 
 	/* Pre-apply the session PHY now, while the phone spends ~400 ms deciding to
 	 * send Initiate-Ranging-Session: our M1 offers exactly one UWB config
@@ -277,21 +277,21 @@ int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t
 	 * start hits the shim's PHY cache and skips the dwt_configure long pole,
 	 * arming RX in time for the earliest phone ranging block. Best-effort: on
 	 * failure M4 falls back to the full configure. */
-	(void)woz_uwb_prewarm(9u, 9u);
+	(void)ultrawidelock_uwb_prewarm(9u, 9u);
 
-	struct aliro_uwb_session *sess = aliro_uwb_session_create(
+	struct ultrawidelock_uwb_session *sess = ultrawidelock_uwb_session_create(
 		s_adapter, session_id, uwb_ev_cb, uwb_tx_cb, (void *)(uintptr_t)conn_handle);
 
 	if (sess == NULL) {
 		LOG_ERR("[conn %u] session_create failed", conn_handle);
 		return -1;
 	}
-	if (aliro_uwb_session_set_ursk(sess, ursk) != ALIRO_UWB_ERR_NONE) {
+	if (ultrawidelock_uwb_session_set_ursk(sess, ursk) != ULTRAWIDELOCK_UWB_ERR_NONE) {
 		LOG_ERR("[conn %u] set_ursk failed", conn_handle);
-		aliro_uwb_session_destroy(sess);
+		ultrawidelock_uwb_session_destroy(sess);
 		return -1;
 	}
-	aliro_uwb_session_set_protocol_version(sess, ALIRO_VERSION);
+	ultrawidelock_uwb_session_set_protocol_version(sess, ALIRO_VERSION);
 
 	s_sc_ble = sc_ble;
 	s_sess = sess;
@@ -321,20 +321,20 @@ int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 	lat_mark_sdu(data[0], data[1]);
 
 	/* Stack-framed message (the engine copies/consumes it, does not retain). */
-	uint8_t storage[sizeof(struct aliro_uwb_message) + ALIRO_RANGING_MSG_MAX]
+	uint8_t storage[sizeof(struct ultrawidelock_uwb_message) + ALIRO_RANGING_MSG_MAX]
 		__attribute__((aligned(8)));
-	struct aliro_uwb_message *msg = (struct aliro_uwb_message *)storage;
+	struct ultrawidelock_uwb_message *msg = (struct ultrawidelock_uwb_message *)storage;
 
 	msg->len = len;
 	memcpy(msg->data, data, len);
 	aliro_lab_evi2("rrx", "proto", data[0], "id", data[1]);
 
 	/* M4 makes the engine start the responder (cherry_ccc_shim ->
-	 * woz_uwb_start_aliro) with the negotiated params. A hard error may DEINIT
+	 * ultrawidelock_uwb_start_aliro) with the negotiated params. A hard error may DEINIT
 	 * the session, which clears s_sess via uwb_ev_cb; don't touch it after. */
-	enum aliro_uwb_err e = aliro_uwb_session_message_handle(s_sess, msg);
+	enum ultrawidelock_uwb_err e = ultrawidelock_uwb_session_message_handle(s_sess, msg);
 
-	if (e != ALIRO_UWB_ERR_NONE) {
+	if (e != ULTRAWIDELOCK_UWB_ERR_NONE) {
 		LOG_WRN("[conn %u] message_handle err %d", conn_handle, (int)e);
 		return -1;
 	}
@@ -346,7 +346,7 @@ void aliro_ranging_stop(uint16_t conn_handle)
 	if (!s_sess_active || s_sess == NULL || s_sess_conn != conn_handle) {
 		return;
 	}
-	struct aliro_uwb_session *sess = s_sess;
+	struct ultrawidelock_uwb_session *sess = s_sess;
 
 	/* Clear first so the DEINIT event this destroy emits is a no-op, and a
 	 * direct free (no CCC session yet) leaves no dangling pointer. */
@@ -354,5 +354,5 @@ void aliro_ranging_stop(uint16_t conn_handle)
 	s_sess_active = false;
 	s_sc_ble = NULL; /* borrowed from the reader session; drop before it is freed */
 	LOG_INF("[conn %u] tearing down UWB ranging session", conn_handle);
-	aliro_uwb_session_destroy(sess);
+	ultrawidelock_uwb_session_destroy(sess);
 }

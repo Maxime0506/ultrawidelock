@@ -427,7 +427,7 @@ matters. Nothing calls into UWB or OpenThread while the application is a
 skeleton, so `--gc-sections` drops both archives and the image links without a
 byte of either. A layer that compiles is a weaker claim than a layer that links,
 and the gap between them is where a call to a vendor function nobody supplies
-survives. `woz_uwb_link_check` closes that gap for UWB by forcing the whole
+survives. `ultrawidelock_uwb_link_check` closes that gap for UWB by forcing the whole
 archive in against the same libraries the product links; it bounds the engine at
 280,820 bytes of flash, which is an upper bound rather than a cost, since a
 responder that never initiates cannot reach all of the decadriver. OpenThread

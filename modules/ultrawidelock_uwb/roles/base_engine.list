@@ -1,0 +1,5 @@
+# ultrawidelock_uwb tier: base ranging estimator (CONFIG_ULTRAWIDELOCK_UWB) — radio-free, so the
+# host KAT suite compiles it too; base tier (not responder) because the anchor
+# ranges with no CCC engine. Consumers: modules/ultrawidelock_uwb/CMakeLists.txt,
+# ports/esp32/components/ultrawidelock_uwb, tests/host/sources.sh. Sorted; add HERE only.
+modules/ultrawidelock_uwb/src/fira/ds_twr.c

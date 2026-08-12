@@ -1,7 +1,7 @@
 # DWM3001CDK standalone Aliro lock: the reader engine, the CCC/FiRa responder,
 # the DW3110 driver and the BLE stack in one nRF52833 image.
 #
-# woz_uwb and modules/ultrawidelock_dw3000 come in as Zephyr modules because they carry their own
+# ultrawidelock_uwb and modules/ultrawidelock_dw3000 come in as Zephyr modules because they carry their own
 # Kconfig gating. modules/woz_aliro's reader core is listed
 # directly here, the way tests/on_target/zephyr/nrf5340dk-aliro-device-ec does, so the nRF5340 build
 # that consumes that module through CONFIG_WOZ_ALIRO_STACK stays untouched.
@@ -22,7 +22,7 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/ultrawidelock_anchor"
 	"${REPO_ROOT}/modules/ultrawidelock_matter"
 	"${REPO_ROOT}/modules/ultrawidelock_ml"
-	"${REPO_ROOT}/modules/woz_uwb"
+	"${REPO_ROOT}/modules/ultrawidelock_uwb"
 	"${REPO_ROOT}/modules/ultrawidelock_dw3000"
 	"${REPO_ROOT}/ports/zephyr")
 

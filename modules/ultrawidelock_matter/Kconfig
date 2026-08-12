@@ -6,7 +6,7 @@
 config ULTRAWIDELOCK_MATTER
 	bool "Hand-written minimal Matter node"
 	# matter_crypto.c needs aliro_hash (SHA-256/HKDF) and the
-	# crypto_aes_ecb_encrypt seam, whose backend choice in modules/woz_uwb
+	# crypto_aes_ecb_encrypt seam, whose backend choice in modules/ultrawidelock_uwb
 	# is itself `depends on WOZ_ALIRO`. Nothing here re-implements either.
 	depends on WOZ_ALIRO
 	help

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Line coverage for our own (asxeem) host-testable code, via clang source-based
-# coverage. Instruments every host suite in the repo — the woz_uwb KAT suite
+# coverage. Instruments every host suite in the repo — the ultrawidelock_uwb KAT suite
 # (same sources as run.sh, see sources.sh) and the shared-core suites mirrored
 # from tests/shared/run.sh and merges their profiles into one report.
 #
@@ -45,7 +45,7 @@ cov_cc() {
 		-fprofile-instr-generate -fcoverage-mapping "$@"
 }
 
-# --- suite 1: the woz_uwb host KAT suite (same sources as run.sh) -----------
+# --- suite 1: the ultrawidelock_uwb host KAT suite (same sources as run.sh) -----------
 # -lm for the same reason run.sh needs it: test_ultrawidelock_door.c calls cos/sqrt, which
 # glibc keeps out of libc.
 cov_cc "${DEFS[@]}" "${INCS[@]}" \
@@ -123,7 +123,7 @@ run_suite reader "$OUT/cov_reader"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/woz_port/include" \
-	-I"$ROOT/modules/woz_uwb/include" \
+	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$SHARED/test_aliro_ranging.c" \
 	"$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
 	"$ALIRO/src/aliro_hash.c" \
@@ -132,7 +132,7 @@ run_suite ranging "$OUT/cov_ranging"
 
 # Header-inline logic (woz_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.
-cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/include" \
+cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$SHARED/test_port_headers.c" -o "$OUT/cov_hdrs"
 run_suite hdrs "$OUT/cov_hdrs"
@@ -140,7 +140,7 @@ run_suite hdrs "$OUT/cov_hdrs"
 # --- target-only sources on recording doubles (mirrors of the run.sh side
 # binaries and the tests/ports/esp32 sdkfake stages). These measure branch
 # logic against fakes — never hardware, radio, or crypto truth.
-SRC="$ROOT/modules/woz_uwb/src"
+SRC="$ROOT/modules/ultrawidelock_uwb/src"
 HOSTD="$ROOT/tests/host"
 ECOMP="$ROOT/ports/esp32/components"
 EREADER="$ROOT/examples/esp32/reader/main"
@@ -161,9 +161,9 @@ SIDE_UNIT_SRCS=(
 	"$ALIRO/src/aliro_ble_nimble.c"
 	"$ECOMP/aliro_reader/aliro_prov_nvs.c"
 	"$ECOMP/aliro_reader/aliro_stepup_worker.c"
-	"$ECOMP/woz_uwb/port/dw3000_hw.c"
-	"$ECOMP/woz_uwb/port/dw3000_spi.c"
-	"$ECOMP/woz_uwb/port/woz_seam_stubs.c"
+	"$ECOMP/ultrawidelock_uwb/port/dw3000_hw.c"
+	"$ECOMP/ultrawidelock_uwb/port/dw3000_spi.c"
+	"$ECOMP/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c"
 	"$EREADER/app_shell.c"
 	"$EREADER/main.c"
 	"$LOCK_MAIN/app_driver.cpp"
@@ -182,10 +182,10 @@ SIDE_UNIT_SRCS=(
 	"$ROOT/modules/woz_aliro_stack/src/session.cpp"
 )
 
-cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_CIRDIAG=1 \
-	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
+cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
+	-DCONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
-	-I"$ROOT/modules/woz_uwb/include" \
+	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
 	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
@@ -201,7 +201,7 @@ WOZ_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
 	>>"$OUT/run.log" 2>&1 || true
 OBJS+=(-object "$OUT/cov_drv")
 
-psa_flags=(-I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include" -I"$SRC/ccc")
+psa_flags=(-I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb/include" -I"$SRC/ccc")
 cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
 	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_cov.o"
 cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_mbedtls_ecb \
@@ -247,7 +247,7 @@ run_suite esp_worker "$OUT/cov_esp_worker"
 # clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
-	-I"$SDKFAKE" -I"$EREADER" -I"$ROOT/modules/woz_uwb/include" \
+	-I"$SDKFAKE" -I"$EREADER" -I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
 	"$ET/test_esp_app_shell.c" "$EREADER/app_shell.c" \
 	"$EREADER/main.c" \
@@ -257,21 +257,21 @@ run_suite esp_shell "$OUT/cov_esp_shell"
 # Exercise the C6 variant here; the regular port suite builds both S3 and C6.
 # board_pins.h deliberately has no implicit target fallback, and dw3000_hw.c
 # derives its cycle rate and worker core from these target settings.
-cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 \
+cov_cc -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 	-DCONFIG_IDF_TARGET_ESP32C6=1 \
 	-DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
 	-DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
-	-I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$ROOT/modules/woz_uwb/include" \
+	-I"$SDKFAKE" -I"$ECOMP/ultrawidelock_uwb/port" -I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$ROOT/modules/ultrawidelock_dw3000/include" -I"$ROOT/modules/ultrawidelock_dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
-	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
+	"$ECOMP/ultrawidelock_uwb/port/dw3000_hw.c" "$ECOMP/ultrawidelock_uwb/port/dw3000_spi.c" \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
-cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
-	-I"$ROOT/modules/ultrawidelock_dw3000/dwt_uwb_driver" -I"$ROOT/modules/woz_uwb/include" \
+cov_cc -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+	-I"$ROOT/modules/ultrawidelock_dw3000/dwt_uwb_driver" -I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$ET/test_esp_seam_stubs.c" \
-	"$ECOMP/woz_uwb/port/woz_seam_stubs.c" -o "$OUT/cov_esp_seam"
+	"$ECOMP/ultrawidelock_uwb/port/ultrawidelock_seam_stubs.c" -o "$OUT/cov_esp_seam"
 run_suite esp_seam "$OUT/cov_esp_seam"
 
 # C++ suite: the six matter-lock app sources on the matterfake CHIP/esp-matter
@@ -284,11 +284,11 @@ cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
 cov_cc -I"$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$OUT/aliro_approach_matter_cov.o"
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
-	-DCONFIG_WOZ_UWB_CIRDIAG=1 \
+	-DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 	-DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
 	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
 	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
-	-I"$ROOT/modules/woz_uwb/include" \
+	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$ET/test_esp_matter_lock.cpp" \
 	"$MLOCK/app_driver.cpp" "$MLOCK/app_main.cpp" "$MLOCK/app_shell.cpp" \
 	"$MLOCK/lock/door_lock_manager.cpp" "$MLOCK/lock/door_lock_callbacks.cpp" \
@@ -355,7 +355,7 @@ run_suite nfc "$OUT/cov_nfc"
 # mapping for it; this one carries the inline bodies, which is why it has to
 # stay a translation unit of its own. Mirrors run.sh stage 7.
 cov_cc -I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
-	-I"$ROOT/modules/woz_uwb/include" -I"$SRC/driver" \
+	-I"$ROOT/modules/ultrawidelock_uwb/include" -I"$SRC/driver" \
 	-I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" -o "$OUT/cov_seam"
 run_suite seam "$OUT/cov_seam"

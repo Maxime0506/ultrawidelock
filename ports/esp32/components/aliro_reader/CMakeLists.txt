@@ -40,7 +40,7 @@ idf_component_register(
 	INCLUDE_DIRS "${ALIRO}/include" "."
 	PRIV_INCLUDE_DIRS "${ALIRO}/src"
 	# woz_port.h / woz_log.h (the platform contract aliro_reader.c and
-	# aliro_ranging.c are written to) come via woz_uwb's public include dirs
+	# aliro_ranging.c are written to) come via ultrawidelock_uwb's public include dirs
 	# (modules/woz_port/include).
-	REQUIRES aliro_ble woz_uwb aliro_crypto nvs_flash
+	REQUIRES aliro_ble ultrawidelock_uwb aliro_crypto nvs_flash
 )

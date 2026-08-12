@@ -8,7 +8,7 @@
 
 #include <deca_device_api.h>
 
-#include "aliro_kdf.h" /* ALIRO_URSK_LEN */
+#include "cred_kdf.h" /* ULTRAWIDELOCK_URSK_LEN */
 #include "ccc_kdf.h"
 #include "ccc_mac.h"
 #include "ccc_shim.h"
@@ -17,7 +17,7 @@
 #include "test.h"
 
 /* The CCC STS substitution seam entry point (uwb_seam.h). */
-extern int32_t woz_uwb_arm_rx(int32_t mode);
+extern int32_t ultrawidelock_uwb_arm_rx(int32_t mode);
 
 #define RND_SID  0x11223344u
 #define RND_STS0 0x00400000u
@@ -26,7 +26,7 @@ extern int32_t woz_uwb_arm_rx(int32_t mode);
 #define RND_BLOCK 7u
 
 /* Session crypto constants, derived in setup exactly as prepoll_decode does. */
-static uint8_t g_ursk[ALIRO_URSK_LEN];
+static uint8_t g_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t g_mupsk1[CCC_MUPSK1_LEN];
 static uint8_t g_ks[CCC_KEYSOURCE_LEN];
 static uint8_t g_dest[CCC_DEST_SHORT_ADDR_LEN];
@@ -123,7 +123,7 @@ void test_prepoll_round(void)
 	uint8_t frame[128];
 	uint16_t len;
 	uint8_t rc[17];
-	struct woz_uwb_aliro_cfg c;
+	struct ultrawidelock_uwb_aliro_cfg c;
 	uint8_t mupsk2[CCC_MUPSK2_LEN], uad[CCC_UAD_LEN];
 	const uint32_t widx = RND_IDX1 + 2u * RND_STRIDE; /* warmed POLL index */
 	uint32_t fc = 100u;
@@ -151,11 +151,11 @@ void test_prepoll_round(void)
 	c.ranging_config = rc;
 	c.rc_len = sizeof(rc);
 	woz_host_rx_reset();
-	T_EQ("start", woz_uwb_start_aliro(&c), 0);
+	T_EQ("start", ultrawidelock_uwb_start_aliro(&c), 0);
 	T_EQ("start.armed", woz_host_rx.rxenable_calls, 1);
 
 	t_group("STS substitution wrap programs a key while bound");
-	T_EQ("wrap.rxenable", woz_uwb_arm_rx(DWT_START_RX_IMMEDIATE),
+	T_EQ("wrap.rxenable", ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE),
 	     DWT_SUCCESS);
 
 	t_group("bootstrap: two Pre-POLL decodes learn index + stride");
@@ -231,8 +231,8 @@ void test_prepoll_round(void)
 	T_OK("notify_rx.survived", 1);
 
 	t_group("restart: a Pre-POLL event with no warm cannot arm SP3");
-	woz_uwb_stop();
-	T_EQ("restart", woz_uwb_start_aliro(&c), 0); /* log_reset clears the warm */
+	ultrawidelock_uwb_stop();
+	T_EQ("restart", ultrawidelock_uwb_start_aliro(&c), 0); /* log_reset clears the warm */
 	len = mk_prepoll(frame, fc++, RND_IDX1);
 	stash_frame(frame, len, 0x6000000ull);
 	rx_event(woz_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm_poll_sp3 -> no warm */
@@ -347,7 +347,7 @@ void test_prepoll_round(void)
 	T_OK("flush.survived", 1);
 
 	t_group("try_prepoll is gated once the listener is stopped");
-	woz_uwb_stop();
+	ultrawidelock_uwb_stop();
 	ccc_shim_rx_try_prepoll(len);
 	T_OK("stopped.not_awaiting", !ccc_shim_rx_awaiting_poll());
 }

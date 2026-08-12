@@ -30,9 +30,9 @@ int aliro_crypto_init(void)
 // Does not perform any derivation; block must already be the HKDF output of
 // aliro_crypto_derive_block.
 void aliro_crypto_ursk_from_block(const uint8_t block[ALIRO_KEY_BLOCK_LEN],
-				  uint8_t ursk[ALIRO_URSK_LEN])
+				  uint8_t ursk[ULTRAWIDELOCK_URSK_LEN])
 {
-	memcpy(ursk, block + ALIRO_URSK_OFFSET, ALIRO_URSK_LEN);
+	memcpy(ursk, block + ALIRO_URSK_OFFSET, ULTRAWIDELOCK_URSK_LEN);
 }
 
 /* ---- key schedule ---- */
@@ -74,7 +74,7 @@ int aliro_crypto_derive_key32(const uint8_t z[32], const uint8_t *salt, size_t s
 // config flag. ursk is always taken from the fixed S4 segment (offset 128) regardless of with_c.
 void aliro_crypto_split(const uint8_t block[ALIRO_KEY_BLOCK_LEN], int with_c,
 			uint8_t enc_key[ALIRO_SESSION_KEY_LEN],
-			uint8_t dec_key[ALIRO_SESSION_KEY_LEN], uint8_t ursk[ALIRO_URSK_LEN])
+			uint8_t dec_key[ALIRO_SESSION_KEY_LEN], uint8_t ursk[ULTRAWIDELOCK_URSK_LEN])
 {
 	/* Five 32-byte segments S0..S4. The config flag "derive shared key C"
 	 * shifts the base of the two directional keys: with C -> S0/S1, without
@@ -86,7 +86,7 @@ void aliro_crypto_split(const uint8_t block[ALIRO_KEY_BLOCK_LEN], int with_c,
 
 	memcpy(enc_key, block + base, ALIRO_SESSION_KEY_LEN);
 	memcpy(dec_key, block + base + 32u, ALIRO_SESSION_KEY_LEN);
-	memcpy(ursk, block + ALIRO_URSK_OFFSET, ALIRO_URSK_LEN);
+	memcpy(ursk, block + ALIRO_URSK_OFFSET, ULTRAWIDELOCK_URSK_LEN);
 }
 
 // Verify an AUTH0 fast-phase cryptogram (Aliro §8.3.1.11): AES-256-GCM open of the

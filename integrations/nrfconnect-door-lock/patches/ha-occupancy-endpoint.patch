@@ -770,9 +770,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  void __attribute__((weak)) emberAfOperationalCredentialsClusterInitCallback(EndpointId endpoint)
  {
  	// To prevent warning
-diff --git a/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager.h b/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager.h
---- a/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager.h
-+++ b/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager.h
+diff --git a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h
+--- a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h
++++ b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h
 @@ -31,6 +31,7 @@
  					       const CryptoTypes::PublicKey &accessCredentialPublicKey);
  	using AccessIndicatorCallback = void (*)(bool isAccessGranted, bool isNfcSession);
@@ -838,9 +838,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/bolt_lock_manage
  	});
  
  	auto addPublicKey = [](uint16_t credentialIndex, CredentialTypeEnum credentialType,
-diff --git a/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager_impl.cpp b/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager_impl.cpp
---- a/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager_impl.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/aliro/access_manager/access_manager_impl.cpp
+diff --git a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
+--- a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
++++ b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
 @@ -1003,6 +1003,12 @@
  
  	bool hasAnyOpenAllowed{ false };

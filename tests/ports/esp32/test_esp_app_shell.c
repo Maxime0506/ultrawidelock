@@ -18,7 +18,7 @@
 #include "linenoise/linenoise.h"
 
 #include "app_shell.h"
-#include "woz_diag.h"
+#include "ultrawidelock_diag.h"
 #include <ultrawidelock/uwb.h>
 
 static int fails;
@@ -34,32 +34,32 @@ static void okc(const char *name, int cond)
 }
 
 /* ---- facade / reader recording doubles ----------------------------------- */
-volatile int woz_uwb_diag_on;
+volatile int ultrawidelock_uwb_diag_on;
 
 static int s_start_calls, s_stop_calls, s_start_rc;
-static const struct woz_uwb_aliro_cfg *s_last_cfg;
+static const struct ultrawidelock_uwb_aliro_cfg *s_last_cfg;
 static bool s_have_range, s_have_trusted;
 static int32_t s_range_cm = 123, s_trusted_cm = 111;
 
-int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *cfg)
+int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *cfg)
 {
 	s_start_calls++;
 	s_last_cfg = cfg;
 	return s_start_rc;
 }
 
-void woz_uwb_stop(void)
+void ultrawidelock_uwb_stop(void)
 {
 	s_stop_calls++;
 }
 
-bool woz_uwb_last_range_cm(int32_t *cm_out)
+bool ultrawidelock_uwb_last_range_cm(int32_t *cm_out)
 {
 	*cm_out = s_range_cm;
 	return s_have_range;
 }
 
-bool woz_uwb_trusted_range_cm(int32_t *cm_out)
+bool ultrawidelock_uwb_trusted_range_cm(int32_t *cm_out)
 {
 	*cm_out = s_trusted_cm;
 	return s_have_trusted;
@@ -223,15 +223,15 @@ static void t_commands(void)
 					      "arm") == 0 && s_stepup_arms == 2);
 
 	/* uwbdiag: on/off/query/usage. */
-	woz_uwb_diag_on = 0;
+	ultrawidelock_uwb_diag_on = 0;
 	okc("uwbdiag on", run2(fake_cmd_lookup("uwbdiag"), "uwbdiag", "on") == 0 &&
-	    woz_uwb_diag_on == 1);
+	    ultrawidelock_uwb_diag_on == 1);
 	okc("uwbdiag off", run2(fake_cmd_lookup("uwbdiag"), "uwbdiag", "off") == 0 &&
-	    woz_uwb_diag_on == 0);
+	    ultrawidelock_uwb_diag_on == 0);
 	okc("uwbdiag query", run1(fake_cmd_lookup("uwbdiag"), "uwbdiag") == 0 &&
-	    woz_uwb_diag_on == 0);
+	    ultrawidelock_uwb_diag_on == 0);
 	okc("uwbdiag usage",
-	    run2(fake_cmd_lookup("uwbdiag"), "uwbdiag", "banana") == 0 && woz_uwb_diag_on == 0);
+	    run2(fake_cmd_lookup("uwbdiag"), "uwbdiag", "banana") == 0 && ultrawidelock_uwb_diag_on == 0);
 
 	/* clear + dumb-mode color gating. */
 	okc("clear cmd", run1(fake_cmd_lookup("clear"), "clear") == 0 &&

@@ -1,0 +1,5 @@
+# ultrawidelock_uwb tier: device-side (initiator) M1/M3 parser + M2/M4 builder — never in
+# the ultrawidelock_uwb Zephyr module (that builds the reader). Consumers:
+# examples/zephyr/nrf5340dk-initiator, tests/host/sources.sh (tested against the real
+# reader codec). One repo-root-relative path per line, sorted; add HERE only.
+modules/ultrawidelock_uwb/src/cred/ultrawidelock_device_uwb.c

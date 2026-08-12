@@ -8,7 +8,7 @@
  *
  * This is Phase 3.1: the primitives and the key schedule. The transaction state
  * machine that drives it (AUTH0/AUTH1, EXCHANGE) is 3.2; the handoff of the URSK
- * into woz_uwb_start_aliro(cfg) is 3.3.
+ * into ultrawidelock_uwb_start_aliro(cfg) is 3.3.
  */
 #pragma once
 
@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define ALIRO_URSK_LEN          32u
+#define ULTRAWIDELOCK_URSK_LEN          32u
 #define ALIRO_KEY_BLOCK_LEN     160u /* full derived block */
 #define ALIRO_URSK_OFFSET       128u /* URSK = block[128 .. 159] */
 #define ALIRO_SESSION_KEY_LEN   32u
@@ -39,7 +39,7 @@ int aliro_crypto_init(void);
 
 /* Extract the 32-byte URSK from the derived 160-byte key block. */
 void aliro_crypto_ursk_from_block(const uint8_t block[ALIRO_KEY_BLOCK_LEN],
-				  uint8_t ursk[ALIRO_URSK_LEN]);
+				  uint8_t ursk[ULTRAWIDELOCK_URSK_LEN]);
 
 /*
  * ---- Credential-auth key schedule (standard/ECDH path) -------------------
@@ -75,7 +75,7 @@ int aliro_crypto_derive_key32(const uint8_t z[32], const uint8_t *salt, size_t s
  */
 void aliro_crypto_split(const uint8_t block[ALIRO_KEY_BLOCK_LEN], int with_c,
 			uint8_t enc_key[ALIRO_SESSION_KEY_LEN],
-			uint8_t dec_key[ALIRO_SESSION_KEY_LEN], uint8_t ursk[ALIRO_URSK_LEN]);
+			uint8_t dec_key[ALIRO_SESSION_KEY_LEN], uint8_t ursk[ULTRAWIDELOCK_URSK_LEN]);
 
 /*
  * ---- Expedited-fast phase (§8.1.1.2, §8.3.1.10/.11/.12) ------------------

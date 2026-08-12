@@ -47,8 +47,8 @@ gate.
 
 | Seam | Contract header | Existing backends |
 |---|---|---|
-| DW3000 GPIO, reset, and IRQ | `dw3000_hw.h` | `ports/zephyr/dw3000/`, `ports/esp32/components/woz_uwb/port/` |
-| DW3000 SPI | `dw3000_spi.h` | `ports/zephyr/dw3000/`, `ports/esp32/components/woz_uwb/port/` |
+| DW3000 GPIO, reset, and IRQ | `dw3000_hw.h` | `ports/zephyr/dw3000/`, `ports/esp32/components/ultrawidelock_uwb/port/` |
+| DW3000 SPI | `dw3000_spi.h` | `ports/zephyr/dw3000/`, `ports/esp32/components/ultrawidelock_uwb/port/` |
 | Reader BLE GATT and L2CAP | `aliro_ble.h` | `ports/zephyr/ble/`, `ports/esp32/components/aliro_ble/` |
 | Initiator BLE central | `aliro_ble_central.h` | `ports/zephyr/ble/`, `ports/esp32/components/aliro_ble_central/` |
 | Reader credential store | `aliro_prov.h` | `ports/zephyr/store/`, `ports/esp32/components/aliro_reader/` |

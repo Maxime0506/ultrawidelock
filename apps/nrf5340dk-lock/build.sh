@@ -182,9 +182,9 @@ do_build() {
   resolve_chip
 
   local selftest=""
-  [ "${UWB_SELFTEST:-0}" = 1 ] && selftest="-DCONFIG_WOZ_UWB_SELFTEST=y"
+  [ "${UWB_SELFTEST:-0}" = 1 ] && selftest="-DCONFIG_ULTRAWIDELOCK_UWB_SELFTEST=y"
 
-  # Range-integrity gate (see modules/woz_uwb/Kconfig). Default off = shadow mode
+  # Range-integrity gate (see modules/ultrawidelock_uwb/Kconfig). Default off = shadow mode
   # (verdict logged, every block still latches). STRICT=1 drops a block whose STS
   # correlated poorly instead of feeding it to the unlock seam.
   local strict=""
@@ -354,8 +354,8 @@ do_build() {
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
     -DPM_STATIC_YML_FILE="$pm_yml"
     -DSB_EXTRA_CONF_FILE="$sb_conf"
-    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/ultrawidelock_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
-    -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_WOZ_UWB=y -DCONFIG_WOZ_UWB_RESPONDER=y
+    -DZEPHYR_EXTRA_MODULES="$TREE/modules/ultrawidelock_uwb;$TREE/modules/ultrawidelock_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
+    -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_ULTRAWIDELOCK_UWB=y -DCONFIG_ULTRAWIDELOCK_UWB_RESPONDER=y
     -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n
   )

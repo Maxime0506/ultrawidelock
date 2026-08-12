@@ -1,5 +1,5 @@
---- a/applications/matter-aliro-door-lock-app/src/aliro/Kconfig
-+++ b/applications/matter-aliro-door-lock-app/src/aliro/Kconfig
+--- a/applications/matter-aliro-door-lock-app/src/cred/Kconfig
++++ b/applications/matter-aliro-door-lock-app/src/cred/Kconfig
 @@ -78,8 +78,27 @@
  	  time forward to validFrom (never backward) instead of failing.
  	  Trade-off: a credential issuer that signs a future-dated document can
@@ -29,8 +29,8 @@
  endmenu # Aliro features
  
  rsource "platform/Kconfig"
---- a/applications/matter-aliro-door-lock-app/src/aliro/storage/storage_keys.h
-+++ b/applications/matter-aliro-door-lock-app/src/aliro/storage/storage_keys.h
+--- a/applications/matter-aliro-door-lock-app/src/cred/storage/storage_keys.h
++++ b/applications/matter-aliro-door-lock-app/src/cred/storage/storage_keys.h
 @@ -23,4 +23,10 @@
  
  #endif // CONFIG_DOOR_LOCK_STEP_UP_PHASE
@@ -42,8 +42,8 @@
 +#endif // CONFIG_DOOR_LOCK_TIME_CONCEPT_PERSIST
 +
  } // namespace Aliro::StorageKeys
---- a/applications/matter-aliro-door-lock-app/src/aliro/init.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/aliro/init.cpp
+--- a/applications/matter-aliro-door-lock-app/src/cred/init.cpp
++++ b/applications/matter-aliro-door-lock-app/src/cred/init.cpp
 @@ -40,6 +40,11 @@
  #include "shell.h"
  #endif // CONFIG_DOOR_LOCK_CLI

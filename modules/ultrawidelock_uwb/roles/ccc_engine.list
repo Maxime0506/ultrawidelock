@@ -1,0 +1,9 @@
+# ultrawidelock_uwb tier: reader-side CCC STS engine + facade (CONFIG_WOZ_ALIRO) — STS
+# generation, RX-arm shim, public facade; host-compiled against the RX stubs.
+# Consumers: modules/ultrawidelock_uwb/CMakeLists.txt, ports/esp32/components/ultrawidelock_uwb,
+# tests/host/sources.sh. One repo-root-relative path per line, sorted; add HERE only.
+modules/ultrawidelock_uwb/src/ccc/ccc_shim.c
+modules/ultrawidelock_uwb/src/ccc/ccc_shim_rx.c
+modules/ultrawidelock_uwb/src/ccc/ccc_shim_wrap.c
+modules/ultrawidelock_uwb/src/ccc/ccc_sts.c
+modules/ultrawidelock_uwb/src/facade/ultrawidelock_uwb_facade.c

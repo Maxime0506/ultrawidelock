@@ -2,7 +2,7 @@
 # libaliro/libaliro_ble reader engine. Shared by the ESP32-S3 port (where it is
 # the only implementation) and, behind this option, the nRF5340 build.
 #
-# Distinct from WOZ_ALIRO in modules/woz_uwb, which names the CCC/STS *ranging*
+# Distinct from WOZ_ALIRO in modules/ultrawidelock_uwb, which names the CCC/STS *ranging*
 # engine below this layer and is unrelated.
 
 config WOZ_ALIRO_STACK

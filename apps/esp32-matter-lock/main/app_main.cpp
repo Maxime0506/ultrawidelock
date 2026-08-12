@@ -211,7 +211,7 @@ static void on_uwb_range(void)
 	aliro_lat_mark(ALIRO_LAT_FIRST_RANGE);
 
 	int32_t cm;
-	if (woz_uwb_trusted_range_cm(&cm)) {
+	if (ultrawidelock_uwb_trusted_range_cm(&cm)) {
 		aliro_lat_mark(ALIRO_LAT_TRUSTED_RANGE);
 	}
 	if (aliro_reader_task_handle == nullptr) {
@@ -245,7 +245,7 @@ static void aliro_reader_task(void *arg)
 		vTaskDelay(pdMS_TO_TICKS(50));
 	}
 
-	woz_uwb_set_range_listener(on_uwb_range);
+	ultrawidelock_uwb_set_range_listener(on_uwb_range);
 #ifdef CONFIG_ENABLE_HA_MQTT
 	/* Access verdicts reach Home Assistant straight from the trust gate, which
 	 * runs on the BLE-host task; the listener only queues, never publishes. */
@@ -332,7 +332,7 @@ static void aliro_reader_task(void *arg)
 
 		int32_t cm = 0;
 		bool active = (woke > 0);
-		bool trusted = active && woz_uwb_trusted_range_cm(&cm);
+		bool trusted = active && ultrawidelock_uwb_trusted_range_cm(&cm);
 
 		enum aliro_approach_action act;
 
