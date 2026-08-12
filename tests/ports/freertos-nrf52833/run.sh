@@ -286,3 +286,19 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	"$ROOT/ports/freertos-nrf52833/crypto/crypto_init_freertos.c" \
 	-o "$CRYPTO_BIN"
 "$CRYPTO_BIN"
+
+# The OpenThread settings adapter, over the real store: the property under test
+# is that a packed multi-value record survives rewriting and a reset, and only
+# the real store can be wrong about that. Scenarios fork for the same reason
+# the store's own do.
+OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_ot_settings.c" \
+	"$HERE/fake/fake_flash.c" \
+	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/thread/ot_settings_freertos.c" \
+	-o "$OT_SETTINGS_BIN"
+"$OT_SETTINGS_BIN"

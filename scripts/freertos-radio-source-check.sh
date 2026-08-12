@@ -286,8 +286,9 @@ if ! rg -q '[[:space:]]otPlatEntropyGet\(' \
 	exit 2
 fi
 ot_error="$workspace/modules/lib/openthread/include/openthread/error.h"
-for pair in 'OT_ERROR_NONE = 0' 'OT_ERROR_FAILED = 1' 'OT_ERROR_INVALID_ARGS = 7' \
-	'OT_ERROR_NOT_CAPABLE = 27' ; do
+for pair in 'OT_ERROR_NONE = 0' 'OT_ERROR_FAILED = 1' 'OT_ERROR_NO_BUFS = 3' \
+	'OT_ERROR_INVALID_ARGS = 7' 'OT_ERROR_NOT_IMPLEMENTED = 12' \
+	'OT_ERROR_NOT_FOUND = 23' 'OT_ERROR_NOT_CAPABLE = 27' ; do
 	if ! rg -Fq "$pair" "$ot_error"; then
 		printf 'radio-source-check: OpenThread error value moved: %s\n' "$pair" >&2
 		exit 2
@@ -302,6 +303,53 @@ for pair in 'OT_PLAT_RESET_REASON_POWER_ON = 0' 'OT_PLAT_RESET_REASON_EXTERNAL =
 	fi
 done
 printf '  ok   OpenThread entropy, reset and error contracts match the port\n'
+
+# thread/ot_settings_freertos.c packs multi-value settings into the port's
+# key-value store through a reproduced header. Its record format leans on the
+# key values, its refusals on the vendor-range boundary, and its buffer sizing
+# on the largest single value, so all three are pinned against upstream.
+ot_settings="$workspace/modules/lib/openthread/include/openthread/platform/settings.h"
+require_file "$ot_settings" 'OpenThread settings contract'
+# Whole prototypes, not just the names. The port defines these functions, so a
+# parameter type that drifts upstream is a link the host build cannot fail on:
+# the reproduced header would still agree with the port and disagree with the
+# real one. board/time_freertos.c lost weeks to that shape of divergence.
+while IFS= read -r prototype; do
+	if ! rg -Fq "$prototype" "$ot_settings"; then
+		printf 'radio-source-check: OpenThread settings prototype moved: %s\n' \
+			"$prototype" >&2
+		exit 2
+	fi
+done <<'EOF'
+void otPlatSettingsInit(otInstance *aInstance, const uint16_t *aSensitiveKeys, uint16_t aSensitiveKeysLength);
+void otPlatSettingsDeinit(otInstance *aInstance);
+otError otPlatSettingsGet(otInstance *aInstance, uint16_t aKey, int aIndex, uint8_t *aValue, uint16_t *aValueLength);
+otError otPlatSettingsSet(otInstance *aInstance, uint16_t aKey, const uint8_t *aValue, uint16_t aValueLength);
+otError otPlatSettingsAdd(otInstance *aInstance, uint16_t aKey, const uint8_t *aValue, uint16_t aValueLength);
+otError otPlatSettingsDelete(otInstance *aInstance, uint16_t aKey, int aIndex);
+void otPlatSettingsWipe(otInstance *aInstance);
+EOF
+for pair in 'OT_SETTINGS_KEY_ACTIVE_DATASET += 0x0001' 'OT_SETTINGS_KEY_PENDING_DATASET += 0x0002' \
+	'OT_SETTINGS_KEY_NETWORK_INFO += 0x0003' 'OT_SETTINGS_KEY_PARENT_INFO += 0x0004' \
+	'OT_SETTINGS_KEY_CHILD_INFO += 0x0005' 'OT_SETTINGS_KEY_SRP_ECDSA_KEY += 0x000b' \
+	'OT_SETTINGS_KEY_VENDOR_RESERVED_MIN += 0x8000'; do
+	if ! rg -q "$pair" "$ot_settings"; then
+		printf 'radio-source-check: OpenThread settings key moved: %s\n' "$pair" >&2
+		exit 2
+	fi
+done
+# Delete's index -1 wildcard is behaviour the adapter reproduces, not a value
+# it can link against, so the words that promise it are pinned too.
+if ! rg -q 'If set to -1, all values for this @p aKey will be' "$ot_settings"; then
+	printf 'radio-source-check: settings Delete no longer documents index -1\n' >&2
+	exit 2
+fi
+if ! rg -Fq '#define OT_OPERATIONAL_DATASET_MAX_LENGTH 254' \
+	"$workspace/modules/lib/openthread/include/openthread/dataset.h"; then
+	printf 'radio-source-check: the largest Operational Dataset value moved\n' >&2
+	exit 2
+fi
+printf '  ok   OpenThread settings contract, key values and dataset limit match the port\n'
 
 if ! rg -Fq 'valid for both RTOS and RTOS-free environments' \
 	"$nrfxlib/mpsl/doc/mpsl.rst"; then
