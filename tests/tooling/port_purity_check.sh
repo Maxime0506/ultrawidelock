@@ -8,15 +8,15 @@
 # the other two at the worst time — after the change looked done. This gate
 # fails the commit instead. Two shapes are banned in modules/** sources:
 #
-#   1. platform includes   #include <zephyr/...> / "freertos/..." / <esp_...>
+#   1. platform includes   Zephyr, ESP-IDF, or canonical FreeRTOS headers
 #   2. Zephyr kernel API   k_work*, k_sem*, k_thread*, k_timer*, k_fifo*,
 #                          k_msleep, SYS_INIT, K_WORK_*, K_SEM_*, flash_area_*,
 #                          sys_reboot — platform code goes through woz_port
 #
 # and one shape is banned in platform-owned trees, which is the same rule read
 # from the other side: each names exactly one OS (check_port_os). modules/ names
-# none, each app/example plus ports/zephyr names Zephyr, while the ESP32 app,
-# examples and port name ESP-IDF. A file naming the wrong one is in the wrong tree.
+# none, and the Zephyr, ESP-IDF, and standalone FreeRTOS trees may name only
+# their own platform. A file naming the wrong one is in the wrong tree.
 #
 #   tests/tooling/port_purity_check.sh              # scan the tracked sources
 #   tests/tooling/port_purity_check.sh --self-test  # prove the gate can fail
@@ -97,8 +97,9 @@ cd "$(dirname "$0")/../.."
 INC_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<]'
 ZEPHYR_INC_RE="${INC_RE}zephyr/"
 ESP_INC_RE="${INC_RE}(freertos/|esp_)"
-INCLUDE_RE="${INC_RE}(zephyr/|freertos/|esp_)"
-KERNEL_RE='(^|[^_[:alnum:]])(k_(work|sem|thread|timer|fifo|msleep|sleep|usleep|busy_wait|yield)|sys_reboot|flash_area_|SYS_INIT|K_(WORK|SEM|THREAD|TIMER|FIFO|MUTEX))'
+FREERTOS_INC_RE="${INC_RE}(freertos/)?(FreeRTOS|task|semphr|queue|timers)\.h"
+INCLUDE_RE="${INC_RE}(zephyr/|freertos/|esp_|(FreeRTOS|task|semphr|queue|timers)\.h)"
+KERNEL_RE='(^|[^_[:alnum:]])(k_(work|sem|thread|timer|fifo|msleep|sleep|usleep|busy_wait|yield)|sys_reboot|flash_area_|SYS_INIT|K_(WORK|SEM|THREAD|TIMER|FIFO|MUTEX)|(x|v|ux|ul)Task[A-Z_][A-Za-z0-9_]*|x(Queue|Semaphore|Timer)[A-Z_][A-Za-z0-9_]*|pvPortMalloc|vPortFree)'
 
 # Prose naming a kernel symbol is not a call. Same filter as the seam gate:
 # drop comment-opening lines from `grep -n` output, keep code with a trailing
@@ -254,6 +255,7 @@ scan() {
 # headers on purpose, and their honesty is enforced by compiling, not by this.
 ZEPHYR_TREES=(apps/dwm3001cdk-lock apps/nrf5340dk-lock examples/zephyr ports/zephyr)
 ESP_TREES=(apps/esp32-matter-lock examples/esp32 ports/esp32)
+FREERTOS_TREES=(apps/dwm3001cdk-lock-freertos ports/freertos-nrf52833)
 
 tree_sources() { # <dir>... -> the tracked C/C++ sources under them
 	local d args=()
@@ -273,19 +275,34 @@ os_findings() { # <banned-re> <dir>... -> file:line:text per offence
 
 check_port_os() {
 	local fails=0 n line
-	n=$(tree_sources "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}" | wc -l | tr -d ' ')
+	n=$(tree_sources "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}" "${FREERTOS_TREES[@]}" |
+		wc -l | tr -d ' ')
 
 	while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		printf '%s  esp/freertos include in a Zephyr tree: %s%s\n' "$R" "$line" "$Z" >&2
 		fails=$((fails + 1))
-	done < <(os_findings "$ESP_INC_RE" "${ZEPHYR_TREES[@]}")
+	done < <(os_findings "$ESP_INC_RE|$FREERTOS_INC_RE" "${ZEPHYR_TREES[@]}")
 
 	while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		printf '%s  zephyr include in the ESP-IDF tree: %s%s\n' "$R" "$line" "$Z" >&2
 		fails=$((fails + 1))
 	done < <(os_findings "$ZEPHYR_INC_RE" "${ESP_TREES[@]}")
+
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		printf '%s  zephyr include in the standalone FreeRTOS tree: %s%s\n' \
+			"$R" "$line" "$Z" >&2
+		fails=$((fails + 1))
+	done < <(os_findings "$ZEPHYR_INC_RE" "${FREERTOS_TREES[@]}")
+
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		printf '%s  ESP-IDF include in the standalone FreeRTOS tree: %s%s\n' \
+			"$R" "$line" "$Z" >&2
+		fails=$((fails + 1))
+	done < <(os_findings "$ESP_INC_RE" "${FREERTOS_TREES[@]}")
 
 	if [ "$fails" -gt 0 ]; then
 		printf '%scheck-purity: %d cross-OS include(s) in a platform tree%s\n' "$R" "$fails" "$Z" >&2
@@ -812,6 +829,7 @@ self_test() {
 	local should_fire=(
 		'#include <zephyr/kernel.h>'
 		'  #include "freertos/FreeRTOS.h"'
+		'  #include "FreeRTOS.h"'
 		'#include <esp_timer.h>'
 		'	k_work_submit(&ctx.work);'
 		'	if (k_sem_take(&s, K_MSEC(50)) != 0) {'
@@ -819,6 +837,7 @@ self_test() {
 		'SYS_INIT(boost, PRE_KERNEL_1, 0);'
 		'K_WORK_DELAYABLE_DEFINE(rearm, rearm_fn);'
 		'	sys_reboot(SYS_REBOOT_COLD);'
+		'	xTaskCreateStatic(entry, "worker", 128, NULL, 3, stack, &tcb);'
 	)
 	local should_not=(
 		'	woz_work_submit(&ctx.work);'
@@ -895,11 +914,15 @@ self_test() {
 	# Per-OS halves: each must fire on the other OS and stay quiet on its own,
 	# or check_port_os would ban a tree from the platform it is written for.
 	local zline='#include <zephyr/kernel.h>' eline='#include "freertos/task.h"'
+	local fline='#include "task.h"'
 	printf '%s\n' "$zline" | grep -qE "$ZEPHYR_INC_RE" ||
 		{ printf '%s  self-test FAILED: zephyr half missed its own include%s\n' "$R" "$Z" >&2
 			fails=$((fails + 1)); }
 	printf '%s\n' "$eline" | grep -qE "$ESP_INC_RE" ||
 		{ printf '%s  self-test FAILED: esp half missed its own include%s\n' "$R" "$Z" >&2
+			fails=$((fails + 1)); }
+	printf '%s\n' "$fline" | grep -qE "$FREERTOS_INC_RE" ||
+		{ printf '%s  self-test FAILED: FreeRTOS half missed its own include%s\n' "$R" "$Z" >&2
 			fails=$((fails + 1)); }
 	if printf '%s\n' "$zline" | grep -qE "$ESP_INC_RE"; then
 		printf '%s  self-test FAILED: esp half fired on a zephyr include%s\n' "$R" "$Z" >&2
@@ -909,17 +932,29 @@ self_test() {
 		printf '%s  self-test FAILED: zephyr half fired on an esp include%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
+	if printf '%s\n' "$fline" | grep -qE "$ESP_INC_RE|$ZEPHYR_INC_RE"; then
+		printf '%s  self-test FAILED: another OS half fired on a canonical FreeRTOS include%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
 	# The tree lists must be disjoint, and must not reach into modules/ or
 	# tests/ — a tree in both lists could name neither OS and pass.
 	local zt et
 	for zt in "${ZEPHYR_TREES[@]}"; do
-		for et in "${ESP_TREES[@]}"; do
+		for et in "${ESP_TREES[@]}" "${FREERTOS_TREES[@]}"; do
 			case "$zt" in "$et" | "$et"/*) ;; *) continue ;; esac
 			printf '%s  self-test FAILED: %s is in both OS tree lists%s\n' "$R" "$zt" "$Z" >&2
 			fails=$((fails + 1))
 		done
 	done
-	for zt in "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}"; do
+	for zt in "${ESP_TREES[@]}"; do
+		for et in "${FREERTOS_TREES[@]}"; do
+			case "$zt" in "$et" | "$et"/*) ;; *) continue ;; esac
+			printf '%s  self-test FAILED: %s is in both OS tree lists%s\n' "$R" "$zt" "$Z" >&2
+			fails=$((fails + 1))
+		done
+	done
+	for zt in "${ZEPHYR_TREES[@]}" "${ESP_TREES[@]}" "${FREERTOS_TREES[@]}"; do
 		case "$zt" in
 		modules | modules/* | tests | tests/*)
 			printf '%s  self-test FAILED: %s is not a platform tree%s\n' "$R" "$zt" "$Z" >&2

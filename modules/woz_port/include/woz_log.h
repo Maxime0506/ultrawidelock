@@ -57,6 +57,41 @@
 #define printk(...) printf(__VA_ARGS__) /* see WOZ_PRINTK_COMPAT below */
 #endif
 
+#elif defined(WOZ_PORT_FREERTOS)
+
+#include "woz_freertos_platform.h"
+
+#define LOG_LEVEL_NONE 0
+#define LOG_LEVEL_ERR  1
+#define LOG_LEVEL_WRN  2
+#define LOG_LEVEL_INF  3
+#define LOG_LEVEL_DBG  4
+
+#define LOG_MODULE_REGISTER(name, ...)                                                             \
+	static const char *const WOZ_LOG_TAG __attribute__((unused)) = #name
+#define LOG_MODULE_DECLARE(name, ...)                                                              \
+	static const char *const WOZ_LOG_TAG __attribute__((unused)) = #name
+
+#define LOG_ERR(...) woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_WRN(...) woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_INF(...) woz_freertos_log(WOZ_FREERTOS_LOG_INFO, WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_DBG(...) woz_freertos_log(WOZ_FREERTOS_LOG_DEBUG, WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_PRINTK(...) woz_freertos_log(WOZ_FREERTOS_LOG_RAW, NULL, __VA_ARGS__)
+
+#define LOG_HEXDUMP_ERR(p, l, s)                                                                  \
+	woz_freertos_log_hexdump(WOZ_FREERTOS_LOG_ERROR, WOZ_LOG_TAG, (p), (l), (s))
+#define LOG_HEXDUMP_WRN(p, l, s)                                                                  \
+	woz_freertos_log_hexdump(WOZ_FREERTOS_LOG_WARNING, WOZ_LOG_TAG, (p), (l), (s))
+#define LOG_HEXDUMP_INF(p, l, s)                                                                  \
+	woz_freertos_log_hexdump(WOZ_FREERTOS_LOG_INFO, WOZ_LOG_TAG, (p), (l), (s))
+#define LOG_HEXDUMP_DBG(p, l, s)                                                                  \
+	woz_freertos_log_hexdump(WOZ_FREERTOS_LOG_DEBUG, WOZ_LOG_TAG, (p), (l), (s))
+
+#define woz_printf(...) woz_freertos_log(WOZ_FREERTOS_LOG_RAW, NULL, __VA_ARGS__)
+#ifndef printk
+#define printk(...) woz_printf(__VA_ARGS__) /* see WOZ_PRINTK_COMPAT above */
+#endif
+
 #elif defined(WOZ_PORT_HOST)
 
 #include <stdio.h>
@@ -91,7 +126,7 @@
 #endif
 
 #else
-#error "woz_log.h: no platform backend. Define WOZ_PORT_HOST, or build under Zephyr/ESP-IDF."
+#error "woz_log.h: no platform backend. Define WOZ_PORT_HOST/WOZ_PORT_FREERTOS, or build under Zephyr/ESP-IDF."
 #endif
 
 #endif /* WOZ_LOG_H */

@@ -10,6 +10,21 @@
 #   scope      tests/tooling/uwb_engine_scope_check.sh  no vendor radio API outside the DW3000 engine
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
 #
+# Opt-in, not in the default set:
+#
+#   freertos   tests/ports/freertos-nrf52833/run.sh  standalone RTOS contract
+#
+# The FreeRTOS port has no hardware verdict yet -- no bring-up, no coexistence
+# proof, none of the four release gates -- so it does not get a vote on whether
+# this repository is green. Run it with `make check-freertos`, or fold it in
+# with SUITES="... freertos".
+#
+# That has a cost worth stating, because this port has already paid it once:
+# make freertos-ncs-source-check silently stopped compiling for weeks precisely
+# because it was not in a default set, and nothing noticed until someone ran it
+# by hand. An opt-in suite rots. Whoever moves the port to hardware should move
+# this line into the default set at the same time.
+#
 # Default: suites run in parallel, failures replayed when done. SERIAL=1 streams
 # full output one suite at a time. SUITES="firmware shared" scopes. Exit is
 # nonzero if any suite fails.
@@ -29,6 +44,7 @@ suite_cmd() {
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
 	scope) echo "bash tests/tooling/uwb_engine_scope_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
+	freertos) echo "bash tests/ports/freertos-nrf52833/run.sh" ;;
 	esac
 }
 
@@ -41,6 +57,7 @@ suite_label() {
 	seam) echo "uwb seam" ;;
 	scope) echo "uwb engine scope" ;;
 	purity) echo "port purity" ;;
+	freertos) echo "FreeRTOS port" ;;
 	esac
 }
 

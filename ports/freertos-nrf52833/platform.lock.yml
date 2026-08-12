@@ -1,0 +1,64 @@
+schema: 1
+
+# Board, UWB, and FreeRTOS source base supplied as a local vendor artifact.
+qorvo_dw3_qm33_sdk:
+  version: 1.1.1
+  artifact: DW3_QM33_SDK_1.1.1.zip
+  sha256: ec804092158babe4849d224b05528e7cbf3cfe92a05767df0e8274081341ec9e
+
+# Keep Thread behavior identical to the NCS v3.3.0 Zephyr oracle while the
+# scheduler and platform drivers move to FreeRTOS.
+openthread:
+  repository: https://github.com/nrfconnect/sdk-openthread
+  revision: 0e26667136c2c49d42c96b8104ec2e90e8d55e4d
+  upstream_revision: c6eaeda5a1c1c5dbb24dce7e027340cb8893a77b
+
+# Shipping-radio candidate. MPSL and SoftDevice Controller are linkable,
+# RTOS-agnostic libraries; nrf_802154 supplies an nRF52833 service-layer binary
+# and source-buildable core with a documented non-NCS integration path.
+nrfxlib:
+  repository: https://github.com/nrfconnect/sdk-nrfxlib
+  revision: cfb98f4bcd4efe00df0c741e137b42f307680402
+  mpsl_sdc_binary_revision: 27037d53048dfe99a9f29aadde5b6ae2746cac75
+
+# All three files are compiled from the vendor tree unmodified rather than
+# patched or reimplemented; make freertos-ncs-source-check builds them. The SDC
+# command API is opcode-specific, so the dispatcher is built against
+# ble/hci_compat. The high-precision timer platform already depends on nothing
+# but nrfx and the Nordic HAL, so it needs no compatibility layer at all. The
+# OpenThread radio platform is the whole otPlatRadio implementation and takes
+# only a semaphore, a queue, atomics, byte order, logging and assertions from
+# Zephyr, which thread/ot_compat supplies.
+ncs_sdk_nrf:
+  repository: https://github.com/nrfconnect/sdk-nrf
+  revision: ba167d9f3db4abbdc9b67887ca3ea66c64f2d956
+  sources:
+    - subsys/bluetooth/controller/hci_internal.c
+    - modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c
+    - modules/openthread/platform/radio_nrf5.c
+
+hal_nordic:
+  repository: https://github.com/zephyrproject-rtos/hal_nordic
+  revision: 1acb428a205bad58f3dfd4e38f2d1663bb784ba1
+
+# Crypto provider. Built standalone from its own CMake with no Zephyr, and with
+# the PSA core on so modules/woz_aliro/src/aliro_prim_psa.c compiles unchanged.
+# The NCS fork is pinned rather than upstream Mbed TLS so the algorithm set and
+# version match what the Zephyr oracle links, which is what makes the oracle
+# usable as a behavioural reference for the crypto path.
+#
+# nrf_oberon is deliberately NOT pinned. It would be faster at P-256 and costs
+# no licence this port does not already pay, but the glue that binds it under
+# the PSA core is nrf_security, which is Zephyr Kconfig. It stays out until
+# something is measured to need it.
+mbedtls:
+  repository: https://github.com/nrfconnect/sdk-mbedtls
+  version: 3.6.6
+  revision: 5bb86aeae32420e4f537e5cc390f7219a1bcf500
+  west_revision: ncs-v3.3.0
+
+# Zephyr-free BLE host selected for peripheral GATT and credit-based L2CAP.
+nimble:
+  repository: https://github.com/apache/mynewt-nimble
+  version: 1.10.0
+  revision: a7a156f28954819e158b62dd613008f22f9cf73b

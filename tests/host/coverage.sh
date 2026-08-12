@@ -157,7 +157,8 @@ SIDE_UNIT_SRCS=(
 	"$SRC/ccc/ccc_crypto_mbedtls.c"
 	"$ALIRO/src/aliro_prim_psa.c"
 	"$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp"
-	"$ECOMP/aliro_ble/aliro_ble.c"
+	"$ECOMP/aliro_ble/aliro_ble_esp32.c"
+	"$ALIRO/src/aliro_ble_nimble.c"
 	"$ECOMP/aliro_reader/aliro_prov_nvs.c"
 	"$ECOMP/aliro_reader/aliro_stepup_worker.c"
 	"$ECOMP/woz_uwb/port/dw3000_hw.c"
@@ -221,7 +222,8 @@ cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_c_cov.o"
 run_suite ecp "$OUT/cov_ecp"
 
 cov_cc -I"$SDKFAKE" -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$ET/test_esp_aliro_ble.c" "$ECOMP/aliro_ble/aliro_ble.c" \
+	"$ET/test_esp_aliro_ble.c" "$ECOMP/aliro_ble/aliro_ble_esp32.c" \
+	"$ALIRO/src/aliro_ble_nimble.c" \
 	"$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
 	"$SHARED/aliro_prim_host.c" \
 	"$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_ble"

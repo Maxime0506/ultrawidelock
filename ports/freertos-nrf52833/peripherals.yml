@@ -1,0 +1,73 @@
+schema: 1
+
+# Frozen nRF52833 ownership for the shipping MPSL configuration. The Qorvo
+# archive's weak vector stubs allow the port to provide these handlers.
+interrupts:
+  RADIO: { priority: 0, owner: mpsl }
+  RTC0: { priority: 0, owner: mpsl }
+  TIMER0: { priority: 0, owner: mpsl }
+  SWI0_EGU0: { priority: 1, owner: nrf_802154 }
+  SWI5_EGU5: { priority: 4, owner: mpsl_low_priority }
+  RNG: { priority: 6, owner: board_entropy }
+  RTC1: { priority: 15, owner: freertos_tick }
+  RTC2: { priority: 1, owner: nrf_802154_low_power_timer }
+  GPIOTE: { priority: 4, owner: dw3000_irq }
+  SPIM3: { priority: 5, owner: dw3000_spi, enabled: false }
+
+peripherals:
+  RTC0: mpsl
+  RTC1: freertos_tick
+  RTC2: nrf_802154_low_power_timer
+  TIMER0: mpsl
+  TIMER1: nrf_802154_high_precision_timer
+  EGU0: nrf_802154
+  EGU5: mpsl_low_priority
+  RADIO: mpsl
+  CLOCK: mpsl
+  RNG: board_entropy
+  TEMP: mpsl
+  SPIM3: dw3000_spi
+  GPIOTE: dw3000_irq
+
+handoffs:
+  - Remove Qorvo app_timer from RTC2; delayable work is owned by the FreeRTOS OSAL.
+  - Route the board vectors for RADIO, RTC0, TIMER0, POWER_CLOCK, and SWI5_EGU5
+    to the woz_freertos_radio_*_isr entry points, and RTC2 to
+    nrf_802154_lptimer_freertos_irq_handler; the port owns the rest.
+  - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
+  - Route the board's RNG vector to woz_freertos_rng_isr. The handler only fills
+    this port's entropy pool and calls nothing, so it carries no FreeRTOS
+    priority constraint; it sits below MPSL and the 802.15.4 driver so a refill
+    can never delay a radio event.
+  - TEMP stays MPSL's. MPSL takes its own readings to calibrate the low-frequency
+    clock and the peripheral answers one measurement at a time, so a second
+    reader driving TASKS_START would corrupt the radio timebase. Die temperature
+    comes from mpsl_temperature_get instead.
+  - SPIM3 is the DW3110 link, on the pin map the Qorvo v1.1.1 QANI DWM3001CDK
+    project fixes: SCK P0.03, MOSI P0.08, MISO P0.29, CS P1.06. CS is a plain
+    GPIO rather than SPIM's own CSN, because the wake sequence has to hold it
+    low for 500 us with no clock on the bus.
+  - The SPIM3 vector stays disabled and its priority entry is a reservation, not
+    a routed handler. EasyDMA raises END and the calling task polls that event
+    directly, so an enabled vector would add one interrupt per transfer -- and
+    there are several per frame-pull -- while the caller is spinning anyway. The
+    5 records where it would have to land if a later change ever routes it: at
+    or below the FreeRTOS syscall ceiling of 4, so the handler is allowed to
+    call an RTOS API, and never inside the 0-3 band that belongs to the radio.
+  - GPIOTE is the DW3110 interrupt line, P1.02, at priority 4. That is the most
+    urgent level at which a handler may still call vTaskNotifyGiveFromISR, and
+    this handler must: dwt_isr does SPI, so the vector can only wake a task and
+    the ranging work happens there. Four rather than five is deliberate. At five
+    the MPSL low-priority handler on SWI5_EGU5 would preempt the DW3110 line;
+    at four they are equal and neither can interrupt the other, which is what
+    the ~1.836 ms response-arm deadline needs. The cost to MPSL is the few
+    hundred nanoseconds this handler takes to notify and return.
+  - Verify the GPIOTE channel the DW3110 line takes against MPSL and nRF 802.15.4
+    at target compile time, the same way as PPI below. Both stacks can claim
+    GPIOTE channels -- MPSL for a front-end module, the 802.15.4 driver for coex
+    and antenna diversity -- and this product configures none of those, so the
+    channel is expected to be free. Expected is not linked, so assert it.
+  - Verify every PPI channel against MPSL and nRF 802.15.4 masks at target compile time.
+    The low-power timer hardware task does not need an entry here: the 802.15.4
+    driver core allocates that channel from its own mask and hands it to the
+    platform.

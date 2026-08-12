@@ -416,7 +416,13 @@ static int parse_validity(struct cbor *c, struct aliro_stepup_doc *doc)
 			uint64_t tag;
 			const uint8_t *s;
 			size_t sl;
-			int64_t ep;
+			/* tdate_epoch leaves this alone when it rejects the string,
+			 * and the assignments below are unconditional -- the have_*
+			 * flag, not the epoch, is what says whether the date parsed.
+			 * Storing an indeterminate value behind a false flag is a
+			 * landmine for any reader that checks one and not the other,
+			 * so the failed case is a deterministic zero. */
+			int64_t ep = 0;
 
 			if (cb_tag(c, &tag) != 0 || tag != 0u || cb_tstr(c, &s, &sl) != 0) {
 				return -1;

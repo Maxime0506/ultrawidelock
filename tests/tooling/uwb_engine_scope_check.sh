@@ -29,6 +29,10 @@
 #   facade/flight_recorder.c         reads radio timestamps into the flight log
 #   ports/zephyr/dw3000/**           the wiring seams' Zephyr backend
 #   ports/esp32/components/woz_uwb/port/**  the same two seams plus stubs, ESP32
+#   ports/freertos-nrf52833/uwb/**   the same again, standalone FreeRTOS: the
+#                                    DW3110 SPI and reset/IRQ/wake backends,
+#                                    which call dwt_isr and dwt_checkidlerc as
+#                                    the ESP-IDF ones do, and the seam stubs
 #   examples/zephyr/anchor/**        bench tools that drive the radio directly
 #   examples/zephyr/nrf5340dk-initiator/**  on purpose; they are DW3000 rigs
 #   tests/**                         host doubles and fixtures
@@ -75,6 +79,7 @@ ENGINE_RE='^(modules/woz_dw3000/
 |modules/woz_uwb/src/facade/flight_recorder\.c
 |ports/zephyr/dw3000/
 |ports/esp32/components/woz_uwb/port/
+|ports/freertos-nrf52833/uwb/
 |examples/zephyr/anchor/
 |examples/zephyr/nrf5340dk-initiator/
 |tests/)'

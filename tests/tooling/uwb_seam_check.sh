@@ -31,7 +31,10 @@
 #   ccc_shim_wrap.c            implements woz_uwb_set_sts_iv          sites have
 #   uwb_rxdiag.c               implements the other two               already
 #   port/woz_seam_stubs.c      the ESP32 half of the same two         programmed
-#                                                                     the STS
+#   uwb/woz_seam_stubs.c       the FreeRTOS half of the same two      the STS
+#                              (both ports omit uwb_rxdiag.c, whose
+#                              heartbeat is Zephyr work items, and so
+#                              must re-create the Pre-POLL warm chain)
 #   ccc_sts.c                  the register-level key/IV packer itself, with no
 #                              production caller (host suites only)
 #   modules/woz_dw3000/**      the vendor decadriver: it defines these
@@ -71,6 +74,7 @@ EXEMPT_RE='^(modules/woz_uwb/include/uwb_seam\.h
 |modules/woz_uwb/src/ccc/ccc_sts\.c
 |modules/woz_uwb/src/driver/uwb_rxdiag\.c
 |ports/esp32/components/woz_uwb/port/woz_seam_stubs\.c
+|ports/freertos-nrf52833/uwb/woz_seam_stubs\.c
 |modules/woz_dw3000/
 |tests/)'
 EXEMPT_RE=${EXEMPT_RE//$'\n'/}
