@@ -405,6 +405,30 @@ with the same feature set, so every layer is measured as it lands. What is
 currently linked is the kernel, the device layer, and the board's timebase,
 logging, and fault paths.
 
+What is linked, and what it costs, measured at the link rather than estimated:
+
+| Layer | Contents |
+| --- | --- |
+| kernel | FreeRTOS V10.0.0 and its Cortex-M4F port, compiled unmodified |
+| device | the pinned hal_nordic nrfx, MDK, and CMSIS |
+| board | startup and vector table, RTC1 tick, timebase, RTT log, faults, entropy, die temperature |
+| radio | MPSL, the peripheral SoftDevice Controller, the FEM dispatch layer, and the pinned NCS opcode dispatcher |
+| crypto | Mbed TLS 3.6.6, libmbedcrypto sources only, PSA core on |
+| BLE | Apache NimBLE host, porting layer, and transport |
+
+That image is 159,272 bytes of flash and 49,368 of RAM: 31 percent of the flash
+budget and 38 percent of the RAM one. OpenThread, the nRF 802.15.4 driver, the
+storage layer, UWB, and the application are not in it yet, and OpenThread is
+the largest of those by a wide margin.
+
+The RAM figure is the one that matters. The first link with the BLE host in it
+also found 3,480 bytes of isochronous transport buffers that upstream allocates
+by default and that nothing in this product can use, since the transport rejects
+ISO packets outright; `ble/nimble_syscfg` now sets those counts to zero. The
+next candidate is the ACL pool at 3,000 bytes, which is upstream's ten blocks
+for a build with one connection, but that one is a throughput trade rather than
+dead weight and should be measured before it is cut.
+
 The cross toolchain is found on `PATH`. Set `WOZ_ARM_TOOLCHAIN_DIR` to a
 toolchain's `bin` directory to use one installed outside the system prefix
 without putting it on `PATH` for everything else.

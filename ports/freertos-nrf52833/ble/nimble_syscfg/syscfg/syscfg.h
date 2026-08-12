@@ -64,6 +64,21 @@
  * BLE_OWN_ADDR_RPA_* type would fail at runtime, not at build time.
  */
 
+/*
+ * No isochronous buffers. Upstream defaults these to ten blocks in each
+ * direction at 300 bytes, and the transport pool allocates them unconditionally
+ * whether or not anything can use them.
+ *
+ * Nothing here can. ble/nimble_sdc_transport.c rejects ISO packets outright,
+ * the controller does not link an isochronous feature, and the product needs
+ * GATT and credit-based L2CAP rather than LE Audio. The first target link
+ * measured the cost at 3,480 bytes of RAM, which is worth naming in a budget
+ * where the Zephyr oracle overflows 128 KB by 1,752.
+ */
+#define MYNEWT_VAL_BLE_TRANSPORT_ISO_FROM_HS_COUNT (0)
+#define MYNEWT_VAL_BLE_TRANSPORT_ISO_FROM_LL_COUNT (0)
+#define MYNEWT_VAL_BLE_TRANSPORT_ISO_COUNT (0)
+
 #include_next <syscfg/syscfg.h>
 
 #endif /* WOZ_FREERTOS_NIMBLE_SYSCFG_H */
