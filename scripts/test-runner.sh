@@ -158,12 +158,34 @@ if [[ "${SERIAL:-0}" == "1" ]]; then
 		run_suite "${NAMES[i]}" "${OUTS[i]}" "${METAS[i]}"
 	done
 else
+	printf '  %d suites in parallel · a row lands as each one finishes\n\n' "$n"
 	for i in $(seq 0 $((n - 1))); do
 		run_suite "${NAMES[i]}" "${OUTS[i]}" "${METAS[i]}" &
 		PIDS[i]=$!
 	done
-	for i in $(seq 0 $((n - 1))); do
-		wait "${PIDS[i]}" || true
+	# A row per suite as it lands. Poll the meta files rather than wait in
+	# index order: the suites finish out of order, so waiting on index 0 first
+	# holds every later row behind the slowest suite. Without this the run is a
+	# bare banner for minutes, which reads as a hang rather than as work.
+	declare -a REAPED
+	for i in $(seq 0 $((n - 1))); do REAPED[i]=0; done
+	left=$n
+	while [[ "$left" -gt 0 ]]; do
+		for i in $(seq 0 $((n - 1))); do
+			[[ "${REAPED[i]}" == 1 ]] && continue
+			# run_suite writes the meta line last, so a non-empty file means
+			# the work is finished and this wait returns immediately.
+			[[ -s "${METAS[i]}" ]] || continue
+			wait "${PIDS[i]}" || true
+			REAPED[i]=1
+			left=$((left - 1))
+			IFS='|' read -r _ passed failed secs rc <"${METAS[i]}"
+			mark="+"
+			if [[ "$rc" != 0 || "$failed" != 0 ]]; then mark="x"; fi
+			printf '  %s %-22s %8d %8d %5ss\n' \
+				"$mark" "$(suite_label "${NAMES[i]}")" "$passed" "$failed" "$secs"
+		done
+		if [[ "$left" -gt 0 ]]; then sleep 1; fi
 	done
 	# Replay only what needs eyes: the FAIL rows of any failing suite.
 	for i in $(seq 0 $((n - 1))); do
