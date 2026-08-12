@@ -452,7 +452,8 @@ check_public_includes() {
 			canon="$p"
 			[ ! -d "$p" ] || canon=$(cd "$p" && pwd -P)
 			case "$canon" in
-			"$repo"/modules/woz_*/src | "$repo"/modules/woz_*/src/*)
+			"$repo"/modules/woz_*/src | "$repo"/modules/woz_*/src/* | \
+				"$repo"/modules/ultrawidelock_*/src | "$repo"/modules/ultrawidelock_*/src/*)
 				printf '%s  private include path is public: %s (named by %s)%s\n' \
 					"$R" "$p" "$f" "$Z" >&2
 				fails=$((fails + 1))
@@ -473,7 +474,8 @@ check_public_includes() {
 # own layout and do not define this repository's module boundary.
 private_headers() {
 	repo_files 'modules/woz_*/src/*.h' 'modules/woz_*/src/**/*.h' \
-		| grep -vE '^modules/woz_dfu/src/detools/'
+		'modules/ultrawidelock_*/src/*.h' 'modules/ultrawidelock_*/src/**/*.h' \
+		| grep -vE '^modules/(woz|ultrawidelock)_dfu/src/detools/'
 }
 
 # Production C/C++ files. Tests may include private headers to white-box the
@@ -483,7 +485,7 @@ boundary_sources() {
 		'apps/*.c' 'apps/*.h' 'apps/*.cpp' 'apps/*.hpp' \
 		'examples/*.c' 'examples/*.h' 'examples/*.cpp' 'examples/*.hpp' \
 		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'ports/*.hpp' \
-		| grep -vE '^(modules/woz_dw3000/dwt_uwb_driver/|modules/woz_dfu/src/detools/)'
+		| grep -vE '^(modules/(woz|ultrawidelock)_dw3000/dwt_uwb_driver/|modules/(woz|ultrawidelock)_dfu/src/detools/)'
 }
 
 # Print the private header an include crosses into, or print nothing. A module's
@@ -493,7 +495,7 @@ private_header_target() { # <source> <include-token> <private-header>...
 	local h owner rel matched
 	shift 2
 	case "$src" in
-	modules/woz_*/*)
+	modules/woz_*/* | modules/ultrawidelock_*/*)
 		src_owner=${src#modules/}
 		src_owner=${src_owner%%/*}
 		case "$src" in modules/"$src_owner"/include/*) public_header=1 ;; esac
@@ -603,10 +605,10 @@ check_build_paths() {
 # Identifier shapes a Nordic-add-on patch grafts in. A rename in modules/ or
 # ports/ leaves the patch applying cleanly and breaks only at add-on build
 # time, on hardware CI. Fail here instead.
-PATCH_SYM_RE='woz_[a-z0-9_]+|WozNfc::[A-Za-z]+|CONFIG_WOZ_[A-Z0-9_]+'
+PATCH_SYM_RE='(woz|ultrawidelock)_[a-z0-9_]+|(WozNfc|UltraWideLockNfc)::[A-Za-z]+|CONFIG_(WOZ|ULTRAWIDELOCK)_[A-Z0-9_]+'
 PATCH_HEADER_RE='ultrawidelock/[a-z0-9_]+[.]h'
 # Names a patch itself coins rather than references (never defined in-tree).
-PATCH_LOCAL_RE='^woz_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
+PATCH_LOCAL_RE='^(woz|ultrawidelock)_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
 
 patch_syms() { # <patch> -> unique woz identifiers on its + lines
 	grep -E '^\+' "$1" | grep -oE "$PATCH_SYM_RE" | LC_ALL=C sort -u
@@ -618,18 +620,19 @@ patch_headers() { # <patch> -> unique public SDK headers on its + lines
 
 patch_definition_files() {
 	repo_files 'modules/*' 'ports/*' |
-		grep -vE '^(modules/woz_dw3000/dwt_uwb_driver/|modules/woz_dfu/src/detools/)'
+		grep -vE '^(modules/(woz|ultrawidelock)_dw3000/dwt_uwb_driver/|modules/(woz|ultrawidelock)_dfu/src/detools/)'
 }
 
 patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
-	local f m hits=''
+	local f m ns hits=''
 	case "$1" in
-	WozNfc::*)
+	WozNfc::* | UltraWideLockNfc::*)
 		# In-tree the methods live inside `namespace WozNfc { ... }`, so the
 		# qualified spelling never appears; require one file naming both.
-		m="${1#WozNfc::}"
+		ns=${1%%::*}
+		m=${1##*::}
 		while IFS= read -r f; do
-			grep -qF 'WozNfc' "$f" && hits="$hits $f"
+			grep -qF "$ns" "$f" && hits="$hits $f"
 		done < <(patch_definition_files)
 		[ -n "$hits" ] || return 1
 		# shellcheck disable=SC2086 # tracked paths, no whitespace
@@ -843,6 +846,9 @@ self_test() {
 		'	woz_work_submit(&ctx.work);'
 		'	woz_sem_take(&s, 50);'
 		'#include "woz_port.h"'
+		'	ultrawidelock_work_submit(&ctx.work);'
+		'	ultrawidelock_sem_take(&s, 50);'
+		'#include "ultrawidelock_port.h"'
 		'#include <ultrawidelock/reader.h>'
 		'	int task_sem = mask_semantics(x);'
 		'	stack_free(p);'
@@ -1092,6 +1098,19 @@ self_test() {
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
+	local private_fix_uwl=(modules/ultrawidelock_alpha/src/secret.h)
+	if private_header_target modules/ultrawidelock_alpha/src/impl.c secret.h \
+		"${private_fix_uwl[@]}" >/dev/null; then
+		printf '%s  self-test FAILED: private header matcher rejected an owned ultrawidelock sibling%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	if [ "$(private_header_target modules/ultrawidelock_alpha/include/api.h secret.h \
+		"${private_fix_uwl[@]}")" != "modules/ultrawidelock_alpha/src/secret.h" ]; then
+		printf '%s  self-test FAILED: private header matcher missed an ultrawidelock public-header leak%s\n' \
+			"$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
 	[ "$fails" -ne 0 ] || printf '%s  self-test: private header ownership distinguishes API, implementation and consumers%s\n' "$G" "$Z"
 
 	# Patch tripwire: + lines only, all identifier and SDK-header shapes, and
@@ -1100,20 +1119,25 @@ self_test() {
 		--- a/x.cpp
 		+++ b/x.cpp
 		+	woz_phantom_symbol_xyz();
+		+	ultrawidelock_phantom_symbol_xyz();
 		+	WozNfc::Init();
 		+	if (CONFIG_WOZ_ALIRO) {}
 		+#include <ultrawidelock/uwb.h>
 		+#include <ultrawidelock/phantom.h>
 		-	woz_minus_line_only();
 	EOF
-	if [ "$(patch_syms "$fixdir/fix.patch")" != "$(printf 'CONFIG_WOZ_ALIRO\nWozNfc::Init\nwoz_phantom_symbol_xyz')" ]; then
+	if [ "$(patch_syms "$fixdir/fix.patch")" != \
+		"$(printf 'CONFIG_WOZ_ALIRO\nWozNfc::Init\nultrawidelock_phantom_symbol_xyz\nwoz_phantom_symbol_xyz')" ]; then
 		printf '%s  self-test FAILED: patch_syms extraction wrong for the fixture%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	if patch_sym_defined woz_phantom_symbol_xyz; then
-		printf '%s  self-test FAILED: tripwire resolved an invented symbol%s\n' "$R" "$Z" >&2
-		fails=$((fails + 1))
-	fi
+	for pth in woz_phantom_symbol_xyz ultrawidelock_phantom_symbol_xyz; do
+		if patch_sym_defined "$pth"; then
+			printf '%s  self-test FAILED: tripwire resolved an invented symbol: %s%s\n' \
+				"$R" "$pth" "$Z" >&2
+			fails=$((fails + 1))
+		fi
+	done
 	if [ "$(patch_headers "$fixdir/fix.patch")" != "$(printf 'ultrawidelock/phantom.h\nultrawidelock/uwb.h')" ]; then
 		printf '%s  self-test FAILED: patch header extraction is incomplete%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
