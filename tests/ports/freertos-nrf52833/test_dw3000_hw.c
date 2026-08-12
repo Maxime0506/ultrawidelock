@@ -198,7 +198,7 @@ static void check_interrupt_setup(void)
 	CHECK("the channel watches for the chip asserting the line",
 	      fake_gpiote[0].polarity == NRF_GPIOTE_POLARITY_LOTOHI);
 	CHECK("the GPIOTE interrupt is unmasked",
-	      nrf_gpiote_int_is_enabled(NRF_GPIOTE_INT_IN0_MASK) != 0u);
+	      nrf_gpiote_int_enable_check(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK) != 0u);
 	CHECK("the port reports the interrupt enabled", dw3000_hw_interrupt_is_enabled());
 
 	/*
@@ -288,7 +288,7 @@ static void check_interrupt_masking(void)
 	 */
 	dw3000_hw_interrupt_disable();
 	CHECK("masking clears the GPIOTE interrupt",
-	      nrf_gpiote_int_is_enabled(NRF_GPIOTE_INT_IN0_MASK) == 0u);
+	      nrf_gpiote_int_enable_check(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK) == 0u);
 	CHECK("masking is reported", !dw3000_hw_interrupt_is_enabled());
 	CHECK("nothing else was masked with it",
 	      fake_nvic_get_enable_irq(GPIOTE_IRQn) != 0u);
@@ -390,7 +390,7 @@ static void check_fini(void)
 
 	dw3000_hw_fini();
 	CHECK("shutting down masks the interrupt",
-	      nrf_gpiote_int_is_enabled(NRF_GPIOTE_INT_IN0_MASK) == 0u);
+	      nrf_gpiote_int_enable_check(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK) == 0u);
 	CHECK("shutting down releases the GPIOTE channel", !fake_gpiote[0].enabled);
 	CHECK("shutting down takes the SPI bus down too", !fake_spim.enabled);
 

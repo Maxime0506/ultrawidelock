@@ -1,28 +1,35 @@
 #!/usr/bin/env bash
 #
-# Hold the port's UWB source manifest to what it claims.
+# Hold the port's UWB source set to what it claims.
 #
-# ports/freertos-nrf52833/uwb/sources.mk is a declaration with no compiler
-# behind it yet: the target build graph consumes it, and until that graph links
-# the UWB engine, a path that does not exist or a configuration that selects the
-# wrong backend is invisible. So it is checked here rather than discovered at
-# the first link.
+# ports/freertos-nrf52833/uwb/uwb.cmake declares that set, and the host suite
+# has no cross-compiler to link it with. Until a target build runs, a path that
+# does not exist or a configuration that selects the wrong backend is invisible
+# here and surfaces as an unrelated missing symbol at someone else's first link.
+# So it is asserted now.
 #
-# Three things are checked, and each is a way this file goes wrong quietly:
+# The fragment is read by CMake itself, in script mode, with the handful of
+# commands the surrounding build would have supplied stubbed out so the library
+# it declares can be inspected instead of built. Re-parsing the file by hand
+# would only check this script's copy of the expansion rules.
 #
-#   every path resolves     a manifest entry that names a moved file compiles
-#                           fine on the ports that do not read it
+# What is checked, and how each one goes wrong quietly:
+#
+#   every manifest exists   a renamed role manifest expands to nothing rather
+#                           than to an error, so its sources simply vanish
+#   every path resolves     a manifest entry naming a moved file still compiles
+#                           on the ports that do not read it
 #   the PSA backend         this port has a PSA provider and the ESP-IDF one
-#                           does not, so copying that port's selection would
-#                           link a second path to the same primitive
-#   the Final snapshot      not a diagnostic on this part: without it the
-#                           ranges are kilometres wide, on a single core where
-#                           BLE shares the CPU with the ranging callbacks
+#                           does not, so copying that port's selection links a
+#                           second path to the same primitive
+#   the Final snapshot      not a diagnostic on this part: without it the ranges
+#                           are kilometres wide, on a single core where BLE
+#                           shares the CPU with the ranging callbacks
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-MK="${WOZ_UWB_SOURCES_MK:-$ROOT/ports/freertos-nrf52833/uwb/sources.mk}"
+CMAKE_FRAGMENT="${WOZ_UWB_CMAKE:-$ROOT/ports/freertos-nrf52833/uwb/uwb.cmake}"
 
 checks=0
 failures=0
@@ -37,17 +44,10 @@ check() { # <label> <status>
 	fi
 }
 
-# Ask make itself, rather than re-parsing the fragment: a check that
-# reimplements the expansion is checking its own copy of it.
-ask() { # <variable> -> its expansion, one entry per line
-	printf 'REPO_ROOT := %s\ninclude %s\n.PHONY: show\nshow:\n\t@printf "%%s\\n" $(%s)\n' \
-		"$ROOT" "$MK" "$1" | make --no-print-directory -f - show
-}
-
 # ---- self-test --------------------------------------------------------------
-# The checks below pass against a manifest that is right, and they would also
-# pass against a manifest they had quietly stopped reading. So each one is shown
-# a manifest carrying the defect it exists to catch, and has to fail.
+# The checks below pass against a fragment that is right, and they would also
+# pass against a fragment they had quietly stopped reading. So each one is shown
+# a fragment carrying the defect it exists to catch, and has to fail.
 tmp=
 self_test() {
 	local mutants=0 survived=0 i=0
@@ -57,17 +57,17 @@ self_test() {
 	trap 'rm -rf "$tmp"' EXIT
 
 	mutate() { # <description> <sed expression>
-		local desc=$1 expr=$2 mk="$tmp/mutant_$i.mk"
+		local desc=$1 expr=$2 frag="$tmp/mutant_$i.cmake"
 
 		i=$((i + 1))
 		mutants=$((mutants + 1))
-		sed -e "$expr" "$MK" >"$mk"
-		if cmp -s "$mk" "$MK"; then
+		sed -e "$expr" "$CMAKE_FRAGMENT" >"$frag"
+		if cmp -s "$frag" "$CMAKE_FRAGMENT"; then
 			printf '  FAIL mutation changed nothing: %s\n' "$desc"
 			survived=$((survived + 1))
 			return
 		fi
-		if WOZ_UWB_SOURCES_MK="$mk" "$0" >"$tmp/out" 2>&1; then
+		if WOZ_UWB_CMAKE="$frag" "$0" >"$tmp/out" 2>&1; then
 			printf '  FAIL survives the check: %s\n' "$desc"
 			survived=$((survived + 1))
 		else
@@ -94,7 +94,11 @@ self_test() {
 	mutate "the DW3720 device layer selected instead of the DW3000" \
 		's|CONFIG_DW3000_CHIP_DW3000=1|CONFIG_DW3000_CHIP_DW3720=1|'
 	mutate "the Zephyr backend dragged in beside this port's own" \
-		's|ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c|ports/zephyr/dw3000/dw3000_hw.c|'
+		's|uwb/dw3000_hw_freertos.c|../zephyr/dw3000/dw3000_hw.c|'
+	mutate "the engine linked without the crypto library its STS seam needs" \
+		's|woz_kernel woz_board woz_mbedtls|woz_kernel woz_board|'
+	mutate "the STS seam left to the Zephyr file this port does not compile" \
+		'/woz_seam_stubs.c/d'
 
 	printf 'uwb-sources-self-test: %s (%d mutations)\n' \
 		"$([ "$survived" -eq 0 ] && echo PASS || echo FAIL)" "$mutants"
@@ -106,30 +110,88 @@ if [ "${1:-}" = "--self-test" ]; then
 	exit
 fi
 
-srcs=$(ask WOZ_UWB_SRCS)
-incs=$(ask WOZ_UWB_INCLUDES)
-defs=$(ask WOZ_UWB_DEFINES)
+# ---- read the fragment ------------------------------------------------------
+
+reader=$(mktemp -d)
+trap 'rm -rf "$reader"' EXIT
+
+cat >"$reader/read.cmake" <<CMAKE
+cmake_minimum_required(VERSION 3.20)
+set(WOZ_PORT_DIR "$ROOT/ports/freertos-nrf52833")
+
+# Script mode has no targets, so the commands the fragment uses to declare its
+# library are replaced by ones that record what it passed them. Everything is
+# keyed on the target name: the fragment also declares a link-proof executable,
+# and folding its sources or its --whole-archive link flags into the library's
+# would make every check below answer a question about the wrong target.
+set(WOZ_LIB woz_uwb)
+macro(add_library _name)
+  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+    set(WOZ_SOURCES \${ARGN})
+    list(REMOVE_ITEM WOZ_SOURCES STATIC)
+  endif()
+endmacro()
+macro(add_executable _name)
+endmacro()
+macro(target_include_directories _name)
+  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+    set(_args \${ARGN})
+    list(REMOVE_ITEM _args PUBLIC PRIVATE INTERFACE)
+    list(APPEND WOZ_INCLUDES \${_args})
+  endif()
+endmacro()
+macro(target_compile_definitions _name)
+  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+    set(_args \${ARGN})
+    list(REMOVE_ITEM _args PUBLIC PRIVATE INTERFACE)
+    list(APPEND WOZ_DEFINES \${_args})
+  endif()
+endmacro()
+macro(target_link_libraries _name)
+  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+    set(_args \${ARGN})
+    list(REMOVE_ITEM _args PUBLIC PRIVATE INTERFACE)
+    list(APPEND WOZ_LIBRARIES \${_args})
+  endif()
+endmacro()
+macro(target_link_options _name)
+endmacro()
+macro(set_target_properties _name)
+endmacro()
+# woz_roles.cmake records a configure dependency, which script mode has no
+# directory to hang off. Harmless to swallow: nothing here is being built.
+macro(set_property)
+endmacro()
+
+include("$CMAKE_FRAGMENT")
+
+foreach(_entry IN LISTS \${WOZ_ASK})
+  message("\${_entry}")
+endforeach()
+CMAKE
+
+ask() { # <variable> -> its entries, one per line
+	cmake -DWOZ_ASK="$1" -P "$reader/read.cmake" 2>&1
+}
+
+if ! srcs=$(ask WOZ_SOURCES); then
+	printf '  FAIL the UWB fragment could not be read:\n%s\n' "$srcs"
+	printf 'uwb-sources: FAIL (1 checks)\n'
+	exit 1
+fi
+incs=$(ask WOZ_INCLUDES)
+defs=$(ask WOZ_DEFINES)
+libs=$(ask WOZ_LIBRARIES)
 lists=$(ask WOZ_UWB_ROLE_LISTS)
+
+# ---- checks -----------------------------------------------------------------
 
 [ -n "$srcs" ]
 check "the source set is not empty" $?
 
-missing=0
-while IFS= read -r path; do
-	[ -n "$path" ] || continue
-	if [ ! -f "$path" ]; then
-		printf '       missing source: %s\n' "$path"
-		missing=1
-	fi
-done <<EOF
-$srcs
-EOF
-check "every source the manifest names exists" "$missing"
-
 # A manifest that has been renamed or deleted expands to nothing rather than to
-# an error, so the role's sources vanish and the check above still passes: it
-# only ever sees the paths that survived. The manifests themselves are the thing
-# to assert on.
+# an error, so the role's sources vanish and a check over the surviving paths
+# still passes. The manifests themselves are the thing to assert on.
 missing=0
 while IFS= read -r path; do
 	[ -n "$path" ] || continue
@@ -145,6 +207,18 @@ check "every role manifest the port reads exists" "$missing"
 missing=0
 while IFS= read -r path; do
 	[ -n "$path" ] || continue
+	if [ ! -f "$path" ]; then
+		printf '       missing source: %s\n' "$path"
+		missing=1
+	fi
+done <<EOF
+$srcs
+EOF
+check "every source the fragment names exists" "$missing"
+
+missing=0
+while IFS= read -r path; do
+	[ -n "$path" ] || continue
 	if [ ! -d "$path" ]; then
 		printf '       missing include directory: %s\n' "$path"
 		missing=1
@@ -152,22 +226,33 @@ while IFS= read -r path; do
 done <<EOF
 $incs
 EOF
-check "every include directory the manifest names exists" "$missing"
+check "every include directory the fragment names exists" "$missing"
 
 # The two platform backends this port owns, and nothing standing in for them.
 case "$srcs" in
-*ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c*) r=0 ;;
+*/freertos-nrf52833/uwb/dw3000_spi_freertos.c*) r=0 ;;
 *) r=1 ;;
 esac
 check "the port's own SPI backend is in the source set" "$r"
 
 case "$srcs" in
-*ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c*) r=0 ;;
+*/freertos-nrf52833/uwb/dw3000_hw_freertos.c*) r=0 ;;
 *) r=1 ;;
 esac
 check "the port's own hardware backend is in the source set" "$r"
 
-# And not the Zephyr or ESP-IDF ones, which implement the same symbols.
+# The seam the Zephyr build gets from uwb_rxdiag.c, which is a Zephyr-module
+# literal this port does not compile. Without it the callbacks reach the radio
+# unmodified, the Pre-POLL is never decoded to warm the next block's STS, and
+# the responder hears every Pre-POLL and answers none of them.
+case "$srcs" in
+*/freertos-nrf52833/uwb/woz_seam_stubs.c*) r=0 ;;
+*) r=1 ;;
+esac
+check "the port supplies its half of the STS seam" "$r"
+
+# And not another port's, which implement the same symbols and would either
+# clash at link time or, worse, win.
 case "$srcs" in
 *ports/zephyr/*|*ports/esp32/*) r=1 ;;
 *) r=0 ;;
@@ -192,6 +277,12 @@ case "$srcs" in
 esac
 check "the PSA crypto source is the one in the set" "$r"
 
+case "$libs" in
+*woz_mbedtls*) r=0 ;;
+*) r=1 ;;
+esac
+check "the engine links the crypto library its STS seam reaches through" "$r"
+
 case "$defs" in
 *CONFIG_WOZ_UWB_FINAL_SNAPSHOT=1*) r=0 ;;
 *) r=1 ;;
@@ -210,7 +301,7 @@ case "$defs" in
 esac
 check "the DW3000 device layer is selected, not the DW3720 twin" "$r"
 
-# The snapshot is compiled in, so the code it guards has to be reachable.
+# The snapshot is compiled in, so the code it guards has to still be there.
 if grep -q 'CONFIG_WOZ_UWB_FINAL_SNAPSHOT' "$ROOT/modules/woz_uwb/src/ccc/ccc_shim_rx.c"; then
 	r=0
 else

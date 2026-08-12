@@ -18,13 +18,15 @@ void fake_gpiote_reset(void)
 	fake_gpiote_unwatched_edges = 0;
 }
 
-static uint32_t channel_of(nrf_gpiote_events_t event)
+static uint32_t channel_of(nrf_gpiote_event_t event)
 {
-	return ((uint32_t)event - (uint32_t)NRF_GPIOTE_EVENTS_IN_0) / 4u;
+	return ((uint32_t)event - (uint32_t)NRF_GPIOTE_EVENT_IN_0) / 4u;
 }
 
-void nrf_gpiote_event_configure(uint32_t idx, uint32_t pin, nrf_gpiote_polarity_t polarity)
+void nrf_gpiote_event_configure(NRF_GPIOTE_Type *p_reg, uint32_t idx, uint32_t pin,
+				nrf_gpiote_polarity_t polarity)
 {
+	(void)p_reg;
 	if (idx >= FAKE_GPIOTE_CHANNELS) {
 		return;
 	}
@@ -33,48 +35,57 @@ void nrf_gpiote_event_configure(uint32_t idx, uint32_t pin, nrf_gpiote_polarity_
 	fake_gpiote[idx].polarity = polarity;
 }
 
-void nrf_gpiote_event_enable(uint32_t idx)
+void nrf_gpiote_event_enable(NRF_GPIOTE_Type *p_reg, uint32_t idx)
 {
+	(void)p_reg;
 	if (idx < FAKE_GPIOTE_CHANNELS) {
 		fake_gpiote[idx].enabled = true;
 	}
 }
 
-void nrf_gpiote_event_disable(uint32_t idx)
+void nrf_gpiote_event_disable(NRF_GPIOTE_Type *p_reg, uint32_t idx)
 {
+	(void)p_reg;
 	if (idx < FAKE_GPIOTE_CHANNELS) {
 		fake_gpiote[idx].enabled = false;
 	}
 }
 
-bool nrf_gpiote_event_is_set(nrf_gpiote_events_t event)
+bool nrf_gpiote_event_check(NRF_GPIOTE_Type const *p_reg, nrf_gpiote_event_t event)
 {
 	uint32_t idx = channel_of(event);
+
+	(void)p_reg;
 
 	return idx < FAKE_GPIOTE_CHANNELS && fake_gpiote[idx].event;
 }
 
-void nrf_gpiote_event_clear(nrf_gpiote_events_t event)
+void nrf_gpiote_event_clear(NRF_GPIOTE_Type *p_reg, nrf_gpiote_event_t event)
 {
 	uint32_t idx = channel_of(event);
+
+	(void)p_reg;
 
 	if (idx < FAKE_GPIOTE_CHANNELS) {
 		fake_gpiote[idx].event = false;
 	}
 }
 
-void nrf_gpiote_int_enable(uint32_t mask)
+void nrf_gpiote_int_enable(NRF_GPIOTE_Type *p_reg, uint32_t mask)
 {
+	(void)p_reg;
 	fake_gpiote_int_mask |= mask;
 }
 
-void nrf_gpiote_int_disable(uint32_t mask)
+void nrf_gpiote_int_disable(NRF_GPIOTE_Type *p_reg, uint32_t mask)
 {
+	(void)p_reg;
 	fake_gpiote_int_mask &= ~mask;
 }
 
-uint32_t nrf_gpiote_int_is_enabled(uint32_t mask)
+uint32_t nrf_gpiote_int_enable_check(NRF_GPIOTE_Type const *p_reg, uint32_t mask)
 {
+	(void)p_reg;
 	return fake_gpiote_int_mask & mask;
 }
 

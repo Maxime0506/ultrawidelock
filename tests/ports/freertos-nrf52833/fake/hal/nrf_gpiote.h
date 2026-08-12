@@ -28,15 +28,15 @@ typedef enum {
 } nrf_gpiote_polarity_t;
 
 typedef enum {
-	NRF_GPIOTE_EVENTS_IN_0 = 0x100,
-	NRF_GPIOTE_EVENTS_IN_1 = 0x104,
-	NRF_GPIOTE_EVENTS_IN_2 = 0x108,
-	NRF_GPIOTE_EVENTS_IN_3 = 0x10C,
-	NRF_GPIOTE_EVENTS_IN_4 = 0x110,
-	NRF_GPIOTE_EVENTS_IN_5 = 0x114,
-	NRF_GPIOTE_EVENTS_IN_6 = 0x118,
-	NRF_GPIOTE_EVENTS_IN_7 = 0x11C,
-} nrf_gpiote_events_t;
+	NRF_GPIOTE_EVENT_IN_0 = 0x100,
+	NRF_GPIOTE_EVENT_IN_1 = 0x104,
+	NRF_GPIOTE_EVENT_IN_2 = 0x108,
+	NRF_GPIOTE_EVENT_IN_3 = 0x10C,
+	NRF_GPIOTE_EVENT_IN_4 = 0x110,
+	NRF_GPIOTE_EVENT_IN_5 = 0x114,
+	NRF_GPIOTE_EVENT_IN_6 = 0x118,
+	NRF_GPIOTE_EVENT_IN_7 = 0x11C,
+} nrf_gpiote_event_t;
 
 #define NRF_GPIOTE_INT_IN0_MASK (1uL << 0)
 #define NRF_GPIOTE_INT_IN1_MASK (1uL << 1)
@@ -50,20 +50,25 @@ typedef struct {
 } fake_gpiote_channel_t;
 
 extern fake_gpiote_channel_t fake_gpiote[FAKE_GPIOTE_CHANNELS];
+/* The peripheral instance, taken as the first argument the way the nrfx the
+ * image is built against takes it. One instance on this part. */
+typedef fake_gpiote_channel_t NRF_GPIOTE_Type;
+#define NRF_GPIOTE (&fake_gpiote[0])
 extern uint32_t fake_gpiote_int_mask;
 /* Events raised onto an event that was already pending: a missed clear. */
 extern unsigned fake_gpiote_missed_clears;
 /* Transitions the model dropped because no channel was watching for them. */
 extern unsigned fake_gpiote_unwatched_edges;
 
-void nrf_gpiote_event_configure(uint32_t idx, uint32_t pin, nrf_gpiote_polarity_t polarity);
-void nrf_gpiote_event_enable(uint32_t idx);
-void nrf_gpiote_event_disable(uint32_t idx);
-bool nrf_gpiote_event_is_set(nrf_gpiote_events_t event);
-void nrf_gpiote_event_clear(nrf_gpiote_events_t event);
-void nrf_gpiote_int_enable(uint32_t mask);
-void nrf_gpiote_int_disable(uint32_t mask);
-uint32_t nrf_gpiote_int_is_enabled(uint32_t mask);
+void nrf_gpiote_event_configure(NRF_GPIOTE_Type *p_reg, uint32_t idx, uint32_t pin,
+				nrf_gpiote_polarity_t polarity);
+void nrf_gpiote_event_enable(NRF_GPIOTE_Type *p_reg, uint32_t idx);
+void nrf_gpiote_event_disable(NRF_GPIOTE_Type *p_reg, uint32_t idx);
+bool nrf_gpiote_event_check(NRF_GPIOTE_Type const *p_reg, nrf_gpiote_event_t event);
+void nrf_gpiote_event_clear(NRF_GPIOTE_Type *p_reg, nrf_gpiote_event_t event);
+void nrf_gpiote_int_enable(NRF_GPIOTE_Type *p_reg, uint32_t mask);
+void nrf_gpiote_int_disable(NRF_GPIOTE_Type *p_reg, uint32_t mask);
+uint32_t nrf_gpiote_int_enable_check(NRF_GPIOTE_Type const *p_reg, uint32_t mask);
 
 void fake_gpiote_reset(void);
 

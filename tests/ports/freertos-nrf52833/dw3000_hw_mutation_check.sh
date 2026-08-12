@@ -37,19 +37,19 @@ build() { # <source> <binary>
 }
 
 MUTATIONS=(
-	"the GPIOTE channel is enabled but never bound to the pin ::: 	nrf_gpiote_event_configure(WOZ_DW3000_GPIOTE_CHANNEL, WOZ_DW3000_PIN_IRQ,
+	"the GPIOTE channel is enabled but never bound to the pin ::: 	nrf_gpiote_event_configure(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL, WOZ_DW3000_PIN_IRQ,
 				   NRF_GPIOTE_POLARITY_LOTOHI);
  ::: "
 	"the channel watches the wrong edge ::: NRF_GPIOTE_POLARITY_LOTOHI ::: NRF_GPIOTE_POLARITY_HITOLO"
-	"the channel is configured but left disabled ::: nrf_gpiote_event_enable(WOZ_DW3000_GPIOTE_CHANNEL); ::: (void)0;"
-	"the GPIOTE interrupt is never unmasked ::: 	nrf_gpiote_int_enable(NRF_GPIOTE_INT_IN0_MASK);
+	"the channel is configured but left disabled ::: nrf_gpiote_event_enable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL); ::: (void)0;"
+	"the GPIOTE interrupt is never unmasked ::: 	nrf_gpiote_int_enable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);
 	s_irq_enabled = true; ::: 	s_irq_enabled = true;"
 	"the vector is never enabled in the NVIC ::: NVIC_EnableIRQ(GPIOTE_IRQn); ::: (void)0;"
 	"the vector runs one level below the frozen priority ::: #define WOZ_DW3000_IRQ_PRIORITY 4u ::: #define WOZ_DW3000_IRQ_PRIORITY 5u"
-	"the vector leaves the latched event set ::: nrf_gpiote_event_clear(NRF_GPIOTE_EVENTS_IN_0);
+	"the vector leaves the latched event set ::: nrf_gpiote_event_clear(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0);
 
 	g_dw_cyc_gpio ::: g_dw_cyc_gpio"
-	"the vector notifies without checking there was an event ::: 	if (!nrf_gpiote_event_is_set(NRF_GPIOTE_EVENTS_IN_0)) {
+	"the vector notifies without checking there was an event ::: 	if (!nrf_gpiote_event_check(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0)) {
 		return;
 	}
  ::: "
@@ -89,9 +89,9 @@ MUTATIONS=(
 		woz_freertos_busy_wait_us(10);
 		spins++;
 	} ::: 	(void)dwt_checkidlerc();"
-	"masking the line reports itself enabled anyway ::: 		nrf_gpiote_int_disable(NRF_GPIOTE_INT_IN0_MASK);
-		s_irq_enabled = false; ::: 		nrf_gpiote_int_disable(NRF_GPIOTE_INT_IN0_MASK);"
-	"unmasking never re-enables the interrupt ::: 		nrf_gpiote_int_enable(NRF_GPIOTE_INT_IN0_MASK);
+	"masking the line reports itself enabled anyway ::: 		nrf_gpiote_int_disable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);
+		s_irq_enabled = false; ::: 		nrf_gpiote_int_disable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);"
+	"unmasking never re-enables the interrupt ::: 		nrf_gpiote_int_enable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);
 		s_irq_enabled = true;
 	}
 }
@@ -101,9 +101,9 @@ void dw3000_hw_interrupt_disable ::: 		s_irq_enabled = true;
 }
 
 void dw3000_hw_interrupt_disable"
-	"shutting down leaves the GPIOTE channel live ::: nrf_gpiote_event_disable(WOZ_DW3000_GPIOTE_CHANNEL); ::: (void)0;"
-	"shutting down leaves the SPI bus up ::: 	nrf_gpiote_event_disable(WOZ_DW3000_GPIOTE_CHANNEL);
-	dw3000_spi_fini(); ::: 	nrf_gpiote_event_disable(WOZ_DW3000_GPIOTE_CHANNEL);"
+	"shutting down leaves the GPIOTE channel live ::: nrf_gpiote_event_disable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL); ::: (void)0;"
+	"shutting down leaves the SPI bus up ::: 	nrf_gpiote_event_disable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL);
+	dw3000_spi_fini(); ::: 	nrf_gpiote_event_disable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL);"
 )
 
 pass=0

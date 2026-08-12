@@ -371,4 +371,14 @@ printf '  ok   MPSL and SoftDevice Controller document custom RTOS integration\n
 printf '  ok   SDC HCI packet contract and pinned opcode dispatcher are present\n'
 printf '  ok   nRF 802.15.4 defaults retain EGU0, RTC2, and TIMER1 ownership\n'
 printf '  ok   nRF52833 802.15.4 service layer and non-NCS build contract are present\n'
+# The host suite's HAL doubles must match this same nrfx, not the older one
+# bundled with the Qorvo SDK. The target build uses hal_nordic's deliberately,
+# and the two disagree -- GPIOTE alone renamed its event enum and gave every
+# function a peripheral argument -- so a fake checked against the wrong tree
+# approves a backend that cannot compile. It has already done exactly that once.
+if ! python3 "$(dirname "$0")/freertos-hal-fake-fidelity.py" "$workspace"; then
+	printf 'radio-source-check: a fake HAL header has drifted from the pinned nrfx\n' >&2
+	exit 2
+fi
+
 printf 'RESULT: PINNED RADIO SOURCE SET ACCEPTED; FreeRTOS glue and board proof remain\n'

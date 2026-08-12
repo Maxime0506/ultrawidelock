@@ -148,10 +148,10 @@ void woz_freertos_dw3000_irq_handler(void)
 {
 	BaseType_t wake = pdFALSE;
 
-	if (!nrf_gpiote_event_is_set(NRF_GPIOTE_EVENTS_IN_0)) {
+	if (!nrf_gpiote_event_check(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0)) {
 		return;
 	}
-	nrf_gpiote_event_clear(NRF_GPIOTE_EVENTS_IN_0);
+	nrf_gpiote_event_clear(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0);
 
 	g_dw_cyc_gpio = woz_freertos_cycle_get_32();
 	if (s_task != NULL) {
@@ -201,16 +201,16 @@ int dw3000_hw_init_interrupt(void)
 	 * interrupt is unmasked, so a level left over from before this call
 	 * cannot deliver a notification to a task that has not run yet.
 	 */
-	nrf_gpiote_event_configure(WOZ_DW3000_GPIOTE_CHANNEL, WOZ_DW3000_PIN_IRQ,
+	nrf_gpiote_event_configure(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL, WOZ_DW3000_PIN_IRQ,
 				   NRF_GPIOTE_POLARITY_LOTOHI);
-	nrf_gpiote_event_enable(WOZ_DW3000_GPIOTE_CHANNEL);
-	nrf_gpiote_event_clear(NRF_GPIOTE_EVENTS_IN_0);
+	nrf_gpiote_event_enable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL);
+	nrf_gpiote_event_clear(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0);
 
 	NVIC_SetPriority(GPIOTE_IRQn, WOZ_DW3000_IRQ_PRIORITY);
 	NVIC_ClearPendingIRQ(GPIOTE_IRQn);
 	NVIC_EnableIRQ(GPIOTE_IRQn);
 
-	nrf_gpiote_int_enable(NRF_GPIOTE_INT_IN0_MASK);
+	nrf_gpiote_int_enable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);
 	s_irq_enabled = true;
 	return 0;
 }
@@ -224,7 +224,7 @@ int dw3000_hw_init_interrupt(void)
 void dw3000_hw_interrupt_enable(void)
 {
 	if (!s_irq_enabled) {
-		nrf_gpiote_int_enable(NRF_GPIOTE_INT_IN0_MASK);
+		nrf_gpiote_int_enable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);
 		s_irq_enabled = true;
 	}
 }
@@ -232,7 +232,7 @@ void dw3000_hw_interrupt_enable(void)
 void dw3000_hw_interrupt_disable(void)
 {
 	if (s_irq_enabled) {
-		nrf_gpiote_int_disable(NRF_GPIOTE_INT_IN0_MASK);
+		nrf_gpiote_int_disable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);
 		s_irq_enabled = false;
 	}
 }
@@ -293,6 +293,6 @@ void dw3000_hw_wakeup_pin_low(void)
 void dw3000_hw_fini(void)
 {
 	dw3000_hw_interrupt_disable();
-	nrf_gpiote_event_disable(WOZ_DW3000_GPIOTE_CHANNEL);
+	nrf_gpiote_event_disable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL);
 	dw3000_spi_fini();
 }
