@@ -7,6 +7,7 @@
 #   sdk        tests/sdk/run.sh                 installed C package consumer
 #   drift      drift_check.py + patch ID self-test
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
+#   scope      tests/tooling/uwb_engine_scope_check.sh  no vendor radio API outside the DW3000 engine
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
 #
 # Default: suites run in parallel, failures replayed when done. SERIAL=1 streams
@@ -26,6 +27,7 @@ suite_cmd() {
 	sdk) echo "bash tests/sdk/run.sh" ;;
 	drift) echo "bash tests/tooling/drift_suite.sh" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
+	scope) echo "bash tests/tooling/uwb_engine_scope_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
 	esac
 }
@@ -37,6 +39,7 @@ suite_label() {
 	sdk) echo "SDK package (CMake)" ;;
 	drift) echo "constant drift" ;;
 	seam) echo "uwb seam" ;;
+	scope) echo "uwb engine scope" ;;
 	purity) echo "port purity" ;;
 	esac
 }
@@ -138,7 +141,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared sdk drift seam purity}"
+SEL="${SUITES:-firmware shared sdk drift seam scope purity}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do

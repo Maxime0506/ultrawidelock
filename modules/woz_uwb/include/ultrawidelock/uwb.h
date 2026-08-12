@@ -2,6 +2,13 @@
 // engine is bound and unbound via internal ursk and stop calls.
 /*
  * C shim bridging the add-on UWB impl to the Woz FiRa/CCC engine.
+ *
+ * This header is also the UWB chipset engine contract: everything above it
+ * (apps, the Aliro adapter, session and key logic) speaks these functions and
+ * never names a radio API. The DW3000 engine behind it is a closed file set
+ * enforced by tests/tooling/uwb_engine_scope_check.sh; a new chipset supplies
+ * its own implementation of these functions (see PORTING.md, "New UWB
+ * chipset") instead of extending that set.
  */
 #pragma once
 #include <stddef.h>

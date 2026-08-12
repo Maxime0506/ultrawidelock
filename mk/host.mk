@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam purity
+.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam scope purity
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -39,6 +39,10 @@ drift:
 ## seam: no call reaches the radio past the CCC STS seam
 seam:
 	@$(REPO_ROOT)/tests/tooling/uwb_seam_check.sh
+
+## scope: no vendor radio API named outside the DW3000 engine file set
+scope:
+	@$(REPO_ROOT)/tests/tooling/uwb_engine_scope_check.sh
 
 ## purity: modules/ names no OS, each port tree names only its own
 purity:
