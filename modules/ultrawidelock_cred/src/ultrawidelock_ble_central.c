@@ -16,8 +16,8 @@
 #include <string.h>
 
 /**
- * Parse a 26-byte Aliro 0xFFF2 service data payload into the struct: verify the service UUID and
- * extract flags, TX power, group/sub IDs, expiry, and tag.
+ * Parse a 26-byte credential 0xFFF2 service data payload into the struct: verify the service UUID
+ * and extract flags, TX power, group/sub IDs, expiry, and tag.
  */
 int ultrawidelock_ble_central_parse_adv(const uint8_t *svc_data, size_t len,
 				struct ultrawidelock_ble_central_adv *out)

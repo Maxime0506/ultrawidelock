@@ -1,4 +1,4 @@
-// Aliro initiator (User-Device) session machine: the implementation behind
+// credential initiator (User-Device) session machine: the implementation behind
 // ultrawidelock_device.h. Feeds one reader command at a time through
 // ultrawidelock_device_on_command, which parses AUTH0/AUTH1/EXCHANGE with the inverse
 // codec, runs the mirror of the reader's key schedule (ephemeral ECDH, the two
@@ -8,7 +8,7 @@
 // standard-path derivation factored EC-free so host tests can drive it with a
 // supplied shared secret.
 /*
- * Aliro initiator (User-Device) session layer. See ultrawidelock_device.h. Mirrors the
+ * credential initiator (User-Device) session layer. See ultrawidelock_device.h. Mirrors the
  * reader flow in ultrawidelock_reader.c: the reader builds AUTH0/AUTH1/EXCHANGE commands
  * and verifies the device; here the device parses them and proves itself, running
  * the same §8.3.1.13 key schedule to the same URSK.
@@ -290,10 +290,10 @@ int ultrawidelock_device_set_blesk_salt(struct ultrawidelock_device *d, const ui
 }
 
 /**
- * Process an incoming Aliro APDU command (AUTH0, AUTH1, or EXCHANGE) and generate the response.
- * Validates command structure, reader identity, signatures, and key derivation; returns 0 on
- * success and sets device phase accordingly. On any failure sets phase to ULTRAWIDELOCK_DEV_FAILED
- * and returns -1.
+ * Process an incoming credential APDU command (AUTH0, AUTH1, or EXCHANGE) and generate the
+ * response. Validates command structure, reader identity, signatures, and key derivation; returns 0
+ * on success and sets device phase accordingly. On any failure sets phase to
+ * ULTRAWIDELOCK_DEV_FAILED and returns -1.
  */
 int ultrawidelock_device_on_command(struct ultrawidelock_device *d, const uint8_t *ap_payload,
 				    size_t len, uint8_t *resp, size_t cap, size_t *resp_len)

@@ -74,7 +74,7 @@ replaces it.
 ## Telling the witnesses which advertiser is the credential
 
 With `CONFIG_ULTRAWIDELOCK_SIDE_PEER_EMIT=y` the lock logs `SIDE peer=<AdvA> type=…` when
-the Aliro L2CAP channel opens and `SIDE peer=clear` when it closes. Forward that
+the credential L2CAP channel opens and `SIDE peer=clear` when it closes. Forward that
 address to each witness as an `ADDR` command and they will summarise one phone
 instead of every advertiser in the room.
 

@@ -1,11 +1,11 @@
-// Aliro reader engine: drives the Access Protocol (AUTH0/AUTH1/EXCHANGE) handshake over BLE,
+// credential reader engine: drives the Access Protocol (AUTH0/AUTH1/EXCHANGE) handshake over BLE,
 // manages reader identity and credential trust provisioning in NVS, and arms UWB ranging once
 // a session is authenticated. Maintains a fixed-size table of per-connection sessions tracking
 // transaction phase and secure-channel state, and exposes start/attach entry points for both
 // standalone and Matter-attached BLE transports, plus provisioning and diagnostic APIs used by
 // Matter commissioning and the bench console.
 /*
- * ultrawidelock_reader — the Aliro reader credential-auth transaction (Phase 3.2/3.3) on
+ * ultrawidelock_reader — the credential reader credential-auth transaction (Phase 3.2/3.3) on
  * top of the ultrawidelock_ble L2CAP transport. Drives AUTH0 -> AUTH1 -> EXCHANGE, runs
  * the ECDH + key schedule (ultrawidelock_crypto) to derive the URSK, then hands the URSK
  * to ultrawidelock_ranging, which negotiates the ranging parameters with the peer
@@ -153,7 +153,7 @@ static bool s_kp_dirty;
  * undeliverable Secured and the next session destroyed the correction and left
  * the phone permanently showing this door open. That is not recoverable from the
  * lock side: iOS will not run an approach unlock on a door it believes is already
- * unlocked, so it stops opening Aliro sessions, so the replay can never fire.
+ * unlocked, so it stops opening credential sessions, so the replay can never fire.
  * MEASURED: a grant whose relock could not be delivered, followed by a firmware
  * flash, and no phone opened a session against this reader again.
  *
@@ -1173,10 +1173,10 @@ void ultrawidelock_reader_set_lock_state_listener(void (*cb)(bool unlocked))
 	s_lock_state_listener = cb;
 }
 
-/* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
+/* Reader Status Changed (credential transaction step 23): the reader->phone grant/relock
  * confirmation that fires the iPhone Wallet unlock animation. proto-2 (Notification)
  * message-id 0x02, one State Attribute (id 0x00, len 2) = [OperationSource,
- * ReaderStateByte]. OperationSource 0x04 = this user device in the BLE+UWB Aliro flow;
+ * ReaderStateByte]. OperationSource 0x04 = this user device in the BLE+UWB credential flow;
  * ReaderStateByte Unsecured 0x01 = granted (animate), Secured 0x00 = relocked. The
  * 65-byte access-credential public key is NOT serialized (the reference uses it only
  * to select which connection to notify). Plaintext the BleSK channel then seals:
@@ -1217,8 +1217,8 @@ static void reader_status_send(struct ultrawidelock_session *s, bool unsecured)
 }
 
 /**
- * Send Reader-Status-Changed (Aliro step 23) on an established session: locked (Secured grant to
- * unlock) or unlocked (Unsecured). Deduplicates consecutive identical messages. Logs Secured
+ * Send Reader-Status-Changed (credential step 23) on an established session: locked (Secured grant
+ * to unlock) or unlocked (Unsecured). Deduplicates consecutive identical messages. Logs Secured
  * delivery failure and flags for replay on the next session if the peer disconnected before we
  * could send.
  */
@@ -1289,7 +1289,7 @@ void ultrawidelock_reader_status_tick(int64_t now_ms)
 	ultrawidelock_ble_post_reader_status(reader_status_send_on_host, false);
 }
 
-// Reports whether any peer currently holds an established Aliro session.
+// Reports whether any peer currently holds an established credential session.
 // Returns true if at least one session slot is active and in the established phase.
 bool ultrawidelock_reader_session_active(void)
 {
@@ -1479,7 +1479,7 @@ static size_t capture_a5_tlv(const uint8_t *pl, size_t pl_len, uint8_t *out, siz
 	return 0;
 }
 
-/* Consume one inbound Aliro transaction SDU. */
+/* Consume one inbound credential transaction SDU. */
 static void transaction_feed(struct ultrawidelock_session *s, const uint8_t *data, uint16_t len)
 {
 	s->msgs_rx++;
@@ -1699,7 +1699,7 @@ static void on_connected(uint16_t conn_handle)
 		LOG_ERR("[conn %u] no free session slot", conn_handle);
 		return;
 	}
-	LOG_INF("[conn %u] Aliro session created", conn_handle);
+	LOG_INF("[conn %u] credential session created", conn_handle);
 	ultrawidelock_lab_ev("session.start");
 }
 
@@ -1711,7 +1711,7 @@ static void on_disconnected(uint16_t conn_handle)
 	struct ultrawidelock_session *s = session_find(conn_handle);
 
 	if (s != NULL) {
-		LOG_INF("[conn %u] Aliro session destroyed (%u msgs, phase=%s)", conn_handle,
+		LOG_INF("[conn %u] credential session destroyed (%u msgs, phase=%s)", conn_handle,
 			(unsigned)s->msgs_rx, phase_str(s->phase));
 		s->active = false;
 		/* Aborted walk-ups never reach the bolt-time report: flush the stamped
@@ -1738,9 +1738,9 @@ static void on_disconnected(uint16_t conn_handle)
 	(void)flush_pending_store();
 }
 
-// BLE data-received callback: looks up the session for conn_handle and feeds each Aliro envelope
-// in the received buffer into its transaction state machine.
-// Logs a warning and drops the data if no active session exists for conn_handle.
+// BLE data-received callback: looks up the session for conn_handle and feeds each credential
+// envelope in the received buffer into its transaction state machine. Logs a warning and drops the
+// data if no active session exists for conn_handle.
 static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
 {
 	struct ultrawidelock_session *s = session_find(conn_handle);
@@ -1836,9 +1836,9 @@ static bool apply_provisioned_adv_params(void)
 	return false;
 }
 
-// Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging), applies the
-// provisioned advertising parameters when the loaded identity carries a GRK, and brings up the BLE
-// transport. Returns 0 on success; returns -1 if engine initialization fails, or the underlying
+// Starts the credential reader: initializes the engine (crypto, provisioning, UWB ranging), applies
+// the provisioned advertising parameters when the loaded identity carries a GRK, and brings up the
+// BLE transport. Returns 0 on success; returns -1 if engine initialization fails, or the underlying
 // ultrawidelock_ble_start result otherwise.
 int ultrawidelock_reader_start(void)
 {
@@ -1861,7 +1861,7 @@ int ultrawidelock_reader_start(void)
 
 /* ---- attach mode: share a host another stack (e.g. Matter) owns ---------- */
 
-// Prepares the BLE transport and returns the Aliro GATT service definition for external
+// Prepares the BLE transport and returns the credential GATT service definition for external
 // registration, without starting the transport. Returns NULL if ultrawidelock_ble_prepare fails; on
 // success returns the pointer from ultrawidelock_ble_service_def(), owned by the BLE layer.
 const void *ultrawidelock_reader_ble_prepare(void)
@@ -1875,9 +1875,9 @@ const void *ultrawidelock_reader_ble_prepare(void)
 	return ultrawidelock_ble_service_def();
 }
 
-// Starts the Aliro reader in "attached" transport mode: initializes the engine, applies provisioned
-// resolvable advertising parameters if a real GRK is present, then starts the attached BLE
-// transport. Unlike ultrawidelock_reader_start, this applies GRK-based advertising params
+// Starts the credential reader in "attached" transport mode: initializes the engine, applies
+// provisioned resolvable advertising parameters if a real GRK is present, then starts the attached
+// BLE transport. Unlike ultrawidelock_reader_start, this applies GRK-based advertising params
 // (group/subgroup ID from reader_id, GRK) before starting, when the reader has already been
 // provisioned; falls back to unresolvable advertising if no GRK is set yet. Returns 0 on success;
 // returns -1 if engine initialization fails, or the underlying ultrawidelock_ble_start_attached
@@ -1888,7 +1888,7 @@ int ultrawidelock_reader_start_attached(void)
 		return -1;
 	}
 
-	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): only
+	/* Provisioned credential advertising params (BLE-UWB approach discovery): only
 	 * advertise the resolvable service data when a real GRK is present
 	 * (Matter-provisioned); the dev default leaves the bare 0xFFF2 UUID. */
 	apply_provisioned_adv_params();
@@ -1990,7 +1990,7 @@ void ultrawidelock_reader_prov_print(void)
  * still name the key that just lost its trust. */
 
 /**
- * Terminate every live Aliro link. Runs on the BLE-host task, which owns the session table.
+ * Terminate every live credential link. Runs on the BLE-host task, which owns the session table.
  */
 static void revoke_sweep_on_host(void)
 {
@@ -2240,7 +2240,7 @@ int ultrawidelock_reader_provision_identity(const uint8_t reader_id[ULTRAWIDELOC
 	 * The clone-import path has always done this and its comment claims
 	 * "the Matter provisioning path calls this" -- it did not. Observed on
 	 * hardware: a pairing that installed the identity and both credentials,
-	 * a tile that worked, and zero Aliro sessions afterwards because every
+	 * a tile that worked, and zero credential sessions afterwards because every
 	 * advert stayed on the commissionable branch. A REBOOT hid it, because
 	 * the boot path applies the stored GRK before it ever advertises, which
 	 * is why this survived every test that power-cycled after pairing.

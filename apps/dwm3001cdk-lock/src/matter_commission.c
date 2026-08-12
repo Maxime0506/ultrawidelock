@@ -1228,7 +1228,7 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		 * completed on the wire and still failed.
 		 *
 		 * The system work queue has 6,144 B against a measured 3,872 B
-		 * peak, and that peak belongs to the Aliro unlock path, which
+		 * peak, and that peak belongs to the credential unlock path, which
 		 * never runs while a commissioner is finishing.
 		 */
 		(void)k_work_schedule(&s_fab_store_work, K_NO_WAIT);
@@ -1620,7 +1620,7 @@ static K_WORK_DELAYABLE_DEFINE(s_heartbeat_work, heartbeat_work_fn);
  * Submit lock state change notification to the work queue, and move the lock LED.
  *
  * The LED is driven from here rather than from on_ultrawidelock_lock_state() because
- * this is the one point BOTH movers reach: a walk-up arrives through the Aliro
+ * this is the one point BOTH movers reach: a walk-up arrives through the credential
  * listener, and a Home tile tap arrives through the Door Lock cluster, which
  * writes s_info.lock_state itself and never touches that listener. Hanging the
  * light off the listener alone gave a board whose LED ignored the app.
@@ -1751,7 +1751,7 @@ static void subscription_heartbeat_arm(void)
 }
 
 /*
- * The Aliro side of this lock moved, so Matter has to be told.
+ * The credential side of this lock moved, so Matter has to be told.
  *
  * A walk-up unlock and its walk-away relock never went through the Door Lock
  * cluster at all -- they are the reader's own transaction -- so LockState kept
@@ -1770,7 +1770,7 @@ static void on_ultrawidelock_lock_state(bool unlocked)
 		return;
 	}
 	s_info.lock_state = want;
-	LOG_INF("Aliro %s the lock; telling Matter", unlocked ? "opened" : "relocked");
+	LOG_INF("Credential %s the lock; telling Matter", unlocked ? "opened" : "relocked");
 	notify_lock_state_changed();
 }
 
@@ -1999,7 +1999,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  *
  * reader_id is groupIdentifier || groupSubIdentifier, which is the layout
  * ultrawidelock_reader_provision_identity documents (ultrawidelock_reader.h:152-156). The
- * sub-identifier is this node's own and is the same one the Aliro attributes
+ * sub-identifier is this node's own and is the same one the credential attributes
  * report, so the pair a controller reads back is the pair that was stored.
  *
  * The verification key is not passed on: it is the public half of the signing
@@ -2009,7 +2009,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * NOTHING IS LOGGED but the outcome. Every argument is key material.
  */
 /**
- * An Aliro credential public key, handed to the reader's trust store -- but only
+ * An credential public key, handed to the reader's trust store -- but only
  * if it is a key a phone will ever present.
  *
  * The trust check is a raw-key allowlist (ultrawidelock_reader.c), so an anchor is a
@@ -2043,7 +2043,7 @@ static int on_ultrawidelock_credential(uint8_t credential_type, const uint8_t pu
 			       uint16_t credential_index, uint16_t user_index)
 {
 	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
-		LOG_INF("  ALIRO CREDENTIAL issuer key accepted, NOT an anchor (type %u)",
+		LOG_INF("  CREDENTIAL issuer key accepted, NOT an anchor (type %u)",
 			(unsigned int)credential_type);
 		return 0;
 	}
@@ -2055,14 +2055,14 @@ static int on_ultrawidelock_credential(uint8_t credential_type, const uint8_t pu
 		LOG_ERR("  credential type %u REFUSED (%d)", (unsigned int)credential_type, rc);
 		return rc;
 	}
-	LOG_INF("  ALIRO CREDENTIAL %s (type %u, cred idx %u, user idx %u)",
+	LOG_INF("  CREDENTIAL %s (type %u, cred idx %u, user idx %u)",
 		rc == 1 ? "already present" : "ADDED", (unsigned int)credential_type,
 		(unsigned int)credential_index, (unsigned int)user_index);
 	return 0;
 }
 
 /**
- * Matter ClearCredential: stop honouring one Aliro credential, or every one of them.
+ * Matter ClearCredential: stop honouring one credential, or every one of them.
  *
  * An issuer key was never an anchor, so clearing one is already true and says so without touching
  * the store. Everything else resolves through the credential index the SetCredential recorded.
@@ -2072,7 +2072,7 @@ static int on_ultrawidelock_credential(uint8_t credential_type, const uint8_t pu
 static int on_ultrawidelock_credential_clear(uint8_t credential_type, uint16_t credential_index)
 {
 	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
-		LOG_INF("  ALIRO CLEAR issuer key: never an anchor, nothing to revoke");
+		LOG_INF("  CREDENTIAL CLEAR issuer key: never an anchor, nothing to revoke");
 		return 0;
 	}
 	if (credential_index == MATTER_DL_INDEX_ALL) {
@@ -2084,25 +2084,25 @@ static int on_ultrawidelock_credential_clear(uint8_t credential_type, uint16_t c
 		int rc = ultrawidelock_reader_provision_remove_type(credential_type);
 
 		if (rc < 0) {
-			LOG_ERR("  ALIRO CLEAR type %u NOT PERSISTED",
+			LOG_ERR("  CREDENTIAL CLEAR type %u NOT PERSISTED",
 				(unsigned int)credential_type);
 			return -1;
 		}
-		LOG_WRN("  ALIRO CLEAR type %u revoked %d anchor(s)", (unsigned int)credential_type,
+		LOG_WRN("  CREDENTIAL CLEAR type %u revoked %d anchor(s)", (unsigned int)credential_type,
 			rc);
 		return 0;
 	}
 
 	int rc = ultrawidelock_reader_provision_remove_trust(credential_type, credential_index);
 
-	LOG_WRN("  ALIRO CLEAR credential type %u index %u -> %s", (unsigned int)credential_type,
+	LOG_WRN("  CREDENTIAL CLEAR credential type %u index %u -> %s", (unsigned int)credential_type,
 		(unsigned int)credential_index,
 		rc < 0 ? "NOT PERSISTED" : (rc == 1 ? "no such anchor" : "REVOKED"));
 	return rc < 0 ? -1 : 0;
 }
 
 /**
- * Matter ClearUser: drop every Aliro credential bound to a user, or to all users.
+ * Matter ClearUser: drop every credential bound to a user, or to all users.
  *
  * The user row itself is the cluster's to forget; this is only the trust store half. Returns 0 only
  * when the removal is persisted.
@@ -2112,17 +2112,17 @@ static int on_ultrawidelock_user_clear(uint16_t user_index)
 	int rc = ultrawidelock_reader_provision_remove_user(user_index);
 
 	if (rc < 0) {
-		LOG_ERR("  ALIRO CLEAR user index %u NOT PERSISTED", (unsigned int)user_index);
+		LOG_ERR("  CREDENTIAL CLEAR user index %u NOT PERSISTED", (unsigned int)user_index);
 		return -1;
 	}
-	LOG_WRN("  ALIRO CLEAR user index %u revoked %d anchor(s)", (unsigned int)user_index, rc);
+	LOG_WRN("  CREDENTIAL CLEAR user index %u revoked %d anchor(s)", (unsigned int)user_index, rc);
 	return 0;
 }
 
 /**
- * Complete Aliro reader provisioning from a Matter commissioning exchange. Store the reader
- * identity (derived from the group ID and group sub-ID) and the signing key into the Aliro reader
- * engine, retire the device key, and log success or error.
+ * Complete credential reader provisioning from a Matter commissioning exchange. Store the reader
+ * identity (derived from the group ID and group sub-ID) and the signing key into the credential
+ * reader engine, retire the device key, and log success or error.
  */
 static int on_ultrawidelock_reader_config(const uint8_t signing_key[32],
 				  const uint8_t verification_key[65], const uint8_t group_id[16],
@@ -2142,7 +2142,7 @@ static int on_ultrawidelock_reader_config(const uint8_t signing_key[32],
 		LOG_ERR("  reader identity NOT stored (%d)", rc);
 		return rc;
 	}
-	LOG_INF("  ALIRO READER PROVISIONED: identity stored, dev key retired");
+	LOG_INF("  CREDENTIAL READER PROVISIONED: identity stored, dev key retired");
 	return 0;
 }
 
@@ -2769,7 +2769,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	s_info.case_established = true;
 	/*
 	 * Now that a fabric exists, the advert can stop being the Matter
-	 * commissionable payload and become the Aliro reader tag. Nothing else
+	 * commissionable payload and become the credential reader tag. Nothing else
 	 * re-runs it: ultrawidelock_advertise() is called at boot and on BLE
 	 * disconnect, so without this the board stayed commissionable forever
 	 * and a phone could never approach-resolve the reader it had just
@@ -3294,7 +3294,7 @@ int matter_commission_init(void)
 	}
 
 	/*
-	 * The Aliro reader group sub-identifier. Derived from the factory
+	 * The credential reader group sub-identifier. Derived from the factory
 	 * EUI-64 rather than drawn from the RNG, because nothing on the Matter
 	 * side of this node is persisted yet (there is no settings handler in
 	 * ultrawidelock_matter at all) and a value regenerated at every boot would make
@@ -3321,7 +3321,7 @@ int matter_commission_init(void)
 	 * wrote to.
 	 *
 	 * These three fields live only in RAM: the command fills them and the
-	 * reader's own NVS keeps the identity, so after a reboot the Aliro layer
+	 * reader's own NVS keeps the identity, so after a reboot the credential layer
 	 * reported "provisioned reader identity loaded" while every Matter read
 	 * of AliroReaderVerificationKey answered null. A controller cannot tell
 	 * that apart from a reader nobody has provisioned, and the null is what
@@ -3348,12 +3348,12 @@ int matter_commission_init(void)
 			memcpy(s_info.ultrawidelock_group_resolving_key, grk, sizeof(grk));
 			s_info.have_ultrawidelock_group_resolving_key = true;
 			s_info.have_ultrawidelock_reader_config = true;
-			LOG_INF("Aliro reader configuration restored; attributes readable");
+			LOG_INF("credential reader configuration restored; attributes readable");
 		} else if (rc != -ENOENT) {
 			/* -ENOENT is the dev identity and is not news. Anything
 			 * else means a stored identity exists and could not be
 			 * read back, which leaves the attributes lying. */
-			LOG_ERR("stored Aliro identity unreadable (%d); attributes stay null", rc);
+			LOG_ERR("stored credential identity unreadable (%d); attributes stay null", rc);
 		}
 		memset(reader_id, 0, sizeof(reader_id));
 		memset(grk, 0, sizeof(grk));

@@ -3,7 +3,7 @@
  * Step-up document verification worker for ESP32. Runs on a dedicated FreeRTOS task (6 KB stack, priority 4). Lazily creates a single-slot queue on first submission. Non-blocking submission: if a previous job is still enqueued, the new job is dropped. Verdict and connection handle are stored in shared state (spinlock-protected) and retrieved via ultrawidelock_stepup_worker_last(). Logging includes decrypted DeviceResponse hex and verdict breakdown (validity, element count, issuer found, signature OK, doctype OK, time OK, iteration OK).
  */
 /*
- * ultrawidelock_stepup_worker — the ESP32 background worker for the Aliro step-up phase.
+ * ultrawidelock_stepup_worker — the ESP32 background worker for the credential step-up phase.
  * The reader collects the DeviceResponse during the pre-ranging window and hands
  * it here; this task then decrypts, parses and verifies it (spec §7.4) OFF the
  * BLE-host task, so the CPU-heavy ES256 / SHA-256 work never lands in the auth

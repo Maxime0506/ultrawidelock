@@ -4,12 +4,12 @@
  * one Apple ECP broadcast, one 106 kbps type A activation attempt, field off,
  * sleep) and, once an ISO-DEP User Device is activated, performs the blocking
  * APDU round trips. Stack callbacks (CreateSession / HandleSessionData /
- * DestroySession) are posted to the Aliro workqueue so the stack observes the
+ * DestroySession) are posted to the credential workqueue so the stack observes the
  * same threading as with the upstream RFAL transport, and Send() stays
  * asynchronous: it hands the APDU to the thread and returns.
  *
  * The ECP frame layout mirrors src/nfc_prop_ecp.cpp (the RFAL-path emitter):
- * 8-byte Aliro ECP v2 header, 8-byte provisioned reader identifier, CRC_A.
+ * 8-byte credential ECP v2 header, 8-byte provisioned reader identifier, CRC_A.
  * The PN532 cannot inject raw frames mid-discovery the way RFAL's proprietary
  * poll hook can, so the frame is broadcast with InCommunicateThru while the
  * CIU CRC is switched off, between activation attempts — the same cadence a
@@ -79,7 +79,7 @@ uint8_t sEcpFrame[kEcpFrameLen];
 bool sEcpArmed;
 
 /**
- * Workqueue handler that creates an Aliro session for the NFC connection.
+ * Workqueue handler that creates an credential session for the NFC connection.
  */
 void CreateSessionWork(k_work *)
 {
@@ -87,8 +87,8 @@ void CreateSessionWork(k_work *)
 }
 
 /**
- * Workqueue handler that delivers buffered NFC receive data (sRxBuf, sRxLen) to the Aliro stack's
- * session handler.
+ * Workqueue handler that delivers buffered NFC receive data (sRxBuf, sRxLen) to the credential
+ * stack's session handler.
  */
 void RxWork(k_work *)
 {
@@ -97,7 +97,7 @@ void RxWork(k_work *)
 }
 
 /**
- * Workqueue handler that destroys the Aliro session for the NFC connection.
+ * Workqueue handler that destroys the credential session for the NFC connection.
  */
 void DestroySessionWork(k_work *)
 {
@@ -109,8 +109,8 @@ K_WORK_DEFINE(sRxWork, RxWork);
 K_WORK_DEFINE(sDestroySessionWork, DestroySessionWork);
 
 /**
- * Populate the ECP (Emulated Card Proximity) Aliro frame with header, reader identifier, and CRC_A
- * checksum. Sets sEcpArmed to true and logs the frame for debug. Caller must call this before
+ * Populate the ECP (Emulated Card Proximity) credential frame with header, reader identifier, and
+ * CRC_A checksum. Sets sEcpArmed to true and logs the frame for debug. Caller must call this before
  * BroadcastEcp.
  */
 void ArmEcpFrame()
@@ -131,7 +131,7 @@ void ArmEcpFrame()
 	sEcpFrame[kEcpFrameLen - 1] = static_cast<uint8_t>(crc >> 8);
 	sEcpArmed = true;
 
-	LOG_HEXDUMP_DBG(sEcpFrame, kEcpFrameLen, "ECP Aliro frame armed:");
+	LOG_HEXDUMP_DBG(sEcpFrame, kEcpFrameLen, "ECP credential frame armed:");
 }
 
 /* Fire-and-forget ECP beacon: CRC_A is precomputed in the frame, so the CIU
@@ -168,7 +168,7 @@ void BroadcastEcp()
 
 /* Adapt one stack-level APDU to the PN532's local limits.  Intermediate 9000
  * responses belong to transport-created ENVELOPE fragments and are therefore
- * consumed here; the Aliro stack sees exactly one response to the APDU it sent. */
+ * consumed here; the credential stack sees exactly one response to the APDU it sent. */
 int ExchangeApdu(const pn532_target &target, size_t &wireTxLen)
 {
 	ultrawidelock_pn532_apdu_plan plan{};

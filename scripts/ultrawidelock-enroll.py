@@ -37,7 +37,7 @@ Options:
 
 What it does, in the order it does it:
   1. joins the reader's fabric as a SECOND admin, leaving Apple Home's admin intact
-  2. reads the four Aliro attributes that make up the reader's public identity
+  2. reads the four credential attributes that make up the reader's public identity
   3. generates a P-256 credential for the initiator and posts the public half
      with SetCredential, which is what puts it in the reader's trust store
   4. writes a C header the initiator compiles in
@@ -159,7 +159,7 @@ def read_octets(chip_tool, fabric, attr, node_id, endpoint, dry_run, expect_len)
 
     if re.search(rf"\b{label}\s*:\s*null\b", out, re.IGNORECASE):
         sys.exit(
-            f"{label} is NULL: this reader is not reporting an Aliro configuration.\n"
+            f"{label} is NULL: this reader is not reporting an credential configuration.\n"
             "Either no home has provisioned it, or it has rebooted since one did and\n"
             "the firmware predates the boot-time restore of these attributes."
         )
@@ -309,7 +309,7 @@ def main():
         print("1. skipping commissioning (no --pairing-code); assuming already joined")
 
     # 2. Read the reader's public identity.
-    print("2. reading the reader's Aliro identity")
+    print("2. reading the reader's credential identity")
     verif = read_octets(args.chip_tool, args.fabric, ATTR_VERIFICATION_KEY,
                         args.node_id, args.endpoint, args.dry_run, 65)
     gid = read_octets(args.chip_tool, args.fabric, ATTR_GROUP_ID,

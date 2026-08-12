@@ -48,8 +48,8 @@ void ultrawidelock_lat_begin(void)
 }
 
 /**
- * Record the current uptime for a given Aliro protocol phase if not yet marked; return 1 if newly
- * recorded, 0 if already marked or phase index is out of range.
+ * Record the current uptime for a given credential protocol phase if not yet marked; return 1 if
+ * newly recorded, 0 if already marked or phase index is out of range.
  */
 int ultrawidelock_lat_mark(enum ultrawidelock_lat_phase phase)
 {
@@ -61,9 +61,9 @@ int ultrawidelock_lat_mark(enum ultrawidelock_lat_phase phase)
 }
 
 /**
- * Print a one-line latency summary to stdout showing each Aliro phase as milliseconds offset from
- * BLE connect, or "-" if the phase was never reached; also emit any flight-recorder lab traces if
- * enabled.
+ * Print a one-line latency summary to stdout showing each credential phase as milliseconds offset
+ * from BLE connect, or "-" if the phase was never reached; also emit any flight-recorder lab traces
+ * if enabled.
  */
 void ultrawidelock_lat_report(void)
 {
@@ -92,7 +92,7 @@ void ultrawidelock_lat_report(void)
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_LAB)
 
 /**
- * Enable or disable Aliro latency lab tracing (CONFIG_ULTRAWIDELOCK_CRED_LAB flight-recorder
+ * Enable or disable credential latency lab tracing (CONFIG_ULTRAWIDELOCK_CRED_LAB flight-recorder
  * output).
  */
 void ultrawidelock_lab_set_enabled(bool on)
@@ -101,7 +101,7 @@ void ultrawidelock_lab_set_enabled(bool on)
 }
 
 /**
- * Return true if Aliro latency lab tracing (CONFIG_ULTRAWIDELOCK_CRED_LAB) is enabled; false
+ * Return true if credential latency lab tracing (CONFIG_ULTRAWIDELOCK_CRED_LAB) is enabled; false
  * otherwise.
  */
 bool ultrawidelock_lab_enabled(void)
@@ -148,8 +148,8 @@ void ultrawidelock_lab_evi2(const char *ev, const char *k1, long v1, const char 
 }
 
 /**
- * Emit flight-recorder lab traces for every recorded Aliro latency phase to stdout in [ALAB] format
- * if lab tracing is enabled and has not yet been dumped.
+ * Emit flight-recorder lab traces for every recorded credential latency phase to stdout in [ALAB]
+ * format if lab tracing is enabled and has not yet been dumped.
  */
 void ultrawidelock_lab_dump(void)
 {

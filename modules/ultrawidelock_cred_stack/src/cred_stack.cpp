@@ -1,5 +1,5 @@
 /*
- * Independent implementation of the Nordic Aliro public API used by this app.
+ * Independent implementation of the Nordic credential public API used by this app.
  * Protocol constants and wire formats come from Aliro Specification 1.0.
  */
 
@@ -231,11 +231,11 @@ void BleTypes::AdvertisingServiceData::SetDynamicTag(const uint8_t *dynamicTag)
 }
 
 /**
- * Initializes the Aliro stack. Returns ALIRO_NO_ERROR on success.
+ * Initializes the credential stack. Returns ALIRO_NO_ERROR on success.
  */
 AliroError AliroStack::Init()
 {
-	LOG_INF("Aliro source stack enabled");
+	LOG_INF("credential source stack enabled");
 	return ALIRO_NO_ERROR;
 }
 
@@ -279,10 +279,10 @@ uint8_t AliroStack::GetFeatures() const
 #ifdef CONFIG_NCS_ALIRO_BLE_UWB
 
 /**
- * Generates an Aliro BLE advertisement from the provided address, power level, reader identifier,
- * notification state, and expiration timestamp. Validates inputs and derives the dynamic tag via
- * encryption. Returns ALIRO_NO_ERROR on success; ALIRO_INVALID_ARGUMENT if txPowerLevel is outside
- * [–100, 20] dBm or notification is out of range.
+ * Generates an credential BLE advertisement from the provided address, power level, reader
+ * identifier, notification state, and expiration timestamp. Validates inputs and derives the
+ * dynamic tag via encryption. Returns ALIRO_NO_ERROR on success; ALIRO_INVALID_ARGUMENT if
+ * txPowerLevel is outside [–100, 20] dBm or notification is out of range.
  */
 AliroError AliroStack::GenerateAdvertisingData(
 	BleTypes::AdvertisingServiceData &outData, const BleTypes::BleAddress &address,

@@ -216,7 +216,7 @@ static void t_standalone_start(void)
 	fake_nvs_init_rc_once = ESP_ERR_NVS_NO_FREE_PAGES;
 	okc("start ok (with NVS erase)", ultrawidelock_ble_start(&cfg) == 0);
 	okc("NVS erase ran", fake_nvs_erase_calls == 1);
-	okc("device name set", strcmp(fake_svc_gap_name, "Aliro Reader") == 0);
+	okc("device name set", strcmp(fake_svc_gap_name, "credential Reader") == 0);
 	okc("L2CAP server on SPSM/MTU",
 	    fake_l2cap_server_psm == 0x0080u && fake_l2cap_server_mtu == 512u);
 	okc("host task handed to freertos glue", fake_nimble_host_task != NULL);
@@ -286,7 +286,7 @@ static void t_attach_and_advert(void)
 	    fake_gap_adv_starts == 1 && fake_gap_adv_fields.num_uuids16 == 1 &&
 	    fake_gap_adv_fields.uuids16_is_complete == 1 &&
 	    fake_gap_adv_fields.svc_data_uuid16 == NULL &&
-	    strcmp((const char *)fake_gap_adv_name, "Aliro Reader") == 0);
+	    strcmp((const char *)fake_gap_adv_name, "credential Reader") == 0);
 	okc("advert flags GEN|BREDR_UNSUP",
 	    fake_gap_adv_fields.flags == (BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP));
 	okc("advert params UND/GEN",

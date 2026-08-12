@@ -2,3 +2,17 @@
 # locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
 844423093b8595c5ce8decf5e7007b43903b618b # style: reformat modules/ with clang-format
 9a2dbab06ca0fa34b084a85f2b1190f84caa8887 # style(ultrawidelock): clang-format modules/ultrawidelock_cred after the move
+
+# The woz_/aliro_ -> ultrawidelock_ rename. Each of these moved files and
+# rewrote identifiers across most of the tree, so blame stops here for almost
+# every line unless it is skipped.
+49af69bd76ee123f60270f5d6f0c01139c6e0823 # rename: woz_ml and woz_anchor
+3852d4dd8cf001adf603e237389b5d423ede65dc # rename: woz_dfu and woz_matter
+aa15d27ffaf92d6065d141d2e01ff9594041f245 # rename: woz_dw3000
+1eb7acb32fae38a9c3e255f3ebf8d8c1ee7b7875 # rename: woz_nfc
+2ad511768236b70be86c809bffa41b027d197392 # rename: woz_uwb
+fd9397ed549adea2ed970b406e19185782d35733 # rename: woz_aliro -> ultrawidelock_cred
+e6019d1c6fa997c798618d7a10d72397bd4e7f26 # rename: retire the woz_ prefix entirely
+6c2aee7a6c3186def20ef10da3d055ca1350ba8f # rename: scripts, overlays, patches, env vars
+6ed5fe80be2fb6f7b5e69ed803cf9310f71d58c0 # rename: app layer, shell commands, test files
+35f87d6cfd869c14b6b56808b63c7a584dcdad79 # tooling: contract the dual-prefix nets

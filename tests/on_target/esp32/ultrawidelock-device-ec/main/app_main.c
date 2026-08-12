@@ -1,5 +1,5 @@
 /*
- * On-target entry for the Aliro device (initiator) EC self-test. Initialises the
+ * On-target entry for the credential device (initiator) EC self-test. Initialises the
  * PSA backend, runs the same suite as the host test (tests/ports/esp32/
  * test_ultrawidelock_device.c) but against the real P-256 curve, prints the verdict, then
  * idles so the serial monitor can read it. Exercises only the credential-auth
@@ -16,7 +16,7 @@ int ultrawidelock_device_selftest(void);
 
 void app_main(void)
 {
-	printf("\n=== on-target Aliro device EC self-test (real PSA P-256) ===\n");
+	printf("\n=== on-target credential device EC self-test (real PSA P-256) ===\n");
 
 	if (ultrawidelock_prim_init() != 0) {
 		printf("\nON-TARGET RESULT: FAIL (PSA init)\n");

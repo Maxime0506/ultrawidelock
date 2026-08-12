@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verify the pinned Apache NimBLE host exposes the exact FreeRTOS and L2CAP CoC
-# surfaces required by the Aliro and Matter BLE adapters.
+# surfaces required by the credential and Matter BLE adapters.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then

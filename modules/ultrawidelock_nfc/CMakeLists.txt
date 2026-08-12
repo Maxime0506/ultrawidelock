@@ -22,7 +22,7 @@ endif()
 # RFAL-path ECP (Apple Enhanced Contactless Polling) emitter. Implements the
 # RFAL proprietary-poll hook (NfcPropInit / NfcPropGetCallbacks) that the
 # add-on's subsys/nfc_prop declares, so a matching iPhone auto-presents its
-# Aliro pass (Express / no Face ID). Gated on the add-on's
+# Credential pass (Express / no Face ID). Gated on the add-on's
 # CONFIG_DOOR_LOCK_NFC_PROP, independent of CONFIG_ULTRAWIDELOCK_NFC: the RFAL build
 # uses this hook without the transport seam. Compiles against the add-on's
 # RFAL, nfc_prop, reader_storage and ultrawidelock headers (global Zephyr include

@@ -1,5 +1,5 @@
 // Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
-// parsed into a scored walk-up report. Ships in every Aliro
+// parsed into a scored walk-up report. Ships in every credential
 // build (CONFIG_ULTRAWIDELOCK_CRED_LAB defaults y, like the sibling uwbdiag trace) but is
 // OFF at boot and toggled at runtime by the `lab on`/`lab off` console command, so
 // any firmware profiles on demand with no reflash. Set CONFIG_ULTRAWIDELOCK_CRED_LAB=n to

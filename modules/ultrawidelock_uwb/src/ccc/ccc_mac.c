@@ -33,7 +33,7 @@ uint16_t ccc_hop_round_index(uint32_t block_index, uint32_t hop_key_rw, uint32_t
 #define MHR_KEY_INDEX        0xAAu     /* Key index. */
 #define MHR_VENDOR_IE_HDR    0x0005u   /* Length 5, IE ID 0, Type Header. */
 #define MHR_VENDOR_OUI       0x04DF69u /* CCC OUI. */
-#define MHR_VENDOR_OUI_ALIRO 0x4A191Bu /* Apple SP0 frames carry the Aliro OUI. */
+#define MHR_VENDOR_OUI_CRED 0x4A191Bu /* Apple SP0 frames carry the credential OUI. */
 #define MHR_HT2_IE           0x3F80u   /* Header Termination IE HT2, Element ID 0x7F. */
 
 /** @brief Store a uint16 little-endian. */
@@ -65,12 +65,13 @@ static uint32_t get_le32(const uint8_t *p)
 	       ((uint32_t)p[3] << 24);
 }
 
-/** @brief True if the 3-byte little-endian OUI at p is the CCC or Aliro OUI (both accepted). */
+/** @brief True if the 3-byte little-endian OUI at p is the CCC or credential OUI (both accepted).
+ */
 static bool mhr_vendor_oui_ok(const uint8_t *p)
 {
 	uint32_t oui = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16);
 
-	return oui == MHR_VENDOR_OUI || oui == MHR_VENDOR_OUI_ALIRO;
+	return oui == MHR_VENDOR_OUI || oui == MHR_VENDOR_OUI_CRED;
 }
 
 /**

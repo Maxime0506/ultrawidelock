@@ -124,7 +124,7 @@ if ( cd "$PROJ" && idf.py -B "$PBUILD" \
 		# Negative control, asserted rather than assumed: a name that is linked
 		# either way makes the four checks above pass whatever happens to the
 		# presence config. ultrawidelock_ec_p256_keygen and ultrawidelock_ecdsa_p256_sign were
-		# the obvious picks and are exactly that -- the Aliro credential path
+		# the obvious picks and are exactly that -- the credential path
 		# pulls both in with presence off -- so the discrimination is checked
 		# here instead of being taken on trust.
 		check "presence absent from defaults build" \

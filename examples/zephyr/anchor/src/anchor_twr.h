@@ -2,7 +2,7 @@
  * @file anchor_twr.h — anchor-to-anchor DS-TWR, both roles.
  *
  * A three-message double-sided two-way ranging round between two boards this
- * project owns both ends of. No CCC, no Aliro, no credential, no phone: the
+ * project owns both ends of. No CCC, no credential protocol, no phone: the
  * whole thing runs at the CONFIG_ULTRAWIDELOCK_UWB tier, where uwb_seam.h inlines to the
  * bare decadriver and there is no STS engine to bind.
  *

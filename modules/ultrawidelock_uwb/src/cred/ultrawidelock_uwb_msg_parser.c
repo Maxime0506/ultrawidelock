@@ -16,7 +16,7 @@ LOG_MODULE_DECLARE(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
  */
 
 /**
- * @brief Extracts the protocol type from byte 0 of an Aliro message header.
+ * @brief Extracts the protocol type from byte 0 of an credential message header.
  * @param bytes Pointer to the start of the raw message bytes.
  * @return The protocol type byte.
  */
@@ -26,7 +26,7 @@ uint8_t ultrawidelock_uwb_msg_protocol_header(const uint8_t *bytes)
 }
 
 /**
- * @brief Extracts the message type ID from byte 1 of an Aliro message header, used to dispatch
+ * @brief Extracts the message type ID from byte 1 of an credential message header, used to dispatch
  * M1-M4 setup and ranging messages during parsing.
  * @param bytes Pointer to the start of the raw message bytes.
  * @return The message ID byte.
@@ -37,7 +37,7 @@ uint8_t ultrawidelock_uwb_msg_message_id(const uint8_t *bytes)
 }
 
 /**
- * @brief Extracts the payload length from bytes 2-3 of an Aliro message header as a 16-bit
+ * @brief Extracts the payload length from bytes 2-3 of an credential message header as a 16-bit
  * big-endian integer.
  * @param bytes Pointer to the start of the raw message bytes.
  * @return The payload length in bytes.

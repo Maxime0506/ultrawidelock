@@ -30,7 +30,7 @@ and is deleted with it.
 
 The selected board source base is Qorvo DW3/QM33 SDK v1.1.1;
 this port owns the pinned OpenThread MTD, nRF52833 802.15.4
-integration, and Aliro/Matter L2CAP CoC backend layered onto it. The radio
+integration, and credential/Matter L2CAP CoC backend layered onto it. The radio
 runtime is paired with the pinned MPSL/SoftDevice Controller, nRF 802.15.4,
 and Apache NimBLE host source set.
 

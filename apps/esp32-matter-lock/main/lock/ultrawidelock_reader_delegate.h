@@ -1,4 +1,4 @@
-// Declares UltraWideLockReaderDelegate, the Aliro (Apple Home Key) reader-provisioning and BLE-UWB half of
+// Declares UltraWideLockReaderDelegate, the credential (Apple Home Key) reader-provisioning and BLE-UWB half of
 // the Matter DoorLock cluster delegate, bridging controller commands to the on-device reader
 // identity, trust store, and BLE advertising state.
 /*
@@ -25,7 +25,7 @@
 #include <app/clusters/door-lock-server/door-lock-server.h>
 
 /*
- * UltraWideLockReaderDelegate — the Aliro (Apple Home Key) reader-provisioning half of
+ * UltraWideLockReaderDelegate — the credential (Apple Home Key) reader-provisioning half of
  * the Door Lock cluster Delegate, for a BLE + UWB ("Express") reader.
  *
  * Apple Home writes the reader identity with SetAliroReaderConfig (signing key,
@@ -34,7 +34,7 @@
  * delegate holds that config and advertises the expedited + BLE-UWB protocol
  * versions the reader speaks.
  *
- * Aliro credential *keys* (issuer / endpoint, credential types 6/7/8) do NOT
+ * credential *keys* (issuer / endpoint, credential types 6/7/8) do NOT
  * flow through this Delegate. They arrive on the generic
  * emberAfPluginDoorLockSet/GetCredential path and are stored by BoltLockManager
  * (its storage is credential-type indexed and already sized to hold them), so
@@ -62,7 +62,7 @@ class UltraWideLockReaderDelegate: public chip::app::Clusters::DoorLock::Delegat
 	UltraWideLockReaderDelegate(const UltraWideLockReaderDelegate &) = delete;
 	UltraWideLockReaderDelegate &operator=(const UltraWideLockReaderDelegate &) = delete;
 
-	// DoorLock::Delegate — Aliro reader-provisioning interface
+	// DoorLock::Delegate — credential reader-provisioning interface
 	CHIP_ERROR GetAliroReaderVerificationKey(chip::MutableByteSpan &verificationKey) override;
 	CHIP_ERROR GetAliroReaderGroupIdentifier(chip::MutableByteSpan &groupIdentifier) override;
 	CHIP_ERROR
@@ -88,7 +88,7 @@ class UltraWideLockReaderDelegate: public chip::app::Clusters::DoorLock::Delegat
 	CHIP_ERROR CopyProtocolVersionIntoSpan(uint16_t value, chip::MutableByteSpan &out);
 	void EnsureSubIdentifier();
 
-	// Number of Aliro credential-issuer / endpoint keys advertised as supported.
+	// Number of credential-issuer / endpoint keys advertised as supported.
 	// Must stay <= BoltLockManager's kMaxCredentialsPerUser, since that is where
 	// these credentials (types 6/7/8) are actually stored.
 	static constexpr uint16_t kAliroKeysSupported = 10;

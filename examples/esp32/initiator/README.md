@@ -1,6 +1,6 @@
 # ESP32-S3 initiator example
 
-This is the ESP32-S3 bench peer for an Aliro reader. It implements the BLE
+This is the ESP32-S3 bench peer for an credential reader. It implements the BLE
 central and user-device transport path. The current example is BLE-only and
 does not enable a UWB initiator.
 

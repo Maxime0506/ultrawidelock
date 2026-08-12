@@ -1,8 +1,8 @@
-// APDU framing and parsing for the Aliro Access Protocol: builds outbound command APDUs via a
+// APDU framing and parsing for the credential Access Protocol: builds outbound command APDUs via a
 // TLV writer and parses the AUTH0/AUTH1 response APDUs exchanged during the reader-device
 // handshake.
 /*
- * ultrawidelock_apdu — the Aliro credential-auth wire codec: single-byte-tag BER-TLV
+ * ultrawidelock_apdu — the credential-auth wire codec: single-byte-tag BER-TLV
  * plus the AUTH0/AUTH1 command builders, the ECDSA authentication-data
  * transcript, the AUTH0/AUTH1 response parsers, the EXCHANGE command, and the
  * 4-byte L2CAP envelope. Pure byte manipulation, no crypto and no platform

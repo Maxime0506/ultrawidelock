@@ -353,7 +353,7 @@ add_library(ultrawidelock_storage STATIC
   # ultrawidelock_cred/roles/reader_policy.list and now comes in with the rest of that
   # role, below: naming it in two places would put one object in two archives.
 )
-# The provisioning backend implements a contract owned by the shared Aliro
+# The provisioning backend implements a contract owned by the shared credential
 # module, not by this port, so the module's public headers are on the path.
 target_include_directories(ultrawidelock_storage PUBLIC
   "${ULTRAWIDELOCK_MODULES_DIR}/ultrawidelock_cred/include"
@@ -368,7 +368,7 @@ target_link_libraries(ultrawidelock_storage PUBLIC ultrawidelock_radio)
 include("${ULTRAWIDELOCK_PORT_DIR}/uwb/uwb.cmake")
 
 # ----------------------------------------------------------------------------
-# Aliro reader: the transaction engine, its BLE transport, and the ranging glue.
+# credential reader: the transaction engine, its BLE transport, and the ranging glue.
 #
 # After the UWB layer because it calls into it: ultrawidelock_ranging.c drives the
 # responder through the contract in <ultrawidelock/uwb.h>.
@@ -394,7 +394,7 @@ set(ULTRAWIDELOCK_CRED_ROLE_LISTS
 set(ULTRAWIDELOCK_CRED_SOURCES)
 foreach(_ultrawidelock_list IN LISTS ULTRAWIDELOCK_CRED_ROLE_LISTS)
   if(NOT EXISTS "${_ultrawidelock_list}")
-    message(FATAL_ERROR "Aliro role manifest is missing: ${_ultrawidelock_list}")
+    message(FATAL_ERROR "credential role manifest is missing: ${_ultrawidelock_list}")
   endif()
   ultrawidelock_role_sources("${_ultrawidelock_list}" _ultrawidelock_role_srcs)
   list(APPEND ULTRAWIDELOCK_CRED_SOURCES ${_ultrawidelock_role_srcs})
@@ -641,7 +641,7 @@ foreach(_ultrawidelock_target ultrawidelock_board ultrawidelock_radio ultrawidel
   )
 endforeach()
 
-# The Aliro BLE layer gets the same treatment minus -Wundef, which it cannot
+# The credential BLE layer gets the same treatment minus -Wundef, which it cannot
 # have: NimBLE's public headers test MYNEWT_VAL_* names that are meant to
 # evaluate to zero when unset, and ultrawidelock_nimble already relaxes it PUBLIC for that
 # reason. The rest still applies -- this is the port's own code and the shared

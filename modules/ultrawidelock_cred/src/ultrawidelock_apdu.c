@@ -1,9 +1,9 @@
-// Aliro APDU TLV codec: builds command payloads (AUTH0, AUTH1, AuthData, EXCHANGE) and parses
+// credential APDU TLV codec: builds command payloads (AUTH0, AUTH1, AuthData, EXCHANGE) and parses
 // response APDUs, plus BLE envelope framing/unframing and ISO7816 APDU wrap/status-word stripping.
 // Provides a minimal BER-TLV writer (ultrawidelock_tlv_w_init/put/finish) used to assemble command
 // payloads, and TLV/APDU parsing helpers used to extract fields from device responses.
 /*
- * Aliro credential-auth wire codec. See ultrawidelock_apdu.h.
+ * credential-auth wire codec. See ultrawidelock_apdu.h.
  */
 #include "ultrawidelock_apdu.h"
 
@@ -321,10 +321,10 @@ int ultrawidelock_apdu_parse_auth1_response(const uint8_t *buf, size_t len,
 
 /* ---- L2CAP envelope ---- */
 
-// Frames a payload into an Aliro BLE envelope: 1-byte type (top 2 bits masked off), 1-byte opcode,
-// 2-byte big-endian payload length, followed by the payload. Returns 0 on success with *out_len set
-// to the total framed length; returns -1 if plen exceeds 0xFFFF or cap is too small to hold the
-// header plus payload.
+// Frames a payload into an credential BLE envelope: 1-byte type (top 2 bits masked off), 1-byte
+// opcode, 2-byte big-endian payload length, followed by the payload. Returns 0 on success with
+// *out_len set to the total framed length; returns -1 if plen exceeds 0xFFFF or cap is too small to
+// hold the header plus payload.
 int ultrawidelock_ble_frame(uint8_t type, uint8_t opcode, const uint8_t *payload, size_t plen,
 			    uint8_t *out, size_t cap, size_t *out_len)
 {
@@ -342,10 +342,10 @@ int ultrawidelock_ble_frame(uint8_t type, uint8_t opcode, const uint8_t *payload
 	return 0;
 }
 
-// Parses an Aliro BLE envelope, extracting the type, opcode, and a pointer/length into the payload
-// region of buf. The returned *payload points into buf; the caller must not use it beyond buf's
-// lifetime. Returns 0 on success; returns -1 if len is shorter than the envelope header, or the
-// encoded payload length would exceed the buffer.
+// Parses an credential BLE envelope, extracting the type, opcode, and a pointer/length into the
+// payload region of buf. The returned *payload points into buf; the caller must not use it beyond
+// buf's lifetime. Returns 0 on success; returns -1 if len is shorter than the envelope header, or
+// the encoded payload length would exceed the buffer.
 int ultrawidelock_ble_unframe(const uint8_t *buf, size_t len, uint8_t *type, uint8_t *opcode,
 		      const uint8_t **payload, size_t *plen)
 {

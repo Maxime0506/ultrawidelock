@@ -1,4 +1,4 @@
-# ultrawidelock_cred role: NimBLE reader transport -- GAP advertising, the Aliro 0xFFF2
+# ultrawidelock_cred role: NimBLE reader transport -- GAP advertising, the credential 0xFFF2
 # GATT service, and the L2CAP CoC server that carries the transaction. Portable
 # across every NimBLE host; each port supplies its own ultrawidelock_ble_start() for the
 # platform half (storage, nimble_port_init, host task).

@@ -13,7 +13,7 @@ config ULTRAWIDELOCK_NFC
 if ULTRAWIDELOCK_NFC
 
 choice ULTRAWIDELOCK_NFC_TRANSPORT
-	prompt "Aliro NFC reader transport"
+	prompt "credential NFC reader transport"
 	default ULTRAWIDELOCK_NFC_TRANSPORT_RFAL if NFC_DRIVER_STM
 	default ULTRAWIDELOCK_NFC_TRANSPORT_NONE
 
@@ -31,14 +31,14 @@ config ULTRAWIDELOCK_NFC_TRANSPORT_PN532
 	  In-tree PN532 reader transport. Needs a devicetree node compatible
 	  "nxp,pn532-spi" (see apps/nrf5340dk-lock/overlays/pn532.overlay, which
 	  reuses the spi1 bus the ST25R shield would occupy). Emits Apple ECP frames
-	  while polling so an iPhone auto-presents its Aliro pass, mirroring the
+	  while polling so an iPhone auto-presents its credential pass, mirroring the
 	  RFAL-path emitter in src/nfc_prop_ecp.cpp.
 
 config ULTRAWIDELOCK_NFC_TRANSPORT_NONE
 	bool "No NFC reader fitted"
 	help
 	  The board has no NFC frontend. Start() succeeds without doing
-	  anything; the Aliro NFC flow is simply never entered. BLE/UWB and
+	  anything; the credential NFC flow is simply never entered. BLE/UWB and
 	  Matter operate normally.
 
 endchoice

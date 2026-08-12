@@ -1,5 +1,5 @@
 /*
- * DWM3001CDK standalone Aliro reader — board overlay.
+ * DWM3001CDK standalone credential reader — board overlay.
  *
  * Declare the DW3110 that is already wired inside the DWM3001C module. &spi3 is
  * enabled by the board with CS on P1.06; only the side-band GPIOs are ours to

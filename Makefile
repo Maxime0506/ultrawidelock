@@ -12,7 +12,7 @@
 #   make test            # host suites (no toolchain, no hardware)
 #
 # Bare build/flash/monitor mean the DWM3001CDK because that is this project's
-# headline target: one nRF52833 carrying the Aliro reader, the DW3110's ranging,
+# headline target: one nRF52833 carrying the credential reader, the DW3110's ranging,
 # a hand-written Matter node and an OpenThread MTD. The other two boards keep
 # their own prefixes.
 
@@ -62,7 +62,7 @@ export SIGN_KEY
 
 # ---- options forwarded to the firmware builds -------------------------------
 # Set on the command line: make nrf-build PRETTY=1.
-# The in-tree Aliro stack is the default; ULTRAWIDELOCK_SOURCE=0 selects the legacy
+# The in-tree credential stack is the default; ULTRAWIDELOCK_SOURCE=0 selects the legacy
 # Nordic archive for comparison or regression isolation.
 CHIP     ?=
 PRETTY   ?=

@@ -1,7 +1,7 @@
-# No-bootloader flash layout for the Aliro-UWB image (MCUboot dropped).
+# No-bootloader flash layout for the credential-UWB image (MCUboot dropped).
 # App owns flash_primary from 0x0 up to factory_data. settings_storage is pinned
-# at 0xf8000 (the MCUboot-layout address) so existing Matter/Aliro commissioning in
-# NVS survives the reflash. external_nvs (Aliro reader storage) + external_flash
+# at 0xf8000 (the MCUboot-layout address) so existing Matter/credential commissioning in
+# NVS survives the reflash. external_nvs (credential reader storage) + external_flash
 # live on the DK's MX25R64 QSPI.
 app:
   address: 0x0

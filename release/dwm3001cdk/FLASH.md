@@ -1,6 +1,6 @@
 # ultrawidelock on the DWM3001CDK: flash guide
 
-An Aliro lock on one board. Your iPhone carries the key in Wallet, and the lock
+An credential lock on one board. Your iPhone carries the key in Wallet, and the lock
 opens as you walk up to it, phone in your pocket. No app to install.
 
 Everything is on the DWM3001CDK itself: the radio, the debugger, the lot. There
@@ -8,7 +8,7 @@ is nothing to wire and nothing to solder.
 
 | File | What it is |
 |---|---|
-| `merged.hex` | the firmware: bootloader, Aliro reader, Matter node, UWB engine |
+| `merged.hex` | the firmware: bootloader, credential reader, Matter node, UWB engine |
 | `flash.sh` | writes it to the board over the on-board debugger |
 | `VERSION.txt` | build details, **and your setup code** |
 | `README.txt` | the short version of this guide, in plain text |

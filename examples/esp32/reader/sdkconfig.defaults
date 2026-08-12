@@ -25,8 +25,8 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# Phase 2 BLE transport: NimBLE host (Aliro GATT service + L2CAP CoC). BLE-only
-# on the S3; NimBLE is the peripheral host. L2CAP CoC carries the Aliro
+# Phase 2 BLE transport: NimBLE host (credential GATT service + L2CAP CoC). BLE-only
+# on the S3; NimBLE is the peripheral host. L2CAP CoC carries the credential
 # transaction (M1-M4); allow a couple of concurrent sessions.
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y

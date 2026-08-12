@@ -121,7 +121,7 @@ async def run(args):
 
     # The DFU service is NOT in the advertisement -- the advertising set is the
     # reader's and is already full -- so match on what the board does advertise:
-    # Aliro 0xFFF2 once provisioned, Matter 0xFFF6 while commissionable.
+    # credential 0xFFF2 once provisioned, Matter 0xFFF6 while commissionable.
     wanted = {
         "0000fff2-0000-1000-8000-00805f9b34fb",
         "0000fff6-0000-1000-8000-00805f9b34fb",
@@ -134,7 +134,7 @@ async def run(args):
         timeout=args.scan_timeout,
     )
     if device is None:
-        die("no board found advertising Aliro (0xFFF2) or Matter (0xFFF6). "
+        die("no board found advertising the credential service (0xFFF2) or Matter (0xFFF6). "
             "Is it powered and advertising?")
     print(f"  found {device.address}")
 

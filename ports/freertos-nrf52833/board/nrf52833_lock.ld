@@ -3,7 +3,7 @@
  *
  * The one thing this script does that a stock nRF52833 script does not is stop
  * the image at 0x7e000. The two pages above that are the persistent key-value
- * store (storage/kv_flash_freertos.c), which holds the Aliro provisioning
+ * store (storage/kv_flash_freertos.c), which holds the credential provisioning
  * record and OpenThread's settings including the SRP client key. Leaving them
  * inside the FLASH region would let a large image grow into them and be
  * discovered as a lock that forgets its identity after a firmware update, which

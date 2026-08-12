@@ -11,7 +11,7 @@
 #if defined(CONFIG_ULTRAWIDELOCK_CRED)
 #include "cred_kdf.h"
 
-/* Aliro URSK stash: the Pre-POLL decode reads it to derive the CCC STS. */
+/* credential URSK stash: the Pre-POLL decode reads it to derive the CCC STS. */
 static bool g_have_ursk;
 static uint8_t g_ursk[ULTRAWIDELOCK_URSK_LEN];
 
@@ -38,7 +38,7 @@ uint32_t fira_session_current_slot(void)
 }
 #endif /* CONFIG_ULTRAWIDELOCK_CRED */
 
-/* Last valid DS-TWR range, latched for the Aliro mRangingData seam and the shell. */
+/* Last valid DS-TWR range, latched for the credential mRangingData seam and the shell. */
 static bool g_have_range;
 static int32_t g_last_range_cm;
 static uint16_t g_last_range_addr;

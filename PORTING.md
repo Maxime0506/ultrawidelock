@@ -89,10 +89,10 @@ paste the source path into a second build definition.
 
 The two `dw3000_*` seams above cover a new board carrying a DW3000-family
 chip. A different chipset replaces the engine, not the seams. The contract is
-`<ultrawidelock/uwb.h>`: bind a URSK, start and stop an Aliro session from the
+`<ultrawidelock/uwb.h>`: bind a URSK, start and stop an credential session from the
 negotiated parameters, report ranges with integrity evidence. Everything above
 that header is chip-agnostic and reused as is — the FiRa session state, DS-TWR
-math, CCC key schedule and MAC framing, the Aliro M1-M4 adapter, and the apps.
+math, CCC key schedule and MAC framing, the credential M1-M4 adapter, and the apps.
 
 What a new chipset supplies:
 

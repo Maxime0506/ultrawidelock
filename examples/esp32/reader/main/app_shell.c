@@ -1,4 +1,4 @@
-// ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, ultrawidelock-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
+// ESP32-IDF console shell for the standalone credential UWB responder bench app: registers status, range, ultrawidelock-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
 /*
  * app_shell — see app_shell.h. Interactive console + demo responder lifecycle.
  */
@@ -43,7 +43,7 @@ static void print_banner(void)
 
 	printf("\n%s%s%s %s%s · esp-idf %s%s\n", col(C_TITLE), app->project_name, col(C_RST),
 	       col(C_DIM), app->version, esp_get_idf_version(), col(C_RST));
-	printf("%sAliro reader bench · 'help' lists commands · ctrl-] leaves the "
+	printf("%scredential reader bench · 'help' lists commands · ctrl-] leaves the "
 	       "monitor%s\n\n",
 	       col(C_DIM), col(C_RST));
 }
@@ -57,7 +57,7 @@ static const uint8_t demo_ursk[32] = {
 	0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00,
 };
 
-// Demo Aliro UWB responder configuration used by the shell's ultrawidelock-start command.
+// Demo credential UWB responder configuration used by the shell's ultrawidelock-start command.
 static const struct ultrawidelock_uwb_ultrawidelock_cfg demo_cfg = {
 	.session_id = 0x02b02fd4u,
 	.channel = 9u,
@@ -156,7 +156,7 @@ static int cmd_range(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: starts the Aliro UWB responder via app_responder_start. Prints "busy" if a responder is already running (rc == 1), otherwise reports ok/FAILED with the return code. Always returns 0 to the shell.
+// Shell command handler: starts the credential UWB responder via app_responder_start. Prints "busy" if a responder is already running (rc == 1), otherwise reports ok/FAILED with the return code. Always returns 0 to the shell.
 static int cmd_ultrawidelock_start(int argc, char **argv)
 {
 	(void)argc;
@@ -170,7 +170,7 @@ static int cmd_ultrawidelock_start(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: stops the Aliro UWB responder via app_responder_stop and prints confirmation. Always returns 0.
+// Shell command handler: stops the credential UWB responder via app_responder_stop and prints confirmation. Always returns 0.
 static int cmd_ultrawidelock_stop(int argc, char **argv)
 {
 	(void)argc;
@@ -180,7 +180,7 @@ static int cmd_ultrawidelock_stop(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: prints the current Aliro reader provisioning state. Always returns 0.
+// Shell command handler: prints the current credential reader provisioning state. Always returns 0.
 static int cmd_ultrawidelock_prov(int argc, char **argv)
 {
 	(void)argc;
@@ -235,7 +235,7 @@ static int cmd_clear(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via ultrawidelock_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
+// Shell command handler: trusts the last-presented credential and persists it to NVS via ultrawidelock_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
 static int cmd_ultrawidelock_trust(int argc, char **argv)
 {
 	(void)argc;
@@ -354,7 +354,7 @@ static int cmd_ultrawidelock_stepup(int argc, char **argv)
 		return 0;
 	}
 	ultrawidelock_reader_stepup_arm();
-	printf("ultrawidelock-stepup: armed one-shot; approach with an Aliro device to request "
+	printf("ultrawidelock-stepup: armed one-shot; approach with an credential device to request "
 	       "an Access Document (verdict logged, unlock unaffected)\n");
 	return 0;
 }

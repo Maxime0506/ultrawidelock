@@ -540,7 +540,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 	g_dbg_fd_calls++;
 #endif
 	struct ccc_mhr_fields mhr;
-	// CCC final message carrying Aliro authentication data (MAC, derived ranging state).
+	// CCC final message carrying credential authentication data (MAC, derived ranging state).
 	struct ccc_final_data fd;
 	uint8_t dudsk[CCC_DUDSK_LEN];
 	uint8_t plain[64];
@@ -1601,7 +1601,7 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
  * (07 01 09 = SYNC_Code_Index=9). */
 #define CCC_RX_PREPOLL_CODE 9u
 
-/* PHY-config cache: dwt_configure is the long pole of session start, and every Aliro
+/* PHY-config cache: dwt_configure is the long pole of session start, and every credential
  * session negotiates the same PHY in practice (the reader's M1 offers exactly one
  * config). Remember what was last applied, keyed to the radio-init generation so a
  * re-probe/reset invalidates it, and skip the reconfigure when identical.

@@ -70,7 +70,7 @@ LOG_MODULE_DECLARE(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 /**
  * @brief Builds the M1 ranging-session-setup message advertising configuration IDs, pulse-shape
  * combos, channel bitmask, and session ID.
- * @param session Session whose Aliro capabilities and session ID populate the message.
+ * @param session Session whose credential capabilities and session ID populate the message.
  * @return Newly allocated M1 message, or NULL if builder init or attribute encoding fails.
  */
 struct ultrawidelock_uwb_message *
@@ -270,7 +270,7 @@ ultrawidelock_uwb_msg_build_suspend_response(struct ultrawidelock_uwb_session *s
 }
 
 /**
- * @brief Builds an Aliro general-error notification message carrying the given error code.
+ * @brief Builds an credential general-error notification message carrying the given error code.
  * @param session Unused; reserved for a consistent builder signature.
  * @param error_code Error code to encode in the general-error notification attribute.
  * @return Newly allocated notification message, or NULL if builder init or attribute encoding
@@ -753,7 +753,7 @@ static void compute_initiation_time(struct ultrawidelock_uwb_session *session)
 /**
  * @brief Sets the STS index and initiation time on the CCC session in preparation for re-arming
  * ranging after a suspend.
- * @param session Session whose CCC session and Aliro config supply the resume parameters.
+ * @param session Session whose CCC session and credential config supply the resume parameters.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success, or ULTRAWIDELOCK_UWB_ERR_INTERNAL if either CCC
  * call fails.
  */
@@ -935,7 +935,7 @@ static enum ultrawidelock_uwb_err handle_suspend_response(struct ultrawidelock_u
 
 /**
  * @brief Handle an inbound resume response, arm timing and CCC state, and start ranging.
- * @param session Aliro UWB session expected to be in RESUME_REQ_SENT state.
+ * @param session credential UWB session expected to be in RESUME_REQ_SENT state.
  * @param message Received resume response message to validate and parse.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success; an error if attributes are missing, state is
  * wrong, or resume setup/session start fails.
@@ -975,7 +975,7 @@ static enum ultrawidelock_uwb_err handle_resume_response(struct ultrawidelock_uw
 
 /**
  * @brief Dispatch an inbound ranging-phase message to its handler based on message type.
- * @param session Aliro UWB session to update.
+ * @param session credential UWB session to update.
  * @param message Received ranging message to dispatch.
  * @return Handler's result on success; ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER if session or
  * message is NULL; ULTRAWIDELOCK_UWB_ERR_MESSAGE_UNSUPPORTED for unknown message types.
@@ -1010,7 +1010,7 @@ ultrawidelock_uwb_msg_process_ranging(struct ultrawidelock_uwb_session *session,
 
 /**
  * @brief Handle an "init ranging later" notification, returning the session to CREATED state.
- * @param session Aliro UWB session expected to be in M1_SENT state.
+ * @param session credential UWB session expected to be in M1_SENT state.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success; ULTRAWIDELOCK_UWB_ERR_INVALID_STATE if the session
  * is not in M1_SENT.
  */
@@ -1028,7 +1028,7 @@ handle_init_ranging_later(struct ultrawidelock_uwb_session *session)
 /**
  * @brief Handle a "resume later" notification, moving the session to SUSPENDED without re-arming
  * ranging.
- * @param session Aliro UWB session expected to be in RESUME_REQ_SENT state.
+ * @param session credential UWB session expected to be in RESUME_REQ_SENT state.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success; ULTRAWIDELOCK_UWB_ERR_INVALID_STATE if the session
  * is not in RESUME_REQ_SENT.
  */
@@ -1045,7 +1045,7 @@ static enum ultrawidelock_uwb_err handle_resume_later(struct ultrawidelock_uwb_s
 /**
  * @brief Handle a "ranging suspended" notification by stopping the session and moving it to
  * SUSPENDED.
- * @param session Aliro UWB session expected to be in RANGING state.
+ * @param session credential UWB session expected to be in RANGING state.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success; ULTRAWIDELOCK_UWB_ERR_INVALID_STATE if the session
  * is not in RANGING; otherwise the result of stopping the session.
  */
@@ -1060,9 +1060,9 @@ handle_ranging_suspended(struct ultrawidelock_uwb_session *session)
 }
 
 /**
- * @brief Parse an Aliro event notification message, logging busy, general-error, and
+ * @brief Parse an credential event notification message, logging busy, general-error, and
  * reader-descriptor events.
- * @param session Aliro UWB session (unused).
+ * @param session credential UWB session (unused).
  * @param message Received event notification message to parse.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success; ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED if a
  * general-error attribute has the wrong length.
@@ -1113,7 +1113,7 @@ parse_event_notification(struct ultrawidelock_uwb_session *session,
 /**
  * @brief Parse a ranging-setup notification message and dispatch each attribute to its session
  * state handler.
- * @param session Aliro UWB session to update.
+ * @param session credential UWB session to update.
  * @param message Received ranging notification message to parse.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success; the first handler error encountered otherwise.
  */
@@ -1160,7 +1160,7 @@ parse_ranging_notification(struct ultrawidelock_uwb_session *session,
 /**
  * @brief Dispatch a received notification message to its parser by message ID. Reader-status
  * notifications are informational and ignored; unknown IDs are logged and ignored.
- * @param session Aliro UWB session to update with the parsed notification's effects.
+ * @param session credential UWB session to update with the parsed notification's effects.
  * @param message Received notification message to dispatch.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE for handled, informational and unknown notifications,
  * otherwise the error from the event or ranging parser.
@@ -1192,7 +1192,7 @@ ultrawidelock_uwb_msg_process_notification(struct ultrawidelock_uwb_session *ses
  * and no response is emitted, so this only surfaces the payload: the semantics are
  * unknown and are being characterised by diffing the attributes across conditions.
  *
- * @param session Aliro UWB session (unused; no state is driven from here yet).
+ * @param session credential UWB session (unused; no state is driven from here yet).
  * @param message Received supplementary-service message to log.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE always.
  */

@@ -1,4 +1,4 @@
-// UWB ranging bring-up and lifecycle for the Aliro reader: initializes the reader's UWB
+// UWB ranging bring-up and lifecycle for the credential reader: initializes the reader's UWB
 // adapter and Cherry CCC context once, then arms, feeds, and tears down per-connection ranging
 // sessions driven by the M1-M4 setup exchanged over the peer's L2CAP channel.
 // Maintains process-wide singletons for the Cherry context and adapter (set up once via
@@ -52,7 +52,7 @@ static struct ultrawidelock_uwb_adapter_reader_config s_reader_cfg = {
 
 // Process-wide handle to the active Cherry CCC context, or NULL if ranging has not been set up.
 static struct cherry *s_cherry;
-// Process-wide handle to the active Aliro UWB adapter, or NULL if ranging has not been set up.
+// Process-wide handle to the active credential UWB adapter, or NULL if ranging has not been set up.
 static struct ultrawidelock_uwb_adapter *s_adapter;
 
 /* The single active ranging session (the DW3000 is single-session). Owned and
@@ -110,7 +110,7 @@ static void lat_mark_sdu(uint8_t proto, uint8_t id)
 /* ---- engine callbacks (invoked synchronously on the BLE-host task) ---- */
 
 /* Send an adapter-built message verbatim over the peer's L2CAP channel. The
- * bytes already carry the 4-byte Aliro header; hand them straight to the BLE
+ * bytes already carry the 4-byte credential header; hand them straight to the BLE
  * send. We own the message and MUST free it (even if we don't send). */
 static void uwb_tx_cb(struct ultrawidelock_uwb_message *message,
 		      struct ultrawidelock_uwb_session *session, void *user_data, bool timeout)
@@ -196,7 +196,7 @@ int ultrawidelock_ranging_init(void)
 	uint16_t proto[] = {ULTRAWIDELOCK_VERSION};
 	uint16_t uwb_configs[] = {0x0000u};
 	uint8_t pulse_combos[] = {0x00u};
-	// CCC capabilities advertised to the Aliro UWB adapter for this reader.
+	// CCC capabilities advertised to the credential UWB adapter for this reader.
 	struct cherry_ccc_capabilities ccc = {
 		.slot_bitmask = 0xFFu,
 		.sync_code_index_bitmask = 0x00000F00u, /* SYNC codes 9..12 */
@@ -228,15 +228,15 @@ int ultrawidelock_ranging_init(void)
 
 	/* Prove + initialise the DW3000 here, in the clean reader-startup task, so the
 	 * heavy dwt_probe/dwt_initialise never runs from the BLE-host callback at M4.
-	 * That callback path (ultrawidelock_ranging_feed -> engine -> ultrawidelock_uwb_start_ultrawidelock) has a
-	 * shallow stack and no prior bring-up, and dwt_probe failed there (-1). A one-shot
-	 * start+stop with a throwaway URSK leaves the radio probed (uwb_min's g_radio_ready
-	 * latches); the real session at M4 then re-uses it — ccc_prepoll_listen skips the
-	 * probe and only re-applies the negotiated channel. Non-fatal: if the radio is
-	 * absent, auth still runs and M4 will surface the failure. */
+	 * That callback path (ultrawidelock_ranging_feed -> engine ->
+	 * ultrawidelock_uwb_start_ultrawidelock) has a shallow stack and no prior bring-up, and
+	 * dwt_probe failed there (-1). A one-shot start+stop with a throwaway URSK leaves the radio
+	 * probed (uwb_min's g_radio_ready latches); the real session at M4 then re-uses it —
+	 * ccc_prepoll_listen skips the probe and only re-applies the negotiated channel. Non-fatal:
+	 * if the radio is absent, auth still runs and M4 will surface the failure. */
 	static const uint8_t k_probe_ursk[ULTRAWIDELOCK_URSK_LEN] = {0};
-	// Aliro UWB Kconfig-equivalent probe configuration used to bring up the ultrawidelock_uwb layer on
-	// this port.
+	// credential UWB Kconfig-equivalent probe configuration used to bring up the
+	// ultrawidelock_uwb layer on this port.
 	const struct ultrawidelock_uwb_ultrawidelock_cfg probe_cfg = {
 		.session_id = 0u,
 		.channel = 9u,

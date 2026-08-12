@@ -11,13 +11,13 @@ bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out, uint8_t *nlos_
 			     uint32_t *block_out, int64_t *age_ms_out);
 
 #if defined(CONFIG_ULTRAWIDELOCK_CRED)
-/** @brief Stash an Aliro URSK for the CCC Pre-POLL STS decode; NULL clears it. */
+/** @brief Stash an credential URSK for the CCC Pre-POLL STS decode; NULL clears it. */
 void fira_session_set_provisioned_ursk(const uint8_t *ursk);
 
-/** @brief The stashed Aliro URSK (32 bytes), or NULL if none — for the Pre-POLL decode. */
+/** @brief The stashed credential URSK (32 bytes), or NULL if none — for the Pre-POLL decode. */
 const uint8_t *fira_session_get_ursk(void);
 
-/** @brief Latch a CCC DS-TWR range so it flows up the Aliro mRangingData seam. */
+/** @brief Latch a CCC DS-TWR range so it flows up the credential mRangingData seam. */
 void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block);
 
 /** @brief Record the layer-2 STS evidence for the block that is about to latch.
@@ -83,7 +83,7 @@ uint32_t fira_session_current_slot(void);
 
 /* Layer 1 — plausibility band. Below -NEG_TOL is physically impossible (an
  * early-first-path / Ghost-Peak spoof drives ToF sharply negative); above MAX
- * is outside any Aliro proximity envelope. A small negative is legitimate
+ * is outside any credential proximity envelope. A small negative is legitimate
  * point-blank calibration slop and reads as 0 cm rather than being dropped. */
 #define FIRA_RANGE_NEG_TOL_CM 30   /* legit point-blank slop; drop beyond */
 #define FIRA_RANGE_MAX_CM     3000 /* usable envelope (30 m); tune to radio */

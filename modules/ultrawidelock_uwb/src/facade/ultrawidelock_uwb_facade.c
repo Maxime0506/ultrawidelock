@@ -1,6 +1,6 @@
-// UWB facade: binds the CCC credential-based STS engine to the DW3000 radio, exposes Aliro DS-TWR
-// responder start/stop and range query, and manages platform dependencies (HFCLK boost, SPI init,
-// callbacks).
+// UWB facade: binds the CCC credential-based STS engine to the DW3000 radio, exposes credential
+// DS-TWR responder start/stop and range query, and manages platform dependencies (HFCLK boost, SPI
+// init, callbacks).
 /*
  * C shim over fira_session + ccc_shim (see ultrawidelock_uwb_facade.h).
  */
@@ -36,12 +36,12 @@ int ultrawidelock_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)
 {
 	ultrawidelock_hfclk_ensure_128mhz();
 	fira_session_set_provisioned_ursk(ursk);
-	/* Placeholder ranging_config / sts_index0 / n_slot until Aliro M1-M4 negotiation. */
+	/* Placeholder ranging_config / sts_index0 / n_slot until credential M1-M4 negotiation. */
 	return ccc_shim_bind_from_ursk(ursk, ursk, ursk_len, 0u, 8u);
 }
 
 /**
- * @brief Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
+ * @brief Start the CCC DS-TWR responder bound to a live credential; returns 0 on success.
  * @param c Configuration struct (channel, sync_code_index, ursk, ranging_config, sts_index0,
  * slot_per_round).
  * @return 0 on success, -EINVAL if config is NULL or ursk is NULL, -EIO if radio initialization
@@ -123,8 +123,9 @@ bool ultrawidelock_uwb_last_range_cm(int32_t *cm_out)
  * consensus.
  * @param cm_out Pointer to store the distance in cm.
  * @return True only when a valid range has been seen AND it is trusted by the layer-4 consensus
- * gate; false if no valid range exists or the range is not yet trusted. When CONFIG_ULTRAWIDELOCK_CRED is
- * not defined, behaves identically to ultrawidelock_uwb_last_range_cm().
+ * gate; false if no valid range exists or the range is not yet trusted. When
+ * CONFIG_ULTRAWIDELOCK_CRED is not defined, behaves identically to
+ * ultrawidelock_uwb_last_range_cm().
  */
 /**
  * @brief Register a callback fired after each accepted DS-TWR range latch.

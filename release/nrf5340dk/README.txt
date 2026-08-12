@@ -1,6 +1,6 @@
 ultrawidelock @VERSION@   ·   nRF5340 DK
 
-The ultrawidelock target that taps. An Aliro lock with NFC tap and UWB approach
+The ultrawidelock target that taps. An credential lock with NFC tap and UWB approach
 unlock: it joins Apple Home over Thread, your iPhone carries the key in Wallet,
 and the lock opens as you walk up or on a tap.
 
@@ -34,7 +34,7 @@ THE SHORT VERSION
 WHAT IS IN HERE
 ──────────────────────────────────────────────────────────────────────────────
 
-  merged.hex           application core: Matter, Aliro, the UWB engine
+  merged.hex           application core: Matter, the credential stack, the UWB engine
   merged_CPUNET.hex    network core: the radio controller
   flash.sh             flashes both cores over the DK's on-board J-Link
   SETUP-QR.png         the commissioning QR code, scannable from here

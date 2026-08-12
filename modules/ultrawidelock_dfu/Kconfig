@@ -68,7 +68,7 @@ config ULTRAWIDELOCK_DFU_RECEIVER
 	  the slot a patch rewrites.
 
 	  Transport-independent. On the DWM3001CDK it is fed from a second L2CAP
-	  CoC beside the Aliro one, but nothing in the receiver knows that.
+	  CoC beside the credential one, but nothing in the receiver knows that.
 
 	  NOTHING IS ACCEPTED until ultrawidelock_dfu_window_open() has been called. That
 	  window is the authorization: the patch is signed and MCUboot re-checks
@@ -84,7 +84,7 @@ config ULTRAWIDELOCK_DFU_WINDOW_MS
 	range 10000 3600000
 	help
 	  Five minutes by default: long enough to push a patch over a connection
-	  interval that Matter and Aliro are also using, short enough that an
+	  interval that Matter and credential are also using, short enough that an
 	  owner who opened it and walked away is not leaving it open all day.
 
 config ULTRAWIDELOCK_DFU_SMP_IMG

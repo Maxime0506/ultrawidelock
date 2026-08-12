@@ -4,7 +4,7 @@
  * Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
  * polls for a range. With no iPhone/initiator present this proves the SPI +
  * DW3000 + CCC init path comes up; a live range needs a peer that
- * drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
+ * drives the DS-TWR exchange (an credential Wallet, or a second board as initiator).
  *
  * The demo responder lifecycle + interactive console live in app_shell.c.
  */
@@ -22,7 +22,7 @@
 
 static const char *TAG = "ultrawidelock_esp32";
 
-// Application entry point: brings up the DW3000 responder, the Aliro BLE reader,
+// Application entry point: brings up the DW3000 responder, the credential BLE reader,
 // and the interactive shell, then polls for ranging results.
 // Silences the CCC shim's per-frame STS trace (WARN level only) because logging
 // on the delayed-TX reply path can blow the reply window; other subsystems keep
@@ -48,13 +48,13 @@ void app_main(void)
 		 rc == 0 ? "(DW3000 up, responder listening)"
 			 : "(FAILED -- check wiring/SPI)");
 
-	/* Phase 2: bring up the Aliro reader (BLE transport + session/transaction
+	/* Phase 2: bring up the credential reader (BLE transport + session/transaction
 	 * layer). Additive; independent of the demo UWB responder above. The real
 	 * URSK-driven UWB start happens inside the reader once the Phase-3 handshake
 	 * is implemented. */
 	int brc = ultrawidelock_reader_start();
 	ESP_LOGI(TAG, "ultrawidelock_reader_start() = %d %s", brc,
-		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
+		 brc == 0 ? "(credential reader up)" : "(reader bring-up FAILED)");
 
 #if defined(CONFIG_ULTRAWIDELOCK_PRESENCE)
 	/* Additive: loads the device signing key; the shell below picks up the

@@ -63,7 +63,7 @@ extern "C" {
  *
  * Integrity here is CRC-32, not a hash, and that is deliberate. AUTHENTICITY is
  * checked by the APPLICATION, which has PSA ECDSA-P256 already linked for
- * Aliro, before it ever writes this header. The bootloader is the flash-starved
+ * the credential stack, before it ever writes this header. The bootloader is the flash-starved
  * image and only has to answer a narrower question: did the bytes I am about to
  * apply arrive intact, and do they belong to the image I am running? A CRC
  * answers both.

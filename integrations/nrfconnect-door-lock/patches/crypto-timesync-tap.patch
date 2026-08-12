@@ -17,7 +17,7 @@ index 6560d40..a4891a3 100644
 +
 +#if !defined(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
 +	/* DIAG (temporary -- Gate-A timesync tap; remove once UWB_Device_Time capture is
-+	 * wired): the Aliro blob is crypto-agnostic and calls this for EVERY BLE message, so a
++	 * wired): the credential blob is crypto-agnostic and calls this for EVERY BLE message, so a
 +	 * Procedure-0 Time Sync is decrypted here. keyId groups AUTH (ExpeditedSK) vs ranging
 +	 * (BleSK); the first BleSK-keyId decrypt is the Time Sync, whose plaintext carries
 +	 * UWB_Device_Time (8B, ~0x0027xxxx us -- magnitude of the M4 UWB_Time0).

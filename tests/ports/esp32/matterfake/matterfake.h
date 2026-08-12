@@ -364,7 +364,7 @@ enum class DaysMaskMap : uint8_t {
 
 enum class DlAssetSource : uint8_t { kUnspecified = 0, kMatterIM = 1 };
 
-/* Aliro reader-provisioning sizes (Matter door lock cluster spec). */
+/* credential reader-provisioning sizes (Matter door lock cluster spec). */
 inline constexpr size_t kAliroReaderVerificationKeySize = 65;
 inline constexpr size_t kAliroReaderGroupIdentifierSize = 16;
 inline constexpr size_t kAliroReaderGroupSubIdentifierSize = 16;

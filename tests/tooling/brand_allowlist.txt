@@ -1,0 +1,66 @@
+# Every spelling of "aliro" this tree is allowed to contain, as extended regular
+# expressions matched against whole lines. Anything else is a leftover from the
+# rename and fails check-purity.
+#
+# The rule the list encodes: we do not own the word. It stays only where it
+# names something outside this repository -- a Nordic add-on symbol, a Matter
+# SDK entry point, a CSA document, an Apple profile, or bytes on the wire.
+#
+# Adding a line here is a claim that the name belongs to someone else. If the
+# thing is ours, rename it instead.
+
+# --- Nordic door-lock add-on: C++ API we link against -------------------------
+namespace Aliro
+using namespace Aliro
+Aliro::
+AliroError
+AliroErrorCode
+AliroStack
+AliroWorkqueueSubmit
+include <aliro
+<aliro/
+includes aliro/
+<aliro_workqueue/
+ALIRO_[A-Z0-9_]+
+aliro_workqueue
+aliroSupported[A-Za-z]*
+Aliro(Reader|Credential|Endpoint|Group|Expedited|BLE)[A-Za-z]*
+
+# --- Nordic add-on: upstream paths and Kconfig, quoted in our build files -----
+subsys/aliro
+applications/matter-aliro
+matter-aliro-door-lock-app
+CONFIG_NCS_ALIRO_[A-Z0-9_]+
+CONFIG_DOOR_LOCK_ALIRO_[A-Z0-9_]+
+libaliro
+
+# --- Matter SDK: DoorLock cluster surface we implement or call ----------------
+kAliro[A-Za-z]*
+(Get|Set|Clear)[A-Za-z]*Aliro[A-Za-z]*
+UserIndexForAliroCredential
+AliroReaderVerificationKey
+Aliro credential types \(DoorLock/Enums.h
+NumberOfAliro[A-Za-z]*
+
+# --- esp_matter: door-lock feature helpers ------------------------------------
+aliro_provisioning
+aliro_bleuwb
+Aliro(Provisioning|BLEUWB)
+UwbAliroFlow
+
+# --- CSA documents, cited by section or table --------------------------------
+Aliro Lab
+Aliro Specification
+Aliro Spec[^a-z]
+Aliro Table
+Aliro §
+
+# --- Apple's ECP profile name ------------------------------------------------
+Aliro \(Unified Access\)
+
+# --- The add-on's own UWB facade, named as theirs -----------------------------
+add-on Aliro UWB facade
+@brief Aliro UWB facade
+
+# --- Wire bytes: CBOR docTypes from the spec, not names we chose --------------
+aliro-[ar]

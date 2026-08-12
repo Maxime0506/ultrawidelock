@@ -1,4 +1,4 @@
-/** @file test_ccc_session.c — Aliro session -> ccc_ran_params mapping. */
+/** @file test_ccc_session.c — credential session -> ccc_ran_params mapping. */
 #include <errno.h>
 
 #include "ccc_session.h"

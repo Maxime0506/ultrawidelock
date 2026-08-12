@@ -1,12 +1,12 @@
-// Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport
-// callbacks connecting the BLE peripheral role to the Aliro protocol handler in
+// credential BLE-UWB reader transport: GATT service definition, advertised feature flags, and
+// transport callbacks connecting the BLE peripheral role to the credential protocol handler in
 // ultrawidelock_reader. Callers configure the transport via ultrawidelock_ble_prepare (which builds
 // the READ characteristic payload without touching NimBLE), then register the GATT service returned
 // by ultrawidelock_ble_service_def with the host's combined service table.
 /*
- * ultrawidelock_ble — Aliro BLE transport (NimBLE) for the ESP32-S3 port.
- * Advertises the Aliro GATT service, negotiates the BLE-UWB protocol version,
- * and carries the Aliro transaction over an L2CAP CoC. Independent
+ * ultrawidelock_ble — credential BLE transport (NimBLE) for the ESP32-S3 port.
+ * Advertises the credential GATT service, negotiates the BLE-UWB protocol version,
+ * and carries the credential transaction over an L2CAP CoC. Independent
  * reimplementation.
  */
 #pragma once
@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-/** Aliro BLE-UWB supported-features flags (advertised in the READ char, and
+/** credential BLE-UWB supported-features flags (advertised in the READ char, and
  *  parsed from the device WRITE). Serialized as one byte: bit0/1/2. */
 struct ultrawidelock_ble_features {
 	bool timesync_procedure_0;
@@ -26,7 +26,7 @@ struct ultrawidelock_ble_features {
 	bool le_coded_phy;
 };
 
-/** Transport callbacks into the app / Phase-3 Aliro handler. All optional. */
+/** Transport callbacks into the app / Phase-3 credential handler. All optional. */
 struct ultrawidelock_ble_callbacks {
 	/** An L2CAP SDU arrived from the peer (2.2+). */
 	void (*on_data)(uint16_t conn_handle, const uint8_t *data, uint16_t len);
@@ -56,12 +56,12 @@ struct ultrawidelock_ble_config {
  * ports/esp32/components/ultrawidelock_ble/ultrawidelock_ble_esp32.c and
  * ports/freertos-nrf52833/ble/ultrawidelock_ble_freertos.c. */
 
-/** Start NimBLE, register the Aliro GATT service, and begin advertising.
+/** Start NimBLE, register the credential GATT service, and begin advertising.
  *  Implemented by the port, not by the shared backend: it is the platform half
  *  above. Returns 0 on success, negative otherwise. */
 int ultrawidelock_ble_start(const struct ultrawidelock_ble_config *cfg);
 
-/** Register the GAP/GATT stubs, the Aliro 0xFFF2 service, the device name, and
+/** Register the GAP/GATT stubs, the credential 0xFFF2 service, the device name, and
  *  the L2CAP CoC server on an already-initialised host. Call ultrawidelock_ble_prepare()
  *  first, then this after nimble_port_init() and before the host task runs.
  *  0 on success. */
@@ -115,7 +115,7 @@ struct ble_gatt_svc_def; /* NimBLE type, opaque here */
 /** Capture config + build the READ payload; does NOT touch NimBLE. 0 on ok. */
 int ultrawidelock_ble_prepare(const struct ultrawidelock_ble_config *cfg);
 
-/** The Aliro GATT service definition, to hand to the host owner's
+/** The credential GATT service definition, to hand to the host owner's
  *  register-extra-services hook. Valid after ultrawidelock_ble_prepare(). */
 const struct ble_gatt_svc_def *ultrawidelock_ble_service_def(void);
 
@@ -123,7 +123,7 @@ const struct ble_gatt_svc_def *ultrawidelock_ble_service_def(void);
  *  advertising. Returns 0 on success. */
 int ultrawidelock_ble_start_attached(void);
 
-/** Set the provisioned Aliro advertising params (BLE-UWB approach discovery): the
+/** Set the provisioned credential advertising params (BLE-UWB approach discovery): the
  *  truncated reader group id (8) + sub id (2), the group resolving key (16) for
  *  the dynamic tag, and the tx-power byte. Call before start_attached(); once set,
  *  the reader advertises the full resolvable 0xFFF2 service data instead of the

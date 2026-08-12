@@ -1,4 +1,4 @@
-// Standalone-FreeRTOS bring-up for the Aliro reader's NimBLE transport.
+// Standalone-FreeRTOS bring-up for the credential reader's NimBLE transport.
 //
 // The portable half -- the GATT service, advertising, and the L2CAP CoC server -- is
 // modules/ultrawidelock_cred/src/ultrawidelock_ble_nimble.c, shared with the ESP32 port. What is
@@ -9,7 +9,7 @@
 //
 // BONDING. The ESP-IDF path initialises NVS here because esp-nimble persists SM keys in
 // it. This port does not, because MYNEWT_VAL_BLE_SM_BONDING is 0 in
-// ble/nimble_syscfg/syscfg/syscfg.h: Aliro carries its own credentials through the
+// ble/nimble_syscfg/syscfg/syscfg.h: credential carries its own credentials through the
 // attestation exchange on the CoC, so SM bonding is not the mechanism and no NimBLE store
 // backend is linked. Turning bonding on means building ble_store_config.c against
 // ultrawidelock_freertos_kv and revisiting this file -- it is not a syscfg edit on its own.
@@ -35,7 +35,7 @@ static const struct ultrawidelock_freertos_nimble_host_hooks k_hooks = {
 	.on_sync = ultrawidelock_ble_host_sync,
 };
 
-// Bring up the Aliro BLE reader on this port: install the hooks, then start the
+// Bring up the credential BLE reader on this port: install the hooks, then start the
 // controller and host.
 //
 // cfg is copied, so the caller may pass a stack local and let it go. Returns 0 on success,
@@ -63,7 +63,7 @@ int ultrawidelock_ble_start(const struct ultrawidelock_ble_config *cfg)
 	}
 
 	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, TAG,
-			 "Aliro reader up; advertising once the host syncs (SPSM 0x%04x)",
+			 "credential reader up; advertising once the host syncs (SPSM 0x%04x)",
 			 (unsigned)ultrawidelock_ble_spsm());
 	return 0;
 }

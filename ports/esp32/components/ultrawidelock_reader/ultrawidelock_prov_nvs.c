@@ -1,4 +1,4 @@
-// NVS-backed persistence for Aliro reader provisioning: loads and stores the serialized reader
+// NVS-backed persistence for credential reader provisioning: loads and stores the serialized reader
 // identity and trust store built by ultrawidelock_prov.c.
 // Lazily initializes NVS on first use; safe to call alongside ultrawidelock_ble's own
 // nvs_flash_init.

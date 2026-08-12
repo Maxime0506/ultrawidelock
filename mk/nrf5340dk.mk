@@ -32,7 +32,7 @@
 #     MCUboot's PUBLISHED demo key the way it did when DFU=1 first landed.
 #     One key serves both boards; the top-level Makefile owns the path.
 #   * The flash map moves external_nvs from 0x0 to 0x12f000, so a board carrying
-#     the old no-bootloader layout loses its Aliro reader storage the first time
+#     the old no-bootloader layout loses its credential reader storage the first time
 #     it takes this build. `DFU=0` keeps the old layout.
 NRF_LTO := $(filter-out 0 n no off N NO OFF,$(if $(filter undefined,$(origin LTO)),1,$(LTO)))
 NRF_DFU := $(filter-out 0 n no off N NO OFF,$(if $(filter undefined,$(origin DFU)),1,$(DFU)))
@@ -62,7 +62,7 @@ NRF_BUILD_SH := $(REPO_ROOT)/apps/nrf5340dk-lock/build.sh
 NRF_BUILD_DIR := $(ULTRAWIDELOCK_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ULTRAWIDELOCK_SOURCE)),-blob)
 NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-ultrawidelock-door-lock-app/zephyr/factory_data.txt
 
-# The Aliro initiator is a second application on the same board, so it gets its
+# The credential initiator is a second application on the same board, so it gets its
 # own build directory rather than sharing the door lock's.
 NRF_INIT_BUILD := $(ULTRAWIDELOCK_BUILD_ROOT)/nrf5340dk-initiator
 
@@ -165,7 +165,7 @@ nrf-size-baseline: nrf-size
 	@python3 $(REPO_ROOT)/scripts/cdk-size-baseline.py \
 	  --from '$(NRF_SIZE_JSON)' --out '$(NRF_SIZE_BASELINE)'
 
-## nrf-init-build: build the Aliro initiator      -> build/nrf5340dk-initiator
+## nrf-init-build: build the credential initiator      -> build/nrf5340dk-initiator
 nrf-init-build:
 	@cd '$(NRF_WS)' && $(NRF_LAUNCH) west build \
 	  -b nrf5340dk/nrf5340/cpuapp --sysbuild \
@@ -173,7 +173,7 @@ nrf-init-build:
 	  -d '$(NRF_INIT_BUILD)' '$(REPO_ROOT)/examples/zephyr/nrf5340dk-initiator' \
 	  -- -DZEPHYR_EXTRA_MODULES='$(REPO_ROOT)/modules/ultrawidelock_uwb;$(REPO_ROOT)/modules/ultrawidelock_dw3000;$(REPO_ROOT)/ports/zephyr'
 
-## nrf-init-flash: flash the Aliro initiator (both cores) -> build/nrf5340dk-initiator
+## nrf-init-flash: flash the credential initiator (both cores) -> build/nrf5340dk-initiator
 nrf-init-flash:
 	@[ -f '$(NRF_INIT_BUILD)/build.ninja' ] || { \
 	  printf '  no initiator build at %s  ·  build it first\n' '$(NRF_INIT_BUILD)' >&2; exit 1; }

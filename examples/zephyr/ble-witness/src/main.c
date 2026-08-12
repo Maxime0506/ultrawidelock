@@ -83,7 +83,7 @@ static bool g_learning;
 static int64_t g_learn_deadline_ms;
 static struct learn_slot g_learn[WITNESS_LEARN_SLOTS];
 
-/* Optional AdvA filter from Aliro peer (Pi bridge pushes ADDR …). */
+/* Optional AdvA filter from credential peer (Pi bridge pushes ADDR …). */
 static bool g_addr_set;
 static uint8_t g_addr[6]; /* MSB-first as printed AA:BB:… */
 

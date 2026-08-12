@@ -1,4 +1,4 @@
-# Makefile — forwarder for the ESP32 Aliro Matter door lock.
+# Makefile — forwarder for the ESP32 credential Matter door lock.
 #
 # The recipes live in mk/esp32.mk at the repo root, so the serial-port guard
 # that refuses any SEGGER/J-Link port exists in one place and every build lands

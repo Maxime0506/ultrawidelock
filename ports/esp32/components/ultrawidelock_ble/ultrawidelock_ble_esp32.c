@@ -1,4 +1,4 @@
-// ESP-IDF bring-up for the Aliro reader's NimBLE transport.
+// ESP-IDF bring-up for the credential reader's NimBLE transport.
 //
 // The portable half -- the GATT service, advertising, and the L2CAP CoC server -- is
 // modules/ultrawidelock_cred/src/ultrawidelock_ble_nimble.c and is shared with the standalone
@@ -24,7 +24,7 @@ static void host_task(void *param)
 	nimble_port_freertos_deinit();
 }
 
-// Bring up the Aliro BLE service as a standalone NimBLE host: init NVS, init the NimBLE
+// Bring up the credential BLE service as a standalone NimBLE host: init NVS, init the NimBLE
 // port, register the service through the shared backend, and start the host task.
 // Returns -1 on any NimBLE port or registration failure, 0 on success. NVS init errors
 // other than the handled no-free-pages/new-version cases abort via ESP_ERROR_CHECK.

@@ -23,14 +23,14 @@ void ultrawidelock_freertos_dw3000_irq_handler(void);
 /*
  * Bring the DW3110 up and pre-apply the expected session PHY.
  *
- * Everything under uwb/ is reached from the ranging engine, which the Aliro
+ * Everything under uwb/ is reached from the ranging engine, which the credential
  * seam drives from the BLE M1-M4 handshake. Until that seam is wired, nothing
  * in the image calls the layer at all: --gc-sections drops it, the flash figure
  * says nothing about it, and no line of this port's SPI, reset, wake or
  * interrupt code has ever run on the part it was written for. This is what
  * closes that gap.
  *
- * The PHY applied is the one an Aliro session is going to negotiate anyway, so
+ * The PHY applied is the one an credential session is going to negotiate anyway, so
  * this is a real step rather than a probe invented for the occasion: it walks
  * the whole backend -- SPI transfers, the reset sequence, the device-ID read,
  * the interrupt line -- and leaves the radio configured with RX unarmed, which

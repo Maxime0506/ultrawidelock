@@ -9,7 +9,7 @@
  * here would be a fourth opinion about a sequence that already has one, and it
  * would drift from the other two the first time the engine changed.
  *
- * So the port reaches the engine through the same contract an Aliro session
+ * So the port reaches the engine through the same contract an credential session
  * uses and adds nothing to it. What is genuinely this file's is the decision of
  * when to call, what to do when it fails, and the PHY to ask for.
  */

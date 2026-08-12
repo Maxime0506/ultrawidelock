@@ -25,7 +25,7 @@ AliroError Init()
  */
 AliroError Start()
 {
-	LOG_INF("No NFC reader fitted; Aliro NFC flow disabled");
+	LOG_INF("No NFC reader fitted; credential NFC flow disabled");
 	return ALIRO_NO_ERROR;
 }
 

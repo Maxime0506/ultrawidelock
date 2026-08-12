@@ -1,4 +1,4 @@
-// Presence dongle commands (see presence_link.h). `prove` ends every old Aliro
+// Presence dongle commands (see presence_link.h). `prove` ends every old credential
 // link, waits for a new trusted credential authentication and a later trusted
 // UWB range, then signs that post-challenge result under a persistent P-256 key.
 //
@@ -104,7 +104,7 @@ void presence_link_init(bool drive_wallet_grant)
 	 * range -- the Matter lock's approach loop does. */
 }
 
-/* Wallet unlock animation (Reader-Status-Changed, Aliro transaction step 23).
+/* Wallet unlock animation (Reader-Status-Changed, credential transaction step 23).
  * Latched so the grant fires on the edge, not once per challenge: the phone
  * animates when a presence check first succeeds and relocks when a later check
  * finds the range stale. Deliberately demand-driven -- no host challenge, no

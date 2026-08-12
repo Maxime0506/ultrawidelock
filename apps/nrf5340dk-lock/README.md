@@ -28,7 +28,7 @@ The merged image is written below `build/nrf5340dk/`. Other useful commands are:
 | `make nrf-term` | Open the serial log and shell |
 
 Use the erase-and-flash target after a network-core change. It removes existing
-commissioning and Aliro storage.
+commissioning and credential storage.
 
 ## Contents
 

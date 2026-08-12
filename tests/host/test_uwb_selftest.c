@@ -1,7 +1,7 @@
 /**
  * @file test_uwb_selftest.c — the Kconfig-gated boot self-test (uwb_selftest.c)
  * against a fake facade and the host OSAL's virtual clock. Pins the
- * arm-at-init delay and the canned Aliro ranging config the worker hands to
+ * arm-at-init delay and the canned credential ranging config the worker hands to
  * ultrawidelock_uwb_start_ultrawidelock — the facade itself is a recording double, so no
  * ranging path runs.
  */

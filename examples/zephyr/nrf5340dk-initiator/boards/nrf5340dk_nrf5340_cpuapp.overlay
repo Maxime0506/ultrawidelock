@@ -1,5 +1,5 @@
 /*
- * DWM3000EVB on the nRF5340 DK Arduino header, for the Aliro initiator.
+ * DWM3000EVB on the nRF5340 DK Arduino header, for the credential initiator.
  *
  * The pinout is copied verbatim from apps/nrf5340dk-lock/overlays/dw3000-nfc.overlay,
  * which is the wiring proven on this bench (HV-3, 2026-08-06: raw DEV_ID reads

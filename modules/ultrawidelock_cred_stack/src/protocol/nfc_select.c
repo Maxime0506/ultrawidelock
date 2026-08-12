@@ -1,10 +1,10 @@
 /**
  * @file nfc_select.c
- * NFC SELECT command builder and response parser for Aliro. build_select_command emits 00 A4 04 00
- * 09 `AID` 00. parse_proprietary_information decodes type-0x80 data from a SELECT response,
- * extracting protocol version (expedited phase only) and extended-length sizes (0x7f66 TLV).
- * parse_select_response and parse_select_response_ex validate the trailing 9000, check AID, and
- * call parse_proprietary_information.
+ * NFC SELECT command builder and response parser for the credential protocol. build_select_command
+ * emits 00 A4 04 00 09 `AID` 00. parse_proprietary_information decodes type-0x80 data from a SELECT
+ * response, extracting protocol version (expedited phase only) and extended-length sizes (0x7f66
+ * TLV). parse_select_response and parse_select_response_ex validate the trailing 9000, check AID,
+ * and call parse_proprietary_information.
  */
 #include "nfc_select.h"
 
@@ -22,8 +22,8 @@ const uint8_t ultrawidelock_cred_step_up_aid[ULTRAWIDELOCK_CRED_AID_SIZE] = {
 };
 
 /**
- * Map a SELECT phase (EXPEDITED or STEP_UP) to its corresponding Aliro AID byte sequence; return
- * NULL if phase is unknown.
+ * Map a SELECT phase (EXPEDITED or STEP_UP) to its corresponding credential AID byte sequence;
+ * return NULL if phase is unknown.
  */
 static const uint8_t *aid_for_phase(enum ultrawidelock_cred_select_phase phase)
 {

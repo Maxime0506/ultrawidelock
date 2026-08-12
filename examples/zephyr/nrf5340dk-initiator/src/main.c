@@ -1,4 +1,4 @@
-// nRF5340 DK application entry for the Aliro initiator, the User-Device role that
+// nRF5340 DK application entry for the credential initiator, the User-Device role that
 // stands in for an iPhone on the bench. Starts the Zephyr BLE central, which
 // scans for the reader's 0xFFF2 advert, connects, reads the reader's SPSM,
 // supported versions and features, writes the version it selects, and opens the
@@ -67,7 +67,7 @@ SYS_INIT(hfclk_div_fixup, PRE_KERNEL_1, 0);
 
 LOG_MODULE_REGISTER(initiator, CONFIG_LOG_DEFAULT_LEVEL);
 
-/* Aliro protocol v1.0 — the only version our reader offers or we speak. */
+/* credential protocol v1.0 — the only version our reader offers or we speak. */
 #define INITIATOR_VERSION 0x0100u
 
 /* The largest Access-Protocol response we build. AUTH1Response is the big one
@@ -135,7 +135,7 @@ static const uint8_t k_cred_priv[32] = {
 };
 #endif /* ULTRAWIDELOCK_BENCH_ENROLLED */
 
-/* One transaction at a time: the reader serves one Aliro session per connection
+/* One transaction at a time: the reader serves one credential session per connection
  * and the central connects to one reader. s_conn is the connection s_dev belongs
  * to, so a stale SDU after a reconnect cannot be fed to the wrong session. */
 static struct ultrawidelock_device s_dev;
@@ -143,8 +143,8 @@ static uint16_t s_conn;
 static bool s_armed;
 
 /**
- * Return a human-readable string for an Aliro device phase: IDLE, SENT_AUTH0_RESP, SENT_AUTH1_RESP,
- * ESTABLISHED, or FAILED.
+ * Return a human-readable string for an credential device phase: IDLE, SENT_AUTH0_RESP,
+ * SENT_AUTH1_RESP, ESTABLISHED, or FAILED.
  */
 static const char *phase_str(enum ultrawidelock_device_phase p)
 {
@@ -210,7 +210,7 @@ static void on_ready(uint16_t conn_handle, const struct ultrawidelock_ble_centra
 	 * a NOTIFICATION/Initiate-Access-Protocol frame, and start_auth() --
 	 * which is what emits AUTH0 -- has exactly one call site, that branch
 	 * (ultrawidelock_reader.c:1529). Without this both ends wait for each other: the
-	 * L2CAP channel opens, the reader logs "Aliro session created", and
+	 * L2CAP channel opens, the reader logs "credential session created", and
 	 * nothing else ever happens. Observed on hardware, twice, before this
 	 * line existed.
 	 *
@@ -361,8 +361,8 @@ static void radio_probe(void)
 #endif
 
 /**
- * Initialize the Aliro BLE central stack, register event callbacks for ready/data/closed, bring up
- * the PSA crypto backend, and begin scanning for an Aliro reader.
+ * Initialize the credential BLE central stack, register event callbacks for ready/data/closed,
+ * bring up the PSA crypto backend, and begin scanning for an credential reader.
  */
 int main(void)
 {
@@ -370,7 +370,7 @@ int main(void)
 
 	/* Who we CONNECT to and who we AUTHENTICATE as are deliberately separate
 	 * here. cfg.reader_id is left all-zero, which makes the transport latch onto
-	 * the first Aliro reader it sees and log its group id; the crypto identity is
+	 * the first credential reader it sees and log its group id; the crypto identity is
 	 * k_reader_id above. Filling cfg.reader_id in would be the correct behaviour
 	 * for a real device, but on the bench it turns "the reader was provisioned
 	 * over Matter, so the dev constants are wrong" into an initiator that scans
@@ -403,7 +403,7 @@ int main(void)
 		LOG_ERR("BLE central start failed");
 		return 0;
 	}
-	LOG_INF("Aliro initiator up; scanning for a reader");
+	LOG_INF("credential initiator up; scanning for a reader");
 	/* Which identity is compiled in decides which readers can possibly answer,
 	 * and getting that wrong looks identical to a transport fault from the log. */
 #ifdef ULTRAWIDELOCK_BENCH_ENROLLED

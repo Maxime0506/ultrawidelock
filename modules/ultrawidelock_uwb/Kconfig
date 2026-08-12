@@ -66,8 +66,8 @@ config ULTRAWIDELOCK_UWB_SELFTEST
 	help
 	  Fire ultrawidelock_uwb_start_ultrawidelock() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
 	  with a canned ranging config, to capture the DW3000 bring-up + Pre-POLL listen
-	  DIAG over RTT WITHOUT commissioning + a live Wallet Aliro UWB solicitation. This
-	  isolates the HW/radio init from the Aliro credential path. Diagnostic only —
+	  DIAG over RTT WITHOUT commissioning + a live Wallet credential UWB solicitation. This
+	  isolates the HW/radio init from the credential path. Diagnostic only —
 	  never enable in a shipping image.
 
 config ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS

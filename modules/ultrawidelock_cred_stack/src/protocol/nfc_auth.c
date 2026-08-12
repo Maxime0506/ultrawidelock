@@ -1,6 +1,6 @@
 /**
  * @file nfc_auth.c
- * NFC Aliro protocol command builders: AUTH0 and AUTH1 APDU encoding, authentication data
+ * NFC credential protocol command builders: AUTH0 and AUTH1 APDU encoding, authentication data
  * construction, and response parsing for credential exchange and signature verification over NFC.
  */
 #include "nfc_auth.h"
@@ -139,10 +139,10 @@ int ultrawidelock_cred_parse_auth0_response(const uint8_t *response, size_t resp
 }
 
 /**
- * Build the fixed-size 256-byte Aliro authentication data structure containing TLV-encoded reader
- * identifier, credential and reader ephemeral public keys (coordinate pairs only), transaction
- * identifier, and usage bitmap; return ULTRAWIDELOCK_CRED_AUTH_OK on success or error code if any
- * input is invalid.
+ * Build the fixed-size 256-byte credential authentication data structure containing TLV-encoded
+ * reader identifier, credential and reader ephemeral public keys (coordinate pairs only),
+ * transaction identifier, and usage bitmap; return ULTRAWIDELOCK_CRED_AUTH_OK on success or error
+ * code if any input is invalid.
  */
 int ultrawidelock_cred_build_authentication_data(
 	const uint8_t reader_identifier[ULTRAWIDELOCK_CRED_READER_ID_SIZE],

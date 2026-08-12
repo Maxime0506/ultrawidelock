@@ -15,7 +15,7 @@
  *
  * There is no hardware accelerator on this part. nRF52833 has no CryptoCell,
  * so P-256 is software, and a signature or an ECDH agreement costs tens of
- * milliseconds. That is affordable because Aliro's expedited path uses
+ * milliseconds. That is affordable because the credential protocol's expedited path uses
  * Kpersistent with AES-CMAC and does no asymmetric work inside the
  * ~1.836 ms DW3110 response-arm window; the public-key work happens during
  * the BLE exchange that precedes ranging. Nordic's nrf_oberon would be faster
@@ -50,7 +50,7 @@
 
 /*
  * Threading. Two tasks reach the PSA core: the OpenThread task, and the task
- * that runs the Aliro exchange behind NimBLE. The PSA key store is global
+ * that runs the credential exchange behind NimBLE. The PSA key store is global
  * mutable state shared between them, so this is required for correctness and
  * not a hardening option.
  *

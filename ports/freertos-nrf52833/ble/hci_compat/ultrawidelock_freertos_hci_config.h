@@ -26,8 +26,8 @@
 
 /*
  * Always present in the controller, so they need no sdc_support_* call:
- * link encryption for Aliro's secure session, the Filter Accept List the
- * resource configuration already pays for, and the connection RSSI the Aliro
+ * link encryption for the credential protocol's secure session, the Filter Accept List the
+ * resource configuration already pays for, and the connection RSSI the credential
  * approach logic reads.
  */
 #define CONFIG_BT_CTLR_LE_ENC 1

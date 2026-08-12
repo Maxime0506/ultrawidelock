@@ -1,8 +1,8 @@
 /**
- * @file test_matter_clusters.c — the two Aliro commands, the ACL write, and resume.
+ * @file test_matter_clusters.c — the two credential commands, the ACL write, and resume.
  *
  * These four entry points are what a commissioner uses to turn a blank node into a
- * working reader, and none of them were reachable from the other suites: the Aliro
+ * working reader, and none of them were reachable from the other suites: the credential
  * pair are static command handlers behind matter_im_server::command, the ACL write is
  * behind ::write, and matter_clusters_resume() only runs on a reboot with a stored
  * dataset. All four are driven here through the server vtable that
@@ -447,7 +447,7 @@ void test_matter_clusters(void)
 		T_OK("and nothing was mirrored", !info.have_ultrawidelock_reader_config);
 	}
 
-	t_group("SetCredential installs the three Aliro credential types");
+	t_group("SetCredential installs the three credential types");
 	{
 		const uint8_t types[3] = {MATTER_DL_CRED_ALIRO_ISSUER_KEY,
 					  MATTER_DL_CRED_ALIRO_EVICTABLE_ENDPOINT,

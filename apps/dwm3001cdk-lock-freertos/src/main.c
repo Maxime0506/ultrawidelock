@@ -53,7 +53,7 @@ static StackType_t s_boot_stack[512];
 /*
  * A placeholder for the product task. It exists so the first images have a task
  * to schedule and so the tick can be watched advancing on the bench before any
- * of the BLE, UWB, or Aliro layers are trusted.
+ * of the BLE, UWB, or credential layers are trusted.
  */
 static void boot_task(void *arg)
 {
@@ -134,7 +134,7 @@ static void boot_task(void *arg)
 	}
 
 	/*
-	 * The Aliro reader, which brings the BLE host up underneath itself.
+	 * The credential reader, which brings the BLE host up underneath itself.
 	 *
 	 * This is the whole product on one line: ultrawidelock_reader_start() does the
 	 * crypto, loads the provisioned identity, arms the UWB ranging adapter,
@@ -151,7 +151,7 @@ static void boot_task(void *arg)
 	 * degrade to and a silent boot would be the worst outcome on a bench.
 	 */
 	if (ultrawidelock_reader_start() != 0) {
-		ultrawidelock_freertos_fatal("Aliro reader start failed");
+		ultrawidelock_freertos_fatal("credential reader start failed");
 	}
 
 	for (;;) {

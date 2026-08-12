@@ -8,7 +8,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 SHARED="$HERE/../../../tests/shared"
-ALIRO="$HERE/../../../modules/ultrawidelock_cred"
+CRED="$HERE/../../../modules/ultrawidelock_cred"
 ULTRAWIDELOCK_PORT_INC="$HERE/../../../modules/ultrawidelock_port/include"
 UWB_INC="$HERE/../../../modules/ultrawidelock_uwb/include"
 ESP_COMPONENTS="$REPO_ROOT/ports/esp32/components"
@@ -36,12 +36,12 @@ echo "== host: ultrawidelock_ble transport vs NimBLE fakes =="
 SDKFAKE="$HERE/sdkfake"
 EBIN="$(mktemp -t esp_ultrawidelock_ble.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
+   -I "$SDKFAKE" -I "$CRED/include" -I "$CRED/src" -I "$ULTRAWIDELOCK_PORT_INC" \
    -DESP_PLATFORM \
    "$HERE/test_esp_ultrawidelock_ble.c" \
    "$ESP_COMPONENTS/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
-   "$ALIRO/src/ultrawidelock_ble_nimble.c" \
-   "$ALIRO/src/ultrawidelock_advtag.c" "$ALIRO/src/ultrawidelock_hash.c" \
+   "$CRED/src/ultrawidelock_ble_nimble.c" \
+   "$CRED/src/ultrawidelock_advtag.c" "$CRED/src/ultrawidelock_hash.c" \
    "$SHARED/ultrawidelock_prim_host.c" \
    "$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$EBIN"
 "$EBIN"
@@ -51,10 +51,10 @@ echo
 echo "== host: ultrawidelock_prov NVS backend vs in-RAM NVS fake =="
 NBIN="$(mktemp -t esp_prov_nvs.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$SDKFAKE" -I "$ALIRO/include" \
+   -I "$SDKFAKE" -I "$CRED/include" \
    "$HERE/test_esp_prov_nvs.c" \
    "$ESP_COMPONENTS/ultrawidelock_reader/ultrawidelock_prov_nvs.c" \
-   "$ALIRO/src/ultrawidelock_prov.c" \
+   "$CRED/src/ultrawidelock_prov.c" \
    "$SDKFAKE/fake_nvs.c" -o "$NBIN"
 "$NBIN"
 rm -f "$NBIN"
@@ -65,12 +65,12 @@ echo "== host: ultrawidelock_stepup worker vs FreeRTOS fakes =="
 # underneath is the real shared-core code on the stepup_vectors.h KATs.
 WBIN="$(mktemp -t esp_stepup_worker.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
-   -I "$SDKFAKE" -I "$HERE" -I "$SHARED" -I "$ALIRO/include" -I "$ALIRO/src" \
+   -I "$SDKFAKE" -I "$HERE" -I "$SHARED" -I "$CRED/include" -I "$CRED/src" \
    "$HERE/test_esp_stepup_worker.c" \
    "$ESP_COMPONENTS/ultrawidelock_reader/ultrawidelock_stepup_worker.c" \
-   "$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
-   "$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
-   "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
+   "$CRED/src/ultrawidelock_stepup.c" "$CRED/src/ultrawidelock_stepup_wire.c" \
+   "$CRED/src/ultrawidelock_stepup_parse.c" "$CRED/src/ultrawidelock_tlv.c" \
+   "$CRED/src/ultrawidelock_hash.c" "$CRED/src/ultrawidelock_crypto.c" \
    "$SHARED/ultrawidelock_prim_host.c" \
    "$SDKFAKE/fake_freertos.c" -o "$WBIN"
 "$WBIN"
@@ -86,11 +86,11 @@ cc -std=c11 -O1 -Wall -Wextra \
    -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
    -DCONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS=1 -DCONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM=40 \
    -I "$SDKFAKE" -I "$ESP_COMPONENTS/ultrawidelock_reader" \
-   -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
+   -I "$CRED/include" -I "$CRED/src" -I "$ULTRAWIDELOCK_PORT_INC" \
    -I "$UWB_INC" \
    "$HERE/test_esp_presence_link.c" \
    "$ESP_COMPONENTS/ultrawidelock_reader/presence_link.c" \
-   "$ALIRO/src/ultrawidelock_assert.c" "$ALIRO/src/ultrawidelock_hash.c" \
+   "$CRED/src/ultrawidelock_assert.c" "$CRED/src/ultrawidelock_hash.c" \
    "$SDKFAKE/fake_nvs.c" -o "$PLBIN"
 "$PLBIN" | grep -E '^(--|  ok|  FAIL|RESULT)'
 rm -f "$PLBIN"
@@ -116,7 +116,7 @@ cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
    -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DULTRAWIDELOCK_PORT_HOST \
 	-I "$SDKFAKE" -I "$READER_MAIN" \
    -I "$UWB_INC" \
-   -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
+   -I "$CRED/include" -I "$ULTRAWIDELOCK_PORT_INC" \
    "$HERE/test_esp_app_shell.c" \
    "$READER_MAIN/app_shell.c" \
    "$READER_MAIN/main.c" \
@@ -184,12 +184,12 @@ MFAKE="$HERE/matterfake"
 LOCKD="$MATTER_MAIN"
 MBIN="$(mktemp -t esp_matter_lock.XXXXXX)"
 cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
-cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/ultrawidelock_approach.c" -o "$MBIN.approach.o"
+cc -std=c11 -O1 -w -I "$CRED/include" -c "$CRED/src/ultrawidelock_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
    -DCONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
    -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DULTRAWIDELOCK_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
-   -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
+   -I "$CRED/include" -I "$ULTRAWIDELOCK_PORT_INC" \
    -I "$UWB_INC" \
    "$HERE/test_esp_matter_lock.cpp" \
    "$LOCKD/app_driver.cpp" "$LOCKD/app_main.cpp" "$LOCKD/app_shell.cpp" \

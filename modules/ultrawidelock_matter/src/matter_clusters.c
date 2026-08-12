@@ -38,7 +38,7 @@
  * has no factory data partition and no per-board serial to read out of one.
  */
 #define MATTER_VENDOR_NAME   "ultrawidelock"
-#define MATTER_PRODUCT_NAME  "DWM3001CDK Aliro Reader"
+#define MATTER_PRODUCT_NAME  "DWM3001CDK credential Reader"
 #define MATTER_SERIAL_NUMBER "DWM3001CDK-0001"
 
 /* Descriptor/Structs.h:43-44, DeviceTypeStruct. */
@@ -247,8 +247,8 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		/*
 		 * FeatureMap is answered here for the same reason it is on
 		 * NetworkCommissioning: it is what a controller reads to decide
-		 * whether this lock is an Aliro reader, and without it the
-		 * Aliro attributes below look like a lock that answers
+		 * whether this lock is an credential reader, and without it the
+		 * credential attributes below look like a lock that answers
 		 * questions nobody asked.
 		 */
 		case MATTER_ATTR_FEATURE_MAP:
@@ -361,7 +361,7 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 }
 
 /**
- * One Aliro protocol version, as the two big-endian bytes the spec asks for.
+ * One credential protocol version, as the two big-endian bytes the spec asks for.
  *
  * Both version lists carry the same single entry, so they share this. The
  * ESP32 lock encodes it the same way (ultrawidelock_reader_delegate.cpp:106-115) and
@@ -459,7 +459,7 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		/*
 		 * False. There IS no actuator on this board, and claiming one
 		 * would invite a Lock/Unlock command this endpoint cannot
-		 * honour. The Aliro half is what this device is for.
+		 * honour. The credential half is what this device is for.
 		 */
 		(void)matter_tlv_put_bool(w, tag, false);
 		return;
@@ -471,7 +471,7 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		return;
 
 	/*
-	 * ---- the Aliro reader configuration -------------------------------
+	 * ---- the credential reader configuration -------------------------------
 	 *
 	 * NULL until SetAliroReaderConfig arrives, which is exactly what tells
 	 * a controller this reader is unprovisioned and needs an identity.
@@ -969,7 +969,7 @@ static const uint32_t k_desc_attrs[] = {
 
 /*
  * FeatureMap leads, because it is the attribute that decides what the rest
- * mean: without the two Aliro bits a controller reads 0x0080..0x0088 as
+ * mean: without the two credential bits a controller reads 0x0080..0x0088 as
  * attributes a lock has no business answering.
  */
 static const uint32_t k_lock_attrs[] = {
@@ -1171,7 +1171,7 @@ static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t 
  * SetCredential carries the credential type one level down, in a
  * CredentialStruct under field 1. Reading tag 0 at the top level instead finds
  * OperationType, which is also a small unsigned and decodes perfectly -- so
- * getting this wrong installs an Aliro key as whatever operation type happened
+ * getting this wrong installs an credential key as whatever operation type happened
  * to be sent, with nothing to report.
  */
 static bool field_struct_u64(const struct matter_im_invoke *inv, uint8_t outer, uint8_t inner,
@@ -1823,7 +1823,7 @@ static uint8_t opcred_command(struct matter_device_info *info, const struct matt
 		 * table whose orphaned owners can never be removed leaves a
 		 * factory wipe as the only way to commission again.
 		 *
-		 * Removal does NOT touch the Aliro trust store. An anchor is
+		 * Removal does NOT touch the credential trust store. An anchor is
 		 * named by credential index and the fabric that installed it is
 		 * not recorded (see ultrawidelock_reader_provision_add_trust), so
 		 * revoking "this fabric's" anchors here would be a guess --
@@ -1941,7 +1941,7 @@ static void opcred_fields(const struct matter_device_info *info, uint32_t respon
  * resolve the group it was just told it belongs to.
  */
 /**
- * SetCredential: the Aliro trust anchor.
+ * SetCredential: the credential trust anchor.
  *
  * The reader identity says who this device IS; this says whose key it will
  * open for. Without it a provisioned reader still holds 0 trust anchors and
@@ -2021,9 +2021,9 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
 }
 
 /**
- * Decode and store Aliro reader configuration: signing key, verification key (P-256 public), group
- * ID, and group-resolving key. Validate all field lengths exactly, call the registered config hook
- * to persist them, and store copies in the device info structure. Return a status code.
+ * Decode and store credential reader configuration: signing key, verification key (P-256 public),
+ * group ID, and group-resolving key. Validate all field lengths exactly, call the registered config
+ * hook to persist them, and store copies in the device info structure. Return a status code.
  */
 static uint8_t set_ultrawidelock_reader_config(struct matter_device_info *info,
 				       const struct matter_im_invoke *inv)
@@ -2075,7 +2075,7 @@ static uint8_t set_ultrawidelock_reader_config(struct matter_device_info *info,
 }
 
 /**
- * ClearCredential (0x0026): stop honouring one Aliro credential, every credential of one type, or
+ * ClearCredential (0x0026): stop honouring one credential, every credential of one type, or
  * every credential there is.
  *
  * The command names its target by (type, index) and never by key, so this is only answerable

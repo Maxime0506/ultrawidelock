@@ -12,7 +12,7 @@
  * ...D12, spelled below in the little-endian order BT_UUID_INIT_128 wants.
  *
  * NOT wired into the reader's advertising: the reader owns one advertising set
- * (Aliro 0xFFF2), and matter_ble_advertise_start() is never called on its own,
+ * (credential 0xFFF2), and matter_ble_advertise_start() is never called on its own,
  * so an image with this file compiled in behaves exactly as before until
  * something asks for it.
  */
@@ -524,7 +524,7 @@ void matter_ble_set_msg_handler(matter_ble_msg_cb cb)
 /*
  * The connection is claimed on the first C1 write, NOT on connect. The reader
  * accepts BLE connections too, and claiming every one of them would let an
- * Aliro peer occupy the single commissioning slot and lock out a real
+ * credential peer occupy the single commissioning slot and lock out a real
  * commissioner. A peer that writes C1 has identified itself as one.
  */
 static bool claim_conn(struct bt_conn *conn)

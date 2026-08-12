@@ -1,7 +1,7 @@
 /**
  * @file ultrawidelock_lat.h
- * Latency tracking for Aliro protocol phases during a walk-up: record BLE_CONNECT as epoch zero,
- * mark timestamps for each phase, emit a report with elapsed intervals and flight-recorder
+ * Latency tracking for credential protocol phases during a walk-up: record BLE_CONNECT as epoch
+ * zero, mark timestamps for each phase, emit a report with elapsed intervals and flight-recorder
  * diagnostics.
  */
 /*
@@ -29,7 +29,7 @@ enum ultrawidelock_lat_phase {
 	ULTRAWIDELOCK_LAT_BLE_CONNECT = 0, /* GAP connect on the reader's advertisement */
 	ULTRAWIDELOCK_LAT_GATT_SPSM_READ,  /* phone read the SPSM/versions/features characteristic */
 	ULTRAWIDELOCK_LAT_GATT_VER_WRITE,  /* phone wrote its selected protocol version */
-	ULTRAWIDELOCK_LAT_L2CAP_OPEN,      /* L2CAP CoC connected on the Aliro SPSM */
+	ULTRAWIDELOCK_LAT_L2CAP_OPEN,      /* L2CAP CoC connected on the credential SPSM */
 	ULTRAWIDELOCK_LAT_OP05_RX,         /* phone's Initiate-Access-Protocol received */
 	ULTRAWIDELOCK_LAT_AUTH0_TX,        /* AUTH0 command sent */
 	ULTRAWIDELOCK_LAT_AUTH0_RSP,       /* AUTH0Response received (fast/standard fork) */
@@ -72,8 +72,8 @@ static inline void ultrawidelock_lat_begin(void)
 {
 }
 /**
- * Record the current uptime for a given Aliro protocol phase if not yet marked; return 1 if newly
- * recorded, 0 if already marked or out of range.
+ * Record the current uptime for a given credential protocol phase if not yet marked; return 1 if
+ * newly recorded, 0 if already marked or out of range.
  */
 static inline int ultrawidelock_lat_mark(enum ultrawidelock_lat_phase phase)
 {

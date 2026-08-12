@@ -1,4 +1,4 @@
-// NimBLE central/client backend for the Aliro initiator: the mirror of
+// NimBLE central/client backend for the credential initiator: the mirror of
 // components/ultrawidelock_ble/ultrawidelock_ble.c. That file advertises 0xFFF2, serves the
 // characteristics and runs a CoC server; this one scans for 0xFFF2, connects,
 // discovers, reads the reader's SPSM/versions, writes the selected version and
@@ -33,7 +33,7 @@
 
 static const char *TAG = "ultrawidelock_central";
 
-/* Aliro service, 16-bit 0xFFF2 — the one the reader advertises and serves. */
+/* credential service, 16-bit 0xFFF2 — the one the reader advertises and serves. */
 static const ble_uuid16_t k_svc_uuid = BLE_UUID16_INIT(0xFFF2u);
 
 /* Reader SPSM + supported protocol versions (READ), and the user-device selected
@@ -290,7 +290,7 @@ static int on_chr_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 	}
 	/* Discovery complete: both handles are required before we can proceed. */
 	if (s_peer.spsm_val_handle == 0 || s_peer.devver_val_handle == 0) {
-		abandon("peer is missing an Aliro characteristic", 0);
+		abandon("peer is missing an credential characteristic", 0);
 		return 0;
 	}
 
@@ -303,9 +303,9 @@ static int on_chr_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 }
 
 /**
- * GATT service discovery callback: record the service handle range for the 0xFFF2 Aliro service. On
- * discovery completion, discover all characteristics within that range. On error, abandon this
- * peer.
+ * GATT service discovery callback: record the service handle range for the 0xFFF2 credential
+ * service. On discovery completion, discover all characteristics within that range. On error,
+ * abandon this peer.
  */
 static int on_svc_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 		       const struct ble_gatt_svc *service, void *arg)
@@ -336,7 +336,7 @@ static int on_svc_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 
 /* ---- scanning + connection ---- */
 
-/* True when this advert carries Aliro service data from the reader we want. The
+/* True when this advert carries credential service data from the reader we want. The
  * reader falls back to a bare UUID + name when unprovisioned or GRK-less
  * (ultrawidelock_ble.c:589); that form has no group id to match, so it is skipped
  * quietly rather than treated as an error. */
@@ -357,7 +357,7 @@ static bool advert_is_our_reader(const struct ble_hs_adv_fields *fields)
 
 	if (memcmp(s_cfg.reader_id, k_zero_id, sizeof(k_zero_id)) == 0) {
 		/* Bench affordance: no reader identity provisioned yet, so take the
-		 * first Aliro reader seen and log its group id for the operator to
+		 * first credential reader seen and log its group id for the operator to
 		 * copy. A provisioned initiator never lands here. */
 		ESP_LOGW(TAG,
 			 "no reader_id set; latching onto group id "
@@ -455,7 +455,7 @@ static void start_scan(void)
 		ESP_LOGE(TAG, "ble_gap_disc rc=%d", rc);
 		return;
 	}
-	ESP_LOGI(TAG, "scanning for the Aliro reader");
+	ESP_LOGI(TAG, "scanning for the credential reader");
 }
 
 /* ---- host bring-up ---- */
@@ -473,7 +473,7 @@ static void on_sync(void)
 		ESP_LOGE(TAG, "infer_auto rc=%d", rc);
 		return;
 	}
-	ESP_LOGI(TAG, "NimBLE synced; running as Aliro initiator");
+	ESP_LOGI(TAG, "NimBLE synced; running as credential initiator");
 	start_scan();
 }
 
@@ -549,7 +549,7 @@ int ultrawidelock_ble_central_start(const struct ultrawidelock_ble_central_confi
 	if (coc_pools_init() != 0) {
 		return -1;
 	}
-	if (ble_svc_gap_device_name_set("Aliro Initiator") != 0) {
+	if (ble_svc_gap_device_name_set("credential Initiator") != 0) {
 		ESP_LOGW(TAG, "device_name_set failed");
 	}
 

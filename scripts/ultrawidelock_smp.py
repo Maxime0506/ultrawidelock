@@ -30,7 +30,7 @@ SMP_CHR_UUID = "da2e7828-fbce-4e01-ae9e-261174997c48"
 
 # The SMP service is never advertised, so the scan has to match on what the
 # reader does put in its advertisement. MEASURED on a commissioned board: the
-# local name, and no service UUIDs at all -- the 0xFFF2/0xFFF6 entries the Aliro
+# local name, and no service UUIDs at all -- the 0xFFF2/0xFFF6 entries the credential
 # and Matter services register are not in the advertising data that CoreBluetooth
 # reports. So the name is the primary match and the UUIDs are a fallback for a
 # board configured to advertise them.

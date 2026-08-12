@@ -10,9 +10,9 @@ Zephyr, NCS, or ESP-IDF names.
 | Module | Responsibility |
 |---|---|
 | `ultrawidelock_port` | OS, flash, logging, allocation, and byte-order contracts |
-| `ultrawidelock_cred` | Aliro APDU, crypto, provisioning, reader, and approach logic |
-| `ultrawidelock_cred_stack` | Adapter that links the portable Aliro stack into the Nordic application |
-| `ultrawidelock_uwb` | Aliro and FiRa UWB messages, sessions, ranging, and diagnostics |
+| `ultrawidelock_cred` | credential APDU, crypto, provisioning, reader, and approach logic |
+| `ultrawidelock_cred_stack` | Adapter that links the portable credential stack into the Nordic application |
+| `ultrawidelock_uwb` | credential and FiRa UWB messages, sessions, ranging, and diagnostics |
 | `ultrawidelock_dw3000` | DW3000-family driver source sets and portable driver seams |
 | `ultrawidelock_nfc` | NFC transport abstraction, PN532 transport, and the RFAL-path ECP emitter |
 | `ultrawidelock_matter` | Minimal Matter transport, session, and cluster implementation |

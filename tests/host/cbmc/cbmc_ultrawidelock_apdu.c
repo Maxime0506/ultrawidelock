@@ -1,4 +1,4 @@
-/* CBMC harness — Aliro BLE credential-auth codec memory safety.
+/* CBMC harness — credential BLE credential-auth codec memory safety.
  *
  * Exhaustively proves the device->reader receive path is memory-safe for all
  * inputs up to APDU_MAX bytes: unframe the L2CAP envelope, strip the ISO7816

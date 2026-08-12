@@ -1,10 +1,10 @@
-// Aliro step-up phase crypto + verifier: derives the StepUpSK SessionData keys, seals/opens
+// credential step-up phase crypto + verifier: derives the StepUpSK SessionData keys, seals/opens
 // SessionData over the ultrawidelock_secchan AES-256-GCM channel (envelope codec factored onto the
 // raw wrap/unwrap in ultrawidelock_stepup_wire.c), builds the simple ENVELOPE/GET RESPONSE APDUs,
 // and runs the six-step Access Document verification of spec 7.4. The ES256 primitive is injected
 // (verify ctx) so this unit carries no elliptic-curve dependency.
 /*
- * Wire structures from the Aliro v1.0 spec (§7.4, §8.4, §14.6) and ISO 18013-5
+ * Wire structures from the credential v1.0 spec (§7.4, §8.4, §14.6) and ISO 18013-5
  * (SessionData, COSE_Sign1 Sig_structure). The crypto goes through ultrawidelock_hash
  * (HKDF/SHA-256) and ultrawidelock_crypto (AES-256-GCM secure channel), with ES256
  * supplied by the caller.

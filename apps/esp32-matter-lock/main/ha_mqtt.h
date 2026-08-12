@@ -1,7 +1,7 @@
 /*
  * ha_mqtt — native Home Assistant MQTT publishing for the ESP32 Matter lock.
  *
- * Publishes UWB distance and Aliro access verdicts on the topics and payloads
+ * Publishes UWB distance and credential access verdicts on the topics and payloads
  * Home Assistant's MQTT Discovery expects, so an existing install picks this
  * board up with no host-side agent running:
  *

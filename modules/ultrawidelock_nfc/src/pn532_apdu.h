@@ -1,6 +1,6 @@
 /* PN532-specific ISO 7816 APDU adaptation.
  *
- * The Aliro stack (including the prebuilt library) negotiates sizes with the
+ * The credential stack (including the prebuilt library) negotiates sizes with the
  * User Device, but has no API for the reader controller's smaller local limit.
  * This adapter keeps that hardware constraint at the transport boundary.
  */
@@ -56,7 +56,7 @@ int ultrawidelock_pn532_apdu_plan_init(const uint8_t *input, size_t input_length
 			     struct ultrawidelock_pn532_apdu_plan *plan);
 
 /* Emit the next wire APDU. more_internal is true only when the transport must
- * consume a 9000 response and send another fragment before notifying Aliro. */
+ * consume a 9000 response and send another fragment before notifying the stack. */
 int ultrawidelock_pn532_apdu_plan_next(struct ultrawidelock_pn532_apdu_plan *plan, uint8_t *output,
 			     size_t output_capacity, size_t *output_length, bool *more_internal);
 

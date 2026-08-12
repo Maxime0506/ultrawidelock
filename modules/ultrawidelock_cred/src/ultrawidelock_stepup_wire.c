@@ -1,11 +1,11 @@
-// Crypto-free wire codecs for the Aliro step-up phase: the mdoc DeviceRequest builders, the
+// Crypto-free wire codecs for the credential step-up phase: the mdoc DeviceRequest builders, the
 // SessionData {"data": bstr} envelope without the AES-GCM channel (raw wrap/unwrap), the NFC
 // DO'53 TLV wrapper, the fragmenting ENVELOPE / extended GET RESPONSE APDU builders, and the
 // 61xx GET RESPONSE chaining reassembly. Merged from ultrawidelock_cred_stack's nfc_step_up.c; this
 // unit carries no crypto dependency so transport stacks that encrypt through their own backend
 // (session.cpp via Nordic's Interface) link it without ultrawidelock_crypto.
 /*
- * Wire structures from the Aliro v1.0 spec (§8.4.2, §8.4.4, Table 8-21) and ISO
+ * Wire structures from the credential v1.0 spec (§8.4.2, §8.4.4, Table 8-21) and ISO
  * 18013-5 SessionData, over ISO 7816-4 ENVELOPE/GET RESPONSE chaining. The
  * crypto-full SessionData seal/open in ultrawidelock_stepup.c factor over the raw
  * wrap/unwrap here.
@@ -222,9 +222,9 @@ int ultrawidelock_stepup_wrap_do53(const uint8_t *message, size_t message_length
 }
 
 /**
- * Unwrap an Aliro DO'53 TLV-encoded message: extract the value of a tag-0x53 object from an encoded
- * buffer. Returns a pointer into the input buffer for the message payload and its length; the
- * pointer is valid only as long as the input buffer is valid.
+ * Unwrap an credential DO'53 TLV-encoded message: extract the value of a tag-0x53 object from an
+ * encoded buffer. Returns a pointer into the input buffer for the message payload and its length;
+ * the pointer is valid only as long as the input buffer is valid.
  */
 int ultrawidelock_stepup_unwrap_do53(const uint8_t *encoded, size_t encoded_length,
 				     const uint8_t **message, size_t *message_length)

@@ -163,9 +163,9 @@ int fr_write_meta(fr_writer_t *w, uint16_t port, const char *sha)
 }
 
 /**
- * Emit a CONFIG record containing Aliro session parameters and UWB radio configuration; truncate
- * URSK and radio controller data to maximum lengths if needed; return 0 on success or -1 on buffer
- * overflow.
+ * Emit a CONFIG record containing credential session parameters and UWB radio configuration;
+ * truncate URSK and radio controller data to maximum lengths if needed; return 0 on success or -1
+ * on buffer overflow.
  */
 int fr_write_config(fr_writer_t *w, const struct fr_config *c)
 {

@@ -1,6 +1,6 @@
 /*
  * ultrawidelock_prim — the AEAD + elliptic-curve + RNG primitive interface used by the
- * Aliro credential-auth composition (ultrawidelock_crypto.c). Two backends implement it:
+ * credential-auth composition (ultrawidelock_crypto.c). Two backends implement it:
  *   - ultrawidelock_prim_psa.c   on the ESP32 target (mbedTLS-PSA)
  *   - a host double in the test build (for the secure-channel nonce/AAD tests)
  *

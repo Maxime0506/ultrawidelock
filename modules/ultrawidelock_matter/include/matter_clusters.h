@@ -108,10 +108,10 @@ extern "C" {
 #define MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES 0x0026u
 
 /*
- * The Aliro reader attributes (DoorLock/AttributeIds.h:204-247).
+ * The credential reader attributes (DoorLock/AttributeIds.h:204-247).
  *
  * These are not decoration. A controller reads them to decide whether this lock
- * can be an Aliro reader at all, and only then does it send
+ * can be an credential reader at all, and only then does it send
  * SetAliroReaderConfig with the reader private key -- which is the entire
  * reason this node exists.
  */
@@ -128,7 +128,7 @@ extern "C" {
 /*
  * FeatureMap bits this lock claims (DoorLock/Enums.h:510-511).
  *
- * Only the two Aliro bits. Claiming PIN, RFID, schedules or users would commit
+ * Only the two credential bits. Claiming PIN, RFID, schedules or users would commit
  * this node to the whole credential and schedule surface, none of which it has.
  */
 #define MATTER_DL_FEATURE_ALIRO_PROVISIONING 0x2000u
@@ -136,7 +136,7 @@ extern "C" {
 /*
  * User (Enums.h:505). Not claimed for its own sake: a real controller invokes
  * GetUser on this endpoint during commissioning and abandons the pairing when
- * it is refused, and Aliro credential keys arrive on the user/credential path
+ * it is refused, and credential keys arrive on the user/credential path
  * rather than through the reader-config commands
  * (ports/esp32/.../ultrawidelock_reader_delegate.h:36-43).
  */
@@ -228,7 +228,7 @@ extern "C" {
 /*
  * SetCredential (0x0022) and its response (0x0023).
  *
- * The Aliro credential itself: CredentialData is an uncompressed P-256 public
+ * The credential itself: CredentialData is an uncompressed P-256 public
  * key, and installing it is what turns a reader with an identity into one that
  * will actually open for a phone.
  */
@@ -259,7 +259,7 @@ extern "C" {
 #define MATTER_DL_CRED_ALIRO_ENDPOINT_KEY       8u
 
 /**
- * Install an Aliro credential public key, set by the port.
+ * Install an credential public key, set by the port.
  *
  * Returns 0 when added, 1 when already present, negative on a bad point or a
  * full/failed store -- the contract ultrawidelock_reader_provision_add_trust() already
@@ -317,13 +317,13 @@ struct matter_user {
 #define MATTER_DL_SUPPORTED_OPERATING_MODES 0x0001u
 
 /*
- * The one Aliro protocol version this reader speaks, big-endian, reported for
+ * The one credential protocol version this reader speaks, big-endian, reported for
  * both the expedited and BLE-UWB lists. Same value the ESP32 lock advertises
  * (ports/esp32/.../ultrawidelock_reader_delegate.cpp:47), which is the port that has
  * actually been provisioned by Apple Home.
  */
 #define MATTER_ALIRO_PROTOCOL_VERSION        0x0100u
-/** 0 is the only defined Aliro BLE advertising version. */
+/** 0 is the only defined credential BLE advertising version. */
 #define MATTER_ALIRO_BLE_ADV_VERSION         0u
 /**
  * NumberOfAliroCredentialIssuerKeysSupported (0x0087).
@@ -342,7 +342,7 @@ struct matter_user {
  * module must not include the reader's headers to find out.
  */
 #define MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED 6u
-/** Aliro group identifier, sub-identifier and resolving key are all 16 bytes. */
+/** credential group identifier, sub-identifier and resolving key are all 16 bytes. */
 #define MATTER_ALIRO_GROUP_ID_LEN            16u
 
 /** Access Control attributes (access-control-cluster.cpp, AclAttribute). */
@@ -536,7 +536,7 @@ struct matter_user {
 
 /**
  * Complete device information structure held by the Matter node, including vendor/product IDs,
- * Aliro identity, user table, commissioning state, operational network configuration, and
+ * credential identity, user table, commissioning state, operational network configuration, and
  * session-specific attestation and key data.
  */
 struct matter_device_info {
@@ -598,7 +598,7 @@ struct matter_device_info {
 	uint8_t accessing_fabric_index;
 
 	/*
-	 * ---- the Aliro reader identity, once Apple has delivered it --------
+	 * ---- the credential reader identity, once Apple has delivered it --------
 	 *
 	 * The SIGNING KEY is deliberately absent. It is the reader's private
 	 * key: it goes straight to @ref ultrawidelock_reader_config_cb, which persists

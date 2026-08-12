@@ -59,7 +59,7 @@ add_library(ultrawidelock_uwb STATIC
   # non-Zephyr port supplies the essential chain itself.
   "${ULTRAWIDELOCK_PORT_DIR}/uwb/ultrawidelock_seam_stubs.c"
   # The port's bring-up, and the only thing in the image that calls the layer
-  # until the Aliro seam is wired.
+  # until the credential seam is wired.
   "${ULTRAWIDELOCK_PORT_DIR}/uwb/ultrawidelock_freertos_uwb.c"
 )
 
@@ -147,10 +147,10 @@ set_target_properties(ultrawidelock_uwb_link_check PROPERTIES SUFFIX ".elf")
 #
 #   baseline   no UWB roots -- the floor the other two are measured against
 #   facade     the responder surface a lock calls
-#   responder  that plus the Aliro ranging-setup seam, which is the real build
+#   responder  that plus the credential ranging-setup seam, which is the real build
 #
 # The gap between the last two is what a range-only responder saves and an
-# Aliro one cannot.
+# credential one cannot.
 #
 # This is in the build graph rather than in someone's notes because a number
 # that regresses silently is worth about what a link check that never runs is
@@ -171,10 +171,10 @@ set(ULTRAWIDELOCK_UWB_REACH_FACADE
   ultrawidelock_uwb_range_generation
 )
 
-# The Aliro ranging-setup seam modules/ultrawidelock_cred/src/ultrawidelock_ranging.c drives. A
+# The credential ranging-setup seam modules/ultrawidelock_cred/src/ultrawidelock_ranging.c drives. A
 # responder that completes M1-M4 needs these, and the facade alone does not pull
-# them in, so measuring without them understates a real Aliro build.
-set(ULTRAWIDELOCK_UWB_REACH_ALIRO
+# them in, so measuring without them understates a real credential build.
+set(ULTRAWIDELOCK_UWB_REACH_CRED
   cherry_create cherry_destroy_sync ultrawidelock_uwb_adapter_create_reader
   ultrawidelock_uwb_session_create ultrawidelock_uwb_session_set_ursk
   ultrawidelock_uwb_session_set_protocol_version ultrawidelock_uwb_session_message_handle
@@ -211,7 +211,7 @@ ultrawidelock_uwb_add_reach_variant(ultrawidelock_uwb_reach_baseline)
 ultrawidelock_uwb_add_reach_variant(ultrawidelock_uwb_reach_facade
   ${ULTRAWIDELOCK_UWB_REACH_IRQ} ${ULTRAWIDELOCK_UWB_REACH_FACADE})
 ultrawidelock_uwb_add_reach_variant(ultrawidelock_uwb_reach_responder
-  ${ULTRAWIDELOCK_UWB_REACH_IRQ} ${ULTRAWIDELOCK_UWB_REACH_FACADE} ${ULTRAWIDELOCK_UWB_REACH_ALIRO})
+  ${ULTRAWIDELOCK_UWB_REACH_IRQ} ${ULTRAWIDELOCK_UWB_REACH_FACADE} ${ULTRAWIDELOCK_UWB_REACH_CRED})
 
 add_custom_target(ultrawidelock_uwb_reach
   COMMAND "${CMAKE_COMMAND}" -E env bash

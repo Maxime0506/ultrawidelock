@@ -1,7 +1,8 @@
-// Aliro step-up (Access Document) phase: builds the mdoc DeviceRequest, unwraps and decrypts the
-// SessionData DeviceResponse, decodes the CBOR document per spec 7.2/8.4.2, and runs the six-step
-// Access Document verification of spec 7.4. Reference-completeness codec + verifier; the verdict is
-// logged and stored, never gates the unlock (the provisioned trust store remains the sole gate).
+// credential step-up (Access Document) phase: builds the mdoc DeviceRequest, unwraps and decrypts
+// the SessionData DeviceResponse, decodes the CBOR document per spec 7.2/8.4.2, and runs the
+// six-step Access Document verification of spec 7.4. Reference-completeness codec + verifier; the
+// verdict is logged and stored, never gates the unlock (the provisioned trust store remains the
+// sole gate).
 /*
  * ultrawidelock_stepup — the Aliro §8.4 step-up phase: the ISO 18013-5 (mdoc) document
  * exchange the Reader MAY run in the standard phase to obtain an Access or

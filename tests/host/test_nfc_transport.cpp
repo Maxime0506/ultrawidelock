@@ -9,7 +9,7 @@
  * pn532.c and pn532_apdu.c are linked in FOR REAL, not faked, so every frame
  * these tests move is encoded and parsed by the shipping codec against the
  * scripted bus in tests/host/nfcfake. What is not real: the SPI peripheral,
- * the chip, and the Aliro stack, which is a call recorder.
+ * the chip, and the credential stack, which is a call recorder.
  *
  * TWO BACKENDS DEFINE THE SAME FIVE SYMBOLS, so transport_none.cpp is compiled
  * with -DUltraWideLockNfc=UltraWideLockNfcNone -- a compile flag on its own step, not a source
@@ -491,7 +491,7 @@ static void test_transport_pn532_polling(void)
  * The session loop is only reachable while the thread is running, and the
  * thread cannot be resumed once it has escaped -- re-entering starts a fresh
  * poll round. So each of these hooks does its one thing on a chosen tick,
- * which is also how the real thing behaves: the Aliro workqueue calls Send()
+ * which is also how the real thing behaves: the credential workqueue calls Send()
  * or Terminate() while the polling thread sits on its semaphore.
  */
 static uint8_t hook_apdu[5] = {0x00, 0xa4, 0x04, 0x00, 0x00};

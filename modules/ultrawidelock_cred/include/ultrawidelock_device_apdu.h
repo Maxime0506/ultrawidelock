@@ -1,4 +1,4 @@
-// Device (User-Device) side of the Aliro Access-Protocol wire codec: the inverse
+// Device (User-Device) side of the credential Access-Protocol wire codec: the inverse
 // of ultrawidelock_apdu.c. Where ultrawidelock_apdu builds reader commands and parses device
 // responses, this parses the reader's AUTH0/AUTH1/EXCHANGE commands and builds
 // the device's AUTH0/AUTH1/EXCHANGE responses. Pure byte manipulation, no crypto

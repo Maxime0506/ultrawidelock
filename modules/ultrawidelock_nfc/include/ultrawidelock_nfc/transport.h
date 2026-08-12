@@ -12,14 +12,14 @@
  *  - Stop():  cease polling and switch the RF field off.
  *  - Send():  asynchronous. Queues one APDU for the activated device and returns;
  *             the response is delivered later via AliroStack::HandleSessionData()
- *             from the Aliro workqueue. Returns ALIRO_INVALID_STATE when no
+ *             from the credential workqueue. Returns ALIRO_INVALID_STATE when no
  *             device is activated.
  *  - Terminate(): the stack is done with the session; drop the device and return
  *             to polling. Does not call back into the stack.
  *
  * The backend owns the session lifecycle in the other direction: on ISO-DEP
  * activation it calls AliroStack::CreateSession(ConnectionHandle::Nfc()), on
- * device loss or exchange failure DestroySession(), both from the Aliro
+ * device loss or exchange failure DestroySession(), both from the credential
  * workqueue, matching the upstream RFAL transport's threading.
  */
 #pragma once

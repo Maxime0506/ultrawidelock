@@ -1,5 +1,5 @@
 /*
- * Host known-answer test for the Aliro step-up (Access Document) codec + §7.4
+ * Host known-answer test for the credential step-up (Access Document) codec + §7.4
  * verifier. Pure host build (no ESP-IDF, no hardware), compiled from the same
  * ultrawidelock_stepup/ultrawidelock_stepup_parse/ultrawidelock_crypto/ultrawidelock_hash sources
  * as the target, with ultrawidelock_prim_host.c as the AES-GCM double.

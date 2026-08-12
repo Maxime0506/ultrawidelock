@@ -1,7 +1,7 @@
-// Aliro reader provisioning state: default dev identity, and serialization/deserialization of the
-// reader identity plus trusted-credential store to/from a self-describing binary blob.
-// Also implements the trust-store membership check and add-with-dedup operations used to decide
-// whether a presented credential public key is trusted.
+// credential reader provisioning state: default dev identity, and serialization/deserialization of
+// the reader identity plus trusted-credential store to/from a self-describing binary blob. Also
+// implements the trust-store membership check and add-with-dedup operations used to decide whether
+// a presented credential public key is trusted.
 /*
  * ultrawidelock_prov (portable core) — dev identity, blob (de)serialisation, and the
  * trust-store logic. No ESP-IDF or crypto dependency, so it compiles identically

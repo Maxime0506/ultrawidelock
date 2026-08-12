@@ -1,8 +1,10 @@
 # UltraWideLock
 
-UltraWideLock is portable firmware for Aliro NFC and UWB smart locks. The protocol
-implementation lives in `modules/`; supported operating systems and chipsets
-are connected through thin backends in `ports/`.
+UltraWideLock is portable firmware for NFC and UWB smart locks. It implements
+the CSA's door-lock credential protocol — BLE plus NFC (ECP) plus UWB ranging —
+built and tested against Nordic's ncs-door-lock-and-access-control add-on. The
+protocol implementation lives in `modules/`; supported operating systems and
+chipsets are connected through thin backends in `ports/`.
 
 The repository includes three complete lock applications and focused examples
 for reader, initiator, and anchor roles.
@@ -45,9 +47,9 @@ request a compatible series or add this repository with `add_subdirectory`;
 
 | Application | Hardware | Connectivity |
 |---|---|---|
-| [`apps/dwm3001cdk-lock/`](apps/dwm3001cdk-lock/) | DWM3001CDK | Aliro UWB, Matter over Thread |
-| [`apps/nrf5340dk-lock/`](apps/nrf5340dk-lock/) | nRF5340 DK, DWM3000EVB, NFC12A1 | Aliro UWB and NFC, Matter over Thread |
-| [`apps/esp32-matter-lock/`](apps/esp32-matter-lock/) | ESP32-S3, ESP32-C5, or ESP32-C6 with DWM3000EVB | Aliro UWB, Matter over Wi-Fi |
+| [`apps/dwm3001cdk-lock/`](apps/dwm3001cdk-lock/) | DWM3001CDK | credential UWB, Matter over Thread |
+| [`apps/nrf5340dk-lock/`](apps/nrf5340dk-lock/) | nRF5340 DK, DWM3000EVB, NFC12A1 | credential UWB and NFC, Matter over Thread |
+| [`apps/esp32-matter-lock/`](apps/esp32-matter-lock/) | ESP32-S3, ESP32-C5, or ESP32-C6 with DWM3000EVB | credential UWB, Matter over Wi-Fi |
 
 Run `make help` for the complete command list.
 

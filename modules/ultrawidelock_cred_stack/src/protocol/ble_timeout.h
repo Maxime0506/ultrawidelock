@@ -1,4 +1,4 @@
-/* Aliro 1.0 Bluetooth LE responseTimeout rules (section 11.9). */
+/* credential 1.0 Bluetooth LE responseTimeout rules (section 11.9). */
 #pragma once
 
 #include <stddef.h>
@@ -64,7 +64,7 @@ struct ultrawidelock_cred_ble_timeout_state {
 	enum ultrawidelock_cred_ble_timeout_message pending_message;
 };
 
-/* Classify one complete, unencrypted Aliro BLE message. */
+/* Classify one complete, unencrypted credential BLE message. */
 int ultrawidelock_cred_ble_timeout_classify(const uint8_t *data, size_t data_length,
 				   enum ultrawidelock_cred_ble_timeout_message *message);
 

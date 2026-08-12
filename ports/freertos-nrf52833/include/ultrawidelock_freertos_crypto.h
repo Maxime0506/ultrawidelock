@@ -37,7 +37,7 @@ void ultrawidelock_freertos_mbedtls_threading_init(void);
 
 /*
  * Bring up the crypto provider: threading, then the PSA core. Returns zero on
- * success. Idempotent, because both the Aliro path and the OpenThread path
+ * success. Idempotent, because both the credential path and the OpenThread path
  * want the core up and neither can be sure it is first.
  */
 int ultrawidelock_freertos_crypto_init(void);

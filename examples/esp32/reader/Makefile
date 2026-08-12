@@ -1,4 +1,4 @@
-# Makefile — forwarder for the standalone ESP32 Aliro reader (no Matter).
+# Makefile — forwarder for the standalone ESP32 credential reader (no Matter).
 #
 # The recipes live in mk/esp32.mk at the repo root, so the serial-port guard
 # that refuses any SEGGER/J-Link port exists in one place and every build lands

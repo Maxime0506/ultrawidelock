@@ -1,4 +1,4 @@
-// Zephyr central/client backend for the Aliro initiator: the mirror of
+// Zephyr central/client backend for the credential initiator: the mirror of
 // ultrawidelock_ble_zephyr.c. That file advertises 0xFFF2, serves the characteristics and
 // runs a CoC server; this one scans for 0xFFF2, connects, discovers, reads the
 // reader's SPSM/versions, writes the selected version and opens a CoC client to
@@ -37,7 +37,7 @@ LOG_MODULE_REGISTER(ultrawidelock_central, CONFIG_LOG_DEFAULT_LEVEL);
  * returns, because it sits in the dynamic range and is the reader's to choose. */
 #define ULTRAWIDELOCK_L2CAP_MTU 512u
 
-/* Aliro service, 16-bit 0xFFF2 — the one the reader advertises and serves. */
+/* credential service, 16-bit 0xFFF2 — the one the reader advertises and serves. */
 static const struct bt_uuid_16 k_svc_uuid = BT_UUID_INIT_16(0xfff2u);
 
 /* Reader SPSM + BLE-UWB protocol version, D3B5A130-9E23-4B3A-8BE4-6B1EE5F980A3. */
@@ -309,7 +309,7 @@ static uint8_t on_chr_disc(struct bt_conn *conn, const struct bt_gatt_attr *attr
 
 	/* attr == NULL means discovery finished. Both handles are required. */
 	if (s_peer.spsm_val_handle == 0u || s_peer.devver_val_handle == 0u) {
-		abandon("peer is missing an Aliro characteristic", 0);
+		abandon("peer is missing an credential characteristic", 0);
 		return BT_GATT_ITER_STOP;
 	}
 
@@ -362,7 +362,7 @@ static uint8_t on_svc_disc(struct bt_conn *conn, const struct bt_gatt_attr *attr
 
 /* ---- scanning + connection ----------------------------------------------- */
 
-/* True when this advert carries Aliro service data from the reader we want. The
+/* True when this advert carries credential service data from the reader we want. The
  * reader falls back to a bare UUID + name when unprovisioned or GRK-less; that
  * form has no group id to match, so it is skipped quietly rather than treated as
  * an error. */
@@ -383,7 +383,7 @@ static bool advert_is_our_reader(struct bt_data *data, void *user_data)
 
 	if (memcmp(s_cfg.reader_id, k_zero_id, sizeof(k_zero_id)) == 0) {
 		/* Bench affordance: no reader identity provisioned yet, so take the
-		 * first Aliro reader seen and log its group id for the operator to
+		 * first credential reader seen and log its group id for the operator to
 		 * copy. A provisioned initiator never lands here. */
 		LOG_WRN("no reader_id set; latching onto group id "
 			"%02x%02x%02x%02x%02x%02x%02x%02x sub %02x%02x",
@@ -512,7 +512,7 @@ static void start_scan(void)
 		LOG_ERR("bt_le_scan_start err=%d", err);
 		return;
 	}
-	LOG_INF("scanning for the Aliro reader");
+	LOG_INF("scanning for the credential reader");
 }
 
 /* ---- host bring-up ------------------------------------------------------- */
@@ -523,7 +523,7 @@ static void bt_ready(int err)
 		LOG_ERR("bt_enable err=%d", err);
 		return;
 	}
-	LOG_INF("Bluetooth ready; running as Aliro initiator");
+	LOG_INF("Bluetooth ready; running as credential initiator");
 	start_scan();
 }
 

@@ -46,11 +46,11 @@ config ULTRAWIDELOCK_SIDE_GATE
 	  is intentional fail-closed behaviour, not a regression.
 
 config ULTRAWIDELOCK_SIDE_PEER_EMIT
-	bool "Bench: log the Aliro peer address at L2CAP CoC open"
+	bool "Bench: log the credential peer address at L2CAP CoC open"
 	depends on ULTRAWIDELOCK_SIDE_GATE
 	default n
 	help
-	  Logs `SIDE peer=<AdvA> type=<public|random>` when the Aliro L2CAP CoC
+	  Logs `SIDE peer=<AdvA> type=<public|random>` when the credential L2CAP CoC
 	  opens and `SIDE peer=clear` when it closes, so bench tooling can push
 	  the phone's current address to the BLE witnesses as an advertising
 	  filter. Without it a witness summarises every advertiser in the room.

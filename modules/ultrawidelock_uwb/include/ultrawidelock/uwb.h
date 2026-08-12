@@ -1,10 +1,10 @@
-// Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
-// engine is bound and unbound via internal ursk and stop calls.
+// Public header for UWB facade: exposes credential DS-TWR responder lifecycle and range query; the
+// CCC engine is bound and unbound via internal ursk and stop calls.
 /*
  * C shim bridging the add-on UWB impl to the UltraWideLock FiRa/CCC engine.
  *
  * This header is also the UWB chipset engine contract: everything above it
- * (apps, the Aliro adapter, session and key logic) speaks these functions and
+ * (apps, the credential adapter, session and key logic) speaks these functions and
  * never names a radio API. The DW3000 engine behind it is a closed file set
  * enforced by tests/tooling/uwb_engine_scope_check.sh; a new chipset supplies
  * its own implementation of these functions (see PORTING.md, "New UWB
@@ -23,8 +23,8 @@ extern "C" {
 int ultrawidelock_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len);
 
 /**
- * @brief Aliro UWB ranging parameters negotiated during M1-M4 handshake.
- * @param session_id Aliro UWB session identifier (any non-zero value).
+ * @brief credential UWB ranging parameters negotiated during M1-M4 handshake.
+ * @param session_id credential UWB session identifier (any non-zero value).
  * @param channel UWB operating channel (5 or 9).
  * @param sync_code_index SYNC/preamble code index (1..32).
  * @param slot_duration_rstu Slot duration in RSTU units (1200 = 1 ms).
@@ -38,7 +38,7 @@ int ultrawidelock_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len);
  * @param rc_len RangingConfiguration length in bytes (typically 17).
  */
 struct ultrawidelock_uwb_ultrawidelock_cfg {
-	uint32_t session_id;         /**< Aliro UWB session id (any non-zero). */
+	uint32_t session_id;         /**< credential UWB session id (any non-zero). */
 	uint8_t channel;             /**< UWB channel: 5 or 9. */
 	uint8_t sync_code_index;     /**< SYNC/preamble code index (1..32). */
 	uint16_t slot_duration_rstu; /**< Slot duration, RSTU (1200 = 1 ms). */
@@ -52,7 +52,7 @@ struct ultrawidelock_uwb_ultrawidelock_cfg {
 	size_t rc_len; /**< RangingConfiguration length, bytes (17). */
 };
 
-/** Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success. */
+/** Start the CCC DS-TWR responder bound to a live credential; returns 0 on success. */
 int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg);
 
 /** Pre-apply the expected session PHY (radio configured, TRX off, RX not armed) so the

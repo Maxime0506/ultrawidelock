@@ -1,4 +1,4 @@
-// ESP32-S3 application entry for the Aliro initiator, the User-Device role that
+// ESP32-S3 application entry for the credential initiator, the User-Device role that
 // stands in for an iPhone on the bench. Starts the NimBLE central, which scans
 // for the reader's 0xFFF2 advert, connects, reads the reader's SPSM, supported
 // versions and features, writes the version it selects, and opens the L2CAP
@@ -8,7 +8,7 @@
 // derives. Credentials are the compiled-in bench pair below, which works only
 // against a reader running its dev identity with an empty trust store.
 /*
- * Aliro initiator (User-Device role) — Stage 1a: BLE transport + Access Protocol.
+ * credential initiator (User-Device role) — Stage 1a: BLE transport + Access Protocol.
  *
  * The transport half (scan/connect/discover/READ/WRITE/CoC) lives in the
  * ultrawidelock_ble_central component; the protocol half is modules/ultrawidelock_cred's
@@ -34,7 +34,7 @@
 
 static const char *TAG = "initiator";
 
-/* Aliro protocol v1.0 — the only version our reader offers or we speak. */
+/* credential protocol v1.0 — the only version our reader offers or we speak. */
 #define INITIATOR_VERSION 0x0100u
 
 /* The largest Access-Protocol response we build. AUTH1Response is the big one
@@ -80,7 +80,7 @@ static const uint8_t k_cred_priv[32] = {
 	0xe5, 0x78, 0xcb, 0xa2, 0xa6, 0x93, 0x8b, 0x29, 0xc3, 0xb5,
 };
 
-/* One transaction at a time: the reader serves one Aliro session per connection
+/* One transaction at a time: the reader serves one credential session per connection
  * and the central connects to one reader. s_conn is the connection s_dev belongs
  * to, so a stale SDU after a reconnect cannot be fed to the wrong session. */
 static struct ultrawidelock_device s_dev;
@@ -88,8 +88,8 @@ static uint16_t s_conn;
 static bool s_armed;
 
 /**
- * Return a human-readable string for an Aliro device phase: IDLE, SENT_AUTH0_RESP, SENT_AUTH1_RESP,
- * ESTABLISHED, or FAILED.
+ * Return a human-readable string for an credential device phase: IDLE, SENT_AUTH0_RESP,
+ * SENT_AUTH1_RESP, ESTABLISHED, or FAILED.
  */
 static const char *phase_str(enum ultrawidelock_device_phase p)
 {
@@ -231,9 +231,9 @@ static void on_closed(uint16_t conn_handle)
 }
 
 /**
- * Initialize the Aliro BLE central stack, register event callbacks for ready/data/closed, bring up
- * the PSA crypto backend, and begin scanning for an Aliro reader. Run forever, yielding
- * periodically.
+ * Initialize the credential BLE central stack, register event callbacks for ready/data/closed,
+ * bring up the PSA crypto backend, and begin scanning for an credential reader. Run forever,
+ * yielding periodically.
  */
 void app_main(void)
 {
@@ -241,7 +241,7 @@ void app_main(void)
 
 	/* Who we CONNECT to and who we AUTHENTICATE as are deliberately separate
 	 * here. cfg.reader_id is left all-zero, which makes the transport latch onto
-	 * the first Aliro reader it sees and log its group id; the crypto identity is
+	 * the first credential reader it sees and log its group id; the crypto identity is
 	 * k_reader_id above. Filling cfg.reader_id in would be the correct behaviour
 	 * for a real device, but on the bench it turns "the reader was provisioned
 	 * over Matter, so the dev constants are wrong" into an initiator that scans
@@ -266,7 +266,7 @@ void app_main(void)
 		ESP_LOGE(TAG, "BLE central start failed");
 		return;
 	}
-	ESP_LOGI(TAG, "Aliro initiator up; scanning for a reader");
+	ESP_LOGI(TAG, "credential initiator up; scanning for a reader");
 
 	for (;;) {
 		vTaskDelay(pdMS_TO_TICKS(5000));

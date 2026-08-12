@@ -1,6 +1,6 @@
 # ultrawidelock on ESP32-S3/C5/C6: flash guide
 
-The complete Aliro Matter lock on a single ESP32-S3, ESP32-C5 or ESP32-C6: it
+The complete credential Matter lock on a single ESP32-S3, ESP32-C5 or ESP32-C6: it
 commissions into Apple Home over Wi-Fi, your iPhone carries the key in Wallet,
 and the lock opens as you walk up (BLE + UWB approach unlock; no NFC tap on
 these targets). ESP32-S3 is the hardware-validated target. On C6 the UWB radio

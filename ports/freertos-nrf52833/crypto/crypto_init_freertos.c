@@ -8,7 +8,7 @@
  * first would have it lock mutexes that do not exist yet.
  *
  * Idempotent, because both callers want the core up and neither is reliably
- * first: the Aliro reader initialises crypto when it loads its identity, and
+ * first: the credential reader initialises crypto when it loads its identity, and
  * the OpenThread task initialises it when the stack starts. psa_crypto_init()
  * is itself documented as safe to call more than once, but the guard here also
  * keeps the log line to one.

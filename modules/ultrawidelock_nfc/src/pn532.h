@@ -1,5 +1,5 @@
 /* NXP PN532 host-protocol driver: frame codec and the command subset needed by
- * the Aliro reader transport. Bus-agnostic and OS-free — all I/O goes through
+ * the credential reader transport. Bus-agnostic and OS-free — all I/O goes through
  * injected bus operations, so the whole layer compiles and runs in the host
  * test suite against a scripted fake bus.
  *

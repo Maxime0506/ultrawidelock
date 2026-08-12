@@ -37,7 +37,7 @@ printf '\n  UWB reachable set (--gc-sections from named roots, not --whole-archi
 printf '    %-30s %8s %9s %8s %9s\n' "roots" "flash" "over" "RAM" "over"
 printf '    %-30s %8d %9s %8d %9s\n' "baseline, no UWB" "$b" "--" "$bm" "--"
 printf '    %-30s %8d %9d %8d %9d\n' "responder facade" "$f" "$((f - b))" "$fm" "$((fm - bm))"
-printf '    %-30s %8d %9d %8d %9d\n' "facade + Aliro ranging setup" "$r" "$((r - b))" "$rm_" \
+printf '    %-30s %8d %9d %8d %9d\n' "facade + credential ranging setup" "$r" "$((r - b))" "$rm_" \
 	"$((rm_ - bm))"
 
 # Attribute the responder link's flash bytes to the archive each input section

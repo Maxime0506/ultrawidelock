@@ -248,7 +248,7 @@ The implemented foundation now includes:
   credentials are stored differently here than in the Zephyr oracle and a board
   reflashed between the two loses them. There is no CryptoCell on this part, so
   P-256 is software and an asymmetric operation costs tens of milliseconds; that
-  is affordable because Aliro's expedited path uses Kpersistent with AES-CMAC
+  is affordable because the credential protocol's expedited path uses Kpersistent with AES-CMAC
   and does no asymmetric work inside the 1.836 ms DW3110 response-arm window.
   `nrf_oberon` would be faster and adds no licence this port does not already
   carry, but the glue that binds it under the PSA core is `nrf_security`, which
@@ -258,7 +258,7 @@ The implemented foundation now includes:
   the `PSA_WANT_*` list; AES tables go in flash because RAM is the binding
   constraint on this part. `mbedtls_threading_freertos.c` supplies the
   `MBEDTLS_THREADING_ALT` callbacks over static FreeRTOS mutexes, needed for
-  correctness rather than hardening: the OpenThread task and the Aliro task
+  correctness rather than hardening: the OpenThread task and the credential task
   behind NimBLE share the PSA key store. A lock from an exception is refused
   rather than allowed to assert the scheduler.
   `mbedtls_platform_freertos.c` puts allocation on the FreeRTOS heap NimBLE
@@ -451,7 +451,7 @@ repository: the extracted Qorvo SDK, the west workspace, and the Apache NimBLE
 checkout, each pinned by `platform.lock.yml`.
 
 `board/nrf52833_lock.ld` stops the image at `0x7e000`. The two pages above that
-are the key-value store, which holds the Aliro provisioning record and
+are the key-value store, which holds the credential provisioning record and
 OpenThread's settings including the SRP client key, so an oversized image is a
 link error rather than a lock that forgets its identity after a firmware update.
 MCUboot is not in the map yet; when it arrives it takes the bottom of flash and

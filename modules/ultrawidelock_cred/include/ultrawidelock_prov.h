@@ -41,7 +41,7 @@ extern "C" {
  * and eviction (below) is what makes running out survivable rather than fatal.
  */
 #define ULTRAWIDELOCK_TRUST_MAX       6u  /* trusted credential keys the store holds */
-#define ULTRAWIDELOCK_GRK_LEN         16u /* group resolving key (Aliro BLE-UWB adv tag) */
+#define ULTRAWIDELOCK_GRK_LEN         16u /* group resolving key (credential BLE-UWB adv tag) */
 #define ULTRAWIDELOCK_KPERSISTENT_LEN 32u /* per-credential expedited-fast key (§8.3.1.13) */
 /*
  * The credential index of an anchor no Matter admin installed.

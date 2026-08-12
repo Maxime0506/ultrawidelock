@@ -117,7 +117,7 @@ static void test_adv(void)
 	printf("\n== advert decode rejects malformed input ==\n");
 	T_OK("adv.short", ultrawidelock_ble_central_parse_adv(svc, sizeof(svc) - 1u, &adv) == -1);
 	T_OK("adv.long", ultrawidelock_ble_central_parse_adv(svc, sizeof(svc) + 1u, &adv) == -1);
-	svc[0] = 0xF1u; /* not the Aliro service */
+	svc[0] = 0xF1u; /* not the credential service */
 	T_OK("adv.wrong-uuid", ultrawidelock_ble_central_parse_adv(svc, sizeof(svc), &adv) == -1);
 }
 

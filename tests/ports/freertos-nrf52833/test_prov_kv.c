@@ -1,5 +1,5 @@
 /*
- * The Aliro provisioning backend over the port's key-value store.
+ * The credential provisioning backend over the port's key-value store.
  *
  * This runs the real store over the flash model rather than a stub, because the
  * property that matters is that a provisioned identity survives a reset, and

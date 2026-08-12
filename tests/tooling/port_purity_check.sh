@@ -583,6 +583,53 @@ BUILD_FILES=(
 	tests/on_target/esp32/ultrawidelock-device-ec/main/CMakeLists.txt
 )
 
+# ---- brand ratchet -----------------------------------------------------------
+#
+# The rename to ultrawidelock_ is finished, so the two old names may only appear
+# where they belong to someone else. brand_allowlist.txt says where that is, one
+# regex per line; everything else fails. Vendored trees and the host fake mirrors
+# are whole-file exemptions because we do not author them at all.
+#
+# This is the check that would have caught, without a test having to, both the
+# wire constants and the frozen add-on includes that a broad substitution took
+# out during the rename.
+BRAND_RE='woz|aliro'
+BRAND_EXEMPT=(':!*size-baseline*.json' ':!tests/host/stackfake' ':!tests/host/nfcfake'
+	':!tests/host/ecpfake' ':!modules/ultrawidelock_dw3000/dwt_uwb_driver'
+	':!modules/ultrawidelock_dfu/src/detools' ':!west.yml'
+	':!tests/tooling/brand_allowlist.txt'
+	# Both of these have to spell the banned names in order to ban them.
+	':!tests/tooling/port_purity_check.sh'
+	# A record of the rename itself, so it names what was renamed.
+	':!.git-blame-ignore-revs')
+
+brand_hits() { # -> allowlist survivors, "path:line:text"
+	local allow="$1"
+	# A patch's context lines are upstream's text; only its + lines are ours.
+	git grep -inE "$BRAND_RE" -- . "${BRAND_EXEMPT[@]}" \
+		':!integrations/nrfconnect-door-lock/patches' |
+		grep -vEf "$allow" || true
+	git grep -inE "^\+.*($BRAND_RE)" -- integrations/nrfconnect-door-lock/patches |
+		grep -vEf "$allow" || true
+}
+
+check_brand() {
+	local allow list n
+	allow="$(mktemp)"
+	grep -vE '^#|^$' "$(dirname "$0")/brand_allowlist.txt" >"$allow"
+	list="$(brand_hits "$allow")"
+	rm -f "$allow"
+	if [ -n "$list" ]; then
+		printf '%s\n' "$list" | sed "s/^/$R  unrenamed: /;s/\$/$Z/" >&2
+		printf '%scheck-purity: %d line(s) still name woz or aliro outside the frozen set%s\n' \
+			"$R" "$(printf '%s\n' "$list" | wc -l | tr -d ' ')" "$Z" >&2
+		return 1
+	fi
+	n=$(grep -cvE '^#|^$' "$(dirname "$0")/brand_allowlist.txt")
+	printf '%s  ok   brand: woz/aliro appear only in the %d allowlisted vendor spellings%s\n' \
+		"$G" "$n" "$Z"
+}
+
 check_build_paths() {
 	local fails=0 n=0 f p
 	for f in "${BUILD_FILES[@]}"; do
@@ -1129,7 +1176,7 @@ self_test() {
 		--- a/x.cpp
 		+++ b/x.cpp
 		+	ultrawidelock_phantom_symbol_xyz();
-		+	ultrawidelock_phantom_symbol_xyz();
+		+	ultrawidelock_phantom_other_xyz();
 		+	UltraWideLockNfc::Init();
 		+	if (CONFIG_ULTRAWIDELOCK_CRED) {}
 		+#include <ultrawidelock/uwb.h>
@@ -1137,11 +1184,11 @@ self_test() {
 		-	ultrawidelock_minus_line_only();
 	EOF
 	if [ "$(patch_syms "$fixdir/fix.patch")" != \
-		"$(printf 'CONFIG_ULTRAWIDELOCK_CRED\nUltraWideLockNfc::Init\nultrawidelock_phantom_symbol_xyz\nultrawidelock_phantom_symbol_xyz')" ]; then
+		"$(printf 'CONFIG_ULTRAWIDELOCK_CRED\nUltraWideLockNfc::Init\nultrawidelock_phantom_other_xyz\nultrawidelock_phantom_symbol_xyz')" ]; then
 		printf '%s  self-test FAILED: patch_syms extraction wrong for the fixture%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	for pth in ultrawidelock_phantom_symbol_xyz ultrawidelock_phantom_symbol_xyz; do
+	for pth in ultrawidelock_phantom_symbol_xyz ultrawidelock_phantom_other_xyz; do
 		if patch_sym_defined "$pth"; then
 			printf '%s  self-test FAILED: tripwire resolved an invented symbol: %s%s\n' \
 				"$R" "$pth" "$Z" >&2
@@ -1192,6 +1239,23 @@ self_test() {
 	[ "$fails" -ne 0 ] || printf '%s  self-test: manifest parser and allowlist are exact%s\n' "$G" "$Z"
 	rm -rf "$fixdir"
 
+	# The brand ratchet passes on a clean tree, which is also what a scan that
+	# matches nothing at all looks like. Emptying the allowlist separates the
+	# two: the scan must then report the vendor spellings it normally excuses.
+	local empty raw
+	empty="$(mktemp)"
+	printf 'this matches no line\n' >"$empty"
+	raw="$(brand_hits "$empty" | wc -l | tr -d ' ')"
+	rm -f "$empty"
+	if [ "$raw" -lt 50 ]; then
+		printf '%s  self-test FAILED: brand scan found only %s line(s) with the allowlist emptied%s\n' \
+			"$R" "$raw" "$Z" >&2
+		fails=$((fails + 1))
+	else
+		printf '%s  self-test: brand scan is live (%s line(s) without the allowlist)%s\n' \
+			"$G" "$raw" "$Z"
+	fi
+
 	if [ "$fails" -ne 0 ]; then
 		printf '%scheck-purity: the gate itself is broken%s\n' "$R" "$Z" >&2
 		return 2
@@ -1205,6 +1269,10 @@ case "${1-}" in
 	;;
 "")
 	rc=0
+	# The self-test runs here, not only under --self-test, because that flag was
+	# passed by hand and nothing else. A stale fixture in it went unnoticed
+	# through a whole rename, which is the rot it exists to catch.
+	self_test || rc=1
 	scan || rc=1
 	check_port_os || rc=1
 	check_public_includes || rc=1
@@ -1213,6 +1281,7 @@ case "${1-}" in
 	check_hal_contract || rc=1
 	check_build_paths || rc=1
 	check_patch_symbols || rc=1
+	check_brand || rc=1
 	exit "$rc"
 	;;
 *)

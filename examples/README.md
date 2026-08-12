@@ -8,8 +8,8 @@ lock products themselves.
 | Example | Purpose | Build command |
 |---|---|---|
 | [`zephyr/anchor/`](zephyr/anchor/) | Two-board DS-TWR anchor bench | `make anchor-build` |
-| [`zephyr/nrf5340dk-initiator/`](zephyr/nrf5340dk-initiator/) | nRF5340 DK Aliro initiator | `make nrf-init-build` |
-| [`esp32/reader/`](esp32/reader/) | Standalone ESP32 Aliro reader | `make esp-build APP=reader` |
+| [`zephyr/nrf5340dk-initiator/`](zephyr/nrf5340dk-initiator/) | nRF5340 DK credential initiator | `make nrf-init-build` |
+| [`esp32/reader/`](esp32/reader/) | Standalone ESP32 credential reader | `make esp-build APP=reader` |
 | [`esp32/initiator/`](esp32/initiator/) | ESP32-S3 BLE initiator peer | `make esp-build APP=initiator TARGET=esp32s3` |
 | [`cmake/consumer/`](cmake/consumer/) | Installed C API and TLV package consumer | `make sdk-check` |
 

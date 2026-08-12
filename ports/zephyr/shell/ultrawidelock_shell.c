@@ -1,4 +1,5 @@
-/** @file ultrawidelock_shell.c — `ultrawidelock` UART shell command: colored console over the UWB engine.
+/** @file ultrawidelock_shell.c — `ultrawidelock` UART shell command: colored console over the UWB
+ * engine.
  */
 
 #include <stdint.h>
@@ -427,7 +428,8 @@ static int cmd_ultrawidelock(const struct shell *sh, size_t argc, char **argv)
 		return -EINVAL;
 	}
 	shell_print(sh, "");
-	shell_print(sh, C_GRN C_B "  ultrawidelock" C_RST C_DIM "  ·  DIY Aliro NFC + UWB unlock" C_RST);
+	shell_print(sh, C_GRN C_B "  ultrawidelock" C_RST C_DIM
+				  "  ·  DIY credential NFC + UWB unlock" C_RST);
 	shell_print(sh, C_RULE);
 	shell_print(sh, "  " C_CYN "status  " C_RST C_DIM "everything at a glance" C_RST);
 	shell_print(sh, "  " C_CYN "rx      " C_RST C_DIM "on-air RX/TX tally" C_RST);
@@ -465,4 +467,5 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		  cmd_factoryreset),
 	SHELL_SUBCMD_SET_END);
 
-SHELL_CMD_REGISTER(ultrawidelock, &sub_ultrawidelock, "Aliro UWB firmware console.", cmd_ultrawidelock);
+SHELL_CMD_REGISTER(ultrawidelock, &sub_ultrawidelock, "credential UWB firmware console.",
+		   cmd_ultrawidelock);

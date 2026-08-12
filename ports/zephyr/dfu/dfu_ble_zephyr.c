@@ -28,7 +28,7 @@ LOG_MODULE_DECLARE(ultrawidelock_dfu, CONFIG_ULTRAWIDELOCK_DFU_LOG_LEVEL);
 /**
  * Its own PSM, one above the reader's.
  *
- * Deliberately not multiplexed onto the Aliro PSM. That channel's bytes go
+ * Deliberately not multiplexed onto the credential PSM. That channel's bytes go
  * straight into the reader's APDU parser, which is the most security-sensitive
  * parser on the board; giving it a second message class to distinguish would
  * put update framing inside the unlock path. A separate PSM costs one
@@ -153,7 +153,7 @@ static int dfu_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 
 static struct bt_l2cap_server s_dfu_server = {
 	.psm = DFU_L2CAP_PSM,
-	/* Same as the Aliro channel: no link-layer security, because this board
+	/* Same as the credential channel: no link-layer security, because this board
 	 * never pairs. Authenticity is the patch signature. */
 	.sec_level = BT_SECURITY_L1,
 	.accept = dfu_accept,

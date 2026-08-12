@@ -61,7 +61,7 @@ config SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE
 endif # ULTRAWIDELOCK_PROV_CONSOLE
 
 config ULTRAWIDELOCK_PROV_CLEAR_ON_BOOT
-	bool "Erase the stored Aliro identity at boot"
+	bool "Erase the stored credential identity at boot"
 	default n
 	help
 	  Deletes the `ultrawidelock/prov` settings key before anything reads it, so the
@@ -92,7 +92,7 @@ config ULTRAWIDELOCK_FACTORY_RESET_BUTTON
 
 	  This is not a convenience. A commissioning that installs a fabric and
 	  then times out leaves that fabric stored, the advert gate switches to
-	  the Aliro reader payload, and the controller can neither discover the
+	  the credential reader payload, and the controller can neither discover the
 	  node nor open a commissioning window on an accessory it has already
 	  forgotten. Without this button that board needs a debugger, and a user
 	  does not have one.
@@ -113,7 +113,7 @@ config ULTRAWIDELOCK_STATUS_LED
 	help
 	  D9 green is the lock (solid unlocked, one blip per 2 s locked-and-alive),
 	  D12 red is attention (solid fault, 0.5 Hz needs commissioning), D11 red is
-	  the phone (4 Hz ranging, 1 Hz Aliro session) and D10 blue is a window
+	  the phone (4 Hz ranging, 1 Hz credential session) and D10 blue is a window
 	  (2 Hz update window, solid provisioning mode). src/status_led.c carries
 	  the argument for each.
 
@@ -370,7 +370,7 @@ config ULTRAWIDELOCK_HEAP_PROBE
 	  same time: `ultrawidelock heap` in provisioning mode, covering the import path's
 	  P-256 derive, and an RTT line at each unlock in run mode, covering a whole
 	  walk-up. Both read a peak accumulated since boot, so the walk-up figure
-	  includes BLE pairing and the Aliro exchange, not just the ranging.
+	  includes BLE pairing and the credential exchange, not just the ranging.
 
 	  Needs CONFIG_MBEDTLS_MEMORY_DEBUG=y, which is not a shipping setting.
 
@@ -531,7 +531,7 @@ source "subsys/logging/Kconfig.template.log_config"
 endif # ULTRAWIDELOCK_MATTER_BLE
 
 config ULTRAWIDELOCK_BLE_CENTRAL
-	bool "Aliro initiator BLE central transport (User-Device role)"
+	bool "credential initiator BLE central transport (User-Device role)"
 	depends on BT
 	select BT_CENTRAL
 	select BT_OBSERVER
@@ -539,7 +539,7 @@ config ULTRAWIDELOCK_BLE_CENTRAL
 	select BT_L2CAP_DYNAMIC_CHANNEL
 	default n
 	help
-	  The device half of Aliro, the role a phone plays, so a reader can be
+	  The device half of the credential protocol, the role a phone plays, so a reader can be
 	  exercised on the bench with no iPhone in the loop. Scans for the reader's
 	  0xFFF2 advert, connects, reads the reader-SPSM characteristic, writes the
 	  selected version and opens an L2CAP CoC client to the PSM that READ

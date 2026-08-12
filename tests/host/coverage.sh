@@ -55,21 +55,21 @@ LLVM_PROFILE_FILE="$OUT/host.profraw" "$BIN" >"$OUT/run.log" 2>&1 || true
 # --- suite 2..n: portable core host KATs (mirror of tests/shared/run.sh) ----
 ET="$ROOT/tests/ports/esp32"
 SHARED="$ROOT/tests/shared"
-ALIRO="$ROOT/modules/ultrawidelock_cred"
+CRED="$ROOT/modules/ultrawidelock_cred"
 LOCK_MAIN="$ROOT/apps/esp32-matter-lock/main"
 
 # Units those suites exercise; joins UNIT_SRCS in the coverage denominator.
 CORE_UNIT_SRCS=(
-	"$ALIRO/src/ultrawidelock_hash.c"
-	"$ALIRO/src/ultrawidelock_crypto.c"
-	"$ALIRO/src/ultrawidelock_advtag.c"
-	"$ALIRO/src/ultrawidelock_apdu.c"
-	"$ALIRO/src/ultrawidelock_stepup.c"
-	"$ALIRO/src/ultrawidelock_stepup_parse.c"
-	"$ALIRO/src/ultrawidelock_prov.c"
-	"$ALIRO/src/ultrawidelock_lat.c"
-	"$ALIRO/src/ultrawidelock_reader.c"
-	"$ALIRO/src/ultrawidelock_ranging.c"
+	"$CRED/src/ultrawidelock_hash.c"
+	"$CRED/src/ultrawidelock_crypto.c"
+	"$CRED/src/ultrawidelock_advtag.c"
+	"$CRED/src/ultrawidelock_apdu.c"
+	"$CRED/src/ultrawidelock_stepup.c"
+	"$CRED/src/ultrawidelock_stepup_parse.c"
+	"$CRED/src/ultrawidelock_prov.c"
+	"$CRED/src/ultrawidelock_lat.c"
+	"$CRED/src/ultrawidelock_reader.c"
+	"$CRED/src/ultrawidelock_ranging.c"
 	"$LOCK_MAIN/lock_led.c"
 )
 
@@ -79,33 +79,33 @@ run_suite() { # <name> <bin>: run one instrumented suite into its own profile
 	OBJS+=(-object "$2")
 }
 
-cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
+cov_cc -I"$CRED/include" -I"$CRED/src" \
 	"$SHARED/test_ultrawidelock_crypto.c" \
-	"$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_advtag.c" \
+	"$CRED/src/ultrawidelock_hash.c" "$CRED/src/ultrawidelock_crypto.c" "$CRED/src/ultrawidelock_advtag.c" \
 	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_crypto"
 run_suite crypto "$OUT/cov_crypto"
 
-cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$SHARED/test_ultrawidelock_apdu.c" "$ALIRO/src/ultrawidelock_apdu.c" -o "$OUT/cov_apdu"
+cov_cc -I"$CRED/include" -I"$CRED/src" \
+	"$SHARED/test_ultrawidelock_apdu.c" "$CRED/src/ultrawidelock_apdu.c" -o "$OUT/cov_apdu"
 run_suite apdu "$OUT/cov_apdu"
 
-cov_cc -I"$SHARED" -I"$ALIRO/include" -I"$ALIRO/src" \
+cov_cc -I"$SHARED" -I"$CRED/include" -I"$CRED/src" \
 	"$SHARED/test_ultrawidelock_stepup.c" \
-	"$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
-	"$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
-	"$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
+	"$CRED/src/ultrawidelock_stepup.c" "$CRED/src/ultrawidelock_stepup_wire.c" \
+	"$CRED/src/ultrawidelock_stepup_parse.c" "$CRED/src/ultrawidelock_tlv.c" \
+	"$CRED/src/ultrawidelock_hash.c" "$CRED/src/ultrawidelock_crypto.c" \
 	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_stepup"
 run_suite stepup "$OUT/cov_stepup"
 
-cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
-	"$SHARED/test_ultrawidelock_prov.c" "$ALIRO/src/ultrawidelock_prov.c" -o "$OUT/cov_prov"
+cov_cc -I"$CRED/include" -I"$CRED/src" \
+	"$SHARED/test_ultrawidelock_prov.c" "$CRED/src/ultrawidelock_prov.c" -o "$OUT/cov_prov"
 run_suite prov "$OUT/cov_prov"
 
 # Only the trace-on lat build is instrumented: the gate-off variant maps the
 # same lines differently and the two profiles would not merge cleanly.
 cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
-	-I"$ALIRO/include" -I"$ROOT/modules/ultrawidelock_port/include" \
-	"$SHARED/test_ultrawidelock_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$OUT/cov_lat"
+	-I"$CRED/include" -I"$ROOT/modules/ultrawidelock_port/include" \
+	"$SHARED/test_ultrawidelock_lat.c" "$CRED/src/ultrawidelock_lat.c" -o "$OUT/cov_lat"
 run_suite lat "$OUT/cov_lat"
 
 cov_cc -I"$LOCK_MAIN" \
@@ -113,20 +113,20 @@ cov_cc -I"$LOCK_MAIN" \
 run_suite led "$OUT/cov_led"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
-	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/ultrawidelock_port/include" \
+	-I"$CRED/include" -I"$CRED/src" -I"$ROOT/modules/ultrawidelock_port/include" \
 	"$SHARED/test_ultrawidelock_reader.c" \
-	"$ALIRO/src/ultrawidelock_reader.c" "$ALIRO/src/ultrawidelock_apdu.c" \
-	"$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
-	"$ALIRO/src/ultrawidelock_prov.c" \
+	"$CRED/src/ultrawidelock_reader.c" "$CRED/src/ultrawidelock_apdu.c" \
+	"$CRED/src/ultrawidelock_crypto.c" "$CRED/src/ultrawidelock_hash.c" \
+	"$CRED/src/ultrawidelock_prov.c" \
 	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_reader"
 run_suite reader "$OUT/cov_reader"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
-	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/ultrawidelock_port/include" \
+	-I"$CRED/include" -I"$CRED/src" -I"$ROOT/modules/ultrawidelock_port/include" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$SHARED/test_ultrawidelock_ranging.c" \
-	"$ALIRO/src/ultrawidelock_ranging.c" "$ALIRO/src/ultrawidelock_crypto.c" \
-	"$ALIRO/src/ultrawidelock_hash.c" \
+	"$CRED/src/ultrawidelock_ranging.c" "$CRED/src/ultrawidelock_crypto.c" \
+	"$CRED/src/ultrawidelock_hash.c" \
 	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_ranging"
 run_suite ranging "$OUT/cov_ranging"
 
@@ -155,10 +155,10 @@ SIDE_UNIT_SRCS=(
 	"$ROOT/ports/zephyr/shell/ultrawidelock_shell.c"
 	"$SRC/ccc/ccc_crypto_psa.c"
 	"$SRC/ccc/ccc_crypto_mbedtls.c"
-	"$ALIRO/src/ultrawidelock_prim_psa.c"
+	"$CRED/src/ultrawidelock_prim_psa.c"
 	"$ROOT/modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp"
 	"$ECOMP/ultrawidelock_ble/ultrawidelock_ble_esp32.c"
-	"$ALIRO/src/ultrawidelock_ble_nimble.c"
+	"$CRED/src/ultrawidelock_ble_nimble.c"
 	"$ECOMP/ultrawidelock_reader/ultrawidelock_prov_nvs.c"
 	"$ECOMP/ultrawidelock_reader/ultrawidelock_stepup_worker.c"
 	"$ECOMP/ultrawidelock_uwb/port/dw3000_hw.c"
@@ -206,9 +206,9 @@ cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=ultrawidelock_test_psa_ecb 
 	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_cov.o"
 cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=ultrawidelock_test_mbedtls_ecb \
 	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$OUT/ccc_crypto_mbedtls_cov.o"
-cov_cc "${psa_flags[@]}" -I"$HOSTD" -I"$ALIRO/include" \
+cov_cc "${psa_flags[@]}" -I"$HOSTD" -I"$CRED/include" \
 	"$HOSTD/test.c" "$HOSTD/test_psa_backends.c" "$HOSTD/psafake/psafake.c" \
-	"$ALIRO/src/ultrawidelock_prim_psa.c" \
+	"$CRED/src/ultrawidelock_prim_psa.c" \
 	"$OUT/ccc_crypto_psa_cov.o" "$OUT/ccc_crypto_mbedtls_cov.o" -o "$OUT/cov_psa"
 run_suite psa "$OUT/cov_psa"
 
@@ -221,25 +221,25 @@ cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_c_cov.o"
 	"$OUT/test_harness_c_cov.o" -o "$OUT/cov_ecp"
 run_suite ecp "$OUT/cov_ecp"
 
-cov_cc -I"$SDKFAKE" -I"$ALIRO/include" -I"$ALIRO/src" \
+cov_cc -I"$SDKFAKE" -I"$CRED/include" -I"$CRED/src" \
 	"$ET/test_esp_ultrawidelock_ble.c" "$ECOMP/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
-	"$ALIRO/src/ultrawidelock_ble_nimble.c" \
-	"$ALIRO/src/ultrawidelock_advtag.c" "$ALIRO/src/ultrawidelock_hash.c" \
+	"$CRED/src/ultrawidelock_ble_nimble.c" \
+	"$CRED/src/ultrawidelock_advtag.c" "$CRED/src/ultrawidelock_hash.c" \
 	"$SHARED/ultrawidelock_prim_host.c" \
 	"$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_ble"
 run_suite esp_ble "$OUT/cov_esp_ble"
 
-cov_cc -I"$SDKFAKE" -I"$ALIRO/include" \
+cov_cc -I"$SDKFAKE" -I"$CRED/include" \
 	"$ET/test_esp_prov_nvs.c" "$ECOMP/ultrawidelock_reader/ultrawidelock_prov_nvs.c" \
-	"$ALIRO/src/ultrawidelock_prov.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_nvs"
+	"$CRED/src/ultrawidelock_prov.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_nvs"
 run_suite esp_nvs "$OUT/cov_esp_nvs"
 
 cov_cc -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
-	-I"$SDKFAKE" -I"$ET" -I"$SHARED" -I"$ALIRO/include" -I"$ALIRO/src" \
+	-I"$SDKFAKE" -I"$ET" -I"$SHARED" -I"$CRED/include" -I"$CRED/src" \
 	"$ET/test_esp_stepup_worker.c" "$ECOMP/ultrawidelock_reader/ultrawidelock_stepup_worker.c" \
-	"$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
-	"$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
-	"$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
+	"$CRED/src/ultrawidelock_stepup.c" "$CRED/src/ultrawidelock_stepup_wire.c" \
+	"$CRED/src/ultrawidelock_stepup_parse.c" "$CRED/src/ultrawidelock_tlv.c" \
+	"$CRED/src/ultrawidelock_hash.c" "$CRED/src/ultrawidelock_crypto.c" \
 	"$SHARED/ultrawidelock_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
 
@@ -248,7 +248,7 @@ run_suite esp_worker "$OUT/cov_esp_worker"
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DULTRAWIDELOCK_PORT_HOST \
 	-I"$SDKFAKE" -I"$EREADER" -I"$ROOT/modules/ultrawidelock_uwb/include" \
-	-I"$ALIRO/include" -I"$ROOT/modules/ultrawidelock_port/include" \
+	-I"$CRED/include" -I"$ROOT/modules/ultrawidelock_port/include" \
 	"$ET/test_esp_app_shell.c" "$EREADER/app_shell.c" \
 	"$EREADER/main.c" \
 	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
@@ -281,13 +281,13 @@ MFAKE="$ET/matterfake"
 cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
 # app_main.cpp's reader task drives the shared ultrawidelock_approach controller (C);
 # link it in like lock_led.c or the app_main.o has undefined references.
-cov_cc -I"$ALIRO/include" -c "$ALIRO/src/ultrawidelock_approach.c" -o "$OUT/ultrawidelock_approach_matter_cov.o"
+cov_cc -I"$CRED/include" -c "$CRED/src/ultrawidelock_approach.c" -o "$OUT/ultrawidelock_approach_matter_cov.o"
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 \
 	-DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 	-DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DULTRAWIDELOCK_PORT_HOST \
 	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
-	-I"$ALIRO/include" -I"$ROOT/modules/ultrawidelock_port/include" \
+	-I"$CRED/include" -I"$ROOT/modules/ultrawidelock_port/include" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$ET/test_esp_matter_lock.cpp" \
 	"$MLOCK/app_driver.cpp" "$MLOCK/app_main.cpp" "$MLOCK/app_shell.cpp" \
@@ -360,7 +360,7 @@ cov_cc -I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" -o "$OUT/cov_seam"
 run_suite seam "$OUT/cov_seam"
 
-# C++ suite: the Aliro source stack over the Interface doubles in stackfake/.
+# C++ suite: the credential source stack over the Interface doubles in stackfake/.
 # The protocol codecs beside it are already in UNIT_SRCS and are compiled again
 # here; they carry no conditional compilation, so both objects map the same
 # lines the same way and the profiles merge. Mirrors run.sh stage 8.

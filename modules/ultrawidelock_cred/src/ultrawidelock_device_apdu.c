@@ -5,7 +5,7 @@
 // caller-owned buffers with no allocation, so it round-trips against the reader's
 // own builders and parsers in ultrawidelock_apdu.c under the host tests.
 /*
- * Device-side Aliro Access-Protocol wire codec. See ultrawidelock_device_apdu.h.
+ * Device-side credential Access-Protocol wire codec. See ultrawidelock_device_apdu.h.
  */
 #include "ultrawidelock_device_apdu.h"
 

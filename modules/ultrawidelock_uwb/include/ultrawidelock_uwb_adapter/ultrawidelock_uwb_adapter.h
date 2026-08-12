@@ -18,7 +18,7 @@ extern "C" {
 /** Opaque adapter context (session-independent reader state). */
 struct ultrawidelock_uwb_adapter;
 
-/** Status codes returned by the Aliro UWB adapter. */
+/** Status codes returned by the credential UWB adapter. */
 enum ultrawidelock_uwb_err {
 	ULTRAWIDELOCK_UWB_ERR_NONE,
 	ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER,

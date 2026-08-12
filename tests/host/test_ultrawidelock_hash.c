@@ -1,7 +1,7 @@
 /** @file test_ultrawidelock_hash.c — SHA-256 / HMAC / HKDF / X9.63 KATs.
  *
  * ultrawidelock_hash.c is the portable crypto the presence assertion (and the whole
- * Aliro key schedule) leans on, but it had no host coverage. Pin it against the
+ * credential key schedule) leans on, but it had no host coverage. Pin it against the
  * published standard vectors so a regression in the primitive is caught here,
  * not on wire. Vectors: FIPS 180-4 (SHA-256), RFC 4231 (HMAC), RFC 5869 (HKDF).
  */

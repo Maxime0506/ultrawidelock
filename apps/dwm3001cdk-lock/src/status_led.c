@@ -7,7 +7,7 @@
  *
  *   D9  green  the lock      solid = unlocked · one blip per 2 s = locked, alive
  *   D12 red    attention     solid = fault · 0.5 Hz = no fabric, needs commissioning
- *   D11 red    the phone     4 Hz = ranging · 1 Hz = Aliro session · off = idle
+ *   D11 red    the phone     4 Hz = ranging · 1 Hz = credential session · off = idle
  *   D10 blue   a window      2 Hz = update window open · solid = provisioning mode
  *
  * D13 is not ours (DW3110 tx/rx), nor is D20 (J-Link OB). Each LED renders a

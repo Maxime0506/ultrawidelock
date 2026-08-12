@@ -1,11 +1,11 @@
-// NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
-// Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
+// NFC Type A proprietary callback implementation for credential Express unlock (tap-to-unlock
+// without Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
 /*
  * Copyright (c) 2026 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  *
- * Apple ECP (Enhanced Contactless Polling) emitter for the Aliro tap path.
+ * Apple ECP (Enhanced Contactless Polling) emitter for the credential tap path.
  */
 
 #include <nfc_prop/nfc_prop.h>
@@ -104,8 +104,8 @@ const rfalNfcPropCallbacks kCallbacks = {
 } // namespace
 
 /**
- * @brief Builds and arms the ECP frame with the Aliro header, provisioned reader identifier, and
- * CRC_A checksum for emission.
+ * @brief Builds and arms the ECP frame with the credential header, provisioned reader identifier,
+ * and CRC_A checksum for emission.
  */
 void NfcPropInit(void)
 {
@@ -123,11 +123,11 @@ void NfcPropInit(void)
 	Crc16A(sEcpFrame, 16, sEcpFrame + 16);
 	sArmed = true;
 
-	LOG_HEXDUMP_INF(sEcpFrame, kEcpFrameLen, "ECP Aliro frame armed:");
+	LOG_HEXDUMP_INF(sEcpFrame, kEcpFrameLen, "ECP credential frame armed:");
 }
 
 /**
- * @brief Returns the RFAL proprietary NFC callback table for Aliro ECP emission.
+ * @brief Returns the RFAL proprietary NFC callback table for credential ECP emission.
  * @return Pointer to the static rfalNfcPropCallbacks table.
  */
 const rfalNfcPropCallbacks *NfcPropGetCallbacks(void)

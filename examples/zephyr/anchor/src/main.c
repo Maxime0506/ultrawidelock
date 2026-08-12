@@ -3,7 +3,7 @@
  *.
  *
  * One application, two roles, two boards. The role is CONFIG_ANCHOR_ROLE_*, the
- * board is the overlay in boards/. Nothing here is Aliro-aware: this builds at
+ * board is the overlay in boards/. Nothing here is credential-aware: this builds at
  * the CONFIG_ULTRAWIDELOCK_UWB tier, where uwb_seam.h inlines straight to the decadriver
  * and there is no credential, no STS engine and no phone in the loop. That is
  * the whole reason stage A is cheap, and it is why moving the satellite to a

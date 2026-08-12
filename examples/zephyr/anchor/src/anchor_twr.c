@@ -627,7 +627,7 @@ int anchor_twr_responder_round(int32_t *mm_out, uint32_t *seq_out)
 		tw.t_round2 = (uint32_t)(t6 - t3);
 	}
 
-	/* The shared estimator: src/fira/ds_twr.c, the same one the Aliro responder
+	/* The shared estimator: src/fira/ds_twr.c, the same one the credential responder
 	 * uses. Signed, which matters here more than anywhere -- 0.3 m is the first
 	 * row of stage A's measurement matrix and that is exactly where an unsigned
 	 * numerator underflows. */

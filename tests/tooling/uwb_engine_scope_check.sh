@@ -7,7 +7,7 @@
 # radio API (dwt_* calls and types, deca_*.h headers) is the DW3000 engine
 # backend behind that contract, and it is a closed set of files. A dwt_ call or
 # deca include added anywhere else quietly re-couples the chip-agnostic zone —
-# the FiRa session logic, CCC key schedule, Aliro adapter, apps — to one
+# the FiRa session logic, CCC key schedule, credential adapter, apps — to one
 # vendor's silicon, and the next chipset port inherits it as a rewrite. This
 # gate keeps the boundary mechanical: a new chipset implements the contract,
 # it never edits the zone.

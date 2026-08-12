@@ -1,5 +1,5 @@
-/** @file cherry_ccc_shim.c — cherry_ccc_* seam (Aliro responder) implemented over the lock-native
- * FiRa MAC; maps each call onto ultrawidelock_uwb_facade. */
+/** @file cherry_ccc_shim.c — cherry_ccc_* seam (credential responder) implemented over the
+ * lock-native FiRa MAC; maps each call onto ultrawidelock_uwb_facade. */
 
 #include <cherry/cherry.h>
 #include <cherry/cherry_ccc.h>
@@ -16,7 +16,7 @@
 
 LOG_MODULE_REGISTER(ultrawidelock_ccc_shim, LOG_LEVEL_INF);
 
-/** URSK length (bytes) the Aliro provisioned-STS path expects. */
+/** URSK length (bytes) the credential provisioned-STS path expects. */
 #define SHIM_URSK_LEN 32u
 
 /**
@@ -147,7 +147,7 @@ void cherry_destroy_sync(struct cherry *ctx)
 /* ---- CCC session create + lifetime --------------------------------------- */
 
 /**
- * @brief Allocate and initialize an Aliro responder CCC session.
+ * @brief Allocate and initialize an credential responder CCC session.
  * @param ctx Cherry context (unused).
  * @param callback CCC notification callback.
  * @param user_data User context to pass to callback.
@@ -218,8 +218,9 @@ void cherry_session_destroy(struct cherry_session *session)
 /* ---- Start / stop -------------------------------------------------------- */
 
 /**
- * @brief Start an Aliro UWB session by building a RangingConfiguration byte array from session
- * config, calling ultrawidelock_uwb_start_ultrawidelock, and emitting IDLE then ACTIVE status events.
+ * @brief Start an credential UWB session by building a RangingConfiguration byte array from session
+ * config, calling ultrawidelock_uwb_start_ultrawidelock, and emitting IDLE then ACTIVE status
+ * events.
  * @param session Base session.
  * @return CHERRY_ERR_INVALID_PARAMETER if session or config is null; CHERRY_ERR_SESSION_CONFIG if
  * URSK is not set; CHERRY_ERR_SESSION_INIT if UWB start fails; otherwise CHERRY_ERR_NONE.
@@ -228,9 +229,9 @@ enum cherry_err cherry_session_start(struct cherry_session *session)
 {
 	struct cherry_ccc_session *s = to_ccc(session);
 	const struct cherry_ccc_ultrawidelock_session_config *c;
-	// Configuration struct for ultrawidelock_uwb_start_ultrawidelock; holds session ID, channel, sync code,
-	// timing, slot geometry, STS index, UWB time, URSK key, and the RangingConfiguration byte
-	// array required to derive the CCC SaltedHash.
+	// Configuration struct for ultrawidelock_uwb_start_ultrawidelock; holds session ID,
+	// channel, sync code, timing, slot geometry, STS index, UWB time, URSK key, and the
+	// RangingConfiguration byte array required to derive the CCC SaltedHash.
 	struct ultrawidelock_uwb_ultrawidelock_cfg fcfg;
 	uint8_t rcfg[17];
 	int rc;
@@ -279,10 +280,10 @@ enum cherry_err cherry_session_start(struct cherry_session *session)
 	fcfg.ranging_config = rcfg;
 	fcfg.rc_len = sizeof(rcfg);
 
-	LOG_INF("Aliro start: sid=0x%08x ch=%u code=%u slot=%u blk=%ums spr=%u sts0=0x%08x",
+	LOG_INF("credential start: sid=0x%08x ch=%u code=%u slot=%u blk=%ums spr=%u sts0=0x%08x",
 		c->session_id, c->channel, c->sync_code_index, c->slot_duration,
 		c->ranging_duration_ms, c->slot_per_rr, c->sts_index);
-	LOG_INF("Aliro RangingConfig: proto=%02x%02x cfg=%02x%02x n=%u ran=%u spr=%u chap=%u "
+	LOG_INF("credential RangingConfig: proto=%02x%02x cfg=%02x%02x n=%u ran=%u spr=%u chap=%u "
 		"ps=%02x",
 		rcfg[0], rcfg[1], rcfg[2], rcfg[3], rcfg[12], rcfg[13], rcfg[14], rcfg[15],
 		rcfg[16]);

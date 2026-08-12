@@ -1,7 +1,7 @@
-// Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
-// seal/open framing shared by the reader and device sides of an Aliro session.
+// credential crypto public API: key derivation, AES-GCM secure channels, and wire message
+// seal/open framing shared by the reader and device sides of an credential session.
 /*
- * ultrawidelock_crypto — the credential-auth cryptography for the Aliro reader: the
+ * ultrawidelock_crypto — the credential-auth cryptography for the credential reader: the
  * P-256 / AES-256-GCM / SHA-256 suite and the key-derivation schedule that
  * turns a passed credential authentication into the 32-byte URSK (the UWB
  * ranging root) plus the secure-channel keys.
@@ -147,7 +147,7 @@ int ultrawidelock_secchan_open(struct ultrawidelock_secchan *sc, const uint8_t *
 		       uint8_t *pt);
 
 /*
- * ---- Aliro message security (§11.8): ranging/notification SDUs -----------
+ * ---- credential message security (§11.8): ranging/notification SDUs -----------
  *
  * Proto-1/2/3 SDUs (UWB Ranging Service M1-M4, Notification, Supplementary) ride
  * a SEPARATE AES-256-GCM channel from the AP secure channel: BleSKReader/

@@ -9,7 +9,7 @@
 # See coverage.sh for what is deliberately excluded and why.
 
 SRC="$ROOT/modules/ultrawidelock_uwb/src"
-ALIRO="$ROOT/modules/ultrawidelock_cred"
+CRED="$ROOT/modules/ultrawidelock_cred"
 SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
 
@@ -70,9 +70,9 @@ UNIT_SRCS=(
 # ultrawidelock_cred_stack compiles the same files on target) — crypto-free, so no
 # ultrawidelock_crypto/prim backend is needed here. hash + reader_policy are the
 # host-tested halves of the reader.
-unit_srcs_from_role "$ALIRO/roles/wire_codecs.list"
-unit_srcs_from_role "$ALIRO/roles/hash.list"
-unit_srcs_from_role "$ALIRO/roles/reader_policy.list"
+unit_srcs_from_role "$CRED/roles/wire_codecs.list"
+unit_srcs_from_role "$CRED/roles/hash.list"
+unit_srcs_from_role "$CRED/roles/reader_policy.list"
 
 # ultrawidelock_uwb roles. Everything radio-free: the CCC key schedule and STS engine, the
 # M1-M4 codec on BOTH ends (ultrawidelock_device = initiator side, tested against the
@@ -180,7 +180,7 @@ INCS=(
 	-I"$SRC/fira"
 	-I"$SRC/facade"
 	-I"$ROOT/ports/zephyr/shell"
-	-I"$ALIRO/include"
+	-I"$CRED/include"
 	-I"$ROOT/modules/ultrawidelock_port/include"
 	-I"$ROOT/modules/ultrawidelock_cred/include"
 	-I"$ROOT/modules/ultrawidelock_cred/src"
@@ -191,7 +191,7 @@ INCS=(
 	-I"$ROOT/modules/ultrawidelock_dw3000/include"
 )
 
-# The Aliro path is Kconfig-gated in-tree; the normal build has it on.
+# The credential path is Kconfig-gated in-tree; the normal build has it on.
 # _DEFAULT_SOURCE: glibc hides clock_gettime/CLOCK_MONOTONIC under strict
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
 # ULTRAWIDELOCK_PORT_HOST selects the libc backend in ultrawidelock_port.h / ultrawidelock_log.h; without it

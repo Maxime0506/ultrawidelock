@@ -11,14 +11,14 @@
 #include <stdint.h>
 
 /**
- * @brief Accumulates bytes into a heap-allocated Aliro UWB message.
- * @param message Aliro UWB message under construction, holding encoded M1-M4 attributes and
+ * @brief Accumulates bytes into a heap-allocated credential UWB message.
+ * @param message credential UWB message under construction, holding encoded M1-M4 attributes and
  * payload.
  * @param capacity Capacity of the message buffer.
  */
 struct ultrawidelock_uwb_msg_builder {
 	/**
-	 * @brief Aliro UWB message under construction, holding encoded M1-M4 attributes and
+	 * @brief credential UWB message under construction, holding encoded M1-M4 attributes and
 	 * payload.
 	 */
 	struct ultrawidelock_uwb_message *message;

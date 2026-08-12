@@ -2,7 +2,7 @@
  * Host test for the ESP32 matter-lock app glue (app_driver / app_main /
  * app_shell / door_lock_manager / door_lock_callbacks / ultrawidelock_reader_delegate)
  * against the matterfake/ CHIP + esp-matter recording doubles. "Theatre"
- * suite: the Matter stack, NimBLE host, console, LED driver and Aliro reader
+ * suite: the Matter stack, NimBLE host, console, LED driver and credential reader
  * are all fakes, so passing proves the units' branch logic and argument
  * plumbing (state machines, index bounds, persistence calls, event dispatch)
  * — never CHIP-stack, radio, hardware, or crypto truth.
@@ -11,7 +11,7 @@
  *   A  app_driver: LED init failure/success, lock-state colors, button init
  *   B  ultrawidelock_reader_delegate: getters, config set/clear, size validation
  *   C  door_lock_manager: init bounds, NVM blobs, users/credentials/schedules
- *   D  door_lock_callbacks: every plugin hook incl. the Aliro trust mirror
+ *   D  door_lock_callbacks: every plugin hook incl. the credential trust mirror
  *   E  app_main boot: endpoint/cluster assembly, GATT pre-registration
  *   F  Matter device events: SNTP, reader start, fabric-removal recovery
  *   G  attribute / identification callbacks
@@ -77,7 +77,7 @@ static void okc(const char *name, int cond)
 }
 
 /* ---- helpers -------------------------------------------------------------- */
-/* A wake with the Aliro session up (the usual case: ranging implies a session). */
+/* A wake with the credential session up (the usual case: ranging implies a session). */
 static void wake_push(uint32_t wake, int trusted, int32_t cm, int64_t advance_ms,
 		      int session = 1)
 {

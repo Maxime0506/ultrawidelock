@@ -25,7 +25,7 @@ extern "C" {
  * its own advertised list at 8 (ULTRAWIDELOCK_MAX_VERSIONS in ultrawidelock_ble.c). */
 #define ULTRAWIDELOCK_BLE_CENTRAL_MAX_VERSIONS 8u
 
-/* Aliro service data is 26 B on air: the 2-byte 0xFFF2 UUID then 24 B payload. */
+/* credential service data is 26 B on air: the 2-byte 0xFFF2 UUID then 24 B payload. */
 #define ULTRAWIDELOCK_BLE_CENTRAL_SVC_DATA_LEN 26u
 
 /* Reader identity recovered from one 0xFFF2 service-data advert. Field order is
@@ -84,7 +84,7 @@ int ultrawidelock_ble_central_blesk_salt(const struct ultrawidelock_ble_central_
  * for each inbound SDU, on_closed when link or CoC drops.
  */
 struct ultrawidelock_ble_central_callbacks {
-	/* The CoC is open and the peer's GATT facts are known: the Aliro
+	/* The CoC is open and the peer's GATT facts are known: the credential
 	 * transaction can start. peer stays valid only for the call. */
 	void (*on_ready)(uint16_t conn_handle, const struct ultrawidelock_ble_central_peer *peer);
 	/* One inbound SDU from the reader (an AP response or a sealed ranging SDU). */

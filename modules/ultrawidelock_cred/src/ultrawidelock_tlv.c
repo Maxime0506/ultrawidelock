@@ -1,6 +1,6 @@
 /**
  * @file ultrawidelock_tlv.c
- * BER-TLV parser and encoder for Aliro protocol: parse TLVs with definite length and advance
+ * BER-TLV parser and encoder for credential protocol: parse TLVs with definite length and advance
  * offset, compute encoded sizes, and write new TLVs. Promoted verbatim from
  * ultrawidelock_cred_stack (protocol/tlv.c); full BER incl. multi-byte and high-tag-number tags.
  */

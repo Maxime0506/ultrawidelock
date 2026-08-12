@@ -16,7 +16,7 @@ extern "C" {
 struct ultrawidelock_uwb_session;
 
 /**
- * @brief Framed Aliro BLE message with 4-byte header followed by TLV payload.
+ * @brief Framed credential BLE message with 4-byte header followed by TLV payload.
  * @param len Number of valid bytes in @p data.
  * @param data Message bytes (4-byte header followed by TLV attributes).
  */
@@ -151,9 +151,9 @@ enum ultrawidelock_uwb_err
 ultrawidelock_uwb_session_forced_suspend(struct ultrawidelock_uwb_session *session);
 
 /**
- * @brief Build and send a resume request for a suspended Aliro UWB ranging session.
- * @param session Aliro UWB session to resume.
- * @return Aliro UWB error code indicating success or failure of the resume request.
+ * @brief Build and send a resume request for a suspended credential UWB ranging session.
+ * @param session credential UWB session to resume.
+ * @return credential UWB error code indicating success or failure of the resume request.
  */
 enum ultrawidelock_uwb_err
 ultrawidelock_uwb_session_resume(struct ultrawidelock_uwb_session *session);

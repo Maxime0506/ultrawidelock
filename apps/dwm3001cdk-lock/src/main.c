@@ -1,7 +1,7 @@
 /*
- * DWM3001CDK standalone Aliro reader.
+ * DWM3001CDK standalone credential reader.
  *
- * One board: the nRF52833 runs the BLE peripheral and the Aliro reader engine,
+ * One board: the nRF52833 runs the BLE peripheral and the credential reader engine,
  * and the DW3110 in the same DWM3001C module does the UWB ranging. No host MCU
  * board, no seated DWM3000EVB, no NFC (the CDK has none).
  *
@@ -60,7 +60,7 @@ LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 /* Reported at the grant, because by then the unlock has done every P-256 and
  * AES-GCM operation it is going to do. The peak is cumulative since boot, so it
- * covers BLE pairing and the Aliro exchange too, not only the ranging. */
+ * covers BLE pairing and the credential exchange too, not only the ranging. */
 static void heap_peak_log(const char *when)
 {
 	size_t used = 0;
@@ -196,7 +196,7 @@ static void provisioning_mode(void)
  * WITHOUT THIS THE BOARD IS A BRICK AFTER A FAILED PAIRING, which is not a
  * bench annoyance but the ordinary failure. A commissioning that gets far
  * enough to install a fabric and then times out leaves the fabric stored; the
- * advert gate then offers Aliro 0xFFF2 instead of commissionable; the
+ * advert gate then offers credential 0xFFF2 instead of commissionable; the
  * controller can neither discover the node nor open a commissioning window on
  * an accessory it has already forgotten. On 2026-08-02 that state was reached
  * four times in one evening and cleared four times with a debugger. A user has
@@ -212,9 +212,9 @@ static void provisioning_mode(void)
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_FACTORY_RESET_BUTTON)
 /**
  * Check GPIO SW0 (active-low, pulled up in DTS) at boot. If SW0 is held (logical 1), blink the lock
- * LED as user feedback, erase Aliro provisioning and Matter fabric (if CONFIG_ULTRAWIDELOCK_MATTER_BLE is
- * on), and log that the board is now commissionable on the next boot. Returns silently if GPIO is
- * not ready or if SW0 is not held.
+ * LED as user feedback, erase credential provisioning and Matter fabric (if
+ * CONFIG_ULTRAWIDELOCK_MATTER_BLE is on), and log that the board is now commissionable on the next
+ * boot. Returns silently if GPIO is not ready or if SW0 is not held.
  */
 static void factory_reset_if_requested(void)
 {
@@ -249,11 +249,11 @@ static void factory_reset_if_requested(void)
 
 /**
  * Entry point for the DWM3001CDK reader application. Initializes provisioning and factory-reset
- * paths, starts the Aliro BLE reader and optional Matter commissioning and DFU receiver, then runs
- * the approach controller loop. Feeds the controller trusted ranges on each new latch generation
- * and observes untrusted ranges for departure detection. Grants unlock on approach prediction or
- * threshold crossing, relocks on departure or abort, and exits with an error code if reader startup
- * fails.
+ * paths, starts the credential BLE reader and optional Matter commissioning and DFU receiver, then
+ * runs the approach controller loop. Feeds the controller trusted ranges on each new latch
+ * generation and observes untrusted ranges for departure detection. Grants unlock on approach
+ * prediction or threshold crossing, relocks on departure or abort, and exits with an error code if
+ * reader startup fails.
  */
 int main(void)
 {
@@ -423,7 +423,7 @@ int main(void)
 	int64_t led_range_ms = 0;
 	bool present = false;
 	bool granted = false;
-	/* Rising-edge detector for the Aliro session, which is what arms the
+	/* Rising-edge detector for the credential session, which is what arms the
 	 * trajectory gate. See ultrawidelock_approach_session_up(). */
 	bool session_was_up = false;
 
@@ -664,7 +664,7 @@ int main(void)
 			break;
 		}
 
-		/* Departure: the peer's Aliro session ended (walked away / phone pocketed). iOS
+		/* Departure: the peer's credential session ended (walked away / phone pocketed). iOS
 		 * ranging silence alone does NOT mean departed (a still phone stops ranging too),
 		 * so gate on the session, not on range age. Tell Wallet Secured once and reset. */
 		if (present && !ultrawidelock_reader_session_active()) {

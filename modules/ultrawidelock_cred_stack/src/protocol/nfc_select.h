@@ -1,8 +1,8 @@
 /**
  * @file nfc_select.h
- * Parsed result of an NFC SELECT command for the Aliro applet: negotiated protocol version, maximum
- * command and response data lengths (from TLV or default), extended-length support, and the raw
- * proprietary information TLV (A5 tag) for further parsing.
+ * Parsed result of an NFC SELECT command for the credential applet: negotiated protocol version,
+ * maximum command and response data lengths (from TLV or default), extended-length support, and the
+ * raw proprietary information TLV (A5 tag) for further parsing.
  */
 #pragma once
 

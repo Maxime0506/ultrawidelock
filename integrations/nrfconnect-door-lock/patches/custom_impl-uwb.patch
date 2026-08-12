@@ -37,7 +37,7 @@ index 7731eb0..53dd5eb 100644
 +
 +/** @brief Range poll cadence while a session is active. */
 +constexpr uint32_t kPollMs{ 200 };
-+/** @brief Largest incoming Aliro ranging-service message we accept (stack-framed). */
++/** @brief Largest incoming credential ranging-service message we accept (stack-framed). */
 +constexpr size_t kMaxBleMessage{ 256 };
 +
 +/** @brief Map an ultrawidelock_uwb_err to a negative errno (0 on success). */
@@ -93,7 +93,7 @@ index 7731eb0..53dd5eb 100644
 +		return -ENODEV;
 +	}
 +
-+	/* Synthesize the DW3110's Aliro/CCC capabilities (channels 5+9, all slot
++	/* Synthesize the DW3110's credential/CCC capabilities (channels 5+9, all slot
 +	 * durations, SYNC codes 9..12, default+continuous+no hopping, RAN>=1,
 +	 * protocol 1.0, UWB config 0, pulse shape 0). ultrawidelock_uwb_adapter_create_reader
 +	 * deep-copies these, so the locals need not outlive this call. */
@@ -224,7 +224,7 @@ index 7731eb0..53dd5eb 100644
 +
 +	mSession = session;
 +	mHandle = sessionContextHandle;
-+	LOG_INF("Aliro ranging session configured (sid=0x%08x)", sessionId);
++	LOG_INF("credential ranging session configured (sid=0x%08x)", sessionId);
 +	return 0;
 +#else
  	return -ENOSYS;
@@ -340,7 +340,7 @@ index 7731eb0..53dd5eb 100644
 +			self->mCallbacks.mRangingSessionStateChanged(*self->mHandle, MapState(st));
 +		}
 +	} else if (event->type == ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_ERROR) {
-+		LOG_INF("Aliro session error: 0x%x", static_cast<unsigned int>(event->data.error->status_err));
++		LOG_INF("credential session error: 0x%x", static_cast<unsigned int>(event->data.error->status_err));
 +	}
 +
 +	ultrawidelock_uwb_session_event_free(event);
@@ -368,7 +368,7 @@ index 0688558..111fbe3 100644
   *
   * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 + *
-+ * UltraWideLock UltraWideBandImpl: drives a live Apple Wallet Aliro UWB ranging session
++ * UltraWideLock UltraWideBandImpl: drives a live Apple Wallet credential UWB ranging session
 + * on the lock-native FiRa MAC (DW3110) via the vendored Qorvo ultrawidelock_uwb_adapter.
 + * The adapter runs the M1-M4 ranging-setup handshake; its cherry_ccc_* seam is
 + * implemented by the ultrawidelock_uwb module's cherry_ccc_shim.c over fira_session +

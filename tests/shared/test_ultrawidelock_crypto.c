@@ -390,7 +390,7 @@ int main(void)
 		     ultrawidelock_crypto_verify_cryptogram(csk, crg, ULTRAWIDELOCK_CRYPTOGRAM_LEN, pt) < 0);
 	}
 
-	/* BLE advertisement Dynamic Tag (Aliro 1.0 sect. 11.3.1 / sect. 20 examples).
+	/* BLE advertisement Dynamic Tag (credential 1.0 sect. 11.3.1 / sect. 20 examples).
 	 * First pin the host AES-128 double itself (FIPS-197 appendix C.1), then the
 	 * derivation layout against all three spec worked examples (same expiry
 	 * 0x7a4b8500), then the no-clock form as a pinned self-consistency vector

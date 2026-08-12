@@ -2,7 +2,7 @@
  * Mbed TLS mutex callbacks over FreeRTOS.
  *
  * Two tasks reach the PSA crypto core on this image: the OpenThread task, and
- * the task that runs the Aliro exchange behind NimBLE. They share the PSA key
+ * the task that runs the credential exchange behind NimBLE. They share the PSA key
  * store, its slot table and its DRBG state, so the library needs real locking
  * rather than the empty stubs a single-threaded image could get away with.
  *

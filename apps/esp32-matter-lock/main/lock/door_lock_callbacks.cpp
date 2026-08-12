@@ -92,8 +92,8 @@ bool emberAfPluginDoorLockGetCredential(chip::EndpointId endpointId, uint16_t cr
 // Matter DoorLock plugin hook: store a credential for an endpoint via
 // BoltLockMgr().SetCredential.
 // When CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB is enabled and the write succeeds with an
-// Occupied status, a 65-byte Aliro endpoint key (evictable or non-evictable),
-// the raw key is additionally mirrored into the Aliro reader's trust store via
+// Occupied status, a 65-byte credential endpoint key (evictable or non-evictable),
+// the raw key is additionally mirrored into the credential reader's trust store via
 // ultrawidelock_reader_provision_add_trust, so the reader accepts ranging auth from the
 // Wallet credential Apple just installed. An Available status on the same types
 // is the erase half of ClearCredential and revokes the anchor by its index.
@@ -108,7 +108,7 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 	bool ok = BoltLockMgr().SetCredential(endpointId, credentialIndex, creator, modifier,
 					      credentialStatus, credentialType, credentialData);
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
-	// Mirror an occupied Aliro endpoint key (the per-device key the phone signs
+	// Mirror an occupied credential endpoint key (the per-device key the phone signs
 	// with during the ranging auth) into the reader's raw-key trust store, so the
 	// handoff-started reader accepts the Wallet credential Apple just installed.
 	if (ok && credentialStatus == DlCredentialStatus::kOccupied &&
@@ -122,7 +122,7 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 		int rc = ultrawidelock_reader_provision_add_trust(
 			credentialData.data(), static_cast<uint8_t>(credentialType), credentialIndex,
 			ULTRAWIDELOCK_CRED_INDEX_NONE);
-		ESP_LOGI(TAG, "Aliro endpoint key -> reader trust store (type=%u rc=%d)",
+		ESP_LOGI(TAG, "credential endpoint key -> reader trust store (type=%u rc=%d)",
 			 static_cast<unsigned>(credentialType), rc);
 		// rc == 1 is "already trusted", which is success. A negative rc means the
 		// reader is NOT holding this key, so reporting success would leave the
@@ -140,7 +140,7 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 	     credentialType == CredentialTypeEnum::kAliroNonEvictableEndpointKey)) {
 		int rc = ultrawidelock_reader_provision_remove_trust(
 			static_cast<uint8_t>(credentialType), credentialIndex);
-		ESP_LOGW(TAG, "Aliro endpoint key REVOKED (type=%u index=%u rc=%d)",
+		ESP_LOGW(TAG, "credential endpoint key REVOKED (type=%u index=%u rc=%d)",
 			 static_cast<unsigned>(credentialType),
 			 static_cast<unsigned>(credentialIndex), rc);
 		// rc == 1 is "no such anchor", which is the right answer to a removal

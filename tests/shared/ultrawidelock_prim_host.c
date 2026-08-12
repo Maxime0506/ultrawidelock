@@ -320,7 +320,7 @@ static void gcm_core(const uint8_t key[32], const uint8_t *nonce, size_t nonce_l
 	aes256_expand(key, rk);
 	aes256_encrypt(rk, h, h); /* H = E(K, 0^128) */
 
-	/* 96-bit nonce -> J0 = nonce | 0^31 | 1 (the only case Aliro uses). */
+	/* 96-bit nonce -> J0 = nonce | 0^31 | 1 (the only case credential uses). */
 	memcpy(j0, nonce, nonce_len < 12 ? nonce_len : 12);
 	j0[15] = 1;
 

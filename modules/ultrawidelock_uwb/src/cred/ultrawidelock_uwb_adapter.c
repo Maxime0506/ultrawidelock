@@ -13,7 +13,7 @@
 LOG_MODULE_REGISTER(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 
 /**
- * @brief Map a CCC error code to its Aliro UWB equivalent, treating unknown errors as internal
+ * @brief Map a CCC error code to its credential UWB equivalent, treating unknown errors as internal
  * failures.
  * @param err CCC error code to translate.
  * @return Corresponding `enum ultrawidelock_uwb_err` value, or `ULTRAWIDELOCK_UWB_ERR_INTERNAL` if
@@ -151,7 +151,7 @@ ultrawidelock_uwb_adapter_create_reader(struct cherry *cherry_ctx,
 			: adapter->ccc_caps.minimum_ran_multiplier;
 	adapter->diag_config = NULL;
 
-	LOG_INF("Aliro adapter created");
+	LOG_INF("credential adapter created");
 	return adapter;
 }
 
@@ -175,7 +175,7 @@ void ultrawidelock_uwb_adapter_set_diagnostics(struct ultrawidelock_uwb_adapter 
 }
 
 /**
- * @brief Destroy an Aliro UWB adapter, freeing all associated CCC capabilities arrays and
+ * @brief Destroy an credential UWB adapter, freeing all associated CCC capabilities arrays and
  * diagnostic configuration.
  */
 void ultrawidelock_uwb_adapter_destroy(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx)

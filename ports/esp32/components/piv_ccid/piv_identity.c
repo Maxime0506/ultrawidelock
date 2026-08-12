@@ -68,7 +68,8 @@ static bool s_ready;
 static uint8_t s_certificate_der[PIV_CERT_MAX];
 
 /**
- * Fill a buffer with random bytes from the Aliro CSPRNG. Return 0 on success or nonzero on error.
+ * Fill a buffer with random bytes from the credential CSPRNG. Return 0 on success or nonzero on
+ * error.
  */
 static int certificate_rng(void *ctx, unsigned char *out, size_t len)
 {

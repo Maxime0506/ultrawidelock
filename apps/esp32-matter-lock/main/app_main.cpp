@@ -1,9 +1,8 @@
 // Matter application main: door lock endpoint setup, Matter lifecycle event handling, and (when
-// CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB is set) startup/coexistence wiring for the Aliro BLE+UWB reader
-// alongside the Matter BLE commissioning transport.
-// Owns the Aliro reader background task (started once on commissioning-complete or at boot if
-// already commissioned) and the Matter attribute/identify/device-event callbacks required by
-// esp-matter's node/cluster framework.
+// CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB is set) startup/coexistence wiring for the credential BLE+UWB
+// reader alongside the Matter BLE commissioning transport. Owns the credential reader background
+// task (started once on commissioning-complete or at boot if already commissioned) and the Matter
+// attribute/identify/device-event callbacks required by esp-matter's node/cluster framework.
 /*
    This example code is in the Public Domain (or CC0 licensed, at your option.)
 
@@ -121,7 +120,7 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 #endif // CONFIG_ENABLE_ENCRYPTED_OTA
 
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
-// BLE coexistence (nRF-style local UWB unlock): the Aliro reader shares Matter's
+// BLE coexistence (nRF-style local UWB unlock): the credential reader shares Matter's
 // NimBLE host — Matter keeps BLE up (CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n), its
 // GATT service is registered via BLEMgrImpl().ConfigureExtraServices() before
 // esp_matter::start (see app_main), and the reader's advertiser + L2CAP CoC come
@@ -130,11 +129,11 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 // UWB range then drives the Matter lock to Unlocked. This replaces the old handoff,
 // which crashed because NimBLE can't be re-inited after Matter reclaims BLE.
 #define ULTRAWIDELOCK_UNLOCK_RANGE_CM 100  // approach threshold: unlock at/under this (median cm)
-#define ULTRAWIDELOCK_RELOCK_RANGE_CM                                                                      \
+#define ULTRAWIDELOCK_RELOCK_RANGE_CM                                                              \
 	250 // depart threshold: relock past this — wide band vs UWB range noise
 #define ULTRAWIDELOCK_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
 #define ULTRAWIDELOCK_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
-// Departure is the Aliro session ending, not a ranging timeout, so there is no
+// Departure is the credential session ending, not a ranging timeout, so there is no
 // silence threshold to tune here. Every value tried relocked the bolt under a phone
 // that had simply stopped moving: iOS pauses ranging when the user stands still,
 // measured at 1.6 s, 2.4 s and 3.07 s in successive bench runs, the last one with
@@ -160,18 +159,18 @@ static app::DataModel::Nullable<uint16_t> ultrawidelock_operating_user(void)
 	uint8_t cred[65];
 
 	if (!ultrawidelock_reader_authenticated_credential(cred)) {
-		ESP_LOGW(TAG, "no authenticated Aliro credential; LockOperation stays unattributed");
+		ESP_LOGW(TAG, "no authenticated credential; LockOperation stays unattributed");
 		return app::DataModel::NullNullable;
 	}
 
 	uint16_t user_index = BoltLockMgr().UserIndexForAliroCredential(ByteSpan(cred, sizeof(cred)));
 
 	if (user_index == 0) {
-		ESP_LOGW(TAG, "Aliro credential matches no stored user; LockOperation stays "
+		ESP_LOGW(TAG, "credential matches no stored user; LockOperation stays "
 			      "unattributed (did Apple send SetUser, not just SetCredential?)");
 		return app::DataModel::NullNullable;
 	}
-	ESP_LOGI(TAG, "Aliro operation attributed to user index %u", user_index);
+	ESP_LOGI(TAG, "credential operation attributed to user index %u", user_index);
 	return app::DataModel::MakeNullable(user_index);
 }
 
@@ -196,9 +195,9 @@ static void schedule_bolt_unlock(void)
 }
 
 /**
- * Schedule the door bolt to lock on the Aliro endpoint, attributing the operation to the credential
- * owner resolved from the current reader authentication context. Defers the lock call to the Matter
- * device layer work queue.
+ * Schedule the door bolt to lock on the credential endpoint, attributing the operation to the
+ * credential owner resolved from the current reader authentication context. Defers the lock call to
+ * the Matter device layer work queue.
  */
 static void schedule_bolt_lock(void)
 {
@@ -231,7 +230,7 @@ static void on_uwb_range(void)
 	}
 }
 
-// Background task that starts the Aliro reader and drives approach-based lock/unlock from UWB
+// Background task that starts the credential reader and drives approach-based lock/unlock from UWB
 // range. Waits for the shared NimBLE host to be usable (host synced, Matter's advertiser released)
 // before calling ultrawidelock_reader_start_attached(), instead of sleeping a flat second. Then
 // runs forever as the sole auto-lock driver (the fixed Matter auto-relock is disabled). See the
@@ -281,7 +280,7 @@ static void ultrawidelock_reader_task(void *arg)
 	// that stops closing or misses its arrival window relocks before anyone
 	// is in reach. Presence behaviour is unchanged — slow approaches and
 	// stand-at-door still unlock via the median path. This task additionally:
-	//   - ties the Wallet grant (Aliro step 23, Unsecured) to the bolt itself,
+	//   - ties the Wallet grant (credential step 23, Unsecured) to the bolt itself,
 	//     never to the bare trust bit: trust lands at whatever range the first
 	//     block resolves at (bench: 300 cm), so granting there tells the phone
 	//     "unlocked" while the door is still locked, for the whole walk-in. Both
@@ -290,7 +289,7 @@ static void ultrawidelock_reader_task(void *arg)
 	//   - sends Secured on the depart and abort transitions, while the link is
 	//     still up — the peer-gone path below normally runs after the phone has
 	//     already dropped BLE, and the notify is then discarded;
-	//   - treats the peer as gone (relock + Secured) when its Aliro SESSION ends,
+	//   - treats the peer as gone (relock + Secured) when its credential SESSION ends,
 	//     never on ranging silence: iOS stops ranging when the phone stops moving,
 	//     measured at 3.07 s with the phone 26 cm from the reader, which relocked
 	//     the bolt under someone standing at the door and re-unlocked when ranging
@@ -367,7 +366,7 @@ static void ultrawidelock_reader_task(void *arg)
 		switch (act) {
 		case ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT:
 			// ETA inside the retraction window: start now, open at arrival.
-			ESP_LOGI(TAG, "Aliro arrival in %d ms (%d cm/s closing): unlocking early",
+			ESP_LOGI(TAG, "credential arrival in %d ms (%d cm/s closing): unlocking early",
 				 (int)ultrawidelock_approach_eta_ms(&approach),
 				 (int)ultrawidelock_approach_vel_cm_s(&approach));
 			ultrawidelock_lab_evi("predict.fire", "eta_ms",
@@ -379,14 +378,14 @@ static void ultrawidelock_reader_task(void *arg)
 			granted = true;
 			break;
 		case ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD:
-			ESP_LOGI(TAG, "Aliro approach %d cm (est): unlocking",
+			ESP_LOGI(TAG, "credential approach %d cm (est): unlocking",
 				 (int)ultrawidelock_approach_est_cm(&approach));
 			schedule_bolt_unlock();
 			ultrawidelock_reader_notify_unlock(true);
 			granted = true;
 			break;
 		case ULTRAWIDELOCK_APPROACH_RELOCK_DEPART:
-			ESP_LOGI(TAG, "Aliro departed %d cm (est): relocking",
+			ESP_LOGI(TAG, "credential departed %d cm (est): relocking",
 				 (int)ultrawidelock_approach_est_cm(&approach));
 			schedule_bolt_lock();
 			// Still connected here, so this one actually reaches the phone
@@ -397,7 +396,7 @@ static void ultrawidelock_reader_task(void *arg)
 		case ULTRAWIDELOCK_APPROACH_RELOCK_ABORT:
 			// Opened on a prediction, but the approach stopped/turned or
 			// arrival is overdue: put the bolt back.
-			ESP_LOGI(TAG, "Aliro approach aborted (%d cm/s closing): relocking",
+			ESP_LOGI(TAG, "credential approach aborted (%d cm/s closing): relocking",
 				 (int)ultrawidelock_approach_vel_cm_s(&approach));
 			ultrawidelock_lab_ev("predict.abort");
 			schedule_bolt_lock();
@@ -408,7 +407,7 @@ static void ultrawidelock_reader_task(void *arg)
 			break;
 		}
 
-		// Departure: the peer's Aliro session is gone. Not ranging silence — iOS
+		// Departure: the peer's credential session is gone. Not ranging silence — iOS
 		// stops ranging when the phone stops moving, so silence means "standing
 		// still", which is the opposite of departed. The link is the presence
 		// signal; walking away ends it via the RSSI gate's close path, and a
@@ -418,7 +417,7 @@ static void ultrawidelock_reader_task(void *arg)
 			bool relocked = ultrawidelock_approach_gone(&approach) ==
 					ULTRAWIDELOCK_APPROACH_RELOCK_DEPART;
 
-			ESP_LOGI(TAG, "Aliro peer gone (session ended)%s%s",
+			ESP_LOGI(TAG, "credential peer gone (session ended)%s%s",
 				 relocked ? ": relock" : "", granted ? " + secured" : "");
 			if (relocked) {
 				schedule_bolt_lock();
@@ -432,8 +431,9 @@ static void ultrawidelock_reader_task(void *arg)
 	}
 }
 
-// Start the Aliro reader task exactly once, idempotent across repeated calls (e.g. from multiple
-// event callbacks). Spawns ultrawidelock_reader_task on its own FreeRTOS task; logs the outcome.
+// Start the credential reader task exactly once, idempotent across repeated calls (e.g. from
+// multiple event callbacks). Spawns ultrawidelock_reader_task on its own FreeRTOS task; logs the
+// outcome.
 static void start_ultrawidelock_reader_once(void)
 {
 	static bool started = false;
@@ -447,10 +447,10 @@ static void start_ultrawidelock_reader_once(void)
 	 * rather than assumed. */
 	xTaskCreate(ultrawidelock_reader_task, "ultrawidelock_reader", 12288, nullptr, 5,
 		    &ultrawidelock_reader_task_handle);
-	ESP_LOGI(TAG, "Aliro reader (attach mode) task started");
+	ESP_LOGI(TAG, "credential reader (attach mode) task started");
 }
 
-/* SNTP feeds ONLY the Aliro advertisement's dynamic-tag expiry (ultrawidelock_ble.c);
+/* SNTP feeds ONLY the credential advertisement's dynamic-tag expiry (ultrawidelock_ble.c);
  * nothing credential- or Matter-facing consumes it here, so a spoofed server
  * can at worst break approach-unlock. Fail-open: until the first sync the advert carries the
  * spec's "expiry unavailable" form, which phones still resolve. */
@@ -461,7 +461,7 @@ static void sntp_synced_cb(struct timeval *tv)
 }
 
 // Start SNTP once the interface has an address; every (re)sync steps the wall
-// clock and pokes the Aliro advertiser through sntp_synced_cb.
+// clock and pokes the credential advertiser through sntp_synced_cb.
 static void start_sntp_once(void)
 {
 	static bool started = false;
@@ -472,14 +472,14 @@ static void start_sntp_once(void)
 	esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
 	cfg.sync_cb = sntp_synced_cb;
 	esp_err_t err = esp_netif_sntp_init(&cfg);
-	ESP_LOGI(TAG, "SNTP started for the Aliro dynamic tag (%s)", esp_err_to_name(err));
+	ESP_LOGI(TAG, "SNTP started for the credential dynamic tag (%s)", esp_err_to_name(err));
 }
 #endif // CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 
-// Matter device-event callback: logs commissioning/fabric/BLE lifecycle events and, when Aliro
-// BLE+UWB support is enabled, starts the Aliro reader once commissioning completes (Matter releases
-// the BLE advertiser at that point). On the last fabric being removed, reopens a DNS-SD-only
-// commissioning window if one is not already open.
+// Matter device-event callback: logs commissioning/fabric/BLE lifecycle events and, when credential
+// BLE+UWB support is enabled, starts the credential reader once commissioning completes (Matter
+// releases the BLE advertiser at that point). On the last fabric being removed, reopens a
+// DNS-SD-only commissioning window if one is not already open.
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
 	switch (event->Type) {
@@ -501,7 +501,7 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 		ESP_LOGI(TAG, "Commissioning complete");
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 		// Matter stops advertising when commissioning completes; the reader can
-		// now take the advertiser and run the local BLE+UWB Aliro transaction.
+		// now take the advertiser and run the local BLE+UWB credential transaction.
 		start_ultrawidelock_reader_once();
 #endif
 		break;
@@ -530,7 +530,7 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 		ESP_LOGI(TAG, "Fabric removed successfully");
 		if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0) {
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
-			/* The last home just removed this lock: drop its Aliro reader
+			/* The last home just removed this lock: drop its credential reader
 			 * config (delegate RAM) and revert the reader identity + trust
 			 * store to the dev defaults (RAM + NVS). Otherwise the old
 			 * home's phones could still authenticate, and the stale
@@ -613,10 +613,10 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
 }
 
 // Application entry point: initializes NVS, the lock LED, power management, and the Matter node
-// with a door lock endpoint (adding Aliro provisioning/BLE-UWB clusters and delegate when enabled).
-// See app_priv.h. Schedules the open onto the Matter task, which is the only
-// thread allowed to drive the server, and logs the outcome at WARN so it lands
-// in the boot log at the default level rather than needing `log` turned up.
+// with a door lock endpoint (adding credential provisioning/BLE-UWB clusters and delegate when
+// enabled). See app_priv.h. Schedules the open onto the Matter task, which is the only thread
+// allowed to drive the server, and logs the outcome at WARN so it lands in the boot log at the
+// default level rather than needing `log` turned up.
 void app_commissioning_window_open()
 {
 	/* Not discarded: a schedule that fails means the window never opens, and
@@ -670,7 +670,7 @@ void app_print_onboarding_codes()
 
 /* Long press opens a commissioning window rather than the factory reset the
  * esp-matter examples map here. On a lock a mispress should cost a 3 minute
- * advertisement, not every fabric and the Aliro trust store. */
+ * advertisement, not every fabric and the credential trust store. */
 static void on_button_long_press(void *button_handle, void *usr_data)
 {
 	(void)button_handle;
@@ -678,9 +678,9 @@ static void on_button_long_press(void *button_handle, void *usr_data)
 	app_commissioning_window_open();
 }
 
-// Registers the Aliro reader's GATT service with the BLE host before esp_matter::start so it
+// Registers the credential reader's GATT service with the BLE host before esp_matter::start so it
 // coexists with CHIPoBLE. Starts Matter, prints onboarding codes, and if already commissioned (e.g.
-// after a reboot) starts the Aliro reader immediately; otherwise the reader starts on the
+// after a reboot) starts the credential reader immediately; otherwise the reader starts on the
 // kCommissioningComplete event. Finally launches the interactive console (app_shell_start), which
 // must not run alongside esp_matter::console::init since both read the same console UART.
 extern "C" void app_main()
@@ -766,7 +766,7 @@ extern "C" void app_main()
 #endif
 	// 0 disables CHIP's fixed auto-relock timer (DoorLockServer skips scheduling when
 	// AutoRelockTime == 0). Relock is driven by proximity instead: the reader task
-	// relocks when the Aliro peer leaves range (see ultrawidelock_reader_task).
+	// relocks when the credential peer leaves range (see ultrawidelock_reader_task).
 	cluster::door_lock::attribute::create_auto_relock_time(door_lock_cluster, 0);
 
 	door_lock_endpoint_id = endpoint::get_id(endpoint);
@@ -783,20 +783,20 @@ extern "C" void app_main()
 #endif
 
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
-	/* Register the Aliro reader's GATT service on Matter's NimBLE host BEFORE the
+	/* Register the credential reader's GATT service on Matter's NimBLE host BEFORE the
 	 * Matter server builds its GATT table, so the reader's 0xFFF2 service coexists
 	 * with CHIPoBLE. Must be called before esp_matter::start (which runs InitServer). */
 	{
 		const struct ble_gatt_svc_def *ultrawidelock_svc =
 			static_cast<const struct ble_gatt_svc_def *>(ultrawidelock_reader_ble_prepare());
 		if (ultrawidelock_svc != nullptr) {
-			// Local vector wrapping the Aliro GATT service definition for registration with the BLE host's
-			// combined service table.
+			// Local vector wrapping the credential GATT service definition for
+			// registration with the BLE host's combined service table.
 			std::vector<struct ble_gatt_svc_def> svcs = {*ultrawidelock_svc};
 			CHIP_ERROR e =
 				chip::DeviceLayer::Internal::BLEMgrImpl().ConfigureExtraServices(
 					svcs, true);
-			ESP_LOGI(TAG, "Aliro GATT extra-service register: %" CHIP_ERROR_FORMAT,
+			ESP_LOGI(TAG, "credential GATT extra-service register: %" CHIP_ERROR_FORMAT,
 				 e.Format());
 		} else {
 			ESP_LOGE(TAG,
@@ -843,7 +843,7 @@ extern "C" void app_main()
 	/* Already commissioned (e.g. a reboot): Matter is not advertising over BLE, so
 	 * bring the reader up now. A fresh commission starts it on kCommissioningComplete. */
 	if (chip::Server::GetInstance().GetFabricTable().FabricCount() > 0) {
-		ESP_LOGI(TAG, "Already commissioned; starting Aliro reader on shared host");
+		ESP_LOGI(TAG, "Already commissioned; starting credential reader on shared host");
 		start_ultrawidelock_reader_once();
 	}
 #endif

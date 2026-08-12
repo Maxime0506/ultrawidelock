@@ -1,5 +1,5 @@
 /**
- * @file test_ultrawidelock_stack.cpp — the Aliro source stack on host.
+ * @file test_ultrawidelock_stack.cpp — the credential source stack on host.
  *
  * Files under test:
  *   modules/ultrawidelock_cred_stack/src/cred_stack.cpp  error strings, RFC 3339 time,
@@ -823,7 +823,7 @@ static void test_ble_framing(void)
 	feed_ble(0, oversized, 4);
 	T_EQ("reserved protocol bits close the session", (long)stackfake.termination_calls, 1L);
 
-	/* A HEADER SPLIT ACROSS SDUs is held, not misread. Aliro messages span
+	/* A HEADER SPLIT ACROSS SDUs is held, not misread. credential messages span
 	 * several L2CAP SDUs and the reassembler is what makes that work. */
 	ready();
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
@@ -929,7 +929,7 @@ static void test_ble_uwb_messages(void)
 
 /* ---- session.cpp: the BLE flow, end to end --------------------------------- */
 
-/** Wrap @p payload in the four-byte Aliro BLE header. */
+/** Wrap @p payload in the four-byte credential BLE header. */
 static size_t frame_ble(uint8_t *out, uint8_t protocol, uint8_t message_id, const uint8_t *payload,
 			size_t length)
 {

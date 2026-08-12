@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # build.sh {build|rebuild|flash|flash-erase|build-flash}: build the
-# Aliro NFC+UWB image for the nRF5340 DK from the self-contained ./workspace.
+# credential NFC+UWB image for the nRF5340 DK from the self-contained ./workspace.
 # Run scripts/bootstrap.sh first.
 #
 # Named for its board because BOARD below is hardcoded: this script builds
@@ -21,7 +21,7 @@
 #   PRISTINE=1 apps/nrf5340dk-lock/build.sh build       # same as rebuild
 #   UWB_SELFTEST=1 apps/nrf5340dk-lock/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 #   PRETTY=1 apps/nrf5340dk-lock/build.sh build         # curated/clean console (reversible; default verbose)
-#   ULTRAWIDELOCK_SOURCE=0 apps/nrf5340dk-lock/build.sh build   # legacy Nordic Aliro binary fallback
+#   ULTRAWIDELOCK_SOURCE=0 apps/nrf5340dk-lock/build.sh build   # legacy Nordic credential binary fallback
 #   UWB_CHIP=dw3720 apps/nrf5340dk-lock/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 #   LTO=1 apps/nrf5340dk-lock/build.sh build            # link-time optimisation (overlays/lto.conf)
 #   DFU=1 apps/nrf5340dk-lock/build.sh build            # MCUboot + Matter OTA (overlays/sysbuild-dfu.conf)
@@ -61,7 +61,7 @@ PATCH_STATE="$WS/.ultrawidelock-patches.sha256"
 # One build root for the whole repo (Makefile exports ULTRAWIDELOCK_BUILD_ROOT); every
 # producer derives its own subdirectory under it, so `make clean` is one rm.
 # ULTRAWIDELOCK_SOURCE picks the subdirectory rather than reconfiguring one shared dir:
-# the two link different Aliro implementations, and sharing a directory made
+# the two link different credential implementations, and sharing a directory made
 # every flip a from-scratch rebuild. Validated in do_build, not here, so an
 # unknown value still dies with the message that names the legal ones.
 BUILD_ROOT="${ULTRAWIDELOCK_BUILD_ROOT:-$TREE/build}"
@@ -176,7 +176,7 @@ preflight() {
   ok "overlays present"
 }
 
-# Build the Aliro UWB firmware image. Runs preflight checks, resolves chip config, applies optional overlays (pretty console, latency diagnostics, self-test), computes a signature from all -D flags, and runs west build (pristine if config changed, incremental otherwise). Writes build signature to a cache file to detect future flag changes. Outputs merged.hex to BUILD directory.
+# Build the credential UWB firmware image. Runs preflight checks, resolves chip config, applies optional overlays (pretty console, latency diagnostics, self-test), computes a signature from all -D flags, and runs west build (pristine if config changed, incremental otherwise). Writes build signature to a cache file to detect future flag changes. Outputs merged.hex to BUILD directory.
 do_build() {
   preflight
   resolve_chip
@@ -190,7 +190,7 @@ do_build() {
   local strict=""
   [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_ULTRAWIDELOCK_RANGE_GATE_STRICT=y"
 
-  # The independent public API is the default Aliro implementation. Keep the
+  # The independent public API is the default credential implementation. Keep the
   # Nordic archive available as an explicit diagnostic fallback so the two
   # implementations can still be compared while the source stack matures.
   local ultrawidelock_source="${ULTRAWIDELOCK_SOURCE:-1}"
@@ -209,12 +209,12 @@ do_build() {
   if [ -n "$ultrawidelock_trace" ]; then
     local trace_patch="$TREE/integration/patches/ultrawidelock-ble-trace.patch"
     if git -C "$ADDON" apply --check --reverse "$trace_patch" 2>/dev/null; then
-      ok "Aliro BLE trace integration already applied"
+      ok "credential BLE trace integration already applied"
     elif git -C "$ADDON" apply --check "$trace_patch" 2>/dev/null; then
       git -C "$ADDON" apply --whitespace=nowarn "$trace_patch"
-      ok "Aliro BLE trace integration applied"
+      ok "credential BLE trace integration applied"
     else
-      die "Aliro BLE trace patch does not match the workspace" "$trace_patch"
+      die "credential BLE trace patch does not match the workspace" "$trace_patch"
     fi
   fi
   # NFC=pn532|st25r|none selects the reader behind the ultrawidelock_nfc transport seam.
@@ -399,7 +399,7 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${ultrawidelock_trace:+   (Aliro trace ON)}${lto_conf:+   (LTO ON)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${ultrawidelock_trace:+   (credential trace ON)}${lto_conf:+   (LTO ON)}"
   if [ "$ultrawidelock_source" = 1 ]; then
     kv "ultrawidelock" "in-tree source (default)"
   else
@@ -479,12 +479,12 @@ do_build() {
 
   if [ "$ultrawidelock_source" = 1 ]; then
     local ultrawidelock_map="$BUILD/matter-ultrawidelock-door-lock-app/zephyr/zephyr.map"
-    [ -f "$ultrawidelock_map" ] || die "Aliro source link map not found" "$ultrawidelock_map"
+    [ -f "$ultrawidelock_map" ] || die "credential source link map not found" "$ultrawidelock_map"
     if grep -q 'libaliro_ble\.a' "$ultrawidelock_map"; then
-      die "proprietary Aliro archive still contributed linked code" \
+      die "proprietary credential archive still contributed linked code" \
           "source stack must define the complete application-used public ABI"
     fi
-    ok "Aliro source stack linked without libaliro_ble.a members"
+    ok "credential source stack linked without libaliro_ble.a members"
   fi
   printf '%s' "$sig" > "$sig_file"
   local secs=$(( SECONDS - start ))

@@ -27,12 +27,12 @@ int matter_commission_init(void);
  * Whether this node currently holds a commissioned Matter fabric.
  *
  * Asked by the advertiser, which can carry the Matter commissionable
- * service data OR the Aliro reader tag but not both: flags 3 + Matter 12 +
- * Aliro 26 is 41 bytes in a 31-byte legacy packet, and a second advertising
+ * service data OR the credential reader tag but not both: flags 3 + Matter 12 +
+ * credential 26 is 41 bytes in a 31-byte legacy packet, and a second advertising
  * set costs 24.8 KB of RAM.
  *
  * A device with no fabric MUST stay commissionable. Provisioning the reader
- * identity used to flip the advert to Aliro on its own, which left a board
+ * identity used to flip the advert to credential on its own, which left a board
  * that had just been provisioned -- and had lost its fabric to a failed
  * pairing -- invisible to Add Accessory and impossible to recover without
  * erasing it.
@@ -43,7 +43,7 @@ bool matter_commission_has_fabric(void);
  * True while an AdministratorCommissioning window is open.
  *
  * The advertiser needs this: a node that HAS a fabric normally advertises as
- * an Aliro reader, and doing that during a commissioning window hides it from
+ * an credential reader, and doing that during a commissioning window hides it from
  * the very ecosystem the window was opened for.
  */
 bool matter_commission_window_open(void);

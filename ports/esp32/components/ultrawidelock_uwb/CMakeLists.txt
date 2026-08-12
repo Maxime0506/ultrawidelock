@@ -1,4 +1,4 @@
-# UltraWideLock UWB (Aliro DS-TWR responder) engine as an ESP-IDF component.
+# UltraWideLock UWB (credential DS-TWR responder) engine as an ESP-IDF component.
 # Additive: reuses modules/ultrawidelock_uwb/src + modules/ultrawidelock_dw3000 from the repo unchanged.
 # The engine is platform-neutral: it takes its OS surface from ultrawidelock_port.h and
 # its logging from ultrawidelock_log.h (modules/ultrawidelock_port/include), which select the ESP-IDF
@@ -6,7 +6,7 @@
 # platform SPI/GPIO layer is the ESP-IDF backend in port/.
 # Source set = the role manifests in modules/{ultrawidelock_uwb,ultrawidelock_dw3000}/roles/ — the
 # SAME lists modules/ultrawidelock_uwb/CMakeLists.txt reads for CONFIG_ULTRAWIDELOCK_UWB +
-# RESPONDER + ALIRO + CRYPTO_MBEDTLS (no PRETTY/SHELL/SELFTEST, no uwb_rxdiag:
+# RESPONDER + CRED + CRYPTO_MBEDTLS (no PRETTY/SHELL/SELFTEST, no uwb_rxdiag:
 # those stay Zephyr-module literals) — plus the port/*.c locals below.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
@@ -27,7 +27,7 @@ ultrawidelock_role_sources("${UWBROLES}/responder_engine.list" UWB_RESP_ENGINE_S
 ultrawidelock_role_sources("${UWBROLES}/ccc_keys.list" UWB_CCC_KEYS_SRCS)
 ultrawidelock_role_sources("${UWBROLES}/ccc_engine.list" UWB_CCC_ENGINE_SRCS)
 ultrawidelock_role_sources("${UWBROLES}/crypto_mbedtls.list" UWB_CRYPTO_SRCS)
-# engine: Aliro ranging-setup adapter + M1-M4 codec
+# engine: credential ranging-setup adapter + M1-M4 codec
 ultrawidelock_role_sources("${UWBROLES}/ultrawidelock_adapter.list" UWB_ULTRAWIDELOCK_ADAPTER_SRCS)
 ultrawidelock_role_sources("${UWBROLES}/ultrawidelock_codec.list" UWB_ULTRAWIDELOCK_CODEC_SRCS)
 # vendor decadriver (modules/ultrawidelock_dw3000/roles/ canonical set)

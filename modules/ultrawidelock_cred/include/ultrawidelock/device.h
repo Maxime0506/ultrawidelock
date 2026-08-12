@@ -1,10 +1,10 @@
-// Aliro initiator (User-Device) session layer: the device-side counterpart of
+// credential initiator (User-Device) session layer: the device-side counterpart of
 // ultrawidelock_reader.c. Drives the credential-auth handshake from the phone/fob role:
 // parses the reader's AUTH0/AUTH1/EXCHANGE commands, runs the mirror-image key
 // schedule (ECDH, the two ECDSA transcripts, the §8.3.1.13 salt), and produces
 // the sealed responses. The result is the same 32-byte URSK the reader derives.
 /*
- * ultrawidelock_device: the initiator half of the Aliro Access Protocol. Reuses the
+ * ultrawidelock_device: the initiator half of the credential Access Protocol. Reuses the
  * direction-symmetric crypto (ultrawidelock_crypto.c) and EC primitives (ultrawidelock_prim.h);
  * the only genuinely new logic is the inverse codec (ultrawidelock_device_apdu) and the
  * device view of the two AES-256-GCM channels (opposite seal/open direction to
@@ -23,7 +23,7 @@
 extern "C" {
 #endif
 
-/* Device view of an Aliro AES-256-GCM channel. The reader's ultrawidelock_secchan seals
+/* Device view of an credential AES-256-GCM channel. The reader's ultrawidelock_secchan seals
  * on direction 0 and opens on direction 1; the device is the mirror: it OPENS
  * reader->device traffic (direction 0, key s0) and SEALS device->reader traffic
  * (direction 1, key s1). Both per-direction counters start at 1 (§8.3.1.13). */
@@ -116,7 +116,7 @@ enum ultrawidelock_device_phase {
 };
 
 /**
- * Aliro device: access credential (private scalar and public point), reader identity and
+ * credential device: access credential (private scalar and public point), reader identity and
  * verification key, per-transaction ephemeral and channel state, BLE-SK salt, and transaction
  * phase.
  */

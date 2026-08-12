@@ -1,4 +1,4 @@
-# ultrawidelock_uwb tier: Aliro M1-M4 message builder/parser — role-neutral wire codec,
+# ultrawidelock_uwb tier: credential M1-M4 message builder/parser — role-neutral wire codec,
 # linked by the reader AND the initiator. Consumers: modules/ultrawidelock_uwb/
 # CMakeLists.txt (CONFIG_ULTRAWIDELOCK_CRED), ports/esp32/components/ultrawidelock_uwb,
 # examples/zephyr/nrf5340dk-initiator, tests/host/sources.sh. Sorted; add HERE only.

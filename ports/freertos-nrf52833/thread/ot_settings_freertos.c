@@ -17,7 +17,7 @@
  * keys. OpenThread also reserves 0x8000..0xffff for vendor use; that range
  * cannot fit the window, and masking it in would silently alias distinct
  * vendor keys onto each other and onto the native ones. This firmware keeps
- * its own persistent data (the Aliro provisioning blob) under its own store
+ * its own persistent data (the credential provisioning blob) under its own store
  * key rather than behind otPlatSettings, so no vendor key exists here, and any
  * key outside the native range is refused with OT_ERROR_NOT_IMPLEMENTED and a
  * warning. If a vendor key is ever wanted, the window must be widened in
@@ -193,7 +193,7 @@ void otPlatSettingsInit(otInstance *instance, const uint16_t *sensitive_keys,
 
 void otPlatSettingsDeinit(otInstance *instance)
 {
-	/* The store stays mounted: the Aliro provisioning backend shares it. */
+	/* The store stays mounted: the credential provisioning backend shares it. */
 	(void)instance;
 }
 
@@ -362,10 +362,10 @@ otError otPlatSettingsDelete(otInstance *instance, uint16_t key, int index)
 /*
  * Factory-reset OpenThread and nothing else. This walks the reserved window
  * and deletes key by key; it must never call ultrawidelock_freertos_kv_erase_all(),
- * because the Aliro provisioning blob lives in the same two pages and erasing
+ * because the credential provisioning blob lives in the same two pages and erasing
  * it would take the reader's provisioned identity and trust anchors with it —
  * the mirror of the argument in ultrawidelock_prov_erase(), which spares these keys so
- * an Aliro factory reset cannot cost the SRP client key and the up-to-14-day
+ * an credential factory reset cannot cost the SRP client key and the up-to-14-day
  * lease wait that follows.
  */
 void otPlatSettingsWipe(otInstance *instance)

@@ -22,14 +22,14 @@
  */
 #define ULTRAWIDELOCK_KV_KEY_ALIRO_PROV 0x0001u
 /* OpenThread's own settings keys are 0x0000..0x00ff; they are offset into this
- * range so they cannot land on an Aliro key. */
+ * range so they cannot land on an credential key. */
 #define ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE 0x1000u
 #define ULTRAWIDELOCK_KV_KEY_OPENTHREAD_LIMIT 0x1100u
 
 /* A key no record can carry: erased flash reads as all ones. */
 #define ULTRAWIDELOCK_KV_KEY_NONE 0xffffu
 
-/* The largest single value. Sized by the Aliro provisioning blob, the biggest
+/* The largest single value. Sized by the credential provisioning blob, the biggest
  * thing either consumer stores. */
 #define ULTRAWIDELOCK_KV_VALUE_MAX 768u
 

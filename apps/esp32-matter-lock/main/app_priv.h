@@ -38,7 +38,7 @@ esp_err_t app_driver_led_init();
  * commissioned device does not advertise commissionable, and with no working
  * network no controller can reach it to open a window. Opening one here lets a
  * controller re-push Wi-Fi credentials over BLE through the NetworkCommissioning
- * cluster, keeping every fabric and the Aliro trust store. `factoryreset` is the
+ * cluster, keeping every fabric and the credential trust store. `factoryreset` is the
  * only other way out of that corner and it takes both.
  *
  * Basic rather than enhanced, so the QR and manual codes already printed at boot

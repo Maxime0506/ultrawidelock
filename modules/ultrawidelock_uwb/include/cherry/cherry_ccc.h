@@ -1,4 +1,4 @@
-/** @file cherry_ccc.h — CCC/Aliro-session interface (seam the adapter drives). */
+/** @file cherry_ccc.h — CCC/credential-session interface (seam the adapter drives). */
 
 #pragma once
 
@@ -21,7 +21,7 @@ extern "C" {
 struct cherry_ccc_session;
 
 /**
- * @brief Device CCC/Aliro capability set advertised to the peer.
+ * @brief Device CCC/credential capability set advertised to the peer.
  */
 struct cherry_ccc_capabilities {
 	/** Supported slot durations, one bit per NChap-per-slot value. */
@@ -154,7 +154,7 @@ enum cherry_ccc_hopping_mode {
 };
 
 /**
- * @brief Negotiated Aliro ranging params (filled in-place across M1-M4).
+ * @brief Negotiated credential ranging params (filled in-place across M1-M4).
  */
 struct cherry_ccc_ultrawidelock_session_config {
 	uint32_t session_id;
@@ -173,7 +173,7 @@ struct cherry_ccc_ultrawidelock_session_config {
 	uint64_t uwb_time_us;
 };
 
-/** Create an Aliro responder session bound to @p config (NULL on error). */
+/** Create an credential responder session bound to @p config (NULL on error). */
 struct cherry_ccc_session *
 cherry_ccc_session_create_ultrawidelock_responder(struct cherry *ctx, cherry_ccc_cb_t callback,
 					  void *user_data,
@@ -256,7 +256,7 @@ enum cherry_err cherry_ccc_session_set_ursk(struct cherry_ccc_session *session,
 enum cherry_err cherry_ccc_session_set_protocol_version(struct cherry_ccc_session *session,
 							uint16_t selected_protocol_version);
 
-/** Select antennas for the Aliro second ranging round. */
+/** Select antennas for the credential second ranging round. */
 enum cherry_err cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session,
 						       uint8_t tx_antenna_set,
 						       uint8_t rx_antenna_set);

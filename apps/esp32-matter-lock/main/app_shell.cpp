@@ -1,5 +1,5 @@
-// ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, ultrawidelock,
-// lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
+// ESP32-IDF console shell for the credential Matter door lock app: registers status, range,
+// ultrawidelock, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 /*
  * app_shell — see app_shell.h.
  */
@@ -73,7 +73,7 @@ static void print_banner(void)
 
 	printf("\n%s%s%s %s%s · esp-idf %s%s\n", col(C_TITLE), app->project_name, col(C_RST),
 	       col(C_DIM), app->version, esp_get_idf_version(), col(C_RST));
-	printf("%sAliro Matter door lock · 'help' lists commands · ctrl-] leaves the "
+	printf("%sUltraWideLock Matter door lock · 'help' lists commands · ctrl-] leaves the "
 	       "monitor%s\n\n",
 	       col(C_DIM), col(C_RST));
 }
@@ -83,8 +83,8 @@ static void print_banner(void)
  * state takes the stack lock; anything mutating it is scheduled onto the Matter
  * task, which is the only thread allowed to drive the lock cluster. */
 
-// Shell command handler: prints the current Matter door lock state, fabric count, and (when Aliro
-// BLE/UWB is enabled) the last measured and last trusted UWB ranges in cm, or "none" if
+// Shell command handler: prints the current Matter door lock state, fabric count, and (when
+// credential BLE/UWB is enabled) the last measured and last trusted UWB ranges in cm, or "none" if
 // unavailable. Always returns 0.
 static int cmd_status(int argc, char **argv)
 {
@@ -109,7 +109,7 @@ static int cmd_status(int argc, char **argv)
 	}
 	printf("lock      : %s%s%s\n", col(locked ? C_BAD : C_OK), state_str, col(C_RST));
 	printf("fabrics   : %s%u%s\n", col(fabrics ? C_OK : C_BAD), fabrics, col(C_RST));
-	/* Aliro feature bits: 0x2000 AliroProvisioning, 0x4000 AliroBLEUWB. */
+	/* credential feature bits: 0x2000 AliroProvisioning, 0x4000 AliroBLEUWB. */
 	printf("featuremap: 0x%04X (ultrawidelock prov %s%s%s, ble-uwb %s%s%s)\n", (unsigned)feature_map,
 	       col((feature_map & 0x2000) ? C_OK : C_BAD), (feature_map & 0x2000) ? "y" : "n",
 	       col(C_RST), col((feature_map & 0x4000) ? C_OK : C_BAD),
@@ -195,11 +195,11 @@ static int ultrawidelock_hexdecode(const char *s, uint8_t *out, size_t out_cap)
 }
 #endif /* CONFIG_ULTRAWIDELOCK_CRED_CLONE */
 
-// Shell handler for the "ultrawidelock" command. Subcommands: "prov" prints reader provisioning info;
-// "trust" adds the last-presented credential to the trust store and persists it to NVS, reporting
-// whether a credential was actually available to trust or whether the store/NVS write failed.
-// With CONFIG_ULTRAWIDELOCK_CRED_CLONE, "export"/"import <hex>" clone the identity to a second
-// board. Any other or missing argument prints usage. Always returns 0.
+// Shell handler for the "ultrawidelock" command. Subcommands: "prov" prints reader provisioning
+// info; "trust" adds the last-presented credential to the trust store and persists it to NVS,
+// reporting whether a credential was actually available to trust or whether the store/NVS write
+// failed. With CONFIG_ULTRAWIDELOCK_CRED_CLONE, "export"/"import <hex>" clone the identity to a
+// second board. Any other or missing argument prints usage. Always returns 0.
 static int cmd_ultrawidelock(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "prov") == 0) {
@@ -331,7 +331,7 @@ static int cmd_codes(int argc, char **argv)
 /* Recovery for the one corner this firmware had no exit from: commissioned, so
  * it does not advertise commissionable, but with no working network, so no
  * controller can reach it to open a window. Opening one here lets a controller
- * re-push Wi-Fi credentials over BLE with every fabric and the Aliro trust store
+ * re-push Wi-Fi credentials over BLE with every fabric and the credential trust store
  * intact, which is exactly what `factoryreset` costs. */
 static int cmd_commission(int argc, char **argv)
 {
@@ -371,7 +371,7 @@ static int cmd_commission(int argc, char **argv)
 		 * Matter takes it back to advertise commissionable, so walk-up
 		 * stops meanwhile. Worth it during a recovery, worth knowing about
 		 * when it is not one. */
-		printf("            note: the Aliro reader shares the one BLE advertiser, "
+		printf("            note: the credential reader shares the one BLE advertiser, "
 		       "so walk-up\n            stops until the window closes or you "
 		       "reboot\n");
 #endif
@@ -392,7 +392,7 @@ static int cmd_factoryreset(int argc, char **argv)
 	printf("factory reset: erasing and rebooting\n");
 #ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 	/* esp_matter::factory_reset() erases only Matter's own NVS namespaces; the
-	 * Aliro reader identity + trust store live in "ultrawidelock_prov" and would
+	 * credential reader identity + trust store live in "ultrawidelock_prov" and would
 	 * survive, so the old home's phones could still authenticate after the
 	 * reset. Revert to the dev identity (RAM + NVS) before rebooting. */
 	ultrawidelock_reader_provision_clear();

@@ -4,7 +4,7 @@
  * for host tests, and wraps mutexes (no-op on single-threaded host).
  */
 /*
- * ultrawidelock_port.h - the platform contract for the UWB engine and the Aliro reader.
+ * ultrawidelock_port.h - the platform contract for the UWB engine and the credential reader.
  * This header IS the port specification: a new target is a new branch here plus
  * a DW3000 SPI/GPIO backend, nothing else. Work queues, timers and init hooks
  * are deliberately absent (Zephyr-only diagnostics use them, never the ranging
@@ -15,7 +15,7 @@
  *   ultrawidelock_sleep_ms                    relinquish the CPU for at least ms
  *   ultrawidelock_sleep_us                    short busy-wait, microseconds (deca_sleep)
  *   ultrawidelock_cycle_get_32                free-running counter, RX-arm latency probe
- *   ultrawidelock_mutex_init/lock/unlock      blocking mutex (Aliro reader trust store)
+ *   ultrawidelock_mutex_init/lock/unlock      blocking mutex (credential reader trust store)
  */
 #ifndef ULTRAWIDELOCK_PORT_H
 #define ULTRAWIDELOCK_PORT_H

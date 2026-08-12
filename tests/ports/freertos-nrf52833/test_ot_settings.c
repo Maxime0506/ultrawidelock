@@ -245,7 +245,7 @@ static void scenario_delete_all(void)
 		      OT_ERROR_NOT_FOUND);
 }
 
-/* A wipe empties OpenThread's window and must not touch the Aliro blob. */
+/* A wipe empties OpenThread's window and must not touch the credential blob. */
 static void scenario_wipe(void)
 {
 	uint8_t dataset[10];
@@ -262,7 +262,7 @@ static void scenario_wipe(void)
 
 	otPlatSettingsInit(&g_instance, NULL, 0);
 
-	CHECK("the Aliro provisioning blob stores beside the settings",
+	CHECK("the credential provisioning blob stores beside the settings",
 	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, prov_blob,
 					    sizeof(prov_blob)) == ULTRAWIDELOCK_KV_OK);
 	CHECK("the settings to be wiped store",
@@ -297,12 +297,12 @@ static void scenario_wipe(void)
 
 	/*
 	 * The reason the wipe walks keys instead of erasing the store: the
-	 * Aliro provisioning blob shares the two pages, and a reader that
+	 * credential provisioning blob shares the two pages, and a reader that
 	 * forgets its identity and trust anchors on a Thread factory reset no
 	 * longer opens the door.
 	 */
 	length = sizeof(prov_read);
-	CHECK("the wipe leaves the Aliro provisioning blob byte-for-byte intact",
+	CHECK("the wipe leaves the credential provisioning blob byte-for-byte intact",
 	      ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, prov_read, &length) ==
 			      ULTRAWIDELOCK_KV_OK &&
 		      length == sizeof(prov_blob) && memcmp(prov_read, prov_blob, length) == 0);

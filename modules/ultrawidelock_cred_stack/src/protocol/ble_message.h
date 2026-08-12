@@ -1,4 +1,4 @@
-/* Aliro 1.0 Bluetooth LE message framing (section 11.7). */
+/* credential 1.0 Bluetooth LE message framing (section 11.7). */
 #pragma once
 
 #include <stddef.h>
@@ -42,7 +42,7 @@ enum ultrawidelock_cred_ble_result {
 };
 
 /**
- * Parsed Aliro BLE message: protocol version, message ID, and opaque payload.
+ * Parsed credential BLE message: protocol version, message ID, and opaque payload.
  */
 struct ultrawidelock_cred_ble_message {
 	uint8_t protocol;
@@ -52,7 +52,7 @@ struct ultrawidelock_cred_ble_message {
 };
 
 /* Parse exactly one message at the beginning of data. consumed permits an
- * L2CAP SDU containing several concatenated Aliro messages. */
+ * L2CAP SDU containing several concatenated credential messages. */
 int ultrawidelock_cred_ble_parse_message(const uint8_t *data, size_t data_length,
 				struct ultrawidelock_cred_ble_message *message, size_t *consumed);
 

@@ -145,7 +145,7 @@ fi
 if printf '%s\n' "$build_graph" | rg -qi 'l2cap|sd_ble_l2cap'; then
 	printf '  note QANI already integrates L2CAP CoC\n'
 else
-	printf '  todo implement the Aliro/Matter L2CAP CoC backend on the selected BLE host\n'
+	printf '  todo implement the credential/Matter L2CAP CoC backend on the selected BLE host\n'
 fi
 
 printf 'RESULT: SOURCE BASE ACCEPTED; custom radio integration and board proof remain\n'

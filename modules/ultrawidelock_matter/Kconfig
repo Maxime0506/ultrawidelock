@@ -15,7 +15,7 @@ config ULTRAWIDELOCK_MATTER
 	  actually exercises.
 
 	  This is NOT a certified Matter stack and does not aim to be. It exists
-	  so a DWM3001CDK can receive its Aliro reader identity from Apple Home
+	  so a DWM3001CDK can receive its credential reader identity from Apple Home
 	  over SetAliroReaderConfig, which is the only way this board can be
 	  provisioned without cloning a credential from a donor.
 

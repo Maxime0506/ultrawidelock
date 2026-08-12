@@ -1,4 +1,4 @@
-# Standalone Zephyr app: the Aliro initiator (User-Device role) on an nRF5340 DK,
+# Standalone Zephyr app: the credential initiator (User-Device role) on an nRF5340 DK,
 # the bench stand-in for an iPhone. Scans for a reader's 0xFFF2 advert, opens the
 # L2CAP channel and runs the Access Protocol to a shared URSK. No UWB: ranging on
 # that URSK is Stage 1b and needs the DWM3000EVB driver linked in as well.
@@ -13,7 +13,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(ultrawidelock_initiator_nrf5340dk)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
-set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
+set(CRED "${REPO_ROOT}/modules/ultrawidelock_cred")
 set(UWB_INC "${REPO_ROOT}/modules/ultrawidelock_uwb/include")
 set(UWB "${REPO_ROOT}/modules/ultrawidelock_uwb/src/cred")
 set(CCC "${REPO_ROOT}/modules/ultrawidelock_uwb/src/ccc")
@@ -21,11 +21,11 @@ set(CCC "${REPO_ROOT}/modules/ultrawidelock_uwb/src/ccc")
 # Shared sources by role manifest (modules/{ultrawidelock_cred,ultrawidelock_uwb}/roles/*.list) —
 # the same lists the ESP32 components and the host suite read.
 include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
-ultrawidelock_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
 set(UWBROLES "${REPO_ROOT}/modules/ultrawidelock_uwb/roles")
 ultrawidelock_role_sources("${UWBROLES}/ultrawidelock_device.list" UWB_DEVICE_SRCS)
 ultrawidelock_role_sources("${UWBROLES}/ultrawidelock_codec.list" UWB_CODEC_SRCS)
@@ -72,7 +72,7 @@ target_sources(app PRIVATE
 )
 # The app target also compiles selected module sources, so their private
 # sibling headers remain on this target's private include path.
-target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
+target_include_directories(app PRIVATE ${CRED}/include ${CRED}/src
 	# The UWB codec's own headers, the adapter/cherry headers its message struct
 	# is declared in, and the two platform facades it compiles against
 	# (qmalloc -> k_malloc, LOG_MODULE_DECLARE).
@@ -93,8 +93,8 @@ target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
 # means a freshly written header needs a re-configure to be picked up; that is
 # what scripts/ultrawidelock-enroll.py tells you to do when it finishes.
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/src/bench_identity.h")
-	message(STATUS "Aliro initiator: ENROLLED identity (src/bench_identity.h)")
+	message(STATUS "credential initiator: ENROLLED identity (src/bench_identity.h)")
 	target_compile_definitions(app PRIVATE ULTRAWIDELOCK_BENCH_ENROLLED)
 else()
-	message(STATUS "Aliro initiator: DEV fallback identity, run scripts/ultrawidelock-enroll.py")
+	message(STATUS "credential initiator: DEV fallback identity, run scripts/ultrawidelock-enroll.py")
 endif()

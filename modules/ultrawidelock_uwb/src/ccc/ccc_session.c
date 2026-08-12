@@ -1,4 +1,4 @@
-/** @file ccc_session.c — Aliro/CCC ranging seam implementation. See ccc_session.h. */
+/** @file ccc_session.c — credential/CCC ranging seam implementation. See ccc_session.h. */
 
 #include "ccc_session.h"
 
@@ -24,8 +24,8 @@ uint16_t ccc_session_n_round(const struct ccc_ran_session *s)
 }
 
 /**
- * @brief Map an Aliro session onto the CCC MAC's ranging-schedule parameters.
- * @param s Aliro session configuration.
+ * @brief Map an credential session onto the CCC MAC's ranging-schedule parameters.
+ * @param s credential session configuration.
  * @param out Filled with the mapped CCC ranging parameters.
  * @return 0 on success, -EINVAL if the session or output pointer is NULL, slot count is
  * insufficient, or N_Round is zero.

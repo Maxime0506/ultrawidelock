@@ -7,12 +7,12 @@ CONFIG_BT_NIMBLE_ENABLED=y
 #disable BT connection reattempt
 CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
 
-# Enable L2CAP Connection-Oriented Channels: the Aliro credential-auth transaction
+# Enable L2CAP Connection-Oriented Channels: the credential-auth transaction
 # rides an L2CAP CoC on the reader's SPSM. Default esp-matter NimBLE leaves this at
 # 0, so ble_l2cap_create_server() returns BLE_HS_ENOTSUP. Match the bench reader app.
 CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
 
-# The Aliro reader runs its P-256 credential-auth (ECDH + ECDSA sign/verify + HKDF)
+# The credential reader runs its P-256 credential-auth (ECDH + ECDSA sign/verify + HKDF)
 # inside the NimBLE L2CAP callback, i.e. on the nimble_host task. The 4096-byte
 # default overflows that stack mid-transaction; the software P-256 path needs more.
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=16384
@@ -84,11 +84,11 @@ CONFIG_ESP32_COREDUMP_DATA_FORMAT_ELF=y
 # disable groupcast cluster until verified
 CONFIG_SUPPORT_GROUPCAST_CLUSTER=n
 
-# Advertise Aliro (Apple Home Key) Provisioning + BLE-UWB and register the reader delegate
+# Advertise the credential protocol (Apple Home Key) Provisioning + BLE-UWB and register the reader delegate
 CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB=y
 
 # Keep BLE up after commissioning (do NOT deinit/reclaim it). Required for the
-# Aliro reader to coexist on Matter's NimBLE host; also, reclaiming BLE makes any
+# credential reader to coexist on Matter's NimBLE host; also, reclaiming BLE makes any
 # later nimble_port_init() crash the controller (btdm_controller_init fault).
 CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n
 

@@ -41,7 +41,7 @@ static enum ultrawidelock_uwb_err notify_error(struct ultrawidelock_uwb_session 
 /**
  * @brief CCC seam callback: wrap the CCC event and forward it to the client.
  * @param event CCC event to wrap and forward.
- * @param user_data Aliro UWB session that owns the callback and client data.
+ * @param user_data credential UWB session that owns the callback and client data.
  */
 static void ultrawidelock_ccc_cb(struct cherry_ccc_event *event, void *user_data)
 {
@@ -112,7 +112,7 @@ static void session_close(struct ultrawidelock_uwb_session *session)
 }
 
 /**
- * @brief Initialize a session by creating and configuring a CCC Aliro responder, setting URSK,
+ * @brief Initialize a session by creating and configuring a CCC credential responder, setting URSK,
  * protocol version, antennas, and diagnostics, then starting the session. On any error, tears down
  * the session and returns the mapped error code.
  * @param session Session to initialize.
@@ -129,7 +129,8 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_init(struct ultrawidelock_u
 	}
 
 	session->ccc_session = cherry_ccc_session_create_ultrawidelock_responder(
-		session->ultrawidelock_ctx->cherry_ctx, ultrawidelock_ccc_cb, session, &session->ccc_ultrawidelock_config);
+		session->ultrawidelock_ctx->cherry_ctx, ultrawidelock_ccc_cb, session,
+		&session->ccc_ultrawidelock_config);
 	if (!session->ccc_session) {
 		LOG_ERR("create_ultrawidelock_responder failed");
 		return ULTRAWIDELOCK_UWB_ERR_INTERNAL;
@@ -229,12 +230,12 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_stop(struct ultrawidelock_u
 }
 
 /**
- * @brief Allocate an Aliro UWB session in the CREATED state, bound to an adapter and to the
+ * @brief Allocate an credential UWB session in the CREATED state, bound to an adapter and to the
  * caller's transmit and event callbacks. No CCC session is started here.
  */
 struct ultrawidelock_uwb_session *
-ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx, uint32_t session_id,
-				 ultrawidelock_uwb_session_cb_t callback,
+ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx,
+				 uint32_t session_id, ultrawidelock_uwb_session_cb_t callback,
 				 ultrawidelock_uwb_adapter_transmit_message_t transmit,
 				 void *user_data)
 {
@@ -256,12 +257,12 @@ ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock
 	session->user_data = user_data;
 	session->state = CREATED;
 
-	LOG_INF("Aliro session created");
+	LOG_INF("credential session created");
 	return session;
 }
 
 /**
- * @brief Destroy an Aliro UWB session, freeing the URSK and tearing down the underlying CCC
+ * @brief Destroy an credential UWB session, freeing the URSK and tearing down the underlying CCC
  * session.
  * @param session Session to destroy; no-op if NULL.
  */
@@ -384,7 +385,8 @@ ultrawidelock_uwb_session_set_time_offset(struct ultrawidelock_uwb_session *sess
 }
 
 /**
- * @brief Validate and dispatch an incoming Aliro UWB message to the appropriate protocol handler.
+ * @brief Validate and dispatch an incoming credential UWB message to the appropriate protocol
+ * handler.
  * @param session Session that received the message.
  * @param message Message to validate and process.
  * @return ULTRAWIDELOCK_UWB_ERR_NONE on success, ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER if session

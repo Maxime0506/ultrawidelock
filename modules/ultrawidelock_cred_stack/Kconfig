@@ -1,17 +1,17 @@
-# Aliro stack implementation derived from the published specification.
+# credential stack implementation derived from the published specification.
 
 config ULTRAWIDELOCK_CRED_SOURCE_STACK
-	bool "Use the in-tree Aliro source implementation"
+	bool "Use the in-tree credential source implementation"
 	depends on NCS_ALIRO_BLE_UWB
 	default y
 	help
-	  Use the in-tree implementation for the public Aliro symbols consumed
+	  Use the in-tree implementation for the public credential symbols consumed
 	  by the nRF application. This is the default. The repository build
 	  script can explicitly set this to n with ULTRAWIDELOCK_SOURCE=0 for comparison
 	  with the legacy Nordic binary.
 
 config ULTRAWIDELOCK_CRED_APDU_BUFFER_SIZE
-	int "Aliro session APDU buffer size"
+	int "credential session APDU buffer size"
 	depends on ULTRAWIDELOCK_CRED_SOURCE_STACK
 	default RFAL_FEATURE_ISO_DEP_APDU_MAX_LEN if NFC_DRIVER_STM
 	default 512
@@ -22,7 +22,7 @@ config ULTRAWIDELOCK_CRED_APDU_BUFFER_SIZE
 	  PN532 transport chains larger transfers at the ISO-DEP layer).
 
 config ULTRAWIDELOCK_CRED_TRACE
-	bool "Trace Aliro BLE/UWB protocol boundaries"
+	bool "Trace credential BLE/UWB protocol boundaries"
 	depends on NCS_ALIRO_BLE_UWB
 	help
 	  Log advertising data, encrypted BLE transport messages, decrypted UWB

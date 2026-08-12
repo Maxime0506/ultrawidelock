@@ -1,8 +1,9 @@
-// Aliro cryptographic primitives: key derivation (KDF/HKDF), key-block splitting, AES-GCM secure
-// channels, and wire message framing built on a pluggable crypto backend (ultrawidelock_prim_*).
-// Implements the Aliro key-derivation chain (ECDH shared secret -> z -> 160-byte key block -> split
-// session keys / URSK / BLE ranging keys), per-direction AES-256-GCM secure channels with monotonic
-// message counters, and the seal/open framing used to carry engine plaintext over the wire.
+// credential cryptographic primitives: key derivation (KDF/HKDF), key-block splitting, AES-GCM
+// secure channels, and wire message framing built on a pluggable crypto backend
+// (ultrawidelock_prim_*). Implements the credential key-derivation chain (ECDH shared secret -> z
+// -> 160-byte key block -> split session keys / URSK / BLE ranging keys), per-direction AES-256-GCM
+// secure channels with monotonic message counters, and the seal/open framing used to carry engine
+// plaintext over the wire.
 /*
  * ultrawidelock_crypto — credential-auth key schedule. See ultrawidelock_crypto.h.
  *
@@ -18,7 +19,7 @@
 #include "ultrawidelock_hash.h"
 #include "ultrawidelock_prim.h"
 
-// Initializes the Aliro crypto backend's underlying primitive library.
+// Initializes the credential crypto backend's underlying primitive library.
 // Must be called once before any other ultrawidelock_crypto function. Returns the underlying
 // ultrawidelock_prim_init() status code.
 int ultrawidelock_crypto_init(void)
@@ -48,7 +49,7 @@ void ultrawidelock_crypto_derive_z(const uint8_t shared_secret[ULTRAWIDELOCK_SHA
 			       ULTRAWIDELOCK_TXID_LEN, z, 32);
 }
 
-// Derives the 160-byte Aliro key block via HKDF-SHA256(salt, IKM=z, info=device_pub_x, L=160).
+// Derives the 160-byte credential key block via HKDF-SHA256(salt, IKM=z, info=device_pub_x, L=160).
 // z is the 32-byte KDF intermediate (ultrawidelock_crypto_derive_z output); device_pub_x is the
 // peer device's ephemeral public-key X coordinate. Returns 0 on success, nonzero on HKDF failure.
 int ultrawidelock_crypto_derive_block(const uint8_t z[32], const uint8_t *salt, size_t salt_len,
@@ -194,7 +195,7 @@ int ultrawidelock_secchan_open(struct ultrawidelock_secchan *sc, const uint8_t *
 	return rc;
 }
 
-/* ---- Aliro message security (§11.8): ranging/notification SDUs ---- */
+/* ---- credential message security (§11.8): ranging/notification SDUs ---- */
 
 // Derives the two directional BLE ranging-channel session keys (BleSKReader, BleSKDevice) from the
 // BleSK segment of a derived key block via HKDF. salt/salt_len is the caller-built ranging-channel
@@ -256,8 +257,8 @@ int ultrawidelock_msg_seal(struct ultrawidelock_secchan *sc, const uint8_t *plai
 	return 0;
 }
 
-// Represents a secure Aliro communication channel: a pair of AES-GCM session keys and per-direction
-// message counters, used to seal/open messages exchanged with the device.
+// Represents a secure credential communication channel: a pair of AES-GCM session keys and
+// per-direction message counters, used to seal/open messages exchanged with the device.
 int ultrawidelock_msg_open(struct ultrawidelock_secchan *sc, const uint8_t *wire, size_t wire_len,
 			   uint8_t *plain, size_t plain_cap, size_t *plain_len)
 {

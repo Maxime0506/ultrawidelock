@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(ultrawidelock_uwb_selftest, LOG_LEVEL_INF);
 // UWB_SELFTEST=1.
 static struct ultrawidelock_dwork uwb_selftest_dwork;
 
-/** Canned Aliro ranging config for the peerless self-test (dummy URSK). */
+/** Canned credential ranging config for the peerless self-test (dummy URSK). */
 static const uint8_t uwb_selftest_ursk[32] = {
 	0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb,
 	0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
@@ -19,12 +19,12 @@ static const uint8_t uwb_selftest_ursk[32] = {
 };
 
 /**
- * @brief One-shot worker: run the Aliro UWB start path and log the outcome.
+ * @brief One-shot worker: run the credential UWB start path and log the outcome.
  * @param dwork The delayable work item (unused).
  */
 static void uwb_selftest_work(struct ultrawidelock_dwork *dwork)
 {
-	// Configuration struct for the Aliro DS-TWR responder, containing ranging parameters
+	// Configuration struct for the credential DS-TWR responder, containing ranging parameters
 	// (channel, preamble code, session ID, and STS index).
 	const struct ultrawidelock_uwb_ultrawidelock_cfg cfg = {
 		.session_id = 0x02b02fd4u,

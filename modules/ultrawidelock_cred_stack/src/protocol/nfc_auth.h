@@ -1,4 +1,4 @@
-/* Aliro 1.0 expedited authentication APDU codecs. */
+/* credential 1.0 expedited authentication APDU codecs. */
 #pragma once
 
 #include <stddef.h>

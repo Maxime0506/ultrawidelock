@@ -1,7 +1,7 @@
-# Aliro reader component options (ESP-IDF). Applies to every app that pulls the
+# credential reader component options (ESP-IDF). Applies to every app that pulls the
 # ultrawidelock_reader component (the standalone reader and the Matter lock).
 
-menu "Aliro reader"
+menu "credential reader"
 
 config ULTRAWIDELOCK_LAT_TRACE
 	bool "Walk-up latency trace (ultrawidelock-lat budget line)"
@@ -22,7 +22,7 @@ config ULTRAWIDELOCK_CRED_LAB
 	  Compile in the structured "[ALAB] t=<us> ev=..." trace at transaction
 	  phase boundaries, so a captured serial log can be turned into a scored
 	  walk-up report (phase waterfall, approach curve, checks).
-	  Like the sibling `uwbdiag` trace, it ships in every Aliro build but
+	  Like the sibling `uwbdiag` trace, it ships in every credential build but
 	  stays OFF at boot — the `lab on`/`lab off` console command toggles it
 	  at runtime, off the UWB hot path. Its per-phase lines come from the
 	  ultrawidelock-lat stamps, hence the ULTRAWIDELOCK_LAT_TRACE dependency. Set n to strip
@@ -33,7 +33,7 @@ config ULTRAWIDELOCK_RSSI_GATE
 	default y
 	help
 	  Gate the UWB radio on BLE connection RSSI: the reader completes the
-	  Aliro auth as soon as the phone connects, but holds the one message
+	  credential auth as soon as the phone connects, but holds the one message
 	  the phone waits for before initiating ranging (Reader-Status-AP-
 	  Completed, §11.7.3.4.1) until the smoothed RSSI says the phone is in
 	  the last few metres. Until then the DW3000 stays powered off instead
@@ -123,7 +123,7 @@ config ULTRAWIDELOCK_RSSI_GATE_POLL_MS
 	depends on ULTRAWIDELOCK_RSSI_GATE
 	default 250
 	help
-	  How often the transport reads the controller RSSI while the Aliro
+	  How often the transport reads the controller RSSI while the credential
 	  L2CAP channel is up (one HCI Read RSSI per period; negligible next
 	  to the UWB RX it replaces). The first read fires at channel-open so
 	  a connect-at-the-door walk-up is never delayed by the poll interval.
@@ -191,10 +191,10 @@ config ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES
 	  fills, capture stops and the END record is flagged truncated.
 
 config ULTRAWIDELOCK_CRED_STEPUP
-	bool "Enable the Aliro step-up (Access Document) phase"
+	bool "Enable the credential step-up (Access Document) phase"
 	default n
 	help
-	  Reference-completeness build of the Aliro v1.0 §8.4 step-up phase: after
+	  Reference-completeness build of the credential v1.0 §8.4 step-up phase: after
 	  the standard EXCHANGE, the reader can request an ISO 18013-5 (mdoc) Access
 	  Document from the User Device (ENVELOPE / GET RESPONSE APDUs carrying a
 	  session-encrypted DeviceRequest/DeviceResponse), then parse and verify it
@@ -211,7 +211,7 @@ config ULTRAWIDELOCK_CRED_ACCESS_LISTENER
 	default n
 	help
 	  Compile ultrawidelock_reader_set_access_listener() and the three notify points on
-	  the credential trust gate, so an application can observe whether each Aliro
+	  the credential trust gate, so an application can observe whether each credential
 	  transaction was granted or denied. The listener gets the verdict and nothing
 	  else, never a credential.
 

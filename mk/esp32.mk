@@ -196,7 +196,7 @@ esp-app-flash: esp-check-env
 	echo "  app-flashing $$port"; \
 	cd "$(ESP_APP_DIR)" && $(IDFPY) -p "$$port" app-flash
 
-## esp-flash-erase: full chip erase, then flash  (drops commissioning + Aliro NVS)
+## esp-flash-erase: full chip erase, then flash  (drops commissioning + credential NVS)
 esp-flash-erase: esp-check-env
 	@$(RESOLVE_PORT); \
 	$(ENSURE_PORT_FREE); \

@@ -1,4 +1,4 @@
-// Streaming SHA-256 (FIPS 180-4) implementation used by the Aliro crypto layer.
+// Streaming SHA-256 (FIPS 180-4) implementation used by the credential crypto layer.
 // Declares struct ultrawidelock_sha256, the incremental hash context used across init/update/finish
 // calls.
 /*
@@ -7,7 +7,7 @@
  * same object is compiled on the ESP32 target and in the host known-answer
  * tests: a host KAT here is a direct proof of the on-target key schedule.
  *
- * These are the building blocks of the Aliro credential-auth key derivation
+ * These are the building blocks of the credential-auth key derivation
  * (see ultrawidelock_crypto.h). AES-GCM and P-256 (ECDH/ECDSA) are NOT here; those use
  * the platform crypto backend (mbedTLS-PSA on target).
  */

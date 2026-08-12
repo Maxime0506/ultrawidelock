@@ -1,11 +1,11 @@
 /**
  * @file ble_timeout.c
- * Aliro BLE timeout supervisor (state machine + reply validator). Core: classify_attribute parses
- * BLE message type from attribute ID/length; is_allowed_reply maps request→reply types (including
- * Busy/GeneralError for any); has_response_timeout marks messages that start a timeout window;
- * collision_replaces_pending resolves priority when incoming messages arrive before the previous
- * one completes; set_pending / clear_pending manage state transitions. Designed to prevent timeouts
- * when the phone is responsive and terminate when not.
+ * credential BLE timeout supervisor (state machine + reply validator). Core: classify_attribute
+ * parses BLE message type from attribute ID/length; is_allowed_reply maps request→reply types
+ * (including Busy/GeneralError for any); has_response_timeout marks messages that start a timeout
+ * window; collision_replaces_pending resolves priority when incoming messages arrive before the
+ * previous one completes; set_pending / clear_pending manage state transitions. Designed to prevent
+ * timeouts when the phone is responsive and terminate when not.
  */
 #include "ble_timeout.h"
 
@@ -242,11 +242,11 @@ static void clear_pending(struct ultrawidelock_cred_ble_timeout_state *state)
 }
 
 /**
- * Supervise Aliro BLE protocol timeouts in a state machine: track pending messages, role (idle,
- * local transmitter, local receiver), and deadline. Given a message direction and type, return the
- * action (ARM timeout, STOP timeout, TERMINATE connection, or HOLD). Validates collisions (incoming
- * ResumRequest or SuspendRequest can replace pending messages) and enforces request-reply
- * correspondence.
+ * Supervise credential BLE protocol timeouts in a state machine: track pending messages, role
+ * (idle, local transmitter, local receiver), and deadline. Given a message direction and type,
+ * return the action (ARM timeout, STOP timeout, TERMINATE connection, or HOLD). Validates
+ * collisions (incoming ResumRequest or SuspendRequest can replace pending messages) and enforces
+ * request-reply correspondence.
  */
 enum ultrawidelock_cred_ble_timeout_action
 ultrawidelock_cred_ble_timeout_observe(struct ultrawidelock_cred_ble_timeout_state *state,

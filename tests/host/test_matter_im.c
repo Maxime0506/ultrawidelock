@@ -265,7 +265,7 @@ static int walk_report(const uint8_t *buf, size_t len, struct rep *reps, bool *s
 						 * TLV null (0x14), which has no
 						 * accessor because it carries no
 						 * value. It arrived with the
-						 * Aliro reader attributes, where
+						 * credential reader attributes, where
 						 * null is the meaningful answer:
 						 * an unprovisioned reader. Not
 						 * handling it made every report
@@ -551,7 +551,7 @@ void test_matter_im(void)
 		T_OK("not a status", !sreps[0].is_status);
 		T_EQ("on the lock endpoint", sreps[0].endpoint, MATTER_ENDPOINT_LOCK);
 		/*
-		 * The two Aliro bits and User, and nothing else. User is not
+		 * The two credential bits and User, and nothing else. User is not
 		 * aspiration: a real controller invokes GetUser during
 		 * commissioning and abandons the pairing when it is refused.
 		 * PIN, RFID, schedules and logging stay out -- claiming those

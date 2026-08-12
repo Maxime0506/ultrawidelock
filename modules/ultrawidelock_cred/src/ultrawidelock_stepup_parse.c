@@ -1,11 +1,11 @@
-// DeviceResponse structural decoder for the Aliro step-up phase: a minimal, bounds-checked,
+// DeviceResponse structural decoder for the credential step-up phase: a minimal, bounds-checked,
 // depth-limited CBOR reader (definite-length core-deterministic only) plus the Table 8-22/7-1/7-2
 // field walk. No crypto and no allocation; every parsed field is a slice of the caller's buffer.
 // This is the wire-facing attack surface. The extract_* helpers (deviceKey, x5chain end-entity
 // cert, COSE alg, version) run on cursor copies and only ever ADD fields; they never change what
 // the parser accepts.
 /*
- * CBOR per RFC 8949 (definite lengths only, indefinite rejected); the Aliro
+ * CBOR per RFC 8949 (definite lengths only, indefinite rejected); the credential
  * remapped-key layout from the v1.0 spec (§7.2 Table 7-1/7-2, §8.4.2 Table 8-22)
  * and the §14.6 worked example.
  */

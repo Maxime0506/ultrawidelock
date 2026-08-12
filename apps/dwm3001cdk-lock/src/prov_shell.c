@@ -242,4 +242,4 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		       "Peak mbedTLS heap use since boot.", cmd_heap),
 	SHELL_SUBCMD_SET_END);
 
-SHELL_CMD_REGISTER(ultrawidelock, &sub_ultrawidelock, "Aliro reader provisioning.", NULL);
+SHELL_CMD_REGISTER(ultrawidelock, &sub_ultrawidelock, "credential reader provisioning.", NULL);

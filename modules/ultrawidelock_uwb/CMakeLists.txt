@@ -21,7 +21,7 @@ if(CONFIG_ULTRAWIDELOCK_UWB)
   zephyr_library_named(ultrawidelock_uwb)
   # ds_twr.c sits at the BASE tier, not under the responder, because the
   # anchor-to-anchor example ranges another board with no CCC engine in
-  # its image and needs the same estimator the Aliro responder uses.
+  # its image and needs the same estimator the credential responder uses.
   zephyr_library_sources(
     ${UWB_BASE_DRIVER_SRCS}
     ${UWB_BASE_ENGINE_SRCS})
@@ -71,7 +71,7 @@ if(CONFIG_ULTRAWIDELOCK_UWB)
       # glue and compile from ports/zephyr (ultrawidelock_zephyr_port) under the same
       # gates; their Kconfig symbols stay in this module's Kconfig.
 
-      # Aliro UWB ranging-setup adapter: composes the M1-M4 handshake the add-on's
+      # Credential UWB ranging-setup adapter: composes the M1-M4 handshake the add-on's
       # ultrawidelock_stack drives via the facade, over the cherry_ccc_* seam that
       # cherry_ccc_shim.c implements on our MAC (fira_session.c + ccc_shim).
       ultrawidelock_role_sources(${ROLES}/ultrawidelock_adapter.list UWB_ULTRAWIDELOCK_ADAPTER_SRCS)

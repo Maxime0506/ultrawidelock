@@ -2,7 +2,7 @@
  * @file ds_twr.h — the double-sided two-way ranging estimator, one definition.
  *
  * Lives at the base CONFIG_ULTRAWIDELOCK_UWB tier rather than in the CCC MAC because two
- * unrelated callers need it: the Aliro responder, which ranges a phone, and the
+ * unrelated callers need it: the credential responder, which ranges a phone, and the
  * anchor-to-anchor bench link, which ranges another board and has no CCC engine
  * in its image at all.
  *

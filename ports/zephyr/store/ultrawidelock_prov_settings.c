@@ -43,10 +43,10 @@ static int prov_set(const char *name, size_t len, settings_read_cb read_cb, void
 SETTINGS_STATIC_HANDLER_DEFINE(ultrawidelock_prov, "ultrawidelock", NULL, prov_set, NULL, NULL);
 
 /**
- * Load Aliro reader identity and trust anchors from persistent settings. Returns 0 on success with
- * stored data loaded, 1 if never provisioned (DEV identity used), -1 on any error (settings init,
- * load, or malformed blob; DEV identity used). On any failure the loaded identity defaults to DEV
- * and the error is logged as a warning.
+ * Load credential reader identity and trust anchors from persistent settings. Returns 0 on success
+ * with stored data loaded, 1 if never provisioned (DEV identity used), -1 on any error (settings
+ * init, load, or malformed blob; DEV identity used). On any failure the loaded identity defaults to
+ * DEV and the error is logged as a warning.
  */
 int ultrawidelock_prov_load(struct ultrawidelock_reader_identity *id,
 			    struct ultrawidelock_trust_store *ts)
@@ -89,9 +89,10 @@ int ultrawidelock_prov_load(struct ultrawidelock_reader_identity *id,
 }
 
 /**
- * Erase the stored Aliro provisioning blob from persistent settings. Returns 0 on success, negative
- * on settings error; the error is logged as a warning and returned rather than suppressed, because
- * a silent factory reset that left the old anchors in place would pair but then reject the phone.
+ * Erase the stored credential provisioning blob from persistent settings. Returns 0 on success,
+ * negative on settings error; the error is logged as a warning and returned rather than suppressed,
+ * because a silent factory reset that left the old anchors in place would pair but then reject the
+ * phone.
  */
 int ultrawidelock_prov_erase(void)
 {
@@ -111,9 +112,9 @@ int ultrawidelock_prov_erase(void)
 }
 
 /**
- * Serialize and store Aliro reader identity and trust anchors to persistent settings. Uses a static
- * blob buffer to avoid stack overflow; safe because provisioning writes are rare and serialized on
- * s_prov_lock or the Matter work queue. Returns the result of settings_save_one.
+ * Serialize and store credential reader identity and trust anchors to persistent settings. Uses a
+ * static blob buffer to avoid stack overflow; safe because provisioning writes are rare and
+ * serialized on s_prov_lock or the Matter work queue. Returns the result of settings_save_one.
  */
 int ultrawidelock_prov_store(const struct ultrawidelock_reader_identity *id,
 			     const struct ultrawidelock_trust_store *ts)

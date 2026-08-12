@@ -1,6 +1,6 @@
 /**
  * @file session.cpp
- * Aliro reader BLE session state machine and cryptographic session context. Manages NFC APDU
+ * credential reader BLE session state machine and cryptographic session context. Manages NFC APDU
  * limits, response timeouts, connection setup, fast-path and standard key derivation, message
  * encryption and decryption, and reader-status notifications. Processes events from the BLE
  * transport and application layer.
@@ -74,8 +74,8 @@ enum class SessionState : uint8_t {
 };
 
 /**
- * Session context holding all state needed to manage an Aliro session: connection handle, protocol
- * version, cryptographic keys, buffers, counters, and access document details.
+ * Session context holding all state needed to manage an credential session: connection handle,
+ * protocol version, cryptographic keys, buffers, counters, and access document details.
  */
 struct SessionContext {
 	std::optional<ConnectionHandle> mHandle;
@@ -298,12 +298,12 @@ void ResponseTimerExpired(void *context)
 	const uint32_t generation = timerContext->mGeneration.load(std::memory_order_relaxed);
 	auto *event = new (std::nothrow) ResponseTimeoutEvent(sessionIndex, generation);
 	if (event == nullptr) {
-		LOG_ERR("Cannot defer Aliro response timeout: no memory");
+		LOG_ERR("Cannot defer credential response timeout: no memory");
 		return;
 	}
 	const AliroError status = Interface::Os::QueueEvent(event);
 	if (status != ALIRO_NO_ERROR) {
-		LOG_ERR("Cannot defer Aliro response timeout: %s", status.ToString());
+		LOG_ERR("Cannot defer credential response timeout: %s", status.ToString());
 		delete event;
 	}
 }
@@ -344,7 +344,7 @@ void DestroyKey(CryptoTypes::KeyId &keyId)
 	if (keyId != 0) {
 		const AliroError error = Interface::Crypto::DestroyKey(keyId);
 		if (error != ALIRO_NO_ERROR) {
-			LOG_WRN("Failed to destroy transient Aliro key: %d", error.ToInt());
+			LOG_WRN("Failed to destroy transient credential key: %d", error.ToInt());
 		}
 		keyId = 0;
 	}
@@ -608,8 +608,8 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 					       nullptr, 0, nonce, plaintext.data(),
 					       plaintextLength);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_DECRYPT_RESULT status=%d plaintext_len=%zu", error.ToInt(),
-		plaintextLength);
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_DECRYPT_RESULT status=%d plaintext_len=%zu",
+		error.ToInt(), plaintextLength);
 #endif
 	DestroyKey(cryptogramKeyId);
 	if (error != ALIRO_NO_ERROR ||
@@ -2064,7 +2064,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 	if (handle.IsBle()) {
 		size_t offset = 0;
 		while (offset < data.mLength) {
-			/* Aliro messages may span several L2CAP SDUs. Assemble exactly one
+			/* credential messages may span several L2CAP SDUs. Assemble exactly one
 			 * framed message before handing it to the protocol parser. */
 			std::array<uint8_t, kBleFrameCapacity> frame{};
 			size_t frameLength = 0;
@@ -2128,7 +2128,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 				}
 			}
 			if (invalidFrame) {
-				LOG_WRN("Malformed or oversized Aliro BLE frame");
+				LOG_WRN("Malformed or oversized credential BLE frame");
 				AliroStack::Instance().DestroySession(handle);
 				return;
 			}
@@ -2138,7 +2138,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 			if (ultrawidelock_cred_ble_parse_message(frame.data(), frameLength, &message,
 							&consumed) != ULTRAWIDELOCK_CRED_BLE_OK ||
 			    consumed != frameLength) {
-				LOG_WRN("Cannot parse assembled Aliro BLE frame");
+				LOG_WRN("Cannot parse assembled credential BLE frame");
 				AliroStack::Instance().DestroySession(handle);
 				return;
 			}
@@ -2295,7 +2295,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 					}
 				}
 				if (status != ALIRO_NO_ERROR) {
-					LOG_WRN("Aliro BLE session failed in state %u: %s",
+					LOG_WRN("credential BLE session failed in state %u: %s",
 						static_cast<unsigned int>(session->mState),
 						status.ToString());
 					terminate = true;
@@ -2324,7 +2324,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 		}
 		status = processApResponse(*session, data, terminate);
 		if (status != ALIRO_NO_ERROR) {
-			LOG_WRN("Aliro NFC session failed in state %u: %s",
+			LOG_WRN("credential NFC session failed in state %u: %s",
 				static_cast<unsigned int>(session->mState), status.ToString());
 			terminate = true;
 		}
@@ -2360,7 +2360,7 @@ void ProcessResponseTimeout(size_t sessionIndex, uint32_t generation)
 		NextResponseTimerGeneration(session);
 	}
 
-	LOG_WRN("Aliro BLE response timeout expired");
+	LOG_WRN("credential BLE response timeout expired");
 	AliroStack::Instance().DestroySession(*expiredHandle);
 }
 
@@ -2381,20 +2381,20 @@ void AliroStack::HandleSessionData(ConnectionHandle handle, Data data)
 	}
 	if (data.mData == nullptr || data.mLength == 0 ||
 	    data.mLength > kSessionDataEventCapacity) {
-		LOG_WRN("Cannot defer Aliro BLE data: invalid length %zu", data.mLength);
+		LOG_WRN("Cannot defer credential BLE data: invalid length %zu", data.mLength);
 		DestroySession(handle);
 		return;
 	}
 
 	auto *event = new (std::nothrow) SessionDataEvent(handle, data);
 	if (event == nullptr) {
-		LOG_WRN("Cannot defer Aliro BLE data: no memory");
+		LOG_WRN("Cannot defer credential BLE data: no memory");
 		DestroySession(handle);
 		return;
 	}
 	const AliroError status = Interface::Os::QueueEvent(event);
 	if (status != ALIRO_NO_ERROR) {
-		LOG_WRN("Cannot defer Aliro BLE data: %s", status.ToString());
+		LOG_WRN("Cannot defer credential BLE data: %s", status.ToString());
 		delete event;
 		DestroySession(handle);
 	}
@@ -2418,7 +2418,7 @@ void AliroStack::SendBleMessage(ConnectionHandle connectionHandle, const uint8_t
 		}
 	}
 	if (status != ALIRO_NO_ERROR) {
-		LOG_WRN("Failed to send Aliro BLE message: %s", status.ToString());
+		LOG_WRN("Failed to send credential BLE message: %s", status.ToString());
 		if (status != ALIRO_SESSION_NOT_FOUND) {
 			const_cast<AliroStack *>(this)->DestroySession(connectionHandle);
 		}
@@ -2463,16 +2463,16 @@ AliroError AliroStack::SendReaderStatusChangedMessage(
 #endif // CONFIG_NCS_ALIRO_BLE_UWB
 
 /**
- * Dequeue and process a pending Aliro event (ResponseTimeoutEvent or SessionDataEvent) or log and
- * ignore unknown events.
+ * Dequeue and process a pending credential event (ResponseTimeoutEvent or SessionDataEvent) or log
+ * and ignore unknown events.
  *
- * Deletes the event after processing. Called by the OS event loop when an Aliro-owned event is
+ * Deletes the event after processing. Called by the OS event loop when an credential-owned event is
  * ready. Caller must pass a non-null event pointer; null triggers a warning log.
  */
 void AliroStack::ProcessEvent(void *event)
 {
 	if (event == nullptr) {
-		LOG_WRN("Cannot process null Aliro event");
+		LOG_WRN("Cannot process null credential event");
 		return;
 	}
 	auto *header = static_cast<EventHeader *>(event);
@@ -2486,7 +2486,7 @@ void AliroStack::ProcessEvent(void *event)
 		return;
 	}
 	if (header->mMagic != kSessionDataEventMagic) {
-		LOG_WRN("Cannot process unknown Aliro event");
+		LOG_WRN("Cannot process unknown credential event");
 		return;
 	}
 	auto *sessionData = static_cast<SessionDataEvent *>(event);

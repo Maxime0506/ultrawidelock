@@ -155,7 +155,7 @@ int main(void)
 		      status_for(d, HCI_OPCODE_LE_SET_PHY, &status) &&
 		      status == HCI_STATUS_SUCCESS);
 
-	/* LE OGF 0x08, and the command that actually starts Aliro advertising. */
+	/* LE OGF 0x08, and the command that actually starts credential advertising. */
 	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_LE_SET_ADV_ENABLE, 1);
 	packet[3] = 1;

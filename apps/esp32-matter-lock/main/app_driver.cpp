@@ -93,7 +93,7 @@ esp_err_t app_driver_led_init()
     return led_strip_clear(s_lock_led);
 }
 
-// Set the lock status LED color to reflect lock and Aliro state.
+// Set the lock status LED color to reflect lock and credential state.
 // No-op if app_driver_led_init failed or was never called. Looks up the RGB
 // color for the given (locked, ultrawidelock) combination and pushes it to the single
 // pixel.
@@ -102,7 +102,7 @@ void app_driver_led_lock_state(bool locked, bool ultrawidelock)
     if (s_lock_led == NULL) {
         return; /* init failed or was never called: stay silent */
     }
-    // RGB color for the lock status LED corresponding to a given locked/Aliro state
+    // RGB color for the lock status LED corresponding to a given locked/credential state
     // combination, as returned by lock_led_color.
     struct lock_led_rgb c = lock_led_color(locked, ultrawidelock);
     led_strip_set_pixel(s_lock_led, 0, c.r, c.g, c.b);

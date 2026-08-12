@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 /**
- * @brief Session-independent reader state shared across all ranging sessions for an Aliro UWB
+ * @brief Session-independent reader state shared across all ranging sessions for an credential UWB
  * adapter.
  */
 struct ultrawidelock_uwb_adapter {
@@ -49,7 +49,7 @@ enum ultrawidelock_uwb_session_state {
 
 /**
  * @brief Per-approach ranging-setup session record holding the CCC state machine and derived keys
- * for one Aliro exchange.
+ * for one credential exchange.
  */
 struct ultrawidelock_uwb_session {
 	/**
@@ -69,7 +69,7 @@ struct ultrawidelock_uwb_session {
 	 */
 	struct cherry_ccc_session *ccc_session;
 	/**
-	 * @brief CCC Aliro session configuration encoding the M1-M4 setup parameters (MAC, time
+	 * @brief CCC credential session configuration encoding the M1-M4 setup parameters (MAC, time
 	 * sync, STS seed, hopping sequence).
 	 */
 	struct cherry_ccc_ultrawidelock_session_config ccc_ultrawidelock_config;

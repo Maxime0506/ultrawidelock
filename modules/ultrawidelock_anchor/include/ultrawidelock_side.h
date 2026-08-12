@@ -57,7 +57,7 @@ enum ultrawidelock_side_anchor_mask {
 
 /** Compact observation features for one correlated window. */
 struct ultrawidelock_side_features {
-	uint32_t obs_session_id; /**< ephemeral; bind to Aliro session locally */
+	uint32_t obs_session_id; /**< ephemeral; bind to credential session locally */
 	uint32_t seq;            /**< monotonic per obs_session_id */
 	int64_t now_ms;          /**< lock monotonic clock */
 

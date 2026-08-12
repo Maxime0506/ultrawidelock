@@ -8,7 +8,7 @@
 config ULTRAWIDELOCK_CRED_STACK
 	bool "UltraWideLock credential-auth stack (open libaliro replacement)"
 	help
-	  Compile the open Aliro reader core: the credential-auth key schedule
+	  Compile the open credential reader core: the credential-auth key schedule
 	  (X9.63/HKDF -> session keys, URSK, BleSK), the AES-256-GCM secure
 	  channel, the BER-TLV/ISO7816 wire codec, and the reader trust store.
 

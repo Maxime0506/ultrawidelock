@@ -1,9 +1,9 @@
 /*
- * ultrawidelock_ble — Zephyr/NCS backend for the Aliro BLE transport seam
+ * ultrawidelock_ble — Zephyr/NCS backend for the credential BLE transport seam
  * (modules/ultrawidelock_cred/include/ultrawidelock_ble.h), for the DWM3001CDK standalone
  * reader. The byte contract is the one the ESP32-S3 NimBLE backend already
  * ships and the host tests already pin: the 0xFFF2 service, the reader-SPSM
- * READ payload, the device-version WRITE, and the Aliro transaction on an
+ * READ payload, the device-version WRITE, and the credential transaction on an
  * L2CAP CoC at the published SPSM.
  *
  * Deliberately not here yet (stage 4 finishes them; none affects code size
@@ -78,7 +78,7 @@ static int8_t s_adv_tx_power;
 #define ULTRAWIDELOCK_ADV_TIME_FLOOR   1700000000
 #define ULTRAWIDELOCK_ADV_TAG_VALID_S  600
 
-/* ---- L2CAP CoC: the Aliro transaction channel ---------------------------- */
+/* ---- L2CAP CoC: the credential transaction channel ---------------------------- */
 
 /* One peer at a time. CONFIG_BT_MAX_CONN=1 makes that a build-time fact, not a
  * hope, so a single channel record is the whole table. */
@@ -125,7 +125,7 @@ static int coc_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 }
 
 /**
- * Emit a bench-scrapable SIDE line carrying the peer AdvA/RPA at Aliro CoC
+ * Emit a bench-scrapable SIDE line carrying the peer AdvA/RPA at credential CoC
  * open, and a matching clear at close. The format is fixed for the
  * bench capture tooling, which pushes the address to the BLE witnesses as an
  * advertising filter so they summarise one phone instead of the whole room.
@@ -183,7 +183,8 @@ static void side_emit_clear(void)
 #endif /* CONFIG_ULTRAWIDELOCK_SIDE_PEER_EMIT */
 
 /**
- * Handle L2CAP CoC connection establishment by notifying the Aliro engine and logging the event.
+ * Handle L2CAP CoC connection establishment by notifying the credential engine and logging the
+ * event.
  */
 static void coc_connected(struct bt_l2cap_chan *chan)
 {
@@ -195,8 +196,8 @@ static void coc_connected(struct bt_l2cap_chan *chan)
 }
 
 /**
- * Handle L2CAP CoC disconnection by releasing the channel, clearing state, and notifying the Aliro
- * engine.
+ * Handle L2CAP CoC disconnection by releasing the channel, clearing state, and notifying the
+ * credential engine.
  */
 static void coc_disconnected(struct bt_l2cap_chan *chan)
 {
@@ -241,15 +242,15 @@ static int coc_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 
 static struct bt_l2cap_server s_l2cap_server = {
 	.psm = ULTRAWIDELOCK_L2CAP_SPSM,
-	.sec_level = BT_SECURITY_L1, /* Aliro encrypts at the application layer */
+	.sec_level = BT_SECURITY_L1, /* credential encrypts at the application layer */
 	.accept = coc_accept,
 };
 
 /* ---- GATT: reader-SPSM READ + device-version WRITE ------------------------ */
 
 /**
- * Encode Aliro feature flags (timesync procedures 0 and 1, LE Coded PHY) into a byte bitmap for the
- * service data advertisement.
+ * Encode credential feature flags (timesync procedures 0 and 1, LE Coded PHY) into a byte bitmap
+ * for the service data advertisement.
  */
 static uint8_t encode_features(const struct ultrawidelock_ble_features *f)
 {
@@ -268,8 +269,8 @@ static uint8_t encode_features(const struct ultrawidelock_ble_features *f)
 }
 
 /**
- * Build the Aliro BLE advertisement payload containing the L2CAP SPSM, supported protocol versions,
- * and feature flags.
+ * Build the credential BLE advertisement payload containing the L2CAP SPSM, supported protocol
+ * versions, and feature flags.
  */
 static void build_read_payload(const struct ultrawidelock_ble_config *cfg)
 {
@@ -291,7 +292,7 @@ static void build_read_payload(const struct ultrawidelock_ble_config *cfg)
 }
 
 /**
- * GATT read callback that returns the static Aliro reader payload (service data with identity
+ * GATT read callback that returns the static credential reader payload (service data with identity
  * material and features).
  */
 static ssize_t reader_spsm_read(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf,
@@ -318,7 +319,7 @@ static ssize_t device_ver_write(struct bt_conn *conn, const struct bt_gatt_attr 
 	return len;
 }
 
-/* No _ENC / _AUTHEN on either permission: Aliro runs its own application-layer
+/* No _ENC / _AUTHEN on either permission: credential runs its own application-layer
  * secure channel, and requiring BLE bonding here would break the walk-up. The
  * shipped ESP32 reader is unpaired for the same reason and unlocks a real
  * iPhone Wallet key. */
@@ -332,7 +333,7 @@ BT_GATT_SERVICE_DEFINE(ultrawidelock_svc,
 
 /* ---- advertising --------------------------------------------------------- */
 
-/* Aliro 1.0 section 11.3 (Table 11-2). 24 payload bytes after the 16-bit UUID:
+/* credential 1.0 section 11.3 (Table 11-2). 24 payload bytes after the 16-bit UUID:
  *   [0]      flags: bit7 = BLE+UWB supported, bits2:0 = version (0)
  *   [1]      tx power (int8)
  *   [2..9]   truncated reader group id      = reader_id[0..7]
@@ -405,7 +406,7 @@ static bool build_ultrawidelock_svc_data(uint8_t out[24])
  * all, and the name a Mac displayed came from the cached GATT one.
  *
  * The scan response and not the advert, because a 128-bit UUID is 18 of the 31
- * bytes available and the advert is already carrying the Aliro payload an
+ * bytes available and the advert is already carrying the credential payload an
  * iPhone needs in order to resolve an approach. The scan response is a second
  * 31 bytes that costs the advert nothing, and every mcumgr client scans
  * actively, so it always asks for it. The name goes here too: 18 + 11 = 29,
@@ -424,10 +425,10 @@ static const struct bt_data smp_sd[] = {
 #endif
 
 /**
- * Advertise the Aliro reader service or Matter commissioning availability over BLE, with payload
- * priority given to findability: reader service when commissioned, commissioning advertisement when
- * unprovisioned or a window is open, or bare service UUID as fallback. Stops advertising if a
- * connection is active and schedules re-advertisement on disconnect.
+ * Advertise the credential reader service or Matter commissioning availability over BLE, with
+ * payload priority given to findability: reader service when commissioned, commissioning
+ * advertisement when unprovisioned or a window is open, or bare service UUID as fallback. Stops
+ * advertising if a connection is active and schedules re-advertisement on disconnect.
  */
 static int ultrawidelock_advertise(void)
 {
@@ -454,7 +455,7 @@ static int ultrawidelock_advertise(void)
 	/*
 	 * A commissioning window makes this node commissionable AGAIN even
 	 * though it holds a fabric. Without this an OpenCommissioningWindow
-	 * kept advertising the Aliro reader tag, so the second ecosystem the
+	 * kept advertising the credential reader tag, so the second ecosystem the
 	 * window was opened for could never find it -- observed on hardware,
 	 * 2026-08-03.
 	 */
@@ -480,7 +481,7 @@ static int ultrawidelock_advertise(void)
 		/* A reader with no identity cannot unlock anything, so the only
 		 * useful thing it can advertise is that it wants commissioning.
 		 * Both elements fit one legacy packet: flags 3 + Matter service
-		 * data 12 + the Aliro UUID 4 = 19 of the 31 bytes available, so
+		 * data 12 + the credential UUID 4 = 19 of the 31 bytes available, so
 		 * the scanner affordance above is kept rather than traded away.
 		 *
 		 * This is also why there is no second advertising set. See
@@ -524,7 +525,7 @@ static int ultrawidelock_advertise(void)
 	 * a bench, and it is not otherwise visible without a sniffer. */
 	if (rc == 0) {
 		LOG_INF("advertising: %s (%u AD elements)",
-			as_reader ? "Aliro reader 0xFFF2" : "unprovisioned, commissionable",
+			as_reader ? "credential reader 0xFFF2" : "unprovisioned, commissionable",
 			(unsigned int)ad_len);
 	} else {
 		/*
@@ -551,14 +552,14 @@ static K_WORK_DELAYABLE_DEFINE(s_readvertise_work, readvertise_work_fn);
 
 /**
  * Attempt to resume BLE advertising with exponential backoff (100 ms, max 5 attempts) when a
- * disconnect requires re-advertisement; runs on the system work queue to avoid blocking the Aliro
- * access protocol.
+ * disconnect requires re-advertisement; runs on the system work queue to avoid blocking the
+ * credential access protocol.
  */
 static void readvertise_work_fn(struct k_work *w)
 {
 	/*
 	 * Rescheduled rather than retried in a loop: this runs on the system
-	 * work queue, which is also where the Aliro access protocol runs, so
+	 * work queue, which is also where the credential access protocol runs, so
 	 * sleeping here would stall an unlock to fix advertising.
 	 */
 	static uint8_t attempts;
@@ -692,9 +693,9 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 /* ---- the ultrawidelock_ble.h seam ------------------------------------------------ */
 
 /**
- * Validate and store Aliro BLE configuration: protocol versions and callback handler. Caller must
- * provide non-null cfg with non-empty proto_versions array sized <= ULTRAWIDELOCK_MAX_VERSIONS;
- * returns 0 on success or -EINVAL if any parameter is invalid.
+ * Validate and store credential BLE configuration: protocol versions and callback handler. Caller
+ * must provide non-null cfg with non-empty proto_versions array sized <=
+ * ULTRAWIDELOCK_MAX_VERSIONS; returns 0 on success or -EINVAL if any parameter is invalid.
  */
 int ultrawidelock_ble_prepare(const struct ultrawidelock_ble_config *cfg)
 {
@@ -739,12 +740,12 @@ int ultrawidelock_ble_start(const struct ultrawidelock_ble_config *cfg)
 		LOG_ERR("adv start rc=%d", rc);
 		return rc;
 	}
-	LOG_INF("Aliro reader up; advertising (SPSM 0x%04x)", (unsigned)ULTRAWIDELOCK_L2CAP_SPSM);
+	LOG_INF("credential reader up; advertising (SPSM 0x%04x)", (unsigned)ULTRAWIDELOCK_L2CAP_SPSM);
 	return 0;
 }
 
 /**
- * Return the L2CAP protocol/service multiplexer for the Aliro reader channel.
+ * Return the L2CAP protocol/service multiplexer for the credential reader channel.
  */
 uint16_t ultrawidelock_ble_spsm(void)
 {
@@ -797,7 +798,7 @@ int ultrawidelock_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len
 }
 
 /**
- * Disconnect the active L2CAP CoC link, terminating the Aliro protocol exchange.
+ * Disconnect the active L2CAP CoC link, terminating the credential protocol exchange.
  */
 int ultrawidelock_ble_disconnect(uint16_t conn_handle)
 {
@@ -810,7 +811,7 @@ int ultrawidelock_ble_disconnect(uint16_t conn_handle)
 }
 
 /**
- * Store the Aliro reader identity material (group ID, sub ID, GRK, TX power) to populate the
+ * Store the credential reader identity material (group ID, sub ID, GRK, TX power) to populate the
  * service data advertisement on the next readvertise call.
  */
 void ultrawidelock_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
@@ -824,8 +825,8 @@ void ultrawidelock_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t 
 }
 
 /**
- * Re-advertise the Aliro reader service or Matter commissioning availability over BLE after a state
- * change requiring advertisement resume.
+ * Re-advertise the credential reader service or Matter commissioning availability over BLE after a
+ * state change requiring advertisement resume.
  */
 void ultrawidelock_ble_readvertise(void)
 {
@@ -833,8 +834,8 @@ void ultrawidelock_ble_readvertise(void)
 }
 
 /**
- * Re-advertise the Aliro reader service or Matter commissioning availability over BLE after the
- * system time is updated.
+ * Re-advertise the credential reader service or Matter commissioning availability over BLE after
+ * the system time is updated.
  */
 void ultrawidelock_ble_time_updated(void)
 {

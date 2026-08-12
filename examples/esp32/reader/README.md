@@ -1,6 +1,6 @@
 # ESP32 reader example
 
-This is a standalone Aliro reader for ESP32-S3, ESP32-C5, or ESP32-C6 with a
+This is a standalone credential reader for ESP32-S3, ESP32-C5, or ESP32-C6 with a
 DWM3000EVB. It exercises the reader, provisioning, BLE, and UWB paths without
 the esp-matter lock application.
 

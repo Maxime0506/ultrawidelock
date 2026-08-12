@@ -1,12 +1,12 @@
 # ultrawidelock on the nRF5340 DK: flash guide
 
-The ultrawidelock target that taps: an Aliro lock with NFC tap and UWB approach unlock. It
+The ultrawidelock target that taps: an credential lock with NFC tap and UWB approach unlock. It
 joins Apple Home over Thread, your iPhone carries the key in Wallet, and the lock
 opens as you walk up or on a tap.
 
 | File | What it is |
 |---|---|
-| `merged.hex` | application core image (Matter, Aliro, the UWB engine) |
+| `merged.hex` | application core image (Matter, the credential stack, the UWB engine) |
 | `merged_CPUNET.hex` | network core image (radio controller) |
 | `flash.sh` | flashes both cores over the DK's on-board J-Link |
 | `SETUP-QR.png` | the commissioning QR code: scan it straight from this folder |

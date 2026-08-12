@@ -192,7 +192,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-o "$KV_BIN"
 "$KV_BIN"
 
-# The Aliro provisioning backend, over the real store rather than a stub: the
+# The credential provisioning backend, over the real store rather than a stub: the
 # property under test is that a provisioned identity survives a reset, and only
 # the real store can be wrong about that.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \

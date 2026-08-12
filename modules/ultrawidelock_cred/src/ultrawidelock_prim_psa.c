@@ -1,7 +1,7 @@
-// Aliro crypto primitive backend implemented on Arm PSA Crypto: random generation, AES-256-GCM
+// credential crypto primitive backend implemented on Arm PSA Crypto: random generation, AES-256-GCM
 // encrypt/decrypt, and NIST P-256 key generation, ECDH, and ECDSA sign/verify.
 // Provides the ultrawidelock_prim_* / ultrawidelock_* primitive functions consumed by the
-// higher-level Aliro KDF and secure-channel code in ultrawidelock_crypto.c; callers must call
+// higher-level credential KDF and secure-channel code in ultrawidelock_crypto.c; callers must call
 // ultrawidelock_prim_init before using any other function in this file.
 /*
  * ultrawidelock_prim backend for the ESP32 target: AES-256-GCM, P-256 ECDH/ECDSA, and
@@ -14,7 +14,7 @@
 
 #include "psa/crypto.h"
 
-/* Aliro secure-channel messages fit in one L2CAP SDU (<= 512 B); bound the
+/* credential secure-channel messages fit in one L2CAP SDU (<= 512 B); bound the
  * ciphertext||tag scratch used by GCM decrypt accordingly. */
 #define ULTRAWIDELOCK_AEAD_MAX 1024u
 

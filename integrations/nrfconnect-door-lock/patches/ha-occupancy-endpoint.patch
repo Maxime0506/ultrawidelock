@@ -826,7 +826,7 @@ diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/bolt_loc
  			},
 +		.mProximityClb =
 +			[](bool inProximity) {
-+				/* Runs in the Aliro/UWB context; hop to the app task, where attribute
++				/* Runs in the credential/UWB context; hop to the app task, where attribute
 +				   access is safe (same hop the lock/unlock callbacks above take). */
 +				Nrf::PostTask([inProximity] {
 +					using namespace chip::app::Clusters::OccupancySensing;

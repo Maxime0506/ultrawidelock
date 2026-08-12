@@ -1,7 +1,7 @@
-// Aliro M1-M4 ranging-setup interface: negotiates UWB ranging parameters with the device and
+// credential M1-M4 ranging-setup interface: negotiates UWB ranging parameters with the device and
 // produces the BLE ranging-control secure channel used to carry the M1-M4 exchange.
 /*
- * ultrawidelock_ranging — the post-auth Aliro UWB ranging-setup (M1-M4) on ESP32. Thin
+ * ultrawidelock_ranging — the post-auth credential UWB ranging-setup (M1-M4) on ESP32. Thin
  * glue that drives the engine's reader adapter/session (modules/ultrawidelock_uwb
  * ultrawidelock_uwb_ adapter + session): on a completed credential-auth it creates a session bound
  * to the derived URSK, emits M1 over the BLE L2CAP channel, feeds inbound M2/M4 back to the engine,

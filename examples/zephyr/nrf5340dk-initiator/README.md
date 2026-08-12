@@ -1,7 +1,7 @@
 # nRF5340 DK initiator example
 
-This application runs the Aliro user-device role on an nRF5340 DK. It scans for
-an Aliro reader, negotiates the BLE transport, and drives the initiator-side
+This application runs the credential user-device role on an nRF5340 DK. It scans for
+an credential reader, negotiates the BLE transport, and drives the initiator-side
 UWB exchange. It is a bench peer, not a lock.
 
 Prepare the NCS workspace and build:

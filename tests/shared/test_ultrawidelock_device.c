@@ -1,5 +1,5 @@
 /*
- * Host tests for the Aliro initiator (device) side: ultrawidelock_device_apdu (inverse
+ * Host tests for the credential initiator (device) side: ultrawidelock_device_apdu (inverse
  * wire codec) + ultrawidelock_device (AP secure channel, cryptogram sealer, standard-path
  * key schedule). Everything here is EC-free and CI-gating; the full ECDH+ECDSA
  * handshake loopback is compiled behind ULTRAWIDELOCK_DEVICE_HAVE_EC (real EC only exists

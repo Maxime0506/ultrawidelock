@@ -1,4 +1,4 @@
-/* Minimal strict BER/DER-TLV reader for Aliro APDU payloads. Promoted from
+/* Minimal strict BER/DER-TLV reader for credential APDU payloads. Promoted from
  * ultrawidelock_cred_stack (protocol/tlv.h) as the one TLV codec both stacks share. */
 #pragma once
 

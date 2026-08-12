@@ -1,21 +1,21 @@
-# Aliro reader engine as an ESP-IDF component.
+# credential reader engine as an ESP-IDF component.
 # The transaction driver, wire codec, trust store and ranging glue come from
 # the role manifests in modules/ultrawidelock_cred/roles/; the same lists apps/dwm3001cdk-lock/
 # and the host suite read. Only ultrawidelock_prov_nvs.c is ESP32-specific (NVS-backed
 # blob store); its Zephyr counterpart will be a settings/nvs twin.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
-set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
+set(CRED "${REPO_ROOT}/modules/ultrawidelock_cred")
 
 include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
-ultrawidelock_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
 # Step-up (Access Document) + presence-assertion pure codecs. Always compiled
 # (pure functions, no side effects) but only invoked from ultrawidelock_reader.c under
 # CONFIG_ULTRAWIDELOCK_CRED_STEPUP (default n); ultrawidelock_assert.c is backend-free by
 # design and only the presence dongle app (CONFIG_ULTRAWIDELOCK_PRESENCE) calls it.
-ultrawidelock_role_sources("${ALIRO}/roles/wire_codecs.list" ULTRAWIDELOCK_WIRE_CODEC_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/wire_codecs.list" ULTRAWIDELOCK_WIRE_CODEC_SRCS)
 
 idf_component_register(
 	SRCS
@@ -28,8 +28,8 @@ idf_component_register(
 		# worker's engine half whose ESP worker body is gated to empty when
 		# CONFIG_ULTRAWIDELOCK_CRED_STEPUP is off, and the ultrawidelock_assert P-256 shim —
 		# the only one of the assert pair with a crypto dependency.
-		"${ALIRO}/src/ultrawidelock_stepup.c"
-		"${ALIRO}/src/ultrawidelock_assert_ec.c"
+		"${CRED}/src/ultrawidelock_stepup.c"
+		"${CRED}/src/ultrawidelock_assert_ec.c"
 		"ultrawidelock_stepup_worker.c"
 		"ultrawidelock_prov_nvs.c"
 		# The `presence` console command. Lives here rather than in one app so
@@ -37,8 +37,8 @@ idf_component_register(
 		# lock is the board a phone is actually provisioned against, so requiring
 		# a separate dongle app would mean cloning an identity to use it at all.
 		"presence_link.c"
-	INCLUDE_DIRS "${ALIRO}/include" "."
-	PRIV_INCLUDE_DIRS "${ALIRO}/src"
+	INCLUDE_DIRS "${CRED}/include" "."
+	PRIV_INCLUDE_DIRS "${CRED}/src"
 	# ultrawidelock_port.h / ultrawidelock_log.h (the platform contract ultrawidelock_reader.c and
 	# ultrawidelock_ranging.c are written to) come via ultrawidelock_uwb's public include dirs
 	# (modules/ultrawidelock_port/include).

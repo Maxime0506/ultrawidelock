@@ -1,5 +1,5 @@
-/** @file ccc_session.h — Aliro/CCC ranging seam: map an Aliro session's URSK + M1-M4 setup to
- * ccc_ran_params. */
+/** @file ccc_session.h — credential/CCC ranging seam: map an credential session's URSK + M1-M4
+ * setup to ccc_ran_params. */
 
 #ifndef CCC_SESSION_H
 #define CCC_SESSION_H
@@ -8,12 +8,12 @@
 
 #include "ccc_mac.h" /* struct ccc_ran_params, enum ccc_hop_mode, CCC_URSK_LEN */
 
-/** SP0 MHR Vendor OUI for Aliro ranging (CSA Company Id). */
+/** SP0 MHR Vendor OUI for credential ranging (CSA Company Id). */
 #define CCC_CRED_VENDOR_OUI 0x4A191Bu
 
 /**
- * @brief An Aliro ranging session: the URSK + the M1-M4 setup parameters; the interface to the CCC
- * MAC.
+ * @brief An credential ranging session: the URSK + the M1-M4 setup parameters; the interface to the
+ * CCC MAC.
  */
 struct ccc_ran_session {
 	uint8_t ursk[CCC_URSK_LEN]; /**< Ranging secret key (ultrawidelock_kdf). */
@@ -32,7 +32,7 @@ struct ccc_ran_session {
 /** Rounds per ranging block, from N_RAN_S and the slot parameters (0 if the denominator is 0). */
 uint16_t ccc_session_n_round(const struct ccc_ran_session *s);
 
-/** Map an Aliro session onto the CCC MAC's ranging-schedule parameters. */
+/** Map an credential session onto the CCC MAC's ranging-schedule parameters. */
 int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out);
 
 #endif /* CCC_SESSION_H */

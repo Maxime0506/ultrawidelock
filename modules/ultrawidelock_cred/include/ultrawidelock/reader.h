@@ -1,6 +1,6 @@
 /*
- * ultrawidelock_reader: Aliro reader session/transaction layer. Owns the per-connection
- * Aliro transaction on top of the ultrawidelock_ble transport: session lifecycle, the
+ * ultrawidelock_reader: credential reader session/transaction layer. Owns the per-connection
+ * credential transaction on top of the ultrawidelock_ble transport: session lifecycle, the
  * credential-auth exchange (AUTH0/AUTH1/EXCHANGE), the reader identity and
  * credential trust gate, the M1-M4 ranging setup, and the handoff of the derived
  * URSK plus negotiated ranging parameters to the UWB engine.
@@ -17,18 +17,18 @@
 extern "C" {
 #endif
 
-/** Bring up the Aliro reader (starts the BLE transport + session layer).
+/** Bring up the credential reader (starts the BLE transport + session layer).
  *  Returns 0 on success, negative on failure. */
 int ultrawidelock_reader_start(void);
 
 /* ---- Attach mode: coexist with a host another stack owns (esp-matter) ----- *
  * Two phases so the reader shares one BLE controller with Matter:
  * ultrawidelock_reader_ble_prepare() runs BEFORE the host stack starts its GATT server
- * and returns the Aliro GATT service definition to register via that stack's
+ * and returns the credential GATT service definition to register via that stack's
  * hook; ultrawidelock_reader_start_attached() runs once the host is up + the device is
  * operational (the owner has released the advertiser). */
 
-/** Prepare the reader for attach mode + return the Aliro GATT service def to
+/** Prepare the reader for attach mode + return the credential GATT service def to
  *  register (cast to `const struct ble_gatt_svc_def *`). NULL on failure. */
 const void *ultrawidelock_reader_ble_prepare(void);
 
@@ -38,7 +38,7 @@ int ultrawidelock_reader_start_attached(void);
 
 /** Re-emit the BLE advertisement using the currently-provisioned GRK. Call after
  *  Matter provisioning (SetAliroReaderConfig) if the reader may already be
- *  advertising: it starts on kCommissioningComplete, before Apple sends the Aliro
+ *  advertising: it starts on kCommissioningComplete, before Apple sends the credential
  *  config, so its first advertisement has no GRK and the phone cannot resolve it.
  *  No-op if the reader has no GRK or is not yet advertising. */
 void ultrawidelock_reader_refresh_adv(void);
@@ -65,7 +65,7 @@ void ultrawidelock_reader_set_lock_state_listener(void (*cb)(bool unlocked));
  * sustained fade below the close threshold. */
 void ultrawidelock_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm);
 
-/* Send the phone a "Reader Status Changed" SDU (Aliro transaction step 23) over the
+/* Send the phone a "Reader Status Changed" SDU (credential transaction step 23) over the
  * active ranging session's BleSK channel: `unsecured` true on an approach grant (this
  * is what fires the iPhone Wallet unlock animation), false on relock. Safe to call
  * from any task -- it marshals the send onto the BLE-host task. No-op if no ranging
@@ -80,7 +80,7 @@ void ultrawidelock_reader_notify_unlock(bool unsecured);
  * replay is pending. Nothing else needs it -- an ordinary walk-up never arms one. */
 void ultrawidelock_reader_status_tick(int64_t now_ms);
 
-/* True while some peer holds an established Aliro session (auth done, ranging
+/* True while some peer holds an established credential session (auth done, ranging
  * channel up). This is the reader's presence signal, and it is the one an approach
  * controller should relock on: ranging silence is not a departure, because iOS
  * pauses ranging when the phone stops moving (bench: 3.07 s with the phone 26 cm
@@ -118,7 +118,7 @@ bool ultrawidelock_reader_authenticated_credential(uint8_t cred_pub[65]);
 
 /* ---- Demand-driven presence proof --------------------------------------- *
  * A proof must not reuse the credential/range latches from a prior walk-up.
- * restart() marshals a disconnect of every current Aliro link onto the BLE
+ * restart() marshals a disconnect of every current credential link onto the BLE
  * host task and returns a nonzero request ticket. checkpoint() becomes true
  * only after those links are gone; its auth_generation is the floor a new
  * transaction must advance past. */
@@ -187,7 +187,7 @@ int ultrawidelock_reader_provision_add_trust(const uint8_t cred_pub[65], uint8_t
  * FAIL CLOSED: the anchor is dropped from the live store first and persisted
  * second, so a write that fails returns an error while the credential is already
  * untrusted, and the next disconnect retries the write. Both also drop every
- * live Aliro link, because an established session keeps ranging under a URSK
+ * live credential link, because an established session keeps ranging under a URSK
  * derived before the removal and never re-checks the trust store. */
 
 /** Revoke the anchor installed as Door Lock (@p cred_type, @p cred_index). Both

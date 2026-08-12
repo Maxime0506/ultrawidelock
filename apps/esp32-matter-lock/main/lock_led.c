@@ -1,7 +1,6 @@
-// Lock-state indicator LED: maps lock state (and Aliro activity) to an RGB colour for the single
-// status pixel.
-// Locked always extinguishes the indicator; unlocked shows blue during active UWB/Aliro engagement
-// and a different colour otherwise, per lock_led_color.
+// Lock-state indicator LED: maps lock state (and credential activity) to an RGB colour for the
+// single status pixel. Locked always extinguishes the indicator; unlocked shows blue during active
+// UWB/credential engagement and a different colour otherwise, per lock_led_color.
 #include "lock_led.h"
 
 struct lock_led_rgb lock_led_color(bool locked, bool ultrawidelock)

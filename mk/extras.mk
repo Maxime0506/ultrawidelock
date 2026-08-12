@@ -40,7 +40,7 @@ help:
 	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
 	  b=$$(printf '\033[1m'); c=$$(printf '\033[36m'); y=$$(printf '\033[1;33m'); d=$$(printf '\033[2m'); r=$$(printf '\033[0m'); \
 	else b=; c=; y=; d=; r=; fi; \
-	printf '\n  %sUltraWideLock%s  %s·  Aliro NFC + UWB firmware  ·  bare targets mean the DWM3001CDK%s\n' "$$b" "$$r" "$$d" "$$r"; \
+	printf '\n  %sUltraWideLock%s  %s·  credential NFC + UWB firmware  ·  bare targets mean the DWM3001CDK%s\n' "$$b" "$$r" "$$d" "$$r"; \
 	awk -v c="$$c" -v y="$$y" -v d="$$d" -v r="$$r" \
 	  '/^##@ / { printf "\n  %s%s%s\n", y, substr($$0,5), r; next } \
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \

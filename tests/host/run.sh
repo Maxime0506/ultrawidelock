@@ -138,7 +138,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb
 "$OUT/host_test_dfu"
 
 # 6) The ultrawidelock_nfc transport seam (C++), over fake Zephyr SPI/GPIO/kernel and a
-#    recording Aliro stack (nfcfake/). pn532.c and pn532_apdu.c link in for
+#    recording credential stack (nfcfake/). pn532.c and pn532_apdu.c link in for
 #    real, so the frames really are encoded and parsed by the shipping codec.
 #    transport_none.cpp defines the same five symbols as transport_pn532.cpp,
 #    so it is renamed on its own compile step with -DUltraWideLockNfc=UltraWideLockNfcNone -- a
@@ -196,12 +196,12 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/includ
 	-o "$OUT/host_test_seam"
 "$OUT/host_test_seam"
 
-# 8) The Aliro source stack (C++): ultrawidelock_stack.cpp and session.cpp over the
+# 8) The credential source stack (C++): ultrawidelock_stack.cpp and session.cpp over the
 #    Nordic Interface API as recording doubles (stackfake/). The protocol
 #    codecs beside them are the shipping sources, linked in whole, so every
 #    APDU and BLE frame here is built and parsed for real -- only the crypto
 #    and the application callbacks are stand-ins. Its own binary because
-#    stackfake's <ultrawidelock/*.h> are a different Aliro surface from the one
+#    stackfake's <ultrawidelock/*.h> are a different credential surface from the one
 #    ecpfake and nfcfake carry, and all three would collide.
 STK="$ROOT/modules/ultrawidelock_cred_stack/src"
 STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1

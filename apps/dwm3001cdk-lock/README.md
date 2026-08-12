@@ -1,7 +1,7 @@
 # DWM3001CDK lock
 
-This application turns one DWM3001CDK into an Aliro reader and Matter lock. It
-runs the portable Aliro, UWB, and Matter modules on the board's nRF52833 and
+This application turns one DWM3001CDK into an credential reader and Matter lock. It
+runs the portable credential, UWB, and Matter modules on the board's nRF52833 and
 DW3110.
 
 ## Build
@@ -23,7 +23,7 @@ Useful related images are:
 
 | Command | Image |
 |---|---|
-| `make reader` | Aliro reader without Matter |
+| `make reader` | credential reader without Matter |
 | `make selftest` | One-shot UWB initialization self-test |
 | `make cirdiag` | Matter lock with unattended CIR capture |
 | `make mlgate` | Lock with LOS/NLOS classification in the unlock path |

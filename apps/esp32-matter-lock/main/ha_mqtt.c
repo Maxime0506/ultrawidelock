@@ -34,17 +34,17 @@ static const char *TAG = "ha_mqtt";
 #define HA_CA_MAX        4096
 #define HA_DEFAULT_PORT  8883
 
-/* The Home Assistant device model, "<target> Aliro lock". The agent publishes
+/* The Home Assistant device model, "<target> credential lock". The agent publishes
  * the nRF5340 form of the same string (ultrawidelock_ha.mqtt.DEFAULT_MODEL); the
  * shape is the contract, the target is what tells two boards apart in HA. */
 #if CONFIG_IDF_TARGET_ESP32S3
-#define HA_MQTT_MODEL "ESP32-S3 Aliro lock"
+#define HA_MQTT_MODEL "ESP32-S3 credential lock"
 #elif CONFIG_IDF_TARGET_ESP32C5
-#define HA_MQTT_MODEL "ESP32-C5 Aliro lock"
+#define HA_MQTT_MODEL "ESP32-C5 credential lock"
 #elif CONFIG_IDF_TARGET_ESP32C6
-#define HA_MQTT_MODEL "ESP32-C6 Aliro lock"
+#define HA_MQTT_MODEL "ESP32-C6 credential lock"
 #else
-#define HA_MQTT_MODEL CONFIG_IDF_TARGET " Aliro lock"
+#define HA_MQTT_MODEL CONFIG_IDF_TARGET " credential lock"
 #endif
 
 /* Distance rate limit. The approach controller conditions one sample
@@ -333,7 +333,7 @@ static esp_err_t client_start(void)
 	 * rather than buying speed with priority: a slow connect costs nothing,
 	 * a connect that outranks ranging costs a missed slot deadline. */
 	cfg.network.timeout_ms = 30000;
-	/* Below the Aliro reader task (5) and far below the NimBLE host, so the
+	/* Below the credential reader task (5) and far below the NimBLE host, so the
 	 * TLS handshake — software P-256 on this target — is preempted by the
 	 * walk-up rather than competing with it. */
 	cfg.task.priority = 3;
@@ -402,7 +402,7 @@ static void ha_mqtt_task(void *arg)
 /* ---- producers ---------------------------------------------------------- */
 
 // Hand one observation to the publisher task. Drops rather than blocks: the callers
-// are the Aliro reader task and the NimBLE host task running the credential
+// are the credential reader task and the NimBLE host task running the credential
 // transaction, where the UWB responder holds a ~1.8 ms slot deadline and a stalled
 // broker must never become walk-up latency. A dropped distance sample is replaced
 // by the next block 192 ms later; a dropped access event is only possible behind

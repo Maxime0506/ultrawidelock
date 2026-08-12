@@ -37,13 +37,13 @@
 #define MYNEWT_VAL_BLE_MAX_CONNECTIONS (1)
 
 /*
- * Credit-based L2CAP is how Aliro moves its larger payloads. Upstream defaults
+ * Credit-based L2CAP is how credential moves its larger payloads. Upstream defaults
  * the channel count to zero, which compiles the whole CoC path out.
  */
 #define MYNEWT_VAL_BLE_L2CAP_COC_MAX_NUM (1)
 
 /*
- * LE Secure Connections only. Aliro's session establishment requires it, and
+ * LE Secure Connections only. the credential protocol's session establishment requires it, and
  * allowing the legacy pairing fallback would let a peer negotiate down.
  */
 #define MYNEWT_VAL_BLE_SM_SC (1)

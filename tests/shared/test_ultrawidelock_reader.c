@@ -1,5 +1,5 @@
 /*
- * Host test for the Aliro reader engine (ultrawidelock_reader.c): the AUTH0 -> AUTH1 ->
+ * Host test for the credential reader engine (ultrawidelock_reader.c): the AUTH0 -> AUTH1 ->
  * EXCHANGE -> AP-Completed transaction, driven end-to-end by a scripted phone.
  *
  * The phone side re-derives the §8.3.1.13 key schedule independently from the

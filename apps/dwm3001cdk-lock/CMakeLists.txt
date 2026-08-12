@@ -1,4 +1,4 @@
-# DWM3001CDK standalone Aliro lock: the reader engine, the CCC/FiRa responder,
+# DWM3001CDK standalone credential lock: the reader engine, the CCC/FiRa responder,
 # the DW3110 driver and the BLE stack in one nRF52833 image.
 #
 # ultrawidelock_uwb and modules/ultrawidelock_dw3000 come in as Zephyr modules because they carry their own
@@ -51,20 +51,20 @@ if(CONFIG_NRF_APPROTECT_LOCK OR CONFIG_NRF_SECURE_APPROTECT_LOCK)
 		"`ultrawidelock export yes` if you genuinely intend this.")
 endif()
 
-set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
+set(CRED "${REPO_ROOT}/modules/ultrawidelock_cred")
 set(PORTZ "${REPO_ROOT}/ports/zephyr")
 
 # Reader-role source sets come from the role manifests (modules/ultrawidelock_cred/
 # roles/*.list) — the same lists the ESP32 components, the nRF5340 apps and the
 # host suite read, so each role's file set exists in exactly one place.
 include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
-ultrawidelock_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/dyntag.list" ULTRAWIDELOCK_DYNTAG_SRCS)
-ultrawidelock_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/dyntag.list" ULTRAWIDELOCK_DYNTAG_SRCS)
+ultrawidelock_role_sources("${CRED}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
@@ -124,5 +124,5 @@ endif()
 # ${PORTZ}/{matter,store} for the re-homed matter_ble_zephyr.h and
 # matter_fab_settings.h, which main.c and matter_commission.c include
 # regardless of CONFIG_ULTRAWIDELOCK_MATTER_BLE.
-target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src src
+target_include_directories(app PRIVATE ${CRED}/include ${CRED}/src src
 	${PORTZ}/matter ${PORTZ}/store)
