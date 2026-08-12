@@ -42,6 +42,14 @@
 #endif
 
 /*
+ * One past the largest value the counter can hold, derived rather than named:
+ * the pinned hal_nordic nrf_rtc.h publishes NRF_RTC_COUNTER_MAX and nothing
+ * else, so a span macro spelled the obvious way would compile on the host fake
+ * and fail to compile on target.
+ */
+#define BOARD_RTC_COUNTER_SPAN ((uint32_t)NRF_RTC_COUNTER_MAX + 1u)
+
+/*
  * The largest span a single busy-wait pass may cover. The counter is 24 bits,
  * so a delta only reads unambiguously while it stays well inside that; a
  * megatick is three orders of magnitude of headroom and still 32 seconds of
@@ -142,7 +150,7 @@ uint32_t woz_freertos_cycle_get_32(void)
 	__disable_irq();
 	now = counter_raw();
 	if (now < s_last_counter) {
-		s_counter_high += (uint32_t)NRF_RTC_COUNTER_SPAN;
+		s_counter_high += BOARD_RTC_COUNTER_SPAN;
 	}
 	s_last_counter = now;
 	value = s_counter_high + now;

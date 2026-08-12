@@ -162,7 +162,7 @@ void fake_rtc_advance(uint32_t ticks)
 		    (fake_rtc2.evt_mask & NRF_RTC_INT_OVERFLOW_MASK) != 0u) {
 			fake_rtc2.event_overflow = true;
 		}
-		for (ch = 0; ch < NRF_RTC_CHANNEL_COUNT; ch++) {
+		for (ch = 0; ch < FAKE_RTC_CHANNEL_COUNT; ch++) {
 			if (fake_rtc2.counter == fake_rtc2.cc[ch] &&
 			    (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(ch)) != 0u) {
 				fake_rtc2.event_compare[ch] = true;

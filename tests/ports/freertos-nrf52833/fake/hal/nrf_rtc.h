@@ -10,16 +10,23 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define NRF_RTC_COUNTER_BITS 24u
-#define NRF_RTC_COUNTER_SPAN (1uL << NRF_RTC_COUNTER_BITS)
-#define NRF_RTC_COUNTER_MAX (NRF_RTC_COUNTER_SPAN - 1uL)
-#define NRF_RTC_CHANNEL_COUNT 4u
+/*
+ * Only NRF_RTC_COUNTER_MAX is spelled the way the real header spells it,
+ * because that is the only one of these the pinned hal_nordic nrf_rtc.h
+ * actually publishes. The rest carry a FAKE_ prefix so port code cannot reach
+ * for a macro that exists here and nowhere on target: that mistake compiles
+ * clean on the host and breaks the firmware link.
+ */
+#define FAKE_RTC_COUNTER_BITS 24u
+#define FAKE_RTC_COUNTER_SPAN (1uL << FAKE_RTC_COUNTER_BITS)
+#define NRF_RTC_COUNTER_MAX (FAKE_RTC_COUNTER_SPAN - 1uL)
+#define FAKE_RTC_CHANNEL_COUNT 4u
 
 typedef struct {
 	uint32_t counter;
 	uint32_t prescaler;
-	uint32_t cc[NRF_RTC_CHANNEL_COUNT];
-	bool event_compare[NRF_RTC_CHANNEL_COUNT];
+	uint32_t cc[FAKE_RTC_CHANNEL_COUNT];
+	bool event_compare[FAKE_RTC_CHANNEL_COUNT];
 	bool event_overflow;
 	uint32_t int_mask;
 	/*
