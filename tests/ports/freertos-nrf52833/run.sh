@@ -22,6 +22,8 @@ BOARD_ENTROPY_BIN="$OUT/freertos_board_entropy_test"
 BOARD_LOG_BIN="$OUT/freertos_board_log_test"
 BOARD_FLASH_BIN="$OUT/freertos_board_flash_test"
 CRYPTO_BIN="$OUT/freertos_crypto_backend_test"
+SPI_BIN="$OUT/freertos_dw3000_spi_test"
+HW_BIN="$OUT/freertos_dw3000_hw_test"
 
 mkdir -p "$OUT"
 
@@ -287,6 +289,63 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-o "$CRYPTO_BIN"
 "$CRYPTO_BIN"
 
+# The DW3110 SPI backend, against a register-level SPIM and GPIO model. The
+# model refuses to clock anything when EasyDMA is pointed at flash, when the
+# clock pin's input buffer is disconnected, or when END was left set by the
+# previous transfer, so what is checked is the bus the chip would actually see.
+# Each scenario forks: the backend's ready flag and bus lock are static, and
+# resetting the peripheral model under them would refuse every later transfer
+# for a reason the scenario never asked about.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/uwb" \
+	-I"$ROOT/modules/woz_dw3000/include" \
+	"$HERE/test_dw3000_spi.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_gpio.c" \
+	"$HERE/fake/fake_spim.c" \
+	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+	-o "$SPI_BIN"
+"$SPI_BIN"
+
+# And the proof that those checks bite: every mutation is a defect this backend
+# could plausibly have shipped with, and the suite above has to fail for each.
+"$HERE/dw3000_spi_mutation_check.sh"
+
+# The DW3110's reset, interrupt and wake lines, against register-level GPIO and
+# GPIOTE models. The GPIOTE model raises an event only where the channel would
+# -- bound to the pin, enabled, polarity matching -- because the defect this
+# layer is most exposed to is a board that comes up, logs nothing, and never
+# ranges. The worker task's body is pumped rather than reimplemented, so the
+# question of whether it drains the interrupt line is asked of the port.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/uwb" \
+	-I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
+	"$HERE/test_dw3000_hw.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_gpio.c" \
+	"$HERE/fake/fake_gpiote.c" \
+	"$HERE/fake/fake_spim.c" \
+	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c" \
+	-o "$HW_BIN"
+"$HW_BIN"
+
+"$HERE/dw3000_hw_mutation_check.sh"
+
+# The UWB engine's source set and configuration. The target build graph consumes
+# ports/freertos-nrf52833/uwb/sources.mk, so until that graph links the engine a
+# renamed manifest or the wrong crypto backend is invisible; both are asserted
+# here instead. The self-test shows each check the defect it exists to catch.
+"$HERE/uwb_sources_check.sh"
+"$HERE/uwb_sources_check.sh" --self-test
 # The OpenThread settings adapter, over the real store: the property under test
 # is that a packed multi-value record survives rewriting and a reset, and only
 # the real store can be wrong about that. Scenarios fork for the same reason

@@ -258,7 +258,7 @@ int main(void)
 		      NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE);
 	CHECK("a refused preparation leaves the channel and the endpoint untouched",
 	      fake_ppi.event_endpoint[HW_TASK_PPI] == 0 &&
-		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) == 0);
+		      (fake_rtc2.evt_mask & FAKE_RTC_CHANNEL_EVT_MASK(2)) == 0);
 
 	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
 	CHECK("a reachable target is accepted",
@@ -266,7 +266,7 @@ int main(void)
 		      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS);
 	CHECK("the compare is armed on the channel reserved for the hardware task",
 	      fake_rtc2.cc[2] == (uint32_t)((now + 100) & 0xffffffu) &&
-		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) != 0);
+		      (fake_rtc2.evt_mask & FAKE_RTC_CHANNEL_EVT_MASK(2)) != 0);
 	CHECK("the hardware task raises no interrupt, because PPI carries it",
 	      (fake_rtc2.int_mask & NRF_RTC_INT_COMPARE2_MASK) == 0);
 	CHECK("the compare event is published to the channel the caller allocated",
@@ -303,7 +303,7 @@ int main(void)
 	CHECK("cleanup disarms the compare and takes the endpoint back down",
 	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
 			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
-		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) == 0 &&
+		      (fake_rtc2.evt_mask & FAKE_RTC_CHANNEL_EVT_MASK(2)) == 0 &&
 		      !fake_rtc2.event_compare[2] && fake_ppi.event_endpoint[HW_TASK_PPI] == 0);
 	CHECK("cleanup a second time is refused rather than repeated",
 	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
@@ -315,7 +315,7 @@ int main(void)
 	      nrf_802154_platform_sl_lptimer_hw_task_prepare(now + 10, HW_TASK_PPI) ==
 		      NRF_802154_SL_LPTIMER_PLATFORM_TOO_LATE);
 	CHECK("the overtaken binding is unwound, not left armed",
-	      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) == 0 &&
+	      (fake_rtc2.evt_mask & FAKE_RTC_CHANNEL_EVT_MASK(2)) == 0 &&
 		      fake_ppi.event_endpoint[HW_TASK_PPI] == 0);
 	CHECK("an unwound binding leaves the platform free to prepare again",
 	      nrf_802154_platform_sl_lptimer_hw_task_prepare(
@@ -334,7 +334,7 @@ int main(void)
 	      nrf_802154_platform_sl_lptimer_hw_task_prepare(
 		      now + 100, NRF_802154_SL_HW_TASK_PPI_INVALID) ==
 			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&
-		      (fake_rtc2.evt_mask & NRF_RTC_CHANNEL_EVT_MASK(2)) != 0);
+		      (fake_rtc2.evt_mask & FAKE_RTC_CHANNEL_EVT_MASK(2)) != 0);
 	CHECK("cleaning up a task that never had a channel touches no endpoint",
 	      nrf_802154_platform_sl_lptimer_hw_task_cleanup() ==
 			      NRF_802154_SL_LPTIMER_PLATFORM_SUCCESS &&

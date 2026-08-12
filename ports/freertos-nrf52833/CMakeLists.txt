@@ -354,8 +354,15 @@ target_include_directories(woz_storage PUBLIC
 )
 target_link_libraries(woz_storage PUBLIC woz_radio)
 
+# ----------------------------------------------------------------------------
+# UWB layer: the ranging engine, the vendored decadriver, and the DW3110
+# platform backends. Its own file, because its source set comes from the shared
+# role manifests rather than from a list kept here.
+# ----------------------------------------------------------------------------
+include("${WOZ_PORT_DIR}/uwb/uwb.cmake")
+
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_storage)
+target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
@@ -370,7 +377,8 @@ foreach(_woz_target woz_board woz_radio woz_storage)
   )
 endforeach()
 
-foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls woz_storage)
+foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls
+                    woz_storage woz_uwb)
   target_compile_options(${_woz_target} PRIVATE
     -ffunction-sections
     -fdata-sections

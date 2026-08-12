@@ -77,8 +77,12 @@ typedef enum {
 #define NRF_RTC_INT_COMPARE1_MASK (1uL << 17)
 #define NRF_RTC_INT_COMPARE2_MASK (1uL << 18)
 #define NRF_RTC_INT_COMPARE3_MASK (1uL << 19)
-/* EVTEN uses the same bit positions as INTEN. */
-#define NRF_RTC_CHANNEL_EVT_MASK(ch) (1uL << (16u + (ch)))
+/*
+ * EVTEN uses the same bit positions as INTEN. Test-owned, hence the prefix:
+ * the pinned HAL has no EVTEN mask macro, and port code that reached for one
+ * here would compile on the host and fail the target build.
+ */
+#define FAKE_RTC_CHANNEL_EVT_MASK(ch) (1uL << (16u + (ch)))
 
 nrf_rtc_event_t nrf_rtc_compare_event_get(uint8_t index);
 void nrf_rtc_cc_set(NRF_RTC_Type *p_reg, uint32_t ch, uint32_t cc_val);

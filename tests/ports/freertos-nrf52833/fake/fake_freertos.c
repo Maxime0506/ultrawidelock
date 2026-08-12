@@ -23,6 +23,8 @@ unsigned fake_task_notify_calls;
 unsigned fake_isr_notify_calls;
 unsigned fake_isr_yield_calls;
 unsigned fake_recursive_take_calls;
+unsigned fake_semaphore_takes;
+unsigned fake_semaphore_gives;
 unsigned fake_recursive_give_calls;
 static TaskHandle_t fake_current_task;
 
@@ -45,6 +47,8 @@ void fake_freertos_reset(void)
 	fake_isr_notify_calls = 0;
 	fake_isr_yield_calls = 0;
 	fake_recursive_take_calls = 0;
+	fake_semaphore_takes = 0;
+	fake_semaphore_gives = 0;
 	fake_recursive_give_calls = 0;
 	fake_current_task = NULL;
 	fake_semaphore_isr_gives = 0;
@@ -141,6 +145,7 @@ BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t ticks)
 		return pdFALSE;
 	}
 	sem->takes++;
+	fake_semaphore_takes++;
 	if (sem->count == 0) {
 		return pdFALSE;
 	}
@@ -154,6 +159,7 @@ BaseType_t xSemaphoreGive(SemaphoreHandle_t sem)
 		return pdFALSE;
 	}
 	sem->gives++;
+	fake_semaphore_gives++;
 	if (sem->count == sem->limit) {
 		return pdFALSE;
 	}
