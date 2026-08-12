@@ -230,6 +230,23 @@ void Reset_Handler(void)
 	 */
 	SystemInit();
 
+	/*
+	 * Point the core at our vector table before anything can interrupt.
+	 *
+	 * Required, not defensive. This image is linked at 0xa200 and starts with
+	 * MCUboot's table still selected in VTOR -- MCUboot jumps to our reset
+	 * vector without changing it, because an image that relocates itself is
+	 * the only one that knows where it went. Every interrupt taken before
+	 * this line would dispatch through the bootloader's table, which by then
+	 * describes handlers that are no longer running.
+	 *
+	 * SystemInit() first: it is the part's errata work and touches no
+	 * interrupt this could race.
+	 */
+	SCB->VTOR = (uint32_t)&__isr_vector[0];
+	__DSB();
+	__ISB();
+
 	for (src = &__etext, dst = &__data_start__; dst < &__data_end__;) {
 		*dst++ = *src++;
 	}
