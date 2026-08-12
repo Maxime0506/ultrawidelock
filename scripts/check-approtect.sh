@@ -327,7 +327,7 @@ scan_generated || findings=1
 if [ "$findings" -ne 0 ]; then
 	printf '%s  FAIL — remove the setting. Never `nrfjprog --recover` to undo it\n' "$R"
 	printf '         on a provisioned board without exporting the identity first\n'
-	printf '         (`aliro export yes`).%s\n' "$Z"
+	printf '         (`ultrawidelock export yes`).%s\n' "$Z"
 	exit 1
 fi
 printf '%s  ok%s\n' "$G" "$Z"

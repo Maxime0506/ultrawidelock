@@ -3,7 +3,7 @@
  *
  * The pinout is copied verbatim from apps/nrf5340dk-lock/overlays/dw3000-nfc.overlay,
  * which is the wiring proven on this bench (HV-3, 2026-08-06: raw DEV_ID reads
- * 0xdeca0302 and ultrawidelock_uwb_start_aliro() reaches ACTIVE). Only the DW3000 half is
+ * 0xdeca0302 and ultrawidelock_uwb_start_ultrawidelock() reaches ACTIVE). Only the DW3000 half is
  * here. That file also retargets SPIM1 for an NFC12A1 shield and patches a
  * nucleo_nfc@0 node that exists only in the door-lock app's devicetree, so it
  * cannot be reused as-is: an initiator has no NFC frontend and referencing that

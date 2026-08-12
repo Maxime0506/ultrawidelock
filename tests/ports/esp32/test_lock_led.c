@@ -31,37 +31,37 @@ static int is_dark(struct lock_led_rgb c)
 
 int main(void)
 {
-	struct lock_led_rgb locked, locked_aliro, remote, aliro;
+	struct lock_led_rgb locked, locked_ultrawidelock, remote, ultrawidelock;
 
 	locked = lock_led_color(true, false);
-	locked_aliro = lock_led_color(true, true);
+	locked_ultrawidelock = lock_led_color(true, true);
 	remote = lock_led_color(false, false);
-	aliro = lock_led_color(false, true);
+	ultrawidelock = lock_led_color(false, true);
 
 	printf("== locked extinguishes ==\n");
 	okc("locked.dark", is_dark(locked));
-	/* aliro is documented as ignored while locked: a stale source flag must
+	/* ultrawidelock is documented as ignored while locked: a stale source flag must
 	 * never leave the indicator lit after a lock. */
-	okc("locked.dark_ignores_aliro", is_dark(locked_aliro));
+	okc("locked.dark_ignores_ultrawidelock", is_dark(locked_ultrawidelock));
 
 	printf("\n== unlocked lights ==\n");
 	okc("remote.lit", !is_dark(remote));
-	okc("aliro.lit", !is_dark(aliro));
+	okc("ultrawidelock.lit", !is_dark(ultrawidelock));
 
 	printf("\n== channel assignment ==\n");
 	okc("remote.green", remote.g == LOCK_LED_BRIGHTNESS);
 	okc("remote.blue_off", remote.b == 0);
-	okc("aliro.blue", aliro.b == LOCK_LED_BRIGHTNESS);
-	okc("aliro.green_off", aliro.g == 0);
+	okc("ultrawidelock.blue", ultrawidelock.b == LOCK_LED_BRIGHTNESS);
+	okc("ultrawidelock.green_off", ultrawidelock.g == 0);
 	/* Red is unused by this policy; a nonzero red would wash both colours
 	 * toward white and destroy the at-a-glance distinction. */
 	okc("remote.red_off", remote.r == 0);
-	okc("aliro.red_off", aliro.r == 0);
+	okc("ultrawidelock.red_off", ultrawidelock.r == 0);
 
 	printf("\n== the two unlock paths stay distinguishable ==\n");
-	okc("paths.differ", remote.g != aliro.g || remote.b != aliro.b);
+	okc("paths.differ", remote.g != ultrawidelock.g || remote.b != ultrawidelock.b);
 	okc("remote.single_channel", (remote.g != 0) && (remote.b == 0));
-	okc("aliro.single_channel", (aliro.b != 0) && (aliro.g == 0));
+	okc("ultrawidelock.single_channel", (ultrawidelock.b != 0) && (ultrawidelock.g == 0));
 
 	printf("\n== brightness is sane ==\n");
 	/* Zero would compile and "pass" a lit/dark check while leaving the board

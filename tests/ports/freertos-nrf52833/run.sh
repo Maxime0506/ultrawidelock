@@ -5,7 +5,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host"
+OUT="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host"
 BIN="$OUT/freertos_port_test"
 RADIO_BIN="$OUT/freertos_radio_start_test"
 HOST_BIN="$OUT/freertos_nimble_host_test"

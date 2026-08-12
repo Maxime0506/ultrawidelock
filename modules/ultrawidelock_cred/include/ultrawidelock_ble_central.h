@@ -8,7 +8,7 @@
 // transport calls sits in ports/esp32, so a Zephyr bt_gap_*/bt_l2cap_* backend
 // can be written behind this same header.
 // Every byte layout here is the inverse of the reader's emitters in
-// ports/esp32/components/ultrawidelock_ble/ultrawidelock_ble.c (build_aliro_svc_data,
+// ports/esp32/components/ultrawidelock_ble/ultrawidelock_ble.c (build_ultrawidelock_svc_data,
 // build_read_payload).
 #pragma once
 
@@ -29,7 +29,7 @@ extern "C" {
 #define ULTRAWIDELOCK_BLE_CENTRAL_SVC_DATA_LEN 26u
 
 /* Reader identity recovered from one 0xFFF2 service-data advert. Field order is
- * the inverse of build_aliro_svc_data (ultrawidelock_ble.c:532). */
+ * the inverse of build_ultrawidelock_svc_data (ultrawidelock_ble.c:532). */
 struct ultrawidelock_ble_central_adv {
 	uint8_t flags;       /* bit7 = BLE+UWB supported, bits2:0 = advert version */
 	int8_t tx_power;     /* dBm as advertised */

@@ -718,8 +718,8 @@ extern int mfk_em_node_creates;
 extern void *mfk_em_delegate;
 extern uint8_t mfk_em_lock_state_init;
 extern int mfk_em_feature_adds;
-extern int mfk_em_aliro_prov_adds;
-extern int mfk_em_aliro_bleuwb_adds;
+extern int mfk_em_ultrawidelock_prov_adds;
+extern int mfk_em_ultrawidelock_bleuwb_adds;
 extern int mfk_em_cluster_create_null; /* nonzero -> cluster::create returns NULL */
 extern uint32_t mfk_em_cluster_create_id;
 extern uint8_t mfk_em_cluster_create_flags;
@@ -822,7 +822,7 @@ extern int mfk_led_gpio;
 extern uint32_t mfk_led_last_index, mfk_led_r, mfk_led_g, mfk_led_b;
 extern int mfk_bsp_button_calls;
 
-/* aliro reader / ble / lab / lat / uwb stubs */
+/* ultrawidelock reader / ble / lab / lat / uwb stubs */
 extern int mfk_reader_start_calls;
 extern int mfk_status_tick_calls;
 extern int64_t mfk_status_tick_last_ms;

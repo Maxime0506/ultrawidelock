@@ -126,10 +126,10 @@ static void fill_info(struct matter_device_info *info)
 	info->failsafe_expiry_s = 60u;
 	info->failsafe_max_s = 900u;
 	info->supports_concurrent_connection = true;
-	info->aliro_reader_config_cb = cfg_cb;
-	info->aliro_credential_cb = cred_cb;
-	info->aliro_credential_clear_cb = clear_cred_cb;
-	info->aliro_user_clear_cb = clear_user_cb;
+	info->ultrawidelock_reader_config_cb = cfg_cb;
+	info->ultrawidelock_credential_cb = cred_cb;
+	info->ultrawidelock_credential_clear_cb = clear_cred_cb;
+	info->ultrawidelock_user_clear_cb = clear_user_cb;
 }
 
 /* A byte pattern that differs per field, so a handler that mixes two of them up
@@ -333,14 +333,14 @@ void test_matter_clusters(void)
 
 		/* The signing key is the one field NOT mirrored into device state:
 		 * it goes to the store and nowhere else. */
-		T_OK("config marked present", info.have_aliro_reader_config);
-		T_OK("resolving key marked present", info.have_aliro_group_resolving_key);
+		T_OK("config marked present", info.have_ultrawidelock_reader_config);
+		T_OK("resolving key marked present", info.have_ultrawidelock_group_resolving_key);
 		T_OK("verification key mirrored",
-		     memcmp(info.aliro_verification_key, verification, sizeof(verification)) == 0);
+		     memcmp(info.ultrawidelock_verification_key, verification, sizeof(verification)) == 0);
 		T_OK("group id mirrored",
-		     memcmp(info.aliro_group_id, group_id, sizeof(group_id)) == 0);
+		     memcmp(info.ultrawidelock_group_id, group_id, sizeof(group_id)) == 0);
 		T_OK("resolving key mirrored",
-		     memcmp(info.aliro_group_resolving_key, grk, sizeof(grk)) == 0);
+		     memcmp(info.ultrawidelock_group_resolving_key, grk, sizeof(grk)) == 0);
 	}
 
 	t_group("SetAliroReaderConfig refuses a malformed identity");
@@ -414,14 +414,14 @@ void test_matter_clusters(void)
 		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
 
 		T_EQ("nothing reached the store", s_cfg_calls, 0);
-		T_OK("and no config was recorded", !info.have_aliro_reader_config);
+		T_OK("and no config was recorded", !info.have_ultrawidelock_reader_config);
 	}
 
 	t_group("SetAliroReaderConfig fails loudly when the store cannot keep it");
 	{
 		reset_doubles();
 		fill_info(&info);
-		info.aliro_reader_config_cb = NULL;
+		info.ultrawidelock_reader_config_cb = NULL;
 		matter_clusters_init(&srv, &info);
 
 		flen = build_cfg_fields(fields, sizeof(fields), signing, sizeof(signing),
@@ -433,7 +433,7 @@ void test_matter_clusters(void)
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK,
 				 MATTER_CMD_DL_SET_ALIRO_READER_CONFIG, fields, flen, NULL),
 		     MATTER_IM_STATUS_FAILURE);
-		T_OK("and no config was recorded", !info.have_aliro_reader_config);
+		T_OK("and no config was recorded", !info.have_ultrawidelock_reader_config);
 
 		reset_doubles();
 		fill_info(&info);
@@ -444,7 +444,7 @@ void test_matter_clusters(void)
 				 MATTER_CMD_DL_SET_ALIRO_READER_CONFIG, fields, flen, NULL),
 		     MATTER_IM_STATUS_FAILURE);
 		T_EQ("the store was asked", s_cfg_calls, 1);
-		T_OK("and nothing was mirrored", !info.have_aliro_reader_config);
+		T_OK("and nothing was mirrored", !info.have_ultrawidelock_reader_config);
 	}
 
 	t_group("SetCredential installs the three Aliro credential types");
@@ -568,7 +568,7 @@ void test_matter_clusters(void)
 	{
 		reset_doubles();
 		fill_info(&info);
-		info.aliro_credential_cb = NULL;
+		info.ultrawidelock_credential_cb = NULL;
 		matter_clusters_init(&srv, &info);
 
 		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
@@ -885,8 +885,8 @@ void test_matter_clusters(void)
 		 * cannot revoke, and must not pretend it did. */
 		reset_doubles();
 		fill_info(&info);
-		info.aliro_credential_clear_cb = NULL;
-		info.aliro_user_clear_cb = NULL;
+		info.ultrawidelock_credential_clear_cb = NULL;
+		info.ultrawidelock_user_clear_cb = NULL;
 		matter_clusters_init(&srv, &info);
 		info.users[0].in_use = true;
 

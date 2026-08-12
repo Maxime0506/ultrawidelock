@@ -10,7 +10,7 @@
  * the error branches. The BleSK sealing in the transmit callback is REAL
  * crypto (ultrawidelock_crypto.c over the GCM in ultrawidelock_prim_host.c): every sealed SDU
  * the double records is opened with the mirrored device-direction GCM (as
- * test_aliro_reader.c's ph_open_ble does) to prove plaintext, AAD and the
+ * test_ultrawidelock_reader.c's ph_open_ble does) to prove plaintext, AAD and the
  * per-direction counter (starting at 1) all match §11.8.2.
  *
  * Scenarios, in one linear script (the unit's state is process-global):
@@ -146,7 +146,7 @@ static uint8_t s_sess_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint16_t s_sess_ver;
 
 struct ultrawidelock_uwb_session *
-ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *aliro_ctx, uint32_t session_id,
+ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx, uint32_t session_id,
 				 ultrawidelock_uwb_session_cb_t callback,
 				 ultrawidelock_uwb_adapter_transmit_message_t transmit,
 				 void *user_data)
@@ -156,7 +156,7 @@ ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *aliro_ctx, ui
 		s_sess_create_fail = false;
 		return NULL;
 	}
-	s_sess_adapter = aliro_ctx;
+	s_sess_adapter = ultrawidelock_ctx;
 	s_sess_sid = session_id;
 	s_ev_cb = callback;
 	s_tx_cb = transmit;
@@ -244,11 +244,11 @@ void ultrawidelock_uwb_session_event_free(struct ultrawidelock_uwb_session_event
 
 static int s_uwb_starts, s_uwb_stops, s_uwb_prewarms;
 static int s_uwb_start_rc;
-static struct ultrawidelock_uwb_aliro_cfg s_uwb_cfg;
+static struct ultrawidelock_uwb_ultrawidelock_cfg s_uwb_cfg;
 static uint8_t s_uwb_ursk[ULTRAWIDELOCK_URSK_LEN];
 static uint8_t s_pw_ch, s_pw_sync;
 
-int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *cfg)
+int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
 {
 	s_uwb_starts++;
 	s_uwb_cfg = *cfg;
@@ -302,7 +302,7 @@ int ultrawidelock_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len
 /* ---- device-side BleSK mirror + script helpers --------------------------- */
 
 /* BleSKReader (the reader's seal key): the device opens with direction-0
- * nonces, mirroring ultrawidelock_msg_open — see test_aliro_reader.c's ph_open_ble. */
+ * nonces, mirroring ultrawidelock_msg_open — see test_ultrawidelock_reader.c's ph_open_ble. */
 static uint8_t k_blesk_r[ULTRAWIDELOCK_SESSION_KEY_LEN];
 static uint8_t k_blesk_d[ULTRAWIDELOCK_SESSION_KEY_LEN];
 static uint32_t s_open_ctr = 1; /* §11.8: BLE-channel counters start at 1 */

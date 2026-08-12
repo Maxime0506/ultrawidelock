@@ -7,7 +7,7 @@
 # Contributes nothing unless a consuming CONFIG is y: an image that selects no
 # feature below gets zero bytes from this module.
 
-# ultrawidelock_shell.h is the one header living here (the `aliro` console's seam to
+# ultrawidelock_shell.h is the one header living here (the `ultrawidelock` console's seam to
 # the application); published wherever modules/ultrawidelock_uwb used to publish its
 # shell dir, because the add-on factory-reset patch includes it.
 if(CONFIG_ULTRAWIDELOCK_UWB)
@@ -58,13 +58,13 @@ zephyr_library_sources_ifdef(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL
 	log/ultrawidelock_logfmt.c
 	log/ultrawidelock_logquiet.c)
 
-# `aliro` UART console (status/rx/range/chip/selftest/log/version). Needs the
+# `ultrawidelock` UART console (status/rx/range/chip/selftest/log/version). Needs the
 # shell subsystem, which an NCS/Matter dependency force-selects. Engine headers
 # (ccc_shim.h, fira_session.h, ...) come from modules/ultrawidelock_uwb's global include
 # dirs, alive whenever CONFIG_ULTRAWIDELOCK_UWB is.
 if(CONFIG_ULTRAWIDELOCK_UWB_SHELL)
 	zephyr_library_sources(shell/ultrawidelock_shell.c)
-	# Short commit SHA of THIS repo, baked in for `aliro version`. Captured at
+	# Short commit SHA of THIS repo, baked in for `ultrawidelock version`. Captured at
 	# CMake configure time (git -C works from a worktree too); refreshed on a
 	# pristine/reconfigure build, so a stale-but-clean incremental keeps the
 	# prior value. "unknown" if git is unavailable (e.g. a source export).
@@ -115,7 +115,7 @@ endif()
 # Compiled straight into the application target, the same mechanism
 # modules/ultrawidelock_nfc uses for its transports: these files include app-owned
 # headers (matter_commission.h) or need the app/add-on include paths, so they
-# ride the app's compile context rather than the library's. The ALIRO_* /
+# ride the app's compile context rather than the library's. The ULTRAWIDELOCK_* /
 # ULTRAWIDELOCK_DFU_RECEIVER gates are defined by the consuming app's Kconfig and simply
 # do not exist elsewhere, so every other image gets nothing.
 
@@ -130,7 +130,7 @@ endif()
 # table store. matter_commission.c stays in apps/dwm3001cdk-lock/src (it is the app's
 # policy half); its headers here reach it via apps/dwm3001cdk-lock/CMakeLists.txt's app
 # include dirs.
-if(CONFIG_ALIRO_MATTER_BLE)
+if(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 	target_sources(app PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/matter/matter_ble_zephyr.c
 		${CMAKE_CURRENT_SOURCE_DIR}/matter/matter_thread_port.c
@@ -140,7 +140,7 @@ endif()
 # Initiator (User-Device role) BLE central transport, the mirror of
 # ble/ultrawidelock_ble_zephyr.c. examples/zephyr/nrf5340dk-initiator lists this file by path
 # instead: it carries no Kconfig of its own to define this gate.
-if(CONFIG_ALIRO_BLE_CENTRAL)
+if(CONFIG_ULTRAWIDELOCK_BLE_CENTRAL)
 	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble/ultrawidelock_ble_central_zephyr.c)
 endif()
 

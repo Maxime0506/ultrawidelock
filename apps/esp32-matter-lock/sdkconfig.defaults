@@ -85,7 +85,7 @@ CONFIG_ESP32_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_SUPPORT_GROUPCAST_CLUSTER=n
 
 # Advertise Aliro (Apple Home Key) Provisioning + BLE-UWB and register the reader delegate
-CONFIG_ENABLE_ALIRO_BLE_UWB=y
+CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB=y
 
 # Keep BLE up after commissioning (do NOT deinit/reclaim it). Required for the
 # Aliro reader to coexist on Matter's NimBLE host; also, reclaiming BLE makes any

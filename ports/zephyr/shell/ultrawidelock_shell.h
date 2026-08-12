@@ -1,14 +1,14 @@
-/** @file ultrawidelock_shell.h — the one seam the `aliro` console needs from the application. */
+/** @file ultrawidelock_shell.h — the one seam the `ultrawidelock` console needs from the application. */
 
-#ifndef ALIRO_SHELL_H_
-#define ALIRO_SHELL_H_
+#ifndef ULTRAWIDELOCK_SHELL_H_
+#define ULTRAWIDELOCK_SHELL_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @brief Supply the handler that `aliro factoryreset yes` invokes.
+ * @brief Supply the handler that `ultrawidelock factoryreset yes` invokes.
  *
  * A factory reset is a Matter/CHIP operation, and CHIP is C++. This file's
  * module is pure C and has no CHIP include paths, so the application registers
@@ -26,4 +26,4 @@ void ultrawidelock_shell_set_factory_reset(void (*fn)(void));
 }
 #endif
 
-#endif /* ALIRO_SHELL_H_ */
+#endif /* ULTRAWIDELOCK_SHELL_H_ */

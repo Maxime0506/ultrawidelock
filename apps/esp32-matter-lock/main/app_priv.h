@@ -58,10 +58,10 @@ void app_print_onboarding_codes();
 /** Drive the bolt-state indicator.
  *
  * @param[in] locked true to extinguish the LED, false to light it.
- * @param[in] aliro true when the UWB approach path drove the unlock (lights
+ * @param[in] ultrawidelock true when the UWB approach path drove the unlock (lights
  *                  blue instead of green). Ignored when `locked` is true.
  */
-void app_driver_led_lock_state(bool locked, bool aliro);
+void app_driver_led_lock_state(bool locked, bool ultrawidelock);
 
 /** Driver Update
  *

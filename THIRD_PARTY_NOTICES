@@ -193,8 +193,8 @@ The following files retain their Public Domain or CC0 option and disclaimer:
 
 The following files are distributed under Apache-2.0:
 
-  apps/esp32-matter-lock/main/lock/aliro_reader_delegate.cpp
-  apps/esp32-matter-lock/main/lock/aliro_reader_delegate.h
+  apps/esp32-matter-lock/main/lock/ultrawidelock_reader_delegate.cpp
+  apps/esp32-matter-lock/main/lock/ultrawidelock_reader_delegate.h
 
 Apache License 2.0 files
 ------------------------

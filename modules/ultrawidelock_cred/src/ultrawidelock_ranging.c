@@ -67,7 +67,7 @@ static bool s_sess_active;
 static struct ultrawidelock_secchan *s_sc_ble;
 
 /* Ranging-SDU identity, as [proto][id] on the wire. Mirrors the engine's
- * ultrawidelock_uwb_msg_spec.h, which is private to ultrawidelock_uwb; test_aliro_ranging.c
+ * ultrawidelock_uwb_msg_spec.h, which is private to ultrawidelock_uwb; test_ultrawidelock_ranging.c
  * asserts these still agree with the frames the engine builds. */
 #define RSDU_PROTO_RANGING      0x01u
 #define RSDU_PROTO_NOTIFICATION 0x02u
@@ -228,7 +228,7 @@ int ultrawidelock_ranging_init(void)
 
 	/* Prove + initialise the DW3000 here, in the clean reader-startup task, so the
 	 * heavy dwt_probe/dwt_initialise never runs from the BLE-host callback at M4.
-	 * That callback path (ultrawidelock_ranging_feed -> engine -> ultrawidelock_uwb_start_aliro) has a
+	 * That callback path (ultrawidelock_ranging_feed -> engine -> ultrawidelock_uwb_start_ultrawidelock) has a
 	 * shallow stack and no prior bring-up, and dwt_probe failed there (-1). A one-shot
 	 * start+stop with a throwaway URSK leaves the radio probed (uwb_min's g_radio_ready
 	 * latches); the real session at M4 then re-uses it — ccc_prepoll_listen skips the
@@ -237,14 +237,14 @@ int ultrawidelock_ranging_init(void)
 	static const uint8_t k_probe_ursk[ULTRAWIDELOCK_URSK_LEN] = {0};
 	// Aliro UWB Kconfig-equivalent probe configuration used to bring up the ultrawidelock_uwb layer on
 	// this port.
-	const struct ultrawidelock_uwb_aliro_cfg probe_cfg = {
+	const struct ultrawidelock_uwb_ultrawidelock_cfg probe_cfg = {
 		.session_id = 0u,
 		.channel = 9u,
 		.sync_code_index = 9u,
 		.slot_per_round = 1u,
 		.ursk = k_probe_ursk,
 	};
-	if (ultrawidelock_uwb_start_aliro(&probe_cfg) == 0) {
+	if (ultrawidelock_uwb_start_ultrawidelock(&probe_cfg) == 0) {
 		ultrawidelock_uwb_stop(); /* release RX; the radio stays probed */
 		LOG_INF("DW3000 radio probed at init (M4 will reuse it)");
 	} else {
@@ -330,7 +330,7 @@ int ultrawidelock_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t
 	ultrawidelock_lab_evi2("rrx", "proto", data[0], "id", data[1]);
 
 	/* M4 makes the engine start the responder (cherry_ccc_shim ->
-	 * ultrawidelock_uwb_start_aliro) with the negotiated params. A hard error may DEINIT
+	 * ultrawidelock_uwb_start_ultrawidelock) with the negotiated params. A hard error may DEINIT
 	 * the session, which clears s_sess via uwb_ev_cb; don't touch it after. */
 	enum ultrawidelock_uwb_err e = ultrawidelock_uwb_session_message_handle(s_sess, msg);
 

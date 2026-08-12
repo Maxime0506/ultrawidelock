@@ -31,7 +31,7 @@
 #include "ultrawidelock_advtag.h"
 #include "ultrawidelock_ble.h"
 #include "ultrawidelock_prov.h" /* ULTRAWIDELOCK_GRK_LEN */
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 #include "matter_ble_zephyr.h"
 #include "matter_commission.h" /* the commissionable payload, when unprovisioned */
 #endif
@@ -64,7 +64,7 @@ static uint8_t s_read_payload[2u + 1u + (2u * ULTRAWIDELOCK_MAX_VERSIONS) + 1u +
 static uint16_t s_read_payload_len;
 
 /* Resolvable advertising params, set once the reader is provisioned. */
-static bool s_adv_aliro;
+static bool s_adv_ultrawidelock;
 /** Whether the one connection slot is occupied; see ultrawidelock_advertise(). */
 static bool s_conn_up;
 static uint8_t s_adv_group_id[8];
@@ -322,7 +322,7 @@ static ssize_t device_ver_write(struct bt_conn *conn, const struct bt_gatt_attr 
  * secure channel, and requiring BLE bonding here would break the walk-up. The
  * shipped ESP32 reader is unpaired for the same reason and unlocks a real
  * iPhone Wallet key. */
-BT_GATT_SERVICE_DEFINE(aliro_svc,
+BT_GATT_SERVICE_DEFINE(ultrawidelock_svc,
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_DECLARE_16(0xFFF2)),
 	BT_GATT_CHARACTERISTIC(&k_chr_reader_spsm_uuid.uuid, BT_GATT_CHRC_READ,
 			       BT_GATT_PERM_READ, reader_spsm_read, NULL, NULL),
@@ -343,7 +343,7 @@ BT_GATT_SERVICE_DEFINE(aliro_svc,
  * The derivation wants the identity address MSB-first; bt_id_get hands it out
  * LSB-first, same as NimBLE.
  */
-static bool build_aliro_svc_data(uint8_t out[24])
+static bool build_ultrawidelock_svc_data(uint8_t out[24])
 {
 	bt_addr_le_t addrs[CONFIG_BT_ID_MAX];
 	size_t count = ARRAY_SIZE(addrs);
@@ -450,7 +450,7 @@ static int ultrawidelock_advertise(void)
 	 * and the pairing that delivered it then failed: provisioned, no
 	 * fabric, and gone from Add Accessory with no way back but an erase.
 	 */
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 	/*
 	 * A commissioning window makes this node commissionable AGAIN even
 	 * though it holds a fabric. Without this an OpenCommissioningWindow
@@ -463,7 +463,7 @@ static int ultrawidelock_advertise(void)
 	bool commissioned = true;
 #endif
 
-	if (commissioned && s_adv_aliro && build_aliro_svc_data(&svc_data[2])) {
+	if (commissioned && s_adv_ultrawidelock && build_ultrawidelock_svc_data(&svc_data[2])) {
 		ad[1] = (struct bt_data)BT_DATA(BT_DATA_SVC_DATA16, svc_data, sizeof(svc_data));
 		ad_len = 2;
 		as_reader = true;
@@ -476,7 +476,7 @@ static int ultrawidelock_advertise(void)
 		ad[1] = (struct bt_data)BT_DATA(BT_DATA_UUID16_ALL, uuid16, sizeof(uuid16));
 		ad_len = 2;
 
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 		/* A reader with no identity cannot unlock anything, so the only
 		 * useful thing it can advertise is that it wants commissioning.
 		 * Both elements fit one legacy packet: flags 3 + Matter service
@@ -820,7 +820,7 @@ void ultrawidelock_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t 
 	memcpy(s_adv_sub_id, sub_id2, sizeof(s_adv_sub_id));
 	memcpy(s_adv_grk, grk, sizeof(s_adv_grk));
 	s_adv_tx_power = tx_power;
-	s_adv_aliro = true;
+	s_adv_ultrawidelock = true;
 }
 
 /**

@@ -35,8 +35,8 @@ REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 #   build/_sig/        build signatures
 #
 # site/ is NOT here: it is publishable output, not an intermediate.
-ALIRO_BUILD_ROOT ?= $(REPO_ROOT)/build
-export ALIRO_BUILD_ROOT
+ULTRAWIDELOCK_BUILD_ROOT ?= $(REPO_ROOT)/build
+export ULTRAWIDELOCK_BUILD_ROOT
 
 # NCS version for both Zephyr ports. Matches apps/nrf5340dk-lock/build.sh.
 NCS_VER ?= v3.3.0
@@ -62,7 +62,7 @@ export SIGN_KEY
 
 # ---- options forwarded to the firmware builds -------------------------------
 # Set on the command line: make nrf-build PRETTY=1.
-# The in-tree Aliro stack is the default; ALIRO_SOURCE=0 selects the legacy
+# The in-tree Aliro stack is the default; ULTRAWIDELOCK_SOURCE=0 selects the legacy
 # Nordic archive for comparison or regression isolation.
 CHIP     ?=
 PRETTY   ?=
@@ -73,8 +73,8 @@ STRICT   ?=
 # (applies the data-model patches) and build (layers ultrawidelock-ha.conf).
 # Not hardware-validated.
 HA            ?=
-ALIRO_SOURCE  ?=
-ALIRO_TRACE   ?=
+ULTRAWIDELOCK_SOURCE  ?=
+ULTRAWIDELOCK_TRACE   ?=
 NFC           ?=
 CIR           ?=
 

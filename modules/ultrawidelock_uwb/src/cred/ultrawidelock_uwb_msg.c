@@ -77,7 +77,7 @@ struct ultrawidelock_uwb_message *
 ultrawidelock_uwb_msg_build_m1(struct ultrawidelock_uwb_session *session)
 {
 	struct ultrawidelock_uwb_msg_builder builder;
-	struct cherry_ccc_capabilities *caps = &session->aliro_ctx->ccc_caps;
+	struct cherry_ccc_capabilities *caps = &session->ultrawidelock_ctx->ccc_caps;
 	uint16_t payload_length;
 	bool ok;
 
@@ -128,9 +128,9 @@ static struct ultrawidelock_uwb_message *
 ultrawidelock_uwb_msg_build_m3(struct ultrawidelock_uwb_session *session)
 {
 	struct ultrawidelock_uwb_msg_builder builder;
-	struct ultrawidelock_uwb_adapter_reader_config *reader = session->aliro_ctx->config;
-	struct cherry_ccc_capabilities *caps = &session->aliro_ctx->ccc_caps;
-	struct cherry_ccc_aliro_session_config *cfg = &session->ccc_aliro_config;
+	struct ultrawidelock_uwb_adapter_reader_config *reader = session->ultrawidelock_ctx->config;
+	struct cherry_ccc_capabilities *caps = &session->ultrawidelock_ctx->ccc_caps;
+	struct cherry_ccc_ultrawidelock_session_config *cfg = &session->ccc_ultrawidelock_config;
 	uint16_t payload_length;
 	uint8_t ran_multiplier;
 	uint8_t chaps_per_slot;
@@ -171,7 +171,7 @@ ultrawidelock_uwb_msg_build_m3(struct ultrawidelock_uwb_session *session)
 		      * (ULTRAWIDELOCK_NUM_RESPONDERS, default 1). MUST equal rcfg[12] in
 		      * cherry_ccc_shim.c — both feed the RangingConfiguration SaltedHash
 		      * the Wallet independently recomputes; a mismatch diverges every
-		      * derived STS/key and nothing decodes. See aliro_round_config.h. */
+		      * derived STS/key and nothing decodes. See ultrawidelock_round_config.h. */
 		     ULTRAWIDELOCK_UWB_RANGING_SERVICE_ATTR_NUMBER_RESPONDERS_NODES,
 		     ULTRAWIDELOCK_NUM_RESPONDERS) &&
 	     ultrawidelock_uwb_msg_builder_add_u8(
@@ -309,7 +309,7 @@ ultrawidelock_uwb_msg_build_general_error(struct ultrawidelock_uwb_session *sess
  * they are framing, not session logic, and leaving them here made every reader
  * of a message header link this file's M2/M4 handlers to get three byte reads. */
 
-/* ---- Attribute parsers (fold values into ccc_aliro_config) --------------- */
+/* ---- Attribute parsers (fold values into ccc_ultrawidelock_config) --------------- */
 
 /**
  * @brief Parses the UWB configuration ID attribute from M2 and stores it in the session config.
@@ -326,7 +326,7 @@ static enum ultrawidelock_uwb_err parse_config_id(struct ultrawidelock_uwb_sessi
 	if (!ultrawidelock_uwb_msg_read_u16(attr, "config id", &value)) {
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
-	session->ccc_aliro_config.uwb_config_id = value;
+	session->ccc_ultrawidelock_config.uwb_config_id = value;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -345,7 +345,7 @@ static enum ultrawidelock_uwb_err parse_pulse_shape(struct ultrawidelock_uwb_ses
 	if (!ultrawidelock_uwb_msg_read_u8(attr, "pulse shape", &value)) {
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
-	session->ccc_aliro_config.pulse_shape_combo = value;
+	session->ccc_ultrawidelock_config.pulse_shape_combo = value;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -389,9 +389,9 @@ static enum ultrawidelock_uwb_err parse_channel(struct ultrawidelock_uwb_session
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
 	if (bitmask == ULTRAWIDELOCK_CHANNEL_BITMASK_CH5) {
-		session->ccc_aliro_config.channel = 5;
+		session->ccc_ultrawidelock_config.channel = 5;
 	} else if (bitmask == ULTRAWIDELOCK_CHANNEL_BITMASK_CH9) {
-		session->ccc_aliro_config.channel = 9;
+		session->ccc_ultrawidelock_config.channel = 9;
 	} else {
 		LOG_ERR("unsupported channel bitmask 0x%02x", bitmask);
 		return ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER;
@@ -417,10 +417,10 @@ static enum ultrawidelock_uwb_err parse_ran_multiplier(struct ultrawidelock_uwb_
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
 	/* Take the larger of the peer's value and the reader's minimum. */
-	selected = received > session->aliro_ctx->min_ran_multiplier
+	selected = received > session->ultrawidelock_ctx->min_ran_multiplier
 			   ? received
-			   : session->aliro_ctx->min_ran_multiplier;
-	session->ccc_aliro_config.ranging_duration_ms = 96 * selected;
+			   : session->ultrawidelock_ctx->min_ran_multiplier;
+	session->ccc_ultrawidelock_config.ranging_duration_ms = 96 * selected;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -444,7 +444,7 @@ static enum ultrawidelock_uwb_err parse_slot_bitmask(struct ultrawidelock_uwb_se
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
 	/* Smallest NChap-per-slot supported by both sides = lowest common bit. */
-	common = bitmask & session->aliro_ctx->ccc_caps.slot_bitmask;
+	common = bitmask & session->ultrawidelock_ctx->ccc_caps.slot_bitmask;
 	chaps_per_slot = common;
 	for (idx = 0; idx < 7; idx++) {
 		if ((common >> idx) & 0x1) {
@@ -477,7 +477,7 @@ static enum ultrawidelock_uwb_err parse_slot_bitmask(struct ultrawidelock_uwb_se
 		/* No bit 0-6 set in common: keep the seeded raw bitmask value. */
 		break;
 	}
-	session->ccc_aliro_config.slot_duration = 400 * chaps_per_slot;
+	session->ccc_ultrawidelock_config.slot_duration = 400 * chaps_per_slot;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -518,7 +518,7 @@ static enum ultrawidelock_uwb_err parse_sync_code_index(struct ultrawidelock_uwb
 	if (!ultrawidelock_uwb_msg_read_u8(attr, "sync code index", &value)) {
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
-	session->ccc_aliro_config.sync_code_index = value;
+	session->ccc_ultrawidelock_config.sync_code_index = value;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -535,7 +535,7 @@ static enum ultrawidelock_uwb_err parse_hopping_bitmask(struct ultrawidelock_uwb
 						struct ultrawidelock_uwb_msg_attribute *attr)
 {
 	const struct ultrawidelock_uwb_preferred_hopping_configs *prefs =
-		&session->aliro_ctx->config->preferred_hopping_configs;
+		&session->ultrawidelock_ctx->config->preferred_hopping_configs;
 	uint8_t peer_caps;
 	uint8_t common;
 	size_t i;
@@ -543,7 +543,7 @@ static enum ultrawidelock_uwb_err parse_hopping_bitmask(struct ultrawidelock_uwb
 	if (!ultrawidelock_uwb_msg_read_u8(attr, "hopping bitmask", &peer_caps)) {
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
-	common = HOP_CCC_TO_FIRA(peer_caps) & session->aliro_ctx->ccc_caps.hopping_config_bitmask;
+	common = HOP_CCC_TO_FIRA(peer_caps) & session->ultrawidelock_ctx->ccc_caps.hopping_config_bitmask;
 
 	/* Pick the first preferred config both sides fully support. */
 	for (i = 0; i < prefs->count; i++) {
@@ -564,9 +564,9 @@ static enum ultrawidelock_uwb_err parse_hopping_bitmask(struct ultrawidelock_uwb
 			break;
 		}
 		if (combo != 0 && (common & combo) == combo) {
-			session->ccc_aliro_config.hopping_mode =
+			session->ccc_ultrawidelock_config.hopping_mode =
 				(enum cherry_ccc_hopping_mode)prefs->configs[i];
-			session->ccc_aliro_config.hopping_config_bitmask = HOP_FIRA_TO_CCC(combo);
+			session->ccc_ultrawidelock_config.hopping_config_bitmask = HOP_FIRA_TO_CCC(combo);
 			return ULTRAWIDELOCK_UWB_ERR_NONE;
 		}
 	}
@@ -589,7 +589,7 @@ static enum ultrawidelock_uwb_err parse_sts_index0(struct ultrawidelock_uwb_sess
 	if (!ultrawidelock_uwb_msg_read_u32(attr, "sts index0", &value)) {
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
-	session->ccc_aliro_config.sts_index = value;
+	session->ccc_ultrawidelock_config.sts_index = value;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -608,7 +608,7 @@ static enum ultrawidelock_uwb_err parse_uwb_time0(struct ultrawidelock_uwb_sessi
 	if (!ultrawidelock_uwb_msg_read_u64(attr, "uwb time0", &value)) {
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
-	session->ccc_aliro_config.uwb_time_us = value;
+	session->ccc_ultrawidelock_config.uwb_time_us = value;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -629,7 +629,7 @@ static enum ultrawidelock_uwb_err parse_hop_mode_key(struct ultrawidelock_uwb_se
 		return ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED;
 	}
 	/* Store the raw 4 key bytes as decoded (unused downstream on this lock). */
-	memcpy(session->ccc_aliro_config.hop_mode_key, &key, CHERRY_CCC_HOP_MODE_KEY_SIZE);
+	memcpy(session->ccc_ultrawidelock_config.hop_mode_key, &key, CHERRY_CCC_HOP_MODE_KEY_SIZE);
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
 
@@ -740,7 +740,7 @@ static enum ultrawidelock_uwb_err parse_ranging(struct ultrawidelock_uwb_session
  */
 static void compute_initiation_time(struct ultrawidelock_uwb_session *session)
 {
-	struct cherry_ccc_aliro_session_config *cfg = &session->ccc_aliro_config;
+	struct cherry_ccc_ultrawidelock_session_config *cfg = &session->ccc_ultrawidelock_config;
 
 	/* Without a synchronized time base, start as soon as possible. */
 	if (session->time_offset == 0) {
@@ -762,12 +762,12 @@ static enum ultrawidelock_uwb_err set_resume_params(struct ultrawidelock_uwb_ses
 	enum cherry_err err;
 
 	err = cherry_ccc_session_set_sts_index(session->ccc_session,
-					       session->ccc_aliro_config.sts_index);
+					       session->ccc_ultrawidelock_config.sts_index);
 	if (err != CHERRY_ERR_NONE) {
 		return ULTRAWIDELOCK_UWB_ERR_INTERNAL;
 	}
 	err = cherry_ccc_session_set_initiation_time(session->ccc_session,
-						     session->ccc_aliro_config.uwb_time_us);
+						     session->ccc_ultrawidelock_config.uwb_time_us);
 	if (err != CHERRY_ERR_NONE) {
 		return ULTRAWIDELOCK_UWB_ERR_INTERNAL;
 	}

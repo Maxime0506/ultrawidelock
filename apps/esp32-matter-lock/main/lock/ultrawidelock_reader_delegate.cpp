@@ -1,4 +1,4 @@
-// AliroReaderDelegate: implements the Aliro reader-provisioning and BLE-UWB portions of the Matter
+// UltraWideLockReaderDelegate: implements the Aliro reader-provisioning and BLE-UWB portions of the Matter
 // DoorLock::Delegate interface, backing the controller-facing GetAliro*/SetAliroReaderConfig
 // commands and persisting the provisioned reader identity via
 // ultrawidelock_reader_provision_identity. Bridges Matter cluster commands to the underlying
@@ -22,7 +22,7 @@
  *    limitations under the License.
  */
 
-#include "aliro_reader_delegate.h"
+#include "ultrawidelock_reader_delegate.h"
 
 #include <crypto/CHIPCryptoPAL.h>
 #include <lib/core/CHIPEncoding.h>
@@ -39,7 +39,7 @@
 using namespace chip;
 using namespace chip::app::Clusters::DoorLock;
 
-AliroReaderDelegate AliroReaderDelegate::sInstance;
+UltraWideLockReaderDelegate UltraWideLockReaderDelegate::sInstance;
 
 namespace
 {
@@ -51,7 +51,7 @@ constexpr uint16_t kKnownProtocolVersion = 0x0100;
 // Lazily generates and caches the Aliro group sub-identifier via DRBG on first call; subsequent
 // calls are a no-op. On RNG failure, zeroes mGroupSubIdentifier and logs an error, but still marks
 // it as set so this is not retried.
-void AliroReaderDelegate::EnsureSubIdentifier()
+void UltraWideLockReaderDelegate::EnsureSubIdentifier()
 {
 	if (mHasSubId) {
 		return;
@@ -65,7 +65,7 @@ void AliroReaderDelegate::EnsureSubIdentifier()
 	mHasSubId = true;
 }
 
-void AliroReaderDelegate::Init()
+void UltraWideLockReaderDelegate::Init()
 {
 	EnsureSubIdentifier();
 	ChipLogProgress(Zcl, "Aliro reader delegate ready (configured=%d)",
@@ -76,7 +76,7 @@ void AliroReaderDelegate::Init()
 // Reader-provisioning attribute getters
 // ---------------------------------------------------------------------------
 
-CHIP_ERROR AliroReaderDelegate::GetAliroReaderVerificationKey(MutableByteSpan &verificationKey)
+CHIP_ERROR UltraWideLockReaderDelegate::GetAliroReaderVerificationKey(MutableByteSpan &verificationKey)
 {
 	if (!mConfigured) {
 		verificationKey.reduce_size(0);
@@ -88,7 +88,7 @@ CHIP_ERROR AliroReaderDelegate::GetAliroReaderVerificationKey(MutableByteSpan &v
 // Copies the Aliro reader group identifier into groupIdentifier. If the reader is not configured,
 // reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or
 // whatever CopySpanToMutableSpan reports on failure.
-CHIP_ERROR AliroReaderDelegate::GetAliroReaderGroupIdentifier(MutableByteSpan &groupIdentifier)
+CHIP_ERROR UltraWideLockReaderDelegate::GetAliroReaderGroupIdentifier(MutableByteSpan &groupIdentifier)
 {
 	if (!mConfigured) {
 		groupIdentifier.reduce_size(0);
@@ -101,7 +101,7 @@ CHIP_ERROR AliroReaderDelegate::GetAliroReaderGroupIdentifier(MutableByteSpan &g
 // Lazily generates the sub-identifier on first call via EnsureSubIdentifier. Returns CHIP_NO_ERROR
 // on success or whatever CopySpanToMutableSpan reports on failure.
 CHIP_ERROR
-AliroReaderDelegate::GetAliroReaderGroupSubIdentifier(MutableByteSpan &groupSubIdentifier)
+UltraWideLockReaderDelegate::GetAliroReaderGroupSubIdentifier(MutableByteSpan &groupSubIdentifier)
 {
 	EnsureSubIdentifier();
 	return CopySpanToMutableSpan(ByteSpan(mGroupSubIdentifier), groupSubIdentifier);
@@ -110,7 +110,7 @@ AliroReaderDelegate::GetAliroReaderGroupSubIdentifier(MutableByteSpan &groupSubI
 // Encodes a 16-bit Aliro protocol version as 2 big-endian bytes into out. Returns
 // CHIP_ERROR_INVALID_ARGUMENT if out is smaller than kAliroProtocolVersionSize; on success, reduces
 // out to the written size.
-CHIP_ERROR AliroReaderDelegate::CopyProtocolVersionIntoSpan(uint16_t value, MutableByteSpan &out)
+CHIP_ERROR UltraWideLockReaderDelegate::CopyProtocolVersionIntoSpan(uint16_t value, MutableByteSpan &out)
 {
 	static_assert(sizeof(value) == kAliroProtocolVersionSize, "protocol version is 2 bytes");
 
@@ -127,7 +127,7 @@ CHIP_ERROR AliroReaderDelegate::CopyProtocolVersionIntoSpan(uint16_t value, Muta
 // Only index 0 is valid; returns CHIP_ERROR_PROVIDER_LIST_EXHAUSTED for any other index. On
 // success, encodes kKnownProtocolVersion big-endian into protocolVersion via
 // CopyProtocolVersionIntoSpan.
-CHIP_ERROR AliroReaderDelegate::GetAliroExpeditedTransactionSupportedProtocolVersionAtIndex(
+CHIP_ERROR UltraWideLockReaderDelegate::GetAliroExpeditedTransactionSupportedProtocolVersionAtIndex(
 	size_t index, MutableByteSpan &protocolVersion)
 {
 	if (index > 0) {
@@ -139,7 +139,7 @@ CHIP_ERROR AliroReaderDelegate::GetAliroExpeditedTransactionSupportedProtocolVer
 // Copies the Aliro group resolving key into groupResolvingKey. If the reader is not configured,
 // reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or
 // whatever CopySpanToMutableSpan reports on failure.
-CHIP_ERROR AliroReaderDelegate::GetAliroGroupResolvingKey(MutableByteSpan &groupResolvingKey)
+CHIP_ERROR UltraWideLockReaderDelegate::GetAliroGroupResolvingKey(MutableByteSpan &groupResolvingKey)
 {
 	if (!mConfigured) {
 		groupResolvingKey.reduce_size(0);
@@ -153,7 +153,7 @@ CHIP_ERROR AliroReaderDelegate::GetAliroGroupResolvingKey(MutableByteSpan &group
 // success, encodes kKnownProtocolVersion big-endian into protocolVersion via
 // CopyProtocolVersionIntoSpan.
 CHIP_ERROR
-AliroReaderDelegate::GetAliroSupportedBLEUWBProtocolVersionAtIndex(size_t index,
+UltraWideLockReaderDelegate::GetAliroSupportedBLEUWBProtocolVersionAtIndex(size_t index,
 								   MutableByteSpan &protocolVersion)
 {
 	if (index > 0) {
@@ -163,20 +163,20 @@ AliroReaderDelegate::GetAliroSupportedBLEUWBProtocolVersionAtIndex(size_t index,
 }
 
 // Returns the Aliro BLE advertising version. Always 0, the only version currently defined.
-uint8_t AliroReaderDelegate::GetAliroBLEAdvertisingVersion()
+uint8_t UltraWideLockReaderDelegate::GetAliroBLEAdvertisingVersion()
 {
 	// 0 is the only defined Aliro BLE advertising version.
 	return 0;
 }
 
 // Returns the number of Aliro credential issuer keys supported, kAliroKeysSupported.
-uint16_t AliroReaderDelegate::GetNumberOfAliroCredentialIssuerKeysSupported()
+uint16_t UltraWideLockReaderDelegate::GetNumberOfAliroCredentialIssuerKeysSupported()
 {
 	return kAliroKeysSupported;
 }
 
 // Returns the number of Aliro endpoint keys supported, kAliroKeysSupported.
-uint16_t AliroReaderDelegate::GetNumberOfAliroEndpointKeysSupported()
+uint16_t UltraWideLockReaderDelegate::GetNumberOfAliroEndpointKeysSupported()
 {
 	return kAliroKeysSupported;
 }
@@ -198,7 +198,7 @@ uint16_t AliroReaderDelegate::GetNumberOfAliroEndpointKeysSupported()
 // refreshes the BLE advertisement so it carries the newly configured group resolving key, since the
 // reader may have started advertising before this command arrived. Always returns CHIP_NO_ERROR
 // once the size checks pass.
-CHIP_ERROR AliroReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
+CHIP_ERROR UltraWideLockReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
 						     const ByteSpan &verificationKey,
 						     const ByteSpan &groupIdentifier,
 						     const Optional<ByteSpan> &groupResolvingKey)
@@ -251,7 +251,7 @@ CHIP_ERROR AliroReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
 // Clears the stored Aliro reader configuration (signing/verification keys, group identifier, group
 // resolving key) and marks the reader unconfigured. Also clears the persisted provisioning state
 // via ultrawidelock_reader_provision_clear. Always returns CHIP_NO_ERROR.
-CHIP_ERROR AliroReaderDelegate::ClearAliroReaderConfig()
+CHIP_ERROR UltraWideLockReaderDelegate::ClearAliroReaderConfig()
 {
 	memset(mSigningKey, 0, sizeof(mSigningKey));
 	memset(mVerificationKey, 0, sizeof(mVerificationKey));

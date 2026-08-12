@@ -47,7 +47,7 @@ int ultrawidelock_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)
  * @return 0 on success, -EINVAL if config is NULL or ursk is NULL, -EIO if radio initialization
  * fails.
  */
-int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *c)
+int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *c)
 {
 	if (c == NULL || c->ursk == NULL) {
 		return -EINVAL;

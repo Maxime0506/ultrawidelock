@@ -4,7 +4,7 @@
 // and for the other end.
 //
 // These are console commands rather than a private binary channel, so the shell
-// stays available on the same board: provisioning (aliro-import) and presence both
+// stays available on the same board: provisioning (ultrawidelock-import) and presence both
 // work without reflashing between modes. Every response is one tagged hex line, so
 // a log line landing mid-conversation is just another line rather than corruption:
 //

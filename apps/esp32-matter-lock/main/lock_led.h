@@ -27,10 +27,10 @@ struct lock_led_rgb {
 
 /* Locked extinguishes the indicator. Unlocked lights blue when the UWB
  * approach path drove it and green otherwise, so an approach-unlock is
- * distinguishable from a Home-app tap at a glance. @p aliro is ignored
+ * distinguishable from a Home-app tap at a glance. @p ultrawidelock is ignored
  * when @p locked is true.
  */
-struct lock_led_rgb lock_led_color(bool locked, bool aliro);
+struct lock_led_rgb lock_led_color(bool locked, bool ultrawidelock);
 
 #ifdef __cplusplus
 }

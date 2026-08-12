@@ -1,4 +1,4 @@
 # Bulk mechanical reformats, ignored by git blame (GitHub honors this file;
 # locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
 844423093b8595c5ce8decf5e7007b43903b618b # style: reformat modules/ with clang-format
-9a2dbab06ca0fa34b084a85f2b1190f84caa8887 # style(aliro): clang-format modules/ultrawidelock_cred after the move
+9a2dbab06ca0fa34b084a85f2b1190f84caa8887 # style(ultrawidelock): clang-format modules/ultrawidelock_cred after the move

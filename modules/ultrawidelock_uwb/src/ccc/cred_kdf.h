@@ -1,4 +1,4 @@
-/** @file aliro_kdf.h — UWB Ranging Secret Key (URSK) length. */
+/** @file ultrawidelock_kdf.h — UWB Ranging Secret Key (URSK) length. */
 
 #ifndef CRED_KDF_H
 #define CRED_KDF_H

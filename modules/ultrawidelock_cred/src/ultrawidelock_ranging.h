@@ -6,7 +6,7 @@
  * ultrawidelock_uwb_ adapter + session): on a completed credential-auth it creates a session bound
  * to the derived URSK, emits M1 over the BLE L2CAP channel, feeds inbound M2/M4 back to the engine,
  * and lets the engine negotiate the ranging parameters and start the DW3000 responder itself (via
- * cherry_ccc_shim -> ultrawidelock_uwb_start_aliro). This replaces the earlier canned-parameter
+ * cherry_ccc_shim -> ultrawidelock_uwb_start_ultrawidelock). This replaces the earlier canned-parameter
  * handoff.
  *
  * The DW3000 is single-session, so exactly one ranging session runs at a time.

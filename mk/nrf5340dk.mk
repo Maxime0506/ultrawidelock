@@ -45,8 +45,8 @@ NRF_ENV := $(strip \
   $(if $(SELFTEST),UWB_SELFTEST=$(SELFTEST)) \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)) \
-  $(if $(ALIRO_SOURCE),ALIRO_SOURCE=$(ALIRO_SOURCE)) \
-  $(if $(ALIRO_TRACE),ALIRO_TRACE=$(ALIRO_TRACE)) \
+  $(if $(ULTRAWIDELOCK_SOURCE),ULTRAWIDELOCK_SOURCE=$(ULTRAWIDELOCK_SOURCE)) \
+  $(if $(ULTRAWIDELOCK_TRACE),ULTRAWIDELOCK_TRACE=$(ULTRAWIDELOCK_TRACE)) \
   $(if $(NFC),NFC=$(NFC)) \
   $(if $(NRF_LTO),LTO=1) \
   $(if $(NRF_DFU),DFU=1) \
@@ -58,13 +58,13 @@ NRF_BUILD_SH := $(REPO_ROOT)/apps/nrf5340dk-lock/build.sh
 # (CONFIG_CHIP_FACTORY_DATA_GENERATE_ONBOARDING_CODES) and merged into the image
 # (CONFIG_CHIP_FACTORY_DATA_MERGE_WITH_FIRMWARE), so it describes the hex that was
 # built here, not whatever is on the board. Mirrors the lock app's build.sh
-# ALIRO_SOURCE split so the code shown belongs to the variant you built.
-NRF_BUILD_DIR := $(ALIRO_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ALIRO_SOURCE)),-blob)
-NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-aliro-door-lock-app/zephyr/factory_data.txt
+# ULTRAWIDELOCK_SOURCE split so the code shown belongs to the variant you built.
+NRF_BUILD_DIR := $(ULTRAWIDELOCK_BUILD_ROOT)/nrf5340dk$(if $(filter 0,$(ULTRAWIDELOCK_SOURCE)),-blob)
+NRF_FACTORY   := $(NRF_BUILD_DIR)/matter-ultrawidelock-door-lock-app/zephyr/factory_data.txt
 
 # The Aliro initiator is a second application on the same board, so it gets its
 # own build directory rather than sharing the door lock's.
-NRF_INIT_BUILD := $(ALIRO_BUILD_ROOT)/nrf5340dk-initiator
+NRF_INIT_BUILD := $(ULTRAWIDELOCK_BUILD_ROOT)/nrf5340dk-initiator
 
 # The initiator is a plain Zephyr app, so it is built with west directly rather
 # than through the lock app's build.sh, whose do_build resolves door-lock
@@ -77,9 +77,9 @@ NRF_INIT_BUILD := $(ALIRO_BUILD_ROOT)/nrf5340dk-initiator
 NRF_WS     := $(REPO_ROOT)/workspace
 NRF_LAUNCH := nrfutil sdk-manager toolchain launch --ncs-version $(NCS_VER) --
 
-NRF_RELEASE_OUT ?= $(ALIRO_BUILD_ROOT)/release/ultrawidelock-nrf5340dk
+NRF_RELEASE_OUT ?= $(ULTRAWIDELOCK_BUILD_ROOT)/release/ultrawidelock-nrf5340dk
 NRF_RELEASE_OUT := $(abspath $(NRF_RELEASE_OUT))
-NRF_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.nrf-stage
+NRF_RELEASE_STAGE := $(ULTRAWIDELOCK_BUILD_ROOT)/release/.nrf-stage
 NRF_RELEASE_VER ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
 # Exported for the same reason as ESP_RELEASE_VER in mk/esp32.mk: a tag reaches
 # the recipe through the environment rather than being pasted into '...' at Make
@@ -139,7 +139,7 @@ nrf-flash-erase:
 # sysbuild-shaped, so only the image name and the baseline location differ.
 # Reports (ram_report/rom_report) are left off: they relink through west and
 # this target must stay a measure, not a build.
-NRF_IMAGE         := matter-aliro-door-lock-app
+NRF_IMAGE         := matter-ultrawidelock-door-lock-app
 NRF_SIZE_JSON     ?= $(NRF_BUILD_DIR)/size-report.json
 NRF_SIZE_BASELINE ?= $(REPO_ROOT)/apps/nrf5340dk-lock/size-baseline.json
 
@@ -177,7 +177,7 @@ nrf-init-build:
 nrf-init-flash:
 	@[ -f '$(NRF_INIT_BUILD)/build.ninja' ] || { \
 	  printf '  no initiator build at %s  ·  build it first\n' '$(NRF_INIT_BUILD)' >&2; exit 1; }
-	@ALIRO_BUILD='$(NRF_INIT_BUILD)' $(NRF_BUILD_SH) flash-erase
+	@ULTRAWIDELOCK_BUILD='$(NRF_INIT_BUILD)' $(NRF_BUILD_SH) flash-erase
 
 ## hitl: enrol, build, flash and judge the initiator against a live reader
 hitl:

@@ -10,7 +10,7 @@
 #
 # Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
 # overlays. Output → build/nrf5340dk (git-ignored), or build/nrf5340dk-blob
-# when ALIRO_SOURCE=0, so flipping that flag no longer forces a pristine rebuild.
+# when ULTRAWIDELOCK_SOURCE=0, so flipping that flag no longer forces a pristine rebuild.
 #
 # Incremental by default — a full from-scratch (pristine) build runs only when it
 # has to: first build, changed build flags (UWB chip / self-test / config), or
@@ -21,7 +21,7 @@
 #   PRISTINE=1 apps/nrf5340dk-lock/build.sh build       # same as rebuild
 #   UWB_SELFTEST=1 apps/nrf5340dk-lock/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
 #   PRETTY=1 apps/nrf5340dk-lock/build.sh build         # curated/clean console (reversible; default verbose)
-#   ALIRO_SOURCE=0 apps/nrf5340dk-lock/build.sh build   # legacy Nordic Aliro binary fallback
+#   ULTRAWIDELOCK_SOURCE=0 apps/nrf5340dk-lock/build.sh build   # legacy Nordic Aliro binary fallback
 #   UWB_CHIP=dw3720 apps/nrf5340dk-lock/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 #   LTO=1 apps/nrf5340dk-lock/build.sh build            # link-time optimisation (overlays/lto.conf)
 #   DFU=1 apps/nrf5340dk-lock/build.sh build            # MCUboot + Matter OTA (overlays/sysbuild-dfu.conf)
@@ -38,12 +38,12 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TREE="$(cd "$APP_DIR/../.." && pwd)"
-WS="${ALIRO_WS:-$TREE/workspace}"
+WS="${ULTRAWIDELOCK_WS:-$TREE/workspace}"
 
 # A linked git worktree usually has no NCS workspace of its own (the ~6.5 GB
 # tree lives in the primary checkout); fall back to the primary's workspace so
-# builds still work. An explicit ALIRO_WS wins.
-if [ -z "${ALIRO_WS:-}" ] && [ ! -d "$WS/.west" ]; then
+# builds still work. An explicit ULTRAWIDELOCK_WS wins.
+if [ -z "${ULTRAWIDELOCK_WS:-}" ] && [ ! -d "$WS/.west" ]; then
   _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
   if [ -n "$_common" ]; then
     case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
@@ -55,21 +55,21 @@ fi
 NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$APP_DIR/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
-APP="$ADDON/applications/matter-aliro-door-lock-app"
+APP="$ADDON/applications/matter-ultrawidelock-door-lock-app"
 PATCH_DIR="$TREE/integrations/nrfconnect-door-lock/patches"
 PATCH_STATE="$WS/.ultrawidelock-patches.sha256"
-# One build root for the whole repo (Makefile exports ALIRO_BUILD_ROOT); every
+# One build root for the whole repo (Makefile exports ULTRAWIDELOCK_BUILD_ROOT); every
 # producer derives its own subdirectory under it, so `make clean` is one rm.
-# ALIRO_SOURCE picks the subdirectory rather than reconfiguring one shared dir:
+# ULTRAWIDELOCK_SOURCE picks the subdirectory rather than reconfiguring one shared dir:
 # the two link different Aliro implementations, and sharing a directory made
 # every flip a from-scratch rebuild. Validated in do_build, not here, so an
 # unknown value still dies with the message that names the legal ones.
-BUILD_ROOT="${ALIRO_BUILD_ROOT:-$TREE/build}"
-case "${ALIRO_SOURCE:-1}" in
+BUILD_ROOT="${ULTRAWIDELOCK_BUILD_ROOT:-$TREE/build}"
+case "${ULTRAWIDELOCK_SOURCE:-1}" in
 0) BUILD_NAME="nrf5340dk-blob" ;;
 *) BUILD_NAME="nrf5340dk" ;;
 esac
-BUILD="${ALIRO_BUILD:-$BUILD_ROOT/$BUILD_NAME}"
+BUILD="${ULTRAWIDELOCK_BUILD:-$BUILD_ROOT/$BUILD_NAME}"
 BOARD="nrf5340dk/nrf5340/cpuapp"
 
 # The MCUboot image-signing key, used only when DFU=1 puts a bootloader in the
@@ -87,10 +87,10 @@ fi
 SIGN_KEY="${SIGN_KEY:-$default_sign_key}"
 
 # Launch a west command through nrfutil's Nordic SDK toolchain manager for the configured NCS version. Ensures all builds use the pinned toolchain without calling bare west.
-# ALIRO_TOOLCHAIN=env skips that wrapper and runs the command directly — for
+# ULTRAWIDELOCK_TOOLCHAIN=env skips that wrapper and runs the command directly — for
 # environments with the toolchain already on PATH (the NCS toolchain container
 # in CI, where nrfutil's toolchain index is not reachable).
-if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
+if [ "${ULTRAWIDELOCK_TOOLCHAIN:-}" = env ]; then
   launch() { "$@"; }
 else
   # Launch a command in the NCS toolchain environment for the configured version.
@@ -133,10 +133,10 @@ resolve_chip() {
 preflight() {
   hdr "preflight"
 
-  if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
+  if [ "${ULTRAWIDELOCK_TOOLCHAIN:-}" = env ]; then
     command -v west >/dev/null 2>&1 \
-      || die "west not found on PATH (ALIRO_TOOLCHAIN=env)" \
-             "unset ALIRO_TOOLCHAIN to use the nrfutil-pinned toolchain"
+      || die "west not found on PATH (ULTRAWIDELOCK_TOOLCHAIN=env)" \
+             "unset ULTRAWIDELOCK_TOOLCHAIN to use the nrfutil-pinned toolchain"
     ok "toolchain from environment (west $(west --version 2>/dev/null | awk '{print $NF}'))"
   else
     command -v nrfutil >/dev/null 2>&1 \
@@ -193,21 +193,21 @@ do_build() {
   # The independent public API is the default Aliro implementation. Keep the
   # Nordic archive available as an explicit diagnostic fallback so the two
   # implementations can still be compared while the source stack matures.
-  local aliro_source="${ALIRO_SOURCE:-1}"
-  local aliro_source_flag=""
-  case "$aliro_source" in
-    1) aliro_source_flag="-DCONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK=y" ;;
-    0) aliro_source_flag="-DCONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK=n" ;;
-    *) die "unknown ALIRO_SOURCE='$aliro_source'" "use 1 (source, default) or 0 (Nordic binary)" ;;
+  local ultrawidelock_source="${ULTRAWIDELOCK_SOURCE:-1}"
+  local ultrawidelock_source_flag=""
+  case "$ultrawidelock_source" in
+    1) ultrawidelock_source_flag="-DCONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK=y" ;;
+    0) ultrawidelock_source_flag="-DCONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK=n" ;;
+    *) die "unknown ULTRAWIDELOCK_SOURCE='$ultrawidelock_source'" "use 1 (source, default) or 0 (Nordic binary)" ;;
   esac
 
-  # ALIRO_TRACE=1: capture proprietary/source BLE session boundaries without
+  # ULTRAWIDELOCK_TRACE=1: capture proprietary/source BLE session boundaries without
   # exposing URSK itself (only its truncated SHA-256 fingerprint is logged).
-  local aliro_trace=""
-  [ "${ALIRO_TRACE:-0}" = 1 ] && aliro_trace="-DCONFIG_ULTRAWIDELOCK_CRED_TRACE=y"
+  local ultrawidelock_trace=""
+  [ "${ULTRAWIDELOCK_TRACE:-0}" = 1 ] && ultrawidelock_trace="-DCONFIG_ULTRAWIDELOCK_CRED_TRACE=y"
 
-  if [ -n "$aliro_trace" ]; then
-    local trace_patch="$TREE/integration/patches/aliro-ble-trace.patch"
+  if [ -n "$ultrawidelock_trace" ]; then
+    local trace_patch="$TREE/integration/patches/ultrawidelock-ble-trace.patch"
     if git -C "$ADDON" apply --check --reverse "$trace_patch" 2>/dev/null; then
       ok "Aliro BLE trace integration already applied"
     elif git -C "$ADDON" apply --check "$trace_patch" 2>/dev/null; then
@@ -255,7 +255,7 @@ do_build() {
   local lat_conf=""
   [ "${LAT:-0}" = 1 ] && lat_conf=";$OV/diag-latency.conf"
 
-  # CIR=1: layer diag-cirdiag.conf (CIA/CIR diagnostics: `aliro cir`). Off by
+  # CIR=1: layer diag-cirdiag.conf (CIA/CIR diagnostics: `ultrawidelock cir`). Off by
   # default because the windowed tap read costs walk-up latency while armed.
   # Rides EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
   local cir_conf=""
@@ -361,10 +361,10 @@ do_build() {
   )
   [ -n "$selftest" ] && dflags+=("$selftest")
   [ -n "$strict" ] && dflags+=("$strict")
-  dflags+=("$aliro_source_flag")
-  if [ -n "$aliro_trace" ]; then
+  dflags+=("$ultrawidelock_source_flag")
+  if [ -n "$ultrawidelock_trace" ]; then
     dflags+=(
-      "$aliro_trace"
+      "$ultrawidelock_trace"
       -DCONFIG_DOOR_LOCK_ALIRO_BLE_SERVICE_LOG_LEVEL_INF=y
       -DCONFIG_DOOR_LOCK_ALIRO_GATT_SERVER_LOG_LEVEL_DBG=y
       -DCONFIG_DOOR_LOCK_ALIRO_L2CAP_SERVER_LOG_LEVEL_INF=y
@@ -399,11 +399,11 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${aliro_trace:+   (Aliro trace ON)}${lto_conf:+   (LTO ON)}"
-  if [ "$aliro_source" = 1 ]; then
-    kv "aliro" "in-tree source (default)"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${ultrawidelock_trace:+   (Aliro trace ON)}${lto_conf:+   (LTO ON)}"
+  if [ "$ultrawidelock_source" = 1 ]; then
+    kv "ultrawidelock" "in-tree source (default)"
   else
-    kv "aliro" "Nordic binary (fallback)"
+    kv "ultrawidelock" "Nordic binary (fallback)"
   fi
   kv "nfc"   "$nfc_name"
   if [ -n "$dfu_conf" ]; then
@@ -429,7 +429,7 @@ do_build() {
   # from the generated .config silently (see overlays/lto.conf), and the build then
   # succeeds while measuring nothing. Read it back off the artefact instead.
   if [ -n "$lto_conf" ]; then
-    local app_config="$BUILD/matter-aliro-door-lock-app/zephyr/.config"
+    local app_config="$BUILD/matter-ultrawidelock-door-lock-app/zephyr/.config"
     [ -f "$app_config" ] || die "app .config not found" "$app_config"
     local sym
     for sym in CONFIG_LTO CONFIG_ISR_TABLES_LOCAL_DECLARATION; do
@@ -477,10 +477,10 @@ do_build() {
     ok "MCUboot signs with this checkout's key, not MCUboot's published one"
   fi
 
-  if [ "$aliro_source" = 1 ]; then
-    local aliro_map="$BUILD/matter-aliro-door-lock-app/zephyr/zephyr.map"
-    [ -f "$aliro_map" ] || die "Aliro source link map not found" "$aliro_map"
-    if grep -q 'libaliro_ble\.a' "$aliro_map"; then
+  if [ "$ultrawidelock_source" = 1 ]; then
+    local ultrawidelock_map="$BUILD/matter-ultrawidelock-door-lock-app/zephyr/zephyr.map"
+    [ -f "$ultrawidelock_map" ] || die "Aliro source link map not found" "$ultrawidelock_map"
+    if grep -q 'libaliro_ble\.a' "$ultrawidelock_map"; then
       die "proprietary Aliro archive still contributed linked code" \
           "source stack must define the complete application-used public ABI"
     fi

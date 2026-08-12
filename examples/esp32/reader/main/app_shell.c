@@ -1,4 +1,4 @@
-// ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, aliro-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
+// ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, ultrawidelock-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
 /*
  * app_shell — see app_shell.h. Interactive console + demo responder lifecycle.
  */
@@ -49,7 +49,7 @@ static void print_banner(void)
 }
 
 /* Dummy 32-byte URSK for a peerless bring-up smoke test (mirrors uwb_selftest.c).
- * Moved here from main.c so both the boot-time start and the `aliro-start`
+ * Moved here from main.c so both the boot-time start and the `ultrawidelock-start`
  * command drive the exact same canned credential. */
 static const uint8_t demo_ursk[32] = {
 	0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb,
@@ -57,8 +57,8 @@ static const uint8_t demo_ursk[32] = {
 	0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00,
 };
 
-// Demo Aliro UWB responder configuration used by the shell's aliro-start command.
-static const struct ultrawidelock_uwb_aliro_cfg demo_cfg = {
+// Demo Aliro UWB responder configuration used by the shell's ultrawidelock-start command.
+static const struct ultrawidelock_uwb_ultrawidelock_cfg demo_cfg = {
 	.session_id = 0x02b02fd4u,
 	.channel = 9u,
 	.sync_code_index = 9u,
@@ -91,7 +91,7 @@ int app_responder_start(void)
 	if (s_up) {
 		rc = 1; /* already running */
 	} else {
-		rc = ultrawidelock_uwb_start_aliro(&demo_cfg);
+		rc = ultrawidelock_uwb_start_ultrawidelock(&demo_cfg);
 		if (rc == 0) {
 			s_up = true;
 		}
@@ -157,7 +157,7 @@ static int cmd_range(int argc, char **argv)
 }
 
 // Shell command handler: starts the Aliro UWB responder via app_responder_start. Prints "busy" if a responder is already running (rc == 1), otherwise reports ok/FAILED with the return code. Always returns 0 to the shell.
-static int cmd_aliro_start(int argc, char **argv)
+static int cmd_ultrawidelock_start(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
@@ -165,23 +165,23 @@ static int cmd_aliro_start(int argc, char **argv)
 	if (rc == 1) {
 		printf("busy: responder already running\n");
 	} else {
-		printf("aliro-start: %s (rc=%d)\n", rc == 0 ? "ok" : "FAILED", rc);
+		printf("ultrawidelock-start: %s (rc=%d)\n", rc == 0 ? "ok" : "FAILED", rc);
 	}
 	return 0;
 }
 
 // Shell command handler: stops the Aliro UWB responder via app_responder_stop and prints confirmation. Always returns 0.
-static int cmd_aliro_stop(int argc, char **argv)
+static int cmd_ultrawidelock_stop(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
 	app_responder_stop();
-	printf("aliro-stop: ok\n");
+	printf("ultrawidelock-stop: ok\n");
 	return 0;
 }
 
 // Shell command handler: prints the current Aliro reader provisioning state. Always returns 0.
-static int cmd_aliro_prov(int argc, char **argv)
+static int cmd_ultrawidelock_prov(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
@@ -222,7 +222,7 @@ static int cmd_lab(int argc, char **argv)
 		printf("usage: lab [on|off]\n");
 		return 0;
 	}
-	printf("aliro lab trace: %s\n", ultrawidelock_lab_enabled() ? "on" : "off");
+	printf("ultrawidelock lab trace: %s\n", ultrawidelock_lab_enabled() ? "on" : "off");
 	return 0;
 }
 
@@ -236,19 +236,19 @@ static int cmd_clear(int argc, char **argv)
 }
 
 // Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via ultrawidelock_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
-static int cmd_aliro_trust(int argc, char **argv)
+static int cmd_ultrawidelock_trust(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
 	int rc = ultrawidelock_reader_trust_last();
 
 	if (rc == 0) {
-		printf("aliro-trust: added last-presented credential + saved to NVS\n");
+		printf("ultrawidelock-trust: added last-presented credential + saved to NVS\n");
 	} else if (rc == 1) {
-		printf("aliro-trust: nothing to add (no credential presented, or "
+		printf("ultrawidelock-trust: nothing to add (no credential presented, or "
 		       "already trusted)\n");
 	} else {
-		printf("aliro-trust: FAILED (trust store full or NVS error)\n");
+		printf("ultrawidelock-trust: FAILED (trust store full or NVS error)\n");
 	}
 	return 0;
 }
@@ -293,7 +293,7 @@ static int hexdecode(const char *s, uint8_t *out, size_t out_cap)
 // Shell command handler: serialise the reader identity + trust store (INCLUDING the
 // private key) into a hex blob for cloning onto a second board. Bench only; gated by
 // CONFIG_ULTRAWIDELOCK_CRED_CLONE. Always returns 0.
-static int cmd_aliro_export(int argc, char **argv)
+static int cmd_ultrawidelock_export(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
@@ -301,10 +301,10 @@ static int cmd_aliro_export(int argc, char **argv)
 	size_t len = 0;
 
 	if (ultrawidelock_reader_export_blob(blob, sizeof(blob), &len) != 0) {
-		printf("aliro-export: FAILED (buffer too small)\n");
+		printf("ultrawidelock-export: FAILED (buffer too small)\n");
 		return 0;
 	}
-	printf("%saliro-export%s: %u bytes (contains the reader PRIVATE KEY -- bench only)\n",
+	printf("%sultrawidelock-export%s: %u bytes (contains the reader PRIVATE KEY -- bench only)\n",
 	       col(C_BAD), col(C_RST), (unsigned)len);
 	for (size_t i = 0; i < len; i++) {
 		printf("%02x", blob[i]);
@@ -313,48 +313,48 @@ static int cmd_aliro_export(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: `aliro-import <hex>`. Adopt an identity + trust store
-// exported from another board via `aliro-export`, persist it, and use it live.
+// Shell command handler: `ultrawidelock-import <hex>`. Adopt an identity + trust store
+// exported from another board via `ultrawidelock-export`, persist it, and use it live.
 // Always returns 0.
-static int cmd_aliro_import(int argc, char **argv)
+static int cmd_ultrawidelock_import(int argc, char **argv)
 {
 	if (argc != 2) {
-		printf("usage: aliro-import <hex-blob>\n");
+		printf("usage: ultrawidelock-import <hex-blob>\n");
 		return 0;
 	}
 	uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 	int n = hexdecode(argv[1], blob, sizeof(blob));
 
 	if (n < 0) {
-		printf("aliro-import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
+		printf("ultrawidelock-import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
 		       (unsigned)sizeof(blob));
 		return 0;
 	}
 	int rc = ultrawidelock_reader_import_blob(blob, (size_t)n);
 
 	if (rc == 0) {
-		printf("aliro-import: adopted %d-byte identity + trust store (saved to NVS)\n", n);
+		printf("ultrawidelock-import: adopted %d-byte identity + trust store (saved to NVS)\n", n);
 	} else if (rc == -1) {
-		printf("aliro-import: malformed blob (bad magic/version/length)\n");
+		printf("ultrawidelock-import: malformed blob (bad magic/version/length)\n");
 	} else {
-		printf("aliro-import: NVS write FAILED\n");
+		printf("ultrawidelock-import: NVS write FAILED\n");
 	}
 	return 0;
 }
 #endif /* CONFIG_ULTRAWIDELOCK_CRED_CLONE */
 
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
-// Shell command handler: `aliro-stepup [arm|status]`. With `arm` (or no argument)
+// Shell command handler: `ultrawidelock-stepup [arm|status]`. With `arm` (or no argument)
 // it arms a one-shot Access-Document request for the next transaction; `status`
 // prints the armed state and the most recent verification verdict. Always 0.
-static int cmd_aliro_stepup(int argc, char **argv)
+static int cmd_ultrawidelock_stepup(int argc, char **argv)
 {
 	if (argc >= 2 && strcmp(argv[1], "status") == 0) {
 		ultrawidelock_reader_stepup_status();
 		return 0;
 	}
 	ultrawidelock_reader_stepup_arm();
-	printf("aliro-stepup: armed one-shot; approach with an Aliro device to request "
+	printf("ultrawidelock-stepup: armed one-shot; approach with an Aliro device to request "
 	       "an Access Document (verdict logged, unlock unaffected)\n");
 	return 0;
 }
@@ -394,31 +394,31 @@ void app_shell_start(void)
 		 .help = "responder state + last/trusted range",
 		 .func = cmd_status},
 		{.command = "range", .help = "print the latest distance", .func = cmd_range},
-		{.command = "aliro-start",
+		{.command = "ultrawidelock-start",
 		 .help = "start the demo DS-TWR responder",
-		 .func = cmd_aliro_start},
-		{.command = "aliro-stop",
+		 .func = cmd_ultrawidelock_start},
+		{.command = "ultrawidelock-stop",
 		 .help = "stop the demo responder",
-		 .func = cmd_aliro_stop},
-		{.command = "aliro-prov",
+		 .func = cmd_ultrawidelock_stop},
+		{.command = "ultrawidelock-prov",
 		 .help = "show reader identity + credential trust store",
-		 .func = cmd_aliro_prov},
-		{.command = "aliro-trust",
+		 .func = cmd_ultrawidelock_prov},
+		{.command = "ultrawidelock-trust",
 		 .help = "trust the last-presented credential (persist to NVS)",
-		 .func = cmd_aliro_trust},
+		 .func = cmd_ultrawidelock_trust},
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_CLONE)
-		{.command = "aliro-export",
+		{.command = "ultrawidelock-export",
 		 .help = "serialise identity+trust (incl. PRIVATE KEY) to hex for cloning",
-		 .func = cmd_aliro_export},
-		{.command = "aliro-import",
-		 .help = "aliro-import <hex>: adopt an identity+trust blob from another board",
-		 .func = cmd_aliro_import},
+		 .func = cmd_ultrawidelock_export},
+		{.command = "ultrawidelock-import",
+		 .help = "ultrawidelock-import <hex>: adopt an identity+trust blob from another board",
+		 .func = cmd_ultrawidelock_import},
 #endif
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
-		{.command = "aliro-stepup",
-		 .help = "aliro-stepup [arm|status]: request + verify an Access Document (verdict "
+		{.command = "ultrawidelock-stepup",
+		 .help = "ultrawidelock-stepup [arm|status]: request + verify an Access Document (verdict "
 			 "logged only)",
-		 .func = cmd_aliro_stepup},
+		 .func = cmd_ultrawidelock_stepup},
 #endif
 #if defined(CONFIG_ULTRAWIDELOCK_PRESENCE)
 		{.command = "presence",

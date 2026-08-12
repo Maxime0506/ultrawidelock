@@ -1,6 +1,6 @@
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap
 @@ -5088,6 +5088,461 @@
            ]
          }
@@ -478,9 +478,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
      }
    ]
  }
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
 @@ -62,7 +62,7 @@
  	}
  
@@ -688,9 +688,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
 -		kInvalidEndpointId, kInvalidEndpointId                                                                 \
 +		kInvalidEndpointId, kInvalidEndpointId, kInvalidEndpointId                                             \
  	}
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/gen_config.h
 @@ -21,12 +21,12 @@
  #pragma once
  
@@ -727,9 +727,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  /**** Cluster Commands Flag ****/
  //  AdministratorCommissioning Cluster Commands
  #define ADMINISTRATOR_COMMISSIONING_ENABLE_OPEN_COMMISSIONING_WINDOW_CMD 1
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/PluginApplicationCallbacks.h
 @@ -36,6 +36,7 @@
  void MatterGroupKeyManagementPluginServerInitCallback();
  void MatterIcdManagementPluginServerInitCallback();
@@ -745,9 +745,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
 -	MatterDoorLockPluginServerInitCallback();
 +	MatterDoorLockPluginServerInitCallback();                                                                      \
 +	MatterOccupancySensingPluginServerInitCallback();
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/callback-stub.cpp
 @@ -70,6 +70,9 @@
  	case app::Clusters::OtaSoftwareUpdateRequestor::Id:
  		emberAfOtaSoftwareUpdateRequestorClusterInitCallback(endpoint);
@@ -770,9 +770,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  void __attribute__((weak)) emberAfOperationalCredentialsClusterInitCallback(EndpointId endpoint)
  {
  	// To prevent warning
-diff --git a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h
---- a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h
-+++ b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager.h
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager.h b/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager.h
+--- a/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager.h
++++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager.h
 @@ -31,6 +31,7 @@
  					       const CryptoTypes::PublicKey &accessCredentialPublicKey);
  	using AccessIndicatorCallback = void (*)(bool isAccessGranted, bool isNfcSession);
@@ -798,9 +798,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/cred/access_manager/acc
  	};
  
  	/**
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/bolt_lock_manager.cpp b/applications/matter-aliro-door-lock-app/src/matter/bolt_lock_manager.cpp
---- a/applications/matter-aliro-door-lock-app/src/matter/bolt_lock_manager.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/matter/bolt_lock_manager.cpp
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/bolt_lock_manager.cpp b/applications/matter-ultrawidelock-door-lock-app/src/matter/bolt_lock_manager.cpp
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/bolt_lock_manager.cpp
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/bolt_lock_manager.cpp
 @@ -18,12 +18,18 @@
  
  #include "app_task.h"
@@ -838,9 +838,9 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/bolt_lock_manage
  	});
  
  	auto addPublicKey = [](uint16_t credentialIndex, CredentialTypeEnum credentialType,
-diff --git a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
---- a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
+--- a/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
++++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
 @@ -1003,6 +1003,12 @@
  
  	bool hasAnyOpenAllowed{ false };

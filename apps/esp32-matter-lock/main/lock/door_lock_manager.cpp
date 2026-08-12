@@ -14,7 +14,7 @@
 
 /* Defined in app_driver.cpp. Declared here rather than including app_priv.h,
  * whose esp_matter includes make this file's TAG ambiguous. */
-void app_driver_led_lock_state(bool locked, bool aliro);
+void app_driver_led_lock_state(bool locked, bool ultrawidelock);
 
 static const char *TAG = "doorlock_manager";
 

@@ -45,9 +45,9 @@ void t_eqi_(const char *name, long got, long want, const char *file, int line);
 #define T_EQ(name, got, want) t_eqi_((name), (long)(got), (long)(want), __FILE__, __LINE__)
 
 /* Module suites — one per file under test. */
-void test_aliro_advertising(void);
-void test_aliro_ble(void);
-void test_aliro_nfc(void);
+void test_ultrawidelock_advertising(void);
+void test_ultrawidelock_ble(void);
+void test_ultrawidelock_nfc(void);
 void test_pn532(void);
 void test_ccc_kdf(void);
 void test_ccc_mac(void);
@@ -60,9 +60,9 @@ void test_ultrawidelock_uwb_msg_parser(void);
 void test_ultrawidelock_uwb_adapter(void);
 void test_ultrawidelock_uwb_msg(void);
 void test_ultrawidelock_uwb_session(void);
-void test_aliro_prov(void);
-void test_aliro_hash(void);
-void test_aliro_assert(void);
+void test_ultrawidelock_prov(void);
+void test_ultrawidelock_hash(void);
+void test_ultrawidelock_assert(void);
 void test_ultrawidelock_device_uwb(void);
 void test_cherry(void);
 void test_fira(void);
@@ -113,6 +113,6 @@ void test_ultrawidelock_shell(void);
 
 /* PSA/mbedTLS-backend binary suites (host_test_psa; see tests/host/psafake/). */
 void test_ccc_crypto_backends(void);
-void test_aliro_prim_psa(void);
+void test_ultrawidelock_prim_psa(void);
 
 #endif /* ULTRAWIDELOCK_HOST_TEST_H */

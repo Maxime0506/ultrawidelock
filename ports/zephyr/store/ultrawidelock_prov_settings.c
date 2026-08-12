@@ -59,7 +59,7 @@ int ultrawidelock_prov_load(struct ultrawidelock_reader_identity *id,
 		return -1;
 	}
 
-#if IS_ENABLED(CONFIG_ALIRO_PROV_CLEAR_ON_BOOT)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_PROV_CLEAR_ON_BOOT)
 	/* Before the load, not after: the point is that nothing ever sees the old
 	 * blob, so the identity this boot reports is the DEV one. */
 	rc = settings_delete(ULTRAWIDELOCK_PROV_KEY);

@@ -1,5 +1,5 @@
 /**
- * @file test_ultrawidelock_shell.c — the `aliro` console (ultrawidelock_shell.c) through the
+ * @file test_ultrawidelock_shell.c — the `ultrawidelock` console (ultrawidelock_shell.c) through the
  * fake shell registry (logfake zephyr/shell/shell.h). Every handler runs for
  * real against drvfake-backed uwb_min/ccc/fira state; shell_print lands in the
  * shellfake capture buffer, so the checks pin return codes and the substance
@@ -15,16 +15,16 @@
 #include "uwb_min.h"
 #include "uwb_rxdiag.h"
 
-extern const struct shellfake_root shellfake_cmd_aliro;
+extern const struct shellfake_root shellfake_cmd_ultrawidelock;
 
-/** Dispatch `aliro <sub>` with the given argv tail; returns the handler rc. */
+/** Dispatch `ultrawidelock <sub>` with the given argv tail; returns the handler rc. */
 static int run(const char *sub, int argc, char **argv)
 {
 	const struct shellfake_entry *e;
 	struct shell sh = {0};
 
 	shellfake_reset();
-	for (e = shellfake_cmd_aliro.sub; e->syntax != NULL; e++) {
+	for (e = shellfake_cmd_ultrawidelock.sub; e->syntax != NULL; e++) {
 		if (strcmp(e->syntax, sub) == 0) {
 			return e->handler(&sh, (size_t)argc, argv);
 		}
@@ -128,7 +128,7 @@ void test_ultrawidelock_shell(void)
 	T_OK("log reads off", !uwb_rxdiag_stream_get() && has("off"));
 	argv2[1] = junk_s;
 	T_EQ("log junk rc", run("log", 2, argv2), -22);
-	T_OK("usage shown", has("usage: aliro log"));
+	T_OK("usage shown", has("usage: ultrawidelock log"));
 	T_EQ("log query rc", run("log", 1, NULL), 0);
 	argv2[1] = on_s;
 	T_EQ("frames on rc", run("frames", 2, argv2), 0);
@@ -198,7 +198,7 @@ void test_ultrawidelock_shell(void)
 		/* Unconfirmed: explains the loss, refuses, and must not fire. */
 		T_EQ("bare rc", run("factoryreset", 1, NULL), -22);
 		T_OK("names what is lost", has("Matter fabrics") && has("trusted phone key"));
-		T_OK("shows the confirm word", has("aliro factoryreset yes"));
+		T_OK("shows the confirm word", has("ultrawidelock factoryreset yes"));
 		T_EQ("bare did not reset", factory_resets, 0);
 		argv[1] = junk_s;
 		T_EQ("wrong word rc", run("factoryreset", 2, argv), -22);
@@ -271,12 +271,12 @@ void test_ultrawidelock_shell(void)
 		struct shell sh = {0};
 
 		shellfake_reset();
-		T_EQ("help rc", shellfake_cmd_aliro.handler(&sh, 1, NULL), 0);
+		T_EQ("help rc", shellfake_cmd_ultrawidelock.handler(&sh, 1, NULL), 0);
 		T_OK("lists subcommands", has("status") && has("selftest") && has("version"));
-		char *argv[2] = {(char *)"aliro", junk_s};
+		char *argv[2] = {(char *)"ultrawidelock", junk_s};
 
 		shellfake_reset();
-		T_EQ("unknown sub rc", shellfake_cmd_aliro.handler(&sh, 2, argv), -22);
+		T_EQ("unknown sub rc", shellfake_cmd_ultrawidelock.handler(&sh, 2, argv), -22);
 		T_OK("unknown reported", has("unknown subcommand: sideways"));
 	}
 }

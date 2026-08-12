@@ -27,7 +27,7 @@
 /* Unconditional: srp_sign_self_test() runs in every build of this file. */
 #include <psa/crypto.h>
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
 
@@ -54,7 +54,7 @@
 #include "matter_thread.h"
 #include "status_led.h" /* the lock LED; a tile tap has to move it too */
 
-LOG_MODULE_DECLARE(matter_ble, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
+LOG_MODULE_DECLARE(matter_ble, CONFIG_ULTRAWIDELOCK_MATTER_BLE_LOG_LEVEL);
 
 static struct matter_exchange s_exchange;
 static struct matter_pase_responder s_pase;
@@ -77,8 +77,8 @@ static bool s_stale = true;
  * are what the commissioner reads back; see matter_clusters.h for each.
  */
 static struct matter_device_info s_info = {
-	.vendor_id = CONFIG_ALIRO_MATTER_VENDOR_ID,
-	.product_id = CONFIG_ALIRO_MATTER_PRODUCT_ID,
+	.vendor_id = CONFIG_ULTRAWIDELOCK_MATTER_VENDOR_ID,
+	.product_id = CONFIG_ULTRAWIDELOCK_MATTER_PRODUCT_ID,
 	.breadcrumb = 0u,
 	.regulatory_config = MATTER_REGULATORY_INDOOR,
 	.location_capability = MATTER_REGULATORY_INDOOR,
@@ -163,7 +163,7 @@ BUILD_ASSERT(MATTER_THREAD_REPLY_MAX ==
  * ciphertext has to stay intact while its tag is checked, and aliasing the two
  * would make that depend on the cipher's write order.
  */
-static uint8_t s_pt[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
+static uint8_t s_pt[CONFIG_ULTRAWIDELOCK_MATTER_BLE_RX_BUF];
 
 /*
  * The two seams matter_attest.h declares. Kept here rather than in the module
@@ -469,7 +469,7 @@ static int load_verifier(void)
 	size_t blob_len = 0u;
 	size_t salt_len = 0u;
 
-	if (unhex(CONFIG_ALIRO_MATTER_SPAKE2P_VERIFIER, blob, sizeof(blob), &blob_len) != 0) {
+	if (unhex(CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_VERIFIER, blob, sizeof(blob), &blob_len) != 0) {
 		LOG_ERR("SPAKE2P verifier is not %u bytes of hex", (unsigned int)sizeof(blob));
 		return -EINVAL;
 	}
@@ -486,7 +486,7 @@ static int load_verifier(void)
 		return -EINVAL;
 	}
 
-	if (unhex(CONFIG_ALIRO_MATTER_SPAKE2P_SALT, s_verifier.salt, sizeof(s_verifier.salt),
+	if (unhex(CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_SALT, s_verifier.salt, sizeof(s_verifier.salt),
 		  &salt_len) != 0) {
 		LOG_ERR("SPAKE2P salt is not valid hex, or longer than %u bytes",
 			(unsigned int)sizeof(s_verifier.salt));
@@ -496,7 +496,7 @@ static int load_verifier(void)
 	memcpy(s_verifier.w0, blob, MATTER_SPAKE_SCALAR_LEN);
 	memcpy(s_verifier.l, blob + MATTER_SPAKE_SCALAR_LEN, MATTER_SPAKE_POINT_LEN);
 	s_verifier.salt_len = (uint8_t)salt_len;
-	s_verifier.iterations = CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS;
+	s_verifier.iterations = CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_ITERATIONS;
 
 	return 0;
 }
@@ -1049,7 +1049,7 @@ static void send_im(uint8_t opcode, const uint8_t *payload, size_t len)
  * Kept static rather than on the stack: the request holds up to
  * MATTER_IM_MAX_PATHS paths and the report another half kilobyte, and this runs
  * on the Matter work queue, whose size is still an argument rather than a
- * measurement (see CONFIG_ALIRO_MATTER_BLE_WQ_STACK). Only one commissioner is
+ * measurement (see CONFIG_ULTRAWIDELOCK_MATTER_BLE_WQ_STACK). Only one commissioner is
  * ever served at a time, so one of each is enough.
  */
 static struct matter_im_read s_read;
@@ -1239,7 +1239,7 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		/*
 		 * Same stack constraint as above, so the same deferral -- which
 		 * means the NOCResponse says OK before flash agrees. That is
-		 * the shape test_aliro_reader's revocation sweep forbids for
+		 * the shape test_ultrawidelock_reader's revocation sweep forbids for
 		 * trust anchors, accepted here because this path CANNOT write
 		 * synchronously (the overflow above was measured, not feared)
 		 * and the failure mode is bounded: the store retries three
@@ -1619,7 +1619,7 @@ static K_WORK_DELAYABLE_DEFINE(s_heartbeat_work, heartbeat_work_fn);
 /**
  * Submit lock state change notification to the work queue, and move the lock LED.
  *
- * The LED is driven from here rather than from on_aliro_lock_state() because
+ * The LED is driven from here rather than from on_ultrawidelock_lock_state() because
  * this is the one point BOTH movers reach: a walk-up arrives through the Aliro
  * listener, and a Home tile tap arrives through the Door Lock cluster, which
  * writes s_info.lock_state itself and never touches that listener. Hanging the
@@ -1762,7 +1762,7 @@ static void subscription_heartbeat_arm(void)
  * Runs on the BLE-host task, so it does the cheapest possible thing: set a byte
  * and submit. The report itself is built on the system work queue.
  */
-static void on_aliro_lock_state(bool unlocked)
+static void on_ultrawidelock_lock_state(bool unlocked)
 {
 	uint8_t want = unlocked ? MATTER_DL_LOCK_STATE_UNLOCKED : MATTER_DL_LOCK_STATE_LOCKED;
 
@@ -1992,7 +1992,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * Where the reader identity Apple delivered actually lands.
  *
  * This is the end of the road the whole Matter node was built for: until now
- * the reader's private key was CONFIG_ALIRO_PROV_SEED_HEX, a build-time string,
+ * the reader's private key was CONFIG_ULTRAWIDELOCK_PROV_SEED_HEX, a build-time string,
  * so every image carried one identity and unlocked only for the phones enrolled
  * in whoever built it. After this call the device has its own, in NVS, and a
  * Wallet key survives a power cycle.
@@ -2039,7 +2039,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 BUILD_ASSERT(MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED == ULTRAWIDELOCK_TRUST_MAX,
 	     "reported endpoint-key cap must equal the trust store it describes");
 
-static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65],
+static int on_ultrawidelock_credential(uint8_t credential_type, const uint8_t public_key[65],
 			       uint16_t credential_index, uint16_t user_index)
 {
 	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
@@ -2069,7 +2069,7 @@ static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key
  * Returns 0 only when the removal is persisted, because the cluster turns anything else into a
  * FAILURE the admin can act on.
  */
-static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credential_index)
+static int on_ultrawidelock_credential_clear(uint8_t credential_type, uint16_t credential_index)
 {
 	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
 		LOG_INF("  ALIRO CLEAR issuer key: never an anchor, nothing to revoke");
@@ -2107,7 +2107,7 @@ static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credentia
  * The user row itself is the cluster's to forget; this is only the trust store half. Returns 0 only
  * when the removal is persisted.
  */
-static int on_aliro_user_clear(uint16_t user_index)
+static int on_ultrawidelock_user_clear(uint16_t user_index)
 {
 	int rc = ultrawidelock_reader_provision_remove_user(user_index);
 
@@ -2124,7 +2124,7 @@ static int on_aliro_user_clear(uint16_t user_index)
  * identity (derived from the group ID and group sub-ID) and the signing key into the Aliro reader
  * engine, retire the device key, and log success or error.
  */
-static int on_aliro_reader_config(const uint8_t signing_key[32],
+static int on_ultrawidelock_reader_config(const uint8_t signing_key[32],
 				  const uint8_t verification_key[65], const uint8_t group_id[16],
 				  const uint8_t *group_resolving_key)
 {
@@ -2134,7 +2134,7 @@ static int on_aliro_reader_config(const uint8_t signing_key[32],
 	ARG_UNUSED(verification_key);
 
 	memcpy(reader_id, group_id, 16u);
-	memcpy(reader_id + 16, s_info.aliro_group_sub_id, 16u);
+	memcpy(reader_id + 16, s_info.ultrawidelock_group_sub_id, 16u);
 
 	rc = ultrawidelock_reader_provision_identity(reader_id, signing_key, group_resolving_key);
 	memset(reader_id, 0, sizeof(reader_id));
@@ -2790,7 +2790,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	 */
 	sub_resume_for(slot, s_case_x[slot].peer_op_node_id, s_case_fabric[slot],
 		       s_case.local_session_id);
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 	/* The third report point. main.c reads the peak at an unlock grant and
 	 * prov_shell.c at an import, and both predate this node: Sigma3 is now
 	 * the heaviest crypto this image does, running an ECDH, a signature
@@ -3289,8 +3289,8 @@ int matter_commission_init(void)
 	} else {
 		s_verifier_ok = true;
 		LOG_INF("commissioning ready: discriminator 0x%03x, %u PBKDF iterations",
-			(unsigned int)CONFIG_ALIRO_MATTER_DISCRIMINATOR,
-			(unsigned int)CONFIG_ALIRO_MATTER_SPAKE2P_ITERATIONS);
+			(unsigned int)CONFIG_ULTRAWIDELOCK_MATTER_DISCRIMINATOR,
+			(unsigned int)CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_ITERATIONS);
 	}
 
 	/*
@@ -3301,7 +3301,7 @@ int matter_commission_init(void)
 	 * this look like a different reader group after each power cycle.
 	 * Hashing keeps the EUI-64 itself off the wire.
 	 *
-	 * The ESP32 lock uses DRBG and caches (aliro_reader_delegate.cpp:51),
+	 * The ESP32 lock uses DRBG and caches (ultrawidelock_reader_delegate.cpp:51),
 	 * which is the better answer once Matter state persists. Revisit then.
 	 */
 	{
@@ -3310,10 +3310,10 @@ int matter_commission_init(void)
 		uint8_t digest[ULTRAWIDELOCK_SHA256_LEN];
 
 		ultrawidelock_sha256_init(&h);
-		ultrawidelock_sha256_update(&h, (const uint8_t *)"aliro-group-sub-id", 18u);
+		ultrawidelock_sha256_update(&h, (const uint8_t *)"ultrawidelock-group-sub-id", 18u);
 		ultrawidelock_sha256_update(&h, (const uint8_t *)id, sizeof(id));
 		ultrawidelock_sha256_final(&h, digest);
-		memcpy(s_info.aliro_group_sub_id, digest, MATTER_ALIRO_GROUP_ID_LEN);
+		memcpy(s_info.ultrawidelock_group_sub_id, digest, MATTER_ALIRO_GROUP_ID_LEN);
 	}
 
 	/*
@@ -3343,11 +3343,11 @@ int matter_commission_init(void)
 		int rc = ultrawidelock_reader_identity_public(reader_id, verif_pub, grk);
 
 		if (rc == 0) {
-			memcpy(s_info.aliro_verification_key, verif_pub, sizeof(verif_pub));
-			memcpy(s_info.aliro_group_id, reader_id, MATTER_ALIRO_GROUP_ID_LEN);
-			memcpy(s_info.aliro_group_resolving_key, grk, sizeof(grk));
-			s_info.have_aliro_group_resolving_key = true;
-			s_info.have_aliro_reader_config = true;
+			memcpy(s_info.ultrawidelock_verification_key, verif_pub, sizeof(verif_pub));
+			memcpy(s_info.ultrawidelock_group_id, reader_id, MATTER_ALIRO_GROUP_ID_LEN);
+			memcpy(s_info.ultrawidelock_group_resolving_key, grk, sizeof(grk));
+			s_info.have_ultrawidelock_group_resolving_key = true;
+			s_info.have_ultrawidelock_reader_config = true;
 			LOG_INF("Aliro reader configuration restored; attributes readable");
 		} else if (rc != -ENOENT) {
 			/* -ENOENT is the dev identity and is not news. Anything
@@ -3359,10 +3359,10 @@ int matter_commission_init(void)
 		memset(grk, 0, sizeof(grk));
 	}
 
-	s_info.aliro_reader_config_cb = on_aliro_reader_config;
-	s_info.aliro_credential_cb = on_aliro_credential;
-	s_info.aliro_credential_clear_cb = on_aliro_credential_clear;
-	s_info.aliro_user_clear_cb = on_aliro_user_clear;
+	s_info.ultrawidelock_reader_config_cb = on_ultrawidelock_reader_config;
+	s_info.ultrawidelock_credential_cb = on_ultrawidelock_credential;
+	s_info.ultrawidelock_credential_clear_cb = on_ultrawidelock_credential_clear;
+	s_info.ultrawidelock_user_clear_cb = on_ultrawidelock_user_clear;
 
 	matter_clusters_init(&s_im, &s_info);
 	/* Without this the cluster still APPEARS in ServerList -- which is the
@@ -3371,7 +3371,7 @@ int matter_commission_init(void)
 	matter_clusters_set_admin_hooks(&k_admin_hooks);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
-	ultrawidelock_reader_set_lock_state_listener(on_aliro_lock_state);
+	ultrawidelock_reader_set_lock_state_listener(on_ultrawidelock_lock_state);
 
 	/*
 	 * AFTER matter_clusters_init, which zeroes the parts of s_info it owns.
@@ -3385,9 +3385,9 @@ int matter_commission_init(void)
 	{
 		int rc;
 
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_CLEAR_ON_BOOT)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_CLEAR_ON_BOOT)
 		/* Before the load, so nothing this boot ever sees the old
-		 * fabrics -- the same shape as ALIRO_PROV_CLEAR_ON_BOOT. */
+		 * fabrics -- the same shape as ULTRAWIDELOCK_PROV_CLEAR_ON_BOOT. */
 		(void)matter_fab_erase();
 #endif
 		rc = matter_fab_load(&s_info);

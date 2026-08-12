@@ -7,7 +7,7 @@ config ULTRAWIDELOCK_CRED_SOURCE_STACK
 	help
 	  Use the in-tree implementation for the public Aliro symbols consumed
 	  by the nRF application. This is the default. The repository build
-	  script can explicitly set this to n with ALIRO_SOURCE=0 for comparison
+	  script can explicitly set this to n with ULTRAWIDELOCK_SOURCE=0 for comparison
 	  with the legacy Nordic binary.
 
 config ULTRAWIDELOCK_CRED_APDU_BUFFER_SIZE

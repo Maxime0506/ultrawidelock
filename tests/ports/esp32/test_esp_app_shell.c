@@ -37,11 +37,11 @@ static void okc(const char *name, int cond)
 volatile int ultrawidelock_uwb_diag_on;
 
 static int s_start_calls, s_stop_calls, s_start_rc;
-static const struct ultrawidelock_uwb_aliro_cfg *s_last_cfg;
+static const struct ultrawidelock_uwb_ultrawidelock_cfg *s_last_cfg;
 static bool s_have_range, s_have_trusted;
 static int32_t s_range_cm = 123, s_trusted_cm = 111;
 
-int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *cfg)
+int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
 {
 	s_start_calls++;
 	s_last_cfg = cfg;
@@ -164,8 +164,8 @@ static void t_shell_registration(void)
 	okc("multiline off (flicker fix)", fake_linenoise_multiline == 0);
 	okc("10 commands registered", fake_cmd_count == 10);
 
-	static const char *want[] = {"status",     "range",       "aliro-start",  "aliro-stop",
-				     "aliro-prov", "aliro-trust", "aliro-stepup", "uwbdiag",
+	static const char *want[] = {"status",     "range",       "ultrawidelock-start",  "ultrawidelock-stop",
+				     "ultrawidelock-prov", "ultrawidelock-trust", "ultrawidelock-stepup", "uwbdiag",
 				     "lab",        "clear"};
 	int all = 1;
 
@@ -192,34 +192,34 @@ static void t_commands(void)
 	/* start/stop commands drive the guarded lifecycle. */
 	s_start_calls = 0;
 	s_stop_calls = 0;
-	okc("aliro-start cmd", run1(fake_cmd_lookup("aliro-start"), "aliro-start") == 0 &&
+	okc("ultrawidelock-start cmd", run1(fake_cmd_lookup("ultrawidelock-start"), "ultrawidelock-start") == 0 &&
 	    s_start_calls == 1 && app_responder_up());
-	okc("aliro-start cmd busy", run1(fake_cmd_lookup("aliro-start"), "aliro-start") == 0 &&
+	okc("ultrawidelock-start cmd busy", run1(fake_cmd_lookup("ultrawidelock-start"), "ultrawidelock-start") == 0 &&
 	    s_start_calls == 1);
-	okc("aliro-stop cmd", run1(fake_cmd_lookup("aliro-stop"), "aliro-stop") == 0 &&
+	okc("ultrawidelock-stop cmd", run1(fake_cmd_lookup("ultrawidelock-stop"), "ultrawidelock-stop") == 0 &&
 	    s_stop_calls == 1 && !app_responder_up());
 	s_start_rc = -1;
-	okc("aliro-start cmd failure", run1(fake_cmd_lookup("aliro-start"), "aliro-start") == 0 &&
+	okc("ultrawidelock-start cmd failure", run1(fake_cmd_lookup("ultrawidelock-start"), "ultrawidelock-start") == 0 &&
 	    !app_responder_up());
 	s_start_rc = 0;
 
 	/* prov / trust passthroughs, incl. every trust_last rc arm. */
-	okc("aliro-prov cmd", run1(fake_cmd_lookup("aliro-prov"), "aliro-prov") == 0 &&
+	okc("ultrawidelock-prov cmd", run1(fake_cmd_lookup("ultrawidelock-prov"), "ultrawidelock-prov") == 0 &&
 	    s_prov_prints == 1);
 	s_trust_last_rc = 0;
-	okc("aliro-trust added", run1(fake_cmd_lookup("aliro-trust"), "aliro-trust") == 0 &&
+	okc("ultrawidelock-trust added", run1(fake_cmd_lookup("ultrawidelock-trust"), "ultrawidelock-trust") == 0 &&
 	    s_trust_last_calls == 1);
 	s_trust_last_rc = 1;
-	okc("aliro-trust nothing", run1(fake_cmd_lookup("aliro-trust"), "aliro-trust") == 0);
+	okc("ultrawidelock-trust nothing", run1(fake_cmd_lookup("ultrawidelock-trust"), "ultrawidelock-trust") == 0);
 	s_trust_last_rc = -1;
-	okc("aliro-trust failed", run1(fake_cmd_lookup("aliro-trust"), "aliro-trust") == 0);
+	okc("ultrawidelock-trust failed", run1(fake_cmd_lookup("ultrawidelock-trust"), "ultrawidelock-trust") == 0);
 
 	/* stepup: status vs arm (default). */
-	okc("aliro-stepup status", run2(fake_cmd_lookup("aliro-stepup"), "aliro-stepup",
+	okc("ultrawidelock-stepup status", run2(fake_cmd_lookup("ultrawidelock-stepup"), "ultrawidelock-stepup",
 					"status") == 0 && s_stepup_statuses == 1);
-	okc("aliro-stepup arm", run1(fake_cmd_lookup("aliro-stepup"), "aliro-stepup") == 0 &&
+	okc("ultrawidelock-stepup arm", run1(fake_cmd_lookup("ultrawidelock-stepup"), "ultrawidelock-stepup") == 0 &&
 	    s_stepup_arms == 1);
-	okc("aliro-stepup arm explicit", run2(fake_cmd_lookup("aliro-stepup"), "aliro-stepup",
+	okc("ultrawidelock-stepup arm explicit", run2(fake_cmd_lookup("ultrawidelock-stepup"), "ultrawidelock-stepup",
 					      "arm") == 0 && s_stepup_arms == 2);
 
 	/* uwbdiag: on/off/query/usage. */

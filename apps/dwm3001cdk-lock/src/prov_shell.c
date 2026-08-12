@@ -9,7 +9,7 @@
  *
  * Reachable only in provisioning mode -- hold SW2 through reset -- where main()
  * brings up USB CDC-ACM and deliberately never starts the radios. Everything
- * here therefore reads and writes the settings store directly (aliro_prov_*)
+ * here therefore reads and writes the settings store directly (ultrawidelock_prov_*)
  * rather than the running engine's state, which in this mode does not exist.
  * The one exception is `import`, which routes through ultrawidelock_reader_import_blob
  * so the engine's own commit path stays the single place that adopts identity.
@@ -24,7 +24,7 @@
 #include "ultrawidelock_prov.h"
 #include <ultrawidelock/reader.h>
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
 
@@ -151,7 +151,7 @@ static int cmd_import(const struct shell *sh, size_t argc, char **argv)
 }
 
 /**
- * Serialize and print the reader identity and trust store as hex after confirming with "aliro
+ * Serialize and print the reader identity and trust store as hex after confirming with "ultrawidelock
  * export yes"; the resulting string holds the private key and can impersonate the lock.
  */
 static int cmd_export(const struct shell *sh, size_t argc, char **argv)
@@ -163,7 +163,7 @@ static int cmd_export(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 
 	if (strcmp(argv[1], "yes") != 0) {
-		shell_error(sh, "this prints the reader PRIVATE KEY. Confirm: aliro export yes");
+		shell_error(sh, "this prints the reader PRIVATE KEY. Confirm: ultrawidelock export yes");
 		return -EINVAL;
 	}
 
@@ -184,7 +184,7 @@ static int cmd_export(const struct shell *sh, size_t argc, char **argv)
 }
 
 /**
- * Erase the reader identity and all trust anchors after confirming with "aliro erase yes",
+ * Erase the reader identity and all trust anchors after confirming with "ultrawidelock erase yes",
  * returning to the DEV identity with no anchors.
  */
 static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
@@ -193,7 +193,7 @@ static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
 
 	if (strcmp(argv[1], "yes") != 0) {
 		shell_error(sh, "this erases the identity and every trust anchor. "
-			    "Confirm: aliro erase yes");
+			    "Confirm: ultrawidelock erase yes");
 		return -EINVAL;
 	}
 
@@ -207,7 +207,7 @@ static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 /* Run this straight after an `import`: the commit path does a software P-256
  * derive, which is the reader's heaviest single crypto step, and the peak is
  * cumulative since boot so one reading covers the whole command. */
@@ -229,7 +229,7 @@ static int cmd_heap(const struct shell *sh, size_t argc, char **argv)
 #endif
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
-	sub_aliro,
+	sub_ultrawidelock,
 	SHELL_CMD(prov, NULL, "Show the stored reader identity and whether it can unlock.",
 		  cmd_prov),
 	SHELL_CMD_ARG(import, NULL, "Adopt an exported identity: `import <hex>`.", cmd_import, 2,
@@ -238,8 +238,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      "`export yes`.", cmd_export, 2, 0),
 	SHELL_CMD_ARG(erase, NULL, "Erase identity and trust anchors: `erase yes`.", cmd_erase, 2,
 		      0),
-	SHELL_COND_CMD(CONFIG_ALIRO_HEAP_PROBE, heap, NULL,
+	SHELL_COND_CMD(CONFIG_ULTRAWIDELOCK_HEAP_PROBE, heap, NULL,
 		       "Peak mbedTLS heap use since boot.", cmd_heap),
 	SHELL_SUBCMD_SET_END);
 
-SHELL_CMD_REGISTER(aliro, &sub_aliro, "Aliro reader provisioning.", NULL);
+SHELL_CMD_REGISTER(ultrawidelock, &sub_ultrawidelock, "Aliro reader provisioning.", NULL);

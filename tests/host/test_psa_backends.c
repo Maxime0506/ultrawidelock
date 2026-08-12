@@ -98,7 +98,7 @@ void test_ccc_crypto_backends(void)
 	T_EQ("crypt fail -> -EIO", ultrawidelock_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
 }
 
-void test_aliro_prim_psa(void)
+void test_ultrawidelock_prim_psa(void)
 {
 	uint8_t ct[64], tag[16], pt[64], out16[16];
 	uint8_t priv[ULTRAWIDELOCK_P256_SCALAR], pub[ULTRAWIDELOCK_P256_POINT];
@@ -292,7 +292,7 @@ void test_aliro_prim_psa(void)
 int main(void)
 {
 	test_ccc_crypto_backends();
-	test_aliro_prim_psa();
+	test_ultrawidelock_prim_psa();
 	if (t_fail > 0) {
 		printf("  psa-backends: FAIL (%d of %d)\n", t_fail, t_fail + t_pass);
 		return 1;

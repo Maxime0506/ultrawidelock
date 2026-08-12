@@ -566,7 +566,7 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 	AliroError error = Interface::Access::GetAccessCredentialPublicKey(kpersistentKeyId,
 									   credentialPublicKey);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_CREDENTIAL_LOOKUP status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_CREDENTIAL_LOOKUP status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -584,7 +584,7 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 		kpersistentKeyId, session.mCredentialEphemeralPublicKey.data() + 1, 32, salt.data(),
 		saltLength, derivedKeys.data(), derivedKeys.size());
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_DERIVE status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_DERIVE status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -592,7 +592,7 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 	CryptoTypes::KeyId cryptogramKeyId{};
 	error = Interface::Crypto::ImportSymmetricKey(derivedKeys.data(), 32, cryptogramKeyId);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_IMPORT status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_IMPORT status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		std::fill(derivedKeys.begin(), derivedKeys.end(), 0);
@@ -602,13 +602,13 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 	size_t plaintextLength = plaintext.size();
 	const CryptoTypes::Nonce nonce{};
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_DECRYPT_BEGIN cryptogram_len=%zu", cryptogramLength);
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_DECRYPT_BEGIN cryptogram_len=%zu", cryptogramLength);
 #endif
 	error = Interface::Crypto::AeadDecrypt(cryptogramKeyId, cryptogram, cryptogramLength,
 					       nullptr, 0, nonce, plaintext.data(),
 					       plaintextLength);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_DECRYPT_RESULT status=%d plaintext_len=%zu", error.ToInt(),
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_DECRYPT_RESULT status=%d plaintext_len=%zu", error.ToInt(),
 		plaintextLength);
 #endif
 	DestroyKey(cryptogramKeyId);
@@ -627,12 +627,12 @@ AliroError TryFastKey(SessionContext &session, CryptoTypes::KeyId kpersistentKey
 	/* A successfully authenticated fast cryptogram can still require the
 	 * standard phase when the device advertises a newer Access Document. */
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_ACCESS_DOCUMENT_CHECK_BEGIN");
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_ACCESS_DOCUMENT_CHECK_BEGIN");
 #endif
 	const auto accessDocumentRequest = Interface::Access::GetAccessDocumentRequestParameters(
 		credentialPublicKey, credentialSignedTimestamp);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE FAST_ACCESS_DOCUMENT_CHECK_RESULT requested=%u",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_ACCESS_DOCUMENT_CHECK_RESULT requested=%u",
 		static_cast<unsigned int>(accessDocumentRequest.has_value()));
 #endif
 	if (accessDocumentRequest.has_value()) {
@@ -673,7 +673,7 @@ AliroError SendApCommand(SessionContext &session, const uint8_t *command, size_t
 						{const_cast<uint8_t *>(command), commandLength});
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AP_COMMAND_BUILD state=%u ins=0x%02x len=%zu",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AP_COMMAND_BUILD state=%u ins=0x%02x len=%zu",
 		static_cast<unsigned int>(session.mState), commandLength > 1 ? command[1] : 0xff,
 		commandLength);
 #endif
@@ -691,7 +691,7 @@ AliroError SendApCommand(SessionContext &session, const uint8_t *command, size_t
 					      session.mBleBuffer.data(), messageLength);
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AP_COMMAND_SEND state=%u framed_len=%zu status=%d",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AP_COMMAND_SEND state=%u framed_len=%zu status=%d",
 		static_cast<unsigned int>(session.mState), messageLength, error.ToInt());
 #endif
 	return error;
@@ -769,7 +769,7 @@ AliroError SendAuth0(SessionContext &session)
 AliroError HandleAuth0Response(SessionContext &session, Data data)
 {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH0_RESPONSE_BEGIN len=%zu fast=%u keys=%zu", data.mLength,
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH0_RESPONSE_BEGIN len=%zu fast=%u keys=%zu", data.mLength,
 		static_cast<unsigned int>((session.mCommandParameters & 1) != 0),
 		session.mKpersistentKeyCount);
 #endif
@@ -777,7 +777,7 @@ AliroError HandleAuth0Response(SessionContext &session, Data data)
 	const int parseStatus = ultrawidelock_cred_parse_auth0_response(
 		data.mData, data.mLength, session.mCommandParameters & 1, &response);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH0_PARSE status=%d cryptogram_len=%zu", parseStatus,
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH0_PARSE status=%d cryptogram_len=%zu", parseStatus,
 		response.cryptogram_length);
 #endif
 	if (parseStatus != ULTRAWIDELOCK_CRED_AUTH_OK) {
@@ -791,13 +791,13 @@ AliroError HandleAuth0Response(SessionContext &session, Data data)
 			bool matched = false;
 			bool requiresStandard = false;
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-			LOG_INF("ALIRO_TRACE SOURCE FAST_KEY_BEGIN index=%zu", i);
+			LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_KEY_BEGIN index=%zu", i);
 #endif
 			const AliroError fastStatus = TryFastKey(
 				session, session.mKpersistentKeyIds[i], response.cryptogram,
 				response.cryptogram_length, matched, requiresStandard);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-			LOG_INF("ALIRO_TRACE SOURCE FAST_KEY_RESULT index=%zu status=%d matched=%u "
+			LOG_INF("ULTRAWIDELOCK_TRACE SOURCE FAST_KEY_RESULT index=%zu status=%d matched=%u "
 				"standard=%u",
 				i, fastStatus.ToInt(), static_cast<unsigned int>(matched),
 				static_cast<unsigned int>(requiresStandard));
@@ -828,11 +828,11 @@ AliroError HandleAuth0Response(SessionContext &session, Data data)
 		std::fill(session.mUrsk.begin(), session.mUrsk.end(), 0);
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE VOLATILE_KEYS_BEGIN");
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE VOLATILE_KEYS_BEGIN");
 #endif
 	AliroError error = DeriveVolatileKeys(session);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE VOLATILE_KEYS_RESULT status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE VOLATILE_KEYS_RESULT status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -847,12 +847,12 @@ AliroError HandleAuth0Response(SessionContext &session, Data data)
 	}
 	CryptoTypes::Signature signature{};
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH1_SIGN_BEGIN");
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH1_SIGN_BEGIN");
 #endif
 	error = Interface::Crypto::GenerateSignature(authenticationData.data(),
 						     authenticationData.size(), signature);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH1_SIGN_RESULT status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH1_SIGN_RESULT status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -872,7 +872,7 @@ AliroError HandleAuth0Response(SessionContext &session, Data data)
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH1_BUILD len=%zu certificate_len=%zu", commandLength,
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH1_BUILD len=%zu certificate_len=%zu", commandLength,
 		readerCertificate.mLength);
 #endif
 	session.mState = SessionState::AwaitingAuth1;
@@ -1097,7 +1097,7 @@ AliroError SendNfcCompletionExchange(SessionContext &session, bool useStepUpKeys
 	const CryptoTypes::KeyId readerKeyId =
 		useStepUpKeys ? session.mStepUpReaderKeyId : session.mExpeditedReaderKeyId;
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE NFC_COMPLETION_SEND phase=%s",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE NFC_COMPLETION_SEND phase=%s",
 		useStepUpKeys ? "step-up" : "expedited");
 #endif
 	return SendEncryptedExchange(session, plaintext, sizeof(plaintext), readerKeyId,
@@ -1136,19 +1136,19 @@ AliroError ProcessAccess(SessionContext &session)
 AliroError CompleteBleAccess(SessionContext &session)
 {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE COMPLETE_BLE_BEGIN processed=%u",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE COMPLETE_BLE_BEGIN processed=%u",
 		static_cast<unsigned int>(session.mAccessProcessed));
 #endif
 	AliroError error = ProcessAccess(session);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE COMPLETE_BLE_ACCESS status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE COMPLETE_BLE_ACCESS status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
 	}
 	error = DeriveBleSessionKeys(session);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE COMPLETE_BLE_KEYS status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE COMPLETE_BLE_KEYS status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -1164,7 +1164,7 @@ AliroError CompleteBleAccess(SessionContext &session)
 	error = Interface::Session::StartRangingSession(*session.mHandle, rangingSessionId,
 							session.mUrsk, session.mProtocolVersion);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE COMPLETE_BLE_RANGING status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE COMPLETE_BLE_RANGING status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -1257,13 +1257,13 @@ AliroError SendNextEnvelope(SessionContext &session)
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE STEP_UP_ENVELOPE_TX len=%zu offset=%zu total=%zu "
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_ENVELOPE_TX len=%zu offset=%zu total=%zu "
 		"last=%u max_command=%zu max_response=%zu extended=%u",
 		commandLength, session.mExchangeOffset, session.mExchangeLength,
 		session.mLastEnvelope ? 1u : 0u, session.mMaxCommandData, session.mMaxResponseData,
 		session.mUseExtendedApdus ? 1u : 0u);
 	LOG_HEXDUMP_INF(session.mTxBuffer.data(), commandLength,
-			"ALIRO_TRACE STEP_UP_ENVELOPE_TX bytes:");
+			"ULTRAWIDELOCK_TRACE STEP_UP_ENVELOPE_TX bytes:");
 #endif
 	session.mState = SessionState::SendingStepUpEnvelope;
 	return SendApCommand(session, session.mTxBuffer.data(), commandLength);
@@ -1312,7 +1312,7 @@ AliroError StartStepUpExchange(SessionContext &session)
 							      session.mStepUpDeviceKeyId);
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE STEP_UP_KEYS status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_KEYS status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -1330,7 +1330,7 @@ AliroError StartStepUpExchange(SessionContext &session)
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
 	LOG_HEXDUMP_INF(session.mPlaintextBuffer.data(), requestLength,
-			"ALIRO_TRACE SOURCE STEP_UP_DEVICE_REQUEST_PLAINTEXT");
+			"ULTRAWIDELOCK_TRACE SOURCE STEP_UP_DEVICE_REQUEST_PLAINTEXT");
 #endif
 	const CryptoTypes::Nonce nonce = MakeNonce(false, session.mReaderCounter);
 	CryptoTypes::AuthenticationTag tag{};
@@ -1360,7 +1360,7 @@ AliroError StartStepUpExchange(SessionContext &session)
 			      std::equal(session.mPlaintextBuffer.begin(),
 					 session.mPlaintextBuffer.begin() + requestLength,
 					 session.mTxBuffer.begin());
-	LOG_INF("ALIRO_TRACE SOURCE STEP_UP_AEAD_SELF_CHECK status=%d "
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_AEAD_SELF_CHECK status=%d "
 		"decrypted_len=%zu expected_len=%zu match=%u",
 		verifyError.ToInt(), verifiedLength, requestLength, verified ? 1u : 0u);
 #endif
@@ -1518,13 +1518,13 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 					    size_t deviceResponseLength)
 {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_VALIDATE_BEGIN len=%zu requested_len=%zu",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_VALIDATE_BEGIN len=%zu requested_len=%zu",
 		deviceResponseLength, session.mRequestedElementLength);
 	static bool tracedDocument;
 	if (!tracedDocument) {
 		tracedDocument = true;
 		LOG_HEXDUMP_INF(deviceResponse, deviceResponseLength,
-				"ALIRO_TRACE SOURCE ACCESS_DOCUMENT_PLAINTEXT");
+				"ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_PLAINTEXT");
 	}
 #endif
 	/* Parse scratch: the full DeviceResponse decode is a few KiB of slices and
@@ -1539,7 +1539,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 						session.mRequestedElementLength, parsed);
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_PARSE status=%d", parseStatus);
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_PARSE status=%d", parseStatus);
 #endif
 	if (parseStatus != 0) {
 		return ALIRO_INVALID_DATA_FORMAT;
@@ -1548,7 +1548,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 	AliroError error = Interface::Crypto::Sha256(parsed.issuer_signed_item,
 						     parsed.issuer_signed_item_length, digest);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_DIGEST status=%d match=%u", error.ToInt(),
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_DIGEST status=%d match=%u", error.ToInt(),
 		static_cast<unsigned int>(
 			error == ALIRO_NO_ERROR &&
 			std::equal(digest.begin(), digest.end(), parsed.expected_digest)));
@@ -1586,7 +1586,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 		CryptoTypes::PublicKey storedIssuerPublicKey{};
 		error = Interface::Access::GetCredentialIssuerPublicKey(kid, storedIssuerPublicKey);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-		LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_ISSUER_LOOKUP status=%d",
+		LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_ISSUER_LOOKUP status=%d",
 			error.ToInt());
 #endif
 		if (error != ALIRO_NO_ERROR) {
@@ -1636,7 +1636,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 	error = Interface::Crypto::VerifySignature(
 		issuerPublicKey, session.mSessionDataBuffer.data(), sigLength, signature);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_SIGNATURE status=%d sig_structure_len=%zu",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_SIGNATURE status=%d sig_structure_len=%zu",
 		error.ToInt(), sigLength);
 #endif
 	if (error != ALIRO_NO_ERROR) {
@@ -1654,7 +1654,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 	}
 	auto valid = Interface::AccessDocument::VerifyValidityPeriod(*validFrom, *validUntil);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_VALIDITY known=%u valid=%u required=%u",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_VALIDITY known=%u valid=%u required=%u",
 		static_cast<unsigned int>(valid.has_value()),
 		static_cast<unsigned int>(valid.value_or(false)),
 		static_cast<unsigned int>(parsed.time_verification_required));
@@ -1679,7 +1679,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 							session.mCredentialPublicKey,
 							session.mKpersistentKeyId, accessDocument);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT_PROCESS status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT_PROCESS status=%d", error.ToInt());
 #endif
 	return error;
 }
@@ -1692,7 +1692,7 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 AliroError FinishStepUpResponse(SessionContext &session)
 {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE STEP_UP_FINISH_BEGIN response_len=%zu",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_FINISH_BEGIN response_len=%zu",
 		session.mResponseLength);
 #endif
 	const uint8_t *sessionData = nullptr;
@@ -1709,7 +1709,7 @@ AliroError FinishStepUpResponse(SessionContext &session)
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE STEP_UP_UNWRAP session_len=%zu ciphertext_len=%zu",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_UNWRAP session_len=%zu ciphertext_len=%zu",
 		sessionDataLength, ciphertextLength);
 #endif
 	size_t plaintextLength = session.mPlaintextBuffer.size();
@@ -1718,7 +1718,7 @@ AliroError FinishStepUpResponse(SessionContext &session)
 		session.mStepUpDeviceKeyId, ciphertext, ciphertextLength, nullptr, 0, nonce,
 		session.mPlaintextBuffer.data(), plaintextLength);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE STEP_UP_DECRYPT status=%d plaintext_len=%zu", error.ToInt(),
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_DECRYPT status=%d plaintext_len=%zu", error.ToInt(),
 		plaintextLength);
 #endif
 	if (error != ALIRO_NO_ERROR) {
@@ -1746,13 +1746,13 @@ AliroError CollectStepUpResponse(SessionContext &session, Data data)
 {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
 	if (data.mLength >= 2) {
-		LOG_INF("ALIRO_TRACE SOURCE STEP_UP_APDU_RX len=%zu sw=%02x%02x", data.mLength,
+		LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_APDU_RX len=%zu sw=%02x%02x", data.mLength,
 			data.mData[data.mLength - 2], data.mData[data.mLength - 1]);
 	} else {
-		LOG_INF("ALIRO_TRACE SOURCE STEP_UP_APDU_RX len=%zu missing_status_word",
+		LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_APDU_RX len=%zu missing_status_word",
 			data.mLength);
 	}
-	LOG_HEXDUMP_INF(data.mData, data.mLength, "ALIRO_TRACE STEP_UP_APDU_RX bytes:");
+	LOG_HEXDUMP_INF(data.mData, data.mLength, "ULTRAWIDELOCK_TRACE STEP_UP_APDU_RX bytes:");
 #endif
 	size_t nextLength = 0;
 	const int result = ultrawidelock_stepup_collect_response(
@@ -1797,7 +1797,7 @@ AliroError HandleAuth1Response(SessionContext &session, Data data)
 		session.mExpeditedDeviceKeyId, data.mData, encryptedLength, nullptr, 0, nonce,
 		session.mPlaintextBuffer.data(), plaintextLength);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH1_DECRYPT status=%d plaintext_len=%zu", error.ToInt(),
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH1_DECRYPT status=%d plaintext_len=%zu", error.ToInt(),
 		plaintextLength);
 #endif
 	if (error != ALIRO_NO_ERROR) {
@@ -1826,14 +1826,14 @@ AliroError HandleAuth1Response(SessionContext &session, Data data)
 	error = Interface::Crypto::VerifySignature(credentialPublicKey, authenticationData.data(),
 						   authenticationData.size(), signature);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE AUTH1_VERIFY status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE AUTH1_VERIFY status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
 	}
 	error = DerivePersistentKey(session, credentialPublicKey);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE PERSISTENT_DERIVE status=%d", error.ToInt());
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE PERSISTENT_DERIVE status=%d", error.ToInt());
 #endif
 	if (error != ALIRO_NO_ERROR) {
 		return error;
@@ -1848,7 +1848,7 @@ AliroError HandleAuth1Response(SessionContext &session, Data data)
 	auto request = Interface::Access::GetAccessDocumentRequestParameters(
 		credentialPublicKey, credentialSignedTimestamp);
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE ACCESS_DOCUMENT requested=%u signaling=0x%04x",
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE ACCESS_DOCUMENT requested=%u signaling=0x%04x",
 		static_cast<unsigned int>(request.has_value()), response.signaling_bitmap);
 #endif
 	/* Bit 0 advertises that an Access Document can be retrieved. If the
@@ -2012,31 +2012,31 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 							       &selected) != ULTRAWIDELOCK_CRED_SELECT_OK) {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
 				if (response.mLength >= 2) {
-					LOG_INF("ALIRO_TRACE SOURCE STEP_UP_SELECT_RX parse=failed "
+					LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_SELECT_RX parse=failed "
 						"len=%zu "
 						"sw=%02x%02x",
 						response.mLength,
 						response.mData[response.mLength - 2],
 						response.mData[response.mLength - 1]);
 				} else {
-					LOG_INF("ALIRO_TRACE SOURCE STEP_UP_SELECT_RX parse=failed "
+					LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_SELECT_RX parse=failed "
 						"len=%zu "
 						"missing_status_word",
 						response.mLength);
 				}
 				LOG_HEXDUMP_INF(response.mData, response.mLength,
-						"ALIRO_TRACE STEP_UP_SELECT_RX bytes:");
+						"ULTRAWIDELOCK_TRACE STEP_UP_SELECT_RX bytes:");
 #endif
 				status = ALIRO_INVALID_DATA_FORMAT;
 			} else {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-				LOG_INF("ALIRO_TRACE SOURCE STEP_UP_SELECT_RX parse=ok len=%zu "
+				LOG_INF("ULTRAWIDELOCK_TRACE SOURCE STEP_UP_SELECT_RX parse=ok len=%zu "
 					"max_command=%zu max_response=%zu extended_supported=%u",
 					response.mLength, selected.max_command_data_length,
 					selected.max_response_data_length,
 					selected.extended_length_supported ? 1u : 0u);
 				LOG_HEXDUMP_INF(response.mData, response.mLength,
-						"ALIRO_TRACE STEP_UP_SELECT_RX bytes:");
+						"ULTRAWIDELOCK_TRACE STEP_UP_SELECT_RX bytes:");
 #endif
 				ApplyNfcApduLimits(session, selected);
 				status = StartStepUpExchange(session);
@@ -2089,7 +2089,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 				}
 				if (session->mBleRxLength < ULTRAWIDELOCK_CRED_BLE_HEADER_SIZE) {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-					LOG_INF("ALIRO_TRACE SOURCE BLE_REASSEMBLY buffered=%zu "
+					LOG_INF("ULTRAWIDELOCK_TRACE SOURCE BLE_REASSEMBLY buffered=%zu "
 						"header=pending",
 						session->mBleRxLength);
 #endif
@@ -2115,7 +2115,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 					offset += copied;
 					if (session->mBleRxLength < expectedLength) {
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-						LOG_INF("ALIRO_TRACE SOURCE BLE_REASSEMBLY "
+						LOG_INF("ULTRAWIDELOCK_TRACE SOURCE BLE_REASSEMBLY "
 							"buffered=%zu expected=%zu",
 							session->mBleRxLength, expectedLength);
 #endif
@@ -2187,7 +2187,7 @@ void ProcessSessionData(ConnectionHandle handle, Data data)
 							 session->mExchangeBuffer.size() - 2,
 							 kBleMaxResponseData});
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-						LOG_INF("ALIRO_TRACE SOURCE BLE_APDU_LIMITS "
+						LOG_INF("ULTRAWIDELOCK_TRACE SOURCE BLE_APDU_LIMITS "
 							"command=%zu response=%zu",
 							session->mMaxCommandData,
 							session->mMaxResponseData);
@@ -2492,7 +2492,7 @@ void AliroStack::ProcessEvent(void *event)
 	auto *sessionData = static_cast<SessionDataEvent *>(event);
 
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_TRACE
-	LOG_INF("ALIRO_TRACE SOURCE DEFERRED_RX len=%zu", sessionData->mLength);
+	LOG_INF("ULTRAWIDELOCK_TRACE SOURCE DEFERRED_RX len=%zu", sessionData->mLength);
 #endif
 	ProcessSessionData(sessionData->mHandle, {sessionData->mData.data(), sessionData->mLength});
 	sessionData->mMagic = 0;

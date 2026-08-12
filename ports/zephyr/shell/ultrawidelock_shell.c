@@ -1,4 +1,4 @@
-/** @file ultrawidelock_shell.c — `aliro` UART shell command: colored console over the UWB engine.
+/** @file ultrawidelock_shell.c — `ultrawidelock` UART shell command: colored console over the UWB engine.
  */
 
 #include <stdint.h>
@@ -30,11 +30,11 @@
 #define C_CYN  "\x1b[36m"
 #define C_RULE C_DIM "  ────────────────────────────────────" C_RST
 
-/** @brief Section header: green "aliro · <title>" over a dim rule. */
+/** @brief Section header: green "ultrawidelock · <title>" over a dim rule. */
 static void hdr(const struct shell *sh, const char *title)
 {
 	shell_print(sh, "");
-	shell_print(sh, C_GRN C_B "  aliro" C_RST C_DIM " · " C_RST C_B "%s" C_RST, title);
+	shell_print(sh, C_GRN C_B "  ultrawidelock" C_RST C_DIM " · " C_RST C_B "%s" C_RST, title);
 	shell_print(sh, C_RULE);
 }
 
@@ -171,7 +171,7 @@ static int cmd_log(const struct shell *sh, size_t argc, char **argv)
 		} else if (strcmp(argv[1], "off") == 0) {
 			uwb_rxdiag_stream_set(false);
 		} else {
-			shell_print(sh, "  " C_YEL "usage: aliro log [on|off]" C_RST);
+			shell_print(sh, "  " C_YEL "usage: ultrawidelock log [on|off]" C_RST);
 			return -EINVAL;
 		}
 	}
@@ -195,7 +195,7 @@ static int cmd_frames(const struct shell *sh, size_t argc, char **argv)
 		} else if (strcmp(argv[1], "off") == 0) {
 			uwb_rxdiag_rng_set(false);
 		} else {
-			shell_print(sh, "  " C_YEL "usage: aliro frames [on|off]" C_RST);
+			shell_print(sh, "  " C_YEL "usage: ultrawidelock frames [on|off]" C_RST);
 			return -EINVAL;
 		}
 	}
@@ -226,7 +226,7 @@ static int cmd_frec(const struct shell *sh, size_t argc, char **argv)
 		} else if (strcmp(argv[1], "clear") == 0) {
 			fr_clear();
 		} else {
-			shell_print(sh, "  " C_YEL "usage: aliro frec [on|off|dump|clear]" C_RST);
+			shell_print(sh, "  " C_YEL "usage: ultrawidelock frec [on|off|dump|clear]" C_RST);
 			return -EINVAL;
 		}
 	}
@@ -259,7 +259,7 @@ static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
 			} else if (strcmp(argv[2], "off") == 0) {
 				uwb_cirdiag_dump_set_enabled(false);
 			} else {
-				shell_print(sh, "  " C_YEL "usage: aliro cir dump [on|off]" C_RST);
+				shell_print(sh, "  " C_YEL "usage: ultrawidelock cir dump [on|off]" C_RST);
 				return -EINVAL;
 			}
 		}
@@ -277,7 +277,7 @@ static int cmd_cir(const struct shell *sh, size_t argc, char **argv)
 		} else if (strcmp(argv[1], "off") == 0) {
 			uwb_cirdiag_set_enabled(false);
 		} else {
-			shell_print(sh, "  " C_YEL "usage: aliro cir [on|off] | cir dump "
+			shell_print(sh, "  " C_YEL "usage: ultrawidelock cir [on|off] | cir dump "
 					"[on|off] | cir probe" C_RST);
 			return -EINVAL;
 		}
@@ -303,7 +303,7 @@ void ultrawidelock_shell_set_factory_reset(void (*fn)(void))
  * @brief Erase every stored credential and reboot, but only on an explicit "yes".
  *
  * The confirm word is the whole safety mechanism: this is reachable over a bare
- * UART with no undo, and `aliro fa<TAB>` completes to something that would
+ * UART with no undo, and `ultrawidelock fa<TAB>` completes to something that would
  * otherwise unpair the lock on Enter. Without it the command only explains what
  * it would destroy.
  *
@@ -321,7 +321,7 @@ static int cmd_factoryreset(const struct shell *sh, size_t argc, char **argv)
 		shell_print(sh, "  " C_DIM "trusted phone keys, then reboots unprovisioned." C_RST);
 		shell_print(sh, "  " C_DIM "Remove the stale accessory before re-pairing." C_RST);
 		shell_print(sh, "");
-		shell_print(sh, "  " C_YEL "confirm with: aliro factoryreset yes" C_RST);
+		shell_print(sh, "  " C_YEL "confirm with: ultrawidelock factoryreset yes" C_RST);
 		return -EINVAL;
 	}
 	if (factory_reset_fn == NULL) {
@@ -414,20 +414,20 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 }
 
 /**
- * @brief Print aliro shell command help and list all available subcommands.
+ * @brief Print ultrawidelock shell command help and list all available subcommands.
  * @param sh Shell context.
  * @param argc Argument count; if >1, returns error for unknown subcommand.
  * @param argv Argument vector; argv[1] if present must be empty or help request.
  * @return 0 on success; -EINVAL if argc >1.
  */
-static int cmd_aliro(const struct shell *sh, size_t argc, char **argv)
+static int cmd_ultrawidelock(const struct shell *sh, size_t argc, char **argv)
 {
 	if (argc > 1) {
 		shell_print(sh, "  " C_YEL "unknown subcommand: %s" C_RST, argv[1]);
 		return -EINVAL;
 	}
 	shell_print(sh, "");
-	shell_print(sh, C_GRN C_B "  aliro" C_RST C_DIM "  ·  DIY Aliro NFC + UWB unlock" C_RST);
+	shell_print(sh, C_GRN C_B "  ultrawidelock" C_RST C_DIM "  ·  DIY Aliro NFC + UWB unlock" C_RST);
 	shell_print(sh, C_RULE);
 	shell_print(sh, "  " C_CYN "status  " C_RST C_DIM "everything at a glance" C_RST);
 	shell_print(sh, "  " C_CYN "rx      " C_RST C_DIM "on-air RX/TX tally" C_RST);
@@ -443,7 +443,7 @@ static int cmd_aliro(const struct shell *sh, size_t argc, char **argv)
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
-	sub_aliro,
+	sub_ultrawidelock,
 	SHELL_CMD(status, NULL, "One-glance panel: chip, ccc, ursk, range, rx.", cmd_status),
 	SHELL_CMD(rx, NULL, "On-air RX/TX event tally.", cmd_rx),
 	SHELL_CMD(range, NULL, "Last measured DS-TWR distance.", cmd_range),
@@ -465,4 +465,4 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		  cmd_factoryreset),
 	SHELL_SUBCMD_SET_END);
 
-SHELL_CMD_REGISTER(aliro, &sub_aliro, "Aliro UWB firmware console.", cmd_aliro);
+SHELL_CMD_REGISTER(ultrawidelock, &sub_ultrawidelock, "Aliro UWB firmware console.", cmd_ultrawidelock);

@@ -79,7 +79,7 @@ make build
 
 `make bootstrap` is a large first run: roughly 2 GB for the NCS v3.3.0
 toolchain, once per machine, then a multi-GB `west update` into `./workspace`.
-Set `ALIRO_WS=/other/disk/ws` to put the workspace elsewhere. It is safe to
+Set `ULTRAWIDELOCK_WS=/other/disk/ws` to put the workspace elsewhere. It is safe to
 re-run, and an interrupted fetch resumes rather than starting over.
 
 ESP32 builds use an installed ESP-IDF environment; the Matter lock also needs

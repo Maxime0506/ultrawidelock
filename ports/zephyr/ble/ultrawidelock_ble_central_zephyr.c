@@ -73,7 +73,7 @@ NET_BUF_POOL_FIXED_DEFINE(s_coc_rx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ULTRAWIDELOCK_
 NET_BUF_POOL_FIXED_DEFINE(s_coc_tx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ULTRAWIDELOCK_L2CAP_MTU),
 			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
 
-static struct aliro_coc_client {
+static struct ultrawidelock_coc_client {
 	struct bt_l2cap_le_chan le;
 	bool in_use;
 } s_coc;
@@ -486,7 +486,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	start_scan();
 }
 
-BT_CONN_CB_DEFINE(aliro_central_conn_cb) = {
+BT_CONN_CB_DEFINE(ultrawidelock_central_conn_cb) = {
 	.connected = connected,
 	.disconnected = disconnected,
 };

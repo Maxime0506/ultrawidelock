@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/host/sources.sh"
 
 # One build root for the whole repo; the host suites own build/host.
-OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/host"
+OUT="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/host"
 mkdir -p "$OUT"
 # SAN=1: same suite rebuilt under ASan + UBSan (`make test-san`).
 san_flags=
@@ -196,12 +196,12 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/includ
 	-o "$OUT/host_test_seam"
 "$OUT/host_test_seam"
 
-# 8) The Aliro source stack (C++): aliro_stack.cpp and session.cpp over the
+# 8) The Aliro source stack (C++): ultrawidelock_stack.cpp and session.cpp over the
 #    Nordic Interface API as recording doubles (stackfake/). The protocol
 #    codecs beside them are the shipping sources, linked in whole, so every
 #    APDU and BLE frame here is built and parsed for real -- only the crypto
 #    and the application callbacks are stand-ins. Its own binary because
-#    stackfake's <aliro/*.h> are a different Aliro surface from the one
+#    stackfake's <ultrawidelock/*.h> are a different Aliro surface from the one
 #    ecpfake and nfcfake carry, and all three would collide.
 STK="$ROOT/modules/ultrawidelock_cred_stack/src"
 STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
@@ -224,21 +224,21 @@ for stk_src in advertising_core protocol/ble_message protocol/ble_timeout \
 done
 # The step-up wire codecs + DeviceResponse parser are the shared ultrawidelock_cred
 # sources (one source of protocol truth; session.cpp calls them directly).
-for aliro_src in ultrawidelock_tlv ultrawidelock_stepup_wire ultrawidelock_stepup_parse; do
-	stk_obj="$OUT/stk_$aliro_src.o"
+for ultrawidelock_src in ultrawidelock_tlv ultrawidelock_stepup_wire ultrawidelock_stepup_parse; do
+	stk_obj="$OUT/stk_$ultrawidelock_src.o"
 	# shellcheck disable=SC2086
 	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
 		-I"$ROOT/modules/ultrawidelock_cred/src" \
-		-c "$ROOT/modules/ultrawidelock_cred/src/$aliro_src.c" -o "$stk_obj"
+		-c "$ROOT/modules/ultrawidelock_cred/src/$ultrawidelock_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
 # The symmetric crypto is REAL: ultrawidelock_hash.c (SHA-256/HMAC/HKDF, pinned by
-# test_aliro_hash.c) and the reference AES-GCM in ultrawidelock_prim_host.c (pinned by
-# test_aliro_crypto.c). Only P-256 stays a stand-in -- this repo has none on host.
+# test_ultrawidelock_hash.c) and the reference AES-GCM in ultrawidelock_prim_host.c (pinned by
+# test_ultrawidelock_crypto.c). Only P-256 stays a stand-in -- this repo has none on host.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
 	-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_hash.c" \
-	-o "$OUT/stk_aliro_hash.o"
+	-o "$OUT/stk_ultrawidelock_hash.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
 	-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/tests/shared/ultrawidelock_prim_host.c" \
@@ -254,11 +254,11 @@ done
 	-c "$HOSTD/stackfake/stackfake.cpp" -o "$OUT/stackfake.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
-	-c "$HOSTD/test_aliro_stack.cpp" -o "$OUT/test_aliro_stack.o"
+	-c "$HOSTD/test_ultrawidelock_stack.cpp" -o "$OUT/test_ultrawidelock_stack.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
-	"$OUT/test_aliro_stack.o" "$OUT/stackfake.o" "$OUT/test_harness_stack.o" \
+	"$OUT/test_ultrawidelock_stack.o" "$OUT/stackfake.o" "$OUT/test_harness_stack.o" \
 	"$OUT/stk_cred_stack.o" "$OUT/stk_session.o" "${STK_OBJS[@]}" \
-	"$OUT/stk_aliro_hash.o" "$OUT/stk_ultrawidelock_prim_host.o" \
+	"$OUT/stk_ultrawidelock_hash.o" "$OUT/stk_ultrawidelock_prim_host.o" \
 	-o "$OUT/host_test_stack"
 "$OUT/host_test_stack"

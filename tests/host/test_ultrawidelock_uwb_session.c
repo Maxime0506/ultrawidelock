@@ -255,10 +255,10 @@ void test_ultrawidelock_uwb_session(void)
 	ultrawidelock_uwb_msg_free(b.message);
 
 	t_group("ccc SESSION_ERROR event -> peer general-error notification");
-	/* The shim registers aliro_ccc_cb as the ccc session's callback (base.cb,
+	/* The shim registers ultrawidelock_ccc_cb as the ccc session's callback (base.cb,
 	 * the first member of the ccc session) and invokes it with cherry events.
 	 * The host shim only ever emits STATUS events, so drive an ERROR event the
-	 * same way the shim would and confirm aliro_ccc_cb answers with a
+	 * same way the shim would and confirm ultrawidelock_ccc_cb answers with a
 	 * general-error notification via the transmit callback. */
 	cherry_ccc_cb_t ccc_cb = *(cherry_ccc_cb_t *)s->ccc_session;
 	void *ccc_ud = cherry_ccc_session_get_user_data(s->ccc_session);

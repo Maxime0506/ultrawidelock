@@ -135,7 +135,7 @@ bool ultrawidelock_reader_presence_authenticated_after(uint32_t checkpoint, uint
 bool ultrawidelock_reader_presence_expected_credential(uint8_t cred_pub[65]);
 
 /* ---- Bench provisioning helpers (Phase 3.4) ---------------------------- *
- * Back the `aliro-prov` / `aliro-trust` console commands. Kept as plain calls
+ * Back the `ultrawidelock-prov` / `ultrawidelock-trust` console commands. Kept as plain calls
  * so the shell does not need the internal ultrawidelock_prov types. */
 
 /** Print the reader identity (dev vs provisioned, reader_id), the trust store,
@@ -244,16 +244,16 @@ int ultrawidelock_reader_provision_clear(void);
  * key, so only the clone-gated console commands reach these. */
 
 /** Serialise the current identity + trust store into a portable blob (backs the
- *  `aliro-export` console command). Returns 0 and sets *out_len; -1 if cap is
+ *  `ultrawidelock-export` console command). Returns 0 and sets *out_len; -1 if cap is
  *  too small. The blob contains the reader private key. */
 int ultrawidelock_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len);
 
 /** Adopt an identity + trust store from an exported blob, persist it, and use it
- *  live (backs `aliro-import`). 0 ok; -1 malformed blob; -2 NVS write failed. */
+ *  live (backs `ultrawidelock-import`). 0 ok; -1 malformed blob; -2 NVS write failed. */
 int ultrawidelock_reader_import_blob(const uint8_t *buf, size_t len);
 
 /* ---- Step-up (Access Document) bench control (CONFIG_ULTRAWIDELOCK_CRED_STEPUP) ---- *
- * Back the `aliro-stepup` console command. Both are no-ops unless the reader was
+ * Back the `ultrawidelock-stepup` console command. Both are no-ops unless the reader was
  * built with the step-up phase enabled. */
 
 /** Arm a one-shot Access-Document request: the next transaction is forced into

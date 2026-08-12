@@ -74,11 +74,11 @@ CDK_PROBE_GUARD = @if [ -z '$(CDK_PROBE)' ] && \
 	  exit 1; \
 	fi
 
-CDK_BUILD          ?= $(ALIRO_BUILD_ROOT)/cdk-matter
-CDK_READER_BUILD   ?= $(ALIRO_BUILD_ROOT)/cdk-reader
-CDK_SELFTEST_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-selftest
-CDK_CIRDIAG_BUILD  ?= $(ALIRO_BUILD_ROOT)/cdk-cirdiag
-CDK_MLGATE_BUILD   ?= $(ALIRO_BUILD_ROOT)/cdk-mlgate
+CDK_BUILD          ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-matter
+CDK_READER_BUILD   ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-reader
+CDK_SELFTEST_BUILD ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-selftest
+CDK_CIRDIAG_BUILD  ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-cirdiag
+CDK_MLGATE_BUILD   ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-mlgate
 # Split out only so `monitor` can be pointed at an ELF without moving what the
 # flash targets write. Same directory by default, which is the whole point.
 CDK_RTT_BUILD      ?= $(CDK_BUILD)
@@ -113,7 +113,7 @@ CDK_PRISTINE := $(if $(PRISTINE),always,auto)
 # (measured, see the cirdiag target), and the taps it buys are worth 0.14 accuracy
 # points to the classifier the capture feeds. Same `-p auto` caveat as RELEASE:
 # switching it in an existing build dir needs PRISTINE=1.
-CDK_CIRDIAG_WINDOWS := $(if $(CIRDIAG_WINDOWS),-DCONFIG_ALIRO_CIRDIAG_CAPTURE_WINDOWS=y,)
+CDK_CIRDIAG_WINDOWS := $(if $(CIRDIAG_WINDOWS),-DCONFIG_ULTRAWIDELOCK_CIRDIAG_CAPTURE_WINDOWS=y,)
 
 # RELEASE=1 appends the release overlay, which trades the 8 KB RTT ring for
 # 7,168 B of RAM. Semicolon because EXTRA_CONF_FILE is a CMake list and later
@@ -250,13 +250,13 @@ DFU_BAUD   ?= 115200
 # else programs it. If it goes stale the update is REFUSED rather than
 # mis-applied -- the header carries a CRC of the from-image and the bootloader
 # checks it -- so the failure mode is a wasted transfer, not a brick.
-CDK_DEPLOYED ?= $(ALIRO_BUILD_ROOT)/cdk-deployed/zephyr.signed.hex
+CDK_DEPLOYED ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-deployed/zephyr.signed.hex
 CDK_PATCH    ?= $(CDK_BUILD)/update.wdfu
 
 # The host tooling's Python dependencies, in a throwaway virtualenv rather than
 # in the user's interpreter. detools creates the patch, cryptography signs its
 # header, bleak carries it over Bluetooth.
-CDK_OTA_VENV := $(ALIRO_BUILD_ROOT)/ota-venv
+CDK_OTA_VENV := $(ULTRAWIDELOCK_BUILD_ROOT)/ota-venv
 CDK_OTA_PY   := $(CDK_OTA_VENV)/bin/python
 
 # The ELF that goes with $(CDK_DEPLOYED), kept because `ota-window` needs the
@@ -266,12 +266,12 @@ CDK_OTA_PY   := $(CDK_OTA_VENV)/bin/python
 # RAM word and the push then fails with access denied for no visible reason.
 CDK_DEPLOYED_ELF := $(dir $(CDK_DEPLOYED))zephyr.elf
 
-# ALIRO_TOOLCHAIN=env skips the nrfutil wrapper and runs west straight off PATH.
+# ULTRAWIDELOCK_TOOLCHAIN=env skips the nrfutil wrapper and runs west straight off PATH.
 # apps/nrf5340dk-lock/build.sh carries the same escape hatch for the same reason:
 # inside the NCS toolchain container CI uses, nrfutil's toolchain index is not
 # reachable, so the wrapper cannot resolve a toolchain that is already there.
 # firmware-builds.yml's dwm3001cdk job depends on this.
-ifeq ($(ALIRO_TOOLCHAIN),env)
+ifeq ($(ULTRAWIDELOCK_TOOLCHAIN),env)
 CDK_WEST := west
 else
 CDK_WEST := nrfutil sdk-manager toolchain launch --ncs-version $(NCS_VER) -- west
@@ -302,14 +302,14 @@ CDK_SIZE_ARGS      = --build '$(CDK_BUILD)' --image $(CDK_IMAGE) --json '$(CDK_S
 .PHONY: build rebuild reader selftest cirdiag flash flash-erase monitor dfu release \
         cdk-size cdk-size-check cdk-size-baseline \
         dfu-serial fota fota-build fota-done fota-confirm ota-patch ota-push ota-smp ota-smp-push ota-smp-list ota-window ota-deps \
-        cdk-aliro-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
+        cdk-ultrawidelock-matter-thread cdk-reader cdk-flash cdk-flash-erase cdk-rtt
 
 ##@ DWM3001CDK  ·  the lock (bare targets mean this board)
 ## build: the DWM3001CDK lock, reader + Matter over Thread  -> build/cdk-matter
 build:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_BUILD) $(CDK_APP) \
-	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ALIRO_MATTER_BLE=y \
+	  -- -DEXTRA_CONF_FILE="$(CDK_CONF)" -DCONFIG_ULTRAWIDELOCK_MATTER_BLE=y \
 	     $(CDK_SIGN) $(CDK_DFU) $(CDK_DFU_LOG)
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_BUILD)/$(CDK_IMAGE)/zephyr/.config
@@ -341,7 +341,7 @@ cirdiag:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_CIRDIAG_BUILD) $(CDK_APP) \
 	  -- -DEXTRA_CONF_FILE="$(CDK_CONF);overlays/cirdiag.conf" \
-	     -DCONFIG_ALIRO_MATTER_BLE=y $(CDK_CIRDIAG_WINDOWS) \
+	     -DCONFIG_ULTRAWIDELOCK_MATTER_BLE=y $(CDK_CIRDIAG_WINDOWS) \
 	     $(CDK_SIGN) $(CDK_DFU) $(CDK_DFU_LOG)
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_CIRDIAG_BUILD)/$(CDK_IMAGE)/zephyr/.config
@@ -354,7 +354,7 @@ mlgate:
 	@$(CDK_RUN) build -p $(CDK_PRISTINE) -b $(CDK_BOARD) \
 	  -d $(CDK_MLGATE_BUILD) $(CDK_APP) \
 	  -- -DEXTRA_CONF_FILE="$(CDK_CONF);overlays/mlgate.conf" \
-	     -DCONFIG_ALIRO_MATTER_BLE=y \
+	     -DCONFIG_ULTRAWIDELOCK_MATTER_BLE=y \
 	     $(CDK_SIGN) $(CDK_DFU) $(CDK_DFU_LOG)
 	@python3 $(REPO_ROOT)/scripts/spake2p_verifier.py \
 	  --from-config $(CDK_MLGATE_BUILD)/$(CDK_IMAGE)/zephyr/.config
@@ -401,7 +401,7 @@ dfu:
 
 ## fota: make the file an iPhone can install, and say how  ·  needs SMP=1
 FOTA_VERSION   ?= 1.0.0
-CDK_FOTA_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-smp-img
+CDK_FOTA_BUILD ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-smp-img
 CDK_FOTA_BUILD := $(abspath $(CDK_FOTA_BUILD))
 CDK_FOTA       := $(CDK_BUILD)/ultrawidelock-fota.bin
 
@@ -508,8 +508,8 @@ ota-window:
 	probe-rs write --chip $(CDK_CHIP) $(CDK_PROBE_ARG) b8 "0x$$addr" 1
 
 ## release: build and bundle the image to publish  ·  needs RELEASE_KEY=<path>
-CDK_RELEASE_BUILD ?= $(ALIRO_BUILD_ROOT)/cdk-release
-CDK_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/ultrawidelock-dwm3001cdk
+CDK_RELEASE_BUILD ?= $(ULTRAWIDELOCK_BUILD_ROOT)/cdk-release
+CDK_RELEASE_OUT   ?= $(ULTRAWIDELOCK_BUILD_ROOT)/release/ultrawidelock-dwm3001cdk
 CDK_RELEASE_BUILD := $(abspath $(CDK_RELEASE_BUILD))
 CDK_RELEASE_OUT   := $(abspath $(CDK_RELEASE_OUT))
 CDK_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
@@ -619,8 +619,8 @@ cdk-size-baseline: cdk-size
 # The names these targets had while the CDK still lived under ports/. Each does
 # the work and prints where it moved to, so a bookmarked command keeps working
 # and says so once. Not in the help list: the new names are above.
-cdk-aliro-matter-thread:
-	@printf '  cdk-aliro-matter-thread is now `make build`\n'
+cdk-ultrawidelock-matter-thread:
+	@printf '  cdk-ultrawidelock-matter-thread is now `make build`\n'
 	@$(MAKE) --no-print-directory build
 
 cdk-reader:

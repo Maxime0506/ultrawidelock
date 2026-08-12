@@ -98,10 +98,10 @@ struct drvfake_state {
 	const uint8_t *fira_ursk;
 
 	/* ── ultrawidelock_uwb_facade fake (uwb_selftest boot path) ── */
-	unsigned start_aliro_calls;
-	struct ultrawidelock_uwb_aliro_cfg last_aliro_cfg;
-	uint8_t last_aliro_ursk[32]; /* copied: cfg->ursk is a pointer */
-	int start_aliro_ret;
+	unsigned start_ultrawidelock_calls;
+	struct ultrawidelock_uwb_ultrawidelock_cfg last_ultrawidelock_cfg;
+	uint8_t last_ultrawidelock_ursk[32]; /* copied: cfg->ursk is a pointer */
+	int start_ultrawidelock_ret;
 };
 
 extern struct drvfake_state drvfake;

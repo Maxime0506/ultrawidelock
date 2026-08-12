@@ -24,7 +24,7 @@ static struct esp_console_repl {
 	int dummy;
 } s_repl;
 
-static const esp_app_desc_t s_app = {.project_name = "aliro-bench", .version = "test"};
+static const esp_app_desc_t s_app = {.project_name = "ultrawidelock-bench", .version = "test"};
 
 void fake_esp_reset(void)
 {

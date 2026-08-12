@@ -8,7 +8,7 @@
 /*
  * nRF5340 entry for the Aliro device (initiator) EC self-test. Initialises the
  * PSA backend (nrf_security/CryptoCell), runs the same suite as the host test
- * (tests/shared/test_aliro_device.c) against the real P-256 curve, and
+ * (tests/shared/test_ultrawidelock_device.c) against the real P-256 curve, and
  * prints the verdict to the DK's UART console. Credential-auth crypto only; no
  * BLE, UWB or iPhone.
  */
@@ -18,7 +18,7 @@
 
 #include "ultrawidelock_prim.h"
 
-int aliro_device_selftest(void);
+int ultrawidelock_device_selftest(void);
 
 /**
  * Run the on-target Aliro device EC self-test: initialize PSA, run the device self-test, and print
@@ -33,7 +33,7 @@ int main(void)
 		return 0;
 	}
 
-	int rc = aliro_device_selftest();
+	int rc = ultrawidelock_device_selftest();
 
 	printf(rc == 0 ? "\nON-TARGET RESULT: PASS\n" : "\nON-TARGET RESULT: FAIL (rc=%d)\n", rc);
 	return 0;

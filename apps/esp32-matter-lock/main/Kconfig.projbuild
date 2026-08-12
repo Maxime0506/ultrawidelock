@@ -1,6 +1,6 @@
 menu "Example Configuration"
 
-    config ENABLE_ALIRO_BLE_UWB
+    config ENABLE_ULTRAWIDELOCK_BLE_UWB
         bool "Enable Aliro (Apple Home Key) over BLE + UWB"
         default y
         help
@@ -11,7 +11,7 @@ menu "Example Configuration"
     config ENABLE_HA_MQTT
         bool "Publish distance and access events to Home Assistant over MQTT"
         default n
-        depends on ENABLE_ALIRO_BLE_UWB
+        depends on ENABLE_ULTRAWIDELOCK_BLE_UWB
         select ULTRAWIDELOCK_CRED_ACCESS_LISTENER
         help
             Publish UWB distance and Aliro access verdicts straight to a TLS

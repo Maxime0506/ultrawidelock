@@ -8,7 +8,7 @@
  *
  * This is Phase 3.1: the primitives and the key schedule. The transaction state
  * machine that drives it (AUTH0/AUTH1, EXCHANGE) is 3.2; the handoff of the URSK
- * into ultrawidelock_uwb_start_aliro(cfg) is 3.3.
+ * into ultrawidelock_uwb_start_ultrawidelock(cfg) is 3.3.
  */
 #pragma once
 

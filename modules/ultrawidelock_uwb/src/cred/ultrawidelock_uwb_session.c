@@ -43,7 +43,7 @@ static enum ultrawidelock_uwb_err notify_error(struct ultrawidelock_uwb_session 
  * @param event CCC event to wrap and forward.
  * @param user_data Aliro UWB session that owns the callback and client data.
  */
-static void aliro_ccc_cb(struct cherry_ccc_event *event, void *user_data)
+static void ultrawidelock_ccc_cb(struct cherry_ccc_event *event, void *user_data)
 {
 	struct ultrawidelock_uwb_session *session = user_data;
 	ultrawidelock_uwb_session_cb_t callback = session->callback;
@@ -52,7 +52,7 @@ static void aliro_ccc_cb(struct cherry_ccc_event *event, void *user_data)
 
 	wrapped = qmalloc(sizeof(*wrapped));
 	if (!wrapped) {
-		LOG_ERR("aliro_ccc_cb: OOM");
+		LOG_ERR("ultrawidelock_ccc_cb: OOM");
 		return;
 	}
 
@@ -79,7 +79,7 @@ static void aliro_ccc_cb(struct cherry_ccc_event *event, void *user_data)
 		wrapped->data.diagnostics = event->data.diagnostics;
 		break;
 	default:
-		LOG_INF("aliro_ccc_cb: unknown event type %u", event->type);
+		LOG_INF("ultrawidelock_ccc_cb: unknown event type %u", event->type);
 		qfree(wrapped);
 		return;
 	}
@@ -128,10 +128,10 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_init(struct ultrawidelock_u
 		return ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER;
 	}
 
-	session->ccc_session = cherry_ccc_session_create_aliro_responder(
-		session->aliro_ctx->cherry_ctx, aliro_ccc_cb, session, &session->ccc_aliro_config);
+	session->ccc_session = cherry_ccc_session_create_ultrawidelock_responder(
+		session->ultrawidelock_ctx->cherry_ctx, ultrawidelock_ccc_cb, session, &session->ccc_ultrawidelock_config);
 	if (!session->ccc_session) {
-		LOG_ERR("create_aliro_responder failed");
+		LOG_ERR("create_ultrawidelock_responder failed");
 		return ULTRAWIDELOCK_UWB_ERR_INTERNAL;
 	}
 
@@ -149,7 +149,7 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_init(struct ultrawidelock_u
 		}
 	}
 
-	reader = session->aliro_ctx->config;
+	reader = session->ultrawidelock_ctx->config;
 	if (reader->r1_antennas[0] || reader->r1_antennas[1]) {
 		err = cherry_ccc_session_set_antennas(session->ccc_session, reader->r1_antennas[0],
 						      reader->r1_antennas[1]);
@@ -164,9 +164,9 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_init(struct ultrawidelock_u
 			goto fail;
 		}
 	}
-	if (session->aliro_ctx->diag_config) {
+	if (session->ultrawidelock_ctx->diag_config) {
 		err = cherry_ccc_session_set_diagnostics(session->ccc_session,
-							 *session->aliro_ctx->diag_config);
+							 *session->ultrawidelock_ctx->diag_config);
 		if (err) {
 			goto fail;
 		}
@@ -181,7 +181,7 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_init(struct ultrawidelock_u
 fail:
 	LOG_ERR("session init step failed: %d", err);
 	session_close(session);
-	return cherry_err_to_aliro(err);
+	return cherry_err_to_ultrawidelock(err);
 }
 
 /**
@@ -200,7 +200,7 @@ ultrawidelock_uwb_session_start(struct ultrawidelock_uwb_session *session)
 	err = cherry_ccc_session_start(session->ccc_session);
 	if (err) {
 		session_close(session);
-		return cherry_err_to_aliro(err);
+		return cherry_err_to_ultrawidelock(err);
 	}
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
 }
@@ -222,7 +222,7 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_stop(struct ultrawidelock_u
 	err = cherry_ccc_session_stop(session->ccc_session);
 	if (err) {
 		session_close(session);
-		return cherry_err_to_aliro(err);
+		return cherry_err_to_ultrawidelock(err);
 	}
 	session->state = SUSPENDED;
 	return ULTRAWIDELOCK_UWB_ERR_NONE;
@@ -233,14 +233,14 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_stop(struct ultrawidelock_u
  * caller's transmit and event callbacks. No CCC session is started here.
  */
 struct ultrawidelock_uwb_session *
-ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *aliro_ctx, uint32_t session_id,
+ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx, uint32_t session_id,
 				 ultrawidelock_uwb_session_cb_t callback,
 				 ultrawidelock_uwb_adapter_transmit_message_t transmit,
 				 void *user_data)
 {
 	struct ultrawidelock_uwb_session *session;
 
-	if (!aliro_ctx || !transmit || !callback) {
+	if (!ultrawidelock_ctx || !transmit || !callback) {
 		return NULL;
 	}
 
@@ -249,7 +249,7 @@ ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *aliro_ctx, ui
 		return NULL;
 	}
 
-	session->aliro_ctx = aliro_ctx;
+	session->ultrawidelock_ctx = ultrawidelock_ctx;
 	session->session_id = session_id;
 	session->callback = callback;
 	session->transmit = transmit;
@@ -353,7 +353,7 @@ ultrawidelock_uwb_session_init_setup(struct ultrawidelock_uwb_session *session)
 	}
 
 	/* Only session_id is known now; the rest is filled in as M2/M4 arrive. */
-	session->ccc_aliro_config.session_id = session->session_id;
+	session->ccc_ultrawidelock_config.session_id = session->session_id;
 
 	m1 = ultrawidelock_uwb_msg_build_m1(session);
 	if (!m1) {
@@ -484,7 +484,7 @@ ultrawidelock_uwb_session_forced_suspend(struct ultrawidelock_uwb_session *sessi
 	if (err == CHERRY_ERR_NONE) {
 		session->state = SUSPENDED;
 	}
-	return cherry_err_to_aliro(err);
+	return cherry_err_to_ultrawidelock(err);
 }
 
 /**

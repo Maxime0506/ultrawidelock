@@ -1,4 +1,4 @@
-// ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro,
+// ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, ultrawidelock,
 // lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 /*
  * app_shell — see app_shell.h.
@@ -17,7 +17,7 @@
 #include <platform/PlatformManager.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
 #include <ultrawidelock_diag.h> // ultrawidelock_uwb_diag_on — the raw per-frame UWB trace gate
@@ -47,8 +47,8 @@ using namespace chip;
 using namespace chip::app::Clusters;
 
 extern uint16_t door_lock_endpoint_id;
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
-extern TaskHandle_t aliro_reader_task_handle;
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
+extern TaskHandle_t ultrawidelock_reader_task_handle;
 #endif
 
 /* ---- look & feel -------------------------------------------------------- *
@@ -110,12 +110,12 @@ static int cmd_status(int argc, char **argv)
 	printf("lock      : %s%s%s\n", col(locked ? C_BAD : C_OK), state_str, col(C_RST));
 	printf("fabrics   : %s%u%s\n", col(fabrics ? C_OK : C_BAD), fabrics, col(C_RST));
 	/* Aliro feature bits: 0x2000 AliroProvisioning, 0x4000 AliroBLEUWB. */
-	printf("featuremap: 0x%04X (aliro prov %s%s%s, ble-uwb %s%s%s)\n", (unsigned)feature_map,
+	printf("featuremap: 0x%04X (ultrawidelock prov %s%s%s, ble-uwb %s%s%s)\n", (unsigned)feature_map,
 	       col((feature_map & 0x2000) ? C_OK : C_BAD), (feature_map & 0x2000) ? "y" : "n",
 	       col(C_RST), col((feature_map & 0x4000) ? C_OK : C_BAD),
 	       (feature_map & 0x4000) ? "y" : "n", col(C_RST));
 
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 	int32_t cm;
 	if (ultrawidelock_uwb_last_range_cm(&cm)) {
 		printf("last range: %d cm\n", (int)cm);
@@ -129,9 +129,9 @@ static int cmd_status(int argc, char **argv)
 	}
 	/* Smallest free stack ever seen, in bytes. A value near zero on any of these is
 	 * the overflow to chase; the end-of-stack watchpoint will name it if it trips. */
-	if (aliro_reader_task_handle != nullptr) {
+	if (ultrawidelock_reader_task_handle != nullptr) {
 		unsigned free_b =
-			(unsigned)uxTaskGetStackHighWaterMark(aliro_reader_task_handle) *
+			(unsigned)uxTaskGetStackHighWaterMark(ultrawidelock_reader_task_handle) *
 			sizeof(StackType_t);
 		printf("stack rdr : %s%u B free%s\n", col(free_b < 1024 ? C_BAD : C_OK), free_b,
 		       col(C_RST));
@@ -140,7 +140,7 @@ static int cmd_status(int argc, char **argv)
 	return 0;
 }
 
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 // Shell handler for the "range" command; prints the last measured UWB range in cm, or "no range
 // yet" if none has been recorded. Always returns 0.
 static int cmd_range(int argc, char **argv)
@@ -161,7 +161,7 @@ static int cmd_range(int argc, char **argv)
 
 // Maps one hex digit to its 0-15 value, or -1 if not [0-9a-fA-F]. Twin of the
 // helper in the standalone reader app_shell.c (kept local to avoid a shared dep).
-static int aliro_hexnib(char c)
+static int ultrawidelock_hexnib(char c)
 {
 	if (c >= '0' && c <= '9') {
 		return c - '0';
@@ -177,15 +177,15 @@ static int aliro_hexnib(char c)
 
 // Decodes an even-length hex string into out (capacity out_cap). Returns the byte
 // count on success, or -1 on an odd length, a bad character, or overflow.
-static int aliro_hexdecode(const char *s, uint8_t *out, size_t out_cap)
+static int ultrawidelock_hexdecode(const char *s, uint8_t *out, size_t out_cap)
 {
 	size_t n = strlen(s);
 	if (n == 0 || (n & 1u) || n / 2 > out_cap) {
 		return -1;
 	}
 	for (size_t i = 0; i < n; i += 2) {
-		int hi = aliro_hexnib(s[i]);
-		int lo = aliro_hexnib(s[i + 1]);
+		int hi = ultrawidelock_hexnib(s[i]);
+		int lo = ultrawidelock_hexnib(s[i + 1]);
 		if (hi < 0 || lo < 0) {
 			return -1;
 		}
@@ -195,12 +195,12 @@ static int aliro_hexdecode(const char *s, uint8_t *out, size_t out_cap)
 }
 #endif /* CONFIG_ULTRAWIDELOCK_CRED_CLONE */
 
-// Shell handler for the "aliro" command. Subcommands: "prov" prints reader provisioning info;
+// Shell handler for the "ultrawidelock" command. Subcommands: "prov" prints reader provisioning info;
 // "trust" adds the last-presented credential to the trust store and persists it to NVS, reporting
 // whether a credential was actually available to trust or whether the store/NVS write failed.
 // With CONFIG_ULTRAWIDELOCK_CRED_CLONE, "export"/"import <hex>" clone the identity to a second
 // board. Any other or missing argument prints usage. Always returns 0.
-static int cmd_aliro(int argc, char **argv)
+static int cmd_ultrawidelock(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "prov") == 0) {
 		ultrawidelock_reader_prov_print();
@@ -209,23 +209,23 @@ static int cmd_aliro(int argc, char **argv)
 	if (argc == 2 && strcmp(argv[1], "trust") == 0) {
 		int rc = ultrawidelock_reader_trust_last();
 		if (rc == 0) {
-			printf("aliro trust: added last-presented credential + saved to NVS\n");
+			printf("ultrawidelock trust: added last-presented credential + saved to NVS\n");
 		} else if (rc == 1) {
-			printf("aliro trust: nothing to add (no credential presented, or "
+			printf("ultrawidelock trust: nothing to add (no credential presented, or "
 			       "already trusted)\n");
 		} else {
-			printf("aliro trust: FAILED (trust store full or NVS error)\n");
+			printf("ultrawidelock trust: FAILED (trust store full or NVS error)\n");
 		}
 		return 0;
 	}
 	if (argc == 2 && strcmp(argv[1], "clear") == 0) {
 		int rc = ultrawidelock_reader_trust_clear();
 		if (rc == 0) {
-			printf("aliro clear: trust store emptied + saved to NVS\n");
+			printf("ultrawidelock clear: trust store emptied + saved to NVS\n");
 		} else if (rc == 1) {
-			printf("aliro clear: already empty\n");
+			printf("ultrawidelock clear: already empty\n");
 		} else {
-			printf("aliro clear: FAILED (NVS error)\n");
+			printf("ultrawidelock clear: FAILED (NVS error)\n");
 		}
 		return 0;
 	}
@@ -234,10 +234,10 @@ static int cmd_aliro(int argc, char **argv)
 		uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 		size_t len = 0;
 		if (ultrawidelock_reader_export_blob(blob, sizeof(blob), &len) != 0) {
-			printf("aliro export: FAILED (buffer)\n");
+			printf("ultrawidelock export: FAILED (buffer)\n");
 			return 0;
 		}
-		printf("aliro export: %u bytes (contains the reader PRIVATE KEY -- bench only)\n",
+		printf("ultrawidelock export: %u bytes (contains the reader PRIVATE KEY -- bench only)\n",
 		       (unsigned)len);
 		for (size_t i = 0; i < len; i++) {
 			printf("%02x", blob[i]);
@@ -247,26 +247,26 @@ static int cmd_aliro(int argc, char **argv)
 	}
 	if (argc == 3 && strcmp(argv[1], "import") == 0) {
 		uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
-		int n = aliro_hexdecode(argv[2], blob, sizeof(blob));
+		int n = ultrawidelock_hexdecode(argv[2], blob, sizeof(blob));
 		if (n < 0) {
-			printf("aliro import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
+			printf("ultrawidelock import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
 			       (unsigned)sizeof(blob));
 			return 0;
 		}
 		int rc = ultrawidelock_reader_import_blob(blob, (size_t)n);
 		if (rc == 0) {
-			printf("aliro import: adopted %d-byte identity + trust store (saved to NVS)\n",
+			printf("ultrawidelock import: adopted %d-byte identity + trust store (saved to NVS)\n",
 			       n);
 		} else if (rc == -1) {
-			printf("aliro import: malformed blob (bad magic/version/length)\n");
+			printf("ultrawidelock import: malformed blob (bad magic/version/length)\n");
 		} else {
-			printf("aliro import: NVS write FAILED\n");
+			printf("ultrawidelock import: NVS write FAILED\n");
 		}
 		return 0;
 	}
-	printf("usage: aliro <prov|trust|clear|export|import <hex>>\n");
+	printf("usage: ultrawidelock <prov|trust|clear|export|import <hex>>\n");
 #else
-	printf("usage: aliro <prov|trust|clear>\n");
+	printf("usage: ultrawidelock <prov|trust|clear>\n");
 #endif
 	return 0;
 }
@@ -288,7 +288,7 @@ static int cmd_uwbdiag(int argc, char **argv)
 	printf("uwb per-frame trace: %s\n", ultrawidelock_uwb_diag_on ? "on" : "off");
 	return 0;
 }
-#endif /* CONFIG_ENABLE_ALIRO_BLE_UWB */
+#endif /* CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB */
 
 /* Both bolt commands hop to the Matter task: BoltLockMgr drives cluster
  * attributes + emits events, which is only safe there. */
@@ -365,9 +365,9 @@ static int cmd_commission(int argc, char **argv)
 	} else {
 		app_commissioning_window_open();
 		printf("commission: opening; re-run to confirm, `commission close` to stop\n");
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 		/* The shared NimBLE host has one legacy advertiser, and the reader
-		 * only takes it once Matter releases it (start_aliro_reader_once).
+		 * only takes it once Matter releases it (start_ultrawidelock_reader_once).
 		 * Matter takes it back to advertise commissionable, so walk-up
 		 * stops meanwhile. Worth it during a recovery, worth knowing about
 		 * when it is not one. */
@@ -390,7 +390,7 @@ static int cmd_factoryreset(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 	printf("factory reset: erasing and rebooting\n");
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 	/* esp_matter::factory_reset() erases only Matter's own NVS namespaces; the
 	 * Aliro reader identity + trust store live in "ultrawidelock_prov" and would
 	 * survive, so the old home's phones could still authenticate after the
@@ -458,7 +458,7 @@ static int cmd_lab(int argc, char **argv)
 		}
 		bool cir_on = uwb_cirdiag_dump_enabled();
 
-		printf("aliro lab CIR dump: %s%s\n", cir_on ? "on" : "off",
+		printf("ultrawidelock lab CIR dump: %s%s\n", cir_on ? "on" : "off",
 		       cir_on ? "  (taps print on: lab cir off)" : "");
 		return 0;
 	}
@@ -473,7 +473,7 @@ static int cmd_lab(int argc, char **argv)
 		printf("usage: lab [on|off] | lab cir [on|off|probe]\n");
 		return 0;
 	}
-	printf("aliro lab trace: %s\n", ultrawidelock_lab_enabled() ? "on" : "off");
+	printf("ultrawidelock lab trace: %s\n", ultrawidelock_lab_enabled() ? "on" : "off");
 	return 0;
 }
 #endif
@@ -554,21 +554,21 @@ void app_shell_start(void)
 		 .help = "reprint the commissioning QR URL + manual pairing code",
 		 .hint = NULL,
 		 .func = cmd_codes},
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 		{.command = "range",
 		 .help = "print the latest distance",
 		 .hint = NULL,
 		 .func = cmd_range},
-		{.command = "aliro",
+		{.command = "ultrawidelock",
 #ifdef CONFIG_ULTRAWIDELOCK_CRED_CLONE
-		 .help = "aliro <prov|trust|clear|export|import <hex>>: identity / trust / "
+		 .help = "ultrawidelock <prov|trust|clear|export|import <hex>>: identity / trust / "
 			 "clone to a second board",
 #else
-		 .help = "aliro <prov|trust|clear>: show identity / trust last credential / "
+		 .help = "ultrawidelock <prov|trust|clear>: show identity / trust last credential / "
 			 "empty trust store",
 #endif
 		 .hint = NULL,
-		 .func = cmd_aliro},
+		 .func = cmd_ultrawidelock},
 #ifdef CONFIG_ULTRAWIDELOCK_PRESENCE
 		{.command = "presence",
 		 .help = "presence pub|credential|prove <nonce-hex>: fresh signed "

@@ -27,7 +27,7 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/ports/zephyr")
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(aliro_reader_dwm3001cdk)
+project(ultrawidelock_reader_dwm3001cdk)
 
 # APPROTECT must never be locked on this board. SystemInit() re-asserts the lock
 # on every boot and the only way out is `nrfjprog --recover`, which mass-erases
@@ -48,7 +48,7 @@ if(CONFIG_NRF_APPROTECT_LOCK OR CONFIG_NRF_SECURE_APPROTECT_LOCK)
 		"Locking is a one-way door for this board's DATA: recovering debug "
 		"access costs a mass erase of flash and UICR, which destroys "
 		"settings_storage and the reader identity. Export it first with "
-		"`aliro export yes` if you genuinely intend this.")
+		"`ultrawidelock export yes` if you genuinely intend this.")
 endif()
 
 set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
@@ -85,26 +85,26 @@ target_sources(app PRIVATE
 )
 # Provisioning console (USB CDC-ACM, provisioning mode only).
 target_sources_ifdef(CONFIG_ULTRAWIDELOCK_SIDE_GATE app PRIVATE src/side_feed.c)
-# Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
+# Measurement only; CONFIG_ULTRAWIDELOCK_THREAD_GATE defaults n so this is absent from
 # every shipping image.
-target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_THREAD_GATE app PRIVATE src/thread_gate.c)
 # The DFU receiver's BLE transport (ports/zephyr/dfu/dfu_ble_zephyr.c) and the
 # rest of the gated Zephyr glue compile via the ultrawidelock_zephyr_port module under
 # the same CONFIG symbols.
 # The board's only output. NOT gated on the DFU receiver any more: the update
 # window was the first thing worth showing, not the only one, and the `reader`
 # image has no receiver and used to light nothing at all.
-target_sources_ifdef(CONFIG_ALIRO_STATUS_LED app PRIVATE src/status_led.c)
-target_sources_ifdef(CONFIG_ALIRO_CIRDIAG_CAPTURE app PRIVATE src/cirdiag_capture.c)
-target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_STATUS_LED app PRIVATE src/status_led.c)
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_CIRDIAG_CAPTURE app PRIVATE src/cirdiag_capture.c)
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_CASE_BENCH app PRIVATE src/case_bench.c)
 # Initiator (User-Device role) transport: ultrawidelock_zephyr_port compiles the central
 # mirror of ultrawidelock_ble_zephyr.c under this gate; the platform-free advert/READ
 # decoder it calls is the same translation unit the ESP32 port and the host
 # suite compile.
-target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ULTRAWIDELOCK_BLE_CENTRAL_SRCS})
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_BLE_CENTRAL app PRIVATE ${ULTRAWIDELOCK_BLE_CENTRAL_SRCS})
 # The commissioning policy half; its transport, Thread/fabric ports and fabric
 # table store live in ports/zephyr/{matter,store} under the same gate.
-target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_commission.c)
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_MATTER_BLE app PRIVATE src/matter_commission.c)
 
 # CONFIG_MBEDTLS_MEMORY_DEBUG=y is a NO-OP in this build and sets no define.
 # nrf_security only wires that symbol through configs/legacy_crypto_config.h.template
@@ -117,12 +117,12 @@ target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_commission.c
 # Define it for every target instead. Safe because the only struct it changes,
 # buffer_alloc_ctx, is file-local to mbedtls/library/memory_buffer_alloc.c, so
 # there is no layout to get out of step across compilation units.
-if(CONFIG_ALIRO_HEAP_PROBE)
+if(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 	zephyr_compile_definitions(MBEDTLS_MEMORY_DEBUG)
 endif()
 # src for matter_commission.h (included by the re-homed ultrawidelock_ble_zephyr.c);
 # ${PORTZ}/{matter,store} for the re-homed matter_ble_zephyr.h and
 # matter_fab_settings.h, which main.c and matter_commission.c include
-# regardless of CONFIG_ALIRO_MATTER_BLE.
+# regardless of CONFIG_ULTRAWIDELOCK_MATTER_BLE.
 target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src src
 	${PORTZ}/matter ${PORTZ}/store)

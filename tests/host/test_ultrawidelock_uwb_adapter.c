@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "ultrawidelock_uwb_internal.h" /* struct ultrawidelock_uwb_adapter + cherry_err_to_aliro */
+#include "ultrawidelock_uwb_internal.h" /* struct ultrawidelock_uwb_adapter + cherry_err_to_ultrawidelock */
 #include "test.h"
 
 static struct cherry_ccc_capabilities mk_caps(uint16_t *pvs, uint16_t *cfgs,
@@ -82,21 +82,21 @@ void test_ultrawidelock_uwb_adapter(void)
 	nocaps.ccc_capabilities = NULL;
 	T_OK("caps.no_ccc", ultrawidelock_uwb_adapter_create_reader(ctx, &nocaps, &cfg) == NULL);
 
-	t_group("cherry_err -> aliro_err mapping");
-	T_EQ("e.none", cherry_err_to_aliro(CHERRY_ERR_NONE), ULTRAWIDELOCK_UWB_ERR_NONE);
-	T_EQ("e.param", cherry_err_to_aliro(CHERRY_ERR_INVALID_PARAMETER),
+	t_group("cherry_err -> ultrawidelock_err mapping");
+	T_EQ("e.none", cherry_err_to_ultrawidelock(CHERRY_ERR_NONE), ULTRAWIDELOCK_UWB_ERR_NONE);
+	T_EQ("e.param", cherry_err_to_ultrawidelock(CHERRY_ERR_INVALID_PARAMETER),
 	     ULTRAWIDELOCK_UWB_ERR_INVALID_PARAMETER);
-	T_EQ("e.timeout", cherry_err_to_aliro(CHERRY_ERR_UWBS_TIMEOUT),
+	T_EQ("e.timeout", cherry_err_to_ultrawidelock(CHERRY_ERR_UWBS_TIMEOUT),
 	     ULTRAWIDELOCK_UWB_ERR_UWBS_TIMEOUT);
-	T_EQ("e.internal", cherry_err_to_aliro(CHERRY_ERR_INTERNAL),
+	T_EQ("e.internal", cherry_err_to_ultrawidelock(CHERRY_ERR_INTERNAL),
 	     ULTRAWIDELOCK_UWB_ERR_INTERNAL);
-	T_EQ("e.sinit", cherry_err_to_aliro(CHERRY_ERR_SESSION_INIT),
+	T_EQ("e.sinit", cherry_err_to_ultrawidelock(CHERRY_ERR_SESSION_INIT),
 	     ULTRAWIDELOCK_UWB_ERR_SESSION_INIT);
-	T_EQ("e.sactive", cherry_err_to_aliro(CHERRY_ERR_SESSION_ACTIVE),
+	T_EQ("e.sactive", cherry_err_to_ultrawidelock(CHERRY_ERR_SESSION_ACTIVE),
 	     ULTRAWIDELOCK_UWB_ERR_SESSION_ACTIVE);
-	T_EQ("e.sconfig", cherry_err_to_aliro(CHERRY_ERR_SESSION_CONFIG),
+	T_EQ("e.sconfig", cherry_err_to_ultrawidelock(CHERRY_ERR_SESSION_CONFIG),
 	     ULTRAWIDELOCK_UWB_ERR_SESSION_CONFIG);
-	T_EQ("e.notsup", cherry_err_to_aliro(CHERRY_ERR_SESSION_TYPE_NOT_SUPPORTED),
+	T_EQ("e.notsup", cherry_err_to_ultrawidelock(CHERRY_ERR_SESSION_TYPE_NOT_SUPPORTED),
 	     ULTRAWIDELOCK_UWB_ERR_INTERNAL);
-	T_EQ("e.default", cherry_err_to_aliro((enum cherry_err)999), ULTRAWIDELOCK_UWB_ERR_INTERNAL);
+	T_EQ("e.default", cherry_err_to_ultrawidelock((enum cherry_err)999), ULTRAWIDELOCK_UWB_ERR_INTERNAL);
 }

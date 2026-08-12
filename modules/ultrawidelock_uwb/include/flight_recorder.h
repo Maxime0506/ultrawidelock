@@ -51,7 +51,7 @@ enum fr_port {
 /* Record types. */
 enum fr_rec_type {
 	FR_REC_META = 1,   /* format version + port + firmware SHA */
-	FR_REC_CONFIG = 2, /* the ultrawidelock_uwb_aliro_cfg that opened the session */
+	FR_REC_CONFIG = 2, /* the ultrawidelock_uwb_ultrawidelock_cfg that opened the session */
 	FR_REC_EV = 3,     /* one call into ccc_shim_rx.c + its register snapshot */
 	FR_REC_END = 4,    /* event count + truncation flag (last record) */
 };
@@ -176,14 +176,14 @@ int fr_read_next(fr_reader_t *r, struct fr_record *out);
 #include "sdkconfig.h" /* CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER (Zephyr injects autoconf.h itself) */
 #endif
 
-struct ultrawidelock_uwb_aliro_cfg; /* forward decl; the real def is in ultrawidelock_uwb_facade.h
+struct ultrawidelock_uwb_ultrawidelock_cfg; /* forward decl; the real def is in ultrawidelock_uwb_facade.h
 				     */
 
 #if defined(CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER)
 
 void fr_set_enabled(bool on); /* arm/disarm (OFF at boot; `fr on` before a walk-up) */
 bool fr_enabled(void);
-void fr_capture_config(const struct ultrawidelock_uwb_aliro_cfg *cfg); /* session-start hook */
+void fr_capture_config(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg); /* session-start hook */
 void fr_capture_ev(uint8_t ep, uint32_t status, uint16_t datalength); /* per-frame hook */
 size_t fr_finalize(const uint8_t **buf); /* append END once; return trace length */
 void fr_dump(void);                      /* hex-encode the ring as `[FREC]` lines */
@@ -212,7 +212,7 @@ static inline bool fr_enabled(void)
  * Stub callback invoked when the flight recorder captures the Aliro session configuration.
  * No-op when the flight recorder is disabled.
  */
-static inline void fr_capture_config(const struct ultrawidelock_uwb_aliro_cfg *cfg)
+static inline void fr_capture_config(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
 {
 	(void)cfg;
 }

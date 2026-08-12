@@ -9,7 +9,7 @@
 
 #include "ccc_shim.h"        /* ccc_shim_rx_try_prepoll */
 #include "fira_session.h"    /* fira_session_last_range */
-#include <ultrawidelock/uwb.h>  /* ultrawidelock_uwb_start_aliro / ultrawidelock_uwb_stop */
+#include <ultrawidelock/uwb.h>  /* ultrawidelock_uwb_start_ultrawidelock / ultrawidelock_uwb_stop */
 
 /* Load the DW3000 register snapshot this event carries into the shim doubles, so
  * the entry point reads exactly what the device saw. */
@@ -76,7 +76,7 @@ bool fr_replay_run(const uint8_t *trace, size_t len, struct fr_replay_result *ou
 	fr_reader_t r;
 	struct fr_record rec;         /* current record */
 	struct fr_config cfg_store;   /* kept alive for the whole session */
-	struct ultrawidelock_uwb_aliro_cfg cfg;
+	struct ultrawidelock_uwb_ultrawidelock_cfg cfg;
 	bool have_config = false;
 	bool saw_end = false;
 	int idx = 0;
@@ -117,7 +117,7 @@ bool fr_replay_run(const uint8_t *trace, size_t len, struct fr_replay_result *ou
 			cfg.rc_len = cfg_store.rc_len;
 
 			ultrawidelock_host_rx_reset();
-			if (ultrawidelock_uwb_start_aliro(&cfg) != 0) {
+			if (ultrawidelock_uwb_start_ultrawidelock(&cfg) != 0) {
 				out->err_at = idx;
 				return false;
 			}

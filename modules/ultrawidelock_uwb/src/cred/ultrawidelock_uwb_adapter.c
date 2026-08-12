@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
  * @return Corresponding `enum ultrawidelock_uwb_err` value, or `ULTRAWIDELOCK_UWB_ERR_INTERNAL` if
  * unrecognized.
  */
-enum ultrawidelock_uwb_err cherry_err_to_aliro(enum cherry_err err)
+enum ultrawidelock_uwb_err cherry_err_to_ultrawidelock(enum cherry_err err)
 {
 	switch (err) {
 	case CHERRY_ERR_NONE:
@@ -159,33 +159,33 @@ ultrawidelock_uwb_adapter_create_reader(struct cherry *cherry_ctx,
  * @brief Store a diagnostics configuration in the adapter for later application to CCC sessions,
  * allocating storage if needed.
  */
-void ultrawidelock_uwb_adapter_set_diagnostics(struct ultrawidelock_uwb_adapter *aliro_ctx,
+void ultrawidelock_uwb_adapter_set_diagnostics(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx,
 				       struct cherry_common_diag_cfg config)
 {
-	if (!aliro_ctx) {
+	if (!ultrawidelock_ctx) {
 		return;
 	}
-	if (!aliro_ctx->diag_config) {
-		aliro_ctx->diag_config = qmalloc(sizeof(config));
-		if (!aliro_ctx->diag_config) {
+	if (!ultrawidelock_ctx->diag_config) {
+		ultrawidelock_ctx->diag_config = qmalloc(sizeof(config));
+		if (!ultrawidelock_ctx->diag_config) {
 			return;
 		}
 	}
-	memcpy(aliro_ctx->diag_config, &config, sizeof(config));
+	memcpy(ultrawidelock_ctx->diag_config, &config, sizeof(config));
 }
 
 /**
  * @brief Destroy an Aliro UWB adapter, freeing all associated CCC capabilities arrays and
  * diagnostic configuration.
  */
-void ultrawidelock_uwb_adapter_destroy(struct ultrawidelock_uwb_adapter *aliro_ctx)
+void ultrawidelock_uwb_adapter_destroy(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx)
 {
-	if (!aliro_ctx) {
+	if (!ultrawidelock_ctx) {
 		return;
 	}
-	qfree(aliro_ctx->ccc_caps.protocol_versions.items);
-	qfree(aliro_ctx->ccc_caps.uwb_configs.items);
-	qfree(aliro_ctx->ccc_caps.pulse_shape_combos.items);
-	qfree(aliro_ctx->diag_config);
-	qfree(aliro_ctx);
+	qfree(ultrawidelock_ctx->ccc_caps.protocol_versions.items);
+	qfree(ultrawidelock_ctx->ccc_caps.uwb_configs.items);
+	qfree(ultrawidelock_ctx->ccc_caps.pulse_shape_combos.items);
+	qfree(ultrawidelock_ctx->diag_config);
+	qfree(ultrawidelock_ctx);
 }

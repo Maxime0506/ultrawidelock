@@ -8,7 +8,7 @@
  * it here; this task then decrypts, parses and verifies it (spec §7.4) OFF the
  * BLE-host task, so the CPU-heavy ES256 / SHA-256 work never lands in the auth
  * segment or the ~1836 us ranging arm window. The verdict is logged and kept for
- * `aliro-stepup status`; it NEVER gates the unlock. The decrypted DeviceResponse
+ * `ultrawidelock-stepup status`; it NEVER gates the unlock. The decrypted DeviceResponse
  * is hex-dumped so a bench-captured Apple document can be pinned as a KAT.
  *
  * ESP-only: this file is compiled solely by the ultrawidelock_reader ESP-IDF component,

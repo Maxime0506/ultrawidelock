@@ -8,7 +8,7 @@
  * modules/ultrawidelock_uwb/src/cred/ultrawidelock_device_uwb.c. This file is the glue that was
  * missing, and it lives in the application rather than in modules/ because the
  * radio half is only one frame deep: a device "ranging session" here is a BLE
- * conversation plus a Pre-POLL, and calling it aliro_device_ranging in modules/
+ * conversation plus a Pre-POLL, and calling it ultrawidelock_device_ranging in modules/
  * would promise the rest of the block.
  *
  * SCOPE, stated plainly: this reaches the end of ranging SETUP and then hands

@@ -6,7 +6,7 @@
  * run_job's decrypt->parse->verify branch logic — not real task scheduling.
  * The decrypt, CBOR parse and section-7.4 verifier underneath run the REAL
  * shared-core code on the KAT vectors from stepup_vectors.h (fake-EC prim
- * double for ES256, as in test_aliro_stepup.c).
+ * double for ES256, as in test_ultrawidelock_stepup.c).
  */
 #include <setjmp.h>
 #include <stdint.h>

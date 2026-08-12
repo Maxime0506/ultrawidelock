@@ -94,19 +94,19 @@ void test_ultrawidelock_device_uwb(void)
 	T_EQ("init.m1", ultrawidelock_uwb_session_init_setup(s), ULTRAWIDELOCK_UWB_ERR_NONE);
 	T_OK("m1.captured", g_tx.msg != NULL);
 
-	struct aliro_dev_uwb_m1 m1;
+	struct ultrawidelock_dev_uwb_m1 m1;
 
-	T_EQ("m1.parse", aliro_dev_uwb_parse_m1(g_tx.msg->data, g_tx.msg->len, &m1), 0);
+	T_EQ("m1.parse", ultrawidelock_dev_uwb_parse_m1(g_tx.msg->data, g_tx.msg->len, &m1), 0);
 	T_EQ("m1.session_id", m1.session_id, SID);
 	T_OK("m1.config", m1.config_count == 1u && m1.config_ids[0] == 0x0001u);
 	T_EQ("m1.channel", m1.channel_bitmask, 0x01);
 
 	t_group("device builds M2; reader accepts -> M3_SENT");
-	struct aliro_dev_uwb_m2_params m2p;
+	struct ultrawidelock_dev_uwb_m2_params m2p;
 
-	aliro_dev_uwb_select_m2(&m1, &m2p);
+	ultrawidelock_dev_uwb_select_m2(&m1, &m2p);
 
-	struct ultrawidelock_uwb_message *m2 = aliro_dev_uwb_build_m2(&m2p);
+	struct ultrawidelock_uwb_message *m2 = ultrawidelock_dev_uwb_build_m2(&m2p);
 
 	T_OK("m2.built", m2 != NULL);
 	T_EQ("m2.accepted", ultrawidelock_uwb_session_message_handle(s, m2), ULTRAWIDELOCK_UWB_ERR_NONE);
@@ -116,21 +116,21 @@ void test_ultrawidelock_device_uwb(void)
 	ultrawidelock_uwb_msg_free(m2);
 
 	t_group("device parses M3");
-	struct aliro_dev_uwb_m3 m3;
+	struct ultrawidelock_dev_uwb_m3 m3;
 
-	T_EQ("m3.parse", aliro_dev_uwb_parse_m3(g_tx.msg->data, g_tx.msg->len, &m3), 0);
+	T_EQ("m3.parse", ultrawidelock_dev_uwb_parse_m3(g_tx.msg->data, g_tx.msg->len, &m3), 0);
 	T_EQ("m3.nresp", m3.num_responders, 1);   /* ULTRAWIDELOCK_NUM_RESPONDERS */
 	T_EQ("m3.slots", m3.slots_per_round, 12); /* ULTRAWIDELOCK_SLOTS_PER_ROUND_DEFAULT */
 	T_EQ("m3.syncmask", m3.sync_code_index_bitmask, 0x05);
 
 	t_group("device builds M4; reader accepts -> RANGING");
-	struct aliro_dev_uwb_m4_params m4p = {
+	struct ultrawidelock_dev_uwb_m4_params m4p = {
 		.sts_index0 = 0x1000u,
 		.uwb_time0 = 0u,
 		.hop_mode_key = 0x11223344u,
 		.sync_code_index = 9u,
 	};
-	struct ultrawidelock_uwb_message *m4 = aliro_dev_uwb_build_m4(&m4p);
+	struct ultrawidelock_uwb_message *m4 = ultrawidelock_dev_uwb_build_m4(&m4p);
 
 	T_OK("m4.built", m4 != NULL);
 	T_EQ("m4.accepted", ultrawidelock_uwb_session_message_handle(s, m4), ULTRAWIDELOCK_UWB_ERR_NONE);
@@ -138,7 +138,7 @@ void test_ultrawidelock_device_uwb(void)
 	ultrawidelock_uwb_msg_free(m4);
 
 	t_group("round-trip: built M2 re-parses to the same attributes");
-	m2 = aliro_dev_uwb_build_m2(&m2p);
+	m2 = ultrawidelock_dev_uwb_build_m2(&m2p);
 	{
 		struct ultrawidelock_uwb_msg_parser p = {
 			.length = m2->len,
@@ -171,25 +171,25 @@ void test_ultrawidelock_device_uwb(void)
 	 * -- no message reaches the device, so the initiator sees only a stall. That
 	 * cost a hardware session to find. Assert the rule directly. */
 	{
-		struct aliro_dev_uwb_m1 both = m1;
-		struct aliro_dev_uwb_m2_params sel;
+		struct ultrawidelock_dev_uwb_m1 both = m1;
+		struct ultrawidelock_dev_uwb_m2_params sel;
 
 		both.channel_bitmask = ULTRAWIDELOCK_CHANNEL_BITMASK_CH5 | ULTRAWIDELOCK_CHANNEL_BITMASK_CH9;
-		aliro_dev_uwb_select_m2(&both, &sel);
+		ultrawidelock_dev_uwb_select_m2(&both, &sel);
 		T_EQ("m2.ch.one_of_two", sel.channel_bitmask, ULTRAWIDELOCK_CHANNEL_BITMASK_CH9);
 
 		both.channel_bitmask = ULTRAWIDELOCK_CHANNEL_BITMASK_CH5;
-		aliro_dev_uwb_select_m2(&both, &sel);
+		ultrawidelock_dev_uwb_select_m2(&both, &sel);
 		T_EQ("m2.ch.only_ch5", sel.channel_bitmask, ULTRAWIDELOCK_CHANNEL_BITMASK_CH5);
 
 		both.channel_bitmask = ULTRAWIDELOCK_CHANNEL_BITMASK_CH9;
-		aliro_dev_uwb_select_m2(&both, &sel);
+		ultrawidelock_dev_uwb_select_m2(&both, &sel);
 		T_EQ("m2.ch.only_ch9", sel.channel_bitmask, ULTRAWIDELOCK_CHANNEL_BITMASK_CH9);
 
 		/* Whatever a reader offers, the answer must be exactly one bit. */
 		for (uint8_t offer = 0; offer <= 0x03u; offer++) {
 			both.channel_bitmask = offer;
-			aliro_dev_uwb_select_m2(&both, &sel);
+			ultrawidelock_dev_uwb_select_m2(&both, &sel);
 			T_OK("m2.ch.single_bit",
 			     sel.channel_bitmask != 0 &&
 				     (sel.channel_bitmask & (sel.channel_bitmask - 1u)) == 0);
@@ -197,12 +197,12 @@ void test_ultrawidelock_device_uwb(void)
 	}
 
 	t_group("parse rejects malformed input");
-	struct aliro_dev_uwb_m1 bad1;
+	struct ultrawidelock_dev_uwb_m1 bad1;
 	uint8_t tiny[3] = {0x01u, 0x00u, 0x00u};
 
-	T_EQ("m1.parse.short", aliro_dev_uwb_parse_m1(tiny, sizeof(tiny), &bad1), -1);
+	T_EQ("m1.parse.short", ultrawidelock_dev_uwb_parse_m1(tiny, sizeof(tiny), &bad1), -1);
 	/* an M3 message is not an M1: the header id guard must reject it */
-	T_EQ("m1.parse.wrongid", aliro_dev_uwb_parse_m1(g_tx.msg->data, g_tx.msg->len, &bad1), -1);
+	T_EQ("m1.parse.wrongid", ultrawidelock_dev_uwb_parse_m1(g_tx.msg->data, g_tx.msg->len, &bad1), -1);
 
 	if (g_tx.msg) {
 		ultrawidelock_uwb_session_message_free(g_tx.msg);

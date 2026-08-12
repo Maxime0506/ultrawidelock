@@ -98,7 +98,7 @@ int main(void)
 	T_EQ("beacon fires", cb->rfalNfcpPollerTechnologyDetection(), RFAL_ERR_TIMEOUT);
 	T_EQ("one transceive", (long)ecpfake.transceive_calls, 1L);
 	T_EQ("18-byte ECP frame", (long)ecpfake.tx_len, 18L);
-	T_OK("aliro ecp header", std::memcmp(ecpfake.tx, kHeader, 8) == 0);
+	T_OK("ultrawidelock ecp header", std::memcmp(ecpfake.tx, kHeader, 8) == 0);
 	{
 		uint8_t zeros[8] = {0};
 

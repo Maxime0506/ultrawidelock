@@ -1,7 +1,7 @@
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap
 index 877bc2f..e99ac97 100644
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/lock.zap
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/lock.zap
 @@ -5076,6 +5076,15 @@
                "maxInterval": 65344,
                "reportableChange": 0
@@ -18,9 +18,9 @@ index 877bc2f..e99ac97 100644
            ]
          }
        ]
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
---- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
-+++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
 @@ -618,7 +618,7 @@
  	}
  

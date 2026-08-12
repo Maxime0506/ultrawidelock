@@ -34,7 +34,7 @@ enum ultrawidelock_uwb_err {
 };
 
 /** Reader-preferred hopping configuration. */
-enum aliro_hopping_config {
+enum ultrawidelock_hopping_config {
 	ULTRAWIDELOCK_HOPPING_CONFIG_DISABLED = CHERRY_CCC_HOPPING_MODE_DISABLE,
 	ULTRAWIDELOCK_HOPPING_CONFIG_CONTINUOUS_DEFAULT = CHERRY_CCC_HOPPING_MODE_CONTINUOUS_DEFAULT,
 	ULTRAWIDELOCK_HOPPING_CONFIG_ADAPTIVE_DEFAULT = CHERRY_CCC_HOPPING_MODE_ADAPTATIVE_DEFAULT,
@@ -44,7 +44,7 @@ enum aliro_hopping_config {
  * @brief Ordered hopping preferences (at least one default sequence required).
  */
 struct ultrawidelock_uwb_preferred_hopping_configs {
-	enum aliro_hopping_config configs[ULTRAWIDELOCK_UWB_ADAPTER_PREFERRED_HOP_CONFIG_MAX];
+	enum ultrawidelock_hopping_config configs[ULTRAWIDELOCK_UWB_ADAPTER_PREFERRED_HOP_CONFIG_MAX];
 	size_t count;
 };
 
@@ -80,17 +80,17 @@ ultrawidelock_uwb_adapter_create_reader(struct cherry *cherry_ctx,
 
 /**
  * @brief Set the diagnostics configuration applied to new sessions.
- * @param aliro_ctx Adapter context to update.
+ * @param ultrawidelock_ctx Adapter context to update.
  * @param config Diagnostic configuration to apply for CCC reporting.
  */
-void ultrawidelock_uwb_adapter_set_diagnostics(struct ultrawidelock_uwb_adapter *aliro_ctx,
+void ultrawidelock_uwb_adapter_set_diagnostics(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx,
 				       struct cherry_common_diag_cfg config);
 
 /**
  * @brief Release an adapter context.
- * @param aliro_ctx Adapter context to release.
+ * @param ultrawidelock_ctx Adapter context to release.
  */
-void ultrawidelock_uwb_adapter_destroy(struct ultrawidelock_uwb_adapter *aliro_ctx);
+void ultrawidelock_uwb_adapter_destroy(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx);
 
 #ifdef __cplusplus
 }

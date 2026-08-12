@@ -364,7 +364,7 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
  * One Aliro protocol version, as the two big-endian bytes the spec asks for.
  *
  * Both version lists carry the same single entry, so they share this. The
- * ESP32 lock encodes it the same way (aliro_reader_delegate.cpp:106-115) and
+ * ESP32 lock encodes it the same way (ultrawidelock_reader_delegate.cpp:106-115) and
  * that is the port Apple Home has actually provisioned.
  */
 static void put_protocol_version_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag)
@@ -478,24 +478,24 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 	 * Reporting zeros instead would claim a key that cannot verify.
 	 */
 	case MATTER_ATTR_DL_ALIRO_VERIFICATION_KEY:
-		if (info->have_aliro_reader_config) {
-			(void)matter_tlv_put_bytes(w, tag, info->aliro_verification_key,
+		if (info->have_ultrawidelock_reader_config) {
+			(void)matter_tlv_put_bytes(w, tag, info->ultrawidelock_verification_key,
 						   MATTER_ALIRO_VERIFICATION_KEY_LEN);
 		} else {
 			(void)matter_tlv_put_null(w, tag);
 		}
 		return;
 	case MATTER_ATTR_DL_ALIRO_GROUP_ID:
-		if (info->have_aliro_reader_config) {
-			(void)matter_tlv_put_bytes(w, tag, info->aliro_group_id,
+		if (info->have_ultrawidelock_reader_config) {
+			(void)matter_tlv_put_bytes(w, tag, info->ultrawidelock_group_id,
 						   MATTER_ALIRO_GROUP_ID_LEN);
 		} else {
 			(void)matter_tlv_put_null(w, tag);
 		}
 		return;
 	case MATTER_ATTR_DL_ALIRO_GROUP_RESOLVING_KEY:
-		if (info->have_aliro_group_resolving_key) {
-			(void)matter_tlv_put_bytes(w, tag, info->aliro_group_resolving_key,
+		if (info->have_ultrawidelock_group_resolving_key) {
+			(void)matter_tlv_put_bytes(w, tag, info->ultrawidelock_group_resolving_key,
 						   MATTER_ALIRO_GROUP_ID_LEN);
 		} else {
 			(void)matter_tlv_put_null(w, tag);
@@ -505,7 +505,7 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		/* Not nullable and not provisioned: it identifies the reader
 		 * GROUP this device belongs to, which it has before any
 		 * controller talks to it. The port supplies it. */
-		(void)matter_tlv_put_bytes(w, tag, info->aliro_group_sub_id,
+		(void)matter_tlv_put_bytes(w, tag, info->ultrawidelock_group_sub_id,
 					   MATTER_ALIRO_GROUP_ID_LEN);
 		return;
 	case MATTER_ATTR_DL_ALIRO_EXPEDITED_VERSIONS:
@@ -2010,8 +2010,8 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
 	if (have_user_index) {
 		info->last_user_index = (uint16_t)user_index;
 	}
-	if (info->aliro_credential_cb == NULL ||
-	    info->aliro_credential_cb((uint8_t)cred_type, data, (uint16_t)cred_index,
+	if (info->ultrawidelock_credential_cb == NULL ||
+	    info->ultrawidelock_credential_cb((uint8_t)cred_type, data, (uint16_t)cred_index,
 				      (uint16_t)user_index) < 0) {
 		info->last_user_index = 0u;      /* nothing was stored to attribute */
 		return MATTER_IM_STATUS_SUCCESS; /* status stays FAILURE */
@@ -2025,7 +2025,7 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
  * ID, and group-resolving key. Validate all field lengths exactly, call the registered config hook
  * to persist them, and store copies in the device info structure. Return a status code.
  */
-static uint8_t set_aliro_reader_config(struct matter_device_info *info,
+static uint8_t set_ultrawidelock_reader_config(struct matter_device_info *info,
 				       const struct matter_im_invoke *inv)
 {
 	const uint8_t *signing = NULL;
@@ -2057,20 +2057,20 @@ static uint8_t set_aliro_reader_config(struct matter_device_info *info,
 		return MATTER_IM_STATUS_CONSTRAINT_ERROR;
 	}
 
-	if (info->aliro_reader_config_cb == NULL) {
+	if (info->ultrawidelock_reader_config_cb == NULL) {
 		/* No store to write to. Reporting success would claim an
 		 * identity was kept that will be gone at the next boot. */
 		return MATTER_IM_STATUS_FAILURE;
 	}
-	if (info->aliro_reader_config_cb(signing, verification, group_id, grk) != 0) {
+	if (info->ultrawidelock_reader_config_cb(signing, verification, group_id, grk) != 0) {
 		return MATTER_IM_STATUS_FAILURE;
 	}
 
-	memcpy(info->aliro_verification_key, verification, MATTER_ALIRO_VERIFICATION_KEY_LEN);
-	memcpy(info->aliro_group_id, group_id, MATTER_ALIRO_GROUP_ID_LEN);
-	memcpy(info->aliro_group_resolving_key, grk, MATTER_ALIRO_GROUP_ID_LEN);
-	info->have_aliro_group_resolving_key = true;
-	info->have_aliro_reader_config = true;
+	memcpy(info->ultrawidelock_verification_key, verification, MATTER_ALIRO_VERIFICATION_KEY_LEN);
+	memcpy(info->ultrawidelock_group_id, group_id, MATTER_ALIRO_GROUP_ID_LEN);
+	memcpy(info->ultrawidelock_group_resolving_key, grk, MATTER_ALIRO_GROUP_ID_LEN);
+	info->have_ultrawidelock_group_resolving_key = true;
+	info->have_ultrawidelock_reader_config = true;
 	return MATTER_IM_STATUS_SUCCESS;
 }
 
@@ -2094,13 +2094,13 @@ static uint8_t clear_credential(struct matter_device_info *info, const struct ma
 	uint64_t cred_type = 0u;
 	uint64_t cred_index = 0u;
 
-	if (info->aliro_credential_clear_cb == NULL) {
+	if (info->ultrawidelock_credential_clear_cb == NULL) {
 		return MATTER_IM_STATUS_FAILURE;
 	}
 	if (!field_struct_u64(inv, TAG_CLEARCRED_CREDENTIAL, TAG_CREDSTRUCT_TYPE, &cred_type)) {
 		/* Null or absent: every credential of every type. Type 0 is not a
 		 * credential type, which is what makes it usable as that flag. */
-		return info->aliro_credential_clear_cb(0u, MATTER_DL_INDEX_ALL) == 0
+		return info->ultrawidelock_credential_clear_cb(0u, MATTER_DL_INDEX_ALL) == 0
 			       ? MATTER_IM_STATUS_SUCCESS
 			       : MATTER_IM_STATUS_FAILURE;
 	}
@@ -2116,7 +2116,7 @@ static uint8_t clear_credential(struct matter_device_info *info, const struct ma
 		/* Indices are 1-based, so 0 is not a slot this lock could hold. */
 		return MATTER_IM_STATUS_INVALID_COMMAND;
 	}
-	return info->aliro_credential_clear_cb((uint8_t)cred_type, (uint16_t)cred_index) == 0
+	return info->ultrawidelock_credential_clear_cb((uint8_t)cred_type, (uint16_t)cred_index) == 0
 		       ? MATTER_IM_STATUS_SUCCESS
 		       : MATTER_IM_STATUS_FAILURE;
 }
@@ -2146,7 +2146,7 @@ static uint8_t clear_user(struct matter_device_info *info, const struct matter_i
 	    (idx > MATTER_DL_USERS_MAX && idx != MATTER_DL_INDEX_ALL)) {
 		return MATTER_IM_STATUS_INVALID_COMMAND;
 	}
-	if (info->aliro_user_clear_cb == NULL) {
+	if (info->ultrawidelock_user_clear_cb == NULL) {
 		return MATTER_IM_STATUS_FAILURE;
 	}
 	if (idx == MATTER_DL_INDEX_ALL) {
@@ -2154,7 +2154,7 @@ static uint8_t clear_user(struct matter_device_info *info, const struct matter_i
 	} else {
 		memset(&info->users[idx - 1u], 0, sizeof(info->users[0]));
 	}
-	return info->aliro_user_clear_cb((uint16_t)idx) == 0 ? MATTER_IM_STATUS_SUCCESS
+	return info->ultrawidelock_user_clear_cb((uint16_t)idx) == 0 ? MATTER_IM_STATUS_SUCCESS
 							     : MATTER_IM_STATUS_FAILURE;
 }
 
@@ -2199,7 +2199,7 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 			return MATTER_IM_STATUS_SUCCESS;
 		}
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
-			return set_aliro_reader_config(info, inv);
+			return set_ultrawidelock_reader_config(info, inv);
 		}
 		if (inv->command == MATTER_CMD_DL_SET_CREDENTIAL) {
 			return set_credential(info, inv, response_command);

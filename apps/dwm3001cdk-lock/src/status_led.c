@@ -67,7 +67,7 @@ static const struct gpio_dt_spec s_leds[LED_COUNT] = {
 
 /* The locked-and-healthy pattern. Compiling the heartbeat out is what lets an
  * idle board stop the tick entirely, so it is a real knob and not a preference. */
-#if IS_ENABLED(CONFIG_ALIRO_STATUS_LED_HEARTBEAT)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_STATUS_LED_HEARTBEAT)
 #define PAT_IDLE PAT_BLIP
 #else
 #define PAT_IDLE PAT_OFF

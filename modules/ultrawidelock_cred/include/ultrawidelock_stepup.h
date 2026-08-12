@@ -317,7 +317,7 @@ struct ultrawidelock_stepup_job {
 };
 int ultrawidelock_stepup_worker_submit(const struct ultrawidelock_stepup_job *job);
 
-/* Copy out the most recent verdict the worker produced (for `aliro-stepup
+/* Copy out the most recent verdict the worker produced (for `ultrawidelock-stepup
  * status`). Returns 1 and fills *verdict (+ *conn if non-NULL) when one exists,
  * 0 otherwise. Implemented in the per-platform worker. */
 int ultrawidelock_stepup_worker_last(struct ultrawidelock_stepup_verdict *verdict, uint16_t *conn);

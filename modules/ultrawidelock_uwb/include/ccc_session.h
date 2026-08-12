@@ -16,7 +16,7 @@
  * MAC.
  */
 struct ccc_ran_session {
-	uint8_t ursk[CCC_URSK_LEN]; /**< Ranging secret key (aliro_kdf). */
+	uint8_t ursk[CCC_URSK_LEN]; /**< Ranging secret key (ultrawidelock_kdf). */
 	uint32_t uwb_session_id;    /**< M1: UWB Session Identifier. */
 	uint32_t sts_index0;        /**< M4: STS_Index0. */
 	uint32_t uwb_time0;         /**< M4: UWB_Time0 block-time anchor. */

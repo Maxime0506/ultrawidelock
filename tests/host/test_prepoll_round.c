@@ -123,7 +123,7 @@ void test_prepoll_round(void)
 	uint8_t frame[128];
 	uint16_t len;
 	uint8_t rc[17];
-	struct ultrawidelock_uwb_aliro_cfg c;
+	struct ultrawidelock_uwb_ultrawidelock_cfg c;
 	uint8_t mupsk2[CCC_MUPSK2_LEN], uad[CCC_UAD_LEN];
 	const uint32_t widx = RND_IDX1 + 2u * RND_STRIDE; /* warmed POLL index */
 	uint32_t fc = 100u;
@@ -151,7 +151,7 @@ void test_prepoll_round(void)
 	c.ranging_config = rc;
 	c.rc_len = sizeof(rc);
 	ultrawidelock_host_rx_reset();
-	T_EQ("start", ultrawidelock_uwb_start_aliro(&c), 0);
+	T_EQ("start", ultrawidelock_uwb_start_ultrawidelock(&c), 0);
 	T_EQ("start.armed", ultrawidelock_host_rx.rxenable_calls, 1);
 
 	t_group("STS substitution wrap programs a key while bound");
@@ -232,7 +232,7 @@ void test_prepoll_round(void)
 
 	t_group("restart: a Pre-POLL event with no warm cannot arm SP3");
 	ultrawidelock_uwb_stop();
-	T_EQ("restart", ultrawidelock_uwb_start_aliro(&c), 0); /* log_reset clears the warm */
+	T_EQ("restart", ultrawidelock_uwb_start_ultrawidelock(&c), 0); /* log_reset clears the warm */
 	len = mk_prepoll(frame, fc++, RND_IDX1);
 	stash_frame(frame, len, 0x6000000ull);
 	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm_poll_sp3 -> no warm */

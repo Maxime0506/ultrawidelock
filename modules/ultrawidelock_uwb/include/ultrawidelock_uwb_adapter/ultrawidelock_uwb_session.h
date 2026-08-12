@@ -94,7 +94,7 @@ typedef void (*ultrawidelock_uwb_adapter_transmit_message_t)(
 
 /**
  * @brief Create a session in the CREATED state. No CCC session is started here.
- * @param aliro_ctx Adapter supplying the Cherry context and reader configuration.
+ * @param ultrawidelock_ctx Adapter supplying the Cherry context and reader configuration.
  * @param session_id Session identifier carried in the ranging-service messages.
  * @param callback Session event callback; must not be NULL.
  * @param transmit Message transmit callback; must not be NULL.
@@ -102,7 +102,7 @@ typedef void (*ultrawidelock_uwb_adapter_transmit_message_t)(
  * @return New session, or NULL on bad parameters or allocation failure.
  */
 struct ultrawidelock_uwb_session *
-ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *aliro_ctx, uint32_t session_id,
+ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx, uint32_t session_id,
 				 ultrawidelock_uwb_session_cb_t callback,
 				 ultrawidelock_uwb_adapter_transmit_message_t transmit,
 				 void *user_data);

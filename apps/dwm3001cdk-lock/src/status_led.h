@@ -18,8 +18,8 @@
  * be called from the DW3110 callbacks themselves -- nothing may be, the arm
  * deadline there is ~1836 us -- but the 250 ms reader loop is fine.
  */
-#ifndef ALIRO_STATUS_LED_H
-#define ALIRO_STATUS_LED_H
+#ifndef ULTRAWIDELOCK_STATUS_LED_H
+#define ULTRAWIDELOCK_STATUS_LED_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -47,7 +47,7 @@ enum status_led_signal {
 	STATUS_LED_FAULT = BIT(6),
 };
 
-#if IS_ENABLED(CONFIG_ALIRO_STATUS_LED)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_STATUS_LED)
 
 /**
  * Assert (@p on true) or clear @p signals, which may be several ORed together.
@@ -71,7 +71,7 @@ void status_led_signal(uint32_t signals, bool on);
  */
 void status_led_boot_blink(void);
 
-#else /* !CONFIG_ALIRO_STATUS_LED */
+#else /* !CONFIG_ULTRAWIDELOCK_STATUS_LED */
 
 static inline void status_led_signal(uint32_t signals, bool on)
 {
@@ -83,6 +83,6 @@ static inline void status_led_boot_blink(void)
 {
 }
 
-#endif /* CONFIG_ALIRO_STATUS_LED */
+#endif /* CONFIG_ULTRAWIDELOCK_STATUS_LED */
 
-#endif /* ALIRO_STATUS_LED_H */
+#endif /* ULTRAWIDELOCK_STATUS_LED_H */

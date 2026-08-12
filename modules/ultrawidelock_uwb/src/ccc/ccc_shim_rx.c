@@ -19,7 +19,7 @@
 #include "uwb_min.h"            /* uwb_min_radio_init — standalone SP0 Pre-POLL listener */
 #include "uwb_seam.h"           /* the decadriver seam this file implements */
 #include "ultrawidelock_diag.h" /* DIAGK — verbose per-frame trace, gated off in pretty mode */
-#include "uwb_rxdiag.h"         /* uwb_rxdiag_stream_get — the `aliro log` runtime toggle */
+#include "uwb_rxdiag.h"         /* uwb_rxdiag_stream_get — the `ultrawidelock log` runtime toggle */
 #include "flight_recorder.h"    /* fr_capture_ev — record/replay walk-up capture (gated) */
 
 /* DIAGK runtime gate — default is per-platform; see ultrawidelock_diag.h for the rationale. */
@@ -679,7 +679,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			DIAGK("GATE sts=%d verdict=%d sts_ok=%d\n", (int)g_final_sts_index,
 			      (int)g_final_sts_verdict, (int)sts_ok);
 #if defined(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
-			/* Curated one-liner: the per-block distance, gated behind `aliro frames`
+			/* Curated one-liner: the per-block distance, gated behind `ultrawidelock frames`
 			 * (default off in pretty) so the console stays quiet unless asked. */
 			if (uwb_rxdiag_rng_get()) {
 				LOG_INF("rng  blk=%-3u d=%dmm  tof=%d", (unsigned)fd.ranging_block,

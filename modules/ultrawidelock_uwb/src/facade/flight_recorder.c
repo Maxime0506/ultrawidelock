@@ -369,7 +369,7 @@ int fr_read_next(fr_reader_t *r, struct fr_record *out)
 
 #include <deca_device_api.h>
 
-#include <ultrawidelock/uwb.h> /* struct ultrawidelock_uwb_aliro_cfg */
+#include <ultrawidelock/uwb.h> /* struct ultrawidelock_uwb_ultrawidelock_cfg */
 #include "ultrawidelock_log.h"        /* ultrawidelock_printf */
 
 #ifndef CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES
@@ -446,7 +446,7 @@ void fr_set_dump_sink(void (*sink)(const char *line))
 	s_sink = sink;
 }
 
-void fr_capture_config(const struct ultrawidelock_uwb_aliro_cfg *c)
+void fr_capture_config(const struct ultrawidelock_uwb_ultrawidelock_cfg *c)
 {
 	struct fr_config fc;
 

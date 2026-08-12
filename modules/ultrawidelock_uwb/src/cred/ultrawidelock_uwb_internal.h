@@ -55,7 +55,7 @@ struct ultrawidelock_uwb_session {
 	/**
 	 * @brief Session-independent reader state shared by this per-approach session.
 	 */
-	struct ultrawidelock_uwb_adapter *aliro_ctx;
+	struct ultrawidelock_uwb_adapter *ultrawidelock_ctx;
 	ultrawidelock_uwb_session_cb_t callback;
 	ultrawidelock_uwb_adapter_transmit_message_t transmit;
 	void *user_data;
@@ -72,12 +72,12 @@ struct ultrawidelock_uwb_session {
 	 * @brief CCC Aliro session configuration encoding the M1-M4 setup parameters (MAC, time
 	 * sync, STS seed, hopping sequence).
 	 */
-	struct cherry_ccc_aliro_session_config ccc_aliro_config;
+	struct cherry_ccc_ultrawidelock_session_config ccc_ultrawidelock_config;
 	enum ultrawidelock_uwb_session_state state;
 };
 
 /* Shared between the session and message-handling sources. */
-enum ultrawidelock_uwb_err cherry_err_to_aliro(enum cherry_err err);
+enum ultrawidelock_uwb_err cherry_err_to_ultrawidelock(enum cherry_err err);
 enum ultrawidelock_uwb_err
 ultrawidelock_uwb_session_init(struct ultrawidelock_uwb_session *session);
 enum ultrawidelock_uwb_err

@@ -20,10 +20,10 @@ check_declarations modules/ultrawidelock_cred/include/ultrawidelock/tlv.h
 check_declarations modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h
 
 # Both spellings stay banned: the flat headers this API replaced, under their
-# original aliro_ names, and the same names carried into the ultrawidelock_
+# original ultrawidelock_ names, and the same names carried into the ultrawidelock_
 # prefix by the rename. Either one reappearing means the flat API came back.
-for legacy in modules/ultrawidelock_cred/include/aliro_reader.h \
-	modules/ultrawidelock_cred/include/aliro_device.h modules/ultrawidelock_cred/include/aliro_tlv.h \
+for legacy in modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
+	modules/ultrawidelock_cred/include/ultrawidelock_device.h modules/ultrawidelock_cred/include/ultrawidelock_tlv.h \
 	modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
 	modules/ultrawidelock_cred/include/ultrawidelock_device.h modules/ultrawidelock_cred/include/ultrawidelock_tlv.h \
 	modules/ultrawidelock_uwb/include/ultrawidelock_uwb_facade.h modules/ultrawidelock_port/include/ultrawidelock_hal.h; do
@@ -32,7 +32,7 @@ for legacy in modules/ultrawidelock_cred/include/aliro_reader.h \
 		exit 1
 	}
 done
-if git grep -nE '#include [<"](aliro_reader|aliro_device|aliro_tlv|ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_uwb_facade|ultrawidelock_hal)[.]h[>"]' \
+if git grep -nE '#include [<"](ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_uwb_facade|ultrawidelock_hal)[.]h[>"]' \
 	-- apps examples integrations modules ports tests/host tests/ports tests/shared tests/tooling \
 	>/dev/null; then
 	echo "sdk API: FAIL (legacy API include returned)" >&2

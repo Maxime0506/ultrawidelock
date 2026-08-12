@@ -6,7 +6,7 @@
 
 #include "ccc_shim.h"     /* ccc_shim_rx_notify_rx — empirical STS-index tracker */
 #include "fira_session.h" /* fira_session_last_range — latched DS-TWR distance */
-#include "uwb_cirdiag.h"  /* per-reception CIA diag latch (`aliro cir on`) */
+#include "uwb_cirdiag.h"  /* per-reception CIA diag latch (`ultrawidelock cir on`) */
 #include "uwb_rxdiag.h"   /* our accessors + runtime stream toggle */
 #include "uwb_seam.h"     /* the two decadriver seams this file implements */
 #include "ultrawidelock_diag.h"     /* DIAGK — per-event/cfg/CAD trace, gated off in pretty mode */
@@ -24,10 +24,10 @@ LOG_MODULE_REGISTER(uwb_rxdiag, LOG_LEVEL_INF);
 #define RX_RED "\x1b[31m"
 #define RX_CYN "\x1b[36m"
 
-/** @brief Runtime arm state for the periodic heartbeat (backs `aliro log`). */
+/** @brief Runtime arm state for the periodic heartbeat (backs `ultrawidelock log`). */
 static volatile bool g_stream;
 
-/** @brief Runtime arm state for the per-block distance stream (backs `aliro frames`). */
+/** @brief Runtime arm state for the per-block distance stream (backs `ultrawidelock frames`). */
 static volatile bool g_rng_stream;
 
 /** @brief The MAC's own callbacks, saved so our shims can chain to them. */

@@ -10,7 +10,7 @@
 # its ultrawidelock_{crypto,device,ble_central} components.
 cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(aliro_initiator_nrf5340dk)
+project(ultrawidelock_initiator_nrf5340dk)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
@@ -53,7 +53,7 @@ target_sources(app PRIVATE
 	# builds the reader's session, adapter and CCC engine, none of which a device
 	# uses. ultrawidelock_device (ultrawidelock_device_uwb.c) is the M1/M3 parser and M2/M4
 	# builder, host-tested by tests/host/test_ultrawidelock_device_uwb.c against the real
-	# reader codec; aliro_codec is the TLV builder and parser it is written on.
+	# reader codec; ultrawidelock_codec is the TLV builder and parser it is written on.
 	# No radio here.
 	src/ranging.c
 	${UWB_DEVICE_SRCS}
@@ -94,7 +94,7 @@ target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
 # what scripts/ultrawidelock-enroll.py tells you to do when it finishes.
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/src/bench_identity.h")
 	message(STATUS "Aliro initiator: ENROLLED identity (src/bench_identity.h)")
-	target_compile_definitions(app PRIVATE ALIRO_BENCH_ENROLLED)
+	target_compile_definitions(app PRIVATE ULTRAWIDELOCK_BENCH_ENROLLED)
 else()
 	message(STATUS "Aliro initiator: DEV fallback identity, run scripts/ultrawidelock-enroll.py")
 endif()

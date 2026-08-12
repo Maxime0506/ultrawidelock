@@ -19,7 +19,7 @@ void test_facade(void)
 {
 	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
 	uint8_t rc[17];
-	struct ultrawidelock_uwb_aliro_cfg c;
+	struct ultrawidelock_uwb_ultrawidelock_cfg c;
 	int32_t cm = -1;
 
 	for (size_t i = 0; i < sizeof(ursk); i++) {
@@ -46,13 +46,13 @@ void test_facade(void)
 	T_EQ("bind.ok", ultrawidelock_uwb_bind_ursk(ursk, sizeof(ursk)), 0);
 	T_OK("shim.bound.after", ccc_shim_active());
 
-	t_group("start_aliro rejects null cfg / null ursk");
-	T_EQ("start.null", ultrawidelock_uwb_start_aliro(NULL), -EINVAL);
+	t_group("start_ultrawidelock rejects null cfg / null ursk");
+	T_EQ("start.null", ultrawidelock_uwb_start_ultrawidelock(NULL), -EINVAL);
 	memset(&c, 0, sizeof(c));
 	c.ursk = NULL;
-	T_EQ("start.null.ursk", ultrawidelock_uwb_start_aliro(&c), -EINVAL);
+	T_EQ("start.null.ursk", ultrawidelock_uwb_start_ultrawidelock(&c), -EINVAL);
 
-	t_group("start_aliro with a serialized RangingConfiguration");
+	t_group("start_ultrawidelock with a serialized RangingConfiguration");
 	memset(&c, 0, sizeof(c));
 	c.session_id = 0x11223344u;
 	c.channel = 5u;
@@ -65,14 +65,14 @@ void test_facade(void)
 	c.ursk = ursk;
 	c.ranging_config = rc;
 	c.rc_len = sizeof(rc);
-	T_EQ("start.rc", ultrawidelock_uwb_start_aliro(&c), 0);
+	T_EQ("start.rc", ultrawidelock_uwb_start_ultrawidelock(&c), 0);
 	T_OK("shim.active.rc", ccc_shim_active());
 
-	t_group("start_aliro URSK fallback (no ranging_config, slot_per_round 0)");
+	t_group("start_ultrawidelock URSK fallback (no ranging_config, slot_per_round 0)");
 	c.ranging_config = NULL;
 	c.rc_len = 0u;
 	c.slot_per_round = 0u;
-	T_EQ("start.fallback", ultrawidelock_uwb_start_aliro(&c), 0);
+	T_EQ("start.fallback", ultrawidelock_uwb_start_ultrawidelock(&c), 0);
 
 	t_group("stop unbinds the shim");
 	ultrawidelock_uwb_stop();

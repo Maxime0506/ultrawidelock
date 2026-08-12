@@ -162,7 +162,7 @@ static size_t record_round(const uint8_t **trace, int32_t *range_cm_out)
 	uint8_t mupsk2[CCC_MUPSK2_LEN], uad[CCC_UAD_LEN];
 	const uint32_t widx = RND_IDX1 + 2u * RND_STRIDE;
 	uint32_t fc = 100u;
-	struct ultrawidelock_uwb_aliro_cfg c;
+	struct ultrawidelock_uwb_ultrawidelock_cfg c;
 	int32_t cm = -1;
 
 	for (size_t i = 0; i < sizeof(g_ursk); i++) {
@@ -191,7 +191,7 @@ static size_t record_round(const uint8_t **trace, int32_t *range_cm_out)
 	fr_set_enabled(true); /* META */
 
 	ultrawidelock_host_rx_reset();
-	T_EQ("rec.start", ultrawidelock_uwb_start_aliro(&c), 0); /* CONFIG */
+	T_EQ("rec.start", ultrawidelock_uwb_start_ultrawidelock(&c), 0); /* CONFIG */
 
 	/* Bootstrap: two Pre-POLL decodes learn index + stride. */
 	len = mk_prepoll(frame, fc++, RND_IDX1);

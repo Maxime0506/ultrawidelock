@@ -156,7 +156,7 @@ enum cherry_ccc_hopping_mode {
 /**
  * @brief Negotiated Aliro ranging params (filled in-place across M1-M4).
  */
-struct cherry_ccc_aliro_session_config {
+struct cherry_ccc_ultrawidelock_session_config {
 	uint32_t session_id;
 	uint16_t uwb_config_id;
 	uint8_t pulse_shape_combo;
@@ -175,9 +175,9 @@ struct cherry_ccc_aliro_session_config {
 
 /** Create an Aliro responder session bound to @p config (NULL on error). */
 struct cherry_ccc_session *
-cherry_ccc_session_create_aliro_responder(struct cherry *ctx, cherry_ccc_cb_t callback,
+cherry_ccc_session_create_ultrawidelock_responder(struct cherry *ctx, cherry_ccc_cb_t callback,
 					  void *user_data,
-					  struct cherry_ccc_aliro_session_config *config);
+					  struct cherry_ccc_ultrawidelock_session_config *config);
 
 /**
  * @brief Return the base session for a CCC session (the base is the first member).

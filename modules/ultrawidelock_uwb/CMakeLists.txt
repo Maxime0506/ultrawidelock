@@ -67,12 +67,12 @@ if(CONFIG_ULTRAWIDELOCK_UWB)
       endif()
 
       # The PRETTY log backend (ultrawidelock_logfmt/ultrawidelock_logquiet, CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
-      # and the `aliro` console (ultrawidelock_shell, CONFIG_ULTRAWIDELOCK_UWB_SHELL) are Zephyr
+      # and the `ultrawidelock` console (ultrawidelock_shell, CONFIG_ULTRAWIDELOCK_UWB_SHELL) are Zephyr
       # glue and compile from ports/zephyr (ultrawidelock_zephyr_port) under the same
       # gates; their Kconfig symbols stay in this module's Kconfig.
 
       # Aliro UWB ranging-setup adapter: composes the M1-M4 handshake the add-on's
-      # aliro_stack drives via the facade, over the cherry_ccc_* seam that
+      # ultrawidelock_stack drives via the facade, over the cherry_ccc_* seam that
       # cherry_ccc_shim.c implements on our MAC (fira_session.c + ccc_shim).
       ultrawidelock_role_sources(${ROLES}/ultrawidelock_adapter.list UWB_ULTRAWIDELOCK_ADAPTER_SRCS)
       ultrawidelock_role_sources(${ROLES}/ultrawidelock_codec.list UWB_ULTRAWIDELOCK_CODEC_SRCS)

@@ -1,7 +1,7 @@
 # Woz NFC transport seam. Compiled straight into the application target, the
 # same mechanism ultrawidelock_cred_stack uses: the seam functions must resolve for the
 # patched add-on call sites, and the backends need the add-on's global include
-# paths (aliro headers, reader_storage, aliro_workqueue).
+# paths (ultrawidelock headers, reader_storage, aliro_workqueue).
 if(CONFIG_ULTRAWIDELOCK_NFC)
   target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -25,7 +25,7 @@ endif()
 # Aliro pass (Express / no Face ID). Gated on the add-on's
 # CONFIG_DOOR_LOCK_NFC_PROP, independent of CONFIG_ULTRAWIDELOCK_NFC: the RFAL build
 # uses this hook without the transport seam. Compiles against the add-on's
-# RFAL, nfc_prop, reader_storage and aliro headers (global Zephyr include
+# RFAL, nfc_prop, reader_storage and ultrawidelock headers (global Zephyr include
 # dirs). transport_pn532.cpp emits the same frame on the PN532 path.
 if(CONFIG_DOOR_LOCK_NFC_PROP)
   zephyr_library_named(ultrawidelock_nfc_ecp)

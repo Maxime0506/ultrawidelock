@@ -12,7 +12,7 @@
 #include <esp_log.h>
 #include "door_lock_manager.h"
 #include <lib/core/DataModelTypes.h>
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 // ULTRAWIDELOCK_CRED_INDEX_NONE, for the index this hook is not given
 #include <ultrawidelock_prov.h>
 #include <ultrawidelock/reader.h> // reader-side provisioning trust store (ultrawidelock_prov)
@@ -91,7 +91,7 @@ bool emberAfPluginDoorLockGetCredential(chip::EndpointId endpointId, uint16_t cr
 
 // Matter DoorLock plugin hook: store a credential for an endpoint via
 // BoltLockMgr().SetCredential.
-// When CONFIG_ENABLE_ALIRO_BLE_UWB is enabled and the write succeeds with an
+// When CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB is enabled and the write succeeds with an
 // Occupied status, a 65-byte Aliro endpoint key (evictable or non-evictable),
 // the raw key is additionally mirrored into the Aliro reader's trust store via
 // ultrawidelock_reader_provision_add_trust, so the reader accepts ranging auth from the
@@ -107,7 +107,7 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 {
 	bool ok = BoltLockMgr().SetCredential(endpointId, credentialIndex, creator, modifier,
 					      credentialStatus, credentialType, credentialData);
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+#ifdef CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB
 	// Mirror an occupied Aliro endpoint key (the per-device key the phone signs
 	// with during the ranging auth) into the reader's raw-key trust store, so the
 	// handoff-started reader accepts the Wallet credential Apple just installed.

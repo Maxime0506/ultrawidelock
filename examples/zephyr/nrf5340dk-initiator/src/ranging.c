@@ -139,10 +139,10 @@ static int send_initiate_ranging(void)
 /** Answer M1 with M2: parse what the reader offered, pick from it, send. */
 static void on_m1(const uint8_t *plain, size_t plain_len)
 {
-	struct aliro_dev_uwb_m1 m1;
-	struct aliro_dev_uwb_m2_params p;
+	struct ultrawidelock_dev_uwb_m1 m1;
+	struct ultrawidelock_dev_uwb_m2_params p;
 
-	if (aliro_dev_uwb_parse_m1(plain, plain_len, &m1) != 0) {
+	if (ultrawidelock_dev_uwb_parse_m1(plain, plain_len, &m1) != 0) {
 		LOG_ERR("M1 parse failed (%u B)", (unsigned)plain_len);
 		LOG_HEXDUMP_ERR(plain, plain_len, "m1");
 		return;
@@ -151,7 +151,7 @@ static void on_m1(const uint8_t *plain, size_t plain_len)
 		(unsigned)m1.session_id, (unsigned)m1.config_count, (unsigned)m1.combo_count,
 		m1.channel_bitmask);
 
-	aliro_dev_uwb_select_m2(&m1, &p);
+	ultrawidelock_dev_uwb_select_m2(&m1, &p);
 	LOG_INF("M2: config 0x%04x, combo 0x%02x, channel 0x%02x, ran_mult %u",
 		(unsigned)p.config_id, p.pulse_shape_combo, p.channel_bitmask, p.ran_multiplier);
 
@@ -161,7 +161,7 @@ static void on_m1(const uint8_t *plain, size_t plain_len)
 	 * is a decode, not a preference. */
 	s_channel = (p.channel_bitmask & ULTRAWIDELOCK_CHANNEL_BITMASK_CH9) ? 9u : 5u;
 
-	if (send_message(aliro_dev_uwb_build_m2(&p), "M2") == 0) {
+	if (send_message(ultrawidelock_dev_uwb_build_m2(&p), "M2") == 0) {
 		s_step = RANGING_M2_SENT;
 	}
 }
@@ -190,15 +190,15 @@ static void on_m1(const uint8_t *plain, size_t plain_len)
  */
 static void on_m3(const uint8_t *plain, size_t plain_len)
 {
-	struct aliro_dev_uwb_m3 m3;
-	struct aliro_dev_uwb_m4_params p = {
+	struct ultrawidelock_dev_uwb_m3 m3;
+	struct ultrawidelock_dev_uwb_m4_params p = {
 		.sts_index0 = 0x1000u,
 		.uwb_time0 = 0u,
 		.hop_mode_key = 0x11223344u,
 		.sync_code_index = 9u,
 	};
 
-	if (aliro_dev_uwb_parse_m3(plain, plain_len, &m3) != 0) {
+	if (ultrawidelock_dev_uwb_parse_m3(plain, plain_len, &m3) != 0) {
 		LOG_ERR("M3 parse failed (%u B)", (unsigned)plain_len);
 		LOG_HEXDUMP_ERR(plain, plain_len, "m3");
 		return;
@@ -208,7 +208,7 @@ static void on_m3(const uint8_t *plain, size_t plain_len)
 	LOG_INF("M3: sync mask 0x%08x, hop cfg 0x%02x, mac mode %u",
 		(unsigned)m3.sync_code_index_bitmask, m3.hopping_config_bitmask, m3.mac_mode);
 
-	if (send_message(aliro_dev_uwb_build_m4(&p), "M4") == 0) {
+	if (send_message(ultrawidelock_dev_uwb_build_m4(&p), "M4") == 0) {
 		struct prepoll_tx_params tx = {
 			.ursk = s_dev->ursk,
 			.uwb_session_id = s_session_id,

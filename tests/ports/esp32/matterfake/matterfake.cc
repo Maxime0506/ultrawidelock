@@ -397,8 +397,8 @@ int mfk_em_node_creates;
 void *mfk_em_delegate;
 uint8_t mfk_em_lock_state_init;
 int mfk_em_feature_adds;
-int mfk_em_aliro_prov_adds;
-int mfk_em_aliro_bleuwb_adds;
+int mfk_em_ultrawidelock_prov_adds;
+int mfk_em_ultrawidelock_bleuwb_adds;
 int mfk_em_cluster_create_null;
 uint32_t mfk_em_cluster_create_id;
 uint8_t mfk_em_cluster_create_flags;
@@ -517,7 +517,7 @@ namespace aliro_provisioning {
 esp_err_t add(cluster_t *cluster)
 {
 	(void)cluster;
-	mfk_em_aliro_prov_adds++;
+	mfk_em_ultrawidelock_prov_adds++;
 	return ESP_OK;
 }
 } // namespace aliro_provisioning
@@ -525,7 +525,7 @@ namespace aliro_bleuwb {
 esp_err_t add(cluster_t *cluster)
 {
 	(void)cluster;
-	mfk_em_aliro_bleuwb_adds++;
+	mfk_em_ultrawidelock_bleuwb_adds++;
 	return ESP_OK;
 }
 } // namespace aliro_bleuwb
@@ -972,7 +972,7 @@ esp_err_t bsp_iot_button_create(button_handle_t btn_array[], int *btn_cnt, int b
 	return ESP_OK;
 }
 
-/* ---- aliro reader / ble / lab / lat / uwb stubs ------------------------------------ */
+/* ---- ultrawidelock reader / ble / lab / lat / uwb stubs ------------------------------------ */
 int mfk_reader_start_calls;
 int mfk_status_tick_calls;
 int64_t mfk_status_tick_last_ms;
@@ -1017,7 +1017,7 @@ int mfk_last_have;
 int32_t mfk_last_cm;
 void (*mfk_range_listener)(void);
 
-static struct ble_gatt_svc_def mfk_aliro_svc = {1};
+static struct ble_gatt_svc_def mfk_ultrawidelock_svc = {1};
 
 extern "C" {
 
@@ -1038,7 +1038,7 @@ void ultrawidelock_reader_status_tick(int64_t now_ms)
 
 const void *ultrawidelock_reader_ble_prepare(void)
 {
-	return mfk_ble_prepare_null ? NULL : (const void *)&mfk_aliro_svc;
+	return mfk_ble_prepare_null ? NULL : (const void *)&mfk_ultrawidelock_svc;
 }
 
 void ultrawidelock_reader_refresh_adv(void)
@@ -1277,8 +1277,8 @@ void mfk_reset(void)
 	mfk_em_delegate = NULL;
 	mfk_em_lock_state_init = 0;
 	mfk_em_feature_adds = 0;
-	mfk_em_aliro_prov_adds = 0;
-	mfk_em_aliro_bleuwb_adds = 0;
+	mfk_em_ultrawidelock_prov_adds = 0;
+	mfk_em_ultrawidelock_bleuwb_adds = 0;
 	mfk_em_cluster_create_null = 0;
 	mfk_em_cluster_create_id = 0;
 	mfk_em_attr_creates = 0;

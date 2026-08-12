@@ -24,7 +24,7 @@ static size_t decode_hex(const char *hex, uint8_t *output, size_t capacity)
 	return length;
 }
 
-void test_aliro_nfc(void)
+void test_ultrawidelock_nfc(void)
 {
 	static const uint8_t expected_select[] = {
 		0x00, 0xa4, 0x04, 0x00, 0x09, 0xa0, 0x00, 0x00,

@@ -46,7 +46,7 @@ constexpr size_t kEcpFrameLen = 18;
 constexpr size_t kReaderIdLen = 8;
 /* ECP v2 header for the Aliro (Unified Access) profile — keep in sync with
  * src/nfc_prop_ecp.cpp. */
-constexpr std::array<uint8_t, 8> kAliroEcpHeader = {0x6A, 0x02, 0xCB, 0x02, 0x06, 0x20, 0x42, 0x20};
+constexpr std::array<uint8_t, 8> kCredEcpHeader = {0x6A, 0x02, 0xCB, 0x02, 0x06, 0x20, 0x42, 0x20};
 
 /* RFConfiguration fTimeout codes (timeout = 100 us * 2^(code - 1)). The ECP
  * broadcast never gets an answer, so the chip-side wait is shrunk around it;
@@ -115,15 +115,15 @@ K_WORK_DEFINE(sDestroySessionWork, DestroySessionWork);
  */
 void ArmEcpFrame()
 {
-	std::memcpy(sEcpFrame, kAliroEcpHeader.data(), kAliroEcpHeader.size());
+	std::memcpy(sEcpFrame, kCredEcpHeader.data(), kCredEcpHeader.size());
 
 	Aliro::Identifier identifier{};
 	if (DoorLock::ReaderStorage::IsIdentifierSet() &&
 	    DoorLock::ReaderStorage::GetIdentifier(identifier) == ALIRO_NO_ERROR) {
-		std::memcpy(sEcpFrame + kAliroEcpHeader.size(), identifier.data(), kReaderIdLen);
+		std::memcpy(sEcpFrame + kCredEcpHeader.size(), identifier.data(), kReaderIdLen);
 	} else {
 		LOG_WRN("ECP: reader identifier not provisioned; emitting zero Reader Identifier");
-		std::memset(sEcpFrame + kAliroEcpHeader.size(), 0, kReaderIdLen);
+		std::memset(sEcpFrame + kCredEcpHeader.size(), 0, kReaderIdLen);
 	}
 
 	const uint16_t crc = pn532_crc_a(sEcpFrame, kEcpFrameLen - 2);

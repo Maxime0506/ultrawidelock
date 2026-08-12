@@ -1,4 +1,4 @@
-/** @file aliro_round_config.h — one knob for the CCC ranging round's responder count. */
+/** @file ultrawidelock_round_config.h — one knob for the CCC ranging round's responder count. */
 
 #ifndef CRED_ROUND_CONFIG_H
 #define CRED_ROUND_CONFIG_H

@@ -1,7 +1,7 @@
-diff --git a/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp b/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp b/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp
 index 2529dd5..c6462d2 100644
---- a/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp
+--- a/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp
++++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp
 @@ -25,12 +25,18 @@
  
  #include <app-common/zap-generated/attributes/Accessors.h>
@@ -29,7 +29,7 @@ index 2529dd5..c6462d2 100644
  #endif /* CONFIG_CHIP_FACTORY_RESET_ERASE_SETTINGS */
  
 +#if defined(CONFIG_ULTRAWIDELOCK_CRED) && defined(CONFIG_SHELL)
-+	/* Give `aliro factoryreset yes` the same CHIP entry point the DK's long
++	/* Give `ultrawidelock factoryreset yes` the same CHIP entry point the DK's long
 +	 * button hold uses (nrf/samples/matter/common/src/board/board.cpp), so the
 +	 * console reset and the button reset are the same operation rather than two
 +	 * implementations that can drift.

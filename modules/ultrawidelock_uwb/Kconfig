@@ -16,11 +16,11 @@ config ULTRAWIDELOCK_UWB_RESPONDER
 	  modules/ultrawidelock_dw3000 driver via ccc_shim_rx.c.
 
 config ULTRAWIDELOCK_UWB_SHELL
-	bool "`aliro` UWB console commands"
+	bool "`ultrawidelock` UWB console commands"
 	depends on ULTRAWIDELOCK_UWB && SHELL
 	default y
 	help
-	  Registers the `aliro` command tree (status, rx, range, chip, selftest,
+	  Registers the `ultrawidelock` command tree (status, rx, range, chip, selftest,
 	  log, frames, cir, version, factoryreset). Default y, so every build that
 	  already enables SHELL is unchanged.
 
@@ -64,7 +64,7 @@ config ULTRAWIDELOCK_UWB_SELFTEST
 	bool "One-shot UWB init self-test after boot (diagnostic; no iPhone)"
 	depends on ULTRAWIDELOCK_CRED
 	help
-	  Fire ultrawidelock_uwb_start_aliro() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
+	  Fire ultrawidelock_uwb_start_ultrawidelock() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
 	  with a canned ranging config, to capture the DW3000 bring-up + Pre-POLL listen
 	  DIAG over RTT WITHOUT commissioning + a live Wallet Aliro UWB solicitation. This
 	  isolates the HW/radio init from the Aliro credential path. Diagnostic only —
@@ -75,7 +75,7 @@ config ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS
 	depends on ULTRAWIDELOCK_UWB_SELFTEST
 	default 15000
 	help
-	  Delay before the one-shot ultrawidelock_uwb_start_aliro(). Keep generous so Thread has
+	  Delay before the one-shot ultrawidelock_uwb_start_ultrawidelock(). Keep generous so Thread has
 	  rejoined on an already-commissioned device before the deferred 128 MHz
 	  HFCLK boost that the first UWB entry performs.
 
@@ -126,8 +126,8 @@ config ULTRAWIDELOCK_UWB_CIRDIAG
 	  emit it as one "[ALAB] ev=uwb.diag" line from task context, plus an
 	  independently-armed 64-tap Ipatov window around the first path
 	  ("[ALAB] ev=uwb.cir").
-	  OFF at boot; `aliro cir on` arms the summary, `aliro cir dump on` the
-	  taps, and `aliro cir probe` runs a one-shot accumulator read diagnostic.
+	  OFF at boot; `ultrawidelock cir on` arms the summary, `ultrawidelock cir dump on` the
+	  taps, and `ultrawidelock cir probe` runs a one-shot accumulator read diagnostic.
 	  The window read is only valid while the receiver is idle, so it is taken
 	  before the RX shim re-arms and only on one Final in four; even so it costs
 	  walk-up latency while armed, so arm it only for a capture run. Default n =

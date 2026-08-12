@@ -138,7 +138,7 @@ extern "C" {
  * GetUser on this endpoint during commissioning and abandons the pairing when
  * it is refused, and Aliro credential keys arrive on the user/credential path
  * rather than through the reader-config commands
- * (ports/esp32/.../aliro_reader_delegate.h:36-43).
+ * (ports/esp32/.../ultrawidelock_reader_delegate.h:36-43).
  */
 #define MATTER_DL_FEATURE_USER               0x0100u
 
@@ -319,7 +319,7 @@ struct matter_user {
 /*
  * The one Aliro protocol version this reader speaks, big-endian, reported for
  * both the expedited and BLE-UWB lists. Same value the ESP32 lock advertises
- * (ports/esp32/.../aliro_reader_delegate.cpp:47), which is the port that has
+ * (ports/esp32/.../ultrawidelock_reader_delegate.cpp:47), which is the port that has
  * actually been provisioned by Apple Home.
  */
 #define MATTER_ALIRO_PROTOCOL_VERSION        0x0100u
@@ -551,7 +551,7 @@ struct matter_device_info {
 	 * sub-identifier after a reboot is entitled to treat this as a
 	 * different reader. The port owns both the entropy and the store.
 	 */
-	uint8_t aliro_group_sub_id[MATTER_ALIRO_GROUP_ID_LEN];
+	uint8_t ultrawidelock_group_sub_id[MATTER_ALIRO_GROUP_ID_LEN];
 	/**
 	 * The UserIndex the last GetUser asked for, held between running the
 	 * command and serialising its response -- matter_im_command_fields_fn
@@ -601,15 +601,15 @@ struct matter_device_info {
 	 * ---- the Aliro reader identity, once Apple has delivered it --------
 	 *
 	 * The SIGNING KEY is deliberately absent. It is the reader's private
-	 * key: it goes straight to @ref aliro_reader_config_cb, which persists
+	 * key: it goes straight to @ref ultrawidelock_reader_config_cb, which persists
 	 * it, and is never held here, never read back as an attribute, and
 	 * never logged. What stays is only what a controller may read back.
 	 */
-	uint8_t aliro_verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN];
-	uint8_t aliro_group_id[MATTER_ALIRO_GROUP_ID_LEN];
-	uint8_t aliro_group_resolving_key[MATTER_ALIRO_GROUP_ID_LEN];
-	bool have_aliro_group_resolving_key;
-	bool have_aliro_reader_config;
+	uint8_t ultrawidelock_verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN];
+	uint8_t ultrawidelock_group_id[MATTER_ALIRO_GROUP_ID_LEN];
+	uint8_t ultrawidelock_group_resolving_key[MATTER_ALIRO_GROUP_ID_LEN];
+	bool have_ultrawidelock_group_resolving_key;
+	bool have_ultrawidelock_reader_config;
 	/**
 	 * Where the identity actually lands, set by the port.
 	 *
@@ -618,7 +618,7 @@ struct matter_device_info {
 	 * NULL is the honest answer. Returns 0 on success; anything else makes
 	 * the command report FAILURE rather than claiming an identity was kept.
 	 */
-	int (*aliro_credential_cb)(uint8_t credential_type,
+	int (*ultrawidelock_credential_cb)(uint8_t credential_type,
 				   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
 				   uint16_t credential_index, uint16_t user_index);
 	/**
@@ -635,7 +635,7 @@ struct matter_device_info {
 	 * a removal succeeded when it did not survive the next reboot is worse
 	 * than one told it failed.
 	 */
-	int (*aliro_credential_clear_cb)(uint8_t credential_type, uint16_t credential_index);
+	int (*ultrawidelock_credential_clear_cb)(uint8_t credential_type, uint16_t credential_index);
 	/**
 	 * Where a ClearUser lands, set by the port.
 	 *
@@ -647,8 +647,8 @@ struct matter_device_info {
 	 * keeps opening for someone the admin has already removed. Same return
 	 * contract as above.
 	 */
-	int (*aliro_user_clear_cb)(uint16_t user_index);
-	int (*aliro_reader_config_cb)(
+	int (*ultrawidelock_user_clear_cb)(uint16_t user_index);
+	int (*ultrawidelock_reader_config_cb)(
 		const uint8_t signing_key[MATTER_ALIRO_SIGNING_KEY_LEN],
 		const uint8_t verification_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
 		const uint8_t group_id[MATTER_ALIRO_GROUP_ID_LEN],

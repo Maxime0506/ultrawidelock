@@ -1,7 +1,7 @@
-diff --git a/applications/matter-aliro-door-lock-app/src/cred/Kconfig b/applications/matter-aliro-door-lock-app/src/cred/Kconfig
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/Kconfig b/applications/matter-ultrawidelock-door-lock-app/src/cred/Kconfig
 index 6267d8c..b541ebe 100644
---- a/applications/matter-aliro-door-lock-app/src/cred/Kconfig
-+++ b/applications/matter-aliro-door-lock-app/src/cred/Kconfig
+--- a/applications/matter-ultrawidelock-door-lock-app/src/cred/Kconfig
++++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/Kconfig
 @@ -62,6 +62,24 @@ config DOOR_LOCK_TIME_CONCEPT
  	help
  	  If enabled, the Time concept is supported.
@@ -27,10 +27,10 @@ index 6267d8c..b541ebe 100644
  endmenu # Aliro features
  
  rsource "platform/Kconfig"
-diff --git a/applications/matter-aliro-door-lock-app/src/cred/interface_impl/access_document.cpp b/applications/matter-aliro-door-lock-app/src/cred/interface_impl/access_document.cpp
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/access_document.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/access_document.cpp
 index a85921a..4a81a93 100644
---- a/applications/matter-aliro-door-lock-app/src/cred/interface_impl/access_document.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/cred/interface_impl/access_document.cpp
+--- a/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/access_document.cpp
++++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/access_document.cpp
 @@ -11,6 +11,11 @@
  #include <time_utils/time_utils.h>
  #endif // CONFIG_DOOR_LOCK_TIME_CONCEPT

@@ -118,7 +118,7 @@ else:
 
 for raw, want in [
     ("ot_thread_run.lto_priv.0", "ot_thread_run"),
-    ("aliro_derive.constprop.12", "aliro_derive"),
+    ("ultrawidelock_derive.constprop.12", "ultrawidelock_derive"),
     ("ccc_shim_rx.isra.3.lto_priv.9", "ccc_shim_rx"),
     ("bt_conn_cb_area.part.1", "bt_conn_cb_area"),
     ("plain_symbol", "plain_symbol"),

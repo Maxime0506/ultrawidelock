@@ -89,11 +89,11 @@ LOG_MODULE_REGISTER(initiator, CONFIG_LOG_DEFAULT_LEVEL);
  * coverage over the one translation unit here that handles key material. The
  * cost is that adding the header needs a re-configure, not just a rebuild.
  */
-#ifdef ALIRO_BENCH_ENROLLED
+#ifdef ULTRAWIDELOCK_BENCH_ENROLLED
 #include "bench_identity.h"
 #endif
 
-#ifndef ALIRO_BENCH_ENROLLED
+#ifndef ULTRAWIDELOCK_BENCH_ENROLLED
 /*
  * ---- bench credentials -----------------------------------------------------
  *
@@ -133,7 +133,7 @@ static const uint8_t k_cred_priv[32] = {
 	0x8a, 0xe8, 0x57, 0x2f, 0xc2, 0xe5, 0xc9, 0x02, 0x4a, 0x40, 0xc5,
 	0xe5, 0x78, 0xcb, 0xa2, 0xa6, 0x93, 0x8b, 0x29, 0xc3, 0xb5,
 };
-#endif /* ALIRO_BENCH_ENROLLED */
+#endif /* ULTRAWIDELOCK_BENCH_ENROLLED */
 
 /* One transaction at a time: the reader serves one Aliro session per connection
  * and the central connects to one reader. s_conn is the connection s_dev belongs
@@ -406,7 +406,7 @@ int main(void)
 	LOG_INF("Aliro initiator up; scanning for a reader");
 	/* Which identity is compiled in decides which readers can possibly answer,
 	 * and getting that wrong looks identical to a transport fault from the log. */
-#ifdef ALIRO_BENCH_ENROLLED
+#ifdef ULTRAWIDELOCK_BENCH_ENROLLED
 	LOG_INF("identity: ENROLLED (scripts/ultrawidelock-enroll.py)");
 #else
 	LOG_INF("identity: DEV fallback -- only an unprovisioned reader will accept us");

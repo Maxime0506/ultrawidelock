@@ -1,4 +1,4 @@
-/** @file test_aliro_assert_ec.c — the P-256 binder between ultrawidelock_assert and
+/** @file test_ultrawidelock_assert_ec.c — the P-256 binder between ultrawidelock_assert and
  * ultrawidelock_prim.
  *
  * ultrawidelock_assert.c is backend-free by design, so the main host suite exercises its

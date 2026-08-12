@@ -22,7 +22,7 @@
 #include "ultrawidelock_prov.h" /* ultrawidelock_prov_erase, for the factory-reset button */
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 #include "matter_commission.h"
 #include "matter_fab_settings.h" /* matter_fab_erase, the Matter half of a reset */
 #endif
@@ -51,13 +51,13 @@
 int dfu_ble_start(void);
 #endif
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 /* Reported at the grant, because by then the unlock has done every P-256 and
  * AES-GCM operation it is going to do. The peak is cumulative since boot, so it
  * covers BLE pairing and the Aliro exchange too, not only the ranging. */
@@ -71,7 +71,7 @@ static void heap_peak_log(const char *when)
 		(unsigned int)used, (unsigned int)CONFIG_MBEDTLS_HEAP_SIZE,
 		(unsigned int)blocks);
 }
-#endif /* CONFIG_ALIRO_HEAP_PROBE */
+#endif /* CONFIG_ULTRAWIDELOCK_HEAP_PROBE */
 
 /* The per-frame UWB diagnostic trace (DIAGK) defaults ON for nRF targets but OFF
  * for the ESP32, because its printf on every ranging frame blocks the callback
@@ -85,7 +85,7 @@ extern volatile int ultrawidelock_uwb_diag_on;
 /* Reader status housekeeping: the engine expects a periodic tick to age out a
  * stalled transaction and to drive the ranging power gate's decay. 250 ms is
  * the cadence the ESP32 port runs. */
-#define ALIRO_TICK_MS 250
+#define ULTRAWIDELOCK_TICK_MS 250
 
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 /* Liveness watchdog on the witness feed, which is NOT the same question as
@@ -107,7 +107,7 @@ extern volatile int ultrawidelock_uwb_diag_on;
 /* How long the ranging LED holds after the last range landed. Four ticks: long
  * enough that no rate iOS ranges at can make it stutter, short enough that a
  * phone put in a pocket drops the light while the person is still in the room. */
-#define ALIRO_LED_RANGE_HOLD_MS 1000
+#define ULTRAWIDELOCK_LED_RANGE_HOLD_MS 1000
 
 /* Wakes the grant loop the moment a range is latched, instead of on the next
  * 250 ms tick.
@@ -141,13 +141,13 @@ static void on_range_latched(void)
  * The reader identity is per-device data in the settings store, never a string
  * in the image, so it has to arrive at runtime. This board's only input path is
  * the USB device port wired straight to the nRF52833 -- RTT is output-only --
- * so provisioning mode brings up CDC-ACM and the `aliro` console on it.
+ * so provisioning mode brings up CDC-ACM and the `ultrawidelock` console on it.
  *
  * The radios stay down in this mode on purpose. It keeps USB's millisecond SOF
  * interrupts away from the DW3110's delayed-TX reply window (the timing that
  * commit 5b8d06b had to fight for on this single-core part), and it means the
  * console can never be reached while a walk-up is in flight. */
-#if IS_ENABLED(CONFIG_ALIRO_PROV_CONSOLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_PROV_CONSOLE)
 /**
  * Check GPIO SW0 (active-low, pulled up in DTS) to see if provisioning is requested at boot.
  * Returns true if SW0 is ready and held (logical 1), false otherwise.
@@ -189,7 +189,7 @@ static void provisioning_mode(void)
 		k_msleep(1000);
 	}
 }
-#endif /* CONFIG_ALIRO_PROV_CONSOLE */
+#endif /* CONFIG_ULTRAWIDELOCK_PROV_CONSOLE */
 
 /* Factory reset: hold SW2 (the sw0 alias, P0.02) through reset.
  *
@@ -209,10 +209,10 @@ static void provisioning_mode(void)
  *
  * The Thread credentials are deliberately NOT erased -- see ultrawidelock_prov_erase().
  */
-#if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_FACTORY_RESET_BUTTON)
 /**
  * Check GPIO SW0 (active-low, pulled up in DTS) at boot. If SW0 is held (logical 1), blink the lock
- * LED as user feedback, erase Aliro provisioning and Matter fabric (if CONFIG_ALIRO_MATTER_BLE is
+ * LED as user feedback, erase Aliro provisioning and Matter fabric (if CONFIG_ULTRAWIDELOCK_MATTER_BLE is
  * on), and log that the board is now commissionable on the next boot. Returns silently if GPIO is
  * not ready or if SW0 is not held.
  */
@@ -240,7 +240,7 @@ static void factory_reset_if_requested(void)
 	status_led_boot_blink();
 
 	(void)ultrawidelock_prov_erase();
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 	(void)matter_fab_erase();
 #endif
 	LOG_WRN("factory reset done; commissionable on the next boot");
@@ -265,13 +265,13 @@ int main(void)
 	 * mojibake in RTT Viewer. */
 	LOG_INF("ultrawidelock reader: DWM3001CDK (nRF52833 + DW3110)");
 
-#if IS_ENABLED(CONFIG_ALIRO_PROV_CONSOLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_PROV_CONSOLE)
 	if (provisioning_requested()) {
 		provisioning_mode(); /* never returns */
 	}
 #endif
 
-#if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_FACTORY_RESET_BUTTON)
 	factory_reset_if_requested();
 #endif
 
@@ -290,7 +290,7 @@ int main(void)
 #if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 	/*
 	 * The classifier is this image's consumer of the CIA latch, and nothing else
-	 * arms it: the capture-cycle thread is CONFIG_ALIRO_CIRDIAG_CAPTURE (not set
+	 * arms it: the capture-cycle thread is CONFIG_ULTRAWIDELOCK_CIRDIAG_CAPTURE (not set
 	 * here) and the console shell is a DK-only path. Safe before the radio is
 	 * probed -- the chip-side CIA enable happens lazily inside the first armed
 	 * reception. The first mlgate walk (2026-08-07) printed zero [ALAB] lines
@@ -299,7 +299,7 @@ int main(void)
 	uwb_cirdiag_set_enabled(true);
 #endif
 
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 	/* After the reader, because the reader owns BLE and the advertising set;
 	 * this only attaches handlers to the 0xFFF6 transport that SYS_INIT
 	 * already brought up. */
@@ -523,7 +523,7 @@ int main(void)
 		 * says "the radios are working on someone", which is the
 		 * question being asked when you are standing in front of a
 		 * board that has not opened.
-		 * ALIRO_LED_RANGE_HOLD_MS outlives one round at every rate iOS
+		 * ULTRAWIDELOCK_LED_RANGE_HOLD_MS outlives one round at every rate iOS
 		 * uses, so a walk-up shows as a steady 4 Hz rather than a
 		 * stutter, and it drops back to the 1 Hz session light about a
 		 * second after the phone stops ranging (which a still phone
@@ -537,7 +537,7 @@ int main(void)
 		 * loop first runs, so without it every board reports ranging for
 		 * its first second. */
 		bool ranging = led_range_ms != 0 &&
-			       (now - led_range_ms) < ALIRO_LED_RANGE_HOLD_MS;
+			       (now - led_range_ms) < ULTRAWIDELOCK_LED_RANGE_HOLD_MS;
 
 		status_led_signal(STATUS_LED_RANGING, ranging);
 		const bool session_now = ultrawidelock_reader_session_active();
@@ -555,7 +555,7 @@ int main(void)
 			ultrawidelock_approach_session_up(&approach);
 		}
 		session_was_up = session_now;
-#if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
 		/* D12: an uncommissioned node cannot unlock anything, and it is
 		 * indistinguishable from a working one until someone walks up. */
 		status_led_signal(STATUS_LED_UNCOMMISSIONED, !matter_commission_has_fabric());
@@ -650,7 +650,7 @@ int main(void)
 			ultrawidelock_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			status_led_signal(STATUS_LED_UNLOCKED, true);
 			granted = true;
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 			heap_peak_log("unlock");
 #endif
 			break;
@@ -734,7 +734,7 @@ int main(void)
 		 * polls it more often, never less. Its debounce is a time comparison,
 		 * not a count of ticks, so a faster poll rate cannot make a single
 		 * strike read as several. */
-		(void)k_sem_take(&s_range_sig, K_MSEC(ALIRO_TICK_MS));
+		(void)k_sem_take(&s_range_sig, K_MSEC(ULTRAWIDELOCK_TICK_MS));
 	}
 	return 0;
 }

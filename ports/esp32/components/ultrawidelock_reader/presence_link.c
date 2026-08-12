@@ -3,7 +3,7 @@
 // UWB range, then signs that post-challenge result under a persistent P-256 key.
 //
 // These live on the ordinary console rather than a private binary channel, so one
-// board can be provisioned (aliro-import) and queried for presence without
+// board can be provisioned (ultrawidelock-import) and queried for presence without
 // reflashing between modes, and so a stray log line is just another line instead of
 // a corrupted frame.
 #include <stdio.h>

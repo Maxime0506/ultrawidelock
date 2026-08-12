@@ -70,13 +70,13 @@ static uint8_t s_own_addr_type;
 static bool s_attached;
 
 /* Provisioned Aliro advertising params (set via ultrawidelock_ble_set_adv_params). With
- * s_adv_aliro set, ultrawidelock_advertise emits the full 0xFFF2 service data + a
+ * s_adv_ultrawidelock set, ultrawidelock_advertise emits the full 0xFFF2 service data + a
  * GroupResolvingKey-derived dynamic tag; else the bare service UUID (Phase-2). */
 static uint8_t s_adv_group_id[8];
 static uint8_t s_adv_sub_id[2];
 static uint8_t s_adv_grk[16];
 static int8_t s_adv_tx_power;
-static bool s_adv_aliro;
+static bool s_adv_ultrawidelock;
 
 /* Dynamic-tag freshness. The spec (11.3) leaves the window to the reader and
  * says only "re-derive at expiry"; 900 s matches the nRF add-on's default.
@@ -599,7 +599,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 static void adv_refresh_ev(struct ble_npl_event *ev)
 {
 	(void)ev;
-	if (!s_adv_aliro || !ble_gap_adv_active()) {
+	if (!s_adv_ultrawidelock || !ble_gap_adv_active()) {
 		return;
 	}
 	(void)ble_gap_adv_stop();
@@ -633,7 +633,7 @@ static void adv_tag_schedule_refresh(void)
  * With a valid wall clock the expiry is live (now + window) and the periodic
  * re-derivation is armed; phones silently ignore an expiry in their past, so a
  * clock that cannot be trusted must advertise the "unavailable" form instead. */
-static bool build_aliro_svc_data(uint8_t out[26])
+static bool build_ultrawidelock_svc_data(uint8_t out[26])
 {
 	uint8_t id_addr_type =
 		(s_own_addr_type == BLE_OWN_ADDR_PUBLIC) ? BLE_ADDR_PUBLIC : BLE_ADDR_RANDOM;
@@ -690,7 +690,7 @@ static bool build_aliro_svc_data(uint8_t out[26])
 }
 
 // Configure and start BLE advertising for Aliro discovery.
-// Advertises full Aliro service data (0xFFF2, 26 bytes) built by build_aliro_svc_data when adv is
+// Advertises full Aliro service data (0xFFF2, 26 bytes) built by build_ultrawidelock_svc_data when adv is
 // enabled and a GRK is configured; otherwise falls back to a bare service UUID plus device name for
 // the unprovisioned/no-GRK case. Logs and returns without starting advertising if either
 // ble_gap_adv_set_fields or ble_gap_adv_start fails.
@@ -704,7 +704,7 @@ static void ultrawidelock_advertise(void)
 
 	fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
 
-	if (s_adv_aliro && build_aliro_svc_data(svc_data)) {
+	if (s_adv_ultrawidelock && build_ultrawidelock_svc_data(svc_data)) {
 		/* Full Aliro service data — what the iPhone resolves to approach-connect. */
 		fields.svc_data_uuid16 = svc_data;
 		fields.svc_data_uuid16_len = sizeof(svc_data);
@@ -893,7 +893,7 @@ void ultrawidelock_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t 
 	memcpy(s_adv_sub_id, sub_id2, sizeof(s_adv_sub_id));
 	memcpy(s_adv_grk, grk, sizeof(s_adv_grk));
 	s_adv_tx_power = tx_power;
-	s_adv_aliro = true;
+	s_adv_ultrawidelock = true;
 }
 
 // Return the L2CAP SPSM (simplified protocol/service multiplexer) value used for the Aliro CoC

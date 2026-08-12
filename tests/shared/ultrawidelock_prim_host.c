@@ -2,11 +2,11 @@
  * Host double for the ultrawidelock_prim backend so the key-schedule and secure-channel
  * code can be tested off-target. Provides a compact reference AES-256-GCM (the
  * real target backend is ultrawidelock_prim_psa.c / mbedTLS-PSA). The GCM here is
- * KAT-checked against the GCM spec vectors in test_aliro_crypto.c.
+ * KAT-checked against the GCM spec vectors in test_ultrawidelock_crypto.c.
  *
  * The EC block at the bottom is NOT P-256 — it is a deterministic, commutative,
  * trivially forgeable stand-in (see its banner) so the reader transaction state
- * machine (test_aliro_reader.c) can run both sides of the handshake on host.
+ * machine (test_ultrawidelock_reader.c) can run both sides of the handshake on host.
  * Real curve math runs only in ultrawidelock_prim_psa.c on target.
  */
 #include "ultrawidelock_prim.h"

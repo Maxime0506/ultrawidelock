@@ -486,9 +486,9 @@ void test_ultrawidelock_uwb_msg(void)
 	ultrawidelock_uwb_msg_free(b.message);
 
 	t_group("build M1 fails when a capability array is empty");
-	s->aliro_ctx->ccc_caps.uwb_configs.len = 0u;
+	s->ultrawidelock_ctx->ccc_caps.uwb_configs.len = 0u;
 	T_OK("m1.nocfgs", ultrawidelock_uwb_msg_build_m1(s) == NULL);
-	s->aliro_ctx->ccc_caps.uwb_configs.len = 1u;
+	s->ultrawidelock_ctx->ccc_caps.uwb_configs.len = 1u;
 
 	t_group("session-id mismatch rejects suspend request and M4");
 	s->state = RANGING;
@@ -520,7 +520,7 @@ void test_ultrawidelock_uwb_msg(void)
 	/* Parsed (channel latched), then fails the M2 attribute-mask check. */
 	T_EQ("m2.ch9", ultrawidelock_uwb_msg_process_ranging(s, b.message),
 	     ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED);
-	T_EQ("m2.ch9.chan", s->ccc_aliro_config.channel, 9);
+	T_EQ("m2.ch9.chan", s->ccc_ultrawidelock_config.channel, 9);
 	ultrawidelock_uwb_msg_free(b.message);
 
 	t_group("slot bitmask maps every chaps-per-slot bit");
@@ -535,7 +535,7 @@ void test_ultrawidelock_uwb_msg(void)
 			{ 0x80u, 400u * 0x80u }, /* no chaps bit: raw kept */
 		};
 
-		s->aliro_ctx->ccc_caps.slot_bitmask = 0xFFu;
+		s->ultrawidelock_ctx->ccc_caps.slot_bitmask = 0xFFu;
 		for (size_t i = 0; i < sizeof(sb) / sizeof(sb[0]); i++) {
 			s->state = M1_SENT;
 			b = mk(ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
@@ -546,15 +546,15 @@ void test_ultrawidelock_uwb_msg(void)
 			fix_plen(b.message);
 			T_EQ("slot.parse", ultrawidelock_uwb_msg_process_ranging(s, b.message),
 			     ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED);
-			T_EQ("slot.duration", s->ccc_aliro_config.slot_duration,
+			T_EQ("slot.duration", s->ccc_ultrawidelock_config.slot_duration,
 			     sb[i].slot_duration);
 			ultrawidelock_uwb_msg_free(b.message);
 		}
-		s->aliro_ctx->ccc_caps.slot_bitmask = 0x01u;
+		s->ultrawidelock_ctx->ccc_caps.slot_bitmask = 0x01u;
 	}
 
 	t_group("hopping preference selection: disabled / adaptive / unknown");
-	s->aliro_ctx->ccc_caps.hopping_config_bitmask = 0xFFu;
+	s->ultrawidelock_ctx->ccc_caps.hopping_config_bitmask = 0xFFu;
 	cfg.preferred_hopping_configs.configs[0] = ULTRAWIDELOCK_HOPPING_CONFIG_DISABLED;
 	s->state = M1_SENT;
 	b = mk(ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
@@ -565,7 +565,7 @@ void test_ultrawidelock_uwb_msg(void)
 	fix_plen(b.message);
 	T_EQ("hop.disabled", ultrawidelock_uwb_msg_process_ranging(s, b.message),
 	     ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED); /* mask check, after the hop parse */
-	T_EQ("hop.disabled.mode", s->ccc_aliro_config.hopping_mode,
+	T_EQ("hop.disabled.mode", s->ccc_ultrawidelock_config.hopping_mode,
 	     (enum cherry_ccc_hopping_mode)ULTRAWIDELOCK_HOPPING_CONFIG_DISABLED);
 	ultrawidelock_uwb_msg_free(b.message);
 	cfg.preferred_hopping_configs.configs[0] =
@@ -579,10 +579,10 @@ void test_ultrawidelock_uwb_msg(void)
 	fix_plen(b.message);
 	T_EQ("hop.adaptive", ultrawidelock_uwb_msg_process_ranging(s, b.message),
 	     ULTRAWIDELOCK_UWB_ERR_MSG_MALFORMED);
-	T_EQ("hop.adaptive.mode", s->ccc_aliro_config.hopping_mode,
+	T_EQ("hop.adaptive.mode", s->ccc_ultrawidelock_config.hopping_mode,
 	     (enum cherry_ccc_hopping_mode)ULTRAWIDELOCK_HOPPING_CONFIG_ADAPTIVE_DEFAULT);
 	ultrawidelock_uwb_msg_free(b.message);
-	cfg.preferred_hopping_configs.configs[0] = (enum aliro_hopping_config)0x55;
+	cfg.preferred_hopping_configs.configs[0] = (enum ultrawidelock_hopping_config)0x55;
 	s->state = M1_SENT;
 	b = mk(ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
 	       ULTRAWIDELOCK_UWB_MESSAGE_SETUP_M2);
@@ -595,7 +595,7 @@ void test_ultrawidelock_uwb_msg(void)
 	ultrawidelock_uwb_msg_free(b.message);
 	cfg.preferred_hopping_configs.configs[0] =
 		ULTRAWIDELOCK_HOPPING_CONFIG_CONTINUOUS_DEFAULT;
-	s->aliro_ctx->ccc_caps.hopping_config_bitmask = 0x0Au;
+	s->ultrawidelock_ctx->ccc_caps.hopping_config_bitmask = 0x0Au;
 
 	t_group("suspend request: missing attributes + wrong state");
 	s->state = RANGING;

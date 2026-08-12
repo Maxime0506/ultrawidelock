@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 
-void test_aliro_ble(void)
+void test_ultrawidelock_ble(void)
 {
 	/* Successful nRF/iPhone capture, 2026-07-20. This is the clear first
 	 * message; credential and randomized encrypted material are intentionally

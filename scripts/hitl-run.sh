@@ -20,7 +20,7 @@
 #   --skip-build   do not rebuild the initiator
 #   --skip-flash   do not touch the DK (implies the image on it is current)
 #   --no-reader    judge from the DK console alone, without the reader's RTT
-#   Environment: NODE (0x1234), STORAGE (~/.aliro-chip-tool), FABRIC (alpha),
+#   Environment: NODE (0x1234), STORAGE (~/.ultrawidelock-chip-tool), FABRIC (alpha),
 #                TIMEOUT (verdict window seconds, 120), PORT (DK console)
 #
 # Exit: 0 PASS · 1 FAIL (verdict window closed without the markers, or a fail
@@ -56,7 +56,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 
 NODE="${NODE:-0x1234}"
-STORAGE="${STORAGE:-$HOME/.aliro-chip-tool}"
+STORAGE="${STORAGE:-$HOME/.ultrawidelock-chip-tool}"
 FABRIC="${FABRIC:-alpha}"
 TIMEOUT="${TIMEOUT:-120}"
 PORT="${PORT:-}"
@@ -213,7 +213,7 @@ if [ "$SKIP_FLASH" = 0 ]; then
 		# stops for it would fail every first run after recabling the rig.
 		if grep -q "must be recovered" "$ART/flash.log"; then
 			printf '   APPROTECT engaged (power-cycled since last flash); recovering the DK\n'
-			if ! ALIRO_BUILD="$REPO_ROOT/build/nrf5340dk-initiator" \
+			if ! ULTRAWIDELOCK_BUILD="$REPO_ROOT/build/nrf5340dk-initiator" \
 				"$REPO_ROOT/apps/nrf5340dk-lock/build.sh" flash-recover \
 				>>"$ART/flash.log" 2>&1; then
 				tail -10 "$ART/flash.log" >&2
@@ -244,7 +244,7 @@ fi
 printf '4. watching for the session (up to %ss)\n' "$TIMEOUT"
 
 # Short needles on purpose: the 115200 capture drops occasional byte runs
-# under burst (observed live: "aliro_centour reader"), and a marker longer
+# under burst (observed live: "ultrawidelock_centour reader"), and a marker longer
 # than the typical gap can lose a real PASS to line noise.
 DK_ESTABLISHED='URSK agreed'
 DK_SETUP='Pre-POLL #'

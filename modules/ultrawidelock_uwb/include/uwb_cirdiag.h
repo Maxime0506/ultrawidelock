@@ -2,7 +2,7 @@
  * Stage 0). The RX callback latches the DW3000's CIA diagnostic bank (Ipatov/STS first-path
  * index, F1..F3, power, peak, STS quality, xtal offset); task context emits it as one
  * "[ALAB] t=<us> ev=uwb.diag ..." line. OFF at boot; armed at runtime
- * (nRF `aliro cir on`, ESP32 rides the `lab on` gate). */
+ * (nRF `ultrawidelock cir on`, ESP32 rides the `lab on` gate). */
 
 #ifndef ULTRAWIDELOCK_UWB_CIRDIAG_H_
 #define ULTRAWIDELOCK_UWB_CIRDIAG_H_

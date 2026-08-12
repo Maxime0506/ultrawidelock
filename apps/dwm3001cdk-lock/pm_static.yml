@@ -198,12 +198,12 @@ patch_staging:
 # MEASURED: merged.hex spans 0x0..0x75274 and so stops 36,236 B short of this
 # partition.
 #
-# BACKING IT UP IS NOT `aliro export yes`. That command does not exist on the
-# Matter image: overlay-thread.conf sets CONFIG_ALIRO_PROV_CONSOLE=n and
+# BACKING IT UP IS NOT `ultrawidelock export yes`. That command does not exist on the
+# Matter image: overlay-thread.conf sets CONFIG_ULTRAWIDELOCK_PROV_CONSOLE=n and
 # CONFIG_SHELL=n, so prov_shell.c is never compiled and there is no shell and no
 # USB console on the board whose loss would actually hurt. Only the standalone
 # cdk-reader build keeps it. Back this partition up over SWD instead, which also
-# captures the Matter fabrics that `aliro export` never did:
+# captures the Matter fabrics that `ultrawidelock export` never did:
 #
 #   JLinkExe -device nRF52833_xxAA -if SWD -speed 4000 -autoconnect 1 \
 #     -CommanderScript <(printf 'savebin s.bin 0x7E000 0x2000\nexit\n')

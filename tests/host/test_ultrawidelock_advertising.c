@@ -15,7 +15,7 @@ struct dynamic_tag_vector {
 	uint8_t tag[7];
 };
 
-void test_aliro_advertising(void)
+void test_ultrawidelock_advertising(void)
 {
 	/* Aliro Specification 1.0, Appendix 20. Addresses are reversed here to
 	 * match the bt_addr_t byte order passed by the nRF application. */

@@ -298,7 +298,7 @@ static void test_key_schedule(void)
 	T_OK("dev.s1==S1(device->reader)", memcmp(sc.s1, dec, 32) == 0);
 }
 
-/* ---- test 4b: device BleSK ranging channel <-> the reader's aliro_msg_* ---- */
+/* ---- test 4b: device BleSK ranging channel <-> the reader's ultrawidelock_msg_* ---- */
 
 static void test_blesk_channel(void)
 {
@@ -312,7 +312,7 @@ static void test_blesk_channel(void)
 		block[i] = (uint8_t)(0x37u * (unsigned)i + 0x11u);
 	}
 	/* v1.0-only ranging-channel salt = reader_versions || selected_version, i.e.
-	 * 01 00 01 00 (matches the reader's init_ble_channel + test_aliro_reader.c). */
+	 * 01 00 01 00 (matches the reader's init_ble_channel + test_ultrawidelock_reader.c). */
 	static const uint8_t ble_salt[] = {0x01, 0x00, 0x01, 0x00};
 
 	/* reader side: the shipped primitives */
@@ -689,7 +689,7 @@ static void test_ranging_channel_after_auth1(struct ultrawidelock_device *dev,
 /* The full self-test body, callable from the host main() below and from the
  * on-target app_main() (tests/on_target/esp32/ultrawidelock-device-ec), which runs the same
  * suite against the real PSA P-256 backend instead of the host fake curve. */
-int aliro_device_selftest(void)
+int ultrawidelock_device_selftest(void)
 {
 	printf("== ultrawidelock_device: initiator-side codec + crypto ==\n");
 
@@ -725,11 +725,11 @@ int aliro_device_selftest(void)
 }
 
 /* Host entry. On a firmware target the on-target main()/app_main() calls
- * aliro_device_selftest() instead: ESP-IDF defines ESP_PLATFORM, Zephyr (nRF)
+ * ultrawidelock_device_selftest() instead: ESP-IDF defines ESP_PLATFORM, Zephyr (nRF)
  * defines __ZEPHYR__ and supplies its own main(), so exclude this there. */
 #if !defined(ESP_PLATFORM) && !defined(__ZEPHYR__)
 int main(void)
 {
-	return aliro_device_selftest();
+	return ultrawidelock_device_selftest();
 }
 #endif

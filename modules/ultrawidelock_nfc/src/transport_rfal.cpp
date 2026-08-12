@@ -2,7 +2,7 @@
 
 #include <ultrawidelock_nfc/transport.h>
 
-#include "aliro/platform/nfc/nfc_transport_rfal.h"
+#include "ultrawidelock/platform/nfc/nfc_transport_rfal.h"
 
 namespace UltraWideLockNfc
 {

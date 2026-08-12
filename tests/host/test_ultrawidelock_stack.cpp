@@ -1,5 +1,5 @@
 /**
- * @file test_aliro_stack.cpp — the Aliro source stack on host.
+ * @file test_ultrawidelock_stack.cpp — the Aliro source stack on host.
  *
  * Files under test:
  *   modules/ultrawidelock_cred_stack/src/cred_stack.cpp  error strings, RFC 3339 time,
@@ -9,7 +9,7 @@
  * The protocol codecs it calls are the shipping sources, linked in whole:
  * every APDU and BLE frame is built and parsed by the real encoders, so a
  * scripted response must be byte-correct. NOT real: everything behind
- * aliro/interface.h (crypto stand-ins in tests/host/stackfake) -- no evidence
+ * ultrawidelock/interface.h (crypto stand-ins in tests/host/stackfake) -- no evidence
  * a cryptogram authenticates, only of what session.cpp decides on its own:
  * which command next, which key/counter per direction, when a session tears
  * down, what the peer is told on failure.
@@ -203,11 +203,11 @@ static void feed_nfc(const uint8_t *bytes, size_t len)
 				  {const_cast<uint8_t *>(bytes), len});
 }
 
-/* ---- aliro_stack.cpp: error strings ---------------------------------------- */
+/* ---- ultrawidelock_stack.cpp: error strings ---------------------------------------- */
 
 static void test_error_strings(void)
 {
-	t_group("aliro error strings");
+	t_group("ultrawidelock error strings");
 
 	/* Every code has a message, and the table is indexed by the code -- so
 	 * a shifted entry shows up as the wrong string, not as a crash. */
@@ -235,7 +235,7 @@ static void test_error_strings(void)
 	     (int)ALIRO_ERROR_UNKNOWN);
 }
 
-/* ---- aliro_stack.cpp: RFC 3339 timestamps ---------------------------------- */
+/* ---- ultrawidelock_stack.cpp: RFC 3339 timestamps ---------------------------------- */
 
 static bool parses(const char *text)
 {
@@ -244,7 +244,7 @@ static bool parses(const char *text)
 
 static void test_timestamps(void)
 {
-	t_group("aliro timestamps");
+	t_group("ultrawidelock timestamps");
 
 	T_OK("a well formed timestamp", parses("2025-08-03T12:34:56Z"));
 	{
@@ -299,14 +299,14 @@ static void test_timestamps(void)
 	T_OK("second 61 rejected", !parses("2025-08-03T12:34:61Z"));
 }
 
-/* ---- aliro_stack.cpp: stack identity and advertising ----------------------- */
+/* ---- ultrawidelock_stack.cpp: stack identity and advertising ----------------------- */
 
 static void test_stack_identity(void)
 {
 	size_t count = 0;
 	const ProtocolVersion *versions;
 
-	t_group("aliro stack identity");
+	t_group("ultrawidelock stack identity");
 
 	T_EQ("init succeeds", stack().Init().ToInt(), (int)ALIRO_NO_ERROR);
 	T_OK("library version", std::strcmp(AliroStack::GetLibraryVersion(), "ultrawidelock/0.2") == 0);
@@ -338,7 +338,7 @@ static void test_advertising(void)
 	const BleTypes::BleAddress address{0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
 	Identifier reader{};
 
-	t_group("aliro advertising data");
+	t_group("ultrawidelock advertising data");
 
 	for (size_t i = 0; i < reader.size(); i++) {
 		reader[i] = static_cast<uint8_t>(0xc0 + i);
@@ -412,7 +412,7 @@ static void test_advertising(void)
 
 static void test_session_lifecycle(void)
 {
-	t_group("aliro session lifecycle");
+	t_group("ultrawidelock session lifecycle");
 
 	/* An NFC session opens by sending SELECT, built by the real encoder. */
 	ready();
@@ -507,7 +507,7 @@ static void test_nfc_flow(void)
 	uint8_t response[512];
 	size_t length;
 
-	t_group("aliro nfc flow");
+	t_group("ultrawidelock nfc flow");
 
 	/* SELECT answered -> AUTH0 goes out, built by the real encoder. */
 	nfc_to_auth0(false);
@@ -591,7 +591,7 @@ static void test_nfc_flow(void)
 
 static void test_nfc_failures(void)
 {
-	t_group("aliro nfc failure paths");
+	t_group("ultrawidelock nfc failure paths");
 
 	/* Every identity and crypto step SendAuth0 depends on, failed one at a
 	 * time. Each must tear the session down rather than send a command
@@ -678,7 +678,7 @@ static void test_nfc_fast_path(void)
 	uint8_t response[512];
 	size_t length;
 
-	t_group("aliro nfc fast path");
+	t_group("ultrawidelock nfc fast path");
 
 	/* A cryptogram the reader cannot decrypt is an ordinary trial result:
 	 * the flow falls back to expedited-standard rather than failing. */
@@ -726,7 +726,7 @@ static void test_ble_deferral(void)
 {
 	uint8_t frame[64];
 
-	t_group("aliro ble deferral");
+	t_group("ultrawidelock ble deferral");
 
 	/* BLE data is never processed on the transport's thread: it is copied
 	 * into an event and queued, which is what keeps the stack mutex out of
@@ -788,7 +788,7 @@ static void test_ble_framing(void)
 	uint8_t frame[64];
 	uint8_t oversized[8];
 
-	t_group("aliro ble framing");
+	t_group("ultrawidelock ble framing");
 
 	std::memset(frame, 0, sizeof(frame));
 
@@ -845,7 +845,7 @@ static void test_ble_framing(void)
 
 static void test_ble_timeout(void)
 {
-	t_group("aliro ble response timeout");
+	t_group("ultrawidelock ble response timeout");
 
 	/* Acquiring the timer is part of opening a BLE session; firing it with
 	 * no request outstanding must NOT tear the session down, or an idle
@@ -871,7 +871,7 @@ static void test_ble_uwb_messages(void)
 {
 	uint8_t plaintext[8];
 
-	t_group("aliro ble uwb messages");
+	t_group("ultrawidelock ble uwb messages");
 
 	/* SendBleMessage with no session at all reports it and does not
 	 * destroy anything -- there is nothing to destroy. */
@@ -1008,7 +1008,7 @@ static void test_ble_flow(void)
 	uint8_t body[512];
 	size_t length;
 
-	t_group("aliro ble flow");
+	t_group("ultrawidelock ble flow");
 
 	/* Initiate Access -> AUTH0, framed as a BLE AP message rather than a
 	 * bare APDU. That framing is the whole difference between the two
@@ -1147,7 +1147,7 @@ static void test_ble_flow_failures(void)
 	uint8_t body[512];
 	size_t length;
 
-	t_group("aliro ble failure paths");
+	t_group("ultrawidelock ble failure paths");
 
 	/* A proprietary block that does not parse ends the session before any
 	 * key material is touched. */
@@ -1273,7 +1273,7 @@ static void test_step_up(void)
 	uint8_t body[512];
 	size_t length;
 
-	t_group("aliro step-up");
+	t_group("ultrawidelock step-up");
 
 	/* An application that wants an Access Document, over NFC, with the
 	 * signaling bit that also demands the dedicated step-up AID: the reader
@@ -1396,7 +1396,7 @@ static void test_step_up(void)
 
 /* ---- session.cpp: validating a real Access Document ------------------------ */
 
-/* The published plaintext DeviceResponse, the same fixture test_aliro_nfc.c
+/* The published plaintext DeviceResponse, the same fixture test_ultrawidelock_nfc.c
  * pins the parser against. Its requested data element is "element2". */
 static const char kDeviceResponseHex[] =
 	"a3613163312e30613281a26131a26131a167616c69726f2d6181d8185838a4613101613258200aa260c8"
@@ -1482,7 +1482,7 @@ static void test_access_document(void)
 	uint8_t body[512];
 	size_t length;
 
-	t_group("aliro access document");
+	t_group("ultrawidelock access document");
 
 	document_length = decode_hex(kDeviceResponseHex, document_bytes, sizeof(document_bytes));
 	T_EQ("fixture decoded", (long)document_length, 492L);
@@ -1676,7 +1676,7 @@ static void test_fast_match(void)
 	uint8_t cryptogram[64];
 	size_t n;
 
-	t_group("aliro fast path match");
+	t_group("ultrawidelock fast path match");
 
 	fill_public_key(credential, 0x10);
 
@@ -1772,7 +1772,7 @@ static void test_key_schedule(void)
 	const uint8_t *salt;
 	size_t salt_len;
 
-	t_group("aliro key schedule");
+	t_group("ultrawidelock key schedule");
 
 	/* A plain expedited-standard BLE flow, so every key in the schedule is
 	 * derived (BleSK only exists on BLE). */
@@ -1915,10 +1915,10 @@ int main(void)
 	test_key_schedule();
 
 	if (t_fail > 0) {
-		std::printf("  aliro-stack: FAIL (%d of %d)\n", t_fail, t_fail + t_pass);
+		std::printf("  ultrawidelock-stack: FAIL (%d of %d)\n", t_fail, t_fail + t_pass);
 		return 1;
 	}
-	std::printf("  aliro-stack: PASS (%d checks — real protocol codecs, real "
+	std::printf("  ultrawidelock-stack: PASS (%d checks — real protocol codecs, real "
 		    "SHA-256/HKDF/AES-GCM, stand-in P-256)\n",
 		    t_pass);
 	return 0;

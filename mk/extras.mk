@@ -9,16 +9,16 @@ fw-check:
 	@$(MAKE) --no-print-directory witness-trio
 ## clean: remove every build artifact in the tree  ->  ./build and the app-local ones
 clean:
-	@# ALIRO_BUILD_ROOT is `?=` and exported (Makefile:38-39), so whatever is in
+	@# ULTRAWIDELOCK_BUILD_ROOT is `?=` and exported (Makefile:38-39), so whatever is in
 	@# the caller's environment wins -- and this line deletes it recursively. A
 	@# stale export from another checkout would aim that delete outside the repo,
 	@# so refuse anything that is not a real subdirectory of it. `..` is rejected
 	@# separately because a path can start with $(REPO_ROOT) and still climb out.
-	@root='$(ALIRO_BUILD_ROOT)'; repo='$(REPO_ROOT)'; \
+	@root='$(ULTRAWIDELOCK_BUILD_ROOT)'; repo='$(REPO_ROOT)'; \
 	case "$$root" in \
-	  *..*) printf '  refusing: ALIRO_BUILD_ROOT contains ".." -- %s\n' "$$root" >&2; exit 1;; \
+	  *..*) printf '  refusing: ULTRAWIDELOCK_BUILD_ROOT contains ".." -- %s\n' "$$root" >&2; exit 1;; \
 	  "$$repo"/?*) ;; \
-	  *) printf '  refusing: ALIRO_BUILD_ROOT is not inside %s -- %s\n' "$$repo" "$$root" >&2; \
+	  *) printf '  refusing: ULTRAWIDELOCK_BUILD_ROOT is not inside %s -- %s\n' "$$repo" "$$root" >&2; \
 	     printf '  It is exported, so a value left in your environment redirects this delete.\n' >&2; \
 	     exit 1;; \
 	esac; \
@@ -28,7 +28,7 @@ clean:
 	@rm -rf "$(REPO_ROOT)"/apps/esp32-matter-lock/build "$(REPO_ROOT)"/apps/esp32-matter-lock/build-piv \
 	        "$(REPO_ROOT)"/examples/esp32/*/build "$(REPO_ROOT)"/examples/esp32/*/build-piv \
 	        "$(REPO_ROOT)"/tests/on_target/esp32/ultrawidelock-device-ec/build "$(REPO_ROOT)"/tests/on_target/zephyr/nrf5340dk-ultrawidelock-device-ec/build
-	@printf '  removed %s and the app-local build directories\n' '$(ALIRO_BUILD_ROOT)'
+	@printf '  removed %s and the app-local build directories\n' '$(ULTRAWIDELOCK_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + workspace
 ws-clean: clean
@@ -53,9 +53,9 @@ help:
 	printf '    %sAPP=matter-lock|reader|initiator  TARGET=esp32s3|esp32c5|esp32c6  VARIANT=presence|hamqtt|piv%s\n' "$$d" "$$r"; \
 	printf '    %sCHIP=dw3720  PRETTY=1  SELFTEST=1  STRICT=1  ·  nRF5340 DK%s\n' "$$d" "$$r"; \
 	printf '    %sHA=1  ·  Home Assistant variant; set on bootstrap AND nrf-build%s\n' "$$d" "$$r"; \
-	printf '    %sALIRO_SOURCE=0  ·  legacy Nordic binary fallback -> build/nrf5340dk-blob%s\n' "$$d" "$$r"; \
+	printf '    %sULTRAWIDELOCK_SOURCE=0  ·  legacy Nordic binary fallback -> build/nrf5340dk-blob%s\n' "$$d" "$$r"; \
 	printf '    %sCIR=1  ·  CIA/CIR diagnostics%s\n' "$$d" "$$r"; \
-	printf '    %sALIRO_TRACE=1  ·  unavailable: required vendor trace patch is absent%s\n' "$$d" "$$r"; \
+	printf '    %sULTRAWIDELOCK_TRACE=1  ·  unavailable: required vendor trace patch is absent%s\n' "$$d" "$$r"; \
 	printf '    %sNFC=pn532|st25r|none  ·  reader transport; default st25r%s\n' "$$d" "$$r"; \
-	printf '\n  %sMoved%s  %scdk-aliro-matter-thread -> build   cdk-reader -> reader   cdk-rtt -> monitor   term -> nrf-term%s\n' "$$y" "$$r" "$$d" "$$r"; \
+	printf '\n  %sMoved%s  %scdk-ultrawidelock-matter-thread -> build   cdk-reader -> reader   cdk-rtt -> monitor   term -> nrf-term%s\n' "$$y" "$$r" "$$d" "$$r"; \
 	printf '\n'

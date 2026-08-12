@@ -10,13 +10,13 @@
 void uwb_rxdiag_get_counts(uint32_t *rxok, uint32_t *rxerr, uint32_t *rxto, uint32_t *txdone,
 			   uint32_t *last_err, uint32_t *last_ok);
 
-/** @brief Arm or cancel the periodic ranging heartbeat (backs `aliro log on|off`). */
+/** @brief Arm or cancel the periodic ranging heartbeat (backs `ultrawidelock log on|off`). */
 void uwb_rxdiag_stream_set(bool on);
 
 /** @brief Whether the periodic ranging heartbeat is currently armed. */
 bool uwb_rxdiag_stream_get(void);
 
-/** @brief Arm or cancel the per-block distance stream (backs `aliro frames on|off`). */
+/** @brief Arm or cancel the per-block distance stream (backs `ultrawidelock frames on|off`). */
 void uwb_rxdiag_rng_set(bool on);
 
 /** @brief Whether the per-block distance stream is currently armed. */

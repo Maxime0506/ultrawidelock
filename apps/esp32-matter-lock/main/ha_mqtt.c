@@ -209,9 +209,9 @@ static bool cfg_load(void)
 // Build every topic once, from the node name the agent also keys its topics on.
 static void build_topics(void)
 {
-	snprintf(s_topic_status, sizeof(s_topic_status), "aliro/%s/status", s_cfg.node);
-	snprintf(s_topic_distance, sizeof(s_topic_distance), "aliro/%s/distance", s_cfg.node);
-	snprintf(s_topic_access, sizeof(s_topic_access), "aliro/%s/access", s_cfg.node);
+	snprintf(s_topic_status, sizeof(s_topic_status), "ultrawidelock/%s/status", s_cfg.node);
+	snprintf(s_topic_distance, sizeof(s_topic_distance), "ultrawidelock/%s/distance", s_cfg.node);
+	snprintf(s_topic_access, sizeof(s_topic_access), "ultrawidelock/%s/access", s_cfg.node);
 	snprintf(s_topic_disc_distance, sizeof(s_topic_disc_distance),
 		 "homeassistant/sensor/%s/distance/config", s_cfg.node);
 	snprintf(s_topic_disc_access, sizeof(s_topic_disc_access),
@@ -236,8 +236,8 @@ static int discovery_distance_payload(char *buf, size_t len)
 {
 	return snprintf(buf, len,
 			"{\"name\": \"Distance\", \"unique_id\": \"%s_distance\", "
-			"\"state_topic\": \"aliro/%s/distance\", "
-			"\"availability_topic\": \"aliro/%s/status\", "
+			"\"state_topic\": \"ultrawidelock/%s/distance\", "
+			"\"availability_topic\": \"ultrawidelock/%s/status\", "
 			"\"unit_of_measurement\": \"mm\", \"device_class\": \"distance\", "
 			"\"state_class\": \"measurement\", " HA_DEVICE_BLOCK_FMT,
 			s_cfg.node, s_cfg.node, s_cfg.node, s_cfg.node, s_cfg.node);
@@ -251,8 +251,8 @@ static int discovery_access_payload(char *buf, size_t len)
 {
 	return snprintf(buf, len,
 			"{\"name\": \"Access\", \"unique_id\": \"%s_access\", "
-			"\"state_topic\": \"aliro/%s/access\", "
-			"\"availability_topic\": \"aliro/%s/status\", "
+			"\"state_topic\": \"ultrawidelock/%s/access\", "
+			"\"availability_topic\": \"ultrawidelock/%s/status\", "
 			"\"event_types\": [\"granted\", \"denied\"], " HA_DEVICE_BLOCK_FMT,
 			s_cfg.node, s_cfg.node, s_cfg.node, s_cfg.node, s_cfg.node);
 }

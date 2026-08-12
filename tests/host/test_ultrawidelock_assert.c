@@ -1,4 +1,4 @@
-/** @file test_aliro_assert.c — presence-assertion codec + verifier.
+/** @file test_ultrawidelock_assert.c — presence-assertion codec + verifier.
  *
  * The security core of the non-door primitive: a spoofed USB device must not be
  * able to assert presence. Covers the happy path and every distinct reject:
@@ -98,7 +98,7 @@ static void base_assertion(struct ultrawidelock_assert *a)
 	a->unix_ms = 1785000000000ULL;
 }
 
-void test_aliro_assert(void)
+void test_ultrawidelock_assert(void)
 {
 	struct fake_ec fec;
 	memset(&fec, 0, sizeof(fec));

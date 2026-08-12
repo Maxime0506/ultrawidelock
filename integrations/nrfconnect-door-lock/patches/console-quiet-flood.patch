@@ -1,7 +1,7 @@
-diff --git a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
+diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
 index ec087aa..a5c3505 100644
---- a/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
-+++ b/applications/matter-aliro-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
+--- a/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
++++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/access_manager/access_manager_impl.cpp
 @@ -615,11 +615,11 @@ void AccessManagerImpl::_HandleRangingSessionData(SessionContext sessionContext,
  		const auto result =
  			id ? Aliro::Uwb::Disambiguation::Disambiguator::Instance().TryGetLastResult(*id) : std::nullopt;

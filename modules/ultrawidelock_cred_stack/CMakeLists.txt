@@ -1,12 +1,12 @@
 # Compile the independent implementation directly into the application target.
-# The upstream add-on has already created its imported `aliro` target by the
+# The upstream add-on has already created its imported `ultrawidelock` target by the
 # time extra modules are processed. Zephyr links every registered library under
 # --whole-archive, so leaving that target registered would force all duplicate
 # definitions into the link. Remove exactly that target from the global list;
 # the upstream module still supplies its public headers and integration code.
 if(CONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK)
   get_property(_zephyr_libraries GLOBAL PROPERTY ZEPHYR_LIBS)
-  list(REMOVE_ITEM _zephyr_libraries aliro)
+  list(REMOVE_ITEM _zephyr_libraries ultrawidelock)
   set_property(GLOBAL PROPERTY ZEPHYR_LIBS "${_zephyr_libraries}")
 
   # The step-up wire codecs, DeviceResponse parser and TLV codec are the shared

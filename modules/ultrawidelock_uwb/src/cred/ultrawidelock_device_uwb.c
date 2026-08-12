@@ -14,7 +14,7 @@
 #include "ultrawidelock_uwb_msg_builder.h"
 #include "ultrawidelock_uwb_msg_parser.h"
 
-int aliro_dev_uwb_parse_m1(const uint8_t *msg, size_t len, struct aliro_dev_uwb_m1 *out)
+int ultrawidelock_dev_uwb_parse_m1(const uint8_t *msg, size_t len, struct ultrawidelock_dev_uwb_m1 *out)
 {
 	if (msg == NULL || len < ULTRAWIDELOCK_HEADER_LENGTH ||
 	    ultrawidelock_uwb_msg_protocol_header(msg) !=
@@ -73,7 +73,7 @@ int aliro_dev_uwb_parse_m1(const uint8_t *msg, size_t len, struct aliro_dev_uwb_
  * responders, slots per round, sync code index bitmask, hopping configuration, and MAC mode. Return
  * 0 on success or -1 if the message is malformed or required fields are missing.
  */
-int aliro_dev_uwb_parse_m3(const uint8_t *msg, size_t len, struct aliro_dev_uwb_m3 *out)
+int ultrawidelock_dev_uwb_parse_m3(const uint8_t *msg, size_t len, struct ultrawidelock_dev_uwb_m3 *out)
 {
 	if (msg == NULL || len < ULTRAWIDELOCK_HEADER_LENGTH ||
 	    ultrawidelock_uwb_msg_protocol_header(msg) !=
@@ -135,7 +135,7 @@ int aliro_dev_uwb_parse_m3(const uint8_t *msg, size_t len, struct aliro_dev_uwb_
 	return ((seen & need) == need) ? 0 : -1;
 }
 
-void aliro_dev_uwb_select_m2(const struct aliro_dev_uwb_m1 *m1, struct aliro_dev_uwb_m2_params *out)
+void ultrawidelock_dev_uwb_select_m2(const struct ultrawidelock_dev_uwb_m1 *m1, struct ultrawidelock_dev_uwb_m2_params *out)
 {
 	memset(out, 0, sizeof(*out));
 	out->config_id = m1->config_count ? m1->config_ids[0] : 0x0001u;
@@ -162,7 +162,7 @@ void aliro_dev_uwb_select_m2(const struct aliro_dev_uwb_m1 *m1, struct aliro_dev
 	out->hopping_config_bitmask = 0xFFu;
 }
 
-struct ultrawidelock_uwb_message *aliro_dev_uwb_build_m2(const struct aliro_dev_uwb_m2_params *p)
+struct ultrawidelock_uwb_message *ultrawidelock_dev_uwb_build_m2(const struct ultrawidelock_dev_uwb_m2_params *p)
 {
 	struct ultrawidelock_uwb_msg_builder b;
 	uint16_t plen = ULTRAWIDELOCK_UWB_RANGING_SERVICE_ATTR_CONFIGURATION_IDENTIFIER_LENGTH +
@@ -212,7 +212,7 @@ struct ultrawidelock_uwb_message *aliro_dev_uwb_build_m2(const struct aliro_dev_
 /**
  * Build an M4 UWB message from STS index, UWB time, hop mode key, and sync code index.
  */
-struct ultrawidelock_uwb_message *aliro_dev_uwb_build_m4(const struct aliro_dev_uwb_m4_params *p)
+struct ultrawidelock_uwb_message *ultrawidelock_dev_uwb_build_m4(const struct ultrawidelock_dev_uwb_m4_params *p)
 {
 	struct ultrawidelock_uwb_msg_builder b;
 	uint16_t plen = ULTRAWIDELOCK_UWB_RANGING_SERVICE_ATTR_STS_INDEX0_LENGTH +

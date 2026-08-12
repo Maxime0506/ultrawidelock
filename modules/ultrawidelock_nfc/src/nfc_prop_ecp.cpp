@@ -33,7 +33,7 @@ constexpr std::size_t kEcpFrameLen = 18;
 constexpr std::size_t kReaderIdLen = 8;
 
 /* ECP v2 header for the Aliro (Unified Access) profile. */
-constexpr std::array<uint8_t, 8> kAliroEcpHeader = {0x6A, 0x02, 0xCB, 0x02, 0x06, 0x20, 0x42, 0x20};
+constexpr std::array<uint8_t, 8> kCredEcpHeader = {0x6A, 0x02, 0xCB, 0x02, 0x06, 0x20, 0x42, 0x20};
 
 uint8_t sEcpFrame[kEcpFrameLen];
 bool sArmed;
@@ -109,15 +109,15 @@ const rfalNfcPropCallbacks kCallbacks = {
  */
 void NfcPropInit(void)
 {
-	std::memcpy(sEcpFrame, kAliroEcpHeader.data(), kAliroEcpHeader.size());
+	std::memcpy(sEcpFrame, kCredEcpHeader.data(), kCredEcpHeader.size());
 
 	Aliro::Identifier identifier{};
 	if (DoorLock::ReaderStorage::IsIdentifierSet() &&
 	    DoorLock::ReaderStorage::GetIdentifier(identifier) == ALIRO_NO_ERROR) {
-		std::memcpy(sEcpFrame + kAliroEcpHeader.size(), identifier.data(), kReaderIdLen);
+		std::memcpy(sEcpFrame + kCredEcpHeader.size(), identifier.data(), kReaderIdLen);
 	} else {
 		LOG_WRN("ECP: reader identifier not provisioned; emitting zero Reader Identifier");
-		std::memset(sEcpFrame + kAliroEcpHeader.size(), 0, kReaderIdLen);
+		std::memset(sEcpFrame + kCredEcpHeader.size(), 0, kReaderIdLen);
 	}
 
 	Crc16A(sEcpFrame, 16, sEcpFrame + 16);

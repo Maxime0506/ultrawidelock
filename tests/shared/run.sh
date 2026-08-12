@@ -19,10 +19,10 @@ rm -f "$BIN"
 
 echo
 echo "== host: ultrawidelock_crypto key-schedule KAT =="
-CBIN="$(mktemp -t aliro_crypto_kat.XXXXXX)"
+CBIN="$(mktemp -t ultrawidelock_crypto_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_crypto.c" \
+   "$HERE/test_ultrawidelock_crypto.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_advtag.c" \
    "$HERE/ultrawidelock_prim_host.c" -o "$CBIN"
 "$CBIN"
@@ -33,7 +33,7 @@ echo "== host: ultrawidelock_assert_ec P-256 binder =="
 ECBIN="$(mktemp -t ultrawidelock_assert_ec.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_assert_ec.c" \
+   "$HERE/test_ultrawidelock_assert_ec.c" \
    "$ALIRO/src/ultrawidelock_assert.c" "$ALIRO/src/ultrawidelock_assert_ec.c" "$ALIRO/src/ultrawidelock_hash.c" \
    "$HERE/ultrawidelock_prim_host.c" -o "$ECBIN"
 "$ECBIN"
@@ -41,10 +41,10 @@ rm -f "$ECBIN"
 
 echo
 echo "== host: ultrawidelock_apdu wire-codec KAT =="
-ABIN="$(mktemp -t aliro_apdu_kat.XXXXXX)"
+ABIN="$(mktemp -t ultrawidelock_apdu_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_apdu.c" "$ALIRO/src/ultrawidelock_apdu.c" -o "$ABIN"
+   "$HERE/test_ultrawidelock_apdu.c" "$ALIRO/src/ultrawidelock_apdu.c" -o "$ABIN"
 "$ABIN"
 rm -f "$ABIN"
 
@@ -53,7 +53,7 @@ echo "== host: ultrawidelock_device initiator codec + crypto KAT =="
 DBIN="$(mktemp -t ultrawidelock_device.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DULTRAWIDELOCK_DEVICE_HAVE_EC \
    -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_device.c" \
+   "$HERE/test_ultrawidelock_device.c" \
    "$ALIRO/src/ultrawidelock_device.c" "$ALIRO/src/ultrawidelock_device_apdu.c" \
    "$ALIRO/src/ultrawidelock_apdu.c" "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
    "$HERE/ultrawidelock_prim_host.c" -o "$DBIN"
@@ -65,16 +65,16 @@ echo "== host: ultrawidelock_ble_central device-transport decoders =="
 BCBIN="$(mktemp -t ultrawidelock_ble_central.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" \
-   "$HERE/test_aliro_ble_central.c" "$ALIRO/src/ultrawidelock_ble_central.c" -o "$BCBIN"
+   "$HERE/test_ultrawidelock_ble_central.c" "$ALIRO/src/ultrawidelock_ble_central.c" -o "$BCBIN"
 "$BCBIN"
 rm -f "$BCBIN"
 
 echo
 echo "== host: ultrawidelock_stepup Access-Document codec + section 7.4 verifier KAT =="
-SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
+SBIN="$(mktemp -t ultrawidelock_stepup_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_stepup.c" \
+   "$HERE/test_ultrawidelock_stepup.c" \
    "$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
    "$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
@@ -84,10 +84,10 @@ rm -f "$SBIN"
 
 echo
 echo "== host: ultrawidelock_prov identity/trust KAT =="
-PBIN="$(mktemp -t aliro_prov_kat.XXXXXX)"
+PBIN="$(mktemp -t ultrawidelock_prov_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
-   "$HERE/test_aliro_prov.c" "$ALIRO/src/ultrawidelock_prov.c" -o "$PBIN"
+   "$HERE/test_ultrawidelock_prov.c" "$ALIRO/src/ultrawidelock_prov.c" -o "$PBIN"
 "$PBIN"
 rm -f "$PBIN"
 
@@ -97,12 +97,12 @@ TBIN="$(mktemp -t ultrawidelock_lat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
    -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
-   "$HERE/test_aliro_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$TBIN"
+   "$HERE/test_ultrawidelock_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$TBIN"
 "$TBIN"
 cc -std=c11 -O1 -Wall -Wextra \
    -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
    -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
-   "$HERE/test_aliro_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$TBIN"
+   "$HERE/test_ultrawidelock_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$TBIN"
 "$TBIN"
 rm -f "$TBIN"
 
@@ -113,7 +113,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    -Wno-unused-variable -Wno-unused-function \
    -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
    -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
-   "$HERE/test_aliro_reader.c" \
+   "$HERE/test_ultrawidelock_reader.c" \
    "$ALIRO/src/ultrawidelock_reader.c" "$ALIRO/src/ultrawidelock_apdu.c" \
    "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
    "$ALIRO/src/ultrawidelock_prov.c" \
@@ -127,7 +127,7 @@ GBIN="$(mktemp -t ultrawidelock_ranging.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
    -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" -I "$UWB_INC" \
-   "$HERE/test_aliro_ranging.c" \
+   "$HERE/test_ultrawidelock_ranging.c" \
    "$ALIRO/src/ultrawidelock_ranging.c" "$ALIRO/src/ultrawidelock_crypto.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_lat.c" \
    "$HERE/ultrawidelock_prim_host.c" -o "$GBIN"

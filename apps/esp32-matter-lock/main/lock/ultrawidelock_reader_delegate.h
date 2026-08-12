@@ -1,4 +1,4 @@
-// Declares AliroReaderDelegate, the Aliro (Apple Home Key) reader-provisioning and BLE-UWB half of
+// Declares UltraWideLockReaderDelegate, the Aliro (Apple Home Key) reader-provisioning and BLE-UWB half of
 // the Matter DoorLock cluster delegate, bridging controller commands to the on-device reader
 // identity, trust store, and BLE advertising state.
 /*
@@ -25,7 +25,7 @@
 #include <app/clusters/door-lock-server/door-lock-server.h>
 
 /*
- * AliroReaderDelegate — the Aliro (Apple Home Key) reader-provisioning half of
+ * UltraWideLockReaderDelegate — the Aliro (Apple Home Key) reader-provisioning half of
  * the Door Lock cluster Delegate, for a BLE + UWB ("Express") reader.
  *
  * Apple Home writes the reader identity with SetAliroReaderConfig (signing key,
@@ -47,10 +47,10 @@
  * in NVS and refreshes advertising. That is what keeps a Wallet key valid and lets
  * the UWB reader start after a power cycle.
  */
-class AliroReaderDelegate: public chip::app::Clusters::DoorLock::Delegate
+class UltraWideLockReaderDelegate: public chip::app::Clusters::DoorLock::Delegate
 {
       public:
-	static AliroReaderDelegate &Instance()
+	static UltraWideLockReaderDelegate &Instance()
 	{
 		return sInstance;
 	}
@@ -59,8 +59,8 @@ class AliroReaderDelegate: public chip::app::Clusters::DoorLock::Delegate
 	// (after nvs_flash_init, before esp_matter::start).
 	void Init();
 
-	AliroReaderDelegate(const AliroReaderDelegate &) = delete;
-	AliroReaderDelegate &operator=(const AliroReaderDelegate &) = delete;
+	UltraWideLockReaderDelegate(const UltraWideLockReaderDelegate &) = delete;
+	UltraWideLockReaderDelegate &operator=(const UltraWideLockReaderDelegate &) = delete;
 
 	// DoorLock::Delegate — Aliro reader-provisioning interface
 	CHIP_ERROR GetAliroReaderVerificationKey(chip::MutableByteSpan &verificationKey) override;
@@ -83,7 +83,7 @@ class AliroReaderDelegate: public chip::app::Clusters::DoorLock::Delegate
 	CHIP_ERROR ClearAliroReaderConfig() override;
 
       private:
-	AliroReaderDelegate() = default;
+	UltraWideLockReaderDelegate() = default;
 
 	CHIP_ERROR CopyProtocolVersionIntoSpan(uint16_t value, chip::MutableByteSpan &out);
 	void EnsureSubIdentifier();
@@ -106,5 +106,5 @@ class AliroReaderDelegate: public chip::app::Clusters::DoorLock::Delegate
 	bool mConfigured = false;
 	bool mHasSubId = false;
 
-	static AliroReaderDelegate sInstance;
+	static UltraWideLockReaderDelegate sInstance;
 };

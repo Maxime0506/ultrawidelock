@@ -29,7 +29,7 @@
 #include "matter_btp.h"
 #include "matter_ble_zephyr.h"
 
-LOG_MODULE_REGISTER(matter_ble, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
+LOG_MODULE_REGISTER(matter_ble, CONFIG_ULTRAWIDELOCK_MATTER_BLE_LOG_LEVEL);
 
 /* C1, written by the commissioner (BLEManagerImpl.cpp:78-79). */
 static const struct bt_uuid_128 k_chr_c1_uuid =
@@ -49,7 +49,7 @@ static const struct bt_uuid_128 k_chr_c2_uuid =
  */
 static struct bt_conn *s_conn;
 static struct matter_btp_rx s_rx;
-static uint8_t s_rx_buf[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
+static uint8_t s_rx_buf[CONFIG_ULTRAWIDELOCK_MATTER_BLE_RX_BUF];
 static struct matter_btp_tx s_tx;
 static uint8_t s_frag[MATTER_BTP_MAX_FRAGMENT];
 static bool s_tx_active;
@@ -111,7 +111,7 @@ static matter_ble_link_cb s_link_cb;
  * than from a plausible-looking round number. Nothing here is expensive yet;
  * PASE is what will actually load it, and it must be re-measured then.
  */
-K_THREAD_STACK_DEFINE(matter_wq_stack, CONFIG_ALIRO_MATTER_BLE_WQ_STACK);
+K_THREAD_STACK_DEFINE(matter_wq_stack, CONFIG_ULTRAWIDELOCK_MATTER_BLE_WQ_STACK);
 static struct k_work_queue_config matter_wq_cfg = {.name = "matter_wq"};
 static struct k_work_q matter_wq;
 static struct k_work s_msg_work;
@@ -245,7 +245,7 @@ static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
 			LOG_ERR("bad BTP handshake request (%d)", rc);
 			return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
 		}
-		rc = matter_btp_accept(&req, bt_gatt_get_mtu(conn), CONFIG_ALIRO_MATTER_BLE_WINDOW,
+		rc = matter_btp_accept(&req, bt_gatt_get_mtu(conn), CONFIG_ULTRAWIDELOCK_MATTER_BLE_WINDOW,
 				       &resp);
 		if (rc != MATTER_OK) {
 			LOG_ERR("no mutually supported BTP version");
@@ -328,7 +328,7 @@ static ssize_t c1_write(struct bt_conn *conn, const struct bt_gatt_attr *attr, c
 	 * piggybacks the pending ack onto the next fragment for free.
 	 */
 	if (s_ack_pending && !s_tx_active && !s_indicate_busy &&
-	    (rc == MATTER_END || s_rx_unacked >= (CONFIG_ALIRO_MATTER_BLE_WINDOW / 2))) {
+	    (rc == MATTER_END || s_rx_unacked >= (CONFIG_ULTRAWIDELOCK_MATTER_BLE_WINDOW / 2))) {
 		uint8_t ackbuf[3];
 		size_t n = 0;
 
@@ -586,7 +586,7 @@ BT_CONN_CB_DEFINE(matter_conn_cb) = {
  * Runtime discriminator override, 0 meaning "use the built-in one".
  *
  * Set while an OpenCommissioningWindow is open, cleared when it closes. It
- * exists because CONFIG_ALIRO_MATTER_DISCRIMINATOR is baked into the payload
+ * exists because CONFIG_ULTRAWIDELOCK_MATTER_DISCRIMINATOR is baked into the payload
  * at build time, and a controller opening a window picks its own.
  */
 static uint16_t s_discriminator_override;
@@ -599,7 +599,7 @@ void matter_ble_set_discriminator(uint16_t discriminator)
 uint16_t matter_ble_discriminator(void)
 {
 	return s_discriminator_override != 0u ? s_discriminator_override
-					      : (uint16_t)CONFIG_ALIRO_MATTER_DISCRIMINATOR;
+					      : (uint16_t)CONFIG_ULTRAWIDELOCK_MATTER_DISCRIMINATOR;
 }
 
 int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)
@@ -625,10 +625,10 @@ int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)
 	p[1] = (uint8_t)(matter_ble_discriminator() & 0xFFu);
 	/* Advertisement version 0 in the high nibble. */
 	p[2] = (uint8_t)((matter_ble_discriminator() >> 8) & 0x0Fu);
-	p[3] = (uint8_t)(CONFIG_ALIRO_MATTER_VENDOR_ID & 0xFFu);
-	p[4] = (uint8_t)(CONFIG_ALIRO_MATTER_VENDOR_ID >> 8);
-	p[5] = (uint8_t)(CONFIG_ALIRO_MATTER_PRODUCT_ID & 0xFFu);
-	p[6] = (uint8_t)(CONFIG_ALIRO_MATTER_PRODUCT_ID >> 8);
+	p[3] = (uint8_t)(CONFIG_ULTRAWIDELOCK_MATTER_VENDOR_ID & 0xFFu);
+	p[4] = (uint8_t)(CONFIG_ULTRAWIDELOCK_MATTER_VENDOR_ID >> 8);
+	p[5] = (uint8_t)(CONFIG_ULTRAWIDELOCK_MATTER_PRODUCT_ID & 0xFFu);
+	p[6] = (uint8_t)(CONFIG_ULTRAWIDELOCK_MATTER_PRODUCT_ID >> 8);
 	p[7] = 0x00u;
 
 	return 0;
@@ -649,7 +649,7 @@ int matter_ble_commissionable_svc_data(uint8_t *out, size_t cap)
 static int matter_ble_init(void)
 {
 	k_work_queue_start(&matter_wq, matter_wq_stack, K_THREAD_STACK_SIZEOF(matter_wq_stack),
-			   CONFIG_ALIRO_MATTER_BLE_WQ_PRIO, &matter_wq_cfg);
+			   CONFIG_ULTRAWIDELOCK_MATTER_BLE_WQ_PRIO, &matter_wq_cfg);
 	k_work_init(&s_msg_work, msg_work_handler);
 	k_work_init(&s_hs_work, hs_work_handler);
 	reset_link();

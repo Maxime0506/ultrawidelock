@@ -25,7 +25,7 @@ void drvfake_reset(void)
 {
 	memset(&drvfake, 0, sizeof(drvfake));
 	drvfake.stsq_val = 0;
-	drvfake.start_aliro_ret = 0;
+	drvfake.start_ultrawidelock_ret = 0;
 }
 
 /* ── per-frame diag gate (defined by ccc_shim_rx.c on the main binary) ─────── */
@@ -380,16 +380,16 @@ const uint8_t *fira_session_get_ursk(void)
 }
 
 /* ── ultrawidelock_uwb_facade fake (uwb_selftest boot path) ──────────────────────────── */
-int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *cfg)
+int ultrawidelock_uwb_start_ultrawidelock(const struct ultrawidelock_uwb_ultrawidelock_cfg *cfg)
 {
-	drvfake.start_aliro_calls++;
+	drvfake.start_ultrawidelock_calls++;
 	if (cfg != NULL) {
-		drvfake.last_aliro_cfg = *cfg;
+		drvfake.last_ultrawidelock_cfg = *cfg;
 		if (cfg->ursk != NULL) {
-			memcpy(drvfake.last_aliro_ursk, cfg->ursk, 32);
+			memcpy(drvfake.last_ultrawidelock_ursk, cfg->ursk, 32);
 		}
 	}
-	return drvfake.start_aliro_ret;
+	return drvfake.start_ultrawidelock_ret;
 }
 
 /* ── shell fake (zephyr/shell/shell.h capture sink) ────────────────────────── */

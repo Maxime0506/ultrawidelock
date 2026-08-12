@@ -34,11 +34,11 @@ echo "== host: ultrawidelock_ble transport vs NimBLE fakes =="
 # the ESP-IDF half. ESP_PLATFORM selects ultrawidelock_log.h's ESP branch, which resolves
 # to sdkfake's esp_log.h -- the same path the target takes.
 SDKFAKE="$HERE/sdkfake"
-EBIN="$(mktemp -t esp_aliro_ble.XXXXXX)"
+EBIN="$(mktemp -t esp_ultrawidelock_ble.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
    -DESP_PLATFORM \
-   "$HERE/test_esp_aliro_ble.c" \
+   "$HERE/test_esp_ultrawidelock_ble.c" \
    "$ESP_COMPONENTS/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
    "$ALIRO/src/ultrawidelock_ble_nimble.c" \
    "$ALIRO/src/ultrawidelock_advtag.c" "$ALIRO/src/ultrawidelock_hash.c" \
@@ -186,7 +186,7 @@ MBIN="$(mktemp -t esp_matter_lock.XXXXXX)"
 cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
 cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/ultrawidelock_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
-   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
+   -DCONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
    -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DULTRAWIDELOCK_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
    -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
@@ -194,7 +194,7 @@ ${CXX:-c++} -std=c++17 -O1 -w \
    "$HERE/test_esp_matter_lock.cpp" \
    "$LOCKD/app_driver.cpp" "$LOCKD/app_main.cpp" "$LOCKD/app_shell.cpp" \
    "$LOCKD/lock/door_lock_manager.cpp" "$LOCKD/lock/door_lock_callbacks.cpp" \
-   "$LOCKD/lock/aliro_reader_delegate.cpp" \
+   "$LOCKD/lock/ultrawidelock_reader_delegate.cpp" \
    "$MFAKE/matterfake.cc" "$MBIN.led.o" "$MBIN.approach.o" -o "$MBIN"
 # pipefail keeps the binary's exit status; the grep hides app_main's own
 # onboarding-code printf noise without dropping any ok/FAIL/RESULT line.

@@ -1,4 +1,4 @@
-/** @file test_aliro_hash.c — SHA-256 / HMAC / HKDF / X9.63 KATs.
+/** @file test_ultrawidelock_hash.c — SHA-256 / HMAC / HKDF / X9.63 KATs.
  *
  * ultrawidelock_hash.c is the portable crypto the presence assertion (and the whole
  * Aliro key schedule) leans on, but it had no host coverage. Pin it against the
@@ -10,7 +10,7 @@
 #include "ultrawidelock_hash.h"
 #include "test.h"
 
-void test_aliro_hash(void)
+void test_ultrawidelock_hash(void)
 {
 	t_group("SHA-256 (FIPS 180-4)");
 	uint8_t d[ULTRAWIDELOCK_SHA256_LEN];

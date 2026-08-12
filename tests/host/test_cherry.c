@@ -33,7 +33,7 @@ static void cc_cb(struct cherry_ccc_event *ev, void *user_data)
 
 void test_cherry(void)
 {
-	struct cherry_ccc_aliro_session_config cfg;
+	struct cherry_ccc_ultrawidelock_session_config cfg;
 	struct cherry_common_diag_cfg diag;
 	uint8_t ursk[32];
 
@@ -47,7 +47,7 @@ void test_cherry(void)
 	struct cherry *cx = cherry_create("host", NULL, NULL);
 	T_OK("create", cx != NULL);
 
-	t_group("create_aliro_responder guards + happy");
+	t_group("create_ultrawidelock_responder guards + happy");
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.session_id = 0x11223344u;
 	cfg.uwb_config_id = 0x0001u;
@@ -59,11 +59,11 @@ void test_cherry(void)
 	cfg.sts_index = 0x1000u;
 	cfg.pulse_shape_combo = 0u;
 	T_OK("resp.null.cb",
-	     cherry_ccc_session_create_aliro_responder(cx, NULL, NULL, &cfg) == NULL);
+	     cherry_ccc_session_create_ultrawidelock_responder(cx, NULL, NULL, &cfg) == NULL);
 	T_OK("resp.null.cfg",
-	     cherry_ccc_session_create_aliro_responder(cx, cc_cb, NULL, NULL) == NULL);
+	     cherry_ccc_session_create_ultrawidelock_responder(cx, cc_cb, NULL, NULL) == NULL);
 	struct cherry_ccc_session *s =
-		cherry_ccc_session_create_aliro_responder(cx, cc_cb, (void *)0x1234,
+		cherry_ccc_session_create_ultrawidelock_responder(cx, cc_cb, (void *)0x1234,
 							  &cfg);
 	T_OK("resp.ok", s != NULL);
 

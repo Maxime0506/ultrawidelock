@@ -4,9 +4,9 @@
 Usage:
   # headless, no pairing window, no phone: act as an admin that already
   # commissioned this reader (the HITL path -- see --fabric below: the
-  # 2026-08-07 identity in ~/.aliro-chip-tool is chip-tool's DEFAULT
+  # 2026-08-07 identity in ~/.ultrawidelock-chip-tool is chip-tool's DEFAULT
   # fabric, which is alpha, not this script's beta default)
-  scripts/ultrawidelock-enroll.py --node-id 0x1234 --storage ~/.aliro-chip-tool --fabric alpha
+  scripts/ultrawidelock-enroll.py --node-id 0x1234 --storage ~/.ultrawidelock-chip-tool --fabric alpha
 
   # first run, BLE route -- the one that works against this reader today
   scripts/ultrawidelock-enroll.py --node-id 0x1234 --pairing-code <11 digits> \
@@ -67,10 +67,10 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 # reader_id is group_id || group_sub_id, 16 bytes each, assembled exactly this way
 # by the reader itself (apps/dwm3001cdk-lock/src/matter_commission.c:1991).
-ATTR_VERIFICATION_KEY = "aliro-reader-verification-key"
-ATTR_GROUP_ID = "aliro-reader-group-identifier"
-ATTR_GROUP_SUB_ID = "aliro-reader-group-sub-identifier"
-ATTR_GRK = "aliro-group-resolving-key"
+ATTR_VERIFICATION_KEY = "ultrawidelock-reader-verification-key"
+ATTR_GROUP_ID = "ultrawidelock-reader-group-identifier"
+ATTR_GROUP_SUB_ID = "ultrawidelock-reader-group-sub-identifier"
+ATTR_GRK = "ultrawidelock-group-resolving-key"
 
 DEFAULT_CHIP_TOOL = os.path.expanduser(
     "~/esp/esp-matter/connectedhomeip/connectedhomeip/out/host/chip-tool"
@@ -150,7 +150,7 @@ def read_octets(chip_tool, fabric, attr, node_id, endpoint, dry_run, expect_len)
 
     # chip-tool takes the attribute DASHED on the command line and prints it
     # CamelCase on the report line, so neither match below can use `attr`:
-    #   $ chip-tool doorlock read aliro-reader-verification-key ...
+    #   $ chip-tool doorlock read ultrawidelock-reader-verification-key ...
     #     [TOO]   AliroReaderVerificationKey: null
     # Matching the dashed name meant the null check never fired and the failure
     # surfaced as "could not find a hex value" -- which reads as a parsing bug
@@ -202,7 +202,7 @@ def main():
                          "from an earlier attempt can leak into this one")
     ap.add_argument("--storage",
                     help="chip-tool storage directory holding an ALREADY-commissioned "
-                         "controller identity (e.g. ~/.aliro-chip-tool). With it, no "
+                         "controller identity (e.g. ~/.ultrawidelock-chip-tool). With it, no "
                          "--pairing-code is needed: the fabric in that directory is the "
                          "admin this run acts as. Mutually exclusive with --fresh-storage.")
     ap.add_argument("--dry-run", action="store_true")
@@ -353,8 +353,8 @@ def main():
         " * credential key this initiator authenticates with. Regenerate whenever the\n"
         " * reader is re-provisioned: every value here dies with its home.\n"
         " */\n"
-        "#ifndef ALIRO_BENCH_IDENTITY_H\n"
-        "#define ALIRO_BENCH_IDENTITY_H\n\n"
+        "#ifndef ULTRAWIDELOCK_BENCH_IDENTITY_H\n"
+        "#define ULTRAWIDELOCK_BENCH_IDENTITY_H\n\n"
         "#include <stdint.h>\n\n"
         "/* group_id || group_sub_id, assembled as the reader assembles it. */\n"
         + c_array("k_reader_id", reader_id)
@@ -362,7 +362,7 @@ def main():
         + "\n/* Resolves the reader's advert tag on approach; unused until Stage 1b. */\n"
         + c_array("k_group_resolving_key", grk)
         + "\n" + c_array("k_cred_priv", priv)
-        + "\n#endif /* ALIRO_BENCH_IDENTITY_H */\n"
+        + "\n#endif /* ULTRAWIDELOCK_BENCH_IDENTITY_H */\n"
     )
     if args.dry_run:
         print("  [dry-run] header not written")

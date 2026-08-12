@@ -1,6 +1,6 @@
 /*
  * Host test for the ESP32 matter-lock app glue (app_driver / app_main /
- * app_shell / door_lock_manager / door_lock_callbacks / aliro_reader_delegate)
+ * app_shell / door_lock_manager / door_lock_callbacks / ultrawidelock_reader_delegate)
  * against the matterfake/ CHIP + esp-matter recording doubles. "Theatre"
  * suite: the Matter stack, NimBLE host, console, LED driver and Aliro reader
  * are all fakes, so passing proves the units' branch logic and argument
@@ -9,15 +9,15 @@
  *
  * Sections (one linear script; the production singletons are process-global):
  *   A  app_driver: LED init failure/success, lock-state colors, button init
- *   B  aliro_reader_delegate: getters, config set/clear, size validation
+ *   B  ultrawidelock_reader_delegate: getters, config set/clear, size validation
  *   C  door_lock_manager: init bounds, NVM blobs, users/credentials/schedules
  *   D  door_lock_callbacks: every plugin hook incl. the Aliro trust mirror
  *   E  app_main boot: endpoint/cluster assembly, GATT pre-registration
  *   F  Matter device events: SNTP, reader start, fabric-removal recovery
  *   G  attribute / identification callbacks
- *   H  aliro_reader_task approach controller (median, dwell, peer-gone)
+ *   H  ultrawidelock_reader_task approach controller (median, dwell, peer-gone)
  *   I  UWB range listener (task wake, ISR vs task context)
- *   J  console commands (status/range/aliro/uwbdiag/lock/unlock/codes/
+ *   J  console commands (status/range/ultrawidelock/uwbdiag/lock/unlock/codes/
  *      log/lab/factoryreset/clear)
  *   K  app_main reboot path (already commissioned, degraded branches)
  */
@@ -57,11 +57,11 @@
 #include "app_priv.h"
 #include "app_shell.h"
 #include "door_lock_manager.h"
-#include "aliro_reader_delegate.h"
+#include "ultrawidelock_reader_delegate.h"
 #include "lock_led.h"
 
 extern uint16_t door_lock_endpoint_id;
-extern TaskHandle_t aliro_reader_task_handle;
+extern TaskHandle_t ultrawidelock_reader_task_handle;
 extern "C" void app_main();
 
 static int fails;
@@ -143,7 +143,7 @@ static void section_app_driver(void)
 
 	c = lock_led_color(false, true);
 	app_driver_led_lock_state(false, true);
-	okc("aliro-unlock color pushed",
+	okc("ultrawidelock-unlock color pushed",
 	    mfk_led_r == c.r && mfk_led_g == c.g && mfk_led_b == c.b);
 
 	c = lock_led_color(false, false);
@@ -158,12 +158,12 @@ static void section_app_driver(void)
 	okc("bsp button driver initialized once", mfk_bsp_button_calls == 1);
 }
 
-/* ---- B: aliro_reader_delegate ---------------------------------------------- */
+/* ---- B: ultrawidelock_reader_delegate ---------------------------------------------- */
 static void section_delegate(void)
 {
-	printf("-- aliro_reader_delegate\n");
+	printf("-- ultrawidelock_reader_delegate\n");
 	mfk_reset();
-	AliroReaderDelegate &d = AliroReaderDelegate::Instance();
+	UltraWideLockReaderDelegate &d = UltraWideLockReaderDelegate::Instance();
 
 	/* RNG failure first: the error branch zeroes the sub-id and latches, so
 	 * this is the only shot at it (singleton, no reset). */
@@ -381,35 +381,35 @@ static void section_manager(void)
 	okc("unoccupied slot reports available",
 	    mgr.GetUser(1, 1, user) && user.userStatus == UserStatusEnum::kAvailable);
 
-	CredentialStruct aliroLink;
-	aliroLink.credentialType = CredentialTypeEnum::kAliroEvictableEndpointKey;
-	aliroLink.credentialIndex = 1;
+	CredentialStruct ultrawidelockLink;
+	ultrawidelockLink.credentialType = CredentialTypeEnum::kAliroEvictableEndpointKey;
+	ultrawidelockLink.credentialIndex = 1;
 	okc("set user rejects index 0",
 	    !mgr.SetUser(1, 0, 1, 1, chip::CharSpan("A", 1), 7, UserStatusEnum::kOccupiedEnabled,
-			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &aliroLink,
+			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &ultrawidelockLink,
 			 1));
 	okc("set user rejects index 11",
 	    !mgr.SetUser(1, 11, 1, 1, chip::CharSpan("A", 1), 7, UserStatusEnum::kOccupiedEnabled,
-			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &aliroLink,
+			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &ultrawidelockLink,
 			 1));
 	okc("set user rejects an oversized name",
 	    !mgr.SetUser(1, 1, 1, 1, chip::CharSpan("ABCDEFGHIJK", 11), 7,
 			 UserStatusEnum::kOccupiedEnabled, UserTypeEnum::kUnrestrictedUser,
-			 CredentialRuleEnum::kSingle, &aliroLink, 1));
+			 CredentialRuleEnum::kSingle, &ultrawidelockLink, 1));
 	okc("set user rejects too many credentials",
 	    !mgr.SetUser(1, 1, 1, 1, chip::CharSpan("A", 1), 7, UserStatusEnum::kOccupiedEnabled,
-			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &aliroLink,
+			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &ultrawidelockLink,
 			 11));
 	mfk_cfg_fail_write = "lock-user";
 	okc("set user surfaces NVM write failure",
 	    !mgr.SetUser(1, 1, 1, 1, chip::CharSpan("A", 1), 7, UserStatusEnum::kOccupiedEnabled,
-			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &aliroLink,
+			 UserTypeEnum::kUnrestrictedUser, CredentialRuleEnum::kSingle, &ultrawidelockLink,
 			 1));
 	mfk_cfg_fail_write = nullptr;
-	okc("set user 1 (alice, aliro link)",
+	okc("set user 1 (alice, ultrawidelock link)",
 	    mgr.SetUser(1, 1, 2, 3, chip::CharSpan("alice", 5), 42,
 			UserStatusEnum::kOccupiedEnabled, UserTypeEnum::kUnrestrictedUser,
-			CredentialRuleEnum::kSingle, &aliroLink, 1));
+			CredentialRuleEnum::kSingle, &ultrawidelockLink, 1));
 	okc("get user 1 round-trips",
 	    mgr.GetUser(1, 1, user) && user.userStatus == UserStatusEnum::kOccupiedEnabled &&
 		    user.userName.size() == 5 && memcmp(user.userName.data(), "alice", 5) == 0 &&
@@ -451,17 +451,17 @@ static void section_manager(void)
 		    memcmp(cred.credentialData.data(), pin, 4) == 0 && cred.createdBy == 4 &&
 		    cred.lastModifiedBy == 5);
 
-	/* aliro endpoint key attribution */
+	/* ultrawidelock endpoint key attribution */
 	static uint8_t alice_key[65];
 	memset(alice_key, 0x5A, sizeof(alice_key));
-	okc("set aliro endpoint key (user 1's credential 1)",
+	okc("set ultrawidelock endpoint key (user 1's credential 1)",
 	    mgr.SetCredential(1, 1, 1, 1, DlCredentialStatus::kOccupied,
 			      CredentialTypeEnum::kAliroEvictableEndpointKey,
 			      chip::ByteSpan(alice_key)));
 
 	/* user 2: link list exercising every skip branch of the scan */
 	CredentialStruct skips[3];
-	skips[0].credentialType = CredentialTypeEnum::kPin; /* non-aliro type */
+	skips[0].credentialType = CredentialTypeEnum::kPin; /* non-ultrawidelock type */
 	skips[0].credentialIndex = 1;
 	skips[1].credentialType = CredentialTypeEnum::kAliroEvictableEndpointKey;
 	skips[1].credentialIndex = 0; /* invalid one-indexed 0 */
@@ -472,11 +472,11 @@ static void section_manager(void)
 			UserStatusEnum::kOccupiedEnabled, UserTypeEnum::kUnrestrictedUser,
 			CredentialRuleEnum::kSingle, skips, 3));
 
-	okc("aliro credential attributes to user 1 (one-indexed)",
+	okc("ultrawidelock credential attributes to user 1 (one-indexed)",
 	    mgr.UserIndexForAliroCredential(chip::ByteSpan(alice_key)) == 1);
 	uint8_t stranger[65];
 	memset(stranger, 0xEE, sizeof(stranger));
-	okc("unknown aliro credential attributes to nobody",
+	okc("unknown ultrawidelock credential attributes to nobody",
 	    mgr.UserIndexForAliroCredential(chip::ByteSpan(stranger)) == 0);
 
 	/* ValidatePIN */
@@ -506,7 +506,7 @@ static void section_manager(void)
 		    mfk_dls_last_user_null == 1 && mfk_led_set_calls == 1);
 	mgr.Unlock(1, OperationSourceEnum::kAliro, chip::app::DataModel::MakeNullable<uint16_t>(2));
 	struct lock_led_rgb ac = lock_led_color(false, true);
-	okc("aliro unlock drives cluster state + aliro LED + user attribution",
+	okc("ultrawidelock unlock drives cluster state + ultrawidelock LED + user attribution",
 	    mfk_dls_last_state == (int)DlLockState::kUnlocked &&
 		    mfk_dls_last_source == (int)OperationSourceEnum::kAliro &&
 		    mfk_dls_last_user_null == 0 && mfk_dls_last_user == 2 &&
@@ -673,10 +673,10 @@ static void section_callbacks(void)
 	okc("get-credential hook propagates invalid index",
 	    !emberAfPluginDoorLockGetCredential(1, 0, CredentialTypeEnum::kPin, cred));
 
-	/* aliro endpoint key mirror into the reader trust store */
+	/* ultrawidelock endpoint key mirror into the reader trust store */
 	static uint8_t key65[65];
 	memset(key65, 0xC3, sizeof(key65));
-	okc("set-credential mirrors an occupied 65-byte aliro key",
+	okc("set-credential mirrors an occupied 65-byte ultrawidelock key",
 	    emberAfPluginDoorLockSetCredential(1, 2, 1, 1, DlCredentialStatus::kOccupied,
 					       CredentialTypeEnum::kAliroNonEvictableEndpointKey,
 					       chip::ByteSpan(key65)) &&
@@ -698,7 +698,7 @@ static void section_callbacks(void)
 	 * REVOKE rather than add, and it is the only signal the reader gets that a
 	 * home key was removed in the controller's UI.
 	 */
-	okc("set-credential revokes a cleared aliro slot",
+	okc("set-credential revokes a cleared ultrawidelock slot",
 	    emberAfPluginDoorLockSetCredential(1, 4, 1, 1, DlCredentialStatus::kAvailable,
 					       CredentialTypeEnum::kAliroEvictableEndpointKey,
 					       chip::ByteSpan()) &&
@@ -744,7 +744,7 @@ static void section_callbacks(void)
 		    mfk_add_trust_calls == 3);
 	mfk_add_trust_rc = 0;
 	/* Index 0 is invalid for a PIN, so the lock's own store refuses before the
-	 * aliro mirror is ever reached: the call count must not move. */
+	 * ultrawidelock mirror is ever reached: the call count must not move. */
 	okc("set-credential propagates a failed store",
 	    !emberAfPluginDoorLockSetCredential(1, 0, 1, 1, DlCredentialStatus::kOccupied,
 						CredentialTypeEnum::kPin,
@@ -802,13 +802,13 @@ static void section_app_main(void)
 	okc("matter node created with app callbacks",
 	    mfk_em_node_creates >= 1 && mfk_em_attribute_cb != nullptr &&
 		    mfk_em_identify_cb != nullptr);
-	okc("door lock endpoint carries the aliro delegate",
-	    mfk_em_delegate == (void *)&AliroReaderDelegate::Instance());
+	okc("door lock endpoint carries the ultrawidelock delegate",
+	    mfk_em_delegate == (void *)&UltraWideLockReaderDelegate::Instance());
 	okc("initial lock state configured Locked",
 	    mfk_em_lock_state_init == chip::to_underlying(DlLockState::kLocked));
 	okc("COTA + pin + user features added", mfk_em_feature_adds == 3);
-	okc("aliro provisioning + ble-uwb features added",
-	    mfk_em_aliro_prov_adds == 1 && mfk_em_aliro_bleuwb_adds == 1);
+	okc("ultrawidelock provisioning + ble-uwb features added",
+	    mfk_em_ultrawidelock_prov_adds == 1 && mfk_em_ultrawidelock_bleuwb_adds == 1);
 	okc("approach direction cluster 0x1349FC03 created",
 	    mfk_em_cluster_create_id == 0x1349FC03u);
 	okc("approach direction attribute: writable+nonvolatile bitmap8 = 7",
@@ -822,7 +822,7 @@ static void section_app_main(void)
 	okc("auto-relock timer disabled (0)",
 	    mfk_em_autorelock_creates == 1 && mfk_em_autorelock_val == 0);
 	okc("door lock endpoint id latched", door_lock_endpoint_id == 1);
-	okc("aliro GATT service pre-registered on the shared host",
+	okc("ultrawidelock GATT service pre-registered on the shared host",
 	    mfk_blemgr_calls == 1 && mfk_blemgr_nsvcs == 1);
 	okc("matter started with the app event callback",
 	    mfk_em_start_calls == 1 && mfk_em_event_cb != nullptr);
@@ -870,14 +870,14 @@ static void section_events(void)
 	cb(&ev, 0);
 	okc("second IP event does not restart SNTP", mfk_sntp_inits == 1);
 	mfk_sntp_cb(nullptr);
-	okc("SNTP sync pokes the aliro advertiser", mfk_ble_time_updated_calls == 1);
+	okc("SNTP sync pokes the ultrawidelock advertiser", mfk_ble_time_updated_calls == 1);
 
 	ev.Type = chip::DeviceLayer::DeviceEventType::kCommissioningComplete;
 	cb(&ev, 0);
 	okc("commissioning-complete starts the reader task once",
 	    mfk_task_count == 1 && strcmp(mfk_tasks[0].name, "ultrawidelock_reader") == 0 &&
 		    mfk_tasks[0].stack == 12288 && mfk_tasks[0].prio == 5 &&
-		    aliro_reader_task_handle != nullptr);
+		    ultrawidelock_reader_task_handle != nullptr);
 	cb(&ev, 0);
 	okc("reader task start is idempotent", mfk_task_count == 1);
 
@@ -949,7 +949,7 @@ static void section_matter_callbacks(void)
 /* ---- H: reader task approach controller ------------------------------------------- */
 static void section_reader_task(void)
 {
-	printf("-- aliro reader task\n");
+	printf("-- ultrawidelock reader task\n");
 	void (*task)(void *) = mfk_tasks[0].fn;
 
 	/* run 1: no authenticated credential; full approach + depart + silence */
@@ -1004,7 +1004,7 @@ static void section_reader_task(void)
 	okc("near dwell unlocked via the matter hop",
 	    mfk_lat_marks[ULTRAWIDELOCK_LAT_NEAR_DWELL] >= 1 &&
 		    mfk_lat_marks[ULTRAWIDELOCK_LAT_BOLT_DRIVEN] >= 1 && mfk_lat_reports == 1);
-	okc("unlock was aliro-sourced and unattributed (no credential)",
+	okc("unlock was ultrawidelock-sourced and unattributed (no credential)",
 	    mfk_dls_last_source == (int)OperationSourceEnum::kAliro);
 	okc("far dwell + session end relocked and secured",
 	    mfk_dls_last_state == (int)DlLockState::kLocked && mfk_notify_unlock_last == 0 &&
@@ -1097,10 +1097,10 @@ static void section_range_listener(void)
 {
 	printf("-- uwb range listener\n");
 	void (*cb)(void) = mfk_range_listener;
-	TaskHandle_t saved = aliro_reader_task_handle;
+	TaskHandle_t saved = ultrawidelock_reader_task_handle;
 
 	memset(mfk_lat_marks, 0, sizeof(mfk_lat_marks));
-	aliro_reader_task_handle = nullptr;
+	ultrawidelock_reader_task_handle = nullptr;
 	mfk_notify_gives = 0;
 	mfk_isr_gives = 0;
 	mfk_trusted_have = 1;
@@ -1111,7 +1111,7 @@ static void section_range_listener(void)
 		    mfk_lat_marks[ULTRAWIDELOCK_LAT_TRUSTED_RANGE] == 1 && mfk_notify_gives == 0 &&
 		    mfk_isr_gives == 0);
 
-	aliro_reader_task_handle = saved;
+	ultrawidelock_reader_task_handle = saved;
 	mfk_in_isr = 0;
 	cb();
 	okc("task-context wake notifies directly", mfk_notify_gives == 1 && mfk_isr_gives == 0);
@@ -1138,7 +1138,7 @@ static void section_shell(void)
 						 mfk_cmd_lookup("unlock") &&
 						 mfk_cmd_lookup("codes") &&
 						 mfk_cmd_lookup("range") &&
-						 mfk_cmd_lookup("aliro") &&
+						 mfk_cmd_lookup("ultrawidelock") &&
 						 mfk_cmd_lookup("uwbdiag") &&
 						 mfk_cmd_lookup("lab") && mfk_cmd_lookup("log") &&
 						 mfk_cmd_lookup("factoryreset") &&
@@ -1168,11 +1168,11 @@ static void section_shell(void)
 	okc("status runs (unlocked, ranges, low stack)", run_cmd("status", 1) == 0);
 
 	/* status: null lock state + no reader task */
-	TaskHandle_t saved = aliro_reader_task_handle;
-	aliro_reader_task_handle = nullptr;
+	TaskHandle_t saved = ultrawidelock_reader_task_handle;
+	ultrawidelock_reader_task_handle = nullptr;
 	mfk_attr_lockstate_null = 1;
 	okc("status runs (unknown state, no reader task)", run_cmd("status", 1) == 0);
-	aliro_reader_task_handle = saved;
+	ultrawidelock_reader_task_handle = saved;
 	mfk_attr_lockstate_null = 0;
 
 	okc("range with a latched distance", run_cmd("range", 1) == 0);
@@ -1180,22 +1180,22 @@ static void section_shell(void)
 	okc("range before any distance", run_cmd("range", 1) == 0);
 
 	mfk_prov_print_calls = 0;
-	okc("aliro prov prints the identity",
-	    run_cmd("aliro", 2, "prov") == 0 && mfk_prov_print_calls == 1);
+	okc("ultrawidelock prov prints the identity",
+	    run_cmd("ultrawidelock", 2, "prov") == 0 && mfk_prov_print_calls == 1);
 	mfk_trust_last_rc = 0;
-	okc("aliro trust: added", run_cmd("aliro", 2, "trust") == 0);
+	okc("ultrawidelock trust: added", run_cmd("ultrawidelock", 2, "trust") == 0);
 	mfk_trust_last_rc = 1;
-	okc("aliro trust: nothing to add", run_cmd("aliro", 2, "trust") == 0);
+	okc("ultrawidelock trust: nothing to add", run_cmd("ultrawidelock", 2, "trust") == 0);
 	mfk_trust_last_rc = -1;
-	okc("aliro trust: store failure", run_cmd("aliro", 2, "trust") == 0);
+	okc("ultrawidelock trust: store failure", run_cmd("ultrawidelock", 2, "trust") == 0);
 	mfk_trust_clear_rc = 0;
-	okc("aliro clear: emptied", run_cmd("aliro", 2, "clear") == 0);
+	okc("ultrawidelock clear: emptied", run_cmd("ultrawidelock", 2, "clear") == 0);
 	mfk_trust_clear_rc = 1;
-	okc("aliro clear: already empty", run_cmd("aliro", 2, "clear") == 0);
+	okc("ultrawidelock clear: already empty", run_cmd("ultrawidelock", 2, "clear") == 0);
 	mfk_trust_clear_rc = -1;
-	okc("aliro clear: NVS failure", run_cmd("aliro", 2, "clear") == 0);
-	okc("aliro usage on missing arg", run_cmd("aliro", 1) == 0);
-	okc("aliro usage on unknown arg", run_cmd("aliro", 2, "bogus") == 0);
+	okc("ultrawidelock clear: NVS failure", run_cmd("ultrawidelock", 2, "clear") == 0);
+	okc("ultrawidelock usage on missing arg", run_cmd("ultrawidelock", 1) == 0);
+	okc("ultrawidelock usage on unknown arg", run_cmd("ultrawidelock", 2, "bogus") == 0);
 
 	okc("uwbdiag on", run_cmd("uwbdiag", 2, "on") == 0 && ultrawidelock_uwb_diag_on == 1);
 	okc("uwbdiag off", run_cmd("uwbdiag", 2, "off") == 0 && ultrawidelock_uwb_diag_on == 0);
@@ -1274,7 +1274,7 @@ static void section_shell(void)
 
 	mfk_prov_clear_calls = 0;
 	mfk_em_factory_resets = 0;
-	okc("factoryreset clears the aliro store then resets matter",
+	okc("factoryreset clears the ultrawidelock store then resets matter",
 	    run_cmd("factoryreset", 1) == 0 && mfk_prov_clear_calls == 1 &&
 		    mfk_em_factory_resets == 1);
 

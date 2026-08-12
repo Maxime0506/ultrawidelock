@@ -16,7 +16,7 @@ ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
 idf_component_register(
 	SRCS
 		"app_main.c"
-		"${SHARED}/test_aliro_device.c"
+		"${SHARED}/test_ultrawidelock_device.c"
 		${ULTRAWIDELOCK_DEVICE_SRCS}
 		${ULTRAWIDELOCK_APDU_SRCS}
 		${ULTRAWIDELOCK_CRYPTO_SRCS}

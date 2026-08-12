@@ -31,7 +31,7 @@ ESP_APP_DIR := $(REPO_ROOT)/apps/esp32-matter-lock
 else
 ESP_APP_DIR := $(REPO_ROOT)/examples/esp32/$(APP)
 endif
-ESP_BUILD   := $(ALIRO_BUILD_ROOT)/esp32-$(APP)-$(TARGET)$(if $(VARIANT),-$(VARIANT))
+ESP_BUILD   := $(ULTRAWIDELOCK_BUILD_ROOT)/esp32-$(APP)-$(TARGET)$(if $(VARIANT),-$(VARIANT))
 # The generated config belongs to the build, not to the checkout. Keyed by
 # APP+TARGET+VARIANT along with the tree, so building the C6 can no longer
 # overwrite the config the hardware-validated S3 image was built from.
@@ -146,9 +146,9 @@ endif
 
 # Publishing.
 ESP_RELEASE_CHIPS ?= esp32s3 esp32c5 esp32c6
-ESP_RELEASE_OUT   ?= $(ALIRO_BUILD_ROOT)/release/ultrawidelock-esp32-matter-lock
+ESP_RELEASE_OUT   ?= $(ULTRAWIDELOCK_BUILD_ROOT)/release/ultrawidelock-esp32-matter-lock
 ESP_RELEASE_OUT   := $(abspath $(ESP_RELEASE_OUT))
-ESP_RELEASE_STAGE := $(ALIRO_BUILD_ROOT)/release/.esp-stage
+ESP_RELEASE_STAGE := $(ULTRAWIDELOCK_BUILD_ROOT)/release/.esp-stage
 ESP_RELEASE_VER   ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null || echo unknown)
 # Exported so the recipes below can read it as "$$ESP_RELEASE_VER" instead of
 # pasting it in at Make time. A tag is attacker-influenced text: interpolated
@@ -279,7 +279,7 @@ esp-release:
 	@# app builds with CHIP's test parameters and no factory-data provider, so
 	@# the passcode is a constant.
 	@bins=; for t in $(ESP_RELEASE_CHIPS); do \
-	    bins="$$bins $(ALIRO_BUILD_ROOT)/esp32-matter-lock-$$t/ultrawidelock-matter-lock-$$t.bin"; \
+	    bins="$$bins $(ULTRAWIDELOCK_BUILD_ROOT)/esp32-matter-lock-$$t/ultrawidelock-matter-lock-$$t.bin"; \
 	  done; \
 	  $(REPO_ROOT)/scripts/release-bundle.sh \
 	    --target esp32-matter-lock --out '$(ESP_RELEASE_OUT)' \

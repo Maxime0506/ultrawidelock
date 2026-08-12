@@ -3,7 +3,7 @@
 # (ultrawidelock_prim_psa.c). Console prints PASS/FAIL. No BLE/UWB/iPhone.
 cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(aliro_device_ec_test)
+project(ultrawidelock_device_ec_test)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
@@ -22,7 +22,7 @@ ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
-	${TESTDIR}/test_aliro_device.c
+	${TESTDIR}/test_ultrawidelock_device.c
 	${ULTRAWIDELOCK_DEVICE_SRCS}
 	${ULTRAWIDELOCK_APDU_SRCS}
 	${ULTRAWIDELOCK_CRYPTO_SRCS}

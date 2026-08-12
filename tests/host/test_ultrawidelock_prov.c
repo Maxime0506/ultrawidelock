@@ -1,6 +1,6 @@
-/** @file test_aliro_prov.c — reader identity + trust store (de)serialisation KAT.
+/** @file test_ultrawidelock_prov.c — reader identity + trust store (de)serialisation KAT.
  *
- * Backs the `aliro-export` / `aliro-import` clone path: a blob written on one
+ * Backs the `ultrawidelock-export` / `ultrawidelock-import` clone path: a blob written on one
  * board must round-trip byte-for-byte into the same identity + trust store on a
  * second board, and a malformed or wrong-version blob must be rejected, never
  * half-applied. Also locks the wire header so the format cannot drift silently.
@@ -55,7 +55,7 @@ static void make_key(uint8_t out[ULTRAWIDELOCK_CRED_PUB_LEN], uint8_t seed)
 	out[1] = seed;
 }
 
-void test_aliro_prov(void)
+void test_ultrawidelock_prov(void)
 {
 	t_group("dev default");
 	struct ultrawidelock_reader_identity dev_id;

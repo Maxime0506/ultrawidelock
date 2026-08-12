@@ -28,7 +28,7 @@ PROJ="$REPO_ROOT/examples/esp32/reader"
 #
 # Both live under the one repo build root, so `make clean` removes them. They
 # are absolute because idf.py runs with its cwd in $PROJ, not here.
-BUILD_ROOT="${ALIRO_BUILD_ROOT:-$REPO_ROOT/build}"
+BUILD_ROOT="${ULTRAWIDELOCK_BUILD_ROOT:-$REPO_ROOT/build}"
 BUILD="$BUILD_ROOT/esp32-example-reader-esp32s3-verify"
 fail=0
 note() { printf '  %-4s %s\n' "$1" "$2"; }

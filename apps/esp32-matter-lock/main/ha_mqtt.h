@@ -7,9 +7,9 @@
  *
  *   homeassistant/sensor/<node>/distance/config   retained, QoS 1
  *   homeassistant/event/<node>/access/config      retained, QoS 1
- *   aliro/<node>/status    online | offline, retained, QoS 1, also the last will
- *   aliro/<node>/distance  bare integer millimetres, not retained, QoS 0
- *   aliro/<node>/access    {"event_type":"granted"|"denied"}, not retained, QoS 0
+ *   ultrawidelock/<node>/status    online | offline, retained, QoS 1, also the last will
+ *   ultrawidelock/<node>/distance  bare integer millimetres, not retained, QoS 0
+ *   ultrawidelock/<node>/access    {"event_type":"granted"|"denied"}, not retained, QoS 0
  *
  * Lock control stays on Matter; this carries only what Matter does not expose,
  * matching the split the agent already makes.

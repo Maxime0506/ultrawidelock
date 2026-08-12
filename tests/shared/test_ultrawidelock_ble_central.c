@@ -4,7 +4,7 @@
  * the version list that READ carries.
  *
  * Anti-self-consistency: the fixtures here are assembled field-for-field the way
- * the SHIPPED reader emits them (build_aliro_svc_data and build_read_payload in
+ * the SHIPPED reader emits them (build_ultrawidelock_svc_data and build_read_payload in
  * ports/esp32/components/ultrawidelock_ble/ultrawidelock_ble.c), and the salt check is pinned to
  * the reader's own hardcoded BleSK salt — the 01 00 01 00 that ultrawidelock_reader.c
  * builds from k_proto_versions — rather than to anything this file computes.
@@ -29,7 +29,7 @@ static void t_ok_(const char *name, int cond)
 
 #define T_OK(n, c) t_ok_((n), (c) ? 1 : 0)
 
-/* Assemble 0xFFF2 service data exactly as build_aliro_svc_data does. */
+/* Assemble 0xFFF2 service data exactly as build_ultrawidelock_svc_data does. */
 static void make_adv(uint8_t out[ULTRAWIDELOCK_BLE_CENTRAL_SVC_DATA_LEN],
 		     const uint8_t reader_id[32], uint32_t expiry)
 {

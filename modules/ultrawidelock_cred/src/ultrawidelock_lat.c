@@ -70,12 +70,12 @@ void ultrawidelock_lat_report(void)
 	int64_t t0 = s_stamp_us[ULTRAWIDELOCK_LAT_BLE_CONNECT];
 
 	if (t0 == 0) {
-		ultrawidelock_printf("aliro-lat: no trace (no BLE connect marked)\n");
+		ultrawidelock_printf("ultrawidelock-lat: no trace (no BLE connect marked)\n");
 		return;
 	}
 
 	/* One line, every phase as +ms from connect ("-" = never reached). */
-	ultrawidelock_printf("aliro-lat:");
+	ultrawidelock_printf("ultrawidelock-lat:");
 	for (int i = 0; i < ULTRAWIDELOCK_LAT_PHASE_COUNT; i++) {
 		if (s_stamp_us[i] != 0) {
 			ultrawidelock_printf(" %s+%d", k_phase_name[i], (int)((s_stamp_us[i] - t0) / 1000));

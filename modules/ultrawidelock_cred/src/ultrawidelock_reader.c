@@ -55,7 +55,7 @@ static struct ultrawidelock_trust_store s_trust;
 static bool s_loaded;
 
 /* Most-recently-presented credential public key (the one the device signature
- * verified against). Captured for the `aliro-trust` bench command. */
+ * verified against). Captured for the `ultrawidelock-trust` bench command. */
 static uint8_t s_last_cred_pub[ULTRAWIDELOCK_CRED_PUB_LEN];
 static bool s_have_last_cred;
 
@@ -118,7 +118,7 @@ static void compute_reader_group_x(void)
 
 /* Guards s_trust + s_last_cred_pub/s_have_last_cred + s_auth_cred_pub/
  * s_have_auth_cred, which the BLE-host task (on_auth1_response), the REPL task
- * (the aliro-prov/aliro-trust commands) and the reader task (the attribution
+ * (the ultrawidelock-prov/ultrawidelock-trust commands) and the reader task (the attribution
  * lookup) all touch. s_id/s_loaded are set once at boot before the REPL starts,
  * so they need no lock. Created in load_provisioning() (single-threaded boot). */
 static ultrawidelock_mutex_t s_prov_lock;
@@ -198,10 +198,10 @@ static bool s_last_unsecured;
 static bool s_peer_state_unknown;
 
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
-/* One-shot step-up arm (bench `aliro-stepup arm`): forces the next transaction
+/* One-shot step-up arm (bench `ultrawidelock-stepup arm`): forces the next transaction
  * into the expedited-standard phase and requests an Access Document after
  * EXCHANGE. Set by the REPL task, consumed by the BLE-host task in start_auth.
- * Guarded by s_prov_lock. The verdict lives in the worker (aliro-stepup status). */
+ * Guarded by s_prov_lock. The verdict lives in the worker (ultrawidelock-stepup status). */
 static bool s_stepup_armed;
 #endif
 
@@ -824,7 +824,7 @@ static void on_auth1_response(struct ultrawidelock_session *s, const uint8_t *pl
 	}
 	LOG_INF("[conn %u] device signature OK", s->conn_handle);
 
-	/* Remember the presented credential key for the `aliro-trust` bench command,
+	/* Remember the presented credential key for the `ultrawidelock-trust` bench command,
 	 * and take the trust decision, under the lock the REPL commands share. The
 	 * raw-key allowlist is the interim seam; real issuer-chain validation plugs
 	 * in here (Phase 4). */
@@ -838,7 +838,7 @@ static void on_auth1_response(struct ultrawidelock_session *s, const uint8_t *pl
 		LOG_INF("[conn %u] credential key TRUSTED", s->conn_handle);
 	} else if (tv == 1 && s_id.is_dev) {
 		LOG_WRN("[conn %u] no trust anchors (DEV identity): accepting the "
-			"presented credential; run `aliro-trust` to enforce",
+			"presented credential; run `ultrawidelock-trust` to enforce",
 			s->conn_handle);
 	} else {
 		LOG_WRN("[conn %u] credential key NOT trusted (%s); rejecting", s->conn_handle,
@@ -1931,7 +1931,7 @@ void ultrawidelock_reader_refresh_adv(void)
 	LOG_INF("advertisement refreshed with provisioned GRK (approach-resolvable)");
 }
 
-/* ---- bench provisioning helpers (aliro-prov / aliro-trust) ------------- */
+/* ---- bench provisioning helpers (ultrawidelock-prov / ultrawidelock-trust) ------------- */
 
 // Print the reader's provisioning state (identity, trust anchors, last presented credential)
 // to the console for diagnostics.
