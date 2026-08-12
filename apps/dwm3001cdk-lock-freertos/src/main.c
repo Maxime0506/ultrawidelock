@@ -25,12 +25,22 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include <aliro_prov.h>
+
 #include <woz_freertos_crypto.h>
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_platform.h>
+#include <woz_freertos_kv.h>
 #include <woz_freertos_radio.h>
 
 #define MAIN_TAG "main"
+
+/*
+ * The reader identity and its trust store, static because they outlive the
+ * boot task and are large enough that a stack copy would dominate it.
+ */
+static struct aliro_reader_identity s_identity;
+static struct aliro_trust_store s_trust;
 
 static StaticTask_t s_boot_tcb;
 static StackType_t s_boot_stack[512];
@@ -46,6 +56,27 @@ static void boot_task(void *arg)
 
 	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "controller pool used: %u bytes",
 			 (unsigned)woz_freertos_radio_memory_used());
+
+	/*
+	 * The persistent store, and the reader identity that lives in it.
+	 *
+	 * This runs on the scheduler because the flash driver arbitrates NVMC
+	 * against the radio with MPSL timeslots and waits on them, and it runs
+	 * before the BLE host because the identity is what the host will
+	 * eventually advertise.
+	 *
+	 * Neither failure is fatal. woz_freertos_kv_init() reformats a store it
+	 * cannot read, and aliro_prov_load() yields a usable development
+	 * identity on every failure path, because a reader that will not boot is
+	 * worse than one that boots unprovisioned.
+	 */
+	if (woz_freertos_kv_init() != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG, "key-value store unavailable");
+	}
+	if (aliro_prov_load(&s_identity, &s_trust) != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "no stored identity; running on the development one");
+	}
 
 	/*
 	 * The BLE host comes up on the scheduler, unlike the radio: it has a

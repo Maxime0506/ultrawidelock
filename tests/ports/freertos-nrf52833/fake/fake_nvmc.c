@@ -120,7 +120,19 @@ void nrf_nvmc_page_partial_erase_start(NRF_NVMC_Type *p_reg, uint32_t address)
 {
 	unsigned page = address / FAKE_NVMC_PAGE_SIZE;
 
+	/*
+	 * Which mode a partial erase must be started from is a property of the
+	 * part, not of this model. nRF52833 has the partial-erase registers but
+	 * no partial-erase WEN mode, so it slices from the ordinary erase mode;
+	 * the nRF52840 and nRF91 have a mode of their own and refuse anything
+	 * else. Following the HAL's capability symbol keeps the model as strict
+	 * as the hardware it is standing in for, rather than accepting both.
+	 */
+#if NRF_NVMC_HAS_PARTIAL_ERASE_MODE
 	if (p_reg->mode != NRF_NVMC_MODE_PARTIAL_ERASE) {
+#else
+	if (p_reg->mode != NRF_NVMC_MODE_ERASE) {
+#endif
 		p_reg->violations++;
 		return;
 	}

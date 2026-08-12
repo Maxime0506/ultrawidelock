@@ -130,7 +130,17 @@ static bool in_device(uint32_t offset, size_t length)
 	if (length == 0u) {
 		return true;
 	}
-	if (offset < FLASH_DEVICE_BASE || offset > FLASH_DEVICE_BASE + FLASH_DEVICE_SIZE) {
+	/*
+	 * Only the upper bound is tested. The device base is zero on this part,
+	 * so a lower-bound test on an unsigned offset can never fail, and
+	 * writing one anyway is a warning at target-compile time rather than
+	 * defence. The static assertion keeps the omission honest: if the base
+	 * ever moves, this stops compiling instead of silently accepting
+	 * anything below it.
+	 */
+	_Static_assert(FLASH_DEVICE_BASE == 0u,
+		       "a non-zero flash base needs a lower-bound check here");
+	if (offset > FLASH_DEVICE_BASE + FLASH_DEVICE_SIZE) {
 		return false;
 	}
 	return length <= (FLASH_DEVICE_BASE + FLASH_DEVICE_SIZE) - offset;
@@ -208,7 +218,24 @@ static void erase_one_slice(void)
 static bool op_step(bool bounded)
 {
 	if (s_op.erase) {
+		/*
+		 * nRF52833 has partial erase but no partial-erase WEN mode: the
+		 * MDK defines NVMC_ERASEPAGEPARTIALCFG_DURATION but not
+		 * NVMC_CONFIG_WEN_PEen, so the pinned HAL compiles
+		 * NRF_NVMC_MODE_PARTIAL_ERASE out of the enum entirely on this
+		 * part. The duration register and ERASEPAGEPARTIAL still work;
+		 * they are driven from the ordinary erase mode.
+		 *
+		 * The mode exists on the nRF52840 and the nRF91 series, so the
+		 * choice is made by the HAL's own capability symbol rather than
+		 * hardcoded, and this file stays correct if it is ever built for
+		 * one of those.
+		 */
+#if NRF_NVMC_HAS_PARTIAL_ERASE_MODE
 		nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_PARTIAL_ERASE);
+#else
+		nrf_nvmc_mode_set(NRF_NVMC, NRF_NVMC_MODE_ERASE);
+#endif
 		do {
 			erase_one_slice();
 		} while (s_op.remaining > 0u && !bounded);

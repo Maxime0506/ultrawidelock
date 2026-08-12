@@ -37,6 +37,7 @@ set(WOZ_FREERTOS_SRC "${WOZ_NRF5_SDK}/external/freertos")
 set(WOZ_NRFX "${WOZ_NCS_WORKSPACE}/modules/hal/nordic/nrfx")
 set(WOZ_BSP "${WOZ_NRFX}/bsp/stable")
 set(WOZ_MDK "${WOZ_BSP}/mdk")
+set(WOZ_MODULES_DIR "${CMAKE_CURRENT_LIST_DIR}/../../modules")
 set(WOZ_CMSIS "${WOZ_NCS_WORKSPACE}/modules/hal/cmsis/CMSIS/Core/Include")
 
 foreach(_woz_path "${WOZ_FREERTOS_SRC}/source/tasks.c" "${WOZ_MDK}/nrf52833.h"
@@ -329,13 +330,37 @@ set_source_files_properties(
 # exist and radio_start_freertos.c is never pulled in.
 target_link_libraries(woz_board PUBLIC woz_radio)
 
+# ----------------------------------------------------------------------------
+# Storage layer: the persistent key-value store and its two readers.
+#
+# board/flash_freertos.c belongs here rather than with the rest of the board,
+# because it arbitrates NVMC against the radio with MPSL timeslots and so
+# cannot be linked without MPSL.
+# ----------------------------------------------------------------------------
+add_library(woz_storage STATIC
+  "${WOZ_PORT_DIR}/board/flash_freertos.c"
+  "${WOZ_PORT_DIR}/storage/kv_flash_freertos.c"
+  "${WOZ_PORT_DIR}/storage/aliro_prov_kv.c"
+  # The portable half of the provisioning record, from the shared module. The
+  # port supplies only where the bytes live; the format, the default identity,
+  # and the trust check are the same code the Zephyr and ESP32 targets run,
+  # which is the entire point of the module boundary.
+  "${WOZ_MODULES_DIR}/woz_aliro/src/aliro_prov.c"
+)
+# The provisioning backend implements a contract owned by the shared Aliro
+# module, not by this port, so the module's public headers are on the path.
+target_include_directories(woz_storage PUBLIC
+  "${WOZ_MODULES_DIR}/woz_aliro/include"
+)
+target_link_libraries(woz_storage PUBLIC woz_radio)
+
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_radio)
+target_link_libraries(woz_freertos_port INTERFACE woz_storage)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
 # ----------------------------------------------------------------------------
-foreach(_woz_target woz_board woz_radio)
+foreach(_woz_target woz_board woz_radio woz_storage)
   target_compile_options(${_woz_target} PRIVATE
     -Wall
     -Wextra
@@ -345,7 +370,7 @@ foreach(_woz_target woz_board woz_radio)
   )
 endforeach()
 
-foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls)
+foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls woz_storage)
   target_compile_options(${_woz_target} PRIVATE
     -ffunction-sections
     -fdata-sections

@@ -11,6 +11,14 @@
 #ifndef TEST_HAL_NRF_NVMC_H
 #define TEST_HAL_NRF_NVMC_H
 
+/*
+ * nRF52833: partial erase is present, the partial-erase mode is not. Both are
+ * spelled the way the pinned hal_nordic nrf_nvmc.h spells them, so port code
+ * that reads them here behaves the same way it will on target.
+ */
+#define NRF_NVMC_HAS_PARTIAL_ERASE 1
+#define NRF_NVMC_HAS_PARTIAL_ERASE_MODE 0
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -21,7 +29,17 @@ typedef enum {
 	NRF_NVMC_MODE_READONLY = 0,
 	NRF_NVMC_MODE_WRITE = 1,
 	NRF_NVMC_MODE_ERASE = 2,
+	/*
+	 * nRF52833 has no partial-erase WEN mode -- the pinned HAL compiles
+	 * this enumerator out on this part, because the MDK defines the
+	 * partial-erase duration register but not NVMC_CONFIG_WEN_PEen. It is
+	 * kept here, behind the same capability symbol the HAL uses, so the
+	 * fake models whichever part the port is built for rather than a more
+	 * capable one than exists.
+	 */
+#if NRF_NVMC_HAS_PARTIAL_ERASE_MODE
 	NRF_NVMC_MODE_PARTIAL_ERASE = 3,
+#endif
 } nrf_nvmc_mode_t;
 
 typedef struct {

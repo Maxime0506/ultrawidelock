@@ -415,11 +415,12 @@ What is linked, and what it costs, measured at the link rather than estimated:
 | radio | MPSL, the peripheral SoftDevice Controller, the FEM dispatch layer, and the pinned NCS opcode dispatcher |
 | crypto | Mbed TLS 3.6.6, libmbedcrypto sources only, PSA core on |
 | BLE | Apache NimBLE host, porting layer, and transport |
+| storage | MPSL-arbitrated NVMC, the key-value store, and the provisioning record |
 
-That image is 159,272 bytes of flash and 49,368 of RAM: 31 percent of the flash
-budget and 38 percent of the RAM one. OpenThread, the nRF 802.15.4 driver, the
-storage layer, UWB, and the application are not in it yet, and OpenThread is
-the largest of those by a wide margin.
+That image is 163,356 bytes of flash and 50,928 of RAM: 32 percent of the flash
+budget and 39 percent of the RAM one. OpenThread, the nRF 802.15.4 driver, UWB,
+and the application are not in it yet, and OpenThread is the largest of those by
+a wide margin.
 
 The RAM figure is the one that matters. The first link with the BLE host in it
 also found 3,480 bytes of isochronous transport buffers that upstream allocates
