@@ -29,8 +29,17 @@ claim covers.
 | 11 jumper wires | the SPI wiring |
 | USB cable | power, flashing, serial console; must be a data cable |
 
-Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor), a Home hub
-(HomePod or Apple TV), and a 2.4 GHz Wi-Fi network (the ESP32 has no 5 GHz).
+Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor) and a
+2.4 GHz Wi-Fi network (the ESP32 has no 5 GHz). This build is Matter over Wi-Fi,
+so it needs no Thread border router. A Home hub (HomePod or Apple TV) is the path
+we test, and the one to pick; since iOS 18 the Home app can add and control Matter
+accessories with no hub at all, which we have not verified against this lock.
+
+If you live with anyone, you want the hub. Without one Apple Home cannot share
+the home, and home keys reach other people only by being residents of your
+household, so you would be the only person who can unlock the door. A hub is also
+what gives you unlock notifications, remote lock and unlock, and automations like
+Lock When Leaving Home. Going hub-less is a single-occupant setup.
 
 ## 2. Install the tools
 
