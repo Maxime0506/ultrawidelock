@@ -7,7 +7,7 @@ index 7731eb0..53dd5eb 100644
   *
   * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 + *
-+ * Woz UltraWideBandImpl: bridges the add-on Aliro UWB facade to the Woz
++ * UltraWideLock UltraWideBandImpl: bridges the add-on Aliro UWB facade to the UltraWideLock
 + * FiRa/CCC engine. Mirrors Nordic's qm35_impl wiring, minus the QM35 cherry_core
 + * (UCI) path: our FiRa MAC runs natively on the nRF5340 driving a DW3110, so
 + * _Init synthesizes the device capabilities and builds the adapter directly.
@@ -119,8 +119,8 @@ index 7731eb0..53dd5eb 100644
 +	caps.status_err = CHERRY_ERR_NONE;
 +	caps.ccc_capabilities = &ccc;
 +
-+	mAliroCtx = ultrawidelock_uwb_adapter_create_reader(mCtx, &caps, &mReaderConfig);
-+	if (!mAliroCtx) {
++	mAdapterCtx = ultrawidelock_uwb_adapter_create_reader(mCtx, &caps, &mReaderConfig);
++	if (!mAdapterCtx) {
 +		LOG_ERR("ultrawidelock_uwb_adapter_create_reader failed");
 +		cherry_destroy_sync(mCtx);
 +		mCtx = nullptr;
@@ -129,7 +129,7 @@ index 7731eb0..53dd5eb 100644
 +#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
 +	mInitialized = true;
-+	LOG_INF("Woz UWB facade initialized");
++	LOG_INF("UltraWideLock UWB facade initialized");
 +	return 0;
  }
  
@@ -145,9 +145,9 @@ index 7731eb0..53dd5eb 100644
 +	}
 +	mHandle.reset();
 +	ultrawidelock_uwb_stop();
-+	if (mAliroCtx) {
-+		ultrawidelock_uwb_adapter_destroy(mAliroCtx);
-+		mAliroCtx = nullptr;
++	if (mAdapterCtx) {
++		ultrawidelock_uwb_adapter_destroy(mAdapterCtx);
++		mAdapterCtx = nullptr;
 +	}
 +	if (mCtx) {
 +		cherry_destroy_sync(mCtx);
@@ -199,7 +199,7 @@ index 7731eb0..53dd5eb 100644
 +						[[maybe_unused]] SessionContextHandle sessionContextHandle)
  {
 +#ifdef CONFIG_ULTRAWIDELOCK_CRED
-+	if (!mAliroCtx) {
++	if (!mAdapterCtx) {
 +		return -EBUSY;
 +	}
 +	if (mSession) {
@@ -208,7 +208,7 @@ index 7731eb0..53dd5eb 100644
 +	}
 +
 +	ultrawidelock_uwb_session *session =
-+		ultrawidelock_uwb_session_create(mAliroCtx, sessionId, &SessionHandlerCallback, &TransmitBleMessage, this);
++		ultrawidelock_uwb_session_create(mAdapterCtx, sessionId, &SessionHandlerCallback, &TransmitBleMessage, this);
 +	if (!session) {
 +		return -ENOMEM;
 +	}
@@ -368,7 +368,7 @@ index 0688558..111fbe3 100644
   *
   * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 + *
-+ * Woz UltraWideBandImpl: drives a live Apple Wallet Aliro UWB ranging session
++ * UltraWideLock UltraWideBandImpl: drives a live Apple Wallet Aliro UWB ranging session
 + * on the lock-native FiRa MAC (DW3110) via the vendored Qorvo ultrawidelock_uwb_adapter.
 + * The adapter runs the M1-M4 ranging-setup handshake; its cherry_ccc_* seam is
 + * implemented by the ultrawidelock_uwb module's cherry_ccc_shim.c over fira_session +
@@ -400,7 +400,7 @@ index 0688558..111fbe3 100644
 - *
 - * This class provides the dummy implementation of the UltraWideBand interface, handling UWB operations
 - * such as initialization, ranging session management, and BLE message handling.
-+ * @brief Aliro UWB facade backed by the Woz FiRa/CCC engine on a DW3110.
++ * @brief Aliro UWB facade backed by the UltraWideLock FiRa/CCC engine on a DW3110.
   */
  class UltraWideBandImpl final : public UltraWideBand {
  private:
@@ -446,7 +446,7 @@ index 0688558..111fbe3 100644
 +
 +#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	cherry *mCtx{ nullptr };
-+	ultrawidelock_uwb_adapter *mAliroCtx{ nullptr };
++	ultrawidelock_uwb_adapter *mAdapterCtx{ nullptr };
 +	/* One physical DW3110 ranges a single session at a time; the walk-up demo
 +	 * needs exactly one. A second ConfigureRangingSession returns -EBUSY. */
 +	ultrawidelock_uwb_session *mSession{ nullptr };

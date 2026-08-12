@@ -1,5 +1,5 @@
 /*
- * Woz NFC transport seam.
+ * UltraWideLock NFC transport seam.
  *
  * One reader backend is selected at build time (Kconfig choice ULTRAWIDELOCK_NFC_TRANSPORT):
  * the upstream ST25R/RFAL transport, the in-tree PN532 transport, or none. The

@@ -8,7 +8,7 @@ proved from a Mac before anyone starts tapping at a phone. When this works and
 the app does not, the fault is in the app or the file it is given, not in the
 firmware.
 
-    scripts/ultrawidelock_smp.py build/cdk.woz          push a patch
+    scripts/ultrawidelock_smp.py build/cdk.wdfu          push a patch
     scripts/ultrawidelock_smp.py --list                 read the image list and stop
 
 Requires the board to be built with SMP=1 (apps/dwm3001cdk-lock/overlay-smp.conf).
@@ -347,7 +347,7 @@ async def run(args):
 
 def main():
     ap = argparse.ArgumentParser(description="Push a delta patch over SMP, as a phone would.")
-    ap.add_argument("patch", nargs="?", help="the .woz patch from scripts/ultrawidelock_patch.py")
+    ap.add_argument("patch", nargs="?", help="the .wdfu patch from scripts/ultrawidelock_patch.py")
     ap.add_argument("--list", action="store_true", help="read the image list and stop")
     ap.add_argument(
         "--expect",

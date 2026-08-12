@@ -1,4 +1,4 @@
-# Woz Aliro credential-auth stack as a Zephyr module.
+# UltraWideLock credential-auth stack as a Zephyr module.
 # Contributes nothing unless CONFIG_ULTRAWIDELOCK_CRED_STACK=y (stock nRF build
 # byte-identical). The same src/ is compiled by the ESP-IDF ports through
 # ports/esp32/components/ultrawidelock_{crypto,reader}/CMakeLists.txt.

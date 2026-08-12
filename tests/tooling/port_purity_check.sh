@@ -63,7 +63,7 @@
 #
 #   build-file paths   every path literal a CMakeLists or a -DZEPHYR_EXTRA_MODULES
 #                      list names must exist in the tree (check_build_paths)
-#   patch symbols      every woz identifier a integrations/nrfconnect-door-lock/patches/*.patch
+#   patch symbols      every ultrawidelock identifier a integrations/nrfconnect-door-lock/patches/*.patch
 #                      grafts into the Nordic add-on must still be defined in
 #                      modules/ or ports/ (check_patch_symbols)
 #   role manifests     modules/*/roles/*.list is the ONE place a shared source is
@@ -475,7 +475,7 @@ check_public_includes() {
 private_headers() {
 	repo_files 'modules/ultrawidelock_*/src/*.h' 'modules/ultrawidelock_*/src/**/*.h' \
 		'modules/ultrawidelock_*/src/*.h' 'modules/ultrawidelock_*/src/**/*.h' \
-		| grep -vE '^modules/(woz|ultrawidelock)_dfu/src/detools/'
+		| grep -vE '^modules/ultrawidelock_dfu/src/detools/'
 }
 
 # Production C/C++ files. Tests may include private headers to white-box the
@@ -485,7 +485,7 @@ boundary_sources() {
 		'apps/*.c' 'apps/*.h' 'apps/*.cpp' 'apps/*.hpp' \
 		'examples/*.c' 'examples/*.h' 'examples/*.cpp' 'examples/*.hpp' \
 		'ports/*.c' 'ports/*.h' 'ports/*.cpp' 'ports/*.hpp' \
-		| grep -vE '^(modules/(woz|ultrawidelock)_dw3000/dwt_uwb_driver/|modules/(woz|ultrawidelock)_dfu/src/detools/)'
+		| grep -vE '^(modules/ultrawidelock_dw3000/dwt_uwb_driver/|modules/ultrawidelock_dfu/src/detools/)'
 }
 
 # Print the private header an include crosses into, or print nothing. A module's
@@ -615,12 +615,12 @@ check_build_paths() {
 # Identifier shapes a Nordic-add-on patch grafts in. A rename in modules/ or
 # ports/ leaves the patch applying cleanly and breaks only at add-on build
 # time, on hardware CI. Fail here instead.
-PATCH_SYM_RE='(woz|ultrawidelock)_[a-z0-9_]+|(UltraWideLockNfc|UltraWideLockNfc)::[A-Za-z]+|CONFIG_(WOZ|ULTRAWIDELOCK)_[A-Z0-9_]+'
+PATCH_SYM_RE='ultrawidelock_[a-z0-9_]+|UltraWideLockNfc::[A-Za-z]+|CONFIG_ULTRAWIDELOCK_[A-Z0-9_]+'
 PATCH_HEADER_RE='ultrawidelock/[a-z0-9_]+[.]h'
 # Names a patch itself coins rather than references (never defined in-tree).
-PATCH_LOCAL_RE='^(woz|ultrawidelock)_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
+PATCH_LOCAL_RE='^ultrawidelock_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
 
-patch_syms() { # <patch> -> unique woz identifiers on its + lines
+patch_syms() { # <patch> -> unique ultrawidelock identifiers on its + lines
 	grep -E '^\+' "$1" | grep -oE "$PATCH_SYM_RE" | LC_ALL=C sort -u
 }
 
@@ -630,13 +630,13 @@ patch_headers() { # <patch> -> unique public SDK headers on its + lines
 
 patch_definition_files() {
 	repo_files 'modules/*' 'ports/*' |
-		grep -vE '^(modules/(woz|ultrawidelock)_dw3000/dwt_uwb_driver/|modules/(woz|ultrawidelock)_dfu/src/detools/)'
+		grep -vE '^(modules/ultrawidelock_dw3000/dwt_uwb_driver/|modules/ultrawidelock_dfu/src/detools/)'
 }
 
 patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
 	local f m ns hits=''
 	case "$1" in
-	UltraWideLockNfc::* | UltraWideLockNfc::*)
+	UltraWideLockNfc::*)
 		# In-tree the methods live inside `namespace UltraWideLockNfc { ... }`, so the
 		# qualified spelling never appears; require one file naming both.
 		ns=${1%%::*}
@@ -695,7 +695,7 @@ check_patch_symbols() {
 			"$R" "$fails" "$Z" >&2
 		return 1
 	fi
-	printf '%s  ok   add-on patches: %d woz symbol(s), %d SDK header(s) still defined%s\n' \
+	printf '%s  ok   add-on patches: %d ultrawidelock symbol(s), %d SDK header(s) still defined%s\n' \
 		"$G" "$n" "$headers" "$Z"
 }
 

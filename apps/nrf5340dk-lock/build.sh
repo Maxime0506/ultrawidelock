@@ -169,7 +169,7 @@ preflight() {
   ok "integration patches applied"
 
   local f missing=""
-  for f in ultrawidelock-cred.conf dw3000-nfc.overlay pm_static.yml sysbuild-woz.conf; do
+  for f in ultrawidelock-cred.conf dw3000-nfc.overlay pm_static.yml sysbuild-ultrawidelock.conf; do
     [ -f "$OV/$f" ] || missing="$missing $f"
   done
   [ -z "$missing" ] || die "overlay files missing:$missing"
@@ -317,7 +317,7 @@ do_build() {
     -Dmcuboot_CONFIG_LOG=y -Dmcuboot_CONFIG_LOG_MODE_MINIMAL=y
   )
 
-  local dfu_conf="" sb_conf="$OV/sysbuild-woz.conf" pm_yml="$OV/pm_static.yml"
+  local dfu_conf="" sb_conf="$OV/sysbuild-ultrawidelock.conf" pm_yml="$OV/pm_static.yml"
   local -a sign_flags=()
   if [ "${DFU:-0}" = 1 ]; then
     dfu_conf=";$OV/dfu.conf"

@@ -1,15 +1,15 @@
-# Woz UWB engine for the Nordic door-lock add-on (NCS v3.3.0).
+# UltraWideLock UWB engine for the Nordic door-lock add-on (NCS v3.3.0).
 # Options: ULTRAWIDELOCK_UWB / ULTRAWIDELOCK_UWB_RESPONDER / ULTRAWIDELOCK_CRED.
 
 config ULTRAWIDELOCK_UWB
-	bool "Woz UWB (DW3000) bring-up"
+	bool "UltraWideLock UWB (DW3000) bring-up"
 	select SPI
 	select GPIO
 	help
 	  Compile the minimal DW3110 (DWM3000EVB) bring-up driver (uwb_min.c).
 
 config ULTRAWIDELOCK_UWB_RESPONDER
-	bool "Woz DS-TWR responder"
+	bool "UltraWideLock DS-TWR responder"
 	depends on ULTRAWIDELOCK_UWB
 	help
 	  DS-TWR responder that produces a distance in cm. Runs on the ISC
@@ -29,7 +29,7 @@ config ULTRAWIDELOCK_UWB_SHELL
 	  commands would drive a driver that has not been brought up.
 
 config ULTRAWIDELOCK_CRED
-	bool "Woz Aliro/CCC credential-bound STS engine"
+	bool "UltraWideLock/CCC credential-bound STS engine"
 	depends on ULTRAWIDELOCK_UWB_RESPONDER
 	help
 	  CCC credential-bound STS substitution (ccc_shim + uwb_seam.h). Consumes an

@@ -12,20 +12,20 @@ index 2529dd5..37c0178 100644
 +	 * Re-emit the commissioning QR URL + manual pairing code once here, on module
 +	 * `app` (unaffected by MATTER_LOG_LEVEL), so the code is never lost. */
 +	{
-+		chip::PayloadContents wozPayload;
-+		if (GetPayloadContents(wozPayload, chip::RendezvousInformationFlags(
++		chip::PayloadContents ultrawidelockPayload;
++		if (GetPayloadContents(ultrawidelockPayload, chip::RendezvousInformationFlags(
 +							   chip::RendezvousInformationFlag::kBLE)) == CHIP_NO_ERROR) {
-+			char wozQrBuf[128];
-+			char wozUrl[256];
-+			chip::MutableCharSpan wozQr(wozQrBuf);
-+			if (GetQRCode(wozQr, wozPayload) == CHIP_NO_ERROR &&
-+			    GetQRCodeUrl(wozUrl, sizeof(wozUrl), wozQr) == CHIP_NO_ERROR) {
-+				LOG_INF("commis  %s", wozUrl);
++			char ultrawidelockQrBuf[128];
++			char ultrawidelockUrl[256];
++			chip::MutableCharSpan ultrawidelockQr(ultrawidelockQrBuf);
++			if (GetQRCode(ultrawidelockQr, ultrawidelockPayload) == CHIP_NO_ERROR &&
++			    GetQRCodeUrl(ultrawidelockUrl, sizeof(ultrawidelockUrl), ultrawidelockQr) == CHIP_NO_ERROR) {
++				LOG_INF("commis  %s", ultrawidelockUrl);
 +			}
-+			char wozManBuf[64];
-+			chip::MutableCharSpan wozMan(wozManBuf);
-+			if (GetManualPairingCode(wozMan, wozPayload) == CHIP_NO_ERROR) {
-+				LOG_INF("commis  manual=%s", wozMan.data());
++			char ultrawidelockManBuf[64];
++			chip::MutableCharSpan ultrawidelockMan(ultrawidelockManBuf);
++			if (GetManualPairingCode(ultrawidelockMan, ultrawidelockPayload) == CHIP_NO_ERROR) {
++				LOG_INF("commis  manual=%s", ultrawidelockMan.data());
 +			}
 +		}
 +	}

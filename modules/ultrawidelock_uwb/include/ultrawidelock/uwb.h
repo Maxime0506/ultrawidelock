@@ -1,7 +1,7 @@
 // Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
 // engine is bound and unbound via internal ursk and stop calls.
 /*
- * C shim bridging the add-on UWB impl to the Woz FiRa/CCC engine.
+ * C shim bridging the add-on UWB impl to the UltraWideLock FiRa/CCC engine.
  *
  * This header is also the UWB chipset engine contract: everything above it
  * (apps, the Aliro adapter, session and key logic) speaks these functions and

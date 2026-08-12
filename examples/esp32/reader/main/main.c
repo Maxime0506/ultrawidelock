@@ -1,5 +1,5 @@
 /*
- * Woz UWB ranging engine on ESP32 (ESP-IDF) — minimal bring-up app.
+ * UltraWideLock UWB ranging engine on ESP32 (ESP-IDF) — minimal bring-up app.
  *
  * Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
  * polls for a range. With no iPhone/initiator present this proves the SPI +

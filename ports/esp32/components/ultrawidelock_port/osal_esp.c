@@ -254,7 +254,7 @@ int ultrawidelock_thread_create(ultrawidelock_thread_t *thread, ultrawidelock_th
 		[ULTRAWIDELOCK_THREAD_PRIO_HIGH] = tskIDLE_PRIORITY + 3,
 	};
 
-	thread->handle = xTaskCreateStatic(entry, name ? name : "woz", stack_size / sizeof(StackType_t),
+	thread->handle = xTaskCreateStatic(entry, name ? name : "ultrawidelock", stack_size / sizeof(StackType_t),
 					   arg, prios[prio], stack, &thread->tcb);
 	return thread->handle != NULL ? 0 : -1;
 }

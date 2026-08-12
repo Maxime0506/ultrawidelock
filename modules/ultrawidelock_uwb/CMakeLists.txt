@@ -1,4 +1,4 @@
-# Woz UWB engine as a Zephyr module for the Nordic door-lock add-on.
+# UltraWideLock UWB engine as a Zephyr module for the Nordic door-lock add-on.
 # The CCC STS substitution rides include/uwb_seam.h: every caller reaches the
 # radio through ultrawidelock_uwb_arm_rx(), which programs the CCC key/IV on every RX-arm,
 # and its three siblings. tests/tooling/uwb_seam_check.sh keeps the seam intact.

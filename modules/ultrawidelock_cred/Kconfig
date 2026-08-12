@@ -1,4 +1,4 @@
-# Woz Aliro credential-auth stack — the open replacement for the closed
+# UltraWideLock credential-auth stack — the open replacement for the closed
 # libaliro/libaliro_ble reader engine. Shared by the ESP32-S3 port (where it is
 # the only implementation) and, behind this option, the nRF5340 build.
 #
@@ -6,7 +6,7 @@
 # engine below this layer and is unrelated.
 
 config ULTRAWIDELOCK_CRED_STACK
-	bool "Woz Aliro credential-auth stack (open libaliro replacement)"
+	bool "UltraWideLock credential-auth stack (open libaliro replacement)"
 	help
 	  Compile the open Aliro reader core: the credential-auth key schedule
 	  (X9.63/HKDF -> session keys, URSK, BleSK), the AES-256-GCM secure

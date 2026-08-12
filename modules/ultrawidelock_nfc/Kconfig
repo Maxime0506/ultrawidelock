@@ -1,8 +1,8 @@
-# Woz NFC transport seam: selects which reader backend implements the UltraWideLockNfc
+# UltraWideLock NFC transport seam: selects which reader backend implements the UltraWideLockNfc
 # transport API consumed by the patched add-on application.
 
 config ULTRAWIDELOCK_NFC
-	bool "Woz NFC transport seam"
+	bool "UltraWideLock NFC transport seam"
 	help
 	  Compile the UltraWideLockNfc transport seam into the application. The add-on's
 	  NFC call sites are patched

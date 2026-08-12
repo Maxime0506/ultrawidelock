@@ -45,7 +45,7 @@
 	sense-edge-mask = <0x00000100>;
 };
 
-/* ── DW3000 (DWM3000EVB, SPIM4) — Woz UWB ranging engine (dw3000@0 node) ──
+/* ── DW3000 (DWM3000EVB, SPIM4) — UltraWideLock UWB ranging engine (dw3000@0 node) ──
  * Arduino SPI header P1.15/13/14 + CS P1.12 (free now that the NFC reader moved
  * to the A2-A5 ribbon). Side-band GPIOs per the seated DWM3000EVB.
  */

@@ -1,6 +1,6 @@
 description: |
   NXP PN532 NFC reader controller on SPI. The controller's SPI interface is
-  byte-wise LSB-first and runs in SPI mode 0; the Woz PN532 transport sets the
+  byte-wise LSB-first and runs in SPI mode 0; the UltraWideLock PN532 transport sets the
   LSB-first flag in the driver, so no DT property is needed for it. Readiness is
   polled with the STATREAD command by default; wire irq-gpios to the PN532 IRQ
   pad (active low when a response frame is ready) to sleep on the line instead.

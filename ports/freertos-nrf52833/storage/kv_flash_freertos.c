@@ -34,7 +34,13 @@
  * reset during compaction leaves the half-built page unclaimed and the old one
  * still active. Nothing is lost by that; a repeat of the compaction is.
  */
-#define KV_MAGIC 0x574f5a4bu /* "WOZK" */
+/*
+ * "ULWK" — UltraWideLock KV. The magic changed with the rename, so any page
+ * written by a pre-rename build reads as unclaimed and the device
+ * starts from an empty store. Nothing has shipped on this port, so there is no
+ * store in the field to strand.
+ */
+#define KV_MAGIC 0x554c574bu
 
 struct kv_page_header {
 	uint32_t magic;

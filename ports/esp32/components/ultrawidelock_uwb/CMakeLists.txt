@@ -1,4 +1,4 @@
-# Woz UWB (Aliro DS-TWR responder) engine as an ESP-IDF component.
+# UltraWideLock UWB (Aliro DS-TWR responder) engine as an ESP-IDF component.
 # Additive: reuses modules/ultrawidelock_uwb/src + modules/ultrawidelock_dw3000 from the repo unchanged.
 # The engine is platform-neutral: it takes its OS surface from ultrawidelock_port.h and
 # its logging from ultrawidelock_log.h (modules/ultrawidelock_port/include), which select the ESP-IDF
@@ -10,7 +10,7 @@
 # those stay Zephyr-module literals) — plus the port/*.c locals below.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
-set(WOZ "${REPO_ROOT}/modules/ultrawidelock_uwb/src")
+set(UWB_SRC "${REPO_ROOT}/modules/ultrawidelock_uwb/src")
 set(ULTRAWIDELOCK_INC "${REPO_ROOT}/modules/ultrawidelock_uwb/include")
 set(ULTRAWIDELOCK_PORT "${REPO_ROOT}/modules/ultrawidelock_port/include")
 set(DW  "${REPO_ROOT}/modules/ultrawidelock_dw3000")
@@ -73,8 +73,8 @@ idf_component_register(
         "${ULTRAWIDELOCK_INC}"           # facade, seams, diagnostics and ranging-setup API
     PRIV_INCLUDE_DIRS
         "port"                 # board_pins.h
-        "${WOZ}/driver" "${WOZ}/fira" "${WOZ}/ccc" "${WOZ}/facade"
-		"${WOZ}/cred"
+        "${UWB_SRC}/driver" "${UWB_SRC}/fira" "${UWB_SRC}/ccc" "${UWB_SRC}/facade"
+		"${UWB_SRC}/cred"
 		"${DW}/include"
         "${DW}/dwt_uwb_driver"
         "${DW}/dwt_uwb_driver/lib/qmath/include"

@@ -1,4 +1,4 @@
-# Woz NFC transport seam. Compiled straight into the application target, the
+# UltraWideLock NFC transport seam. Compiled straight into the application target, the
 # same mechanism ultrawidelock_cred_stack uses: the seam functions must resolve for the
 # patched add-on call sites, and the backends need the add-on's global include
 # paths (ultrawidelock headers, reader_storage, aliro_workqueue).
