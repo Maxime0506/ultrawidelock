@@ -52,18 +52,18 @@ UNIT_SRCS=(
 	"$ROOT/modules/woz_matter/src/matter_attest.c"
 	"$ROOT/modules/woz_matter/src/matter_fabric.c"
 	"$ROOT/modules/woz_matter/src/matter_case.c"
-	"$ROOT/modules/woz_ml/src/woz_ml_los.c"
-	"$ROOT/modules/woz_ml/src/woz_ml_lin.c"
-	"$ROOT/modules/woz_ml/src/woz_ml_feat.c"
-	"$ROOT/modules/woz_ml/src/woz_ml_range.c"
-	"$ROOT/modules/woz_ml/src/woz_ml_log2.c"
-	"$ROOT/modules/woz_anchor/src/woz_door.c"
-	"$ROOT/modules/woz_anchor/src/woz_fusion.c"
-	"$ROOT/modules/woz_anchor/src/woz_report.c"
-	"$ROOT/modules/woz_anchor/src/woz_satellite.c"
-	"$ROOT/modules/woz_anchor/src/woz_side.c"
-	"$ROOT/modules/woz_anchor/src/woz_side_log.c"
-	"$ROOT/modules/woz_anchor/src/woz_slam.c"
+	"$ROOT/modules/ultrawidelock_ml/src/ultrawidelock_ml_los.c"
+	"$ROOT/modules/ultrawidelock_ml/src/ultrawidelock_ml_lin.c"
+	"$ROOT/modules/ultrawidelock_ml/src/ultrawidelock_ml_feat.c"
+	"$ROOT/modules/ultrawidelock_ml/src/ultrawidelock_ml_range.c"
+	"$ROOT/modules/ultrawidelock_ml/src/ultrawidelock_ml_log2.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_door.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_fusion.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_report.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_satellite.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_side.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_side_log.c"
+	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_slam.c"
 )
 
 # woz_aliro roles. wire_codecs = the shared step-up/assert codecs (one source;
@@ -135,20 +135,20 @@ TEST_SRCS=(
 	"$HOST/test_prepoll_round.c"
 	"$HOST/test_rssi_gate.c"
 	"$HOST/test_approach.c"
-	"$HOST/test_woz_door.c"
-	"$HOST/test_woz_fusion.c"
-	"$HOST/test_woz_report.c"
-	"$HOST/test_woz_satellite.c"
-	"$HOST/test_woz_side.c"
-	"$HOST/test_woz_side_replay.c"
-	"$HOST/test_woz_slam.c"
+	"$HOST/test_ultrawidelock_door.c"
+	"$HOST/test_ultrawidelock_fusion.c"
+	"$HOST/test_ultrawidelock_report.c"
+	"$HOST/test_ultrawidelock_satellite.c"
+	"$HOST/test_ultrawidelock_side.c"
+	"$HOST/test_ultrawidelock_side_replay.c"
+	"$HOST/test_ultrawidelock_slam.c"
 	"$HOST/test_woz_logfmt.c"
 	"$HOST/test_trace.c"
 	"$HOST/trace_stub.c"
 	"$HOST/test_ccc_shim_wrap.c"
 	"$HOST/test_flight_recorder.c"
 	"$HOST/fr_replay.c"
-	"$HOST/test_woz_ml.c"
+	"$HOST/test_ultrawidelock_ml.c"
 	"$HOST/test_woz_port.c"
 )
 
@@ -185,9 +185,9 @@ INCS=(
 	-I"$ROOT/modules/woz_aliro/include"
 	-I"$ROOT/modules/woz_aliro/src"
 	-I"$ROOT/modules/woz_matter/include"
-	-I"$ROOT/modules/woz_ml/include"
-	-I"$ROOT/modules/woz_ml/src"
-	-I"$ROOT/modules/woz_anchor/include"
+	-I"$ROOT/modules/ultrawidelock_ml/include"
+	-I"$ROOT/modules/ultrawidelock_ml/src"
+	-I"$ROOT/modules/ultrawidelock_anchor/include"
 	-I"$ROOT/modules/woz_dw3000/include"
 )
 
@@ -196,7 +196,7 @@ INCS=(
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
 # WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
 # those headers #error rather than guess a platform.
-DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
+DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_ULTRAWIDELOCK_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
 
 # PY — the interpreter the python-side suites run under: the repo-local .venv
 # when one exists, else the system python3.

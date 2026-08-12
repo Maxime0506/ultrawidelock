@@ -23,11 +23,11 @@ extern "C" {
 /**
  * @brief The Ipatov scalars of the latest latched reception, for a classifier.
  *
- * Field for field from dwt_rxdiag_t, and deliberately NOT struct woz_ml_cia even
+ * Field for field from dwt_rxdiag_t, and deliberately NOT struct ultrawidelock_ml_cia even
  * though the two are the same five numbers: woz_uwb is the lower layer and must
- * not acquire a dependency on woz_ml to hand out registers it already holds. The
+ * not acquire a dependency on ultrawidelock_ml to hand out registers it already holds. The
  * caller copies across by name, which is checkable by eye — see
- * apps/dwm3001cdk-lock/src/main.c, and see woz_ml.h on why five same-typed integers are
+ * apps/dwm3001cdk-lock/src/main.c, and see ultrawidelock_ml.h on why five same-typed integers are
  * passed as a struct rather than positionally.
  */
 struct uwb_cirdiag_ipatov {
@@ -60,7 +60,7 @@ struct uwb_cirdiag_ipatov {
  * @return false if the stream is disarmed, nothing has been captured yet, or the
  *         seqlock could not settle in three tries. Also false when the CIA read
  *         produced a zero accumulator count or channel area, which is a failed
- *         read rather than a very weak channel — woz_ml_los_features() rejects
+ *         read rather than a very weak channel — ultrawidelock_ml_los_features() rejects
  *         the same condition, and the training data drops those receptions.
  */
 bool uwb_cirdiag_last_ipatov(struct uwb_cirdiag_ipatov *out);

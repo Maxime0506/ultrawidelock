@@ -383,7 +383,7 @@ bool uwb_cirdiag_last_ipatov(struct uwb_cirdiag_ipatov *out)
 		}
 		/* n == 0 is "nothing captured yet", and the two zero checks are a
 		 * failed CIA read rather than a weak channel: both are divisors in
-		 * woz_ml_los_features(), which rejects the same condition. Checked
+		 * ultrawidelock_ml_los_features(), which rejects the same condition. Checked
 		 * after the seqlock settles so the values tested are the ones
 		 * returned. */
 		return out->n != 0u && out->accum_count != 0u && out->power != 0u;

@@ -19,7 +19,7 @@ fi
 # -w: the shim intentionally leaves some args unused, and the in-tree modules are
 # lint-gated by the real Zephyr build, not here. Errors still fail the build.
 # shellcheck disable=SC2086  # san_flags is a deliberate word-split flag list
-# -lm: test_woz_door.c derives its expected chord lengths with cos/sqrt rather
+# -lm: test_ultrawidelock_door.c derives its expected chord lengths with cos/sqrt rather
 # than restating the module's arithmetic. glibc keeps those in libm, so the link
 # fails on Linux without this; on macOS libSystem already has them and the flag
 # is a no-op, which is why this only ever breaks in CI.

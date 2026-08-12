@@ -141,7 +141,7 @@ static int coc_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
  * whole image and flash is already at 93%. The Kconfig gate is what keeps the
  * address out of shipped builds; the log level is not load-bearing here.
  */
-#ifdef CONFIG_WOZ_SIDE_PEER_EMIT
+#ifdef CONFIG_ULTRAWIDELOCK_SIDE_PEER_EMIT
 static void side_emit_peer(struct bt_conn *conn)
 {
 	struct bt_conn_info info;
@@ -180,7 +180,7 @@ static void side_emit_peer(struct bt_conn *conn)
 static void side_emit_clear(void)
 {
 }
-#endif /* CONFIG_WOZ_SIDE_PEER_EMIT */
+#endif /* CONFIG_ULTRAWIDELOCK_SIDE_PEER_EMIT */
 
 /**
  * Handle L2CAP CoC connection establishment by notifying the Aliro engine and logging the event.

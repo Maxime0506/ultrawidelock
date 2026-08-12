@@ -160,7 +160,7 @@ struct aliro_approach_cfg {
 	bool range_correct_en;
 	/*
 	 * Confidence floor for the obstruction correction, in the units
-	 * woz_ml_los_confidence() returns. 2.61 is the top quartile boundary
+	 * ultrawidelock_ml_los_confidence() returns. 2.61 is the top quartile boundary
 	 * measured over the 399 tripod receptions of Results 18 and 19, where the
 	 * linear sign is right 96% of the time against 39% in the bottom quartile.
 	 * Install-dependent: it is one room, one phone and one body.
@@ -313,9 +313,9 @@ enum aliro_approach_action aliro_approach_feed(struct aliro_approach *ap, int64_
  * the case the majority vote exists to handle.
  *
  * @param cm          the range as the reader produced it, uncorrected.
- * @param obstructed  woz_ml_los_classify() == WOZ_ML_LOS_OBSTRUCTED for the
+ * @param obstructed  ultrawidelock_ml_los_classify() == ULTRAWIDELOCK_ML_LOS_OBSTRUCTED for the
  *                    reception this range came from.
- * @param confidence  woz_ml_los_confidence() for the same reception. Compared
+ * @param confidence  ultrawidelock_ml_los_confidence() for the same reception. Compared
  *                    against cfg.nlos_conf_min; a sample below it votes clear
  *                    rather than being discarded, because a low-confidence
  *                    reading is evidence about the channel and not a missing
@@ -399,7 +399,7 @@ int32_t aliro_approach_eta_ms(const struct aliro_approach *ap);   /* -1 = none *
  * widening still 0 can log where a widened build WOULD have moved its
  * threshold -- the reading an owner needs before choosing that number.
  * Telemetry only: the decision path reads the same state internally and never
- * through here. Constant false without CONFIG_WOZ_ML_LOS, like the widening.
+ * through here. Constant false without CONFIG_ULTRAWIDELOCK_ML_LOS, like the widening.
  *
  * @param now_ms  the caller's clock, same monotonic base as the feeds; the
  *                verdict is a function of the window AND of when it is asked.

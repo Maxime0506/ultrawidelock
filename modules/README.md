@@ -16,8 +16,8 @@ Zephyr, NCS, or ESP-IDF names.
 | `woz_dw3000` | DW3000-family driver source sets and portable driver seams |
 | `woz_nfc` | NFC transport abstraction, PN532 transport, and the RFAL-path ECP emitter |
 | `woz_matter` | Minimal Matter transport, session, and cluster implementation |
-| `woz_anchor` | Anchor geometry, fusion, reporting, and SLAM logic |
-| `woz_ml` | LOS/NLOS feature extraction and classifier |
+| `ultrawidelock_anchor` | Anchor geometry, fusion, reporting, and SLAM logic |
+| `ultrawidelock_ml` | LOS/NLOS feature extraction and classifier |
 | `woz_dfu` | Delta update receiver and applier |
 
 ## Public and private boundaries

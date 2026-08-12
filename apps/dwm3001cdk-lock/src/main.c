@@ -29,21 +29,21 @@
 #include "ml_feed.h" /* channel-classifier glue; plain feed when ML is off */
 #include "status_led.h"
 #include "uwb_cirdiag.h" /* latched Ipatov scalars, for the channel classifier */
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR)
-#include "woz_satellite.h" /* second-anchor verdict; gates PREDICT only */
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR)
+#include "ultrawidelock_satellite.h" /* second-anchor verdict; gates PREDICT only */
 #endif
-#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
-#include "woz_side.h" /* fail-closed OUTSIDE-only passive unlock gate */
-#include "woz_side_log.h"
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
+#include "ultrawidelock_side.h" /* fail-closed OUTSIDE-only passive unlock gate */
+#include "ultrawidelock_side_log.h"
 #include "side_feed.h"
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 #include "woz_log.h"
 #include "woz_port.h"
 #endif
 #endif
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
-#include "woz_slam.h"
-#include "woz_slam_hw.h"
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM)
+#include "ultrawidelock_slam.h"
+#include "ultrawidelock_slam_hw.h"
 #endif
 
 #if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
@@ -87,9 +87,9 @@ extern volatile int woz_uwb_diag_on;
  * the cadence the ESP32 port runs. */
 #define ALIRO_TICK_MS 250
 
-#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 /* Liveness watchdog on the witness feed, which is NOT the same question as
- * woz_side_cfg::evidence_fresh_ms. That one asks "how old is the committed
+ * ultrawidelock_side_cfg::evidence_fresh_ms. That one asks "how old is the committed
  * decision at the moment a feed arrives"; this one asks "is anything still
  * feeding us at all". Sizing them the same breaks the gate: witnesses summarise
  * over WITNESS_WINDOW_MS (2000), so SF1 lands about every 2 s and a 1500 ms
@@ -287,7 +287,7 @@ int main(void)
 		return rc;
 	}
 
-#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
 	/*
 	 * The classifier is this image's consumer of the CIA latch, and nothing else
 	 * arms it: the capture-cycle thread is CONFIG_ALIRO_CIRDIAG_CAPTURE (not set
@@ -328,33 +328,33 @@ int main(void)
 	 * grew past trivial; the 4 KB main stack is not the place to discover that,
 	 * and in .bss the cost shows up in the measured RAM budget instead. */
 	static struct aliro_approach approach;
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR)
 	/*
 	 * Second-anchor geometry. Nothing feeds this yet -- the satellite
 	 * transport is not wired up -- and that is a working
 	 * state rather than a gap: with no report the verdict is UNKNOWN, UNKNOWN
 	 * permits prediction, and the door behaves exactly as it does today.
 	 */
-	static struct woz_satellite satellite;
-	const struct woz_fusion_cfg fusion_cfg = {
-		.baseline_mm = CONFIG_WOZ_ANCHOR_BASELINE_MM,
-		.tol_mm = CONFIG_WOZ_ANCHOR_TOL_MM,
-		.deadband_mm = CONFIG_WOZ_ANCHOR_DEADBAND_MM,
+	static struct ultrawidelock_satellite satellite;
+	const struct ultrawidelock_fusion_cfg fusion_cfg = {
+		.baseline_mm = CONFIG_ULTRAWIDELOCK_ANCHOR_BASELINE_MM,
+		.tol_mm = CONFIG_ULTRAWIDELOCK_ANCHOR_TOL_MM,
+		.deadband_mm = CONFIG_ULTRAWIDELOCK_ANCHOR_DEADBAND_MM,
 	};
 
-	woz_satellite_init(&satellite, &fusion_cfg, CONFIG_WOZ_ANCHOR_STALE_MS,
-			   IS_ENABLED(CONFIG_WOZ_ANCHOR_SELF_INSIDE));
+	ultrawidelock_satellite_init(&satellite, &fusion_cfg, CONFIG_ULTRAWIDELOCK_ANCHOR_STALE_MS,
+			   IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR_SELF_INSIDE));
 #endif
-#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 	/*
 	 * Fail-closed side gate. BLE witness summaries arrive as SF1 lines on
 	 * RTT down (lab) via side_feed_*; without them every evaluate stays
 	 * UNKNOWN / quorum-fail and passive unlock is withheld. NFC Express
 	 * Mode and Home commands are not routed through this switch.
 	 */
-	static struct woz_side_filter side_filt;
-	static struct woz_side_decision side_dec;
-	static struct woz_side_cfg side_cfg;
+	static struct ultrawidelock_side_filter side_filt;
+	static struct ultrawidelock_side_decision side_dec;
+	static struct ultrawidelock_side_cfg side_cfg;
 	/* When the last feed landed. side_dec is a snapshot, and the filter can
 	 * only age it while it is being fed -- so a feed that stops right after
 	 * committing OUTSIDE would leave the grant live forever. Observed: a lab
@@ -362,11 +362,11 @@ int main(void)
 	int64_t side_feed_ms = 0;
 	int64_t side_deny_log_ms = 0;
 
-	woz_side_defaults(&side_cfg);
-	woz_side_filter_init(&side_filt, &side_cfg);
+	ultrawidelock_side_defaults(&side_cfg);
+	ultrawidelock_side_filter_init(&side_filt, &side_cfg);
 	{
 		/* Boot: no witnesses yet => UNKNOWN + quorum fail (fail-closed). */
-		struct woz_side_features absent;
+		struct ultrawidelock_side_features absent;
 
 		memset(&absent, 0, sizeof(absent));
 		absent.now_ms = k_uptime_get();
@@ -378,22 +378,22 @@ int main(void)
 		absent.uwb_peer_mm = -1;
 		absent.classifier_ver = side_cfg.classifier_ver;
 		absent.calibration_ver = side_cfg.calibration_ver;
-		absent.flags = WOZ_SIDE_F_QUORUM_FAIL;
-		side_dec = woz_side_filter_feed(&side_filt, &absent);
+		absent.flags = ULTRAWIDELOCK_SIDE_F_QUORUM_FAIL;
+		side_dec = ultrawidelock_side_filter_feed(&side_filt, &absent);
 	}
 #endif
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
-	static struct woz_slam_state slam;
-	const struct woz_slam_cfg slam_cfg = {
-		.debounce_ms = WOZ_SLAM_DEBOUNCE_MS_DEFAULT,
-		.tamper_window_ms = WOZ_SLAM_TAMPER_WINDOW_MS_DEFAULT,
-		.tamper_count = WOZ_SLAM_TAMPER_COUNT_DEFAULT,
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM)
+	static struct ultrawidelock_slam_state slam;
+	const struct ultrawidelock_slam_cfg slam_cfg = {
+		.debounce_ms = ULTRAWIDELOCK_SLAM_DEBOUNCE_MS_DEFAULT,
+		.tamper_window_ms = ULTRAWIDELOCK_SLAM_TAMPER_WINDOW_MS_DEFAULT,
+		.tamper_count = ULTRAWIDELOCK_SLAM_TAMPER_COUNT_DEFAULT,
 	};
 
-	woz_slam_init(&slam);
+	ultrawidelock_slam_init(&slam);
 	/* A board with no accelerometer, or one that will not answer, loses the
 	 * tamper signal and keeps the lock. Nothing below depends on it. */
-	if (woz_slam_hw_init() != 0) {
+	if (ultrawidelock_slam_hw_init() != 0) {
 		LOG_WRN("no impact sensor; tamper detection is off");
 	}
 #endif
@@ -434,9 +434,9 @@ int main(void)
 		enum aliro_approach_action act;
 
 		aliro_reader_status_tick(now);
-#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 		{
-			struct woz_side_features feat;
+			struct ultrawidelock_side_features feat;
 
 			side_feed_rtt_poll();
 			if (side_feed_take(&feat)) {
@@ -446,7 +446,7 @@ int main(void)
 				}
 				feat.classifier_ver = side_cfg.classifier_ver;
 				feat.calibration_ver = side_cfg.calibration_ver;
-				side_dec = woz_side_filter_feed(&side_filt, &feat);
+				side_dec = ultrawidelock_side_filter_feed(&side_filt, &feat);
 				side_feed_ms = now;
 				LOG_INF("side feed: side=%u conf=%u flags=0x%02x oi_pkts=%u/%u",
 					(unsigned)side_dec.side, side_dec.confidence,
@@ -457,13 +457,13 @@ int main(void)
 			/* Age the snapshot on the loop clock, not on the arrival of
 			 * the next feed. A witness link that dies must close the
 			 * gate, not freeze it open at whatever it last said. */
-			if (side_dec.side != WOZ_SIDE_LABEL_UNKNOWN &&
+			if (side_dec.side != ULTRAWIDELOCK_SIDE_LABEL_UNKNOWN &&
 			    (now - side_feed_ms) > (int64_t)SIDE_FEED_WATCHDOG_MS) {
 				LOG_WRN("side evidence stale (%lld ms); closing gate",
 					(long long)(now - side_feed_ms));
-				side_dec.side = WOZ_SIDE_LABEL_UNKNOWN;
+				side_dec.side = ULTRAWIDELOCK_SIDE_LABEL_UNKNOWN;
 				side_dec.confidence = 0;
-				side_dec.flags |= WOZ_SIDE_F_EVIDENCE_STALE;
+				side_dec.flags |= ULTRAWIDELOCK_SIDE_F_EVIDENCE_STALE;
 			}
 
 			/*
@@ -497,8 +497,8 @@ int main(void)
 			 * holding the door open across the whole crossing.
 			 */
 			const bool went_inside =
-				side_dec.side == WOZ_SIDE_LABEL_INSIDE ||
-				(side_dec.flags & WOZ_SIDE_F_INSIDE_CONTRADICT) != 0;
+				side_dec.side == ULTRAWIDELOCK_SIDE_LABEL_INSIDE ||
+				(side_dec.flags & ULTRAWIDELOCK_SIDE_F_INSIDE_CONTRADICT) != 0;
 
 			if (granted && went_inside) {
 				LOG_INF("passive unlock revoked: side=%u flags=0x%02x conf=%u",
@@ -601,27 +601,27 @@ int main(void)
 
 		switch (act) {
 		case ALIRO_APPROACH_UNLOCK_PREDICT:
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR) && !IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR) && !IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 			/*
 			 * Legacy two-anchor helper: gates PREDICTION only and
-			 * fail-opens on UNKNOWN. Retained when WOZ_SIDE_GATE is
+			 * fail-opens on UNKNOWN. Retained when ULTRAWIDELOCK_SIDE_GATE is
 			 * off so existing ANCHOR=1 behaviour stays unchanged.
 			 */
-			if (!woz_satellite_may_predict(&satellite, approach.last_cm * 10, now)) {
+			if (!ultrawidelock_satellite_may_predict(&satellite, approach.last_cm * 10, now)) {
 				LOG_INF("predict withheld: second anchor puts the phone outside");
 				break;
 			}
 #endif
 			/* fall through */
 		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
-#if IS_ENABLED(CONFIG_WOZ_SIDE_GATE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 			/*
 			 * Safety gate for ALL passive approach unlocks. Requires
 			 * confident OUTSIDE. UNKNOWN/INSIDE/THRESHOLD/stale/
 			 * quorum-fail suppress the grant. Intentional paths
 			 * (NFC Express, Home, mechanical) do not enter here.
 			 */
-			if (!woz_side_may_passive_unlock(&side_dec, &side_cfg)) {
+			if (!ultrawidelock_side_may_passive_unlock(&side_dec, &side_cfg)) {
 				/*
 				 * Hand the unlock back. Both approach unlock paths
 				 * clear their own `locked` before returning, so
@@ -701,7 +701,7 @@ int main(void)
 			present = false;
 		}
 
-#if IS_ENABLED(CONFIG_WOZ_ANCHOR_SLAM)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM)
 		/*
 		 * The accelerometer's whole cost at runtime: one atomic read per
 		 * tick. The GPIO callback that sets it does nothing but set it,
@@ -713,11 +713,11 @@ int main(void)
 		 * tick unlocked. Tamper is a signal to surface, not an input to
 		 * the grant.
 		 */
-		switch (woz_slam_poll(&slam_cfg, &slam, woz_slam_hw_take(), now)) {
-		case WOZ_SLAM_TAMPER:
+		switch (ultrawidelock_slam_poll(&slam_cfg, &slam, ultrawidelock_slam_hw_take(), now)) {
+		case ULTRAWIDELOCK_SLAM_TAMPER:
 			LOG_WRN("tamper: repeated impacts on the door");
 			break;
-		case WOZ_SLAM_IMPACT:
+		case ULTRAWIDELOCK_SLAM_IMPACT:
 			LOG_INF("impact");
 			break;
 		default:

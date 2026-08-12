@@ -1,0 +1,4 @@
+name: ultrawidelock_anchor
+build:
+  cmake: .
+  kconfig: Kconfig

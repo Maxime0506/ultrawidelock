@@ -46,7 +46,7 @@ cov_cc() {
 }
 
 # --- suite 1: the woz_uwb host KAT suite (same sources as run.sh) -----------
-# -lm for the same reason run.sh needs it: test_woz_door.c calls cos/sqrt, which
+# -lm for the same reason run.sh needs it: test_ultrawidelock_door.c calls cos/sqrt, which
 # glibc keeps out of libc.
 cov_cc "${DEFS[@]}" "${INCS[@]}" \
 	"${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" -lm -o "$BIN"

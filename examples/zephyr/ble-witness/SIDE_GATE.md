@@ -1,8 +1,8 @@
 # Inside vs outside — build, flash, commission, calibrate, place
 
 ## What this covers
-- Fail-closed side gate (`woz_side`) with OUTSIDE / INSIDE / THRESHOLD / UNKNOWN
-- Binary 48-byte decision log (`woz_side_log`)
+- Fail-closed side gate (`ultrawidelock_side`) with OUTSIDE / INSIDE / THRESHOLD / UNKNOWN
+- Binary 48-byte decision log (`ultrawidelock_side_log`)
 - nRF52840 BLE witness firmware (inside / outside / threshold)
 - Raspberry Pi JSONL collector + differential-RSSI baseline tool
 - DWM3001CDK integration behind `SIDE=1` (default build unchanged)
@@ -27,13 +27,13 @@ make cdk-size CDK_SIZE_REPORTS=0 CDK_BUILD=build/cdk-side
 | FLASH | 401100 | **+524 B** |
 | RAM | 116068 | **+128 B** |
 
-`CONFIG_WOZ_SIDE_GATE=y` verified in the side image `.config`.
+`CONFIG_ULTRAWIDELOCK_SIDE_GATE=y` verified in the side image `.config`.
 
 ## Host tests
 ```
 make check
 ```
-New suite: `woz_side` (policy fail-closed, spike hysteresis, log CRC).
+New suite: `ultrawidelock_side` (policy fail-closed, spike hysteresis, log CRC).
 
 ## Enable the side gate on the lock
 ```
@@ -64,7 +64,7 @@ SF1 in=<dbm> out=<dbm> th=<dbm> ni=<n> no=<n> nt=<n>
 
 `in`/`out`/`th` are the mean RSSI each witness heard over its window and
 `ni`/`no`/`nt` the packet counts. Build the lock with `SIDE=1` so
-`CONFIG_WOZ_SIDE_FEED_RTT` and `CONFIG_WOZ_SIDE_PEER_EMIT` are on, then drive
+`CONFIG_ULTRAWIDELOCK_SIDE_FEED_RTT` and `CONFIG_ULTRAWIDELOCK_SIDE_PEER_EMIT` are on, then drive
 the buffer with any host that can hold an RTT connection.
 
 This is a bench path, not a product one: it needs a debug probe attached for
@@ -73,7 +73,7 @@ replaces it.
 
 ## Telling the witnesses which advertiser is the credential
 
-With `CONFIG_WOZ_SIDE_PEER_EMIT=y` the lock logs `SIDE peer=<AdvA> type=…` when
+With `CONFIG_ULTRAWIDELOCK_SIDE_PEER_EMIT=y` the lock logs `SIDE peer=<AdvA> type=…` when
 the Aliro L2CAP channel opens and `SIDE peer=clear` when it closes. Forward that
 address to each witness as an `ADDR` command and they will summarise one phone
 instead of every advertiser in the room.

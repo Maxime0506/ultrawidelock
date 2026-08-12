@@ -20,11 +20,11 @@ target_include_directories(ultrawidelock_headers INTERFACE
 
 set(ULTRAWIDELOCK_MODULE_INCLUDE_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_aliro/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_anchor/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_anchor/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_dfu/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_dw3000/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_matter/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_ml/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_ml/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_nfc/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_port/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_uwb/include")

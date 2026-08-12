@@ -14,8 +14,8 @@
 
 #include <string.h>
 
-#if defined(CONFIG_WOZ_ML_LOS)
-#include "woz_ml.h"
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS)
+#include "ultrawidelock_ml.h"
 #endif
 
 /* Kalman tuning. Measurement noise from bench range scatter (~30 cm sigma on
@@ -391,9 +391,9 @@ void aliro_approach_session_up(struct aliro_approach *ap)
  * programs the DW3000 antenna delay. Conditional part: a body in the path adds a
  * constant 84.5 cm, and that is undone only when a strict majority of the window
  * were confident obstructed calls. Both constants and the arithmetic live in
- * woz_ml so that the model they were measured beside owns them.
+ * ultrawidelock_ml so that the model they were measured beside owns them.
  *
- * Without CONFIG_WOZ_ML_LOS there is no classifier to ask and no module to call,
+ * Without CONFIG_ULTRAWIDELOCK_ML_LOS there is no classifier to ask and no module to call,
  * so this is the identity and the controller behaves exactly as it shipped.
  */
 /**
@@ -414,12 +414,12 @@ void aliro_approach_session_up(struct aliro_approach *ap)
  * resting-at-the-door case leans on the band silence tier and on ranging
  * coming back, not on a vote nobody can refresh.
  *
- * Without CONFIG_WOZ_ML_LOS nothing ever writes ch_win, so this is constant
+ * Without CONFIG_ULTRAWIDELOCK_ML_LOS nothing ever writes ch_win, so this is constant
  * false and both consumers fold away.
  */
 static bool nlos_blocked(const struct aliro_approach *ap, int64_t now_ms)
 {
-#if defined(CONFIG_WOZ_ML_LOS)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS)
 	int votes = 0;
 
 	for (int i = 0; i < ap->wlen; i++) {
@@ -457,14 +457,14 @@ static int32_t effective_unlock_cm(const struct aliro_approach *ap, int64_t now_
 
 static int32_t channel_correct(const struct aliro_approach *ap, int64_t now_ms, int32_t median_cm)
 {
-#if defined(CONFIG_WOZ_ML_LOS)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS)
 	if (!ap->cfg.range_correct_en || median_cm < 0) {
 		return median_cm;
 	}
 
-	return (int32_t)woz_ml_los_range_true_cm((uint16_t)median_cm,
-						 nlos_blocked(ap, now_ms) ? WOZ_ML_LOS_OBSTRUCTED
-									  : WOZ_ML_LOS_CLEAR);
+	return (int32_t)ultrawidelock_ml_los_range_true_cm((uint16_t)median_cm,
+						 nlos_blocked(ap, now_ms) ? ULTRAWIDELOCK_ML_LOS_OBSTRUCTED
+									  : ULTRAWIDELOCK_ML_LOS_CLEAR);
 #else
 	(void)ap;
 	(void)now_ms;

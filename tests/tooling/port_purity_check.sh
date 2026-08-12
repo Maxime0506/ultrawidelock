@@ -694,7 +694,7 @@ check_patch_symbols() {
 # Trees whose every tracked .c must be assigned to a role. Deliberately not the
 # whole of modules/: the vendored decadriver is reached BY manifests (core.list
 # points into it) but is not ours to enumerate, and single-port modules
-# (woz_matter, woz_ml, woz_anchor, ...) have one consumer each, so a manifest
+# (woz_matter, ultrawidelock_ml, ultrawidelock_anchor, ...) have one consumer each, so a manifest
 # would be a second copy of a list that exists once.
 MANIFEST_ROOTS=(
 	modules/woz_aliro/src

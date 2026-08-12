@@ -12,16 +12,16 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 # LOG_MODULE the `module = WOZ_ALIRO` template declares, so CONFIG_WOZ_ALIRO_LOG_LEVEL
 # has to exist. Its CMakeLists is gated on CONFIG_WOZ_ALIRO_STACK, which stays n
 # here, so it contributes no sources and the nRF5340 build is unaffected.
-# modules/woz_anchor is listed on the same terms: its CMakeLists is gated on
-# CONFIG_WOZ_ANCHOR, which is default n, so listing it here costs the default
+# modules/ultrawidelock_anchor is listed on the same terms: its CMakeLists is gated on
+# CONFIG_ULTRAWIDELOCK_ANCHOR, which is default n, so listing it here costs the default
 # build nothing and only makes `overlay-anchor.conf` able to turn it on.
-# modules/woz_ml likewise, gated on CONFIG_WOZ_ML_LOS: default n, so the shipping
+# modules/ultrawidelock_ml likewise, gated on CONFIG_ULTRAWIDELOCK_ML_LOS: default n, so the shipping
 # image is byte-identical without it and only overlays/mlgate.conf turns it on.
 list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_aliro"
-	"${REPO_ROOT}/modules/woz_anchor"
+	"${REPO_ROOT}/modules/ultrawidelock_anchor"
 	"${REPO_ROOT}/modules/woz_matter"
-	"${REPO_ROOT}/modules/woz_ml"
+	"${REPO_ROOT}/modules/ultrawidelock_ml"
 	"${REPO_ROOT}/modules/woz_uwb"
 	"${REPO_ROOT}/modules/woz_dw3000"
 	"${REPO_ROOT}/ports/zephyr")
@@ -84,7 +84,7 @@ target_sources(app PRIVATE
 	${ALIRO_DYNTAG_SRCS}
 )
 # Provisioning console (USB CDC-ACM, provisioning mode only).
-target_sources_ifdef(CONFIG_WOZ_SIDE_GATE app PRIVATE src/side_feed.c)
+target_sources_ifdef(CONFIG_ULTRAWIDELOCK_SIDE_GATE app PRIVATE src/side_feed.c)
 # Measurement only; CONFIG_ALIRO_THREAD_GATE defaults n so this is absent from
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)

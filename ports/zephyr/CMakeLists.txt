@@ -20,7 +20,7 @@ if(CONFIG_DW3000
    OR CONFIG_WOZ_UWB_SHELL
    OR (CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
    OR CONFIG_WOZ_DFU_SMP_IMG
-   OR CONFIG_WOZ_ANCHOR_SLAM
+   OR CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM
    OR CONFIG_WOZ_DFU_RECEIVER)
 
 zephyr_library_named(woz_zephyr_port)
@@ -98,14 +98,14 @@ if(CONFIG_WOZ_DFU_SMP_IMG)
 		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
 endif()
 
-# LIS2DH12 wake-on-motion backend of woz_slam_hw.h: writes an I2C part's
+# LIS2DH12 wake-on-motion backend of ultrawidelock_slam_hw.h: writes an I2C part's
 # registers and attaches a GPIO callback, so it needs a board whose devicetree
-# has an accel0 — which is why CONFIG_WOZ_ANCHOR_SLAM is a separate symbol
-# from CONFIG_WOZ_ANCHOR (the geometry links anywhere, this does not).
-if(CONFIG_WOZ_ANCHOR_SLAM)
-	zephyr_library_sources(drivers/woz_slam_lis2dh12.c)
+# has an accel0 — which is why CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM is a separate symbol
+# from CONFIG_ULTRAWIDELOCK_ANCHOR (the geometry links anywhere, this does not).
+if(CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM)
+	zephyr_library_sources(drivers/ultrawidelock_slam_lis2dh12.c)
 	zephyr_library_include_directories(
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_anchor/include
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_anchor/include
 		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
 endif()
 

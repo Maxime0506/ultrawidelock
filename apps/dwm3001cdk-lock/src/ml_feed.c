@@ -7,8 +7,8 @@
 
 #include "uwb_cirdiag.h" /* latched Ipatov scalars, for the channel classifier */
 
-#if defined(CONFIG_WOZ_ML_LOS)
-#include "woz_ml.h"
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS)
+#include "ultrawidelock_ml.h"
 #include "woz_log.h"  /* woz_printf -- the [ALAB] ev=ml classifier trace */
 #include "woz_port.h" /* woz_uptime_us -- the [ALAB] timebase */
 #endif
@@ -37,40 +37,40 @@
 enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
 					 int32_t cm)
 {
-#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
 	static uint32_t last_diag_n;
 	struct uwb_cirdiag_ipatov ip;
 
 	if (cm >= 0 && uwb_cirdiag_last_ipatov(&ip) && ip.n != last_diag_n) {
-		const struct woz_ml_cia cia = {
+		const struct ultrawidelock_ml_cia cia = {
 			.f1 = ip.f1,
 			.f2 = ip.f2,
 			.f3 = ip.f3,
 			.accum_count = ip.accum_count,
 			.channel_area = ip.power,
 		};
-		float feat[WOZ_ML_LOS_N_FEATURES];
+		float feat[ULTRAWIDELOCK_ML_LOS_N_FEATURES];
 		float pwr_diff;
 
 		last_diag_n = ip.n;
-		if (woz_ml_los_features(&cia, (uint16_t)cm, feat, &pwr_diff)) {
-			const enum woz_ml_los_class cls = woz_ml_los_classify(feat);
-			const float conf = woz_ml_los_confidence(feat);
+		if (ultrawidelock_ml_los_features(&cia, (uint16_t)cm, feat, &pwr_diff)) {
+			const enum ultrawidelock_ml_los_class cls = ultrawidelock_ml_los_classify(feat);
+			const float conf = ultrawidelock_ml_los_confidence(feat);
 
 			/*
 			 * One line per fresh latch, joinable to its ev=uwb.diag line by
 			 * n=. conf_c is the dB-scaled confidence in centi-units, so the
 			 * 2.61 vote gate reads as 261; dis is the tree-vs-vendor
 			 * disagreement whose RATE is the label-free drift monitor
-			 * woz_ml_los_vendor() documents. Main-loop context, one ranging
+			 * ultrawidelock_ml_los_vendor() documents. Main-loop context, one ranging
 			 * block after the reception, so this competes with no deadline.
 			 */
 			woz_printf("[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u\n",
 				   woz_uptime_us(), ip.n, cm, (unsigned)cls,
 				   (int)(conf * 100.0f),
-				   (unsigned)woz_ml_los_disagrees(feat, pwr_diff));
+				   (unsigned)ultrawidelock_ml_los_disagrees(feat, pwr_diff));
 			return aliro_approach_feed_channel(ap, now, cm,
-							   cls == WOZ_ML_LOS_OBSTRUCTED, conf);
+							   cls == ULTRAWIDELOCK_ML_LOS_OBSTRUCTED, conf);
 		}
 	}
 #endif
@@ -85,7 +85,7 @@ enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
  */
 void ml_feed_vote_trace(struct aliro_approach *ap, int64_t now)
 {
-#if defined(CONFIG_WOZ_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_WOZ_UWB_CIRDIAG)
 	static bool was_blocked;
 	const bool blocked = aliro_approach_nlos_blocked(ap, now);
 

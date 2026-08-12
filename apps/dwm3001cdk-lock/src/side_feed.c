@@ -1,5 +1,5 @@
 /**
- * @file side_feed.c — SF1 parser + optional RTT-down lab ingest for woz_side.
+ * @file side_feed.c — SF1 parser + optional RTT-down lab ingest for ultrawidelock_side.
  */
 
 #include "side_feed.h"
@@ -12,12 +12,12 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
-#if defined(CONFIG_WOZ_SIDE_FEED_RTT) && CONFIG_WOZ_SIDE_FEED_RTT
+#if defined(CONFIG_ULTRAWIDELOCK_SIDE_FEED_RTT) && CONFIG_ULTRAWIDELOCK_SIDE_FEED_RTT
 #include <SEGGER_RTT.h>
 #endif
 
 static struct k_mutex s_lock;
-static struct woz_side_features s_pending;
+static struct ultrawidelock_side_features s_pending;
 static bool s_have;
 static bool s_inited;
 static uint32_t s_seq;
@@ -30,7 +30,7 @@ static void ensure_init(void)
 	}
 }
 
-bool side_feed_parse_sf1(const char *line, struct woz_side_features *out)
+bool side_feed_parse_sf1(const char *line, struct ultrawidelock_side_features *out)
 {
 	int in_dbm = 0, out_dbm = 0, th_dbm = 0;
 	int ni = 0, no = 0, nt = 0;
@@ -83,13 +83,13 @@ bool side_feed_parse_sf1(const char *line, struct woz_side_features *out)
 	out->classifier_ver = 1;
 	out->calibration_ver = 1;
 	out->anchor_health_mask =
-		(uint8_t)(((ni > 0) ? WOZ_SIDE_ANCHOR_BLE_INSIDE : 0) |
-			  ((no > 0) ? WOZ_SIDE_ANCHOR_BLE_OUTSIDE : 0) |
-			  ((nt > 0) ? WOZ_SIDE_ANCHOR_BLE_THRESHOLD : 0));
+		(uint8_t)(((ni > 0) ? ULTRAWIDELOCK_SIDE_ANCHOR_BLE_INSIDE : 0) |
+			  ((no > 0) ? ULTRAWIDELOCK_SIDE_ANCHOR_BLE_OUTSIDE : 0) |
+			  ((nt > 0) ? ULTRAWIDELOCK_SIDE_ANCHOR_BLE_THRESHOLD : 0));
 	return ni > 0 || no > 0;
 }
 
-void side_feed_push(const struct woz_side_features *feat)
+void side_feed_push(const struct ultrawidelock_side_features *feat)
 {
 	ensure_init();
 	if (feat == NULL) {
@@ -101,7 +101,7 @@ void side_feed_push(const struct woz_side_features *feat)
 	k_mutex_unlock(&s_lock);
 }
 
-bool side_feed_take(struct woz_side_features *out)
+bool side_feed_take(struct ultrawidelock_side_features *out)
 {
 	bool got = false;
 
@@ -121,11 +121,11 @@ bool side_feed_take(struct woz_side_features *out)
 
 void side_feed_rtt_poll(void)
 {
-#if defined(CONFIG_WOZ_SIDE_FEED_RTT) && CONFIG_WOZ_SIDE_FEED_RTT
+#if defined(CONFIG_ULTRAWIDELOCK_SIDE_FEED_RTT) && CONFIG_ULTRAWIDELOCK_SIDE_FEED_RTT
 	static char buf[128];
 	static size_t len;
 	unsigned n;
-	struct woz_side_features feat;
+	struct ultrawidelock_side_features feat;
 
 	/* A line longer than the buffer would otherwise leave no room to read
 	 * into, and a zero-length read returns before the overflow reset below

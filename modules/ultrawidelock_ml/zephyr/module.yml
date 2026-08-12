@@ -1,0 +1,4 @@
+name: ultrawidelock_ml
+build:
+  cmake: .
+  kconfig: Kconfig
