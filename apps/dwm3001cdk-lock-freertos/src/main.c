@@ -29,6 +29,7 @@
 
 #include <woz_freertos_crypto.h>
 #include <woz_freertos_nimble_host.h>
+#include <woz_freertos_openthread.h>
 #include <woz_freertos_platform.h>
 #include <woz_freertos_kv.h>
 #include <woz_freertos_radio.h>
@@ -77,6 +78,22 @@ static void boot_task(void *arg)
 		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "no stored identity; running on the development one");
 	}
+
+	/*
+	 * Thread is not started here yet, and the omission is deliberate rather
+	 * than forgotten.
+	 *
+	 * OpenThread is compiled and in the graph, but calling
+	 * otInstanceInitSingle() pulls in the whole stack and with it every
+	 * otPlatRadio entry point. Those come from Nordic's pinned radio_nrf5.c
+	 * and the nRF 802.15.4 driver, which are the next layer. Starting it
+	 * before they are linked turns a working build into a page of undefined
+	 * references, so the call arrives with them.
+	 *
+	 * Until then --gc-sections drops OpenThread entirely, which is why the
+	 * reported image size does not yet include it. That is the same trap the
+	 * UWB layer hit, and the reason woz_uwb_link_check exists.
+	 */
 
 	/*
 	 * The BLE host comes up on the scheduler, unlike the radio: it has a

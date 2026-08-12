@@ -130,10 +130,16 @@ add_library(woz_board STATIC
   "${WOZ_PORT_DIR}/board/time_freertos.c"
   "${WOZ_PORT_DIR}/board/fault_freertos.c"
   "${WOZ_PORT_DIR}/board/log_rtt_freertos.c"
+  # The OSAL sits here rather than in a layer of its own: it is the port's
+  # implementation of the shared modules/woz_port contract, it needs nothing but
+  # the kernel, and everything above the board uses it.
+  "${WOZ_PORT_DIR}/osal/osal_freertos.c"
 )
 target_include_directories(woz_board PUBLIC
   "${WOZ_PORT_DIR}/include"
+  "${WOZ_MODULES_DIR}/woz_port/include"
 )
+target_compile_definitions(woz_board PUBLIC WOZ_PORT_FREERTOS)
 target_link_libraries(woz_board PUBLIC woz_kernel)
 
 # A real cycle, declared rather than worked around. The kernel calls back into
@@ -361,13 +367,64 @@ target_link_libraries(woz_storage PUBLIC woz_radio)
 # ----------------------------------------------------------------------------
 include("${WOZ_PORT_DIR}/uwb/uwb.cmake")
 
+# ----------------------------------------------------------------------------
+# Thread layer: OpenThread as an MTD, plus the port's platform adapters.
+#
+# Built through upstream's own CMake with OT_PLATFORM=external, which is the
+# supported way to supply a platform from outside the tree: it links ot-config
+# and leaves otPlat* to whoever provides them. That is this port.
+#
+# OT_EXTERNAL_MBEDTLS points at the crypto layer above, so there is one Mbed TLS
+# in the image rather than OpenThread bringing its own. This is also where
+# leaving OPENTHREAD_CONFIG_CRYPTO_LIB at its upstream MBEDTLS default pays for
+# itself: OpenThread compiles its own otPlatCrypto from crypto_platform.cpp
+# against that library, so the port implements none of that surface.
+# ----------------------------------------------------------------------------
+set(WOZ_OPENTHREAD_DIR "${WOZ_NCS_WORKSPACE}/modules/lib/openthread")
+if(NOT EXISTS "${WOZ_OPENTHREAD_DIR}/CMakeLists.txt")
+  message(FATAL_ERROR "pinned OpenThread is missing: ${WOZ_OPENTHREAD_DIR}")
+endif()
+
+set(OT_PLATFORM "external" CACHE STRING "" FORCE)
+set(OT_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
+set(OT_MTD ON CACHE BOOL "" FORCE)
+set(OT_FTD OFF CACHE BOOL "" FORCE)
+set(OT_RCP OFF CACHE BOOL "" FORCE)
+set(OT_APP_CLI OFF CACHE BOOL "" FORCE)
+set(OT_APP_NCP OFF CACHE BOOL "" FORCE)
+set(OT_APP_RCP OFF CACHE BOOL "" FORCE)
+set(OT_EXTERNAL_MBEDTLS "woz_mbedtls" CACHE STRING "" FORCE)
+set(OT_MBEDTLS_THREADING ON CACHE BOOL "" FORCE)
+set(OT_PROJECT_CONFIG "openthread_project_config.h" CACHE STRING "" FORCE)
+
+# The project config is found by name, so its directory has to be reachable
+# from every OpenThread translation unit.
+include_directories("${WOZ_PORT_DIR}/thread")
+
+add_subdirectory("${WOZ_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
+
+add_library(woz_thread STATIC
+  "${WOZ_PORT_DIR}/thread/openthread_freertos.c"
+  "${WOZ_PORT_DIR}/thread/ot_kernel_freertos.c"
+  "${WOZ_PORT_DIR}/thread/ot_radio_freertos.c"
+  "${WOZ_PORT_DIR}/thread/ot_alarm_freertos.c"
+  "${WOZ_PORT_DIR}/thread/ot_misc_freertos.c"
+  "${WOZ_PORT_DIR}/thread/ot_settings_freertos.c"
+)
+target_include_directories(woz_thread PUBLIC
+  "${WOZ_PORT_DIR}/thread/ot_compat"
+  "${WOZ_OPENTHREAD_DIR}/include"
+  "${WOZ_OPENTHREAD_DIR}/examples/platforms"
+)
+target_link_libraries(woz_thread PUBLIC woz_storage openthread-mtd ot-config)
+
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb)
+target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
 # ----------------------------------------------------------------------------
-foreach(_woz_target woz_board woz_radio woz_storage)
+foreach(_woz_target woz_board woz_radio woz_storage woz_thread)
   target_compile_options(${_woz_target} PRIVATE
     -Wall
     -Wextra

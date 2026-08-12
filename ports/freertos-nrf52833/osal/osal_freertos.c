@@ -9,7 +9,18 @@
 
 #include <string.h>
 
+/*
+ * FreeRTOS.h first, and not only by convention: the kernel's own queue.h,
+ * semphr.h and task.h open with an #error if it has not been seen, because they
+ * are written against types and configuration it defines. Every other file in
+ * this port already had the order right; this one did not, and the host doubles
+ * were permissive enough not to say so.
+ */
+#include "FreeRTOS.h"
+
 #include "queue.h"
+#include "semphr.h"
+#include "task.h"
 
 #include "woz_osal.h"
 #include "woz_port.h"
@@ -282,8 +293,16 @@ int woz_thread_create(woz_thread_t *thread, woz_thread_stack_t *stack, size_t st
 		[WOZ_THREAD_PRIO_HIGH] = tskIDLE_PRIORITY + 3,
 	};
 
-	if (thread == NULL || stack == NULL || entry == NULL ||
-	    prio < WOZ_THREAD_PRIO_LOW || prio > WOZ_THREAD_PRIO_HIGH ||
+	/*
+	 * Only the upper bound is tested. WOZ_THREAD_PRIO_LOW is the first
+	 * enumerator, so the compiler picks an unsigned type for the enum and a
+	 * lower-bound test can never fail; writing one is a target-compile
+	 * warning rather than defence. The assertion keeps that reasoning tied
+	 * to the enum instead of to this comment.
+	 */
+	_Static_assert(WOZ_THREAD_PRIO_LOW == 0,
+		       "a non-zero lowest priority needs a lower-bound check here");
+	if (thread == NULL || stack == NULL || entry == NULL || prio > WOZ_THREAD_PRIO_HIGH ||
 	    stack_size < sizeof(StackType_t)) {
 		return -1;
 	}
