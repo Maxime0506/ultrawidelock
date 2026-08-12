@@ -130,9 +130,14 @@ int dw3000_hw_init(void)
 	 */
 	nrf_gpio_cfg_input(WOZ_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
 
-	/* Wake line held asserted, matching the other two ports' idle state. */
+	/*
+	 * Wake line held asserted, matching the other two ports' idle state --
+	 * on a board that has one. This one does not; see board_pins.h.
+	 */
+#ifdef WOZ_DW3000_PIN_WAKEUP
 	nrf_gpio_pin_set(WOZ_DW3000_PIN_WAKEUP);
 	nrf_gpio_cfg_output(WOZ_DW3000_PIN_WAKEUP);
+#endif
 
 	return dw3000_spi_init();
 }
@@ -292,7 +297,14 @@ void dw3000_hw_wakeup(void)
 
 void dw3000_hw_wakeup_pin_low(void)
 {
+	/*
+	 * Nothing to lower on this board, exactly as the Zephyr backend does
+	 * nothing when no wakeup-gpios property is present. The declaration
+	 * stays because dw3000_hw.h is shared with boards that do have the pin.
+	 */
+#ifdef WOZ_DW3000_PIN_WAKEUP
 	nrf_gpio_pin_clear(WOZ_DW3000_PIN_WAKEUP);
+#endif
 }
 
 void dw3000_hw_fini(void)

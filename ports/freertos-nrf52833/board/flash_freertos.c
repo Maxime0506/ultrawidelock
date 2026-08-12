@@ -125,7 +125,7 @@ static volatile bool s_failed;
  * outside, because both leave the caller sitting in the same poll loop.
  */
 #ifndef WOZ_FREERTOS_FLASH_DIAG
-#define WOZ_FREERTOS_FLASH_DIAG 1
+#define WOZ_FREERTOS_FLASH_DIAG 0
 #endif
 
 #if WOZ_FREERTOS_FLASH_DIAG

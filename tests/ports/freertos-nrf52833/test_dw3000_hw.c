@@ -182,9 +182,13 @@ static void check_init(void)
 	CHECK("the reset line comes up released, not driven high",
 	      fake_gpio[WOZ_DW3000_PIN_RST].configured &&
 		      fake_gpio[WOZ_DW3000_PIN_RST].dir == NRF_GPIO_PIN_DIR_INPUT);
-	CHECK("the wake line is an output",
-	      fake_gpio[WOZ_DW3000_PIN_WAKEUP].dir == NRF_GPIO_PIN_DIR_OUTPUT);
-	CHECK("the wake line idles asserted", fake_gpio[WOZ_DW3000_PIN_WAKEUP].level);
+	/*
+	 * No wake line on this board, and asserting its absence rather than its
+	 * state is the point: the number the SDK gives for it is P1.19, which
+	 * the nRF52833 does not have. See ports/.../uwb/board_pins.h.
+	 */
+	CHECK("bring-up touches no pin the nRF52833 does not have",
+	      fake_gpio_absent_pin_touches == 0u);
 	CHECK("the SPI bus came up with it", fake_spim.enabled);
 }
 
@@ -412,7 +416,13 @@ static void check_wakeup_pin(void)
 {
 	bring_up();
 	dw3000_hw_wakeup_pin_low();
-	CHECK("the wake pin can be driven low", !fake_gpio[WOZ_DW3000_PIN_WAKEUP].level);
+	/*
+	 * The call is a no-op here and must stay harmless: dw3000_hw.h is shared
+	 * with the ESP32 port, which does have the pin, so the entry point
+	 * cannot be deleted -- only emptied.
+	 */
+	CHECK("lowering an absent wake pin touches no pin the part lacks",
+	      fake_gpio_absent_pin_touches == 0u);
 }
 
 static void check_fini(void)

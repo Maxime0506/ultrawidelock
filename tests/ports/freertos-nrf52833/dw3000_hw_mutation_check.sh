@@ -79,14 +79,22 @@ MUTATIONS=(
 	/* Long enough"
 	"reset comes up driven instead of released ::: 	nrf_gpio_cfg_input(WOZ_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
 
-	/* Wake line ::: 	nrf_gpio_cfg_output(WOZ_DW3000_PIN_RST);
+	/*
+	 * Wake line ::: 	nrf_gpio_cfg_output(WOZ_DW3000_PIN_RST);
 
-	/* Wake line"
+	/*
+	 * Wake line"
 	"waking does not wait for the chip to reach IDLE_RC ::: 	woz_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
 	s_asleep = false; ::: 	s_asleep = false;"
 	"reset does not let the chip climb to IDLE_RC before returning ::: 	/* Long enough for the chip to climb from INIT_RC to IDLE_RC. */
 	woz_freertos_busy_wait_us(2000); ::: "
-	"the wake line comes up deasserted ::: nrf_gpio_pin_set(WOZ_DW3000_PIN_WAKEUP); ::: nrf_gpio_pin_clear(WOZ_DW3000_PIN_WAKEUP);"
+	"bring-up drives a pin the part does not have ::: 	nrf_gpio_cfg_input(WOZ_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
+
+	/*
+	 * Wake line ::: 	nrf_gpio_cfg_input(51u, NRF_GPIO_PIN_NOPULL);
+
+	/*
+	 * Wake line"
 	"waking an already awake chip strobes it anyway ::: 	if (!s_asleep) {
 		return;
 	}
