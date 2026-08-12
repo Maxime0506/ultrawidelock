@@ -1,7 +1,7 @@
 /*
  * Woz NFC transport seam.
  *
- * One reader backend is selected at build time (Kconfig choice WOZ_NFC_TRANSPORT):
+ * One reader backend is selected at build time (Kconfig choice ULTRAWIDELOCK_NFC_TRANSPORT):
  * the upstream ST25R/RFAL transport, the in-tree PN532 transport, or none. The
  * add-on application calls these five functions instead of a concrete transport
  * class; the selected backend supplies the definitions. The semantics mirror the
@@ -30,7 +30,7 @@
 /**
  * C++ namespace for NFC transport: Init, Start, Stop, Send (Aliro::Data), Terminate.
  */
-namespace WozNfc
+namespace UltraWideLockNfc
 {
 
 AliroError Init();
@@ -39,4 +39,4 @@ AliroError Stop();
 AliroError Send(Aliro::Data data);
 AliroError Terminate();
 
-} // namespace WozNfc
+} // namespace UltraWideLockNfc

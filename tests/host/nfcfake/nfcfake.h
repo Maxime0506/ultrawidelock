@@ -1,5 +1,5 @@
 /* nfcfake — test-side control/inspection API for the Zephyr SPI/GPIO, kernel
- * and Aliro-stack surfaces that modules/woz_nfc builds against.
+ * and Aliro-stack surfaces that modules/ultrawidelock_nfc builds against.
  *
  * WHAT IS REAL. pn532.c and pn532_apdu.c are the shipping sources, linked in
  * whole: the frame codec, the ACK handshake, ISO-DEP chaining and the APDU
@@ -18,8 +18,8 @@
  * with longjmp() once the tick budget is spent (see nfcfake_run_thread). The
  * frames it unwinds hold only PODs, which is what makes that safe here.
  */
-#ifndef WOZ_NFCFAKE_H
-#define WOZ_NFCFAKE_H
+#ifndef ULTRAWIDELOCK_NFCFAKE_H
+#define ULTRAWIDELOCK_NFCFAKE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -152,4 +152,4 @@ void nfcfake_fire_irq(void);
 }
 #endif
 
-#endif /* WOZ_NFCFAKE_H */
+#endif /* ULTRAWIDELOCK_NFCFAKE_H */

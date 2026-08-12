@@ -1,30 +1,30 @@
-# Woz NFC transport seam: selects which reader backend implements the WozNfc
+# Woz NFC transport seam: selects which reader backend implements the UltraWideLockNfc
 # transport API consumed by the patched add-on application.
 
-config WOZ_NFC
+config ULTRAWIDELOCK_NFC
 	bool "Woz NFC transport seam"
 	help
-	  Compile the WozNfc transport seam into the application. The add-on's
+	  Compile the UltraWideLockNfc transport seam into the application. The add-on's
 	  NFC call sites are patched
 	  (integrations/nrfconnect-door-lock/patches/nfc-transport-seam.patch)
 	  to go through this seam, so exactly one backend below must be selected
 	  in any application build that links those call sites.
 
-if WOZ_NFC
+if ULTRAWIDELOCK_NFC
 
-choice WOZ_NFC_TRANSPORT
+choice ULTRAWIDELOCK_NFC_TRANSPORT
 	prompt "Aliro NFC reader transport"
-	default WOZ_NFC_TRANSPORT_RFAL if NFC_DRIVER_STM
-	default WOZ_NFC_TRANSPORT_NONE
+	default ULTRAWIDELOCK_NFC_TRANSPORT_RFAL if NFC_DRIVER_STM
+	default ULTRAWIDELOCK_NFC_TRANSPORT_NONE
 
-config WOZ_NFC_TRANSPORT_RFAL
+config ULTRAWIDELOCK_NFC_TRANSPORT_RFAL
 	bool "ST25R series via the upstream RFAL transport"
 	depends on NFC_DRIVER_STM
 	help
 	  Forward the seam to the add-on's NfcTransportRfal (X-NUCLEO-NFC12A1
 	  with ST25R300 on spi1). Upstream behavior, byte for byte.
 
-config WOZ_NFC_TRANSPORT_PN532
+config ULTRAWIDELOCK_NFC_TRANSPORT_PN532
 	bool "NXP PN532 over SPI"
 	depends on SPI
 	help
@@ -34,7 +34,7 @@ config WOZ_NFC_TRANSPORT_PN532
 	  while polling so an iPhone auto-presents its Aliro pass, mirroring the
 	  RFAL-path emitter in src/nfc_prop_ecp.cpp.
 
-config WOZ_NFC_TRANSPORT_NONE
+config ULTRAWIDELOCK_NFC_TRANSPORT_NONE
 	bool "No NFC reader fitted"
 	help
 	  The board has no NFC frontend. Start() succeeds without doing
@@ -43,20 +43,20 @@ config WOZ_NFC_TRANSPORT_NONE
 
 endchoice
 
-if WOZ_NFC_TRANSPORT_PN532
+if ULTRAWIDELOCK_NFC_TRANSPORT_PN532
 
-config WOZ_NFC_PN532_THREAD_STACK_SIZE
+config ULTRAWIDELOCK_NFC_PN532_THREAD_STACK_SIZE
 	int "PN532 transport thread stack size"
 	default 3072
 
-config WOZ_NFC_PN532_POLL_PERIOD_MS
+config ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS
 	int "Polling period between discovery rounds (ms)"
 	default 96
 	help
 	  Delay with the RF field off between polling rounds. Each round emits
 	  one ECP frame and one 106 kbps type A activation attempt.
 
-config WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS
+config ULTRAWIDELOCK_NFC_PN532_EXCHANGE_TIMEOUT_MS
 	int "APDU exchange response timeout (ms)"
 	default 5000
 	help
@@ -64,10 +64,10 @@ config WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS
 	  ISO-DEP WTX requests autonomously, and a User Device performing user
 	  authentication can legitimately stretch a response several seconds.
 
-endif # WOZ_NFC_TRANSPORT_PN532
+endif # ULTRAWIDELOCK_NFC_TRANSPORT_PN532
 
-module = WOZ_NFC
-module-str = woz_nfc
+module = ULTRAWIDELOCK_NFC
+module-str = ultrawidelock_nfc
 source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
 
-endif # WOZ_NFC
+endif # ULTRAWIDELOCK_NFC

@@ -2,7 +2,7 @@
 # Mirror of ports/esp32/components/*, which implements the same contracts on
 # ESP-IDF; modules/ stays the single portable source tree. Contract headers
 # stay with their modules (dw3000_hw.h / dw3000_spi.h in
-# modules/ultrawidelock_dw3000/include, pn532_bus.h in modules/woz_nfc/include); this tree
+# modules/ultrawidelock_dw3000/include, pn532_bus.h in modules/ultrawidelock_nfc/include); this tree
 # carries the Zephyr .c backends plus the app-target glue below.
 # Contributes nothing unless a consuming CONFIG is y: an image that selects no
 # feature below gets zero bytes from this module.
@@ -113,17 +113,17 @@ endif()
 
 # ---- app-target glue --------------------------------------------------------
 # Compiled straight into the application target, the same mechanism
-# modules/woz_nfc uses for its transports: these files include app-owned
+# modules/ultrawidelock_nfc uses for its transports: these files include app-owned
 # headers (matter_commission.h) or need the app/add-on include paths, so they
 # ride the app's compile context rather than the library's. The ALIRO_* /
 # ULTRAWIDELOCK_DFU_RECEIVER gates are defined by the consuming app's Kconfig and simply
 # do not exist elsewhere, so every other image gets nothing.
 
 # Zephyr SPI backend of the PN532 bus contract.
-if(CONFIG_WOZ_NFC_TRANSPORT_PN532)
+if(CONFIG_ULTRAWIDELOCK_NFC_TRANSPORT_PN532)
 	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/nfc/pn532_bus_spi.c)
 	target_include_directories(app PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_nfc/include)
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_nfc/include)
 endif()
 
 # The 0xFFF6 Matter commissioning transport + Thread/fabric ports + the fabric

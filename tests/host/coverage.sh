@@ -156,7 +156,7 @@ SIDE_UNIT_SRCS=(
 	"$SRC/ccc/ccc_crypto_psa.c"
 	"$SRC/ccc/ccc_crypto_mbedtls.c"
 	"$ALIRO/src/aliro_prim_psa.c"
-	"$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp"
+	"$ROOT/modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp"
 	"$ECOMP/aliro_ble/aliro_ble_esp32.c"
 	"$ALIRO/src/aliro_ble_nimble.c"
 	"$ECOMP/aliro_reader/aliro_prov_nvs.c"
@@ -176,8 +176,8 @@ SIDE_UNIT_SRCS=(
 	"$ROOT/modules/ultrawidelock_dfu/src/dfu_applier.c"
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c"
 	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c"
-	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp"
-	"$ROOT/modules/woz_nfc/src/transport_none.cpp"
+	"$ROOT/modules/ultrawidelock_nfc/src/transport_pn532.cpp"
+	"$ROOT/modules/ultrawidelock_nfc/src/transport_none.cpp"
 	"$ROOT/modules/woz_aliro_stack/src/aliro_stack.cpp"
 	"$ROOT/modules/woz_aliro_stack/src/session.cpp"
 )
@@ -217,7 +217,7 @@ cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_c_cov.o"
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/ecpfake" \
-	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp" \
+	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp" \
 	"$OUT/test_harness_c_cov.o" -o "$OUT/cov_ecp"
 run_suite ecp "$OUT/cov_ecp"
 
@@ -315,33 +315,33 @@ cov_cc -DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELO
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c" -o "$OUT/cov_dfu"
 run_suite dfu "$OUT/cov_dfu"
 
-# C++ suite: the woz_nfc transport seam over nfcfake, with the REAL pn532.c and
+# C++ suite: the ultrawidelock_nfc transport seam over nfcfake, with the REAL pn532.c and
 # pn532_apdu.c linked in. transport_none.cpp is renamed on its own compile step
 # because it defines the same five symbols as transport_pn532.cpp. Mirrors
 # run.sh stage 6.
-NFC_DEF=(-DCONFIG_WOZ_NFC_LOG_LEVEL=3 -DCONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE=2048
-	-DCONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS=200
-	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
+NFC_DEF=(-DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL=3 -DCONFIG_ULTRAWIDELOCK_NFC_PN532_THREAD_STACK_SIZE=2048
+	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS=200
+	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
 	-DWOZ_PORT_HOST)
-NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
-	-I"$ROOT/modules/woz_nfc/src" -I"$ROOT/modules/woz_port/include")
+NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/include"
+	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/woz_port/include")
 cov_cxx() {
 	"${CXX:-c++}" -std=c++17 -O0 -g -w \
 		-fprofile-instr-generate -fcoverage-mapping "$@"
 }
 cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc_cov.o"
-cov_cc -c -I"$ROOT/modules/woz_nfc/include" -I"$ROOT/modules/woz_nfc/src" \
-	"$ROOT/modules/woz_nfc/src/pn532.c" \
+cov_cc -c -I"$ROOT/modules/ultrawidelock_nfc/include" -I"$ROOT/modules/ultrawidelock_nfc/src" \
+	"$ROOT/modules/ultrawidelock_nfc/src/pn532.c" \
 	-o "$OUT/pn532_nfc_cov.o"
-cov_cc -c -I"$ROOT/modules/woz_nfc/include" -I"$ROOT/modules/woz_nfc/src" \
-	"$ROOT/modules/woz_nfc/src/pn532_apdu.c" \
+cov_cc -c -I"$ROOT/modules/ultrawidelock_nfc/include" -I"$ROOT/modules/ultrawidelock_nfc/src" \
+	"$ROOT/modules/ultrawidelock_nfc/src/pn532_apdu.c" \
 	-o "$OUT/pn532_apdu_nfc_cov.o"
 cov_cc -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
 	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi_cov.o"
 cov_cxx -c "${NFC_DEF[@]}" "${NFC_INC[@]}" \
-	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532_cov.o"
-cov_cxx -c -DWozNfc=WozNfcNone "${NFC_DEF[@]}" "${NFC_INC[@]}" \
-	"$ROOT/modules/woz_nfc/src/transport_none.cpp" -o "$OUT/transport_none_cov.o"
+	"$ROOT/modules/ultrawidelock_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532_cov.o"
+cov_cxx -c -DUltraWideLockNfc=UltraWideLockNfcNone "${NFC_DEF[@]}" "${NFC_INC[@]}" \
+	"$ROOT/modules/ultrawidelock_nfc/src/transport_none.cpp" -o "$OUT/transport_none_cov.o"
 cov_cxx -c "${NFC_INC[@]}" "$HOSTD/nfcfake/nfcfake.cpp" -o "$OUT/nfcfake_cov.o"
 cov_cxx -c "${NFC_DEF[@]}" "${NFC_INC[@]}" "$HOSTD/test_nfc_transport.cpp" \
 	-o "$OUT/test_nfc_transport_cov.o"

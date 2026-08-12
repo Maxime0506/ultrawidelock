@@ -89,7 +89,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include"
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 	-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/ecpfake" \
-	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp" \
+	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp" \
 	"$OUT/test_harness_c.o" \
 	-o "$OUT/host_test_ecp"
 "$OUT/host_test_ecp"
@@ -137,39 +137,39 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include"
 	-o "$OUT/host_test_dfu"
 "$OUT/host_test_dfu"
 
-# 6) The woz_nfc transport seam (C++), over fake Zephyr SPI/GPIO/kernel and a
+# 6) The ultrawidelock_nfc transport seam (C++), over fake Zephyr SPI/GPIO/kernel and a
 #    recording Aliro stack (nfcfake/). pn532.c and pn532_apdu.c link in for
 #    real, so the frames really are encoded and parsed by the shipping codec.
 #    transport_none.cpp defines the same five symbols as transport_pn532.cpp,
-#    so it is renamed on its own compile step with -DWozNfc=WozNfcNone -- a
+#    so it is renamed on its own compile step with -DUltraWideLockNfc=UltraWideLockNfcNone -- a
 #    compile flag, not a source edit, exactly as (2) renames the two crypto
 #    backends.
-NFC_DEF=(-DCONFIG_WOZ_NFC_LOG_LEVEL=3 -DCONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE=2048
-	-DCONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS=200
-	-DCONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
+NFC_DEF=(-DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL=3 -DCONFIG_ULTRAWIDELOCK_NFC_PN532_THREAD_STACK_SIZE=2048
+	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS=200
+	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
 	-DWOZ_PORT_HOST) # transport_none logs through woz_log.h
-NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
-	-I"$ROOT/modules/woz_nfc/src" -I"$ROOT/modules/woz_port/include")
+NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/include"
+	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/woz_port/include")
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/include" \
-	-I"$ROOT/modules/woz_nfc/src" \
-	-c "$ROOT/modules/woz_nfc/src/pn532.c" -o "$OUT/pn532_nfc.o"
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_nfc/include" \
+	-I"$ROOT/modules/ultrawidelock_nfc/src" \
+	-c "$ROOT/modules/ultrawidelock_nfc/src/pn532.c" -o "$OUT/pn532_nfc.o"
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_nfc/include" \
-	-I"$ROOT/modules/woz_nfc/src" \
-	-c "$ROOT/modules/woz_nfc/src/pn532_apdu.c" -o "$OUT/pn532_apdu_nfc.o"
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_nfc/include" \
+	-I"$ROOT/modules/ultrawidelock_nfc/src" \
+	-c "$ROOT/modules/ultrawidelock_nfc/src/pn532_apdu.c" -o "$OUT/pn532_apdu_nfc.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
 	-c "$ROOT/ports/zephyr/nfc/pn532_bus_spi.c" -o "$OUT/pn532_bus_spi.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_DEF[@]}" "${NFC_INC[@]}" \
-	-c "$ROOT/modules/woz_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532.o"
+	-c "$ROOT/modules/ultrawidelock_nfc/src/transport_pn532.cpp" -o "$OUT/transport_pn532.o"
 # shellcheck disable=SC2086
-"${CXX:-c++}" -std=c++17 -O1 -w $san_flags -DWozNfc=WozNfcNone \
+"${CXX:-c++}" -std=c++17 -O1 -w $san_flags -DUltraWideLockNfc=UltraWideLockNfcNone \
 	"${NFC_DEF[@]}" "${NFC_INC[@]}" \
-	-c "$ROOT/modules/woz_nfc/src/transport_none.cpp" -o "$OUT/transport_none.o"
+	-c "$ROOT/modules/ultrawidelock_nfc/src/transport_none.cpp" -o "$OUT/transport_none.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${NFC_INC[@]}" \
 	-c "$HOSTD/nfcfake/nfcfake.cpp" -o "$OUT/nfcfake.o"

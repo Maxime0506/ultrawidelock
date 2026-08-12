@@ -1,14 +1,14 @@
-/* WozNfc backend for boards with no NFC frontend: polling never starts and no
+/* UltraWideLockNfc backend for boards with no NFC frontend: polling never starts and no
  * NFC session is ever created, so Send()/Terminate() are unreachable in a
  * correct run; Send() reports invalid state defensively. */
 
-#include <woz_nfc/transport.h>
+#include <ultrawidelock_nfc/transport.h>
 
 #include "woz_log.h"
 
-LOG_MODULE_REGISTER(woz_nfc_none, CONFIG_WOZ_NFC_LOG_LEVEL);
+LOG_MODULE_REGISTER(ultrawidelock_nfc_none, CONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL);
 
-namespace WozNfc
+namespace UltraWideLockNfc
 {
 
 /**
@@ -54,4 +54,4 @@ AliroError Terminate()
 	return ALIRO_NO_ERROR;
 }
 
-} // namespace WozNfc
+} // namespace UltraWideLockNfc

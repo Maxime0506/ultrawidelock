@@ -1,10 +1,10 @@
 /**
- * @file test_nfc_transport.cpp — the woz_nfc transport seam on host.
+ * @file test_nfc_transport.cpp — the ultrawidelock_nfc transport seam on host.
  *
  * Files under test:
  *   ports/zephyr/nfc/pn532_bus_spi.c    Zephyr SPI/GPIO glue
- *   modules/woz_nfc/src/transport_pn532.cpp  the PN532 reader backend
- *   modules/woz_nfc/src/transport_none.cpp   the no-reader backend
+ *   modules/ultrawidelock_nfc/src/transport_pn532.cpp  the PN532 reader backend
+ *   modules/ultrawidelock_nfc/src/transport_none.cpp   the no-reader backend
  *
  * pn532.c and pn532_apdu.c are linked in FOR REAL, not faked, so every frame
  * these tests move is encoded and parsed by the shipping codec against the
@@ -12,7 +12,7 @@
  * the chip, and the Aliro stack, which is a call recorder.
  *
  * TWO BACKENDS DEFINE THE SAME FIVE SYMBOLS, so transport_none.cpp is compiled
- * with -DWozNfc=WozNfcNone -- a compile flag on its own step, not a source
+ * with -DUltraWideLockNfc=UltraWideLockNfcNone -- a compile flag on its own step, not a source
  * edit, the same trick run.sh already uses for the two crypto backends.
  */
 #include <cstdio>
@@ -25,24 +25,24 @@ extern "C" {
 
 #include <aliro/errors.h>
 #include <aliro/types.h>
-#include <woz_nfc/transport.h>
+#include <ultrawidelock_nfc/transport.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 
 extern "C" {
 #include "pn532.h"
-#include <woz_nfc/pn532_bus.h>
+#include <ultrawidelock_nfc/pn532_bus.h>
 }
 
 /** The same five entry points, renamed at compile time on the other backend. */
-namespace WozNfcNone
+namespace UltraWideLockNfcNone
 {
 AliroError Init();
 AliroError Start();
 AliroError Stop();
 AliroError Send(Aliro::Data data);
 AliroError Terminate();
-} // namespace WozNfcNone
+} // namespace UltraWideLockNfcNone
 
 /* PN532 command codes, for scripting responses. */
 #define CMD_GET_FIRMWARE_VERSION  0x02
@@ -78,20 +78,20 @@ static void test_transport_none(void)
 	uint8_t payload[4] = {1, 2, 3, 4};
 	Aliro::Data data{payload, sizeof(payload)};
 
-	t_group("woz_nfc transport none");
+	t_group("ultrawidelock_nfc transport none");
 
 	/* Bring-up and polling both succeed and do nothing: a board with no
 	 * frontend must not fail its own init over a reader it never had. */
-	T_EQ("init succeeds", WozNfcNone::Init().ToInt(), (int)ALIRO_NO_ERROR);
-	T_EQ("start succeeds", WozNfcNone::Start().ToInt(), (int)ALIRO_NO_ERROR);
-	T_EQ("stop succeeds", WozNfcNone::Stop().ToInt(), (int)ALIRO_NO_ERROR);
-	T_EQ("terminate succeeds", WozNfcNone::Terminate().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("init succeeds", UltraWideLockNfcNone::Init().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("start succeeds", UltraWideLockNfcNone::Start().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("stop succeeds", UltraWideLockNfcNone::Stop().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("terminate succeeds", UltraWideLockNfcNone::Terminate().ToInt(), (int)ALIRO_NO_ERROR);
 
 	/* No session is ever created here, so Send() is unreachable in a
 	 * correct run; it reports invalid state rather than pretending. */
-	T_EQ("send reports invalid state", WozNfcNone::Send(data).ToInt(),
+	T_EQ("send reports invalid state", UltraWideLockNfcNone::Send(data).ToInt(),
 	     (int)ALIRO_INVALID_STATE);
-	T_EQ("send with no data reports invalid state", WozNfcNone::Send({nullptr, 0}).ToInt(),
+	T_EQ("send with no data reports invalid state", UltraWideLockNfcNone::Send({nullptr, 0}).ToInt(),
 	     (int)ALIRO_INVALID_STATE);
 }
 
@@ -300,19 +300,19 @@ static void script_successful_init(void)
 
 static void test_transport_pn532_init(void)
 {
-	t_group("woz_nfc transport pn532 init");
+	t_group("ultrawidelock_nfc transport pn532 init");
 
 	/* A chip that never answers is reported with the wiring hint, after
 	 * three attempts -- the first doubles as a wake. */
 	nfcfake_reset();
-	T_EQ("silent chip refused", WozNfc::Init().ToInt(), (int)ALIRO_ERROR_INTERNAL);
+	T_EQ("silent chip refused", UltraWideLockNfc::Init().ToInt(), (int)ALIRO_ERROR_INTERNAL);
 	T_OK("probed three times", nfcfake.spi_write_calls >= 3u);
 	T_EQ("no thread started", (long)nfcfake.thread_create_calls, 0L);
 
 	/* A bus that will not come up is refused before the chip is probed. */
 	nfcfake_reset();
 	nfcfake.spi_ready = false;
-	T_EQ("unready bus refused", WozNfc::Init().ToInt(), (int)ALIRO_ERROR_INTERNAL);
+	T_EQ("unready bus refused", UltraWideLockNfc::Init().ToInt(), (int)ALIRO_ERROR_INTERNAL);
 
 	/* SAMConfiguration failing after a good firmware probe is called out
 	 * separately: the chip is alive but will not configure. */
@@ -321,7 +321,7 @@ static void test_transport_pn532_init(void)
 		const uint8_t version[] = {0x32, 0x01, 0x06, 0x07};
 
 		nfcfake_push_response(CMD_GET_FIRMWARE_VERSION, version, sizeof(version));
-		T_EQ("sam configuration failure refused", WozNfc::Init().ToInt(),
+		T_EQ("sam configuration failure refused", UltraWideLockNfc::Init().ToInt(),
 		     (int)ALIRO_ERROR_INTERNAL);
 	}
 
@@ -332,7 +332,7 @@ static void test_transport_pn532_init(void)
 
 		nfcfake_push_response(CMD_GET_FIRMWARE_VERSION, version, sizeof(version));
 		nfcfake_push_response(CMD_SAM_CONFIGURATION, nullptr, 0);
-		T_EQ("rf configuration failure refused", WozNfc::Init().ToInt(),
+		T_EQ("rf configuration failure refused", UltraWideLockNfc::Init().ToInt(),
 		     (int)ALIRO_ERROR_INTERNAL);
 	}
 
@@ -340,16 +340,16 @@ static void test_transport_pn532_init(void)
 	 * because Init() is idempotent by a file-static and only runs once. */
 	nfcfake_reset();
 	script_successful_init();
-	T_EQ("init succeeds", WozNfc::Init().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("init succeeds", UltraWideLockNfc::Init().ToInt(), (int)ALIRO_NO_ERROR);
 	T_EQ("polling thread created", (long)nfcfake.thread_create_calls, 1L);
 	T_OK("thread named", nfcfake.thread_name != nullptr &&
-				    std::strcmp(nfcfake.thread_name, "woz_nfc_pn532") == 0);
+				    std::strcmp(nfcfake.thread_name, "ultrawidelock_nfc_pn532") == 0);
 	T_OK("thread entry captured", nfcfake_thread_entry() != nullptr);
 
 	/* A second Init() is a no-op: the chip is already up and re-probing it
 	 * would cost a bring-up for nothing. */
 	nfcfake_reset();
-	T_EQ("second init is a no-op", WozNfc::Init().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("second init is a no-op", UltraWideLockNfc::Init().ToInt(), (int)ALIRO_NO_ERROR);
 	T_EQ("no second thread", (long)nfcfake.thread_create_calls, 0L);
 	T_EQ("no traffic", (long)nfcfake.spi_write_calls, 0L);
 }
@@ -359,35 +359,36 @@ static void test_transport_pn532_control(void)
 	uint8_t payload[8] = {0x80, 0xca, 0, 0, 0, 0, 0, 0};
 	Aliro::Data data{payload, sizeof(payload)};
 
-	t_group("woz_nfc transport pn532 control");
+	t_group("ultrawidelock_nfc transport pn532 control");
 
 	/* Start arms the ECP beacon with the provisioned Reader Identifier. */
 	nfcfake_reset();
-	T_EQ("start succeeds", WozNfc::Start().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("start succeeds", UltraWideLockNfc::Start().ToInt(), (int)ALIRO_NO_ERROR);
 	T_OK("polling thread woken", nfcfake.sem_give_calls >= 1u);
 
 	/* An unprovisioned reader still beacons, with a zero identifier: a
 	 * silent reader would look like a dead one. */
 	nfcfake_reset();
 	nfcfake.identifier_set = false;
-	T_EQ("start without an identifier still succeeds", WozNfc::Start().ToInt(),
+	T_EQ("start without an identifier still succeeds", UltraWideLockNfc::Start().ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	nfcfake_reset();
 	nfcfake.identifier_ret = -1;
-	T_EQ("start with an unreadable identifier still succeeds", WozNfc::Start().ToInt(),
+	T_EQ("start with an unreadable identifier still succeeds", UltraWideLockNfc::Start().ToInt(),
 	     (int)ALIRO_NO_ERROR);
 
 	/* Stop and Terminate are unconditional and both wake the thread. */
 	nfcfake_reset();
-	T_EQ("stop succeeds", WozNfc::Stop().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("stop succeeds", UltraWideLockNfc::Stop().ToInt(), (int)ALIRO_NO_ERROR);
 	T_OK("stop wakes the thread", nfcfake.sem_give_calls >= 1u);
 	nfcfake_reset();
-	T_EQ("terminate succeeds", WozNfc::Terminate().ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("terminate succeeds", UltraWideLockNfc::Terminate().ToInt(), (int)ALIRO_NO_ERROR);
 	T_OK("terminate wakes the thread", nfcfake.sem_give_calls >= 1u);
 
 	/* Send is refused unless a device is activated. */
 	nfcfake_reset();
-	T_EQ("send with no device refused", WozNfc::Send(data).ToInt(), (int)ALIRO_INVALID_STATE);
+	T_EQ("send with no device refused", UltraWideLockNfc::Send(data).ToInt(),
+	     (int)ALIRO_INVALID_STATE);
 }
 
 /**
@@ -435,11 +436,11 @@ static void test_transport_pn532_polling(void)
 	uint8_t apdu[5] = {0x00, 0xa4, 0x04, 0x00, 0x00};
 	Aliro::Data data{apdu, sizeof(apdu)};
 
-	t_group("woz_nfc transport pn532 polling");
+	t_group("ultrawidelock_nfc transport pn532 polling");
 
 	/* The thread parks the field when polling is stopped and waits. */
 	nfcfake_reset();
-	WozNfc::Stop();
+	UltraWideLockNfc::Stop();
 	nfcfake_push_response(CMD_IN_RELEASE, nullptr, 0);
 	nfcfake_push_response(CMD_RF_CONFIGURATION, nullptr, 0);
 	nfcfake_run_thread(nfcfake_thread_entry(), 3);
@@ -449,14 +450,14 @@ static void test_transport_pn532_polling(void)
 	/* An RF field that will not come on skips the round rather than
 	 * pressing on into an activation that cannot work. */
 	nfcfake_reset();
-	WozNfc::Start();
+	UltraWideLockNfc::Start();
 	nfcfake_run_thread(nfcfake_thread_entry(), 2);
 	T_OK("slept after the failed field", nfcfake.msleep_calls >= 1u);
 	T_EQ("no session", (long)nfcfake.create_session_calls, 0L);
 
 	/* A card that is not ISO-DEP is ignored, and polling continues. */
 	nfcfake_reset();
-	WozNfc::Start();
+	UltraWideLockNfc::Start();
 	script_poll_round_with_card(false);
 	nfcfake_push_response(CMD_IN_RELEASE, nullptr, 0);
 	nfcfake_push_response(CMD_RF_CONFIGURATION, nullptr, 0);
@@ -467,19 +468,20 @@ static void test_transport_pn532_polling(void)
 	 * with nothing queued it spins until the tick budget runs out, and the
 	 * session is created exactly once. */
 	nfcfake_reset();
-	WozNfc::Start();
+	UltraWideLockNfc::Start();
 	script_poll_round_with_card(true);
 	nfcfake_run_thread(nfcfake_thread_entry(), 5);
 	T_EQ("session created on activation", (long)nfcfake.create_session_calls, 1L);
 	T_OK("beacon went out", nfcfake.write_count >= 8u);
 
 	/* Now Send() is accepted, because a device is active. */
-	T_EQ("send accepted while activated", WozNfc::Send(data).ToInt(), (int)ALIRO_NO_ERROR);
-	T_EQ("a second send while pending is refused", WozNfc::Send(data).ToInt(),
+	T_EQ("send accepted while activated", UltraWideLockNfc::Send(data).ToInt(), (int)ALIRO_NO_ERROR);
+	T_EQ("a second send while pending is refused", UltraWideLockNfc::Send(data).ToInt(),
 	     (int)ALIRO_INVALID_STATE);
-	T_EQ("null data refused", WozNfc::Send({nullptr, 4}).ToInt(), (int)ALIRO_INVALID_ARGUMENT);
-	T_EQ("empty data refused", WozNfc::Send({apdu, 0}).ToInt(), (int)ALIRO_INVALID_ARGUMENT);
-	T_EQ("oversized data refused", WozNfc::Send({apdu, 1024}).ToInt(),
+	T_EQ("null data refused", UltraWideLockNfc::Send({nullptr, 4}).ToInt(),
+	     (int)ALIRO_INVALID_ARGUMENT);
+	T_EQ("empty data refused", UltraWideLockNfc::Send({apdu, 0}).ToInt(), (int)ALIRO_INVALID_ARGUMENT);
+	T_EQ("oversized data refused", UltraWideLockNfc::Send({apdu, 1024}).ToInt(),
 	     (int)ALIRO_INVALID_ARGUMENT);
 }
 
@@ -498,21 +500,21 @@ static int hook_send_status;
 static void send_on_tick(int remaining)
 {
 	if (remaining == 3) {
-		hook_send_status = WozNfc::Send({hook_apdu, sizeof(hook_apdu)}).ToInt();
+		hook_send_status = UltraWideLockNfc::Send({hook_apdu, sizeof(hook_apdu)}).ToInt();
 	}
 }
 
 static void stop_on_tick(int remaining)
 {
 	if (remaining == 3) {
-		(void)WozNfc::Stop();
+		(void)UltraWideLockNfc::Stop();
 	}
 }
 
 static void terminate_on_tick(int remaining)
 {
 	if (remaining == 3) {
-		(void)WozNfc::Terminate();
+		(void)UltraWideLockNfc::Terminate();
 	}
 }
 
@@ -520,13 +522,13 @@ static void terminate_on_tick(int remaining)
 static void restart_polling(void)
 {
 	nfcfake_reset();
-	(void)WozNfc::Stop();
-	(void)WozNfc::Start();
+	(void)UltraWideLockNfc::Stop();
+	(void)UltraWideLockNfc::Start();
 }
 
 static void test_transport_pn532_exchange(void)
 {
-	t_group("woz_nfc transport pn532 exchange");
+	t_group("ultrawidelock_nfc transport pn532 exchange");
 
 	/* ONE ACTIVATION, ONE APDU, ONE RESPONSE. Send() is called from inside
 	 * the session loop, so the round trip runs where it does on target. */

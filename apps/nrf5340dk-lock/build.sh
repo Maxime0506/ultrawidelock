@@ -217,7 +217,7 @@ do_build() {
       die "Aliro BLE trace patch does not match the workspace" "$trace_patch"
     fi
   fi
-  # NFC=pn532|st25r|none selects the reader behind the woz_nfc transport seam.
+  # NFC=pn532|st25r|none selects the reader behind the ultrawidelock_nfc transport seam.
   # Default: st25r, the upstream X-NUCLEO-NFC12A1/ST25R300 path, matching the build
   # before the seam existed. NFC=none is for a DK with no NFC frontend: nothing
   # is compiled in and boot proceeds BLE/UWB-only with no NFC error.
@@ -228,14 +228,14 @@ do_build() {
     pn532)
       # INF: the reader is up, so keep the console quiet during polling. Raise to
       # _DBG to get the raw PN532 RX-frame hexdumps back for bus-level debugging.
-      nfc_flags=(-DCONFIG_WOZ_NFC_TRANSPORT_PN532=y -DCONFIG_SPI=y
-                 -DCONFIG_WOZ_NFC_LOG_LEVEL_INF=y)
+      nfc_flags=(-DCONFIG_ULTRAWIDELOCK_NFC_TRANSPORT_PN532=y -DCONFIG_SPI=y
+                 -DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL_INF=y)
       nfc_overlay=";$OV/pn532.overlay"
       nfc_name="PN532"
       ;;
     st25r)
-      nfc_flags=(-DCONFIG_NFC_DRIVER_STM=y -DCONFIG_WOZ_NFC_TRANSPORT_RFAL=y
-                 -DCONFIG_WOZ_NFC_LOG_LEVEL_INF=y)
+      nfc_flags=(-DCONFIG_NFC_DRIVER_STM=y -DCONFIG_ULTRAWIDELOCK_NFC_TRANSPORT_RFAL=y
+                 -DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL_INF=y)
       nfc_conf=";$OV/st25r.conf"
       nfc_name="ST25R"
       ;;
@@ -354,7 +354,7 @@ do_build() {
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
     -DPM_STATIC_YML_FILE="$pm_yml"
     -DSB_EXTRA_CONF_FILE="$sb_conf"
-    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
+    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/ultrawidelock_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_WOZ_UWB=y -DCONFIG_WOZ_UWB_RESPONDER=y
     -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n

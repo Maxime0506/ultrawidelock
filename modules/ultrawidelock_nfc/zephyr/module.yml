@@ -1,4 +1,4 @@
-name: woz_nfc
+name: ultrawidelock_nfc
 build:
   cmake: .
   kconfig: Kconfig

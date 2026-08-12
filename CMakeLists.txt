@@ -25,7 +25,7 @@ set(ULTRAWIDELOCK_MODULE_INCLUDE_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_dw3000/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_matter/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_ml/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_nfc/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_nfc/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_port/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_uwb/include")
 foreach(include_dir IN LISTS ULTRAWIDELOCK_MODULE_INCLUDE_DIRS)

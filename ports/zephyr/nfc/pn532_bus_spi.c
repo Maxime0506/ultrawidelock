@@ -20,7 +20,7 @@
  * frame ready), in which case a GPIO edge wakes the waiting thread.
  */
 
-#include <woz_nfc/pn532_bus.h>
+#include <ultrawidelock_nfc/pn532_bus.h>
 
 #include <string.h>
 
@@ -31,7 +31,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
-LOG_MODULE_REGISTER(woz_nfc_pn532_spi, CONFIG_WOZ_NFC_LOG_LEVEL);
+LOG_MODULE_REGISTER(ultrawidelock_nfc_pn532_spi, CONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL);
 
 #define DT_DRV_COMPAT nxp_pn532_spi
 

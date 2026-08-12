@@ -1,4 +1,4 @@
-/* WozNfc backend driving an NXP PN532 reader.
+/* UltraWideLockNfc backend driving an NXP PN532 reader.
  *
  * A dedicated thread owns the chip: it runs the discovery loop (RF field on,
  * one Apple ECP broadcast, one 106 kbps type A activation attempt, field off,
@@ -16,11 +16,11 @@
  * matching iPhone expects: ECP beacon, then WUPA.
  */
 
-#include <woz_nfc/transport.h>
+#include <ultrawidelock_nfc/transport.h>
 
 #include "pn532.h"
 #include "pn532_apdu.h"
-#include <woz_nfc/pn532_bus.h>
+#include <ultrawidelock_nfc/pn532_bus.h>
 
 #include <aliro/aliro.h>
 #include <aliro/connection_handle.h>
@@ -34,7 +34,7 @@
 #include <array>
 #include <cstring>
 
-LOG_MODULE_REGISTER(woz_nfc_pn532, CONFIG_WOZ_NFC_LOG_LEVEL);
+LOG_MODULE_REGISTER(ultrawidelock_nfc_pn532, CONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL);
 
 namespace
 {
@@ -55,7 +55,7 @@ constexpr uint8_t kAtrResTimeoutCode = 0x0B;   /* 102 ms */
 constexpr uint8_t kEcpTimeoutCode = 0x04;      /* 0.8 ms */
 constexpr uint8_t kExchangeTimeoutCode = 0x0D; /* 410 ms per frame wait */
 
-K_THREAD_STACK_DEFINE(sThreadStack, CONFIG_WOZ_NFC_PN532_THREAD_STACK_SIZE);
+K_THREAD_STACK_DEFINE(sThreadStack, CONFIG_ULTRAWIDELOCK_NFC_PN532_THREAD_STACK_SIZE);
 k_thread sThreadData;
 k_tid_t sThreadId;
 
@@ -190,7 +190,7 @@ int ExchangeApdu(const pn532_target &target, size_t &wireTxLen)
 		}
 		const int rc = pn532_in_data_exchange(&sChip, target.tg, sWireTxBuf, wireTxLen,
 						      sRxBuf, sizeof(sRxBuf), &sRxLen,
-						      CONFIG_WOZ_NFC_PN532_EXCHANGE_TIMEOUT_MS);
+						      CONFIG_ULTRAWIDELOCK_NFC_PN532_EXCHANGE_TIMEOUT_MS);
 		if (rc != PN532_OK || sRxLen == 0) {
 			return rc != PN532_OK ? rc : PN532_ERR_FRAME;
 		}
@@ -261,8 +261,8 @@ void RunSession(const pn532_target &target)
 /**
  * Run one RF poll cycle: enable field, broadcast ECP beacon, detect ISO-DEP targets for 400 ms, and
  * activate a session if exactly one ISO-DEP card is found. Disable field and sleep for
- * CONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS before returning. Called by ThreadMain in a loop when polling
- * is active.
+ * CONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS before returning. Called by ThreadMain in a loop
+ * when polling is active.
  */
 void PollRound()
 {
@@ -270,7 +270,7 @@ void PollRound()
 
 	if (pn532_rf_field(&sChip, true) != PN532_OK) {
 		LOG_WRN("PN532: RF field on failed");
-		k_msleep(CONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS);
+		k_msleep(CONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS);
 		return;
 	}
 	k_msleep(2); /* field settle before the beacon */
@@ -288,7 +288,7 @@ void PollRound()
 
 	(void)pn532_in_release(&sChip);
 	(void)pn532_rf_field(&sChip, false);
-	k_msleep(CONFIG_WOZ_NFC_PN532_POLL_PERIOD_MS);
+	k_msleep(CONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS);
 }
 
 /**
@@ -317,7 +317,7 @@ void ThreadMain(void *, void *, void *)
 
 } // namespace
 
-namespace WozNfc
+namespace UltraWideLockNfc
 {
 
 /**
@@ -380,7 +380,7 @@ AliroError Init()
 	sThreadId = k_thread_create(&sThreadData, sThreadStack, K_THREAD_STACK_SIZEOF(sThreadStack),
 				    ThreadMain, nullptr, nullptr, nullptr, K_PRIO_PREEMPT(7), 0,
 				    K_NO_WAIT);
-	k_thread_name_set(sThreadId, "woz_nfc_pn532");
+	k_thread_name_set(sThreadId, "ultrawidelock_nfc_pn532");
 
 	sInitDone = true;
 	return ALIRO_NO_ERROR;
@@ -450,4 +450,4 @@ AliroError Terminate()
 	return ALIRO_NO_ERROR;
 }
 
-} // namespace WozNfc
+} // namespace UltraWideLockNfc

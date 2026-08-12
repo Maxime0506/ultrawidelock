@@ -33,11 +33,11 @@
 #   woz_aliro_stack/{aliro_stack,session}.cpp  adapters to the Nordic add-on's
 #                                    <aliro/*> API; the add-on's own headers
 #                                    include Zephyr, so these can never be pure
-#   woz_nfc/src/transport_pn532.cpp  same class of adapter: its threading
+#   ultrawidelock_nfc/src/transport_pn532.cpp  same class of adapter: its threading
 #                                    contract IS the add-on's workqueue
 #                                    (AliroWorkqueueSubmit takes a k_work), and
 #                                    it includes aliro/ + reader_storage headers
-#   woz_nfc/src/nfc_prop_ecp.cpp     same: grafts into the add-on's
+#   ultrawidelock_nfc/src/nfc_prop_ecp.cpp     same: grafts into the add-on's
 #                                    subsys/nfc_prop, add-on headers included
 #   woz_uwb/include/woz_util.h    portable shim that defers to the Zephyr
 #                                    header under #ifdef __ZEPHYR__ and carries
@@ -128,8 +128,8 @@ PERMANENT_FILES=(
 	modules/woz_port/include/woz_port.h
 	modules/woz_aliro_stack/src/aliro_stack.cpp
 	modules/woz_aliro_stack/src/session.cpp
-	modules/woz_nfc/src/transport_pn532.cpp
-	modules/woz_nfc/src/nfc_prop_ecp.cpp
+	modules/ultrawidelock_nfc/src/transport_pn532.cpp
+	modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp
 	modules/woz_uwb/include/woz_util.h
 )
 
@@ -615,7 +615,7 @@ check_build_paths() {
 # Identifier shapes a Nordic-add-on patch grafts in. A rename in modules/ or
 # ports/ leaves the patch applying cleanly and breaks only at add-on build
 # time, on hardware CI. Fail here instead.
-PATCH_SYM_RE='(woz|ultrawidelock)_[a-z0-9_]+|(WozNfc|UltraWideLockNfc)::[A-Za-z]+|CONFIG_(WOZ|ULTRAWIDELOCK)_[A-Z0-9_]+'
+PATCH_SYM_RE='(woz|ultrawidelock)_[a-z0-9_]+|(UltraWideLockNfc|UltraWideLockNfc)::[A-Za-z]+|CONFIG_(WOZ|ULTRAWIDELOCK)_[A-Z0-9_]+'
 PATCH_HEADER_RE='ultrawidelock/[a-z0-9_]+[.]h'
 # Names a patch itself coins rather than references (never defined in-tree).
 PATCH_LOCAL_RE='^(woz|ultrawidelock)_uwb_impl$' # LOG_MODULE name local to custom_impl-uwb.patch
@@ -636,8 +636,8 @@ patch_definition_files() {
 patch_sym_defined() { # <sym> -> 0 if modules/ or ports/ still carries it
 	local f m ns hits=''
 	case "$1" in
-	WozNfc::* | UltraWideLockNfc::*)
-		# In-tree the methods live inside `namespace WozNfc { ... }`, so the
+	UltraWideLockNfc::* | UltraWideLockNfc::*)
+		# In-tree the methods live inside `namespace UltraWideLockNfc { ... }`, so the
 		# qualified spelling never appears; require one file naming both.
 		ns=${1%%::*}
 		m=${1##*::}
@@ -1130,14 +1130,14 @@ self_test() {
 		+++ b/x.cpp
 		+	woz_phantom_symbol_xyz();
 		+	ultrawidelock_phantom_symbol_xyz();
-		+	WozNfc::Init();
+		+	UltraWideLockNfc::Init();
 		+	if (CONFIG_WOZ_ALIRO) {}
 		+#include <ultrawidelock/uwb.h>
 		+#include <ultrawidelock/phantom.h>
 		-	woz_minus_line_only();
 	EOF
 	if [ "$(patch_syms "$fixdir/fix.patch")" != \
-		"$(printf 'CONFIG_WOZ_ALIRO\nWozNfc::Init\nultrawidelock_phantom_symbol_xyz\nwoz_phantom_symbol_xyz')" ]; then
+		"$(printf 'CONFIG_WOZ_ALIRO\nUltraWideLockNfc::Init\nultrawidelock_phantom_symbol_xyz\nwoz_phantom_symbol_xyz')" ]; then
 		printf '%s  self-test FAILED: patch_syms extraction wrong for the fixture%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
@@ -1157,7 +1157,7 @@ self_test() {
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	for pth in CONFIG_WOZ_ALIRO WozNfc::Init; do
+	for pth in CONFIG_WOZ_ALIRO UltraWideLockNfc::Init; do
 		if ! patch_sym_defined "$pth"; then
 			printf '%s  self-test FAILED: tripwire lost a real symbol: %s%s\n' "$R" "$pth" "$Z" >&2
 			fails=$((fails + 1))

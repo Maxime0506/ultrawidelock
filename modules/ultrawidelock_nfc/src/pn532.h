@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <woz_nfc/pn532_bus.h>
+#include <ultrawidelock_nfc/pn532_bus.h>
 
 #ifdef __cplusplus
 extern "C" {

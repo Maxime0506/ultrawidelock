@@ -1,10 +1,10 @@
-/* WozNfc backend forwarding to the add-on's ST25R/RFAL transport unchanged. */
+/* UltraWideLockNfc backend forwarding to the add-on's ST25R/RFAL transport unchanged. */
 
-#include <woz_nfc/transport.h>
+#include <ultrawidelock_nfc/transport.h>
 
 #include "aliro/platform/nfc/nfc_transport_rfal.h"
 
-namespace WozNfc
+namespace UltraWideLockNfc
 {
 
 /**
@@ -47,4 +47,4 @@ AliroError Terminate()
 	return Aliro::NfcTransportRfal::Instance().Terminate();
 }
 
-} // namespace WozNfc
+} // namespace UltraWideLockNfc
