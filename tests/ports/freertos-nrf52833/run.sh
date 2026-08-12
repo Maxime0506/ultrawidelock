@@ -323,3 +323,10 @@ mkdir -p "$OUT"
 "$HW_BIN"
 
 "$HERE/dw3000_hw_mutation_check.sh"
+
+# The UWB engine's source set and configuration. The target build graph consumes
+# ports/freertos-nrf52833/uwb/sources.mk, so until that graph links the engine a
+# renamed manifest or the wrong crypto backend is invisible; both are asserted
+# here instead. The self-test shows each check the defect it exists to catch.
+"$HERE/uwb_sources_check.sh"
+"$HERE/uwb_sources_check.sh" --self-test
