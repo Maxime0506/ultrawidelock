@@ -94,3 +94,9 @@ freertos-build:
 	@cmake -S $(REPO_ROOT)/apps/dwm3001cdk-lock-freertos -B $(FREERTOS_BUILD_DIR) \
 		-G Ninja $(FREERTOS_CMAKE_ARGS)
 	@cmake --build $(FREERTOS_BUILD_DIR)
+	@# What the UWB layer will cost once something calls it. The image itself
+	@# cannot say: nothing reaches the layer yet, so it is collected away and
+	@# the flash figure above is silent about it. Printed on every build rather
+	@# than kept as a target someone remembers to run, because this port has
+	@# already had a check rot in exactly that position.
+	@cmake --build $(FREERTOS_BUILD_DIR) --target woz_uwb_reach

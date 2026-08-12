@@ -129,3 +129,96 @@ target_link_options(woz_uwb_link_check PRIVATE
   --specs=nosys.specs
 )
 set_target_properties(woz_uwb_link_check PROPERTIES SUFFIX ".elf")
+
+# ----------------------------------------------------------------------------
+# What the layer costs when it is reached, rather than when it is forced in.
+#
+# The link check above is the right shape for proving symbol closure and the
+# wrong one for answering size: --whole-archive keeps everything, so it reports
+# 280,628 bytes, roughly six times what the layer actually costs. That is an
+# upper bound, and a bound loose enough to plan the wrong things around.
+#
+# --gc-sections keeps what is referenced, so the honest number comes from naming
+# the entry points an application really calls and letting the linker walk out
+# from them. Three links, because the useful figures are differences:
+#
+#   baseline   no UWB roots -- the floor the other two are measured against
+#   facade     the responder surface a lock calls
+#   responder  that plus the Aliro ranging-setup seam, which is the real build
+#
+# The gap between the last two is what a range-only responder saves and an
+# Aliro one cannot.
+#
+# This is in the build graph rather than in someone's notes because a number
+# that regresses silently is worth about what a link check that never runs is
+# worth, and this port has already paid that once: freertos-ncs-source-check
+# stopped compiling for weeks because nothing ran it.
+#
+# The figure is relative to these roots. A build that also reaches the
+# diagnostics, cirdiag or the flight recorder costs more, and none of that
+# appears here.
+# ----------------------------------------------------------------------------
+
+# The app-facing responder surface: lifecycle plus the range accessors a lock
+# reads.
+set(WOZ_UWB_REACH_FACADE
+  woz_uwb_start_aliro woz_uwb_stop woz_uwb_prewarm
+  woz_uwb_set_range_listener woz_uwb_trusted_range_cm
+  woz_uwb_trusted_range_after_checked_cm woz_uwb_last_range_cm
+  woz_uwb_range_generation
+)
+
+# The Aliro ranging-setup seam modules/woz_aliro/src/aliro_ranging.c drives. A
+# responder that completes M1-M4 needs these, and the facade alone does not pull
+# them in, so measuring without them understates a real Aliro build.
+set(WOZ_UWB_REACH_ALIRO
+  cherry_create cherry_destroy_sync aliro_uwb_adapter_create_reader
+  aliro_uwb_session_create aliro_uwb_session_set_ursk
+  aliro_uwb_session_set_protocol_version aliro_uwb_session_message_handle
+  aliro_uwb_session_destroy aliro_uwb_session_message_free
+  aliro_uwb_session_event_free
+)
+
+# The interrupt entry the vector table references on a real target. Without it
+# the worker's whole call tree is unreachable and the measurement is a fiction.
+set(WOZ_UWB_REACH_IRQ woz_freertos_dw3000_irq_handler)
+
+# <name> <roots...> -- one variant of the same link, differing only in roots.
+function(woz_uwb_add_reach_variant _name)
+  add_executable("${_name}" "${WOZ_PORT_DIR}/uwb/link_check.c")
+  # Not --whole-archive: the point is to let the collector do its work.
+  target_link_libraries("${_name}" PRIVATE woz_uwb woz_freertos_port)
+  set(_undef "")
+  foreach(_sym ${ARGN})
+    list(APPEND _undef "-Wl,--undefined=${_sym}")
+  endforeach()
+  target_link_options("${_name}" PRIVATE
+    "-T${WOZ_PORT_DIR}/board/nrf52833_lock.ld"
+    "-L${WOZ_PORT_DIR}/board"
+    --specs=nano.specs
+    --specs=nosys.specs
+    -Wl,--gc-sections
+    "-Wl,-Map=$<TARGET_FILE_DIR:${_name}>/${_name}.map"
+    ${_undef}
+  )
+  set_target_properties("${_name}" PROPERTIES SUFFIX ".elf" EXCLUDE_FROM_ALL TRUE)
+endfunction()
+
+woz_uwb_add_reach_variant(woz_uwb_reach_baseline)
+woz_uwb_add_reach_variant(woz_uwb_reach_facade
+  ${WOZ_UWB_REACH_IRQ} ${WOZ_UWB_REACH_FACADE})
+woz_uwb_add_reach_variant(woz_uwb_reach_responder
+  ${WOZ_UWB_REACH_IRQ} ${WOZ_UWB_REACH_FACADE} ${WOZ_UWB_REACH_ALIRO})
+
+add_custom_target(woz_uwb_reach
+  COMMAND "${CMAKE_COMMAND}" -E env bash
+          "${WOZ_PORT_DIR}/uwb/reach_report.sh"
+          "${CMAKE_SIZE}"
+          "$<TARGET_FILE:woz_uwb_reach_baseline>"
+          "$<TARGET_FILE:woz_uwb_reach_facade>"
+          "$<TARGET_FILE:woz_uwb_reach_responder>"
+          "$<TARGET_FILE_DIR:woz_uwb_reach_responder>/woz_uwb_reach_responder.map"
+  DEPENDS woz_uwb_reach_baseline woz_uwb_reach_facade woz_uwb_reach_responder
+  COMMENT "Measuring the UWB layer's reachable set"
+  VERBATIM
+)
