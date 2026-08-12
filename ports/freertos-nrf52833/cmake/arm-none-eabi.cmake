@@ -1,8 +1,15 @@
 # Cross toolchain for the nRF52833 target build.
 #
-# The compiler is located by name on PATH unless WOZ_ARM_TOOLCHAIN_DIR points at
-# a bin directory, which is how a toolchain installed outside the system prefix
-# is used without putting it on PATH for everything else.
+# WOZ_ARM_TOOLCHAIN_DIR names a bin directory and wins over PATH, which is how a
+# toolchain installed outside the system prefix is used without putting it on
+# PATH for everything else. Without it the compiler is found by name on PATH.
+#
+# Whichever is used is then checked for a C library, because the most likely
+# arm-none-eabi-gcc on a developer machine cannot build firmware. Homebrew's
+# formula of that name is bare GCC with no newlib: no nosys.specs, no libc to
+# resolve. It compiles every file in the image and fails only at the link, with
+# an error that names missing symbols rather than the missing toolchain. The
+# probe below turns that into one sentence at configure time.
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
@@ -42,3 +49,38 @@ set(CMAKE_C_FLAGS_INIT "${WOZ_ARCH_FLAGS}")
 set(CMAKE_CXX_FLAGS_INIT "${WOZ_ARCH_FLAGS}")
 set(CMAKE_ASM_FLAGS_INIT "${WOZ_ARCH_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "${WOZ_ARCH_FLAGS}")
+
+# The C library probe described at the top of this file.
+#
+# CMAKE_TRY_COMPILE_TARGET_TYPE above is STATIC_LIBRARY, which is correct for a
+# bare-metal compiler and is also exactly why a newlib-less toolchain sails
+# through the standard check: archiving never touches libc. So the probe here
+# links, with the same specs the image links with, and looks for the file the
+# broken toolchain does not ship.
+#
+# It runs once per configure and is cached, so it costs nothing on a rebuild.
+if(NOT DEFINED WOZ_ARM_TOOLCHAIN_HAS_LIBC)
+  execute_process(
+    COMMAND "${CMAKE_C_COMPILER}" -print-file-name=nosys.specs
+    OUTPUT_VARIABLE _woz_nosys
+    ERROR_QUIET
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE _woz_nosys_result
+  )
+  # -print-file-name echoes the name back unchanged when it cannot find it.
+  if(_woz_nosys_result EQUAL 0 AND NOT _woz_nosys STREQUAL "nosys.specs")
+    set(WOZ_ARM_TOOLCHAIN_HAS_LIBC TRUE CACHE INTERNAL "arm-none-eabi ships a C library")
+  else()
+    set(WOZ_ARM_TOOLCHAIN_HAS_LIBC FALSE CACHE INTERNAL "arm-none-eabi ships a C library")
+  endif()
+endif()
+
+if(NOT WOZ_ARM_TOOLCHAIN_HAS_LIBC)
+  message(FATAL_ERROR
+    "${CMAKE_C_COMPILER} has no C library: nosys.specs is missing, so this "
+    "toolchain can compile the image but not link it.\n"
+    "This is what Homebrew's arm-none-eabi-gcc formula installs -- bare GCC "
+    "with no newlib. Install the Arm GNU Toolchain instead and point "
+    "WOZ_ARM_TOOLCHAIN_DIR at its bin directory, which takes precedence over "
+    "whatever is on PATH.")
+endif()
