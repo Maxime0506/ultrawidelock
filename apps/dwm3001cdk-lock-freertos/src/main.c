@@ -221,6 +221,32 @@ static void boot_task(void *arg)
 	}
 }
 
+/*
+ * Let the SW2 pull-up charge the pin, counted in instructions rather than time.
+ *
+ * NOT woz_freertos_busy_wait_us(). That spins on RTC1, and RTC1 is not started
+ * until the FreeRTOS port sets the tick up inside vTaskStartScheduler() -- so
+ * calling it from here reaches time_freertos.c's ensure_clock(), which
+ * correctly finds a counter that never advances and takes the fatal path. The
+ * board then resets, MCUboot boots it again, and it resets again: a loop that
+ * from outside looks like a bootloader that will not hand over, and says
+ * nothing about why.
+ *
+ * That is not hypothetical. It is what this image did on the first boot ever
+ * attempted on hardware, and the host tests could not have caught it because
+ * their RTC fake always counts.
+ *
+ * ~6,400 cycles at 64 MHz is ~100 us, and the loop is deliberately crude: the
+ * only requirement is a floor, the pin has microseconds of RC at most, and
+ * nothing here can afford a dependency on a clock that is not running yet.
+ */
+static void settle_pullup(void)
+{
+	for (volatile uint32_t i = 0; i < 2000u; i++) {
+		__NOP();
+	}
+}
+
 int main(void)
 {
 	int err;
@@ -249,7 +275,7 @@ int main(void)
 	 * for here.
 	 */
 	nrf_gpio_cfg_input(WOZ_FREERTOS_PIN_SW2, NRF_GPIO_PIN_PULLUP);
-	woz_freertos_busy_wait_us(100);
+	settle_pullup();
 	s_prov_mode = (nrf_gpio_pin_read(WOZ_FREERTOS_PIN_SW2) == 0u);
 
 	err = woz_freertos_radio_start(woz_freertos_radio_sdc_dispatcher());

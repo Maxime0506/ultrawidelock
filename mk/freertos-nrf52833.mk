@@ -109,3 +109,11 @@ freertos-build:
 	@# than kept as a target someone remembers to run, because this port has
 	@# already had a check rot in exactly that position.
 	@cmake --build $(FREERTOS_BUILD_DIR) --target woz_uwb_reach
+	@# Every vector peripherals.yml gives an owner must reach that owner. The
+	@# vector table is data, so a weak alias no owner overrode links cleanly and
+	@# resolves to default_handler -- an infinite loop the first interrupt falls
+	@# into. RNG and RTC2 both shipped that way and cost a hardware debugging
+	@# session; this makes the next one a build failure.
+	@WOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR) \
+		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
+		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf

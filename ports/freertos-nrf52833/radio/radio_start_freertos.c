@@ -223,12 +223,20 @@ static int32_t apply_resource_cfg(void)
 	sdc_cfg_t cfg;
 	int32_t rc;
 
-	cfg.central_count.count = 0;
-	rc = sdc_cfg_set(SDC_DEFAULT_RESOURCE_CFG_TAG, SDC_CFG_TYPE_CENTRAL_COUNT, &cfg);
-	if (rc < 0) {
-		return rc;
-	}
-
+	/*
+	 * SDC_CFG_TYPE_CENTRAL_COUNT is deliberately NOT set, and zero is not a
+	 * safe value to pass -- it is not a value at all here.
+	 *
+	 * This image links libsoftdevice_controller_peripheral.a, which has no
+	 * central role to size, and it rejects the config TYPE outright rather
+	 * than accepting a count of zero: the call returns -NRF_EOPNOTSUPP (-45)
+	 * and startup fails at STAGE_SDC_CFG. Setting it to zero reads as the
+	 * careful thing to do, which is exactly why this note is here.
+	 *
+	 * Found on hardware. Nothing in the host suite could see it: the
+	 * controller is a real vendor archive with a real role restriction, and
+	 * the fake accepts every configuration it is handed.
+	 */
 	cfg.peripheral_count.count = 1;
 	rc = sdc_cfg_set(SDC_DEFAULT_RESOURCE_CFG_TAG, SDC_CFG_TYPE_PERIPHERAL_COUNT, &cfg);
 	if (rc < 0) {

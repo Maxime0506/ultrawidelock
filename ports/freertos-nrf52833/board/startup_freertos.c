@@ -22,6 +22,7 @@
 #include <nrf.h>
 #include <system_nrf52833.h>
 
+#include <woz_freertos_board.h>
 #include <woz_freertos_radio.h>
 
 extern uint32_t __etext;
@@ -131,10 +132,41 @@ void SWI5_EGU5_IRQHandler(void)
 }
 
 /*
- * TIMER1, SWI0_EGU0, RTC2, RTC1, RNG, and GPIOTE are defined by their owners:
+ * RNG, routed here rather than left to its owner to define.
+ *
+ * Both were declared weak below with a comment saying their owners defined
+ * them. Neither owner did: board/entropy_freertos.c exports
+ * woz_freertos_rng_isr and radio/nrf_802154_lptimer_freertos.c exports
+ * nrf_802154_lptimer_freertos_irq_handler, and nothing connected either to a
+ * vector. The weak aliases then resolved to default_handler, so the first RNG
+ * interrupt -- raised as soon as the SoftDevice Controller asked for entropy --
+ * parked the core in a spin loop with the interrupt still latched.
+ *
+ * Found on hardware, and only there: the vector table is data, so no host test
+ * and no link-time check looked at what it pointed to. scripts/vector-check.sh
+ * now does, which is the durable half of this fix.
+ *
+ * Written as explicit forwarders because that is this file's whole premise --
+ * the handoff should be the code, not the absence of a symbol.
+ */
+void RNG_IRQHandler(void)
+{
+	woz_freertos_rng_isr();
+}
+
+/*
+ * RTC2 is routed by its owner, radio/nrf_802154_lptimer_freertos.c, and not
+ * here: that handler lives in woz_802154, which the board layer does not link,
+ * and forwarding to it from this file is an undefined reference. The owner's
+ * object is pulled by the ordinary calls the 802.15.4 driver makes into it, so
+ * its strong definition wins over the weak alias below.
+ */
+
+/*
+ * TIMER1, SWI0_EGU0, RTC1, RTC2, and GPIOTE are defined by their owners:
  * TIMER1 by the pinned Nordic high-precision timer, SWI0_EGU0 by the nRF
  * 802.15.4 driver, RTC2 by radio/nrf_802154_lptimer_freertos.c, RTC1 by
- * board/tick_freertos.c, RNG by board/entropy_freertos.c, and GPIOTE by
+ * board/tick_freertos.c, and GPIOTE by
  * board/gpiote_freertos.c, which fans it out because the DW3110 line and the
  * update button each take a channel. They are declared weak here only so an
  * image that leaves one of those out still links.
@@ -147,11 +179,10 @@ void SWI5_EGU5_IRQHandler(void)
  * is why none of them is written that way.
  */
 WEAK_ALIAS(GPIOTE_IRQHandler);
+WEAK_ALIAS(RTC2_IRQHandler);
 WEAK_ALIAS(TIMER1_IRQHandler);
 WEAK_ALIAS(SWI0_EGU0_IRQHandler);
 WEAK_ALIAS(RTC1_IRQHandler);
-WEAK_ALIAS(RTC2_IRQHandler);
-WEAK_ALIAS(RNG_IRQHandler);
 
 typedef void (*vector_t)(void);
 
