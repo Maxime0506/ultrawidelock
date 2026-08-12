@@ -35,4 +35,23 @@ typedef void (*woz_freertos_gpiote_handler)(void);
  */
 int woz_freertos_gpiote_add_handler(woz_freertos_gpiote_handler fn);
 
+/*
+ * SW2, the DWM3001CDK's only usable push button.
+ *
+ * P0.02, with the module's pull-up and active low -- byte for byte the Zephyr
+ * oracle's `button2` node, which is the sw0 alias every routine on that side
+ * reaches it through. SW1 is on P0.18, which is nRESET by default and resets
+ * the board, so there is no second button to hand out.
+ *
+ * Three routines want it and they do not conflict, because two of them only
+ * look at boot: held through reset it means provisioning mode or factory reset,
+ * and pressed while the application is running it opens an update window.
+ *
+ * The channel is 1 because 0 is the DW3110 interrupt line; the two are asserted
+ * disjoint, and against the 802.15.4 driver's debug pins, in
+ * radio/peripheral_asserts_freertos.c.
+ */
+#define WOZ_FREERTOS_PIN_SW2 2u
+#define WOZ_FREERTOS_SW2_GPIOTE_CHANNEL 1u
+
 #endif /* WOZ_FREERTOS_BOARD_H */

@@ -131,6 +131,7 @@ add_library(woz_board STATIC
   "${WOZ_PORT_DIR}/board/time_freertos.c"
   "${WOZ_PORT_DIR}/board/fault_freertos.c"
   "${WOZ_PORT_DIR}/board/log_rtt_freertos.c"
+  "${WOZ_PORT_DIR}/board/gpiote_freertos.c"
   # The OSAL sits here rather than in a layer of its own: it is the port's
   # implementation of the shared modules/woz_port contract, it needs nothing but
   # the kernel, and everything above the board uses it.
@@ -625,8 +626,68 @@ set_source_files_properties(
   PROPERTIES COMPILE_OPTIONS
   "-include;${WOZ_PORT_DIR}/thread/ot_compat/woz_freertos_ot_config.h;-Wno-unused-parameter")
 
+# ----------------------------------------------------------------------------
+# DFU receiver: take a signed delta patch, verify it, stage it, reboot.
+#
+# The receiver itself is already portable -- modules/woz_dfu/src/dfu_receiver.c
+# names PSA, woz_flash, woz_osal and woz_log and nothing else -- so what this
+# layer adds is the flash backend for the two partitions and the signing key.
+#
+# The APPLIER half is deliberately not here. It runs in MCUboot, because an
+# application cannot rewrite the flash it is executing from, and MCUboot is a
+# separate image this port does not build. See board/nrf52833_lock.ld.
+# ----------------------------------------------------------------------------
+set(WOZ_DFU_DIR "${WOZ_MODULES_DIR}/woz_dfu")
+
+# The same key the Zephyr image signs with, reached the same way: the top-level
+# Makefile computes SIGN_KEY and exports it, and mk/freertos-nrf52833.mk passes
+# it through. Falling back to the environment covers a bare cmake invocation.
+if(NOT WOZ_DFU_KEY AND DEFINED ENV{SIGN_KEY})
+  set(WOZ_DFU_KEY "$ENV{SIGN_KEY}")
+endif()
+if(NOT WOZ_DFU_KEY OR NOT EXISTS "${WOZ_DFU_KEY}")
+  message(FATAL_ERROR
+    "the update-signing key is missing: '${WOZ_DFU_KEY}'\n"
+    "  This image verifies delta patches against its public half, so it cannot\n"
+    "  be built without one.\n"
+    "  Fix: make dfu-key   (once per clone; it refuses to overwrite)\n"
+    "  Or:  pass -DWOZ_DFU_KEY=<absolute path>.")
+endif()
+
+# The public key is generated into the image rather than committed, for the same
+# reason the Zephyr build does it: the private key is the thing that must not be
+# in the tree, and deriving the public half at configure time means the two
+# cannot drift.
+set(WOZ_DFU_PUBKEY_C "${CMAKE_CURRENT_BINARY_DIR}/woz_dfu_pubkey.c")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_custom_command(
+  OUTPUT "${WOZ_DFU_PUBKEY_C}"
+  COMMAND "${Python3_EXECUTABLE}" "${WOZ_DFU_DIR}/scripts/emit_pubkey.py"
+          "${WOZ_DFU_KEY}" "${WOZ_DFU_PUBKEY_C}"
+  DEPENDS "${WOZ_DFU_KEY}" "${WOZ_DFU_DIR}/scripts/emit_pubkey.py"
+  COMMENT "woz_dfu: extracting the update-signing public key")
+
+add_library(woz_dfu STATIC
+  "${WOZ_DFU_DIR}/src/dfu_receiver.c"
+  "${WOZ_DFU_DIR}/src/dfu_crc.c"
+  "${WOZ_PORT_DIR}/storage/flash_area_freertos.c"
+  "${WOZ_PORT_DIR}/dfu/dfu_ble_freertos.c"
+  "${WOZ_DFU_PUBKEY_C}"
+)
+target_include_directories(woz_dfu PUBLIC
+  "${WOZ_DFU_DIR}/include"
+)
+target_include_directories(woz_dfu PRIVATE
+  "${WOZ_DFU_DIR}/src"
+)
+# woz_storage for the flash driver underneath the area backend, woz_mbedtls for
+# the PSA signature check the receiver makes before anything is staged, and
+# woz_nimble for the transport in front of it.
+target_link_libraries(woz_dfu PUBLIC woz_storage woz_mbedtls woz_nimble)
+
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread woz_aliro)
+target_link_libraries(woz_freertos_port INTERFACE
+  woz_storage woz_uwb woz_thread woz_aliro woz_dfu)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.

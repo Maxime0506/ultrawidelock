@@ -53,7 +53,10 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 		return -1;
 	}
 
-	woz_freertos_nimble_host_set_hooks(&k_hooks);
+	if (woz_freertos_nimble_host_add_hooks(&k_hooks) != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, "no NimBLE hook slot");
+		return -1;
+	}
 
 	rc = woz_freertos_nimble_host_start();
 	if (rc != 0) {

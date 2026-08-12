@@ -31,6 +31,7 @@
 #include <openthread/instance.h>
 
 #include <woz_freertos_crypto.h>
+#include <woz_freertos_dfu.h>
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_openthread.h>
 #include <woz_freertos_platform.h>
@@ -129,6 +130,25 @@ static void boot_task(void *arg)
 	if (woz_freertos_uwb_start() != 0) {
 		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "UWB unavailable; ranging will not be offered");
+	}
+
+	/*
+	 * The update channel, registered BEFORE the reader and not after.
+	 *
+	 * That ordering is the whole reason this line is here rather than
+	 * further down: aliro_reader_start() starts the NimBLE host, and every
+	 * GATT service in this image has to be registered inside that startup
+	 * sequence -- after the memory pools exist, before the host task begins
+	 * consuming events. A layer that registered afterwards would be adding
+	 * services to a running host.
+	 *
+	 * Not fatal. An update channel that failed to register leaves a board
+	 * that still opens doors and can still be recovered over SWD, and
+	 * refusing to boot over it would take away the working half too.
+	 */
+	if (dfu_ble_start() != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "no update channel; this board can only be updated by cable");
 	}
 
 	/*
