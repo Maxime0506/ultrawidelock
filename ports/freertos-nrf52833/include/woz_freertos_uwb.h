@@ -2,7 +2,7 @@
  * The UWB side of the BSP: the vector the board routes to the DW3110's
  * interrupt line, and the port's bring-up of the part behind it.
  *
- * The rest of the DW3110 surface is modules/woz_dw3000's dw3000_hw.h and
+ * The rest of the DW3110 surface is modules/ultrawidelock_dw3000's dw3000_hw.h and
  * dw3000_spi.h, which this port implements rather than extends. Only the vector
  * entry point and the bring-up belong here, because only the board's vector
  * table and the application need them.

@@ -26,7 +26,7 @@ build() { # <source> <binary>
 		-I"$HERE/fake" \
 		-I"$ROOT/ports/freertos-nrf52833/include" \
 		-I"$ROOT/ports/freertos-nrf52833/uwb" \
-		-I"$ROOT/modules/woz_dw3000/include" \
+		-I"$ROOT/modules/ultrawidelock_dw3000/include" \
 		"$HERE/test_dw3000_spi.c" \
 		"$HERE/fake/fake_freertos.c" \
 		"$HERE/fake/fake_gpio.c" \
@@ -67,15 +67,15 @@ MUTATIONS=(
 	"bits go out least significant first ::: NRF_SPIM_BIT_ORDER_MSB_FIRST ::: NRF_SPIM_BIT_ORDER_LSB_FIRST"
 	"MOSI is left high while the chip answers a read ::: nrf_spim_orc_set(NRF_SPIM3, 0); ::: nrf_spim_orc_set(NRF_SPIM3, 0xff);"
 	"MISO is left floating instead of pulled down ::: NRF_GPIO_PIN_PULLDOWN ::: NRF_GPIO_PIN_NOPULL"
-	"chip select is made an output before its idle level is written ::: 	nrf_gpio_pin_set(WOZ_DW3000_PIN_CS);
-	nrf_gpio_cfg_output(WOZ_DW3000_PIN_CS); ::: 	nrf_gpio_cfg_output(WOZ_DW3000_PIN_CS);
-	nrf_gpio_pin_set(WOZ_DW3000_PIN_CS);"
+	"chip select is made an output before its idle level is written ::: 	nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_CS);
+	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_CS); ::: 	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_CS);
+	nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_CS);"
 	"the bus starts at the fast clock, before the chip's PLL has locked ::: BIT_ORDER_MSB_FIRST);
-	s_freq = freq_of(WOZ_DW3000_SPI_SLOW_HZ); ::: BIT_ORDER_MSB_FIRST);
-	s_freq = freq_of(WOZ_DW3000_SPI_FAST_HZ);"
+	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ); ::: BIT_ORDER_MSB_FIRST);
+	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_FAST_HZ);"
 	"the fast rate is set past what the board is qualified for ::: void dw3000_spi_speed_fast(void)
 {
-	s_freq = freq_of(WOZ_DW3000_SPI_FAST_HZ); ::: void dw3000_spi_speed_fast(void)
+	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_FAST_HZ); ::: void dw3000_spi_speed_fast(void)
 {
 	s_freq = freq_of(32000000u);"
 	"the wake pulse is too short for the chip to notice ::: woz_freertos_busy_wait_us(500); ::: woz_freertos_busy_wait_us(50);"

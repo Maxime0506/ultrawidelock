@@ -135,8 +135,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
    -I "$SDKFAKE" -I "$ESP_COMPONENTS/woz_uwb/port" \
    -I "$UWB_INC" \
-   -I "$HERE/../../../modules/woz_dw3000/include" \
-   -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/ultrawidelock_dw3000/include" \
+   -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
    "$ESP_COMPONENTS/woz_uwb/port/dw3000_hw.c" \
    "$ESP_COMPONENTS/woz_uwb/port/dw3000_spi.c" \
@@ -153,8 +153,8 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
    -I "$SDKFAKE" -I "$ESP_COMPONENTS/woz_uwb/port" \
    -I "$UWB_INC" \
-   -I "$HERE/../../../modules/woz_dw3000/include" \
-   -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/ultrawidelock_dw3000/include" \
+   -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    "$HERE/test_esp_dw3000_port.c" \
    "$ESP_COMPONENTS/woz_uwb/port/dw3000_hw.c" \
    "$ESP_COMPONENTS/woz_uwb/port/dw3000_spi.c" \
@@ -166,7 +166,7 @@ echo
 echo "== host: seam RX-callback shim chaining =="
 SBIN2="$(mktemp -t esp_seam_stubs.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
-   -I "$HERE/../../../modules/woz_dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    -I "$UWB_INC" \
    "$HERE/test_esp_seam_stubs.c" \
    "$ESP_COMPONENTS/woz_uwb/port/woz_seam_stubs.c" -o "$SBIN2"

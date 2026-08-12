@@ -1,9 +1,0 @@
-# woz_dw3000 role: OS-neutral glue + vendored Qorvo decadriver core (paths point
-# INTO the vendored tree; the tree itself is never edited). Consumers:
-# modules/woz_dw3000/CMakeLists.txt, ports/esp32/components/woz_uwb.
-# One repo-root-relative path per line, sorted; add HERE and nowhere else.
-modules/woz_dw3000/dwt_uwb_driver/deca_interface.c
-modules/woz_dw3000/dwt_uwb_driver/deca_rsl.c
-modules/woz_dw3000/dwt_uwb_driver/lib/qmath/src/qmath.c
-modules/woz_dw3000/src/deca_compat.c
-modules/woz_dw3000/src/deca_port.c

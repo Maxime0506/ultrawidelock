@@ -37,7 +37,7 @@
 #                              must re-create the Pre-POLL warm chain)
 #   ccc_sts.c                  the register-level key/IV packer itself, with no
 #                              production caller (host suites only)
-#   modules/woz_dw3000/**      the vendor decadriver: it defines these
+#   modules/ultrawidelock_dw3000/**      the vendor decadriver: it defines these
 #   tests/**, docs/**            host doubles and prose
 #
 # Adding a file here is a decision to trust it forever. Prefer calling the seam.
@@ -75,7 +75,7 @@ EXEMPT_RE='^(modules/woz_uwb/include/uwb_seam\.h
 |modules/woz_uwb/src/driver/uwb_rxdiag\.c
 |ports/esp32/components/woz_uwb/port/woz_seam_stubs\.c
 |ports/freertos-nrf52833/uwb/woz_seam_stubs\.c
-|modules/woz_dw3000/
+|modules/ultrawidelock_dw3000/
 |tests/)'
 EXEMPT_RE=${EXEMPT_RE//$'\n'/}
 

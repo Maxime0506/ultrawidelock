@@ -17,13 +17,13 @@
 #define WOZ_FREERTOS_UWB_BOARD_PINS_H
 
 /* Port 0 pins are 0-31, port 1 pins are 32-63: the part's own flat numbering. */
-#define WOZ_DW3000_PIN_SCLK   3u  /* P0.03 */
-#define WOZ_DW3000_PIN_MOSI   8u  /* P0.08 */
-#define WOZ_DW3000_PIN_MISO   29u /* P0.29 */
-#define WOZ_DW3000_PIN_CS     38u /* P1.06 */
-#define WOZ_DW3000_PIN_IRQ    34u /* P1.02 */
-#define WOZ_DW3000_PIN_RST    25u /* P0.25 */
-#define WOZ_DW3000_PIN_WAKEUP 51u /* P1.19 */
+#define ULTRAWIDELOCK_DW3000_PIN_SCLK   3u  /* P0.03 */
+#define ULTRAWIDELOCK_DW3000_PIN_MOSI   8u  /* P0.08 */
+#define ULTRAWIDELOCK_DW3000_PIN_MISO   29u /* P0.29 */
+#define ULTRAWIDELOCK_DW3000_PIN_CS     38u /* P1.06 */
+#define ULTRAWIDELOCK_DW3000_PIN_IRQ    34u /* P1.02 */
+#define ULTRAWIDELOCK_DW3000_PIN_RST    25u /* P0.25 */
+#define ULTRAWIDELOCK_DW3000_PIN_WAKEUP 51u /* P1.19 */
 
 /*
  * Two clocks, as every DW3000 port has: the chip only accepts SPI below 7 MHz
@@ -32,8 +32,8 @@
  * overlay asks for on this same silicon; the frame-pull path is dominated by
  * per-transfer overhead rather than bit time, so a higher clock buys little.
  */
-#define WOZ_DW3000_SPI_SLOW_HZ 2000000u
-#define WOZ_DW3000_SPI_FAST_HZ 8000000u
+#define ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ 2000000u
+#define ULTRAWIDELOCK_DW3000_SPI_FAST_HZ 8000000u
 
 /*
  * The largest single DW3110 transaction this product performs: a 1023-byte
@@ -42,7 +42,7 @@
  * A request past this is refused rather than truncated -- a short SPI transfer
  * to this chip does not fail, it returns a different register.
  */
-#define WOZ_DW3000_SPI_XFER_MAX 1028u
+#define ULTRAWIDELOCK_DW3000_SPI_XFER_MAX 1028u
 
 /*
  * The GPIOTE channel the DW3110 interrupt line takes. Here rather than beside
@@ -50,8 +50,8 @@
  * the layer that can check it against the other stacks' claims is the 802.15.4
  * one: see radio/peripheral_asserts_freertos.c, which is the only other reader.
  */
-#ifndef WOZ_DW3000_GPIOTE_CHANNEL
-#define WOZ_DW3000_GPIOTE_CHANNEL 0u
+#ifndef ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL
+#define ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL 0u
 #endif
 
 #endif /* WOZ_FREERTOS_UWB_BOARD_PINS_H */

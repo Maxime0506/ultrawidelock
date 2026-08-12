@@ -1,7 +1,7 @@
 /*
  * The DW3110 SPI link on SPIM3, for the standalone FreeRTOS port.
  *
- * This implements modules/woz_dw3000's dw3000_spi.h, the same five entry points
+ * This implements modules/ultrawidelock_dw3000's dw3000_spi.h, the same five entry points
  * the Zephyr and ESP-IDF backends implement. Nothing in modules/ changes to
  * accommodate it; a new target is a new file here and nothing else.
  *
@@ -51,7 +51,7 @@
 
 #define TAG "dw3000_spi"
 
-#define DW_XFER_MAX WOZ_DW3000_SPI_XFER_MAX
+#define DW_XFER_MAX ULTRAWIDELOCK_DW3000_SPI_XFER_MAX
 
 /*
  * How long a transfer may take before the port gives up on it. At the slow
@@ -92,12 +92,12 @@ static nrf_spim_frequency_t freq_of(uint32_t hz)
 /* CS is active low and idles high. */
 static void cs_assert(void)
 {
-	nrf_gpio_pin_clear(WOZ_DW3000_PIN_CS);
+	nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_CS);
 }
 
 static void cs_release(void)
 {
-	nrf_gpio_pin_set(WOZ_DW3000_PIN_CS);
+	nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_CS);
 }
 
 int dw3000_spi_init(void)
@@ -114,8 +114,8 @@ int dw3000_spi_init(void)
 	}
 
 	/* CS first and idle high, so enabling the bus cannot strobe the chip. */
-	nrf_gpio_pin_set(WOZ_DW3000_PIN_CS);
-	nrf_gpio_cfg_output(WOZ_DW3000_PIN_CS);
+	nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_CS);
+	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_CS);
 
 	/*
 	 * SCK carries the clock's idle level before the peripheral drives it,
@@ -123,20 +123,20 @@ int dw3000_spi_init(void)
 	 * the SPIM samples its own clock line through it, and a pin configured
 	 * as a plain output produces a bus that never transfers anything.
 	 */
-	nrf_gpio_pin_clear(WOZ_DW3000_PIN_SCLK);
-	nrf_gpio_cfg(WOZ_DW3000_PIN_SCLK, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_CONNECT,
+	nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_SCLK);
+	nrf_gpio_cfg(ULTRAWIDELOCK_DW3000_PIN_SCLK, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_CONNECT,
 		     NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_S0S1, NRF_GPIO_PIN_NOSENSE);
 
-	nrf_gpio_pin_clear(WOZ_DW3000_PIN_MOSI);
-	nrf_gpio_cfg_output(WOZ_DW3000_PIN_MOSI);
+	nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_MOSI);
+	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_MOSI);
 
 	/* Pulled down, matching the Qorvo baseline, so a floating MISO reads 0. */
-	nrf_gpio_cfg_input(WOZ_DW3000_PIN_MISO, NRF_GPIO_PIN_PULLDOWN);
+	nrf_gpio_cfg_input(ULTRAWIDELOCK_DW3000_PIN_MISO, NRF_GPIO_PIN_PULLDOWN);
 
-	nrf_spim_pins_set(NRF_SPIM3, WOZ_DW3000_PIN_SCLK, WOZ_DW3000_PIN_MOSI,
-			  WOZ_DW3000_PIN_MISO);
+	nrf_spim_pins_set(NRF_SPIM3, ULTRAWIDELOCK_DW3000_PIN_SCLK, ULTRAWIDELOCK_DW3000_PIN_MOSI,
+			  ULTRAWIDELOCK_DW3000_PIN_MISO);
 	nrf_spim_configure(NRF_SPIM3, NRF_SPIM_MODE_0, NRF_SPIM_BIT_ORDER_MSB_FIRST);
-	s_freq = freq_of(WOZ_DW3000_SPI_SLOW_HZ);
+	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ);
 	nrf_spim_frequency_set(NRF_SPIM3, s_freq);
 
 	/*
@@ -154,13 +154,13 @@ int dw3000_spi_init(void)
 
 void dw3000_spi_speed_slow(void)
 {
-	s_freq = freq_of(WOZ_DW3000_SPI_SLOW_HZ);
+	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ);
 	nrf_spim_frequency_set(NRF_SPIM3, s_freq);
 }
 
 void dw3000_spi_speed_fast(void)
 {
-	s_freq = freq_of(WOZ_DW3000_SPI_FAST_HZ);
+	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_FAST_HZ);
 	nrf_spim_frequency_set(NRF_SPIM3, s_freq);
 }
 

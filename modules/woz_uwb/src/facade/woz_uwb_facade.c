@@ -79,7 +79,8 @@ int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)
 	/* Fresh per-session log budget so a live Wallet session re-logs its own RX-arms. */
 	ccc_shim_rx_log_reset();
 
-	/* Stand up the permanent SP0 receiver on modules/woz_dw3000, driving the DS-TWR exchange. */
+	/* Stand up the permanent SP0 receiver on modules/ultrawidelock_dw3000, driving the DS-TWR
+	 * exchange. */
 	return ccc_prepoll_listen(c->channel, c->sync_code_index);
 }
 

@@ -188,7 +188,7 @@ INCS=(
 	-I"$ROOT/modules/ultrawidelock_ml/include"
 	-I"$ROOT/modules/ultrawidelock_ml/src"
 	-I"$ROOT/modules/ultrawidelock_anchor/include"
-	-I"$ROOT/modules/woz_dw3000/include"
+	-I"$ROOT/modules/ultrawidelock_dw3000/include"
 )
 
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.

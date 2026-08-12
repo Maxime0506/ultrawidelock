@@ -9,26 +9,26 @@ DW3000 integration
 ------------------
 
 The DW3000 integration is distributed under the component ISC license in
-modules/woz_dw3000/LICENSE.txt. This includes the module root, integration code,
+modules/ultrawidelock_dw3000/LICENSE.txt. This includes the module root, integration code,
 and Zephyr glue, except for files carrying an Apache-2.0 notice and the Qorvo
 scope listed below.
 
 Upstream: derived from Bruno Randolf's Zephyr integration at
 https://github.com/br101/zephyr-dw3000-decadriver, reduced to the source sets
-named in modules/woz_dw3000/roles/*.list.
+named in modules/ultrawidelock_dw3000/roles/*.list.
 
 Qorvo UWB driver
 ----------------
 
 Scope:
 
-  modules/woz_dw3000/dwt_uwb_driver/**
-  modules/woz_dw3000/src/deca_compat.c
+  modules/ultrawidelock_dw3000/dwt_uwb_driver/**
+  modules/ultrawidelock_dw3000/src/deca_compat.c
 
 License: LicenseRef-QORVO-2
 License text:
 
-  modules/woz_dw3000/dwt_uwb_driver/LICENSES/LicenseRef-QORVO-2.txt
+  modules/ultrawidelock_dw3000/dwt_uwb_driver/LICENSES/LicenseRef-QORVO-2.txt
 
 This license restricts use to Qorvo integrated circuits and includes other
 conditions stated in the component-local license text. The ISC-licensed
@@ -205,9 +205,9 @@ not vendor; see "FreeRTOS port pinned sources" above.
 In addition to the Matter files listed above, Apache-2.0 applies to:
 
   .clang-format
-  modules/woz_dw3000/CMakeLists.txt
-  modules/woz_dw3000/dts/bindings/decawave,dw3000/decawave,dw3000.yaml
-  modules/woz_dw3000/zephyr/module.yml
+  modules/ultrawidelock_dw3000/CMakeLists.txt
+  modules/ultrawidelock_dw3000/dts/bindings/decawave,dw3000/decawave,dw3000.yaml
+  modules/ultrawidelock_dw3000/zephyr/module.yml
 
                                  Apache License
                            Version 2.0, January 2004

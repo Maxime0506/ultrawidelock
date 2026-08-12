@@ -13,7 +13,7 @@ config WOZ_UWB_RESPONDER
 	depends on WOZ_UWB
 	help
 	  DS-TWR responder that produces a distance in cm. Runs on the ISC
-	  modules/woz_dw3000 driver via ccc_shim_rx.c.
+	  modules/ultrawidelock_dw3000 driver via ccc_shim_rx.c.
 
 config WOZ_UWB_SHELL
 	bool "`aliro` UWB console commands"

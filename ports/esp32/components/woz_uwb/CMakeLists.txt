@@ -1,10 +1,10 @@
 # Woz UWB (Aliro DS-TWR responder) engine as an ESP-IDF component.
-# Additive: reuses modules/woz_uwb/src + modules/woz_dw3000 from the repo unchanged.
+# Additive: reuses modules/woz_uwb/src + modules/ultrawidelock_dw3000 from the repo unchanged.
 # The engine is platform-neutral: it takes its OS surface from woz_port.h and
 # its logging from woz_log.h (modules/woz_port/include), which select the ESP-IDF
 # backend on ESP_PLATFORM. No Zephyr compat layer is involved. The DW3000
 # platform SPI/GPIO layer is the ESP-IDF backend in port/.
-# Source set = the role manifests in modules/{woz_uwb,woz_dw3000}/roles/ — the
+# Source set = the role manifests in modules/{woz_uwb,ultrawidelock_dw3000}/roles/ — the
 # SAME lists modules/woz_uwb/CMakeLists.txt reads for CONFIG_WOZ_UWB +
 # RESPONDER + ALIRO + CRYPTO_MBEDTLS (no PRETTY/SHELL/SELFTEST, no uwb_rxdiag:
 # those stay Zephyr-module literals) — plus the port/*.c locals below.
@@ -13,9 +13,9 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUT
 set(WOZ "${REPO_ROOT}/modules/woz_uwb/src")
 set(WOZ_INC "${REPO_ROOT}/modules/woz_uwb/include")
 set(WOZ_PORT "${REPO_ROOT}/modules/woz_port/include")
-set(DW  "${REPO_ROOT}/modules/woz_dw3000")
+set(DW  "${REPO_ROOT}/modules/ultrawidelock_dw3000")
 set(UWBROLES "${REPO_ROOT}/modules/woz_uwb/roles")
-set(DWROLES "${REPO_ROOT}/modules/woz_dw3000/roles")
+set(DWROLES "${REPO_ROOT}/modules/ultrawidelock_dw3000/roles")
 
 include("${REPO_ROOT}/cmake/woz_roles.cmake")
 # engine: driver + fira (ds_twr = shared ToF estimator; ccc_shim_rx.c calls it)
@@ -30,7 +30,7 @@ woz_role_sources("${UWBROLES}/crypto_mbedtls.list" UWB_CRYPTO_SRCS)
 # engine: Aliro ranging-setup adapter + M1-M4 codec
 woz_role_sources("${UWBROLES}/aliro_adapter.list" UWB_ALIRO_ADAPTER_SRCS)
 woz_role_sources("${UWBROLES}/aliro_codec.list" UWB_ALIRO_CODEC_SRCS)
-# vendor decadriver (modules/woz_dw3000/roles/ canonical set)
+# vendor decadriver (modules/ultrawidelock_dw3000/roles/ canonical set)
 woz_role_sources("${DWROLES}/core.list" DW_CORE_SRCS)
 woz_role_sources("${DWROLES}/chip_dw3000.list" DW_CHIP_SRCS)
 

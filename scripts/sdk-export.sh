@@ -63,7 +63,7 @@ mkdir -p "$STAGE"
 MAKEFLAGS= MFLAGS= "$CMAKE_BIN" --build "$STAGE/build" >/dev/null
 "$CMAKE_BIN" --install "$STAGE/build" >/dev/null
 
-for f in LICENSE THIRD_PARTY_NOTICES modules/woz_dw3000/LICENSE.txt; do
+for f in LICENSE THIRD_PARTY_NOTICES modules/ultrawidelock_dw3000/LICENSE.txt; do
 	[ -f "$STAGE/$NAME/share/doc/ultrawidelock/$f" ] ||
 		die "license text missing from the staged tree: $f" \
 			"the install rules in CMakeLists.txt must place it; do not ship without it"

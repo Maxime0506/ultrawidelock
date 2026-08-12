@@ -74,7 +74,7 @@ void dwt_isr(void)
 {
 	g_isr_calls++;
 	if (g_isr_calls >= g_isr_passes_before_line_drops) {
-		fake_gpio_input_set(WOZ_DW3000_PIN_IRQ, false);
+		fake_gpio_input_set(ULTRAWIDELOCK_DW3000_PIN_IRQ, false);
 	}
 }
 
@@ -127,7 +127,7 @@ static bool deliver_irq(void)
 {
 	bool interrupted;
 
-	fake_gpiote_pin_edge(WOZ_DW3000_PIN_IRQ, true);
+	fake_gpiote_pin_edge(ULTRAWIDELOCK_DW3000_PIN_IRQ, true);
 	interrupted = fake_gpiote_would_interrupt();
 	if (interrupted) {
 		woz_freertos_dw3000_irq_handler();
@@ -171,11 +171,11 @@ static void check_init(void)
 	 * chip every time the chip resets itself.
 	 */
 	CHECK("the reset line comes up released, not driven high",
-	      fake_gpio[WOZ_DW3000_PIN_RST].configured &&
-		      fake_gpio[WOZ_DW3000_PIN_RST].dir == NRF_GPIO_PIN_DIR_INPUT);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_RST].configured &&
+		      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_RST].dir == NRF_GPIO_PIN_DIR_INPUT);
 	CHECK("the wake line is an output",
-	      fake_gpio[WOZ_DW3000_PIN_WAKEUP].dir == NRF_GPIO_PIN_DIR_OUTPUT);
-	CHECK("the wake line idles asserted", fake_gpio[WOZ_DW3000_PIN_WAKEUP].level);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_WAKEUP].dir == NRF_GPIO_PIN_DIR_OUTPUT);
+	CHECK("the wake line idles asserted", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_WAKEUP].level);
 	CHECK("the SPI bus came up with it", fake_spim.enabled);
 }
 
@@ -185,15 +185,15 @@ static void check_interrupt_setup(void)
 	CHECK("the interrupt comes up", dw3000_hw_init_interrupt() == 0);
 
 	CHECK("the interrupt line is an input",
-	      fake_gpio[WOZ_DW3000_PIN_IRQ].configured &&
-		      fake_gpio[WOZ_DW3000_PIN_IRQ].dir == NRF_GPIO_PIN_DIR_INPUT);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_IRQ].configured &&
+		      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_IRQ].dir == NRF_GPIO_PIN_DIR_INPUT);
 	/*
 	 * Bound to the pin, not merely enabled. An unbound channel with its
 	 * interrupt unmasked is a board where nothing ever interrupts, and the
 	 * symptom is ranging that never starts rather than an error anywhere.
 	 */
 	CHECK("a GPIOTE channel is bound to the interrupt pin",
-	      fake_gpiote[0].configured && fake_gpiote[0].pin == WOZ_DW3000_PIN_IRQ);
+	      fake_gpiote[0].configured && fake_gpiote[0].pin == ULTRAWIDELOCK_DW3000_PIN_IRQ);
 	CHECK("the channel is enabled", fake_gpiote[0].enabled);
 	CHECK("the channel watches for the chip asserting the line",
 	      fake_gpiote[0].polarity == NRF_GPIOTE_POLARITY_LOTOHI);
@@ -260,7 +260,7 @@ static void check_interrupt_delivery(void)
 	CHECK("the worker drained the line rather than servicing one event",
 	      g_isr_calls == 3u);
 	CHECK("the line is released once it is drained",
-	      nrf_gpio_pin_read(WOZ_DW3000_PIN_IRQ) == 0u);
+	      nrf_gpio_pin_read(ULTRAWIDELOCK_DW3000_PIN_IRQ) == 0u);
 }
 
 static void check_spurious_vector(void)
@@ -293,7 +293,7 @@ static void check_interrupt_masking(void)
 	CHECK("nothing else was masked with it",
 	      fake_nvic_get_enable_irq(GPIOTE_IRQn) != 0u);
 
-	fake_gpiote_pin_edge(WOZ_DW3000_PIN_IRQ, true);
+	fake_gpiote_pin_edge(ULTRAWIDELOCK_DW3000_PIN_IRQ, true);
 	CHECK("a masked line raises no interrupt", !fake_gpiote_would_interrupt());
 	/*
 	 * But the event still latches, which is why unmasking has to be enough
@@ -320,9 +320,9 @@ static void check_reset(void)
 	 * by driving high: the line is open drain with the module's pull-up.
 	 */
 	CHECK("reset ends with the line released, not driven",
-	      fake_gpio[WOZ_DW3000_PIN_RST].dir == NRF_GPIO_PIN_DIR_INPUT);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_RST].dir == NRF_GPIO_PIN_DIR_INPUT);
 	CHECK("reset drove the line low while it was asserted",
-	      !fake_gpio[WOZ_DW3000_PIN_RST].level);
+	      !fake_gpio[ULTRAWIDELOCK_DW3000_PIN_RST].level);
 	/*
 	 * The chip needs time to climb from INIT_RC to IDLE_RC, and a port that
 	 * carries on early talks to a chip that answers SPI with nonsense.
@@ -347,7 +347,7 @@ static void check_wakeup(void)
 	g_busy_wait_total_us = 0;
 	dw3000_hw_wakeup();
 	CHECK("waking clears the sleep state", !dw3000_hw_is_asleep());
-	CHECK("waking pulsed chip select", fake_gpio[WOZ_DW3000_PIN_CS].writes >= 2u);
+	CHECK("waking pulsed chip select", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].writes >= 2u);
 	/*
 	 * 500 us for the chip-select pulse plus 2000 for the climb from INIT_RC
 	 * to IDLE_RC. The second is the one that matters: a DW3110 still in
@@ -380,7 +380,7 @@ static void check_wakeup_pin(void)
 {
 	bring_up();
 	dw3000_hw_wakeup_pin_low();
-	CHECK("the wake pin can be driven low", !fake_gpio[WOZ_DW3000_PIN_WAKEUP].level);
+	CHECK("the wake pin can be driven low", !fake_gpio[ULTRAWIDELOCK_DW3000_PIN_WAKEUP].level);
 }
 
 static void check_fini(void)
@@ -394,7 +394,7 @@ static void check_fini(void)
 	CHECK("shutting down releases the GPIOTE channel", !fake_gpiote[0].enabled);
 	CHECK("shutting down takes the SPI bus down too", !fake_spim.enabled);
 
-	fake_gpiote_pin_edge(WOZ_DW3000_PIN_IRQ, true);
+	fake_gpiote_pin_edge(ULTRAWIDELOCK_DW3000_PIN_IRQ, true);
 	CHECK("a released channel raises nothing", !fake_gpiote_would_interrupt());
 }
 

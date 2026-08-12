@@ -375,7 +375,7 @@ static uint32_t reply_hi32(uint64_t ref_dtu)
  * The RMARKER the chip will produce is (dx << 8) plus whatever the TX antenna
  * delay register holds, so it is knowable BEFORE the frame goes out -- which is
  * what lets the initiator put t5 inside the FINAL it is about to send. Nothing
- * in this repo ever programs that register (modules/woz_dw3000's only writers are in
+ * in this repo ever programs that register (modules/ultrawidelock_dw3000's only writers are in
  * the MCPS init path this stack does not use), so the offset is a constant, and
  * a constant is exactly what ANCHOR_ANT_DLY_DTU absorbs. The residual is
  * measured rather than assumed: every delayed TX compares the prediction with

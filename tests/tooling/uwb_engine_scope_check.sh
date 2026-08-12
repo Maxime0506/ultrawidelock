@@ -20,7 +20,7 @@
 #
 # WHAT IS EXEMPT, and why each one is not a hole:
 #
-#   modules/woz_dw3000/**            the vendored driver and its integration
+#   modules/ultrawidelock_dw3000/**            the vendored driver and its integration
 #   uwb_seam.h                       the engine's own call discipline (dwt-typed
 #                                    by design; see uwb_seam_check.sh)
 #   modules/woz_uwb/src/driver/**    radio init, ISR, RX/CIR diagnostics
@@ -70,7 +70,7 @@ COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 strip_trailing_comments() { sed -E 's|//.*$||; s|/\*.*$||'; }
 
 # The DW3000 engine file set. See the header for why each entry is not a hole.
-ENGINE_RE='^(modules/woz_dw3000/
+ENGINE_RE='^(modules/ultrawidelock_dw3000/
 |modules/woz_uwb/include/uwb_seam\.h
 |modules/woz_uwb/src/driver/
 |modules/woz_uwb/src/ccc/ccc_shim_rx\.c

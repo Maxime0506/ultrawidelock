@@ -301,7 +301,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/uwb" \
-	-I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HERE/test_dw3000_spi.c" \
 	"$HERE/fake/fake_freertos.c" \
 	"$HERE/fake/fake_gpio.c" \
@@ -325,8 +325,8 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/uwb" \
-	-I"$ROOT/modules/woz_dw3000/include" \
-	-I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/include" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/dwt_uwb_driver" \
 	"$HERE/test_dw3000_hw.c" \
 	"$HERE/fake/fake_freertos.c" \
 	"$HERE/fake/fake_nrf.c" \

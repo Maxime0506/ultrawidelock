@@ -129,7 +129,7 @@ duplicating separate instructions for individual agent products.
 ## License
 
 Project-original code is under the ISC license in [LICENSE](LICENSE). The
-DW3000 integration in `modules/woz_dw3000` is ISC (Bruno Randolf); the vendored
+DW3000 integration in `modules/ultrawidelock_dw3000` is ISC (Bruno Randolf); the vendored
 Qorvo UWB driver it wraps is LicenseRef-QORVO-2, which permits use only with
 Qorvo integrated circuits, so binaries built with UWB support inherit that
 hardware restriction. The full file-to-license mapping is in

@@ -37,9 +37,9 @@ volatile uint32_t g_dw_cyc_per_us = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ;
 #endif
 
 #if CONFIG_FREERTOS_NUMBER_OF_CORES > 1
-#define WOZ_DW3000_TASK_CORE 1
+#define ULTRAWIDELOCK_DW3000_TASK_CORE 1
 #else
-#define WOZ_DW3000_TASK_CORE 0
+#define ULTRAWIDELOCK_DW3000_TASK_CORE 0
 #endif
 
 // Return the current CPU cycle count, used as the DW3000 driver's cycle-counter timebase on this port.
@@ -62,18 +62,18 @@ int dw3000_hw_init(void)
 {
 	/* Reset line: input = released (external pull-up); active low when driven. */
 	gpio_config_t rst = {
-		.pin_bit_mask = 1ULL << WOZ_DW3000_PIN_RST,
+		.pin_bit_mask = 1ULL << ULTRAWIDELOCK_DW3000_PIN_RST,
 		.mode = GPIO_MODE_INPUT,
 	};
 	gpio_config(&rst);
 
 	/* Wakeup line held active (matches the Zephyr GPIO_OUTPUT_ACTIVE default). */
 	gpio_config_t wk = {
-		.pin_bit_mask = 1ULL << WOZ_DW3000_PIN_WAKEUP,
+		.pin_bit_mask = 1ULL << ULTRAWIDELOCK_DW3000_PIN_WAKEUP,
 		.mode = GPIO_MODE_OUTPUT,
 	};
 	gpio_config(&wk);
-	gpio_set_level(WOZ_DW3000_PIN_WAKEUP, 1);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_WAKEUP, 1);
 
 	return dw3000_spi_init();
 }
@@ -102,7 +102,7 @@ static void dw3000_isr_task(void *arg)
 	for (;;) {
 		xSemaphoreTake(s_irq_sem, portMAX_DELAY);
 		g_dw_cyc_work = esp_cpu_get_cycle_count();
-		while (gpio_get_level(WOZ_DW3000_PIN_IRQ)) {
+		while (gpio_get_level(ULTRAWIDELOCK_DW3000_PIN_IRQ)) {
 			dwt_isr();
 		}
 		g_dw_cyc_isrdone = esp_cpu_get_cycle_count();
@@ -127,7 +127,7 @@ int dw3000_hw_init_interrupt(void)
 	}
 
 	gpio_config_t irq = {
-		.pin_bit_mask = 1ULL << WOZ_DW3000_PIN_IRQ,
+		.pin_bit_mask = 1ULL << ULTRAWIDELOCK_DW3000_PIN_IRQ,
 		.mode = GPIO_MODE_INPUT,
 		.intr_type = GPIO_INTR_POSEDGE,
 	};
@@ -141,7 +141,7 @@ int dw3000_hw_init_interrupt(void)
 		}
 		isr_service_installed = true;
 	}
-	gpio_isr_handler_add(WOZ_DW3000_PIN_IRQ, dw3000_gpio_isr, NULL);
+	gpio_isr_handler_add(ULTRAWIDELOCK_DW3000_PIN_IRQ, dw3000_gpio_isr, NULL);
 
 	if (s_irq_task == NULL) {
 		/* On dual-core parts this stays on core 1 while BLE/Wi-Fi live on core 0.
@@ -152,16 +152,16 @@ int dw3000_hw_init_interrupt(void)
 		 * so the Final arm always ran after the Final had passed. */
 		BaseType_t rc = xTaskCreatePinnedToCore(dw3000_isr_task, "dw3000_isr", 4096,
 						      NULL, 23, &s_irq_task,
-						      WOZ_DW3000_TASK_CORE);
+						      ULTRAWIDELOCK_DW3000_TASK_CORE);
 		if (rc != pdPASS) {
 			ESP_LOGE(TAG, "failed to create IRQ task on core %d",
-				 WOZ_DW3000_TASK_CORE);
+				 ULTRAWIDELOCK_DW3000_TASK_CORE);
 			return -1;
 		}
 	}
 	s_irq_enabled = true;
-	ESP_LOGI(TAG, "IRQ on GPIO%d, worker core %d", WOZ_DW3000_PIN_IRQ,
-		 WOZ_DW3000_TASK_CORE);
+	ESP_LOGI(TAG, "IRQ on GPIO%d, worker core %d", ULTRAWIDELOCK_DW3000_PIN_IRQ,
+		 ULTRAWIDELOCK_DW3000_TASK_CORE);
 	return 0;
 }
 
@@ -169,7 +169,7 @@ int dw3000_hw_init_interrupt(void)
 void dw3000_hw_interrupt_enable(void)
 {
 	if (!s_irq_enabled) {
-		gpio_intr_enable(WOZ_DW3000_PIN_IRQ);
+		gpio_intr_enable(ULTRAWIDELOCK_DW3000_PIN_IRQ);
 		s_irq_enabled = true;
 	}
 }
@@ -178,7 +178,7 @@ void dw3000_hw_interrupt_enable(void)
 void dw3000_hw_interrupt_disable(void)
 {
 	if (s_irq_enabled) {
-		gpio_intr_disable(WOZ_DW3000_PIN_IRQ);
+		gpio_intr_disable(ULTRAWIDELOCK_DW3000_PIN_IRQ);
 		s_irq_enabled = false;
 	}
 }
@@ -191,10 +191,10 @@ bool dw3000_hw_interrupt_is_enabled(void) { return s_irq_enabled; }
 void dw3000_hw_reset(void)
 {
 	/* Drive reset low (assert), release to hi-Z, let the chip climb to IDLE_RC. */
-	gpio_set_direction(WOZ_DW3000_PIN_RST, GPIO_MODE_OUTPUT);
-	gpio_set_level(WOZ_DW3000_PIN_RST, 0);
+	gpio_set_direction(ULTRAWIDELOCK_DW3000_PIN_RST, GPIO_MODE_OUTPUT);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_RST, 0);
 	vTaskDelay(pdMS_TO_TICKS(1));
-	gpio_set_direction(WOZ_DW3000_PIN_RST, GPIO_MODE_INPUT);
+	gpio_set_direction(ULTRAWIDELOCK_DW3000_PIN_RST, GPIO_MODE_INPUT);
 	vTaskDelay(pdMS_TO_TICKS(2));
 	s_asleep = false;
 }
@@ -226,7 +226,7 @@ void dw3000_hw_wakeup(void)
 // Drive the DW3000 WAKEUP pin low.
 void dw3000_hw_wakeup_pin_low(void)
 {
-	gpio_set_level(WOZ_DW3000_PIN_WAKEUP, 0);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_WAKEUP, 0);
 }
 
 // Tear down the DW3000 hardware port: disable the IRQ line if enabled and finalize the SPI bus.
@@ -234,7 +234,7 @@ void dw3000_hw_wakeup_pin_low(void)
 void dw3000_hw_fini(void)
 {
 	if (s_irq_enabled) {
-		gpio_intr_disable(WOZ_DW3000_PIN_IRQ);
+		gpio_intr_disable(ULTRAWIDELOCK_DW3000_PIN_IRQ);
 		s_irq_enabled = false;
 	}
 	dw3000_spi_fini();

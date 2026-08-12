@@ -7,7 +7,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 ALIRO="$ROOT/modules/woz_aliro"
 WOZ_PORT_INC="$ROOT/modules/woz_port/include"
 UWB_INC="$ROOT/modules/woz_uwb/include"
-DW3000_INC="$ROOT/modules/woz_dw3000/include"
+DW3000_INC="$ROOT/modules/ultrawidelock_dw3000/include"
 
 echo "== host: port headers unit test =="
 BIN="$(mktemp -t woz_port_headers.XXXXXX)"

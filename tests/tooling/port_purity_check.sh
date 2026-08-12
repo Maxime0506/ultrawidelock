@@ -28,7 +28,7 @@
 #
 #   modules/woz_port/                the contract itself: its whole job is to be
 #                                    the one place platform branches live
-#   modules/woz_dw3000/dwt_uwb_driver/   vendored Qorvo decadriver
+#   modules/ultrawidelock_dw3000/dwt_uwb_driver/   vendored Qorvo decadriver
 #   modules/ultrawidelock_dfu/src/detools/         vendored delta-patch engine
 #   woz_aliro_stack/{aliro_stack,session}.cpp  adapters to the Nordic add-on's
 #                                    <aliro/*> API; the add-on's own headers
@@ -111,7 +111,7 @@ COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 # them and the staleness check re-proves each one is still needed, so the list
 # cannot outlive its reasons.
 PERMANENT_DIRS=(
-	modules/woz_dw3000/dwt_uwb_driver   # vendored Qorvo decadriver
+	modules/ultrawidelock_dw3000/dwt_uwb_driver   # vendored Qorvo decadriver
 	modules/ultrawidelock_dfu/src/detools         # vendored delta-patch engine
 )
 PERMANENT_FILES=(
@@ -984,7 +984,7 @@ self_test() {
 	# the gate without anyone noticing.
 	local f
 	for f in modules/ultrawidelock_matter/src/matter_tlv.c modules/woz_aliro/src/aliro_reader.c \
-		modules/woz_uwb/src/ccc/ccc_shim.c modules/woz_dw3000/src/deca_port.c; do
+		modules/woz_uwb/src/ccc/ccc_shim.c modules/ultrawidelock_dw3000/src/deca_port.c; do
 		if [[ $f =~ $PERMANENT_RE ]] || in_ratchet "$f"; then
 			printf '%s  self-test FAILED: %s is exempt, but it must stay pure%s\n' \
 				"$R" "$f" "$Z" >&2

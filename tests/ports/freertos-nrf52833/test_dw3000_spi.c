@@ -92,7 +92,7 @@ static void bring_up(void)
 {
 	fake_gpio_reset();
 	fake_spim_reset();
-	fake_spim_cs_pin = WOZ_DW3000_PIN_CS;
+	fake_spim_cs_pin = ULTRAWIDELOCK_DW3000_PIN_CS;
 	CHECK("the bus comes up", dw3000_spi_init() == 0);
 }
 
@@ -102,10 +102,10 @@ static void check_init(void)
 {
 	bring_up();
 
-	CHECK("chip select is an output", fake_gpio[WOZ_DW3000_PIN_CS].configured &&
-					  fake_gpio[WOZ_DW3000_PIN_CS].dir ==
+	CHECK("chip select is an output", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].configured &&
+					  fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].dir ==
 						  NRF_GPIO_PIN_DIR_OUTPUT);
-	CHECK("chip select idles released", fake_gpio[WOZ_DW3000_PIN_CS].level);
+	CHECK("chip select idles released", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].level);
 	/*
 	 * The order matters and the level alone cannot show it: a pin made an
 	 * output while its OUT register still reads zero drives the line low,
@@ -114,24 +114,26 @@ static void check_init(void)
 	 * already high the one time its level changed.
 	 */
 	CHECK("chip select never strobed on the way up",
-	      fake_gpio[WOZ_DW3000_PIN_CS].writes == 1u);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].writes == 1u);
 
 	CHECK("the clock pin is an output",
-	      fake_gpio[WOZ_DW3000_PIN_SCLK].dir == NRF_GPIO_PIN_DIR_OUTPUT);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_SCLK].dir == NRF_GPIO_PIN_DIR_OUTPUT);
 	CHECK("the clock pin keeps its input buffer connected",
-	      fake_gpio[WOZ_DW3000_PIN_SCLK].input == NRF_GPIO_PIN_INPUT_CONNECT);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_SCLK].input == NRF_GPIO_PIN_INPUT_CONNECT);
 	CHECK("the clock idles low, as SPI mode 0 requires",
-	      !fake_gpio[WOZ_DW3000_PIN_SCLK].level);
-	CHECK("MOSI is an output", fake_gpio[WOZ_DW3000_PIN_MOSI].dir == NRF_GPIO_PIN_DIR_OUTPUT);
-	CHECK("MISO is an input", fake_gpio[WOZ_DW3000_PIN_MISO].configured &&
-				  fake_gpio[WOZ_DW3000_PIN_MISO].dir == NRF_GPIO_PIN_DIR_INPUT);
-	CHECK("MISO is pulled down", fake_gpio[WOZ_DW3000_PIN_MISO].pull == NRF_GPIO_PIN_PULLDOWN);
+	      !fake_gpio[ULTRAWIDELOCK_DW3000_PIN_SCLK].level);
+	CHECK("MOSI is an output",
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_MOSI].dir == NRF_GPIO_PIN_DIR_OUTPUT);
+	CHECK("MISO is an input", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_MISO].configured &&
+				  fake_gpio[ULTRAWIDELOCK_DW3000_PIN_MISO].dir == NRF_GPIO_PIN_DIR_INPUT);
+	CHECK("MISO is pulled down",
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_MISO].pull == NRF_GPIO_PIN_PULLDOWN);
 
 	CHECK("the peripheral is enabled", fake_spim.enabled);
 	CHECK("the pins are routed to the peripheral",
-	      fake_spim.psel_sck == WOZ_DW3000_PIN_SCLK &&
-		      fake_spim.psel_mosi == WOZ_DW3000_PIN_MOSI &&
-		      fake_spim.psel_miso == WOZ_DW3000_PIN_MISO);
+	      fake_spim.psel_sck == ULTRAWIDELOCK_DW3000_PIN_SCLK &&
+		      fake_spim.psel_mosi == ULTRAWIDELOCK_DW3000_PIN_MOSI &&
+		      fake_spim.psel_miso == ULTRAWIDELOCK_DW3000_PIN_MISO);
 	CHECK("the DW3110's SPI mode 0 is selected", fake_spim.mode == NRF_SPIM_MODE_0);
 	CHECK("bits go out most significant first",
 	      fake_spim.bit_order == NRF_SPIM_BIT_ORDER_MSB_FIRST);
@@ -165,13 +167,13 @@ static void check_init_is_idempotent(void)
 
 	bring_up();
 	dw3000_spi_speed_fast();
-	writes = fake_gpio[WOZ_DW3000_PIN_CS].writes;
+	writes = fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].writes;
 
 	CHECK("a second bring-up succeeds", dw3000_spi_init() == 0);
 	CHECK("a second bring-up leaves the clock where the driver put it",
 	      fake_spim.frequency == NRF_SPIM_FREQ_8M);
 	CHECK("a second bring-up leaves chip select alone",
-	      fake_gpio[WOZ_DW3000_PIN_CS].writes == writes);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].writes == writes);
 }
 
 static void check_write(void)
@@ -188,7 +190,7 @@ static void check_write(void)
 	      fake_spim.mosi_len == 5u && memcmp(mosi_at(0), hdr, 2) == 0 &&
 		      memcmp(mosi_at(2), body, 3) == 0);
 	CHECK("chip select was held low across the whole command", fake_spim_cs_held);
-	CHECK("chip select was released afterwards", fake_gpio[WOZ_DW3000_PIN_CS].level);
+	CHECK("chip select was released afterwards", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].level);
 
 	/*
 	 * A second command, because END is what a polled driver waits on and the
@@ -290,7 +292,7 @@ static void check_flash_body_is_copied(void)
 static void check_oversize_is_refused(void)
 {
 	static uint8_t hdr[2];
-	static uint8_t body[WOZ_DW3000_SPI_XFER_MAX];
+	static uint8_t body[ULTRAWIDELOCK_DW3000_SPI_XFER_MAX];
 
 	bring_up();
 	bus_reset();
@@ -302,7 +304,7 @@ static void check_oversize_is_refused(void)
 	 * wrong comparison actually lives.
 	 */
 	CHECK("the largest allowed transfer is accepted",
-	      dw3000_spi_write(2, hdr, WOZ_DW3000_SPI_XFER_MAX - 2u, body) == 0);
+	      dw3000_spi_write(2, hdr, ULTRAWIDELOCK_DW3000_SPI_XFER_MAX - 2u, body) == 0);
 	CHECK("the largest allowed transfer was clocked", fake_spim.transfers == 1u);
 
 	bus_reset();
@@ -312,7 +314,7 @@ static void check_oversize_is_refused(void)
 	 * truncating instead of refusing would produce plausible wrong values.
 	 */
 	CHECK("one byte past the bound is refused",
-	      dw3000_spi_write(2, hdr, WOZ_DW3000_SPI_XFER_MAX - 1u, body) == -1);
+	      dw3000_spi_write(2, hdr, ULTRAWIDELOCK_DW3000_SPI_XFER_MAX - 1u, body) == -1);
 	CHECK("a refused transfer clocks nothing", fake_spim.transfers == 0u);
 	CHECK("a zero-length header is refused", dw3000_spi_write(0, hdr, 1, body) == -1);
 }
@@ -335,7 +337,7 @@ static void check_stalled_transfer(void)
 	 * has to stop the peripheral before it lets go.
 	 */
 	CHECK("the peripheral was stopped rather than abandoned", fake_spim.stops == 1u);
-	CHECK("chip select was released even so", fake_gpio[WOZ_DW3000_PIN_CS].level);
+	CHECK("chip select was released even so", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].level);
 
 	/* And the bus is usable again, which is the point of stopping it. */
 	fake_spim.stall = false;
@@ -378,8 +380,8 @@ static void check_wakeup(void)
 	 * CSN: hardware chip select only asserts around a transfer.
 	 */
 	CHECK("waking the chip clocked nothing", fake_spim.transfers == 0u);
-	CHECK("waking the chip pulsed chip select", fake_gpio[WOZ_DW3000_PIN_CS].writes == 3u);
-	CHECK("chip select is released after the pulse", fake_gpio[WOZ_DW3000_PIN_CS].level);
+	CHECK("waking the chip pulsed chip select", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].writes == 3u);
+	CHECK("chip select is released after the pulse", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].level);
 	CHECK("the pulse is held for the 500 us the chip requires",
 	      g_busy_waits == 1u && g_busy_wait_us == 500u);
 }
@@ -393,7 +395,7 @@ static void check_fini(void)
 
 	CHECK("shutting down disables the peripheral", !fake_spim.enabled);
 	CHECK("shutting down leaves chip select released",
-	      fake_gpio[WOZ_DW3000_PIN_CS].level);
+	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_CS].level);
 	bus_reset();
 	CHECK("a transfer after shutdown is refused", dw3000_spi_write(2, hdr, 0, NULL) == -1);
 	CHECK("a transfer after shutdown clocks nothing", fake_spim.transfers == 0u);

@@ -97,7 +97,7 @@ math, CCC key schedule and MAC framing, the Aliro M1-M4 adapter, and the apps.
 What a new chipset supplies:
 
 1. An implementation of every function in `<ultrawidelock/uwb.h>`, in its own
-   module directory beside `modules/woz_dw3000/`.
+   module directory beside `modules/ultrawidelock_dw3000/`.
 2. Role manifests for its source sets, replacing the DW3000-shaped roles
    (`base_driver`, `ccc_engine`, `responder_driver`, `diag_cir`,
    `flight_recorder`); the chip-agnostic roles are consumed unchanged.

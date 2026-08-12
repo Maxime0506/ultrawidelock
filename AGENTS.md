@@ -16,7 +16,7 @@ in `ports/`. Applications select both without copying their implementation.
 Run `make help` for supported build and hardware commands. Search with `rg` or
 `rg --files`; role manifests under `modules/*/roles/` are the source of truth
 for shared source membership. Grep `apps/*/size-baseline*.json` and
-`modules/woz_dw3000/dwt_uwb_driver/` rather than reading them whole; they are
+`modules/ultrawidelock_dw3000/dwt_uwb_driver/` rather than reading them whole; they are
 generated or vendored bulk, not prose.
 
 ## Architecture contract
@@ -54,7 +54,7 @@ also implement the OSAL, flash, logging, and base port contracts.
 ## Change discipline
 
 - Keep edits minimal and preserve unrelated working-tree changes.
-- Do not edit `modules/woz_dw3000/dwt_uwb_driver/` or
+- Do not edit `modules/ultrawidelock_dw3000/dwt_uwb_driver/` or
   `modules/ultrawidelock_dfu/src/detools/`.
 - Do not change `mk/cdk.mk:208`.
 - Do not weaken a test, purity rule, or ratchet allowlist to obtain a pass.

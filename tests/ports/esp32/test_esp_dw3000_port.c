@@ -81,7 +81,7 @@ static BaseType_t take_once(SemaphoreHandle_t s, TickType_t ticks)
 
 static void drop_irq_line(int pin)
 {
-	if (pin == WOZ_DW3000_PIN_IRQ) {
+	if (pin == ULTRAWIDELOCK_DW3000_PIN_IRQ) {
 		fake_gpio_input_level[pin] = 0; /* one dwt_isr pass, then done */
 	}
 }
@@ -90,16 +90,16 @@ static void t_spi_init(void)
 {
 #if CONFIG_IDF_TARGET_ESP32C6
 	okc("C6 pin map",
-	    WOZ_DW3000_PIN_SCLK == 6 && WOZ_DW3000_PIN_MOSI == 7 &&
-	    WOZ_DW3000_PIN_MISO == 2 && WOZ_DW3000_PIN_CS == 10 &&
-	    WOZ_DW3000_PIN_RST == 1 && WOZ_DW3000_PIN_IRQ == 3 &&
-	    WOZ_DW3000_PIN_WAKEUP == 0);
+	    ULTRAWIDELOCK_DW3000_PIN_SCLK == 6 && ULTRAWIDELOCK_DW3000_PIN_MOSI == 7 &&
+	    ULTRAWIDELOCK_DW3000_PIN_MISO == 2 && ULTRAWIDELOCK_DW3000_PIN_CS == 10 &&
+	    ULTRAWIDELOCK_DW3000_PIN_RST == 1 && ULTRAWIDELOCK_DW3000_PIN_IRQ == 3 &&
+	    ULTRAWIDELOCK_DW3000_PIN_WAKEUP == 0);
 #elif CONFIG_IDF_TARGET_ESP32S3
 	okc("S3 pin map",
-	    WOZ_DW3000_PIN_SCLK == 12 && WOZ_DW3000_PIN_MOSI == 11 &&
-	    WOZ_DW3000_PIN_MISO == 13 && WOZ_DW3000_PIN_CS == 10 &&
-	    WOZ_DW3000_PIN_RST == 4 && WOZ_DW3000_PIN_IRQ == 5 &&
-	    WOZ_DW3000_PIN_WAKEUP == 6);
+	    ULTRAWIDELOCK_DW3000_PIN_SCLK == 12 && ULTRAWIDELOCK_DW3000_PIN_MOSI == 11 &&
+	    ULTRAWIDELOCK_DW3000_PIN_MISO == 13 && ULTRAWIDELOCK_DW3000_PIN_CS == 10 &&
+	    ULTRAWIDELOCK_DW3000_PIN_RST == 4 && ULTRAWIDELOCK_DW3000_PIN_IRQ == 5 &&
+	    ULTRAWIDELOCK_DW3000_PIN_WAKEUP == 6);
 #endif
 	okc("cycle rate follows target CPU",
 	    g_dw_cyc_per_us == CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
@@ -107,7 +107,7 @@ static void t_spi_init(void)
 	printf("-- spi init --\n");
 
 	fake_driver_reset();
-	fake_spi_cs_pin = WOZ_DW3000_PIN_CS;
+	fake_spi_cs_pin = ULTRAWIDELOCK_DW3000_PIN_CS;
 
 	fake_spi_bus_init_rc = ESP_FAIL;
 	okc("bus init failure", dw3000_spi_init() == -1);
@@ -121,12 +121,12 @@ static void t_spi_init(void)
 
 	okc("init ok", dw3000_spi_init() == 0);
 	okc("CS output + idle high",
-	    fake_gpio_mode[WOZ_DW3000_PIN_CS] == GPIO_MODE_OUTPUT &&
-	    fake_gpio_level[WOZ_DW3000_PIN_CS] == 1);
+	    fake_gpio_mode[ULTRAWIDELOCK_DW3000_PIN_CS] == GPIO_MODE_OUTPUT &&
+	    fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_CS] == 1);
 	okc("bus pins wired",
-	    fake_spi_bus_cfg.mosi_io_num == WOZ_DW3000_PIN_MOSI &&
-	    fake_spi_bus_cfg.miso_io_num == WOZ_DW3000_PIN_MISO &&
-	    fake_spi_bus_cfg.sclk_io_num == WOZ_DW3000_PIN_SCLK);
+	    fake_spi_bus_cfg.mosi_io_num == ULTRAWIDELOCK_DW3000_PIN_MOSI &&
+	    fake_spi_bus_cfg.miso_io_num == ULTRAWIDELOCK_DW3000_PIN_MISO &&
+	    fake_spi_bus_cfg.sclk_io_num == ULTRAWIDELOCK_DW3000_PIN_SCLK);
 	okc("re-init is a no-op", dw3000_spi_init() == 0 && fake_spi_bus_inits >= 1);
 }
 
@@ -150,7 +150,7 @@ static void t_spi_framing(void)
 	okc("read body zero-filled on MOSI",
 	    fake_spi_txns[0].tx[2] == 0 && fake_spi_txns[0].tx[9] == 0);
 	okc("read CS low during burst", fake_spi_txns[0].cs_level_during == 0);
-	okc("read CS released after", fake_gpio_level[WOZ_DW3000_PIN_CS] == 1);
+	okc("read CS released after", fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_CS] == 1);
 
 	int body_ok = 1;
 
@@ -213,7 +213,7 @@ static void t_spi_framing(void)
 	okc("oversize rejected", dw3000_spi_write(2, hdr, 2047, NULL) == -1);
 	fake_spi_transmit_rc = ESP_FAIL;
 	okc("transmit failure -> -1", dw3000_spi_read(2, hdr, 4, body) == -1);
-	okc("CS released after failure", fake_gpio_level[WOZ_DW3000_PIN_CS] == 1);
+	okc("CS released after failure", fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_CS] == 1);
 	fake_spi_transmit_rc = ESP_OK;
 
 	/* Speed switch changes the device handle in use. */
@@ -225,14 +225,14 @@ static void t_spi_framing(void)
 	okc("slow/fast use different devices",
 	    fake_spi_txn_count == 2 && fake_spi_txns[0].dev != fake_spi_txns[1].dev);
 	okc("slow clock on slow device",
-	    fake_spi_txns[0].dev->cfg.clock_speed_hz == WOZ_DW3000_SPI_SLOW_HZ &&
-	    fake_spi_txns[1].dev->cfg.clock_speed_hz == WOZ_DW3000_SPI_FAST_HZ);
+	    fake_spi_txns[0].dev->cfg.clock_speed_hz == ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ &&
+	    fake_spi_txns[1].dev->cfg.clock_speed_hz == ULTRAWIDELOCK_DW3000_SPI_FAST_HZ);
 
 	/* CS-toggle wakeup: low, ~500 us, high. */
 	fake_rom_delay_us_total = 0;
 	dw3000_spi_wakeup();
 	okc("wakeup toggled CS with 500 us low",
-	    fake_gpio_level[WOZ_DW3000_PIN_CS] == 1 && fake_rom_delay_us_total == 500);
+	    fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_CS] == 1 && fake_rom_delay_us_total == 500);
 
 	dw3000_spi_trace_output(); /* no-op; just must link */
 	okc("trace no-op", 1);
@@ -243,10 +243,10 @@ static void t_hw(void)
 	printf("-- hw init / reset / wakeup / irq --\n");
 
 	okc("hw_init rc", dw3000_hw_init() == 0);
-	okc("RST is input (released)", fake_gpio_mode[WOZ_DW3000_PIN_RST] == GPIO_MODE_INPUT);
+	okc("RST is input (released)", fake_gpio_mode[ULTRAWIDELOCK_DW3000_PIN_RST] == GPIO_MODE_INPUT);
 	okc("WAKEUP output held high",
-	    fake_gpio_mode[WOZ_DW3000_PIN_WAKEUP] == GPIO_MODE_OUTPUT &&
-	    fake_gpio_level[WOZ_DW3000_PIN_WAKEUP] == 1);
+	    fake_gpio_mode[ULTRAWIDELOCK_DW3000_PIN_WAKEUP] == GPIO_MODE_OUTPUT &&
+	    fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_WAKEUP] == 1);
 
 	/* Reset choreography: drive low, release to hi-Z input. */
 	dw3000_hw_mark_asleep();
@@ -254,8 +254,8 @@ static void t_hw(void)
 	fake_delay_calls = 0;
 	dw3000_hw_reset();
 	okc("reset released RST to input",
-	    fake_gpio_mode[WOZ_DW3000_PIN_RST] == GPIO_MODE_INPUT &&
-	    fake_gpio_level[WOZ_DW3000_PIN_RST] == 0);
+	    fake_gpio_mode[ULTRAWIDELOCK_DW3000_PIN_RST] == GPIO_MODE_INPUT &&
+	    fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_RST] == 0);
 	okc("reset waited (1+2 ticks)", fake_delay_total_ticks >= 3);
 	okc("reset cleared asleep", !dw3000_hw_is_asleep());
 
@@ -275,7 +275,7 @@ static void t_hw(void)
 	s_idlerc = 1;
 
 	dw3000_hw_wakeup_pin_low();
-	okc("wakeup pin driven low", fake_gpio_level[WOZ_DW3000_PIN_WAKEUP] == 0);
+	okc("wakeup pin driven low", fake_gpio_level[ULTRAWIDELOCK_DW3000_PIN_WAKEUP] == 0);
 
 	/* IRQ bring-up. */
 	fake_gpio_isr_service_rc = ESP_FAIL;
@@ -283,9 +283,9 @@ static void t_hw(void)
 	fake_gpio_isr_service_rc = ESP_ERR_INVALID_STATE; /* already installed: fine */
 	okc("init_interrupt rc", dw3000_hw_init_interrupt() == 0);
 	okc("IRQ pin input + posedge",
-	    fake_gpio_mode[WOZ_DW3000_PIN_IRQ] == GPIO_MODE_INPUT &&
-	    fake_gpio_intr[WOZ_DW3000_PIN_IRQ] == GPIO_INTR_POSEDGE);
-	okc("isr handler registered", fake_gpio_isr[WOZ_DW3000_PIN_IRQ] != NULL);
+	    fake_gpio_mode[ULTRAWIDELOCK_DW3000_PIN_IRQ] == GPIO_MODE_INPUT &&
+	    fake_gpio_intr[ULTRAWIDELOCK_DW3000_PIN_IRQ] == GPIO_INTR_POSEDGE);
+	okc("isr handler registered", fake_gpio_isr[ULTRAWIDELOCK_DW3000_PIN_IRQ] != NULL);
 	okc("irq task uses target core at prio 23",
 	    fake_task_count == 1 && fake_tasks[0].core == EXPECTED_UWB_CORE &&
 	    fake_tasks[0].prio == 23);
@@ -293,10 +293,10 @@ static void t_hw(void)
 	okc("re-init is idempotent", dw3000_hw_init_interrupt() == 0 && fake_task_count == 1);
 
 	/* Fire the ISR, then pump the service task: dwt_isr while the line is high. */
-	fake_gpio_isr[WOZ_DW3000_PIN_IRQ](fake_gpio_isr_arg[WOZ_DW3000_PIN_IRQ]);
+	fake_gpio_isr[ULTRAWIDELOCK_DW3000_PIN_IRQ](fake_gpio_isr_arg[ULTRAWIDELOCK_DW3000_PIN_IRQ]);
 	okc("isr yielded to the worker", fake_port_yields == 1);
 
-	fake_gpio_input_level[WOZ_DW3000_PIN_IRQ] = 1;
+	fake_gpio_input_level[ULTRAWIDELOCK_DW3000_PIN_IRQ] = 1;
 	fake_gpio_get_level_hook = drop_irq_line;
 	fake_sem_take_hook = take_once;
 	s_takes = 0;
@@ -311,12 +311,13 @@ static void t_hw(void)
 	/* Enable/disable are edge-triggered on the tracked state. */
 	dw3000_hw_interrupt_disable();
 	okc("disable gates the GPIO intr",
-	    !dw3000_hw_interrupt_is_enabled() && fake_gpio_intr_enabled[WOZ_DW3000_PIN_IRQ] == 0);
+	    !dw3000_hw_interrupt_is_enabled() &&
+		    fake_gpio_intr_enabled[ULTRAWIDELOCK_DW3000_PIN_IRQ] == 0);
 	dw3000_hw_interrupt_disable();
 	okc("double disable no-op", !dw3000_hw_interrupt_is_enabled());
 	dw3000_hw_interrupt_enable();
 	okc("enable restores the GPIO intr",
-	    dw3000_hw_interrupt_is_enabled() && fake_gpio_intr_enabled[WOZ_DW3000_PIN_IRQ] == 1);
+	    dw3000_hw_interrupt_is_enabled() && fake_gpio_intr_enabled[ULTRAWIDELOCK_DW3000_PIN_IRQ] == 1);
 	dw3000_hw_interrupt_enable();
 	okc("double enable no-op", dw3000_hw_interrupt_is_enabled());
 

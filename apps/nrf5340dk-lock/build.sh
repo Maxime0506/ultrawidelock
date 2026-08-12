@@ -119,7 +119,7 @@ die() {
   exit 1
 }
 
-# Resolve UWB_CHIP -> the dw3000 decadriver's chip Kconfig choice (modules/woz_dw3000/Kconfig).
+# Resolve UWB_CHIP -> the dw3000 decadriver's chip Kconfig choice (modules/ultrawidelock_dw3000/Kconfig).
 # Same DT node + wiring for both; only which *_device.c/dwt_driver builds changes.
 resolve_chip() {
   case "$(printf '%s' "${UWB_CHIP:-dw3000}" | tr '[:upper:]' '[:lower:]')" in
@@ -354,7 +354,7 @@ do_build() {
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
     -DPM_STATIC_YML_FILE="$pm_yml"
     -DSB_EXTRA_CONF_FILE="$sb_conf"
-    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/woz_dw3000;$TREE/ports/zephyr"
+    -DZEPHYR_EXTRA_MODULES="$TREE/modules/woz_uwb;$TREE/modules/woz_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_WOZ_UWB=y -DCONFIG_WOZ_UWB_RESPONDER=y
     -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n

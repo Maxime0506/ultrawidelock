@@ -22,7 +22,7 @@ set(ULTRAWIDELOCK_MODULE_INCLUDE_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_aliro/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_anchor/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_dfu/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_dw3000/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_dw3000/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_matter/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_ml/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_nfc/include"
@@ -47,8 +47,8 @@ set(ULTRAWIDELOCK_PACKAGE_HEADERS
 	"modules/woz_aliro/include/aliro_crypto.h|aliro_crypto.h"
 	"modules/woz_aliro/include/aliro_device_apdu.h|aliro_device_apdu.h"
 	"modules/woz_aliro/include/aliro_prov.h|aliro_prov.h"
-	"modules/woz_dw3000/include/dw3000_hw.h|dw3000_hw.h"
-	"modules/woz_dw3000/include/dw3000_spi.h|dw3000_spi.h")
+	"modules/ultrawidelock_dw3000/include/dw3000_hw.h|dw3000_hw.h"
+	"modules/ultrawidelock_dw3000/include/dw3000_spi.h|dw3000_spi.h")
 set(ULTRAWIDELOCK_INSTALLED_HEADER_PATHS)
 foreach(header_mapping IN LISTS ULTRAWIDELOCK_PACKAGE_HEADERS)
 	string(REPLACE "|" ";" header_fields "${header_mapping}")
@@ -69,8 +69,8 @@ endforeach()
 # same relative paths THIRD_PARTY_NOTICES points to.
 install(FILES LICENSE THIRD_PARTY_NOTICES
 	DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/ultrawidelock")
-install(FILES modules/woz_dw3000/LICENSE.txt
-	DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/ultrawidelock/modules/woz_dw3000")
+install(FILES modules/ultrawidelock_dw3000/LICENSE.txt
+	DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/ultrawidelock/modules/ultrawidelock_dw3000")
 
 add_library(ultrawidelock_tlv STATIC modules/woz_aliro/src/aliro_tlv.c)
 add_library(UltraWideLock::tlv ALIAS ultrawidelock_tlv)

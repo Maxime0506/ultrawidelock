@@ -47,7 +47,7 @@ HOSTD="$ROOT/tests/host"
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/woz_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
@@ -191,7 +191,7 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/woz_nfc/include"
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
 	-I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/woz_uwb/include" -I"$SRC/driver" \
-	-I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" \
 	-o "$OUT/host_test_seam"
 "$OUT/host_test_seam"

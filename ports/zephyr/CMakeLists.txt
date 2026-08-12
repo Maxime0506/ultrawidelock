@@ -2,7 +2,7 @@
 # Mirror of ports/esp32/components/*, which implements the same contracts on
 # ESP-IDF; modules/ stays the single portable source tree. Contract headers
 # stay with their modules (dw3000_hw.h / dw3000_spi.h in
-# modules/woz_dw3000/include, pn532_bus.h in modules/woz_nfc/include); this tree
+# modules/ultrawidelock_dw3000/include, pn532_bus.h in modules/woz_nfc/include); this tree
 # carries the Zephyr .c backends plus the app-target glue below.
 # Contributes nothing unless a consuming CONFIG is y: an image that selects no
 # feature below gets zero bytes from this module.
@@ -43,12 +43,12 @@ zephyr_library_sources_ifdef(CONFIG_DW3000
 	dw3000/dw3000_spi.c
 	dw3000/dw3000_spi_trace.c)
 
-# Contract headers + decadriver API; modules/woz_dw3000 also publishes these
+# Contract headers + decadriver API; modules/ultrawidelock_dw3000 also publishes these
 # via zephyr_include_directories, listed here so this library does not depend
 # on that module's processing order.
 zephyr_library_include_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/include
-	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dw3000/dwt_uwb_driver)
+	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dw3000/include
+	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dw3000/dwt_uwb_driver)
 
 # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log line
 # (woz_logfmt), plus runtime-mute of benign upstream Matter/BLE error spam

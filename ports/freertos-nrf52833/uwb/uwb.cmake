@@ -4,7 +4,7 @@
 # Included by ports/freertos-nrf52833/CMakeLists.txt, following that file's
 # layer-at-a-time rule: this one is added once the layers below it link.
 #
-# The source set is the role manifests in modules/{woz_uwb,woz_dw3000}/roles/,
+# The source set is the role manifests in modules/{woz_uwb,ultrawidelock_dw3000}/roles/,
 # read through cmake/woz_roles.cmake -- the same lists and the same reader the
 # Zephyr module and the ESP-IDF component use. A source assigned to a role
 # belongs in its manifest and nowhere else; that is what has kept three ports
@@ -15,7 +15,7 @@ get_filename_component(WOZ_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLU
 include("${WOZ_REPO_ROOT}/cmake/woz_roles.cmake")
 
 set(WOZ_UWB_ROLES "${WOZ_REPO_ROOT}/modules/woz_uwb/roles")
-set(WOZ_DW_ROLES "${WOZ_REPO_ROOT}/modules/woz_dw3000/roles")
+set(WOZ_DW_ROLES "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/roles")
 
 # Named once, in a list of their own, because a manifest that is renamed or
 # deleted expands to nothing rather than to an error: the role's sources simply
@@ -66,7 +66,7 @@ add_library(woz_uwb STATIC
 target_include_directories(woz_uwb PUBLIC
   "${WOZ_REPO_ROOT}/modules/woz_port/include"
   "${WOZ_REPO_ROOT}/modules/woz_uwb/include"
-  "${WOZ_REPO_ROOT}/modules/woz_dw3000/include"
+  "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/include"
   "${WOZ_PORT_DIR}/include"
 )
 target_include_directories(woz_uwb PRIVATE
@@ -75,8 +75,8 @@ target_include_directories(woz_uwb PRIVATE
   "${WOZ_REPO_ROOT}/modules/woz_uwb/src/ccc"
   "${WOZ_REPO_ROOT}/modules/woz_uwb/src/facade"
   "${WOZ_REPO_ROOT}/modules/woz_uwb/src/aliro"
-  "${WOZ_REPO_ROOT}/modules/woz_dw3000/dwt_uwb_driver"
-  "${WOZ_REPO_ROOT}/modules/woz_dw3000/dwt_uwb_driver/lib/qmath/include"
+  "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/dwt_uwb_driver"
+  "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/dwt_uwb_driver/lib/qmath/include"
   "${WOZ_PORT_DIR}/uwb"
 )
 

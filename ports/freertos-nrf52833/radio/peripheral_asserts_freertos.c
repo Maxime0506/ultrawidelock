@@ -34,9 +34,9 @@
  * observe radio timing.
  */
 _Static_assert((NRF_802154_DEBUG_GPIOTE_CHANNELS_USED_MASK &
-		(1u << WOZ_DW3000_GPIOTE_CHANNEL)) == 0u,
+		(1u << ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL)) == 0u,
 	       "the DW3110 IRQ shares a GPIOTE channel with the 802.15.4 driver's debug pins; "
-	       "move WOZ_DW3000_GPIOTE_CHANNEL above 5, or drop ENABLE_DEBUG_GPIO");
+	       "move ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL above 5, or drop ENABLE_DEBUG_GPIO");
 
 /*
  * And against the driver's PPI claim, which is not debug-only and is the larger

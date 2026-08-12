@@ -50,16 +50,16 @@ int dw3000_spi_init(void)
 
 	/* CS as GPIO, idle high (DW3000 CS is active low). */
 	gpio_config_t cs = {
-		.pin_bit_mask = 1ULL << WOZ_DW3000_PIN_CS,
+		.pin_bit_mask = 1ULL << ULTRAWIDELOCK_DW3000_PIN_CS,
 		.mode = GPIO_MODE_OUTPUT,
 	};
 	gpio_config(&cs);
-	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_CS, 1);
 
 	spi_bus_config_t bus = {
-		.mosi_io_num = WOZ_DW3000_PIN_MOSI,
-		.miso_io_num = WOZ_DW3000_PIN_MISO,
-		.sclk_io_num = WOZ_DW3000_PIN_SCLK,
+		.mosi_io_num = ULTRAWIDELOCK_DW3000_PIN_MOSI,
+		.miso_io_num = ULTRAWIDELOCK_DW3000_PIN_MISO,
+		.sclk_io_num = ULTRAWIDELOCK_DW3000_PIN_SCLK,
 		.quadwp_io_num = -1,
 		.quadhd_io_num = -1,
 		.max_transfer_sz = DW_XFER_MAX,
@@ -69,7 +69,7 @@ int dw3000_spi_init(void)
 	 * Without DMA, <=64 B transfers use the CPU data registers directly (~10us).
 	 * dw_xfer chunks anything larger into 64 B bursts. Only the DW3000 is on this
 	 * bus (status LED is on RMT), so this is safe. */
-	esp_err_t e = spi_bus_initialize(WOZ_DW3000_SPI_HOST, &bus, SPI_DMA_DISABLED);
+	esp_err_t e = spi_bus_initialize(ULTRAWIDELOCK_DW3000_SPI_HOST, &bus, SPI_DMA_DISABLED);
 	if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) {
 		ESP_LOGE(TAG, "spi_bus_initialize failed: %d", e);
 		return -1;
@@ -79,20 +79,20 @@ int dw3000_spi_init(void)
 		.mode = 0, /* DW3000: SPI mode 0 (CPOL=0, CPHA=0) */
 		.spics_io_num = -1, /* manual CS via GPIO */
 		.queue_size = 1,
-		.clock_speed_hz = WOZ_DW3000_SPI_SLOW_HZ,
+		.clock_speed_hz = ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ,
 	};
-	if (spi_bus_add_device(WOZ_DW3000_SPI_HOST, &dev, &s_dev_slow) != ESP_OK) {
+	if (spi_bus_add_device(ULTRAWIDELOCK_DW3000_SPI_HOST, &dev, &s_dev_slow) != ESP_OK) {
 		ESP_LOGE(TAG, "add slow device failed");
 		return -1;
 	}
-	dev.clock_speed_hz = WOZ_DW3000_SPI_FAST_HZ;
-	if (spi_bus_add_device(WOZ_DW3000_SPI_HOST, &dev, &s_dev_fast) != ESP_OK) {
+	dev.clock_speed_hz = ULTRAWIDELOCK_DW3000_SPI_FAST_HZ;
+	if (spi_bus_add_device(ULTRAWIDELOCK_DW3000_SPI_HOST, &dev, &s_dev_fast) != ESP_OK) {
 		ESP_LOGE(TAG, "add fast device failed");
 		return -1;
 	}
 	s_cur = s_dev_slow;
 	ESP_LOGI(TAG, "DW3000 SPI up (slow %d Hz / fast %d Hz)",
-		 WOZ_DW3000_SPI_SLOW_HZ, WOZ_DW3000_SPI_FAST_HZ);
+		 ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ, ULTRAWIDELOCK_DW3000_SPI_FAST_HZ);
 	return 0;
 }
 
@@ -101,7 +101,7 @@ void dw3000_spi_speed_slow(void) { s_cur = s_dev_slow; }
 // Switch subsequent DW3000 SPI transfers to the fast-clock device handle.
 void dw3000_spi_speed_fast(void) { s_cur = s_dev_fast; }
 
-// Tears down the DW3000 SPI bus: removes the slow and fast SPI device handles if present, then frees the SPI bus on WOZ_DW3000_SPI_HOST.
+// Tears down the DW3000 SPI bus: removes the slow and fast SPI device handles if present, then frees the SPI bus on ULTRAWIDELOCK_DW3000_SPI_HOST.
 // Safe to call when devices were never added (each handle is checked for non-NULL before removal).
 void dw3000_spi_fini(void)
 {
@@ -113,7 +113,7 @@ void dw3000_spi_fini(void)
 		spi_bus_remove_device(s_dev_fast);
 		s_dev_fast = NULL;
 	}
-	spi_bus_free(WOZ_DW3000_SPI_HOST);
+	spi_bus_free(ULTRAWIDELOCK_DW3000_SPI_HOST);
 }
 
 /* One CS-low command: [header][body|zeros][crc?]; capture RX body slice when
@@ -143,7 +143,7 @@ static int32_t dw_xfer(const uint8_t *hdr, uint16_t hlen, const uint8_t *body,
 	 * transactions into <=64 B bursts inside one CS-low window; the chip streams
 	 * sequentially so a split read/write is seamless. Anything <=64 B (every
 	 * register/STS write on the arm critical path) is a single burst, unchanged. */
-	gpio_set_level(WOZ_DW3000_PIN_CS, 0);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_CS, 0);
 	esp_err_t e = ESP_OK;
 	for (size_t off = 0; off < total && e == ESP_OK; off += DW_XFER_CHUNK) {
 		size_t n = total - off;
@@ -157,7 +157,7 @@ static int32_t dw_xfer(const uint8_t *hdr, uint16_t hlen, const uint8_t *body,
 		t.rx_buffer = rx_body ? (s_rxbuf + off) : NULL;
 		e = spi_device_polling_transmit(s_cur, &t);
 	}
-	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_CS, 1);
 
 	if (e == ESP_OK && rx_body && blen) {
 		memcpy(rx_body, s_rxbuf + hlen, blen);
@@ -204,9 +204,9 @@ int32_t dw3000_spi_write_crc(uint16_t headerLength, const uint8_t *headerBuffer,
 void dw3000_spi_wakeup(void)
 {
 	/* CS active low: drive low ~500us to wake, then release (Qorvo CS-toggle). */
-	gpio_set_level(WOZ_DW3000_PIN_CS, 0);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_CS, 0);
 	esp_rom_delay_us(500);
-	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
+	gpio_set_level(ULTRAWIDELOCK_DW3000_PIN_CS, 1);
 }
 
 // No-op: SPI transaction tracing is not implemented in this port.

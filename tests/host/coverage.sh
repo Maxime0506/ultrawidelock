@@ -13,7 +13,7 @@
 # attributes their lines when an instrumented TU instantiates them, and the
 # rest fall through to the 0% table. Non-C surfaces (python, web pages, the
 # nRF add-on patches, shell tooling) are listed in a block of their own.
-# Excluded entirely: the vendored trees (modules/woz_dw3000 = the Qorvo
+# Excluded entirely: the vendored trees (modules/ultrawidelock_dw3000 = the Qorvo
 # decadriver, modules/ultrawidelock_dfu/src/detools) plus workspace/ and */test/
 # harnesses. Coverage is a measure of OUR code, so third-party sources are not
 # in the denominator.
@@ -133,7 +133,7 @@ run_suite ranging "$OUT/cov_ranging"
 # Header-inline logic (woz_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.
 cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/include" \
-	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$SHARED/test_port_headers.c" -o "$OUT/cov_hdrs"
 run_suite hdrs "$OUT/cov_hdrs"
 
@@ -187,7 +187,7 @@ cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_WOZ_UWB_C
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/woz_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
@@ -262,14 +262,14 @@ cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 \
 	-DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
 	-DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
 	-I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" -I"$ROOT/modules/woz_uwb/include" \
-	-I"$ROOT/modules/woz_dw3000/include" -I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/include" -I"$ROOT/modules/ultrawidelock_dw3000/dwt_uwb_driver" \
 	"$ET/test_esp_dw3000_port.c" \
 	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
 	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
 run_suite esp_dw "$OUT/cov_esp_dw"
 
 cov_cc -DCONFIG_WOZ_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
-	-I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" -I"$ROOT/modules/woz_uwb/include" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/dwt_uwb_driver" -I"$ROOT/modules/woz_uwb/include" \
 	"$ET/test_esp_seam_stubs.c" \
 	"$ECOMP/woz_uwb/port/woz_seam_stubs.c" -o "$OUT/cov_esp_seam"
 run_suite esp_seam "$OUT/cov_esp_seam"
@@ -356,7 +356,7 @@ run_suite nfc "$OUT/cov_nfc"
 # stay a translation unit of its own. Mirrors run.sh stage 7.
 cov_cc -I"$HOSTD" -I"$HOSTD/shim" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/woz_uwb/include" -I"$SRC/driver" \
-	-I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/test_uwb_seam.c" -o "$OUT/cov_seam"
 run_suite seam "$OUT/cov_seam"
 
@@ -429,7 +429,7 @@ HDR_SRCS=()
 while IFS= read -r h; do
 	HDR_SRCS+=("$ROOT/$h")
 done < <(cd "$ROOT" && find modules ports -name '*.h' ! -path '*/test/*' \
-	! -path 'modules/woz_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' | LC_ALL=C sort)
+	! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' | LC_ALL=C sort)
 
 # Browsable HTML, restricted to the units under test.
 llvm_tool llvm-cov show "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
@@ -461,9 +461,9 @@ while IFS= read -r rel; do
 done < <(cd "$ROOT" && {
 	find modules ports \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
 		! -path '*/test/*' ! -path '*/managed_components/*' \
-		! -path 'modules/woz_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*'
+		! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*'
 	find modules ports -name '*.h' ! -path '*/test/*' \
-		! -path 'modules/woz_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' \
+		! -path 'modules/ultrawidelock_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' \
 		-exec grep -l 'static inline' {} +
 } | LC_ALL=C sort)
 
