@@ -23,6 +23,7 @@ BOARD_LOG_BIN="$OUT/freertos_board_log_test"
 BOARD_FLASH_BIN="$OUT/freertos_board_flash_test"
 CRYPTO_BIN="$OUT/freertos_crypto_backend_test"
 SPI_BIN="$OUT/freertos_dw3000_spi_test"
+HW_BIN="$OUT/freertos_dw3000_hw_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -296,3 +297,29 @@ mkdir -p "$OUT"
 # And the proof that those checks bite: every mutation is a defect this backend
 # could plausibly have shipped with, and the suite above has to fail for each.
 "$HERE/dw3000_spi_mutation_check.sh"
+
+# The DW3110's reset, interrupt and wake lines, against register-level GPIO and
+# GPIOTE models. The GPIOTE model raises an event only where the channel would
+# -- bound to the pin, enabled, polarity matching -- because the defect this
+# layer is most exposed to is a board that comes up, logs nothing, and never
+# ranges. The worker task's body is pumped rather than reimplemented, so the
+# question of whether it drains the interrupt line is asked of the port.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/uwb" \
+	-I"$ROOT/modules/woz_dw3000/include" \
+	-I"$ROOT/modules/woz_dw3000/dwt_uwb_driver" \
+	"$HERE/test_dw3000_hw.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_gpio.c" \
+	"$HERE/fake/fake_gpiote.c" \
+	"$HERE/fake/fake_spim.c" \
+	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c" \
+	-o "$HW_BIN"
+"$HW_BIN"
+
+"$HERE/dw3000_hw_mutation_check.sh"

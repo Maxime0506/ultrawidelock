@@ -31,6 +31,14 @@ typedef uint32_t StackType_t;
 /* NimBLE callouts are FreeRTOS software timers. */
 #define configUSE_TIMERS                   1
 #define configMAX_PRIORITIES               8
+/*
+ * The board's ceiling, mirrored here so port sources that assert their vector
+ * priority against it are checked by the host suite too. Four, because MPSL's
+ * low-priority handler sits at 4 and calls a FreeRTOS FromISR API, and because
+ * anything lower would put MPSL's own priority-0 handlers and the 802.15.4 SWI
+ * at 1 under the scheduler's critical sections.
+ */
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY 4
 #define configASSERT(condition)             assert(condition)
 
 typedef struct {

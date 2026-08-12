@@ -129,6 +129,14 @@ done
 printf '  ok   RTC1 is the FreeRTOS tick and radio vectors are weak link-time handoffs\n'
 printf '  ok   RTC2 can move from Qorvo app_timer to the nRF 802.15.4 low-power timer\n'
 
+# The host suite's HAL doubles must not exceed the headers they stand in for.
+# A fake that defines a symbol the vendor header does not passes every host run
+# and fails at the first target link; this port has already lost time to one.
+if ! python3 "$(dirname "$0")/freertos-hal-fake-fidelity.py" "$archive"; then
+	printf 'platform-check: a fake HAL header exceeds its pinned vendor header\n' >&2
+	exit 2
+fi
+
 if rg -qi 'openthread|nrf5.sdk.for.thread|thread.and.zigbee|examples/thread/' \
 	"$members_file"; then
 	printf '  note archive contains a Thread stack; the port still pins its own version\n'
