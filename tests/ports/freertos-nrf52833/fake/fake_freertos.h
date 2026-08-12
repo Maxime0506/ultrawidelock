@@ -29,4 +29,13 @@ void fake_freertos_reset(void);
 
 extern unsigned fake_semaphore_isr_gives;
 
+/*
+ * Every take and give, across every semaphore. A caller holding a lock is not
+ * observable from outside the file that owns it, so the balance is: a path that
+ * returns without giving shows up here as a take with no give, and on a lock
+ * guarding shared hardware that is a permanent wedge rather than a slow path.
+ */
+extern unsigned fake_semaphore_takes;
+extern unsigned fake_semaphore_gives;
+
 #endif /* TEST_FAKE_FREERTOS_CONTROL_H */

@@ -22,6 +22,7 @@ BOARD_ENTROPY_BIN="$OUT/freertos_board_entropy_test"
 BOARD_LOG_BIN="$OUT/freertos_board_log_test"
 BOARD_FLASH_BIN="$OUT/freertos_board_flash_test"
 CRYPTO_BIN="$OUT/freertos_crypto_backend_test"
+SPI_BIN="$OUT/freertos_dw3000_spi_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -270,3 +271,28 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/crypto/crypto_init_freertos.c" \
 	-o "$CRYPTO_BIN"
 "$CRYPTO_BIN"
+
+# The DW3110 SPI backend, against a register-level SPIM and GPIO model. The
+# model refuses to clock anything when EasyDMA is pointed at flash, when the
+# clock pin's input buffer is disconnected, or when END was left set by the
+# previous transfer, so what is checked is the bus the chip would actually see.
+# Each scenario forks: the backend's ready flag and bus lock are static, and
+# resetting the peripheral model under them would refuse every later transfer
+# for a reason the scenario never asked about.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/uwb" \
+	-I"$ROOT/modules/woz_dw3000/include" \
+	"$HERE/test_dw3000_spi.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_gpio.c" \
+	"$HERE/fake/fake_spim.c" \
+	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+	-o "$SPI_BIN"
+"$SPI_BIN"
+
+# And the proof that those checks bite: every mutation is a defect this backend
+# could plausibly have shipped with, and the suite above has to fail for each.
+"$HERE/dw3000_spi_mutation_check.sh"
