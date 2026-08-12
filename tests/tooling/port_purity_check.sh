@@ -521,6 +521,9 @@ private_header_target() { # <source> <include-token> <private-header>...
 	done
 	[ "$own" -eq 0 ] || return 1
 	[ -n "$candidate" ] || return 1
+	# Published as a global too, so the per-include caller can read the answer
+	# without a command substitution; see check_private_headers.
+	PHT_TARGET=$candidate
 	printf '%s\n' "$candidate"
 }
 
@@ -531,8 +534,15 @@ check_private_headers() {
 		while IFS= read -r hit; do
 			[ -n "$hit" ] || continue
 			n=$((n + 1))
-			inc=$(printf '%s\n' "$hit" | sed -E 's/^[0-9]+:[[:space:]]*#[[:space:]]*include[[:space:]]*[<"]([^>"]+)[>"].*/\1/')
-			target=$(private_header_target "$f" "$inc" "${private[@]}") || continue
+			# Shell-native, and called without a command substitution: this
+			# runs once per include in the tree, and a subshell per include
+			# exhausts the shell's heap on a tree this size (it aborts around
+			# 300 files). INC_RE already guaranteed both delimiters.
+			inc=${hit#*[<\"]}
+			inc=${inc%%[>\"]*}
+			PHT_TARGET=''
+			private_header_target "$f" "$inc" "${private[@]}" >/dev/null || continue
+			target=$PHT_TARGET
 			printf '%s  private header include: %s:%s -> %s%s\n' \
 				"$R" "$f" "${hit%%:*}" "$target" "$Z" >&2
 			fails=$((fails + 1))
