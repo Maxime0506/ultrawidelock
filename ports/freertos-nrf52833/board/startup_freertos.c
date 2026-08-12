@@ -72,7 +72,6 @@ WEAK_ALIAS(UARTE0_UART0_IRQHandler);
 WEAK_ALIAS(SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0_IRQHandler);
 WEAK_ALIAS(SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1_IRQHandler);
 WEAK_ALIAS(NFCT_IRQHandler);
-WEAK_ALIAS(GPIOTE_IRQHandler);
 WEAK_ALIAS(SAADC_IRQHandler);
 WEAK_ALIAS(TIMER2_IRQHandler);
 WEAK_ALIAS(TEMP_IRQHandler);
@@ -132,12 +131,22 @@ void SWI5_EGU5_IRQHandler(void)
 }
 
 /*
- * TIMER1, SWI0_EGU0, RTC2, RTC1, and RNG are defined by their owners:
+ * TIMER1, SWI0_EGU0, RTC2, RTC1, RNG, and GPIOTE are defined by their owners:
  * TIMER1 by the pinned Nordic high-precision timer, SWI0_EGU0 by the nRF
  * 802.15.4 driver, RTC2 by radio/nrf_802154_lptimer_freertos.c, RTC1 by
- * board/tick_freertos.c, and RNG by board/entropy_freertos.c. They are declared
- * weak here only so an image that leaves one of those out still links.
+ * board/tick_freertos.c, RNG by board/entropy_freertos.c, and GPIOTE by
+ * board/gpiote_freertos.c, which fans it out because the DW3110 line and the
+ * update button each take a channel. They are declared weak here only so an
+ * image that leaves one of those out still links.
+ *
+ * A weak definition here does not shadow the real one: this object is pulled
+ * for the vector table, but each owner's object is pulled by an ordinary call
+ * into it -- woz_freertos_gpiote_add_handler() in GPIOTE's case -- and a strong
+ * definition in an object the linker has already taken wins over a weak one.
+ * An owner reachable ONLY through its vector would not be pulled at all, which
+ * is why none of them is written that way.
  */
+WEAK_ALIAS(GPIOTE_IRQHandler);
 WEAK_ALIAS(TIMER1_IRQHandler);
 WEAK_ALIAS(SWI0_EGU0_IRQHandler);
 WEAK_ALIAS(RTC1_IRQHandler);

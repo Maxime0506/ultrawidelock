@@ -334,6 +334,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	"$HERE/fake/fake_gpiote.c" \
 	"$HERE/fake/fake_spim.c" \
 	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/board/gpiote_freertos.c" \
 	"$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c" \
 	-o "$HW_BIN"
 "$HW_BIN"

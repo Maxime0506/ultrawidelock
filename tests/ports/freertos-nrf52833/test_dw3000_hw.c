@@ -34,8 +34,11 @@
 #include <hal/nrf_spim.h>
 #include <nrfx.h>
 
+#include <woz_freertos_board.h>
 #include <woz_freertos_platform.h>
 #include <woz_freertos_uwb.h>
+
+void GPIOTE_IRQHandler(void);
 
 #include "board_pins.h"
 #include "dw3000_hw.h"
@@ -122,6 +125,12 @@ static void bring_up(void)
  * One trip through the interrupt path, with no scheduler under it: raise the
  * line, run the vector if the part would have taken one, then run what the
  * worker task runs once it is notified.
+ *
+ * Through GPIOTE_IRQHandler rather than the driver's handler, because the
+ * vector is shared: board/gpiote_freertos.c owns it and fans it out to whoever
+ * registered. Calling the driver directly would pass with the registration
+ * missing, which is precisely the state this port shipped in before the
+ * dispatcher existed -- the edge reached default_handler and spun.
  */
 static bool deliver_irq(void)
 {
@@ -130,7 +139,7 @@ static bool deliver_irq(void)
 	fake_gpiote_pin_edge(WOZ_DW3000_PIN_IRQ, true);
 	interrupted = fake_gpiote_would_interrupt();
 	if (interrupted) {
-		woz_freertos_dw3000_irq_handler();
+		GPIOTE_IRQHandler();
 	}
 	return interrupted;
 }
@@ -268,11 +277,34 @@ static void check_spurious_vector(void)
 	bring_up();
 	(void)dw3000_hw_init_interrupt();
 
-	/* No event behind it: the vector must notify nobody. */
-	woz_freertos_dw3000_irq_handler();
+	/* No event behind it: the vector must notify nobody. Through the shared
+	 * vector, because a handler that ignores the event check would see
+	 * every other channel's edges once the update button takes one. */
+	GPIOTE_IRQHandler();
 	CHECK("a vector with no event behind it notifies nothing",
 	      fake_isr_notify_calls == 0u);
 	CHECK("a vector with no event behind it yields nothing", fake_isr_yield_calls == 0u);
+}
+
+/*
+ * The routing itself, asked of the dispatcher rather than of the driver.
+ *
+ * Registering twice is what an image that re-initialises the interrupt does,
+ * and a table that took the handler twice would call dwt_isr twice per edge --
+ * which reads downstream as a duplicated frame, not as a registration bug.
+ */
+static void check_vector_registration(void)
+{
+	bring_up();
+	CHECK("the DW3110 line is registered on the shared GPIOTE vector",
+	      dw3000_hw_init_interrupt() == 0);
+	CHECK("registering the same handler again is accepted",
+	      dw3000_hw_init_interrupt() == 0);
+
+	fake_isr_notify_calls = 0u;
+	fake_gpiote_pin_edge(WOZ_DW3000_PIN_IRQ, true);
+	GPIOTE_IRQHandler();
+	CHECK("one edge notifies the worker exactly once", fake_isr_notify_calls == 1u);
 }
 
 static void check_interrupt_masking(void)
@@ -405,6 +437,7 @@ static void (*const g_scenarios[])(void) = {
 	check_interrupt_setup,
 	check_interrupt_delivery,
 	check_spurious_vector,
+	check_vector_registration,
 	check_interrupt_masking,
 	check_reset,
 	check_wakeup,

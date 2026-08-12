@@ -32,6 +32,7 @@ build() { # <source> <binary>
 		"$HERE/fake/fake_gpiote.c" \
 		"$HERE/fake/fake_spim.c" \
 		"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+		"$ROOT/ports/freertos-nrf52833/board/gpiote_freertos.c" \
 		"$1" \
 		-o "$2"
 }
@@ -39,6 +40,11 @@ build() { # <source> <binary>
 MUTATIONS=(
 	"the GPIOTE channel is enabled but never bound to the pin ::: 	nrf_gpiote_event_configure(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL, WOZ_DW3000_PIN_IRQ,
 				   NRF_GPIOTE_POLARITY_LOTOHI);
+ ::: "
+	"the line is never registered on the shared GPIOTE vector ::: 	if (woz_freertos_gpiote_add_handler(woz_freertos_dw3000_irq_handler) != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, \"no GPIOTE handler slot\");
+		return -1;
+	}
  ::: "
 	"the channel watches the wrong edge ::: NRF_GPIOTE_POLARITY_LOTOHI ::: NRF_GPIOTE_POLARITY_HITOLO"
 	"the channel is configured but left disabled ::: nrf_gpiote_event_enable(NRF_GPIOTE, WOZ_DW3000_GPIOTE_CHANNEL); ::: (void)0;"

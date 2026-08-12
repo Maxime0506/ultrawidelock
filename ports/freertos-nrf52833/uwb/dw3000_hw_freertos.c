@@ -37,6 +37,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include <woz_freertos_board.h>
 #include <woz_freertos_platform.h>
 
 #include "board_pins.h"
@@ -185,6 +186,18 @@ int dw3000_hw_init_interrupt(void)
 			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, "no worker task");
 			return -1;
 		}
+	}
+
+	/*
+	 * The vector belongs to board/gpiote_freertos.c, because the update
+	 * button takes a second channel on the same peripheral and a vector
+	 * cannot have two definitions. Registered before the event is enabled:
+	 * an edge that arrived with no handler installed would be cleared by
+	 * nobody and would re-enter the vector forever.
+	 */
+	if (woz_freertos_gpiote_add_handler(woz_freertos_dw3000_irq_handler) != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, "no GPIOTE handler slot");
+		return -1;
 	}
 
 	/*
