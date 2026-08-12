@@ -85,6 +85,31 @@ Shared source selection comes from `modules/*/roles/*.list`. Add a source to one
 role manifest and consume that role through the existing CMake helper. Do not
 paste the source path into a second build definition.
 
+## New UWB chipsets
+
+The two `dw3000_*` seams above cover a new board carrying a DW3000-family
+chip. A different chipset replaces the engine, not the seams. The contract is
+`<ultrawidelock/uwb.h>`: bind a URSK, start and stop an Aliro session from the
+negotiated parameters, report ranges with integrity evidence. Everything above
+that header is chip-agnostic and reused as is — the FiRa session state, DS-TWR
+math, CCC key schedule and MAC framing, the Aliro M1-M4 adapter, and the apps.
+
+What a new chipset supplies:
+
+1. An implementation of every function in `<ultrawidelock/uwb.h>`, in its own
+   module directory beside `modules/woz_dw3000/`.
+2. Role manifests for its source sets, replacing the DW3000-shaped roles
+   (`base_driver`, `ccc_engine`, `responder_driver`, `diag_cir`,
+   `flight_recorder`); the chip-agnostic roles are consumed unchanged.
+3. Wiring seams in `ports/` only if the chip is a raw transceiver. A chip that
+   runs its own FiRa stack and speaks UCI needs no local ranging engine at
+   all: the contract implementation translates sessions to UCI commands.
+
+`tests/tooling/uwb_engine_scope_check.sh` (`make scope`) enforces the
+boundary: the Qorvo radio API is named only inside the DW3000 engine's file
+set, so chip-agnostic code cannot silently couple to one vendor's silicon.
+Keep a new chipset's radio API inside its own engine the same way.
+
 ## New operating systems
 
 The five HAL seams are not the complete contract for a new operating system.

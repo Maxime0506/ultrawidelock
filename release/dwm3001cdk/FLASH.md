@@ -20,8 +20,20 @@ is nothing to wire and nothing to solder.
 - A **Qorvo DWM3001CDK** board.
 - A **USB cable** (the board has two ports; use the one marked **J-Link**).
 - An **iPhone with UWB**, iPhone 11 or newer, on iOS 26 or later.
-- An **Apple Home hub with Thread**: a HomePod, HomePod mini, or Apple TV 4K.
-  The lock talks Thread, not Wi-Fi, so this is not optional.
+- A way onto your **Thread** network. The lock talks Thread, not Wi-Fi, so it
+  needs one of:
+  - An **Apple Home hub with Thread**: a HomePod, HomePod mini, or Apple TV 4K.
+    This is the path we test, and the one to pick.
+  - A **compatible third-party Thread border router**.
+  - Possibly **nothing else at all**: since iOS 18, an iPhone 15 Pro or later can
+    pair and control Thread accessories with no hub. We have not verified this
+    lock against that path, so treat it as untested here.
+
+If you live with anyone, you want the hub. Without one Apple Home cannot share
+the home, and home keys reach other people only by being residents of your
+household, so **you would be the only person who can unlock the door**. A hub is
+also what gives you unlock notifications, remote lock and unlock, and automations
+like Lock When Leaving Home. Going hub-less is a single-occupant setup.
 
 ## 1. Install one tool
 
@@ -175,7 +187,7 @@ Do not secure anything valuable with this.
 |---|---|
 | `nrfutil device list` shows nothing | Use the **J-Link** USB port, not the other one. Try another cable. |
 | Flashing fails to connect | Unplug, wait five seconds, plug back in. On macOS, quit any SEGGER or nRF Connect app first. |
-| Home never finds the accessory | Check your Thread hub is on the same network, then power-cycle the board and retry. |
+| Home never finds the accessory | Check your Thread hub or border router is on the same network, then power-cycle the board and retry. |
 | Home sits on "Adding to Home" | Give it two minutes. If it fails, power-cycle the board and start again. |
 | It pairs but never unlocks on approach | Confirm the key is in Wallet (Wallet app, look for the lock), and that the phone has UWB. |
 | You want to start over | Hold **SW2** and tap **RESET**. That clears the pairing so you can add it again. |

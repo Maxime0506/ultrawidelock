@@ -7,6 +7,7 @@
 #   sdk        tests/sdk/run.sh                 installed C package consumer
 #   drift      drift_check.py + patch ID self-test
 #   seam       tests/tooling/uwb_seam_check.sh  no call bypasses the STS seam
+#   scope      tests/tooling/uwb_engine_scope_check.sh  no vendor radio API outside the DW3000 engine
 #   purity     tests/tooling/port_purity_check.sh  one source, one OS per port
 #   freertos   tests/ports/freertos-nrf52833/run.sh  standalone RTOS contract
 #
@@ -27,6 +28,7 @@ suite_cmd() {
 	sdk) echo "bash tests/sdk/run.sh" ;;
 	drift) echo "bash tests/tooling/drift_suite.sh" ;;
 	seam) echo "bash tests/tooling/uwb_seam_check.sh" ;;
+	scope) echo "bash tests/tooling/uwb_engine_scope_check.sh" ;;
 	purity) echo "bash tests/tooling/port_purity_check.sh" ;;
 	freertos) echo "bash tests/ports/freertos-nrf52833/run.sh" ;;
 	esac
@@ -39,6 +41,7 @@ suite_label() {
 	sdk) echo "SDK package (CMake)" ;;
 	drift) echo "constant drift" ;;
 	seam) echo "uwb seam" ;;
+	scope) echo "uwb engine scope" ;;
 	purity) echo "port purity" ;;
 	freertos) echo "FreeRTOS port" ;;
 	esac
@@ -141,7 +144,7 @@ run_suite() { # <suite> <outfile> <metafile>
 	printf '%s|%d|%d|%d|%d\n' "$s" "$passed" "$failed" "$((t1 - t0))" "$rc" >"$meta"
 }
 
-SEL="${SUITES:-firmware shared sdk drift seam purity freertos}"
+SEL="${SUITES:-firmware shared sdk drift seam scope purity freertos}"
 declare -a NAMES OUTS METAS PIDS
 n=0
 for s in $SEL; do
@@ -158,12 +161,34 @@ if [[ "${SERIAL:-0}" == "1" ]]; then
 		run_suite "${NAMES[i]}" "${OUTS[i]}" "${METAS[i]}"
 	done
 else
+	printf '  %d suites in parallel · a row lands as each one finishes\n\n' "$n"
 	for i in $(seq 0 $((n - 1))); do
 		run_suite "${NAMES[i]}" "${OUTS[i]}" "${METAS[i]}" &
 		PIDS[i]=$!
 	done
-	for i in $(seq 0 $((n - 1))); do
-		wait "${PIDS[i]}" || true
+	# A row per suite as it lands. Poll the meta files rather than wait in
+	# index order: the suites finish out of order, so waiting on index 0 first
+	# holds every later row behind the slowest suite. Without this the run is a
+	# bare banner for minutes, which reads as a hang rather than as work.
+	declare -a REAPED
+	for i in $(seq 0 $((n - 1))); do REAPED[i]=0; done
+	left=$n
+	while [[ "$left" -gt 0 ]]; do
+		for i in $(seq 0 $((n - 1))); do
+			[[ "${REAPED[i]}" == 1 ]] && continue
+			# run_suite writes the meta line last, so a non-empty file means
+			# the work is finished and this wait returns immediately.
+			[[ -s "${METAS[i]}" ]] || continue
+			wait "${PIDS[i]}" || true
+			REAPED[i]=1
+			left=$((left - 1))
+			IFS='|' read -r _ passed failed secs rc <"${METAS[i]}"
+			mark="+"
+			if [[ "$rc" != 0 || "$failed" != 0 ]]; then mark="x"; fi
+			printf '  %s %-22s %8d %8d %5ss\n' \
+				"$mark" "$(suite_label "${NAMES[i]}")" "$passed" "$failed" "$secs"
+		done
+		if [[ "$left" -gt 0 ]]; then sleep 1; fi
 	done
 	# Replay only what needs eyes: the FAIL rows of any failing suite.
 	for i in $(seq 0 $((n - 1))); do
