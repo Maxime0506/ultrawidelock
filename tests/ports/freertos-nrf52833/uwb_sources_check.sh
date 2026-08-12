@@ -158,6 +158,11 @@ macro(target_link_options _name)
 endmacro()
 macro(set_target_properties _name)
 endmacro()
+# The reachable-set measurement hangs its report off a custom target, which
+# script mode cannot declare because there is no build to attach it to. It has
+# nothing to say about the library's source set either way.
+macro(add_custom_target _name)
+endmacro()
 # woz_roles.cmake records a configure dependency, which script mode has no
 # directory to hang off. Harmless to swallow: nothing here is being built.
 macro(set_property)
