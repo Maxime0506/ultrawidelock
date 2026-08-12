@@ -502,6 +502,10 @@ add_library(woz_802154 STATIC
   "${WOZ_PORT_DIR}/radio/nrf_802154_irq_freertos.c"
   "${WOZ_PORT_DIR}/radio/nrf_802154_lptimer_freertos.c"
   "${WOZ_PORT_DIR}/radio/nrf_802154_misc_freertos.c"
+  # No code, only the peripheral collision assertions. Here because this is
+  # the only library whose include path reaches both the driver's private
+  # masks and the UWB layer's board_pins.h.
+  "${WOZ_PORT_DIR}/radio/peripheral_asserts_freertos.c"
   # The high-precision timer, a pinned NCS source compiled unmodified. It is an
   # 802.15.4 platform file rather than a Thread one despite living under
   # nrf/modules: the service layer's timer coordinator calls it, and nothing in
@@ -516,6 +520,7 @@ target_include_directories(woz_802154 PUBLIC
 )
 target_include_directories(woz_802154 PRIVATE
   "${WOZ_802154_DIR}/driver/src"
+  "${WOZ_PORT_DIR}/uwb"
 )
 target_compile_definitions(woz_802154 PUBLIC
   # This core has the driver; nothing is serialized to a network core.

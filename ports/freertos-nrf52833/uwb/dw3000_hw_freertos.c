@@ -46,17 +46,9 @@
 
 #define TAG "dw3000_hw"
 
-/*
- * The GPIOTE channel the DW3110 line takes. Nothing else on this product asks
- * for one: MPSL claims GPIOTE channels only for a front-end module and the
- * nRF 802.15.4 driver only for coex or antenna diversity, and none of the three
- * is configured here. That is an expectation rather than a link-time fact, so
- * peripherals.yml carries the requirement that the target build assert this
- * channel against both stacks' masks, the same way it does for PPI.
- */
-#ifndef WOZ_DW3000_GPIOTE_CHANNEL
-#define WOZ_DW3000_GPIOTE_CHANNEL 0u
-#endif
+/* WOZ_DW3000_GPIOTE_CHANNEL is in board_pins.h with the rest of the peripheral
+ * claims, and is asserted against the radio stacks in
+ * radio/peripheral_asserts_freertos.c. */
 
 /* Frozen in peripherals.yml; see the note above for why it is 4 and not 5. */
 #ifndef WOZ_DW3000_IRQ_PRIORITY

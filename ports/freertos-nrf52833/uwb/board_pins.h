@@ -44,4 +44,14 @@
  */
 #define WOZ_DW3000_SPI_XFER_MAX 1028u
 
+/*
+ * The GPIOTE channel the DW3110 interrupt line takes. Here rather than beside
+ * its only user in dw3000_hw_freertos.c because it is a peripheral claim, and
+ * the layer that can check it against the other stacks' claims is the 802.15.4
+ * one: see radio/peripheral_asserts_freertos.c, which is the only other reader.
+ */
+#ifndef WOZ_DW3000_GPIOTE_CHANNEL
+#define WOZ_DW3000_GPIOTE_CHANNEL 0u
+#endif
+
 #endif /* WOZ_FREERTOS_UWB_BOARD_PINS_H */
