@@ -28,6 +28,8 @@
 #include <aliro_prov.h>
 #include <ultrawidelock/reader.h>
 
+#include <openthread/instance.h>
+
 #include <woz_freertos_crypto.h>
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_openthread.h>
@@ -82,20 +84,34 @@ static void boot_task(void *arg)
 	}
 
 	/*
-	 * Thread is not started here yet, and the omission is deliberate rather
-	 * than forgotten.
+	 * Thread.
 	 *
-	 * OpenThread is compiled and in the graph, but calling
-	 * otInstanceInitSingle() pulls in the whole stack and with it every
-	 * otPlatRadio entry point. Those come from Nordic's pinned radio_nrf5.c
-	 * and the nRF 802.15.4 driver, which are the next layer. Starting it
-	 * before they are linked turns a working build into a page of undefined
-	 * references, so the call arrives with them.
+	 * The radio driver comes up first and separately, because the two fail
+	 * for different reasons and at different costs. Bringing up the nRF
+	 * 802.15.4 driver is a peripheral claim that either succeeds or says
+	 * which peripheral it lost; otInstanceInitSingle() after it is an
+	 * allocation out of OpenThread's own pools. Reporting them as one step
+	 * would turn "the radio is not there" and "the stack did not fit" into
+	 * the same log line.
 	 *
-	 * Until then --gc-sections drops OpenThread entirely, which is why the
-	 * reported image size does not yet include it. That is the same trap the
-	 * UWB layer hit, and the reason woz_uwb_link_check exists.
+	 * Not fatal, for the same reason UWB is not: Thread is one of the paths
+	 * into this lock, and BLE carries the others. A board whose Thread is
+	 * down is still a lock.
 	 */
+	if (woz_freertos_openthread_radio_start() != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "802.15.4 radio unavailable; Thread will not run");
+	} else {
+		otInstance *ot = otInstanceInitSingle();
+
+		if (ot == NULL) {
+			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, MAIN_TAG,
+					 "OpenThread instance allocation failed");
+		} else if (woz_freertos_openthread_start(ot) != 0) {
+			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, MAIN_TAG,
+					 "OpenThread task did not start");
+		}
+	}
 
 	/*
 	 * The DW3110, before the BLE host rather than after it.

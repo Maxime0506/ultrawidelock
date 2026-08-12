@@ -208,11 +208,11 @@ static const char *level_prefix(enum woz_freertos_log_level level)
 	}
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void woz_freertos_log_va(enum woz_freertos_log_level level, const char *tag, const char *fmt,
+			 va_list args)
 {
 	char line[WOZ_FREERTOS_LOG_LINE_BYTES];
 	const char *prefix;
-	va_list args;
 	int header;
 	int body;
 	size_t used;
@@ -234,9 +234,7 @@ void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const 
 		}
 	}
 
-	va_start(args, fmt);
 	body = vsnprintf(&line[header], sizeof(line) - (size_t)header, fmt, args);
-	va_end(args);
 	if (body < 0) {
 		return;
 	}
@@ -253,6 +251,18 @@ void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const 
 	used++;
 
 	emit(line, used);
+}
+
+/* The variadic spelling every call site but OpenThread's uses. Kept as the thin
+ * one so there is a single formatter: otPlatLog is handed a va_list it cannot
+ * unpack, which is the whole reason the _va form is exported at all. */
+void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	woz_freertos_log_va(level, tag, fmt, args);
+	va_end(args);
 }
 
 void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag, const void *data,

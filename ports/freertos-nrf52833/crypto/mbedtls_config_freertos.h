@@ -101,6 +101,18 @@ void woz_freertos_mbedtls_free(void *block);
 #define MBEDTLS_AES_ROM_TABLES
 
 /*
+ * The legacy message-digest layer, for one caller: OpenThread.
+ *
+ * Everything this port wrote reaches hashing through PSA, so this was absent
+ * until Thread was linked. OpenThread's crypto_platform.cpp calls
+ * mbedtls_md_hmac_* directly for its HMAC-SHA256 -- that is what
+ * OPENTHREAD_CONFIG_CRYPTO_LIB_MBEDTLS means, and leaving it at that default is
+ * what keeps the port from having to implement otPlatCrypto itself. The cost is
+ * this module, and the alternative cost was the whole otPlatCrypto surface.
+ */
+#define MBEDTLS_MD_C
+
+/*
  * Deliberately absent, each because a caller for it does not exist:
  *
  *   MBEDTLS_PSA_CRYPTO_STORAGE_C   no persistent keys; see the PSA config file

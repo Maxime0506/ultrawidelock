@@ -8,6 +8,7 @@
 #ifndef WOZ_FREERTOS_PLATFORM_H
 #define WOZ_FREERTOS_PLATFORM_H
 
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -62,6 +63,14 @@ int woz_freertos_flash_erase(uint32_t offset, size_t length);
 
 /** Platform log sink. It must be safe from every task that uses shared code. */
 void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...);
+
+/**
+ * The same sink taking an already-started va_list, for callers handed one.
+ * OpenThread's otPlatLog is the reason this exists: its contract passes the
+ * arguments through, so it cannot use the variadic form above.
+ */
+void woz_freertos_log_va(enum woz_freertos_log_level level, const char *tag, const char *fmt,
+			 va_list args);
 
 /** Hex log sink matching the Zephyr LOG_HEXDUMP_* contract. */
 void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag,

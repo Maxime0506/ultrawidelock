@@ -412,6 +412,141 @@ target_include_directories(woz_aliro PUBLIC
 target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage woz_uwb)
 
 # ----------------------------------------------------------------------------
+# 802.15.4 layer: Nordic's radio driver, its service-layer binary, and the
+# platform files this port already supplies in radio/.
+#
+# Built from an explicit source list rather than through nrfxlib's own CMake.
+# That CMake builds five interface targets whose compile definitions come from
+# Zephyr Kconfig, and adding it would pull the Kconfig dependency this port
+# exists to avoid. The list below is driver/CMakeLists.txt's, read at the pinned
+# revision; tests/ports/freertos-nrf52833/nrf_802154_sources_check.sh fails if
+# the two drift apart, which is the same guard the UWB manifests get.
+#
+# The service layer is a binary. It arbitrates the radio with MPSL -- timeslot
+# requests, the low-power timer, RSSI and CCA timing -- and there is no source
+# form to compile, only the per-core, per-float-ABI archive selected here.
+# ----------------------------------------------------------------------------
+set(WOZ_802154_DIR "${WOZ_NRFXLIB}/nrf_802154")
+set(WOZ_802154_SL_LIB
+  "${WOZ_802154_DIR}/sl/sl/lib/nrf52833/hard-float/libnrf-802154-sl.a")
+if(NOT EXISTS "${WOZ_802154_SL_LIB}")
+  message(FATAL_ERROR "802.15.4 service layer is missing: ${WOZ_802154_SL_LIB}")
+endif()
+
+set(WOZ_802154_SOURCES)
+foreach(_woz_src
+    nrf_802154.c
+    nrf_802154_aes_ccm_acc_ccm.c
+    nrf_802154_aes_ccm_acc_ecb.c
+    nrf_802154_co.c
+    nrf_802154_core.c
+    nrf_802154_core_hooks.c
+    nrf_802154_critical_section.c
+    nrf_802154_debug.c
+    nrf_802154_debug_gpio.c
+    nrf_802154_encrypt.c
+    nrf_802154_notification_swi.c
+    nrf_802154_pib.c
+    nrf_802154_queue.c
+    nrf_802154_request_swi.c
+    nrf_802154_rssi.c
+    nrf_802154_rx_buffer.c
+    nrf_802154_stats.c
+    nrf_802154_swi.c
+    nrf_802154_swi_callouts_weak.c
+    nrf_802154_trx.c
+    nrf_802154_trx_ppi.c
+    nrf_802154_tx_work_buffer.c
+    nrf_802154_tx_power.c
+    mac_features/nrf_802154_csma_ca.c
+    mac_features/nrf_802154_csma_ca_backoff.c
+    mac_features/nrf_802154_delayed_trx.c
+    mac_features/nrf_802154_filter.c
+    mac_features/nrf_802154_frame_parser.c
+    mac_features/nrf_802154_ie_writer.c
+    mac_features/nrf_802154_imm_tx.c
+    mac_features/nrf_802154_security_pib_ram.c
+    mac_features/nrf_802154_security_writer.c
+    mac_features/nrf_802154_precise_ack_timeout.c
+    mac_features/nrf_802154_tx_timestamp_provider.c
+    mac_features/ack_generator/nrf_802154_ack_data.c
+    mac_features/ack_generator/nrf_802154_ack_generator.c
+    mac_features/ack_generator/nrf_802154_enh_ack_generator.c
+    mac_features/ack_generator/nrf_802154_imm_ack_generator.c)
+  list(APPEND WOZ_802154_SOURCES "${WOZ_802154_DIR}/driver/src/${_woz_src}")
+endforeach()
+
+# Four of upstream's sources are deliberately absent, and each omission is a
+# selection rather than a trim:
+#
+#   nrf_802154_bsim_utils.c      BabbleSim host simulation, not a target build
+#   nrf_802154_notification_direct.c \  the direct variants are the SL_OPENSOURCE
+#   nrf_802154_request_direct.c      /  build's; this image uses the SWI ones,
+#                                       which is what the shared EGU0 handler in
+#                                       radio/ is wired for
+#   nrf_802154_trx_dppi.c        DPPI belongs to nRF53/nRF91. nRF52833 has PPI,
+#                                and linking both would define the same symbols
+
+add_library(woz_802154 STATIC
+  ${WOZ_802154_SOURCES}
+  # Shared timestamp conversions, from nrfxlib's common tree rather than the
+  # driver's. radio_nrf5.c calls them directly for its CSL and delayed-TX
+  # timing, so they belong to the layer even though upstream files them apart.
+  "${WOZ_802154_DIR}/common/src/nrf_802154_common_utils.c"
+  # The platform half of the driver: everything nrfxlib declares under
+  # platform/ and leaves to whoever integrates it. Under Zephyr these come
+  # from the nrfxlib module glue; here they are the port's, and they are what
+  # keeps this driver sharing CLOCK, the low-power timer and the interrupt
+  # controller with MPSL instead of fighting it for them.
+  "${WOZ_PORT_DIR}/radio/nrf_802154_clock_freertos.c"
+  "${WOZ_PORT_DIR}/radio/nrf_802154_irq_freertos.c"
+  "${WOZ_PORT_DIR}/radio/nrf_802154_lptimer_freertos.c"
+  "${WOZ_PORT_DIR}/radio/nrf_802154_misc_freertos.c"
+  # The high-precision timer, a pinned NCS source compiled unmodified. It is an
+  # 802.15.4 platform file rather than a Thread one despite living under
+  # nrf/modules: the service layer's timer coordinator calls it, and nothing in
+  # OpenThread does.
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
+)
+target_include_directories(woz_802154 PUBLIC
+  "${WOZ_802154_DIR}/common/include"
+  "${WOZ_802154_DIR}/driver/include"
+  "${WOZ_802154_DIR}/sl/include"
+  "${WOZ_802154_DIR}/sl/sl/include"
+)
+target_include_directories(woz_802154 PRIVATE
+  "${WOZ_802154_DIR}/driver/src"
+)
+target_compile_definitions(woz_802154 PUBLIC
+  # This core has the driver; nothing is serialized to a network core.
+  NRF_802154_SERIALIZATION_HOST=0
+  # The port's configuration, forced in by name the same way Mbed TLS's is, so
+  # there is one answer to what this driver was built with.
+  NRF_802154_PROJECT_CONFIG="woz_freertos_802154_config.h"
+)
+target_include_directories(woz_802154 PUBLIC "${WOZ_PORT_DIR}/radio")
+
+# The service layer as an imported target rather than a bare path, so the cycle
+# below can be declared. It is a real cycle and not an ordering mistake: the SL
+# archive's timer coordinator calls the platform's high-precision timer, and the
+# driver's core calls back into the SL for timeslots and timing. A single scan
+# in either order leaves the other half unresolved.
+add_library(woz_802154_sl STATIC IMPORTED)
+set_target_properties(woz_802154_sl PROPERTIES IMPORTED_LOCATION "${WOZ_802154_SL_LIB}")
+target_link_libraries(woz_802154 PUBLIC woz_radio woz_802154_sl)
+set_property(TARGET woz_802154_sl APPEND PROPERTY INTERFACE_LINK_LIBRARIES woz_802154)
+
+# Vendor source, compiled unmodified, so the port's warning set is not imposed
+# on it -- the same treatment the FreeRTOS kernel gets above.
+target_compile_options(woz_802154 PRIVATE
+  -ffunction-sections
+  -fdata-sections
+  -fno-common
+  -fno-strict-aliasing
+  -Wno-unused-parameter
+)
+
+# ----------------------------------------------------------------------------
 # Thread layer: OpenThread as an MTD, plus the port's platform adapters.
 #
 # Built through upstream's own CMake with OT_PLATFORM=external, which is the
@@ -448,19 +583,42 @@ include_directories("${WOZ_PORT_DIR}/thread")
 add_subdirectory("${WOZ_OPENTHREAD_DIR}" openthread EXCLUDE_FROM_ALL)
 
 add_library(woz_thread STATIC
+  # Nordic's OpenThread radio platform and the service layer's high-precision
+  # timer, both pinned NCS sources compiled unmodified against thread/ot_compat
+  # -- exactly as make freertos-ncs-source-check compiles them. They are the
+  # otPlatRadio surface: without them OpenThread has no radio and every
+  # otPlatRadio* entry point is undefined.
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/radio_nrf5.c"
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
   "${WOZ_PORT_DIR}/thread/openthread_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_kernel_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_radio_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_alarm_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_misc_freertos.c"
+  "${WOZ_PORT_DIR}/thread/ot_log_freertos.c"
   "${WOZ_PORT_DIR}/thread/ot_settings_freertos.c"
 )
 target_include_directories(woz_thread PUBLIC
   "${WOZ_PORT_DIR}/thread/ot_compat"
   "${WOZ_OPENTHREAD_DIR}/include"
   "${WOZ_OPENTHREAD_DIR}/examples/platforms"
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform"
 )
-target_link_libraries(woz_thread PUBLIC woz_storage openthread-mtd ot-config)
+target_link_libraries(woz_thread PUBLIC woz_storage woz_802154 openthread-mtd ot-config)
+
+# The third declared cycle in this file, and the same shape as the other two.
+# OpenThread's core calls otPlatSettings*, otPlatLog and otPlatReset, which this
+# port implements in thread/; this port calls into OpenThread's core. Whichever
+# archive is scanned first leaves the other's references open.
+set_property(TARGET openthread-mtd APPEND PROPERTY INTERFACE_LINK_LIBRARIES woz_thread)
+
+# The two vendor sources read their configuration from a forced include, the
+# same way the source-check script compiles them, so neither needs an edit.
+set_source_files_properties(
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/openthread/platform/radio_nrf5.c"
+  "${WOZ_NCS_WORKSPACE}/nrf/modules/nrfxlib/nrf_802154/sl/platform/nrf_802154_hp_timer.c"
+  PROPERTIES COMPILE_OPTIONS
+  "-include;${WOZ_PORT_DIR}/thread/ot_compat/woz_freertos_ot_config.h;-Wno-unused-parameter")
 
 add_library(woz_freertos_port INTERFACE)
 target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread woz_aliro)
