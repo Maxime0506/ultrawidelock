@@ -389,6 +389,57 @@ application work already uses the port OSAL. MPSL uses SWI5/EGU5 for its
 low-priority signal, and that IRQ must be configured at a FreeRTOS-callable
 priority before it invokes `woz_freertos_mpsl_wake_from_isr()`.
 
+## Target build
+
+```sh
+make freertos-build \
+  NCS_WORKSPACE=<path-to-ncs-workspace> \
+  QORVO_SDK_DIR=<path-to-extracted-DW3_QM33_SDK_1.1.1>
+```
+
+The image is assembled in layers, and a layer is only added once the one below
+it links, because a first link that reports its section sizes is worth more here
+than a complete graph that does not. The binding constraint is 512 KB of flash
+and 128 KB of RAM, and the Zephyr oracle already overflows 128 KB by 1,752 bytes
+with the same feature set, so every layer is measured as it lands. What is
+currently linked is the kernel, the device layer, and the board's timebase,
+logging, and fault paths.
+
+The cross toolchain is found on `PATH`. Set `WOZ_ARM_TOOLCHAIN_DIR` to a
+toolchain's `bin` directory to use one installed outside the system prefix
+without putting it on `PATH` for everything else.
+
+Three vendor trees feed the build and none of them is copied into the
+repository: the extracted Qorvo SDK, the west workspace, and the Apache NimBLE
+checkout, each pinned by `platform.lock.yml`.
+
+`board/nrf52833_lock.ld` stops the image at `0x7e000`. The two pages above that
+are the key-value store, which holds the Aliro provisioning record and
+OpenThread's settings including the SRP client key, so an oversized image is a
+link error rather than a lock that forgets its identity after a firmware update.
+MCUboot is not in the map yet; when it arrives it takes the bottom of flash and
+the application origin moves, which is why the store sits at the top.
+
+The kernel is FreeRTOS V10.0.0 from the pinned Qorvo tree's nRF5 SDK, and its
+Cortex-M4F port is compiled unmodified against two small headers in
+`kernel/kernel_compat/`, the same arrangement `ble/hci_compat` and
+`thread/ot_compat` use for the pinned NCS sources. One vendor file is
+deliberately left out: `portable/CMSIS/nrf52/port_cmsis_systick.c` drives RTC1
+through `nrf_drv_clock`, which fights MPSL for the low-frequency clock, and it
+prescales the counter `board/time_freertos.c` reads at full rate.
+`board/tick_freertos.c` replaces it, running RTC1 unprescaled at 32768 Hz with
+the tick on a compare stepped 32 counts at a time. That is why
+`configTICK_RATE_HZ` is 1024 and not 1000: 32768 divides by 1024 exactly, and a
+static assertion in the tick file refuses any rate that does not.
+
+`configMAX_SYSCALL_INTERRUPT_PRIORITY` is 4, and it is pinned from both sides.
+It cannot exceed 4 because the MPSL low-priority handler runs at 4 and calls
+`vTaskNotifyGiveFromISR`; it cannot go below 2 because a critical section at
+that ceiling would mask MPSL at 0 or the nRF 802.15.4 driver at 1. Both bounds
+are static assertions, one in `board/FreeRTOSConfig.h` and one in
+`radio/radio_start_freertos.c`, placed where the numbers they compare are
+visible. Priorities 0 through 3 are radio-only by construction.
+
 The deprecated Nordic nRF5 Thread SDK is reference material only; its bundled
 OpenThread build is not a shipping dependency. The pinned current OpenThread,
 MPSL, SoftDevice Controller, and nRF 802.15.4 components must be integrated

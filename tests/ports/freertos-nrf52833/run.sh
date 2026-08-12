@@ -24,6 +24,22 @@ BOARD_FLASH_BIN="$OUT/freertos_board_flash_test"
 CRYPTO_BIN="$OUT/freertos_crypto_backend_test"
 
 mkdir -p "$OUT"
+
+# The FromISR ceiling is stated in two places -- the target configuration and
+# the host fake -- so that radio/radio_start_freertos.c's static assertion is
+# live on the host. A silent disagreement would leave the host suite checking a
+# number the firmware does not use, so they are compared here rather than
+# trusted.
+real_ceiling=$(sed -n 's/^#define configMAX_SYSCALL_INTERRUPT_PRIORITY[[:space:]]*\([0-9]*\).*/\1/p' \
+	"$ROOT/ports/freertos-nrf52833/board/FreeRTOSConfig.h")
+fake_ceiling=$(sed -n 's/^#define configMAX_SYSCALL_INTERRUPT_PRIORITY[[:space:]]*\([0-9]*\).*/\1/p' \
+	"$HERE/fake/FreeRTOS.h")
+if [ -z "$real_ceiling" ] || [ "$real_ceiling" != "$fake_ceiling" ]; then
+	printf 'freertos-port-test: configMAX_SYSCALL_INTERRUPT_PRIORITY disagrees: target=%s host=%s\n' \
+		"${real_ceiling:-unset}" "${fake_ceiling:-unset}" >&2
+	exit 1
+fi
+printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "$real_ceiling"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DWOZ_PORT_FREERTOS \
 	-I"$HERE/fake" \

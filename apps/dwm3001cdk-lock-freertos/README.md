@@ -12,9 +12,23 @@ contract, and serialized upstream OpenThread task runtime in
 make freertos-port-test
 ```
 
-There is intentionally no target firmware recipe yet. `make freertos-build`
-reports that the custom target graph is incomplete rather than producing a
-misleading image. The selected board source base is Qorvo DW3/QM33 SDK v1.1.1;
+The target image builds:
+
+```sh
+make freertos-build \
+  NCS_WORKSPACE=<path-to-ncs-workspace> \
+  QORVO_SDK_DIR=<path-to-extracted-DW3_QM33_SDK_1.1.1>
+```
+
+It is not the product yet. The application is a skeleton that brings the kernel
+up and proves the tick runs; what the build is for right now is the link, since
+the binding constraint on this port is the 512 KB flash and 128 KB RAM budget
+and the Zephyr oracle already overflows 128 KB by 1,752 bytes with the same
+feature set. Layers are added one at a time and measured as they land.
+`src/radio_not_yet_linked.c` exists only until the radio layer joins the graph
+and is deleted with it.
+
+The selected board source base is Qorvo DW3/QM33 SDK v1.1.1;
 this port owns the pinned OpenThread MTD, nRF52833 802.15.4
 integration, and Aliro/Matter L2CAP CoC backend layered onto it. The radio
 runtime is paired with the pinned MPSL/SoftDevice Controller, nRF 802.15.4,

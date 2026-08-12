@@ -31,6 +31,14 @@ typedef uint32_t StackType_t;
 /* NimBLE callouts are FreeRTOS software timers. */
 #define configUSE_TIMERS                   1
 #define configMAX_PRIORITIES               8
+/*
+ * The FromISR ceiling, carried over from board/FreeRTOSConfig.h so the static
+ * assertion in radio/radio_start_freertos.c is live in the host suite instead
+ * of waiting for the radio layer to join the target build graph. If the two
+ * ever disagree the host suite is checking the wrong number, so this is a
+ * duplicate on purpose and not a default.
+ */
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY 4
 #define configASSERT(condition)             assert(condition)
 
 typedef struct {
