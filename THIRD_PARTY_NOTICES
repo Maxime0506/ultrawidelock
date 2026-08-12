@@ -49,7 +49,7 @@ Nordic Semiconductor code
 
 Scope:
 
-  modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp
+  modules/woz_nfc/src/nfc_prop_ecp.cpp
   integrations/nrfconnect-door-lock/patches/custom_impl-uwb.patch
 
 License: LicenseRef-Nordic-5-Clause

@@ -156,7 +156,7 @@ SIDE_UNIT_SRCS=(
 	"$SRC/ccc/ccc_crypto_psa.c"
 	"$SRC/ccc/ccc_crypto_mbedtls.c"
 	"$ALIRO/src/aliro_prim_psa.c"
-	"$ROOT/modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp"
+	"$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp"
 	"$ECOMP/aliro_ble/aliro_ble.c"
 	"$ECOMP/aliro_reader/aliro_prov_nvs.c"
 	"$ECOMP/aliro_reader/aliro_stepup_worker.c"
@@ -216,7 +216,7 @@ cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_c_cov.o"
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/ecpfake" \
-	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp" \
+	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp" \
 	"$OUT/test_harness_c_cov.o" -o "$OUT/cov_ecp"
 run_suite ecp "$OUT/cov_ecp"
 

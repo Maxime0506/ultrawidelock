@@ -32,7 +32,7 @@ config WOZ_NFC_TRANSPORT_PN532
 	  "nxp,pn532-spi" (see apps/nrf5340dk-lock/overlays/pn532.overlay, which
 	  reuses the spi1 bus the ST25R shield would occupy). Emits Apple ECP frames
 	  while polling so an iPhone auto-presents its Aliro pass, mirroring the
-	  woz_aliro_ecp module on the RFAL path.
+	  RFAL-path emitter in src/nfc_prop_ecp.cpp.
 
 config WOZ_NFC_TRANSPORT_NONE
 	bool "No NFC reader fitted"
