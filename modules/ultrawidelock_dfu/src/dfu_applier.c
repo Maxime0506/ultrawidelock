@@ -21,12 +21,12 @@
 #include <string.h>
 
 #include "dfu_crc.h"
-#include "woz_dfu.h"
+#include "ultrawidelock_dfu.h"
 #include "woz_flash.h"
 #include "woz_osal.h"
 #include "detools.h"
 
-#if defined(CONFIG_WOZ_DFU_APPLIER_LOG)
+#if defined(CONFIG_ULTRAWIDELOCK_DFU_APPLIER_LOG)
 #include "woz_log.h" /* printk on every platform */
 #define DFU_LOG(...) printk("WDFU " __VA_ARGS__)
 #else
@@ -49,14 +49,14 @@
  * MCUboot would refuse to boot it.
  */
 /** Most steps the one-page step log can record, one word each. */
-#define STEP_MAX (WOZ_DFU_PAGE_SIZE / sizeof(uint32_t))
+#define STEP_MAX (ULTRAWIDELOCK_DFU_PAGE_SIZE / sizeof(uint32_t))
 
 /* The host builds this header with struct.pack and this side reads it with a
  * flash read straight into the struct, so the two agree on the layout or
  * nothing works. Caught here rather than on the bench. */
-_Static_assert(sizeof(struct woz_dfu_hdr) == WOZ_DFU_HDR_LEN,
-	       "woz_dfu_hdr changed size; scripts/woz_patch.py must change with it");
-_Static_assert(WOZ_DFU_HDR_CRC_LEN == WOZ_DFU_HDR_LEN - sizeof(uint32_t),
+_Static_assert(sizeof(struct ultrawidelock_dfu_hdr) == ULTRAWIDELOCK_DFU_HDR_LEN,
+	       "ultrawidelock_dfu_hdr changed size; scripts/woz_patch.py must change with it");
+_Static_assert(ULTRAWIDELOCK_DFU_HDR_CRC_LEN == ULTRAWIDELOCK_DFU_HDR_LEN - sizeof(uint32_t),
 	       "the header CRC must cover everything except itself");
 
 /**
@@ -72,7 +72,7 @@ struct apply_ctx {
  * afterwards. */
 static struct apply_ctx s_ctx;
 static struct detools_apply_patch_in_place_t s_patcher;
-static uint8_t s_chunk[CONFIG_WOZ_DFU_APPLIER_CHUNK];
+static uint8_t s_chunk[CONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK];
 
 /* ---- detools memory callbacks -------------------------------------------- */
 /*
@@ -229,12 +229,12 @@ static int mem_erase(void *arg_p, uintptr_t addr, size_t size)
 	 * already written by an earlier segment -- so an unaligned start is a
 	 * hard failure rather than something to paper over.
 	 */
-	if ((addr % WOZ_DFU_PAGE_SIZE) != 0U) {
+	if ((addr % ULTRAWIDELOCK_DFU_PAGE_SIZE) != 0U) {
 		DFU_LOG("e %u unaligned\n", (unsigned)addr);
 		return -1;
 	}
 
-	rounded = ROUND_UP(size, WOZ_DFU_PAGE_SIZE);
+	rounded = ROUND_UP(size, ULTRAWIDELOCK_DFU_PAGE_SIZE);
 	if (addr + rounded > woz_flash_size(c->primary)) {
 		DFU_LOG("e %u+%u past slot\n", (unsigned)addr, (unsigned)rounded);
 		return -1;
@@ -279,7 +279,7 @@ static int step_set(void *arg_p, int step)
 	 * points here.
 	 */
 	if (step == 0) {
-		if (woz_flash_erase(c->staging, WOZ_DFU_STEP_OFFSET, WOZ_DFU_PAGE_SIZE) !=
+		if (woz_flash_erase(c->staging, ULTRAWIDELOCK_DFU_STEP_OFFSET, ULTRAWIDELOCK_DFU_PAGE_SIZE) !=
 		    0) {
 			DFU_LOG("step clear failed\n");
 			return -1;
@@ -293,7 +293,7 @@ static int step_set(void *arg_p, int step)
 	}
 
 	return woz_flash_write(c->staging,
-				WOZ_DFU_STEP_OFFSET +
+				ULTRAWIDELOCK_DFU_STEP_OFFSET +
 					((uint32_t)step - 1u) * (uint32_t)sizeof(value),
 				&value, sizeof(value)) == 0
 		       ? 0
@@ -312,11 +312,11 @@ static int step_get(void *arg_p, int *step_p)
 
 	for (i = 0; i < STEP_MAX; i++) {
 		if (woz_flash_read(c->staging,
-				    WOZ_DFU_STEP_OFFSET + (uint32_t)(i * sizeof(value)),
+				    ULTRAWIDELOCK_DFU_STEP_OFFSET + (uint32_t)(i * sizeof(value)),
 				    &value, sizeof(value)) != 0) {
 			return -1;
 		}
-		if (value == WOZ_DFU_STEP_ERASED) {
+		if (value == ULTRAWIDELOCK_DFU_STEP_ERASED) {
 			break;
 		}
 	}
@@ -365,10 +365,10 @@ static void staging_consume(struct apply_ctx *c)
  * Stream a patch from the staging area into detools in chunks, applying it in place to the primary
  * flash area, and flushing all buffered writes before finalization; returns detools result code.
  */
-static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
+static int patch_stream(struct apply_ctx *c, const struct ultrawidelock_dfu_hdr *hdr)
 {
 	size_t left = hdr->patch_len;
-	uint32_t off = WOZ_DFU_PATCH_OFFSET;
+	uint32_t off = ULTRAWIDELOCK_DFU_PATCH_OFFSET;
 	int res;
 
 	s_w.len = 0U;
@@ -411,9 +411,9 @@ static int patch_stream(struct apply_ctx *c, const struct woz_dfu_hdr *hdr)
  * staging on completion or failure. Returns 0 always; actual success determined by primary image
  * validity on next boot.
  */
-static int woz_dfu_apply(void)
+static int ultrawidelock_dfu_apply(void)
 {
-	struct woz_dfu_hdr hdr;
+	struct ultrawidelock_dfu_hdr hdr;
 	uint32_t crc;
 	int completed = 0;
 	int res;
@@ -423,17 +423,17 @@ static int woz_dfu_apply(void)
 	}
 
 	/* The normal-boot fast path: no header, nothing staged, one read. */
-	if (woz_flash_read(s_ctx.staging, WOZ_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0 ||
-	    hdr.magic != WOZ_DFU_MAGIC) {
+	if (woz_flash_read(s_ctx.staging, ULTRAWIDELOCK_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0 ||
+	    hdr.magic != ULTRAWIDELOCK_DFU_MAGIC) {
 		woz_flash_close(s_ctx.staging);
 		return 0;
 	}
 
 	DFU_LOG("staged: len=%u to=%u\n", (unsigned)hdr.patch_len, (unsigned)hdr.to_len);
 
-	if (hdr.abi_version != WOZ_DFU_ABI_VERSION || hdr.patch_len == 0U ||
-	    hdr.patch_len > woz_flash_size(s_ctx.staging) - WOZ_DFU_PATCH_OFFSET ||
-	    hdr.hdr_crc32 != woz_crc32((const uint8_t *)&hdr, WOZ_DFU_HDR_CRC_LEN)) {
+	if (hdr.abi_version != ULTRAWIDELOCK_DFU_ABI_VERSION || hdr.patch_len == 0U ||
+	    hdr.patch_len > woz_flash_size(s_ctx.staging) - ULTRAWIDELOCK_DFU_PATCH_OFFSET ||
+	    hdr.hdr_crc32 != woz_crc32((const uint8_t *)&hdr, ULTRAWIDELOCK_DFU_HDR_CRC_LEN)) {
 		DFU_LOG("header rejected\n");
 		staging_consume(&s_ctx);
 		woz_flash_close(s_ctx.staging);
@@ -459,7 +459,7 @@ static int woz_dfu_apply(void)
 	 */
 	if (completed == 0) {
 		if (hdr.from_len > (uint32_t)woz_flash_size(s_ctx.primary) ||
-		    area_crc32(s_ctx.staging, WOZ_DFU_PATCH_OFFSET, hdr.patch_len, &crc) !=
+		    area_crc32(s_ctx.staging, ULTRAWIDELOCK_DFU_PATCH_OFFSET, hdr.patch_len, &crc) !=
 			    0 ||
 		    crc != hdr.patch_crc32) {
 			DFU_LOG("patch crc bad\n");
@@ -494,4 +494,4 @@ done:
 	return 0;
 }
 
-WOZ_INIT_APPLICATION_PRIO(woz_dfu_apply, 0);
+WOZ_INIT_APPLICATION_PRIO(ultrawidelock_dfu_apply, 0);

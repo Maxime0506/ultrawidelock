@@ -143,7 +143,7 @@ int detools_apply_patch_in_place_process(struct detools_apply_patch_in_place_t *
 		return dfufake.detools_process_ret;
 	}
 	/* The script runs once, on the first chunk: the applier streams the
-	 * patch in CONFIG_WOZ_DFU_APPLIER_CHUNK pieces and replaying per chunk
+	 * patch in CONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK pieces and replaying per chunk
 	 * would multiply every scripted operation by the chunk count. */
 	if (self_p->replayed) {
 		return 0;

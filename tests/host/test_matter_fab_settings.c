@@ -3,7 +3,7 @@
  * coverage any file under firmware has had.
  *
  * That gap is why this exists. Every defect this port has hit on hardware lived
- * in the Zephyr glue, never in the woz_matter protocol modules (which are 14/14
+ * in the Zephyr glue, never in the ultrawidelock_matter protocol modules (which are 14/14
  * covered), and the glue was never compiled by anything but a developer's local
  * `make cdk-*`. This compiles the REAL source unmodified against a fake settings
  * backend, so what passes is the code that ships.

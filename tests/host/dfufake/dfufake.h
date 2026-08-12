@@ -9,8 +9,8 @@
  * never the patch format) and the running image the SMP group reads. PSA is a
  * knob (tests/host/psafake/psafake.h).
  */
-#ifndef WOZ_DFUFAKE_H
-#define WOZ_DFUFAKE_H
+#ifndef ULTRAWIDELOCK_DFUFAKE_H
+#define ULTRAWIDELOCK_DFUFAKE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -101,4 +101,4 @@ size_t dfufake_ops_done(void);
 /** Returned by the double when an applier callback refused an operation. */
 #define DFUFAKE_DETOOLS_CALLBACK_FAILED (-6001)
 
-#endif /* WOZ_DFUFAKE_H */
+#endif /* ULTRAWIDELOCK_DFUFAKE_H */

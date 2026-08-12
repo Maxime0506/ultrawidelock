@@ -2,7 +2,7 @@
  * @file matter_ble_zephyr.h — the 0xFFF6 commissioning transport.
  *
  * Everything here is Zephyr-side glue. The protocol lives in
- * modules/woz_matter, which knows nothing about BLE.
+ * modules/ultrawidelock_matter, which knows nothing about BLE.
  */
 #pragma once
 

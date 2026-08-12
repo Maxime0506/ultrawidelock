@@ -136,7 +136,7 @@ def read_octets(chip_tool, fabric, attr, node_id, endpoint, dry_run, expect_len)
 
     chip-tool renders an octet string as a hex blob on the report line. The value
     is NULL until Apple Home has provisioned the reader, which the reader reports
-    deliberately (modules/woz_matter/src/matter_clusters.c:482) -- an unprovisioned
+    deliberately (modules/ultrawidelock_matter/src/matter_clusters.c:482) -- an unprovisioned
     reader has no identity to hand out, and that is a legible failure rather than
     a confusing one.
     """

@@ -5,7 +5,7 @@
  *
  * This is the second front door onto the same receiver: a stock mcumgr client
  * (nRF Device Manager, `mcumgr image upload`) pushes CBOR at group 1 and every
- * byte still goes through woz_dfu_rx_upload(). So the checks here are about
+ * byte still goes through ultrawidelock_dfu_rx_upload(). So the checks here are about
  * the adapter and nothing else — which keys it emits, which mgmt error it
  * returns for each refusal, and that the window gate stands in front of both
  * upload and erase.
@@ -31,8 +31,8 @@
 
 #include "dfu_crc.h"
 
-#include "woz_dfu.h"
-#include "woz_dfu_rx.h"
+#include "ultrawidelock_dfu.h"
+#include "ultrawidelock_dfu_rx.h"
 
 /* dfu_smp_img.c's MCUMGR_HANDLER_DEFINE, made callable by smpfake. */
 extern void (*const smpfake_handler_woz_smp_img)(void);
@@ -47,7 +47,7 @@ extern void (*const smpfake_handler_woz_smp_img)(void);
 #define IMAGE_TLV_PROT_INFO_MAGIC 0x6908
 #define IMAGE_TLV_SHA256          0x10
 
-#define HEAD_LEN (WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN)
+#define HEAD_LEN (ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN)
 
 static struct smpfake_nb reader_nb;
 static struct smpfake_nb writer_nb;
@@ -79,8 +79,8 @@ static void ready(void)
 	dfufake_reset();
 	psafake_reset();
 	smpfake_reset();
-	woz_dfu_rx_reset();
-	woz_dfu_window_close();
+	ultrawidelock_dfu_rx_reset();
+	ultrawidelock_dfu_window_close();
 }
 
 /* ---- the running image's identity ----------------------------------------- */
@@ -324,7 +324,7 @@ static void test_state_write(void)
 	T_EQ("request decoded", (long)smpfake.decode_bulk_calls, 1L);
 	T_EQ("both fields matched", (long)smpfake.decoded_keys, 2L);
 	T_OK("answered with the image list", smpfake_find("images") >= 0);
-	T_OK("nothing was marked", !woz_dfu_rx_staged());
+	T_OK("nothing was marked", !ultrawidelock_dfu_rx_staged());
 }
 
 /* ---- upload ---------------------------------------------------------------- */
@@ -335,23 +335,23 @@ static uint8_t upload_wire[HEAD_LEN + sizeof(upload_patch)];
 
 static void build_upload_wire(void)
 {
-	struct woz_dfu_hdr hdr;
+	struct ultrawidelock_dfu_hdr hdr;
 
 	for (size_t i = 0; i < sizeof(upload_patch); i++) {
 		upload_patch[i] = (uint8_t)(0x30 + i * 3u);
 	}
 	memset(&hdr, 0, sizeof(hdr));
-	hdr.magic = WOZ_DFU_MAGIC;
-	hdr.abi_version = WOZ_DFU_ABI_VERSION;
+	hdr.magic = ULTRAWIDELOCK_DFU_MAGIC;
+	hdr.abi_version = ULTRAWIDELOCK_DFU_ABI_VERSION;
 	hdr.patch_len = sizeof(upload_patch);
 	hdr.to_len = 0;
 	hdr.patch_crc32 = woz_crc32(upload_patch, sizeof(upload_patch));
 	hdr.from_crc32 = 0;
 	hdr.from_len = 0;
 	memcpy(upload_head, &hdr, sizeof(hdr));
-	hdr.hdr_crc32 = woz_crc32(upload_head, WOZ_DFU_HDR_CRC_LEN);
+	hdr.hdr_crc32 = woz_crc32(upload_head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN);
 	memcpy(upload_head, &hdr, sizeof(hdr));
-	memset(upload_head + WOZ_DFU_HDR_LEN, 0xa5, WOZ_DFU_SIG_LEN);
+	memset(upload_head + ULTRAWIDELOCK_DFU_HDR_LEN, 0xa5, ULTRAWIDELOCK_DFU_SIG_LEN);
 
 	memcpy(upload_wire, upload_head, HEAD_LEN);
 	memcpy(upload_wire + HEAD_LEN, upload_patch, sizeof(upload_patch));
@@ -391,7 +391,7 @@ static void test_upload(void)
 
 	/* A request that will not decode at all. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	smpfake.decode_bulk_ret = -1;
 	T_EQ("undecodable request refused",
 	     img_group->mg_handlers[WOZ_SMP_IMG_ID_UPLOAD].mh_write(ctxt()), MGMT_ERR_EINVAL);
@@ -399,33 +399,33 @@ static void test_upload(void)
 	/* mcumgr's offset is mandatory; without it there is no way to know what
 	 * these bytes are. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	T_EQ("missing offset refused", upload(0, 0, total, upload_wire, total, false),
 	     MGMT_ERR_EINVAL);
 
 	/* Only image 0 exists; writing another image's bytes into the one slot
 	 * there is would be worse than saying so. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	T_EQ("second image refused", upload(1, 0, total, upload_wire, total, true),
 	     MGMT_ERR_EINVAL);
 
 	/* The whole file in one chunk. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	T_EQ("upload accepted", upload(0, 0, total, upload_wire, total, true), MGMT_ERR_EOK);
 	item = value_after("off");
 	T_OK("next offset echoed", item != NULL && item->kind == SMPFAKE_UINT);
 	if (item != NULL) {
 		T_EQ("next offset is the whole file", (long)item->value, (long)total);
 	}
-	T_OK("staged", woz_dfu_rx_staged());
+	T_OK("staged", ultrawidelock_dfu_rx_staged());
 	/* Legacy clients want an explicit rc alongside the offset. */
 	T_OK("legacy rc emitted", smpfake_find("rc") >= 0);
 
 	/* Chunked, with the device reporting its position each time. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	{
 		size_t off = 0;
 		const size_t chunk = 24;
@@ -440,12 +440,12 @@ static void test_upload(void)
 			item = value_after("off");
 			T_OK("position echoed", item != NULL && (size_t)item->value == off);
 		}
-		T_OK("staged after chunking", woz_dfu_rx_staged());
+		T_OK("staged after chunking", ultrawidelock_dfu_rx_staged());
 	}
 
 	/* A stale offset is a resync, which the protocol treats as success. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	T_EQ("first chunk", upload(0, 0, total, upload_wire, 24, true), MGMT_ERR_EOK);
 	smpfake_reset();
 	T_EQ("stale offset accepted", upload(0, 999, total, upload_wire, 24, true), MGMT_ERR_EOK);
@@ -455,15 +455,15 @@ static void test_upload(void)
 	/* A refusal from the receiver is a bad-state error: the transfer is
 	 * discarded and the client must restart at 0. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	psafake.verify_ret = -1;
 	T_EQ("bad signature refused", upload(0, 0, total, upload_wire, total, true),
 	     MGMT_ERR_EBADSTATE);
-	T_OK("nothing staged", !woz_dfu_rx_staged());
+	T_OK("nothing staged", !ultrawidelock_dfu_rx_staged());
 
 	/* A reply that will not fit. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	smpfake.encode_fail_in = 0;
 	T_EQ("full reply buffer reported", upload(0, 0, total, upload_wire, total, true),
 	     MGMT_ERR_EMSGSIZE);
@@ -484,21 +484,21 @@ static void test_erase(void)
 
 	/* A staged update is thrown away, and the receiver forgets it too. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	build_upload_wire();
 	T_EQ("stage something first",
 	     upload(0, 0, sizeof(upload_wire), upload_wire, sizeof(upload_wire), true),
 	     MGMT_ERR_EOK);
-	T_OK("staged", woz_dfu_rx_staged());
+	T_OK("staged", ultrawidelock_dfu_rx_staged());
 	T_EQ("erase ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_write(ctxt()),
 	     MGMT_ERR_EOK);
 	T_EQ("erased the whole partition", (long)dfufake_staging.last_erase_len,
 	     (long)DFUFAKE_STAGING_SIZE);
-	T_OK("no longer staged", !woz_dfu_rx_staged());
+	T_OK("no longer staged", !ultrawidelock_dfu_rx_staged());
 
 	/* Flash failures are reported rather than swallowed. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	dfufake_staging.erase_fail_in = 0;
 	T_EQ("failed erase reported", img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_write(ctxt()),
 	     MGMT_ERR_EUNKNOWN);
@@ -539,7 +539,7 @@ static void test_reset_gate(void)
 
 	/* An owner who opened a window is allowed to reboot. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	rc = 0;
 	T_EQ("reset allowed with the window open",
 	     cb->callback(MGMT_EVT_OP_OS_MGMT_RESET, MGMT_CB_OK, &rc, &group, &abort_more, NULL, 0),
@@ -549,12 +549,12 @@ static void test_reset_gate(void)
 	/* So is a reboot that installs an update already staged and verified,
 	 * even though the window has since closed. */
 	ready();
-	woz_dfu_window_open(1000);
+	ultrawidelock_dfu_window_open(1000);
 	build_upload_wire();
 	T_EQ("stage an update",
 	     upload(0, 0, sizeof(upload_wire), upload_wire, sizeof(upload_wire), true),
 	     MGMT_ERR_EOK);
-	woz_dfu_window_close();
+	ultrawidelock_dfu_window_close();
 	rc = 0;
 	T_EQ("reset allowed with an update staged",
 	     cb->callback(MGMT_EVT_OP_OS_MGMT_RESET, MGMT_CB_OK, &rc, &group, &abort_more, NULL, 0),

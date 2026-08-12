@@ -20,7 +20,7 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 list(APPEND ZEPHYR_EXTRA_MODULES
 	"${REPO_ROOT}/modules/woz_aliro"
 	"${REPO_ROOT}/modules/ultrawidelock_anchor"
-	"${REPO_ROOT}/modules/woz_matter"
+	"${REPO_ROOT}/modules/ultrawidelock_matter"
 	"${REPO_ROOT}/modules/ultrawidelock_ml"
 	"${REPO_ROOT}/modules/woz_uwb"
 	"${REPO_ROOT}/modules/woz_dw3000"

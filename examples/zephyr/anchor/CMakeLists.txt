@@ -6,7 +6,7 @@
 # giving it a signing key would add a setup step and buy nothing.
 #
 # Only two modules: woz_uwb for the CONFIG_WOZ_UWB tier and modules/woz_dw3000 under
-# it. woz_aliro and woz_matter are absent because nothing here is Aliro-aware --
+# it. woz_aliro and ultrawidelock_matter are absent because nothing here is Aliro-aware --
 # that is the point of building at this tier.
 cmake_minimum_required(VERSION 3.20.0)
 

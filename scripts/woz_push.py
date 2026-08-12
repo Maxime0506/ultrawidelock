@@ -5,7 +5,7 @@
 
 The board accepts nothing until an update window is open, so this connects and
 then WAITS, asking once a second and prompting you to press SW2. The window
-lasts CONFIG_WOZ_DFU_WINDOW_MS, five minutes by default. Start the push first
+lasts CONFIG_ULTRAWIDELOCK_DFU_WINDOW_MS, five minutes by default. Start the push first
 or press the button first; either order works.
 
 On success the board reboots into MCUboot, which applies the patch -- about

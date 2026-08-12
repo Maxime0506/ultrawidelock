@@ -19,16 +19,16 @@ if(CONFIG_DW3000
    OR CONFIG_WOZ_PRETTY_SHELL
    OR CONFIG_WOZ_UWB_SHELL
    OR (CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
-   OR CONFIG_WOZ_DFU_SMP_IMG
+   OR CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG
    OR CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM
-   OR CONFIG_WOZ_DFU_RECEIVER)
+   OR CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 
 zephyr_library_named(woz_zephyr_port)
 
 # Zephyr backend of woz_osal.h, for every image on this OS. It lives here and
 # nowhere else: modules/ calls the contract (uwb_rxdiag.c, uwb_selftest.c,
 # dfu_receiver.c) and this tier is the one thing all four Zephyr images carry
-# on ZEPHYR_EXTRA_MODULES. It used to ride modules/woz_dfu, which meant an
+# on ZEPHYR_EXTRA_MODULES. It used to ride modules/ultrawidelock_dfu, which meant an
 # image without the DFU module -- the nRF5340DK door lock -- linked the callers
 # with nothing behind them. MCUboot is the exception and needs no backend: the
 # applier is synchronous and takes only woz_flash.
@@ -87,14 +87,14 @@ if(CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
 	zephyr_library_sources(uwb/woz_hfclk_boost.c)
 endif()
 
-# Optional second front door onto the woz_dfu receiver: the SMP image group,
+# Optional second front door onto the ultrawidelock_dfu receiver: the SMP image group,
 # for clients that only speak mcumgr. Rides the receiver's library contract
-# (woz_dfu.h / woz_dfu_rx.h / woz_flash.h).
-if(CONFIG_WOZ_DFU_SMP_IMG)
+# (ultrawidelock_dfu.h / ultrawidelock_dfu_rx.h / woz_flash.h).
+if(CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG)
 	zephyr_library_sources(dfu/dfu_smp_img.c)
 	zephyr_library_include_directories(
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dfu/include
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_dfu/src
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dfu/include
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dfu/src
 		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
 endif()
 
@@ -116,7 +116,7 @@ endif()
 # modules/woz_nfc uses for its transports: these files include app-owned
 # headers (matter_commission.h) or need the app/add-on include paths, so they
 # ride the app's compile context rather than the library's. The ALIRO_* /
-# WOZ_DFU_RECEIVER gates are defined by the consuming app's Kconfig and simply
+# ULTRAWIDELOCK_DFU_RECEIVER gates are defined by the consuming app's Kconfig and simply
 # do not exist elsewhere, so every other image gets nothing.
 
 # Zephyr SPI backend of the PN532 bus contract.
@@ -144,8 +144,8 @@ if(CONFIG_ALIRO_BLE_CENTRAL)
 	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble/aliro_ble_central_zephyr.c)
 endif()
 
-# BLE transport of the delta-update receiver (woz_dfu supplies woz_dfu_rx.h
-# globally while CONFIG_WOZ_DFU_RECEIVER=y).
-if(CONFIG_WOZ_DFU_RECEIVER)
+# BLE transport of the delta-update receiver (ultrawidelock_dfu supplies ultrawidelock_dfu_rx.h
+# globally while CONFIG_ULTRAWIDELOCK_DFU_RECEIVER=y).
+if(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/dfu/dfu_ble_zephyr.c)
 endif()

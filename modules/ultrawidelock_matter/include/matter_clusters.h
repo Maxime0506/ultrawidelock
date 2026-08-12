@@ -545,7 +545,7 @@ struct matter_device_info {
 	/**
 	 * AliroReaderGroupSubIdentifier, filled by the port.
 	 *
-	 * Here rather than generated in this module because woz_matter carries
+	 * Here rather than generated in this module because ultrawidelock_matter carries
 	 * no RNG and no storage seam, and this value has to be stable for the
 	 * life of the reader group -- a controller that reads a different
 	 * sub-identifier after a reboot is entitled to treat this as a

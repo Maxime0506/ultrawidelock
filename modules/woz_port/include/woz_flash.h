@@ -1,5 +1,5 @@
 /*
- * woz_flash.h - the two flash partitions woz_dfu touches, and reboot.
+ * woz_flash.h - the two flash partitions ultrawidelock_dfu touches, and reboot.
  *
  * Exactly what the DFU receiver and applier need: open one of two named
  * areas, read/write/erase inside it, reboot when a patch is staged. The
@@ -9,7 +9,7 @@
  * erase rounding exist only to satisfy them; a permissive fake would hide
  * their bugs. Backends: Zephyr flash_map over the partition-manager ids
  * (flash_zephyr.c), host RAM (flash_host.c). ESP-IDF gets a backend when an
- * ESP consumer of woz_dfu exists; none does today.
+ * ESP consumer of ultrawidelock_dfu exists; none does today.
  */
 #ifndef WOZ_FLASH_H
 #define WOZ_FLASH_H

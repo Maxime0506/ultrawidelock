@@ -5,7 +5,7 @@
  * Zephyr's img_mgmt is gated off by single-slot mode, and single-slot is the
  * only way MCUboot fits this part (two slots want 844 KB of a 512 KB flash), so
  * group 1 is served here instead. A thin adapter, not a reimplementation: every
- * byte still goes through woz_dfu_rx_upload(), same signature check, size
+ * byte still goes through ultrawidelock_dfu_rx_upload(), same signature check, size
  * limits, CRC and window gate as the native transport; only CBOR is new.
  * Clients see one image, one slot, active and confirmed -- never a pending
  * second image, because a staged patch has no honest hash until applied. So the
@@ -38,12 +38,12 @@
 
 #include <pm_config.h>
 
-#include "woz_dfu.h"
-#include "woz_dfu_rx.h"
+#include "ultrawidelock_dfu.h"
+#include "ultrawidelock_dfu_rx.h"
 #include "woz_flash.h"
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_DECLARE(woz_dfu, CONFIG_WOZ_DFU_LOG_LEVEL);
+LOG_MODULE_DECLARE(ultrawidelock_dfu, CONFIG_ULTRAWIDELOCK_DFU_LOG_LEVEL);
 
 /* MGMT_GROUP_ID_IMAGE. Spelled out rather than included from
  * img_mgmt.h, which is not compiled in this configuration.
@@ -290,7 +290,7 @@ static int upload_write(struct smp_streamer *ctxt)
 		return MGMT_ERR_EINVAL;
 	}
 
-	rc = woz_dfu_rx_upload((uint32_t)off, (uint32_t)total, data.value, data.len, &next);
+	rc = ultrawidelock_dfu_rx_upload((uint32_t)off, (uint32_t)total, data.value, data.len, &next);
 	if (rc == -EACCES) {
 		/* The window is shut. This is the one refusal a legitimate user
 		 * will meet, so it gets its own code: the client shows "access
@@ -327,7 +327,7 @@ static int erase_write(struct smp_streamer *ctxt)
 
 	ARG_UNUSED(ctxt);
 
-	if (!woz_dfu_window_is_open()) {
+	if (!ultrawidelock_dfu_window_is_open()) {
 		return MGMT_ERR_EACCESSDENIED;
 	}
 	if (woz_flash_open(WOZ_FLASH_AREA_STAGING, &fa) != 0) {
@@ -336,7 +336,7 @@ static int erase_write(struct smp_streamer *ctxt)
 	rc = woz_flash_erase(fa, 0, woz_flash_size(fa));
 	woz_flash_close(fa);
 
-	woz_dfu_rx_reset();
+	ultrawidelock_dfu_rx_reset();
 
 	return (rc == 0) ? MGMT_ERR_EOK : MGMT_ERR_EUNKNOWN;
 }
@@ -371,7 +371,7 @@ static enum mgmt_cb_return reset_gate(uint32_t event, enum mgmt_cb_return prev_s
 	if (event != MGMT_EVT_OP_OS_MGMT_RESET) {
 		return MGMT_CB_OK;
 	}
-	if (woz_dfu_window_is_open() || woz_dfu_rx_staged()) {
+	if (ultrawidelock_dfu_window_is_open() || ultrawidelock_dfu_rx_staged()) {
 		return MGMT_CB_OK;
 	}
 

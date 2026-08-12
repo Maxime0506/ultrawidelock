@@ -14,8 +14,8 @@
  * transcription.
  */
 
-#ifndef WOZ_DFU_H_
-#define WOZ_DFU_H_
+#ifndef ULTRAWIDELOCK_DFU_H_
+#define ULTRAWIDELOCK_DFU_H_
 
 #include <stdint.h>
 
@@ -24,10 +24,10 @@ extern "C" {
 #endif
 
 /** "WDFU" read as a little-endian word. */
-#define WOZ_DFU_MAGIC 0x55464457u
+#define ULTRAWIDELOCK_DFU_MAGIC 0x55464457u
 
 /** Bumped whenever the layout below changes in any way. */
-#define WOZ_DFU_ABI_VERSION 1u
+#define ULTRAWIDELOCK_DFU_ABI_VERSION 1u
 
 /**
  * Layout of the staging partition. Page-granular because the erase unit is a
@@ -36,10 +36,10 @@ extern "C" {
  * written once. Sharing a page between any two of them would mean erasing one
  * to update another.
  */
-#define WOZ_DFU_PAGE_SIZE 4096u
+#define ULTRAWIDELOCK_DFU_PAGE_SIZE 4096u
 
-/** Page 0: @ref woz_dfu_hdr, written by the application. */
-#define WOZ_DFU_HDR_OFFSET 0u
+/** Page 0: @ref ultrawidelock_dfu_hdr, written by the application. */
+#define ULTRAWIDELOCK_DFU_HDR_OFFSET 0u
 
 /**
  * Page 1: the step log, written by the bootloader.
@@ -50,13 +50,13 @@ extern "C" {
  * everything already done (`detools.c:1559`) instead of restarting the patch
  * against a half-patched image.
  */
-#define WOZ_DFU_STEP_OFFSET WOZ_DFU_PAGE_SIZE
+#define ULTRAWIDELOCK_DFU_STEP_OFFSET ULTRAWIDELOCK_DFU_PAGE_SIZE
 
 /** Page 2 onward: the patch itself. */
-#define WOZ_DFU_PATCH_OFFSET (2u * WOZ_DFU_PAGE_SIZE)
+#define ULTRAWIDELOCK_DFU_PATCH_OFFSET (2u * ULTRAWIDELOCK_DFU_PAGE_SIZE)
 
 /** Value of an erased flash word, and so the end marker of the step log. */
-#define WOZ_DFU_STEP_ERASED 0xffffffffu
+#define ULTRAWIDELOCK_DFU_STEP_ERASED 0xffffffffu
 
 /**
  * The staged-update header.
@@ -77,15 +77,15 @@ extern "C" {
  * Every field is little-endian. Total 32 bytes, word-aligned throughout,
  * because the nRF flash driver writes words.
  */
-struct woz_dfu_hdr {
-	/** @ref WOZ_DFU_MAGIC. Anything else means "no update staged", which is
+struct ultrawidelock_dfu_hdr {
+	/** @ref ULTRAWIDELOCK_DFU_MAGIC. Anything else means "no update staged", which is
 	 *  the normal-boot fast path and must stay a single word read. */
 	uint32_t magic;
-	/** @ref WOZ_DFU_ABI_VERSION. */
+	/** @ref ULTRAWIDELOCK_DFU_ABI_VERSION. */
 	uint16_t abi_version;
 	/** Reserved, written as zero. */
 	uint16_t flags;
-	/** Patch length in bytes, starting at @ref WOZ_DFU_PATCH_OFFSET. */
+	/** Patch length in bytes, starting at @ref ULTRAWIDELOCK_DFU_PATCH_OFFSET. */
 	uint32_t patch_len;
 	/** Size the primary slot's image is expected to have afterwards. */
 	uint32_t to_len;
@@ -101,19 +101,19 @@ struct woz_dfu_hdr {
 };
 
 /**
- * Bytes of @ref woz_dfu_hdr covered by @ref woz_dfu_hdr.hdr_crc32: everything
+ * Bytes of @ref ultrawidelock_dfu_hdr covered by @ref ultrawidelock_dfu_hdr.hdr_crc32: everything
  * ahead of the field itself. The whole struct is 32 bytes, so this is 28.
  */
-#define WOZ_DFU_HDR_CRC_LEN 28u
+#define ULTRAWIDELOCK_DFU_HDR_CRC_LEN 28u
 
-/** Wire and on-flash size of @ref woz_dfu_hdr. Asserted against sizeof(). */
-#define WOZ_DFU_HDR_LEN 32u
+/** Wire and on-flash size of @ref ultrawidelock_dfu_hdr. Asserted against sizeof(). */
+#define ULTRAWIDELOCK_DFU_HDR_LEN 32u
 
-/** Raw P-256 signature, r||s, over all @ref WOZ_DFU_HDR_LEN header bytes. */
-#define WOZ_DFU_SIG_LEN 64u
+/** Raw P-256 signature, r||s, over all @ref ULTRAWIDELOCK_DFU_HDR_LEN header bytes. */
+#define ULTRAWIDELOCK_DFU_SIG_LEN 64u
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* WOZ_DFU_H_ */
+#endif /* ULTRAWIDELOCK_DFU_H_ */

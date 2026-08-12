@@ -55,7 +55,7 @@ also implement the OSAL, flash, logging, and base port contracts.
 
 - Keep edits minimal and preserve unrelated working-tree changes.
 - Do not edit `modules/woz_dw3000/dwt_uwb_driver/` or
-  `modules/woz_dfu/src/detools/`.
+  `modules/ultrawidelock_dfu/src/detools/`.
 - Do not change `mk/cdk.mk:208`.
 - Do not weaken a test, purity rule, or ratchet allowlist to obtain a pass.
 - A stale allowlist entry is a failure and must be removed with the change that

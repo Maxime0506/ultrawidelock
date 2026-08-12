@@ -7,8 +7,8 @@
  * implementation (not Zephyr's crc32_ieee) so both DFU halves compile from
  * one source on every port; the algorithm is identical.
  */
-#ifndef WOZ_DFU_CRC_H
-#define WOZ_DFU_CRC_H
+#ifndef ULTRAWIDELOCK_DFU_CRC_H
+#define ULTRAWIDELOCK_DFU_CRC_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -22,4 +22,4 @@ static inline uint32_t woz_crc32(const uint8_t *data, size_t len)
 	return woz_crc32_update(0, data, len);
 }
 
-#endif /* WOZ_DFU_CRC_H */
+#endif /* ULTRAWIDELOCK_DFU_CRC_H */

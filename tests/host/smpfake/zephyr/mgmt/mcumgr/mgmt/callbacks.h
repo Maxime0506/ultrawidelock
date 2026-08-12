@@ -1,5 +1,5 @@
 /* smpfake: <zephyr/mgmt/mcumgr/mgmt/callbacks.h> — the event hook a handler
- * uses to veto a command. woz_dfu registers one on os_mgmt reset. */
+ * uses to veto a command. ultrawidelock_dfu registers one on os_mgmt reset. */
 #ifndef SMPFAKE_ZEPHYR_MGMT_MCUMGR_CALLBACKS_H
 #define SMPFAKE_ZEPHYR_MGMT_MCUMGR_CALLBACKS_H
 

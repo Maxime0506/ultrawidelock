@@ -5,7 +5,7 @@ Not run by tests/host/run.sh. It produced the constants pasted into that suite,
 and it lives here so they can be regenerated and audited rather than taken on
 trust:
 
-    python3 tests/host/gen_pase_vector.py modules/woz_matter/src/matter_spake2p.c
+    python3 tests/host/gen_pase_vector.py modules/ultrawidelock_matter/src/matter_spake2p.c
 
 Nothing here comes from the C under test. P-256 is plain Python integer math,
 the transcript follows RFC 9383 + Matter's ordering, and the prover and the
@@ -13,7 +13,7 @@ verifier sides are computed with their DIFFERENT formulas and asserted equal --
 that agreement is the check that the vector is right, not that it is self
 consistent with one implementation.
 
-M and N are read out of modules/woz_matter/src/matter_spake2p.c rather than
+M and N are read out of modules/ultrawidelock_matter/src/matter_spake2p.c rather than
 retyped, and then checked to be on the curve, so a transcription slip cannot
 survive into the vector.
 """

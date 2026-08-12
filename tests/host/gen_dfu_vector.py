@@ -21,7 +21,7 @@ header and the 64-byte raw r||s signature, and that a single tampered header
 byte changes what gets verified.
 
 Nothing here reads the C under test. The header is rebuilt from the on-flash
-layout in modules/woz_dfu/include/woz_dfu.h, and the suite asserts that its own
+layout in modules/ultrawidelock_dfu/include/ultrawidelock_dfu.h, and the suite asserts that its own
 build_head() reproduces these bytes -- so a drift on either side is caught.
 """
 
@@ -31,20 +31,20 @@ import zlib
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, utils
 
-WOZ_DFU_MAGIC = 0x55464457
-WOZ_DFU_ABI_VERSION = 1
-WOZ_DFU_HDR_CRC_LEN = 28
+ULTRAWIDELOCK_DFU_MAGIC = 0x55464457
+ULTRAWIDELOCK_DFU_ABI_VERSION = 1
+ULTRAWIDELOCK_DFU_HDR_CRC_LEN = 28
 
 # The patch tests/host/test_dfu.c stages: fill_pattern(patch, 70, 3).
 PATCH = bytes((3 + i * 7) & 0xFF for i in range(70))
 
 
 def build_header() -> bytes:
-    """struct woz_dfu_hdr for that patch, little-endian, CRC written last."""
+    """struct ultrawidelock_dfu_hdr for that patch, little-endian, CRC written last."""
     head = struct.pack(
         "<IHHIIIII",
-        WOZ_DFU_MAGIC,
-        WOZ_DFU_ABI_VERSION,
+        ULTRAWIDELOCK_DFU_MAGIC,
+        ULTRAWIDELOCK_DFU_ABI_VERSION,
         0,  # flags
         len(PATCH),  # patch_len
         0,  # to_len
@@ -52,7 +52,7 @@ def build_header() -> bytes:
         0,  # from_crc32
         0,  # from_len
     )
-    assert len(head) == WOZ_DFU_HDR_CRC_LEN, len(head)
+    assert len(head) == ULTRAWIDELOCK_DFU_HDR_CRC_LEN, len(head)
     return head + struct.pack("<I", zlib.crc32(head))
 
 

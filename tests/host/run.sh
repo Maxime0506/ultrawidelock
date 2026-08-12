@@ -105,7 +105,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra $san_flags \
 	-DCONFIG_LOG_DEFAULT_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/settingsfake" -I"$HOSTD/logfake" \
-	-I"$ROOT/modules/woz_matter/include" -I"$ROOT/ports/zephyr/store" \
+	-I"$ROOT/modules/ultrawidelock_matter/include" -I"$ROOT/ports/zephyr/store" \
 	"$HOSTD/test.c" "$HOSTD/test_matter_fab_settings.c" \
 	"$HOSTD/settingsfake/settingsfake.c" \
 	"$ROOT/ports/zephyr/store/matter_fab_settings.c" \
@@ -121,18 +121,18 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include"
 #    checked.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
-	-DWOZ_PORT_HOST -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
+	-DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
 	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
 	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
 	-I"$HOSTD/psafake" -I"$ROOT/modules/woz_port/include" \
-	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
+	-I"$ROOT/modules/ultrawidelock_dfu/include" -I"$ROOT/modules/ultrawidelock_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
 	"$ROOT/tests/host/port/osal_host.c" "$ROOT/tests/host/port/flash_host.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_crc.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_crc.c" \
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_receiver.c" \
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_applier.c" \
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c" \
 	-o "$OUT/host_test_dfu"
 "$OUT/host_test_dfu"

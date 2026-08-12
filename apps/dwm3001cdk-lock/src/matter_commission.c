@@ -33,8 +33,8 @@
 
 #include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
 #include "aliro_ble.h" /* aliro_ble_readvertise, when a fabric arrives */
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
-#include "woz_dfu_rx.h" /* the same gesture opens the update window */
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
+#include "ultrawidelock_dfu_rx.h" /* the same gesture opens the update window */
 #endif
 #include "aliro_prov.h" /* ALIRO_TRUST_MAX, to hold the reported cap to the real one */
 #include <ultrawidelock/reader.h> /* aliro_reader_provision_identity, for SetAliroReaderConfig */
@@ -165,7 +165,7 @@ static uint8_t s_pt[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
 
 /*
  * The two seams matter_attest.h declares. Kept here rather than in the module
- * so woz_matter stays free of any particular crypto backend; on this board both
+ * so ultrawidelock_matter stays free of any particular crypto backend; on this board both
  * are the reader's existing PSA-backed primitives.
  */
 int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
@@ -502,7 +502,7 @@ static int load_verifier(void)
 /* ---- AdministratorCommissioning (0x003C) ---------------------------------- */
 /*
  * What Apple Home's "Turn On Pairing Mode" reaches. The cluster decodes; this
- * is everything with a side effect, because modules/woz_matter is compiled by
+ * is everything with a side effect, because modules/ultrawidelock_matter is compiled by
  * the host suite without Zephyr and must not learn about Bluetooth.
  *
  * The commissioner supplies its OWN verifier, so the ecosystem being invited in
@@ -550,8 +550,8 @@ static K_WORK_DELAYABLE_DEFINE(s_admin_timer, admin_expire);
 /**
  * Open the Matter commissioning window for the specified kind (basic or enhanced) and timeout in
  * seconds. Set the administrative window state, reschedule the admin timer, re-advertise on BLE,
- * and if CONFIG_WOZ_DFU_RECEIVER is enabled, open the DFU update window for the same timeout
- * (converted to milliseconds). Log the window opening.
+ * and if CONFIG_ULTRAWIDELOCK_DFU_RECEIVER is enabled, open the DFU update window for the same
+ * timeout (converted to milliseconds). Log the window opening.
  */
 static void admin_arm(uint16_t timeout_s, uint8_t kind)
 {
@@ -572,11 +572,11 @@ static void admin_arm(uint16_t timeout_s, uint8_t kind)
 	 * when a window is open, and tying the disclosure to that keeps it to a
 	 * gesture the owner just made rather than every boot. */
 	matter_thread_dump_active_dataset();
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 	/* The same gesture opens the update window. This is what the SW2 press
 	 * stands in for: an owner who can re-pair the lock is the owner who may
 	 * re-flash it, and both are deliberate acts with a visible prompt. */
-	woz_dfu_window_open((uint32_t)timeout_s * 1000u);
+	ultrawidelock_dfu_window_open((uint32_t)timeout_s * 1000u);
 #endif
 	LOG_INF("commissioning window open for %u s (kind %u)", (unsigned)timeout_s,
 		(unsigned)kind);
@@ -2029,7 +2029,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  */
 /*
  * The cluster reports NumberOfAliroEndpointKeysSupported from its own constant,
- * because woz_matter must not include the reader's headers. This is where the
+ * because ultrawidelock_matter must not include the reader's headers. This is where the
  * two meet: a controller told it may install more endpoint keys than the trust
  * store holds will have the surplus silently evicted, which is the failure that
  * once locked a re-paired reader out for good.
@@ -3295,7 +3295,7 @@ int matter_commission_init(void)
 	 * The Aliro reader group sub-identifier. Derived from the factory
 	 * EUI-64 rather than drawn from the RNG, because nothing on the Matter
 	 * side of this node is persisted yet (there is no settings handler in
-	 * woz_matter at all) and a value regenerated at every boot would make
+	 * ultrawidelock_matter at all) and a value regenerated at every boot would make
 	 * this look like a different reader group after each power cycle.
 	 * Hashing keeps the EUI-64 itself off the wire.
 	 *

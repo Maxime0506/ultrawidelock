@@ -11,7 +11,7 @@
 # rewrite the flash it is executing from. The receiver goes in the APPLICATION,
 # because the bootloader has no radio.
 
-config WOZ_DFU_APPLIER
+config ULTRAWIDELOCK_DFU_APPLIER
 	bool "Delta patch applier (bootloader side)"
 	depends on FLASH
 	help
@@ -29,9 +29,9 @@ config WOZ_DFU_APPLIER
 	  Nothing happens at boot unless a valid header is found in the
 	  patch_staging partition, so the cost on a normal boot is one word read.
 
-if WOZ_DFU_APPLIER
+if ULTRAWIDELOCK_DFU_APPLIER
 
-config WOZ_DFU_APPLIER_LOG
+config ULTRAWIDELOCK_DFU_APPLIER_LOG
 	bool "Print applier progress"
 	depends on PRINTK
 	help
@@ -44,7 +44,7 @@ config WOZ_DFU_APPLIER_LOG
 	  when the difference between "declined the patch" and "applied it and
 	  produced an image that fails validation" is otherwise invisible.
 
-config WOZ_DFU_APPLIER_CHUNK
+config ULTRAWIDELOCK_DFU_APPLIER_CHUNK
 	int "Patch read buffer, bytes"
 	default 256
 	range 64 1024
@@ -53,9 +53,9 @@ config WOZ_DFU_APPLIER_CHUNK
 	  handed to detools. Larger is marginally faster and costs BSS. detools
 	  itself is a streaming decoder and imposes no minimum.
 
-endif # WOZ_DFU_APPLIER
+endif # ULTRAWIDELOCK_DFU_APPLIER
 
-config WOZ_DFU_RECEIVER
+config ULTRAWIDELOCK_DFU_RECEIVER
 	bool "Delta patch receiver (application side)"
 	depends on FLASH && SETTINGS
 	depends on PSA_WANT_ALG_ECDSA && PSA_WANT_ECC_SECP_R1_256
@@ -70,15 +70,15 @@ config WOZ_DFU_RECEIVER
 	  Transport-independent. On the DWM3001CDK it is fed from a second L2CAP
 	  CoC beside the Aliro one, but nothing in the receiver knows that.
 
-	  NOTHING IS ACCEPTED until woz_dfu_window_open() has been called. That
+	  NOTHING IS ACCEPTED until ultrawidelock_dfu_window_open() has been called. That
 	  window is the authorization: the patch is signed and MCUboot re-checks
 	  the result, so no peer can install code either way, but a closed
 	  channel is what stops an unauthenticated peer in radio range from
 	  burning flash cycles and forcing reboots.
 
-if WOZ_DFU_RECEIVER
+if ULTRAWIDELOCK_DFU_RECEIVER
 
-config WOZ_DFU_WINDOW_MS
+config ULTRAWIDELOCK_DFU_WINDOW_MS
 	int "How long an update window stays open, milliseconds"
 	default 300000
 	range 10000 3600000
@@ -87,7 +87,7 @@ config WOZ_DFU_WINDOW_MS
 	  interval that Matter and Aliro are also using, short enough that an
 	  owner who opened it and walked away is not leaving it open all day.
 
-config WOZ_DFU_SMP_IMG
+config ULTRAWIDELOCK_DFU_SMP_IMG
 	bool "Serve SMP group 1, so stock mcumgr clients can push an update"
 	depends on MCUMGR
 	help
@@ -113,8 +113,8 @@ config WOZ_DFU_SMP_IMG
 	  unpaired peer the SMP endpoint, and only the window gate stands in
 	  front of it. The native L2CAP transport needs no such setting.
 
-module = WOZ_DFU
-module-str = woz_dfu
+module = ULTRAWIDELOCK_DFU
+module-str = ultrawidelock_dfu
 source "subsys/logging/Kconfig.template.log_config"
 
-endif # WOZ_DFU_RECEIVER
+endif # ULTRAWIDELOCK_DFU_RECEIVER

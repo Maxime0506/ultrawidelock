@@ -15,10 +15,10 @@ Zephyr, NCS, or ESP-IDF names.
 | `woz_uwb` | Aliro and FiRa UWB messages, sessions, ranging, and diagnostics |
 | `woz_dw3000` | DW3000-family driver source sets and portable driver seams |
 | `woz_nfc` | NFC transport abstraction, PN532 transport, and the RFAL-path ECP emitter |
-| `woz_matter` | Minimal Matter transport, session, and cluster implementation |
+| `ultrawidelock_matter` | Minimal Matter transport, session, and cluster implementation |
 | `ultrawidelock_anchor` | Anchor geometry, fusion, reporting, and SLAM logic |
 | `ultrawidelock_ml` | LOS/NLOS feature extraction and classifier |
-| `woz_dfu` | Delta update receiver and applier |
+| `ultrawidelock_dfu` | Delta update receiver and applier |
 
 ## Public and private boundaries
 

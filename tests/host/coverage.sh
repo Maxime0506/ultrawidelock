@@ -14,7 +14,7 @@
 # rest fall through to the 0% table. Non-C surfaces (python, web pages, the
 # nRF add-on patches, shell tooling) are listed in a block of their own.
 # Excluded entirely: the vendored trees (modules/woz_dw3000 = the Qorvo
-# decadriver, modules/woz_dfu/src/detools) plus workspace/ and */test/
+# decadriver, modules/ultrawidelock_dfu/src/detools) plus workspace/ and */test/
 # harnesses. Coverage is a measure of OUR code, so third-party sources are not
 # in the denominator.
 #
@@ -172,8 +172,8 @@ SIDE_UNIT_SRCS=(
 	"$LOCK_MAIN/lock/door_lock_manager.cpp"
 	"$LOCK_MAIN/lock/door_lock_callbacks.cpp"
 	"$LOCK_MAIN/lock/aliro_reader_delegate.cpp"
-	"$ROOT/modules/woz_dfu/src/dfu_receiver.c"
-	"$ROOT/modules/woz_dfu/src/dfu_applier.c"
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_receiver.c"
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_applier.c"
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c"
 	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c"
 	"$ROOT/modules/woz_nfc/src/transport_pn532.cpp"
@@ -300,18 +300,18 @@ run_suite esp_matter "$OUT/cov_esp_matter"
 # Delta update, both halves plus the SMP front door, on the RAM flash of
 # dfufake/ (which enforces the nRF word/page alignment rules), psafake's
 # recording PSA and a scripted detools. Mirrors run.sh stage 5.
-cov_cc -DWOZ_PORT_HOST -DCONFIG_WOZ_DFU_SMP_IMG=1 -DCONFIG_WOZ_DFU_APPLIER_CHUNK=256 \
+cov_cc -DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
 	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
 	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
 	-I"$HOSTD/psafake" -I"$ROOT/modules/woz_port/include" \
-	-I"$ROOT/modules/woz_dfu/include" -I"$ROOT/modules/woz_dfu/src" \
+	-I"$ROOT/modules/ultrawidelock_dfu/include" -I"$ROOT/modules/ultrawidelock_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
 	"$ROOT/tests/host/port/osal_host.c" "$ROOT/tests/host/port/flash_host.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_crc.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_receiver.c" \
-	"$ROOT/modules/woz_dfu/src/dfu_applier.c" \
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_crc.c" \
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_receiver.c" \
+	"$ROOT/modules/ultrawidelock_dfu/src/dfu_applier.c" \
 	"$ROOT/ports/zephyr/dfu/dfu_smp_img.c" -o "$OUT/cov_dfu"
 run_suite dfu "$OUT/cov_dfu"
 
@@ -429,7 +429,7 @@ HDR_SRCS=()
 while IFS= read -r h; do
 	HDR_SRCS+=("$ROOT/$h")
 done < <(cd "$ROOT" && find modules ports -name '*.h' ! -path '*/test/*' \
-	! -path 'modules/woz_dw3000/*' ! -path 'modules/woz_dfu/src/detools/*' | LC_ALL=C sort)
+	! -path 'modules/woz_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' | LC_ALL=C sort)
 
 # Browsable HTML, restricted to the units under test.
 llvm_tool llvm-cov show "$BIN" "${OBJS[@]}" -instr-profile="$OUT/host.profdata" \
@@ -461,9 +461,9 @@ while IFS= read -r rel; do
 done < <(cd "$ROOT" && {
 	find modules ports \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
 		! -path '*/test/*' ! -path '*/managed_components/*' \
-		! -path 'modules/woz_dw3000/*' ! -path 'modules/woz_dfu/src/detools/*'
+		! -path 'modules/woz_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*'
 	find modules ports -name '*.h' ! -path '*/test/*' \
-		! -path 'modules/woz_dw3000/*' ! -path 'modules/woz_dfu/src/detools/*' \
+		! -path 'modules/woz_dw3000/*' ! -path 'modules/ultrawidelock_dfu/src/detools/*' \
 		-exec grep -l 'static inline' {} +
 } | LC_ALL=C sort)
 

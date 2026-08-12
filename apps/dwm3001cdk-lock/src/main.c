@@ -46,7 +46,7 @@
 #include "ultrawidelock_slam_hw.h"
 #endif
 
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 /* src/dfu_ble_zephyr.c. One function, so it carries no header of its own. */
 int dfu_ble_start(void);
 #endif
@@ -306,7 +306,7 @@ int main(void)
 	(void)matter_commission_init();
 #endif
 
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 	/* Also after the reader, and for the same reason: registering an L2CAP
 	 * PSM needs the host up, and the reader is what enables it. The channel
 	 * refuses every connection until SW2 opens a window, so registering it

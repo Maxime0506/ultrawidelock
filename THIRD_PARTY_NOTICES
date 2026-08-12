@@ -46,12 +46,12 @@ detools
 
 Scope:
 
-  modules/woz_dfu/src/detools/**
+  modules/ultrawidelock_dfu/src/detools/**
 
 Licenses: BSD-2-Clause and MIT, as assigned inside the component license.
 License text:
 
-  modules/woz_dfu/src/detools/LICENSE
+  modules/ultrawidelock_dfu/src/detools/LICENSE
 
 Nordic Semiconductor code
 -------------------------

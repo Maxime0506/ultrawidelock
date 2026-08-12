@@ -1,4 +1,4 @@
-name: woz_matter
+name: ultrawidelock_matter
 build:
   cmake: .
   kconfig: Kconfig

@@ -187,7 +187,7 @@ CDK_KEY  ?= $(SIGN_KEY)
 CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
 
 # ---- delta update over BLE ---------------------------------------------------
-# modules/woz_dfu has to reach BOTH images, and they need opposite halves of it:
+# modules/ultrawidelock_dfu has to reach BOTH images, and they need opposite halves of it:
 # the patch APPLIER is compiled into MCUboot, because an application cannot
 # rewrite the flash it is executing from, and the RECEIVER is compiled into the
 # application, because the bootloader has no radio.
@@ -202,13 +202,13 @@ CDK_SIGN := -DSB_CONFIG_BOOT_SIGNATURE_KEY_FILE='"$(CDK_KEY)"'
 #
 # The two CONFIG_ assignments are per-image and must not be swapped: each half
 # is inert without a partition and a peer that the other image owns.
-# WOZ_DFU_KEY is the IMAGE-signing key, deliberately. The application checks a
+# ULTRAWIDELOCK_DFU_KEY is the IMAGE-signing key, deliberately. The application checks a
 # staged update against its public half, so one secret authorises both what the
 # bootloader will boot and what the radio will accept, and they cannot drift.
-CDK_DFU  := -DEXTRA_ZEPHYR_MODULES='$(REPO_ROOT)/modules/woz_dfu' \
-            -DWOZ_DFU_KEY='$(CDK_KEY)' \
-            -Dmcuboot_CONFIG_WOZ_DFU_APPLIER=y \
-            -DCONFIG_WOZ_DFU_RECEIVER=y
+CDK_DFU  := -DEXTRA_ZEPHYR_MODULES='$(REPO_ROOT)/modules/ultrawidelock_dfu' \
+            -DULTRAWIDELOCK_DFU_KEY='$(CDK_KEY)' \
+            -Dmcuboot_CONFIG_ULTRAWIDELOCK_DFU_APPLIER=y \
+            -DCONFIG_ULTRAWIDELOCK_DFU_RECEIVER=y
 
 # DFU_LOG=1 makes the bootloader narrate what it does with a staged patch.
 #
@@ -224,7 +224,7 @@ CDK_DFU  := -DEXTRA_ZEPHYR_MODULES='$(REPO_ROOT)/modules/woz_dfu' \
 # The application re-initialises the RTT control block on every boot
 # (CONFIG_SEGGER_RTT_INIT_MODE_ALWAYS in prj.conf, and it has to), so anything
 # the bootloader printed is gone the moment the application starts.
-CDK_DFU_LOG := $(if $(DFU_LOG),-Dmcuboot_CONFIG_WOZ_DFU_APPLIER_LOG=y \
+CDK_DFU_LOG := $(if $(DFU_LOG),-Dmcuboot_CONFIG_ULTRAWIDELOCK_DFU_APPLIER_LOG=y \
                                -Dmcuboot_CONFIG_PRINTK=y \
                                -Dmcuboot_CONFIG_USE_SEGGER_RTT=y \
                                -Dmcuboot_CONFIG_RTT_CONSOLE=y)
@@ -334,7 +334,7 @@ selftest:
 #   Flash it with `flash`, NEVER `flash-erase`: the erase takes the commissioned
 #   credential the capture walk-up needs, and costs a re-commissioning.
 #   Every flag `build` passes is repeated here, deliberately and not by include:
-#   dropping $(CDK_DFU) alone silently built an image with no woz_dfu module at
+#   dropping $(CDK_DFU) alone silently built an image with no ultrawidelock_dfu module at
 #   all, which is a different image from the one being characterised and cannot
 #   be updated over Bluetooth. If `build` gains a flag, this needs it too.
 cirdiag:

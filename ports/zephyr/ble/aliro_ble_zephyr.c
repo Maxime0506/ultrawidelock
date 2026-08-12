@@ -21,7 +21,7 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/bluetooth/uuid.h>
-#if IS_ENABLED(CONFIG_WOZ_DFU_SMP_IMG)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG)
 #include <zephyr/mgmt/mcumgr/transport/smp_bt.h>
 #endif
 #include <zephyr/kernel.h>
@@ -392,7 +392,7 @@ static bool build_aliro_svc_data(uint8_t out[24])
 	return true;
 }
 
-#if IS_ENABLED(CONFIG_WOZ_DFU_SMP_IMG)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG)
 /*
  * The SMP service, in the SCAN RESPONSE, so that a phone can find this board.
  *

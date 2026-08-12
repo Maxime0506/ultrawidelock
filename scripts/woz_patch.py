@@ -31,10 +31,10 @@ declines the patch with "not for this image" -- which is the good outcome, and
 only because the from-image CRC catches it. This script refuses the .bin rather
 than rely on that.
 
-The `.wdfu` layout, which `modules/woz_dfu/include/woz_dfu.h` is the other half
+The `.wdfu` layout, which `modules/ultrawidelock_dfu/include/ultrawidelock_dfu.h` is the other half
 of:
 
-      0   32   struct woz_dfu_hdr, little-endian
+      0   32   struct ultrawidelock_dfu_hdr, little-endian
      32   64   ECDSA-P256 signature over those 32 bytes, raw r||s
      96   ..   the detools patch
 
@@ -55,16 +55,16 @@ import zipfile
 import zlib
 from pathlib import Path
 
-# Mirrors modules/woz_dfu/include/woz_dfu.h. A change on either side without
+# Mirrors modules/ultrawidelock_dfu/include/ultrawidelock_dfu.h. A change on either side without
 # the other produces a board that stages an update and then declines it, so the
 # constants are named the same and checked at the bottom of this file.
-WOZ_DFU_MAGIC = 0x55464457  # "WDFU"
-WOZ_DFU_ABI_VERSION = 1
-WOZ_DFU_PAGE_SIZE = 4096
-WOZ_DFU_PATCH_OFFSET = 2 * WOZ_DFU_PAGE_SIZE
-WOZ_DFU_HDR_LEN = 32
-WOZ_DFU_HDR_CRC_LEN = 28
-WOZ_DFU_SIG_LEN = 64
+ULTRAWIDELOCK_DFU_MAGIC = 0x55464457  # "WDFU"
+ULTRAWIDELOCK_DFU_ABI_VERSION = 1
+ULTRAWIDELOCK_DFU_PAGE_SIZE = 4096
+ULTRAWIDELOCK_DFU_PATCH_OFFSET = 2 * ULTRAWIDELOCK_DFU_PAGE_SIZE
+ULTRAWIDELOCK_DFU_HDR_LEN = 32
+ULTRAWIDELOCK_DFU_HDR_CRC_LEN = 28
+ULTRAWIDELOCK_DFU_SIG_LEN = 64
 
 # magic, abi_version, flags, patch_len, to_len, patch_crc32, from_crc32, from_len
 HDR_FMT = "<IHHIIIII"
@@ -263,7 +263,7 @@ def build(args):
         if len(data) > memory_size:
             die(f"{name} is {len(data)} B, larger than the {memory_size} B slot")
 
-    patch_capacity = staging_size - WOZ_DFU_PATCH_OFFSET
+    patch_capacity = staging_size - ULTRAWIDELOCK_DFU_PATCH_OFFSET
 
     fpatch = io.BytesIO()
     detools.create_patch(
@@ -291,8 +291,8 @@ def build(args):
 
     body = struct.pack(
         HDR_FMT,
-        WOZ_DFU_MAGIC,
-        WOZ_DFU_ABI_VERSION,
+        ULTRAWIDELOCK_DFU_MAGIC,
+        ULTRAWIDELOCK_DFU_ABI_VERSION,
         0,
         len(patch),
         len(to_data),
@@ -301,8 +301,8 @@ def build(args):
         len(from_data),
     )
     header = body + struct.pack("<I", zlib.crc32(body))
-    assert len(header) == WOZ_DFU_HDR_LEN
-    assert len(body) == WOZ_DFU_HDR_CRC_LEN
+    assert len(header) == ULTRAWIDELOCK_DFU_HDR_LEN
+    assert len(body) == ULTRAWIDELOCK_DFU_HDR_CRC_LEN
 
     signature = sign(args.key, header)
     Path(args.out).write_bytes(header + signature + patch)
@@ -325,9 +325,9 @@ def wrap(args):
     to run it. The board recognises the wrapper by its magic and skips it.
     """
     inner = Path(args.patch).read_bytes()
-    if len(inner) < WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:
+    if len(inner) < ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN:
         die(f"{args.patch} is too short to be a .wdfu")
-    if struct.unpack("<I", inner[:4])[0] != WOZ_DFU_MAGIC:
+    if struct.unpack("<I", inner[:4])[0] != ULTRAWIDELOCK_DFU_MAGIC:
         die(f"{args.patch} is not a .wdfu (no WDFU magic). Did you pass the wrapped file back in?")
 
     major, minor, rev = (int(x) for x in args.version.split("."))
@@ -422,22 +422,22 @@ def wrap(args):
 
 def info(args):
     blob = Path(args.patch).read_bytes()
-    if len(blob) < WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:
+    if len(blob) < ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN:
         die("too short to be a .wdfu")
 
-    fields = struct.unpack(HDR_FMT, blob[:WOZ_DFU_HDR_CRC_LEN])
+    fields = struct.unpack(HDR_FMT, blob[:ULTRAWIDELOCK_DFU_HDR_CRC_LEN])
     (magic, abi, flags, patch_len, to_len, patch_crc, from_crc, from_len) = fields
-    stored_crc = struct.unpack("<I", blob[WOZ_DFU_HDR_CRC_LEN:WOZ_DFU_HDR_LEN])[0]
-    patch = blob[WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:]
+    stored_crc = struct.unpack("<I", blob[ULTRAWIDELOCK_DFU_HDR_CRC_LEN:ULTRAWIDELOCK_DFU_HDR_LEN])[0]
+    patch = blob[ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN:]
 
-    print(f"  magic       {magic:#010x} {'ok' if magic == WOZ_DFU_MAGIC else 'BAD'}")
-    print(f"  abi         {abi} {'ok' if abi == WOZ_DFU_ABI_VERSION else 'BAD'}")
+    print(f"  magic       {magic:#010x} {'ok' if magic == ULTRAWIDELOCK_DFU_MAGIC else 'BAD'}")
+    print(f"  abi         {abi} {'ok' if abi == ULTRAWIDELOCK_DFU_ABI_VERSION else 'BAD'}")
     print(f"  flags       {flags:#06x}")
     print(f"  from        {from_len:,} B  crc {from_crc:#010x}")
     print(f"  to          {to_len:,} B")
     print(f"  patch       {patch_len:,} B  crc {patch_crc:#010x}")
     print(f"  header crc  {stored_crc:#010x} "
-          f"{'ok' if stored_crc == zlib.crc32(blob[:WOZ_DFU_HDR_CRC_LEN]) else 'BAD'}")
+          f"{'ok' if stored_crc == zlib.crc32(blob[:ULTRAWIDELOCK_DFU_HDR_CRC_LEN]) else 'BAD'}")
     print(f"  patch crc   {'ok' if patch_crc == zlib.crc32(patch) else 'BAD'}")
     print(f"  patch len   {'ok' if patch_len == len(patch) else 'BAD'}")
 
@@ -456,20 +456,20 @@ def stage(args):
         nrfjprog --program staging.hex --sectorerase --verify -r
     """
     blob = Path(args.patch).read_bytes()
-    header = blob[:WOZ_DFU_HDR_LEN]
-    patch = blob[WOZ_DFU_HDR_LEN + WOZ_DFU_SIG_LEN:]
+    header = blob[:ULTRAWIDELOCK_DFU_HDR_LEN]
+    patch = blob[ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN:]
 
-    if struct.unpack("<I", header[:4])[0] != WOZ_DFU_MAGIC:
+    if struct.unpack("<I", header[:4])[0] != ULTRAWIDELOCK_DFU_MAGIC:
         die(f"{args.patch} is not a .wdfu")
 
     # Page 0 header, page 1 the step log left ERASED, page 2 onward the patch.
     # The step log must be 0xff: a stale one would make the bootloader believe
     # steps were already applied and skip them.
-    image = bytearray(b"\xff" * WOZ_DFU_PATCH_OFFSET)
+    image = bytearray(b"\xff" * ULTRAWIDELOCK_DFU_PATCH_OFFSET)
     image[: len(header)] = header
     image += patch
     Path(args.out).write_bytes(image)
-    print(f"  wrote {args.out}  ({len(image):,} B, patch at +{WOZ_DFU_PATCH_OFFSET})")
+    print(f"  wrote {args.out}  ({len(image):,} B, patch at +{ULTRAWIDELOCK_DFU_PATCH_OFFSET})")
 
 
 def main():
@@ -519,5 +519,5 @@ def main():
 
 
 if __name__ == "__main__":
-    assert struct.calcsize(HDR_FMT) == WOZ_DFU_HDR_CRC_LEN, "header layout drifted"
+    assert struct.calcsize(HDR_FMT) == ULTRAWIDELOCK_DFU_HDR_CRC_LEN, "header layout drifted"
     main()

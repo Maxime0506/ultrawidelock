@@ -1,7 +1,7 @@
 /*
  * matter_fab_settings — the operational identity, across a reboot.
  *
- * woz_matter carries no storage seam on purpose (it is host-tested and has no
+ * ultrawidelock_matter carries no storage seam on purpose (it is host-tested and has no
  * Zephyr in it), so the port owns this. Without it every reset silently
  * un-commissions the node: the fabric table is plain RAM, the node comes back
  * advertising commissionable, Thread never starts because nothing replays the

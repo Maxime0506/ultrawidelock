@@ -3,7 +3,7 @@
 # from-scratch implementation, and it exists because neither of those fits a
 # 516 KB / 128 KB part alongside the reader.
 
-config WOZ_MATTER
+config ULTRAWIDELOCK_MATTER
 	bool "Hand-written minimal Matter node"
 	# matter_crypto.c needs aliro_hash (SHA-256/HKDF) and the
 	# crypto_aes_ecb_encrypt seam, whose backend choice in modules/woz_uwb

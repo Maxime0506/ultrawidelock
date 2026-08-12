@@ -25,8 +25,8 @@
 
 #include "status_led.h"
 
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
-#include "woz_dfu_rx.h"
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
+#include "ultrawidelock_dfu_rx.h"
 #endif
 
 #include <zephyr/logging/log.h>
@@ -196,7 +196,7 @@ void status_led_boot_blink(void)
 	(void)k_work_reschedule(&s_tick, K_NO_WAIT);
 }
 
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 /**
  * Follow the update window rather than the button that opened it, so the light
  * goes out when the five minutes expire on their own.
@@ -229,8 +229,8 @@ static int status_led_init(void)
 			s_ready, (unsigned int)BIT_MASK(LED_COUNT));
 	}
 
-#if IS_ENABLED(CONFIG_WOZ_DFU_RECEIVER)
-	woz_dfu_set_window_cb(window_changed);
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
+	ultrawidelock_dfu_set_window_cb(window_changed);
 #endif
 
 	(void)k_work_reschedule(&s_tick, K_NO_WAIT);

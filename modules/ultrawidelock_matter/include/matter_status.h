@@ -1,5 +1,5 @@
 /**
- * @file matter_status.h — return codes shared by every woz_matter layer.
+ * @file matter_status.h — return codes shared by every ultrawidelock_matter layer.
  */
 /*
  * One code space for the whole node, so a value returned by the TLV codec and

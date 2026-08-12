@@ -1,4 +1,4 @@
-/* dfufake: <zephyr/sys/util.h>, the handful of macros woz_dfu uses. Every one
+/* dfufake: <zephyr/sys/util.h>, the handful of macros ultrawidelock_dfu uses. Every one
  * is guarded: logfake's <zephyr/kernel.h> defines some of the same names and
  * either header may be included first. */
 #ifndef DFUFAKE_ZEPHYR_SYS_UTIL_H

@@ -378,10 +378,10 @@ source "Kconfig.zephyr"
 
 config ALIRO_MATTER_BLE
 	bool "Matter commissioning transport: the 0xFFF6 GATT service over BTP"
-	# The framing itself is in modules/woz_matter and has no Zephyr
+	# The framing itself is in modules/ultrawidelock_matter and has no Zephyr
 	# dependency; this brings in the Zephyr-side adapter that carries it.
 	depends on BT_PERIPHERAL
-	select WOZ_MATTER
+	select ULTRAWIDELOCK_MATTER
 	default n
 	help
 	  Compile the 0xFFF6 service (C1 write, C2 indicate) and the BTP glue

@@ -1,4 +1,4 @@
-name: woz_dfu
+name: ultrawidelock_dfu
 build:
   cmake: .
   kconfig: Kconfig

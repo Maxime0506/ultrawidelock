@@ -35,7 +35,7 @@ import sys
 ROOTS = ("modules", "ports", "apps", "examples", "tests/ports/esp32")
 SKIP = (
     "modules/woz_dw3000/",          # Qorvo decadriver, verbatim
-    "modules/woz_dfu/src/detools/", # detools + heatshrink, verbatim
+    "modules/ultrawidelock_dfu/src/detools/", # detools + heatshrink, verbatim
     "integrations/nrfconnect-door-lock/patches/",     # diffs against the Nordic add-on
     "workspace/",
     "build/",

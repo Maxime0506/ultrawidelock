@@ -29,7 +29,7 @@
 #   modules/woz_port/                the contract itself: its whole job is to be
 #                                    the one place platform branches live
 #   modules/woz_dw3000/dwt_uwb_driver/   vendored Qorvo decadriver
-#   modules/woz_dfu/src/detools/         vendored delta-patch engine
+#   modules/ultrawidelock_dfu/src/detools/         vendored delta-patch engine
 #   woz_aliro_stack/{aliro_stack,session}.cpp  adapters to the Nordic add-on's
 #                                    <aliro/*> API; the add-on's own headers
 #                                    include Zephyr, so these can never be pure
@@ -112,7 +112,7 @@ COMMENT_LINE_RE='^[0-9]+:[[:space:]]*(\*|//|/\*)'
 # cannot outlive its reasons.
 PERMANENT_DIRS=(
 	modules/woz_dw3000/dwt_uwb_driver   # vendored Qorvo decadriver
-	modules/woz_dfu/src/detools         # vendored delta-patch engine
+	modules/ultrawidelock_dfu/src/detools         # vendored delta-patch engine
 )
 PERMANENT_FILES=(
 	# The contract itself: these four headers name every platform on purpose,
@@ -549,7 +549,7 @@ check_private_headers() {
 
 # Every -DZEPHYR_EXTRA_MODULES / -DEXTRA_ZEPHYR_MODULES entry the build
 # recipes pass, repo-relative. Covers the nRF5340DK lock build and mk/*.mk,
-# notably mk/cdk.mk injecting woz_dfu at the sysbuild level.
+# notably mk/cdk.mk injecting ultrawidelock_dfu at the sysbuild level.
 module_list_paths() {
 	grep -hoE -- '-D(ZEPHYR_EXTRA_MODULES|EXTRA_ZEPHYR_MODULES)=[^[:space:]]+' \
 		apps/nrf5340dk-lock/build.sh mk/*.mk \
@@ -694,7 +694,7 @@ check_patch_symbols() {
 # Trees whose every tracked .c must be assigned to a role. Deliberately not the
 # whole of modules/: the vendored decadriver is reached BY manifests (core.list
 # points into it) but is not ours to enumerate, and single-port modules
-# (woz_matter, ultrawidelock_ml, ultrawidelock_anchor, ...) have one consumer each, so a manifest
+# (ultrawidelock_matter, ultrawidelock_ml, ultrawidelock_anchor, ...) have one consumer each, so a manifest
 # would be a second copy of a list that exists once.
 MANIFEST_ROOTS=(
 	modules/woz_aliro/src
@@ -973,7 +973,7 @@ self_test() {
 	# Exemption exactness: a prefix that swallowed a portable file would silence
 	# the gate without anyone noticing.
 	local f
-	for f in modules/woz_matter/src/matter_tlv.c modules/woz_aliro/src/aliro_reader.c \
+	for f in modules/ultrawidelock_matter/src/matter_tlv.c modules/woz_aliro/src/aliro_reader.c \
 		modules/woz_uwb/src/ccc/ccc_shim.c modules/woz_dw3000/src/deca_port.c; do
 		if [[ $f =~ $PERMANENT_RE ]] || in_ratchet "$f"; then
 			printf '%s  self-test FAILED: %s is exempt, but it must stay pure%s\n' \

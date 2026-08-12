@@ -1,7 +1,7 @@
 /**
  * @file matter_ble_zephyr.c — the 0xFFF6 GATT service that carries BTP.
  *
- * A thin adapter, on purpose. All the framing lives in modules/woz_matter
+ * A thin adapter, on purpose. All the framing lives in modules/ultrawidelock_matter
  * (matter_btp.c), which has no Zephyr dependency and is tested on the host
  * under sanitizers. This file does three things and no more: hand C1 writes to
  * the reassembler, drive the fragmenter out through C2 indications, and build
