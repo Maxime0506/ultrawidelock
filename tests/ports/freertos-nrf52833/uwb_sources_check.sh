@@ -256,6 +256,16 @@ case "$srcs" in
 esac
 check "the port supplies its half of the STS seam" "$r"
 
+# The bring-up. Without it nothing in the image calls the layer at all, so
+# --gc-sections drops the whole archive and the port ships a UWB stack that has
+# never executed a single instruction -- which is the state this file was
+# written during, and the one worth not returning to by accident.
+case "$srcs" in
+*/freertos-nrf52833/uwb/woz_freertos_uwb.c*) r=0 ;;
+*) r=1 ;;
+esac
+check "the port's bring-up is in the source set" "$r"
+
 # And not another port's, which implement the same symbols and would either
 # clash at link time or, worse, win.
 case "$srcs" in

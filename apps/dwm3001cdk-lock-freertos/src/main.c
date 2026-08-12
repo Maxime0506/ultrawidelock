@@ -33,6 +33,7 @@
 #include <woz_freertos_platform.h>
 #include <woz_freertos_kv.h>
 #include <woz_freertos_radio.h>
+#include <woz_freertos_uwb.h>
 
 #define MAIN_TAG "main"
 
@@ -96,6 +97,24 @@ static void boot_task(void *arg)
 	 */
 
 	/*
+	 * The DW3110, before the BLE host rather than after it.
+	 *
+	 * Ordering is for the bench, not for correctness: the two radios share
+	 * no peripheral, so either order works. Bringing UWB up first means a
+	 * board with a broken SPI line or an unconnected reset says so in the
+	 * first few lines of the boot log, instead of after the BLE host has
+	 * finished announcing itself.
+	 *
+	 * Not fatal, unlike the controller start in main(). A lock whose UWB is
+	 * down still opens by the other two paths this product supports, and a
+	 * board that refuses to boot cannot tell anyone which step failed.
+	 */
+	if (woz_freertos_uwb_start() != 0) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+				 "UWB unavailable; ranging will not be offered");
+	}
+
+	/*
 	 * The BLE host comes up on the scheduler, unlike the radio: it has a
 	 * task of its own, it waits for the controller to answer a reset, and
 	 * its porting layer allocates from the heap. None of that works before
@@ -106,9 +125,10 @@ static void boot_task(void *arg)
 	}
 
 	for (;;) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "uptime %lld us, radio %s",
+		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "uptime %lld us, radio %s, uwb %s",
 				 (long long)woz_freertos_uptime_us(),
-				 woz_freertos_radio_ready() ? "ready" : "down");
+				 woz_freertos_radio_ready() ? "ready" : "down",
+				 woz_freertos_uwb_ready() ? "ready" : "down");
 		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }

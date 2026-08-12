@@ -58,6 +58,9 @@ add_library(woz_uwb STATIC
   # which is a Zephyr-module literal and not in any role manifest, so each
   # non-Zephyr port supplies the essential chain itself.
   "${WOZ_PORT_DIR}/uwb/woz_seam_stubs.c"
+  # The port's bring-up, and the only thing in the image that calls the layer
+  # until the Aliro seam is wired.
+  "${WOZ_PORT_DIR}/uwb/woz_freertos_uwb.c"
 )
 
 target_include_directories(woz_uwb PUBLIC
