@@ -96,9 +96,34 @@ void woz_freertos_radio_timer0_isr(void)
 	MPSL_IRQ_TIMER0_Handler();
 }
 
+/*
+ * The POWER half of this vector, which MPSL does not read.
+ *
+ * MPSL_IRQ_CLOCK_Handler services the CLOCK events and leaves the POWER ones
+ * latched -- USBDETECTED, USBREMOVED and USBPWRRDY are not its business. Left
+ * unread and unmasked they would re-enter this vector at priority 0 forever, so
+ * whoever enables them also has to consume them, and that is the USB stack.
+ */
+static woz_freertos_power_handler s_power_handler;
+
+int woz_freertos_radio_set_power_handler(woz_freertos_power_handler fn)
+{
+	if (fn == NULL || s_power_handler != NULL) {
+		return -1;
+	}
+	s_power_handler = fn;
+	return 0;
+}
+
 void woz_freertos_radio_power_clock_isr(void)
 {
+	/* MPSL first, unconditionally. Its events are the ones with a deadline,
+	 * and the POWER events are a cable being plugged in. */
 	MPSL_IRQ_CLOCK_Handler();
+
+	if (s_power_handler != NULL) {
+		s_power_handler();
+	}
 }
 
 void woz_freertos_radio_low_priority_isr(void)

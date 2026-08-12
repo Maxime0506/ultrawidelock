@@ -685,6 +685,87 @@ target_include_directories(woz_dfu PRIVATE
 # woz_nimble for the transport in front of it.
 target_link_libraries(woz_dfu PUBLIC woz_storage woz_mbedtls woz_nimble)
 
+# ----------------------------------------------------------------------------
+# USB device: the provisioning console's transport.
+#
+# The nRF5 SDK's app_usbd framework and CDC ACM class, compiled unmodified,
+# against the nrfx this image already links rather than the one they shipped
+# with. usb/usb_compat/ carries the three headers that makes possible:
+# nrf_drv_usbd.h absorbs a return-type change between nrfx 1.9.0 and 4.2.1, and
+# nrf_drv_clock.h / nrf_drv_power.h replace two SDK drivers that would each have
+# taken POWER_CLOCK away from MPSL.
+#
+# NOT TinyUSB or a hand-written stack. USB enumeration is the kind of code whose
+# bugs only appear against a particular host, and this tree already contains a
+# stack that Nordic ships, tests on this silicon, and that the Qorvo SDK pins.
+# ----------------------------------------------------------------------------
+set(WOZ_NRF5_USBD "${WOZ_NRF5_SDK}/components/libraries/usbd")
+set(WOZ_NRF5_NRFX "${WOZ_NRF5_SDK}/modules/nrfx")
+
+add_library(woz_usb STATIC
+  # The pinned vendor stack, unmodified.
+  "${WOZ_NRF5_NRFX}/drivers/src/nrfx_usbd.c"
+  "${WOZ_NRF5_USBD}/app_usbd.c"
+  "${WOZ_NRF5_USBD}/app_usbd_core.c"
+  "${WOZ_NRF5_USBD}/app_usbd_string_desc.c"
+  "${WOZ_NRF5_USBD}/app_usbd_serial_num.c"
+  "${WOZ_NRF5_USBD}/class/cdc/acm/app_usbd_cdc_acm.c"
+  # The SDK libraries it leans on. nrf_atfifo is the event queue -- see
+  # usb/usb_power_freertos.c for why its being lock-free is load-bearing here.
+  "${WOZ_NRF5_SDK}/components/libraries/atomic_fifo/nrf_atfifo.c"
+  "${WOZ_NRF5_SDK}/components/libraries/atomic/nrf_atomic.c"
+  "${WOZ_NRF5_SDK}/components/libraries/util/app_util_platform.c"
+  # This port's half.
+  "${WOZ_PORT_DIR}/usb/usb_power_freertos.c"
+)
+target_include_directories(woz_usb PUBLIC
+  # First, so the three compat headers shadow the SDK's own.
+  "${WOZ_PORT_DIR}/usb/usb_compat"
+  "${WOZ_NRF5_USBD}"
+  "${WOZ_NRF5_USBD}/class/cdc"
+  "${WOZ_NRF5_USBD}/class/cdc/acm"
+)
+# THE nrfx THIS ONE LIBRARY SEES IS THE SDK'S OWN, and it is the only place in
+# the image where that is true. Everywhere else the rule at the top of this file
+# holds: hal_nordic's nrfx, because the radio stack is built against it.
+#
+# The rule cannot hold here, and the reason is measured rather than assumed.
+# Between nrfx 1.9.0 and 4.2.1 the USBD *driver* API is nearly unchanged -- three
+# return types, absorbed by usb_compat/nrf_drv_usbd.h -- but the *hal* underneath
+# it gained a peripheral-instance argument on every function: this SDK calls
+# nrf_usbd_setup_brequest_get(), the new hal wants nrf_usbd_setup_brequest_get(NRF_USBD).
+# app_usbd.c and app_usbd_core.c do that in dozens of places, and shimming a hal
+# means redeclaring functions the newer nrfx also defines, in an image that
+# compiles both.
+#
+# So the vendor stack gets to be internally consistent instead: driver, hal and
+# framework all from SDK 17.1, on include paths PRIVATE to this library. What is
+# deliberately NOT taken is ${WOZ_NRF5_NRFX}/mdk -- nrf.h still resolves to the
+# pinned MDK through woz_device, so there is still exactly one register map and
+# one device header in the image, which was the property the rule was protecting.
+target_include_directories(woz_usb PRIVATE
+  "${WOZ_NRF5_SDK}/integration/nrfx"
+  "${WOZ_NRF5_NRFX}"
+  "${WOZ_NRF5_NRFX}/hal"
+  "${WOZ_NRF5_NRFX}/drivers/include"
+  "${WOZ_NRF5_NRFX}/soc"
+  # nrf_error.h, from the no-SoftDevice variant. This image has no SoftDevice --
+  # the controller is the SoftDevice Controller library, which is a different
+  # thing -- so the s132/s112 copies would be the wrong ones.
+  "${WOZ_NRF5_SDK}/components/drivers_nrf/nrf_soc_nosd"
+  "${WOZ_NRF5_SDK}/components/libraries/util"
+  "${WOZ_NRF5_SDK}/components/libraries/atomic"
+  "${WOZ_NRF5_SDK}/components/libraries/atomic_fifo"
+  "${WOZ_NRF5_SDK}/components/libraries/log"
+  "${WOZ_NRF5_SDK}/components/libraries/log/src"
+  "${WOZ_NRF5_SDK}/components/libraries/experimental_section_vars"
+  "${WOZ_NRF5_SDK}/components/libraries/delay"
+  "${WOZ_NRF5_SDK}/external/utf_converter"
+)
+# woz_radio for the MPSL clock and the POWER vector fan-out; woz_board for the
+# logger and the device headers underneath both.
+target_link_libraries(woz_usb PUBLIC woz_board woz_radio)
+
 add_library(woz_freertos_port INTERFACE)
 target_link_libraries(woz_freertos_port INTERFACE
   woz_storage woz_uwb woz_thread woz_aliro woz_dfu)
