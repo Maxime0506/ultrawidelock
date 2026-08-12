@@ -41,6 +41,22 @@ hal_nordic:
   repository: https://github.com/zephyrproject-rtos/hal_nordic
   revision: 1acb428a205bad58f3dfd4e38f2d1663bb784ba1
 
+# Crypto provider. Built standalone from its own CMake with no Zephyr, and with
+# the PSA core on so modules/woz_aliro/src/aliro_prim_psa.c compiles unchanged.
+# The NCS fork is pinned rather than upstream Mbed TLS so the algorithm set and
+# version match what the Zephyr oracle links, which is what makes the oracle
+# usable as a behavioural reference for the crypto path.
+#
+# nrf_oberon is deliberately NOT pinned. It would be faster at P-256 and costs
+# no licence this port does not already pay, but the glue that binds it under
+# the PSA core is nrf_security, which is Zephyr Kconfig. It stays out until
+# something is measured to need it.
+mbedtls:
+  repository: https://github.com/nrfconnect/sdk-mbedtls
+  version: 3.6.6
+  revision: 5bb86aeae32420e4f537e5cc390f7219a1bcf500
+  west_revision: ncs-v3.3.0
+
 # Zephyr-free BLE host selected for peripheral GATT and credit-based L2CAP.
 nimble:
   repository: https://github.com/apache/mynewt-nimble

@@ -21,6 +21,7 @@ BOARD_TIME_BIN="$OUT/freertos_board_time_test"
 BOARD_ENTROPY_BIN="$OUT/freertos_board_entropy_test"
 BOARD_LOG_BIN="$OUT/freertos_board_log_test"
 BOARD_FLASH_BIN="$OUT/freertos_board_flash_test"
+CRYPTO_BIN="$OUT/freertos_crypto_backend_test"
 
 mkdir -p "$OUT"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
@@ -248,3 +249,24 @@ mkdir -p "$OUT"
 	"$ROOT/ports/freertos-nrf52833/board/flash_freertos.c" \
 	-o "$BOARD_FLASH_BIN"
 "$BOARD_FLASH_BIN"
+
+# The crypto backend: Mbed TLS's threading callbacks, the FreeRTOS-heap
+# allocator, and the hardware entropy poll. The mutex model enforces exclusion,
+# and the PSA double refuses to succeed unless the threading callbacks were
+# installed before it ran, so the bring-up order is checked rather than assumed.
+# The crypto directory is on the include path because Mbed TLS includes
+# "threading_alt.h" by that bare name.
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	-I"$ROOT/ports/freertos-nrf52833/crypto" \
+	"$HERE/test_crypto_backend.c" \
+	"$HERE/fake/fake_nrf.c" \
+	"$HERE/fake/fake_freertos.c" \
+	"$HERE/fake/fake_mbedtls.c" \
+	"$ROOT/ports/freertos-nrf52833/crypto/mbedtls_threading_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/crypto/mbedtls_platform_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/crypto/crypto_init_freertos.c" \
+	-o "$CRYPTO_BIN"
+"$CRYPTO_BIN"

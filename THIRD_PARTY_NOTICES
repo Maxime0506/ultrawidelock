@@ -141,6 +141,19 @@ license so an audit of a built image has one place to start.
     the Thread stack
     License: BSD-3-Clause, in the BSD 3-Clause section below
 
+  Mbed TLS (nrfconnect/sdk-mbedtls)
+    the crypto provider, built standalone with its PSA core; the port supplies
+    only its configuration, its threading callbacks, its allocator, and its
+    entropy source
+    License: Apache-2.0 OR GPL-2.0-or-later, at the user's choice. This
+    project takes it under Apache-2.0, in the Apache License 2.0 section below.
+
+    Nordic's nrf_oberon is deliberately NOT pinned and is not part of any built
+    image. It carries LicenseRef-Nordic-5-Clause, the same restriction this
+    port already accepts for MPSL and the SoftDevice Controller, so adopting it
+    later would add no new one -- but until it is adopted, the crypto in this
+    port is Apache-2.0 and redistributable on its own terms.
+
 The Nordic license permits binary redistribution only as embedded in a Nordic
 Semiconductor integrated circuit, so an image built from this port carries that
 hardware restriction in addition to the Qorvo one stated above.

@@ -52,8 +52,22 @@ void fake_freertos_reset(void)
 
 void *pvPortMalloc(size_t size)
 {
+	void *block;
+
 	fake_malloc_calls++;
-	return malloc(size);
+
+	block = malloc(size);
+	if (block != NULL) {
+		/*
+		 * Poisoned, because the FreeRTOS heap does not zero and hands
+		 * back recycled memory. A fresh malloc from the host allocator
+		 * usually arrives zeroed, which quietly makes any caller that
+		 * forgot to initialise its block pass here and fail on the
+		 * board.
+		 */
+		memset(block, 0x5a, size);
+	}
+	return block;
 }
 
 void vPortFree(void *ptr)

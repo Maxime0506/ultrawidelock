@@ -232,10 +232,47 @@ The implemented foundation now includes:
   reboots comes back and can be opened. Define `WOZ_FREERTOS_FATAL_HALT` for
   bench builds to stop instead. The reset shows up in RESETREAS as SOFTWARE,
   which `otPlatGetResetReason` then reports.
+- `crypto/` selects and starts the crypto provider: Mbed TLS 3.6.6, built
+  standalone from its own CMake with the PSA core on. The provider is chosen for
+  what already compiles against it rather than for speed:
+  `modules/woz_aliro/src/aliro_prim_psa.c` is the reader's primitive backend and
+  speaks PSA, so a PSA core reuses it unchanged, exactly as `ports/esp32` does
+  over ESP-IDF's Mbed TLS. OpenThread is deliberately left on its upstream
+  default of `OPENTHREAD_CONFIG_CRYPTO_LIB_MBEDTLS` rather than moved to PSA,
+  and that single choice is what keeps Zephyr's `crypto_psa.c` out of the build
+  and removes any need for persistent PSA keys, `MBEDTLS_PSA_CRYPTO_STORAGE_C`,
+  or an ITS backend: OpenThread's SRP client was the only caller that asked for
+  `PSA_KEY_LIFETIME_PERSISTENT`, and all 83 PSA call sites in `aliro_prim_psa.c`
+  import, use, and destroy volatile keys. OpenThread's key material lands in
+  `otPlatSettings` over the key-value store instead, which means Thread
+  credentials are stored differently here than in the Zephyr oracle and a board
+  reflashed between the two loses them. There is no CryptoCell on this part, so
+  P-256 is software and an asymmetric operation costs tens of milliseconds; that
+  is affordable because Aliro's expedited path uses Kpersistent with AES-CMAC
+  and does no asymmetric work inside the 1.836 ms DW3110 response-arm window.
+  `nrf_oberon` would be faster and adds no licence this port does not already
+  carry, but the glue that binds it under the PSA core is `nrf_security`, which
+  is Zephyr Kconfig, so it stays out until something is measured to need it.
+  `mbedtls_config_freertos.h` replaces the library defaults wholesale and names
+  no legacy module, because `config_adjust_legacy_from_psa.h` derives them from
+  the `PSA_WANT_*` list; AES tables go in flash because RAM is the binding
+  constraint on this part. `mbedtls_threading_freertos.c` supplies the
+  `MBEDTLS_THREADING_ALT` callbacks over static FreeRTOS mutexes, needed for
+  correctness rather than hardening: the OpenThread task and the Aliro task
+  behind NimBLE share the PSA key store. A lock from an exception is refused
+  rather than allowed to assert the scheduler.
+  `mbedtls_platform_freertos.c` puts allocation on the FreeRTOS heap NimBLE
+  already forces, and makes the board entropy source the library's only seed.
+  `make freertos-crypto-source-check` asserts the contracts the port cannot see
+  from here: the `threading_alt.h` include spelling, the `mbedtls_hardware_poll`
+  signature, and that every `PSA_WANT_*` the config sets is one Mbed TLS
+  recognises. That last row earned itself immediately by catching
+  `PSA_WANT_GENERATE_RANDOM`, which is Nordic's Kconfig and not an Mbed TLS
+  option, copied in from the oracle's list where it would have been silent.
 - `peripherals.yml` freezes RTC, TIMER, EGU, vector, and clock ownership before
   the first target link.
 - `platform.lock.yml` pins the Qorvo base and the exact OpenThread, nrfxlib,
-  SDC opcode-dispatcher, Nordic HAL, and NimBLE revisions.
+  SDC opcode-dispatcher, Nordic HAL, Mbed TLS, and NimBLE revisions.
 - `make freertos-port-test` compiles and runs this production backend against a
   recording FreeRTOS test double.
 
