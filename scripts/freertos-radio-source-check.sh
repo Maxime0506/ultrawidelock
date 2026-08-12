@@ -310,14 +310,25 @@ printf '  ok   OpenThread entropy, reset and error contracts match the port\n'
 # on the largest single value, so all three are pinned against upstream.
 ot_settings="$workspace/modules/lib/openthread/include/openthread/platform/settings.h"
 require_file "$ot_settings" 'OpenThread settings contract'
-for symbol in otPlatSettingsInit otPlatSettingsDeinit otPlatSettingsGet otPlatSettingsSet \
-	otPlatSettingsAdd otPlatSettingsDelete otPlatSettingsWipe; do
-	if ! rg -q "[[:space:]]${symbol}\(" "$ot_settings"; then
-		printf 'radio-source-check: OpenThread settings contract is missing: %s\n' \
-			"$symbol" >&2
+# Whole prototypes, not just the names. The port defines these functions, so a
+# parameter type that drifts upstream is a link the host build cannot fail on:
+# the reproduced header would still agree with the port and disagree with the
+# real one. board/time_freertos.c lost weeks to that shape of divergence.
+while IFS= read -r prototype; do
+	if ! rg -Fq "$prototype" "$ot_settings"; then
+		printf 'radio-source-check: OpenThread settings prototype moved: %s\n' \
+			"$prototype" >&2
 		exit 2
 	fi
-done
+done <<'EOF'
+void otPlatSettingsInit(otInstance *aInstance, const uint16_t *aSensitiveKeys, uint16_t aSensitiveKeysLength);
+void otPlatSettingsDeinit(otInstance *aInstance);
+otError otPlatSettingsGet(otInstance *aInstance, uint16_t aKey, int aIndex, uint8_t *aValue, uint16_t *aValueLength);
+otError otPlatSettingsSet(otInstance *aInstance, uint16_t aKey, const uint8_t *aValue, uint16_t aValueLength);
+otError otPlatSettingsAdd(otInstance *aInstance, uint16_t aKey, const uint8_t *aValue, uint16_t aValueLength);
+otError otPlatSettingsDelete(otInstance *aInstance, uint16_t aKey, int aIndex);
+void otPlatSettingsWipe(otInstance *aInstance);
+EOF
 for pair in 'OT_SETTINGS_KEY_ACTIVE_DATASET += 0x0001' 'OT_SETTINGS_KEY_PENDING_DATASET += 0x0002' \
 	'OT_SETTINGS_KEY_NETWORK_INFO += 0x0003' 'OT_SETTINGS_KEY_PARENT_INFO += 0x0004' \
 	'OT_SETTINGS_KEY_CHILD_INFO += 0x0005' 'OT_SETTINGS_KEY_SRP_ECDSA_KEY += 0x000b' \
