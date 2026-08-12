@@ -49,9 +49,30 @@ struct aliro_ble_config {
 	struct aliro_ble_callbacks cb;
 };
 
+/* ---- Owned-host mode: the port brings NimBLE up, this registers on it ------ *
+ * Bring-up splits in two because only half of it is portable. The port does the
+ * platform half -- persistent storage, nimble_port_init(), and starting the host
+ * task -- and calls these for the rest. See each port's bring-up file:
+ * ports/esp32/components/aliro_ble/aliro_ble_esp32.c and
+ * ports/freertos-nrf52833/ble/aliro_ble_freertos.c. */
+
 /** Start NimBLE, register the Aliro GATT service, and begin advertising.
- *  Returns 0 on success, negative errno otherwise. */
+ *  Implemented by the port, not by the shared backend: it is the platform half
+ *  above. Returns 0 on success, negative otherwise. */
 int aliro_ble_start(const struct aliro_ble_config *cfg);
+
+/** Register the GAP/GATT stubs, the Aliro 0xFFF2 service, the device name, and
+ *  the L2CAP CoC server on an already-initialised host. Call aliro_ble_prepare()
+ *  first, then this after nimble_port_init() and before the host task runs.
+ *  0 on success. */
+int aliro_ble_register_gatt(void);
+
+/** Host sync handler: ensure an address exists, infer the type, advertise.
+ *  Install as ble_hs_cfg.sync_cb, or call from the port's own sync handler. */
+void aliro_ble_host_sync(void);
+
+/** Host reset handler; logs the reason. Install as ble_hs_cfg.reset_cb. */
+void aliro_ble_host_reset(int reason);
 
 /** The L2CAP SPSM published to peers in the READ characteristic. */
 uint16_t aliro_ble_spsm(void);
@@ -83,7 +104,7 @@ void aliro_ble_post_presence_reset(void (*cb)(void));
 void aliro_ble_post_revoke_sweep(void (*cb)(void));
 
 /* ---- Attach mode: share a NimBLE host another stack already owns ---------- *
- * Instead of owning NimBLE (aliro_ble_start), the reader can attach to a host
+ * Instead of the port owning NimBLE, the reader can attach to a host
  * brought up by e.g. esp-matter, so both coexist on one controller. Three
  * phases: prepare() captures the config; the owner registers our GATT service
  * (aliro_ble_service_def()) through its extra-services hook BEFORE it starts its

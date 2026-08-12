@@ -37,7 +37,8 @@ set(WOZ_FREERTOS_SRC "${WOZ_NRF5_SDK}/external/freertos")
 set(WOZ_NRFX "${WOZ_NCS_WORKSPACE}/modules/hal/nordic/nrfx")
 set(WOZ_BSP "${WOZ_NRFX}/bsp/stable")
 set(WOZ_MDK "${WOZ_BSP}/mdk")
-set(WOZ_MODULES_DIR "${CMAKE_CURRENT_LIST_DIR}/../../modules")
+get_filename_component(WOZ_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(WOZ_MODULES_DIR "${WOZ_REPO_ROOT}/modules")
 set(WOZ_CMSIS "${WOZ_NCS_WORKSPACE}/modules/hal/cmsis/CMSIS/Core/Include")
 
 foreach(_woz_path "${WOZ_FREERTOS_SRC}/source/tasks.c" "${WOZ_MDK}/nrf52833.h"
@@ -347,11 +348,10 @@ add_library(woz_storage STATIC
   "${WOZ_PORT_DIR}/board/flash_freertos.c"
   "${WOZ_PORT_DIR}/storage/kv_flash_freertos.c"
   "${WOZ_PORT_DIR}/storage/aliro_prov_kv.c"
-  # The portable half of the provisioning record, from the shared module. The
-  # port supplies only where the bytes live; the format, the default identity,
-  # and the trust check are the same code the Zephyr and ESP32 targets run,
-  # which is the entire point of the module boundary.
-  "${WOZ_MODULES_DIR}/woz_aliro/src/aliro_prov.c"
+  # aliro_prov.c -- the portable half of the provisioning record -- was listed
+  # here while this was the only layer that needed it. It is manifested in
+  # woz_aliro/roles/reader_policy.list and now comes in with the rest of that
+  # role, below: naming it in two places would put one object in two archives.
 )
 # The provisioning backend implements a contract owned by the shared Aliro
 # module, not by this port, so the module's public headers are on the path.
@@ -366,6 +366,50 @@ target_link_libraries(woz_storage PUBLIC woz_radio)
 # role manifests rather than from a list kept here.
 # ----------------------------------------------------------------------------
 include("${WOZ_PORT_DIR}/uwb/uwb.cmake")
+
+# ----------------------------------------------------------------------------
+# Aliro reader: the transaction engine, its BLE transport, and the ranging glue.
+#
+# After the UWB layer because it calls into it: aliro_ranging.c drives the
+# responder through the contract in <ultrawidelock/uwb.h>.
+#
+# Every source here comes from a role manifest, including the NimBLE transport
+# backend -- that file names no OS and is the same one ports/esp32 builds, so it
+# is shared rather than copied. Only ble/aliro_ble_freertos.c is this port's,
+# and it is short because woz_radio already owns the host: see its header for
+# why bonding is off and what turning it on would cost.
+# ----------------------------------------------------------------------------
+set(WOZ_ALIRO_ROLES "${WOZ_MODULES_DIR}/woz_aliro/roles")
+set(WOZ_ALIRO_ROLE_LISTS
+  "${WOZ_ALIRO_ROLES}/reader.list"
+  "${WOZ_ALIRO_ROLES}/reader_policy.list"
+  "${WOZ_ALIRO_ROLES}/ble_transport.list"
+  "${WOZ_ALIRO_ROLES}/apdu.list"
+  "${WOZ_ALIRO_ROLES}/crypto.list"
+  "${WOZ_ALIRO_ROLES}/hash.list"
+  "${WOZ_ALIRO_ROLES}/dyntag.list"
+  "${WOZ_ALIRO_ROLES}/wire_codecs.list"
+)
+
+set(WOZ_ALIRO_SOURCES)
+foreach(_woz_list IN LISTS WOZ_ALIRO_ROLE_LISTS)
+  if(NOT EXISTS "${_woz_list}")
+    message(FATAL_ERROR "Aliro role manifest is missing: ${_woz_list}")
+  endif()
+  woz_role_sources("${_woz_list}" _woz_role_srcs)
+  list(APPEND WOZ_ALIRO_SOURCES ${_woz_role_srcs})
+endforeach()
+
+add_library(woz_aliro STATIC
+  ${WOZ_ALIRO_SOURCES}
+  "${WOZ_PORT_DIR}/ble/aliro_ble_freertos.c"
+)
+target_include_directories(woz_aliro PUBLIC
+  "${WOZ_MODULES_DIR}/woz_aliro/include"
+)
+# woz_radio for the NimBLE host and its hooks, woz_storage for the provisioning
+# backend the identity is read through, woz_uwb for the ranging contract.
+target_link_libraries(woz_aliro PUBLIC woz_radio woz_storage woz_uwb)
 
 # ----------------------------------------------------------------------------
 # Thread layer: OpenThread as an MTD, plus the port's platform adapters.
@@ -419,7 +463,7 @@ target_include_directories(woz_thread PUBLIC
 target_link_libraries(woz_thread PUBLIC woz_storage openthread-mtd ot-config)
 
 add_library(woz_freertos_port INTERFACE)
-target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread)
+target_link_libraries(woz_freertos_port INTERFACE woz_storage woz_uwb woz_thread woz_aliro)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.
@@ -434,8 +478,20 @@ foreach(_woz_target woz_board woz_radio woz_storage woz_thread)
   )
 endforeach()
 
+# The Aliro BLE layer gets the same treatment minus -Wundef, which it cannot
+# have: NimBLE's public headers test MYNEWT_VAL_* names that are meant to
+# evaluate to zero when unset, and woz_nimble already relaxes it PUBLIC for that
+# reason. The rest still applies -- this is the port's own code and the shared
+# backend, not vendor source.
+target_compile_options(woz_aliro PRIVATE
+  -Wall
+  -Wextra
+  -Werror
+  -Wshadow
+)
+
 foreach(_woz_target woz_device woz_kernel woz_board woz_radio woz_nimble woz_mbedtls
-                    woz_storage woz_uwb)
+                    woz_storage woz_uwb woz_aliro)
   target_compile_options(${_woz_target} PRIVATE
     -ffunction-sections
     -fdata-sections

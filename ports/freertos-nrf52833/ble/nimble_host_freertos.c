@@ -57,6 +57,17 @@ static StackType_t s_stack[HOST_STACK_WORDS];
 static bool s_ready;
 static volatile bool s_synced;
 static volatile uint32_t s_resets;
+static struct woz_freertos_nimble_host_hooks s_hooks;
+
+void woz_freertos_nimble_host_set_hooks(const struct woz_freertos_nimble_host_hooks *hooks)
+{
+	if (hooks == NULL) {
+		s_hooks.register_services = NULL;
+		s_hooks.on_sync = NULL;
+		return;
+	}
+	s_hooks = *hooks;
+}
 
 bool woz_freertos_nimble_host_ready(void)
 {
@@ -79,6 +90,10 @@ static void on_sync(void)
 	s_synced = true;
 	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, WOZ_FREERTOS_NIMBLE_HOST_TAG,
 			 "host synced with the controller");
+	/* After the flag, so a hook that advertises sees a synced host. */
+	if (s_hooks.on_sync != NULL) {
+		s_hooks.on_sync();
+	}
 }
 
 /*
@@ -126,6 +141,19 @@ int woz_freertos_nimble_host_start(void)
 
 	ble_hs_cfg.sync_cb = on_sync;
 	ble_hs_cfg.reset_cb = on_reset;
+
+	/*
+	 * Between the pools existing and the host task consuming events: service
+	 * tables need the former and must be registered before the latter.
+	 */
+	if (s_hooks.register_services != NULL) {
+		rc = s_hooks.register_services();
+		if (rc != 0) {
+			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_NIMBLE_HOST_TAG,
+					 "service registration failed rc=%d", rc);
+			return -WOZ_FREERTOS_NIMBLE_HOST_STAGE_SERVICES;
+		}
+	}
 
 	s_task = xTaskCreateStatic(host_task, "ble_host", (uint32_t)HOST_STACK_WORDS, NULL,
 				   WOZ_FREERTOS_NIMBLE_HOST_TASK_PRIORITY, s_stack,

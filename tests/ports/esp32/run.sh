@@ -29,12 +29,18 @@ echo "== host: aliro_ble transport vs NimBLE fakes =="
 # These suites prove branch logic + wiring against the fakes, not hardware
 # truth; the dynamic-tag advert bytes are cross-checked against
 # aliro_advtag_derive. See sdkfake/sdkfake.h.
+# Two files because bring-up is split: aliro_ble_nimble.c is the shared NimBLE
+# backend (also built by the standalone FreeRTOS port) and aliro_ble_esp32.c is
+# the ESP-IDF half. ESP_PLATFORM selects woz_log.h's ESP branch, which resolves
+# to sdkfake's esp_log.h -- the same path the target takes.
 SDKFAKE="$HERE/sdkfake"
 EBIN="$(mktemp -t esp_aliro_ble.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" \
+   -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   -DESP_PLATFORM \
    "$HERE/test_esp_aliro_ble.c" \
-   "$ESP_COMPONENTS/aliro_ble/aliro_ble.c" \
+   "$ESP_COMPONENTS/aliro_ble/aliro_ble_esp32.c" \
+   "$ALIRO/src/aliro_ble_nimble.c" \
    "$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
    "$SHARED/aliro_prim_host.c" \
    "$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$EBIN"

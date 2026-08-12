@@ -16,11 +16,9 @@
 #include <string.h>
 #include <time.h>
 
-#include "esp_log.h"
-#include "nvs_flash.h"
+#include <woz_log.h>
 
 #include "nimble/nimble_port.h"
-#include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
 #include "host/ble_l2cap.h"
 #include "host/util/util.h"
@@ -32,7 +30,7 @@
 #include "aliro_ble.h"
 #include "aliro_lat.h"
 
-static const char *TAG = "aliro_ble";
+LOG_MODULE_REGISTER(aliro_ble, CONFIG_WOZ_ALIRO_LOG_LEVEL);
 
 /* L2CAP SPSM published to peers. Dynamic-PSM range is 0x0080..0x00FF; the value
  * is our choice (the peer learns it from the READ char, it is not well-known). */
@@ -161,7 +159,7 @@ static int coc_arm_rx(struct ble_l2cap_chan *chan)
 {
 	struct os_mbuf *rx = os_mbuf_get_pkthdr(&s_coc_mbuf_pool, 0);
 	if (rx == NULL) {
-		ESP_LOGE(TAG, "coc: out of rx buffers");
+		LOG_ERR("coc: out of rx buffers");
 		return BLE_HS_ENOMEM;
 	}
 	return ble_l2cap_recv_ready(chan, rx);
@@ -255,12 +253,12 @@ static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 
 	case BLE_L2CAP_EVENT_COC_CONNECTED:
 		if (event->connect.status != 0) {
-			ESP_LOGW(TAG, "coc connect failed status=%d", event->connect.status);
+			LOG_WRN("coc connect failed status=%d", event->connect.status);
 			return 0;
 		}
 		aliro_lat_mark(ALIRO_LAT_L2CAP_OPEN);
 		coc_track(event->connect.conn_handle, event->connect.chan);
-		ESP_LOGI(TAG, "coc connected (conn %u)", event->connect.conn_handle);
+		LOG_INF("coc connected (conn %u)", event->connect.conn_handle);
 		if (s_cb.on_connected) {
 			s_cb.on_connected(event->connect.conn_handle);
 		}
@@ -270,7 +268,7 @@ static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 	case BLE_L2CAP_EVENT_COC_DISCONNECTED:
 		rssi_poll_stop();
 		coc_untrack(event->disconnect.chan);
-		ESP_LOGI(TAG, "coc disconnected (conn %u)", event->disconnect.conn_handle);
+		LOG_INF("coc disconnected (conn %u)", event->disconnect.conn_handle);
 		if (s_cb.on_disconnected) {
 			s_cb.on_disconnected(event->disconnect.conn_handle);
 		}
@@ -282,7 +280,7 @@ static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 			uint8_t buf[ALIRO_L2CAP_MTU];
 			uint16_t len = 0;
 			if (ble_hs_mbuf_to_flat(om, buf, sizeof(buf), &len) == 0) {
-				ESP_LOGI(TAG, "coc rx %u bytes (conn %u)", len,
+				LOG_INF("coc rx %u bytes (conn %u)", len,
 					 event->receive.conn_handle);
 				if (s_cb.on_data) {
 					s_cb.on_data(event->receive.conn_handle, buf, len);
@@ -300,26 +298,36 @@ static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 
 // Initialize the L2CAP connection-oriented channel (CoC) server used for Aliro's BLE transport.
 // Sets up the CoC mbuf memory pool and registers an L2CAP server on the Aliro SPSM with the given MTU. Logs an error and returns early if the mempool init, mbuf pool init, or ble_l2cap_create_server call fails, leaving the CoC server unavailable.
+// Idempotent: the standalone path registers the server alongside the GATT service, and
+// start_attached() registers it for hosts that skipped that step. Re-running it would
+// re-init a live mempool and fail ble_l2cap_create_server with EALREADY.
+static bool s_l2cap_ready;
+
 static void l2cap_init(void)
 {
+	if (s_l2cap_ready) {
+		return;
+	}
+
 	int rc = os_mempool_init(&s_coc_mempool, ALIRO_COC_BUF_COUNT, ALIRO_L2CAP_MTU, s_coc_mem,
 				 "aliro_coc");
 	if (rc != 0) {
-		ESP_LOGE(TAG, "coc mempool init rc=%d", rc);
+		LOG_ERR("coc mempool init rc=%d", rc);
 		return;
 	}
 	rc = os_mbuf_pool_init(&s_coc_mbuf_pool, &s_coc_mempool, ALIRO_L2CAP_MTU,
 			       ALIRO_COC_BUF_COUNT);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "coc mbuf pool init rc=%d", rc);
+		LOG_ERR("coc mbuf pool init rc=%d", rc);
 		return;
 	}
 	rc = ble_l2cap_create_server(ALIRO_L2CAP_SPSM, ALIRO_L2CAP_MTU, l2cap_event_cb, NULL);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "l2cap create_server rc=%d", rc);
+		LOG_ERR("l2cap create_server rc=%d", rc);
 		return;
 	}
-	ESP_LOGI(TAG, "L2CAP CoC server up on SPSM 0x%04x (MTU %u)", (unsigned)ALIRO_L2CAP_SPSM,
+	s_l2cap_ready = true;
+	LOG_INF("L2CAP CoC server up on SPSM 0x%04x (MTU %u)", (unsigned)ALIRO_L2CAP_SPSM,
 		 (unsigned)ALIRO_L2CAP_MTU);
 }
 
@@ -405,7 +413,7 @@ static int device_ver_access(uint16_t conn_handle, uint16_t attr_handle,
 			break;
 		}
 	}
-	ESP_LOGI(TAG, "conn %u selected BLE-UWB protocol version 0x%04x (%s)", conn_handle, version,
+	LOG_INF("conn %u selected BLE-UWB protocol version 0x%04x (%s)", conn_handle, version,
 		 supported ? "supported" : "unsupported");
 	return 0;
 }
@@ -471,7 +479,7 @@ static void request_fast_conn(uint16_t conn_handle)
 	int rc = ble_gap_update_params(conn_handle, &params);
 
 	if (rc != 0) {
-		ESP_LOGW(TAG, "conn param update request rc=%d", rc);
+		LOG_WRN("conn param update request rc=%d", rc);
 	}
 }
 
@@ -502,12 +510,12 @@ static void conn_upd_schedule_retry(uint16_t conn_handle)
 		return;
 	}
 	if (desc.conn_itvl <= CONN_UPD_ITVL_MAX) {
-		ESP_LOGW(TAG, "conn itvl %u us; fast enough, no retry",
+		LOG_WRN("conn itvl %u us; fast enough, no retry",
 			 (unsigned)desc.conn_itvl * 1250u);
 		return;
 	}
 	if (s_conn_upd_tries >= CONN_UPD_MAX_TRIES) {
-		ESP_LOGW(TAG, "conn itvl stuck at %u us after %u tries",
+		LOG_WRN("conn itvl stuck at %u us after %u tries",
 			 (unsigned)desc.conn_itvl * 1250u, (unsigned)s_conn_upd_tries);
 		return;
 	}
@@ -527,7 +535,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 	(void)arg;
 	switch (event->type) {
 	case BLE_GAP_EVENT_CONNECT:
-		ESP_LOGI(TAG, "GAP connect (conn %u) status=%d", event->connect.conn_handle,
+		LOG_INF("GAP connect (conn %u) status=%d", event->connect.conn_handle,
 			 event->connect.status);
 		if (event->connect.status != 0) {
 			aliro_advertise(); /* failed; keep advertising */
@@ -545,11 +553,11 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
 		if (event->conn_update.status == 0 &&
 		    ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0) {
-			ESP_LOGW(TAG, "conn update: itvl=%u us latency=%u timeout=%u ms",
+			LOG_WRN("conn update: itvl=%u us latency=%u timeout=%u ms",
 				 (unsigned)desc.conn_itvl * 1250u, desc.conn_latency,
 				 (unsigned)desc.supervision_timeout * 10u);
 		} else {
-			ESP_LOGW(TAG, "conn update failed: status=%d",
+			LOG_WRN("conn update failed: status=%d",
 				 event->conn_update.status);
 		}
 		/* Covers both outcomes that leave us slow: our request rejected
@@ -558,7 +566,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 		return 0;
 	}
 	case BLE_GAP_EVENT_DISCONNECT:
-		ESP_LOGI(TAG, "GAP disconnect reason=%d", event->disconnect.reason);
+		LOG_INF("GAP disconnect reason=%d", event->disconnect.reason);
 		if (s_conn_upd_retry_init) {
 			ble_npl_callout_stop(&s_conn_upd_retry);
 		}
@@ -620,7 +628,7 @@ static bool build_aliro_svc_data(uint8_t out[26])
 	uint8_t adva[6];
 
 	if (ble_hs_id_copy_addr(id_addr_type, adva, NULL) != 0) {
-		ESP_LOGW(TAG, "adv: no identity address for the dynamic tag");
+		LOG_WRN("adv: no identity address for the dynamic tag");
 		return false;
 	}
 
@@ -642,7 +650,7 @@ static bool build_aliro_svc_data(uint8_t out[26])
 	int rc = aliro_advtag_derive(s_adv_grk, adva_msb, expiry, dyn_tag);
 
 	if (rc != 0) {
-		ESP_LOGE(TAG, "adv: dynamic-tag derive rc=%d", rc);
+		LOG_ERR("adv: dynamic-tag derive rc=%d", rc);
 		return false;
 	}
 
@@ -697,7 +705,7 @@ static void aliro_advertise(void)
 
 	int rc = ble_gap_adv_set_fields(&fields);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "adv_set_fields rc=%d", rc);
+		LOG_ERR("adv_set_fields rc=%d", rc);
 		return;
 	}
 
@@ -709,47 +717,42 @@ static void aliro_advertise(void)
 
 	rc = ble_gap_adv_start(s_own_addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event, NULL);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "adv_start rc=%d", rc);
+		LOG_ERR("adv_start rc=%d", rc);
 	}
 }
 
 // NimBLE host sync callback: ensures a device address exists, infers the own address type,
 // and starts Aliro advertising. Logs and returns early without advertising if either step
 // fails.
-static void on_sync(void)
+//
+// Ports that own the host install this as ble_hs_cfg.sync_cb, or call it from their own
+// sync handler. It is exported rather than static because the bring-up sequence that
+// installs it is per-OS: see aliro_ble_register_gatt().
+void aliro_ble_host_sync(void)
 {
 	int rc = ble_hs_util_ensure_addr(0);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "ensure_addr rc=%d", rc);
+		LOG_ERR("ensure_addr rc=%d", rc);
 		return;
 	}
 	rc = ble_hs_id_infer_auto(0, &s_own_addr_type);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "infer_auto rc=%d", rc);
+		LOG_ERR("infer_auto rc=%d", rc);
 		return;
 	}
-	ESP_LOGI(TAG, "NimBLE synced; advertising as Aliro reader (SPSM 0x%04x)",
+	LOG_INF("NimBLE synced; advertising as Aliro reader (SPSM 0x%04x)",
 		 (unsigned)ALIRO_L2CAP_SPSM);
 	aliro_advertise();
 }
 
 // NimBLE host reset callback; logs the reset reason.
-static void on_reset(int reason)
+void aliro_ble_host_reset(int reason)
 {
-	ESP_LOGW(TAG, "NimBLE reset; reason=%d", reason);
-}
-
-// FreeRTOS task entry point that runs the NimBLE host until stopped.
-// Blocks in nimble_port_run() until nimble_port_stop() is called, then deinitializes the NimBLE FreeRTOS port; param is unused.
-static void host_task(void *param)
-{
-	(void)param;
-	nimble_port_run(); /* returns only on nimble_port_stop() */
-	nimble_port_freertos_deinit();
+	LOG_WRN("NimBLE reset; reason=%d", reason);
 }
 
 /* Capture the config into the module statics (versions, callbacks, READ payload).
- * Shared by aliro_ble_start (owns the host) and aliro_ble_prepare (attach mode). */
+ * Shared by the port's bring-up (owns the host) and aliro_ble_prepare (attach mode). */
 static int capture_cfg(const struct aliro_ble_config *cfg)
 {
 	if (cfg == NULL || cfg->proto_versions == NULL || cfg->proto_versions_count == 0 ||
@@ -766,55 +769,39 @@ static int capture_cfg(const struct aliro_ble_config *cfg)
 	return 0;
 }
 
-// Bring up the Aliro BLE service as a standalone NimBLE host: init NVS, init the NimBLE port,
-// register the GAP/GATT services and the Aliro L2CAP CoC server, and start the host task.
-// Captures cfg first; returns -1 if that fails. Returns -1 on any NVS, NimBLE port, or GATT
-// registration failure (aborting via ESP_ERROR_CHECK for NVS init errors other than the
-// handled no-free-pages/new-version cases). Returns 0 on success.
-int aliro_ble_start(const struct aliro_ble_config *cfg)
+// Register everything the Aliro reader needs on a NimBLE host the caller has already
+// initialised: the GAP and GATT service stubs, the Aliro 0xFFF2 service, the device name,
+// and the L2CAP CoC server on the published SPSM.
+//
+// This is the OS-free half of bring-up. The half that is not here -- initialising NVS or
+// the port's key-value store, calling nimble_port_init(), and starting the host task --
+// differs per platform and lives in each port's own bring-up file. Call this after
+// nimble_port_init() and before the host task starts processing events.
+//
+// The config must already have been captured by aliro_ble_prepare(); this touches only
+// NimBLE. Returns -1 if any registration step fails, 0 on success.
+int aliro_ble_register_gatt(void)
 {
-	if (capture_cfg(cfg) != 0) {
-		return -1;
-	}
-
-	esp_err_t err = nvs_flash_init(); /* NimBLE stores bonding/keys in NVS */
-	if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-		ESP_ERROR_CHECK(nvs_flash_erase());
-		err = nvs_flash_init();
-	}
-	ESP_ERROR_CHECK(err);
-
-	err = nimble_port_init();
-	if (err != ESP_OK) {
-		ESP_LOGE(TAG, "nimble_port_init rc=%d", err);
-		return -1;
-	}
-
-	ble_hs_cfg.sync_cb = on_sync;
-	ble_hs_cfg.reset_cb = on_reset;
-
 	ble_svc_gap_init();
 	ble_svc_gatt_init();
 
 	int rc = ble_gatts_count_cfg(k_gatt_svcs);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "gatts_count_cfg rc=%d", rc);
+		LOG_ERR("gatts_count_cfg rc=%d", rc);
 		return -1;
 	}
 	rc = ble_gatts_add_svcs(k_gatt_svcs);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "gatts_add_svcs rc=%d", rc);
+		LOG_ERR("gatts_add_svcs rc=%d", rc);
 		return -1;
 	}
 
 	rc = ble_svc_gap_device_name_set("Aliro Reader");
 	if (rc != 0) {
-		ESP_LOGW(TAG, "device_name_set rc=%d", rc);
+		LOG_WRN("device_name_set rc=%d", rc);
 	}
 
 	l2cap_init(); /* register the Aliro L2CAP CoC server on the SPSM */
-
-	nimble_port_freertos_init(host_task);
 	return 0;
 }
 
@@ -848,10 +835,10 @@ int aliro_ble_start_attached(void)
 
 	int rc = ble_hs_id_infer_auto(0, &s_own_addr_type);
 	if (rc != 0) {
-		ESP_LOGE(TAG, "attached: infer_auto rc=%d", rc);
+		LOG_ERR("attached: infer_auto rc=%d", rc);
 		return -1;
 	}
-	ESP_LOGI(TAG, "Aliro reader attached to shared host; advertising (SPSM 0x%04x)",
+	LOG_INF("Aliro reader attached to shared host; advertising (SPSM 0x%04x)",
 		 (unsigned)ALIRO_L2CAP_SPSM);
 	s_attached = true;
 	aliro_advertise();
@@ -907,7 +894,7 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 	}
 	struct ble_l2cap_chan *chan = coc_chan_for(conn_handle);
 	if (chan == NULL) {
-		ESP_LOGW(TAG, "aliro_ble_send: no CoC channel for conn %u", conn_handle);
+		LOG_WRN("aliro_ble_send: no CoC channel for conn %u", conn_handle);
 		return -1;
 	}
 
@@ -928,7 +915,7 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 		return 0;
 	}
 	os_mbuf_free_chain(sdu);
-	ESP_LOGW(TAG, "ble_l2cap_send rc=%d", rc);
+	LOG_WRN("ble_l2cap_send rc=%d", rc);
 	return -1;
 }
 
@@ -939,7 +926,7 @@ int aliro_ble_disconnect(uint16_t conn_handle)
 	int rc = ble_gap_terminate(conn_handle, BLE_ERR_REM_USER_CONN_TERM);
 
 	if (rc != 0 && rc != BLE_HS_ENOTCONN) {
-		ESP_LOGW(TAG, "gap terminate (conn %u) rc=%d", conn_handle, rc);
+		LOG_WRN("gap terminate (conn %u) rc=%d", conn_handle, rc);
 		return -1;
 	}
 	return 0;

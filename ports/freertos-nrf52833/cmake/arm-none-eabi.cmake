@@ -58,8 +58,17 @@ set(CMAKE_EXE_LINKER_FLAGS_INIT "${WOZ_ARCH_FLAGS}")
 # links, with the same specs the image links with, and looks for the file the
 # broken toolchain does not ship.
 #
-# It runs once per configure and is cached, so it costs nothing on a rebuild.
-if(NOT DEFINED WOZ_ARM_TOOLCHAIN_HAS_LIBC)
+# The result is cached against the compiler it was measured on, so a rebuild
+# costs nothing but pointing WOZ_ARM_TOOLCHAIN_DIR at a working toolchain
+# re-probes immediately.
+#
+# Caching the answer alone is not enough, and getting that wrong is how this
+# went wrong once: a configure that failed here still wrote its cache, so every
+# later configure read the stale FALSE and repeated the error with the NEW
+# compiler's path in the message. The fix that matters is the key, not the
+# value -- a negative verdict must not outlive the toolchain it was about.
+if(NOT DEFINED WOZ_ARM_TOOLCHAIN_LIBC_PROBED_ON OR
+   NOT WOZ_ARM_TOOLCHAIN_LIBC_PROBED_ON STREQUAL "${CMAKE_C_COMPILER}")
   execute_process(
     COMMAND "${CMAKE_C_COMPILER}" -print-file-name=nosys.specs
     OUTPUT_VARIABLE _woz_nosys
@@ -73,6 +82,8 @@ if(NOT DEFINED WOZ_ARM_TOOLCHAIN_HAS_LIBC)
   else()
     set(WOZ_ARM_TOOLCHAIN_HAS_LIBC FALSE CACHE INTERNAL "arm-none-eabi ships a C library")
   endif()
+  set(WOZ_ARM_TOOLCHAIN_LIBC_PROBED_ON "${CMAKE_C_COMPILER}" CACHE INTERNAL
+      "compiler the C library probe was run against")
 endif()
 
 if(NOT WOZ_ARM_TOOLCHAIN_HAS_LIBC)

@@ -22,7 +22,31 @@
 enum woz_freertos_nimble_host_stage {
 	WOZ_FREERTOS_NIMBLE_HOST_STAGE_RADIO = 1,
 	WOZ_FREERTOS_NIMBLE_HOST_STAGE_TASK,
+	WOZ_FREERTOS_NIMBLE_HOST_STAGE_SERVICES,
 };
+
+/**
+ * Product hooks into the startup sequence.
+ *
+ * Both exist because GATT registration has to land inside the sequence, not
+ * before or after it: NimBLE's service tables need the memory pools that
+ * nimble_port_init() creates, and they must be registered before the host task
+ * begins processing events. A product that registered them from its own task
+ * would be racing the sync it is registering for.
+ */
+struct woz_freertos_nimble_host_hooks {
+	/** Runs after nimble_port_init(), before the host task is created.
+	 *  Nonzero aborts startup at STAGE_SERVICES. */
+	int (*register_services)(void);
+	/** Runs on the host task after the port's own sync bookkeeping. */
+	void (*on_sync)(void);
+};
+
+/**
+ * Install the hooks. Call before woz_freertos_nimble_host_start(); afterwards
+ * has no effect on a sequence that already ran. Passing NULL clears them.
+ */
+void woz_freertos_nimble_host_set_hooks(const struct woz_freertos_nimble_host_hooks *hooks);
 
 /**
  * Bring up the controller and then the NimBLE host, and schedule host/

@@ -26,6 +26,7 @@
 #include <task.h>
 
 #include <aliro_prov.h>
+#include <ultrawidelock/reader.h>
 
 #include <woz_freertos_crypto.h>
 #include <woz_freertos_nimble_host.h>
@@ -115,13 +116,24 @@ static void boot_task(void *arg)
 	}
 
 	/*
-	 * The BLE host comes up on the scheduler, unlike the radio: it has a
-	 * task of its own, it waits for the controller to answer a reset, and
-	 * its porting layer allocates from the heap. None of that works before
+	 * The Aliro reader, which brings the BLE host up underneath itself.
+	 *
+	 * This is the whole product on one line: aliro_reader_start() does the
+	 * crypto, loads the provisioned identity, arms the UWB ranging adapter,
+	 * and hands its transport config to the port's aliro_ble_start(), which
+	 * registers the GATT service and starts the controller and host.
+	 *
+	 * It runs on the scheduler, unlike the radio: the host has a task of its
+	 * own, it waits for the controller to answer a reset, and NimBLE's
+	 * porting layer allocates from the heap. None of that works before
 	 * vTaskStartScheduler(), which is why this is here and not in main().
+	 *
+	 * Fatal, unlike UWB above. The reader is the product: a lock that cannot
+	 * advertise cannot be unlocked by any path, so there is nothing to
+	 * degrade to and a silent boot would be the worst outcome on a bench.
 	 */
-	if (woz_freertos_nimble_host_start() != 0) {
-		woz_freertos_fatal("BLE host start failed");
+	if (aliro_reader_start() != 0) {
+		woz_freertos_fatal("Aliro reader start failed");
 	}
 
 	for (;;) {

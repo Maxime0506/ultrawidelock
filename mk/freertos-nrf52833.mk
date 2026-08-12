@@ -71,7 +71,15 @@ FREERTOS_BUILD_DIR ?= $(REPO_ROOT)/build/freertos-nrf52833
 # The cross toolchain is looked up on PATH unless WOZ_ARM_TOOLCHAIN_DIR names a
 # bin directory, so a toolchain installed outside the system prefix can be used
 # without putting it on PATH for every other build.
+#
+# Forwarded from the environment when set, rather than left to CMake's cache.
+# The cache only remembers it until someone deletes the build directory, and the
+# failure that follows -- "nosys.specs is missing" -- reads like a broken
+# toolchain rather than a lost setting.
+FREERTOS_TOOLCHAIN_ARG = $(if $(WOZ_ARM_TOOLCHAIN_DIR),-DWOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR))
+
 FREERTOS_CMAKE_ARGS = \
+	$(FREERTOS_TOOLCHAIN_ARG) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
 	-DWOZ_NCS_WORKSPACE=$(NCS_WORKSPACE) \
