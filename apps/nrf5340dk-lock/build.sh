@@ -169,7 +169,7 @@ preflight() {
   ok "integration patches applied"
 
   local f missing=""
-  for f in woz-aliro.conf dw3000-nfc.overlay pm_static.yml sysbuild-woz.conf; do
+  for f in ultrawidelock-cred.conf dw3000-nfc.overlay pm_static.yml sysbuild-woz.conf; do
     [ -f "$OV/$f" ] || missing="$missing $f"
   done
   [ -z "$missing" ] || die "overlay files missing:$missing"
@@ -242,12 +242,12 @@ do_build() {
     *) die "unknown NFC transport (use pn532, st25r, or none)" "NFC=$NFC" ;;
   esac
 
-  # PRETTY=1: layer woz-pretty.conf after woz-aliro.conf (curated console +
+  # PRETTY=1: layer ultrawidelock-pretty.conf after ultrawidelock-cred.conf (curated console +
   # log-level cuts). Reversible: drop PRETTY and the flag + levels revert to the
   # verbose default. It rides EXTRA_CONF_FILE (in the build signature), so
   # toggling it forces the reconfigure the changed log levels need.
   local pretty_conf=""
-  [ "${PRETTY:-0}" = 1 ] && pretty_conf=";$OV/woz-pretty.conf"
+  [ "${PRETTY:-0}" = 1 ] && pretty_conf=";$OV/ultrawidelock-pretty.conf"
 
   # LAT=1: layer diag-latency.conf (Matter DBG logging) to timestamp the
   # LockState ReportData egress vs the attribute set. Off-by-default diagnostic;
@@ -261,12 +261,12 @@ do_build() {
   local cir_conf=""
   [ "${CIR:-0}" = 1 ] && cir_conf=";$OV/diag-cirdiag.conf"
 
-  # HA=1: layer woz-ha.conf (Home Assistant / multi-admin). Off by default so the
+  # HA=1: layer ultrawidelock-ha.conf (Home Assistant / multi-admin). Off by default so the
   # Apple Home demo image is untouched; see that file for why. Needs the matching
   # `make bootstrap HA=1`, which applies the data-model patches this pairs with.
   # Rides EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
   local ha_conf=""
-  [ "${HA:-0}" = 1 ] && ha_conf=";$OV/woz-ha.conf"
+  [ "${HA:-0}" = 1 ] && ha_conf=";$OV/ultrawidelock-ha.conf"
 
   # LTO=1: layer lto.conf (whole-program codegen on the app image). OFF by default
   # in this script and ON via `make nrf-build`, which is where the policy lives;
@@ -290,7 +290,7 @@ do_build() {
     # reflashed), diagnosed over SWD from the halted PC and the exception frame.
     #
     # Undoing it per-image is deliberate: namespacing the whole EXTRA_CONF_FILE to
-    # the application would also stop woz-aliro.conf reaching MCUboot, which is a
+    # the application would also stop ultrawidelock-cred.conf reaching MCUboot, which is a
     # bigger behavioural change than this bug warrants. The bootloader has nothing
     # to gain from whole-program codegen anyway.
     lto_flags=(-Dmcuboot_CONFIG_LTO=n -Dmcuboot_CONFIG_ISR_TABLES_LOCAL_DECLARATION=n)
@@ -349,7 +349,7 @@ do_build() {
   # *content* edits are handled incrementally by Zephyr (configure-deps), so only
   # flag changes are captured here.
   local -a dflags=(
-    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${nfc_conf}${pretty_conf}${lat_conf}${cir_conf}${ha_conf}${dfu_conf}${lto_conf}"
+    -DEXTRA_CONF_FILE="$OV/ultrawidelock-cred.conf${nfc_conf}${pretty_conf}${lat_conf}${cir_conf}${ha_conf}${dfu_conf}${lto_conf}"
     -Dipc_radio_EXTRA_CONF_FILE="$OV/ipc_radio.conf"
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
     -DPM_STATIC_YML_FILE="$pm_yml"

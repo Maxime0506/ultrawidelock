@@ -27,10 +27,10 @@ grep -q "revision: $PIN" "$ROOT/west.yml" \
 # matters — ha-occupancy-endpoint is cut against a tree with the others applied.
 ADDON_PATCHES=(
   "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch"
-  "$P/pretty-shell.patch" "$P/aliro-shell-factoryreset.patch"
+  "$P/pretty-shell.patch" "$P/cred-shell-factoryreset.patch"
   "$P/console-quiet-flood.patch"
-  "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch"
-  "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch"
+  "$P/kpersistent-orphan-selfheal.patch" "$P/cred-doc-time-ratchet.patch"
+  "$P/cred-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch"
   "$P/approach-direction-cluster.patch" "$P/nfc-transport-seam.patch"
   "$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch"
 )

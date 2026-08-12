@@ -9,7 +9,7 @@ trust -- the same arrangement as gen_pase_vector.py:
 
 WHY A VECTOR AND NOT A LIVE CHECK. dfu_receiver.c authenticates a staged update
 with psa_verify_message() over ECDSA-P256, and there is no P-256 anywhere in
-this repo's host build (see the banner in tests/shared/aliro_prim_host.c:
+this repo's host build (see the banner in tests/shared/ultrawidelock_prim_host.c:
 its EC block is a deliberate stand-in, and real curve math runs only in
 ultrawidelock_prim_psa.c on target). A fake curve would prove nothing.
 

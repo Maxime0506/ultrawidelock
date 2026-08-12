@@ -76,7 +76,7 @@ LOG_MODULE_REGISTER(initiator, CONFIG_LOG_DEFAULT_LEVEL);
  * reason. */
 #define INITIATOR_RESP_MAX 320u
 
-/* An enrolled build gets its identity from the header scripts/aliro-enroll.py
+/* An enrolled build gets its identity from the header scripts/ultrawidelock-enroll.py
  * writes: the real reader's public identity read back over Matter, plus a
  * credential this initiator was issued by the reader's home. That is the
  * high-fidelity configuration -- the reader is a normal provisioned lock and we
@@ -98,7 +98,7 @@ LOG_MODULE_REGISTER(initiator, CONFIG_LOG_DEFAULT_LEVEL);
  * ---- bench credentials -----------------------------------------------------
  *
  * Fallback for an un-enrolled bench: only works against a reader on its DEV
- * identity. Run scripts/aliro-enroll.py to target a real provisioned reader.
+ * identity. Run scripts/ultrawidelock-enroll.py to target a real provisioned reader.
  *
  * The reader identity below is the DEV identity every unprovisioned reader falls
  * back to (ultrawidelock_prov.c, ultrawidelock_prov_dev_default). reader_id is that file's
@@ -407,7 +407,7 @@ int main(void)
 	/* Which identity is compiled in decides which readers can possibly answer,
 	 * and getting that wrong looks identical to a transport fault from the log. */
 #ifdef ALIRO_BENCH_ENROLLED
-	LOG_INF("identity: ENROLLED (scripts/aliro-enroll.py)");
+	LOG_INF("identity: ENROLLED (scripts/ultrawidelock-enroll.py)");
 #else
 	LOG_INF("identity: DEV fallback -- only an unprovisioned reader will accept us");
 #endif

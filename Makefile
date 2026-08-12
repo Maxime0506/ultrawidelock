@@ -70,7 +70,7 @@ PRISTINE ?=
 SELFTEST ?=
 STRICT   ?=
 # HA=1 opts into the Home Assistant variant. It must be set on BOTH bootstrap
-# (applies the data-model patches) and build (layers woz-ha.conf).
+# (applies the data-model patches) and build (layers ultrawidelock-ha.conf).
 # Not hardware-validated.
 HA            ?=
 ALIRO_SOURCE  ?=

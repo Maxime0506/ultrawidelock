@@ -3,7 +3,7 @@
 #
 # ultrawidelock_uwb and modules/ultrawidelock_dw3000 come in as Zephyr modules because they carry their own
 # Kconfig gating. modules/ultrawidelock_cred's reader core is listed
-# directly here, the way tests/on_target/zephyr/nrf5340dk-aliro-device-ec does, so the nRF5340 build
+# directly here, the way tests/on_target/zephyr/nrf5340dk-ultrawidelock-device-ec does, so the nRF5340 build
 # that consumes that module through CONFIG_ULTRAWIDELOCK_CRED_STACK stays untouched.
 cmake_minimum_required(VERSION 3.20.0)
 

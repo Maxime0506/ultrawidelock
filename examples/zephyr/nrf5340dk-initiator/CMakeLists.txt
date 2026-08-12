@@ -91,10 +91,10 @@ target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
 # NONE of its rules run against -- which would silently drop SAST coverage of
 # the translation unit that holds the credential key. Configure-time detection
 # means a freshly written header needs a re-configure to be picked up; that is
-# what scripts/aliro-enroll.py tells you to do when it finishes.
+# what scripts/ultrawidelock-enroll.py tells you to do when it finishes.
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/src/bench_identity.h")
 	message(STATUS "Aliro initiator: ENROLLED identity (src/bench_identity.h)")
 	target_compile_definitions(app PRIVATE ALIRO_BENCH_ENROLLED)
 else()
-	message(STATUS "Aliro initiator: DEV fallback identity, run scripts/aliro-enroll.py")
+	message(STATUS "Aliro initiator: DEV fallback identity, run scripts/ultrawidelock-enroll.py")
 endif()

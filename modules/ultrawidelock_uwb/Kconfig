@@ -88,7 +88,7 @@ config ULTRAWIDELOCK_PRETTY_SHELL
 	  ccc_shim_rx.c / uwb_rxdiag.c compile to no-ops (DIAGK, see ultrawidelock_diag.h),
 	  one clean per-block ranging line is emitted instead, and the app re-emits
 	  the commissioning QR URL through its own logger so Matter can drop to WRN.
-	  Pairs with apps/nrf5340dk-lock/overlays/woz-pretty.conf, which carries the
+	  Pairs with apps/nrf5340dk-lock/overlays/ultrawidelock-pretty.conf, which carries the
 	  matching log-level cuts. Default n = today's verbose output, byte-for-byte.
 	  Reverse by dropping the PRETTY=1 build switch (flag returns to n).
 

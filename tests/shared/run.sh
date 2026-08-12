@@ -24,7 +24,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_crypto.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_advtag.c" \
-   "$HERE/aliro_prim_host.c" -o "$CBIN"
+   "$HERE/ultrawidelock_prim_host.c" -o "$CBIN"
 "$CBIN"
 rm -f "$CBIN"
 
@@ -35,7 +35,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_assert_ec.c" \
    "$ALIRO/src/ultrawidelock_assert.c" "$ALIRO/src/ultrawidelock_assert_ec.c" "$ALIRO/src/ultrawidelock_hash.c" \
-   "$HERE/aliro_prim_host.c" -o "$ECBIN"
+   "$HERE/ultrawidelock_prim_host.c" -o "$ECBIN"
 "$ECBIN"
 rm -f "$ECBIN"
 
@@ -56,7 +56,7 @@ cc -std=c11 -O1 -Wall -Wextra -DULTRAWIDELOCK_DEVICE_HAVE_EC \
    "$HERE/test_aliro_device.c" \
    "$ALIRO/src/ultrawidelock_device.c" "$ALIRO/src/ultrawidelock_device_apdu.c" \
    "$ALIRO/src/ultrawidelock_apdu.c" "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
-   "$HERE/aliro_prim_host.c" -o "$DBIN"
+   "$HERE/ultrawidelock_prim_host.c" -o "$DBIN"
 "$DBIN"
 rm -f "$DBIN"
 
@@ -78,7 +78,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
    "$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
-   "$HERE/aliro_prim_host.c" -o "$SBIN"
+   "$HERE/ultrawidelock_prim_host.c" -o "$SBIN"
 "$SBIN"
 rm -f "$SBIN"
 
@@ -117,7 +117,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$ALIRO/src/ultrawidelock_reader.c" "$ALIRO/src/ultrawidelock_apdu.c" \
    "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
    "$ALIRO/src/ultrawidelock_prov.c" \
-   "$HERE/aliro_prim_host.c" -o "$RBIN"
+   "$HERE/ultrawidelock_prim_host.c" -o "$RBIN"
 "$RBIN"
 rm -f "$RBIN"
 
@@ -130,7 +130,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$HERE/test_aliro_ranging.c" \
    "$ALIRO/src/ultrawidelock_ranging.c" "$ALIRO/src/ultrawidelock_crypto.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_lat.c" \
-   "$HERE/aliro_prim_host.c" -o "$GBIN"
+   "$HERE/ultrawidelock_prim_host.c" -o "$GBIN"
 "$GBIN"
 rm -f "$GBIN"
 

@@ -42,7 +42,7 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$ESP_COMPONENTS/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
    "$ALIRO/src/ultrawidelock_ble_nimble.c" \
    "$ALIRO/src/ultrawidelock_advtag.c" "$ALIRO/src/ultrawidelock_hash.c" \
-   "$SHARED/aliro_prim_host.c" \
+   "$SHARED/ultrawidelock_prim_host.c" \
    "$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$EBIN"
 "$EBIN"
 rm -f "$EBIN"
@@ -71,7 +71,7 @@ cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
    "$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
    "$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
-   "$SHARED/aliro_prim_host.c" \
+   "$SHARED/ultrawidelock_prim_host.c" \
    "$SDKFAKE/fake_freertos.c" -o "$WBIN"
 "$WBIN"
 rm -f "$WBIN"

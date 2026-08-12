@@ -53,7 +53,7 @@ zephyr_library_include_directories(
 # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log line
 # (ultrawidelock_logfmt), plus runtime-mute of benign upstream Matter/BLE error spam
 # (ultrawidelock_logquiet). Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT, set in
-# apps/nrf5340dk-lock/overlays/woz-pretty.conf, active only under PRETTY=1.
+# apps/nrf5340dk-lock/overlays/ultrawidelock-pretty.conf, active only under PRETTY=1.
 zephyr_library_sources_ifdef(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL
 	log/ultrawidelock_logfmt.c
 	log/ultrawidelock_logquiet.c)

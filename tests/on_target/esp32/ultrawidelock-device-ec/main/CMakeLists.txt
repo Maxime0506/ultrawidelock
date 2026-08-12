@@ -2,7 +2,7 @@
 # PSA backend. ULTRAWIDELOCK_DEVICE_HAVE_EC turns on the full ECDH+ECDSA loopback.
 # The test body is port-neutral (tests/shared) and the sources are the same
 # role manifests the nRF twin of this app reads
-# (tests/on_target/zephyr/nrf5340dk-aliro-device-ec/CMakeLists.txt).
+# (tests/on_target/zephyr/nrf5340dk-ultrawidelock-device-ec/CMakeLists.txt).
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
 set(SHARED "${REPO_ROOT}/tests/shared")

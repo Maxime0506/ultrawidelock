@@ -71,7 +71,7 @@ static void t_ok_(const char *name, int cond)
 /* Same CSA v1.0 default 0xA5 salt TLV the reader and device both use. */
 static const uint8_t k_a5[] = {0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0x01, 0x00};
 
-/* EC comes from aliro_prim_host.c's fake-curve double (added by the reader-tests
+/* EC comes from ultrawidelock_prim_host.c's fake-curve double (added by the reader-tests
  * suite): a self-consistent P-256 stand-in (symmetric ECDH, round-tripping
  * ECDSA). With it present the full standard-path loopback below runs host-side
  * under -DULTRAWIDELOCK_DEVICE_HAVE_EC; the byte-exact anchors above still pin spec truth. */
@@ -687,7 +687,7 @@ static void test_ranging_channel_after_auth1(struct ultrawidelock_device *dev,
 #endif
 
 /* The full self-test body, callable from the host main() below and from the
- * on-target app_main() (tests/on_target/esp32/aliro-device-ec), which runs the same
+ * on-target app_main() (tests/on_target/esp32/ultrawidelock-device-ec), which runs the same
  * suite against the real PSA P-256 backend instead of the host fake curve. */
 int aliro_device_selftest(void)
 {

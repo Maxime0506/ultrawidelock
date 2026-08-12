@@ -423,7 +423,7 @@ index 0688558..111fbe3 100644
  	int _ResumeRangingSession(SessionContextHandle sessionContextData);
 -	const char *_GetFirmwareVersion() { return nullptr; }
 -	bool _IsInitialized() { return false; }
-+	const char *_GetFirmwareVersion() { return "woz-uwb-fira"; }
++	const char *_GetFirmwareVersion() { return "ultrawidelock-uwb-fira"; }
 +	bool _IsInitialized() { return mInitialized; }
 +	int _StartRadarSession() { return -ENOSYS; }
  	void _StopRadarSession() {}

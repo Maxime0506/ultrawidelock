@@ -576,11 +576,11 @@ BUILD_FILES=(
 	examples/zephyr/anchor/CMakeLists.txt
 	examples/zephyr/nrf5340dk-initiator/CMakeLists.txt
 	examples/esp32/*/CMakeLists.txt
-	tests/on_target/zephyr/nrf5340dk-aliro-device-ec/CMakeLists.txt
+	tests/on_target/zephyr/nrf5340dk-ultrawidelock-device-ec/CMakeLists.txt
 	ports/zephyr/CMakeLists.txt
 	modules/*/CMakeLists.txt
 	ports/esp32/components/*/CMakeLists.txt
-	tests/on_target/esp32/aliro-device-ec/main/CMakeLists.txt
+	tests/on_target/esp32/ultrawidelock-device-ec/main/CMakeLists.txt
 )
 
 check_build_paths() {

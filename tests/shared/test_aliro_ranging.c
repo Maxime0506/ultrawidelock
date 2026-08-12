@@ -8,7 +8,7 @@
  * arguments, stash the registered transmit/event callbacks so the script can
  * invoke them as the engine would, and expose one-shot failure switches for
  * the error branches. The BleSK sealing in the transmit callback is REAL
- * crypto (ultrawidelock_crypto.c over the GCM in aliro_prim_host.c): every sealed SDU
+ * crypto (ultrawidelock_crypto.c over the GCM in ultrawidelock_prim_host.c): every sealed SDU
  * the double records is opened with the mirrored device-direction GCM (as
  * test_aliro_reader.c's ph_open_ble does) to prove plaintext, AAD and the
  * per-direction counter (starting at 1) all match §11.8.2.
@@ -46,9 +46,9 @@
 #include "ultrawidelock_uwb_adapter/ultrawidelock_uwb_session.h"
 #include <ultrawidelock/uwb.h>
 
-/* Failure injection into the prim double (aliro_prim_host.c); default off,
+/* Failure injection into the prim double (ultrawidelock_prim_host.c); default off,
  * self-disarming after firing. */
-extern int aliro_prim_host_fail_encrypt_after;
+extern int ultrawidelock_prim_host_fail_encrypt_after;
 
 static int fails;
 
@@ -535,7 +535,7 @@ int main(void)
 	okc("t.null_msg", s_msg_frees_null == 1 && s_msg_frees == 2);
 
 	before = s_txn;
-	aliro_prim_host_fail_encrypt_after = 0; /* next GCM encrypt fails */
+	ultrawidelock_prim_host_fail_encrypt_after = 0; /* next GCM encrypt fails */
 	tx_push(irs, sizeof(irs), 7);
 	okc("t.seal_fail", s_txn == before && s_msg_frees == 3);
 

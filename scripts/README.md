@@ -9,7 +9,7 @@ operations, and release workflows.
 | DWM3001CDK operations | `cdk-dfu.sh`, `cdk-find-probe.sh`, `cdk-rtt-elf-check.sh` |
 | Firmware size | `cdk-size.py`, `cdk-size-compare.py`, `cdk-size-baseline.py` |
 | Delta update and SMP | `ultrawidelock_patch.py`, `ultrawidelock_push.py`, `ultrawidelock_smp.py` |
-| Provisioning | `aliro-enroll.py`, `spake2p_verifier.py` |
+| Provisioning | `ultrawidelock-enroll.py`, `spake2p_verifier.py` |
 | Release and validation | `release-bundle.sh`, `hitl-run.sh`, `test-runner.sh` |
 
 Prefer a documented Make target when one exists. Run `make help` to see the

@@ -5,7 +5,7 @@
  * P-256 path against a local double. That leaves one thing untested: the shim
  * that actually wires the seam to ultrawidelock_prim, where a swapped key argument or a
  * mis-sized buffer would be invisible to both sides. This links the real
- * ultrawidelock_assert_ec.c against the host prim double (aliro_prim_host.c, a
+ * ultrawidelock_assert_ec.c against the host prim double (ultrawidelock_prim_host.c, a
  * documented fake curve -- so this proves wiring, never curve arithmetic).
  *
  * What it pins: a frame signed through the binder verifies through the binder,

@@ -82,7 +82,7 @@ run_suite() { # <name> <bin>: run one instrumented suite into its own profile
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$SHARED/test_aliro_crypto.c" \
 	"$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_advtag.c" \
-	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_crypto"
+	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_crypto"
 run_suite crypto "$OUT/cov_crypto"
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
@@ -94,7 +94,7 @@ cov_cc -I"$SHARED" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
 	"$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
 	"$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
-	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_stepup"
+	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_stepup"
 run_suite stepup "$OUT/cov_stepup"
 
 cov_cc -I"$ALIRO/include" -I"$ALIRO/src" \
@@ -118,7 +118,7 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
 	"$ALIRO/src/ultrawidelock_reader.c" "$ALIRO/src/ultrawidelock_apdu.c" \
 	"$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
 	"$ALIRO/src/ultrawidelock_prov.c" \
-	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_reader"
+	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_reader"
 run_suite reader "$OUT/cov_reader"
 
 cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
@@ -127,7 +127,7 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
 	"$SHARED/test_aliro_ranging.c" \
 	"$ALIRO/src/ultrawidelock_ranging.c" "$ALIRO/src/ultrawidelock_crypto.c" \
 	"$ALIRO/src/ultrawidelock_hash.c" \
-	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_ranging"
+	"$SHARED/ultrawidelock_prim_host.c" -o "$OUT/cov_ranging"
 run_suite ranging "$OUT/cov_ranging"
 
 # Header-inline logic (ultrawidelock_port.h et al.) is exercised by the port-headers
@@ -225,7 +225,7 @@ cov_cc -I"$SDKFAKE" -I"$ALIRO/include" -I"$ALIRO/src" \
 	"$ET/test_esp_aliro_ble.c" "$ECOMP/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
 	"$ALIRO/src/ultrawidelock_ble_nimble.c" \
 	"$ALIRO/src/ultrawidelock_advtag.c" "$ALIRO/src/ultrawidelock_hash.c" \
-	"$SHARED/aliro_prim_host.c" \
+	"$SHARED/ultrawidelock_prim_host.c" \
 	"$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_ble"
 run_suite esp_ble "$OUT/cov_esp_ble"
 
@@ -240,7 +240,7 @@ cov_cc -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
 	"$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
 	"$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
 	"$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
-	"$SHARED/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
+	"$SHARED/ultrawidelock_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
 
 # _POSIX_C_SOURCE because main.c now includes ultrawidelock_port.h, whose host build calls
@@ -392,7 +392,7 @@ done
 cov_cc -I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelock_cred/src" \
 	-c "$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_hash.c" -o "$OUT/stk_aliro_hash_cov.o"
 cov_cc -I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelock_cred/src" \
-	-c "$SHARED/aliro_prim_host.c" -o "$OUT/stk_aliro_prim_host_cov.o"
+	-c "$SHARED/ultrawidelock_prim_host.c" -o "$OUT/stk_ultrawidelock_prim_host_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/cred_stack.cpp" -o "$OUT/stk_cred_stack_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/session.cpp" -o "$OUT/stk_session_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/stackfake/stackfake.cpp" \
@@ -401,7 +401,7 @@ cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/test_aliro_stack.cpp" \
 	-o "$OUT/test_aliro_stack_cov.o"
 cov_cxx "$OUT/test_aliro_stack_cov.o" "$OUT/stackfake_cov.o" "$OUT/test_harness_stack_cov.o" \
 	"$OUT/stk_cred_stack_cov.o" "$OUT/stk_session_cov.o" "${STK_OBJS[@]}" \
-	"$OUT/stk_aliro_hash_cov.o" "$OUT/stk_aliro_prim_host_cov.o" \
+	"$OUT/stk_aliro_hash_cov.o" "$OUT/stk_ultrawidelock_prim_host_cov.o" \
 	-o "$OUT/cov_stack"
 run_suite stack "$OUT/cov_stack"
 

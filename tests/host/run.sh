@@ -233,7 +233,7 @@ for aliro_src in ultrawidelock_tlv ultrawidelock_stepup_wire ultrawidelock_stepu
 	STK_OBJS+=("$stk_obj")
 done
 # The symmetric crypto is REAL: ultrawidelock_hash.c (SHA-256/HMAC/HKDF, pinned by
-# test_aliro_hash.c) and the reference AES-GCM in aliro_prim_host.c (pinned by
+# test_aliro_hash.c) and the reference AES-GCM in ultrawidelock_prim_host.c (pinned by
 # test_aliro_crypto.c). Only P-256 stays a stand-in -- this repo has none on host.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
@@ -241,8 +241,8 @@ done
 	-o "$OUT/stk_aliro_hash.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
-	-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/tests/shared/aliro_prim_host.c" \
-	-o "$OUT/stk_aliro_prim_host.o"
+	-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/tests/shared/ultrawidelock_prim_host.c" \
+	-o "$OUT/stk_ultrawidelock_prim_host.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
 	-c "$STK/cred_stack.cpp" -o "$OUT/stk_cred_stack.o"
@@ -259,6 +259,6 @@ done
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 	"$OUT/test_aliro_stack.o" "$OUT/stackfake.o" "$OUT/test_harness_stack.o" \
 	"$OUT/stk_cred_stack.o" "$OUT/stk_session.o" "${STK_OBJS[@]}" \
-	"$OUT/stk_aliro_hash.o" "$OUT/stk_aliro_prim_host.o" \
+	"$OUT/stk_aliro_hash.o" "$OUT/stk_ultrawidelock_prim_host.o" \
 	-o "$OUT/host_test_stack"
 "$OUT/host_test_stack"

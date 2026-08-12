@@ -90,7 +90,7 @@ mkdir -p "$ART"
 
 if [ "$SKIP_ENROL" = 0 ]; then
 	[ -d "$STORAGE" ] || die "no controller identity at $STORAGE -- commission once" \
-	                         "(scripts/aliro-enroll.py --pairing-code ...) or pass STORAGE="
+	                         "(scripts/ultrawidelock-enroll.py --pairing-code ...) or pass STORAGE="
 fi
 
 # The DK console: the ioreg walk picks the serial number exposing the MOST
@@ -129,7 +129,7 @@ printf '  DK console: %s · reader watch: %s · verdict window: %ss\n' \
 
 if [ "$SKIP_ENROL" = 0 ]; then
 	printf '1. enrolling the initiator (headless, fabric %s)\n' "$FABRIC"
-	if ! python3 "$REPO_ROOT/scripts/aliro-enroll.py" --node-id "$NODE" \
+	if ! python3 "$REPO_ROOT/scripts/ultrawidelock-enroll.py" --node-id "$NODE" \
 		--storage "$STORAGE" --fabric "$FABRIC" >"$ART/enrol.log" 2>&1; then
 		tail -5 "$ART/enrol.log" >&2
 		die "enrolment failed (full log: $ART/enrol.log)"

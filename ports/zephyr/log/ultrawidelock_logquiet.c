@@ -15,7 +15,7 @@
  *
  * Reversible: compiled only under CONFIG_ULTRAWIDELOCK_PRETTY_SHELL (PRETTY=1). Drop PRETTY
  * and every one of these lines returns for raw diagnosis. Needs
- * CONFIG_LOG_RUNTIME_FILTERING=y (set in apps/nrf5340dk-lock/overlays/woz-pretty.conf).
+ * CONFIG_LOG_RUNTIME_FILTERING=y (set in apps/nrf5340dk-lock/overlays/ultrawidelock-pretty.conf).
  */
 
 #include <zephyr/init.h>

@@ -27,7 +27,7 @@ clean:
 	@# the whole word would stop `*` expanding.
 	@rm -rf "$(REPO_ROOT)"/apps/esp32-matter-lock/build "$(REPO_ROOT)"/apps/esp32-matter-lock/build-piv \
 	        "$(REPO_ROOT)"/examples/esp32/*/build "$(REPO_ROOT)"/examples/esp32/*/build-piv \
-	        "$(REPO_ROOT)"/tests/on_target/esp32/aliro-device-ec/build "$(REPO_ROOT)"/tests/on_target/zephyr/nrf5340dk-aliro-device-ec/build
+	        "$(REPO_ROOT)"/tests/on_target/esp32/ultrawidelock-device-ec/build "$(REPO_ROOT)"/tests/on_target/zephyr/nrf5340dk-ultrawidelock-device-ec/build
 	@printf '  removed %s and the app-local build directories\n' '$(ALIRO_BUILD_ROOT)'
 
 ## ws-clean: remove THIS worktree's local build + workspace

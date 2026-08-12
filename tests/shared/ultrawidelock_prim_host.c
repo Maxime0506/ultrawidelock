@@ -23,12 +23,12 @@
  * The _after shape exists because some ops are nested (keygen draws from
  * ultrawidelock_random; the phone helpers seal with the same GCM the reader uses), so
  * the test must be able to fail the Nth call, not the first. */
-int aliro_prim_host_fail_init;
-int aliro_prim_host_fail_keygen;
-int aliro_prim_host_fail_sign;
-int aliro_prim_host_fail_pub_from_priv;
-int aliro_prim_host_fail_random_after = -1;
-int aliro_prim_host_fail_encrypt_after = -1;
+int ultrawidelock_prim_host_fail_init;
+int ultrawidelock_prim_host_fail_keygen;
+int ultrawidelock_prim_host_fail_sign;
+int ultrawidelock_prim_host_fail_pub_from_priv;
+int ultrawidelock_prim_host_fail_random_after = -1;
+int ultrawidelock_prim_host_fail_encrypt_after = -1;
 
 /* Consume one call against an _after counter; returns 1 when this call must fail. */
 static int fail_after_fires(int *after)
@@ -46,8 +46,8 @@ static int fail_after_fires(int *after)
 
 int ultrawidelock_prim_init(void)
 {
-	if (aliro_prim_host_fail_init > 0) {
-		aliro_prim_host_fail_init--;
+	if (ultrawidelock_prim_host_fail_init > 0) {
+		ultrawidelock_prim_host_fail_init--;
 		return -1;
 	}
 	return 0;
@@ -55,7 +55,7 @@ int ultrawidelock_prim_init(void)
 
 int ultrawidelock_random(uint8_t *out, size_t len)
 {
-	if (fail_after_fires(&aliro_prim_host_fail_random_after)) {
+	if (fail_after_fires(&ultrawidelock_prim_host_fail_random_after)) {
 		return -1;
 	}
 	/* Deterministic host filler; the host suite does not need CSPRNG quality. */
@@ -357,7 +357,7 @@ int ultrawidelock_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce
 {
 	uint8_t full[16];
 
-	if (fail_after_fires(&aliro_prim_host_fail_encrypt_after)) {
+	if (fail_after_fires(&ultrawidelock_prim_host_fail_encrypt_after)) {
 		return -1;
 	}
 	if (tag_len > 16) {
@@ -404,11 +404,11 @@ int ultrawidelock_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce
  * can produce *within the test process*. That contract is satisfied without
  * curve math:
  *
- *   pub(priv)         = 0x04 || priv || SHA-256("woz-fake-y" || priv)
- *   ecdh(a, B)        = SHA-256("woz-fake-ecdh" || sort(a, B.x))   (commutes
+ *   pub(priv)         = 0x04 || priv || SHA-256("ultrawidelock-fake-y" || priv)
+ *   ecdh(a, B)        = SHA-256("ultrawidelock-fake-ecdh" || sort(a, B.x))   (commutes
  *                       because B.x == b, so both sides hash the same pair)
- *   sign(priv, m)     = SHA-256("woz-fake-r" || priv || H(m)) ||
- *                       SHA-256("woz-fake-s" || priv || H(m))
+ *   sign(priv, m)     = SHA-256("ultrawidelock-fake-r" || priv || H(m)) ||
+ *                       SHA-256("ultrawidelock-fake-s" || priv || H(m))
  *   verify(P, m, sig) recomputes both halves from P.x (== priv).
  *
  * Anyone holding a public key can forge signatures — which is exactly why this
@@ -423,7 +423,7 @@ static void fake_point(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
 	pub[0] = 0x04;
 	memcpy(pub + 1, priv, 32);
 	ultrawidelock_sha256_init(&s);
-	ultrawidelock_sha256_update(&s, "woz-fake-y", 10);
+	ultrawidelock_sha256_update(&s, "ultrawidelock-fake-y", 10);
 	ultrawidelock_sha256_update(&s, priv, 32);
 	ultrawidelock_sha256_final(&s, pub + 33);
 }
@@ -431,8 +431,8 @@ static void fake_point(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
 int ultrawidelock_ec_p256_keygen(uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
 				 uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
-	if (aliro_prim_host_fail_keygen > 0) {
-		aliro_prim_host_fail_keygen--;
+	if (ultrawidelock_prim_host_fail_keygen > 0) {
+		ultrawidelock_prim_host_fail_keygen--;
 		return -1;
 	}
 	if (ultrawidelock_random(priv, ULTRAWIDELOCK_P256_SCALAR) != 0) {
@@ -445,8 +445,8 @@ int ultrawidelock_ec_p256_keygen(uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
 int ultrawidelock_ec_p256_pub_from_priv(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
 				uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
-	if (aliro_prim_host_fail_pub_from_priv > 0) {
-		aliro_prim_host_fail_pub_from_priv--;
+	if (ultrawidelock_prim_host_fail_pub_from_priv > 0) {
+		ultrawidelock_prim_host_fail_pub_from_priv--;
 		return -1;
 	}
 	fake_point(priv, pub);
@@ -470,7 +470,7 @@ int ultrawidelock_ecdh_p256(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
 		b = t;
 	}
 	ultrawidelock_sha256_init(&s);
-	ultrawidelock_sha256_update(&s, "woz-fake-ecdh", 13);
+	ultrawidelock_sha256_update(&s, "ultrawidelock-fake-ecdh", 13);
 	ultrawidelock_sha256_update(&s, a, 32);
 	ultrawidelock_sha256_update(&s, b, 32);
 	ultrawidelock_sha256_final(&s, shared_x);
@@ -486,12 +486,12 @@ static void fake_sig(const uint8_t x[32], const uint8_t *msg, size_t msg_len,
 
 	ultrawidelock_sha256(msg, msg_len, h);
 	ultrawidelock_sha256_init(&s);
-	ultrawidelock_sha256_update(&s, "woz-fake-r", 10);
+	ultrawidelock_sha256_update(&s, "ultrawidelock-fake-r", 10);
 	ultrawidelock_sha256_update(&s, x, 32);
 	ultrawidelock_sha256_update(&s, h, sizeof(h));
 	ultrawidelock_sha256_final(&s, sig);
 	ultrawidelock_sha256_init(&s);
-	ultrawidelock_sha256_update(&s, "woz-fake-s", 10);
+	ultrawidelock_sha256_update(&s, "ultrawidelock-fake-s", 10);
 	ultrawidelock_sha256_update(&s, x, 32);
 	ultrawidelock_sha256_update(&s, h, sizeof(h));
 	ultrawidelock_sha256_final(&s, sig + 32);
@@ -500,8 +500,8 @@ static void fake_sig(const uint8_t x[32], const uint8_t *msg, size_t msg_len,
 int ultrawidelock_ecdsa_p256_sign(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR], const uint8_t *msg,
 				  size_t msg_len, uint8_t sig[ULTRAWIDELOCK_P256_SIG])
 {
-	if (aliro_prim_host_fail_sign > 0) {
-		aliro_prim_host_fail_sign--;
+	if (ultrawidelock_prim_host_fail_sign > 0) {
+		ultrawidelock_prim_host_fail_sign--;
 		return -1;
 	}
 	fake_sig(priv, msg, msg_len, sig); /* priv == pub.x by construction */

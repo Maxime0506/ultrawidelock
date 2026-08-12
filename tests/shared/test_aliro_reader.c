@@ -38,15 +38,15 @@
 /* ultrawidelock_uptime_ms: the clock the status tick's deadline uses */
 #include "ultrawidelock_port.h"
 
-/* Failure injection into the prim double (aliro_prim_host.c). Every hook
+/* Failure injection into the prim double (ultrawidelock_prim_host.c). Every hook
  * defaults off and disarms itself after firing, so the walk-ups before
  * section E run against the plain fakes. */
-extern int aliro_prim_host_fail_init;
-extern int aliro_prim_host_fail_keygen;
-extern int aliro_prim_host_fail_sign;
-extern int aliro_prim_host_fail_pub_from_priv;
-extern int aliro_prim_host_fail_random_after;  /* -1 off; N: fail after N successes */
-extern int aliro_prim_host_fail_encrypt_after; /* -1 off; N: fail after N successes */
+extern int ultrawidelock_prim_host_fail_init;
+extern int ultrawidelock_prim_host_fail_keygen;
+extern int ultrawidelock_prim_host_fail_sign;
+extern int ultrawidelock_prim_host_fail_pub_from_priv;
+extern int ultrawidelock_prim_host_fail_random_after;  /* -1 off; N: fail after N successes */
+extern int ultrawidelock_prim_host_fail_encrypt_after; /* -1 off; N: fail after N successes */
 
 static int fails;
 
@@ -1365,9 +1365,9 @@ int main(void)
 	tx_reset(); /* every earlier frame is consumed; reclaim the queue */
 
 	/* E1: engine/transport bring-up failures */
-	aliro_prim_host_fail_init = 1;
+	ultrawidelock_prim_host_fail_init = 1;
 	okc("e1.start_crypto_fail", ultrawidelock_reader_start() == -1);
-	aliro_prim_host_fail_init = 1;
+	ultrawidelock_prim_host_fail_init = 1;
 	okc("e1.start_attached_crypto_fail", ultrawidelock_reader_start_attached() == -1);
 	s_ble_prepare_fail = true;
 	okc("e1.ble_prepare_fail", ultrawidelock_reader_ble_prepare() == NULL);
@@ -1451,7 +1451,7 @@ int main(void)
 		ph_initiate(&p, 32, 0); /* consumes the spare */
 		okc("e4.auth0_c", tx_next(&dn) != NULL);
 		s_cfg.cb.on_connected(33);
-		aliro_prim_host_fail_keygen = 1;
+		ultrawidelock_prim_host_fail_keygen = 1;
 		ph_initiate(&p, 33, 0);
 		okc("e4.keygen_fail_no_auth0", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(33); /* refills the spare */
@@ -1460,7 +1460,7 @@ int main(void)
 		ph_initiate(&p, 34, 0); /* consumes the refilled spare */
 		okc("e4.auth0_d", tx_next(&dn) != NULL);
 		s_cfg.cb.on_connected(35);
-		aliro_prim_host_fail_random_after = 1; /* keygen draws once, txid fails */
+		ultrawidelock_prim_host_fail_random_after = 1; /* keygen draws once, txid fails */
 		ph_initiate(&p, 35, 0);
 		okc("e4.random_fail_no_auth0", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(35);
@@ -1470,7 +1470,7 @@ int main(void)
 		s_cfg.cb.on_connected(36);
 		ph_initiate(&p, 36, 0);
 		okc("e4.auth0_e", ph_take_auth0(&p) == 0);
-		aliro_prim_host_fail_sign = 1;
+		ultrawidelock_prim_host_fail_sign = 1;
 		ph_auth0_resp(&p, 36, 0xE6);
 		okc("e4.sign_fail_no_auth1", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(36);
@@ -1561,7 +1561,7 @@ int main(void)
 		}
 
 		/* reader-status seal failure: nothing goes on the wire */
-		aliro_prim_host_fail_encrypt_after = 0;
+		ultrawidelock_prim_host_fail_encrypt_after = 0;
 		ultrawidelock_reader_notify_unlock(true);
 		okc("e6.notify_seal_fail", tx_pending() == 0);
 
@@ -1598,7 +1598,7 @@ int main(void)
 
 		/* group key lost: provisioning commits but the fast trial and the
 		 * standard AUTH1 both dead-end on the missing salt field 1 */
-		aliro_prim_host_fail_pub_from_priv = 1;
+		ultrawidelock_prim_host_fail_pub_from_priv = 1;
 		okc("e7.provision_no_group_x",
 		    ultrawidelock_reader_provision_identity(rid, sp, grk0) == 0);
 		s_cfg.cb.on_connected(44);
@@ -1664,7 +1664,7 @@ int main(void)
 		ph_initiate(&p, 49, 0);
 		okc("e8.auth0_d", ph_take_auth0(&p) == 0);
 		ph_auth0_resp(&p, 49, 0xF4);
-		aliro_prim_host_fail_encrypt_after = 1; /* phone seals once, reader fails */
+		ultrawidelock_prim_host_fail_encrypt_after = 1; /* phone seals once, reader fails */
 		okc("e8.auth1_resp_d", ph_auth1_resp(&p, 49, NULL, 0) == 0);
 		okc("e8.exchange_seal_fail_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(49);
@@ -1675,7 +1675,7 @@ int main(void)
 		okc("e8.auth0_e", ph_take_auth0(&p) == 0);
 		ph_auth0_resp(&p, 50, 0xF5);
 		okc("e8.auth1_resp_e", ph_auth1_resp(&p, 50, NULL, 0) == 0);
-		aliro_prim_host_fail_encrypt_after = 1; /* phone ok-body, then AP seal */
+		ultrawidelock_prim_host_fail_encrypt_after = 1; /* phone ok-body, then AP seal */
 		okc("e8.exchange_resp_e", ph_exchange_resp(&p, 50) == 0);
 		okc("e8.ap_seal_fail_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(50);
