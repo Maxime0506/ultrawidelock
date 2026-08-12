@@ -10,7 +10,7 @@
 #include "protocol/ble_timeout.h"
 #include "protocol/nfc_select.h"
 
-#include "aliro_stepup.h"
+#include "ultrawidelock_stepup.h"
 
 #include <aliro/aliro.h>
 #include <aliro/interface.h>
@@ -1246,11 +1246,11 @@ AliroError HandleExchangeResponse(SessionContext &session, Data data)
 AliroError SendNextEnvelope(SessionContext &session)
 {
 	size_t commandLength = 0;
-	if (aliro_stepup_build_envelope_ex(
+	if (ultrawidelock_stepup_build_envelope_ex(
 		    session.mExchangeBuffer.data(), session.mExchangeLength,
 		    &session.mExchangeOffset, session.mMaxCommandData, session.mMaxResponseData,
 		    session.mUseExtendedApdus, session.mTxBuffer.data(), session.mTxBuffer.size(),
-		    &commandLength, &session.mLastEnvelope) != ALIRO_STEPUP_OK) {
+		    &commandLength, &session.mLastEnvelope) != ULTRAWIDELOCK_STEPUP_OK) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 #ifdef CONFIG_WOZ_ALIRO_TRACE
@@ -1276,7 +1276,7 @@ AliroError SendNextEnvelope(SessionContext &session)
 AliroError SendGetResponse(SessionContext &session, size_t expectedLength)
 {
 	size_t commandLength = 0;
-	if (aliro_stepup_build_get_response_ex(expectedLength, session.mTxBuffer.data(),
+	if (ultrawidelock_stepup_build_get_response_ex(expectedLength, session.mTxBuffer.data(),
 					       session.mTxBuffer.size(), &commandLength) != 0) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
@@ -1319,7 +1319,7 @@ AliroError StartStepUpExchange(SessionContext &session)
 	session.mReaderCounter = kInitialCounter;
 	session.mDeviceCounter = kInitialCounter;
 	size_t requestLength = 0;
-	if (aliro_stepup_build_device_request_ex(
+	if (ultrawidelock_stepup_build_device_request_ex(
 		    session.mRequestedElement.data(), session.mRequestedElementLength,
 		    session.mIntentToStore, session.mPlaintextBuffer.data(),
 		    session.mPlaintextBuffer.size(), &requestLength) != 0) {
@@ -1363,12 +1363,12 @@ AliroError StartStepUpExchange(SessionContext &session)
 #endif
 
 	size_t sessionDataLength = 0;
-	if (aliro_stepup_wrap_sessiondata_raw(session.mSessionDataBuffer.data(),
+	if (ultrawidelock_stepup_wrap_sessiondata_raw(session.mSessionDataBuffer.data(),
 					      requestLength + tag.size(),
 					      session.mPlaintextBuffer.data(),
 					      session.mPlaintextBuffer.size(),
 					      &sessionDataLength) != 0 ||
-	    aliro_stepup_wrap_do53(session.mPlaintextBuffer.data(), sessionDataLength,
+	    ultrawidelock_stepup_wrap_do53(session.mPlaintextBuffer.data(), sessionDataLength,
 				   session.mExchangeBuffer.data(), session.mExchangeBuffer.size(),
 				   &session.mExchangeLength) != 0) {
 		return ALIRO_NO_MEMORY;
@@ -1401,7 +1401,8 @@ size_t EncodeBstrHead(size_t length, uint8_t *output)
 
 /**
  * The Access-Document field shape this session layer consumes, mapped from the shared
- * aliro_stepup_parse.c decode. All pointers are slices into the parse scratch / response buffer.
+ * ultrawidelock_stepup_parse.c decode. All pointers are slices into the parse scratch / response
+ * buffer.
  */
 struct AccessDocumentView {
 	const uint8_t *device_public_key; /* 65-byte uncompressed point */
@@ -1434,18 +1435,18 @@ struct AccessDocumentView {
  * end-entity certificate, an EC2/P-256 deviceKey, the requested element with its valueDigest, and
  * complete validity timestamps. Returns 0 on success, -1 on any missing or mismatched field.
  */
-int MapAccessDocument(const struct aliro_stepup_doc &doc, const uint8_t *requested,
+int MapAccessDocument(const struct ultrawidelock_stepup_doc &doc, const uint8_t *requested,
 		      size_t requestedLength, AccessDocumentView &out)
 {
 	if (!doc.have_document || doc.status != 0 ||
 	    std::strcmp(doc.version, "1.0") != 0 ||
-	    std::strcmp(doc.doc_type, ALIRO_STEPUP_DOCTYPE_ACCESS) != 0 ||
-	    std::strcmp(doc.mso_doc_type, ALIRO_STEPUP_DOCTYPE_ACCESS) != 0 ||
-	    std::strcmp(doc.name_space, ALIRO_STEPUP_DOCTYPE_ACCESS) != 0 ||
+	    std::strcmp(doc.doc_type, ULTRAWIDELOCK_STEPUP_DOCTYPE_ACCESS) != 0 ||
+	    std::strcmp(doc.mso_doc_type, ULTRAWIDELOCK_STEPUP_DOCTYPE_ACCESS) != 0 ||
+	    std::strcmp(doc.name_space, ULTRAWIDELOCK_STEPUP_DOCTYPE_ACCESS) != 0 ||
 	    std::strcmp(doc.digest_alg, "SHA-256") != 0) {
 		return -1;
 	}
-	const struct aliro_stepup_item *item = nullptr;
+	const struct ultrawidelock_stepup_item *item = nullptr;
 	for (size_t i = 0; i < doc.n_items; ++i) {
 		if (std::strlen(doc.items[i].elem_id) == requestedLength &&
 		    std::memcmp(doc.items[i].elem_id, requested, requestedLength) == 0) {
@@ -1456,7 +1457,7 @@ int MapAccessDocument(const struct aliro_stepup_doc &doc, const uint8_t *request
 	if (item == nullptr || item->value == nullptr) {
 		return -1;
 	}
-	const struct aliro_stepup_digest *digest = nullptr;
+	const struct ultrawidelock_stepup_digest *digest = nullptr;
 	for (size_t i = 0; i < doc.n_digests; ++i) {
 		if (doc.digests[i].id == item->digest_id) {
 			digest = &doc.digests[i];
@@ -1526,9 +1527,9 @@ AliroError ValidateAndProcessAccessDocument(SessionContext &session, const uint8
 	/* Parse scratch: the full DeviceResponse decode is a few KiB of slices and
 	 * digests, too large for the protocol worker stack. All session APDU
 	 * processing runs on one context, so a single static scratch is safe. */
-	static struct aliro_stepup_doc stepUpDoc;
+	static struct ultrawidelock_stepup_doc stepUpDoc;
 	AccessDocumentView parsed;
-	int parseStatus = aliro_stepup_parse_response(deviceResponse, deviceResponseLength,
+	int parseStatus = ultrawidelock_stepup_parse_response(deviceResponse, deviceResponseLength,
 						      &stepUpDoc);
 	if (parseStatus == 0) {
 		parseStatus = MapAccessDocument(stepUpDoc, session.mRequestedElement.data(),
@@ -1693,13 +1694,13 @@ AliroError FinishStepUpResponse(SessionContext &session)
 #endif
 	const uint8_t *sessionData = nullptr;
 	size_t sessionDataLength = 0;
-	if (aliro_stepup_unwrap_do53(session.mExchangeBuffer.data(), session.mResponseLength,
+	if (ultrawidelock_stepup_unwrap_do53(session.mExchangeBuffer.data(), session.mResponseLength,
 				     &sessionData, &sessionDataLength) != 0) {
 		return ALIRO_INVALID_DATA_FORMAT;
 	}
 	const uint8_t *ciphertext = nullptr;
 	size_t ciphertextLength = 0;
-	if (aliro_stepup_unwrap_sessiondata_raw(sessionData, sessionDataLength, &ciphertext,
+	if (ultrawidelock_stepup_unwrap_sessiondata_raw(sessionData, sessionDataLength, &ciphertext,
 						&ciphertextLength) != 0 ||
 	    ciphertextLength < CryptoTypes::kAuthenticationTagLength) {
 		return ALIRO_INVALID_DATA_FORMAT;
@@ -1751,13 +1752,13 @@ AliroError CollectStepUpResponse(SessionContext &session, Data data)
 	LOG_HEXDUMP_INF(data.mData, data.mLength, "ALIRO_TRACE STEP_UP_APDU_RX bytes:");
 #endif
 	size_t nextLength = 0;
-	const int result = aliro_stepup_collect_response(
+	const int result = ultrawidelock_stepup_collect_response(
 		data.mData, data.mLength, session.mExchangeBuffer.data(),
 		session.mExchangeBuffer.size(), &session.mResponseLength, &nextLength);
-	if (result == ALIRO_STEPUP_MORE_RESPONSE) {
+	if (result == ULTRAWIDELOCK_STEPUP_MORE_RESPONSE) {
 		return SendGetResponse(session, nextLength);
 	}
-	if (result != ALIRO_STEPUP_OK) {
+	if (result != ULTRAWIDELOCK_STEPUP_OK) {
 		return ALIRO_APDU_STATUS_INVALID;
 	}
 	AliroError error = FinishStepUpResponse(session);

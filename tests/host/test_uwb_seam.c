@@ -2,7 +2,7 @@
  * @file test_uwb_seam.c — the decadriver seam's engine-less tier.
  *
  * File under test: modules/ultrawidelock_uwb/include/uwb_seam.h, compiled WITHOUT
- * CONFIG_WOZ_ALIRO -- the inline-to-decadriver half that no other build
+ * CONFIG_ULTRAWIDELOCK_CRED -- the inline-to-decadriver half that no other build
  * compiles. Its own binary because one header compiled two ways in one binary
  * breaks coverage merging. It proves only that each helper forwards to the
  * decadriver entry point it claims, argument and return unchanged; the

@@ -9,8 +9,8 @@
  * Two omissions carry over and matter:
  *
  * PSA_WANT_ALG_HKDF is absent. It depends on HMAC, which this image does not
- * enable, so it would resolve to nothing. Key derivation is aliro_hkdf() in
- * modules/woz_aliro/src/aliro_hash.c, pure C11 and already linked.
+ * enable, so it would resolve to nothing. Key derivation is ultrawidelock_hkdf() in
+ * modules/ultrawidelock_cred/src/ultrawidelock_hash.c, pure C11 and already linked.
  *
  * PSA persistent-key storage is absent, and unlike the oracle this port can
  * afford that. The oracle must keep MBEDTLS_PSA_CRYPTO_STORAGE_C because
@@ -18,7 +18,7 @@
  * that file imports keys at PSA_KEY_LIFETIME_PERSISTENT unconditionally. This
  * port leaves OpenThread on its upstream default of
  * OPENTHREAD_CONFIG_CRYPTO_LIB_MBEDTLS, so that caller does not exist, and no
- * tracked caller asks for a persistent lifetime: aliro_prim_psa.c imports,
+ * tracked caller asks for a persistent lifetime: ultrawidelock_prim_psa.c imports,
  * uses and destroys volatile keys, and the reader identity is a record in the
  * key-value store rather than a PSA key. Adding OT PSA later means adding
  * storage back and a PSA ITS backend with it -- read the oracle's note before

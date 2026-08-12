@@ -348,7 +348,7 @@ add_library(woz_storage STATIC
   "${WOZ_PORT_DIR}/board/flash_freertos.c"
   "${WOZ_PORT_DIR}/storage/kv_flash_freertos.c"
   "${WOZ_PORT_DIR}/storage/aliro_prov_kv.c"
-  # aliro_prov.c -- the portable half of the provisioning record -- was listed
+  # ultrawidelock_prov.c -- the portable half of the provisioning record -- was listed
   # here while this was the only layer that needed it. It is manifested in
   # woz_aliro/roles/reader_policy.list and now comes in with the rest of that
   # role, below: naming it in two places would put one object in two archives.
@@ -370,7 +370,7 @@ include("${WOZ_PORT_DIR}/uwb/uwb.cmake")
 # ----------------------------------------------------------------------------
 # Aliro reader: the transaction engine, its BLE transport, and the ranging glue.
 #
-# After the UWB layer because it calls into it: aliro_ranging.c drives the
+# After the UWB layer because it calls into it: ultrawidelock_ranging.c drives the
 # responder through the contract in <ultrawidelock/uwb.h>.
 #
 # Every source here comes from a role manifest, including the NimBLE transport

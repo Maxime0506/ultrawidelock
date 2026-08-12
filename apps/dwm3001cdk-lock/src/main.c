@@ -18,8 +18,8 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/usb/usb_device.h>
 
-#include "aliro_approach.h"
-#include "aliro_prov.h" /* aliro_prov_erase, for the factory-reset button */
+#include "ultrawidelock_approach.h"
+#include "ultrawidelock_prov.h" /* ultrawidelock_prov_erase, for the factory-reset button */
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
@@ -36,7 +36,7 @@
 #include "ultrawidelock_side.h" /* fail-closed OUTSIDE-only passive unlock gate */
 #include "ultrawidelock_side_log.h"
 #include "side_feed.h"
-#if defined(CONFIG_WOZ_ALIRO_LAB)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_LAB)
 #include "woz_log.h"
 #include "woz_port.h"
 #endif
@@ -207,7 +207,7 @@ static void provisioning_mode(void)
  * debounce and no thread on a part at 96% RAM, and cannot fire while a walk-up
  * is in flight.
  *
- * The Thread credentials are deliberately NOT erased -- see aliro_prov_erase().
+ * The Thread credentials are deliberately NOT erased -- see ultrawidelock_prov_erase().
  */
 #if IS_ENABLED(CONFIG_ALIRO_FACTORY_RESET_BUTTON)
 /**
@@ -239,7 +239,7 @@ static void factory_reset_if_requested(void)
 	 */
 	status_led_boot_blink();
 
-	(void)aliro_prov_erase();
+	(void)ultrawidelock_prov_erase();
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 	(void)matter_fab_erase();
 #endif
@@ -275,10 +275,10 @@ int main(void)
 	factory_reset_if_requested();
 #endif
 
-	int rc = aliro_reader_start();
+	int rc = ultrawidelock_reader_start();
 
 	if (rc != 0) {
-		LOG_ERR("aliro_reader_start rc=%d", rc);
+		LOG_ERR("ultrawidelock_reader_start rc=%d", rc);
 		/* main() is about to return and this board has no console, so a
 		 * solid D12 is the only account anyone gets of why it does
 		 * nothing. The LED tick lives on the system work queue and
@@ -316,18 +316,18 @@ int main(void)
 
 	/* Bridge the trusted UWB range stream to the Wallet grant.
 	 *
-	 * aliro_reader_start brings up BLE and the CCC/FiRa ranging engine, and the engine
+	 * ultrawidelock_reader_start brings up BLE and the CCC/FiRa ranging engine, and the engine
 	 * latches a trust-gated distance (fira_session) on every good block -- but nothing
 	 * consumes it on its own. The shipped Matter lock wires this in its app_main
 	 * (apps/esp32-matter-lock): trusted range -> approach controller -> on UNLOCK,
-	 * aliro_reader_notify_unlock(true), which sends Reader Status = Unsecured and animates
+	 * ultrawidelock_reader_notify_unlock(true), which sends Reader Status = Unsecured and animates
 	 * the phone. The standalone reader has to do the same or a perfectly good range never
 	 * becomes an unlock. There is no bolt on this board: the grant IS the product.
 	 *
 	 * Static: the struct carries two 5-entry sample windows plus the filter and
 	 * grew past trivial; the 4 KB main stack is not the place to discover that,
 	 * and in .bss the cost shows up in the measured RAM budget instead. */
-	static struct aliro_approach approach;
+	static struct ultrawidelock_approach approach;
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR)
 	/*
 	 * Second-anchor geometry. Nothing feeds this yet -- the satellite
@@ -401,8 +401,8 @@ int main(void)
 	/* Factory defaults: unlock 100 cm, relock 250 cm, and a trajectory gate
 	 * at 180 cm -- no auto-unlock until the credential has been seen that
 	 * far out in this session, so a phone that was already at the door when
-	 * ranging started does not open it. See aliro_approach_cfg::approach_cm. */
-	aliro_approach_init(&approach, NULL);
+	 * ranging started does not open it. See ultrawidelock_approach_cfg::approach_cm. */
+	ultrawidelock_approach_init(&approach, NULL);
 
 	/* Same seam the ESP32 matter-lock uses (app_main.cpp on_uwb_range): the engine
 	 * signals, this thread decides. Both lines run before the listener can fire --
@@ -424,16 +424,16 @@ int main(void)
 	bool present = false;
 	bool granted = false;
 	/* Rising-edge detector for the Aliro session, which is what arms the
-	 * trajectory gate. See aliro_approach_session_up(). */
+	 * trajectory gate. See ultrawidelock_approach_session_up(). */
 	bool session_was_up = false;
 
 	while (1) {
 		int64_t now = k_uptime_get();
 		uint32_t gen = ultrawidelock_uwb_range_generation();
 		int32_t cm = 0;
-		enum aliro_approach_action act;
+		enum ultrawidelock_approach_action act;
 
-		aliro_reader_status_tick(now);
+		ultrawidelock_reader_status_tick(now);
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 		{
 			struct ultrawidelock_side_features feat;
@@ -472,7 +472,7 @@ int main(void)
 			 * the "walk in and stay" case with no way back to Secured:
 			 * iOS stops ranging once the phone is still, and the
 			 * departure path deliberately refuses to relock from a
-			 * last measurement INSIDE the radius (aliro_approach.c,
+			 * last measurement INSIDE the radius (ultrawidelock_approach.c,
 			 * far_silence_ms) so it cannot throw the bolt at a
 			 * stationary owner. MEASURED 2026-08-11: grant, then
 			 * "UWB session IDLE" at ~112 cm, then nothing -- the door
@@ -504,14 +504,14 @@ int main(void)
 				LOG_INF("passive unlock revoked: side=%u flags=0x%02x conf=%u",
 					(unsigned)side_dec.side, side_dec.flags,
 					side_dec.confidence);
-				aliro_reader_notify_unlock(false);
+				ultrawidelock_reader_notify_unlock(false);
 				status_led_signal(STATUS_LED_UNLOCKED, false);
 				granted = false;
 				/* Same state repair as a refusal: the controller still
 				 * believes the bolt it opened is open. Without this it
 				 * never offers again until a departure past relock_cm,
 				 * which is the very thing that is not coming. */
-				aliro_approach_veto(&approach);
+				ultrawidelock_approach_veto(&approach);
 			}
 		}
 #endif
@@ -540,7 +540,7 @@ int main(void)
 			       (now - led_range_ms) < ALIRO_LED_RANGE_HOLD_MS;
 
 		status_led_signal(STATUS_LED_RANGING, ranging);
-		const bool session_now = aliro_reader_session_active();
+		const bool session_now = ultrawidelock_reader_session_active();
 
 		status_led_signal(STATUS_LED_SESSION, session_now);
 		if (session_now && !session_was_up) {
@@ -552,7 +552,7 @@ int main(void)
 			 * this architecture produces -- UWB starts when the phone is
 			 * already at the door, so a 180 cm range never arrives.
 			 */
-			aliro_approach_session_up(&approach);
+			ultrawidelock_approach_session_up(&approach);
 		}
 		session_was_up = session_now;
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
@@ -576,7 +576,7 @@ int main(void)
 			 * for still says something -- about DEPARTURE only. Far
 			 * ranges are the ones it declines, so without this the
 			 * walk-away relock can never fire; see
-			 * aliro_approach_observe_departure() for why reading an
+			 * ultrawidelock_approach_observe_departure() for why reading an
 			 * unvouched range is safe in that one direction.
 			 *
 			 * last_gen is deliberately NOT consumed here. Trust can
@@ -591,16 +591,16 @@ int main(void)
 
 				last_obs_gen = gen;
 				if (ultrawidelock_uwb_last_range_cm(&raw)) {
-					aliro_approach_observe_departure(&approach, now, raw);
+					ultrawidelock_approach_observe_departure(&approach, now, raw);
 				}
 			}
-			act = aliro_approach_tick(&approach, now);
+			act = ultrawidelock_approach_tick(&approach, now);
 		}
 
 		ml_feed_vote_trace(&approach, now);
 
 		switch (act) {
-		case ALIRO_APPROACH_UNLOCK_PREDICT:
+		case ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT:
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR) && !IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 			/*
 			 * Legacy two-anchor helper: gates PREDICTION only and
@@ -613,7 +613,7 @@ int main(void)
 			}
 #endif
 			/* fall through */
-		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+		case ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD:
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 			/*
 			 * Safety gate for ALL passive approach unlocks. Requires
@@ -630,7 +630,7 @@ int main(void)
 				 * before the witnesses had time to commit a side,
 				 * killed auto-unlock for the whole approach.
 				 */
-				aliro_approach_veto(&approach);
+				ultrawidelock_approach_veto(&approach);
 				/* Retried on every trusted range now, so rate-limit
 				 * the line or it buries the RTT console. */
 				if ((now - side_deny_log_ms) >= SIDE_DENY_LOG_MS) {
@@ -639,7 +639,7 @@ int main(void)
 						(unsigned)side_dec.side, side_dec.confidence,
 						side_dec.flags);
 				}
-#if defined(CONFIG_WOZ_ALIRO_LAB)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_LAB)
 				woz_printf("[ALAB] t=%lld ev=side.deny side=%u conf=%u flags=%u\n",
 					   woz_uptime_us(), (unsigned)side_dec.side,
 					   side_dec.confidence, side_dec.flags);
@@ -647,16 +647,16 @@ int main(void)
 				break;
 			}
 #endif
-			aliro_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
+			ultrawidelock_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			status_led_signal(STATUS_LED_UNLOCKED, true);
 			granted = true;
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 			heap_peak_log("unlock");
 #endif
 			break;
-		case ALIRO_APPROACH_RELOCK_DEPART:
-		case ALIRO_APPROACH_RELOCK_ABORT:
-			aliro_reader_notify_unlock(false); /* Reader Status -> Secured */
+		case ULTRAWIDELOCK_APPROACH_RELOCK_DEPART:
+		case ULTRAWIDELOCK_APPROACH_RELOCK_ABORT:
+			ultrawidelock_reader_notify_unlock(false); /* Reader Status -> Secured */
 			status_led_signal(STATUS_LED_UNLOCKED, false);
 			granted = false;
 			break;
@@ -667,10 +667,10 @@ int main(void)
 		/* Departure: the peer's Aliro session ended (walked away / phone pocketed). iOS
 		 * ranging silence alone does NOT mean departed (a still phone stops ranging too),
 		 * so gate on the session, not on range age. Tell Wallet Secured once and reset. */
-		if (present && !aliro_reader_session_active()) {
+		if (present && !ultrawidelock_reader_session_active()) {
 			/*
 			 * Reaching here with the bolt still open means the silence
-			 * relock in aliro_approach_tick() did NOT fire, and this is
+			 * relock in ultrawidelock_approach_tick() did NOT fire, and this is
 			 * the only moment that proves it: the Secured is about to go
 			 * out with no session left to carry it.
 			 *
@@ -680,7 +680,7 @@ int main(void)
 			 * the raw latch either way, so a walk-away can show 390 cm
 			 * on screen while the controller last saw 199 cm. Printing
 			 * both the value and its age says which of the two gates
-			 * held. MUST run before aliro_approach_gone(), which
+			 * held. MUST run before ultrawidelock_approach_gone(), which
 			 * re-inits the struct and erases the evidence.
 			 */
 			if (granted) {
@@ -692,9 +692,9 @@ int main(void)
 						: 0u,
 					approach.cfg.relock_cm, approach.cfg.far_silence_ms);
 			}
-			(void)aliro_approach_gone(&approach);
+			(void)ultrawidelock_approach_gone(&approach);
 			if (granted) {
-				aliro_reader_notify_unlock(false);
+				ultrawidelock_reader_notify_unlock(false);
 				status_led_signal(STATUS_LED_UNLOCKED, false);
 				granted = false;
 			}

@@ -9,9 +9,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_assert.h"
-#include "aliro_assert_ec.h"
-#include "aliro_prim.h"
+#include "ultrawidelock_assert.h"
+#include "ultrawidelock_assert_ec.h"
+#include "ultrawidelock_prim.h"
 #include <ultrawidelock/reader.h>
 #include "nvs.h"
 #include "presence_link.h"
@@ -32,39 +32,40 @@ static void okc(const char *name, bool condition)
 /* ---- crypto + persistent-key doubles ---------------------------------- */
 
 static int sign_calls;
-static uint8_t signed_prefix[ALIRO_ASSERT_SIGNED_LEN];
+static uint8_t signed_prefix[ULTRAWIDELOCK_ASSERT_SIGNED_LEN];
 
-int aliro_prim_init(void)
+int ultrawidelock_prim_init(void)
 {
 	return 0;
 }
 
-int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])
+int ultrawidelock_ec_p256_keygen(uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
+				 uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
-	memset(priv, 0x33, ALIRO_P256_SCALAR);
+	memset(priv, 0x33, ULTRAWIDELOCK_P256_SCALAR);
 	pub[0] = 0x04;
-	memset(pub + 1, 0x44, ALIRO_P256_POINT - 1);
+	memset(pub + 1, 0x44, ULTRAWIDELOCK_P256_POINT - 1);
 	return 0;
 }
 
-int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
-				uint8_t pub[ALIRO_P256_POINT])
+int ultrawidelock_ec_p256_pub_from_priv(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
+				uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
 	(void)priv;
 	pub[0] = 0x04;
-	memset(pub + 1, 0x44, ALIRO_P256_POINT - 1);
+	memset(pub + 1, 0x44, ULTRAWIDELOCK_P256_POINT - 1);
 	return 0;
 }
 
-int aliro_assert_ec_sign(void *ctx, const uint8_t *msg, size_t msg_len,
-			 uint8_t sig[ALIRO_ASSERT_SIG_LEN])
+int ultrawidelock_assert_ec_sign(void *ctx, const uint8_t *msg, size_t msg_len,
+			 uint8_t sig[ULTRAWIDELOCK_ASSERT_SIG_LEN])
 {
 	(void)ctx;
 	if (msg_len != sizeof(signed_prefix)) {
 		return -1;
 	}
 	memcpy(signed_prefix, msg, msg_len);
-	memset(sig, 0x5a, ALIRO_ASSERT_SIG_LEN);
+	memset(sig, 0x5a, ULTRAWIDELOCK_ASSERT_SIG_LEN);
 	sign_calls++;
 	return 0;
 }
@@ -80,15 +81,15 @@ static int32_t range_cm;
 static uint32_t range_generation;
 static int restart_calls;
 static int wallet_grants;
-static uint8_t expected_pub[ALIRO_ASSERT_PUB_LEN];
-static uint8_t actual_pub[ALIRO_ASSERT_PUB_LEN];
+static uint8_t expected_pub[ULTRAWIDELOCK_ASSERT_PUB_LEN];
+static uint8_t actual_pub[ULTRAWIDELOCK_ASSERT_PUB_LEN];
 
-void aliro_reader_notify_unlock(bool unsecured)
+void ultrawidelock_reader_notify_unlock(bool unsecured)
 {
 	wallet_grants += unsecured ? 1 : -1;
 }
 
-bool aliro_reader_presence_expected_credential(uint8_t out[ALIRO_ASSERT_PUB_LEN])
+bool ultrawidelock_reader_presence_expected_credential(uint8_t out[ULTRAWIDELOCK_ASSERT_PUB_LEN])
 {
 	if (have_expected) {
 		memcpy(out, expected_pub, sizeof(expected_pub));
@@ -96,13 +97,13 @@ bool aliro_reader_presence_expected_credential(uint8_t out[ALIRO_ASSERT_PUB_LEN]
 	return have_expected;
 }
 
-uint32_t aliro_reader_presence_restart(void)
+uint32_t ultrawidelock_reader_presence_restart(void)
 {
 	restart_calls++;
 	return (uint32_t)restart_calls;
 }
 
-bool aliro_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generation)
+bool ultrawidelock_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generation)
 {
 	if (!reset_ready || request != (uint32_t)restart_calls) {
 		return false;
@@ -111,8 +112,8 @@ bool aliro_reader_presence_checkpoint(uint32_t request, uint32_t *auth_generatio
 	return true;
 }
 
-bool aliro_reader_presence_authenticated_after(uint32_t checkpoint,
-					       uint8_t out[ALIRO_ASSERT_PUB_LEN])
+bool ultrawidelock_reader_presence_authenticated_after(uint32_t checkpoint,
+					       uint8_t out[ULTRAWIDELOCK_ASSERT_PUB_LEN])
 {
 	if (!auth_fresh || checkpoint != 41u) {
 		return false;
@@ -168,7 +169,7 @@ static int prove(void)
 
 int main(void)
 {
-	uint8_t expected_id[ALIRO_ASSERT_CREDID_LEN];
+	uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN];
 
 	fake_nvs_reset();
 	presence_link_init(true);
@@ -177,18 +178,18 @@ int main(void)
 	reset_scenario();
 	okc("success.rc", prove() == 0);
 	okc("success.signed_once", sign_calls == 1);
-	okc("success.present", signed_prefix[4] == ALIRO_PRESENCE_PRESENT);
+	okc("success.present", signed_prefix[4] == ULTRAWIDELOCK_PRESENCE_PRESENT);
 	okc("success.nonce", memcmp(signed_prefix + 5,
 				    "\x00\x01\x02\x03\x04\x05\x06\x07"
 				    "\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
-				    ALIRO_ASSERT_NONCE_LEN) == 0);
-	aliro_assert_cred_id(expected_pub, expected_id);
+				    ULTRAWIDELOCK_ASSERT_NONCE_LEN) == 0);
+	ultrawidelock_assert_cred_id(expected_pub, expected_id);
 	okc("success.credential", memcmp(signed_prefix + 21, expected_id,
-					 ALIRO_ASSERT_CREDID_LEN) == 0);
+					 ULTRAWIDELOCK_ASSERT_CREDID_LEN) == 0);
 	okc("success.distance", signed_prefix[29] == 0 && signed_prefix[30] == 25);
 	/* The evidence the range arrived with reaches the signed bytes, rather than
 	 * the firmware asserting a fixed "all good" of its own. */
-	okc("success.range_flags", signed_prefix[31] == ALIRO_ASSERT_RANGE_STS_OK);
+	okc("success.range_flags", signed_prefix[31] == ULTRAWIDELOCK_ASSERT_RANGE_STS_OK);
 	okc("success.sts_quality", signed_prefix[32] == 0 && signed_prefix[33] == 120);
 	okc("success.trust_level", signed_prefix[34] == 3);
 	okc("success.wallet_after_sign", wallet_grants == 1);

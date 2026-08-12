@@ -356,7 +356,7 @@ do_build() {
     -DSB_EXTRA_CONF_FILE="$sb_conf"
     -DZEPHYR_EXTRA_MODULES="$TREE/modules/ultrawidelock_uwb;$TREE/modules/ultrawidelock_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_ULTRAWIDELOCK_UWB=y -DCONFIG_ULTRAWIDELOCK_UWB_RESPONDER=y
-    -DCONFIG_WOZ_ALIRO=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
+    -DCONFIG_ULTRAWIDELOCK_CRED=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n
   )
   [ -n "$selftest" ] && dflags+=("$selftest")

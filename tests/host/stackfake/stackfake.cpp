@@ -7,8 +7,8 @@
 #include <cstring>
 
 extern "C" {
-#include "aliro_hash.h"
-#include "aliro_prim.h"
+#include "ultrawidelock_hash.h"
+#include "ultrawidelock_prim.h"
 }
 
 struct stackfake_state stackfake;
@@ -191,7 +191,7 @@ size_t stackfake_seal_as_device(uint32_t key_id, uint32_t counter, const uint8_t
 		return 0;
 	}
 	device_nonce(counter, nonce);
-	if (aliro_aes256_gcm_encrypt(slot->bytes, nonce, sizeof(nonce), aad, aad_length, plaintext,
+	if (ultrawidelock_aes256_gcm_encrypt(slot->bytes, nonce, sizeof(nonce), aad, aad_length, plaintext,
 				     length, out, out + length, 16) != 0) {
 		return 0;
 	}
@@ -677,7 +677,7 @@ AliroError RawKeyAgreement(CryptoTypes::KeyId keyId, const CryptoTypes::PublicKe
 	return ALIRO_NO_ERROR;
 }
 
-/* REAL HKDF from here down: modules/woz_aliro/src/aliro_hash.c, pinned against
+/* REAL HKDF from here down: modules/ultrawidelock_cred/src/ultrawidelock_hash.c, pinned against
  * published vectors by test_aliro_hash.c. A wrong salt or a wrong info string
  * now produces genuinely different key bytes. */
 AliroError DeriveSharedKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t infoLength,
@@ -699,7 +699,7 @@ AliroError DeriveSharedKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t
 	if (slot == nullptr) {
 		return ALIRO_INVALID_STATE;
 	}
-	if (aliro_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, out,
+	if (ultrawidelock_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, out,
 		       sizeof(out)) != 0) {
 		return ALIRO_ERROR_INTERNAL;
 	}
@@ -730,7 +730,7 @@ AliroError DeriveSymmetricKey(CryptoTypes::KeyId keyId, const uint8_t *info, siz
 	if (slot == nullptr) {
 		return ALIRO_INVALID_STATE;
 	}
-	if (aliro_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, out,
+	if (ultrawidelock_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, out,
 		       sizeof(out)) != 0) {
 		return ALIRO_ERROR_INTERNAL;
 	}
@@ -766,7 +766,7 @@ AliroError DeriveRawKey(CryptoTypes::KeyId keyId, const uint8_t *info, size_t in
 	if (slot == nullptr) {
 		return ALIRO_INVALID_STATE;
 	}
-	return aliro_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, derivedKey,
+	return ultrawidelock_hkdf(salt, saltLength, slot->bytes, slot->len, info, infoLength, derivedKey,
 			  derivedKeyLength) == 0
 		       ? AliroError(ALIRO_NO_ERROR)
 		       : AliroError(ALIRO_ERROR_INTERNAL);
@@ -792,7 +792,7 @@ AliroError AeadEncrypt(CryptoTypes::KeyId keyId, const uint8_t *plainTxt, size_t
 	if (slot == nullptr) {
 		return ALIRO_INVALID_STATE;
 	}
-	return aliro_aes256_gcm_encrypt(slot->bytes, nonce.data(), nonce.size(), additionalData,
+	return ultrawidelock_aes256_gcm_encrypt(slot->bytes, nonce.data(), nonce.size(), additionalData,
 					additionalDataLength, plainTxt, plainTxtLength, cipherText,
 					authTag.data(), authTag.size()) == 0
 		       ? AliroError(ALIRO_NO_ERROR)
@@ -823,7 +823,7 @@ AliroError AeadDecrypt(CryptoTypes::KeyId keyId, const uint8_t *cipherTextWithTa
 	if (slot == nullptr) {
 		return ALIRO_INVALID_STATE;
 	}
-	if (aliro_aes256_gcm_decrypt(slot->bytes, nonce.data(), nonce.size(), additionalData,
+	if (ultrawidelock_aes256_gcm_decrypt(slot->bytes, nonce.data(), nonce.size(), additionalData,
 				     additionalDataLength, cipherTextWithTag, bodyLength,
 				     cipherTextWithTag + bodyLength,
 				     CryptoTypes::kAuthenticationTagLength, plainText) != 0) {
@@ -847,7 +847,7 @@ AliroError Encrypt(const uint8_t *plainText, size_t plainTextLength, uint8_t *ci
 	if (plainTextLength != 16U) {
 		return ALIRO_INVALID_ARGUMENT;
 	}
-	return aliro_aes128_ecb_encrypt(grk, plainText, cipherText) == 0
+	return ultrawidelock_aes128_ecb_encrypt(grk, plainText, cipherText) == 0
 		       ? AliroError(ALIRO_NO_ERROR)
 		       : AliroError(ALIRO_ERROR_INTERNAL);
 }
@@ -859,7 +859,7 @@ AliroError Sha256(const uint8_t *data, size_t dataLength, CryptoTypes::Sha256Has
 	if (stackfake.sha256_ret != 0) {
 		return static_cast<AliroErrorCode>(stackfake.sha256_ret);
 	}
-	aliro_sha256(data, dataLength, hash.data());
+	ultrawidelock_sha256(data, dataLength, hash.data());
 	return ALIRO_NO_ERROR;
 }
 

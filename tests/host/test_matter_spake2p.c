@@ -18,7 +18,7 @@
  */
 #include <string.h>
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 #include "matter_spake2p.h"
 
 #include "test.h"
@@ -195,7 +195,7 @@ void test_matter_spake2p(void)
 		{
 			uint8_t digest[MATTER_SPAKE_HASH_LEN];
 
-			aliro_sha256(tt, tt_len, digest);
+			ultrawidelock_sha256(tt, tt_len, digest);
 			t_vec("SHA256(TT)", digest, sizeof(digest),
 			      "f4b00baab8ceefecb46539991c7cc9dd4d67d1b9b43f946c82cd2c61f443dc9f");
 		}

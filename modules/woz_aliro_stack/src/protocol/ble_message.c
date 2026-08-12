@@ -81,7 +81,7 @@ int woz_aliro_ble_parse_initiate_access(const struct woz_aliro_ble_message *mess
 	const size_t encoded_length = message->payload[1];
 	struct woz_aliro_tlv tlv;
 	size_t offset = 0;
-	if (woz_aliro_tlv_next(encoded, encoded_length, &offset, &tlv) != WOZ_ALIRO_TLV_OK ||
+	if (woz_aliro_tlv_next(encoded, encoded_length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK ||
 	    tlv.tag != 0xa5 || offset != encoded_length) {
 		return WOZ_ALIRO_BLE_MALFORMED;
 	}

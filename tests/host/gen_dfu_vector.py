@@ -11,7 +11,7 @@ WHY A VECTOR AND NOT A LIVE CHECK. dfu_receiver.c authenticates a staged update
 with psa_verify_message() over ECDSA-P256, and there is no P-256 anywhere in
 this repo's host build (see the banner in tests/shared/aliro_prim_host.c:
 its EC block is a deliberate stand-in, and real curve math runs only in
-aliro_prim_psa.c on target). A fake curve would prove nothing.
+ultrawidelock_prim_psa.c on target). A fake curve would prove nothing.
 
 So the curve runs HERE, once, in python's `cryptography`, over the exact 32
 header bytes the suite stages. psafake then replays the result: it accepts that

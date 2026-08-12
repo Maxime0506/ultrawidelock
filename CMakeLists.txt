@@ -19,7 +19,7 @@ target_include_directories(ultrawidelock_headers INTERFACE
 	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 set(ULTRAWIDELOCK_MODULE_INCLUDE_DIRS
-	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_aliro/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_cred/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_anchor/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_dfu/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_dw3000/include"
@@ -35,18 +35,18 @@ endforeach()
 
 set(ULTRAWIDELOCK_PACKAGE_HEADERS
 	"include/ultrawidelock/ultrawidelock.h|ultrawidelock.h"
-	"modules/woz_aliro/include/ultrawidelock/device.h|device.h"
-	"modules/woz_aliro/include/ultrawidelock/reader.h|reader.h"
-	"modules/woz_aliro/include/ultrawidelock/tlv.h|tlv.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock/device.h|device.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock/reader.h|reader.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock/tlv.h|tlv.h"
 	"modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h|uwb.h"
 	"modules/woz_port/include/ultrawidelock/woz_hal.h|woz_hal.h"
-	"modules/woz_aliro/include/aliro_advtag.h|aliro_advtag.h"
-	"modules/woz_aliro/include/aliro_apdu.h|aliro_apdu.h"
-	"modules/woz_aliro/include/aliro_ble.h|aliro_ble.h"
-	"modules/woz_aliro/include/aliro_ble_central.h|aliro_ble_central.h"
-	"modules/woz_aliro/include/aliro_crypto.h|aliro_crypto.h"
-	"modules/woz_aliro/include/aliro_device_apdu.h|aliro_device_apdu.h"
-	"modules/woz_aliro/include/aliro_prov.h|aliro_prov.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_advtag.h|ultrawidelock_advtag.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_apdu.h|ultrawidelock_apdu.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_ble.h|ultrawidelock_ble.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_ble_central.h|ultrawidelock_ble_central.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_crypto.h|ultrawidelock_crypto.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_device_apdu.h|ultrawidelock_device_apdu.h"
+	"modules/ultrawidelock_cred/include/ultrawidelock_prov.h|ultrawidelock_prov.h"
 	"modules/ultrawidelock_dw3000/include/dw3000_hw.h|dw3000_hw.h"
 	"modules/ultrawidelock_dw3000/include/dw3000_spi.h|dw3000_spi.h")
 set(ULTRAWIDELOCK_INSTALLED_HEADER_PATHS)
@@ -72,7 +72,7 @@ install(FILES LICENSE THIRD_PARTY_NOTICES
 install(FILES modules/ultrawidelock_dw3000/LICENSE.txt
 	DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/ultrawidelock/modules/ultrawidelock_dw3000")
 
-add_library(ultrawidelock_tlv STATIC modules/woz_aliro/src/aliro_tlv.c)
+add_library(ultrawidelock_tlv STATIC modules/ultrawidelock_cred/src/ultrawidelock_tlv.c)
 add_library(UltraWideLock::tlv ALIAS ultrawidelock_tlv)
 set_target_properties(ultrawidelock_tlv PROPERTIES
 	C_STANDARD 11

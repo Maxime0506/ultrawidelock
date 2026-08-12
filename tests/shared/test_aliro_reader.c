@@ -1,5 +1,5 @@
 /*
- * Host test for the Aliro reader engine (aliro_reader.c): the AUTH0 -> AUTH1 ->
+ * Host test for the Aliro reader engine (ultrawidelock_reader.c): the AUTH0 -> AUTH1 ->
  * EXCHANGE -> AP-Completed transaction, driven end-to-end by a scripted phone.
  *
  * The phone side re-derives the §8.3.1.13 key schedule independently from the
@@ -27,13 +27,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_apdu.h"
-#include "aliro_ble.h"
-#include "aliro_crypto.h"
-#include "aliro_lab.h"
-#include "aliro_prim.h"
-#include "aliro_prov.h"
-#include "aliro_ranging.h"
+#include "ultrawidelock_apdu.h"
+#include "ultrawidelock_ble.h"
+#include "ultrawidelock_crypto.h"
+#include "ultrawidelock_lab.h"
+#include "ultrawidelock_prim.h"
+#include "ultrawidelock_prov.h"
+#include "ultrawidelock_ranging.h"
 #include <ultrawidelock/reader.h>
 #include "woz_port.h" /* woz_uptime_ms: the clock the status tick's deadline uses */
 
@@ -59,9 +59,9 @@ static void okc(const char *name, int cond)
 	}
 }
 
-/* ---- aliro_ble transport double ----------------------------------------- */
+/* ---- ultrawidelock_ble transport double ----------------------------------------- */
 
-static struct aliro_ble_config s_cfg;
+static struct ultrawidelock_ble_config s_cfg;
 static bool s_ble_started;
 
 #define TX_MAX 32
@@ -75,7 +75,7 @@ static int s_adv_sets;
 static uint8_t s_adv_grk[16];
 static int s_readv;
 
-int aliro_ble_start(const struct aliro_ble_config *cfg)
+int ultrawidelock_ble_start(const struct ultrawidelock_ble_config *cfg)
 {
 	s_cfg = *cfg;
 	s_ble_started = true;
@@ -84,7 +84,7 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 
 static bool s_ble_prepare_fail;
 
-int aliro_ble_prepare(const struct aliro_ble_config *cfg)
+int ultrawidelock_ble_prepare(const struct ultrawidelock_ble_config *cfg)
 {
 	if (s_ble_prepare_fail) {
 		return -1;
@@ -95,23 +95,23 @@ int aliro_ble_prepare(const struct aliro_ble_config *cfg)
 
 static const int s_svc_dummy;
 
-const struct ble_gatt_svc_def *aliro_ble_service_def(void)
+const struct ble_gatt_svc_def *ultrawidelock_ble_service_def(void)
 {
 	return (const struct ble_gatt_svc_def *)&s_svc_dummy;
 }
 
-int aliro_ble_start_attached(void)
+int ultrawidelock_ble_start_attached(void)
 {
 	s_ble_started = true;
 	return 0;
 }
 
-uint16_t aliro_ble_spsm(void)
+uint16_t ultrawidelock_ble_spsm(void)
 {
 	return 0x0080;
 }
 
-int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
+int ultrawidelock_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	(void)conn_handle;
 	if (s_txn < TX_MAX && len <= sizeof(s_tx[0].b)) {
@@ -122,12 +122,12 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 	return 0;
 }
 
-void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
+void ultrawidelock_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 {
 	cb(unsecured); /* the double runs "the host task" inline */
 }
 
-void aliro_ble_post_presence_reset(void (*cb)(void))
+void ultrawidelock_ble_post_presence_reset(void (*cb)(void))
 {
 	cb(); /* the double runs "the host task" inline */
 }
@@ -142,7 +142,7 @@ void aliro_ble_post_presence_reset(void (*cb)(void))
 static void (*s_revoke_sweep_pending)(void);
 static int s_revoke_sweep_posts;
 
-void aliro_ble_post_revoke_sweep(void (*cb)(void))
+void ultrawidelock_ble_post_revoke_sweep(void (*cb)(void))
 {
 	s_revoke_sweep_pending = cb;
 	s_revoke_sweep_posts++;
@@ -166,7 +166,7 @@ static int s_disconnects;
 static uint16_t s_last_disconnected;
 static bool s_disconnect_inline;
 
-int aliro_ble_disconnect(uint16_t conn_handle)
+int ultrawidelock_ble_disconnect(uint16_t conn_handle)
 {
 	s_disconnects++;
 	s_last_disconnected = conn_handle;
@@ -176,7 +176,7 @@ int aliro_ble_disconnect(uint16_t conn_handle)
 	return 0;
 }
 
-void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
+void ultrawidelock_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
 			      const uint8_t grk[16], int8_t tx_power)
 {
 	(void)group_id8;
@@ -186,7 +186,7 @@ void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[
 	s_adv_sets++;
 }
 
-void aliro_ble_readvertise(void)
+void ultrawidelock_ble_readvertise(void)
 {
 	s_readv++;
 }
@@ -214,7 +214,7 @@ static void tx_reset(void)
 	s_tx_rd = 0;
 }
 
-/* ---- aliro_ranging double ------------------------------------------------ */
+/* ---- ultrawidelock_ranging double ------------------------------------------------ */
 
 static int s_rng_inits, s_rng_starts, s_rng_stops, s_rng_feeds;
 static uint32_t s_rng_sid;
@@ -225,7 +225,7 @@ static size_t s_rng_feed_len;
 /* One-shot failure switches for section E (self-clearing, default off). */
 static int s_rng_init_fail, s_rng_start_fail;
 
-int aliro_ranging_init(void)
+int ultrawidelock_ranging_init(void)
 {
 	s_rng_inits++;
 	if (s_rng_init_fail) {
@@ -235,8 +235,8 @@ int aliro_ranging_init(void)
 	return 0;
 }
 
-int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t *ursk,
-			struct aliro_secchan *sc_ble)
+int ultrawidelock_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t *ursk,
+			struct ultrawidelock_secchan *sc_ble)
 {
 	(void)conn_handle;
 	(void)sc_ble;
@@ -250,7 +250,7 @@ int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t
 	return 0;
 }
 
-int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
+int ultrawidelock_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	(void)conn_handle;
 	if (len <= sizeof(s_rng_feed_buf)) {
@@ -261,15 +261,15 @@ int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 	return 0;
 }
 
-void aliro_ranging_stop(uint16_t conn_handle)
+void ultrawidelock_ranging_stop(uint16_t conn_handle)
 {
 	(void)conn_handle;
 	s_rng_stops++;
 }
 
-/* ---- aliro_prov NVS double (RAM blob via the real serializer) ------------ */
+/* ---- ultrawidelock_prov NVS double (RAM blob via the real serializer) ------------ */
 
-static uint8_t s_nvs[ALIRO_PROV_BLOB_MAX];
+static uint8_t s_nvs[ULTRAWIDELOCK_PROV_BLOB_MAX];
 static size_t s_nvs_len;
 static bool s_nvs_has;
 static bool s_nvs_fail;
@@ -279,21 +279,23 @@ static bool s_nvs_fail;
 static int s_nvs_errno = -1;
 static int s_nvs_stores;
 
-int aliro_prov_load(struct aliro_reader_identity *id, struct aliro_trust_store *ts)
+int ultrawidelock_prov_load(struct ultrawidelock_reader_identity *id,
+			    struct ultrawidelock_trust_store *ts)
 {
-	if (s_nvs_has && aliro_prov_deserialize(s_nvs, s_nvs_len, id, ts) == 0) {
+	if (s_nvs_has && ultrawidelock_prov_deserialize(s_nvs, s_nvs_len, id, ts) == 0) {
 		return 0;
 	}
-	aliro_prov_dev_default(id, ts);
+	ultrawidelock_prov_dev_default(id, ts);
 	return 1;
 }
 
-int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)
+int ultrawidelock_prov_store(const struct ultrawidelock_reader_identity *id,
+			     const struct ultrawidelock_trust_store *ts)
 {
 	if (s_nvs_fail) {
 		return s_nvs_errno;
 	}
-	if (aliro_prov_serialize(id, ts, s_nvs, sizeof(s_nvs), &s_nvs_len) != 0) {
+	if (ultrawidelock_prov_serialize(id, ts, s_nvs, sizeof(s_nvs), &s_nvs_len) != 0) {
 		return -1;
 	}
 	s_nvs_has = true;
@@ -304,7 +306,7 @@ int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_
 /* ---- the scripted phone -------------------------------------------------- */
 
 /* Fallback 0xA5 TLV the reader salts with when the phone's op-0x05 carried
- * none; must match k_a5_csa_v1 in aliro_reader.c. */
+ * none; must match k_a5_csa_v1 in ultrawidelock_reader.c. */
 static const uint8_t k_a5_csa[] = {
 	0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0x01, 0x00,
 };
@@ -313,7 +315,7 @@ static const uint8_t k_a5_csa[] = {
 static const uint8_t k_a5_phone[] = {0xa5, 0x04, 0xde, 0xad, 0xbe, 0xef};
 
 /* BleSK derivation salt: reader_supported_versions || selected version, both
- * v1.0 — must match init_ble_channel() in aliro_reader.c. */
+ * v1.0 — must match init_ble_channel() in ultrawidelock_reader.c. */
 static const uint8_t k_ble_salt[] = {0x01, 0x00, 0x01, 0x00};
 
 static const uint8_t k_ap_completed[] = {0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00};
@@ -338,9 +340,9 @@ struct ph {
 
 	/* independently derived schedule */
 	uint8_t z[32];
-	uint8_t block[ALIRO_KEY_BLOCK_LEN];
+	uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
-	uint8_t kp[ALIRO_KPERSISTENT_LEN];
+	uint8_t kp[ULTRAWIDELOCK_KPERSISTENT_LEN];
 
 	/* AP secure channel, phone's view: r2p = reader-seal direction (0),
 	 * p2r = phone-seal direction (1); counters start at 1 (§8.3.1). */
@@ -368,7 +370,7 @@ static void ph_send(uint16_t conn, uint8_t type, uint8_t op, const uint8_t *pl, 
 /* Split a captured ACCESS command frame into INS + APDU body. */
 static int parse_cmd(const uint8_t *f, size_t n, uint8_t *ins, const uint8_t **body, size_t *blen)
 {
-	if (n < 4 || f[0] != ALIRO_PROTO_ACCESS || f[1] != ALIRO_AP_OP_COMMAND) {
+	if (n < 4 || f[0] != ULTRAWIDELOCK_PROTO_ACCESS || f[1] != ULTRAWIDELOCK_AP_OP_COMMAND) {
 		return -1;
 	}
 	size_t alen = ((size_t)f[2] << 8) | f[3];
@@ -399,14 +401,14 @@ static size_t tlv1(uint8_t *out, uint8_t tag, const uint8_t *v, size_t n)
 
 /* Phone-direction AEAD: the phone seals with direction-1 nonces (what the
  * reader opens) and opens direction-0 nonces (what the reader seals) — the
- * mirror image of aliro_secchan_seal/open, driven off the raw primitives. */
+ * mirror image of ultrawidelock_secchan_seal/open, driven off the raw primitives. */
 static int ph_seal(const uint8_t key[32], uint32_t *ctr, const uint8_t *aad, size_t aadn,
 		   const uint8_t *pt, size_t ptn, uint8_t *ct, uint8_t tag[16])
 {
-	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+	uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 
-	aliro_crypto_gcm_nonce(1, *ctr, nonce);
-	if (aliro_aes256_gcm_encrypt(key, nonce, sizeof(nonce), aad, aadn, pt, ptn, ct, tag, 16) !=
+	ultrawidelock_crypto_gcm_nonce(1, *ctr, nonce);
+	if (ultrawidelock_aes256_gcm_encrypt(key, nonce, sizeof(nonce), aad, aadn, pt, ptn, ct, tag, 16) !=
 	    0) {
 		return -1;
 	}
@@ -417,10 +419,10 @@ static int ph_seal(const uint8_t key[32], uint32_t *ctr, const uint8_t *aad, siz
 static int ph_open(const uint8_t key[32], uint32_t *ctr, const uint8_t *aad, size_t aadn,
 		   const uint8_t *ct, size_t ctn, const uint8_t *tag, uint8_t *pt)
 {
-	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+	uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 
-	aliro_crypto_gcm_nonce(0, *ctr, nonce);
-	if (aliro_aes256_gcm_decrypt(key, nonce, sizeof(nonce), aad, aadn, ct, ctn, tag, 16, pt) !=
+	ultrawidelock_crypto_gcm_nonce(0, *ctr, nonce);
+	if (ultrawidelock_aes256_gcm_decrypt(key, nonce, sizeof(nonce), aad, aadn, ct, ctn, tag, 16, pt) !=
 	    0) {
 		return -1;
 	}
@@ -429,7 +431,7 @@ static int ph_open(const uint8_t key[32], uint32_t *ctr, const uint8_t *aad, siz
 }
 
 /* Open one reader-sealed BleSK wire SDU ([proto][id][(len+16)be16][ct||tag])
- * into its plaintext form, mirroring aliro_msg_open. */
+ * into its plaintext form, mirroring ultrawidelock_msg_open. */
 static int ph_open_ble(struct ph *p, const uint8_t *w, size_t wl, uint8_t *plain, size_t *plen)
 {
 	if (wl < 4 + 16) {
@@ -442,10 +444,10 @@ static int ph_open_ble(struct ph *p, const uint8_t *w, size_t wl, uint8_t *plain
 	}
 	size_t payn = clen - 16;
 	uint8_t aad[4] = {w[0], w[1], (uint8_t)(payn >> 8), (uint8_t)payn};
-	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+	uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 
-	aliro_crypto_gcm_nonce(0, p->ble_r2p_ctr, nonce);
-	if (aliro_aes256_gcm_decrypt(p->ble_r2p, nonce, sizeof(nonce), aad, sizeof(aad), w + 4,
+	ultrawidelock_crypto_gcm_nonce(0, p->ble_r2p_ctr, nonce);
+	if (ultrawidelock_aes256_gcm_decrypt(p->ble_r2p, nonce, sizeof(nonce), aad, sizeof(aad), w + 4,
 				     payn, w + 4 + payn, 16, plain + 4) != 0) {
 		return -1;
 	}
@@ -456,17 +458,17 @@ static int ph_open_ble(struct ph *p, const uint8_t *w, size_t wl, uint8_t *plain
 }
 
 /* Seal one phone->reader BleSK SDU from its plaintext form ([proto][id]
- * [len_be16][payload]), mirroring aliro_msg_seal from the device side. */
+ * [len_be16][payload]), mirroring ultrawidelock_msg_seal from the device side. */
 static size_t ph_seal_ble(struct ph *p, const uint8_t *plain, size_t plen, uint8_t *wire)
 {
 	size_t payn = plen - 4;
-	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+	uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 
 	memcpy(wire, plain, 2);
 	wire[2] = (uint8_t)((payn + 16) >> 8);
 	wire[3] = (uint8_t)(payn + 16);
-	aliro_crypto_gcm_nonce(1, p->ble_p2r_ctr, nonce);
-	if (aliro_aes256_gcm_encrypt(p->ble_p2r, nonce, sizeof(nonce), plain, 4, plain + 4, payn,
+	ultrawidelock_crypto_gcm_nonce(1, p->ble_p2r_ctr, nonce);
+	if (ultrawidelock_aes256_gcm_encrypt(p->ble_p2r, nonce, sizeof(nonce), plain, 4, plain + 4, payn,
 				     wire + 4, wire + 4 + payn, 16) != 0) {
 		return 0;
 	}
@@ -491,7 +493,7 @@ static void ph_initiate(struct ph *p, uint16_t conn, int with_a5)
 		p->a5 = k_a5_csa;
 		p->a5n = sizeof(k_a5_csa);
 	}
-	ph_send(conn, ALIRO_PROTO_NOTIFICATION, ALIRO_NOTIF_INITIATE_AP, pl, n);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_NOTIFICATION, ULTRAWIDELOCK_NOTIF_INITIATE_AP, pl, n);
 }
 
 /* Consume the reader's AUTH0 and capture the transcript inputs off the wire.
@@ -504,22 +506,22 @@ static int ph_take_auth0(struct ph *p)
 	size_t blen, vl;
 	uint8_t ins;
 
-	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_AUTH0) {
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ULTRAWIDELOCK_INS_AUTH0) {
 		return -1;
 	}
-	if (aliro_tlv_find(body, blen, ALIRO_TAG_READER_EPH, &v, &vl) != 0 || vl != 65) {
+	if (ultrawidelock_tlv_find(body, blen, ULTRAWIDELOCK_TAG_READER_EPH, &v, &vl) != 0 || vl != 65) {
 		return -1;
 	}
 	memcpy(p->r_eph_pub, v, 65);
-	if (aliro_tlv_find(body, blen, ALIRO_TAG_TXID, &v, &vl) != 0 || vl != 16) {
+	if (ultrawidelock_tlv_find(body, blen, ULTRAWIDELOCK_TAG_TXID, &v, &vl) != 0 || vl != 16) {
 		return -1;
 	}
 	memcpy(p->txid, v, 16);
-	if (aliro_tlv_find(body, blen, ALIRO_TAG_READER_ID, &v, &vl) != 0 || vl != 32) {
+	if (ultrawidelock_tlv_find(body, blen, ULTRAWIDELOCK_TAG_READER_ID, &v, &vl) != 0 || vl != 32) {
 		return -1;
 	}
 	memcpy(p->r_id, v, 32);
-	if (aliro_tlv_find(body, blen, ALIRO_TAG_EXP_PHASE, &v, &vl) != 0 || vl != 1) {
+	if (ultrawidelock_tlv_find(body, blen, ULTRAWIDELOCK_TAG_EXP_PHASE, &v, &vl) != 0 || vl != 1) {
 		return -1;
 	}
 	p->exp_phase = v[0];
@@ -534,14 +536,14 @@ static void ph_auth0_resp(struct ph *p, uint16_t conn, uint8_t eph_seed)
 	size_t n;
 
 	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
-	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
-	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
-	aliro_crypto_derive_z(shared, p->txid, p->z);
+	ultrawidelock_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	ultrawidelock_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	ultrawidelock_crypto_derive_z(shared, p->txid, p->z);
 
-	n = tlv1(pl, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	n = tlv1(pl, ULTRAWIDELOCK_TAG_DEVICE_PUBX, p->eph_pub, 65);
 	pl[n++] = 0x90;
 	pl[n++] = 0x00;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, n);
 }
 
 /* The phone's independent run of the standard-phase key schedule: session salt
@@ -549,29 +551,30 @@ static void ph_auth0_resp(struct ph *p, uint16_t conn, uint8_t eph_seed)
  * this transaction would mint. Everything from wire captures + p->z. */
 static int ph_derive_standard(struct ph *p)
 {
-	uint8_t salt[ALIRO_SALT_MAX], enc[32], dec[32];
+	uint8_t salt[ULTRAWIDELOCK_SALT_MAX], enc[32], dec[32];
 	size_t sl;
 
-	if (aliro_salt_build(ALIRO_SALT_SESSION, p->txid, p->rvk + 1, p->r_eph_pub + 1, p->r_id,
-			     ALIRO_IFACE_BLE, 0x0100, p->exp_phase, 0x01, NULL, p->a5, p->a5n,
-			     salt, &sl) != 0 ||
-	    aliro_crypto_derive_block(p->z, salt, sl, p->eph_pub + 1, p->block) != 0) {
+	if (ultrawidelock_salt_build(ULTRAWIDELOCK_SALT_SESSION, p->txid, p->rvk + 1,
+				     p->r_eph_pub + 1, p->r_id, ULTRAWIDELOCK_IFACE_BLE, 0x0100,
+				     p->exp_phase, 0x01, NULL, p->a5, p->a5n, salt, &sl) != 0 ||
+	    ultrawidelock_crypto_derive_block(p->z, salt, sl, p->eph_pub + 1, p->block) != 0) {
 		return -1;
 	}
-	aliro_crypto_split(p->block, 1, enc, dec, p->ursk);
+	ultrawidelock_crypto_split(p->block, 1, enc, dec, p->ursk);
 	memcpy(p->k_r2p, enc, 32);
 	memcpy(p->k_p2r, dec, 32);
 	p->r2p_ctr = p->p2r_ctr = 1;
-	if (aliro_crypto_derive_ble_keys(p->block, k_ble_salt, sizeof(k_ble_salt), p->ble_r2p,
+	if (ultrawidelock_crypto_derive_ble_keys(p->block, k_ble_salt, sizeof(k_ble_salt), p->ble_r2p,
 					 p->ble_p2r) != 0) {
 		return -1;
 	}
 	p->ble_r2p_ctr = p->ble_p2r_ctr = 1;
 
-	if (aliro_salt_build(ALIRO_SALT_KPERSISTENT, p->txid, p->rvk + 1, p->r_eph_pub + 1, p->r_id,
-			     ALIRO_IFACE_BLE, 0x0100, p->exp_phase, 0x01, p->cred_pub + 1, p->a5,
-			     p->a5n, salt, &sl) != 0 ||
-	    aliro_crypto_derive_key32(p->z, salt, sl, p->eph_pub + 1, p->kp) != 0) {
+	if (ultrawidelock_salt_build(ULTRAWIDELOCK_SALT_KPERSISTENT, p->txid, p->rvk + 1,
+				     p->r_eph_pub + 1, p->r_id, ULTRAWIDELOCK_IFACE_BLE, 0x0100,
+				     p->exp_phase, 0x01, p->cred_pub + 1, p->a5, p->a5n, salt,
+				     &sl) != 0 ||
+	    ultrawidelock_crypto_derive_key32(p->z, salt, sl, p->eph_pub + 1, p->kp) != 0) {
 		return -1;
 	}
 	return 0;
@@ -589,10 +592,10 @@ static int ph_auth1_resp(struct ph *p, uint16_t conn, const uint8_t *signer, int
 	size_t blen, vl;
 	uint8_t ins;
 
-	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_AUTH1) {
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ULTRAWIDELOCK_INS_AUTH1) {
 		return -1;
 	}
-	if (aliro_tlv_find(body, blen, ALIRO_TAG_SIG, &v, &vl) != 0 || vl != 64) {
+	if (ultrawidelock_tlv_find(body, blen, ULTRAWIDELOCK_TAG_SIG, &v, &vl) != 0 || vl != 64) {
 		return -1;
 	}
 
@@ -600,9 +603,10 @@ static int ph_auth1_resp(struct ph *p, uint16_t conn, const uint8_t *signer, int
 	uint8_t td[160];
 	size_t tn;
 
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_READER, p->r_id, p->eph_pub + 1, p->r_eph_pub + 1,
-				      p->txid, td, sizeof(td), &tn) != 0 ||
-	    aliro_ecdsa_p256_verify(p->rvk, td, tn, v) != 0) {
+	if (ultrawidelock_apdu_build_authdata(ULTRAWIDELOCK_AUTH_READER, p->r_id, p->eph_pub + 1,
+					      p->r_eph_pub + 1, p->txid, td, sizeof(td),
+					      &tn) != 0 ||
+	    ultrawidelock_ecdsa_p256_verify(p->rvk, td, tn, v) != 0) {
 		return -1;
 	}
 
@@ -615,13 +619,15 @@ static int ph_auth1_resp(struct ph *p, uint16_t conn, const uint8_t *signer, int
 	uint8_t pt[160], sig[64], pl[200];
 	size_t ptn = 0;
 
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, p->r_id, p->eph_pub + 1, p->r_eph_pub + 1,
-				      p->txid, td, sizeof(td), &tn) != 0 ||
-	    aliro_ecdsa_p256_sign(signer != NULL ? signer : p->cred_priv, td, tn, sig) != 0) {
+	if (ultrawidelock_apdu_build_authdata(ULTRAWIDELOCK_AUTH_DEVICE, p->r_id, p->eph_pub + 1,
+					      p->r_eph_pub + 1, p->txid, td, sizeof(td),
+					      &tn) != 0 ||
+	    ultrawidelock_ecdsa_p256_sign(signer != NULL ? signer : p->cred_priv, td, tn, sig) !=
+		    0) {
 		return -1;
 	}
-	ptn += tlv1(pt + ptn, ALIRO_TAG_DEVICE_PUB, p->cred_pub, 65);
-	ptn += tlv1(pt + ptn, ALIRO_TAG_SIG, sig, 64);
+	ptn += tlv1(pt + ptn, ULTRAWIDELOCK_TAG_DEVICE_PUB, p->cred_pub, 65);
+	ptn += tlv1(pt + ptn, ULTRAWIDELOCK_TAG_SIG, sig, 64);
 
 	uint8_t tag[16];
 
@@ -634,7 +640,7 @@ static int ph_auth1_resp(struct ph *p, uint16_t conn, const uint8_t *signer, int
 	memcpy(pl + ptn, tag, 16);
 	pl[ptn + 16] = 0x90;
 	pl[ptn + 17] = 0x00;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, ptn + 18);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, ptn + 18);
 	return 0;
 }
 
@@ -649,7 +655,7 @@ static int ph_exchange_resp(struct ph *p, uint16_t conn)
 	size_t blen, vl;
 	uint8_t ins;
 
-	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_EXCHANGE ||
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ULTRAWIDELOCK_INS_EXCHANGE ||
 	    blen < 17) {
 		return -1;
 	}
@@ -660,7 +666,7 @@ static int ph_exchange_resp(struct ph *p, uint16_t conn)
 	if (ph_open(p->k_r2p, &p->r2p_ctr, NULL, 0, body, ctn, body + ctn, pt) != 0) {
 		return -1;
 	}
-	if (aliro_tlv_find(pt, ctn, ALIRO_TAG_URSK_READY, &v, &vl) != 0) {
+	if (ultrawidelock_tlv_find(pt, ctn, ULTRAWIDELOCK_TAG_URSK_READY, &v, &vl) != 0) {
 		return -1;
 	}
 
@@ -674,7 +680,7 @@ static int ph_exchange_resp(struct ph *p, uint16_t conn)
 	memcpy(pl + sizeof(ok_body), tag, 16);
 	pl[sizeof(ok_body) + 16] = 0x90;
 	pl[sizeof(ok_body) + 17] = 0x00;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, sizeof(ok_body) + 18);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, sizeof(ok_body) + 18);
 	return 0;
 }
 
@@ -713,13 +719,13 @@ static void ph_auth0_resp_sw2(struct ph *p, uint16_t conn, uint8_t eph_seed, uin
 	size_t n;
 
 	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
-	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
-	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
-	aliro_crypto_derive_z(shared, p->txid, p->z);
-	n = tlv1(pl, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	ultrawidelock_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	ultrawidelock_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	ultrawidelock_crypto_derive_z(shared, p->txid, p->z);
+	n = tlv1(pl, ULTRAWIDELOCK_TAG_DEVICE_PUBX, p->eph_pub, 65);
 	pl[n++] = sw1;
 	pl[n++] = sw2;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, n);
 }
 
 /* Fast-phase AUTH0Response off the Kpersistent agreed in the last standard
@@ -729,43 +735,44 @@ static void ph_auth0_resp_sw2(struct ph *p, uint16_t conn, uint8_t eph_seed, uin
  * the ECDH so z is ready if the reader falls back to the standard phase. */
 static int ph_auth0_resp_fast(struct ph *p, uint16_t conn, uint8_t eph_seed)
 {
-	uint8_t salt[ALIRO_SALT_MAX], enc[32], dec[32], fast[ALIRO_KEY_BLOCK_LEN];
+	uint8_t salt[ULTRAWIDELOCK_SALT_MAX], enc[32], dec[32], fast[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 	uint8_t crypt[64], payload[48], pl[160], shared[32];
 	size_t sl, n = 0;
 	static const uint8_t zero_iv[12] = {0};
 
 	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
-	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
-	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
-	aliro_crypto_derive_z(shared, p->txid, p->z);
+	ultrawidelock_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	ultrawidelock_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	ultrawidelock_crypto_derive_z(shared, p->txid, p->z);
 
-	if (aliro_salt_build(ALIRO_SALT_CRYPTOGRAM, p->txid, p->rvk + 1, p->r_eph_pub + 1, p->r_id,
-			     ALIRO_IFACE_BLE, 0x0100, p->exp_phase, 0x01, p->cred_pub + 1, p->a5,
-			     p->a5n, salt, &sl) != 0 ||
-	    aliro_crypto_derive_block(p->kp, salt, sl, p->eph_pub + 1, fast) != 0) {
+	if (ultrawidelock_salt_build(ULTRAWIDELOCK_SALT_CRYPTOGRAM, p->txid, p->rvk + 1,
+				     p->r_eph_pub + 1, p->r_id, ULTRAWIDELOCK_IFACE_BLE, 0x0100,
+				     p->exp_phase, 0x01, p->cred_pub + 1, p->a5, p->a5n, salt,
+				     &sl) != 0 ||
+	    ultrawidelock_crypto_derive_block(p->kp, salt, sl, p->eph_pub + 1, fast) != 0) {
 		return -1;
 	}
 	memset(payload, 0x22, sizeof(payload));
-	if (aliro_aes256_gcm_encrypt(fast + ALIRO_CRYPTOGRAM_SK_OFFSET, zero_iv, sizeof(zero_iv),
-				     NULL, 0, payload, sizeof(payload), crypt, crypt + 48,
-				     16) != 0) {
+	if (ultrawidelock_aes256_gcm_encrypt(fast + ULTRAWIDELOCK_CRYPTOGRAM_SK_OFFSET, zero_iv,
+					     sizeof(zero_iv), NULL, 0, payload, sizeof(payload),
+					     crypt, crypt + 48, 16) != 0) {
 		return -1;
 	}
-	aliro_crypto_split(fast, 0, enc, dec, p->ursk);
+	ultrawidelock_crypto_split(fast, 0, enc, dec, p->ursk);
 	memcpy(p->k_r2p, enc, 32);
 	memcpy(p->k_p2r, dec, 32);
 	p->r2p_ctr = p->p2r_ctr = 1;
-	if (aliro_crypto_derive_ble_keys(fast, k_ble_salt, sizeof(k_ble_salt), p->ble_r2p,
+	if (ultrawidelock_crypto_derive_ble_keys(fast, k_ble_salt, sizeof(k_ble_salt), p->ble_r2p,
 					 p->ble_p2r) != 0) {
 		return -1;
 	}
 	p->ble_r2p_ctr = p->ble_p2r_ctr = 1;
 
-	n += tlv1(pl + n, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	n += tlv1(pl + n, ULTRAWIDELOCK_TAG_DEVICE_PUBX, p->eph_pub, 65);
 	n += tlv1(pl + n, 0x9D, crypt, 64);
 	pl[n++] = 0x90;
 	pl[n++] = 0x00;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, n);
 	return 0;
 }
 
@@ -777,15 +784,15 @@ static void ph_auth0_resp_badcrypt(struct ph *p, uint16_t conn, uint8_t eph_seed
 	size_t n;
 
 	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
-	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
-	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
-	aliro_crypto_derive_z(shared, p->txid, p->z);
+	ultrawidelock_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	ultrawidelock_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	ultrawidelock_crypto_derive_z(shared, p->txid, p->z);
 	memset(junk, 0x6B, sizeof(junk));
-	n = tlv1(pl, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	n = tlv1(pl, ULTRAWIDELOCK_TAG_DEVICE_PUBX, p->eph_pub, 65);
 	n += tlv1(pl + n, 0x9D, junk, 64);
 	pl[n++] = 0x90;
 	pl[n++] = 0x00;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, n);
 }
 
 /* ph_auth1_resp variant: derive the channels as usual, then either seal a
@@ -799,7 +806,7 @@ static int ph_auth1_resp_v(struct ph *p, uint16_t conn, int junk_pt, uint8_t sw1
 	size_t blen;
 	uint8_t ins;
 
-	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_AUTH1) {
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ULTRAWIDELOCK_INS_AUTH1) {
 		return -1;
 	}
 	if (ph_derive_standard(p) != 0) {
@@ -813,13 +820,13 @@ static int ph_auth1_resp_v(struct ph *p, uint16_t conn, int junk_pt, uint8_t sw1
 		pt[ptn++] = 0xDE;
 		pt[ptn++] = 0xAD;
 	} else {
-		if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, p->r_id, p->eph_pub + 1,
+		if (ultrawidelock_apdu_build_authdata(ULTRAWIDELOCK_AUTH_DEVICE, p->r_id, p->eph_pub + 1,
 					      p->r_eph_pub + 1, p->txid, td, sizeof(td), &tn) != 0 ||
-		    aliro_ecdsa_p256_sign(p->cred_priv, td, tn, sig) != 0) {
+		    ultrawidelock_ecdsa_p256_sign(p->cred_priv, td, tn, sig) != 0) {
 			return -1;
 		}
-		ptn += tlv1(pt + ptn, ALIRO_TAG_DEVICE_PUB, p->cred_pub, 65);
-		ptn += tlv1(pt + ptn, ALIRO_TAG_SIG, sig, 64);
+		ptn += tlv1(pt + ptn, ULTRAWIDELOCK_TAG_DEVICE_PUB, p->cred_pub, 65);
+		ptn += tlv1(pt + ptn, ULTRAWIDELOCK_TAG_SIG, sig, 64);
 	}
 	if (ph_seal(p->k_p2r, &p->p2r_ctr, NULL, 0, pt, ptn, pl, tag) != 0) {
 		return -1;
@@ -827,7 +834,7 @@ static int ph_auth1_resp_v(struct ph *p, uint16_t conn, int junk_pt, uint8_t sw1
 	memcpy(pl + ptn, tag, 16);
 	pl[ptn + 16] = sw1;
 	pl[ptn + 17] = sw2;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, ptn + 18);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, ptn + 18);
 	return 0;
 }
 
@@ -841,7 +848,7 @@ static int ph_exchange_err(struct ph *p, uint16_t conn)
 	size_t blen;
 	uint8_t ins;
 
-	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_EXCHANGE ||
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ULTRAWIDELOCK_INS_EXCHANGE ||
 	    blen < 17) {
 		return -1;
 	}
@@ -862,7 +869,7 @@ static int ph_exchange_err(struct ph *p, uint16_t conn)
 	memcpy(pl + sizeof(err_body), tag, 16);
 	pl[sizeof(err_body) + 16] = 0x90;
 	pl[sizeof(err_body) + 17] = 0x00;
-	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, sizeof(err_body) + 18);
+	ph_send(conn, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, sizeof(err_body) + 18);
 	return 0;
 }
 
@@ -871,33 +878,33 @@ static int ph_exchange_err(struct ph *p, uint16_t conn)
 int main(void)
 {
 	struct ph p;
-	struct aliro_reader_identity dev_id;
-	struct aliro_trust_store dev_ts;
+	struct ultrawidelock_reader_identity dev_id;
+	struct ultrawidelock_trust_store dev_ts;
 	uint8_t out65[65];
 
 	memset(&p, 0, sizeof(p));
 
 	printf("== T0: start + dev-identity walk-up (dev-open trust policy) ==\n");
 	/* console/notify paths before anything is provisioned or presented, plus
-	 * the compiled-out (CONFIG_WOZ_ALIRO_LAB=n) lab stubs */
-	aliro_reader_prov_print(); /* "last cred : (none presented yet)" branch */
-	okc("t0.trust_last_nothing", aliro_reader_trust_last() == 1);
-	aliro_reader_notify_unlock(true); /* no established session: warn only */
+	 * the compiled-out (CONFIG_ULTRAWIDELOCK_CRED_LAB=n) lab stubs */
+	ultrawidelock_reader_prov_print(); /* "last cred : (none presented yet)" branch */
+	okc("t0.trust_last_nothing", ultrawidelock_reader_trust_last() == 1);
+	ultrawidelock_reader_notify_unlock(true); /* no established session: warn only */
 	okc("t0.notify_no_session", tx_pending() == 0);
-	aliro_lab_set_enabled(true); /* stub: stays disabled */
-	okc("t0.lab_stub_off", !aliro_lab_enabled());
-	okc("t0.no_auth_cred_yet", !aliro_reader_authenticated_credential(out65));
+	ultrawidelock_lab_set_enabled(true); /* stub: stays disabled */
+	okc("t0.lab_stub_off", !ultrawidelock_lab_enabled());
+	okc("t0.no_auth_cred_yet", !ultrawidelock_reader_authenticated_credential(out65));
 	okc("t0.no_pinned_presence_cred",
-	     !aliro_reader_presence_expected_credential(out65));
-	okc("t0.start", aliro_reader_start() == 0);
+	     !ultrawidelock_reader_presence_expected_credential(out65));
+	okc("t0.start", ultrawidelock_reader_start() == 0);
 	okc("t0.transport_up", s_ble_started && s_cfg.cb.on_data != NULL);
 	okc("t0.ranging_init", s_rng_inits == 1);
 
 	/* the phone against the dev identity: rvk from the dev signing key */
-	aliro_prov_dev_default(&dev_id, &dev_ts);
-	aliro_ec_p256_pub_from_priv(dev_id.sign_priv, p.rvk);
+	ultrawidelock_prov_dev_default(&dev_id, &dev_ts);
+	ultrawidelock_ec_p256_pub_from_priv(dev_id.sign_priv, p.rvk);
 	memset(p.cred_priv, 0xC1, sizeof(p.cred_priv));
-	aliro_ec_p256_pub_from_priv(p.cred_priv, p.cred_pub);
+	ultrawidelock_ec_p256_pub_from_priv(p.cred_priv, p.cred_pub);
 
 	s_cfg.cb.on_connected(1);
 	ph_initiate(&p, 1, 0); /* no 0xA5 TLV: salts must fall back to CSA v1.0 */
@@ -910,7 +917,7 @@ int main(void)
 	okc("t0.ranging_armed", s_rng_starts == 1);
 	okc("t0.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
 	okc("t0.sid_from_txid", s_rng_sid == ph_sid(&p));
-	okc("t0.auth_cred_recorded", aliro_reader_authenticated_credential(out65) &&
+	okc("t0.auth_cred_recorded", ultrawidelock_reader_authenticated_credential(out65) &&
 					     memcmp(out65, p.cred_pub, 65) == 0);
 	s_cfg.cb.on_disconnected(1);
 	okc("t0.ranging_stopped", s_rng_stops == 1);
@@ -921,12 +928,14 @@ int main(void)
 
 	memset(rid, 0xA0, sizeof(rid));
 	memset(sp, 0x33, sizeof(sp));
-	okc("a.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
-	okc("a.provision_trust", aliro_reader_provision_add_trust(p.cred_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
+	okc("a.provision_id", ultrawidelock_reader_provision_identity(rid, sp, grk0) == 0);
+	okc("a.provision_trust",
+	    ultrawidelock_reader_provision_add_trust(p.cred_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == 0);
 	okc("a.pinned_presence_cred",
-	     aliro_reader_presence_expected_credential(out65) &&
+	     ultrawidelock_reader_presence_expected_credential(out65) &&
 		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
-	aliro_ec_p256_pub_from_priv(sp, p.rvk); /* new verification key */
+	ultrawidelock_ec_p256_pub_from_priv(sp, p.rvk); /* new verification key */
 
 	s_cfg.cb.on_connected(2);
 	ph_initiate(&p, 2, 1); /* with the phone's own 0xA5 TLV this time */
@@ -940,7 +949,7 @@ int main(void)
 	okc("a.ranging_armed", s_rng_starts == 2);
 	/* The approach controller's presence signal: true only once a session has
 	 * reached the established phase, and false again the moment it tears down. */
-	okc("a.session_active", aliro_reader_session_active());
+	okc("a.session_active", ultrawidelock_reader_session_active());
 	okc("a.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
 
 	/* established: a device ranging SDU rides the BleSK channel to the engine */
@@ -985,11 +994,11 @@ int main(void)
 		static const uint8_t grant[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x01};
 		static const uint8_t relock[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x00};
 
-		aliro_reader_notify_unlock(true);
+		ultrawidelock_reader_notify_unlock(true);
 		f = tx_next(&n);
 		okc("a.grant_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					   pn == 8 && memcmp(plain, grant, 8) == 0);
-		aliro_reader_notify_unlock(false);
+		ultrawidelock_reader_notify_unlock(false);
 		f = tx_next(&n);
 		okc("a.relock_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					     pn == 8 && memcmp(plain, relock, 8) == 0);
@@ -998,12 +1007,12 @@ int main(void)
 		 * path relocks the phone itself, so the approach controller's relock
 		 * arrives right behind it as a duplicate; forwarding it would flag an
 		 * undeliverable Secured and replay it on the next approach. */
-		aliro_reader_notify_unlock(false);
+		ultrawidelock_reader_notify_unlock(false);
 		okc("a.duplicate_relock_suppressed", tx_pending() == 0);
 
 		/* Back to unsecured, so the post-disconnect relock below is a real state
 		 * change rather than another duplicate. */
-		aliro_reader_notify_unlock(true);
+		ultrawidelock_reader_notify_unlock(true);
 		f = tx_next(&n);
 		okc("a.regrant_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					      pn == 8 && memcmp(plain, grant, 8) == 0);
@@ -1011,31 +1020,31 @@ int main(void)
 
 	/* disconnect persists the minted Kpersistent — compare against the
 	 * phone's independent derivation of it */
-	uint32_t proof_request = aliro_reader_presence_restart();
+	uint32_t proof_request = ultrawidelock_reader_presence_restart();
 	uint32_t proof_checkpoint = 0;
 
 	okc("a.proof_restart_requested",
 	     proof_request != 0u && s_disconnects == 1 && s_last_disconnected == 2);
 	okc("a.proof_checkpoint_waits_for_disconnect",
-	     !aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
+	     !ultrawidelock_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	s_cfg.cb.on_disconnected(2);
 	okc("a.proof_checkpoint_ready",
-	     aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
+	     ultrawidelock_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	okc("a.old_auth_not_fresh",
-	     !aliro_reader_presence_authenticated_after(proof_checkpoint, out65));
+	     !ultrawidelock_reader_presence_authenticated_after(proof_checkpoint, out65));
 	okc("a.kp_persisted", s_nvs_stores == 3); /* 2 provision calls + this one */
-	okc("a.session_gone_on_disconnect", !aliro_reader_session_active());
+	okc("a.session_gone_on_disconnect", !ultrawidelock_reader_session_active());
 
 	/* The peer-gone relock lands after the phone has already dropped BLE, which is
 	 * the normal case: nothing goes out, and the phone is left showing this door
 	 * unlocked. Section B asserts the next session replays it. */
-	aliro_reader_notify_unlock(false);
+	ultrawidelock_reader_notify_unlock(false);
 	okc("a.relock_undeliverable", tx_pending() == 0);
 	{
-		struct aliro_reader_identity id2;
-		struct aliro_trust_store ts2;
+		struct ultrawidelock_reader_identity id2;
+		struct ultrawidelock_trust_store ts2;
 
-		okc("a.kp_blob_loads", aliro_prov_load(&id2, &ts2) == 0);
+		okc("a.kp_blob_loads", ultrawidelock_prov_load(&id2, &ts2) == 0);
 		okc("a.kp_valid_bit", (ts2.kp_valid & 1u) != 0);
 		okc("a.kp_match", memcmp(ts2.kpersistent[0], p.kp, 32) == 0);
 	}
@@ -1048,44 +1057,44 @@ int main(void)
 
 	/* fast block + cryptogram from the Kpersistent agreed in A */
 	{
-		uint8_t salt[ALIRO_SALT_MAX], enc[32], dec[32], fast[ALIRO_KEY_BLOCK_LEN];
+		uint8_t salt[ULTRAWIDELOCK_SALT_MAX], enc[32], dec[32], fast[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 		uint8_t crypt[64], payload[48], pl[160];
 		size_t sl, n = 0;
 		static const uint8_t zero_iv[12] = {0};
 
 		memset(p.eph_priv, 0xE2, sizeof(p.eph_priv));
-		aliro_ec_p256_pub_from_priv(p.eph_priv, p.eph_pub);
+		ultrawidelock_ec_p256_pub_from_priv(p.eph_priv, p.eph_pub);
 
 		okc("b.fast_salt",
-		    aliro_salt_build(ALIRO_SALT_CRYPTOGRAM, p.txid, p.rvk + 1, p.r_eph_pub + 1,
-				     p.r_id, ALIRO_IFACE_BLE, 0x0100, p.exp_phase, 0x01,
+		    ultrawidelock_salt_build(ULTRAWIDELOCK_SALT_CRYPTOGRAM, p.txid, p.rvk + 1, p.r_eph_pub + 1,
+				     p.r_id, ULTRAWIDELOCK_IFACE_BLE, 0x0100, p.exp_phase, 0x01,
 				     p.cred_pub + 1, p.a5, p.a5n, salt, &sl) == 0);
 		okc("b.fast_block",
-		    aliro_crypto_derive_block(p.kp, salt, sl, p.eph_pub + 1, fast) == 0);
+		    ultrawidelock_crypto_derive_block(p.kp, salt, sl, p.eph_pub + 1, fast) == 0);
 		memset(payload, 0x11, sizeof(payload));
 		okc("b.cryptogram_sealed",
-		    aliro_aes256_gcm_encrypt(fast + ALIRO_CRYPTOGRAM_SK_OFFSET, zero_iv,
+		    ultrawidelock_aes256_gcm_encrypt(fast + ULTRAWIDELOCK_CRYPTOGRAM_SK_OFFSET, zero_iv,
 					     sizeof(zero_iv), NULL, 0, payload, sizeof(payload),
 					     crypt, crypt + 48, 16) == 0);
 
 		/* fast channel keys: split(fast, 0) + BleSK off the same block */
-		aliro_crypto_split(fast, 0, enc, dec, p.ursk);
+		ultrawidelock_crypto_split(fast, 0, enc, dec, p.ursk);
 		memcpy(p.k_r2p, enc, 32);
 		memcpy(p.k_p2r, dec, 32);
 		p.r2p_ctr = p.p2r_ctr = 1;
-		okc("b.ble_keys", aliro_crypto_derive_ble_keys(fast, k_ble_salt,
+		okc("b.ble_keys", ultrawidelock_crypto_derive_ble_keys(fast, k_ble_salt,
 							       sizeof(k_ble_salt), p.ble_r2p,
 							       p.ble_p2r) == 0);
 		p.ble_r2p_ctr = p.ble_p2r_ctr = 1;
 
-		n += tlv1(pl + n, ALIRO_TAG_DEVICE_PUBX, p.eph_pub, 65);
+		n += tlv1(pl + n, ULTRAWIDELOCK_TAG_DEVICE_PUBX, p.eph_pub, 65);
 		n += tlv1(pl + n, 0x9D, crypt, 64);
 		pl[n++] = 0x90;
 		pl[n++] = 0x00;
-		ph_send(3, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+		ph_send(3, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, pl, n);
 	}
 	okc("b.new_auth_is_fresh",
-	     aliro_reader_presence_authenticated_after(proof_checkpoint, out65) &&
+	     ultrawidelock_reader_presence_authenticated_after(proof_checkpoint, out65) &&
 		     memcmp(out65, p.cred_pub, sizeof(out65)) == 0);
 	okc("b.exchange_no_auth1", ph_exchange_resp(&p, 3) == 0); /* next TX is EXCHANGE */
 	okc("b.ap_completed", ph_take_ap_completed(&p) == 0);
@@ -1104,29 +1113,29 @@ int main(void)
 		static const uint8_t relock[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x00};
 
 		/* Still inside the window: a tick before the deadline releases nothing. */
-		aliro_reader_status_tick(woz_uptime_ms());
+		ultrawidelock_reader_status_tick(woz_uptime_ms());
 		okc("b.replay_held_before_deadline", tx_pending() == 0);
 
 		/* Past it, with no grant having intervened, so the phone gets the truth.
 		 * Offsetting the real clock keeps the deadline exact without a fake one. */
-		aliro_reader_status_tick(woz_uptime_ms() + 10000);
+		ultrawidelock_reader_status_tick(woz_uptime_ms() + 10000);
 		f = tx_next(&n);
 		okc("b.secured_replayed", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 						  pn == 8 && memcmp(plain, relock, 8) == 0);
 	}
 	/* One shot: the flag is cleared by the replay, so nothing trails it. */
 	okc("b.replay_not_repeated", tx_pending() == 0);
-	aliro_reader_status_tick(woz_uptime_ms() + 10000);
+	ultrawidelock_reader_status_tick(woz_uptime_ms() + 10000);
 	okc("b.replay_disarmed_after_firing", tx_pending() == 0);
 
 	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
-	/* A transport may report disconnect before aliro_ble_disconnect returns.
+	/* A transport may report disconnect before ultrawidelock_ble_disconnect returns.
 	 * The waiter must already be armed or this checkpoint would be lost. */
 	s_disconnect_inline = true;
-	proof_request = aliro_reader_presence_restart();
+	proof_request = ultrawidelock_reader_presence_restart();
 	s_disconnect_inline = false;
 	okc("b.inline_disconnect_checkpoint",
-	     aliro_reader_presence_checkpoint(proof_request, &proof_checkpoint));
+	     ultrawidelock_reader_presence_checkpoint(proof_request, &proof_checkpoint));
 	okc("b.no_new_persist", s_nvs_stores == 3); /* fast phase mints nothing */
 
 	printf("\n== C: failure paths ==\n");
@@ -1135,7 +1144,7 @@ int main(void)
 		uint8_t cred2_priv[32], cred2_pub[65];
 
 		memset(cred2_priv, 0xC2, sizeof(cred2_priv));
-		aliro_ec_p256_pub_from_priv(cred2_priv, cred2_pub);
+		ultrawidelock_ec_p256_pub_from_priv(cred2_priv, cred2_pub);
 
 		struct ph q;
 
@@ -1150,17 +1159,17 @@ int main(void)
 		ph_auth0_resp(&q, 4, 0xE3);
 		okc("c1.auth1_resp", ph_auth1_resp(&q, 4, NULL, 0) == 0);
 		okc("c1.rejected_no_exchange", tx_pending() == 0);
-		okc("c1.auth_cred_unchanged", aliro_reader_authenticated_credential(out65) &&
+		okc("c1.auth_cred_unchanged", ultrawidelock_reader_authenticated_credential(out65) &&
 						      memcmp(out65, p.cred_pub, 65) == 0);
 		s_cfg.cb.on_disconnected(4);
 
 		/* the rejected key is the last-presented one: trust it via the
 		 * bench path, exercising the store-failure rollback first */
 		s_nvs_fail = true;
-		okc("c1.trust_last_store_fail", aliro_reader_trust_last() == -1);
+		okc("c1.trust_last_store_fail", ultrawidelock_reader_trust_last() == -1);
 		s_nvs_fail = false;
-		okc("c1.trust_last_ok", aliro_reader_trust_last() == 0);
-		okc("c1.trust_last_dup", aliro_reader_trust_last() == 1);
+		okc("c1.trust_last_ok", ultrawidelock_reader_trust_last() == 0);
+		okc("c1.trust_last_dup", ultrawidelock_reader_trust_last() == 1);
 	}
 
 	/* C2: garbage envelope still starts the AP; a GeneralError then kills it */
@@ -1175,10 +1184,10 @@ int main(void)
 
 			memset(&q, 0, sizeof(q));
 			okc("c2.auth0_after_garbage", ph_take_auth0(&q) == 0);
-			ph_send(5, ALIRO_PROTO_NOTIFICATION, ALIRO_NOTIF_EVENT, generr,
+			ph_send(5, ULTRAWIDELOCK_PROTO_NOTIFICATION, ULTRAWIDELOCK_NOTIF_EVENT, generr,
 				sizeof(generr));
 			okc("c2.failed_after_generalerror", tx_pending() == 0);
-			ph_send(5, ALIRO_PROTO_NOTIFICATION, ALIRO_NOTIF_INITIATE_AP, junk, 0);
+			ph_send(5, ULTRAWIDELOCK_PROTO_NOTIFICATION, ULTRAWIDELOCK_NOTIF_INITIATE_AP, junk, 0);
 			okc("c2.failed_ignores_msgs", tx_pending() == 0);
 		}
 		s_cfg.cb.on_disconnected(5);
@@ -1229,12 +1238,12 @@ int main(void)
 		s_cfg.cb.on_connected(8);
 		ph_initiate(&q, 8, 0);
 		okc("c7.auth0", ph_take_auth0(&q) == 0);
-		ph_send(8, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, bad, sizeof(bad));
+		ph_send(8, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, bad, sizeof(bad));
 		okc("c7.parse_fail_no_auth1", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(8);
 	}
 
-	/* C5: the session table holds ALIRO_MAX_SESSIONS(2); a third connect is
+	/* C5: the session table holds ULTRAWIDELOCK_MAX_SESSIONS(2); a third connect is
 	 * refused and its data dropped without a crash */
 	{
 		static const uint8_t ping[1] = {0x00};
@@ -1242,7 +1251,7 @@ int main(void)
 		s_cfg.cb.on_connected(20);
 		s_cfg.cb.on_connected(21);
 		s_cfg.cb.on_connected(22); /* no free slot */
-		ph_send(22, ALIRO_PROTO_NOTIFICATION, ALIRO_NOTIF_INITIATE_AP, ping,
+		ph_send(22, ULTRAWIDELOCK_PROTO_NOTIFICATION, ULTRAWIDELOCK_NOTIF_INITIATE_AP, ping,
 			sizeof(ping));
 		okc("c5.overflow_conn_dropped", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(22);
@@ -1251,8 +1260,8 @@ int main(void)
 	}
 
 	printf("\n== D: trust clear, adv refresh, attach mode, provision clear ==\n");
-	okc("d.trust_clear", aliro_reader_trust_clear() == 0);
-	okc("d.trust_clear_again", aliro_reader_trust_clear() == 1);
+	okc("d.trust_clear", ultrawidelock_reader_trust_clear() == 0);
+	okc("d.trust_clear_again", ultrawidelock_reader_trust_clear() == 1);
 
 	/* cleared trust store also dropped the Kpersistent: fast no longer offered */
 	{
@@ -1266,13 +1275,13 @@ int main(void)
 	}
 
 	/* adv refresh: no-op on a zero GRK, live once one is provisioned */
-	aliro_reader_refresh_adv();
+	ultrawidelock_reader_refresh_adv();
 	okc("d.refresh_noop_zero_grk", s_readv == 0);
 	{
 		uint8_t grk[16];
 
 		memset(grk, 0xAB, sizeof(grk));
-		okc("d.provision_grk", aliro_reader_provision_identity(rid, sp, grk) == 0);
+		okc("d.provision_grk", ultrawidelock_reader_provision_identity(rid, sp, grk) == 0);
 		/*
 		 * PROVISIONING ALONE REFRESHES THE ADVERT. It did not, and the
 		 * gap is invisible from everywhere except a walk-up: on hardware
@@ -1286,28 +1295,28 @@ int main(void)
 		    s_readv == 1 && s_adv_sets >= 1 && s_adv_grk[0] == 0xAB);
 		/* And asking again is harmless, which is what lets the import
 		 * path and the Matter path both call it. */
-		aliro_reader_refresh_adv();
+		ultrawidelock_reader_refresh_adv();
 		okc("d.refresh_again_is_safe", s_readv == 2 && s_adv_grk[0] == 0xAB);
 	}
 
 	/* attach-mode entry points */
-	okc("d.ble_prepare", aliro_reader_ble_prepare() != NULL);
+	okc("d.ble_prepare", ultrawidelock_reader_ble_prepare() != NULL);
 	{
 		int sets = s_adv_sets;
 
-		okc("d.start_attached", aliro_reader_start_attached() == 0);
+		okc("d.start_attached", ultrawidelock_reader_start_attached() == 0);
 		okc("d.attached_adv_params", s_adv_sets == sets + 1); /* GRK present */
 	}
 
 	/* Standalone start must apply the same params. The DWM3001CDK has no Matter
-	 * image, so aliro_reader_start is the only path that ever builds its
+	 * image, so ultrawidelock_reader_start is the only path that ever builds its
 	 * advertisement; while only start_attached applied them, a board carrying a
 	 * perfectly good cloned identity advertised unresolvably and no phone ever
 	 * approached it. */
 	{
 		int sets = s_adv_sets;
 
-		okc("d.start_standalone", aliro_reader_start() == 0);
+		okc("d.start_standalone", ultrawidelock_reader_start() == 0);
 		okc("d.start_adv_params", s_adv_sets == sets + 1 && s_adv_grk[0] == 0xAB);
 	}
 
@@ -1315,38 +1324,40 @@ int main(void)
 	 * advertised dynamic tag is derived from, and has to readvertise the way the
 	 * Matter provisioning path does. */
 	{
-		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 		size_t blen = 0;
-		struct aliro_reader_identity iid;
-		struct aliro_trust_store its;
+		struct ultrawidelock_reader_identity iid;
+		struct ultrawidelock_trust_store its;
 		int readv = s_readv;
 
-		aliro_prov_dev_default(&iid, &its);
+		ultrawidelock_prov_dev_default(&iid, &its);
 		memset(iid.grk, 0x5C, sizeof(iid.grk));
 		okc("d.import_serialize",
-		    aliro_prov_serialize(&iid, &its, blob, sizeof(blob), &blen) == 0);
-		okc("d.import_blob", aliro_reader_import_blob(blob, blen) == 0);
+		    ultrawidelock_prov_serialize(&iid, &its, blob, sizeof(blob), &blen) == 0);
+		okc("d.import_blob", ultrawidelock_reader_import_blob(blob, blen) == 0);
 		okc("d.import_refreshes_adv", s_readv == readv + 1 && s_adv_grk[0] == 0x5C);
 	}
 
 	/* provisioning error paths + reset to the dev identity */
 	s_nvs_fail = true;
-	okc("d.provision_id_store_fail", aliro_reader_provision_identity(rid, sp, grk0) == -1);
-	okc("d.provision_clear_store_fail", aliro_reader_provision_clear() == -1);
+	okc("d.provision_id_store_fail", ultrawidelock_reader_provision_identity(rid, sp, grk0) == -1);
+	okc("d.provision_clear_store_fail", ultrawidelock_reader_provision_clear() == -1);
 	s_nvs_fail = false;
 	{
 		uint8_t badpt[65];
 
 		memset(badpt, 0x05, sizeof(badpt)); /* not an uncompressed point */
-		okc("d.provision_bad_point", aliro_reader_provision_add_trust(badpt, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == -1);
+		okc("d.provision_bad_point", ultrawidelock_reader_provision_add_trust(
+						     badpt, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == -1);
 	}
-	okc("d.provision_clear", aliro_reader_provision_clear() == 0);
+	okc("d.provision_clear", ultrawidelock_reader_provision_clear() == 0);
 	{
-		struct aliro_reader_identity id2;
-		struct aliro_trust_store ts2;
+		struct ultrawidelock_reader_identity id2;
+		struct ultrawidelock_trust_store ts2;
 
 		okc("d.dev_identity_persisted",
-		    aliro_prov_load(&id2, &ts2) == 0 && id2.is_dev && ts2.count == 0);
+		    ultrawidelock_prov_load(&id2, &ts2) == 0 && id2.is_dev && ts2.count == 0);
 	}
 
 	printf("\n== E: failure injection — bring-up, provisioning, walk-up error paths ==\n");
@@ -1354,41 +1365,51 @@ int main(void)
 
 	/* E1: engine/transport bring-up failures */
 	aliro_prim_host_fail_init = 1;
-	okc("e1.start_crypto_fail", aliro_reader_start() == -1);
+	okc("e1.start_crypto_fail", ultrawidelock_reader_start() == -1);
 	aliro_prim_host_fail_init = 1;
-	okc("e1.start_attached_crypto_fail", aliro_reader_start_attached() == -1);
+	okc("e1.start_attached_crypto_fail", ultrawidelock_reader_start_attached() == -1);
 	s_ble_prepare_fail = true;
-	okc("e1.ble_prepare_fail", aliro_reader_ble_prepare() == NULL);
+	okc("e1.ble_prepare_fail", ultrawidelock_reader_ble_prepare() == NULL);
 	s_ble_prepare_fail = false;
 	s_rng_init_fail = 1; /* ranging adapter down: start still succeeds, auth-only */
-	okc("e1.start_ranging_unavailable", aliro_reader_start() == 0);
+	okc("e1.start_ranging_unavailable", ultrawidelock_reader_start() == 0);
 
 	/* E2: provisioning + trust console error paths (dev identity, empty store) */
 	uint8_t idle_priv[32], idle_pub[65];
 
 	memset(idle_priv, 0xB7, sizeof(idle_priv));
-	aliro_ec_p256_pub_from_priv(idle_priv, idle_pub);
-	okc("e2.add_trust", aliro_reader_provision_add_trust(idle_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
-	okc("e2.add_trust_dup", aliro_reader_provision_add_trust(idle_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 1);
+	ultrawidelock_ec_p256_pub_from_priv(idle_priv, idle_pub);
+	okc("e2.add_trust",
+	    ultrawidelock_reader_provision_add_trust(idle_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == 0);
+	okc("e2.add_trust_dup",
+	    ultrawidelock_reader_provision_add_trust(idle_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == 1);
 	s_nvs_fail = true;
-	okc("e2.add_trust_store_fail", aliro_reader_provision_add_trust(p.cred_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == -1);
-	okc("e2.trust_clear_store_fail", aliro_reader_trust_clear() == -1);
+	okc("e2.add_trust_store_fail",
+	    ultrawidelock_reader_provision_add_trust(p.cred_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == -1);
+	okc("e2.trust_clear_store_fail", ultrawidelock_reader_trust_clear() == -1);
 	s_nvs_fail = false;
-	aliro_reader_prov_print(); /* anchor-listing loop + last-cred hexdump */
+	ultrawidelock_reader_prov_print(); /* anchor-listing loop + last-cred hexdump */
 	/*
 	 * The clear that could not be written above still emptied the LIVE store:
 	 * a revocation that cannot be persisted must stop opening the door now and
 	 * report the write failure, not stay trusted until the write succeeds. So
 	 * by here there is nothing left to clear, and 1 says so.
 	 */
-	okc("e2.trust_clear", aliro_reader_trust_clear() == 1);
+	okc("e2.trust_clear", ultrawidelock_reader_trust_clear() == 1);
 
 	/* E3: provisioned identity + two anchors (an idle one first, so the fast
 	 * trial later has a no-Kpersistent slot to skip over) */
-	okc("e3.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
-	okc("e3.trust_idle", aliro_reader_provision_add_trust(idle_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
-	okc("e3.trust_walker", aliro_reader_provision_add_trust(p.cred_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
-	aliro_ec_p256_pub_from_priv(sp, p.rvk);
+	okc("e3.provision_id", ultrawidelock_reader_provision_identity(rid, sp, grk0) == 0);
+	okc("e3.trust_idle",
+	    ultrawidelock_reader_provision_add_trust(idle_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == 0);
+	okc("e3.trust_walker",
+	    ultrawidelock_reader_provision_add_trust(p.cred_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+						     ULTRAWIDELOCK_CRED_INDEX_NONE) == 0);
+	ultrawidelock_ec_p256_pub_from_priv(sp, p.rvk);
 
 	/* E4: AUTH0-response failure paths */
 	{
@@ -1401,7 +1422,7 @@ int main(void)
 		{
 			static const uint8_t one[1] = {0x00};
 
-			ph_send(30, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, one, sizeof(one));
+			ph_send(30, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, one, sizeof(one));
 		}
 		okc("e4.short_auth0resp_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(30);
@@ -1415,10 +1436,10 @@ int main(void)
 			size_t bn;
 
 			memset(badpub, 0x05, sizeof(badpub)); /* prefix != 0x04 */
-			bn = tlv1(bpl, ALIRO_TAG_DEVICE_PUBX, badpub, 65);
+			bn = tlv1(bpl, ULTRAWIDELOCK_TAG_DEVICE_PUBX, badpub, 65);
 			bpl[bn++] = 0x90;
 			bpl[bn++] = 0x00;
-			ph_send(31, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, bpl, bn);
+			ph_send(31, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, bpl, bn);
 		}
 		okc("e4.ecdh_fail_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(31);
@@ -1467,7 +1488,7 @@ int main(void)
 		{
 			static const uint8_t one[1] = {0x22};
 
-			ph_send(37, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, one, sizeof(one));
+			ph_send(37, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, one, sizeof(one));
 		}
 		okc("e5.short_auth1resp_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(37);
@@ -1483,7 +1504,7 @@ int main(void)
 
 			small[8] = 0x90;
 			small[9] = 0x00;
-			ph_send(38, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, small,
+			ph_send(38, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, small,
 				sizeof(small));
 		}
 		okc("e5.tagless_auth1resp_dead", tx_pending() == 0);
@@ -1501,7 +1522,7 @@ int main(void)
 			memset(big, 0x33, sizeof(big));
 			big[298] = 0x90;
 			big[299] = 0x00;
-			ph_send(39, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, big, sizeof(big));
+			ph_send(39, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, big, sizeof(big));
 		}
 		okc("e5.oversize_auth1resp_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(39);
@@ -1540,7 +1561,7 @@ int main(void)
 
 		/* reader-status seal failure: nothing goes on the wire */
 		aliro_prim_host_fail_encrypt_after = 0;
-		aliro_reader_notify_unlock(true);
+		ultrawidelock_reader_notify_unlock(true);
 		okc("e6.notify_seal_fail", tx_pending() == 0);
 
 		/* the standard phase minted a Kpersistent; the persist fails on this
@@ -1578,7 +1599,7 @@ int main(void)
 		 * standard AUTH1 both dead-end on the missing salt field 1 */
 		aliro_prim_host_fail_pub_from_priv = 1;
 		okc("e7.provision_no_group_x",
-		    aliro_reader_provision_identity(rid, sp, grk0) == 0);
+		    ultrawidelock_reader_provision_identity(rid, sp, grk0) == 0);
 		s_cfg.cb.on_connected(44);
 		ph_initiate(&p, 44, 1);
 		okc("e7.auth0_c", ph_take_auth0(&p) == 0 && p.exp_phase == 0x01);
@@ -1586,7 +1607,7 @@ int main(void)
 		okc("e7.auth1_resp_c", ph_auth1_resp(&p, 44, NULL, 0) == 0);
 		okc("e7.no_group_x_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(44);
-		okc("e7.provision_restore", aliro_reader_provision_identity(rid, sp, grk0) == 0);
+		okc("e7.provision_restore", ultrawidelock_reader_provision_identity(rid, sp, grk0) == 0);
 	}
 
 	/* E8: EXCHANGE-response failures + seal failures on the reader side */
@@ -1604,7 +1625,7 @@ int main(void)
 		{
 			static const uint8_t one[1] = {0x11};
 
-			ph_send(46, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, one, sizeof(one));
+			ph_send(46, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, one, sizeof(one));
 		}
 		okc("e8.short_exresp_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(46);
@@ -1622,7 +1643,7 @@ int main(void)
 			memset(junk, 0x5C, sizeof(junk));
 			junk[38] = 0x90;
 			junk[39] = 0x00;
-			ph_send(47, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, junk, sizeof(junk));
+			ph_send(47, ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, junk, sizeof(junk));
 		}
 		okc("e8.garbage_exresp_dead", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(47);
@@ -1670,16 +1691,20 @@ int main(void)
 		uint8_t fill_priv[32], fill_pub[65];
 
 		memset(fill_priv, 0xB8, sizeof(fill_priv));
-		aliro_ec_p256_pub_from_priv(fill_priv, fill_pub);
-		okc("e9.fill3", aliro_reader_provision_add_trust(fill_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
+		ultrawidelock_ec_p256_pub_from_priv(fill_priv, fill_pub);
+		okc("e9.fill3", ultrawidelock_reader_provision_add_trust(
+					fill_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+					ULTRAWIDELOCK_CRED_INDEX_NONE) == 0);
 		memset(fill_priv, 0xB9, sizeof(fill_priv));
-		aliro_ec_p256_pub_from_priv(fill_priv, fill_pub);
-		okc("e9.fill4", aliro_reader_provision_add_trust(fill_pub, 0u, ALIRO_CRED_INDEX_NONE, ALIRO_CRED_INDEX_NONE) == 0);
+		ultrawidelock_ec_p256_pub_from_priv(fill_priv, fill_pub);
+		okc("e9.fill4", ultrawidelock_reader_provision_add_trust(
+					fill_pub, 0u, ULTRAWIDELOCK_CRED_INDEX_NONE,
+					ULTRAWIDELOCK_CRED_INDEX_NONE) == 0);
 
 		memset(&q, 0, sizeof(q));
 		memcpy(q.rvk, p.rvk, sizeof(q.rvk));
 		memset(q.cred_priv, 0xC9, sizeof(q.cred_priv));
-		aliro_ec_p256_pub_from_priv(q.cred_priv, q.cred_pub);
+		ultrawidelock_ec_p256_pub_from_priv(q.cred_priv, q.cred_pub);
 		s_cfg.cb.on_connected(45);
 		ph_initiate(&q, 45, 0);
 		okc("e9.auth0", ph_take_auth0(&q) == 0);
@@ -1687,7 +1712,7 @@ int main(void)
 		okc("e9.auth1_resp", ph_auth1_resp(&q, 45, NULL, 0) == 0);
 		okc("e9.rejected", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(45);
-		okc("e9.trust_last_evicts", aliro_reader_trust_last() == 0);
+		okc("e9.trust_last_evicts", ultrawidelock_reader_trust_last() == 0);
 	}
 
 	printf("\n== B2: a grant inside the hold window supersedes the replay ==\n");
@@ -1712,7 +1737,7 @@ int main(void)
 		okc("b2.setup_exchange", ph_exchange_resp(&p, 4) == 0);
 		okc("b2.setup_ap_completed", ph_take_ap_completed(&p) == 0);
 
-		aliro_reader_notify_unlock(true); /* peer now believes the door is open */
+		ultrawidelock_reader_notify_unlock(true); /* peer now believes the door is open */
 		f = tx_next(&n);
 		okc("b2.setup_grant", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					     pn == 8 && memcmp(plain, grant, 8) == 0);
@@ -1720,7 +1745,7 @@ int main(void)
 		/* Departure: the relock has nowhere to go, so the phone is stranded showing
 		 * this door unlocked. This is the state the replay exists to repair. */
 		s_cfg.cb.on_disconnected(4);
-		aliro_reader_notify_unlock(false);
+		ultrawidelock_reader_notify_unlock(false);
 		okc("b2.relock_undeliverable", tx_pending() == 0);
 
 		/* Return. The replay is armed, not sent. */
@@ -1735,12 +1760,12 @@ int main(void)
 		/* The approach grant lands inside the window. It must go out despite the
 		 * peer having last been told Unsecured — the reconnect invalidated that
 		 * belief — and it must leave nothing for the tick to release. */
-		aliro_reader_notify_unlock(true);
+		ultrawidelock_reader_notify_unlock(true);
 		f = tx_next(&n);
 		okc("b2.grant_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					    pn == 8 && memcmp(plain, grant, 8) == 0);
 
-		aliro_reader_status_tick(woz_uptime_ms() + 10000);
+		ultrawidelock_reader_status_tick(woz_uptime_ms() + 10000);
 		okc("b2.replay_cancelled_by_grant", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(5);
 	}
@@ -1749,7 +1774,7 @@ int main(void)
 	 * ---- R: revocation ------------------------------------------------
 	 *
 	 * The reader half of Matter ClearCredential/ClearUser. This is the only
-	 * suite that compiles the real aliro_reader.c, so it is the only place
+	 * suite that compiles the real ultrawidelock_reader.c, so it is the only place
 	 * the fail-closed persist policy can be exercised at all.
 	 */
 	printf("\n== R: revocation — ClearCredential / ClearUser reach the store ==\n");
@@ -1759,40 +1784,40 @@ int main(void)
 
 		memset(rp1, 0xC1, sizeof(rp1));
 		memset(rp2, 0xC2, sizeof(rp2));
-		aliro_ec_p256_pub_from_priv(rp1, rk1);
-		aliro_ec_p256_pub_from_priv(rp2, rk2);
+		ultrawidelock_ec_p256_pub_from_priv(rp1, rk1);
+		ultrawidelock_ec_p256_pub_from_priv(rp2, rk2);
 
-		okc("r.clear_start", aliro_reader_trust_clear() >= 0);
-		okc("r.add1", aliro_reader_provision_add_trust(rk1, 7u, 11u, 3u) == 0);
-		okc("r.add2", aliro_reader_provision_add_trust(rk2, 7u, 12u, 4u) == 0);
+		okc("r.clear_start", ultrawidelock_reader_trust_clear() >= 0);
+		okc("r.add1", ultrawidelock_reader_provision_add_trust(rk1, 7u, 11u, 3u) == 0);
+		okc("r.add2", ultrawidelock_reader_provision_add_trust(rk2, 7u, 12u, 4u) == 0);
 		/* Same key, same indices: nothing to write. */
-		okc("r.add1_dup", aliro_reader_provision_add_trust(rk1, 7u, 11u, 3u) == 1);
+		okc("r.add1_dup", ultrawidelock_reader_provision_add_trust(rk1, 7u, 11u, 3u) == 1);
 		/* Same key at a NEW index: still 1, but the binding must be rewritten
 		 * or the anchor becomes one no ClearCredential can name. */
-		okc("r.rebind", aliro_reader_provision_add_trust(rk1, 7u, 21u, 3u) == 1);
-		okc("r.rebound_old_index_gone", aliro_reader_provision_remove_trust(7u, 11u) == 1);
+		okc("r.rebind", ultrawidelock_reader_provision_add_trust(rk1, 7u, 21u, 3u) == 1);
+		okc("r.rebound_old_index_gone", ultrawidelock_reader_provision_remove_trust(7u, 11u) == 1);
 
 		/* The admin names the credential by index, and it goes. */
-		okc("r.remove", aliro_reader_provision_remove_trust(7u, 21u) == 0);
+		okc("r.remove", ultrawidelock_reader_provision_remove_trust(7u, 21u) == 0);
 		/* Idempotent: a removal that already happened is not a failure. */
-		okc("r.remove_again", aliro_reader_provision_remove_trust(7u, 21u) == 1);
+		okc("r.remove_again", ultrawidelock_reader_provision_remove_trust(7u, 21u) == 1);
 		/* Gone for real: re-adding is an ADD (0), not a dedup (1). */
-		okc("r.slot_freed", aliro_reader_provision_add_trust(rk1, 7u, 31u, 3u) == 0);
+		okc("r.slot_freed", ultrawidelock_reader_provision_add_trust(rk1, 7u, 31u, 3u) == 0);
 
 		/* ClearUser takes every anchor bound to that user, and only those. */
-		okc("r.remove_user_none", aliro_reader_provision_remove_user(9u) == 0);
-		okc("r.remove_user", aliro_reader_provision_remove_user(3u) == 1);
-		okc("r.other_user_kept", aliro_reader_provision_remove_trust(7u, 12u) == 0);
+		okc("r.remove_user_none", ultrawidelock_reader_provision_remove_user(9u) == 0);
+		okc("r.remove_user", ultrawidelock_reader_provision_remove_user(3u) == 1);
+		okc("r.other_user_kept", ultrawidelock_reader_provision_remove_trust(7u, 12u) == 0);
 
 		/*
 		 * The type is half the name: a Matter credential index is scoped
 		 * to its type, so clearing (type 8, index 61) must not touch the
 		 * (type 7, index 61) anchor sitting beside it.
 		 */
-		okc("r.type_add", aliro_reader_provision_add_trust(rk1, 7u, 61u, 8u) == 0);
+		okc("r.type_add", ultrawidelock_reader_provision_add_trust(rk1, 7u, 61u, 8u) == 0);
 		okc("r.type_mismatch_misses",
-		    aliro_reader_provision_remove_trust(8u, 61u) == 1);
-		okc("r.type_match_removes", aliro_reader_provision_remove_trust(7u, 61u) == 0);
+		    ultrawidelock_reader_provision_remove_trust(8u, 61u) == 1);
+		okc("r.type_match_removes", ultrawidelock_reader_provision_remove_trust(7u, 61u) == 0);
 
 		/*
 		 * ClearCredential's two wildcards. Clearing one type must leave
@@ -1800,29 +1825,29 @@ int main(void)
 		 * anchors included -- they are not Matter credentials, but
 		 * leaving them behind would leave the door open.
 		 */
-		okc("r.wild_clean", aliro_reader_trust_clear() >= 0);
-		okc("r.wild_add7", aliro_reader_provision_add_trust(rk1, 7u, 71u, 9u) == 0);
-		okc("r.wild_add8", aliro_reader_provision_add_trust(rk2, 8u, 72u, 9u) == 0);
-		okc("r.wild_type7", aliro_reader_provision_remove_type(7u) == 1);
-		okc("r.wild_type8_kept", aliro_reader_provision_remove_trust(8u, 72u) == 0);
-		okc("r.wild_add_again", aliro_reader_provision_add_trust(rk1, 7u, 73u, 9u) == 0);
-		okc("r.wild_all", aliro_reader_provision_remove_type(0u) == 1);
-		okc("r.wild_all_empty", aliro_reader_provision_remove_type(0u) == 0);
+		okc("r.wild_clean", ultrawidelock_reader_trust_clear() >= 0);
+		okc("r.wild_add7", ultrawidelock_reader_provision_add_trust(rk1, 7u, 71u, 9u) == 0);
+		okc("r.wild_add8", ultrawidelock_reader_provision_add_trust(rk2, 8u, 72u, 9u) == 0);
+		okc("r.wild_type7", ultrawidelock_reader_provision_remove_type(7u) == 1);
+		okc("r.wild_type8_kept", ultrawidelock_reader_provision_remove_trust(8u, 72u) == 0);
+		okc("r.wild_add_again", ultrawidelock_reader_provision_add_trust(rk1, 7u, 73u, 9u) == 0);
+		okc("r.wild_all", ultrawidelock_reader_provision_remove_type(0u) == 1);
+		okc("r.wild_all_empty", ultrawidelock_reader_provision_remove_type(0u) == 0);
 
 		/*
 		 * Fail closed. The write fails, so the call reports -1 -- and the
 		 * credential is untrusted anyway, which a re-add proves by
 		 * returning 0 rather than 1.
 		 */
-		okc("r.readd", aliro_reader_provision_add_trust(rk2, 7u, 41u, 5u) == 0);
+		okc("r.readd", ultrawidelock_reader_provision_add_trust(rk2, 7u, 41u, 5u) == 0);
 		s_nvs_fail = true;
-		okc("r.remove_unpersisted", aliro_reader_provision_remove_trust(7u, 41u) == -1);
+		okc("r.remove_unpersisted", ultrawidelock_reader_provision_remove_trust(7u, 41u) == -1);
 		s_nvs_fail = false;
 		okc("r.unpersisted_still_untrusted",
-		    aliro_reader_provision_add_trust(rk2, 7u, 42u, 5u) == 0);
+		    ultrawidelock_reader_provision_add_trust(rk2, 7u, 42u, 5u) == 0);
 		s_nvs_fail = true;
 		okc("r.remove_user_unpersisted_reports",
-		    aliro_reader_provision_remove_user(5u) == -1);
+		    ultrawidelock_reader_provision_remove_user(5u) == -1);
 		s_nvs_fail = false;
 
 		/*
@@ -1832,25 +1857,25 @@ int main(void)
 		 * no room left" -- which cost an afternoon on real hardware.
 		 */
 		s_nvs_errno = -ENOSPC;
-		okc("r.errno_anchor1", aliro_reader_provision_add_trust(rk2, 7u, 43u, 5u) == 0);
+		okc("r.errno_anchor1", ultrawidelock_reader_provision_add_trust(rk2, 7u, 43u, 5u) == 0);
 		s_nvs_fail = true;
-		okc("r.errno_add", aliro_reader_provision_add_trust(rk1, 7u, 44u, 5u) == -ENOSPC);
-		okc("r.errno_remove", aliro_reader_provision_remove_trust(7u, 43u) == -ENOSPC);
+		okc("r.errno_add", ultrawidelock_reader_provision_add_trust(rk1, 7u, 44u, 5u) == -ENOSPC);
+		okc("r.errno_remove", ultrawidelock_reader_provision_remove_trust(7u, 43u) == -ENOSPC);
 		okc("r.errno_identity",
-		    aliro_reader_provision_identity(rid, sp, grk0) == -ENOSPC);
-		okc("r.errno_clear", aliro_reader_provision_clear() == -ENOSPC);
+		    ultrawidelock_reader_provision_identity(rid, sp, grk0) == -ENOSPC);
+		okc("r.errno_clear", ultrawidelock_reader_provision_clear() == -ENOSPC);
 		s_nvs_fail = false;
 
 		/* Each wildcard needs its own anchor: the failed removal above
 		 * already took the last one out of RAM, and a wildcard that
 		 * finds nothing returns 0 rather than reaching the store. */
-		okc("r.errno_anchor2", aliro_reader_provision_add_trust(rk2, 7u, 45u, 6u) == 0);
+		okc("r.errno_anchor2", ultrawidelock_reader_provision_add_trust(rk2, 7u, 45u, 6u) == 0);
 		s_nvs_fail = true;
-		okc("r.errno_remove_user", aliro_reader_provision_remove_user(6u) == -ENOSPC);
+		okc("r.errno_remove_user", ultrawidelock_reader_provision_remove_user(6u) == -ENOSPC);
 		s_nvs_fail = false;
-		okc("r.errno_anchor3", aliro_reader_provision_add_trust(rk2, 7u, 46u, 6u) == 0);
+		okc("r.errno_anchor3", ultrawidelock_reader_provision_add_trust(rk2, 7u, 46u, 6u) == 0);
 		s_nvs_fail = true;
-		okc("r.errno_remove_type", aliro_reader_provision_remove_type(7u) == -ENOSPC);
+		okc("r.errno_remove_type", ultrawidelock_reader_provision_remove_type(7u) == -ENOSPC);
 		s_nvs_fail = false;
 
 		/*
@@ -1862,16 +1887,16 @@ int main(void)
 		 * so that repeat carries the write -- and keeps reporting the failure
 		 * until it lands, rather than answering "already removed".
 		 */
-		okc("r.retry_add", aliro_reader_provision_add_trust(rk1, 7u, 81u, 9u) == 0);
+		okc("r.retry_add", ultrawidelock_reader_provision_add_trust(rk1, 7u, 81u, 9u) == 0);
 		s_nvs_fail = true;
-		okc("r.retry_first_fails", aliro_reader_provision_remove_trust(7u, 81u) == -ENOSPC);
+		okc("r.retry_first_fails", ultrawidelock_reader_provision_remove_trust(7u, 81u) == -ENOSPC);
 		okc("r.retry_reports_pending",
-		    aliro_reader_provision_remove_trust(7u, 81u) == -ENOSPC);
-		okc("r.retry_pending_via_user", aliro_reader_provision_remove_user(9u) == -ENOSPC);
-		okc("r.retry_pending_via_type", aliro_reader_provision_remove_type(7u) == -ENOSPC);
+		    ultrawidelock_reader_provision_remove_trust(7u, 81u) == -ENOSPC);
+		okc("r.retry_pending_via_user", ultrawidelock_reader_provision_remove_user(9u) == -ENOSPC);
+		okc("r.retry_pending_via_type", ultrawidelock_reader_provision_remove_type(7u) == -ENOSPC);
 		s_nvs_fail = false;
-		okc("r.retry_lands", aliro_reader_provision_remove_trust(7u, 81u) == 1);
-		okc("r.retry_settled", aliro_reader_provision_remove_trust(7u, 81u) == 1);
+		okc("r.retry_lands", ultrawidelock_reader_provision_remove_trust(7u, 81u) == 1);
+		okc("r.retry_settled", ultrawidelock_reader_provision_remove_trust(7u, 81u) == 1);
 		s_nvs_errno = -1;
 
 		/* A revocation drops every live link: an established session keeps
@@ -1883,16 +1908,16 @@ int main(void)
 		 * hold is that the second revocation coalesces into the first
 		 * pending sweep instead of queueing a second one on the same
 		 * static event. */
-		okc("r.clean", aliro_reader_trust_clear() >= 0);
+		okc("r.clean", ultrawidelock_reader_trust_clear() >= 0);
 		(void)drain_revoke_sweep(); /* the clear posted one; start from empty */
-		okc("r.link_add", aliro_reader_provision_add_trust(rk1, 7u, 51u, 7u) == 0);
-		okc("r.link_add2", aliro_reader_provision_add_trust(rk2, 7u, 52u, 7u) == 0);
+		okc("r.link_add", ultrawidelock_reader_provision_add_trust(rk1, 7u, 51u, 7u) == 0);
+		okc("r.link_add2", ultrawidelock_reader_provision_add_trust(rk2, 7u, 52u, 7u) == 0);
 		s_cfg.cb.on_connected(41);
 		int before = s_disconnects;
 		int posts = s_revoke_sweep_posts;
 
-		okc("r.link_revoke", aliro_reader_provision_remove_trust(7u, 51u) == 0);
-		okc("r.link_revoke2", aliro_reader_provision_remove_trust(7u, 52u) == 0);
+		okc("r.link_revoke", ultrawidelock_reader_provision_remove_trust(7u, 51u) == 0);
+		okc("r.link_revoke2", ultrawidelock_reader_provision_remove_trust(7u, 52u) == 0);
 		okc("r.sweep_posted_twice", s_revoke_sweep_posts == posts + 2);
 		okc("r.sweep_deferred", s_disconnects == before);
 		okc("r.sweep_coalesced", drain_revoke_sweep() == 1);
@@ -1902,9 +1927,9 @@ int main(void)
 	}
 
 	/* console/status entry points: exercised for effect-free execution */
-	aliro_reader_prov_print();
-	aliro_reader_stepup_arm();
-	aliro_reader_stepup_status();
+	ultrawidelock_reader_prov_print();
+	ultrawidelock_reader_stepup_arm();
+	ultrawidelock_reader_stepup_status();
 
 	printf("\n%s: %d failure(s)\n", fails == 0 ? "PASS" : "FAIL", fails);
 	return fails != 0;

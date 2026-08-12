@@ -20,8 +20,8 @@
 
 extern "C" {
 #include "test.h"
-#include "aliro_hash.h"
-#include "aliro_prim.h"
+#include "ultrawidelock_hash.h"
+#include "ultrawidelock_prim.h"
 }
 
 #include "stackfake.h"
@@ -34,7 +34,7 @@ extern "C" {
 #include "protocol/ble_message.h"
 #include "protocol/nfc_auth.h"
 #include "protocol/nfc_select.h"
-#include "aliro_stepup.h"
+#include "ultrawidelock_stepup.h"
 }
 
 using namespace Aliro;
@@ -1436,7 +1436,7 @@ static size_t decode_hex(const char *hex, uint8_t *out, size_t cap)
 
 static uint8_t document_bytes[1024];
 static size_t document_length;
-static struct aliro_stepup_doc parsed_document;
+static struct ultrawidelock_stepup_doc parsed_document;
 /* Views the suite pulls out of the parsed fixture: the device key the document
  * binds and the valueDigest of its element2 item. */
 static const uint8_t *parsed_device_public_key;
@@ -1464,11 +1464,11 @@ static size_t build_step_up_response(uint8_t *out, size_t cap, const uint8_t *do
 	if (sealed == 0U) {
 		return 0;
 	}
-	if (aliro_stepup_wrap_sessiondata_raw(ciphertext, sealed, sessionData, sizeof(sessionData),
+	if (ultrawidelock_stepup_wrap_sessiondata_raw(ciphertext, sealed, sessionData, sizeof(sessionData),
 					      &sessionDataLength) != 0) {
 		return 0;
 	}
-	if (aliro_stepup_wrap_do53(sessionData, sessionDataLength, out, cap - 2, &wrapped) != 0) {
+	if (ultrawidelock_stepup_wrap_do53(sessionData, sessionDataLength, out, cap - 2, &wrapped) != 0) {
 		return 0;
 	}
 	out[wrapped++] = 0x90;
@@ -1491,7 +1491,7 @@ static void test_access_document(void)
 	 * digest the validator will demand and use the device key the document
 	 * actually binds. Neither can be invented from outside. */
 	T_EQ("fixture parses",
-	     aliro_stepup_parse_response(document_bytes, document_length, &parsed_document), 0);
+	     ultrawidelock_stepup_parse_response(document_bytes, document_length, &parsed_document), 0);
 	parsed_device_public_key = parsed_document.device_key;
 	parsed_expected_digest = kZeroDigest;
 	for (size_t i = 0; i < parsed_document.n_digests; i++) {
@@ -1646,12 +1646,12 @@ static void seal_fast_cryptogram(const uint8_t *credential_ephemeral_public_key,
 
 	/* Same HKDF the reader used, over the salt the reader produced. */
 	T_EQ("derive the cryptogram key",
-	     aliro_hkdf(stackfake.first_salt, stackfake.first_salt_len, kpersistent,
+	     ultrawidelock_hkdf(stackfake.first_salt, stackfake.first_salt_len, kpersistent,
 			sizeof(kpersistent), credential_ephemeral_public_key + 1, 32, block,
 			sizeof(block)),
 	     0);
 	T_EQ("seal the cryptogram",
-	     aliro_aes256_gcm_encrypt(block, nonce, sizeof(nonce), nullptr, 0, plaintext,
+	     ultrawidelock_aes256_gcm_encrypt(block, nonce, sizeof(nonce), nullptr, 0, plaintext,
 				      sizeof(plaintext), cryptogram, cryptogram + sizeof(plaintext),
 				      16),
 	     0);
@@ -1845,7 +1845,7 @@ static void test_key_schedule(void)
 	fill_public_key(credential, 0x10);
 	(void)ephemeral;
 	T_EQ("re-derive the block",
-	     aliro_hkdf(salt, salt_len, kdh, sizeof(kdh), credential + 1, 32, block,
+	     ultrawidelock_hkdf(salt, salt_len, kdh, sizeof(kdh), credential + 1, 32, block,
 			sizeof(block)),
 	     0);
 

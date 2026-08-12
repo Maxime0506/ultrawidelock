@@ -1,8 +1,9 @@
 // AliroReaderDelegate: implements the Aliro reader-provisioning and BLE-UWB portions of the Matter
 // DoorLock::Delegate interface, backing the controller-facing GetAliro*/SetAliroReaderConfig
-// commands and persisting the provisioned reader identity via aliro_reader_provision_identity.
-// Bridges Matter cluster commands to the underlying aliro_reader NVS-backed identity/trust store
-// and to the BLE advertising layer (refreshed when the group resolving key changes).
+// commands and persisting the provisioned reader identity via
+// ultrawidelock_reader_provision_identity. Bridges Matter cluster commands to the underlying
+// ultrawidelock_reader NVS-backed identity/trust store and to the BLE advertising layer (refreshed
+// when the group resolving key changes).
 /*
  *
  *    Copyright (c) 2026 Project CHIP Authors
@@ -31,7 +32,7 @@
 
 #include <string.h>
 
-// Bridge into the reader component's NVS-backed provisioning store (aliro_prov).
+// Bridge into the reader component's NVS-backed provisioning store (ultrawidelock_prov).
 // The header carries its own extern "C" guard.
 #include <ultrawidelock/reader.h>
 
@@ -47,7 +48,9 @@ namespace
 constexpr uint16_t kKnownProtocolVersion = 0x0100;
 } // namespace
 
-// Lazily generates and caches the Aliro group sub-identifier via DRBG on first call; subsequent calls are a no-op. On RNG failure, zeroes mGroupSubIdentifier and logs an error, but still marks it as set so this is not retried.
+// Lazily generates and caches the Aliro group sub-identifier via DRBG on first call; subsequent
+// calls are a no-op. On RNG failure, zeroes mGroupSubIdentifier and logs an error, but still marks
+// it as set so this is not retried.
 void AliroReaderDelegate::EnsureSubIdentifier()
 {
 	if (mHasSubId) {
@@ -82,7 +85,9 @@ CHIP_ERROR AliroReaderDelegate::GetAliroReaderVerificationKey(MutableByteSpan &v
 	return CopySpanToMutableSpan(ByteSpan(mVerificationKey), verificationKey);
 }
 
-// Copies the Aliro reader group identifier into groupIdentifier. If the reader is not configured, reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or whatever CopySpanToMutableSpan reports on failure.
+// Copies the Aliro reader group identifier into groupIdentifier. If the reader is not configured,
+// reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or
+// whatever CopySpanToMutableSpan reports on failure.
 CHIP_ERROR AliroReaderDelegate::GetAliroReaderGroupIdentifier(MutableByteSpan &groupIdentifier)
 {
 	if (!mConfigured) {
@@ -102,7 +107,9 @@ AliroReaderDelegate::GetAliroReaderGroupSubIdentifier(MutableByteSpan &groupSubI
 	return CopySpanToMutableSpan(ByteSpan(mGroupSubIdentifier), groupSubIdentifier);
 }
 
-// Encodes a 16-bit Aliro protocol version as 2 big-endian bytes into out. Returns CHIP_ERROR_INVALID_ARGUMENT if out is smaller than kAliroProtocolVersionSize; on success, reduces out to the written size.
+// Encodes a 16-bit Aliro protocol version as 2 big-endian bytes into out. Returns
+// CHIP_ERROR_INVALID_ARGUMENT if out is smaller than kAliroProtocolVersionSize; on success, reduces
+// out to the written size.
 CHIP_ERROR AliroReaderDelegate::CopyProtocolVersionIntoSpan(uint16_t value, MutableByteSpan &out)
 {
 	static_assert(sizeof(value) == kAliroProtocolVersionSize, "protocol version is 2 bytes");
@@ -129,7 +136,9 @@ CHIP_ERROR AliroReaderDelegate::GetAliroExpeditedTransactionSupportedProtocolVer
 	return CopyProtocolVersionIntoSpan(kKnownProtocolVersion, protocolVersion);
 }
 
-// Copies the Aliro group resolving key into groupResolvingKey. If the reader is not configured, reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or whatever CopySpanToMutableSpan reports on failure.
+// Copies the Aliro group resolving key into groupResolvingKey. If the reader is not configured,
+// reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or
+// whatever CopySpanToMutableSpan reports on failure.
 CHIP_ERROR AliroReaderDelegate::GetAliroGroupResolvingKey(MutableByteSpan &groupResolvingKey)
 {
 	if (!mConfigured) {
@@ -180,15 +189,15 @@ uint16_t AliroReaderDelegate::GetNumberOfAliroEndpointKeysSupported()
 // optional group resolving key) sent by the controller, and persist the corresponding reader
 // identity to NVS.
 // Requires signingKey, verificationKey, and groupIdentifier to each match their fixed expected
-// sizes, and if present, groupResolvingKey to match its fixed size; returns CHIP_ERROR_INVALID_ARGUMENT
-// otherwise, without modifying any stored state. If groupResolvingKey is absent, zeroes
-// mGroupResolvingKey. On success, marks the reader configured, ensures the group sub-identifier is
-// generated, builds reader_id = groupIdentifier || groupSubIdentifier, and calls
-// aliro_reader_provision_identity to persist it alongside the signing key and group resolving key
-// (persistence failure is logged but does not change the return value). Also refreshes the BLE
-// advertisement so it carries the newly configured group resolving key, since the reader may have
-// started advertising before this command arrived. Always returns CHIP_NO_ERROR once the size
-// checks pass.
+// sizes, and if present, groupResolvingKey to match its fixed size; returns
+// CHIP_ERROR_INVALID_ARGUMENT otherwise, without modifying any stored state. If groupResolvingKey
+// is absent, zeroes mGroupResolvingKey. On success, marks the reader configured, ensures the group
+// sub-identifier is generated, builds reader_id = groupIdentifier || groupSubIdentifier, and calls
+// ultrawidelock_reader_provision_identity to persist it alongside the signing key and group
+// resolving key (persistence failure is logged but does not change the return value). Also
+// refreshes the BLE advertisement so it carries the newly configured group resolving key, since the
+// reader may have started advertising before this command arrived. Always returns CHIP_NO_ERROR
+// once the size checks pass.
 CHIP_ERROR AliroReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
 						     const ByteSpan &verificationKey,
 						     const ByteSpan &groupIdentifier,
@@ -219,27 +228,29 @@ CHIP_ERROR AliroReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
 	// handoff-started reader authenticates the credential Apple just installed:
 	// reader_id = groupIdentifier || groupSubIdentifier, sign_priv = signingKey.
 	// (groupResolvingKey is captured above for the BLE approach-resolution
-	// refinement; it is not yet carried into aliro_prov.)
+	// refinement; it is not yet carried into ultrawidelock_prov.)
 	EnsureSubIdentifier();
 	uint8_t readerId[kAliroReaderGroupIdentifierSize + kAliroReaderGroupSubIdentifierSize];
 	memcpy(readerId, mGroupIdentifier, sizeof(mGroupIdentifier));
 	memcpy(readerId + sizeof(mGroupIdentifier), mGroupSubIdentifier,
 	       sizeof(mGroupSubIdentifier));
-	int rc = aliro_reader_provision_identity(readerId, mSigningKey, mGroupResolvingKey);
+	int rc = ultrawidelock_reader_provision_identity(readerId, mSigningKey, mGroupResolvingKey);
 
 	// Apple sends this command AFTER commissioning completes, but the reader starts
 	// (and begins advertising) on kCommissioningComplete — so its first advertisement
 	// predates the GRK and is not approach-resolvable. Refresh it with the GRK now.
-	aliro_reader_refresh_adv();
+	ultrawidelock_reader_refresh_adv();
 
 	ChipLogProgress(Zcl,
 			"Aliro reader configured — identity provisioned (groupResolvingKey=%d, "
-			"aliro_prov rc=%d)",
+			"ultrawidelock_prov rc=%d)",
 			static_cast<int>(groupResolvingKey.HasValue()), rc);
 	return CHIP_NO_ERROR;
 }
 
-// Clears the stored Aliro reader configuration (signing/verification keys, group identifier, group resolving key) and marks the reader unconfigured. Also clears the persisted provisioning state via aliro_reader_provision_clear. Always returns CHIP_NO_ERROR.
+// Clears the stored Aliro reader configuration (signing/verification keys, group identifier, group
+// resolving key) and marks the reader unconfigured. Also clears the persisted provisioning state
+// via ultrawidelock_reader_provision_clear. Always returns CHIP_NO_ERROR.
 CHIP_ERROR AliroReaderDelegate::ClearAliroReaderConfig()
 {
 	memset(mSigningKey, 0, sizeof(mSigningKey));
@@ -248,7 +259,7 @@ CHIP_ERROR AliroReaderDelegate::ClearAliroReaderConfig()
 	memset(mGroupResolvingKey, 0, sizeof(mGroupResolvingKey));
 	mConfigured = false;
 
-	int rc = aliro_reader_provision_clear();
-	ChipLogProgress(Zcl, "Aliro reader config cleared (aliro_prov rc=%d)", rc);
+	int rc = ultrawidelock_reader_provision_clear();
+	ChipLogProgress(Zcl, "Aliro reader config cleared (ultrawidelock_prov rc=%d)", rc);
 	return CHIP_NO_ERROR;
 }

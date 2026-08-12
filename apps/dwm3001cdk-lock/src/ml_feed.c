@@ -34,7 +34,7 @@
  * class must read as CLEAR rather than as obstructed: clear is the unwidened
  * threshold, which is the behaviour that shipped.
  */
-enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
+enum ultrawidelock_approach_action ml_feed_range(struct ultrawidelock_approach *ap, int64_t now,
 					 int32_t cm)
 {
 #if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
@@ -69,12 +69,12 @@ enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
 				   woz_uptime_us(), ip.n, cm, (unsigned)cls,
 				   (int)(conf * 100.0f),
 				   (unsigned)ultrawidelock_ml_los_disagrees(feat, pwr_diff));
-			return aliro_approach_feed_channel(ap, now, cm,
+			return ultrawidelock_approach_feed_channel(ap, now, cm,
 							   cls == ULTRAWIDELOCK_ML_LOS_OBSTRUCTED, conf);
 		}
 	}
 #endif
-	return aliro_approach_feed(ap, now, cm);
+	return ultrawidelock_approach_feed(ap, now, cm);
 }
 
 /**
@@ -83,11 +83,11 @@ enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
  * exactly where a widened build would have moved its threshold --
  * which is the reading that chooses the number.
  */
-void ml_feed_vote_trace(struct aliro_approach *ap, int64_t now)
+void ml_feed_vote_trace(struct ultrawidelock_approach *ap, int64_t now)
 {
 #if defined(CONFIG_ULTRAWIDELOCK_ML_LOS) && defined(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG)
 	static bool was_blocked;
-	const bool blocked = aliro_approach_nlos_blocked(ap, now);
+	const bool blocked = ultrawidelock_approach_nlos_blocked(ap, now);
 
 	if (blocked != was_blocked) {
 		was_blocked = blocked;

@@ -1825,7 +1825,7 @@ static uint8_t opcred_command(struct matter_device_info *info, const struct matt
 		 *
 		 * Removal does NOT touch the Aliro trust store. An anchor is
 		 * named by credential index and the fabric that installed it is
-		 * not recorded (see aliro_reader_provision_add_trust), so
+		 * not recorded (see ultrawidelock_reader_provision_add_trust), so
 		 * revoking "this fabric's" anchors here would be a guess --
 		 * and the anchor a walk-up depends on may outlive the
 		 * commissioning fabric that posted it on purpose.

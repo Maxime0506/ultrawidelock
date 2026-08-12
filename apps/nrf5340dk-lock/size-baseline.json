@@ -2011,7 +2011,7 @@
         "adv_new": 80,
         "adv_pool": 176,
         "aliro_ccc_cb": 256,
-        "aliro_stepup_build_device_request_ex": 324,
+        "ultrawidelock_stepup_build_device_request_ex": 324,
         "ultrawidelock_uwb_session_init_setup": 256,
         "ultrawidelock_uwb_session_resume": 76,
         "alloc_chunk": 114,

@@ -5,9 +5,9 @@ role declarations stay with their portable implementation owners:
 
 | Include | Canonical source |
 |---|---|
-| `<ultrawidelock/reader.h>` | `modules/woz_aliro/include/ultrawidelock/reader.h` |
-| `<ultrawidelock/device.h>` | `modules/woz_aliro/include/ultrawidelock/device.h` |
-| `<ultrawidelock/tlv.h>` | `modules/woz_aliro/include/ultrawidelock/tlv.h` |
+| `<ultrawidelock/reader.h>` | `modules/ultrawidelock_cred/include/ultrawidelock/reader.h` |
+| `<ultrawidelock/device.h>` | `modules/ultrawidelock_cred/include/ultrawidelock/device.h` |
+| `<ultrawidelock/tlv.h>` | `modules/ultrawidelock_cred/include/ultrawidelock/tlv.h` |
 | `<ultrawidelock/uwb.h>` | `modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h` |
 | `<ultrawidelock/woz_hal.h>` | `modules/woz_port/include/ultrawidelock/woz_hal.h` |
 

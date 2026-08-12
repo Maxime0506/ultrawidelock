@@ -16,7 +16,7 @@
 
 #include <zephyr/kernel.h>
 
-#include "aliro_prim.h"
+#include "ultrawidelock_prim.h"
 
 int aliro_device_selftest(void);
 
@@ -28,7 +28,7 @@ int main(void)
 {
 	printf("\n=== on-target Aliro device EC self-test (nRF5340, nrf_security PSA) ===\n");
 
-	if (aliro_prim_init() != 0) {
+	if (ultrawidelock_prim_init() != 0) {
 		printf("\nON-TARGET RESULT: FAIL (PSA init)\n");
 		return 0;
 	}

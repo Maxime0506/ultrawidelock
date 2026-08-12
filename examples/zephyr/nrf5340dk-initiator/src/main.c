@@ -9,10 +9,10 @@
 // only against a reader running its dev identity with an empty trust store.
 /*
  * Port of examples/esp32/initiator/main/main.c -- the same program on two
- * stacks, differing only in logging macros and entry point (aliro_ble_central.h
+ * stacks, differing only in logging macros and entry point (ultrawidelock_ble_central.h
  * absorbs NimBLE-vs-Zephyr); keep them in step. The transport half lives in
  * ports/zephyr/ble/aliro_ble_central_zephyr.c, the protocol half in woz_aliro's
- * aliro_device; this file is only the glue. UWB is NOT yet wired: ESTABLISHED
+ * ultrawidelock_device; this file is only the glue. UWB is NOT yet wired: ESTABLISHED
  * means the boards agreed a URSK, ranging on it needs the DWM3000EVB driver.
  */
 #include <stdbool.h>
@@ -21,9 +21,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include "aliro_apdu.h" /* 4-byte envelope: frame/unframe + PROTO/OP constants */
-#include "aliro_ble_central.h"
-#include "aliro_crypto.h" /* aliro_crypto_init: brings up the PSA backend */
+#include "ultrawidelock_apdu.h" /* 4-byte envelope: frame/unframe + PROTO/OP constants */
+#include "ultrawidelock_ble_central.h"
+#include "ultrawidelock_crypto.h" /* ultrawidelock_crypto_init: brings up the PSA backend */
 #include <ultrawidelock/device.h>
 #include "ranging.h" /* the post-auth BleSK ranging-setup driver */
 
@@ -101,14 +101,14 @@ LOG_MODULE_REGISTER(initiator, CONFIG_LOG_DEFAULT_LEVEL);
  * identity. Run scripts/aliro-enroll.py to target a real provisioned reader.
  *
  * The reader identity below is the DEV identity every unprovisioned reader falls
- * back to (aliro_prov.c, aliro_prov_dev_default). reader_id is that file's
+ * back to (ultrawidelock_prov.c, ultrawidelock_prov_dev_default). reader_id is that file's
  * k_dev_reader_id verbatim, and the verification key is the public point of its
  * k_dev_sign_priv — note reader_id is exactly that point's X coordinate, which
  * is how the dev identity was constructed and a free check that these two agree.
  *
  * This only works against a reader that is still on its dev identity AND has an
  * empty trust store: that combination makes the reader accept any presented
- * credential (aliro_reader.c, the tv == 1 && s_id.is_dev branch). A reader
+ * credential (ultrawidelock_reader.c, the tv == 1 && s_id.is_dev branch). A reader
  * provisioned over Matter has a real identity and enforces its trust store, so
  * these constants are wrong for it and the transaction will fail at AUTH1.
  *
@@ -138,7 +138,7 @@ static const uint8_t k_cred_priv[32] = {
 /* One transaction at a time: the reader serves one Aliro session per connection
  * and the central connects to one reader. s_conn is the connection s_dev belongs
  * to, so a stale SDU after a reconnect cannot be fed to the wrong session. */
-static struct aliro_device s_dev;
+static struct ultrawidelock_device s_dev;
 static uint16_t s_conn;
 static bool s_armed;
 
@@ -146,16 +146,16 @@ static bool s_armed;
  * Return a human-readable string for an Aliro device phase: IDLE, SENT_AUTH0_RESP, SENT_AUTH1_RESP,
  * ESTABLISHED, or FAILED.
  */
-static const char *phase_str(enum aliro_device_phase p)
+static const char *phase_str(enum ultrawidelock_device_phase p)
 {
 	switch (p) {
-	case ALIRO_DEV_IDLE:
+	case ULTRAWIDELOCK_DEV_IDLE:
 		return "IDLE";
-	case ALIRO_DEV_SENT_AUTH0_RESP:
+	case ULTRAWIDELOCK_DEV_SENT_AUTH0_RESP:
 		return "SENT_AUTH0_RESP";
-	case ALIRO_DEV_SENT_AUTH1_RESP:
+	case ULTRAWIDELOCK_DEV_SENT_AUTH1_RESP:
 		return "SENT_AUTH1_RESP";
-	case ALIRO_DEV_ESTABLISHED:
+	case ULTRAWIDELOCK_DEV_ESTABLISHED:
 		return "ESTABLISHED";
 	default:
 		return "FAILED";
@@ -168,7 +168,7 @@ static const char *phase_str(enum aliro_device_phase p)
  * identity, derive the BleSK salt from the peer's published version list, and arm the device to
  * wait for AUTH0. Log connection and version details.
  */
-static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *peer)
+static void on_ready(uint16_t conn_handle, const struct ultrawidelock_ble_central_peer *peer)
 {
 	LOG_INF("=== transport up (conn %u) ===", conn_handle);
 	LOG_INF("  SPSM     0x%04x", (unsigned)peer->spsm);
@@ -178,7 +178,7 @@ static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *
 	}
 
 	s_armed = false;
-	if (aliro_device_init(&s_dev, k_cred_priv, k_reader_id, k_reader_verif_pub) != 0) {
+	if (ultrawidelock_device_init(&s_dev, k_cred_priv, k_reader_id, k_reader_verif_pub) != 0) {
 		LOG_ERR("device init failed (EC unavailable?)");
 		return;
 	}
@@ -188,15 +188,15 @@ static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *
 	 * while the nRF publishes two entries. Taking it from the GATT READ we just
 	 * did is the whole reason that READ happens before the channel opens; the
 	 * compiled-in default would derive a BleSK the nRF does not share. */
-	uint8_t salt[2u * (ALIRO_BLE_CENTRAL_MAX_VERSIONS + 1u)];
+	uint8_t salt[2u * (ULTRAWIDELOCK_BLE_CENTRAL_MAX_VERSIONS + 1u)];
 	size_t salt_len = 0;
 
-	if (aliro_ble_central_blesk_salt(peer, INITIATOR_VERSION, salt, sizeof(salt), &salt_len) !=
+	if (ultrawidelock_ble_central_blesk_salt(peer, INITIATOR_VERSION, salt, sizeof(salt), &salt_len) !=
 	    0) {
 		LOG_ERR("BleSK salt assembly failed");
 		return;
 	}
-	if (aliro_device_set_blesk_salt(&s_dev, salt, salt_len) != 0) {
+	if (ultrawidelock_device_set_blesk_salt(&s_dev, salt, salt_len) != 0) {
 		LOG_ERR("BleSK salt rejected (%u B)", (unsigned)salt_len);
 		return;
 	}
@@ -209,7 +209,7 @@ static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *
 	 * The DEVICE speaks first. The reader sits in PH_IDLE until it receives
 	 * a NOTIFICATION/Initiate-Access-Protocol frame, and start_auth() --
 	 * which is what emits AUTH0 -- has exactly one call site, that branch
-	 * (aliro_reader.c:1529). Without this both ends wait for each other: the
+	 * (ultrawidelock_reader.c:1529). Without this both ends wait for each other: the
 	 * L2CAP channel opens, the reader logs "Aliro session created", and
 	 * nothing else ever happens. Observed on hardware, twice, before this
 	 * line existed.
@@ -225,16 +225,17 @@ static void on_ready(uint16_t conn_handle, const struct aliro_ble_central_peer *
 		static const uint8_t a5_csa_v1[] = {
 			0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0x01, 0x00,
 		};
-		uint8_t frame[ALIRO_ENVELOPE_HDR + sizeof(a5_csa_v1)];
+		uint8_t frame[ULTRAWIDELOCK_ENVELOPE_HDR + sizeof(a5_csa_v1)];
 		size_t frame_len = 0;
 		int rc;
 
-		if (aliro_ble_frame(ALIRO_PROTO_NOTIFICATION, ALIRO_NOTIF_INITIATE_AP, a5_csa_v1,
-				    sizeof(a5_csa_v1), frame, sizeof(frame), &frame_len) != 0) {
+		if (ultrawidelock_ble_frame(
+			    ULTRAWIDELOCK_PROTO_NOTIFICATION, ULTRAWIDELOCK_NOTIF_INITIATE_AP,
+			    a5_csa_v1, sizeof(a5_csa_v1), frame, sizeof(frame), &frame_len) != 0) {
 			LOG_ERR("Initiate-AP framing failed");
 			return;
 		}
-		rc = aliro_ble_central_send(conn_handle, frame, frame_len);
+		rc = ultrawidelock_ble_central_send(conn_handle, frame, frame_len);
 		LOG_INF("device armed; sent Initiate-AP (%u B, rc=%d), expecting AUTH0",
 			(unsigned)frame_len, rc);
 	}
@@ -251,7 +252,7 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, size_t len)
 	 * path splits coalesced envelopes because a real iPhone packs several into one
 	 * SDU. If this is ever pointed at a reader that does the same, the trailing
 	 * envelopes are dropped here and the transaction stalls. */
-	if (aliro_ble_unframe(data, len, &type, &opcode, &pl, &pl_len) != 0) {
+	if (ultrawidelock_ble_unframe(data, len, &type, &opcode, &pl, &pl_len) != 0) {
 		LOG_WRN("conn %u: not a valid envelope (%u B)", conn_handle, (unsigned)len);
 		LOG_HEXDUMP_WRN(data, len, "sdu");
 		return;
@@ -265,7 +266,7 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, size_t len)
 	 * [proto][id][len_be16][ct||tag], so the four bytes unframed above are its
 	 * own authenticated header, not an envelope wrapped around it. They were
 	 * only unframed here because the two framings are the same shape. */
-	if (type != ALIRO_PROTO_ACCESS || opcode != ALIRO_AP_OP_COMMAND) {
+	if (type != ULTRAWIDELOCK_PROTO_ACCESS || opcode != ULTRAWIDELOCK_AP_OP_COMMAND) {
 		if (initiator_ranging_on_sdu(conn_handle, data, len) == 0) {
 			return;
 		}
@@ -283,7 +284,7 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, size_t len)
 	uint8_t resp[INITIATOR_RESP_MAX];
 	size_t resp_len = 0;
 
-	if (aliro_device_on_command(&s_dev, pl, pl_len, resp, sizeof(resp), &resp_len) != 0) {
+	if (ultrawidelock_device_on_command(&s_dev, pl, pl_len, resp, sizeof(resp), &resp_len) != 0) {
 		LOG_ERR("conn %u: command rejected in phase %s", conn_handle,
 			phase_str(s_dev.phase));
 		LOG_HEXDUMP_ERR(pl, pl_len, "command");
@@ -291,21 +292,21 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, size_t len)
 		return;
 	}
 
-	uint8_t frame[ALIRO_ENVELOPE_HDR + INITIATOR_RESP_MAX];
+	uint8_t frame[ULTRAWIDELOCK_ENVELOPE_HDR + INITIATOR_RESP_MAX];
 	size_t frame_len = 0;
 
-	if (aliro_ble_frame(ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, resp, resp_len, frame,
-			    sizeof(frame), &frame_len) != 0) {
+	if (ultrawidelock_ble_frame(ULTRAWIDELOCK_PROTO_ACCESS, ULTRAWIDELOCK_AP_OP_RESPONSE, resp,
+				    resp_len, frame, sizeof(frame), &frame_len) != 0) {
 		LOG_ERR("conn %u: response framing failed (%u B)", conn_handle, (unsigned)resp_len);
 		return;
 	}
 
-	int rc = aliro_ble_central_send(conn_handle, frame, frame_len);
+	int rc = ultrawidelock_ble_central_send(conn_handle, frame, frame_len);
 
 	LOG_INF("conn %u: -> %u B response, phase %s (send rc=%d)", conn_handle, (unsigned)resp_len,
 		phase_str(s_dev.phase), rc);
 
-	if (s_dev.phase == ALIRO_DEV_ESTABLISHED) {
+	if (s_dev.phase == ULTRAWIDELOCK_DEV_ESTABLISHED) {
 		LOG_INF("=== ESTABLISHED: URSK agreed with the reader ===");
 		LOG_HEXDUMP_INF(s_dev.ursk, sizeof(s_dev.ursk), "ursk");
 		/* sc_ble is keyed by the same derivation that produced the URSK, so the
@@ -365,7 +366,7 @@ static void radio_probe(void)
  */
 int main(void)
 {
-	struct aliro_ble_central_config cfg;
+	struct ultrawidelock_ble_central_config cfg;
 
 	/* Who we CONNECT to and who we AUTHENTICATE as are deliberately separate
 	 * here. cfg.reader_id is left all-zero, which makes the transport latch onto
@@ -382,10 +383,10 @@ int main(void)
 	cfg.cb.on_closed = on_closed;
 
 	/* Bring up the PSA backend before anything can reach for a key. The reader
-	 * does this inside aliro_reader_start (aliro_reader.c:1447); the initiator has
-	 * no equivalent entry point, so it belongs here. Without it aliro_device_init
+	 * does this inside ultrawidelock_reader_start (ultrawidelock_reader.c:1447); the initiator has
+	 * no equivalent entry point, so it belongs here. Without it ultrawidelock_device_init
 	 * fails in on_ready, which is a confusing place to discover it. */
-	if (aliro_crypto_init() != 0) {
+	if (ultrawidelock_crypto_init() != 0) {
 		LOG_ERR("PSA crypto init failed");
 		return 0;
 	}
@@ -398,7 +399,7 @@ int main(void)
 	 * fails here, reseat the DWM3000EVB before touching this call site. */
 	radio_probe();
 
-	if (aliro_ble_central_start(&cfg) != 0) {
+	if (ultrawidelock_ble_central_start(&cfg) != 0) {
 		LOG_ERR("BLE central start failed");
 		return 0;
 	}

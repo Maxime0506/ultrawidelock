@@ -707,7 +707,7 @@ check_patch_symbols() {
 # (ultrawidelock_matter, ultrawidelock_ml, ultrawidelock_anchor, ...) have one consumer each, so a manifest
 # would be a second copy of a list that exists once.
 MANIFEST_ROOTS=(
-	modules/woz_aliro/src
+	modules/ultrawidelock_cred/src
 	modules/ultrawidelock_uwb/src
 )
 
@@ -715,17 +715,17 @@ MANIFEST_ROOTS=(
 # ratchet discipline as RATCHET: an entry that becomes manifested, or stops
 # existing, is a FAILURE — the allowlist can only shrink deliberately.
 #
-#   aliro_stepup.c      the step-up worker's engine half; only the ESP reader
+#   ultrawidelock_stepup.c      the step-up worker's engine half; only the ESP reader
 #                       component compiles it, and its worker body is gated to
-#                       empty without CONFIG_WOZ_ALIRO_STEPUP
-#   aliro_assert_ec.c   the P-256 half of the assert pair — the only one with a
+#                       empty without CONFIG_ULTRAWIDELOCK_CRED_STEPUP
+#   ultrawidelock_assert_ec.c   the P-256 half of the assert pair — the only one with a
 #                       crypto dependency, so it cannot join wire_codecs
 #   uwb_rxdiag.c        Zephyr-module only: the ESP port omits it and stubs the
 #                       two decadriver seams it would otherwise supply
 #   uwb_selftest.c      Zephyr-module only, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST, default n
 NOT_MANIFESTED=(
-	modules/woz_aliro/src/aliro_assert_ec.c
-	modules/woz_aliro/src/aliro_stepup.c
+	modules/ultrawidelock_cred/src/ultrawidelock_assert_ec.c
+	modules/ultrawidelock_cred/src/ultrawidelock_stepup.c
 	modules/ultrawidelock_uwb/src/driver/uwb_rxdiag.c
 	modules/ultrawidelock_uwb/src/driver/uwb_selftest.c
 )
@@ -803,9 +803,9 @@ check_manifests() {
 # dropping one of these five is an architecture change, not a header cleanup.
 HAL_CONTRACT=modules/woz_port/include/ultrawidelock/woz_hal.h
 HAL_CONTRACT_HEADERS=(
-	aliro_ble.h
-	aliro_ble_central.h
-	aliro_prov.h
+	ultrawidelock_ble.h
+	ultrawidelock_ble_central.h
+	ultrawidelock_prov.h
 	dw3000_hw.h
 	dw3000_spi.h
 )
@@ -889,21 +889,21 @@ self_test() {
 	# while the approved five pass independently of include order.
 	local halfix
 	halfix=$(mktemp -t purity-hal.XXXXXX)
-	printf '%s\n' '#include "aliro_ble.h"' '#include "aliro_ble_central.h"' \
-		'#include "aliro_prov.h"' '#include "dw3000_hw.h"' >"$halfix"
+	printf '%s\n' '#include "ultrawidelock_ble.h"' '#include "ultrawidelock_ble_central.h"' \
+		'#include "ultrawidelock_prov.h"' '#include "dw3000_hw.h"' >"$halfix"
 	if hal_contract_matches "$halfix"; then
 		printf '%s  self-test FAILED: HAL contract accepted a missing seam%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	printf '%s\n' '#include "dw3000_spi.h"' '#include "aliro_ble.h"' \
-		'#include "aliro_ble_central.h"' '#include "aliro_prov.h"' \
+	printf '%s\n' '#include "dw3000_spi.h"' '#include "ultrawidelock_ble.h"' \
+		'#include "ultrawidelock_ble_central.h"' '#include "ultrawidelock_prov.h"' \
 		'#include "dw3000_hw.h"' '#include "invented_bus.h"' >"$halfix"
 	if hal_contract_matches "$halfix"; then
 		printf '%s  self-test FAILED: HAL contract accepted an extra seam%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	printf '%s\n' '#include "dw3000_spi.h"' '#include "aliro_ble.h"' \
-		'#include "aliro_ble_central.h"' '#include "aliro_prov.h"' \
+	printf '%s\n' '#include "dw3000_spi.h"' '#include "ultrawidelock_ble.h"' \
+		'#include "ultrawidelock_ble_central.h"' '#include "ultrawidelock_prov.h"' \
 		'#include "dw3000_hw.h"' >"$halfix"
 	if ! hal_contract_matches "$halfix"; then
 		printf '%s  self-test FAILED: HAL contract rejected the approved seams%s\n' "$R" "$Z" >&2
@@ -983,7 +983,7 @@ self_test() {
 	# Exemption exactness: a prefix that swallowed a portable file would silence
 	# the gate without anyone noticing.
 	local f
-	for f in modules/ultrawidelock_matter/src/matter_tlv.c modules/woz_aliro/src/aliro_reader.c \
+	for f in modules/ultrawidelock_matter/src/matter_tlv.c modules/ultrawidelock_cred/src/ultrawidelock_reader.c \
 		modules/ultrawidelock_uwb/src/ccc/ccc_shim.c modules/ultrawidelock_dw3000/src/deca_port.c; do
 		if [[ $f =~ $PERMANENT_RE ]] || in_ratchet "$f"; then
 			printf '%s  self-test FAILED: %s is exempt, but it must stay pure%s\n' \
@@ -1131,13 +1131,13 @@ self_test() {
 		+	woz_phantom_symbol_xyz();
 		+	ultrawidelock_phantom_symbol_xyz();
 		+	UltraWideLockNfc::Init();
-		+	if (CONFIG_WOZ_ALIRO) {}
+		+	if (CONFIG_ULTRAWIDELOCK_CRED) {}
 		+#include <ultrawidelock/uwb.h>
 		+#include <ultrawidelock/phantom.h>
 		-	woz_minus_line_only();
 	EOF
 	if [ "$(patch_syms "$fixdir/fix.patch")" != \
-		"$(printf 'CONFIG_WOZ_ALIRO\nUltraWideLockNfc::Init\nultrawidelock_phantom_symbol_xyz\nwoz_phantom_symbol_xyz')" ]; then
+		"$(printf 'CONFIG_ULTRAWIDELOCK_CRED\nUltraWideLockNfc::Init\nultrawidelock_phantom_symbol_xyz\nwoz_phantom_symbol_xyz')" ]; then
 		printf '%s  self-test FAILED: patch_syms extraction wrong for the fixture%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
@@ -1157,7 +1157,7 @@ self_test() {
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	for pth in CONFIG_WOZ_ALIRO UltraWideLockNfc::Init; do
+	for pth in CONFIG_ULTRAWIDELOCK_CRED UltraWideLockNfc::Init; do
 		if ! patch_sym_defined "$pth"; then
 			printf '%s  self-test FAILED: tripwire lost a real symbol: %s%s\n' "$R" "$pth" "$Z" >&2
 			fails=$((fails + 1))
@@ -1182,7 +1182,7 @@ self_test() {
 		fails=$((fails + 1))
 	fi
 	# The allowlist is exact: a file that IS in a role must not be swallowed.
-	for f in modules/woz_aliro/src/aliro_tlv.c modules/ultrawidelock_uwb/src/ccc/ccc_kdf.c; do
+	for f in modules/ultrawidelock_cred/src/ultrawidelock_tlv.c modules/ultrawidelock_uwb/src/ccc/ccc_kdf.c; do
 		if printf '%s\n' "${NOT_MANIFESTED[@]}" | grep -qxF "$f"; then
 			printf '%s  self-test FAILED: %s is allowlisted but lives in a role%s\n' \
 				"$R" "$f" "$Z" >&2

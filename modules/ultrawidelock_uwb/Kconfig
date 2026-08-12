@@ -1,5 +1,5 @@
 # Woz UWB engine for the Nordic door-lock add-on (NCS v3.3.0).
-# Options: ULTRAWIDELOCK_UWB / ULTRAWIDELOCK_UWB_RESPONDER / WOZ_ALIRO.
+# Options: ULTRAWIDELOCK_UWB / ULTRAWIDELOCK_UWB_RESPONDER / ULTRAWIDELOCK_CRED.
 
 config ULTRAWIDELOCK_UWB
 	bool "Woz UWB (DW3000) bring-up"
@@ -28,7 +28,7 @@ config ULTRAWIDELOCK_UWB_SHELL
 	  mode, where the radios are deliberately never started, and these
 	  commands would drive a driver that has not been brought up.
 
-config WOZ_ALIRO
+config ULTRAWIDELOCK_CRED
 	bool "Woz Aliro/CCC credential-bound STS engine"
 	depends on ULTRAWIDELOCK_UWB_RESPONDER
 	help
@@ -39,7 +39,7 @@ config WOZ_ALIRO
 choice
 	prompt "AES-ECB backend for the CCC key ladder"
 	default WOZ_CRYPTO_PSA
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  Selects which file defines crypto_aes_ecb_encrypt() (ccc_kdf.h) — the one
 	  AES-128/256 ECB primitive the whole CCC key ladder and AES-CCM* build on.
@@ -62,7 +62,7 @@ endchoice
 
 config ULTRAWIDELOCK_UWB_SELFTEST
 	bool "One-shot UWB init self-test after boot (diagnostic; no iPhone)"
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  Fire ultrawidelock_uwb_start_aliro() once, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS after boot,
 	  with a canned ranging config, to capture the DW3000 bring-up + Pre-POLL listen
@@ -81,7 +81,7 @@ config ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS
 
 config WOZ_PRETTY_SHELL
 	bool "Clean/curated UART log output (suppress bring-up diagnostics)"
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  Collapse the verbose bring-up console into a curated timeline (tap ->
 	  auth -> ranging -> unlock). When set, the per-frame RX diagnostics in
@@ -94,7 +94,7 @@ config WOZ_PRETTY_SHELL
 
 config WOZ_RANGE_GATE_STRICT
 	bool "Range gate: enforce STS quality (drop suspect blocks)"
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  Enforce the layer-2 STS-quality check: a block whose STS correlated poorly
 	  is dropped rather than fed to the unlock seam. Default n = shadow mode: the
@@ -105,7 +105,7 @@ config WOZ_RANGE_GATE_STRICT
 
 config ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT
 	bool "Responder ToF: use the same-round Final-capture timestamp snapshot"
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  When Final_Data is decoded, compute the DS-TWR reply/round intervals from
 	  the snapshot latched at Final RX (ccc_shim_rx.c, g_final_reply1/round2)
@@ -119,7 +119,7 @@ config ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT
 
 config ULTRAWIDELOCK_UWB_CIRDIAG
 	bool "CIA/CIR diagnostics: first-path summary + windowed CIR tap dump"
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  Latch the DW3000's CIA diagnostic bank on each reception (Ipatov/STS
 	  first-path index, F1..F3, power, peak, STS quality, crystal offset) and
@@ -248,7 +248,7 @@ endif # ULTRAWIDELOCK_UWB_CIRDIAG
 
 config WOZ_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
-	depends on WOZ_ALIRO
+	depends on ULTRAWIDELOCK_CRED
 	help
 	  Record the DS-TWR responder's inputs (session config + every received
 	  frame and its DW3000 register snapshot, in dispatch order) into a RAM ring,

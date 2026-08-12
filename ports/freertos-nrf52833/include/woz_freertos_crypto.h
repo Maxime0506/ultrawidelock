@@ -4,7 +4,7 @@
  * The provider is Mbed TLS built standalone -- its own CMake, no Zephyr -- with
  * the PSA crypto core enabled. That choice is not about Mbed TLS being the
  * best software P-256 available; it is about which files already compile
- * against it. modules/woz_aliro/src/aliro_prim_psa.c is the reader's primitive
+ * against it. modules/ultrawidelock_cred/src/ultrawidelock_prim_psa.c is the reader's primitive
  * backend and it speaks PSA, so a PSA core means it is reused rather than
  * rewritten, exactly as ports/esp32 reuses it over ESP-IDF's Mbed TLS.
  *

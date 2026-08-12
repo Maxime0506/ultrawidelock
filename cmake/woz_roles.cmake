@@ -7,7 +7,7 @@
 #
 # Include by absolute path (plain CMake, works before idf_component_register):
 #   include("${REPO_ROOT}/cmake/woz_roles.cmake")
-#   woz_role_sources("${REPO_ROOT}/modules/woz_aliro/roles/hash.list" HASH_SRCS)
+#   woz_role_sources("${REPO_ROOT}/modules/ultrawidelock_cred/roles/hash.list" HASH_SRCS)
 
 function(woz_role_sources listfile out_var)
 	# Manifests live at <repo>/modules/<mod>/roles/<name>.list, so the repo

@@ -13,8 +13,9 @@
 #include "door_lock_manager.h"
 #include <lib/core/DataModelTypes.h>
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
-#include <aliro_prov.h>   // ALIRO_CRED_INDEX_NONE, for the index this hook is not given
-#include <ultrawidelock/reader.h> // reader-side provisioning trust store (aliro_prov)
+// ULTRAWIDELOCK_CRED_INDEX_NONE, for the index this hook is not given
+#include <ultrawidelock_prov.h>
+#include <ultrawidelock/reader.h> // reader-side provisioning trust store (ultrawidelock_prov)
 #endif
 
 static const char *TAG = "doorlock_callback";
@@ -93,7 +94,7 @@ bool emberAfPluginDoorLockGetCredential(chip::EndpointId endpointId, uint16_t cr
 // When CONFIG_ENABLE_ALIRO_BLE_UWB is enabled and the write succeeds with an
 // Occupied status, a 65-byte Aliro endpoint key (evictable or non-evictable),
 // the raw key is additionally mirrored into the Aliro reader's trust store via
-// aliro_reader_provision_add_trust, so the reader accepts ranging auth from the
+// ultrawidelock_reader_provision_add_trust, so the reader accepts ranging auth from the
 // Wallet credential Apple just installed. An Available status on the same types
 // is the erase half of ClearCredential and revokes the anchor by its index.
 // Returns the underlying SetCredential result regardless of whether either
@@ -118,9 +119,9 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 		// ClearCredential carries (type, index) and never the key bytes. This
 		// hook is not given a user index, and does not need one -- the server
 		// clears a user by clearing each of its credentials through here.
-		int rc = aliro_reader_provision_add_trust(
+		int rc = ultrawidelock_reader_provision_add_trust(
 			credentialData.data(), static_cast<uint8_t>(credentialType), credentialIndex,
-			ALIRO_CRED_INDEX_NONE);
+			ULTRAWIDELOCK_CRED_INDEX_NONE);
 		ESP_LOGI(TAG, "Aliro endpoint key -> reader trust store (type=%u rc=%d)",
 			 static_cast<unsigned>(credentialType), rc);
 		// rc == 1 is "already trusted", which is success. A negative rc means the
@@ -137,7 +138,7 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 	if (ok && credentialStatus == DlCredentialStatus::kAvailable &&
 	    (credentialType == CredentialTypeEnum::kAliroEvictableEndpointKey ||
 	     credentialType == CredentialTypeEnum::kAliroNonEvictableEndpointKey)) {
-		int rc = aliro_reader_provision_remove_trust(
+		int rc = ultrawidelock_reader_provision_remove_trust(
 			static_cast<uint8_t>(credentialType), credentialIndex);
 		ESP_LOGW(TAG, "Aliro endpoint key REVOKED (type=%u index=%u rc=%d)",
 			 static_cast<unsigned>(credentialType),

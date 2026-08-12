@@ -9,7 +9,7 @@ int main(void)
 	size_t offset = 0;
 
 	if (woz_aliro_tlv_write(encoded, sizeof(encoded), &offset, 0x5cu, value,
-				sizeof(value)) != WOZ_ALIRO_TLV_OK) {
+				sizeof(value)) != ULTRAWIDELOCK_CRED_TLV_OK) {
 		return 1;
 	}
 
@@ -18,7 +18,7 @@ int main(void)
 
 	offset = 0;
 	if (woz_aliro_tlv_next(encoded, encoded_length, &offset, &parsed) !=
-	    WOZ_ALIRO_TLV_OK) {
+	    ULTRAWIDELOCK_CRED_TLV_OK) {
 		return 2;
 	}
 

@@ -34,7 +34,7 @@ int main(void)
 
 	static const struct suite suites[] = {
 		{ "aliro_advertising", test_aliro_advertising },
-		{ "aliro_ble", test_aliro_ble },
+		{ "ultrawidelock_ble", test_aliro_ble },
 		{ "aliro_nfc", test_aliro_nfc },
 		{ "pn532", test_pn532 },
 		{ "ccc_kdf", test_ccc_kdf },
@@ -48,9 +48,9 @@ int main(void)
 		{ "ultrawidelock_uwb_adapter", test_ultrawidelock_uwb_adapter },
 		{ "ultrawidelock_uwb_msg", test_ultrawidelock_uwb_msg },
 		{ "ultrawidelock_uwb_session", test_ultrawidelock_uwb_session },
-		{ "aliro_prov", test_aliro_prov },
-		{ "aliro_hash", test_aliro_hash },
-		{ "aliro_assert", test_aliro_assert },
+		{ "ultrawidelock_prov", test_aliro_prov },
+		{ "ultrawidelock_hash", test_aliro_hash },
+		{ "ultrawidelock_assert", test_aliro_assert },
 		{ "ultrawidelock_device_uwb", test_ultrawidelock_device_uwb },
 		{ "cherry", test_cherry },
 		{ "fira", test_fira },

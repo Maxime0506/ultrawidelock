@@ -2,9 +2,9 @@
 // BleSK-sealed post-auth SDUs and answers them, walking AP-Completed ->
 // Initiate-Ranging-Session -> M1 -> M2 -> M3 -> M4.
 /*
- * The device mirror of modules/woz_aliro/src/aliro_ranging.c, which is
+ * The device mirror of modules/ultrawidelock_cred/src/ultrawidelock_ranging.c, which is
  * reader-only. Everything below the transport is existing code: the BleSK
- * channel is aliro_device.c's sc_ble and the M1-M4 codec is
+ * channel is ultrawidelock_device.c's sc_ble and the M1-M4 codec is
  * modules/ultrawidelock_uwb/src/cred/ultrawidelock_device_uwb.c. This file is the glue that was
  * missing, and it lives in the application rather than in modules/ because the
  * radio half is only one frame deep: a device "ranging session" here is a BLE
@@ -21,11 +21,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct aliro_device;
+struct ultrawidelock_device;
 
 /** Arm the ranging-setup driver for @conn, once the Access Protocol has reached
  *  ESTABLISHED and @dev->sc_ble is therefore keyed. Idempotent per connection. */
-void initiator_ranging_begin(struct aliro_device *dev, uint16_t conn);
+void initiator_ranging_begin(struct ultrawidelock_device *dev, uint16_t conn);
 
 /** Feed one inbound post-auth SDU, still sealed, exactly as it came off L2CAP
  *  (wire = [proto][id][len_be16][ct||tag]). Opens it on the BleSK channel and

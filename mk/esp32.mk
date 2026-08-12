@@ -323,14 +323,14 @@ esp-clean:
 ## esp-presence-on: add the presence console command to this build  ·  idempotent
 esp-presence-on:
 	@[ -f "$(ESP_SDKCONFIG)" ] || { echo "  no sdkconfig yet — run 'make esp-build APP=$(APP)' once first" >&2; exit 1; }
-	@for k in CONFIG_WOZ_PRESENCE $(if $(filter reader,$(APP)),CONFIG_WOZ_ALIRO_CLONE); do \
+	@for k in CONFIG_WOZ_PRESENCE $(if $(filter reader,$(APP)),CONFIG_ULTRAWIDELOCK_CRED_CLONE); do \
 		grep -qx "$$k=y" "$(ESP_SDKCONFIG)" || printf '%s=y\n' "$$k" >> "$(ESP_SDKCONFIG)"; \
 	done; echo "  presence ON  ·  next: make esp-presence-flash APP=$(APP)"
 
 ## esp-presence-off: drop the presence commands from this build
 esp-presence-off:
 	@[ -f "$(ESP_SDKCONFIG)" ] || { echo "  no sdkconfig yet — nothing to turn off"; exit 0; }
-	@sed -i '' -e '/^CONFIG_WOZ_PRESENCE=y$$/d' -e '/^CONFIG_WOZ_ALIRO_CLONE=y$$/d' \
+	@sed -i '' -e '/^CONFIG_WOZ_PRESENCE=y$$/d' -e '/^CONFIG_ULTRAWIDELOCK_CRED_CLONE=y$$/d' \
 	  "$(ESP_SDKCONFIG)" && echo "  presence OFF  ·  next: make esp-flash APP=$(APP)"
 
 ## esp-presence-flash: turn presence on, then build + flash

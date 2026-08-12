@@ -1,52 +1,52 @@
 /** @file test_aliro_hash.c — SHA-256 / HMAC / HKDF / X9.63 KATs.
  *
- * aliro_hash.c is the portable crypto the presence assertion (and the whole
+ * ultrawidelock_hash.c is the portable crypto the presence assertion (and the whole
  * Aliro key schedule) leans on, but it had no host coverage. Pin it against the
  * published standard vectors so a regression in the primitive is caught here,
  * not on wire. Vectors: FIPS 180-4 (SHA-256), RFC 4231 (HMAC), RFC 5869 (HKDF).
  */
 #include <string.h>
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 #include "test.h"
 
 void test_aliro_hash(void)
 {
 	t_group("SHA-256 (FIPS 180-4)");
-	uint8_t d[ALIRO_SHA256_LEN];
-	aliro_sha256("abc", 3, d);
+	uint8_t d[ULTRAWIDELOCK_SHA256_LEN];
+	ultrawidelock_sha256("abc", 3, d);
 	t_vec("sha.abc", d, sizeof(d),
 	      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
-	aliro_sha256("", 0, d);
+	ultrawidelock_sha256("", 0, d);
 	t_vec("sha.empty", d, sizeof(d),
 	      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
 	t_group("SHA-256 streaming == one-shot");
-	struct aliro_sha256 s;
-	uint8_t d2[ALIRO_SHA256_LEN];
-	aliro_sha256_init(&s);
-	aliro_sha256_update(&s, "a", 1);
-	aliro_sha256_update(&s, "bc", 2);
-	aliro_sha256_final(&s, d2);
-	aliro_sha256("abc", 3, d);
+	struct ultrawidelock_sha256 s;
+	uint8_t d2[ULTRAWIDELOCK_SHA256_LEN];
+	ultrawidelock_sha256_init(&s);
+	ultrawidelock_sha256_update(&s, "a", 1);
+	ultrawidelock_sha256_update(&s, "bc", 2);
+	ultrawidelock_sha256_final(&s, d2);
+	ultrawidelock_sha256("abc", 3, d);
 	T_OK("stream.eq_oneshot", memcmp(d, d2, sizeof(d)) == 0);
 	/* Multi-block message to exercise the block-buffer flush path. */
 	uint8_t big[200];
 	memset(big, 0x61, sizeof(big)); /* 200 * 'a' */
-	struct aliro_sha256 s2;
-	aliro_sha256_init(&s2);
+	struct ultrawidelock_sha256 s2;
+	ultrawidelock_sha256_init(&s2);
 	for (unsigned i = 0; i < sizeof(big); i++) {
-		aliro_sha256_update(&s2, &big[i], 1); /* one byte at a time */
+		ultrawidelock_sha256_update(&s2, &big[i], 1); /* one byte at a time */
 	}
-	aliro_sha256_final(&s2, d2);
-	aliro_sha256(big, sizeof(big), d);
+	ultrawidelock_sha256_final(&s2, d2);
+	ultrawidelock_sha256(big, sizeof(big), d);
 	T_OK("stream.bytewise_eq", memcmp(d, d2, sizeof(d)) == 0);
 
 	t_group("HMAC-SHA256 (RFC 4231 TC1)");
 	uint8_t key20[20];
 	memset(key20, 0x0b, sizeof(key20));
-	uint8_t mac[ALIRO_SHA256_LEN];
-	aliro_hmac_sha256(key20, sizeof(key20), "Hi There", 8, mac);
+	uint8_t mac[ULTRAWIDELOCK_SHA256_LEN];
+	ultrawidelock_hmac_sha256(key20, sizeof(key20), "Hi There", 8, mac);
 	t_vec("hmac.tc1", mac, sizeof(mac),
 	      "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7");
 
@@ -58,7 +58,7 @@ void test_aliro_hash(void)
 	static const uint8_t info[10] = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4,
 					  0xf5, 0xf6, 0xf7, 0xf8, 0xf9 };
 	uint8_t okm[42];
-	T_EQ("hkdf.rc", aliro_hkdf(salt, sizeof(salt), ikm, sizeof(ikm), info, sizeof(info), okm,
+	T_EQ("hkdf.rc", ultrawidelock_hkdf(salt, sizeof(salt), ikm, sizeof(ikm), info, sizeof(info), okm,
 				  sizeof(okm)),
 	     0);
 	t_vec("hkdf.tc1", okm, sizeof(okm),
@@ -68,24 +68,24 @@ void test_aliro_hash(void)
 	t_group("HKDF length guard");
 	uint8_t toobig[1];
 	/* expand caps at 255*32 bytes; ask for more -> -1. */
-	uint8_t prk[ALIRO_SHA256_LEN];
-	aliro_hkdf_extract(salt, sizeof(salt), ikm, sizeof(ikm), prk);
-	T_EQ("hkdf.expand_overflow", aliro_hkdf_expand(prk, info, sizeof(info), toobig, 255u * 32u + 1u),
-	     -1);
+	uint8_t prk[ULTRAWIDELOCK_SHA256_LEN];
+	ultrawidelock_hkdf_extract(salt, sizeof(salt), ikm, sizeof(ikm), prk);
+	T_EQ("hkdf.expand_overflow",
+	     ultrawidelock_hkdf_expand(prk, info, sizeof(info), toobig, 255u * 32u + 1u), -1);
 
 	t_group("X9.63 KDF self-consistency");
 	/* SEC1 KDF2: first 32 bytes = SHA-256(Z || be32(1) || info). Re-derive that
 	 * block independently and compare. */
 	static const uint8_t z[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 	uint8_t out[32];
-	T_EQ("x963.rc", aliro_x963_kdf(z, sizeof(z), info, sizeof(info), out, sizeof(out)), 0);
-	struct aliro_sha256 xs;
-	uint8_t expect[ALIRO_SHA256_LEN];
+	T_EQ("x963.rc", ultrawidelock_x963_kdf(z, sizeof(z), info, sizeof(info), out, sizeof(out)), 0);
+	struct ultrawidelock_sha256 xs;
+	uint8_t expect[ULTRAWIDELOCK_SHA256_LEN];
 	static const uint8_t ctr1[4] = { 0x00, 0x00, 0x00, 0x01 };
-	aliro_sha256_init(&xs);
-	aliro_sha256_update(&xs, z, sizeof(z));
-	aliro_sha256_update(&xs, ctr1, sizeof(ctr1));
-	aliro_sha256_update(&xs, info, sizeof(info));
-	aliro_sha256_final(&xs, expect);
+	ultrawidelock_sha256_init(&xs);
+	ultrawidelock_sha256_update(&xs, z, sizeof(z));
+	ultrawidelock_sha256_update(&xs, ctr1, sizeof(ctr1));
+	ultrawidelock_sha256_update(&xs, info, sizeof(info));
+	ultrawidelock_sha256_final(&xs, expect);
 	T_OK("x963.block1", memcmp(out, expect, sizeof(out)) == 0);
 }

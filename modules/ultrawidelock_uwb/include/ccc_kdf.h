@@ -1,6 +1,6 @@
 /**
  * @file ccc_kdf.h
- * @brief UWB ranging key schedule + SP0 frame crypto (CONFIG_WOZ_ALIRO).
+ * @brief UWB ranging key schedule + SP0 frame crypto (CONFIG_ULTRAWIDELOCK_CRED).
  *
  * Turns the 32-byte URSK into the per-ranging-cycle keys the DW3000 STS engine
  * and the SP0 frames consume, over a single AES block-encrypt primitive.

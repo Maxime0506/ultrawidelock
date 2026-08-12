@@ -6,7 +6,7 @@
  * BER-TLV.
  *
  * The fixed-size device-key / signature copies inside the parsers depend on
- * aliro_tlv_find returning a value slice that lies within the buffer. Rather
+ * ultrawidelock_tlv_find returning a value slice that lies within the buffer. Rather
  * than size the buffer large enough to actually hold a 65-byte value (which
  * makes the solver blow up), that precondition is asserted directly below: it
  * holds for ANY returned length, so it covers the 65/64-byte copies while the
@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "aliro_apdu.h"
+#include "ultrawidelock_apdu.h"
 
 #define APDU_MAX 48
 
@@ -33,23 +33,23 @@ void harness(void)
 	const uint8_t *payload;
 	size_t plen;
 
-	if (aliro_ble_unframe(buf, size, &type, &opcode, &payload, &plen) == 0) {
+	if (ultrawidelock_ble_unframe(buf, size, &type, &opcode, &payload, &plen) == 0) {
 		size_t body = plen;
 		uint16_t sw;
 
-		(void)aliro_apdu_strip_sw(payload, &body, &sw);
+		(void)ultrawidelock_apdu_strip_sw(payload, &body, &sw);
 
-		struct aliro_auth0_response r0;
-		struct aliro_auth1_response r1;
+		struct ultrawidelock_auth0_response r0;
+		struct ultrawidelock_auth1_response r1;
 
-		(void)aliro_apdu_parse_auth0_response(payload, body, &r0);
-		(void)aliro_apdu_parse_auth1_response(payload, body, &r1);
+		(void)ultrawidelock_apdu_parse_auth0_response(payload, body, &r0);
+		(void)ultrawidelock_apdu_parse_auth1_response(payload, body, &r1);
 	}
 
 	const uint8_t *val;
 	size_t vlen;
 
-	if (aliro_tlv_find(buf, size, ALIRO_TAG_DEVICE_PUBX, &val, &vlen) == 0) {
+	if (ultrawidelock_tlv_find(buf, size, ULTRAWIDELOCK_TAG_DEVICE_PUBX, &val, &vlen) == 0) {
 		/* Precondition the parsers' fixed-size memcpys rely on; length-agnostic,
 		 * so it covers the 65/64-byte copies. */
 		__CPROVER_assert(val >= buf && (size_t)(val - buf) + vlen <= size,

@@ -127,7 +127,7 @@ The implemented foundation now includes:
   partition held.
 - `storage/aliro_prov_kv.c` is the reader's provisioning backend, the standalone
   twin of the Zephyr port's `aliro_prov_settings.c`. The serialisation, the dev
-  fallback and the trust logic are the portable `aliro_prov.c`; this file only
+  fallback and the trust logic are the portable `ultrawidelock_prov.c`; this file only
   moves that one blob under `WOZ_KV_KEY_ALIRO_PROV`. Every failure still leaves
   a usable dev identity, because a reader that will not boot is worse than one
   that boots unprovisioned, and a stored record longer than this firmware can
@@ -135,8 +135,8 @@ The implemented foundation now includes:
   instead of the store: OpenThread's SRP client key shares these pages, the SRP
   host name is the factory EUI-64, and asking for that name with a new key is
   refused until the old lease expires, up to 14 days attached to Thread but
-  unreachable on it. A static assert holds `ALIRO_PROV_BLOB_MAX` (700 bytes at
-  `ALIRO_TRUST_MAX` 6) inside one record, so raising the anchor limit fails the
+  unreachable on it. A static assert holds `ULTRAWIDELOCK_PROV_BLOB_MAX` (700 bytes at
+  `ULTRAWIDELOCK_TRUST_MAX` 6) inside one record, so raising the anchor limit fails the
   build rather than the first provisioning write.
 - `radio/nrf_802154_irq_freertos.c` maps the driver's IRQ abstraction to CMSIS
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
@@ -235,14 +235,14 @@ The implemented foundation now includes:
 - `crypto/` selects and starts the crypto provider: Mbed TLS 3.6.6, built
   standalone from its own CMake with the PSA core on. The provider is chosen for
   what already compiles against it rather than for speed:
-  `modules/woz_aliro/src/aliro_prim_psa.c` is the reader's primitive backend and
+  `modules/ultrawidelock_cred/src/ultrawidelock_prim_psa.c` is the reader's primitive backend and
   speaks PSA, so a PSA core reuses it unchanged, exactly as `ports/esp32` does
   over ESP-IDF's Mbed TLS. OpenThread is deliberately left on its upstream
   default of `OPENTHREAD_CONFIG_CRYPTO_LIB_MBEDTLS` rather than moved to PSA,
   and that single choice is what keeps Zephyr's `crypto_psa.c` out of the build
   and removes any need for persistent PSA keys, `MBEDTLS_PSA_CRYPTO_STORAGE_C`,
   or an ITS backend: OpenThread's SRP client was the only caller that asked for
-  `PSA_KEY_LIFETIME_PERSISTENT`, and all 83 PSA call sites in `aliro_prim_psa.c`
+  `PSA_KEY_LIFETIME_PERSISTENT`, and all 83 PSA call sites in `ultrawidelock_prim_psa.c`
   import, use, and destroy volatile keys. OpenThread's key material lands in
   `otPlatSettings` over the key-value store instead, which means Thread
   credentials are stored differently here than in the Zephyr oracle and a board

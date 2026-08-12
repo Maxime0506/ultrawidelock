@@ -1,8 +1,0 @@
-# woz_aliro role: platform-free pure codecs — TLV, step-up (Access Document)
-# wire + parse, presence-assertion. No crypto backend needed. Consumers:
-# ports/esp32/components/aliro_reader, tests/host/sources.sh (woz_aliro_stack
-# compiles the same files on target). Sorted; add HERE and nowhere else.
-modules/woz_aliro/src/aliro_assert.c
-modules/woz_aliro/src/aliro_stepup_parse.c
-modules/woz_aliro/src/aliro_stepup_wire.c
-modules/woz_aliro/src/aliro_tlv.c

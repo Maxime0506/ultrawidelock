@@ -240,39 +240,39 @@ void test_aliro_ble(void)
 	struct woz_aliro_tlv tlv;
 	size_t tlv_offset = 0;
 	T_EQ("TLV rejects null data", woz_aliro_tlv_next(NULL, 4, &tlv_offset, &tlv),
-		WOZ_ALIRO_TLV_INVALID);
+		ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t tlv_single[] = { 0x80, 0x01, 0xaa };
 	tlv_offset = sizeof(tlv_single);
 	T_EQ("TLV end of buffer", woz_aliro_tlv_next(tlv_single, sizeof(tlv_single),
-		&tlv_offset, &tlv), WOZ_ALIRO_TLV_END);
+		&tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_END);
 	static const uint8_t tag_truncated[] = { 0x5f };
 	tlv_offset = 0;
 	T_EQ("TLV rejects truncated high tag", woz_aliro_tlv_next(tag_truncated,
-		sizeof(tag_truncated), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(tag_truncated), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t tag_too_wide[] = { 0x5f, 0x81, 0x82, 0x83, 0x84, 0x01, 0x00 };
 	tlv_offset = 0;
 	T_EQ("TLV rejects five-octet tag", woz_aliro_tlv_next(tag_too_wide,
-		sizeof(tag_too_wide), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(tag_too_wide), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t tag_zero_group[] = { 0x5f, 0x80, 0x66, 0x01, 0xaa };
 	tlv_offset = 0;
 	T_EQ("TLV rejects zero tag group", woz_aliro_tlv_next(tag_zero_group,
-		sizeof(tag_zero_group), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(tag_zero_group), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t missing_length[] = { 0x80 };
 	tlv_offset = 0;
 	T_EQ("TLV rejects missing length", woz_aliro_tlv_next(missing_length,
-		sizeof(missing_length), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(missing_length), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t indefinite_length[] = { 0x80, 0x80, 0xaa };
 	tlv_offset = 0;
 	T_EQ("TLV rejects indefinite length", woz_aliro_tlv_next(indefinite_length,
-		sizeof(indefinite_length), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(indefinite_length), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t length_too_wide[] = { 0x80, 0x89, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
 	tlv_offset = 0;
 	T_EQ("TLV rejects nine-octet length", woz_aliro_tlv_next(length_too_wide,
-		sizeof(length_too_wide), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(length_too_wide), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t length_leading_zero[] = { 0x80, 0x82, 0x00, 0x80 };
 	tlv_offset = 0;
 	T_EQ("TLV rejects zero length octet", woz_aliro_tlv_next(length_leading_zero,
-		sizeof(length_leading_zero), &tlv_offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+		sizeof(length_leading_zero), &tlv_offset, &tlv), ULTRAWIDELOCK_CRED_TLV_INVALID);
 
 	T_EQ("TLV two-byte tag size", woz_aliro_tlv_encoded_size(0x7f66, 4), 7);
 	T_EQ("TLV three-byte tag size", woz_aliro_tlv_encoded_size(0xbf8177, 4), 8);
@@ -286,27 +286,27 @@ void test_aliro_ble(void)
 	memset(tlv_value, 0x5a, sizeof(tlv_value));
 	tlv_offset = 0;
 	T_EQ("TLV write rejects null output", woz_aliro_tlv_write(NULL, sizeof(tlv_frame),
-		&tlv_offset, 0x80, tlv_value, 1), WOZ_ALIRO_TLV_INVALID);
+		&tlv_offset, 0x80, tlv_value, 1), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	T_EQ("TLV write rejects short buffer", woz_aliro_tlv_write(tlv_frame, 4,
-		&tlv_offset, 0x7f66, tlv_value, 4), WOZ_ALIRO_TLV_INVALID);
+		&tlv_offset, 0x7f66, tlv_value, 4), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	T_EQ("TLV write rejects wide tag", woz_aliro_tlv_write(tlv_frame, sizeof(tlv_frame),
-		&tlv_offset, 0x01000000, tlv_value, 4), WOZ_ALIRO_TLV_INVALID);
+		&tlv_offset, 0x01000000, tlv_value, 4), ULTRAWIDELOCK_CRED_TLV_INVALID);
 	T_EQ("TLV write one-octet length form", woz_aliro_tlv_write(tlv_frame,
-		sizeof(tlv_frame), &tlv_offset, 0x7f66, tlv_value, 200), WOZ_ALIRO_TLV_OK);
+		sizeof(tlv_frame), &tlv_offset, 0x7f66, tlv_value, 200), ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("TLV write two-octet length form", woz_aliro_tlv_write(tlv_frame,
-		sizeof(tlv_frame), &tlv_offset, 0x80, tlv_value, 300), WOZ_ALIRO_TLV_OK);
+		sizeof(tlv_frame), &tlv_offset, 0x80, tlv_value, 300), ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("TLV write empty value", woz_aliro_tlv_write(tlv_frame, sizeof(tlv_frame),
-		&tlv_offset, 0x80, NULL, 0), WOZ_ALIRO_TLV_OK);
+		&tlv_offset, 0x80, NULL, 0), ULTRAWIDELOCK_CRED_TLV_OK);
 	size_t tlv_reparse = 0;
 	T_EQ("TLV round-trip first", woz_aliro_tlv_next(tlv_frame, tlv_offset, &tlv_reparse,
-		&tlv), WOZ_ALIRO_TLV_OK);
+		&tlv), ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("TLV round-trip two-byte tag", tlv.tag, 0x7f66);
 	T_EQ("TLV round-trip 200-byte value", tlv.length, 200);
 	T_EQ("TLV round-trip second", woz_aliro_tlv_next(tlv_frame, tlv_offset, &tlv_reparse,
-		&tlv), WOZ_ALIRO_TLV_OK);
+		&tlv), ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("TLV round-trip 300-byte value", tlv.length, 300);
 	T_EQ("TLV round-trip third", woz_aliro_tlv_next(tlv_frame, tlv_offset, &tlv_reparse,
-		&tlv), WOZ_ALIRO_TLV_OK);
+		&tlv), ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("TLV round-trip empty value", tlv.length, 0);
 	T_EQ("TLV round-trip consumes exactly", tlv_reparse, tlv_offset);
 

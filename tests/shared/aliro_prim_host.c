@@ -1,16 +1,16 @@
 /*
- * Host double for the aliro_prim backend so the key-schedule and secure-channel
+ * Host double for the ultrawidelock_prim backend so the key-schedule and secure-channel
  * code can be tested off-target. Provides a compact reference AES-256-GCM (the
- * real target backend is aliro_prim_psa.c / mbedTLS-PSA). The GCM here is
+ * real target backend is ultrawidelock_prim_psa.c / mbedTLS-PSA). The GCM here is
  * KAT-checked against the GCM spec vectors in test_aliro_crypto.c.
  *
  * The EC block at the bottom is NOT P-256 — it is a deterministic, commutative,
  * trivially forgeable stand-in (see its banner) so the reader transaction state
  * machine (test_aliro_reader.c) can run both sides of the handshake on host.
- * Real curve math runs only in aliro_prim_psa.c on target.
+ * Real curve math runs only in ultrawidelock_prim_psa.c on target.
  */
-#include "aliro_prim.h"
-#include "aliro_hash.h"
+#include "ultrawidelock_prim.h"
+#include "ultrawidelock_hash.h"
 
 #include <string.h>
 
@@ -21,7 +21,7 @@
  *   fail_<op>        > 0: fail the next N calls of <op>, decrementing each time
  *   fail_<op>_after >= 0: succeed that many calls, then fail ONE and reset to -1
  * The _after shape exists because some ops are nested (keygen draws from
- * aliro_random; the phone helpers seal with the same GCM the reader uses), so
+ * ultrawidelock_random; the phone helpers seal with the same GCM the reader uses), so
  * the test must be able to fail the Nth call, not the first. */
 int aliro_prim_host_fail_init;
 int aliro_prim_host_fail_keygen;
@@ -44,7 +44,7 @@ static int fail_after_fires(int *after)
 	return 0;
 }
 
-int aliro_prim_init(void)
+int ultrawidelock_prim_init(void)
 {
 	if (aliro_prim_host_fail_init > 0) {
 		aliro_prim_host_fail_init--;
@@ -53,7 +53,7 @@ int aliro_prim_init(void)
 	return 0;
 }
 
-int aliro_random(uint8_t *out, size_t len)
+int ultrawidelock_random(uint8_t *out, size_t len)
 {
 	if (fail_after_fires(&aliro_prim_host_fail_random_after)) {
 		return -1;
@@ -231,7 +231,7 @@ static void aes128_encrypt(const uint8_t rk[176], const uint8_t in[16], uint8_t 
 	memcpy(out, s, 16);
 }
 
-int aliro_aes128_ecb_encrypt(const uint8_t key[16], const uint8_t in[16], uint8_t out[16])
+int ultrawidelock_aes128_ecb_encrypt(const uint8_t key[16], const uint8_t in[16], uint8_t out[16])
 {
 	uint8_t rk[176];
 
@@ -350,7 +350,7 @@ static void gcm_core(const uint8_t key[32], const uint8_t *nonce, size_t nonce_l
 	gctr(rk, j0, s, 16, tag); /* T = GCTR(J0, S) */
 }
 
-int aliro_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce,
+int ultrawidelock_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce,
 			     size_t nonce_len, const uint8_t *aad, size_t aad_len,
 			     const uint8_t *pt, size_t pt_len, uint8_t *ct,
 			     uint8_t *tag, size_t tag_len)
@@ -368,7 +368,7 @@ int aliro_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce,
 	return 0;
 }
 
-int aliro_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce,
+int ultrawidelock_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce,
 			     size_t nonce_len, const uint8_t *aad, size_t aad_len,
 			     const uint8_t *ct, size_t ct_len, const uint8_t *tag,
 			     size_t tag_len, uint8_t *pt)
@@ -415,33 +415,35 @@ int aliro_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce,
  * stays in the host double: it exercises the state machine, key schedule and
  * secure channels, never the curve. KATs for real EC belong on target. */
 
-static void fake_point(const uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])
+static void fake_point(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
+		       uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
-	struct aliro_sha256 s;
+	struct ultrawidelock_sha256 s;
 
 	pub[0] = 0x04;
 	memcpy(pub + 1, priv, 32);
-	aliro_sha256_init(&s);
-	aliro_sha256_update(&s, "woz-fake-y", 10);
-	aliro_sha256_update(&s, priv, 32);
-	aliro_sha256_final(&s, pub + 33);
+	ultrawidelock_sha256_init(&s);
+	ultrawidelock_sha256_update(&s, "woz-fake-y", 10);
+	ultrawidelock_sha256_update(&s, priv, 32);
+	ultrawidelock_sha256_final(&s, pub + 33);
 }
 
-int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])
+int ultrawidelock_ec_p256_keygen(uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
+				 uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
 	if (aliro_prim_host_fail_keygen > 0) {
 		aliro_prim_host_fail_keygen--;
 		return -1;
 	}
-	if (aliro_random(priv, ALIRO_P256_SCALAR) != 0) {
+	if (ultrawidelock_random(priv, ULTRAWIDELOCK_P256_SCALAR) != 0) {
 		return -1;
 	}
 	fake_point(priv, pub);
 	return 0;
 }
 
-int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
-				uint8_t pub[ALIRO_P256_POINT])
+int ultrawidelock_ec_p256_pub_from_priv(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
+				uint8_t pub[ULTRAWIDELOCK_P256_POINT])
 {
 	if (aliro_prim_host_fail_pub_from_priv > 0) {
 		aliro_prim_host_fail_pub_from_priv--;
@@ -451,11 +453,12 @@ int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
 	return 0;
 }
 
-int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t peer_pub[ALIRO_P256_POINT],
-		    uint8_t shared_x[ALIRO_P256_SCALAR])
+int ultrawidelock_ecdh_p256(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR],
+			    const uint8_t peer_pub[ULTRAWIDELOCK_P256_POINT],
+			    uint8_t shared_x[ULTRAWIDELOCK_P256_SCALAR])
 {
 	const uint8_t *a = priv, *b = peer_pub + 1;
-	struct aliro_sha256 s;
+	struct ultrawidelock_sha256 s;
 
 	if (peer_pub[0] != 0x04) {
 		return -1;
@@ -466,36 +469,36 @@ int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t peer_pu
 		a = b;
 		b = t;
 	}
-	aliro_sha256_init(&s);
-	aliro_sha256_update(&s, "woz-fake-ecdh", 13);
-	aliro_sha256_update(&s, a, 32);
-	aliro_sha256_update(&s, b, 32);
-	aliro_sha256_final(&s, shared_x);
+	ultrawidelock_sha256_init(&s);
+	ultrawidelock_sha256_update(&s, "woz-fake-ecdh", 13);
+	ultrawidelock_sha256_update(&s, a, 32);
+	ultrawidelock_sha256_update(&s, b, 32);
+	ultrawidelock_sha256_final(&s, shared_x);
 	return 0;
 }
 
 /* sig = two SHA-256 halves bound to the signer's X coordinate and H(msg). */
 static void fake_sig(const uint8_t x[32], const uint8_t *msg, size_t msg_len,
-		     uint8_t sig[ALIRO_P256_SIG])
+		     uint8_t sig[ULTRAWIDELOCK_P256_SIG])
 {
-	uint8_t h[ALIRO_SHA256_LEN];
-	struct aliro_sha256 s;
+	uint8_t h[ULTRAWIDELOCK_SHA256_LEN];
+	struct ultrawidelock_sha256 s;
 
-	aliro_sha256(msg, msg_len, h);
-	aliro_sha256_init(&s);
-	aliro_sha256_update(&s, "woz-fake-r", 10);
-	aliro_sha256_update(&s, x, 32);
-	aliro_sha256_update(&s, h, sizeof(h));
-	aliro_sha256_final(&s, sig);
-	aliro_sha256_init(&s);
-	aliro_sha256_update(&s, "woz-fake-s", 10);
-	aliro_sha256_update(&s, x, 32);
-	aliro_sha256_update(&s, h, sizeof(h));
-	aliro_sha256_final(&s, sig + 32);
+	ultrawidelock_sha256(msg, msg_len, h);
+	ultrawidelock_sha256_init(&s);
+	ultrawidelock_sha256_update(&s, "woz-fake-r", 10);
+	ultrawidelock_sha256_update(&s, x, 32);
+	ultrawidelock_sha256_update(&s, h, sizeof(h));
+	ultrawidelock_sha256_final(&s, sig);
+	ultrawidelock_sha256_init(&s);
+	ultrawidelock_sha256_update(&s, "woz-fake-s", 10);
+	ultrawidelock_sha256_update(&s, x, 32);
+	ultrawidelock_sha256_update(&s, h, sizeof(h));
+	ultrawidelock_sha256_final(&s, sig + 32);
 }
 
-int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *msg, size_t msg_len,
-			  uint8_t sig[ALIRO_P256_SIG])
+int ultrawidelock_ecdsa_p256_sign(const uint8_t priv[ULTRAWIDELOCK_P256_SCALAR], const uint8_t *msg,
+				  size_t msg_len, uint8_t sig[ULTRAWIDELOCK_P256_SIG])
 {
 	if (aliro_prim_host_fail_sign > 0) {
 		aliro_prim_host_fail_sign--;
@@ -505,14 +508,14 @@ int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *
 	return 0;
 }
 
-int aliro_ecdsa_p256_verify(const uint8_t pub[ALIRO_P256_POINT], const uint8_t *msg, size_t msg_len,
-			    const uint8_t sig[ALIRO_P256_SIG])
+int ultrawidelock_ecdsa_p256_verify(const uint8_t pub[ULTRAWIDELOCK_P256_POINT], const uint8_t *msg,
+				    size_t msg_len, const uint8_t sig[ULTRAWIDELOCK_P256_SIG])
 {
-	uint8_t want[ALIRO_P256_SIG];
+	uint8_t want[ULTRAWIDELOCK_P256_SIG];
 
 	if (pub[0] != 0x04) {
 		return -1;
 	}
 	fake_sig(pub + 1, msg, msg_len, want);
-	return memcmp(want, sig, ALIRO_P256_SIG) == 0 ? 0 : -1;
+	return memcmp(want, sig, ULTRAWIDELOCK_P256_SIG) == 0 ? 0 : -1;
 }

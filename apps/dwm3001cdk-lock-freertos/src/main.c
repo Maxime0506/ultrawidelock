@@ -25,7 +25,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <aliro_prov.h>
+#include <ultrawidelock_prov.h>
 #include <ultrawidelock/reader.h>
 
 #include <openthread/instance.h>
@@ -44,8 +44,8 @@
  * The reader identity and its trust store, static because they outlive the
  * boot task and are large enough that a stack copy would dominate it.
  */
-static struct aliro_reader_identity s_identity;
-static struct aliro_trust_store s_trust;
+static struct ultrawidelock_reader_identity s_identity;
+static struct ultrawidelock_trust_store s_trust;
 
 static StaticTask_t s_boot_tcb;
 static StackType_t s_boot_stack[512];
@@ -71,14 +71,14 @@ static void boot_task(void *arg)
 	 * eventually advertise.
 	 *
 	 * Neither failure is fatal. woz_freertos_kv_init() reformats a store it
-	 * cannot read, and aliro_prov_load() yields a usable development
+	 * cannot read, and ultrawidelock_prov_load() yields a usable development
 	 * identity on every failure path, because a reader that will not boot is
 	 * worse than one that boots unprovisioned.
 	 */
 	if (woz_freertos_kv_init() != 0) {
 		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG, "key-value store unavailable");
 	}
-	if (aliro_prov_load(&s_identity, &s_trust) != 0) {
+	if (ultrawidelock_prov_load(&s_identity, &s_trust) != 0) {
 		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "no stored identity; running on the development one");
 	}
@@ -134,9 +134,9 @@ static void boot_task(void *arg)
 	/*
 	 * The Aliro reader, which brings the BLE host up underneath itself.
 	 *
-	 * This is the whole product on one line: aliro_reader_start() does the
+	 * This is the whole product on one line: ultrawidelock_reader_start() does the
 	 * crypto, loads the provisioned identity, arms the UWB ranging adapter,
-	 * and hands its transport config to the port's aliro_ble_start(), which
+	 * and hands its transport config to the port's ultrawidelock_ble_start(), which
 	 * registers the GATT service and starts the controller and host.
 	 *
 	 * It runs on the scheduler, unlike the radio: the host has a task of its
@@ -148,7 +148,7 @@ static void boot_task(void *arg)
 	 * advertise cannot be unlocked by any path, so there is nothing to
 	 * degrade to and a silent boot would be the worst outcome on a bench.
 	 */
-	if (aliro_reader_start() != 0) {
+	if (ultrawidelock_reader_start() != 0) {
 		woz_freertos_fatal("Aliro reader start failed");
 	}
 

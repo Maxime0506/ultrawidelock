@@ -798,7 +798,7 @@ struct mfk_wake_step {
 	int trusted;        /* ultrawidelock_uwb_trusted_range_cm returns this */
 	int32_t cm;         /* ... with this distance */
 	int64_t advance_ms; /* esp_timer clock advance applied at the wake */
-	int session;        /* aliro_reader_session_active() from this wake on */
+	int session;        /* ultrawidelock_reader_session_active() from this wake on */
 };
 #define MFK_WAKE_MAX 64
 extern struct mfk_wake_step mfk_wake_script[MFK_WAKE_MAX];
@@ -827,9 +827,9 @@ extern int mfk_reader_start_calls;
 extern int mfk_status_tick_calls;
 extern int64_t mfk_status_tick_last_ms;
 extern int mfk_reader_start_rc;
-extern int mfk_ble_prepare_null; /* nonzero -> aliro_reader_ble_prepare NULL */
+extern int mfk_ble_prepare_null; /* nonzero -> ultrawidelock_reader_ble_prepare NULL */
 extern int mfk_notify_unlock_calls;
-/* aliro_reader_session_active(): the approach controller's presence signal. */
+/* ultrawidelock_reader_session_active(): the approach controller's presence signal. */
 extern int mfk_session_active;
 extern int mfk_notify_unlock_last;
 extern int mfk_auth_cred_have;

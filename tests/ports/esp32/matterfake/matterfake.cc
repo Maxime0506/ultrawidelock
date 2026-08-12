@@ -24,10 +24,10 @@
 #include "linenoise/linenoise.h"
 #include "nvs_flash.h"
 
-#include "aliro_ble.h"
-#include "aliro_lab.h"
+#include "ultrawidelock_ble.h"
+#include "ultrawidelock_lab.h"
 #include "uwb_cirdiag.h"
-#include "aliro_lat.h"
+#include "ultrawidelock_lat.h"
 #include <ultrawidelock/reader.h>
 #include "ultrawidelock_diag.h"
 #include <ultrawidelock/uwb.h>
@@ -1021,7 +1021,7 @@ static struct ble_gatt_svc_def mfk_aliro_svc = {1};
 
 extern "C" {
 
-int aliro_reader_start_attached(void)
+int ultrawidelock_reader_start_attached(void)
 {
 	mfk_reader_start_calls++;
 	return mfk_reader_start_rc;
@@ -1030,34 +1030,34 @@ int aliro_reader_start_attached(void)
 /* Released by the approach loop, not at startup: a held Wallet status only goes
  * out because this is called every pass, so the count is recorded rather than
  * swallowed and the wiring test can assert the loop really drives it. */
-void aliro_reader_status_tick(int64_t now_ms)
+void ultrawidelock_reader_status_tick(int64_t now_ms)
 {
 	mfk_status_tick_calls++;
 	mfk_status_tick_last_ms = now_ms;
 }
 
-const void *aliro_reader_ble_prepare(void)
+const void *ultrawidelock_reader_ble_prepare(void)
 {
 	return mfk_ble_prepare_null ? NULL : (const void *)&mfk_aliro_svc;
 }
 
-void aliro_reader_refresh_adv(void)
+void ultrawidelock_reader_refresh_adv(void)
 {
 	mfk_refresh_adv_calls++;
 }
 
-void aliro_reader_notify_unlock(bool unsecured)
+void ultrawidelock_reader_notify_unlock(bool unsecured)
 {
 	mfk_notify_unlock_calls++;
 	mfk_notify_unlock_last = unsecured ? 1 : 0;
 }
 
-bool aliro_reader_session_active(void)
+bool ultrawidelock_reader_session_active(void)
 {
 	return mfk_session_active != 0;
 }
 
-bool aliro_reader_authenticated_credential(uint8_t cred_pub[65])
+bool ultrawidelock_reader_authenticated_credential(uint8_t cred_pub[65])
 {
 	if (!mfk_auth_cred_have) {
 		return false;
@@ -1066,22 +1066,22 @@ bool aliro_reader_authenticated_credential(uint8_t cred_pub[65])
 	return true;
 }
 
-void aliro_reader_prov_print(void)
+void ultrawidelock_reader_prov_print(void)
 {
 	mfk_prov_print_calls++;
 }
 
-int aliro_reader_trust_last(void)
+int ultrawidelock_reader_trust_last(void)
 {
 	return mfk_trust_last_rc;
 }
 
-int aliro_reader_trust_clear(void)
+int ultrawidelock_reader_trust_clear(void)
 {
 	return mfk_trust_clear_rc;
 }
 
-int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t sign_priv[32],
+int ultrawidelock_reader_provision_identity(const uint8_t reader_id[32], const uint8_t sign_priv[32],
 				    const uint8_t group_resolving_key[16])
 {
 	mfk_prov_identity_calls++;
@@ -1091,7 +1091,7 @@ int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t s
 	return mfk_prov_identity_rc;
 }
 
-int aliro_reader_provision_add_trust(const uint8_t cred_pub[65], uint8_t cred_type,
+int ultrawidelock_reader_provision_add_trust(const uint8_t cred_pub[65], uint8_t cred_type,
 				     uint16_t cred_index, uint16_t user_index)
 {
 	mfk_add_trust_calls++;
@@ -1102,7 +1102,7 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[65], uint8_t cred_ty
 	return mfk_add_trust_rc;
 }
 
-int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
+int ultrawidelock_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
 {
 	mfk_remove_trust_calls++;
 	mfk_remove_trust_type = cred_type;
@@ -1110,30 +1110,30 @@ int aliro_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred_index)
 	return mfk_remove_trust_rc;
 }
 
-int aliro_reader_provision_remove_user(uint16_t user_index)
+int ultrawidelock_reader_provision_remove_user(uint16_t user_index)
 {
 	mfk_remove_user_calls++;
 	mfk_remove_user_index = user_index;
 	return mfk_remove_user_rc;
 }
 
-int aliro_reader_provision_clear(void)
+int ultrawidelock_reader_provision_clear(void)
 {
 	mfk_prov_clear_calls++;
 	return 0;
 }
 
-void aliro_ble_time_updated(void)
+void ultrawidelock_ble_time_updated(void)
 {
 	mfk_ble_time_updated_calls++;
 }
 
-void aliro_lab_set_enabled(bool on)
+void ultrawidelock_lab_set_enabled(bool on)
 {
 	mfk_lab_on = on ? 1 : 0;
 }
 
-bool aliro_lab_enabled(void)
+bool ultrawidelock_lab_enabled(void)
 {
 	return mfk_lab_on != 0;
 }
@@ -1171,12 +1171,12 @@ void uwb_cirdiag_probe(void)
 	mfk_cir_probes++;
 }
 
-void aliro_lab_ev(const char *ev)
+void ultrawidelock_lab_ev(const char *ev)
 {
 	(void)ev;
 }
 
-void aliro_lab_evi(const char *ev, const char *key, long val)
+void ultrawidelock_lab_evi(const char *ev, const char *key, long val)
 {
 	(void)ev;
 	(void)key;
@@ -1184,22 +1184,22 @@ void aliro_lab_evi(const char *ev, const char *key, long val)
 	mfk_lab_evi_last = val;
 }
 
-void aliro_lab_dump(void)
+void ultrawidelock_lab_dump(void)
 {
 }
 
-int aliro_lat_mark(enum aliro_lat_phase phase)
+int ultrawidelock_lat_mark(enum ultrawidelock_lat_phase phase)
 {
 	int first = mfk_lat_marks[(int)phase] == 0;
 	mfk_lat_marks[(int)phase]++;
 	return first;
 }
 
-void aliro_lat_begin(void)
+void ultrawidelock_lat_begin(void)
 {
 }
 
-void aliro_lat_report(void)
+void ultrawidelock_lat_report(void)
 {
 	mfk_lat_reports++;
 }

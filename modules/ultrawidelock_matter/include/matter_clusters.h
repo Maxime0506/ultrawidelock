@@ -262,7 +262,7 @@ extern "C" {
  * Install an Aliro credential public key, set by the port.
  *
  * Returns 0 when added, 1 when already present, negative on a bad point or a
- * full/failed store -- the contract aliro_reader_provision_add_trust() already
+ * full/failed store -- the contract ultrawidelock_reader_provision_add_trust() already
  * has, passed through unchanged so the module invents no policy of its own.
  */
 /* SetUser fields (DoorLock/Commands.h, SetUser::Fields). Numbered from
@@ -334,7 +334,7 @@ struct matter_user {
 #define MATTER_ALIRO_ISSUER_KEYS_SUPPORTED   10u
 /**
  * NumberOfAliroEndpointKeysSupported (0x0088): how many endpoint keys the
- * reader's trust store actually holds, which is ALIRO_TRUST_MAX.
+ * reader's trust store actually holds, which is ULTRAWIDELOCK_TRUST_MAX.
  *
  * Claiming 10 while holding 6 invited a controller to install four keys that
  * would be silently evicted, and eviction is what used to lock a re-paired

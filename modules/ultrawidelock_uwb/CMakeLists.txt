@@ -37,7 +37,7 @@ if(CONFIG_ULTRAWIDELOCK_UWB)
       ${UWB_RESP_ENGINE_SRCS}
     )
 
-    if(CONFIG_WOZ_ALIRO)
+    if(CONFIG_ULTRAWIDELOCK_CRED)
       # The add-on hands us the plaintext URSK in _ConfigureRangingSession, so we
       # only need the CCC STS engine (ccc_keys = key schedule/MAC/session config,
       # ccc_engine = STS generation + RX-arm shim + facade).

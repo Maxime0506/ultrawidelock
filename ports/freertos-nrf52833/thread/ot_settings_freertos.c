@@ -358,7 +358,7 @@ otError otPlatSettingsDelete(otInstance *instance, uint16_t key, int index)
  * and deletes key by key; it must never call woz_freertos_kv_erase_all(),
  * because the Aliro provisioning blob lives in the same two pages and erasing
  * it would take the reader's provisioned identity and trust anchors with it —
- * the mirror of the argument in aliro_prov_erase(), which spares these keys so
+ * the mirror of the argument in ultrawidelock_prov_erase(), which spares these keys so
  * an Aliro factory reset cannot cost the SRP client key and the up-to-14-day
  * lease wait that follows.
  */

@@ -10,7 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "aliro_prim.h"
+#include "ultrawidelock_prim.h"
 
 int aliro_device_selftest(void);
 
@@ -18,7 +18,7 @@ void app_main(void)
 {
 	printf("\n=== on-target Aliro device EC self-test (real PSA P-256) ===\n");
 
-	if (aliro_prim_init() != 0) {
+	if (ultrawidelock_prim_init() != 0) {
 		printf("\nON-TARGET RESULT: FAIL (PSA init)\n");
 	} else {
 		int rc = aliro_device_selftest();

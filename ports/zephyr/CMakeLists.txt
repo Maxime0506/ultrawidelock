@@ -18,7 +18,7 @@ endif()
 if(CONFIG_DW3000
    OR CONFIG_WOZ_PRETTY_SHELL
    OR CONFIG_ULTRAWIDELOCK_UWB_SHELL
-   OR (CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
+   OR (CONFIG_ULTRAWIDELOCK_CRED AND CONFIG_SOC_NRF5340_CPUAPP)
    OR CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG
    OR CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM
    OR CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
@@ -82,8 +82,8 @@ endif()
 
 # nRF5340 app-core HFCLK boost, split out of ultrawidelock_uwb_facade.c (which keeps the
 # portable woz_hfclk_ensure_128mhz() seam). Compiled exactly when the facade
-# is (CONFIG_WOZ_ALIRO) on the SoC it exists for.
-if(CONFIG_WOZ_ALIRO AND CONFIG_SOC_NRF5340_CPUAPP)
+# is (CONFIG_ULTRAWIDELOCK_CRED) on the SoC it exists for.
+if(CONFIG_ULTRAWIDELOCK_CRED AND CONFIG_SOC_NRF5340_CPUAPP)
 	zephyr_library_sources(uwb/woz_hfclk_boost.c)
 endif()
 

@@ -11,7 +11,7 @@
  * brings up USB CDC-ACM and deliberately never starts the radios. Everything
  * here therefore reads and writes the settings store directly (aliro_prov_*)
  * rather than the running engine's state, which in this mode does not exist.
- * The one exception is `import`, which routes through aliro_reader_import_blob
+ * The one exception is `import`, which routes through ultrawidelock_reader_import_blob
  * so the engine's own commit path stays the single place that adopts identity.
  */
 #include <stdbool.h>
@@ -21,7 +21,7 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/util.h>
 
-#include "aliro_prov.h"
+#include "ultrawidelock_prov.h"
 #include <ultrawidelock/reader.h>
 
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
@@ -31,8 +31,8 @@
 /* One blob each way, static because the hex form of a full 476-byte blob is 952
  * characters on its own, against a shell thread stack of
  * CONFIG_SHELL_STACK_SIZE. */
-static uint8_t s_blob[ALIRO_PROV_BLOB_MAX];
-static char s_hex[2u * ALIRO_PROV_BLOB_MAX + 1u];
+static uint8_t s_blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
+static char s_hex[2u * ULTRAWIDELOCK_PROV_BLOB_MAX + 1u];
 
 /**
  * Return true if all bytes in the buffer are zero.
@@ -51,14 +51,14 @@ static bool all_zero(const uint8_t *p, size_t len)
  * left for the walk-up to discover. Same three reports on a
  * flash dump, checked again here because a hex string can arrive by any route.
  * Returns a reason, or NULL when the blob will actually unlock. */
-static const char *dead_blob_reason(const struct aliro_reader_identity *id,
-				    const struct aliro_trust_store *ts)
+static const char *dead_blob_reason(const struct ultrawidelock_reader_identity *id,
+				    const struct ultrawidelock_trust_store *ts)
 {
 	if (id->is_dev) {
 		return "it is the built-in DEV identity: the source board was never "
 		       "provisioned, or was factory-reset after it was";
 	}
-	if (all_zero(id->grk, ALIRO_GRK_LEN)) {
+	if (all_zero(id->grk, ULTRAWIDELOCK_GRK_LEN)) {
 		return "the GroupResolvingKey is all zero: SetAliroReaderConfig never "
 		       "landed on the source, so no phone can resolve this reader";
 	}
@@ -75,13 +75,13 @@ static const char *dead_blob_reason(const struct aliro_reader_identity *id,
  */
 static int cmd_prov(const struct shell *sh, size_t argc, char **argv)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	int rc = aliro_prov_load(&id, &ts);
+	int rc = ultrawidelock_prov_load(&id, &ts);
 
 	if (rc < 0) {
 		shell_error(sh, "settings store unreadable; showing the dev fallback");
@@ -91,10 +91,10 @@ static int cmd_prov(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "reader_id  : %02x%02x%02x%02x...%02x%02x%02x%02x", id.reader_id[0],
 		    id.reader_id[1], id.reader_id[2], id.reader_id[3], id.reader_id[28],
 		    id.reader_id[29], id.reader_id[30], id.reader_id[31]);
-	shell_print(sh, "GRK        : %s", all_zero(id.grk, ALIRO_GRK_LEN) ? "all zero (no "
+	shell_print(sh, "GRK        : %s", all_zero(id.grk, ULTRAWIDELOCK_GRK_LEN) ? "all zero (no "
 		    "phone will approach)" : "set");
 	shell_print(sh, "trust      : %u of %u anchor(s)", (unsigned int)ts.count,
-		    (unsigned int)ALIRO_TRUST_MAX);
+		    (unsigned int)ULTRAWIDELOCK_TRUST_MAX);
 
 	const char *why = dead_blob_reason(&id, &ts);
 
@@ -109,8 +109,8 @@ static int cmd_prov(const struct shell *sh, size_t argc, char **argv)
  */
 static int cmd_import(const struct shell *sh, size_t argc, char **argv)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 
 	ARG_UNUSED(argc);
 
@@ -123,7 +123,7 @@ static int cmd_import(const struct shell *sh, size_t argc, char **argv)
 		return -EINVAL;
 	}
 
-	if (aliro_prov_deserialize(s_blob, len, &id, &ts) != 0) {
+	if (ultrawidelock_prov_deserialize(s_blob, len, &id, &ts) != 0) {
 		shell_error(sh, "not an APRV blob (bad magic, version, or length)");
 		return -EINVAL;
 	}
@@ -137,7 +137,7 @@ static int cmd_import(const struct shell *sh, size_t argc, char **argv)
 		return -EINVAL;
 	}
 
-	int rc = aliro_reader_import_blob(s_blob, len);
+	int rc = ultrawidelock_reader_import_blob(s_blob, len);
 
 	if (rc != 0) {
 		/* -1 malformed (already ruled out above), -2 settings write failed. */
@@ -156,8 +156,8 @@ static int cmd_import(const struct shell *sh, size_t argc, char **argv)
  */
 static int cmd_export(const struct shell *sh, size_t argc, char **argv)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 	size_t len = 0;
 
 	ARG_UNUSED(argc);
@@ -167,8 +167,8 @@ static int cmd_export(const struct shell *sh, size_t argc, char **argv)
 		return -EINVAL;
 	}
 
-	(void)aliro_prov_load(&id, &ts);
-	if (aliro_prov_serialize(&id, &ts, s_blob, sizeof(s_blob), &len) != 0) {
+	(void)ultrawidelock_prov_load(&id, &ts);
+	if (ultrawidelock_prov_serialize(&id, &ts, s_blob, sizeof(s_blob), &len) != 0) {
 		shell_error(sh, "serialise failed");
 		return -EINVAL;
 	}
@@ -197,7 +197,7 @@ static int cmd_erase(const struct shell *sh, size_t argc, char **argv)
 		return -EINVAL;
 	}
 
-	int rc = aliro_reader_provision_clear();
+	int rc = ultrawidelock_reader_provision_clear();
 
 	if (rc != 0) {
 		shell_error(sh, "erase failed rc=%d", rc);

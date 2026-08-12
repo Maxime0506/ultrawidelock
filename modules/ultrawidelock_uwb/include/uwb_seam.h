@@ -8,7 +8,7 @@
  * later cannot quietly bypass any of it. `make seam` enforces that
  * mechanically (tests/tooling/uwb_seam_check.sh).
  *
- * Under CONFIG_WOZ_ALIRO the engine supplies the definitions:
+ * Under CONFIG_ULTRAWIDELOCK_CRED the engine supplies the definitions:
  *
  *   ultrawidelock_uwb_arm_rx         ccc_shim_rx.c    program the CCC key/IV, then arm RX
  *   ultrawidelock_uwb_set_sts_iv     ccc_shim_wrap.c  substitute the CCC STS-V per frame
@@ -16,7 +16,7 @@
  *   ultrawidelock_uwb_configure_phy  uwb_rxdiag.c     log the PHY configuration
  *
  * The ESP32 port omits uwb_rxdiag.c (it is k_work-based) and supplies the last
- * two from port/ultrawidelock_seam_stubs.c instead. Below the CONFIG_WOZ_ALIRO tier there
+ * two from port/ultrawidelock_seam_stubs.c instead. Below the CONFIG_ULTRAWIDELOCK_CRED tier there
  * is no engine to reach, so each helper inlines to the plain decadriver call.
  *
  * The implementations are free to call the decadriver directly — that is how
@@ -31,7 +31,7 @@
 
 #include <deca_device_api.h>
 
-#ifdef CONFIG_WOZ_ALIRO
+#ifdef CONFIG_ULTRAWIDELOCK_CRED
 
 /** @brief Program the CCC STS for the current slot, then enable RX. */
 int32_t ultrawidelock_uwb_arm_rx(int32_t mode);
@@ -71,6 +71,6 @@ static inline int32_t ultrawidelock_uwb_configure_phy(dwt_config_t *config)
 	return dwt_configure(config);
 }
 
-#endif /* CONFIG_WOZ_ALIRO */
+#endif /* CONFIG_ULTRAWIDELOCK_CRED */
 
 #endif /* UWB_SEAM_H */

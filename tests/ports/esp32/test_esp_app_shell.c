@@ -69,28 +69,28 @@ static int s_prov_prints, s_trust_last_rc, s_trust_last_calls;
 static int s_stepup_arms, s_stepup_statuses, s_reader_start_calls, s_reader_start_rc;
 static int s_status_ticks;
 
-void aliro_reader_prov_print(void)
+void ultrawidelock_reader_prov_print(void)
 {
 	s_prov_prints++;
 }
 
-int aliro_reader_trust_last(void)
+int ultrawidelock_reader_trust_last(void)
 {
 	s_trust_last_calls++;
 	return s_trust_last_rc;
 }
 
-void aliro_reader_stepup_arm(void)
+void ultrawidelock_reader_stepup_arm(void)
 {
 	s_stepup_arms++;
 }
 
-void aliro_reader_stepup_status(void)
+void ultrawidelock_reader_stepup_status(void)
 {
 	s_stepup_statuses++;
 }
 
-int aliro_reader_start(void)
+int ultrawidelock_reader_start(void)
 {
 	s_reader_start_calls++;
 	return s_reader_start_rc;
@@ -99,7 +99,7 @@ int aliro_reader_start(void)
 /* The app's forever-loop drives this every pass to release a held Wallet status.
  * Counted rather than ignored: the loop calling it is the whole delivery path,
  * and a silent stub would let a future edit drop the call unnoticed. */
-void aliro_reader_status_tick(int64_t now_ms)
+void ultrawidelock_reader_status_tick(int64_t now_ms)
 {
 	(void)now_ms;
 	s_status_ticks++;

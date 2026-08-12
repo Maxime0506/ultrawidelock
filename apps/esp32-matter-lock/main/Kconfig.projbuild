@@ -12,7 +12,7 @@ menu "Example Configuration"
         bool "Publish distance and access events to Home Assistant over MQTT"
         default n
         depends on ENABLE_ALIRO_BLE_UWB
-        select WOZ_ALIRO_ACCESS_LISTENER
+        select ULTRAWIDELOCK_CRED_ACCESS_LISTENER
         help
             Publish UWB distance and Aliro access verdicts straight to a TLS
             MQTT broker, on the topics MQTT Discovery expects, so Home

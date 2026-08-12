@@ -72,7 +72,7 @@ float ultrawidelock_ml_los_fp_resid(float fp_pwr_db, uint16_t dist_cm)
  * distance while holding blocker position fixed by accident.
  *
  * Subtracting the wrong amount fails in the dangerous direction -- a phone genuinely
- * at 185 cm reads as 100 and the door opens for a walk-by -- so aliro_approach's
+ * at 185 cm reads as 100 and the door opens for a walk-by -- so ultrawidelock_approach's
  * cfg.range_correct_en defaults false and should stay there. The supportable use of
  * the classifier is to WIDEN unlock_cm while obstructed, which needs the sign of the
  * effect (replicated) rather than its magnitude (not replicated).

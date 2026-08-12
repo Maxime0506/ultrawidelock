@@ -1,7 +1,7 @@
 /* stackfake — test-side control/inspection API for the Aliro Interface the
  * woz_aliro_stack sources call into.
  *
- * SYMMETRIC CRYPTO IS REAL (SHA-256/HKDF from aliro_hash.c, the reference GCM
+ * SYMMETRIC CRYPTO IS REAL (SHA-256/HKDF from ultrawidelock_hash.c, the reference GCM
  * from aliro_prim_host.c, both vector-pinned): a wrong key, skipped counter or
  * forged tag fails HERE the way it fails on the device. ASYMMETRIC IS NOT --
  * no P-256 exists in the host build, EC results are knobs, and nothing here is

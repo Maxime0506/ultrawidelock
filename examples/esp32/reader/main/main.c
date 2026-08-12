@@ -28,7 +28,7 @@ static const char *TAG = "woz_esp32";
 // on the delayed-TX reply path can blow the reply window; other subsystems keep
 // their normal log level. app_responder_start() performs the full DW3000
 // bring-up chain (ultrawidelock_uwb_start_aliro -> ccc_prepoll_listen ->
-// uwb_min_radio_init). aliro_reader_start() brings up the BLE transport and
+// uwb_min_radio_init). ultrawidelock_reader_start() brings up the BLE transport and
 // session/transaction layer independently of the demo responder; the
 // URSK-driven UWB start happens inside the reader once the Phase-3 handshake is
 // implemented. Never returns: loops forever logging the last UWB range every
@@ -52,8 +52,8 @@ void app_main(void)
 	 * layer). Additive; independent of the demo UWB responder above. The real
 	 * URSK-driven UWB start happens inside the reader once the Phase-3 handshake
 	 * is implemented. */
-	int brc = aliro_reader_start();
-	ESP_LOGI(TAG, "aliro_reader_start() = %d %s", brc,
+	int brc = ultrawidelock_reader_start();
+	ESP_LOGI(TAG, "ultrawidelock_reader_start() = %d %s", brc,
 		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
 
 #if defined(CONFIG_WOZ_PRESENCE)
@@ -75,7 +75,7 @@ void app_main(void)
 		/* Same duty as the Matter lock's approach loop: release a held stale-Wallet
 		 * Secured once its window passes without a grant. Only presence_link drives
 		 * grants in this app, so only presence can ever arm one. */
-		aliro_reader_status_tick(woz_uptime_ms());
+		ultrawidelock_reader_status_tick(woz_uptime_ms());
 
 		if (ultrawidelock_uwb_last_range_cm(&cm)) {
 			ESP_LOGI(TAG, "range: %d cm", (int)cm);

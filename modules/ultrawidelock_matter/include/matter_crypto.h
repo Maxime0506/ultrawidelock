@@ -57,7 +57,7 @@ extern "C" {
  * compiler sees the two declarations together and rejects any drift.
  *
  * Note for the first on-target Matter build: that Kconfig choice currently
- * `depends on WOZ_ALIRO`, so a Matter-only image would find no definition and
+ * `depends on ULTRAWIDELOCK_CRED`, so a Matter-only image would find no definition and
  * fail to link. Widening it belongs with that build, not here.
  */
 int crypto_aes_ecb_encrypt(const uint8_t *key, size_t key_bits, const uint8_t in[16],

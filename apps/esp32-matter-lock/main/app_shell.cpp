@@ -1,4 +1,5 @@
-// ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
+// ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro,
+// lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 /*
  * app_shell — see app_shell.h.
  */
@@ -20,8 +21,8 @@
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
 #include <ultrawidelock_diag.h> // ultrawidelock_uwb_diag_on — the raw per-frame UWB trace gate
-#ifdef CONFIG_WOZ_ALIRO_LAB
-#include <aliro_lab.h>   // aliro_lab_set_enabled — the transaction-trace runtime gate
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_LAB
+#include <ultrawidelock_lab.h> // ultrawidelock_lab_set_enabled — the transaction-trace runtime gate
 #include <uwb_cirdiag.h> // uwb_cirdiag_set_enabled — per-reception CIA diag stream, rides `lab`
 #endif
 #ifdef CONFIG_WOZ_FLIGHT_RECORDER
@@ -82,7 +83,9 @@ static void print_banner(void)
  * state takes the stack lock; anything mutating it is scheduled onto the Matter
  * task, which is the only thread allowed to drive the lock cluster. */
 
-// Shell command handler: prints the current Matter door lock state, fabric count, and (when Aliro BLE/UWB is enabled) the last measured and last trusted UWB ranges in cm, or "none" if unavailable. Always returns 0.
+// Shell command handler: prints the current Matter door lock state, fabric count, and (when Aliro
+// BLE/UWB is enabled) the last measured and last trusted UWB ranges in cm, or "none" if
+// unavailable. Always returns 0.
 static int cmd_status(int argc, char **argv)
 {
 	(void)argc;
@@ -138,8 +141,8 @@ static int cmd_status(int argc, char **argv)
 }
 
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
-// Shell handler for the "range" command; prints the last measured UWB range in cm, or "no range yet"
-// if none has been recorded. Always returns 0.
+// Shell handler for the "range" command; prints the last measured UWB range in cm, or "no range
+// yet" if none has been recorded. Always returns 0.
 static int cmd_range(int argc, char **argv)
 {
 	(void)argc;
@@ -153,8 +156,8 @@ static int cmd_range(int argc, char **argv)
 	return 0;
 }
 
-#ifdef CONFIG_WOZ_ALIRO_CLONE
-#include <aliro_prov.h> // ALIRO_PROV_BLOB_MAX
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_CLONE
+#include <ultrawidelock_prov.h> // ULTRAWIDELOCK_PROV_BLOB_MAX
 
 // Maps one hex digit to its 0-15 value, or -1 if not [0-9a-fA-F]. Twin of the
 // helper in the standalone reader app_shell.c (kept local to avoid a shared dep).
@@ -190,21 +193,21 @@ static int aliro_hexdecode(const char *s, uint8_t *out, size_t out_cap)
 	}
 	return (int)(n / 2);
 }
-#endif /* CONFIG_WOZ_ALIRO_CLONE */
+#endif /* CONFIG_ULTRAWIDELOCK_CRED_CLONE */
 
 // Shell handler for the "aliro" command. Subcommands: "prov" prints reader provisioning info;
 // "trust" adds the last-presented credential to the trust store and persists it to NVS, reporting
 // whether a credential was actually available to trust or whether the store/NVS write failed.
-// With CONFIG_WOZ_ALIRO_CLONE, "export"/"import <hex>" clone the identity to a second board.
-// Any other or missing argument prints usage. Always returns 0.
+// With CONFIG_ULTRAWIDELOCK_CRED_CLONE, "export"/"import <hex>" clone the identity to a second
+// board. Any other or missing argument prints usage. Always returns 0.
 static int cmd_aliro(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "prov") == 0) {
-		aliro_reader_prov_print();
+		ultrawidelock_reader_prov_print();
 		return 0;
 	}
 	if (argc == 2 && strcmp(argv[1], "trust") == 0) {
-		int rc = aliro_reader_trust_last();
+		int rc = ultrawidelock_reader_trust_last();
 		if (rc == 0) {
 			printf("aliro trust: added last-presented credential + saved to NVS\n");
 		} else if (rc == 1) {
@@ -216,7 +219,7 @@ static int cmd_aliro(int argc, char **argv)
 		return 0;
 	}
 	if (argc == 2 && strcmp(argv[1], "clear") == 0) {
-		int rc = aliro_reader_trust_clear();
+		int rc = ultrawidelock_reader_trust_clear();
 		if (rc == 0) {
 			printf("aliro clear: trust store emptied + saved to NVS\n");
 		} else if (rc == 1) {
@@ -226,11 +229,11 @@ static int cmd_aliro(int argc, char **argv)
 		}
 		return 0;
 	}
-#ifdef CONFIG_WOZ_ALIRO_CLONE
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_CLONE
 	if (argc == 2 && strcmp(argv[1], "export") == 0) {
-		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 		size_t len = 0;
-		if (aliro_reader_export_blob(blob, sizeof(blob), &len) != 0) {
+		if (ultrawidelock_reader_export_blob(blob, sizeof(blob), &len) != 0) {
 			printf("aliro export: FAILED (buffer)\n");
 			return 0;
 		}
@@ -243,14 +246,14 @@ static int cmd_aliro(int argc, char **argv)
 		return 0;
 	}
 	if (argc == 3 && strcmp(argv[1], "import") == 0) {
-		uint8_t blob[ALIRO_PROV_BLOB_MAX];
+		uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 		int n = aliro_hexdecode(argv[2], blob, sizeof(blob));
 		if (n < 0) {
 			printf("aliro import: bad hex (even length, 0-9a-f, <= %u bytes)\n",
 			       (unsigned)sizeof(blob));
 			return 0;
 		}
-		int rc = aliro_reader_import_blob(blob, (size_t)n);
+		int rc = ultrawidelock_reader_import_blob(blob, (size_t)n);
 		if (rc == 0) {
 			printf("aliro import: adopted %d-byte identity + trust store (saved to NVS)\n",
 			       n);
@@ -380,7 +383,8 @@ static int cmd_commission(int argc, char **argv)
 }
 
 // Shell handler for the "factoryreset" command; erases persisted config and reboots the device via
-// esp_matter::factory_reset(). Always returns 0 (the reboot happens before returning is meaningful).
+// esp_matter::factory_reset(). Always returns 0 (the reboot happens before returning is
+// meaningful).
 static int cmd_factoryreset(int argc, char **argv)
 {
 	(void)argc;
@@ -388,10 +392,10 @@ static int cmd_factoryreset(int argc, char **argv)
 	printf("factory reset: erasing and rebooting\n");
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 	/* esp_matter::factory_reset() erases only Matter's own NVS namespaces; the
-	 * Aliro reader identity + trust store live in "aliro_prov" and would
+	 * Aliro reader identity + trust store live in "ultrawidelock_prov" and would
 	 * survive, so the old home's phones could still authenticate after the
 	 * reset. Revert to the dev identity (RAM + NVS) before rebooting. */
-	aliro_reader_provision_clear();
+	ultrawidelock_reader_provision_clear();
 #endif
 	esp_matter::factory_reset();
 	return 0;
@@ -401,7 +405,7 @@ static int cmd_factoryreset(int argc, char **argv)
  * protocol callbacks cost walk-up latency), so bench diagnostics need a way
  * back up without a reflash. The compile-time ceiling is DEBUG
  * (CONFIG_LOG_MAXIMUM_LEVEL); note the shared woz_aliro/ultrawidelock_uwb sources log
- * under their module tags (aliro_reader, aliro_ranging, ...). */
+ * under their module tags (ultrawidelock_reader, ultrawidelock_ranging, ...). */
 static int cmd_log(int argc, char **argv)
 {
 	static const struct {
@@ -429,7 +433,7 @@ static int cmd_log(int argc, char **argv)
 	return 0;
 }
 
-#ifdef CONFIG_WOZ_ALIRO_LAB
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_LAB
 /* Aliro Lab transaction trace: OFF at boot (the [ALAB] lines are blocking UART
  * writes on the protocol path, so they cost walk-up latency while on). `lab on`
  * before a walk-up, `lab off` after;
@@ -460,16 +464,16 @@ static int cmd_lab(int argc, char **argv)
 	}
 #endif /* CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG */
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
-		aliro_lab_set_enabled(true);
+		ultrawidelock_lab_set_enabled(true);
 		uwb_cirdiag_set_enabled(true); /* per-reception ev=uwb.diag lines ride the gate */
 	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
-		aliro_lab_set_enabled(false);
+		ultrawidelock_lab_set_enabled(false);
 		uwb_cirdiag_set_enabled(false);
 	} else if (argc != 1) {
 		printf("usage: lab [on|off] | lab cir [on|off|probe]\n");
 		return 0;
 	}
-	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");
+	printf("aliro lab trace: %s\n", ultrawidelock_lab_enabled() ? "on" : "off");
 	return 0;
 }
 #endif
@@ -516,9 +520,9 @@ void app_shell_start(void)
 	 * would stall both cores' cache). Pin off the Matter/radio core. */
 	repl_cfg.prompt = "matter> ";
 	repl_cfg.task_core_id = 0;
-#ifdef CONFIG_WOZ_ALIRO_CLONE
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_CLONE
 	/* An exported identity+trust blob is a single hex argument up to
-	 * ALIRO_PROV_BLOB_MAX*2 chars, past the 256-byte default line buffer. */
+	 * ULTRAWIDELOCK_PROV_BLOB_MAX*2 chars, past the 256-byte default line buffer. */
 	repl_cfg.max_cmdline_length = 1024;
 #endif
 
@@ -556,7 +560,7 @@ void app_shell_start(void)
 		 .hint = NULL,
 		 .func = cmd_range},
 		{.command = "aliro",
-#ifdef CONFIG_WOZ_ALIRO_CLONE
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_CLONE
 		 .help = "aliro <prov|trust|clear|export|import <hex>>: identity / trust / "
 			 "clone to a second board",
 #else
@@ -577,7 +581,7 @@ void app_shell_start(void)
 			 "costs slot deadlines)",
 		 .hint = NULL,
 		 .func = cmd_uwbdiag},
-#ifdef CONFIG_WOZ_ALIRO_LAB
+#ifdef CONFIG_ULTRAWIDELOCK_CRED_LAB
 		{.command = "lab",
 		 .help = "lab [on|off]: Aliro Lab transaction trace (boot default off)",
 		 .hint = NULL,

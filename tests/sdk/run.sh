@@ -14,20 +14,25 @@ check_declarations() {
 	}
 }
 
-check_declarations modules/woz_aliro/include/ultrawidelock/reader.h
-check_declarations modules/woz_aliro/include/ultrawidelock/device.h
-check_declarations modules/woz_aliro/include/ultrawidelock/tlv.h
+check_declarations modules/ultrawidelock_cred/include/ultrawidelock/reader.h
+check_declarations modules/ultrawidelock_cred/include/ultrawidelock/device.h
+check_declarations modules/ultrawidelock_cred/include/ultrawidelock/tlv.h
 check_declarations modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h
 
-for legacy in modules/woz_aliro/include/aliro_reader.h \
-	modules/woz_aliro/include/aliro_device.h modules/woz_aliro/include/aliro_tlv.h \
+# Both spellings stay banned: the flat headers this API replaced, under their
+# original aliro_ names, and the same names carried into the ultrawidelock_
+# prefix by the rename. Either one reappearing means the flat API came back.
+for legacy in modules/ultrawidelock_cred/include/aliro_reader.h \
+	modules/ultrawidelock_cred/include/aliro_device.h modules/ultrawidelock_cred/include/aliro_tlv.h \
+	modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
+	modules/ultrawidelock_cred/include/ultrawidelock_device.h modules/ultrawidelock_cred/include/ultrawidelock_tlv.h \
 	modules/ultrawidelock_uwb/include/ultrawidelock_uwb_facade.h modules/woz_port/include/woz_hal.h; do
 	[ ! -e "$ROOT/$legacy" ] || {
 		echo "sdk API: FAIL (legacy API header returned: $legacy)" >&2
 		exit 1
 	}
 done
-if git grep -nE '#include [<"](aliro_reader|aliro_device|aliro_tlv|ultrawidelock_uwb_facade|woz_hal)[.]h[>"]' \
+if git grep -nE '#include [<"](aliro_reader|aliro_device|aliro_tlv|ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_uwb_facade|woz_hal)[.]h[>"]' \
 	-- apps examples integrations modules ports tests/host tests/ports tests/shared tests/tooling \
 	>/dev/null; then
 	echo "sdk API: FAIL (legacy API include returned)" >&2
@@ -79,8 +84,8 @@ MAKEFLAGS= MFLAGS= "$CMAKE_BIN" --build "$TMP/sdk" >/dev/null
 "$CMAKE_BIN" --install "$TMP/sdk" >/dev/null
 
 expected_headers=$(printf '%s\n' \
-	aliro_advtag.h aliro_apdu.h aliro_ble.h aliro_ble_central.h \
-	aliro_crypto.h aliro_device_apdu.h aliro_prov.h device.h dw3000_hw.h \
+	ultrawidelock_advtag.h ultrawidelock_apdu.h ultrawidelock_ble.h ultrawidelock_ble_central.h \
+	ultrawidelock_crypto.h ultrawidelock_device_apdu.h ultrawidelock_prov.h device.h dw3000_hw.h \
 	dw3000_spi.h ultrawidelock.h reader.h tlv.h uwb.h woz_hal.h | LC_ALL=C sort)
 installed_headers=$(find "$TMP/install/include/ultrawidelock" -type f -name '*.h' \
 	-exec basename {} \; | LC_ALL=C sort)

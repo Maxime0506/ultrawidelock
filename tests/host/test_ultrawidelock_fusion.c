@@ -123,7 +123,7 @@ static void symmetric_relay_is_not_caught(void)
 	/*
 	 * And why it does not matter, asserted rather than asserted-in-prose: the
 	 * inflated distances are far outside the approach controller's unlock
-	 * radius (100 cm by default, aliro_approach.c), so the range gate refuses
+	 * radius (100 cm by default, ultrawidelock_approach.c), so the range gate refuses
 	 * them long before geometry is consulted. Inflation cannot help an
 	 * attacker who needs to look CLOSE.
 	 */

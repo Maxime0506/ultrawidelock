@@ -2,15 +2,15 @@
 # the DW3110 driver and the BLE stack in one nRF52833 image.
 #
 # ultrawidelock_uwb and modules/ultrawidelock_dw3000 come in as Zephyr modules because they carry their own
-# Kconfig gating. modules/woz_aliro's reader core is listed
+# Kconfig gating. modules/ultrawidelock_cred's reader core is listed
 # directly here, the way tests/on_target/zephyr/nrf5340dk-aliro-device-ec does, so the nRF5340 build
-# that consumes that module through CONFIG_WOZ_ALIRO_STACK stays untouched.
+# that consumes that module through CONFIG_ULTRAWIDELOCK_CRED_STACK stays untouched.
 cmake_minimum_required(VERSION 3.20.0)
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-# modules/woz_aliro is listed for its Kconfig alone: the reader sources use the
-# LOG_MODULE the `module = WOZ_ALIRO` template declares, so CONFIG_WOZ_ALIRO_LOG_LEVEL
-# has to exist. Its CMakeLists is gated on CONFIG_WOZ_ALIRO_STACK, which stays n
+# modules/ultrawidelock_cred is listed for its Kconfig alone: the reader sources use the
+# LOG_MODULE the `module = ULTRAWIDELOCK_CRED` template declares, so CONFIG_ULTRAWIDELOCK_CRED_LOG_LEVEL
+# has to exist. Its CMakeLists is gated on CONFIG_ULTRAWIDELOCK_CRED_STACK, which stays n
 # here, so it contributes no sources and the nRF5340 build is unaffected.
 # modules/ultrawidelock_anchor is listed on the same terms: its CMakeLists is gated on
 # CONFIG_ULTRAWIDELOCK_ANCHOR, which is default n, so listing it here costs the default
@@ -18,7 +18,7 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 # modules/ultrawidelock_ml likewise, gated on CONFIG_ULTRAWIDELOCK_ML_LOS: default n, so the shipping
 # image is byte-identical without it and only overlays/mlgate.conf turns it on.
 list(APPEND ZEPHYR_EXTRA_MODULES
-	"${REPO_ROOT}/modules/woz_aliro"
+	"${REPO_ROOT}/modules/ultrawidelock_cred"
 	"${REPO_ROOT}/modules/ultrawidelock_anchor"
 	"${REPO_ROOT}/modules/ultrawidelock_matter"
 	"${REPO_ROOT}/modules/ultrawidelock_ml"
@@ -51,20 +51,20 @@ if(CONFIG_NRF_APPROTECT_LOCK OR CONFIG_NRF_SECURE_APPROTECT_LOCK)
 		"`aliro export yes` if you genuinely intend this.")
 endif()
 
-set(ALIRO "${REPO_ROOT}/modules/woz_aliro")
+set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
 set(PORTZ "${REPO_ROOT}/ports/zephyr")
 
-# Reader-role source sets come from the role manifests (modules/woz_aliro/
+# Reader-role source sets come from the role manifests (modules/ultrawidelock_cred/
 # roles/*.list) — the same lists the ESP32 components, the nRF5340 apps and the
 # host suite read, so each role's file set exists in exactly one place.
 include("${REPO_ROOT}/cmake/woz_roles.cmake")
-woz_role_sources("${ALIRO}/roles/reader.list" ALIRO_READER_SRCS)
-woz_role_sources("${ALIRO}/roles/reader_policy.list" ALIRO_POLICY_SRCS)
-woz_role_sources("${ALIRO}/roles/apdu.list" ALIRO_APDU_SRCS)
-woz_role_sources("${ALIRO}/roles/crypto.list" ALIRO_CRYPTO_SRCS)
-woz_role_sources("${ALIRO}/roles/hash.list" ALIRO_HASH_SRCS)
-woz_role_sources("${ALIRO}/roles/dyntag.list" ALIRO_DYNTAG_SRCS)
-woz_role_sources("${ALIRO}/roles/ble_central.list" ALIRO_BLE_CENTRAL_SRCS)
+woz_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
+woz_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
+woz_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+woz_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+woz_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+woz_role_sources("${ALIRO}/roles/dyntag.list" ULTRAWIDELOCK_DYNTAG_SRCS)
+woz_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
@@ -76,12 +76,12 @@ target_sources(app PRIVATE
 	${PORTZ}/ble/aliro_ble_zephyr.c
 	${PORTZ}/store/aliro_prov_settings.c
 	# Reader engine: roles reader + reader_policy + apdu + crypto + hash + dyntag.
-	${ALIRO_READER_SRCS}
-	${ALIRO_POLICY_SRCS}
-	${ALIRO_APDU_SRCS}
-	${ALIRO_CRYPTO_SRCS}
-	${ALIRO_HASH_SRCS}
-	${ALIRO_DYNTAG_SRCS}
+	${ULTRAWIDELOCK_READER_SRCS}
+	${ULTRAWIDELOCK_POLICY_SRCS}
+	${ULTRAWIDELOCK_APDU_SRCS}
+	${ULTRAWIDELOCK_CRYPTO_SRCS}
+	${ULTRAWIDELOCK_HASH_SRCS}
+	${ULTRAWIDELOCK_DYNTAG_SRCS}
 )
 # Provisioning console (USB CDC-ACM, provisioning mode only).
 target_sources_ifdef(CONFIG_ULTRAWIDELOCK_SIDE_GATE app PRIVATE src/side_feed.c)
@@ -101,7 +101,7 @@ target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
 # mirror of aliro_ble_zephyr.c under this gate; the platform-free advert/READ
 # decoder it calls is the same translation unit the ESP32 port and the host
 # suite compile.
-target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ALIRO_BLE_CENTRAL_SRCS})
+target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ULTRAWIDELOCK_BLE_CENTRAL_SRCS})
 # The commissioning policy half; its transport, Thread/fabric ports and fabric
 # table store live in ports/zephyr/{matter,store} under the same gate.
 target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_commission.c)

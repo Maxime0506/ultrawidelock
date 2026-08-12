@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CBMC="${CBMC:-cbmc}"
 CB="$ROOT/tests/host/cbmc"
 SRCD="$ROOT/modules/ultrawidelock_uwb/src"
-APDU_SRC="$ROOT/modules/woz_aliro/src"
+APDU_SRC="$ROOT/modules/ultrawidelock_cred/src"
 EXTRA_INCS=(-I"$APDU_SRC")
 
 COMMON=(
@@ -27,7 +27,7 @@ COMMON=(
 	--drop-unused-functions
 )
 
-targets=(ultrawidelock_uwb_msg ccc_mac aliro_apdu)
+targets=(ultrawidelock_uwb_msg ccc_mac ultrawidelock_apdu)
 [ "$#" -gt 0 ] && targets=("$@")
 
 # harness -> parser source under proof.
@@ -35,7 +35,7 @@ harness_src() {
 	case "$1" in
 	ultrawidelock_uwb_msg) echo "$SRCD/cred/ultrawidelock_uwb_msg_parser.c" ;;
 	ccc_mac) echo "$SRCD/ccc/ccc_mac.c" ;;
-	aliro_apdu) echo "$APDU_SRC/aliro_apdu.c" ;;
+	ultrawidelock_apdu) echo "$APDU_SRC/ultrawidelock_apdu.c" ;;
 	*) return 1 ;;
 	esac
 }
@@ -46,7 +46,7 @@ harness_unwind() {
 	case "$1" in
 	ultrawidelock_uwb_msg) echo 12 ;;
 	ccc_mac) echo 12 ;;
-	aliro_apdu) echo 28 ;;
+	ultrawidelock_apdu) echo 28 ;;
 	*) return 1 ;;
 	esac
 }

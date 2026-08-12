@@ -1,7 +1,0 @@
-# woz_aliro role: NimBLE reader transport -- GAP advertising, the Aliro 0xFFF2
-# GATT service, and the L2CAP CoC server that carries the transaction. Portable
-# across every NimBLE host; each port supplies its own aliro_ble_start() for the
-# platform half (storage, nimble_port_init, host task).
-# Consumers: ports/esp32/components/aliro_ble, ports/freertos-nrf52833/ble.
-# One repo-root-relative path per line, sorted; add HERE and nowhere else.
-modules/woz_aliro/src/aliro_ble_nimble.c

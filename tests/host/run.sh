@@ -42,7 +42,7 @@ HOSTD="$ROOT/tests/host"
 #    the drvfake radio + logfake zephyr surface.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
-	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
+	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 	-DCONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
@@ -75,9 +75,9 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb
 	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$OUT/ccc_crypto_mbedtls_host.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags \
-	-I"$HOSTD" -I"$ROOT/modules/woz_aliro/include" \
+	-I"$HOSTD" -I"$ROOT/modules/ultrawidelock_cred/include" \
 	"$HOSTD/test.c" "$HOSTD/test_psa_backends.c" "$HOSTD/psafake/psafake.c" \
-	"$ROOT/modules/woz_aliro/src/aliro_prim_psa.c" \
+	"$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_prim_psa.c" \
 	"$OUT/ccc_crypto_psa_host.o" "$OUT/ccc_crypto_mbedtls_host.o" \
 	-o "$OUT/host_test_psa"
 "$OUT/host_test_psa"
@@ -184,7 +184,7 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/includ
 	-o "$OUT/host_test_nfc"
 "$OUT/host_test_nfc"
 
-# 7) uwb_seam.h's engine-less tier. Compiled WITHOUT CONFIG_WOZ_ALIRO, alone:
+# 7) uwb_seam.h's engine-less tier. Compiled WITHOUT CONFIG_ULTRAWIDELOCK_CRED, alone:
 #    that half of the header is inline bodies, and a header compiled two ways
 #    inside one binary maps the same lines twice. See the file for the rest.
 # shellcheck disable=SC2086
@@ -210,7 +210,7 @@ STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
 	-DCONFIG_MAX_NUMBER_OF_KPERSISTENT=4
 	-DCONFIG_DOOR_LOCK_STORAGE_MAX_STORED_ACCESS_DOCUMENTS=2)
 STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
-	-I"$ROOT/modules/woz_aliro/include" -I"$ROOT/modules/woz_aliro/src")
+	-I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelock_cred/src")
 STK_OBJS=()
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_stack.o"
@@ -219,29 +219,29 @@ for stk_src in advertising_core protocol/ble_message protocol/ble_timeout \
 	stk_obj="$OUT/stk_$(basename "$stk_src").o"
 	# shellcheck disable=SC2086
 	"${CC:-cc}" -std=c11 -O1 -w $san_flags "${STK_DEF[@]}" -I"$STK" -I"$STK/protocol" \
-		-I"$ROOT/modules/woz_aliro/include" -c "$STK/$stk_src.c" -o "$stk_obj"
+		-I"$ROOT/modules/ultrawidelock_cred/include" -c "$STK/$stk_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
 # The step-up wire codecs + DeviceResponse parser are the shared woz_aliro
 # sources (one source of protocol truth; session.cpp calls them directly).
-for aliro_src in aliro_tlv aliro_stepup_wire aliro_stepup_parse; do
+for aliro_src in ultrawidelock_tlv ultrawidelock_stepup_wire ultrawidelock_stepup_parse; do
 	stk_obj="$OUT/stk_$aliro_src.o"
 	# shellcheck disable=SC2086
-	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
-		-I"$ROOT/modules/woz_aliro/src" \
-		-c "$ROOT/modules/woz_aliro/src/$aliro_src.c" -o "$stk_obj"
+	"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
+		-I"$ROOT/modules/ultrawidelock_cred/src" \
+		-c "$ROOT/modules/ultrawidelock_cred/src/$aliro_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
-# The symmetric crypto is REAL: aliro_hash.c (SHA-256/HMAC/HKDF, pinned by
+# The symmetric crypto is REAL: ultrawidelock_hash.c (SHA-256/HMAC/HKDF, pinned by
 # test_aliro_hash.c) and the reference AES-GCM in aliro_prim_host.c (pinned by
 # test_aliro_crypto.c). Only P-256 stays a stand-in -- this repo has none on host.
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
-	-I"$ROOT/modules/woz_aliro/src" -c "$ROOT/modules/woz_aliro/src/aliro_hash.c" \
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
+	-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_hash.c" \
 	-o "$OUT/stk_aliro_hash.o"
 # shellcheck disable=SC2086
-"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/woz_aliro/include" \
-	-I"$ROOT/modules/woz_aliro/src" -c "$ROOT/tests/shared/aliro_prim_host.c" \
+"${CC:-cc}" -std=c11 -O1 -w $san_flags -I"$ROOT/modules/ultrawidelock_cred/include" \
+	-I"$ROOT/modules/ultrawidelock_cred/src" -c "$ROOT/tests/shared/aliro_prim_host.c" \
 	-o "$OUT/stk_aliro_prim_host.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \

@@ -6,7 +6,7 @@
  * uniform jitter, so every run is bit-identical. */
 #include <string.h>
 
-#include "aliro_approach.h"
+#include "ultrawidelock_approach.h"
 #include "test.h"
 
 #define BLOCK_MS 192
@@ -33,25 +33,25 @@ struct rec {
 	int64_t t_predict, t_thresh, t_depart, t_abort;
 };
 
-static void note(struct rec *r, enum aliro_approach_action a, int64_t t)
+static void note(struct rec *r, enum ultrawidelock_approach_action a, int64_t t)
 {
 	switch (a) {
-	case ALIRO_APPROACH_UNLOCK_PREDICT:
+	case ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT:
 		if (r->n_predict++ == 0) {
 			r->t_predict = t;
 		}
 		break;
-	case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+	case ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD:
 		if (r->n_thresh++ == 0) {
 			r->t_thresh = t;
 		}
 		break;
-	case ALIRO_APPROACH_RELOCK_DEPART:
+	case ULTRAWIDELOCK_APPROACH_RELOCK_DEPART:
 		if (r->n_depart++ == 0) {
 			r->t_depart = t;
 		}
 		break;
-	case ALIRO_APPROACH_RELOCK_ABORT:
+	case ULTRAWIDELOCK_APPROACH_RELOCK_ABORT:
 		if (r->n_abort++ == 0) {
 			r->t_abort = t;
 		}
@@ -63,7 +63,7 @@ static void note(struct rec *r, enum aliro_approach_action a, int64_t t)
 
 /* A simulated walk-up: true distance moves linearly, one sample per block. */
 struct walk {
-	struct aliro_approach ap;
+	struct ultrawidelock_approach ap;
 	struct rec r;
 	int64_t t; /* ms of the last fed sample */
 	float d;   /* true distance, cm */
@@ -72,7 +72,7 @@ struct walk {
 static void walk_init(struct walk *w, uint32_t seed, float d0)
 {
 	memset(w, 0, sizeof(*w));
-	aliro_approach_init(&w->ap, NULL);
+	ultrawidelock_approach_init(&w->ap, NULL);
 	s_rng = seed;
 	w->d = d0;
 }
@@ -80,10 +80,10 @@ static void walk_init(struct walk *w, uint32_t seed, float d0)
 /* Same, with an explicit config (used to run a walk with the prediction path
  * compiled in but disabled, as the RSSI-power-gate builds do). */
 static void walk_init_cfg(struct walk *w, uint32_t seed, float d0,
-			  const struct aliro_approach_cfg *cfg)
+			  const struct ultrawidelock_approach_cfg *cfg)
 {
 	memset(w, 0, sizeof(*w));
-	aliro_approach_init(&w->ap, cfg);
+	ultrawidelock_approach_init(&w->ap, cfg);
 	s_rng = seed;
 	w->d = d0;
 }
@@ -96,7 +96,7 @@ static void walk_block(struct walk *w, float v_cm_s, int32_t noise, int32_t over
 	w->d -= v_cm_s * (float)BLOCK_MS / 1000.0f;
 	int32_t cm = override_cm >= 0 ? override_cm : (int32_t)w->d + jitter(noise);
 
-	note(&w->r, aliro_approach_feed(&w->ap, w->t, cm), w->t);
+	note(&w->r, ultrawidelock_approach_feed(&w->ap, w->t, cm), w->t);
 }
 
 /* Feed blocks until the true distance passes d_to (either direction). Every
@@ -124,10 +124,10 @@ static void walk_blocks(struct walk *w, float v_cm_s, int32_t noise, int n)
 void test_approach(void)
 {
 	struct walk w;
-	struct aliro_approach_cfg cfg;
+	struct ultrawidelock_approach_cfg cfg;
 
 	t_group("defaults + idle accessors");
-	aliro_approach_defaults(&cfg);
+	ultrawidelock_approach_defaults(&cfg);
 	T_EQ("def.unlock_cm", cfg.unlock_cm, 100);
 	T_EQ("def.relock_cm", cfg.relock_cm, 250);
 	T_EQ("def.near_dwell", cfg.near_dwell, 2);
@@ -144,10 +144,10 @@ void test_approach(void)
 	T_OK("def.approach_cm.above.unlock", cfg.approach_cm > cfg.unlock_cm);
 	walk_init(&w, 1, 600.0f);
 	T_EQ("idle.cfg.null.defaults", w.ap.cfg.unlock_cm, 100);
-	T_OK("idle.locked", aliro_approach_locked(&w.ap));
-	T_EQ("idle.est", aliro_approach_est_cm(&w.ap), -1);
-	T_EQ("idle.vel", aliro_approach_vel_cm_s(&w.ap), 0);
-	T_EQ("idle.eta", aliro_approach_eta_ms(&w.ap), -1);
+	T_OK("idle.locked", ultrawidelock_approach_locked(&w.ap));
+	T_EQ("idle.est", ultrawidelock_approach_est_cm(&w.ap), -1);
+	T_EQ("idle.vel", ultrawidelock_approach_vel_cm_s(&w.ap), 0);
+	T_EQ("idle.eta", ultrawidelock_approach_eta_ms(&w.ap), -1);
 
 	t_group("brisk walk 1.3 m/s: bolt open before the hand arrives");
 	/* True ring (100 cm) crossing at (600-100)/130 = 3846 ms; reach
@@ -157,14 +157,14 @@ void test_approach(void)
 	walk_init(&w, 0xB01DFACE, 600.0f);
 	walk_until(&w, 130.0f, 25, 300.0f, 0, 0);
 	T_OK("brisk.mid.est",
-	     aliro_approach_est_cm(&w.ap) > 230 && aliro_approach_est_cm(&w.ap) < 380);
+	     ultrawidelock_approach_est_cm(&w.ap) > 230 && ultrawidelock_approach_est_cm(&w.ap) < 380);
 	T_OK("brisk.mid.vel",
-	     aliro_approach_vel_cm_s(&w.ap) > 80 && aliro_approach_vel_cm_s(&w.ap) < 180);
+	     ultrawidelock_approach_vel_cm_s(&w.ap) > 80 && ultrawidelock_approach_vel_cm_s(&w.ap) < 180);
 	walk_until(&w, 130.0f, 25, 55.0f, 0, 0);
 	T_EQ("brisk.predict.once", w.r.n_predict, 1);
 	T_EQ("brisk.thresh.none", w.r.n_thresh, 0);
 	T_EQ("brisk.abort.none", w.r.n_abort, 0);
-	T_OK("brisk.unlocked", !aliro_approach_locked(&w.ap));
+	T_OK("brisk.unlocked", !ultrawidelock_approach_locked(&w.ap));
 	T_OK("brisk.done.by.reach", w.r.t_predict + 500 <= 4153);
 	T_OK("brisk.fire.bounded", w.r.t_predict >= 3846 - 1500);
 
@@ -187,7 +187,7 @@ void test_approach(void)
 	}
 	T_EQ("spoof.predict.none", w.r.n_predict, 0);
 	T_EQ("spoof.thresh.none", w.r.n_thresh, 0);
-	T_OK("spoof.locked", aliro_approach_locked(&w.ap));
+	T_OK("spoof.locked", ultrawidelock_approach_locked(&w.ap));
 
 	t_group("slow shuffle 0.15 m/s: threshold path still unlocks");
 	/* Below vmin (30 cm/s) the predictor stays quiet; the shipped
@@ -197,7 +197,7 @@ void test_approach(void)
 	walk_until(&w, 15.0f, 20, 70.0f, 0, 0);
 	T_EQ("shuffle.predict.none", w.r.n_predict, 0);
 	T_EQ("shuffle.thresh.once", w.r.n_thresh, 1);
-	T_OK("shuffle.unlocked", !aliro_approach_locked(&w.ap));
+	T_OK("shuffle.unlocked", !ultrawidelock_approach_locked(&w.ap));
 	T_OK("shuffle.at.crossing", w.r.t_thresh >= 7000 && w.r.t_thresh <= 10500);
 
 	t_group("hallway stationary at 1.6 m: never pre-actuates");
@@ -205,7 +205,7 @@ void test_approach(void)
 	walk_blocks(&w, 0.0f, 25, 156); /* ~30 s */
 	T_EQ("hall.predict.none", w.r.n_predict, 0);
 	T_EQ("hall.thresh.none", w.r.n_thresh, 0);
-	T_OK("hall.locked", aliro_approach_locked(&w.ap));
+	T_OK("hall.locked", ultrawidelock_approach_locked(&w.ap));
 
 	t_group("standing inside the ring: REFUSED, the trajectory gate's whole point");
 	/*
@@ -221,7 +221,7 @@ void test_approach(void)
 	walk_blocks(&w, 0.0f, 15, 20);
 	T_EQ("stand.thresh.none", w.r.n_thresh, 0);
 	T_EQ("stand.predict.none", w.r.n_predict, 0);
-	T_OK("stand.locked", aliro_approach_locked(&w.ap));
+	T_OK("stand.locked", ultrawidelock_approach_locked(&w.ap));
 
 	t_group("approach then stand: the same standstill DOES unlock, once earned");
 	/* The counterpart, and the reason the gate is a gate rather than a ban
@@ -233,13 +233,13 @@ void test_approach(void)
 	walk_until(&w, 20.0f, 15, 80.0f, 0, 0);
 	walk_blocks(&w, 0.0f, 15, 20);
 	T_EQ("earned.thresh.once", w.r.n_thresh, 1);
-	T_OK("earned.unlocked", !aliro_approach_locked(&w.ap));
+	T_OK("earned.unlocked", !ultrawidelock_approach_locked(&w.ap));
 
 	t_group("trajectory gate disabled: the old behaviour is still reachable");
 	/* approach_cm = 0 restores exactly what shipped before the gate, so a
 	 * deployment that wants stand-at-door unlocking can have it back without
 	 * a source change. */
-	aliro_approach_defaults(&cfg);
+	ultrawidelock_approach_defaults(&cfg);
 	cfg.approach_cm = 0;
 	walk_init_cfg(&w, 0xFEED0206, 80.0f, &cfg);
 	walk_blocks(&w, 0.0f, 15, 20);
@@ -255,12 +255,12 @@ void test_approach(void)
 	walk_init(&w, 0xFEED0306, 200.0f);
 	walk_until(&w, 20.0f, 15, 80.0f, 0, 0);
 	T_EQ("rearm.first.once", w.r.n_thresh, 1);
-	aliro_approach_gone(&w.ap);
+	ultrawidelock_approach_gone(&w.ap);
 	memset(&w.r, 0, sizeof(w.r));
 	w.d = 80.0f;
 	walk_blocks(&w, 0.0f, 15, 20);
 	T_EQ("rearm.second.none", w.r.n_thresh, 0);
-	T_OK("rearm.locked", aliro_approach_locked(&w.ap));
+	T_OK("rearm.locked", ultrawidelock_approach_locked(&w.ap));
 
 	t_group("stop short after fire: predictive open aborts");
 	/* Fires on the approach, then the walker halts at ~1.7 m and stands.
@@ -274,25 +274,25 @@ void test_approach(void)
 	walk_blocks(&w, 0.0f, 25, 20); /* stand for ~3.8 s */
 	T_EQ("stop.abort.once", w.r.n_abort, 1);
 	T_EQ("stop.thresh.none", w.r.n_thresh, 0);
-	T_OK("stop.relocked", aliro_approach_locked(&w.ap));
+	T_OK("stop.relocked", ultrawidelock_approach_locked(&w.ap));
 	T_OK("stop.abort.fast", w.r.t_abort - t_stop <= 2500);
 
 	t_group("departure: walk away relocks via far dwell");
 	walk_init(&w, 0xD00D0008, 400.0f);
 	walk_until(&w, 130.0f, 20, 70.0f, 0, 0);
-	T_OK("depart.unlocked", !aliro_approach_locked(&w.ap));
+	T_OK("depart.unlocked", !ultrawidelock_approach_locked(&w.ap));
 	walk_until(&w, -160.0f, 20, 420.0f, 0, 0);
 	T_EQ("depart.once", w.r.n_depart, 1);
-	T_OK("depart.relocked", aliro_approach_locked(&w.ap));
-	T_EQ("depart.gone.idle", aliro_approach_gone(&w.ap), ALIRO_APPROACH_HOLD);
+	T_OK("depart.relocked", ultrawidelock_approach_locked(&w.ap));
+	T_EQ("depart.gone.idle", ultrawidelock_approach_gone(&w.ap), ULTRAWIDELOCK_APPROACH_HOLD);
 
 	t_group("peer gone while open: relock + reset");
 	walk_init(&w, 0xD00D0009, 400.0f);
 	walk_until(&w, 130.0f, 20, 70.0f, 0, 0);
-	T_OK("gone.unlocked", !aliro_approach_locked(&w.ap));
-	T_EQ("gone.relock", aliro_approach_gone(&w.ap), ALIRO_APPROACH_RELOCK_DEPART);
-	T_OK("gone.locked", aliro_approach_locked(&w.ap));
-	T_EQ("gone.est.reset", aliro_approach_est_cm(&w.ap), -1);
+	T_OK("gone.unlocked", !ultrawidelock_approach_locked(&w.ap));
+	T_EQ("gone.relock", ultrawidelock_approach_gone(&w.ap), ULTRAWIDELOCK_APPROACH_RELOCK_DEPART);
+	T_OK("gone.locked", ultrawidelock_approach_locked(&w.ap));
+	T_EQ("gone.est.reset", ultrawidelock_approach_est_cm(&w.ap), -1);
 
 	t_group("ranging dies after fire: overdue tick aborts");
 	walk_init(&w, 0xF00D000A, 600.0f);
@@ -300,13 +300,13 @@ void test_approach(void)
 		walk_block(&w, 130.0f, 25, -1);
 	}
 	T_EQ("overdue.fired", w.r.n_predict, 1);
-	int32_t eta = aliro_approach_eta_ms(&w.ap);
+	int32_t eta = ultrawidelock_approach_eta_ms(&w.ap);
 
 	T_OK("overdue.eta.sane", eta >= 0 && eta <= 750);
 	for (int k = 1; k <= 20 && w.r.n_abort == 0; k++) {
 		int64_t tk = w.t + (int64_t)k * 200;
 
-		note(&w.r, aliro_approach_tick(&w.ap, tk), tk);
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, tk), tk);
 	}
 	T_EQ("overdue.abort.once", w.r.n_abort, 1);
 	/* 1800 is PRED_GRACE_MS: silence tolerance during a predictive open. It
@@ -315,7 +315,7 @@ void test_approach(void)
 	 * and the extra ~0.9 s of bolt-open on a genuinely dead session is the
 	 * price. The 250 covers the tick cadence. */
 	T_OK("overdue.by.deadline", w.r.t_abort - w.r.t_predict <= (int64_t)eta + 1800 + 250);
-	T_OK("overdue.relocked", aliro_approach_locked(&w.ap));
+	T_OK("overdue.relocked", ultrawidelock_approach_locked(&w.ap));
 
 	t_group("teleport: gate rejects, then re-bases; predictor disarms");
 	walk_init(&w, 0x7E1E000B, 500.0f);
@@ -325,25 +325,25 @@ void test_approach(void)
 	T_EQ("tele.predict.none", w.r.n_predict, 0);
 	T_EQ("tele.thresh.none", w.r.n_thresh, 0); /* dead band */
 	T_OK("tele.est.follows",
-	     aliro_approach_est_cm(&w.ap) > 120 && aliro_approach_est_cm(&w.ap) < 180);
+	     ultrawidelock_approach_est_cm(&w.ap) > 120 && ultrawidelock_approach_est_cm(&w.ap) < 180);
 	T_OK("tele.vel.settled",
-	     aliro_approach_vel_cm_s(&w.ap) > -25 && aliro_approach_vel_cm_s(&w.ap) < 25);
+	     ultrawidelock_approach_vel_cm_s(&w.ap) > -25 && ultrawidelock_approach_vel_cm_s(&w.ap) < 25);
 
 	t_group("estimator edges: stale gap re-bases, zero-dt clamps");
 	walk_init(&w, 0x0C0C000C, 0.0f);
-	note(&w.r, aliro_approach_feed(&w.ap, 1000, 400), 1000);
-	note(&w.r, aliro_approach_feed(&w.ap, 2600, 380), 2600); /* > stale */
-	T_EQ("stale.rebased.est", aliro_approach_est_cm(&w.ap), 380);
-	T_EQ("stale.rebased.vel", aliro_approach_vel_cm_s(&w.ap), 0);
-	note(&w.r, aliro_approach_feed(&w.ap, 2600, 380), 2600); /* dt clamp */
+	note(&w.r, ultrawidelock_approach_feed(&w.ap, 1000, 400), 1000);
+	note(&w.r, ultrawidelock_approach_feed(&w.ap, 2600, 380), 2600); /* > stale */
+	T_EQ("stale.rebased.est", ultrawidelock_approach_est_cm(&w.ap), 380);
+	T_EQ("stale.rebased.vel", ultrawidelock_approach_vel_cm_s(&w.ap), 0);
+	note(&w.r, ultrawidelock_approach_feed(&w.ap, 2600, 380), 2600); /* dt clamp */
 	T_OK("clamp.est.stable",
-	     aliro_approach_est_cm(&w.ap) > 370 && aliro_approach_est_cm(&w.ap) < 390);
+	     ultrawidelock_approach_est_cm(&w.ap) > 370 && ultrawidelock_approach_est_cm(&w.ap) < 390);
 
 	t_group("predict_en=0: prediction path off, presence path untouched");
 	/* The RSSI-power-gate build. Same brisk walk that fires a prediction
 	 * above; with the path disabled the bolt must still open, but only on
 	 * the shipped threshold rule, and no ETA may ever be published. */
-	aliro_approach_defaults(&cfg);
+	ultrawidelock_approach_defaults(&cfg);
 	T_OK("def.predict_en", cfg.predict_en);
 	cfg.predict_en = false;
 	walk_init_cfg(&w, 0xB01DFACE, 600.0f, &cfg);
@@ -351,8 +351,8 @@ void test_approach(void)
 	/* The estimator itself keeps running: `vel` still feeds the lab trace,
 	 * it just cannot arm the bolt. */
 	T_OK("off.vel.tracked",
-	     aliro_approach_vel_cm_s(&w.ap) > 80 && aliro_approach_vel_cm_s(&w.ap) < 180);
-	T_EQ("off.eta.never", aliro_approach_eta_ms(&w.ap), -1);
+	     ultrawidelock_approach_vel_cm_s(&w.ap) > 80 && ultrawidelock_approach_vel_cm_s(&w.ap) < 180);
+	T_EQ("off.eta.never", ultrawidelock_approach_eta_ms(&w.ap), -1);
 	/* Arriving and stopping: without the predictor the median has to settle
 	 * inside the ring first, which is precisely the latency the prediction
 	 * path exists to remove. */
@@ -360,11 +360,11 @@ void test_approach(void)
 	T_EQ("off.predict.none", w.r.n_predict, 0);
 	T_EQ("off.abort.none", w.r.n_abort, 0);
 	T_EQ("off.thresh.once", w.r.n_thresh, 1);
-	T_OK("off.unlocked", !aliro_approach_locked(&w.ap));
+	T_OK("off.unlocked", !ultrawidelock_approach_locked(&w.ap));
 	/* Departure still relocks on the presence path. */
 	walk_until(&w, -130.0f, 25, 400.0f, 0, 0);
 	T_EQ("off.depart.once", w.r.n_depart, 1);
-	T_OK("off.relocked", aliro_approach_locked(&w.ap));
+	T_OK("off.relocked", ultrawidelock_approach_locked(&w.ap));
 	/*
 	 * The walk-away that hardware actually produces: a couple of far
 	 * samples and then nothing, because the phone leaves UWB range or iOS
@@ -376,22 +376,22 @@ void test_approach(void)
 
 		walk_init(&d, 7, 600.0f);
 		walk_until(&d, 130.0f, 10, 40.0f, 0, 0); /* arrive and unlock */
-		T_OK("silence.unlocked", !aliro_approach_locked(&d.ap));
+		T_OK("silence.unlocked", !ultrawidelock_approach_locked(&d.ap));
 
 		/* Two far readings -- one short of far_dwell -- then silence. */
 		d.t += BLOCK_MS;
-		note(&d.r, aliro_approach_feed(&d.ap, d.t, 380), d.t);
+		note(&d.r, ultrawidelock_approach_feed(&d.ap, d.t, 380), d.t);
 		d.t += BLOCK_MS;
-		note(&d.r, aliro_approach_feed(&d.ap, d.t, 420), d.t);
-		T_OK("silence.still.open.after.two", !aliro_approach_locked(&d.ap));
+		note(&d.r, ultrawidelock_approach_feed(&d.ap, d.t, 420), d.t);
+		T_OK("silence.still.open.after.two", !ultrawidelock_approach_locked(&d.ap));
 
 		T_EQ("silence.nothing.before.the.window",
-		     (long)aliro_approach_tick(&d.ap, d.t + 500), (long)ALIRO_APPROACH_HOLD);
-		T_EQ("silence.relocks.after.it", (long)aliro_approach_tick(&d.ap, d.t + 750),
-		     (long)ALIRO_APPROACH_RELOCK_DEPART);
-		T_OK("silence.locked", aliro_approach_locked(&d.ap));
-		T_EQ("silence.only.once", (long)aliro_approach_tick(&d.ap, d.t + 9000),
-		     (long)ALIRO_APPROACH_HOLD);
+		     (long)ultrawidelock_approach_tick(&d.ap, d.t + 500), (long)ULTRAWIDELOCK_APPROACH_HOLD);
+		T_EQ("silence.relocks.after.it", (long)ultrawidelock_approach_tick(&d.ap, d.t + 750),
+		     (long)ULTRAWIDELOCK_APPROACH_RELOCK_DEPART);
+		T_OK("silence.locked", ultrawidelock_approach_locked(&d.ap));
+		T_EQ("silence.only.once", (long)ultrawidelock_approach_tick(&d.ap, d.t + 9000),
+		     (long)ULTRAWIDELOCK_APPROACH_HOLD);
 	}
 
 	/*
@@ -404,11 +404,11 @@ void test_approach(void)
 
 		walk_init(&n, 11, 600.0f);
 		walk_until(&n, 130.0f, 10, 40.0f, 0, 0);
-		T_OK("near.unlocked", !aliro_approach_locked(&n.ap));
+		T_OK("near.unlocked", !ultrawidelock_approach_locked(&n.ap));
 
-		T_EQ("near.silence.holds", (long)aliro_approach_tick(&n.ap, n.t + 60000),
-		     (long)ALIRO_APPROACH_HOLD);
-		T_OK("near.still.open", !aliro_approach_locked(&n.ap));
+		T_EQ("near.silence.holds", (long)ultrawidelock_approach_tick(&n.ap, n.t + 60000),
+		     (long)ULTRAWIDELOCK_APPROACH_HOLD);
+		T_OK("near.still.open", !ultrawidelock_approach_locked(&n.ap));
 	}
 
 	/*
@@ -422,15 +422,15 @@ void test_approach(void)
 
 		walk_init(&u, 17, 600.0f);
 		walk_until(&u, 130.0f, 10, 40.0f, 0, 0);
-		T_OK("unvouched.unlocked", !aliro_approach_locked(&u.ap));
+		T_OK("unvouched.unlocked", !ultrawidelock_approach_locked(&u.ap));
 
 		/* Nothing fed from here on -- only observed. */
-		aliro_approach_observe_departure(&u.ap, u.t + 200, 309);
+		ultrawidelock_approach_observe_departure(&u.ap, u.t + 200, 309);
 		T_EQ("unvouched.holds.inside.the.window",
-		     (long)aliro_approach_tick(&u.ap, u.t + 600), (long)ALIRO_APPROACH_HOLD);
-		T_EQ("unvouched.relocks.after.it", (long)aliro_approach_tick(&u.ap, u.t + 1000),
-		     (long)ALIRO_APPROACH_RELOCK_DEPART);
-		T_OK("unvouched.locked", aliro_approach_locked(&u.ap));
+		     (long)ultrawidelock_approach_tick(&u.ap, u.t + 600), (long)ULTRAWIDELOCK_APPROACH_HOLD);
+		T_EQ("unvouched.relocks.after.it", (long)ultrawidelock_approach_tick(&u.ap, u.t + 1000),
+		     (long)ULTRAWIDELOCK_APPROACH_RELOCK_DEPART);
+		T_OK("unvouched.locked", ultrawidelock_approach_locked(&u.ap));
 	}
 
 	/*
@@ -444,37 +444,37 @@ void test_approach(void)
 
 		walk_init(&k, 19, 600.0f);
 		walk_until(&k, 130.0f, 10, 40.0f, 0, 0);
-		aliro_approach_observe_departure(&k.ap, k.t + 100, 380);
+		ultrawidelock_approach_observe_departure(&k.ap, k.t + 100, 380);
 
 		/* A near reading arrives mid-window and must be ignored. */
-		aliro_approach_observe_departure(&k.ap, k.t + 500, 12);
+		ultrawidelock_approach_observe_departure(&k.ap, k.t + 500, 12);
 		T_EQ("near.observation.cannot.delay.the.relock",
-		     (long)aliro_approach_tick(&k.ap, k.t + 900),
-		     (long)ALIRO_APPROACH_RELOCK_DEPART);
+		     (long)ultrawidelock_approach_tick(&k.ap, k.t + 900),
+		     (long)ULTRAWIDELOCK_APPROACH_RELOCK_DEPART);
 	}
 
 	/* far_silence_ms == 0 restores the sample-only behaviour exactly. */
 	t_group("departure by silence: disabled by config");
 	{
 		struct walk z;
-		struct aliro_approach_cfg zcfg;
+		struct ultrawidelock_approach_cfg zcfg;
 
-		aliro_approach_defaults(&zcfg);
+		ultrawidelock_approach_defaults(&zcfg);
 		zcfg.far_silence_ms = 0;
 		walk_init_cfg(&z, 13, 600.0f, &zcfg);
 		walk_until(&z, 130.0f, 10, 40.0f, 0, 0);
 		z.t += BLOCK_MS;
-		note(&z.r, aliro_approach_feed(&z.ap, z.t, 380), z.t);
+		note(&z.r, ultrawidelock_approach_feed(&z.ap, z.t, 380), z.t);
 
-		T_EQ("off.silence.never.fires", (long)aliro_approach_tick(&z.ap, z.t + 60000),
-		     (long)ALIRO_APPROACH_HOLD);
-		T_OK("off.still.open", !aliro_approach_locked(&z.ap));
+		T_EQ("off.silence.never.fires", (long)ultrawidelock_approach_tick(&z.ap, z.t + 60000),
+		     (long)ULTRAWIDELOCK_APPROACH_HOLD);
+		T_OK("off.still.open", !ultrawidelock_approach_locked(&z.ap));
 	}
 
 	t_group("channel correction: calibration always, obstruction only on a majority");
 	{
-		struct aliro_approach ap;
-		struct aliro_approach_cfg cfg;
+		struct ultrawidelock_approach ap;
+		struct ultrawidelock_approach_cfg cfg;
 
 		/*
 		 * EVERY case here arms the trajectory gate first, at 260 cm, and that is
@@ -493,19 +493,19 @@ void test_approach(void)
 		/* OFF by default: the offset is one board's, and modules/ builds for
 		 * three targets. A default that shifted every range would be wrong on
 		 * two of them, so the whole suite above pins the uncorrected path. */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		T_OK("correction.off.by.default", !cfg.range_correct_en);
 
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
 		}
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 100, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 100, false, 0.0f);
 		}
-		T_OK("default.100cm.unlocks.as.before", !aliro_approach_locked(&ap));
+		T_OK("default.100cm.unlocks.as.before", !ultrawidelock_approach_locked(&ap));
 
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		cfg.range_correct_en = true;
 
 		/*
@@ -515,79 +515,79 @@ void test_approach(void)
 		 * calibration -- which is the "makes the lock stricter" half of Result
 		 * 19 and the one a regression would silently undo.
 		 */
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
 		}
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 100, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 100, false, 0.0f);
 		}
-		T_OK("clear.100cm.stays.locked.after.calibration", aliro_approach_locked(&ap));
+		T_OK("clear.100cm.stays.locked.after.calibration", ultrawidelock_approach_locked(&ap));
 
 		/* 70 cm reported is a true ~96, inside it. */
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
 		}
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 70, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 70, false, 0.0f);
 		}
-		T_OK("clear.70cm.unlocks", !aliro_approach_locked(&ap));
+		T_OK("clear.70cm.unlocks", !ultrawidelock_approach_locked(&ap));
 
 		/*
 		 * The pocketed owner: a true 100 cm reads 155. The next three cases feed
 		 * IDENTICAL ranges and timings and differ only in what the classifier
 		 * said, so no pass among them can come from the range.
 		 */
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
 		}
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 155, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 155, false, 0.0f);
 		}
-		T_OK("blocked.155cm.unclassified.stays.locked", aliro_approach_locked(&ap));
+		T_OK("blocked.155cm.unclassified.stays.locked", ultrawidelock_approach_locked(&ap));
 
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, true, 3.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, true, 3.0f);
 		}
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 155, true, 3.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 155, true, 3.0f);
 		}
-		T_OK("blocked.155cm.confident.unlocks", !aliro_approach_locked(&ap));
+		T_OK("blocked.155cm.confident.unlocks", !ultrawidelock_approach_locked(&ap));
 
 		/* Below the confidence floor a sample votes CLEAR rather than being
 		 * dropped: a weak reading is evidence about the channel, not a gap. */
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, true, 1.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, true, 1.0f);
 		}
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 155, true, 1.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 155, true, 1.0f);
 		}
-		T_OK("blocked.low.confidence.stays.locked", aliro_approach_locked(&ap));
+		T_OK("blocked.low.confidence.stays.locked", ultrawidelock_approach_locked(&ap));
 
 		/* Two in five is not a majority. The arming phase is deliberately CLEAR
 		 * here: feeding it obstructed would leave five confident votes in the
 		 * window and the correction would still be engaged while the minority
 		 * pattern washed through, which is the hysteresis pinned below rather
 		 * than the vote rule under test. */
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, false, 0.0f);
 		}
 		for (int i = 0; i < 15; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 155, (i % 5) < 2,
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 155, (i % 5) < 2,
 							  3.0f);
 		}
-		T_OK("blocked.minority.vote.stays.locked", aliro_approach_locked(&ap));
+		T_OK("blocked.minority.vote.stays.locked", ultrawidelock_approach_locked(&ap));
 
 		/*
 		 * HYSTERESIS, pinned because it is a real cost of voting over a window
 		 * and not an accident. When obstruction ends, the reported range drops
 		 * by 84.5 cm immediately while the window keeps voting obstructed for up
-		 * to ALIRO_APPROACH_MEDIAN_N more samples, so for that long the
+		 * to ULTRAWIDELOCK_APPROACH_MEDIAN_N more samples, so for that long the
 		 * controller subtracts a bias that is no longer there and believes the
 		 * credential is ~84 cm nearer than it is. At the measured 0.762 s
 		 * reception interval that is a window of a few seconds.
@@ -596,22 +596,22 @@ void test_approach(void)
 		 * make rare, arriving by a different route. This check exists so that
 		 * anyone lengthening the window sees the cost.
 		 */
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < ARM_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, true, 3.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, ARM_CM, true, 3.0f);
 		}
 		/* True 200 cm, obstructed: reported 259, corrected back to 200. */
 		for (int i = 0; i < HOLD_N; i++) {
-			(void)aliro_approach_feed_channel(&ap, 3000 + i * 200, 259, true, 3.0f);
+			(void)ultrawidelock_approach_feed_channel(&ap, 3000 + i * 200, 259, true, 3.0f);
 		}
-		T_OK("blocked.at.true.200.stays.locked", aliro_approach_locked(&ap));
+		T_OK("blocked.at.true.200.stays.locked", ultrawidelock_approach_locked(&ap));
 		/* The subject turns: still a true 200, now reported 175. Two samples is
 		 * not enough to turn the window over, so the stale obstructed vote
 		 * subtracts 84.5 that is no longer there. */
-		(void)aliro_approach_feed_channel(&ap, 6000, 175, false, 0.0f);
-		(void)aliro_approach_feed_channel(&ap, 6200, 175, false, 0.0f);
+		(void)ultrawidelock_approach_feed_channel(&ap, 6000, 175, false, 0.0f);
+		(void)ultrawidelock_approach_feed_channel(&ap, 6200, 175, false, 0.0f);
 		T_OK("stale.obstructed.vote.moves.the.estimate.inward",
-		     aliro_approach_est_cm(&ap) < 175);
+		     ultrawidelock_approach_est_cm(&ap) < 175);
 
 #undef ARM_CM
 #undef ARM_N
@@ -620,8 +620,8 @@ void test_approach(void)
 
 	t_group("2026-08-07 walk-up regressions");
 	{
-		struct aliro_approach ap;
-		struct aliro_approach_cfg cfg;
+		struct ultrawidelock_approach ap;
+		struct ultrawidelock_approach_cfg cfg;
 
 		/*
 		 * THE 21.5 SECOND UNLOCK. Ranging came up at 55 cm and the bolt ignored
@@ -631,22 +631,22 @@ void test_approach(void)
 		 * door. Replayed here: a session that starts inside the radius and never
 		 * leaves it.
 		 */
-		aliro_approach_defaults(&cfg);
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_defaults(&cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		for (int i = 0; i < 10; i++) {
-			(void)aliro_approach_feed(&ap, 1000 + i * 200, 55);
+			(void)ultrawidelock_approach_feed(&ap, 1000 + i * 200, 55);
 		}
 		T_OK("session.starting.inside.the.radius.still.will.not.unlock.unarmed",
-		     aliro_approach_locked(&ap));
+		     ultrawidelock_approach_locked(&ap));
 
 		/* With the session edge reported, the same stream unlocks promptly. */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 10; i++) {
-			(void)aliro_approach_feed(&ap, 1000 + i * 200, 55);
+			(void)ultrawidelock_approach_feed(&ap, 1000 + i * 200, 55);
 		}
 		T_OK("session.up.arms.the.gate.and.the.walk.up.unlocks",
-		     !aliro_approach_locked(&ap));
+		     !ultrawidelock_approach_locked(&ap));
 
 		/*
 		 * THE 11 SECOND RELOCK. The owner left, the last vouched range was
@@ -659,39 +659,39 @@ void test_approach(void)
 		 * trust hole mid-arrival, not a departure. 2.5 s here still beats the
 		 * 11 s this test was written against by a factor of four.
 		 */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 10; i++) {
-			(void)aliro_approach_feed(&ap, 1000 + i * 200, 55);
+			(void)ultrawidelock_approach_feed(&ap, 1000 + i * 200, 55);
 		}
-		T_OK("open.before.the.walk.away", !aliro_approach_locked(&ap));
-		(void)aliro_approach_feed(&ap, 3200, 207);
-		(void)aliro_approach_feed(&ap, 3400, 207);
-		(void)aliro_approach_feed(&ap, 3600, 207);
+		T_OK("open.before.the.walk.away", !ultrawidelock_approach_locked(&ap));
+		(void)ultrawidelock_approach_feed(&ap, 3200, 207);
+		(void)ultrawidelock_approach_feed(&ap, 3400, 207);
+		(void)ultrawidelock_approach_feed(&ap, 3600, 207);
 		T_EQ("silence.in.the.dead.band.holds.through.a.pocket.gap",
-		     (long)aliro_approach_tick(&ap, 3600 + cfg.far_silence_ms + 1),
-		     (long)ALIRO_APPROACH_HOLD);
+		     (long)ultrawidelock_approach_tick(&ap, 3600 + cfg.far_silence_ms + 1),
+		     (long)ULTRAWIDELOCK_APPROACH_HOLD);
 		T_EQ("silence.in.the.dead.band.relocks",
-		     (long)aliro_approach_tick(&ap, 3600 + 2500 + 1),
-		     (long)ALIRO_APPROACH_RELOCK_DEPART);
+		     (long)ultrawidelock_approach_tick(&ap, 3600 + 2500 + 1),
+		     (long)ULTRAWIDELOCK_APPROACH_RELOCK_DEPART);
 
 		/* And the protection the old threshold was reaching for survives: a
 		 * phone resting INSIDE the unlock radius still goes quiet without the
 		 * bolt moving under its owner. */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 10; i++) {
-			(void)aliro_approach_feed(&ap, 1000 + i * 200, 55);
+			(void)ultrawidelock_approach_feed(&ap, 1000 + i * 200, 55);
 		}
 		T_EQ("silence.at.the.door.does.not.relock",
-		     (long)aliro_approach_tick(&ap, 3000 + cfg.far_silence_ms + 1),
-		     (long)ALIRO_APPROACH_HOLD);
+		     (long)ultrawidelock_approach_tick(&ap, 3000 + cfg.far_silence_ms + 1),
+		     (long)ULTRAWIDELOCK_APPROACH_HOLD);
 	}
 
 	t_group("nlos widening (Result 21)");
 	{
-		struct aliro_approach ap;
-		struct aliro_approach_cfg cfg;
+		struct ultrawidelock_approach ap;
+		struct ultrawidelock_approach_cfg cfg;
 		const float conf = 9.0f; /* comfortably over nlos_conf_min */
 
 		/*
@@ -699,45 +699,45 @@ void test_approach(void)
 		 * reports themselves out here, and unlock_cm is 100. Without a widening
 		 * the bolt never moves, which is the complaint that started this.
 		 */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		cfg.nlos_widen_cm = 80;
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 8; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
 		}
-		T_OK("obstructed.window.unlocks.at.150", !aliro_approach_locked(&ap));
+		T_OK("obstructed.window.unlocks.at.150", !ultrawidelock_approach_locked(&ap));
 
 		/* The same stream classified CLEAR must not. This is the control that
 		 * makes the test above mean anything: without it the assertion would
 		 * pass just as well with the widening deleted and unlock_cm raised. */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 8; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, false, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, false, conf);
 		}
-		T_OK("clear.window.stays.locked.at.150", aliro_approach_locked(&ap));
+		T_OK("clear.window.stays.locked.at.150", ultrawidelock_approach_locked(&ap));
 
 		/* Obstructed but UNCONFIDENT is the same as clear: the confidence floor
 		 * is one of the three gates, and a widening that ignored it would engage
 		 * on the classifier's worst quartile. */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 8; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, true,
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, true,
 							  cfg.nlos_conf_min - 0.01f);
 		}
-		T_OK("unconfident.obstructed.stays.locked", aliro_approach_locked(&ap));
+		T_OK("unconfident.obstructed.stays.locked", ultrawidelock_approach_locked(&ap));
 
 		/* A minority of the window does not widen. Two of five obstructed, and
 		 * NLOS_VOTES_N is three. */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 8; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, (i % 5) < 2,
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, (i % 5) < 2,
 							  conf);
 		}
-		T_OK("minority.vote.stays.locked", aliro_approach_locked(&ap));
+		T_OK("minority.vote.stays.locked", ultrawidelock_approach_locked(&ap));
 
 		/*
 		 * Silence at the widened radius must NOT relock. A pocketed phone
@@ -745,18 +745,18 @@ void test_approach(void)
 		 * unwidened 100 it would read that as a departure and shut the bolt
 		 * under the owner it just opened for.
 		 */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 8; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
 		}
-		T_OK("open.before.the.silence", !aliro_approach_locked(&ap));
+		T_OK("open.before.the.silence", !ultrawidelock_approach_locked(&ap));
 		T_EQ("silence.inside.the.widened.radius.does.not.relock",
-		     (long)aliro_approach_tick(&ap, 2600 + cfg.far_silence_ms + 1),
-		     (long)ALIRO_APPROACH_HOLD);
+		     (long)ultrawidelock_approach_tick(&ap, 2600 + cfg.far_silence_ms + 1),
+		     (long)ULTRAWIDELOCK_APPROACH_HOLD);
 
 		/* Default config widens nothing, so every existing expectation holds. */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		T_EQ("widening.is.off.by.default", (long)cfg.nlos_widen_cm, 0L);
 
 		/*
@@ -766,16 +766,16 @@ void test_approach(void)
 		 * widened sample would arm the gate and fire it at once, reopening the
 		 * hole 574dbb91 closed.
 		 */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		cfg.nlos_widen_cm = 500;
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		T_EQ("widening.clamped.under.approach_cm", (long)ap.cfg.nlos_widen_cm, 79L);
 
 		/* Negative is nonsense in this direction (stricter only while
 		 * obstructed) and is clamped away rather than honoured. */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		cfg.nlos_widen_cm = -50;
-		aliro_approach_init(&ap, &cfg);
+		ultrawidelock_approach_init(&ap, &cfg);
 		T_EQ("negative.widening.clamped.to.zero", (long)ap.cfg.nlos_widen_cm, 0L);
 
 		/*
@@ -785,19 +785,19 @@ void test_approach(void)
 		 * samples wash the window. A divergence here would make the mlgate
 		 * log lie about what the controller would have done.
 		 */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		cfg.nlos_widen_cm = 80;
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
-		T_OK("vote.accessor.starts.clear", !aliro_approach_nlos_blocked(&ap, 1000));
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
+		T_OK("vote.accessor.starts.clear", !ultrawidelock_approach_nlos_blocked(&ap, 1000));
 		for (int i = 0; i < 5; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
 		}
-		T_OK("vote.accessor.reports.blocked", aliro_approach_nlos_blocked(&ap, 1800));
+		T_OK("vote.accessor.reports.blocked", ultrawidelock_approach_nlos_blocked(&ap, 1800));
 		for (int i = 0; i < 5; i++) {
-			(void)aliro_approach_feed_channel(&ap, 2000 + i * 200, 150, false, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 2000 + i * 200, 150, false, conf);
 		}
-		T_OK("vote.accessor.clears.after.wash", !aliro_approach_nlos_blocked(&ap, 2800));
+		T_OK("vote.accessor.clears.after.wash", !ultrawidelock_approach_nlos_blocked(&ap, 2800));
 
 		/*
 		 * Votes age with the median entries they share timestamps with. An
@@ -807,28 +807,28 @@ void test_approach(void)
 		 * simply stop counting, so the effective threshold is unlock_cm
 		 * again the moment the hole outlives the horizon.
 		 */
-		aliro_approach_defaults(&cfg);
+		ultrawidelock_approach_defaults(&cfg);
 		cfg.nlos_widen_cm = 80;
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 5; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, true, conf);
 		}
-		T_OK("vote.fresh.majority.widens", aliro_approach_nlos_blocked(&ap, 1800));
-		T_OK("vote.stale.majority.does.not", !aliro_approach_nlos_blocked(&ap, 4400));
+		T_OK("vote.fresh.majority.widens", ultrawidelock_approach_nlos_blocked(&ap, 1800));
+		T_OK("vote.stale.majority.does.not", !ultrawidelock_approach_nlos_blocked(&ap, 4400));
 
 		/* A fresh 3-of-5 majority still widens: the eligible-voter set
 		 * changed, the NLOS_VOTES_N arithmetic did not. */
-		aliro_approach_init(&ap, &cfg);
-		aliro_approach_session_up(&ap);
+		ultrawidelock_approach_init(&ap, &cfg);
+		ultrawidelock_approach_session_up(&ap);
 		for (int i = 0; i < 5; i++) {
-			(void)aliro_approach_feed_channel(&ap, 1000 + i * 200, 150, i < 3, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 1000 + i * 200, 150, i < 3, conf);
 		}
-		T_OK("vote.three.of.five.fresh.widens", aliro_approach_nlos_blocked(&ap, 1800));
+		T_OK("vote.three.of.five.fresh.widens", ultrawidelock_approach_nlos_blocked(&ap, 1800));
 		for (int i = 0; i < 3; i++) {
-			(void)aliro_approach_feed_channel(&ap, 2000 + i * 200, 150, true, conf);
+			(void)ultrawidelock_approach_feed_channel(&ap, 2000 + i * 200, 150, true, conf);
 		}
-		T_OK("vote.widened.unlock.still.fires", !aliro_approach_locked(&ap));
+		T_OK("vote.widened.unlock.still.fires", !ultrawidelock_approach_locked(&ap));
 	}
 
 	t_group("prediction vs ranging holes (2026-08-07 walk)");
@@ -854,7 +854,7 @@ void test_approach(void)
 		w.d -= 60.0f * (1200.0f - (float)BLOCK_MS) / 1000.0f;
 		walk_until(&w, 60.0f, 25, 40.0f, 0, 0);
 		T_EQ("hole.no.abort", w.r.n_abort, 0);
-		T_OK("hole.door.open", !aliro_approach_locked(&w.ap));
+		T_OK("hole.door.open", !ultrawidelock_approach_locked(&w.ap));
 
 		/*
 		 * The lockout, deterministic (no jitter): at 100 cm/s the prediction
@@ -869,11 +869,11 @@ void test_approach(void)
 		T_EQ("lockout.predict.fired", w.r.n_predict, 1);
 		walk_blocks(&w, 0.0f, 0, 30); /* stop dead: stall abort */
 		T_EQ("lockout.abort.fired", w.r.n_abort, 1);
-		T_OK("lockout.relocked", aliro_approach_locked(&w.ap));
+		T_OK("lockout.relocked", ultrawidelock_approach_locked(&w.ap));
 		T_OK("lockout.arm.kept", w.ap.approach_armed);
 		T_EQ("lockout.standing.no.open", w.r.n_thresh, 0);
 		walk_until(&w, 100.0f, 0, 30.0f, 0, 0);
-		T_OK("lockout.resume.opens", !aliro_approach_locked(&w.ap));
+		T_OK("lockout.resume.opens", !ultrawidelock_approach_locked(&w.ap));
 
 		/*
 		 * The invariant the exception must not touch: an abort with the
@@ -893,7 +893,7 @@ void test_approach(void)
 		for (int k = 1; k <= 30 && w.r.n_abort == 0; k++) {
 			int64_t tk = w.t + (int64_t)k * 200;
 
-			note(&w.r, aliro_approach_tick(&w.ap, tk), tk);
+			note(&w.r, ultrawidelock_approach_tick(&w.ap, tk), tk);
 		}
 		T_EQ("far.abort.fired", w.r.n_abort, 1);
 		T_OK("far.abort.clears.arm", !w.ap.approach_armed);
@@ -911,15 +911,15 @@ void test_approach(void)
 		 */
 		walk_init(&w, 0, 400.0f);
 		walk_until(&w, 100.0f, 0, 60.0f, 0, 0);
-		T_OK("neargap.unlocked", !aliro_approach_locked(&w.ap));
+		T_OK("neargap.unlocked", !ultrawidelock_approach_locked(&w.ap));
 		walk_until(&w, -60.0f, 0, 130.0f, 0, 0); /* drift just outside */
 		/* 130 cm is the dead band: the slower BAND_SILENCE_MS tier governs. */
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 2600), w.t + 2600);
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 2600), w.t + 2600);
 		T_EQ("neargap.silence.relock", w.r.n_depart, 1);
 		T_OK("neargap.arm.kept", w.ap.approach_armed);
 		w.t += 2600;
 		walk_until(&w, 100.0f, 0, 30.0f, 0, 0);
-		T_OK("neargap.reopens", !aliro_approach_locked(&w.ap));
+		T_OK("neargap.reopens", !ultrawidelock_approach_locked(&w.ap));
 
 		/*
 		 * The 23:51 lockout replay: the trust gate declines the whole
@@ -931,17 +931,17 @@ void test_approach(void)
 		 */
 		walk_init(&w, 0, 400.0f);
 		walk_until(&w, 100.0f, 0, 60.0f, 0, 0);
-		T_OK("observe.unlocked", !aliro_approach_locked(&w.ap));
-		aliro_approach_observe_departure(&w.ap, w.t + 500, 474);
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 1400), w.t + 1400);
+		T_OK("observe.unlocked", !ultrawidelock_approach_locked(&w.ap));
+		ultrawidelock_approach_observe_departure(&w.ap, w.t + 500, 474);
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 1400), w.t + 1400);
 		T_EQ("observe.silence.relock", w.r.n_depart, 1);
 		T_OK("observe.far.relock.clears.arm", !w.ap.approach_armed);
-		aliro_approach_observe_departure(&w.ap, w.t + 2000, 473);
+		ultrawidelock_approach_observe_departure(&w.ap, w.t + 2000, 473);
 		T_OK("observe.rearms", w.ap.approach_armed);
 		w.t += 2400; /* the KF gap re-bases the filter; that is fine here */
 		w.d = 200.0f;
 		walk_until(&w, 100.0f, 0, 30.0f, 0, 0);
-		T_OK("observe.reopens", !aliro_approach_locked(&w.ap));
+		T_OK("observe.reopens", !ultrawidelock_approach_locked(&w.ap));
 
 		/*
 		 * The credential the gate exists for: a phone that never leaves
@@ -951,13 +951,13 @@ void test_approach(void)
 		 */
 		walk_init(&w, 0, 400.0f);
 		walk_until(&w, 100.0f, 0, 60.0f, 0, 0);
-		aliro_approach_observe_departure(&w.ap, w.t + 500, 474);
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 1400), w.t + 1400);
+		ultrawidelock_approach_observe_departure(&w.ap, w.t + 500, 474);
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 1400), w.t + 1400);
 		T_OK("resting.arm.cleared", !w.ap.approach_armed);
 		w.t += 1400;
 		w.d = 110.0f;
 		walk_blocks(&w, 0.0f, 0, 60); /* sit at 110 for ~11 s */
-		T_OK("resting.still.locked", aliro_approach_locked(&w.ap));
+		T_OK("resting.still.locked", ultrawidelock_approach_locked(&w.ap));
 		T_OK("resting.never.armed", !w.ap.approach_armed);
 	}
 
@@ -975,20 +975,20 @@ void test_approach(void)
 		 */
 		walk_init(&w, 0, 400.0f);
 		walk_until(&w, 100.0f, 0, 60.0f, 0, 0);
-		T_OK("stale.opened", !aliro_approach_locked(&w.ap));
-		aliro_approach_observe_departure(&w.ap, w.t + 400, 300);
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 1300), w.t + 1300);
-		T_OK("stale.relocked", aliro_approach_locked(&w.ap));
-		aliro_approach_observe_departure(&w.ap, w.t + 2000, 300); /* re-arm */
+		T_OK("stale.opened", !ultrawidelock_approach_locked(&w.ap));
+		ultrawidelock_approach_observe_departure(&w.ap, w.t + 400, 300);
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 1300), w.t + 1300);
+		T_OK("stale.relocked", ultrawidelock_approach_locked(&w.ap));
+		ultrawidelock_approach_observe_departure(&w.ap, w.t + 2000, 300); /* re-arm */
 		w.t += 8500;
 		walk_block(&w, 0.0f, 0, 193);
 		walk_block(&w, 0.0f, 0, 159);
-		T_OK("stale.no.ghost.grant", aliro_approach_locked(&w.ap));
+		T_OK("stale.no.ghost.grant", ultrawidelock_approach_locked(&w.ap));
 		walk_block(&w, 0.0f, 0, 60);
 		walk_block(&w, 0.0f, 0, 45);
 		walk_block(&w, 0.0f, 0, 40);
 		walk_block(&w, 0.0f, 0, 35);
-		T_OK("stale.real.grant", !aliro_approach_locked(&w.ap));
+		T_OK("stale.real.grant", !ultrawidelock_approach_locked(&w.ap));
 
 		/*
 		 * The 00:01:40 mid-approach relock: last sample 159 (dead band),
@@ -998,20 +998,20 @@ void test_approach(void)
 		 */
 		walk_init(&w, 0, 400.0f);
 		walk_until(&w, 100.0f, 0, 60.0f, 0, 0);
-		T_OK("band.opened", !aliro_approach_locked(&w.ap));
+		T_OK("band.opened", !ultrawidelock_approach_locked(&w.ap));
 		walk_block(&w, 0.0f, 0, 159); /* wandered out; still in the band */
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 1700), w.t + 1700);
-		T_OK("band.pocket.gap.no.relock", !aliro_approach_locked(&w.ap));
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 2600), w.t + 2600);
-		T_OK("band.long.silence.relocks", aliro_approach_locked(&w.ap));
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 1700), w.t + 1700);
+		T_OK("band.pocket.gap.no.relock", !ultrawidelock_approach_locked(&w.ap));
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 2600), w.t + 2600);
+		T_OK("band.long.silence.relocks", ultrawidelock_approach_locked(&w.ap));
 
 		/* The fast tier is untouched: last seen >= relock_cm relocks on
 		 * far_silence_ms as before. */
 		walk_init(&w, 0, 400.0f);
 		walk_until(&w, 100.0f, 0, 60.0f, 0, 0);
-		aliro_approach_observe_departure(&w.ap, w.t + 400, 320);
-		note(&w.r, aliro_approach_tick(&w.ap, w.t + 1200), w.t + 1200);
-		T_OK("far.tier.still.fast", aliro_approach_locked(&w.ap));
+		ultrawidelock_approach_observe_departure(&w.ap, w.t + 400, 320);
+		note(&w.r, ultrawidelock_approach_tick(&w.ap, w.t + 1200), w.t + 1200);
+		T_OK("far.tier.still.fast", ultrawidelock_approach_locked(&w.ap));
 		T_OK("far.tier.arm.cleared", !w.ap.approach_armed);
 
 		/* A fresh far sample after a gap re-arms via the median, exactly as

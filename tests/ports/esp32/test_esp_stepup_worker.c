@@ -1,5 +1,5 @@
 /*
- * Host test for the ESP32 step-up worker (aliro_stepup_worker.c) against the
+ * Host test for the ESP32 step-up worker (ultrawidelock_stepup_worker.c) against the
  * sdkfake FreeRTOS doubles. "Theatre" suite: the queue/task are synchronous
  * fakes pumped from the test (the worker's forever-loop is exited via a
  * longjmp hook), so passing proves the submit/drop/verdict-store wiring and
@@ -17,9 +17,9 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
-#include "aliro_crypto.h"
-#include "aliro_prim.h"
-#include "aliro_stepup.h"
+#include "ultrawidelock_crypto.h"
+#include "ultrawidelock_prim.h"
+#include "ultrawidelock_stepup.h"
 #include "stepup_vectors.h"
 
 static int fails;
@@ -59,7 +59,7 @@ static void pump_worker(void)
 static size_t seal_device_sd(const uint8_t skd[32], uint32_t ctr, const uint8_t *plain,
 			     size_t plain_len, uint8_t *out, size_t cap)
 {
-	size_t ct_len = plain_len + ALIRO_GCM_TAG_LEN;
+	size_t ct_len = plain_len + ULTRAWIDELOCK_GCM_TAG_LEN;
 	uint8_t hdr[16];
 	size_t h = 0;
 
@@ -84,11 +84,11 @@ static size_t seal_device_sd(const uint8_t skd[32], uint32_t ctr, const uint8_t 
 	}
 	memcpy(out, hdr, h);
 
-	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+	uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 
-	aliro_crypto_gcm_nonce(1, ctr, nonce);
-	if (aliro_aes256_gcm_encrypt(skd, nonce, sizeof(nonce), NULL, 0, plain, plain_len,
-				     out + h, out + h + plain_len, ALIRO_GCM_TAG_LEN) != 0) {
+	ultrawidelock_crypto_gcm_nonce(1, ctr, nonce);
+	if (ultrawidelock_aes256_gcm_encrypt(skd, nonce, sizeof(nonce), NULL, 0, plain, plain_len,
+				     out + h, out + h + plain_len, ULTRAWIDELOCK_GCM_TAG_LEN) != 0) {
 		return 0;
 	}
 	return h + ct_len;
@@ -97,7 +97,7 @@ static size_t seal_device_sd(const uint8_t skd[32], uint32_t ctr, const uint8_t 
 /* SV_GOOD carries a synthetic golden signature the fake-EC prim cannot verify.
  * Re-sign the COSE Sig_structure with the prim double's own keypair and patch
  * the signature bytes in a copy, so the worker's hardcoded
- * ctx.ecdsa_verify = aliro_ecdsa_p256_verify accepts it end-to-end. */
+ * ctx.ecdsa_verify = ultrawidelock_ecdsa_p256_verify accepts it end-to-end. */
 static uint8_t s_good[600];
 static size_t s_good_len;
 static uint8_t s_issuer_pub[65];
@@ -107,8 +107,8 @@ static int resign_good_vector(void)
 	uint8_t priv[32], sig[64];
 
 	memset(priv, 0x42, sizeof(priv));
-	if (aliro_ec_p256_pub_from_priv(priv, s_issuer_pub) != 0 ||
-	    aliro_ecdsa_p256_sign(priv, SV_GOLDEN_SIGSTRUCT, SV_GOLDEN_SIGSTRUCT_len, sig) != 0) {
+	if (ultrawidelock_ec_p256_pub_from_priv(priv, s_issuer_pub) != 0 ||
+	    ultrawidelock_ecdsa_p256_sign(priv, SV_GOLDEN_SIGSTRUCT, SV_GOLDEN_SIGSTRUCT_len, sig) != 0) {
 		return -1;
 	}
 	memcpy(s_good, SV_GOOD, SV_GOOD_len);
@@ -122,9 +122,9 @@ static int resign_good_vector(void)
 	return -1;
 }
 
-static struct aliro_stepup_job base_job(const uint8_t skr[32], const uint8_t skd[32])
+static struct ultrawidelock_stepup_job base_job(const uint8_t skr[32], const uint8_t skd[32])
 {
-	struct aliro_stepup_job job;
+	struct ultrawidelock_stepup_job job;
 
 	memset(&job, 0, sizeof(job));
 	memcpy(job.sk_reader, skr, 32);
@@ -152,19 +152,19 @@ int main(void)
 	printf("-- worker lifecycle --\n");
 	okc("re-sign vector for the fake EC", resign_good_vector() == 0);
 
-	struct aliro_stepup_verdict v;
+	struct ultrawidelock_stepup_verdict v;
 	uint16_t conn = 0;
 
-	okc("no verdict before any job", aliro_stepup_worker_last(&v, &conn) == 0);
+	okc("no verdict before any job", ultrawidelock_stepup_worker_last(&v, &conn) == 0);
 
 	/* Queue-create failure -> submit fails, nothing recorded. */
-	struct aliro_stepup_job job = base_job(skr, skd);
+	struct ultrawidelock_stepup_job job = base_job(skr, skd);
 
 	job.sd_len = seal_device_sd(skd, 1, s_good, s_good_len, job.sd, sizeof(job.sd));
 	okc("device-direction seal", job.sd_len > 0);
 
 	fake_queue_create_rc = 0;
-	okc("submit w/ queue-create failure", aliro_stepup_worker_submit(&job) == -1);
+	okc("submit w/ queue-create failure", ultrawidelock_stepup_worker_submit(&job) == -1);
 	fake_queue_create_rc = 1;
 
 	/* NOT covered: the xTaskCreate-failure branch. Failing it once leaves the
@@ -173,15 +173,15 @@ int main(void)
 
 	printf("-- verify pipeline (real codec + verifier on KAT vectors) --\n");
 
-	okc("submit good job", aliro_stepup_worker_submit(&job) == 0);
+	okc("submit good job", ultrawidelock_stepup_worker_submit(&job) == 0);
 	okc("worker task created", fake_task_count == 1 &&
-	    strcmp(fake_tasks[0].name, "aliro_stepup") == 0);
+	    strcmp(fake_tasks[0].name, "ultrawidelock_stepup") == 0);
 
 	/* Second submit while the first is still queued: dropped, not queued. */
-	okc("second submit drops", aliro_stepup_worker_submit(&job) == -1);
+	okc("second submit drops", ultrawidelock_stepup_worker_submit(&job) == -1);
 
 	pump_worker();
-	okc("verdict recorded", aliro_stepup_worker_last(&v, &conn) == 1);
+	okc("verdict recorded", ultrawidelock_stepup_worker_last(&v, &conn) == 1);
 	okc("verdict VALID on SV_GOOD", v.valid == 1 && conn == 33);
 	okc("verdict detail (sig+digests+doctype+time)",
 	    v.sig_ok == 1 && v.digests_ok == 1 && v.doctype_ok == 1 && v.time_ok == 1);
@@ -191,9 +191,9 @@ int main(void)
 	job.conn_handle = 44;
 	job.sd_len = seal_device_sd(skd, 1, SV_TAMPERED, SV_TAMPERED_len, job.sd, sizeof(job.sd));
 	okc("tampered seal", job.sd_len > 0);
-	okc("submit tampered", aliro_stepup_worker_submit(&job) == 0);
+	okc("submit tampered", ultrawidelock_stepup_worker_submit(&job) == 0);
 	pump_worker();
-	okc("tampered verdict recorded", aliro_stepup_worker_last(&v, &conn) == 1 && conn == 44);
+	okc("tampered verdict recorded", ultrawidelock_stepup_worker_last(&v, &conn) == 1 && conn == 44);
 	okc("tampered verdict invalid", v.valid == 0);
 
 	/* No issuer provisioned -> issuer_key_found = 0. */
@@ -201,9 +201,9 @@ int main(void)
 	job.have_issuer = 0;
 	job.conn_handle = 55;
 	job.sd_len = seal_device_sd(skd, 1, s_good, s_good_len, job.sd, sizeof(job.sd));
-	okc("submit no-issuer", aliro_stepup_worker_submit(&job) == 0);
+	okc("submit no-issuer", ultrawidelock_stepup_worker_submit(&job) == 0);
 	pump_worker();
-	okc("no-issuer verdict", aliro_stepup_worker_last(&v, &conn) == 1 && conn == 55 &&
+	okc("no-issuer verdict", ultrawidelock_stepup_worker_last(&v, &conn) == 1 && conn == 55 &&
 	    v.issuer_key_found == 0 && v.valid == 0);
 
 	printf("-- early-out branches --\n");
@@ -212,10 +212,10 @@ int main(void)
 	job = base_job(skr, skd);
 	job.conn_handle = 66;
 	job.sd_len = seal_device_sd(skd, 9, s_good, s_good_len, job.sd, sizeof(job.sd));
-	okc("submit bad-counter", aliro_stepup_worker_submit(&job) == 0);
+	okc("submit bad-counter", ultrawidelock_stepup_worker_submit(&job) == 0);
 	pump_worker();
 	okc("decrypt failure keeps last verdict",
-	    aliro_stepup_worker_last(&v, &conn) == 1 && conn == 55);
+	    ultrawidelock_stepup_worker_last(&v, &conn) == 1 && conn == 55);
 
 	/* Parse failure: decrypt succeeds (ctr 1) but plaintext is not CBOR. */
 	static const uint8_t junk[4] = {0xFF, 0xFF, 0xFF, 0xFF};
@@ -223,12 +223,12 @@ int main(void)
 	job = base_job(skr, skd);
 	job.conn_handle = 77;
 	job.sd_len = seal_device_sd(skd, 1, junk, sizeof(junk), job.sd, sizeof(job.sd));
-	okc("submit junk-plaintext", aliro_stepup_worker_submit(&job) == 0);
+	okc("submit junk-plaintext", ultrawidelock_stepup_worker_submit(&job) == 0);
 	pump_worker();
 	okc("parse failure keeps last verdict",
-	    aliro_stepup_worker_last(&v, &conn) == 1 && conn == 55);
+	    ultrawidelock_stepup_worker_last(&v, &conn) == 1 && conn == 55);
 
-	okc("last with NULL conn ptr", aliro_stepup_worker_last(&v, NULL) == 1);
+	okc("last with NULL conn ptr", ultrawidelock_stepup_worker_last(&v, NULL) == 1);
 
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");
 	return fails == 0 ? 0 : 1;

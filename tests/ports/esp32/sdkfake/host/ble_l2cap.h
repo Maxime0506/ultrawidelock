@@ -1,4 +1,4 @@
-/* sdkfake host/ble_l2cap.h — L2CAP CoC slice used by aliro_ble.c. */
+/* sdkfake host/ble_l2cap.h — L2CAP CoC slice used by ultrawidelock_ble.c. */
 #ifndef SDKFAKE_HOST_BLE_L2CAP_H
 #define SDKFAKE_HOST_BLE_L2CAP_H
 

@@ -31,14 +31,16 @@
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
 
-#include "aliro_hash.h" /* aliro_sha256, for the CASE transcript */
-#include "aliro_ble.h" /* aliro_ble_readvertise, when a fabric arrives */
+#include "ultrawidelock_hash.h" /* ultrawidelock_sha256, for the CASE transcript */
+#include "ultrawidelock_ble.h" /* ultrawidelock_ble_readvertise, when a fabric arrives */
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 #include "ultrawidelock_dfu_rx.h" /* the same gesture opens the update window */
 #endif
-#include "aliro_prov.h" /* ALIRO_TRUST_MAX, to hold the reported cap to the real one */
-#include <ultrawidelock/reader.h> /* aliro_reader_provision_identity, for SetAliroReaderConfig */
-#include "aliro_prim.h" /* aliro_random, the CSPRNG the reader already uses */
+/* ULTRAWIDELOCK_TRUST_MAX, to hold the reported cap to the real one */
+#include "ultrawidelock_prov.h"
+/* ultrawidelock_reader_provision_identity, for SetAliroReaderConfig */
+#include <ultrawidelock/reader.h>
+#include "ultrawidelock_prim.h" /* ultrawidelock_random, the CSPRNG the reader already uses */
 #include "matter_ble_zephyr.h"
 #include "matter_attest.h"
 #include "matter_case.h"
@@ -171,7 +173,7 @@ static uint8_t s_pt[CONFIG_ALIRO_MATTER_BLE_RX_BUF];
 int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
 			     uint8_t sig[MATTER_ATTEST_SIG_LEN])
 {
-	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
+	return ultrawidelock_ecdsa_p256_sign(priv, msg, msg_len, sig);
 }
 
 /**
@@ -180,7 +182,7 @@ int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t 
  */
 int matter_attest_ec_keygen(uint8_t priv[32], uint8_t pub[65])
 {
-	return aliro_ec_p256_keygen(priv, pub);
+	return ultrawidelock_ec_p256_keygen(priv, pub);
 }
 
 /*
@@ -192,7 +194,7 @@ int matter_attest_ec_keygen(uint8_t priv[32], uint8_t pub[65])
 int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_PUBKEY_LEN],
 		     uint8_t secret_out[MATTER_CASE_SECRET_LEN])
 {
-	return aliro_ecdh_p256(priv, peer_pub, secret_out);
+	return ultrawidelock_ecdh_p256(priv, peer_pub, secret_out);
 }
 
 /**
@@ -202,7 +204,7 @@ int matter_case_ecdh(const uint8_t priv[32], const uint8_t peer_pub[MATTER_CASE_
 int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
 		     uint8_t sig[MATTER_CASE_SIG_LEN])
 {
-	return aliro_ecdsa_p256_sign(priv, msg, msg_len, sig);
+	return ultrawidelock_ecdsa_p256_sign(priv, msg, msg_len, sig);
 }
 
 /**
@@ -212,7 +214,7 @@ int matter_case_sign(const uint8_t priv[32], const uint8_t *msg, size_t msg_len,
 int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t *msg,
 		       size_t msg_len, const uint8_t sig[MATTER_CASE_SIG_LEN])
 {
-	return aliro_ecdsa_p256_verify(pub, msg, msg_len, sig);
+	return ultrawidelock_ecdsa_p256_verify(pub, msg, msg_len, sig);
 }
 
 /*
@@ -222,7 +224,7 @@ int matter_case_verify(const uint8_t pub[MATTER_CASE_PUBKEY_LEN], const uint8_t 
  * y^2 = x^3 - 3x + b, the private key to produce its own published public key
  * under scalar multiplication, and d*Q to reproduce Z. That check exists
  * because two vectors offered for this job turned out to have public keys that
- * were not on the curve at all -- and aliro_ecdh_p256() would have correctly
+ * were not on the curve at all -- and ultrawidelock_ecdh_p256() would have correctly
  * rejected them, which reads exactly like the bug being hunted.
  */
 static const uint8_t k_kat_priv[] = {
@@ -254,7 +256,7 @@ static void ecdh_known_answer_test(void)
 {
 	uint8_t z[32];
 
-	if (aliro_ecdh_p256(k_kat_priv, k_kat_peer, z) != 0) {
+	if (ultrawidelock_ecdh_p256(k_kat_priv, k_kat_peer, z) != 0) {
 		LOG_ERR("ECDH self-test: primitive REFUSED the NIST vector");
 		return;
 	}
@@ -530,7 +532,7 @@ static void admin_close(void)
 	s_admin_fabric = 0u;
 	s_admin_vendor = 0u;
 	matter_ble_set_discriminator(0u);
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	/* Withdraw the DNS-SD invitation with the same gesture that stops the BLE
 	 * one. Left up, it advertises a window this node will now refuse. */
 	(void)matter_thread_unadvertise_commissionable();
@@ -557,7 +559,7 @@ static void admin_arm(uint16_t timeout_s, uint8_t kind)
 {
 	s_admin_window = kind;
 	(void)k_work_reschedule(&s_admin_timer, K_SECONDS(timeout_s));
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	/*
 	 * The BLE advert above is what Apple Home looks for. Every other
 	 * controller browses DNS-SD for "_matterc._udp,_S<short-discriminator>"
@@ -729,9 +731,9 @@ static int begin_session(void)
 	}
 	matter_clusters_failsafe_expire(&s_info);
 
-	if (aliro_random(responder_random, sizeof(responder_random)) != 0 ||
-	    aliro_random(y_entropy, sizeof(y_entropy)) != 0 ||
-	    aliro_random(seed, sizeof(seed)) != 0) {
+	if (ultrawidelock_random(responder_random, sizeof(responder_random)) != 0 ||
+	    ultrawidelock_random(y_entropy, sizeof(y_entropy)) != 0 ||
+	    ultrawidelock_random(seed, sizeof(seed)) != 0) {
 		LOG_ERR("CSPRNG failed; refusing to start PASE");
 		return -EIO;
 	}
@@ -1996,7 +1998,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * Wallet key survives a power cycle.
  *
  * reader_id is groupIdentifier || groupSubIdentifier, which is the layout
- * aliro_reader_provision_identity documents (aliro_reader.h:152-156). The
+ * ultrawidelock_reader_provision_identity documents (ultrawidelock_reader.h:152-156). The
  * sub-identifier is this node's own and is the same one the Aliro attributes
  * report, so the pair a controller reads back is the pair that was stored.
  *
@@ -2010,7 +2012,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * An Aliro credential public key, handed to the reader's trust store -- but only
  * if it is a key a phone will ever present.
  *
- * The trust check is a raw-key allowlist (aliro_reader.c), so an anchor is a
+ * The trust check is a raw-key allowlist (ultrawidelock_reader.c), so an anchor is a
  * claim that some device will present exactly these 65 bytes. An ISSUER key
  * never will: it identifies the home that certifies credentials, not a device.
  * Storing it produced a reader that reported "1 trust anchor(s)", looked
@@ -2034,7 +2036,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * store holds will have the surplus silently evicted, which is the failure that
  * once locked a re-paired reader out for good.
  */
-BUILD_ASSERT(MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED == ALIRO_TRUST_MAX,
+BUILD_ASSERT(MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED == ULTRAWIDELOCK_TRUST_MAX,
 	     "reported endpoint-key cap must equal the trust store it describes");
 
 static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key[65],
@@ -2046,7 +2048,7 @@ static int on_aliro_credential(uint8_t credential_type, const uint8_t public_key
 		return 0;
 	}
 
-	int rc = aliro_reader_provision_add_trust(public_key, credential_type, credential_index,
+	int rc = ultrawidelock_reader_provision_add_trust(public_key, credential_type, credential_index,
 						  user_index);
 
 	if (rc < 0) {
@@ -2079,7 +2081,7 @@ static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credentia
 		 * non-evictable ones. Type 0 is the cluster's "every type" and is
 		 * wider than that -- it takes every anchor in the store, including
 		 * the ones no Matter index ever named, such as a bench add. */
-		int rc = aliro_reader_provision_remove_type(credential_type);
+		int rc = ultrawidelock_reader_provision_remove_type(credential_type);
 
 		if (rc < 0) {
 			LOG_ERR("  ALIRO CLEAR type %u NOT PERSISTED",
@@ -2091,7 +2093,7 @@ static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credentia
 		return 0;
 	}
 
-	int rc = aliro_reader_provision_remove_trust(credential_type, credential_index);
+	int rc = ultrawidelock_reader_provision_remove_trust(credential_type, credential_index);
 
 	LOG_WRN("  ALIRO CLEAR credential type %u index %u -> %s", (unsigned int)credential_type,
 		(unsigned int)credential_index,
@@ -2107,7 +2109,7 @@ static int on_aliro_credential_clear(uint8_t credential_type, uint16_t credentia
  */
 static int on_aliro_user_clear(uint16_t user_index)
 {
-	int rc = aliro_reader_provision_remove_user(user_index);
+	int rc = ultrawidelock_reader_provision_remove_user(user_index);
 
 	if (rc < 0) {
 		LOG_ERR("  ALIRO CLEAR user index %u NOT PERSISTED", (unsigned int)user_index);
@@ -2134,7 +2136,7 @@ static int on_aliro_reader_config(const uint8_t signing_key[32],
 	memcpy(reader_id, group_id, 16u);
 	memcpy(reader_id + 16, s_info.aliro_group_sub_id, 16u);
 
-	rc = aliro_reader_provision_identity(reader_id, signing_key, group_resolving_key);
+	rc = ultrawidelock_reader_provision_identity(reader_id, signing_key, group_resolving_key);
 	memset(reader_id, 0, sizeof(reader_id));
 	if (rc != 0) {
 		LOG_ERR("  reader identity NOT stored (%d)", rc);
@@ -2334,7 +2336,7 @@ static struct {
 	 * Copy the context and finalise the copy to read an intermediate digest;
 	 * finalising this one would end the transcript a message early.
 	 */
-	struct aliro_sha256 transcript;
+	struct ultrawidelock_sha256 transcript;
 	uint16_t peer_session_id;
 	uint16_t local_session_id;
 	bool active;
@@ -2387,7 +2389,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	 * session id AND its random -- the session id alone is 16 bits chosen by
 	 * the peer and a fresh handshake may reuse it. Everything below is
 	 * skipped: no new ephemeral key, no new randoms, no new session id, and
-	 * above all no second aliro_sha256_update() on the transcript.
+	 * above all no second ultrawidelock_sha256_update() on the transcript.
 	 */
 	repeat = s_case.active && s_case.sigma2_len > 0u &&
 		 s_case.peer_session_id == s1->initiator_session_id &&
@@ -2401,10 +2403,10 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		s_case.sigma2_len = 0u;
 	}
 
-	if (!repeat && (aliro_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
-	    aliro_random(s_case.responder_random, sizeof(s_case.responder_random)) != 0 ||
-	    aliro_random(s_case.resumption_id, sizeof(s_case.resumption_id)) != 0 ||
-	    aliro_random((uint8_t *)&s_case.local_session_id, sizeof(s_case.local_session_id)) !=
+	if (!repeat && (ultrawidelock_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
+	    ultrawidelock_random(s_case.responder_random, sizeof(s_case.responder_random)) != 0 ||
+	    ultrawidelock_random(s_case.resumption_id, sizeof(s_case.resumption_id)) != 0 ||
+	    ultrawidelock_random((uint8_t *)&s_case.local_session_id, sizeof(s_case.local_session_id)) !=
 		    0)) {
 		LOG_ERR("  no entropy for Sigma2");
 		return 0u;
@@ -2436,12 +2438,12 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	 * SAME Sigma2 correctly resent twice, then "Sigma3 REJECTED (-6)" and
 	 * the pairing died. */
 	if (!repeat) {
-		aliro_sha256_init(&s_case.transcript);
-		aliro_sha256_update(&s_case.transcript, sigma1, sigma1_len);
+		ultrawidelock_sha256_init(&s_case.transcript);
+		ultrawidelock_sha256_update(&s_case.transcript, sigma1, sigma1_len);
 		{
-			struct aliro_sha256 snapshot = s_case.transcript;
+			struct ultrawidelock_sha256 snapshot = s_case.transcript;
 
-			aliro_sha256_final(&snapshot, transcript);
+			ultrawidelock_sha256_final(&snapshot, transcript);
 		}
 		memcpy(s_case.init_eph_pub, s1->initiator_pubkey, sizeof(s_case.init_eph_pub));
 	}
@@ -2457,7 +2459,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		struct matter_cert_info ci;
 		uint8_t derived[MATTER_CASE_PUBKEY_LEN];
 
-		if (aliro_ec_p256_pub_from_priv(f->op_priv, derived) == 0 &&
+		if (ultrawidelock_ec_p256_pub_from_priv(f->op_priv, derived) == 0 &&
 		    matter_cert_parse(f->noc, f->noc_len, &ci) == MATTER_OK &&
 		    ci.have_public_key) {
 			LOG_INF("  signing key %s the NOC; noc %u B, icac %u B",
@@ -2521,7 +2523,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	 * every reason to treat the message as a replay of an old one.
 	 */
 	if (s_case_counter == 0u) {
-		if (aliro_random((uint8_t *)&s_case_counter, sizeof(s_case_counter)) != 0) {
+		if (ultrawidelock_random((uint8_t *)&s_case_counter, sizeof(s_case_counter)) != 0) {
 			LOG_ERR("  no entropy for the message counter");
 			return 0u;
 		}
@@ -2605,7 +2607,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 	}
 	/* The transcript covers payloads, never headers -- the same rule the
 	 * Sigma1 length check above exists to prove. */
-	aliro_sha256_update(&s_case.transcript, reply + mh_len + ph_len, s2_len);
+	ultrawidelock_sha256_update(&s_case.transcript, reply + mh_len + ph_len, s2_len);
 	/*
 	 * The first 48 bytes are the whole TLV skeleton: outer structure, the
 	 * random, the session id, and the start of the ephemeral key. Enough to
@@ -2666,9 +2668,9 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	/* SHA-256(Sigma1 || Sigma2), taken off a COPY so the running context can
 	 * go on to absorb this Sigma3 for the session keys below. */
 	{
-		struct aliro_sha256 snapshot = s_case.transcript;
+		struct ultrawidelock_sha256 snapshot = s_case.transcript;
 
-		aliro_sha256_final(&snapshot, digest);
+		ultrawidelock_sha256_final(&snapshot, digest);
 	}
 
 	memset(&in, 0, sizeof(in));
@@ -2702,8 +2704,8 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	}
 
 	/* Only now can the transcript close, over all three messages. */
-	aliro_sha256_update(&s_case.transcript, sigma3, sigma3_len);
-	aliro_sha256_final(&s_case.transcript, digest);
+	ultrawidelock_sha256_update(&s_case.transcript, sigma3, sigma3_len);
+	ultrawidelock_sha256_final(&s_case.transcript, digest);
 	memcpy(salt, ipk, MATTER_CASE_IPK_LEN);
 	memcpy(&salt[MATTER_CASE_IPK_LEN], digest, sizeof(digest));
 	rc = matter_derive_session_keys(s_case.shared, MATTER_CASE_SECRET_LEN, salt, sizeof(salt),
@@ -2727,7 +2729,7 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 		/* Drawn, not carried over from s_case_counter: that one is the
 		 * UNSECURED counter and is on the wire in clear text, so seeding
 		 * from it would let a listener predict this session's. */
-		if (aliro_random((uint8_t *)&seed, sizeof(seed)) != 0) {
+		if (ultrawidelock_random((uint8_t *)&seed, sizeof(seed)) != 0) {
 			LOG_ERR("  no entropy for the session counter");
 			memset(&keys, 0, sizeof(keys));
 			return 0u;
@@ -2768,13 +2770,13 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	/*
 	 * Now that a fabric exists, the advert can stop being the Matter
 	 * commissionable payload and become the Aliro reader tag. Nothing else
-	 * re-runs it: aliro_advertise() is called at boot and on BLE
+	 * re-runs it: ultrawidelock_advertise() is called at boot and on BLE
 	 * disconnect, so without this the board stayed commissionable forever
 	 * and a phone could never approach-resolve the reader it had just
 	 * provisioned -- the Wallet key screen came up blank and nothing
 	 * installed.
 	 */
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 
 	LOG_INF("  CASE ESTABLISHED: local session 0x%04x, peer 0x%04x",
 		(unsigned int)s_case.local_session_id, (unsigned int)s_case.peer_session_id);
@@ -3220,7 +3222,7 @@ static void on_message(const uint8_t *msg, size_t len)
 	if (matter_pase_responder_state(&s_pase) == MATTER_PASE_ST_DONE && !s_exchange.secure) {
 		uint32_t seed = 0u;
 
-		if (aliro_random((uint8_t *)&seed, sizeof(seed)) != 0) {
+		if (ultrawidelock_random((uint8_t *)&seed, sizeof(seed)) != 0) {
 			LOG_ERR("CSPRNG failed; cannot open the secure session");
 			s_stale = true;
 			return;
@@ -3304,13 +3306,13 @@ int matter_commission_init(void)
 	 */
 	{
 		uint32_t id[2] = { NRF_FICR->DEVICEID[0], NRF_FICR->DEVICEID[1] };
-		struct aliro_sha256 h;
-		uint8_t digest[ALIRO_SHA256_LEN];
+		struct ultrawidelock_sha256 h;
+		uint8_t digest[ULTRAWIDELOCK_SHA256_LEN];
 
-		aliro_sha256_init(&h);
-		aliro_sha256_update(&h, (const uint8_t *)"aliro-group-sub-id", 18u);
-		aliro_sha256_update(&h, (const uint8_t *)id, sizeof(id));
-		aliro_sha256_final(&h, digest);
+		ultrawidelock_sha256_init(&h);
+		ultrawidelock_sha256_update(&h, (const uint8_t *)"aliro-group-sub-id", 18u);
+		ultrawidelock_sha256_update(&h, (const uint8_t *)id, sizeof(id));
+		ultrawidelock_sha256_final(&h, digest);
 		memcpy(s_info.aliro_group_sub_id, digest, MATTER_ALIRO_GROUP_ID_LEN);
 	}
 
@@ -3338,7 +3340,7 @@ int matter_commission_init(void)
 		uint8_t reader_id[32];
 		uint8_t verif_pub[65];
 		uint8_t grk[MATTER_ALIRO_GROUP_ID_LEN];
-		int rc = aliro_reader_identity_public(reader_id, verif_pub, grk);
+		int rc = ultrawidelock_reader_identity_public(reader_id, verif_pub, grk);
 
 		if (rc == 0) {
 			memcpy(s_info.aliro_verification_key, verif_pub, sizeof(verif_pub));
@@ -3369,7 +3371,7 @@ int matter_commission_init(void)
 	matter_clusters_set_admin_hooks(&k_admin_hooks);
 	matter_ble_set_link_handler(on_link_reset);
 	matter_ble_set_msg_handler(on_message);
-	aliro_reader_set_lock_state_listener(on_aliro_lock_state);
+	ultrawidelock_reader_set_lock_state_listener(on_aliro_lock_state);
 
 	/*
 	 * AFTER matter_clusters_init, which zeroes the parts of s_info it owns.
@@ -3408,7 +3410,7 @@ int matter_commission_init(void)
 			 * reboot and silently stops after it. The gate reads the
 			 * fabric table, which only now has anything in it.
 			 */
-			aliro_ble_readvertise();
+			ultrawidelock_ble_readvertise();
 		} else if (rc > 0) {
 			LOG_INF("no stored fabric; commissionable");
 		}

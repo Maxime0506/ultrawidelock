@@ -119,16 +119,16 @@ if ( cd "$PROJ" && idf.py -B "$PBUILD" \
 	if command -v "$PNM" >/dev/null 2>&1; then
 		check "presence_link_init survives gc"      "psym presence_link_init"
 		check "presence_link_cmd survives gc"       "psym presence_link_cmd"
-		check "aliro_assert_build_p256 survives gc" "psym aliro_assert_build_p256"
-		check "aliro_assert_ec_sign survives gc"    "psym aliro_assert_ec_sign"
+		check "ultrawidelock_assert_build_p256 survives gc" "psym ultrawidelock_assert_build_p256"
+		check "ultrawidelock_assert_ec_sign survives gc"    "psym ultrawidelock_assert_ec_sign"
 		# Negative control, asserted rather than assumed: a name that is linked
 		# either way makes the four checks above pass whatever happens to the
-		# presence config. aliro_ec_p256_keygen and aliro_ecdsa_p256_sign were
+		# presence config. ultrawidelock_ec_p256_keygen and ultrawidelock_ecdsa_p256_sign were
 		# the obvious picks and are exactly that -- the Aliro credential path
 		# pulls both in with presence off -- so the discrimination is checked
 		# here instead of being taken on trust.
 		check "presence absent from defaults build" \
-			"! dsym presence_link_init && ! dsym aliro_assert_build_p256"
+			"! dsym presence_link_init && ! dsym ultrawidelock_assert_build_p256"
 	else
 		note skip "presence symbols ($PNM not on PATH; set WOZ_NM=)"
 	fi

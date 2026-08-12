@@ -10,7 +10,7 @@
 bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out, uint8_t *nlos_out,
 			     uint32_t *block_out, int64_t *age_ms_out);
 
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 /** @brief Stash an Aliro URSK for the CCC Pre-POLL STS decode; NULL clears it. */
 void fira_session_set_provisioned_ursk(const uint8_t *ursk);
 
@@ -122,6 +122,6 @@ uint8_t fira_session_trust_level(void);
 /** @brief Register a callback fired after each accepted range latch (NULL to
  *  clear). Runs on the UWB RX path — keep it to a task wake, nothing heavier. */
 void fira_session_set_range_listener(void (*cb)(void));
-#endif /* CONFIG_WOZ_ALIRO */
+#endif /* CONFIG_ULTRAWIDELOCK_CRED */
 
 #endif /* ULTRAWIDELOCK_UWB_FIRA_SESSION_H_ */

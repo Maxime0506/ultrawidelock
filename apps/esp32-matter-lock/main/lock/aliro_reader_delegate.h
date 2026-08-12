@@ -43,7 +43,7 @@
  * credential writes.
  *
  * The provisioned identity is persisted, not in-memory only: SetAliroReaderConfig
- * hands it to aliro_reader_provision_identity, which stores it through aliro_prov
+ * hands it to ultrawidelock_reader_provision_identity, which stores it through ultrawidelock_prov
  * in NVS and refreshes advertising. That is what keeps a Wallet key valid and lets
  * the UWB reader start after a power cycle.
  */

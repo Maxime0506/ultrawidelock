@@ -19,8 +19,8 @@ set(EXTRA_COMPONENT_DIRS
     "${ESP_MATTER_PATH}/examples/common"
     "${MATTER_SDK_PATH}/config/esp32/components"
     "${ESP_MATTER_PATH}/components"
-    # Aliro reader stack shared with the bench reader app: aliro_ble (NimBLE
-    # transport), aliro_reader (credential-auth + provisioning), aliro_crypto,
+    # Aliro reader stack shared with the bench reader app: ultrawidelock_ble (NimBLE
+    # transport), ultrawidelock_reader (credential-auth + provisioning), ultrawidelock_crypto,
     # and ultrawidelock_uwb (DW3000 UWB ranging engine).
     "${CMAKE_CURRENT_SOURCE_DIR}/../../ports/esp32/components"
     ${extra_components_dirs_append})

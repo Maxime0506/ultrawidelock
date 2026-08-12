@@ -134,7 +134,7 @@ int matter_attest_csr(const uint8_t priv[32], const uint8_t pub[65], uint8_t *ou
  *
  * Declared rather than included so this module stays free of any particular
  * crypto backend, the same seam matter_crypto.c uses for AES. On the CDK the
- * port forwards it to aliro_ecdsa_p256_sign(); the host suite substitutes one
+ * port forwards it to ultrawidelock_ecdsa_p256_sign(); the host suite substitutes one
  * whose output is checked against OpenSSL.
  *
  * @param sig r||s, 32 bytes each. @return 0 on success.
@@ -144,7 +144,7 @@ int matter_attest_ecdsa_sign(const uint8_t priv[32], const uint8_t *msg, size_t 
 
 /**
  * A fresh P-256 key pair, provided by the platform. Same seam as above; on the
- * CDK the port forwards it to aliro_ec_p256_keygen().
+ * CDK the port forwards it to ultrawidelock_ec_p256_keygen().
  *
  * @param pub uncompressed, 0x04 || X || Y. @return 0 on success.
  */

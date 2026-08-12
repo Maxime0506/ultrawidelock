@@ -1,9 +1,9 @@
 /*
- * Host tests for the Aliro initiator (device) side: aliro_device_apdu (inverse
- * wire codec) + aliro_device (AP secure channel, cryptogram sealer, standard-path
+ * Host tests for the Aliro initiator (device) side: ultrawidelock_device_apdu (inverse
+ * wire codec) + ultrawidelock_device (AP secure channel, cryptogram sealer, standard-path
  * key schedule). Everything here is EC-free and CI-gating; the full ECDH+ECDSA
- * handshake loopback is compiled behind ALIRO_DEVICE_HAVE_EC (real EC only exists
- * on-target, aliro_prim_psa.c) and is exercised on the bench, mirroring how the
+ * handshake loopback is compiled behind ULTRAWIDELOCK_DEVICE_HAVE_EC (real EC only exists
+ * on-target, ultrawidelock_prim_psa.c) and is exercised on the bench, mirroring how the
  * repo already gates verify_port.sh.
  *
  * Anti-self-consistency: the device builders are pinned to the SHIPPED reader
@@ -15,11 +15,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_apdu.h"
-#include "aliro_crypto.h"
+#include "ultrawidelock_apdu.h"
+#include "ultrawidelock_crypto.h"
 #include <ultrawidelock/device.h>
-#include "aliro_device_apdu.h"
-#include "aliro_prim.h"
+#include "ultrawidelock_device_apdu.h"
+#include "ultrawidelock_prim.h"
 
 static int fails;
 
@@ -74,7 +74,7 @@ static const uint8_t k_a5[] = {0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0
 /* EC comes from aliro_prim_host.c's fake-curve double (added by the reader-tests
  * suite): a self-consistent P-256 stand-in (symmetric ECDH, round-tripping
  * ECDSA). With it present the full standard-path loopback below runs host-side
- * under -DALIRO_DEVICE_HAVE_EC; the byte-exact anchors above still pin spec truth. */
+ * under -DULTRAWIDELOCK_DEVICE_HAVE_EC; the byte-exact anchors above still pin spec truth. */
 
 /* ---- test 1: inverse wire codec round-trips against the shipped reader ---- */
 
@@ -98,18 +98,19 @@ static void test_codec(void)
 	uint8_t tlv[200], apdu[220];
 	size_t tn, an;
 
-	T_OK("auth0.build", aliro_apdu_build_auth0(0x00u, 0x01u, 0x0100u, reph, txid, rid, tlv,
+	T_OK("auth0.build", ultrawidelock_apdu_build_auth0(0x00u, 0x01u, 0x0100u, reph, txid, rid, tlv,
 						   sizeof(tlv), &tn) == 0);
-	T_OK("auth0.wrap", aliro_apdu_wrap(ALIRO_INS_AUTH0, tlv, tn, apdu, sizeof(apdu), &an) == 0);
+	T_OK("auth0.wrap", ultrawidelock_apdu_wrap(ULTRAWIDELOCK_INS_AUTH0, tlv, tn, apdu,
+						   sizeof(apdu), &an) == 0);
 
 	uint8_t ins;
 	const uint8_t *data;
 	size_t dlen;
-	struct aliro_auth0_command a0c;
+	struct ultrawidelock_auth0_command a0c;
 
-	T_OK("auth0.unwrap",
-	     aliro_apdu_unwrap(apdu, an, &ins, &data, &dlen) == 0 && ins == ALIRO_INS_AUTH0);
-	T_OK("auth0.parse", aliro_dev_parse_auth0_cmd(data, dlen, &a0c) == 0);
+	T_OK("auth0.unwrap", ultrawidelock_apdu_unwrap(apdu, an, &ins, &data, &dlen) == 0 &&
+				     ins == ULTRAWIDELOCK_INS_AUTH0);
+	T_OK("auth0.parse", ultrawidelock_dev_parse_auth0_cmd(data, dlen, &a0c) == 0);
 	T_OK("auth0.fields",
 	     a0c.exp_phase == 0x00u && a0c.user_policy == 0x01u && a0c.version == 0x0100u &&
 		     memcmp(a0c.reader_eph_pub, reph, 65) == 0 && memcmp(a0c.txid, txid, 16) == 0 &&
@@ -123,15 +124,15 @@ static void test_codec(void)
 		deph[i] = (uint8_t)(i == 0 ? 0x04 : 0x80 + i);
 	}
 	T_OK("auth0resp.build",
-	     aliro_dev_build_auth0_resp(deph, NULL, resp, sizeof(resp), &rn) == 0 &&
-		     aliro_apdu_append_sw(resp, &rn, sizeof(resp), 0x9000u) == 0);
+	     ultrawidelock_dev_build_auth0_resp(deph, NULL, resp, sizeof(resp), &rn) == 0 &&
+		     ultrawidelock_apdu_append_sw(resp, &rn, sizeof(resp), 0x9000u) == 0);
 
 	size_t rl = rn;
 	uint16_t sw;
-	struct aliro_auth0_response a0r;
+	struct ultrawidelock_auth0_response a0r;
 
-	T_OK("auth0resp.strip", aliro_apdu_strip_sw(resp, &rl, &sw) == 0 && sw == 0x9000u);
-	T_OK("auth0resp.parse", aliro_apdu_parse_auth0_response(resp, rl, &a0r) == 0 &&
+	T_OK("auth0resp.strip", ultrawidelock_apdu_strip_sw(resp, &rl, &sw) == 0 && sw == 0x9000u);
+	T_OK("auth0resp.parse", ultrawidelock_apdu_parse_auth0_response(resp, rl, &a0r) == 0 &&
 					memcmp(a0r.device_eph_pub, deph, 65) == 0 &&
 					!a0r.have_cryptogram);
 
@@ -141,15 +142,17 @@ static void test_codec(void)
 	for (int i = 0; i < 64; i++) {
 		rsig[i] = (uint8_t)(0xC0 + i);
 	}
-	T_OK("auth1.build", aliro_apdu_build_auth1(0x01u, rsig, tlv, sizeof(tlv), &tn) == 0);
-	T_OK("auth1.wrap", aliro_apdu_wrap(ALIRO_INS_AUTH1, tlv, tn, apdu, sizeof(apdu), &an) == 0);
+	T_OK("auth1.build", ultrawidelock_apdu_build_auth1(0x01u, rsig, tlv, sizeof(tlv), &tn) == 0);
+	T_OK("auth1.wrap", ultrawidelock_apdu_wrap(ULTRAWIDELOCK_INS_AUTH1, tlv, tn, apdu,
+						   sizeof(apdu), &an) == 0);
 
-	struct aliro_auth1_command a1c;
+	struct ultrawidelock_auth1_command a1c;
 
 	T_OK("auth1.unwrap+parse",
-	     aliro_apdu_unwrap(apdu, an, &ins, &data, &dlen) == 0 && ins == ALIRO_INS_AUTH1 &&
-		     aliro_dev_parse_auth1_cmd(data, dlen, &a1c) == 0 && a1c.cred_type == 0x01u &&
-		     memcmp(a1c.reader_sig, rsig, 64) == 0);
+	     ultrawidelock_apdu_unwrap(apdu, an, &ins, &data, &dlen) == 0 &&
+		     ins == ULTRAWIDELOCK_INS_AUTH1 &&
+		     ultrawidelock_dev_parse_auth1_cmd(data, dlen, &a1c) == 0 &&
+		     a1c.cred_type == 0x01u && memcmp(a1c.reader_sig, rsig, 64) == 0);
 
 	/* AUTH1Response plaintext: device build -> reader parse */
 	uint8_t dsig[64], dpub[65];
@@ -163,11 +166,11 @@ static void test_codec(void)
 
 	uint8_t plain[200];
 	size_t pn;
-	struct aliro_auth1_response a1r;
+	struct ultrawidelock_auth1_response a1r;
 
 	T_OK("auth1resp.build",
-	     aliro_dev_build_auth1_resp(dsig, dpub, plain, sizeof(plain), &pn) == 0);
-	T_OK("auth1resp.parse", aliro_apdu_parse_auth1_response(plain, pn, &a1r) == 0 &&
+	     ultrawidelock_dev_build_auth1_resp(dsig, dpub, plain, sizeof(plain), &pn) == 0);
+	T_OK("auth1resp.parse", ultrawidelock_apdu_parse_auth1_response(plain, pn, &a1r) == 0 &&
 					memcmp(a1r.device_sig, dsig, 64) == 0 &&
 					a1r.have_device_pub &&
 					memcmp(a1r.device_pub, dpub, 65) == 0);
@@ -175,16 +178,16 @@ static void test_codec(void)
 	/* EXCHANGE command plaintext: reader build -> device parse */
 	uint8_t ex[16];
 	size_t exn;
-	struct aliro_exchange_command exc;
+	struct ultrawidelock_exchange_command exc;
 
-	T_OK("exchange.build", aliro_apdu_build_exchange(0, 0, 1, ex, sizeof(ex), &exn) == 0);
-	T_OK("exchange.parse", aliro_dev_parse_exchange_cmd(ex, exn, &exc) == 0 && exc.ursk_ready &&
-				       !exc.have_status);
+	T_OK("exchange.build", ultrawidelock_apdu_build_exchange(0, 0, 1, ex, sizeof(ex), &exn) == 0);
+	T_OK("exchange.parse", ultrawidelock_dev_parse_exchange_cmd(ex, exn, &exc) == 0 &&
+				       exc.ursk_ready && !exc.have_status);
 
 	/* unwrap rejects a malformed/short APDU */
 	uint8_t bad[3] = {0x80, 0x80, 0x00};
 
-	T_OK("unwrap.rejects-short", aliro_apdu_unwrap(bad, sizeof(bad), &ins, &data, &dlen) != 0);
+	T_OK("unwrap.rejects-short", ultrawidelock_apdu_unwrap(bad, sizeof(bad), &ins, &data, &dlen) != 0);
 }
 
 /* ---- test 2: fast-phase cryptogram sealer, byte-exact to Aliro §14.4 ---- */
@@ -199,21 +202,21 @@ static void test_cryptogram(void)
 	uh(pt, "5e02003f911400000000000000000000000000000000000000009214000000"
 	       "0000000000000000000000000000000000");
 
-	T_OK("cryptogram.seal.ok", aliro_dev_seal_cryptogram(csk, pt, 48, out) == 0);
+	T_OK("cryptogram.seal.ok", ultrawidelock_dev_seal_cryptogram(csk, pt, 48, out) == 0);
 	/* the device's sealed cryptogram must equal the spec's worked-example bytes */
 	chk("cryptogram.seal==§14.4", out, 64,
 	    "ba76234a1e427f9e463106251fb9e9edc5f5812f59fd887d4e57eb0bc544b7cb"
 	    "9d368c4dedadf782d520a91f9666b9091e0973894522c04b142f6447b596942a");
 	/* and the reader's own verifier must accept it and recover the plaintext */
 	T_OK("cryptogram.verify-roundtrip",
-	     aliro_crypto_verify_cryptogram(csk, out, 64, pt2) == 0 && memcmp(pt2, pt, 48) == 0);
+	     ultrawidelock_crypto_verify_cryptogram(csk, out, 64, pt2) == 0 && memcmp(pt2, pt, 48) == 0);
 }
 
 /* ---- test 3: device AP channel interops with the shipped reader channel ---- */
 
 static void test_secchan(void)
 {
-	printf("\n== device AP channel <-> reader aliro_secchan interop ==\n");
+	printf("\n== device AP channel <-> reader ultrawidelock_secchan interop ==\n");
 
 	uint8_t s0[32], s1[32];
 
@@ -221,20 +224,20 @@ static void test_secchan(void)
 		s0[i] = (uint8_t)(0x11 + i);
 		s1[i] = (uint8_t)(0x91 + i);
 	}
-	struct aliro_secchan scr;     /* reader */
-	struct aliro_dev_secchan scd; /* device */
+	struct ultrawidelock_secchan scr;     /* reader */
+	struct ultrawidelock_dev_secchan scd; /* device */
 
-	aliro_secchan_init(&scr, s0, s1);
-	aliro_dev_secchan_init(&scd, s0, s1);
+	ultrawidelock_secchan_init(&scr, s0, s1);
+	ultrawidelock_dev_secchan_init(&scd, s0, s1);
 
 	/* reader -> device, twice (counters must advance in lockstep) */
 	for (int round = 0; round < 2; round++) {
 		uint8_t msg[24], ct[24], tag[16], got[24];
 
 		memset(msg, 0x30 + round, sizeof(msg));
-		T_OK("r2d.seal", aliro_secchan_seal(&scr, NULL, 0, msg, sizeof(msg), ct, tag) == 0);
+		T_OK("r2d.seal", ultrawidelock_secchan_seal(&scr, NULL, 0, msg, sizeof(msg), ct, tag) == 0);
 		T_OK("r2d.device-opens",
-		     aliro_dev_secchan_open(&scd, ct, sizeof(msg), tag, got) == 0 &&
+		     ultrawidelock_dev_secchan_open(&scd, ct, sizeof(msg), tag, got) == 0 &&
 			     memcmp(got, msg, sizeof(msg)) == 0);
 	}
 
@@ -243,9 +246,9 @@ static void test_secchan(void)
 		uint8_t msg[20], ct[20], tag[16], got[20];
 
 		memset(msg, 0x60 + round, sizeof(msg));
-		T_OK("d2r.seal", aliro_dev_secchan_seal(&scd, msg, sizeof(msg), ct, tag) == 0);
+		T_OK("d2r.seal", ultrawidelock_dev_secchan_seal(&scd, msg, sizeof(msg), ct, tag) == 0);
 		T_OK("d2r.reader-opens",
-		     aliro_secchan_open(&scr, NULL, 0, ct, sizeof(msg), tag, got) == 0 &&
+		     ultrawidelock_secchan_open(&scr, NULL, 0, ct, sizeof(msg), tag, got) == 0 &&
 			     memcmp(got, msg, sizeof(msg)) == 0);
 	}
 }
@@ -269,25 +272,25 @@ static void test_key_schedule(void)
 		txid[i] = (uint8_t)(0xF0 - i);
 	}
 
-	/* reference (reader) path via aliro_crypto directly */
-	uint8_t z[32], salt[ALIRO_SALT_MAX], block[ALIRO_KEY_BLOCK_LEN];
+	/* reference (reader) path via ultrawidelock_crypto directly */
+	uint8_t z[32], salt[ULTRAWIDELOCK_SALT_MAX], block[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 	uint8_t enc[32], dec[32], ursk_exp[32];
 	size_t slen;
 
-	aliro_crypto_derive_z(shared, txid, z);
-	T_OK("ref.salt",
-	     aliro_salt_build(ALIRO_SALT_SESSION, txid, rgx, rex, rid, ALIRO_IFACE_BLE, 0x0100u,
-			      0x00u, 0x01u, NULL, k_a5, sizeof(k_a5), salt, &slen) == 0);
-	T_OK("ref.block", aliro_crypto_derive_block(z, salt, slen, dex, block) == 0);
-	aliro_crypto_split(block, 1, enc, dec, ursk_exp);
+	ultrawidelock_crypto_derive_z(shared, txid, z);
+	T_OK("ref.salt", ultrawidelock_salt_build(ULTRAWIDELOCK_SALT_SESSION, txid, rgx, rex, rid,
+						  ULTRAWIDELOCK_IFACE_BLE, 0x0100u, 0x00u, 0x01u,
+						  NULL, k_a5, sizeof(k_a5), salt, &slen) == 0);
+	T_OK("ref.block", ultrawidelock_crypto_derive_block(z, salt, slen, dex, block) == 0);
+	ultrawidelock_crypto_split(block, 1, enc, dec, ursk_exp);
 
 	/* device path */
-	struct aliro_dev_secchan sc;
-	uint8_t ursk_dev[32], block_dev[ALIRO_KEY_BLOCK_LEN];
+	struct ultrawidelock_dev_secchan sc;
+	uint8_t ursk_dev[32], block_dev[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 
 	T_OK("dev.derive",
-	     aliro_device_derive_session(shared, txid, rgx, rex, rid, 0x00u, k_a5, sizeof(k_a5), dex,
-					 &sc, ursk_dev, block_dev) == 0);
+	     ultrawidelock_device_derive_session(shared, txid, rgx, rex, rid, 0x00u, k_a5,
+						 sizeof(k_a5), dex, &sc, ursk_dev, block_dev) == 0);
 	T_OK("dev.ursk==reader", memcmp(ursk_dev, ursk_exp, 32) == 0);
 	/* the whole 160-byte block matches, so BleSK (block[96..127]) does too */
 	T_OK("dev.block==reader", memcmp(block_dev, block, sizeof(block)) == 0);
@@ -299,11 +302,11 @@ static void test_key_schedule(void)
 
 static void test_blesk_channel(void)
 {
-	printf("\n== device BleSK ranging channel <-> reader aliro_msg_seal/open ==\n");
+	printf("\n== device BleSK ranging channel <-> reader ultrawidelock_msg_seal/open ==\n");
 
 	/* A derived 160-byte key block; only block[96..127] (BleSK) is consumed here.
 	 * Both roles derive their directional keys from the SAME block + versions salt. */
-	uint8_t block[ALIRO_KEY_BLOCK_LEN];
+	uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 
 	for (int i = 0; i < (int)sizeof(block); i++) {
 		block[i] = (uint8_t)(0x37u * (unsigned)i + 0x11u);
@@ -314,16 +317,17 @@ static void test_blesk_channel(void)
 
 	/* reader side: the shipped primitives */
 	uint8_t br[32], bd[32];
-	struct aliro_secchan r_ble;
+	struct ultrawidelock_secchan r_ble;
 
 	T_OK("blesk.derive",
-	     aliro_crypto_derive_ble_keys(block, ble_salt, sizeof(ble_salt), br, bd) == 0);
-	aliro_secchan_init(&r_ble, br, bd);
+	     ultrawidelock_crypto_derive_ble_keys(block, ble_salt, sizeof(ble_salt), br, bd) == 0);
+	ultrawidelock_secchan_init(&r_ble, br, bd);
 
 	/* device side: the new mirror derives the same two directional keys */
-	struct aliro_dev_secchan d_ble;
+	struct ultrawidelock_dev_secchan d_ble;
 
-	T_OK("blesk.dev-init", aliro_dev_blesk_init(&d_ble, block, ble_salt, sizeof(ble_salt)) == 0);
+	T_OK("blesk.dev-init",
+	     ultrawidelock_dev_blesk_init(&d_ble, block, ble_salt, sizeof(ble_salt)) == 0);
 	T_OK("blesk.s0==BleSKReader", memcmp(d_ble.s0, br, 32) == 0);
 	T_OK("blesk.s1==BleSKDevice", memcmp(d_ble.s1, bd, 32) == 0);
 
@@ -338,9 +342,9 @@ static void test_blesk_channel(void)
 		size_t wl = 0, gl = 0;
 
 		T_OK("blesk.r2d.reader-seals",
-		     aliro_msg_seal(&r_ble, r2d[i], 8, wire, sizeof(wire), &wl) == 0);
+		     ultrawidelock_msg_seal(&r_ble, r2d[i], 8, wire, sizeof(wire), &wl) == 0);
 		T_OK("blesk.r2d.device-opens",
-		     aliro_dev_ble_open(&d_ble, wire, wl, got, sizeof(got), &gl) == 0 && gl == 8 &&
+		     ultrawidelock_dev_ble_open(&d_ble, wire, wl, got, sizeof(got), &gl) == 0 && gl == 8 &&
 			     memcmp(got, r2d[i], 8) == 0);
 	}
 
@@ -355,26 +359,26 @@ static void test_blesk_channel(void)
 		size_t wl = 0, gl = 0;
 
 		T_OK("blesk.d2r.device-seals",
-		     aliro_dev_ble_seal(&d_ble, d2r[i], d2r_len[i], wire, sizeof(wire), &wl) == 0);
+		     ultrawidelock_dev_ble_seal(&d_ble, d2r[i], d2r_len[i], wire, sizeof(wire), &wl) == 0);
 		T_OK("blesk.d2r.reader-opens",
-		     aliro_msg_open(&r_ble, wire, wl, got, sizeof(got), &gl) == 0 &&
+		     ultrawidelock_msg_open(&r_ble, wire, wl, got, sizeof(got), &gl) == 0 &&
 			     gl == d2r_len[i] && memcmp(got, d2r[i], d2r_len[i]) == 0);
 	}
 
 	/* a flipped ciphertext byte must fail the device open (auth, not just parse). */
 	{
-		struct aliro_dev_secchan fresh;
-		struct aliro_secchan rfresh;
+		struct ultrawidelock_dev_secchan fresh;
+		struct ultrawidelock_secchan rfresh;
 		uint8_t wire[64], got[64];
 		size_t wl = 0, gl = 0;
 
-		aliro_secchan_init(&rfresh, br, bd);
-		aliro_dev_blesk_init(&fresh, block, ble_salt, sizeof(ble_salt));
+		ultrawidelock_secchan_init(&rfresh, br, bd);
+		ultrawidelock_dev_blesk_init(&fresh, block, ble_salt, sizeof(ble_salt));
 		T_OK("blesk.tamper.seal",
-		     aliro_msg_seal(&rfresh, ap_completed, 8, wire, sizeof(wire), &wl) == 0);
+		     ultrawidelock_msg_seal(&rfresh, ap_completed, 8, wire, sizeof(wire), &wl) == 0);
 		wire[5] ^= 0x01u;
 		T_OK("blesk.tamper.rejected",
-		     aliro_dev_ble_open(&fresh, wire, wl, got, sizeof(got), &gl) != 0);
+		     ultrawidelock_dev_ble_open(&fresh, wire, wl, got, sizeof(got), &gl) != 0);
 	}
 }
 
@@ -395,23 +399,24 @@ static void test_blesk_salt(void)
 	/* {0x0100, 0x0009} published, 0x0100 selected: measured from the nRF reader */
 	static const uint8_t salt_nrf[] = {0x01, 0x00, 0x00, 0x09, 0x01, 0x00};
 
-	uint8_t block[ALIRO_KEY_BLOCK_LEN];
+	uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 
 	for (size_t i = 0; i < sizeof(block); i++) {
 		block[i] = (uint8_t)(0x40u + i);
 	}
 
-	struct aliro_dev_secchan ch_v10, ch_nrf;
+	struct ultrawidelock_dev_secchan ch_v10, ch_nrf;
 	uint8_t r_v10[32], d_v10[32], r_nrf[32], d_nrf[32];
 
 	T_OK("salt.v10.init",
-	     aliro_dev_blesk_init(&ch_v10, block, salt_v10, sizeof(salt_v10)) == 0);
-	T_OK("salt.nrf.init", aliro_dev_blesk_init(&ch_nrf, block, salt_nrf, sizeof(salt_nrf)) == 0);
+	     ultrawidelock_dev_blesk_init(&ch_v10, block, salt_v10, sizeof(salt_v10)) == 0);
+	T_OK("salt.nrf.init",
+	     ultrawidelock_dev_blesk_init(&ch_nrf, block, salt_nrf, sizeof(salt_nrf)) == 0);
 	T_OK("salt.v10.matches-derive",
-	     aliro_crypto_derive_ble_keys(block, salt_v10, sizeof(salt_v10), r_v10, d_v10) == 0 &&
+	     ultrawidelock_crypto_derive_ble_keys(block, salt_v10, sizeof(salt_v10), r_v10, d_v10) == 0 &&
 		     memcmp(ch_v10.s0, r_v10, 32) == 0 && memcmp(ch_v10.s1, d_v10, 32) == 0);
 	T_OK("salt.nrf.matches-derive",
-	     aliro_crypto_derive_ble_keys(block, salt_nrf, sizeof(salt_nrf), r_nrf, d_nrf) == 0 &&
+	     ultrawidelock_crypto_derive_ble_keys(block, salt_nrf, sizeof(salt_nrf), r_nrf, d_nrf) == 0 &&
 		     memcmp(ch_nrf.s0, r_nrf, 32) == 0 && memcmp(ch_nrf.s1, d_nrf, 32) == 0);
 	/* The whole point: same block, different published list, different key. If this
 	 * ever passes as equal the salt has stopped reaching the KDF. */
@@ -419,18 +424,19 @@ static void test_blesk_salt(void)
 	T_OK("salt.v10!=nrf.device", memcmp(ch_v10.s1, ch_nrf.s1, 32) != 0);
 
 	/* setter validation, on a zeroed struct so this needs no EC */
-	struct aliro_device d;
+	struct ultrawidelock_device d;
 
 	memset(&d, 0, sizeof(d));
-	T_OK("salt.set.ok", aliro_device_set_blesk_salt(&d, salt_nrf, sizeof(salt_nrf)) == 0);
+	T_OK("salt.set.ok", ultrawidelock_device_set_blesk_salt(&d, salt_nrf, sizeof(salt_nrf)) == 0);
 	T_OK("salt.set.stored",
 	     d.blesk_salt_len == sizeof(salt_nrf) &&
 		     memcmp(d.blesk_salt, salt_nrf, sizeof(salt_nrf)) == 0);
-	T_OK("salt.set.rejects-null", aliro_device_set_blesk_salt(&d, NULL, 4) == -1);
-	T_OK("salt.set.rejects-short", aliro_device_set_blesk_salt(&d, salt_nrf, 2) == -1);
-	T_OK("salt.set.rejects-odd", aliro_device_set_blesk_salt(&d, salt_nrf, 5) == -1);
+	T_OK("salt.set.rejects-null", ultrawidelock_device_set_blesk_salt(&d, NULL, 4) == -1);
+	T_OK("salt.set.rejects-short", ultrawidelock_device_set_blesk_salt(&d, salt_nrf, 2) == -1);
+	T_OK("salt.set.rejects-odd", ultrawidelock_device_set_blesk_salt(&d, salt_nrf, 5) == -1);
 	T_OK("salt.set.rejects-oversized",
-	     aliro_device_set_blesk_salt(&d, salt_nrf, ALIRO_DEV_BLESK_SALT_MAX + 2u) == -1);
+	     ultrawidelock_device_set_blesk_salt(&d, salt_nrf,
+						 ULTRAWIDELOCK_DEV_BLESK_SALT_MAX + 2u) == -1);
 	/* a rejected salt must not have disturbed the accepted one */
 	T_OK("salt.set.reject-leaves-prior",
 	     d.blesk_salt_len == sizeof(salt_nrf) &&
@@ -439,28 +445,29 @@ static void test_blesk_salt(void)
 
 /* ---- test 5: full standard-path loopback (target-gated: needs real EC) ---- */
 
-#if defined(ALIRO_DEVICE_HAVE_EC)
+#if defined(ULTRAWIDELOCK_DEVICE_HAVE_EC)
 /* On success writes the finished device (for the ranging-channel checks below)
  * and the reader's own 160-byte key block into the caller's buffers. */
-static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BLOCK_LEN])
+static int loopback(struct ultrawidelock_device *dev_out,
+		    uint8_t block_out[ULTRAWIDELOCK_KEY_BLOCK_LEN])
 {
 	uint8_t reader_sign_priv[32], reader_verif_pub[65], reader_group_x[32], reader_id[32];
 	uint8_t cred_priv[32];
 
-	if (aliro_random(reader_sign_priv, 32) != 0 || aliro_random(cred_priv, 32) != 0) {
+	if (ultrawidelock_random(reader_sign_priv, 32) != 0 || ultrawidelock_random(cred_priv, 32) != 0) {
 		return -1;
 	}
 	for (int i = 0; i < 32; i++) {
 		reader_id[i] = (uint8_t)(0x30 + i);
 	}
-	if (aliro_ec_p256_pub_from_priv(reader_sign_priv, reader_verif_pub) != 0) {
+	if (ultrawidelock_ec_p256_pub_from_priv(reader_sign_priv, reader_verif_pub) != 0) {
 		return -1;
 	}
 	memcpy(reader_group_x, reader_verif_pub + 1, 32);
 
-	struct aliro_device dev;
+	struct ultrawidelock_device dev;
 
-	if (aliro_device_init(&dev, cred_priv, reader_id, reader_verif_pub) != 0) {
+	if (ultrawidelock_device_init(&dev, cred_priv, reader_id, reader_verif_pub) != 0) {
 		return -1;
 	}
 	/* The loopback's peer is our own reader, which publishes v1.0 alone, so it runs
@@ -476,7 +483,8 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 	/* reader: ephemeral + txid -> AUTH0 */
 	uint8_t reph_priv[32], reph_pub[65], txid[16];
 
-	if (aliro_ec_p256_keygen(reph_priv, reph_pub) != 0 || aliro_random(txid, 16) != 0) {
+	if (ultrawidelock_ec_p256_keygen(reph_priv, reph_pub) != 0 ||
+	    ultrawidelock_random(txid, 16) != 0) {
 		return -1;
 	}
 
@@ -484,20 +492,20 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 	size_t tn, an, rn, rl;
 	uint16_t sw;
 
-	if (aliro_apdu_build_auth0(0x00u, 0x01u, 0x0100u, reph_pub, txid, reader_id, tlv,
+	if (ultrawidelock_apdu_build_auth0(0x00u, 0x01u, 0x0100u, reph_pub, txid, reader_id, tlv,
 				   sizeof(tlv), &tn) != 0 ||
-	    aliro_apdu_wrap(ALIRO_INS_AUTH0, tlv, tn, apdu, sizeof(apdu), &an) != 0 ||
-	    aliro_device_on_command(&dev, apdu, an, resp, sizeof(resp), &rn) != 0) {
+	    ultrawidelock_apdu_wrap(ULTRAWIDELOCK_INS_AUTH0, tlv, tn, apdu, sizeof(apdu), &an) != 0 ||
+	    ultrawidelock_device_on_command(&dev, apdu, an, resp, sizeof(resp), &rn) != 0) {
 		return -1;
 	}
 
 	/* reader parses AUTH0Response */
-	struct aliro_auth0_response a0;
+	struct ultrawidelock_auth0_response a0;
 	uint8_t device_eph_pub[65];
 
 	rl = rn;
-	if (aliro_apdu_strip_sw(resp, &rl, &sw) != 0 ||
-	    aliro_apdu_parse_auth0_response(resp, rl, &a0) != 0) {
+	if (ultrawidelock_apdu_strip_sw(resp, &rl, &sw) != 0 ||
+	    ultrawidelock_apdu_parse_auth0_response(resp, rl, &a0) != 0) {
 		return -1;
 	}
 	memcpy(device_eph_pub, a0.device_eph_pub, 65);
@@ -506,46 +514,47 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 	uint8_t shared[32], z[32], td[160], sig[64];
 	size_t tdn;
 
-	if (aliro_ecdh_p256(reph_priv, device_eph_pub, shared) != 0) {
+	if (ultrawidelock_ecdh_p256(reph_priv, device_eph_pub, shared) != 0) {
 		return -1;
 	}
-	aliro_crypto_derive_z(shared, txid, z);
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_READER, reader_id, device_eph_pub + 1,
+	ultrawidelock_crypto_derive_z(shared, txid, z);
+	if (ultrawidelock_apdu_build_authdata(ULTRAWIDELOCK_AUTH_READER, reader_id, device_eph_pub + 1,
 				      reph_pub + 1, txid, td, sizeof(td), &tdn) != 0 ||
-	    aliro_ecdsa_p256_sign(reader_sign_priv, td, tdn, sig) != 0 ||
-	    aliro_apdu_build_auth1(0x01u, sig, tlv, sizeof(tlv), &tn) != 0 ||
-	    aliro_apdu_wrap(ALIRO_INS_AUTH1, tlv, tn, apdu, sizeof(apdu), &an) != 0 ||
-	    aliro_device_on_command(&dev, apdu, an, resp, sizeof(resp), &rn) != 0) {
+	    ultrawidelock_ecdsa_p256_sign(reader_sign_priv, td, tdn, sig) != 0 ||
+	    ultrawidelock_apdu_build_auth1(0x01u, sig, tlv, sizeof(tlv), &tn) != 0 ||
+	    ultrawidelock_apdu_wrap(ULTRAWIDELOCK_INS_AUTH1, tlv, tn, apdu, sizeof(apdu), &an) != 0 ||
+	    ultrawidelock_device_on_command(&dev, apdu, an, resp, sizeof(resp), &rn) != 0) {
 		return -1;
 	}
 
 	/* reader: derive session, open + parse AUTH1Response, verify device signature */
-	uint8_t salt[ALIRO_SALT_MAX], block[ALIRO_KEY_BLOCK_LEN], enc[32], dec[32], ursk_r[32];
+	uint8_t salt[ULTRAWIDELOCK_SALT_MAX], block[ULTRAWIDELOCK_KEY_BLOCK_LEN], enc[32], dec[32],
+		ursk_r[32];
 	size_t slen;
 
-	if (aliro_salt_build(ALIRO_SALT_SESSION, txid, reader_group_x, reph_pub + 1, reader_id,
-			     ALIRO_IFACE_BLE, 0x0100u, 0x00u, 0x01u, NULL, k_a5, sizeof(k_a5), salt,
-			     &slen) != 0 ||
-	    aliro_crypto_derive_block(z, salt, slen, device_eph_pub + 1, block) != 0) {
+	if (ultrawidelock_salt_build(ULTRAWIDELOCK_SALT_SESSION, txid, reader_group_x, reph_pub + 1,
+				     reader_id, ULTRAWIDELOCK_IFACE_BLE, 0x0100u, 0x00u, 0x01u,
+				     NULL, k_a5, sizeof(k_a5), salt, &slen) != 0 ||
+	    ultrawidelock_crypto_derive_block(z, salt, slen, device_eph_pub + 1, block) != 0) {
 		return -1;
 	}
-	aliro_crypto_split(block, 1, enc, dec, ursk_r);
+	ultrawidelock_crypto_split(block, 1, enc, dec, ursk_r);
 
-	struct aliro_secchan scr;
+	struct ultrawidelock_secchan scr;
 
-	aliro_secchan_init(&scr, enc, dec);
+	ultrawidelock_secchan_init(&scr, enc, dec);
 
 	rl = rn;
-	if (aliro_apdu_strip_sw(resp, &rl, &sw) != 0 || rl < 16u) {
+	if (ultrawidelock_apdu_strip_sw(resp, &rl, &sw) != 0 || rl < 16u) {
 		return -1;
 	}
 
 	uint8_t ptbuf[200];
 	size_t ctlen = rl - 16u;
-	struct aliro_auth1_response a1;
+	struct ultrawidelock_auth1_response a1;
 
-	if (aliro_secchan_open(&scr, NULL, 0, resp, ctlen, resp + ctlen, ptbuf) != 0 ||
-	    aliro_apdu_parse_auth1_response(ptbuf, ctlen, &a1) != 0) {
+	if (ultrawidelock_secchan_open(&scr, NULL, 0, resp, ctlen, resp + ctlen, ptbuf) != 0 ||
+	    ultrawidelock_apdu_parse_auth1_response(ptbuf, ctlen, &a1) != 0) {
 		return -1;
 	}
 
@@ -553,9 +562,9 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 	size_t td2n;
 	const uint8_t *cred_pub = a1.have_device_pub ? a1.device_pub : device_eph_pub;
 
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, reader_id, device_eph_pub + 1,
+	if (ultrawidelock_apdu_build_authdata(ULTRAWIDELOCK_AUTH_DEVICE, reader_id, device_eph_pub + 1,
 				      reph_pub + 1, txid, td2, sizeof(td2), &td2n) != 0 ||
-	    aliro_ecdsa_p256_verify(cred_pub, td2, td2n, a1.device_sig) != 0) {
+	    ultrawidelock_ecdsa_p256_verify(cred_pub, td2, td2n, a1.device_sig) != 0) {
 		return -1;
 	}
 
@@ -563,27 +572,27 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 	uint8_t ex[16], exct[16], extag[16], expayload[64];
 	size_t exn;
 
-	if (aliro_apdu_build_exchange(0, 0, 1, ex, sizeof(ex), &exn) != 0 ||
-	    aliro_secchan_seal(&scr, NULL, 0, ex, exn, exct, extag) != 0) {
+	if (ultrawidelock_apdu_build_exchange(0, 0, 1, ex, sizeof(ex), &exn) != 0 ||
+	    ultrawidelock_secchan_seal(&scr, NULL, 0, ex, exn, exct, extag) != 0) {
 		return -1;
 	}
 	memcpy(expayload, exct, exn);
 	memcpy(expayload + exn, extag, 16);
-	if (aliro_apdu_wrap(ALIRO_INS_EXCHANGE, expayload, exn + 16u, apdu, sizeof(apdu), &an) !=
-		    0 ||
-	    aliro_device_on_command(&dev, apdu, an, resp, sizeof(resp), &rn) != 0) {
+	if (ultrawidelock_apdu_wrap(ULTRAWIDELOCK_INS_EXCHANGE, expayload, exn + 16u, apdu,
+				    sizeof(apdu), &an) != 0 ||
+	    ultrawidelock_device_on_command(&dev, apdu, an, resp, sizeof(resp), &rn) != 0) {
 		return -1;
 	}
 
 	rl = rn;
-	if (aliro_apdu_strip_sw(resp, &rl, &sw) != 0 || rl < 16u) {
+	if (ultrawidelock_apdu_strip_sw(resp, &rl, &sw) != 0 || rl < 16u) {
 		return -1;
 	}
 
 	uint8_t body[32];
 	size_t bodylen = rl - 16u;
 
-	if (aliro_secchan_open(&scr, NULL, 0, resp, bodylen, resp + bodylen, body) != 0) {
+	if (ultrawidelock_secchan_open(&scr, NULL, 0, resp, bodylen, resp + bodylen, body) != 0) {
 		return -1;
 	}
 
@@ -594,7 +603,7 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
 		return -1;
 	}
 	memcpy(dev_out, &dev, sizeof(dev));
-	memcpy(block_out, block, ALIRO_KEY_BLOCK_LEN);
+	memcpy(block_out, block, ULTRAWIDELOCK_KEY_BLOCK_LEN);
 	return 0;
 }
 
@@ -607,18 +616,18 @@ static int loopback(struct aliro_device *dev_out, uint8_t block_out[ALIRO_KEY_BL
  * and the counters stay in lockstep across the real SDU order. Payload bodies are
  * opaque here on purpose — M1-M4 content is proven against the live reader engine
  * in tests/host/test_ultrawidelock_device_uwb.c; what is under test is the channel. */
-static void test_ranging_channel_after_auth1(struct aliro_device *dev,
-					     const uint8_t block[ALIRO_KEY_BLOCK_LEN])
+static void test_ranging_channel_after_auth1(struct ultrawidelock_device *dev,
+					     const uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN])
 {
 	printf("\n== ranging channel established by AUTH1 ==\n");
 
 	static const uint8_t ble_salt[] = {0x01, 0x00, 0x01, 0x00};
 	uint8_t br[32], bd[32];
-	struct aliro_secchan r_ble;
+	struct ultrawidelock_secchan r_ble;
 
 	T_OK("auth1.blesk.reader-derive",
-	     aliro_crypto_derive_ble_keys(block, ble_salt, sizeof(ble_salt), br, bd) == 0);
-	aliro_secchan_init(&r_ble, br, bd);
+	     ultrawidelock_crypto_derive_ble_keys(block, ble_salt, sizeof(ble_salt), br, bd) == 0);
+	ultrawidelock_secchan_init(&r_ble, br, bd);
 
 	T_OK("auth1.blesk.s0==BleSKReader", memcmp(dev->sc_ble.s0, br, 32) == 0);
 	T_OK("auth1.blesk.s1==BleSKDevice", memcmp(dev->sc_ble.s1, bd, 32) == 0);
@@ -627,8 +636,8 @@ static void test_ranging_channel_after_auth1(struct aliro_device *dev,
 	/* the AP channel ran AUTH1Response + EXCHANGE and must be independent of it */
 	T_OK("auth1.ap.counters-untouched", dev->sc.ctr_r2d == 2u && dev->sc.ctr_d2r == 3u);
 
-	/* The real ranging-setup order (aliro_reader.c complete_ap_and_range ->
-	 * aliro_ranging.c): reader AP-Completed, device Initiate-Ranging-Session,
+	/* The real ranging-setup order (ultrawidelock_reader.c complete_ap_and_range ->
+	 * ultrawidelock_ranging.c): reader AP-Completed, device Initiate-Ranging-Session,
 	 * then M1/M2/M3/M4 alternating. Headers are [proto][id][len_be16]. */
 	static const uint8_t r2d_ap_completed[] = {0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00};
 	static const uint8_t d2r_initiate[] = {0x02, 0x01, 0x00, 0x02, 0x00, 0x00};
@@ -657,13 +666,13 @@ static void test_ranging_channel_after_auth1(struct aliro_device *dev,
 		int rc;
 
 		if (seq[i].reader_to_device) {
-			rc = aliro_msg_seal(&r_ble, seq[i].plain, seq[i].len, wire, sizeof(wire),
+			rc = ultrawidelock_msg_seal(&r_ble, seq[i].plain, seq[i].len, wire, sizeof(wire),
 					    &wl) == 0 &&
-			     aliro_dev_ble_open(&dev->sc_ble, wire, wl, got, sizeof(got), &gl) == 0;
+			     ultrawidelock_dev_ble_open(&dev->sc_ble, wire, wl, got, sizeof(got), &gl) == 0;
 		} else {
-			rc = aliro_dev_ble_seal(&dev->sc_ble, seq[i].plain, seq[i].len, wire,
+			rc = ultrawidelock_dev_ble_seal(&dev->sc_ble, seq[i].plain, seq[i].len, wire,
 						sizeof(wire), &wl) == 0 &&
-			     aliro_msg_open(&r_ble, wire, wl, got, sizeof(got), &gl) == 0;
+			     ultrawidelock_msg_open(&r_ble, wire, wl, got, sizeof(got), &gl) == 0;
 		}
 		T_OK(seq[i].name,
 		     rc && wl == seq[i].len + 16u && gl == seq[i].len &&
@@ -682,7 +691,7 @@ static void test_ranging_channel_after_auth1(struct aliro_device *dev,
  * suite against the real PSA P-256 backend instead of the host fake curve. */
 int aliro_device_selftest(void)
 {
-	printf("== aliro_device: initiator-side codec + crypto ==\n");
+	printf("== ultrawidelock_device: initiator-side codec + crypto ==\n");
 
 	test_codec();
 	test_cryptogram();
@@ -692,10 +701,10 @@ int aliro_device_selftest(void)
 	test_blesk_salt();
 
 	printf("\n== full standard-path loopback ==\n");
-#if defined(ALIRO_DEVICE_HAVE_EC)
+#if defined(ULTRAWIDELOCK_DEVICE_HAVE_EC)
 	{
-		struct aliro_device dev;
-		uint8_t rblock[ALIRO_KEY_BLOCK_LEN];
+		struct ultrawidelock_device dev;
+		uint8_t rblock[ULTRAWIDELOCK_KEY_BLOCK_LEN];
 		int rc = loopback(&dev, rblock);
 
 		T_OK("loopback: reader URSK == device URSK", rc == 0);
@@ -704,7 +713,7 @@ int aliro_device_selftest(void)
 		}
 	}
 #else
-	printf("  SKIP loopback (no host EC double; runs on target with real aliro_prim)\n");
+	printf("  SKIP loopback (no host EC double; runs on target with real ultrawidelock_prim)\n");
 #endif
 
 	if (fails) {

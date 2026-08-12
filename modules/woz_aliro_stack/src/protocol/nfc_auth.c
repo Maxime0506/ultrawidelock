@@ -17,7 +17,8 @@
 static int put_tlv(uint8_t *output, size_t capacity, size_t *offset, uint32_t tag,
 		   const uint8_t *value, size_t length)
 {
-	return woz_aliro_tlv_write(output, capacity, offset, tag, value, length) == WOZ_ALIRO_TLV_OK
+	return woz_aliro_tlv_write(output, capacity, offset, tag, value, length) ==
+			       ULTRAWIDELOCK_CRED_TLV_OK
 		       ? WOZ_ALIRO_AUTH_OK
 		       : WOZ_ALIRO_AUTH_BUFFER_TOO_SMALL;
 }
@@ -97,14 +98,14 @@ int woz_aliro_parse_auth0_response(const uint8_t *response, size_t response_leng
 	size_t offset = 0;
 	const size_t data_length = response_length - 2;
 	struct woz_aliro_tlv tlv;
-	if (woz_aliro_tlv_next(response, data_length, &offset, &tlv) != WOZ_ALIRO_TLV_OK ||
+	if (woz_aliro_tlv_next(response, data_length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK ||
 	    tlv.tag != 0x86 || tlv.length != WOZ_ALIRO_PUBLIC_KEY_SIZE || tlv.value[0] != 0x04) {
 		return WOZ_ALIRO_AUTH_WRONG_CONTENT;
 	}
 	memcpy(result->credential_ephemeral_public_key, tlv.value, WOZ_ALIRO_PUBLIC_KEY_SIZE);
 
 	if (offset < data_length) {
-		if (woz_aliro_tlv_next(response, data_length, &offset, &tlv) != WOZ_ALIRO_TLV_OK) {
+		if (woz_aliro_tlv_next(response, data_length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK) {
 			return WOZ_ALIRO_AUTH_INVALID_APDU;
 		}
 		if (tlv.tag == 0x9d) {
@@ -115,7 +116,7 @@ int woz_aliro_parse_auth0_response(const uint8_t *response, size_t response_leng
 			result->cryptogram_length = tlv.length;
 			if (offset < data_length &&
 			    woz_aliro_tlv_next(response, data_length, &offset, &tlv) !=
-				    WOZ_ALIRO_TLV_OK) {
+				    ULTRAWIDELOCK_CRED_TLV_OK) {
 				return WOZ_ALIRO_AUTH_INVALID_APDU;
 			}
 		}
@@ -241,7 +242,7 @@ int woz_aliro_parse_auth1_plaintext(const uint8_t *plaintext, size_t plaintext_l
 	memset(result, 0, sizeof(*result));
 	size_t offset = 0;
 	struct woz_aliro_tlv tlv;
-	if (woz_aliro_tlv_next(plaintext, plaintext_length, &offset, &tlv) != WOZ_ALIRO_TLV_OK) {
+	if (woz_aliro_tlv_next(plaintext, plaintext_length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK) {
 		return WOZ_ALIRO_AUTH_INVALID_APDU;
 	}
 	if (!public_key_requested || tlv.tag != 0x5a || tlv.length != WOZ_ALIRO_PUBLIC_KEY_SIZE ||
@@ -249,7 +250,7 @@ int woz_aliro_parse_auth1_plaintext(const uint8_t *plaintext, size_t plaintext_l
 		return WOZ_ALIRO_AUTH_WRONG_CONTENT;
 	}
 	memcpy(result->credential_public_key, tlv.value, WOZ_ALIRO_PUBLIC_KEY_SIZE);
-	if (woz_aliro_tlv_next(plaintext, plaintext_length, &offset, &tlv) != WOZ_ALIRO_TLV_OK ||
+	if (woz_aliro_tlv_next(plaintext, plaintext_length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK ||
 	    tlv.tag != 0x9e || tlv.length != WOZ_ALIRO_SIGNATURE_SIZE) {
 		return WOZ_ALIRO_AUTH_WRONG_CONTENT;
 	}
@@ -258,7 +259,7 @@ int woz_aliro_parse_auth1_plaintext(const uint8_t *plaintext, size_t plaintext_l
 	bool found_signaling = false;
 	while (offset < plaintext_length) {
 		if (woz_aliro_tlv_next(plaintext, plaintext_length, &offset, &tlv) !=
-		    WOZ_ALIRO_TLV_OK) {
+		    ULTRAWIDELOCK_CRED_TLV_OK) {
 			return WOZ_ALIRO_AUTH_INVALID_APDU;
 		}
 		if (tlv.tag == 0x4b && !found_signaling) {

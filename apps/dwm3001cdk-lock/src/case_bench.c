@@ -18,7 +18,7 @@
 
 #include <psa/crypto.h>
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 
 #if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
@@ -122,7 +122,7 @@ static psa_status_t import_pub(const uint8_t *pub, size_t len, psa_algorithm_t a
 
 /* HKDF-SHA256, the KDF CASE uses for S2K, S3K and the session keys.
  *
- * The repo's own aliro_hkdf(), not PSA key derivation, for two reasons. It is
+ * The repo's own ultrawidelock_hkdf(), not PSA key derivation, for two reasons. It is
  * what a hand-written node on this board would actually call: pure C11, already
  * linked, no extra flash. And PSA key derivation is not available in this image
  * at all -- PSA_WANT_ALG_HKDF depends on PSA_WANT_ALG_HMAC, which is off, so
@@ -131,9 +131,9 @@ static psa_status_t import_pub(const uint8_t *pub, size_t len, psa_algorithm_t a
 static void hkdf(const uint8_t *secret, size_t secret_len, const uint8_t *salt,
 		 size_t salt_len, const char *info, uint8_t *out, size_t out_len)
 {
-	if (aliro_hkdf(salt, salt_len, secret, secret_len, (const uint8_t *)info, strlen(info),
+	if (ultrawidelock_hkdf(salt, salt_len, secret, secret_len, (const uint8_t *)info, strlen(info),
 		       out, out_len) != 0) {
-		LOG_ERR("aliro_hkdf failed");
+		LOG_ERR("ultrawidelock_hkdf failed");
 		bench_ok = false;
 	}
 }

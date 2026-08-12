@@ -9,11 +9,11 @@ index 2529dd5..c6462d2 100644
  #include <platform/CHIPDeviceLayer.h>
  #include <setup_payload/OnboardingCodesUtil.h>
  
-+#if defined(CONFIG_WOZ_ALIRO) && defined(CONFIG_SHELL)
++#if defined(CONFIG_ULTRAWIDELOCK_CRED) && defined(CONFIG_SHELL)
 +#include <app/server/Server.h>
 +
 +#include "aliro_shell.h"
-+#endif /* CONFIG_WOZ_ALIRO && CONFIG_SHELL */
++#endif /* CONFIG_ULTRAWIDELOCK_CRED && CONFIG_SHELL */
 +
  #include <aliro/aliro.h>
  #include <aliro/aliro_state_control.h>
@@ -28,7 +28,7 @@ index 2529dd5..c6462d2 100644
  	ReturnErrorOnFailure(Nrf::Matter::RegisterEventHandler(AppEventHandler, 0));
  #endif /* CONFIG_CHIP_FACTORY_RESET_ERASE_SETTINGS */
  
-+#if defined(CONFIG_WOZ_ALIRO) && defined(CONFIG_SHELL)
++#if defined(CONFIG_ULTRAWIDELOCK_CRED) && defined(CONFIG_SHELL)
 +	/* Give `aliro factoryreset yes` the same CHIP entry point the DK's long
 +	 * button hold uses (nrf/samples/matter/common/src/board/board.cpp), so the
 +	 * console reset and the button reset are the same operation rather than two
@@ -40,7 +40,7 @@ index 2529dd5..c6462d2 100644
 +	 * CONFIG_CHIP_LIB_SHELL, so in a release image `matter device factoryreset`
 +	 * does not exist and this is the only console route to a reset. */
 +	aliro_shell_set_factory_reset([] { chip::Server::GetInstance().ScheduleFactoryReset(); });
-+#endif /* CONFIG_WOZ_ALIRO && CONFIG_SHELL */
++#endif /* CONFIG_ULTRAWIDELOCK_CRED && CONFIG_SHELL */
 +
  	/* Initialize lock manager */
  	BoltLockMgr().Init(LockStateChanged);

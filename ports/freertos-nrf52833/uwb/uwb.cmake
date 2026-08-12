@@ -31,7 +31,7 @@ set(ULTRAWIDELOCK_UWB_ROLE_LISTS
   # The PSA provider, not the mbedTLS variant ports/esp32 selects. The CCC STS
   # key derivation reaches AES-ECB through a seam behind ccc_kdf.h, and this
   # port has a PSA provider where that one did not: crypto/ builds Mbed TLS
-  # standalone with the PSA core on, for aliro_prim_psa.c's sake. Selecting the
+  # standalone with the PSA core on, for ultrawidelock_prim_psa.c's sake. Selecting the
   # mbedTLS variant here would link a second, lower-level path to the same
   # primitive for no reason.
   "${ULTRAWIDELOCK_UWB_ROLES}/crypto_psa.list"
@@ -88,7 +88,7 @@ target_compile_definitions(ultrawidelock_uwb PUBLIC
   WOZ_PORT_FREERTOS=1
   CONFIG_ULTRAWIDELOCK_UWB=1
   CONFIG_ULTRAWIDELOCK_UWB_RESPONDER=1
-  CONFIG_WOZ_ALIRO=1
+  CONFIG_ULTRAWIDELOCK_CRED=1
   CONFIG_DW3000=1
   CONFIG_DW3000_CHIP_DW3000=1
   CONFIG_WOZ_CRYPTO_PSA=1
@@ -171,7 +171,7 @@ set(ULTRAWIDELOCK_UWB_REACH_FACADE
   ultrawidelock_uwb_range_generation
 )
 
-# The Aliro ranging-setup seam modules/woz_aliro/src/aliro_ranging.c drives. A
+# The Aliro ranging-setup seam modules/ultrawidelock_cred/src/ultrawidelock_ranging.c drives. A
 # responder that completes M1-M4 needs these, and the facade alone does not pull
 # them in, so measuring without them understates a real Aliro build.
 set(ULTRAWIDELOCK_UWB_REACH_ALIRO

@@ -31,13 +31,13 @@ if(CONFIG_ULTRAWIDELOCK_MATTER)
 
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-  # matter_crypto.c uses aliro_hash.h for SHA-256/HKDF, and the
+  # matter_crypto.c uses ultrawidelock_hash.h for SHA-256/HKDF, and the
   # crypto_aes_ecb_encrypt seam it declares itself. Both already ship in any
-  # image that has the reader -- aliro_hash.c is compiled by the port, and the
+  # image that has the reader -- ultrawidelock_hash.c is compiled by the port, and the
   # AES backend by the CONFIG_WOZ_CRYPTO_* choice -- so this is an include path,
   # not new code. It is still a real dependency, which CONFIG_ULTRAWIDELOCK_MATTER records
-  # with `depends on WOZ_ALIRO`.
+  # with `depends on ULTRAWIDELOCK_CRED`.
   #
-  zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../woz_aliro/include)
+  zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../ultrawidelock_cred/include)
 
 endif(CONFIG_ULTRAWIDELOCK_MATTER)

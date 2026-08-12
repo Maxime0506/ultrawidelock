@@ -35,17 +35,18 @@
 
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
-#include <platform/PlatformManager.h> // ScheduleWork — also pulled in below, but not unconditionally
+// ScheduleWork — also pulled in below, but not unconditionally
+#include <platform/PlatformManager.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 #include <setup_payload/QRCodeSetupPayloadGenerator.h> // kMaxQRCodeBase38RepresentationLength
 #include <iot_button.h> // BUTTON_LONG_PRESS_START — the commissioning-window recovery press
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <ultrawidelock/reader.h>
-#include <aliro_approach.h>
-#include <aliro_ble.h> // aliro_ble_time_updated()
-#include <aliro_lab.h>
-#include <aliro_lat.h>
+#include <ultrawidelock_approach.h>
+#include <ultrawidelock_ble.h> // ultrawidelock_ble_time_updated()
+#include <ultrawidelock_lab.h>
+#include <ultrawidelock_lat.h>
 #include <esp_netif_sntp.h>
 #include <ultrawidelock/uwb.h>
 #ifdef CONFIG_WOZ_PRESENCE
@@ -129,7 +130,8 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 // UWB range then drives the Matter lock to Unlocked. This replaces the old handoff,
 // which crashed because NimBLE can't be re-inited after Matter reclaims BLE.
 #define ALIRO_UNLOCK_RANGE_CM 100  // approach threshold: unlock at/under this (median cm)
-#define ALIRO_RELOCK_RANGE_CM 250  // depart threshold: relock past this — wide band vs UWB range noise
+#define ALIRO_RELOCK_RANGE_CM                                                                      \
+	250 // depart threshold: relock past this — wide band vs UWB range noise
 #define ALIRO_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
 #define ALIRO_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
 // Departure is the Aliro session ending, not a ranging timeout, so there is no
@@ -151,12 +153,13 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 // event names who operated the lock. Without it the event is anonymous and Apple Home, unable to
 // tell which member unlocked, notifies every device in the home including the one that just did it.
 // Call from the Matter task (it reads the door lock's user and credential tables).
-// Returns a null user index if no credential has authenticated since boot or no stored user owns it.
+// Returns a null user index if no credential has authenticated since boot or no stored user owns
+// it.
 static app::DataModel::Nullable<uint16_t> aliro_operating_user(void)
 {
 	uint8_t cred[65];
 
-	if (!aliro_reader_authenticated_credential(cred)) {
+	if (!ultrawidelock_reader_authenticated_credential(cred)) {
 		ESP_LOGW(TAG, "no authenticated Aliro credential; LockOperation stays unattributed");
 		return app::DataModel::NullNullable;
 	}
@@ -173,27 +176,29 @@ static app::DataModel::Nullable<uint16_t> aliro_operating_user(void)
 }
 
 // Drive the bolt from the approach controller. Both hop to the Matter task (the only thread allowed
-// to touch the DoorLock cluster). Unlock also stamps the walk-up latency mark on its first execution.
+// to touch the DoorLock cluster). Unlock also stamps the walk-up latency mark on its first
+// execution.
 static void schedule_bolt_unlock(void)
 {
 	// Threshold decision made on the reader task; bolt-near = the Matter-task
 	// hop + Unlock() itself.
-	aliro_lat_mark(ALIRO_LAT_NEAR_DWELL);
+	ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_NEAR_DWELL);
 	chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
 		BoltLockMgr().Unlock(door_lock_endpoint_id,
 				     chip::app::Clusters::DoorLock::OperationSourceEnum::kAliro,
 				     aliro_operating_user());
 		// Stamped after Unlock() runs on the Matter task, so the trace measures
 		// execution; report only when newly stamped so a re-unlock does not reprint.
-		if (aliro_lat_mark(ALIRO_LAT_BOLT_DRIVEN)) {
-			aliro_lat_report();
+		if (ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_BOLT_DRIVEN)) {
+			ultrawidelock_lat_report();
 		}
 	});
 }
 
 /**
- * Schedule the door bolt to lock on the Aliro endpoint, attributing the operation to the credential owner resolved from the current reader authentication context.
- * Defers the lock call to the Matter device layer work queue.
+ * Schedule the door bolt to lock on the Aliro endpoint, attributing the operation to the credential
+ * owner resolved from the current reader authentication context. Defers the lock call to the Matter
+ * device layer work queue.
  */
 static void schedule_bolt_lock(void)
 {
@@ -208,11 +213,11 @@ static void schedule_bolt_lock(void)
 // trace and wakes the reader task; the unlock decision itself stays on the task.
 static void on_uwb_range(void)
 {
-	aliro_lat_mark(ALIRO_LAT_FIRST_RANGE);
+	ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_FIRST_RANGE);
 
 	int32_t cm;
 	if (ultrawidelock_uwb_trusted_range_cm(&cm)) {
-		aliro_lat_mark(ALIRO_LAT_TRUSTED_RANGE);
+		ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_TRUSTED_RANGE);
 	}
 	if (aliro_reader_task_handle == nullptr) {
 		return;
@@ -226,11 +231,12 @@ static void on_uwb_range(void)
 	}
 }
 
-// Background task that starts the Aliro reader and drives approach-based lock/unlock from UWB range.
-// Waits for the shared NimBLE host to be usable (host synced, Matter's advertiser released) before
-// calling aliro_reader_start_attached(), instead of sleeping a flat second. Then runs forever as the
-// sole auto-lock driver (the fixed Matter auto-relock is disabled). See the controller comment inside
-// for how the noisy per-block UWB distance is conditioned into stable grant / unlock / relock events.
+// Background task that starts the Aliro reader and drives approach-based lock/unlock from UWB
+// range. Waits for the shared NimBLE host to be usable (host synced, Matter's advertiser released)
+// before calling ultrawidelock_reader_start_attached(), instead of sleeping a flat second. Then
+// runs forever as the sole auto-lock driver (the fixed Matter auto-relock is disabled). See the
+// controller comment inside for how the noisy per-block UWB distance is conditioned into stable
+// grant / unlock / relock events.
 static void aliro_reader_task(void *arg)
 {
 	// The reader can only take the (single, shared) legacy advertiser once the
@@ -249,7 +255,7 @@ static void aliro_reader_task(void *arg)
 #ifdef CONFIG_ENABLE_HA_MQTT
 	/* Access verdicts reach Home Assistant straight from the trust gate, which
 	 * runs on the BLE-host task; the listener only queues, never publishes. */
-	aliro_reader_set_access_listener(ha_mqtt_publish_access);
+	ultrawidelock_reader_set_access_listener(ha_mqtt_publish_access);
 #endif
 
 #ifdef CONFIG_WOZ_PRESENCE
@@ -258,11 +264,11 @@ static void aliro_reader_task(void *arg)
 	presence_link_init(false);
 #endif
 
-	int rc = aliro_reader_start_attached();
-	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
+	int rc = ultrawidelock_reader_start_attached();
+	ESP_LOGI(TAG, "ultrawidelock_reader_start_attached() = %d (%s)", rc,
 		 rc == 0 ? "reader advertising on shared host" : "reader start FAILED");
 
-	// Approach controller (modules/woz_aliro/src/aliro_approach.c, shared with
+	// Approach controller (modules/ultrawidelock_cred/src/ultrawidelock_approach.c, shared with
 	// the host suite's walk-up profile replays). The per-block UWB distance is
 	// very noisy — single blocks swing by metres (bench: 70 mm -> 1604 mm ->
 	// 112 mm between consecutive blocks) — and the security trust gate
@@ -293,10 +299,10 @@ static void aliro_reader_task(void *arg)
 	// Only fresh notifies feed the controller; a bare 200 ms timeout only
 	// supervises the arrival deadline, never re-decides on a stale latched value.
 	// `granted` mirrors the Wallet state, `present` marks an approach in progress.
-	struct aliro_approach approach;
-	struct aliro_approach_cfg acfg;
+	struct ultrawidelock_approach approach;
+	struct ultrawidelock_approach_cfg acfg;
 
-	aliro_approach_defaults(&acfg);
+	ultrawidelock_approach_defaults(&acfg);
 	acfg.unlock_cm = ALIRO_UNLOCK_RANGE_CM;
 	acfg.relock_cm = ALIRO_RELOCK_RANGE_CM;
 	acfg.near_dwell = ALIRO_NEAR_DWELL;
@@ -313,7 +319,7 @@ static void aliro_reader_task(void *arg)
 #else
 	acfg.predict_en = false;
 #endif
-	aliro_approach_init(&approach, &acfg);
+	ultrawidelock_approach_init(&approach, &acfg);
 
 	bool present = false;
 	bool granted = false;
@@ -328,74 +334,74 @@ static void aliro_reader_task(void *arg)
 		// Release a held stale-Wallet Secured if this approach produced no grant to
 		// supersede it. Free on every other pass: nothing is armed unless a relock
 		// went undelivered, which needs the peer to have vanished mid-notification.
-		aliro_reader_status_tick(now);
+		ultrawidelock_reader_status_tick(now);
 
 		int32_t cm = 0;
 		bool active = (woke > 0);
 		bool trusted = active && ultrawidelock_uwb_trusted_range_cm(&cm);
 
-		enum aliro_approach_action act;
+		enum ultrawidelock_approach_action act;
 
 		if (trusted) {
 			// Task context (not the UWB RX path): one trace line per trusted
 			// range block gives the approach curve in the Aliro Lab report.
-			aliro_lab_evi("range", "cm", cm);
+			ultrawidelock_lab_evi("range", "cm", cm);
 			present = true;
-			act = aliro_approach_feed(&approach, now, cm);
+			act = ultrawidelock_approach_feed(&approach, now, cm);
 #ifdef CONFIG_ENABLE_HA_MQTT
 			/* The conditioned estimate the thresholds above act on, not
 			 * the raw block `range` prints: a single block swings by
 			 * metres, and a sensor showing that is not a distance. */
-			ha_mqtt_publish_distance_cm(aliro_approach_est_cm(&approach));
+			ha_mqtt_publish_distance_cm(ultrawidelock_approach_est_cm(&approach));
 #endif
-			if (aliro_approach_eta_ms(&approach) >= 0) {
+			if (ultrawidelock_approach_eta_ms(&approach) >= 0) {
 				// Estimator overlay for the walk-up report: closing speed
 				// and predicted time of arrival at the unlock radius.
-				aliro_lab_evi("vel", "cms", aliro_approach_vel_cm_s(&approach));
-				aliro_lab_evi("eta", "ms", aliro_approach_eta_ms(&approach));
+				ultrawidelock_lab_evi("vel", "cms", ultrawidelock_approach_vel_cm_s(&approach));
+				ultrawidelock_lab_evi("eta", "ms", ultrawidelock_approach_eta_ms(&approach));
 			}
 		} else {
-			act = aliro_approach_tick(&approach, now);
+			act = ultrawidelock_approach_tick(&approach, now);
 		}
 
 		switch (act) {
-		case ALIRO_APPROACH_UNLOCK_PREDICT:
+		case ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT:
 			// ETA inside the retraction window: start now, open at arrival.
 			ESP_LOGI(TAG, "Aliro arrival in %d ms (%d cm/s closing): unlocking early",
-				 (int)aliro_approach_eta_ms(&approach),
-				 (int)aliro_approach_vel_cm_s(&approach));
-			aliro_lab_evi("predict.fire", "eta_ms",
-				      aliro_approach_eta_ms(&approach));
+				 (int)ultrawidelock_approach_eta_ms(&approach),
+				 (int)ultrawidelock_approach_vel_cm_s(&approach));
+			ultrawidelock_lab_evi("predict.fire", "eta_ms",
+				      ultrawidelock_approach_eta_ms(&approach));
 			schedule_bolt_unlock();
 			// Reader Status Changed -> Unsecured. Honest on the predictive
 			// path too: the bolt is being driven, just early.
-			aliro_reader_notify_unlock(true);
+			ultrawidelock_reader_notify_unlock(true);
 			granted = true;
 			break;
-		case ALIRO_APPROACH_UNLOCK_THRESHOLD:
+		case ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD:
 			ESP_LOGI(TAG, "Aliro approach %d cm (est): unlocking",
-				 (int)aliro_approach_est_cm(&approach));
+				 (int)ultrawidelock_approach_est_cm(&approach));
 			schedule_bolt_unlock();
-			aliro_reader_notify_unlock(true);
+			ultrawidelock_reader_notify_unlock(true);
 			granted = true;
 			break;
-		case ALIRO_APPROACH_RELOCK_DEPART:
+		case ULTRAWIDELOCK_APPROACH_RELOCK_DEPART:
 			ESP_LOGI(TAG, "Aliro departed %d cm (est): relocking",
-				 (int)aliro_approach_est_cm(&approach));
+				 (int)ultrawidelock_approach_est_cm(&approach));
 			schedule_bolt_lock();
 			// Still connected here, so this one actually reaches the phone
 			// (the peer-gone path below often cannot).
-			aliro_reader_notify_unlock(false);
+			ultrawidelock_reader_notify_unlock(false);
 			granted = false;
 			break;
-		case ALIRO_APPROACH_RELOCK_ABORT:
+		case ULTRAWIDELOCK_APPROACH_RELOCK_ABORT:
 			// Opened on a prediction, but the approach stopped/turned or
 			// arrival is overdue: put the bolt back.
 			ESP_LOGI(TAG, "Aliro approach aborted (%d cm/s closing): relocking",
-				 (int)aliro_approach_vel_cm_s(&approach));
-			aliro_lab_ev("predict.abort");
+				 (int)ultrawidelock_approach_vel_cm_s(&approach));
+			ultrawidelock_lab_ev("predict.abort");
 			schedule_bolt_lock();
-			aliro_reader_notify_unlock(false);
+			ultrawidelock_reader_notify_unlock(false);
 			granted = false;
 			break;
 		default:
@@ -408,9 +414,9 @@ static void aliro_reader_task(void *arg)
 		// signal; walking away ends it via the RSSI gate's close path, and a
 		// phone that pockets or sleeps ends it too. Relock if still open, tell
 		// Wallet Secured, reset for the next approach.
-		if (present && !aliro_reader_session_active()) {
-			bool relocked = aliro_approach_gone(&approach) ==
-					ALIRO_APPROACH_RELOCK_DEPART;
+		if (present && !ultrawidelock_reader_session_active()) {
+			bool relocked = ultrawidelock_approach_gone(&approach) ==
+					ULTRAWIDELOCK_APPROACH_RELOCK_DEPART;
 
 			ESP_LOGI(TAG, "Aliro peer gone (session ended)%s%s",
 				 relocked ? ": relock" : "", granted ? " + secured" : "");
@@ -418,7 +424,7 @@ static void aliro_reader_task(void *arg)
 				schedule_bolt_lock();
 			}
 			if (granted) {
-				aliro_reader_notify_unlock(false); /* -> Secured */
+				ultrawidelock_reader_notify_unlock(false); /* -> Secured */
 				granted = false;
 			}
 			present = false;
@@ -435,22 +441,23 @@ static void start_aliro_reader_once(void)
 		return;
 	}
 	started = true;
-	/* 12 KiB, not the previous 8: aliro_reader_start_attached() runs a deep chain
+	/* 12 KiB, not the previous 8: ultrawidelock_reader_start_attached() runs a deep chain
 	 * (NimBLE GATT/L2CAP registration, NVS reads, P-256 setup) before the poll loop
 	 * begins. `status` reports the high-water mark so the real headroom is measurable
 	 * rather than assumed. */
-	xTaskCreate(aliro_reader_task, "aliro_reader", 12288, nullptr, 5, &aliro_reader_task_handle);
+	xTaskCreate(aliro_reader_task, "ultrawidelock_reader", 12288, nullptr, 5,
+		    &aliro_reader_task_handle);
 	ESP_LOGI(TAG, "Aliro reader (attach mode) task started");
 }
 
-/* SNTP feeds ONLY the Aliro advertisement's dynamic-tag expiry (aliro_ble.c);
+/* SNTP feeds ONLY the Aliro advertisement's dynamic-tag expiry (ultrawidelock_ble.c);
  * nothing credential- or Matter-facing consumes it here, so a spoofed server
  * can at worst break approach-unlock. Fail-open: until the first sync the advert carries the
  * spec's "expiry unavailable" form, which phones still resolve. */
 static void sntp_synced_cb(struct timeval *tv)
 {
 	(void)tv;
-	aliro_ble_time_updated(); /* re-derive the advertised tag right away */
+	ultrawidelock_ble_time_updated(); /* re-derive the advertised tag right away */
 }
 
 // Start SNTP once the interface has an address; every (re)sync steps the wall
@@ -781,7 +788,7 @@ extern "C" void app_main()
 	 * with CHIPoBLE. Must be called before esp_matter::start (which runs InitServer). */
 	{
 		const struct ble_gatt_svc_def *aliro_svc =
-			static_cast<const struct ble_gatt_svc_def *>(aliro_reader_ble_prepare());
+			static_cast<const struct ble_gatt_svc_def *>(ultrawidelock_reader_ble_prepare());
 		if (aliro_svc != nullptr) {
 			// Local vector wrapping the Aliro GATT service definition for registration with the BLE host's
 			// combined service table.
@@ -793,7 +800,7 @@ extern "C" void app_main()
 				 e.Format());
 		} else {
 			ESP_LOGE(TAG,
-				 "aliro_reader_ble_prepare failed; reader GATT not registered");
+				 "ultrawidelock_reader_ble_prepare failed; reader GATT not registered");
 		}
 	}
 #endif

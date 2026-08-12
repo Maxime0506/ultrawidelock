@@ -14,7 +14,7 @@
 
 #include "matter_crypto.h"
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 
 /** L, the octet count of the length field: 15 - 13 = 2 for a Matter nonce. */
 #define CCM_L           2u
@@ -259,7 +259,7 @@ int matter_derive_session_keys(const uint8_t *secret, size_t secret_len, const u
 		return MATTER_E_INVAL;
 	}
 
-	rc = aliro_hkdf(salt, salt_len, secret, secret_len, info, info_len, keys, sizeof(keys));
+	rc = ultrawidelock_hkdf(salt, salt_len, secret, secret_len, info, info_len, keys, sizeof(keys));
 	if (rc != 0) {
 		return MATTER_E_STATE;
 	}

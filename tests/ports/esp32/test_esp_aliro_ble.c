@@ -1,17 +1,17 @@
 /*
- * Host test for the ESP32 BLE transport (aliro_ble.c) against the sdkfake/
+ * Host test for the ESP32 BLE transport (ultrawidelock_ble.c) against the sdkfake/
  * NimBLE recording doubles. "Theatre" suite: the NimBLE host, controller and
  * radio are all fakes, so passing proves the unit's wire-payload assembly and
  * branch logic (advert service data, READ payload, version WRITE validation,
  * CoC tracking, send/receive paths, retry/refresh scheduling) — not that a
  * phone can actually connect. The dynamic-tag bytes ARE cross-checked against
- * aliro_advtag_derive(), and the wall clock is overridden so both the
+ * ultrawidelock_advtag_derive(), and the wall clock is overridden so both the
  * live-expiry and no-clock advert forms are pinned byte-for-byte.
  *
  * Sections (one linear script; the unit's state is process-global):
  *   A  config capture + READ payload (via the GATT access callback)
  *   B  device-version WRITE validation branches
- *   C  standalone start (aliro_ble_start) incl. NVS-erase + failure branches
+ *   C  standalone start (ultrawidelock_ble_start) incl. NVS-erase + failure branches
  *   D  attach-mode start, advert assembly (bare UUID and full 0xFFF2 forms)
  *   E  GAP events: connect, conn-update retry ladder, disconnect, adv-complete
  *   F  L2CAP CoC: accept/connected/data/disconnected, send paths
@@ -34,8 +34,8 @@
 #include "services/gap/ble_svc_gap.h"
 #include "esp_console.h" /* unused; keeps the fake include tree honest */
 
-#include "aliro_advtag.h"
-#include "aliro_ble.h"
+#include "ultrawidelock_advtag.h"
+#include "ultrawidelock_ble.h"
 
 static int fails;
 
@@ -49,7 +49,7 @@ static void okc(const char *name, int cond)
 	}
 }
 
-/* ---- wall-clock override: aliro_ble.c calls time(NULL) ------------------- */
+/* ---- wall-clock override: ultrawidelock_ble.c calls time(NULL) ------------------- */
 static time_t s_fake_now;
 
 time_t time(time_t *out)
@@ -106,9 +106,9 @@ static void on_rssi(uint16_t conn, int8_t rssi_dbm)
 
 static const uint16_t k_versions[2] = {0x0100, 0x0200};
 
-static struct aliro_ble_config base_cfg(void)
+static struct ultrawidelock_ble_config base_cfg(void)
 {
-	struct aliro_ble_config cfg = {
+	struct ultrawidelock_ble_config cfg = {
 		.proto_versions = k_versions,
 		.proto_versions_count = 2,
 		.features = {.timesync_procedure_0 = true, .le_coded_phy = true},
@@ -122,7 +122,7 @@ static struct aliro_ble_config base_cfg(void)
 /* Fetch the two access callbacks from the service definition the unit exports. */
 static ble_gatt_access_fn chr_cb(int idx)
 {
-	const struct ble_gatt_svc_def *svc = aliro_ble_service_def();
+	const struct ble_gatt_svc_def *svc = ultrawidelock_ble_service_def();
 
 	return svc->characteristics[idx].access_cb;
 }
@@ -131,23 +131,23 @@ static void t_prepare_and_read_payload(void)
 {
 	printf("-- A: config capture + READ payload --\n");
 
-	struct aliro_ble_config cfg = base_cfg();
+	struct ultrawidelock_ble_config cfg = base_cfg();
 
-	okc("prepare NULL cfg rejected", aliro_ble_prepare(NULL) == -1);
+	okc("prepare NULL cfg rejected", ultrawidelock_ble_prepare(NULL) == -1);
 
-	struct aliro_ble_config bad = cfg;
+	struct ultrawidelock_ble_config bad = cfg;
 
 	bad.proto_versions = NULL;
-	okc("prepare NULL versions rejected", aliro_ble_prepare(&bad) == -1);
+	okc("prepare NULL versions rejected", ultrawidelock_ble_prepare(&bad) == -1);
 	bad = cfg;
 	bad.proto_versions_count = 0;
-	okc("prepare 0 versions rejected", aliro_ble_prepare(&bad) == -1);
+	okc("prepare 0 versions rejected", ultrawidelock_ble_prepare(&bad) == -1);
 	bad = cfg;
-	bad.proto_versions_count = 9; /* > ALIRO_MAX_VERSIONS */
-	okc("prepare 9 versions rejected", aliro_ble_prepare(&bad) == -1);
+	bad.proto_versions_count = 9; /* > ULTRAWIDELOCK_MAX_VERSIONS */
+	okc("prepare 9 versions rejected", ultrawidelock_ble_prepare(&bad) == -1);
 
-	okc("prepare ok", aliro_ble_prepare(&cfg) == 0);
-	okc("spsm getter", aliro_ble_spsm() == 0x0080u);
+	okc("prepare ok", ultrawidelock_ble_prepare(&cfg) == 0);
+	okc("spsm getter", ultrawidelock_ble_spsm() == 0x0080u);
 
 	/* READ: [SPSM be16][verLen][vers be16*2][featLen=1][features]. */
 	struct os_mbuf om = {0};
@@ -207,14 +207,14 @@ static void t_standalone_start(void)
 {
 	printf("-- C: standalone start --\n");
 
-	struct aliro_ble_config cfg = base_cfg();
+	struct ultrawidelock_ble_config cfg = base_cfg();
 
-	okc("start with bad cfg", aliro_ble_start(NULL) == -1);
+	okc("start with bad cfg", ultrawidelock_ble_start(NULL) == -1);
 
 	/* NVS wants an erase first (no-free-pages), then everything succeeds. */
 	fake_nvs_reset();
 	fake_nvs_init_rc_once = ESP_ERR_NVS_NO_FREE_PAGES;
-	okc("start ok (with NVS erase)", aliro_ble_start(&cfg) == 0);
+	okc("start ok (with NVS erase)", ultrawidelock_ble_start(&cfg) == 0);
 	okc("NVS erase ran", fake_nvs_erase_calls == 1);
 	okc("device name set", strcmp(fake_svc_gap_name, "Aliro Reader") == 0);
 	okc("L2CAP server on SPSM/MTU",
@@ -248,16 +248,16 @@ static void t_standalone_start(void)
 
 	/* Failure injection, one call each. */
 	fake_nimble_port_init_rc = ESP_FAIL;
-	okc("nimble_port_init failure", aliro_ble_start(&cfg) == -1);
+	okc("nimble_port_init failure", ultrawidelock_ble_start(&cfg) == -1);
 	fake_nimble_port_init_rc = ESP_OK;
 	fake_gatts_count_rc = 1;
-	okc("gatts_count failure", aliro_ble_start(&cfg) == -1);
+	okc("gatts_count failure", ultrawidelock_ble_start(&cfg) == -1);
 	fake_gatts_count_rc = 0;
 	fake_gatts_add_rc = 1;
-	okc("gatts_add failure", aliro_ble_start(&cfg) == -1);
+	okc("gatts_add failure", ultrawidelock_ble_start(&cfg) == -1);
 	fake_gatts_add_rc = 0;
 	fake_svc_gap_name_set_rc = 1; /* warning only, start still succeeds */
-	okc("device-name failure tolerated", aliro_ble_start(&cfg) == 0);
+	okc("device-name failure tolerated", ultrawidelock_ble_start(&cfg) == 0);
 	fake_svc_gap_name_set_rc = 0;
 }
 
@@ -267,21 +267,21 @@ static void t_attach_and_advert(void)
 
 	/* readvertise before attach is a no-op. */
 	fake_gap_adv_starts = 0;
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	okc("readvertise before attach: no-op", fake_gap_adv_starts == 0);
 
 	/* time_updated before attach is a no-op. */
-	aliro_ble_time_updated();
+	ultrawidelock_ble_time_updated();
 	okc("time_updated before attach: no event", fake_eventq_count == 0);
 
 	/* attach failure: infer_auto rejects. */
 	fake_hs_id_infer_rc = 1;
-	okc("start_attached infer failure", aliro_ble_start_attached() == -1);
+	okc("start_attached infer failure", ultrawidelock_ble_start_attached() == -1);
 	fake_hs_id_infer_rc = 0;
 
 	/* Attach without a GRK: bare-UUID fallback advert. */
 	fake_gap_adv_starts = 0;
-	okc("start_attached ok", aliro_ble_start_attached() == 0);
+	okc("start_attached ok", ultrawidelock_ble_start_attached() == 0);
 	okc("fallback advert: bare UUID + name",
 	    fake_gap_adv_starts == 1 && fake_gap_adv_fields.num_uuids16 == 1 &&
 	    fake_gap_adv_fields.uuids16_is_complete == 1 &&
@@ -301,10 +301,10 @@ static void t_attach_and_advert(void)
 
 	memcpy(fake_hs_id_addr, (const uint8_t[6]){0x10, 0x27, 0xC3, 0x86, 0xBB, 0xC4}, 6);
 	s_fake_now = 1750000000; /* valid wall clock */
-	aliro_ble_set_adv_params(group_id, sub_id, grk, -7);
+	ultrawidelock_ble_set_adv_params(group_id, sub_id, grk, -7);
 	fake_gap_adv_stops = 0;
 	fake_gap_adv_starts = 0;
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	okc("readvertise stop+start", fake_gap_adv_stops == 1 && fake_gap_adv_starts == 1);
 	okc("svc data length 26", fake_gap_adv_fields.svc_data_uuid16_len == 26);
 
@@ -322,11 +322,11 @@ static void t_attach_and_advert(void)
 
 	/* Cross-check the tag against the derivation (AdvA MSB-first). */
 	uint8_t adva_msb[6] = {0xC4, 0xBB, 0x86, 0xC3, 0x27, 0x10};
-	uint8_t want_tag[ALIRO_ADVTAG_LEN];
+	uint8_t want_tag[ULTRAWIDELOCK_ADVTAG_LEN];
 
 	okc("advtag derive rc",
-	    aliro_advtag_derive(grk, adva_msb, expiry, want_tag) == 0);
-	okc("dynamic tag bytes", memcmp(sd + 19, want_tag, ALIRO_ADVTAG_LEN) == 0);
+	    ultrawidelock_advtag_derive(grk, adva_msb, expiry, want_tag) == 0);
+	okc("dynamic tag bytes", memcmp(sd + 19, want_tag, ULTRAWIDELOCK_ADVTAG_LEN) == 0);
 	okc("tag refresh armed (valid clock)",
 	    fake_last_callout != NULL && fake_last_callout->armed &&
 	    fake_last_callout->armed_ticks == 450u * 1000u);
@@ -334,18 +334,19 @@ static void t_attach_and_advert(void)
 	/* No-clock form: epoch clock -> expiry unavailable, no refresh arm. */
 	s_fake_now = 1000; /* 1970-ish: below the sanity floor */
 	fake_last_callout->armed = 0;
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	sd = fake_gap_adv_svc_data;
 	okc("no-clock expiry FFFFFFFF",
 	    sd[14] == 0xFF && sd[15] == 0xFF && sd[16] == 0xFF && sd[17] == 0xFF);
 	okc("advtag derive (unavailable) rc",
-	    aliro_advtag_derive(grk, adva_msb, ALIRO_ADVTAG_EXPIRY_UNAVAILABLE, want_tag) == 0);
-	okc("no-clock tag bytes", memcmp(sd + 19, want_tag, ALIRO_ADVTAG_LEN) == 0);
+	    ultrawidelock_advtag_derive(grk, adva_msb, ULTRAWIDELOCK_ADVTAG_EXPIRY_UNAVAILABLE,
+					want_tag) == 0);
+	okc("no-clock tag bytes", memcmp(sd + 19, want_tag, ULTRAWIDELOCK_ADVTAG_LEN) == 0);
 	okc("no refresh armed without clock", fake_last_callout->armed == 0);
 
 	/* Identity address unavailable -> fall back to the bare-UUID advert. */
 	fake_hs_id_copy_rc = 1;
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	okc("no-identity fallback advert", fake_gap_adv_fields.svc_data_uuid16 == NULL &&
 	    fake_gap_adv_fields.num_uuids16 == 1);
 	fake_hs_id_copy_rc = 0;
@@ -353,14 +354,14 @@ static void t_attach_and_advert(void)
 	/* adv_set_fields / adv_start failures are absorbed. */
 	s_fake_now = 1750000000;
 	fake_gap_adv_set_fields_rc = 1;
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	okc("set_fields failure absorbed", 1);
 	fake_gap_adv_set_fields_rc = 0;
 	fake_gap_adv_start_rc = 1;
-	aliro_ble_readvertise();
+	ultrawidelock_ble_readvertise();
 	okc("adv_start failure absorbed", 1);
 	fake_gap_adv_start_rc = 0;
-	aliro_ble_readvertise(); /* leave a good advert up for section E */
+	ultrawidelock_ble_readvertise(); /* leave a good advert up for section E */
 }
 
 static void t_gap_events(void)
@@ -492,31 +493,31 @@ static void t_l2cap_coc(void)
 	static const uint8_t msg[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x42};
 
 	fake_l2cap_send_rc = 0;
-	okc("send ok", aliro_ble_send(7, msg, sizeof(msg)) == 0);
+	okc("send ok", ultrawidelock_ble_send(7, msg, sizeof(msg)) == 0);
 	okc("send bytes on wire", fake_l2cap_sent_len == sizeof(msg) &&
 	    memcmp(fake_l2cap_sent, msg, sizeof(msg)) == 0);
 
 	/* ESTALLED counts as queued. */
 	fake_l2cap_send_rc = BLE_HS_ESTALLED;
-	okc("send stalled = queued", aliro_ble_send(7, msg, sizeof(msg)) == 0);
+	okc("send stalled = queued", ultrawidelock_ble_send(7, msg, sizeof(msg)) == 0);
 
 	/* Hard send failure frees the SDU. */
 	fake_l2cap_send_rc = 5;
 	fake_mbuf_frees = 0;
-	okc("send hard failure", aliro_ble_send(7, msg, sizeof(msg)) == -1 &&
+	okc("send hard failure", ultrawidelock_ble_send(7, msg, sizeof(msg)) == -1 &&
 	    fake_mbuf_frees == 1);
 	fake_l2cap_send_rc = 0;
 
 	/* Argument + no-channel + alloc/append failures. */
-	okc("send NULL data", aliro_ble_send(7, NULL, 5) == -1);
-	okc("send zero len", aliro_ble_send(7, msg, 0) == -1);
-	okc("send unknown conn", aliro_ble_send(42, msg, sizeof(msg)) == -1);
+	okc("send NULL data", ultrawidelock_ble_send(7, NULL, 5) == -1);
+	okc("send zero len", ultrawidelock_ble_send(7, msg, 0) == -1);
+	okc("send unknown conn", ultrawidelock_ble_send(42, msg, sizeof(msg)) == -1);
 	fake_mbuf_alloc_fail = 1;
-	okc("send alloc failure", aliro_ble_send(7, msg, sizeof(msg)) == -1);
+	okc("send alloc failure", ultrawidelock_ble_send(7, msg, sizeof(msg)) == -1);
 	fake_mbuf_alloc_fail = 0;
 	fake_mbuf_append_rc = BLE_HS_ENOMEM;
 	fake_mbuf_frees = 0;
-	okc("send append failure frees", aliro_ble_send(7, msg, sizeof(msg)) == -1 &&
+	okc("send append failure frees", ultrawidelock_ble_send(7, msg, sizeof(msg)) == -1 &&
 	    fake_mbuf_frees == 1);
 	fake_mbuf_append_rc = 0;
 
@@ -527,7 +528,7 @@ static void t_l2cap_coc(void)
 	lev.connect.chan = chanB;
 	okc("second coc connect (table full)",
 	    fake_l2cap_event_cb(&lev, fake_l2cap_event_arg) == 0);
-	okc("send to untracked conn fails", aliro_ble_send(8, msg, sizeof(msg)) == -1);
+	okc("send to untracked conn fails", ultrawidelock_ble_send(8, msg, sizeof(msg)) == -1);
 
 	/* DATA_RECEIVED dispatches to on_data and re-arms. */
 	struct os_mbuf sdu = {0};
@@ -566,7 +567,7 @@ static void t_l2cap_coc(void)
 	s_disc_count = 0;
 	okc("coc disconnected", fake_l2cap_event_cb(&lev, fake_l2cap_event_arg) == 0 &&
 	    s_disc_count == 1 && s_disc_evts[0] == 7);
-	okc("send after disconnect fails", aliro_ble_send(7, msg, sizeof(msg)) == -1);
+	okc("send after disconnect fails", ultrawidelock_ble_send(7, msg, sizeof(msg)) == -1);
 
 	/* Unknown / repeat-disconnect events are tolerated. */
 	okc("repeat disconnect tolerated",
@@ -597,17 +598,17 @@ static void t_marshaling(void)
 
 	/* Reader-status post: queued, then runs on the drained \"host task\". */
 	fake_eventq_count = 0;
-	aliro_ble_post_reader_status(status_cb, true);
+	ultrawidelock_ble_post_reader_status(status_cb, true);
 	okc("status posted not yet run", fake_eventq_count == 1 && s_status_calls == 0);
 	fake_nimble_drain_eventq();
 	okc("status ran unsecured=true", s_status_calls == 1 && s_status_flag == true);
-	aliro_ble_post_reader_status(status_cb, false);
+	ultrawidelock_ble_post_reader_status(status_cb, false);
 	fake_nimble_drain_eventq();
 	okc("status ran unsecured=false", s_status_calls == 2 && s_status_flag == false);
 
 	/* Presence reset uses its own event slot and runs on that same host task. */
 	fake_eventq_count = 0;
-	aliro_ble_post_presence_reset(presence_reset_cb);
+	ultrawidelock_ble_post_presence_reset(presence_reset_cb);
 	okc("presence reset posted not yet run",
 	    fake_eventq_count == 1 && s_presence_reset_calls == 0);
 	fake_nimble_drain_eventq();
@@ -615,7 +616,7 @@ static void t_marshaling(void)
 
 	/* time_updated after attach posts the refresh event. */
 	fake_eventq_count = 0;
-	aliro_ble_time_updated();
+	ultrawidelock_ble_time_updated();
 	okc("time_updated posts refresh", fake_eventq_count == 1);
 
 	/* Refresh with the advertiser up: stop + re-derive + restart. */
@@ -633,7 +634,7 @@ static void t_marshaling(void)
 	okc("refresh re-derived expiry", expiry == (uint32_t)s_fake_now + 900u);
 
 	/* Refresh while the advertiser is paused: no restart. */
-	aliro_ble_time_updated();
+	ultrawidelock_ble_time_updated();
 	fake_gap_adv_active_val = 0;
 	fake_gap_adv_starts = 0;
 	fake_nimble_drain_eventq();
@@ -645,12 +646,12 @@ static void t_leftover_branches(void)
 	printf("-- H: leftover branches --\n");
 
 	/* timesync_procedure_1 feature bit (bit 1) in the READ payload. */
-	struct aliro_ble_config cfg = base_cfg();
+	struct ultrawidelock_ble_config cfg = base_cfg();
 
 	cfg.features.timesync_procedure_0 = false;
 	cfg.features.timesync_procedure_1 = true;
 	cfg.features.le_coded_phy = false;
-	okc("re-prepare (proc-1 only)", aliro_ble_prepare(&cfg) == 0);
+	okc("re-prepare (proc-1 only)", ultrawidelock_ble_prepare(&cfg) == 0);
 
 	struct os_mbuf om = {0};
 	struct ble_gatt_access_ctxt ctxt = {.om = &om};
@@ -660,7 +661,7 @@ static void t_leftover_branches(void)
 
 	/* L2CAP server registration failure is logged + absorbed. */
 	fake_l2cap_create_server_rc = 7;
-	okc("l2cap server failure absorbed", aliro_ble_start_attached() == 0);
+	okc("l2cap server failure absorbed", ultrawidelock_ble_start_attached() == 0);
 	fake_l2cap_create_server_rc = 0;
 
 	/* CONN_UPDATE when the connection has already vanished. */
@@ -682,10 +683,10 @@ static void t_rssi_gate_poll(void)
 	printf("-- G: RSSI power-gate poll --\n");
 
 	/* on_rssi non-NULL turns the poll on; base_cfg leaves it off. */
-	struct aliro_ble_config cfg = base_cfg();
+	struct ultrawidelock_ble_config cfg = base_cfg();
 
 	cfg.cb.on_rssi = on_rssi;
-	okc("prepare with on_rssi", aliro_ble_prepare(&cfg) == 0);
+	okc("prepare with on_rssi", ultrawidelock_ble_prepare(&cfg) == 0);
 
 	struct ble_l2cap_chan *chan = (struct ble_l2cap_chan *)0x3333;
 	struct ble_l2cap_event lev = {0};
@@ -729,15 +730,15 @@ static void t_rssi_gate_poll(void)
 	/* Reader-initiated disconnect (gate close on a departed peer). */
 	fake_gap_terminate_calls = 0;
 	fake_gap_terminate_rc = 0;
-	okc("disconnect ok", aliro_ble_disconnect(9) == 0);
+	okc("disconnect ok", ultrawidelock_ble_disconnect(9) == 0);
 	okc("terminated with remote-user reason", fake_gap_terminate_calls == 1 &&
 	    fake_gap_terminate_reason == BLE_ERR_REM_USER_CONN_TERM);
 
 	/* Already-gone tolerated; a hard failure surfaces. */
 	fake_gap_terminate_rc = BLE_HS_ENOTCONN;
-	okc("already-gone tolerated", aliro_ble_disconnect(9) == 0);
+	okc("already-gone tolerated", ultrawidelock_ble_disconnect(9) == 0);
 	fake_gap_terminate_rc = 5;
-	okc("hard terminate failure surfaces", aliro_ble_disconnect(9) == -1);
+	okc("hard terminate failure surfaces", ultrawidelock_ble_disconnect(9) == -1);
 	fake_gap_terminate_rc = 0;
 }
 

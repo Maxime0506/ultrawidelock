@@ -1,4 +1,4 @@
-/* sdkfake host/ble_hs.h — the slice of the NimBLE host API aliro_ble.c uses,
+/* sdkfake host/ble_hs.h — the slice of the NimBLE host API ultrawidelock_ble.c uses,
  * as recording doubles (fake_nimble.c). Types carry only the fields touched. */
 #ifndef SDKFAKE_HOST_BLE_HS_H
 #define SDKFAKE_HOST_BLE_HS_H

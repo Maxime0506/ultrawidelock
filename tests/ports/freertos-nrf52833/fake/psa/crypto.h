@@ -2,7 +2,7 @@
  * The single PSA entry point the port's own crypto sources call.
  *
  * Nothing else of PSA is modelled here on purpose. The port does not wrap the
- * PSA API -- modules/woz_aliro/src/aliro_prim_psa.c calls it directly and is
+ * PSA API -- modules/ultrawidelock_cred/src/ultrawidelock_prim_psa.c calls it directly and is
  * covered by the shared host suite against tests/host/psafake. All this port
  * adds is the bring-up, so this fake only has to be able to succeed, to fail,
  * and to say whether the threading callbacks were installed before it ran.

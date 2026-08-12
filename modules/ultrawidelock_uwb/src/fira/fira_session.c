@@ -8,7 +8,7 @@
 
 #include "fira_session.h"
 
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 #include "cred_kdf.h"
 
 /* Aliro URSK stash: the Pre-POLL decode reads it to derive the CCC STS. */
@@ -36,7 +36,7 @@ uint32_t fira_session_current_slot(void)
 	/* The live index comes from the air, so this diagnostic counter is inert and reads 0. */
 	return 0u;
 }
-#endif /* CONFIG_WOZ_ALIRO */
+#endif /* CONFIG_ULTRAWIDELOCK_CRED */
 
 /* Last valid DS-TWR range, latched for the Aliro mRangingData seam and the shell. */
 static bool g_have_range;
@@ -47,7 +47,7 @@ static uint32_t g_last_range_block;
 static int64_t g_last_range_ms;
 /* Layer 4: run length of consecutive plausible, mutually consistent blocks. */
 static uint8_t g_range_trust;
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 /* Layer 2 evidence for the block currently being latched, published by the RX
  * path just before the latch. Cleared on consumption so a latch that arrives
  * without fresh diagnostics cannot inherit the previous block's good verdict. */
@@ -66,7 +66,7 @@ static int16_t g_sts_quality_min;
 /* Post-challenge freshness epoch. Written after every accepted latch, so a
  * reader that observes a newer generation also observes the associated range. */
 static volatile uint32_t g_range_generation;
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 /* Fired (from the UWB RX path) after each accepted latch, so the unlock seam
  * can wake on fresh ranges instead of polling. Keep the callback tiny. */
 static void (*g_range_listener)(void);
@@ -97,7 +97,7 @@ bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out, uint8_t *nlos_
 	return true;
 }
 
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 bool fira_session_range_plausible(int32_t cm)
 {
 	return cm >= -FIRA_RANGE_NEG_TOL_CM && cm <= FIRA_RANGE_MAX_CM;
@@ -231,4 +231,4 @@ void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block)
 		g_range_listener();
 	}
 }
-#endif /* CONFIG_WOZ_ALIRO */
+#endif /* CONFIG_ULTRAWIDELOCK_CRED */

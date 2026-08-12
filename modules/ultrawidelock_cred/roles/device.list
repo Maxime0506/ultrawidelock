@@ -1,0 +1,6 @@
+# woz_aliro role: device/initiator session layer (User-Device end of the
+# Access Protocol). Consumers: the Zephyr initiator and on-target test,
+# ports/esp32/components/ultrawidelock_device.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/ultrawidelock_cred/src/ultrawidelock_device.c
+modules/ultrawidelock_cred/src/ultrawidelock_device_apdu.c

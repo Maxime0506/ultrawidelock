@@ -2,7 +2,7 @@
 
 #include "nfc_select.h"
 #include "nfc_auth.h"
-#include "aliro_stepup.h"
+#include "ultrawidelock_stepup.h"
 #include <ultrawidelock/tlv.h>
 
 #include <stdint.h>
@@ -44,7 +44,8 @@ void test_aliro_nfc(void)
 	};
 	uint16_t version = 0;
 	T_EQ("parse SELECT example",
-	     woz_aliro_parse_select_response(response, sizeof(response), WOZ_ALIRO_SELECT_EXPEDITED, &version),
+	     woz_aliro_parse_select_response(response, sizeof(response), WOZ_ALIRO_SELECT_EXPEDITED,
+					     &version),
 	     WOZ_ALIRO_SELECT_OK);
 	T_EQ("select protocol 1.0", version, 0x0100);
 
@@ -52,30 +53,35 @@ void test_aliro_nfc(void)
 	memcpy(malformed, response, sizeof(response));
 	malformed[sizeof(malformed) - 1] = 0x01;
 	T_EQ("reject unsuccessful status",
-	     woz_aliro_parse_select_response(malformed, sizeof(malformed), WOZ_ALIRO_SELECT_EXPEDITED, &version),
+	     woz_aliro_parse_select_response(malformed, sizeof(malformed),
+					     WOZ_ALIRO_SELECT_EXPEDITED, &version),
 	     WOZ_ALIRO_SELECT_STATUS_ERROR);
 
 	memcpy(malformed, response, sizeof(response));
 	malformed[12] = 0x02;
 	T_EQ("reject wrong selected AID",
-	     woz_aliro_parse_select_response(malformed, sizeof(malformed), WOZ_ALIRO_SELECT_EXPEDITED, &version),
+	     woz_aliro_parse_select_response(malformed, sizeof(malformed),
+					     WOZ_ALIRO_SELECT_EXPEDITED, &version),
 	     WOZ_ALIRO_SELECT_WRONG_APPLICATION);
 
 	memcpy(malformed, response, sizeof(response));
 	malformed[21] = 0x02;
 	T_EQ("reject unsupported version",
-	     woz_aliro_parse_select_response(malformed, sizeof(malformed), WOZ_ALIRO_SELECT_EXPEDITED, &version),
+	     woz_aliro_parse_select_response(malformed, sizeof(malformed),
+					     WOZ_ALIRO_SELECT_EXPEDITED, &version),
 	     WOZ_ALIRO_SELECT_VERSION_NOT_SUPPORTED);
 
 	static const uint8_t long_form[] = { 0xb3, 0x81, 0x80 };
 	struct woz_aliro_tlv tlv;
 	size_t offset = 0;
 	T_EQ("reject truncated long TLV",
-	     woz_aliro_tlv_next(long_form, sizeof(long_form), &offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+	     woz_aliro_tlv_next(long_form, sizeof(long_form), &offset, &tlv),
+	     ULTRAWIDELOCK_CRED_TLV_INVALID);
 	static const uint8_t non_minimal[] = { 0x80, 0x81, 0x01, 0x00 };
 	offset = 0;
 	T_EQ("reject non-minimal DER length",
-	     woz_aliro_tlv_next(non_minimal, sizeof(non_minimal), &offset, &tlv), WOZ_ALIRO_TLV_INVALID);
+	     woz_aliro_tlv_next(non_minimal, sizeof(non_minimal), &offset, &tlv),
+	     ULTRAWIDELOCK_CRED_TLV_INVALID);
 
 	/* Section 14.3 published expedited-standard AUTH0 transcript. */
 	uint8_t reader_ephemeral[WOZ_ALIRO_PUBLIC_KEY_SIZE];
@@ -203,33 +209,35 @@ void test_aliro_nfc(void)
 	uint8_t device_request[256];
 	size_t device_request_length = 0;
 	T_EQ("build step-up DeviceRequest",
-	     aliro_stepup_build_device_request_ex((const uint8_t *)"element2", 8, true,
+	     ultrawidelock_stepup_build_device_request_ex((const uint8_t *)"element2", 8, true,
 						  device_request, sizeof(device_request),
-						  &device_request_length), ALIRO_STEPUP_OK);
+						  &device_request_length), ULTRAWIDELOCK_STEPUP_OK);
 	uint8_t expected_request[128];
-	const size_t expected_request_length = decode_hex(
-		"a2613163312e30613281a16131d8185821a26131a167616c69726f2d61a168656c656d656e7432f5613567616c69726f2d61",
-		expected_request, sizeof(expected_request));
+	const size_t expected_request_length =
+		decode_hex("a2613163312e30613281a16131d8185821a26131a167616c69726f2d61a168656c656d6"
+			   "56e7432f5613567616c69726f2d61",
+			   expected_request, sizeof(expected_request));
 	T_EQ("DeviceRequest vector length", device_request_length, expected_request_length);
 	t_vec("DeviceRequest vector bytes", device_request, device_request_length,
-	      "a2613163312e30613281a16131d8185821a26131a167616c69726f2d61a168656c656d656e7432f5613567616c69726f2d61");
+	      "a2613163312e30613281a16131d8185821a26131a167616c69726f2d61a168656c656d656e7432f56135"
+	      "67616c69726f2d61");
 
 	uint8_t session_data[300];
 	size_t session_data_length = 0;
-	T_EQ("wrap SessionData", aliro_stepup_wrap_sessiondata_raw(device_request,
+	T_EQ("wrap SessionData", ultrawidelock_stepup_wrap_sessiondata_raw(device_request,
 		device_request_length, session_data, sizeof(session_data), &session_data_length), 0);
 	const uint8_t *unwrapped = NULL;
 	size_t unwrapped_length = 0;
-	T_EQ("unwrap SessionData", aliro_stepup_unwrap_sessiondata_raw(session_data,
+	T_EQ("unwrap SessionData", ultrawidelock_stepup_unwrap_sessiondata_raw(session_data,
 		session_data_length, &unwrapped, &unwrapped_length), 0);
 	T_EQ("SessionData payload length", unwrapped_length, device_request_length);
 	T_OK("SessionData round trip", memcmp(unwrapped, device_request, device_request_length) == 0);
 
 	uint8_t do53[320];
 	size_t do53_length = 0;
-	T_EQ("wrap DO53", aliro_stepup_wrap_do53(session_data, session_data_length,
+	T_EQ("wrap DO53", ultrawidelock_stepup_wrap_do53(session_data, session_data_length,
 		do53, sizeof(do53), &do53_length), 0);
-	T_EQ("unwrap DO53", aliro_stepup_unwrap_do53(do53, do53_length,
+	T_EQ("unwrap DO53", ultrawidelock_stepup_unwrap_do53(do53, do53_length,
 		&unwrapped, &unwrapped_length), 0);
 	T_EQ("DO53 payload length", unwrapped_length, session_data_length);
 
@@ -238,13 +246,13 @@ void test_aliro_nfc(void)
 	size_t envelope_length = 0;
 	size_t envelope_offset = 0;
 	bool last = true;
-	T_EQ("build chained ENVELOPE", aliro_stepup_build_envelope_ex(
+	T_EQ("build chained ENVELOPE", ultrawidelock_stepup_build_envelope_ex(
 		do53, do53_length, &envelope_offset, 32, 256, false, envelope,
 		sizeof(envelope), &envelope_length, &last), 0);
 	T_OK("first ENVELOPE is chained", !last && envelope[0] == 0x10 && envelope[1] == 0xc3);
 	T_EQ("chained ENVELOPE has no Le", envelope_length, 5 + 32);
 	while (!last) {
-		T_EQ("build next ENVELOPE", aliro_stepup_build_envelope_ex(
+		T_EQ("build next ENVELOPE", ultrawidelock_stepup_build_envelope_ex(
 			do53, do53_length, &envelope_offset, 32, 256, false, envelope,
 			sizeof(envelope), &envelope_length, &last), 0);
 	}
@@ -259,7 +267,7 @@ void test_aliro_nfc(void)
 		0x53, 0x03, 0x01, 0x02, 0x03, 0xf0,
 	};
 	envelope_offset = 0;
-	T_EQ("build short ENVELOPE with extended support", aliro_stepup_build_envelope_ex(
+	T_EQ("build short ENVELOPE with extended support", ultrawidelock_stepup_build_envelope_ex(
 		small_do53, sizeof(small_do53), &envelope_offset, 240, 240, true,
 		envelope, sizeof(envelope), &envelope_length, &last), 0);
 	T_OK("supported extended ENVELOPE stays short",
@@ -270,31 +278,43 @@ void test_aliro_nfc(void)
 	uint8_t collected[16];
 	size_t collected_length = 0, next_length = 0;
 	const uint8_t first_response[] = { 1, 2, 3, 0x61, 0x04 };
-	T_EQ("collect 61xx response", aliro_stepup_collect_response(first_response,
+	T_EQ("collect 61xx response", ultrawidelock_stepup_collect_response(first_response,
 		sizeof(first_response), collected, sizeof(collected), &collected_length,
-		&next_length), ALIRO_STEPUP_MORE_RESPONSE);
+		&next_length), ULTRAWIDELOCK_STEPUP_MORE_RESPONSE);
 	T_EQ("61xx suggested length", next_length, 4);
 	uint8_t get_response[8];
 	size_t get_response_length = 0;
-	T_EQ("build GET RESPONSE", aliro_stepup_build_get_response_ex(next_length,
+	T_EQ("build GET RESPONSE", ultrawidelock_stepup_build_get_response_ex(next_length,
 		get_response, sizeof(get_response), &get_response_length), 0);
 	static const uint8_t expected_get_response[] = { 0, 0xc0, 0, 0, 4 };
 	T_OK("GET RESPONSE bytes", get_response_length == sizeof(expected_get_response) &&
 		memcmp(get_response, expected_get_response, sizeof(expected_get_response)) == 0);
 	const uint8_t final_response[] = { 4, 5, 0x90, 0x00 };
-	T_EQ("collect final response", aliro_stepup_collect_response(final_response,
+	T_EQ("collect final response", ultrawidelock_stepup_collect_response(final_response,
 		sizeof(final_response), collected, sizeof(collected), &collected_length,
-		&next_length), ALIRO_STEPUP_OK);
+		&next_length), ULTRAWIDELOCK_STEPUP_OK);
 	T_EQ("collected response length", collected_length, 5);
 
 	/* Published plaintext DeviceResponse: pin compact aliases and the views
 	 * consumed by the cryptographic validation layer. */
 	uint8_t device_response[768];
 	const size_t device_response_length = decode_hex(
-		"a3613163312e30613281a26131a26131a167616c69726f2d6181d8185838a4613101613258200aa260c85ca2f6eca90016720a1d7c7c160baf9cfa1a5aa4156331b71863b426613368656c656d656e74326134a1000161328443a10126a104478ea23b8fe54e51590133d81859012ea7613163312e306132675348412d3235366133a167616c69726f2d61a3005820b193e9b1fd40d43aee51f794fb2754f537a12104b743f53ede26d4a74ef604660158202f6f396adb893a91242c60f3b3a32237c90f543cbbed2bf10398ac228955b7e902582095feb0333d71a311b94921230db1bcd094629c01d0fe5e1f2ab6d888b8997ca36134a16134a40102200121582096313d6c63e24e3372742bfdb1a33ba2c897dcd68ab8c753e4fbd48dca6b7f9a2258201fb3269edd418857de1b39a4e4a44b92fa484caa722c228288f01d0c03a2c3d6613567616c69726f2d616136a36131c074323032342d30362d30315431333a33303a30325a6132c074323032342d30362d30315431333a33303a30325a6133c074323032352d30362d30315431333a33303a30325a6137f5584007df311fce5e28c83b5b88e6402fae24250c778eec0c58e06283a7d6ab7037e791307aadb8571b1229e18c49932de464a4dc4f639ad186eb8742099b56a15d17613567616c69726f2d61613300",
+		"a3613163312e30613281a26131a26131a167616c69726f2d6181d8185838a4613101613258200aa260"
+		"c85ca2f6eca90016720a1d7c7c160baf9cfa1a5aa4156331b71863b426613368656c656d656e743261"
+		"34a1000161328443a10126a104478ea23b8fe54e51590133d81859012ea7613163312e306132675348"
+		"412d3235366133a167616c69726f2d61a3005820b193e9b1fd40d43aee51f794fb2754f537a12104b7"
+		"43f53ede26d4a74ef604660158202f6f396adb893a91242c60f3b3a32237c90f543cbbed2bf10398ac"
+		"228955b7e902582095feb0333d71a311b94921230db1bcd094629c01d0fe5e1f2ab6d888b8997ca361"
+		"34a16134a40102200121582096313d6c63e24e3372742bfdb1a33ba2c897dcd68ab8c753e4fbd48dca"
+		"6b7f9a2258201fb3269edd418857de1b39a4e4a44b92fa484caa722c228288f01d0c03a2c3d6613567"
+		"616c69726f2d616136a36131c074323032342d30362d30315431333a33303a30325a6132c074323032"
+		"342d30362d30315431333a33303a30325a6133c074323032352d30362d30315431333a33303a30325a"
+		"6137f5584007df311fce5e28c83b5b88e6402fae24250c778eec0c58e06283a7d6ab7037e791307aad"
+		"b8571b1229e18c49932de464a4dc4f639ad186eb8742099b56a15d17613567616c69726f2d6161330"
+		"0",
 		device_response, sizeof(device_response));
-	static struct aliro_stepup_doc access_document;
-	T_EQ("parse published Access Document", aliro_stepup_parse_response(
+	static struct ultrawidelock_stepup_doc access_document;
+	T_EQ("parse published Access Document", ultrawidelock_stepup_parse_response(
 		device_response, device_response_length, &access_document), 0);
 	T_OK("Access Document digest ID", access_document.n_items == 1 &&
 		strcmp(access_document.items[0].elem_id, "element2") == 0 &&
@@ -324,7 +344,7 @@ void test_aliro_nfc(void)
 		}
 	}
 	T_OK("Access Document deviceKey alias fixture", updated_device_key_alias);
-	T_OK("parse standard deviceKey alias", aliro_stepup_parse_response(
+	T_OK("parse standard deviceKey alias", ultrawidelock_stepup_parse_response(
 		device_response, device_response_length, &access_document) == 0 &&
 		access_document.have_device_key && access_document.device_key[1] == 0x96);
 
@@ -488,13 +508,13 @@ void test_aliro_nfc(void)
 	uint8_t fast_vendor[192];
 	size_t fast_vendor_length = 0;
 	T_EQ("assemble fast key TLV", woz_aliro_tlv_write(fast_vendor, sizeof(fast_vendor),
-	     &fast_vendor_length, 0x86, point, sizeof(point)), WOZ_ALIRO_TLV_OK);
+	     &fast_vendor_length, 0x86, point, sizeof(point)), ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("assemble fast cryptogram TLV", woz_aliro_tlv_write(fast_vendor,
 	     sizeof(fast_vendor), &fast_vendor_length, 0x9d, cryptogram, sizeof(cryptogram)),
-	     WOZ_ALIRO_TLV_OK);
+	     ULTRAWIDELOCK_CRED_TLV_OK);
 	T_EQ("assemble fast vendor TLV", woz_aliro_tlv_write(fast_vendor, sizeof(fast_vendor),
 	     &fast_vendor_length, 0xb2, vendor_extension, sizeof(vendor_extension)),
-	     WOZ_ALIRO_TLV_OK);
+	     ULTRAWIDELOCK_CRED_TLV_OK);
 	fast_vendor[fast_vendor_length++] = 0x90;
 	fast_vendor[fast_vendor_length++] = 0x00;
 	T_EQ("AUTH0 fast response with vendor extension",
@@ -506,7 +526,7 @@ void test_aliro_nfc(void)
 	fast_vendor_length = 0;
 	T_EQ("assemble dangling key TLV", woz_aliro_tlv_write(fast_vendor,
 	     sizeof(fast_vendor), &fast_vendor_length, 0x86, point, sizeof(point)),
-	     WOZ_ALIRO_TLV_OK);
+	     ULTRAWIDELOCK_CRED_TLV_OK);
 	fast_vendor[fast_vendor_length++] = 0x9d;
 	fast_vendor[fast_vendor_length++] = 0x90;
 	fast_vendor[fast_vendor_length++] = 0x00;
@@ -516,10 +536,10 @@ void test_aliro_nfc(void)
 
 	fast_vendor_length = 0;
 	T_EQ("assemble key TLV again", woz_aliro_tlv_write(fast_vendor, sizeof(fast_vendor),
-	     &fast_vendor_length, 0x86, point, sizeof(point)), WOZ_ALIRO_TLV_OK);
+	     &fast_vendor_length, 0x86, point, sizeof(point)), ULTRAWIDELOCK_CRED_TLV_OK);
 	static const uint8_t stray_byte = 0x00;
 	T_EQ("assemble stray TLV", woz_aliro_tlv_write(fast_vendor, sizeof(fast_vendor),
-	     &fast_vendor_length, 0x41, &stray_byte, 1), WOZ_ALIRO_TLV_OK);
+	     &fast_vendor_length, 0x41, &stray_byte, 1), ULTRAWIDELOCK_CRED_TLV_OK);
 	fast_vendor[fast_vendor_length++] = 0x90;
 	fast_vendor[fast_vendor_length++] = 0x00;
 	T_EQ("AUTH0 response rejects stray tag",

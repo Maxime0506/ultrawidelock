@@ -1,8 +1,8 @@
 /*
  * Host known-answer test for the Aliro step-up (Access Document) codec + §7.4
  * verifier. Pure host build (no ESP-IDF, no hardware), compiled from the same
- * aliro_stepup/aliro_stepup_parse/aliro_crypto/aliro_hash sources as the target,
- * with aliro_prim_host.c as the AES-GCM double.
+ * ultrawidelock_stepup/ultrawidelock_stepup_parse/ultrawidelock_crypto/ultrawidelock_hash sources
+ * as the target, with aliro_prim_host.c as the AES-GCM double.
  *
  * Two anchor sets:
  *   §14.6  the spec worked example — StepUpSK -> SKReader/SKDevice, the
@@ -17,10 +17,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_crypto.h"
-#include "aliro_hash.h"
-#include "aliro_prim.h"
-#include "aliro_stepup.h"
+#include "ultrawidelock_crypto.h"
+#include "ultrawidelock_hash.h"
+#include "ultrawidelock_prim.h"
+#include "ultrawidelock_stepup.h"
 
 #include "stepup_vectors.h"
 
@@ -139,24 +139,24 @@ static int stub_verify(const uint8_t pub[65], const uint8_t *msg, size_t len, co
 	return 0; /* MODE_ACCEPT */
 }
 
-static struct aliro_stepup_verify_ctx base_ctx(const uint8_t *kid, size_t kid_len,
+static struct ultrawidelock_stepup_verify_ctx base_ctx(const uint8_t *kid, size_t kid_len,
 					       const uint8_t *pub)
 {
-	static struct aliro_stepup_issuer iss;
+	static struct ultrawidelock_stepup_issuer iss;
 
 	iss.kid = kid;
 	iss.kid_len = kid_len;
 	if (pub) {
 		memcpy(iss.pub, pub, 65);
 	}
-	struct aliro_stepup_verify_ctx ctx = {0};
+	struct ultrawidelock_stepup_verify_ctx ctx = {0};
 
 	ctx.issuers = &iss;
 	ctx.n_issuers = 1;
 	ctx.time_valid = 1;
 	ctx.now_epoch = SV_EPOCH_NOW;
 	ctx.access_iteration = 0;
-	ctx.expected_doctype = ALIRO_STEPUP_DOCTYPE_ACCESS;
+	ctx.expected_doctype = ULTRAWIDELOCK_STEPUP_DOCTYPE_ACCESS;
 	ctx.ecdsa_verify = stub_verify;
 	return ctx;
 }
@@ -166,15 +166,15 @@ static struct aliro_stepup_verify_ctx base_ctx(const uint8_t *kid, size_t kid_le
 static void t_spec_keys_and_codec(void)
 {
 	printf("-- §14.6 keys + SessionData codec --\n");
-	uint8_t block[ALIRO_KEY_BLOCK_LEN] = {0};
+	uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN] = {0};
 	uint8_t stepup[32];
 
 	uh(stepup, K_STEPUP_SK);
-	memcpy(block + ALIRO_STEPUP_SK_OFFSET, stepup, 32);
+	memcpy(block + ULTRAWIDELOCK_STEPUP_SK_OFFSET, stepup, 32);
 
 	uint8_t skr[32], skd[32];
 
-	chk("derive_keys rc", aliro_stepup_derive_keys(block, skr, skd) == 0);
+	chk("derive_keys rc", ultrawidelock_stepup_derive_keys(block, skr, skd) == 0);
 	chk_hex("SKReader", skr, 32, K_SKREADER);
 	chk_hex("SKDevice", skd, 32, K_SKDEVICE);
 
@@ -182,20 +182,20 @@ static void t_spec_keys_and_codec(void)
 	uint8_t dr[128];
 	size_t drn;
 
-	chk("build_device_request rc", aliro_stepup_build_device_request(NULL, 0, dr, sizeof(dr),
+	chk("build_device_request rc", ultrawidelock_stepup_build_device_request(NULL, 0, dr, sizeof(dr),
 									 &drn) == 0);
 	chk_hex("DeviceRequest", dr, drn, K_DEVREQ);
 
 	/* Seal the DeviceRequest -> §14.6 SessionData request (SKReader, ctr 1). */
-	struct aliro_secchan sc;
+	struct ultrawidelock_secchan sc;
 
-	aliro_stepup_channel_init(&sc, skr, skd);
+	ultrawidelock_stepup_channel_init(&sc, skr, skd);
 
 	uint8_t sd[256];
 	size_t sdn;
 
 	chk("seal_sessiondata rc",
-	    aliro_stepup_seal_sessiondata(&sc, dr, drn, sd, sizeof(sd), &sdn) == 0);
+	    ultrawidelock_stepup_seal_sessiondata(&sc, dr, drn, sd, sizeof(sd), &sdn) == 0);
 	chk_hex("SessionData request", sd, sdn, K_SD_REQ);
 
 	/* Open the §14.6 SessionData response -> DeviceResponse (SKDevice, ctr 1). */
@@ -204,7 +204,7 @@ static void t_spec_keys_and_codec(void)
 	uint8_t devresp[600];
 	size_t devn;
 
-	chk("open_sessiondata rc", aliro_stepup_open_sessiondata(&sc, sdresp, sdrespn, devresp,
+	chk("open_sessiondata rc", ultrawidelock_stepup_open_sessiondata(&sc, sdresp, sdrespn, devresp,
 								 sizeof(devresp), &devn) == 0);
 	chk_hex("DeviceResponse (decrypted)", devresp, devn, K_DEVRESP);
 }
@@ -214,9 +214,9 @@ static void t_spec_parse_and_digest(void)
 	printf("-- §14.6 DeviceResponse parse + digest recompute --\n");
 	uint8_t buf[600];
 	size_t n = uh(buf, K_DEVRESP);
-	struct aliro_stepup_doc doc;
+	struct ultrawidelock_stepup_doc doc;
 
-	chk("parse rc", aliro_stepup_parse_response(buf, n, &doc) == 0);
+	chk("parse rc", ultrawidelock_stepup_parse_response(buf, n, &doc) == 0);
 	chk("have_document", doc.have_document == 1);
 	chk("status 0", doc.status == 0);
 	chk("doc_type aliro-a", strcmp(doc.doc_type, "aliro-a") == 0);
@@ -237,19 +237,19 @@ static void t_spec_parse_and_digest(void)
 	uh(want, K_VDIGEST1);
 	uint8_t got[32];
 
-	aliro_sha256(doc.items[0].tagged, doc.items[0].tagged_len, got);
+	ultrawidelock_sha256(doc.items[0].tagged, doc.items[0].tagged_len, got);
 	chk("SHA-256(item)==valueDigests[1]", memcmp(got, want, 32) == 0);
 
 	/* Full verify with the digest/validity/doctype/iteration logic exercised on
 	 * the real spec document; ES256 is ACCEPTED (no issuer key is in §14.6). */
 	uint8_t kid[8];
 	size_t kidn = uh(kid, "8ea23b8fe54e51");
-	struct aliro_stepup_verify_ctx ctx = base_ctx(kid, kidn, NULL);
-	struct aliro_stepup_verdict v;
+	struct ultrawidelock_stepup_verify_ctx ctx = base_ctx(kid, kidn, NULL);
+	struct ultrawidelock_stepup_verdict v;
 
 	g_mode = MODE_ACCEPT;
 	ctx.now_epoch = SV_EPOCH_VALID_FROM; /* inside the window */
-	int rc = aliro_stepup_verify(&doc, &ctx, &v);
+	int rc = ultrawidelock_stepup_verify(&doc, &ctx, &v);
 
 	chk("§14.6 verify valid", rc == 0 && v.valid);
 	chk("§14.6 valid_elements 1", v.valid_elements == 1);
@@ -258,22 +258,22 @@ static void t_spec_parse_and_digest(void)
 	chk("§14.6 time_ok", v.time_ok);
 }
 
-static int verify_bytes(const uint8_t *buf, size_t n, struct aliro_stepup_verify_ctx *ctx,
-			struct aliro_stepup_verdict *v)
+static int verify_bytes(const uint8_t *buf, size_t n, struct ultrawidelock_stepup_verify_ctx *ctx,
+			struct ultrawidelock_stepup_verdict *v)
 {
-	struct aliro_stepup_doc doc;
+	struct ultrawidelock_stepup_doc doc;
 
-	if (aliro_stepup_parse_response(buf, n, &doc) != 0) {
+	if (ultrawidelock_stepup_parse_response(buf, n, &doc) != 0) {
 		return -2;
 	}
-	return aliro_stepup_verify(&doc, ctx, v);
+	return ultrawidelock_stepup_verify(&doc, ctx, v);
 }
 
 static void t_synth_good_and_rejects(void)
 {
 	printf("-- synthetic verifier (real ES256 vectors) --\n");
-	struct aliro_stepup_verify_ctx ctx = base_ctx(SV_KID, SV_KID_len, SV_ISSUER_PUB);
-	struct aliro_stepup_verdict v;
+	struct ultrawidelock_stepup_verify_ctx ctx = base_ctx(SV_KID, SV_KID_len, SV_ISSUER_PUB);
+	struct ultrawidelock_stepup_verdict v;
 
 	/* Good: GOLDEN mode also asserts the exact Sig_structure/sig/pubkey. */
 	g_mode = MODE_GOLDEN;
@@ -336,7 +336,7 @@ static void t_synth_good_and_rejects(void)
 
 	/* Wrong kid -> issuer not found -> step 1. */
 	uint8_t wrong_kid[4] = {0xaa, 0xbb, 0xcc, 0xdd};
-	struct aliro_stepup_verify_ctx wctx = base_ctx(wrong_kid, 4, SV_ISSUER_PUB);
+	struct ultrawidelock_stepup_verify_ctx wctx = base_ctx(wrong_kid, 4, SV_ISSUER_PUB);
 
 	verify_bytes(SV_GOOD, SV_GOOD_len, &wctx, &v);
 	chk("wrong-kid reject step 1", v.reject_step == 1 && !v.issuer_key_found);
@@ -344,7 +344,7 @@ static void t_synth_good_and_rejects(void)
 	/* x5chain: EE key extracted, chain NOT validated, otherwise valid. */
 	g_mode = MODE_GOLDEN;
 	g_golden_ss_ok = 0;
-	struct aliro_stepup_verify_ctx xctx = base_ctx(NULL, 0, NULL);
+	struct ultrawidelock_stepup_verify_ctx xctx = base_ctx(NULL, 0, NULL);
 
 	xctx.n_issuers = 0; /* force x5chain path */
 	rc = verify_bytes(SV_X5CHAIN, SV_X5CHAIN_len, &xctx, &v);
@@ -361,30 +361,30 @@ static void t_synth_good_and_rejects(void)
 
 static void t_run_convenience(void)
 {
-	printf("-- aliro_stepup_run (§14.6 SessionData response) --\n");
-	uint8_t block[ALIRO_KEY_BLOCK_LEN] = {0}, stepup[32], skr[32], skd[32];
+	printf("-- ultrawidelock_stepup_run (§14.6 SessionData response) --\n");
+	uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN] = {0}, stepup[32], skr[32], skd[32];
 
 	uh(stepup, K_STEPUP_SK);
-	memcpy(block + ALIRO_STEPUP_SK_OFFSET, stepup, 32);
-	aliro_stepup_derive_keys(block, skr, skd);
+	memcpy(block + ULTRAWIDELOCK_STEPUP_SK_OFFSET, stepup, 32);
+	ultrawidelock_stepup_derive_keys(block, skr, skd);
 
-	struct aliro_secchan sc;
+	struct ultrawidelock_secchan sc;
 
-	aliro_stepup_channel_init(&sc, skr, skd);
+	ultrawidelock_stepup_channel_init(&sc, skr, skd);
 
 	uint8_t sdresp[600];
 	size_t sdn = uh(sdresp, K_SD_RESP);
 	uint8_t scratch[700];
 	uint8_t kid[8];
 	size_t kidn = uh(kid, "8ea23b8fe54e51");
-	struct aliro_stepup_verify_ctx ctx = base_ctx(kid, kidn, NULL);
+	struct ultrawidelock_stepup_verify_ctx ctx = base_ctx(kid, kidn, NULL);
 
 	ctx.now_epoch = SV_EPOCH_VALID_FROM;
 	g_mode = MODE_ACCEPT;
 
-	struct aliro_stepup_doc doc;
-	struct aliro_stepup_verdict v;
-	int rc = aliro_stepup_run(&sc, sdresp, sdn, &ctx, scratch, sizeof(scratch), &doc, &v);
+	struct ultrawidelock_stepup_doc doc;
+	struct ultrawidelock_stepup_verdict v;
+	int rc = ultrawidelock_stepup_run(&sc, sdresp, sdn, &ctx, scratch, sizeof(scratch), &doc, &v);
 
 	chk("run valid", rc == 0 && v.valid);
 	chk("run doc_type aliro-a", strcmp(doc.doc_type, "aliro-a") == 0);
@@ -417,36 +417,37 @@ static size_t find_pat(const uint8_t *hay, size_t hn, const uint8_t *pat, size_t
 	return (size_t)-1;
 }
 
-static int parse_mut2(size_t o1, uint8_t v1, size_t o2, uint8_t v2, struct aliro_stepup_doc *doc)
+static int parse_mut2(size_t o1, uint8_t v1, size_t o2, uint8_t v2,
+		      struct ultrawidelock_stepup_doc *doc)
 {
 	static uint8_t b[400]; /* static: the doc keeps slices into this buffer */
-	struct aliro_stepup_doc local;
+	struct ultrawidelock_stepup_doc local;
 
 	memcpy(b, SV_GOOD, SV_GOOD_len);
 	b[o1] = v1;
 	b[o2] = v2;
-	return aliro_stepup_parse_response(b, SV_GOOD_len, doc ? doc : &local);
+	return ultrawidelock_stepup_parse_response(b, SV_GOOD_len, doc ? doc : &local);
 }
 
 /* Minimal DeviceResponse {"9": <value>} exercising the unknown-key skipper. */
 static int parse_skipv(const uint8_t *val, size_t vn)
 {
 	uint8_t b[64] = {0xa1, 0x61, 0x39};
-	struct aliro_stepup_doc doc;
+	struct ultrawidelock_stepup_doc doc;
 
 	memcpy(b + 3, val, vn);
-	return aliro_stepup_parse_response(b, 3 + vn, &doc);
+	return ultrawidelock_stepup_parse_response(b, 3 + vn, &doc);
 }
 
 /* SV_GOOD with the status value (offset 334) replaced by an arbitrary tail. */
-static int parse_status_tail(const uint8_t *tail, size_t tn, struct aliro_stepup_doc *doc)
+static int parse_status_tail(const uint8_t *tail, size_t tn, struct ultrawidelock_stepup_doc *doc)
 {
 	uint8_t b[400];
-	struct aliro_stepup_doc local;
+	struct ultrawidelock_stepup_doc local;
 
 	memcpy(b, SV_GOOD, 334);
 	memcpy(b + 334, tail, tn);
-	return aliro_stepup_parse_response(b, 334 + tn, doc ? doc : &local);
+	return ultrawidelock_stepup_parse_response(b, 334 + tn, doc ? doc : &local);
 }
 
 static void t_parse_malformed(void)
@@ -519,14 +520,14 @@ static void t_parse_malformed(void)
 	}
 
 	/* NULL / empty / truncated inputs. */
-	struct aliro_stepup_doc doc;
+	struct ultrawidelock_stepup_doc doc;
 	uint8_t one = 0xa0;
 
-	chk("NULL buf", aliro_stepup_parse_response(NULL, 4, &doc) == -1);
-	chk("NULL doc", aliro_stepup_parse_response(&one, 1, NULL) == -1);
-	chk("empty input", aliro_stepup_parse_response(&one, 0, &doc) == -1);
-	chk("truncated at payload", aliro_stepup_parse_response(SV_GOOD, 150, &doc) == -1);
-	chk("truncated at COSE label", aliro_stepup_parse_response(SV_GOOD, 92, &doc) == -1);
+	chk("NULL buf", ultrawidelock_stepup_parse_response(NULL, 4, &doc) == -1);
+	chk("NULL doc", ultrawidelock_stepup_parse_response(&one, 1, NULL) == -1);
+	chk("empty input", ultrawidelock_stepup_parse_response(&one, 0, &doc) == -1);
+	chk("truncated at payload", ultrawidelock_stepup_parse_response(SV_GOOD, 150, &doc) == -1);
+	chk("truncated at COSE label", ultrawidelock_stepup_parse_response(SV_GOOD, 92, &doc) == -1);
 
 	/* Unknown validity key "4" whose tagged value is skipped (rc 0, no signed). */
 	chk("validity unknown key skip ok",
@@ -545,7 +546,7 @@ static void t_parse_malformed(void)
 		memcpy(b + 185, "0000", 4); /* year */
 		memcpy(b + 190, "01", 2);   /* month <= 2 */
 		chk("date year 0000",
-		    aliro_stepup_parse_response(b, SV_GOOD_len, &doc) == 0 && doc.have_signed &&
+		    ultrawidelock_stepup_parse_response(b, SV_GOOD_len, &doc) == 0 && doc.have_signed &&
 			    doc.signed_epoch < 0);
 	}
 
@@ -558,7 +559,7 @@ static void t_parse_malformed(void)
 		chk("VI pattern found", q != (size_t)-1);
 		memcpy(b, SV_WITH_VI, SV_WITH_VI_len);
 		b[q + 2] = 0x20;
-		chk("VI not uint", aliro_stepup_parse_response(b, SV_WITH_VI_len, &doc) == -1);
+		chk("VI not uint", ultrawidelock_stepup_parse_response(b, SV_WITH_VI_len, &doc) == -1);
 	}
 
 	/* x5chain value that cannot be skipped (mutated SV_X5CHAIN). */
@@ -570,7 +571,7 @@ static void t_parse_malformed(void)
 		chk("x5chain pattern found", q != (size_t)-1);
 		memcpy(b, SV_X5CHAIN, SV_X5CHAIN_len);
 		b[q + 2] = 0x7f;
-		chk("x5chain skip fail", aliro_stepup_parse_response(b, SV_X5CHAIN_len, &doc) == -1);
+		chk("x5chain skip fail", ultrawidelock_stepup_parse_response(b, SV_X5CHAIN_len, &doc) == -1);
 	}
 
 	/* CBOR head argument widths on the status value. */
@@ -591,7 +592,7 @@ static void t_parse_malformed(void)
 	{
 		uint8_t b = 0xbf; /* indefinite map */
 
-		chk("indefinite map", aliro_stepup_parse_response(&b, 1, &doc) == -1);
+		chk("indefinite map", ultrawidelock_stepup_parse_response(&b, 1, &doc) == -1);
 	}
 
 	/* Generic skipper: array / map / tag / simple / depth / truncation. */
@@ -628,13 +629,13 @@ static void t_parse_malformed(void)
 		b[334] = 0x33;
 		b[335] = 0x00; /* "3": 0 */
 		chk("second document skipped",
-		    aliro_stepup_parse_response(b, 336, &doc) == 0 && doc.have_document &&
+		    ultrawidelock_stepup_parse_response(b, 336, &doc) == 0 && doc.have_document &&
 			    doc.n_items == 1);
 		b[332] = 0xff;
-		chk("second document skip fail", aliro_stepup_parse_response(b, 336, &doc) == -1);
+		chk("second document skip fail", ultrawidelock_stepup_parse_response(b, 336, &doc) == -1);
 	}
 
-	/* ALIRO_STEPUP_MAX_ITEMS parsed, the 17th falls to the skipper. */
+	/* ULTRAWIDELOCK_STEPUP_MAX_ITEMS parsed, the 17th falls to the skipper. */
 	{
 		static const uint8_t hdr[] = {0xa1, 0x61, 0x32, 0x81, 0xa1, 0x61, 0x31,
 					      0xa1, 0x61, 0x31, 0xa1, 0x61, 0x6e, 0x91};
@@ -648,17 +649,17 @@ static void t_parse_malformed(void)
 			n += sizeof(item);
 		}
 		b[n] = 0x00; /* 17th item: skipped */
-		chk("17th item skipped", aliro_stepup_parse_response(b, n + 1, &doc) == 0 &&
-						 doc.n_items == ALIRO_STEPUP_MAX_ITEMS);
+		chk("17th item skipped", ultrawidelock_stepup_parse_response(b, n + 1, &doc) == 0 &&
+						 doc.n_items == ULTRAWIDELOCK_STEPUP_MAX_ITEMS);
 		b[n] = 0xff;
-		chk("17th item skip fail", aliro_stepup_parse_response(b, n + 1, &doc) == -1);
+		chk("17th item skip fail", ultrawidelock_stepup_parse_response(b, n + 1, &doc) == -1);
 	}
 }
 
 /* ---- writer/APDU/SessionData edges + verifier seams ----------------------- */
 
 /* SV_X5CHAIN with the 102-byte x5chain value spliced out for an alternative. */
-static int x5_splice(const uint8_t *val, size_t vn, struct aliro_stepup_doc *doc)
+static int x5_splice(const uint8_t *val, size_t vn, struct ultrawidelock_stepup_doc *doc)
 {
 	static const uint8_t pat[] = {0x18, 0x21, 0x58, 0x64};
 	size_t q = find_pat(SV_X5CHAIN, SV_X5CHAIN_len, pat, sizeof(pat));
@@ -674,7 +675,7 @@ static int x5_splice(const uint8_t *val, size_t vn, struct aliro_stepup_doc *doc
 	n += vn;
 	memcpy(b + n, SV_X5CHAIN + q + 2 + 102, SV_X5CHAIN_len - (q + 2 + 102));
 	n += SV_X5CHAIN_len - (q + 2 + 102);
-	return aliro_stepup_parse_response(b, n, doc);
+	return ultrawidelock_stepup_parse_response(b, n, doc);
 }
 
 static void t_stepup_edges(void)
@@ -694,35 +695,35 @@ static void t_stepup_edges(void)
 		uint8_t dr[256];
 
 		chk("devreq long elem",
-		    aliro_stepup_build_device_request(elems, 1, dr, sizeof(dr), &n) == -1);
+		    ultrawidelock_stepup_build_device_request(elems, 1, dr, sizeof(dr), &n) == -1);
 		chk("devreq tiny cap",
-		    aliro_stepup_build_device_request(NULL, 0, dr, 4, &n) == -1);
+		    ultrawidelock_stepup_build_device_request(NULL, 0, dr, 4, &n) == -1);
 	}
 
 	/* Seal/open edges over a real channel. */
-	uint8_t block[ALIRO_KEY_BLOCK_LEN] = {0}, stepup[32], skr[32], skd[32];
+	uint8_t block[ULTRAWIDELOCK_KEY_BLOCK_LEN] = {0}, stepup[32], skr[32], skd[32];
 
 	uh(stepup, K_STEPUP_SK);
-	memcpy(block + ALIRO_STEPUP_SK_OFFSET, stepup, 32);
-	aliro_stepup_derive_keys(block, skr, skd);
+	memcpy(block + ULTRAWIDELOCK_STEPUP_SK_OFFSET, stepup, 32);
+	ultrawidelock_stepup_derive_keys(block, skr, skd);
 
-	struct aliro_secchan sc;
+	struct ultrawidelock_secchan sc;
 
-	aliro_stepup_channel_init(&sc, skr, skd);
+	ultrawidelock_stepup_channel_init(&sc, skr, skd);
 	{
 		uint8_t plain[500] = {0};
 		uint8_t sd[600];
 
 		chk("seal plaintext too big",
-		    aliro_stepup_seal_sessiondata(&sc, plain, 500, sd, sizeof(sd), &n) == -1);
+		    ultrawidelock_stepup_seal_sessiondata(&sc, plain, 500, sd, sizeof(sd), &n) == -1);
 		chk("seal out cap too small",
-		    aliro_stepup_seal_sessiondata(&sc, plain, 4, sd, 6, &n) == -1);
+		    ultrawidelock_stepup_seal_sessiondata(&sc, plain, 4, sd, 6, &n) == -1);
 
-		struct aliro_secchan dead = sc;
+		struct ultrawidelock_secchan dead = sc;
 
 		dead.enc_ctr = 0xffffffffu;
 		chk("seal counter exhausted",
-		    aliro_stepup_seal_sessiondata(&dead, plain, 4, sd, sizeof(sd), &n) == -1);
+		    ultrawidelock_stepup_seal_sessiondata(&dead, plain, 4, sd, sizeof(sd), &n) == -1);
 	}
 	{
 		static const uint8_t bad_prefix[8] = {0};
@@ -738,43 +739,44 @@ static void t_stepup_edges(void)
 		uint8_t pt[64];
 
 		chk("open bad prefix",
-		    aliro_stepup_open_sessiondata(&sc, bad_prefix, 8, pt, sizeof(pt), &n) == -1);
+		    ultrawidelock_stepup_open_sessiondata(&sc, bad_prefix, 8, pt, sizeof(pt), &n) == -1);
 		chk("open short-form GCM fail",
-		    aliro_stepup_open_sessiondata(&sc, short_form, sizeof(short_form), pt,
+		    ultrawidelock_stepup_open_sessiondata(&sc, short_form, sizeof(short_form), pt,
 						  sizeof(pt), &n) == -1);
 
 		uint8_t byte_form[7 + 1 + 32] = {0xa1, 0x64, 0x64, 0x61,
 						 0x74, 0x61, 0x58, 0x20}; /* bstr(32), 1-byte len */
 
 		chk("open 0x58-form GCM fail",
-		    aliro_stepup_open_sessiondata(&sc, byte_form, sizeof(byte_form), pt, sizeof(pt),
+		    ultrawidelock_stepup_open_sessiondata(&sc, byte_form, sizeof(byte_form), pt, sizeof(pt),
 						  &n) == -1);
 		chk("open 0x59 truncated",
-		    aliro_stepup_open_sessiondata(&sc, trunc59, sizeof(trunc59), pt, sizeof(pt),
+		    ultrawidelock_stepup_open_sessiondata(&sc, trunc59, sizeof(trunc59), pt, sizeof(pt),
 						  &n) == -1);
 		chk("open bad length byte",
-		    aliro_stepup_open_sessiondata(&sc, bad_ib, sizeof(bad_ib), pt, sizeof(pt),
+		    ultrawidelock_stepup_open_sessiondata(&sc, bad_ib, sizeof(bad_ib), pt, sizeof(pt),
 						  &n) == -1);
 		chk("open blob under tag len",
-		    aliro_stepup_open_sessiondata(&sc, tiny_blob, sizeof(tiny_blob), pt, sizeof(pt),
+		    ultrawidelock_stepup_open_sessiondata(&sc, tiny_blob, sizeof(tiny_blob), pt, sizeof(pt),
 						  &n) == -1);
 
 		uint8_t sdresp[600];
 		size_t sdn = uh(sdresp, K_SD_RESP);
 
 		chk("open out cap too small",
-		    aliro_stepup_open_sessiondata(&sc, sdresp, sdn, pt, 4, &n) == -1);
+		    ultrawidelock_stepup_open_sessiondata(&sc, sdresp, sdn, pt, 4, &n) == -1);
 	}
 
 	/* APDU builder bounds. */
-	chk("envelope zero len", aliro_stepup_build_envelope(out, 0, 0, out, sizeof(out), &n) == -1);
-	chk("envelope cap too small", aliro_stepup_build_envelope(out, 32, 0, out, 8, &n) == -1);
-	chk("get_response cap too small", aliro_stepup_build_get_response(0, out, 4, &n) == -1);
+	chk("envelope zero len",
+	    ultrawidelock_stepup_build_envelope(out, 0, 0, out, sizeof(out), &n) == -1);
+	chk("envelope cap too small", ultrawidelock_stepup_build_envelope(out, 32, 0, out, 8, &n) == -1);
+	chk("get_response cap too small", ultrawidelock_stepup_build_get_response(0, out, 4, &n) == -1);
 
 	/* Oversized protected header: Sig_structure build fails -> reject step 2. */
-	struct aliro_stepup_verify_ctx ctx = base_ctx(SV_KID, SV_KID_len, SV_ISSUER_PUB);
-	struct aliro_stepup_verdict v;
-	struct aliro_stepup_doc doc;
+	struct ultrawidelock_stepup_verify_ctx ctx = base_ctx(SV_KID, SV_KID_len, SV_ISSUER_PUB);
+	struct ultrawidelock_stepup_verdict v;
+	struct ultrawidelock_stepup_doc doc;
 
 	g_mode = MODE_ACCEPT;
 	{
@@ -790,9 +792,9 @@ static void t_stepup_edges(void)
 		bn += 600;
 		memcpy(b + bn, SV_GOOD + 91, SV_GOOD_len - 91);
 		bn += SV_GOOD_len - 91;
-		chk("big-protected parse", aliro_stepup_parse_response(b, bn, &doc) == 0);
+		chk("big-protected parse", ultrawidelock_stepup_parse_response(b, bn, &doc) == 0);
 		chk("big-protected reject step 2",
-		    aliro_stepup_verify(&doc, &ctx, &v) == -1 && v.reject_step == 2 && !v.sig_ok);
+		    ultrawidelock_stepup_verify(&doc, &ctx, &v) == -1 && v.reject_step == 2 && !v.sig_ok);
 	}
 
 	/* >=64 KiB payload: CBOR writer takes the 4-byte-length arm, then errors. */
@@ -820,9 +822,9 @@ static void t_stepup_edges(void)
 		bn += 70000 - 152;
 		memcpy(b + bn, SV_GOOD + 256, SV_GOOD_len - 256); /* sig + docType + status */
 		bn += SV_GOOD_len - 256;
-		chk("huge-payload parse", aliro_stepup_parse_response(b, bn, &doc) == 0);
+		chk("huge-payload parse", ultrawidelock_stepup_parse_response(b, bn, &doc) == 0);
 		chk("huge-payload reject step 2",
-		    aliro_stepup_verify(&doc, &ctx, &v) == -1 && v.reject_step == 2 && !v.sig_ok);
+		    ultrawidelock_stepup_verify(&doc, &ctx, &v) == -1 && v.reject_step == 2 && !v.sig_ok);
 	}
 
 	/* x5chain too short / without an SPKI marker -> issuer key not found. */
@@ -831,10 +833,10 @@ static void t_stepup_edges(void)
 		uint8_t nomark[72] = {0x58, 0x46, 0}; /* bstr(70) of zeros */
 
 		chk("x5chain tiny parse", x5_splice(tiny, sizeof(tiny), &doc) == 0);
-		aliro_stepup_verify(&doc, &ctx, &v);
+		ultrawidelock_stepup_verify(&doc, &ctx, &v);
 		chk("x5chain tiny reject step 1", v.reject_step == 1 && !v.issuer_key_found);
 		chk("x5chain no-marker parse", x5_splice(nomark, sizeof(nomark), &doc) == 0);
-		aliro_stepup_verify(&doc, &ctx, &v);
+		ultrawidelock_stepup_verify(&doc, &ctx, &v);
 		chk("x5chain no-marker reject step 1", v.reject_step == 1 && !v.issuer_key_found);
 	}
 
@@ -844,46 +846,46 @@ static void t_stepup_edges(void)
 		g_mode = MODE_GOLDEN;
 		g_golden_ss_ok = 0;
 		chk("no-kid single-issuer valid",
-		    aliro_stepup_verify(&doc, &ctx, &v) == 0 && v.valid && g_golden_ss_ok);
+		    ultrawidelock_stepup_verify(&doc, &ctx, &v) == 0 && v.valid && g_golden_ss_ok);
 		g_mode = MODE_ACCEPT;
 
-		struct aliro_stepup_verify_ctx zctx = ctx;
+		struct ultrawidelock_stepup_verify_ctx zctx = ctx;
 
 		zctx.n_issuers = 0;
-		aliro_stepup_verify(&doc, &zctx, &v);
+		ultrawidelock_stepup_verify(&doc, &zctx, &v);
 		chk("no-kid zero-issuer reject step 1", v.reject_step == 1);
 	}
 
 	/* Disclosed item whose digestID has no valueDigests entry -> step 3. */
 	{
 		chk("unknown digestID parse", parse_mut2(33, 0x08, 33, 0x08, &doc) == 0);
-		aliro_stepup_verify(&doc, &ctx, &v);
+		ultrawidelock_stepup_verify(&doc, &ctx, &v);
 		chk("unknown digestID reject step 3",
 		    v.reject_step == 3 && v.valid_elements == 0);
 	}
 
-	/* aliro_stepup_run early-outs: SessionData open fails, then parse fails. */
+	/* ultrawidelock_stepup_run early-outs: SessionData open fails, then parse fails. */
 	{
 		static const uint8_t junk[8] = {0};
 		uint8_t scratch[64];
 
-		chk("run open fail", aliro_stepup_run(&sc, junk, sizeof(junk), &ctx, scratch,
+		chk("run open fail", ultrawidelock_stepup_run(&sc, junk, sizeof(junk), &ctx, scratch,
 						      sizeof(scratch), &doc, &v) == -1);
 
 		/* Seal invalid CBOR in the device direction so open succeeds. */
-		struct aliro_secchan sc2;
+		struct ultrawidelock_secchan sc2;
 
-		aliro_stepup_channel_init(&sc2, skr, skd);
+		ultrawidelock_stepup_channel_init(&sc2, skr, skd);
 
-		uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+		uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 		uint8_t pt[2] = {0xff, 0xff};
 		uint8_t sd[7 + 18] = {0xa1, 0x64, 0x64, 0x61, 0x74, 0x61, 0x52};
 
-		aliro_crypto_gcm_nonce(1, 1, nonce);
+		ultrawidelock_crypto_gcm_nonce(1, 1, nonce);
 		chk("device-direction seal",
-		    aliro_aes256_gcm_encrypt(skd, nonce, sizeof(nonce), NULL, 0, pt, 2, sd + 7,
-					     sd + 9, ALIRO_GCM_TAG_LEN) == 0);
-		chk("run parse fail", aliro_stepup_run(&sc2, sd, sizeof(sd), &ctx, scratch,
+		    ultrawidelock_aes256_gcm_encrypt(skd, nonce, sizeof(nonce), NULL, 0, pt, 2, sd + 7,
+					     sd + 9, ULTRAWIDELOCK_GCM_TAG_LEN) == 0);
+		chk("run parse fail", ultrawidelock_stepup_run(&sc2, sd, sizeof(sd), &ctx, scratch,
 						       sizeof(scratch), &doc, &v) == -1);
 	}
 }
@@ -895,18 +897,18 @@ static void t_apdu_builders(void)
 	uint8_t out[32];
 	size_t n;
 
-	chk("envelope rc", aliro_stepup_build_envelope(data, 4, 0, out, sizeof(out), &n) == 0);
+	chk("envelope rc", ultrawidelock_stepup_build_envelope(data, 4, 0, out, sizeof(out), &n) == 0);
 	chk_hex("envelope", out, n, "00c3000004a164646100");
 	chk("envelope chaining CLA 0x10",
-	    aliro_stepup_build_envelope(data, 4, 1, out, sizeof(out), &n) == 0 && out[0] == 0x10);
-	chk("get_response rc", aliro_stepup_build_get_response(0x20, out, sizeof(out), &n) == 0);
+	    ultrawidelock_stepup_build_envelope(data, 4, 1, out, sizeof(out), &n) == 0 && out[0] == 0x10);
+	chk("get_response rc", ultrawidelock_stepup_build_get_response(0x20, out, sizeof(out), &n) == 0);
 	chk_hex("get_response", out, n, "00c0000020");
 }
 
 int main(void)
 {
-	aliro_prim_init();
-	aliro_crypto_init();
+	ultrawidelock_prim_init();
+	ultrawidelock_crypto_init();
 
 	t_spec_keys_and_codec();
 	t_spec_parse_and_digest();

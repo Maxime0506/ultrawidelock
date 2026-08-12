@@ -172,7 +172,7 @@ float ultrawidelock_ml_los_fp_resid(float fp_pwr_db, uint16_t dist_cm);
  * FEED IT A FILTERED RANGE, NOT ONE RECEPTION. The obstructed captures had
  * interquartile spreads of 38 and 47.5 cm against 7 and 11.5 for clear, so a
  * single obstructed reception is a poor estimate of anything and this correction
- * does not make it a better one. aliro_approach already takes a median over its
+ * does not make it a better one. ultrawidelock_approach already takes a median over its
  * window; that is the quantity to correct.
  *
  * @param reported_cm  the range as the reader produced it.

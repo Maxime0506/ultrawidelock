@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
  * apps/dwm3001cdk-lock/src/main.c.
  *
  * That flag and every DIAGK call site live in ccc_shim_rx.c and uwb_rxdiag.c,
- * which ultrawidelock_uwb compiles only at the CONFIG_WOZ_ALIRO tier. This app is below
+ * which ultrawidelock_uwb compiles only at the CONFIG_ULTRAWIDELOCK_CRED tier. This app is below
  * it, so the per-frame trace is not merely switched off, it does not exist --
  * the symbol is undefined and referencing it fails the link. The rule the lock
  * has to enforce at runtime is enforced here by the build.

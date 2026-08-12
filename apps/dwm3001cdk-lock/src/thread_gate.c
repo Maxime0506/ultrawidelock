@@ -206,6 +206,6 @@ static int thread_gate_start(void)
  * (zephyr/kernel/init.c:318 then :347), so this brings Thread up ahead of the
  * reader engine rather than behind it. Harmless for a contention gate, since
  * both are running long before a phone walks up, but the rework should start
- * Thread from main() after aliro_reader_start() if the reader ever needs to
+ * Thread from main() after ultrawidelock_reader_start() if the reader ever needs to
  * own the radio first. */
 SYS_INIT(thread_gate_start, APPLICATION, 90);

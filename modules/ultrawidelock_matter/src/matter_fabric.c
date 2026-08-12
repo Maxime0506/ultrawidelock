@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 #include "matter_tlv.h"
 
 /* Certificate element tags (credentials/CHIPCert.h:68-78). */
@@ -160,7 +160,7 @@ int matter_fabric_compressed_id(const uint8_t root_pub[MATTER_FABRIC_PUBKEY_LEN]
 		salt[i] = (uint8_t)(fabric_id >> (56u - 8u * i));
 	}
 
-	if (aliro_hkdf(salt, sizeof(salt), root_pub + 1, MATTER_FABRIC_PUBKEY_LEN - 1u, k_info,
+	if (ultrawidelock_hkdf(salt, sizeof(salt), root_pub + 1, MATTER_FABRIC_PUBKEY_LEN - 1u, k_info,
 		       sizeof(k_info), out, MATTER_COMPRESSED_FABRIC_LEN) != 0) {
 		return MATTER_E_INVAL;
 	}

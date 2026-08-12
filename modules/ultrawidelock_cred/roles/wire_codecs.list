@@ -1,0 +1,8 @@
+# woz_aliro role: platform-free pure codecs — TLV, step-up (Access Document)
+# wire + parse, presence-assertion. No crypto backend needed. Consumers:
+# ports/esp32/components/ultrawidelock_reader, tests/host/sources.sh (woz_aliro_stack
+# compiles the same files on target). Sorted; add HERE and nowhere else.
+modules/ultrawidelock_cred/src/ultrawidelock_assert.c
+modules/ultrawidelock_cred/src/ultrawidelock_stepup_parse.c
+modules/ultrawidelock_cred/src/ultrawidelock_stepup_wire.c
+modules/ultrawidelock_cred/src/ultrawidelock_tlv.c

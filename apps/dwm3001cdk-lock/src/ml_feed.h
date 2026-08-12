@@ -11,18 +11,18 @@
 
 #include <stdint.h>
 
-#include "aliro_approach.h"
+#include "ultrawidelock_approach.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /** Feed one trusted range, carrying this reception's channel class if any. */
-enum aliro_approach_action ml_feed_range(struct aliro_approach *ap, int64_t now,
+enum ultrawidelock_approach_action ml_feed_range(struct ultrawidelock_approach *ap, int64_t now,
 					 int32_t cm);
 
 /** Print the debounced NLOS verdict on its edge ([ALAB] ev=ml.vote). */
-void ml_feed_vote_trace(struct aliro_approach *ap, int64_t now);
+void ml_feed_vote_trace(struct ultrawidelock_approach *ap, int64_t now);
 
 #ifdef __cplusplus
 }

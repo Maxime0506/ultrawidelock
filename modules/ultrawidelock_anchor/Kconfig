@@ -33,7 +33,7 @@ config ULTRAWIDELOCK_SIDE_GATE
 	bool "Fail-closed side gate for passive approach unlock"
 	default n
 	help
-	  When y, UNLOCK_PREDICT and UNLOCK_THRESHOLD from aliro_approach are
+	  When y, UNLOCK_PREDICT and UNLOCK_THRESHOLD from ultrawidelock_approach are
 	  released only if ultrawidelock_side_may_passive_unlock() is true: side must be
 	  confident OUTSIDE with fresh evidence, quorum, and no contradiction.
 

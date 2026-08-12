@@ -39,7 +39,7 @@ void ha_mqtt_start_once(void);
 void ha_mqtt_publish_distance_cm(int32_t cm);
 
 /** Queue one credential-independent access verdict. Never blocks: a full queue
- *  drops the event. Matches aliro_reader's access-listener signature, so it can
+ *  drops the event. Matches ultrawidelock_reader's access-listener signature, so it can
  *  be registered directly. */
 void ha_mqtt_publish_access(bool granted);
 

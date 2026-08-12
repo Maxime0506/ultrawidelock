@@ -8,7 +8,7 @@
  * mapping.
  *
  * The portable serialiser is exercised elsewhere; what is checked here is the
- * three return contracts aliro_prov.h states, and that a failure of any kind
+ * three return contracts ultrawidelock_prov.h states, and that a failure of any kind
  * still leaves a usable identity behind.
  */
 #include <stdbool.h>
@@ -23,7 +23,7 @@
 #include <woz_freertos_kv.h>
 #include <woz_freertos_platform.h>
 
-#include "aliro_prov.h"
+#include "ultrawidelock_prov.h"
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -47,26 +47,27 @@ void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const 
 }
 
 /* A provisioned identity that is nothing like the dev default. */
-static void make_identity(struct aliro_reader_identity *id, struct aliro_trust_store *ts)
+static void make_identity(struct ultrawidelock_reader_identity *id,
+			  struct ultrawidelock_trust_store *ts)
 {
 	size_t i;
 
 	memset(id, 0, sizeof(*id));
 	memset(ts, 0, sizeof(*ts));
 
-	for (i = 0; i < ALIRO_READER_ID_LEN; i++) {
+	for (i = 0; i < ULTRAWIDELOCK_READER_ID_LEN; i++) {
 		id->reader_id[i] = (uint8_t)(0xa0 + i);
 	}
-	for (i = 0; i < ALIRO_READER_PRIV_LEN; i++) {
+	for (i = 0; i < ULTRAWIDELOCK_READER_PRIV_LEN; i++) {
 		id->sign_priv[i] = (uint8_t)(0x50 + i);
 	}
-	for (i = 0; i < ALIRO_GRK_LEN; i++) {
+	for (i = 0; i < ULTRAWIDELOCK_GRK_LEN; i++) {
 		id->grk[i] = (uint8_t)(0x10 + i);
 	}
 	id->is_dev = false;
 
 	ts->count = 2;
-	for (i = 0; i < ALIRO_CRED_PUB_LEN; i++) {
+	for (i = 0; i < ULTRAWIDELOCK_CRED_PUB_LEN; i++) {
 		ts->cred_pub[0][i] = (uint8_t)(0x04 + i);
 		ts->cred_pub[1][i] = (uint8_t)(0x80 + i);
 	}
@@ -75,21 +76,21 @@ static void make_identity(struct aliro_reader_identity *id, struct aliro_trust_s
 	ts->user_index[0] = 9;
 }
 
-static bool identity_matches(const struct aliro_reader_identity *a,
-			     const struct aliro_reader_identity *b)
+static bool identity_matches(const struct ultrawidelock_reader_identity *a,
+			     const struct ultrawidelock_reader_identity *b)
 {
-	return memcmp(a->reader_id, b->reader_id, ALIRO_READER_ID_LEN) == 0 &&
-	       memcmp(a->sign_priv, b->sign_priv, ALIRO_READER_PRIV_LEN) == 0 &&
-	       memcmp(a->grk, b->grk, ALIRO_GRK_LEN) == 0 && a->is_dev == b->is_dev;
+	return memcmp(a->reader_id, b->reader_id, ULTRAWIDELOCK_READER_ID_LEN) == 0 &&
+	       memcmp(a->sign_priv, b->sign_priv, ULTRAWIDELOCK_READER_PRIV_LEN) == 0 &&
+	       memcmp(a->grk, b->grk, ULTRAWIDELOCK_GRK_LEN) == 0 && a->is_dev == b->is_dev;
 }
 
 /* True if the identity is the built-in bench one. */
-static bool is_dev_default(const struct aliro_reader_identity *id)
+static bool is_dev_default(const struct ultrawidelock_reader_identity *id)
 {
-	struct aliro_reader_identity dev;
-	struct aliro_trust_store unused;
+	struct ultrawidelock_reader_identity dev;
+	struct ultrawidelock_trust_store unused;
 
-	aliro_prov_dev_default(&dev, &unused);
+	ultrawidelock_prov_dev_default(&dev, &unused);
 	return identity_matches(id, &dev);
 }
 
@@ -98,41 +99,41 @@ static bool is_dev_default(const struct aliro_reader_identity *id)
 /* A part that has never been provisioned yields the dev identity, not an error. */
 static void scenario_unprovisioned(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 
 	memset(&id, 0x5a, sizeof(id));
 	memset(&ts, 0x5a, sizeof(ts));
 
-	CHECK("unprovisioned load reports nothing stored", aliro_prov_load(&id, &ts) == 1);
+	CHECK("unprovisioned load reports nothing stored", ultrawidelock_prov_load(&id, &ts) == 1);
 	CHECK("unprovisioned load yields the dev identity", is_dev_default(&id));
 	CHECK("unprovisioned load yields an empty trust store", ts.count == 0);
 	CHECK("unprovisioned load marks the identity as dev", id.is_dev);
 
 	/* A factory reset with nothing to undo has still succeeded. */
-	CHECK("erasing an unprovisioned store succeeds", aliro_prov_erase() == 0);
+	CHECK("erasing an unprovisioned store succeeds", ultrawidelock_prov_erase() == 0);
 }
 
 /* Store, then read back in the same process. */
 static void scenario_round_trip(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_reader_identity got;
-	struct aliro_trust_store ts;
-	struct aliro_trust_store got_ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_reader_identity got;
+	struct ultrawidelock_trust_store ts;
+	struct ultrawidelock_trust_store got_ts;
 
 	make_identity(&id, &ts);
-	CHECK("store succeeds", aliro_prov_store(&id, &ts) == 0);
+	CHECK("store succeeds", ultrawidelock_prov_store(&id, &ts) == 0);
 
 	memset(&got, 0, sizeof(got));
 	memset(&got_ts, 0, sizeof(got_ts));
-	CHECK("load reports a stored blob", aliro_prov_load(&got, &got_ts) == 0);
+	CHECK("load reports a stored blob", ultrawidelock_prov_load(&got, &got_ts) == 0);
 	CHECK("the identity round-trips", identity_matches(&got, &id));
 	CHECK("the anchor count round-trips", got_ts.count == 2);
 	CHECK("the first anchor round-trips",
-	      memcmp(got_ts.cred_pub[0], ts.cred_pub[0], ALIRO_CRED_PUB_LEN) == 0);
+	      memcmp(got_ts.cred_pub[0], ts.cred_pub[0], ULTRAWIDELOCK_CRED_PUB_LEN) == 0);
 	CHECK("the second anchor round-trips",
-	      memcmp(got_ts.cred_pub[1], ts.cred_pub[1], ALIRO_CRED_PUB_LEN) == 0);
+	      memcmp(got_ts.cred_pub[1], ts.cred_pub[1], ULTRAWIDELOCK_CRED_PUB_LEN) == 0);
 	CHECK("the Matter binding round-trips",
 	      got_ts.cred_type[0] == 6 && got_ts.cred_index[0] == 3 && got_ts.user_index[0] == 9);
 	CHECK("a stored identity is not marked dev", !got.is_dev);
@@ -141,8 +142,8 @@ static void scenario_round_trip(void)
 	 * credential change, so the newest blob has to win. */
 	id.grk[0] = 0xee;
 	ts.count = 1;
-	CHECK("re-store succeeds", aliro_prov_store(&id, &ts) == 0);
-	CHECK("re-load reports a stored blob", aliro_prov_load(&got, &got_ts) == 0);
+	CHECK("re-store succeeds", ultrawidelock_prov_store(&id, &ts) == 0);
+	CHECK("re-load reports a stored blob", ultrawidelock_prov_load(&got, &got_ts) == 0);
 	CHECK("the newer identity wins", got.grk[0] == 0xee);
 	CHECK("the newer anchor count wins", got_ts.count == 1);
 }
@@ -150,10 +151,10 @@ static void scenario_round_trip(void)
 /* Erasing removes the identity without disturbing OpenThread's keys. */
 static void scenario_erase(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_reader_identity got;
-	struct aliro_trust_store ts;
-	struct aliro_trust_store got_ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_reader_identity got;
+	struct ultrawidelock_trust_store ts;
+	struct ultrawidelock_trust_store got_ts;
 	uint8_t ot_value[16];
 	uint8_t ot_read[16];
 	size_t length;
@@ -165,10 +166,10 @@ static void scenario_erase(void)
 		      WOZ_KV_OK);
 
 	make_identity(&id, &ts);
-	CHECK("store before erase succeeds", aliro_prov_store(&id, &ts) == 0);
-	CHECK("erase succeeds", aliro_prov_erase() == 0);
+	CHECK("store before erase succeeds", ultrawidelock_prov_store(&id, &ts) == 0);
+	CHECK("erase succeeds", ultrawidelock_prov_erase() == 0);
 
-	CHECK("load after erase reports nothing stored", aliro_prov_load(&got, &got_ts) == 1);
+	CHECK("load after erase reports nothing stored", ultrawidelock_prov_load(&got, &got_ts) == 1);
 	CHECK("load after erase yields the dev identity", is_dev_default(&got));
 	CHECK("load after erase yields an empty trust store", got_ts.count == 0);
 
@@ -182,14 +183,14 @@ static void scenario_erase(void)
 	      woz_freertos_kv_get(WOZ_KV_KEY_OPENTHREAD_BASE + 1u, ot_read, &length) == WOZ_KV_OK &&
 		      length == sizeof(ot_value) && memcmp(ot_read, ot_value, length) == 0);
 
-	CHECK("a second erase succeeds", aliro_prov_erase() == 0);
+	CHECK("a second erase succeeds", ultrawidelock_prov_erase() == 0);
 }
 
 /* A stored blob the parser rejects must not take the reader down with it. */
 static void scenario_malformed(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 	uint8_t garbage[12];
 
 	memset(garbage, 0x33, sizeof(garbage));
@@ -197,7 +198,7 @@ static void scenario_malformed(void)
 	CHECK("garbage stores under the prov key",
 	      woz_freertos_kv_set(WOZ_KV_KEY_ALIRO_PROV, garbage, sizeof(garbage)) == WOZ_KV_OK);
 
-	CHECK("a malformed blob reports an error", aliro_prov_load(&id, &ts) == -1);
+	CHECK("a malformed blob reports an error", ultrawidelock_prov_load(&id, &ts) == -1);
 	CHECK("a malformed blob still yields the dev identity", is_dev_default(&id));
 	CHECK("a malformed blob still yields an empty trust store", ts.count == 0);
 }
@@ -208,57 +209,58 @@ static void scenario_malformed(void)
  */
 static void scenario_oversized(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
-	static uint8_t big[ALIRO_PROV_BLOB_MAX + 4u];
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
+	static uint8_t big[ULTRAWIDELOCK_PROV_BLOB_MAX + 4u];
 
 	memset(big, 0x22, sizeof(big));
 	CHECK("kv init succeeds", woz_freertos_kv_init() == WOZ_KV_OK);
 	CHECK("an oversized record stores",
 	      woz_freertos_kv_set(WOZ_KV_KEY_ALIRO_PROV, big, sizeof(big)) == WOZ_KV_OK);
 
-	CHECK("an oversized record reports an error", aliro_prov_load(&id, &ts) == -1);
+	CHECK("an oversized record reports an error", ultrawidelock_prov_load(&id, &ts) == -1);
 	CHECK("an oversized record still yields the dev identity", is_dev_default(&id));
 }
 
 /* A store that the flash refuses must report the failure, not swallow it. */
 static void scenario_store_fails(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 
 	make_identity(&id, &ts);
 	CHECK("kv init succeeds", woz_freertos_kv_init() == WOZ_KV_OK);
 
 	/* Fail the next write, which is the one carrying the record header. */
 	fake_flash_fail_write_after = 1;
-	CHECK("a refused write reports a store error", aliro_prov_store(&id, &ts) < 0);
+	CHECK("a refused write reports a store error", ultrawidelock_prov_store(&id, &ts) < 0);
 	fake_flash_fail_write_after = 0;
 }
 
 /* Provision, then leave the flash for the next process to mount. */
 static void scenario_provision_then_reboot(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_trust_store ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_trust_store ts;
 
 	make_identity(&id, &ts);
-	CHECK("store before reboot succeeds", aliro_prov_store(&id, &ts) == 0);
+	CHECK("store before reboot succeeds", ultrawidelock_prov_store(&id, &ts) == 0);
 }
 
 /* Fresh statics, the previous process's flash: a real reset. */
 static void scenario_after_reboot(void)
 {
-	struct aliro_reader_identity id;
-	struct aliro_reader_identity expect;
-	struct aliro_trust_store ts;
-	struct aliro_trust_store expect_ts;
+	struct ultrawidelock_reader_identity id;
+	struct ultrawidelock_reader_identity expect;
+	struct ultrawidelock_trust_store ts;
+	struct ultrawidelock_trust_store expect_ts;
 
 	make_identity(&expect, &expect_ts);
-	CHECK("load after reboot reports a stored blob", aliro_prov_load(&id, &ts) == 0);
+	CHECK("load after reboot reports a stored blob", ultrawidelock_prov_load(&id, &ts) == 0);
 	CHECK("the identity survives a reboot", identity_matches(&id, &expect));
 	CHECK("the anchors survive a reboot",
-	      ts.count == 2 && memcmp(ts.cred_pub[1], expect_ts.cred_pub[1], ALIRO_CRED_PUB_LEN) == 0);
+	      ts.count == 2 && memcmp(ts.cred_pub[1], expect_ts.cred_pub[1],
+				      ULTRAWIDELOCK_CRED_PUB_LEN) == 0);
 	CHECK("no flash rule was broken across the reboot", fake_flash_violations == 0);
 }
 

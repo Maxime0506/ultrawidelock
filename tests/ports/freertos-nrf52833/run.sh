@@ -199,10 +199,10 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 	-DWOZ_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
-	-I"$ROOT/modules/woz_aliro/include" \
+	-I"$ROOT/modules/ultrawidelock_cred/include" \
 	"$HERE/test_prov_kv.c" \
 	"$HERE/fake/fake_flash.c" \
-	"$ROOT/modules/woz_aliro/src/aliro_prov.c" \
+	"$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_prov.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/aliro_prov_kv.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
 	-o "$PROV_BIN"

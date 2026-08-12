@@ -50,7 +50,7 @@
 #endif
 
 #include "esp_log.h"
-#include "aliro_lat.h"
+#include "ultrawidelock_lat.h"
 #include "ultrawidelock_diag.h"
 #include "uwb_cirdiag.h"
 
@@ -875,7 +875,7 @@ static void section_events(void)
 	ev.Type = chip::DeviceLayer::DeviceEventType::kCommissioningComplete;
 	cb(&ev, 0);
 	okc("commissioning-complete starts the reader task once",
-	    mfk_task_count == 1 && strcmp(mfk_tasks[0].name, "aliro_reader") == 0 &&
+	    mfk_task_count == 1 && strcmp(mfk_tasks[0].name, "ultrawidelock_reader") == 0 &&
 		    mfk_tasks[0].stack == 12288 && mfk_tasks[0].prio == 5 &&
 		    aliro_reader_task_handle != nullptr);
 	cb(&ev, 0);
@@ -972,7 +972,7 @@ static void section_reader_task(void)
 	mfk_wake_len = 0;
 	mfk_wake_idx = 0;
 	wake_push(1, 0, 0, 10);    /* active but untrusted: activity only */
-	/* Arms the trajectory gate (aliro_approach_cfg::approach_cm, 180 cm by
+	/* Arms the trajectory gate (ultrawidelock_approach_cfg::approach_cm, 180 cm by
 	 * default). Without a sample this far out the controller now refuses to
 	 * unlock at all, which is the point of it: a credential that appears
 	 * already at the door never approached. 200 cm also sits in the dead
@@ -1002,8 +1002,8 @@ static void section_reader_task(void)
 	okc("wallet notified exactly twice: grant with the bolt, secured on depart",
 	    mfk_notify_unlock_calls == 2);
 	okc("near dwell unlocked via the matter hop",
-	    mfk_lat_marks[ALIRO_LAT_NEAR_DWELL] >= 1 &&
-		    mfk_lat_marks[ALIRO_LAT_BOLT_DRIVEN] >= 1 && mfk_lat_reports == 1);
+	    mfk_lat_marks[ULTRAWIDELOCK_LAT_NEAR_DWELL] >= 1 &&
+		    mfk_lat_marks[ULTRAWIDELOCK_LAT_BOLT_DRIVEN] >= 1 && mfk_lat_reports == 1);
 	okc("unlock was aliro-sourced and unattributed (no credential)",
 	    mfk_dls_last_source == (int)OperationSourceEnum::kAliro);
 	okc("far dwell + session end relocked and secured",
@@ -1107,8 +1107,8 @@ static void section_range_listener(void)
 	mfk_trusted_cm = 80;
 	cb();
 	okc("listener without a task only stamps the trace",
-	    mfk_lat_marks[ALIRO_LAT_FIRST_RANGE] == 1 &&
-		    mfk_lat_marks[ALIRO_LAT_TRUSTED_RANGE] == 1 && mfk_notify_gives == 0 &&
+	    mfk_lat_marks[ULTRAWIDELOCK_LAT_FIRST_RANGE] == 1 &&
+		    mfk_lat_marks[ULTRAWIDELOCK_LAT_TRUSTED_RANGE] == 1 && mfk_notify_gives == 0 &&
 		    mfk_isr_gives == 0);
 
 	aliro_reader_task_handle = saved;
@@ -1123,10 +1123,10 @@ static void section_range_listener(void)
 	mfk_in_isr = 0;
 
 	mfk_trusted_have = 0;
-	int first = mfk_lat_marks[ALIRO_LAT_TRUSTED_RANGE];
+	int first = mfk_lat_marks[ULTRAWIDELOCK_LAT_TRUSTED_RANGE];
 	cb();
 	okc("untrusted range skips the trusted mark",
-	    mfk_lat_marks[ALIRO_LAT_TRUSTED_RANGE] == first);
+	    mfk_lat_marks[ULTRAWIDELOCK_LAT_TRUSTED_RANGE] == first);
 }
 
 /* ---- J: console commands -------------------------------------------------------------- */

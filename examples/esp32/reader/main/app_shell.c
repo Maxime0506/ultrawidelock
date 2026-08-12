@@ -15,7 +15,7 @@
 #include <ultrawidelock/uwb.h>
 #include "ultrawidelock_diag.h" /* ultrawidelock_uwb_diag_on — the raw per-frame UWB trace gate */
 #include <ultrawidelock/reader.h>
-#include "aliro_lab.h" /* aliro_lab_set_enabled — the [ALAB] trace runtime gate */
+#include "ultrawidelock_lab.h" /* ultrawidelock_lab_set_enabled — the [ALAB] trace runtime gate */
 #include "app_shell.h"
 #if defined(CONFIG_WOZ_PRESENCE)
 #include "presence_link.h"
@@ -185,7 +185,7 @@ static int cmd_aliro_prov(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
-	aliro_reader_prov_print();
+	ultrawidelock_reader_prov_print();
 	return 0;
 }
 
@@ -209,20 +209,20 @@ static int cmd_uwbdiag(int argc, char **argv)
 
 // Shell command handler: toggles the [ALAB] transaction/power trace consumed by
 // and (rssi, gate.hold/open/close, phase
-// boundaries). Compiled in by default (CONFIG_WOZ_ALIRO_LAB) but off at boot so it
+// boundaries). Compiled in by default (CONFIG_ULTRAWIDELOCK_CRED_LAB) but off at boot so it
 // costs nothing until asked for. With no argument, prints the current state.
 // Always returns 0.
 static int cmd_lab(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "on") == 0) {
-		aliro_lab_set_enabled(true);
+		ultrawidelock_lab_set_enabled(true);
 	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
-		aliro_lab_set_enabled(false);
+		ultrawidelock_lab_set_enabled(false);
 	} else if (argc != 1) {
 		printf("usage: lab [on|off]\n");
 		return 0;
 	}
-	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");
+	printf("aliro lab trace: %s\n", ultrawidelock_lab_enabled() ? "on" : "off");
 	return 0;
 }
 
@@ -235,12 +235,12 @@ static int cmd_clear(int argc, char **argv)
 	return 0;
 }
 
-// Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via aliro_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
+// Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via ultrawidelock_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
 static int cmd_aliro_trust(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
-	int rc = aliro_reader_trust_last();
+	int rc = ultrawidelock_reader_trust_last();
 
 	if (rc == 0) {
 		printf("aliro-trust: added last-presented credential + saved to NVS\n");
@@ -253,8 +253,8 @@ static int cmd_aliro_trust(int argc, char **argv)
 	return 0;
 }
 
-#if defined(CONFIG_WOZ_ALIRO_CLONE)
-#include "aliro_prov.h" /* ALIRO_PROV_BLOB_MAX */
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_CLONE)
+#include "ultrawidelock_prov.h" /* ULTRAWIDELOCK_PROV_BLOB_MAX */
 
 // Maps one hex digit to its 0-15 value, or -1 if not [0-9a-fA-F].
 static int hexnib(char c)
@@ -292,15 +292,15 @@ static int hexdecode(const char *s, uint8_t *out, size_t out_cap)
 
 // Shell command handler: serialise the reader identity + trust store (INCLUDING the
 // private key) into a hex blob for cloning onto a second board. Bench only; gated by
-// CONFIG_WOZ_ALIRO_CLONE. Always returns 0.
+// CONFIG_ULTRAWIDELOCK_CRED_CLONE. Always returns 0.
 static int cmd_aliro_export(int argc, char **argv)
 {
 	(void)argc;
 	(void)argv;
-	uint8_t blob[ALIRO_PROV_BLOB_MAX];
+	uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 	size_t len = 0;
 
-	if (aliro_reader_export_blob(blob, sizeof(blob), &len) != 0) {
+	if (ultrawidelock_reader_export_blob(blob, sizeof(blob), &len) != 0) {
 		printf("aliro-export: FAILED (buffer too small)\n");
 		return 0;
 	}
@@ -322,7 +322,7 @@ static int cmd_aliro_import(int argc, char **argv)
 		printf("usage: aliro-import <hex-blob>\n");
 		return 0;
 	}
-	uint8_t blob[ALIRO_PROV_BLOB_MAX];
+	uint8_t blob[ULTRAWIDELOCK_PROV_BLOB_MAX];
 	int n = hexdecode(argv[1], blob, sizeof(blob));
 
 	if (n < 0) {
@@ -330,7 +330,7 @@ static int cmd_aliro_import(int argc, char **argv)
 		       (unsigned)sizeof(blob));
 		return 0;
 	}
-	int rc = aliro_reader_import_blob(blob, (size_t)n);
+	int rc = ultrawidelock_reader_import_blob(blob, (size_t)n);
 
 	if (rc == 0) {
 		printf("aliro-import: adopted %d-byte identity + trust store (saved to NVS)\n", n);
@@ -341,19 +341,19 @@ static int cmd_aliro_import(int argc, char **argv)
 	}
 	return 0;
 }
-#endif /* CONFIG_WOZ_ALIRO_CLONE */
+#endif /* CONFIG_ULTRAWIDELOCK_CRED_CLONE */
 
-#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
 // Shell command handler: `aliro-stepup [arm|status]`. With `arm` (or no argument)
 // it arms a one-shot Access-Document request for the next transaction; `status`
 // prints the armed state and the most recent verification verdict. Always 0.
 static int cmd_aliro_stepup(int argc, char **argv)
 {
 	if (argc >= 2 && strcmp(argv[1], "status") == 0) {
-		aliro_reader_stepup_status();
+		ultrawidelock_reader_stepup_status();
 		return 0;
 	}
-	aliro_reader_stepup_arm();
+	ultrawidelock_reader_stepup_arm();
 	printf("aliro-stepup: armed one-shot; approach with an Aliro device to request "
 	       "an Access Document (verdict logged, unlock unaffected)\n");
 	return 0;
@@ -369,9 +369,9 @@ void app_shell_start(void)
 	 * and keeps the shell away from the IRQ worker on dual-core targets. */
 	repl_cfg.prompt = "esp32>";
 	repl_cfg.task_core_id = 0;
-#if defined(CONFIG_WOZ_ALIRO_CLONE)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_CLONE)
 	/* An exported identity+trust blob is a single hex argument up to
-	 * ALIRO_PROV_BLOB_MAX*2 chars, past the 256-byte default line buffer. */
+	 * ULTRAWIDELOCK_PROV_BLOB_MAX*2 chars, past the 256-byte default line buffer. */
 	repl_cfg.max_cmdline_length = 1024;
 #endif
 
@@ -406,7 +406,7 @@ void app_shell_start(void)
 		{.command = "aliro-trust",
 		 .help = "trust the last-presented credential (persist to NVS)",
 		 .func = cmd_aliro_trust},
-#if defined(CONFIG_WOZ_ALIRO_CLONE)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_CLONE)
 		{.command = "aliro-export",
 		 .help = "serialise identity+trust (incl. PRIVATE KEY) to hex for cloning",
 		 .func = cmd_aliro_export},
@@ -414,7 +414,7 @@ void app_shell_start(void)
 		 .help = "aliro-import <hex>: adopt an identity+trust blob from another board",
 		 .func = cmd_aliro_import},
 #endif
-#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
 		{.command = "aliro-stepup",
 		 .help = "aliro-stepup [arm|status]: request + verify an Access Document (verdict "
 			 "logged only)",

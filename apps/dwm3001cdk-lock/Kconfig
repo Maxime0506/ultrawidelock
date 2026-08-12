@@ -544,8 +544,8 @@ config ALIRO_BLE_CENTRAL
 	  0xFFF2 advert, connects, reads the reader-SPSM characteristic, writes the
 	  selected version and opens an L2CAP CoC client to the PSM that READ
 	  returned. Zephyr mirror of the NimBLE backend in
-	  ports/esp32/components/aliro_ble_central, behind the same
-	  aliro_ble_central.h, so only the transport differs between the two ports.
+	  ports/esp32/components/ultrawidelock_ble_central, behind the same
+	  ultrawidelock_ble_central.h, so only the transport differs between the two ports.
 	  A reader image does not want this. It exists so the initiator can be built
 	  for a board carrying a DW3110, which the ESP32-S3 is not.
 	  See ports/zephyr/ble/aliro_ble_central_zephyr.c.

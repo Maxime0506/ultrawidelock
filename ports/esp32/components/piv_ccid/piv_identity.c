@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "aliro_prim.h"
+#include "ultrawidelock_prim.h"
 #include "nvs.h"
 #include "psa/crypto.h"
 
@@ -34,8 +34,8 @@ struct piv_identity_blob {
 	uint32_t magic;
 	uint16_t version;
 	uint16_t certificate_len;
-	uint8_t private_key[ALIRO_P256_SCALAR];
-	uint8_t public_key[ALIRO_P256_POINT];
+	uint8_t private_key[ULTRAWIDELOCK_P256_SCALAR];
+	uint8_t public_key[ULTRAWIDELOCK_P256_POINT];
 	uint8_t guid[16];
 	uint8_t pin_provisioned;
 	uint8_t pin_retries;
@@ -54,8 +54,8 @@ struct piv_key_management_blob {
 	uint32_t magic;
 	uint16_t version;
 	uint16_t certificate_len;
-	uint8_t private_key[ALIRO_P256_SCALAR];
-	uint8_t public_key[ALIRO_P256_POINT];
+	uint8_t private_key[ULTRAWIDELOCK_P256_SCALAR];
+	uint8_t public_key[ULTRAWIDELOCK_P256_POINT];
 	uint8_t serial[16];
 	uint8_t certificate[PIV_CERT_MAX];
 };
@@ -73,7 +73,7 @@ static uint8_t s_certificate_der[PIV_CERT_MAX];
 static int certificate_rng(void *ctx, unsigned char *out, size_t len)
 {
 	(void)ctx;
-	return aliro_random(out, len);
+	return ultrawidelock_random(out, len);
 }
 
 /*
@@ -81,8 +81,8 @@ static int certificate_rng(void *ctx, unsigned char *out, size_t len)
  * Parsing this standard DER object lets the X.509 writer use the same key
  * without reaching into private mbedTLS structures.
  */
-static int make_pk_context(const uint8_t private_key[ALIRO_P256_SCALAR],
-			   const uint8_t public_key[ALIRO_P256_POINT],
+static int make_pk_context(const uint8_t private_key[ULTRAWIDELOCK_P256_SCALAR],
+			   const uint8_t public_key[ULTRAWIDELOCK_P256_POINT],
 			   mbedtls_pk_context *key)
 {
 	static const uint8_t prefix[] = {
@@ -95,19 +95,19 @@ static int make_pk_context(const uint8_t private_key[ALIRO_P256_SCALAR],
 		0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07,
 		0xa1, 0x44, 0x03, 0x42, 0x00,
 	};
-	uint8_t der[sizeof(prefix) + ALIRO_P256_SCALAR +
-		    sizeof(curve) + ALIRO_P256_POINT];
+	uint8_t der[sizeof(prefix) + ULTRAWIDELOCK_P256_SCALAR +
+		    sizeof(curve) + ULTRAWIDELOCK_P256_POINT];
 	size_t at = 0u;
 	int result;
 
 	memcpy(der + at, prefix, sizeof(prefix));
 	at += sizeof(prefix);
-	memcpy(der + at, private_key, ALIRO_P256_SCALAR);
-	at += ALIRO_P256_SCALAR;
+	memcpy(der + at, private_key, ULTRAWIDELOCK_P256_SCALAR);
+	at += ULTRAWIDELOCK_P256_SCALAR;
 	memcpy(der + at, curve, sizeof(curve));
 	at += sizeof(curve);
-	memcpy(der + at, public_key, ALIRO_P256_POINT);
-	at += ALIRO_P256_POINT;
+	memcpy(der + at, public_key, ULTRAWIDELOCK_P256_POINT);
+	at += ULTRAWIDELOCK_P256_POINT;
 
 	mbedtls_pk_init(key);
 	result = mbedtls_pk_parse_key(key, der, at, NULL, 0u,
@@ -125,8 +125,8 @@ static int make_pk_context(const uint8_t private_key[ALIRO_P256_SCALAR],
  * certificate_len.
  */
 static int make_certificate(
-	const uint8_t private_key[ALIRO_P256_SCALAR],
-	const uint8_t public_key[ALIRO_P256_POINT],
+	const uint8_t private_key[ULTRAWIDELOCK_P256_SCALAR],
+	const uint8_t public_key[ULTRAWIDELOCK_P256_POINT],
 	const uint8_t serial_source[16], const char *name,
 	unsigned int key_usage, uint8_t *certificate,
 	size_t certificate_cap, uint16_t *certificate_len)
@@ -236,7 +236,7 @@ static int load_identity(void)
 {
 	nvs_handle_t handle;
 	size_t length = sizeof(s_identity);
-	uint8_t derived[ALIRO_P256_POINT];
+	uint8_t derived[ULTRAWIDELOCK_P256_POINT];
 	esp_err_t err = nvs_open(PIV_IDENTITY_NS, NVS_READONLY, &handle);
 
 	if (err == ESP_ERR_NVS_NOT_FOUND) {
@@ -257,7 +257,7 @@ static int load_identity(void)
 	    s_identity.certificate_len > sizeof(s_identity.certificate) ||
 	    s_identity.public_key[0] != 0x04u ||
 	    s_identity.pin_retries > PIV_PIN_RETRIES ||
-	    aliro_ec_p256_pub_from_priv(s_identity.private_key, derived) != 0 ||
+	    ultrawidelock_ec_p256_pub_from_priv(s_identity.private_key, derived) != 0 ||
 	    memcmp(derived, s_identity.public_key, sizeof(derived)) != 0) {
 		memset(&s_identity, 0, sizeof(s_identity));
 		return -1;
@@ -270,7 +270,7 @@ static int load_key_management(void)
 {
 	nvs_handle_t handle;
 	size_t length = sizeof(s_key_management);
-	uint8_t derived[ALIRO_P256_POINT];
+	uint8_t derived[ULTRAWIDELOCK_P256_POINT];
 	esp_err_t err = nvs_open(PIV_IDENTITY_NS, NVS_READONLY, &handle);
 
 	if (err == ESP_ERR_NVS_NOT_FOUND) {
@@ -292,7 +292,7 @@ static int load_key_management(void)
 	    s_key_management.certificate_len >
 		    sizeof(s_key_management.certificate) ||
 	    s_key_management.public_key[0] != 0x04u ||
-	    aliro_ec_p256_pub_from_priv(s_key_management.private_key,
+	    ultrawidelock_ec_p256_pub_from_priv(s_key_management.private_key,
 					derived) != 0 ||
 	    memcmp(derived, s_key_management.public_key,
 		   sizeof(derived)) != 0) {
@@ -497,7 +497,7 @@ static int backend_change_pin(void *ctx,
 	}
 
 	previous = s_identity;
-	if (aliro_random(s_identity.pin_salt,
+	if (ultrawidelock_random(s_identity.pin_salt,
 			 sizeof(s_identity.pin_salt)) != 0) {
 		return -1;
 	}
@@ -528,7 +528,7 @@ static int backend_sign_hash(void *ctx,
 	    presence_link_require_fresh() != 0) {
 		return -1;
 	}
-	return aliro_ecdsa_p256_sign_hash(s_identity.private_key,
+	return ultrawidelock_ecdsa_p256_sign_hash(s_identity.private_key,
 					  hash, signature);
 }
 
@@ -544,7 +544,7 @@ static int backend_derive_shared(
 	if (!s_ready || peer_public_key == NULL || shared_secret == NULL) {
 		return -1;
 	}
-	return aliro_ecdh_p256(s_key_management.private_key,
+	return ultrawidelock_ecdh_p256(s_key_management.private_key,
 			      peer_public_key, shared_secret);
 }
 
@@ -569,7 +569,7 @@ esp_err_t piv_identity_init(void)
 	s_ready = false;
 	memset(&s_identity, 0, sizeof(s_identity));
 	memset(&s_key_management, 0, sizeof(s_key_management));
-	if (aliro_prim_init() != 0) {
+	if (ultrawidelock_prim_init() != 0) {
 		return ESP_FAIL;
 	}
 	auth_loaded = load_identity();
@@ -580,9 +580,9 @@ esp_err_t piv_identity_init(void)
 		s_identity.magic = PIV_IDENTITY_MAGIC;
 		s_identity.version = PIV_IDENTITY_VERSION;
 		s_identity.pin_retries = PIV_PIN_RETRIES;
-		if (aliro_ec_p256_keygen(s_identity.private_key,
+		if (ultrawidelock_ec_p256_keygen(s_identity.private_key,
 					 s_identity.public_key) != 0 ||
-		    aliro_random(s_identity.guid, sizeof(s_identity.guid)) != 0 ||
+		    ultrawidelock_random(s_identity.guid, sizeof(s_identity.guid)) != 0 ||
 		    make_certificate(
 			    s_identity.private_key, s_identity.public_key,
 			    s_identity.guid, auth_name,
@@ -603,9 +603,9 @@ esp_err_t piv_identity_init(void)
 	if (key_management_loaded > 0) {
 		s_key_management.magic = PIV_KEY_MANAGEMENT_MAGIC;
 		s_key_management.version = PIV_KEY_MANAGEMENT_VERSION;
-		if (aliro_ec_p256_keygen(s_key_management.private_key,
+		if (ultrawidelock_ec_p256_keygen(s_key_management.private_key,
 					 s_key_management.public_key) != 0 ||
-		    aliro_random(s_key_management.serial,
+		    ultrawidelock_random(s_key_management.serial,
 				 sizeof(s_key_management.serial)) != 0 ||
 		    make_certificate(
 			    s_key_management.private_key,

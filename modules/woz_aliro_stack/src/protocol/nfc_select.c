@@ -65,7 +65,7 @@ static int parse_proprietary_information(const uint8_t *data, size_t length,
 	bool found_version = false;
 	while (offset < length) {
 		struct woz_aliro_tlv tlv;
-		if (woz_aliro_tlv_next(data, length, &offset, &tlv) != WOZ_ALIRO_TLV_OK) {
+		if (woz_aliro_tlv_next(data, length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK) {
 			return WOZ_ALIRO_SELECT_INVALID_APDU;
 		}
 		if (tlv.tag == 0x80) {
@@ -94,7 +94,7 @@ static int parse_proprietary_information(const uint8_t *data, size_t length,
 			struct woz_aliro_tlv sizes[2];
 			for (size_t i = 0; i < 2; ++i) {
 				if (woz_aliro_tlv_next(tlv.value, tlv.length, &inner, &sizes[i]) !=
-					    WOZ_ALIRO_TLV_OK ||
+					    ULTRAWIDELOCK_CRED_TLV_OK ||
 				    sizes[i].tag != 0x02 || sizes[i].length != 2) {
 					return WOZ_ALIRO_SELECT_INVALID_APDU;
 				}
@@ -136,7 +136,7 @@ int woz_aliro_parse_proprietary_information(const uint8_t *encoded, size_t encod
 	struct woz_aliro_tlv proprietary;
 	size_t offset = 0;
 	if (woz_aliro_tlv_next(encoded, encoded_length, &offset, &proprietary) !=
-		    WOZ_ALIRO_TLV_OK ||
+		    ULTRAWIDELOCK_CRED_TLV_OK ||
 	    proprietary.tag != 0xa5 || offset != encoded_length) {
 		return WOZ_ALIRO_SELECT_INVALID_APDU;
 	}
@@ -186,7 +186,7 @@ int woz_aliro_parse_select_response_ex(const uint8_t *response, size_t response_
 	const size_t data_length = response_length - 2;
 	size_t outer_offset = 0;
 	struct woz_aliro_tlv fci;
-	if (woz_aliro_tlv_next(response, data_length, &outer_offset, &fci) != WOZ_ALIRO_TLV_OK ||
+	if (woz_aliro_tlv_next(response, data_length, &outer_offset, &fci) != ULTRAWIDELOCK_CRED_TLV_OK ||
 	    fci.tag != 0x6f || outer_offset != data_length) {
 		return WOZ_ALIRO_SELECT_INVALID_APDU;
 	}
@@ -197,7 +197,7 @@ int woz_aliro_parse_select_response_ex(const uint8_t *response, size_t response_
 	while (offset < fci.length) {
 		const size_t tlv_start = offset;
 		struct woz_aliro_tlv tlv;
-		if (woz_aliro_tlv_next(fci.value, fci.length, &offset, &tlv) != WOZ_ALIRO_TLV_OK) {
+		if (woz_aliro_tlv_next(fci.value, fci.length, &offset, &tlv) != ULTRAWIDELOCK_CRED_TLV_OK) {
 			return WOZ_ALIRO_SELECT_INVALID_APDU;
 		}
 		if (tlv.tag == 0x84) {

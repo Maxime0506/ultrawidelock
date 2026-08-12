@@ -25,7 +25,7 @@
 /*
  * Channel 9, SYNC code 9. Not a guess and not a default: this is the single UWB
  * configuration the reader offers in M1, so it is the one every session
- * negotiates in practice. modules/woz_aliro/src/aliro_ranging.c pre-applies the
+ * negotiates in practice. modules/ultrawidelock_cred/src/ultrawidelock_ranging.c pre-applies the
  * same pair for the same reason, and the two must not drift -- a bring-up that
  * warmed a different PHY would leave the shim's cache cold at M4 and put
  * dwt_configure back on the critical path it was moved off.

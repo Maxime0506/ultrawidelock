@@ -1,0 +1,4 @@
+# woz_aliro role: BLE advert Dynamic Tag derivation.
+# Consumers: apps/dwm3001cdk-lock/, ports/esp32/components/ultrawidelock_crypto.
+# One repo-root-relative path per line, sorted; add HERE and nowhere else.
+modules/ultrawidelock_cred/src/ultrawidelock_advtag.c

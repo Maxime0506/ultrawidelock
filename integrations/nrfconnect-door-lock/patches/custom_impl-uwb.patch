@@ -21,17 +21,17 @@ index 7731eb0..53dd5eb 100644
 +#include <zephyr/sys/byteorder.h>
 +#include <zephyr/sys/util.h>
 +
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +#include <cherry/cherry_ccc.h>
 +#include <ultrawidelock/uwb.h>
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
 +LOG_MODULE_REGISTER(ultrawidelock_uwb_impl, LOG_LEVEL_INF);
  
  namespace Aliro::Uwb {
  
 -int UltraWideBandImpl::_Init([[maybe_unused]] const Callbacks &)
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +
 +namespace {
 +
@@ -76,13 +76,13 @@ index 7731eb0..53dd5eb 100644
 +
 +} // namespace
 +
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
 +int UltraWideBandImpl::_Init(const Callbacks &callbacks)
 +{
 +	mCallbacks = callbacks;
 +
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	k_work_init_delayable(&mPollWork, &PollWorkHandler);
 +
 +	/* No UCI transport to query; our shim's cherry_create is a trivial ctx
@@ -126,7 +126,7 @@ index 7731eb0..53dd5eb 100644
 +		mCtx = nullptr;
 +		return -EIO;
 +	}
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
 +	mInitialized = true;
 +	LOG_INF("Woz UWB facade initialized");
@@ -136,7 +136,7 @@ index 7731eb0..53dd5eb 100644
  int UltraWideBandImpl::_Deinit()
  {
 -	return -ENOSYS;
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	k_work_cancel_delayable(&mPollWork);
 +	mRanging = false;
 +	if (mSession) {
@@ -153,7 +153,7 @@ index 7731eb0..53dd5eb 100644
 +		cherry_destroy_sync(mCtx);
 +		mCtx = nullptr;
 +	}
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +	mInitialized = false;
 +	return 0;
  }
@@ -170,7 +170,7 @@ index 7731eb0..53dd5eb 100644
 +	if (!data || length == 0) {
 +		return -EINVAL;
 +	}
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	if (!mSession) {
 +		return -ENOENT;
 +	}
@@ -187,7 +187,7 @@ index 7731eb0..53dd5eb 100644
 +	return ConvertErr(ultrawidelock_uwb_session_message_handle(mSession, message));
 +#else
  	return -ENOSYS;
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
  }
  
 -int UltraWideBandImpl::_ConfigureRangingSession([[maybe_unused]] SessionIdentifier,
@@ -198,7 +198,7 @@ index 7731eb0..53dd5eb 100644
 +						[[maybe_unused]] ProtocolVersion protocolVersion,
 +						[[maybe_unused]] SessionContextHandle sessionContextHandle)
  {
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	if (!mAliroCtx) {
 +		return -EBUSY;
 +	}
@@ -228,13 +228,13 @@ index 7731eb0..53dd5eb 100644
 +	return 0;
 +#else
  	return -ENOSYS;
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
  }
  
 -int UltraWideBandImpl::_InitiateRangingSession([[maybe_unused]] SessionContextHandle)
 +int UltraWideBandImpl::_InitiateRangingSession([[maybe_unused]] SessionContextHandle sessionContextData)
  {
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	if (!mSession || !mHandle || !(*mHandle == sessionContextData)) {
 +		return -ENOENT;
 +	}
@@ -243,14 +243,14 @@ index 7731eb0..53dd5eb 100644
 +	return ConvertErr(ultrawidelock_uwb_session_init_setup(mSession));
 +#else
  	return -ENOSYS;
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
  }
  
 -int UltraWideBandImpl::_TerminateRangingSession([[maybe_unused]] SessionContextHandle)
 +int UltraWideBandImpl::_TerminateRangingSession([[maybe_unused]] SessionContextHandle sessionContextData)
  {
 -	return -ENOSYS;
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	if (mHandle && (*mHandle == sessionContextData)) {
 +		k_work_cancel_delayable(&mPollWork);
 +		mRanging = false;
@@ -261,7 +261,7 @@ index 7731eb0..53dd5eb 100644
 +		mHandle.reset();
 +		ultrawidelock_uwb_stop();
 +	}
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +	return 0;
  }
  
@@ -269,33 +269,33 @@ index 7731eb0..53dd5eb 100644
 +int UltraWideBandImpl::_SuspendRangingSession([[maybe_unused]] SessionContextHandle sessionContextData)
  {
 -	return -ENOSYS;
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	if (!mSession || !mHandle || !(*mHandle == sessionContextData)) {
 +		return -ENOENT;
 +	}
 +	return ConvertErr(ultrawidelock_uwb_session_suspend(mSession));
 +#else
 +	return 0;
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
  }
  
 -int UltraWideBandImpl::_ResumeRangingSession([[maybe_unused]] SessionContextHandle)
 +int UltraWideBandImpl::_ResumeRangingSession([[maybe_unused]] SessionContextHandle sessionContextData)
  {
 -	return -ENOSYS;
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	if (!mSession || !mHandle || !(*mHandle == sessionContextData)) {
 +		return -ENOENT;
 +	}
 +	return ConvertErr(ultrawidelock_uwb_session_resume(mSession));
 +#else
 +	return 0;
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +}
 +
 +void UltraWideBandImpl::ReportRange([[maybe_unused]] SessionContextHandle handle)
 +{
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	int32_t cm = 0;
 +	if (ultrawidelock_uwb_trusted_range_cm(&cm) && mCallbacks.mRangingData) {
 +		if (cm < 0) {
@@ -305,10 +305,10 @@ index 7731eb0..53dd5eb 100644
 +		mCallbacks.mRangingData(handle,
 +					UwbRangingData{ .mData = mDistanceCm.data(), .mLength = mDistanceCm.size() });
 +	}
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +}
 +
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +
 +void UltraWideBandImpl::TransmitBleMessage(ultrawidelock_uwb_message *message, ultrawidelock_uwb_session *uwbSessionCtx, void *userData,
 +					   [[maybe_unused]] bool timeout)
@@ -356,7 +356,7 @@ index 7731eb0..53dd5eb 100644
 +	}
 +}
 +
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
  } // namespace Aliro::Uwb
 diff --git a/subsys/aliro/uwb/custom_impl/uwb_impl.h b/subsys/aliro/uwb/custom_impl/uwb_impl.h
@@ -379,11 +379,11 @@ index 0688558..111fbe3 100644
  
  #include "uwb.h"
  
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +#include <ultrawidelock_uwb_adapter/ultrawidelock_uwb_adapter.h>
 +#include <ultrawidelock_uwb_adapter/ultrawidelock_uwb_session.h>
 +#include <cherry/cherry.h>
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
 +#include <zephyr/kernel.h>
 +
@@ -431,7 +431,7 @@ index 0688558..111fbe3 100644
 +	/** @brief Poll the FiRa engine's latest range and push it up as BE16 cm. */
 +	void ReportRange(SessionContextHandle handle);
 +
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	/** @brief Adapter -> BLE transmit trampoline (ultrawidelock_uwb_adapter_transmit_message_t). */
 +	static void TransmitBleMessage(ultrawidelock_uwb_message *message, ultrawidelock_uwb_session *uwbSessionCtx, void *userData,
 +				       bool timeout);
@@ -439,12 +439,12 @@ index 0688558..111fbe3 100644
 +	static void SessionHandlerCallback(ultrawidelock_uwb_session_event *event, void *userData);
 +	/** @brief Periodic range poll while a session is active. */
 +	static void PollWorkHandler(k_work *work);
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
 +	Callbacks mCallbacks{};
 +	bool mInitialized{ false };
 +
-+#ifdef CONFIG_WOZ_ALIRO
++#ifdef CONFIG_ULTRAWIDELOCK_CRED
 +	cherry *mCtx{ nullptr };
 +	ultrawidelock_uwb_adapter *mAliroCtx{ nullptr };
 +	/* One physical DW3110 ranges a single session at a time; the walk-up demo
@@ -464,7 +464,7 @@ index 0688558..111fbe3 100644
 +		.r1_antennas = { 0, 0 },
 +		.r2_antennas = { 0, 0 },
 +	};
-+#endif // CONFIG_WOZ_ALIRO
++#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
  	UltraWideBandImpl() = default;
  	~UltraWideBandImpl() = default;

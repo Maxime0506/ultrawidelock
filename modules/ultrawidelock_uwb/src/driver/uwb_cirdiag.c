@@ -548,7 +548,7 @@ void uwb_cirdiag_flush(void)
 		 * snapshot, so reading it earlier would pair a retried reception with a
 		 * distance from the attempt that lost. */
 		cirdiag_range_fields(rng, sizeof(rng));
-		/* One line, all-decimal for aliro_lab.py's k=v parser. Keys: n capture#,
+		/* One line, all-decimal for ultrawidelock_lab.py's k=v parser. Keys: n capture#,
 		 * sp STS mode, len/st the callback frame info; ip.. Ipatov and s.. STS CIR
 		 * diagnostics — fp first-path index (Q10.6), pk peak (idx[30:21]|amp[20:0]),
 		 * pw channel power, f1..f3 first-path amplitudes, ac accumulated symbols;

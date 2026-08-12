@@ -9,7 +9,7 @@
 # See coverage.sh for what is deliberately excluded and why.
 
 SRC="$ROOT/modules/ultrawidelock_uwb/src"
-ALIRO="$ROOT/modules/woz_aliro"
+ALIRO="$ROOT/modules/ultrawidelock_cred"
 SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
 
@@ -68,14 +68,14 @@ UNIT_SRCS=(
 
 # woz_aliro roles. wire_codecs = the shared step-up/assert codecs (one source;
 # woz_aliro_stack compiles the same files on target) — crypto-free, so no
-# aliro_crypto/prim backend is needed here. hash + reader_policy are the
+# ultrawidelock_crypto/prim backend is needed here. hash + reader_policy are the
 # host-tested halves of the reader.
 unit_srcs_from_role "$ALIRO/roles/wire_codecs.list"
 unit_srcs_from_role "$ALIRO/roles/hash.list"
 unit_srcs_from_role "$ALIRO/roles/reader_policy.list"
 
 # ultrawidelock_uwb roles. Everything radio-free: the CCC key schedule and STS engine, the
-# M1-M4 codec on BOTH ends (aliro_device = initiator side, tested against the
+# M1-M4 codec on BOTH ends (ultrawidelock_device = initiator side, tested against the
 # real reader codec), the ranging estimator and responder state machine, and the
 # flight recorder's replay half. base_driver/responder_driver need a DW3000 and
 # are absent by design.
@@ -182,8 +182,8 @@ INCS=(
 	-I"$ROOT/ports/zephyr/shell"
 	-I"$ALIRO/include"
 	-I"$ROOT/modules/woz_port/include"
-	-I"$ROOT/modules/woz_aliro/include"
-	-I"$ROOT/modules/woz_aliro/src"
+	-I"$ROOT/modules/ultrawidelock_cred/include"
+	-I"$ROOT/modules/ultrawidelock_cred/src"
 	-I"$ROOT/modules/ultrawidelock_matter/include"
 	-I"$ROOT/modules/ultrawidelock_ml/include"
 	-I"$ROOT/modules/ultrawidelock_ml/src"
@@ -196,7 +196,7 @@ INCS=(
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
 # WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
 # those headers #error rather than guess a platform.
-DEFS=(-DCONFIG_WOZ_ALIRO=1 -DCONFIG_ULTRAWIDELOCK_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
+DEFS=(-DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
 
 # PY — the interpreter the python-side suites run under: the repo-local .venv
 # when one exists, else the system python3.

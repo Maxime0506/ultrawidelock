@@ -16,7 +16,7 @@
 
 #include "matter_spake2p.h"
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 
 /* CHIPCryptoPAL.h:186-197. Constants of the protocol. */
 const uint8_t matter_spake2p_M[MATTER_SPAKE_POINT_LEN] = {
@@ -47,8 +47,8 @@ static const char k_confirmation_info[] = "ConfirmationKeys";
 int matter_pbkdf2_sha256(const uint8_t *password, size_t password_len, const uint8_t *salt,
 			 size_t salt_len, uint32_t iterations, uint8_t *out, size_t out_len)
 {
-	uint8_t u[ALIRO_SHA256_LEN];
-	uint8_t t[ALIRO_SHA256_LEN];
+	uint8_t u[ULTRAWIDELOCK_SHA256_LEN];
+	uint8_t t[ULTRAWIDELOCK_SHA256_LEN];
 	/* One salt block: the salt plus the 4-byte big-endian block index that
 	 * PBKDF2 appends. The salt is bounded by the caller's protocol; 64 covers
 	 * Matter's 32-byte maximum with room to spare. */
@@ -69,8 +69,8 @@ int matter_pbkdf2_sha256(const uint8_t *password, size_t password_len, const uin
 	while (done < out_len) {
 		size_t take = out_len - done;
 
-		if (take > ALIRO_SHA256_LEN) {
-			take = ALIRO_SHA256_LEN;
+		if (take > ULTRAWIDELOCK_SHA256_LEN) {
+			take = ULTRAWIDELOCK_SHA256_LEN;
 		}
 
 		/* U1 = HMAC(P, S || INT_32_BE(i)) */
@@ -81,13 +81,13 @@ int matter_pbkdf2_sha256(const uint8_t *password, size_t password_len, const uin
 		block[salt_len + 1u] = (uint8_t)(counter >> 16);
 		block[salt_len + 2u] = (uint8_t)(counter >> 8);
 		block[salt_len + 3u] = (uint8_t)counter;
-		aliro_hmac_sha256(password, password_len, block, salt_len + 4u, u);
-		memcpy(t, u, ALIRO_SHA256_LEN);
+		ultrawidelock_hmac_sha256(password, password_len, block, salt_len + 4u, u);
+		memcpy(t, u, ULTRAWIDELOCK_SHA256_LEN);
 
 		/* T = U1 xor U2 xor ... xor Uc */
 		for (uint32_t i = 1u; i < iterations; i++) {
-			aliro_hmac_sha256(password, password_len, u, ALIRO_SHA256_LEN, u);
-			for (size_t j = 0; j < ALIRO_SHA256_LEN; j++) {
+			ultrawidelock_hmac_sha256(password, password_len, u, ULTRAWIDELOCK_SHA256_LEN, u);
+			for (size_t j = 0; j < ULTRAWIDELOCK_SHA256_LEN; j++) {
 				t[j] ^= u[j];
 			}
 		}
@@ -152,7 +152,7 @@ int matter_spake2p_w0w1(uint32_t passcode, const uint8_t *salt, size_t salt_len,
 int matter_spake2p_context(const uint8_t *req, size_t req_len, const uint8_t *resp, size_t resp_len,
 			   uint8_t out[MATTER_SPAKE_HASH_LEN])
 {
-	struct aliro_sha256 h;
+	struct ultrawidelock_sha256 h;
 
 	if (out == NULL) {
 		return MATTER_E_INVAL;
@@ -161,16 +161,16 @@ int matter_spake2p_context(const uint8_t *req, size_t req_len, const uint8_t *re
 		return MATTER_E_INVAL;
 	}
 
-	aliro_sha256_init(&h);
+	ultrawidelock_sha256_init(&h);
 	/* sizeof - 1: the NUL is not part of the context. */
-	aliro_sha256_update(&h, k_context, sizeof(k_context) - 1u);
+	ultrawidelock_sha256_update(&h, k_context, sizeof(k_context) - 1u);
 	if (req_len != 0u) {
-		aliro_sha256_update(&h, req, req_len);
+		ultrawidelock_sha256_update(&h, req, req_len);
 	}
 	if (resp_len != 0u) {
-		aliro_sha256_update(&h, resp, resp_len);
+		ultrawidelock_sha256_update(&h, resp, resp_len);
 	}
-	aliro_sha256_final(&h, out);
+	ultrawidelock_sha256_final(&h, out);
 	return MATTER_OK;
 }
 
@@ -241,18 +241,18 @@ int matter_spake2p_transcript(const uint8_t context[MATTER_SPAKE_HASH_LEN],
 int matter_spake2p_p2(const uint8_t *tt, size_t tt_len, const uint8_t pa[MATTER_SPAKE_POINT_LEN],
 		      const uint8_t pb[MATTER_SPAKE_POINT_LEN], struct matter_spake2p_result *out)
 {
-	uint8_t kake[ALIRO_SHA256_LEN];
-	uint8_t kcakcb[ALIRO_SHA256_LEN];
+	uint8_t kake[ULTRAWIDELOCK_SHA256_LEN];
+	uint8_t kcakcb[ULTRAWIDELOCK_SHA256_LEN];
 
 	if (tt == NULL || tt_len == 0u || pa == NULL || pb == NULL || out == NULL) {
 		return MATTER_E_INVAL;
 	}
 
 	/* Ka is the first half of SHA256(TT), Ke the second. */
-	aliro_sha256(tt, tt_len, kake);
+	ultrawidelock_sha256(tt, tt_len, kake);
 
 	/* KcA ‖ KcB = HKDF(Ka, "ConfirmationKeys") with an empty salt. */
-	if (aliro_hkdf(NULL, 0u, kake, MATTER_SPAKE_HALF_LEN, (const uint8_t *)k_confirmation_info,
+	if (ultrawidelock_hkdf(NULL, 0u, kake, MATTER_SPAKE_HALF_LEN, (const uint8_t *)k_confirmation_info,
 		       sizeof(k_confirmation_info) - 1u, kcakcb, sizeof(kcakcb)) != 0) {
 		memset(kake, 0, sizeof(kake));
 		return MATTER_E_STATE;
@@ -261,8 +261,8 @@ int matter_spake2p_p2(const uint8_t *tt, size_t tt_len, const uint8_t pa[MATTER_
 	/* Each side confirms with the OTHER side's share: cA over pB, cB over pA.
 	 * Swapping them produces two values that both look plausible and neither
 	 * of which the peer accepts. */
-	aliro_hmac_sha256(&kcakcb[0], MATTER_SPAKE_HALF_LEN, pb, MATTER_SPAKE_POINT_LEN, out->ca);
-	aliro_hmac_sha256(&kcakcb[MATTER_SPAKE_HALF_LEN], MATTER_SPAKE_HALF_LEN, pa,
+	ultrawidelock_hmac_sha256(&kcakcb[0], MATTER_SPAKE_HALF_LEN, pb, MATTER_SPAKE_POINT_LEN, out->ca);
+	ultrawidelock_hmac_sha256(&kcakcb[MATTER_SPAKE_HALF_LEN], MATTER_SPAKE_HALF_LEN, pa,
 			  MATTER_SPAKE_POINT_LEN, out->cb);
 	memcpy(out->ke, &kake[MATTER_SPAKE_HALF_LEN], MATTER_SPAKE_HALF_LEN);
 

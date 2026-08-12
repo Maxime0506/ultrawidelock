@@ -4,10 +4,10 @@
 // reader's SPSM/versions, writes the selected version and opens a CoC client to
 // that SPSM.
 /*
- * Zephyr backend behind the shared aliro_ble_central.h, the counterpart of the
- * NimBLE one in ports/esp32/components/aliro_ble_central. The decoding it feeds
+ * Zephyr backend behind the shared ultrawidelock_ble_central.h, the counterpart of the
+ * NimBLE one in ports/esp32/components/ultrawidelock_ble_central. The decoding it feeds
  * on (advert, READ payload, BleSK salt) is platform-free and lives in
- * modules/woz_aliro/src/aliro_ble_central.c, host-tested separately; everything
+ * modules/ultrawidelock_cred/src/ultrawidelock_ble_central.c, host-tested separately; everything
  * here is stack plumbing that only silicon can exercise.
  *
  * Bring-up is one linear chain, each step resumed from the previous callback:
@@ -28,14 +28,14 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/net_buf.h>
 
-#include "aliro_ble_central.h"
+#include "ultrawidelock_ble_central.h"
 
-LOG_MODULE_REGISTER(aliro_central, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(ultrawidelock_central, CONFIG_LOG_DEFAULT_LEVEL);
 
 /* Sized to match the reader side (aliro_ble_zephyr.c:49) so an SDU that fits one
  * fits the other. The SPSM itself is NOT hardcoded here: it is whatever the READ
  * returns, because it sits in the dynamic range and is the reader's to choose. */
-#define ALIRO_L2CAP_MTU 512u
+#define ULTRAWIDELOCK_L2CAP_MTU 512u
 
 /* Aliro service, 16-bit 0xFFF2 — the one the reader advertises and serves. */
 static const struct bt_uuid_16 k_svc_uuid = BT_UUID_INIT_16(0xfff2u);
@@ -48,7 +48,7 @@ static const struct bt_uuid_128 k_chr_reader_spsm_uuid = BT_UUID_INIT_128(
 static const struct bt_uuid_128 k_chr_device_ver_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0xbd4b9502, 0x3f54, 0x11ec, 0xb919, 0x0242ac120005));
 
-static struct aliro_ble_central_config s_cfg;
+static struct ultrawidelock_ble_central_config s_cfg;
 
 /* Set the moment we decide to connect, cleared when we go back to scanning.
  * bt_le_scan_stop() does not retract reports the stack has already queued, so
@@ -63,14 +63,14 @@ static struct {
 	uint16_t spsm_val_handle;
 	uint16_t devver_val_handle;
 	bool coc_open;
-	struct aliro_ble_central_peer peer;
+	struct ultrawidelock_ble_central_peer peer;
 } s_peer;
 
 /* Separate pools by direction, same reasoning as the reader side: sharing one
  * would let a queued outbound SDU starve the receive path mid-transaction. */
-NET_BUF_POOL_FIXED_DEFINE(s_coc_rx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ALIRO_L2CAP_MTU),
+NET_BUF_POOL_FIXED_DEFINE(s_coc_rx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ULTRAWIDELOCK_L2CAP_MTU),
 			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
-NET_BUF_POOL_FIXED_DEFINE(s_coc_tx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ALIRO_L2CAP_MTU),
+NET_BUF_POOL_FIXED_DEFINE(s_coc_tx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ULTRAWIDELOCK_L2CAP_MTU),
 			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
 
 static struct aliro_coc_client {
@@ -192,7 +192,7 @@ static void coc_connect(void)
 	}
 	memset(&s_coc.le, 0, sizeof(s_coc.le));
 	s_coc.le.chan.ops = &k_coc_ops;
-	s_coc.le.rx.mtu = ALIRO_L2CAP_MTU;
+	s_coc.le.rx.mtu = ULTRAWIDELOCK_L2CAP_MTU;
 	s_coc.in_use = true;
 
 	int err = bt_l2cap_chan_connect(s_peer.conn, &s_coc.le.chan, s_peer.peer.spsm);
@@ -238,7 +238,7 @@ static uint8_t on_spsm_read(struct bt_conn *conn, uint8_t err, struct bt_gatt_re
 		abandon("reader-SPSM read: empty", (int)length);
 		return BT_GATT_ITER_STOP;
 	}
-	if (aliro_ble_central_parse_read_payload(data, length, &s_peer.peer) != 0) {
+	if (ultrawidelock_ble_central_parse_read_payload(data, length, &s_peer.peer) != 0) {
 		abandon("reader-SPSM read: malformed payload", (int)length);
 		return BT_GATT_ITER_STOP;
 	}
@@ -369,13 +369,13 @@ static uint8_t on_svc_disc(struct bt_conn *conn, const struct bt_gatt_attr *attr
 static bool advert_is_our_reader(struct bt_data *data, void *user_data)
 {
 	bool *matched = user_data;
-	struct aliro_ble_central_adv adv;
+	struct ultrawidelock_ble_central_adv adv;
 
 	if (data->type != BT_DATA_SVC_DATA16 ||
-	    data->data_len != ALIRO_BLE_CENTRAL_SVC_DATA_LEN) {
+	    data->data_len != ULTRAWIDELOCK_BLE_CENTRAL_SVC_DATA_LEN) {
 		return true; /* keep walking the AD structures */
 	}
-	if (aliro_ble_central_parse_adv(data->data, data->data_len, &adv) != 0) {
+	if (ultrawidelock_ble_central_parse_adv(data->data, data->data_len, &adv) != 0) {
 		return true;
 	}
 
@@ -393,7 +393,7 @@ static bool advert_is_our_reader(struct bt_data *data, void *user_data)
 		*matched = true;
 		return false;
 	}
-	if (aliro_ble_central_adv_matches(&adv, s_cfg.reader_id) == 1) {
+	if (ultrawidelock_ble_central_adv_matches(&adv, s_cfg.reader_id) == 1) {
 		*matched = true;
 		return false;
 	}
@@ -527,7 +527,7 @@ static void bt_ready(int err)
 	start_scan();
 }
 
-int aliro_ble_central_start(const struct aliro_ble_central_config *cfg)
+int ultrawidelock_ble_central_start(const struct ultrawidelock_ble_central_config *cfg)
 {
 	if (cfg == NULL || cfg->selected_version == 0u) {
 		return -1;
@@ -551,13 +551,13 @@ int aliro_ble_central_start(const struct aliro_ble_central_config *cfg)
 	return 0;
 }
 
-int aliro_ble_central_send(uint16_t conn_handle, const uint8_t *data, size_t len)
+int ultrawidelock_ble_central_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	if (data == NULL || len == 0u || !s_peer.coc_open || s_peer.conn == NULL ||
 	    conn_to_handle(s_peer.conn) != conn_handle) {
 		return -1;
 	}
-	if (len > ALIRO_L2CAP_MTU) {
+	if (len > ULTRAWIDELOCK_L2CAP_MTU) {
 		return -1;
 	}
 

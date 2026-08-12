@@ -1,6 +1,6 @@
 /*
- * aliro_ble — Zephyr/NCS backend for the Aliro BLE transport seam
- * (modules/woz_aliro/include/aliro_ble.h), for the DWM3001CDK standalone
+ * ultrawidelock_ble — Zephyr/NCS backend for the Aliro BLE transport seam
+ * (modules/ultrawidelock_cred/include/ultrawidelock_ble.h), for the DWM3001CDK standalone
  * reader. The byte contract is the one the ESP32-S3 NimBLE backend already
  * ships and the host tests already pin: the 0xFFF2 service, the reader-SPSM
  * READ payload, the device-version WRITE, and the Aliro transaction on an
@@ -28,22 +28,22 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/net_buf.h>
 
-#include "aliro_advtag.h"
-#include "aliro_ble.h"
-#include "aliro_prov.h" /* ALIRO_GRK_LEN */
+#include "ultrawidelock_advtag.h"
+#include "ultrawidelock_ble.h"
+#include "ultrawidelock_prov.h" /* ULTRAWIDELOCK_GRK_LEN */
 #if IS_ENABLED(CONFIG_ALIRO_MATTER_BLE)
 #include "matter_ble_zephyr.h"
 #include "matter_commission.h" /* the commissionable payload, when unprovisioned */
 #endif
 
-LOG_MODULE_REGISTER(aliro_ble, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(ultrawidelock_ble, CONFIG_LOG_DEFAULT_LEVEL);
 
-/* Same value the ESP32-S3 backend publishes (ports/esp32/components/aliro_ble/
- * aliro_ble.c:42). The dynamic-PSM range is 0x0080..0x00FF and the peer learns
+/* Same value the ESP32-S3 backend publishes (ports/esp32/components/ultrawidelock_ble/
+ * ultrawidelock_ble.c:42). The dynamic-PSM range is 0x0080..0x00FF and the peer learns
  * the value from the READ characteristic, so it is ours to pick — but picking
  * the same one keeps bench captures comparable across the two ports. */
-#define ALIRO_L2CAP_SPSM 0x0080u
-#define ALIRO_L2CAP_MTU  512u
+#define ULTRAWIDELOCK_L2CAP_SPSM 0x0080u
+#define ULTRAWIDELOCK_L2CAP_MTU  512u
 
 /* Reader SPSM + BLE-UWB protocol version, D3B5A130-9E23-4B3A-8BE4-6B1EE5F980A3. */
 static const struct bt_uuid_128 k_chr_reader_spsm_uuid = BT_UUID_INIT_128(
@@ -53,36 +53,36 @@ static const struct bt_uuid_128 k_chr_reader_spsm_uuid = BT_UUID_INIT_128(
 static const struct bt_uuid_128 k_chr_device_ver_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0xbd4b9502, 0x3f54, 0x11ec, 0xb919, 0x0242ac120005));
 
-#define ALIRO_MAX_VERSIONS 8u
+#define ULTRAWIDELOCK_MAX_VERSIONS 8u
 
-static uint16_t s_versions[ALIRO_MAX_VERSIONS];
+static uint16_t s_versions[ULTRAWIDELOCK_MAX_VERSIONS];
 static size_t s_versions_count;
-static struct aliro_ble_callbacks s_cb;
+static struct ultrawidelock_ble_callbacks s_cb;
 
 /* Prebuilt READ payload: [SPSM be16][verLen u8][versions be16*N][featLen u8][features u8]. */
-static uint8_t s_read_payload[2u + 1u + (2u * ALIRO_MAX_VERSIONS) + 1u + 1u];
+static uint8_t s_read_payload[2u + 1u + (2u * ULTRAWIDELOCK_MAX_VERSIONS) + 1u + 1u];
 static uint16_t s_read_payload_len;
 
 /* Resolvable advertising params, set once the reader is provisioned. */
 static bool s_adv_aliro;
-/** Whether the one connection slot is occupied; see aliro_advertise(). */
+/** Whether the one connection slot is occupied; see ultrawidelock_advertise(). */
 static bool s_conn_up;
 static uint8_t s_adv_group_id[8];
 static uint8_t s_adv_sub_id[2];
-static uint8_t s_adv_grk[ALIRO_GRK_LEN];
+static uint8_t s_adv_grk[ULTRAWIDELOCK_GRK_LEN];
 static int8_t s_adv_tx_power;
 
 /* A dynamic tag whose expiry is in the phone's past is silently ignored, so a
  * clock we cannot trust must advertise the "unavailable" form instead. Mirrors
- * the ESP backend's ALIRO_ADV_TIME_FLOOR / ALIRO_ADV_TAG_VALID_S. */
-#define ALIRO_ADV_TIME_FLOOR   1700000000
-#define ALIRO_ADV_TAG_VALID_S  600
+ * the ESP backend's ULTRAWIDELOCK_ADV_TIME_FLOOR / ULTRAWIDELOCK_ADV_TAG_VALID_S. */
+#define ULTRAWIDELOCK_ADV_TIME_FLOOR   1700000000
+#define ULTRAWIDELOCK_ADV_TAG_VALID_S  600
 
 /* ---- L2CAP CoC: the Aliro transaction channel ---------------------------- */
 
 /* One peer at a time. CONFIG_BT_MAX_CONN=1 makes that a build-time fact, not a
  * hope, so a single channel record is the whole table. */
-static struct aliro_coc {
+static struct ultrawidelock_coc {
 	struct bt_l2cap_le_chan le;
 	struct bt_conn *conn;
 	bool in_use;
@@ -91,9 +91,9 @@ static struct aliro_coc {
 /* Separate pools by direction. Sharing one would let a queued outbound SDU
  * starve the receive path mid-transaction, which is the phase where a dropped
  * SDU costs the whole walk-up. */
-NET_BUF_POOL_FIXED_DEFINE(s_coc_rx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ALIRO_L2CAP_MTU),
+NET_BUF_POOL_FIXED_DEFINE(s_coc_rx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ULTRAWIDELOCK_L2CAP_MTU),
 			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
-NET_BUF_POOL_FIXED_DEFINE(s_coc_tx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ALIRO_L2CAP_MTU),
+NET_BUF_POOL_FIXED_DEFINE(s_coc_tx_pool, 2, BT_L2CAP_SDU_BUF_SIZE(ULTRAWIDELOCK_L2CAP_MTU),
 			  CONFIG_BT_CONN_TX_USER_DATA_SIZE, NULL);
 
 /* The reader engine's transport handle. Zephyr identifies a link by pointer,
@@ -187,7 +187,7 @@ static void side_emit_clear(void)
  */
 static void coc_connected(struct bt_l2cap_chan *chan)
 {
-	LOG_INF("L2CAP CoC open (SPSM 0x%04x)", (unsigned)ALIRO_L2CAP_SPSM);
+	LOG_INF("L2CAP CoC open (SPSM 0x%04x)", (unsigned)ULTRAWIDELOCK_L2CAP_SPSM);
 	side_emit_peer(chan->conn);
 	if (s_cb.on_connected != NULL) {
 		s_cb.on_connected(conn_to_handle(chan->conn));
@@ -232,7 +232,7 @@ static int coc_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 	}
 	memset(&s_coc.le, 0, sizeof(s_coc.le));
 	s_coc.le.chan.ops = &k_coc_ops;
-	s_coc.le.rx.mtu = ALIRO_L2CAP_MTU;
+	s_coc.le.rx.mtu = ULTRAWIDELOCK_L2CAP_MTU;
 	s_coc.conn = conn;
 	s_coc.in_use = true;
 	*chan = &s_coc.le.chan;
@@ -240,7 +240,7 @@ static int coc_accept(struct bt_conn *conn, struct bt_l2cap_server *server,
 }
 
 static struct bt_l2cap_server s_l2cap_server = {
-	.psm = ALIRO_L2CAP_SPSM,
+	.psm = ULTRAWIDELOCK_L2CAP_SPSM,
 	.sec_level = BT_SECURITY_L1, /* Aliro encrypts at the application layer */
 	.accept = coc_accept,
 };
@@ -251,7 +251,7 @@ static struct bt_l2cap_server s_l2cap_server = {
  * Encode Aliro feature flags (timesync procedures 0 and 1, LE Coded PHY) into a byte bitmap for the
  * service data advertisement.
  */
-static uint8_t encode_features(const struct aliro_ble_features *f)
+static uint8_t encode_features(const struct ultrawidelock_ble_features *f)
 {
 	uint8_t b = 0;
 
@@ -271,12 +271,12 @@ static uint8_t encode_features(const struct aliro_ble_features *f)
  * Build the Aliro BLE advertisement payload containing the L2CAP SPSM, supported protocol versions,
  * and feature flags.
  */
-static void build_read_payload(const struct aliro_ble_config *cfg)
+static void build_read_payload(const struct ultrawidelock_ble_config *cfg)
 {
 	uint8_t *p = s_read_payload;
 
-	*p++ = (uint8_t)(ALIRO_L2CAP_SPSM >> 8);
-	*p++ = (uint8_t)(ALIRO_L2CAP_SPSM & 0xffu);
+	*p++ = (uint8_t)(ULTRAWIDELOCK_L2CAP_SPSM >> 8);
+	*p++ = (uint8_t)(ULTRAWIDELOCK_L2CAP_SPSM & 0xffu);
 
 	*p++ = (uint8_t)(s_versions_count * 2u);
 	for (size_t i = 0; i < s_versions_count; i++) {
@@ -360,15 +360,15 @@ static bool build_aliro_svc_data(uint8_t out[24])
 		adva_msb[i] = addrs[0].a.val[5 - i];
 	}
 
-	uint32_t expiry = ALIRO_ADVTAG_EXPIRY_UNAVAILABLE;
+	uint32_t expiry = ULTRAWIDELOCK_ADVTAG_EXPIRY_UNAVAILABLE;
 	time_t now = time(NULL);
 
-	if (now >= ALIRO_ADV_TIME_FLOOR) {
-		expiry = (uint32_t)now + ALIRO_ADV_TAG_VALID_S;
+	if (now >= ULTRAWIDELOCK_ADV_TIME_FLOOR) {
+		expiry = (uint32_t)now + ULTRAWIDELOCK_ADV_TAG_VALID_S;
 	}
 
-	uint8_t dyn_tag[ALIRO_ADVTAG_LEN];
-	int rc = aliro_advtag_derive(s_adv_grk, adva_msb, expiry, dyn_tag);
+	uint8_t dyn_tag[ULTRAWIDELOCK_ADVTAG_LEN];
+	int rc = ultrawidelock_advtag_derive(s_adv_grk, adva_msb, expiry, dyn_tag);
 
 	if (rc != 0) {
 		LOG_ERR("adv: dynamic-tag derive rc=%d", rc);
@@ -388,7 +388,7 @@ static bool build_aliro_svc_data(uint8_t out[24])
 	*p++ = (uint8_t)(expiry >> 8);
 	*p++ = (uint8_t)expiry;
 	*p++ = 0x00u; /* reserved */
-	memcpy(p, dyn_tag, ALIRO_ADVTAG_LEN);
+	memcpy(p, dyn_tag, ULTRAWIDELOCK_ADVTAG_LEN);
 	return true;
 }
 
@@ -429,7 +429,7 @@ static const struct bt_data smp_sd[] = {
  * unprovisioned or a window is open, or bare service UUID as fallback. Stops advertising if a
  * connection is active and schedules re-advertisement on disconnect.
  */
-static int aliro_advertise(void)
+static int ultrawidelock_advertise(void)
 {
 	static uint8_t svc_data[2 + 24]; /* BT_DATA_SVC_DATA16 carries the UUID inline */
 	struct bt_data ad[3];
@@ -565,7 +565,7 @@ static void readvertise_work_fn(struct k_work *w)
 
 	ARG_UNUSED(w);
 
-	if (aliro_advertise() == 0) {
+	if (ultrawidelock_advertise() == 0) {
 		attempts = 0u;
 		return;
 	}
@@ -689,17 +689,17 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.le_param_updated = on_le_param_updated,
 };
 
-/* ---- the aliro_ble.h seam ------------------------------------------------ */
+/* ---- the ultrawidelock_ble.h seam ------------------------------------------------ */
 
 /**
  * Validate and store Aliro BLE configuration: protocol versions and callback handler. Caller must
- * provide non-null cfg with non-empty proto_versions array sized <= ALIRO_MAX_VERSIONS; returns 0
- * on success or -EINVAL if any parameter is invalid.
+ * provide non-null cfg with non-empty proto_versions array sized <= ULTRAWIDELOCK_MAX_VERSIONS;
+ * returns 0 on success or -EINVAL if any parameter is invalid.
  */
-int aliro_ble_prepare(const struct aliro_ble_config *cfg)
+int ultrawidelock_ble_prepare(const struct ultrawidelock_ble_config *cfg)
 {
 	if (cfg == NULL || cfg->proto_versions == NULL || cfg->proto_versions_count == 0 ||
-	    cfg->proto_versions_count > ALIRO_MAX_VERSIONS) {
+	    cfg->proto_versions_count > ULTRAWIDELOCK_MAX_VERSIONS) {
 		return -EINVAL;
 	}
 	s_versions_count = cfg->proto_versions_count;
@@ -709,9 +709,9 @@ int aliro_ble_prepare(const struct aliro_ble_config *cfg)
 	return 0;
 }
 
-int aliro_ble_start(const struct aliro_ble_config *cfg)
+int ultrawidelock_ble_start(const struct ultrawidelock_ble_config *cfg)
 {
-	int rc = aliro_ble_prepare(cfg);
+	int rc = ultrawidelock_ble_prepare(cfg);
 
 	if (rc != 0) {
 		return rc;
@@ -734,21 +734,21 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 		return rc;
 	}
 
-	rc = aliro_advertise();
+	rc = ultrawidelock_advertise();
 	if (rc != 0) {
 		LOG_ERR("adv start rc=%d", rc);
 		return rc;
 	}
-	LOG_INF("Aliro reader up; advertising (SPSM 0x%04x)", (unsigned)ALIRO_L2CAP_SPSM);
+	LOG_INF("Aliro reader up; advertising (SPSM 0x%04x)", (unsigned)ULTRAWIDELOCK_L2CAP_SPSM);
 	return 0;
 }
 
 /**
  * Return the L2CAP protocol/service multiplexer for the Aliro reader channel.
  */
-uint16_t aliro_ble_spsm(void)
+uint16_t ultrawidelock_ble_spsm(void)
 {
-	return ALIRO_L2CAP_SPSM;
+	return ULTRAWIDELOCK_L2CAP_SPSM;
 }
 
 /**
@@ -756,7 +756,7 @@ uint16_t aliro_ble_spsm(void)
  * net_buf and asserts the payload fits the pool buffer to catch oversized framing from the reader
  * itself.
  */
-int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
+int ultrawidelock_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	ARG_UNUSED(conn_handle);
 
@@ -799,7 +799,7 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 /**
  * Disconnect the active L2CAP CoC link, terminating the Aliro protocol exchange.
  */
-int aliro_ble_disconnect(uint16_t conn_handle)
+int ultrawidelock_ble_disconnect(uint16_t conn_handle)
 {
 	ARG_UNUSED(conn_handle);
 
@@ -813,7 +813,7 @@ int aliro_ble_disconnect(uint16_t conn_handle)
  * Store the Aliro reader identity material (group ID, sub ID, GRK, TX power) to populate the
  * service data advertisement on the next readvertise call.
  */
-void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
+void ultrawidelock_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
 			      const uint8_t grk[16], int8_t tx_power)
 {
 	memcpy(s_adv_group_id, group_id8, sizeof(s_adv_group_id));
@@ -827,18 +827,18 @@ void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[
  * Re-advertise the Aliro reader service or Matter commissioning availability over BLE after a state
  * change requiring advertisement resume.
  */
-void aliro_ble_readvertise(void)
+void ultrawidelock_ble_readvertise(void)
 {
-	(void)aliro_advertise();
+	(void)ultrawidelock_advertise();
 }
 
 /**
  * Re-advertise the Aliro reader service or Matter commissioning availability over BLE after the
  * system time is updated.
  */
-void aliro_ble_time_updated(void)
+void ultrawidelock_ble_time_updated(void)
 {
-	(void)aliro_advertise();
+	(void)ultrawidelock_advertise();
 }
 
 /* The reader engine marshals these onto the transport's own task so a caller
@@ -889,7 +889,7 @@ static K_WORK_DEFINE(s_revoke_work, revoke_work_fn);
 /**
  * Queue a reader status callback with unsecured state to run asynchronously on the work queue.
  */
-void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
+void ultrawidelock_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 {
 	s_status_cb = cb;
 	s_status_unsecured = unsecured;
@@ -899,7 +899,7 @@ void aliro_ble_post_reader_status(void (*cb)(bool unsecured), bool unsecured)
 /**
  * Queue a presence reset callback to run asynchronously on the work queue.
  */
-void aliro_ble_post_presence_reset(void (*cb)(void))
+void ultrawidelock_ble_post_presence_reset(void (*cb)(void))
 {
 	s_presence_cb = cb;
 	k_work_submit(&s_presence_work);
@@ -908,7 +908,7 @@ void aliro_ble_post_presence_reset(void (*cb)(void))
 /**
  * Queue a post-revocation link sweep to run asynchronously on the work queue.
  */
-void aliro_ble_post_revoke_sweep(void (*cb)(void))
+void ultrawidelock_ble_post_revoke_sweep(void (*cb)(void))
 {
 	s_revoke_cb = cb;
 	k_work_submit(&s_revoke_work);
@@ -916,7 +916,7 @@ void aliro_ble_post_revoke_sweep(void (*cb)(void))
 
 /* Attach mode exists only so the ESP32 reader can share a NimBLE host with
  * esp-matter. Nothing shares this host. */
-const struct ble_gatt_svc_def *aliro_ble_service_def(void)
+const struct ble_gatt_svc_def *ultrawidelock_ble_service_def(void)
 {
 	return NULL;
 }
@@ -924,7 +924,7 @@ const struct ble_gatt_svc_def *aliro_ble_service_def(void)
 /**
  * Not supported on this target; returns ENOTSUP.
  */
-int aliro_ble_start_attached(void)
+int ultrawidelock_ble_start_attached(void)
 {
 	return -ENOTSUP;
 }

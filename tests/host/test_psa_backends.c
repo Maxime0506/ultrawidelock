@@ -13,13 +13,13 @@
  * Files under test:
  *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_psa.c      (as woz_test_psa_ecb)
  *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_mbedtls.c  (as woz_test_mbedtls_ecb)
- *   modules/woz_aliro/src/aliro_prim_psa.c
+ *   modules/ultrawidelock_cred/src/ultrawidelock_prim_psa.c
  */
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_prim.h"
+#include "ultrawidelock_prim.h"
 #include "psafake.h"
 #include <mbedtls/aes.h>
 #include <psa/crypto.h>
@@ -101,8 +101,8 @@ void test_ccc_crypto_backends(void)
 void test_aliro_prim_psa(void)
 {
 	uint8_t ct[64], tag[16], pt[64], out16[16];
-	uint8_t priv[ALIRO_P256_SCALAR], pub[ALIRO_P256_POINT];
-	uint8_t shared[ALIRO_P256_SCALAR], sig[ALIRO_P256_SIG];
+	uint8_t priv[ULTRAWIDELOCK_P256_SCALAR], pub[ULTRAWIDELOCK_P256_POINT];
+	uint8_t shared[ULTRAWIDELOCK_P256_SCALAR], sig[ULTRAWIDELOCK_P256_SIG];
 	static const uint8_t NONCE[12] = {0};
 	static const uint8_t AAD[5] = {1, 2, 3, 4, 5};
 	static const uint8_t MSG[20] = {7};
@@ -110,19 +110,19 @@ void test_aliro_prim_psa(void)
 
 	t_group("init + random");
 	psafake_reset();
-	T_EQ("init ok", aliro_prim_init(), 0);
+	T_EQ("init ok", ultrawidelock_prim_init(), 0);
 	T_EQ("init hits psa_crypto_init", (long)psafake.init_calls, 1L);
 	psafake.init_ret = PSA_ERROR_GENERIC;
-	T_EQ("init fail -> -1", aliro_prim_init(), -1);
-	T_EQ("random ok", aliro_random(pt, 20), 0);
+	T_EQ("init fail -> -1", ultrawidelock_prim_init(), -1);
+	T_EQ("random ok", ultrawidelock_random(pt, 20), 0);
 	T_EQ("random len plumbed", (long)psafake.last_random_len, 20L);
 	psafake.random_ret = PSA_ERROR_GENERIC;
-	T_EQ("random fail -> -1", aliro_random(pt, 4), -1);
+	T_EQ("random fail -> -1", ultrawidelock_random(pt, 4), -1);
 
 	t_group("aes256-gcm encrypt");
 	psafake_reset();
 	T_EQ("encrypt ok (tag16)",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, sizeof(NONCE), AAD, sizeof(AAD), BLK, 16, ct,
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, sizeof(NONCE), AAD, sizeof(AAD), BLK, 16, ct,
 				      tag, 16),
 	     0);
 	T_EQ("bits 256", (long)psafake.attr_bits, 256L);
@@ -136,70 +136,70 @@ void test_aliro_prim_psa(void)
 	T_EQ("key destroyed", (long)psafake.destroy_calls, 1L);
 	psafake.aead_enc_olen = 16 + 8; /* fake writes pt+16; olen knob models tag8 */
 	T_EQ("encrypt ok (tag8)",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, sizeof(NONCE), NULL, 0, BLK, 16, ct, tag, 8),
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, sizeof(NONCE), NULL, 0, BLK, 16, ct, tag, 8),
 	     0);
 	T_EQ("alg encodes tag8", (long)psafake.last_alg,
 	     (long)PSA_ALG_AEAD_WITH_SHORTENED_TAG(PSA_ALG_GCM, 8));
 	T_EQ("tag too long -> -1",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 17), -1);
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 17), -1);
 	T_EQ("pt too long -> -1",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 2000, ct, tag, 16), -1);
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 2000, ct, tag, 16), -1);
 	psafake_reset();
 	psafake.import_ret = PSA_ERROR_GENERIC;
 	T_EQ("import fail -> -1",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
 	psafake_reset();
 	psafake.aead_enc_ret = PSA_ERROR_GENERIC;
 	T_EQ("aead fail -> -1",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
 	T_EQ("destroy after aead fail", (long)psafake.destroy_calls, 1L);
 	psafake_reset();
 	psafake.aead_enc_olen = 5; /* wrong total length */
 	T_EQ("olen mismatch -> -1",
-	     aliro_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
+	     ultrawidelock_aes256_gcm_encrypt(K32, NONCE, 12, NULL, 0, BLK, 16, ct, tag, 16), -1);
 
 	t_group("aes256-gcm decrypt");
 	psafake_reset();
 	T_EQ("decrypt ok",
-	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, AAD, 5, ct, 16, tag, 16, pt), 0);
+	     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, AAD, 5, ct, 16, tag, 16, pt), 0);
 	T_EQ("usage DECRYPT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_DECRYPT);
 	T_EQ("ct||tag length in", (long)psafake.last_in_len, 32L);
 	T_OK("pt out", memcmp(pt, ct, 16) == 0);
 	T_EQ("tag too long -> -1",
-	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 17, pt), -1);
+	     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 17, pt), -1);
 	T_EQ("ct too long -> -1",
-	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 2000, tag, 16, pt), -1);
+	     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 2000, tag, 16, pt), -1);
 	psafake_reset();
 	psafake.import_ret = PSA_ERROR_GENERIC;
 	T_EQ("import fail -> -1",
-	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
+	     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
 	psafake_reset();
 	psafake.aead_dec_ret = PSA_ERROR_GENERIC;
 	T_EQ("tag-mismatch fail -> -1",
-	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
+	     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
 	psafake_reset();
 	psafake.aead_dec_olen = 3;
 	T_EQ("olen mismatch -> -1",
-	     aliro_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
+	     ultrawidelock_aes256_gcm_decrypt(K32, NONCE, 12, NULL, 0, ct, 16, tag, 16, pt), -1);
 
 	t_group("aes128-ecb (advert dynamic tag)");
 	psafake_reset();
-	T_EQ("ecb ok", aliro_aes128_ecb_encrypt(K16, BLK, out16), 0);
+	T_EQ("ecb ok", ultrawidelock_aes128_ecb_encrypt(K16, BLK, out16), 0);
 	T_EQ("bits 128", (long)psafake.attr_bits, 128L);
 	T_EQ("alg ECB", (long)psafake.last_alg, (long)PSA_ALG_ECB_NO_PADDING);
 	T_OK("block out", memcmp(out16, BLK, 16) == 0);
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("import fail -> -1", aliro_aes128_ecb_encrypt(K16, BLK, out16), -1);
+	T_EQ("import fail -> -1", ultrawidelock_aes128_ecb_encrypt(K16, BLK, out16), -1);
 	psafake_reset();
 	psafake.cipher_olen = 15;
-	T_EQ("olen mismatch -> -1", aliro_aes128_ecb_encrypt(K16, BLK, out16), -1);
+	T_EQ("olen mismatch -> -1", ultrawidelock_aes128_ecb_encrypt(K16, BLK, out16), -1);
 	psafake_reset();
 	psafake.cipher_ret = PSA_ERROR_GENERIC;
-	T_EQ("cipher fail -> -1", aliro_aes128_ecb_encrypt(K16, BLK, out16), -1);
+	T_EQ("cipher fail -> -1", ultrawidelock_aes128_ecb_encrypt(K16, BLK, out16), -1);
 
 	t_group("p256 keygen");
 	psafake_reset();
-	T_EQ("keygen ok", aliro_ec_p256_keygen(priv, pub), 0);
+	T_EQ("keygen ok", ultrawidelock_ec_p256_keygen(priv, pub), 0);
 	T_EQ("usage EXPORT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_EXPORT);
 	T_EQ("alg ECDH", (long)psafake.attr_alg, (long)PSA_ALG_ECDH);
 	T_EQ("type keypair secp256r1", (long)psafake.attr_type,
@@ -208,84 +208,84 @@ void test_aliro_prim_psa(void)
 	T_EQ("destroyed", (long)psafake.destroy_calls, 1L);
 	psafake_reset();
 	psafake.generate_key_ret = PSA_ERROR_GENERIC;
-	T_EQ("generate fail -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	T_EQ("generate fail -> -1", ultrawidelock_ec_p256_keygen(priv, pub), -1);
 	psafake_reset();
 	psafake.export_key_ret = PSA_ERROR_GENERIC;
-	T_EQ("export-priv fail -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	T_EQ("export-priv fail -> -1", ultrawidelock_ec_p256_keygen(priv, pub), -1);
 	psafake_reset();
 	psafake.export_olen = 31;
-	T_EQ("priv olen mismatch -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	T_EQ("priv olen mismatch -> -1", ultrawidelock_ec_p256_keygen(priv, pub), -1);
 	psafake_reset();
 	psafake.export_pub_ret = PSA_ERROR_GENERIC;
-	T_EQ("export-pub fail -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	T_EQ("export-pub fail -> -1", ultrawidelock_ec_p256_keygen(priv, pub), -1);
 	psafake_reset();
 	psafake.export_pub_olen = 64;
-	T_EQ("pub olen mismatch -> -1", aliro_ec_p256_keygen(priv, pub), -1);
+	T_EQ("pub olen mismatch -> -1", ultrawidelock_ec_p256_keygen(priv, pub), -1);
 
 	t_group("p256 pub-from-priv");
 	psafake_reset();
-	T_EQ("derive ok", aliro_ec_p256_pub_from_priv(priv, pub), 0);
+	T_EQ("derive ok", ultrawidelock_ec_p256_pub_from_priv(priv, pub), 0);
 	T_EQ("scalar imported", (long)psafake.key_len, 32L);
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("import fail -> -1", aliro_ec_p256_pub_from_priv(priv, pub), -1);
+	T_EQ("import fail -> -1", ultrawidelock_ec_p256_pub_from_priv(priv, pub), -1);
 	psafake_reset();
 	psafake.export_pub_olen = 10;
-	T_EQ("olen mismatch -> -1", aliro_ec_p256_pub_from_priv(priv, pub), -1);
+	T_EQ("olen mismatch -> -1", ultrawidelock_ec_p256_pub_from_priv(priv, pub), -1);
 
 	t_group("p256 ecdh");
 	psafake_reset();
-	T_EQ("ecdh ok", aliro_ecdh_p256(priv, pub, shared), 0);
+	T_EQ("ecdh ok", ultrawidelock_ecdh_p256(priv, pub, shared), 0);
 	T_EQ("usage DERIVE", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_DERIVE);
 	T_EQ("op alg ECDH", (long)psafake.last_alg, (long)PSA_ALG_ECDH);
 	T_EQ("peer point 65B", (long)psafake.last_in_len, 65L);
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("import fail -> -1", aliro_ecdh_p256(priv, pub, shared), -1);
+	T_EQ("import fail -> -1", ultrawidelock_ecdh_p256(priv, pub, shared), -1);
 	psafake_reset();
 	psafake.raw_ka_ret = PSA_ERROR_GENERIC;
-	T_EQ("agreement fail -> -1", aliro_ecdh_p256(priv, pub, shared), -1);
+	T_EQ("agreement fail -> -1", ultrawidelock_ecdh_p256(priv, pub, shared), -1);
 	psafake_reset();
 	psafake.raw_ka_olen = 31;
-	T_EQ("olen mismatch -> -1", aliro_ecdh_p256(priv, pub, shared), -1);
+	T_EQ("olen mismatch -> -1", ultrawidelock_ecdh_p256(priv, pub, shared), -1);
 
 	t_group("p256 ecdsa sign/verify");
 	psafake_reset();
-	T_EQ("sign ok", aliro_ecdsa_p256_sign(priv, MSG, sizeof(MSG), sig), 0);
+	T_EQ("sign ok", ultrawidelock_ecdsa_p256_sign(priv, MSG, sizeof(MSG), sig), 0);
 	T_EQ("usage SIGN", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_SIGN_MESSAGE);
 	T_EQ("alg ECDSA(SHA256)", (long)psafake.last_alg,
 	     (long)PSA_ALG_ECDSA(PSA_ALG_SHA_256));
 	T_EQ("msg len plumbed", (long)psafake.last_msg_len, 20L);
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("sign import fail -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	T_EQ("sign import fail -> -1", ultrawidelock_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
 	psafake_reset();
 	psafake.sign_ret = PSA_ERROR_GENERIC;
-	T_EQ("sign fail -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	T_EQ("sign fail -> -1", ultrawidelock_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
 	psafake_reset();
 	psafake.sign_olen = 63;
-	T_EQ("sig olen mismatch -> -1", aliro_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
+	T_EQ("sig olen mismatch -> -1", ultrawidelock_ecdsa_p256_sign(priv, MSG, 20, sig), -1);
 	psafake_reset();
-	T_EQ("sign hash ok", aliro_ecdsa_p256_sign_hash(priv, HASH, sig), 0);
+	T_EQ("sign hash ok", ultrawidelock_ecdsa_p256_sign_hash(priv, HASH, sig), 0);
 	T_EQ("usage SIGN_HASH", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_SIGN_HASH);
 	T_EQ("hash len plumbed", (long)psafake.last_msg_len, 32L);
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("sign hash import fail -> -1", aliro_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
+	T_EQ("sign hash import fail -> -1", ultrawidelock_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
 	psafake_reset();
 	psafake.sign_ret = PSA_ERROR_GENERIC;
-	T_EQ("sign hash fail -> -1", aliro_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
+	T_EQ("sign hash fail -> -1", ultrawidelock_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
 	psafake_reset();
 	psafake.sign_olen = 63;
 	T_EQ("sign hash olen mismatch -> -1",
-	     aliro_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
+	     ultrawidelock_ecdsa_p256_sign_hash(priv, HASH, sig), -1);
 	psafake_reset();
-	T_EQ("verify ok", aliro_ecdsa_p256_verify(pub, MSG, sizeof(MSG), sig), 0);
+	T_EQ("verify ok", ultrawidelock_ecdsa_p256_verify(pub, MSG, sizeof(MSG), sig), 0);
 	T_EQ("usage VERIFY", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_VERIFY_MESSAGE);
 	T_EQ("type public key", (long)psafake.attr_type,
 	     (long)PSA_KEY_TYPE_ECC_PUBLIC_KEY(PSA_ECC_FAMILY_SECP_R1));
 	T_EQ("sig len 64", (long)psafake.last_sig_len, 64L);
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("verify import fail -> -1", aliro_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
+	T_EQ("verify import fail -> -1", ultrawidelock_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
 	psafake_reset();
 	psafake.verify_ret = PSA_ERROR_GENERIC;
-	T_EQ("bad signature -> -1", aliro_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
+	T_EQ("bad signature -> -1", ultrawidelock_ecdsa_p256_verify(pub, MSG, 20, sig), -1);
 	T_EQ("destroy after verify fail", (long)psafake.destroy_calls, 1L);
 }
 

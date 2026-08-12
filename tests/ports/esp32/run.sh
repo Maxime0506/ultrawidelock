@@ -8,7 +8,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 SHARED="$HERE/../../../tests/shared"
-ALIRO="$HERE/../../../modules/woz_aliro"
+ALIRO="$HERE/../../../modules/ultrawidelock_cred"
 WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
 UWB_INC="$HERE/../../../modules/ultrawidelock_uwb/include"
 ESP_COMPONENTS="$REPO_ROOT/ports/esp32/components"
@@ -24,13 +24,13 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$LBIN"
 
 echo
-echo "== host: aliro_ble transport vs NimBLE fakes =="
+echo "== host: ultrawidelock_ble transport vs NimBLE fakes =="
 # Target-only sources compiled against the recording doubles in sdkfake/.
 # These suites prove branch logic + wiring against the fakes, not hardware
 # truth; the dynamic-tag advert bytes are cross-checked against
-# aliro_advtag_derive. See sdkfake/sdkfake.h.
-# Two files because bring-up is split: aliro_ble_nimble.c is the shared NimBLE
-# backend (also built by the standalone FreeRTOS port) and aliro_ble_esp32.c is
+# ultrawidelock_advtag_derive. See sdkfake/sdkfake.h.
+# Two files because bring-up is split: ultrawidelock_ble_nimble.c is the shared NimBLE
+# backend (also built by the standalone FreeRTOS port) and ultrawidelock_ble_esp32.c is
 # the ESP-IDF half. ESP_PLATFORM selects woz_log.h's ESP branch, which resolves
 # to sdkfake's esp_log.h -- the same path the target takes.
 SDKFAKE="$HERE/sdkfake"
@@ -39,38 +39,38 @@ cc -std=c11 -O1 -Wall -Wextra \
    -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
    -DESP_PLATFORM \
    "$HERE/test_esp_aliro_ble.c" \
-   "$ESP_COMPONENTS/aliro_ble/aliro_ble_esp32.c" \
-   "$ALIRO/src/aliro_ble_nimble.c" \
-   "$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
+   "$ESP_COMPONENTS/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
+   "$ALIRO/src/ultrawidelock_ble_nimble.c" \
+   "$ALIRO/src/ultrawidelock_advtag.c" "$ALIRO/src/ultrawidelock_hash.c" \
    "$SHARED/aliro_prim_host.c" \
    "$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$EBIN"
 "$EBIN"
 rm -f "$EBIN"
 
 echo
-echo "== host: aliro_prov NVS backend vs in-RAM NVS fake =="
+echo "== host: ultrawidelock_prov NVS backend vs in-RAM NVS fake =="
 NBIN="$(mktemp -t esp_prov_nvs.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$SDKFAKE" -I "$ALIRO/include" \
    "$HERE/test_esp_prov_nvs.c" \
-   "$ESP_COMPONENTS/aliro_reader/aliro_prov_nvs.c" \
-   "$ALIRO/src/aliro_prov.c" \
+   "$ESP_COMPONENTS/ultrawidelock_reader/ultrawidelock_prov_nvs.c" \
+   "$ALIRO/src/ultrawidelock_prov.c" \
    "$SDKFAKE/fake_nvs.c" -o "$NBIN"
 "$NBIN"
 rm -f "$NBIN"
 
 echo
-echo "== host: aliro_stepup worker vs FreeRTOS fakes =="
+echo "== host: ultrawidelock_stepup worker vs FreeRTOS fakes =="
 # The queue/task doubles are pumped synchronously; the decrypt/parse/verify
 # underneath is the real shared-core code on the stepup_vectors.h KATs.
 WBIN="$(mktemp -t esp_stepup_worker.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
    -I "$SDKFAKE" -I "$HERE" -I "$SHARED" -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_esp_stepup_worker.c" \
-   "$ESP_COMPONENTS/aliro_reader/aliro_stepup_worker.c" \
-   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_wire.c" \
-   "$ALIRO/src/aliro_stepup_parse.c" "$ALIRO/src/aliro_tlv.c" \
-   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
+   "$ESP_COMPONENTS/ultrawidelock_reader/ultrawidelock_stepup_worker.c" \
+   "$ALIRO/src/ultrawidelock_stepup.c" "$ALIRO/src/ultrawidelock_stepup_wire.c" \
+   "$ALIRO/src/ultrawidelock_stepup_parse.c" "$ALIRO/src/ultrawidelock_tlv.c" \
+   "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_crypto.c" \
    "$SHARED/aliro_prim_host.c" \
    "$SDKFAKE/fake_freertos.c" -o "$WBIN"
 "$WBIN"
@@ -85,12 +85,12 @@ PLBIN="$(mktemp -t esp_presence_link.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
    -DCONFIG_WOZ_PRESENCE_TIMEOUT_MS=1 -DCONFIG_WOZ_PRESENCE_MAX_CM=40 \
-   -I "$SDKFAKE" -I "$ESP_COMPONENTS/aliro_reader" \
+   -I "$SDKFAKE" -I "$ESP_COMPONENTS/ultrawidelock_reader" \
    -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
    -I "$UWB_INC" \
    "$HERE/test_esp_presence_link.c" \
-   "$ESP_COMPONENTS/aliro_reader/presence_link.c" \
-   "$ALIRO/src/aliro_assert.c" "$ALIRO/src/aliro_hash.c" \
+   "$ESP_COMPONENTS/ultrawidelock_reader/presence_link.c" \
+   "$ALIRO/src/ultrawidelock_assert.c" "$ALIRO/src/ultrawidelock_hash.c" \
    "$SDKFAKE/fake_nvs.c" -o "$PLBIN"
 "$PLBIN" | grep -E '^(--|  ok|  FAIL|RESULT)'
 rm -f "$PLBIN"
@@ -113,7 +113,7 @@ CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
 # clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
-   -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
+   -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DWOZ_PORT_HOST \
 	-I "$SDKFAKE" -I "$READER_MAIN" \
    -I "$UWB_INC" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
@@ -129,7 +129,7 @@ rm -f "$CSBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (S3 dual-core) =="
 DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_ULTRAWIDELOCK_CRED=1 \
    -DCONFIG_IDF_TARGET_ESP32S3=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=2 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240 \
@@ -147,7 +147,7 @@ rm -f "$DBIN"
 echo
 echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes (C6 single-core) =="
 DBIN="$(mktemp -t esp_dw3000_port_c6.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_ULTRAWIDELOCK_CRED=1 \
    -DCONFIG_IDF_TARGET_ESP32C6=1 \
    -DCONFIG_FREERTOS_NUMBER_OF_CORES=1 \
    -DCONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160 \
@@ -165,7 +165,7 @@ rm -f "$DBIN"
 echo
 echo "== host: seam RX-callback shim chaining =="
 SBIN2="$(mktemp -t esp_seam_stubs.XXXXXX)"
-cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_WOZ_ALIRO=1 \
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 -DCONFIG_ULTRAWIDELOCK_CRED=1 \
    -I "$HERE/../../../modules/ultrawidelock_dw3000/dwt_uwb_driver" \
    -I "$UWB_INC" \
    "$HERE/test_esp_seam_stubs.c" \
@@ -178,16 +178,16 @@ echo "== host: matter-lock app glue vs CHIP/esp-matter fakes =="
 # The six esp-matter door-lock app sources compiled UNMODIFIED against the
 # matterfake/ CHIP + esp-matter recording doubles (C++17). Proves branch
 # logic + argument plumbing only — never CHIP-stack, NimBLE, hardware, or
-# crypto truth. lock_led.c and the shared aliro_approach controller are C, so
+# crypto truth. lock_led.c and the shared ultrawidelock_approach controller are C, so
 # they get their own objects first (app_main.cpp drives the approach controller).
 MFAKE="$HERE/matterfake"
 LOCKD="$MATTER_MAIN"
 MBIN="$(mktemp -t esp_matter_lock.XXXXXX)"
 cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
-cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/aliro_approach.c" -o "$MBIN.approach.o"
+cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/ultrawidelock_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
-   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
-   -DCONFIG_ALIRO_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
+   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
+   -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
    -I "$UWB_INC" \

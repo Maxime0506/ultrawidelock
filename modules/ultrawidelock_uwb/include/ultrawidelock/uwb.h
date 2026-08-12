@@ -70,7 +70,7 @@ bool ultrawidelock_uwb_last_range_cm(int32_t *cm_out);
  * true only when a valid range has been seen AND it is trusted
  * (fira_session_range_trusted()). This is the accessor the unlock decision
  * must use so a single unverified/spoofed block cannot drive an unlock; raw
- * telemetry keeps using ultrawidelock_uwb_last_range_cm(). Without CONFIG_WOZ_ALIRO
+ * telemetry keeps using ultrawidelock_uwb_last_range_cm(). Without CONFIG_ULTRAWIDELOCK_CRED
  * there is no trust concept and this matches ultrawidelock_uwb_last_range_cm().
  */
 bool ultrawidelock_uwb_trusted_range_cm(int32_t *cm_out);
@@ -105,7 +105,7 @@ struct ultrawidelock_uwb_range_integrity {
  * with that latch. The plain accessor answers "how far", which is all an unlock
  * decision needs; this one also answers "how well was that measured", which is
  * what a caller has to know before signing the number into a statement someone
- * else will believe. Without CONFIG_WOZ_ALIRO there is no evidence to report
+ * else will believe. Without CONFIG_ULTRAWIDELOCK_CRED there is no evidence to report
  * and @p ig_out reads back as a failed STS.
  */
 bool ultrawidelock_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t after,
@@ -115,7 +115,7 @@ bool ultrawidelock_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t 
  * Register a callback fired after each accepted range latch (NULL to clear),
  * so the unlock seam can block on an event instead of polling. The callback
  * runs on the UWB RX path; keep it to a task wake, nothing heavier. A no-op
- * without CONFIG_WOZ_ALIRO.
+ * without CONFIG_ULTRAWIDELOCK_CRED.
  */
 void ultrawidelock_uwb_set_range_listener(void (*cb)(void));
 

@@ -56,7 +56,7 @@ int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *c)
 	woz_hfclk_ensure_128mhz();
 	/* Trust is session-bound. Carrying the prior session's K agreeing blocks
 	 * into a new URSK would let its first measurement appear trusted. */
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 	fira_session_reset_ranges();
 #endif
 
@@ -123,17 +123,17 @@ bool ultrawidelock_uwb_last_range_cm(int32_t *cm_out)
  * consensus.
  * @param cm_out Pointer to store the distance in cm.
  * @return True only when a valid range has been seen AND it is trusted by the layer-4 consensus
- * gate; false if no valid range exists or the range is not yet trusted. When CONFIG_WOZ_ALIRO is
+ * gate; false if no valid range exists or the range is not yet trusted. When CONFIG_ULTRAWIDELOCK_CRED is
  * not defined, behaves identically to ultrawidelock_uwb_last_range_cm().
  */
 /**
  * @brief Register a callback fired after each accepted DS-TWR range latch.
  * @param cb Callback invoked on the UWB RX path (keep it to a task wake), or NULL to clear.
- * Without CONFIG_WOZ_ALIRO there is no range latch to observe and this is a no-op.
+ * Without CONFIG_ULTRAWIDELOCK_CRED there is no range latch to observe and this is a no-op.
  */
 void ultrawidelock_uwb_set_range_listener(void (*cb)(void))
 {
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 	fira_session_set_range_listener(cb);
 #else
 	(void)cb;
@@ -147,7 +147,7 @@ bool ultrawidelock_uwb_trusted_range_cm(int32_t *cm_out)
 
 bool ultrawidelock_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out)
 {
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 	/* Layer 4: only surface the range to the unlock seam once K consecutive
 	 * agreeing plausible blocks have built trust, so a lone spoofed block
 	 * cannot flip open-allowed. */
@@ -160,7 +160,7 @@ bool ultrawidelock_uwb_trusted_range_age_cm(int32_t *cm_out, int64_t *age_ms_out
 
 uint32_t ultrawidelock_uwb_range_generation(void)
 {
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 	return fira_session_range_generation();
 #else
 	return 0u;
@@ -169,7 +169,7 @@ uint32_t ultrawidelock_uwb_range_generation(void)
 
 bool ultrawidelock_uwb_trusted_range_after_cm(int32_t *cm_out, uint32_t after)
 {
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 	/* Generation is written after the range fields. A concurrent latch can
 	 * cause one harmless false-negative poll, never acceptance of old data. */
 	uint32_t generation = fira_session_range_generation();
@@ -195,7 +195,7 @@ bool ultrawidelock_uwb_trusted_range_after_checked_cm(int32_t *cm_out, uint32_t 
 	if (!ultrawidelock_uwb_trusted_range_after_cm(cm_out, after)) {
 		return false;
 	}
-#if defined(CONFIG_WOZ_ALIRO)
+#if defined(CONFIG_ULTRAWIDELOCK_CRED)
 	struct fira_range_integrity ig;
 
 	if (ig_out != NULL && fira_session_last_range_integrity(&ig)) {

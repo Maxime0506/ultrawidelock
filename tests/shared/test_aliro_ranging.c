@@ -1,5 +1,5 @@
 /*
- * Host test for the ranging-setup glue (aliro_ranging.c): the post-auth layer
+ * Host test for the ranging-setup glue (ultrawidelock_ranging.c): the post-auth layer
  * that arms, feeds and tears down the engine's M1-M4 ranging session and
  * BleSK-seals its outbound SDUs.
  *
@@ -8,7 +8,7 @@
  * arguments, stash the registered transmit/event callbacks so the script can
  * invoke them as the engine would, and expose one-shot failure switches for
  * the error branches. The BleSK sealing in the transmit callback is REAL
- * crypto (aliro_crypto.c over the GCM in aliro_prim_host.c): every sealed SDU
+ * crypto (ultrawidelock_crypto.c over the GCM in aliro_prim_host.c): every sealed SDU
  * the double records is opened with the mirrored device-direction GCM (as
  * test_aliro_reader.c's ph_open_ble does) to prove plaintext, AAD and the
  * per-direction counter (starting at 1) all match §11.8.2.
@@ -34,11 +34,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aliro_ble.h"
-#include "aliro_crypto.h"
-#include "aliro_lat.h"
-#include "aliro_prim.h"
-#include "aliro_ranging.h"
+#include "ultrawidelock_ble.h"
+#include "ultrawidelock_crypto.h"
+#include "ultrawidelock_lat.h"
+#include "ultrawidelock_prim.h"
+#include "ultrawidelock_ranging.h"
 
 #include "cherry/cherry.h"
 #include "cherry/cherry_ccc.h"
@@ -271,7 +271,7 @@ void ultrawidelock_uwb_stop(void)
 	s_uwb_stops++;
 }
 
-/* ---- aliro_ble transport double ------------------------------------------ */
+/* ---- ultrawidelock_ble transport double ------------------------------------------ */
 
 #define TX_MAX 8
 static struct {
@@ -282,7 +282,7 @@ static struct {
 static int s_txn;
 static int s_ble_send_rc; /* one-shot: nonzero fails (and drops) the next send */
 
-int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
+int ultrawidelock_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
 	if (s_ble_send_rc != 0) {
 		int rc = s_ble_send_rc;
@@ -302,28 +302,28 @@ int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 /* ---- device-side BleSK mirror + script helpers --------------------------- */
 
 /* BleSKReader (the reader's seal key): the device opens with direction-0
- * nonces, mirroring aliro_msg_open — see test_aliro_reader.c's ph_open_ble. */
-static uint8_t k_blesk_r[ALIRO_SESSION_KEY_LEN];
-static uint8_t k_blesk_d[ALIRO_SESSION_KEY_LEN];
+ * nonces, mirroring ultrawidelock_msg_open — see test_aliro_reader.c's ph_open_ble. */
+static uint8_t k_blesk_r[ULTRAWIDELOCK_SESSION_KEY_LEN];
+static uint8_t k_blesk_d[ULTRAWIDELOCK_SESSION_KEY_LEN];
 static uint32_t s_open_ctr = 1; /* §11.8: BLE-channel counters start at 1 */
 
 static int open_ble(const uint8_t *w, size_t wl, uint8_t *plain, size_t *plen)
 {
-	if (wl < 4u + ALIRO_GCM_TAG_LEN) {
+	if (wl < 4u + ULTRAWIDELOCK_GCM_TAG_LEN) {
 		return -1;
 	}
 	size_t clen = ((size_t)w[2] << 8) | w[3];
 
-	if (clen < ALIRO_GCM_TAG_LEN || 4u + clen > wl) {
+	if (clen < ULTRAWIDELOCK_GCM_TAG_LEN || 4u + clen > wl) {
 		return -1;
 	}
-	size_t payn = clen - ALIRO_GCM_TAG_LEN;
+	size_t payn = clen - ULTRAWIDELOCK_GCM_TAG_LEN;
 	uint8_t aad[4] = {w[0], w[1], (uint8_t)(payn >> 8), (uint8_t)payn};
-	uint8_t nonce[ALIRO_GCM_NONCE_LEN];
+	uint8_t nonce[ULTRAWIDELOCK_GCM_NONCE_LEN];
 
-	aliro_crypto_gcm_nonce(0, s_open_ctr, nonce);
-	if (aliro_aes256_gcm_decrypt(k_blesk_r, nonce, sizeof(nonce), aad, sizeof(aad), w + 4,
-				     payn, w + 4 + payn, ALIRO_GCM_TAG_LEN, plain + 4) != 0) {
+	ultrawidelock_crypto_gcm_nonce(0, s_open_ctr, nonce);
+	if (ultrawidelock_aes256_gcm_decrypt(k_blesk_r, nonce, sizeof(nonce), aad, sizeof(aad), w + 4,
+				     payn, w + 4 + payn, ULTRAWIDELOCK_GCM_TAG_LEN, plain + 4) != 0) {
 		return -1;
 	}
 	s_open_ctr++;
@@ -379,34 +379,34 @@ int main(void)
 {
 	static const uint8_t zursk[ULTRAWIDELOCK_URSK_LEN];
 	uint8_t ursk[ULTRAWIDELOCK_URSK_LEN];
-	struct aliro_secchan sc;
+	struct ultrawidelock_secchan sc;
 	uint8_t irs[8] = {0x02, 0x01, 0x00, 0x04, 0xde, 0xad, 0xbe, 0xef};
 	uint8_t plain[64];
 	size_t pn;
 	int before;
 
-	okc("prim.init", aliro_prim_init() == 0);
+	okc("prim.init", ultrawidelock_prim_init() == 0);
 	memset(ursk, 0xA7, sizeof(ursk));
 	memset(k_blesk_r, 0x11, sizeof(k_blesk_r));
 	memset(k_blesk_d, 0x22, sizeof(k_blesk_d));
-	aliro_secchan_init(&sc, k_blesk_r, k_blesk_d);
+	ultrawidelock_secchan_init(&sc, k_blesk_r, k_blesk_d);
 
 	printf("P: API before init\n");
-	okc("p.start", aliro_ranging_start(7, 1, ursk, &sc) == -1);
-	okc("p.feed", aliro_ranging_feed(7, irs, sizeof(irs)) == -1);
-	aliro_ranging_stop(7);
+	okc("p.start", ultrawidelock_ranging_start(7, 1, ursk, &sc) == -1);
+	okc("p.feed", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == -1);
+	ultrawidelock_ranging_stop(7);
 	okc("p.stop", s_sess_destroys == 0);
 
 	printf("I: init\n");
 	s_cherry_create_fail = true;
-	okc("i.cherry_fail", aliro_ranging_init() == -1);
+	okc("i.cherry_fail", ultrawidelock_ranging_init() == -1);
 	okc("i.cherry_fail.no_adapter", s_cherry_creates == 1 && s_adapter_creates == 0);
 
 	s_adapter_create_fail = true;
-	okc("i.adapter_fail", aliro_ranging_init() == -1);
+	okc("i.adapter_fail", ultrawidelock_ranging_init() == -1);
 	okc("i.adapter_fail.cherry_released", s_cherry_creates == 2 && s_cherry_destroys == 1);
 
-	okc("i.ok", aliro_ranging_init() == 0);
+	okc("i.ok", ultrawidelock_ranging_init() == 0);
 	okc("i.device", s_cherry_dev_ok);
 	okc("i.adapter_bound", s_adapter_cherry == (struct cherry *)&s_cherry_dummy);
 	okc("i.caps.bitmasks",
@@ -427,23 +427,23 @@ int main(void)
 		    memcmp(s_uwb_ursk, zursk, sizeof(zursk)) == 0);
 	okc("i.probe.released", s_uwb_stops == 1);
 
-	okc("i.again", aliro_ranging_init() == 0);
+	okc("i.again", ultrawidelock_ranging_init() == 0);
 	okc("i.again.noop", s_cherry_creates == 3 && s_adapter_creates == 2);
 
 	printf("S: start\n");
-	okc("s.null_ursk", aliro_ranging_start(7, 1, NULL, &sc) == -1);
-	okc("s.null_sc", aliro_ranging_start(7, 1, ursk, NULL) == -1);
+	okc("s.null_ursk", ultrawidelock_ranging_start(7, 1, NULL, &sc) == -1);
+	okc("s.null_sc", ultrawidelock_ranging_start(7, 1, ursk, NULL) == -1);
 
 	s_sess_create_fail = true;
-	okc("s.create_fail", aliro_ranging_start(7, 1, ursk, &sc) == -1);
+	okc("s.create_fail", ultrawidelock_ranging_start(7, 1, ursk, &sc) == -1);
 
 	s_sess_set_ursk_fail = true;
 	before = s_sess_destroys;
-	okc("s.set_ursk_fail", aliro_ranging_start(7, 1, ursk, &sc) == -1);
+	okc("s.set_ursk_fail", ultrawidelock_ranging_start(7, 1, ursk, &sc) == -1);
 	okc("s.set_ursk_fail.released", s_sess_destroys == before + 1);
 
 	before = s_uwb_stops;
-	okc("s.ok", aliro_ranging_start(7, 0x11223344u, ursk, &sc) == 0);
+	okc("s.ok", ultrawidelock_ranging_start(7, 0x11223344u, ursk, &sc) == 0);
 	okc("s.ok.radio_freed", s_uwb_stops == before + 1);
 	okc("s.ok.prewarm", s_uwb_prewarms >= 1 && s_pw_ch == 9u && s_pw_sync == 9u);
 	okc("s.ok.args",
@@ -452,17 +452,17 @@ int main(void)
 		    s_sess_user == (void *)(uintptr_t)7);
 	okc("s.ok.ursk", memcmp(s_sess_ursk, ursk, sizeof(ursk)) == 0);
 	okc("s.ok.version", s_sess_ver == 0x0100u);
-	okc("s.busy", aliro_ranging_start(8, 2, ursk, &sc) == -1);
+	okc("s.busy", ultrawidelock_ranging_start(8, 2, ursk, &sc) == -1);
 
 	printf("F: feed\n");
-	okc("f.wrong_conn", aliro_ranging_feed(8, irs, sizeof(irs)) == -1);
-	okc("f.short", aliro_ranging_feed(7, irs, 3) == -1);
+	okc("f.wrong_conn", ultrawidelock_ranging_feed(8, irs, sizeof(irs)) == -1);
+	okc("f.short", ultrawidelock_ranging_feed(7, irs, 3) == -1);
 	{
 		uint8_t big[257] = {0x02, 0x01, 0x00, 0xfd};
 
-		okc("f.oversize", aliro_ranging_feed(7, big, sizeof(big)) == -1);
+		okc("f.oversize", ultrawidelock_ranging_feed(7, big, sizeof(big)) == -1);
 	}
-	okc("f.ok", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
+	okc("f.ok", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == 0);
 	okc("f.ok.msg",
 	    s_handles == 1 && s_handle_sess == (struct ultrawidelock_uwb_session *)&s_sess_dummy &&
 		    s_handle_len == sizeof(irs) && memcmp(s_handle_buf, irs, sizeof(irs)) == 0);
@@ -472,7 +472,7 @@ int main(void)
 	 * labelling then shifted every device->reader stamp by one frame,
 	 * putting "M2 received" on the IRS — before M1 had even been sent.
 	 *
-	 * aliro_lat_mark returns nonzero only when IT stamped the phase, so a
+	 * ultrawidelock_lat_mark returns nonzero only when IT stamped the phase, so a
 	 * nonzero here means "still unstamped", i.e. nothing mislabelled it.
 	 * Each probe consumes its phase, so every scenario starts a fresh
 	 * walk-up and asserts one thing. */
@@ -486,38 +486,38 @@ int main(void)
 		const uint8_t m2[8] = {0x01, 0x01, 0x00, 0x04, 0, 0, 0, 0};
 		const uint8_t m4[8] = {0x01, 0x03, 0x00, 0x04, 0, 0, 0, 0};
 
-		aliro_lat_begin();
+		ultrawidelock_lat_begin();
 		okc("l.stray_notify_keeps_irs_free",
-		    aliro_ranging_feed(7, evt, sizeof(evt)) == 0 &&
-			    aliro_lat_mark(ALIRO_LAT_IRS_RX) != 0);
+		    ultrawidelock_ranging_feed(7, evt, sizeof(evt)) == 0 &&
+			    ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_IRS_RX) != 0);
 
-		aliro_lat_begin();
-		okc("l.irs_is_not_m2", aliro_ranging_feed(7, irs, sizeof(irs)) == 0 &&
-					       aliro_lat_mark(ALIRO_LAT_M2_RX) != 0);
+		ultrawidelock_lat_begin();
+		okc("l.irs_is_not_m2", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == 0 &&
+					       ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_M2_RX) != 0);
 
-		aliro_lat_begin();
-		okc("l.irs_stamps_irs", aliro_ranging_feed(7, irs, sizeof(irs)) == 0 &&
-						aliro_lat_mark(ALIRO_LAT_IRS_RX) == 0);
+		ultrawidelock_lat_begin();
+		okc("l.irs_stamps_irs", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == 0 &&
+						ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_IRS_RX) == 0);
 
-		aliro_lat_begin();
-		okc("l.m2_stamps_m2", aliro_ranging_feed(7, m2, sizeof(m2)) == 0 &&
-					      aliro_lat_mark(ALIRO_LAT_M2_RX) == 0);
+		ultrawidelock_lat_begin();
+		okc("l.m2_stamps_m2", ultrawidelock_ranging_feed(7, m2, sizeof(m2)) == 0 &&
+					      ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_M2_RX) == 0);
 
-		aliro_lat_begin();
-		okc("l.m4_stamps_m4", aliro_ranging_feed(7, m4, sizeof(m4)) == 0 &&
-					      aliro_lat_mark(ALIRO_LAT_M4_RX) == 0);
+		ultrawidelock_lat_begin();
+		okc("l.m4_stamps_m4", ultrawidelock_ranging_feed(7, m4, sizeof(m4)) == 0 &&
+					      ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_M4_RX) == 0);
 	}
 
 	printf("F: feed (engine errors)\n");
 	s_handle_rc = ULTRAWIDELOCK_UWB_ERR_MESSAGE_STATE;
-	okc("f.engine_reject", aliro_ranging_feed(7, irs, sizeof(irs)) == -1);
-	okc("f.engine_reject.session_kept", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
+	okc("f.engine_reject", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == -1);
+	okc("f.engine_reject.session_kept", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == 0);
 
 	printf("T: transmit callback\n");
 	before = s_txn;
 	tx_push(irs, sizeof(irs), 7);
 	okc("t.sent", s_txn == before + 1 && s_tx[before].conn == 7 &&
-			      s_tx[before].n == sizeof(irs) + ALIRO_GCM_TAG_LEN);
+			      s_tx[before].n == sizeof(irs) + ULTRAWIDELOCK_GCM_TAG_LEN);
 	okc("t.open", open_ble(s_tx[before].b, s_tx[before].n, plain, &pn) == 0 &&
 			      pn == sizeof(irs) && memcmp(plain, irs, sizeof(irs)) == 0);
 	okc("t.freed", s_msg_frees == 1);
@@ -554,24 +554,24 @@ int main(void)
 	ev_typed(ULTRAWIDELOCK_UWB_SESSION_EVENT_TYPE_SESSION_CONTROLLER_REPORT, 7);
 	okc("e.freed", s_ev_frees == before + 6);
 	ev_status(CHERRY_CCC_SESSION_STATE_DEINIT, 8); /* wrong conn: session kept */
-	okc("e.deinit_wrong_conn", aliro_ranging_feed(7, irs, sizeof(irs)) == 0);
+	okc("e.deinit_wrong_conn", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == 0);
 	ev_status(CHERRY_CCC_SESSION_STATE_DEINIT, 7); /* engine freed the session */
-	okc("e.deinit", aliro_ranging_feed(7, irs, sizeof(irs)) == -1);
+	okc("e.deinit", ultrawidelock_ranging_feed(7, irs, sizeof(irs)) == -1);
 
-	okc("e.restart", aliro_ranging_start(9, 0x55667788u, ursk, &sc) == 0);
+	okc("e.restart", ultrawidelock_ranging_start(9, 0x55667788u, ursk, &sc) == 0);
 	s_handle_fire_deinit = true;
 	s_handle_rc = ULTRAWIDELOCK_UWB_ERR_INTERNAL;
-	okc("e.deinit_mid_handle", aliro_ranging_feed(9, irs, sizeof(irs)) == -1);
-	okc("e.deinit_mid_handle.cleared", aliro_ranging_feed(9, irs, sizeof(irs)) == -1);
+	okc("e.deinit_mid_handle", ultrawidelock_ranging_feed(9, irs, sizeof(irs)) == -1);
+	okc("e.deinit_mid_handle.cleared", ultrawidelock_ranging_feed(9, irs, sizeof(irs)) == -1);
 
 	printf("X: stop\n");
-	okc("x.rearm", aliro_ranging_start(9, 3, ursk, &sc) == 0);
+	okc("x.rearm", ultrawidelock_ranging_start(9, 3, ursk, &sc) == 0);
 	before = s_sess_destroys;
-	aliro_ranging_stop(4); /* wrong conn: no-op */
-	okc("x.wrong_conn", s_sess_destroys == before && aliro_ranging_feed(9, irs, 8) == 0);
-	aliro_ranging_stop(9);
-	okc("x.stopped", s_sess_destroys == before + 1 && aliro_ranging_feed(9, irs, 8) == -1);
-	aliro_ranging_stop(9); /* already inactive: no-op */
+	ultrawidelock_ranging_stop(4); /* wrong conn: no-op */
+	okc("x.wrong_conn", s_sess_destroys == before && ultrawidelock_ranging_feed(9, irs, 8) == 0);
+	ultrawidelock_ranging_stop(9);
+	okc("x.stopped", s_sess_destroys == before + 1 && ultrawidelock_ranging_feed(9, irs, 8) == -1);
+	ultrawidelock_ranging_stop(9); /* already inactive: no-op */
 	okc("x.stop_idempotent", s_sess_destroys == before + 1);
 
 	/* The secure channel was dropped at stop: a late engine TX is rejected
@@ -580,9 +580,9 @@ int main(void)
 	tx_push(irs, sizeof(irs), 9);
 	okc("x.tx_after_stop", s_txn == before && s_msg_frees == 5);
 	ev_status(CHERRY_CCC_SESSION_STATE_DEINIT, 9);
-	okc("x.deinit_echo", aliro_ranging_feed(9, irs, 8) == -1);
+	okc("x.deinit_echo", ultrawidelock_ranging_feed(9, irs, 8) == -1);
 
-	okc("x.restart", aliro_ranging_start(3, 5, ursk, &sc) == 0);
+	okc("x.restart", ultrawidelock_ranging_start(3, 5, ursk, &sc) == 0);
 
 	/* TX-side identity stamping, deliberately last: it pushes extra engine
 	 * messages, which would shift the free/nonce counters T and X assert on.
@@ -593,20 +593,20 @@ int main(void)
 		const uint8_t m1[8] = {0x01, 0x00, 0x00, 0x04, 0, 0, 0, 0};
 		const uint8_t m3[8] = {0x01, 0x02, 0x00, 0x04, 0, 0, 0, 0};
 
-		aliro_lat_begin();
+		ultrawidelock_lat_begin();
 		tx_push(m3, sizeof(m3), 3);
-		okc("l.m3_is_not_m1", aliro_lat_mark(ALIRO_LAT_M1_TX) != 0);
+		okc("l.m3_is_not_m1", ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_M1_TX) != 0);
 
-		aliro_lat_begin();
+		ultrawidelock_lat_begin();
 		tx_push(m1, sizeof(m1), 3);
-		okc("l.m1_stamps_m1", aliro_lat_mark(ALIRO_LAT_M1_TX) == 0);
+		okc("l.m1_stamps_m1", ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_M1_TX) == 0);
 
-		aliro_lat_begin();
+		ultrawidelock_lat_begin();
 		tx_push(m3, sizeof(m3), 3);
-		okc("l.m3_stamps_m3", aliro_lat_mark(ALIRO_LAT_M3_TX) == 0);
+		okc("l.m3_stamps_m3", ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_M3_TX) == 0);
 	}
 
-	aliro_ranging_stop(3);
+	ultrawidelock_ranging_stop(3);
 
 	printf("\nRESULT: %s\n", fails == 0 ? "PASS" : "FAIL");
 	return fails == 0 ? 0 : 1;

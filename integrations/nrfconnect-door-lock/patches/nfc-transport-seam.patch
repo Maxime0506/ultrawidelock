@@ -50,7 +50,7 @@ index ff08e59..0b89529 100644
 +#include <ultrawidelock_nfc/transport.h>
  
  #ifdef CONFIG_NCS_ALIRO_BLE_UWB
- #include <aliro_service/aliro_service.h>
+ #include <ultrawidelock_service/ultrawidelock_service.h>
 @@ -18,7 +18,7 @@ namespace Aliro::Interface::Session {
  AliroError Send(ConnectionHandle handle, Data data)
  {

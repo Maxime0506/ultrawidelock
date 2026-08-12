@@ -11,7 +11,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include "aliro_ble_central.h"
+#include "ultrawidelock_ble_central.h"
 #include <ultrawidelock/device.h>
 #include "ultrawidelock_device_uwb.h"
 #include "ultrawidelock_uwb_msg_spec.h"
@@ -29,7 +29,7 @@ LOG_MODULE_REGISTER(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
  * The reader's own inbound path uses 256 for the same traffic. */
 #define RANGING_SDU_MAX 256u
 
-static struct aliro_device *s_dev;
+static struct ultrawidelock_device *s_dev;
 static uint16_t s_conn;
 static bool s_active;
 
@@ -69,7 +69,7 @@ static const char *step_str(enum ranging_step s)
  * Seal one plaintext ranging SDU on the BleSK channel and put it on the wire.
  *
  * There is no outer envelope. A sealed SDU is already [proto][id][len_be16][ct||tag],
- * the same four-byte shape aliro_ble_frame produces, so framing it again would
+ * the same four-byte shape ultrawidelock_ble_frame produces, so framing it again would
  * give the reader a header describing a header.
  */
 static int send_plain(const uint8_t *plain, size_t plain_len)
@@ -78,12 +78,12 @@ static int send_plain(const uint8_t *plain, size_t plain_len)
 	size_t wire_len = 0;
 	int rc;
 
-	if (aliro_dev_ble_seal(&s_dev->sc_ble, plain, plain_len, wire, sizeof(wire), &wire_len) !=
+	if (ultrawidelock_dev_ble_seal(&s_dev->sc_ble, plain, plain_len, wire, sizeof(wire), &wire_len) !=
 	    0) {
 		LOG_ERR("BleSK seal failed (%u B plaintext)", (unsigned)plain_len);
 		return -1;
 	}
-	rc = aliro_ble_central_send(s_conn, wire, wire_len);
+	rc = ultrawidelock_ble_central_send(s_conn, wire, wire_len);
 	if (rc != 0) {
 		LOG_ERR("send failed (%u B, rc=%d)", (unsigned)wire_len, rc);
 		return -1;
@@ -239,7 +239,7 @@ static void on_m3(const uint8_t *plain, size_t plain_len)
 	}
 }
 
-void initiator_ranging_begin(struct aliro_device *dev, uint16_t conn)
+void initiator_ranging_begin(struct ultrawidelock_device *dev, uint16_t conn)
 {
 	s_dev = dev;
 	s_conn = conn;
@@ -275,7 +275,7 @@ int initiator_ranging_on_sdu(uint16_t conn, const uint8_t *wire, size_t wire_len
 	 * reader's published version list, so the usual cause is a salt that does
 	 * not match the peer's GATT read, and the whole ranging channel is dead
 	 * from this point on -- worth an error rather than a debug line. */
-	if (aliro_dev_ble_open(&s_dev->sc_ble, wire, wire_len, plain, sizeof(plain), &plain_len) !=
+	if (ultrawidelock_dev_ble_open(&s_dev->sc_ble, wire, wire_len, plain, sizeof(plain), &plain_len) !=
 	    0) {
 		LOG_ERR("BleSK open failed (%u B) in step %s", (unsigned)wire_len,
 			step_str(s_step));

@@ -1,9 +1,9 @@
 /*
- * fake_nimble — recording doubles of the NimBLE host slice aliro_ble.c uses.
+ * fake_nimble — recording doubles of the NimBLE host slice ultrawidelock_ble.c uses.
  * Every entry point records its arguments (advert fields get a deep copy) and
  * returns a test-settable rc. Callouts and posted events are captured so the
  * test can run them synchronously ("host task" pump). No radio, no timing:
- * this proves aliro_ble.c's branch logic and wiring only.
+ * this proves ultrawidelock_ble.c's branch logic and wiring only.
  */
 #include <string.h>
 

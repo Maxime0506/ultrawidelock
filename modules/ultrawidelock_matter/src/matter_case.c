@@ -5,7 +5,7 @@
 
 #include <string.h>
 
-#include "aliro_hash.h"
+#include "ultrawidelock_hash.h"
 #include "matter_crypto.h"
 #include "matter_fabric.h"
 #include "matter_im.h"
@@ -34,7 +34,7 @@ int matter_case_operational_ipk(const uint8_t epoch_key[MATTER_CASE_IPK_LEN],
 	if (epoch_key == NULL || compressed_fabric_id == NULL || out == NULL) {
 		return MATTER_E_INVAL;
 	}
-	if (aliro_hkdf(compressed_fabric_id, 8u, epoch_key, MATTER_CASE_IPK_LEN, k_info,
+	if (ultrawidelock_hkdf(compressed_fabric_id, 8u, epoch_key, MATTER_CASE_IPK_LEN, k_info,
 		       sizeof(k_info), out, MATTER_CASE_IPK_LEN) != 0) {
 		return MATTER_E_INVAL;
 	}
@@ -72,7 +72,7 @@ int matter_case_destination_id(const uint8_t ipk[MATTER_CASE_IPK_LEN],
 	}
 	n += 8u;
 
-	aliro_hmac_sha256(ipk, MATTER_CASE_IPK_LEN, msg, n, out);
+	ultrawidelock_hmac_sha256(ipk, MATTER_CASE_IPK_LEN, msg, n, out);
 	return MATTER_OK;
 }
 
@@ -256,7 +256,7 @@ int matter_case_sigma2_encode(const struct matter_case_sigma2_in *in, uint8_t *o
 	memcpy(&salt[off], in->transcript_hash, 32u);
 	off += 32u;
 
-	rc = aliro_hkdf(salt, off, shared_out, MATTER_CASE_SECRET_LEN, k_info, sizeof(k_info), s2k,
+	rc = ultrawidelock_hkdf(salt, off, shared_out, MATTER_CASE_SECRET_LEN, k_info, sizeof(k_info), s2k,
 			sizeof(s2k));
 	memset(salt, 0, sizeof(salt));
 	if (rc != 0) {
@@ -453,7 +453,7 @@ int matter_case_sigma3_open(const struct matter_case_sigma3_in *in, const uint8_
 
 	memcpy(salt, in->ipk, MATTER_CASE_IPK_LEN);
 	memcpy(&salt[MATTER_CASE_IPK_LEN], in->transcript_hash, 32u);
-	rc = aliro_hkdf(salt, sizeof(salt), in->shared, MATTER_CASE_SECRET_LEN, k_info,
+	rc = ultrawidelock_hkdf(salt, sizeof(salt), in->shared, MATTER_CASE_SECRET_LEN, k_info,
 			sizeof(k_info), s3k, sizeof(s3k));
 	memset(salt, 0, sizeof(salt));
 	if (rc != 0) {

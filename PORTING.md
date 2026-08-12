@@ -10,8 +10,8 @@ under [New operating systems](#new-operating-systems).
 |---|---|---|
 | Zephyr reader | `apps/dwm3001cdk-lock/` or `apps/nrf5340dk-lock/` | Module selection and `ports/zephyr/` |
 | Zephyr initiator | `examples/zephyr/nrf5340dk-initiator/` | Device role manifests and `ports/zephyr/` |
-| ESP-IDF reader | `examples/esp32/reader/` | `EXTRA_COMPONENT_DIRS` and `aliro_reader` requirements |
-| ESP-IDF initiator | `examples/esp32/initiator/` | `EXTRA_COMPONENT_DIRS` and `aliro_device` requirements |
+| ESP-IDF reader | `examples/esp32/reader/` | `EXTRA_COMPONENT_DIRS` and `ultrawidelock_reader` requirements |
+| ESP-IDF initiator | `examples/esp32/initiator/` | `EXTRA_COMPONENT_DIRS` and `ultrawidelock_device` requirements |
 
 Keep the new application small. Board pins, devicetree, partitions, and feature
 selection belong in the application. Portable protocol decisions belong in
@@ -49,16 +49,16 @@ gate.
 |---|---|---|
 | DW3000 GPIO, reset, and IRQ | `dw3000_hw.h` | `ports/zephyr/dw3000/`, `ports/esp32/components/ultrawidelock_uwb/port/` |
 | DW3000 SPI | `dw3000_spi.h` | `ports/zephyr/dw3000/`, `ports/esp32/components/ultrawidelock_uwb/port/` |
-| Reader BLE GATT and L2CAP | `aliro_ble.h` | `ports/zephyr/ble/`, `ports/esp32/components/aliro_ble/` |
-| Initiator BLE central | `aliro_ble_central.h` | `ports/zephyr/ble/`, `ports/esp32/components/aliro_ble_central/` |
-| Reader credential store | `aliro_prov.h` | `ports/zephyr/store/`, `ports/esp32/components/aliro_reader/` |
+| Reader BLE GATT and L2CAP | `ultrawidelock_ble.h` | `ports/zephyr/ble/`, `ports/esp32/components/ultrawidelock_ble/` |
+| Initiator BLE central | `ultrawidelock_ble_central.h` | `ports/zephyr/ble/`, `ports/esp32/components/ultrawidelock_ble_central/` |
+| Reader credential store | `ultrawidelock_prov.h` | `ports/zephyr/store/`, `ports/esp32/components/ultrawidelock_reader/` |
 
-Implement every function in `dw3000_hw.h`, `dw3000_spi.h`, and `aliro_ble.h`
-for a reader. Implement `aliro_ble_central_start()` and
-`aliro_ble_central_send()` for an initiator. The parser and salt helpers in the
+Implement every function in `dw3000_hw.h`, `dw3000_spi.h`, and `ultrawidelock_ble.h`
+for a reader. Implement `ultrawidelock_ble_central_start()` and
+`ultrawidelock_ble_central_send()` for an initiator. The parser and salt helpers in the
 same header are portable code and must not be copied into a port. Implement only
-`aliro_prov_load()`, `aliro_prov_store()`, and `aliro_prov_erase()` from
-`aliro_prov.h`; serialization and trust policy remain portable.
+`ultrawidelock_prov_load()`, `ultrawidelock_prov_store()`, and `ultrawidelock_prov_erase()` from
+`ultrawidelock_prov.h`; serialization and trust policy remain portable.
 
 If an existing backend already works for the chipset, do not fork it. Supply
 pins and bus instances through the framework's board configuration. Add a new
@@ -77,7 +77,7 @@ set(EXTRA_COMPONENT_DIRS "${ULTRAWIDELOCK_ROOT}/ports/esp32/components")
 ```
 
 Then name the role in the consuming component's `REQUIRES` or `PRIV_REQUIRES`.
-Use `aliro_reader` for a reader and `aliro_device` plus `aliro_ble_central` for
+Use `ultrawidelock_reader` for a reader and `ultrawidelock_device` plus `ultrawidelock_ble_central` for
 an initiator. ESP-IDF discovers every component but compiles only required
 components, so an unreferenced backend is not verified.
 

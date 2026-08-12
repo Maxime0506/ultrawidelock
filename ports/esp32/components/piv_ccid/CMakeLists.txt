@@ -20,8 +20,8 @@ idf_component_register(
 	SRCS ${PIV_SRCS}
 	INCLUDE_DIRS "include"
 	PRIV_REQUIRES
-		aliro_crypto
-		aliro_reader
+		ultrawidelock_crypto
+		ultrawidelock_reader
 		${PIV_USB_REQUIRES}
 		mbedtls
 		nvs_flash

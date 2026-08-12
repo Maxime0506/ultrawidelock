@@ -1,5 +1,0 @@
-# woz_aliro role: SHA-256/HMAC/HKDF core — its own role because the host KAT
-# suite compiles it without the rest of the crypto role. Consumers: the reader
-# app, the Zephyr initiator and on-target test, ports/esp32/components/aliro_crypto,
-# tests/host/sources.sh. One repo-root-relative path per line, sorted; add HERE only.
-modules/woz_aliro/src/aliro_hash.c
