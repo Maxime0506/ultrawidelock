@@ -13,6 +13,10 @@ modules/woz_dw3000/LICENSE.txt. This includes the module root, integration code,
 and Zephyr glue, except for files carrying an Apache-2.0 notice and the Qorvo
 scope listed below.
 
+Upstream: derived from Bruno Randolf's Zephyr integration at
+https://github.com/br101/zephyr-dw3000-decadriver, reduced to the source sets
+named in modules/woz_dw3000/roles/*.list.
+
 Qorvo UWB driver
 ----------------
 
@@ -31,6 +35,11 @@ conditions stated in the component-local license text. The ISC-licensed
 integration code links against this driver but does not change its terms: any
 binary that includes the driver may only be used with a Qorvo integrated
 circuit or a module containing one.
+
+Upstream: Qorvo's official DW3XXX device driver, version 08.19.02
+(dwt_uwb_driver/deca_version.h), as redistributed inside the integration
+repository above. Re-vendoring a newer driver or more of it is a fetch from
+that upstream plus a rerun of the role-manifest trim.
 
 detools
 -------
