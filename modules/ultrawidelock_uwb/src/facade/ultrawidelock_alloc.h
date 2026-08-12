@@ -1,15 +1,15 @@
 // Memory allocation and timing facade: qmalloc, qcalloc, qfree wrap the platform heap;
 // qrtc_get_us returns monotonic microseconds since boot.
 /*
- * ultrawidelock_alloc.h - thin heap + monotonic-clock wrappers over woz_port.h.
+ * ultrawidelock_alloc.h - thin heap + monotonic-clock wrappers over ultrawidelock_port.h.
  */
-#ifndef WOZ_ALLOC_H
-#define WOZ_ALLOC_H
+#ifndef ULTRAWIDELOCK_ALLOC_H
+#define ULTRAWIDELOCK_ALLOC_H
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include "woz_port.h"
+#include "ultrawidelock_port.h"
 
 /**
  * @brief Allocate size bytes.
@@ -18,7 +18,7 @@
  */
 static inline void *qmalloc(size_t size)
 {
-	return woz_malloc(size);
+	return ultrawidelock_malloc(size);
 }
 
 /**
@@ -29,7 +29,7 @@ static inline void *qmalloc(size_t size)
  */
 static inline void *qcalloc(size_t nb_items, size_t item_size)
 {
-	return woz_calloc(nb_items, item_size);
+	return ultrawidelock_calloc(nb_items, item_size);
 }
 
 /**
@@ -38,7 +38,7 @@ static inline void *qcalloc(size_t nb_items, size_t item_size)
  */
 static inline void qfree(void *ptr)
 {
-	woz_free(ptr);
+	ultrawidelock_free(ptr);
 }
 
 /**
@@ -47,7 +47,7 @@ static inline void qfree(void *ptr)
  */
 static inline int64_t qrtc_get_us(void)
 {
-	return woz_uptime_us();
+	return ultrawidelock_uptime_us();
 }
 
-#endif /* WOZ_ALLOC_H */
+#endif /* ULTRAWIDELOCK_ALLOC_H */

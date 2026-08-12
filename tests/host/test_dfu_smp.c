@@ -35,12 +35,12 @@
 #include "ultrawidelock_dfu_rx.h"
 
 /* dfu_smp_img.c's MCUMGR_HANDLER_DEFINE, made callable by smpfake. */
-extern void (*const smpfake_handler_woz_smp_img)(void);
+extern void (*const smpfake_handler_ultrawidelock_smp_img)(void);
 
-#define WOZ_SMP_GRP_IMG       1
-#define WOZ_SMP_IMG_ID_STATE  0
-#define WOZ_SMP_IMG_ID_UPLOAD 1
-#define WOZ_SMP_IMG_ID_ERASE  5
+#define ULTRAWIDELOCK_SMP_GRP_IMG       1
+#define ULTRAWIDELOCK_SMP_IMG_ID_STATE  0
+#define ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD 1
+#define ULTRAWIDELOCK_SMP_IMG_ID_ERASE  5
 
 #define IMAGE_MAGIC               0x96f3b83du
 #define IMAGE_TLV_INFO_MAGIC      0x6907
@@ -61,7 +61,7 @@ static const struct mgmt_callback *reset_cb;
  * ready() clears the recorder. */
 static void register_group(void)
 {
-	smpfake_handler_woz_smp_img();
+	smpfake_handler_ultrawidelock_smp_img();
 	img_group = smpfake.registered_group;
 	reset_cb = smpfake.registered_callback;
 }
@@ -167,17 +167,21 @@ static void test_registration(void)
 	if (img_group == NULL) {
 		return;
 	}
-	T_EQ("claims the image group id", (long)img_group->mg_group_id, (long)WOZ_SMP_GRP_IMG);
+	T_EQ("claims the image group id", (long)img_group->mg_group_id, (long)ULTRAWIDELOCK_SMP_GRP_IMG);
 	T_EQ("serves six command slots", (long)img_group->mg_handlers_count, 6L);
 
 	/* State is the only command a client may read; upload and erase are
 	 * write-only, and the three in between must stay unsupported. */
-	T_OK("state read served", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read != NULL);
-	T_OK("state write served", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_write != NULL);
-	T_OK("upload has no read", img_group->mg_handlers[WOZ_SMP_IMG_ID_UPLOAD].mh_read == NULL);
-	T_OK("upload write served", img_group->mg_handlers[WOZ_SMP_IMG_ID_UPLOAD].mh_write != NULL);
-	T_OK("erase has no read", img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_read == NULL);
-	T_OK("erase write served", img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_write != NULL);
+	T_OK("state read served", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read != NULL);
+	T_OK("state write served",
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_write != NULL);
+	T_OK("upload has no read",
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD].mh_read == NULL);
+	T_OK("upload write served",
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD].mh_write != NULL);
+	T_OK("erase has no read", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_ERASE].mh_read == NULL);
+	T_OK("erase write served",
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_ERASE].mh_write != NULL);
 	for (int id = 2; id <= 4; id++) {
 		T_OK("file/corelist/coreload unsupported",
 		     img_group->mg_handlers[id].mh_read == NULL &&
@@ -209,7 +213,7 @@ static void test_state_read(void)
 	/* A valid image: the version and the hash the bootloader recorded. */
 	ready();
 	build_running_image(1, 2, 3, 4, IMAGE_TLV_INFO_MAGIC, sha, sizeof(sha), false);
-	T_EQ("state read ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()),
+	T_EQ("state read ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()),
 	     MGMT_ERR_EOK);
 	T_OK("images key present", smpfake_find("images") >= 0);
 	T_OK("splitStatus key present", smpfake_find("splitStatus") >= 0);
@@ -237,7 +241,7 @@ static void test_state_read(void)
 	/* A protected TLV block comes first and has to be stepped over. */
 	ready();
 	build_running_image(9, 8, 7, 6, IMAGE_TLV_INFO_MAGIC, sha, sizeof(sha), true);
-	T_EQ("state read ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()),
+	T_EQ("state read ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()),
 	     MGMT_ERR_EOK);
 	item = value_after("version");
 	T_OK("version past the protected block",
@@ -250,7 +254,7 @@ static void test_state_read(void)
 	 * than as a refusal, which is what a client can parse. */
 	ready();
 	memset(dfufake_running_image, 0, DFUFAKE_PAGE_SIZE);
-	T_EQ("state read ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()),
+	T_EQ("state read ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()),
 	     MGMT_ERR_EOK);
 	item = value_after("version");
 	T_OK("zero version", item != NULL && strcmp(item->text, "0.0.0.0") == 0);
@@ -266,7 +270,7 @@ static void test_state_read(void)
 	 * zeros, version still read from the header. */
 	ready();
 	build_running_image(1, 0, 0, 0, 0x1234, sha, sizeof(sha), false);
-	T_EQ("state read ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()),
+	T_EQ("state read ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()),
 	     MGMT_ERR_EOK);
 	item = value_after("hash");
 	if (item != NULL) {
@@ -280,7 +284,7 @@ static void test_state_read(void)
 	 * end of the block and reports zeros. */
 	ready();
 	build_running_image(1, 0, 0, 0, IMAGE_TLV_INFO_MAGIC, sha, 16, false);
-	T_EQ("state read ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()),
+	T_EQ("state read ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()),
 	     MGMT_ERR_EOK);
 	item = value_after("hash");
 	if (item != NULL) {
@@ -294,13 +298,14 @@ static void test_state_read(void)
 	ready();
 	build_running_image(1, 2, 3, 4, IMAGE_TLV_INFO_MAGIC, sha, sizeof(sha), false);
 	smpfake.encode_fail_in = 0;
-	T_EQ("full buffer reported", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()),
+	T_EQ("full buffer reported",
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()),
 	     MGMT_ERR_EMSGSIZE);
 	ready();
 	build_running_image(1, 2, 3, 4, IMAGE_TLV_INFO_MAGIC, sha, sizeof(sha), false);
 	smpfake.encode_fail_in = 5; /* fails part-way through the slot map */
 	T_EQ("partial encode reported",
-	     img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_read(ctxt()), MGMT_ERR_EMSGSIZE);
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_read(ctxt()), MGMT_ERR_EMSGSIZE);
 }
 
 static void test_state_write(void)
@@ -319,7 +324,7 @@ static void test_state_write(void)
 	ready();
 	build_running_image(2, 0, 1, 0, IMAGE_TLV_INFO_MAGIC, hash, sizeof(hash), false);
 	smpfake_request(request, ARRAY_SIZE(request));
-	T_EQ("state write ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_STATE].mh_write(ctxt()),
+	T_EQ("state write ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_STATE].mh_write(ctxt()),
 	     MGMT_ERR_EOK);
 	T_EQ("request decoded", (long)smpfake.decode_bulk_calls, 1L);
 	T_EQ("both fields matched", (long)smpfake.decoded_keys, 2L);
@@ -345,11 +350,11 @@ static void build_upload_wire(void)
 	hdr.abi_version = ULTRAWIDELOCK_DFU_ABI_VERSION;
 	hdr.patch_len = sizeof(upload_patch);
 	hdr.to_len = 0;
-	hdr.patch_crc32 = woz_crc32(upload_patch, sizeof(upload_patch));
+	hdr.patch_crc32 = ultrawidelock_crc32(upload_patch, sizeof(upload_patch));
 	hdr.from_crc32 = 0;
 	hdr.from_len = 0;
 	memcpy(upload_head, &hdr, sizeof(hdr));
-	hdr.hdr_crc32 = woz_crc32(upload_head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN);
+	hdr.hdr_crc32 = ultrawidelock_crc32(upload_head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN);
 	memcpy(upload_head, &hdr, sizeof(hdr));
 	memset(upload_head + ULTRAWIDELOCK_DFU_HDR_LEN, 0xa5, ULTRAWIDELOCK_DFU_SIG_LEN);
 
@@ -370,7 +375,7 @@ static int upload(uint32_t image, size_t off, size_t total, const uint8_t *data,
 		request[n++] = (struct smpfake_kv){"off", SMPFAKE_UINT, off, NULL, 0};
 	}
 	smpfake_request(request, n);
-	return img_group->mg_handlers[WOZ_SMP_IMG_ID_UPLOAD].mh_write(ctxt());
+	return img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD].mh_write(ctxt());
 }
 
 static void test_upload(void)
@@ -394,7 +399,7 @@ static void test_upload(void)
 	ultrawidelock_dfu_window_open(1000);
 	smpfake.decode_bulk_ret = -1;
 	T_EQ("undecodable request refused",
-	     img_group->mg_handlers[WOZ_SMP_IMG_ID_UPLOAD].mh_write(ctxt()), MGMT_ERR_EINVAL);
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD].mh_write(ctxt()), MGMT_ERR_EINVAL);
 
 	/* mcumgr's offset is mandatory; without it there is no way to know what
 	 * these bytes are. */
@@ -478,7 +483,7 @@ static void test_erase(void)
 	 * attack on a door lock. */
 	ready();
 	T_EQ("erase refused while closed",
-	     img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_write(ctxt()),
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_ERASE].mh_write(ctxt()),
 	     MGMT_ERR_EACCESSDENIED);
 	T_EQ("nothing erased", (long)dfufake_staging.erase_calls, 0L);
 
@@ -490,7 +495,7 @@ static void test_erase(void)
 	     upload(0, 0, sizeof(upload_wire), upload_wire, sizeof(upload_wire), true),
 	     MGMT_ERR_EOK);
 	T_OK("staged", ultrawidelock_dfu_rx_staged());
-	T_EQ("erase ok", img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_write(ctxt()),
+	T_EQ("erase ok", img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_ERASE].mh_write(ctxt()),
 	     MGMT_ERR_EOK);
 	T_EQ("erased the whole partition", (long)dfufake_staging.last_erase_len,
 	     (long)DFUFAKE_STAGING_SIZE);
@@ -500,7 +505,8 @@ static void test_erase(void)
 	ready();
 	ultrawidelock_dfu_window_open(1000);
 	dfufake_staging.erase_fail_in = 0;
-	T_EQ("failed erase reported", img_group->mg_handlers[WOZ_SMP_IMG_ID_ERASE].mh_write(ctxt()),
+	T_EQ("failed erase reported",
+	     img_group->mg_handlers[ULTRAWIDELOCK_SMP_IMG_ID_ERASE].mh_write(ctxt()),
 	     MGMT_ERR_EUNKNOWN);
 }
 

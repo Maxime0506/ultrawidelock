@@ -20,8 +20,8 @@
 
 #include "fake_flash.h"
 
-#include <woz_freertos_kv.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_kv.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include "ultrawidelock_prov.h"
 
@@ -39,7 +39,8 @@ static unsigned g_failures;
 		}                                                                                  \
 	} while (0)
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
@@ -160,10 +161,10 @@ static void scenario_erase(void)
 	size_t length;
 
 	memset(ot_value, 0x77, sizeof(ot_value));
-	CHECK("kv init succeeds", woz_freertos_kv_init() == WOZ_KV_OK);
+	CHECK("kv init succeeds", ultrawidelock_freertos_kv_init() == ULTRAWIDELOCK_KV_OK);
 	CHECK("a neighbouring OpenThread key stores",
-	      woz_freertos_kv_set(WOZ_KV_KEY_OPENTHREAD_BASE + 1u, ot_value, sizeof(ot_value)) ==
-		      WOZ_KV_OK);
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE + 1u, ot_value,
+					    sizeof(ot_value)) == ULTRAWIDELOCK_KV_OK);
 
 	make_identity(&id, &ts);
 	CHECK("store before erase succeeds", ultrawidelock_prov_store(&id, &ts) == 0);
@@ -180,7 +181,8 @@ static void scenario_erase(void)
 	 */
 	length = sizeof(ot_read);
 	CHECK("erase leaves the OpenThread key alone",
-	      woz_freertos_kv_get(WOZ_KV_KEY_OPENTHREAD_BASE + 1u, ot_read, &length) == WOZ_KV_OK &&
+	      ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE + 1u, ot_read,
+					    &length) == ULTRAWIDELOCK_KV_OK &&
 		      length == sizeof(ot_value) && memcmp(ot_read, ot_value, length) == 0);
 
 	CHECK("a second erase succeeds", ultrawidelock_prov_erase() == 0);
@@ -194,9 +196,10 @@ static void scenario_malformed(void)
 	uint8_t garbage[12];
 
 	memset(garbage, 0x33, sizeof(garbage));
-	CHECK("kv init succeeds", woz_freertos_kv_init() == WOZ_KV_OK);
+	CHECK("kv init succeeds", ultrawidelock_freertos_kv_init() == ULTRAWIDELOCK_KV_OK);
 	CHECK("garbage stores under the prov key",
-	      woz_freertos_kv_set(WOZ_KV_KEY_ALIRO_PROV, garbage, sizeof(garbage)) == WOZ_KV_OK);
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, garbage,
+					    sizeof(garbage)) == ULTRAWIDELOCK_KV_OK);
 
 	CHECK("a malformed blob reports an error", ultrawidelock_prov_load(&id, &ts) == -1);
 	CHECK("a malformed blob still yields the dev identity", is_dev_default(&id));
@@ -214,9 +217,10 @@ static void scenario_oversized(void)
 	static uint8_t big[ULTRAWIDELOCK_PROV_BLOB_MAX + 4u];
 
 	memset(big, 0x22, sizeof(big));
-	CHECK("kv init succeeds", woz_freertos_kv_init() == WOZ_KV_OK);
+	CHECK("kv init succeeds", ultrawidelock_freertos_kv_init() == ULTRAWIDELOCK_KV_OK);
 	CHECK("an oversized record stores",
-	      woz_freertos_kv_set(WOZ_KV_KEY_ALIRO_PROV, big, sizeof(big)) == WOZ_KV_OK);
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, big, sizeof(big)) ==
+		      ULTRAWIDELOCK_KV_OK);
 
 	CHECK("an oversized record reports an error", ultrawidelock_prov_load(&id, &ts) == -1);
 	CHECK("an oversized record still yields the dev identity", is_dev_default(&id));
@@ -229,7 +233,7 @@ static void scenario_store_fails(void)
 	struct ultrawidelock_trust_store ts;
 
 	make_identity(&id, &ts);
-	CHECK("kv init succeeds", woz_freertos_kv_init() == WOZ_KV_OK);
+	CHECK("kv init succeeds", ultrawidelock_freertos_kv_init() == ULTRAWIDELOCK_KV_OK);
 
 	/* Fail the next write, which is the one carrying the record header. */
 	fake_flash_fail_write_after = 1;

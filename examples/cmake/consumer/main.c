@@ -8,16 +8,16 @@ int main(void)
 	uint8_t encoded[8];
 	size_t offset = 0;
 
-	if (woz_aliro_tlv_write(encoded, sizeof(encoded), &offset, 0x5cu, value,
+	if (ultrawidelock_cred_tlv_write(encoded, sizeof(encoded), &offset, 0x5cu, value,
 				sizeof(value)) != ULTRAWIDELOCK_CRED_TLV_OK) {
 		return 1;
 	}
 
 	const size_t encoded_length = offset;
-	struct woz_aliro_tlv parsed;
+	struct ultrawidelock_cred_tlv parsed;
 
 	offset = 0;
-	if (woz_aliro_tlv_next(encoded, encoded_length, &offset, &parsed) !=
+	if (ultrawidelock_cred_tlv_next(encoded, encoded_length, &offset, &parsed) !=
 	    ULTRAWIDELOCK_CRED_TLV_OK) {
 		return 2;
 	}

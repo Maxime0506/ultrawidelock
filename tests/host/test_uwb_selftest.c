@@ -9,20 +9,20 @@
 
 #include "drvfake.h"
 #include "test.h"
-#include "woz_osal.h"
+#include "ultrawidelock_osal.h"
 
-extern int (*const woz_init_uwb_selftest_init)(void);
+extern int (*const ultrawidelock_init_uwb_selftest_init)(void);
 
 void test_uwb_selftest(void)
 {
 	t_group("boot arm");
 	drvfake_reset();
-	woz_osal_host_reset();
-	T_EQ("init rc", woz_init_uwb_selftest_init(), 0);
+	ultrawidelock_osal_host_reset();
+	T_EQ("init rc", ultrawidelock_init_uwb_selftest_init(), 0);
 	T_EQ("nothing started yet", (long)drvfake.start_aliro_calls, 0L);
 	T_EQ("quiet until the Kconfig delay",
-	     (long)woz_osal_host_advance_ms(CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS - 1), 0L);
-	T_EQ("fires after the Kconfig delay", (long)woz_osal_host_advance_ms(1), 1L);
+	     (long)ultrawidelock_osal_host_advance_ms(CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS - 1), 0L);
+	T_EQ("fires after the Kconfig delay", (long)ultrawidelock_osal_host_advance_ms(1), 1L);
 
 	t_group("worker: canned config reaches the facade");
 	T_EQ("wrap log budget reset first", (long)drvfake.wrap_log_reset_calls, 1L);
@@ -43,8 +43,8 @@ void test_uwb_selftest(void)
 
 	t_group("worker: failure path only logs");
 	drvfake.start_aliro_ret = -5;
-	T_EQ("re-arm rc", woz_init_uwb_selftest_init(), 0);
+	T_EQ("re-arm rc", ultrawidelock_init_uwb_selftest_init(), 0);
 	T_EQ("worker fires again",
-	     (long)woz_osal_host_advance_ms(CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS), 1L);
+	     (long)ultrawidelock_osal_host_advance_ms(CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS), 1L);
 	T_EQ("second run still calls through", (long)drvfake.start_aliro_calls, 2L);
 }

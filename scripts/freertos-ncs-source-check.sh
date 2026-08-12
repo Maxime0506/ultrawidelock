@@ -54,7 +54,7 @@ fi
 
 CC=${CC:-cc}
 inc=(-I "$compat" -I "$root/ports/freertos-nrf52833/include" -I "$stubs" -I "$sdc_include" -I "$controller")
-cfg=(-include "$compat/woz_freertos_hci_config.h")
+cfg=(-include "$compat/ultrawidelock_freertos_hci_config.h")
 
 # The dispatcher is compiled with the port's warnings, unmodified and unpatched.
 "$CC" -std=c11 -O1 -Wall -Wextra -Werror -c "${cfg[@]}" "${inc[@]}" \
@@ -87,7 +87,7 @@ nm -u "$out/hci_internal.o" |
 			printf 'ncs-source-check: no prototype for %s\n' "$symbol" >&2
 			exit 2
 		fi
-		printf '%s { return woz_stub_record("%s"); }\n' "${decl%;}" "$symbol"
+		printf '%s { return ultrawidelock_stub_record("%s"); }\n' "${decl%;}" "$symbol"
 	done <"$out/hci_commands.txt"
 } >"$gen"
 
@@ -158,7 +158,7 @@ fi
 # -Wno-unused-parameter: three OpenThread callbacks take an instance the Nordic
 # platform does not need. The Zephyr build does not enable -Wextra at all.
 "$CC" -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -fsyntax-only \
-	-include "$ot_compat/woz_freertos_ot_config.h" \
+	-include "$ot_compat/ultrawidelock_freertos_ot_config.h" \
 	-I "$ot_compat" \
 	-I "$root/ports/freertos-nrf52833/include" \
 	-I "$ot_stubs" \

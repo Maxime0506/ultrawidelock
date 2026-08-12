@@ -10,8 +10,8 @@
 #include <stdio.h>
 
 #include <openthread/platform/alarm-milli.h>
-#include <woz_freertos_openthread.h>
-#include <woz_osal.h>
+#include <ultrawidelock_freertos_openthread.h>
+#include <ultrawidelock_osal.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -30,25 +30,25 @@ static unsigned g_failures;
 /* The clock the alarm reads, under the test's control. */
 static int64_t g_uptime_us;
 
-int64_t woz_freertos_uptime_us(void)
+int64_t ultrawidelock_freertos_uptime_us(void)
 {
 	return g_uptime_us;
 }
 
 /* The port's delayable work, recorded rather than run. */
-static struct woz_dwork *g_scheduled;
+static struct ultrawidelock_dwork *g_scheduled;
 static int32_t g_delay_ms;
 static unsigned g_schedule_calls;
 static unsigned g_cancel_calls;
-static woz_dwork_fn g_fn;
+static ultrawidelock_dwork_fn g_fn;
 
-void woz_dwork_init(struct woz_dwork *dwork, woz_dwork_fn fn)
+void ultrawidelock_dwork_init(struct ultrawidelock_dwork *dwork, ultrawidelock_dwork_fn fn)
 {
 	g_fn = fn;
 	(void)dwork;
 }
 
-int woz_dwork_reschedule(struct woz_dwork *dwork, int32_t delay_ms)
+int ultrawidelock_dwork_reschedule(struct ultrawidelock_dwork *dwork, int32_t delay_ms)
 {
 	g_scheduled = dwork;
 	g_delay_ms = delay_ms;
@@ -56,7 +56,7 @@ int woz_dwork_reschedule(struct woz_dwork *dwork, int32_t delay_ms)
 	return 0;
 }
 
-int woz_dwork_cancel(struct woz_dwork *dwork)
+int ultrawidelock_dwork_cancel(struct ultrawidelock_dwork *dwork)
 {
 	(void)dwork;
 	g_scheduled = NULL;
@@ -67,7 +67,7 @@ int woz_dwork_cancel(struct woz_dwork *dwork)
 /* Run the deadline the way the work queue would. */
 static void expire(void)
 {
-	struct woz_dwork *due = g_scheduled;
+	struct ultrawidelock_dwork *due = g_scheduled;
 
 	g_scheduled = NULL;
 	if (due != NULL && g_fn != NULL) {
@@ -77,7 +77,7 @@ static void expire(void)
 
 static unsigned g_wake_calls;
 
-void woz_freertos_openthread_wake(void)
+void ultrawidelock_freertos_openthread_wake(void)
 {
 	g_wake_calls++;
 }
@@ -112,23 +112,23 @@ int main(void)
 	      g_schedule_calls == 1 && g_delay_ms == 200 && g_scheduled != NULL);
 	CHECK("and does not fire early", g_wake_calls == 0);
 
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("draining before the deadline delivers nothing", g_fired_calls == 0);
 
 	g_uptime_us = 1700000;
 	expire();
 	CHECK("expiry wakes the OpenThread task rather than calling the stack",
 	      g_wake_calls == 1 && g_fired_calls == 0);
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("the drain is what delivers it", g_fired_calls == 1);
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("and delivers it exactly once", g_fired_calls == 1);
 
 	/* A deadline already past must not wait for a work queue pass. */
 	otPlatAlarmMilliStartAt(instance, 1000, 100);
 	CHECK("a deadline already past is recorded without scheduling",
 	      g_schedule_calls == 1 && g_wake_calls == 2);
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("and is delivered on the next drain", g_fired_calls == 2);
 
 	/*
@@ -138,10 +138,10 @@ int main(void)
 	g_rearm_on_fire = true;
 	otPlatAlarmMilliStartAt(instance, otPlatAlarmMilliGetNow(), 10);
 	expire();
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("re-arming from inside the callback survives the drain",
 	      g_fired_calls == 3);
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("and the re-armed deadline is delivered on the next drain",
 	      g_fired_calls == 4);
 
@@ -157,7 +157,7 @@ int main(void)
 
 	otPlatAlarmMilliStop(instance);
 	CHECK("stopping cancels the deadline", g_scheduled == NULL);
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 	CHECK("and drops a deadline that had already expired", g_fired_calls == 4);
 
 	printf("RESULT: %s (%u checks)\n", g_failures == 0 ? "PASS" : "FAIL", g_checks);

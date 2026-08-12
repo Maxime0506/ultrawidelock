@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 #include "ultrawidelock_ble.h"
 #include "ultrawidelock_crypto.h"

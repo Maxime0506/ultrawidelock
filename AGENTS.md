@@ -24,7 +24,7 @@ generated or vendored bulk, not prose.
 1. `modules/` names no operating system. Public headers are in `include/` and
    private headers and implementation are in `src/`.
 2. `ports/zephyr/` names only Zephyr. `ports/esp32/` names only ESP-IDF.
-3. `modules/woz_port/include/` is headers-only. Backend implementations live in
+3. `modules/ultrawidelock_port/include/` is headers-only. Backend implementations live in
    a port tree or in `tests/host/port/`.
 4. A source must not include another module's `src/`, and build files must not
    propagate a module `src/` include directory.
@@ -34,7 +34,7 @@ generated or vendored bulk, not prose.
 The application-facing C headers are `<ultrawidelock/reader.h>`,
 `<ultrawidelock/device.h>`, `<ultrawidelock/uwb.h>`, and `<ultrawidelock/tlv.h>`. The
 all-in-one `<ultrawidelock/ultrawidelock.h>` is for package consumers that intentionally
-want every declaration. The chipset contract is `<ultrawidelock/woz_hal.h>`. The
+want every declaration. The chipset contract is `<ultrawidelock/ultrawidelock_hal.h>`. The
 HAL names five seams: DW3000 GPIO/IRQ, DW3000 SPI, BLE GATT/L2CAP, BLE central,
 and credential storage.
 

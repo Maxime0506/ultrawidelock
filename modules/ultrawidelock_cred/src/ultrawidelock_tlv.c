@@ -2,7 +2,7 @@
  * @file ultrawidelock_tlv.c
  * BER-TLV parser and encoder for Aliro protocol: parse TLVs with definite length and advance
  * offset, compute encoded sizes, and write new TLVs. Promoted verbatim from
- * woz_aliro_stack (protocol/tlv.c); full BER incl. multi-byte and high-tag-number tags.
+ * ultrawidelock_cred_stack (protocol/tlv.c); full BER incl. multi-byte and high-tag-number tags.
  */
 #include <ultrawidelock/tlv.h>
 
@@ -10,8 +10,8 @@
 
 #include <limits.h>
 
-int woz_aliro_tlv_next(const uint8_t *data, size_t data_length, size_t *offset,
-		       struct woz_aliro_tlv *out)
+int ultrawidelock_cred_tlv_next(const uint8_t *data, size_t data_length, size_t *offset,
+		       struct ultrawidelock_cred_tlv *out)
 {
 	if (data == NULL || offset == NULL || out == NULL || *offset > data_length) {
 		return ULTRAWIDELOCK_CRED_TLV_INVALID;
@@ -112,7 +112,7 @@ static size_t length_size(size_t length)
 	return 0;
 }
 
-size_t woz_aliro_tlv_encoded_size(uint32_t tag, size_t value_length)
+size_t ultrawidelock_cred_tlv_encoded_size(uint32_t tag, size_t value_length)
 {
 	const size_t encoded_tag_size = tag_size(tag);
 	const size_t encoded_length_size = length_size(value_length);
@@ -123,13 +123,13 @@ size_t woz_aliro_tlv_encoded_size(uint32_t tag, size_t value_length)
 	return encoded_tag_size + encoded_length_size + value_length;
 }
 
-int woz_aliro_tlv_write(uint8_t *data, size_t data_capacity, size_t *offset, uint32_t tag,
+int ultrawidelock_cred_tlv_write(uint8_t *data, size_t data_capacity, size_t *offset, uint32_t tag,
 			const uint8_t *value, size_t value_length)
 {
 	if (data == NULL || offset == NULL || (value == NULL && value_length != 0)) {
 		return ULTRAWIDELOCK_CRED_TLV_INVALID;
 	}
-	const size_t total = woz_aliro_tlv_encoded_size(tag, value_length);
+	const size_t total = ultrawidelock_cred_tlv_encoded_size(tag, value_length);
 	if (total == 0 || *offset > data_capacity || total > data_capacity - *offset) {
 		return ULTRAWIDELOCK_CRED_TLV_INVALID;
 	}

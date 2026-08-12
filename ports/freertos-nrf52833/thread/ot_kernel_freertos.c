@@ -1,6 +1,6 @@
 /*
  * The Zephyr kernel objects the pinned OpenThread radio platform uses, on
- * FreeRTOS. See ot_compat/woz_freertos_ot_kernel.h for the surface and why it
+ * FreeRTOS. See ot_compat/ultrawidelock_freertos_ot_kernel.h for the surface and why it
  * is only this much.
  *
  * Every operation here is reachable from an 802.15.4 driver callout, which
@@ -8,9 +8,9 @@
  * the queue and the atomics mask interrupts rather than take a lock, and why
  * the semaphore has to pick its FreeRTOS entry point by context.
  */
-#include <woz_freertos_ot_kernel.h>
+#include <ultrawidelock_freertos_ot_kernel.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include <FreeRTOS.h>
 #include <semphr.h>
@@ -32,7 +32,7 @@ void k_sem_init(struct k_sem *sem, unsigned int initial_count, unsigned int limi
 {
 	sem->handle = xSemaphoreCreateCountingStatic(limit, initial_count, &sem->storage);
 	if (sem->handle == NULL) {
-		woz_freertos_fatal("openthread semaphore");
+		ultrawidelock_freertos_fatal("openthread semaphore");
 	}
 }
 
@@ -100,7 +100,7 @@ void *k_fifo_get(struct k_fifo *fifo, k_timeout_t timeout)
 	 * better than a wait that silently returns immediately.
 	 */
 	if (timeout.ticks != 0u) {
-		woz_freertos_fatal("openthread fifo blocking get");
+		ultrawidelock_freertos_fatal("openthread fifo blocking get");
 	}
 
 	primask = __get_PRIMASK();
@@ -119,13 +119,14 @@ void *k_fifo_get(struct k_fifo *fifo, k_timeout_t timeout)
 
 _Noreturn void k_oops(void)
 {
-	woz_freertos_fatal("openthread radio platform");
+	ultrawidelock_freertos_fatal("openthread radio platform");
 }
 
-_Noreturn void woz_freertos_ot_assert_failed(const char *file, int line, const char *test)
+_Noreturn void ultrawidelock_freertos_ot_assert_failed(const char *file, int line, const char *test)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, "ot_radio", "assert %s:%d: %s", file, line, test);
-	woz_freertos_fatal("openthread radio assertion");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, "ot_radio", "assert %s:%d: %s",
+				   file, line, test);
+	ultrawidelock_freertos_fatal("openthread radio assertion");
 }
 
 /*
@@ -135,12 +136,12 @@ _Noreturn void woz_freertos_ot_assert_failed(const char *file, int line, const c
  */
 static atomic_t *word_of(atomic_t *target, int bit)
 {
-	return target + ((unsigned)bit / WOZ_OT_ATOMIC_BITS);
+	return target + ((unsigned)bit / ULTRAWIDELOCK_OT_ATOMIC_BITS);
 }
 
 static atomic_t mask_of(int bit)
 {
-	return (atomic_t)1u << ((unsigned)bit % WOZ_OT_ATOMIC_BITS);
+	return (atomic_t)1u << ((unsigned)bit % ULTRAWIDELOCK_OT_ATOMIC_BITS);
 }
 
 bool atomic_test_bit(const atomic_t *target, int bit)

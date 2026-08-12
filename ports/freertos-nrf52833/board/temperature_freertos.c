@@ -12,9 +12,9 @@
  */
 #include <mpsl_temp.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
-int8_t woz_freertos_die_temperature_c(void)
+int8_t ultrawidelock_freertos_die_temperature_c(void)
 {
 	int32_t quarter_degrees = mpsl_temperature_get();
 

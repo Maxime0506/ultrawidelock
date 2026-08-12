@@ -1,5 +1,5 @@
 /* logfake: minimal <zephyr/logging/log_msg.h>. The suite fabricates log_msg
- * structs directly; the accessors are the ones woz_logfmt.c calls. */
+ * structs directly; the accessors are the ones ultrawidelock_logfmt.c calls. */
 #ifndef LOGFAKE_ZEPHYR_LOGGING_LOG_MSG_H
 #define LOGFAKE_ZEPHYR_LOGGING_LOG_MSG_H
 

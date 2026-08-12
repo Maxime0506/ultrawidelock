@@ -19,7 +19,7 @@
 #include <sdc_hci_cmd_info_params.h>
 #include <sdc_hci_cmd_le.h>
 
-#include "woz_freertos_radio.h"
+#include "ultrawidelock_freertos_radio.h"
 #include "stub_sdc_hci_cmd.h"
 
 /* Bluetooth Core spec Vol 4, Part E: opcodes and event layout, spelled out
@@ -59,7 +59,7 @@ static void put_command(uint8_t *packet, uint16_t opcode, uint8_t param_len)
 }
 
 /* Reads back the Command Complete the dispatcher staged for the last command. */
-static bool complete_for(const struct woz_freertos_radio_dispatcher *d, uint16_t opcode,
+static bool complete_for(const struct ultrawidelock_freertos_radio_dispatcher *d, uint16_t opcode,
 			 uint8_t *status_out)
 {
 	uint8_t event[257];
@@ -86,7 +86,7 @@ static bool complete_for(const struct woz_freertos_radio_dispatcher *d, uint16_t
  * Command Complete. Reading it back proves the second packed layout in the
  * compat header independently of the first.
  */
-static bool status_for(const struct woz_freertos_radio_dispatcher *d, uint16_t opcode,
+static bool status_for(const struct ultrawidelock_freertos_radio_dispatcher *d, uint16_t opcode,
 		       uint8_t *status_out)
 {
 	uint8_t event[257];
@@ -108,7 +108,8 @@ static bool status_for(const struct woz_freertos_radio_dispatcher *d, uint16_t o
 
 int main(void)
 {
-	const struct woz_freertos_radio_dispatcher *d = woz_freertos_radio_sdc_dispatcher();
+	const struct ultrawidelock_freertos_radio_dispatcher *d =
+		ultrawidelock_freertos_radio_sdc_dispatcher();
 	sdc_hci_ip_supported_commands_t cmds;
 	uint8_t packet[260];
 	uint8_t status = 0xff;
@@ -120,23 +121,23 @@ int main(void)
 	      d != NULL && d->cmd_put != NULL && d->msg_get != NULL);
 
 	CHECK("an idle dispatcher forwards the controller's no-data status",
-	      d->msg_get(packet, &type) == -NRF_EAGAIN && woz_stub_calls("sdc_hci_get") == 1);
+	      d->msg_get(packet, &type) == -NRF_EAGAIN && ultrawidelock_stub_calls("sdc_hci_get") == 1);
 
 	/* HCI Reset is Baseband OGF 0x03: it proves BT_OGF splits the opcode. */
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_RESET, 0);
 	CHECK("HCI Reset reaches the controller's reset command",
-	      d->cmd_put(packet) == 0 && woz_stub_calls("sdc_hci_cmd_cb_reset") == 1);
+	      d->cmd_put(packet) == 0 && ultrawidelock_stub_calls("sdc_hci_cmd_cb_reset") == 1);
 	CHECK("HCI Reset completes with success before the controller is polled",
 	      complete_for(d, HCI_OPCODE_RESET, &status) && status == HCI_STATUS_SUCCESS &&
-		      woz_stub_calls("sdc_hci_get") == 0);
+		      ultrawidelock_stub_calls("sdc_hci_get") == 0);
 
 	/* Informational OGF 0x04, and the first command NimBLE sends after reset. */
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_READ_LOCAL_VERSION, 0);
 	CHECK("Read Local Version Information reaches the controller",
 	      d->cmd_put(packet) == 0 &&
-		      woz_stub_calls("sdc_hci_cmd_ip_read_local_version_information") == 1);
+		      ultrawidelock_stub_calls("sdc_hci_cmd_ip_read_local_version_information") == 1);
 	CHECK("Read Local Version Information returns its parameters in one event",
 	      complete_for(d, HCI_OPCODE_READ_LOCAL_VERSION, &status) &&
 		      status == HCI_STATUS_SUCCESS);
@@ -147,27 +148,27 @@ int main(void)
 	 * the only place the two Command Status fields hold different values, and
 	 * therefore the only place their order is actually checkable.
 	 */
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_LE_SET_PHY, 7);
 	CHECK("a successful LE Set PHY is reported as a Command Status",
-	      d->cmd_put(packet) == 0 && woz_stub_calls("sdc_hci_cmd_le_set_phy") == 1 &&
+	      d->cmd_put(packet) == 0 && ultrawidelock_stub_calls("sdc_hci_cmd_le_set_phy") == 1 &&
 		      status_for(d, HCI_OPCODE_LE_SET_PHY, &status) &&
 		      status == HCI_STATUS_SUCCESS);
 
 	/* LE OGF 0x08, and the command that actually starts Aliro advertising. */
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_LE_SET_ADV_ENABLE, 1);
 	packet[3] = 1;
 	CHECK("LE Set Advertising Enable reaches the controller's LE command",
 	      d->cmd_put(packet) == 0 &&
-		      woz_stub_calls("sdc_hci_cmd_le_set_adv_enable") == 1 &&
+		      ultrawidelock_stub_calls("sdc_hci_cmd_le_set_adv_enable") == 1 &&
 		      complete_for(d, HCI_OPCODE_LE_SET_ADV_ENABLE, &status) &&
 		      status == HCI_STATUS_SUCCESS);
 
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_UNKNOWN_LE, 0);
 	CHECK("an unsupported opcode is refused without touching the controller",
-	      d->cmd_put(packet) == 0 && woz_stub_total() == 0);
+	      d->cmd_put(packet) == 0 && ultrawidelock_stub_total() == 0);
 	CHECK("an unsupported opcode returns Unknown HCI Command as a status event",
 	      status_for(d, HCI_OPCODE_UNKNOWN_LE, &status) &&
 		      status == HCI_STATUS_UNKNOWN_CMD);
@@ -175,23 +176,23 @@ int main(void)
 	/* OGF 0x3f is the vendor group. This port leaves CONFIG_BT_HCI_VS out, so
 	 * reaching Unknown HCI Command here proves both that BT_OGF isolates the
 	 * group and that the compat configuration really gates the command set. */
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_UNKNOWN_VS, 0);
 	CHECK("the vendor command group is not compiled into this port",
-	      d->cmd_put(packet) == 0 && woz_stub_total() == 0 &&
+	      d->cmd_put(packet) == 0 && ultrawidelock_stub_total() == 0 &&
 		      status_for(d, HCI_OPCODE_UNKNOWN_VS, &status) &&
 		      status == HCI_STATUS_UNKNOWN_CMD);
 
 	/* The dispatcher refuses a second command until the first one's event has
 	 * been collected, which is why msg_get has to be the transport's read path. */
-	woz_stub_reset();
+	ultrawidelock_stub_reset();
 	put_command(packet, HCI_OPCODE_RESET, 0);
 	CHECK("a command that is not yet answered blocks the next one",
 	      d->cmd_put(packet) == 0 && d->cmd_put(packet) < 0 &&
-		      woz_stub_calls("sdc_hci_cmd_cb_reset") == 1);
+		      ultrawidelock_stub_calls("sdc_hci_cmd_cb_reset") == 1);
 	CHECK("collecting the event lets the next command through",
 	      complete_for(d, HCI_OPCODE_RESET, &status) && d->cmd_put(packet) == 0 &&
-		      woz_stub_calls("sdc_hci_cmd_cb_reset") == 2);
+		      ultrawidelock_stub_calls("sdc_hci_cmd_cb_reset") == 2);
 	CHECK("the answered event is returned once and not replayed",
 	      complete_for(d, HCI_OPCODE_RESET, &status) &&
 		      d->msg_get(packet, &type) == -NRF_EAGAIN);

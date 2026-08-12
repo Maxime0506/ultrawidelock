@@ -3,7 +3,7 @@
  *
  * ultrawidelock_uwb_set_sts_iv is the seam entry point (uwb_seam.h); on host the suite
  * calls the wrapper directly. The DW3000 side is the recording shim
- * (tests/host/shim/shim.c + dw_rx_stub.c): woz_host_last_sts_key/iv capture
+ * (tests/host/shim/shim.c + dw_rx_stub.c): ultrawidelock_host_last_sts_key/iv capture
  * what would hit the radio registers, and dwt_read_reg returns 0 — so this
  * pins the shim-active/inactive gating, the blob-index calibration handoff,
  * and the key/IV register packing (whole-16 reverse + per-word LE) against the
@@ -20,8 +20,8 @@
 void ultrawidelock_uwb_set_sts_iv(dwt_sts_cp_iv_t *pStsIv);
 
 /* Capture state from tests/host/shim/shim.c. */
-extern dwt_sts_cp_key_t woz_host_last_sts_key;
-extern dwt_sts_cp_iv_t woz_host_last_sts_iv;
+extern dwt_sts_cp_key_t ultrawidelock_host_last_sts_key;
+extern dwt_sts_cp_iv_t ultrawidelock_host_last_sts_iv;
 
 static const uint8_t URSK[CCC_URSK_LEN] = {
 	0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0xda, 0xdb,
@@ -68,10 +68,10 @@ void test_ccc_shim_wrap(void)
 	t_group("inactive: passthrough to the real IV load");
 	ccc_shim_unbind();
 	iv = blob_iv(0x11223344u);
-	memset(&woz_host_last_sts_iv, 0, sizeof(woz_host_last_sts_iv));
+	memset(&ultrawidelock_host_last_sts_iv, 0, sizeof(ultrawidelock_host_last_sts_iv));
 	ultrawidelock_uwb_set_sts_iv(&iv);
 	T_OK("iv reaches real load verbatim",
-	     memcmp(&woz_host_last_sts_iv, &iv, sizeof(iv)) == 0);
+	     memcmp(&ultrawidelock_host_last_sts_iv, &iv, sizeof(iv)) == 0);
 
 	t_group("active: CCC STS substituted (frame 0 calibrates the origin)");
 	T_EQ("bind", ccc_shim_bind_from_ursk(URSK, RC, sizeof(RC), STS0, NSLOT), 0);
@@ -80,22 +80,22 @@ void test_ccc_shim_wrap(void)
 	ultrawidelock_uwb_set_sts_iv(&iv);
 	/* Independent expectation: frame 0 maps to CCC index STS0 exactly. */
 	T_EQ("kdf ref", ccc_shim_sts_for_index(STS0, dursk, sts_v), 0);
-	T_EQ("key0 packed", (long)woz_host_last_sts_key.key0, (long)regword(dursk, 0));
-	T_EQ("key1 packed", (long)woz_host_last_sts_key.key1, (long)regword(dursk, 1));
-	T_EQ("key2 packed", (long)woz_host_last_sts_key.key2, (long)regword(dursk, 2));
-	T_EQ("key3 packed", (long)woz_host_last_sts_key.key3, (long)regword(dursk, 3));
-	T_EQ("iv0 packed", (long)woz_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
-	T_EQ("iv1 packed", (long)woz_host_last_sts_iv.iv1, (long)regword(sts_v, 1));
-	T_EQ("iv2 packed", (long)woz_host_last_sts_iv.iv2, (long)regword(sts_v, 2));
-	T_EQ("iv3 packed", (long)woz_host_last_sts_iv.iv3, (long)regword(sts_v, 3));
+	T_EQ("key0 packed", (long)ultrawidelock_host_last_sts_key.key0, (long)regword(dursk, 0));
+	T_EQ("key1 packed", (long)ultrawidelock_host_last_sts_key.key1, (long)regword(dursk, 1));
+	T_EQ("key2 packed", (long)ultrawidelock_host_last_sts_key.key2, (long)regword(dursk, 2));
+	T_EQ("key3 packed", (long)ultrawidelock_host_last_sts_key.key3, (long)regword(dursk, 3));
+	T_EQ("iv0 packed", (long)ultrawidelock_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
+	T_EQ("iv1 packed", (long)ultrawidelock_host_last_sts_iv.iv1, (long)regword(sts_v, 1));
+	T_EQ("iv2 packed", (long)ultrawidelock_host_last_sts_iv.iv2, (long)regword(sts_v, 2));
+	T_EQ("iv3 packed", (long)ultrawidelock_host_last_sts_iv.iv3, (long)regword(sts_v, 3));
 
 	t_group("frame 1 learns the stride; block 1 advances one round");
 	iv = blob_iv(0x0badc0deu + 96u);
 	ultrawidelock_uwb_set_sts_iv(&iv);
 	T_EQ("kdf ref blk1", ccc_shim_sts_for_index(STS0 + NSLOT, dursk, sts_v), 0);
-	T_EQ("blk1 iv0", (long)woz_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
-	T_EQ("blk1 iv3", (long)woz_host_last_sts_iv.iv3, (long)regword(sts_v, 3));
-	T_EQ("blk1 key0", (long)woz_host_last_sts_key.key0, (long)regword(dursk, 0));
+	T_EQ("blk1 iv0", (long)ultrawidelock_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
+	T_EQ("blk1 iv3", (long)ultrawidelock_host_last_sts_iv.iv3, (long)regword(sts_v, 3));
+	T_EQ("blk1 key0", (long)ultrawidelock_host_last_sts_key.key0, (long)regword(dursk, 0));
 
 	t_group("past the log budget: substitution continues silently");
 	for (int i = 0; i < 10; i++) {
@@ -103,19 +103,19 @@ void test_ccc_shim_wrap(void)
 		ultrawidelock_uwb_set_sts_iv(&iv);
 	}
 	T_EQ("kdf ref blk11", ccc_shim_sts_for_index(STS0 + 11u * NSLOT, dursk, sts_v), 0);
-	T_EQ("blk11 iv0", (long)woz_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
+	T_EQ("blk11 iv0", (long)ultrawidelock_host_last_sts_iv.iv0, (long)regword(sts_v, 0));
 
 	t_group("suspended: passthrough again without unbinding");
 	ccc_shim_suspend(true);
 	iv = blob_iv(0x31415926u);
 	ultrawidelock_uwb_set_sts_iv(&iv);
-	T_OK("suspended iv verbatim", memcmp(&woz_host_last_sts_iv, &iv, sizeof(iv)) == 0);
+	T_OK("suspended iv verbatim", memcmp(&ultrawidelock_host_last_sts_iv, &iv, sizeof(iv)) == 0);
 	ccc_shim_suspend(false);
 
 	t_group("NULL iv: forwarded, capture untouched");
-	iv = woz_host_last_sts_iv;
+	iv = ultrawidelock_host_last_sts_iv;
 	ultrawidelock_uwb_set_sts_iv(NULL);
-	T_OK("null forwarded safely", memcmp(&woz_host_last_sts_iv, &iv, sizeof(iv)) == 0);
+	T_OK("null forwarded safely", memcmp(&ultrawidelock_host_last_sts_iv, &iv, sizeof(iv)) == 0);
 
 	ccc_shim_unbind(); /* leave no session behind for later suites */
 }

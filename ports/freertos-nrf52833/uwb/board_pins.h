@@ -13,8 +13,8 @@
  * asserts around a transfer. So CS is an ordinary GPIO the port drives, exactly
  * as the Zephyr and ESP-IDF backends do.
  */
-#ifndef WOZ_FREERTOS_UWB_BOARD_PINS_H
-#define WOZ_FREERTOS_UWB_BOARD_PINS_H
+#ifndef ULTRAWIDELOCK_FREERTOS_UWB_BOARD_PINS_H
+#define ULTRAWIDELOCK_FREERTOS_UWB_BOARD_PINS_H
 
 /* Port 0 pins are 0-31, port 1 pins are 32-63: the part's own flat numbering. */
 #define ULTRAWIDELOCK_DW3000_PIN_SCLK   3u  /* P0.03 */
@@ -54,4 +54,4 @@
 #define ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL 0u
 #endif
 
-#endif /* WOZ_FREERTOS_UWB_BOARD_PINS_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_UWB_BOARD_PINS_H */

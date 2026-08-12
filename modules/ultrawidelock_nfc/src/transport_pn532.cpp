@@ -171,20 +171,20 @@ void BroadcastEcp()
  * consumed here; the Aliro stack sees exactly one response to the APDU it sent. */
 int ExchangeApdu(const pn532_target &target, size_t &wireTxLen)
 {
-	woz_pn532_apdu_plan plan{};
-	if (woz_pn532_apdu_plan_init(sTxBuf, sTxLen, &plan) != 0) {
+	ultrawidelock_pn532_apdu_plan plan{};
+	if (ultrawidelock_pn532_apdu_plan_init(sTxBuf, sTxLen, &plan) != 0) {
 		return PN532_ERR_FRAME;
 	}
 	if (plan.adapted) {
 		LOG_INF("PN532: adapting APDU INS=0x%02x tx=%zu data=%zu Le=%u "
 			"(wire=%u, response=%u)",
 			sTxBuf[1], sTxLen, plan.data_length, static_cast<unsigned int>(plan.le),
-			WOZ_PN532_APDU_WIRE_MAX, WOZ_PN532_RESPONSE_DATA_MAX);
+			ULTRAWIDELOCK_PN532_APDU_WIRE_MAX, ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX);
 	}
 
 	for (;;) {
 		bool moreInternal = false;
-		if (woz_pn532_apdu_plan_next(&plan, sWireTxBuf, sizeof(sWireTxBuf), &wireTxLen,
+		if (ultrawidelock_pn532_apdu_plan_next(&plan, sWireTxBuf, sizeof(sWireTxBuf), &wireTxLen,
 					     &moreInternal) != 0) {
 			return PN532_ERR_SPACE;
 		}

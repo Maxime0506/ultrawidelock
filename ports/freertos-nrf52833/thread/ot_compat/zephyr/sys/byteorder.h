@@ -3,8 +3,8 @@
  * little-endian, so the little-endian forms are plain copies and only the
  * memcpy swap actually reverses anything.
  */
-#ifndef WOZ_OT_COMPAT_ZEPHYR_BYTEORDER_H
-#define WOZ_OT_COMPAT_ZEPHYR_BYTEORDER_H
+#ifndef ULTRAWIDELOCK_OT_COMPAT_ZEPHYR_BYTEORDER_H
+#define ULTRAWIDELOCK_OT_COMPAT_ZEPHYR_BYTEORDER_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -38,4 +38,4 @@ static inline void sys_memcpy_swap(void *dst, const void *src, size_t length)
 	}
 }
 
-#endif /* WOZ_OT_COMPAT_ZEPHYR_BYTEORDER_H */
+#endif /* ULTRAWIDELOCK_OT_COMPAT_ZEPHYR_BYTEORDER_H */

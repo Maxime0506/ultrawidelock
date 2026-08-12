@@ -3,7 +3,7 @@
 #include <string.h>
 #include <sys/mman.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 uint8_t *fake_flash;
 unsigned fake_flash_violations;
@@ -40,7 +40,7 @@ static int in_range(uint32_t offset, size_t length)
 	return 1;
 }
 
-int woz_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
+int ultrawidelock_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
 {
 	if (!in_range(offset, length)) {
 		fake_flash_violations++;
@@ -50,7 +50,7 @@ int woz_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
 	return 0;
 }
 
-int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
+int ultrawidelock_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 {
 	const uint8_t *in = data;
 	size_t i;
@@ -60,8 +60,8 @@ int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 		fake_flash_violations++;
 		return -1;
 	}
-	if ((offset % WOZ_FREERTOS_FLASH_WRITE_ALIGN) != 0u ||
-	    (length % WOZ_FREERTOS_FLASH_WRITE_ALIGN) != 0u) {
+	if ((offset % ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN) != 0u ||
+	    (length % ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN) != 0u) {
 		fake_flash_violations++;
 		return -1;
 	}
@@ -90,14 +90,14 @@ int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 	return 0;
 }
 
-int woz_freertos_flash_erase(uint32_t offset, size_t length)
+int ultrawidelock_freertos_flash_erase(uint32_t offset, size_t length)
 {
 	if (!in_range(offset, length)) {
 		fake_flash_violations++;
 		return -1;
 	}
-	if (((offset - FAKE_FLASH_BASE) % WOZ_FREERTOS_FLASH_PAGE_SIZE) != 0u ||
-	    (length % WOZ_FREERTOS_FLASH_PAGE_SIZE) != 0u) {
+	if (((offset - FAKE_FLASH_BASE) % ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE) != 0u ||
+	    (length % ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE) != 0u) {
 		fake_flash_violations++;
 		return -1;
 	}

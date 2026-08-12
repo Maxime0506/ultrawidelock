@@ -13,39 +13,39 @@
  * no CSL and no network time sync, and nothing else asks for microsecond
  * timers. Adding it would mean shipping a second timer with no caller.
  */
-#include <woz_freertos_openthread.h>
+#include <ultrawidelock_freertos_openthread.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <woz_freertos_platform.h>
-#include <woz_osal.h>
+#include <ultrawidelock_freertos_platform.h>
+#include <ultrawidelock_osal.h>
 
 #include <openthread/platform/alarm-milli.h>
 
 #define ALARM_MS_PER_SECOND 1000
 #define ALARM_US_PER_MS 1000
 
-static struct woz_dwork s_alarm;
+static struct ultrawidelock_dwork s_alarm;
 static bool s_alarm_ready;
 static volatile bool s_fired;
 
 /*
  * The deadline is recorded and the OpenThread task woken; the stack's own
  * callback runs from that task, under the API lock, in
- * woz_freertos_openthread_alarm_process().
+ * ultrawidelock_freertos_openthread_alarm_process().
  */
-static void alarm_expired(struct woz_dwork *dwork)
+static void alarm_expired(struct ultrawidelock_dwork *dwork)
 {
 	(void)dwork;
 	s_fired = true;
-	woz_freertos_openthread_wake();
+	ultrawidelock_freertos_openthread_wake();
 }
 
 static void alarm_ready(void)
 {
 	if (!s_alarm_ready) {
-		woz_dwork_init(&s_alarm, alarm_expired);
+		ultrawidelock_dwork_init(&s_alarm, alarm_expired);
 		s_alarm_ready = true;
 	}
 }
@@ -57,7 +57,7 @@ uint32_t otPlatAlarmMilliGetNow(void)
 	 * written to survive the wrap, so truncating here is the contract rather
 	 * than a loss.
 	 */
-	return (uint32_t)(woz_freertos_uptime_us() / (int64_t)ALARM_US_PER_MS);
+	return (uint32_t)(ultrawidelock_freertos_uptime_us() / (int64_t)ALARM_US_PER_MS);
 }
 
 void otPlatAlarmMilliStartAt(otInstance *instance, uint32_t t0, uint32_t dt)
@@ -75,7 +75,7 @@ void otPlatAlarmMilliStartAt(otInstance *instance, uint32_t t0, uint32_t dt)
 	delta = (int32_t)(t0 + dt - otPlatAlarmMilliGetNow());
 
 	if (delta > 0) {
-		(void)woz_dwork_reschedule(&s_alarm, delta);
+		(void)ultrawidelock_dwork_reschedule(&s_alarm, delta);
 		return;
 	}
 
@@ -84,7 +84,7 @@ void otPlatAlarmMilliStartAt(otInstance *instance, uint32_t t0, uint32_t dt)
 	 * keeps the deadline from waiting on a work queue pass it does not need,
 	 * and matches what the stack expects: a deadline in the past has fired.
 	 */
-	(void)woz_dwork_cancel(&s_alarm);
+	(void)ultrawidelock_dwork_cancel(&s_alarm);
 	alarm_expired(&s_alarm);
 }
 
@@ -92,7 +92,7 @@ void otPlatAlarmMilliStop(otInstance *instance)
 {
 	(void)instance;
 	alarm_ready();
-	(void)woz_dwork_cancel(&s_alarm);
+	(void)ultrawidelock_dwork_cancel(&s_alarm);
 	s_fired = false;
 }
 
@@ -101,7 +101,7 @@ void otPlatAlarmMilliStop(otInstance *instance)
  * re-arm the alarm from inside its own callback. The flag is cleared first for
  * exactly that reason.
  */
-void woz_freertos_openthread_alarm_process(otInstance *instance)
+void ultrawidelock_freertos_openthread_alarm_process(otInstance *instance)
 {
 	if (!s_fired) {
 		return;

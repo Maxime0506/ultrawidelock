@@ -58,8 +58,8 @@ void ultrawidelock_reader_refresh_adv(void);
 void ultrawidelock_reader_set_lock_state_listener(void (*cb)(bool unlocked));
 
 /* Feed one BLE connection-RSSI sample (dBm) into the session's ranging power gate
- * (CONFIG_WOZ_RSSI_GATE; absent without it). The transport polls the controller
- * every CONFIG_WOZ_RSSI_GATE_POLL_MS while its CoC is up and calls this from the
+ * (CONFIG_ULTRAWIDELOCK_RSSI_GATE; absent without it). The transport polls the controller
+ * every CONFIG_ULTRAWIDELOCK_RSSI_GATE_POLL_MS while its CoC is up and calls this from the
  * BLE-host task. The gate holds AP-Completed, and with it the whole UWB radio,
  * until the phone is inside the open threshold, and tears ranging down again on a
  * sustained fade below the close threshold. */

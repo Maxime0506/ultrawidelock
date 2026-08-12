@@ -6,7 +6,7 @@
 #include <cherry/cherry_ccc.h>
 #include <cherry/cherry_session.h>
 
-#include <deca_device_api.h> /* woz_host_rx radio knobs */
+#include <deca_device_api.h> /* ultrawidelock_host_rx radio knobs */
 
 #include "test.h"
 
@@ -97,12 +97,12 @@ void test_cherry(void)
 	T_EQ("stop.null", cherry_session_stop(NULL), CHERRY_ERR_INVALID_PARAMETER);
 
 	t_group("start surfaces a UWB bring-up failure as a SESSION_ERROR event");
-	woz_host_rx.radio_init_ret = -5; /* the host radio refuses to init */
+	ultrawidelock_host_rx.radio_init_ret = -5; /* the host radio refuses to init */
 	g_cc.count = 0;
 	T_EQ("start.uwbfail", cherry_session_start(base), CHERRY_ERR_SESSION_INIT);
 	T_EQ("start.uwbfail.event", g_cc.type, CHERRY_CCC_EVENT_TYPE_SESSION_ERROR);
 	T_EQ("start.uwbfail.err", g_cc.err, CHERRY_ERR_SESSION_INIT);
-	woz_host_rx.radio_init_ret = 0;
+	ultrawidelock_host_rx.radio_init_ret = 0;
 
 	t_group("fine setters (write-through + null guards)");
 	T_EQ("proto.ok", cherry_ccc_session_set_protocol_version(s, 0x0100u),

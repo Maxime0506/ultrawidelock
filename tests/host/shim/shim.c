@@ -6,25 +6,25 @@
 
 #include "deca_device_api.h"
 
-dwt_sts_cp_key_t woz_host_last_sts_key;
-dwt_sts_cp_iv_t woz_host_last_sts_iv;
-unsigned int woz_host_sts_loadiv_calls;
+dwt_sts_cp_key_t ultrawidelock_host_last_sts_key;
+dwt_sts_cp_iv_t ultrawidelock_host_last_sts_iv;
+unsigned int ultrawidelock_host_sts_loadiv_calls;
 
 void dwt_configurestskey(dwt_sts_cp_key_t *key)
 {
 	if (key != NULL) {
-		woz_host_last_sts_key = *key;
+		ultrawidelock_host_last_sts_key = *key;
 	}
 }
 
 void dwt_configurestsiv(dwt_sts_cp_iv_t *iv)
 {
 	if (iv != NULL) {
-		woz_host_last_sts_iv = *iv;
+		ultrawidelock_host_last_sts_iv = *iv;
 	}
 }
 
 void dwt_configurestsloadiv(void)
 {
-	woz_host_sts_loadiv_calls++;
+	ultrawidelock_host_sts_loadiv_calls++;
 }

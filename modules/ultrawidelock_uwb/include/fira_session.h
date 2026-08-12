@@ -75,7 +75,7 @@ uint32_t fira_session_current_slot(void);
  * consumers want opposite failure modes. A door lock must not refuse to open
  * on a marginal block — a mis-tuned floor locks a human out of their house —
  * so it keeps the shadow behaviour and only drops blocks under
- * CONFIG_WOZ_RANGE_GATE_STRICT. A signed presence assertion is the opposite:
+ * CONFIG_ULTRAWIDELOCK_RANGE_GATE_STRICT. A signed presence assertion is the opposite:
  * it exists to be believed by someone who was not there, so it must refuse to
  * state a distance it cannot vouch for. The store therefore carries the
  * verdict alongside the range and lets each consumer pick.

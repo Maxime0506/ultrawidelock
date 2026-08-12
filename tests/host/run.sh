@@ -27,8 +27,8 @@ fi
    "${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" \
    -lm -o "$OUT/host_test"
 # Quiet: suites assert, they don't need the UWB diag firehose on stdout (run
-# the binary directly, without WOZ_TEST_QUIET, to get it back).
-WOZ_TEST_QUIET=1 "$OUT/host_test"
+# the binary directly, without ULTRAWIDELOCK_TEST_QUIET, to get it back).
+ULTRAWIDELOCK_TEST_QUIET=1 "$OUT/host_test"
 
 # --- target-only sources, separate small binaries --------------------------
 # These compile production sources whose exported symbols the main binary
@@ -38,27 +38,27 @@ WOZ_TEST_QUIET=1 "$OUT/host_test"
 SRC="$ROOT/modules/ultrawidelock_uwb/src"
 HOSTD="$ROOT/tests/host"
 
-# 1) uwb driver + shell (uwb_min/isr/rxdiag/cirdiag/selftest + aliro_shell) on
+# 1) uwb driver + shell (uwb_min/isr/rxdiag/cirdiag/selftest + ultrawidelock_shell) on
 #    the drvfake radio + logfake zephyr surface.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
-	-DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
+	-DULTRAWIDELOCK_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 	-DCONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
-	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
+	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_ultrawidelock_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
 	"$ROOT/tests/host/port/osal_host.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
-	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/aliro_shell.c" \
+	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/ultrawidelock_shell.c" \
 	-o "$OUT/host_test_drv"
-WOZ_TEST_QUIET=1 "$OUT/host_test_drv"
+ULTRAWIDELOCK_TEST_QUIET=1 "$OUT/host_test_drv"
 
 # 2) PSA/mbedTLS crypto seams over recording fakes (psafake/). The two backend
 #    files define the same crypto_aes_ecb_encrypt symbol as aes_ref.c, so each
@@ -67,11 +67,11 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb
 	-I"$SRC/ccc")
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags -c \
-	-Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
+	-Dcrypto_aes_ecb_encrypt=ultrawidelock_test_psa_ecb \
 	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_host.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags -c \
-	-Dcrypto_aes_ecb_encrypt=woz_test_mbedtls_ecb \
+	-Dcrypto_aes_ecb_encrypt=ultrawidelock_test_mbedtls_ecb \
 	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$OUT/ccc_crypto_mbedtls_host.o"
 # shellcheck disable=SC2086
 "${CC:-cc}" "${psa_flags[@]}" $san_flags \
@@ -112,7 +112,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb
 	-o "$ROOT/build/host_test_cdk"
 "$ROOT/build/host_test_cdk"
 
-# 5) Delta update, both halves, over the woz_flash host backend (RAM
+# 5) Delta update, both halves, over the ultrawidelock_flash host backend (RAM
 #    partitions that enforce the nRF driver's word and page alignment rules),
 #    the host OSAL's virtual clock, the recording PSA (psafake/) and a scripted
 #    detools (dfufake/). Its own binary because the SMP half needs the
@@ -121,11 +121,11 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb
 #    checked.
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags \
-	-DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
+	-DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
 	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
 	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
-	-I"$HOSTD/psafake" -I"$ROOT/modules/woz_port/include" \
+	-I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_port/include" \
 	-I"$ROOT/modules/ultrawidelock_dfu/include" -I"$ROOT/modules/ultrawidelock_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
@@ -147,9 +147,9 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb
 NFC_DEF=(-DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL=3 -DCONFIG_ULTRAWIDELOCK_NFC_PN532_THREAD_STACK_SIZE=2048
 	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS=200
 	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
-	-DWOZ_PORT_HOST) # transport_none logs through woz_log.h
+	-DULTRAWIDELOCK_PORT_HOST) # transport_none logs through ultrawidelock_log.h
 NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/include"
-	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/woz_port/include")
+	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/ultrawidelock_port/include")
 # shellcheck disable=SC2086
 "${CC:-cc}" -std=c11 -O1 -w $san_flags -c "$HOSTD/test.c" -o "$OUT/test_harness_nfc.o"
 # shellcheck disable=SC2086
@@ -203,10 +203,10 @@ NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/includ
 #    and the application callbacks are stand-ins. Its own binary because
 #    stackfake's <aliro/*.h> are a different Aliro surface from the one
 #    ecpfake and nfcfake carry, and all three would collide.
-STK="$ROOT/modules/woz_aliro_stack/src"
+STK="$ROOT/modules/ultrawidelock_cred_stack/src"
 STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
 	-DCONFIG_DOOR_LOCK_EXPEDITED_FAST_PHASE=1 -DCONFIG_DOOR_LOCK_STEP_UP_PHASE=1
-	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_WOZ_ALIRO_APDU_BUFFER_SIZE=1024
+	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_ULTRAWIDELOCK_CRED_APDU_BUFFER_SIZE=1024
 	-DCONFIG_MAX_NUMBER_OF_KPERSISTENT=4
 	-DCONFIG_DOOR_LOCK_STORAGE_MAX_STORED_ACCESS_DOCUMENTS=2)
 STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
@@ -222,7 +222,7 @@ for stk_src in advertising_core protocol/ble_message protocol/ble_timeout \
 		-I"$ROOT/modules/ultrawidelock_cred/include" -c "$STK/$stk_src.c" -o "$stk_obj"
 	STK_OBJS+=("$stk_obj")
 done
-# The step-up wire codecs + DeviceResponse parser are the shared woz_aliro
+# The step-up wire codecs + DeviceResponse parser are the shared ultrawidelock_cred
 # sources (one source of protocol truth; session.cpp calls them directly).
 for aliro_src in ultrawidelock_tlv ultrawidelock_stepup_wire ultrawidelock_stepup_parse; do
 	stk_obj="$OUT/stk_$aliro_src.o"
@@ -245,7 +245,7 @@ done
 	-o "$OUT/stk_aliro_prim_host.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
-	-c "$STK/aliro_stack.cpp" -o "$OUT/stk_aliro_stack.o"
+	-c "$STK/cred_stack.cpp" -o "$OUT/stk_cred_stack.o"
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags "${STK_DEF[@]}" "${STK_INC[@]}" \
 	-c "$STK/session.cpp" -o "$OUT/stk_session.o"
@@ -258,7 +258,7 @@ done
 # shellcheck disable=SC2086
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 	"$OUT/test_aliro_stack.o" "$OUT/stackfake.o" "$OUT/test_harness_stack.o" \
-	"$OUT/stk_aliro_stack.o" "$OUT/stk_session.o" "${STK_OBJS[@]}" \
+	"$OUT/stk_cred_stack.o" "$OUT/stk_session.o" "${STK_OBJS[@]}" \
 	"$OUT/stk_aliro_hash.o" "$OUT/stk_aliro_prim_host.o" \
 	-o "$OUT/host_test_stack"
 "$OUT/host_test_stack"

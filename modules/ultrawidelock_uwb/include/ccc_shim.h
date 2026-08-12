@@ -86,7 +86,7 @@ bool ccc_shim_rx_deadline_pending(void);
 bool ccc_shim_rx_awaiting_final(void);
 
 /** BENCH toggle — run the standalone SP0 Pre-POLL listener instead of the FiRa session. */
-#define WOZ_CCC_PREPOLL_LISTEN 1
+#define ULTRAWIDELOCK_CCC_PREPOLL_LISTEN 1
 
 /** BENCH: bring up a raw continuous SP0 receiver for the CCC Pre-POLL (target only). */
 int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code);

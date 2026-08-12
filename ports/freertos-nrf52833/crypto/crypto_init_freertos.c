@@ -18,12 +18,12 @@
 
 #include <psa/crypto.h>
 
-#include <woz_freertos_crypto.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_crypto.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #define CRYPTO_TAG "crypto"
 
-int woz_freertos_crypto_init(void)
+int ultrawidelock_freertos_crypto_init(void)
 {
 	static bool ready;
 	psa_status_t status;
@@ -32,7 +32,7 @@ int woz_freertos_crypto_init(void)
 		return 0;
 	}
 
-	woz_freertos_mbedtls_threading_init();
+	ultrawidelock_freertos_mbedtls_threading_init();
 
 	/*
 	 * This is where the DRBG gets seeded, and it is the one call in the
@@ -50,12 +50,13 @@ int woz_freertos_crypto_init(void)
 		 * without crypto and will say so, but a build that only wanted
 		 * Thread should not be reset out from under by this path.
 		 */
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, CRYPTO_TAG, "psa_crypto_init failed (%d)",
-				 (int)status);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, CRYPTO_TAG,
+					   "psa_crypto_init failed (%d)", (int)status);
 		return -1;
 	}
 
 	ready = true;
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, CRYPTO_TAG, "PSA core ready (software P-256)");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, CRYPTO_TAG,
+				   "PSA core ready (software P-256)");
 	return 0;
 }

@@ -34,8 +34,8 @@
 #include <hal/nrf_spim.h>
 #include <nrfx.h>
 
-#include <woz_freertos_platform.h>
-#include <woz_freertos_uwb.h>
+#include <ultrawidelock_freertos_platform.h>
+#include <ultrawidelock_freertos_uwb.h>
 
 #include "board_pins.h"
 #include "dw3000_hw.h"
@@ -83,21 +83,22 @@ int dwt_checkidlerc(void)
 	return g_idle_rc ? 1 : 0;
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)tag;
 	(void)fmt;
-	if (level == WOZ_FREERTOS_LOG_ERROR) {
+	if (level == ULTRAWIDELOCK_FREERTOS_LOG_ERROR) {
 		g_errors_logged++;
 	}
 }
 
-void woz_freertos_busy_wait_us(uint64_t us)
+void ultrawidelock_freertos_busy_wait_us(uint64_t us)
 {
 	g_busy_wait_total_us += us;
 }
 
-uint32_t woz_freertos_cycle_get_32(void)
+uint32_t ultrawidelock_freertos_cycle_get_32(void)
 {
 	static uint32_t tick;
 
@@ -130,7 +131,7 @@ static bool deliver_irq(void)
 	fake_gpiote_pin_edge(ULTRAWIDELOCK_DW3000_PIN_IRQ, true);
 	interrupted = fake_gpiote_would_interrupt();
 	if (interrupted) {
-		woz_freertos_dw3000_irq_handler();
+		ultrawidelock_freertos_dw3000_irq_handler();
 	}
 	return interrupted;
 }
@@ -269,7 +270,7 @@ static void check_spurious_vector(void)
 	(void)dw3000_hw_init_interrupt();
 
 	/* No event behind it: the vector must notify nobody. */
-	woz_freertos_dw3000_irq_handler();
+	ultrawidelock_freertos_dw3000_irq_handler();
 	CHECK("a vector with no event behind it notifies nothing",
 	      fake_isr_notify_calls == 0u);
 	CHECK("a vector with no event behind it yields nothing", fake_isr_yield_calls == 0u);

@@ -11,50 +11,50 @@
 #include "uwb_rxdiag.h"
 #include "uwb_seam.h"
 
-struct woz_host_rx_rec woz_host_rx = { .rxenable_ret = DWT_SUCCESS,
+struct ultrawidelock_host_rx_rec ultrawidelock_host_rx = { .rxenable_ret = DWT_SUCCESS,
 				       .starttx_ret = DWT_SUCCESS };
 
-void woz_host_rx_reset(void)
+void ultrawidelock_host_rx_reset(void)
 {
-	memset(&woz_host_rx, 0, sizeof(woz_host_rx));
-	woz_host_rx.rxenable_ret = DWT_SUCCESS;
-	woz_host_rx.starttx_ret = DWT_SUCCESS;
+	memset(&ultrawidelock_host_rx, 0, sizeof(ultrawidelock_host_rx));
+	ultrawidelock_host_rx.rxenable_ret = DWT_SUCCESS;
+	ultrawidelock_host_rx.starttx_ret = DWT_SUCCESS;
 }
 
 /* The decadriver entries the seam helpers chain into; on the host they ARE the doubles. */
 int32_t dwt_rxenable(int32_t mode)
 {
-	woz_host_rx.rxenable_calls++;
-	woz_host_rx.last_rxenable_mode = mode;
-	woz_host_rx.last_rxenable_seq = ++woz_host_rx.seq;
-	return woz_host_rx.rxenable_ret;
+	ultrawidelock_host_rx.rxenable_calls++;
+	ultrawidelock_host_rx.last_rxenable_mode = mode;
+	ultrawidelock_host_rx.last_rxenable_seq = ++ultrawidelock_host_rx.seq;
+	return ultrawidelock_host_rx.rxenable_ret;
 }
 
 void dwt_forcetrxoff(void)
 {
-	woz_host_rx.forcetrxoff_calls++;
-	woz_host_rx.last_forcetrxoff_seq = ++woz_host_rx.seq;
+	ultrawidelock_host_rx.forcetrxoff_calls++;
+	ultrawidelock_host_rx.last_forcetrxoff_seq = ++ultrawidelock_host_rx.seq;
 }
 
 int32_t dwt_starttx(int32_t mode)
 {
 	(void)mode;
-	woz_host_rx.starttx_calls++;
-	woz_host_rx.seq++;
-	return woz_host_rx.starttx_ret;
+	ultrawidelock_host_rx.starttx_calls++;
+	ultrawidelock_host_rx.seq++;
+	return ultrawidelock_host_rx.starttx_ret;
 }
 
 void dwt_setcallbacks(dwt_callbacks_s *callbacks)
 {
 	if (callbacks != NULL) {
-		woz_host_rx.cbs = *callbacks;
+		ultrawidelock_host_rx.cbs = *callbacks;
 	}
 }
 
 int32_t dwt_configure(dwt_config_t *config)
 {
 	(void)config;
-	return woz_host_rx.configure_ret;
+	return ultrawidelock_host_rx.configure_ret;
 }
 
 void dwt_configurestsmode(uint8_t stsMode)
@@ -119,7 +119,7 @@ uint32_t dwt_readctrdbg(void)
 
 uint32_t dwt_readsystimestamphi32(void)
 {
-	return woz_host_rx.systime;
+	return ultrawidelock_host_rx.systime;
 }
 
 uint32_t dwt_readsysstatuslo(void)
@@ -137,22 +137,22 @@ static void ts40_out(uint8_t *timestamp, uint64_t v)
 
 void dwt_readtxtimestamp(uint8_t *timestamp)
 {
-	ts40_out(timestamp, woz_host_rx.tx_ts40);
+	ts40_out(timestamp, ultrawidelock_host_rx.tx_ts40);
 }
 
 void dwt_readrxtimestamp_ipatov(uint8_t *timestamp)
 {
-	ts40_out(timestamp, woz_host_rx.rx_ts40);
+	ts40_out(timestamp, ultrawidelock_host_rx.rx_ts40);
 }
 
 void dwt_readrxdata(uint8_t *buffer, uint16_t length, uint16_t rxBufferOffset)
 {
 	(void)rxBufferOffset;
 	memset(buffer, 0, length);
-	if (length > sizeof(woz_host_rx.rxdata)) {
-		length = sizeof(woz_host_rx.rxdata);
+	if (length > sizeof(ultrawidelock_host_rx.rxdata)) {
+		length = sizeof(ultrawidelock_host_rx.rxdata);
 	}
-	memcpy(buffer, woz_host_rx.rxdata, length);
+	memcpy(buffer, ultrawidelock_host_rx.rxdata, length);
 }
 
 uint16_t dwt_getframelength(uint8_t *rng)
@@ -160,23 +160,23 @@ uint16_t dwt_getframelength(uint8_t *rng)
 	if (rng != NULL) {
 		*rng = 0u;
 	}
-	return woz_host_rx.rxdata_len;
+	return ultrawidelock_host_rx.rxdata_len;
 }
 
 int dwt_readstsquality(int16_t *rxStsQualityIndex, int stsSegment)
 {
 	(void)stsSegment;
 	if (rxStsQualityIndex != NULL) {
-		*rxStsQualityIndex = woz_host_rx.stsq_val;
+		*rxStsQualityIndex = ultrawidelock_host_rx.stsq_val;
 	}
-	return woz_host_rx.stsq_ret;
+	return ultrawidelock_host_rx.stsq_ret;
 }
 
 /* ── modules/ultrawidelock_uwb/src/driver externs the listener links against ─────────── */
 
 int uwb_min_radio_init(void)
 {
-	return woz_host_rx.radio_init_ret; /* radio is "up" on the host by default */
+	return ultrawidelock_host_rx.radio_init_ret; /* radio is "up" on the host by default */
 }
 
 uint32_t uwb_min_radio_generation(void)

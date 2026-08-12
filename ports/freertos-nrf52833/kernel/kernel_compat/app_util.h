@@ -13,8 +13,8 @@
  * pinned NCS sources. If a future kernel revision starts using more of this
  * header, the build breaks here rather than silently picking up a second SDK.
  */
-#ifndef WOZ_FREERTOS_KERNEL_COMPAT_APP_UTIL_H
-#define WOZ_FREERTOS_KERNEL_COMPAT_APP_UTIL_H
+#ifndef ULTRAWIDELOCK_FREERTOS_KERNEL_COMPAT_APP_UTIL_H
+#define ULTRAWIDELOCK_FREERTOS_KERNEL_COMPAT_APP_UTIL_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -24,4 +24,4 @@
 #define ROUNDED_DIV(A, B) (((A) + ((B) / 2)) / (B))
 #endif
 
-#endif /* WOZ_FREERTOS_KERNEL_COMPAT_APP_UTIL_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_KERNEL_COMPAT_APP_UTIL_H */

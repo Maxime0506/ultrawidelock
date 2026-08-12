@@ -1,9 +1,9 @@
 /* Host shim for <deca_device_api.h> — only the STS key/IV surface ccc_sts.c
  * needs. The register writes are no-ops here, but the values are captured into
- * woz_host_last_sts_* so a unit test can assert the derivation packed them
+ * ultrawidelock_host_last_sts_* so a unit test can assert the derivation packed them
  * correctly (field layout matches the DW3000 driver's cp_key/cp_iv structs). */
-#ifndef WOZ_HOST_SHIM_DECA_DEVICE_API_H
-#define WOZ_HOST_SHIM_DECA_DEVICE_API_H
+#ifndef ULTRAWIDELOCK_HOST_SHIM_DECA_DEVICE_API_H
+#define ULTRAWIDELOCK_HOST_SHIM_DECA_DEVICE_API_H
 
 #include <stdint.h>
 
@@ -22,9 +22,9 @@ typedef struct {
 } dwt_sts_cp_iv_t;
 
 /* Last values handed to the (no-op) register writes — for test assertions. */
-extern dwt_sts_cp_key_t woz_host_last_sts_key;
-extern dwt_sts_cp_iv_t woz_host_last_sts_iv;
-extern unsigned int woz_host_sts_loadiv_calls;
+extern dwt_sts_cp_key_t ultrawidelock_host_last_sts_key;
+extern dwt_sts_cp_iv_t ultrawidelock_host_last_sts_iv;
+extern unsigned int ultrawidelock_host_sts_loadiv_calls;
 
 void dwt_configurestskey(dwt_sts_cp_key_t *key);
 void dwt_configurestsiv(dwt_sts_cp_iv_t *iv);
@@ -213,8 +213,8 @@ int dwt_readcir(uint32_t *buffer, dwt_acc_idx_e cir_idx, uint16_t sample_offs,
 int dwt_readstsstatus(uint16_t *stsStatus, int sts_num);
 void dwt_configciadiag(uint8_t enable_mask);
 
-/* Recording state for the doubles above — reset with woz_host_rx_reset(). */
-struct woz_host_rx_rec {
+/* Recording state for the doubles above — reset with ultrawidelock_host_rx_reset(). */
+struct ultrawidelock_host_rx_rec {
 	unsigned rxenable_calls;      /* dwt_rxenable invocations */
 	int32_t last_rxenable_mode;
 	unsigned forcetrxoff_calls;
@@ -236,7 +236,7 @@ struct woz_host_rx_rec {
 	int radio_init_ret;           /* uwb_min_radio_init return (default 0 = up) */
 	int32_t configure_ret;        /* dwt_configure return (default DWT_SUCCESS) */
 };
-extern struct woz_host_rx_rec woz_host_rx;
-void woz_host_rx_reset(void);
+extern struct ultrawidelock_host_rx_rec ultrawidelock_host_rx;
+void ultrawidelock_host_rx_reset(void);
 
-#endif /* WOZ_HOST_SHIM_DECA_DEVICE_API_H */
+#endif /* ULTRAWIDELOCK_HOST_SHIM_DECA_DEVICE_API_H */

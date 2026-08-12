@@ -2,9 +2,9 @@
  * @file test_aliro_stack.cpp — the Aliro source stack on host.
  *
  * Files under test:
- *   modules/woz_aliro_stack/src/aliro_stack.cpp  error strings, RFC 3339 time,
+ *   modules/ultrawidelock_cred_stack/src/cred_stack.cpp  error strings, RFC 3339 time,
  *                                                advertising data
- *   modules/woz_aliro_stack/src/session.cpp      the BLE/NFC session machine
+ *   modules/ultrawidelock_cred_stack/src/session.cpp      the BLE/NFC session machine
  *
  * The protocol codecs it calls are the shipping sources, linked in whole:
  * every APDU and BLE frame is built and parsed by the real encoders, so a
@@ -422,12 +422,12 @@ static void test_session_lifecycle(void)
 	if (stackfake_last_send() != nullptr) {
 		const struct stackfake_send *sent = stackfake_last_send();
 
-		T_EQ("select is 15 bytes", (long)sent->len, (long)WOZ_ALIRO_SELECT_COMMAND_SIZE);
+		T_EQ("select is 15 bytes", (long)sent->len, (long)ULTRAWIDELOCK_CRED_SELECT_COMMAND_SIZE);
 		T_EQ("select CLA", (long)sent->bytes[0], 0x00L);
 		T_EQ("select INS", (long)sent->bytes[1], 0xa4L);
 		T_OK("select carries the expedited AID",
-		     std::memcmp(sent->bytes + 5, woz_aliro_expedited_aid, WOZ_ALIRO_AID_SIZE) ==
-			     0);
+		     std::memcmp(sent->bytes + 5, ultrawidelock_cred_expedited_aid,
+				 ULTRAWIDELOCK_CRED_AID_SIZE) == 0);
 		T_OK("sent on the nfc handle", !sent->is_ble);
 	}
 
@@ -518,7 +518,7 @@ static void test_nfc_flow(void)
 		T_EQ("auth0 CLA", (long)auth0->bytes[0], 0x80L);
 		T_EQ("auth0 INS", (long)auth0->bytes[1], 0x80L);
 		T_EQ("standard auth0 length", (long)auth0->len,
-		     (long)WOZ_ALIRO_AUTH0_STANDARD_COMMAND_SIZE);
+		     (long)ULTRAWIDELOCK_CRED_AUTH0_STANDARD_COMMAND_SIZE);
 		/* Command Parameters ride in the first TLV of the body (tag
 		 * 0x41, one byte), not in P1 -- P1/P2 are always zero here. */
 		T_EQ("body starts with command parameters", (long)auth0->bytes[5], 0x41L);
@@ -668,7 +668,7 @@ static void test_nfc_failures(void)
 		T_EQ("auth1 sent with a certificate", (long)stackfake.send_count, 3L);
 		if (stackfake_sent(2) != nullptr) {
 			T_OK("auth1 grew past the bare form",
-			     stackfake_sent(2)->len > WOZ_ALIRO_AUTH1_COMMAND_SIZE);
+			     stackfake_sent(2)->len > ULTRAWIDELOCK_CRED_AUTH1_COMMAND_SIZE);
 		}
 	}
 }
@@ -735,7 +735,7 @@ static void test_ble_deferral(void)
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
 	     (int)ALIRO_NO_ERROR);
 	std::memset(frame, 0, sizeof(frame));
-	frame[0] = WOZ_ALIRO_BLE_PROTOCOL_AP;
+	frame[0] = ULTRAWIDELOCK_CRED_BLE_PROTOCOL_AP;
 	frame[1] = 1;
 	frame[2] = 0;
 	frame[3] = 4;
@@ -797,7 +797,7 @@ static void test_ble_framing(void)
 	ready();
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
 	     (int)ALIRO_NO_ERROR);
-	oversized[0] = WOZ_ALIRO_BLE_PROTOCOL_AP;
+	oversized[0] = ULTRAWIDELOCK_CRED_BLE_PROTOCOL_AP;
 	oversized[1] = 1;
 	oversized[2] = 0xff;
 	oversized[3] = 0xff;
@@ -828,7 +828,7 @@ static void test_ble_framing(void)
 	ready();
 	T_EQ("ble session", stack().CreateSession(ConnectionHandle::Ble(0)).ToInt(),
 	     (int)ALIRO_NO_ERROR);
-	frame[0] = WOZ_ALIRO_BLE_PROTOCOL_AP;
+	frame[0] = ULTRAWIDELOCK_CRED_BLE_PROTOCOL_AP;
 	frame[1] = 1;
 	frame[2] = 0;
 	frame[3] = 4;
@@ -955,8 +955,8 @@ static size_t build_initiate_access(uint8_t *out)
 	payload[0] = 0;
 	payload[1] = static_cast<uint8_t>(sizeof(proprietary));
 	std::memcpy(payload + 2, proprietary, sizeof(proprietary));
-	return frame_ble(out, WOZ_ALIRO_BLE_PROTOCOL_NOTIFICATION,
-			 WOZ_ALIRO_BLE_NOTIFICATION_INITIATE_ACCESS, payload, sizeof(payload));
+	return frame_ble(out, ULTRAWIDELOCK_CRED_BLE_PROTOCOL_NOTIFICATION,
+			 ULTRAWIDELOCK_CRED_BLE_NOTIFICATION_INITIATE_ACCESS, payload, sizeof(payload));
 }
 
 /**
@@ -971,7 +971,7 @@ static size_t build_ble_protected(uint8_t *out, uint8_t protocol, uint8_t id,
 {
 	const uint8_t aad[4] = {protocol, id, static_cast<uint8_t>(length >> 8),
 				static_cast<uint8_t>(length)};
-	const size_t onWire = length + WOZ_ALIRO_BLE_AUTH_TAG_SIZE;
+	const size_t onWire = length + ULTRAWIDELOCK_CRED_BLE_AUTH_TAG_SIZE;
 	size_t sealed;
 
 	out[0] = protocol;
@@ -979,14 +979,14 @@ static size_t build_ble_protected(uint8_t *out, uint8_t protocol, uint8_t id,
 	out[2] = static_cast<uint8_t>(onWire >> 8);
 	out[3] = static_cast<uint8_t>(onWire);
 	sealed = stackfake_seal_as_device(BLE_DEVICE_KEY(), counter, aad, sizeof(aad), plaintext,
-					  length, out + WOZ_ALIRO_BLE_HEADER_SIZE);
-	return sealed == 0U ? 0U : WOZ_ALIRO_BLE_HEADER_SIZE + sealed;
+					  length, out + ULTRAWIDELOCK_CRED_BLE_HEADER_SIZE);
+	return sealed == 0U ? 0U : ULTRAWIDELOCK_CRED_BLE_HEADER_SIZE + sealed;
 }
 
 /** Wrap an AP response payload the way the peer does: protocol AP, id 1. */
 static size_t frame_ap(uint8_t *out, const uint8_t *payload, size_t length)
 {
-	return frame_ble(out, WOZ_ALIRO_BLE_PROTOCOL_AP, 1, payload, length);
+	return frame_ble(out, ULTRAWIDELOCK_CRED_BLE_PROTOCOL_AP, 1, payload, length);
 }
 
 /** Open a BLE session and take it to the point where AUTH0 has gone out. */
@@ -1020,12 +1020,12 @@ static void test_ble_flow(void)
 
 		T_OK("sent on the ble handle", sent->is_ble);
 		T_EQ("framed as an AP message", (long)sent->bytes[0],
-		     (long)WOZ_ALIRO_BLE_PROTOCOL_AP);
+		     (long)ULTRAWIDELOCK_CRED_BLE_PROTOCOL_AP);
 		T_EQ("apdu follows the header", (long)sent->bytes[4], 0x80L);
 		T_EQ("auth0 INS", (long)sent->bytes[5], 0x80L);
 		T_EQ("declared payload matches the frame",
 		     (long)(((size_t)sent->bytes[2] << 8) | sent->bytes[3]),
-		     (long)(sent->len - WOZ_ALIRO_BLE_HEADER_SIZE));
+		     (long)(sent->len - ULTRAWIDELOCK_CRED_BLE_HEADER_SIZE));
 	}
 	/* Arming the response timer is what stops a peer that goes quiet from
 	 * holding a session slot. */
@@ -1068,13 +1068,13 @@ static void test_ble_flow(void)
 		const struct stackfake_send *sent = stackfake_sent(3);
 
 		T_EQ("notification protocol", (long)sent->bytes[0],
-		     (long)WOZ_ALIRO_BLE_PROTOCOL_NOTIFICATION);
+		     (long)ULTRAWIDELOCK_CRED_BLE_PROTOCOL_NOTIFICATION);
 		T_EQ("access completed id", (long)sent->bytes[1],
-		     (long)WOZ_ALIRO_BLE_NOTIFICATION_ACCESS_COMPLETED);
+		     (long)ULTRAWIDELOCK_CRED_BLE_NOTIFICATION_ACCESS_COMPLETED);
 		/* The frame grew by exactly the authentication tag. */
 		T_EQ("payload carries the tag",
 		     (long)(((size_t)sent->bytes[2] << 8) | sent->bytes[3]),
-		     (long)(4 + WOZ_ALIRO_BLE_AUTH_TAG_SIZE));
+		     (long)(4 + ULTRAWIDELOCK_CRED_BLE_AUTH_TAG_SIZE));
 	}
 	/* ONCE RANGING STARTS THE ACCESS PROTOCOL KEYS ARE GONE. Seven of the
 	 * nine slots hold a key on this path -- reader ephemeral, Kdh, both
@@ -1092,19 +1092,19 @@ static void test_ble_flow(void)
 
 		/* Sealed for real with the reader's own BleSKDevice, on the
 		 * first device counter. */
-		n = build_ble_protected(protectedFrame, WOZ_ALIRO_BLE_PROTOCOL_UWB, 0, plain,
+		n = build_ble_protected(protectedFrame, ULTRAWIDELOCK_CRED_BLE_PROTOCOL_UWB, 0, plain,
 					sizeof(plain), 1);
 		T_OK("frame sealed", n > 0u);
 		feed_ble(0, protectedFrame, n);
 		T_EQ("the uwb message was forwarded", (long)stackfake.uwb_handle_calls, 1L);
 		T_EQ("forwarded with its header", (long)stackfake.last_uwb_message_len,
-		     (long)(WOZ_ALIRO_BLE_HEADER_SIZE + sizeof(plain)));
+		     (long)(ULTRAWIDELOCK_CRED_BLE_HEADER_SIZE + sizeof(plain)));
 		T_EQ("session still open", (long)stackfake.termination_calls, 0L);
 	}
 
 	/* SendBleMessage now works, because the session is ranging. */
 	{
-		uint8_t outbound[8] = {WOZ_ALIRO_BLE_PROTOCOL_UWB, 0, 0, 4, 1, 2, 3, 4};
+		uint8_t outbound[8] = {ULTRAWIDELOCK_CRED_BLE_PROTOCOL_UWB, 0, 0, 4, 1, 2, 3, 4};
 		const size_t before = stackfake.send_count;
 
 		stack().SendBleMessage(ConnectionHandle::Ble(0), outbound, sizeof(outbound));
@@ -1133,7 +1133,7 @@ static void test_ble_flow(void)
 		size_t n;
 
 		/* Counter 2: the reader already opened the UWB frame above. */
-		n = build_ble_protected(protectedFrame, WOZ_ALIRO_BLE_PROTOCOL_AP, 7, plain,
+		n = build_ble_protected(protectedFrame, ULTRAWIDELOCK_CRED_BLE_PROTOCOL_AP, 7, plain,
 					sizeof(plain), 2);
 		T_OK("frame sealed", n > 0u);
 		feed_ble(0, protectedFrame, n);
@@ -1157,8 +1157,8 @@ static void test_ble_flow_failures(void)
 	{
 		uint8_t payload[4] = {0, 2, 0xa5, 0x00};
 
-		length = frame_ble(frame, WOZ_ALIRO_BLE_PROTOCOL_NOTIFICATION,
-				   WOZ_ALIRO_BLE_NOTIFICATION_INITIATE_ACCESS, payload,
+		length = frame_ble(frame, ULTRAWIDELOCK_CRED_BLE_PROTOCOL_NOTIFICATION,
+				   ULTRAWIDELOCK_CRED_BLE_NOTIFICATION_INITIATE_ACCESS, payload,
 				   sizeof(payload));
 		feed_ble(0, frame, length);
 		T_EQ("a bad initiate closes the session", (long)stackfake.termination_calls, 1L);
@@ -1290,8 +1290,8 @@ static void test_step_up(void)
 	T_EQ("the step-up AID was selected", (long)stackfake.send_count, 4L);
 	if (stackfake_sent(3) != nullptr) {
 		T_OK("select carries the step-up AID",
-		     std::memcmp(stackfake_sent(3)->bytes + 5, woz_aliro_step_up_aid,
-				 WOZ_ALIRO_AID_SIZE) == 0);
+		     std::memcmp(stackfake_sent(3)->bytes + 5, ultrawidelock_cred_step_up_aid,
+				 ULTRAWIDELOCK_CRED_AID_SIZE) == 0);
 	}
 
 	/* Answering that SELECT starts the exchange: the directional step-up

@@ -20,7 +20,7 @@ Initiators use `<ultrawidelock/device.h>`, and codec-only consumers use
 `<ultrawidelock/tlv.h>`. Installed plain-CMake consumers may use the all-in-one
 `<ultrawidelock/ultrawidelock.h>` when they intentionally want every declaration.
 
-Port implementations use `<ultrawidelock/woz_hal.h>`, which names the five chipset
+Port implementations use `<ultrawidelock/ultrawidelock_hal.h>`, which names the five chipset
 seams for DW3000 GPIO/IRQ, DW3000 SPI, reader BLE, central BLE, and credential
 storage. See [`PORTING.md`](PORTING.md) for the shortest board and chipset
 workflow.

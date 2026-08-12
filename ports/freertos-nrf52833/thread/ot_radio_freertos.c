@@ -7,11 +7,11 @@
  * right order, draining its pending work on the OpenThread task, and turning
  * its wake call into a FreeRTOS notification.
  */
-#include <woz_freertos_openthread.h>
+#include <ultrawidelock_freertos_openthread.h>
 
 #include <stdbool.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include <nrfx.h>
 
@@ -27,10 +27,10 @@ static bool s_started;
 
 /*
  * The 802.15.4 driver arbitrates the radio through MPSL, so this must run
- * after woz_freertos_radio_start(). It also has to run before the OpenThread
+ * after ultrawidelock_freertos_radio_start(). It also has to run before the OpenThread
  * task starts, because the task drains the platform on every pass.
  */
-int woz_freertos_openthread_radio_start(void)
+int ultrawidelock_freertos_openthread_radio_start(void)
 {
 	if (s_started) {
 		return 0;
@@ -41,7 +41,7 @@ int woz_freertos_openthread_radio_start(void)
 	return 0;
 }
 
-bool woz_freertos_openthread_radio_started(void)
+bool ultrawidelock_freertos_openthread_radio_started(void)
 {
 	return s_started;
 }
@@ -51,13 +51,13 @@ bool woz_freertos_openthread_radio_started(void)
  * started there is nothing to drain, and calling in anyway would read the
  * platform's state before it was initialized.
  */
-void woz_freertos_openthread_process_drivers(otInstance *instance)
+void ultrawidelock_freertos_openthread_process_drivers(otInstance *instance)
 {
 	/*
 	 * The alarm needs no start of its own: it is armed by the stack, and a
 	 * pass before anything armed it has nothing to deliver.
 	 */
-	woz_freertos_openthread_alarm_process(instance);
+	ultrawidelock_freertos_openthread_alarm_process(instance);
 
 	if (!s_started) {
 		return;
@@ -74,8 +74,8 @@ void woz_freertos_openthread_process_drivers(otInstance *instance)
 void otSysEventSignalPending(void)
 {
 	if (__get_IPSR() != 0u) {
-		woz_freertos_openthread_wake_from_isr();
+		ultrawidelock_freertos_openthread_wake_from_isr();
 		return;
 	}
-	woz_freertos_openthread_wake();
+	ultrawidelock_freertos_openthread_wake();
 }

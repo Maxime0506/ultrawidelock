@@ -129,5 +129,5 @@ CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM=y
 # Pinned here because a Kconfig `default` only seeds a FRESH sdkconfig. An
 # existing sdkconfig keeps its old value forever, so changing the default alone
 # silently ships the old thresholds.
-CONFIG_WOZ_RSSI_GATE_OPEN_DBM=-55
-CONFIG_WOZ_RSSI_GATE_CLOSE_DBM=-65
+CONFIG_ULTRAWIDELOCK_RSSI_GATE_OPEN_DBM=-55
+CONFIG_ULTRAWIDELOCK_RSSI_GATE_CLOSE_DBM=-65

@@ -103,8 +103,8 @@ run_suite prov "$OUT/cov_prov"
 
 # Only the trace-on lat build is instrumented: the gate-off variant maps the
 # same lines differently and the two profiles would not merge cleanly.
-cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
-	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
+cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
+	-I"$ALIRO/include" -I"$ROOT/modules/ultrawidelock_port/include" \
 	"$SHARED/test_aliro_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$OUT/cov_lat"
 run_suite lat "$OUT/cov_lat"
 
@@ -112,8 +112,8 @@ cov_cc -I"$LOCK_MAIN" \
 	"$ET/test_lock_led.c" "$LOCK_MAIN/lock_led.c" -o "$OUT/cov_led"
 run_suite led "$OUT/cov_led"
 
-cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
-	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/woz_port/include" \
+cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
+	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/ultrawidelock_port/include" \
 	"$SHARED/test_aliro_reader.c" \
 	"$ALIRO/src/ultrawidelock_reader.c" "$ALIRO/src/ultrawidelock_apdu.c" \
 	"$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
@@ -121,8 +121,8 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_reader"
 run_suite reader "$OUT/cov_reader"
 
-cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
-	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/woz_port/include" \
+cov_cc -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
+	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/ultrawidelock_port/include" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$SHARED/test_aliro_ranging.c" \
 	"$ALIRO/src/ultrawidelock_ranging.c" "$ALIRO/src/ultrawidelock_crypto.c" \
@@ -130,9 +130,9 @@ cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
 	"$SHARED/aliro_prim_host.c" -o "$OUT/cov_ranging"
 run_suite ranging "$OUT/cov_ranging"
 
-# Header-inline logic (woz_port.h et al.) is exercised by the port-headers
+# Header-inline logic (ultrawidelock_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.
-cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_uwb/include" \
+cov_cc -I"$ROOT/modules/ultrawidelock_port/include" -I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$SHARED/test_port_headers.c" -o "$OUT/cov_hdrs"
 run_suite hdrs "$OUT/cov_hdrs"
@@ -152,7 +152,7 @@ SIDE_UNIT_SRCS=(
 	"$SRC/driver/uwb_rxdiag.c"
 	"$SRC/driver/uwb_cirdiag.c"
 	"$SRC/driver/uwb_selftest.c"
-	"$ROOT/ports/zephyr/shell/aliro_shell.c"
+	"$ROOT/ports/zephyr/shell/ultrawidelock_shell.c"
 	"$SRC/ccc/ccc_crypto_psa.c"
 	"$SRC/ccc/ccc_crypto_mbedtls.c"
 	"$ALIRO/src/ultrawidelock_prim_psa.c"
@@ -178,33 +178,33 @@ SIDE_UNIT_SRCS=(
 	"$ROOT/ports/zephyr/nfc/pn532_bus_spi.c"
 	"$ROOT/modules/ultrawidelock_nfc/src/transport_pn532.cpp"
 	"$ROOT/modules/ultrawidelock_nfc/src/transport_none.cpp"
-	"$ROOT/modules/woz_aliro_stack/src/aliro_stack.cpp"
-	"$ROOT/modules/woz_aliro_stack/src/session.cpp"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/cred_stack.cpp"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/session.cpp"
 )
 
-cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
+cov_cc -DULTRAWIDELOCK_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
 	-DCONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS=250 \
 	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" -I"$ROOT/ports/zephyr/shell" \
-	-I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" -I"$ROOT/modules/ultrawidelock_dw3000/include" \
 	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
 	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
 	"$HOSTD/test_uwb_cirdiag.c" \
-	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
+	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_ultrawidelock_shell.c" \
 	"$HOSTD/shim/drvfake.c" \
 	"$ROOT/tests/host/port/osal_host.c" \
 	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
 	"$SRC/driver/uwb_cirdiag.c" \
-	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/aliro_shell.c" -o "$OUT/cov_drv"
-WOZ_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
+	"$SRC/driver/uwb_selftest.c" "$ROOT/ports/zephyr/shell/ultrawidelock_shell.c" -o "$OUT/cov_drv"
+ULTRAWIDELOCK_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
 	>>"$OUT/run.log" 2>&1 || true
 OBJS+=(-object "$OUT/cov_drv")
 
 psa_flags=(-I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_uwb/include" -I"$SRC/ccc")
-cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
+cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=ultrawidelock_test_psa_ecb \
 	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_cov.o"
-cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_mbedtls_ecb \
+cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=ultrawidelock_test_mbedtls_ecb \
 	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$OUT/ccc_crypto_mbedtls_cov.o"
 cov_cc "${psa_flags[@]}" -I"$HOSTD" -I"$ALIRO/include" \
 	"$HOSTD/test.c" "$HOSTD/test_psa_backends.c" "$HOSTD/psafake/psafake.c" \
@@ -243,12 +243,12 @@ cov_cc -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 \
 	"$SHARED/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
 run_suite esp_worker "$OUT/cov_esp_worker"
 
-# _POSIX_C_SOURCE because main.c now includes woz_port.h, whose host build calls
+# _POSIX_C_SOURCE because main.c now includes ultrawidelock_port.h, whose host build calls
 # clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
 # declares both unconditionally, so omitting it builds locally and fails on CI.
-cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DWOZ_PORT_HOST \
+cov_cc -D_POSIX_C_SOURCE=200809L -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DULTRAWIDELOCK_PORT_HOST \
 	-I"$SDKFAKE" -I"$EREADER" -I"$ROOT/modules/ultrawidelock_uwb/include" \
-	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
+	-I"$ALIRO/include" -I"$ROOT/modules/ultrawidelock_port/include" \
 	"$ET/test_esp_app_shell.c" "$EREADER/app_shell.c" \
 	"$EREADER/main.c" \
 	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
@@ -285,9 +285,9 @@ cov_cc -I"$ALIRO/include" -c "$ALIRO/src/ultrawidelock_approach.c" -o "$OUT/alir
 "${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
 	-DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 \
 	-DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
-	-DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
+	-DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DULTRAWIDELOCK_PORT_HOST \
 	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
-	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
+	-I"$ALIRO/include" -I"$ROOT/modules/ultrawidelock_port/include" \
 	-I"$ROOT/modules/ultrawidelock_uwb/include" \
 	"$ET/test_esp_matter_lock.cpp" \
 	"$MLOCK/app_driver.cpp" "$MLOCK/app_main.cpp" "$MLOCK/app_shell.cpp" \
@@ -300,11 +300,11 @@ run_suite esp_matter "$OUT/cov_esp_matter"
 # Delta update, both halves plus the SMP front door, on the RAM flash of
 # dfufake/ (which enforces the nRF word/page alignment rules), psafake's
 # recording PSA and a scripted detools. Mirrors run.sh stage 5.
-cov_cc -DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
+cov_cc -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_DFU_SMP_IMG=1 -DCONFIG_ULTRAWIDELOCK_DFU_APPLIER_CHUNK=256 \
 	-DCONFIG_MCUMGR_GRP_OS_RESET_HOOK=1 -DCONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME=1 \
 	-DCONFIG_MCUMGR_SMP_LEGACY_RC_BEHAVIOUR=1 \
 	-I"$HOSTD" -I"$HOSTD/dfufake" -I"$HOSTD/smpfake" -I"$HOSTD/logfake" \
-	-I"$HOSTD/psafake" -I"$ROOT/modules/woz_port/include" \
+	-I"$HOSTD/psafake" -I"$ROOT/modules/ultrawidelock_port/include" \
 	-I"$ROOT/modules/ultrawidelock_dfu/include" -I"$ROOT/modules/ultrawidelock_dfu/src" \
 	"$HOSTD/test.c" "$HOSTD/test_dfu.c" "$HOSTD/test_dfu_smp.c" \
 	"$HOSTD/dfufake/dfufake.c" "$HOSTD/smpfake/smpfake.c" "$HOSTD/psafake/psafake.c" \
@@ -322,9 +322,9 @@ run_suite dfu "$OUT/cov_dfu"
 NFC_DEF=(-DCONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL=3 -DCONFIG_ULTRAWIDELOCK_NFC_PN532_THREAD_STACK_SIZE=2048
 	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_POLL_PERIOD_MS=200
 	-DCONFIG_ULTRAWIDELOCK_NFC_PN532_EXCHANGE_TIMEOUT_MS=1000
-	-DWOZ_PORT_HOST)
+	-DULTRAWIDELOCK_PORT_HOST)
 NFC_INC=(-I"$HOSTD" -I"$HOSTD/nfcfake" -I"$ROOT/modules/ultrawidelock_nfc/include"
-	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/woz_port/include")
+	-I"$ROOT/modules/ultrawidelock_nfc/src" -I"$ROOT/modules/ultrawidelock_port/include")
 cov_cxx() {
 	"${CXX:-c++}" -std=c++17 -O0 -g -w \
 		-fprofile-instr-generate -fcoverage-mapping "$@"
@@ -364,10 +364,10 @@ run_suite seam "$OUT/cov_seam"
 # The protocol codecs beside it are already in UNIT_SRCS and are compiled again
 # here; they carry no conditional compilation, so both objects map the same
 # lines the same way and the profiles merge. Mirrors run.sh stage 8.
-STK="$ROOT/modules/woz_aliro_stack/src"
+STK="$ROOT/modules/ultrawidelock_cred_stack/src"
 STK_DEF=(-DCONFIG_NCS_ALIRO_LOG_LEVEL_VALUE=3 -DCONFIG_NCS_ALIRO_BLE_UWB=1
 	-DCONFIG_DOOR_LOCK_EXPEDITED_FAST_PHASE=1 -DCONFIG_DOOR_LOCK_STEP_UP_PHASE=1
-	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_WOZ_ALIRO_APDU_BUFFER_SIZE=1024
+	-DCONFIG_DOOR_LOCK_BLE_UWB_MAX_SESSIONS=2 -DCONFIG_ULTRAWIDELOCK_CRED_APDU_BUFFER_SIZE=1024
 	-DCONFIG_MAX_NUMBER_OF_KPERSISTENT=4
 	-DCONFIG_DOOR_LOCK_STORAGE_MAX_STORED_ACCESS_DOCUMENTS=2)
 STK_INC=(-I"$HOSTD" -I"$HOSTD/stackfake" -I"$STK" -I"$STK/protocol"
@@ -393,14 +393,14 @@ cov_cc -I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelo
 	-c "$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_hash.c" -o "$OUT/stk_aliro_hash_cov.o"
 cov_cc -I"$ROOT/modules/ultrawidelock_cred/include" -I"$ROOT/modules/ultrawidelock_cred/src" \
 	-c "$SHARED/aliro_prim_host.c" -o "$OUT/stk_aliro_prim_host_cov.o"
-cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/aliro_stack.cpp" -o "$OUT/stk_aliro_stack_cov.o"
+cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/cred_stack.cpp" -o "$OUT/stk_cred_stack_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$STK/session.cpp" -o "$OUT/stk_session_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/stackfake/stackfake.cpp" \
 	-o "$OUT/stackfake_cov.o"
 cov_cxx -c "${STK_DEF[@]}" "${STK_INC[@]}" "$HOSTD/test_aliro_stack.cpp" \
 	-o "$OUT/test_aliro_stack_cov.o"
 cov_cxx "$OUT/test_aliro_stack_cov.o" "$OUT/stackfake_cov.o" "$OUT/test_harness_stack_cov.o" \
-	"$OUT/stk_aliro_stack_cov.o" "$OUT/stk_session_cov.o" "${STK_OBJS[@]}" \
+	"$OUT/stk_cred_stack_cov.o" "$OUT/stk_session_cov.o" "${STK_OBJS[@]}" \
 	"$OUT/stk_aliro_hash_cov.o" "$OUT/stk_aliro_prim_host_cov.o" \
 	-o "$OUT/cov_stack"
 run_suite stack "$OUT/cov_stack"

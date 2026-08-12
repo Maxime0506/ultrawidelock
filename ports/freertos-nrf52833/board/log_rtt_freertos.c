@@ -37,21 +37,21 @@
 
 #include <nrfx.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 /* Bytes of RAM the up-buffer holds. One boot's worth of bring-up chatter. */
-#ifndef WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES
-#define WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES 1024u
+#ifndef ULTRAWIDELOCK_FREERTOS_LOG_RTT_BUFFER_BYTES
+#define ULTRAWIDELOCK_FREERTOS_LOG_RTT_BUFFER_BYTES 1024u
 #endif
 
 /* The longest single line. Anything past this is truncated, not split. */
-#ifndef WOZ_FREERTOS_LOG_LINE_BYTES
-#define WOZ_FREERTOS_LOG_LINE_BYTES 160u
+#ifndef ULTRAWIDELOCK_FREERTOS_LOG_LINE_BYTES
+#define ULTRAWIDELOCK_FREERTOS_LOG_LINE_BYTES 160u
 #endif
 
 /* Levels above this are compiled to nothing at the call site's expense only. */
-#ifndef WOZ_FREERTOS_LOG_MAX_LEVEL
-#define WOZ_FREERTOS_LOG_MAX_LEVEL WOZ_FREERTOS_LOG_INFO
+#ifndef ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL
+#define ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL ULTRAWIDELOCK_FREERTOS_LOG_INFO
 #endif
 
 /*
@@ -110,20 +110,20 @@ _Static_assert(offsetof(struct rtt_control_block, max_down_buffers) == 20u, "RTT
 _Static_assert(offsetof(struct rtt_control_block, up) == 24u, "RTT header layout");
 #endif
 
-static char s_up_storage[WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES];
+static char s_up_storage[ULTRAWIDELOCK_FREERTOS_LOG_RTT_BUFFER_BYTES];
 
 /*
  * Not static: a J-Link scans RAM for the identifier, and keeping the symbol
  * visible also lets a debugger read the ring by name when no host is attached.
  */
-struct rtt_control_block woz_freertos_rtt_control_block = {
+struct rtt_control_block ultrawidelock_freertos_rtt_control_block = {
 	.id = { 'S', 'E', 'G', 'G', 'E', 'R', ' ', 'R', 'T', 'T', 0, 0, 0, 0, 0, 0 },
 	.max_up_buffers = 1,
 	.max_down_buffers = 1,
 	.up = { {
 		.name = "Terminal",
 		.buffer = s_up_storage,
-		.size = WOZ_FREERTOS_LOG_RTT_BUFFER_BYTES,
+		.size = ULTRAWIDELOCK_FREERTOS_LOG_RTT_BUFFER_BYTES,
 		.write_offset = 0,
 		.read_offset = 0,
 		.flags = RTT_MODE_NO_BLOCK_SKIP,
@@ -178,7 +178,7 @@ static void ring_write(struct rtt_buffer_up *up, const char *data, unsigned leng
  */
 static void emit(const char *data, size_t length)
 {
-	struct rtt_buffer_up *up = &woz_freertos_rtt_control_block.up[0];
+	struct rtt_buffer_up *up = &ultrawidelock_freertos_rtt_control_block.up[0];
 	uint32_t primask = __get_PRIMASK();
 
 	if (length == 0u || length >= up->size) {
@@ -192,32 +192,32 @@ static void emit(const char *data, size_t length)
 	__set_PRIMASK(primask);
 }
 
-static const char *level_prefix(enum woz_freertos_log_level level)
+static const char *level_prefix(enum ultrawidelock_freertos_log_level level)
 {
 	switch (level) {
-	case WOZ_FREERTOS_LOG_ERROR:
+	case ULTRAWIDELOCK_FREERTOS_LOG_ERROR:
 		return "E";
-	case WOZ_FREERTOS_LOG_WARNING:
+	case ULTRAWIDELOCK_FREERTOS_LOG_WARNING:
 		return "W";
-	case WOZ_FREERTOS_LOG_INFO:
+	case ULTRAWIDELOCK_FREERTOS_LOG_INFO:
 		return "I";
-	case WOZ_FREERTOS_LOG_DEBUG:
+	case ULTRAWIDELOCK_FREERTOS_LOG_DEBUG:
 		return "D";
 	default:
 		return NULL;
 	}
 }
 
-void woz_freertos_log_va(enum woz_freertos_log_level level, const char *tag, const char *fmt,
-			 va_list args)
+void ultrawidelock_freertos_log_va(enum ultrawidelock_freertos_log_level level, const char *tag,
+				   const char *fmt, va_list args)
 {
-	char line[WOZ_FREERTOS_LOG_LINE_BYTES];
+	char line[ULTRAWIDELOCK_FREERTOS_LOG_LINE_BYTES];
 	const char *prefix;
 	int header;
 	int body;
 	size_t used;
 
-	if (level > WOZ_FREERTOS_LOG_MAX_LEVEL || fmt == NULL) {
+	if (level > ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL || fmt == NULL) {
 		return;
 	}
 
@@ -256,27 +256,29 @@ void woz_freertos_log_va(enum woz_freertos_log_level level, const char *tag, con
 /* The variadic spelling every call site but OpenThread's uses. Kept as the thin
  * one so there is a single formatter: otPlatLog is handed a va_list it cannot
  * unpack, which is the whole reason the _va form is exported at all. */
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	va_list args;
 
 	va_start(args, fmt);
-	woz_freertos_log_va(level, tag, fmt, args);
+	ultrawidelock_freertos_log_va(level, tag, fmt, args);
 	va_end(args);
 }
 
-void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag, const void *data,
-			      size_t len, const char *message)
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
+					const char *tag, const void *data, size_t len,
+					const char *message)
 {
 	static const char digits[] = "0123456789abcdef";
 	const uint8_t *bytes = data;
-	char line[WOZ_FREERTOS_LOG_LINE_BYTES];
+	char line[ULTRAWIDELOCK_FREERTOS_LOG_LINE_BYTES];
 	size_t offset;
 
-	if (level > WOZ_FREERTOS_LOG_MAX_LEVEL) {
+	if (level > ULTRAWIDELOCK_FREERTOS_LOG_MAX_LEVEL) {
 		return;
 	}
-	woz_freertos_log(level, tag, "%s (%u bytes)", message != NULL ? message : "hexdump",
+	ultrawidelock_freertos_log(level, tag, "%s (%u bytes)", message != NULL ? message : "hexdump",
 			 (unsigned)len);
 	if (bytes == NULL) {
 		return;

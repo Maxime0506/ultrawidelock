@@ -10,9 +10,9 @@
 #include "ultrawidelock_alloc.h"
 #include <string.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
-LOG_MODULE_DECLARE(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
+LOG_MODULE_DECLARE(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 
 #define ULTRAWIDELOCK_UWB_URSK_SIZE 32
 

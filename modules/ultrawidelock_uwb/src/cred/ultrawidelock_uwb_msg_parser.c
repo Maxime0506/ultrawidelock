@@ -3,9 +3,9 @@
 #include "ultrawidelock_uwb_msg_parser.h"
 
 #include "ultrawidelock_uwb_msg.h" /* declares the three header accessors defined below */
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
-LOG_MODULE_DECLARE(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
+LOG_MODULE_DECLARE(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 
 /* ---- Header accessors ----------------------------------------------------
  *

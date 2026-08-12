@@ -12,10 +12,10 @@
 #include "ultrawidelock_alloc.h"
 #include <string.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 #include "ultrawidelock_util.h"
 
-LOG_MODULE_DECLARE(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
+LOG_MODULE_DECLARE(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 
 /* Number of slots per round the reader always offers in M3. */
 #define ULTRAWIDELOCK_SLOTS_PER_ROUND_DEFAULT 12

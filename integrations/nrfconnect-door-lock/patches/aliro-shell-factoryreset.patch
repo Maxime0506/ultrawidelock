@@ -12,7 +12,7 @@ index 2529dd5..c6462d2 100644
 +#if defined(CONFIG_ULTRAWIDELOCK_CRED) && defined(CONFIG_SHELL)
 +#include <app/server/Server.h>
 +
-+#include "aliro_shell.h"
++#include "ultrawidelock_shell.h"
 +#endif /* CONFIG_ULTRAWIDELOCK_CRED && CONFIG_SHELL */
 +
  #include <aliro/aliro.h>
@@ -39,7 +39,7 @@ index 2529dd5..c6462d2 100644
 +	 * Registering it unconditionally is the point: prj_release.conf turns off
 +	 * CONFIG_CHIP_LIB_SHELL, so in a release image `matter device factoryreset`
 +	 * does not exist and this is the only console route to a reset. */
-+	aliro_shell_set_factory_reset([] { chip::Server::GetInstance().ScheduleFactoryReset(); });
++	ultrawidelock_shell_set_factory_reset([] { chip::Server::GetInstance().ScheduleFactoryReset(); });
 +#endif /* CONFIG_ULTRAWIDELOCK_CRED && CONFIG_SHELL */
 +
  	/* Initialize lock manager */

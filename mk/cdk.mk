@@ -412,7 +412,7 @@ fota:
 fota-build:
 	@$(MAKE) --no-print-directory build
 	@$(MAKE) --no-print-directory ota-patch
-	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_patch.py wrap '$(CDK_PATCH)' \
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_patch.py wrap '$(CDK_PATCH)' \
 	  --version '$(FOTA_VERSION)' --out-dir '$(CDK_BUILD)' \
 	  --from-image '$(CDK_DEPLOYED)' --to-image '$(CDK_SIGNED_HEX)'
 	@printf '\n  ---- put this on the phone ----------------------------------\n\n'
@@ -445,7 +445,7 @@ fota-done:
 	  SMP=1 RELEASE=1 CDK_BUILD='$(CDK_FOTA_BUILD)'
 
 fota-confirm: $(CDK_OTA_PY)
-	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py \
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_smp.py \
 	  --expect '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.signed.bin' \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))'
@@ -461,14 +461,14 @@ ota-patch: $(CDK_OTA_PY)
 	  printf '  to set the record, or point CDK_DEPLOYED at the signed .hex it is running.\n' >&2; \
 	  exit 1; \
 	fi
-	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_patch.py build \
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_patch.py build \
 	  --from '$(CDK_DEPLOYED)' --to '$(CDK_SIGNED_HEX)' \
 	  --build-dir '$(CDK_BUILD)' --key '$(CDK_KEY)' --out '$(CDK_PATCH)'
 
 ## ota-push: send an already-built patch over Bluetooth
 ota-push: $(CDK_OTA_PY)
 	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make ota-patch`\n' '$(CDK_PATCH)' >&2; exit 1; }
-	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_push.py '$(CDK_PATCH)' \
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_push.py '$(CDK_PATCH)' \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
 	@cp '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)' 2>/dev/null || true
@@ -487,14 +487,14 @@ ota-smp:
 
 ota-smp-push: $(CDK_OTA_PY)
 	@test -f '$(CDK_PATCH)' || { printf '  no patch at %s  ·  run `make fota`\n' '$(CDK_PATCH)' >&2; exit 1; }
-	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py '$(CDK_PATCH)' \
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_smp.py '$(CDK_PATCH)' \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 	@mkdir -p '$(dir $(CDK_DEPLOYED))' && cp '$(CDK_SIGNED_HEX)' '$(CDK_DEPLOYED)'
 	@cp '$(CDK_BUILD)/$(CDK_IMAGE)/zephyr/zephyr.elf' '$(CDK_DEPLOYED_ELF)' 2>/dev/null || true
 	@printf '  recorded as deployed  ·  %s\n' '$(CDK_DEPLOYED)'
 
 ota-smp-list: $(CDK_OTA_PY)
-	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/woz_smp.py --list \
+	@$(CDK_OTA_PY) $(REPO_ROOT)/scripts/ultrawidelock_smp.py --list \
 	  $(if $(OTA_NAME),--name '$(OTA_NAME)')
 
 ## ota-window: open the update window over SWD instead of pressing SW2

@@ -1,0 +1,4 @@
+name: ultrawidelock_cred_stack
+build:
+  cmake: .
+  kconfig: Kconfig

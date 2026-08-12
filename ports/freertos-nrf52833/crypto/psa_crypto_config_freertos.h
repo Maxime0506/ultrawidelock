@@ -24,8 +24,8 @@
  * storage back and a PSA ITS backend with it -- read the oracle's note before
  * assuming otherwise, because it cost a commissioning round to learn.
  */
-#ifndef WOZ_FREERTOS_PSA_CRYPTO_CONFIG_H
-#define WOZ_FREERTOS_PSA_CRYPTO_CONFIG_H
+#ifndef ULTRAWIDELOCK_FREERTOS_PSA_CRYPTO_CONFIG_H
+#define ULTRAWIDELOCK_FREERTOS_PSA_CRYPTO_CONFIG_H
 
 #define PSA_WANT_ALG_ECDSA 1
 #define PSA_WANT_ALG_ECDH 1
@@ -56,4 +56,4 @@
  * include/psa/crypto_config.h for exactly that reason -- it is what caught it.
  */
 
-#endif /* WOZ_FREERTOS_PSA_CRYPTO_CONFIG_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_PSA_CRYPTO_CONFIG_H */

@@ -18,10 +18,10 @@
  * 64 MHz. Other SoCs (e.g. ESP32-S3) clock their SPI controller independently,
  * so this compiles to a no-op there.
  */
-static void woz_hfclk_ensure_128mhz(void)
+static void ultrawidelock_hfclk_ensure_128mhz(void)
 {
-	/* No-op by design: the boost happens in woz_hfclk_boost()
-	 * (ports/zephyr/uwb/woz_hfclk_boost.c) at PRE_KERNEL_1, before the SPI
+	/* No-op by design: the boost happens in ultrawidelock_hfclk_boost()
+	 * (ports/zephyr/uwb/ultrawidelock_hfclk_boost.c) at PRE_KERNEL_1, before the SPI
 	 * driver is ever configured. Kept as a seam so the call sites and the
 	 * non-nRF5340 ports build unchanged. */
 }
@@ -34,7 +34,7 @@ static void woz_hfclk_ensure_128mhz(void)
  */
 int ultrawidelock_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)
 {
-	woz_hfclk_ensure_128mhz();
+	ultrawidelock_hfclk_ensure_128mhz();
 	fira_session_set_provisioned_ursk(ursk);
 	/* Placeholder ranging_config / sts_index0 / n_slot until Aliro M1-M4 negotiation. */
 	return ccc_shim_bind_from_ursk(ursk, ursk, ursk_len, 0u, 8u);
@@ -53,7 +53,7 @@ int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *c)
 		return -EINVAL;
 	}
 
-	woz_hfclk_ensure_128mhz();
+	ultrawidelock_hfclk_ensure_128mhz();
 	/* Trust is session-bound. Carrying the prior session's K agreeing blocks
 	 * into a new URSK would let its first measurement appear trusted. */
 #if defined(CONFIG_ULTRAWIDELOCK_CRED)
@@ -92,7 +92,7 @@ int ultrawidelock_uwb_start_aliro(const struct ultrawidelock_uwb_aliro_cfg *c)
  */
 int ultrawidelock_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)
 {
-	woz_hfclk_ensure_128mhz();
+	ultrawidelock_hfclk_ensure_128mhz();
 	return ccc_prepoll_prewarm(channel, sync_code_index);
 }
 

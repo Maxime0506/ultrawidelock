@@ -20,7 +20,7 @@ const char *log_source_name_get(uint32_t domain_id, int16_t source_id);
 int16_t log_source_id_get(const char *name);
 
 /* No-op module/log macros for driver sources that include this header directly
- * (uwb_rxdiag.c, uwb_selftest.c). Guarded: woz_log.h may define them too. */
+ * (uwb_rxdiag.c, uwb_selftest.c). Guarded: ultrawidelock_log.h may define them too. */
 #ifndef LOG_MODULE_REGISTER
 #define LOG_MODULE_REGISTER(...)
 #endif

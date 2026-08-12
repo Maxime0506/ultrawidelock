@@ -8,13 +8,13 @@
 #include "ultrawidelock_alloc.h"
 #include <string.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 #include "ultrawidelock_util.h"
 
 #include <ultrawidelock/uwb.h>
 #include "cred_round_config.h" /* ULTRAWIDELOCK_NUM_RESPONDERS — EXPERIMENT-2RESP */
 
-LOG_MODULE_REGISTER(woz_ccc_shim, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(ultrawidelock_ccc_shim, LOG_LEVEL_INF);
 
 /** URSK length (bytes) the Aliro provisioned-STS path expects. */
 #define SHIM_URSK_LEN 32u

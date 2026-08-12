@@ -14,11 +14,11 @@ set(TESTDIR "${REPO_ROOT}/tests/shared")
 
 # Device-side shared sources by role manifest (modules/ultrawidelock_cred/roles/*.list)
 # — the same lists the initiator app and the ESP32 components read.
-include("${REPO_ROOT}/cmake/woz_roles.cmake")
-woz_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
-woz_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-woz_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
-woz_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
+ultrawidelock_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c

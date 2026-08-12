@@ -6,16 +6,16 @@
 #include <nrf_errno.h>
 #include <sdc_hci.h>
 
-#define WOZ_STUB_MAX 64
+#define ULTRAWIDELOCK_STUB_MAX 64
 
 static struct {
 	const char *name;
 	unsigned calls;
-} s_records[WOZ_STUB_MAX];
+} s_records[ULTRAWIDELOCK_STUB_MAX];
 static unsigned s_used;
 static unsigned s_total;
 
-uint8_t woz_stub_record(const char *name)
+uint8_t ultrawidelock_stub_record(const char *name)
 {
 	unsigned i;
 
@@ -26,7 +26,7 @@ uint8_t woz_stub_record(const char *name)
 			return 0;
 		}
 	}
-	if (s_used == WOZ_STUB_MAX) {
+	if (s_used == ULTRAWIDELOCK_STUB_MAX) {
 		printf("  FAIL stub table is full at %s\n", name);
 		return 0;
 	}
@@ -36,7 +36,7 @@ uint8_t woz_stub_record(const char *name)
 	return 0;
 }
 
-unsigned woz_stub_calls(const char *name)
+unsigned ultrawidelock_stub_calls(const char *name)
 {
 	unsigned i;
 
@@ -48,12 +48,12 @@ unsigned woz_stub_calls(const char *name)
 	return 0;
 }
 
-unsigned woz_stub_total(void)
+unsigned ultrawidelock_stub_total(void)
 {
 	return s_total;
 }
 
-void woz_stub_reset(void)
+void ultrawidelock_stub_reset(void)
 {
 	s_used = 0;
 	s_total = 0;
@@ -67,6 +67,6 @@ int32_t sdc_hci_get(uint8_t *p_msg_out, uint8_t *p_msg_type_out)
 {
 	(void)p_msg_out;
 	(void)p_msg_type_out;
-	woz_stub_record("sdc_hci_get");
+	ultrawidelock_stub_record("sdc_hci_get");
 	return -NRF_EAGAIN;
 }

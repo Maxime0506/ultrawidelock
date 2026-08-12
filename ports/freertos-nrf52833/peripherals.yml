@@ -32,10 +32,10 @@ peripherals:
 handoffs:
   - Remove Qorvo app_timer from RTC2; delayable work is owned by the FreeRTOS OSAL.
   - Route the board vectors for RADIO, RTC0, TIMER0, POWER_CLOCK, and SWI5_EGU5
-    to the woz_freertos_radio_*_isr entry points, and RTC2 to
+    to the ultrawidelock_freertos_radio_*_isr entry points, and RTC2 to
     nrf_802154_lptimer_freertos_irq_handler; the port owns the rest.
   - Retain the nRF 802.15.4 defaults of EGU0, RTC2, and TIMER1.
-  - Route the board's RNG vector to woz_freertos_rng_isr. The handler only fills
+  - Route the board's RNG vector to ultrawidelock_freertos_rng_isr. The handler only fills
     this port's entropy pool and calls nothing, so it carries no FreeRTOS
     priority constraint; it sits below MPSL and the 802.15.4 driver so a refill
     can never delay a radio event.

@@ -9,15 +9,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "woz_port.h"
-#include "woz_log.h"
+#include "ultrawidelock_port.h"
+#include "ultrawidelock_log.h"
 
 #include "ultrawidelock_lab.h"
 #include "ultrawidelock_lat.h"
 
 #ifdef CONFIG_ULTRAWIDELOCK_LAT_TRACE
 
-/* 0 = unmarked this walk-up (woz_uptime_us() is nonzero by the time BLE is up). */
+/* 0 = unmarked this walk-up (ultrawidelock_uptime_us() is nonzero by the time BLE is up). */
 static int64_t s_stamp_us[ULTRAWIDELOCK_LAT_PHASE_COUNT];
 
 static const char *const k_phase_name[] = {
@@ -41,7 +41,7 @@ static bool s_lab_dumped;
 void ultrawidelock_lat_begin(void)
 {
 	memset(s_stamp_us, 0, sizeof(s_stamp_us));
-	s_stamp_us[ULTRAWIDELOCK_LAT_BLE_CONNECT] = woz_uptime_us();
+	s_stamp_us[ULTRAWIDELOCK_LAT_BLE_CONNECT] = ultrawidelock_uptime_us();
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_LAB)
 	s_lab_dumped = false;
 #endif
@@ -56,7 +56,7 @@ int ultrawidelock_lat_mark(enum ultrawidelock_lat_phase phase)
 	if ((unsigned)phase >= ULTRAWIDELOCK_LAT_PHASE_COUNT || s_stamp_us[phase] != 0) {
 		return 0;
 	}
-	s_stamp_us[phase] = woz_uptime_us();
+	s_stamp_us[phase] = ultrawidelock_uptime_us();
 	return 1;
 }
 
@@ -70,20 +70,20 @@ void ultrawidelock_lat_report(void)
 	int64_t t0 = s_stamp_us[ULTRAWIDELOCK_LAT_BLE_CONNECT];
 
 	if (t0 == 0) {
-		woz_printf("aliro-lat: no trace (no BLE connect marked)\n");
+		ultrawidelock_printf("aliro-lat: no trace (no BLE connect marked)\n");
 		return;
 	}
 
 	/* One line, every phase as +ms from connect ("-" = never reached). */
-	woz_printf("aliro-lat:");
+	ultrawidelock_printf("aliro-lat:");
 	for (int i = 0; i < ULTRAWIDELOCK_LAT_PHASE_COUNT; i++) {
 		if (s_stamp_us[i] != 0) {
-			woz_printf(" %s+%d", k_phase_name[i], (int)((s_stamp_us[i] - t0) / 1000));
+			ultrawidelock_printf(" %s+%d", k_phase_name[i], (int)((s_stamp_us[i] - t0) / 1000));
 		} else {
-			woz_printf(" %s-", k_phase_name[i]);
+			ultrawidelock_printf(" %s-", k_phase_name[i]);
 		}
 	}
-	woz_printf(" ms\n");
+	ultrawidelock_printf(" ms\n");
 	ultrawidelock_lab_dump();
 }
 
@@ -118,7 +118,7 @@ void ultrawidelock_lab_ev(const char *ev)
 	if (!s_lab_on) {
 		return;
 	}
-	woz_printf("[ALAB] t=%lld ev=%s\n", (long long)woz_uptime_us(), ev);
+	ultrawidelock_printf("[ALAB] t=%lld ev=%s\n", (long long)ultrawidelock_uptime_us(), ev);
 }
 
 /**
@@ -130,7 +130,8 @@ void ultrawidelock_lab_evi(const char *ev, const char *key, long val)
 	if (!s_lab_on) {
 		return;
 	}
-	woz_printf("[ALAB] t=%lld ev=%s %s=%ld\n", (long long)woz_uptime_us(), ev, key, val);
+	ultrawidelock_printf("[ALAB] t=%lld ev=%s %s=%ld\n", (long long)ultrawidelock_uptime_us(),
+			     ev, key, val);
 }
 
 /**
@@ -142,8 +143,8 @@ void ultrawidelock_lab_evi2(const char *ev, const char *k1, long v1, const char 
 	if (!s_lab_on) {
 		return;
 	}
-	woz_printf("[ALAB] t=%lld ev=%s %s=%ld %s=%ld\n", (long long)woz_uptime_us(), ev, k1, v1,
-		   k2, v2);
+	ultrawidelock_printf("[ALAB] t=%lld ev=%s %s=%ld %s=%ld\n",
+			     (long long)ultrawidelock_uptime_us(), ev, k1, v1, k2, v2);
 }
 
 /**
@@ -158,7 +159,7 @@ void ultrawidelock_lab_dump(void)
 	s_lab_dumped = true;
 	for (int i = 0; i < ULTRAWIDELOCK_LAT_PHASE_COUNT; i++) {
 		if (s_stamp_us[i] != 0) {
-			woz_printf("[ALAB] t=%lld ev=ph.%s\n", (long long)s_stamp_us[i],
+			ultrawidelock_printf("[ALAB] t=%lld ev=ph.%s\n", (long long)s_stamp_us[i],
 				   k_phase_name[i]);
 		}
 	}

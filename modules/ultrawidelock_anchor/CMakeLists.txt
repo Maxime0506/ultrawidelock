@@ -22,7 +22,7 @@ if(CONFIG_ULTRAWIDELOCK_ANCHOR)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ultrawidelock_slam.c)
   # The LIS2DH12 backend of ultrawidelock_slam_hw.h (CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM) is the one
   # file that was not portable integer logic; it compiles from ports/zephyr
-  # (woz_zephyr_port) under that same gate.
+  # (ultrawidelock_zephyr_port) under that same gate.
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 endif()

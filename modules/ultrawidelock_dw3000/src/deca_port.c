@@ -1,4 +1,4 @@
-#include "woz_port.h"
+#include "ultrawidelock_port.h"
 
 #include "deca_interface.h"
 
@@ -21,12 +21,12 @@ void decamutexoff(decaIrqStatus_t s)
 
 void deca_sleep(unsigned int time_ms)
 {
-	woz_sleep_ms((int32_t)time_ms);
+	ultrawidelock_sleep_ms((int32_t)time_ms);
 }
 
 void deca_usleep(unsigned long time_us)
 {
-	woz_sleep_us((int64_t)time_us);
+	ultrawidelock_sleep_us((int64_t)time_us);
 }
 
 static const struct dwt_spi_s dw3000_spi_fct = {

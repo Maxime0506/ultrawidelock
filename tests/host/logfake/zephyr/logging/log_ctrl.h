@@ -11,7 +11,7 @@ typedef log_timestamp_t (*log_timestamp_get_t)(void);
 
 int log_set_timestamp_func(log_timestamp_get_t fn, uint32_t freq);
 
-/* NULL backend + LOG_LEVEL_NONE is the whole-source mute woz_logquiet uses. */
+/* NULL backend + LOG_LEVEL_NONE is the whole-source mute ultrawidelock_logquiet uses. */
 uint32_t log_filter_set(struct log_backend *backend, uint32_t domain_id,
 			int16_t source_id, uint32_t level);
 

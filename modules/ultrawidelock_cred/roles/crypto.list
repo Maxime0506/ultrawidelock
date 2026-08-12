@@ -1,4 +1,4 @@
-# woz_aliro role: key schedule + PSA P-256 primitive backend.
+# ultrawidelock_cred role: key schedule + PSA P-256 primitive backend.
 # Consumers: the reader app, the Zephyr initiator and on-target test,
 # ports/esp32/components/ultrawidelock_crypto. Repo-root-relative, one path per line,
 # sorted. To compile a file everywhere this role goes, add it HERE and nowhere else.

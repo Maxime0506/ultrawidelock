@@ -16,9 +16,9 @@
 #include "fake_nimble_host.h"
 #include "fake_nrf.h"
 #include "fake_sdc.h"
-#include "woz_freertos_nimble_host.h"
-#include "woz_freertos_platform.h"
-#include "woz_freertos_radio.h"
+#include "ultrawidelock_freertos_nimble_host.h"
+#include "ultrawidelock_freertos_platform.h"
+#include "ultrawidelock_freertos_radio.h"
 
 #include <host/ble_hs.h>
 #include <nrf_errno.h>
@@ -41,48 +41,50 @@ static unsigned g_failures;
 /* BSP hooks the port expects from the board layer. */
 static unsigned g_fatal_calls;
 
-int64_t woz_freertos_uptime_us(void)
+int64_t ultrawidelock_freertos_uptime_us(void)
 {
 	return fake_uptime_us;
 }
 
-void woz_freertos_busy_wait_us(uint64_t us)
+void ultrawidelock_freertos_busy_wait_us(uint64_t us)
 {
 	fake_uptime_us += (int64_t)us;
 }
 
-uint32_t woz_freertos_cycle_get_32(void)
+uint32_t ultrawidelock_freertos_cycle_get_32(void)
 {
 	return (uint32_t)(fake_uptime_us * 64);
 }
 
-int woz_freertos_entropy(void *buffer, size_t length)
+int ultrawidelock_freertos_entropy(void *buffer, size_t length)
 {
 	memset(buffer, 0x5a, length);
 	return 0;
 }
 
-int8_t woz_freertos_die_temperature_c(void)
+int8_t ultrawidelock_freertos_die_temperature_c(void)
 {
 	return 23;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	g_fatal_calls++;
 	printf("  FAIL unexpected fatal: %s\n", reason != NULL ? reason : "?");
 	exit(1);
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
 	(void)fmt;
 }
 
-void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag, const void *data,
-			      size_t len, const char *message)
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
+					const char *tag, const void *data, size_t len,
+					const char *message)
 {
 	(void)level;
 	(void)tag;
@@ -95,7 +97,7 @@ void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag
  * The real dispatcher is vendor source that only the opt-in
  * freertos-hci-dispatcher-check builds, so the adapter in
  * ble/hci_dispatcher_freertos.c is linked here against these two stubs. That
- * keeps the wiring from woz_freertos_nimble_host_start() down to the vendor
+ * keeps the wiring from ultrawidelock_freertos_nimble_host_start() down to the vendor
  * entry points under test without pulling the vendor tree into this binary.
  */
 int hci_internal_cmd_put(uint8_t *cmd_in)
@@ -118,18 +120,20 @@ static void scenario_success(void)
 	unsigned tasks_before;
 
 	CHECK("the host is not ready before it is started",
-	      !woz_freertos_nimble_host_ready() && !woz_freertos_nimble_host_synced() &&
-		      woz_freertos_nimble_host_resets() == 0);
+	      !ultrawidelock_freertos_nimble_host_ready() &&
+		      !ultrawidelock_freertos_nimble_host_synced() &&
+		      ultrawidelock_freertos_nimble_host_resets() == 0);
 
 	tasks_before = fake_task_count;
 	CHECK("host start brings up the radio and the host",
-	      woz_freertos_nimble_host_start() == 0 && woz_freertos_nimble_host_ready());
+	      ultrawidelock_freertos_nimble_host_start() == 0 &&
+		      ultrawidelock_freertos_nimble_host_ready());
 	host_entry = fake_task_entry;
 	host_arg = fake_task_arg;
 
 	CHECK("the controller is enabled before the host is initialized",
 	      fake_mpsl_init_calls == 1 && fake_sdc_enable_calls == 1 &&
-		      woz_freertos_radio_ready());
+		      ultrawidelock_freertos_radio_ready());
 	CHECK("the porting layer is initialized exactly once",
 	      fake_nimble_port_init_calls == 1);
 
@@ -160,26 +164,27 @@ static void scenario_success(void)
 	CHECK("the host registers both of its lifecycle callbacks",
 	      ble_hs_cfg.sync_cb != NULL && ble_hs_cfg.reset_cb != NULL);
 	CHECK("a started host is not yet synced with the controller",
-	      !woz_freertos_nimble_host_synced());
+	      !ultrawidelock_freertos_nimble_host_synced());
 
 	host_entry(host_arg);
 	CHECK("the host task drains the default event queue",
 	      fake_nimble_port_run_calls == 1);
 
 	ble_hs_cfg.sync_cb();
-	CHECK("the sync callback marks the host usable", woz_freertos_nimble_host_synced());
+	CHECK("the sync callback marks the host usable", ultrawidelock_freertos_nimble_host_synced());
 
 	ble_hs_cfg.reset_cb(NRF_EPERM);
 	CHECK("a host reset withdraws sync and is counted, without faulting",
-	      !woz_freertos_nimble_host_synced() && woz_freertos_nimble_host_resets() == 1 &&
-		      g_fatal_calls == 0);
+	      !ultrawidelock_freertos_nimble_host_synced() &&
+		      ultrawidelock_freertos_nimble_host_resets() == 1 && g_fatal_calls == 0);
 
 	ble_hs_cfg.sync_cb();
 	CHECK("the host resynchronizes after a reset",
-	      woz_freertos_nimble_host_synced() && woz_freertos_nimble_host_resets() == 1);
+	      ultrawidelock_freertos_nimble_host_synced() &&
+		      ultrawidelock_freertos_nimble_host_resets() == 1);
 
 	CHECK("host start is idempotent",
-	      woz_freertos_nimble_host_start() == 0 && fake_nimble_port_init_calls == 1 &&
+	      ultrawidelock_freertos_nimble_host_start() == 0 && fake_nimble_port_init_calls == 1 &&
 		      fake_ble_hs_sched_start_calls == 1 && fake_task_count == tasks_before + 2);
 }
 
@@ -188,8 +193,9 @@ static void scenario_radio_failure(void)
 	fake_sdc_enable_result = -NRF_ENOMEM;
 
 	CHECK("a radio that will not start stops the host",
-	      woz_freertos_nimble_host_start() == -WOZ_FREERTOS_NIMBLE_HOST_STAGE_RADIO &&
-		      !woz_freertos_nimble_host_ready());
+	      ultrawidelock_freertos_nimble_host_start() ==
+			      -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_RADIO &&
+		      !ultrawidelock_freertos_nimble_host_ready());
 	CHECK("a failed radio never initializes the porting layer",
 	      fake_nimble_port_init_calls == 0 && fake_ble_hs_sched_start_calls == 0);
 }
@@ -200,12 +206,13 @@ static void scenario_task_failure(void)
 	fake_task_create_failures = 0;
 
 	CHECK("the radio starts before the host task is attempted",
-	      woz_freertos_radio_start(woz_freertos_radio_sdc_dispatcher()) == 0);
+	      ultrawidelock_freertos_radio_start(ultrawidelock_freertos_radio_sdc_dispatcher()) == 0);
 
 	fake_task_create_failures = 1;
 	CHECK("a host task that cannot be created stops the host",
-	      woz_freertos_nimble_host_start() == -WOZ_FREERTOS_NIMBLE_HOST_STAGE_TASK &&
-		      !woz_freertos_nimble_host_ready());
+	      ultrawidelock_freertos_nimble_host_start() ==
+			      -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_TASK &&
+		      !ultrawidelock_freertos_nimble_host_ready());
 	CHECK("a host without its task never schedules startup",
 	      fake_ble_hs_sched_start_calls == 0 && fake_nimble_port_run_calls == 0);
 }

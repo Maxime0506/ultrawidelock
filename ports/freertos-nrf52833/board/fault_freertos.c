@@ -6,21 +6,22 @@
  * back and can be opened. The reason is logged first, and the reset shows up in
  * RESETREAS as SOFTWARE, which is what otPlatGetResetReason reports afterwards.
  *
- * Define WOZ_FREERTOS_FATAL_HALT for bench builds to stop instead. The header
+ * Define ULTRAWIDELOCK_FREERTOS_FATAL_HALT for bench builds to stop instead. The header
  * calls this hook "stop or reset" and both are in contract; which one is right
  * depends on whether a person is watching.
  */
 #include <nrfx.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, "fatal", "%s", reason != NULL ? reason : "(none)");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, "fatal", "%s",
+				   reason != NULL ? reason : "(none)");
 
 	__disable_irq();
 
-#ifdef WOZ_FREERTOS_FATAL_HALT
+#ifdef ULTRAWIDELOCK_FREERTOS_FATAL_HALT
 	for (;;) {
 		/* Hold the state for a debugger. */
 	}

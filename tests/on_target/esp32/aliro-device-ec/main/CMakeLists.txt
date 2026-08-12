@@ -7,11 +7,11 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." ABSO
 set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
 set(SHARED "${REPO_ROOT}/tests/shared")
 
-include("${REPO_ROOT}/cmake/woz_roles.cmake")
-woz_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
-woz_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-woz_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
-woz_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
+ultrawidelock_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
 
 idf_component_register(
 	SRCS

@@ -1,4 +1,4 @@
-# ports/zephyr — woz_zephyr_port: the Zephyr platform backends, one module.
+# ports/zephyr — ultrawidelock_zephyr_port: the Zephyr platform backends, one module.
 # Mirror of ports/esp32/components/*, which implements the same contracts on
 # ESP-IDF; modules/ stays the single portable source tree. Contract headers
 # stay with their modules (dw3000_hw.h / dw3000_spi.h in
@@ -7,34 +7,34 @@
 # Contributes nothing unless a consuming CONFIG is y: an image that selects no
 # feature below gets zero bytes from this module.
 
-# aliro_shell.h is the one header living here (the `aliro` console's seam to
+# ultrawidelock_shell.h is the one header living here (the `aliro` console's seam to
 # the application); published wherever modules/ultrawidelock_uwb used to publish its
 # shell dir, because the add-on factory-reset patch includes it.
 if(CONFIG_ULTRAWIDELOCK_UWB)
 	zephyr_include_directories(shell)
 endif()
 
-# ---- woz_zephyr_port library: backends of module library contracts ----------
+# ---- ultrawidelock_zephyr_port library: backends of module library contracts ----------
 if(CONFIG_DW3000
-   OR CONFIG_WOZ_PRETTY_SHELL
+   OR CONFIG_ULTRAWIDELOCK_PRETTY_SHELL
    OR CONFIG_ULTRAWIDELOCK_UWB_SHELL
    OR (CONFIG_ULTRAWIDELOCK_CRED AND CONFIG_SOC_NRF5340_CPUAPP)
    OR CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG
    OR CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM
    OR CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 
-zephyr_library_named(woz_zephyr_port)
+zephyr_library_named(ultrawidelock_zephyr_port)
 
-# Zephyr backend of woz_osal.h, for every image on this OS. It lives here and
+# Zephyr backend of ultrawidelock_osal.h, for every image on this OS. It lives here and
 # nowhere else: modules/ calls the contract (uwb_rxdiag.c, uwb_selftest.c,
 # dfu_receiver.c) and this tier is the one thing all four Zephyr images carry
 # on ZEPHYR_EXTRA_MODULES. It used to ride modules/ultrawidelock_dfu, which meant an
 # image without the DFU module -- the nRF5340DK door lock -- linked the callers
 # with nothing behind them. MCUboot is the exception and needs no backend: the
-# applier is synchronous and takes only woz_flash.
+# applier is synchronous and takes only ultrawidelock_flash.
 zephyr_library_sources(osal/osal_zephyr.c)
 zephyr_library_include_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
+	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_port/include)
 
 # Zephyr GPIO/SPI/trace backend of the dw3000_hw.h + dw3000_spi.h contract
 # (ESP-IDF backend: ports/esp32/components/ultrawidelock_uwb/port/dw3000_{hw,spi}.c).
@@ -51,51 +51,51 @@ zephyr_library_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dw3000/dwt_uwb_driver)
 
 # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log line
-# (woz_logfmt), plus runtime-mute of benign upstream Matter/BLE error spam
-# (woz_logquiet). Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT, set in
+# (ultrawidelock_logfmt), plus runtime-mute of benign upstream Matter/BLE error spam
+# (ultrawidelock_logquiet). Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT, set in
 # apps/nrf5340dk-lock/overlays/woz-pretty.conf, active only under PRETTY=1.
-zephyr_library_sources_ifdef(CONFIG_WOZ_PRETTY_SHELL
-	log/woz_logfmt.c
-	log/woz_logquiet.c)
+zephyr_library_sources_ifdef(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL
+	log/ultrawidelock_logfmt.c
+	log/ultrawidelock_logquiet.c)
 
 # `aliro` UART console (status/rx/range/chip/selftest/log/version). Needs the
 # shell subsystem, which an NCS/Matter dependency force-selects. Engine headers
 # (ccc_shim.h, fira_session.h, ...) come from modules/ultrawidelock_uwb's global include
 # dirs, alive whenever CONFIG_ULTRAWIDELOCK_UWB is.
 if(CONFIG_ULTRAWIDELOCK_UWB_SHELL)
-	zephyr_library_sources(shell/aliro_shell.c)
+	zephyr_library_sources(shell/ultrawidelock_shell.c)
 	# Short commit SHA of THIS repo, baked in for `aliro version`. Captured at
 	# CMake configure time (git -C works from a worktree too); refreshed on a
 	# pristine/reconfigure build, so a stale-but-clean incremental keeps the
 	# prior value. "unknown" if git is unavailable (e.g. a source export).
 	execute_process(
 		COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse --short HEAD
-		OUTPUT_VARIABLE WOZ_GIT_SHA
+		OUTPUT_VARIABLE ULTRAWIDELOCK_GIT_SHA
 		OUTPUT_STRIP_TRAILING_WHITESPACE
 		ERROR_QUIET)
-	if(NOT WOZ_GIT_SHA)
-		set(WOZ_GIT_SHA "unknown")
+	if(NOT ULTRAWIDELOCK_GIT_SHA)
+		set(ULTRAWIDELOCK_GIT_SHA "unknown")
 	endif()
-	set_source_files_properties(shell/aliro_shell.c PROPERTIES
-		COMPILE_DEFINITIONS "WOZ_GIT_SHA=\"${WOZ_GIT_SHA}\"")
+	set_source_files_properties(shell/ultrawidelock_shell.c PROPERTIES
+		COMPILE_DEFINITIONS "ULTRAWIDELOCK_GIT_SHA=\"${ULTRAWIDELOCK_GIT_SHA}\"")
 endif()
 
 # nRF5340 app-core HFCLK boost, split out of ultrawidelock_uwb_facade.c (which keeps the
-# portable woz_hfclk_ensure_128mhz() seam). Compiled exactly when the facade
+# portable ultrawidelock_hfclk_ensure_128mhz() seam). Compiled exactly when the facade
 # is (CONFIG_ULTRAWIDELOCK_CRED) on the SoC it exists for.
 if(CONFIG_ULTRAWIDELOCK_CRED AND CONFIG_SOC_NRF5340_CPUAPP)
-	zephyr_library_sources(uwb/woz_hfclk_boost.c)
+	zephyr_library_sources(uwb/ultrawidelock_hfclk_boost.c)
 endif()
 
 # Optional second front door onto the ultrawidelock_dfu receiver: the SMP image group,
 # for clients that only speak mcumgr. Rides the receiver's library contract
-# (ultrawidelock_dfu.h / ultrawidelock_dfu_rx.h / woz_flash.h).
+# (ultrawidelock_dfu.h / ultrawidelock_dfu_rx.h / ultrawidelock_flash.h).
 if(CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG)
 	zephyr_library_sources(dfu/dfu_smp_img.c)
 	zephyr_library_include_directories(
 		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dfu/include
 		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_dfu/src
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_port/include)
 endif()
 
 # LIS2DH12 wake-on-motion backend of ultrawidelock_slam_hw.h: writes an I2C part's
@@ -106,7 +106,7 @@ if(CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM)
 	zephyr_library_sources(drivers/ultrawidelock_slam_lis2dh12.c)
 	zephyr_library_include_directories(
 		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_anchor/include
-		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/woz_port/include)
+		${CMAKE_CURRENT_SOURCE_DIR}/../../modules/ultrawidelock_port/include)
 endif()
 
 endif()
@@ -138,10 +138,10 @@ if(CONFIG_ALIRO_MATTER_BLE)
 endif()
 
 # Initiator (User-Device role) BLE central transport, the mirror of
-# ble/aliro_ble_zephyr.c. examples/zephyr/nrf5340dk-initiator lists this file by path
+# ble/ultrawidelock_ble_zephyr.c. examples/zephyr/nrf5340dk-initiator lists this file by path
 # instead: it carries no Kconfig of its own to define this gate.
 if(CONFIG_ALIRO_BLE_CENTRAL)
-	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble/aliro_ble_central_zephyr.c)
+	target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ble/ultrawidelock_ble_central_zephyr.c)
 endif()
 
 # BLE transport of the delta-update receiver (ultrawidelock_dfu supplies ultrawidelock_dfu_rx.h

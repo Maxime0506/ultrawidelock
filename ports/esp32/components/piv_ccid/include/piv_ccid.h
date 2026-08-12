@@ -1,5 +1,5 @@
-#ifndef WOZ_PIV_CCID_H
-#define WOZ_PIV_CCID_H
+#ifndef ULTRAWIDELOCK_PIV_CCID_H
+#define ULTRAWIDELOCK_PIV_CCID_H
 
 #include <stdbool.h>
 #include <stddef.h>

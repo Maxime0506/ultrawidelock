@@ -25,12 +25,12 @@
 #include <string.h>
 
 #include "dfu_crc.h"
-#include "woz_bytes.h"
+#include "ultrawidelock_bytes.h"
 #include "ultrawidelock_dfu.h"
 #include "ultrawidelock_dfu_rx.h"
-#include "woz_flash.h"
-#include "woz_log.h"
-#include "woz_osal.h"
+#include "ultrawidelock_flash.h"
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_osal.h"
 
 LOG_MODULE_REGISTER(ultrawidelock_dfu, CONFIG_ULTRAWIDELOCK_DFU_LOG_LEVEL);
 
@@ -58,23 +58,23 @@ static struct {
 	size_t wlen;
 } s_rx;
 
-static const struct woz_flash_area *s_fa;
+static const struct ultrawidelock_flash_area *s_fa;
 
 /* Replying before rebooting is the whole reason this is deferred: a reboot
  * inside the frame handler drops the acknowledgement the host is waiting for,
  * and the host cannot then tell success from a dead board. */
-static void reboot_fn(struct woz_dwork *dwork)
+static void reboot_fn(struct ultrawidelock_dwork *dwork)
 {
 	(void)dwork;
 	LOG_INF("update staged, restarting into the bootloader");
-	woz_reboot();
+	ultrawidelock_reboot();
 }
-static struct woz_dwork s_reboot;
+static struct ultrawidelock_dwork s_reboot;
 
 /* ---- window --------------------------------------------------------------- */
 
-static void window_expire(struct woz_dwork *dwork);
-static struct woz_dwork s_window;
+static void window_expire(struct ultrawidelock_dwork *dwork);
+static struct ultrawidelock_dwork s_window;
 static bool s_open;
 static ultrawidelock_dfu_window_cb s_window_cb;
 
@@ -86,8 +86,8 @@ static void works_bind(void)
 	static bool bound;
 
 	if (!bound) {
-		woz_dwork_init(&s_reboot, reboot_fn);
-		woz_dwork_init(&s_window, window_expire);
+		ultrawidelock_dwork_init(&s_reboot, reboot_fn);
+		ultrawidelock_dwork_init(&s_window, window_expire);
 		bound = true;
 	}
 }
@@ -113,7 +113,7 @@ static void window_notify(bool open)
  * Mark the update window closed, reset RX state, and notify all listeners (typically the UI) that
  * the window is no longer open.
  */
-static void window_expire(struct woz_dwork *dwork)
+static void window_expire(struct ultrawidelock_dwork *dwork)
 {
 	(void)dwork;
 	LOG_INF("update window closed");
@@ -130,7 +130,7 @@ void ultrawidelock_dfu_window_open(uint32_t duration_ms)
 {
 	works_bind();
 	s_open = true;
-	(void)woz_dwork_reschedule(&s_window, (int32_t)duration_ms);
+	(void)ultrawidelock_dwork_reschedule(&s_window, (int32_t)duration_ms);
 	LOG_INF("update window open for %u ms", (unsigned)duration_ms);
 	window_notify(true);
 }
@@ -142,7 +142,7 @@ void ultrawidelock_dfu_window_open(uint32_t duration_ms)
 void ultrawidelock_dfu_window_close(void)
 {
 	works_bind();
-	(void)woz_dwork_cancel(&s_window);
+	(void)ultrawidelock_dwork_cancel(&s_window);
 	s_open = false;
 	ultrawidelock_dfu_rx_reset();
 	window_notify(false);
@@ -167,13 +167,13 @@ static int staging_open(void)
 	if (s_fa != NULL) {
 		return 0;
 	}
-	return woz_flash_open(WOZ_FLASH_AREA_STAGING, &s_fa);
+	return ultrawidelock_flash_open(ULTRAWIDELOCK_FLASH_AREA_STAGING, &s_fa);
 }
 
 /** Room for patch bytes, after the header page and the step-log page. */
 static uint32_t patch_max(void)
 {
-	return (uint32_t)woz_flash_size(s_fa) - ULTRAWIDELOCK_DFU_PATCH_OFFSET;
+	return (uint32_t)ultrawidelock_flash_size(s_fa) - ULTRAWIDELOCK_DFU_PATCH_OFFSET;
 }
 
 /**
@@ -193,7 +193,7 @@ static int wbuf_flush(bool final)
 	if (n == 0U) {
 		return 0;
 	}
-	if (woz_flash_write(s_fa, s_rx.wpos, s_rx.wbuf, n) != 0) {
+	if (ultrawidelock_flash_write(s_fa, s_rx.wpos, s_rx.wbuf, n) != 0) {
 		return -1;
 	}
 
@@ -211,7 +211,7 @@ static int wbuf_flush(bool final)
  */
 static int patch_write(const uint8_t *data, size_t len)
 {
-	s_rx.patch_crc = woz_crc32_update(s_rx.patch_crc, data, len);
+	s_rx.patch_crc = ultrawidelock_crc32_update(s_rx.patch_crc, data, len);
 
 	while (len > 0U) {
 		size_t n = MIN(len, WBUF_SZ - s_rx.wlen);
@@ -315,7 +315,7 @@ static enum ultrawidelock_dfu_err begin_at(uint32_t total)
 
 	/* Erase everything, including the step log: a stale one would make the
 	 * bootloader believe steps of THIS patch were already applied. */
-	if (woz_flash_erase(s_fa, 0, woz_flash_size(s_fa)) != 0) {
+	if (ultrawidelock_flash_erase(s_fa, 0, ultrawidelock_flash_size(s_fa)) != 0) {
 		return ULTRAWIDELOCK_DFU_ERR_FLASH;
 	}
 
@@ -377,7 +377,7 @@ static enum ultrawidelock_dfu_err commit_now(bool reboot)
 	memcpy(&hdr, s_rx.head, sizeof(hdr));
 
 	if (hdr.magic != ULTRAWIDELOCK_DFU_MAGIC || hdr.abi_version != ULTRAWIDELOCK_DFU_ABI_VERSION ||
-	    hdr.hdr_crc32 != woz_crc32(s_rx.head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN) ||
+	    hdr.hdr_crc32 != ultrawidelock_crc32(s_rx.head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN) ||
 	    hdr.patch_len != (s_rx.total - HEAD_LEN) || hdr.patch_crc32 != s_rx.patch_crc) {
 		LOG_WRN("rejected: staged bytes do not match the header");
 		return ULTRAWIDELOCK_DFU_ERR_INTEGRITY;
@@ -386,14 +386,14 @@ static enum ultrawidelock_dfu_err commit_now(bool reboot)
 	/* The header goes in LAST. Until this write lands there is no magic in
 	 * the staging partition and the bootloader has nothing to act on, so an
 	 * interrupted transfer is indistinguishable from no transfer. */
-	if (woz_flash_write(s_fa, ULTRAWIDELOCK_DFU_HDR_OFFSET, s_rx.head,
+	if (ultrawidelock_flash_write(s_fa, ULTRAWIDELOCK_DFU_HDR_OFFSET, s_rx.head,
 			    ULTRAWIDELOCK_DFU_HDR_LEN) != 0) {
 		return ULTRAWIDELOCK_DFU_ERR_FLASH;
 	}
 
 	s_rx.active = false;
 	if (reboot) {
-		(void)woz_dwork_schedule(&s_reboot, 500);
+		(void)ultrawidelock_dwork_schedule(&s_reboot, 500);
 	}
 	return ULTRAWIDELOCK_DFU_ERR_OK;
 }
@@ -446,7 +446,7 @@ int ultrawidelock_dfu_rx_frame(const uint8_t *frame, size_t len, uint8_t *rsp, s
 		break;
 	case ULTRAWIDELOCK_DFU_OP_ABORT:
 		if (s_fa != NULL) {
-			(void)woz_flash_erase(s_fa, 0, woz_flash_size(s_fa));
+			(void)ultrawidelock_flash_erase(s_fa, 0, ultrawidelock_flash_size(s_fa));
 		}
 		ultrawidelock_dfu_rx_reset();
 		*rsp_len = reply_ok(rsp);
@@ -492,7 +492,7 @@ int ultrawidelock_dfu_rx_upload(uint32_t off, uint32_t total, const uint8_t *dat
 
 		/* A phone will not offer a file its own parser rejects, so a
 		 * patch meant for one is dressed as an MCUboot image by
-		 * `woz_patch.py wrap`. Step over that wrapper. A raw .wdfu has
+		 * `ultrawidelock_patch.py wrap`. Step over that wrapper. A raw .wdfu has
 		 * no magic here and is taken as it is, so both files work and
 		 * the native transport is untouched. */
 		if (len >= MCUBOOT_HDR_MIN && sys_get_le32(data) == MCUBOOT_IMAGE_MAGIC) {
@@ -582,7 +582,7 @@ bool ultrawidelock_dfu_rx_staged(void)
 	if (staging_open() != 0) {
 		return false;
 	}
-	if (woz_flash_read(s_fa, ULTRAWIDELOCK_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0) {
+	if (ultrawidelock_flash_read(s_fa, ULTRAWIDELOCK_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0) {
 		return false;
 	}
 	return hdr.magic == ULTRAWIDELOCK_DFU_MAGIC && hdr.abi_version == ULTRAWIDELOCK_DFU_ABI_VERSION;

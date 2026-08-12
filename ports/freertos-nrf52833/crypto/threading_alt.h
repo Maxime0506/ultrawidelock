@@ -10,8 +10,8 @@
  * callback, which has no return value and so cannot report an allocation
  * failure. A static FreeRTOS mutex has nothing to fail.
  */
-#ifndef WOZ_FREERTOS_THREADING_ALT_H
-#define WOZ_FREERTOS_THREADING_ALT_H
+#ifndef ULTRAWIDELOCK_FREERTOS_THREADING_ALT_H
+#define ULTRAWIDELOCK_FREERTOS_THREADING_ALT_H
 
 #include <FreeRTOS.h>
 #include <semphr.h>
@@ -27,4 +27,4 @@ typedef struct {
 	 */
 } mbedtls_threading_mutex_t;
 
-#endif /* WOZ_FREERTOS_THREADING_ALT_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_THREADING_ALT_H */

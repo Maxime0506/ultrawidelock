@@ -15,8 +15,8 @@
 #include "fake_nrf.h"
 
 #include <nrfx.h>
-#include <woz_freertos_platform.h>
-#include <woz_freertos_ot_kernel.h>
+#include <ultrawidelock_freertos_platform.h>
+#include <ultrawidelock_freertos_ot_kernel.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -41,7 +41,7 @@ struct queued_item {
 static unsigned g_fatal_calls;
 static const char *g_fatal_reason;
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	g_fatal_calls++;
 	g_fatal_reason = reason;
@@ -50,7 +50,8 @@ _Noreturn void woz_freertos_fatal(const char *reason)
 	_Exit(1);
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;

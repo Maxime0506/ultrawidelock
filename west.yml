@@ -4,7 +4,7 @@
 # imports NCS (sdk-nrf v3.3.0) + Zephyr + all modules, so pulling it at this exact
 # rev reproduces the ~6 GB build workspace.
 #
-# The project-specific modules (woz_* and dw3000) live in THIS tree and are added
+# The project-specific modules (ultrawidelock_* and dw3000) live in THIS tree and are added
 # to the build via ZEPHYR_EXTRA_MODULES. They are intentionally NOT west projects.
 #
 # Bootstrap manually (or just run ../scripts/bootstrap.sh, which does this):

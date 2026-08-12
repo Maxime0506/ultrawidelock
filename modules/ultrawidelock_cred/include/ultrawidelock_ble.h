@@ -54,7 +54,7 @@ struct ultrawidelock_ble_config {
  * platform half -- persistent storage, nimble_port_init(), and starting the host
  * task -- and calls these for the rest. See each port's bring-up file:
  * ports/esp32/components/ultrawidelock_ble/ultrawidelock_ble_esp32.c and
- * ports/freertos-nrf52833/ble/aliro_ble_freertos.c. */
+ * ports/freertos-nrf52833/ble/ultrawidelock_ble_freertos.c. */
 
 /** Start NimBLE, register the Aliro GATT service, and begin advertising.
  *  Implemented by the port, not by the shared backend: it is the platform half

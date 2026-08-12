@@ -15,7 +15,7 @@ index 6560d40..a4891a3 100644
  
  	plainTextLength = outLength;
 +
-+#if !defined(CONFIG_WOZ_PRETTY_SHELL)
++#if !defined(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
 +	/* DIAG (temporary -- Gate-A timesync tap; remove once UWB_Device_Time capture is
 +	 * wired): the Aliro blob is crypto-agnostic and calls this for EVERY BLE message, so a
 +	 * Procedure-0 Time Sync is decrypted here. keyId groups AUTH (ExpeditedSK) vs ranging
@@ -30,7 +30,7 @@ index 6560d40..a4891a3 100644
 +		}
 +		printk("\n");
 +	}
-+#endif /* !CONFIG_WOZ_PRETTY_SHELL */
++#endif /* !CONFIG_ULTRAWIDELOCK_PRETTY_SHELL */
 +
  	return ALIRO_NO_ERROR;
  }

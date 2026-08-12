@@ -38,8 +38,8 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <woz_freertos_platform.h>
-#include <woz_freertos_radio.h>
+#include <ultrawidelock_freertos_platform.h>
+#include <ultrawidelock_freertos_radio.h>
 
 #define FLASH_TAG "flash"
 
@@ -51,11 +51,11 @@
  * What may be written or erased. The default is the two pages the key-value
  * store owns; a board that adds a DFU slot widens it deliberately.
  */
-#ifndef WOZ_FREERTOS_FLASH_WRITABLE_BASE
-#define WOZ_FREERTOS_FLASH_WRITABLE_BASE 0x0007e000u
+#ifndef ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE
+#define ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE 0x0007e000u
 #endif
-#ifndef WOZ_FREERTOS_FLASH_WRITABLE_LIMIT
-#define WOZ_FREERTOS_FLASH_WRITABLE_LIMIT 0x00080000u
+#ifndef ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_LIMIT
+#define ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_LIMIT 0x00080000u
 #endif
 
 /*
@@ -85,8 +85,8 @@
  * its turn, and failing early would report an I/O error for an operation that
  * was merely slow.
  */
-#ifndef WOZ_FREERTOS_FLASH_TIMEOUT_MS
-#define WOZ_FREERTOS_FLASH_TIMEOUT_MS 10000u
+#ifndef ULTRAWIDELOCK_FREERTOS_FLASH_TIMEOUT_MS
+#define ULTRAWIDELOCK_FREERTOS_FLASH_TIMEOUT_MS 10000u
 #endif
 
 /* One session's worth of MPSL context, aligned as the API requires. */
@@ -121,8 +121,8 @@ static volatile bool s_failed;
  * controller. The host test points this at its model, which is the only way to
  * exercise the read path off target.
  */
-#ifndef WOZ_FREERTOS_FLASH_MAPPED
-#define WOZ_FREERTOS_FLASH_MAPPED(offset) ((const void *)(uintptr_t)(offset))
+#ifndef ULTRAWIDELOCK_FREERTOS_FLASH_MAPPED
+#define ULTRAWIDELOCK_FREERTOS_FLASH_MAPPED(offset) ((const void *)(uintptr_t)(offset))
 #endif
 
 static bool in_device(uint32_t offset, size_t length)
@@ -148,10 +148,10 @@ static bool in_device(uint32_t offset, size_t length)
 
 static bool in_writable_window(uint32_t offset, size_t length)
 {
-	if (offset < WOZ_FREERTOS_FLASH_WRITABLE_BASE) {
+	if (offset < ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE) {
 		return false;
 	}
-	return length <= WOZ_FREERTOS_FLASH_WRITABLE_LIMIT - offset;
+	return length <= ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_LIMIT - offset;
 }
 
 /* Spin until the controller has finished. NVMC stalls the CPU regardless. */
@@ -189,9 +189,9 @@ static void write_one_word(void)
 	nrf_nvmc_word_write(s_op.offset, word);
 	wait_ready();
 
-	s_op.offset += WOZ_FREERTOS_FLASH_WRITE_ALIGN;
-	s_op.data += WOZ_FREERTOS_FLASH_WRITE_ALIGN;
-	s_op.remaining -= WOZ_FREERTOS_FLASH_WRITE_ALIGN;
+	s_op.offset += ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN;
+	s_op.data += ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN;
+	s_op.remaining -= ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN;
 }
 
 /* Issue one partial erase slice on the page the operation is standing on. */
@@ -203,8 +203,8 @@ static void erase_one_slice(void)
 	s_op.slices++;
 	if (s_op.slices >= FLASH_PARTIAL_ERASE_SLICES) {
 		s_op.slices = 0;
-		s_op.offset += WOZ_FREERTOS_FLASH_PAGE_SIZE;
-		s_op.remaining -= WOZ_FREERTOS_FLASH_PAGE_SIZE;
+		s_op.offset += ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE;
+		s_op.remaining -= ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE;
 	}
 }
 
@@ -315,12 +315,12 @@ static mpsl_timeslot_signal_return_param_t *timeslot_callback(mpsl_timeslot_sess
 
 static int run_under_timeslot(uint32_t slot_us)
 {
-	TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(WOZ_FREERTOS_FLASH_TIMEOUT_MS);
+	TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(ULTRAWIDELOCK_FREERTOS_FLASH_TIMEOUT_MS);
 	int rc = 0;
 
 	if (!s_sessions_configured) {
 		if (mpsl_timeslot_session_count_set(s_timeslot_context, 1) != 0) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_TAG,
 					 "no MPSL timeslot session available");
 			return -1;
 		}
@@ -328,7 +328,8 @@ static int run_under_timeslot(uint32_t slot_us)
 	}
 
 	if (mpsl_timeslot_session_open(timeslot_callback, &s_session) != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG, "timeslot session open failed");
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_TAG,
+					   "timeslot session open failed");
 		return -1;
 	}
 
@@ -343,7 +344,8 @@ static int run_under_timeslot(uint32_t slot_us)
 
 	if (mpsl_timeslot_request(s_session, &s_request) != 0) {
 		mpsl_timeslot_session_close(s_session);
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG, "timeslot request failed");
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_TAG,
+					   "timeslot request failed");
 		return -1;
 	}
 
@@ -354,7 +356,7 @@ static int run_under_timeslot(uint32_t slot_us)
 	 */
 	while (!s_done) {
 		if ((int32_t)(xTaskGetTickCount() - deadline) >= 0) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_TAG,
 					 "timed out waiting for a timeslot");
 			rc = -1;
 			break;
@@ -374,7 +376,7 @@ static int run_under_timeslot(uint32_t slot_us)
 /* Run the pending operation, arbitrated if the radio is up. */
 static int run_op(uint32_t slot_us)
 {
-	if (!woz_freertos_radio_ready()) {
+	if (!ultrawidelock_freertos_radio_ready()) {
 		(void)op_step(false);
 		return 0;
 	}
@@ -383,14 +385,14 @@ static int run_op(uint32_t slot_us)
 		 * The wait needs a task to yield from, and a flash operation at
 		 * interrupt priority would stall the radio anyway.
 		 */
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, FLASH_TAG,
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_TAG,
 				 "refused: flash from an interrupt while the radio is up");
 		return -1;
 	}
 	return run_under_timeslot(slot_us);
 }
 
-int woz_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
+int ultrawidelock_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
 {
 	if (buffer == NULL && length != 0u) {
 		return -1;
@@ -399,11 +401,11 @@ int woz_freertos_flash_read(uint32_t offset, void *buffer, size_t length)
 		return -1;
 	}
 	/* Flash is memory-mapped for reading; the controller is not involved. */
-	memcpy(buffer, WOZ_FREERTOS_FLASH_MAPPED(offset), length);
+	memcpy(buffer, ULTRAWIDELOCK_FREERTOS_FLASH_MAPPED(offset), length);
 	return 0;
 }
 
-int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
+int ultrawidelock_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 {
 	if (data == NULL && length != 0u) {
 		return -1;
@@ -411,8 +413,8 @@ int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 	if (!in_device(offset, length) || !in_writable_window(offset, length)) {
 		return -1;
 	}
-	if ((offset % WOZ_FREERTOS_FLASH_WRITE_ALIGN) != 0u ||
-	    (length % WOZ_FREERTOS_FLASH_WRITE_ALIGN) != 0u) {
+	if ((offset % ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN) != 0u ||
+	    (length % ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN) != 0u) {
 		return -1;
 	}
 	if (length == 0u) {
@@ -427,13 +429,13 @@ int woz_freertos_flash_write(uint32_t offset, const void *data, size_t length)
 	return run_op(FLASH_SLOT_WRITE_US);
 }
 
-int woz_freertos_flash_erase(uint32_t offset, size_t length)
+int ultrawidelock_freertos_flash_erase(uint32_t offset, size_t length)
 {
 	if (!in_device(offset, length) || !in_writable_window(offset, length)) {
 		return -1;
 	}
-	if ((offset % WOZ_FREERTOS_FLASH_PAGE_SIZE) != 0u ||
-	    (length % WOZ_FREERTOS_FLASH_PAGE_SIZE) != 0u) {
+	if ((offset % ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE) != 0u ||
+	    (length % ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE) != 0u) {
 		return -1;
 	}
 	if (length == 0u) {

@@ -24,8 +24,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "woz_port.h"
-#include "woz_log.h"
+#include "ultrawidelock_port.h"
+#include "ultrawidelock_log.h"
 
 #include "ultrawidelock_ble.h"
 #include "ultrawidelock_apdu.h"
@@ -121,7 +121,7 @@ static void compute_reader_group_x(void)
  * (the aliro-prov/aliro-trust commands) and the reader task (the attribution
  * lookup) all touch. s_id/s_loaded are set once at boot before the REPL starts,
  * so they need no lock. Created in load_provisioning() (single-threaded boot). */
-static woz_mutex_t s_prov_lock;
+static ultrawidelock_mutex_t s_prov_lock;
 static bool s_prov_lock_ready;
 
 /* Monotonic epoch for successful trusted authentications. Presence snapshots it
@@ -216,7 +216,7 @@ enum txn_phase {
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
 	PH_SENT_STEPUP, /* ENVELOPE sent; collecting the DeviceResponse before AP-Completed */
 #endif
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 	PH_GATE_HOLD, /* auth done; AP-Completed deferred until the RSSI power gate opens */
 #endif
 	PH_ESTABLISHED, /* AP-Completed sent; ranging setup (M1-M4) driven by ultrawidelock_ranging */
@@ -240,7 +240,7 @@ static const char *phase_str(enum txn_phase p)
 	case PH_SENT_STEPUP:
 		return "SENT_STEPUP";
 #endif
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 	case PH_GATE_HOLD:
 		return "GATE_HOLD";
 #endif
@@ -296,7 +296,7 @@ static struct ultrawidelock_session {
 	size_t stepup_sd_len;
 #endif
 
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 	/* BLE-RSSI ranging power gate: fed by the transport's poll, holds
 	 * AP-Completed (PH_GATE_HOLD) until the phone is near enough that the UWB
 	 * radio's RX power is worth spending. Zeroed slot == closed + unprimed. */
@@ -344,7 +344,7 @@ static struct ultrawidelock_session *session_alloc(uint16_t conn_handle)
 static void load_provisioning(void)
 {
 	if (!s_prov_lock_ready) {
-		woz_mutex_init(&s_prov_lock);
+		ultrawidelock_mutex_init(&s_prov_lock);
 		s_prov_lock_ready = true;
 	}
 	if (s_loaded) {
@@ -465,7 +465,7 @@ static void start_auth(struct ultrawidelock_session *s)
 	 * session because it feeds every salt as the flag field, which per
 	 * §8.3.1.12/.13 is command_parameters AS TRANSMITTED — also on fallback.
 	 * UserAuthenticationPolicy stays 0x01 (reference AUTH0Command::Serialize). */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s->exp_phase_sent = (s_trust.kp_valid != 0u) ? 0x01u : 0x00u;
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
 	if (s_stepup_armed) {
@@ -475,7 +475,7 @@ static void start_auth(struct ultrawidelock_session *s)
 		LOG_INF("[conn %u] step-up armed: forcing the standard phase", s->conn_handle);
 	}
 #endif
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	if (ultrawidelock_apdu_build_auth0(s->exp_phase_sent, 0x01u, ULTRAWIDELOCK_VERSION,
 					   s->reader_eph_pub, s->txid, s_id.reader_id, apdu,
 					   sizeof(apdu), &n) != 0) {
@@ -563,7 +563,7 @@ static int try_fast_auth(struct ultrawidelock_session *s,
 	if (!s_have_group_x) {
 		return -1;
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	for (uint8_t i = 0; i < s_trust.count && i < ULTRAWIDELOCK_TRUST_MAX; i++) {
 		if ((s_trust.kp_valid & (1u << i)) == 0u) {
 			continue;
@@ -592,7 +592,7 @@ static int try_fast_auth(struct ultrawidelock_session *s,
 		s_have_auth_cred = true;
 		s_auth_generation++;
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	if (match < 0) {
 		return -1;
 	}
@@ -828,11 +828,11 @@ static void on_auth1_response(struct ultrawidelock_session *s, const uint8_t *pl
 	 * and take the trust decision, under the lock the REPL commands share. The
 	 * raw-key allowlist is the interim seam; real issuer-chain validation plugs
 	 * in here (Phase 4). */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	memcpy(s_last_cred_pub, cred_pub, ULTRAWIDELOCK_CRED_PUB_LEN);
 	s_have_last_cred = true;
 	int tv = ultrawidelock_prov_trust_check(&s_trust, cred_pub);
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	if (tv == 0) {
 		LOG_INF("[conn %u] credential key TRUSTED", s->conn_handle);
@@ -873,11 +873,11 @@ static void on_auth1_response(struct ultrawidelock_session *s, const uint8_t *pl
 
 	/* Accepted: remember which key it was, so the unlock this session goes on to
 	 * grant can be attributed to the Matter user that owns it. */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	memcpy(s_auth_cred_pub, cred_pub, ULTRAWIDELOCK_CRED_PUB_LEN);
 	s_have_auth_cred = true;
 	s_auth_generation++;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	/* Mint/refresh this credential's Kpersistent (§8.3.1.13): keyed off this
 	 * session's Kdh, so every standard phase re-agrees it with the phone and the
@@ -893,7 +893,7 @@ static void on_auth1_response(struct ultrawidelock_session *s, const uint8_t *pl
 				     ULTRAWIDELOCK_VERSION, s->exp_phase_sent, 0x01u, cred_pub + 1, a5, a5n,
 				     salt, &slen) == 0 &&
 		    ultrawidelock_crypto_derive_key32(s->z, salt, slen, s->device_eph_pub + 1, kp) == 0) {
-			woz_mutex_lock(&s_prov_lock);
+			ultrawidelock_mutex_lock(&s_prov_lock);
 			ki = ultrawidelock_prov_trust_find(&s_trust, cred_pub);
 			if (ki >= 0 && ultrawidelock_prov_kpersistent_set(&s_trust, ki, kp) != 0) {
 				ki = -1;
@@ -901,7 +901,7 @@ static void on_auth1_response(struct ultrawidelock_session *s, const uint8_t *pl
 			if (ki >= 0) {
 				s_kp_dirty = true;
 			}
-			woz_mutex_unlock(&s_prov_lock);
+			ultrawidelock_mutex_unlock(&s_prov_lock);
 		}
 		if (ki >= 0) {
 			LOG_INF("[conn %u] Kpersistent agreed (cred %d): next unlock can go fast",
@@ -973,14 +973,14 @@ static void complete_ap_and_range(struct ultrawidelock_session *s)
 	if (s_secured_undelivered) {
 		LOG_INF("[conn %u] stale Wallet state: Secured replay armed (%d ms)",
 			s->conn_handle, ULTRAWIDELOCK_SECURED_REPLAY_HOLD_MS);
-		uint32_t at = (uint32_t)woz_uptime_ms() + ULTRAWIDELOCK_SECURED_REPLAY_HOLD_MS;
+		uint32_t at = (uint32_t)ultrawidelock_uptime_ms() + ULTRAWIDELOCK_SECURED_REPLAY_HOLD_MS;
 
 		s_secured_replay_at = (at == 0) ? 1u : at;
 		s_peer_state_unknown = true;
 	}
 }
 
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 static const struct ultrawidelock_rssi_gate_cfg k_rgate_cfg = ULTRAWIDELOCK_RSSI_GATE_CFG_DEFAULT;
 #endif
 
@@ -993,7 +993,7 @@ static const struct ultrawidelock_rssi_gate_cfg k_rgate_cfg = ULTRAWIDELOCK_RSSI
  * gate is compiled out. */
 static void gated_complete_ap(struct ultrawidelock_session *s)
 {
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 	if (!s->rgate.primed) {
 		/* No RSSI sample ever arrived (controller read failing?): fail OPEN.
 		 * Deferring on missing data would trade a broken unlock for a power
@@ -1003,7 +1003,7 @@ static void gated_complete_ap(struct ultrawidelock_session *s)
 			s->conn_handle);
 	} else if (!ultrawidelock_rssi_gate_is_open(&s->rgate)) {
 		s->phase = PH_GATE_HOLD;
-		ultrawidelock_rssi_gate_hold_begin(&s->rgate, (uint32_t)(woz_uptime_us() / 1000));
+		ultrawidelock_rssi_gate_hold_begin(&s->rgate, (uint32_t)(ultrawidelock_uptime_us() / 1000));
 		LOG_INF("[conn %u] RSSI gate closed (%d dBm): AP-Completed held, UWB stays dark",
 			s->conn_handle, (int)ultrawidelock_rssi_gate_level_dbm(&s->rgate));
 		ultrawidelock_lab_evi("gate.hold", "dbm", ultrawidelock_rssi_gate_level_dbm(&s->rgate));
@@ -1267,8 +1267,8 @@ void ultrawidelock_reader_notify_unlock(bool unsecured)
 }
 
 // Releases a held stale-Wallet Secured once its window expires with no grant to supersede it.
-// now_ms is the caller's monotonic clock (the same one woz_uptime_ms reads); taking it as an
-// argument keeps the deadline testable without a fake clock. No-op unless a replay is armed.
+// now_ms is the caller's monotonic clock (the same one ultrawidelock_uptime_ms reads); taking it as
+// an argument keeps the deadline testable without a fake clock. No-op unless a replay is armed.
 void ultrawidelock_reader_status_tick(int64_t now_ms)
 {
 	uint32_t at = s_secured_replay_at;
@@ -1319,12 +1319,12 @@ bool ultrawidelock_reader_authenticated_credential(uint8_t out[ULTRAWIDELOCK_CRE
 
 	load_provisioning(); /* the Matter task can reach here before the reader started */
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	have = s_have_auth_cred;
 	if (have) {
 		memcpy(out, s_auth_cred_pub, ULTRAWIDELOCK_CRED_PUB_LEN);
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	return have;
 }
@@ -1338,12 +1338,12 @@ bool ultrawidelock_reader_presence_expected_credential(uint8_t out[ULTRAWIDELOCK
 	bool have;
 
 	load_provisioning();
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	have = s_trust.count == 1u;
 	if (have) {
 		memcpy(out, s_trust.cred_pub[0], ULTRAWIDELOCK_CRED_PUB_LEN);
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	return have;
 }
 
@@ -1357,12 +1357,12 @@ bool ultrawidelock_reader_presence_authenticated_after(uint32_t checkpoint,
 	bool fresh;
 
 	load_provisioning();
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	fresh = s_have_auth_cred && (int32_t)(s_auth_generation - checkpoint) > 0;
 	if (fresh) {
 		memcpy(out, s_auth_cred_pub, ULTRAWIDELOCK_CRED_PUB_LEN);
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	return fresh;
 }
 
@@ -1385,11 +1385,11 @@ static bool any_session_active_on_host(void)
  */
 static void presence_checkpoint_ready_on_host(void)
 {
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_presence_ready_request = s_presence_request;
 	s_presence_ready_auth_generation = s_auth_generation;
 	s_presence_wait_disconnect = false;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 }
 
 /**
@@ -1405,9 +1405,9 @@ static void presence_reset_on_host(void)
 	 * can deliver on_disconnect inline, and a real stack may enqueue it before
 	 * this callback returns. In either case the final disconnect must see the
 	 * waiter armed so it can publish the post-reset checkpoint. */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_presence_wait_disconnect = true;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	for (int i = 0; i < ULTRAWIDELOCK_MAX_SESSIONS; i++) {
 		if (s_sessions[i].active) {
 			disconnecting = true;
@@ -1429,13 +1429,13 @@ uint32_t ultrawidelock_reader_presence_restart(void)
 	uint32_t request;
 
 	load_provisioning();
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	request = ++s_presence_request;
 	if (request == 0u) {
 		request = ++s_presence_request;
 	}
 	s_presence_ready_request = 0u;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	ultrawidelock_ble_post_presence_reset(presence_reset_on_host);
 	return request;
 }
@@ -1449,12 +1449,12 @@ bool ultrawidelock_reader_presence_checkpoint(uint32_t request, uint32_t *auth_g
 	bool ready;
 
 	load_provisioning();
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	ready = request != 0u && s_presence_ready_request == request;
 	if (ready && auth_generation != NULL) {
 		*auth_generation = s_presence_ready_auth_generation;
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	return ready;
 }
 
@@ -1592,7 +1592,7 @@ static void transaction_feed(struct ultrawidelock_session *s, const uint8_t *dat
 	}
 }
 
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 // Feeds one connection-RSSI sample into the session's ranging power gate and acts on the
 // resulting transition: gate opening completes a held AP (starts ranging); gate closing on an
 // established session tears ranging down and drops the link (the phone re-runs the fast auth
@@ -1604,7 +1604,7 @@ void ultrawidelock_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
 	if (s == NULL) {
 		return;
 	}
-	uint32_t now_ms = (uint32_t)(woz_uptime_us() / 1000);
+	uint32_t now_ms = (uint32_t)(ultrawidelock_uptime_us() / 1000);
 	bool was_open = ultrawidelock_rssi_gate_is_open(&s->rgate);
 	bool open = ultrawidelock_rssi_gate_feed(&s->rgate, &k_rgate_cfg, rssi_dbm, now_ms);
 
@@ -1644,7 +1644,7 @@ void ultrawidelock_reader_rssi_sample(uint16_t conn_handle, int8_t rssi_dbm)
 		(void)ultrawidelock_ble_disconnect(conn_handle);
 	}
 }
-#endif /* CONFIG_WOZ_RSSI_GATE */
+#endif /* CONFIG_ULTRAWIDELOCK_RSSI_GATE */
 
 /**
  * Write the trust store if something left it dirty: a Kpersistent minted in RAM, or a removal that
@@ -1662,14 +1662,14 @@ static int flush_pending_store(void)
 	struct ultrawidelock_trust_store ts;
 	bool dirty;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	dirty = s_kp_dirty;
 	if (dirty) {
 		id = s_id;
 		ts = s_trust;
 		s_kp_dirty = false;
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	if (!dirty) {
 		return 0;
 	}
@@ -1677,9 +1677,9 @@ static int flush_pending_store(void)
 	int rc = ultrawidelock_prov_store(&id, &ts);
 
 	if (rc != 0) {
-		woz_mutex_lock(&s_prov_lock);
+		ultrawidelock_mutex_lock(&s_prov_lock);
 		s_kp_dirty = true;
-		woz_mutex_unlock(&s_prov_lock);
+		ultrawidelock_mutex_unlock(&s_prov_lock);
 		LOG_WRN("trust store persist failed (%d); will retry", rc);
 		return rc;
 	}
@@ -1720,9 +1720,9 @@ static void on_disconnected(uint16_t conn_handle)
 		ultrawidelock_lab_ev("session.end");
 	}
 	ultrawidelock_ranging_stop(conn_handle);
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	bool presence_wait = s_presence_wait_disconnect;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	if (presence_wait && !any_session_active_on_host()) {
 		presence_checkpoint_ready_on_host();
 	}
@@ -1791,7 +1791,7 @@ static struct ultrawidelock_ble_config make_ble_cfg(void)
 				.on_data = on_data,
 				.on_connected = on_connected,
 				.on_disconnected = on_disconnected,
-#if defined(CONFIG_WOZ_RSSI_GATE)
+#if defined(CONFIG_ULTRAWIDELOCK_RSSI_GATE)
 				/* non-NULL turns the transport's RSSI poll on */
 				.on_rssi = ultrawidelock_reader_rssi_sample,
 #endif
@@ -1947,11 +1947,11 @@ void ultrawidelock_reader_prov_print(void)
 	uint8_t last[ULTRAWIDELOCK_CRED_PUB_LEN];
 	bool have;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	ts = s_trust;
 	have = s_have_last_cred;
 	memcpy(last, s_last_cred_pub, ULTRAWIDELOCK_CRED_PUB_LEN);
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	printf("identity  : %s\n", s_id.is_dev ? "DEV (bench)" : "provisioned");
 	printf("reader_id : ");
@@ -2011,7 +2011,7 @@ static void revoke_sweep_on_host(void)
  */
 static void revoke_aftermath(const uint8_t *removed_pub)
 {
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	if (s_have_auth_cred && (removed_pub == NULL ||
 				 memcmp(s_auth_cred_pub, removed_pub, ULTRAWIDELOCK_CRED_PUB_LEN) == 0)) {
 		memset(s_auth_cred_pub, 0, ULTRAWIDELOCK_CRED_PUB_LEN);
@@ -2022,7 +2022,7 @@ static void revoke_aftermath(const uint8_t *removed_pub)
 		memset(s_last_cred_pub, 0, ULTRAWIDELOCK_CRED_PUB_LEN);
 		s_have_last_cred = false;
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	ultrawidelock_ble_post_revoke_sweep(revoke_sweep_on_host);
 }
 
@@ -2051,9 +2051,9 @@ static int persist_removal(const struct ultrawidelock_reader_identity *id,
 	if (rc == 0) {
 		return 0;
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_kp_dirty = true;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	LOG_ERR("revocation applied in RAM but NOT persisted (%d); retrying on the next "
 		"disconnect or revocation",
 		rc);
@@ -2075,11 +2075,11 @@ int ultrawidelock_reader_trust_last(void)
 	uint8_t last[ULTRAWIDELOCK_CRED_PUB_LEN];
 	bool have;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	cand = s_trust;
 	have = s_have_last_cred;
 	memcpy(last, s_last_cred_pub, ULTRAWIDELOCK_CRED_PUB_LEN);
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	if (!have) {
 		return 1; /* nothing presented yet */
@@ -2100,9 +2100,9 @@ int ultrawidelock_reader_trust_last(void)
 	if (store_rc != 0) {
 		return store_rc; /* not committed; s_trust unchanged */
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_trust = cand;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	return 0;
 }
 
@@ -2125,15 +2125,15 @@ int ultrawidelock_reader_trust_clear(void)
 	/* Emptied under the lock rather than off a snapshot: a snapshot-then-
 	 * commit would silently undo a SetCredential that landed in between, and
 	 * on this path that would put a just-revoked anchor back. */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	if (s_trust.count == 0u) {
-		woz_mutex_unlock(&s_prov_lock);
+		ultrawidelock_mutex_unlock(&s_prov_lock);
 		return 1;
 	}
 	memset(&s_trust, 0, sizeof(s_trust));
 	id = s_id;
 	cand = s_trust;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	int rc = persist_removal(&id, &cand);
 
@@ -2149,9 +2149,9 @@ void ultrawidelock_reader_stepup_arm(void)
 {
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_STEPUP)
 	load_provisioning(); /* ensures s_prov_lock exists */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_stepup_armed = true;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	LOG_INF("step-up armed: the next transaction will request an Access Document");
 #else
 	LOG_WRN("step-up not built (CONFIG_ULTRAWIDELOCK_CRED_STEPUP=n)");
@@ -2165,9 +2165,9 @@ void ultrawidelock_reader_stepup_status(void)
 	bool armed;
 
 	load_provisioning();
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	armed = s_stepup_armed;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	printf("step-up   : built, %s\n", armed ? "ARMED (one-shot)" : "idle");
 
 	struct ultrawidelock_stepup_verdict v;
@@ -2213,18 +2213,18 @@ int ultrawidelock_reader_provision_identity(const uint8_t reader_id[ULTRAWIDELOC
 	memcpy(id.grk, grk, ULTRAWIDELOCK_GRK_LEN);
 	id.is_dev = false;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	ts = s_trust; /* keep any anchors already added */
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	int store_rc = ultrawidelock_prov_store(&id, &ts);
 
 	if (store_rc != 0) {
 		return store_rc; /* not committed; s_id unchanged */
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_id = id;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
 	/*
 	 * And the ADVERTISEMENT, which this path used to leave stale.
@@ -2292,10 +2292,10 @@ int ultrawidelock_reader_provision_add_trust(const uint8_t cred_pub[ULTRAWIDELOC
 	struct ultrawidelock_reader_identity id;
 	struct ultrawidelock_trust_store cand;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	id = s_id;
 	cand = s_trust;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	int add = ultrawidelock_prov_trust_add(&cand, cred_pub);
 
@@ -2322,9 +2322,9 @@ int ultrawidelock_reader_provision_add_trust(const uint8_t cred_pub[ULTRAWIDELOC
 		if (rebind_rc != 0) {
 			return rebind_rc;
 		}
-		woz_mutex_lock(&s_prov_lock);
+		ultrawidelock_mutex_lock(&s_prov_lock);
 		s_trust = cand;
-		woz_mutex_unlock(&s_prov_lock);
+		ultrawidelock_mutex_unlock(&s_prov_lock);
 		return 1;
 	}
 	int store_rc = ultrawidelock_prov_store(&id, &cand);
@@ -2332,9 +2332,9 @@ int ultrawidelock_reader_provision_add_trust(const uint8_t cred_pub[ULTRAWIDELOC
 	if (store_rc != 0) {
 		return store_rc; /* not committed; s_trust unchanged */
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_trust = cand;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	if (add == 2) {
 		LOG_WRN("trust store was FULL; dropped an anchor to make room. "
 			"ULTRAWIDELOCK_TRUST_MAX is %u -- raise it if this repeats",
@@ -2363,7 +2363,7 @@ int ultrawidelock_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred
 	/* Found, removed and snapshotted in one critical section. The add path
 	 * mutates a snapshot and commits it later, which on a removal would let
 	 * a SetCredential that landed in between put the revoked anchor back. */
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	idx = ultrawidelock_prov_find_cred_index(&s_trust, cred_type, cred_index);
 	if (idx >= 0) {
 		memcpy(removed, s_trust.cred_pub[idx], ULTRAWIDELOCK_CRED_PUB_LEN);
@@ -2371,7 +2371,7 @@ int ultrawidelock_reader_provision_remove_trust(uint8_t cred_type, uint16_t cred
 		id = s_id;
 		cand = s_trust;
 	}
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	if (idx < 0) {
 		/* Nothing to take out now, but an earlier removal may still be
@@ -2406,7 +2406,7 @@ int ultrawidelock_reader_provision_remove_type(uint8_t cred_type)
 	struct ultrawidelock_trust_store cand;
 	int removed = 0;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	/* Downwards, because removing slot i shifts every later slot into it. */
 	for (int i = (int)s_trust.count - 1; i >= 0; i--) {
 		if (cred_type == 0u || s_trust.cred_type[i] == cred_type) {
@@ -2416,7 +2416,7 @@ int ultrawidelock_reader_provision_remove_type(uint8_t cred_type)
 	}
 	id = s_id;
 	cand = s_trust;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	if (removed == 0) {
 		/* Same retry the single-anchor path takes: an admin repeating a
@@ -2445,7 +2445,7 @@ int ultrawidelock_reader_provision_remove_user(uint16_t user_index)
 	struct ultrawidelock_trust_store cand;
 	int removed = 0;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	/* Downwards, because removing slot i shifts every later slot into it. */
 	for (int i = (int)s_trust.count - 1; i >= 0; i--) {
 		if (user_index == ULTRAWIDELOCK_USER_INDEX_ALL || s_trust.user_index[i] == user_index) {
@@ -2455,7 +2455,7 @@ int ultrawidelock_reader_provision_remove_user(uint16_t user_index)
 	}
 	id = s_id;
 	cand = s_trust;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	if (removed == 0) {
 		/* The user held no anchor, so there is nothing new to write -- but
@@ -2491,10 +2491,10 @@ int ultrawidelock_reader_provision_clear(void)
 	if (store_rc != 0) {
 		return store_rc;
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_id = id;
 	s_trust = ts;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
 	/* The store just lost every anchor, so the same latches and links a
 	 * per-credential revocation drops have to go here too. */
@@ -2525,10 +2525,10 @@ int ultrawidelock_reader_export_blob(uint8_t *out, size_t cap, size_t *out_len)
 	struct ultrawidelock_reader_identity id;
 	struct ultrawidelock_trust_store ts;
 
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	id = s_id;
 	ts = s_trust;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 
 	return ultrawidelock_prov_serialize(&id, &ts, out, cap, out_len);
 }
@@ -2551,10 +2551,10 @@ int ultrawidelock_reader_import_blob(const uint8_t *buf, size_t len)
 	if (ultrawidelock_prov_store(&id, &ts) != 0) {
 		return -2; /* not committed; s_id/s_trust unchanged */
 	}
-	woz_mutex_lock(&s_prov_lock);
+	ultrawidelock_mutex_lock(&s_prov_lock);
 	s_id = id;
 	s_trust = ts;
-	woz_mutex_unlock(&s_prov_lock);
+	ultrawidelock_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey/grk changed -> refresh salt field 1 */
 	/* Same reason the Matter provisioning path calls this: a new GRK means the
 	 * advertised dynamic tag is stale, and the phone resolves the reader by that

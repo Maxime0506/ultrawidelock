@@ -1,7 +1,7 @@
 /* DW3000-family wiring per ESP32 target, SPI2/FSPI. Source of truth for the
  * wiring table. Change to match how the UWB module is wired to your board. */
-#ifndef WOZ_ESP_BOARD_PINS_H
-#define WOZ_ESP_BOARD_PINS_H
+#ifndef ULTRAWIDELOCK_ESP_BOARD_PINS_H
+#define ULTRAWIDELOCK_ESP_BOARD_PINS_H
 
 #include "driver/spi_master.h"
 #include "sdkconfig.h"
@@ -48,4 +48,4 @@
 #define ULTRAWIDELOCK_DW3000_SPI_SLOW_HZ 2000000
 #define ULTRAWIDELOCK_DW3000_SPI_FAST_HZ 8000000
 
-#endif /* WOZ_ESP_BOARD_PINS_H */
+#endif /* ULTRAWIDELOCK_ESP_BOARD_PINS_H */

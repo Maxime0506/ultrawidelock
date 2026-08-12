@@ -4,11 +4,11 @@
  * The dispatcher itself (hci_internal.c, pinned in platform.lock.yml) is
  * compiled from the vendor tree unmodified. It resolves its handful of Zephyr
  * spellings through ble/hci_compat and its Kconfig symbols through
- * ble/hci_compat/woz_freertos_hci_config.h, so nothing Zephyr is linked. This
+ * ble/hci_compat/ultrawidelock_freertos_hci_config.h, so nothing Zephyr is linked. This
  * file owns only the two signature differences between the vendor API and
- * struct woz_freertos_radio_dispatcher.
+ * struct ultrawidelock_freertos_radio_dispatcher.
  */
-#include "woz_freertos_radio.h"
+#include "ultrawidelock_freertos_radio.h"
 
 #include <stddef.h>
 
@@ -43,9 +43,10 @@ static int32_t dispatcher_msg_get(uint8_t *packet, uint8_t *type)
 	return rc;
 }
 
-const struct woz_freertos_radio_dispatcher *woz_freertos_radio_sdc_dispatcher(void)
+const struct ultrawidelock_freertos_radio_dispatcher *
+ultrawidelock_freertos_radio_sdc_dispatcher(void)
 {
-	static const struct woz_freertos_radio_dispatcher dispatcher = {
+	static const struct ultrawidelock_freertos_radio_dispatcher dispatcher = {
 		.cmd_put = dispatcher_cmd_put,
 		.msg_get = dispatcher_msg_get,
 	};

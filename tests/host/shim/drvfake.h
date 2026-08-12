@@ -1,5 +1,5 @@
 /* Host recording doubles for the DRIVER-BINARY suites (uwb_min / uwb_isr /
- * uwb_rxdiag / uwb_selftest / aliro_shell). This binary compiles the real
+ * uwb_rxdiag / uwb_selftest / ultrawidelock_shell). This binary compiles the real
  * modules/ultrawidelock_uwb/src/driver + shell sources, so it cannot link dw_rx_stub.c
  * (that stub defines uwb_min_radio_init etc. as fakes). drvfake.c is its
  * replacement: every dwt_* / dw3000_* / ccc_shim_* / fira_session_* symbol the
@@ -7,8 +7,8 @@
  *
  * Theatre disclaimer: nothing here talks to a DW3000. These doubles prove the
  * drivers' branch logic and argument plumbing, not hardware truth. */
-#ifndef WOZ_HOST_SHIM_DRVFAKE_H
-#define WOZ_HOST_SHIM_DRVFAKE_H
+#ifndef ULTRAWIDELOCK_HOST_SHIM_DRVFAKE_H
+#define ULTRAWIDELOCK_HOST_SHIM_DRVFAKE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -78,7 +78,7 @@ struct drvfake_state {
 	unsigned setinterrupt_calls;
 	uint32_t last_int_lo;
 
-	/* ── ccc_shim / fira_session fakes (aliro_shell + uwb_rxdiag deps) ── */
+	/* ── ccc_shim / fira_session fakes (ultrawidelock_shell + uwb_rxdiag deps) ── */
 	bool ccc_active;
 	unsigned wrap_log_reset_calls;
 	bool rx_awaiting;
@@ -130,4 +130,4 @@ extern unsigned long shellfake_len;
 void shellfake_reset(void);
 void shellfake_print(const struct shell *sh, const char *fmt, ...);
 
-#endif /* WOZ_HOST_SHIM_DRVFAKE_H */
+#endif /* ULTRAWIDELOCK_HOST_SHIM_DRVFAKE_H */

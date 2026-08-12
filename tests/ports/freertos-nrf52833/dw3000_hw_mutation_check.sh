@@ -19,7 +19,7 @@ SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c"
 mkdir -p "$OUT"
 
 build() { # <source> <binary>
-	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DWOZ_PORT_FREERTOS \
+	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DULTRAWIDELOCK_PORT_FREERTOS \
 		-I"$HERE/fake" \
 		-I"$ROOT/ports/freertos-nrf52833/include" \
 		-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -76,17 +76,17 @@ MUTATIONS=(
 	/* Wake line ::: 	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_RST);
 
 	/* Wake line"
-	"waking does not wait for the chip to reach IDLE_RC ::: 	woz_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
+	"waking does not wait for the chip to reach IDLE_RC ::: 	ultrawidelock_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
 	s_asleep = false; ::: 	s_asleep = false;"
 	"reset does not let the chip climb to IDLE_RC before returning ::: 	/* Long enough for the chip to climb from INIT_RC to IDLE_RC. */
-	woz_freertos_busy_wait_us(2000); ::: "
+	ultrawidelock_freertos_busy_wait_us(2000); ::: "
 	"the wake line comes up deasserted ::: nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_WAKEUP); ::: nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_WAKEUP);"
 	"waking an already awake chip strobes it anyway ::: 	if (!s_asleep) {
 		return;
 	}
 	dw3000_spi_wakeup(); ::: 	dw3000_spi_wakeup();"
 	"a chip that never reaches IDLE_RC is assumed to have woken ::: 	while (!dwt_checkidlerc() && spins < 500u) {
-		woz_freertos_busy_wait_us(10);
+		ultrawidelock_freertos_busy_wait_us(10);
 		spins++;
 	} ::: 	(void)dwt_checkidlerc();"
 	"masking the line reports itself enabled anyway ::: 		nrf_gpiote_int_disable(NRF_GPIOTE, NRF_GPIOTE_INT_IN0_MASK);

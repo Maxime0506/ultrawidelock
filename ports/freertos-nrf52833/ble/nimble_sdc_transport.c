@@ -1,5 +1,5 @@
-#include "woz_freertos_nimble_sdc.h"
-#include "woz_freertos_mpsl.h"
+#include "ultrawidelock_freertos_nimble_sdc.h"
+#include "ultrawidelock_freertos_mpsl.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -21,16 +21,16 @@
 #error "The NimBLE/SDC receive pump requires configUSE_TASK_NOTIFICATIONS=1"
 #endif
 
-#ifndef WOZ_FREERTOS_NIMBLE_SDC_STACK_BYTES
-#define WOZ_FREERTOS_NIMBLE_SDC_STACK_BYTES 2048u
+#ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_STACK_BYTES
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_STACK_BYTES 2048u
 #endif
 
-#ifndef WOZ_FREERTOS_NIMBLE_SDC_TASK_PRIORITY
-#define WOZ_FREERTOS_NIMBLE_SDC_TASK_PRIORITY (tskIDLE_PRIORITY + 2u)
+#ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_TASK_PRIORITY
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_TASK_PRIORITY (tskIDLE_PRIORITY + 2u)
 #endif
 
 #define SDC_STACK_WORDS                                                                 \
-	((WOZ_FREERTOS_NIMBLE_SDC_STACK_BYTES + sizeof(StackType_t) - 1u) /             \
+	((ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_STACK_BYTES + sizeof(StackType_t) - 1u) /             \
 	 sizeof(StackType_t))
 
 /* nrfxlib sdc_hci.h values, checked by freertos-radio-source-check.sh. */
@@ -50,7 +50,7 @@ enum process_result {
 	PROCESS_RETRY,
 };
 
-static struct woz_freertos_nimble_sdc_ops s_ops;
+static struct ultrawidelock_freertos_nimble_sdc_ops s_ops;
 static bool s_configured;
 static TaskHandle_t s_task;
 static StaticTask_t s_task_storage;
@@ -58,12 +58,12 @@ static StackType_t s_stack[SDC_STACK_WORDS];
 static uint8_t s_rx_packet[SDC_HCI_PACKET_MAX];
 static uint8_t s_rx_type;
 
-static void report_fault(enum woz_freertos_nimble_sdc_fault fault, int32_t detail)
+static void report_fault(enum ultrawidelock_freertos_nimble_sdc_fault fault, int32_t detail)
 {
 	s_ops.fault(fault, detail);
 }
 
-void woz_freertos_nimble_sdc_wake(void)
+void ultrawidelock_freertos_nimble_sdc_wake(void)
 {
 	TaskHandle_t task = s_task;
 
@@ -72,7 +72,7 @@ void woz_freertos_nimble_sdc_wake(void)
 	}
 }
 
-void woz_freertos_nimble_sdc_wake_from_isr(void)
+void ultrawidelock_freertos_nimble_sdc_wake_from_isr(void)
 {
 	BaseType_t wake = pdFALSE;
 	TaskHandle_t task = s_task;
@@ -120,7 +120,7 @@ static enum process_result deliver_event(size_t size)
 	 */
 	if (size > MYNEWT_VAL(BLE_TRANSPORT_EVT_SIZE)) {
 		s_rx_type = SDC_HCI_MSG_TYPE_NONE;
-		report_fault(WOZ_NIMBLE_SDC_FAULT_PACKET, (int32_t)size);
+		report_fault(ULTRAWIDELOCK_NIMBLE_SDC_FAULT_PACKET, (int32_t)size);
 		return PROCESS_PROGRESS;
 	}
 
@@ -137,7 +137,7 @@ static enum process_result deliver_event(size_t size)
 	s_rx_type = SDC_HCI_MSG_TYPE_NONE;
 	rc = ble_transport_to_hs_evt(event);
 	if (rc != 0) {
-		report_fault(WOZ_NIMBLE_SDC_FAULT_HOST, rc);
+		report_fault(ULTRAWIDELOCK_NIMBLE_SDC_FAULT_HOST, rc);
 	}
 	return PROCESS_PROGRESS;
 }
@@ -153,14 +153,14 @@ static enum process_result deliver_data(size_t size)
 	if (os_mbuf_append(data, s_rx_packet, (uint16_t)size) != 0) {
 		(void)os_mbuf_free_chain(data);
 		s_rx_type = SDC_HCI_MSG_TYPE_NONE;
-		report_fault(WOZ_NIMBLE_SDC_FAULT_HOST, BLE_ERR_MEM_CAPACITY);
+		report_fault(ULTRAWIDELOCK_NIMBLE_SDC_FAULT_HOST, BLE_ERR_MEM_CAPACITY);
 		return PROCESS_PROGRESS;
 	}
 
 	s_rx_type = SDC_HCI_MSG_TYPE_NONE;
 	rc = ble_transport_to_hs_acl(data);
 	if (rc != 0) {
-		report_fault(WOZ_NIMBLE_SDC_FAULT_HOST, rc);
+		report_fault(ULTRAWIDELOCK_NIMBLE_SDC_FAULT_HOST, rc);
 	}
 	return PROCESS_PROGRESS;
 }
@@ -171,16 +171,16 @@ static enum process_result process_one(void)
 	size_t size;
 
 	if (s_rx_type == SDC_HCI_MSG_TYPE_NONE) {
-		woz_freertos_mpsl_lock();
+		ultrawidelock_freertos_mpsl_lock();
 		rc = s_ops.msg_get(s_rx_packet, &s_rx_type);
-		woz_freertos_mpsl_unlock();
+		ultrawidelock_freertos_mpsl_unlock();
 		if (rc == s_ops.no_data_error) {
 			s_rx_type = SDC_HCI_MSG_TYPE_NONE;
 			return PROCESS_IDLE;
 		}
 		if (rc != 0) {
 			s_rx_type = SDC_HCI_MSG_TYPE_NONE;
-			report_fault(WOZ_NIMBLE_SDC_FAULT_GET, rc);
+			report_fault(ULTRAWIDELOCK_NIMBLE_SDC_FAULT_GET, rc);
 			return PROCESS_IDLE;
 		}
 	}
@@ -190,7 +190,7 @@ static enum process_result process_one(void)
 		int32_t detail = s_rx_type;
 
 		s_rx_type = SDC_HCI_MSG_TYPE_NONE;
-		report_fault(WOZ_NIMBLE_SDC_FAULT_PACKET, detail);
+		report_fault(ULTRAWIDELOCK_NIMBLE_SDC_FAULT_PACKET, detail);
 		return PROCESS_PROGRESS;
 	}
 	if (s_rx_type == SDC_HCI_MSG_TYPE_EVT) {
@@ -215,10 +215,11 @@ static void receive_task(void *arg)
 	}
 }
 
-int woz_freertos_nimble_sdc_configure(const struct woz_freertos_nimble_sdc_ops *ops)
+int ultrawidelock_freertos_nimble_sdc_configure(
+	const struct ultrawidelock_freertos_nimble_sdc_ops *ops)
 {
 	if (ops == NULL || ops->cmd_put == NULL || ops->data_put == NULL ||
-	    ops->msg_get == NULL || ops->fault == NULL || !woz_freertos_mpsl_ready() ||
+	    ops->msg_get == NULL || ops->fault == NULL || !ultrawidelock_freertos_mpsl_ready() ||
 	    s_configured) {
 		return -1;
 	}
@@ -237,7 +238,7 @@ void ble_transport_ll_init(void)
 		return;
 	}
 	task = xTaskCreateStatic(receive_task, "nimble-sdc", SDC_STACK_WORDS, NULL,
-				 WOZ_FREERTOS_NIMBLE_SDC_TASK_PRIORITY, s_stack, &s_task_storage);
+				 ULTRAWIDELOCK_FREERTOS_NIMBLE_SDC_TASK_PRIORITY, s_stack, &s_task_storage);
 	configASSERT(task != NULL);
 	s_task = task;
 }
@@ -255,12 +256,12 @@ int ble_transport_to_ll_cmd_impl(void *buf)
 		return BLE_ERR_INV_HCI_CMD_PARMS;
 	}
 
-	woz_freertos_mpsl_lock();
+	ultrawidelock_freertos_mpsl_lock();
 	rc = s_ops.cmd_put(packet);
-	woz_freertos_mpsl_unlock();
+	ultrawidelock_freertos_mpsl_unlock();
 	ble_transport_free(buf);
 	if (rc == 0) {
-		woz_freertos_nimble_sdc_wake();
+		ultrawidelock_freertos_nimble_sdc_wake();
 		return 0;
 	}
 	return BLE_ERR_MEM_CAPACITY;
@@ -282,12 +283,12 @@ int ble_transport_to_ll_acl_impl(struct os_mbuf *om)
 		return BLE_ERR_INV_HCI_CMD_PARMS;
 	}
 
-	woz_freertos_mpsl_lock();
+	ultrawidelock_freertos_mpsl_lock();
 	rc = s_ops.data_put(packet);
-	woz_freertos_mpsl_unlock();
+	ultrawidelock_freertos_mpsl_unlock();
 	(void)os_mbuf_free_chain(om);
 	if (rc != 0) {
-		woz_freertos_nimble_sdc_wake();
+		ultrawidelock_freertos_nimble_sdc_wake();
 		return BLE_ERR_MEM_CAPACITY;
 	}
 	return 0;

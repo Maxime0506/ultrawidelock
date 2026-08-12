@@ -13,7 +13,7 @@
  * the day CONFIG_OPENTHREAD_MTD changes is worse than a few bytes of code.
  *
  * Key mapping: OpenThread's native keys are 0x0000..0x00ff and are offset into
- * the reserved WOZ_KV_KEY_OPENTHREAD_BASE window, which holds exactly 0x100
+ * the reserved ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE window, which holds exactly 0x100
  * keys. OpenThread also reserves 0x8000..0xffff for vendor use; that range
  * cannot fit the window, and masking it in would silently alias distinct
  * vendor keys onto each other and onto the native ones. This firmware keeps
@@ -21,14 +21,14 @@
  * key rather than behind otPlatSettings, so no vendor key exists here, and any
  * key outside the native range is refused with OT_ERROR_NOT_IMPLEMENTED and a
  * warning. If a vendor key is ever wanted, the window must be widened in
- * woz_freertos_kv.h deliberately, not aliased into quietly.
+ * ultrawidelock_freertos_kv.h deliberately, not aliased into quietly.
  */
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
-#include <woz_freertos_kv.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_kv.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include <openthread/dataset.h>
 #include <openthread/platform/settings.h>
@@ -44,30 +44,31 @@
  * Dataset — as one entry of one record. Catch a change to either limit at
  * build time rather than at the first join on a customer's board.
  */
-_Static_assert(WOZ_KV_KEY_OPENTHREAD_LIMIT - WOZ_KV_KEY_OPENTHREAD_BASE >= 0x100u,
+_Static_assert(ULTRAWIDELOCK_KV_KEY_OPENTHREAD_LIMIT - ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE >=
+		       0x100u,
 	       "the reserved key window no longer holds every native OpenThread key");
-_Static_assert(ENTRY_HEADER + OT_OPERATIONAL_DATASET_MAX_LENGTH <= WOZ_KV_VALUE_MAX,
+_Static_assert(ENTRY_HEADER + OT_OPERATIONAL_DATASET_MAX_LENGTH <= ULTRAWIDELOCK_KV_VALUE_MAX,
 	       "the largest OpenThread value no longer fits one key-value record");
 
 /*
- * STATIC, not on the stack, for the same reason aliro_prov_kv.c's buffer is: a
- * record is up to WOZ_KV_VALUE_MAX (768) bytes, and that does not fit the
+ * STATIC, not on the stack, for the same reason ultrawidelock_prov_kv.c's buffer is: a
+ * record is up to ULTRAWIDELOCK_KV_VALUE_MAX (768) bytes, and that does not fit the
  * port's 4096-byte task stacks alongside the stack's own frames. One buffer is
  * enough because every caller is the serialized OpenThread runtime
  * (openthread_freertos.c), which never runs two settings calls at once.
  */
-static uint8_t s_record[WOZ_KV_VALUE_MAX];
+static uint8_t s_record[ULTRAWIDELOCK_KV_VALUE_MAX];
 
 /* True if the key is native and maps into the reserved window. */
 static bool key_maps(uint16_t key, uint16_t *kv_key)
 {
 	if (key > 0x00ffu) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
 				 "key 0x%04x is outside the native range; refused",
 				 (unsigned)key);
 		return false;
 	}
-	*kv_key = (uint16_t)(WOZ_KV_KEY_OPENTHREAD_BASE + key);
+	*kv_key = (uint16_t)(ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE + key);
 	return true;
 }
 
@@ -104,29 +105,29 @@ static size_t record_well_formed(const uint8_t *record, size_t length)
 }
 
 /*
- * Read one key's record into s_record. WOZ_KV_OK with *used the well-formed
- * length, WOZ_KV_NOT_FOUND, or a negative store error. The buffer is sized to
- * WOZ_KV_VALUE_MAX, so no stored record can be too long for it.
+ * Read one key's record into s_record. ULTRAWIDELOCK_KV_OK with *used the well-formed
+ * length, ULTRAWIDELOCK_KV_NOT_FOUND, or a negative store error. The buffer is sized to
+ * ULTRAWIDELOCK_KV_VALUE_MAX, so no stored record can be too long for it.
  */
 static int record_load(uint16_t kv_key, size_t *used)
 {
 	size_t length = sizeof(s_record);
-	int rc = woz_freertos_kv_init();
+	int rc = ultrawidelock_freertos_kv_init();
 
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
-	rc = woz_freertos_kv_get(kv_key, s_record, &length);
-	if (rc != WOZ_KV_OK) {
+	rc = ultrawidelock_freertos_kv_get(kv_key, s_record, &length);
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 	*used = record_well_formed(s_record, length);
 	if (*used != length) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
 				 "record 0x%04x has a malformed tail (%u of %u B); dropped",
 				 (unsigned)kv_key, (unsigned)(length - *used), (unsigned)length);
 	}
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
 /*
@@ -152,13 +153,14 @@ static bool record_find(const uint8_t *record, size_t used, int index, size_t *o
 
 static otError store_result(int rc)
 {
-	if (rc == WOZ_KV_OK) {
+	if (rc == ULTRAWIDELOCK_KV_OK) {
 		return OT_ERROR_NONE;
 	}
-	if (rc == WOZ_KV_FULL) {
+	if (rc == ULTRAWIDELOCK_KV_FULL) {
 		return OT_ERROR_NO_BUFS;
 	}
-	woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG, "kv write rc=%d", rc);
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+				   "kv write rc=%d", rc);
 	return OT_ERROR_FAILED;
 }
 
@@ -177,14 +179,15 @@ void otPlatSettingsInit(otInstance *instance, const uint16_t *sensitive_keys,
 	(void)sensitive_keys;
 	(void)sensitive_keys_length;
 
-	rc = woz_freertos_kv_init();
-	if (rc != WOZ_KV_OK) {
+	rc = ultrawidelock_freertos_kv_init();
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		/*
 		 * Init returns void, so the failure cannot be reported here; it
 		 * is logged, and every later operation fails loudly on its own
 		 * mount attempt rather than pretending the store is up.
 		 */
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, OT_SETTINGS_TAG, "kv init rc=%d", rc);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, OT_SETTINGS_TAG,
+					   "kv init rc=%d", rc);
 	}
 }
 
@@ -209,16 +212,17 @@ otError otPlatSettingsGet(otInstance *instance, uint16_t key, int index, uint8_t
 		return OT_ERROR_NOT_IMPLEMENTED;
 	}
 	rc = record_load(kv_key, &used);
-	if (rc == WOZ_KV_NOT_FOUND) {
+	if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 		return OT_ERROR_NOT_FOUND;
 	}
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		/*
 		 * A store that cannot be read serves nothing. NOT_FOUND is the
 		 * one degraded answer the contract offers, and it makes the
 		 * stack rebuild the state rather than trust garbage.
 		 */
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG, "kv read rc=%d", rc);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+					   "kv read rc=%d", rc);
 		return OT_ERROR_NOT_FOUND;
 	}
 	if (!record_find(s_record, used, index, &offset)) {
@@ -261,7 +265,7 @@ otError otPlatSettingsSet(otInstance *instance, uint16_t key, const uint8_t *val
 		memcpy(s_record + ENTRY_HEADER, value, value_length);
 	}
 	return store_result(
-		woz_freertos_kv_set(kv_key, s_record, ENTRY_HEADER + (size_t)value_length));
+		ultrawidelock_freertos_kv_set(kv_key, s_record, ENTRY_HEADER + (size_t)value_length));
 }
 
 otError otPlatSettingsAdd(otInstance *instance, uint16_t key, const uint8_t *value,
@@ -281,11 +285,12 @@ otError otPlatSettingsAdd(otInstance *instance, uint16_t key, const uint8_t *val
 	}
 
 	rc = record_load(kv_key, &used);
-	if (rc == WOZ_KV_NOT_FOUND) {
+	if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 		/* Absent is the ordinary first Add. */
 		used = 0;
-	} else if (rc != WOZ_KV_OK) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG, "kv read rc=%d", rc);
+	} else if (rc != ULTRAWIDELOCK_KV_OK) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+					   "kv read rc=%d", rc);
 		return OT_ERROR_FAILED;
 	}
 
@@ -297,7 +302,7 @@ otError otPlatSettingsAdd(otInstance *instance, uint16_t key, const uint8_t *val
 		memcpy(s_record + used + ENTRY_HEADER, value, value_length);
 	}
 	return store_result(
-		woz_freertos_kv_set(kv_key, s_record, used + ENTRY_HEADER + (size_t)value_length));
+		ultrawidelock_freertos_kv_set(kv_key, s_record, used + ENTRY_HEADER + (size_t)value_length));
 }
 
 otError otPlatSettingsDelete(otInstance *instance, uint16_t key, int index)
@@ -315,23 +320,24 @@ otError otPlatSettingsDelete(otInstance *instance, uint16_t key, int index)
 	}
 
 	if (index == -1) {
-		rc = woz_freertos_kv_init();
-		if (rc != WOZ_KV_OK) {
+		rc = ultrawidelock_freertos_kv_init();
+		if (rc != ULTRAWIDELOCK_KV_OK) {
 			return OT_ERROR_FAILED;
 		}
-		rc = woz_freertos_kv_delete(kv_key);
-		if (rc == WOZ_KV_NOT_FOUND) {
+		rc = ultrawidelock_freertos_kv_delete(kv_key);
+		if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 			return OT_ERROR_NOT_FOUND;
 		}
 		return store_result(rc);
 	}
 
 	rc = record_load(kv_key, &used);
-	if (rc == WOZ_KV_NOT_FOUND) {
+	if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 		return OT_ERROR_NOT_FOUND;
 	}
-	if (rc != WOZ_KV_OK) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG, "kv read rc=%d", rc);
+	if (rc != ULTRAWIDELOCK_KV_OK) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+					   "kv read rc=%d", rc);
 		return OT_ERROR_FAILED;
 	}
 	if (!record_find(s_record, used, index, &offset)) {
@@ -348,14 +354,14 @@ otError otPlatSettingsDelete(otInstance *instance, uint16_t key, int index)
 		 * it empty, so the key reads as fully deleted — the state the
 		 * stack's Set-after-Delete guarantee is worded around.
 		 */
-		return store_result(woz_freertos_kv_delete(kv_key));
+		return store_result(ultrawidelock_freertos_kv_delete(kv_key));
 	}
-	return store_result(woz_freertos_kv_set(kv_key, s_record, used));
+	return store_result(ultrawidelock_freertos_kv_set(kv_key, s_record, used));
 }
 
 /*
  * Factory-reset OpenThread and nothing else. This walks the reserved window
- * and deletes key by key; it must never call woz_freertos_kv_erase_all(),
+ * and deletes key by key; it must never call ultrawidelock_freertos_kv_erase_all(),
  * because the Aliro provisioning blob lives in the same two pages and erasing
  * it would take the reader's provisioned identity and trust anchors with it —
  * the mirror of the argument in ultrawidelock_prov_erase(), which spares these keys so
@@ -369,19 +375,20 @@ void otPlatSettingsWipe(otInstance *instance)
 
 	(void)instance;
 
-	rc = woz_freertos_kv_init();
-	if (rc != WOZ_KV_OK) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, OT_SETTINGS_TAG,
+	rc = ultrawidelock_freertos_kv_init();
+	if (rc != ULTRAWIDELOCK_KV_OK) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, OT_SETTINGS_TAG,
 				 "kv init rc=%d; nothing wiped", rc);
 		return;
 	}
-	for (kv_key = WOZ_KV_KEY_OPENTHREAD_BASE; kv_key < WOZ_KV_KEY_OPENTHREAD_LIMIT; kv_key++) {
-		rc = woz_freertos_kv_delete(kv_key);
-		if (rc != WOZ_KV_OK && rc != WOZ_KV_NOT_FOUND) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+	for (kv_key = ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE;
+	     kv_key < ULTRAWIDELOCK_KV_KEY_OPENTHREAD_LIMIT; kv_key++) {
+		rc = ultrawidelock_freertos_kv_delete(kv_key);
+		if (rc != ULTRAWIDELOCK_KV_OK && rc != ULTRAWIDELOCK_KV_NOT_FOUND) {
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
 					 "wipe: delete 0x%04x rc=%d", (unsigned)kv_key, rc);
 		}
 	}
-	woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, OT_SETTINGS_TAG,
 			 "factory reset: OpenThread settings wiped");
 }

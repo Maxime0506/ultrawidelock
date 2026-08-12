@@ -21,8 +21,8 @@ MEMORY
   RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 0x20000
 }
 
-__woz_storage_start = ORIGIN(STORAGE);
-__woz_storage_end = ORIGIN(STORAGE) + LENGTH(STORAGE);
+__ultrawidelock_storage_start = ORIGIN(STORAGE);
+__ultrawidelock_storage_end = ORIGIN(STORAGE) + LENGTH(STORAGE);
 
 /*
  * The main stack, used by every interrupt handler and by main() before the

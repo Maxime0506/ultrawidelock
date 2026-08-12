@@ -86,7 +86,7 @@ self_test() {
 	mutate "the mbedTLS crypto backend copied over from the ESP-IDF port" \
 		's|crypto_psa.list|crypto_mbedtls.list|'
 	mutate "the mbedTLS define left selected beside the PSA one" \
-		's|CONFIG_WOZ_CRYPTO_PSA=1|CONFIG_WOZ_CRYPTO_PSA=1 CONFIG_WOZ_CRYPTO_MBEDTLS=1|'
+		's|CONFIG_ULTRAWIDELOCK_CRYPTO_PSA=1|CONFIG_ULTRAWIDELOCK_CRYPTO_PSA=1 CONFIG_ULTRAWIDELOCK_CRYPTO_MBEDTLS=1|'
 	mutate "the Final-capture snapshot dropped as if it were a diagnostic" \
 		'/CONFIG_ULTRAWIDELOCK_UWB_FINAL_SNAPSHOT=1/d'
 	mutate "the engine built as something other than a responder" \
@@ -96,7 +96,7 @@ self_test() {
 	mutate "the Zephyr backend dragged in beside this port's own" \
 		's|uwb/dw3000_hw_freertos.c|../zephyr/dw3000/dw3000_hw.c|'
 	mutate "the engine linked without the crypto library its STS seam needs" \
-		's|woz_kernel woz_board woz_mbedtls|woz_kernel woz_board|'
+		's|ultrawidelock_kernel ultrawidelock_board ultrawidelock_mbedtls|ultrawidelock_kernel ultrawidelock_board|'
 	mutate "the STS seam left to the Zephyr file this port does not compile" \
 		'/ultrawidelock_seam_stubs.c/d'
 
@@ -117,41 +117,41 @@ trap 'rm -rf "$reader"' EXIT
 
 cat >"$reader/read.cmake" <<CMAKE
 cmake_minimum_required(VERSION 3.20)
-set(WOZ_PORT_DIR "$ROOT/ports/freertos-nrf52833")
+set(ULTRAWIDELOCK_PORT_DIR "$ROOT/ports/freertos-nrf52833")
 
 # Script mode has no targets, so the commands the fragment uses to declare its
 # library are replaced by ones that record what it passed them. Everything is
 # keyed on the target name: the fragment also declares a link-proof executable,
 # and folding its sources or its --whole-archive link flags into the library's
 # would make every check below answer a question about the wrong target.
-set(WOZ_LIB ultrawidelock_uwb)
+set(ULTRAWIDELOCK_LIB ultrawidelock_uwb)
 macro(add_library _name)
-  if("\${_name}" STREQUAL "\${WOZ_LIB}")
-    set(WOZ_SOURCES \${ARGN})
-    list(REMOVE_ITEM WOZ_SOURCES STATIC)
+  if("\${_name}" STREQUAL "\${ULTRAWIDELOCK_LIB}")
+    set(ULTRAWIDELOCK_SOURCES \${ARGN})
+    list(REMOVE_ITEM ULTRAWIDELOCK_SOURCES STATIC)
   endif()
 endmacro()
 macro(add_executable _name)
 endmacro()
 macro(target_include_directories _name)
-  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+  if("\${_name}" STREQUAL "\${ULTRAWIDELOCK_LIB}")
     set(_args \${ARGN})
     list(REMOVE_ITEM _args PUBLIC PRIVATE INTERFACE)
-    list(APPEND WOZ_INCLUDES \${_args})
+    list(APPEND ULTRAWIDELOCK_INCLUDES \${_args})
   endif()
 endmacro()
 macro(target_compile_definitions _name)
-  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+  if("\${_name}" STREQUAL "\${ULTRAWIDELOCK_LIB}")
     set(_args \${ARGN})
     list(REMOVE_ITEM _args PUBLIC PRIVATE INTERFACE)
-    list(APPEND WOZ_DEFINES \${_args})
+    list(APPEND ULTRAWIDELOCK_DEFINES \${_args})
   endif()
 endmacro()
 macro(target_link_libraries _name)
-  if("\${_name}" STREQUAL "\${WOZ_LIB}")
+  if("\${_name}" STREQUAL "\${ULTRAWIDELOCK_LIB}")
     set(_args \${ARGN})
     list(REMOVE_ITEM _args PUBLIC PRIVATE INTERFACE)
-    list(APPEND WOZ_LIBRARIES \${_args})
+    list(APPEND ULTRAWIDELOCK_LIBRARIES \${_args})
   endif()
 endmacro()
 macro(target_link_options _name)
@@ -163,30 +163,30 @@ endmacro()
 # nothing to say about the library's source set either way.
 macro(add_custom_target _name)
 endmacro()
-# woz_roles.cmake records a configure dependency, which script mode has no
+# ultrawidelock_roles.cmake records a configure dependency, which script mode has no
 # directory to hang off. Harmless to swallow: nothing here is being built.
 macro(set_property)
 endmacro()
 
 include("$CMAKE_FRAGMENT")
 
-foreach(_entry IN LISTS \${WOZ_ASK})
+foreach(_entry IN LISTS \${ULTRAWIDELOCK_ASK})
   message("\${_entry}")
 endforeach()
 CMAKE
 
 ask() { # <variable> -> its entries, one per line
-	cmake -DWOZ_ASK="$1" -P "$reader/read.cmake" 2>&1
+	cmake -DULTRAWIDELOCK_ASK="$1" -P "$reader/read.cmake" 2>&1
 }
 
-if ! srcs=$(ask WOZ_SOURCES); then
+if ! srcs=$(ask ULTRAWIDELOCK_SOURCES); then
 	printf '  FAIL the UWB fragment could not be read:\n%s\n' "$srcs"
 	printf 'uwb-sources: FAIL (1 checks)\n'
 	exit 1
 fi
-incs=$(ask WOZ_INCLUDES)
-defs=$(ask WOZ_DEFINES)
-libs=$(ask WOZ_LIBRARIES)
+incs=$(ask ULTRAWIDELOCK_INCLUDES)
+defs=$(ask ULTRAWIDELOCK_DEFINES)
+libs=$(ask ULTRAWIDELOCK_LIBRARIES)
 lists=$(ask ULTRAWIDELOCK_UWB_ROLE_LISTS)
 
 # ---- checks -----------------------------------------------------------------
@@ -261,7 +261,7 @@ check "the port supplies its half of the STS seam" "$r"
 # never executed a single instruction -- which is the state this file was
 # written during, and the one worth not returning to by accident.
 case "$srcs" in
-*/freertos-nrf52833/uwb/woz_freertos_uwb.c*) r=0 ;;
+*/freertos-nrf52833/uwb/ultrawidelock_freertos_uwb.c*) r=0 ;;
 *) r=1 ;;
 esac
 check "the port's bring-up is in the source set" "$r"
@@ -275,13 +275,13 @@ esac
 check "no other port's backend is dragged in beside them" "$r"
 
 case "$defs" in
-*CONFIG_WOZ_CRYPTO_PSA=1*) r=0 ;;
+*CONFIG_ULTRAWIDELOCK_CRYPTO_PSA=1*) r=0 ;;
 *) r=1 ;;
 esac
 check "the AES-ECB seam takes the PSA provider this port has" "$r"
 
 case "$defs" in
-*CONFIG_WOZ_CRYPTO_MBEDTLS*) r=1 ;;
+*CONFIG_ULTRAWIDELOCK_CRYPTO_MBEDTLS*) r=1 ;;
 *) r=0 ;;
 esac
 check "the mbedTLS variant is not selected beside it" "$r"
@@ -293,7 +293,7 @@ esac
 check "the PSA crypto source is the one in the set" "$r"
 
 case "$libs" in
-*woz_mbedtls*) r=0 ;;
+*ultrawidelock_mbedtls*) r=0 ;;
 *) r=1 ;;
 esac
 check "the engine links the crypto library its STS seam reaches through" "$r"

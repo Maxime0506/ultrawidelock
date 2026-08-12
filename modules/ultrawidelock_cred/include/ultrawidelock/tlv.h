@@ -1,5 +1,5 @@
 /* Minimal strict BER/DER-TLV reader for Aliro APDU payloads. Promoted from
- * woz_aliro_stack (protocol/tlv.h) as the one TLV codec both stacks share. */
+ * ultrawidelock_cred_stack (protocol/tlv.h) as the one TLV codec both stacks share. */
 #pragma once
 
 #include <stddef.h>
@@ -13,14 +13,14 @@ extern "C" {
  * Parsed TLV (Tag-Length-Value): tag (uint32), value (pointer to payload bytes), length (payload
  * size), encoded_length (total tag+length+value bytes).
  */
-struct woz_aliro_tlv {
+struct ultrawidelock_cred_tlv {
 	uint32_t tag;
 	const uint8_t *value;
 	size_t length;
 	size_t encoded_length;
 };
 
-enum woz_aliro_tlv_result {
+enum ultrawidelock_cred_tlv_result {
 	ULTRAWIDELOCK_CRED_TLV_OK = 0,
 	ULTRAWIDELOCK_CRED_TLV_END = 1,
 	ULTRAWIDELOCK_CRED_TLV_INVALID = -1,
@@ -28,16 +28,16 @@ enum woz_aliro_tlv_result {
 
 /* Parse one TLV at *offset and advance the offset past it. Indefinite and
  * non-minimal DER lengths are rejected. */
-int woz_aliro_tlv_next(const uint8_t *data, size_t data_length, size_t *offset,
-		       struct woz_aliro_tlv *out);
+int ultrawidelock_cred_tlv_next(const uint8_t *data, size_t data_length, size_t *offset,
+		       struct ultrawidelock_cred_tlv *out);
 
 /* Return the encoded size of a definite-length TLV, or zero when the tag or
  * length cannot be represented by this codec. Tags are supplied in their
  * normal big-endian encoded form (for example 0x7f66). */
-size_t woz_aliro_tlv_encoded_size(uint32_t tag, size_t value_length);
+size_t ultrawidelock_cred_tlv_encoded_size(uint32_t tag, size_t value_length);
 
 /* Append one definite-length TLV at *offset. */
-int woz_aliro_tlv_write(uint8_t *data, size_t data_capacity, size_t *offset, uint32_t tag,
+int ultrawidelock_cred_tlv_write(uint8_t *data, size_t data_capacity, size_t *offset, uint32_t tag,
 			const uint8_t *value, size_t value_length);
 
 #ifdef __cplusplus

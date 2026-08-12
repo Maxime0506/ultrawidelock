@@ -1,4 +1,4 @@
-name: woz_aliro
+name: ultrawidelock_cred
 build:
   cmake: .
   kconfig: Kconfig

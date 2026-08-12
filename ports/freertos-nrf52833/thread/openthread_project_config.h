@@ -3,14 +3,14 @@
  *
  * Passed to upstream's CMake as OT_PROJECT_CONFIG, which is the supported way
  * to override src/core/config defaults without patching the tree. It is
- * separate from thread/ot_compat/woz_freertos_ot_config.h, which forces Zephyr
+ * separate from thread/ot_compat/ultrawidelock_freertos_ot_config.h, which forces Zephyr
  * Kconfig symbols onto the pinned Nordic radio platform: that file configures
  * a vendor source, this one configures OpenThread itself.
  *
  * Only settings that must differ from upstream are here.
  */
-#ifndef WOZ_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H
-#define WOZ_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H
+#ifndef ULTRAWIDELOCK_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H
+#define ULTRAWIDELOCK_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H
 
 /*
  * This port owns Mbed TLS, so OpenThread must not also manage it.
@@ -39,4 +39,4 @@
  * lives in tests it with #if and upstream already answers zero.
  */
 
-#endif /* WOZ_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_OPENTHREAD_PROJECT_CONFIG_H */

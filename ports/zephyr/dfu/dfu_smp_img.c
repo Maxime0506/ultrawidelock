@@ -40,7 +40,7 @@
 
 #include "ultrawidelock_dfu.h"
 #include "ultrawidelock_dfu_rx.h"
-#include "woz_flash.h"
+#include "ultrawidelock_flash.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(ultrawidelock_dfu, CONFIG_ULTRAWIDELOCK_DFU_LOG_LEVEL);
@@ -52,11 +52,11 @@ LOG_MODULE_DECLARE(ultrawidelock_dfu, CONFIG_ULTRAWIDELOCK_DFU_LOG_LEVEL);
  * is a bare sys_slist_append() with no duplicate check and no reserved range
  * (zephyr/subsys/mgmt/mcumgr/mgmt/src/mgmt.c), and nothing else in this image
  * registers group 1 because Kconfig refuses to build the only other claimant. */
-#define WOZ_SMP_GRP_IMG 1
+#define ULTRAWIDELOCK_SMP_GRP_IMG 1
 
-#define WOZ_SMP_IMG_ID_STATE  0
-#define WOZ_SMP_IMG_ID_UPLOAD 1
-#define WOZ_SMP_IMG_ID_ERASE  5
+#define ULTRAWIDELOCK_SMP_IMG_ID_STATE  0
+#define ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD 1
+#define ULTRAWIDELOCK_SMP_IMG_ID_ERASE  5
 
 /* ---- the running image's identity ----------------------------------------- */
 
@@ -322,7 +322,7 @@ static int upload_write(struct smp_streamer *ctxt)
  */
 static int erase_write(struct smp_streamer *ctxt)
 {
-	const struct woz_flash_area *fa;
+	const struct ultrawidelock_flash_area *fa;
 	int rc;
 
 	ARG_UNUSED(ctxt);
@@ -330,11 +330,11 @@ static int erase_write(struct smp_streamer *ctxt)
 	if (!ultrawidelock_dfu_window_is_open()) {
 		return MGMT_ERR_EACCESSDENIED;
 	}
-	if (woz_flash_open(WOZ_FLASH_AREA_STAGING, &fa) != 0) {
+	if (ultrawidelock_flash_open(ULTRAWIDELOCK_FLASH_AREA_STAGING, &fa) != 0) {
 		return MGMT_ERR_EUNKNOWN;
 	}
-	rc = woz_flash_erase(fa, 0, woz_flash_size(fa));
-	woz_flash_close(fa);
+	rc = ultrawidelock_flash_erase(fa, 0, ultrawidelock_flash_size(fa));
+	ultrawidelock_flash_close(fa);
 
 	ultrawidelock_dfu_rx_reset();
 
@@ -380,7 +380,7 @@ static enum mgmt_cb_return reset_gate(uint32_t event, enum mgmt_cb_return prev_s
 	return MGMT_CB_ERROR_RC;
 }
 
-static struct mgmt_callback woz_smp_reset_cb = {
+static struct mgmt_callback ultrawidelock_smp_reset_cb = {
 	.callback = reset_gate,
 	.event_id = MGMT_EVT_OP_OS_MGMT_RESET,
 };
@@ -388,37 +388,37 @@ static struct mgmt_callback woz_smp_reset_cb = {
 
 /* ---- registration --------------------------------------------------------- */
 
-static const struct mgmt_handler woz_smp_img_handlers[] = {
-	[WOZ_SMP_IMG_ID_STATE] =
+static const struct mgmt_handler ultrawidelock_smp_img_handlers[] = {
+	[ULTRAWIDELOCK_SMP_IMG_ID_STATE] =
 		{
 			.mh_read = state_read,
 			.mh_write = state_write,
 		},
-	[WOZ_SMP_IMG_ID_UPLOAD] =
+	[ULTRAWIDELOCK_SMP_IMG_ID_UPLOAD] =
 		{
 			.mh_read = NULL,
 			.mh_write = upload_write,
 		},
 	/* 2 (file), 3 (corelist) and 4 (coreload) stay NULL: mgmt_find_handler()
 	 * treats a NULL pair as "not supported" and the client is told so. */
-	[WOZ_SMP_IMG_ID_ERASE] =
+	[ULTRAWIDELOCK_SMP_IMG_ID_ERASE] =
 		{
 			.mh_read = NULL,
 			.mh_write = erase_write,
 		},
 };
 
-static struct mgmt_group woz_smp_img_group = {
-	.mg_handlers = (struct mgmt_handler *)woz_smp_img_handlers,
-	.mg_handlers_count = ARRAY_SIZE(woz_smp_img_handlers),
-	.mg_group_id = WOZ_SMP_GRP_IMG,
+static struct mgmt_group ultrawidelock_smp_img_group = {
+	.mg_handlers = (struct mgmt_handler *)ultrawidelock_smp_img_handlers,
+	.mg_handlers_count = ARRAY_SIZE(ultrawidelock_smp_img_handlers),
+	.mg_group_id = ULTRAWIDELOCK_SMP_GRP_IMG,
 };
 
 /**
- * SYS_INIT callback that registers the woz_smp_img group with mcumgr and optionally registers the
- * reset callback if CONFIG_MCUMGR_GRP_OS_RESET_HOOK is enabled.
+ * SYS_INIT callback that registers the ultrawidelock_smp_img group with mcumgr and optionally
+ * registers the reset callback if CONFIG_MCUMGR_GRP_OS_RESET_HOOK is enabled.
  */
-static void woz_smp_img_init(void)
+static void ultrawidelock_smp_img_init(void)
 {
 	/* Set here rather than in the initializer above, and not for style: semgrep
 	 * parses C without a preprocessor and gives up on an #ifdef between
@@ -428,12 +428,12 @@ static void woz_smp_img_init(void)
 	 * same #ifdef inside a function body parses fine. Nothing reads the group
 	 * before the registration below, so the assignment is equivalent. */
 #ifdef CONFIG_MCUMGR_GRP_ENUM_DETAILS_NAME
-	woz_smp_img_group.mg_group_name = "img mgmt";
+	ultrawidelock_smp_img_group.mg_group_name = "img mgmt";
 #endif
-	mgmt_register_group(&woz_smp_img_group);
+	mgmt_register_group(&ultrawidelock_smp_img_group);
 #ifdef CONFIG_MCUMGR_GRP_OS_RESET_HOOK
-	mgmt_callback_register(&woz_smp_reset_cb);
+	mgmt_callback_register(&ultrawidelock_smp_reset_cb);
 #endif
 }
 
-MCUMGR_HANDLER_DEFINE(woz_smp_img, woz_smp_img_init);
+MCUMGR_HANDLER_DEFINE(ultrawidelock_smp_img, ultrawidelock_smp_img_init);

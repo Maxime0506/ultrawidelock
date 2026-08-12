@@ -30,7 +30,7 @@
 #include <hal/nrf_gpio.h>
 #include <hal/nrf_spim.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include "board_pins.h"
 #include "dw3000_spi.h"
@@ -55,16 +55,17 @@ static uint64_t g_busy_wait_us;
 static unsigned g_busy_waits;
 static unsigned g_errors_logged;
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)tag;
 	(void)fmt;
-	if (level == WOZ_FREERTOS_LOG_ERROR) {
+	if (level == ULTRAWIDELOCK_FREERTOS_LOG_ERROR) {
 		g_errors_logged++;
 	}
 }
 
-void woz_freertos_busy_wait_us(uint64_t us)
+void ultrawidelock_freertos_busy_wait_us(uint64_t us)
 {
 	g_busy_wait_us = us;
 	g_busy_waits++;

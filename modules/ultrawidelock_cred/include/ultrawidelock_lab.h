@@ -6,7 +6,7 @@
 // strip it from a hardened production image.
 /*
  * ultrawidelock_lab — one line per event, `[ALAB] t=<us> ev=<name>[ <key>=<val>]`, with
- * t from woz_uptime_us(). Emit only from the BLE-host or Matter task — never
+ * t from ultrawidelock_uptime_us(). Emit only from the BLE-host or Matter task — never
  * from the UWB RX/ISR path. UWB-side phase boundaries are latched by
  * ultrawidelock_lat_mark() (a plain store) and printed later by ultrawidelock_lab_dump(), which
  * runs once per walk-up from ultrawidelock_lat_report() (bolt) or the disconnect path,

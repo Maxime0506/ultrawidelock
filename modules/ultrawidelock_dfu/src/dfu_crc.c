@@ -3,7 +3,7 @@
  * bootloader's flash. */
 #include "dfu_crc.h"
 
-uint32_t woz_crc32_update(uint32_t crc, const uint8_t *data, size_t len)
+uint32_t ultrawidelock_crc32_update(uint32_t crc, const uint8_t *data, size_t len)
 {
 	crc = ~crc;
 	for (size_t i = 0; i < len; i++) {

@@ -37,8 +37,8 @@
 #include "ultrawidelock_side_log.h"
 #include "side_feed.h"
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_LAB)
-#include "woz_log.h"
-#include "woz_port.h"
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_port.h"
 #endif
 #endif
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM)
@@ -640,8 +640,8 @@ int main(void)
 						side_dec.flags);
 				}
 #if defined(CONFIG_ULTRAWIDELOCK_CRED_LAB)
-				woz_printf("[ALAB] t=%lld ev=side.deny side=%u conf=%u flags=%u\n",
-					   woz_uptime_us(), (unsigned)side_dec.side,
+				ultrawidelock_printf("[ALAB] t=%lld ev=side.deny side=%u conf=%u flags=%u\n",
+					   ultrawidelock_uptime_us(), (unsigned)side_dec.side,
 					   side_dec.confidence, side_dec.flags);
 #endif
 				break;

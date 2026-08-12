@@ -7,15 +7,15 @@
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
 set(ALIRO "${REPO_ROOT}/modules/ultrawidelock_cred")
 
-include("${REPO_ROOT}/cmake/woz_roles.cmake")
-woz_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
-woz_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-woz_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
+include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
+ultrawidelock_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
 # Step-up (Access Document) + presence-assertion pure codecs. Always compiled
 # (pure functions, no side effects) but only invoked from ultrawidelock_reader.c under
 # CONFIG_ULTRAWIDELOCK_CRED_STEPUP (default n); ultrawidelock_assert.c is backend-free by
-# design and only the presence dongle app (CONFIG_WOZ_PRESENCE) calls it.
-woz_role_sources("${ALIRO}/roles/wire_codecs.list" ULTRAWIDELOCK_WIRE_CODEC_SRCS)
+# design and only the presence dongle app (CONFIG_ULTRAWIDELOCK_PRESENCE) calls it.
+ultrawidelock_role_sources("${ALIRO}/roles/wire_codecs.list" ULTRAWIDELOCK_WIRE_CODEC_SRCS)
 
 idf_component_register(
 	SRCS
@@ -39,8 +39,8 @@ idf_component_register(
 		"presence_link.c"
 	INCLUDE_DIRS "${ALIRO}/include" "."
 	PRIV_INCLUDE_DIRS "${ALIRO}/src"
-	# woz_port.h / woz_log.h (the platform contract ultrawidelock_reader.c and
+	# ultrawidelock_port.h / ultrawidelock_log.h (the platform contract ultrawidelock_reader.c and
 	# ultrawidelock_ranging.c are written to) come via ultrawidelock_uwb's public include dirs
-	# (modules/woz_port/include).
+	# (modules/ultrawidelock_port/include).
 	REQUIRES ultrawidelock_ble ultrawidelock_uwb ultrawidelock_crypto nvs_flash
 )

@@ -85,8 +85,8 @@ static bool parse_apdu(const uint8_t *input, size_t length, struct parsed_apdu *
 	return false;
 }
 
-int woz_pn532_apdu_plan_init(const uint8_t *input, size_t input_length,
-			     struct woz_pn532_apdu_plan *plan)
+int ultrawidelock_pn532_apdu_plan_init(const uint8_t *input, size_t input_length,
+			     struct ultrawidelock_pn532_apdu_plan *plan)
 {
 	if (input == NULL || input_length == 0 || plan == NULL) {
 		return -1;
@@ -97,25 +97,25 @@ int woz_pn532_apdu_plan_init(const uint8_t *input, size_t input_length,
 
 	struct parsed_apdu parsed;
 	if (!parse_apdu(input, input_length, &parsed)) {
-		plan->mode = WOZ_PN532_APDU_PASSTHROUGH;
+		plan->mode = ULTRAWIDELOCK_PN532_APDU_PASSTHROUGH;
 		return 0;
 	}
 
 	if (input[1] == 0xc3 && parsed.has_data) {
-		plan->mode = WOZ_PN532_APDU_ENVELOPE;
+		plan->mode = ULTRAWIDELOCK_PN532_APDU_ENVELOPE;
 		plan->data_offset = parsed.data_offset;
 		plan->data_length = parsed.data_length;
 		plan->extended = parsed.extended;
 		plan->has_le = parsed.has_le;
 		plan->le = parsed.le;
-		plan->adapted = parsed.data_length > WOZ_PN532_ENVELOPE_DATA_MAX ||
-				(parsed.has_le && parsed.le > WOZ_PN532_RESPONSE_DATA_MAX);
+		plan->adapted = parsed.data_length > ULTRAWIDELOCK_PN532_ENVELOPE_DATA_MAX ||
+				(parsed.has_le && parsed.le > ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX);
 	} else if (input[1] == 0xc0 && !parsed.has_data && parsed.has_le) {
-		plan->mode = WOZ_PN532_APDU_GET_RESPONSE;
+		plan->mode = ULTRAWIDELOCK_PN532_APDU_GET_RESPONSE;
 		plan->extended = parsed.extended;
 		plan->has_le = true;
 		plan->le = parsed.le;
-		plan->adapted = parsed.le > WOZ_PN532_RESPONSE_DATA_MAX;
+		plan->adapted = parsed.le > ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX;
 	}
 	return 0;
 }
@@ -124,7 +124,7 @@ int woz_pn532_apdu_plan_init(const uint8_t *input, size_t input_length,
  * Emit a passthrough (raw APDU command): copy input as-is. Returns 0 on success, -2 if buffer too
  * small or already emitted.
  */
-static int emit_passthrough(struct woz_pn532_apdu_plan *plan, uint8_t *output,
+static int emit_passthrough(struct ultrawidelock_pn532_apdu_plan *plan, uint8_t *output,
 			    size_t output_capacity, size_t *output_length)
 {
 	if (plan->emitted || plan->input_length > output_capacity) {
@@ -140,15 +140,16 @@ static int emit_passthrough(struct woz_pn532_apdu_plan *plan, uint8_t *output,
  * Emit a GetResponse command (00 C0 00 00 [Le]): copy input, adjust Le for extended if needed.
  * Returns 0 on success, -2 if buffer too small or already emitted.
  */
-static int emit_get_response(struct woz_pn532_apdu_plan *plan, uint8_t *output,
+static int emit_get_response(struct ultrawidelock_pn532_apdu_plan *plan, uint8_t *output,
 			     size_t output_capacity, size_t *output_length)
 {
 	if (plan->emitted || plan->input_length > output_capacity) {
 		return -2;
 	}
 	memcpy(output, plan->input, plan->input_length);
-	const uint32_t le =
-		plan->le > WOZ_PN532_RESPONSE_DATA_MAX ? WOZ_PN532_RESPONSE_DATA_MAX : plan->le;
+	const uint32_t le = plan->le > ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX
+				    ? ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX
+				    : plan->le;
 	if (plan->extended) {
 		output[5] = (uint8_t)(le >> 8);
 		output[6] = (uint8_t)le;
@@ -161,26 +162,26 @@ static int emit_get_response(struct woz_pn532_apdu_plan *plan, uint8_t *output,
 }
 
 /**
- * Emit one chunk of an APDU command: fragments data if needed (WOZ_PN532_ENVELOPE_DATA_MAX per
- * frame), sets more bit if more chunks follow, appends Le if this is the last chunk. Returns 0 on
- * success, -2 if buffer too small or data exhausted.
+ * Emit one chunk of an APDU command: fragments data if needed
+ * (ULTRAWIDELOCK_PN532_ENVELOPE_DATA_MAX per frame), sets more bit if more chunks follow, appends
+ * Le if this is the last chunk. Returns 0 on success, -2 if buffer too small or data exhausted.
  */
-static int emit_envelope(struct woz_pn532_apdu_plan *plan, uint8_t *output, size_t output_capacity,
-			 size_t *output_length, bool *more_internal)
+static int emit_envelope(struct ultrawidelock_pn532_apdu_plan *plan, uint8_t *output,
+			 size_t output_capacity, size_t *output_length, bool *more_internal)
 {
 	if (plan->emitted_data >= plan->data_length) {
 		return -2;
 	}
 	size_t fragment = plan->data_length - plan->emitted_data;
-	if (fragment > WOZ_PN532_ENVELOPE_DATA_MAX) {
-		fragment = WOZ_PN532_ENVELOPE_DATA_MAX;
+	if (fragment > ULTRAWIDELOCK_PN532_ENVELOPE_DATA_MAX) {
+		fragment = ULTRAWIDELOCK_PN532_ENVELOPE_DATA_MAX;
 	}
 	const bool more = plan->emitted_data + fragment < plan->data_length;
 	const bool include_le = !more && plan->has_le;
 	const size_t header_length = plan->extended ? 7 : 5;
 	const size_t needed =
 		header_length + fragment + (include_le ? (plan->extended ? 2 : 1) : 0);
-	if (needed > output_capacity || needed > WOZ_PN532_APDU_WIRE_MAX) {
+	if (needed > output_capacity || needed > ULTRAWIDELOCK_PN532_APDU_WIRE_MAX) {
 		return -2;
 	}
 
@@ -199,8 +200,8 @@ static int emit_envelope(struct woz_pn532_apdu_plan *plan, uint8_t *output, size
 	memcpy(output + at, plan->input + plan->data_offset + plan->emitted_data, fragment);
 	at += fragment;
 	if (include_le) {
-		const uint32_t le = plan->le > WOZ_PN532_RESPONSE_DATA_MAX
-					    ? WOZ_PN532_RESPONSE_DATA_MAX
+		const uint32_t le = plan->le > ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX
+					    ? ULTRAWIDELOCK_PN532_RESPONSE_DATA_MAX
 					    : plan->le;
 		if (plan->extended) {
 			output[at++] = (uint8_t)(le >> 8);
@@ -216,7 +217,7 @@ static int emit_envelope(struct woz_pn532_apdu_plan *plan, uint8_t *output, size
 	return 0;
 }
 
-int woz_pn532_apdu_plan_next(struct woz_pn532_apdu_plan *plan, uint8_t *output,
+int ultrawidelock_pn532_apdu_plan_next(struct ultrawidelock_pn532_apdu_plan *plan, uint8_t *output,
 			     size_t output_capacity, size_t *output_length, bool *more_internal)
 {
 	if (plan == NULL || output == NULL || output_length == NULL || more_internal == NULL) {
@@ -225,11 +226,11 @@ int woz_pn532_apdu_plan_next(struct woz_pn532_apdu_plan *plan, uint8_t *output,
 	*output_length = 0;
 	*more_internal = false;
 	switch (plan->mode) {
-	case WOZ_PN532_APDU_ENVELOPE:
+	case ULTRAWIDELOCK_PN532_APDU_ENVELOPE:
 		return emit_envelope(plan, output, output_capacity, output_length, more_internal);
-	case WOZ_PN532_APDU_GET_RESPONSE:
+	case ULTRAWIDELOCK_PN532_APDU_GET_RESPONSE:
 		return emit_get_response(plan, output, output_capacity, output_length);
-	case WOZ_PN532_APDU_PASSTHROUGH:
+	case ULTRAWIDELOCK_PN532_APDU_PASSTHROUGH:
 	default:
 		return emit_passthrough(plan, output, output_capacity, output_length);
 	}

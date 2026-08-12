@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "woz_log.h"
-#include "woz_bytes.h"
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_bytes.h"
 
 #include <deca_device_api.h>
 

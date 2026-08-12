@@ -7,8 +7,8 @@
  * Each module under test exposes one void test_<module>(void) suite; test_main.c
  * runs them all and prints an aggregate PASS/FAIL/RECORD.
  */
-#ifndef WOZ_HOST_TEST_H
-#define WOZ_HOST_TEST_H
+#ifndef ULTRAWIDELOCK_HOST_TEST_H
+#define ULTRAWIDELOCK_HOST_TEST_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -79,7 +79,7 @@ void test_ultrawidelock_satellite(void);
 void test_ultrawidelock_side(void);
 void test_ultrawidelock_side_replay(void);
 void test_ultrawidelock_slam(void);
-void test_woz_logfmt(void);
+void test_ultrawidelock_logfmt(void);
 void test_trace(void);
 void test_ccc_shim_wrap(void);
 void test_matter_tlv(void);
@@ -101,7 +101,7 @@ void test_matter_network(void);
 void test_matter_case(void);
 void test_matter_clusters(void);
 void test_ultrawidelock_ml(void);
-void test_woz_port(void);
+void test_ultrawidelock_port(void);
 
 /* Driver-binary suites (built by run.sh as host_test_drv; see drvfake.h). */
 void test_uwb_min(void);
@@ -109,10 +109,10 @@ void test_uwb_isr(void);
 void test_uwb_rxdiag(void);
 void test_uwb_cirdiag(void);
 void test_uwb_selftest(void);
-void test_aliro_shell(void);
+void test_ultrawidelock_shell(void);
 
 /* PSA/mbedTLS-backend binary suites (host_test_psa; see tests/host/psafake/). */
 void test_ccc_crypto_backends(void);
 void test_aliro_prim_psa(void);
 
-#endif /* WOZ_HOST_TEST_H */
+#endif /* ULTRAWIDELOCK_HOST_TEST_H */

@@ -1,4 +1,4 @@
-# woz_aliro role: reader engine — transaction driver, UWB ranging glue, latency
+# ultrawidelock_cred role: reader engine — transaction driver, UWB ranging glue, latency
 # probe. Consumers: apps/dwm3001cdk-lock/, ports/esp32/components/ultrawidelock_reader.
 # One repo-root-relative path per line, sorted; add HERE and nowhere else.
 modules/ultrawidelock_cred/src/ultrawidelock_lat.c

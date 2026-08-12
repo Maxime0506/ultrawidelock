@@ -20,7 +20,7 @@
 #include <zephyr/logging/log.h>
 
 #include "uwb_cirdiag.h"
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 LOG_MODULE_DECLARE(main, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -44,7 +44,7 @@ static void cirdiag_capture_thread(void *a, void *b, void *c)
 		CONFIG_ALIRO_CIRDIAG_CAPTURE_WINDOW_MS, CONFIG_ALIRO_CIRDIAG_CAPTURE_IDLE_MS);
 
 	for (uint32_t n = 1;; n++) {
-		woz_printf("cir.cycle: n=%u armed\n", (unsigned)n);
+		ultrawidelock_printf("cir.cycle: n=%u armed\n", (unsigned)n);
 		uwb_cirdiag_dump_set_enabled(true);
 
 		k_msleep(CONFIG_ALIRO_CIRDIAG_CAPTURE_WINDOW_MS);
@@ -54,7 +54,7 @@ static void cirdiag_capture_thread(void *a, void *b, void *c)
 		const uint32_t recs = uwb_cirdiag_ring_count();
 
 		uwb_cirdiag_dump_set_enabled(false);
-		woz_printf("cir.cycle: n=%u drained recs=%u\n", (unsigned)n, (unsigned)recs);
+		ultrawidelock_printf("cir.cycle: n=%u drained recs=%u\n", (unsigned)n, (unsigned)recs);
 
 		k_msleep(CONFIG_ALIRO_CIRDIAG_CAPTURE_IDLE_MS);
 	}
@@ -69,9 +69,9 @@ static void cirdiag_capture_thread(void *a, void *b, void *c)
 	uwb_cirdiag_set_enabled(true);
 
 	for (uint32_t n = 1;; n++) {
-		woz_printf("cir.cycle: n=%u capture\n", (unsigned)n);
+		ultrawidelock_printf("cir.cycle: n=%u capture\n", (unsigned)n);
 		k_msleep(CONFIG_ALIRO_CIRDIAG_CAPTURE_WINDOW_MS);
-		woz_printf("cir.cycle: n=%u end\n", (unsigned)n);
+		ultrawidelock_printf("cir.cycle: n=%u end\n", (unsigned)n);
 		k_msleep(CONFIG_ALIRO_CIRDIAG_CAPTURE_IDLE_MS);
 	}
 #endif

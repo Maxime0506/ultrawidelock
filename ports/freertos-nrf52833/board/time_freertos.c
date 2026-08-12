@@ -2,10 +2,10 @@
  * The board's three time hooks.
  *
  * They come from two sources on purpose, because the header asks two different
- * things of them. woz_freertos_uptime_us must never step backwards over the
+ * things of them. ultrawidelock_freertos_uptime_us must never step backwards over the
  * life of the product, so it is built on the FreeRTOS tick count, which is
  * software-extended past its 32-bit wrap and therefore has no horizon at all.
- * woz_freertos_cycle_get_32 and woz_freertos_busy_wait_us need resolution finer
+ * ultrawidelock_freertos_cycle_get_32 and ultrawidelock_freertos_busy_wait_us need resolution finer
  * than a tick, so they read RTC1's counter directly.
  *
  * Reading RTC1 while the FreeRTOS port owns it is safe: an RTC counter free-runs
@@ -28,7 +28,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 /* RTC1 carries the FreeRTOS tick; peripherals.yml freezes that ownership. */
 #define BOARD_RTC NRF_RTC1
@@ -37,8 +37,8 @@
  * The frequency RTC1 counts at, which is 32768 Hz divided by the prescaler the
  * board's FreeRTOS tick sets. The board overrides this if it ever prescales.
  */
-#ifndef WOZ_FREERTOS_BOARD_RTC_HZ
-#define WOZ_FREERTOS_BOARD_RTC_HZ 32768u
+#ifndef ULTRAWIDELOCK_FREERTOS_BOARD_RTC_HZ
+#define ULTRAWIDELOCK_FREERTOS_BOARD_RTC_HZ 32768u
 #endif
 
 /*
@@ -97,7 +97,7 @@ static void ensure_clock(void)
 			return;
 		}
 	}
-	woz_freertos_fatal("board RTC is not running; start the FreeRTOS tick first");
+	ultrawidelock_freertos_fatal("board RTC is not running; start the FreeRTOS tick first");
 }
 
 /*
@@ -125,7 +125,7 @@ static uint64_t ticks_now(void)
 	return total;
 }
 
-int64_t woz_freertos_uptime_us(void)
+int64_t ultrawidelock_freertos_uptime_us(void)
 {
 	return (int64_t)((ticks_now() * 1000000u) / (uint64_t)configTICK_RATE_HZ);
 }
@@ -137,9 +137,9 @@ int64_t woz_freertos_uptime_us(void)
  * ever difference two nearby reads, and a wrap between two such reads is caught
  * here; whole wraps that pass between one probe and the next are not, which
  * makes the absolute value meaningless and the differences correct. That is the
- * contract woz_port.h states for this hook.
+ * contract ultrawidelock_port.h states for this hook.
  */
-uint32_t woz_freertos_cycle_get_32(void)
+uint32_t ultrawidelock_freertos_cycle_get_32(void)
 {
 	uint32_t primask = __get_PRIMASK();
 	uint32_t now;
@@ -167,7 +167,7 @@ uint32_t woz_freertos_cycle_get_32(void)
  * starts. Waiting too long costs microseconds during driver bring-up; waiting
  * too little violates a part's timing and fails intermittently on the bench.
  */
-void woz_freertos_busy_wait_us(uint64_t us)
+void ultrawidelock_freertos_busy_wait_us(uint64_t us)
 {
 	uint64_t remaining;
 
@@ -176,7 +176,7 @@ void woz_freertos_busy_wait_us(uint64_t us)
 	}
 	ensure_clock();
 
-	remaining = ((us * WOZ_FREERTOS_BOARD_RTC_HZ) + 999999u) / 1000000u;
+	remaining = ((us * ULTRAWIDELOCK_FREERTOS_BOARD_RTC_HZ) + 999999u) / 1000000u;
 	remaining += 1u;
 
 	while (remaining > 0u) {

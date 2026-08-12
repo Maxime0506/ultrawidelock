@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Push a signed delta patch to a DWM3001CDK over Bluetooth.
 
-    scripts/woz_push.py update.wdfu
+    scripts/ultrawidelock_push.py update.wdfu
 
 The board accepts nothing until an update window is open, so this connects and
 then WAITS, asking once a second and prompting you to press SW2. The window
@@ -48,7 +48,7 @@ ERRORS = {
 
 def die(msg):
     """Exit with a prefixed error message."""
-    sys.exit(f"woz_push: {msg}")
+    sys.exit(f"ultrawidelock_push: {msg}")
 
 
 class Session:
@@ -172,7 +172,7 @@ async def run(args):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("patch", help="a .wdfu built by scripts/woz_patch.py")
+    p.add_argument("patch", help="a .wdfu built by scripts/ultrawidelock_patch.py")
     p.add_argument("--name", default="ultrawidelock", help="advertised name to look for")
     p.add_argument("--chunk", type=int, default=180,
                    help="bytes of patch per frame, capped by the negotiated MTU")

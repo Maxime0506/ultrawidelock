@@ -4,7 +4,7 @@
 
 #include <ultrawidelock_nfc/transport.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 LOG_MODULE_REGISTER(ultrawidelock_nfc_none, CONFIG_ULTRAWIDELOCK_NFC_LOG_LEVEL);
 

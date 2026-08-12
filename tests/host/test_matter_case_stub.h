@@ -1,6 +1,6 @@
 /** @file test_matter_case_stub.h — see test_matter_case_stub.c. */
-#ifndef WOZ_TEST_MATTER_CASE_STUB_H
-#define WOZ_TEST_MATTER_CASE_STUB_H
+#ifndef ULTRAWIDELOCK_TEST_MATTER_CASE_STUB_H
+#define ULTRAWIDELOCK_TEST_MATTER_CASE_STUB_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -21,4 +21,4 @@ extern int g_case_verify_fail;
 
 void test_matter_case_stub_reset(void);
 
-#endif /* WOZ_TEST_MATTER_CASE_STUB_H */
+#endif /* ULTRAWIDELOCK_TEST_MATTER_CASE_STUB_H */

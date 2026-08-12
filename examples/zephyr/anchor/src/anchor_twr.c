@@ -16,8 +16,8 @@
 #include "ds_twr.h"   /* ds_twr_tof_signed(): the shared estimator */
 #include "uwb_min.h"  /* uwb_min_radio_init() */
 #include "uwb_seam.h" /* ultrawidelock_uwb_arm_rx / ultrawidelock_uwb_configure_phy */
-#include "woz_log.h"
-#include "woz_port.h"
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_port.h"
 
 LOG_MODULE_REGISTER(anchor_twr, LOG_LEVEL_INF);
 
@@ -263,11 +263,11 @@ static uint64_t tx_ts(void)
  */
 static uint32_t wait_status(uint32_t mask, int ceil_ms)
 {
-	const int64_t deadline = woz_uptime_ms() + ceil_ms;
+	const int64_t deadline = ultrawidelock_uptime_ms() + ceil_ms;
 	uint32_t st = 0;
 
 	while (((st = dwt_readsysstatuslo()) & mask) == 0u) {
-		if (woz_uptime_ms() > deadline) {
+		if (ultrawidelock_uptime_ms() > deadline) {
 			break;
 		}
 	}

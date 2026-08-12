@@ -16,7 +16,7 @@
 #include <string.h>
 #include <time.h>
 
-#include <woz_log.h>
+#include <ultrawidelock_log.h>
 
 #include "nimble/nimble_port.h"
 #include "host/ble_hs.h"
@@ -170,12 +170,12 @@ static int coc_arm_rx(struct ble_l2cap_chan *chan)
 /* ---- Connection-RSSI poll (ranging power gate) ---------------------------- *
  * Armed only when the engine registered an on_rssi callback. One callout on the
  * default (host-task) event queue reads the controller RSSI every
- * CONFIG_WOZ_RSSI_GATE_POLL_MS while the Aliro CoC is up and feeds the sample
+ * CONFIG_ULTRAWIDELOCK_RSSI_GATE_POLL_MS while the Aliro CoC is up and feeds the sample
  * to the engine. The first read fires inline at CoC-open so the gate is primed
  * before the fast auth can complete — otherwise a walk-up that connects at the
  * door would pay up to one poll period before ranging is allowed to start. */
-#ifndef CONFIG_WOZ_RSSI_GATE_POLL_MS
-#define CONFIG_WOZ_RSSI_GATE_POLL_MS 250
+#ifndef CONFIG_ULTRAWIDELOCK_RSSI_GATE_POLL_MS
+#define CONFIG_ULTRAWIDELOCK_RSSI_GATE_POLL_MS 250
 #endif
 
 static struct ble_npl_callout s_rssi_poll;
@@ -208,7 +208,7 @@ static void rssi_poll_ev(struct ble_npl_event *ev)
 	}
 	rssi_poll_sample();
 	ble_npl_callout_reset(&s_rssi_poll,
-			      ble_npl_time_ms_to_ticks32(CONFIG_WOZ_RSSI_GATE_POLL_MS));
+			      ble_npl_time_ms_to_ticks32(CONFIG_ULTRAWIDELOCK_RSSI_GATE_POLL_MS));
 }
 
 /* Call after on_connected: the first inline sample must find the engine's
@@ -227,7 +227,7 @@ static void rssi_poll_start(uint16_t conn_handle)
 	s_rssi_poll_on = true;
 	rssi_poll_sample();
 	ble_npl_callout_reset(&s_rssi_poll,
-			      ble_npl_time_ms_to_ticks32(CONFIG_WOZ_RSSI_GATE_POLL_MS));
+			      ble_npl_time_ms_to_ticks32(CONFIG_ULTRAWIDELOCK_RSSI_GATE_POLL_MS));
 }
 
 /**

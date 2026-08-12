@@ -3,8 +3,8 @@
 #include "uwb_isr.h"
 
 #include <stdint.h>
-#include "woz_port.h"
-#include "woz_log.h"
+#include "ultrawidelock_port.h"
+#include "ultrawidelock_log.h"
 
 #include <deca_device_api.h>
 

@@ -1,4 +1,4 @@
-name: woz_zephyr_port
+name: ultrawidelock_zephyr_port
 build:
   cmake: .
   kconfig: Kconfig

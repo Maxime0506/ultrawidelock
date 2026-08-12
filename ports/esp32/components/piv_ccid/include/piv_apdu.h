@@ -1,5 +1,5 @@
-#ifndef WOZ_PIV_APDU_H
-#define WOZ_PIV_APDU_H
+#ifndef ULTRAWIDELOCK_PIV_APDU_H
+#define ULTRAWIDELOCK_PIV_APDU_H
 
 #include <stdbool.h>
 #include <stddef.h>

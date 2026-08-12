@@ -43,8 +43,8 @@
  * two clocks drift apart by 2.4 percent.
  *
  * The prescaler has to stay at zero for a second reason: board/time_freertos.c
- * reads the same counter for woz_freertos_cycle_get_32 and
- * woz_freertos_busy_wait_us, and states 32768 Hz for it. Prescaling to get a
+ * reads the same counter for ultrawidelock_freertos_cycle_get_32 and
+ * ultrawidelock_freertos_busy_wait_us, and states 32768 Hz for it. Prescaling to get a
  * 1000 Hz tick would silently make every busy wait 33 times too long and coarsen
  * the DW3110 response-arm probe from 30.5 us to 1 ms.
  */
@@ -144,8 +144,8 @@
  * both sides.
  *
  * It must be at most 4. radio/radio_start_freertos.c installs
- * woz_freertos_radio_low_priority_isr on SWI5_EGU5 at priority 4, and that
- * handler calls woz_freertos_mpsl_wake_from_isr, which is
+ * ultrawidelock_freertos_radio_low_priority_isr on SWI5_EGU5 at priority 4, and that
+ * handler calls ultrawidelock_freertos_mpsl_wake_from_isr, which is
  * vTaskNotifyGiveFromISR followed by portYIELD_FROM_ISR. FreeRTOS permits a
  * FromISR call only from a handler at or numerically below this ceiling, so a
  * ceiling of 5 -- which is what the Qorvo baseline ships -- would make that
@@ -189,11 +189,11 @@
 
 #define configASSERT_DEFINED 1
 #if !(defined(__ASSEMBLY__) || defined(__ASSEMBLER__))
-void woz_freertos_config_assert(const char *file, unsigned line);
+void ultrawidelock_freertos_config_assert(const char *file, unsigned line);
 #define configASSERT(x)                                                                            \
 	do {                                                                                       \
 		if (!(x)) {                                                                        \
-			woz_freertos_config_assert(__FILE__, (unsigned)__LINE__);                   \
+			ultrawidelock_freertos_config_assert(__FILE__, (unsigned)__LINE__);                   \
 		}                                                                                  \
 	} while (0)
 #endif

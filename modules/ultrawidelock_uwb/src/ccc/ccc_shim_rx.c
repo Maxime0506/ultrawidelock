@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <errno.h>
 
-#include "woz_port.h"
-#include "woz_bytes.h"
+#include "ultrawidelock_port.h"
+#include "ultrawidelock_bytes.h"
 
 #include <deca_device_api.h>
 
@@ -25,10 +25,10 @@
 /* DIAGK runtime gate — default is per-platform; see ultrawidelock_diag.h for the rationale. */
 volatile int ultrawidelock_uwb_diag_on = ULTRAWIDELOCK_UWB_DIAG_DEFAULT;
 
-#if defined(CONFIG_WOZ_PRETTY_SHELL)
-#include "woz_log.h"
+#if defined(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
+#include "ultrawidelock_log.h"
 /* Pretty mode: one curated line per ranging block replaces the per-frame trace. */
-LOG_MODULE_REGISTER(woz_rng, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(ultrawidelock_rng, LOG_LEVEL_INF);
 #endif
 
 /** @brief Log the first N intercepted RX-arms — confirms slot advance + register load. */
@@ -62,7 +62,7 @@ LOG_MODULE_REGISTER(woz_rng, LOG_LEVEL_INF);
 /** EMPIRICAL STS-INDEX LOCK (bench) — track Apple's ranging clock on-air by searching the constant
  * slot offset Δ between our time0 and Apple's UWB_Time0. */
 #define CCC_RX_LOCK_SWEEP                                                                          \
-	0 /* 0 for the Pre-POLL listen (WOZ_CCC_PREPOLL_LISTEN): SP0 frames have no                \
+	0 /* 0 for the Pre-POLL listen (ULTRAWIDELOCK_CCC_PREPOLL_LISTEN): SP0 frames have no      \
 	   * STS, so cper=0 would false-LOCK the sweep tracker — keep notify_rx a no-op. */
 
 /** RESIDUE-COMPLETE alignment-offset sweep (slot = current_slot() + Δ): the STS index is linear at
@@ -85,8 +85,8 @@ LOG_MODULE_REGISTER(woz_rng, LOG_LEVEL_INF);
 /** @brief Count of intercepted RX-arms; the first @ref CCC_RX_LOG_ARMS are logged. */
 static uint32_t g_rx_arms;
 
-/* --- SP3 POLL follow-on (WOZ_CCC_PREPOLL_LISTEN): after a Pre-POLL, arm the STS receiver for the
- * POLL one slot later at Apple's decrypted Poll_STS_Index. --- */
+/* --- SP3 POLL follow-on (ULTRAWIDELOCK_CCC_PREPOLL_LISTEN): after a Pre-POLL, arm the STS receiver
+ * for the POLL one slot later at Apple's decrypted Poll_STS_Index. --- */
 /** @brief Apple's Poll_STS_Index from the most recent decoded Pre-POLL. */
 static uint32_t g_poll_sts_index;
 /** @brief True once a Pre-POLL has handed us a fresh @ref g_poll_sts_index. */
@@ -493,7 +493,7 @@ static void prepoll_decode(const uint8_t *frame, uint16_t datalength)
 		 * module under pretty shell, and not through DIAGK's gate: pretty
 		 * builds compile that to nothing, which is how this event came to
 		 * have no observable at all on 2026-08-08. */
-		woz_printf("I: Pre-POLL accepted: URSK proven on air (sts0 %08x)\n",
+		ultrawidelock_printf("I: Pre-POLL accepted: URSK proven on air (sts0 %08x)\n",
 			   (unsigned)ccc_shim_sts_index0());
 	}
 	if (lg) {
@@ -596,7 +596,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 	{
 		/* One ranging slot in full 40-bit DTU. Equals CCC_RX_SLOT_HI32 (499000, the
 		 * hi32/bits[39:8] domain) << 8; defined locally because that macro lives
-		 * further down inside the WOZ_CCC_PREPOLL_LISTEN block. Keep the two equal. */
+		 * further down inside the ULTRAWIDELOCK_CCC_PREPOLL_LISTEN block. Keep the two equal. */
 		const uint64_t slot_dtu = (uint64_t)499000u << 8;
 		uint8_t fdts[5] = {0};
 		uint64_t fd_rx;
@@ -663,7 +663,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 #endif
 			/* Range-integrity gate (layer 2): the STS-quality floor. Shadow by
 			 * default (log the verdict, still latch); define
-			 * CONFIG_WOZ_RANGE_GATE_STRICT to drop a failing block instead. Layers 1
+			 * CONFIG_ULTRAWIDELOCK_RANGE_GATE_STRICT to drop a failing block instead. Layers 1
 			 * (plausibility) and 4 (consensus) live in fira_session below. */
 			bool sts_ok =
 				fira_session_sts_quality_ok(g_final_sts_verdict, g_final_sts_index);
@@ -678,7 +678,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			      (unsigned)tw.t_round1, (unsigned)tw.t_reply2);
 			DIAGK("GATE sts=%d verdict=%d sts_ok=%d\n", (int)g_final_sts_index,
 			      (int)g_final_sts_verdict, (int)sts_ok);
-#if defined(CONFIG_WOZ_PRETTY_SHELL)
+#if defined(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
 			/* Curated one-liner: the per-block distance, gated behind `aliro frames`
 			 * (default off in pretty) so the console stays quiet unless asked. */
 			if (uwb_rxdiag_rng_get()) {
@@ -695,7 +695,7 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			/* Feed the range into fira_session_last_range ->
 			 * UltraWideBandImpl::ReportRange -> AccessManager -> BoltLockMgr -> Matter
 			 * DoorLock cluster. */
-#if defined(CONFIG_WOZ_RANGE_GATE_STRICT)
+#if defined(CONFIG_ULTRAWIDELOCK_RANGE_GATE_STRICT)
 			if (sts_ok)
 #else
 			(void)sts_ok;
@@ -966,7 +966,7 @@ int32_t ultrawidelock_uwb_arm_rx(int32_t mode)
 			dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND);
 #endif
 
-			/* Synchronous woz_printf (survives deferred-log starvation); rd==wr proves
+			/* Synchronous ultrawidelock_printf (survives deferred-log starvation); rd==wr proves
 			 * the key reached the register, slot proves the index clock advances. */
 			if (g_rx_arms < CCC_RX_LOG_ARMS) {
 				DIAGK("ccc_rx arm#%u slot=%u key0 wr %08x rd %08x iv2=%08x\n",
@@ -979,7 +979,7 @@ int32_t ultrawidelock_uwb_arm_rx(int32_t mode)
 	return dwt_rxenable(mode);
 }
 
-#if WOZ_CCC_PREPOLL_LISTEN
+#if ULTRAWIDELOCK_CCC_PREPOLL_LISTEN
 /** Re-arm the SP0 receiver after each RX event; the ultrawidelock_uwb_set_callbacks shim runs
  * ccc_shim_rx_try_prepoll first, so here we keep the plain SP0 receive listening. */
 #define CCC_RX_DIAG_N                                                                              \
@@ -1487,7 +1487,7 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 
 		g_await_poll = false;
 		/* Time-critical FIRST: arm Response_0's delayed TX before the stsq read and
-		 * woz_printf. cper=0 => real POLL, so delayed-TX Response_0 (index+1); else return
+		 * ultrawidelock_printf. cper=0 => real POLL, so delayed-TX Response_0 (index+1); else return
 		 * to the SP0 listen. */
 		if (cper == 0u && ip != 0u) {
 			g_poll_ip_for_final = ip; /* round anchor for the Final RX arm (TXDONE) */
@@ -1708,7 +1708,7 @@ int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)
 /* Stop the permanent Pre-POLL listener: close the listen-gate (every self-rearm
  * site checks it via gated_rxenable), then force the radio out of RX/TX.  The
  * DW3000 callbacks run on the dedicated coop (-11) isr workqueue with
- * busy-polled SPI and synchronous woz_printf, so a callback never yields
+ * busy-polled SPI and synchronous ultrawidelock_printf, so a callback never yields
  * mid-flight: one in flight when a preemptive-thread caller gets here has
  * already run to completion (its rearm landed BEFORE our forcetrxoff), and any
  * later callback sees the gate closed.  A residual rearm window exists only if
@@ -1727,4 +1727,4 @@ void ccc_prepoll_stop(void)
 	g_listen_gate = false; /* order matters: close the gate, then kill RX */
 	dwt_forcetrxoff();
 }
-#endif /* WOZ_CCC_PREPOLL_LISTEN */
+#endif /* ULTRAWIDELOCK_CCC_PREPOLL_LISTEN */

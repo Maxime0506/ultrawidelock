@@ -25,10 +25,10 @@ static void rule(const char *dim, const char *rst, int n)
 
 int main(void)
 {
-	/* run.sh sets WOZ_TEST_QUIET so `make test` shows the summary table, not
+	/* run.sh sets ULTRAWIDELOCK_TEST_QUIET so `make test` shows the summary table, not
 	 * the UWB diag firehose. Unset (coverage, a manual run, debugging a
 	 * suite), the diag default is untouched. */
-	if (getenv("WOZ_TEST_QUIET") != NULL) {
+	if (getenv("ULTRAWIDELOCK_TEST_QUIET") != NULL) {
 		ultrawidelock_uwb_diag_on = 0;
 	}
 
@@ -66,7 +66,7 @@ int main(void)
 		{ "ultrawidelock_side_replay", test_ultrawidelock_side_replay },
 		{ "ultrawidelock_slam", test_ultrawidelock_slam },
 		{ "approach", test_approach },
-		{ "logfmt", test_woz_logfmt },
+		{ "logfmt", test_ultrawidelock_logfmt },
 		{ "trace", test_trace },
 		{ "ccc_shim_wrap", test_ccc_shim_wrap },
 		{ "flight_recorder", test_flight_recorder },
@@ -89,7 +89,7 @@ int main(void)
 		{ "matter_case", test_matter_case },
 		{ "matter_clusters", test_matter_clusters },
 		{ "ultrawidelock_ml", test_ultrawidelock_ml },
-		{ "woz_port", test_woz_port },
+		{ "ultrawidelock_port", test_ultrawidelock_port },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	/* Sized from the table, not a literal 32: these are indexed by suite, so a

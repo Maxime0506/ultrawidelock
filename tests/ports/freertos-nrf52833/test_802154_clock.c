@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "fake_sdc.h"
-#include "woz_freertos_platform.h"
+#include "ultrawidelock_freertos_platform.h"
 
 #include <platform/nrf_802154_clock.h>
 
@@ -43,22 +43,24 @@ void nrf_802154_clock_lfclk_ready(void)
 	g_lfclk_ready_calls++;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	g_fatal_calls++;
 	printf("  FAIL unexpected fatal: %s\n", reason != NULL ? reason : "?");
 	exit(1);
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
 	(void)fmt;
 }
 
-void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag, const void *data,
-			      size_t len, const char *message)
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
+					const char *tag, const void *data, size_t len,
+					const char *message)
 {
 	(void)level;
 	(void)tag;

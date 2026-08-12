@@ -9,7 +9,7 @@ Each component carries local Component Manager metadata in `idf_component.yml`.
 
 Key component groups are:
 
-- `woz_port` for the ESP32 OSAL backend.
+- `ultrawidelock_port` for the ESP32 OSAL backend.
 - `ultrawidelock_uwb` for DW3000 hardware and SPI integration.
 - `ultrawidelock_ble`, `ultrawidelock_ble_central`, and `ultrawidelock_reader` for BLE and storage glue.
 - `ultrawidelock_crypto` and `ultrawidelock_device` for provider selection and role assembly.

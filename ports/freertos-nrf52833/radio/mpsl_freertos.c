@@ -1,4 +1,4 @@
-#include "woz_freertos_mpsl.h"
+#include "ultrawidelock_freertos_mpsl.h"
 
 #include <stddef.h>
 
@@ -16,16 +16,16 @@
 #error "The MPSL worker requires configUSE_TASK_NOTIFICATIONS=1"
 #endif
 
-#ifndef WOZ_FREERTOS_MPSL_STACK_BYTES
-#define WOZ_FREERTOS_MPSL_STACK_BYTES 2048u
+#ifndef ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES
+#define ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES 2048u
 #endif
 
-#ifndef WOZ_FREERTOS_MPSL_TASK_PRIORITY
-#define WOZ_FREERTOS_MPSL_TASK_PRIORITY (configMAX_PRIORITIES - 1u)
+#ifndef ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY
+#define ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY (configMAX_PRIORITIES - 1u)
 #endif
 
 #define MPSL_STACK_WORDS                                                                \
-	((WOZ_FREERTOS_MPSL_STACK_BYTES + sizeof(StackType_t) - 1u) / sizeof(StackType_t))
+	((ULTRAWIDELOCK_FREERTOS_MPSL_STACK_BYTES + sizeof(StackType_t) - 1u) / sizeof(StackType_t))
 
 static void (*s_low_priority_process)(void);
 static TaskHandle_t s_task;
@@ -34,12 +34,12 @@ static StackType_t s_stack[MPSL_STACK_WORDS];
 static StaticSemaphore_t s_lock_storage;
 static SemaphoreHandle_t s_lock;
 
-bool woz_freertos_mpsl_ready(void)
+bool ultrawidelock_freertos_mpsl_ready(void)
 {
 	return s_task != NULL && s_lock != NULL;
 }
 
-void woz_freertos_mpsl_lock(void)
+void ultrawidelock_freertos_mpsl_lock(void)
 {
 	BaseType_t taken;
 
@@ -49,7 +49,7 @@ void woz_freertos_mpsl_lock(void)
 	(void)taken;
 }
 
-void woz_freertos_mpsl_unlock(void)
+void ultrawidelock_freertos_mpsl_unlock(void)
 {
 	BaseType_t given;
 
@@ -59,7 +59,7 @@ void woz_freertos_mpsl_unlock(void)
 	(void)given;
 }
 
-void woz_freertos_mpsl_wake(void)
+void ultrawidelock_freertos_mpsl_wake(void)
 {
 	TaskHandle_t task = s_task;
 
@@ -68,7 +68,7 @@ void woz_freertos_mpsl_wake(void)
 	}
 }
 
-void woz_freertos_mpsl_wake_from_isr(void)
+void ultrawidelock_freertos_mpsl_wake_from_isr(void)
 {
 	BaseType_t wake = pdFALSE;
 	TaskHandle_t task = s_task;
@@ -86,13 +86,13 @@ static void mpsl_task(void *arg)
 
 	for (;;) {
 		(void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		woz_freertos_mpsl_lock();
+		ultrawidelock_freertos_mpsl_lock();
 		s_low_priority_process();
-		woz_freertos_mpsl_unlock();
+		ultrawidelock_freertos_mpsl_unlock();
 	}
 }
 
-int woz_freertos_mpsl_start(void (*low_priority_process)(void))
+int ultrawidelock_freertos_mpsl_start(void (*low_priority_process)(void))
 {
 	TaskHandle_t task;
 
@@ -109,7 +109,7 @@ int woz_freertos_mpsl_start(void (*low_priority_process)(void))
 	}
 	s_low_priority_process = low_priority_process;
 	task = xTaskCreateStatic(mpsl_task, "mpsl", MPSL_STACK_WORDS, NULL,
-				 WOZ_FREERTOS_MPSL_TASK_PRIORITY, s_stack, &s_task_storage);
+				 ULTRAWIDELOCK_FREERTOS_MPSL_TASK_PRIORITY, s_stack, &s_task_storage);
 	if (task == NULL) {
 		s_low_priority_process = NULL;
 		s_lock = NULL;

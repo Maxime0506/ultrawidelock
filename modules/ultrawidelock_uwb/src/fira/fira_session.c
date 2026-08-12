@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "woz_port.h"
+#include "ultrawidelock_port.h"
 
 #include "fira_session.h"
 
@@ -92,7 +92,7 @@ bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out, uint8_t *nlos_
 		*block_out = g_last_range_block;
 	}
 	if (age_ms_out) {
-		*age_ms_out = woz_uptime_ms() - g_last_range_ms;
+		*age_ms_out = ultrawidelock_uptime_ms() - g_last_range_ms;
 	}
 	return true;
 }
@@ -220,7 +220,7 @@ void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block)
 	g_last_range_addr = 0u;
 	g_last_range_nlos = 0u;
 	g_last_range_block = block;
-	g_last_range_ms = woz_uptime_ms();
+	g_last_range_ms = ultrawidelock_uptime_ms();
 	g_range_generation++;
 	if (g_range_generation == 0u) {
 		g_range_generation++;

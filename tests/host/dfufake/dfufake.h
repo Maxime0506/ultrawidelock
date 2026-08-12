@@ -1,6 +1,6 @@
 /* dfufake — test-side control/inspection API for the DFU suites.
  *
- * The flash is the real host backend of woz_flash.h (tests/host/port/
+ * The flash is the real host backend of ultrawidelock_flash.h (tests/host/port/
  * flash_host.c): RAM partitions, erase writes 0xff, BOTH nRF alignment rules
  * enforced (word writes, page erases) -- the entire reason the applier's
  * write combiner and erase ROUND_UP exist, so a fake accepting anything would
@@ -16,21 +16,22 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "woz_flash.h"
+#include "ultrawidelock_flash.h"
 
-/* Geometry, via the woz_flash host backend (matches apps/dwm3001cdk-lock/pm_static.yml). */
-#define DFUFAKE_STAGING_SIZE WOZ_FLASH_HOST_STAGING_SIZE
-#define DFUFAKE_PRIMARY_SIZE WOZ_FLASH_HOST_PRIMARY_SIZE
-#define DFUFAKE_WRITE_BLOCK  WOZ_FLASH_HOST_WRITE_BLOCK
-#define DFUFAKE_PAGE_SIZE    WOZ_FLASH_HOST_PAGE_SIZE
+/* Geometry, via the ultrawidelock_flash host backend (matches apps/dwm3001cdk-lock/pm_static.yml).
+ */
+#define DFUFAKE_STAGING_SIZE ULTRAWIDELOCK_FLASH_HOST_STAGING_SIZE
+#define DFUFAKE_PRIMARY_SIZE ULTRAWIDELOCK_FLASH_HOST_PRIMARY_SIZE
+#define DFUFAKE_WRITE_BLOCK  ULTRAWIDELOCK_FLASH_HOST_WRITE_BLOCK
+#define DFUFAKE_PAGE_SIZE    ULTRAWIDELOCK_FLASH_HOST_PAGE_SIZE
 
-/* The two partitions, with their knobs and recorders (see woz_flash.h). */
-#define dfufake_staging (*woz_flash_host_area(WOZ_FLASH_AREA_STAGING))
-#define dfufake_primary (*woz_flash_host_area(WOZ_FLASH_AREA_PRIMARY))
+/* The two partitions, with their knobs and recorders (see ultrawidelock_flash.h). */
+#define dfufake_staging (*ultrawidelock_flash_host_area(ULTRAWIDELOCK_FLASH_AREA_STAGING))
+#define dfufake_primary (*ultrawidelock_flash_host_area(ULTRAWIDELOCK_FLASH_AREA_PRIMARY))
 
 /**
  * Everything the suites drive or inspect that is not flash: the scripted
- * detools double. (The reboot recorder is woz_flash_host_reboots().)
+ * detools double. (The reboot recorder is ultrawidelock_flash_host_reboots().)
  */
 struct dfufake_state {
 	/* detools double: statuses returned by each entry point. */
@@ -56,11 +57,11 @@ extern uint8_t dfufake_running_image[];
  * drop queued OSAL work. */
 void dfufake_reset(void);
 
-/** @brief Fill @p area with 0xff without going through woz_flash_erase(). */
-void dfufake_blank(struct woz_flash_host_area *area);
+/** @brief Fill @p area with 0xff without going through ultrawidelock_flash_erase(). */
+void dfufake_blank(struct ultrawidelock_flash_host_area *area);
 
 /** @brief Byte at @p off of @p area, for assertions about what landed. */
-uint8_t dfufake_peek(const struct woz_flash_host_area *area, size_t off);
+uint8_t dfufake_peek(const struct ultrawidelock_flash_host_area *area, size_t off);
 
 /* ---- the scripted detools double ------------------------------------------
  *

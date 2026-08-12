@@ -8,9 +8,9 @@
 #include "ultrawidelock_alloc.h"
 #include <string.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
-LOG_MODULE_REGISTER(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 
 /**
  * @brief Map a CCC error code to its Aliro UWB equivalent, treating unknown errors as internal

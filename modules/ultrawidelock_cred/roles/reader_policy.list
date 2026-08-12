@@ -1,4 +1,4 @@
-# woz_aliro role: reader-side stores + gating policy (trust store, RSSI gate,
+# ultrawidelock_cred role: reader-side stores + gating policy (trust store, RSSI gate,
 # approach controller) — split from reader.list because the host KAT suite
 # compiles these without the engine. Consumers: apps/dwm3001cdk-lock/, ports/esp32/
 # components/ultrawidelock_reader, tests/host/sources.sh. Sorted; add HERE only.

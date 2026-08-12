@@ -1,38 +1,39 @@
 /*
- * flash_host.c - the host backend of woz_flash.h: RAM partitions that enforce
+ * flash_host.c - the host backend of ultrawidelock_flash.h: RAM partitions that enforce
  * the nRF alignment rules (word writes, page erases). The strictness is the
  * point -- the DFU applier's write combiner and erase rounding exist to meet
  * these rules, and a fake accepting anything would hide their bugs. Geometry
  * and failure-knob semantics carried over from tests/host/dfufake, the prior
  * home of this model.
  */
-#if defined(WOZ_PORT_HOST)
+#if defined(ULTRAWIDELOCK_PORT_HOST)
 
 #include <string.h>
 
-#include "woz_flash.h"
+#include "ultrawidelock_flash.h"
 
-static uint8_t g_primary_buf[WOZ_FLASH_HOST_PRIMARY_SIZE];
-static uint8_t g_staging_buf[WOZ_FLASH_HOST_STAGING_SIZE];
+static uint8_t g_primary_buf[ULTRAWIDELOCK_FLASH_HOST_PRIMARY_SIZE];
+static uint8_t g_staging_buf[ULTRAWIDELOCK_FLASH_HOST_STAGING_SIZE];
 
-static struct woz_flash_host_area g_areas[2] = {
-	[WOZ_FLASH_AREA_PRIMARY] = { .buf = g_primary_buf, .size = sizeof(g_primary_buf) },
-	[WOZ_FLASH_AREA_STAGING] = { .buf = g_staging_buf, .size = sizeof(g_staging_buf) },
+static struct ultrawidelock_flash_host_area g_areas[2] = {
+	[ULTRAWIDELOCK_FLASH_AREA_PRIMARY] = { .buf = g_primary_buf, .size = sizeof(g_primary_buf) },
+	[ULTRAWIDELOCK_FLASH_AREA_STAGING] = { .buf = g_staging_buf, .size = sizeof(g_staging_buf) },
 };
 
 static unsigned g_reboots;
 
-struct woz_flash_host_area *woz_flash_host_area(enum woz_flash_area_id id)
+struct ultrawidelock_flash_host_area *
+ultrawidelock_flash_host_area(enum ultrawidelock_flash_area_id id)
 {
 	return &g_areas[id];
 }
 
-unsigned woz_flash_host_reboots(void)
+unsigned ultrawidelock_flash_host_reboots(void)
 {
 	return g_reboots;
 }
 
-void woz_flash_host_reset(void)
+void ultrawidelock_flash_host_reset(void)
 {
 	for (int i = 0; i < 2; i++) {
 		uint8_t *buf = g_areas[i].buf;
@@ -63,36 +64,38 @@ static int knob_fires(int *knob)
 }
 
 /* The opaque handle is the host-area struct itself. */
-static struct woz_flash_host_area *area_of(const struct woz_flash_area *fa)
+static struct ultrawidelock_flash_host_area *area_of(const struct ultrawidelock_flash_area *fa)
 {
-	return (struct woz_flash_host_area *)(void *)(uintptr_t)fa;
+	return (struct ultrawidelock_flash_host_area *)(void *)(uintptr_t)fa;
 }
 
-int woz_flash_open(enum woz_flash_area_id id, const struct woz_flash_area **fa)
+int ultrawidelock_flash_open(enum ultrawidelock_flash_area_id id,
+			     const struct ultrawidelock_flash_area **fa)
 {
-	struct woz_flash_host_area *a = &g_areas[id];
+	struct ultrawidelock_flash_host_area *a = &g_areas[id];
 
 	a->open_calls++;
 	if (a->fail_open) {
 		return -1;
 	}
-	*fa = (const struct woz_flash_area *)a;
+	*fa = (const struct ultrawidelock_flash_area *)a;
 	return 0;
 }
 
-void woz_flash_close(const struct woz_flash_area *fa)
+void ultrawidelock_flash_close(const struct ultrawidelock_flash_area *fa)
 {
 	area_of(fa)->close_calls++;
 }
 
-size_t woz_flash_size(const struct woz_flash_area *fa)
+size_t ultrawidelock_flash_size(const struct ultrawidelock_flash_area *fa)
 {
 	return area_of(fa)->size;
 }
 
-int woz_flash_read(const struct woz_flash_area *fa, uint32_t off, void *dst, size_t len)
+int ultrawidelock_flash_read(const struct ultrawidelock_flash_area *fa, uint32_t off, void *dst,
+			     size_t len)
 {
-	struct woz_flash_host_area *a = area_of(fa);
+	struct ultrawidelock_flash_host_area *a = area_of(fa);
 
 	a->read_calls++;
 	if (knob_fires(&a->read_fail_in)) {
@@ -105,9 +108,10 @@ int woz_flash_read(const struct woz_flash_area *fa, uint32_t off, void *dst, siz
 	return 0;
 }
 
-int woz_flash_write(const struct woz_flash_area *fa, uint32_t off, const void *src, size_t len)
+int ultrawidelock_flash_write(const struct ultrawidelock_flash_area *fa, uint32_t off,
+			      const void *src, size_t len)
 {
-	struct woz_flash_host_area *a = area_of(fa);
+	struct ultrawidelock_flash_host_area *a = area_of(fa);
 
 	a->write_calls++;
 	a->last_write_off = off;
@@ -115,7 +119,7 @@ int woz_flash_write(const struct woz_flash_area *fa, uint32_t off, const void *s
 	if (knob_fires(&a->write_fail_in)) {
 		return -1;
 	}
-	if (off % WOZ_FLASH_HOST_WRITE_BLOCK || len % WOZ_FLASH_HOST_WRITE_BLOCK) {
+	if (off % ULTRAWIDELOCK_FLASH_HOST_WRITE_BLOCK || len % ULTRAWIDELOCK_FLASH_HOST_WRITE_BLOCK) {
 		return -1; /* the nRF driver refuses unaligned writes */
 	}
 	if (off > a->size || len > a->size - off) {
@@ -125,9 +129,9 @@ int woz_flash_write(const struct woz_flash_area *fa, uint32_t off, const void *s
 	return 0;
 }
 
-int woz_flash_erase(const struct woz_flash_area *fa, uint32_t off, size_t len)
+int ultrawidelock_flash_erase(const struct ultrawidelock_flash_area *fa, uint32_t off, size_t len)
 {
-	struct woz_flash_host_area *a = area_of(fa);
+	struct ultrawidelock_flash_host_area *a = area_of(fa);
 
 	a->erase_calls++;
 	a->last_erase_off = off;
@@ -135,7 +139,7 @@ int woz_flash_erase(const struct woz_flash_area *fa, uint32_t off, size_t len)
 	if (knob_fires(&a->erase_fail_in)) {
 		return -1;
 	}
-	if (off % WOZ_FLASH_HOST_PAGE_SIZE || len % WOZ_FLASH_HOST_PAGE_SIZE) {
+	if (off % ULTRAWIDELOCK_FLASH_HOST_PAGE_SIZE || len % ULTRAWIDELOCK_FLASH_HOST_PAGE_SIZE) {
 		return -1; /* the nRF driver erases whole pages only */
 	}
 	if (off > a->size || len > a->size - off) {
@@ -145,9 +149,9 @@ int woz_flash_erase(const struct woz_flash_area *fa, uint32_t off, size_t len)
 	return 0;
 }
 
-void woz_reboot(void)
+void ultrawidelock_reboot(void)
 {
 	g_reboots++;
 }
 
-#endif /* WOZ_PORT_HOST */
+#endif /* ULTRAWIDELOCK_PORT_HOST */

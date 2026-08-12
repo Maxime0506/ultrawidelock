@@ -60,11 +60,11 @@ void test_aliro_advertising(void)
 		uint8_t ciphertext[16];
 		uint8_t tag[7];
 
-		woz_aliro_dynamic_tag_input(vectors[i].address_le, vectors[i].expiry, plaintext);
+		ultrawidelock_cred_dynamic_tag_input(vectors[i].address_le, vectors[i].expiry, plaintext);
 		T_OK("dynamic-tag plaintext", memcmp(plaintext, vectors[i].plaintext, sizeof(plaintext)) == 0);
 		T_EQ("dynamic-tag AES", crypto_aes_ecb_encrypt(vectors[i].key, 128, plaintext, ciphertext), 0);
 		T_OK("dynamic-tag ciphertext", memcmp(ciphertext, vectors[i].ciphertext, sizeof(ciphertext)) == 0);
-		woz_aliro_dynamic_tag_from_ciphertext(ciphertext, tag);
+		ultrawidelock_cred_dynamic_tag_from_ciphertext(ciphertext, tag);
 		T_OK("dynamic-tag truncation", memcmp(tag, vectors[i].tag, sizeof(tag)) == 0);
 	}
 }

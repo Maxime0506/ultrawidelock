@@ -1,9 +1,9 @@
 /** @file ultrawidelock_diag.h — DIAGK(): gate for verbose UWB bring-up diagnostics. */
 
-#ifndef WOZ_DIAG_H
-#define WOZ_DIAG_H
+#ifndef ULTRAWIDELOCK_DIAG_H
+#define ULTRAWIDELOCK_DIAG_H
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,20 +27,20 @@ extern volatile int ultrawidelock_uwb_diag_on;
 #define ULTRAWIDELOCK_UWB_DIAG_DEFAULT 1
 #endif
 
-#if defined(CONFIG_WOZ_PRETTY_SHELL)
+#if defined(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)
 #define DIAGK(...)                                                                                 \
 	do {                                                                                       \
 		if (0) {                                                                           \
-			woz_printf(__VA_ARGS__);                                                   \
+			ultrawidelock_printf(__VA_ARGS__);                                                   \
 		}                                                                                  \
 	} while (0)
 #else
 #define DIAGK(...)                                                                                 \
 	do {                                                                                       \
 		if (ultrawidelock_uwb_diag_on) {                                                             \
-			woz_printf(__VA_ARGS__);                                                   \
+			ultrawidelock_printf(__VA_ARGS__);                                                   \
 		}                                                                                  \
 	} while (0)
 #endif
 
-#endif /* WOZ_DIAG_H */
+#endif /* ULTRAWIDELOCK_DIAG_H */

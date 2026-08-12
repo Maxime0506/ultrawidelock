@@ -9,7 +9,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
 SHARED="$HERE/../../../tests/shared"
 ALIRO="$HERE/../../../modules/ultrawidelock_cred"
-WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
+ULTRAWIDELOCK_PORT_INC="$HERE/../../../modules/ultrawidelock_port/include"
 UWB_INC="$HERE/../../../modules/ultrawidelock_uwb/include"
 ESP_COMPONENTS="$REPO_ROOT/ports/esp32/components"
 READER_MAIN="$REPO_ROOT/examples/esp32/reader/main"
@@ -31,12 +31,12 @@ echo "== host: ultrawidelock_ble transport vs NimBLE fakes =="
 # ultrawidelock_advtag_derive. See sdkfake/sdkfake.h.
 # Two files because bring-up is split: ultrawidelock_ble_nimble.c is the shared NimBLE
 # backend (also built by the standalone FreeRTOS port) and ultrawidelock_ble_esp32.c is
-# the ESP-IDF half. ESP_PLATFORM selects woz_log.h's ESP branch, which resolves
+# the ESP-IDF half. ESP_PLATFORM selects ultrawidelock_log.h's ESP branch, which resolves
 # to sdkfake's esp_log.h -- the same path the target takes.
 SDKFAKE="$HERE/sdkfake"
 EBIN="$(mktemp -t esp_aliro_ble.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
    -DESP_PLATFORM \
    "$HERE/test_esp_aliro_ble.c" \
    "$ESP_COMPONENTS/ultrawidelock_ble/ultrawidelock_ble_esp32.c" \
@@ -83,10 +83,10 @@ echo "== host: demand-driven presence proof freshness =="
 # reset timeout and ambiguous trust all fail before the signer is called.
 PLBIN="$(mktemp -t esp_presence_link.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
-   -DCONFIG_WOZ_PRESENCE_TIMEOUT_MS=1 -DCONFIG_WOZ_PRESENCE_MAX_CM=40 \
+   -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
+   -DCONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS=1 -DCONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM=40 \
    -I "$SDKFAKE" -I "$ESP_COMPONENTS/ultrawidelock_reader" \
-   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
    -I "$UWB_INC" \
    "$HERE/test_esp_presence_link.c" \
    "$ESP_COMPONENTS/ultrawidelock_reader/presence_link.c" \
@@ -109,14 +109,14 @@ rm -f "$PIVBIN"
 echo
 echo "== host: reader bench console vs esp_console fakes =="
 CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
-# _POSIX_C_SOURCE because main.c now includes woz_port.h, whose host build calls
+# _POSIX_C_SOURCE because main.c now includes ultrawidelock_port.h, whose host build calls
 # clock_gettime(CLOCK_MONOTONIC): glibc declares neither without it, while macOS
 # declares both unconditionally, so omitting it builds locally and fails on CI.
 cc -std=c11 -O1 -Wall -Wextra -D_POSIX_C_SOURCE=200809L \
-   -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DWOZ_PORT_HOST \
+   -DCONFIG_ULTRAWIDELOCK_CRED_STEPUP=1 -DULTRAWIDELOCK_PORT_HOST \
 	-I "$SDKFAKE" -I "$READER_MAIN" \
    -I "$UWB_INC" \
-   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
    "$HERE/test_esp_app_shell.c" \
    "$READER_MAIN/app_shell.c" \
    "$READER_MAIN/main.c" \
@@ -187,9 +187,9 @@ cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
 cc -std=c11 -O1 -w -I "$ALIRO/include" -c "$ALIRO/src/ultrawidelock_approach.c" -o "$MBIN.approach.o"
 ${CXX:-c++} -std=c++17 -O1 -w \
    -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_ULTRAWIDELOCK_CRED_LAB=1 -DCONFIG_ULTRAWIDELOCK_UWB_CIRDIAG=1 \
-   -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DWOZ_PORT_HOST \
+   -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 -DCONFIG_IDF_TARGET_ESP32C6=1 -DULTRAWIDELOCK_PORT_HOST \
    -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
-   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
    -I "$UWB_INC" \
    "$HERE/test_esp_matter_lock.cpp" \
    "$LOCKD/app_driver.cpp" "$LOCKD/app_main.cpp" "$LOCKD/app_shell.cpp" \

@@ -1,14 +1,14 @@
 /*
  * ultrawidelock_util.h - container and compare macros.
  *
- * Pure code, same rationale as woz_bytes.h: none of this is platform-specific,
+ * Pure code, same rationale as ultrawidelock_bytes.h: none of this is platform-specific,
  * so it does not belong behind a <zephyr/sys/util.h> compat header.
  *
  * Every macro is #ifndef-guarded, so on Zephyr the real header wins if it was
  * already included and these are inert.
  */
-#ifndef WOZ_UTIL_H
-#define WOZ_UTIL_H
+#ifndef ULTRAWIDELOCK_UTIL_H
+#define ULTRAWIDELOCK_UTIL_H
 
 #include <stddef.h>
 
@@ -54,4 +54,4 @@
 #define Z_IS_ENABLED3(ignore_this, val, ...) val
 #endif
 
-#endif /* WOZ_UTIL_H */
+#endif /* ULTRAWIDELOCK_UTIL_H */

@@ -27,8 +27,9 @@
 #include <deca_device_api.h>
 
 #include "fira_session.h" /* fira_session_last_range — the DS-TWR distance, for `d=` below */
-#include "woz_log.h"      /* woz_printf — platform print, same sink as the [ALAB] trace */
-#include "woz_port.h"     /* woz_uptime_us — the [ALAB] timebase */
+/* ultrawidelock_printf — platform print, same sink as the [ALAB] trace */
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_port.h"     /* ultrawidelock_uptime_us — the [ALAB] timebase */
 
 /** @brief SYS_CFG + STS-packet-config (CP_SPC): the mode of THIS reception (0=SP0..3=SP3).
  * Same trick as uwb_rxdiag.c's RXDIAG_CP_SPC, duplicated to keep this unit freestanding. */
@@ -163,7 +164,7 @@ static void cirdiag_drain(void)
 		const int16_t *s = (const int16_t *)r->taps;
 
 		for (unsigned i = 0; i < CIRDIAG_CIR_WIN; i++) {
-			woz_printf("[ALAB] t=%lld ev=uwb.cir n=%u i=%u re=%d im=%d\n",
+			ultrawidelock_printf("[ALAB] t=%lld ev=uwb.cir n=%u i=%u re=%d im=%d\n",
 				   (long long)r->t_us, (unsigned)r->n, (unsigned)(r->base + i),
 				   (int)s[2u * i], (int)s[2u * i + 1u]);
 		}
@@ -174,7 +175,7 @@ static void cirdiag_drain(void)
 		 * RTT buffer is 8 KB in NO_BLOCK_SKIP mode and this loop writes ~46 KB
 		 * faster than probe-rs drains it, discarding the newest lines with no
 		 * indication that anything was lost. See the Kconfig help. */
-		woz_sleep_ms(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG_DRAIN_PACE_MS);
+		ultrawidelock_sleep_ms(CONFIG_ULTRAWIDELOCK_UWB_CIRDIAG_DRAIN_PACE_MS);
 #endif
 	}
 	g_ring_count = 0;
@@ -312,7 +313,7 @@ bool uwb_cirdiag_capture(uint32_t status, uint16_t datalength, bool deadline_pen
 		return false;
 	}
 	g_seq++; /* odd: writer active */
-	g_t_us = woz_uptime_us();
+	g_t_us = ultrawidelock_uptime_us();
 	g_status = status;
 	g_len = datalength;
 	/*
@@ -427,12 +428,12 @@ void uwb_cirdiag_probe(void)
 	uint16_t base;
 
 	if (!g_cia_armed) {
-		woz_printf("cir.probe: not ready: the chip-side CIA enable happens on the "
+		ultrawidelock_printf("cir.probe: not ready: the chip-side CIA enable happens on the "
 			   "RX path, so arm the stream and take one reception first\n");
 		return;
 	}
 	base = cirdiag_window_base();
-	woz_printf("cir.probe: base=%u fp=%u clk=%lu\n", (unsigned)base,
+	ultrawidelock_printf("cir.probe: base=%u fp=%u clk=%lu\n", (unsigned)base,
 		   (unsigned)g_diag.ipatovFpIndex, (unsigned long)dwt_read_reg(CIRDIAG_CLK_CTRL));
 
 	for (unsigned p = 0; p < (sizeof(offs) / sizeof(offs[0])); p++) {
@@ -442,10 +443,10 @@ void uwb_cirdiag_probe(void)
 
 		memset(buf, 0, sizeof(buf));
 		rc = dwt_readcir(buf, DWT_ACC_IDX_IP_M, at, CIRDIAG_PROBE_TAPS, DWT_CIR_READ_MID);
-		woz_printf("cir.probe: pass=%u at=%u rc=%d clk=%lu\n", p, (unsigned)at, rc,
+		ultrawidelock_printf("cir.probe: pass=%u at=%u rc=%d clk=%lu\n", p, (unsigned)at, rc,
 			   (unsigned long)dwt_read_reg(CIRDIAG_CLK_CTRL));
 		for (unsigned i = 0; i < CIRDIAG_PROBE_TAPS; i++) {
-			woz_printf("cir.probe:   p=%u i=%u re=%d im=%d\n", p, i, (int)s[2u * i],
+			ultrawidelock_printf("cir.probe:   p=%u i=%u re=%d im=%d\n", p, i, (int)s[2u * i],
 				   (int)s[2u * i + 1u]);
 		}
 	}
@@ -459,11 +460,11 @@ void uwb_cirdiag_probe(void)
 		int rc = dwt_readcir(buf, DWT_ACC_IDX_IP_M, base, CIRDIAG_PROBE_TAPS,
 				     DWT_CIR_READ_FULL);
 
-		woz_printf("cir.probe: full at=%u rc=%d\n", (unsigned)base, rc);
+		ultrawidelock_printf("cir.probe: full at=%u rc=%d\n", (unsigned)base, rc);
 		for (unsigned i = 0; i < CIRDIAG_PROBE_TAPS; i++) {
 			const uint8_t *t = &b[6u * i];
 
-			woz_printf("cir.probe:   full i=%u re24=%lu im24=%lu\n", i,
+			ultrawidelock_printf("cir.probe:   full i=%u re24=%lu im24=%lu\n", i,
 				   (unsigned long)((uint32_t)t[0] | ((uint32_t)t[1] << 8) |
 						   ((uint32_t)t[2] << 16)),
 				   (unsigned long)((uint32_t)t[3] | ((uint32_t)t[4] << 8) |
@@ -558,7 +559,7 @@ void uwb_cirdiag_flush(void)
 		/* LEAN: the keys for fields this build never read are ABSENT, not zero. A parser
 		 * cannot tell `sq=0` meaning "STS quality measured zero" from `sq=0` meaning "we
 		 * did not look", and one of those is a data point while the other is a lie. */
-		woz_printf("[ALAB] t=%lld ev=uwb.diag n=%u len=%u st=%u "
+		ultrawidelock_printf("[ALAB] t=%lld ev=uwb.diag n=%u len=%u st=%u "
 			   "ipfp=%u ippk=%u ippw=%u ipf1=%u ipf2=%u ipf3=%u ipac=%u "
 			   "xtal=%d cd1=%u rdcyc=%u%s\n",
 			   (long long)t_us, (unsigned)n, (unsigned)len, (unsigned)status,
@@ -572,7 +573,7 @@ void uwb_cirdiag_flush(void)
 		(void)sts_stat;
 		(void)sts_stat_ret;
 #else
-		woz_printf("[ALAB] t=%lld ev=uwb.diag n=%u sp=%u len=%u st=%u "
+		ultrawidelock_printf("[ALAB] t=%lld ev=uwb.diag n=%u sp=%u len=%u st=%u "
 			   "ipfp=%u ippk=%u ippw=%u ipf1=%u ipf2=%u ipf3=%u ipac=%u "
 			   "sfp=%u spk=%u spw=%u sf1=%u sf2=%u sf3=%u sac=%u "
 			   "sq=%d sqr=%d ss=%u ssr=%d xtal=%d cd1=%u rdcyc=%u%s\n",

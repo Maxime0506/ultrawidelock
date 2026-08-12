@@ -7,7 +7,7 @@
  * flight_recorder — trace (de)serialisation + the on-device capture path.
  * See flight_recorder.h for the format rationale. The writer/reader half is
  * portable and pointer-free so the same code builds in the firmware, the host
- * replay, and any offline tool; the CONFIG_WOZ_FLIGHT_RECORDER half adds
+ * replay, and any offline tool; the CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER half adds
  * the RAM-ring capture hooks and the `[FREC]` serial dump.
  */
 #include "flight_recorder.h"
@@ -361,22 +361,22 @@ int fr_read_next(fr_reader_t *r, struct fr_record *out)
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- * On-device capture path (CONFIG_WOZ_FLIGHT_RECORDER).
+ * On-device capture path (CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER).
  * ════════════════════════════════════════════════════════════════════════ */
-#if defined(CONFIG_WOZ_FLIGHT_RECORDER)
+#if defined(CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER)
 
 #include <stdio.h> /* snprintf for the hex dump */
 
 #include <deca_device_api.h>
 
 #include <ultrawidelock/uwb.h> /* struct ultrawidelock_uwb_aliro_cfg */
-#include "woz_log.h"        /* woz_printf */
+#include "ultrawidelock_log.h"        /* ultrawidelock_printf */
 
-#ifndef CONFIG_WOZ_FLIGHT_RECORDER_BYTES
-#define CONFIG_WOZ_FLIGHT_RECORDER_BYTES 16384
+#ifndef CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES
+#define CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES 16384
 #endif
-#ifndef WOZ_GIT_SHA
-#define WOZ_GIT_SHA "dev"
+#ifndef ULTRAWIDELOCK_GIT_SHA
+#define ULTRAWIDELOCK_GIT_SHA "dev"
 #endif
 
 #if defined(ESP_PLATFORM)
@@ -390,7 +390,7 @@ int fr_read_next(fr_reader_t *r, struct fr_record *out)
 /* 32 raw bytes -> 64 hex chars per `[FREC]` line. */
 #define FR_DUMP_LINE 32u
 
-static uint8_t s_ring[CONFIG_WOZ_FLIGHT_RECORDER_BYTES];
+static uint8_t s_ring[CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES];
 static fr_writer_t s_w;
 static bool s_armed; /* capturing (fr on) */
 static bool s_open;  /* a CONFIG record has been written this recording */
@@ -399,7 +399,7 @@ static uint32_t s_nev;
 static bool s_trunc;
 
 /* Dump sink, so a host test can capture the serial lines instead of printing
- * them; NULL routes to woz_printf (the real UART/console). */
+ * them; NULL routes to ultrawidelock_printf (the real UART/console). */
 static void (*s_sink)(const char *line);
 
 /**
@@ -421,7 +421,7 @@ void fr_set_enabled(bool on)
 		/* Fresh recording: reset the ring and stamp META. CONFIG lands when
 		 * the next session opens (arm BEFORE the walk-up, like `lab on`). */
 		fr_writer_init(&s_w, s_ring, sizeof(s_ring));
-		fr_write_meta(&s_w, (uint16_t)FR_THIS_PORT, WOZ_GIT_SHA);
+		fr_write_meta(&s_w, (uint16_t)FR_THIS_PORT, ULTRAWIDELOCK_GIT_SHA);
 		s_open = false;
 		s_ended = false;
 		s_nev = 0;
@@ -540,7 +540,7 @@ static void fr_emit_line(const char *line)
 	if (s_sink != NULL) {
 		s_sink(line);
 	} else {
-		woz_printf("%s\n", line);
+		ultrawidelock_printf("%s\n", line);
 	}
 }
 
@@ -580,4 +580,4 @@ void fr_clear(void)
 	s_w.len = 0; /* drop even the magic: an un-armed dump reports empty */
 }
 
-#endif /* CONFIG_WOZ_FLIGHT_RECORDER */
+#endif /* CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER */

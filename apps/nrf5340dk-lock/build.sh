@@ -188,7 +188,7 @@ do_build() {
   # (verdict logged, every block still latches). STRICT=1 drops a block whose STS
   # correlated poorly instead of feeding it to the unlock seam.
   local strict=""
-  [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
+  [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_ULTRAWIDELOCK_RANGE_GATE_STRICT=y"
 
   # The independent public API is the default Aliro implementation. Keep the
   # Nordic archive available as an explicit diagnostic fallback so the two
@@ -196,15 +196,15 @@ do_build() {
   local aliro_source="${ALIRO_SOURCE:-1}"
   local aliro_source_flag=""
   case "$aliro_source" in
-    1) aliro_source_flag="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=y" ;;
-    0) aliro_source_flag="-DCONFIG_WOZ_ALIRO_SOURCE_STACK=n" ;;
+    1) aliro_source_flag="-DCONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK=y" ;;
+    0) aliro_source_flag="-DCONFIG_ULTRAWIDELOCK_CRED_SOURCE_STACK=n" ;;
     *) die "unknown ALIRO_SOURCE='$aliro_source'" "use 1 (source, default) or 0 (Nordic binary)" ;;
   esac
 
   # ALIRO_TRACE=1: capture proprietary/source BLE session boundaries without
   # exposing URSK itself (only its truncated SHA-256 fingerprint is logged).
   local aliro_trace=""
-  [ "${ALIRO_TRACE:-0}" = 1 ] && aliro_trace="-DCONFIG_WOZ_ALIRO_TRACE=y"
+  [ "${ALIRO_TRACE:-0}" = 1 ] && aliro_trace="-DCONFIG_ULTRAWIDELOCK_CRED_TRACE=y"
 
   if [ -n "$aliro_trace" ]; then
     local trace_patch="$TREE/integration/patches/aliro-ble-trace.patch"
@@ -354,7 +354,7 @@ do_build() {
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay${nfc_overlay}"
     -DPM_STATIC_YML_FILE="$pm_yml"
     -DSB_EXTRA_CONF_FILE="$sb_conf"
-    -DZEPHYR_EXTRA_MODULES="$TREE/modules/ultrawidelock_uwb;$TREE/modules/ultrawidelock_nfc;$TREE/modules/woz_aliro_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
+    -DZEPHYR_EXTRA_MODULES="$TREE/modules/ultrawidelock_uwb;$TREE/modules/ultrawidelock_nfc;$TREE/modules/ultrawidelock_cred_stack;$TREE/modules/ultrawidelock_dw3000;$TREE/ports/zephyr"
     -DCONFIG_DOOR_LOCK_BLE_UWB=y -DCONFIG_ULTRAWIDELOCK_UWB=y -DCONFIG_ULTRAWIDELOCK_UWB_RESPONDER=y
     -DCONFIG_ULTRAWIDELOCK_CRED=y -DCONFIG_DW3000=y "$CHIP_FLAG" -DCONFIG_SPI_ASYNC=y
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n

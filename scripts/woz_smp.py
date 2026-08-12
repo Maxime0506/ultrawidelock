@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Push a delta patch to the board over SMP, the way a phone would.
 
-WHY THIS EXISTS BESIDE woz_push.py. woz_push speaks the native framed protocol
+WHY THIS EXISTS BESIDE ultrawidelock_push.py. ultrawidelock_push speaks the native framed protocol
 over an L2CAP CoC, which no phone app can open. This one speaks mcumgr over
 GATT -- byte for byte what nRF Device Manager sends -- so the device half can be
 proved from a Mac before anyone starts tapping at a phone. When this works and
 the app does not, the fault is in the app or the file it is given, not in the
 firmware.
 
-    scripts/woz_smp.py build/cdk.woz          push a patch
-    scripts/woz_smp.py --list                 read the image list and stop
+    scripts/ultrawidelock_smp.py build/cdk.woz          push a patch
+    scripts/ultrawidelock_smp.py --list                 read the image list and stop
 
 Requires the board to be built with SMP=1 (apps/dwm3001cdk-lock/overlay-smp.conf).
 
@@ -54,8 +54,8 @@ MGMT_ERR = {
 
 
 def die(msg):
-    """Exit the process with the formatted error message prefixed by woz_smp."""
-    sys.exit(f"woz_smp: {msg}")
+    """Exit the process with the formatted error message prefixed by ultrawidelock_smp."""
+    sys.exit(f"ultrawidelock_smp: {msg}")
 
 
 def image_sha(path):
@@ -267,7 +267,7 @@ async def run(args):
     print(f"connecting to {device.name or device.address}")
     # services=[...] on purpose: CoreBluetooth aborts with CBError 8 while
     # enumerating one of the reader's own characteristics if it is allowed to
-    # discover everything. Same trap as woz_push.py.
+    # discover everything. Same trap as ultrawidelock_push.py.
     async with BleakClient(device, services=[SMP_SVC_UUID]) as client:
         smp = Smp(client)
         await client.start_notify(SMP_CHR_UUID, smp.on_notify)
@@ -347,7 +347,7 @@ async def run(args):
 
 def main():
     ap = argparse.ArgumentParser(description="Push a delta patch over SMP, as a phone would.")
-    ap.add_argument("patch", nargs="?", help="the .woz patch from scripts/woz_patch.py")
+    ap.add_argument("patch", nargs="?", help="the .woz patch from scripts/ultrawidelock_patch.py")
     ap.add_argument("--list", action="store_true", help="read the image list and stop")
     ap.add_argument(
         "--expect",

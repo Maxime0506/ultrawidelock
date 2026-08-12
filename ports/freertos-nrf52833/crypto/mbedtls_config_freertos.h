@@ -23,8 +23,8 @@
  * under the PSA core is nrf_security's job and nrf_security is Zephyr Kconfig,
  * so it stays out until something is measured to need it.
  */
-#ifndef WOZ_FREERTOS_MBEDTLS_CONFIG_H
-#define WOZ_FREERTOS_MBEDTLS_CONFIG_H
+#ifndef ULTRAWIDELOCK_FREERTOS_MBEDTLS_CONFIG_H
+#define ULTRAWIDELOCK_FREERTOS_MBEDTLS_CONFIG_H
 
 /* The PSA core, driven by the PSA_WANT_* list rather than by legacy switches. */
 #define MBEDTLS_PSA_CRYPTO_C
@@ -56,7 +56,7 @@
  *
  * ALT rather than PTHREAD: the mutex is a FreeRTOS static mutex, defined in
  * crypto/threading_alt.h, which Mbed TLS includes by that exact name.
- * woz_freertos_crypto_init() installs the four callbacks before any other
+ * ultrawidelock_freertos_crypto_init() installs the four callbacks before any other
  * library call, which mbedtls_threading_set_alt() requires.
  */
 #define MBEDTLS_THREADING_C
@@ -72,19 +72,19 @@
  */
 #define MBEDTLS_PLATFORM_C
 #define MBEDTLS_PLATFORM_MEMORY
-#define MBEDTLS_PLATFORM_CALLOC_MACRO woz_freertos_mbedtls_calloc
-#define MBEDTLS_PLATFORM_FREE_MACRO woz_freertos_mbedtls_free
+#define MBEDTLS_PLATFORM_CALLOC_MACRO ultrawidelock_freertos_mbedtls_calloc
+#define MBEDTLS_PLATFORM_FREE_MACRO ultrawidelock_freertos_mbedtls_free
 
 /*
  * Those two macros expand inside Mbed TLS library sources, which include
  * nothing belonging to this port. This config file is the only header those
  * sources are guaranteed to read -- build_info.h pulls it in ahead of
  * everything else -- so the declarations have to live here rather than in
- * woz_freertos_crypto.h.
+ * ultrawidelock_freertos_crypto.h.
  */
 #include <stddef.h>
-void *woz_freertos_mbedtls_calloc(size_t count, size_t size);
-void woz_freertos_mbedtls_free(void *block);
+void *ultrawidelock_freertos_mbedtls_calloc(size_t count, size_t size);
+void ultrawidelock_freertos_mbedtls_free(void *block);
 
 /*
  * P-256 arithmetic. NIST_OPTIM replaces the generic modular reduction with the
@@ -124,4 +124,4 @@ void woz_freertos_mbedtls_free(void *block);
  *   MBEDTLS_TIMING_C               uses a host clock this part does not have
  */
 
-#endif /* WOZ_FREERTOS_MBEDTLS_CONFIG_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_MBEDTLS_CONFIG_H */

@@ -4,8 +4,8 @@
 
 #include <errno.h>
 #include <string.h>
-#include "woz_port.h"
-#include "woz_log.h"
+#include "ultrawidelock_port.h"
+#include "ultrawidelock_log.h"
 
 /* dwt_uwb_driver public headers; the include is unprefixed. */
 #include <deca_device_api.h>
@@ -43,7 +43,7 @@ static int uwb_probe_ensure(void)
 	for (int attempt = 1; attempt <= 3; attempt++) {
 		dw3000_hw_reset();
 		/* Datasheet: ~2 ms wakeup latency after reset; 5 ms gives margin. */
-		woz_sleep_ms(5);
+		ultrawidelock_sleep_ms(5);
 
 		/* Wake the DW3000 and settle it BEFORE the SDK probe. The SDK's dwt_probe reads
 		 * the device id immediately after its own CS-toggle wakeup with no delay, so on a
@@ -65,7 +65,7 @@ static int uwb_probe_ensure(void)
 
 		for (int i = 0; i < 5; i++) {
 			dw3000_spi_wakeup();
-			woz_sleep_ms(2); /* > DW3000 wakeup latency */
+			ultrawidelock_sleep_ms(2); /* > DW3000 wakeup latency */
 			uint8_t devid_hdr = 0x00;
 			uint8_t devid_buf[4] = {0};
 
@@ -90,7 +90,7 @@ static int uwb_probe_ensure(void)
 		 * line above does not). */
 		LOG_ERR("dwt_probe failed (attempt %d/3): %d, raw DEV_ID=0x%08x", attempt, err,
 			raw_devid);
-		woz_sleep_ms(10 * attempt);
+		ultrawidelock_sleep_ms(10 * attempt);
 	}
 	return -EIO;
 }
@@ -178,7 +178,7 @@ int uwb_min_hw_reset(void)
 {
 	/* Drive the SDK's reset routine (routed through the platform glue). */
 	dw3000_hw_reset();
-	woz_sleep_ms(5);
+	ultrawidelock_sleep_ms(5);
 
 	/* Force a re-probe and re-init after reset (the SDK's fn-pointer table gets cleared). */
 	g_probed = false;
@@ -244,8 +244,8 @@ int uwb_min_selftest(struct uwb_selftest_result *out)
 
 	/* Poll SYS_STATUS for TXFRS; 100 ms ceiling is generous. */
 	uint32_t tx_status = 0;
-	const int64_t tx_deadline = woz_uptime_ms() + 100;
-	while (woz_uptime_ms() < tx_deadline) {
+	const int64_t tx_deadline = ultrawidelock_uptime_ms() + 100;
+	while (ultrawidelock_uptime_ms() < tx_deadline) {
 		tx_status = dwt_readsysstatuslo();
 		if (tx_status & DWT_INT_TXFRS_BIT_MASK) {
 			out->tx_done = true;
@@ -277,8 +277,8 @@ int uwb_min_selftest(struct uwb_selftest_result *out)
 
 	/* Poll for any RX event; with no peer we expect RXFTO after the window. */
 	uint32_t rx_status = 0;
-	const int64_t rx_deadline = woz_uptime_ms() + 200; /* 2× chip TO */
-	while (woz_uptime_ms() < rx_deadline) {
+	const int64_t rx_deadline = ultrawidelock_uptime_ms() + 200; /* 2× chip TO */
+	while (ultrawidelock_uptime_ms() < rx_deadline) {
 		rx_status = dwt_readsysstatuslo();
 		if (rx_status & RX_STATUS_EVENT_MASK) {
 			out->rx_event = true;
@@ -347,9 +347,9 @@ void uwb_min_twr_exchange(struct uwb_twr_frame *f)
 	}
 
 	/* Wait for the POLL to leave the antenna. */
-	int64_t txdl = woz_uptime_ms() + 50;
+	int64_t txdl = ultrawidelock_uptime_ms() + 50;
 	while (!(dwt_readsysstatuslo() & DWT_INT_TXFRS_BIT_MASK)) {
-		if (woz_uptime_ms() > txdl) {
+		if (ultrawidelock_uptime_ms() > txdl) {
 			break;
 		}
 	}
@@ -361,9 +361,9 @@ void uwb_min_twr_exchange(struct uwb_twr_frame *f)
 	ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE);
 
 	uint32_t st = 0;
-	int64_t rxdl = woz_uptime_ms() + 80; /* > the 50 ms chip RX timeout */
+	int64_t rxdl = ultrawidelock_uptime_ms() + 80; /* > the 50 ms chip RX timeout */
 	while (!((st = dwt_readsysstatuslo()) & rx_mask)) {
-		if (woz_uptime_ms() > rxdl) {
+		if (ultrawidelock_uptime_ms() > rxdl) {
 			break;
 		}
 	}
@@ -418,7 +418,7 @@ int uwb_min_twr_poll(uint32_t n, uint32_t period_ms, struct uwb_twr_result *out)
 			f.sts, (unsigned int)f.status);
 
 		if (period_ms) {
-			woz_sleep_ms(period_ms);
+			ultrawidelock_sleep_ms(period_ms);
 		}
 	}
 	return 0;

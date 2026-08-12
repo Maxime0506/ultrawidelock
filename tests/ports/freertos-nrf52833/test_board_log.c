@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -60,9 +60,9 @@ struct rtt_control_block {
 	struct rtt_buffer_down down[1];
 };
 
-extern struct rtt_control_block woz_freertos_rtt_control_block;
+extern struct rtt_control_block ultrawidelock_freertos_rtt_control_block;
 
-#define CB woz_freertos_rtt_control_block
+#define CB ultrawidelock_freertos_rtt_control_block
 #define UP (&CB.up[0])
 
 /* Read the ring the way a J-Link does. Returns bytes drained. */
@@ -125,7 +125,7 @@ static void test_lines(void)
 
 	host_reset();
 
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "radio", "started at %u", 42u);
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "radio", "started at %u", 42u);
 	(void)host_drain(out, sizeof(out));
 	CHECK("a line carries its level", strncmp(out, "I ", 2) == 0);
 	CHECK("a line carries its tag", strstr(out, "radio: ") != NULL);
@@ -133,18 +133,18 @@ static void test_lines(void)
 	CHECK("a line ends with a newline", out[strlen(out) - 1u] == '\n');
 	CHECK("a line is one line", strchr(out, '\n') == &out[strlen(out) - 1u]);
 
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, "ble", "down");
-	woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, "ble", "retry");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, "ble", "down");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, "ble", "retry");
 	(void)host_drain(out, sizeof(out));
 	CHECK("lines arrive in order", strstr(out, "E ble: down\nW ble: retry\n") != NULL);
 
 	/* A null tag must not be dereferenced. */
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, NULL, "no tag");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, NULL, "no tag");
 	(void)host_drain(out, sizeof(out));
 	CHECK("a null tag is survivable", strstr(out, "no tag") != NULL);
 
 	/* A null format is refused rather than passed to vsnprintf. */
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "x", NULL);
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "x", NULL);
 	CHECK("a null format writes nothing", host_drain(out, sizeof(out)) == 0u);
 }
 
@@ -157,10 +157,10 @@ static void test_level_gate(void)
 	host_reset();
 
 	/* The default ceiling is INFO, so DEBUG costs the ring nothing. */
-	woz_freertos_log(WOZ_FREERTOS_LOG_DEBUG, "uwb", "chatter");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_DEBUG, "uwb", "chatter");
 	CHECK("a level above the ceiling writes nothing", host_drain(out, sizeof(out)) == 0u);
 
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "uwb", "kept");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "uwb", "kept");
 	CHECK("a level at the ceiling is written", host_drain(out, sizeof(out)) > 0u);
 }
 
@@ -181,7 +181,7 @@ static void test_wrap(void)
 	UP->write_offset = UP->size - 8u;
 	UP->read_offset = UP->size - 8u;
 
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "wrap", "abcdefghijklmnop");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "wrap", "abcdefghijklmnop");
 	drained = host_drain(out, sizeof(out));
 	CHECK("a line that straddles the end is drained whole", drained > 0u);
 	CHECK("a straddling line reassembles in order",
@@ -190,7 +190,7 @@ static void test_wrap(void)
 	/* Many lines through the wrap, to prove the offsets stay consistent. */
 	host_reset();
 	for (i = 0; i < 200u; i++) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "n", "%u", i);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "n", "%u", i);
 		(void)host_drain(out, sizeof(out));
 	}
 	CHECK("the ring survives many wraps", strstr(out, "I n: 199\n") != NULL);
@@ -213,12 +213,13 @@ static void test_full_ring(void)
 	UP->read_offset = 4u;
 
 	write_before = UP->write_offset;
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "full", "a line far longer than four bytes");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "full",
+				   "a line far longer than four bytes");
 	CHECK("a line that does not fit is dropped whole", UP->write_offset == write_before);
 
 	/* And the ring is still coherent afterwards. */
 	host_reset();
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "after", "ok");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "after", "ok");
 	(void)host_drain(out, sizeof(out));
 	CHECK("the ring still works after a dropped line", strstr(out, "after: ok") != NULL);
 }
@@ -232,7 +233,8 @@ static void test_never_fills_completely(void)
 	host_reset();
 	/* The host never reads, so the ring fills and then refuses. */
 	for (i = 0; i < 400u; i++) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "fill", "%u padding padding padding", i);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "fill",
+					   "%u padding padding padding", i);
 		if (UP->write_offset == UP->read_offset && i > 0u) {
 			collided = true;
 		}
@@ -249,7 +251,7 @@ static void test_never_fills_completely(void)
 	 * lose every byte in it.
 	 */
 	host_reset();
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "size", "measure me");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "size", "measure me");
 	{
 		unsigned line_length = UP->write_offset;
 
@@ -257,7 +259,7 @@ static void test_never_fills_completely(void)
 		UP->write_offset = 0;
 		UP->read_offset = line_length;
 
-		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "size", "measure me");
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "size", "measure me");
 		CHECK("a line that would exactly fill the ring is refused",
 		      UP->write_offset != UP->read_offset);
 	}
@@ -274,7 +276,7 @@ static void test_truncation(void)
 	memset(huge, 'x', sizeof(huge) - 1u);
 	huge[sizeof(huge) - 1u] = '\0';
 
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, "long", "%s", huge);
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "long", "%s", huge);
 	(void)host_drain(out, sizeof(out));
 	CHECK("an over-long line is still written", strlen(out) > 0u);
 	CHECK("an over-long line is truncated, not split", out[strlen(out) - 1u] == '\n');
@@ -289,7 +291,8 @@ static void test_hexdump(void)
 	static const uint8_t data[] = { 0x00, 0x0f, 0xa5, 0xff };
 
 	host_reset();
-	woz_freertos_log_hexdump(WOZ_FREERTOS_LOG_INFO, "apdu", data, sizeof(data), "select");
+	ultrawidelock_freertos_log_hexdump(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "apdu", data,
+					   sizeof(data), "select");
 	(void)host_drain(out, sizeof(out));
 
 	CHECK("a hexdump names its message and length", strstr(out, "select (4 bytes)") != NULL);
@@ -297,7 +300,7 @@ static void test_hexdump(void)
 	CHECK("a hexdump renders high bytes", strstr(out, "a5 ff") != NULL);
 
 	host_reset();
-	woz_freertos_log_hexdump(WOZ_FREERTOS_LOG_INFO, "apdu", NULL, 4u, "absent");
+	ultrawidelock_freertos_log_hexdump(ULTRAWIDELOCK_FREERTOS_LOG_INFO, "apdu", NULL, 4u, "absent");
 	(void)host_drain(out, sizeof(out));
 	CHECK("a null hexdump body writes only its header",
 	      strstr(out, "absent (4 bytes)") != NULL && strchr(out, '\n') == &out[strlen(out) - 1u]);

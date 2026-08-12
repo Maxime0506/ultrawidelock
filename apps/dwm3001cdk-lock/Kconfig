@@ -548,7 +548,7 @@ config ALIRO_BLE_CENTRAL
 	  ultrawidelock_ble_central.h, so only the transport differs between the two ports.
 	  A reader image does not want this. It exists so the initiator can be built
 	  for a board carrying a DW3110, which the ESP32-S3 is not.
-	  See ports/zephyr/ble/aliro_ble_central_zephyr.c.
+	  See ports/zephyr/ble/ultrawidelock_ble_central_zephyr.c.
 
 config ALIRO_THREAD_DATASET_DUMP
 	bool "Print the active Thread operational dataset at attach (BENCH ONLY)"

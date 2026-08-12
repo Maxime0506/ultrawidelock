@@ -6,8 +6,8 @@
  *
  * On target these two spellings come from cmsis_compiler.h by way of nrfx.h.
  */
-#ifndef WOZ_DISPATCHER_NRFX_H
-#define WOZ_DISPATCHER_NRFX_H
+#ifndef ULTRAWIDELOCK_DISPATCHER_NRFX_H
+#define ULTRAWIDELOCK_DISPATCHER_NRFX_H
 
 /* The real nrfx.h reaches these transitively, and vendor sources rely on it. */
 #include <assert.h>
@@ -17,4 +17,4 @@
 #define __PACKED   __attribute__((packed))
 #define __ALIGN(n) __attribute__((aligned(n)))
 
-#endif /* WOZ_DISPATCHER_NRFX_H */
+#endif /* ULTRAWIDELOCK_DISPATCHER_NRFX_H */

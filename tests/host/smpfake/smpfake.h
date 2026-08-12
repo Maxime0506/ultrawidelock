@@ -18,8 +18,8 @@
  * through that registration -- so a group id, a handler slot or a read/write
  * pairing that is wrong is caught rather than bypassed.
  */
-#ifndef WOZ_SMPFAKE_H
-#define WOZ_SMPFAKE_H
+#ifndef ULTRAWIDELOCK_SMPFAKE_H
+#define ULTRAWIDELOCK_SMPFAKE_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -96,4 +96,4 @@ int smpfake_find(const char *key);
 /** @brief Item at @p index, or NULL when out of range. */
 const struct smpfake_item *smpfake_item(int index);
 
-#endif /* WOZ_SMPFAKE_H */
+#endif /* ULTRAWIDELOCK_SMPFAKE_H */

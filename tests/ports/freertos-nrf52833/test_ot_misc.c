@@ -15,7 +15,7 @@
 
 #include <hal/nrf_power.h>
 #include <nrfx.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 #include <openthread/platform/entropy.h>
 #include <openthread/platform/misc.h>
 
@@ -38,7 +38,7 @@ static bool g_entropy_fails;
 static unsigned g_entropy_calls;
 static size_t g_entropy_length;
 
-int woz_freertos_entropy(void *buffer, size_t length)
+int ultrawidelock_freertos_entropy(void *buffer, size_t length)
 {
 	g_entropy_calls++;
 	g_entropy_length = length;
@@ -49,14 +49,15 @@ int woz_freertos_entropy(void *buffer, size_t length)
 	return 0;
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
 	(void)fmt;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	printf("RESULT: FAIL (fatal: %s)\n", reason);
 	_Exit(1);

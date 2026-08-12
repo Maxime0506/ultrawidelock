@@ -5,7 +5,7 @@
  * Checked by scripts/freertos-ncs-source-check.sh, which fails if the file ever
  * starts using it.
  */
-#ifndef WOZ_OT_COMPAT_OPENTHREAD_H
-#define WOZ_OT_COMPAT_OPENTHREAD_H
+#ifndef ULTRAWIDELOCK_OT_COMPAT_OPENTHREAD_H
+#define ULTRAWIDELOCK_OT_COMPAT_OPENTHREAD_H
 
-#endif /* WOZ_OT_COMPAT_OPENTHREAD_H */
+#endif /* ULTRAWIDELOCK_OT_COMPAT_OPENTHREAD_H */

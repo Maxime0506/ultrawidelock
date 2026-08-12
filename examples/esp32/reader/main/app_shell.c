@@ -17,7 +17,7 @@
 #include <ultrawidelock/reader.h>
 #include "ultrawidelock_lab.h" /* ultrawidelock_lab_set_enabled — the [ALAB] trace runtime gate */
 #include "app_shell.h"
-#if defined(CONFIG_WOZ_PRESENCE)
+#if defined(CONFIG_ULTRAWIDELOCK_PRESENCE)
 #include "presence_link.h"
 #endif
 
@@ -420,7 +420,7 @@ void app_shell_start(void)
 			 "logged only)",
 		 .func = cmd_aliro_stepup},
 #endif
-#if defined(CONFIG_WOZ_PRESENCE)
+#if defined(CONFIG_ULTRAWIDELOCK_PRESENCE)
 		{.command = "presence",
 		 .help = "presence pub|credential|prove <nonce-hex>: fresh signed "
 			 "post-challenge presence proof",

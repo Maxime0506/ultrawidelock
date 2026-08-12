@@ -17,22 +17,22 @@
 #include "ultrawidelock_assert_ec.h"
 #include "ultrawidelock_prim.h"
 #include "presence_link.h"
-#include "woz_port.h"
+#include "ultrawidelock_port.h"
 
 #define PRESENCE_NS     "presence"
 #define PRESENCE_DEVKEY "kdev"
 
-#if !defined(CONFIG_WOZ_PRESENCE_TIMEOUT_MS)
-#define CONFIG_WOZ_PRESENCE_TIMEOUT_MS 8000
+#if !defined(CONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS)
+#define CONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS 8000
 #endif
-#if !defined(CONFIG_WOZ_PRESENCE_MAX_CM)
-#define CONFIG_WOZ_PRESENCE_MAX_CM 40
+#if !defined(CONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM)
+#define CONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM 40
 #endif
 #define PROOF_POLL_MS 20
 
 static bool s_drive_wallet;
 static bool s_initialized;
-static woz_mutex_t s_proof_lock;
+static ultrawidelock_mutex_t s_proof_lock;
 
 /* Device signing identity. Only the private scalar is persisted; the public point
  * is re-derived at every boot so the two can never drift apart in NVS. */
@@ -95,7 +95,7 @@ void presence_link_init(bool drive_wallet_grant)
 	load_or_make_dev_key();
 	s_drive_wallet = drive_wallet_grant;
 	if (!s_initialized) {
-		woz_mutex_init(&s_proof_lock);
+		ultrawidelock_mutex_init(&s_proof_lock);
 		s_initialized = true;
 	}
 	/* No range listener on purpose. The range latch already carries its own age,
@@ -148,7 +148,7 @@ static void fill_assert(struct ultrawidelock_assert *a,
 	a->range_flags = ig->sts_ok ? (uint8_t)ULTRAWIDELOCK_ASSERT_RANGE_STS_OK : 0u;
 	a->sts_quality = ig->sts_quality;
 	a->trust_level = ig->trust_level;
-	a->uptime_ms = (uint64_t)woz_uptime_ms();
+	a->uptime_ms = (uint64_t)ultrawidelock_uptime_ms();
 	/* unix_ms stays ULTRAWIDELOCK_ASSERT_TIME_NONE (the memset above): this dongle has
 	 * no trusted wall clock, and claiming one it cannot back would be worse
 	 * than admitting it has none. Freshness therefore rests entirely on the
@@ -232,7 +232,7 @@ static int answer_p256(const uint8_t nonce[ULTRAWIDELOCK_ASSERT_NONCE_LEN],
  */
 static bool before_deadline(int64_t deadline_ms)
 {
-	return woz_uptime_ms() < deadline_ms;
+	return ultrawidelock_uptime_ms() < deadline_ms;
 }
 
 static int acquire_fresh(uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN],
@@ -246,7 +246,7 @@ static int acquire_fresh(uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN],
 	uint32_t range_checkpoint;
 	bool saw_far = false;
 	bool saw_suspect = false;
-	int64_t deadline_ms = woz_uptime_ms() + CONFIG_WOZ_PRESENCE_TIMEOUT_MS;
+	int64_t deadline_ms = ultrawidelock_uptime_ms() + CONFIG_ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS;
 
 	if (!s_initialized ||
 	    !ultrawidelock_reader_presence_expected_credential(expected_pub)) {
@@ -265,7 +265,7 @@ static int acquire_fresh(uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN],
 
 	while (before_deadline(deadline_ms) &&
 	       !ultrawidelock_reader_presence_checkpoint(request, &auth_checkpoint)) {
-		woz_sleep_ms(PROOF_POLL_MS);
+		ultrawidelock_sleep_ms(PROOF_POLL_MS);
 	}
 	if (!ultrawidelock_reader_presence_checkpoint(request, &auth_checkpoint)) {
 		if (report) {
@@ -302,7 +302,7 @@ static int acquire_fresh(uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN],
 				 * deadline already bounds the wait. */
 				if (!ig.sts_ok) {
 					saw_suspect = true;
-				} else if (cm >= 0 && cm <= CONFIG_WOZ_PRESENCE_MAX_CM) {
+				} else if (cm >= 0 && cm <= CONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM) {
 					*distance_cm = cm;
 					*integrity = ig;
 					return 0;
@@ -311,7 +311,7 @@ static int acquire_fresh(uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN],
 				}
 			}
 		}
-		woz_sleep_ms(PROOF_POLL_MS);
+		ultrawidelock_sleep_ms(PROOF_POLL_MS);
 	}
 
 	if (report) {
@@ -323,7 +323,7 @@ static int acquire_fresh(uint8_t expected_id[ULTRAWIDELOCK_ASSERT_CREDID_LEN],
 			printf("PRESENCE-ERR range failed the STS integrity check; refusing to sign it\n");
 		} else if (saw_far) {
 			printf("PRESENCE-ERR proof stayed outside %d cm\n",
-			       CONFIG_WOZ_PRESENCE_MAX_CM);
+			       CONFIG_ULTRAWIDELOCK_PRESENCE_MAX_CM);
 		} else {
 			printf("PRESENCE-ERR proof timed out; wake the phone and hold it near the reader\n");
 		}
@@ -338,7 +338,7 @@ static int prove(const uint8_t nonce[ULTRAWIDELOCK_ASSERT_NONCE_LEN])
 	struct ultrawidelock_uwb_range_integrity ig;
 	int rc;
 
-	woz_mutex_lock(&s_proof_lock);
+	ultrawidelock_mutex_lock(&s_proof_lock);
 	rc = acquire_fresh(cred_id, &distance_cm, &ig, true);
 	if (rc == 0) {
 		rc = answer_p256(nonce, cred_id, distance_cm, &ig) == 0 ? 0 : -1;
@@ -346,7 +346,7 @@ static int prove(const uint8_t nonce[ULTRAWIDELOCK_ASSERT_NONCE_LEN])
 			notify_wallet(true);
 		}
 	}
-	woz_mutex_unlock(&s_proof_lock);
+	ultrawidelock_mutex_unlock(&s_proof_lock);
 	return rc == 0 ? 0 : 1;
 }
 
@@ -360,9 +360,9 @@ int presence_link_require_fresh(void)
 	if (!s_initialized) {
 		return -1;
 	}
-	woz_mutex_lock(&s_proof_lock);
+	ultrawidelock_mutex_lock(&s_proof_lock);
 	rc = acquire_fresh(cred_id, &distance_cm, &ig, false);
-	woz_mutex_unlock(&s_proof_lock);
+	ultrawidelock_mutex_unlock(&s_proof_lock);
 	return rc;
 }
 

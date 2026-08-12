@@ -38,20 +38,20 @@ config ULTRAWIDELOCK_CRED
 
 choice
 	prompt "AES-ECB backend for the CCC key ladder"
-	default WOZ_CRYPTO_PSA
+	default ULTRAWIDELOCK_CRYPTO_PSA
 	depends on ULTRAWIDELOCK_CRED
 	help
 	  Selects which file defines crypto_aes_ecb_encrypt() (ccc_kdf.h) — the one
 	  AES-128/256 ECB primitive the whole CCC key ladder and AES-CCM* build on.
 	  This is the only per-platform crypto seam.
 
-config WOZ_CRYPTO_PSA
+config ULTRAWIDELOCK_CRYPTO_PSA
 	bool "PSA Crypto (nRF/NCS default)"
 	help
 	  ccc_crypto_psa.c over the PSA Crypto API (nrf_security / CryptoCell on nRF).
 	  Default: the nRF build is byte-identical to before this option existed.
 
-config WOZ_CRYPTO_MBEDTLS
+config ULTRAWIDELOCK_CRYPTO_MBEDTLS
 	bool "mbedTLS AES (ESP32-S3 / generic Zephyr)"
 	select MBEDTLS
 	help
@@ -79,7 +79,7 @@ config ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS
 	  rejoined on an already-commissioned device before the deferred 128 MHz
 	  HFCLK boost that the first UWB entry performs.
 
-config WOZ_PRETTY_SHELL
+config ULTRAWIDELOCK_PRETTY_SHELL
 	bool "Clean/curated UART log output (suppress bring-up diagnostics)"
 	depends on ULTRAWIDELOCK_CRED
 	help
@@ -92,7 +92,7 @@ config WOZ_PRETTY_SHELL
 	  matching log-level cuts. Default n = today's verbose output, byte-for-byte.
 	  Reverse by dropping the PRETTY=1 build switch (flag returns to n).
 
-config WOZ_RANGE_GATE_STRICT
+config ULTRAWIDELOCK_RANGE_GATE_STRICT
 	bool "Range gate: enforce STS quality (drop suspect blocks)"
 	depends on ULTRAWIDELOCK_CRED
 	help
@@ -246,7 +246,7 @@ config ULTRAWIDELOCK_UWB_CIRDIAG_SUMMARY_FINAL_ONLY
 
 endif # ULTRAWIDELOCK_UWB_CIRDIAG
 
-config WOZ_FLIGHT_RECORDER
+config ULTRAWIDELOCK_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	depends on ULTRAWIDELOCK_CRED
 	help
@@ -260,9 +260,9 @@ config WOZ_FLIGHT_RECORDER
 	  walk-up latency — arm it only for a capture run. Default n = compiled out,
 	  the recorder call sites in ccc_shim_rx.c cost nothing.
 
-config WOZ_FLIGHT_RECORDER_BYTES
+config ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES
 	int "Flight recorder RAM ring size (bytes)"
-	depends on WOZ_FLIGHT_RECORDER
+	depends on ULTRAWIDELOCK_FLIGHT_RECORDER
 	default 16384
 	help
 	  Capacity of the static capture ring. One walk-up is a few dozen events at
@@ -270,7 +270,7 @@ config WOZ_FLIGHT_RECORDER_BYTES
 	  fills, capture stops and the END record is flagged truncated (the replayable
 	  prefix is preserved).
 
-config WOZ_E2E_TRACE
+config ULTRAWIDELOCK_E2E_TRACE
 	bool "End-to-end [ULTRAWIDELOCK_TRACE] lines from the DW3000 interrupt callbacks"
 	depends on ULTRAWIDELOCK_UWB
 	help

@@ -16,18 +16,18 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "woz_freertos_platform.h"
+#include "ultrawidelock_freertos_platform.h"
 
 #include <mpsl_clock.h>
 
-#define WOZ_FREERTOS_802154_CLOCK_TAG "802154_clk"
+#define ULTRAWIDELOCK_FREERTOS_802154_CLOCK_TAG "802154_clk"
 
 /*
  * The plain mpsl_clock_hfclk_request/release/is_running trio is deprecated in
  * the pinned MPSL and scheduled for removal, so this uses the _src_ variants
  * throughout. nRF52833 has exactly one high-frequency source, the crystal.
  */
-#define WOZ_FREERTOS_802154_HF_SRC MPSL_CLOCK_HF_SRC_XO
+#define ULTRAWIDELOCK_FREERTOS_802154_HF_SRC MPSL_CLOCK_HF_SRC_XO
 
 static bool s_hfclk_requested;
 
@@ -63,8 +63,8 @@ void nrf_802154_clock_hfclk_start(void)
 	if (s_hfclk_requested) {
 		return;
 	}
-	if (mpsl_clock_hfclk_src_request(WOZ_FREERTOS_802154_HF_SRC, hfclk_event) != 0) {
-		woz_freertos_fatal("802154 hfclk request");
+	if (mpsl_clock_hfclk_src_request(ULTRAWIDELOCK_FREERTOS_802154_HF_SRC, hfclk_event) != 0) {
+		ultrawidelock_freertos_fatal("802154 hfclk request");
 	}
 	s_hfclk_requested = true;
 }
@@ -75,8 +75,8 @@ void nrf_802154_clock_hfclk_stop(void)
 		return;
 	}
 	s_hfclk_requested = false;
-	if (mpsl_clock_hfclk_src_release(WOZ_FREERTOS_802154_HF_SRC) != 0) {
-		woz_freertos_fatal("802154 hfclk release");
+	if (mpsl_clock_hfclk_src_release(ULTRAWIDELOCK_FREERTOS_802154_HF_SRC) != 0) {
+		ultrawidelock_freertos_fatal("802154 hfclk release");
 	}
 }
 
@@ -93,7 +93,7 @@ bool nrf_802154_clock_hfclk_is_running(void)
 	if (!s_hfclk_requested) {
 		return false;
 	}
-	if (mpsl_clock_hfclk_src_is_running(WOZ_FREERTOS_802154_HF_SRC, &running) != 0) {
+	if (mpsl_clock_hfclk_src_is_running(ULTRAWIDELOCK_FREERTOS_802154_HF_SRC, &running) != 0) {
 		return false;
 	}
 	return running != 0;

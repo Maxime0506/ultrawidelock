@@ -7,7 +7,7 @@ index 2529dd5..37c0178 100644
  {
  	ReturnErrorOnFailure(Init());
 +
-+#ifdef CONFIG_WOZ_PRETTY_SHELL
++#ifdef CONFIG_ULTRAWIDELOCK_PRETTY_SHELL
 +	/* Curated console runs Matter at WRN, which silences its own SetupQRCode line.
 +	 * Re-emit the commissioning QR URL + manual pairing code once here, on module
 +	 * `app` (unaffected by MATTER_LOG_LEVEL), so the code is never lost. */
@@ -29,7 +29,7 @@ index 2529dd5..37c0178 100644
 +			}
 +		}
 +	}
-+#endif /* CONFIG_WOZ_PRETTY_SHELL */
++#endif /* CONFIG_ULTRAWIDELOCK_PRETTY_SHELL */
 +
  	VerifyOrReturnError(AliroInit() == EXIT_SUCCESS, CHIP_ERROR_INTERNAL, LOG_ERR("Failed to initialize Aliro"));
  	VerifyOrReturnError(DoorLock::AliroStateControl::UpdateAliroState() == ALIRO_NO_ERROR, CHIP_ERROR_INTERNAL,

@@ -1,4 +1,4 @@
-// Presence dongle commands (CONFIG_WOZ_PRESENCE): fresh, challenge-driven signed
+// Presence dongle commands (CONFIG_ULTRAWIDELOCK_PRESENCE): fresh, challenge-driven signed
 // statements from a new trusted Aliro authentication and later UWB range, turning
 // proximity of a provisioned iPhone into a factor any tool can check. See
 // and for the other end.

@@ -1,6 +1,6 @@
 menu "PIV smart-card token"
 
-config WOZ_PIV_CCID
+config ULTRAWIDELOCK_PIV_CCID
 	bool "Expose a native-USB PIV/CCID token (VM bench only)"
 	depends on IDF_TARGET_ESP32S3
 	default n

@@ -11,8 +11,8 @@
 #include "uwb_seam.h"     /* the two decadriver seams this file implements */
 #include "ultrawidelock_diag.h"     /* DIAGK — per-event/cfg/CAD trace, gated off in pretty mode */
 #include "ultrawidelock_alloc.h"    /* qrtc_get_us — monotonic microsecond wall-clock */
-#include "woz_log.h"      /* printk + LOG_* spellings on every platform */
-#include "woz_osal.h"     /* deferred work — task-side emitters off the RX path */
+#include "ultrawidelock_log.h"      /* printk + LOG_* spellings on every platform */
+#include "ultrawidelock_osal.h"     /* deferred work — task-side emitters off the RX path */
 
 LOG_MODULE_REGISTER(uwb_rxdiag, LOG_LEVEL_INF);
 
@@ -88,12 +88,12 @@ static void rxdiag_ev_log(const char *cls, const dwt_cb_data_t *d)
 uint32_t g_ccc_dbg_decode;
 
 /** @brief Task-side emitter for the latched CIA diagnostics (uwb_cirdiag). */
-static void cirdiag_emit(struct woz_work *work)
+static void cirdiag_emit(struct ultrawidelock_work *work)
 {
 	(void)work;
 	uwb_cirdiag_flush();
 }
-static struct woz_work g_cirdiag_work; /* bound in rxdiag_init() */
+static struct ultrawidelock_work g_cirdiag_work; /* bound in rxdiag_init() */
 
 /**
  * @brief RX-good callback shim: log RX diagnostics, invoke the armed CCC callback, then decode the
@@ -148,7 +148,7 @@ static void shim_rxok(const dwt_cb_data_t *d)
 					      d != NULL ? d->datalength : 0u, true, is_final);
 	}
 	if (latched) {
-		woz_work_submit(&g_cirdiag_work);
+		ultrawidelock_work_submit(&g_cirdiag_work);
 	}
 }
 
@@ -222,8 +222,8 @@ int32_t ultrawidelock_uwb_configure_phy(dwt_config_t *config)
 	return dwt_configure(config);
 }
 
-static void rxdiag_log(struct woz_dwork *dwork);
-static struct woz_dwork g_rxdiag_work; /* bound in rxdiag_init() */
+static void rxdiag_log(struct ultrawidelock_dwork *dwork);
+static struct ultrawidelock_dwork g_rxdiag_work; /* bound in rxdiag_init() */
 
 /* A DS-TWR range older than this is shown dimmed as stale, not live cyan. */
 #define RXDIAG_STALE_MS 1000
@@ -232,7 +232,7 @@ static struct woz_dwork g_rxdiag_work; /* bound in rxdiag_init() */
 #define RXDIAG_PERIOD_MS 2000
 
 /** @brief Periodic ranging heartbeat (every 2 s); re-arms itself while streaming. */
-static void rxdiag_log(struct woz_dwork *dwork)
+static void rxdiag_log(struct ultrawidelock_dwork *dwork)
 {
 	(void)dwork;
 
@@ -293,7 +293,7 @@ static void rxdiag_log(struct woz_dwork *dwork)
 		}
 	}
 	if (g_stream) {
-		woz_dwork_reschedule(&g_rxdiag_work, RXDIAG_PERIOD_MS);
+		ultrawidelock_dwork_reschedule(&g_rxdiag_work, RXDIAG_PERIOD_MS);
 	}
 }
 
@@ -324,9 +324,9 @@ void uwb_rxdiag_stream_set(bool on)
 {
 	g_stream = on;
 	if (on) {
-		woz_dwork_reschedule(&g_rxdiag_work, 0);
+		ultrawidelock_dwork_reschedule(&g_rxdiag_work, 0);
 	} else {
-		woz_dwork_cancel(&g_rxdiag_work);
+		ultrawidelock_dwork_cancel(&g_rxdiag_work);
 	}
 }
 
@@ -348,15 +348,15 @@ bool uwb_rxdiag_rng_get(void)
 /** @brief Bind the work items and arm the periodic heartbeat at application init. */
 static int rxdiag_init(void)
 {
-	woz_work_init(&g_cirdiag_work, cirdiag_emit);
-	woz_dwork_init(&g_rxdiag_work, rxdiag_log);
-#ifndef CONFIG_WOZ_PRETTY_SHELL
+	ultrawidelock_work_init(&g_cirdiag_work, cirdiag_emit);
+	ultrawidelock_dwork_init(&g_rxdiag_work, rxdiag_log);
+#ifndef CONFIG_ULTRAWIDELOCK_PRETTY_SHELL
 	g_stream = true;
 #endif
 	if (g_stream) {
-		woz_dwork_reschedule(&g_rxdiag_work, RXDIAG_PERIOD_MS);
+		ultrawidelock_dwork_reschedule(&g_rxdiag_work, RXDIAG_PERIOD_MS);
 	}
 	return 0;
 }
 
-WOZ_INIT_APPLICATION(rxdiag_init);
+ULTRAWIDELOCK_INIT_APPLICATION(rxdiag_init);

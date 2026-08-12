@@ -14,9 +14,9 @@
 #include <errno.h>
 #include <string.h>
 
-static struct woz_range_report sample(void)
+static struct ultrawidelock_range_report sample(void)
 {
-	struct woz_range_report r;
+	struct ultrawidelock_range_report r;
 
 	r.anchor_id = 2u;
 	r.seq = 1234u;
@@ -30,7 +30,7 @@ static struct woz_range_report sample(void)
 	return r;
 }
 
-static bool same(const struct woz_range_report *a, const struct woz_range_report *b)
+static bool same(const struct ultrawidelock_range_report *a, const struct ultrawidelock_range_report *b)
 {
 	return a->anchor_id == b->anchor_id && a->seq == b->seq && a->us == b->us &&
 	       a->d_mm == b->d_mm && a->quality == b->quality && a->trust == b->trust &&
@@ -53,8 +53,8 @@ static void crc_matches_the_standard(void)
 
 static void round_trip(void)
 {
-	struct woz_range_report r = sample();
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r = sample();
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	int n;
 
@@ -75,8 +75,8 @@ static void round_trip(void)
  */
 static void extreme_values(void)
 {
-	struct woz_range_report r;
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r;
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	int n;
 
@@ -126,8 +126,8 @@ static void extreme_values(void)
  */
 static void single_flipped_digit_is_caught(void)
 {
-	struct woz_range_report r = sample();
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r = sample();
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	int n;
 	int i;
@@ -159,8 +159,8 @@ static void single_flipped_digit_is_caught(void)
 
 static void foreign_version_is_refused(void)
 {
-	struct woz_range_report r = sample();
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r = sample();
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	int n;
 
@@ -184,8 +184,8 @@ static void foreign_version_is_refused(void)
 
 static void truncation_and_junk(void)
 {
-	struct woz_range_report r = sample();
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r = sample();
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	char cut[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	int n;
@@ -228,8 +228,8 @@ static void truncation_and_junk(void)
 
 static void line_endings(void)
 {
-	struct woz_range_report r = sample();
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r = sample();
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	char crlf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	int n;
@@ -252,7 +252,7 @@ static void line_endings(void)
 
 static void small_buffer_never_writes_a_partial_line(void)
 {
-	struct woz_range_report r = sample();
+	struct ultrawidelock_range_report r = sample();
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 	size_t cap;
 	int n;
@@ -282,8 +282,8 @@ static void small_buffer_never_writes_a_partial_line(void)
 
 static void rejects_bad_input(void)
 {
-	struct woz_range_report r = sample();
-	struct woz_range_report back;
+	struct ultrawidelock_range_report r = sample();
+	struct ultrawidelock_range_report back;
 	char buf[ULTRAWIDELOCK_REPORT_LINE_MAX];
 
 	t_group("report: NULLs and empties");

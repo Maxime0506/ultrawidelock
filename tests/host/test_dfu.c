@@ -25,7 +25,7 @@
 #include "dfu_crc.h"
 #include "ultrawidelock_dfu.h"
 #include "ultrawidelock_dfu_rx.h"
-#include "woz_osal.h"
+#include "ultrawidelock_osal.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
@@ -72,8 +72,8 @@ const uint8_t ultrawidelock_dfu_pubkey[65] = {
 	0xd3, 0x3c, 0xf4, 0x25, 0x23, 0xd0, 0x5d, 0x31, 0xeb,
 };
 
-/* dfu_applier.c's init hook, exposed by WOZ_INIT_APPLICATION's host branch. */
-extern int (*const woz_init_ultrawidelock_dfu_apply)(void);
+/* dfu_applier.c's init hook, exposed by ULTRAWIDELOCK_INIT_APPLICATION's host branch. */
+extern int (*const ultrawidelock_init_ultrawidelock_dfu_apply)(void);
 
 #define HEAD_LEN  (ULTRAWIDELOCK_DFU_HDR_LEN + ULTRAWIDELOCK_DFU_SIG_LEN)
 #define PATCH_MAX (DFUFAKE_STAGING_SIZE - ULTRAWIDELOCK_DFU_PATCH_OFFSET)
@@ -96,12 +96,12 @@ static void build_head(uint8_t *head, const uint8_t *patch, uint32_t patch_len, 
 	hdr.flags = 0;
 	hdr.patch_len = patch_len;
 	hdr.to_len = from_len;
-	hdr.patch_crc32 = woz_crc32(patch, patch_len);
+	hdr.patch_crc32 = ultrawidelock_crc32(patch, patch_len);
 	hdr.from_crc32 = from_crc;
 	hdr.from_len = from_len;
 	hdr.hdr_crc32 = 0;
 	memcpy(head, &hdr, sizeof(hdr));
-	hdr.hdr_crc32 = woz_crc32(head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN);
+	hdr.hdr_crc32 = ultrawidelock_crc32(head, ULTRAWIDELOCK_DFU_HDR_CRC_LEN);
 	memcpy(head, &hdr, sizeof(hdr));
 	memset(head + ULTRAWIDELOCK_DFU_HDR_LEN, 0xa5, ULTRAWIDELOCK_DFU_SIG_LEN);
 }
@@ -210,23 +210,23 @@ static void test_window(void)
 	ultrawidelock_dfu_window_open(1234);
 	T_OK("open after open", ultrawidelock_dfu_window_is_open());
 	T_EQ("open notified once", window_open_seen, 1);
-	T_EQ("no expiry before the duration", (long)woz_osal_host_advance_ms(1233), 0L);
+	T_EQ("no expiry before the duration", (long)ultrawidelock_osal_host_advance_ms(1233), 0L);
 
 	/* Re-opening restarts the clock rather than stacking timers. */
 	ultrawidelock_dfu_window_open(500);
 	T_EQ("reopen notifies again", window_open_seen, 2);
 	T_OK("still open at the old deadline",
-	     (woz_osal_host_advance_ms(1), ultrawidelock_dfu_window_is_open()));
+	     (ultrawidelock_osal_host_advance_ms(1), ultrawidelock_dfu_window_is_open()));
 
 	/* Let the restarted expiry fire the way the kernel would. */
-	T_EQ("one expiry fires", (long)woz_osal_host_advance_ms(499), 1L);
+	T_EQ("one expiry fires", (long)ultrawidelock_osal_host_advance_ms(499), 1L);
 	T_OK("closed after expiry", !ultrawidelock_dfu_window_is_open());
 	T_EQ("close notified", window_close_seen, 1);
 
 	ultrawidelock_dfu_window_open(500);
 	ultrawidelock_dfu_window_close();
 	T_OK("closed by request", !ultrawidelock_dfu_window_is_open());
-	T_EQ("close cancelled the timer", (long)woz_osal_host_advance_ms(5000), 0L);
+	T_EQ("close cancelled the timer", (long)ultrawidelock_osal_host_advance_ms(5000), 0L);
 	T_EQ("close notified again", window_close_seen, 2);
 
 	/* A port with no indicator pays nothing: the callback is optional. */
@@ -414,9 +414,9 @@ static void test_receiver_stage(void)
 	}
 
 	/* The reply goes out first; only then does the board restart. */
-	T_EQ("reboot deferred, not immediate", (long)woz_flash_host_reboots(), 0L);
-	T_EQ("reboot fires after its delay", (long)woz_osal_host_advance_ms(500), 1L);
-	T_EQ("reboot taken", (long)woz_flash_host_reboots(), 1L);
+	T_EQ("reboot deferred, not immediate", (long)ultrawidelock_flash_host_reboots(), 0L);
+	T_EQ("reboot fires after its delay", (long)ultrawidelock_osal_host_advance_ms(500), 1L);
+	T_EQ("reboot taken", (long)ultrawidelock_flash_host_reboots(), 1L);
 }
 
 /* ---- receiver: commit-time integrity and flash failures -------------------- */
@@ -518,7 +518,7 @@ static void test_receiver_integrity(void)
 
 /* ---- receiver: the SMP upload front door ---------------------------------- */
 
-/** Build an MCUboot-shaped wrapper around @p patch, as `woz_patch.py wrap` does. */
+/** Build an MCUboot-shaped wrapper around @p patch, as `ultrawidelock_patch.py wrap` does. */
 static size_t wrap_mcuboot(uint8_t *out, const uint8_t *patch, size_t patch_len, uint16_t hdr_sz,
 			   uint32_t img_sz, size_t trailer)
 {
@@ -572,8 +572,8 @@ static void test_receiver_upload(void)
 	/* SMP stages and stops: the host sends its own reset, and a board that
 	 * restarted here would drop the response. 600 ms clears the receiver's
 	 * 500 ms reboot delay without reaching the window expiry. */
-	(void)woz_osal_host_advance_ms(600);
-	T_EQ("no reboot scheduled on the SMP path", (long)woz_flash_host_reboots(), 0L);
+	(void)ultrawidelock_osal_host_advance_ms(600);
+	T_EQ("no reboot scheduled on the SMP path", (long)ultrawidelock_flash_host_reboots(), 0L);
 	T_OK("header written", memcmp(dfufake_staging.buf, head, ULTRAWIDELOCK_DFU_HDR_LEN) == 0);
 
 	/* Chunked, which is what a real client does. */
@@ -776,7 +776,7 @@ static void stage_for_apply(const uint8_t *patch, uint32_t patch_len, uint32_t f
 	dfufake_blank(&dfufake_staging);
 	dfufake_blank(&dfufake_primary);
 	fill_pattern(dfufake_primary.buf, from_len, 0x21);
-	from_crc = woz_crc32(dfufake_primary.buf, from_len);
+	from_crc = ultrawidelock_crc32(dfufake_primary.buf, from_len);
 
 	build_head(head, patch, patch_len, from_len, from_crc);
 	memcpy(dfufake_staging.buf, head, ULTRAWIDELOCK_DFU_HDR_LEN);
@@ -786,7 +786,7 @@ static void stage_for_apply(const uint8_t *patch, uint32_t patch_len, uint32_t f
 /** Reset the doubles, stage a valid update, and return the applier entry point. */
 static int apply_now(void)
 {
-	return woz_init_ultrawidelock_dfu_apply();
+	return ultrawidelock_init_ultrawidelock_dfu_apply();
 }
 
 #define APPLY_FROM_LEN 4096u

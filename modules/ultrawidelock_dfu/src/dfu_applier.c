@@ -22,12 +22,12 @@
 
 #include "dfu_crc.h"
 #include "ultrawidelock_dfu.h"
-#include "woz_flash.h"
-#include "woz_osal.h"
+#include "ultrawidelock_flash.h"
+#include "ultrawidelock_osal.h"
 #include "detools.h"
 
 #if defined(CONFIG_ULTRAWIDELOCK_DFU_APPLIER_LOG)
-#include "woz_log.h" /* printk on every platform */
+#include "ultrawidelock_log.h" /* printk on every platform */
 #define DFU_LOG(...) printk("WDFU " __VA_ARGS__)
 #else
 #define DFU_LOG(...) ((void)0)
@@ -55,7 +55,7 @@
  * flash read straight into the struct, so the two agree on the layout or
  * nothing works. Caught here rather than on the bench. */
 _Static_assert(sizeof(struct ultrawidelock_dfu_hdr) == ULTRAWIDELOCK_DFU_HDR_LEN,
-	       "ultrawidelock_dfu_hdr changed size; scripts/woz_patch.py must change with it");
+	       "ultrawidelock_dfu_hdr changed size; scripts/ultrawidelock_patch.py must change with it");
 _Static_assert(ULTRAWIDELOCK_DFU_HDR_CRC_LEN == ULTRAWIDELOCK_DFU_HDR_LEN - sizeof(uint32_t),
 	       "the header CRC must cover everything except itself");
 
@@ -63,8 +63,8 @@ _Static_assert(ULTRAWIDELOCK_DFU_HDR_CRC_LEN == ULTRAWIDELOCK_DFU_HDR_LEN - size
  * Context passed to detools patch applier callbacks holding the primary and staging flash areas.
  */
 struct apply_ctx {
-	const struct woz_flash_area *primary;
-	const struct woz_flash_area *staging;
+	const struct ultrawidelock_flash_area *primary;
+	const struct ultrawidelock_flash_area *staging;
 };
 
 /* Static, not automatic: this runs on the main thread's stack and the patcher
@@ -112,7 +112,7 @@ static int wbuf_flush_words(struct apply_ctx *c)
 	if (whole == 0U) {
 		return 0;
 	}
-	if (woz_flash_write(c->primary, s_w.addr, s_w.buf, whole) != 0) {
+	if (ultrawidelock_flash_write(c->primary, s_w.addr, s_w.buf, whole) != 0) {
 		DFU_LOG("w %u+%u failed\n", (unsigned)s_w.addr, (unsigned)whole);
 		return -1;
 	}
@@ -138,7 +138,7 @@ static int wbuf_flush_all(struct apply_ctx *c)
 	while (s_w.len & 3U) {
 		s_w.buf[s_w.len++] = 0xff;
 	}
-	if (woz_flash_write(c->primary, s_w.addr, s_w.buf, s_w.len) != 0) {
+	if (ultrawidelock_flash_write(c->primary, s_w.addr, s_w.buf, s_w.len) != 0) {
 		DFU_LOG("wt %u+%u failed\n", (unsigned)s_w.addr, (unsigned)s_w.len);
 		return -1;
 	}
@@ -194,7 +194,7 @@ static int mem_read(void *arg_p, void *dst_p, uintptr_t src, size_t size)
 	if (wbuf_flush_all(c) != 0) {
 		return -1;
 	}
-	if (woz_flash_read(c->primary, (uint32_t)src, dst_p, size) != 0) {
+	if (ultrawidelock_flash_read(c->primary, (uint32_t)src, dst_p, size) != 0) {
 		DFU_LOG("r %u+%u failed\n", (unsigned)src, (unsigned)size);
 		return -1;
 	}
@@ -235,12 +235,12 @@ static int mem_erase(void *arg_p, uintptr_t addr, size_t size)
 	}
 
 	rounded = ROUND_UP(size, ULTRAWIDELOCK_DFU_PAGE_SIZE);
-	if (addr + rounded > woz_flash_size(c->primary)) {
+	if (addr + rounded > ultrawidelock_flash_size(c->primary)) {
 		DFU_LOG("e %u+%u past slot\n", (unsigned)addr, (unsigned)rounded);
 		return -1;
 	}
 
-	if (woz_flash_erase(c->primary, (uint32_t)addr, rounded) != 0) {
+	if (ultrawidelock_flash_erase(c->primary, (uint32_t)addr, rounded) != 0) {
 		DFU_LOG("e %u+%u failed\n", (unsigned)addr, (unsigned)rounded);
 		return -1;
 	}
@@ -279,8 +279,8 @@ static int step_set(void *arg_p, int step)
 	 * points here.
 	 */
 	if (step == 0) {
-		if (woz_flash_erase(c->staging, ULTRAWIDELOCK_DFU_STEP_OFFSET, ULTRAWIDELOCK_DFU_PAGE_SIZE) !=
-		    0) {
+		if (ultrawidelock_flash_erase(c->staging, ULTRAWIDELOCK_DFU_STEP_OFFSET,
+					      ULTRAWIDELOCK_DFU_PAGE_SIZE) != 0) {
 			DFU_LOG("step clear failed\n");
 			return -1;
 		}
@@ -292,7 +292,7 @@ static int step_set(void *arg_p, int step)
 		return -1;
 	}
 
-	return woz_flash_write(c->staging,
+	return ultrawidelock_flash_write(c->staging,
 				ULTRAWIDELOCK_DFU_STEP_OFFSET +
 					((uint32_t)step - 1u) * (uint32_t)sizeof(value),
 				&value, sizeof(value)) == 0
@@ -311,7 +311,7 @@ static int step_get(void *arg_p, int *step_p)
 	size_t i;
 
 	for (i = 0; i < STEP_MAX; i++) {
-		if (woz_flash_read(c->staging,
+		if (ultrawidelock_flash_read(c->staging,
 				    ULTRAWIDELOCK_DFU_STEP_OFFSET + (uint32_t)(i * sizeof(value)),
 				    &value, sizeof(value)) != 0) {
 			return -1;
@@ -334,17 +334,18 @@ static int step_get(void *arg_p, int *step_p)
  * Python's zlib.crc32(data, previous) does, which is what lets the host compute
  * the same value without either side reimplementing the other's polynomial.
  */
-static int area_crc32(const struct woz_flash_area *fa, uint32_t off, size_t len, uint32_t *out)
+static int area_crc32(const struct ultrawidelock_flash_area *fa, uint32_t off, size_t len,
+		      uint32_t *out)
 {
 	uint32_t crc = 0;
 
 	while (len > 0U) {
 		size_t n = MIN(sizeof(s_chunk), len);
 
-		if (woz_flash_read(fa, off, s_chunk, n) != 0) {
+		if (ultrawidelock_flash_read(fa, off, s_chunk, n) != 0) {
 			return -1;
 		}
-		crc = woz_crc32_update(crc, s_chunk, n);
+		crc = ultrawidelock_crc32_update(crc, s_chunk, n);
 		off += (uint32_t)n;
 		len -= n;
 	}
@@ -356,7 +357,7 @@ static int area_crc32(const struct woz_flash_area *fa, uint32_t off, size_t len,
 /** Erase the whole staging partition, consuming the update. */
 static void staging_consume(struct apply_ctx *c)
 {
-	(void)woz_flash_erase(c->staging, 0, woz_flash_size(c->staging));
+	(void)ultrawidelock_flash_erase(c->staging, 0, ultrawidelock_flash_size(c->staging));
 }
 
 /* ---- the apply ----------------------------------------------------------- */
@@ -383,7 +384,7 @@ static int patch_stream(struct apply_ctx *c, const struct ultrawidelock_dfu_hdr 
 	while (left > 0U) {
 		size_t n = MIN(sizeof(s_chunk), left);
 
-		if (woz_flash_read(c->staging, off, s_chunk, n) != 0) {
+		if (ultrawidelock_flash_read(c->staging, off, s_chunk, n) != 0) {
 			return -1;
 		}
 
@@ -418,30 +419,31 @@ static int ultrawidelock_dfu_apply(void)
 	int completed = 0;
 	int res;
 
-	if (woz_flash_open(WOZ_FLASH_AREA_STAGING, &s_ctx.staging) != 0) {
+	if (ultrawidelock_flash_open(ULTRAWIDELOCK_FLASH_AREA_STAGING, &s_ctx.staging) != 0) {
 		return 0;
 	}
 
 	/* The normal-boot fast path: no header, nothing staged, one read. */
-	if (woz_flash_read(s_ctx.staging, ULTRAWIDELOCK_DFU_HDR_OFFSET, &hdr, sizeof(hdr)) != 0 ||
+	if (ultrawidelock_flash_read(s_ctx.staging, ULTRAWIDELOCK_DFU_HDR_OFFSET, &hdr,
+				     sizeof(hdr)) != 0 ||
 	    hdr.magic != ULTRAWIDELOCK_DFU_MAGIC) {
-		woz_flash_close(s_ctx.staging);
+		ultrawidelock_flash_close(s_ctx.staging);
 		return 0;
 	}
 
 	DFU_LOG("staged: len=%u to=%u\n", (unsigned)hdr.patch_len, (unsigned)hdr.to_len);
 
 	if (hdr.abi_version != ULTRAWIDELOCK_DFU_ABI_VERSION || hdr.patch_len == 0U ||
-	    hdr.patch_len > woz_flash_size(s_ctx.staging) - ULTRAWIDELOCK_DFU_PATCH_OFFSET ||
-	    hdr.hdr_crc32 != woz_crc32((const uint8_t *)&hdr, ULTRAWIDELOCK_DFU_HDR_CRC_LEN)) {
+	    hdr.patch_len > ultrawidelock_flash_size(s_ctx.staging) - ULTRAWIDELOCK_DFU_PATCH_OFFSET ||
+	    hdr.hdr_crc32 != ultrawidelock_crc32((const uint8_t *)&hdr, ULTRAWIDELOCK_DFU_HDR_CRC_LEN)) {
 		DFU_LOG("header rejected\n");
 		staging_consume(&s_ctx);
-		woz_flash_close(s_ctx.staging);
+		ultrawidelock_flash_close(s_ctx.staging);
 		return 0;
 	}
 
-	if (woz_flash_open(WOZ_FLASH_AREA_PRIMARY, &s_ctx.primary) != 0) {
-		woz_flash_close(s_ctx.staging);
+	if (ultrawidelock_flash_open(ULTRAWIDELOCK_FLASH_AREA_PRIMARY, &s_ctx.primary) != 0) {
+		ultrawidelock_flash_close(s_ctx.staging);
 		return 0;
 	}
 
@@ -458,7 +460,7 @@ static int ultrawidelock_dfu_apply(void)
 	 * between the last step and the erase below cannot re-apply it.
 	 */
 	if (completed == 0) {
-		if (hdr.from_len > (uint32_t)woz_flash_size(s_ctx.primary) ||
+		if (hdr.from_len > (uint32_t)ultrawidelock_flash_size(s_ctx.primary) ||
 		    area_crc32(s_ctx.staging, ULTRAWIDELOCK_DFU_PATCH_OFFSET, hdr.patch_len, &crc) !=
 			    0 ||
 		    crc != hdr.patch_crc32) {
@@ -489,9 +491,9 @@ static int ultrawidelock_dfu_apply(void)
 	staging_consume(&s_ctx);
 
 done:
-	woz_flash_close(s_ctx.primary);
-	woz_flash_close(s_ctx.staging);
+	ultrawidelock_flash_close(s_ctx.primary);
+	ultrawidelock_flash_close(s_ctx.staging);
 	return 0;
 }
 
-WOZ_INIT_APPLICATION_PRIO(ultrawidelock_dfu_apply, 0);
+ULTRAWIDELOCK_INIT_APPLICATION_PRIO(ultrawidelock_dfu_apply, 0);

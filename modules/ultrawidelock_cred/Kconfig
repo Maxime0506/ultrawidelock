@@ -17,5 +17,5 @@ config ULTRAWIDELOCK_CRED_STACK
 	  still links the closed archive.
 
 module = ULTRAWIDELOCK_CRED
-module-str = woz_aliro
+module-str = ultrawidelock_cred
 source "subsys/logging/Kconfig.template.log_config"

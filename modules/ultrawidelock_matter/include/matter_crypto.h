@@ -49,7 +49,7 @@ extern "C" {
  * The AES block seam, shared with the CCC key ladder.
  *
  * Defined by exactly one backend per build: ccc_crypto_psa.c or
- * ccc_crypto_mbedtls.c on target (the CONFIG_WOZ_CRYPTO_* choice in
+ * ccc_crypto_mbedtls.c on target (the CONFIG_ULTRAWIDELOCK_CRYPTO_* choice in
  * modules/ultrawidelock_uwb/Kconfig), and tests/host/aes_ref.c -- a real FIPS-197 AES --
  * on the host. Declared here rather than pulled in from
  * modules/ultrawidelock_uwb/include/ccc_kdf.h so this module does not depend on the UWB

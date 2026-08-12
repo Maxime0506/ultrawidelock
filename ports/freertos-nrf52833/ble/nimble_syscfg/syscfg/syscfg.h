@@ -12,8 +12,8 @@
  * that the controller does not support would make NimBLE issue commands the
  * controller rejects at runtime instead of failing at build time.
  */
-#ifndef WOZ_FREERTOS_NIMBLE_SYSCFG_H
-#define WOZ_FREERTOS_NIMBLE_SYSCFG_H
+#ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_SYSCFG_H
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_SYSCFG_H
 
 /*
  * Upstream defaults both of these to 1. The controller links neither
@@ -81,4 +81,4 @@
 
 #include_next <syscfg/syscfg.h>
 
-#endif /* WOZ_FREERTOS_NIMBLE_SYSCFG_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_NIMBLE_SYSCFG_H */

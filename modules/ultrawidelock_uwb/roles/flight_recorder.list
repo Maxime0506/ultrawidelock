@@ -1,4 +1,4 @@
-# ultrawidelock_uwb tier: flight recorder (CONFIG_WOZ_FLIGHT_RECORDER, default n) — RAM
+# ultrawidelock_uwb tier: flight recorder (CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER, default n) — RAM
 # ring capture of a live walk-up for host replay; host-compiled for the replay
 # side. Consumers: modules/ultrawidelock_uwb/CMakeLists.txt, ports/esp32/components/
 # ultrawidelock_uwb, tests/host/sources.sh. Sorted; add HERE and nowhere else.

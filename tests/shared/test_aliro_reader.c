@@ -35,7 +35,8 @@
 #include "ultrawidelock_prov.h"
 #include "ultrawidelock_ranging.h"
 #include <ultrawidelock/reader.h>
-#include "woz_port.h" /* woz_uptime_ms: the clock the status tick's deadline uses */
+/* ultrawidelock_uptime_ms: the clock the status tick's deadline uses */
+#include "ultrawidelock_port.h"
 
 /* Failure injection into the prim double (aliro_prim_host.c). Every hook
  * defaults off and disarms itself after firing, so the walk-ups before
@@ -1113,19 +1114,19 @@ int main(void)
 		static const uint8_t relock[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x02, 0x04, 0x00};
 
 		/* Still inside the window: a tick before the deadline releases nothing. */
-		ultrawidelock_reader_status_tick(woz_uptime_ms());
+		ultrawidelock_reader_status_tick(ultrawidelock_uptime_ms());
 		okc("b.replay_held_before_deadline", tx_pending() == 0);
 
 		/* Past it, with no grant having intervened, so the phone gets the truth.
 		 * Offsetting the real clock keeps the deadline exact without a fake one. */
-		ultrawidelock_reader_status_tick(woz_uptime_ms() + 10000);
+		ultrawidelock_reader_status_tick(ultrawidelock_uptime_ms() + 10000);
 		f = tx_next(&n);
 		okc("b.secured_replayed", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 						  pn == 8 && memcmp(plain, relock, 8) == 0);
 	}
 	/* One shot: the flag is cleared by the replay, so nothing trails it. */
 	okc("b.replay_not_repeated", tx_pending() == 0);
-	ultrawidelock_reader_status_tick(woz_uptime_ms() + 10000);
+	ultrawidelock_reader_status_tick(ultrawidelock_uptime_ms() + 10000);
 	okc("b.replay_disarmed_after_firing", tx_pending() == 0);
 
 	okc("b.ursk_match", memcmp(s_rng_ursk, p.ursk, ULTRAWIDELOCK_URSK_LEN) == 0);
@@ -1765,7 +1766,7 @@ int main(void)
 		okc("b2.grant_sent", f != NULL && ph_open_ble(&p, f, n, plain, &pn) == 0 &&
 					    pn == 8 && memcmp(plain, grant, 8) == 0);
 
-		ultrawidelock_reader_status_tick(woz_uptime_ms() + 10000);
+		ultrawidelock_reader_status_tick(ultrawidelock_uptime_ms() + 10000);
 		okc("b2.replay_cancelled_by_grant", tx_pending() == 0);
 		s_cfg.cb.on_disconnected(5);
 	}

@@ -13,7 +13,7 @@
  *
  *  - It prescales RTC1 so the counter itself ticks at configTICK_RATE_HZ. That
  *    would leave board/time_freertos.c reading a 1 kHz counter while it states
- *    32768 Hz, making every woz_freertos_busy_wait_us about 33 times too long
+ *    32768 Hz, making every ultrawidelock_freertos_busy_wait_us about 33 times too long
  *    and coarsening the DW3110 response-arm probe from 30.5 us to 1 ms.
  *
  * So RTC1 runs unprescaled at 32768 Hz and the tick comes from COMPARE0 stepped
@@ -41,7 +41,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #define TICK_RTC NRF_RTC1
 #define TICK_RTC_IRQn RTC1_IRQn
@@ -103,7 +103,7 @@ static void ensure_running(void)
 			return;
 		}
 	}
-	woz_freertos_fatal("RTC1 is not counting; start MPSL before the scheduler");
+	ultrawidelock_freertos_fatal("RTC1 is not counting; start MPSL before the scheduler");
 }
 
 /*

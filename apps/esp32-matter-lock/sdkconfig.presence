@@ -2,7 +2,7 @@
 # to the board a phone is actually provisioned against.
 #
 # Load this in a separate build directory, the same way sdkconfig.piv is loaded.
-# It exists so CI can build the presence path: CONFIG_WOZ_PRESENCE is default n
+# It exists so CI can build the presence path: CONFIG_ULTRAWIDELOCK_PRESENCE is default n
 # and no sdkconfig.defaults sets it, so the ordinary matter-lock build compiles
 # none of app_shell.cpp's or app_main.cpp's presence code.
 #
@@ -10,4 +10,4 @@
 # That is right for a board you are iterating on and wrong for a build whose
 # only job is to prove the code still compiles, which must not depend on
 # whatever untracked sdkconfig the machine happens to have.
-CONFIG_WOZ_PRESENCE=y
+CONFIG_ULTRAWIDELOCK_PRESENCE=y

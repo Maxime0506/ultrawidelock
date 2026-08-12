@@ -11,12 +11,12 @@
 # application image.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-set(WOZ_PORT ${REPO_ROOT}/modules/woz_port)
+set(ULTRAWIDELOCK_PORT ${REPO_ROOT}/modules/ultrawidelock_port)
 # The Zephyr flash backend lives with the other Zephyr backends, in the port
 # tree. It is pulled in BY PATH rather than by depending on that module,
 # because the applier half below is built into MCUboot, and ports/zephyr is
 # not on the bootloader's module path.
-set(WOZ_PORT_ZEPHYR ${REPO_ROOT}/ports/zephyr/osal)
+set(ULTRAWIDELOCK_PORT_ZEPHYR ${REPO_ROOT}/ports/zephyr/osal)
 
 if(CONFIG_ULTRAWIDELOCK_DFU_APPLIER)
 
@@ -26,14 +26,14 @@ if(CONFIG_ULTRAWIDELOCK_DFU_APPLIER)
   zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_applier.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
-    ${WOZ_PORT_ZEPHYR}/flash_zephyr.c
+    ${ULTRAWIDELOCK_PORT_ZEPHYR}/flash_zephyr.c
     ${DETOOLS}/detools.c
     ${DETOOLS}/heatshrink/heatshrink_decoder.c)
 
   zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${WOZ_PORT}/include
+    ${ULTRAWIDELOCK_PORT}/include
     ${DETOOLS}
     ${DETOOLS}/heatshrink)
 
@@ -96,19 +96,19 @@ if(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
   zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_receiver.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/dfu_crc.c
-    ${WOZ_PORT_ZEPHYR}/flash_zephyr.c
+    ${ULTRAWIDELOCK_PORT_ZEPHYR}/flash_zephyr.c
     ${ultrawidelock_dfu_pubkey_c})
-  # The woz_osal.h backend this receiver also needs is NOT built here: one
+  # The ultrawidelock_osal.h backend this receiver also needs is NOT built here: one
   # image, one definition, and ports/zephyr owns it for every Zephyr image
   # (CONFIG_ULTRAWIDELOCK_DFU_RECEIVER is in that library's gate). The flash backend is
-  # named by path above instead, for the reason given at WOZ_PORT_ZEPHYR.
+  # named by path above instead, for the reason given at ULTRAWIDELOCK_PORT_ZEPHYR.
   zephyr_library_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${WOZ_PORT}/include)
+    ${ULTRAWIDELOCK_PORT}/include)
 
   # The optional SMP image-group front door onto this receiver
   # (CONFIG_ULTRAWIDELOCK_DFU_SMP_IMG) is Zephyr mcumgr glue and compiles from
-  # ports/zephyr (woz_zephyr_port); see the Kconfig help for why Zephyr's own
+  # ports/zephyr (ultrawidelock_zephyr_port); see the Kconfig help for why Zephyr's own
   # img_mgmt cannot be used here.
 
   # zephyr_include_directories, not the _library_ form: the transport lives in

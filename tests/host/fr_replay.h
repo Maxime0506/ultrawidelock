@@ -3,16 +3,16 @@
  *
  * Feeds a recorded walk-up's inputs (session config + the ordered per-frame
  * register snapshots) back through the REAL ccc_shim_rx.c listener via the
- * DW3000 shim doubles (woz_host_rx), and captures the radio-action outputs the
+ * DW3000 shim doubles (ultrawidelock_host_rx), and captures the radio-action outputs the
  * engine produces at each event. Because the responder path has no RNG and
  * every clock read is a captured timestamp, a correct firmware re-derives the
  * exact same outputs — so a divergence pins a behaviour change to one event.
  *
  * Lives in tests/host (not the portable module) because it pokes the shim's
- * woz_host_rx state, which only exists in the host build.
+ * ultrawidelock_host_rx state, which only exists in the host build.
  */
-#ifndef WOZ_FR_REPLAY_H
-#define WOZ_FR_REPLAY_H
+#ifndef ULTRAWIDELOCK_FR_REPLAY_H
+#define ULTRAWIDELOCK_FR_REPLAY_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -50,4 +50,4 @@ struct fr_replay_result {
  * Returns true iff the trace was well-formed through its END record. */
 bool fr_replay_run(const uint8_t *trace, size_t len, struct fr_replay_result *out);
 
-#endif /* WOZ_FR_REPLAY_H */
+#endif /* ULTRAWIDELOCK_FR_REPLAY_H */

@@ -18,20 +18,20 @@
  * so that a delay taken from a driver measures against the same RTC1 timebase
  * as every other wait in the image.
  */
-#ifndef WOZ_FREERTOS_NRFX_GLUE_H
-#define WOZ_FREERTOS_NRFX_GLUE_H
+#ifndef ULTRAWIDELOCK_FREERTOS_NRFX_GLUE_H
+#define ULTRAWIDELOCK_FREERTOS_NRFX_GLUE_H
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include <nrf.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #define NRFX_ASSERT(expression)                                                                    \
 	do {                                                                                       \
 		if (!(expression)) {                                                               \
-			woz_freertos_fatal("nrfx assertion failed");                               \
+			ultrawidelock_freertos_fatal("nrfx assertion failed");                               \
 		}                                                                                  \
 	} while (0)
 
@@ -39,7 +39,8 @@
 
 #define NRFX_IRQ_PRIORITY_SET(irq_number, priority) NVIC_SetPriority(irq_number, priority)
 #define NRFX_IRQ_ENABLE(irq_number) NVIC_EnableIRQ(irq_number)
-#define NRFX_IRQ_IS_ENABLED(irq_number) (0 != (NVIC->ISER[(irq_number) / 32] & (1UL << ((irq_number) % 32))))
+#define NRFX_IRQ_IS_ENABLED(irq_number)                                                            \
+	(0 != (NVIC->ISER[(irq_number) / 32] & (1UL << ((irq_number) % 32))))
 #define NRFX_IRQ_DISABLE(irq_number) NVIC_DisableIRQ(irq_number)
 #define NRFX_IRQ_PENDING_SET(irq_number) NVIC_SetPendingIRQ(irq_number)
 #define NRFX_IRQ_PENDING_CLEAR(irq_number) NVIC_ClearPendingIRQ(irq_number)
@@ -51,14 +52,14 @@
  */
 #define NRFX_CRITICAL_SECTION_ENTER()                                                            \
 	{                                                                                          \
-		uint32_t _woz_primask = __get_PRIMASK();                                           \
+		uint32_t _ultrawidelock_primask = __get_PRIMASK();                                           \
 		__disable_irq();
 
 #define NRFX_CRITICAL_SECTION_EXIT()                                                               \
-		__set_PRIMASK(_woz_primask);                                                       \
+		__set_PRIMASK(_ultrawidelock_primask);                                                       \
 	}
 
-#define NRFX_DELAY_US(us_time) woz_freertos_busy_wait_us((uint64_t)(us_time))
+#define NRFX_DELAY_US(us_time) ultrawidelock_freertos_busy_wait_us((uint64_t)(us_time))
 
 typedef uint32_t nrfx_atomic_t;
 
@@ -68,26 +69,32 @@ typedef uint32_t nrfx_atomic_t;
  * driver also touch, and those two run at interrupt priorities this port must
  * never mask for longer than a few instructions.
  */
-#define WOZ_NRFX_ATOMIC_OP(p_data, expr)                                                           \
+#define ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, expr)                                                 \
 	({                                                                                         \
-		uint32_t _woz_old;                                                                 \
-		uint32_t _woz_new;                                                                 \
+		uint32_t _ultrawidelock_old;                                                       \
+		uint32_t _ultrawidelock_new;                                                       \
 		do {                                                                               \
-			_woz_old = __LDREXW((volatile uint32_t *)(p_data));                        \
-			_woz_new = (expr);                                                         \
-		} while (__STREXW(_woz_new, (volatile uint32_t *)(p_data)) != 0u);                 \
+			_ultrawidelock_old = __LDREXW((volatile uint32_t *)(p_data));              \
+			_ultrawidelock_new = (expr);                                               \
+		} while (__STREXW(_ultrawidelock_new, (volatile uint32_t *)(p_data)) != 0u);       \
 		__DMB();                                                                           \
-		_woz_old;                                                                          \
+		_ultrawidelock_old;                                                                \
 	})
 
-#define NRFX_ATOMIC_FETCH_STORE(p_data, value) WOZ_NRFX_ATOMIC_OP(p_data, (uint32_t)(value))
-#define NRFX_ATOMIC_FETCH_OR(p_data, value) WOZ_NRFX_ATOMIC_OP(p_data, _woz_old | (uint32_t)(value))
-#define NRFX_ATOMIC_FETCH_AND(p_data, value) WOZ_NRFX_ATOMIC_OP(p_data, _woz_old & (uint32_t)(value))
-#define NRFX_ATOMIC_FETCH_XOR(p_data, value) WOZ_NRFX_ATOMIC_OP(p_data, _woz_old ^ (uint32_t)(value))
-#define NRFX_ATOMIC_FETCH_ADD(p_data, value) WOZ_NRFX_ATOMIC_OP(p_data, _woz_old + (uint32_t)(value))
-#define NRFX_ATOMIC_FETCH_SUB(p_data, value) WOZ_NRFX_ATOMIC_OP(p_data, _woz_old - (uint32_t)(value))
+#define NRFX_ATOMIC_FETCH_STORE(p_data, value)                                                     \
+	ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, (uint32_t)(value))
+#define NRFX_ATOMIC_FETCH_OR(p_data, value)                                                        \
+	ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, _ultrawidelock_old | (uint32_t)(value))
+#define NRFX_ATOMIC_FETCH_AND(p_data, value)                                                       \
+	ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, _ultrawidelock_old &(uint32_t)(value))
+#define NRFX_ATOMIC_FETCH_XOR(p_data, value)                                                       \
+	ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, _ultrawidelock_old ^ (uint32_t)(value))
+#define NRFX_ATOMIC_FETCH_ADD(p_data, value)                                                       \
+	ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, _ultrawidelock_old + (uint32_t)(value))
+#define NRFX_ATOMIC_FETCH_SUB(p_data, value)                                                       \
+	ULTRAWIDELOCK_NRFX_ATOMIC_OP(p_data, _ultrawidelock_old - (uint32_t)(value))
 
-static inline bool woz_freertos_nrfx_atomic_cas(nrfx_atomic_t *p_data, uint32_t old_value,
+static inline bool ultrawidelock_freertos_nrfx_atomic_cas(nrfx_atomic_t *p_data, uint32_t old_value,
 						uint32_t new_value)
 {
 	if (__LDREXW((volatile uint32_t *)p_data) != old_value) {
@@ -102,11 +109,11 @@ static inline bool woz_freertos_nrfx_atomic_cas(nrfx_atomic_t *p_data, uint32_t 
 }
 
 #define NRFX_ATOMIC_CAS(p_data, old_value, new_value)                                              \
-	woz_freertos_nrfx_atomic_cas(p_data, (uint32_t)(old_value), (uint32_t)(new_value))
+	ultrawidelock_freertos_nrfx_atomic_cas(p_data, (uint32_t)(old_value), (uint32_t)(new_value))
 
 #define NRFX_CLZ(value) __CLZ(value)
 #define NRFX_CTZ(value) (__CLZ(__RBIT(value)))
 
 #define NRFX_EVENT_READBACK_ENABLED 1
 
-#endif /* WOZ_FREERTOS_NRFX_GLUE_H */
+#endif /* ULTRAWIDELOCK_FREERTOS_NRFX_GLUE_H */

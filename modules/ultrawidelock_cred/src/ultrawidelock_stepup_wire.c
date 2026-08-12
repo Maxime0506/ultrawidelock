@@ -1,8 +1,8 @@
 // Crypto-free wire codecs for the Aliro step-up phase: the mdoc DeviceRequest builders, the
 // SessionData {"data": bstr} envelope without the AES-GCM channel (raw wrap/unwrap), the NFC
 // DO'53 TLV wrapper, the fragmenting ENVELOPE / extended GET RESPONSE APDU builders, and the
-// 61xx GET RESPONSE chaining reassembly. Merged from woz_aliro_stack's nfc_step_up.c; this unit
-// carries no crypto dependency so transport stacks that encrypt through their own backend
+// 61xx GET RESPONSE chaining reassembly. Merged from ultrawidelock_cred_stack's nfc_step_up.c; this
+// unit carries no crypto dependency so transport stacks that encrypt through their own backend
 // (session.cpp via Nordic's Interface) link it without ultrawidelock_crypto.
 /*
  * Wire structures from the Aliro v1.0 spec (§8.4.2, §8.4.4, Table 8-21) and ISO
@@ -213,7 +213,7 @@ int ultrawidelock_stepup_wrap_do53(const uint8_t *message, size_t message_length
 		return ULTRAWIDELOCK_STEPUP_INVALID_ARGUMENT;
 	}
 	size_t off = 0;
-	if (woz_aliro_tlv_write(output, output_capacity, &off, 0x53, message, message_length) !=
+	if (ultrawidelock_cred_tlv_write(output, output_capacity, &off, 0x53, message, message_length) !=
 	    ULTRAWIDELOCK_CRED_TLV_OK) {
 		return ULTRAWIDELOCK_STEPUP_BUFFER_TOO_SMALL;
 	}
@@ -232,9 +232,9 @@ int ultrawidelock_stepup_unwrap_do53(const uint8_t *encoded, size_t encoded_leng
 	if (encoded == NULL || message == NULL || message_length == NULL) {
 		return ULTRAWIDELOCK_STEPUP_INVALID_ARGUMENT;
 	}
-	struct woz_aliro_tlv tlv;
+	struct ultrawidelock_cred_tlv tlv;
 	size_t off = 0;
-	if (woz_aliro_tlv_next(encoded, encoded_length, &off, &tlv) != 0 || tlv.tag != 0x53 ||
+	if (ultrawidelock_cred_tlv_next(encoded, encoded_length, &off, &tlv) != 0 || tlv.tag != 0x53 ||
 	    off != encoded_length) {
 		return ULTRAWIDELOCK_STEPUP_INVALID_DATA;
 	}

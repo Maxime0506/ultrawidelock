@@ -17,12 +17,12 @@
 #include "ultrawidelock_uwb_msg_spec.h"
 #include "prepoll_tx.h"
 
-/* ultrawidelock_uwb_msg_parser.c does LOG_MODULE_DECLARE(woz_ultrawidelock_uwb) and the module's
+/* ultrawidelock_uwb_msg_parser.c does LOG_MODULE_DECLARE(ultrawidelock_cred_uwb) and the module's
  * own registration lives in ultrawidelock_uwb_adapter.c, which is reader-side and not
  * linked here. Someone in this image has to own the symbol, so it is this file.
  * If the adapter is ever linked into the initiator as well, this becomes a
  * duplicate registration and the linker says so, which is the failure we want. */
-LOG_MODULE_REGISTER(woz_ultrawidelock_uwb, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(ultrawidelock_cred_uwb, LOG_LEVEL_INF);
 
 /* The largest post-auth SDU either side sends. M1 is the big one: a config-id
  * list, a pulse-shape-combo list, a channel bitmask and a session id, all TLV.

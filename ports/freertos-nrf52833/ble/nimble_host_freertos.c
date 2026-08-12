@@ -1,9 +1,9 @@
-#include "woz_freertos_nimble_host.h"
+#include "ultrawidelock_freertos_nimble_host.h"
 
 #include <stddef.h>
 
-#include "woz_freertos_platform.h"
-#include "woz_freertos_radio.h"
+#include "ultrawidelock_freertos_platform.h"
+#include "ultrawidelock_freertos_radio.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -32,8 +32,8 @@
 #error "NimBLE callouts are FreeRTOS software timers; set configUSE_TIMERS=1"
 #endif
 
-#ifndef WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES
-#define WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES 4096u
+#ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES 4096u
 #endif
 
 /*
@@ -41,15 +41,15 @@
  * work: the host must not delay the controller, but it must still drain its
  * event queue ahead of product logic.
  */
-#ifndef WOZ_FREERTOS_NIMBLE_HOST_TASK_PRIORITY
-#define WOZ_FREERTOS_NIMBLE_HOST_TASK_PRIORITY (tskIDLE_PRIORITY + 1u)
+#ifndef ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TASK_PRIORITY
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TASK_PRIORITY (tskIDLE_PRIORITY + 1u)
 #endif
 
 #define HOST_STACK_WORDS                                                                   \
-	((WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES + sizeof(StackType_t) - 1u) /               \
+	((ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES + sizeof(StackType_t) - 1u) /               \
 	 sizeof(StackType_t))
 
-#define WOZ_FREERTOS_NIMBLE_HOST_TAG "ble_host"
+#define ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG "ble_host"
 
 static TaskHandle_t s_task;
 static StaticTask_t s_task_storage;
@@ -57,9 +57,10 @@ static StackType_t s_stack[HOST_STACK_WORDS];
 static bool s_ready;
 static volatile bool s_synced;
 static volatile uint32_t s_resets;
-static struct woz_freertos_nimble_host_hooks s_hooks;
+static struct ultrawidelock_freertos_nimble_host_hooks s_hooks;
 
-void woz_freertos_nimble_host_set_hooks(const struct woz_freertos_nimble_host_hooks *hooks)
+void ultrawidelock_freertos_nimble_host_set_hooks(
+	const struct ultrawidelock_freertos_nimble_host_hooks *hooks)
 {
 	if (hooks == NULL) {
 		s_hooks.register_services = NULL;
@@ -69,17 +70,17 @@ void woz_freertos_nimble_host_set_hooks(const struct woz_freertos_nimble_host_ho
 	s_hooks = *hooks;
 }
 
-bool woz_freertos_nimble_host_ready(void)
+bool ultrawidelock_freertos_nimble_host_ready(void)
 {
 	return s_ready;
 }
 
-bool woz_freertos_nimble_host_synced(void)
+bool ultrawidelock_freertos_nimble_host_synced(void)
 {
 	return s_synced;
 }
 
-uint32_t woz_freertos_nimble_host_resets(void)
+uint32_t ultrawidelock_freertos_nimble_host_resets(void)
 {
 	return s_resets;
 }
@@ -88,7 +89,7 @@ uint32_t woz_freertos_nimble_host_resets(void)
 static void on_sync(void)
 {
 	s_synced = true;
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, WOZ_FREERTOS_NIMBLE_HOST_TAG,
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
 			 "host synced with the controller");
 	/* After the flag, so a hook that advertises sees a synced host. */
 	if (s_hooks.on_sync != NULL) {
@@ -105,8 +106,9 @@ static void on_reset(int reason)
 {
 	s_synced = false;
 	s_resets++;
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_NIMBLE_HOST_TAG,
-			 "host reset, reason %d", reason);
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR,
+				   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG, "host reset, reason %d",
+				   reason);
 }
 
 static void host_task(void *arg)
@@ -116,7 +118,7 @@ static void host_task(void *arg)
 	nimble_port_run();
 }
 
-int woz_freertos_nimble_host_start(void)
+int ultrawidelock_freertos_nimble_host_start(void)
 {
 	int rc;
 
@@ -124,18 +126,19 @@ int woz_freertos_nimble_host_start(void)
 		return 0;
 	}
 
-	rc = woz_freertos_radio_start(woz_freertos_radio_sdc_dispatcher());
+	rc = ultrawidelock_freertos_radio_start(ultrawidelock_freertos_radio_sdc_dispatcher());
 	if (rc != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_NIMBLE_HOST_TAG,
-				 "radio startup failed at stage %d", -rc);
-		return -WOZ_FREERTOS_NIMBLE_HOST_STAGE_RADIO;
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR,
+					   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
+					   "radio startup failed at stage %d", -rc);
+		return -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_RADIO;
 	}
 
 	/*
 	 * Initializes the NPL default queue and memory pools, then the transport
 	 * and the host. The transport half of this reaches back into
 	 * ble/nimble_sdc_transport.c, which is why the radio has to be up first:
-	 * its ops table is published by woz_freertos_radio_start().
+	 * its ops table is published by ultrawidelock_freertos_radio_start().
 	 */
 	nimble_port_init();
 
@@ -149,17 +152,18 @@ int woz_freertos_nimble_host_start(void)
 	if (s_hooks.register_services != NULL) {
 		rc = s_hooks.register_services();
 		if (rc != 0) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_NIMBLE_HOST_TAG,
-					 "service registration failed rc=%d", rc);
-			return -WOZ_FREERTOS_NIMBLE_HOST_STAGE_SERVICES;
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR,
+						   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
+						   "service registration failed rc=%d", rc);
+			return -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_SERVICES;
 		}
 	}
 
 	s_task = xTaskCreateStatic(host_task, "ble_host", (uint32_t)HOST_STACK_WORDS, NULL,
-				   WOZ_FREERTOS_NIMBLE_HOST_TASK_PRIORITY, s_stack,
+				   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TASK_PRIORITY, s_stack,
 				   &s_task_storage);
 	if (s_task == NULL) {
-		return -WOZ_FREERTOS_NIMBLE_HOST_STAGE_TASK;
+		return -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_TASK;
 	}
 
 	/*

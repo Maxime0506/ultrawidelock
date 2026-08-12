@@ -14,12 +14,12 @@
 #include "drvfake.h"
 #include "test.h"
 #include "uwb_rxdiag.h"
-#include "woz_osal.h"
+#include "ultrawidelock_osal.h"
 
 /* Seam entry points + the init hook (see uwb_seam.h / uwb_rxdiag.c). */
 void ultrawidelock_uwb_set_callbacks(dwt_callbacks_s *callbacks);
 int32_t ultrawidelock_uwb_configure_phy(dwt_config_t *config);
-extern int (*const woz_init_rxdiag_init)(void);
+extern int (*const ultrawidelock_init_rxdiag_init)(void);
 
 /* The MAC-side callbacks our shims must chain into. */
 static unsigned chain_rxok, chain_rxto, chain_rxerr, chain_txdone;
@@ -53,7 +53,7 @@ static unsigned advance_quiet(int64_t ms)
 
 	fflush(stdout);
 	dup2(devnull, 1);
-	ran = woz_osal_host_advance_ms(ms);
+	ran = ultrawidelock_osal_host_advance_ms(ms);
 	fflush(stdout);
 	dup2(saved, 1);
 	close(saved);
@@ -67,10 +67,10 @@ void test_uwb_rxdiag(void)
 
 	t_group("boot init binds the work items and arms the heartbeat");
 	drvfake_reset();
-	woz_osal_host_reset();
-	T_EQ("init rc", woz_init_rxdiag_init(), 0);
+	ultrawidelock_osal_host_reset();
+	T_EQ("init rc", ultrawidelock_init_rxdiag_init(), 0);
 	T_OK("stream defaulted on (pretty shell off)", uwb_rxdiag_stream_get());
-	T_EQ("not due before 2s", (long)woz_osal_host_advance_ms(1999), 0L);
+	T_EQ("not due before 2s", (long)ultrawidelock_osal_host_advance_ms(1999), 0L);
 	T_EQ("armed at 2s", (long)advance_quiet(1), 1L);
 
 	t_group("callback interception");
@@ -166,7 +166,7 @@ void test_uwb_rxdiag(void)
 	t_group("stream toggles drive the heartbeat");
 	uwb_rxdiag_stream_set(false);
 	T_OK("stream off", !uwb_rxdiag_stream_get());
-	T_EQ("cancelled: nothing fires", (long)woz_osal_host_advance_ms(5000), 0L);
+	T_EQ("cancelled: nothing fires", (long)ultrawidelock_osal_host_advance_ms(5000), 0L);
 	uwb_rxdiag_stream_set(true);
 	T_OK("stream on", uwb_rxdiag_stream_get());
 	T_EQ("armed immediately", (long)advance_quiet(0), 1L);
@@ -209,6 +209,6 @@ void test_uwb_rxdiag(void)
 	(void)advance_quiet(2000); /* nothing new: idle announced once */
 	(void)advance_quiet(2000); /* still idle: quiet path */
 	uwb_rxdiag_stream_set(false);
-	T_EQ("no re-arm when stopped", (long)woz_osal_host_advance_ms(4000), 0L);
+	T_EQ("no re-arm when stopped", (long)ultrawidelock_osal_host_advance_ms(4000), 0L);
 	T_OK("heartbeat survived all branches", 1);
 }

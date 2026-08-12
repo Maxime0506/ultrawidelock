@@ -36,8 +36,8 @@
 
 #include <library/entropy_poll.h>
 
-#include <woz_freertos_crypto.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_crypto.h>
+#include <ultrawidelock_freertos_platform.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -53,14 +53,15 @@ static unsigned g_failures;
 		}                                                                                  \
 	} while (0)
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
 	(void)fmt;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	printf("  FAIL unexpected fatal: %s\n", reason);
 	fflush(stdout);
@@ -73,7 +74,7 @@ static bool s_entropy_fails;
 static unsigned s_entropy_calls;
 static size_t s_entropy_last_len;
 
-int woz_freertos_entropy(void *buffer, size_t length)
+int ultrawidelock_freertos_entropy(void *buffer, size_t length)
 {
 	s_entropy_calls++;
 	s_entropy_last_len = length;
@@ -95,7 +96,7 @@ int woz_freertos_entropy(void *buffer, size_t length)
 
 static const struct fake_threading_callbacks *callbacks(void)
 {
-	woz_freertos_mbedtls_threading_init();
+	ultrawidelock_freertos_mbedtls_threading_init();
 	return fake_threading_installed();
 }
 
@@ -116,8 +117,8 @@ static void scenario_install(void)
 	 * so calling it twice would re-init mutexes that are already guarding
 	 * state. The guard is what stops that, and the count is the evidence.
 	 */
-	woz_freertos_mbedtls_threading_init();
-	woz_freertos_mbedtls_threading_init();
+	ultrawidelock_freertos_mbedtls_threading_init();
+	ultrawidelock_freertos_mbedtls_threading_init();
 	CHECK("a repeated install is refused", fake_threading_set_alt_calls == 1u);
 }
 
@@ -239,7 +240,7 @@ static void scenario_alloc(void)
 	size_t i;
 	bool zeroed = true;
 
-	block = woz_freertos_mbedtls_calloc(8u, 4u);
+	block = ultrawidelock_freertos_mbedtls_calloc(8u, 4u);
 	CHECK("calloc returns a block", block != NULL);
 	if (block != NULL) {
 		for (i = 0; i < 32u; i++) {
@@ -248,13 +249,13 @@ static void scenario_alloc(void)
 			}
 		}
 		CHECK("calloc zeroes what it returns", zeroed);
-		woz_freertos_mbedtls_free(block);
+		ultrawidelock_freertos_mbedtls_free(block);
 	}
 
 	CHECK("a zero count allocates nothing",
-	      woz_freertos_mbedtls_calloc(0u, 4u) == NULL);
+	      ultrawidelock_freertos_mbedtls_calloc(0u, 4u) == NULL);
 	CHECK("a zero size allocates nothing",
-	      woz_freertos_mbedtls_calloc(4u, 0u) == NULL);
+	      ultrawidelock_freertos_mbedtls_calloc(4u, 0u) == NULL);
 
 	/*
 	 * The overflow check is the reason this is a function and not a macro.
@@ -263,7 +264,7 @@ static void scenario_alloc(void)
 	 * about to write into.
 	 */
 	CHECK("an overflowing product allocates nothing",
-	      woz_freertos_mbedtls_calloc(SIZE_MAX / 2u + 2u, 2u) == NULL);
+	      ultrawidelock_freertos_mbedtls_calloc(SIZE_MAX / 2u + 2u, 2u) == NULL);
 
 	/*
 	 * The step below the overflow. This one passes the check and is refused
@@ -273,11 +274,11 @@ static void scenario_alloc(void)
 	 */
 	fake_malloc_calls = 0;
 	CHECK("the largest non-overflowing product still reaches the heap",
-	      woz_freertos_mbedtls_calloc(SIZE_MAX / 2u, 2u) == NULL &&
+	      ultrawidelock_freertos_mbedtls_calloc(SIZE_MAX / 2u, 2u) == NULL &&
 		      fake_malloc_calls == 1u);
 
 	/* free tolerates NULL, because the library passes it. */
-	woz_freertos_mbedtls_free(NULL);
+	ultrawidelock_freertos_mbedtls_free(NULL);
 	CHECK("freeing NULL is survivable", true);
 }
 
@@ -329,12 +330,12 @@ static void scenario_entropy_poll(void)
 
 static void scenario_bringup(void)
 {
-	CHECK("bring-up succeeds", woz_freertos_crypto_init() == 0);
+	CHECK("bring-up succeeds", ultrawidelock_freertos_crypto_init() == 0);
 	CHECK("the PSA core was initialised", fake_psa_init_calls == 1u);
 	CHECK("threading was installed first", fake_psa_threading_was_ready());
 	CHECK("the threading callbacks are in place", fake_threading_set_alt_calls == 1u);
 
-	CHECK("a second bring-up is a no-op", woz_freertos_crypto_init() == 0);
+	CHECK("a second bring-up is a no-op", ultrawidelock_freertos_crypto_init() == 0);
 	CHECK("and does not re-enter the PSA core", fake_psa_init_calls == 1u);
 	CHECK("and does not re-install the callbacks", fake_threading_set_alt_calls == 1u);
 }
@@ -343,7 +344,7 @@ static void scenario_bringup_failure(void)
 {
 	fake_psa_set_init_status(PSA_ERROR_INSUFFICIENT_MEMORY);
 
-	CHECK("a failing PSA core fails bring-up", woz_freertos_crypto_init() == -1);
+	CHECK("a failing PSA core fails bring-up", ultrawidelock_freertos_crypto_init() == -1);
 	CHECK("the core was reached", fake_psa_init_calls == 1u);
 	CHECK("threading was still installed first", fake_psa_threading_was_ready());
 
@@ -353,7 +354,7 @@ static void scenario_bringup_failure(void)
 	 * caller has to get a real attempt rather than a cached success.
 	 */
 	fake_psa_set_init_status(PSA_SUCCESS);
-	CHECK("a retry is attempted", woz_freertos_crypto_init() == 0);
+	CHECK("a retry is attempted", ultrawidelock_freertos_crypto_init() == 0);
 	CHECK("the retry reached the core", fake_psa_init_calls == 2u);
 	CHECK("the retry did not re-install the callbacks", fake_threading_set_alt_calls == 1u);
 }

@@ -28,7 +28,7 @@ config ULTRAWIDELOCK_CRED_LAB
 	  aliro-lat stamps, hence the ULTRAWIDELOCK_LAT_TRACE dependency. Set n to strip
 	  it entirely from a hardened production image.
 
-config WOZ_RSSI_GATE
+config ULTRAWIDELOCK_RSSI_GATE
 	bool "RSSI-gated UWB ranging (power gate)"
 	default y
 	help
@@ -43,9 +43,9 @@ config WOZ_RSSI_GATE
 	  phone re-runs the fast auth on its next approach. With this off the
 	  radio arms right after auth, exactly as before.
 
-config WOZ_RSSI_GATE_OPEN_DBM
+config ULTRAWIDELOCK_RSSI_GATE_OPEN_DBM
 	int "Gate open threshold (dBm)"
-	depends on WOZ_RSSI_GATE
+	depends on ULTRAWIDELOCK_RSSI_GATE
 	default -55
 	help
 	  Smoothed connection RSSI at or above this opens the gate (allows UWB).
@@ -57,9 +57,9 @@ config WOZ_RSSI_GATE_OPEN_DBM
 	  rig -55 lands in the 2.0-2.5 m band; -50 separates near from far better
 	  on paper but opens under 1 m, which arrives too late to be useful.
 
-config WOZ_RSSI_GATE_CLOSE_DBM
+config ULTRAWIDELOCK_RSSI_GATE_CLOSE_DBM
 	int "Gate close threshold (dBm)"
-	depends on WOZ_RSSI_GATE
+	depends on ULTRAWIDELOCK_RSSI_GATE
 	default -65
 	help
 	  Smoothed RSSI at or below this — sustained for the close hold time —
@@ -72,17 +72,17 @@ config WOZ_RSSI_GATE_CLOSE_DBM
 	  powers down. The old -75 was below the level seen at any distance the
 	  rig could still hold a link at, so the gate effectively never closed.
 
-config WOZ_RSSI_GATE_CLOSE_HOLD_MS
+config ULTRAWIDELOCK_RSSI_GATE_CLOSE_HOLD_MS
 	int "Gate close hold (ms)"
-	depends on WOZ_RSSI_GATE
+	depends on ULTRAWIDELOCK_RSSI_GATE
 	default 3000
 	help
 	  How long the smoothed RSSI must stay below the close threshold before
 	  the gate closes. Rides out pocket/body fades mid-approach.
 
-config WOZ_RSSI_GATE_MAX_HOLD_MS
+config ULTRAWIDELOCK_RSSI_GATE_MAX_HOLD_MS
 	int "Longest AP-Completed hold (ms; 0 = unbounded)"
-	depends on WOZ_RSSI_GATE
+	depends on ULTRAWIDELOCK_RSSI_GATE
 	default 0
 	help
 	  Cap on how long Reader-Status-AP-Completed may be deferred while the
@@ -104,12 +104,12 @@ config WOZ_RSSI_GATE_MAX_HOLD_MS
 
 	  Set a nonzero value to take the other trade. If you do, note the cap is
 	  only evaluated when an RSSI sample arrives, so the hold ends up to
-	  WOZ_RSSI_GATE_POLL_MS late: a 1500 ms cap released at 1695 ms on the
+	  ULTRAWIDELOCK_RSSI_GATE_POLL_MS late: a 1500 ms cap released at 1695 ms on the
 	  bench, leaving 121 ms against the phone's 1873. Budget cap + poll.
 
-config WOZ_RSSI_GATE_SLOPE_DB
+config ULTRAWIDELOCK_RSSI_GATE_SLOPE_DB
 	int "Fast-open rise (dB per 1.5 s window; 0 disables)"
-	depends on WOZ_RSSI_GATE
+	depends on ULTRAWIDELOCK_RSSI_GATE
 	default 8
 	help
 	  A rise of this many dB across the tracking window opens the gate
@@ -118,18 +118,18 @@ config WOZ_RSSI_GATE_SLOPE_DB
 	  (threshold-only gating) — useful as the comparison arm in the power/
 	  latency study.
 
-config WOZ_RSSI_GATE_POLL_MS
+config ULTRAWIDELOCK_RSSI_GATE_POLL_MS
 	int "Connection RSSI poll period (ms)"
-	depends on WOZ_RSSI_GATE
+	depends on ULTRAWIDELOCK_RSSI_GATE
 	default 250
 	help
 	  How often the transport reads the controller RSSI while the Aliro
 	  L2CAP channel is up (one HCI Read RSSI per period; negligible next
 	  to the UWB RX it replaces). The first read fires at channel-open so
 	  a connect-at-the-door walk-up is never delayed by the poll interval.
-config WOZ_APPROACH_PREDICT
+config ULTRAWIDELOCK_APPROACH_PREDICT
 	bool "Predictive (ETA) unlock — negative latency"
-	depends on !WOZ_RSSI_GATE
+	depends on !ULTRAWIDELOCK_RSSI_GATE
 	default y
 	help
 	  Run the constant-velocity Kalman path in ultrawidelock_approach: estimate the
@@ -141,7 +141,7 @@ config WOZ_APPROACH_PREDICT
 	  above the minimum, so the controller has to see the phone approaching
 	  from beyond a metre.
 
-	  That is exactly what WOZ_RSSI_GATE takes away, which is why this
+	  That is exactly what ULTRAWIDELOCK_RSSI_GATE takes away, which is why this
 	  depends on the gate being off. The gate withholds the message that
 	  starts ranging until the phone is already close, and a further ~1.29 s
 	  elapses before the first trusted range (1286 and 1289 ms, measured).
@@ -168,7 +168,7 @@ config ULTRAWIDELOCK_UWB_CIRDIAG
 	  walk-up latency while armed, so arm it only for a capture run. Set n to
 	  strip it entirely.
 
-config WOZ_FLIGHT_RECORDER
+config ULTRAWIDELOCK_FLIGHT_RECORDER
 	bool "Flight recorder: record a live walk-up for host replay"
 	default n
 	help
@@ -181,9 +181,9 @@ config WOZ_FLIGHT_RECORDER
 	  `uwbdiag` traces it reads extra registers while armed, so it costs walk-up
 	  latency — arm it only for a capture run. Set n to strip it entirely.
 
-config WOZ_FLIGHT_RECORDER_BYTES
+config ULTRAWIDELOCK_FLIGHT_RECORDER_BYTES
 	int "Flight recorder RAM ring size (bytes)"
-	depends on WOZ_FLIGHT_RECORDER
+	depends on ULTRAWIDELOCK_FLIGHT_RECORDER
 	default 16384
 	help
 	  Capacity of the static capture ring. One walk-up is a few dozen events at
@@ -219,7 +219,7 @@ config ULTRAWIDELOCK_CRED_ACCESS_LISTENER
 	  to set it by hand. Off by default because it is otherwise dead weight on the
 	  transaction path: unset, the reader is byte-for-byte identical to today.
 
-config WOZ_PRESENCE
+config ULTRAWIDELOCK_PRESENCE
 	bool "Presence assertions (non-door primitive)"
 	default n
 	help
@@ -239,25 +239,25 @@ config WOZ_PRESENCE
 	  suits rare deliberate actions (signing a release tag), not anything
 	  frequent or ambient. OFF by default.
 
-config WOZ_PRESENCE_TIMEOUT_MS
+config ULTRAWIDELOCK_PRESENCE_TIMEOUT_MS
 	int "Fresh presence proof timeout (ms)"
-	depends on WOZ_PRESENCE
+	depends on ULTRAWIDELOCK_PRESENCE
 	range 1000 30000
 	default 8000
 	help
 	  End a proof without signing if a new authentication and trusted UWB range
 	  have not completed in this window.
 
-config WOZ_PRESENCE_MAX_CM
+config ULTRAWIDELOCK_PRESENCE_MAX_CM
 	int "Maximum signed presence distance (cm)"
-	depends on WOZ_PRESENCE
+	depends on ULTRAWIDELOCK_PRESENCE
 	range 0 3000
 	default 40
 	help
 	  Firmware refuses to sign a fresh range beyond this distance. A verifier
 	  may enforce an equal or lower threshold.
 
-config WOZ_RANGE_GATE_STRICT
+config ULTRAWIDELOCK_RANGE_GATE_STRICT
 	bool "Range gate: enforce STS quality for the lock path too (drop suspect blocks)"
 	default n
 	help
@@ -268,7 +268,7 @@ config WOZ_RANGE_GATE_STRICT
 	  a human out of their own door.
 
 	  This option governs the DOOR path only. Presence assertions
-	  (WOZ_PRESENCE) always require a good STS and refuse to sign a range
+	  (ULTRAWIDELOCK_PRESENCE) always require a good STS and refuse to sign a range
 	  without one, regardless of this setting, because a signed claim someone
 	  else will act on has to fail closed where a lock must not.
 

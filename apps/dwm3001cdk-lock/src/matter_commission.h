@@ -14,7 +14,7 @@ extern "C" {
  *
  * Call after the reader is up. Nothing here touches the radio: whether the
  * board is discoverable as a commissionable node is decided by the advertising
- * branch in aliro_ble_zephyr.c, which asks for the Matter payload while this
+ * branch in ultrawidelock_ble_zephyr.c, which asks for the Matter payload while this
  * node holds no fabric -- see matter_commission_has_fabric().
  *
  * @return 0. A bad verifier is reported by log and refused per attempt rather

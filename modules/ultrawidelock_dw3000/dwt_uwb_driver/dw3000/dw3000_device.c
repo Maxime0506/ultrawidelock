@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include "woz_log.h"           /* DIAG: RF-arm trace (temporary) */
+#include "ultrawidelock_log.h"           /* DIAG: RF-arm trace (temporary) */
 #include "ultrawidelock_util.h"          /* IS_ENABLED — gate the DIAG printk under PRETTY */
 
 #define OPTSPEED __attribute__((optimize("O3")))
@@ -1951,7 +1951,7 @@ static int32_t ull_configure(dwchip_t *dw, dwt_config_t *config)
 {
     uint8_t chan = config->chan;
     uint32_t temp;
-    if (!IS_ENABLED(CONFIG_WOZ_PRETTY_SHELL)) printk("DIAG ull_configure chan=%u\n", (unsigned)config->chan); /* DIAG */
+    if (!IS_ENABLED(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)) printk("DIAG ull_configure chan=%u\n", (unsigned)config->chan); /* DIAG */
     uint8_t scp = ((config->rxCode > 24U) || (config->txCode > 24U)) ? 1U : 0U;
     uint32_t mode = (config->phrMode == DWT_PHRMODE_EXT) ? SYS_CFG_PHR_MODE_BIT_MASK : 0UL;
     int32_t ret_val = (int32_t)DWT_SUCCESS;
@@ -7351,7 +7351,7 @@ static int32_t ull_setchannel(dwchip_t *dw, uint8_t ch)
 {
     int32_t ret_val = (int32_t)DWT_SUCCESS;
     uint8_t dw_state = dwt_read8bitoffsetreg(dw, SYS_STATE_LO_ID, 2U);
-    if (!IS_ENABLED(CONFIG_WOZ_PRETTY_SHELL)) printk("DIAG ull_setchannel ch=%u dw_state=0x%02x\n", (unsigned)ch, (unsigned)dw_state); /* DIAG */
+    if (!IS_ENABLED(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)) printk("DIAG ull_setchannel ch=%u dw_state=0x%02x\n", (unsigned)ch, (unsigned)dw_state); /* DIAG */
 
     // Check if UWB radio is in TX or RX state, if true return an error. User should call dwt_forcetrxoff() prior to changing channel
     if (dw_state > DW_SYS_STATE_IDLE) 

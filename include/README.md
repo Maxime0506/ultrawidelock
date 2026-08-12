@@ -9,7 +9,7 @@ role declarations stay with their portable implementation owners:
 | `<ultrawidelock/device.h>` | `modules/ultrawidelock_cred/include/ultrawidelock/device.h` |
 | `<ultrawidelock/tlv.h>` | `modules/ultrawidelock_cred/include/ultrawidelock/tlv.h` |
 | `<ultrawidelock/uwb.h>` | `modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h` |
-| `<ultrawidelock/woz_hal.h>` | `modules/woz_port/include/ultrawidelock/woz_hal.h` |
+| `<ultrawidelock/ultrawidelock_hal.h>` | `modules/ultrawidelock_port/include/ultrawidelock/ultrawidelock_hal.h` |
 
 This keeps module ownership intact while giving source builds and installed
 packages the same `<ultrawidelock/...>` include spelling. The former flat role

@@ -11,7 +11,7 @@
  * Port of examples/esp32/initiator/main/main.c -- the same program on two
  * stacks, differing only in logging macros and entry point (ultrawidelock_ble_central.h
  * absorbs NimBLE-vs-Zephyr); keep them in step. The transport half lives in
- * ports/zephyr/ble/aliro_ble_central_zephyr.c, the protocol half in woz_aliro's
+ * ports/zephyr/ble/ultrawidelock_ble_central_zephyr.c, the protocol half in ultrawidelock_cred's
  * ultrawidelock_device; this file is only the glue. UWB is NOT yet wired: ESTABLISHED
  * means the boards agreed a URSK, ranging on it needs the DWM3000EVB driver.
  */

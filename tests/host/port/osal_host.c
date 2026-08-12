@@ -1,38 +1,38 @@
 /*
- * osal_host.c - the host backend of woz_osal.h, which IS the test double.
+ * osal_host.c - the host backend of ultrawidelock_osal.h, which IS the test double.
  *
  * A FIFO for immediate work, a deadline-ordered list for delayable work, and
- * a virtual clock the suite steps (woz_osal_host_advance_ms / _flush). Runs
+ * a virtual clock the suite steps (ultrawidelock_osal_host_advance_ms / _flush). Runs
  * single-threaded and deterministic: nothing fires until the suite says time
- * passed. woz_sem_take with a timeout advances the clock itself, running
+ * passed. ultrawidelock_sem_take with a timeout advances the clock itself, running
  * delayable work that falls due, so a handler's give can satisfy the take
  * without a second thread.
  */
-#if defined(WOZ_PORT_HOST)
+#if defined(ULTRAWIDELOCK_PORT_HOST)
 
-#include "woz_osal.h"
+#include "ultrawidelock_osal.h"
 
 /* ---- state ---------------------------------------------------------------- */
 
-static struct woz_work *g_work_head, *g_work_tail;
-static struct woz_dwork *g_dwork_head; /* deadline-ordered, FIFO among equals */
+static struct ultrawidelock_work *g_work_head, *g_work_tail;
+static struct ultrawidelock_dwork *g_dwork_head; /* deadline-ordered, FIFO among equals */
 static int64_t g_now_ms;
 
-#define WOZ_OSAL_HOST_MAX_INIT 16
-static int (*g_init_fns[WOZ_OSAL_HOST_MAX_INIT])(void);
+#define ULTRAWIDELOCK_OSAL_HOST_MAX_INIT 16
+static int (*g_init_fns[ULTRAWIDELOCK_OSAL_HOST_MAX_INIT])(void);
 static unsigned g_init_count;
 static int g_init_ran;
 
 /* ---- init hooks ------------------------------------------------------------ */
 
-void woz_osal_init_register(int (*fn)(void))
+void ultrawidelock_osal_init_register(int (*fn)(void))
 {
-	if (g_init_count < WOZ_OSAL_HOST_MAX_INIT) {
+	if (g_init_count < ULTRAWIDELOCK_OSAL_HOST_MAX_INIT) {
 		g_init_fns[g_init_count++] = fn;
 	}
 }
 
-int woz_osal_init_all(void)
+int ultrawidelock_osal_init_all(void)
 {
 	int rc = 0;
 
@@ -52,14 +52,14 @@ int woz_osal_init_all(void)
 
 /* ---- immediate work -------------------------------------------------------- */
 
-void woz_work_init(struct woz_work *work, woz_work_fn fn)
+void ultrawidelock_work_init(struct ultrawidelock_work *work, ultrawidelock_work_fn fn)
 {
 	work->fn = fn;
 	work->next = NULL;
 	work->pending = 0;
 }
 
-int woz_work_submit(struct woz_work *work)
+int ultrawidelock_work_submit(struct ultrawidelock_work *work)
 {
 	if (work->pending) {
 		return 0;
@@ -75,16 +75,16 @@ int woz_work_submit(struct woz_work *work)
 	return 0;
 }
 
-unsigned woz_osal_host_flush(void)
+unsigned ultrawidelock_osal_host_flush(void)
 {
 	/* Snapshot the queue: what these handlers submit waits for the next
 	 * flush, so a self-resubmitting handler is stepped, not spun on. */
-	struct woz_work *w = g_work_head;
+	struct ultrawidelock_work *w = g_work_head;
 	unsigned ran = 0;
 
 	g_work_head = g_work_tail = NULL;
 	while (w) {
-		struct woz_work *next = w->next;
+		struct ultrawidelock_work *next = w->next;
 
 		w->next = NULL;
 		w->pending = 0;
@@ -97,7 +97,7 @@ unsigned woz_osal_host_flush(void)
 
 /* ---- delayable work -------------------------------------------------------- */
 
-void woz_dwork_init(struct woz_dwork *dwork, woz_dwork_fn fn)
+void ultrawidelock_dwork_init(struct ultrawidelock_dwork *dwork, ultrawidelock_dwork_fn fn)
 {
 	dwork->fn = fn;
 	dwork->next = NULL;
@@ -105,9 +105,9 @@ void woz_dwork_init(struct woz_dwork *dwork, woz_dwork_fn fn)
 	dwork->pending = 0;
 }
 
-static void dwork_insert(struct woz_dwork *dwork)
+static void dwork_insert(struct ultrawidelock_dwork *dwork)
 {
-	struct woz_dwork **at = &g_dwork_head;
+	struct ultrawidelock_dwork **at = &g_dwork_head;
 
 	while (*at && (*at)->deadline_ms <= dwork->deadline_ms) {
 		at = &(*at)->next;
@@ -116,9 +116,9 @@ static void dwork_insert(struct woz_dwork *dwork)
 	*at = dwork;
 }
 
-static void dwork_remove(struct woz_dwork *dwork)
+static void dwork_remove(struct ultrawidelock_dwork *dwork)
 {
-	struct woz_dwork **at = &g_dwork_head;
+	struct ultrawidelock_dwork **at = &g_dwork_head;
 
 	while (*at) {
 		if (*at == dwork) {
@@ -130,7 +130,7 @@ static void dwork_remove(struct woz_dwork *dwork)
 	}
 }
 
-int woz_dwork_schedule(struct woz_dwork *dwork, int32_t delay_ms)
+int ultrawidelock_dwork_schedule(struct ultrawidelock_dwork *dwork, int32_t delay_ms)
 {
 	if (dwork->pending) {
 		return 0; /* the earlier deadline stands */
@@ -141,7 +141,7 @@ int woz_dwork_schedule(struct woz_dwork *dwork, int32_t delay_ms)
 	return 0;
 }
 
-int woz_dwork_reschedule(struct woz_dwork *dwork, int32_t delay_ms)
+int ultrawidelock_dwork_reschedule(struct ultrawidelock_dwork *dwork, int32_t delay_ms)
 {
 	if (dwork->pending) {
 		dwork_remove(dwork);
@@ -152,7 +152,7 @@ int woz_dwork_reschedule(struct woz_dwork *dwork, int32_t delay_ms)
 	return 0;
 }
 
-int woz_dwork_cancel(struct woz_dwork *dwork)
+int ultrawidelock_dwork_cancel(struct ultrawidelock_dwork *dwork)
 {
 	if (dwork->pending) {
 		dwork_remove(dwork);
@@ -161,13 +161,13 @@ int woz_dwork_cancel(struct woz_dwork *dwork)
 	return 0;
 }
 
-unsigned woz_osal_host_advance_ms(int64_t ms)
+unsigned ultrawidelock_osal_host_advance_ms(int64_t ms)
 {
 	int64_t target = g_now_ms + ms;
 	unsigned ran = 0;
 
 	while (g_dwork_head && g_dwork_head->deadline_ms <= target) {
-		struct woz_dwork *due = g_dwork_head;
+		struct ultrawidelock_dwork *due = g_dwork_head;
 
 		g_now_ms = due->deadline_ms > g_now_ms ? due->deadline_ms : g_now_ms;
 		g_dwork_head = due->next;
@@ -180,27 +180,27 @@ unsigned woz_osal_host_advance_ms(int64_t ms)
 	return ran;
 }
 
-int64_t woz_osal_host_now_ms(void)
+int64_t ultrawidelock_osal_host_now_ms(void)
 {
 	return g_now_ms;
 }
 
 /* ---- semaphore ------------------------------------------------------------- */
 
-void woz_sem_init(woz_sem_t *sem, unsigned initial, unsigned limit)
+void ultrawidelock_sem_init(ultrawidelock_sem_t *sem, unsigned initial, unsigned limit)
 {
 	sem->count = initial;
 	sem->limit = limit;
 }
 
-void woz_sem_give(woz_sem_t *sem)
+void ultrawidelock_sem_give(ultrawidelock_sem_t *sem)
 {
 	if (sem->count < sem->limit) {
 		sem->count++;
 	}
 }
 
-int woz_sem_take(woz_sem_t *sem, int32_t timeout_ms)
+int ultrawidelock_sem_take(ultrawidelock_sem_t *sem, int32_t timeout_ms)
 {
 	if (sem->count > 0) {
 		sem->count--;
@@ -213,19 +213,19 @@ int woz_sem_take(woz_sem_t *sem, int32_t timeout_ms)
 	/* Single-threaded: the only sources of a give are queued handlers.
 	 * Run what is already queued, then walk delayable work forward inside
 	 * the window until a give lands or the window (or the work) runs out. */
-	woz_osal_host_flush();
+	ultrawidelock_osal_host_flush();
 	if (timeout_ms < 0) {
 		while (sem->count == 0 && g_dwork_head) {
-			woz_osal_host_advance_ms(g_dwork_head->deadline_ms - g_now_ms);
-			woz_osal_host_flush();
+			ultrawidelock_osal_host_advance_ms(g_dwork_head->deadline_ms - g_now_ms);
+			ultrawidelock_osal_host_flush();
 		}
 	} else {
 		int64_t target = g_now_ms + timeout_ms;
 
 		while (sem->count == 0 && g_dwork_head &&
 		       g_dwork_head->deadline_ms <= target) {
-			woz_osal_host_advance_ms(g_dwork_head->deadline_ms - g_now_ms);
-			woz_osal_host_flush();
+			ultrawidelock_osal_host_advance_ms(g_dwork_head->deadline_ms - g_now_ms);
+			ultrawidelock_osal_host_flush();
 		}
 		if (target > g_now_ms) {
 			g_now_ms = target; /* the rest of the wait elapses idle */
@@ -238,16 +238,16 @@ int woz_sem_take(woz_sem_t *sem, int32_t timeout_ms)
 	return -1;
 }
 
-void woz_sem_reset(woz_sem_t *sem)
+void ultrawidelock_sem_reset(ultrawidelock_sem_t *sem)
 {
 	sem->count = 0;
 }
 
 /* ---- thread ---------------------------------------------------------------- */
 
-int woz_thread_create(woz_thread_t *thread, woz_thread_stack_t *stack, size_t stack_size,
-		      void (*entry)(void *arg), void *arg, enum woz_thread_prio prio,
-		      const char *name)
+int ultrawidelock_thread_create(ultrawidelock_thread_t *thread, ultrawidelock_thread_stack_t *stack,
+				size_t stack_size, void (*entry)(void *arg), void *arg,
+				enum ultrawidelock_thread_prio prio, const char *name)
 {
 	(void)stack;
 	(void)stack_size;
@@ -261,10 +261,10 @@ int woz_thread_create(woz_thread_t *thread, woz_thread_stack_t *stack, size_t st
 
 /* ---- reset ------------------------------------------------------------------ */
 
-void woz_osal_host_reset(void)
+void ultrawidelock_osal_host_reset(void)
 {
 	while (g_work_head) {
-		struct woz_work *w = g_work_head;
+		struct ultrawidelock_work *w = g_work_head;
 
 		g_work_head = w->next;
 		w->next = NULL;
@@ -272,7 +272,7 @@ void woz_osal_host_reset(void)
 	}
 	g_work_tail = NULL;
 	while (g_dwork_head) {
-		struct woz_dwork *d = g_dwork_head;
+		struct ultrawidelock_dwork *d = g_dwork_head;
 
 		g_dwork_head = d->next;
 		d->next = NULL;
@@ -281,4 +281,4 @@ void woz_osal_host_reset(void)
 	g_now_ms = 0;
 }
 
-#endif /* WOZ_PORT_HOST */
+#endif /* ULTRAWIDELOCK_PORT_HOST */

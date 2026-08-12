@@ -2,14 +2,14 @@
 
 #include <ultrawidelock/uwb.h>
 #include "ccc_shim.h"
-#include "woz_log.h"
-#include "woz_osal.h"
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_osal.h"
 
 LOG_MODULE_REGISTER(ultrawidelock_uwb_selftest, LOG_LEVEL_INF);
 
 // Delayable work item for the UWB self-test boot diagnostic; scheduled once at startup if
 // UWB_SELFTEST=1.
-static struct woz_dwork uwb_selftest_dwork;
+static struct ultrawidelock_dwork uwb_selftest_dwork;
 
 /** Canned Aliro ranging config for the peerless self-test (dummy URSK). */
 static const uint8_t uwb_selftest_ursk[32] = {
@@ -22,7 +22,7 @@ static const uint8_t uwb_selftest_ursk[32] = {
  * @brief One-shot worker: run the Aliro UWB start path and log the outcome.
  * @param dwork The delayable work item (unused).
  */
-static void uwb_selftest_work(struct woz_dwork *dwork)
+static void uwb_selftest_work(struct ultrawidelock_dwork *dwork)
 {
 	// Configuration struct for the Aliro DS-TWR responder, containing ranging parameters
 	// (channel, preamble code, session ID, and STS index).
@@ -56,11 +56,11 @@ static void uwb_selftest_work(struct woz_dwork *dwork)
  */
 static int uwb_selftest_init(void)
 {
-	woz_dwork_init(&uwb_selftest_dwork, uwb_selftest_work);
+	ultrawidelock_dwork_init(&uwb_selftest_dwork, uwb_selftest_work);
 	LOG_INF("SELFTEST: UWB init self-test armed, firing in %d ms",
 		CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS);
-	woz_dwork_schedule(&uwb_selftest_dwork, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS);
+	ultrawidelock_dwork_schedule(&uwb_selftest_dwork, CONFIG_ULTRAWIDELOCK_UWB_SELFTEST_DELAY_MS);
 	return 0;
 }
 
-WOZ_INIT_APPLICATION(uwb_selftest_init);
+ULTRAWIDELOCK_INIT_APPLICATION(uwb_selftest_init);

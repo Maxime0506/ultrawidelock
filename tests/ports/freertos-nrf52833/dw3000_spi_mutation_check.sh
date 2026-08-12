@@ -22,7 +22,7 @@ SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c"
 mkdir -p "$OUT"
 
 build() { # <source> <binary>
-	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DWOZ_PORT_FREERTOS \
+	"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -DULTRAWIDELOCK_PORT_FREERTOS \
 		-I"$HERE/fake" \
 		-I"$ROOT/ports/freertos-nrf52833/include" \
 		-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -78,7 +78,7 @@ MUTATIONS=(
 	s_freq = freq_of(ULTRAWIDELOCK_DW3000_SPI_FAST_HZ); ::: void dw3000_spi_speed_fast(void)
 {
 	s_freq = freq_of(32000000u);"
-	"the wake pulse is too short for the chip to notice ::: woz_freertos_busy_wait_us(500); ::: woz_freertos_busy_wait_us(50);"
+	"the wake pulse is too short for the chip to notice ::: ultrawidelock_freertos_busy_wait_us(500); ::: ultrawidelock_freertos_busy_wait_us(50);"
 	"the CRC byte is dropped from the command ::: 	if (crc != NULL) {
 		s_tx[hlen + blen] = *crc;
 	} ::: 	if (crc != NULL) {

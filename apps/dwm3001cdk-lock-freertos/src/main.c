@@ -30,13 +30,13 @@
 
 #include <openthread/instance.h>
 
-#include <woz_freertos_crypto.h>
-#include <woz_freertos_nimble_host.h>
-#include <woz_freertos_openthread.h>
-#include <woz_freertos_platform.h>
-#include <woz_freertos_kv.h>
-#include <woz_freertos_radio.h>
-#include <woz_freertos_uwb.h>
+#include <ultrawidelock_freertos_crypto.h>
+#include <ultrawidelock_freertos_nimble_host.h>
+#include <ultrawidelock_freertos_openthread.h>
+#include <ultrawidelock_freertos_platform.h>
+#include <ultrawidelock_freertos_kv.h>
+#include <ultrawidelock_freertos_radio.h>
+#include <ultrawidelock_freertos_uwb.h>
 
 #define MAIN_TAG "main"
 
@@ -59,8 +59,9 @@ static void boot_task(void *arg)
 {
 	(void)arg;
 
-	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "controller pool used: %u bytes",
-			 (unsigned)woz_freertos_radio_memory_used());
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, MAIN_TAG,
+				   "controller pool used: %u bytes",
+				   (unsigned)ultrawidelock_freertos_radio_memory_used());
 
 	/*
 	 * The persistent store, and the reader identity that lives in it.
@@ -70,16 +71,17 @@ static void boot_task(void *arg)
 	 * before the BLE host because the identity is what the host will
 	 * eventually advertise.
 	 *
-	 * Neither failure is fatal. woz_freertos_kv_init() reformats a store it
+	 * Neither failure is fatal. ultrawidelock_freertos_kv_init() reformats a store it
 	 * cannot read, and ultrawidelock_prov_load() yields a usable development
 	 * identity on every failure path, because a reader that will not boot is
 	 * worse than one that boots unprovisioned.
 	 */
-	if (woz_freertos_kv_init() != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG, "key-value store unavailable");
+	if (ultrawidelock_freertos_kv_init() != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
+					   "key-value store unavailable");
 	}
 	if (ultrawidelock_prov_load(&s_identity, &s_trust) != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "no stored identity; running on the development one");
 	}
 
@@ -98,17 +100,17 @@ static void boot_task(void *arg)
 	 * into this lock, and BLE carries the others. A board whose Thread is
 	 * down is still a lock.
 	 */
-	if (woz_freertos_openthread_radio_start() != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+	if (ultrawidelock_freertos_openthread_radio_start() != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "802.15.4 radio unavailable; Thread will not run");
 	} else {
 		otInstance *ot = otInstanceInitSingle();
 
 		if (ot == NULL) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, MAIN_TAG,
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, MAIN_TAG,
 					 "OpenThread instance allocation failed");
-		} else if (woz_freertos_openthread_start(ot) != 0) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, MAIN_TAG,
+		} else if (ultrawidelock_freertos_openthread_start(ot) != 0) {
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, MAIN_TAG,
 					 "OpenThread task did not start");
 		}
 	}
@@ -126,8 +128,8 @@ static void boot_task(void *arg)
 	 * down still opens by the other two paths this product supports, and a
 	 * board that refuses to boot cannot tell anyone which step failed.
 	 */
-	if (woz_freertos_uwb_start() != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
+	if (ultrawidelock_freertos_uwb_start() != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "UWB unavailable; ranging will not be offered");
 	}
 
@@ -149,14 +151,15 @@ static void boot_task(void *arg)
 	 * degrade to and a silent boot would be the worst outcome on a bench.
 	 */
 	if (ultrawidelock_reader_start() != 0) {
-		woz_freertos_fatal("Aliro reader start failed");
+		ultrawidelock_freertos_fatal("Aliro reader start failed");
 	}
 
 	for (;;) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "uptime %lld us, radio %s, uwb %s",
-				 (long long)woz_freertos_uptime_us(),
-				 woz_freertos_radio_ready() ? "ready" : "down",
-				 woz_freertos_uwb_ready() ? "ready" : "down");
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, MAIN_TAG,
+					   "uptime %lld us, radio %s, uwb %s",
+					   (long long)ultrawidelock_freertos_uptime_us(),
+					   ultrawidelock_freertos_radio_ready() ? "ready" : "down",
+					   ultrawidelock_freertos_uwb_ready() ? "ready" : "down");
 		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
@@ -167,22 +170,22 @@ int main(void)
 
 	/*
 	 * Crypto first, because it is the one bring-up step that can be retried:
-	 * woz_freertos_crypto_init() logs and returns non-zero rather than
+	 * ultrawidelock_freertos_crypto_init() logs and returns non-zero rather than
 	 * halting, so a transient PSA failure does not cost the whole boot. It
 	 * needs no scheduler and no radio.
 	 */
-	(void)woz_freertos_crypto_init();
+	(void)ultrawidelock_freertos_crypto_init();
 
-	err = woz_freertos_radio_start(woz_freertos_radio_sdc_dispatcher());
+	err = ultrawidelock_freertos_radio_start(ultrawidelock_freertos_radio_sdc_dispatcher());
 	if (err != 0) {
 		/*
-		 * The value is the negated woz_freertos_radio_stage that failed,
+		 * The value is the negated ultrawidelock_freertos_radio_stage that failed,
 		 * which is the one piece of information worth carrying into the
 		 * log: the stages fail for quite different reasons.
 		 */
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, MAIN_TAG, "radio start failed at stage %d",
-				 -err);
-		woz_freertos_fatal("radio start failed");
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, MAIN_TAG,
+					   "radio start failed at stage %d", -err);
+		ultrawidelock_freertos_fatal("radio start failed");
 	}
 
 	(void)xTaskCreateStatic(boot_task, "boot",
@@ -191,5 +194,5 @@ int main(void)
 
 	vTaskStartScheduler();
 
-	woz_freertos_fatal("scheduler returned");
+	ultrawidelock_freertos_fatal("scheduler returned");
 }

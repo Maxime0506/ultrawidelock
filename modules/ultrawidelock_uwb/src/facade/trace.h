@@ -1,4 +1,5 @@
-/** @file trace.h — Structured [ULTRAWIDELOCK_TRACE] emit helpers, gated on CONFIG_WOZ_E2E_TRACE. */
+/** @file trace.h — Structured [ULTRAWIDELOCK_TRACE] emit helpers, gated on
+ * CONFIG_ULTRAWIDELOCK_E2E_TRACE. */
 
 #ifndef ULTRAWIDELOCK_TRACE_H
 #define ULTRAWIDELOCK_TRACE_H
@@ -6,15 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(CONFIG_WOZ_E2E_TRACE)
+#if defined(CONFIG_ULTRAWIDELOCK_E2E_TRACE)
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 /** @brief Buffer length for a 16-char hex prefix (8 bytes) + NUL terminator. */
 #define ULTRAWIDELOCK_TRACE_HEX8_LEN 17
 
 /** @brief Format up to 8 bytes of @p bytes as lowercase hex into @p buf; returns @p buf. */
-static inline const char *woz_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
+static inline const char *ultrawidelock_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
 					 const uint8_t *bytes, size_t len)
 {
 	static const char nybble[16] = "0123456789abcdef";
@@ -31,9 +32,9 @@ static inline const char *woz_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
 #define ULTRAWIDELOCK_TRACE(stage, fmt, ...)                                                       \
 	LOG_INF("[ULTRAWIDELOCK_TRACE] src=lock stage=" stage " " fmt, ##__VA_ARGS__)
 
-#else /* !CONFIG_WOZ_E2E_TRACE */
+#else /* !CONFIG_ULTRAWIDELOCK_E2E_TRACE */
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 #define ULTRAWIDELOCK_TRACE_HEX8_LEN 17
 
@@ -41,13 +42,13 @@ static inline const char *woz_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
 #define ULTRAWIDELOCK_TRACE(stage, fmt, ...)                                                       \
 	do {                                                                                       \
 		if (0) {                                                                           \
-			woz_printf("[ULTRAWIDELOCK_TRACE] src=lock stage=" stage " " fmt,          \
+			ultrawidelock_printf("[ULTRAWIDELOCK_TRACE] src=lock stage=" stage " " fmt,          \
 				   ##__VA_ARGS__);                                                 \
 		}                                                                                  \
 	} while (0)
 
 /** @brief Stub that touches @p buf and @p bytes so neither becomes unused. */
-static inline const char *woz_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
+static inline const char *ultrawidelock_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
 					 const uint8_t *bytes, size_t len)
 {
 	(void)bytes;
@@ -56,6 +57,6 @@ static inline const char *woz_trace_hex8(char buf[ULTRAWIDELOCK_TRACE_HEX8_LEN],
 	return buf;
 }
 
-#endif /* CONFIG_WOZ_E2E_TRACE */
+#endif /* CONFIG_ULTRAWIDELOCK_E2E_TRACE */
 
 #endif /* ULTRAWIDELOCK_TRACE_H */

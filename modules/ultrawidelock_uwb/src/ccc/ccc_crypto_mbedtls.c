@@ -11,7 +11,7 @@
 
 /**
  * @brief Encrypt one AES-ECB block using mbedTLS, supporting 128-bit and 256-bit keys, as the
- * portable crypto seam selected by CONFIG_WOZ_CRYPTO_MBEDTLS ( same contract as
+ * portable crypto seam selected by CONFIG_ULTRAWIDELOCK_CRYPTO_MBEDTLS ( same contract as
  * ccc_crypto_psa.c).
  */
 int crypto_aes_ecb_encrypt(const uint8_t *key, size_t key_bits, const uint8_t in[16],

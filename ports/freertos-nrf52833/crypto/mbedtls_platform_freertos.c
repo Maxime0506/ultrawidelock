@@ -25,10 +25,10 @@
 
 #include <library/entropy_poll.h>
 
-#include <woz_freertos_crypto.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_crypto.h>
+#include <ultrawidelock_freertos_platform.h>
 
-void *woz_freertos_mbedtls_calloc(size_t count, size_t size)
+void *ultrawidelock_freertos_mbedtls_calloc(size_t count, size_t size)
 {
 	size_t bytes;
 	void *block;
@@ -58,7 +58,7 @@ void *woz_freertos_mbedtls_calloc(size_t count, size_t size)
 	return block;
 }
 
-void woz_freertos_mbedtls_free(void *block)
+void ultrawidelock_freertos_mbedtls_free(void *block)
 {
 	/* vPortFree already tolerates NULL, but stating it keeps the pair symmetric. */
 	if (block == NULL) {
@@ -86,7 +86,7 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
 	 * credit this source for entropy it did not receive, and the board hook
 	 * either fills the buffer or fails.
 	 */
-	if (woz_freertos_entropy(output, len) != 0) {
+	if (ultrawidelock_freertos_entropy(output, len) != 0) {
 		return MBEDTLS_ERR_ENTROPY_SOURCE_FAILED;
 	}
 

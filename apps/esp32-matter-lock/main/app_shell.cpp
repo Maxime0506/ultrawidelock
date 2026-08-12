@@ -25,7 +25,7 @@
 #include <ultrawidelock_lab.h> // ultrawidelock_lab_set_enabled — the transaction-trace runtime gate
 #include <uwb_cirdiag.h> // uwb_cirdiag_set_enabled — per-reception CIA diag stream, rides `lab`
 #endif
-#ifdef CONFIG_WOZ_FLIGHT_RECORDER
+#ifdef CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER
 #include <flight_recorder.h> // fr_set_enabled / fr_dump — walk-up record/replay gate
 #endif
 
@@ -39,7 +39,7 @@
 #ifdef CONFIG_ENABLE_HA_MQTT
 #include "ha_mqtt.h" // ha_mqtt_shell_cmd — the `hamqtt` broker provisioning command
 #endif
-#ifdef CONFIG_WOZ_PRESENCE
+#ifdef CONFIG_ULTRAWIDELOCK_PRESENCE
 #include <presence_link.h>
 #endif
 
@@ -404,7 +404,7 @@ static int cmd_factoryreset(int argc, char **argv)
 /* Runtime log knob: the boot default is WARN (blocking UART writes in the
  * protocol callbacks cost walk-up latency), so bench diagnostics need a way
  * back up without a reflash. The compile-time ceiling is DEBUG
- * (CONFIG_LOG_MAXIMUM_LEVEL); note the shared woz_aliro/ultrawidelock_uwb sources log
+ * (CONFIG_LOG_MAXIMUM_LEVEL); note the shared ultrawidelock_cred/ultrawidelock_uwb sources log
  * under their module tags (ultrawidelock_reader, ultrawidelock_ranging, ...). */
 static int cmd_log(int argc, char **argv)
 {
@@ -478,7 +478,7 @@ static int cmd_lab(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WOZ_FLIGHT_RECORDER
+#ifdef CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER
 /* Flight recorder: record a live walk-up into a RAM ring for host replay. OFF at
  * boot (it reads extra DW3000 registers while armed, costing walk-up latency).
  * `fr on` before a walk-up, `fr off` after, `fr dump` to emit the `[FREC]` hex
@@ -569,7 +569,7 @@ void app_shell_start(void)
 #endif
 		 .hint = NULL,
 		 .func = cmd_aliro},
-#ifdef CONFIG_WOZ_PRESENCE
+#ifdef CONFIG_ULTRAWIDELOCK_PRESENCE
 		{.command = "presence",
 		 .help = "presence pub|credential|prove <nonce-hex>: fresh signed "
 			 "post-challenge presence proof",
@@ -587,7 +587,7 @@ void app_shell_start(void)
 		 .hint = NULL,
 		 .func = cmd_lab},
 #endif
-#ifdef CONFIG_WOZ_FLIGHT_RECORDER
+#ifdef CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER
 		{.command = "fr",
 		 .help = "fr [on|off|dump|clear]: flight recorder walk-up capture (boot default off)",
 		 .hint = NULL,

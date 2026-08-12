@@ -36,11 +36,11 @@ check() { if eval "$2"; then note ok "$1"; else note FAIL "$1"; fail=1; fi; }
 
 # Building firmware is a separate job. This suite normally runs on a machine
 # with no ESP-IDF, so it never reaches the build below;
-# WOZ_NO_TARGET_BUILD=1 makes a developer shell that HAS ESP-IDF sourced behave
+# ULTRAWIDELOCK_NO_TARGET_BUILD=1 makes a developer shell that HAS ESP-IDF sourced behave
 # the same way, so a pre-PR sweep stays host-only instead of turning into a
 # multi-minute build the sweep was never meant to include.
-if [ -n "${WOZ_NO_TARGET_BUILD:-}" ]; then
-	echo "SKIP verify_port.sh: target build off by request (WOZ_NO_TARGET_BUILD=1)."
+if [ -n "${ULTRAWIDELOCK_NO_TARGET_BUILD:-}" ]; then
+	echo "SKIP verify_port.sh: target build off by request (ULTRAWIDELOCK_NO_TARGET_BUILD=1)."
 	exit 0
 fi
 
@@ -69,7 +69,7 @@ echo "building esp32s3 target (defaults only)..."
 	build >/dev/null )
 # The guard is only as good as the config it built. Assert the defaults build is
 # really presence-free, or section 4 below proves nothing by passing.
-if grep -q '^CONFIG_WOZ_PRESENCE=y' "$BUILD/sdkconfig"; then
+if grep -q '^CONFIG_ULTRAWIDELOCK_PRESENCE=y' "$BUILD/sdkconfig"; then
 	echo "verify_port: FAIL — the defaults build has presence ON; sdkconfig.defaults changed?" >&2
 	exit 1
 fi
@@ -96,11 +96,11 @@ check "uwb_min does not call dwt_rxenable directly" \
 	"[ -n '$UWBMIN' ] && ! nm '$UWBMIN' | grep -qE ' U dwt_rxenable$'"
 
 echo "3. excluded diagnostic files stay out"
-for d in uwb_rxdiag uwb_selftest ccc_crypto_psa aliro_shell woz_logquiet dw3000_spi_trace; do
+for d in uwb_rxdiag uwb_selftest ccc_crypto_psa ultrawidelock_shell ultrawidelock_logquiet dw3000_spi_trace; do
 	check "no $d.obj" "! find '$BUILD' -name '$d*.obj' | grep -q ."
 done
 
-echo "4. presence build (CONFIG_WOZ_PRESENCE=y)"
+echo "4. presence build (CONFIG_ULTRAWIDELOCK_PRESENCE=y)"
 # Presence is default n and no sdkconfig.defaults sets it, so everything above
 # this line passes with every line of presence code uncompiled. Build it in its
 # own directory, with its own sdkconfig, so the default build and a developer's
@@ -113,7 +113,7 @@ if ( cd "$PROJ" && idf.py -B "$PBUILD" \
 	note ok "presence build links"
 	# Linking is not enough: --gc-sections has eliminated these before, which is
 	# why the symbols are named individually rather than trusting the config.
-	PNM="${WOZ_NM:-xtensa-esp32s3-elf-nm}"
+	PNM="${ULTRAWIDELOCK_NM:-xtensa-esp32s3-elf-nm}"
 	psym() { "$PNM" "$PBUILD/ultrawidelock_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
 	dsym() { "$PNM" "$BUILD/ultrawidelock_uwb_esp32s3.elf" 2>/dev/null | grep -qE " T $1$"; }
 	if command -v "$PNM" >/dev/null 2>&1; then
@@ -130,7 +130,7 @@ if ( cd "$PROJ" && idf.py -B "$PBUILD" \
 		check "presence absent from defaults build" \
 			"! dsym presence_link_init && ! dsym ultrawidelock_assert_build_p256"
 	else
-		note skip "presence symbols ($PNM not on PATH; set WOZ_NM=)"
+		note skip "presence symbols ($PNM not on PATH; set ULTRAWIDELOCK_NM=)"
 	fi
 else
 	note FAIL "presence build links"

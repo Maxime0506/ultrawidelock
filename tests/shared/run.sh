@@ -5,14 +5,14 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 ALIRO="$ROOT/modules/ultrawidelock_cred"
-WOZ_PORT_INC="$ROOT/modules/woz_port/include"
+ULTRAWIDELOCK_PORT_INC="$ROOT/modules/ultrawidelock_port/include"
 UWB_INC="$ROOT/modules/ultrawidelock_uwb/include"
 DW3000_INC="$ROOT/modules/ultrawidelock_dw3000/include"
 
 echo "== host: port headers unit test =="
-BIN="$(mktemp -t woz_port_headers.XXXXXX)"
+BIN="$(mktemp -t ultrawidelock_port_headers.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$WOZ_PORT_INC" -I "$UWB_INC" -I "$ALIRO/include" -I "$DW3000_INC" \
+   -I "$ULTRAWIDELOCK_PORT_INC" -I "$UWB_INC" -I "$ALIRO/include" -I "$DW3000_INC" \
    "$HERE/test_port_headers.c" -o "$BIN"
 "$BIN"
 rm -f "$BIN"
@@ -95,13 +95,13 @@ echo
 echo "== host: ultrawidelock_lat walk-up trace (gate on + gate off) =="
 TBIN="$(mktemp -t ultrawidelock_lat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
-   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
+   -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
    "$HERE/test_aliro_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$TBIN"
 "$TBIN"
 cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
-   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
+   -I "$ALIRO/include" -I "$ULTRAWIDELOCK_PORT_INC" \
    "$HERE/test_aliro_lat.c" "$ALIRO/src/ultrawidelock_lat.c" -o "$TBIN"
 "$TBIN"
 rm -f "$TBIN"
@@ -111,8 +111,8 @@ echo "== host: ultrawidelock_reader engine walk-up (scripted phone) =="
 RBIN="$(mktemp -t ultrawidelock_reader.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -Wno-unused-variable -Wno-unused-function \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
-   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST \
+   -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" \
    "$HERE/test_aliro_reader.c" \
    "$ALIRO/src/ultrawidelock_reader.c" "$ALIRO/src/ultrawidelock_apdu.c" \
    "$ALIRO/src/ultrawidelock_crypto.c" "$ALIRO/src/ultrawidelock_hash.c" \
@@ -125,8 +125,8 @@ echo
 echo "== host: ultrawidelock_ranging M1-M4 session glue =="
 GBIN="$(mktemp -t ultrawidelock_ranging.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
-   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" -I "$UWB_INC" \
+   -D_POSIX_C_SOURCE=200809L -DULTRAWIDELOCK_PORT_HOST -DCONFIG_ULTRAWIDELOCK_LAT_TRACE=1 \
+   -I "$ALIRO/include" -I "$ALIRO/src" -I "$ULTRAWIDELOCK_PORT_INC" -I "$UWB_INC" \
    "$HERE/test_aliro_ranging.c" \
    "$ALIRO/src/ultrawidelock_ranging.c" "$ALIRO/src/ultrawidelock_crypto.c" \
    "$ALIRO/src/ultrawidelock_hash.c" "$ALIRO/src/ultrawidelock_lat.c" \

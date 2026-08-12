@@ -1,4 +1,4 @@
-# woz_aliro role: platform-free central-side advert/READ decoder.
+# ultrawidelock_cred role: platform-free central-side advert/READ decoder.
 # Consumers: apps/dwm3001cdk-lock/ (CONFIG_ALIRO_BLE_CENTRAL), examples/zephyr/nrf5340dk-initiator,
 # ports/esp32/components/ultrawidelock_ble_central.
 # One repo-root-relative path per line, sorted; add HERE and nowhere else.

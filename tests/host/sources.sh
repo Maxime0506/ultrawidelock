@@ -14,7 +14,7 @@ SHIM="$ROOT/tests/host/shim"
 HOST="$ROOT/tests/host"
 
 # unit_srcs_from_role — append one role manifest (modules/<mod>/roles/<n>.list)
-# to UNIT_SRCS. Same lists cmake/woz_roles.cmake reads, so the host suite and
+# to UNIT_SRCS. Same lists cmake/ultrawidelock_roles.cmake reads, so the host suite and
 # the apps/dwm3001cdk-lock/ESP builds cannot disagree about which files a role contains.
 # Redirected (not piped) so the appends land in this shell under bash 3.2.
 unit_srcs_from_role() {
@@ -29,15 +29,15 @@ unit_srcs_from_role() {
 }
 
 UNIT_SRCS=(
-	"$ROOT/modules/woz_aliro_stack/src/advertising_core.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/ble_message.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/ble_timeout.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_select.c"
-	"$ROOT/modules/woz_aliro_stack/src/protocol/nfc_auth.c"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/advertising_core.c"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/protocol/ble_message.c"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/protocol/ble_timeout.c"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/protocol/nfc_select.c"
+	"$ROOT/modules/ultrawidelock_cred_stack/src/protocol/nfc_auth.c"
 	"$ROOT/modules/ultrawidelock_nfc/src/pn532.c"
 	"$ROOT/modules/ultrawidelock_nfc/src/pn532_apdu.c"
-	"$ROOT/ports/zephyr/log/woz_logfmt.c"
-	"$ROOT/ports/zephyr/log/woz_logquiet.c"
+	"$ROOT/ports/zephyr/log/ultrawidelock_logfmt.c"
+	"$ROOT/ports/zephyr/log/ultrawidelock_logquiet.c"
 	"$ROOT/modules/ultrawidelock_matter/src/matter_tlv.c"
 	"$ROOT/modules/ultrawidelock_matter/src/matter_msg.c"
 	"$ROOT/modules/ultrawidelock_matter/src/matter_mrp.c"
@@ -66,8 +66,8 @@ UNIT_SRCS=(
 	"$ROOT/modules/ultrawidelock_anchor/src/ultrawidelock_slam.c"
 )
 
-# woz_aliro roles. wire_codecs = the shared step-up/assert codecs (one source;
-# woz_aliro_stack compiles the same files on target) — crypto-free, so no
+# ultrawidelock_cred roles. wire_codecs = the shared step-up/assert codecs (one source;
+# ultrawidelock_cred_stack compiles the same files on target) — crypto-free, so no
 # ultrawidelock_crypto/prim backend is needed here. hash + reader_policy are the
 # host-tested halves of the reader.
 unit_srcs_from_role "$ALIRO/roles/wire_codecs.list"
@@ -142,14 +142,14 @@ TEST_SRCS=(
 	"$HOST/test_ultrawidelock_side.c"
 	"$HOST/test_ultrawidelock_side_replay.c"
 	"$HOST/test_ultrawidelock_slam.c"
-	"$HOST/test_woz_logfmt.c"
+	"$HOST/test_ultrawidelock_logfmt.c"
 	"$HOST/test_trace.c"
 	"$HOST/trace_stub.c"
 	"$HOST/test_ccc_shim_wrap.c"
 	"$HOST/test_flight_recorder.c"
 	"$HOST/fr_replay.c"
 	"$HOST/test_ultrawidelock_ml.c"
-	"$HOST/test_woz_port.c"
+	"$HOST/test_ultrawidelock_port.c"
 )
 
 SHIM_SRCS=(
@@ -157,19 +157,19 @@ SHIM_SRCS=(
 	"$SHIM/dw_rx_stub.c"
 	"$HOST/logfake/logfake.c"
 	"$HOST/spakefake/spakefake.c"
-	# The host OSAL/flash backends double as the test fakes (woz_osal.h).
+	# The host OSAL/flash backends double as the test fakes (ultrawidelock_osal.h).
 	"$ROOT/tests/host/port/osal_host.c"
 	"$ROOT/tests/host/port/flash_host.c"
 )
 
 # Include search path: shim first so <zephyr/...> resolves to the stubs;
-# logfake supplies the Zephyr logging + CMSIS surface woz_logfmt.c needs.
+# logfake supplies the Zephyr logging + CMSIS surface ultrawidelock_logfmt.c needs.
 INCS=(
 	-I"$SHIM"
 	-I"$HOST"
 	-I"$HOST/logfake"
-	-I"$ROOT/modules/woz_aliro_stack/src"
-	-I"$ROOT/modules/woz_aliro_stack/src/protocol"
+	-I"$ROOT/modules/ultrawidelock_cred_stack/src"
+	-I"$ROOT/modules/ultrawidelock_cred_stack/src/protocol"
 	-I"$ROOT/modules/ultrawidelock_nfc/include"
 	-I"$ROOT/modules/ultrawidelock_nfc/src"
 	-I"$ROOT/modules/ultrawidelock_uwb/include"
@@ -181,7 +181,7 @@ INCS=(
 	-I"$SRC/facade"
 	-I"$ROOT/ports/zephyr/shell"
 	-I"$ALIRO/include"
-	-I"$ROOT/modules/woz_port/include"
+	-I"$ROOT/modules/ultrawidelock_port/include"
 	-I"$ROOT/modules/ultrawidelock_cred/include"
 	-I"$ROOT/modules/ultrawidelock_cred/src"
 	-I"$ROOT/modules/ultrawidelock_matter/include"
@@ -194,9 +194,9 @@ INCS=(
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.
 # _DEFAULT_SOURCE: glibc hides clock_gettime/CLOCK_MONOTONIC under strict
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
-# WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
+# ULTRAWIDELOCK_PORT_HOST selects the libc backend in ultrawidelock_port.h / ultrawidelock_log.h; without it
 # those headers #error rather than guess a platform.
-DEFS=(-DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_ML_LOS=1 -DCONFIG_WOZ_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)
+DEFS=(-DCONFIG_ULTRAWIDELOCK_CRED=1 -DCONFIG_ULTRAWIDELOCK_ML_LOS=1 -DCONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER=1 -D_DEFAULT_SOURCE -DULTRAWIDELOCK_PORT_HOST)
 
 # PY — the interpreter the python-side suites run under: the repo-local .venv
 # when one exists, else the system python3.

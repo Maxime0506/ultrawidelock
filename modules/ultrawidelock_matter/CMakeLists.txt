@@ -34,7 +34,7 @@ if(CONFIG_ULTRAWIDELOCK_MATTER)
   # matter_crypto.c uses ultrawidelock_hash.h for SHA-256/HKDF, and the
   # crypto_aes_ecb_encrypt seam it declares itself. Both already ship in any
   # image that has the reader -- ultrawidelock_hash.c is compiled by the port, and the
-  # AES backend by the CONFIG_WOZ_CRYPTO_* choice -- so this is an include path,
+  # AES backend by the CONFIG_ULTRAWIDELOCK_CRYPTO_* choice -- so this is an include path,
   # not new code. It is still a real dependency, which CONFIG_ULTRAWIDELOCK_MATTER records
   # with `depends on ULTRAWIDELOCK_CRED`.
   #

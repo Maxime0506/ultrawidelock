@@ -180,7 +180,7 @@ static struct bt_l2cap_server s_dfu_server = {
  * nothing it could not achieve by spamming any other characteristic.
  */
 
-/* Same vendor base as the reader's own characteristic in aliro_ble_zephyr.c. */
+/* Same vendor base as the reader's own characteristic in ultrawidelock_ble_zephyr.c. */
 static const struct bt_uuid_128 k_dfu_svc_uuid = BT_UUID_INIT_128(
 	BT_UUID_128_ENCODE(0xd3b5a140, 0x9e23, 0x4b3a, 0x8be4, 0x6b1ee5f980a3));
 static const struct bt_uuid_128 k_dfu_chr_uuid = BT_UUID_INIT_128(

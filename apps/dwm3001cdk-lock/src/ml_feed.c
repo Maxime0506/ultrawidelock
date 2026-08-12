@@ -9,8 +9,8 @@
 
 #if defined(CONFIG_ULTRAWIDELOCK_ML_LOS)
 #include "ultrawidelock_ml.h"
-#include "woz_log.h"  /* woz_printf -- the [ALAB] ev=ml classifier trace */
-#include "woz_port.h" /* woz_uptime_us -- the [ALAB] timebase */
+#include "ultrawidelock_log.h"  /* ultrawidelock_printf -- the [ALAB] ev=ml classifier trace */
+#include "ultrawidelock_port.h" /* ultrawidelock_uptime_us -- the [ALAB] timebase */
 #endif
 
 /**
@@ -65,8 +65,8 @@ enum ultrawidelock_approach_action ml_feed_range(struct ultrawidelock_approach *
 			 * ultrawidelock_ml_los_vendor() documents. Main-loop context, one ranging
 			 * block after the reception, so this competes with no deadline.
 			 */
-			woz_printf("[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u\n",
-				   woz_uptime_us(), ip.n, cm, (unsigned)cls,
+			ultrawidelock_printf("[ALAB] t=%lld ev=ml n=%u cm=%d cls=%u conf_c=%d dis=%u\n",
+				   ultrawidelock_uptime_us(), ip.n, cm, (unsigned)cls,
 				   (int)(conf * 100.0f),
 				   (unsigned)ultrawidelock_ml_los_disagrees(feat, pwr_diff));
 			return ultrawidelock_approach_feed_channel(ap, now, cm,
@@ -91,8 +91,8 @@ void ml_feed_vote_trace(struct ultrawidelock_approach *ap, int64_t now)
 
 	if (blocked != was_blocked) {
 		was_blocked = blocked;
-		woz_printf("[ALAB] t=%lld ev=ml.vote blocked=%u\n",
-			   woz_uptime_us(), (unsigned)blocked);
+		ultrawidelock_printf("[ALAB] t=%lld ev=ml.vote blocked=%u\n",
+			   ultrawidelock_uptime_us(), (unsigned)blocked);
 	}
 #else
 	(void)ap;

@@ -18,19 +18,19 @@ set(UWB_INC "${REPO_ROOT}/modules/ultrawidelock_uwb/include")
 set(UWB "${REPO_ROOT}/modules/ultrawidelock_uwb/src/cred")
 set(CCC "${REPO_ROOT}/modules/ultrawidelock_uwb/src/ccc")
 
-# Shared sources by role manifest (modules/{woz_aliro,ultrawidelock_uwb}/roles/*.list) —
+# Shared sources by role manifest (modules/{ultrawidelock_cred,ultrawidelock_uwb}/roles/*.list) —
 # the same lists the ESP32 components and the host suite read.
-include("${REPO_ROOT}/cmake/woz_roles.cmake")
-woz_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
-woz_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
-woz_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-woz_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
-woz_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
+ultrawidelock_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/device.list" ULTRAWIDELOCK_DEVICE_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
 set(UWBROLES "${REPO_ROOT}/modules/ultrawidelock_uwb/roles")
-woz_role_sources("${UWBROLES}/ultrawidelock_device.list" UWB_DEVICE_SRCS)
-woz_role_sources("${UWBROLES}/ultrawidelock_codec.list" UWB_CODEC_SRCS)
-woz_role_sources("${UWBROLES}/ccc_keys.list" UWB_CCC_KEYS_SRCS)
-woz_role_sources("${UWBROLES}/crypto_psa.list" UWB_CRYPTO_SRCS)
+ultrawidelock_role_sources("${UWBROLES}/ultrawidelock_device.list" UWB_DEVICE_SRCS)
+ultrawidelock_role_sources("${UWBROLES}/ultrawidelock_codec.list" UWB_CODEC_SRCS)
+ultrawidelock_role_sources("${UWBROLES}/ccc_keys.list" UWB_CCC_KEYS_SRCS)
+ultrawidelock_role_sources("${UWBROLES}/crypto_psa.list" UWB_CRYPTO_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
@@ -40,7 +40,7 @@ target_sources(app PRIVATE
 	# makes it linkable from here. The ble_central role is the platform-free
 	# decoder half, the same translation unit the ESP32 port and the host suite
 	# compile.
-	${REPO_ROOT}/ports/zephyr/ble/aliro_ble_central_zephyr.c
+	${REPO_ROOT}/ports/zephyr/ble/ultrawidelock_ble_central_zephyr.c
 	${ULTRAWIDELOCK_BLE_CENTRAL_SRCS}
 	# Access Protocol, device side (roles device + apdu), plus the key schedule
 	# and the PSA primitive backend (roles crypto + hash).
@@ -78,7 +78,7 @@ target_include_directories(app PRIVATE ${ALIRO}/include ${ALIRO}/src
 	# (qmalloc -> k_malloc, LOG_MODULE_DECLARE).
 	${UWB_INC} ${UWB}
 	${REPO_ROOT}/modules/ultrawidelock_uwb/src/facade
-	${REPO_ROOT}/modules/woz_port/include
+	${REPO_ROOT}/modules/ultrawidelock_port/include
 	# The CCC key schedule and MAC headers, plus src/driver for uwb_seam.h
 	# (ultrawidelock_uwb_configure_phy). CONFIG_ULTRAWIDELOCK_UWB already puts src/driver on the
 	# path for the module's own library, but this app's sources are compiled

@@ -1,4 +1,4 @@
-/* logfake: minimal <zephyr/shell/shell.h> for host-building aliro_shell.c.
+/* logfake: minimal <zephyr/shell/shell.h> for host-building ultrawidelock_shell.c.
  *
  * shell_print lands in the shellfake_out capture buffer (drvfake.c), and the
  * SHELL_* registration macros emit a plain table (struct shellfake_root) the

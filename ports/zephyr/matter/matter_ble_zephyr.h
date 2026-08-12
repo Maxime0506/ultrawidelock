@@ -58,7 +58,7 @@ int matter_ble_send(const uint8_t *msg, size_t len);
  * Build the commissionable-node service data element.
  *
  * This does NOT start advertising, deliberately. The reader owns the single
- * advertising set (aliro_ble_zephyr.c), and it stays that way: Zephyr's legacy
+ * advertising set (ultrawidelock_ble_zephyr.c), and it stays that way: Zephyr's legacy
  * bt_le_adv_start API has exactly one set, and the alternative -- CONFIG_BT_EXT_ADV
  * with two sets -- measured +24,844 B of flash and +2,464 B of RAM on this board
  * before either advertiser was rewritten to use it. On a part where CASE and the

@@ -37,7 +37,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include "board_pins.h"
 #include "deca_device_api.h"
@@ -101,7 +101,7 @@ volatile uint32_t g_dw_cyc_per_us = 64u; /* nRF52833 core clock, MHz. */
 
 uint32_t dw3000_dwt_cyccnt(void)
 {
-	return woz_freertos_cycle_get_32();
+	return ultrawidelock_freertos_cycle_get_32();
 }
 
 static StaticTask_t s_task_tcb;
@@ -136,7 +136,7 @@ int dw3000_hw_init(void)
 	return dw3000_spi_init();
 }
 
-void woz_freertos_dw3000_irq_handler(void)
+void ultrawidelock_freertos_dw3000_irq_handler(void)
 {
 	BaseType_t wake = pdFALSE;
 
@@ -145,7 +145,7 @@ void woz_freertos_dw3000_irq_handler(void)
 	}
 	nrf_gpiote_event_clear(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0);
 
-	g_dw_cyc_gpio = woz_freertos_cycle_get_32();
+	g_dw_cyc_gpio = ultrawidelock_freertos_cycle_get_32();
 	if (s_task != NULL) {
 		vTaskNotifyGiveFromISR(s_task, &wake);
 		portYIELD_FROM_ISR(wake);
@@ -158,7 +158,7 @@ static void dw3000_isr_task(void *arg)
 
 	for (;;) {
 		(void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		g_dw_cyc_work = woz_freertos_cycle_get_32();
+		g_dw_cyc_work = ultrawidelock_freertos_cycle_get_32();
 		/*
 		 * The line stays high until every pending event has been read
 		 * out, so one notification can owe several passes. Draining it
@@ -168,7 +168,7 @@ static void dw3000_isr_task(void *arg)
 		while (nrf_gpio_pin_read(ULTRAWIDELOCK_DW3000_PIN_IRQ)) {
 			dwt_isr();
 		}
-		g_dw_cyc_isrdone = woz_freertos_cycle_get_32();
+		g_dw_cyc_isrdone = ultrawidelock_freertos_cycle_get_32();
 	}
 }
 
@@ -182,7 +182,7 @@ int dw3000_hw_init_interrupt(void)
 					   ULTRAWIDELOCK_DW3000_ISR_TASK_PRIORITY, s_task_stack,
 					   &s_task_tcb);
 		if (s_task == NULL) {
-			woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, "no worker task");
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, TAG, "no worker task");
 			return -1;
 		}
 	}
@@ -243,11 +243,11 @@ void dw3000_hw_reset(void)
 	 */
 	nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_RST);
 	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_RST);
-	woz_freertos_busy_wait_us(1000);
+	ultrawidelock_freertos_busy_wait_us(1000);
 	nrf_gpio_cfg_input(ULTRAWIDELOCK_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
 
 	/* Long enough for the chip to climb from INIT_RC to IDLE_RC. */
-	woz_freertos_busy_wait_us(2000);
+	ultrawidelock_freertos_busy_wait_us(2000);
 	s_asleep = false;
 }
 
@@ -259,7 +259,7 @@ void dw3000_hw_wakeup(void)
 		return;
 	}
 	dw3000_spi_wakeup();
-	woz_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
+	ultrawidelock_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
 	s_asleep = false;
 
 	/*
@@ -269,11 +269,11 @@ void dw3000_hw_wakeup(void)
 	 * plausible numbers from a radio that was never configured.
 	 */
 	while (!dwt_checkidlerc() && spins < 500u) {
-		woz_freertos_busy_wait_us(10);
+		ultrawidelock_freertos_busy_wait_us(10);
 		spins++;
 	}
 	if (spins >= 500u) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, "wake: never reached IDLE_RC");
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, TAG, "wake: never reached IDLE_RC");
 	}
 }
 

@@ -14,12 +14,12 @@
 #include <stdint.h>
 
 /** @brief Continue a CRC-32 over @p len bytes; seed @p crc with 0 to start. */
-uint32_t woz_crc32_update(uint32_t crc, const uint8_t *data, size_t len);
+uint32_t ultrawidelock_crc32_update(uint32_t crc, const uint8_t *data, size_t len);
 
 /** @brief CRC-32 of one whole buffer. */
-static inline uint32_t woz_crc32(const uint8_t *data, size_t len)
+static inline uint32_t ultrawidelock_crc32(const uint8_t *data, size_t len)
 {
-	return woz_crc32_update(0, data, len);
+	return ultrawidelock_crc32_update(0, data, len);
 }
 
 #endif /* ULTRAWIDELOCK_DFU_CRC_H */

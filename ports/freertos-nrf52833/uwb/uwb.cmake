@@ -5,17 +5,17 @@
 # layer-at-a-time rule: this one is added once the layers below it link.
 #
 # The source set is the role manifests in modules/{ultrawidelock_uwb,ultrawidelock_dw3000}/roles/,
-# read through cmake/woz_roles.cmake -- the same lists and the same reader the
+# read through cmake/ultrawidelock_roles.cmake -- the same lists and the same reader the
 # Zephyr module and the ESP-IDF component use. A source assigned to a role
 # belongs in its manifest and nowhere else; that is what has kept three ports
 # from drifting apart, and it is why nothing is listed literally here except
 # the two files this port actually owns.
 
-get_filename_component(WOZ_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
-include("${WOZ_REPO_ROOT}/cmake/woz_roles.cmake")
+get_filename_component(ULTRAWIDELOCK_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+include("${ULTRAWIDELOCK_REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
 
-set(ULTRAWIDELOCK_UWB_ROLES "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/roles")
-set(WOZ_DW_ROLES "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/roles")
+set(ULTRAWIDELOCK_UWB_ROLES "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/roles")
+set(ULTRAWIDELOCK_DW_ROLES "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_dw3000/roles")
 
 # Named once, in a list of their own, because a manifest that is renamed or
 # deleted expands to nothing rather than to an error: the role's sources simply
@@ -37,61 +37,61 @@ set(ULTRAWIDELOCK_UWB_ROLE_LISTS
   "${ULTRAWIDELOCK_UWB_ROLES}/crypto_psa.list"
   "${ULTRAWIDELOCK_UWB_ROLES}/ultrawidelock_adapter.list"
   "${ULTRAWIDELOCK_UWB_ROLES}/ultrawidelock_codec.list"
-  "${WOZ_DW_ROLES}/core.list"
-  "${WOZ_DW_ROLES}/chip_dw3000.list"
+  "${ULTRAWIDELOCK_DW_ROLES}/core.list"
+  "${ULTRAWIDELOCK_DW_ROLES}/chip_dw3000.list"
 )
 
 set(ULTRAWIDELOCK_UWB_SOURCES)
-foreach(_woz_list IN LISTS ULTRAWIDELOCK_UWB_ROLE_LISTS)
-  if(NOT EXISTS "${_woz_list}")
-    message(FATAL_ERROR "UWB role manifest is missing: ${_woz_list}")
+foreach(_ultrawidelock_list IN LISTS ULTRAWIDELOCK_UWB_ROLE_LISTS)
+  if(NOT EXISTS "${_ultrawidelock_list}")
+    message(FATAL_ERROR "UWB role manifest is missing: ${_ultrawidelock_list}")
   endif()
-  woz_role_sources("${_woz_list}" _woz_role_srcs)
-  list(APPEND ULTRAWIDELOCK_UWB_SOURCES ${_woz_role_srcs})
+  ultrawidelock_role_sources("${_ultrawidelock_list}" _ultrawidelock_role_srcs)
+  list(APPEND ULTRAWIDELOCK_UWB_SOURCES ${_ultrawidelock_role_srcs})
 endforeach()
 
 add_library(ultrawidelock_uwb STATIC
   ${ULTRAWIDELOCK_UWB_SOURCES}
-  "${WOZ_PORT_DIR}/uwb/dw3000_spi_freertos.c"
-  "${WOZ_PORT_DIR}/uwb/dw3000_hw_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/uwb/dw3000_spi_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/uwb/dw3000_hw_freertos.c"
   # This port's half of uwb_seam.h. The Zephyr build gets it from uwb_rxdiag.c,
   # which is a Zephyr-module literal and not in any role manifest, so each
   # non-Zephyr port supplies the essential chain itself.
-  "${WOZ_PORT_DIR}/uwb/ultrawidelock_seam_stubs.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/uwb/ultrawidelock_seam_stubs.c"
   # The port's bring-up, and the only thing in the image that calls the layer
   # until the Aliro seam is wired.
-  "${WOZ_PORT_DIR}/uwb/woz_freertos_uwb.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/uwb/ultrawidelock_freertos_uwb.c"
 )
 
 target_include_directories(ultrawidelock_uwb PUBLIC
-  "${WOZ_REPO_ROOT}/modules/woz_port/include"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/include"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/include"
-  "${WOZ_PORT_DIR}/include"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_port/include"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/include"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_dw3000/include"
+  "${ULTRAWIDELOCK_PORT_DIR}/include"
 )
 target_include_directories(ultrawidelock_uwb PRIVATE
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/src/driver"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/src/fira"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/src/ccc"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/src/facade"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_uwb/src/cred"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/dwt_uwb_driver"
-  "${WOZ_REPO_ROOT}/modules/ultrawidelock_dw3000/dwt_uwb_driver/lib/qmath/include"
-  "${WOZ_PORT_DIR}/uwb"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/src/driver"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/src/fira"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/src/ccc"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/src/facade"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_uwb/src/cred"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_dw3000/dwt_uwb_driver"
+  "${ULTRAWIDELOCK_REPO_ROOT}/modules/ultrawidelock_dw3000/dwt_uwb_driver/lib/qmath/include"
+  "${ULTRAWIDELOCK_PORT_DIR}/uwb"
 )
 
 target_compile_definitions(ultrawidelock_uwb PUBLIC
-  # The branch every shared source takes. woz_port.h and woz_log.h are written
+  # The branch every shared source takes. ultrawidelock_port.h and ultrawidelock_log.h are written
   # as one file per contract with a branch per platform, and this is the switch
   # that selects ours; without it the engine falls through to the host branch's
   # #error, or worse, compiles against nothing and asks the linker for Zephyr.
-  WOZ_PORT_FREERTOS=1
+  ULTRAWIDELOCK_PORT_FREERTOS=1
   CONFIG_ULTRAWIDELOCK_UWB=1
   CONFIG_ULTRAWIDELOCK_UWB_RESPONDER=1
   CONFIG_ULTRAWIDELOCK_CRED=1
   CONFIG_DW3000=1
   CONFIG_DW3000_CHIP_DW3000=1
-  CONFIG_WOZ_CRYPTO_PSA=1
+  CONFIG_ULTRAWIDELOCK_CRYPTO_PSA=1
   # Not optional and not a diagnostic. This is a single core and BLE shares it
   # with the ranging callbacks, so the next round's POLL and Response overwrite
   # the live DS-TWR timestamps before Final_Data is processed and the distances
@@ -101,9 +101,9 @@ target_compile_definitions(ultrawidelock_uwb PUBLIC
 )
 
 # The kernel headers, the board's platform hooks, and Mbed TLS's PSA core: the
-# engine takes its OS surface from woz_port.h, its logging and timebase from the
+# engine takes its OS surface from ultrawidelock_port.h, its logging and timebase from the
 # board, and its AES-ECB from PSA.
-target_link_libraries(ultrawidelock_uwb PUBLIC woz_kernel woz_board woz_mbedtls)
+target_link_libraries(ultrawidelock_uwb PUBLIC ultrawidelock_kernel ultrawidelock_board ultrawidelock_mbedtls)
 
 # ----------------------------------------------------------------------------
 # Proof that this layer links, which the product image does not currently give.
@@ -120,14 +120,14 @@ target_link_libraries(ultrawidelock_uwb PUBLIC woz_kernel woz_board woz_mbedtls)
 # it exists to make the symbol set close now rather than at the far end of the
 # application work.
 # ----------------------------------------------------------------------------
-add_executable(ultrawidelock_uwb_link_check "${WOZ_PORT_DIR}/uwb/link_check.c")
+add_executable(ultrawidelock_uwb_link_check "${ULTRAWIDELOCK_PORT_DIR}/uwb/link_check.c")
 target_link_libraries(ultrawidelock_uwb_link_check PRIVATE
   -Wl,--whole-archive ultrawidelock_uwb -Wl,--no-whole-archive
-  woz_freertos_port
+  ultrawidelock_freertos_port
 )
 target_link_options(ultrawidelock_uwb_link_check PRIVATE
-  "-T${WOZ_PORT_DIR}/board/nrf52833_lock.ld"
-  "-L${WOZ_PORT_DIR}/board"
+  "-T${ULTRAWIDELOCK_PORT_DIR}/board/nrf52833_lock.ld"
+  "-L${ULTRAWIDELOCK_PORT_DIR}/board"
   --specs=nano.specs
   --specs=nosys.specs
 )
@@ -184,20 +184,20 @@ set(ULTRAWIDELOCK_UWB_REACH_ALIRO
 
 # The interrupt entry the vector table references on a real target. Without it
 # the worker's whole call tree is unreachable and the measurement is a fiction.
-set(ULTRAWIDELOCK_UWB_REACH_IRQ woz_freertos_dw3000_irq_handler)
+set(ULTRAWIDELOCK_UWB_REACH_IRQ ultrawidelock_freertos_dw3000_irq_handler)
 
 # <name> <roots...> -- one variant of the same link, differing only in roots.
 function(ultrawidelock_uwb_add_reach_variant _name)
-  add_executable("${_name}" "${WOZ_PORT_DIR}/uwb/link_check.c")
+  add_executable("${_name}" "${ULTRAWIDELOCK_PORT_DIR}/uwb/link_check.c")
   # Not --whole-archive: the point is to let the collector do its work.
-  target_link_libraries("${_name}" PRIVATE ultrawidelock_uwb woz_freertos_port)
+  target_link_libraries("${_name}" PRIVATE ultrawidelock_uwb ultrawidelock_freertos_port)
   set(_undef "")
   foreach(_sym ${ARGN})
     list(APPEND _undef "-Wl,--undefined=${_sym}")
   endforeach()
   target_link_options("${_name}" PRIVATE
-    "-T${WOZ_PORT_DIR}/board/nrf52833_lock.ld"
-    "-L${WOZ_PORT_DIR}/board"
+    "-T${ULTRAWIDELOCK_PORT_DIR}/board/nrf52833_lock.ld"
+    "-L${ULTRAWIDELOCK_PORT_DIR}/board"
     --specs=nano.specs
     --specs=nosys.specs
     -Wl,--gc-sections
@@ -215,7 +215,7 @@ ultrawidelock_uwb_add_reach_variant(ultrawidelock_uwb_reach_responder
 
 add_custom_target(ultrawidelock_uwb_reach
   COMMAND "${CMAKE_COMMAND}" -E env bash
-          "${WOZ_PORT_DIR}/uwb/reach_report.sh"
+          "${ULTRAWIDELOCK_PORT_DIR}/uwb/reach_report.sh"
           "${CMAKE_SIZE}"
           "$<TARGET_FILE:ultrawidelock_uwb_reach_baseline>"
           "$<TARGET_FILE:ultrawidelock_uwb_reach_facade>"

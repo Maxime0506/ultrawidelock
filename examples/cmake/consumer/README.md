@@ -2,7 +2,7 @@
 
 This example verifies the installed UltraWideLock CMake package and public include
 layout. It includes `<ultrawidelock/tlv.h>`, links the portable TLV codec, and
-compiles `<ultrawidelock/woz_hal.h>` with its installed support headers. It never
+compiles `<ultrawidelock/ultrawidelock_hal.h>` with its installed support headers. It never
 reaches into a module's private `src/` directory.
 
 Install UltraWideLock, then build the example against that prefix. This derives the

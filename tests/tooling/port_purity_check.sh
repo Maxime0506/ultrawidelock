@@ -11,7 +11,7 @@
 #   1. platform includes   Zephyr, ESP-IDF, or canonical FreeRTOS headers
 #   2. Zephyr kernel API   k_work*, k_sem*, k_thread*, k_timer*, k_fifo*,
 #                          k_msleep, SYS_INIT, K_WORK_*, K_SEM_*, flash_area_*,
-#                          sys_reboot — platform code goes through woz_port
+#                          sys_reboot — platform code goes through ultrawidelock_port
 #
 # and one shape is banned in platform-owned trees, which is the same rule read
 # from the other side: each names exactly one OS (check_port_os). modules/ names
@@ -26,11 +26,11 @@
 #
 # WHAT IS EXEMPT, permanently, and why each one is not a hole:
 #
-#   modules/woz_port/                the contract itself: its whole job is to be
+#   modules/ultrawidelock_port/                the contract itself: its whole job is to be
 #                                    the one place platform branches live
 #   modules/ultrawidelock_dw3000/dwt_uwb_driver/   vendored Qorvo decadriver
 #   modules/ultrawidelock_dfu/src/detools/         vendored delta-patch engine
-#   woz_aliro_stack/{aliro_stack,session}.cpp  adapters to the Nordic add-on's
+#   ultrawidelock_cred_stack/{cred_stack,session}.cpp  adapters to the Nordic add-on's
 #                                    <aliro/*> API; the add-on's own headers
 #                                    include Zephyr, so these can never be pure
 #   ultrawidelock_nfc/src/transport_pn532.cpp  same class of adapter: its threading
@@ -41,8 +41,8 @@
 #                                    subsys/nfc_prop, add-on headers included
 #   ultrawidelock_uwb/include/ultrawidelock_util.h    portable shim that defers to the Zephyr
 #                                    header under #ifdef __ZEPHYR__ and carries
-#                                    its own fallback otherwise (woz_bytes.h,
-#                                    its sibling, now lives in woz_port)
+#                                    its own fallback otherwise (ultrawidelock_bytes.h,
+#                                    its sibling, now lives in ultrawidelock_port)
 #
 # THE RATCHET. Every other exemption is a file still waiting on its unification
 # tranche, listed in RATCHET below with the tranche that retires it. A ratchet
@@ -67,7 +67,7 @@
 #                      grafts into the Nordic add-on must still be defined in
 #                      modules/ or ports/ (check_patch_symbols)
 #   role manifests     modules/*/roles/*.list is the ONE place a shared source is
-#                      assigned to a role; cmake/woz_roles.cmake and
+#                      assigned to a role; cmake/ultrawidelock_roles.cmake and
 #                      tests/host/sources.sh read them instead of carrying their
 #                      own copies. check_manifests keeps that true: every listed
 #                      path exists, no file sits in two roles (a consumer taking
@@ -78,7 +78,7 @@
 #   private headers    production modules, apps and ports never include a
 #                      different module's private header; tests may white-box
 #                      the implementation they compile
-#   HAL contract       ultrawidelock/woz_hal.h names exactly the five approved seams
+#   HAL contract       ultrawidelock/ultrawidelock_hal.h names exactly the five approved seams
 
 set -euo pipefail
 
@@ -117,17 +117,17 @@ PERMANENT_DIRS=(
 PERMANENT_FILES=(
 	# The contract itself: these four headers name every platform on purpose,
 	# because selecting the backend is what they are for. Listed one by one
-	# rather than exempting modules/woz_port wholesale, so that a .c file
+	# rather than exempting modules/ultrawidelock_port wholesale, so that a .c file
 	# appearing beside them fails the gate instead of inheriting a blanket
 	# pass. Every backend lives in a port tree now (ports/zephyr/osal,
-	# ports/esp32/components/woz_port, tests/host/port). woz_flash.h is
+	# ports/esp32/components/ultrawidelock_port, tests/host/port). ultrawidelock_flash.h is
 	# deliberately absent: it is pure, and the ratchet says so if that changes.
-	modules/woz_port/include/woz_bytes.h
-	modules/woz_port/include/woz_log.h
-	modules/woz_port/include/woz_osal.h
-	modules/woz_port/include/woz_port.h
-	modules/woz_aliro_stack/src/aliro_stack.cpp
-	modules/woz_aliro_stack/src/session.cpp
+	modules/ultrawidelock_port/include/ultrawidelock_bytes.h
+	modules/ultrawidelock_port/include/ultrawidelock_log.h
+	modules/ultrawidelock_port/include/ultrawidelock_osal.h
+	modules/ultrawidelock_port/include/ultrawidelock_port.h
+	modules/ultrawidelock_cred_stack/src/cred_stack.cpp
+	modules/ultrawidelock_cred_stack/src/session.cpp
 	modules/ultrawidelock_nfc/src/transport_pn532.cpp
 	modules/ultrawidelock_nfc/src/nfc_prop_ecp.cpp
 	modules/ultrawidelock_uwb/include/ultrawidelock_util.h
@@ -227,14 +227,14 @@ scan() {
 		if [ "$findings" -gt 0 ]; then
 			printf '%scheck-purity: %d platform reference(s) in shared modules/%s\n' \
 				"$R" "$findings" "$Z" >&2
-			printf '  Go through woz_port (woz_port.h / woz_log.h), or move the file\n' >&2
+			printf '  Go through ultrawidelock_port (ultrawidelock_port.h / ultrawidelock_log.h), or move the file\n' >&2
 			printf '  to a port tree. RATCHET additions need a tranche tag and a reason.\n' >&2
 		fi
 		[ "$stale" -eq 0 ] || printf '%scheck-purity: %d stale exemption(s) — an allowlist entry outlived its reason%s\n' \
 			"$R" "$stale" "$Z" >&2
 		return 1
 	fi
-	printf '%s  ok   modules/ is platform-pure outside woz_port and the exempt adapters%s\n' "$G" "$Z"
+	printf '%s  ok   modules/ is platform-pure outside ultrawidelock_port and the exempt adapters%s\n' "$G" "$Z"
 	printf '%s  ok   exemptions: %d permanent (%d dir, %d file), %d ratchet, none stale%s\n' \
 		"$G" "$((${#PERMANENT_DIRS[@]} + ${#PERMANENT_FILES[@]}))" \
 		"${#PERMANENT_DIRS[@]}" "${#PERMANENT_FILES[@]}" "${#RATCHET[@]}" "$Z"
@@ -248,7 +248,7 @@ scan() {
 # one. A Zephyr call in ports/esp32 (or an esp_/FreeRTOS call in ports/zephyr,
 # apps/dwm3001cdk-lock/ or examples/zephyr/) is a file that landed in the wrong tree
 # — it either belongs in the sibling port, or it is shared code that should sit
-# in modules/ behind woz_port. Both readings mean the tree, not the file, is
+# in modules/ behind ultrawidelock_port. Both readings mean the tree, not the file, is
 # wrong, and neither is caught by the modules/ scan above.
 #
 # tests/ is deliberately absent: the host suites include fake <zephyr/*>
@@ -307,7 +307,7 @@ check_port_os() {
 	if [ "$fails" -gt 0 ]; then
 		printf '%scheck-purity: %d cross-OS include(s) in a platform tree%s\n' "$R" "$fails" "$Z" >&2
 		printf '  Move the file to the port whose OS it names, or into modules/\n' >&2
-		printf '  behind woz_port if both ports need it.\n' >&2
+		printf '  behind ultrawidelock_port if both ports need it.\n' >&2
 		return 1
 	fi
 	printf '%s  ok   platform trees: %d source(s), each naming only its own OS%s\n' "$G" "$n" "$Z"
@@ -452,7 +452,7 @@ check_public_includes() {
 			canon="$p"
 			[ ! -d "$p" ] || canon=$(cd "$p" && pwd -P)
 			case "$canon" in
-			"$repo"/modules/woz_*/src | "$repo"/modules/woz_*/src/* | \
+			"$repo"/modules/ultrawidelock_*/src | "$repo"/modules/ultrawidelock_*/src/* | \
 				"$repo"/modules/ultrawidelock_*/src | "$repo"/modules/ultrawidelock_*/src/*)
 				printf '%s  private include path is public: %s (named by %s)%s\n' \
 					"$R" "$p" "$f" "$Z" >&2
@@ -473,7 +473,7 @@ check_public_includes() {
 # Owned private headers only. The vendored trees are dependencies with their
 # own layout and do not define this repository's module boundary.
 private_headers() {
-	repo_files 'modules/woz_*/src/*.h' 'modules/woz_*/src/**/*.h' \
+	repo_files 'modules/ultrawidelock_*/src/*.h' 'modules/ultrawidelock_*/src/**/*.h' \
 		'modules/ultrawidelock_*/src/*.h' 'modules/ultrawidelock_*/src/**/*.h' \
 		| grep -vE '^modules/(woz|ultrawidelock)_dfu/src/detools/'
 }
@@ -495,7 +495,7 @@ private_header_target() { # <source> <include-token> <private-header>...
 	local h owner rel matched
 	shift 2
 	case "$src" in
-	modules/woz_*/* | modules/ultrawidelock_*/*)
+	modules/ultrawidelock_*/* | modules/ultrawidelock_*/*)
 		src_owner=${src#modules/}
 		src_owner=${src_owner%%/*}
 		case "$src" in modules/"$src_owner"/include/*) public_header=1 ;; esac
@@ -733,7 +733,7 @@ NOT_MANIFESTED=(
 manifest_files() { repo_files 'modules/*/roles/*.list'; }
 
 # One manifest -> its repo-relative paths, comments and blank lines dropped.
-# The same three rules cmake/woz_roles.cmake and tests/host/sources.sh apply.
+# The same three rules cmake/ultrawidelock_roles.cmake and tests/host/sources.sh apply.
 manifest_paths() {
 	sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$@"
 }
@@ -801,7 +801,7 @@ check_manifests() {
 
 # The installed HAL umbrella is deliberately small. Adding a sixth seam or
 # dropping one of these five is an architecture change, not a header cleanup.
-HAL_CONTRACT=modules/woz_port/include/ultrawidelock/woz_hal.h
+HAL_CONTRACT=modules/ultrawidelock_port/include/ultrawidelock/ultrawidelock_hal.h
 HAL_CONTRACT_HEADERS=(
 	ultrawidelock_ble.h
 	ultrawidelock_ble_central.h
@@ -824,7 +824,7 @@ hal_contract_matches() {
 
 check_hal_contract() {
 	if [ ! -f "$HAL_CONTRACT" ] || ! hal_contract_matches "$HAL_CONTRACT"; then
-		printf '%scheck-purity: ultrawidelock/woz_hal.h must include exactly the five approved seam headers%s\n' \
+		printf '%scheck-purity: ultrawidelock/ultrawidelock_hal.h must include exactly the five approved seam headers%s\n' \
 			"$R" "$Z" >&2
 		return 1
 	fi
@@ -853,9 +853,9 @@ self_test() {
 		'	xTaskCreateStatic(entry, "worker", 128, NULL, 3, stack, &tcb);'
 	)
 	local should_not=(
-		'	woz_work_submit(&ctx.work);'
-		'	woz_sem_take(&s, 50);'
-		'#include "woz_port.h"'
+		'	ultrawidelock_work_submit(&ctx.work);'
+		'	ultrawidelock_sem_take(&s, 50);'
+		'#include "ultrawidelock_port.h"'
 		'	ultrawidelock_work_submit(&ctx.work);'
 		'	ultrawidelock_sem_take(&s, 50);'
 		'#include "ultrawidelock_port.h"'
@@ -914,7 +914,7 @@ self_test() {
 
 	# Comment filter: drops prose, keeps code with a trailing comment.
 	local drop=('12: * uses k_work_reschedule under the hood' '7://	k_msleep(5);')
-	local keep='20:	woz_sem_give(&s); /* not k_sem_give */'
+	local keep='20:	ultrawidelock_sem_give(&s); /* not k_sem_give */'
 	for line in "${drop[@]}"; do
 		if ! printf '%s\n' "$line" | grep -qE "$COMMENT_LINE_RE"; then
 			printf '%s  self-test FAILED: comment filter kept: %s%s\n' "$R" "$line" "$Z" >&2
@@ -1084,26 +1084,26 @@ self_test() {
 
 	# Private-header matcher: an external source and a module API header must
 	# trip, while a module implementation may include its own private sibling.
-	local private_fix=(modules/woz_alpha/src/secret.h modules/woz_alpha/src/protocol/wire.h)
-	if [ "$(private_header_target modules/woz_beta/src/use.c secret.h "${private_fix[@]}")" != \
-		"modules/woz_alpha/src/secret.h" ]; then
+	local private_fix=(modules/ultrawidelock_alpha/src/secret.h modules/ultrawidelock_alpha/src/protocol/wire.h)
+	if [ "$(private_header_target modules/ultrawidelock_beta/src/use.c secret.h "${private_fix[@]}")" != \
+		"modules/ultrawidelock_alpha/src/secret.h" ]; then
 		printf '%s  self-test FAILED: private header matcher missed a cross-module include%s\n' \
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
 	if [ "$(private_header_target ports/zephyr/use.c protocol/wire.h "${private_fix[@]}")" != \
-		"modules/woz_alpha/src/protocol/wire.h" ]; then
+		"modules/ultrawidelock_alpha/src/protocol/wire.h" ]; then
 		printf '%s  self-test FAILED: private header matcher missed a qualified include%s\n' \
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	if [ "$(private_header_target modules/woz_alpha/include/api.h secret.h "${private_fix[@]}")" != \
-		"modules/woz_alpha/src/secret.h" ]; then
+	if [ "$(private_header_target modules/ultrawidelock_alpha/include/api.h secret.h "${private_fix[@]}")" != \
+		"modules/ultrawidelock_alpha/src/secret.h" ]; then
 		printf '%s  self-test FAILED: private header matcher missed a public-header leak%s\n' \
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	if private_header_target modules/woz_alpha/src/impl.c secret.h "${private_fix[@]}" >/dev/null; then
+	if private_header_target modules/ultrawidelock_alpha/src/impl.c secret.h "${private_fix[@]}" >/dev/null; then
 		printf '%s  self-test FAILED: private header matcher rejected an owned sibling%s\n' \
 			"$R" "$Z" >&2
 		fails=$((fails + 1))
@@ -1128,20 +1128,20 @@ self_test() {
 	cat >"$fixdir/fix.patch" <<-'EOF'
 		--- a/x.cpp
 		+++ b/x.cpp
-		+	woz_phantom_symbol_xyz();
+		+	ultrawidelock_phantom_symbol_xyz();
 		+	ultrawidelock_phantom_symbol_xyz();
 		+	UltraWideLockNfc::Init();
 		+	if (CONFIG_ULTRAWIDELOCK_CRED) {}
 		+#include <ultrawidelock/uwb.h>
 		+#include <ultrawidelock/phantom.h>
-		-	woz_minus_line_only();
+		-	ultrawidelock_minus_line_only();
 	EOF
 	if [ "$(patch_syms "$fixdir/fix.patch")" != \
-		"$(printf 'CONFIG_ULTRAWIDELOCK_CRED\nUltraWideLockNfc::Init\nultrawidelock_phantom_symbol_xyz\nwoz_phantom_symbol_xyz')" ]; then
+		"$(printf 'CONFIG_ULTRAWIDELOCK_CRED\nUltraWideLockNfc::Init\nultrawidelock_phantom_symbol_xyz\nultrawidelock_phantom_symbol_xyz')" ]; then
 		printf '%s  self-test FAILED: patch_syms extraction wrong for the fixture%s\n' "$R" "$Z" >&2
 		fails=$((fails + 1))
 	fi
-	for pth in woz_phantom_symbol_xyz ultrawidelock_phantom_symbol_xyz; do
+	for pth in ultrawidelock_phantom_symbol_xyz ultrawidelock_phantom_symbol_xyz; do
 		if patch_sym_defined "$pth"; then
 			printf '%s  self-test FAILED: tripwire resolved an invented symbol: %s%s\n' \
 				"$R" "$pth" "$Z" >&2
@@ -1167,7 +1167,7 @@ self_test() {
 
 	# Manifest parser: comments (whole-line and trailing), blank lines and
 	# stray whitespace vanish; nothing else does. Must agree with
-	# cmake/woz_roles.cmake and tests/host/sources.sh, which parse the same
+	# cmake/ultrawidelock_roles.cmake and tests/host/sources.sh, which parse the same
 	# files with different tools.
 	printf '%s\n' '# a role manifest' '' 'modules/x/src/a.c' \
 		'  modules/x/src/b.c  ' 'modules/x/src/c.c # why' '#modules/x/src/never.c' \

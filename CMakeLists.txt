@@ -26,7 +26,7 @@ set(ULTRAWIDELOCK_MODULE_INCLUDE_DIRS
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_matter/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_ml/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_nfc/include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/modules/woz_port/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_port/include"
 	"${CMAKE_CURRENT_SOURCE_DIR}/modules/ultrawidelock_uwb/include")
 foreach(include_dir IN LISTS ULTRAWIDELOCK_MODULE_INCLUDE_DIRS)
 	target_include_directories(ultrawidelock_headers INTERFACE
@@ -39,7 +39,7 @@ set(ULTRAWIDELOCK_PACKAGE_HEADERS
 	"modules/ultrawidelock_cred/include/ultrawidelock/reader.h|reader.h"
 	"modules/ultrawidelock_cred/include/ultrawidelock/tlv.h|tlv.h"
 	"modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h|uwb.h"
-	"modules/woz_port/include/ultrawidelock/woz_hal.h|woz_hal.h"
+	"modules/ultrawidelock_port/include/ultrawidelock/ultrawidelock_hal.h|ultrawidelock_hal.h"
 	"modules/ultrawidelock_cred/include/ultrawidelock_advtag.h|ultrawidelock_advtag.h"
 	"modules/ultrawidelock_cred/include/ultrawidelock_apdu.h|ultrawidelock_apdu.h"
 	"modules/ultrawidelock_cred/include/ultrawidelock_ble.h|ultrawidelock_ble.h"

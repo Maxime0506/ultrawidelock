@@ -20,7 +20,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -39,12 +39,13 @@ static unsigned g_failures;
 static char g_last_log[128];
 static unsigned g_error_logs;
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	va_list args;
 
 	(void)tag;
-	if (level == WOZ_FREERTOS_LOG_ERROR) {
+	if (level == ULTRAWIDELOCK_FREERTOS_LOG_ERROR) {
 		g_error_logs++;
 	}
 	va_start(args, fmt);
@@ -52,8 +53,9 @@ void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const 
 	va_end(args);
 }
 
-void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag, const void *data,
-			      size_t len, const char *message)
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
+					const char *tag, const void *data, size_t len,
+					const char *message)
 {
 	(void)level;
 	(void)tag;
@@ -89,14 +91,14 @@ static void test_uptime(void)
 	reset_all();
 
 	fake_task_set_tick_count(0);
-	CHECK("uptime starts at zero", woz_freertos_uptime_us() == 0);
+	CHECK("uptime starts at zero", ultrawidelock_freertos_uptime_us() == 0);
 
 	/* The model ticks at 1 kHz, so a tick is 1000 us. */
 	fake_task_set_tick_count(5);
-	CHECK("uptime converts ticks to microseconds", woz_freertos_uptime_us() == 5000);
+	CHECK("uptime converts ticks to microseconds", ultrawidelock_freertos_uptime_us() == 5000);
 
 	fake_task_set_tick_count(1500);
-	first = woz_freertos_uptime_us();
+	first = ultrawidelock_freertos_uptime_us();
 	CHECK("uptime tracks the tick", first == 1500000);
 
 	/*
@@ -104,17 +106,17 @@ static void test_uptime(void)
 	 * short of the end, cross it, and the result has to keep going up.
 	 */
 	fake_task_set_tick_count(0xffffffffu);
-	second = woz_freertos_uptime_us();
+	second = ultrawidelock_freertos_uptime_us();
 	CHECK("uptime reaches the end of the tick range", second > first);
 
 	fake_task_set_tick_count(4);
-	wrapped = woz_freertos_uptime_us();
+	wrapped = ultrawidelock_freertos_uptime_us();
 	CHECK("uptime does not step back across the tick wrap", wrapped > second);
 	CHECK("uptime carries the wrap forward, not a restart", wrapped - second == 5000);
 
 	/* An ISR reads the same clock through the other FreeRTOS entry point. */
 	fake_ipsr_set(16);
-	CHECK("uptime is readable from an interrupt", woz_freertos_uptime_us() == wrapped);
+	CHECK("uptime is readable from an interrupt", ultrawidelock_freertos_uptime_us() == wrapped);
 	fake_ipsr_set(0);
 
 	CHECK("uptime leaves interrupts as it found them", fake_primask_get() == 0);
@@ -131,8 +133,8 @@ static void test_cycle_counter(void)
 
 	reset_all();
 
-	first = woz_freertos_cycle_get_32();
-	second = woz_freertos_cycle_get_32();
+	first = ultrawidelock_freertos_cycle_get_32();
+	second = ultrawidelock_freertos_cycle_get_32();
 	CHECK("the cycle counter advances", second > first);
 
 	/*
@@ -141,8 +143,8 @@ static void test_cycle_counter(void)
 	 * straddles the wrap would otherwise get wrong by 16 million counts.
 	 */
 	fake_rtc1.counter = (uint32_t)NRF_RTC_COUNTER_MAX - 1u;
-	before_wrap = woz_freertos_cycle_get_32();
-	after_wrap = woz_freertos_cycle_get_32();
+	before_wrap = ultrawidelock_freertos_cycle_get_32();
+	after_wrap = ultrawidelock_freertos_cycle_get_32();
 	CHECK("the cycle counter carries the 24-bit wrap", after_wrap > before_wrap);
 	CHECK("the carry is one step, not a jump", after_wrap - before_wrap == 1u);
 
@@ -157,7 +159,7 @@ static uint32_t wait_ticks(uint64_t us)
 {
 	uint32_t start = fake_rtc1.counter;
 
-	woz_freertos_busy_wait_us(us);
+	ultrawidelock_freertos_busy_wait_us(us);
 	return (fake_rtc1.counter - start) & (uint32_t)NRF_RTC_COUNTER_MAX;
 }
 
@@ -217,7 +219,7 @@ static void test_stopped_clock(void)
 	resets_before = fake_system_reset_count();
 
 	if (setjmp(g_fatal_jmp) == 0) {
-		(void)woz_freertos_cycle_get_32();
+		(void)ultrawidelock_freertos_cycle_get_32();
 		CHECK("a stopped clock is fatal rather than a spin", false);
 	} else {
 		CHECK("a stopped clock is fatal rather than a spin", true);

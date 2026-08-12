@@ -27,8 +27,8 @@
 #include <mbedtls/build_info.h>
 #include <mbedtls/threading.h>
 
-#include <woz_freertos_crypto.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_crypto.h>
+#include <ultrawidelock_freertos_platform.h>
 
 static void mutex_init(mbedtls_threading_mutex_t *mutex)
 {
@@ -115,7 +115,7 @@ static int mutex_unlock(mbedtls_threading_mutex_t *mutex)
 	return 0;
 }
 
-void woz_freertos_mbedtls_threading_init(void)
+void ultrawidelock_freertos_mbedtls_threading_init(void)
 {
 	static bool installed;
 

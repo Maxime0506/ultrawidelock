@@ -1,5 +1,5 @@
-#ifndef WOZ_PIV_IDENTITY_H
-#define WOZ_PIV_IDENTITY_H
+#ifndef ULTRAWIDELOCK_PIV_IDENTITY_H
+#define ULTRAWIDELOCK_PIV_IDENTITY_H
 
 #include "piv_apdu.h"
 

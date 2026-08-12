@@ -7,8 +7,8 @@
  * only that the code under test plumbs the right parameters into the API and
  * takes the right branch on each failure — never that any ciphertext is
  * correct. */
-#ifndef WOZ_PSAFAKE_H
-#define WOZ_PSAFAKE_H
+#ifndef ULTRAWIDELOCK_PSAFAKE_H
+#define ULTRAWIDELOCK_PSAFAKE_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -86,4 +86,4 @@ extern struct psafake_state psafake;
 /** @brief Zero all recordings, restore every knob to success/natural length. */
 void psafake_reset(void);
 
-#endif /* WOZ_PSAFAKE_H */
+#endif /* ULTRAWIDELOCK_PSAFAKE_H */

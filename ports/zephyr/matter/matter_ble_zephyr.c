@@ -7,7 +7,7 @@
  * the reassembler, drive the fragmenter out through C2 indications, and build
  * the commissionable advertisement.
  *
- * Modelled on aliro_ble_zephyr.c -- same shape, proven against live iPhones.
+ * Modelled on ultrawidelock_ble_zephyr.c -- same shape, proven against live iPhones.
  * C1 (RX, write) is 18EE2EF5-263D-4559-959F-4F9C429F9D11, C2 (TX, indicate)
  * ...D12, spelled below in the little-endian order BT_UUID_INIT_128 wants.
  *

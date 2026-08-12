@@ -15,7 +15,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/atomic.h>
 
-#include "woz_log.h"
+#include "ultrawidelock_log.h"
 
 LOG_MODULE_REGISTER(ultrawidelock_slam, CONFIG_ULTRAWIDELOCK_ANCHOR_SLAM_LOG_LEVEL);
 

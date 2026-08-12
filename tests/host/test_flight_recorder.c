@@ -54,10 +54,10 @@ static void rec_snap(uint8_t ep)
 	struct fr_output *o = &g_rec_out[g_rec_n++];
 
 	o->ep = ep;
-	o->rxenable_calls = woz_host_rx.rxenable_calls;
-	o->last_rxenable_mode = woz_host_rx.last_rxenable_mode;
-	o->starttx_calls = woz_host_rx.starttx_calls;
-	o->forcetrxoff_calls = woz_host_rx.forcetrxoff_calls;
+	o->rxenable_calls = ultrawidelock_host_rx.rxenable_calls;
+	o->last_rxenable_mode = ultrawidelock_host_rx.last_rxenable_mode;
+	o->starttx_calls = ultrawidelock_host_rx.starttx_calls;
+	o->forcetrxoff_calls = ultrawidelock_host_rx.forcetrxoff_calls;
 }
 
 static uint16_t mk_prepoll(uint8_t *out, uint32_t fc, uint32_t poll_idx)
@@ -117,9 +117,9 @@ static uint16_t mk_final_data(uint8_t *out, uint32_t fc, uint32_t armed_idx, uin
 
 static void stash_frame(const uint8_t *frame, uint16_t len, uint64_t ip40)
 {
-	memcpy(woz_host_rx.rxdata, frame, len);
-	woz_host_rx.rxdata_len = len;
-	woz_host_rx.rx_ts40 = ip40;
+	memcpy(ultrawidelock_host_rx.rxdata, frame, len);
+	ultrawidelock_host_rx.rxdata_len = len;
+	ultrawidelock_host_rx.rx_ts40 = ip40;
 }
 
 /* Fire a captured RX callback (prepoll_rx_rearm) the way dwt_isr would, then
@@ -130,8 +130,8 @@ static void fire_rx(uint32_t status)
 
 	memset(&d, 0, sizeof(d));
 	d.status = status;
-	d.datalength = woz_host_rx.rxdata_len;
-	woz_host_rx.cbs.cbRxOk(&d);
+	d.datalength = ultrawidelock_host_rx.rxdata_len;
+	ultrawidelock_host_rx.cbs.cbRxOk(&d);
 	rec_snap((uint8_t)FR_EP_RX_REARM);
 }
 
@@ -141,7 +141,7 @@ static void fire_tx(uint32_t status)
 
 	memset(&d, 0, sizeof(d));
 	d.status = status;
-	woz_host_rx.cbs.cbTxDone(&d);
+	ultrawidelock_host_rx.cbs.cbTxDone(&d);
 	rec_snap((uint8_t)FR_EP_TX_DONE);
 }
 
@@ -190,7 +190,7 @@ static size_t record_round(const uint8_t **trace, int32_t *range_cm_out)
 	fr_clear();
 	fr_set_enabled(true); /* META */
 
-	woz_host_rx_reset();
+	ultrawidelock_host_rx_reset();
 	T_EQ("rec.start", ultrawidelock_uwb_start_aliro(&c), 0); /* CONFIG */
 
 	/* Bootstrap: two Pre-POLL decodes learn index + stride. */
@@ -210,17 +210,17 @@ static size_t record_round(const uint8_t **trace, int32_t *range_cm_out)
 	fire_try(len);
 
 	/* POLL result (cper=0) fires the delayed Response TX. */
-	woz_host_rx.rx_ts40 = 0x40000000ull;
+	ultrawidelock_host_rx.rx_ts40 = 0x40000000ull;
 	fire_rx(DWT_INT_CIADONE_BIT_MASK);
 
 	/* TXFRS arms the Final window and flushes the deferred decode. */
-	woz_host_rx.tx_ts40 = 0x40000000ull + 100000u;
+	ultrawidelock_host_rx.tx_ts40 = 0x40000000ull + 100000u;
 	fire_tx(DWT_INT_TXFRS_BIT_MASK);
 
 	/* Final result reverts to SP0. */
-	woz_host_rx.rx_ts40 = 0x40000000ull + 300000u;
-	woz_host_rx.stsq_ret = 0;
-	woz_host_rx.stsq_val = 100;
+	ultrawidelock_host_rx.rx_ts40 = 0x40000000ull + 300000u;
+	ultrawidelock_host_rx.stsq_ret = 0;
+	ultrawidelock_host_rx.stsq_val = 100;
 	fire_rx(DWT_INT_CIADONE_BIT_MASK);
 
 	/* Final_Data decrypt latches the DS-TWR range (234 cm). */

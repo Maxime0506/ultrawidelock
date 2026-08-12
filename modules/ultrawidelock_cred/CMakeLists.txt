@@ -12,7 +12,7 @@ if(CONFIG_ULTRAWIDELOCK_CRED_STACK)
 
   set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-  zephyr_library_named(woz_aliro)
+  zephyr_library_named(ultrawidelock_cred)
 
   # Key schedule + the one AEAD/EC backend. ultrawidelock_prim_psa.c is pure PSA Crypto,
   # which NCS provides via nrf_security/CryptoCell on the nRF5340's Cortex-M33.

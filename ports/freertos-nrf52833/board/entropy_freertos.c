@@ -26,19 +26,19 @@
 #include <hal/nrf_rng.h>
 #include <nrfx.h>
 
-#include <woz_freertos_board.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_board.h>
+#include <ultrawidelock_freertos_platform.h>
 
 /*
  * Deep enough to answer the largest single request either consumer makes -- a
  * 32-byte key -- without blocking, and shallow enough that keeping it full is
  * not a standing power cost.
  */
-#ifndef WOZ_FREERTOS_ENTROPY_POOL_BYTES
-#define WOZ_FREERTOS_ENTROPY_POOL_BYTES 32u
+#ifndef ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES
+#define ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES 32u
 #endif
 
-static uint8_t s_pool[WOZ_FREERTOS_ENTROPY_POOL_BYTES];
+static uint8_t s_pool[ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES];
 static uint8_t s_head;
 static uint8_t s_count;
 static bool s_started;
@@ -48,14 +48,14 @@ static uint8_t pool_take(void)
 {
 	uint8_t byte = s_pool[s_head];
 
-	s_head = (uint8_t)((s_head + 1u) % WOZ_FREERTOS_ENTROPY_POOL_BYTES);
+	s_head = (uint8_t)((s_head + 1u) % ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES);
 	s_count--;
 	return byte;
 }
 
 static void pool_put(uint8_t byte)
 {
-	uint8_t tail = (uint8_t)((s_head + s_count) % WOZ_FREERTOS_ENTROPY_POOL_BYTES);
+	uint8_t tail = (uint8_t)((s_head + s_count) % ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES);
 
 	s_pool[tail] = byte;
 	s_count++;
@@ -88,17 +88,17 @@ static void ensure_started(void)
 	generator_set(true);
 }
 
-void woz_freertos_rng_isr(void)
+void ultrawidelock_freertos_rng_isr(void)
 {
 	if (!nrf_rng_event_check(NRF_RNG, NRF_RNG_EVENT_VALRDY)) {
 		return;
 	}
 	nrf_rng_event_clear(NRF_RNG, NRF_RNG_EVENT_VALRDY);
 
-	if (s_count < WOZ_FREERTOS_ENTROPY_POOL_BYTES) {
+	if (s_count < ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES) {
 		pool_put(nrf_rng_random_value_get(NRF_RNG));
 	}
-	if (s_count >= WOZ_FREERTOS_ENTROPY_POOL_BYTES) {
+	if (s_count >= ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES) {
 		generator_set(false);
 	}
 }
@@ -127,7 +127,7 @@ static uint8_t poll_one(void)
 	return value;
 }
 
-int woz_freertos_entropy(void *buffer, size_t length)
+int ultrawidelock_freertos_entropy(void *buffer, size_t length)
 {
 	uint8_t *out = buffer;
 	size_t i;
@@ -159,7 +159,7 @@ int woz_freertos_entropy(void *buffer, size_t length)
 	}
 
 	/* Refill whatever this request drained. */
-	if (s_count < WOZ_FREERTOS_ENTROPY_POOL_BYTES) {
+	if (s_count < ULTRAWIDELOCK_FREERTOS_ENTROPY_POOL_BYTES) {
 		generator_set(true);
 	}
 	return 0;

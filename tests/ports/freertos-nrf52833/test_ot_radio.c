@@ -12,7 +12,7 @@
 #include "fake_nrf.h"
 
 #include <nrfx.h>
-#include <woz_freertos_openthread.h>
+#include <ultrawidelock_freertos_openthread.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -48,12 +48,12 @@ void platformRadioProcess(otInstance *instance)
 static unsigned g_wake_calls;
 static unsigned g_wake_isr_calls;
 
-void woz_freertos_openthread_wake(void)
+void ultrawidelock_freertos_openthread_wake(void)
 {
 	g_wake_calls++;
 }
 
-void woz_freertos_openthread_wake_from_isr(void)
+void ultrawidelock_freertos_openthread_wake_from_isr(void)
 {
 	g_wake_isr_calls++;
 }
@@ -61,7 +61,7 @@ void woz_freertos_openthread_wake_from_isr(void)
 /* The alarm's half of the drain, recorded. */
 static unsigned g_alarm_process_calls;
 
-void woz_freertos_openthread_alarm_process(otInstance *instance)
+void ultrawidelock_freertos_openthread_alarm_process(otInstance *instance)
 {
 	(void)instance;
 	g_alarm_process_calls++;
@@ -82,21 +82,21 @@ int main(void)
 	 * the radio is up. Reading the platform's state then would read it
 	 * uninitialized.
 	 */
-	woz_freertos_openthread_process_drivers(instance);
+	ultrawidelock_freertos_openthread_process_drivers(instance);
 	CHECK("draining before the radio starts does not reach the platform",
 	      g_process_calls == 0);
 	CHECK("but does still deliver an alarm, which needs no start of its own",
 	      g_alarm_process_calls == 1);
 	CHECK("and the radio does not claim to be started",
-	      !woz_freertos_openthread_radio_started());
+	      !ultrawidelock_freertos_openthread_radio_started());
 
 	CHECK("starting the radio brings the platform up",
-	      woz_freertos_openthread_radio_start() == 0 && g_init_calls == 1 &&
-		      woz_freertos_openthread_radio_started());
+	      ultrawidelock_freertos_openthread_radio_start() == 0 && g_init_calls == 1 &&
+		      ultrawidelock_freertos_openthread_radio_started());
 	CHECK("starting twice does not initialize the platform twice",
-	      woz_freertos_openthread_radio_start() == 0 && g_init_calls == 1);
+	      ultrawidelock_freertos_openthread_radio_start() == 0 && g_init_calls == 1);
 
-	woz_freertos_openthread_process_drivers(instance);
+	ultrawidelock_freertos_openthread_process_drivers(instance);
 	CHECK("draining now reaches the platform with the task's own instance",
 	      g_process_calls == 1 && g_process_instance == instance);
 

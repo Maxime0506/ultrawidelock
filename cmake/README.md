@@ -3,7 +3,7 @@
 `cmake/` contains repository-owned CMake functions and package configuration.
 It is not an application and does not contain generated build output.
 
-`woz_roles.cmake` reads declarative source-role manifests and returns resolved
+`ultrawidelock_roles.cmake` reads declarative source-role manifests and returns resolved
 source lists to Zephyr and ESP-IDF builds. This keeps source membership in one
 place while allowing each framework to create its own targets.
 

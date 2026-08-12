@@ -22,7 +22,7 @@
 #include <nrf.h>
 #include <system_nrf52833.h>
 
-#include <woz_freertos_radio.h>
+#include <ultrawidelock_freertos_radio.h>
 
 extern uint32_t __etext;
 extern uint32_t __data_start__;
@@ -108,27 +108,27 @@ WEAK_ALIAS(SPIM3_IRQHandler);
  */
 void POWER_CLOCK_IRQHandler(void)
 {
-	woz_freertos_radio_power_clock_isr();
+	ultrawidelock_freertos_radio_power_clock_isr();
 }
 
 void RADIO_IRQHandler(void)
 {
-	woz_freertos_radio_radio_isr();
+	ultrawidelock_freertos_radio_radio_isr();
 }
 
 void TIMER0_IRQHandler(void)
 {
-	woz_freertos_radio_timer0_isr();
+	ultrawidelock_freertos_radio_timer0_isr();
 }
 
 void RTC0_IRQHandler(void)
 {
-	woz_freertos_radio_rtc0_isr();
+	ultrawidelock_freertos_radio_rtc0_isr();
 }
 
 void SWI5_EGU5_IRQHandler(void)
 {
-	woz_freertos_radio_low_priority_isr();
+	ultrawidelock_freertos_radio_low_priority_isr();
 }
 
 /*

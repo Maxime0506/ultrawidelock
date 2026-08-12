@@ -15,8 +15,8 @@
  * engine is host-side (tests/host/fr_replay.c). Compiles unchanged in firmware
  * and host builds.
  */
-#ifndef WOZ_FLIGHT_RECORDER_H
-#define WOZ_FLIGHT_RECORDER_H
+#ifndef ULTRAWIDELOCK_FLIGHT_RECORDER_H
+#define ULTRAWIDELOCK_FLIGHT_RECORDER_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -31,7 +31,7 @@ extern "C" {
 #define FR_MAGIC   0x31435246u /* "FRC1" little-endian */
 #define FR_VERSION 1u
 
-/* Fixed caps sized to the CCC responder: a frame fits woz_host_rx.rxdata[128],
+/* Fixed caps sized to the CCC responder: a frame fits ultrawidelock_host_rx.rxdata[128],
  * the URSK is 32 B, a RangingConfiguration is ~17 B, a short SHA ~12 chars. */
 #define FR_FRAME_MAX 128u
 #define FR_URSK_LEN  32u
@@ -169,17 +169,17 @@ typedef struct {
 void fr_reader_init(fr_reader_t *r, const uint8_t *buf, size_t len);
 int fr_read_next(fr_reader_t *r, struct fr_record *out);
 
-/* ─ On-device capture API (CONFIG_WOZ_FLIGHT_RECORDER) ─────────────────────
+/* ─ On-device capture API (CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER) ─────────────────────
  * No-op inlines when the feature is compiled out, so the capture call sites in
  * ccc_shim_rx.c / ultrawidelock_uwb_facade.c cost nothing in a hardened build. */
 #if defined(ESP_PLATFORM)
-#include "sdkconfig.h" /* CONFIG_WOZ_FLIGHT_RECORDER (Zephyr injects autoconf.h itself) */
+#include "sdkconfig.h" /* CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER (Zephyr injects autoconf.h itself) */
 #endif
 
 struct ultrawidelock_uwb_aliro_cfg; /* forward decl; the real def is in ultrawidelock_uwb_facade.h
 				     */
 
-#if defined(CONFIG_WOZ_FLIGHT_RECORDER)
+#if defined(CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER)
 
 void fr_set_enabled(bool on); /* arm/disarm (OFF at boot; `fr on` before a walk-up) */
 bool fr_enabled(void);
@@ -188,7 +188,7 @@ void fr_capture_ev(uint8_t ep, uint32_t status, uint16_t datalength); /* per-fra
 size_t fr_finalize(const uint8_t **buf); /* append END once; return trace length */
 void fr_dump(void);                      /* hex-encode the ring as `[FREC]` lines */
 void fr_clear(void);
-void fr_set_dump_sink(void (*sink)(const char *line)); /* test hook; NULL => woz_printf */
+void fr_set_dump_sink(void (*sink)(const char *line)); /* test hook; NULL => ultrawidelock_printf */
 
 #else
 
@@ -241,10 +241,10 @@ static inline void fr_clear(void)
 {
 }
 
-#endif /* CONFIG_WOZ_FLIGHT_RECORDER */
+#endif /* CONFIG_ULTRAWIDELOCK_FLIGHT_RECORDER */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* WOZ_FLIGHT_RECORDER_H */
+#endif /* ULTRAWIDELOCK_FLIGHT_RECORDER_H */

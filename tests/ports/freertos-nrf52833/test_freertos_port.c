@@ -7,12 +7,12 @@
 #include "fake_freertos.h"
 #include "fake_nimble.h"
 #include "fake_nrf.h"
-#include "woz_log.h"
-#include "woz_freertos_mpsl.h"
-#include "woz_freertos_nimble_sdc.h"
-#include "woz_freertos_openthread.h"
-#include "woz_osal.h"
-#include "woz_port.h"
+#include "ultrawidelock_log.h"
+#include "ultrawidelock_freertos_mpsl.h"
+#include "ultrawidelock_freertos_nimble_sdc.h"
+#include "ultrawidelock_freertos_openthread.h"
+#include "ultrawidelock_osal.h"
+#include "ultrawidelock_port.h"
 
 #include <nimble/ble.h>
 #include <nimble/transport.h>
@@ -41,28 +41,28 @@ static unsigned g_failures;
 static uint64_t g_busy_wait_us;
 static unsigned g_log_calls;
 static unsigned g_hex_calls;
-static enum woz_freertos_log_level g_last_log_level;
+static enum ultrawidelock_freertos_log_level g_last_log_level;
 static const char *g_last_log_tag;
 static unsigned g_entropy_calls;
 static int8_t g_die_temperature = 23;
 
-int64_t woz_freertos_uptime_us(void)
+int64_t ultrawidelock_freertos_uptime_us(void)
 {
 	return fake_uptime_us;
 }
 
-void woz_freertos_busy_wait_us(uint64_t us)
+void ultrawidelock_freertos_busy_wait_us(uint64_t us)
 {
 	g_busy_wait_us += us;
 	fake_uptime_us += (int64_t)us;
 }
 
-uint32_t woz_freertos_cycle_get_32(void)
+uint32_t ultrawidelock_freertos_cycle_get_32(void)
 {
 	return (uint32_t)(fake_uptime_us * 64);
 }
 
-int woz_freertos_entropy(void *buffer, size_t length)
+int ultrawidelock_freertos_entropy(void *buffer, size_t length)
 {
 	static const uint32_t seed = 0x12345678u;
 
@@ -74,18 +74,19 @@ int woz_freertos_entropy(void *buffer, size_t length)
 	return 0;
 }
 
-int8_t woz_freertos_die_temperature_c(void)
+int8_t ultrawidelock_freertos_die_temperature_c(void)
 {
 	return g_die_temperature;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	(void)reason;
 	abort();
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)fmt;
 	g_log_calls++;
@@ -93,8 +94,9 @@ void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const 
 	g_last_log_tag = tag;
 }
 
-void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag,
-			      const void *data, size_t len, const char *message)
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
+					const char *tag, const void *data, size_t len,
+					const char *message)
 {
 	(void)level;
 	(void)tag;
@@ -110,7 +112,7 @@ static int init_hook(void)
 	g_init_runs++;
 	return 0;
 }
-WOZ_INIT_APPLICATION(init_hook);
+ULTRAWIDELOCK_INIT_APPLICATION(init_hook);
 
 static jmp_buf g_dispatch_stop;
 
@@ -145,7 +147,7 @@ static size_t g_sdc_tx_size;
 static int32_t g_sdc_cmd_result;
 static int32_t g_sdc_data_result;
 static unsigned g_sdc_fault_calls;
-static enum woz_freertos_nimble_sdc_fault g_sdc_last_fault;
+static enum ultrawidelock_freertos_nimble_sdc_fault g_sdc_last_fault;
 static int32_t g_sdc_last_fault_detail;
 
 static int32_t test_sdc_cmd_put(uint8_t *packet)
@@ -175,7 +177,7 @@ static int32_t test_sdc_msg_get(uint8_t *packet, uint8_t *type)
 	return 0;
 }
 
-static void test_sdc_fault(enum woz_freertos_nimble_sdc_fault fault, int32_t detail)
+static void test_sdc_fault(enum ultrawidelock_freertos_nimble_sdc_fault fault, int32_t detail)
 {
 	g_sdc_fault_calls++;
 	g_sdc_last_fault = fault;
@@ -203,7 +205,7 @@ void otTaskletsProcess(otInstance *instance)
 	g_ot_tasklets_pending = false;
 }
 
-void woz_freertos_openthread_process_drivers(otInstance *instance)
+void ultrawidelock_freertos_openthread_process_drivers(otInstance *instance)
 {
 	(void)instance;
 	g_ot_driver_runs++;
@@ -237,14 +239,14 @@ static void pump_dispatch(void (*entry)(void *), void *arg)
 }
 
 static unsigned g_work_runs;
-static void work_handler(struct woz_work *work)
+static void work_handler(struct ultrawidelock_work *work)
 {
 	(void)work;
 	g_work_runs++;
 }
 
 static unsigned g_dwork_runs;
-static void dwork_handler(struct woz_dwork *work)
+static void dwork_handler(struct ultrawidelock_dwork *work)
 {
 	(void)work;
 	g_dwork_runs++;
@@ -259,31 +261,31 @@ static void test_port_inlines(void)
 {
 	uint8_t *zeroed;
 	void *overflow;
-	woz_mutex_t mutex;
+	ultrawidelock_mutex_t mutex;
 
 	fake_uptime_us = 1234567;
-	CHECK("uptime microseconds use the BSP hook", woz_uptime_us() == 1234567);
-	CHECK("uptime milliseconds derive from the BSP hook", woz_uptime_ms() == 1234);
-	CHECK("cycle counter uses the BSP hook", woz_cycle_get_32() == (uint32_t)(1234567 * 64));
+	CHECK("uptime microseconds use the BSP hook", ultrawidelock_uptime_us() == 1234567);
+	CHECK("uptime milliseconds derive from the BSP hook", ultrawidelock_uptime_ms() == 1234);
+	CHECK("cycle counter uses the BSP hook", ultrawidelock_cycle_get_32() == (uint32_t)(1234567 * 64));
 
-	woz_sleep_ms(2);
+	ultrawidelock_sleep_ms(2);
 	CHECK("millisecond sleep yields to FreeRTOS", fake_delay_calls == 1 && fake_delay_ticks == 2);
-	woz_sleep_ms(0);
+	ultrawidelock_sleep_ms(0);
 	CHECK("zero millisecond sleep is a no-op", fake_delay_calls == 1);
-	woz_sleep_us(7);
+	ultrawidelock_sleep_us(7);
 	CHECK("microsecond sleep uses the busy-wait hook", g_busy_wait_us == 7);
 
-	zeroed = woz_calloc(4, 8);
+	zeroed = ultrawidelock_calloc(4, 8);
 	CHECK("calloc uses the FreeRTOS heap and clears memory",
 	      zeroed != NULL && zeroed[0] == 0 && zeroed[31] == 0);
-	overflow = woz_calloc(SIZE_MAX, 2);
+	overflow = ultrawidelock_calloc(SIZE_MAX, 2);
 	CHECK("calloc rejects multiplication overflow", overflow == NULL && fake_malloc_calls == 1);
-	woz_free(zeroed);
+	ultrawidelock_free(zeroed);
 	CHECK("free returns memory to the FreeRTOS heap", fake_free_calls == 1);
 
-	woz_mutex_init(&mutex);
-	woz_mutex_lock(&mutex);
-	woz_mutex_unlock(&mutex);
+	ultrawidelock_mutex_init(&mutex);
+	ultrawidelock_mutex_lock(&mutex);
+	ultrawidelock_mutex_unlock(&mutex);
 	CHECK("mutex uses a static semaphore", mutex.h == &mutex.buf && mutex.buf.count == 1 &&
 					    mutex.buf.takes == 1 && mutex.buf.gives == 1);
 }
@@ -292,63 +294,64 @@ static void test_osal(void)
 {
 	void (*dispatch_entry)(void *);
 	void *dispatch_arg;
-	struct woz_work work;
-	struct woz_dwork dwork;
-	woz_sem_t sem;
-	WOZ_THREAD_STACK_DEFINE(stack, 513);
-	woz_thread_t thread;
+	struct ultrawidelock_work work;
+	struct ultrawidelock_dwork dwork;
+	ultrawidelock_sem_t sem;
+	ULTRAWIDELOCK_THREAD_STACK_DEFINE(stack, 513);
+	ultrawidelock_thread_t thread;
 	int thread_ran = 0;
 
-	CHECK("OSAL init starts the static dispatcher and runs hooks", woz_osal_init_all() == 0 &&
-							   fake_task_count == 1 && g_init_runs == 1);
+	CHECK("OSAL init starts the static dispatcher and runs hooks",
+	      ultrawidelock_osal_init_all() == 0 && fake_task_count == 1 && g_init_runs == 1);
 	CHECK("OSAL dispatcher uses the configured 4096-byte stack",
 	      fake_task_stack_depth * sizeof(StackType_t) == 4096);
 	dispatch_entry = fake_task_entry;
 	dispatch_arg = fake_task_arg;
-	CHECK("OSAL init is idempotent", woz_osal_init_all() == 0 && fake_task_count == 1 &&
+	CHECK("OSAL init is idempotent", ultrawidelock_osal_init_all() == 0 && fake_task_count == 1 &&
 							 g_init_runs == 1);
 
-	woz_work_init(&work, work_handler);
-	CHECK("immediate work queues", woz_work_submit(&work) == 0);
-	CHECK("pending immediate work is queued once", woz_work_submit(&work) == 0);
+	ultrawidelock_work_init(&work, work_handler);
+	CHECK("immediate work queues", ultrawidelock_work_submit(&work) == 0);
+	CHECK("pending immediate work is queued once", ultrawidelock_work_submit(&work) == 0);
 	pump_dispatch(dispatch_entry, dispatch_arg);
 	CHECK("dispatcher runs immediate work exactly once", g_work_runs == 1 && !work.pending);
 
 	fake_uptime_us = 10000;
-	woz_dwork_init(&dwork, dwork_handler);
-	CHECK("delayable work arms", woz_dwork_schedule(&dwork, 10) == 0);
-	CHECK("schedule keeps an existing deadline", woz_dwork_schedule(&dwork, 50) == 0 &&
+	ultrawidelock_dwork_init(&dwork, dwork_handler);
+	CHECK("delayable work arms", ultrawidelock_dwork_schedule(&dwork, 10) == 0);
+	CHECK("schedule keeps an existing deadline", ultrawidelock_dwork_schedule(&dwork, 50) == 0 &&
 							 dwork.deadline_us == 20000);
 	pump_dispatch(dispatch_entry, dispatch_arg);
 	CHECK("dispatcher waits until and runs the deadline",
 	      g_dwork_runs == 1 && fake_uptime_us == 20000 && !dwork.pending);
-	CHECK("reschedule restarts a pending deadline", woz_dwork_schedule(&dwork, 20) == 0 &&
+	CHECK("reschedule restarts a pending deadline", ultrawidelock_dwork_schedule(&dwork, 20) == 0 &&
 							  (fake_uptime_us += 5000) == 25000 &&
-							  woz_dwork_reschedule(&dwork, 20) == 0 &&
+							  ultrawidelock_dwork_reschedule(&dwork, 20) == 0 &&
 							  dwork.deadline_us == 45000);
 	pump_dispatch(dispatch_entry, dispatch_arg);
 	CHECK("rescheduled delayable work runs at the new deadline",
 	      g_dwork_runs == 2 && fake_uptime_us == 45000 && !dwork.pending);
 
-	CHECK("negative delay is rejected", woz_dwork_schedule(&dwork, -1) == -1);
-	CHECK("delayable work can be cancelled", woz_dwork_schedule(&dwork, 10) == 0 &&
-						      woz_dwork_cancel(&dwork) == 0 && !dwork.pending);
+	CHECK("negative delay is rejected", ultrawidelock_dwork_schedule(&dwork, -1) == -1);
+	CHECK("delayable work can be cancelled", ultrawidelock_dwork_schedule(&dwork, 10) == 0 &&
+						      ultrawidelock_dwork_cancel(&dwork) == 0 && !dwork.pending);
 	pump_dispatch(dispatch_entry, dispatch_arg);
 	CHECK("cancelled delayable work does not run", g_dwork_runs == 2);
 
-	woz_sem_init(&sem, 0, 1);
-	CHECK("empty semaphore does not take", woz_sem_take(&sem, 0) == -1);
-	woz_sem_give(&sem);
-	woz_sem_give(&sem);
-	CHECK("counting semaphore saturates at its limit", woz_sem_take(&sem, 0) == 0 &&
-							      woz_sem_take(&sem, 0) == -1);
-	woz_sem_give(&sem);
-	woz_sem_reset(&sem);
-	CHECK("semaphore reset drains the count", woz_sem_take(&sem, 0) == -1);
+	ultrawidelock_sem_init(&sem, 0, 1);
+	CHECK("empty semaphore does not take", ultrawidelock_sem_take(&sem, 0) == -1);
+	ultrawidelock_sem_give(&sem);
+	ultrawidelock_sem_give(&sem);
+	CHECK("counting semaphore saturates at its limit", ultrawidelock_sem_take(&sem, 0) == 0 &&
+							      ultrawidelock_sem_take(&sem, 0) == -1);
+	ultrawidelock_sem_give(&sem);
+	ultrawidelock_sem_reset(&sem);
+	CHECK("semaphore reset drains the count", ultrawidelock_sem_take(&sem, 0) == -1);
 
 	CHECK("static-stack thread creation succeeds",
-	      woz_thread_create(&thread, stack, WOZ_THREAD_STACK_SIZEOF(stack), thread_entry,
-				&thread_ran, WOZ_THREAD_PRIO_HIGH, "worker") == 0);
+	      ultrawidelock_thread_create(&thread, stack, ULTRAWIDELOCK_THREAD_STACK_SIZEOF(stack),
+					  thread_entry, &thread_ran, ULTRAWIDELOCK_THREAD_PRIO_HIGH,
+					  "worker") == 0);
 	CHECK("thread priority maps above the OSAL dispatcher",
 	      fake_task_priority == tskIDLE_PRIORITY + 3 && fake_task_stack_depth == 129);
 	fake_task_entry(fake_task_arg);
@@ -361,13 +364,13 @@ static void test_logging(void)
 
 	LOG_INF("hello %d", 1);
 	CHECK("logging passes level and module tag to the BSP", g_log_calls == 1 &&
-							    g_last_log_level == WOZ_FREERTOS_LOG_INFO &&
+							    g_last_log_level == ULTRAWIDELOCK_FREERTOS_LOG_INFO &&
 							    strcmp(g_last_log_tag, "freertos_port_test") == 0);
 	LOG_HEXDUMP_DBG(bytes, sizeof(bytes), "bytes");
 	CHECK("hex logging uses the BSP hook", g_hex_calls == 1);
-	woz_printf("raw");
+	ultrawidelock_printf("raw");
 	CHECK("raw logging uses the BSP hook", g_log_calls == 2 &&
-						    g_last_log_level == WOZ_FREERTOS_LOG_RAW &&
+						    g_last_log_level == ULTRAWIDELOCK_FREERTOS_LOG_RAW &&
 						    g_last_log_tag == NULL);
 }
 
@@ -380,17 +383,17 @@ static void test_openthread_runtime(void)
 	unsigned notifications;
 	unsigned lock_calls;
 
-	CHECK("OpenThread rejects a null instance", woz_freertos_openthread_start(NULL) == -1);
+	CHECK("OpenThread rejects a null instance", ultrawidelock_freertos_openthread_start(NULL) == -1);
 	CHECK("OpenThread starts one static task",
-	      woz_freertos_openthread_start(&instance) == 0 && fake_task_count == 3 &&
+	      ultrawidelock_freertos_openthread_start(&instance) == 0 && fake_task_count == 3 &&
 		      fake_task_stack_depth * sizeof(StackType_t) == 4096 &&
 		      fake_task_priority == tskIDLE_PRIORITY + 1);
 	CHECK("OpenThread publishes the task-owned instance",
-	      woz_freertos_openthread_instance() == &instance);
+	      ultrawidelock_freertos_openthread_instance() == &instance);
 	CHECK("OpenThread start is idempotent for the same instance",
-	      woz_freertos_openthread_start(&instance) == 0 && fake_task_count == 3);
+	      ultrawidelock_freertos_openthread_start(&instance) == 0 && fake_task_count == 3);
 	CHECK("OpenThread refuses a second instance",
-	      woz_freertos_openthread_start(&other) == -1 && fake_task_count == 3);
+	      ultrawidelock_freertos_openthread_start(&other) == -1 && fake_task_count == 3);
 
 	entry = fake_task_entry;
 	arg = fake_task_arg;
@@ -400,8 +403,8 @@ static void test_openthread_runtime(void)
 	      g_ot_tasklet_runs == 1 && g_ot_driver_runs == 1);
 
 	lock_calls = fake_recursive_take_calls;
-	woz_freertos_openthread_lock();
-	woz_freertos_openthread_unlock();
+	ultrawidelock_freertos_openthread_lock();
+	ultrawidelock_freertos_openthread_unlock();
 	CHECK("external OpenThread calls use the runtime API lock",
 	      fake_recursive_take_calls == lock_calls + 1 &&
 		      fake_recursive_give_calls == lock_calls + 1);
@@ -413,7 +416,7 @@ static void test_openthread_runtime(void)
 	otTaskletsSignalPending(&instance);
 	CHECK("pending tasklets wake the OpenThread task",
 	      fake_task_notify_calls == notifications + 1);
-	woz_freertos_openthread_wake_from_isr();
+	ultrawidelock_freertos_openthread_wake_from_isr();
 	CHECK("radio and alarm ISRs notify and yield to OpenThread",
 	      fake_isr_notify_calls == 1 && fake_isr_yield_calls == 1);
 }
@@ -428,22 +431,22 @@ static void test_mpsl_runtime(void)
 	unsigned isr_yields;
 
 	CHECK("MPSL rejects a missing low-priority processor",
-	      woz_freertos_mpsl_start(NULL) == -1);
+	      ultrawidelock_freertos_mpsl_start(NULL) == -1);
 	CHECK("MPSL starts one static highest-priority system task",
-	      woz_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
+	      ultrawidelock_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
 		      fake_task_count == 4 &&
 		      fake_task_stack_depth * sizeof(StackType_t) == 2048 &&
 		      fake_task_priority == configMAX_PRIORITIES - 1 &&
-		      woz_freertos_mpsl_ready());
+		      ultrawidelock_freertos_mpsl_ready());
 	CHECK("MPSL start is idempotent for the same processor",
-	      woz_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
+	      ultrawidelock_freertos_mpsl_start(test_mpsl_low_priority_process) == 0 &&
 		      fake_task_count == 4);
 
 	entry = fake_task_entry;
 	arg = fake_task_arg;
 	lock_calls = fake_recursive_take_calls;
 	notifications = fake_task_notify_calls;
-	woz_freertos_mpsl_wake();
+	ultrawidelock_freertos_mpsl_wake();
 	pump_nimble_sdc(entry, arg);
 	CHECK("MPSL IRQ work runs in task context under the shared radio lock",
 	      fake_task_notify_calls == notifications + 1 && g_mpsl_process_runs == 1 &&
@@ -451,15 +454,15 @@ static void test_mpsl_runtime(void)
 		      fake_recursive_give_calls == lock_calls + 1);
 
 	lock_calls = fake_recursive_take_calls;
-	woz_freertos_mpsl_lock();
-	woz_freertos_mpsl_unlock();
+	ultrawidelock_freertos_mpsl_lock();
+	ultrawidelock_freertos_mpsl_unlock();
 	CHECK("application radio calls use the same MPSL lock",
 	      fake_recursive_take_calls == lock_calls + 1 &&
 		      fake_recursive_give_calls == lock_calls + 1);
 
 	isr_notifications = fake_isr_notify_calls;
 	isr_yields = fake_isr_yield_calls;
-	woz_freertos_mpsl_wake_from_isr();
+	ultrawidelock_freertos_mpsl_wake_from_isr();
 	CHECK("the MPSL low-priority IRQ notifies and yields to its task",
 	      fake_isr_notify_calls == isr_notifications + 1 &&
 		      fake_isr_yield_calls == isr_yields + 1);
@@ -511,7 +514,7 @@ static void test_radio_misc_platform(void)
 
 static void test_nimble_sdc_transport(void)
 {
-	static const struct woz_freertos_nimble_sdc_ops ops = {
+	static const struct ultrawidelock_freertos_nimble_sdc_ops ops = {
 		.cmd_put = test_sdc_cmd_put,
 		.data_put = test_sdc_data_put,
 		.msg_get = test_sdc_msg_get,
@@ -535,9 +538,9 @@ static void test_nimble_sdc_transport(void)
 
 	fake_nimble_reset();
 	CHECK("NimBLE/SDC rejects a missing controller contract",
-	      woz_freertos_nimble_sdc_configure(NULL) == -1);
+	      ultrawidelock_freertos_nimble_sdc_configure(NULL) == -1);
 	CHECK("NimBLE/SDC accepts one complete controller contract",
-	      woz_freertos_nimble_sdc_configure(&ops) == 0);
+	      ultrawidelock_freertos_nimble_sdc_configure(&ops) == 0);
 	ble_transport_ll_init();
 	CHECK("NimBLE/SDC starts one static receive task",
 	      fake_task_count == 5 && fake_task_stack_depth * sizeof(StackType_t) == 2048 &&
@@ -597,7 +600,7 @@ static void test_nimble_sdc_transport(void)
 	queue_sdc_packet(TEST_SDC_TYPE_ISO, iso_packet, sizeof(iso_packet));
 	pump_nimble_sdc(entry, arg);
 	CHECK("unexpected controller packet types reach the platform fault policy",
-	      g_sdc_fault_calls == 1 && g_sdc_last_fault == WOZ_NIMBLE_SDC_FAULT_PACKET &&
+	      g_sdc_fault_calls == 1 && g_sdc_last_fault == ULTRAWIDELOCK_NIMBLE_SDC_FAULT_PACKET &&
 		      g_sdc_last_fault_detail == TEST_SDC_TYPE_ISO);
 
 	/*
@@ -619,7 +622,7 @@ static void test_nimble_sdc_transport(void)
 		pump_nimble_sdc(entry, arg);
 		CHECK("an event larger than the NimBLE pool block is refused, not copied",
 		      g_sdc_fault_calls == faults + 1 &&
-			      g_sdc_last_fault == WOZ_NIMBLE_SDC_FAULT_PACKET &&
+			      g_sdc_last_fault == ULTRAWIDELOCK_NIMBLE_SDC_FAULT_PACKET &&
 			      g_sdc_last_fault_detail == (int32_t)sizeof(oversized) &&
 			      fake_nimble_host_event_calls == events);
 	}
@@ -636,12 +639,12 @@ static void test_nimble_sdc_transport(void)
 		      MYNEWT_VAL(BLE_SM_LEGACY) == 0);
 
 	notifications = fake_task_notify_calls;
-	woz_freertos_nimble_sdc_wake();
+	ultrawidelock_freertos_nimble_sdc_wake();
 	CHECK("task-context controller signals notify the receive task",
 	      fake_task_notify_calls == notifications + 1);
 	isr_notifications = fake_isr_notify_calls;
 	isr_yields = fake_isr_yield_calls;
-	woz_freertos_nimble_sdc_wake_from_isr();
+	ultrawidelock_freertos_nimble_sdc_wake_from_isr();
 	CHECK("MPSL ISR signals notify and yield to the receive task",
 	      fake_isr_notify_calls == isr_notifications + 1 &&
 		      fake_isr_yield_calls == isr_yields + 1);

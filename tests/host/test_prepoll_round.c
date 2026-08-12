@@ -97,9 +97,9 @@ static uint16_t mk_final_data(uint8_t *out, uint32_t fc, uint32_t armed_idx,
 /** Load a frame + Ipatov timestamp into the stub, then feed it to try_prepoll. */
 static void stash_frame(const uint8_t *frame, uint16_t len, uint64_t ip40)
 {
-	memcpy(woz_host_rx.rxdata, frame, len);
-	woz_host_rx.rxdata_len = len;
-	woz_host_rx.rx_ts40 = ip40;
+	memcpy(ultrawidelock_host_rx.rxdata, frame, len);
+	ultrawidelock_host_rx.rxdata_len = len;
+	ultrawidelock_host_rx.rx_ts40 = ip40;
 }
 
 /** Fire a captured RX callback the way dwt_isr would. */
@@ -109,7 +109,7 @@ static void rx_event(dwt_cb_t cb, uint32_t status)
 
 	memset(&d, 0, sizeof(d));
 	d.status = status;
-	d.datalength = woz_host_rx.rxdata_len;
+	d.datalength = ultrawidelock_host_rx.rxdata_len;
 	cb(&d);
 }
 
@@ -150,9 +150,9 @@ void test_prepoll_round(void)
 	c.ursk = g_ursk;
 	c.ranging_config = rc;
 	c.rc_len = sizeof(rc);
-	woz_host_rx_reset();
+	ultrawidelock_host_rx_reset();
 	T_EQ("start", ultrawidelock_uwb_start_aliro(&c), 0);
-	T_EQ("start.armed", woz_host_rx.rxenable_calls, 1);
+	T_EQ("start.armed", ultrawidelock_host_rx.rxenable_calls, 1);
 
 	t_group("STS substitution wrap programs a key while bound");
 	T_EQ("wrap.rxenable", ultrawidelock_uwb_arm_rx(DWT_START_RX_IMMEDIATE),
@@ -169,9 +169,9 @@ void test_prepoll_round(void)
 	t_group("Pre-POLL event arms the SP3 POLL window off the warm");
 	T_OK("prearm.not_awaiting", !ccc_shim_rx_awaiting_poll());
 	stash_frame(frame, len, 0x3000000ull); /* MHR re-read by the callback */
-	rx_event(woz_host_rx.cbs.cbRxOk, ST_GOOD);
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, ST_GOOD);
 	T_OK("arm.awaiting_poll", ccc_shim_rx_awaiting_poll());
-	T_EQ("arm.delayed", woz_host_rx.last_rxenable_mode,
+	T_EQ("arm.delayed", ultrawidelock_host_rx.last_rxenable_mode,
 	     DWT_START_RX_DELAYED | DWT_IDLE_ON_DLY_ERR);
 	/* Next block's Pre-POLL arrives while armed: stash + defer its decode. */
 	len = mk_prepoll(frame, fc++, RND_IDX1 + 2u * RND_STRIDE);
@@ -179,23 +179,23 @@ void test_prepoll_round(void)
 	ccc_shim_rx_try_prepoll(len);
 
 	t_group("POLL result (cper=0) fires the delayed Response TX");
-	woz_host_rx.rx_ts40 = 0x40000000ull;            /* t2: POLL RX */
-	rx_event(woz_host_rx.cbs.cbRxOk, DWT_INT_CIADONE_BIT_MASK);
-	T_EQ("poll.resp_tx", woz_host_rx.starttx_calls, 1);
+	ultrawidelock_host_rx.rx_ts40 = 0x40000000ull;            /* t2: POLL RX */
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, DWT_INT_CIADONE_BIT_MASK);
+	T_EQ("poll.resp_tx", ultrawidelock_host_rx.starttx_calls, 1);
 	T_OK("poll.await_cleared", !ccc_shim_rx_awaiting_poll());
 
 	t_group("TXFRS arms the Final window and flushes the deferred decode");
-	woz_host_rx.tx_ts40 = 0x40000000ull + 100000u;  /* t3 = t2 + 100k DTU */
-	rx_event(woz_host_rx.cbs.cbTxDone, DWT_INT_TXFRS_BIT_MASK);
-	T_EQ("final.armed", woz_host_rx.last_rxenable_mode,
+	ultrawidelock_host_rx.tx_ts40 = 0x40000000ull + 100000u;  /* t3 = t2 + 100k DTU */
+	rx_event(ultrawidelock_host_rx.cbs.cbTxDone, DWT_INT_TXFRS_BIT_MASK);
+	T_EQ("final.armed", ultrawidelock_host_rx.last_rxenable_mode,
 	     DWT_START_RX_DELAYED | DWT_IDLE_ON_DLY_ERR);
 
 	t_group("Final result stashes the STS verdict, reverts to SP0");
-	woz_host_rx.rx_ts40 = 0x40000000ull + 300000u;  /* t6 = t3 + 200k DTU */
-	woz_host_rx.stsq_ret = 0;
-	woz_host_rx.stsq_val = 100;
-	rx_event(woz_host_rx.cbs.cbRxOk, DWT_INT_CIADONE_BIT_MASK);
-	T_EQ("final.sp0", woz_host_rx.last_rxenable_mode, DWT_START_RX_IMMEDIATE);
+	ultrawidelock_host_rx.rx_ts40 = 0x40000000ull + 300000u;  /* t6 = t3 + 200k DTU */
+	ultrawidelock_host_rx.stsq_ret = 0;
+	ultrawidelock_host_rx.stsq_val = 100;
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, DWT_INT_CIADONE_BIT_MASK);
+	T_EQ("final.sp0", ultrawidelock_host_rx.last_rxenable_mode, DWT_START_RX_IMMEDIATE);
 
 	t_group("Final_Data decrypt latches the DS-TWR range");
 	/* reply1=100k, round2=200k (injected above); round1=101k, reply2=199k
@@ -210,21 +210,21 @@ void test_prepoll_round(void)
 	stash_frame(frame, len, 0x4000000ull);
 	len = mk_prepoll(frame, fc++, RND_IDX1 + 3u * RND_STRIDE);
 	stash_frame(frame, len, 0x4000000ull);
-	rx_event(woz_host_rx.cbs.cbRxOk, ST_GOOD);    /* re-arm off decode #3's warm */
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, ST_GOOD);    /* re-arm off decode #3's warm */
 	T_OK("arm2.awaiting", ccc_shim_rx_awaiting_poll());
 	len = mk_prepoll(frame, fc++, RND_IDX1 + 4u * RND_STRIDE);
 	stash_frame(frame, len, 0x4100000ull);
 	ccc_shim_rx_try_prepoll(len);                 /* pending decode #4 */
-	rx_event(woz_host_rx.cbs.cbRxOk, DWT_INT_CIADONE_BIT_MASK | ST_CPER);
-	T_OK("poll2.no_tx", woz_host_rx.starttx_calls == 1); /* no new Response */
-	T_EQ("poll2.sp0", woz_host_rx.last_rxenable_mode, DWT_START_RX_IMMEDIATE);
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, DWT_INT_CIADONE_BIT_MASK | ST_CPER);
+	T_OK("poll2.no_tx", ultrawidelock_host_rx.starttx_calls == 1); /* no new Response */
+	T_EQ("poll2.sp0", ultrawidelock_host_rx.last_rxenable_mode, DWT_START_RX_IMMEDIATE);
 
 	t_group("a refused delayed arm falls back to the SP0 listen");
 	stash_frame(frame, len, 0x5000000ull);
-	woz_host_rx.rxenable_ret = DWT_ERROR;
-	rx_event(woz_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm fails -> ARM FAIL path */
+	ultrawidelock_host_rx.rxenable_ret = DWT_ERROR;
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm fails -> ARM FAIL path */
 	T_OK("armfail.not_awaiting", !ccc_shim_rx_awaiting_poll());
-	woz_host_rx.rxenable_ret = DWT_SUCCESS;
+	ultrawidelock_host_rx.rxenable_ret = DWT_SUCCESS;
 
 	t_group("notify_rx is a quiet no-op without the lock-sweep diagnostic");
 	ccc_shim_rx_notify_rx(0x10000000u);
@@ -235,7 +235,7 @@ void test_prepoll_round(void)
 	T_EQ("restart", ultrawidelock_uwb_start_aliro(&c), 0); /* log_reset clears the warm */
 	len = mk_prepoll(frame, fc++, RND_IDX1);
 	stash_frame(frame, len, 0x6000000ull);
-	rx_event(woz_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm_poll_sp3 -> no warm */
+	rx_event(ultrawidelock_host_rx.cbs.cbRxOk, ST_GOOD);    /* arm_poll_sp3 -> no warm */
 	T_OK("nowarm.not_awaiting", !ccc_shim_rx_awaiting_poll());
 
 	t_group("prepoll decode rejects every malformed frame class");

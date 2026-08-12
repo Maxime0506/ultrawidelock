@@ -25,8 +25,8 @@
 #include <mpsl_temp.h>
 #include <nrfx.h>
 
-#include <woz_freertos_board.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_board.h>
+#include <ultrawidelock_freertos_platform.h>
 
 static unsigned g_checks;
 static unsigned g_failures;
@@ -42,14 +42,15 @@ static unsigned g_failures;
 		}                                                                                  \
 	} while (0)
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
 	(void)fmt;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	printf("  FAIL unexpected fatal: %s\n", reason);
 	fflush(stdout);
@@ -60,7 +61,7 @@ _Noreturn void woz_freertos_fatal(const char *reason)
 static void deliver(uint8_t value)
 {
 	fake_rng_produce(value);
-	woz_freertos_rng_isr();
+	ultrawidelock_freertos_rng_isr();
 }
 
 /* Bring the pool up without leaving anything in it. */
@@ -69,7 +70,7 @@ static void start_empty(void)
 	uint8_t byte = 0;
 
 	fake_rng_auto_produce = 1;
-	(void)woz_freertos_entropy(&byte, 1);
+	(void)ultrawidelock_freertos_entropy(&byte, 1);
 	fake_rng_auto_produce = 0;
 }
 
@@ -82,7 +83,7 @@ static void scenario_start(void)
 	CHECK("the generator is idle before the first request", fake_rng.starts == 0u);
 
 	fake_rng_auto_produce = 1;
-	CHECK("the first request succeeds", woz_freertos_entropy(&byte, 1) == 0);
+	CHECK("the first request succeeds", ultrawidelock_freertos_entropy(&byte, 1) == 0);
 
 	CHECK("bias correction is enabled", fake_rng.error_correction);
 	CHECK("the value-ready interrupt is enabled", fake_rng.int_valrdy);
@@ -102,7 +103,7 @@ static void scenario_pool(void)
 	deliver(0x44);
 
 	memset(out, 0, sizeof(out));
-	CHECK("a pooled request succeeds", woz_freertos_entropy(out, 4) == 0);
+	CHECK("a pooled request succeeds", ultrawidelock_freertos_entropy(out, 4) == 0);
 	CHECK("the pool answers in order",
 	      out[0] == 0x11 && out[1] == 0x22 && out[2] == 0x33 && out[3] == 0x44);
 	CHECK("a pooled request never polls the peripheral", fake_rng.violations == 0u);
@@ -113,10 +114,10 @@ static void scenario_pool(void)
 	 * only way to see the bug is to ask for a byte afterwards and check it
 	 * is not that stale one.
 	 */
-	woz_freertos_rng_isr();
+	ultrawidelock_freertos_rng_isr();
 	fake_rng_auto_produce = 1;
 	memset(out, 0, sizeof(out));
-	CHECK("a request after a spurious vector succeeds", woz_freertos_entropy(out, 1) == 0);
+	CHECK("a request after a spurious vector succeeds", ultrawidelock_freertos_entropy(out, 1) == 0);
 	CHECK("a vector with no event pooled nothing", out[0] != 0x44);
 }
 
@@ -147,7 +148,7 @@ static void scenario_full_pool(void)
 	deliver(0xee);
 	nrf_rng_task_trigger(NRF_RNG, NRF_RNG_TASK_STOP);
 
-	CHECK("a request against a full pool succeeds", woz_freertos_entropy(out, 32) == 0);
+	CHECK("a request against a full pool succeeds", ultrawidelock_freertos_entropy(out, 32) == 0);
 	CHECK("the pool answered the whole request in order", out[0] == 0u && out[31] == 31u);
 	CHECK("draining the pool restarts the generator", fake_rng.running);
 }
@@ -162,7 +163,7 @@ static void scenario_direct_poll(void)
 	/* Nothing pooled, so every byte comes straight from the peripheral. */
 	fake_rng_auto_produce = 8;
 
-	CHECK("a request with an empty pool succeeds", woz_freertos_entropy(out, 8) == 0);
+	CHECK("a request with an empty pool succeeds", ultrawidelock_freertos_entropy(out, 8) == 0);
 	CHECK("every byte came from a running generator", fake_rng.violations == 0u);
 	CHECK("the polled bytes are the ones produced", out[0] == 1u && out[7] == 8u);
 	/*
@@ -181,8 +182,8 @@ static void scenario_arguments(void)
 
 	fake_rng_auto_produce = 4;
 
-	CHECK("a null buffer with a length is refused", woz_freertos_entropy(NULL, 4) == -1);
-	CHECK("a zero-length request succeeds", woz_freertos_entropy(&byte, 0) == 0);
+	CHECK("a null buffer with a length is refused", ultrawidelock_freertos_entropy(NULL, 4) == -1);
+	CHECK("a zero-length request succeeds", ultrawidelock_freertos_entropy(&byte, 0) == 0);
 	CHECK("a zero-length request takes no byte", fake_rng_auto_produce == 4u);
 }
 
@@ -191,18 +192,18 @@ static void scenario_temperature(void)
 	/* MPSL answers quarter degrees; the consumer wants whole ones. */
 	fake_mpsl_temperature_set(100);
 	CHECK("a positive reading converts from quarter degrees",
-	      woz_freertos_die_temperature_c() == 25);
+	      ultrawidelock_freertos_die_temperature_c() == 25);
 
 	fake_mpsl_temperature_set(-80);
 	CHECK("a negative reading converts from quarter degrees",
-	      woz_freertos_die_temperature_c() == -20);
+	      ultrawidelock_freertos_die_temperature_c() == -20);
 
 	fake_mpsl_temperature_set(103);
 	CHECK("a fractional reading truncates toward zero",
-	      woz_freertos_die_temperature_c() == 25);
+	      ultrawidelock_freertos_die_temperature_c() == 25);
 
 	fake_mpsl_temperature_set(0);
-	CHECK("zero converts to zero", woz_freertos_die_temperature_c() == 0);
+	CHECK("zero converts to zero", ultrawidelock_freertos_die_temperature_c() == 0);
 
 	CHECK("every reading went to MPSL", fake_mpsl_temperature_reads() == 4u);
 }

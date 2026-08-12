@@ -11,8 +11,8 @@
  * real PSA/mbedTLS behaviour is out of scope.
  *
  * Files under test:
- *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_psa.c      (as woz_test_psa_ecb)
- *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_mbedtls.c  (as woz_test_mbedtls_ecb)
+ *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_psa.c      (as ultrawidelock_test_psa_ecb)
+ *   modules/ultrawidelock_uwb/src/ccc/ccc_crypto_mbedtls.c  (as ultrawidelock_test_mbedtls_ecb)
  *   modules/ultrawidelock_cred/src/ultrawidelock_prim_psa.c
  */
 #include <errno.h>
@@ -27,8 +27,8 @@
 #include "test.h"
 
 /* The renamed backend entry points (see run.sh). */
-int woz_test_psa_ecb(const uint8_t *key, size_t key_bits, const uint8_t in[16], uint8_t out[16]);
-int woz_test_mbedtls_ecb(const uint8_t *key, size_t key_bits, const uint8_t in[16],
+int ultrawidelock_test_psa_ecb(const uint8_t *key, size_t key_bits, const uint8_t in[16], uint8_t out[16]);
+int ultrawidelock_test_mbedtls_ecb(const uint8_t *key, size_t key_bits, const uint8_t in[16],
 			 uint8_t out[16]);
 
 static const uint8_t K16[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
@@ -43,7 +43,7 @@ void test_ccc_crypto_backends(void)
 
 	t_group("ccc_crypto_psa: argument plumbing");
 	psafake_reset();
-	T_EQ("128-bit ok", woz_test_psa_ecb(K16, 128, BLK, out), 0);
+	T_EQ("128-bit ok", ultrawidelock_test_psa_ecb(K16, 128, BLK, out), 0);
 	T_EQ("usage ENCRYPT", (long)psafake.attr_usage, (long)PSA_KEY_USAGE_ENCRYPT);
 	T_EQ("alg ECB", (long)psafake.attr_alg, (long)PSA_ALG_ECB_NO_PADDING);
 	T_EQ("type AES", (long)psafake.attr_type, (long)PSA_KEY_TYPE_AES);
@@ -55,47 +55,47 @@ void test_ccc_crypto_backends(void)
 	T_OK("out = fake passthrough", memcmp(out, BLK, 16) == 0);
 	T_EQ("key destroyed", (long)psafake.destroy_calls, 1L);
 
-	T_EQ("256-bit ok", woz_test_psa_ecb(K32, 256, BLK, out), 0);
+	T_EQ("256-bit ok", ultrawidelock_test_psa_ecb(K32, 256, BLK, out), 0);
 	T_EQ("bits 256", (long)psafake.attr_bits, 256L);
 	T_EQ("key bytes 32", (long)psafake.key_len, 32L);
 
 	t_group("ccc_crypto_psa: guards + injected failures");
-	T_EQ("NULL key", woz_test_psa_ecb(NULL, 128, BLK, out), -EINVAL);
-	T_EQ("NULL in", woz_test_psa_ecb(K16, 128, NULL, out), -EINVAL);
-	T_EQ("NULL out", woz_test_psa_ecb(K16, 128, BLK, NULL), -EINVAL);
-	T_EQ("192-bit rejected", woz_test_psa_ecb(K16, 192, BLK, out), -EINVAL);
+	T_EQ("NULL key", ultrawidelock_test_psa_ecb(NULL, 128, BLK, out), -EINVAL);
+	T_EQ("NULL in", ultrawidelock_test_psa_ecb(K16, 128, NULL, out), -EINVAL);
+	T_EQ("NULL out", ultrawidelock_test_psa_ecb(K16, 128, BLK, NULL), -EINVAL);
+	T_EQ("192-bit rejected", ultrawidelock_test_psa_ecb(K16, 192, BLK, out), -EINVAL);
 	psafake_reset();
 	psafake.import_ret = PSA_ERROR_GENERIC;
-	T_EQ("import fail -> -EIO", woz_test_psa_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("import fail -> -EIO", ultrawidelock_test_psa_ecb(K16, 128, BLK, out), -EIO);
 	T_EQ("no destroy after failed import... but PSA_KEY_ID_NULL passed",
 	     (long)psafake.destroy_calls, 0L);
 	psafake_reset();
 	psafake.cipher_ret = PSA_ERROR_GENERIC;
-	T_EQ("cipher fail -> -EIO", woz_test_psa_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("cipher fail -> -EIO", ultrawidelock_test_psa_ecb(K16, 128, BLK, out), -EIO);
 	T_EQ("destroy still runs", (long)psafake.destroy_calls, 1L);
 	psafake_reset();
 	psafake.cipher_olen = 15;
-	T_EQ("short olen -> -EIO", woz_test_psa_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("short olen -> -EIO", ultrawidelock_test_psa_ecb(K16, 128, BLK, out), -EIO);
 
 	t_group("ccc_crypto_mbedtls: plumbing + failures");
 	psafake_reset();
-	T_EQ("128-bit ok", woz_test_mbedtls_ecb(K16, 128, BLK, out), 0);
+	T_EQ("128-bit ok", ultrawidelock_test_mbedtls_ecb(K16, 128, BLK, out), 0);
 	T_EQ("keybits 128", (long)psafake.mtls_keybits, 128L);
 	T_EQ("mode ENCRYPT", (long)psafake.mtls_mode, (long)MBEDTLS_AES_ENCRYPT);
 	T_OK("out = fake passthrough", memcmp(out, BLK, 16) == 0);
 	T_EQ("init/free paired", (long)psafake.mtls_init_calls, (long)psafake.mtls_free_calls);
-	T_EQ("256-bit ok", woz_test_mbedtls_ecb(K32, 256, BLK, out), 0);
+	T_EQ("256-bit ok", ultrawidelock_test_mbedtls_ecb(K32, 256, BLK, out), 0);
 	T_EQ("keybits 256", (long)psafake.mtls_keybits, 256L);
-	T_EQ("NULL key", woz_test_mbedtls_ecb(NULL, 128, BLK, out), -EINVAL);
-	T_EQ("192-bit rejected", woz_test_mbedtls_ecb(K16, 192, BLK, out), -EINVAL);
+	T_EQ("NULL key", ultrawidelock_test_mbedtls_ecb(NULL, 128, BLK, out), -EINVAL);
+	T_EQ("192-bit rejected", ultrawidelock_test_mbedtls_ecb(K16, 192, BLK, out), -EINVAL);
 	psafake_reset();
 	psafake.mtls_setkey_ret = -1;
-	T_EQ("setkey fail -> -EIO", woz_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("setkey fail -> -EIO", ultrawidelock_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
 	T_EQ("crypt skipped", (long)psafake.mtls_crypt_calls, 0L);
 	T_EQ("ctx still freed", (long)psafake.mtls_free_calls, 1L);
 	psafake_reset();
 	psafake.mtls_crypt_ret = -1;
-	T_EQ("crypt fail -> -EIO", woz_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
+	T_EQ("crypt fail -> -EIO", ultrawidelock_test_mbedtls_ecb(K16, 128, BLK, out), -EIO);
 }
 
 void test_aliro_prim_psa(void)

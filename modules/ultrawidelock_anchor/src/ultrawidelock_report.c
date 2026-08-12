@@ -172,7 +172,7 @@ static void app_str(struct app *a, const char *s)
 	}
 }
 
-int ultrawidelock_report_format(const struct woz_range_report *r, char *out, size_t cap)
+int ultrawidelock_report_format(const struct ultrawidelock_range_report *r, char *out, size_t cap)
 {
 	struct app a = {out, cap, 0u, false};
 	uint16_t crc;
@@ -293,9 +293,9 @@ static int32_t scan_i32(struct scan *s)
 	return neg ? (int32_t)(-(int64_t)mag) : (int32_t)mag;
 }
 
-int ultrawidelock_report_parse(const char *line, size_t len, struct woz_range_report *out)
+int ultrawidelock_report_parse(const char *line, size_t len, struct ultrawidelock_range_report *out)
 {
-	struct woz_range_report r;
+	struct ultrawidelock_range_report r;
 	struct scan s;
 	uint64_t hi, lo;
 	uint16_t want, got;

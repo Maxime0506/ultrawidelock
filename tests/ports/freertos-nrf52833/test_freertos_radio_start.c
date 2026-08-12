@@ -16,10 +16,10 @@
 #include "fake_nimble.h"
 #include "fake_nrf.h"
 #include "fake_sdc.h"
-#include "woz_freertos_mpsl.h"
-#include "woz_freertos_nimble_sdc.h"
-#include "woz_freertos_platform.h"
-#include "woz_freertos_radio.h"
+#include "ultrawidelock_freertos_mpsl.h"
+#include "ultrawidelock_freertos_nimble_sdc.h"
+#include "ultrawidelock_freertos_platform.h"
+#include "ultrawidelock_freertos_radio.h"
 
 #include <nimble/transport.h>
 #include <nrf_errno.h>
@@ -46,22 +46,22 @@ static size_t g_entropy_last_length;
 static unsigned g_log_calls;
 static unsigned g_fatal_calls;
 
-int64_t woz_freertos_uptime_us(void)
+int64_t ultrawidelock_freertos_uptime_us(void)
 {
 	return fake_uptime_us;
 }
 
-void woz_freertos_busy_wait_us(uint64_t us)
+void ultrawidelock_freertos_busy_wait_us(uint64_t us)
 {
 	fake_uptime_us += (int64_t)us;
 }
 
-uint32_t woz_freertos_cycle_get_32(void)
+uint32_t ultrawidelock_freertos_cycle_get_32(void)
 {
 	return (uint32_t)(fake_uptime_us * 64);
 }
 
-int woz_freertos_entropy(void *buffer, size_t length)
+int ultrawidelock_freertos_entropy(void *buffer, size_t length)
 {
 	g_entropy_calls++;
 	g_entropy_last_length = length;
@@ -69,12 +69,12 @@ int woz_freertos_entropy(void *buffer, size_t length)
 	return 0;
 }
 
-int8_t woz_freertos_die_temperature_c(void)
+int8_t ultrawidelock_freertos_die_temperature_c(void)
 {
 	return 23;
 }
 
-_Noreturn void woz_freertos_fatal(const char *reason)
+_Noreturn void ultrawidelock_freertos_fatal(const char *reason)
 {
 	(void)reason;
 	g_fatal_calls++;
@@ -82,7 +82,8 @@ _Noreturn void woz_freertos_fatal(const char *reason)
 	exit(1);
 }
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
@@ -90,8 +91,9 @@ void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const 
 	g_log_calls++;
 }
 
-void woz_freertos_log_hexdump(enum woz_freertos_log_level level, const char *tag,
-			      const void *data, size_t len, const char *message)
+void ultrawidelock_freertos_log_hexdump(enum ultrawidelock_freertos_log_level level,
+					const char *tag, const void *data, size_t len,
+					const char *message)
 {
 	(void)level;
 	(void)tag;
@@ -138,12 +140,12 @@ static int32_t test_msg_get(uint8_t *packet, uint8_t *type)
 	return sdc_hci_get(packet, type);
 }
 
-static const struct woz_freertos_radio_dispatcher test_dispatcher = {
+static const struct ultrawidelock_freertos_radio_dispatcher test_dispatcher = {
 	.cmd_put = test_cmd_put,
 	.msg_get = test_msg_get,
 };
 
-static const struct woz_freertos_radio_dispatcher half_dispatcher = {
+static const struct ultrawidelock_freertos_radio_dispatcher half_dispatcher = {
 	.cmd_put = test_cmd_put,
 };
 
@@ -158,15 +160,16 @@ static void scenario_success(void)
 	uint8_t rand_buffer[8];
 
 	CHECK("radio start rejects a missing opcode dispatcher",
-	      woz_freertos_radio_start(NULL) == -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT &&
-		      fake_mpsl_init_calls == 0 && !woz_freertos_radio_ready());
+	      ultrawidelock_freertos_radio_start(NULL) == -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_TRANSPORT &&
+		      fake_mpsl_init_calls == 0 && !ultrawidelock_freertos_radio_ready());
 	CHECK("radio start rejects a dispatcher that cannot return events",
-	      woz_freertos_radio_start(&half_dispatcher) ==
-			      -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT &&
-		      fake_mpsl_init_calls == 0 && !woz_freertos_radio_ready());
+	      ultrawidelock_freertos_radio_start(&half_dispatcher) ==
+			      -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_TRANSPORT &&
+		      fake_mpsl_init_calls == 0 && !ultrawidelock_freertos_radio_ready());
 
 	CHECK("radio start brings up MPSL, the controller, and the transport",
-	      woz_freertos_radio_start(&test_dispatcher) == 0 && woz_freertos_radio_ready());
+	      ultrawidelock_freertos_radio_start(&test_dispatcher) == 0 &&
+		      ultrawidelock_freertos_radio_ready());
 	mpsl_entry = fake_task_entry;
 	mpsl_arg = fake_task_arg;
 
@@ -179,8 +182,8 @@ static void scenario_success(void)
 	CHECK("MPSL signals low-priority work on SWI5_EGU5",
 	      fake_mpsl_low_prio_irq == SWI5_EGU5_IRQn);
 	CHECK("the MPSL worker drives mpsl_low_priority_process",
-	      woz_freertos_mpsl_ready() && fake_mpsl_low_priority_process_calls == 0);
-	woz_freertos_mpsl_wake();
+	      ultrawidelock_freertos_mpsl_ready() && fake_mpsl_low_priority_process_calls == 0);
+	ultrawidelock_freertos_mpsl_wake();
 	pump_task(mpsl_entry, mpsl_arg);
 	CHECK("the MPSL worker task runs the pinned low-priority processor",
 	      fake_mpsl_low_priority_process_calls == 1);
@@ -194,14 +197,14 @@ static void scenario_success(void)
 	CHECK("the low-priority signal stays at a FreeRTOS-callable priority",
 	      fake_nrf_irq_priority[SWI5_EGU5_IRQn] == 4 && fake_nrf_irq_enabled[SWI5_EGU5_IRQn]);
 
-	woz_freertos_radio_radio_isr();
-	woz_freertos_radio_rtc0_isr();
-	woz_freertos_radio_timer0_isr();
-	woz_freertos_radio_power_clock_isr();
+	ultrawidelock_freertos_radio_radio_isr();
+	ultrawidelock_freertos_radio_rtc0_isr();
+	ultrawidelock_freertos_radio_timer0_isr();
+	ultrawidelock_freertos_radio_power_clock_isr();
 	CHECK("board vectors reach the MPSL interrupt handlers",
 	      fake_mpsl_radio_isr_calls == 1 && fake_mpsl_rtc0_isr_calls == 1 &&
 		      fake_mpsl_timer0_isr_calls == 1 && fake_mpsl_clock_isr_calls == 1);
-	woz_freertos_radio_low_priority_isr();
+	ultrawidelock_freertos_radio_low_priority_isr();
 	CHECK("the low-priority vector notifies and yields to the MPSL worker",
 	      fake_isr_notify_calls == 1 && fake_isr_yield_calls == 1);
 
@@ -234,7 +237,7 @@ static void scenario_success(void)
 	CHECK("the controller runs from the static, eight-byte-aligned pool",
 	      fake_sdc_enable_calls == 1 && fake_sdc_memory != NULL &&
 		      ((uintptr_t)fake_sdc_memory % 8u) == 0 &&
-		      woz_freertos_radio_memory_used() == 3078);
+		      ultrawidelock_freertos_radio_memory_used() == 3078);
 
 	CHECK("the controller entropy source is registered before enable",
 	      fake_sdc_rand_source != NULL && fake_sdc_rand_source->rand_poll != NULL);
@@ -262,7 +265,7 @@ static void scenario_success(void)
 	      g_msg_get_calls >= 1 && fake_sdc_get_calls == g_msg_get_calls &&
 		      g_fatal_calls == 0);
 
-	CHECK("radio start is idempotent", woz_freertos_radio_start(&test_dispatcher) == 0 &&
+	CHECK("radio start is idempotent", ultrawidelock_freertos_radio_start(&test_dispatcher) == 0 &&
 					   fake_mpsl_init_calls == 1 && fake_sdc_enable_calls == 1);
 }
 
@@ -271,25 +274,25 @@ static void scenario_stage_failure(int stage)
 	int expected = -stage;
 
 	switch (stage) {
-	case WOZ_FREERTOS_RADIO_STAGE_MPSL_INIT:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_MPSL_INIT:
 		fake_mpsl_init_result = -NRF_EINVAL;
 		break;
-	case WOZ_FREERTOS_RADIO_STAGE_SDC_INIT:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_INIT:
 		fake_sdc_init_result = -NRF_EPERM;
 		break;
-	case WOZ_FREERTOS_RADIO_STAGE_SDC_SUPPORT:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_SUPPORT:
 		fake_sdc_support_helper_result = -NRF_EPERM;
 		break;
-	case WOZ_FREERTOS_RADIO_STAGE_SDC_CFG:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_CFG:
 		fake_sdc_cfg_error = -NRF_EINVAL;
 		break;
-	case WOZ_FREERTOS_RADIO_STAGE_SDC_MEMORY:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_MEMORY:
 		fake_sdc_cfg_required_memory = 65536;
 		break;
-	case WOZ_FREERTOS_RADIO_STAGE_SDC_RAND:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_RAND:
 		fake_sdc_rand_source_result = -NRF_EPERM;
 		break;
-	case WOZ_FREERTOS_RADIO_STAGE_SDC_ENABLE:
+	case ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_ENABLE:
 		fake_sdc_enable_result = -NRF_ENOMEM;
 		break;
 	default:
@@ -299,11 +302,11 @@ static void scenario_stage_failure(int stage)
 	}
 
 	CHECK("a failed startup stage is reported and leaves the radio unready",
-	      woz_freertos_radio_start(&test_dispatcher) == expected &&
-		      !woz_freertos_radio_ready() &&
-		      woz_freertos_radio_memory_used() == 0);
+	      ultrawidelock_freertos_radio_start(&test_dispatcher) == expected &&
+		      !ultrawidelock_freertos_radio_ready() &&
+		      ultrawidelock_freertos_radio_memory_used() == 0);
 
-	if (stage == WOZ_FREERTOS_RADIO_STAGE_MPSL_INIT) {
+	if (stage == ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_MPSL_INIT) {
 		CHECK("a failed MPSL init leaves the shared radio vectors disabled",
 		      !fake_nrf_irq_enabled[RADIO_IRQn] && !fake_nrf_irq_enabled[RTC0_IRQn] &&
 			      !fake_nrf_irq_enabled[TIMER0_IRQn] &&
@@ -356,17 +359,17 @@ int main(void)
 		const char *label;
 	} scenarios[] = {
 		{0, "radio startup succeeds and publishes the transport"},
-		{WOZ_FREERTOS_RADIO_STAGE_MPSL_INIT, "a rejected MPSL clock config stops startup"},
-		{WOZ_FREERTOS_RADIO_STAGE_SDC_INIT, "a failed sdc_init stops startup"},
-		{WOZ_FREERTOS_RADIO_STAGE_SDC_SUPPORT,
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_MPSL_INIT, "a rejected MPSL clock config stops startup"},
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_INIT, "a failed sdc_init stops startup"},
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_SUPPORT,
 		 "a late feature-support call stops startup"},
-		{WOZ_FREERTOS_RADIO_STAGE_SDC_CFG,
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_CFG,
 		 "a rejected resource configuration stops startup"},
-		{WOZ_FREERTOS_RADIO_STAGE_SDC_MEMORY,
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_MEMORY,
 		 "a controller larger than the static pool stops startup"},
-		{WOZ_FREERTOS_RADIO_STAGE_SDC_RAND,
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_RAND,
 		 "a missing controller entropy source stops startup"},
-		{WOZ_FREERTOS_RADIO_STAGE_SDC_ENABLE, "a failed sdc_enable stops startup"},
+		{ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_ENABLE, "a failed sdc_enable stops startup"},
 	};
 	unsigned failures = 0;
 	unsigned count = 0;

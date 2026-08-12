@@ -35,10 +35,13 @@ static struct k_work_q dw3000_isr_wq;
  * arm to bucket the reaction:  hop = IRQ->work-handler (the k_work dispatch),
  * isr = dwt_isr frame-pull SPI, post = signal+worker fproc+arm SPI.
  * Remove this whole block once the dominant bucket is identified. */
-#define WOZ_DEMCR      (*(volatile uint32_t *)0xE000EDFCu) /* DEMCR, TRCENA @ bit24 */
-#define WOZ_DWT_LAR    (*(volatile uint32_t *)0xE0001FB0u) /* CoreSight lock (RAZ/WI if absent) */
-#define WOZ_DWT_CTRL   (*(volatile uint32_t *)0xE0001000u) /* DWT_CTRL, CYCCNTENA @ bit0 */
-#define WOZ_DWT_CYCCNT (*(volatile uint32_t *)0xE0001004u) /* DWT_CYCCNT free-running counter */
+#define ULTRAWIDELOCK_DEMCR      (*(volatile uint32_t *)0xE000EDFCu) /* DEMCR, TRCENA @ bit24 */
+#define ULTRAWIDELOCK_DWT_LAR                                                                      \
+	(*(volatile uint32_t *)0xE0001FB0u) /* CoreSight lock (RAZ/WI if absent) */
+#define ULTRAWIDELOCK_DWT_CTRL (*(volatile uint32_t *)0xE0001000u) /* DWT_CTRL, CYCCNTENA @ bit0   \
+								    */
+#define ULTRAWIDELOCK_DWT_CYCCNT                                                                   \
+	(*(volatile uint32_t *)0xE0001004u) /* DWT_CYCCNT free-running counter */
 
 volatile uint32_t g_dw_cyc_gpio;    /* T0: GPIO ISR entry, pre work-submit (hop start) */
 volatile uint32_t g_dw_cyc_work;    /* T1: work-handler entry, post hop */
@@ -48,31 +51,31 @@ volatile uint32_t g_dw_cyc_per_us = 64; /* CPU cyc/us, calibrated at init (64 = 
 /** Read the DWT cycle counter — exported so dw3000_device.c can stamp the arm. */
 uint32_t dw3000_dwt_cyccnt(void)
 {
-	return WOZ_DWT_CYCCNT;
+	return ULTRAWIDELOCK_DWT_CYCCNT;
 }
 
 /** Enable the DWT cycle counter (once, at HW init). */
-static void woz_cyccnt_enable(void)
+static void ultrawidelock_cyccnt_enable(void)
 {
-	WOZ_DEMCR |= (1u << 24);   /* TRCENA — power the DWT/ITM trace unit */
-	WOZ_DWT_LAR = 0xC5ACCE55u; /* unlock DWT (no-op if LAR unimplemented) */
-	WOZ_DWT_CYCCNT = 0u;
-	WOZ_DWT_CTRL |= 1u;        /* CYCCNTENA */
+	ULTRAWIDELOCK_DEMCR |= (1u << 24);   /* TRCENA — power the DWT/ITM trace unit */
+	ULTRAWIDELOCK_DWT_LAR = 0xC5ACCE55u; /* unlock DWT (no-op if LAR unimplemented) */
+	ULTRAWIDELOCK_DWT_CYCCNT = 0u;
+	ULTRAWIDELOCK_DWT_CTRL |= 1u;        /* CYCCNTENA */
 
 	/* Calibrate CPU cyc/us empirically: k_busy_wait(1000) is a known 1 ms wall
 	 * delay, so the CYCCNT delta over it IS the core clock — removes the guess
 	 * about 64 vs 128 MHz that the bucket->us conversion (dw3000_device.c)
 	 * depends on, and confirms the cycle counter is actually running. */
 	{
-		uint32_t c0 = WOZ_DWT_CYCCNT;
+		uint32_t c0 = ULTRAWIDELOCK_DWT_CYCCNT;
 		k_busy_wait(1000);
-		uint32_t c1 = WOZ_DWT_CYCCNT;
+		uint32_t c1 = ULTRAWIDELOCK_DWT_CYCCNT;
 		uint32_t per_us = (c1 - c0) / 1000u;
 
 		if (per_us != 0u) {
 			g_dw_cyc_per_us = per_us;
 		}
-		if (!IS_ENABLED(CONFIG_WOZ_PRETTY_SHELL)) {
+		if (!IS_ENABLED(CONFIG_ULTRAWIDELOCK_PRETTY_SHELL)) {
 			printk("DIAG cyccnt cal: %u cyc/ms => %u cyc/us (%u MHz)\n",
 			       (unsigned)(c1 - c0), (unsigned)g_dw_cyc_per_us,
 			       (unsigned)g_dw_cyc_per_us);
@@ -114,7 +117,7 @@ static const struct dw3000_config conf = {
 
 int dw3000_hw_init(void)
 {
-	woz_cyccnt_enable(); /* DIAG: arm the cycle counter before any IRQ stamps it */
+	ultrawidelock_cyccnt_enable(); /* DIAG: arm the cycle counter before any IRQ stamps it */
 
 	/* Reset */
 	if (conf.gpio_reset.port) {
@@ -149,17 +152,17 @@ int dw3000_hw_init(void)
 
 static void dw3000_hw_isr_work_handler(struct k_work* item)
 {
-	g_dw_cyc_work = WOZ_DWT_CYCCNT; /* T1: post-hop (work-handler entered) */
+	g_dw_cyc_work = ULTRAWIDELOCK_DWT_CYCCNT; /* T1: post-hop (work-handler entered) */
 	while (gpio_pin_get_dt(&conf.gpio_irq)) {
 		dwt_isr();
 	}
-	g_dw_cyc_isrdone = WOZ_DWT_CYCCNT; /* T2: dwt_isr loop done */
+	g_dw_cyc_isrdone = ULTRAWIDELOCK_DWT_CYCCNT; /* T2: dwt_isr loop done */
 }
 
 static void dw3000_hw_isr(const struct device* dev, struct gpio_callback* cb,
 						  uint32_t pins)
 {
-	g_dw_cyc_gpio = WOZ_DWT_CYCCNT; /* T0: GPIO ISR entry, pre work-submit (hop start) */
+	g_dw_cyc_gpio = ULTRAWIDELOCK_DWT_CYCCNT; /* T0: GPIO ISR entry, pre work-submit (hop start) */
 	k_work_submit_to_queue(&dw3000_isr_wq, &dw3000_isr_work);
 }
 

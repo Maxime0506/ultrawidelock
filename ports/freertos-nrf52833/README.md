@@ -1,12 +1,12 @@
 # nRF52833 FreeRTOS Port
 
 This directory owns the standalone FreeRTOS backends for the DWM3001CDK.
-Shared protocol code selects them with `WOZ_PORT_FREERTOS`; it must not include
+Shared protocol code selects them with `ULTRAWIDELOCK_PORT_FREERTOS`; it must not include
 Nordic, Qorvo, or FreeRTOS headers directly.
 
 The implemented foundation now includes:
 
-- `include/woz_freertos_platform.h` defines the BSP-owned clock, cycle-counter,
+- `include/ultrawidelock_freertos_platform.h` defines the BSP-owned clock, cycle-counter,
   busy-wait, flash, and logging hooks. Flash is BSP-owned because MPSL has to
   arbitrate the NVMC stall against radio timeslots.
 - `osal/osal_freertos.c` implements deferred work, delayable work, semaphores,
@@ -26,13 +26,13 @@ The implemented foundation now includes:
   Link Layer packets, registers the hardware entropy source, enables the
   controller from a static eight-byte-aligned pool, and publishes the HCI
   transport contract. Every stage failure returns its own negative
-  `woz_freertos_radio_stage` instead of continuing.
+  `ultrawidelock_freertos_radio_stage` instead of continuing.
 - `ble/nimble_host_freertos.c` starts the whole BLE stack:
-  `woz_freertos_nimble_host_start()` brings up the radio, runs
+  `ultrawidelock_freertos_nimble_host_start()` brings up the radio, runs
   `nimble_port_init()`, registers the host's sync and reset callbacks, creates
   the host task on a static stack, and schedules host/controller
   synchronization. It returns before the link is usable; wait for
-  `woz_freertos_nimble_host_synced()` before advertising.
+  `ultrawidelock_freertos_nimble_host_synced()` before advertising.
 - `ble/nimble_syscfg/syscfg/syscfg.h` is this product's NimBLE configuration.
   It states only the settings that must differ from upstream and reaches the
   rest with `#include_next`, so the vendor tree is neither copied nor patched;
@@ -43,7 +43,7 @@ The implemented foundation now includes:
 - `ble/hci_compat/` lets the pinned `hci_internal.c` opcode dispatcher compile
   byte for byte out of the vendor tree. It supplies the Bluetooth Core packet
   layouts, status codes, and OpCode Group Field split the dispatcher expects
-  under Zephyr names, plus `woz_freertos_hci_config.h`, whose Kconfig symbols
+  under Zephyr names, plus `ultrawidelock_freertos_hci_config.h`, whose Kconfig symbols
   must mirror the controller features the sequencer links. Nothing Zephyr is
   compiled or linked, and the vendor file is never patched, so re-pinning it is
   a plain re-fetch. `ble/hci_dispatcher_freertos.c` adapts it to the port's
@@ -83,15 +83,15 @@ The implemented foundation now includes:
   every one of those is implemented here over FreeRTOS. The semaphore picks its
   FreeRTOS entry point by reading IPSR, because the 802.15.4 driver callouts
   signal it from an interrupt; the queue and the atomics mask interrupts for
-  the same reason. `woz_freertos_ot_config.h` states the Kconfig selection this
+  the same reason. `ultrawidelock_freertos_ot_config.h` states the Kconfig selection this
   product resolves to, and `make freertos-ncs-source-check` fails if the
   vendor file ever reaches past what the shim covers.
 - `thread/ot_radio_freertos.c` makes the three joins Zephyr would otherwise
-  make: `woz_freertos_openthread_radio_start()` brings the platform up, which
-  must follow `woz_freertos_radio_start()` because the 802.15.4 driver
+  make: `ultrawidelock_freertos_openthread_radio_start()` brings the platform up, which
+  must follow `ultrawidelock_freertos_radio_start()` because the 802.15.4 driver
   arbitrates the radio through MPSL and must precede
-  `woz_freertos_openthread_start()` because the task drains the platform on
-  every pass; `woz_freertos_openthread_process_drivers()` is that drain, and
+  `ultrawidelock_freertos_openthread_start()` because the task drains the platform on
+  every pass; `ultrawidelock_freertos_openthread_process_drivers()` is that drain, and
   refuses to reach the platform before it is up; and `otSysEventSignalPending()`
   becomes a FreeRTOS notification, through the interrupt path when IPSR says a
   driver callout is signalling.
@@ -125,10 +125,10 @@ The implemented foundation now includes:
   format is its own and is not Zephyr NVS: a board reflashed from the Zephyr
   build finds no valid page, reformats, and loses whatever the Zephyr settings
   partition held.
-- `storage/aliro_prov_kv.c` is the reader's provisioning backend, the standalone
-  twin of the Zephyr port's `aliro_prov_settings.c`. The serialisation, the dev
+- `storage/ultrawidelock_prov_kv.c` is the reader's provisioning backend, the standalone
+  twin of the Zephyr port's `ultrawidelock_prov_settings.c`. The serialisation, the dev
   fallback and the trust logic are the portable `ultrawidelock_prov.c`; this file only
-  moves that one blob under `WOZ_KV_KEY_ALIRO_PROV`. Every failure still leaves
+  moves that one blob under `ULTRAWIDELOCK_KV_KEY_ALIRO_PROV`. Every failure still leaves
   a usable dev identity, because a reader that will not boot is worse than one
   that boots unprovisioned, and a stored record longer than this firmware can
   write is refused rather than parsed. A factory reset deletes that one key
@@ -142,10 +142,10 @@ The implemented foundation now includes:
   NVIC operations; `nrf_802154_misc_freertos.c` supplies entropy-seeded random
   and die-temperature callouts.
 - `board/time_freertos.c` supplies the three time hooks, from two sources on
-  purpose. `woz_freertos_uptime_us` must never step backwards over the life of
+  purpose. `ultrawidelock_freertos_uptime_us` must never step backwards over the life of
   the product, so it is the FreeRTOS tick count extended past its 32-bit wrap,
-  which gives it no horizon at all. `woz_freertos_cycle_get_32` and
-  `woz_freertos_busy_wait_us` need resolution finer than a tick, so they read
+  which gives it no horizon at all. `ultrawidelock_freertos_cycle_get_32` and
+  `ultrawidelock_freertos_busy_wait_us` need resolution finer than a tick, so they read
   RTC1's counter directly; that is safe because an RTC counter free-runs once
   started and nothing here writes a register. The counter is 24 bits and the
   cycle hook reports 32, so a wrap between two nearby reads is carried in
@@ -157,7 +157,7 @@ The implemented foundation now includes:
   be a hair from advancing when the spin starts and the DW3000 driver asks for
   waits as short as 20 us; coming back early violates a part's timing and fails
   intermittently on a bench. The RTC1 prescaler is stated as
-  `WOZ_FREERTOS_BOARD_RTC_HZ` rather than probed, because the pinned Nordic HAL
+  `ULTRAWIDELOCK_FREERTOS_BOARD_RTC_HZ` rather than probed, because the pinned Nordic HAL
   is not guaranteed to expose a prescaler read. A counter that never advances is
   fatal on first use rather than an unbounded spin: a lock that hangs during
   driver bring-up looks like dead hardware.
@@ -203,7 +203,7 @@ The implemented foundation now includes:
   stray store into a flash program. Writes and erases are confined to a window
   that excludes the application image, so a store with an offset bug can lose
   its own data but cannot erase the firmware out from under a door lock; a board
-  that adds a DFU slot widens `WOZ_FREERTOS_FLASH_WRITABLE_BASE` and `_LIMIT`
+  that adds a DFU slot widens `ULTRAWIDELOCK_FREERTOS_FLASH_WRITABLE_BASE` and `_LIMIT`
   deliberately. Reads need neither the window nor the controller, since program
   flash is memory-mapped.
 - `board/log_rtt_freertos.c` is the log sink, as a SEGGER RTT up-buffer. RTT and
@@ -229,7 +229,7 @@ The implemented foundation now includes:
   are pinned by static assert on a 32-bit target.
 - `board/fault_freertos.c` resets rather than halts, because this is a door
   lock: a board spinning in a fault has stopped answering, while one that
-  reboots comes back and can be opened. Define `WOZ_FREERTOS_FATAL_HALT` for
+  reboots comes back and can be opened. Define `ULTRAWIDELOCK_FREERTOS_FATAL_HALT` for
   bench builds to stop instead. The reset shows up in RESETREAS as SOFTWARE,
   which `otPlatGetResetReason` then reports.
 - `crypto/` selects and starts the crypto provider: Mbed TLS 3.6.6, built
@@ -290,12 +290,12 @@ first-link measurement and is not yet established.
 
 The dispatch task defaults to a
 4096-byte stack and priority `tskIDLE_PRIORITY + 2`; the eventual board build
-may override `WOZ_FREERTOS_OSAL_STACK_BYTES`,
-`WOZ_FREERTOS_OSAL_QUEUE_DEPTH`, and `WOZ_FREERTOS_OSAL_TASK_PRIORITY`. The
+may override `ULTRAWIDELOCK_FREERTOS_OSAL_STACK_BYTES`,
+`ULTRAWIDELOCK_FREERTOS_OSAL_QUEUE_DEPTH`, and `ULTRAWIDELOCK_FREERTOS_OSAL_TASK_PRIORITY`. The
 NimBLE host task defaults to a 4096-byte stack at `tskIDLE_PRIORITY + 1`,
 below the HCI receive pump, and is overridden with
-`WOZ_FREERTOS_NIMBLE_HOST_STACK_BYTES` and
-`WOZ_FREERTOS_NIMBLE_HOST_TASK_PRIORITY`.
+`ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STACK_BYTES` and
+`ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TASK_PRIORITY`.
 
 ## Platform architecture
 
@@ -340,11 +340,11 @@ still requires all of the following on the DWM3001CDK:
    the DW3110 response-arm path.
 5. Reproducible licensing, source acquisition, and an ARM GCC build.
 
-MPSL and the SoftDevice Controller are started by `woz_freertos_radio_start()`,
+MPSL and the SoftDevice Controller are started by `ultrawidelock_freertos_radio_start()`,
 which takes the opcode dispatcher pair. Pass
-`woz_freertos_radio_sdc_dispatcher()` for the pinned Nordic dispatcher. The
+`ultrawidelock_freertos_radio_sdc_dispatcher()` for the pinned Nordic dispatcher. The
 board layer's remaining radio duty is routing RADIO, RTC0, TIMER0, POWER_CLOCK,
-and SWI5_EGU5 to the `woz_freertos_radio_*_isr()` entry points. The transport
+and SWI5_EGU5 to the `ultrawidelock_freertos_radio_*_isr()` entry points. The transport
 intentionally rejects ISO packets because the product requires BLE GATT and
 L2CAP CoC, not LE Audio.
 
@@ -377,9 +377,9 @@ make freertos-ncs-source-check NCS_WORKSPACE=<path-to-ncs-workspace>
 ```
 
 The controller pool is 4096 bytes. The pinned `SDC_MEM_*` macros put the
-shipping configuration at 3078 bytes, and `woz_freertos_radio_start()` fails
-with `WOZ_FREERTOS_RADIO_STAGE_SDC_MEMORY` rather than overrunning the pool if
-a controller update ever needs more. Override `WOZ_FREERTOS_SDC_MEM_BYTES` to
+shipping configuration at 3078 bytes, and `ultrawidelock_freertos_radio_start()` fails
+with `ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_MEMORY` rather than overrunning the pool if
+a controller update ever needs more. Override `ULTRAWIDELOCK_FREERTOS_SDC_MEM_BYTES` to
 resize it.
 
 The shipping resource map keeps Qorvo's RTC1 FreeRTOS tick, assigns RTC0 and
@@ -387,7 +387,7 @@ TIMER0 to MPSL, and assigns RTC2, TIMER1, and EGU0 to nRF 802.15.4. Qorvo's
 `app_timer` must be omitted because it currently occupies RTC2; delayable
 application work already uses the port OSAL. MPSL uses SWI5/EGU5 for its
 low-priority signal, and that IRQ must be configured at a FreeRTOS-callable
-priority before it invokes `woz_freertos_mpsl_wake_from_isr()`.
+priority before it invokes `ultrawidelock_freertos_mpsl_wake_from_isr()`.
 
 ## Target build
 
@@ -442,7 +442,7 @@ next candidate is the ACL pool at 3,000 bytes, which is upstream's ten blocks
 for a build with one connection, but that one is a throughput trade rather than
 dead weight and should be measured before it is cut.
 
-The cross toolchain is found on `PATH`. Set `WOZ_ARM_TOOLCHAIN_DIR` to a
+The cross toolchain is found on `PATH`. Set `ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR` to a
 toolchain's `bin` directory to use one installed outside the system prefix
 without putting it on `PATH` for everything else.
 

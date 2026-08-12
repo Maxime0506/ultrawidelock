@@ -44,7 +44,7 @@
 #include <FreeRTOS.h>
 #include <semphr.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include "board_pins.h"
 #include "dw3000_spi.h"
@@ -261,8 +261,8 @@ static int32_t dw_xfer(const uint8_t *hdr, uint16_t hlen, const uint8_t *body, u
 	(void)xSemaphoreGive(s_lock);
 
 	if (ret != 0) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, TAG, "transfer of %u bytes never ended",
-				 (unsigned)total);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, TAG,
+					   "transfer of %u bytes never ended", (unsigned)total);
 	}
 	return ret;
 }
@@ -293,7 +293,7 @@ int32_t dw3000_spi_write_crc(uint16_t headerLength, const uint8_t *headerBuffer,
 void dw3000_spi_wakeup(void)
 {
 	cs_assert();
-	woz_freertos_busy_wait_us(500);
+	ultrawidelock_freertos_busy_wait_us(500);
 	cs_release();
 }
 

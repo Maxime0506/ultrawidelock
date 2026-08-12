@@ -43,12 +43,12 @@ if [ -z "$real_ceiling" ] || [ "$real_ceiling" != "$fake_ceiling" ]; then
 fi
 printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "$real_ceiling"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
 	-I"$HERE/fake/nimble_upstream" \
-	-I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$HERE/test_freertos_port.c" \
 	"$HERE/fake/fake_freertos.c" \
 	"$HERE/fake/fake_nimble.c" \
@@ -65,12 +65,12 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The radio startup sequencer claims one-shot MPSL, controller, and transport
 # state, so it gets its own binary and forks one process per failure scenario.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
 	-I"$HERE/fake/nimble_upstream" \
-	-I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$HERE/test_freertos_radio_start.c" \
 	"$HERE/fake/fake_freertos.c" \
 	"$HERE/fake/fake_nimble.c" \
@@ -84,12 +84,12 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # The host sequencer starts the radio too, so it also forks per scenario.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/ble/nimble_syscfg" \
 	-I"$HERE/fake/nimble_upstream" \
-	-I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$HERE/test_nimble_host_start.c" \
 	"$HERE/fake/fake_freertos.c" \
 	"$HERE/fake/fake_nimble.c" \
@@ -106,10 +106,10 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # The 802.15.4 clock platform only depends on the MPSL clock double.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
-	-I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$HERE/test_802154_clock.c" \
 	"$HERE/fake/fake_freertos.c" \
 	"$HERE/fake/fake_sdc.c" \
@@ -119,10 +119,10 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # The RTC2 low-power timer runs against a register-level RTC model.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
-	-I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$HERE/test_802154_lptimer.c" \
 	"$HERE/fake/fake_nrf.c" \
 	"$HERE/fake/fake_rtc.c" \
@@ -133,7 +133,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # The Zephyr kernel objects the pinned OpenThread radio platform uses.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/thread/ot_compat" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
@@ -146,7 +146,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # Starting and servicing the pinned OpenThread radio platform.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_radio.c" \
@@ -158,10 +158,10 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # OpenThread's millisecond alarm on the port's delayable work.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
-	-I"$ROOT/modules/woz_port/include" \
+	-I"$ROOT/modules/ultrawidelock_port/include" \
 	"$HERE/test_ot_alarm.c" \
 	"$ROOT/ports/freertos-nrf52833/thread/ot_alarm_freertos.c" \
 	-o "$OT_ALARM_BIN"
@@ -169,7 +169,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 
 # OpenThread's entropy, reset, and assertion platform.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_misc.c" \
@@ -183,7 +183,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # part's own rules. The reboot scenarios fork, because the store's state is
 # static and a remount needs fresh statics over the same flash.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_kv_flash.c" \
@@ -196,21 +196,21 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # property under test is that a provisioned identity survives a reset, and only
 # the real store can be wrong about that.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/modules/ultrawidelock_cred/include" \
 	"$HERE/test_prov_kv.c" \
 	"$HERE/fake/fake_flash.c" \
 	"$ROOT/modules/ultrawidelock_cred/src/ultrawidelock_prov.c" \
-	"$ROOT/ports/freertos-nrf52833/storage/aliro_prov_kv.c" \
+	"$ROOT/ports/freertos-nrf52833/storage/ultrawidelock_prov_kv.c" \
 	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
 	-o "$PROV_BIN"
 "$PROV_BIN"
 
 # The board's time and fault hooks, against a free-running RTC model.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_time.c" \
@@ -226,7 +226,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # pool is static, and resetting the peripheral model under it would leave the
 # port believing it had started a generator that is now stopped.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_entropy.c" \
@@ -241,7 +241,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The board's RTT log sink. The test stands in for the J-Link: it reads the ring
 # the way a host does, so what is checked is the buffer a real host would see.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_log.c" \
@@ -254,8 +254,8 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # model's array stands in for that mapping; writes and erases go through the
 # controller model, which enforces its modes and its only-clear-bits rule.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
-	"-DWOZ_FREERTOS_FLASH_MAPPED(offset)=((const void *)&fake_nvmc_flash[(offset)])" \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
+	"-DULTRAWIDELOCK_FREERTOS_FLASH_MAPPED(offset)=((const void *)&fake_nvmc_flash[(offset)])" \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_board_flash.c" \
@@ -275,7 +275,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # The crypto directory is on the include path because Mbed TLS includes
 # "threading_alt.h" by that bare name.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/crypto" \
@@ -297,7 +297,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # resetting the peripheral model under them would refuse every later transfer
 # for a reason the scenario never asked about.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -321,7 +321,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # ranges. The worker task's body is pumped rather than reimplemented, so the
 # question of whether it drains the interrupt line is asked of the port.
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	-I"$ROOT/ports/freertos-nrf52833/uwb" \
@@ -352,7 +352,7 @@ printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "
 # the store's own do.
 OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
-	-DWOZ_PORT_FREERTOS \
+	-DULTRAWIDELOCK_PORT_FREERTOS \
 	-I"$HERE/fake" \
 	-I"$ROOT/ports/freertos-nrf52833/include" \
 	"$HERE/test_ot_settings.c" \

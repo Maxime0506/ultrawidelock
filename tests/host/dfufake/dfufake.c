@@ -1,5 +1,5 @@
 /* dfufake — the scripted detools double and the running-image buffer. The
- * flash and reboot halves this file used to carry are the woz_flash host
+ * flash and reboot halves this file used to carry are the ultrawidelock_flash host
  * backend now (tests/host/port/flash_host.c); see dfufake.h.
  */
 
@@ -9,7 +9,7 @@
 
 #include <detools.h>
 
-#include "woz_osal.h"
+#include "ultrawidelock_osal.h"
 
 struct dfufake_state dfufake;
 
@@ -17,12 +17,12 @@ struct dfufake_state dfufake;
  * page is more than enough for a header plus a TLV block. */
 uint8_t dfufake_running_image[DFUFAKE_PAGE_SIZE];
 
-void dfufake_blank(struct woz_flash_host_area *area)
+void dfufake_blank(struct ultrawidelock_flash_host_area *area)
 {
 	memset(area->buf, 0xff, area->size);
 }
 
-uint8_t dfufake_peek(const struct woz_flash_host_area *area, size_t off)
+uint8_t dfufake_peek(const struct ultrawidelock_flash_host_area *area, size_t off)
 {
 	return off < area->size ? area->buf[off] : 0;
 }
@@ -30,8 +30,8 @@ uint8_t dfufake_peek(const struct woz_flash_host_area *area, size_t off)
 void dfufake_reset(void)
 {
 	memset(&dfufake, 0, sizeof(dfufake));
-	woz_flash_host_reset();
-	woz_osal_host_reset();
+	ultrawidelock_flash_host_reset();
+	ultrawidelock_osal_host_reset();
 	memset(dfufake_running_image, 0, sizeof(dfufake_running_image));
 	dfufake_script(NULL, 0);
 }

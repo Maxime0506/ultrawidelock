@@ -1,5 +1,5 @@
 /* stackfake — test-side control/inspection API for the Aliro Interface the
- * woz_aliro_stack sources call into.
+ * ultrawidelock_cred_stack sources call into.
  *
  * SYMMETRIC CRYPTO IS REAL (SHA-256/HKDF from ultrawidelock_hash.c, the reference GCM
  * from aliro_prim_host.c, both vector-pinned): a wrong key, skipped counter or
@@ -9,8 +9,8 @@
  * against real derived key material, and the transport is a recorder
  * (Session::Send keeps every frame).
  */
-#ifndef WOZ_STACKFAKE_H
-#define WOZ_STACKFAKE_H
+#ifndef ULTRAWIDELOCK_STACKFAKE_H
+#define ULTRAWIDELOCK_STACKFAKE_H
 
 #include <cstddef>
 #include <cstdint>
@@ -207,4 +207,4 @@ size_t stackfake_seal_as_device(uint32_t key_id, uint32_t counter, const uint8_t
 				size_t aad_length, const uint8_t *plaintext, size_t length,
 				uint8_t *out);
 
-#endif /* WOZ_STACKFAKE_H */
+#endif /* ULTRAWIDELOCK_STACKFAKE_H */

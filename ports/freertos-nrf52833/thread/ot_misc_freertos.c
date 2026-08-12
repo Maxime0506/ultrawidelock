@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include <hal/nrf_power.h>
 #include <nrfx.h>
@@ -25,7 +25,7 @@ otError otPlatEntropyGet(uint8_t *output, uint16_t length)
 	if (output == NULL || length == 0u) {
 		return OT_ERROR_INVALID_ARGS;
 	}
-	if (woz_freertos_entropy(output, length) != 0) {
+	if (ultrawidelock_freertos_entropy(output, length) != 0) {
 		return OT_ERROR_FAILED;
 	}
 	return OT_ERROR_NONE;
@@ -105,6 +105,7 @@ otPlatResetReason otPlatGetResetReason(otInstance *instance)
 
 void otPlatAssertFail(const char *filename, int line)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, "openthread", "assert %s:%d", filename, line);
-	woz_freertos_fatal("openthread assertion");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, "openthread", "assert %s:%d",
+				   filename, line);
+	ultrawidelock_freertos_fatal("openthread assertion");
 }

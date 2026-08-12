@@ -32,7 +32,7 @@
 #define ULTRAWIDELOCK_REPORT_F_DEGRADED   0x04u /**< accepted, but something was off */
 
 /** One accepted DS-TWR round, as the satellite saw it. */
-struct woz_range_report {
+struct ultrawidelock_range_report {
 	uint16_t anchor_id; /**< which satellite */
 	uint32_t seq;       /**< round sequence: the shared timebase */
 	uint64_t us;        /**< satellite uptime at FINAL RX, microseconds */
@@ -53,7 +53,7 @@ struct woz_range_report {
  * @return Bytes written, or -EINVAL on a NULL argument, or -ENOSPC if @p cap is
  *         smaller than the line needs. Never writes a partial line.
  */
-int ultrawidelock_report_format(const struct woz_range_report *r, char *out, size_t cap);
+int ultrawidelock_report_format(const struct ultrawidelock_range_report *r, char *out, size_t cap);
 
 /**
  * Parse a line back into a report.
@@ -69,7 +69,8 @@ int ultrawidelock_report_format(const struct woz_range_report *r, char *out, siz
  * @return 0 on success, -EINVAL on a NULL argument, -EBADMSG on a malformed
  *         line, a bad CRC, a field out of range, or an unrecognised magic.
  */
-int ultrawidelock_report_parse(const char *line, size_t len, struct woz_range_report *out);
+int ultrawidelock_report_parse(const char *line, size_t len,
+			       struct ultrawidelock_range_report *out);
 
 /** CRC-16/CCITT-FALSE, exposed so a host-side consumer can agree with us. */
 uint16_t ultrawidelock_report_crc16(const char *data, size_t len);

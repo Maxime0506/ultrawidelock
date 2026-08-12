@@ -6,7 +6,7 @@
 # giving it a signing key would add a setup step and buy nothing.
 #
 # Only two modules: ultrawidelock_uwb for the CONFIG_ULTRAWIDELOCK_UWB tier and modules/ultrawidelock_dw3000 under
-# it. woz_aliro and ultrawidelock_matter are absent because nothing here is Aliro-aware --
+# it. ultrawidelock_cred and ultrawidelock_matter are absent because nothing here is Aliro-aware --
 # that is the point of building at this tier.
 cmake_minimum_required(VERSION 3.20.0)
 

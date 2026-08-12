@@ -6,11 +6,11 @@
  * layer, so there is no headroom to reserve and the bound is simply the
  * largest HCI event packet the controller can produce.
  */
-#ifndef WOZ_HCI_COMPAT_BLUETOOTH_BUF_H
-#define WOZ_HCI_COMPAT_BLUETOOTH_BUF_H
+#ifndef ULTRAWIDELOCK_HCI_COMPAT_BLUETOOTH_BUF_H
+#define ULTRAWIDELOCK_HCI_COMPAT_BLUETOOTH_BUF_H
 
 #include <sdc_hci.h>
 
 #define BT_BUF_EVT_RX_SIZE HCI_EVENT_PACKET_MAX_SIZE
 
-#endif /* WOZ_HCI_COMPAT_BLUETOOTH_BUF_H */
+#endif /* ULTRAWIDELOCK_HCI_COMPAT_BLUETOOTH_BUF_H */

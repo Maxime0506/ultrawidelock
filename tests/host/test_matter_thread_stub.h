@@ -7,8 +7,8 @@
  * attaches. On a bench that means standing next to a border router and turning
  * it off at the right moment; here it is one assignment.
  */
-#ifndef WOZ_TEST_MATTER_THREAD_STUB_H
-#define WOZ_TEST_MATTER_THREAD_STUB_H
+#ifndef ULTRAWIDELOCK_TEST_MATTER_THREAD_STUB_H
+#define ULTRAWIDELOCK_TEST_MATTER_THREAD_STUB_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -43,4 +43,4 @@ extern char g_thread_last_unadvertised[64];
 
 void test_matter_thread_stub_reset(void);
 
-#endif /* WOZ_TEST_MATTER_THREAD_STUB_H */
+#endif /* ULTRAWIDELOCK_TEST_MATTER_THREAD_STUB_H */

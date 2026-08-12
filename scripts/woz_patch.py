@@ -5,7 +5,7 @@ Takes two SIGNED MCUboot images and emits one `.wdfu` file: a header the
 bootloader reads, a signature the application checks, and a detools in-place
 patch that turns the first image into the second.
 
-    scripts/woz_patch.py build --from old/zephyr.signed.bin \\
+    scripts/ultrawidelock_patch.py build --from old/zephyr.signed.bin \\
                                --to   new/zephyr.signed.bin \\
                                --build-dir build/cdk-matter \\
                                --out  update.wdfu
@@ -132,8 +132,8 @@ def image_sha(path):
 
 
 def die(msg):
-    """Exit the process with the formatted error message prefixed by woz_patch."""
-    sys.exit(f"woz_patch: {msg}")
+    """Exit the process with the formatted error message prefixed by ultrawidelock_patch."""
+    sys.exit(f"ultrawidelock_patch: {msg}")
 
 
 def partition(build_dir, name):
@@ -450,7 +450,7 @@ def stage(args):
     separation is the point -- when an over-the-air update fails, this says
     which half failed.
 
-        scripts/woz_patch.py stage update.wdfu --out staging.bin
+        scripts/ultrawidelock_patch.py stage update.wdfu --out staging.bin
         arm-zephyr-eabi-objcopy -I binary -O ihex \\
             --change-addresses 0x76000 staging.bin staging.hex
         nrfjprog --program staging.hex --sectorerase --verify -r

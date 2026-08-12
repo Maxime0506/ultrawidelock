@@ -16,7 +16,7 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <nvs_flash.h>
-#ifdef CONFIG_WOZ_PIV_CCID
+#ifdef CONFIG_ULTRAWIDELOCK_PIV_CCID
 #include <piv_ccid_usb.h>
 #endif
 #if CONFIG_PM_ENABLE
@@ -49,7 +49,7 @@
 #include <ultrawidelock_lat.h>
 #include <esp_netif_sntp.h>
 #include <ultrawidelock/uwb.h>
-#ifdef CONFIG_WOZ_PRESENCE
+#ifdef CONFIG_ULTRAWIDELOCK_PRESENCE
 #include <presence_link.h>
 #endif
 #include "door_lock_manager.h"
@@ -258,7 +258,7 @@ static void aliro_reader_task(void *arg)
 	ultrawidelock_reader_set_access_listener(ha_mqtt_publish_access);
 #endif
 
-#ifdef CONFIG_WOZ_PRESENCE
+#ifdef CONFIG_ULTRAWIDELOCK_PRESENCE
 	/* false: this app already grants and relocks the phone from its own approach
 	 * loop below, so presence must not also drive the Wallet notification. */
 	presence_link_init(false);
@@ -314,7 +314,7 @@ static void aliro_reader_task(void *arg)
 	// gate holds ranging until the phone is already inside unlock_cm, so an
 	// ETA could never arm anyway. Being explicit here keeps the trace honest
 	// rather than leaving a predictor that silently never fires.
-#if defined(CONFIG_WOZ_APPROACH_PREDICT)
+#if defined(CONFIG_ULTRAWIDELOCK_APPROACH_PREDICT)
 	acfg.predict_en = true;
 #else
 	acfg.predict_en = false;
@@ -690,7 +690,7 @@ extern "C" void app_main()
 	/* Initialize the ESP NVS layer */
 	nvs_flash_init();
 
-#ifdef CONFIG_WOZ_PIV_CCID
+#ifdef CONFIG_ULTRAWIDELOCK_PIV_CCID
 	/*
 	 * Native USB is deliberately independent of the external USB-UART used
 	 * for flashing and recovery. This option is off in normal firmware.

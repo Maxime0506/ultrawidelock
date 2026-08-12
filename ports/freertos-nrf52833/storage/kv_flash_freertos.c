@@ -13,21 +13,21 @@
  * key and the trust anchors, and a board is reflashed without erasing so those
  * survive; moving it would silently orphan them.
  */
-#include <woz_freertos_kv.h>
+#include <ultrawidelock_freertos_kv.h>
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
-#ifndef WOZ_FREERTOS_KV_BASE
-#define WOZ_FREERTOS_KV_BASE 0x7e000u
+#ifndef ULTRAWIDELOCK_FREERTOS_KV_BASE
+#define ULTRAWIDELOCK_FREERTOS_KV_BASE 0x7e000u
 #endif
 
-#define KV_PAGE_SIZE WOZ_FREERTOS_FLASH_PAGE_SIZE
+#define KV_PAGE_SIZE ULTRAWIDELOCK_FREERTOS_FLASH_PAGE_SIZE
 #define KV_PAGE_COUNT 2u
-#define KV_ALIGN WOZ_FREERTOS_FLASH_WRITE_ALIGN
+#define KV_ALIGN ULTRAWIDELOCK_FREERTOS_FLASH_WRITE_ALIGN
 
 /*
  * The page header is written last, after the page's records are in place, so a
@@ -73,7 +73,7 @@ static uint32_t align_up(uint32_t value)
 
 static uint32_t page_base(uint32_t page)
 {
-	return WOZ_FREERTOS_KV_BASE + page * KV_PAGE_SIZE;
+	return ULTRAWIDELOCK_FREERTOS_KV_BASE + page * KV_PAGE_SIZE;
 }
 
 static uint32_t record_size(uint16_t length)
@@ -83,12 +83,12 @@ static uint32_t record_size(uint16_t length)
 
 static int read_at(uint32_t page, uint32_t offset, void *buffer, size_t length)
 {
-	return woz_freertos_flash_read(page_base(page) + offset, buffer, length);
+	return ultrawidelock_freertos_flash_read(page_base(page) + offset, buffer, length);
 }
 
 static int write_at(uint32_t page, uint32_t offset, const void *data, size_t length)
 {
-	return woz_freertos_flash_write(page_base(page) + offset, data, length);
+	return ultrawidelock_freertos_flash_write(page_base(page) + offset, data, length);
 }
 
 /*
@@ -103,26 +103,26 @@ static int write_padded(uint32_t page, uint32_t offset, const void *data, uint16
 	uint32_t remainder = length - whole;
 
 	if (whole != 0u && write_at(page, offset, data, whole) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
 	if (remainder == 0u) {
-		return WOZ_KV_OK;
+		return ULTRAWIDELOCK_KV_OK;
 	}
 
 	memset(tail, 0xff, sizeof(tail));
 	memcpy(tail, (const uint8_t *)data + whole, remainder);
 	if (write_at(page, offset + whole, tail, sizeof(tail)) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
 static int page_header_read(uint32_t page, struct kv_page_header *header)
 {
 	if (read_at(page, 0, header, sizeof(*header)) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
-	return header->magic == KV_MAGIC ? WOZ_KV_OK : WOZ_KV_NOT_FOUND;
+	return header->magic == KV_MAGIC ? ULTRAWIDELOCK_KV_OK : ULTRAWIDELOCK_KV_NOT_FOUND;
 }
 
 /*
@@ -141,9 +141,9 @@ static int page_walk(uint32_t page, kv_visit_fn visit, void *context, uint32_t *
 		uint32_t total;
 
 		if (read_at(page, offset, &header, sizeof(header)) != 0) {
-			return WOZ_KV_IO;
+			return ULTRAWIDELOCK_KV_IO;
 		}
-		if (header.key == WOZ_KV_KEY_NONE && header.length == 0xffffu &&
+		if (header.key == ULTRAWIDELOCK_KV_KEY_NONE && header.length == 0xffffu &&
 		    header.state == KV_STATE_FREE) {
 			break;
 		}
@@ -151,7 +151,7 @@ static int page_walk(uint32_t page, kv_visit_fn visit, void *context, uint32_t *
 		 * A header whose length never landed cannot be stepped over, so
 		 * the log ends here whatever follows.
 		 */
-		if (header.length == 0xffffu || header.length > WOZ_KV_VALUE_MAX) {
+		if (header.length == 0xffffu || header.length > ULTRAWIDELOCK_KV_VALUE_MAX) {
 			break;
 		}
 
@@ -170,7 +170,7 @@ static int page_walk(uint32_t page, kv_visit_fn visit, void *context, uint32_t *
 	if (end_offset != NULL) {
 		*end_offset = offset;
 	}
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
 /* Formats one page: erase, then claim it with the next sequence number. */
@@ -178,13 +178,13 @@ static int page_format(uint32_t page, uint32_t sequence)
 {
 	struct kv_page_header header = {KV_MAGIC, sequence};
 
-	if (woz_freertos_flash_erase(page_base(page), KV_PAGE_SIZE) != 0) {
-		return WOZ_KV_IO;
+	if (ultrawidelock_freertos_flash_erase(page_base(page), KV_PAGE_SIZE) != 0) {
+		return ULTRAWIDELOCK_KV_IO;
 	}
 	if (write_at(page, 0, &header, sizeof(header)) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
 struct find_context {
@@ -217,10 +217,10 @@ static int find_record(uint16_t key, struct find_context *find)
 	find->key = key;
 	find->found = false;
 	rc = page_walk(s_active_page, find_visit, find, NULL);
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
-	return find->found ? WOZ_KV_OK : WOZ_KV_NOT_FOUND;
+	return find->found ? ULTRAWIDELOCK_KV_OK : ULTRAWIDELOCK_KV_NOT_FOUND;
 }
 
 static int append(uint16_t key, const void *value, uint16_t length)
@@ -231,7 +231,7 @@ static int append(uint16_t key, const void *value, uint16_t length)
 	int rc;
 
 	if (offset + record_size(length) > KV_PAGE_SIZE) {
-		return WOZ_KV_FULL;
+		return ULTRAWIDELOCK_KV_FULL;
 	}
 
 	/*
@@ -240,21 +240,21 @@ static int append(uint16_t key, const void *value, uint16_t length)
 	 * it leaves a record the walk steps over.
 	 */
 	if (write_at(s_active_page, offset, &header, sizeof(header)) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
 	if (length != 0u) {
 		rc = write_padded(s_active_page, offset + KV_RECORD_HEADER_SIZE, value, length);
-		if (rc != WOZ_KV_OK) {
+		if (rc != ULTRAWIDELOCK_KV_OK) {
 			return rc;
 		}
 	}
 	if (write_at(s_active_page, offset + offsetof(struct kv_record_header, state), &state,
 		     sizeof(state)) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
 
 	s_write_offset = offset + record_size(length);
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
 struct copy_context {
@@ -278,13 +278,13 @@ static bool copy_visit(uint16_t key, uint16_t length, uint32_t payload_offset, v
 	struct find_context newest = {key, 0, 0, false};
 	struct kv_record_header header = {key, length, KV_STATE_FREE};
 	uint32_t state = KV_STATE_VALID;
-	uint8_t buffer[WOZ_KV_VALUE_MAX];
+	uint8_t buffer[ULTRAWIDELOCK_KV_VALUE_MAX];
 
 	if (key == copy->skip_key) {
 		return true;
 	}
-	if (page_walk(copy->source_page, find_visit, &newest, NULL) != WOZ_KV_OK) {
-		copy->rc = WOZ_KV_IO;
+	if (page_walk(copy->source_page, find_visit, &newest, NULL) != ULTRAWIDELOCK_KV_OK) {
+		copy->rc = ULTRAWIDELOCK_KV_IO;
 		return false;
 	}
 	if (newest.offset != payload_offset) {
@@ -292,27 +292,27 @@ static bool copy_visit(uint16_t key, uint16_t length, uint32_t payload_offset, v
 	}
 
 	if (copy->target_offset + record_size(length) > KV_PAGE_SIZE) {
-		copy->rc = WOZ_KV_FULL;
+		copy->rc = ULTRAWIDELOCK_KV_FULL;
 		return false;
 	}
 	if (length != 0u && read_at(copy->source_page, payload_offset, buffer, length) != 0) {
-		copy->rc = WOZ_KV_IO;
+		copy->rc = ULTRAWIDELOCK_KV_IO;
 		return false;
 	}
 	if (write_at(copy->target_page, copy->target_offset, &header, sizeof(header)) != 0) {
-		copy->rc = WOZ_KV_IO;
+		copy->rc = ULTRAWIDELOCK_KV_IO;
 		return false;
 	}
 	if (length != 0u && write_padded(copy->target_page,
 					 copy->target_offset + KV_RECORD_HEADER_SIZE, buffer,
-					 length) != WOZ_KV_OK) {
-		copy->rc = WOZ_KV_IO;
+					 length) != ULTRAWIDELOCK_KV_OK) {
+		copy->rc = ULTRAWIDELOCK_KV_IO;
 		return false;
 	}
 	if (write_at(copy->target_page,
 		     copy->target_offset + offsetof(struct kv_record_header, state), &state,
 		     sizeof(state)) != 0) {
-		copy->rc = WOZ_KV_IO;
+		copy->rc = ULTRAWIDELOCK_KV_IO;
 		return false;
 	}
 
@@ -328,36 +328,36 @@ static bool copy_visit(uint16_t key, uint16_t length, uint32_t payload_offset, v
 static int compact(uint16_t skip_key)
 {
 	uint32_t target = (s_active_page + 1u) % KV_PAGE_COUNT;
-	struct copy_context copy = {s_active_page, target, KV_HEADER_SIZE, skip_key, WOZ_KV_OK};
+	struct copy_context copy = {s_active_page, target, KV_HEADER_SIZE, skip_key, ULTRAWIDELOCK_KV_OK};
 	struct kv_page_header header = {KV_MAGIC, s_sequence + 1u};
 	int rc;
 
-	if (woz_freertos_flash_erase(page_base(target), KV_PAGE_SIZE) != 0) {
-		return WOZ_KV_IO;
+	if (ultrawidelock_freertos_flash_erase(page_base(target), KV_PAGE_SIZE) != 0) {
+		return ULTRAWIDELOCK_KV_IO;
 	}
 
 	rc = page_walk(s_active_page, copy_visit, &copy, NULL);
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
-	if (copy.rc != WOZ_KV_OK) {
+	if (copy.rc != ULTRAWIDELOCK_KV_OK) {
 		return copy.rc;
 	}
 
 	if (write_at(target, 0, &header, sizeof(header)) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
-	if (woz_freertos_flash_erase(page_base(s_active_page), KV_PAGE_SIZE) != 0) {
-		return WOZ_KV_IO;
+	if (ultrawidelock_freertos_flash_erase(page_base(s_active_page), KV_PAGE_SIZE) != 0) {
+		return ULTRAWIDELOCK_KV_IO;
 	}
 
 	s_active_page = target;
 	s_sequence = header.sequence;
 	s_write_offset = copy.target_offset;
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
-int woz_freertos_kv_init(void)
+int ultrawidelock_freertos_kv_init(void)
 {
 	struct kv_page_header headers[KV_PAGE_COUNT];
 	bool valid[KV_PAGE_COUNT];
@@ -365,31 +365,31 @@ int woz_freertos_kv_init(void)
 	int rc;
 
 	if (s_mounted) {
-		return WOZ_KV_OK;
+		return ULTRAWIDELOCK_KV_OK;
 	}
 
 	for (page = 0; page < KV_PAGE_COUNT; page++) {
 		rc = page_header_read(page, &headers[page]);
-		if (rc == WOZ_KV_IO) {
-			return WOZ_KV_IO;
+		if (rc == ULTRAWIDELOCK_KV_IO) {
+			return ULTRAWIDELOCK_KV_IO;
 		}
-		valid[page] = (rc == WOZ_KV_OK);
+		valid[page] = (rc == ULTRAWIDELOCK_KV_OK);
 	}
 
 	if (!valid[0] && !valid[1]) {
 		/* Never formatted, or both pages lost. Start clean. */
 		rc = page_format(0, 1);
-		if (rc != WOZ_KV_OK) {
+		if (rc != ULTRAWIDELOCK_KV_OK) {
 			return rc;
 		}
-		if (woz_freertos_flash_erase(page_base(1), KV_PAGE_SIZE) != 0) {
-			return WOZ_KV_IO;
+		if (ultrawidelock_freertos_flash_erase(page_base(1), KV_PAGE_SIZE) != 0) {
+			return ULTRAWIDELOCK_KV_IO;
 		}
 		s_active_page = 0;
 		s_sequence = 1;
 		s_write_offset = KV_HEADER_SIZE;
 		s_mounted = true;
-		return WOZ_KV_OK;
+		return ULTRAWIDELOCK_KV_OK;
 	}
 
 	if (valid[0] && valid[1]) {
@@ -399,9 +399,9 @@ int woz_freertos_kv_init(void)
 		 * higher sequence is the finished one and the other is stale.
 		 */
 		s_active_page = (headers[1].sequence > headers[0].sequence) ? 1u : 0u;
-		if (woz_freertos_flash_erase(page_base((s_active_page + 1u) % KV_PAGE_COUNT),
+		if (ultrawidelock_freertos_flash_erase(page_base((s_active_page + 1u) % KV_PAGE_COUNT),
 					     KV_PAGE_SIZE) != 0) {
-			return WOZ_KV_IO;
+			return ULTRAWIDELOCK_KV_IO;
 		}
 	} else {
 		s_active_page = valid[0] ? 0u : 1u;
@@ -409,60 +409,60 @@ int woz_freertos_kv_init(void)
 
 	s_sequence = headers[s_active_page].sequence;
 	rc = page_walk(s_active_page, NULL, NULL, &s_write_offset);
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 	s_mounted = true;
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
-int woz_freertos_kv_get(uint16_t key, void *value, size_t *length)
+int ultrawidelock_freertos_kv_get(uint16_t key, void *value, size_t *length)
 {
 	struct find_context find;
 	size_t capacity;
 	int rc;
 
-	if (length == NULL || key == WOZ_KV_KEY_NONE) {
-		return WOZ_KV_INVALID;
+	if (length == NULL || key == ULTRAWIDELOCK_KV_KEY_NONE) {
+		return ULTRAWIDELOCK_KV_INVALID;
 	}
-	rc = woz_freertos_kv_init();
-	if (rc != WOZ_KV_OK) {
+	rc = ultrawidelock_freertos_kv_init();
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 
 	capacity = *length;
 	rc = find_record(key, &find);
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 
 	/* Reported whether or not it fits, so a caller can size a retry. */
 	*length = find.length;
 	if (find.length > capacity) {
-		return WOZ_KV_INVALID;
+		return ULTRAWIDELOCK_KV_INVALID;
 	}
 	if (find.length != 0u &&
 	    read_at(s_active_page, find.offset, value, find.length) != 0) {
-		return WOZ_KV_IO;
+		return ULTRAWIDELOCK_KV_IO;
 	}
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
-int woz_freertos_kv_set(uint16_t key, const void *value, size_t length)
+int ultrawidelock_freertos_kv_set(uint16_t key, const void *value, size_t length)
 {
 	int rc;
 
-	if (key == WOZ_KV_KEY_NONE || length > WOZ_KV_VALUE_MAX ||
+	if (key == ULTRAWIDELOCK_KV_KEY_NONE || length > ULTRAWIDELOCK_KV_VALUE_MAX ||
 	    (length != 0u && value == NULL)) {
-		return WOZ_KV_INVALID;
+		return ULTRAWIDELOCK_KV_INVALID;
 	}
-	rc = woz_freertos_kv_init();
-	if (rc != WOZ_KV_OK) {
+	rc = ultrawidelock_freertos_kv_init();
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 
 	rc = append(key, value, (uint16_t)length);
-	if (rc != WOZ_KV_FULL) {
+	if (rc != ULTRAWIDELOCK_KV_FULL) {
 		return rc;
 	}
 
@@ -472,13 +472,13 @@ int woz_freertos_kv_set(uint16_t key, const void *value, size_t length)
 	 * only to be superseded again on the next line.
 	 */
 	rc = compact(key);
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 	return append(key, value, (uint16_t)length);
 }
 
-int woz_freertos_kv_delete(uint16_t key)
+int ultrawidelock_freertos_kv_delete(uint16_t key)
 {
 	struct find_context find;
 	uint32_t state = KV_STATE_DELETED;
@@ -486,11 +486,11 @@ int woz_freertos_kv_delete(uint16_t key)
 	unsigned struck = 0;
 	int rc;
 
-	if (key == WOZ_KV_KEY_NONE) {
-		return WOZ_KV_INVALID;
+	if (key == ULTRAWIDELOCK_KV_KEY_NONE) {
+		return ULTRAWIDELOCK_KV_INVALID;
 	}
-	rc = woz_freertos_kv_init();
-	if (rc != WOZ_KV_OK) {
+	rc = ultrawidelock_freertos_kv_init();
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
 
@@ -500,44 +500,44 @@ int woz_freertos_kv_delete(uint16_t key)
 	 */
 	for (;;) {
 		rc = find_record(key, &find);
-		if (rc == WOZ_KV_NOT_FOUND) {
+		if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 			break;
 		}
-		if (rc != WOZ_KV_OK) {
+		if (rc != ULTRAWIDELOCK_KV_OK) {
 			return rc;
 		}
 		header_offset = find.offset - KV_RECORD_HEADER_SIZE;
 		if (write_at(s_active_page,
 			     header_offset + offsetof(struct kv_record_header, state), &state,
 			     sizeof(state)) != 0) {
-			return WOZ_KV_IO;
+			return ULTRAWIDELOCK_KV_IO;
 		}
 		struck++;
 	}
 
-	return struck != 0u ? WOZ_KV_OK : WOZ_KV_NOT_FOUND;
+	return struck != 0u ? ULTRAWIDELOCK_KV_OK : ULTRAWIDELOCK_KV_NOT_FOUND;
 }
 
-int woz_freertos_kv_erase_all(void)
+int ultrawidelock_freertos_kv_erase_all(void)
 {
 	int rc;
 
 	rc = page_format(0, 1);
-	if (rc != WOZ_KV_OK) {
+	if (rc != ULTRAWIDELOCK_KV_OK) {
 		return rc;
 	}
-	if (woz_freertos_flash_erase(page_base(1), KV_PAGE_SIZE) != 0) {
-		return WOZ_KV_IO;
+	if (ultrawidelock_freertos_flash_erase(page_base(1), KV_PAGE_SIZE) != 0) {
+		return ULTRAWIDELOCK_KV_IO;
 	}
 
 	s_active_page = 0;
 	s_sequence = 1;
 	s_write_offset = KV_HEADER_SIZE;
 	s_mounted = true;
-	return WOZ_KV_OK;
+	return ULTRAWIDELOCK_KV_OK;
 }
 
-size_t woz_freertos_kv_free_bytes(void)
+size_t ultrawidelock_freertos_kv_free_bytes(void)
 {
 	if (!s_mounted) {
 		return 0;

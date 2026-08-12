@@ -11,7 +11,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #define KERNEL_TAG "kernel"
 
@@ -20,11 +20,11 @@
  * relies on is already broken, so continuing is not an option; the file and
  * line are the only useful thing left and they are logged before the reset.
  */
-void woz_freertos_config_assert(const char *file, unsigned line)
+void ultrawidelock_freertos_config_assert(const char *file, unsigned line)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, KERNEL_TAG, "assert at %s:%u",
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, KERNEL_TAG, "assert at %s:%u",
 			 file != NULL ? file : "?", line);
-	woz_freertos_fatal("FreeRTOS assertion failed");
+	ultrawidelock_freertos_fatal("FreeRTOS assertion failed");
 }
 
 /*
@@ -35,9 +35,9 @@ void woz_freertos_config_assert(const char *file, unsigned line)
 void vApplicationStackOverflowHook(TaskHandle_t task, char *name)
 {
 	(void)task;
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, KERNEL_TAG, "stack overflow in task %s",
-			 name != NULL ? name : "?");
-	woz_freertos_fatal("FreeRTOS stack overflow");
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, KERNEL_TAG,
+				   "stack overflow in task %s", name != NULL ? name : "?");
+	ultrawidelock_freertos_fatal("FreeRTOS stack overflow");
 }
 
 /*
@@ -47,7 +47,7 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char *name)
  */
 void vApplicationMallocFailedHook(void)
 {
-	woz_freertos_fatal("FreeRTOS heap exhausted");
+	ultrawidelock_freertos_fatal("FreeRTOS heap exhausted");
 }
 
 static StaticTask_t s_idle_tcb;

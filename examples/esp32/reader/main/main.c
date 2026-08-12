@@ -14,13 +14,13 @@
 
 #include <ultrawidelock/reader.h>
 #include <ultrawidelock/uwb.h>
-#include "woz_port.h" /* woz_uptime_ms for the reader status tick */
+#include "ultrawidelock_port.h" /* ultrawidelock_uptime_ms for the reader status tick */
 #include "app_shell.h"
-#if defined(CONFIG_WOZ_PRESENCE)
+#if defined(CONFIG_ULTRAWIDELOCK_PRESENCE)
 #include "presence_link.h"
 #endif
 
-static const char *TAG = "woz_esp32";
+static const char *TAG = "ultrawidelock_esp32";
 
 // Application entry point: brings up the DW3000 responder, the Aliro BLE reader,
 // and the interactive shell, then polls for ranging results.
@@ -56,7 +56,7 @@ void app_main(void)
 	ESP_LOGI(TAG, "ultrawidelock_reader_start() = %d %s", brc,
 		 brc == 0 ? "(Aliro reader up)" : "(reader bring-up FAILED)");
 
-#if defined(CONFIG_WOZ_PRESENCE)
+#if defined(CONFIG_ULTRAWIDELOCK_PRESENCE)
 	/* Additive: loads the device signing key; the shell below picks up the
 	 * `presence` command. Deliberately not a separate mode -- the same board
 	 * serves presence and stays provisionable over the same console. */
@@ -75,7 +75,7 @@ void app_main(void)
 		/* Same duty as the Matter lock's approach loop: release a held stale-Wallet
 		 * Secured once its window passes without a grant. Only presence_link drives
 		 * grants in this app, so only presence can ever arm one. */
-		ultrawidelock_reader_status_tick(woz_uptime_ms());
+		ultrawidelock_reader_status_tick(ultrawidelock_uptime_ms());
 
 		if (ultrawidelock_uwb_last_range_cm(&cm)) {
 			ESP_LOGI(TAG, "range: %d cm", (int)cm);

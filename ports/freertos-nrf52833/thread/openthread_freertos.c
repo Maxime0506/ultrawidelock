@@ -1,4 +1,4 @@
-#include "woz_freertos_openthread.h"
+#include "ultrawidelock_freertos_openthread.h"
 
 #include <stddef.h>
 
@@ -18,16 +18,16 @@
 #error "The OpenThread event pump requires configUSE_TASK_NOTIFICATIONS=1"
 #endif
 
-#ifndef WOZ_FREERTOS_OPENTHREAD_STACK_BYTES
-#define WOZ_FREERTOS_OPENTHREAD_STACK_BYTES 4096u
+#ifndef ULTRAWIDELOCK_FREERTOS_OPENTHREAD_STACK_BYTES
+#define ULTRAWIDELOCK_FREERTOS_OPENTHREAD_STACK_BYTES 4096u
 #endif
 
-#ifndef WOZ_FREERTOS_OPENTHREAD_TASK_PRIORITY
-#define WOZ_FREERTOS_OPENTHREAD_TASK_PRIORITY (tskIDLE_PRIORITY + 1u)
+#ifndef ULTRAWIDELOCK_FREERTOS_OPENTHREAD_TASK_PRIORITY
+#define ULTRAWIDELOCK_FREERTOS_OPENTHREAD_TASK_PRIORITY (tskIDLE_PRIORITY + 1u)
 #endif
 
 #define OT_STACK_WORDS                                                                    \
-	((WOZ_FREERTOS_OPENTHREAD_STACK_BYTES + sizeof(StackType_t) - 1u) / sizeof(StackType_t))
+	((ULTRAWIDELOCK_FREERTOS_OPENTHREAD_STACK_BYTES + sizeof(StackType_t) - 1u) / sizeof(StackType_t))
 
 static otInstance *s_instance;
 static TaskHandle_t s_task;
@@ -36,7 +36,7 @@ static StackType_t s_stack[OT_STACK_WORDS];
 static StaticSemaphore_t s_lock_storage;
 static SemaphoreHandle_t s_lock;
 
-void woz_freertos_openthread_lock(void)
+void ultrawidelock_freertos_openthread_lock(void)
 {
 	BaseType_t taken;
 
@@ -46,7 +46,7 @@ void woz_freertos_openthread_lock(void)
 	(void)taken;
 }
 
-void woz_freertos_openthread_unlock(void)
+void ultrawidelock_freertos_openthread_unlock(void)
 {
 	BaseType_t given;
 
@@ -56,7 +56,7 @@ void woz_freertos_openthread_unlock(void)
 	(void)given;
 }
 
-void woz_freertos_openthread_wake(void)
+void ultrawidelock_freertos_openthread_wake(void)
 {
 	TaskHandle_t task = s_task;
 
@@ -65,7 +65,7 @@ void woz_freertos_openthread_wake(void)
 	}
 }
 
-void woz_freertos_openthread_wake_from_isr(void)
+void ultrawidelock_freertos_openthread_wake_from_isr(void)
 {
 	BaseType_t wake = pdFALSE;
 	TaskHandle_t task = s_task;
@@ -80,7 +80,7 @@ void woz_freertos_openthread_wake_from_isr(void)
 void otTaskletsSignalPending(otInstance *instance)
 {
 	if (instance == s_instance) {
-		woz_freertos_openthread_wake();
+		ultrawidelock_freertos_openthread_wake();
 	}
 }
 
@@ -91,12 +91,12 @@ static void openthread_task(void *arg)
 	/* xTaskCreateStatic() can schedule this task before it returns to start(). */
 	s_task = xTaskGetCurrentTaskHandle();
 	for (;;) {
-		woz_freertos_openthread_lock();
+		ultrawidelock_freertos_openthread_lock();
 		do {
 			otTaskletsProcess(instance);
-			woz_freertos_openthread_process_drivers(instance);
+			ultrawidelock_freertos_openthread_process_drivers(instance);
 		} while (otTaskletsArePending(instance));
-		woz_freertos_openthread_unlock();
+		ultrawidelock_freertos_openthread_unlock();
 
 		/* Radio and alarm ISRs, driver callbacks, and tasklet signalling all
 		 * retain a notification if they race with this transition. */
@@ -104,7 +104,7 @@ static void openthread_task(void *arg)
 	}
 }
 
-int woz_freertos_openthread_start(otInstance *instance)
+int ultrawidelock_freertos_openthread_start(otInstance *instance)
 {
 	TaskHandle_t task;
 
@@ -122,7 +122,7 @@ int woz_freertos_openthread_start(otInstance *instance)
 
 	s_instance = instance;
 	task = xTaskCreateStatic(openthread_task, "openthread", OT_STACK_WORDS, instance,
-				 WOZ_FREERTOS_OPENTHREAD_TASK_PRIORITY, s_stack, &s_task_storage);
+				 ULTRAWIDELOCK_FREERTOS_OPENTHREAD_TASK_PRIORITY, s_stack, &s_task_storage);
 	if (task == NULL) {
 		s_instance = NULL;
 		s_lock = NULL;
@@ -132,7 +132,7 @@ int woz_freertos_openthread_start(otInstance *instance)
 	return 0;
 }
 
-otInstance *woz_freertos_openthread_instance(void)
+otInstance *ultrawidelock_freertos_openthread_instance(void)
 {
 	return s_instance;
 }

@@ -8,9 +8,9 @@
  * which on a lock means it works on the bench and fails in a hallway.
  *
  * This file exists because no other one can do the job. The 802.15.4 driver's
- * masks are in its private source tree, which only the woz_802154 layer has on
+ * masks are in its private source tree, which only the ultrawidelock_802154 layer has on
  * its include path; the DW3110's channel is in the UWB layer's board_pins.h.
- * A file compiled into woz_802154 that includes board_pins.h sees both, and
+ * A file compiled into ultrawidelock_802154 that includes board_pins.h sees both, and
  * nothing else in the image does.
  *
  * It has no code on purpose. The whole content is assertions, and it is in the

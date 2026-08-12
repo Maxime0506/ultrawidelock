@@ -13,7 +13,7 @@
  */
 #include <stdarg.h>
 
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include <openthread/platform/logging.h>
 
@@ -21,7 +21,7 @@
 
 void otPlatLog(otLogLevel level, otLogRegion region, const char *format, ...)
 {
-	enum woz_freertos_log_level mapped;
+	enum ultrawidelock_freertos_log_level mapped;
 	va_list args;
 
 	/* The region is the stack's own subsystem tag (MAC, MLE, ...). It is
@@ -33,21 +33,21 @@ void otPlatLog(otLogLevel level, otLogRegion region, const char *format, ...)
 	case OT_LOG_LEVEL_NONE:
 		return;
 	case OT_LOG_LEVEL_CRIT:
-		mapped = WOZ_FREERTOS_LOG_ERROR;
+		mapped = ULTRAWIDELOCK_FREERTOS_LOG_ERROR;
 		break;
 	case OT_LOG_LEVEL_WARN:
-		mapped = WOZ_FREERTOS_LOG_WARNING;
+		mapped = ULTRAWIDELOCK_FREERTOS_LOG_WARNING;
 		break;
 	case OT_LOG_LEVEL_NOTE:
 	case OT_LOG_LEVEL_INFO:
-		mapped = WOZ_FREERTOS_LOG_INFO;
+		mapped = ULTRAWIDELOCK_FREERTOS_LOG_INFO;
 		break;
 	default:
-		mapped = WOZ_FREERTOS_LOG_DEBUG;
+		mapped = ULTRAWIDELOCK_FREERTOS_LOG_DEBUG;
 		break;
 	}
 
 	va_start(args, format);
-	woz_freertos_log_va(mapped, OT_LOG_TAG, format, args);
+	ultrawidelock_freertos_log_va(mapped, OT_LOG_TAG, format, args);
 	va_end(args);
 }

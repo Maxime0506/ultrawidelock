@@ -1,10 +1,10 @@
-#include "woz_freertos_radio.h"
+#include "ultrawidelock_freertos_radio.h"
 
 #include <stddef.h>
 
-#include "woz_freertos_mpsl.h"
-#include "woz_freertos_nimble_sdc.h"
-#include "woz_freertos_platform.h"
+#include "ultrawidelock_freertos_mpsl.h"
+#include "ultrawidelock_freertos_nimble_sdc.h"
+#include "ultrawidelock_freertos_platform.h"
 
 #include <mpsl.h>
 #include <mpsl_clock.h>
@@ -19,14 +19,14 @@
  * TIMER0, and the CLOCK half of POWER_CLOCK at priority 0. SWI5_EGU5 carries
  * the MPSL low-priority signal and must stay callable from FreeRTOS.
  */
-#define WOZ_FREERTOS_RADIO_MPSL_IRQ_PRIORITY 0u
-#define WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY 4u
+#define ULTRAWIDELOCK_FREERTOS_RADIO_MPSL_IRQ_PRIORITY 0u
+#define ULTRAWIDELOCK_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY 4u
 
 /*
  * The one place both halves of the FromISR rule are visible at once.
  *
- * woz_freertos_radio_low_priority_isr runs at the priority above and calls
- * woz_freertos_mpsl_wake_from_isr, which is vTaskNotifyGiveFromISR followed by
+ * ultrawidelock_freertos_radio_low_priority_isr runs at the priority above and calls
+ * ultrawidelock_freertos_mpsl_wake_from_isr, which is vTaskNotifyGiveFromISR followed by
  * portYIELD_FROM_ISR. FreeRTOS permits that only from a handler at or
  * numerically below configMAX_SYSCALL_INTERRUPT_PRIORITY. Stating it here means
  * moving either number without the other is a build failure rather than an
@@ -37,7 +37,7 @@
  * board/FreeRTOSConfig.h, where those two numbers are the ones in view.
  */
 #if defined(configMAX_SYSCALL_INTERRUPT_PRIORITY)
-_Static_assert(WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY >=
+_Static_assert(ULTRAWIDELOCK_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY >=
 		       configMAX_SYSCALL_INTERRUPT_PRIORITY,
 	       "the MPSL low-priority handler calls FreeRTOS FromISR APIs and must not run "
 	       "above configMAX_SYSCALL_INTERRUPT_PRIORITY");
@@ -48,8 +48,8 @@ _Static_assert(WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY >=
  * is what the Zephyr oracle selects (Zephyr defaults nRF52 to
  * CLOCK_CONTROL_NRF_K32SRC_XTAL at 50 ppm and the board does not override it).
  */
-#ifndef WOZ_FREERTOS_RADIO_LFCLK_ACCURACY_PPM
-#define WOZ_FREERTOS_RADIO_LFCLK_ACCURACY_PPM 50u
+#ifndef ULTRAWIDELOCK_FREERTOS_RADIO_LFCLK_ACCURACY_PPM
+#define ULTRAWIDELOCK_FREERTOS_RADIO_LFCLK_ACCURACY_PPM 50u
 #endif
 
 /*
@@ -58,78 +58,78 @@ _Static_assert(WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY >=
  * pinned SDC_MEM_* macros. The pool keeps headroom for a controller update and
  * the start fails loudly if the controller ever asks for more.
  */
-#ifndef WOZ_FREERTOS_SDC_MEM_BYTES
-#define WOZ_FREERTOS_SDC_MEM_BYTES 4096u
+#ifndef ULTRAWIDELOCK_FREERTOS_SDC_MEM_BYTES
+#define ULTRAWIDELOCK_FREERTOS_SDC_MEM_BYTES 4096u
 #endif
 
-#ifndef WOZ_FREERTOS_SDC_TX_PACKET_SIZE
-#define WOZ_FREERTOS_SDC_TX_PACKET_SIZE 251u
+#ifndef ULTRAWIDELOCK_FREERTOS_SDC_TX_PACKET_SIZE
+#define ULTRAWIDELOCK_FREERTOS_SDC_TX_PACKET_SIZE 251u
 #endif
-#ifndef WOZ_FREERTOS_SDC_RX_PACKET_SIZE
-#define WOZ_FREERTOS_SDC_RX_PACKET_SIZE 251u
+#ifndef ULTRAWIDELOCK_FREERTOS_SDC_RX_PACKET_SIZE
+#define ULTRAWIDELOCK_FREERTOS_SDC_RX_PACKET_SIZE 251u
 #endif
-#ifndef WOZ_FREERTOS_SDC_TX_PACKET_COUNT
-#define WOZ_FREERTOS_SDC_TX_PACKET_COUNT 3u
+#ifndef ULTRAWIDELOCK_FREERTOS_SDC_TX_PACKET_COUNT
+#define ULTRAWIDELOCK_FREERTOS_SDC_TX_PACKET_COUNT 3u
 #endif
-#ifndef WOZ_FREERTOS_SDC_RX_PACKET_COUNT
-#define WOZ_FREERTOS_SDC_RX_PACKET_COUNT 3u
+#ifndef ULTRAWIDELOCK_FREERTOS_SDC_RX_PACKET_COUNT
+#define ULTRAWIDELOCK_FREERTOS_SDC_RX_PACKET_COUNT 3u
 #endif
 
-#define WOZ_FREERTOS_RADIO_TAG "radio"
+#define ULTRAWIDELOCK_FREERTOS_RADIO_TAG "radio"
 
-static uint8_t s_sdc_memory[WOZ_FREERTOS_SDC_MEM_BYTES] __attribute__((aligned(8)));
+static uint8_t s_sdc_memory[ULTRAWIDELOCK_FREERTOS_SDC_MEM_BYTES] __attribute__((aligned(8)));
 static uint32_t s_sdc_memory_used;
 static bool s_ready;
 
-void woz_freertos_radio_radio_isr(void)
+void ultrawidelock_freertos_radio_radio_isr(void)
 {
 	MPSL_IRQ_RADIO_Handler();
 }
 
-void woz_freertos_radio_rtc0_isr(void)
+void ultrawidelock_freertos_radio_rtc0_isr(void)
 {
 	MPSL_IRQ_RTC0_Handler();
 }
 
-void woz_freertos_radio_timer0_isr(void)
+void ultrawidelock_freertos_radio_timer0_isr(void)
 {
 	MPSL_IRQ_TIMER0_Handler();
 }
 
-void woz_freertos_radio_power_clock_isr(void)
+void ultrawidelock_freertos_radio_power_clock_isr(void)
 {
 	MPSL_IRQ_CLOCK_Handler();
 }
 
-void woz_freertos_radio_low_priority_isr(void)
+void ultrawidelock_freertos_radio_low_priority_isr(void)
 {
-	woz_freertos_mpsl_wake_from_isr();
+	ultrawidelock_freertos_mpsl_wake_from_isr();
 }
 
-bool woz_freertos_radio_ready(void)
+bool ultrawidelock_freertos_radio_ready(void)
 {
 	return s_ready;
 }
 
-uint32_t woz_freertos_radio_memory_used(void)
+uint32_t ultrawidelock_freertos_radio_memory_used(void)
 {
 	return s_sdc_memory_used;
 }
 
 static void mpsl_assert(const char *file, const uint32_t line)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_RADIO_TAG,
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_RADIO_TAG,
 			 "MPSL assert at %s:%u", file != NULL ? file : "?",
 			 (unsigned)line);
-	woz_freertos_fatal("mpsl assert");
+	ultrawidelock_freertos_fatal("mpsl assert");
 }
 
 static void sdc_fault(const char *file, const uint32_t line)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_RADIO_TAG,
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_RADIO_TAG,
 			 "SoftDevice Controller fault at %s:%u",
 			 file != NULL ? file : "?", (unsigned)line);
-	woz_freertos_fatal("sdc fault");
+	ultrawidelock_freertos_fatal("sdc fault");
 }
 
 /*
@@ -138,7 +138,7 @@ static void sdc_fault(const char *file, const uint32_t line)
  */
 static void sdc_host_signal(void)
 {
-	woz_freertos_nimble_sdc_wake();
+	ultrawidelock_freertos_nimble_sdc_wake();
 }
 
 /*
@@ -147,16 +147,16 @@ static void sdc_host_signal(void)
  */
 static void sdc_rand_poll(uint8_t *buffer, uint8_t length)
 {
-	if (woz_freertos_entropy(buffer, length) != 0) {
-		woz_freertos_fatal("sdc entropy");
+	if (ultrawidelock_freertos_entropy(buffer, length) != 0) {
+		ultrawidelock_freertos_fatal("sdc entropy");
 	}
 }
 
-static void transport_fault(enum woz_freertos_nimble_sdc_fault fault, int32_t detail)
+static void transport_fault(enum ultrawidelock_freertos_nimble_sdc_fault fault, int32_t detail)
 {
-	woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_RADIO_TAG,
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_RADIO_TAG,
 			 "HCI transport fault %d detail %d", (int)fault, (int)detail);
-	woz_freertos_fatal("hci transport");
+	ultrawidelock_freertos_fatal("hci transport");
 }
 
 /*
@@ -216,20 +216,20 @@ static int32_t apply_resource_cfg(void)
 		return rc;
 	}
 
-	cfg.buffer_cfg.tx_packet_size = WOZ_FREERTOS_SDC_TX_PACKET_SIZE;
-	cfg.buffer_cfg.rx_packet_size = WOZ_FREERTOS_SDC_RX_PACKET_SIZE;
-	cfg.buffer_cfg.tx_packet_count = WOZ_FREERTOS_SDC_TX_PACKET_COUNT;
-	cfg.buffer_cfg.rx_packet_count = WOZ_FREERTOS_SDC_RX_PACKET_COUNT;
+	cfg.buffer_cfg.tx_packet_size = ULTRAWIDELOCK_FREERTOS_SDC_TX_PACKET_SIZE;
+	cfg.buffer_cfg.rx_packet_size = ULTRAWIDELOCK_FREERTOS_SDC_RX_PACKET_SIZE;
+	cfg.buffer_cfg.tx_packet_count = ULTRAWIDELOCK_FREERTOS_SDC_TX_PACKET_COUNT;
+	cfg.buffer_cfg.rx_packet_count = ULTRAWIDELOCK_FREERTOS_SDC_RX_PACKET_COUNT;
 	return sdc_cfg_set(SDC_DEFAULT_RESOURCE_CFG_TAG, SDC_CFG_TYPE_BUFFER_CFG, &cfg);
 }
 
 static void set_interrupt_priorities(void)
 {
-	NVIC_SetPriority(RADIO_IRQn, WOZ_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
-	NVIC_SetPriority(RTC0_IRQn, WOZ_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
-	NVIC_SetPriority(TIMER0_IRQn, WOZ_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
-	NVIC_SetPriority(POWER_CLOCK_IRQn, WOZ_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
-	NVIC_SetPriority(SWI5_EGU5_IRQn, WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY);
+	NVIC_SetPriority(RADIO_IRQn, ULTRAWIDELOCK_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
+	NVIC_SetPriority(RTC0_IRQn, ULTRAWIDELOCK_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
+	NVIC_SetPriority(TIMER0_IRQn, ULTRAWIDELOCK_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
+	NVIC_SetPriority(POWER_CLOCK_IRQn, ULTRAWIDELOCK_FREERTOS_RADIO_MPSL_IRQ_PRIORITY);
+	NVIC_SetPriority(SWI5_EGU5_IRQn, ULTRAWIDELOCK_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY);
 }
 
 /* The oracle enables the MPSL vectors only after mpsl_init() returns, so a
@@ -243,24 +243,25 @@ static void enable_interrupts(void)
 	NVIC_EnableIRQ(SWI5_EGU5_IRQn);
 }
 
-int woz_freertos_radio_start(const struct woz_freertos_radio_dispatcher *dispatcher)
+int ultrawidelock_freertos_radio_start(
+	const struct ultrawidelock_freertos_radio_dispatcher *dispatcher)
 {
 	static const mpsl_clock_lfclk_cfg_t clock_cfg = {
 		.source = MPSL_CLOCK_LF_SRC_XTAL,
 		.rc_ctiv = 0,
 		.rc_temp_ctiv = 0,
-		.accuracy_ppm = WOZ_FREERTOS_RADIO_LFCLK_ACCURACY_PPM,
+		.accuracy_ppm = ULTRAWIDELOCK_FREERTOS_RADIO_LFCLK_ACCURACY_PPM,
 		.skip_wait_lfclk_started = false,
 	};
 	static const sdc_rand_source_t rand_source = {
 		.rand_poll = sdc_rand_poll,
 	};
-	struct woz_freertos_nimble_sdc_ops ops;
+	struct ultrawidelock_freertos_nimble_sdc_ops ops;
 	int32_t rc;
 
 	if (dispatcher == NULL || dispatcher->cmd_put == NULL ||
 	    dispatcher->msg_get == NULL) {
-		return -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_TRANSPORT;
 	}
 	if (s_ready) {
 		return 0;
@@ -269,35 +270,35 @@ int woz_freertos_radio_start(const struct woz_freertos_radio_dispatcher *dispatc
 	set_interrupt_priorities();
 
 	if (mpsl_init(&clock_cfg, SWI5_EGU5_IRQn, mpsl_assert) != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_MPSL_INIT;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_MPSL_INIT;
 	}
 	enable_interrupts();
-	if (woz_freertos_mpsl_start(mpsl_low_priority_process) != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_MPSL_WORKER;
+	if (ultrawidelock_freertos_mpsl_start(mpsl_low_priority_process) != 0) {
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_MPSL_WORKER;
 	}
 	if (sdc_init(sdc_fault) != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_SDC_INIT;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_INIT;
 	}
 	if (enable_supported_features() != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_SDC_SUPPORT;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_SUPPORT;
 	}
 
 	rc = apply_resource_cfg();
 	if (rc < 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_SDC_CFG;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_CFG;
 	}
 	if ((uint32_t)rc > sizeof(s_sdc_memory)) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_ERROR, WOZ_FREERTOS_RADIO_TAG,
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_RADIO_TAG,
 				 "SoftDevice Controller needs %u bytes, pool is %u",
 				 (unsigned)rc, (unsigned)sizeof(s_sdc_memory));
-		return -WOZ_FREERTOS_RADIO_STAGE_SDC_MEMORY;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_MEMORY;
 	}
 
 	if (sdc_rand_source_register(&rand_source) != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_SDC_RAND;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_RAND;
 	}
 	if (sdc_enable(sdc_host_signal, s_sdc_memory) != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_SDC_ENABLE;
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_SDC_ENABLE;
 	}
 
 	ops.cmd_put = dispatcher->cmd_put;
@@ -305,8 +306,8 @@ int woz_freertos_radio_start(const struct woz_freertos_radio_dispatcher *dispatc
 	ops.msg_get = dispatcher->msg_get;
 	ops.fault = transport_fault;
 	ops.no_data_error = -NRF_EAGAIN;
-	if (woz_freertos_nimble_sdc_configure(&ops) != 0) {
-		return -WOZ_FREERTOS_RADIO_STAGE_TRANSPORT;
+	if (ultrawidelock_freertos_nimble_sdc_configure(&ops) != 0) {
+		return -ULTRAWIDELOCK_FREERTOS_RADIO_STAGE_TRANSPORT;
 	}
 
 	s_sdc_memory_used = (uint32_t)rc;

@@ -5,7 +5,7 @@
 
 #include <string.h>
 
-#include <deca_device_api.h> /* woz_host_rx, dwt_cb_data_t, dwt_cb_t */
+#include <deca_device_api.h> /* ultrawidelock_host_rx, dwt_cb_data_t, dwt_cb_t */
 
 #include "ccc_shim.h"        /* ccc_shim_rx_try_prepoll */
 #include "fira_session.h"    /* fira_session_last_range */
@@ -17,20 +17,20 @@ static void load_regs(const struct fr_ev *e)
 {
 	uint16_t n = e->frame_len;
 
-	if (n > sizeof(woz_host_rx.rxdata)) {
-		n = (uint16_t)sizeof(woz_host_rx.rxdata);
+	if (n > sizeof(ultrawidelock_host_rx.rxdata)) {
+		n = (uint16_t)sizeof(ultrawidelock_host_rx.rxdata);
 	}
-	memset(woz_host_rx.rxdata, 0, sizeof(woz_host_rx.rxdata));
-	memcpy(woz_host_rx.rxdata, e->frame, n);
-	woz_host_rx.rxdata_len = (e->datalength > sizeof(woz_host_rx.rxdata))
-					 ? (uint16_t)sizeof(woz_host_rx.rxdata)
+	memset(ultrawidelock_host_rx.rxdata, 0, sizeof(ultrawidelock_host_rx.rxdata));
+	memcpy(ultrawidelock_host_rx.rxdata, e->frame, n);
+	ultrawidelock_host_rx.rxdata_len = (e->datalength > sizeof(ultrawidelock_host_rx.rxdata))
+					 ? (uint16_t)sizeof(ultrawidelock_host_rx.rxdata)
 					 : e->datalength;
-	woz_host_rx.rx_ts40 = e->rx_ts40;
-	woz_host_rx.tx_ts40 = e->tx_ts40;
-	woz_host_rx.systime = e->systime;
+	ultrawidelock_host_rx.rx_ts40 = e->rx_ts40;
+	ultrawidelock_host_rx.tx_ts40 = e->tx_ts40;
+	ultrawidelock_host_rx.systime = e->systime;
 	if (e->stsq_valid) {
-		woz_host_rx.stsq_ret = e->stsq_ret;
-		woz_host_rx.stsq_val = e->stsq_val;
+		ultrawidelock_host_rx.stsq_ret = e->stsq_ret;
+		ultrawidelock_host_rx.stsq_val = e->stsq_val;
 	}
 }
 
@@ -48,13 +48,13 @@ static void dispatch(const struct fr_ev *e)
 		ccc_shim_rx_try_prepoll(e->datalength);
 		break;
 	case FR_EP_RX_REARM:
-		if (woz_host_rx.cbs.cbRxOk != NULL) {
-			woz_host_rx.cbs.cbRxOk(&d);
+		if (ultrawidelock_host_rx.cbs.cbRxOk != NULL) {
+			ultrawidelock_host_rx.cbs.cbRxOk(&d);
 		}
 		break;
 	case FR_EP_TX_DONE:
-		if (woz_host_rx.cbs.cbTxDone != NULL) {
-			woz_host_rx.cbs.cbTxDone(&d);
+		if (ultrawidelock_host_rx.cbs.cbTxDone != NULL) {
+			ultrawidelock_host_rx.cbs.cbTxDone(&d);
 		}
 		break;
 	default:
@@ -65,10 +65,10 @@ static void dispatch(const struct fr_ev *e)
 static void snapshot(struct fr_output *o, uint8_t ep)
 {
 	o->ep = ep;
-	o->rxenable_calls = woz_host_rx.rxenable_calls;
-	o->last_rxenable_mode = woz_host_rx.last_rxenable_mode;
-	o->starttx_calls = woz_host_rx.starttx_calls;
-	o->forcetrxoff_calls = woz_host_rx.forcetrxoff_calls;
+	o->rxenable_calls = ultrawidelock_host_rx.rxenable_calls;
+	o->last_rxenable_mode = ultrawidelock_host_rx.last_rxenable_mode;
+	o->starttx_calls = ultrawidelock_host_rx.starttx_calls;
+	o->forcetrxoff_calls = ultrawidelock_host_rx.forcetrxoff_calls;
 }
 
 bool fr_replay_run(const uint8_t *trace, size_t len, struct fr_replay_result *out)
@@ -116,7 +116,7 @@ bool fr_replay_run(const uint8_t *trace, size_t len, struct fr_replay_result *ou
 			cfg.ranging_config = cfg_store.rc_len ? cfg_store.rc : NULL;
 			cfg.rc_len = cfg_store.rc_len;
 
-			woz_host_rx_reset();
+			ultrawidelock_host_rx_reset();
 			if (ultrawidelock_uwb_start_aliro(&cfg) != 0) {
 				out->err_at = idx;
 				return false;

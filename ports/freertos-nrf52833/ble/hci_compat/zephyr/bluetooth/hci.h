@@ -6,8 +6,8 @@
  * Bluetooth Core specification, so this shim carries no Zephyr behavior; it
  * exists so the dispatcher compiles unmodified and can be re-pinned by a copy.
  */
-#ifndef WOZ_HCI_COMPAT_BLUETOOTH_HCI_H
-#define WOZ_HCI_COMPAT_BLUETOOTH_HCI_H
+#ifndef ULTRAWIDELOCK_HCI_COMPAT_BLUETOOTH_HCI_H
+#define ULTRAWIDELOCK_HCI_COMPAT_BLUETOOTH_HCI_H
 
 /* errno and string arrive transitively through Zephyr's own hci.h, and the
  * dispatcher uses memset and -EINVAL without including either itself. */
@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "woz_hci_compat_util.h"
+#include "ultrawidelock_hci_compat_util.h"
 
 #ifndef __packed
 #define __packed __attribute__((__packed__))
@@ -66,4 +66,4 @@ struct bt_hci_evt_cmd_status {
 #define BT_HCI_ERR_UNKNOWN_CMD 0x01
 #define BT_HCI_ERR_CMD_DISALLOWED 0x0c
 
-#endif /* WOZ_HCI_COMPAT_BLUETOOTH_HCI_H */
+#endif /* ULTRAWIDELOCK_HCI_COMPAT_BLUETOOTH_HCI_H */

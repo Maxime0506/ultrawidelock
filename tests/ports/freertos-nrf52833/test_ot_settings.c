@@ -20,8 +20,8 @@
 
 #include "fake_flash.h"
 
-#include <woz_freertos_kv.h>
-#include <woz_freertos_platform.h>
+#include <ultrawidelock_freertos_kv.h>
+#include <ultrawidelock_freertos_platform.h>
 
 #include <openthread/dataset.h>
 #include <openthread/platform/settings.h>
@@ -40,7 +40,8 @@ static unsigned g_failures;
 		}                                                                                  \
 	} while (0)
 
-void woz_freertos_log(enum woz_freertos_log_level level, const char *tag, const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
+				const char *fmt, ...)
 {
 	(void)level;
 	(void)tag;
@@ -52,13 +53,13 @@ static otInstance g_instance;
 /* The record a native key owns, by the mapping the KV header documents. */
 static uint16_t kv_key_of(uint16_t ot_key)
 {
-	return (uint16_t)(WOZ_KV_KEY_OPENTHREAD_BASE + ot_key);
+	return (uint16_t)(ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE + ot_key);
 }
 
 /* Get one value and compare it whole: index, bytes, and reported length. */
 static bool value_is(uint16_t key, int index, const void *expect, uint16_t expect_length)
 {
-	uint8_t buffer[WOZ_KV_VALUE_MAX];
+	uint8_t buffer[ULTRAWIDELOCK_KV_VALUE_MAX];
 	uint16_t length = sizeof(buffer);
 
 	if (otPlatSettingsGet(&g_instance, key, index, buffer, &length) != OT_ERROR_NONE) {
@@ -202,8 +203,8 @@ static void scenario_multi_value(void)
 	      otPlatSettingsGet(&g_instance, OT_SETTINGS_KEY_CHILD_INFO, 0, NULL, NULL) ==
 		      OT_ERROR_NOT_FOUND);
 	CHECK("a fully deleted key holds no record",
-	      woz_freertos_kv_get(kv_key_of(OT_SETTINGS_KEY_CHILD_INFO), NULL, &(size_t){0}) ==
-		      WOZ_KV_NOT_FOUND);
+	      ultrawidelock_freertos_kv_get(kv_key_of(OT_SETTINGS_KEY_CHILD_INFO), NULL, &(size_t){0}) ==
+		      ULTRAWIDELOCK_KV_NOT_FOUND);
 
 	CHECK("an add after full deletion starts over",
 	      otPlatSettingsAdd(&g_instance, OT_SETTINGS_KEY_CHILD_INFO, child_b,
@@ -262,8 +263,8 @@ static void scenario_wipe(void)
 	otPlatSettingsInit(&g_instance, NULL, 0);
 
 	CHECK("the Aliro provisioning blob stores beside the settings",
-	      woz_freertos_kv_set(WOZ_KV_KEY_ALIRO_PROV, prov_blob, sizeof(prov_blob)) ==
-		      WOZ_KV_OK);
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, prov_blob,
+					    sizeof(prov_blob)) == ULTRAWIDELOCK_KV_OK);
 	CHECK("the settings to be wiped store",
 	      otPlatSettingsSet(&g_instance, OT_SETTINGS_KEY_ACTIVE_DATASET, dataset,
 				sizeof(dataset)) == OT_ERROR_NONE &&
@@ -302,9 +303,9 @@ static void scenario_wipe(void)
 	 */
 	length = sizeof(prov_read);
 	CHECK("the wipe leaves the Aliro provisioning blob byte-for-byte intact",
-	      woz_freertos_kv_get(WOZ_KV_KEY_ALIRO_PROV, prov_read, &length) == WOZ_KV_OK &&
-		      length == sizeof(prov_blob) &&
-		      memcmp(prov_read, prov_blob, length) == 0);
+	      ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, prov_read, &length) ==
+			      ULTRAWIDELOCK_KV_OK &&
+		      length == sizeof(prov_blob) && memcmp(prov_read, prov_blob, length) == 0);
 	CHECK("the wipe broke no flash rule", fake_flash_violations == 0);
 }
 
@@ -337,14 +338,15 @@ static void scenario_key_range(void)
 	 * not alias into the bottom of the window.
 	 */
 	CHECK("a refused vendor key stored nothing in the window",
-	      woz_freertos_kv_get(kv_key_of(0x0000), NULL, &length) == WOZ_KV_NOT_FOUND);
+	      ultrawidelock_freertos_kv_get(kv_key_of(0x0000), NULL, &length) ==
+		      ULTRAWIDELOCK_KV_NOT_FOUND);
 }
 
 /* The sizing this adapter promises at build time, exercised at the limits. */
 static void scenario_sizing(void)
 {
 	static uint8_t dataset[OT_OPERATIONAL_DATASET_MAX_LENGTH];
-	static uint8_t oversized[WOZ_KV_VALUE_MAX];
+	static uint8_t oversized[ULTRAWIDELOCK_KV_VALUE_MAX];
 	uint8_t child[20];
 	unsigned added = 0;
 	unsigned i;
@@ -376,7 +378,7 @@ static void scenario_sizing(void)
 	}
 	CHECK("a full record refuses another value with no buffers", rc == OT_ERROR_NO_BUFS);
 	CHECK("the refusal comes at the packed capacity",
-	      added == WOZ_KV_VALUE_MAX / (2u + sizeof(child)));
+	      added == ULTRAWIDELOCK_KV_VALUE_MAX / (2u + sizeof(child)));
 	CHECK("the values already added survive the refusal",
 	      value_is(OT_SETTINGS_KEY_CHILD_INFO, (int)added - 1, child, sizeof(child)));
 	CHECK("no value appeared beyond the last added",
@@ -387,7 +389,7 @@ static void scenario_sizing(void)
 	 * does not. The boundary itself, not just its neighbourhood. */
 	CHECK("an add that exactly fills the record succeeds",
 	      otPlatSettingsAdd(&g_instance, OT_SETTINGS_KEY_CHILD_INFO, dataset,
-				(uint16_t)(WOZ_KV_VALUE_MAX - added * (2u + sizeof(child)) -
+				(uint16_t)(ULTRAWIDELOCK_KV_VALUE_MAX - added * (2u + sizeof(child)) -
 					   2u)) == OT_ERROR_NONE);
 	CHECK("even an empty value is refused once the record is exactly full",
 	      otPlatSettingsAdd(&g_instance, OT_SETTINGS_KEY_CHILD_INFO, NULL, 0) ==
@@ -452,8 +454,8 @@ static void scenario_corrupt_tail(void)
 	otPlatSettingsInit(&g_instance, NULL, 0);
 
 	CHECK("a corrupt-tailed record plants",
-	      woz_freertos_kv_set(kv_key_of(OT_SETTINGS_KEY_CHILD_INFO), record,
-				  sizeof(record)) == WOZ_KV_OK);
+	      ultrawidelock_freertos_kv_set(kv_key_of(OT_SETTINGS_KEY_CHILD_INFO), record,
+				  sizeof(record)) == ULTRAWIDELOCK_KV_OK);
 
 	CHECK("the entry in front of the corruption still reads",
 	      value_is(OT_SETTINGS_KEY_CHILD_INFO, 0, "hello", 5));

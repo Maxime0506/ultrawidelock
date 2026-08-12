@@ -34,7 +34,7 @@ roles into a target build.
 Port implementations include the complete chipset contract:
 
 ```c
-#include <ultrawidelock/woz_hal.h>
+#include <ultrawidelock/ultrawidelock_hal.h>
 ```
 
 In framework builds the role headers are available in the same `ultrawidelock/`
@@ -115,10 +115,10 @@ Keep a new chipset's radio API inside its own engine the same way.
 The five HAL seams are not the complete contract for a new operating system.
 Before chipset work, implement the platform services declared by:
 
-- `woz_osal.h`
-- `woz_flash.h`
-- `woz_log.h`
-- `woz_port.h`
+- `ultrawidelock_osal.h`
+- `ultrawidelock_flash.h`
+- `ultrawidelock_log.h`
+- `ultrawidelock_port.h`
 
 Put that backend under one new `ports/<os>/` tree. Keep conditional operating
 system code out of `modules/`. Add a host compile or fake for each new contract

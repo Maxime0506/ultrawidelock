@@ -391,7 +391,7 @@ void test_pn532(void)
 
 	t_group("PN532 APDU transport adaptation");
 	{
-		struct woz_pn532_apdu_plan plan;
+		struct ultrawidelock_pn532_apdu_plan plan;
 		uint8_t wire[512];
 		size_t wire_len = 0;
 		bool more = false;
@@ -400,18 +400,18 @@ void test_pn532(void)
 			0x00, 0xa4, 0x04, 0x00, 0x02, 0x12, 0x34, 0x00,
 		};
 		T_EQ("plan SELECT passthrough",
-		     woz_pn532_apdu_plan_init(select, sizeof(select), &plan), 0);
+		     ultrawidelock_pn532_apdu_plan_init(select, sizeof(select), &plan), 0);
 		T_OK("SELECT not adapted", !plan.adapted);
-		T_EQ("emit SELECT", woz_pn532_apdu_plan_next(&plan, wire, sizeof(wire),
+		T_EQ("emit SELECT", ultrawidelock_pn532_apdu_plan_next(&plan, wire, sizeof(wire),
 			&wire_len, &more), 0);
 		T_OK("SELECT unchanged", !more && wire_len == sizeof(select) &&
 			memcmp(wire, select, sizeof(select)) == 0);
 
 		static const uint8_t get_short[] = { 0x00, 0xc0, 0x00, 0x00, 0x00 };
 		T_EQ("plan short GET RESPONSE",
-		     woz_pn532_apdu_plan_init(get_short, sizeof(get_short), &plan), 0);
+		     ultrawidelock_pn532_apdu_plan_init(get_short, sizeof(get_short), &plan), 0);
 		T_OK("short GET RESPONSE adapted", plan.adapted);
-		T_EQ("emit short GET RESPONSE", woz_pn532_apdu_plan_next(&plan, wire,
+		T_EQ("emit short GET RESPONSE", ultrawidelock_pn532_apdu_plan_next(&plan, wire,
 			sizeof(wire), &wire_len, &more), 0);
 		T_OK("short GET RESPONSE Le=240", wire_len == 5 && wire[4] == 0xf0);
 
@@ -419,9 +419,9 @@ void test_pn532(void)
 			0x00, 0xc0, 0x00, 0x00, 0x00, 0x0e, 0x00,
 		};
 		T_EQ("plan extended GET RESPONSE",
-		     woz_pn532_apdu_plan_init(get_extended, sizeof(get_extended), &plan), 0);
+		     ultrawidelock_pn532_apdu_plan_init(get_extended, sizeof(get_extended), &plan), 0);
 		T_OK("extended GET RESPONSE adapted", plan.adapted);
-		T_EQ("emit extended GET RESPONSE", woz_pn532_apdu_plan_next(&plan, wire,
+		T_EQ("emit extended GET RESPONSE", ultrawidelock_pn532_apdu_plan_next(&plan, wire,
 			sizeof(wire), &wire_len, &more), 0);
 		T_OK("extended GET RESPONSE Le=240", wire_len == 7 &&
 			wire[5] == 0x00 && wire[6] == 0xf0);
@@ -430,9 +430,9 @@ void test_pn532(void)
 			0x00, 0xc3, 0x00, 0x00, 0x04, 't', 'e', 's', 't', 0x00,
 		};
 		T_EQ("plan short ENVELOPE",
-		     woz_pn532_apdu_plan_init(short_envelope, sizeof(short_envelope), &plan), 0);
+		     ultrawidelock_pn532_apdu_plan_init(short_envelope, sizeof(short_envelope), &plan), 0);
 		T_OK("short ENVELOPE response adapted", plan.adapted);
-		T_EQ("emit short ENVELOPE", woz_pn532_apdu_plan_next(&plan, wire,
+		T_EQ("emit short ENVELOPE", ultrawidelock_pn532_apdu_plan_next(&plan, wire,
 			sizeof(wire), &wire_len, &more), 0);
 		T_OK("short ENVELOPE preserves data and clamps Le",
 			!more && wire_len == sizeof(short_envelope) &&
@@ -444,21 +444,21 @@ void test_pn532(void)
 		envelope[507] = 0x0e;
 		envelope[508] = 0x00;
 		T_EQ("plan large extended ENVELOPE",
-		     woz_pn532_apdu_plan_init(envelope, 509, &plan), 0);
+		     ultrawidelock_pn532_apdu_plan_init(envelope, 509, &plan), 0);
 		T_OK("large ENVELOPE adapted", plan.adapted);
 
-		T_EQ("emit ENVELOPE fragment 1", woz_pn532_apdu_plan_next(&plan, wire,
+		T_EQ("emit ENVELOPE fragment 1", ultrawidelock_pn532_apdu_plan_next(&plan, wire,
 			sizeof(wire), &wire_len, &more), 0);
 		T_OK("fragment 1 shape", more && wire_len == 238 && wire[0] == 0x10 &&
 			wire[4] == 0x00 && wire[5] == 0x00 && wire[6] == 0xe7 &&
 			memcmp(wire + 7, envelope + 7, 231) == 0);
 
-		T_EQ("emit ENVELOPE fragment 2", woz_pn532_apdu_plan_next(&plan, wire,
+		T_EQ("emit ENVELOPE fragment 2", ultrawidelock_pn532_apdu_plan_next(&plan, wire,
 			sizeof(wire), &wire_len, &more), 0);
 		T_OK("fragment 2 shape", more && wire_len == 238 && wire[0] == 0x10 &&
 			memcmp(wire + 7, envelope + 7 + 231, 231) == 0);
 
-		T_EQ("emit ENVELOPE fragment 3", woz_pn532_apdu_plan_next(&plan, wire,
+		T_EQ("emit ENVELOPE fragment 3", ultrawidelock_pn532_apdu_plan_next(&plan, wire,
 			sizeof(wire), &wire_len, &more), 0);
 		T_OK("fragment 3 shape", !more && wire_len == 47 && wire[0] == 0x00 &&
 			wire[4] == 0x00 && wire[5] == 0x00 && wire[6] == 0x26 &&

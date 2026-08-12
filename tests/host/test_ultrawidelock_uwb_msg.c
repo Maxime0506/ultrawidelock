@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <deca_device_api.h> /* woz_host_rx radio knobs */
+#include <deca_device_api.h> /* ultrawidelock_host_rx radio knobs */
 
 #include "ultrawidelock_uwb_internal.h"
 #include "ultrawidelock_uwb_msg.h"
@@ -738,7 +738,7 @@ void test_ultrawidelock_uwb_msg(void)
 
 	t_group("resume response: failed restart tears the session down");
 	s->state = RESUME_REQ_SENT;
-	woz_host_rx.radio_init_ret = -5; /* the UWB re-listen must fail */
+	ultrawidelock_host_rx.radio_init_ret = -5; /* the UWB re-listen must fail */
 	b = mk(ULTRAWIDELOCK_UWB_PROTOCOL_TYPE_UWB_RANGING_SERVICE,
 	       ULTRAWIDELOCK_UWB_MESSAGE_RESUME_RESPONSE);
 	ultrawidelock_uwb_msg_builder_add_u32(
@@ -749,7 +749,7 @@ void test_ultrawidelock_uwb_msg(void)
 	T_EQ("resume.startfail", ultrawidelock_uwb_msg_process_ranging(s, b.message),
 	     ULTRAWIDELOCK_UWB_ERR_SESSION_INIT);
 	ultrawidelock_uwb_msg_free(b.message);
-	woz_host_rx.radio_init_ret = 0;
+	ultrawidelock_host_rx.radio_init_ret = 0;
 	/* The close-on-error branch already freed s; only the adapter remains. */
 
 	if (g_tx.msg) {

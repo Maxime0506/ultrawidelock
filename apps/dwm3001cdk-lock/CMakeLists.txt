@@ -57,24 +57,24 @@ set(PORTZ "${REPO_ROOT}/ports/zephyr")
 # Reader-role source sets come from the role manifests (modules/ultrawidelock_cred/
 # roles/*.list) — the same lists the ESP32 components, the nRF5340 apps and the
 # host suite read, so each role's file set exists in exactly one place.
-include("${REPO_ROOT}/cmake/woz_roles.cmake")
-woz_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
-woz_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
-woz_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
-woz_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
-woz_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
-woz_role_sources("${ALIRO}/roles/dyntag.list" ULTRAWIDELOCK_DYNTAG_SRCS)
-woz_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
+include("${REPO_ROOT}/cmake/ultrawidelock_roles.cmake")
+ultrawidelock_role_sources("${ALIRO}/roles/reader.list" ULTRAWIDELOCK_READER_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/reader_policy.list" ULTRAWIDELOCK_POLICY_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/apdu.list" ULTRAWIDELOCK_APDU_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/crypto.list" ULTRAWIDELOCK_CRYPTO_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/hash.list" ULTRAWIDELOCK_HASH_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/dyntag.list" ULTRAWIDELOCK_DYNTAG_SRCS)
+ultrawidelock_role_sources("${ALIRO}/roles/ble_central.list" ULTRAWIDELOCK_BLE_CENTRAL_SRCS)
 
 target_sources(app PRIVATE
 	src/main.c
 	src/ml_feed.c
 	# Platform seams the reader engine links against, re-homed to ports/zephyr
 	# with the rest of the Zephyr glue. Listed by path rather than compiled by
-	# the woz_zephyr_port module because they are unconditional app glue with
+	# the ultrawidelock_zephyr_port module because they are unconditional app glue with
 	# no Kconfig gate to ride — this app IS the gate.
-	${PORTZ}/ble/aliro_ble_zephyr.c
-	${PORTZ}/store/aliro_prov_settings.c
+	${PORTZ}/ble/ultrawidelock_ble_zephyr.c
+	${PORTZ}/store/ultrawidelock_prov_settings.c
 	# Reader engine: roles reader + reader_policy + apdu + crypto + hash + dyntag.
 	${ULTRAWIDELOCK_READER_SRCS}
 	${ULTRAWIDELOCK_POLICY_SRCS}
@@ -89,7 +89,7 @@ target_sources_ifdef(CONFIG_ULTRAWIDELOCK_SIDE_GATE app PRIVATE src/side_feed.c)
 # every shipping image.
 target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
 # The DFU receiver's BLE transport (ports/zephyr/dfu/dfu_ble_zephyr.c) and the
-# rest of the gated Zephyr glue compile via the woz_zephyr_port module under
+# rest of the gated Zephyr glue compile via the ultrawidelock_zephyr_port module under
 # the same CONFIG symbols.
 # The board's only output. NOT gated on the DFU receiver any more: the update
 # window was the first thing worth showing, not the only one, and the `reader`
@@ -97,8 +97,8 @@ target_sources_ifdef(CONFIG_ALIRO_THREAD_GATE app PRIVATE src/thread_gate.c)
 target_sources_ifdef(CONFIG_ALIRO_STATUS_LED app PRIVATE src/status_led.c)
 target_sources_ifdef(CONFIG_ALIRO_CIRDIAG_CAPTURE app PRIVATE src/cirdiag_capture.c)
 target_sources_ifdef(CONFIG_ALIRO_CASE_BENCH app PRIVATE src/case_bench.c)
-# Initiator (User-Device role) transport: woz_zephyr_port compiles the central
-# mirror of aliro_ble_zephyr.c under this gate; the platform-free advert/READ
+# Initiator (User-Device role) transport: ultrawidelock_zephyr_port compiles the central
+# mirror of ultrawidelock_ble_zephyr.c under this gate; the platform-free advert/READ
 # decoder it calls is the same translation unit the ESP32 port and the host
 # suite compile.
 target_sources_ifdef(CONFIG_ALIRO_BLE_CENTRAL app PRIVATE ${ULTRAWIDELOCK_BLE_CENTRAL_SRCS})
@@ -120,7 +120,7 @@ target_sources_ifdef(CONFIG_ALIRO_MATTER_BLE app PRIVATE src/matter_commission.c
 if(CONFIG_ALIRO_HEAP_PROBE)
 	zephyr_compile_definitions(MBEDTLS_MEMORY_DEBUG)
 endif()
-# src for matter_commission.h (included by the re-homed aliro_ble_zephyr.c);
+# src for matter_commission.h (included by the re-homed ultrawidelock_ble_zephyr.c);
 # ${PORTZ}/{matter,store} for the re-homed matter_ble_zephyr.h and
 # matter_fab_settings.h, which main.c and matter_commission.c include
 # regardless of CONFIG_ALIRO_MATTER_BLE.

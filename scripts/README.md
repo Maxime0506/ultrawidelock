@@ -8,7 +8,7 @@ operations, and release workflows.
 | Setup and environment | `bootstrap.sh`, `toolchain.sh`, `check-signing-key.sh` |
 | DWM3001CDK operations | `cdk-dfu.sh`, `cdk-find-probe.sh`, `cdk-rtt-elf-check.sh` |
 | Firmware size | `cdk-size.py`, `cdk-size-compare.py`, `cdk-size-baseline.py` |
-| Delta update and SMP | `woz_patch.py`, `woz_push.py`, `woz_smp.py` |
+| Delta update and SMP | `ultrawidelock_patch.py`, `ultrawidelock_push.py`, `ultrawidelock_smp.py` |
 | Provisioning | `aliro-enroll.py`, `spake2p_verifier.py` |
 | Release and validation | `release-bundle.sh`, `hitl-run.sh`, `test-runner.sh` |
 
