@@ -33,6 +33,7 @@ matter-aliro-door-lock-app
 CONFIG_NCS_ALIRO_[A-Z0-9_]+
 CONFIG_DOOR_LOCK_ALIRO_[A-Z0-9_]+
 libaliro
+the Aliro add-on
 
 # --- Matter SDK: DoorLock cluster surface we implement or call ----------------
 kAliro[A-Za-z]*

@@ -1,4 +1,4 @@
-# west.yml — pin record + optional manifest for the aliro-nfc-uwb build.
+# west.yml — pin record + optional manifest for the UltraWideLock build.
 #
 # The public Nordic door-lock add-on (below) is itself a west manifest that
 # imports NCS (sdk-nrf v3.3.0) + Zephyr + all modules, so pulling it at this exact
@@ -19,7 +19,7 @@ manifest:
       url-base: https://github.com/nrfconnect
 
   projects:
-    # Nordic Aliro door-lock + access-control add-on (public). Its own west.yml
+    # Nordic door-lock + access-control add-on (public), the Aliro add-on. Its own west.yml
     # imports sdk-nrf v3.3.0 (+ zephyr + modules).
     - name: ncs-door-lock-and-access-control
       remote: nrfconnect
@@ -27,4 +27,4 @@ manifest:
       import: true
 
   self:
-    path: aliro-nfc-uwb
+    path: ultrawidelock

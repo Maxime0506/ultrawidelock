@@ -596,7 +596,7 @@ BUILD_FILES=(
 BRAND_RE='woz|aliro'
 BRAND_EXEMPT=(':!*size-baseline*.json' ':!tests/host/stackfake' ':!tests/host/nfcfake'
 	':!tests/host/ecpfake' ':!modules/ultrawidelock_dw3000/dwt_uwb_driver'
-	':!modules/ultrawidelock_dfu/src/detools' ':!west.yml'
+	':!modules/ultrawidelock_dfu/src/detools'
 	':!tests/tooling/brand_allowlist.txt'
 	# Both of these have to spell the banned names in order to ban them.
 	':!tests/tooling/port_purity_check.sh'
