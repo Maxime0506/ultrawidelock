@@ -10,7 +10,9 @@
 #   cd examples/esp32/reader && make flash       # same thing, via the forwarder
 #
 # No ESP-IDF or esp-matter version is pinned anywhere in the repo; the paths
-# below are the only thing this file fixes, and both are overridable.
+# below are the only thing this file fixes, and both are overridable. The bench
+# builds against ESP-IDF v5.5.4 and esp-matter 93b1680 — a record of what is
+# known to work, not a requirement the build enforces.
 
 APP     ?= matter-lock
 TARGET  ?= esp32s3

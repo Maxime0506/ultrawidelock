@@ -49,7 +49,20 @@ request a compatible series or add this repository with `add_subdirectory`;
 | [`apps/nrf5340dk-lock/`](apps/nrf5340dk-lock/) | nRF5340 DK, DWM3000EVB, NFC12A1 | Aliro UWB and NFC, Matter over Thread |
 | [`apps/esp32-matter-lock/`](apps/esp32-matter-lock/) | ESP32-S3, ESP32-C5, or ESP32-C6 with DWM3000EVB | Aliro UWB, Matter over Wi-Fi |
 
-Run `make help` for the complete command list. The shortest host-only check is:
+Run `make help` for the complete command list.
+
+### What this machine needs
+
+```sh
+make tools
+```
+
+That names every host tool, the targets each one gates, and what is installed
+here. The host suites need a C compiler and `python3`; `llvm-cov` and `cbmc`
+gate `make coverage` and `make cbmc`. Zephyr builds also need
+[nRF Util](https://www.nordicsemi.com/Products/Development-tools/nrf-util),
+which is what installs the NCS toolchain. Nothing beyond a compiler and
+`python3` is required to run:
 
 ```sh
 make check
@@ -64,8 +77,15 @@ make dfu-key
 make build
 ```
 
-ESP32 builds use an installed ESP-IDF environment. The Matter lock also needs
-esp-matter:
+`make bootstrap` is a large first run: roughly 2 GB for the NCS v3.3.0
+toolchain, once per machine, then a multi-GB `west update` into `./workspace`.
+Set `ALIRO_WS=/other/disk/ws` to put the workspace elsewhere. It is safe to
+re-run, and an interrupted fetch resumes rather than starting over.
+
+ESP32 builds use an installed ESP-IDF environment; the Matter lock also needs
+esp-matter. Neither is pinned by this repository, and both paths default under
+`$HOME/esp` (override with `IDF_EXPORT` and `ESP_MATTER_PATH`). The bench builds
+against ESP-IDF v5.5.4 and esp-matter `93b1680`.
 
 ```sh
 make esp-build APP=matter-lock TARGET=esp32s3

@@ -25,8 +25,18 @@ opens as you walk up or on a tap.
 | 8 jumper wires or a ribbon | NFC board to DK |
 | USB cable | power, flashing, serial console |
 
-Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor) and a
-Thread-capable Home hub (HomePod or Apple TV 4K) in the same home.
+Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor) and a way
+onto your Thread network. A Thread-capable Home hub (HomePod or Apple TV 4K) in
+the same home is the path we test, and the one to pick. A compatible third-party
+Thread border router also works. Since iOS 18 an iPhone 15 Pro or later can pair
+and control Thread accessories with no hub at all, but we have not verified this
+lock against that path.
+
+If you live with anyone, you want the hub. Without one Apple Home cannot share
+the home, and home keys reach other people only by being residents of your
+household, so you would be the only person who can unlock the door. A hub is also
+what gives you unlock notifications, remote lock and unlock, and automations like
+Lock When Leaving Home. Going hub-less is a single-occupant setup.
 
 ## 2. Install the tools
 
@@ -127,8 +137,8 @@ The boot log prints the Matter onboarding QR code URL and manual pairing code; R
 | No boot log | Wrong port among several; try the next, then press RESET |
 | No UWB device ID, or approach unlock dead | Power-select jumper (see Assemble) or unseated shield |
 | NFC tap does nothing | Re-check the 8-wire map, especially A2 to A5 |
-| Home cannot find the accessory | No Thread border router hub, Bluetooth off, or already commissioned (reflash to wipe) |
-| Commissioning fails near the end | Thread join: hub online, same home; remove the half-added accessory and retry |
+| Home cannot find the accessory | Nothing reaching your Thread network (see What you need), Bluetooth off, or already commissioned (reflash to wipe) |
+| Commissioning fails near the end | Thread join: hub or border router online, same home; remove the half-added accessory and retry |
 | No key in Wallet | Wait a few minutes; needs iOS 26+ and a UWB iPhone |
 
 More depth, wiring checks, and a radio self-test:
