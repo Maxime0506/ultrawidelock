@@ -416,11 +416,23 @@ What is linked, and what it costs, measured at the link rather than estimated:
 | crypto | Mbed TLS 3.6.6, libmbedcrypto sources only, PSA core on |
 | BLE | Apache NimBLE host, porting layer, and transport |
 | storage | MPSL-arbitrated NVMC, the key-value store, and the provisioning record |
+| UWB | the ranging engine, the vendored decadriver, and the DW3110 backends |
+| Thread | OpenThread as an MTD, built through its own CMake, plus the port's adapters |
 
 That image is 163,356 bytes of flash and 50,928 of RAM: 32 percent of the flash
-budget and 39 percent of the RAM one. OpenThread, the nRF 802.15.4 driver, UWB,
-and the application are not in it yet, and OpenThread is the largest of those by
-a wide margin.
+budget and 39 percent of the RAM one.
+
+Two of those layers compile but are not in that measurement, and the distinction
+matters. Nothing calls into UWB or OpenThread while the application is a
+skeleton, so `--gc-sections` drops both archives and the image links without a
+byte of either. A layer that compiles is a weaker claim than a layer that links,
+and the gap between them is where a call to a vendor function nobody supplies
+survives. `woz_uwb_link_check` closes that gap for UWB by forcing the whole
+archive in against the same libraries the product links; it bounds the engine at
+280,820 bytes of flash, which is an upper bound rather than a cost, since a
+responder that never initiates cannot reach all of the decadriver. OpenThread
+has no equivalent yet because it cannot link until the nRF 802.15.4 driver and
+Nordic's `radio_nrf5.c` arrive, which is the next and last layer.
 
 The RAM figure is the one that matters. The first link with the BLE host in it
 also found 3,480 bytes of isochronous transport buffers that upstream allocates
