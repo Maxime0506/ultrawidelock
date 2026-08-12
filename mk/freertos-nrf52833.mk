@@ -3,9 +3,19 @@
 # maintained upstream OpenThread and Nordic radio integration. The host port
 # test compiles the production OSAL and OpenThread runtime implementations.
 
-.PHONY: freertos-port-test freertos-platform-check freertos-radio-source-check freertos-ble-source-check freertos-crypto-source-check freertos-ncs-source-check freertos-build
+.PHONY: check-freertos freertos-port-test freertos-platform-check freertos-radio-source-check freertos-ble-source-check freertos-crypto-source-check freertos-ncs-source-check freertos-build
 
 ##@ DWM3001CDK FreeRTOS  ·  custom radio port in progress
+## check-freertos: every host suite plus the opt-in FreeRTOS port contract
+#
+# The FreeRTOS suite is deliberately outside `make check`. The port has no
+# hardware verdict yet -- no bring-up, no BLE/Thread coexistence proof, none of
+# the four release gates -- so an unfinished port cannot turn this repository
+# red. This target is how someone working on it runs everything at once.
+check-freertos:
+	@SUITES="firmware shared sdk drift seam scope purity freertos" \
+		$(REPO_ROOT)/scripts/test-runner.sh
+
 ## freertos-port-test: compile and run the standalone FreeRTOS port contract on the host
 freertos-port-test:
 	@$(REPO_ROOT)/tests/ports/freertos-nrf52833/run.sh
