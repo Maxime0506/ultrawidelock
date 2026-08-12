@@ -17,18 +17,28 @@ set -euo pipefail
 
 SIZE="$1" BASE="$2" FACADE="$3" RESP="$4" MAP="$5"
 
-# text+data occupies flash; bss does not.
+# text+data occupies flash; bss does not. Both are reported, and RAM is the
+# column to read first: this part has 512 KB of flash against 128 KB of RAM, the
+# Zephyr oracle carrying the same stack overflows RAM rather than flash, and
+# OpenThread and the 802.15.4 receive pool are still outside the image. A layer
+# that fits comfortably in flash can still be the one that costs the port its
+# margin.
 flash() { "$SIZE" "$1" | awk 'NR==2 {print $1 + $2}'; }
+ram() { "$SIZE" "$1" | awk 'NR==2 {print $3}'; }
 
 b=$(flash "$BASE")
 f=$(flash "$FACADE")
 r=$(flash "$RESP")
+bm=$(ram "$BASE")
+fm=$(ram "$FACADE")
+rm_=$(ram "$RESP")
 
 printf '\n  UWB reachable set (--gc-sections from named roots, not --whole-archive)\n\n'
-printf '    %-34s %8s %10s\n' "roots" "flash" "over floor"
-printf '    %-34s %8d %10s\n' "baseline, no UWB" "$b" "--"
-printf '    %-34s %8d %10d\n' "responder facade" "$f" "$((f - b))"
-printf '    %-34s %8d %10d\n' "facade + Aliro ranging setup" "$r" "$((r - b))"
+printf '    %-30s %8s %9s %8s %9s\n' "roots" "flash" "over" "RAM" "over"
+printf '    %-30s %8d %9s %8d %9s\n' "baseline, no UWB" "$b" "--" "$bm" "--"
+printf '    %-30s %8d %9d %8d %9d\n' "responder facade" "$f" "$((f - b))" "$fm" "$((fm - bm))"
+printf '    %-30s %8d %9d %8d %9d\n' "facade + Aliro ranging setup" "$r" "$((r - b))" "$rm_" \
+	"$((rm_ - bm))"
 
 # Attribute the responder link's flash bytes to the archive each input section
 # came from. The map lists every kept section with its size and origin, so the
