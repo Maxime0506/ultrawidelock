@@ -18,3 +18,16 @@ if(CONFIG_WOZ_NFC)
     target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/transport_none.cpp)
   endif()
 endif()
+
+# RFAL-path ECP (Apple Enhanced Contactless Polling) emitter. Implements the
+# RFAL proprietary-poll hook (NfcPropInit / NfcPropGetCallbacks) that the
+# add-on's subsys/nfc_prop declares, so a matching iPhone auto-presents its
+# Aliro pass (Express / no Face ID). Gated on the add-on's
+# CONFIG_DOOR_LOCK_NFC_PROP, independent of CONFIG_WOZ_NFC: the RFAL build
+# uses this hook without the transport seam. Compiles against the add-on's
+# RFAL, nfc_prop, reader_storage and aliro headers (global Zephyr include
+# dirs). transport_pn532.cpp emits the same frame on the PN532 path.
+if(CONFIG_DOOR_LOCK_NFC_PROP)
+  zephyr_library_named(woz_nfc_ecp)
+  zephyr_library_sources(${CMAKE_CURRENT_SOURCE_DIR}/src/nfc_prop_ecp.cpp)
+endif()

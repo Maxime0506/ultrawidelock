@@ -181,7 +181,7 @@ int main(void)
 	run_ticks(6);
 	now = nrf_802154_platform_sl_lptimer_current_lpticks_get();
 	CHECK("time keeps increasing across a counter wrap",
-	      now > before && now >= NRF_RTC_COUNTER_SPAN && now < NRF_RTC_COUNTER_SPAN + 16u);
+	      now > before && now >= FAKE_RTC_COUNTER_SPAN && now < FAKE_RTC_COUNTER_SPAN + 16u);
 
 	/*
 	 * The dangerous wrap is the one the interrupt has not caught up with:

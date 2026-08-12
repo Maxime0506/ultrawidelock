@@ -32,11 +32,19 @@ typedef uint32_t StackType_t;
 #define configUSE_TIMERS                   1
 #define configMAX_PRIORITIES               8
 /*
- * The board's ceiling, mirrored here so port sources that assert their vector
- * priority against it are checked by the host suite too. Four, because MPSL's
- * low-priority handler sits at 4 and calls a FreeRTOS FromISR API, and because
- * anything lower would put MPSL's own priority-0 handlers and the 802.15.4 SWI
- * at 1 under the scheduler's critical sections.
+ * The FromISR ceiling, carried over from board/FreeRTOSConfig.h so the static
+ * assertions that depend on it -- radio/radio_start_freertos.c's and
+ * uwb/dw3000_hw_freertos.c's -- are live in the host suite instead of waiting
+ * for those layers to join the target build graph. If the two files ever
+ * disagree the host suite is checking the wrong number, so this is a duplicate
+ * on purpose and not a default.
+ *
+ * Four is bounded on both sides. It must be at most 4 for MPSL's low-priority
+ * handler on SWI5_EGU5, which calls a FreeRTOS FromISR API from priority 4; and
+ * it must be above 1 so MPSL's own priority-0 handlers and the 802.15.4 SWI at
+ * 1 sit above the ceiling and are never masked by a scheduler critical section.
+ * The DW3110's GPIOTE vector takes the same 4, which is the most urgent level
+ * at which it may still notify its worker task.
  */
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY 4
 #define configASSERT(condition)             assert(condition)

@@ -23,6 +23,27 @@
 #define WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY 4u
 
 /*
+ * The one place both halves of the FromISR rule are visible at once.
+ *
+ * woz_freertos_radio_low_priority_isr runs at the priority above and calls
+ * woz_freertos_mpsl_wake_from_isr, which is vTaskNotifyGiveFromISR followed by
+ * portYIELD_FROM_ISR. FreeRTOS permits that only from a handler at or
+ * numerically below configMAX_SYSCALL_INTERRUPT_PRIORITY. Stating it here means
+ * moving either number without the other is a build failure rather than an
+ * assert on the bench, or worse, a race in a release build.
+ *
+ * The reverse bound -- that the ceiling stays above MPSL at 0 and nRF 802.15.4
+ * at 1, so no critical section can mask them -- is asserted in
+ * board/FreeRTOSConfig.h, where those two numbers are the ones in view.
+ */
+#if defined(configMAX_SYSCALL_INTERRUPT_PRIORITY)
+_Static_assert(WOZ_FREERTOS_RADIO_LOW_PRIORITY_IRQ_PRIORITY >=
+		       configMAX_SYSCALL_INTERRUPT_PRIORITY,
+	       "the MPSL low-priority handler calls FreeRTOS FromISR APIs and must not run "
+	       "above configMAX_SYSCALL_INTERRUPT_PRIORITY");
+#endif
+
+/*
  * The DWM3001CDK runs its low-frequency clock from the module crystal, which
  * is what the Zephyr oracle selects (Zephyr defaults nRF52 to
  * CLOCK_CONTROL_NRF_K32SRC_XTAL at 50 ppm and the board does not override it).

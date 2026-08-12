@@ -64,6 +64,14 @@ foreach(header_mapping IN LISTS ULTRAWIDELOCK_PACKAGE_HEADERS)
 		DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/ultrawidelock/${header_subdir}")
 endforeach()
 
+# Two installed seam headers (dw3000_hw.h, dw3000_spi.h) are ISC-scoped with no
+# inline notice, so the license texts must land in every install tree, at the
+# same relative paths THIRD_PARTY_NOTICES points to.
+install(FILES LICENSE THIRD_PARTY_NOTICES
+	DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/ultrawidelock")
+install(FILES modules/woz_dw3000/LICENSE.txt
+	DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/ultrawidelock/modules/woz_dw3000")
+
 add_library(ultrawidelock_tlv STATIC modules/woz_aliro/src/aliro_tlv.c)
 add_library(UltraWideLock::tlv ALIAS ultrawidelock_tlv)
 set_target_properties(ultrawidelock_tlv PROPERTIES

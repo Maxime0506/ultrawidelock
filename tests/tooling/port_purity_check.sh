@@ -37,7 +37,7 @@
 #                                    contract IS the add-on's workqueue
 #                                    (AliroWorkqueueSubmit takes a k_work), and
 #                                    it includes aliro/ + reader_storage headers
-#   woz_aliro_ecp/src/nfc_prop_ecp.cpp   same: grafts into the add-on's
+#   woz_nfc/src/nfc_prop_ecp.cpp     same: grafts into the add-on's
 #                                    subsys/nfc_prop, add-on headers included
 #   woz_uwb/include/woz_util.h    portable shim that defers to the Zephyr
 #                                    header under #ifdef __ZEPHYR__ and carries
@@ -129,7 +129,7 @@ PERMANENT_FILES=(
 	modules/woz_aliro_stack/src/aliro_stack.cpp
 	modules/woz_aliro_stack/src/session.cpp
 	modules/woz_nfc/src/transport_pn532.cpp
-	modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp
+	modules/woz_nfc/src/nfc_prop_ecp.cpp
 	modules/woz_uwb/include/woz_util.h
 )
 

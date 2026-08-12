@@ -49,7 +49,18 @@ const struct woz_freertos_radio_dispatcher *woz_freertos_radio_sdc_dispatcher(vo
  * contract used by NimBLE.
  *
  * Returns zero on success, or the negative @ref woz_freertos_radio_stage that
- * failed. Call it once, from a task, before ble_transport_init().
+ * failed. Call it once, before ble_transport_init().
+ *
+ * It must be called before vTaskStartScheduler(), not from a task, and that is
+ * a hard ordering rather than a preference. MPSL owns CLOCK and starts the
+ * low-frequency crystal inside mpsl_init(); RTC1 carries the FreeRTOS tick and
+ * counts from that same crystal. Starting the scheduler first would start it on
+ * a clock that is not running, which board/tick_freertos.c reports as a fatal
+ * rather than a hang, but which is still a board that never boots.
+ *
+ * Nothing here blocks on the scheduler. The MPSL worker task is created
+ * statically and the notifications its low-priority handler posts before the
+ * scheduler starts are latched and delivered when it does.
  */
 int woz_freertos_radio_start(const struct woz_freertos_radio_dispatcher *dispatcher);
 

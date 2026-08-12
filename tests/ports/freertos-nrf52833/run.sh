@@ -26,6 +26,22 @@ SPI_BIN="$OUT/freertos_dw3000_spi_test"
 HW_BIN="$OUT/freertos_dw3000_hw_test"
 
 mkdir -p "$OUT"
+
+# The FromISR ceiling is stated in two places -- the target configuration and
+# the host fake -- so that radio/radio_start_freertos.c's static assertion is
+# live on the host. A silent disagreement would leave the host suite checking a
+# number the firmware does not use, so they are compared here rather than
+# trusted.
+real_ceiling=$(sed -n 's/^#define configMAX_SYSCALL_INTERRUPT_PRIORITY[[:space:]]*\([0-9]*\).*/\1/p' \
+	"$ROOT/ports/freertos-nrf52833/board/FreeRTOSConfig.h")
+fake_ceiling=$(sed -n 's/^#define configMAX_SYSCALL_INTERRUPT_PRIORITY[[:space:]]*\([0-9]*\).*/\1/p' \
+	"$HERE/fake/FreeRTOS.h")
+if [ -z "$real_ceiling" ] || [ "$real_ceiling" != "$fake_ceiling" ]; then
+	printf 'freertos-port-test: configMAX_SYSCALL_INTERRUPT_PRIORITY disagrees: target=%s host=%s\n' \
+		"${real_ceiling:-unset}" "${fake_ceiling:-unset}" >&2
+	exit 1
+fi
+printf '  ok   the host FromISR ceiling matches board/FreeRTOSConfig.h (%s)\n' "$real_ceiling"
 "${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
 	-DWOZ_PORT_FREERTOS \
 	-I"$HERE/fake" \
@@ -330,3 +346,18 @@ mkdir -p "$OUT"
 # here instead. The self-test shows each check the defect it exists to catch.
 "$HERE/uwb_sources_check.sh"
 "$HERE/uwb_sources_check.sh" --self-test
+# The OpenThread settings adapter, over the real store: the property under test
+# is that a packed multi-value record survives rewriting and a reset, and only
+# the real store can be wrong about that. Scenarios fork for the same reason
+# the store's own do.
+OT_SETTINGS_BIN="$OUT/freertos_ot_settings_test"
+"${CC:-cc}" -std=c11 -O1 -Wall -Wextra -Werror \
+	-DWOZ_PORT_FREERTOS \
+	-I"$HERE/fake" \
+	-I"$ROOT/ports/freertos-nrf52833/include" \
+	"$HERE/test_ot_settings.c" \
+	"$HERE/fake/fake_flash.c" \
+	"$ROOT/ports/freertos-nrf52833/storage/kv_flash_freertos.c" \
+	"$ROOT/ports/freertos-nrf52833/thread/ot_settings_freertos.c" \
+	-o "$OT_SETTINGS_BIN"
+"$OT_SETTINGS_BIN"

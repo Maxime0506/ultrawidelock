@@ -50,9 +50,37 @@ freertos-ncs-source-check:
 	fi
 	@$(REPO_ROOT)/scripts/freertos-ncs-source-check.sh "$(NCS_WORKSPACE)"
 
-## freertos-build: gated until the custom target build graph is assembled
+# Where the target build looks for the three vendor trees. Each may be
+# overridden on the command line; the defaults assume the west workspace and the
+# extracted Qorvo SDK sit side by side, which is what bootstrap.sh produces.
+NCS_WORKSPACE ?= $(REPO_ROOT)/workspace
+QORVO_SDK_DIR ?= $(NCS_WORKSPACE)/qorvo-dw3-qm33-sdk-1.1.1
+NIMBLE_SOURCE ?= $(NCS_WORKSPACE)/mynewt-nimble
+FREERTOS_BUILD_DIR ?= $(REPO_ROOT)/build/freertos-nrf52833
+
+# The cross toolchain is looked up on PATH unless WOZ_ARM_TOOLCHAIN_DIR names a
+# bin directory, so a toolchain installed outside the system prefix can be used
+# without putting it on PATH for every other build.
+FREERTOS_CMAKE_ARGS = \
+	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
+	-DWOZ_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
+	-DWOZ_NCS_WORKSPACE=$(NCS_WORKSPACE) \
+	-DWOZ_NIMBLE_DIR=$(NIMBLE_SOURCE) \
+	-DCMAKE_BUILD_TYPE=MinSizeRel
+
+## freertos-build: build the nRF52833 target image and report its flash and RAM cost
 freertos-build:
-	@printf '  FreeRTOS target build is not assembled yet: custom OpenThread/radio integration is in progress.\n' >&2
-	@printf '  See internal/dwm3001cdk-freertos-platform-qualification.md for the selected architecture.\n' >&2
-	@printf '  Run make freertos-port-test for the implemented RTOS and OpenThread runtime.\n' >&2
-	@exit 2
+	@if [ ! -d "$(QORVO_SDK_DIR)" ]; then \
+		printf '  Extract the pinned Qorvo SDK to %s first, or set QORVO_SDK_DIR.\n' \
+			'$(QORVO_SDK_DIR)' >&2; \
+		printf '  Verify the archive with make freertos-platform-check QORVO_SDK_ARCHIVE=<zip>.\n' >&2; \
+		exit 2; \
+	fi
+	@if [ ! -d "$(NCS_WORKSPACE)/modules/hal/nordic/nrfx" ]; then \
+		printf '  Set NCS_WORKSPACE=<path-to-ncs-workspace>; %s has no nrfx.\n' \
+			'$(NCS_WORKSPACE)' >&2; \
+		exit 2; \
+	fi
+	@cmake -S $(REPO_ROOT)/apps/dwm3001cdk-lock-freertos -B $(FREERTOS_BUILD_DIR) \
+		-G Ninja $(FREERTOS_CMAKE_ARGS)
+	@cmake --build $(FREERTOS_BUILD_DIR)

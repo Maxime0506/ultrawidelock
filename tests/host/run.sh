@@ -89,7 +89,7 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$ROOT/modules/woz_uwb/include"
 "${CXX:-c++}" -std=c++17 -O1 -w $san_flags \
 	-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
 	-I"$HOSTD" -I"$HOSTD/ecpfake" \
-	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp" \
+	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_nfc/src/nfc_prop_ecp.cpp" \
 	"$OUT/test_harness_c.o" \
 	-o "$OUT/host_test_ecp"
 "$OUT/host_test_ecp"

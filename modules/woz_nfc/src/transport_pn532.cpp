@@ -8,7 +8,7 @@
  * same threading as with the upstream RFAL transport, and Send() stays
  * asynchronous: it hands the APDU to the thread and returns.
  *
- * The ECP frame layout mirrors modules/woz_aliro_ecp (the RFAL-path emitter):
+ * The ECP frame layout mirrors src/nfc_prop_ecp.cpp (the RFAL-path emitter):
  * 8-byte Aliro ECP v2 header, 8-byte provisioned reader identifier, CRC_A.
  * The PN532 cannot inject raw frames mid-discovery the way RFAL's proprietary
  * poll hook can, so the frame is broadcast with InCommunicateThru while the
@@ -45,7 +45,7 @@ constexpr size_t kApduBufferSize = 512;
 constexpr size_t kEcpFrameLen = 18;
 constexpr size_t kReaderIdLen = 8;
 /* ECP v2 header for the Aliro (Unified Access) profile — keep in sync with
- * modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp. */
+ * src/nfc_prop_ecp.cpp. */
 constexpr std::array<uint8_t, 8> kAliroEcpHeader = {0x6A, 0x02, 0xCB, 0x02, 0x06, 0x20, 0x42, 0x20};
 
 /* RFConfiguration fTimeout codes (timeout = 100 us * 2^(code - 1)). The ECP
