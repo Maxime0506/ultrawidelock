@@ -1,3 +1,0 @@
-name: woz_aliro_ecp
-build:
-  cmake: .

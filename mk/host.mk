@@ -1,7 +1,7 @@
 # mk/host.mk — everything that runs on this machine: the host suites. No NCS
 # toolchain, no ESP-IDF, no hardware. Output lands under build/host.
 
-.PHONY: test sdk-check test-san coverage cbmc check drift seam purity
+.PHONY: test sdk-check sdk-export test-san coverage cbmc check drift seam purity
 
 ##@ Test
 ## test: run the host test suite for our logic  (no NCS toolchain / hardware)
@@ -11,6 +11,10 @@ test:
 ## sdk-check: install the CMake package and build an external C consumer
 sdk-check:
 	@$(REPO_ROOT)/tests/sdk/run.sh
+
+## sdk-export: the hardware-agnostic SDK as a versioned tarball  ->  build/sdk-export
+sdk-export:
+	@$(REPO_ROOT)/scripts/sdk-export.sh
 
 ## test-san: host suite rebuilt under ASan + UBSan  ·  memory-bug gate
 test-san:

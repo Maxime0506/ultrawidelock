@@ -1,6 +1,6 @@
 /**
  * @file test_nfc_ecp.cpp — the Aliro NFC ECP emitter
- * (modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp) on host, over fake RFAL /
+ * (modules/woz_nfc/src/nfc_prop_ecp.cpp) on host, over fake RFAL /
  * reader-storage headers (tests/host/ecpfake/). Standalone g++ binary: the
  * source is C++ and its Nordic/ST dependencies are faked, so this pins the
  * frame layout (header || reader id || CRC_A), the CRC_A math against an
