@@ -705,6 +705,9 @@ set(WOZ_NRF5_NRFX "${WOZ_NRF5_SDK}/modules/nrfx")
 add_library(woz_usb STATIC
   # The pinned vendor stack, unmodified.
   "${WOZ_NRF5_NRFX}/drivers/src/nrfx_usbd.c"
+  # The exclusive-access atomics nrfx_usbd's endpoint bitmasks are built on.
+  # The pinned nrfx inlines these; this one does not, so the source is needed.
+  "${WOZ_NRF5_NRFX}/soc/nrfx_atomic.c"
   "${WOZ_NRF5_USBD}/app_usbd.c"
   "${WOZ_NRF5_USBD}/app_usbd_core.c"
   "${WOZ_NRF5_USBD}/app_usbd_string_desc.c"
@@ -717,6 +720,9 @@ add_library(woz_usb STATIC
   "${WOZ_NRF5_SDK}/components/libraries/util/app_util_platform.c"
   # This port's half.
   "${WOZ_PORT_DIR}/usb/usb_power_freertos.c"
+  "${WOZ_PORT_DIR}/usb/usb_cdc_freertos.c"
+  "${WOZ_PORT_DIR}/usb/prov_console_freertos.c"
+  "${WOZ_PORT_DIR}/usb/sdk_error_freertos.c"
 )
 target_include_directories(woz_usb PUBLIC
   # First, so the three compat headers shadow the SDK's own.
@@ -764,11 +770,14 @@ target_include_directories(woz_usb PRIVATE
 )
 # woz_radio for the MPSL clock and the POWER vector fan-out; woz_board for the
 # logger and the device headers underneath both.
-target_link_libraries(woz_usb PUBLIC woz_board woz_radio)
+# woz_aliro for the provisioning console, which reads and writes the same
+# identity the reader does -- through aliro_prov_* and the reader's own commit
+# path, never through a second copy of that logic.
+target_link_libraries(woz_usb PUBLIC woz_board woz_radio woz_aliro)
 
 add_library(woz_freertos_port INTERFACE)
 target_link_libraries(woz_freertos_port INTERFACE
-  woz_storage woz_uwb woz_thread woz_aliro woz_dfu)
+  woz_storage woz_uwb woz_thread woz_aliro woz_dfu woz_usb)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.

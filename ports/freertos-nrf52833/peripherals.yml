@@ -12,6 +12,7 @@ interrupts:
   RTC1: { priority: 15, owner: freertos_tick }
   RTC2: { priority: 1, owner: nrf_802154_low_power_timer }
   GPIOTE: { priority: 4, owner: dw3000_irq }
+  USBD:   { priority: 6, owner: usb_provisioning_console }
   SPIM3: { priority: 5, owner: dw3000_spi, enabled: false }
 
 peripherals:
@@ -28,6 +29,7 @@ peripherals:
   TEMP: mpsl
   SPIM3: dw3000_spi
   GPIOTE: dw3000_irq
+  USBD: usb_provisioning_console
 
 handoffs:
   - Remove Qorvo app_timer from RTC2; delayable work is owned by the FreeRTOS OSAL.
@@ -54,6 +56,25 @@ handoffs:
     5 records where it would have to land if a later change ever routes it: at
     or below the FreeRTOS syscall ceiling of 4, so the handler is allowed to
     call an RTOS API, and never inside the 0-3 band that belongs to the radio.
+  - USBD belongs to the provisioning console and to nothing else. It is the one
+    nrfx DRIVER this image compiles, because the register sequence for USB
+    device mode is long and errata-laden and Nordic's driver is the reference
+    implementation of it. Priority 6 is below MPSL and below the FreeRTOS
+    syscall ceiling: USB is the only peripheral here with no deadline, since the
+    host retries a NAKed packet and the thing on the other end is a person
+    typing. It is enabled only when SW2 is held through reset, so an operational
+    boot pays the flash and never runs a USB interrupt.
+  - The USB supply events -- USBDETECTED, USBREMOVED, USBPWRRDY -- arrive on
+    POWER_CLOCK, which is MPSL's. MPSL neither reads nor clears them, so
+    radio/radio_start_freertos.c calls MPSL's handler first and then a
+    registered POWER handler. That handler runs at priority 0 and may call no
+    FreeRTOS API; usb/usb_power_freertos.c states why the event queue it feeds
+    is still correct across the two priorities.
+  - GPIOTE is TWO channels, not one. Channel 0 is the DW3110 interrupt line and
+    channel 1 is SW2; board/gpiote_freertos.c owns the vector and fans it out,
+    because a vector cannot have two definitions. Both are reserved in
+    board/nrfx_config/nrfx_config.h and asserted disjoint in
+    radio/peripheral_asserts_freertos.c.
   - GPIOTE is the DW3110 interrupt line, P1.02, at priority 4. That is the most
     urgent level at which a handler may still call vTaskNotifyGiveFromISR, and
     this handler must: dwt_isr does SPI, so the vector can only wake a task and

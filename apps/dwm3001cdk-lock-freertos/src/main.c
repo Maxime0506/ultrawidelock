@@ -20,7 +20,10 @@
  * far enough to log the reason and reset is more useful than coming up far
  * enough to look healthy.
  */
+#include <stdbool.h>
 #include <stdint.h>
+
+#include <hal/nrf_gpio.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -30,8 +33,10 @@
 
 #include <openthread/instance.h>
 
+#include <woz_freertos_board.h>
 #include <woz_freertos_crypto.h>
 #include <woz_freertos_dfu.h>
+#include <woz_freertos_usb.h>
 #include <woz_freertos_nimble_host.h>
 #include <woz_freertos_openthread.h>
 #include <woz_freertos_platform.h>
@@ -47,6 +52,9 @@
  */
 static struct aliro_reader_identity s_identity;
 static struct aliro_trust_store s_trust;
+
+/* Latched in main() from SW2 before the scheduler starts; see the note there. */
+static bool s_prov_mode;
 
 static StaticTask_t s_boot_tcb;
 static StackType_t s_boot_stack[512];
@@ -82,6 +90,38 @@ static void boot_task(void *arg)
 	if (aliro_prov_load(&s_identity, &s_trust) != 0) {
 		woz_freertos_log(WOZ_FREERTOS_LOG_WARNING, MAIN_TAG,
 				 "no stored identity; running on the development one");
+	}
+
+	/*
+	 * Provisioning mode: SW2 held through reset.
+	 *
+	 * Sampled in main() before the scheduler, latched into s_prov_mode, and
+	 * acted on here -- because this is where the store is up and where a
+	 * task exists to block on a serial port.
+	 *
+	 * NOTHING GOES ON AIR on this path, and it does not return. An operator
+	 * typing an identity into a lock that is also advertising it is the one
+	 * situation where the half-written state is reachable from outside the
+	 * board; refusing to be a lock at all while being provisioned removes the
+	 * question. The way out is a reset without the button, which is also how
+	 * the operator confirms the import took.
+	 *
+	 * ONE HONEST DIFFERENCE from the Zephyr image, whose provisioning mode
+	 * starts no radio at all: MPSL is already running by the time this line
+	 * is reached, because main() starts it before the scheduler and because
+	 * USB needs the crystal that MPSL arbitrates. MPSL by itself transmits
+	 * nothing -- the controller is never told to advertise, the 802.15.4
+	 * driver and the DW3110 are never started, and the Aliro reader never
+	 * runs. What the two images share is the property that matters: in
+	 * provisioning mode the board is not reachable over any radio.
+	 */
+	if (s_prov_mode) {
+		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG,
+				 "provisioning mode: radios stay down, console on USB");
+		if (woz_freertos_usb_start() != 0) {
+			woz_freertos_fatal("provisioning console unavailable");
+		}
+		woz_freertos_prov_console_run();
 	}
 
 	/*
@@ -192,6 +232,25 @@ int main(void)
 	 * needs no scheduler and no radio.
 	 */
 	(void)woz_freertos_crypto_init();
+
+	/*
+	 * SW2, sampled here because "held through reset" can only be asked once
+	 * and this is the first place that can ask it.
+	 *
+	 * Read before anything else claims a peripheral, and latched rather than
+	 * re-read later: by the time the boot task runs, an operator who let go
+	 * of the button would look like one who never pressed it.
+	 *
+	 * The pin has the module's pull-up and the switch shorts it to ground, so
+	 * pressed reads low. The delay is for the pull-up to charge the pin
+	 * capacitance after the input buffer is enabled -- without it the first
+	 * read can return the floating level, which is a factory reset nobody
+	 * asked for on the Zephyr image and a provisioning console nobody asked
+	 * for here.
+	 */
+	nrf_gpio_cfg_input(WOZ_FREERTOS_PIN_SW2, NRF_GPIO_PIN_PULLUP);
+	woz_freertos_busy_wait_us(100);
+	s_prov_mode = (nrf_gpio_pin_read(WOZ_FREERTOS_PIN_SW2) == 0u);
 
 	err = woz_freertos_radio_start(woz_freertos_radio_sdc_dispatcher());
 	if (err != 0) {
