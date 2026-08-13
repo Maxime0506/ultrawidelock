@@ -45,13 +45,50 @@ fail=0
 # that a specifier hidden inside a commented-out call goes unreported -- and
 # commented-out code cannot fault either.
 scan() { # <dir>
-	grep -rInE "$PATTERN" --include='*.c' --include='*.h' "$1" 2>/dev/null |
-		grep -vE '^[^:]*:[0-9]+:[[:space:]]*(\*|//|/\*)' || true
+	local out rc
+	# grep exits 0 with matches, 1 with none, and >1 on a real error. The
+	# last was previously swallowed by `|| true` and reported as a clean
+	# scan, so an unreadable tree passed the build.
+	out="$(grep -rInE "$PATTERN" --include='*.c' --include='*.h' "$1")" || rc=$?
+	rc=${rc:-0}
+	if [ "$rc" -gt 1 ]; then
+		printf '  FAIL grep failed (exit %s) scanning %s\n' "$rc" "$1" >&2
+		exit 1
+	fi
+	printf '%s' "$out" | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(\*|//|/\*)' || true
 }
+
+# A SELECTOR THAT MATCHES NOTHING MUST NOT READ AS A CLEAN SCAN.
+#
+# These paths were hand-written, and the previous version skipped any that did
+# not exist. Rename or move a tree and this check keeps printing "no unsupported
+# formats" -- about a directory it never opened. That is worse than the drift it
+# guards against, because the drift at least needs someone to forget, whereas a
+# rename breaks the selector in the same commit that makes the check matter.
+#
+# Existing is not enough either: a directory can survive a move with its sources
+# gone. So each root has to yield at least one file of the kind being scanned
+# before its result counts as evidence of anything.
+for dir in "${OWNED[@]}" "$SHARED"; do
+	if [ ! -d "$dir" ]; then
+		printf '  FAIL no such tree: %s\n' "${dir#"$ROOT"/}" >&2
+		printf '        This check names its own scan roots. One has moved, and a\n' >&2
+		printf '        root that is not there cannot be scanned clean. Update the\n' >&2
+		printf '        OWNED array in %s.\n' "${0#"$ROOT"/}" >&2
+		exit 1
+	fi
+	# -print -quit, not `| head -1`: under `set -o pipefail` the head closes
+	# the pipe, find dies of SIGPIPE, and the whole check exits 141 without
+	# printing anything.
+	n="$(find "$dir" \( -name '*.c' -o -name '*.h' \) -print -quit)"
+	if [ -z "$n" ]; then
+		printf '  FAIL tree has no C sources to scan: %s\n' "${dir#"$ROOT"/}" >&2
+		exit 1
+	fi
+done
 
 owned_hits=""
 for dir in "${OWNED[@]}"; do
-	[ -d "$dir" ] || continue
 	hits="$(scan "$dir")"
 	[ -n "$hits" ] && owned_hits="${owned_hits}${hits}"$'\n'
 done
@@ -65,13 +102,14 @@ if [ -n "${owned_hits//[$'\n']/}" ]; then
 	fail=1
 fi
 
-if [ -d "$SHARED" ]; then
-	shared_hits="$(scan "$SHARED" | wc -l | tr -d ' ')"
-	if [ "$shared_hits" != "0" ]; then
-		printf '  note: %s such formats in shared modules/, correct on Zephyr and\n' \
-			"$shared_hits"
-		printf '        ESP-IDF. They are a hazard only where linked into this image.\n'
-	fi
+# $SHARED is proven to exist and to hold sources by the loop above, so this is
+# unconditional now. It used to be guarded by `[ -d "$SHARED" ]`, which meant a
+# moved modules/ made the advisory disappear rather than complain.
+shared_hits="$(scan "$SHARED" | wc -l | tr -d ' ')"
+if [ "$shared_hits" != "0" ]; then
+	printf '  note: %s such formats in shared modules/, correct on Zephyr and\n' \
+		"$shared_hits"
+	printf '        ESP-IDF. They are a hazard only where linked into this image.\n'
 fi
 
 if [ "$fail" -eq 0 ]; then
