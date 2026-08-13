@@ -117,3 +117,9 @@ freertos-build:
 	@WOZ_ARM_TOOLCHAIN_DIR=$(WOZ_ARM_TOOLCHAIN_DIR) \
 		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
 		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf
+	@# newlib-nano's printf does not implement ll. A format it cannot honour
+	@# consumes the wrong argument width, so the next %s dereferences a data
+	@# value -- a bus fault into default_handler, which spins and takes the
+	@# tick with it. The board then prints a complete boot log and goes
+	@# silent, which is why this is a build failure and not a review item.
+	@$(REPO_ROOT)/scripts/freertos-printf-check.sh

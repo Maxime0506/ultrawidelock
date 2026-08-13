@@ -54,4 +54,22 @@ int woz_freertos_gpiote_add_handler(woz_freertos_gpiote_handler fn);
 #define WOZ_FREERTOS_PIN_SW2 2u
 #define WOZ_FREERTOS_SW2_GPIOTE_CHANNEL 1u
 
+/*
+ * The four board LEDs, from the Zephyr board file's leds node
+ * (zephyr/boards/qorvo/decawave_dwm3001cdk): led0 D9 green on P0.04, led1 D12
+ * red on P0.14, led2 D11 red on P0.22, led3 D10 blue on P0.05.
+ *
+ * ALL FOUR ARE ACTIVE LOW, and unlike the Zephyr side nothing here inverts for
+ * you. There the GPIO_ACTIVE_LOW flag lives in the devicetree and
+ * gpio_pin_set_dt() takes the logical level; this port has no devicetree, so
+ * the inversion is written out once in the display and nowhere else.
+ *
+ * D13 belongs to the DW3110's tx/rx indication and D20 to the J-Link OB, so
+ * neither is ours to drive.
+ */
+#define WOZ_FREERTOS_PIN_LED_LOCK 4u   /* D9 green */
+#define WOZ_FREERTOS_PIN_LED_ATTN 14u  /* D12 red */
+#define WOZ_FREERTOS_PIN_LED_RADIO 22u /* D11 red */
+#define WOZ_FREERTOS_PIN_LED_WINDOW 5u /* D10 blue */
+
 #endif /* WOZ_FREERTOS_BOARD_H */

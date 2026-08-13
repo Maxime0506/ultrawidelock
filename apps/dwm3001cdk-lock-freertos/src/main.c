@@ -43,8 +43,29 @@
 #include <woz_freertos_kv.h>
 #include <woz_freertos_radio.h>
 #include <woz_freertos_uwb.h>
+#include <ultrawidelock/uwb.h>
+
+#include "status_led.h"
 
 #define MAIN_TAG "main"
+
+/*
+ * How long one accepted range keeps D11 at the ranging rate. It outlives one
+ * round at every rate iOS uses, so a walk-up shows as a steady 4 Hz rather
+ * than a stutter, and it drops back to the 1 Hz session light about a second
+ * after the phone stops ranging -- which a still phone does, with the session
+ * still up. The Zephyr image uses the same number for the same reason.
+ */
+#define LED_RANGE_HOLD_MS 1000
+
+/*
+ * How often the run loop samples what the LEDs report, and how many of those
+ * samples make up one status log line. The display is the reason the loop is
+ * this fast: 250 ms is inside LED_RANGE_HOLD_MS, so a walk-up cannot start and
+ * finish between two samples. The log stays at its old one-a-second.
+ */
+#define RUN_POLL_MS 250
+#define RUN_LOG_EVERY 4
 
 /*
  * The reader identity and its trust store, static because they outlive the
@@ -64,12 +85,104 @@ static StackType_t s_boot_stack[512];
  * to schedule and so the tick can be watched advancing on the bench before any
  * of the BLE, UWB, or Aliro layers are trusted.
  */
+/*
+ * What the board does once it is a lock: report itself, forever.
+ *
+ * Two of the four lamps are driven from here because only here are both facts
+ * available at once -- whether a phone is in a session, and whether ranges are
+ * currently landing. The other two are driven by whoever owns their fact:
+ * D10's window follows the DFU receiver's own callback, and D9 and D12 follow
+ * provisioning mode and a failed start.
+ *
+ * TWO SIGNALS ARE NOT ASSERTED YET, and their absence is a gap rather than a
+ * decision. STATUS_LED_UNLOCKED needs the grant path the Zephyr image's reader
+ * loop carries (approach vetoes, side decisions, passive-unlock revocation),
+ * none of which is ported. STATUS_LED_UNCOMMISSIONED needs a Matter fabric to
+ * ask about, and no Matter image fits an nRF52833 -- which is the whole reason
+ * this board adopts a credential over the USB console instead. So on this
+ * image D9 shows the heartbeat and D12 stays dark unless something failed.
+ */
+static void run_loop(void)
+{
+	uint32_t last_gen = woz_uwb_range_generation();
+	int64_t last_range_us = 0;
+	unsigned poll = 0;
+
+	for (;;) {
+		int64_t now_us = woz_freertos_uptime_us();
+		uint32_t gen = woz_uwb_range_generation();
+		bool ranging;
+
+		if (gen != last_gen) {
+			last_gen = gen;
+			last_range_us = now_us;
+		}
+		/*
+		 * The != 0 is not redundant: uptime is a few tens of ms when
+		 * this loop first runs, so without it every board would report
+		 * ranging for its first second.
+		 */
+		ranging = last_range_us != 0 &&
+			  (now_us - last_range_us) < ((int64_t)LED_RANGE_HOLD_MS * 1000);
+
+		status_led_signal(STATUS_LED_RANGING, ranging);
+		status_led_signal(STATUS_LED_SESSION, aliro_reader_session_active());
+
+		if (++poll >= RUN_LOG_EVERY) {
+			/*
+			 * Seconds and milliseconds as two 32-bit values, NOT one
+			 * %lld.
+			 *
+			 * This image links newlib-nano, whose printf does not
+			 * implement the ll length modifier. It does not print
+			 * something wrong and carry on: it consumes the wrong
+			 * number of bytes, so the %s that follows takes the
+			 * uptime's low word as a char *, memchr dereferences it,
+			 * and the precise bus fault that follows lands in
+			 * default_handler and spins there. That stops the RTC1
+			 * tick with it, so the board goes silent rather than
+			 * crashing visibly -- which is exactly how it presented:
+			 * a full, healthy boot log and then nothing.
+			 *
+			 * The division is done here, where libgcc handles the
+			 * 64-bit maths, instead of in a formatter that cannot.
+			 * scripts/freertos-printf-check.sh keeps the next one out.
+			 */
+			uint32_t up_s = (uint32_t)(now_us / 1000000);
+			uint32_t up_ms = (uint32_t)((now_us / 1000) % 1000);
+
+			poll = 0;
+			woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG,
+					 "uptime %u.%03u s, radio %s, uwb %s", (unsigned)up_s,
+					 (unsigned)up_ms,
+					 woz_freertos_radio_ready() ? "ready" : "down",
+					 woz_freertos_uwb_ready() ? "ready" : "down");
+		}
+
+		vTaskDelay(pdMS_TO_TICKS(RUN_POLL_MS));
+	}
+}
+
 static void boot_task(void *arg)
 {
 	(void)arg;
 
 	woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "controller pool used: %u bytes",
 			 (unsigned)woz_freertos_radio_memory_used());
+
+	/*
+	 * The lamps first, before anything that can fail.
+	 *
+	 * They are the only output a fielded board has -- RTT needs a probe and
+	 * the exact ELF that was flashed, uart0 belongs to the J-Link OB, and
+	 * the USB console exists only in provisioning mode. So the display has
+	 * to be up before the steps that might want to report a fault on it,
+	 * which is every step below this line.
+	 *
+	 * Here rather than in main() because the tick runs on the OSAL work
+	 * queue, and that does not exist until the scheduler does.
+	 */
+	status_led_start();
 
 	/*
 	 * The persistent store, and the reader identity that lives in it.
@@ -118,6 +231,10 @@ static void boot_task(void *arg)
 	if (s_prov_mode) {
 		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG,
 				 "provisioning mode: radios stay down, console on USB");
+		/* D10 solid: the one state an operator has to be able to see
+		 * without a terminal, because it is the state in which the
+		 * board deliberately answers nothing. */
+		status_led_signal(STATUS_LED_PROV_MODE, true);
 		if (woz_freertos_usb_start() != 0) {
 			woz_freertos_fatal("provisioning console unavailable");
 		}
@@ -209,16 +326,13 @@ static void boot_task(void *arg)
 	 * degrade to and a silent boot would be the worst outcome on a bench.
 	 */
 	if (aliro_reader_start() != 0) {
+		/* D12 solid before the reset, so a board that cannot be a lock
+		 * says so on the one output it still has. */
+		status_led_signal(STATUS_LED_FAULT, true);
 		woz_freertos_fatal("Aliro reader start failed");
 	}
 
-	for (;;) {
-		woz_freertos_log(WOZ_FREERTOS_LOG_INFO, MAIN_TAG, "uptime %lld us, radio %s, uwb %s",
-				 (long long)woz_freertos_uptime_us(),
-				 woz_freertos_radio_ready() ? "ready" : "down",
-				 woz_freertos_uwb_ready() ? "ready" : "down");
-		vTaskDelay(pdMS_TO_TICKS(1000));
-	}
+	run_loop();
 }
 
 /*
