@@ -39,6 +39,16 @@
  * written by a pre-rename build reads as unclaimed and the device
  * starts from an empty store. Nothing has shipped on this port, so there is no
  * store in the field to strand.
+ *
+ * Three formats have now existed at 0x7e000: Zephyr's NVS, this store before
+ * the rename, and this store after it. None of them can read another, and each
+ * reformats what it finds. That has already been paid for once on hardware —
+ * booting a FreeRTOS image on a Zephyr-provisioned board destroyed the reader
+ * identity, the trust anchors and the SRP key, and the board came back only
+ * from a full backup. It is survivable now because nothing has shipped from
+ * either port. It stops being survivable the moment one does: a fielded board
+ * that changes ports needs a migration, and the migration has to exist before
+ * the image does, not after a customer finds out.
  */
 #define KV_MAGIC 0x554c574bu
 
