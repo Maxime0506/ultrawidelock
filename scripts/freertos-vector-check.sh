@@ -42,6 +42,39 @@ REQUIRED=$(awk '
     }
 ' "$YML")
 
+# A NON-EMPTY PARSE IS NOT A COMPLETE ONE.
+#
+# The scanner above is block-scoped: it starts at `interrupts:` and stops at the
+# next line beginning in column zero. Anything that ends the block early -- a
+# lowercase key, a stray unindented line -- truncates the list silently. It came
+# back non-empty, so a bare emptiness check passes it, and the summary then
+# quotes a smaller number that still looks entirely reasonable. Measured: one
+# unindented line above RNG drops this from 11 vectors to 6, and RNG, RTC1,
+# RTC2, GPIOTE and USBD go unchecked while the line reads "6 routed".
+#
+# So count the entries a second way, with a selector that does not know where
+# the block is. Every interrupt entry carries `priority:` and nothing else in
+# this file does, so grep finds all of them wherever they sit. The two counts
+# must agree, and the comparison includes the enabled:false reservations
+# because the failure being caught is the SCANNER losing lines, not the yml
+# choosing to exclude one.
+parsed_all=$(awk '
+    /^interrupts:/       { in_blk = 1; next }
+    in_blk && /^[a-z]/   { in_blk = 0 }
+    in_blk && /^[ \t]+[A-Z0-9_]+:/ { n++ }
+    END { print n + 0 }
+' "$YML")
+declared=$(grep -cE '^[ \t]+[A-Z0-9_]+:.*priority:' "$YML" || true)
+
+if [ "$parsed_all" -ne "$declared" ]; then
+    printf 'vector-check: parsed %s interrupt entries, the file declares %s.\n' \
+        "$parsed_all" "$declared" >&2
+    printf '  The interrupts: block scanner stopped early -- almost always a line\n' >&2
+    printf '  that starts in column zero inside the block. Refusing to check a\n' >&2
+    printf '  subset and report it as the whole.\n' >&2
+    exit 1
+fi
+
 [ -n "$REQUIRED" ] || { echo "vector-check: parsed no interrupts from $YML" >&2; exit 1; }
 
 DH=$("$NM" "$ELF" | awk '$3=="default_handler"{print $1}')
