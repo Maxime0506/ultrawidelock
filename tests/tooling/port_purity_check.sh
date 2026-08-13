@@ -310,6 +310,7 @@ check_port_os() {
 		printf '  behind ultrawidelock_port if both ports need it.\n' >&2
 		return 1
 	fi
+	selector_live "platform tree sources" "$n" || return 1
 	printf '%s  ok   platform trees: %d source(s), each naming only its own OS%s\n' "$G" "$n" "$Z"
 }
 
@@ -442,6 +443,19 @@ cmake_files() {
 	repo_files CMakeLists.txt '**/CMakeLists.txt'
 }
 
+# Every check below counts what its selector matched and then reports that count
+# in its ok line. A plausible number is exactly what stops anyone looking, so a
+# count of zero has to be a failure rather than a clean scan: none of these can
+# legitimately be zero in this tree, so zero only ever means the selector stopped
+# matching. They also share repo_files, which is what makes this worth stating
+# five times -- one broken pathspec takes all of them blind in the same commit,
+# and every one of them would still say ok.
+selector_live() { # label, count -> 1 if the selector matched nothing
+	[ "$2" -gt 0 ] && return 0
+	printf '%s  %s matched nothing — the selector stopped looking%s\n' "$R" "$1" "$Z" >&2
+	return 1
+}
+
 check_public_includes() {
 	local fails=0 n=0 f p canon repo
 	repo=$(pwd -P)
@@ -466,6 +480,7 @@ check_public_includes() {
 			"$R" "$fails" "$Z" >&2
 		return 1
 	fi
+	selector_live "public include paths" "$n" || return 1
 	printf '%s  ok   public includes: %d propagated path(s), none enters modules/*/src%s\n' \
 		"$G" "$n" "$Z"
 }
@@ -553,6 +568,7 @@ check_private_headers() {
 			"$R" "$fails" "$Z" >&2
 		return 1
 	fi
+	selector_live "production includes" "$n" || return 1
 	printf '%s  ok   private headers: %d production include(s) stay within module boundaries%s\n' \
 		"$G" "$n" "$Z"
 }
@@ -653,7 +669,7 @@ check_brand() {
 }
 
 check_build_paths() {
-	local fails=0 n=0 f p
+	local fails=0 n=0 mods=0 f p
 	for f in "${BUILD_FILES[@]}"; do
 		while IFS= read -r p; do
 			n=$((n + 1))
@@ -665,6 +681,7 @@ check_build_paths() {
 	done
 	while IFS= read -r p; do
 		n=$((n + 1))
+		mods=$((mods + 1))
 		if [ ! -d "$p" ]; then
 			printf '%s  missing module dir: %s (-D*ZEPHYR*_MODULES in scripts/ or mk/)%s\n' \
 				"$R" "$p" "$Z" >&2
@@ -676,6 +693,13 @@ check_build_paths() {
 			"$R" "$fails" "$Z" >&2
 		return 1
 	fi
+	# Counted apart from n on purpose. n aggregates two selectors, so breaking
+	# only the -D*_MODULES grep drops it from 322 to 313 -- still comfortably
+	# non-zero, still reported as ok, with nine module paths silently unchecked.
+	# A floor on the total cannot see a selector that goes half blind; only a
+	# floor on each selector can.
+	selector_live "cmake path literals" "$((n - mods))" || return 1
+	selector_live "build-file module paths" "$mods" || return 1
 	printf '%s  ok   build-file paths: %d literal(s) resolve in the tree%s\n' "$G" "$n" "$Z"
 }
 
@@ -764,6 +788,7 @@ check_patch_symbols() {
 			"$R" "$fails" "$Z" >&2
 		return 1
 	fi
+	selector_live "patch contract symbols" "$n" || return 1
 	printf '%s  ok   add-on patches: %d ultrawidelock symbol(s), %d SDK header(s) still defined%s\n' \
 		"$G" "$n" "$headers" "$Z"
 }
