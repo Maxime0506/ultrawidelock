@@ -19,14 +19,14 @@ check_declarations modules/ultrawidelock_cred/include/ultrawidelock/device.h
 check_declarations modules/ultrawidelock_cred/include/ultrawidelock/tlv.h
 check_declarations modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h
 
-# The flat headers this API replaced, banned so they cannot come back. They were
-# called aliro_reader.h, aliro_device.h, aliro_tlv.h, woz_uwb_facade.h and
-# woz_hal.h until the rename; this list carried those names across with
-# everything else, which left it holding each new name twice and banning none of
-# the old ones. Spelling the old names here again is not the fix -- check_brand
-# in tests/tooling/port_purity_check.sh bans woz_ and aliro_ across the whole
-# tree, which is a stronger guarantee than a five-entry list. What this list
-# still owns is the flat shape under our own prefix.
+# The flat headers this API replaced, banned so they cannot come back. This list
+# used to spell them in their pre-rename names, and the rename carried those
+# across with everything else -- which left it holding each new name twice and
+# banning none of the originals. Writing the old names back is not the fix, and
+# check_brand would reject them anyway: it bans that whole vocabulary across the
+# tree, which covers the originals more strongly than a five-entry list ever
+# did. What this list still owns is the flat shape under our own prefix. Run
+# `git log -p pre-rename -- tests/sdk/run.sh` for the names themselves.
 for legacy in modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
 	modules/ultrawidelock_cred/include/ultrawidelock_device.h modules/ultrawidelock_cred/include/ultrawidelock_tlv.h \
 	modules/ultrawidelock_uwb/include/ultrawidelock_uwb_facade.h modules/ultrawidelock_port/include/ultrawidelock_hal.h; do
