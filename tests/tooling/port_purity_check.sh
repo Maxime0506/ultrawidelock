@@ -808,7 +808,29 @@ manifest_paths() {
 }
 
 check_manifests() {
-	local fails=0 n=0 lists=0 f p dup
+	local fails=0 n=0 lists=0 f p dup root
+
+	# Both selectors below pass by finding nothing. If modules/*/roles/*.list
+	# stops matching, every list "resolves" because there are none; if a
+	# MANIFEST_ROOTS entry stops matching, the coverage loop walks fewer sources
+	# and still reports ok. A rename breaks both at once and in the same commit,
+	# which is the one situation where their silence is correlated. So each
+	# selector has to answer for itself before its result is trusted.
+	if [ "$(manifest_files | wc -l | tr -d ' ')" -eq 0 ]; then
+		printf '%s  no role manifests matched modules/*/roles/*.list%s\n' "$R" "$Z" >&2
+		fails=$((fails + 1))
+	fi
+	for root in "${MANIFEST_ROOTS[@]}"; do
+		[ -d "$root" ] || {
+			printf '%s  manifest root gone: %s%s\n' "$R" "$root" "$Z" >&2
+			fails=$((fails + 1))
+			continue
+		}
+		[ -n "$(repo_files "$root/*.c")" ] || {
+			printf '%s  manifest root has no tracked .c: %s%s\n' "$R" "$root" "$Z" >&2
+			fails=$((fails + 1))
+		}
+	done
 
 	while IFS= read -r f; do
 		lists=$((lists + 1))
