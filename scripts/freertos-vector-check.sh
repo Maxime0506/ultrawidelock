@@ -13,16 +13,36 @@
 set -eu
 ELF=${1:?usage: freertos-vector-check.sh <image.elf>}
 NM=${WOZ_ARM_TOOLCHAIN_DIR:+$WOZ_ARM_TOOLCHAIN_DIR/}arm-none-eabi-nm
+YML=$(dirname "$0")/../ports/freertos-nrf52833/peripherals.yml
 
-# Mirrors the `peripherals:` map in ports/freertos-nrf52833/peripherals.yml.
-REQUIRED="POWER_CLOCK RADIO TIMER0 RTC0 SWI5_EGU5 RTC1 RTC2 SWI0_EGU0 RNG GPIOTE"
+# READ from peripherals.yml, never restated here.
+#
+# This list used to be a hand-copied mirror, and it had already drifted: the yml
+# gave USBD an owner and the copy did not name it at all -- neither required nor
+# exempt, simply absent. Nothing was broken, because the nrfx driver supplies
+# that vector. But had it ever stopped, the check would have reported "routed"
+# while the console sat on the spin loop, which is the failure this file exists
+# to catch. A mirror that has to be updated by hand is a ratchet that stops
+# biting the moment someone forgets, and it reports success either way.
+#
+# Every entry under `interrupts:` must reach a real handler. `enabled: false`
+# marks a priority RESERVATION with no routed vector -- SPIM3 is one, because
+# the DW3110 bus is polled -- so those are excluded here rather than exempted
+# by name. Peripherals owned in the `peripherals:` map but absent from
+# `interrupts:` raise no interrupt in this image (TEMP is read synchronously,
+# TIMER1 is driven inside the 802.15.4 service layer) and never reach this list.
+[ -f "$YML" ] || { echo "vector-check: no peripherals.yml at $YML" >&2; exit 1; }
 
-# Owned in peripherals.yml but deliberately without a vector, each for a reason:
-#   TEMP   MPSL reads the sensor synchronously; it raises no interrupt here.
-#   TIMER1 the MPSL-arbitrated 802.15.4 service layer drives it internally and
-#          exports no handler to route -- verified absent from the image.
-#   SPIM3  the DW3110 bus is polled; peripherals.yml marks it enabled: false.
-EXEMPT="TEMP TIMER1 SPIM3"
+REQUIRED=$(awk '
+    /^interrupts:/       { in_blk = 1; next }
+    in_blk && /^[a-z]/   { in_blk = 0 }
+    in_blk && /^[ \t]+[A-Z0-9_]+:/ {
+        if ($0 ~ /enabled:[ \t]*false/) next
+        name = $1; sub(/:$/, "", name); print name
+    }
+' "$YML")
+
+[ -n "$REQUIRED" ] || { echo "vector-check: parsed no interrupts from $YML" >&2; exit 1; }
 
 DH=$("$NM" "$ELF" | awk '$3=="default_handler"{print $1}')
 [ -n "$DH" ] || { echo "vector-check: no default_handler in $ELF" >&2; exit 1; }
@@ -42,8 +62,8 @@ done
 
 if [ "$rc" -ne 0 ]; then
     printf '\n  peripherals.yml gives these vectors an owner and the image does not.\n' >&2
-    printf '  Route each in board/startup_freertos.c, or move it to EXEMPT here\n' >&2
-    printf '  with the reason it needs no handler.\n' >&2
+    printf '  Route each in board/startup_freertos.c, or -- if it needs no vector --\n' >&2
+    printf '  mark it `enabled: false` in peripherals.yml with the reason.\n' >&2
     exit 1
 fi
-printf '  vectors: %s routed, %s exempt by name\n' "$(echo $REQUIRED | wc -w | tr -d ' ')" "$(echo $EXEMPT | wc -w | tr -d ' ')"
+printf '  vectors: %s routed, all named by peripherals.yml\n' "$(echo $REQUIRED | wc -w | tr -d ' ')"
