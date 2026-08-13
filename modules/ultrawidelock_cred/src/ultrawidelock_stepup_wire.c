@@ -222,7 +222,7 @@ int ultrawidelock_stepup_wrap_do53(const uint8_t *message, size_t message_length
 }
 
 /**
- * Unwrap an credential DO'53 TLV-encoded message: extract the value of a tag-0x53 object from an
+ * Unwrap a credential DO'53 TLV-encoded message: extract the value of a tag-0x53 object from an
  * encoded buffer. Returns a pointer into the input buffer for the message payload and its length;
  * the pointer is valid only as long as the input buffer is valid.
  */

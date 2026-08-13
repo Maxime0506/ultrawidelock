@@ -13,7 +13,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host/hw-mutants"
+OUT="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host/hw-mutants"
 SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_hw_freertos.c"
 
 mkdir -p "$OUT"
@@ -32,6 +32,7 @@ build() { # <source> <binary>
 		"$HERE/fake/fake_gpiote.c" \
 		"$HERE/fake/fake_spim.c" \
 		"$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c" \
+		"$ROOT/ports/freertos-nrf52833/board/gpiote_freertos.c" \
 		"$1" \
 		-o "$2"
 }
@@ -39,6 +40,11 @@ build() { # <source> <binary>
 MUTATIONS=(
 	"the GPIOTE channel is enabled but never bound to the pin ::: 	nrf_gpiote_event_configure(NRF_GPIOTE, ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL, ULTRAWIDELOCK_DW3000_PIN_IRQ,
 				   NRF_GPIOTE_POLARITY_LOTOHI);
+ ::: "
+	"the line is never registered on the shared GPIOTE vector ::: 	if (ultrawidelock_freertos_gpiote_add_handler(ultrawidelock_freertos_dw3000_irq_handler) != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, TAG, \"no GPIOTE handler slot\");
+		return -1;
+	}
  ::: "
 	"the channel watches the wrong edge ::: NRF_GPIOTE_POLARITY_LOTOHI ::: NRF_GPIOTE_POLARITY_HITOLO"
 	"the channel is configured but left disabled ::: nrf_gpiote_event_enable(NRF_GPIOTE, ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL); ::: (void)0;"
@@ -73,14 +79,22 @@ MUTATIONS=(
 	/* Long enough"
 	"reset comes up driven instead of released ::: 	nrf_gpio_cfg_input(ULTRAWIDELOCK_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
 
-	/* Wake line ::: 	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_RST);
+	/*
+	 * Wake line ::: 	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_RST);
 
-	/* Wake line"
+	/*
+	 * Wake line"
 	"waking does not wait for the chip to reach IDLE_RC ::: 	ultrawidelock_freertos_busy_wait_us(2000); /* INIT_RC to IDLE_RC. */
 	s_asleep = false; ::: 	s_asleep = false;"
 	"reset does not let the chip climb to IDLE_RC before returning ::: 	/* Long enough for the chip to climb from INIT_RC to IDLE_RC. */
 	ultrawidelock_freertos_busy_wait_us(2000); ::: "
-	"the wake line comes up deasserted ::: nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_WAKEUP); ::: nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_WAKEUP);"
+	"bring-up drives a pin the part does not have ::: 	nrf_gpio_cfg_input(ULTRAWIDELOCK_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
+
+	/*
+	 * Wake line ::: 	nrf_gpio_cfg_input(51u, NRF_GPIO_PIN_NOPULL);
+
+	/*
+	 * Wake line"
 	"waking an already awake chip strobes it anyway ::: 	if (!s_asleep) {
 		return;
 	}

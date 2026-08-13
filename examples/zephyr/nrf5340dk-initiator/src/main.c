@@ -143,7 +143,7 @@ static uint16_t s_conn;
 static bool s_armed;
 
 /**
- * Return a human-readable string for an credential device phase: IDLE, SENT_AUTH0_RESP,
+ * Return a human-readable string for a credential device phase: IDLE, SENT_AUTH0_RESP,
  * SENT_AUTH1_RESP, ESTABLISHED, or FAILED.
  */
 static const char *phase_str(enum ultrawidelock_device_phase p)
@@ -362,7 +362,7 @@ static void radio_probe(void)
 
 /**
  * Initialize the credential BLE central stack, register event callbacks for ready/data/closed,
- * bring up the PSA crypto backend, and begin scanning for an credential reader.
+ * bring up the PSA crypto backend, and begin scanning for a credential reader.
  */
 int main(void)
 {

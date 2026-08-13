@@ -1,28 +1,69 @@
 /*
  * Flash and RAM map for the DWM3001CDK lock.
  *
- * The one thing this script does that a stock nRF52833 script does not is stop
- * the image at 0x7e000. The two pages above that are the persistent key-value
- * store (storage/kv_flash_freertos.c), which holds the credential provisioning
- * record and OpenThread's settings including the SRP client key. Leaving them
- * inside the FLASH region would let a large image grow into them and be
- * discovered as a lock that forgets its identity after a firmware update, which
- * is a failure worth spending 8 KB of link-time headroom to make impossible.
+ * THIS MAP IS NOT THIS PORT'S TO CHOOSE. It is byte-for-byte the map in
+ * apps/dwm3001cdk-lock/pm_static.yml, which the Zephyr build pinned and which
+ * every board that already exists has been flashed with. Read that file for why
+ * each boundary is where it is; the reasoning is measured, long, and not worth
+ * duplicating here. What matters at this end is that the two images agree, for
+ * one reason above all others:
  *
- * MCUboot is not in this map yet. When it arrives it takes the bottom of flash
- * and this origin moves; the store stays where it is, which is why it was put
- * at the top rather than immediately after the application.
+ *   settings_storage at 0x7e000 MUST NOT MOVE. It holds the reader identity,
+ *   the trust anchors and OpenThread's SRP key, and a board is reflashed with
+ *   `west flash` and no --erase precisely so that those two pages survive. A
+ *   FreeRTOS image that placed its store anywhere else would orphan every key
+ *   provisioned against that board -- silently, and only discovered later.
+ *
+ * A flash map change is also the one thing an over-the-air update cannot
+ * deliver: it needs a cable on every board in the field. So this agrees with
+ * the oracle rather than optimising for itself.
+ *
+ *   0x00000  mcuboot           40,960 B  a separate image; see the note below
+ *   0x0a000  mcuboot_pad          512 B  the signed image header imgtool writes
+ *   0x0a200  app              433,664 B  THIS IMAGE
+ *   0x74000  patch_staging     40,960 B  one inbound OTA delta patch
+ *   0x7e000  settings_storage   8,192 B  the key-value store, unchanged
+ *
+ * WHY THE BOOTLOADER BEING A ZEPHYR BUILD IS NOT A CONTRADICTION. MCUboot is a
+ * separate image with its own reset vector, and nothing about it is linked
+ * into this one. It hands over the core and is gone. Which RTOS built it is
+ * invisible from here, and rebuilding it under FreeRTOS would buy nothing and
+ * cost the delta-patch applier that already works. The port is Zephyr-free;
+ * the bootloader in front of it is a prebuilt artifact, like the SoftDevice
+ * Controller.
  */
 
+/*
+ * The origin is written out rather than derived from a symbol: a MEMORY block
+ * is parsed before any symbol assignment, so it cannot read one. Bringing a
+ * board up without a bootloader means editing these two numbers and knowing
+ * why, which is the right amount of friction for a change that invalidates
+ * every signed image.
+ */
 MEMORY
 {
-  FLASH (rx)  : ORIGIN = 0x00000000, LENGTH = 0x7e000
+  FLASH (rx)  : ORIGIN = 0x0000a200, LENGTH = 0x69e00
   STORAGE (r) : ORIGIN = 0x0007e000, LENGTH = 0x02000
   RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 0x20000
 }
 
 __ultrawidelock_storage_start = ORIGIN(STORAGE);
 __ultrawidelock_storage_end = ORIGIN(STORAGE) + LENGTH(STORAGE);
+
+/*
+ * Where an inbound OTA delta patch is written before a reboot into MCUboot.
+ * Declared here rather than in C so that there is exactly one flash map and the
+ * staging code cannot disagree with it.
+ */
+__ultrawidelock_patch_staging_start = 0x00074000;
+__ultrawidelock_patch_staging_end = 0x0007e000;
+
+/*
+ * The vector table's address, which the startup code loads into VTOR. Taken
+ * from the map rather than hardcoded, because the whole point of the two
+ * symbols above is that one file owns these numbers.
+ */
+__ultrawidelock_vector_table = ORIGIN(FLASH);
 
 /*
  * The main stack, used by every interrupt handler and by main() before the
@@ -153,5 +194,5 @@ SECTIONS
     ASSERT(__StackTop <= ORIGIN(RAM) + LENGTH(RAM), "RAM overflowed: stack does not fit")
     ASSERT(__StackLimit >= __HeapLimit, "RAM overflowed: heap and stack overlap")
     ASSERT(__etext + (__data_end__ - __data_start__) <= ORIGIN(FLASH) + LENGTH(FLASH),
-           "FLASH overflowed: image would reach into the key-value store at 0x7e000")
+           "FLASH overflowed: image does not fit the MCUboot application slot at 0xa200")
 }

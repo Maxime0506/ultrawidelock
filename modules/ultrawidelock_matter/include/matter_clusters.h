@@ -111,7 +111,7 @@ extern "C" {
  * The credential reader attributes (DoorLock/AttributeIds.h:204-247).
  *
  * These are not decoration. A controller reads them to decide whether this lock
- * can be an credential reader at all, and only then does it send
+ * can be a credential reader at all, and only then does it send
  * SetAliroReaderConfig with the reader private key -- which is the entire
  * reason this node exists.
  */
@@ -259,7 +259,7 @@ extern "C" {
 #define MATTER_DL_CRED_ALIRO_ENDPOINT_KEY       8u
 
 /**
- * Install an credential public key, set by the port.
+ * Install a credential public key, set by the port.
  *
  * Returns 0 when added, 1 when already present, negative on a bad point or a
  * full/failed store -- the contract ultrawidelock_reader_provision_add_trust() already

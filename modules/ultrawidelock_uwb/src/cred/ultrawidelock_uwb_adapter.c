@@ -175,7 +175,7 @@ void ultrawidelock_uwb_adapter_set_diagnostics(struct ultrawidelock_uwb_adapter 
 }
 
 /**
- * @brief Destroy an credential UWB adapter, freeing all associated CCC capabilities arrays and
+ * @brief Destroy a credential UWB adapter, freeing all associated CCC capabilities arrays and
  * diagnostic configuration.
  */
 void ultrawidelock_uwb_adapter_destroy(struct ultrawidelock_uwb_adapter *ultrawidelock_ctx)

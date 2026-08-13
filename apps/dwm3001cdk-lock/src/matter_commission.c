@@ -2009,7 +2009,7 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
  * NOTHING IS LOGGED but the outcome. Every argument is key material.
  */
 /**
- * An credential public key, handed to the reader's trust store -- but only
+ * A credential public key, handed to the reader's trust store -- but only
  * if it is a key a phone will ever present.
  *
  * The trust check is a raw-key allowlist (ultrawidelock_reader.c), so an anchor is a

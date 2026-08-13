@@ -31,7 +31,7 @@ ANCHOR_ROLE_FLAG := $(if $(filter $(ROLE),initiator),\
 # and would otherwise bury the build three directories deep, where the ELF paths
 # the flash and monitor targets print stop being copy-pasteable.
 ANCHOR_BOARD_TAG := $(subst /,_,$(ANCHOR_BOARD))
-ANCHOR_BUILD ?= $(ALIRO_BUILD_ROOT)/anchor-$(ANCHOR_BOARD_TAG)-$(ROLE)
+ANCHOR_BUILD ?= $(ULTRAWIDELOCK_BUILD_ROOT)/anchor-$(ANCHOR_BOARD_TAG)-$(ROLE)
 
 # The chip follows the board, and this is not cosmetic: `probe-rs attach` needs
 # the right target or it fails in a way that reads like a dead board. CDK_CHIP

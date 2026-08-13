@@ -79,7 +79,7 @@ uint8_t sEcpFrame[kEcpFrameLen];
 bool sEcpArmed;
 
 /**
- * Workqueue handler that creates an credential session for the NFC connection.
+ * Workqueue handler that creates a credential session for the NFC connection.
  */
 void CreateSessionWork(k_work *)
 {

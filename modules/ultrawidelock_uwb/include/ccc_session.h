@@ -1,4 +1,4 @@
-/** @file ccc_session.h — credential/CCC ranging seam: map an credential session's URSK + M1-M4
+/** @file ccc_session.h — credential/CCC ranging seam: map a credential session's URSK + M1-M4
  * setup to ccc_ran_params. */
 
 #ifndef CCC_SESSION_H
@@ -12,7 +12,7 @@
 #define CCC_CRED_VENDOR_OUI 0x4A191Bu
 
 /**
- * @brief An credential ranging session: the URSK + the M1-M4 setup parameters; the interface to the
+ * @brief A credential ranging session: the URSK + the M1-M4 setup parameters; the interface to the
  * CCC MAC.
  */
 struct ccc_ran_session {
@@ -32,7 +32,7 @@ struct ccc_ran_session {
 /** Rounds per ranging block, from N_RAN_S and the slot parameters (0 if the denominator is 0). */
 uint16_t ccc_session_n_round(const struct ccc_ran_session *s);
 
-/** Map an credential session onto the CCC MAC's ranging-schedule parameters. */
+/** Map a credential session onto the CCC MAC's ranging-schedule parameters. */
 int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out);
 
 #endif /* CCC_SESSION_H */

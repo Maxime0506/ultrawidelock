@@ -74,7 +74,7 @@ enum class SessionState : uint8_t {
 };
 
 /**
- * Session context holding all state needed to manage an credential session: connection handle,
+ * Session context holding all state needed to manage a credential session: connection handle,
  * protocol version, cryptographic keys, buffers, counters, and access document details.
  */
 struct SessionContext {
@@ -2466,7 +2466,7 @@ AliroError AliroStack::SendReaderStatusChangedMessage(
  * Dequeue and process a pending credential event (ResponseTimeoutEvent or SessionDataEvent) or log
  * and ignore unknown events.
  *
- * Deletes the event after processing. Called by the OS event loop when an credential-owned event is
+ * Deletes the event after processing. Called by the OS event loop when a credential-owned event is
  * ready. Caller must pass a non-null event pointer; null triggers a warning log.
  */
 void AliroStack::ProcessEvent(void *event)

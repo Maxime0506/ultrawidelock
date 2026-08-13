@@ -263,7 +263,7 @@ static void scenario_wipe(void)
 	otPlatSettingsInit(&g_instance, NULL, 0);
 
 	CHECK("the credential provisioning blob stores beside the settings",
-	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, prov_blob,
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_CRED_PROV, prov_blob,
 					    sizeof(prov_blob)) == ULTRAWIDELOCK_KV_OK);
 	CHECK("the settings to be wiped store",
 	      otPlatSettingsSet(&g_instance, OT_SETTINGS_KEY_ACTIVE_DATASET, dataset,
@@ -303,7 +303,7 @@ static void scenario_wipe(void)
 	 */
 	length = sizeof(prov_read);
 	CHECK("the wipe leaves the credential provisioning blob byte-for-byte intact",
-	      ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, prov_read, &length) ==
+	      ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_CRED_PROV, prov_read, &length) ==
 			      ULTRAWIDELOCK_KV_OK &&
 		      length == sizeof(prov_blob) && memcmp(prov_read, prov_blob, length) == 0);
 	CHECK("the wipe broke no flash rule", fake_flash_violations == 0);

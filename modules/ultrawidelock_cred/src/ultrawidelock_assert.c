@@ -218,7 +218,7 @@ static int parse_and_check(const uint8_t *wire, const uint8_t *expected_nonce,
 }
 
 /**
- * Encode an credential attestation into a wire frame with a P-256 signature, signing all bytes
+ * Encode a credential attestation into a wire frame with a P-256 signature, signing all bytes
  * before the tag; return 0 on success, -1 if any argument is NULL or wire_cap is too small.
  */
 int ultrawidelock_assert_build_p256(ultrawidelock_assert_sign_fn sign, void *ctx,

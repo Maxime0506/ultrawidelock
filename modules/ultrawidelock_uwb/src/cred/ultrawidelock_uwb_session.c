@@ -230,7 +230,7 @@ enum ultrawidelock_uwb_err ultrawidelock_uwb_session_stop(struct ultrawidelock_u
 }
 
 /**
- * @brief Allocate an credential UWB session in the CREATED state, bound to an adapter and to the
+ * @brief Allocate a credential UWB session in the CREATED state, bound to an adapter and to the
  * caller's transmit and event callbacks. No CCC session is started here.
  */
 struct ultrawidelock_uwb_session *
@@ -262,7 +262,7 @@ ultrawidelock_uwb_session_create(struct ultrawidelock_uwb_adapter *ultrawidelock
 }
 
 /**
- * @brief Destroy an credential UWB session, freeing the URSK and tearing down the underlying CCC
+ * @brief Destroy a credential UWB session, freeing the URSK and tearing down the underlying CCC
  * session.
  * @param session Session to destroy; no-op if NULL.
  */

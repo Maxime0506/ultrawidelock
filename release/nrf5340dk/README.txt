@@ -1,6 +1,6 @@
 ultrawidelock @VERSION@   ·   nRF5340 DK
 
-The ultrawidelock target that taps. An credential lock with NFC tap and UWB approach
+The ultrawidelock target that taps. A credential lock with NFC tap and UWB approach
 unlock: it joins Apple Home over Thread, your iPhone carries the key in Wallet,
 and the lock opens as you walk up or on a tap.
 

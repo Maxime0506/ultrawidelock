@@ -309,7 +309,7 @@ static uint8_t on_chr_disc(struct bt_conn *conn, const struct bt_gatt_attr *attr
 
 	/* attr == NULL means discovery finished. Both handles are required. */
 	if (s_peer.spsm_val_handle == 0u || s_peer.devver_val_handle == 0u) {
-		abandon("peer is missing an credential characteristic", 0);
+		abandon("peer is missing a credential characteristic", 0);
 		return BT_GATT_ITER_STOP;
 	}
 

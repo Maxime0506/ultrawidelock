@@ -147,7 +147,7 @@ void cherry_destroy_sync(struct cherry *ctx)
 /* ---- CCC session create + lifetime --------------------------------------- */
 
 /**
- * @brief Allocate and initialize an credential responder CCC session.
+ * @brief Allocate and initialize a credential responder CCC session.
  * @param ctx Cherry context (unused).
  * @param callback CCC notification callback.
  * @param user_data User context to pass to callback.
@@ -218,7 +218,7 @@ void cherry_session_destroy(struct cherry_session *session)
 /* ---- Start / stop -------------------------------------------------------- */
 
 /**
- * @brief Start an credential UWB session by building a RangingConfiguration byte array from session
+ * @brief Start a credential UWB session by building a RangingConfiguration byte array from session
  * config, calling ultrawidelock_uwb_start_ultrawidelock, and emitting IDLE then ACTIVE status
  * events.
  * @param session Base session.

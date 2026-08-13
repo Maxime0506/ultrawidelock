@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 /**
- * @brief Session-independent reader state shared across all ranging sessions for an credential UWB
+ * @brief Session-independent reader state shared across all ranging sessions for a credential UWB
  * adapter.
  */
 struct ultrawidelock_uwb_adapter {

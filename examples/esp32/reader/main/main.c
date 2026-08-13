@@ -4,7 +4,7 @@
  * Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
  * polls for a range. With no iPhone/initiator present this proves the SPI +
  * DW3000 + CCC init path comes up; a live range needs a peer that
- * drives the DS-TWR exchange (an credential Wallet, or a second board as initiator).
+ * drives the DS-TWR exchange (a credential Wallet, or a second board as initiator).
  *
  * The demo responder lifecycle + interactive console live in app_shell.c.
  */

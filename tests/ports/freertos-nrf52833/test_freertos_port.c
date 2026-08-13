@@ -633,9 +633,16 @@ static void test_nimble_sdc_transport(void)
 	 * here proves the include order is right in every build that compiles
 	 * the transport, not just on the target.
 	 */
+	/*
+	 * COC_MAX_NUM is 2 because this image registers two L2CAP servers: the
+	 * credential reader's SPSM and the update channel on 0x0081. The value sizes
+	 * NimBLE's server pool, so at 1 the second ble_l2cap_create_server()
+	 * fails with BLE_HS_ENOMEM at registration -- and the image still boots,
+	 * still advertises, and simply has no way to be updated.
+	 */
 	CHECK("the port's NimBLE configuration overrides the upstream defaults",
 	      MYNEWT_VAL(BLE_ROLE_CENTRAL) == 0 && MYNEWT_VAL(BLE_ROLE_OBSERVER) == 0 &&
-		      MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM) == 1 && MYNEWT_VAL(BLE_SM_SC) == 1 &&
+		      MYNEWT_VAL(BLE_L2CAP_COC_MAX_NUM) == 2 && MYNEWT_VAL(BLE_SM_SC) == 1 &&
 		      MYNEWT_VAL(BLE_SM_LEGACY) == 0);
 
 	notifications = fake_task_notify_calls;

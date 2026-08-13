@@ -18,6 +18,7 @@
  * once and cannot be dropped by whoever forgets to include it.
  */
 #include "board_pins.h"
+#include "ultrawidelock_freertos_board.h"
 
 #include "nrf_802154_debug_peripherals.h"
 #include "nrf_802154_peripherals.h"
@@ -37,6 +38,19 @@ _Static_assert((NRF_802154_DEBUG_GPIOTE_CHANNELS_USED_MASK &
 		(1u << ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL)) == 0u,
 	       "the DW3110 IRQ shares a GPIOTE channel with the 802.15.4 driver's debug pins; "
 	       "move ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL above 5, or drop ENABLE_DEBUG_GPIO");
+
+/*
+ * SW2 against both. The button is the second user of GPIOTE on this board, and
+ * unlike the debug pins it is in every build: a channel it shared with the
+ * DW3110 line would deliver ranging interrupts on a button press and swallow
+ * the button, which looks like neither bug from outside.
+ */
+_Static_assert(ULTRAWIDELOCK_FREERTOS_SW2_GPIOTE_CHANNEL != ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL,
+	       "SW2 and the DW3110 interrupt line are on the same GPIOTE channel");
+_Static_assert((NRF_802154_DEBUG_GPIOTE_CHANNELS_USED_MASK &
+		(1u << ULTRAWIDELOCK_FREERTOS_SW2_GPIOTE_CHANNEL)) == 0u,
+	       "SW2 shares a GPIOTE channel with the 802.15.4 driver's debug pins; "
+	       "move ULTRAWIDELOCK_FREERTOS_SW2_GPIOTE_CHANNEL above 5, or drop ENABLE_DEBUG_GPIO");
 
 /*
  * And against the driver's PPI claim, which is not debug-only and is the larger

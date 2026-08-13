@@ -116,6 +116,29 @@ static volatile bool s_done;
 static volatile bool s_failed;
 
 /*
+ * Bring-up instrumentation, off by default.
+ *
+ * The timeslot callback runs at interrupt priority zero, where logging is not
+ * safe, so it only counts. The task-context wait prints the counts, which is
+ * enough to tell "MPSL never granted a slot" from "the slices are running and
+ * the operation is merely slow" -- the two failures that look identical from
+ * outside, because both leave the caller sitting in the same poll loop.
+ */
+#ifndef ULTRAWIDELOCK_FREERTOS_FLASH_DIAG
+#define ULTRAWIDELOCK_FREERTOS_FLASH_DIAG 0
+#endif
+
+#if ULTRAWIDELOCK_FREERTOS_FLASH_DIAG
+static volatile uint32_t s_sig_start;
+static volatile uint32_t s_sig_idle;
+static volatile uint32_t s_sig_retry;
+static volatile uint32_t s_sig_other;
+#define FLASH_DIAG_COUNT(counter) ((counter)++)
+#else
+#define FLASH_DIAG_COUNT(counter) ((void)0)
+#endif
+
+/*
  * The address a flash offset maps to. On the part they are the same, because
  * program flash is memory-mapped from zero and reads never touch the
  * controller. The host test points this at its model, which is the only way to
@@ -277,6 +300,7 @@ static mpsl_timeslot_signal_return_param_t *timeslot_callback(mpsl_timeslot_sess
 
 	switch (signal) {
 	case MPSL_TIMESLOT_SIGNAL_START:
+		FLASH_DIAG_COUNT(s_sig_start);
 		if (op_step(true)) {
 			s_return.callback_action = MPSL_TIMESLOT_SIGNAL_ACTION_END;
 		} else {
@@ -287,6 +311,7 @@ static mpsl_timeslot_signal_return_param_t *timeslot_callback(mpsl_timeslot_sess
 
 	case MPSL_TIMESLOT_SIGNAL_SESSION_IDLE:
 		/* Every request is done, so the operation is done. */
+		FLASH_DIAG_COUNT(s_sig_idle);
 		s_done = true;
 		return NULL;
 
@@ -300,6 +325,7 @@ static mpsl_timeslot_signal_return_param_t *timeslot_callback(mpsl_timeslot_sess
 		 * work is half done and abandoning it here would leave a
 		 * partially erased page, which reads as neither old nor new.
 		 */
+		FLASH_DIAG_COUNT(s_sig_retry);
 		if (mpsl_timeslot_request(s_session, &s_request) != 0) {
 			s_failed = true;
 			s_done = true;
@@ -307,6 +333,7 @@ static mpsl_timeslot_signal_return_param_t *timeslot_callback(mpsl_timeslot_sess
 		return NULL;
 
 	default:
+		FLASH_DIAG_COUNT(s_sig_other);
 		s_failed = true;
 		s_done = true;
 		return NULL;
@@ -342,6 +369,16 @@ static int run_under_timeslot(uint32_t slot_us)
 	s_done = false;
 	s_failed = false;
 
+#if ULTRAWIDELOCK_FREERTOS_FLASH_DIAG
+	s_sig_start = 0;
+	s_sig_idle = 0;
+	s_sig_retry = 0;
+	s_sig_other = 0;
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, FLASH_TAG, "%s %u bytes at 0x%x, slot %u us",
+			 s_op.erase ? "erase" : "write", (unsigned)s_op.remaining,
+			 (unsigned)s_op.offset, (unsigned)slot_us);
+#endif
+
 	if (mpsl_timeslot_request(s_session, &s_request) != 0) {
 		mpsl_timeslot_session_close(s_session);
 		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, FLASH_TAG,
@@ -363,6 +400,13 @@ static int run_under_timeslot(uint32_t slot_us)
 		}
 		vTaskDelay(1);
 	}
+
+#if ULTRAWIDELOCK_FREERTOS_FLASH_DIAG
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, FLASH_TAG,
+			 "rc=%d start=%u idle=%u retry=%u other=%u left=%u", rc,
+			 (unsigned)s_sig_start, (unsigned)s_sig_idle, (unsigned)s_sig_retry,
+			 (unsigned)s_sig_other, (unsigned)s_op.remaining);
+#endif
 
 	/* Closing cancels anything still pending. */
 	mpsl_timeslot_session_close(s_session);

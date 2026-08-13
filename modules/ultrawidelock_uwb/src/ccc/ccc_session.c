@@ -24,7 +24,7 @@ uint16_t ccc_session_n_round(const struct ccc_ran_session *s)
 }
 
 /**
- * @brief Map an credential session onto the CCC MAC's ranging-schedule parameters.
+ * @brief Map a credential session onto the CCC MAC's ranging-schedule parameters.
  * @param s credential session configuration.
  * @param out Filled with the mapped CCC ranging parameters.
  * @return 0 on success, -EINVAL if the session or output pointer is NULL, slot count is

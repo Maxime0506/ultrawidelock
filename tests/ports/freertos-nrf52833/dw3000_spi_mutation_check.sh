@@ -16,7 +16,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-OUT="${ALIRO_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host/spi-mutants"
+OUT="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/freertos-nrf52833-host/spi-mutants"
 SRC="$ROOT/ports/freertos-nrf52833/uwb/dw3000_spi_freertos.c"
 
 mkdir -p "$OUT"

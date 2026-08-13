@@ -23,7 +23,33 @@
 #define ULTRAWIDELOCK_DW3000_PIN_CS     38u /* P1.06 */
 #define ULTRAWIDELOCK_DW3000_PIN_IRQ    34u /* P1.02 */
 #define ULTRAWIDELOCK_DW3000_PIN_RST    25u /* P0.25 */
-#define ULTRAWIDELOCK_DW3000_PIN_WAKEUP 51u /* P1.19 */
+
+/*
+ * NO WAKEUP PIN ON THIS BOARD, and the SDK's number for it is not a pin.
+ *
+ * The same cmake gives CONFIG_DWT_WU_GPIO_PORT=1, CONFIG_DWT_WU_GPIO_PIN=19,
+ * which flattens to 51. The nRF52833 has ten pins on port 1 -- nrf52833.dtsi
+ * says ngpios = <10> -- so P1.19 is not a pin on this part, and it is not one
+ * on the nRF52840 either, whose port 1 stops at P1.15. The number cannot be
+ * right for any Nordic silicon the SDK builds for.
+ *
+ * It survived in the SDK because nothing reads it: CONFIG_DWT_WU_GPIO_PORT and
+ * CONFIG_DWT_WU_GPIO_PIN appear in the project cmake files and in no source
+ * file in the archive. It survived in the Zephyr oracle because there the pin
+ * is optional and gpio_pin_configure_dt()'s return is not checked, so the
+ * refusal is silent.
+ *
+ * Here it was not silent. nrf_gpio_pin_port_decode() asserts on a pin the part
+ * does not have, and dw3000_hw_init() drove it on the first line, so UWB start
+ * was a fatal on hardware -- found on the bench with the assert's return
+ * address, after the boot log reached "OpenThread radio initialized".
+ *
+ * Leaving it undefined is not a lost feature. dw3000_hw_wakeup() wakes the
+ * DW3110 with a CS-low pulse through dw3000_spi_wakeup(), which is the path
+ * the decadriver documents first and the one all three ports actually use; the
+ * pin was only ever configured and driven, never depended on.
+ */
+#undef ULTRAWIDELOCK_DW3000_PIN_WAKEUP
 
 /*
  * Two clocks, as every DW3000 port has: the chip only accepts SPI below 7 MHz

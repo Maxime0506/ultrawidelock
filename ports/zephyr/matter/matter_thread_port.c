@@ -22,7 +22,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(matter_thread, CONFIG_ALIRO_MATTER_BLE_LOG_LEVEL);
+LOG_MODULE_REGISTER(matter_thread, CONFIG_ULTRAWIDELOCK_MATTER_BLE_LOG_LEVEL);
 
 /* CONFIG_OPENTHREAD, not CONFIG_NET_L2_OPENTHREAD: every call below is either
  * OpenThread's own API or one of the four openthread_*() helpers that the
@@ -211,7 +211,7 @@ static void log_addresses(otInstance *ot)
 	}
 }
 
-#if defined(CONFIG_ALIRO_THREAD_DATASET_DUMP)
+#if defined(CONFIG_ULTRAWIDELOCK_THREAD_DATASET_DUMP)
 /*
  * The active dataset as hex, for `chip-tool pairing ble-thread`.
  *
@@ -264,13 +264,13 @@ void matter_thread_dump_active_dataset(void)
 	LOG_ERR("---- END THREAD DATASET ----");
 	LOG_ERR("join those lines; pass as hex:<joined> to chip-tool pairing ble-thread");
 }
-#else /* !CONFIG_ALIRO_THREAD_DATASET_DUMP */
+#else /* !CONFIG_ULTRAWIDELOCK_THREAD_DATASET_DUMP */
 
 void matter_thread_dump_active_dataset(void)
 {
 }
 
-#endif /* CONFIG_ALIRO_THREAD_DATASET_DUMP */
+#endif /* CONFIG_ULTRAWIDELOCK_THREAD_DATASET_DUMP */
 
 int matter_thread_wait_attached(uint32_t timeout_ms)
 {
@@ -604,7 +604,7 @@ static void udp_rx(void *ctx, otMessage *msg, const otMessageInfo *info)
  * The address to look for is an off-mesh-routable one, which only exists if the
  * border router is publishing a prefix this node has picked up.
  */
-#if defined(CONFIG_ALIRO_SRP_DIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_SRP_DIAG)
 /**
  * Whether auto-start ever FOUND a server, printed at the only moment that can change.
  *
@@ -654,7 +654,7 @@ static struct openthread_state_changed_callback srp_diag_cb = {
 };
 
 static bool s_srp_diag_registered;
-#endif /* CONFIG_ALIRO_SRP_DIAG */
+#endif /* CONFIG_ULTRAWIDELOCK_SRP_DIAG */
 
 /** The SRP server's verdict, which otSrpClientAddService() cannot give. */
 static void srp_cb(otError err, const otSrpClientHostInfo *host, const otSrpClientService *services,
@@ -915,7 +915,7 @@ int matter_thread_advertise(const char *instance_name, uint16_t port)
 		/* Finds the border router's SRP server itself, from the network
 		 * data it already has as a child. Idempotent. */
 		otSrpClientEnableAutoStartMode(ot, NULL, NULL);
-#if defined(CONFIG_ALIRO_SRP_DIAG)
+#if defined(CONFIG_ULTRAWIDELOCK_SRP_DIAG)
 		/* Registered here rather than at start-up so it cannot outlive
 		 * the thing it reports on, and once because the register call
 		 * appends to a list. */
@@ -1011,8 +1011,8 @@ int matter_thread_advertise_commissionable(uint16_t discriminator, uint16_t port
 		       (unsigned int)(discriminator & 0x0FFFu));
 	(void)snprintf(s_comm_txt_cm, sizeof(s_comm_txt_cm), "2");
 	(void)snprintf(s_comm_txt_vp, sizeof(s_comm_txt_vp), "%u+%u",
-		       (unsigned int)CONFIG_ALIRO_MATTER_VENDOR_ID,
-		       (unsigned int)CONFIG_ALIRO_MATTER_PRODUCT_ID);
+		       (unsigned int)CONFIG_ULTRAWIDELOCK_MATTER_VENDOR_ID,
+		       (unsigned int)CONFIG_ULTRAWIDELOCK_MATTER_PRODUCT_ID);
 	s_comm_txt[0].mKey = "D";
 	s_comm_txt[0].mValue = (const uint8_t *)s_comm_txt_d;
 	s_comm_txt[0].mValueLength = (uint16_t)strlen(s_comm_txt_d);

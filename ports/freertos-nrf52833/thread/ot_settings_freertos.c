@@ -365,7 +365,7 @@ otError otPlatSettingsDelete(otInstance *instance, uint16_t key, int index)
  * because the credential provisioning blob lives in the same two pages and erasing
  * it would take the reader's provisioned identity and trust anchors with it —
  * the mirror of the argument in ultrawidelock_prov_erase(), which spares these keys so
- * an credential factory reset cannot cost the SRP client key and the up-to-14-day
+ * a credential factory reset cannot cost the SRP client key and the up-to-14-day
  * lease wait that follows.
  */
 void otPlatSettingsWipe(otInstance *instance)

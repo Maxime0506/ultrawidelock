@@ -39,8 +39,15 @@
 /*
  * Credit-based L2CAP is how credential moves its larger payloads. Upstream defaults
  * the channel count to zero, which compiles the whole CoC path out.
+ *
+ * Two, not one, and the second is the update channel on PSM 0x0081. This value
+ * sizes ble_l2cap_coc_srv_pool -- one block per ble_l2cap_create_server() --
+ * so at one the second server would have failed with BLE_HS_ENOMEM at
+ * registration, which reads as a memory problem rather than as this setting.
+ * It also adds one block to ble_l2cap_chan_pool, which is what lets a peer hold
+ * the reader channel open while an update is pushed.
  */
-#define MYNEWT_VAL_BLE_L2CAP_COC_MAX_NUM (1)
+#define MYNEWT_VAL_BLE_L2CAP_COC_MAX_NUM (2)
 
 /*
  * LE Secure Connections only. the credential protocol's session establishment requires it, and

@@ -57,17 +57,19 @@ static StackType_t s_stack[HOST_STACK_WORDS];
 static bool s_ready;
 static volatile bool s_synced;
 static volatile uint32_t s_resets;
-static struct ultrawidelock_freertos_nimble_host_hooks s_hooks;
+static struct ultrawidelock_freertos_nimble_host_hooks s_hooks[ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_HOOKS_MAX];
+static size_t s_hook_count;
 
-void ultrawidelock_freertos_nimble_host_set_hooks(
-	const struct ultrawidelock_freertos_nimble_host_hooks *hooks)
+int ultrawidelock_freertos_nimble_host_add_hooks(const struct ultrawidelock_freertos_nimble_host_hooks *hooks)
 {
-	if (hooks == NULL) {
-		s_hooks.register_services = NULL;
-		s_hooks.on_sync = NULL;
-		return;
+	if (hooks == NULL || s_hook_count >= ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_HOOKS_MAX) {
+		return -1;
 	}
-	s_hooks = *hooks;
+	/* By value: the callers pass file-scope statics today, and one that
+	 * passed a stack local would otherwise leave a pointer into a frame
+	 * that is gone by the time the sequence runs. */
+	s_hooks[s_hook_count++] = *hooks;
+	return 0;
 }
 
 bool ultrawidelock_freertos_nimble_host_ready(void)
@@ -92,8 +94,10 @@ static void on_sync(void)
 	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_INFO, ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
 			 "host synced with the controller");
 	/* After the flag, so a hook that advertises sees a synced host. */
-	if (s_hooks.on_sync != NULL) {
-		s_hooks.on_sync();
+	for (size_t i = 0; i < s_hook_count; i++) {
+		if (s_hooks[i].on_sync != NULL) {
+			s_hooks[i].on_sync();
+		}
 	}
 }
 
@@ -106,9 +110,8 @@ static void on_reset(int reason)
 {
 	s_synced = false;
 	s_resets++;
-	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR,
-				   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG, "host reset, reason %d",
-				   reason);
+	ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
+			 "host reset, reason %d", reason);
 }
 
 static void host_task(void *arg)
@@ -128,9 +131,8 @@ int ultrawidelock_freertos_nimble_host_start(void)
 
 	rc = ultrawidelock_freertos_radio_start(ultrawidelock_freertos_radio_sdc_dispatcher());
 	if (rc != 0) {
-		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR,
-					   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
-					   "radio startup failed at stage %d", -rc);
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
+				 "radio startup failed at stage %d", -rc);
 		return -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_RADIO;
 	}
 
@@ -149,12 +151,18 @@ int ultrawidelock_freertos_nimble_host_start(void)
 	 * Between the pools existing and the host task consuming events: service
 	 * tables need the former and must be registered before the latter.
 	 */
-	if (s_hooks.register_services != NULL) {
-		rc = s_hooks.register_services();
+	for (size_t i = 0; i < s_hook_count; i++) {
+		if (s_hooks[i].register_services == NULL) {
+			continue;
+		}
+		rc = s_hooks[i].register_services();
 		if (rc != 0) {
-			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR,
-						   ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
-						   "service registration failed rc=%d", rc);
+			/* Fatal rather than skipped. A registrant that could not
+			 * add its service leaves an image advertising a profile
+			 * it does not implement, and the peer only finds out
+			 * after connecting. */
+			ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_TAG,
+					 "service registration %u failed rc=%d", (unsigned)i, rc);
 			return -ULTRAWIDELOCK_FREERTOS_NIMBLE_HOST_STAGE_SERVICES;
 		}
 	}

@@ -42,8 +42,7 @@ struct ultrawidelock_freertos_radio_dispatcher {
  * The pinned Nordic opcode dispatcher, implemented in
  * ble/hci_dispatcher_freertos.c. Never NULL.
  */
-const struct ultrawidelock_freertos_radio_dispatcher *
-ultrawidelock_freertos_radio_sdc_dispatcher(void);
+const struct ultrawidelock_freertos_radio_dispatcher *ultrawidelock_freertos_radio_sdc_dispatcher(void);
 
 /**
  * Bring up MPSL and the SoftDevice Controller, then publish the HCI transport
@@ -63,8 +62,7 @@ ultrawidelock_freertos_radio_sdc_dispatcher(void);
  * statically and the notifications its low-priority handler posts before the
  * scheduler starts are latched and delivered when it does.
  */
-int ultrawidelock_freertos_radio_start(
-	const struct ultrawidelock_freertos_radio_dispatcher *dispatcher);
+int ultrawidelock_freertos_radio_start(const struct ultrawidelock_freertos_radio_dispatcher *dispatcher);
 
 /** True after the controller is enabled and the transport contract is published. */
 bool ultrawidelock_freertos_radio_ready(void);
@@ -81,6 +79,24 @@ void ultrawidelock_freertos_radio_radio_isr(void);
 void ultrawidelock_freertos_radio_rtc0_isr(void);
 void ultrawidelock_freertos_radio_timer0_isr(void);
 void ultrawidelock_freertos_radio_power_clock_isr(void);
+
+/**
+ * Watch the POWER half of the POWER_CLOCK vector, after MPSL has had it.
+ *
+ * MPSL owns this vector and the CLOCK events on it, but the POWER peripheral's
+ * USB supply events -- USBDETECTED, USBREMOVED, USBPWRRDY -- arrive on the same
+ * line and MPSL neither reads nor clears them. The USB stack cannot install its
+ * own handler here, so it registers one and this port calls it.
+ *
+ * A handler runs at MPSL's priority, which is 0. That is ABOVE the FreeRTOS
+ * syscall ceiling, so it may not call any FreeRTOS API, FromISR or otherwise.
+ * It must check its own POWER events and clear them.
+ *
+ * Returns 0, or -1 if @p fn is NULL or the single slot is taken. One slot,
+ * because USB is the only thing on this board with a reason to watch POWER.
+ */
+typedef void (*ultrawidelock_freertos_power_handler)(void);
+int ultrawidelock_freertos_radio_set_power_handler(ultrawidelock_freertos_power_handler fn);
 void ultrawidelock_freertos_radio_low_priority_isr(void);
 
 #endif /* ULTRAWIDELOCK_FREERTOS_RADIO_H */

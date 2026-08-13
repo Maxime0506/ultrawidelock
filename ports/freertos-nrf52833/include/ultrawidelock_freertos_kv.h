@@ -20,9 +20,9 @@
  * Key ranges. The two consumers must not collide, and a range is cheaper to
  * reason about than a registry.
  */
-#define ULTRAWIDELOCK_KV_KEY_ALIRO_PROV 0x0001u
+#define ULTRAWIDELOCK_KV_KEY_CRED_PROV 0x0001u
 /* OpenThread's own settings keys are 0x0000..0x00ff; they are offset into this
- * range so they cannot land on an credential key. */
+ * range so they cannot land on a credential key. */
 #define ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE 0x1000u
 #define ULTRAWIDELOCK_KV_KEY_OPENTHREAD_LIMIT 0x1100u
 

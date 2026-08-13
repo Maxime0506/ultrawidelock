@@ -7,7 +7,7 @@
  * own depth; TLV certificate parsing is NOT included. Every PSA status is
  * checked -- a failed call costs no stack, so one failure suppresses the result
  * rather than flattering it. Never in a shipping image:
- * CONFIG_ALIRO_CASE_BENCH defaults n.
+ * CONFIG_ULTRAWIDELOCK_CASE_BENCH defaults n.
  */
 
 #include <string.h>
@@ -20,7 +20,7 @@
 
 #include "ultrawidelock_hash.h"
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 #include <mbedtls/memory_buffer_alloc.h>
 #endif
 
@@ -252,7 +252,7 @@ static uint32_t case_round(void)
 /**
  * Thread entry point for the CASE responder benchmark. Sleeps 8 seconds to allow the reader to
  * initialize, then runs one round of CASE (5 P-256 ops + 2 HKDF + 2 AES-CCM). If
- * CONFIG_ALIRO_CASE_BENCH_PERIOD_MS is nonzero, enters contention mode: repeats the benchmark every
+ * CONFIG_ULTRAWIDELOCK_CASE_BENCH_PERIOD_MS is nonzero, enters contention mode: repeats the benchmark every
  * N milliseconds to measure whether P-256 running on the same core blocks walk-up ranging.
  */
 static void case_bench_run(void *a, void *b, void *c)
@@ -269,7 +269,7 @@ static void case_bench_run(void *a, void *b, void *c)
 	 * it keeps the bench standalone if the reader ever fails to start. */
 	(void)psa_crypto_init();
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 	size_t heap_before = 0;
 	size_t blocks_before = 0;
 
@@ -295,7 +295,7 @@ static void case_bench_run(void *a, void *b, void *c)
 	LOG_INF("CASE responder: static working set %u B", (unsigned int)WORKING_SET_BYTES);
 	LOG_INF("CASE responder: 5 P-256 ops + 2 HKDF + 2 AES-CCM in %u us", elapsed_us);
 
-#if IS_ENABLED(CONFIG_ALIRO_HEAP_PROBE)
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 	size_t heap_after = 0;
 	size_t blocks_after = 0;
 
@@ -304,7 +304,7 @@ static void case_bench_run(void *a, void *b, void *c)
 		(unsigned int)heap_after, (unsigned int)heap_before);
 #endif
 
-	if (CONFIG_ALIRO_CASE_BENCH_PERIOD_MS == 0) {
+	if (CONFIG_ULTRAWIDELOCK_CASE_BENCH_PERIOD_MS == 0) {
 		return;
 	}
 
@@ -313,10 +313,10 @@ static void case_bench_run(void *a, void *b, void *c)
 	 * against a FINAL->arm margin of 0.66 ms, so if thread priority alone is
 	 * not enough to protect the ranging path, this is what finds out. */
 	LOG_INF("CASE contention mode: a round every %u ms, %u us of crypto each. Walk up now.",
-		(unsigned int)CONFIG_ALIRO_CASE_BENCH_PERIOD_MS, elapsed_us);
+		(unsigned int)CONFIG_ULTRAWIDELOCK_CASE_BENCH_PERIOD_MS, elapsed_us);
 
 	for (uint32_t iter = 1;; iter++) {
-		k_msleep(CONFIG_ALIRO_CASE_BENCH_PERIOD_MS);
+		k_msleep(CONFIG_ULTRAWIDELOCK_CASE_BENCH_PERIOD_MS);
 		elapsed_us = case_round();
 		if (!bench_ok) {
 			LOG_ERR("CASE round %u failed; stopping, so a dead thread cannot be "

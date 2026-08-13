@@ -51,7 +51,7 @@ SDK_VERSION="$(sed -n '1p' "$ROOT/VERSION")"
 printf '%s\n' "$SDK_VERSION" | grep -Eq '^[0-9]+[.][0-9]+[.][0-9]+$' ||
 	die "VERSION is not major.minor.patch"
 
-STAGE="${ALIRO_BUILD_ROOT:-$ROOT/build}/sdk-export"
+STAGE="${ULTRAWIDELOCK_BUILD_ROOT:-$ROOT/build}/sdk-export"
 NAME="ultrawidelock-sdk-$SDK_VERSION"
 
 rm -rf "$STAGE"

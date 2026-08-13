@@ -50,9 +50,24 @@
 /* TIMER0 is MPSL's and TIMER1 is the 802.15.4 high-precision timer's. */
 #define NRFX_TIMERS_USED ((1UL << 0) | (1UL << 1))
 
-#define NRFX_GPIOTE_CHANNELS_USED 0
+/*
+ * GPIOTE channel 0 is the DW3110 interrupt line and 1 is SW2. Both are
+ * programmed directly by their owners rather than through nrfx_gpiote, but they
+ * are reserved here so that an nrfx driver added later cannot allocate one out
+ * from under them. radio/peripheral_asserts_freertos.c checks the same two
+ * against the 802.15.4 driver's masks, which this file cannot see.
+ */
+#define NRFX_GPIOTE_CHANNELS_USED ((1UL << 0) | (1UL << 1))
 #define NRFX_DPPI_CHANNELS_USED 0
 #define NRFX_DPPI_GROUPS_USED 0
+
+/*
+ * USBD is deliberately absent, and the absence is the point. The USB stack is
+ * built as ultrawidelock_usb against the nRF5 SDK's own nrfx on include paths private to
+ * that library -- see the note in CMakeLists.txt -- so nothing configured here
+ * reaches it, and enabling it here would compile a SECOND USBD driver from the
+ * pinned nrfx into the same image.
+ */
 
 #include <templates/nrfx_config_common.h>
 #include <nrfx_config_nrf52833.h>

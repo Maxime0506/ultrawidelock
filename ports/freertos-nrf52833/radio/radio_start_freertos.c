@@ -96,9 +96,34 @@ void ultrawidelock_freertos_radio_timer0_isr(void)
 	MPSL_IRQ_TIMER0_Handler();
 }
 
+/*
+ * The POWER half of this vector, which MPSL does not read.
+ *
+ * MPSL_IRQ_CLOCK_Handler services the CLOCK events and leaves the POWER ones
+ * latched -- USBDETECTED, USBREMOVED and USBPWRRDY are not its business. Left
+ * unread and unmasked they would re-enter this vector at priority 0 forever, so
+ * whoever enables them also has to consume them, and that is the USB stack.
+ */
+static ultrawidelock_freertos_power_handler s_power_handler;
+
+int ultrawidelock_freertos_radio_set_power_handler(ultrawidelock_freertos_power_handler fn)
+{
+	if (fn == NULL || s_power_handler != NULL) {
+		return -1;
+	}
+	s_power_handler = fn;
+	return 0;
+}
+
 void ultrawidelock_freertos_radio_power_clock_isr(void)
 {
+	/* MPSL first, unconditionally. Its events are the ones with a deadline,
+	 * and the POWER events are a cable being plugged in. */
 	MPSL_IRQ_CLOCK_Handler();
+
+	if (s_power_handler != NULL) {
+		s_power_handler();
+	}
 }
 
 void ultrawidelock_freertos_radio_low_priority_isr(void)
@@ -198,12 +223,20 @@ static int32_t apply_resource_cfg(void)
 	sdc_cfg_t cfg;
 	int32_t rc;
 
-	cfg.central_count.count = 0;
-	rc = sdc_cfg_set(SDC_DEFAULT_RESOURCE_CFG_TAG, SDC_CFG_TYPE_CENTRAL_COUNT, &cfg);
-	if (rc < 0) {
-		return rc;
-	}
-
+	/*
+	 * SDC_CFG_TYPE_CENTRAL_COUNT is deliberately NOT set, and zero is not a
+	 * safe value to pass -- it is not a value at all here.
+	 *
+	 * This image links libsoftdevice_controller_peripheral.a, which has no
+	 * central role to size, and it rejects the config TYPE outright rather
+	 * than accepting a count of zero: the call returns -NRF_EOPNOTSUPP (-45)
+	 * and startup fails at STAGE_SDC_CFG. Setting it to zero reads as the
+	 * careful thing to do, which is exactly why this note is here.
+	 *
+	 * Found on hardware. Nothing in the host suite could see it: the
+	 * controller is a real vendor archive with a real role restriction, and
+	 * the fake accepts every configuration it is handed.
+	 */
 	cfg.peripheral_count.count = 1;
 	rc = sdc_cfg_set(SDC_DEFAULT_RESOURCE_CFG_TAG, SDC_CFG_TYPE_PERIPHERAL_COUNT, &cfg);
 	if (rc < 0) {
@@ -243,8 +276,7 @@ static void enable_interrupts(void)
 	NVIC_EnableIRQ(SWI5_EGU5_IRQn);
 }
 
-int ultrawidelock_freertos_radio_start(
-	const struct ultrawidelock_freertos_radio_dispatcher *dispatcher)
+int ultrawidelock_freertos_radio_start(const struct ultrawidelock_freertos_radio_dispatcher *dispatcher)
 {
 	static const mpsl_clock_lfclk_cfg_t clock_cfg = {
 		.source = MPSL_CLOCK_LF_SRC_XTAL,

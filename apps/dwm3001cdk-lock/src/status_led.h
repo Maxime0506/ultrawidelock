@@ -31,9 +31,9 @@
  * independently, so two callers owning two different bits cannot fight.
  */
 enum status_led_signal {
-	/** The lock is open: an credential grant, or a Home tile tap. */
+	/** The lock is open: a credential grant, or a Home tile tap. */
 	STATUS_LED_UNLOCKED = BIT(0),
-	/** An credential secure session is established -- a phone is talking to us. */
+	/** A credential secure session is established -- a phone is talking to us. */
 	STATUS_LED_SESSION = BIT(1),
 	/** UWB ranges are landing right now. Implies a walk-up in progress. */
 	STATUS_LED_RANGING = BIT(2),

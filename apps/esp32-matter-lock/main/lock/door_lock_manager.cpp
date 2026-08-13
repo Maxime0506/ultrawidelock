@@ -279,7 +279,7 @@ void BoltLockManager::Unlock(EndpointId endpointId, OperationSourceEnum source,
 // Find the user that owns a given credential endpoint key, so an approach unlock can be attributed
 // to a person in the LockOperation event rather than reported anonymously. credentialData: the
 // credential public key the reader authenticated (uncompressed P-256, 65 bytes). Scans occupied
-// users' credential links for an credential endpoint-key credential whose stored bytes match,
+// users' credential links for a credential endpoint-key credential whose stored bytes match,
 // comparing against the mCredentialData backing store directly (the ByteSpan in mLockCredentials is
 // restored from NVM with a stale pointer after a reboot). Returns the one-indexed user index, or 0
 // if no occupied user owns a matching credential.

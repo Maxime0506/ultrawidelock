@@ -165,7 +165,7 @@ int matter_thread_unadvertise_commissionable(void);
 
 /**
  * Print the active operational dataset as hex. BENCH ONLY, and a no-op unless
- * CONFIG_ALIRO_THREAD_DATASET_DUMP.
+ * CONFIG_ULTRAWIDELOCK_THREAD_DATASET_DUMP.
  *
  * THIS DISCLOSES THE THREAD NETWORK KEY. It exists for one job: commissioning a
  * second Matter administrator over BLE, which is the only transport PASE runs on

@@ -1,15 +1,15 @@
 // Standalone-FreeRTOS bring-up for the credential reader's NimBLE transport.
 //
 // The portable half -- the GATT service, advertising, and the L2CAP CoC server -- is
-// modules/ultrawidelock_cred/src/ultrawidelock_ble_nimble.c, shared with the ESP32 port. What is
-// here is the part that names this platform, and it is smaller than the ESP-IDF equivalent because
-// the port already owns NimBLE: ultrawidelock_freertos_nimble_host_start() does nimble_port_init()
-// and the host task, so this only has to hand it the two hooks and make sure the key-value store is
-// up first.
+// modules/ultrawidelock_cred/src/ultrawidelock_ble_nimble.c, shared with the ESP32 port. What is here is
+// the part that names this platform, and it is smaller than the ESP-IDF equivalent
+// because the port already owns NimBLE: ultrawidelock_freertos_nimble_host_start() does
+// nimble_port_init() and the host task, so this only has to hand it the two hooks and
+// make sure the key-value store is up first.
 //
 // BONDING. The ESP-IDF path initialises NVS here because esp-nimble persists SM keys in
 // it. This port does not, because MYNEWT_VAL_BLE_SM_BONDING is 0 in
-// ble/nimble_syscfg/syscfg/syscfg.h: credential carries its own credentials through the
+// ble/nimble_syscfg/syscfg/syscfg.h: the credential protocol carries its own credentials through the
 // attestation exchange on the CoC, so SM bonding is not the mechanism and no NimBLE store
 // backend is linked. Turning bonding on means building ble_store_config.c against
 // ultrawidelock_freertos_kv and revisiting this file -- it is not a syscfg edit on its own.
@@ -53,7 +53,10 @@ int ultrawidelock_ble_start(const struct ultrawidelock_ble_config *cfg)
 		return -1;
 	}
 
-	ultrawidelock_freertos_nimble_host_set_hooks(&k_hooks);
+	if (ultrawidelock_freertos_nimble_host_add_hooks(&k_hooks) != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, TAG, "no NimBLE hook slot");
+		return -1;
+	}
 
 	rc = ultrawidelock_freertos_nimble_host_start();
 	if (rc != 0) {

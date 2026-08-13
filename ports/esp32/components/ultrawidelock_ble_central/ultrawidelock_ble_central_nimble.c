@@ -290,7 +290,7 @@ static int on_chr_disc(uint16_t conn_handle, const struct ble_gatt_error *error,
 	}
 	/* Discovery complete: both handles are required before we can proceed. */
 	if (s_peer.spsm_val_handle == 0 || s_peer.devver_val_handle == 0) {
-		abandon("peer is missing an credential characteristic", 0);
+		abandon("peer is missing a credential characteristic", 0);
 		return 0;
 	}
 

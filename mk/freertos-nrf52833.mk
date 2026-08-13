@@ -80,6 +80,7 @@ FREERTOS_TOOLCHAIN_ARG = $(if $(ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR),-DULTRAWIDELOCK
 
 FREERTOS_CMAKE_ARGS = \
 	$(FREERTOS_TOOLCHAIN_ARG) \
+	-DULTRAWIDELOCK_DFU_KEY=$(SIGN_KEY) \
 	-DCMAKE_TOOLCHAIN_FILE=$(REPO_ROOT)/ports/freertos-nrf52833/cmake/arm-none-eabi.cmake \
 	-DULTRAWIDELOCK_QORVO_SDK_DIR=$(QORVO_SDK_DIR) \
 	-DULTRAWIDELOCK_NCS_WORKSPACE=$(NCS_WORKSPACE) \
@@ -108,3 +109,17 @@ freertos-build:
 	@# than kept as a target someone remembers to run, because this port has
 	@# already had a check rot in exactly that position.
 	@cmake --build $(FREERTOS_BUILD_DIR) --target ultrawidelock_uwb_reach
+	@# Every vector peripherals.yml gives an owner must reach that owner. The
+	@# vector table is data, so a weak alias no owner overrode links cleanly and
+	@# resolves to default_handler -- an infinite loop the first interrupt falls
+	@# into. RNG and RTC2 both shipped that way and cost a hardware debugging
+	@# session; this makes the next one a build failure.
+	@ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR=$(ULTRAWIDELOCK_ARM_TOOLCHAIN_DIR) \
+		$(REPO_ROOT)/scripts/freertos-vector-check.sh \
+		$(FREERTOS_BUILD_DIR)/dwm3001cdk-lock-freertos.elf
+	@# newlib-nano's printf does not implement ll. A format it cannot honour
+	@# consumes the wrong argument width, so the next %s dereferences a data
+	@# value -- a bus fault into default_handler, which spins and takes the
+	@# tick with it. The board then prints a complete boot log and goes
+	@# silent, which is why this is a build failure and not a review item.
+	@$(REPO_ROOT)/scripts/freertos-printf-check.sh

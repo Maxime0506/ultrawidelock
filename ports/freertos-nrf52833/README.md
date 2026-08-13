@@ -128,7 +128,7 @@ The implemented foundation now includes:
 - `storage/ultrawidelock_prov_kv.c` is the reader's provisioning backend, the standalone
   twin of the Zephyr port's `ultrawidelock_prov_settings.c`. The serialisation, the dev
   fallback and the trust logic are the portable `ultrawidelock_prov.c`; this file only
-  moves that one blob under `ULTRAWIDELOCK_KV_KEY_ALIRO_PROV`. Every failure still leaves
+  moves that one blob under `ULTRAWIDELOCK_KV_KEY_CRED_PROV`. Every failure still leaves
   a usable dev identity, because a reader that will not boot is worse than one
   that boots unprovisioned, and a stored record longer than this firmware can
   write is refused rather than parsed. A factory reset deletes that one key

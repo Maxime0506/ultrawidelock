@@ -14,7 +14,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* The flat numbering's full span: two ports of 32, whether or not they exist. */
 #define FAKE_GPIO_PIN_COUNT 64u
+
+/*
+ * How many of those the nRF52833 actually has: P0.00-P0.31 and P1.00-P1.09.
+ * nrf52833.dtsi gives gpio1 ngpios = <10>, and the part's own
+ * nrf_gpio_pin_port_decode() asserts on anything above.
+ *
+ * Modelled because the absence of this check let a pin that does not exist
+ * pass the whole host suite. ULTRAWIDELOCK_DW3000_PIN_WAKEUP was 51 -- P1.19, copied
+ * from a Qorvo project cmake that no source file in their SDK reads -- and
+ * dw3000_hw_init() drove it on its first line. Every test agreed, because the
+ * fake sized its array by the numbering rather than by the silicon, and the
+ * board took an nrfx assertion at UWB start.
+ */
+#define FAKE_GPIO_PRESENT_COUNT 42u
 
 typedef enum {
 	NRF_GPIO_PIN_DIR_INPUT = 0,
@@ -59,6 +74,12 @@ typedef struct {
 extern fake_gpio_pin_t fake_gpio[FAKE_GPIO_PIN_COUNT];
 /* Writes to pins that were never configured as outputs. */
 extern unsigned fake_gpio_unconfigured_writes;
+/*
+ * Any touch -- configure, write or read -- of a pin the part does not have.
+ * On hardware the first of these is a fatal nrfx assertion, so a test that
+ * leaves this non-zero is describing a board that does not boot.
+ */
+extern unsigned fake_gpio_absent_pin_touches;
 
 void nrf_gpio_cfg(uint32_t pin, nrf_gpio_pin_dir_t dir, nrf_gpio_pin_input_t input,
 		  nrf_gpio_pin_pull_t pull, nrf_gpio_pin_drive_t drive, nrf_gpio_pin_sense_t sense);

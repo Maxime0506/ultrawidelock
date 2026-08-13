@@ -279,7 +279,7 @@ uint8_t AliroStack::GetFeatures() const
 #ifdef CONFIG_NCS_ALIRO_BLE_UWB
 
 /**
- * Generates an credential BLE advertisement from the provided address, power level, reader
+ * Generates a credential BLE advertisement from the provided address, power level, reader
  * identifier, notification state, and expiration timestamp. Validates inputs and derives the
  * dynamic tag via encryption. Returns ALIRO_NO_ERROR on success; ALIRO_INVALID_ARGUMENT if
  * txPowerLevel is outside [–100, 20] dBm or notification is out of range.

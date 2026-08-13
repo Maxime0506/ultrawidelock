@@ -321,7 +321,7 @@ int ultrawidelock_apdu_parse_auth1_response(const uint8_t *buf, size_t len,
 
 /* ---- L2CAP envelope ---- */
 
-// Frames a payload into an credential BLE envelope: 1-byte type (top 2 bits masked off), 1-byte
+// Frames a payload into a credential BLE envelope: 1-byte type (top 2 bits masked off), 1-byte
 // opcode, 2-byte big-endian payload length, followed by the payload. Returns 0 on success with
 // *out_len set to the total framed length; returns -1 if plen exceeds 0xFFFF or cap is too small to
 // hold the header plus payload.
@@ -342,7 +342,7 @@ int ultrawidelock_ble_frame(uint8_t type, uint8_t opcode, const uint8_t *payload
 	return 0;
 }
 
-// Parses an credential BLE envelope, extracting the type, opcode, and a pointer/length into the
+// Parses a credential BLE envelope, extracting the type, opcode, and a pointer/length into the
 // payload region of buf. The returned *payload points into buf; the caller must not use it beyond
 // buf's lifetime. Returns 0 on success; returns -1 if len is shorter than the envelope header, or
 // the encoded payload length would exceed the buffer.

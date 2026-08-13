@@ -159,7 +159,7 @@ def read_octets(chip_tool, fabric, attr, node_id, endpoint, dry_run, expect_len)
 
     if re.search(rf"\b{label}\s*:\s*null\b", out, re.IGNORECASE):
         sys.exit(
-            f"{label} is NULL: this reader is not reporting an credential configuration.\n"
+            f"{label} is NULL: this reader is not reporting a credential configuration.\n"
             "Either no home has provisioned it, or it has rebooted since one did and\n"
             "the firmware predates the boot-time restore of these attributes."
         )

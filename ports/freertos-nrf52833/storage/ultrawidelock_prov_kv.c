@@ -3,7 +3,7 @@
  * port's ultrawidelock_prov_settings.c and the ESP32 port's ultrawidelock_prov_nvs.c. The
  * serialisation, the dev fallback and all of the trust logic live in the
  * portable ultrawidelock_prov.c; this file only moves that one blob in and out of the
- * port's key-value store under ULTRAWIDELOCK_KV_KEY_ALIRO_PROV.
+ * port's key-value store under ULTRAWIDELOCK_KV_KEY_CRED_PROV.
  */
 #include <string.h>
 
@@ -56,7 +56,7 @@ int ultrawidelock_prov_load(struct ultrawidelock_reader_identity *id,
 		return -1;
 	}
 
-	rc = ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, s_blob, &len);
+	rc = ultrawidelock_freertos_kv_get(ULTRAWIDELOCK_KV_KEY_CRED_PROV, s_blob, &len);
 	if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 		/* Never provisioned. Not an error. */
 		ultrawidelock_prov_dev_default(id, ts);
@@ -105,7 +105,7 @@ int ultrawidelock_prov_store(const struct ultrawidelock_reader_identity *id,
 		return -1;
 	}
 
-	rc = ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, s_blob, len);
+	rc = ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_CRED_PROV, s_blob, len);
 	if (rc != ULTRAWIDELOCK_KV_OK) {
 		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_WARNING, PROV_TAG, "kv set rc=%d", rc);
 		return rc;
@@ -136,7 +136,7 @@ int ultrawidelock_prov_erase(void)
 		return rc;
 	}
 
-	rc = ultrawidelock_freertos_kv_delete(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV);
+	rc = ultrawidelock_freertos_kv_delete(ULTRAWIDELOCK_KV_KEY_CRED_PROV);
 	if (rc == ULTRAWIDELOCK_KV_NOT_FOUND) {
 		/* Already absent. A reset that had nothing to undo succeeded. */
 		rc = ULTRAWIDELOCK_KV_OK;

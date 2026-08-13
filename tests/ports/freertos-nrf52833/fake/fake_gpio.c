@@ -5,17 +5,35 @@
 
 fake_gpio_pin_t fake_gpio[FAKE_GPIO_PIN_COUNT];
 unsigned fake_gpio_unconfigured_writes;
+unsigned fake_gpio_absent_pin_touches;
 
 void fake_gpio_reset(void)
 {
 	memset(fake_gpio, 0, sizeof(fake_gpio));
 	fake_gpio_unconfigured_writes = 0;
+	fake_gpio_absent_pin_touches = 0;
+}
+
+/*
+ * Whether the part has this pin, and the single place every entry point asks.
+ *
+ * The array is sized by the flat numbering so an out-of-range pin still has
+ * somewhere to land and the model cannot be made to scribble; presence is a
+ * separate question, and it is the one hardware answers with an assertion.
+ */
+static bool pin_present(uint32_t pin)
+{
+	if (pin < FAKE_GPIO_PRESENT_COUNT) {
+		return true;
+	}
+	fake_gpio_absent_pin_touches++;
+	return false;
 }
 
 void nrf_gpio_cfg(uint32_t pin, nrf_gpio_pin_dir_t dir, nrf_gpio_pin_input_t input,
 		  nrf_gpio_pin_pull_t pull, nrf_gpio_pin_drive_t drive, nrf_gpio_pin_sense_t sense)
 {
-	if (pin >= FAKE_GPIO_PIN_COUNT) {
+	if (!pin_present(pin)) {
 		return;
 	}
 	fake_gpio[pin].configured = true;
@@ -40,7 +58,7 @@ void nrf_gpio_cfg_input(uint32_t pin, nrf_gpio_pin_pull_t pull)
 
 void nrf_gpio_cfg_default(uint32_t pin)
 {
-	if (pin >= FAKE_GPIO_PIN_COUNT) {
+	if (!pin_present(pin)) {
 		return;
 	}
 	memset(&fake_gpio[pin], 0, sizeof(fake_gpio[pin]));
@@ -57,7 +75,7 @@ void nrf_gpio_cfg_default(uint32_t pin)
  */
 static void pin_write(uint32_t pin, bool level)
 {
-	if (pin >= FAKE_GPIO_PIN_COUNT) {
+	if (!pin_present(pin)) {
 		return;
 	}
 	if (!fake_gpio[pin].configured) {
@@ -86,7 +104,7 @@ void nrf_gpio_pin_write(uint32_t pin, uint32_t value)
 
 uint32_t nrf_gpio_pin_read(uint32_t pin)
 {
-	if (pin >= FAKE_GPIO_PIN_COUNT) {
+	if (!pin_present(pin)) {
 		return 0;
 	}
 	return fake_gpio[pin].level ? 1u : 0u;
@@ -99,7 +117,7 @@ uint32_t nrf_gpio_pin_out_read(uint32_t pin)
 
 void fake_gpio_input_set(uint32_t pin, bool level)
 {
-	if (pin >= FAKE_GPIO_PIN_COUNT) {
+	if (!pin_present(pin)) {
 		return;
 	}
 	fake_gpio[pin].level = level;

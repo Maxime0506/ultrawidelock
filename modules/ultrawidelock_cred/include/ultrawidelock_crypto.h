@@ -1,5 +1,5 @@
 // credential crypto public API: key derivation, AES-GCM secure channels, and wire message
-// seal/open framing shared by the reader and device sides of an credential session.
+// seal/open framing shared by the reader and device sides of a credential session.
 /*
  * ultrawidelock_crypto — the credential-auth cryptography for the credential reader: the
  * P-256 / AES-256-GCM / SHA-256 suite and the key-derivation schedule that

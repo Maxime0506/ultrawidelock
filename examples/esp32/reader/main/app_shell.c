@@ -354,7 +354,7 @@ static int cmd_ultrawidelock_stepup(int argc, char **argv)
 		return 0;
 	}
 	ultrawidelock_reader_stepup_arm();
-	printf("ultrawidelock-stepup: armed one-shot; approach with an credential device to request "
+	printf("ultrawidelock-stepup: armed one-shot; approach with a credential device to request "
 	       "an Access Document (verdict logged, unlock unaffected)\n");
 	return 0;
 }

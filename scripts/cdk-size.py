@@ -396,7 +396,7 @@ CONFIG_AXIS = [
     "CONFIG_SIZE_OPTIMIZATIONS",
     "CONFIG_NO_OPTIMIZATIONS",
     "CONFIG_OPENTHREAD_DEBUG",
-    "CONFIG_ALIRO_MATTER_BLE",
+    "CONFIG_ULTRAWIDELOCK_MATTER_BLE",
 ]
 
 
@@ -433,7 +433,7 @@ def relative_to_root(path, root):
         rel = os.path.relpath(path, os.path.abspath(root))
     except ValueError:  # different drive on Windows
         return os.path.basename(path)
-    # A build directory outside the checkout (ALIRO_BUILD elsewhere) would come
+    # A build directory outside the checkout (ULTRAWIDELOCK_BUILD elsewhere) would come
     # back as ../../somewhere, which is still a path off this machine. The
     # basename is all the report needs to say which tree it measured.
     return os.path.basename(path) if rel.startswith("..") else rel

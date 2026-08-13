@@ -2,7 +2,7 @@
  * Thread/ranging contention gate: measures whether DS-TWR's FINAL->arm margin
  * survives sharing the M4 and 2.4 GHz radio with OpenThread. Deliberately harsh:
  * MED (radio always on), channel 15 on top of BLE ch 38. Never in a shipping
- * image -- CONFIG_ALIRO_THREAD_GATE defaults n and the file compiles out.
+ * image -- CONFIG_ULTRAWIDELOCK_THREAD_GATE defaults n and the file compiles out.
  *
  * Needs NET_L2_OPENTHREAD (a "bare OpenThread" build links no radio driver) and
  * CONFIG_OPENTHREAD_MANUAL_START=y so this file can commit its dataset before

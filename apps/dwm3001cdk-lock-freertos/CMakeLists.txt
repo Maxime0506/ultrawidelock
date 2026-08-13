@@ -14,6 +14,7 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../ports/freertos-nrf52833" port)
 
 add_executable(dwm3001cdk-lock-freertos
   "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
+  "${CMAKE_CURRENT_LIST_DIR}/src/status_led.c"
 )
 target_link_libraries(dwm3001cdk-lock-freertos PRIVATE ultrawidelock_freertos_port)
 target_compile_options(dwm3001cdk-lock-freertos PRIVATE -Wall -Wextra -Werror)

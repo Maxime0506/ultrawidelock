@@ -247,7 +247,7 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 		/*
 		 * FeatureMap is answered here for the same reason it is on
 		 * NetworkCommissioning: it is what a controller reads to decide
-		 * whether this lock is an credential reader, and without it the
+		 * whether this lock is a credential reader, and without it the
 		 * credential attributes below look like a lock that answers
 		 * questions nobody asked.
 		 */
@@ -1171,7 +1171,7 @@ static bool field_u64(const struct matter_im_invoke *inv, uint8_t tag, uint64_t 
  * SetCredential carries the credential type one level down, in a
  * CredentialStruct under field 1. Reading tag 0 at the top level instead finds
  * OperationType, which is also a small unsigned and decodes perfectly -- so
- * getting this wrong installs an credential key as whatever operation type happened
+ * getting this wrong installs a credential key as whatever operation type happened
  * to be sent, with nothing to report.
  */
 static bool field_struct_u64(const struct matter_im_invoke *inv, uint8_t outer, uint8_t inner,

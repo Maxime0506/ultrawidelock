@@ -34,8 +34,11 @@
 #include <hal/nrf_spim.h>
 #include <nrfx.h>
 
+#include <ultrawidelock_freertos_board.h>
 #include <ultrawidelock_freertos_platform.h>
 #include <ultrawidelock_freertos_uwb.h>
+
+void GPIOTE_IRQHandler(void);
 
 #include "board_pins.h"
 #include "dw3000_hw.h"
@@ -83,8 +86,7 @@ int dwt_checkidlerc(void)
 	return g_idle_rc ? 1 : 0;
 }
 
-void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag,
-				const char *fmt, ...)
+void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, const char *tag, const char *fmt, ...)
 {
 	(void)tag;
 	(void)fmt;
@@ -123,6 +125,12 @@ static void bring_up(void)
  * One trip through the interrupt path, with no scheduler under it: raise the
  * line, run the vector if the part would have taken one, then run what the
  * worker task runs once it is notified.
+ *
+ * Through GPIOTE_IRQHandler rather than the driver's handler, because the
+ * vector is shared: board/gpiote_freertos.c owns it and fans it out to whoever
+ * registered. Calling the driver directly would pass with the registration
+ * missing, which is precisely the state this port shipped in before the
+ * dispatcher existed -- the edge reached default_handler and spun.
  */
 static bool deliver_irq(void)
 {
@@ -131,7 +139,7 @@ static bool deliver_irq(void)
 	fake_gpiote_pin_edge(ULTRAWIDELOCK_DW3000_PIN_IRQ, true);
 	interrupted = fake_gpiote_would_interrupt();
 	if (interrupted) {
-		ultrawidelock_freertos_dw3000_irq_handler();
+		GPIOTE_IRQHandler();
 	}
 	return interrupted;
 }
@@ -174,9 +182,13 @@ static void check_init(void)
 	CHECK("the reset line comes up released, not driven high",
 	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_RST].configured &&
 		      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_RST].dir == NRF_GPIO_PIN_DIR_INPUT);
-	CHECK("the wake line is an output",
-	      fake_gpio[ULTRAWIDELOCK_DW3000_PIN_WAKEUP].dir == NRF_GPIO_PIN_DIR_OUTPUT);
-	CHECK("the wake line idles asserted", fake_gpio[ULTRAWIDELOCK_DW3000_PIN_WAKEUP].level);
+	/*
+	 * No wake line on this board, and asserting its absence rather than its
+	 * state is the point: the number the SDK gives for it is P1.19, which
+	 * the nRF52833 does not have. See ports/.../uwb/board_pins.h.
+	 */
+	CHECK("bring-up touches no pin the nRF52833 does not have",
+	      fake_gpio_absent_pin_touches == 0u);
 	CHECK("the SPI bus came up with it", fake_spim.enabled);
 }
 
@@ -269,11 +281,34 @@ static void check_spurious_vector(void)
 	bring_up();
 	(void)dw3000_hw_init_interrupt();
 
-	/* No event behind it: the vector must notify nobody. */
-	ultrawidelock_freertos_dw3000_irq_handler();
+	/* No event behind it: the vector must notify nobody. Through the shared
+	 * vector, because a handler that ignores the event check would see
+	 * every other channel's edges once the update button takes one. */
+	GPIOTE_IRQHandler();
 	CHECK("a vector with no event behind it notifies nothing",
 	      fake_isr_notify_calls == 0u);
 	CHECK("a vector with no event behind it yields nothing", fake_isr_yield_calls == 0u);
+}
+
+/*
+ * The routing itself, asked of the dispatcher rather than of the driver.
+ *
+ * Registering twice is what an image that re-initialises the interrupt does,
+ * and a table that took the handler twice would call dwt_isr twice per edge --
+ * which reads downstream as a duplicated frame, not as a registration bug.
+ */
+static void check_vector_registration(void)
+{
+	bring_up();
+	CHECK("the DW3110 line is registered on the shared GPIOTE vector",
+	      dw3000_hw_init_interrupt() == 0);
+	CHECK("registering the same handler again is accepted",
+	      dw3000_hw_init_interrupt() == 0);
+
+	fake_isr_notify_calls = 0u;
+	fake_gpiote_pin_edge(ULTRAWIDELOCK_DW3000_PIN_IRQ, true);
+	GPIOTE_IRQHandler();
+	CHECK("one edge notifies the worker exactly once", fake_isr_notify_calls == 1u);
 }
 
 static void check_interrupt_masking(void)
@@ -381,7 +416,13 @@ static void check_wakeup_pin(void)
 {
 	bring_up();
 	dw3000_hw_wakeup_pin_low();
-	CHECK("the wake pin can be driven low", !fake_gpio[ULTRAWIDELOCK_DW3000_PIN_WAKEUP].level);
+	/*
+	 * The call is a no-op here and must stay harmless: dw3000_hw.h is shared
+	 * with the ESP32 port, which does have the pin, so the entry point
+	 * cannot be deleted -- only emptied.
+	 */
+	CHECK("lowering an absent wake pin touches no pin the part lacks",
+	      fake_gpio_absent_pin_touches == 0u);
 }
 
 static void check_fini(void)
@@ -406,6 +447,7 @@ static void (*const g_scenarios[])(void) = {
 	check_interrupt_setup,
 	check_interrupt_delivery,
 	check_spurious_vector,
+	check_vector_registration,
 	check_interrupt_masking,
 	check_reset,
 	check_wakeup,

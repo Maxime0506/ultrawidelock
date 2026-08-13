@@ -30,7 +30,7 @@ void ultrawidelock_freertos_dw3000_irq_handler(void);
  * interrupt code has ever run on the part it was written for. This is what
  * closes that gap.
  *
- * The PHY applied is the one an credential session is going to negotiate anyway, so
+ * The PHY applied is the one a credential session is going to negotiate anyway, so
  * this is a real step rather than a probe invented for the occasion: it walks
  * the whole backend -- SPI transfers, the reset sequence, the device-ID read,
  * the interrupt line -- and leaves the radio configured with RX unarmed, which

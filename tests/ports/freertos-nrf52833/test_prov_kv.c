@@ -198,7 +198,7 @@ static void scenario_malformed(void)
 	memset(garbage, 0x33, sizeof(garbage));
 	CHECK("kv init succeeds", ultrawidelock_freertos_kv_init() == ULTRAWIDELOCK_KV_OK);
 	CHECK("garbage stores under the prov key",
-	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, garbage,
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_CRED_PROV, garbage,
 					    sizeof(garbage)) == ULTRAWIDELOCK_KV_OK);
 
 	CHECK("a malformed blob reports an error", ultrawidelock_prov_load(&id, &ts) == -1);
@@ -219,7 +219,7 @@ static void scenario_oversized(void)
 	memset(big, 0x22, sizeof(big));
 	CHECK("kv init succeeds", ultrawidelock_freertos_kv_init() == ULTRAWIDELOCK_KV_OK);
 	CHECK("an oversized record stores",
-	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_ALIRO_PROV, big, sizeof(big)) ==
+	      ultrawidelock_freertos_kv_set(ULTRAWIDELOCK_KV_KEY_CRED_PROV, big, sizeof(big)) ==
 		      ULTRAWIDELOCK_KV_OK);
 
 	CHECK("an oversized record reports an error", ultrawidelock_prov_load(&id, &ts) == -1);

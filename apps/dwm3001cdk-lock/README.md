@@ -1,6 +1,6 @@
 # DWM3001CDK lock
 
-This application turns one DWM3001CDK into an credential reader and Matter lock. It
+This application turns one DWM3001CDK into a credential reader and Matter lock. It
 runs the portable credential, UWB, and Matter modules on the board's nRF52833 and
 DW3110.
 

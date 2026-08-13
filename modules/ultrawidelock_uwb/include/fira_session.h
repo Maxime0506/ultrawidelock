@@ -11,7 +11,7 @@ bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out, uint8_t *nlos_
 			     uint32_t *block_out, int64_t *age_ms_out);
 
 #if defined(CONFIG_ULTRAWIDELOCK_CRED)
-/** @brief Stash an credential URSK for the CCC Pre-POLL STS decode; NULL clears it. */
+/** @brief Stash a credential URSK for the CCC Pre-POLL STS decode; NULL clears it. */
 void fira_session_set_provisioned_ursk(const uint8_t *ursk);
 
 /** @brief The stashed credential URSK (32 bytes), or NULL if none — for the Pre-POLL decode. */

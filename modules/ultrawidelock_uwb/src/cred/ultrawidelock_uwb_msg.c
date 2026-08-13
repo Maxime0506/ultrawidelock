@@ -270,7 +270,7 @@ ultrawidelock_uwb_msg_build_suspend_response(struct ultrawidelock_uwb_session *s
 }
 
 /**
- * @brief Builds an credential general-error notification message carrying the given error code.
+ * @brief Builds a credential general-error notification message carrying the given error code.
  * @param session Unused; reserved for a consistent builder signature.
  * @param error_code Error code to encode in the general-error notification attribute.
  * @return Newly allocated notification message, or NULL if builder init or attribute encoding
@@ -1060,7 +1060,7 @@ handle_ranging_suspended(struct ultrawidelock_uwb_session *session)
 }
 
 /**
- * @brief Parse an credential event notification message, logging busy, general-error, and
+ * @brief Parse a credential event notification message, logging busy, general-error, and
  * reader-descriptor events.
  * @param session credential UWB session (unused).
  * @param message Received event notification message to parse.

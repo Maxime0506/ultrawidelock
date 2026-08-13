@@ -23,7 +23,7 @@
 extern "C" {
 #endif
 
-/* Device view of an credential AES-256-GCM channel. The reader's ultrawidelock_secchan seals
+/* Device view of a credential AES-256-GCM channel. The reader's ultrawidelock_secchan seals
  * on direction 0 and opens on direction 1; the device is the mirror: it OPENS
  * reader->device traffic (direction 0, key s0) and SEALS device->reader traffic
  * (direction 1, key s1). Both per-direction counters start at 1 (§8.3.1.13). */

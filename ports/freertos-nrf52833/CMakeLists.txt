@@ -131,6 +131,7 @@ add_library(ultrawidelock_board STATIC
   "${ULTRAWIDELOCK_PORT_DIR}/board/time_freertos.c"
   "${ULTRAWIDELOCK_PORT_DIR}/board/fault_freertos.c"
   "${ULTRAWIDELOCK_PORT_DIR}/board/log_rtt_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/board/gpiote_freertos.c"
   # The OSAL sits here rather than in a layer of its own: it is the port's
   # implementation of the shared modules/ultrawidelock_port contract, it needs nothing but
   # the kernel, and everything above the board uses it.
@@ -625,8 +626,158 @@ set_source_files_properties(
   PROPERTIES COMPILE_OPTIONS
   "-include;${ULTRAWIDELOCK_PORT_DIR}/thread/ot_compat/ultrawidelock_freertos_ot_config.h;-Wno-unused-parameter")
 
+# ----------------------------------------------------------------------------
+# DFU receiver: take a signed delta patch, verify it, stage it, reboot.
+#
+# The receiver itself is already portable -- modules/ultrawidelock_dfu/src/dfu_receiver.c
+# names PSA, ultrawidelock_flash, ultrawidelock_osal and ultrawidelock_log and nothing else -- so what this
+# layer adds is the flash backend for the two partitions and the signing key.
+#
+# The APPLIER half is deliberately not here. It runs in MCUboot, because an
+# application cannot rewrite the flash it is executing from, and MCUboot is a
+# separate image this port does not build. See board/nrf52833_lock.ld.
+# ----------------------------------------------------------------------------
+set(ULTRAWIDELOCK_DFU_DIR "${ULTRAWIDELOCK_MODULES_DIR}/ultrawidelock_dfu")
+
+# The same key the Zephyr image signs with, reached the same way: the top-level
+# Makefile computes SIGN_KEY and exports it, and mk/freertos-nrf52833.mk passes
+# it through. Falling back to the environment covers a bare cmake invocation.
+if(NOT ULTRAWIDELOCK_DFU_KEY AND DEFINED ENV{SIGN_KEY})
+  set(ULTRAWIDELOCK_DFU_KEY "$ENV{SIGN_KEY}")
+endif()
+if(NOT ULTRAWIDELOCK_DFU_KEY OR NOT EXISTS "${ULTRAWIDELOCK_DFU_KEY}")
+  message(FATAL_ERROR
+    "the update-signing key is missing: '${ULTRAWIDELOCK_DFU_KEY}'\n"
+    "  This image verifies delta patches against its public half, so it cannot\n"
+    "  be built without one.\n"
+    "  Fix: make dfu-key   (once per clone; it refuses to overwrite)\n"
+    "  Or:  pass -DULTRAWIDELOCK_DFU_KEY=<absolute path>.")
+endif()
+
+# The public key is generated into the image rather than committed, for the same
+# reason the Zephyr build does it: the private key is the thing that must not be
+# in the tree, and deriving the public half at configure time means the two
+# cannot drift.
+set(ULTRAWIDELOCK_DFU_PUBKEY_C "${CMAKE_CURRENT_BINARY_DIR}/ultrawidelock_dfu_pubkey.c")
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_custom_command(
+  OUTPUT "${ULTRAWIDELOCK_DFU_PUBKEY_C}"
+  COMMAND "${Python3_EXECUTABLE}" "${ULTRAWIDELOCK_DFU_DIR}/scripts/emit_pubkey.py"
+          "${ULTRAWIDELOCK_DFU_KEY}" "${ULTRAWIDELOCK_DFU_PUBKEY_C}"
+  DEPENDS "${ULTRAWIDELOCK_DFU_KEY}" "${ULTRAWIDELOCK_DFU_DIR}/scripts/emit_pubkey.py"
+  COMMENT "ultrawidelock_dfu: extracting the update-signing public key")
+
+add_library(ultrawidelock_dfu STATIC
+  "${ULTRAWIDELOCK_DFU_DIR}/src/dfu_receiver.c"
+  "${ULTRAWIDELOCK_DFU_DIR}/src/dfu_crc.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/storage/flash_area_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/dfu/dfu_ble_freertos.c"
+  "${ULTRAWIDELOCK_DFU_PUBKEY_C}"
+)
+target_include_directories(ultrawidelock_dfu PUBLIC
+  "${ULTRAWIDELOCK_DFU_DIR}/include"
+)
+target_include_directories(ultrawidelock_dfu PRIVATE
+  "${ULTRAWIDELOCK_DFU_DIR}/src"
+)
+# ultrawidelock_storage for the flash driver underneath the area backend, ultrawidelock_mbedtls for
+# the PSA signature check the receiver makes before anything is staged, and
+# ultrawidelock_nimble for the transport in front of it.
+target_link_libraries(ultrawidelock_dfu PUBLIC ultrawidelock_storage ultrawidelock_mbedtls ultrawidelock_nimble)
+
+# ----------------------------------------------------------------------------
+# USB device: the provisioning console's transport.
+#
+# The nRF5 SDK's app_usbd framework and CDC ACM class, compiled unmodified,
+# against the nrfx this image already links rather than the one they shipped
+# with. usb/usb_compat/ carries the three headers that makes possible:
+# nrf_drv_usbd.h absorbs a return-type change between nrfx 1.9.0 and 4.2.1, and
+# nrf_drv_clock.h / nrf_drv_power.h replace two SDK drivers that would each have
+# taken POWER_CLOCK away from MPSL.
+#
+# NOT TinyUSB or a hand-written stack. USB enumeration is the kind of code whose
+# bugs only appear against a particular host, and this tree already contains a
+# stack that Nordic ships, tests on this silicon, and that the Qorvo SDK pins.
+# ----------------------------------------------------------------------------
+set(ULTRAWIDELOCK_NRF5_USBD "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/usbd")
+set(ULTRAWIDELOCK_NRF5_NRFX "${ULTRAWIDELOCK_NRF5_SDK}/modules/nrfx")
+
+add_library(ultrawidelock_usb STATIC
+  # The pinned vendor stack, unmodified.
+  "${ULTRAWIDELOCK_NRF5_NRFX}/drivers/src/nrfx_usbd.c"
+  # The exclusive-access atomics nrfx_usbd's endpoint bitmasks are built on.
+  # The pinned nrfx inlines these; this one does not, so the source is needed.
+  "${ULTRAWIDELOCK_NRF5_NRFX}/soc/nrfx_atomic.c"
+  "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd.c"
+  "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_core.c"
+  "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_string_desc.c"
+  "${ULTRAWIDELOCK_NRF5_USBD}/app_usbd_serial_num.c"
+  "${ULTRAWIDELOCK_NRF5_USBD}/class/cdc/acm/app_usbd_cdc_acm.c"
+  # The SDK libraries it leans on. nrf_atfifo is the event queue -- see
+  # usb/usb_power_freertos.c for why its being lock-free is load-bearing here.
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/atomic_fifo/nrf_atfifo.c"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/atomic/nrf_atomic.c"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/util/app_util_platform.c"
+  # This port's half.
+  "${ULTRAWIDELOCK_PORT_DIR}/usb/usb_power_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/usb/usb_cdc_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/usb/prov_console_freertos.c"
+  "${ULTRAWIDELOCK_PORT_DIR}/usb/sdk_error_freertos.c"
+)
+target_include_directories(ultrawidelock_usb PUBLIC
+  # First, so the three compat headers shadow the SDK's own.
+  "${ULTRAWIDELOCK_PORT_DIR}/usb/usb_compat"
+  "${ULTRAWIDELOCK_NRF5_USBD}"
+  "${ULTRAWIDELOCK_NRF5_USBD}/class/cdc"
+  "${ULTRAWIDELOCK_NRF5_USBD}/class/cdc/acm"
+)
+# THE nrfx THIS ONE LIBRARY SEES IS THE SDK'S OWN, and it is the only place in
+# the image where that is true. Everywhere else the rule at the top of this file
+# holds: hal_nordic's nrfx, because the radio stack is built against it.
+#
+# The rule cannot hold here, and the reason is measured rather than assumed.
+# Between nrfx 1.9.0 and 4.2.1 the USBD *driver* API is nearly unchanged -- three
+# return types, absorbed by usb_compat/nrf_drv_usbd.h -- but the *hal* underneath
+# it gained a peripheral-instance argument on every function: this SDK calls
+# nrf_usbd_setup_brequest_get(), the new hal wants nrf_usbd_setup_brequest_get(NRF_USBD).
+# app_usbd.c and app_usbd_core.c do that in dozens of places, and shimming a hal
+# means redeclaring functions the newer nrfx also defines, in an image that
+# compiles both.
+#
+# So the vendor stack gets to be internally consistent instead: driver, hal and
+# framework all from SDK 17.1, on include paths PRIVATE to this library. What is
+# deliberately NOT taken is ${ULTRAWIDELOCK_NRF5_NRFX}/mdk -- nrf.h still resolves to the
+# pinned MDK through ultrawidelock_soc, so there is still exactly one register map and
+# one device header in the image, which was the property the rule was protecting.
+target_include_directories(ultrawidelock_usb PRIVATE
+  "${ULTRAWIDELOCK_NRF5_SDK}/integration/nrfx"
+  "${ULTRAWIDELOCK_NRF5_NRFX}"
+  "${ULTRAWIDELOCK_NRF5_NRFX}/hal"
+  "${ULTRAWIDELOCK_NRF5_NRFX}/drivers/include"
+  "${ULTRAWIDELOCK_NRF5_NRFX}/soc"
+  # nrf_error.h, from the no-SoftDevice variant. This image has no SoftDevice --
+  # the controller is the SoftDevice Controller library, which is a different
+  # thing -- so the s132/s112 copies would be the wrong ones.
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/drivers_nrf/nrf_soc_nosd"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/util"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/atomic"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/atomic_fifo"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/log"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/log/src"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/experimental_section_vars"
+  "${ULTRAWIDELOCK_NRF5_SDK}/components/libraries/delay"
+  "${ULTRAWIDELOCK_NRF5_SDK}/external/utf_converter"
+)
+# ultrawidelock_radio for the MPSL clock and the POWER vector fan-out; ultrawidelock_board for the
+# logger and the device headers underneath both.
+# ultrawidelock_cred for the provisioning console, which reads and writes the same
+# identity the reader does -- through ultrawidelock_prov_* and the reader's own commit
+# path, never through a second copy of that logic.
+target_link_libraries(ultrawidelock_usb PUBLIC ultrawidelock_board ultrawidelock_radio ultrawidelock_cred)
+
 add_library(ultrawidelock_freertos_port INTERFACE)
-target_link_libraries(ultrawidelock_freertos_port INTERFACE ultrawidelock_storage ultrawidelock_uwb ultrawidelock_thread ultrawidelock_cred)
+target_link_libraries(ultrawidelock_freertos_port INTERFACE
+  ultrawidelock_storage ultrawidelock_uwb ultrawidelock_thread ultrawidelock_cred ultrawidelock_dfu ultrawidelock_usb)
 
 # ----------------------------------------------------------------------------
 # Warnings and code generation, applied to the port's own code only.

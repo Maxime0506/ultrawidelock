@@ -42,7 +42,7 @@ void ultrawidelock_freertos_log(enum ultrawidelock_freertos_log_level level, con
 	(void)fmt;
 }
 
-#define PROV_KEY ULTRAWIDELOCK_KV_KEY_ALIRO_PROV
+#define PROV_KEY ULTRAWIDELOCK_KV_KEY_CRED_PROV
 #define OT_KEY (ULTRAWIDELOCK_KV_KEY_OPENTHREAD_BASE + 3u)
 
 /* Reads a key into a buffer, returning the store's result. */

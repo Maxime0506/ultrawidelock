@@ -22,6 +22,7 @@
 #include <nrf.h>
 #include <system_nrf52833.h>
 
+#include <ultrawidelock_freertos_board.h>
 #include <ultrawidelock_freertos_radio.h>
 
 extern uint32_t __etext;
@@ -72,7 +73,6 @@ WEAK_ALIAS(UARTE0_UART0_IRQHandler);
 WEAK_ALIAS(SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0_IRQHandler);
 WEAK_ALIAS(SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1_IRQHandler);
 WEAK_ALIAS(NFCT_IRQHandler);
-WEAK_ALIAS(GPIOTE_IRQHandler);
 WEAK_ALIAS(SAADC_IRQHandler);
 WEAK_ALIAS(TIMER2_IRQHandler);
 WEAK_ALIAS(TEMP_IRQHandler);
@@ -132,17 +132,57 @@ void SWI5_EGU5_IRQHandler(void)
 }
 
 /*
- * TIMER1, SWI0_EGU0, RTC2, RTC1, and RNG are defined by their owners:
+ * RNG, routed here rather than left to its owner to define.
+ *
+ * Both were declared weak below with a comment saying their owners defined
+ * them. Neither owner did: board/entropy_freertos.c exports
+ * ultrawidelock_freertos_rng_isr and radio/nrf_802154_lptimer_freertos.c exports
+ * nrf_802154_lptimer_freertos_irq_handler, and nothing connected either to a
+ * vector. The weak aliases then resolved to default_handler, so the first RNG
+ * interrupt -- raised as soon as the SoftDevice Controller asked for entropy --
+ * parked the core in a spin loop with the interrupt still latched.
+ *
+ * Found on hardware, and only there: the vector table is data, so no host test
+ * and no link-time check looked at what it pointed to. scripts/vector-check.sh
+ * now does, which is the durable half of this fix.
+ *
+ * Written as explicit forwarders because that is this file's whole premise --
+ * the handoff should be the code, not the absence of a symbol.
+ */
+void RNG_IRQHandler(void)
+{
+	ultrawidelock_freertos_rng_isr();
+}
+
+/*
+ * RTC2 is routed by its owner, radio/nrf_802154_lptimer_freertos.c, and not
+ * here: that handler lives in ultrawidelock_802154, which the board layer does not link,
+ * and forwarding to it from this file is an undefined reference. The owner's
+ * object is pulled by the ordinary calls the 802.15.4 driver makes into it, so
+ * its strong definition wins over the weak alias below.
+ */
+
+/*
+ * TIMER1, SWI0_EGU0, RTC1, RTC2, and GPIOTE are defined by their owners:
  * TIMER1 by the pinned Nordic high-precision timer, SWI0_EGU0 by the nRF
  * 802.15.4 driver, RTC2 by radio/nrf_802154_lptimer_freertos.c, RTC1 by
- * board/tick_freertos.c, and RNG by board/entropy_freertos.c. They are declared
- * weak here only so an image that leaves one of those out still links.
+ * board/tick_freertos.c, and GPIOTE by
+ * board/gpiote_freertos.c, which fans it out because the DW3110 line and the
+ * update button each take a channel. They are declared weak here only so an
+ * image that leaves one of those out still links.
+ *
+ * A weak definition here does not shadow the real one: this object is pulled
+ * for the vector table, but each owner's object is pulled by an ordinary call
+ * into it -- ultrawidelock_freertos_gpiote_add_handler() in GPIOTE's case -- and a strong
+ * definition in an object the linker has already taken wins over a weak one.
+ * An owner reachable ONLY through its vector would not be pulled at all, which
+ * is why none of them is written that way.
  */
+WEAK_ALIAS(GPIOTE_IRQHandler);
+WEAK_ALIAS(RTC2_IRQHandler);
 WEAK_ALIAS(TIMER1_IRQHandler);
 WEAK_ALIAS(SWI0_EGU0_IRQHandler);
 WEAK_ALIAS(RTC1_IRQHandler);
-WEAK_ALIAS(RTC2_IRQHandler);
-WEAK_ALIAS(RNG_IRQHandler);
 
 typedef void (*vector_t)(void);
 
@@ -229,6 +269,23 @@ void Reset_Handler(void)
 	 * the trace pin state, neither of which is safe to reimplement by hand.
 	 */
 	SystemInit();
+
+	/*
+	 * Point the core at our vector table before anything can interrupt.
+	 *
+	 * Required, not defensive. This image is linked at 0xa200 and starts with
+	 * MCUboot's table still selected in VTOR -- MCUboot jumps to our reset
+	 * vector without changing it, because an image that relocates itself is
+	 * the only one that knows where it went. Every interrupt taken before
+	 * this line would dispatch through the bootloader's table, which by then
+	 * describes handlers that are no longer running.
+	 *
+	 * SystemInit() first: it is the part's errata work and touches no
+	 * interrupt this could race.
+	 */
+	SCB->VTOR = (uint32_t)&__isr_vector[0];
+	__DSB();
+	__ISB();
 
 	for (src = &__etext, dst = &__data_start__; dst < &__data_end__;) {
 		*dst++ = *src++;

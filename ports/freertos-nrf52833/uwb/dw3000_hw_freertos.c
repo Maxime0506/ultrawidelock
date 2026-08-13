@@ -37,6 +37,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include <ultrawidelock_freertos_board.h>
 #include <ultrawidelock_freertos_platform.h>
 
 #include "board_pins.h"
@@ -129,9 +130,14 @@ int dw3000_hw_init(void)
 	 */
 	nrf_gpio_cfg_input(ULTRAWIDELOCK_DW3000_PIN_RST, NRF_GPIO_PIN_NOPULL);
 
-	/* Wake line held asserted, matching the other two ports' idle state. */
+	/*
+	 * Wake line held asserted, matching the other two ports' idle state --
+	 * on a board that has one. This one does not; see board_pins.h.
+	 */
+#ifdef ULTRAWIDELOCK_DW3000_PIN_WAKEUP
 	nrf_gpio_pin_set(ULTRAWIDELOCK_DW3000_PIN_WAKEUP);
 	nrf_gpio_cfg_output(ULTRAWIDELOCK_DW3000_PIN_WAKEUP);
+#endif
 
 	return dw3000_spi_init();
 }
@@ -188,13 +194,25 @@ int dw3000_hw_init_interrupt(void)
 	}
 
 	/*
+	 * The vector belongs to board/gpiote_freertos.c, because the update
+	 * button takes a second channel on the same peripheral and a vector
+	 * cannot have two definitions. Registered before the event is enabled:
+	 * an edge that arrived with no handler installed would be cleared by
+	 * nobody and would re-enter the vector forever.
+	 */
+	if (ultrawidelock_freertos_gpiote_add_handler(ultrawidelock_freertos_dw3000_irq_handler) != 0) {
+		ultrawidelock_freertos_log(ULTRAWIDELOCK_FREERTOS_LOG_ERROR, TAG, "no GPIOTE handler slot");
+		return -1;
+	}
+
+	/*
 	 * Rising edge, because the DW3110 asserts the line and holds it. The
 	 * event is configured before it is enabled and cleared before the
 	 * interrupt is unmasked, so a level left over from before this call
 	 * cannot deliver a notification to a task that has not run yet.
 	 */
-	nrf_gpiote_event_configure(NRF_GPIOTE, ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL,
-				   ULTRAWIDELOCK_DW3000_PIN_IRQ, NRF_GPIOTE_POLARITY_LOTOHI);
+	nrf_gpiote_event_configure(NRF_GPIOTE, ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL, ULTRAWIDELOCK_DW3000_PIN_IRQ,
+				   NRF_GPIOTE_POLARITY_LOTOHI);
 	nrf_gpiote_event_enable(NRF_GPIOTE, ULTRAWIDELOCK_DW3000_GPIOTE_CHANNEL);
 	nrf_gpiote_event_clear(NRF_GPIOTE, NRF_GPIOTE_EVENT_IN_0);
 
@@ -279,7 +297,14 @@ void dw3000_hw_wakeup(void)
 
 void dw3000_hw_wakeup_pin_low(void)
 {
+	/*
+	 * Nothing to lower on this board, exactly as the Zephyr backend does
+	 * nothing when no wakeup-gpios property is present. The declaration
+	 * stays because dw3000_hw.h is shared with boards that do have the pin.
+	 */
+#ifdef ULTRAWIDELOCK_DW3000_PIN_WAKEUP
 	nrf_gpio_pin_clear(ULTRAWIDELOCK_DW3000_PIN_WAKEUP);
+#endif
 }
 
 void dw3000_hw_fini(void)

@@ -554,6 +554,27 @@ void nrf_802154_platform_sl_lp_timer_deinit(void)
  * Board vector entry for RTC2. Kept separate from the platform contract so the
  * board's vector table names one symbol per peripheral, as it does for MPSL.
  */
+/*
+ * The RTC2 vector itself.
+ *
+ * Defined here rather than in board/startup_freertos.c because that file cannot
+ * reach this symbol -- the board layer does not link ultrawidelock_802154 -- and because
+ * this is the file peripherals.yml names as the owner. Startup keeps a weak
+ * alias so an image built without the 802.15.4 layer still links; this strong
+ * definition wins whenever the layer is present, since the driver's ordinary
+ * calls into this file already pull the object.
+ *
+ * Without it the weak alias resolved to default_handler and the first low-power
+ * timer interrupt would have parked the core in a spin loop.
+ * scripts/freertos-vector-check.sh now fails the build on that condition.
+ */
+void nrf_802154_lptimer_freertos_irq_handler(void);
+
+void RTC2_IRQHandler(void)
+{
+	nrf_802154_lptimer_freertos_irq_handler();
+}
+
 void nrf_802154_lptimer_freertos_irq_handler(void)
 {
 	if (nrf_rtc_event_check(LPTIMER_RTC, NRF_RTC_EVENT_OVERFLOW)) {

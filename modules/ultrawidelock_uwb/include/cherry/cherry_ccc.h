@@ -173,7 +173,7 @@ struct cherry_ccc_ultrawidelock_session_config {
 	uint64_t uwb_time_us;
 };
 
-/** Create an credential responder session bound to @p config (NULL on error). */
+/** Create a credential responder session bound to @p config (NULL on error). */
 struct cherry_ccc_session *
 cherry_ccc_session_create_ultrawidelock_responder(struct cherry *ctx, cherry_ccc_cb_t callback,
 					  void *user_data,

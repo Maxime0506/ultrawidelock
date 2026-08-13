@@ -122,7 +122,7 @@ struct matter_pase_responder {
 	 * it also calls into oberon's elliptic curve code, and two stack sizes in
 	 * this project were guessed low and both faulted on hardware; 534 bytes of
 	 * BSS shows up in a size report, whereas 534 bytes of stack shows up as a
-	 * fault. See CONFIG_ALIRO_MATTER_BLE_WQ_STACK.
+	 * fault. See CONFIG_ULTRAWIDELOCK_MATTER_BLE_WQ_STACK.
 	 */
 	uint8_t tt[MATTER_SPAKE_TT_LEN];
 };

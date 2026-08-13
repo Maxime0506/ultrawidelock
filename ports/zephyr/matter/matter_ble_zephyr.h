@@ -65,7 +65,7 @@ int matter_ble_send(const uint8_t *msg, size_t len);
  * Interaction Model are still unbuilt, that is not a trade worth making for
  * something the protocol does not ask for: a Matter node advertises as
  * commissionable only while it has no fabric, which is exactly when this reader
- * has nothing to advertise as an credential reader either.
+ * has nothing to advertise as a credential reader either.
  *
  * So the reader asks for these bytes when it has no identity yet, and stops
  * asking once it has one.

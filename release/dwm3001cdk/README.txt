@@ -1,6 +1,6 @@
 ultrawidelock @VERSION@   ·   DWM3001CDK
 
-An credential lock on one board. Your iPhone carries the key in Wallet, and the lock
+A credential lock on one board. Your iPhone carries the key in Wallet, and the lock
 opens as you walk up to it, phone in your pocket. There is no app to install.
 
 
