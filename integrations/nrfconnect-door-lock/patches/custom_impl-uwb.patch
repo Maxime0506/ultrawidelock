@@ -1,7 +1,7 @@
-diff --git a/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.cpp b/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.cpp
+diff --git a/subsys/aliro/uwb/custom_impl/uwb_impl.cpp b/subsys/aliro/uwb/custom_impl/uwb_impl.cpp
 index 7731eb0..53dd5eb 100644
---- a/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.cpp
-+++ b/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.cpp
+--- a/subsys/aliro/uwb/custom_impl/uwb_impl.cpp
++++ b/subsys/aliro/uwb/custom_impl/uwb_impl.cpp
 @@ -2,58 +2,339 @@
   * Copyright (c) 2025 Nordic Semiconductor ASA
   *
@@ -359,10 +359,10 @@ index 7731eb0..53dd5eb 100644
 +#endif // CONFIG_ULTRAWIDELOCK_CRED
 +
  } // namespace Aliro::Uwb
-diff --git a/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.h b/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.h
+diff --git a/subsys/aliro/uwb/custom_impl/uwb_impl.h b/subsys/aliro/uwb/custom_impl/uwb_impl.h
 index 0688558..111fbe3 100644
---- a/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.h
-+++ b/subsys/ultrawidelock/uwb/custom_impl/uwb_impl.h
+--- a/subsys/aliro/uwb/custom_impl/uwb_impl.h
++++ b/subsys/aliro/uwb/custom_impl/uwb_impl.h
 @@ -2,22 +2,36 @@
   * Copyright (c) 2025 Nordic Semiconductor ASA
   *

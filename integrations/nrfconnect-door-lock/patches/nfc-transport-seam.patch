@@ -1,11 +1,11 @@
-diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/init.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/init.cpp
+diff --git a/applications/matter-aliro-door-lock-app/src/aliro/init.cpp b/applications/matter-aliro-door-lock-app/src/aliro/init.cpp
 index ba88c0d..0e3fc49 100644
---- a/applications/matter-ultrawidelock-door-lock-app/src/cred/init.cpp
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/init.cpp
+--- a/applications/matter-aliro-door-lock-app/src/aliro/init.cpp
++++ b/applications/matter-aliro-door-lock-app/src/aliro/init.cpp
 @@ -8,7 +8,7 @@
- #include "ultrawidelock/features.h"
- #include "ultrawidelock/types.h"
- #include "ultrawidelock/utils.h"
+ #include "aliro/features.h"
+ #include "aliro/types.h"
+ #include "aliro/utils.h"
 -#include "nfc/nfc_transport_rfal.h"
 +#include <ultrawidelock_nfc/transport.h>
  
@@ -38,19 +38,19 @@ index ba88c0d..0e3fc49 100644
  	if (ec != ALIRO_NO_ERROR) {
  		LOG_ERR("NFC transport stop failed");
  	}
-diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/session.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/session.cpp
+diff --git a/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/session.cpp b/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/session.cpp
 index ff08e59..0b89529 100644
---- a/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/session.cpp
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/session.cpp
+--- a/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/session.cpp
++++ b/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/session.cpp
 @@ -7,7 +7,7 @@
- #include "ultrawidelock/interface.h"
+ #include "aliro/interface.h"
  
- #include "ultrawidelock/access_manager/access_manager.h"
--#include "ultrawidelock/platform/nfc/nfc_transport_rfal.h"
+ #include "aliro/access_manager/access_manager.h"
+-#include "aliro/platform/nfc/nfc_transport_rfal.h"
 +#include <ultrawidelock_nfc/transport.h>
  
  #ifdef CONFIG_NCS_ALIRO_BLE_UWB
- #include <ultrawidelock_service/ultrawidelock_service.h>
+ #include <aliro_service/aliro_service.h>
 @@ -18,7 +18,7 @@ namespace Aliro::Interface::Session {
  AliroError Send(ConnectionHandle handle, Data data)
  {
@@ -69,10 +69,10 @@ index ff08e59..0b89529 100644
  	}
  #ifdef CONFIG_NCS_ALIRO_BLE_UWB
  	else if (handle.IsBle()) {
-diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/platform/nfc/CMakeLists.txt b/applications/matter-ultrawidelock-door-lock-app/src/cred/platform/nfc/CMakeLists.txt
+diff --git a/applications/matter-aliro-door-lock-app/src/aliro/platform/nfc/CMakeLists.txt b/applications/matter-aliro-door-lock-app/src/aliro/platform/nfc/CMakeLists.txt
 index e7f635c..7bf9968 100644
---- a/applications/matter-ultrawidelock-door-lock-app/src/cred/platform/nfc/CMakeLists.txt
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/platform/nfc/CMakeLists.txt
+--- a/applications/matter-aliro-door-lock-app/src/aliro/platform/nfc/CMakeLists.txt
++++ b/applications/matter-aliro-door-lock-app/src/aliro/platform/nfc/CMakeLists.txt
 @@ -7,4 +7,4 @@
  zephyr_include_directories(.)
  

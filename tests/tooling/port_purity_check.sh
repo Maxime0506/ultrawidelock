@@ -609,8 +609,30 @@ brand_hits() { # -> allowlist survivors, "path:line:text"
 	git grep -inE "$BRAND_RE" -- . "${BRAND_EXEMPT[@]}" \
 		':!integrations/nrfconnect-door-lock/patches' |
 		grep -vEf "$allow" || true
+	# "+++ b/path" is a diff header naming an upstream file, not one of our added
+	# lines, and it starts with + like they do. Reading it as ours is what drove
+	# the rename through every patch header and broke all twelve of them.
 	git grep -inE "^\+.*($BRAND_RE)" -- integrations/nrfconnect-door-lock/patches |
+		grep -vE '^[^:]+:[0-9]+:\+\+\+ ' |
 		grep -vEf "$allow" || true
+}
+
+# The mirror of the rule above, and the one that would have caught the break:
+# upstream has never heard of us, so no line a patch does not add may say our
+# name. Header, context and removal lines all have to match the pristine tree
+# byte for byte or `git apply` fails, and bootstrap is the only thing that
+# would have found out.
+check_patch_upstream() {
+	local list
+	list="$(git grep -invE '^\+' -- integrations/nrfconnect-door-lock/patches |
+		grep -iE 'ultrawidelock' || true)"
+	if [ -n "$list" ]; then
+		printf '%s\n' "$list" | sed "s/^/$R  ours in upstream text: /;s/\$/$Z/" >&2
+		printf '%scheck-purity: %d patch line(s) outside a + rename upstream text%s\n' \
+			"$R" "$(printf '%s\n' "$list" | wc -l | tr -d ' ')" "$Z" >&2
+		return 1
+	fi
+	printf '%s  ok   patches: upstream headers and context never name ultrawidelock%s\n' "$G" "$Z"
 }
 
 check_brand() {
@@ -1256,6 +1278,22 @@ self_test() {
 			"$G" "$raw" "$Z"
 	fi
 
+	# Same trap, one check over: check_patch_upstream passes by finding nothing,
+	# and a pathspec that had stopped matching any patch at all would look
+	# identical. Its own selector, asked for the word upstream really does use,
+	# has to come back with the whole corpus.
+	local upstream_lines
+	upstream_lines="$(git grep -invE '^\+' -- integrations/nrfconnect-door-lock/patches |
+		grep -icE 'aliro' | tr -d ' ')"
+	if [ "$upstream_lines" -lt 20 ]; then
+		printf '%s  self-test FAILED: patch upstream scan reached only %s line(s)%s\n' \
+			"$R" "$upstream_lines" "$Z" >&2
+		fails=$((fails + 1))
+	else
+		printf '%s  self-test: patch upstream scan is live (%s upstream line(s) named aliro)%s\n' \
+			"$G" "$upstream_lines" "$Z"
+	fi
+
 	if [ "$fails" -ne 0 ]; then
 		printf '%scheck-purity: the gate itself is broken%s\n' "$R" "$Z" >&2
 		return 2
@@ -1282,6 +1320,7 @@ case "${1-}" in
 	check_build_paths || rc=1
 	check_patch_symbols || rc=1
 	check_brand || rc=1
+	check_patch_upstream || rc=1
 	exit "$rc"
 	;;
 *)

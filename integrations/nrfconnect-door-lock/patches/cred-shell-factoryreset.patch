@@ -1,7 +1,7 @@
-diff --git a/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp b/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp
+diff --git a/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp b/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp
 index 2529dd5..c6462d2 100644
---- a/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/app_task.cpp
+--- a/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp
++++ b/applications/matter-aliro-door-lock-app/src/matter/app_task.cpp
 @@ -25,12 +25,18 @@
  
  #include <app-common/zap-generated/attributes/Accessors.h>

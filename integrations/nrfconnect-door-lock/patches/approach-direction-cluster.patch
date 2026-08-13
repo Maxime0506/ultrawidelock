@@ -1,5 +1,5 @@
---- a/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
+--- a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
++++ b/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-generated/endpoint_config.h
 @@ -62,7 +62,7 @@
  	}
  

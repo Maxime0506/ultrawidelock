@@ -1,7 +1,7 @@
-diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/kpersistent_manager/kpersistent_manager_impl.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/kpersistent_manager/kpersistent_manager_impl.cpp
+diff --git a/applications/matter-aliro-door-lock-app/src/aliro/kpersistent_manager/kpersistent_manager_impl.cpp b/applications/matter-aliro-door-lock-app/src/aliro/kpersistent_manager/kpersistent_manager_impl.cpp
 index 5f76e80..b31c62c 100644
---- a/applications/matter-ultrawidelock-door-lock-app/src/cred/kpersistent_manager/kpersistent_manager_impl.cpp
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/kpersistent_manager/kpersistent_manager_impl.cpp
+--- a/applications/matter-aliro-door-lock-app/src/aliro/kpersistent_manager/kpersistent_manager_impl.cpp
++++ b/applications/matter-aliro-door-lock-app/src/aliro/kpersistent_manager/kpersistent_manager_impl.cpp
 @@ -163,8 +163,20 @@ AliroError KpersistentManagerImpl::GetAccessCredentialPublicKey(CryptoTypes::Key
  	VerifyOrReturnStatus(mKpersistentMap[index], ALIRO_INVALID_ARGUMENT);
  

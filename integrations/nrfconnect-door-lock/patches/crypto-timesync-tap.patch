@@ -1,7 +1,7 @@
-diff --git a/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/crypto.cpp b/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/crypto.cpp
+diff --git a/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/crypto.cpp b/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/crypto.cpp
 index 6560d40..a4891a3 100644
---- a/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/crypto.cpp
-+++ b/applications/matter-ultrawidelock-door-lock-app/src/cred/interface_impl/crypto.cpp
+--- a/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/crypto.cpp
++++ b/applications/matter-aliro-door-lock-app/src/aliro/interface_impl/crypto.cpp
 @@ -12,6 +12,7 @@
  
  #include <psa/crypto.h>
