@@ -247,6 +247,13 @@ def self_test():
     # than from the literal. cryptography is not a dependency of this script --
     # it has to run on bare python3 -- so when it is absent this says so instead
     # of quietly skipping.
+    #
+    # DO NOT SIMPLIFY THIS TO USE P256_SPKI_PREFIX. Generating a key to check a
+    # constant that is right there in the file looks like waste, and replacing
+    # it with a comparison against the constant would pass, shorten the file,
+    # and read as a tidy-up. It would also restore the exact bug this exists to
+    # close: the value under test cannot supply its own evidence. The cost of
+    # the second derivation IS the point of it.
     try:
         from cryptography.hazmat.primitives import serialization as _ser
         from cryptography.hazmat.primitives.asymmetric import ec as _ec
