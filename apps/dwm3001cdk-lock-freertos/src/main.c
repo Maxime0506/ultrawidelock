@@ -88,7 +88,27 @@ static struct aliro_trust_store s_trust;
 static bool s_prov_mode;
 
 static StaticTask_t s_boot_tcb;
-static StackType_t s_boot_stack[512];
+
+/*
+ * 1,536 words, and the number is measured rather than chosen.
+ *
+ * This task carries three different peaks. The ordinary boot path high-waters
+ * at 1,540 bytes, read off the fill pattern on a running board. The run loop
+ * after it adds the approach controller's float maths. And in provisioning mode
+ * the same stack runs woz_freertos_prov_console_run(), whose `import` does a
+ * software P-256 derive -- kilobytes, not the 508 bytes that were left.
+ *
+ * At 512 words it did not survive that. The import reset the board mid-transfer:
+ * the USB device dropped off the bus, the console vanished, and the board came
+ * back up on the DEV identity with the store untouched, which from outside
+ * looks exactly like an import that was refused. There is no fault code to find
+ * afterwards either, because the overflow hook resets and a reset clears CFSR.
+ *
+ * The console's own header already said this stack was "sized for the P-256
+ * derive inside import". It never was; that comment described an intent nobody
+ * implemented. It is now, with headroom to measure against rather than trust.
+ */
+static StackType_t s_boot_stack[1536];
 
 /*
  * What the board does once it is a lock: sample, decide, report, forever.
