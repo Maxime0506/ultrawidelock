@@ -19,12 +19,15 @@ check_declarations modules/ultrawidelock_cred/include/ultrawidelock/device.h
 check_declarations modules/ultrawidelock_cred/include/ultrawidelock/tlv.h
 check_declarations modules/ultrawidelock_uwb/include/ultrawidelock/uwb.h
 
-# Both spellings stay banned: the flat headers this API replaced, under their
-# original ultrawidelock_ names, and the same names carried into the ultrawidelock_
-# prefix by the rename. Either one reappearing means the flat API came back.
+# The flat headers this API replaced, banned so they cannot come back. They were
+# called aliro_reader.h, aliro_device.h, aliro_tlv.h, woz_uwb_facade.h and
+# woz_hal.h until the rename; this list carried those names across with
+# everything else, which left it holding each new name twice and banning none of
+# the old ones. Spelling the old names here again is not the fix -- check_brand
+# in tests/tooling/port_purity_check.sh bans woz_ and aliro_ across the whole
+# tree, which is a stronger guarantee than a five-entry list. What this list
+# still owns is the flat shape under our own prefix.
 for legacy in modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
-	modules/ultrawidelock_cred/include/ultrawidelock_device.h modules/ultrawidelock_cred/include/ultrawidelock_tlv.h \
-	modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
 	modules/ultrawidelock_cred/include/ultrawidelock_device.h modules/ultrawidelock_cred/include/ultrawidelock_tlv.h \
 	modules/ultrawidelock_uwb/include/ultrawidelock_uwb_facade.h modules/ultrawidelock_port/include/ultrawidelock_hal.h; do
 	[ ! -e "$ROOT/$legacy" ] || {
@@ -32,7 +35,7 @@ for legacy in modules/ultrawidelock_cred/include/ultrawidelock_reader.h \
 		exit 1
 	}
 done
-if git grep -nE '#include [<"](ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_uwb_facade|ultrawidelock_hal)[.]h[>"]' \
+if git grep -nE '#include [<"](ultrawidelock_reader|ultrawidelock_device|ultrawidelock_tlv|ultrawidelock_uwb_facade|ultrawidelock_hal)[.]h[>"]' \
 	-- apps examples integrations modules ports tests/host tests/ports tests/shared tests/tooling \
 	>/dev/null; then
 	echo "sdk API: FAIL (legacy API include returned)" >&2
